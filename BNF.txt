@@ -1,0 +1,198 @@
+	The gramammar of the BUGS PPL
+
+
+						Andrew Thomas
+						MRC Bioststistics Unit
+						Cambridge
+						
+						November 2021
+						
+
+
+I use braces {} to denote one or more occurences of a construct and square brackets [] to denote
+that the construct is optional. Terminals are in block capitals. The rules from <program> to <range>
+concern the syntax of the BUGS language. The rules from <name> to <real> concern the lexical
+structure of the BUGS language. The grammar of the BUGS language in BNF is:
+
+
+<program> ::= MODEL [ <name> ] BRACEL { <statement> } BRACER
+
+<statement> ::= <compound_statement> | <simple_statement>
+
+<compound_statement> ::= <for_statement> | <if_statement>
+
+<for_statement> ::= FOR BRACKETL <name> IN <index> COLON <index> BRACKETR 	
+		BRACEL { <statement> } BRACER
+
+<if_statement> ::= IF BRACKETL <scalar> BRACKETR BRACEL { <statement> } BRACER
+
+<simple_statement> ::= <stochastic_statement> | <logical_statement>
+
+<stochastic_statement> ::= <uni_statement> | <multi_statement>
+
+<logical_statement> ::= <scalar_statement> | <tensor_statement>
+
+<uni_statement>  ::= <scalar> DISTRIBUTED <distribution> [ <censored> ] [ <truncated> ]
+
+<multi_statement> ::= <tensor> DISTRIBUTED <distribution>
+
+<scalar_statement> ::= <lhs> BECOMES <expression>
+
+<tensor_statement> ::= <tensor> BECOMES <tensor_function>
+
+<distribution> ::= <name> BRACKETL <arguement_list> BRACKETR
+
+<arguement_list> ::= [ <arguement> { COMMA <arguement> } ]
+
+<arguement> ::= <scalar> | <tensor> | <number>
+
+<censored> ::= CENSOR BRACKETL [ <scalar> ] COMMA [ <scalar> ] BRACKETR
+
+<truncated> ::= TRUNCATE BRACKETL [ <scalar> ] COMMA  [ <scalar> ] BRACKETR
+
+<lhs> ::= <scalar> | <link_function> BRACKETL <scalar> BRACKETR
+
+<expression> ::= <term> | <expression> ( PLUS | MINUS )   <term>
+
+<term> ::= <factor> | <term> ( MULT | DIV ) <factor>
+
+<factor> ::= [ MINUS ] (BRACKETL  <expression> BRACKETR |  <number> | <scalar> | 
+		<unary_internal_function> | <binary_internal_function> | <external_function> )
+
+<link_function> ::= CLOGLOG | LOG | LOGIT | PROBIT
+
+<external_function> ::= <name> BRACKETL <arguement_list> BRACKETR
+
+<tensor_function> ::= <name> BRACKETL <argument_list> BRACKETR
+
+<unary_internal_function> ::= <unary_function_name> BRACKETL <expression>  BRACKETR
+
+<binary_internal_function> ::= <binary_function_name> 
+		BRACKETL <expression> COMMA <expression>  BRACKETR
+
+<unary_function_name> ::= ABS | ARCCOS| ARCCOSH | ARCSIN | ARCSINH | ARCTAN |
+   	 ARCTANH | CLOGLOG | COS | COSH|  EXP | ICLOGLOG | ILOGIT | LOG |  LOGFACT |
+		LOGGAM | LOGIT | PHI | ROUND | SIN | SINH | SOFTPLUS | SQRT | STEP | TAN | TANH |	 		TRUNC
+
+<binary_function_name> ::= EQUALS | MAX | MIN | POWER
+
+<scalar> ::= <name> [ SQUAREL <index> { COMMA <index> } SQUARER ]
+
+<tensor> ::= <name> SQUAREL <range> [ { COMMA <range> } ] SQUARER
+
+<index> ::= <integer> | <scalar> 
+
+<range> ::= ( <index> [ COLON  <index> ] ) | SPACE
+
+<name> ::= <letter> [ { <letter> | <digit> | UNDERSCORE | PERIOD } ]
+
+<number> ::= [ <sign > ] ( <integer> | < real> )
+
+<letter> ::= "a" .. "z"   |  "A".."Z " | "?".."?.." |  "?".."?"
+
+<digit> ::= "0".."9"
+
+<sign> ::= PLUS | MINUS
+
+<integer> ::= <digit> [ {digit} ]
+
+<real> ::= [ <integer> ] PERIOD <integer> [ EXPONENT <sign> <integer> ] 
+
+
+
+The terminal symbols are:
+
+BECOMES ::= "<-"    BRACEL ::= "{"    BRACER ::= "}"    BRACKETL ::= "("
+
+BRACKETR ::= ")"    CENSOR ::= "C"    COLON ::= ":"    COMMA ::= ","
+
+DIV ::= "/"    DISTRIBUTED ::= "~"    EXPONENT ::= "E"    MINUS ::= "-"
+
+MULT ::= "*"    PERIOD := "."    PLUS ::= "+"    SPACE ::= " "    SQUAREL ::= "["    
+
+SQUARER ::= "]"    TRUNCATE ::= "T"    UNDERSCORE ::= "_"    
+
+ABS ::= "abs"   ARCCOS ::= "arccos"   ARCCOSH ::= "arccosh"   ARCSIN ::= "arcsin"
+
+ARCSINH ::= "arcsinh"   ARCTAN ::= "arctan"   ARCTANH ::= "arctanh"
+
+CLOGLOG ::= "cloglog"    COS ::= "cos"   COSH ::= "cosh"   EXP ::= "exp"
+
+ICLOGLOG ::= "icloglog"   ILOGIT ::= "ilogit"   LOG ::= "log"   LOGFACT ::= "logfact"
+
+LOGGAM ::= "loggam"   LOGIT ::= "logit"   PHI ::= "phi"   PROBIT ::= "probit"
+
+ROUND ::= "round"   SIN ::= "sin"   SINH ::= "sinh"   SOFTPLUS ::= "softplus"
+
+SQRT ::= "sqrt"   STEP ::= "step"   TAN ::= "tan"   TANH ::= "tanh"   TRUNC ::= "trunc"
+
+EQUALS ::= "equals"    MAX ::= "max"    MIN ::= "min"   POWER ::= "power"
+
+FOR ::= "for"    IF ::= "if"    IN ::= "in"    MODEL ::= "model"    
+
+
+
+
+All distribution and function names in the BUGS language are followed immediately by a left bracket
+(that is there is no space between the last letter of the name and the left bracket). The same
+applies to the key words "for" and "if".
+
+There are no built in distributions in the BUGS language. The compiled module for each distribution
+is loaded at run time if that distribution is used in the BUGS language model. The loaded module has
+to inform the compiler of the signiture of the distribution that it implements. and whether the
+distribution is a univariate distribution or a multivariate distribution. The BUGS software contains
+resource files containg pairs of distribution name module name. When the parser detect a
+distribution name in a BUGS language model the resource files are searched for that name and if
+found the relevent module loaded and the signiture recovered. If no match is found an error is
+reported. The signiture of distribution is in the form of a string:
+
+				signiture ::= [ { "s" | "v" } ]  ["C"] ["T"]
+				
+where "s" denotes a scalar argument and "v" a tensor argument. The "C" and "T" denote that the
+distribution can be censored or truncated (both options can be possible at the same time). Note that
+distributions can not have expressions as arguments.
+
+There are no tensor valued functions built into the BUGS language. Some scalar valued functions are
+also implemented externally.They are implemented in the same way as distributions are.  Internal
+scalar functions and external scalar functions differ in the types of arguments that they can
+have. External scalar functions can have tensor valued arguments but not expression as arguments
+while internal scalar functions can have expressions as arguments but not tensor valued arguments.
+
+
+
+Some examples of simple statements
+
+	<uni_statement>	x ~ dnorm(mu, tau)
+	
+	<uni_statement>	tau ~ dgamma(0.001, 0.001)
+	
+	<uni_statement>	n ~ dcat(p[1:4])
+	
+	<uni_statement>	t[i, j] ~ dweib(r, mu[i])C(t.cen[i, j],)
+	
+	<multi_statement>	x[1:2] ~ dmnorm(mu[], tau[,])
+	
+	<multi_statement>	tau[1:2, 1:2] ~ dwish(R[,], 2)
+
+	<scalar_statement>	mu[i] <- alpha - beta * pow(gamma,x[i])
+	
+	<scalar_statement>	logit(p[i]) <- alpha.star + beta * (x[i] - mean(x[]))
+	
+	<tensor_statement>	Sigma[1 : M , 1 : M] <- inverse(Omega[ , ])
+
+
+Some examples of compound statements
+	
+	<for_statement>	for( i in 1 : N ) {
+			Y[i] ~ dnorm(mu[i], tau)
+			mu[i] <- alpha - beta * pow(gamma,x[i])	
+		}
+		
+	<for_statement>	for( i in 1 : N ) {
+			for( j in 1 : T ) {
+				Y[i , j] ~ dnorm(mu[i , j],tau.c)
+				mu[i , j] <- alpha[i] + beta[i] * (x[j] - xbar)
+			}
+			alpha[i] ~ dnorm(alpha.c,alpha.tau)
+			beta[i] ~ dnorm(beta.c,beta.tau)
+		}

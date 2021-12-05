@@ -1,0 +1,7 @@
+name = "BugsParser"
+uuid = "ba9fb4c0-828e-4473-b6a1-cd2560fee5bf"
+authors = ["Philipp Gabler <phipsgabler@users.noreply.github.com>"]
+version = "0.1.0"
+
+[deps]
+CombinedParsers = "5ae71ed2-6f8a-4ed1-b94f-e14e8158f19e"
