@@ -25,39 +25,39 @@ using CombinedParsers: Delayed, word_char
     # <number> ::= [ <sign > ] ( <integer> | < real> )
     number = Either{Real}(integer, real)
 
-    index = Delayed(Union{Symbol, Expr, Real})
+    index = Delayed(Union{Symbol, Int64, Expr})
 
-    # # <scalar> ::= <name> [ SQUAREL <index> { COMMA <index> } SQUARER ]
+    # <scalar> ::= <name> [ SQUAREL <index> { COMMA <index> } SQUARER ]
     scalar = Either{Union{Symbol, Expr}}(
-        map(s -> :($(s.name)[$(s.indices...)]),
+        map(
+            s -> Expr(:scalar, :($(s.name)[$(s.indices...)])),
             Sequence(
                 :name => name,
-                :indices => Sequence(
-                    "[",
-                    space_maybe,
-                    Either(
-                        map(Returns(()), Sequence()),
-                        map(i -> tuple(i), index),
-                        map(t -> (t[begin], t[end]), index * space_maybe * "," * space_maybe * index),
+                :indices => Either(
+                    Sequence(
+                        "[", space_maybe,
+                        :i1 => index,
+                        space_maybe, ",", space_maybe,
+                        :i2 => index,
+                        space_maybe * "]"
                     ),
-                    space_maybe,
-                    "]",
-                )[3]
+                    Sequence("[", space_maybe, :i => index, space_maybe, "]"),
+                    map(t -> (;), "[" * space_maybe * "]"),
+                )
             )
         ),
-        name,
+        map(n -> Expr(:scalar, n), name)
     )
-    
-    # <index> ::= <integer> | <scalar>
-    # recursion
-    push!(index, scalar)
+
     push!(index, integer)
+    push!(index, scalar)
     
     # <range> ::= ( <index> [ COLON  <index> ] ) | SPACE
-    range = Either(
-        index,
-        map(t -> t[begin]:t[end], index * space_maybe  * ":" * space_maybe * index)
-    )
+    # range = Either(
+        # map(t -> t[begin]:t[end], index * space_maybe  * ":" * space_maybe * index),
+        # index,
+    # )
+    range = map(t -> t[begin]:t[end], index * space_maybe  * ":" * space_maybe * index)
     
     # <tensor> ::= <name> SQUAREL <range> [ { COMMA <range> } ] SQUARER
     tensor = map(Sequence(
@@ -65,23 +65,45 @@ using CombinedParsers: Delayed, word_char
         "[",
         space_maybe,
         :ranges => Either(
+            map(t -> (t[begin], t[end]), range * space_maybe * "," * space_maybe * range),
             map(r -> tuple(r), range),
-            map(t -> (t[begin], t[end]), range * space_maybe * "," * space_maybe * range)
         ),
         space_maybe,
         "]"
     )) do (name, ranges)
-        return :($name[$(ranges...)])
+        return Expr(:tensor, :($name[$(ranges...)]))
+    end
+
+    tensor = Sequence(
+        :name => name,
+        :ranges => Either(
+            Sequence(
+                "[", space_maybe,
+                :r1 => range,
+                space_maybe, ",", space_maybe,
+                :r2 => range,
+                space_maybe * "]"
+            ),
+            Sequence("[", space_maybe, :i => range, space_maybe, "]"),
+        )
+    ) do (name, ranges)
+        return Expr(:tensor, :($name[$(ranges...)]))
     end
 
 
     # ############ EXPRESSIONS ####################################################################
+
+    # <argument> ::= <scalar> | <tensor> | <number>
+    argument = tensor | scalar | number
+    
+    # <argument_list> ::= [ <argument> { COMMA <argument> } ]
+    argument_list = Optional(join(Repeat(argument), space_maybe * "," * space_maybe))
     
     # <unary_function_name> ::= ABS | ARCCOS| ARCCOSH | ARCSIN | ARCSINH | ARCTAN |
         # ARCTANH | CLOGLOG | COS | COSH|  EXP | ICLOGLOG | ILOGIT | LOG |  LOGFACT |
         # LOGGAM | LOGIT | PHI | ROUND | SIN | SINH | SOFTPLUS | SQRT | STEP | TAN | TANH | TRUNC
     unary_function_name = Either(
-        "abs", "arccos| arccosh", "arcsin", "arcsinh", "arctan", "arctanh", "cloglog", "cos",
+        "abs", "arccos", "arccosh", "arcsin", "arcsinh", "arctan", "arctanh", "cloglog", "cos",
         "cosh", "exp", "icloglog", "ilogit", "log", "logfact", "loggam", "logit", "phi", "round",
         "sin", "sinh", "softplus", "sqrt", "step", "tan", "tanh", "trunc"
     )
@@ -90,12 +112,6 @@ using CombinedParsers: Delayed, word_char
 
     # <link_function> ::= CLOGLOG | LOG | LOGIT | PROBIT
     link_function_name = Either("cloglog", "log", "logit", "probit")
-
-    # <argument> ::= <scalar> | <tensor> | <number>
-    argument = scalar | tensor | number
-    
-    # <argument_list> ::= [ <argument> { COMMA <argument> } ]
-    argument_list = join(argument, space_maybe * "," * space_maybe)
 
     # # <external_function> ::= <name> BRACKETL <argument_list> BRACKETR
     # external_function = Sequence(
