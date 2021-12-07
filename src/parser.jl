@@ -2,194 +2,149 @@ using CombinedParsers
 using CombinedParsers: Delayed, word_char
 
 
+const Value = Union{Symbol, Real, Expr}
+
 
 @with_names begin
-    ######### PRIMITIVES #############################################################
-    
-    newline_space = map(Returns(nothing), horizontal_space_maybe * vertical_space * horizontal_space_maybe)
-    
+    const newline_space = map(
+        Returns(nothing),
+        horizontal_space_maybe * vertical_space * horizontal_space_maybe
+    )
+end
+
+function intersperse(as, b)
+    return Iterators.take(
+        Iterators.flatten(Iterators.zip(as, Iterators.repeated(b))),
+        2length(as) - 1
+    )
+end
+
+separated(parsers...; separator = space_maybe) = Sequence(intersperse(parsers, separator)...)
+separated(transform::Union{Int, Function}, parsers...; separator = space_maybe) =
+    Sequence(transform, intersperse(parsers, separator)...)
+
+
+######### PRIMITIVES #############################################################
+@with_names begin
     # <letter> ::= "a" .. "z"   |  "A".."Z " | "?".."?.." |  "?".."?"
-    letter = ValueIn(:L) # "Letter" unicode class
+    const letter = ValueIn(:L) # "Letter" unicode class
     
     # <name> ::= <letter> [ { <letter> | <digit> | UNDERSCORE | PERIOD } ]
-    name = map(Symbol, !(letter * Repeat(word_char | ".")))
+    const name = map(Symbol, !(letter * Repeat(word_char | ".")))
 
     # <digit> ::= "0".."9"
     # <sign> ::= PLUS | MINUS
     # <integer> ::= <digit> [ {digit} ]
-    integer = NumericParser(Int64)
+    const integer = NumericParser(Int64)
 
     # <real> ::= [ <integer> ] PERIOD <integer> [ EXPONENT <sign> <integer> ] 
-    real = NumericParser(Float64)
+    const real = NumericParser(Float64)
     
     # <number> ::= [ <sign > ] ( <integer> | < real> )
-    number = Either{Real}(integer, real)
+    const number = Either{Real}(integer, real)
 
-    index = Delayed(Union{Symbol, Int64, Expr})
+    const index = Delayed(Value)
 
     # <scalar> ::= <name> [ SQUAREL <index> { COMMA <index> } SQUARER ]
-    scalar = Either{Union{Symbol, Expr}}(
-        map(
-            s -> Expr(:scalar, :($(s.name)[$(s.indices...)])),
-            Sequence(
-                :name => name,
-                :indices => Either(
-                    Sequence(
-                        "[", space_maybe,
-                        :i1 => index,
-                        space_maybe, ",", space_maybe,
-                        :i2 => index,
-                        space_maybe * "]"
-                    ),
-                    Sequence("[", space_maybe, :i => index, space_maybe, "]"),
-                    map(t -> (;), "[" * space_maybe * "]"),
-                )
+    const scalar = Either{Value}(
+        Sequence(
+            # s -> Expr(:scalar, :($(s.name)[$(s.indices...)])),
+            s -> :($(s.name)[$(s.indices...)]),
+            :name => name,
+            :indices => Either(
+                separated("[", :i1 => index, ",", :i2 => index, "]"),
+                separated("[", :i => index, "]"),
+                map(Returns((;)), "[", "]")
             )
         ),
-        map(n -> Expr(:scalar, n), name)
+        # map(n -> Expr(:scalar, n), name)
+        name
     )
 
     push!(index, integer)
     push!(index, scalar)
     
     # <range> ::= ( <index> [ COLON  <index> ] ) | SPACE
-    # range = Either(
-        # map(t -> t[begin]:t[end], index * space_maybe  * ":" * space_maybe * index),
-        # index,
-    # )
-    range = map(t -> t[begin]:t[end], index * space_maybe  * ":" * space_maybe * index)
+    # NOTE: should not be an integer...
+    const range = separated(:i1 => index, ":", :i2 => index) do s
+        :($(s.i1):$(s.i2))
+    end
     
     # <tensor> ::= <name> SQUAREL <range> [ { COMMA <range> } ] SQUARER
-    tensor = map(Sequence(
-        :name => name,
-        "[",
-        space_maybe,
-        :ranges => Either(
-            map(t -> (t[begin], t[end]), range * space_maybe * "," * space_maybe * range),
-            map(r -> tuple(r), range),
-        ),
-        space_maybe,
-        "]"
-    )) do (name, ranges)
-        return Expr(:tensor, :($name[$(ranges...)]))
-    end
-
-    tensor = Sequence(
+    const tensor = Sequence(
         :name => name,
         :ranges => Either(
-            Sequence(
-                "[", space_maybe,
-                :r1 => range,
-                space_maybe, ",", space_maybe,
-                :r2 => range,
-                space_maybe * "]"
-            ),
-            Sequence("[", space_maybe, :i => range, space_maybe, "]"),
+            separated("[", :r1 => range, ",", :r2 => range, "]"),
+            separated("[", :r => range, "]"),
         )
     ) do (name, ranges)
-        return Expr(:tensor, :($name[$(ranges...)]))
+        # return Expr(:tensor, :($name[$(ranges...)]))
+        return :($name[$(ranges...)])
+    end
+end
+
+############ EXPRESSIONS ####################################################################
+@with_names begin
+    # <argument> ::= <scalar> | <tensor> | <number>
+    # <argument_list> ::= [ <argument> { COMMA <argument> } ]
+    # <external_function> ::= <name> BRACKETL <argument_list> BRACKETR
+    # <tensor_function> ::= <name> BRACKETL <argument_list> BRACKETR
+    # This gets simlified: we just parse functions as expressions, and type-check at a later phase.
+    
+    expression = Delayed(Value)
+    
+    argument_list = Optional(join(Repeat(expression), space_maybe * "," * space_maybe))
+    
+    funcall = Sequence(
+        :name => name,
+        "(",
+        space_maybe,
+        :arguments => argument_list,
+        space_maybe,
+        ")"
+    ) do (name, arguments)
+        return :($name($(arguments...)))
+    end
+    
+    # <lhs> ::= <scalar> | <link_function> BRACKETL <scalar> BRACKETR
+    link_function = map(funcall -> Expr(:link, funcall), funcall)
+
+    # <factor> ::= [ MINUS ] (BRACKETL  <expression> BRACKETR |  <number> | <scalar> |
+    #     <unary_internal_function> | <binary_internal_function> | <external_function> )
+    factor = separated(
+        :sign => Optional(CharIn("+-")),
+        :expression => Either{Value}(
+            Sequence(3, "(", space_maybe, expression, space_maybe, ")"),
+            funcall,
+            number,
+            tensor,
+            scalar,
+        )
+    ) do (sign, expression)
+        if sign === missing
+            return expression
+        else
+            return Expr(:call, Symbol(sign), expression)
+        end
     end
 
+    # <term> ::= <factor> | <term> ( MULT | DIV ) <factor>
+    # AFTER LEFT RECURSION ELIMINATION:
+    # <term> ::= <factor> { ( MULT | DIV ) <factor> }
+    term = join(Repeat(factor), trim(CharIn("*/"), whitespace=space_maybe), infix=:prefix) do (x, xs)
+        return foldl((w, (op, v)) -> Expr(:call, Symbol(op), w, v), xs, init=x)::Value
+    end
 
-    # ############ EXPRESSIONS ####################################################################
-
-    # <argument> ::= <scalar> | <tensor> | <number>
-    argument = tensor | scalar | number
-    
-    # <argument_list> ::= [ <argument> { COMMA <argument> } ]
-    argument_list = Optional(join(Repeat(argument), space_maybe * "," * space_maybe))
-    
-    # <unary_function_name> ::= ABS | ARCCOS| ARCCOSH | ARCSIN | ARCSINH | ARCTAN |
-        # ARCTANH | CLOGLOG | COS | COSH|  EXP | ICLOGLOG | ILOGIT | LOG |  LOGFACT |
-        # LOGGAM | LOGIT | PHI | ROUND | SIN | SINH | SOFTPLUS | SQRT | STEP | TAN | TANH | TRUNC
-    unary_function_name = Either(
-        "abs", "arccos", "arccosh", "arcsin", "arcsinh", "arctan", "arctanh", "cloglog", "cos",
-        "cosh", "exp", "icloglog", "ilogit", "log", "logfact", "loggam", "logit", "phi", "round",
-        "sin", "sinh", "softplus", "sqrt", "step", "tan", "tanh", "trunc"
+    # <expression> ::= <term> | <expression> ( PLUS | MINUS ) <term>
+    # AFTER LEFT RECURSION ELIMINATION:
+    # <expression> ::= <term> { (PLUS | MINUS) <term>}
+    push!(
+        expression,
+        join(Repeat(term), trim(CharIn("+-"), whitespace=space_maybe), infix=:prefix) do (x, xs)
+            return foldl((w, (op, v)) -> Expr(:call, Symbol(op), w, v), xs, init=x)::Value
+        end
     )
-    # <binary_function_name> ::= EQUALS | MAX | MIN | POWER
-    binary_function_name = Either("equals", "max", "min", "power")
 
-    # <link_function> ::= CLOGLOG | LOG | LOGIT | PROBIT
-    link_function_name = Either("cloglog", "log", "logit", "probit")
-
-    # # <external_function> ::= <name> BRACKETL <argument_list> BRACKETR
-    # external_function = Sequence(
-    #     :name => name,
-    #     "(",
-    #     space_maybe,
-    #     :arguments => argument_list,
-    #     space_maybe,
-    #     ")"
-    # )
-
-    # # <tensor_function> ::= <name> BRACKETL <argument_list> BRACKETR
-    # tensor_function = Sequence(
-    #     :name => name,
-    #     "(",
-    #     space_maybe,
-    #     :arguments => argument_list,
-    #     space_maybe,
-    #     ")"
-    # )
-
-    # expression = Delayed(Any)
-    
-    # # <unary_internal_function> ::= <unary_function_name> BRACKETL <expression>  BRACKETR
-    # # <binary_internal_function> ::= <binary_function_name> BRACKETL <expression> COMMA <expression>  BRACKETR
-    # internal_function = Sequence(
-    #     :name => (unary_function_name | binary_function_name),
-    #     "(",
-    #     space_maybe,
-    #     :arguments => join(Repeat(1, 2, expression), space_maybe * "," * space_maybe),
-    #     space_maybe,
-    #     ")"
-    # )
-
-    # # <lhs> ::= <scalar> | <link_function> BRACKETL <scalar> BRACKETR
-    # link_function = Sequence(
-    #     :name => link_function_name,
-    #     "(",
-    #     space_maybe,
-    #     :argument => scalar,
-    #     space_maybe,
-    #     ")"
-    # )
-    
-    # # <factor> ::= [ MINUS ] (BRACKETL  <expression> BRACKETR |  <number> | <scalar> |
-    # #     <unary_internal_function> | <binary_internal_function> | <external_function> )
-    # factor = Sequence(
-    #     :sign => Optional(CharIn("+-"), default="+"),
-    #     space_maybe,
-    #     Either(
-    #         Sequence("(", space_maybe, expression, space_maybe, ")")[3],
-    #         number,
-    #         scalar,
-    #         internal_function,
-    #         external_function
-    #     )
-    # )
-    
-    # # <term> ::= <factor> | <term> ( MULT | DIV ) <factor>
-    # term = Either(factor)
-    # push!(term, Sequence(
-    #     :lhs => term,
-    #     space_maybe,
-    #     CharIn("*/"),
-    #     space_maybe,
-    #     factor
-    # ))
-
-    
-    # # <expression> ::= <term> | <expression> ( PLUS | MINUS ) <term>
-    # # recursion
-    # push!(expression, term)
-    # push!(expression, Sequence(
-    #     :lhs => expression,
-    #     space_maybe,
-    #     CharIn("+-"),
-    #     :rhs => term
-    # ))
     
     # # <distribution> ::= <name> BRACKETL <argument_list> BRACKETR
     # distribution = Sequence(
