@@ -23,6 +23,19 @@ separated(parsers...; separator = space_maybe) = Sequence(intersperse(parsers, s
 separated(transform::Union{Int, Function}, parsers...; separator = space_maybe) =
     Sequence(transform, intersperse(parsers, separator)...)
 
+trimmed(p) = trim(p, whitespace = space_maybe)
+
+function function_parser(p_name, p_argument_list)
+    return Sequence(
+        :name => p_name,
+        "(",
+        space_maybe,
+        :arguments => p_argument_list,
+        space_maybe,
+        ")"
+    )
+end
+
 
 ######### PRIMITIVES #############################################################
 @with_names begin
@@ -93,21 +106,15 @@ end
     
     expression = Delayed(Value)
     
-    argument_list = Optional(join(Repeat(expression), space_maybe * "," * space_maybe))
-    
-    funcall = Sequence(
-        :name => name,
-        "(",
-        space_maybe,
-        :arguments => argument_list,
-        space_maybe,
-        ")"
+    funcall = map(
+        function_parser(name, Optional(join(Repeat(expression), trimmed(","))))
     ) do (name, arguments)
         return :($name($(arguments...)))
     end
     
     # <lhs> ::= <scalar> | <link_function> BRACKETL <scalar> BRACKETR
-    link_function = map(funcall -> Expr(:link, funcall), funcall)
+    # link_function = map(funcall -> Expr(:link, funcall), funcall)
+    link_function = funcall
 
     # <factor> ::= [ MINUS ] (BRACKETL  <expression> BRACKETR |  <number> | <scalar> |
     #     <unary_internal_function> | <binary_internal_function> | <external_function> )
@@ -131,7 +138,7 @@ end
     # <term> ::= <factor> | <term> ( MULT | DIV ) <factor>
     # AFTER LEFT RECURSION ELIMINATION:
     # <term> ::= <factor> { ( MULT | DIV ) <factor> }
-    term = join(Repeat(factor), trim(CharIn("*/"), whitespace=space_maybe), infix=:prefix) do (x, xs)
+    term = join(Repeat(factor), trimmed(CharIn("*/")), infix=:prefix) do (x, xs)
         return foldl((w, (op, v)) -> Expr(:call, Symbol(op), w, v), xs, init=x)::Value
     end
 
@@ -140,49 +147,31 @@ end
     # <expression> ::= <term> { (PLUS | MINUS) <term>}
     push!(
         expression,
-        join(Repeat(term), trim(CharIn("+-"), whitespace=space_maybe), infix=:prefix) do (x, xs)
+        join(Repeat(term), trimmed(CharIn("+-")), infix=:prefix) do (x, xs)
             return foldl((w, (op, v)) -> Expr(:call, Symbol(op), w, v), xs, init=x)::Value
         end
     )
-
     
-    # # <distribution> ::= <name> BRACKETL <argument_list> BRACKETR
-    # distribution = Sequence(
-    #     :name => name,
-    #     "(",
-    #     space_maybe,
-    #     :arguments => argument_list,
-    #     space_maybe,
-    #     ")"
-    # )
+    # <distribution> ::= <name> BRACKETL <argument_list> BRACKETR
+    distribution = map(
+        function_parser(name, Optional(join(Repeat(expression), trimmed(","))))
+    ) do (name, arguments)
+        return :($name($(arguments...)))
+    end
 
-    # # <censored> ::= CENSOR BRACKETL [ <scalar> ] COMMA [ <scalar> ] BRACKETR
-    # censored = Sequence(
-    #     "C",
-    #     "(",
-    #     space_maybe,
-    #     :left => scalar,
-    #     space_maybe,
-    #     ",",
-    #     space_maybe,
-    #     :right => scalar,
-    #     space_maybe,
-    #     ")"
-    # )
+    # <censored> ::= CENSOR BRACKETL [ <scalar> ] COMMA [ <scalar> ] BRACKETR
+    censored = map(
+        function_parser(map(Symbol, parser("C")), separated(:l => scalar, ",", :r => scalar))
+    ) do (_, (l, r))
+        return Expr(:censored, l, r)
+    end
     
-    # # <truncated> ::= TRUNCATE BRACKETL [ <scalar> ] COMMA  [ <scalar> ] BRACKETR
-    # censored = Sequence(
-    #     "T",
-    #     "(",
-    #     space_maybe,
-    #     :left => scalar,
-    #     space_maybe,
-    #     ",",
-    #     space_maybe,
-    #     :right => scalar,
-    #     space_maybe,
-    #     ")"
-    # )
+    # <truncated> ::= TRUNCATE BRACKETL [ <scalar> ] COMMA  [ <scalar> ] BRACKETR
+    truncated = map(
+        function_parser(map(Symbol, parser("T")), separated(:l => scalar, ",", :r => scalar))
+    ) do (_, (l, r))
+        return Expr(:truncated, l, r)
+    end
 
 
 
