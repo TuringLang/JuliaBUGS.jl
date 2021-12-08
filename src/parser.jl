@@ -52,48 +52,41 @@ end
 
     # <real> ::= [ <integer> ] PERIOD <integer> [ EXPONENT <sign> <integer> ] 
     const real = NumericParser(Float64)
-    
+
     # <number> ::= [ <sign > ] ( <integer> | < real> )
     const number = Either{Real}(integer, real)
 
+    # <index> ::= <integer> | <scalar>
     const index = Delayed(Value)
-
-    # <scalar> ::= <name> [ SQUAREL <index> { COMMA <index> } SQUARER ]
-    const scalar = Either{Value}(
-        Sequence(
-            # s -> Expr(:scalar, :($(s.name)[$(s.indices...)])),
-            s -> :($(s.name)[$(s.indices...)]),
-            :name => name,
-            :indices => Either(
-                separated("[", :i1 => index, ",", :i2 => index, "]"),
-                separated("[", :i => index, "]"),
-                map(Returns((;)), "[", "]")
-            )
-        ),
-        # map(n -> Expr(:scalar, n), name)
-        name
-    )
-
-    push!(index, integer)
-    push!(index, scalar)
     
     # <range> ::= ( <index> [ COLON  <index> ] ) | SPACE
-    # NOTE: should not be an integer...
-    const range = separated(:i1 => index, ":", :i2 => index) do s
-        :($(s.i1):$(s.i2))
-    end
+    const range = Either(
+        separated(:i1 => index, ":", :i2 => index) do (i1, i2)
+            :($i1:$i2)
+        end,
+        index,
+        map(Returns(:(:)), space_maybe)
+    )
     
+    # <scalar> ::= <name> [ SQUAREL <index> { COMMA <index> } SQUARER ]
     # <tensor> ::= <name> SQUAREL <range> [ { COMMA <range> } ] SQUARER
-    const tensor = Sequence(
+    const variable = name
+    const indexed_variable = Sequence(
         :name => name,
-        :ranges => Either(
-            separated("[", :r1 => range, ",", :r2 => range, "]"),
-            separated("[", :r => range, "]"),
-        )
-    ) do (name, ranges)
-        # return Expr(:tensor, :($name[$(ranges...)]))
-        return :($name[$(ranges...)])
+        "[",
+        space_maybe,
+        :indices => join(Repeat(range), trimmed(",")),
+        space_maybe,
+        "]"
+    ) do (name, indices)
+        return :($(name)[$(indices...)])
     end
+
+    push!(index, integer)
+    push!(index, indexed_variable)
+    push!(index, variable)
+    
+    const value = number | indexed_variable | variable
 end
 
 ############ EXPRESSIONS ####################################################################
@@ -104,28 +97,22 @@ end
     # <tensor_function> ::= <name> BRACKETL <argument_list> BRACKETR
     # This gets simlified: we just parse functions as expressions, and type-check at a later phase.
     
-    expression = Delayed(Value)
+    const expression = Delayed(Value)
     
-    funcall = map(
+    const funcall = map(
         function_parser(name, Optional(join(Repeat(expression), trimmed(","))))
     ) do (name, arguments)
         return :($name($(arguments...)))
     end
-    
-    # <lhs> ::= <scalar> | <link_function> BRACKETL <scalar> BRACKETR
-    # link_function = map(funcall -> Expr(:link, funcall), funcall)
-    link_function = funcall
 
     # <factor> ::= [ MINUS ] (BRACKETL  <expression> BRACKETR |  <number> | <scalar> |
     #     <unary_internal_function> | <binary_internal_function> | <external_function> )
-    factor = separated(
+    const factor = separated(
         :sign => Optional(CharIn("+-")),
         :expression => Either{Value}(
             Sequence(3, "(", space_maybe, expression, space_maybe, ")"),
             funcall,
-            number,
-            tensor,
-            scalar,
+            value,
         )
     ) do (sign, expression)
         if sign === missing
@@ -138,7 +125,7 @@ end
     # <term> ::= <factor> | <term> ( MULT | DIV ) <factor>
     # AFTER LEFT RECURSION ELIMINATION:
     # <term> ::= <factor> { ( MULT | DIV ) <factor> }
-    term = join(Repeat(factor), trimmed(CharIn("*/")), infix=:prefix) do (x, xs)
+    const term = join(Repeat(factor), trimmed(CharIn("*/")), infix=:prefix) do (x, xs)
         return foldl((w, (op, v)) -> Expr(:call, Symbol(op), w, v), xs, init=x)::Value
     end
 
@@ -153,76 +140,79 @@ end
     )
     
     # <distribution> ::= <name> BRACKETL <argument_list> BRACKETR
-    distribution = map(
+    const distribution = map(
         function_parser(name, Optional(join(Repeat(expression), trimmed(","))))
     ) do (name, arguments)
         return :($name($(arguments...)))
     end
 
+    # TODO: sure that this should be <scalar>, not (<number> | <scalar>)?
     # <censored> ::= CENSOR BRACKETL [ <scalar> ] COMMA [ <scalar> ] BRACKETR
-    censored = map(
-        function_parser(map(Symbol, parser("C")), separated(:l => scalar, ",", :r => scalar))
-    ) do (_, (l, r))
-        return Expr(:censored, l, r)
+    # TODO: what about empty bounds, `C(1,)`
+    const censored = map(
+        function_parser(
+            map(Symbol, parser("C")), separated(:l => value, ",", :r => value)
+        )
+    ) do (_, censoring)
+        return censoring
     end
-    
+
+    # TODO: sure that this should be <scalar>, not (<number> | <scalar>)?
+    # TODO: what about empty bounds, `T(1,)`
     # <truncated> ::= TRUNCATE BRACKETL [ <scalar> ] COMMA  [ <scalar> ] BRACKETR
-    truncated = map(
-        function_parser(map(Symbol, parser("T")), separated(:l => scalar, ",", :r => scalar))
-    ) do (_, (l, r))
-        return Expr(:truncated, l, r)
+    const truncated = map(
+        function_parser(
+            map(Symbol, parser("T")), separated(:l => value, ",", :r => value)
+        )
+    ) do (_, truncation)
+        return truncation
+    end
+end
+
+
+##### STATEMENTS ##################################################################
+@with_names begin
+    # <uni_statement> ::= <scalar> DISTRIBUTED <distribution> [ <censored> ] [ <truncated> ]
+    # <multi_statement> ::= <tensor> DISTRIBUTED <distribution>
+    # <stochastic_statement> ::= <uni_statement> | <multi_statement>
+    # TODO: constants on LHS?
+    const stochastic_statement = separated(
+        :lhs => (indexed_variable | variable),
+        "~",
+        :rhs => distribution,
+        :censoring => Optional(censored),
+        :truncation => Optional(truncated)
+    ) do (lhs, rhs, censoring, truncation)
+        if !ismissing(censoring)
+            rhs = Expr(:censored, rhs, censoring...)
+        end
+
+        if !ismissing(truncation)
+            rhs = Expr(:truncation, rhs, truncation...)
+        end
+        
+        return Expr(:call, :~, lhs, rhs)
+    end
+    
+    # link_function = map(funcall -> Expr(:link, funcall), funcall)
+    const link_function = function_parser(name, Sequence(indexed_variable | variable))
+
+    # <lhs> ::= <scalar> | <link_function> BRACKETL <scalar> BRACKETR
+    const lhs = indexed_variable | variable | link_function
+    
+    # <scalar_statement> ::= <lhs> BECOMES <expression>
+    # <tensor_statement> ::= <tensor> BECOMES <tensor_function>
+    # <logical_statement> ::= <scalar_statement> | <tensor_statement>
+    const logical_statement = separated(
+        :lhs => lhs,
+        "<-",
+        :rhs => expression
+    ) do (lhs, rhs)
+        return Expr(:(=), lhs, rhs)
     end
 
-
-
-    # ##### STATEMENTS ##################################################################
-
-    # # <uni_statement>  ::= <scalar> DISTRIBUTED <distribution> [ <censored> ] [ <truncated> ]
-    # uni_statement = Sequence(
-    #     :lhs => scalar,
-    #     space_maybe,
-    #     "~",
-    #     space_maybe,
-    #     :rhs => distribution,
-    #     :censored => Optional(censored),
-    #     :truncated => Optional(truncated)
-    # )
-
-    # # <multi_statement> ::= <tensor> DISTRIBUTED <distribution>
-    # multi_statement = Sequence(
-    #     :lhs => tensor,
-    #     space_maybe,
-    #     "~",
-    #     space_maybe,
-    #     :rhs => distribution
-    # )
-
-    # # <stochastic_statement> ::= <uni_statement> | <multi_statement>
-    # stochastic_statement = uni_statement | multi_statement
-
-    # # <scalar_statement> ::= <lhs> BECOMES <expression>
-    # scalar_statement = Sequence(
-    #     :lhs => (scalar | link_function),
-    #     space_maybe,
-    #     "<-",
-    #     space_maybe,
-    #     :rhs => expression
-    # )
-
-    # # <tensor_statement> ::= <tensor> BECOMES <tensor_function>
-    # tensor_statement = Sequence(
-    #     :lhs => tensor,
-    #     space_maybe,
-    #     "<-",
-    #     space_maybe,
-    #     :rhs => tensor_function
-    # )
-
-    # # <logical_statement> ::= <scalar_statement> | <tensor_statement>
-    # logical_statement = scalar_statement | tensor_statement
-    
-    # # <simple_statement> ::= <stochastic_statement> | <logical_statement>
-    # simple_statement = stochastic_statement | logical_statement
+    # <simple_statement> ::= <stochastic_statement> | <logical_statement>
+    const simple_statement = stochastic_statement | logical_statement
 
     # statements = Delayed(Any)
    
