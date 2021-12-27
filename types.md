@@ -1,20 +1,66 @@
-The type system of BUGS has several interesting properties:
+# Introduction
 
-1. There are no abstractions.  All values of function types have to be known beforehand.
+BUGS programs, in contrast to some other PPLs, have the sole purpose of implicitly describing a
+directed graphical model.  This means that there are not declarations of variables, input, outputs,
+etc., nor is order relevant for semantics.  A program like
+
+```
+model
+{
+  for( i in 1 : N ) {
+    for( j in 1 : T ) {
+      Y[i , j] ~ dnorm(mu[i , j], tau.c)
+      mu[i , j] <- alpha[i] + beta[i] * (x[j] - xbar)
+    }
+    alpha[i] ~ dnorm(alpha.c, alpha.tau)
+    beta[i] ~ dnorm(beta.c, beta.tau)
+  }
+  tau.c ~ dgamma(0.001, 0.001)
+  sigma <- 1 / sqrt(tau.c)
+  alpha.c ~ dnorm(0.0, 1.0E-6)
+  alpha.tau ~ dgamma(0.001, 0.001)
+  beta.c ~ dnorm(0.0, 1.0E-6)
+  beta.tau ~ dgamma(0.001, 0.001)
+  alpha0 <- alpha.c - xbar * beta.c
+}
+```
+
+denotes only a certain relationship between logical (i.e., deterministic) and stochastic nodes.
+Variable are either names of nodes (when on the LHS of a sampling or assignement statement, like
+`alpha` or `sigma`), or otherwise constant parts of the “data” (like `N` and `xbar`), with which a
+model must be combined to instantiate it.
+
+Loops are just a form of “plate notation”: they allow to concisely express repetition of equal
+statements over many constant indices, and are thus equivalent to their rolled-out form given the
+data.
+
+> In the BUGS language the type information is fine grained: each component of a tensor can have
+> different type information. […] One common case is where some components of a tensor have
+> been observed while other components need to be estimated.
+
+# Formalization
+
+The type system of BUGS has several interesting properties compared to an off-the-shelf lambda
+calculus language:
+
+1. There are no means to introduce any values except by logical or
+   stochastic relations, especially no functions.  All values of function types have to be known
+   beforehand.
 2. There are no type ascriptions (or “variable declarations”).  The types of involved variables
    are reconstructed solely from their usages in expressions.  (BUGS programs are not ordered; 
    you have to unify constraints over the complete program).
-3. There is a simple, non-extensible subtying hierarchy within the primitive types.
-4. Types can be “colored” as either logical (`T @ log`) or stochastic (`T @ stoch`).  These 
-   color annotations are propagated through expressions and used to constrain certain operations.
-   They work independently from the subtyping system.
+3. There is a simple, non-extensible subtying hierarchy within the primitive types (basically `Int
+   <: Float`).
+4. Types can be considered “colored” as either logical (`T @ log`) or stochastic (`T @ stoch`).
+   These color annotations are propagated through expressions and used to constrain certain
+   operations.  They work independently from the subtyping system.
    
 The following implementation is heavily influenced by (and uses the same syntax as) the 
 algorithmic subtyping and constraint-based type reconstruction chapters from “Types 
 and Programming Languages”.
 
-- Typings use `::` instead of `:`, since the latter is object syntax for ranges.
-- Type judgements have the most general form `Γ ⊢ e : T @ α | 𝒞`, where `Γ` is the environment,
+- Typings use `::` instead of `:`, since the latter is the syntax for ranges.
+- Type judgements have the most general form `Γ ⊢ e :: T @ α | 𝒞`, where `Γ` is the environment,
   `e` the typed expression, `T` the type, `α` the color, and `𝒞` the set of constraints.  If
   unnecessary, the color and constraint part are left out for readability (resulting in an
   implicit “any color” annotation or the empty constraint set, repectively).
@@ -23,9 +69,9 @@ TODO: describe coercion semantics when a subtyping rule is applied.
 
 ### Types
 
-There are two primitive number types `ℤ` and `ℝ` for whole and real numbers.  Values of these
-types cannot be constructed, however; scalars are instead always tensors of rank zero, which
-are tagged by the primitive types.  `Int` and `Real` serve as abbreviations for these cases.
+There are two primitive number types `ℤ` and `ℝ` for whole and real numbers.  Values of these types
+cannot be constructed, however; all instances are tensors.  Scalars are just tensors of rank zero,
+which are tagged by the primitive types.  `Int` and `Real` serve as abbreviations for these cases.
 
 The other primitives are ranges (which can only consist
 of integers), `Void` for statements, logical and stochastic function types (the latter
@@ -63,6 +109,11 @@ Nothing interesting to see here: integers are subsumed by reals, and tensors are
 
 ```
 ------
+T <: T
+```
+
+```
+------
 ℤ <: ℝ
 ```
 
@@ -71,6 +122,9 @@ Nothing interesting to see here: integers are subsumed by reals, and tensors are
 ------------------------------
 Tensor{T₁, k} <: Tensor{T₂, k}
 ```
+
+(Functions are hence technically invariant, but that is irrelevant as there are no higher-order
+function.  TODO: maybe there can be higher-order functions in the stdlib?)
 
 ### Variables
 
