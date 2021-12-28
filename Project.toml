@@ -5,3 +5,4 @@ version = "0.1.0"
 
 [deps]
 CombinedParsers = "5ae71ed2-6f8a-4ed1-b94f-e14e8158f19e"
+Lerche = "d42ef402-04e6-4356-9f73-091573ea58dc"
