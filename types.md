@@ -1,8 +1,9 @@
 # Introduction
 
 BUGS programs, in contrast to some other PPLs, have the sole purpose of implicitly describing a
-directed graphical model.  This means that there are not declarations of variables, input, outputs,
-etc., nor is order relevant for semantics.  A program like
+directed graphical model.  This means that they don’t really have operational semantics – there are
+not declarations of variables, input, outputs, etc., nor is order relevant.  A program
+like
 
 ```
 model
@@ -45,12 +46,12 @@ calculus language:
 
 1. There are no means to introduce any values except by logical or
    stochastic relations, especially no functions.  All values of function types have to be known
-   beforehand.
+   beforehand, so no types need to be synthesized in applications.
 2. There are no type ascriptions (or “variable declarations”).  The types of involved variables
    are reconstructed solely from their usages in expressions.  (BUGS programs are not ordered; 
    you have to unify constraints over the complete program).
 3. There is a simple, non-extensible subtying hierarchy within the primitive types (basically `Int
-   <: Float`).
+   <: Real`).
 4. Types can be considered “colored” as either logical (`T @ log`) or stochastic (`T @ stoch`).
    These color annotations are propagated through expressions and used to constrain certain
    operations.  They work independently from the subtyping system.

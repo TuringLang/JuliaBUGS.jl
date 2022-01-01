@@ -2,48 +2,41 @@ check_lhs(expr) = check_lhs(Bool, expr) || error("Invalid LHS expression `$expr`
 check_lhs(::Type{Bool}, expr) = false
 check_lhs(::Type{Bool}, ::Symbol) = true
 function check_lhs(::Type{Bool}, expr::Expr)
-    if Meta.isexpr(expr, :ref)
-        return true
-    elseif Meta.isexpr(expr, :call, 2) && check_lhs(Bool, expr.args[2])
-        return true
-    else
-        return false
-    end
+    return Meta.isexpr(expr, :ref) ||
+        (Meta.isexpr(expr, :call, 2) && check_lhs(Bool, expr.args[2]))
 end
 
 """
-    jbugs_expr(expr)
+    jbugs_expression(expr)
 
-Check & normalize BUGS expressions (function calls, indexing).
+Check & normalize BUGS expressions (function calls, variables, literals, indexed variables).
 """
-function jbugs_expr end
+function jbugs_expression end
 
 """
-    jbugs_expr(expr)
+    jbugs_range(expr)
 
 Check & normalize BUGS ranges.
 """
 function jbugs_range(expr)
-    if Meta.isexpr(expr, :(:), 2)
-        return Expr(:(:), jbugs_expr.(expr.args)...)
-    elseif Meta.isexpr(expr, :call, 3) && expr.args[1] == :(:)
-        return Expr(:(:), jbugs_expr(expr.args[2]), jbugs_expr(expr.args[3]))
+    if Meta.isexpr(expr, :(:)) && length(expr.args) in (0, 2)
+        return Expr(:(:), jbugs_expression.(expr.args)...)
+    elseif Meta.isexpr(expr, :call) && expr.args[1] == :(:) && length(expr.args) in (1, 3)
+        return Expr(:(:), jbugs_expression.(expr.args[2:end])...)
     else
         error("Illegal range: `$expr`")
     end
 end
 
-
-
 function jbugs_index(expr)
     try
-        return jbugs_expr(expr)
+        return jbugs_expression(expr)
     catch
         return jbugs_range(expr)
     end
 end
 
-function jbugs_expr(expr)
+function jbugs_expression(expr)
     if expr isa Union{Symbol, Number}
         return expr
     elseif Meta.isexpr(expr, :ref)
@@ -52,30 +45,43 @@ function jbugs_expr(expr)
         if expr.args[1] == :getindex
             return Expr(:ref, jbugs_index.(expr.args[2:end])...)
         else
-            return Expr(:call, jbugs_expr.(expr.args)...)
+            return Expr(:call, jbugs_expression.(expr.args)...)
         end
     else
         error("Illegal expression: `$expr`")
     end
 end
 
+function jbugs_block(expr)
+    if Meta.isexpr(expr, :block)
+        stmts = [jbugs_statement(e) for e in expr.args if !(e isa LineNumberNode)]
+        return Expr(:block, stmts...)
+    else
+        try
+            return Expr(:block, jbugs_statement(expr))
+        catch
+            error("Expression is not a block")
+        end
+    end
+end
+
 """
-    jbugs_stmt(expr)
+    jbugs_statement(expr)
 
 Check & normalize BUGS statements (logical & stochastic assignment, for, if).
 """
-function jbugs_stmt(expr::Expr)
+function jbugs_statement(expr::Expr)
     if Meta.isexpr(expr, :(=), 2)
-        lhs, rhs = jbugs_expr.(expr.args)
+        lhs, rhs = jbugs_expression.(expr.args)
         check_lhs(lhs)
         return Expr(:(=), lhs, rhs)
     elseif Meta.isexpr(expr, :(~), 2)
-        lhs, rhs = jbugs_expr.(expr.args)
+        lhs, rhs = jbugs_expression.(expr.args)
         check_lhs(lhs)
         return Expr(:(~), lhs, rhs)
     elseif Meta.isexpr(expr, :if, 2)
         condition, body = expr.args
-        return Expr(:if, jbugs_expr(condition), jbugs_stmt(expr))
+        return Expr(:if, jbugs_expression(condition), jbugs_block(body))
     elseif Meta.isexpr(expr, :for, 2)
         condition, body = expr.args
         if Meta.isexpr(condition, :(=), 2)
@@ -85,26 +91,22 @@ function jbugs_stmt(expr::Expr)
                 error("Illegal loop variable declaration: `$condition`")
             else
                 condition = Expr(:(=), var, range)
-                return Expr(:for, condition, [jbugs_stmt(e) for e in body.args if !(e isa LineNumberNode)]...)
+                return Expr(:for, condition, jbugs_block(body))
             end
         else
             error("Invalid loop header: `$condition`")
         end
     elseif Meta.isexpr(expr, :call, 3) && expr.args[1] == :(~)
-        return jbugs_stmt(Expr(:(~), expr.args[2:end]...))
+        return jbugs_statement(Expr(:(~), expr.args[2:end]...))
     elseif Meta.isexpr(expr, :block)
-        return Expr(:block, [jbugs_stmt(e) for e in expr.args if !(e isa LineNumberNode)]...)
+        return jbugs_block(expr)
     else
         error("Illegal statement of type `$(expr.head)`")
     end
 end
 
 function jbugs(expr)
-    if Meta.isexpr(expr, :block)
-        return Expr(:block, [jbugs_stmt(e) for e in expr.args if !(e isa LineNumberNode)]...)
-    else
-        error("Expression is not a block")
-    end
+    return jbugs_block(expr)
 end
 
 """
