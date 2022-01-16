@@ -47,6 +47,8 @@ function jbugs_expression(expr)
         else
             return Expr(:call, jbugs_expression.(expr.args)...)
         end
+    elseif Meta.isexpr(expr, :block, 2) && expr.args[1] isa LineNumberNode
+        return Expr(:block, expr.args[1], jbugs_expression(expr.args[2]))
     else
         error("Illegal expression: `$expr`")
     end
@@ -60,7 +62,7 @@ function jbugs_block(expr)
         try
             return Expr(:block, jbugs_statement(expr))
         catch
-            error("Expression is not a block")
+            error("Expression `$expr` is not a block")
         end
     end
 end
