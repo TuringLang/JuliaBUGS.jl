@@ -1,7 +1,6 @@
 module BugsParser
 
-# include("parser.jl")
-include("jbugs.jl")
+include("bugsast.jl")
 include("typechecker.jl")
 
 # export @bugsast_str

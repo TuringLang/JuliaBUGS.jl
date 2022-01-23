@@ -21,29 +21,6 @@ regression_data = (
 )
 
 
-regions1 = @bugsast begin
-    x[1] = 10
-    x[2] ~ dnorm(0, 1)
-    for i in 1:x[1]
-        y[i] = i
-    end
-end
-
-regions2 = @bugsast begin
-    x[2] ~ dnorm(0, 1)
-    for i in 1:x[1]
-        y[i] = i
-    end
-end
-
-regions3 = @bugsast begin
-    x1 = 10
-    x2 ~ dnorm(0, 1)
-    for i in 1:x1
-        y[i] = i
-    end
-end
-
 rats = @bugsast begin
     for i in 1:N
         for j in 1:T
@@ -80,4 +57,30 @@ hearts = @bugsast begin
     logit(θ) = δ
     delta ~ dnorm(0, 1e-4)
 end
+
+
+regions1 = @bugsast begin
+    x[1] = 10
+    x[2] ~ dnorm(0, 1)
+    for i in 1:x[1]
+        y[i] = i
+    end
+end
+
+regions2 = @bugsast begin
+    x[2] ~ dnorm(0, 1)
+    for i in 1:x[1]
+        y[i] = i
+    end
+end
+
+regions3 = @bugsast begin
+    x1 = 10
+    x2 ~ dnorm(0, 1)
+    for i in 1:x1
+        y[i] = i
+    end
+end
+
+
 
