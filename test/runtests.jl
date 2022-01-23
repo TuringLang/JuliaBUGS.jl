@@ -1,6 +1,8 @@
 using BugsParser
 using Test
 
+# more examples can be found here: https://www.mrc-bsu.cam.ac.uk/software/bugs/
+
 regression = @bugsast begin
     for i in 1:N
         Y[i] ~ dnorm(μ[i], τ)
