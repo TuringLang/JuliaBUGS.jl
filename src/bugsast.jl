@@ -138,13 +138,20 @@ macro bugsmodel_str(s)
         r"\[\p{Zs}*(?=,)" => "[:",
         r",\p{Zs}*(?=[,\]])" => ",:",
         # ignore reserved words (\b is word boundary)
-        r"\bin\b" => "in",
-        r"\bfor\b" => "for",
-        r"\bif\b" => "if",
+        r"\b(in|for|if|C|T)\b" => s"\1",
         # ignore floats (could otherwise overlap with identifiers: ., E, e)
         r"(((\p{N}+\.\p{N}+)|(\p{N}+\.?))([eE][+-]?\p{N}+)?)" => s"\1",
         # wrap variable names in var-strings (to allow variable names with .)
         r"((?:(?:\p{L}\p{M}*)|\.)(?:(?:\p{L}\p{M}*)|\.|\p{N})*)" => s"var\"\1\"", 
+    )
+    transformed_code = replace(
+        transformed_code,
+        r"(var\"[^\"]+\"\(.*\))\p{Zs}*T\p{Zs}*\(\p{Zs}*,(.+)\)" => s"truncated(\1, -Inf, \2)",
+        r"(var\"[^\"]+\"\(.*\))\p{Zs}*T\p{Zs}*\((.+),\p{Zs}*\)" => s"truncated(\1, \2, Inf)",
+        r"(var\"[^\"]+\"\(.*\))\p{Zs}*T\p{Zs}*\((.+),(.+)\)" => s"truncated(\1, \2, \3)",
+        r"(var\"[^\"]+\"\(.*\))\p{Zs}*C\p{Zs}*\(\p{Zs}*,(.+)\)" => s"censored(\1, -Inf, \2)",
+        r"(var\"[^\"]+\"\(.*\))\p{Zs}*C\p{Zs}*\((.+),\p{Zs}*\)" => s"censored(\1, \2, Inf)",
+        r"(var\"[^\"]+\"\(.*\))\p{Zs}*C\p{Zs}*\((.+),(.+)\)" => s"censored(\1, \2, \3)",
     )
     # wrap the whole thing in a block
     transformed_code = "begin\n$transformed_code\nend"

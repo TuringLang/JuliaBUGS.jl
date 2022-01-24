@@ -49,3 +49,10 @@ beta ~ dnorm(0, 0.0001)
 Sigma.inv[1:4, 1:4] ~ dwish(R[,], 4)
 Sigma[1:4, 1:4] <- inverse(Sigma.inv[,])
 """
+
+truncation = bugsmodel"""
+a ~ dwish(R[,], 4) C (0, 1)
+a ~ dwish(R[,], 4) C (,1)
+a ~ dwish(R[,], 4) C (0,)
+a ~ dwish(R[,], 4) T (0, 1)
+"""
