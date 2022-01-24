@@ -123,3 +123,33 @@ converted from `:call` variants.
 macro bugsast(expr)
     return QuoteNode(bugsast(expr))
 end
+
+
+macro bugsmodel_str(s)
+    # remove parentheses around loops
+    transformed_code = replace(s, r"for\p{Zs}*\((.*)\)\p{Zs}*{" => s"for \1 {")
+    transformed_code = replace(
+        transformed_code,
+        "<-" => "=",
+        # blocks in if and for replaced by respective delimiters (; ≃ \n)
+        "{" => ";",
+        "}" => "end",
+        # empty slices (with lookahead to replace multiple in a series)
+        r"\[\p{Zs}*(?=,)" => "[:",
+        r",\p{Zs}*(?=[,\]])" => ",:",
+        # ignore reserved words (\b is word boundary)
+        r"\bin\b" => "in",
+        r"\bfor\b" => "for",
+        r"\bif\b" => "if",
+        # ignore floats (could otherwise overlap with identifiers: ., E, e)
+        r"(((\p{N}+\.\p{N}+)|(\p{N}+\.?))([eE][+-]?\p{N}+)?)" => s"\1",
+        # wrap variable names in var-strings (to allow variable names with .)
+        r"((?:(?:\p{L}\p{M}*)|\.)(?:(?:\p{L}\p{M}*)|\.|\p{N})*)" => s"var\"\1\"", 
+    )
+    # wrap the whole thing in a block
+    transformed_code = "begin\n$transformed_code\nend"
+    # println(transformed_code)
+    
+    expr = Meta.parse(transformed_code)
+    return QuoteNode(bugsast(expr))
+end
