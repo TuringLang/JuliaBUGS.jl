@@ -44,6 +44,8 @@ function bugsast_expression(expr)
     elseif Meta.isexpr(expr, :call)
         if expr.args[1] == :getindex
             return Expr(:ref, bugsast_index.(expr.args[2:end])...)
+        elseif expr.args[1] == :truncated || expr.args[1] == :censored
+            return Expr(expr.args[1], bugsast_expression.(expr.args[2:end])...)
         else
             return Expr(:call, bugsast_expression.(expr.args)...)
         end
@@ -146,11 +148,11 @@ macro bugsmodel_str(s)
     )
     transformed_code = replace(
         transformed_code,
-        r"(var\"[^\"]+\"\(.*\))\p{Zs}*T\p{Zs}*\(\p{Zs}*,(.+)\)" => s"truncated(\1, -Inf, \2)",
-        r"(var\"[^\"]+\"\(.*\))\p{Zs}*T\p{Zs}*\((.+),\p{Zs}*\)" => s"truncated(\1, \2, Inf)",
+        r"(var\"[^\"]+\"\(.*\))\p{Zs}*T\p{Zs}*\(\p{Zs}*,(.+)\)" => s"truncated(\1, nothing, \2)",
+        r"(var\"[^\"]+\"\(.*\))\p{Zs}*T\p{Zs}*\((.+),\p{Zs}*\)" => s"truncated(\1, \2, nothing)",
         r"(var\"[^\"]+\"\(.*\))\p{Zs}*T\p{Zs}*\((.+),(.+)\)" => s"truncated(\1, \2, \3)",
-        r"(var\"[^\"]+\"\(.*\))\p{Zs}*C\p{Zs}*\(\p{Zs}*,(.+)\)" => s"censored(\1, -Inf, \2)",
-        r"(var\"[^\"]+\"\(.*\))\p{Zs}*C\p{Zs}*\((.+),\p{Zs}*\)" => s"censored(\1, \2, Inf)",
+        r"(var\"[^\"]+\"\(.*\))\p{Zs}*C\p{Zs}*\(\p{Zs}*,(.+)\)" => s"censored(\1, nothing, \2)",
+        r"(var\"[^\"]+\"\(.*\))\p{Zs}*C\p{Zs}*\((.+),\p{Zs}*\)" => s"censored(\1, \2, nothing)",
         r"(var\"[^\"]+\"\(.*\))\p{Zs}*C\p{Zs}*\((.+),(.+)\)" => s"censored(\1, \2, \3)",
     )
     # wrap the whole thing in a block
