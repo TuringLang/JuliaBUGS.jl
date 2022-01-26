@@ -55,6 +55,7 @@ a ~ dwish(R[,], 4) C (0, 1)
 a ~ dwish(R[,], 4) C (,1)
 a ~ dwish(R[,], 4) C (0,)
 a ~ dwish(R[,], 4) T (0, 1)
+log(x) <- dnorm()C(, 100)
 """
 
 jaws = bugsmodel"""
