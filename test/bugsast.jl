@@ -80,3 +80,8 @@ regions3 = @bugsast begin
         y[i] = i
     end
 end
+
+interpolated = @bugsast begin
+    log(x) = $(Expr(:call, :f, 10))
+    y = x[$("sdf")] # muahaha...
+end

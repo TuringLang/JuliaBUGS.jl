@@ -23,6 +23,8 @@ function bugsast_range(expr)
         return Expr(:(:), bugsast_expression.(expr.args)...)
     elseif Meta.isexpr(expr, :call) && expr.args[1] == :(:) && length(expr.args) in (1, 3)
         return Expr(:(:), bugsast_expression.(expr.args[2:end])...)
+    elseif Meta.isexpr(expr, :$)
+        return expr
     else
         error("Illegal range: `$expr`")
     end
@@ -56,6 +58,8 @@ function bugsast_expression(expr)
     elseif Meta.isexpr(expr, :block, 2) && expr.args[1] isa LineNumberNode
         # return Expr(:block, expr.args[1], bugsast_expression(expr.args[2]))
         return bugsast_expression(expr.args[2])
+    elseif Meta.isexpr(expr, :$)
+        return expr
     else
         error("Illegal expression: `$expr`")
     end
@@ -109,6 +113,8 @@ function bugsast_statement(expr::Expr)
         return bugsast_statement(Expr(:(~), expr.args[2:end]...))
     elseif Meta.isexpr(expr, :block)
         return bugsast_block(expr)
+    elseif Meta.isexpr(expr, :$)
+        return expr
     else
         error("Illegal statement of type `$(expr.head)`")
     end
@@ -128,7 +134,7 @@ Used expression heads: `:~` for tilde calls, `:ref` for indexing, `:(:)` for ran
 converted from `:call` variants.
 """
 macro bugsast(expr)
-    return QuoteNode(bugsast(expr))
+    return Meta.quot(bugsast(expr))
 end
 
 
@@ -165,5 +171,5 @@ macro bugsmodel_str(s)
     # println(transformed_code)
     
     expr = Meta.parse(transformed_code)
-    return QuoteNode(bugsast(expr))
+    return Meta.quot(bugsast(expr))
 end
