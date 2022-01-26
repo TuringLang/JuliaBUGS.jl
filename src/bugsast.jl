@@ -50,7 +50,8 @@ function bugsast_expression(expr)
             return Expr(:call, bugsast_expression.(expr.args)...)
         end
     elseif Meta.isexpr(expr, :block, 2) && expr.args[1] isa LineNumberNode
-        return Expr(:block, expr.args[1], bugsast_expression(expr.args[2]))
+        # return Expr(:block, expr.args[1], bugsast_expression(expr.args[2]))
+        return bugsast_expression(expr.args[2])
     else
         error("Illegal expression: `$expr`")
     end
