@@ -56,3 +56,16 @@ a ~ dwish(R[,], 4) C (,1)
 a ~ dwish(R[,], 4) C (0,)
 a ~ dwish(R[,], 4) T (0, 1)
 """
+
+jaws = bugsmodel"""
+for(i in 1:20) { 
+    Y[i, 1:4] ~ dmnorm(mu[], Sigma.inv[,]) 
+}
+if(equal(x, 1)) {
+     y ~ dbla()
+}
+
+if	 (equal(x, 1)) {
+     y ~ dbla()
+}
+"""
