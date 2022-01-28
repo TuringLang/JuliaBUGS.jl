@@ -44,6 +44,25 @@ end
 ```
 
 It should be reasonably easy to define anything else on top of this representation by using simple `if` statements, and `Meta.isexpr`.
+Interpolation (`$(…)`) is allowed in `@bugsast`; the result of the macro is a `:quote` expression, in which the interpolations are just left as is. I.e.,
+
+```julia
+@bugsast begin
+    x = $(myfunc(somevalue))
+end
+```
+
+will end up as 
+
+```julia
+quote
+    x = $(myfunc(somevalue))
+end
+```
+
+with quasiquotation working as usual.
+(Using interpolation, it is possible to construct ASTs which bypass validation and do not correspond to valid BUGS programs – use it with care.)
+
 In addition, there is a string macro `bugsmodel` which should work with original (R-like) BUGS syntax:
 
 ```julia
