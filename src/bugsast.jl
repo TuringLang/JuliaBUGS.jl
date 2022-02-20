@@ -192,6 +192,8 @@ macro bugsmodel_str(s::String)
         return Meta.quot(bugsast(expr, __source__))
     catch e
         if e isa Base.Meta.ParseError
+            # Meta.parse automatically uses file name "none" and position 1, so
+            # I think this should always work?
             new_msg = replace(e.msg, "none:1" => position_string(__source__))
             rethrow(ErrorException(new_msg))
         else
