@@ -1,4 +1,4 @@
-using BugsParser
+using BugsModels
 using Test
 
 include("bugsast.jl")

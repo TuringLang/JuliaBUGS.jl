@@ -1,4 +1,4 @@
-name = "BugsParser"
+name = "BugsModels"
 uuid = "ba9fb4c0-828e-4473-b6a1-cd2560fee5bf"
 authors = ["Philipp Gabler <phipsgabler@users.noreply.github.com>"]
 version = "0.1.0"

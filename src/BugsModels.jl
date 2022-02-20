@@ -1,4 +1,4 @@
-module BugsParser
+module BugsModels
 
 include("bugsast.jl")
 include("typechecker.jl")
