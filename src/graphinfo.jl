@@ -61,13 +61,17 @@ end
 
 function Model(;kwargs...)
     for (i, node) in enumerate(values(kwargs))
-        @assert typeof(node) <: Tuple{Union{Array{Float64}, Float64}, Function, Symbol} "Check input order for node $(i) matches Tuple(value, function, kind)"
+        @assert node isa Tuple{Union{Array{Float64}, Float64}, Function, Symbol} "Check input order for node $(i) matches Tuple(value, function, kind)"
     end
-    vals = getvals(NamedTuple(kwargs))
+    node_keys = keys(kwargs)
+    vals = [getvals(NamedTuple(kwargs))...]
+    vals[1] = Tuple([Ref(val) for val in vals[1]])
     args = [argnames(f) for f in vals[2]]
-    A, sorted_vertices = dag(NamedTuple{keys(kwargs)}(args))    
-    modelinputs = NamedTuple{Tuple(sorted_vertices)}.([Tuple.(args), vals...])
-    Model(GraphInfo(modelinputs..., A, sorted_vertices))
+    A, sorted_inds = dag(NamedTuple{node_keys}(args))    
+    sorted_vertices = node_keys[sorted_inds]
+    model_inputs = NamedTuple{node_keys}.([Tuple.(args), vals...])
+    sorted_model_inputs = [NamedTuple{sorted_vertices}(m) for m in model_inputs]
+    Model(GraphInfo(sorted_model_inputs..., A, [sorted_vertices...]))
 end
 
 """
@@ -78,11 +82,10 @@ and returns the implied adjacency matrix and topologically ordered
 vertex list.
 """
 function dag(inputs)
-    input_names = Symbol[keys(inputs)...]
     A = adjacency_matrix(inputs) 
     sorted_vertices = topological_sort_by_dfs(A)
     sorted_A = permute(A, collect(1:length(inputs)), sorted_vertices)
-    sorted_A, input_names[sorted_vertices]
+    sorted_A, sorted_vertices
 end
 
 """
@@ -95,7 +98,7 @@ input, eval and kind, as required by the GraphInfo type.
 @generated function getvals(nt::NamedTuple{T}) where T
     values = [:(nt[$i][$j]) for i in 1:length(T), j in 1:3]
     m = [:($(values[:,i]...), ) for i in 1:3]
-    return Expr(:tuple, m...) # :($(m...),)
+    return Expr(:tuple, m...)
 end
 
 """
@@ -180,6 +183,7 @@ function topological_sort_by_dfs(A)
     return reverse(verts)
 end
 
+# getters and setters
 """
     Base.getindex(m::Model, vn::VarName{p})
 
@@ -217,16 +221,101 @@ function Base.getindex(m::Model, vn::VarName)
     return m.g[vn]
 end
 
-function Base.show(io::IO, m::Model)
-    print(io, "Nodes: \n")
-    for node in nodes(m)
-        print(io, "$node = ", m[VarName{node}()], "\n")
-    end
+"""
+    set_node_value!(m::Model, ind::VarName, value::T) where Takes
+
+Change the value of the node. 
+
+# Examples
+
+```jl-doctest
+julia> m = Model( s2 = (0.0, () -> InverseGamma(2.0,3.0), :Stochastic), 
+                         μ = (1.0, () -> 1.0, :Logical), 
+                         y = (0.0, (μ, s2) -> MvNormal(μ, sqrt(s2)), :Stochastic))
+Nodes: 
+μ = (input = (), value = Base.RefValue{Float64}(1.0), eval = var"#38#41"(), kind = :Logical)
+s2 = (input = (), value = Base.RefValue{Float64}(0.0), eval = var"#37#40"(), kind = :Stochastic)
+y = (input = (:μ, :s2), value = Base.RefValue{Float64}(0.0), eval = var"#39#42"(), kind = :Stochastic)
+
+
+julia> set_node_value!(m, @varname(s2), 1.0)
+1.0
+
+julia> get_node_value(m, @varname s2)
+1.0
+```
+"""
+function set_node_value!(m::Model, ind::VarName, value::T) where T
+    @assert typeof(m[ind].value[]) == T
+    m[ind].value[] = value
 end
 
+"""
+    get_node_value(m::Model, ind::VarName)
+
+Retrieve the value of a particular node, indexed by a VarName.
+
+# Examples
+
+julia> m = Model( s2 = (0.0, () -> InverseGamma(2.0,3.0), :Stochastic), 
+                         μ = (1.0, () -> 1.0, :Logical), 
+                         y = (0.0, (μ, s2) -> MvNormal(μ, sqrt(s2)), :Stochastic))
+Nodes: 
+μ = (input = (), value = Base.RefValue{Float64}(1.0), eval = var"#44#47"(), kind = :Logical)
+s2 = (input = (), value = Base.RefValue{Float64}(0.0), eval = var"#43#46"(), kind = :Stochastic)
+y = (input = (:μ, :s2), value = Base.RefValue{Float64}(0.0), eval = var"#45#48"(), kind = :Stochastic)
+
+
+julia> get_node_value(m, @varname s2)
+0.0
+"""
+
+function get_node_value(m::Model, ind::VarName) 
+    v = getproperty(m[ind], :value)
+    v[]
+end
+#Base.get(m::Model, ind::VarName, field::Symbol) = field==:value ? getvalue(m, ind) : getproperty(m[ind],field)
+
+"""
+    get_node_input(m::Model, ind::VarName)
+
+Retrieve the inputs/parents of a node, as given by model DAG.
+"""
+get_node_input(m::Model, ind::VarName) = getproperty(m[ind], :input)
+
+"""
+    get_node_input(m::Model, ind::VarName)
+
+Retrieve the evaluation function for a node. 
+"""
+get_node_eval(m::Model, ind::VarName) = getproperty(m[ind], :eval)
+
+"""
+    get_nodekind(m::Model, ind::VarName)
+
+Retrieve the type of the node, i.e. stochastic or logical. 
+"""
+get_nodekind(m::Model, ind::VarName) = getproperty(m[ind], :kind)
+
+"""
+    get_dag(m::Model)
+
+Returns the adjacency matrix of the model as a SparseArray.
+"""
+get_dag(m::Model) = m.g.A
+
+"""
+    get_sorted_vertices(m::Model)
+
+Returns a `Vector{Symbol}` containing the sorted vertices 
+of the DAG. 
+"""
+get_sorted_vertices(m::Model) = getproperty(m.g, :sorted_vertices)
+
+# iterators
 
 function Base.iterate(m::Model, state=1)
-    state > length(nodes(m)) ? nothing : (m[VarName{m.g.sorted_vertices[state]}()], state+1)
+    state > length(get_sorted_vertices(m)) ? nothing : (m[VarName{m.g.sorted_vertices[state]}()], state+1)
 end
 
 Base.eltype(m::Model) = NamedTuple{fieldnames(GraphInfo)[1:4]}
@@ -234,22 +323,14 @@ Base.IteratorEltype(m::Model) = HasEltype()
 
 Base.keys(m::Model) = (VarName{n}() for n in m.g.sorted_vertices)
 Base.values(m::Model) = Base.Generator(identity, m)
-Base.length(m::Model) = length(nodes(m))
+Base.length(m::Model) = length(get_sorted_vertices(m))
 Base.keytype(m::Model) = eltype(keys(m))
 Base.valtype(m::Model) = eltype(m)
 
-
-"""
-    dag(m::Model)
-
-Returns the adjacency matrix of the model as a SparseArray.
-"""
-get_dag(m::Model) = m.g.A
-
-"""
-    nodes(m::Model)
-
-Returns a `Vector{Symbol}` containing the sorted vertices 
-of the DAG. 
-"""
-nodes(m::Model) = m.g.sorted_vertices
+# show methods
+function Base.show(io::IO, m::Model)
+    print(io, "Nodes: \n")
+    for node in get_sorted_vertices(m)
+        print(io, "$node = ", m[VarName{node}()], "\n")
+    end
+end
