@@ -16,7 +16,7 @@ data = f(2.0, collect(0.0:0.1:10.0), 5.0) .+ randn(101)
 
 m = Model(
     a = (0., () -> truncated(Normal(0.0, 1.0), 0.0, 3.0), :Stochastic), 
-    x = (collect(1.0:10.0), () -> collect(1.0:10.0), :Logical),
+    x = (collect(0.0:0.1:10.0), () -> collect(0.0:0.1:10.0), :Logical),
     b = (0., () -> Normal(5.0, 3.0), :Stochastic),
     y = (data, (a, x, b) -> MvNormal(f(a, x, b), 1.0), :Observations)
 )
