@@ -25,53 +25,32 @@ function AbstractMCMC.step(
     # state is just a tuple containing the last sample and its log probability
     sample, logjoint_sample = state
     proposed_model = propose(rng, spl, m)
-    logjoint_proposed = logdensityof(proposed_model, proposed)
+    logjoint_proposed = logdensityof(proposed_model)
     # decide whether to accept or reject the next proposal
     if logjoint_sample < logjoint_proposed + randexp(rng)
-        sample = proposed
+        sample = get_model_values(proposed_model)
         logjoint_sample = logjoint_proposed
         set_model_values!(model, sample)
+        return sample, (sample, logjoint_sample)
+    else
+        AbstractMCMC.step(rng, model, sampler, state; kwargs...)
     end
-
-    return sample, (sample, logjoint_sample)
 end
 
 function propose(rng::Random.AbstractRNG, 
                  spl::AdvancedMH.MHSampler,
                  m::Model{Tnames}) where {Tnames}
-    deepcopy(m)
+    _m = deepcopy(m)
     
-    s_nodes = get_stochastic_nodes(m)
-    vals = get_node_value(m, s_nodes)
+    s_nodes = get_stochastic_nodes(_m)
+    vals = get_node_value(_m, s_nodes)
 
     proposal_values = vals .+ rand(rng, spl.proposal)
-    
-    for node in s_nodes
-        set_node_value!(m, VarName{node}(), proposal_values)
+    for (i, node) in enumerate(s_nodes)
+        set_node_value!(_m, VarName{node}(), proposal_values[i])
     end
+    _m
 end
-
-# function update!(
-#     rng::Random.AbstractRNG,
-#     m::AbstractPPL.GraphPPL.Model,
-#     values::NamedTuple{Snames, Svalues}
-#     )
-#     for k in keys(values)
-#         set_node_value!(m, VarName{k}(), values[n])
-#     end
-
-#     for vn in keys(m)
-#         input, _, f, kind = m[vn]
-#         input_values = get_node_value(m, input)
-#         if kind == :Stochastic || kind == :Observations
-#             set_node_value!(m, vn, rand(rng, f(input_values...)))
-#         else
-#             set_node_value!(m, vn, f(input_values...))
-#         end
-#     end
-#     m
-# end
-
 
 function get_stochastic_nodes(m::AbstractPPL.GraphPPL.Model)
     nodes = Vector{Symbol}()
