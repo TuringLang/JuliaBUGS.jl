@@ -2,6 +2,7 @@ using AbstractMCMC
 using AdvancedMH
 using AbstractPPL
 using MCMCChains
+using ComponentArrays
 
 function AbstractMCMC.step(
     rng::Random.AbstractRNG, 
@@ -42,11 +43,11 @@ function propose(rng::Random.AbstractRNG,
     _m = deepcopy(m)
     
     s_nodes = get_nodes(_m, :Stochastic)
-    vals = ComponentArray(get_node_value(_m, s_nodes))
-
+    vals = get_node_value(_m, s_nodes)
     proposal_values = vals .+ rand(rng, spl.proposal)
-    for node in s_nodes
-        set_node_value!(_m, VarName{node}(), proposal_values[node])
+
+    for (i, node) in enumerate(s_nodes)
+        set_node_value!(_m, VarName{node}(), proposal_values[i])
     end
     _m
 end
