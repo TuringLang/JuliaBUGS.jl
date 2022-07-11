@@ -45,12 +45,11 @@ function propose(rng::Random.AbstractRNG,
     vals = ComponentArray(get_node_value(_m, s_nodes))
 
     proposal_values = vals .+ rand(rng, spl.proposal)
-    for node
+    for node in s_nodes
         set_node_value!(_m, VarName{node}(), proposal_values[node])
     end
     _m
 end
-
 
 # ----------------------------------------------------------------------
 # MCMCChains interface
