@@ -14,7 +14,6 @@ function AbstractMCMC.step(
     return AbstractMCMC.step(rng, model, sampler, state; kwargs...)
 end
 
-# step!
 function AbstractMCMC.step(
     rng::Random.AbstractRNG, 
     model::AbstractPPL.GraphPPL.Model, 
@@ -42,26 +41,20 @@ function propose(rng::Random.AbstractRNG,
                  m::Model{Tnames}) where {Tnames}
     _m = deepcopy(m)
     
-    s_nodes = get_stochastic_nodes(_m)
-    vals = get_node_value(_m, s_nodes)
+    s_nodes = get_nodes(_m, :Stochastic)
+    vals = ComponentArray(get_node_value(_m, s_nodes))
 
     proposal_values = vals .+ rand(rng, spl.proposal)
-    for (i, node) in enumerate(s_nodes)
-        set_node_value!(_m, VarName{node}(), proposal_values[i])
+    for node
+        set_node_value!(_m, VarName{node}(), proposal_values[node])
     end
     _m
 end
 
-function get_stochastic_nodes(m::AbstractPPL.GraphPPL.Model)
-    nodes = Vector{Symbol}()
-    for vn in keys(m)
-        if get_nodekind(m, vn) == :Stochastic
-            push!(nodes, getsym(vn))
-        end
-    end
-    Tuple(nodes)
-end
 
+# ----------------------------------------------------------------------
+# MCMCChains interface
+# ----------------------------------------------------------------------
 function AbstractMCMC.bundle_samples(
     samples, 
     m::AbstractPPL.GraphPPL.Model, 
