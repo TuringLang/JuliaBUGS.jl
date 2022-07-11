@@ -43,11 +43,11 @@ function propose(rng::Random.AbstractRNG,
     _m = deepcopy(m)
     
     s_nodes = get_nodes(_m, :Stochastic)
-    vals = get_node_value(_m, s_nodes)
+    vals = ComponentArray(NamedTuple{(s_nodes)}((get_node_value(_m, s_nodes))))
     proposal_values = vals .+ rand(rng, spl.proposal)
 
-    for (i, node) in enumerate(s_nodes)
-        set_node_value!(_m, VarName{node}(), proposal_values[i])
+    for node in s_nodes
+        set_node_value!(_m, VarName{node}(), proposal_values[node])
     end
     _m
 end
