@@ -340,7 +340,7 @@ function get_nodes(m::AbstractPPL.GraphPPL.Model, kind::Symbol)
             push!(nodes, getsym(vn))
         end
     end
-    nodes
+    Tuple(nodes)
 end
 
 """
