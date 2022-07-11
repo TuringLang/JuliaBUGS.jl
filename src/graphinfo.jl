@@ -277,8 +277,7 @@ function get_node_value(m::Model, ind::VarName)
     v[]
 end
 
-function get_node_value(m::Model, ind::NTuple{N, Symbol}) where N
-    # [get_node_value(m, VarName{S}()) for S in ind]
+function get_node_value(m::Model, ind)
     values = Vector{Union{Float64, Array{Float64}}}()
     for i in ind
         push!(values, get_node_value(m, VarName{i}()))
@@ -297,7 +296,7 @@ function get_node_ref_value(m::Model, ind::VarName)
     get(m[ind], @lens _.value)
 end
 
-function get_node_ref_value(m::Model, ind::NTuple{N, Symbol}) where N
+function get_node_ref_value(m::Model, ind)
     values = Vector{Union{Base.RefValue{Float64}, Base.RefValue{Vector{Float64}}}}()
     for i in ind
         push!(values, get_node_ref_value(m, VarName{i}()))
@@ -327,11 +326,29 @@ Retrieve the type of the node, i.e. stochastic or logical.
 get_nodekind(m::Model, ind::VarName) = get(m[ind], @lens _.kind)
 
 """
+    get_nodes(m::Model, kind::Symbol)
+    
+Retrieve the nodes of kind `kind`. 
+"""
+function get_nodes(m::AbstractPPL.GraphPPL.Model, kind::Symbol)
+    if kind ∉ [:Logical, :Stochastic, :Observations]
+        error("Node kind should be :Logical, :Stochastic or :Observations")
+    end
+    nodes = Vector{Symbol}()
+    for vn in keys(m)
+        if get_nodekind(m, vn) == kind
+            push!(nodes, getsym(vn))
+        end
+    end
+    nodes
+end
+
+"""
     get_dag(m::Model)
 
 Returns the adjacency matrix of the model as a SparseArray.
 """
-get_dag(m::Model) = m.g.A
+get_dag(m::Model) = get(m, @lens _.g.A)
 
 """
     get_sorted_vertices(m::Model)
@@ -339,7 +356,7 @@ get_dag(m::Model) = m.g.A
 Returns a `Vector{Symbol}` containing the sorted vertices 
 of the DAG. 
 """
-get_sorted_vertices(m::Model) =  get(m.g, @lens _.sorted_vertices)
+get_sorted_vertices(m::Model) =  get(m, @lens _.g.sorted_vertices)
 
 
 """
@@ -373,6 +390,7 @@ function set_model_values!(m::Model{T}, values::NamedTuple{T}) where T
         end
     end
 end
+
 # iterators
 
 function Base.iterate(m::Model, state=1)
