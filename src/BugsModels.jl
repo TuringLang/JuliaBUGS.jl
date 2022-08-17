@@ -2,7 +2,6 @@ module BugsModels
 
 include("bugsast.jl")
 include("typechecker.jl")
-
 include("compiler.jl")
 
 # export @bugsast_str

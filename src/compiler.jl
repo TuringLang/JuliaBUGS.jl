@@ -6,38 +6,47 @@ using MacroTools
 using LinearAlgebra
 using BugsModels
 
-function parsedata!(data::Union{Dict, NamedTuple}, rules, arrays)
+struct CompilerState
+    arrays::Dict{Symbol, Array{Num}}
+    rules::Dict{Num, Num}
+    stochastic_rules::Dict{Num, Num}
+
+    # link_function_rules
+end
+
+CompilerState() = CompilerState(Dict{Symbol, Array{Num}}(), Dict{Num, Num}(), Dict{Num, Num}())
+
+function parsedata!(data::Union{Dict,NamedTuple}, compiler_state)
     for (key, value) in data
         if isa(value, Number)
-            rules[tosymbolic(key)] = value
+            compiler_state.rules[tosymbolic(key)] = value
         elseif isa(value, Array)
-            sym_array = createsymbolicarray(key, collect(size(value)))            
+            sym_array = create_symbolic_array(key, collect(size(value)))
             for i in eachindex(value)
-                rules[sym_array[i]] = value[i]
+                compiler_state.rules[sym_array[i]] = value[i]
             end
-            arrays[key] = sym_array
+            compiler_state.arrays[key] = sym_array
         else
             error("Value type not supported.")
         end
     end
 end
 
-function createsymbolicarray(name::Symbol, size)
-    sym_array = Array{Num}(undef, size...)
-    for i in CartesianIndices(sym_array)
-        sym_array[i] = tosymbolic(Symbol("$(name)"*"[$(collect(Tuple(i))...)]"))
+function create_symbolic_array(name::Symbol, size)
+    symbolic_array = Array{Num}(undef, size...)
+    for i in CartesianIndices(symbolic_array)
+        symbolic_array[i] = tosymbolic(Symbol("$(name)" * "[$(collect(Tuple(i))...)]"))
     end
-    return sym_array
+    return symbolic_array
 end
 
-function unrollforloops!(expr, rules, arrays)
-    # flag to signal if unrolling happened
+function unrollforloops!(expr, compiler_state)
     unrolled_flag = false
-    while hasforloop(expr, rules)
-        for i in eachindex(expr.args)
-            arg = expr.args[i]
-            if arg.head == :for          
-                unrolled = recursive_unrollforloop(arg, rules, arrays)
+    while hasforloop(expr, compiler_state)
+        expr_copy = deepcopy(expr) # so that iterator is not changed by the mutation
+        for (i, arg) in enumerate(expr_copy.args)
+            if arg.head == :for
+                unrolled = unrollforloop(arg, compiler_state)
                 splice!(expr.args, i, unrolled.args)
                 unrolled_flag = true
             end
@@ -46,13 +55,16 @@ function unrollforloops!(expr, rules, arrays)
     return unrolled_flag
 end
 
-function hasforloop(expr, rules)
+function hasforloop(expr, compiler_state)
     for arg in expr.args
         if arg.head == :for
-            lower_bound, higher_bound = arg.args[1].args[2].args 
-            lower_bound = resolve(lower_bound, rules, arrays)
-            higher_bound = resolve(higher_bound, rules, arrays)
-            if isa(lower_bound, Integer) && isa(higher_bound, Integer)
+            lower_bound, higher_bound = arg.args[1].args[2].args
+            lower_bound = resolve(lower_bound, compiler_state)
+            higher_bound = resolve(higher_bound, compiler_state)
+            if isa(lower_bound, Real) &&
+               isa(higher_bound, Real) &&
+               isinteger(lower_bound) &&
+               isinteger(lower_bound)
                 return true
             end
         end
@@ -60,18 +72,22 @@ function hasforloop(expr, rules)
     return false
 end
 
-function recursive_unrollforloop(expr, rules, arrays)
+function unrollforloop(expr, compiler_state)
     loop_var = expr.args[1].args[1]
     lower_bound, higher_bound = expr.args[1].args[2].args
     body = expr.args[2]
 
-    lower_bound = resolve(lower_bound, rules, arrays)
-    higher_bound = resolve(higher_bound, rules, arrays)
-    if isa(lower_bound, Integer) || isa(higher_bound, Integer)  
+    lower_bound = resolve(lower_bound, compiler_state)
+    higher_bound = resolve(higher_bound, compiler_state)
+    if isa(lower_bound, Real) &&
+       isa(higher_bound, Real) &&
+       isinteger(lower_bound) &&
+       isinteger(lower_bound)
         unrolled_exprs = []
-        for i in lower_bound:higher_bound
+        for i = lower_bound:higher_bound
             # Replace all the loop variables in array indices with integers
-            replaced_expr = MacroTools.postwalk(sub_expr -> isa(sub_expr, Symbol) && sub_expr == loop_var ? i : sub_expr, body)
+            replaced_expr =
+                MacroTools.postwalk(sub_expr -> sub_expr == loop_var ? i : sub_expr, body)
             push!(unrolled_exprs, replaced_expr.args...)
         end
         return Expr(:block, unrolled_exprs...)
@@ -84,13 +100,23 @@ function recursive_unrollforloop(expr, rules, arrays)
 end
 
 # This function comes from `@macroexpand @variable some_variable`. Doing this to avoid local variable binding.
-tosymbolic(var_name::Symbol) = (identity)((Symbolics.wrap)((SymbolicUtils.setmetadata)((SymbolicUtils.Sym){Real}(var_name), Symbolics.VariableSource, (:variables, var_name))))
-tosymbolic(variable::Expr) = MacroTools.isexpr(variable, :ref) && ref_to_symbolic!(variable, arrays)
+tosymbolic(variable::Symbol) = (identity)(
+    (Symbolics.wrap)(
+        (SymbolicUtils.setmetadata)(
+            (SymbolicUtils.Sym){Real}(variable),
+            Symbolics.VariableSource,
+            (:variables, variable),
+        ),
+    ),
+)
+tosymbolic(variable::Expr) =
+    MacroTools.isexpr(variable, :ref) && ref_to_symbolic!(variable, compiler_state)
 tosymbolic(variable::Num) = variable
+tosymbolic(variable::Union{Integer, AbstractFloat}) = Num(variable)
 
-resolve(variable::Union{Integer, AbstractFloat}, rules::Dict, arrays::Dict) = variable
-function resolve(variable, rules, arrays)
-    resolved_variable = symboliceval(tosymbolic(variable), rules)
+resolve(variable::Union{Integer,AbstractFloat}, compiler_state) = variable
+function resolve(variable, compiler_state)
+    resolved_variable = symbolic_eval(tosymbolic(variable), compiler_state)
     return Symbolics.unwrap(resolved_variable)
 end
 
@@ -106,39 +132,39 @@ end
     CAUTION: the implementation can cause infinite loop in the general case, but for simple 
     cases it should suffice, improve later
 """
-function symboliceval(variable::Num, rules)
-    evaluated = Symbolics.substitute(variable, rules)
-    try_evaluated = Symbolics.substitute(evaluated, rules)
-    
+function symbolic_eval(variable::Num, compiler_state)
+    evaluated = Symbolics.substitute(variable, compiler_state.rules)
+    try_evaluated = Symbolics.substitute(evaluated, compiler_state.rules)
+
     while true
         Symbolics.isequal(evaluated, try_evaluated) && break
         evaluated = try_evaluated
-        try_evaluated = Symbolics.substitute(try_evaluated, rules)
+        try_evaluated = Symbolics.substitute(try_evaluated, compiler_state.rules)
     end
-    
+
     return try_evaluated
 end
 
-function ref_to_symbolic!(expr::Expr, arrays::Dict)
+function ref_to_symbolic!(expr::Expr, compiler_state)
     numdims = length(expr.args) - 1 # number of dimensions
     name = expr.args[1]
     index = expr.args[2:end]
 
     # if the array doesn't exist
-    if !haskey(arrays, name)
-        array = createsymbolicarray(name, index)
-        arrays[name] = array
+    if !haskey(compiler_state.arrays, name)
+        array = create_symbolic_array(name, index)
+        compiler_state.arrays[name] = array
         return array[index...]
     end
 
     # if array exists
-    array = arrays[name]
+    array = compiler_state.arrays[name]
     # check if dimension match
     if ndims(array) == numdims
         old_size = size(array)
         if all([index[i] <= old_size[i] for i in eachindex(index)])
             return array[index...]
-        
+
         else
             # expand the array
             new_size = collect(size(array))
@@ -150,10 +176,10 @@ function ref_to_symbolic!(expr::Expr, arrays::Dict)
 
             new_array = Array{Num}(undef, new_size...)
             for i in CartesianIndices(new_array)
-                new_array[i] = tosymbolic(Symbol("$name"*"$(collect(Tuple(i)))"))
+                new_array[i] = tosymbolic(Symbol("$name" * "$(collect(Tuple(i)))"))
             end
-            
-            arrays[name] = new_array
+
+            compiler_state.arrays[name] = new_array
             return new_array[index...] # again need to handle indexing later
         end
     end
@@ -161,24 +187,22 @@ function ref_to_symbolic!(expr::Expr, arrays::Dict)
     error("Dimension doesn't match!")
 end
 
-function parse_logical_assignments!(expr, rules, arrays)
-    newrules = false
+function parse_logical_assignments!(expr, compiler_state)
+    newrules_flag = false
     for arg in expr.args
         if arg.head == :(=)
             lhs, rhs = arg.args
 
-            # replace refs with symbolic variables
-            # LHS should be simple, i.e. ref, variable or link function
-            !isa(lhs, Symbol) || !MacroTools.isexpr(lhs, :ref) || error("LHS need to be simple.")
             if MacroTools.isexpr(lhs, :ref)
-                lhs = Symbolics.tosymbol(ref_to_symbolic!(lhs, arrays))
+                lhs = Symbolics.tosymbol(ref_to_symbolic!(lhs, compiler_state))
             end
-            
-            ref_sym_variables = []
+            !isa(lhs, Symbol) || error("LHS need to be simple.")
+
+            ref_variables = []
             rhs = MacroTools.prewalk(rhs) do sub_expr
                 if MacroTools.isexpr(sub_expr, :ref)
-                    sym_var = ref_to_symbolic!(sub_expr, arrays)
-                    push!(ref_sym_variables, sym_var)
+                    sym_var = ref_to_symbolic!(sub_expr, compiler_state)
+                    push!(ref_variables, sym_var)
                     return Symbolics.tosymbol(sym_var)
                 else
                     return sub_expr
@@ -186,149 +210,142 @@ function parse_logical_assignments!(expr, rules, arrays)
             end
 
             variables = find_all_variables(rhs)
-            
-            sym_rhs = create_sym_rhs(rhs, ref_sym_variables, variables)
+
+            sym_rhs = create_sym_rhs(rhs, ref_variables, variables)
             sym_lhs = tosymbolic(lhs)
-            if haskey(rules, sym_lhs) 
-                Symbolics.isequal(sym_rhs, rules[sym_lhs]) && continue
-                error("Repeated definition for $(lhs)") 
+            if haskey(compiler_state.rules, sym_lhs)
+                Symbolics.isequal(sym_rhs, compiler_state.rules[sym_lhs]) && continue
+                error("Repeated definition for $(lhs)")
             end
-            rules[sym_lhs] = sym_rhs
-            newrules = true
+            compiler_state.rules[sym_lhs] = sym_rhs
+            newrules_flag = true
         end
     end
-    return newrules
+    return newrules_flag
 end
 
-function parse_stochastic_assignments(expr, rules, arrays)
-    stochastic_assign = Dict()
+"""
+    This function should only be called when all the unrollings are done.
+"""
+function parse_stochastic_assignments!(expr, compiler_state)
     for arg in expr.args
         if arg.head == :(~)
             lhs, rhs = arg.args
 
-            # replace refs with symbolic variables
-            # LHS should be simple, i.e. ref, variable or link function
-            !isa(lhs, Symbol) || !MacroTools.isexpr(lhs, :ref) || error("LHS need to be simple.")
             if MacroTools.isexpr(lhs, :ref)
-                lhs = Symbolics.tosymbol(ref_to_symbolic!(lhs, arrays))
+                lhs = Symbolics.tosymbol(ref_to_symbolic!(lhs, compiler_state))
             end
-            
+            isa(lhs, Symbol) && error("LHS need to be simple.")
+
             # rhs will be a distribution object, so handle the distribution right now
             rhs.head == :call || error("RHS needs to be a distribution function")
             dist_func = eval(rhs.args[1])
+            # Assume distribution functions are binded locally
             Base.@isdefined(dist_func) || error("$rhs not defined.")
-            dist_args = rhs.args[2:end]
 
-            ref_sym_variables = []
+            ref_variables = []
             rhs = MacroTools.prewalk(rhs) do sub_expr
                 if MacroTools.isexpr(sub_expr, :ref)
-                    sym_var = ref_to_symbolic!(sub_expr, arrays)
-                    push!(ref_sym_variables, sym_var)
+                    sym_var = ref_to_symbolic!(sub_expr, compiler_state)
+                    push!(ref_variables, sym_var)
                     return Symbolics.tosymbol(sym_var)
                 else
                     return sub_expr
                 end
             end
-
             variables = find_all_variables(rhs)
-            
-            sym_rhs = create_sym_rhs(rhs, ref_sym_variables, variables)
+
+            sym_rhs = create_sym_rhs(rhs, ref_variables, variables)
             sym_lhs = tosymbolic(lhs)
-            if haskey(stochastic_assign, sym_lhs) 
+            if haskey(compiler_state.stochastic_assign, sym_lhs)
                 Symbolics.isequal(sym_rhs, stochastic_assign[sym_lhs]) && continue
-                error("Repeated definition for $(lhs)") 
+                error("Repeated definition for $(lhs)")
             end
-            stochastic_assign[sym_lhs] = sym_rhs
+            compiler_statestochastic_assign[sym_lhs] = sym_rhs
         end
     end
-    return stochastic_assign
 end
 
-function create_sym_rhs(rhs, ref_sym_variables, variables)
+function create_sym_rhs(rhs, ref_variables, variables)
     # bind symbolic variables to local variable with same names
-    # so that when eval creates a symbolic expression 
-    eval(local_binding_exprs(ref_sym_variables))
+    eval(local_binding_exprs(ref_variables))
     eval(local_binding_exprs(variables))
+
+    # `eval` will then construct symbolic expression with the local bindings
     return eval(rhs)
 end
 
-function local_binding_exprs(sym_vars)
-    ret_expr = []
-    for sym_var in sym_vars
-        assignment_expr = Expr(:(=), Symbolics.tosymbol(sym_var),  sym_var)
-        push!(ret_expr, assignment_expr) 
+function local_binding_exprs(variables::Array{Num})
+    binding_exprs = []
+    for variable in variables
+        binding_expr = Expr(:(=), Symbolics.tosymbol(variable), variable)
+        push!(binding_exprs, binding_expr)
     end
-    return Expr(:block, ret_expr...)
+    return Expr(:block, binding_exprs...)
 end
 
-# Find all the variables(Symbol) in expr
+""" 
+Find all the variables (which are Symbols in the expr)
+"""
 function find_all_variables(rhs)
     variables = []
     recursive_find_variables(rhs, variables)
     return map(tosymbolic, variables)
 end
 
-function recursive_find_variables(expr, leaves)
-    # pre-order is important here
+function recursive_find_variables(expr, variables)
+    # pre-order traversal is important here
     MacroTools.prewalk(expr) do sub_expr
         if MacroTools.isexpr(sub_expr, :call)
+            # doesn't touch function identifiers
             for arg in sub_expr.args[2:end]
-                if isa(arg, Symbol) 
+                if isa(arg, Symbol)
                     # filter out the variables turned from ref objects
-                    Base.occursin("[", string(arg)) || push!(leaves, arg)
+                    Base.occursin("[", string(arg)) || push!(variables, arg)
                 end
-                recursive_find_variables(arg, leaves)
+                recursive_find_variables(arg, variables)
             end
         end
     end
 end
 
-function to_symbol(lhs, rules, arrays)
-    if isa(lhs, Symbol)
-        return lhs
-    elseif isa(lhs, Num)
-        return Symbolics.tosymbol(lhs)
-    elseif MacroTools.isexpr(lhs, :ref)
-        return Symbolics.tosymbol(ref_to_symbolic!(lhs, rules, arrays))
+to_symbol(lhs::Symbol, compiler_state) = lhs
+to_symbol(lhs::Num, compiler_state) = Symbolics.tosymbol(lhs)
+function to_symbol(lhs::Expr, compiler_state)
+    if MacroTools.isexpr(lhs, :ref)
+        return Symbolics.tosymbol(ref_to_symbolic!(lhs, compiler_state))
     end
-    error("Type of supported.")
+    error("Only ref expressions are supported.")
 end
 
-# at this point, all the for loops should already be unrolled
-function tograph(rules, arrays, stochastic_rules)
+function tograph(compiler_state)
     # node_name => (default_value, function, node_type)
     to_graph = Dict()
-    
-    # The assumption behind this is that rules and stochastic_rules contain all the assignments in the definition, needs tests!!
-    for key in keys(rules)
-        # Figuring out default values
-        default_value = resolve(key, rules, arrays)
-        @show isa(default_value, Union{Integer, AbstractFloat})
-        if !isa(default_value, Union{Integer, AbstractFloat})
+
+    for key in keys(compiler_state.rules)
+        default_value = resolve(key, compiler_state)
+        @show isa(default_value, Union{Integer,AbstractFloat})
+        if !isa(default_value, Union{Integer,AbstractFloat})
             default_value = 0
         end
         default_value = Float64(default_value)
-        # TODO: deal with multivar case later
 
-        # Figuring out anonymous function
-        ex = rules[key]
+        ex = compiler_state.rules[key]
         args = Symbolics.get_variables(ex)
         f_expr = Symbolics.build_function(ex, args...)
         to_graph[Symbolics.tosymbol(key)] = (default_value, eval(f_expr), :Logical)
-
     end
 
-    for key in keys(stochastic_rules)
-        # Figuring out default values
+    for key in keys(compiler_state.stochastic_rules)
         type = :Stochastic
-        default_value = resolve(key, rules, arrays)
-        if isa(default_value, Union{Integer, AbstractFloat}) 
+        default_value = resolve(key, compiler_state)
+        if isa(default_value, Union{Integer,AbstractFloat})
             type = :Observation
-        else 
+        else
             default_value = 0
         end
         default_value = Float64(default_value)
-        ex = stochastic_rules[key]
+        ex = compiler_state.stochastic_rules[key]
         args = Symbolics.get_variables(ex)
         f_expr = Symbolics.build_function(ex, args...)
 
@@ -338,27 +355,31 @@ function tograph(rules, arrays, stochastic_rules)
     return to_graph
 end
 
+function onlysimpleexpr(expr::Expr)
+    for arg in expr.args
+        if !MacroTools.isexpr(arg, :(=)) && !MacroTools.isexpr(arg, :~)
+            return false
+        end
+    end
+    return true
+end
+
 """
 Top level function
 """
-function compile_graphppl(; model_def::Expr, data)    
-    # Used to store all the arrays of symbolic variables
-    arrays = Dict()
-    # Store all the logical assignment for symbolics variables for partial evaluation
-    rules = Dict()
-    
-    parsedata!(data, rules, arrays)
-    
-    # Alternate Unrolling and Parse logical assignments 
-    while true 
-        unrollforloops!(model_def, rules, arrays) || parse_logical_assignments!(expr, rules ,arrays) || break
-    end
-    stochastic_rules = parse_stochastic_assignments(expr, rules, arrays)
+function compile_graphppl(; model_def::Expr, data)
+    compiler_state = CompilerState()
+    parsedata!(data, compiler_state)
 
-    # TODO: check if model_def still have unresolved loops or ifs remained
-    model = tograph(rules, arrays, stochastic_rules)
+    while true
+        unrollforloops!(model_def, compiler_state) ||
+            parse_logical_assignments!(expr, compiler_state) ||
+            break
+    end
+    parse_stochastic_assignments!(expr, compiler_state)
+
+    onlysimpleexpr(expr) || error("Has unresolvable loop bounds or if conditions.")
+    model = tograph(compiler_state)
 
     return Model(; zip(keys(model), values(model))...)
 end
-
-##
