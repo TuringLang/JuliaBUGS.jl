@@ -87,3 +87,37 @@ model = tograph(expr, compiler_state)
 
 # Top level function
 compile_graphppl(model_def=expr, data=data)
+
+##
+data = (x = [8.0, 15.0, 22.0, 29.0, 36.0], xbar = 22, N = 3, T = 2,   
+        Y = [151 199; 145 199; 147 214])
+
+compiler_state = CompilerState()
+parsedata!(Dict(pairs(data)), compiler_state)
+@show compiler_state;
+
+expr = bugsmodel"""
+    for(i in 1:N) {
+        for(j in 1:T) {
+            Y[i, j] ~ dnorm(mu[i, j], tau.c)
+            mu[i, j] <- alpha[i] + beta[i] * (x[j] - xbar)
+        }
+        alpha[i] ~ dnorm(alpha.c, alpha.tau)
+        beta[i] ~ dnorm(beta.c, beta.tau)
+    }
+    tau.c ~ dgamma(0.001, 0.001)
+    sigma <- 1 / sqrt(tau.c)
+    alpha.c ~ dnorm(0.0, 1.0E-6)   
+    alpha.tau ~ dgamma(0.001, 0.001)
+    beta.c ~ dnorm(0.0, 1.0E-6)
+    beta.tau ~ dgamma(0.001, 0.001)
+    alpha0 <- alpha.c - xbar * beta.c   
+ """
+@run compile_graphppl(model_def=expr, data=data)
+compile_graphppl(model_def=expr, data=data)
+@show model
+
+compiler_state = CompilerState()
+parsedata!(data, compiler_state)
+unrollforloops!(expr, compiler_state)
+##

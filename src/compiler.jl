@@ -10,13 +10,15 @@ struct CompilerState
     arrays::Dict{Symbol, Array{Num}}
     rules::Dict{Num, Num}
     stochastic_rules::Dict{Num, Num}
+    constant_distribution_rules::Dict{Num, Any} # the value type right now is actually Function, as I store the anonymous function directly here, maybe change later
 
     # link_function_rules
 end
 
-CompilerState() = CompilerState(Dict{Symbol, Array{Num}}(), Dict{Num, Num}(), Dict{Num, Num}())
+CompilerState() = CompilerState(Dict{Symbol, Array{Num}}(), Dict{Num, Num}(), Dict{Num, Num}(), Dict{Num, Any}())
 
-function parsedata!(data::Union{Dict,NamedTuple}, compiler_state)
+parsedata!(data::NamedTuple, compiler_state) = parsedata!(Dict(pairs(data)), compiler_state)
+function parsedata!(data::Dict, compiler_state)
     for (key, value) in data
         if isa(value, Number)
             compiler_state.rules[tosymbolic(key)] = value
@@ -35,7 +37,7 @@ end
 function create_symbolic_array(name::Symbol, size)
     symbolic_array = Array{Num}(undef, size...)
     for i in CartesianIndices(symbolic_array)
-        symbolic_array[i] = tosymbolic(Symbol("$(name)" * "[$(collect(Tuple(i))...)]"))
+        symbolic_array[i] = tosymbolic(Symbol("$(name)" * "$(collect(Tuple(i)))"))
     end
     return symbolic_array
 end
@@ -43,12 +45,13 @@ end
 function unrollforloops!(expr, compiler_state)
     unrolled_flag = false
     while hasforloop(expr, compiler_state)
-        expr_copy = deepcopy(expr) # so that iterator is not changed by the mutation
-        for (i, arg) in enumerate(expr_copy.args)
+        for (i, arg) in enumerate(expr.args)
             if arg.head == :for
                 unrolled = unrollforloop(arg, compiler_state)
                 splice!(expr.args, i, unrolled.args)
                 unrolled_flag = true
+                # unroll one loop at a time to avoid complication from mutation
+                break
             end
         end
     end
@@ -196,7 +199,7 @@ function parse_logical_assignments!(expr, compiler_state)
             if MacroTools.isexpr(lhs, :ref)
                 lhs = Symbolics.tosymbol(ref_to_symbolic!(lhs, compiler_state))
             end
-            !isa(lhs, Symbol) || error("LHS need to be simple.")
+            isa(lhs, Symbol) || error("LHS need to be simple.")
 
             ref_variables = []
             rhs = MacroTools.prewalk(rhs) do sub_expr
@@ -235,7 +238,7 @@ function parse_stochastic_assignments!(expr, compiler_state)
             if MacroTools.isexpr(lhs, :ref)
                 lhs = Symbolics.tosymbol(ref_to_symbolic!(lhs, compiler_state))
             end
-            isa(lhs, Symbol) && error("LHS need to be simple.")
+            isa(lhs, Symbol) || error("LHS need to be simple.")
 
             # rhs will be a distribution object, so handle the distribution right now
             rhs.head == :call || error("RHS needs to be a distribution function")
@@ -257,11 +260,16 @@ function parse_stochastic_assignments!(expr, compiler_state)
 
             sym_rhs = create_sym_rhs(rhs, ref_variables, variables)
             sym_lhs = tosymbolic(lhs)
-            if haskey(compiler_state.stochastic_assign, sym_lhs)
-                Symbolics.isequal(sym_rhs, stochastic_assign[sym_lhs]) && continue
+            if haskey(compiler_state.stochastic_rules, sym_lhs)
+                Symbolics.isequal(sym_rhs, compiler_state.stochastic_rules[sym_lhs]) && continue
                 error("Repeated definition for $(lhs)")
             end
-            compiler_statestochastic_assign[sym_lhs] = sym_rhs
+            if size(variables) == (0,) && size(ref_variables) == (0,)
+                # the distribution does not have variable arguments
+                compiler_state.constant_distribution_rules[sym_lhs] = () -> sym_rhs
+            else
+                compiler_state.stochastic_rules[sym_lhs] = sym_rhs
+            end
         end
     end
 end
@@ -275,7 +283,7 @@ function create_sym_rhs(rhs, ref_variables, variables)
     return eval(rhs)
 end
 
-function local_binding_exprs(variables::Array{Num})
+function local_binding_exprs(variables)
     binding_exprs = []
     for variable in variables
         binding_expr = Expr(:(=), Symbolics.tosymbol(variable), variable)
@@ -324,7 +332,6 @@ function tograph(compiler_state)
 
     for key in keys(compiler_state.rules)
         default_value = resolve(key, compiler_state)
-        @show isa(default_value, Union{Integer,AbstractFloat})
         if !isa(default_value, Union{Integer,AbstractFloat})
             default_value = 0
         end
@@ -340,7 +347,7 @@ function tograph(compiler_state)
         type = :Stochastic
         default_value = resolve(key, compiler_state)
         if isa(default_value, Union{Integer,AbstractFloat})
-            type = :Observation
+            type = :Observations
         else
             default_value = 0
         end
@@ -350,6 +357,19 @@ function tograph(compiler_state)
         f_expr = Symbolics.build_function(ex, args...)
 
         to_graph[Symbolics.tosymbol(key)] = (default_value, eval(f_expr), type)
+    end
+
+    for key in keys(compiler_state.constant_distribution_rules)
+        type = :Stochastic
+        default_value = resolve(key, compiler_state)
+        if isa(default_value, Union{Integer,AbstractFloat})
+            type = :Observations
+        else
+            default_value = 0
+        end
+        default_value = Float64(default_value)
+
+        to_graph[Symbolics.tosymbol(key)] = (default_value, compiler_state.constant_distribution_rules[key], type)
     end
 
     return to_graph
@@ -368,11 +388,12 @@ end
 Top level function
 """
 function compile_graphppl(; model_def::Expr, data)
+    expr = deepcopy(model_def)
     compiler_state = CompilerState()
     parsedata!(data, compiler_state)
 
     while true
-        unrollforloops!(model_def, compiler_state) ||
+        unrollforloops!(expr, compiler_state) ||
             parse_logical_assignments!(expr, compiler_state) ||
             break
     end
@@ -380,6 +401,8 @@ function compile_graphppl(; model_def::Expr, data)
 
     onlysimpleexpr(expr) || error("Has unresolvable loop bounds or if conditions.")
     model = tograph(compiler_state)
+    model_nt = (; model...)
 
-    return Model(; zip(keys(model), values(model))...)
+    # the result returned from `Model` is wrong, either: (1) GraphInfo need debugging (2) wrong way to use the constructor
+    return Model(; zip(keys(model_nt), values(model_nt))...)
 end
