@@ -110,8 +110,4 @@ expr = bugsmodel"""
     alpha0 <- alpha.c - xbar * beta.c   
  """
 input = compile_graphppl(model_def=expr, data=data)
-input_nt = (; input...)
-argnames(input[:sigma][2])
-m = [zip(keys(input_nt), values(input_nt))...]
-@run Model(; input_nt...)
 ##
