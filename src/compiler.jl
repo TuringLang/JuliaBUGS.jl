@@ -7,15 +7,20 @@ using LinearAlgebra
 using BugsModels
 
 struct CompilerState
-    arrays::Dict{Symbol, Array{Num}}
-    rules::Dict{Num, Num}
-    stochastic_rules::Dict{Num, Num}
-    constant_distribution_rules::Dict{Num, Any} # the value type right now is actually Function, as I store the anonymous function directly here, maybe change later
+    arrays::Dict{Symbol,Array{Num}}
+    rules::Dict{Num,Num}
+    stochastic_rules::Dict{Num,Num}
+    constant_distribution_rules::Dict{Num,Any} # the value type right now is actually Function, as I store the anonymous function directly here, maybe change later
 
     # link_function_rules
 end
 
-CompilerState() = CompilerState(Dict{Symbol, Array{Num}}(), Dict{Num, Num}(), Dict{Num, Num}(), Dict{Num, Any}())
+CompilerState() = CompilerState(
+    Dict{Symbol,Array{Num}}(),
+    Dict{Num,Num}(),
+    Dict{Num,Num}(),
+    Dict{Num,Any}(),
+)
 
 parsedata!(data::NamedTuple, compiler_state) = parsedata!(Dict(pairs(data)), compiler_state)
 function parsedata!(data::Dict, compiler_state)
@@ -115,7 +120,7 @@ tosymbolic(variable::Symbol) = (identity)(
 tosymbolic(variable::Expr) =
     MacroTools.isexpr(variable, :ref) && ref_to_symbolic!(variable, compiler_state)
 tosymbolic(variable::Num) = variable
-tosymbolic(variable::Union{Integer, AbstractFloat}) = Num(variable)
+tosymbolic(variable::Union{Integer,AbstractFloat}) = Num(variable)
 
 resolve(variable::Union{Integer,AbstractFloat}, compiler_state) = variable
 function resolve(variable, compiler_state)
@@ -260,7 +265,8 @@ function parse_stochastic_assignments!(expr, compiler_state)
             sym_rhs = create_sym_rhs(rhs, ref_variables, variables)
             sym_lhs = tosymbolic(lhs)
             if haskey(compiler_state.stochastic_rules, sym_lhs)
-                Symbolics.isequal(sym_rhs, compiler_state.stochastic_rules[sym_lhs]) && continue
+                Symbolics.isequal(sym_rhs, compiler_state.stochastic_rules[sym_lhs]) &&
+                    continue
                 error("Repeated definition for $(lhs)")
             end
             if size(variables) == (0,) && size(ref_variables) == (0,)
@@ -366,7 +372,8 @@ function tograph(compiler_state)
         end
         default_value = Float64(default_value)
 
-        to_graph[Symbolics.tosymbol(key)] = (default_value, compiler_state.constant_distribution_rules[key], type)
+        to_graph[Symbolics.tosymbol(key)] =
+            (default_value, compiler_state.constant_distribution_rules[key], type)
     end
 
     return to_graph
@@ -398,10 +405,7 @@ function compile_graphppl(; model_def::Expr, data)
 
     onlysimpleexpr(expr) || error("Has unresolvable loop bounds or if conditions.")
     model = tograph(compiler_state)
+    model_nt = (; model...)
 
-    # TODO: I think the problems with constructing GRaphPPL Model may caused by the anonymous function, trying to fix
-    return model
-
-    # the result returned from `Model` is wrong, either: (1) GraphInfo need debugging (2) wrong way to use the constructor
-    # return Model(; zip(keys(model_nt), values(model_nt))...)
+    return Model(; model_nt...)
 end
