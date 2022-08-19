@@ -92,10 +92,6 @@ compile_graphppl(model_def=expr, data=data)
 data = (x = [8.0, 15.0, 22.0, 29.0, 36.0], xbar = 22, N = 3, T = 2,   
         Y = [151 199; 145 199; 147 214])
 
-compiler_state = CompilerState()
-parsedata!(Dict(pairs(data)), compiler_state)
-@show compiler_state;
-
 expr = bugsmodel"""
     for(i in 1:N) {
         for(j in 1:T) {
@@ -113,11 +109,8 @@ expr = bugsmodel"""
     beta.tau ~ dgamma(0.001, 0.001)
     alpha0 <- alpha.c - xbar * beta.c   
  """
-@run compile_graphppl(model_def=expr, data=data)
-compile_graphppl(model_def=expr, data=data)
-@show model
-
-compiler_state = CompilerState()
-parsedata!(data, compiler_state)
-unrollforloops!(expr, compiler_state)
+input = compile_graphppl(model_def=expr, data=data)
+input_nt = (; input...)
+m = [zip(keys(input_nt), values(input_nt))...]
+Model(; input_nt...)
 ##

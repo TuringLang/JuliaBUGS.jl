@@ -242,9 +242,8 @@ function parse_stochastic_assignments!(expr, compiler_state)
 
             # rhs will be a distribution object, so handle the distribution right now
             rhs.head == :call || error("RHS needs to be a distribution function")
-            dist_func = eval(rhs.args[1])
-            # Assume distribution functions are binded locally
-            Base.@isdefined(dist_func) || error("$rhs not defined.")
+            dist_func = rhs.args[1]
+            dist_func in DISTRIBUTIONS || error("$rhs not defined.")
 
             ref_variables = []
             rhs = MacroTools.prewalk(rhs) do sub_expr
@@ -276,20 +275,18 @@ end
 
 function create_sym_rhs(rhs, ref_variables, variables)
     # bind symbolic variables to local variable with same names
-    eval(local_binding_exprs(ref_variables))
-    eval(local_binding_exprs(variables))
-
-    # `eval` will then construct symbolic expression with the local bindings
-    return eval(rhs)
-end
-
-function local_binding_exprs(variables)
     binding_exprs = []
-    for variable in variables
+    for variable in vcat(ref_variables, variables)
         binding_expr = Expr(:(=), Symbolics.tosymbol(variable), variable)
         push!(binding_exprs, binding_expr)
     end
-    return Expr(:block, binding_exprs...)
+
+    # let-bind will bind a local variable to a symbolic variable with the 
+    # same name, so that evaluating the rhs expression generating a symbolic term
+    let_expr = Expr(:let, Expr(:block, binding_exprs...), rhs)
+
+    # `eval` will then construct symbolic expression with the local bindings
+    return eval(let_expr)
 end
 
 """ 
@@ -401,8 +398,10 @@ function compile_graphppl(; model_def::Expr, data)
 
     onlysimpleexpr(expr) || error("Has unresolvable loop bounds or if conditions.")
     model = tograph(compiler_state)
-    model_nt = (; model...)
+
+    # TODO: I think the problems with constructing GRaphPPL Model may caused by the anonymous function, trying to fix
+    return model
 
     # the result returned from `Model` is wrong, either: (1) GraphInfo need debugging (2) wrong way to use the constructor
-    return Model(; zip(keys(model_nt), values(model_nt))...)
+    # return Model(; zip(keys(model_nt), values(model_nt))...)
 end
