@@ -118,7 +118,7 @@ tosymbolic(variable::Symbol) = (identity)(
     ),
 )
 tosymbolic(variable::Expr) =
-    MacroTools.isexpr(variable, :ref) && ref_to_symbolic!(variable, compiler_state)
+    if MacroTools.isexpr(variable, :ref) ? ref_to_symbolic!(variable, compiler_state) : error("General expression to symbol is not supported.)
 tosymbolic(variable::Num) = variable
 tosymbolic(variable::Union{Integer,AbstractFloat}) = Num(variable)
 
@@ -144,8 +144,7 @@ function symbolic_eval(variable::Num, compiler_state)
     evaluated = Symbolics.substitute(variable, compiler_state.rules)
     try_evaluated = Symbolics.substitute(evaluated, compiler_state.rules)
 
-    while true
-        Symbolics.isequal(evaluated, try_evaluated) && break
+    while !Symbolics.isequal(evaluated, try_evaluated)
         evaluated = try_evaluated
         try_evaluated = Symbolics.substitute(try_evaluated, compiler_state.rules)
     end
@@ -170,17 +169,12 @@ function ref_to_symbolic!(expr::Expr, compiler_state)
     # check if dimension match
     if ndims(array) == numdims
         old_size = size(array)
-        if all([index[i] <= old_size[i] for i in eachindex(index)])
+        if all(index .<= old_size)
             return array[index...]
 
         else
             # expand the array
-            new_size = collect(size(array))
-            for i in eachindex(index)
-                if index[i] > old_size[i]
-                    new_size[i] = index[i]
-                end
-            end
+            new_size = max.(size(array), old_size)
 
             new_array = Array{Num}(undef, new_size...)
             for i in CartesianIndices(new_array)
@@ -269,7 +263,7 @@ function parse_stochastic_assignments!(expr, compiler_state)
                     continue
                 error("Repeated definition for $(lhs)")
             end
-            if size(variables) == (0,) && size(ref_variables) == (0,)
+            if isempty(variables) && isempty(ref_variables)
                 # the distribution does not have variable arguments
                 compiler_state.constant_distribution_rules[sym_lhs] = () -> sym_rhs
             else
@@ -379,14 +373,7 @@ function tograph(compiler_state)
     return to_graph
 end
 
-function onlysimpleexpr(expr::Expr)
-    for arg in expr.args
-        if !MacroTools.isexpr(arg, :(=)) && !MacroTools.isexpr(arg, :~)
-            return false
-        end
-    end
-    return true
-end
+issimpleexpression(expr) = Meta.isexpr(expr, (:(=), :~))
 
 """
 Top level function
@@ -403,7 +390,7 @@ function compile_graphppl(; model_def::Expr, data)
     end
     parse_stochastic_assignments!(expr, compiler_state)
 
-    onlysimpleexpr(expr) || error("Has unresolvable loop bounds or if conditions.")
+    all(issimpleexpression, expr.args) || error("Has unresolvable loop bounds or if conditions.")
     model = tograph(compiler_state)
     model_nt = (; model...)
 
