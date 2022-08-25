@@ -49,7 +49,8 @@ expr = bugsmodel"""
     # dummy assignment for easy understanding
     variable.1 <- 1
 """
-unrollforloops!(expr, compiler_state)
+@run unrollforloops!(expr, compiler_state)
+hasforloop(expr, compiler_state)
 expr
 
 ## Tests for unrolling: corner case
@@ -109,5 +110,70 @@ expr = bugsmodel"""
     beta.tau ~ dgamma(0.001, 0.001)
     alpha0 <- alpha.c - xbar * beta.c   
  """
-input = compile_graphppl(model_def=expr, data=data)
+compile_graphppl(model_def=expr, data=data)
 ##
+
+expr = bugsmodel"""
+    a = dmnorm(mu[], T[1:5,1:5])
+    b = mean(g[, 5])
+"""
+
+dump(expr)
+Meta.parse("g[1]")
+dump(Meta.parse("h[1, 2:5]"))
+
+Meta.show_sexpr(expr)
+
+compiler_state = CompilerState()
+
+ref_to_symbolic!(Meta.parse("h[1, 2:5]"), compiler_state)
+@run ref_to_symbolic!(Meta.parse("h[1, 2:5]"), compiler_state)
+compiler_state
+
+##
+compiler_state = CompilerState()
+ref_to_symbolic!(Meta.parse("h[2, 2:5]"), compiler_state)
+##
+using PrettyPrinting
+pprint(compiler_state.arrays)
+@run ref_to_symbolic!(Meta.parse("h[2, 3:6]"), compiler_state)
+ref_to_symbolic!(Meta.parse("h[3, 7]"), compiler_state)
+ref_to_symbolic!(Meta.parse("h[2, :]"), compiler_state)
+
+##
+expr = bugsmodel"""
+    if (g) {
+        a <- b + c
+    }
+"""
+data = Dict(
+    :g => true,
+    # :g => false,
+    # :g => 1.0,
+)
+compiler_state = CompilerState()
+parsedata!(data, compiler_state)
+@show compiler_state;
+dump(expr)
+Meta.show_sexpr(expr)
+
+@run resolve_if_conditions!(expr, compiler_state)
+
+dump(expr)
+
+##
+expr = bugsmodel"""
+logit(mu[i]) <- beta0 + beta1 * z1[i] + beta2 * z2[i] + b[i]
+"""
+
+lhs_link_function_to_rhs_inverse(expr, nothing)
+
+## 
+substitute(a, Dict(a=>b+c, b=>2, c=>3))
+compiler_state = CompilerState(
+    Dict{Symbol,Array{Num}}(),
+    Dict(a=>b+c, b=>2, c=>3),
+    Dict{Num,Num}(),
+    Dict{Num,Any}(),
+)
+symbolic_eval(a, compiler_state)

@@ -11,8 +11,6 @@ struct CompilerState
     rules::Dict{Num,Num}
     stochastic_rules::Dict{Num,Num}
     constant_distribution_rules::Dict{Num,Any} # the value type right now is actually Function, as I store the anonymous function directly here, maybe change later
-
-    # link_function_rules
 end
 
 CompilerState() = CompilerState(
@@ -25,6 +23,7 @@ CompilerState() = CompilerState(
 parsedata!(data::NamedTuple, compiler_state) = parsedata!(Dict(pairs(data)), compiler_state)
 function parsedata!(data::Dict, compiler_state)
     for (key, value) in data
+        # TODO: add supports for `missing` values
         if isa(value, Number)
             compiler_state.rules[tosymbolic(key)] = value
         elseif isa(value, Array)
@@ -39,13 +38,60 @@ function parsedata!(data::Dict, compiler_state)
     end
 end
 
-function create_symbolic_array(name::Symbol, size)
+function create_symbolic_array(name::Symbol, size::Vector)
     symbolic_array = Array{Num}(undef, size...)
     for i in CartesianIndices(symbolic_array)
         symbolic_array[i] = tosymbolic(Symbol("$(name)" * "$(collect(Tuple(i)))"))
     end
     return symbolic_array
 end
+
+# this function should be handled as way as unroll
+function resolve_if_conditions!(expr, compiler_state)
+    for (i, arg) in enumerate(expr.args)
+        if MacroTools.isexpr(arg, :if)
+            condition = arg.args[1]
+            block = arg.args[2]
+            
+            cond = resolve(condition, compiler_state)
+            if cond isa Bool
+                if cond 
+                    splice!(expr.args, i, block.args)
+                else 
+                    pop!(expr.args, i)
+                end
+            elseif cond isa Real
+                if cond > 0 
+                    splice!(expr.args, i, block.args)
+                else 
+                    pop!(expr.args, i)
+                end
+            end
+            return true # mutate once only
+        end
+    end         
+    return false
+end
+
+#this function should be called before everything else
+function lhs_link_function_to_rhs_inverse(expr, compiler_state)
+    # link function only happens at lhs of logical assignment
+    MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, f_(lhs_) = rhs_)
+            if f in keys(INVERSE_LINK_FUNCTION)
+                sub_expr.args[1] = lhs
+                sub_expr.args[2] = Expr(:call, INVERSE_LINK_FUNCTION[f], rhs)
+            else
+                error("Link function $f not supported.")
+            end
+        end
+        return sub_expr
+    end
+end
+
+# TODO: what am I doing with array of symbolic variable anyway? do I even need it, it can be replaced with size + BitArray
+# TODO: alternative array implement: keep a BitArray indicating if elements were referenced, and generate symbolic variable on the fly
+
 
 function unrollforloops!(expr, compiler_state)
     unrolled_flag = false
@@ -107,20 +153,18 @@ function unrollforloop(expr, compiler_state)
     end
 end
 
-# This function comes from `@macroexpand @variable some_variable`. Doing this to avoid local variable binding.
-tosymbolic(variable::Symbol) = (identity)(
-    (Symbolics.wrap)(
-        (SymbolicUtils.setmetadata)(
-            (SymbolicUtils.Sym){Real}(variable),
-            Symbolics.VariableSource,
-            (:variables, variable),
-        ),
-    ),
-)
 tosymbolic(variable::Expr) =
-    if MacroTools.isexpr(variable, :ref) ? ref_to_symbolic!(variable, compiler_state) : error("General expression to symbol is not supported.)
+    MacroTools.isexpr(variable, :ref) ? ref_to_symbolic!(variable, compiler_state) : error("General expression to symbol is not supported.")
 tosymbolic(variable::Num) = variable
 tosymbolic(variable::Union{Integer,AbstractFloat}) = Num(variable)
+function tosymbolic(variable::Symbol) 
+    variable_with_metadata = SymbolicUtils.setmetadata(
+        SymbolicUtils.Sym{Real}(variable),
+        Symbolics.VariableSource,
+        (:variables, variable)
+    )
+    return Symbolics.wrap(variable_with_metadata)
+end
 
 resolve(variable::Union{Integer,AbstractFloat}, compiler_state) = variable
 function resolve(variable, compiler_state)
@@ -141,52 +185,89 @@ end
     cases it should suffice, improve later
 """
 function symbolic_eval(variable::Num, compiler_state)
+    partial_trace = []
     evaluated = Symbolics.substitute(variable, compiler_state.rules)
     try_evaluated = Symbolics.substitute(evaluated, compiler_state.rules)
+    push!(partial_trace, try_evaluated)
 
     while !Symbolics.isequal(evaluated, try_evaluated)
         evaluated = try_evaluated
         try_evaluated = Symbolics.substitute(try_evaluated, compiler_state.rules)
+        try_evaluated in partial_trace && try_evaluated # avoiding infinite loop
     end
 
     return try_evaluated
 end
 
-function ref_to_symbolic!(expr::Expr, compiler_state)
+Base.in(key::Num, vs::Vector{Any}) = any(broadcast(Symbolics.isequal, key, vs))
+
+function ref_to_symbolic!(expr, compiler_state)
     numdims = length(expr.args) - 1 # number of dimensions
     name = expr.args[1]
-    index = expr.args[2:end]
+    indices = expr.args[2:end]
 
-    # if the array doesn't exist
     if !haskey(compiler_state.arrays, name)
-        array = create_symbolic_array(name, index)
+        arraysize = deepcopy(indices)
+        for (i, index) in enumerate(indices)
+            if MacroTools.isexpr(index, :call)
+                if index.args[1] == :(:)
+                    low, high = index.args[2:end] # if size(args) > 3, error
+                    indices[i] = eval(indices[i])
+                else 
+                    error("Wrong ref indexing expression.")
+                end 
+                arraysize[i] = high
+            elseif index == :(:)
+                arraysize[i] = 1
+            end
+        end
+        array = create_symbolic_array(name, arraysize)
         compiler_state.arrays[name] = array
-        return array[index...]
+        return array[indices...]
     end
 
     # if array exists
     array = compiler_state.arrays[name]
-    # check if dimension match
+    # TODO: if this is C, array is a pointer, but may later modify the object pointed by expanding array, improve this
+    # check if number of dimensions match
     if ndims(array) == numdims
-        old_size = size(array)
-        if all(index .<= old_size)
-            return array[index...]
+        array_size = collect(size(array))
+        for (i, index) in enumerate(indices)
+            if MacroTools.isexpr(index, :call)
+                @assert index.args[1] == :(:) "Wrong ref indexing expression."
+                
+                low, high = index.args[2:end] # if size(args) > 3, error
+                array_size[i] = max(array_size[i], high)
 
+                indices[i] = eval(indices[i])
+            elseif index == :(:)
+                indices[i] = eval(indices[i])
+            elseif isa(index, Integer)
+                array_size[i] = max(indices[i], array_size[i])
+            else
+                error("Indexing wrong.")
+            end
+        end
+
+        if all(array_size .== size(array))
+            return array[indices...]
         else
             # expand the array
-            new_size = max.(size(array), old_size)
-
-            new_array = Array{Num}(undef, new_size...)
-            for i in CartesianIndices(new_array)
-                new_array[i] = tosymbolic(Symbol("$name" * "$(collect(Tuple(i)))"))
-            end
-
-            compiler_state.arrays[name] = new_array
-            return new_array[index...] # again need to handle indexing later
+            expand_array!(name, array_size, compiler_state)
+            return compiler_state.arrays[name][indices...] # again need to handle indexing later
         end
     end
 
     error("Dimension doesn't match!")
+end
+
+function expand_array!(name, size, compiler_state)
+    new_array = Array{Num}(undef, size...)
+    for i in CartesianIndices(new_array)
+        new_array[i] = tosymbolic(Symbol("$name" * "$(collect(Tuple(i)))"))
+    end
+
+    compiler_state.arrays[name] = new_array
 end
 
 function parse_logical_assignments!(expr, compiler_state)
