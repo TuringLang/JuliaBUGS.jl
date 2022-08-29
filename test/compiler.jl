@@ -1,21 +1,35 @@
-## tests for analyze_data!
-data = Dict(
-    :N => 2,
-    :b => 3,
-    :g => [1, 2, 3]
-)
+using BugsModels
+import BugsModels:
+    bugsmodel,
+    bugsast,
+    CompilerState,
+    resolveif!,
+    inverselinkfunction,
+    unrollforloops!,
+    tosymbolic,
+    resolve,
+    symbolic_eval,
+    ref_to_symbolic!,
+    addlogicalrules!,
+    addstochasticrules!,
+    tograph,
+    compile_graphppl
+using Test
+using Symbolics
 
-compiler_state = CompilerState()
-parsedata!(data, compiler_state)
-@show compiler_state;
 ##
 
-# test for resolve
-resolve(:n, rules, arrays)
-resolve(10, rules, arrays)
-resolve(Meta.parse("g[2]"), rules, arrays)
+# tests for `addlogicalrules` for data
+data = Dict(:N => 2, :g => [1, 2, 3])
 
-## tests for unroll
+compiler_state = CompilerState()
+addlogicalrules!(data, compiler_state)
+@test compiler_state.logicalrules[tosymbolic(:N)] == Num(2)
+@test compiler_state.logicalrules[tosymbolic(Meta.parse("g[3]"))] == Num(3)
+@test resolve(:N, compiler_state) == 2
+@test resolve(Meta.parse("g[2]"), compiler_state) == 2
+
+# tests for unrolling facilities
 expr = bugsmodel"""      
 ### Likelihood
     # dummy assignment for easy understanding
@@ -49,11 +63,35 @@ expr = bugsmodel"""
     # dummy assignment for easy understanding
     variable.1 <- 1
 """
-@run unrollforloops!(expr, compiler_state)
-hasforloop(expr, compiler_state)
-expr
+unrollforloops!(expr, compiler_state)
 
-## Tests for unrolling: corner case
+intended_result = bugsmodel"""
+    variable.0 <- 1
+    array.variable.0[1] <- 1
+    array.variable.1[1] <- 1 + 1
+    array.variable.2[1, 1, 1] <- 2
+    array.variable.2[1, 2, 1] <- 2
+    array.variable.2[1, 2, 2] <- 2
+    array.variable.0[2] <- 1
+    array.variable.1[2] <- 2 + 1
+    array.variable.2[2, 1, 1] <- 2
+    array.variable.2[2, 2, 1] <- 2
+    array.variable.2[2, 2, 2] <- 2
+    array.variable.0[3] <- 1
+    array.variable.1[3] <- 3 + 1
+    array.variable.2[3, 1, 1] <- 2
+    array.variable.2[3, 2, 1] <- 2
+    array.variable.2[3, 2, 2] <- 2
+    array.variable.3[1] <- 1
+    array.variable.3[2] <- 2
+    array.variable.4[1] <- 1
+    array.variable.4[2] <- 2
+    variable.1 <- 1
+"""
+@test expr == intended_result
+
+# tests for unrolling: corner case where need variable defined in outer loop to unroll inner loop
+# rely on `N` was defined to be 2 from previous tests 
 expr = bugsmodel"""      
     for (i in 1:N) {
         n[i] = i
@@ -63,35 +101,112 @@ expr = bugsmodel"""
     }     
 """
 unrollforloops!(expr, compiler_state)
-parse_logical_assignments!(expr, compiler_state)
-@show expr
-@show compiler_state
+addlogicalrules!(expr, compiler_state)
+unrollforloops!(expr, compiler_state)
 
-## tests for parse_logical_assignments!
+intended_result = bugsmodel"""
+    n[1] = 1
+    m[1, 1] = 1 + 1
+    n[2] = 2
+    m[2, 1] = 2 + 1
+    m[2, 2] = 2 + 2
+"""
+
+@test expr == intended_result
+
+# tests for `ref_to_symbolic!`
+# case 1: g[1] already exists
+@test Symbolics.isequal(
+    ref_to_symbolic!(Meta.parse("g[1]"), compiler_state),
+    tosymbolic(Meta.parse("g[1]")),
+)
+# case 2: g[4] doesn't exist, so expand compiler_state.arrays
+@test Symbolics.isequal(
+    ref_to_symbolic!(Meta.parse("g[4]"), compiler_state),
+    tosymbolic(Meta.parse("g[4]")),
+)
+@test Symbolics.isequal(compiler_state.arrays[:g][4], tosymbolic(Meta.parse("g[4]")))
+# case 3: array h doesn't exist, create one
+@test :h ∉ keys(compiler_state.arrays)
+ref_to_symbolic!(Meta.parse("h[2]"), compiler_state)
+@test Symbolics.isequal(compiler_state.arrays[:h][2], tosymbolic(Meta.parse("h[2]")))
+# case 4: slicing 
+s = ref_to_symbolic!(Meta.parse("s[2, 3:6]"), compiler_state)
+@test size(s) == (4,)
+@test Symbolics.isequal(s[1], tosymbolic(Meta.parse("s[2, 3]")))
+s = ref_to_symbolic!(Meta.parse("s[2, :]"), compiler_state)
+@test size(s) == (6,)
+s = ref_to_symbolic!(Meta.parse("s[2:3, :]"), compiler_state)
+@test size(s) == (2, 6)
+
+# tests for parse_logical_assignments!
 expr = bugsmodel"""
     v[2] <- h[3] + (g[2] * d) * c
     w[6] <- f[2] / (y[4] + e)
 """
 
-@show compiler_state
-parse_logical_assignments!(expr, rules, arrays)
+addlogicalrules!(expr, compiler_state)
+@variables c d
+intended_equation = tosymbolic(Meta.parse("h[3]")) + c * d * tosymbolic(Meta.parse("g[2]"))
+@test Symbolics.isequal(
+    compiler_state.logicalrules[tosymbolic(Meta.parse("v[2]"))],
+    intended_equation,
+)
 
-## tests for compile_graphppl
+# tests for `if`
+# note: `if` implemented simply test if the condition evals to true, and then decides to add the exprs in or leave out 
 expr = bugsmodel"""
-    a <- g[2] * 3 + b
-    b ~ Normal(g[1], g[2])
+    if (condt) {
+        exprt <- 0
+    }
+    if (condf) {
+        exprf <- 0
+    }
+"""
+data = Dict(:condt => true, :condf => false)
+compiler_state = CompilerState()
+addlogicalrules!(data, compiler_state)
+resolveif!(expr, compiler_state)
+intended_expr = bugsmodel"""
+    exprt <- 0
+"""
+@test expr == intended_expr
+
+# test for link function handling
+expr = bugsmodel"""
+    logit(lhs) <- rhs
+    cloglog(lhs) <- rhs
+    log(lhs) <- rhs
+    probit(lhs) <- rhs
 """
 
-parse_logical_assignments!(expr, compiler_state)
-parse_stochastic_assignments!(expr, compiler_state)
-model = tograph(expr, compiler_state)
+intended_expr = bugsmodel"""
+    lhs <- logistic(rhs)
+    lhs <- cexpexp(rhs)
+    lhs <- exp(rhs)
+    lhs <- phi(rhs)
+"""
+@test inverselinkfunction(expr) == intended_expr
 
-# Top level function
-compile_graphppl(model_def=expr, data=data)
+# test for symbolic_eval
+@variables a b c
+compiler_state = CompilerState(
+    Dict{Symbol,Array{Num}}(),
+    Dict(a => b + c, b => 2, c => 3),
+    Dict{Num,Num}(),
+    Dict{Num,Any}(),
+)
+@test symbolic_eval(a, compiler_state) == 5
 
-##
-data = (x = [8.0, 15.0, 22.0, 29.0, 36.0], xbar = 22, N = 3, T = 2,   
-        Y = [151 199; 145 199; 147 214])
+# test for the top function
+# example taken from https://chjackson.github.io/openbugsdoc/Examples/Rats.html (data simplified)
+data = (
+    x = [8.0, 15.0, 22.0, 29.0, 36.0],
+    xbar = 22,
+    N = 3,
+    T = 2,
+    Y = [151 199; 145 199; 147 214],
+)
 
 expr = bugsmodel"""
     for(i in 1:N) {
@@ -110,70 +225,5 @@ expr = bugsmodel"""
     beta.tau ~ dgamma(0.001, 0.001)
     alpha0 <- alpha.c - xbar * beta.c   
  """
-compile_graphppl(model_def=expr, data=data)
-##
 
-expr = bugsmodel"""
-    a = dmnorm(mu[], T[1:5,1:5])
-    b = mean(g[, 5])
-"""
-
-dump(expr)
-Meta.parse("g[1]")
-dump(Meta.parse("h[1, 2:5]"))
-
-Meta.show_sexpr(expr)
-
-compiler_state = CompilerState()
-
-ref_to_symbolic!(Meta.parse("h[1, 2:5]"), compiler_state)
-@run ref_to_symbolic!(Meta.parse("h[1, 2:5]"), compiler_state)
-compiler_state
-
-##
-compiler_state = CompilerState()
-ref_to_symbolic!(Meta.parse("h[2, 2:5]"), compiler_state)
-##
-using PrettyPrinting
-pprint(compiler_state.arrays)
-@run ref_to_symbolic!(Meta.parse("h[2, 3:6]"), compiler_state)
-ref_to_symbolic!(Meta.parse("h[3, 7]"), compiler_state)
-ref_to_symbolic!(Meta.parse("h[2, :]"), compiler_state)
-
-##
-expr = bugsmodel"""
-    if (g) {
-        a <- b + c
-    }
-"""
-data = Dict(
-    :g => true,
-    # :g => false,
-    # :g => 1.0,
-)
-compiler_state = CompilerState()
-parsedata!(data, compiler_state)
-@show compiler_state;
-dump(expr)
-Meta.show_sexpr(expr)
-
-@run resolve_if_conditions!(expr, compiler_state)
-
-dump(expr)
-
-##
-expr = bugsmodel"""
-logit(mu[i]) <- beta0 + beta1 * z1[i] + beta2 * z2[i] + b[i]
-"""
-
-lhs_link_function_to_rhs_inverse(expr, nothing)
-
-## 
-substitute(a, Dict(a=>b+c, b=>2, c=>3))
-compiler_state = CompilerState(
-    Dict{Symbol,Array{Num}}(),
-    Dict(a=>b+c, b=>2, c=>3),
-    Dict{Num,Num}(),
-    Dict{Num,Any}(),
-)
-symbolic_eval(a, compiler_state)
+model = compile_graphppl(model_def = expr, data = data) # Inspected by eyes right now

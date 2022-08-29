@@ -6,11 +6,23 @@ using MacroTools
 using LinearAlgebra
 using BugsModels
 
+
+"""
+    CompilerState
+
+`arrays` is a dictionary maps array names form model definition to arrays of symbolics variables. Indexing 
+in model definition is implemented as indexing to the arrays stored in `arrays`. `logicalrules`, `stochasticrules`, and
+`distirbutionrules` are dictionary that maps symbolic variables to there equivalent julia symbolic expressions. Partial 
+evaluation of variables are implemented as symbolic substitution. 
+
+CompilerState will likely eb mutated multiple times. And the final step of the compiling into GraphPPL only rely on data 
+in CompilerState.
+"""
 struct CompilerState
     arrays::Dict{Symbol,Array{Num}}
-    rules::Dict{Num,Num}
-    stochastic_rules::Dict{Num,Num}
-    constant_distribution_rules::Dict{Num,Any} # the value type right now is actually Function, as I store the anonymous function directly here, maybe change later
+    logicalrules::Dict{Num,Num}
+    stochasticrules::Dict{Num,Num}
+    distirbutionrules::Dict{Num,Any}
 end
 
 CompilerState() = CompilerState(
@@ -20,63 +32,45 @@ CompilerState() = CompilerState(
     Dict{Num,Any}(),
 )
 
-parsedata!(data::NamedTuple, compiler_state) = parsedata!(Dict(pairs(data)), compiler_state)
-function parsedata!(data::Dict, compiler_state)
-    for (key, value) in data
-        # TODO: add supports for `missing` values
-        if isa(value, Number)
-            compiler_state.rules[tosymbolic(key)] = value
-        elseif isa(value, Array)
-            sym_array = create_symbolic_array(key, collect(size(value)))
-            for i in eachindex(value)
-                compiler_state.rules[sym_array[i]] = value[i]
-            end
-            compiler_state.arrays[key] = sym_array
-        else
-            error("Value type not supported.")
-        end
-    end
-end
+"""
+    resolveif!(expr, compiler_state)
 
-function create_symbolic_array(name::Symbol, size::Vector)
-    symbolic_array = Array{Num}(undef, size...)
-    for i in CartesianIndices(symbolic_array)
-        symbolic_array[i] = tosymbolic(Symbol("$(name)" * "$(collect(Tuple(i)))"))
-    end
-    return symbolic_array
-end
+Evaluate the condition of the `if` statement. And in the situation where the condition is true,
+hoist out the consequence; otherwise, discard the if statement.
+"""
+function resolveif!(expr, compiler_state)
+    squashed = false
+    while any(arg -> Meta.isexpr(arg, :if), expr.args)
+        for (i, arg) in enumerate(expr.args)
+            if MacroTools.isexpr(arg, :if)
+                condition = arg.args[1]
+                block = arg.args[2]
 
-# this function should be handled as way as unroll
-function resolve_if_conditions!(expr, compiler_state)
-    for (i, arg) in enumerate(expr.args)
-        if MacroTools.isexpr(arg, :if)
-            condition = arg.args[1]
-            block = arg.args[2]
-            
-            cond = resolve(condition, compiler_state)
-            if cond isa Bool
-                if cond 
-                    splice!(expr.args, i, block.args)
-                else 
-                    pop!(expr.args, i)
-                end
-            elseif cond isa Real
-                if cond > 0 
-                    splice!(expr.args, i, block.args)
-                else 
-                    pop!(expr.args, i)
+                cond = resolve(condition, compiler_state)
+                if cond isa Bool
+                    if cond
+                        splice!(expr.args, i, block.args)
+                    else
+                        deleteat!(expr.args, i)
+                    end
+                    squashed = true # mutate once only, call this function until no mutation to settle multiple ifs
+                    break
                 end
             end
-            return true # mutate once only
         end
-    end         
-    return false
+    end
+    return squashed
 end
 
-#this function should be called before everything else
-function lhs_link_function_to_rhs_inverse(expr, compiler_state)
-    # link function only happens at lhs of logical assignment
-    MacroTools.postwalk(expr) do sub_expr
+"""
+    inverselinkfunction(expr)
+
+For all the logical assignments with supported link functions on the LHS. Rewrite the equation so that the 
+LHS is the argument of the link function, and the new RHS is a call to the inverse of the link function whose 
+argument is the original RHS.  
+"""
+function inverselinkfunction(expr)
+    return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, f_(lhs_) = rhs_)
             if f in keys(INVERSE_LINK_FUNCTION)
                 sub_expr.args[1] = lhs
@@ -89,10 +83,11 @@ function lhs_link_function_to_rhs_inverse(expr, compiler_state)
     end
 end
 
-# TODO: what am I doing with array of symbolic variable anyway? do I even need it, it can be replaced with size + BitArray
-# TODO: alternative array implement: keep a BitArray indicating if elements were referenced, and generate symbolic variable on the fly
+"""
+    unrollforloops!(expr, compiler_state)
 
-
+Unroll all the loops whose loop bounds can be partially evaluated to a constant. 
+"""
 function unrollforloops!(expr, compiler_state)
     unrolled_flag = false
     while hasforloop(expr, compiler_state)
@@ -115,8 +110,8 @@ function hasforloop(expr, compiler_state)
             lower_bound, higher_bound = arg.args[1].args[2].args
             lower_bound = resolve(lower_bound, compiler_state)
             higher_bound = resolve(higher_bound, compiler_state)
-            if isa(lower_bound, Real) &&
-               isa(higher_bound, Real) &&
+            if lower_bound isa Real &&
+               higher_bound isa Real &&
                isinteger(lower_bound) &&
                isinteger(lower_bound)
                 return true
@@ -133,8 +128,8 @@ function unrollforloop(expr, compiler_state)
 
     lower_bound = resolve(lower_bound, compiler_state)
     higher_bound = resolve(higher_bound, compiler_state)
-    if isa(lower_bound, Real) &&
-       isa(higher_bound, Real) &&
+    if lower_bound isa Real &&
+       higher_bound isa Real &&
        isinteger(lower_bound) &&
        isinteger(lower_bound)
         unrolled_exprs = []
@@ -145,7 +140,7 @@ function unrollforloop(expr, compiler_state)
             push!(unrolled_exprs, replaced_expr.args...)
         end
         return Expr(:block, unrolled_exprs...)
-    elseif isa(lower_bound, AbstractFloat) || isa(higher_bound, AbstractFloat)
+    elseif lower_bound isa AbstractFloat || higher_bound isa AbstractFloat
         error("Loop bounds need to be integers.")
     else
         # if loop bounds contain variables that can't be partial evaluated at this moment
@@ -153,19 +148,30 @@ function unrollforloop(expr, compiler_state)
     end
 end
 
+"""
+    tosymbolic(variable)
+
+Returns symbolic variable for multiple types of `variable`s.
+"""
 tosymbolic(variable::Expr) =
-    MacroTools.isexpr(variable, :ref) ? ref_to_symbolic!(variable, compiler_state) : error("General expression to symbol is not supported.")
+    MacroTools.isexpr(variable, :ref) ? ref_to_symbolic!(variable, compiler_state) :
+    error("General expression to symbol is not supported.")
 tosymbolic(variable::Num) = variable
 tosymbolic(variable::Union{Integer,AbstractFloat}) = Num(variable)
-function tosymbolic(variable::Symbol) 
+function tosymbolic(variable::Symbol)
     variable_with_metadata = SymbolicUtils.setmetadata(
         SymbolicUtils.Sym{Real}(variable),
         Symbolics.VariableSource,
-        (:variables, variable)
+        (:variables, variable),
     )
     return Symbolics.wrap(variable_with_metadata)
 end
 
+"""
+    resolve(variable, compiler_state)
+
+Partially evaluate the variable in the context defined by compiler_state.
+"""
 resolve(variable::Union{Integer,AbstractFloat}, compiler_state) = variable
 function resolve(variable, compiler_state)
     resolved_variable = symbolic_eval(tosymbolic(variable), compiler_state)
@@ -181,18 +187,16 @@ end
             b + c
         ```
     
-    CAUTION: the implementation can cause infinite loop in the general case, but for simple 
-    cases it should suffice, improve later
 """
 function symbolic_eval(variable::Num, compiler_state)
     partial_trace = []
-    evaluated = Symbolics.substitute(variable, compiler_state.rules)
-    try_evaluated = Symbolics.substitute(evaluated, compiler_state.rules)
+    evaluated = Symbolics.substitute(variable, compiler_state.logicalrules)
+    try_evaluated = Symbolics.substitute(evaluated, compiler_state.logicalrules)
     push!(partial_trace, try_evaluated)
 
     while !Symbolics.isequal(evaluated, try_evaluated)
         evaluated = try_evaluated
-        try_evaluated = Symbolics.substitute(try_evaluated, compiler_state.rules)
+        try_evaluated = Symbolics.substitute(try_evaluated, compiler_state.logicalrules)
         try_evaluated in partial_trace && try_evaluated # avoiding infinite loop
     end
 
@@ -201,8 +205,14 @@ end
 
 Base.in(key::Num, vs::Vector{Any}) = any(broadcast(Symbolics.isequal, key, vs))
 
+"""
+    ref_to_symbolic!(expr, compiler_state)
+
+Specialized for :ref expressions. If the referred array was seen, then return the corresponding symbolic
+variable; otherwise, allocate array in `CompilerState.arrays`, then return the symbolic arrays.
+"""
 function ref_to_symbolic!(expr, compiler_state)
-    numdims = length(expr.args) - 1 # number of dimensions
+    numdims = length(expr.args) - 1
     name = expr.args[1]
     indices = expr.args[2:end]
 
@@ -211,11 +221,11 @@ function ref_to_symbolic!(expr, compiler_state)
         for (i, index) in enumerate(indices)
             if MacroTools.isexpr(index, :call)
                 if index.args[1] == :(:)
-                    low, high = index.args[2:end] # if size(args) > 3, error
+                    _, high = index.args[2:end]
                     indices[i] = eval(indices[i])
-                else 
+                else
                     error("Wrong ref indexing expression.")
-                end 
+                end
                 arraysize[i] = high
             elseif index == :(:)
                 arraysize[i] = 1
@@ -228,33 +238,27 @@ function ref_to_symbolic!(expr, compiler_state)
 
     # if array exists
     array = compiler_state.arrays[name]
-    # TODO: if this is C, array is a pointer, but may later modify the object pointed by expanding array, improve this
-    # check if number of dimensions match
     if ndims(array) == numdims
         array_size = collect(size(array))
         for (i, index) in enumerate(indices)
             if MacroTools.isexpr(index, :call)
-                @assert index.args[1] == :(:) "Wrong ref indexing expression."
-                
-                low, high = index.args[2:end] # if size(args) > 3, error
+                low, high = index.args[2:end]
                 array_size[i] = max(array_size[i], high)
-
                 indices[i] = eval(indices[i])
             elseif index == :(:)
                 indices[i] = eval(indices[i])
-            elseif isa(index, Integer)
+            elseif index isa Integer
                 array_size[i] = max(indices[i], array_size[i])
             else
-                error("Indexing wrong.")
+                error("Indexing syntax is wrong.")
             end
         end
 
         if all(array_size .== size(array))
             return array[indices...]
         else
-            # expand the array
             expand_array!(name, array_size, compiler_state)
-            return compiler_state.arrays[name][indices...] # again need to handle indexing later
+            return compiler_state.arrays[name][indices...]
         end
     end
 
@@ -270,7 +274,34 @@ function expand_array!(name, size, compiler_state)
     compiler_state.arrays[name] = new_array
 end
 
-function parse_logical_assignments!(expr, compiler_state)
+function create_symbolic_array(name::Symbol, size::Vector)
+    symbolic_array = Array{Num}(undef, size...)
+    for i in CartesianIndices(symbolic_array)
+        symbolic_array[i] = tosymbolic(Symbol("$(name)" * "$(collect(Tuple(i)))"))
+    end
+    return symbolic_array
+end
+
+addlogicalrules!(data::NamedTuple, compiler_state) =
+    addlogicalrules!(Dict(pairs(data)), compiler_state)
+function addlogicalrules!(data::Dict, compiler_state)
+    for (key, value) in data
+        if value isa Number
+            compiler_state.logicalrules[tosymbolic(key)] = value
+        elseif value isa Array
+            sym_array = create_symbolic_array(key, collect(size(value)))
+            for i in eachindex(value)
+                if !isequal(value[i], missing)
+                    compiler_state.logicalrules[sym_array[i]] = value[i]
+                end
+            end
+            compiler_state.arrays[key] = sym_array
+        else
+            error("Value type not supported.")
+        end
+    end
+end
+function addlogicalrules!(expr::Expr, compiler_state)
     newrules_flag = false
     for arg in expr.args
         if arg.head == :(=)
@@ -279,28 +310,18 @@ function parse_logical_assignments!(expr, compiler_state)
             if MacroTools.isexpr(lhs, :ref)
                 lhs = Symbolics.tosymbol(ref_to_symbolic!(lhs, compiler_state))
             end
-            isa(lhs, Symbol) || error("LHS need to be simple.")
+            lhs isa Symbol || error("LHS need to be simple.")
 
-            ref_variables = []
-            rhs = MacroTools.prewalk(rhs) do sub_expr
-                if MacroTools.isexpr(sub_expr, :ref)
-                    sym_var = ref_to_symbolic!(sub_expr, compiler_state)
-                    push!(ref_variables, sym_var)
-                    return Symbolics.tosymbol(sym_var)
-                else
-                    return sub_expr
-                end
-            end
-
+            rhs, ref_variables = find_ref_variables(rhs, compiler_state)
             variables = find_all_variables(rhs)
 
             sym_rhs = create_sym_rhs(rhs, ref_variables, variables)
             sym_lhs = tosymbolic(lhs)
-            if haskey(compiler_state.rules, sym_lhs)
-                Symbolics.isequal(sym_rhs, compiler_state.rules[sym_lhs]) && continue
+            if haskey(compiler_state.logicalrules, sym_lhs)
+                Symbolics.isequal(sym_rhs, compiler_state.logicalrules[sym_lhs]) && continue
                 error("Repeated definition for $(lhs)")
             end
-            compiler_state.rules[sym_lhs] = sym_rhs
+            compiler_state.logicalrules[sym_lhs] = sym_rhs
             newrules_flag = true
         end
     end
@@ -308,9 +329,11 @@ function parse_logical_assignments!(expr, compiler_state)
 end
 
 """
-    This function should only be called when all the unrollings are done.
+    addstochasticrules!(expr, compiler_state::CompilerState)
+
+Process all the stochastic assignments and add them to `CompilerState.stochasticrules`.
 """
-function parse_stochastic_assignments!(expr, compiler_state)
+function addstochasticrules!(expr, compiler_state)
     for arg in expr.args
         if arg.head == :(~)
             lhs, rhs = arg.args
@@ -318,40 +341,45 @@ function parse_stochastic_assignments!(expr, compiler_state)
             if MacroTools.isexpr(lhs, :ref)
                 lhs = Symbolics.tosymbol(ref_to_symbolic!(lhs, compiler_state))
             end
-            isa(lhs, Symbol) || error("LHS need to be simple.")
+            lhs isa Symbol || error("LHS need to be simple.")
 
             # rhs will be a distribution object, so handle the distribution right now
             rhs.head == :call || error("RHS needs to be a distribution function")
             dist_func = rhs.args[1]
-            dist_func in DISTRIBUTIONS || error("$rhs not defined.")
+            dist_func in DISTRIBUTIONS || error("$dist_func not defined.")
 
-            ref_variables = []
-            rhs = MacroTools.prewalk(rhs) do sub_expr
-                if MacroTools.isexpr(sub_expr, :ref)
-                    sym_var = ref_to_symbolic!(sub_expr, compiler_state)
-                    push!(ref_variables, sym_var)
-                    return Symbolics.tosymbol(sym_var)
-                else
-                    return sub_expr
-                end
-            end
+            rhs, ref_variables = find_ref_variables(rhs, compiler_state)
             variables = find_all_variables(rhs)
 
             sym_rhs = create_sym_rhs(rhs, ref_variables, variables)
             sym_lhs = tosymbolic(lhs)
-            if haskey(compiler_state.stochastic_rules, sym_lhs)
-                Symbolics.isequal(sym_rhs, compiler_state.stochastic_rules[sym_lhs]) &&
+            if haskey(compiler_state.stochasticrules, sym_lhs)
+                Symbolics.isequal(sym_rhs, compiler_state.stochasticrules[sym_lhs]) &&
                     continue
                 error("Repeated definition for $(lhs)")
             end
             if isempty(variables) && isempty(ref_variables)
                 # the distribution does not have variable arguments
-                compiler_state.constant_distribution_rules[sym_lhs] = () -> sym_rhs
+                compiler_state.distirbutionrules[sym_lhs] = () -> sym_rhs
             else
-                compiler_state.stochastic_rules[sym_lhs] = sym_rhs
+                compiler_state.stochasticrules[sym_lhs] = sym_rhs
             end
         end
     end
+end
+
+function find_ref_variables(rhs, compiler_state)
+    ref_variables = []
+    replaced_rhs = MacroTools.prewalk(rhs) do sub_expr
+        if MacroTools.isexpr(sub_expr, :ref)
+            sym_var = ref_to_symbolic!(sub_expr, compiler_state)
+            push!(ref_variables, sym_var)
+            return Symbolics.tosymbol(sym_var)
+        else
+            return sub_expr
+        end
+    end
+    return replaced_rhs, ref_variables
 end
 
 function create_sym_rhs(rhs, ref_variables, variables)
@@ -385,7 +413,7 @@ function recursive_find_variables(expr, variables)
         if MacroTools.isexpr(sub_expr, :call)
             # doesn't touch function identifiers
             for arg in sub_expr.args[2:end]
-                if isa(arg, Symbol)
+                if arg isa Symbol
                     # filter out the variables turned from ref objects
                     Base.occursin("[", string(arg)) || push!(variables, arg)
                 end
@@ -408,20 +436,20 @@ function tograph(compiler_state)
     # node_name => (default_value, function, node_type)
     to_graph = Dict()
 
-    for key in keys(compiler_state.rules)
+    for key in keys(compiler_state.logicalrules)
         default_value = resolve(key, compiler_state)
         if !isa(default_value, Union{Integer,AbstractFloat})
             default_value = 0
         end
         default_value = Float64(default_value)
 
-        ex = compiler_state.rules[key]
+        ex = compiler_state.logicalrules[key]
         args = Symbolics.get_variables(ex)
         f_expr = Symbolics.build_function(ex, args...)
         to_graph[Symbolics.tosymbol(key)] = (default_value, eval(f_expr), :Logical)
     end
 
-    for key in keys(compiler_state.stochastic_rules)
+    for key in keys(compiler_state.stochasticrules)
         type = :Stochastic
         default_value = resolve(key, compiler_state)
         if isa(default_value, Union{Integer,AbstractFloat})
@@ -430,14 +458,14 @@ function tograph(compiler_state)
             default_value = 0
         end
         default_value = Float64(default_value)
-        ex = compiler_state.stochastic_rules[key]
+        ex = compiler_state.stochasticrules[key]
         args = Symbolics.get_variables(ex)
         f_expr = Symbolics.build_function(ex, args...)
 
         to_graph[Symbolics.tosymbol(key)] = (default_value, eval(f_expr), type)
     end
 
-    for key in keys(compiler_state.constant_distribution_rules)
+    for key in keys(compiler_state.distirbutionrules)
         type = :Stochastic
         default_value = resolve(key, compiler_state)
         if isa(default_value, Union{Integer,AbstractFloat})
@@ -448,7 +476,7 @@ function tograph(compiler_state)
         default_value = Float64(default_value)
 
         to_graph[Symbolics.tosymbol(key)] =
-            (default_value, compiler_state.constant_distribution_rules[key], type)
+            (default_value, compiler_state.distirbutionrules[key], type)
     end
 
     return to_graph
@@ -457,21 +485,25 @@ end
 issimpleexpression(expr) = Meta.isexpr(expr, (:(=), :~))
 
 """
-Top level function
+    compile_graphppl(; model_def::Expr, data)
+
+The exported top level function. `compile_graphppl` takes model definition and data and returns a GraphPPL.Model.
 """
 function compile_graphppl(; model_def::Expr, data)
     expr = deepcopy(model_def)
     compiler_state = CompilerState()
-    parsedata!(data, compiler_state)
+    addlogicalrules!(data, compiler_state)
 
     while true
         unrollforloops!(expr, compiler_state) ||
-            parse_logical_assignments!(expr, compiler_state) ||
+            resolveif!(expr, compiler_state) ||
+            addlogicalrules!(expr, compiler_state) ||
             break
     end
-    parse_stochastic_assignments!(expr, compiler_state)
+    addstochasticrules!(expr, compiler_state)
 
-    all(issimpleexpression, expr.args) || error("Has unresolvable loop bounds or if conditions.")
+    all(issimpleexpression, expr.args) ||
+        error("Has unresolvable loop bounds or if conditions.")
     model = tograph(compiler_state)
     model_nt = (; model...)
 
