@@ -4,6 +4,7 @@ include("bugsast.jl")
 include("typechecker.jl")
 include("compiler.jl")
 include("primitives.jl")
+include("gibbs.jl")
 
 # export @bugsast_str
 export @bugsast, @bugsmodel_str

@@ -8,35 +8,52 @@ using SpecialFunctions
 import SpecialFunctions: gamma
 using LinearAlgebra
 import LinearAlgebra: logdet
+import AbstractPPL
 
-const DISTRIBUTIONS = [:dgamma, :dnorm]
+const DISTRIBUTIONS = [:dgamma, :dnorm, :dbeta, :dbin, :dexp, :dpois]
 
 const INVERSE_LINK_FUNCTION =
     (logit = :logistic, cloglog = :cexpexp, log = :exp, probit = :phi)
 
+# Reload `set_node_value!`, sampling a Binomial will give a Integer type, while GraphPPL
+# only support Float right now, this is a work around
+function AbstractPPL.GraphPPL.set_node_value!(m::AbstractPPL.GraphPPL.Model, ind::AbstractPPL.VarName, value::Integer)
+    @assert typeof(m[ind].value[]) <: AbstractFloat
+    m[ind].value[] = Float64(value)
+end
+    
+
 """ 
     Distributions
+
+For now, the function argument `check_args` has to be used to avoid support
+checking, but some similar functionality should be provided to avoid sneaky
+wrong results.
+An alternative is directly use the underlying struct and basically write 
+our own type and constructors.
 """
 dnorm(mu, tau) = Normal(mu, 1 / sqrt(tau))
 dbern(p) = Bernoulli(p)
-dbin(p, n) = Binomial(n, p)
+
+function dbin(p, n::AbstractFloat) 
+    if isinteger(n)
+        return Binomial(n, p)
+    else
+        error("Second argument of dbin has to be integer.")
+    end
+end
+
 dcat(p) = Categorical(p)
 dnegbin(p, r) = NegativeBinomial(r, p)
 dpois(lambda) = Poisson(lambda)
 dgeom(p) = Geometric(p)
-# dgeom0(p) = Geometric(p)
-# dhyper(n, m, N, psi) 
 
-dneta(a, b) = Beta(a, b)
-dchisqr(k) = Chisq(k)
-ddexp(mu, tau) = DoubleExponential(mu, tau) # TODO: check if tau == θ
-dexp(lambda) = Exponential(lambda) # TODO: check!
-# dflat()
-dgamma(alpha, beta) = Gamma(alpha, beta)
-# dgev(mu, sigma, eta)
-# df(n, m, mu, tau)
-# dgamma(r, mu, beta)
-# dgpar(mu, sigma, eta)
+dbeta(a, b) = Beta(a, b, check_args=false)
+dexp(lambda) = Exponential(1/lambda)
+# dgamma(r, mu) = Gamma(r, 1/mu, check_args=false) 
+dgamma(r, mu) = Gamma(r, mu, check_args=false) 
+
+
 
 """
     Functions

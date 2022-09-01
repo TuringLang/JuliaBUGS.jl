@@ -11,9 +11,9 @@ using BugsModels
     CompilerState
 
 `arrays` is a dictionary maps array names form model definition to arrays of symbolics variables. Indexing 
-in model definition is implemented as indexing to the arrays stored in `arrays`. `logicalrules`, `stochasticrules`, and
-`distirbutionrules` are dictionary that maps symbolic variables to there equivalent julia symbolic expressions. Partial 
-evaluation of variables are implemented as symbolic substitution. 
+in model definition is implemented as indexing to the arrays stored in `arrays`. `logicalrules` and `stochasticrules` are 
+dictionary that maps symbolic variables to there equivalent julia symbolic expressions. Partial evaluation of variables 
+are implemented as symbolic substitution. 
 
 CompilerState will likely eb mutated multiple times. And the final step of the compiling into GraphPPL only rely on data 
 in CompilerState.
@@ -21,13 +21,11 @@ in CompilerState.
 struct CompilerState
     arrays::Dict{Symbol,Array{Num}}
     logicalrules::Dict{Num,Num}
-    stochasticrules::Dict{Num,Num}
-    distirbutionrules::Dict{Num,Any}
+    stochasticrules::Dict{Num,Any}
 end
 
 CompilerState() = CompilerState(
     Dict{Symbol,Array{Num}}(),
-    Dict{Num,Num}(),
     Dict{Num,Num}(),
     Dict{Num,Any}(),
 )
@@ -351,19 +349,17 @@ function addstochasticrules!(expr, compiler_state)
             rhs, ref_variables = find_ref_variables(rhs, compiler_state)
             variables = find_all_variables(rhs)
 
-            sym_rhs = create_sym_rhs(rhs, ref_variables, variables)
             sym_lhs = tosymbolic(lhs)
+
+            arguments = map(Symbolics.tosymbol, vcat(variables, ref_variables))
+            func_expr = Expr(:(->), Expr(:tuple, arguments...), Expr(:block, rhs))
+            func = eval(func_expr)
+
             if haskey(compiler_state.stochasticrules, sym_lhs)
-                Symbolics.isequal(sym_rhs, compiler_state.stochasticrules[sym_lhs]) &&
-                    continue
                 error("Repeated definition for $(lhs)")
             end
-            if isempty(variables) && isempty(ref_variables)
-                # the distribution does not have variable arguments
-                compiler_state.distirbutionrules[sym_lhs] = () -> sym_rhs
-            else
-                compiler_state.stochasticrules[sym_lhs] = sym_rhs
-            end
+            
+            compiler_state.stochasticrules[sym_lhs] = func
         end
     end
 end
@@ -398,9 +394,6 @@ function create_sym_rhs(rhs, ref_variables, variables)
     return eval(let_expr)
 end
 
-""" 
-Find all the variables (which are Symbols in the expr)
-"""
 function find_all_variables(rhs)
     variables = []
     recursive_find_variables(rhs, variables)
@@ -438,14 +431,21 @@ function tograph(compiler_state)
 
     for key in keys(compiler_state.logicalrules)
         default_value = resolve(key, compiler_state)
+        isconstant = false
         if !isa(default_value, Union{Integer,AbstractFloat})
             default_value = 0
+        else
+            isconstant = true
         end
         default_value = Float64(default_value)
 
         ex = compiler_state.logicalrules[key]
         args = Symbolics.get_variables(ex)
         f_expr = Symbolics.build_function(ex, args...)
+        # hack to make GraphPPL happy: change the function definition to return a Float64 type
+        if isconstant
+            f_expr.args[2].args[end] = Expr(:call, Float64, f_expr.args[2].args[end])
+        end
         to_graph[Symbolics.tosymbol(key)] = (default_value, eval(f_expr), :Logical)
     end
 
@@ -458,25 +458,9 @@ function tograph(compiler_state)
             default_value = 0
         end
         default_value = Float64(default_value)
-        ex = compiler_state.stochasticrules[key]
-        args = Symbolics.get_variables(ex)
-        f_expr = Symbolics.build_function(ex, args...)
-
-        to_graph[Symbolics.tosymbol(key)] = (default_value, eval(f_expr), type)
-    end
-
-    for key in keys(compiler_state.distirbutionrules)
-        type = :Stochastic
-        default_value = resolve(key, compiler_state)
-        if isa(default_value, Union{Integer,AbstractFloat})
-            type = :Observations
-        else
-            default_value = 0
-        end
-        default_value = Float64(default_value)
 
         to_graph[Symbolics.tosymbol(key)] =
-            (default_value, compiler_state.distirbutionrules[key], type)
+            (default_value, compiler_state.stochasticrules[key], type)
     end
 
     return to_graph

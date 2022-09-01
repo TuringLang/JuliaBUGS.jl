@@ -4,6 +4,7 @@ using Test
 include("bugsast.jl")
 include("bugsmodel.jl")
 include("compiler.jl")
+include("mhgibbs.jl")
 
 
 
