@@ -4,8 +4,6 @@ using Symbolics
 using Random
 using MacroTools
 using LinearAlgebra
-using BugsModels
-
 
 """
     CompilerState
@@ -382,8 +380,15 @@ function create_sym_rhs(rhs, ref_variables, variables)
     # bind symbolic variables to local variable with same names
     binding_exprs = []
     for variable in vcat(ref_variables, variables)
-        binding_expr = Expr(:(=), Symbolics.tosymbol(variable), variable)
-        push!(binding_exprs, binding_expr)
+        if !isempty(size(variable)) # Vector
+            for i in eachindex(variable)
+            binding_expr = Expr(:(=), Symbolics.tosymbol(variable[i]), variable[i])
+            push!(binding_exprs, binding_expr)
+            end
+        else
+            binding_expr = Expr(:(=), Symbolics.tosymbol(variable), variable)
+            push!(binding_exprs, binding_expr)
+        end
     end
 
     # let-bind will bind a local variable to a symbolic variable with the 
@@ -433,6 +438,7 @@ function tograph(compiler_state)
         default_value = resolve(key, compiler_state)
         isconstant = false
         if !isa(default_value, Union{Integer,AbstractFloat})
+            # TODO: user should be able to set default values
             default_value = 0
         else
             isconstant = true
@@ -468,13 +474,14 @@ end
 
 issimpleexpression(expr) = Meta.isexpr(expr, (:(=), :~))
 
+##
 """
     compile_graphppl(; model_def::Expr, data)
 
 The exported top level function. `compile_graphppl` takes model definition and data and returns a GraphPPL.Model.
 """
-function compile_graphppl(; model_def::Expr, data)
-    expr = deepcopy(model_def)
+function compile_graphppl(; model_def::Expr, data, initials=nothing) 
+    expr = inverselinkfunction(model_def)
     compiler_state = CompilerState()
     addlogicalrules!(data, compiler_state)
 
@@ -491,5 +498,20 @@ function compile_graphppl(; model_def::Expr, data)
     model = tograph(compiler_state)
     model_nt = (; model...)
 
-    return Model(; model_nt...)
+    graphmodel = Model(; model_nt...)
+    
+    if !isnothing(initials)
+        for variable in keys(initials)
+            if !isempty(size(initials[variable]))
+                for i in CartesianIndices(initials[variable])
+                    vn = AbstractPPL.VarName(Symbol("$variable" * "$(collect(Tuple(i)))"))
+                    set_node_value!(graphmodel, vn, initials[variable][i])
+                end
+            else
+                set_node_value!(graphmodel, AbstractPPL.VarName(variable), initials[variable])
+            end
+        end
+    end
+
+    return graphmodel
 end
