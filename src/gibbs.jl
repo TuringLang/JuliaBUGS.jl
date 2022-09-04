@@ -3,18 +3,19 @@ import AbstractPPL.GraphPPL: set_node_value!, get_node_value, get_model_values, 
 using AbstractMCMC
 using MCMCChains
 using Random
-using BugsModels
 using Distributions
+
+using BugsModels
 
 abstract type GibbsSampler <: AbstractMCMC.AbstractSampler end
 
 struct SampleFromPrior <: GibbsSampler 
-    all_children::Dict{VarName, Vector{VarName}} # TODO: this should be a part of Model
+    all_children::Dict{VarName, Tuple{VarName}} # TODO: this should be a part of Model
 end
 SampleFromPrior(model::AbstractPPL.GraphPPL.Model) = SampleFromPrior(getchildren(model))
 
 function getchildren(model::AbstractPPL.GraphPPL.Model)
-    all_children = Dict{VarName, Vector{VarName}}()
+    all_children = Dict{VarName, Tuple{VarName}}()
     for vn in keys(model)
         children = []
         for vnn in keys(model)
@@ -22,7 +23,7 @@ function getchildren(model::AbstractPPL.GraphPPL.Model)
                 push!(children, vnn)
             end
         end
-        all_children[vn] = children
+        all_children[vn] = Tuple(children)
     end
     return all_children
 end
@@ -47,7 +48,7 @@ function AbstractMCMC.step(
         end
     end
     sample = get_model_values(m)
-    state = (sample, logdensityof(m, sample), )
+    state = sample
     return sample, state
 end
 
@@ -58,7 +59,7 @@ function AbstractMCMC.step(
     state;
     kwargs...
 )
-    last_sample, _ = state
+    last_sample = state
     m = deepcopy(model)  
     set_model_values!(m, last_sample)  
     
@@ -124,7 +125,7 @@ function getfreevaraibles!(model::AbstractPPL.GraphPPL.Model, vn::VarName, allch
 end
 
 
-# ---------------- taken from Pavan's mh branch ----------------
+# ---------------- Adapted from Pavan's mh branch ----------------
 function AbstractMCMC.bundle_samples(
     samples, 
     m::AbstractPPL.GraphPPL.Model, 

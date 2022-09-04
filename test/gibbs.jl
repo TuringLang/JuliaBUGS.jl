@@ -70,7 +70,7 @@ summarize(samples)
 summarize(samples[namesingroup(samples, :x)])
 
 ## https://chjackson.github.io/openbugsdoc/Examples/Rats.html
-# Still can't run this within reasonable time
+# Results are wrong
 
 expr = bugsmodel"""
    for( i in 1 : N ) {
@@ -122,14 +122,30 @@ Y = [151, 199, 246, 283, 320,
    153, 200, 244, 286, 324]
 
 data = (x=[8.0, 15.0, 22.0, 29.0, 36.0], xbar=22, N=30, T=5, Y=permutedims(reshape(Y, 5, 30), (2, 1)))
+
 initials = (alpha = [250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250],
 beta = [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],         
 var"alpha.c" = 150, var"beta.c" = 10,
 var"tau.c" = 1, var"alpha.tau" = 1, var"beta.tau" = 1)
-model = compile_graphppl(model_def=expr, data=data, initials=initials);
 
-sampler = SampleFromPrior(0, 0, getchildren(model))
+# initials = (alpha = [25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0,
+# 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0],
+# beta = [0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6,
+# 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6],         
+# var"alpha.c" = 15, var"beta.c" = 1,
+# var"tau.c" = 0.1, var"alpha.tau" = 0.1, var"beta.tau" = 0.1)
+
+@time model = compile_graphppl(model_def=expr, data=data, initials=initials);
+@code_warntype compile_graphppl(model_def=expr, data=data, initials=initials)
+
+##
+sampler = SampleFromPrior(model)
+@time sample = AbstractMCMC.step(Random.default_rng(), model, sampler)
+
+sampler = SampleFromPrior(model)
+samples = AbstractMCMC.sample(model, sampler, 11000, discard_initial=1000)
 samples = AbstractMCMC.sample(model, sampler, 11000, discard_initial=1000)
 summarize(samples)
+summarize(samples[[:alpha0, :sigma]])
