@@ -182,7 +182,7 @@ end
             > substitute(a, Dict(a=>b+c, b=>2, c=>3))
             b + c
         ```
-    
+    So this function provide a temporary solution by trying to recursively resolve the variable.
 """
 function symbolic_eval(variable::Num, compiler_state::CompilerState)
     partial_trace = []
@@ -193,7 +193,7 @@ function symbolic_eval(variable::Num, compiler_state::CompilerState)
     while !Symbolics.isequal(evaluated, try_evaluated)
         evaluated = try_evaluated
         try_evaluated = Symbolics.substitute(try_evaluated, compiler_state.logicalrules)
-        try_evaluated in partial_trace && try_evaluated # avoiding infinite loop
+        try_evaluated in partial_trace && break # avoiding infinite loop
     end
 
     return try_evaluated
@@ -205,7 +205,7 @@ Base.in(key::Num, vs::Vector{Any}) = any(broadcast(Symbolics.isequal, key, vs))
     ref_to_symbolic!(expr, compiler_state)
 
 Specialized for :ref expressions. If the referred array was seen, then return the corresponding symbolic
-variable; otherwise, allocate array in `CompilerState.arrays`, then return the symbolic arrays.
+variable; otherwise, allocate array in `CompilerState.arrays`, then return the symbolic variable or array.
 """
 function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
     numdims = length(expr.args) - 1
@@ -342,7 +342,7 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
             # rhs will be a distribution object, so handle the distribution right now
             rhs.head == :call || error("RHS needs to be a distribution function")
             dist_func = rhs.args[1]
-            dist_func in DISTRIBUTIONS || error("$dist_func not defined.")
+            dist_func in DISTRIBUTIONS || error("$dist_func not defined.") # DISTRIBUTIONS defined in "primitive.jl"
 
             rhs, ref_variables = find_ref_variables(rhs, compiler_state)
             variables = find_all_variables(rhs)
@@ -351,7 +351,7 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
 
             arguments = map(Symbolics.tosymbol, vcat(variables, ref_variables))
             func_expr = Expr(:(->), Expr(:tuple, arguments...), Expr(:block, rhs))
-            func = eval(func_expr)
+            func = eval(func_expr) # anonymous function, so doesn't contaminate the environment, but still maybe a better solution out there 
 
             if haskey(compiler_state.stochasticrules, sym_lhs)
                 error("Repeated definition for $(lhs)")
@@ -395,7 +395,6 @@ function create_sym_rhs(rhs::Expr, ref_variables::Vector, variables::Vector)
     # same name, so that evaluating the rhs expression generating a symbolic term
     let_expr = Expr(:let, Expr(:block, binding_exprs...), rhs)
 
-    # `eval` will then construct symbolic expression with the local bindings
     return eval(let_expr)
 end
 
@@ -422,9 +421,9 @@ function recursive_find_variables(expr::Expr, variables::Vector{Any})
     end
 end
 
-to_symbol(lhs::Symbol, compiler_state) = lhs
-to_symbol(lhs::Num, compiler_state) = Symbolics.tosymbol(lhs)
-function to_symbol(lhs::Expr, compiler_state)
+to_symbol(lhs::Symbol, compiler_state::CompilerState) = lhs
+to_symbol(lhs::Num, compiler_state::CompilerState) = Symbolics.tosymbol(lhs)
+function to_symbol(lhs::Expr, compiler_state::CompilerState)
     if MacroTools.isexpr(lhs, :ref)
         return Symbolics.tosymbol(ref_to_symbolic!(lhs, compiler_state))
     end
@@ -439,7 +438,7 @@ function tograph(compiler_state::CompilerState)
         default_value = resolve(key, compiler_state)
         isconstant = false
         if !isa(default_value, Union{Integer,AbstractFloat})
-            # TODO: user should be able to set default values
+            # default_value can be set directly on compiler GraphPPL.Model 
             default_value = 0
         else
             isconstant = true
