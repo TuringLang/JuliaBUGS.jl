@@ -138,6 +138,8 @@ s = ref_to_symbolic!(Meta.parse("s[2, :]"), compiler_state)
 @test size(s) == (6,)
 s = ref_to_symbolic!(Meta.parse("s[2:3, :]"), compiler_state)
 @test size(s) == (2, 6)
+s = ref_to_symbolic!(Meta.parse("s[N-1, :]"), compiler_state)
+@test size(s) == (6, )
 
 # tests for parse_logical_assignments!
 expr = bugsmodel"""

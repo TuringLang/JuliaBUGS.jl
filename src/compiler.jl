@@ -147,13 +147,13 @@ end
 """
     tosymbolic(variable)
 
-Returns symbolic variable for multiple types of `variable`s.
+Returns symbolic variable for multiple types of `variable`s. If the argument is an Expr, then
+the function will return a symbolic variable in the case where argument is a `ref` Expr, otherwise
+a symbolic term. 
 """
-tosymbolic(variable::Expr) =
-    MacroTools.isexpr(variable, :ref) ? ref_to_symbolic!(variable, compiler_state) :
-    error("General expression to symbol is not supported.")
 tosymbolic(variable::Num) = variable
 tosymbolic(variable::Union{Integer,AbstractFloat}) = Num(variable)
+tosymbolic(variable::String) = tosymbolic(Symbol(variable))
 function tosymbolic(variable::Symbol)
     variable_with_metadata = SymbolicUtils.setmetadata(
         SymbolicUtils.Sym{Real}(variable),
@@ -162,7 +162,26 @@ function tosymbolic(variable::Symbol)
     )
     return Symbolics.wrap(variable_with_metadata)
 end
-
+function tosymbolic(expr::Expr)
+    if MacroTools.isexpr(expr, :ref)  
+        return tosymbolic(Symbol(expr))
+    else
+        ref_variables = []
+        ex = MacroTools.prewalk(expr) do sub_expr
+            if MacroTools.isexpr(sub_expr, :ref)
+                sym_var = tosymbolic(sub_expr)
+                push!(ref_variables, sym_var)
+                return Symbolics.tosymbol(sym_var)
+            else
+                return sub_expr
+            end
+        end
+        variables = find_all_variables(ex)
+        return create_sym_rhs(ex, vcat(ref_variables, variables))
+    end
+end
+tosymbolic(variable) = variable
+    
 """
     resolve(variable, compiler_state)
 
@@ -198,6 +217,7 @@ function symbolic_eval(variable::Num, compiler_state::CompilerState)
 
     return try_evaluated
 end
+symbolic_eval(variable::UnitRange{Int64}, compiler_state::CompilerState) = variable # Special case for array range
 
 Base.in(key::Num, vs::Vector{Any}) = any(broadcast(Symbolics.isequal, key, vs))
 
@@ -211,18 +231,25 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
     numdims = length(expr.args) - 1
     name = expr.args[1]
     indices = expr.args[2:end]
+    for (i, index) in enumerate(indices)
+        if index isa Expr
+            resolved_index = resolve(tosymbolic(index), compiler_state)
+            if !isa(resolved_index, Union{Number, UnitRange})
+                return tosymbolic("SKIP")
+            end 
+            # || error("$index can't be evaluated to a concrete value.") 
+            if !isa(resolved_index, Number) && !isinteger(resolved_index)
+                error("Index of $expr needs to be integers.")
+            end
+            indices[i] = Integer(resolved_index)
+        end
+    end
 
     if !haskey(compiler_state.arrays, name)
         arraysize = deepcopy(indices)
         for (i, index) in enumerate(indices)
-            if MacroTools.isexpr(index, :call)
-                if index.args[1] == :(:)
-                    _, high = index.args[2:end]
-                    indices[i] = eval(indices[i])
-                else
-                    error("Wrong ref indexing expression.")
-                end
-                arraysize[i] = high
+            if index isa UnitRange
+                arraysize[i] = index[end]
             elseif index == :(:)
                 arraysize[i] = 1
             end
@@ -237,10 +264,8 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
     if ndims(array) == numdims
         array_size = collect(size(array))
         for (i, index) in enumerate(indices)
-            if MacroTools.isexpr(index, :call)
-                low, high = index.args[2:end]
-                array_size[i] = max(array_size[i], high)
-                indices[i] = eval(indices[i])
+            if index isa UnitRange
+                array_size[i] = max(array_size[i], index[end]) # in case 'high' is Expr
             elseif index == :(:)
                 indices[i] = eval(indices[i])
             elseif index isa Integer
@@ -280,7 +305,7 @@ end
 
 addlogicalrules!(data::NamedTuple, compiler_state::CompilerState) =
     addlogicalrules!(Dict(pairs(data)), compiler_state)
-function addlogicalrules!(data::Dict{Symbol, Any}, compiler_state::CompilerState)
+function addlogicalrules!(data::Dict, compiler_state::CompilerState)
     for (key, value) in data
         if value isa Number
             compiler_state.logicalrules[tosymbolic(key)] = value
@@ -304,14 +329,21 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
             lhs, rhs = arg.args
 
             if MacroTools.isexpr(lhs, :ref)
-                lhs = Symbolics.tosymbol(ref_to_symbolic!(lhs, compiler_state))
+                sym_var = ref_to_symbolic!(lhs, compiler_state)
+                if Symbolics.isequal(sym_var, tosymbolic("SKIP"))
+                    continue
+                end
+                lhs = Symbolics.tosymbol(sym_var)
             end
             lhs isa Symbol || error("LHS need to be simple.")
 
             rhs, ref_variables = find_ref_variables(rhs, compiler_state)
+            if !isempty(ref_variables) && Symbolics.isequal(ref_variables[1], tosymbolic("SKIP"))
+                continue
+            end
             variables = find_all_variables(rhs)
 
-            sym_rhs = create_sym_rhs(rhs, ref_variables, variables)
+            sym_rhs = create_sym_rhs(rhs, vcat(ref_variables, variables))
             sym_lhs = tosymbolic(lhs)
             if haskey(compiler_state.logicalrules, sym_lhs)
                 Symbolics.isequal(sym_rhs, compiler_state.logicalrules[sym_lhs]) && continue
@@ -334,17 +366,43 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
         if arg.head == :(~)
             lhs, rhs = arg.args
 
+            if Meta.isexpr(rhs, [:truncated, :censored])
+                l, u = rhs.args[2:3]
+                parameters = Vector{Any}()
+                if l != :nothing
+                    push!(parameters, (:kw, :lower, l))
+                end
+                if u != :nothing
+                    push!(parameters, (:kw, :upper, u))
+                end
+                    
+                rhs = Expr(:call, rhs.head, (:parameters, parameters...), rhs.args[1])
+            end
+
             if MacroTools.isexpr(lhs, :ref)
-                lhs = Symbolics.tosymbol(ref_to_symbolic!(lhs, compiler_state))
+                sym_var = ref_to_symbolic!(lhs, compiler_state)
+                if Symbolics.isequal(sym_var, tosymbolic("SKIP"))
+                    error("Exists unresolvable indexing at $arg.")
+                end
+                lhs = Symbolics.tosymbol(sym_var)
             end
             lhs isa Symbol || error("LHS need to be simple.")
 
             # rhs will be a distribution object, so handle the distribution right now
-            rhs.head == :call || error("RHS needs to be a distribution function")
-            dist_func = rhs.args[1]
-            dist_func in DISTRIBUTIONS || error("$dist_func not defined.") # DISTRIBUTIONS defined in "primitive.jl"
+            if rhs.head == :call
+                dist_func = rhs.args[1]
+                dist_func in DISTRIBUTIONS || error("$dist_func not defined.") # DISTRIBUTIONS defined in "primitive.jl"
+            elseif rhs.head in (:truncated, :censored, )
+                dist_func = rhs.args[1].args[1]
+                dist_func in DISTRIBUTIONS || error("$dist_func not defined.") # DISTRIBUTIONS defined in "primitive.jl"
+            else
+                error("RHS needs to be a distribution function")
+            end
 
             rhs, ref_variables = find_ref_variables(rhs, compiler_state)
+            if !isempty(ref_variables) && Symbolics.isequal(ref_variables[1], tosymbolic("SKIP"))
+                error("Exists unresolvable indexing at $arg.")
+            end
             variables = find_all_variables(rhs)
 
             sym_lhs = tosymbolic(lhs)
@@ -362,11 +420,16 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
     end
 end
 
+find_ref_variables(rhs::Number, compiler_state::CompilerState) = rhs, []
 function find_ref_variables(rhs::Expr, compiler_state::CompilerState)
     ref_variables = []
     replaced_rhs = MacroTools.prewalk(rhs) do sub_expr
         if MacroTools.isexpr(sub_expr, :ref)
             sym_var = ref_to_symbolic!(sub_expr, compiler_state)
+            if Symbolics.isequal(sym_var, tosymbolic("SKIP")) # Some index can't be resolved in this generation
+                push!(ref_variables, tosymbolic("SKIP")) # Put the SKIP signal in the returned variable vector
+                return sub_expr
+            end
             push!(ref_variables, sym_var)
             return Symbolics.tosymbol(sym_var)
         else
@@ -376,10 +439,12 @@ function find_ref_variables(rhs::Expr, compiler_state::CompilerState)
     return replaced_rhs, ref_variables
 end
 
-function create_sym_rhs(rhs::Expr, ref_variables::Vector, variables::Vector)
+create_sym_rhs(rhs::Number, variables::Vector) = rhs
+create_sym_rhs(rhs::Symbol, variables::Vector) = tosymbolic(rhs)
+function create_sym_rhs(rhs::Expr, variables::Vector)
     # bind symbolic variables to local variable with same names
     binding_exprs = []
-    for variable in vcat(ref_variables, variables)
+    for variable in variables
         if !isempty(size(variable)) # Vector
             for i in eachindex(variable)
             binding_expr = Expr(:(=), Symbolics.tosymbol(variable[i]), variable[i])
@@ -395,9 +460,11 @@ function create_sym_rhs(rhs::Expr, ref_variables::Vector, variables::Vector)
     # same name, so that evaluating the rhs expression generating a symbolic term
     let_expr = Expr(:let, Expr(:block, binding_exprs...), rhs)
 
-    return eval(let_expr)
+    return eval(let_expr) # this can be bad, as the type of the return value is not clear
 end
 
+find_all_variables(rhs::Number) = []
+find_all_variables(rhs::Symbol) = Base.occursin("[", string(rhs)) ? [] : rhs
 function find_all_variables(rhs::Expr)
     variables = []
     recursive_find_variables(rhs, variables)
@@ -410,9 +477,8 @@ function recursive_find_variables(expr::Expr, variables::Vector{Any})
         if MacroTools.isexpr(sub_expr, :call)
             # doesn't touch function identifiers
             for arg in sub_expr.args[2:end]
-                if arg isa Symbol
-                    # filter out the variables turned from ref objects
-                    Base.occursin("[", string(arg)) || push!(variables, arg)
+                if arg isa Symbol && !Base.occursin("[", string(arg))
+                    push!(variables, arg)
                     continue
                 end
                 arg isa Expr && recursive_find_variables(arg, variables)
@@ -421,14 +487,14 @@ function recursive_find_variables(expr::Expr, variables::Vector{Any})
     end
 end
 
-to_symbol(lhs::Symbol, compiler_state::CompilerState) = lhs
-to_symbol(lhs::Num, compiler_state::CompilerState) = Symbolics.tosymbol(lhs)
-function to_symbol(lhs::Expr, compiler_state::CompilerState)
-    if MacroTools.isexpr(lhs, :ref)
-        return Symbolics.tosymbol(ref_to_symbolic!(lhs, compiler_state))
-    end
-    error("Only ref expressions are supported.")
-end
+# to_symbol(lhs::Symbol, compiler_state::CompilerState) = lhs
+# to_symbol(lhs::Num, compiler_state::CompilerState) = Symbolics.tosymbol(lhs)
+# function to_symbol(lhs::Expr, compiler_state::CompilerState)
+#     if MacroTools.isexpr(lhs, :ref)
+#         return Symbolics.tosymbol(ref_to_symbolic!(lhs, compiler_state))
+#     end
+#     error("Only ref expressions are supported.")
+# end
 
 function tograph(compiler_state::CompilerState)
     # node_name => (default_value, function, node_type)
@@ -474,13 +540,12 @@ end
 
 issimpleexpression(expr) = Meta.isexpr(expr, (:(=), :~))
 
-##
 """
     compile_graphppl(; model_def::Expr, data)
 
 The exported top level function. `compile_graphppl` takes model definition and data and returns a GraphPPL.Model.
 """
-function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTuple=nothing) 
+function compile_graphppl(; model_def::Expr, data::NamedTuple, initials=nothing) 
     expr = inverselinkfunction(model_def)
     compiler_state = CompilerState()
     addlogicalrules!(data, compiler_state)

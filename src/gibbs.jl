@@ -10,12 +10,12 @@ using BugsModels
 abstract type GibbsSampler <: AbstractMCMC.AbstractSampler end
 
 struct SampleFromPrior <: GibbsSampler 
-    all_children::Dict{VarName, Tuple{VarName}} # TODO: this should be a part of Model
+    all_children::Dict{VarName, Vector{VarName}} # TODO: this should be a part of Model
 end
 SampleFromPrior(model::AbstractPPL.GraphPPL.Model) = SampleFromPrior(getchildren(model))
 
 function getchildren(model::AbstractPPL.GraphPPL.Model)
-    all_children = Dict{VarName, Tuple{VarName}}()
+    all_children = Dict{VarName, Vector{VarName}}()
     for vn in keys(model)
         children = []
         for vnn in keys(model)
@@ -23,7 +23,7 @@ function getchildren(model::AbstractPPL.GraphPPL.Model)
                 push!(children, vnn)
             end
         end
-        all_children[vn] = Tuple(children)
+        all_children[vn] = children
     end
     return all_children
 end
@@ -48,7 +48,7 @@ function AbstractMCMC.step(
         end
     end
     sample = get_model_values(m)
-    state = sample
+    state = (sample, )
     return sample, state
 end
 
@@ -59,7 +59,7 @@ function AbstractMCMC.step(
     state;
     kwargs...
 )
-    last_sample = state
+    last_sample = state[1]
     m = deepcopy(model)  
     set_model_values!(m, last_sample)  
     
