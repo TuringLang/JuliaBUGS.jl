@@ -1,6 +1,8 @@
 using BugsModels
+using BugsModels: SampleFromPrior
 using StatsPlots
 using MCMCChains
+using MCMCChains: summarize
 
 """
 Link: https://chjackson.github.io/openbugsdoc/Examples/Pumps.html
@@ -49,12 +51,10 @@ N=12)
 inits0 = (p = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], tau = 1, mu = 0)
 inits1 = (p = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], tau = 0.1, mu = 1.0)
 
-model = compile_graphppl(model_def=realistic_model, data=data, initials=inits1)
-
-_, state = AbstractMCMC.step(Random.default_rng(), model, sampler) 
-_, state = AbstractMCMC.step(Random.default_rng(), model, sampler, state) 
+model = compile_graphppl(model_def=realistic_model, data=data, initials=inits1);
 
 sampler = SampleFromPrior(model)
 samples = AbstractMCMC.sample(model, sampler, 11000, discard_initial=1000);
 plot(samples)
+summarize(samples)
 summarize(samples[namesingroup(samples, :p)])

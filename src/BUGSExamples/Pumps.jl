@@ -25,8 +25,9 @@ data = (t=[94.3, 15.7, 62.9, 126, 5.24, 31.4, 1.05, 1.05, 2.1, 10.5],
 inits0 = (alpha=1, beta=1)
 inits1 = (alpha=10, beta=10)
 
-model = compile_graphppl(model_def=expr, data=data, initials=inits0)
+model = compile_graphppl(model_def=expr, data=data, initials=inits0);
 
-sampler = SampleFromPrior(model)
-samples = AbstractMCMC.sample(model, sampler, 11000, discard_initial=1000)
-summarize(samples)
+sampler = BugsModels.SampleFromPrior(model);
+samples = AbstractMCMC.sample(model, sampler, 11000, discard_initial=1000);
+summarize(samples[[namesingroup(samples, :theta)..., :alpha, :beta]])
+  

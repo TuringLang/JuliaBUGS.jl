@@ -1,11 +1,12 @@
 using BugsModels
 using StatsPlots
 using MCMCChains
+using AbstractMCMC
 
 """
 Link: https://chjackson.github.io/openbugsdoc/Examples/Seeds.html
 Status: 
-Complier: Untested
+Complier: Working
 Sampler: Untested
 """
 
@@ -37,6 +38,7 @@ inits1 = (alpha0 = 0, alpha1 = 0, alpha2 = 0, alpha12 = 0, tau = 1,
 
 model = compile_graphppl(model_def=expr, data=data, initials=inits0);
 
-sampler = SampleFromPrior(model)
-samples = AbstractMCMC.sample(model, sampler, 11000, discard_initial=1000)
+sampler = BugsModels.SampleFromPrior(model)
+samples = AbstractMCMC.sample(model, sampler, 11000, discard_initial=1000);
 summarize(samples)
+summarize(samples[[:alpha0, :alpha1, :alpha12, :alpha2, :sigma]])
