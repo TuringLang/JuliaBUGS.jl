@@ -1,4 +1,4 @@
-module BugsModels
+module SymbolicPPL
 
 include("bugsast.jl")
 include("typechecker.jl")

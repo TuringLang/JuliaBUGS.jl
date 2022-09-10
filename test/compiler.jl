@@ -1,5 +1,5 @@
-using BugsModels
-import BugsModels:
+using SymbolicPPL
+import SymbolicPPL:
     bugsmodel,
     bugsast,
     CompilerState,

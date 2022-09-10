@@ -1,4 +1,4 @@
-name = "BugsModels"
+name = "SymbolicPPL"
 uuid = "ba9fb4c0-828e-4473-b6a1-cd2560fee5bf"
 version = "0.1.0"
 
@@ -16,3 +16,4 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 StatsPlots = "f3b207a7-027a-5e70-b257-86293d7955fd"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
