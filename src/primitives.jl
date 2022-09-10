@@ -12,8 +12,9 @@ import LinearAlgebra: logdet
 import AbstractPPL
 using Symbolics
 using IfElse
+using Turing:Flat
 
-const DISTRIBUTIONS = [:truncated, :censored, :dgamma, :dnorm, :dbeta, :dbin, :dexp, :dpois, :dflat, :dunif, :dbern]
+const DISTRIBUTIONS = [:dgamma, :dnorm, :dbeta, :dbin, :dexp, :dpois, :dflat, :dunif, :dbern]
 
 const INVERSE_LINK_FUNCTION =
     (logit = :logistic, cloglog = :cexpexp, log = :exp, probit = :phi)
@@ -52,7 +53,7 @@ dnegbin(p, r) = NegativeBinomial(r, p)
 dpois(lambda) = Poisson(lambda)
 dgeom(p) = Geometric(p)
 dunif(a, b) = Uniform(a, b)
-dflat() = 1
+dflat() = Flat()
 
 dbeta(a, b) = Beta(a, b, check_args=false)
 dexp(lambda) = Exponential(1/lambda)

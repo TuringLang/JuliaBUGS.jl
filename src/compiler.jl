@@ -41,6 +41,7 @@ function resolveif!(expr::Expr, compiler_state::CompilerState)
             if MacroTools.isexpr(arg, :if)
                 condition = arg.args[1]
                 block = arg.args[2]
+                @assert size(arg.args) === (2,)
 
                 cond = resolve(condition, compiler_state)
                 if cond isa Bool
@@ -103,13 +104,13 @@ end
 function hasforloop(expr::Expr, compiler_state::CompilerState)
     for arg in expr.args
         if arg.head == :for
-            lower_bound, higher_bound = arg.args[1].args[2].args
+            lower_bound, upper_bound = arg.args[1].args[2].args
             lower_bound = resolve(lower_bound, compiler_state)
-            higher_bound = resolve(higher_bound, compiler_state)
+            upper_bound = resolve(upper_bound, compiler_state)
             if lower_bound isa Real &&
-               higher_bound isa Real &&
+                upper_bound isa Real &&
                isinteger(lower_bound) &&
-               isinteger(lower_bound)
+               isinteger(upper_bound)
                 return true
             end
         end
@@ -119,24 +120,24 @@ end
 
 function unrollforloop(expr::Expr, compiler_state::CompilerState)
     loop_var = expr.args[1].args[1]
-    lower_bound, higher_bound = expr.args[1].args[2].args
+    lower_bound, upper_bound = expr.args[1].args[2].args
     body = expr.args[2]
 
     lower_bound = resolve(lower_bound, compiler_state)
-    higher_bound = resolve(higher_bound, compiler_state)
+    upper_bound = resolve(upper_bound, compiler_state)
     if lower_bound isa Real &&
-       higher_bound isa Real &&
+        upper_bound isa Real &&
        isinteger(lower_bound) &&
-       isinteger(lower_bound)
+       isinteger(upper_bound)
         unrolled_exprs = []
-        for i = lower_bound:higher_bound
+        for i = lower_bound:upper_bound
             # Replace all the loop variables in array indices with integers
             replaced_expr =
                 MacroTools.postwalk(sub_expr -> sub_expr == loop_var ? i : sub_expr, body)
             push!(unrolled_exprs, replaced_expr.args...)
         end
         return Expr(:block, unrolled_exprs...)
-    elseif lower_bound isa AbstractFloat || higher_bound isa AbstractFloat
+    elseif lower_bound isa AbstractFloat || upper_bound isa AbstractFloat
         error("Loop bounds need to be integers.")
     else
         # if loop bounds contain variables that can't be partial evaluated at this moment
@@ -182,6 +183,8 @@ function tosymbolic(expr::Expr)
 end
 tosymbolic(variable) = variable
     
+const __SKIP__ = tosymbolic("SKIP")
+
 """
     resolve(variable, compiler_state)
 
@@ -235,7 +238,7 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
         if index isa Expr
             resolved_index = resolve(tosymbolic(index), compiler_state)
             if !isa(resolved_index, Union{Number, UnitRange})
-                return tosymbolic("SKIP")
+                return __SKIP__
             end 
             # || error("$index can't be evaluated to a concrete value.") 
             if !isa(resolved_index, Number) && !isinteger(resolved_index)
@@ -267,7 +270,7 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
             if index isa UnitRange
                 array_size[i] = max(array_size[i], index[end]) # in case 'high' is Expr
             elseif index == :(:)
-                indices[i] = eval(indices[i])
+                indices[i] = Colon()
             elseif index isa Integer
                 array_size[i] = max(indices[i], array_size[i])
             else
@@ -278,21 +281,12 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
         if all(array_size .== size(array))
             return array[indices...]
         else
-            expand_array!(name, array_size, compiler_state)
+            compiler_state.arrays[name] = create_symbolic_array(name, array_size)
             return compiler_state.arrays[name][indices...]
         end
     end
 
     error("Dimension doesn't match!")
-end
-
-function expand_array!(name::Symbol, size::Vector{<:Integer}, compiler_state::CompilerState)
-    new_array = Array{Num}(undef, size...)
-    for i in CartesianIndices(new_array)
-        new_array[i] = tosymbolic(Symbol("$name" * "$(collect(Tuple(i)))"))
-    end
-
-    compiler_state.arrays[name] = new_array
 end
 
 function create_symbolic_array(name::Symbol, size::Vector)
@@ -330,7 +324,7 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
 
             if MacroTools.isexpr(lhs, :ref)
                 sym_var = ref_to_symbolic!(lhs, compiler_state)
-                if Symbolics.isequal(sym_var, tosymbolic("SKIP"))
+                if Symbolics.isequal(sym_var, __SKIP__)
                     continue
                 end
                 lhs = Symbolics.tosymbol(sym_var)
@@ -338,7 +332,7 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
             lhs isa Symbol || error("LHS need to be simple.")
 
             rhs, ref_variables = find_ref_variables(rhs, compiler_state)
-            if !isempty(ref_variables) && Symbolics.isequal(ref_variables[1], tosymbolic("SKIP"))
+            if !isempty(ref_variables) && Symbolics.isequal(ref_variables[1], __SKIP__)
                 continue
             end
             variables = find_all_variables(rhs)
@@ -381,7 +375,7 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
 
             if MacroTools.isexpr(lhs, :ref)
                 sym_var = ref_to_symbolic!(lhs, compiler_state)
-                if Symbolics.isequal(sym_var, tosymbolic("SKIP"))
+                if Symbolics.isequal(sym_var, __SKIP__)
                     error("Exists unresolvable indexing at $arg.")
                 end
                 lhs = Symbolics.tosymbol(sym_var)
@@ -394,13 +388,13 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
                 dist_func in DISTRIBUTIONS || error("$dist_func not defined.") # DISTRIBUTIONS defined in "primitive.jl"
             elseif rhs.head in (:truncated, :censored, )
                 dist_func = rhs.args[1].args[1]
-                dist_func in DISTRIBUTIONS || error("$dist_func not defined.") # DISTRIBUTIONS defined in "primitive.jl"
+                dist_func in DISTRIBUTIONS || error("$dist_func not defined.") 
             else
                 error("RHS needs to be a distribution function")
             end
 
             rhs, ref_variables = find_ref_variables(rhs, compiler_state)
-            if !isempty(ref_variables) && Symbolics.isequal(ref_variables[1], tosymbolic("SKIP"))
+            if !isempty(ref_variables) && Symbolics.isequal(ref_variables[1], __SKIP__)
                 error("Exists unresolvable indexing at $arg.")
             end
             variables = find_all_variables(rhs)
@@ -426,8 +420,8 @@ function find_ref_variables(rhs::Expr, compiler_state::CompilerState)
     replaced_rhs = MacroTools.prewalk(rhs) do sub_expr
         if MacroTools.isexpr(sub_expr, :ref)
             sym_var = ref_to_symbolic!(sub_expr, compiler_state)
-            if Symbolics.isequal(sym_var, tosymbolic("SKIP")) # Some index can't be resolved in this generation
-                push!(ref_variables, tosymbolic("SKIP")) # Put the SKIP signal in the returned variable vector
+            if Symbolics.isequal(sym_var, __SKIP__) # Some index can't be resolved in this generation
+                push!(ref_variables, __SKIP__) # Put the SKIP signal in the returned variable vector
                 return sub_expr
             end
             push!(ref_variables, sym_var)
@@ -487,15 +481,6 @@ function recursive_find_variables(expr::Expr, variables::Vector{Any})
     end
 end
 
-# to_symbol(lhs::Symbol, compiler_state::CompilerState) = lhs
-# to_symbol(lhs::Num, compiler_state::CompilerState) = Symbolics.tosymbol(lhs)
-# function to_symbol(lhs::Expr, compiler_state::CompilerState)
-#     if MacroTools.isexpr(lhs, :ref)
-#         return Symbolics.tosymbol(ref_to_symbolic!(lhs, compiler_state))
-#     end
-#     error("Only ref expressions are supported.")
-# end
-
 function tograph(compiler_state::CompilerState)
     # node_name => (default_value, function, node_type)
     to_graph = Dict()
@@ -503,7 +488,7 @@ function tograph(compiler_state::CompilerState)
     for key in keys(compiler_state.logicalrules)
         default_value = resolve(key, compiler_state)
         isconstant = false
-        if !isa(default_value, Union{Integer,AbstractFloat})
+        if !isa(default_value, Real)
             # default_value can be set directly on compiler GraphPPL.Model 
             default_value = 0
         else
