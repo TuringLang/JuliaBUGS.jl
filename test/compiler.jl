@@ -1,5 +1,5 @@
 using SymbolicPPL
-import SymbolicPPL:
+using SymbolicPPL:
     bugsmodel,
     bugsast,
     CompilerState,

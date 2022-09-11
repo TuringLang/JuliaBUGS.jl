@@ -1,7 +1,7 @@
-using BugsModels
-using StatsPlots
+using SymbolicPPL
+using SymbolicPPL: SampleFromPrior
 using MCMCChains
-
+using MCMCChains: summarize
 """
 Link: https://chjackson.github.io/openbugsdoc/Examples/Magnesium.html
 Status: 
@@ -79,18 +79,30 @@ expr = bugsmodel"""
     inv.tau.sqrd[6] <- 1 / tau.sqrd[6]
 """
 
-data = (rt = [1, 9, 2, 1, 10, 1, 1, 90], nt = [40, 135, 200, 48, 150, 59, 25, 1159],
-rc = [2, 23, 7, 1, 8, 9, 3, 118], nc = [36, 135, 200, 46, 148, 56, 23, 1157])
+data = (
+    rt = [1, 9, 2, 1, 10, 1, 1, 90],
+    nt = [40, 135, 200, 48, 150, 59, 25, 1159],
+    rc = [2, 23, 7, 1, 8, 9, 3, 118],
+    nc = [36, 135, 200, 46, 148, 56, 23, 1157],
+)
 
 # TODO: NA is not supported
-inits0 = (mu = [-0.5, -0.5, -0.5, -0.5, -0.5, -0.5], tau = [NA, NA, 1, NA, NA, NA],
-tau.sqrd = [NA, 1, NA, NA, NA, 1], inv.tau.sqrd = [1, NA, NA, NA, NA, NA])
+inits0 = (
+    mu = [-0.5, -0.5, -0.5, -0.5, -0.5, -0.5],
+    tau = [NA, NA, 1, NA, NA, NA],
+    tau.sqrd = [NA, 1, NA, NA, NA, 1],
+    inv.tau.sqrd = [1, NA, NA, NA, NA, NA],
+)
 
-inits1 = (mu = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5], tau = [NA, NA, 0.1, NA, NA, NA],
-tau.sqrd = [NA, 0.1, NA, NA, NA, 0.1], inv.tau.sqrd = [0.1, NA, NA, NA, NA, NA])
+inits1 = (
+    mu = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
+    tau = [NA, NA, 0.1, NA, NA, NA],
+    tau.sqrd = [NA, 0.1, NA, NA, NA, 0.1],
+    inv.tau.sqrd = [0.1, NA, NA, NA, NA, NA],
+)
 
-model = compile_graphppl(model_def=expr, data=data, initials=nothing);
+model = compile_graphppl(model_def = expr, data = data, initials = nothing);
 
 sampler = SampleFromPrior(model)
-samples = AbstractMCMC.sample(model, sampler, 11000, discard_initial=1000)
+samples = AbstractMCMC.sample(model, sampler, 11000, discard_initial = 1000)
 summarize(samples)

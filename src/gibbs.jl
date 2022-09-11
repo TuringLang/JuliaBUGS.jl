@@ -5,8 +5,6 @@ using MCMCChains
 using Random
 using Distributions
 
-using BugsModels
-
 abstract type GibbsSampler <: AbstractMCMC.AbstractSampler end
 
 struct SampleFromPrior <: GibbsSampler 

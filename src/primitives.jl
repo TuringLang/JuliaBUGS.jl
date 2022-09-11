@@ -64,6 +64,10 @@ dgamma(r, mu) = Gamma(r, 1/mu, check_args=false)
 """
 phi(x) = Distributions.cdf(Normal(0, 1), x)
 
+# If don't register dpois, Poisson(a::Num) will create a Poisson{Num} object, but we want the Poisson constructor 
+# is the function expr instead of concrete types.
+@register_symbolic dpois(lambda::Num)
+
 arccos(x) = acos(x)
 arccosh(x) = acosh(x)
 arcsin(x) = asin(x)

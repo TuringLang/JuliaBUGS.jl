@@ -60,6 +60,38 @@ function resolveif!(expr::Expr, compiler_state::CompilerState)
 end
 
 """
+    convert_cumulative(expr)
+
+Converts `cumulative(s1, s2)` to `cdf(distribution_of_s1, s2)`.
+"""
+function convert_cumulative(expr::Expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, lhs_ = cumulative(s1_, s2_))
+            dist = find_dist(expr, s1)
+            sub_expr.args[2].args[1] = :cdf 
+            sub_expr.args[2].args[2] = dist
+            return sub_expr
+        else
+            return sub_expr
+        end
+    end
+end
+
+function find_dist(expr::Expr, target::Union{Expr, Symbol})
+    dist = nothing
+    MacroTools.postwalk(expr) do sub_expr
+        if isexpr(sub_expr, :(~))
+            if sub_expr.args[1] == target
+                isnothing(dist) || error()
+                dist = sub_expr.args[2]
+            end
+        end
+        return sub_expr
+    end
+    return dist
+end
+
+"""
     inverselinkfunction(expr)
 
 For all the logical assignments with supported link functions on the LHS. Rewrite the equation so that the 
@@ -486,7 +518,10 @@ function tograph(compiler_state::CompilerState)
     to_graph = Dict()
 
     for key in keys(compiler_state.logicalrules)
+        # Sometimes istree(Distribution.cdf(dist, x)) == True, in this circumstance, a MethodError will be threw
+        # I can't yet recreate the error reliably, use tyr-catch for now 
         default_value = resolve(key, compiler_state)
+        
         isconstant = false
         if !isa(default_value, Real)
             # default_value can be set directly on compiler GraphPPL.Model 
@@ -532,6 +567,7 @@ The exported top level function. `compile_graphppl` takes model definition and d
 """
 function compile_graphppl(; model_def::Expr, data::NamedTuple, initials=nothing) 
     expr = inverselinkfunction(model_def)
+    expr = convert_cumulative(expr)
     compiler_state = CompilerState()
     addlogicalrules!(data, compiler_state)
 
