@@ -1,5 +1,6 @@
 using SymbolicPPL
 using SymbolicPPL: SampleFromPrior
+using AbstractMCMC 
 using MCMCChains
 using MCMCChains: summarize
 
@@ -30,6 +31,6 @@ inits1 = (alpha = 10, beta = 10)
 model = compile_graphppl(model_def = model_def, data = data, initials = inits0)
 
 # Inference
-sampler = BugsModels.SampleFromPrior(model);
+sampler = SampleFromPrior(model);
 samples = AbstractMCMC.sample(model, sampler, 11000, discard_initial = 1000);
 summarize(samples[[namesingroup(samples, :theta)..., :alpha, :beta]])

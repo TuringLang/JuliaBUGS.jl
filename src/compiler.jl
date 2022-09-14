@@ -579,6 +579,7 @@ function compile_graphppl(; model_def::Expr, data::NamedTuple, initials=nothing)
     end
     addstochasticrules!(expr, compiler_state)
 
+    # TODO: add checks for array indices - they should all beresolved by now
     all(issimpleexpression, expr.args) ||
         error("Has unresolvable loop bounds or if conditions.")
     model = tograph(compiler_state)

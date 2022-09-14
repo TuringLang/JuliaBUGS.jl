@@ -31,7 +31,6 @@ addlogicalrules!(data, compiler_state)
 
 # tests for unrolling facilities
 expr = bugsmodel"""      
-### Likelihood
     # dummy assignment for easy understanding
     variable.0 <- 1
 
