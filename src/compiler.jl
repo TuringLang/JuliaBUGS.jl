@@ -19,13 +19,13 @@ in CompilerState.
 struct CompilerState
     arrays::Dict{Symbol,Array{Num}}
     logicalrules::Dict{Num,Num}
-    stochasticrules::Dict{Num,Any}
+    stochasticrules::Dict{Num,Expr}
 end
 
 CompilerState() = CompilerState(
     Dict{Symbol,Array{Num}}(),
     Dict{Num,Num}(),
-    Dict{Num,Any}(),
+    Dict{Num,Expr}(),
 )
 
 """
@@ -435,13 +435,13 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
 
             arguments = map(Symbolics.tosymbol, vcat(variables, ref_variables))
             func_expr = Expr(:(->), Expr(:tuple, arguments...), Expr(:block, rhs))
-            func = eval(func_expr) # anonymous function, so doesn't contaminate the environment, but still maybe a better solution out there 
+            # func = eval(func_expr) # anonymous function, so doesn't contaminate the environment, but still maybe a better solution out there 
 
-            if haskey(compiler_state.stochasticrules, sym_lhs)
+            if haskey(compiler_state.stochasticrules, sym_lhs) && func_expr != compiler_state.stochasticrules[sym_lhs]
                 error("Repeated definition for $(lhs)")
             end
             
-            compiler_state.stochasticrules[sym_lhs] = func
+            compiler_state.stochasticrules[sym_lhs] = func_expr
         end
     end
 end
@@ -551,14 +551,32 @@ function tograph(compiler_state::CompilerState)
         end
         default_value = Float64(default_value)
 
+        func_expr = compiler_state.stochasticrules[key]
         to_graph[Symbolics.tosymbol(key)] =
-            (default_value, compiler_state.stochasticrules[key], type)
+            (default_value, eval(func_expr), type)
     end
 
     return to_graph
 end
 
 issimpleexpression(expr) = Meta.isexpr(expr, (:(=), :~))
+
+function refinindices(expr::Expr)::Bool
+    exist = true
+    MacroTools.prewalk(expr) do sub_expr
+        if Meta.isexpr(sub_expr, :ref)
+            for arg in sub_expr.args
+                MacroTools.postwalk(arg) do subsub_expr
+                    if Meta.isexpr(subsub_expr, :ref) 
+                        exist = false
+                    end
+                end
+            end
+        end
+        return sub_expr
+    end
+    return exist
+end
 
 """
     compile_graphppl(; model_def::Expr, data)
@@ -579,8 +597,7 @@ function compile_graphppl(; model_def::Expr, data::NamedTuple, initials=nothing)
     end
     addstochasticrules!(expr, compiler_state)
 
-    # TODO: add checks for array indices - they should all beresolved by now
-    all(issimpleexpression, expr.args) ||
+    all(issimpleexpression, expr.args) || refinindices(expr) ||
         error("Has unresolvable loop bounds or if conditions.")
     model = tograph(compiler_state)
     model_nt = (; model...)
@@ -591,6 +608,7 @@ function compile_graphppl(; model_def::Expr, data::NamedTuple, initials=nothing)
         for variable in keys(initials)
             if !isempty(size(initials[variable]))
                 for i in CartesianIndices(initials[variable])
+                    isequal(initials[variable][i], missing) && continue
                     vn = AbstractPPL.VarName(Symbol("$variable" * "$(collect(Tuple(i)))"))
                     set_node_value!(graphmodel, vn, initials[variable][i])
                 end
