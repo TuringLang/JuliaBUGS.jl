@@ -1,3 +1,5 @@
+# https://chjackson.github.io/openbugsdoc/Examples/Dyes.html
+
 dyes = (
     name = "Dyes", 
     model_def = bugsmodel"
