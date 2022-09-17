@@ -82,12 +82,13 @@ function find_dist(expr::Expr, target::Union{Expr, Symbol})
     MacroTools.postwalk(expr) do sub_expr
         if isexpr(sub_expr, :(~))
             if sub_expr.args[1] == target
-                isnothing(dist) || error()
+                isnothing(dist) || error("Exist two assignments to the same variable.")
                 dist = sub_expr.args[2]
             end
         end
         return sub_expr
     end
+    isnothing(dist) || error("Didn't find a stochastic assignment for $target.")
     return dist
 end
 
@@ -272,11 +273,13 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
             if !isa(resolved_index, Union{Number, UnitRange})
                 return __SKIP__
             end 
-            # || error("$index can't be evaluated to a concrete value.") 
-            if !isa(resolved_index, Number) && !isinteger(resolved_index)
-                error("Index of $expr needs to be integers.")
+
+            if isa(resolved_index, Number) 
+                isinteger(resolved_index) || error("Index of $expr needs to be integers.")
+                indices[i] = Integer(resolved_index)
+            else
+                indices[i] = resolved_index
             end
-            indices[i] = Integer(resolved_index)
         end
     end
 
@@ -332,14 +335,17 @@ end
 addlogicalrules!(data::NamedTuple, compiler_state::CompilerState) =
     addlogicalrules!(Dict(pairs(data)), compiler_state)
 function addlogicalrules!(data::Dict, compiler_state::CompilerState)
+    datavars = Symbol[]
     for (key, value) in data
         if value isa Number
             compiler_state.logicalrules[tosymbolic(key)] = value
+            push!(datavars, key)
         elseif value isa Array
             sym_array = create_symbolic_array(key, collect(size(value)))
             for i in eachindex(value)
                 if !isequal(value[i], missing)
                     compiler_state.logicalrules[sym_array[i]] = value[i]
+                    push!(datavars, Symbolics.tosymbol(sym_array[i]))
                 end
             end
             compiler_state.arrays[key] = sym_array
@@ -347,6 +353,7 @@ function addlogicalrules!(data::Dict, compiler_state::CompilerState)
             error("Value type not supported.")
         end
     end
+    return datavars
 end
 function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
     newrules_flag = false
@@ -425,6 +432,9 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
                 error("RHS needs to be a distribution function")
             end
 
+            # TODO: try `resolve` on the RHS to get rid of data variables
+            # y[i, j] <- 1 - Y[i, j]
+            # y[i, j] ~ dbern(p[i, j]) in this case y[i, j] is an observation, but the current compiler won't treat it that way
             rhs, ref_variables = find_ref_variables(rhs, compiler_state)
             if !isempty(ref_variables) && Symbolics.isequal(ref_variables[1], __SKIP__)
                 error("Exists unresolvable indexing at $arg.")
@@ -433,7 +443,29 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
 
             sym_lhs = tosymbolic(lhs)
 
-            arguments = map(Symbolics.tosymbol, vcat(variables, ref_variables))
+
+            datavars = Dict()
+            argvars = []
+            for var in vcat(variables, ref_variables)
+                resolved = resolve(var, compiler_state)
+                if resolved isa Number
+                    datavars[var] = resolved
+                else
+                    push!(argvars, var)
+                end
+            end
+
+            rhs = MacroTools.postwalk(rhs) do sub_expr
+                if sub_expr isa Symbol
+                    if tosymbolic(sub_expr) in keys(datavars)
+                        return datavars[tosymbolic(sub_expr)]
+                    else
+                        return sub_expr
+                    end
+                end
+            end
+
+            arguments = map(Symbolics.tosymbol, argvars)
             func_expr = Expr(:(->), Expr(:tuple, arguments...), Expr(:block, rhs))
             # func = eval(func_expr) # anonymous function, so doesn't contaminate the environment, but still maybe a better solution out there 
 
@@ -513,11 +545,13 @@ function recursive_find_variables(expr::Expr, variables::Vector{Any})
     end
 end
 
-function tograph(compiler_state::CompilerState)
+function tograph(compiler_state::CompilerState, datavars::Vector{Symbol})
     # node_name => (default_value, function, node_type)
     to_graph = Dict()
 
     for key in keys(compiler_state.logicalrules)
+        Symbolics.tosymbol(key) in datavars && continue 
+
         # Sometimes istree(Distribution.cdf(dist, x)) == True, in this circumstance, a MethodError will be threw
         # I can't yet recreate the error reliably, use tyr-catch for now 
         default_value = resolve(key, compiler_state)
@@ -532,6 +566,8 @@ function tograph(compiler_state::CompilerState)
         default_value = Float64(default_value)
 
         ex = compiler_state.logicalrules[key]
+        # try evaluate the RHS, ideally, this will get ride of all the dependency on data nodes
+        ex = resolve(ex, compiler_state)
         args = Symbolics.get_variables(ex)
         f_expr = Symbolics.build_function(ex, args...)
         # hack to make GraphPPL happy: change the function definition to return a Float64 type
@@ -544,7 +580,7 @@ function tograph(compiler_state::CompilerState)
     for key in keys(compiler_state.stochasticrules)
         type = :Stochastic
         default_value = resolve(key, compiler_state)
-        if isa(default_value, Union{Integer,AbstractFloat})
+        if isa(default_value, Union{Integer,Float64})
             type = :Observations
         else
             default_value = 0
@@ -579,15 +615,15 @@ function refinindices(expr::Expr)::Bool
 end
 
 """
-    compile_graphppl(; model_def::Expr, data)
+    compile_graphppl(model_def, data, initials)
 
 The exported top level function. `compile_graphppl` takes model definition and data and returns a GraphPPL.Model.
 """
-function compile_graphppl(; model_def::Expr, data::NamedTuple, initials=nothing) 
+function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTuple) 
     expr = inverselinkfunction(model_def)
     expr = convert_cumulative(expr)
     compiler_state = CompilerState()
-    addlogicalrules!(data, compiler_state)
+    datavars = addlogicalrules!(data, compiler_state)
 
     while true
         unrollforloops!(expr, compiler_state) ||
@@ -599,22 +635,20 @@ function compile_graphppl(; model_def::Expr, data::NamedTuple, initials=nothing)
 
     all(issimpleexpression, expr.args) || refinindices(expr) ||
         error("Has unresolvable loop bounds or if conditions.")
-    model = tograph(compiler_state)
+    model = tograph(compiler_state, datavars)
     model_nt = (; model...)
 
     graphmodel = Model(; model_nt...)
     
-    if !isnothing(initials)
-        for variable in keys(initials)
-            if !isempty(size(initials[variable]))
-                for i in CartesianIndices(initials[variable])
-                    isequal(initials[variable][i], missing) && continue
-                    vn = AbstractPPL.VarName(Symbol("$variable" * "$(collect(Tuple(i)))"))
-                    set_node_value!(graphmodel, vn, initials[variable][i])
-                end
-            else
-                set_node_value!(graphmodel, AbstractPPL.VarName(variable), initials[variable])
+    for variable in keys(initials)
+        if !isempty(size(initials[variable]))
+            for i in CartesianIndices(initials[variable])
+                isequal(initials[variable][i], missing) && continue
+                vn = AbstractPPL.VarName(Symbol("$variable" * "$(collect(Tuple(i)))"))
+                set_node_value!(graphmodel, vn, initials[variable][i])
             end
+        else
+            set_node_value!(graphmodel, AbstractPPL.VarName(variable), initials[variable])
         end
     end
 
