@@ -1,0 +1,1 @@
+This folder contains examples of the BUGS language, descriptions and results of the models can be found at https://chjackson.github.io/openbugsdoc/.

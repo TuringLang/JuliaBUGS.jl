@@ -119,7 +119,7 @@ end
 Unroll all the loops whose loop bounds can be partially evaluated to a constant. 
 """
 function unrollforloops!(expr::Expr, compiler_state::CompilerState)
-    unrolled_flag = false
+    hasunrolled = false
     while hasforloop(expr, compiler_state)
         for (i, arg) in enumerate(expr.args)
             if arg.head == :for
@@ -131,7 +131,7 @@ function unrollforloops!(expr::Expr, compiler_state::CompilerState)
             end
         end
     end
-    return unrolled_flag
+    return hasunrolled
 end
 
 function hasforloop(expr::Expr, compiler_state::CompilerState)
@@ -335,17 +335,14 @@ end
 addlogicalrules!(data::NamedTuple, compiler_state::CompilerState) =
     addlogicalrules!(Dict(pairs(data)), compiler_state)
 function addlogicalrules!(data::Dict, compiler_state::CompilerState)
-    datavars = Symbol[]
     for (key, value) in data
         if value isa Number
             compiler_state.logicalrules[tosymbolic(key)] = value
-            push!(datavars, key)
         elseif value isa Array
             sym_array = create_symbolic_array(key, collect(size(value)))
             for i in eachindex(value)
                 if !isequal(value[i], missing)
                     compiler_state.logicalrules[sym_array[i]] = value[i]
-                    push!(datavars, Symbolics.tosymbol(sym_array[i]))
                 end
             end
             compiler_state.arrays[key] = sym_array
@@ -353,10 +350,9 @@ function addlogicalrules!(data::Dict, compiler_state::CompilerState)
             error("Value type not supported.")
         end
     end
-    return datavars
 end
 function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
-    newrules_flag = false
+    addednewrules = false
     for arg in expr.args
         if arg.head == :(=)
             lhs, rhs = arg.args
@@ -383,10 +379,10 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
                 error("Repeated definition for $(lhs)")
             end
             compiler_state.logicalrules[sym_lhs] = sym_rhs
-            newrules_flag = true
+            addednewrules = true
         end
     end
-    return newrules_flag
+    return addednewrules
 end
 
 """
@@ -541,21 +537,17 @@ function recursive_find_variables(expr::Expr, variables::Vector{Any})
     end
 end
 
-function tograph(compiler_state::CompilerState, datavars::Vector{Symbol})
+function tograph(compiler_state::CompilerState)
     # node_name => (default_value, function, node_type)
     to_graph = Dict()
 
     for key in keys(compiler_state.logicalrules)
-        Symbolics.tosymbol(key) in datavars && continue 
-
-        # Sometimes istree(Distribution.cdf(dist, x)) == True, in this circumstance, a MethodError will be threw
-        # I can't yet recreate the error reliably, use tyr-catch for now 
         default_value = resolve(key, compiler_state)
         
         isconstant = false
         if isa(default_value, Real)
             # if the variable can be evaluated into a concrete value, then if it is used
-            # somewhere else, the value will be used, otherwise, it is a detached node
+            # somewhere else, the concrete value will be used, otherwise, it is a detached node
             continue
         end
 
@@ -617,7 +609,7 @@ function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTu
     expr = inverselinkfunction(model_def)
     expr = convert_cumulative(expr)
     compiler_state = CompilerState()
-    datavars = addlogicalrules!(data, compiler_state)
+    addlogicalrules!(data, compiler_state)
 
     while true
         unrollforloops!(expr, compiler_state) ||
@@ -629,7 +621,7 @@ function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTu
 
     all(issimpleexpression, expr.args) || refinindices(expr) ||
         error("Has unresolvable loop bounds or if conditions.")
-    model = tograph(compiler_state, datavars)
+    model = tograph(compiler_state)
     model_nt = (; model...)
 
     graphmodel = Model(; model_nt...)
