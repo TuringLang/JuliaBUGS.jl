@@ -10,6 +10,6 @@ include("gibbs.jl")
 export @bugsast, @bugsmodel_str
 export infer_types
 
-export compile_graphppl
+export compile_graphppl, SampleFromPrior
 
 end # module

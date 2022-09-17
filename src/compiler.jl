@@ -432,9 +432,6 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
                 error("RHS needs to be a distribution function")
             end
 
-            # TODO: try `resolve` on the RHS to get rid of data variables
-            # y[i, j] <- 1 - Y[i, j]
-            # y[i, j] ~ dbern(p[i, j]) in this case y[i, j] is an observation, but the current compiler won't treat it that way
             rhs, ref_variables = find_ref_variables(rhs, compiler_state)
             if !isempty(ref_variables) && Symbolics.isequal(ref_variables[1], __SKIP__)
                 error("Exists unresolvable indexing at $arg.")
@@ -443,9 +440,8 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
 
             sym_lhs = tosymbolic(lhs)
 
-
-            datavars = Dict()
-            argvars = []
+            datavars = Dict{Num, Real}()
+            argvars = Num[]
             for var in vcat(variables, ref_variables)
                 resolved = resolve(var, compiler_state)
                 if resolved isa Number
@@ -557,13 +553,11 @@ function tograph(compiler_state::CompilerState, datavars::Vector{Symbol})
         default_value = resolve(key, compiler_state)
         
         isconstant = false
-        if !isa(default_value, Real)
-            # default_value can be set directly on compiler GraphPPL.Model 
-            default_value = 0
-        else
-            isconstant = true
+        if isa(default_value, Real)
+            # if the variable can be evaluated into a concrete value, then if it is used
+            # somewhere else, the value will be used, otherwise, it is a detached node
+            continue
         end
-        default_value = Float64(default_value)
 
         ex = compiler_state.logicalrules[key]
         # try evaluate the RHS, ideally, this will get ride of all the dependency on data nodes
@@ -574,7 +568,7 @@ function tograph(compiler_state::CompilerState, datavars::Vector{Symbol})
         if isconstant
             f_expr.args[2].args[end] = Expr(:call, Float64, f_expr.args[2].args[end])
         end
-        to_graph[Symbolics.tosymbol(key)] = (default_value, eval(f_expr), :Logical)
+        to_graph[Symbolics.tosymbol(key)] = (Float64(0), eval(f_expr), :Logical)
     end
 
     for key in keys(compiler_state.stochasticrules)

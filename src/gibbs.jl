@@ -7,7 +7,9 @@ using Distributions
 
 abstract type GibbsSampler <: AbstractMCMC.AbstractSampler end
 
-struct SampleFromPrior <: GibbsSampler 
+abstract type MHWithinGibbs <: GibbsSampler end
+
+struct SampleFromPrior <: MHWithinGibbs 
     all_children::Dict{VarName, Vector{VarName}} # TODO: this should be a part of Model
 end
 SampleFromPrior(model::AbstractPPL.GraphPPL.Model) = SampleFromPrior(getchildren(model))
