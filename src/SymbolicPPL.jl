@@ -13,7 +13,7 @@ export infer_types
 
 export compile_graphppl, SampleFromPrior
 
-# include("BUGSExamples/BUGSExamples.jl")
+include("BUGSExamples/BUGSExamples.jl")
 
 
 end # module

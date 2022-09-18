@@ -2,7 +2,7 @@
 
 dogs = (
     name = "Dogs", 
-    model_def = bugsmodel"
+    model_def = bugsmodel"""
         for (i in 1 : Dogs) {
             xa[i, 1] <- 0
             xs[i, 1] <- 0 
@@ -19,7 +19,8 @@ dogs = (
         alpha ~ dflat()T(, -0.00001)
         beta ~ dflat()T(, -0.00001)
         A <- exp(alpha)
-        B <- exp(beta)", 
+        B <- exp(beta)
+        """, 
 
     data = (
         Dogs = 30, 

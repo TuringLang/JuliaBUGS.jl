@@ -1,8 +1,8 @@
-# Link: https://chjackson.github.io/openbugsdoc/Examples/Equiv.html
+# https://chjackson.github.io/openbugsdoc/Examples/Equiv.html
 
 equiv = (
     name = "Equiv", 
-    model_def = bugsmodel"
+    model_def = bugsmodel"""
         for( k in 1 : P ) {
             for( i in 1 : N ) {
                 Y[i , k] ~ dnorm(m[i , k], tau1)
@@ -21,7 +21,8 @@ equiv = (
         phi ~ dnorm(0.0, 1.0E-6)
         pi ~ dnorm(0.0, 1.0E-6)
         theta <- exp(phi)
-        equiv <- step(theta - 0.8) - step(theta - 1.2)", 
+        equiv <- step(theta - 0.8) - step(theta - 1.2)
+        """, 
 
     data = (
         N = 10,

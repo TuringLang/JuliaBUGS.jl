@@ -2,14 +2,12 @@
 
 kidney = (
     name = "Kidney", 
-    model_def = bugsmodel"
+    model_def = bugsmodel"""
     for (i in 1 : N) {
         for (j in 1 : M) {
             # Survival times bounded below by censoring times:
             t[i,j] ~ dweib(r, mu[i,j])C(t.cen[i, j], );
-            log(mu[i,j ]) <- alpha + beta.age * age[i, j]
-                + beta.sex *sex[i]
-                + beta.dis[disease[i]] + b[i];
+            log(mu[i,j ]) <- alpha + beta.age * age[i, j] + beta.sex *sex[i] + beta.dis[disease[i]] + b[i];
             cumulative.t[i,j] <- cumulative(t[i,j], t[i,j])
         }
         # Random effects:
@@ -26,7 +24,8 @@ kidney = (
     }
     tau ~ dgamma(1.0E-3, 1.0E-3);
     r ~ dgamma(1.0, 1.0E-3);
-    sigma <- 1 / sqrt(tau); # s.d. of random effects", 
+    sigma <- 1 / sqrt(tau); # s.d. of random effects
+    """, 
 
     data = (
         N = 286, T = 2, G = 2, Npattern = 16, Ncut = 3,

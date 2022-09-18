@@ -1,12 +1,13 @@
-# https://chjackson.github.io/openbugsdoc/Examples/Pumps.html
+# https://chjackson.github.io/openbugsdoc/Examples/Surgical.html
 
 surgical_simple = (
     name = "Surgical", 
-    model_def = bugsmodel"
+    model_def = bugsmodel"""
         for( i in 1 : N ) {
             p[i] ~ dbeta(1.0, 1.0)
             r[i] ~ dbin(p[i], n[i])
-        }", 
+        }
+        """, 
 
     data = (
         n = [47, 148, 119, 810, 211, 196, 148, 215, 207, 97, 256, 360],
@@ -22,7 +23,7 @@ surgical_simple = (
 
 surgical_realistic = (
     name = "Surgical", 
-    model_def = bugsmodel"
+    model_def = bugsmodel"""
         for( i in 1 : N ) {
             b[i] ~ dnorm(mu,tau)
             r[i] ~ dbin(p[i],n[i])
@@ -31,7 +32,8 @@ surgical_realistic = (
         pop.mean <- exp(mu) / (1 + exp(mu))
         mu ~ dnorm(0.0,1.0E-6)
         sigma <- 1 / sqrt(tau)
-        tau ~ dgamma(0.001,0.001)", 
+        tau ~ dgamma(0.001,0.001)
+        """, 
 
     data = (
         n = [47, 148, 119, 810, 211, 196, 148, 215, 207, 97, 256, 360],

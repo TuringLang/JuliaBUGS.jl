@@ -2,7 +2,7 @@
 
 seeds = (
     name = "seeds", 
-    model_def = bugsmodel"
+    model_def = bugsmodel"""
         for( i in 1 : N ) {
             r[i] ~ dbin(p[i],n[i])
             b[i] ~ dnorm(0.0,tau)
@@ -14,7 +14,8 @@ seeds = (
         alpha2 ~ dnorm(0.0,1.0E-6)
         alpha12 ~ dnorm(0.0,1.0E-6)
         tau ~ dgamma(0.001,0.001)
-        sigma <- 1 / sqrt(tau)", 
+        sigma <- 1 / sqrt(tau)
+        """, 
 
     data = (
         r = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3],

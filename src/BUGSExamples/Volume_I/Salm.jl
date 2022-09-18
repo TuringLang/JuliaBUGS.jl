@@ -1,8 +1,8 @@
-# Link: https://chjackson.github.io/openbugsdoc/Examples/Salm.html
+# https://chjackson.github.io/openbugsdoc/Examples/Salm.html
 
 salm = (
     name = "Salm", 
-    model_def = bugsmodel"
+    model_def = bugsmodel"""
         for( i in 1 : doses ) {
             for( j in 1 : plates ) {
                 y[i , j] ~ dpois(mu[i , j])
@@ -16,7 +16,8 @@ salm = (
         beta ~ dnorm(0.0,1.0E-6)
         gamma ~ dnorm(0.0,1.0E-6)
         tau ~ dgamma(0.001, 0.001)
-        sigma <- 1 / sqrt(tau)", 
+        sigma <- 1 / sqrt(tau)
+        """, 
 
     data = (
         doses = 6,

@@ -2,7 +2,7 @@
 
 lsat = (
     name = "LSAT", 
-    model_def = bugsmodel"
+    model_def = bugsmodel"""
         # Calculate individual (binary) responses to each test from multinomial data
         for (j in 1 : culm[1]) {
             for (k in 1 : T) {
@@ -31,7 +31,8 @@ lsat = (
             alpha[k] ~ dnorm(0, 0.0001)
             a[k] <- alpha[k] - mean(alpha[])
         }
-        beta ~ dflat()T(0, )", 
+        beta ~ dflat()T(0, )
+        """, 
 
     data = (
         N = 1000, R = 32, T = 5,

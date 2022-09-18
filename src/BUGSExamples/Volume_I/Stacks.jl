@@ -2,7 +2,7 @@
 
 stacks = (
     name = "Stacks", 
-    model_def = bugsmodel"
+    model_def = bugsmodel"""
         # Standardise x's and coefficients
         for (j in 1 : p) {
             b[j] <- beta[j] / sd(x[ , j ])
@@ -35,7 +35,8 @@ stacks = (
         # standard deviation of error distribution
         sigma <- sqrt(1 / tau) # normal errors
         # sigma <- sqrt(2) / tau # double exponential errors
-        # sigma <- sqrt(d / (tau * (d - 2))); # t errors on d degrees of freedom", 
+        # sigma <- sqrt(d / (tau * (d - 2))); # t errors on d degrees of freedom
+        """, 
 
     data = (
         p = 3, N = 21,

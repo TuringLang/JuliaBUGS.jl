@@ -8,13 +8,7 @@ using LinearAlgebra
 """
     CompilerState
 
-`arrays` is a dictionary maps array names form model definition to arrays of symbolics variables. Indexing 
-in model definition is implemented as indexing to the arrays stored in `arrays`. `logicalrules` and `stochasticrules` are 
-dictionary that maps symbolic variables to there equivalent julia symbolic expressions. Partial evaluation of variables 
-are implemented as symbolic substitution. 
-
-CompilerState will likely eb mutated multiple times. And the final step of the compiling into GraphPPL only rely on data 
-in CompilerState.
+Store data during the compilation. 
 """
 struct CompilerState
     arrays::Dict{Symbol,Array{Num}}
@@ -31,8 +25,8 @@ CompilerState() = CompilerState(
 """
     resolveif!(expr, compiler_state)
 
-Evaluate the condition of the `if` statement. And in the situation where the condition is true,
-hoist out the consequence; otherwise, discard the if statement.
+Try ['resolve'](@ref) the condition of the `if` statement. If condition is true, hoist out the consequence; 
+otherwise, discard the whole `if` statement.
 """
 function resolveif!(expr::Expr, compiler_state::CompilerState)
     squashed = false
@@ -62,7 +56,7 @@ end
 """
     convert_cumulative(expr)
 
-Converts `cumulative(s1, s2)` to `cdf(distribution_of_s1, s2)`.
+Convert `cumulative(s1, s2)` to `cdf(distribution_of_s1, s2)`.
 """
 function convert_cumulative(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
@@ -95,9 +89,7 @@ end
 """
     inverselinkfunction(expr)
 
-For all the logical assignments with supported link functions on the LHS. Rewrite the equation so that the 
-LHS is the argument of the link function, and the new RHS is a call to the inverse of the link function whose 
-argument is the original RHS.  
+Call the inverse of the link function on the RHS so that the LHS is simple. 
 """
 function inverselinkfunction(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
@@ -181,9 +173,7 @@ end
 """
     tosymbolic(variable)
 
-Returns symbolic variable for multiple types of `variable`s. If the argument is an Expr, then
-the function will return a symbolic variable in the case where argument is a `ref` Expr, otherwise
-a symbolic term. 
+Returns symbolic variable for multiple types of `variable`s. 
 """
 tosymbolic(variable::Num) = variable
 tosymbolic(variable::Union{Integer,AbstractFloat}) = Num(variable)
@@ -229,16 +219,6 @@ function resolve(variable, compiler_state::CompilerState)
     return Symbolics.unwrap(resolved_variable)
 end
 
-"""
-    Wrapper around `Symbolics.substitute`
-
-    Reason for this function: 
-        ```julia
-            > substitute(a, Dict(a=>b+c, b=>2, c=>3))
-            b + c
-        ```
-    So this function provide a temporary solution by trying to recursively resolve the variable.
-"""
 function symbolic_eval(variable::Num, compiler_state::CompilerState)
     partial_trace = []
     evaluated = Symbolics.substitute(variable, compiler_state.logicalrules)
@@ -260,8 +240,7 @@ Base.in(key::Num, vs::Vector{Any}) = any(broadcast(Symbolics.isequal, key, vs))
 """
     ref_to_symbolic!(expr, compiler_state)
 
-Specialized for :ref expressions. If the referred array was seen, then return the corresponding symbolic
-variable; otherwise, allocate array in `CompilerState.arrays`, then return the symbolic variable or array.
+Return a symbolic variable for the referred array element. May mutate the compiler_state.
 """
 function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
     numdims = length(expr.args) - 1
@@ -332,6 +311,11 @@ function create_symbolic_array(name::Symbol, size::Vector)
     return symbolic_array
 end
 
+"""
+    addlogicalrules!(data, compiler_state)
+
+
+"""
 addlogicalrules!(data::NamedTuple, compiler_state::CompilerState) =
     addlogicalrules!(Dict(pairs(data)), compiler_state)
 function addlogicalrules!(data::Dict, compiler_state::CompilerState)

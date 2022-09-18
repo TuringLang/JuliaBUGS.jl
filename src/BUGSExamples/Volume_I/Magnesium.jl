@@ -2,7 +2,7 @@
 
 magnesium = (
     name = "Magnesium", 
-    model_def = bugsmodel"
+    model_def = bugsmodel"""
         #   j indexes alternative prior distributions
         for (j in 1:6) {
         mu[j] ~ dunif(-10, 10)
@@ -70,7 +70,7 @@ magnesium = (
         tau.sqrd[6] ~ dnorm(0, p0)C(0, )
         tau[6] <- sqrt(tau.sqrd[6])
         inv.tau.sqrd[6] <- 1 / tau.sqrd[6]
-        ", 
+        """, 
 
     data = (
         rt = [1, 9, 2, 1, 10, 1, 1, 90],
@@ -82,15 +82,15 @@ magnesium = (
     inits = [
         (
             mu = [-0.5, -0.5, -0.5, -0.5, -0.5, -0.5],
-            tau = [NA, NA, 1, missing, missing, missing],
-            tau.sqrd = [missing, 1, missing, missing, missing, 1],
-            inv.tau.sqrd = [1, missing, missing, missing, missing, missing],
+            tau = [missing, missing, 1, missing, missing, missing],
+            var"tau.sqrd" = [missing, 1, missing, missing, missing, 1],
+            var"inv.tau.sqrd" = [1, missing, missing, missing, missing, missing],
         ), 
         (
             mu = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
             tau = [missing, missing, 0.1, missing, missing, missing],
-            tau.sqrd = [missing, 0.1, missing, missing, missing, 0.1],
-            inv.tau.sqrd = [0.1, missing, missing, missing, missing, missing],
+            var"tau.sqrd" = [missing, 0.1, missing, missing, missing, 0.1],
+            var"inv.tau.sqrd" = [0.1, missing, missing, missing, missing, missing],
         ), 
     ],
 )

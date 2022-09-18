@@ -2,23 +2,34 @@
 
 inhalers = (
     name = "Inhalers", 
-    model_def = bugsmodel"
+    model_def = bugsmodel"""
     
     # Construct individual response data from contingency table
     for (i in 1 : Ncum[1, 1]) {
         group[i] <- 1
-        for (t in 1 : T) { response[i, t] <- pattern[1, t] }
+        for (t in 1 : T) { 
+            response[i, t] <- pattern[1, t]
+        }
     }
     for (i in (Ncum[1,1] + 1) : Ncum[1, 2]) {
-        group[i] <- 2 for (t in 1 : T) { response[i, t] <- pattern[1, t] }
+        group[i] <- 2 
+        for (t in 1 : T) { 
+            response[i, t] <- pattern[1, t] 
+        }
     }
 
     for (k in 2 : Npattern) {
         for(i in (Ncum[k - 1, 2] + 1) : Ncum[k, 1]) {
-            group[i] <- 1 for (t in 1 : T) { response[i, t] <- pattern[k, t] }
+            group[i] <- 1 
+            for (t in 1 : T) { 
+                response[i, t] <- pattern[k, t] 
+            }
         }
         for(i in (Ncum[k, 1] + 1) : Ncum[k, 2]) {
-            group[i] <- 2 for (t in 1 : T) { response[i, t] <- pattern[k, t] }
+            group[i] <- 2 
+            for (t in 1 : T) { 
+                response[i, t] <- pattern[k, t] 
+            }
         }
     }
 
@@ -32,7 +43,9 @@ inhalers = (
             
             # Probability of response = j
             p[i, t, 1] <- 1 - Q[i, t, 1]
-            for (j in 2 : Ncut) { p[i, t, j] <- Q[i, t, j - 1] - Q[i, t, j] }
+            for (j in 2 : Ncut) { 
+                p[i, t, j] <- Q[i, t, j - 1] - Q[i, t, j] 
+            }
             p[i, t, (Ncut+1)] <- Q[i, t, Ncut]
 
             response[i, t] ~ dcat(p[i, t, ])
@@ -60,7 +73,8 @@ inhalers = (
 
     tau ~ dgamma(0.001, 0.001)
     sigma <- sqrt(1 / tau)
-    log.sigma <- log(sigma)", 
+    log.sigma <- log(sigma)
+    """, 
 
     data = (
         N = 286, T = 2, G = 2, Npattern = 16, Ncut = 3,

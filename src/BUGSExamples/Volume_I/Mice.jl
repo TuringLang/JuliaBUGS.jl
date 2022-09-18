@@ -2,7 +2,7 @@
 
 mice = (
     name = "Mice", 
-    model_def = bugsmodel"
+    model_def = bugsmodel"""
         for(i in 1 : M) {
             for(j in 1 : N) {
                 t[i, j] ~ dweib(r, mu[i])C(t.cen[i, j],)
@@ -15,7 +15,8 @@ mice = (
         r ~ dexp(0.001)
         veh.control <- beta[2] - beta[1]
         test.sub <- beta[3] - beta[1]
-        pos.control <- beta[4] - beta[1]", 
+        pos.control <- beta[4] - beta[1]
+        """, 
 
     data = (
         t = row_major_reshape([

@@ -2,7 +2,7 @@
 
 oxford = (
     name = "Oxford", 
-    model_def = bugsmodel"
+    model_def = bugsmodel"""
         for (i in 1 : K) {
             r0[i] ~ dbin(p0[i], n0[i])
             r1[i] ~ dbin(p1[i], n1[i])
@@ -18,7 +18,8 @@ oxford = (
         beta1 ~ dnorm(0.0, 1.0E-6)
         beta2 ~ dnorm(0.0, 1.0E-6)
         tau ~ dgamma(1.0E-3, 1.0E-3)
-        sigma <- 1 / sqrt(tau)", 
+        sigma <- 1 / sqrt(tau)
+        """, 
 
     data = (
         r1 = [

@@ -2,7 +2,7 @@
 
 rats = (
     name = "Rats", 
-    model_def = bugsmodel"
+    model_def = bugsmodel"""
         for( i in 1 : N ) {
             for( j in 1 : T ) {
             Y[i , j] ~ dnorm(mu[i , j],tau.c)
@@ -17,7 +17,8 @@ rats = (
         alpha.tau ~ dgamma(0.001,0.001)
         beta.c ~ dnorm(0.0,1.0E-6)
         beta.tau ~ dgamma(0.001,0.001)
-        alpha0 <- alpha.c - xbar * beta.c", 
+        alpha0 <- alpha.c - xbar * beta.c
+    """, 
 
     data = (
         x = [8.0, 15.0, 22.0, 29.0, 36.0],

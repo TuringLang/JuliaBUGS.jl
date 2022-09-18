@@ -2,7 +2,7 @@
 
 dyes = (
     name = "Dyes", 
-    model_def = bugsmodel"
+    model_def = bugsmodel"""
         for(i in 1 : batches) {
             mu[i] ~ dnorm(theta, tau.btw)
             for(j in 1 : samples) {
@@ -14,7 +14,8 @@ dyes = (
         sigma2.btw <- 1 / tau.btw
         tau.with ~ dgamma(0.001, 0.001)
         tau.btw ~ dgamma(0.001, 0.001)
-        theta ~ dnorm(0.0, 1.0E-10)", 
+        theta ~ dnorm(0.0, 1.0E-10)
+        """, 
 
     data = (
         batches = 6, 
