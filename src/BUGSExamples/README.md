@@ -1,1 +1,1 @@
-This folder contains examples of the BUGS language, descriptions and results of the models can be found at https://chjackson.github.io/openbugsdoc/.
+This folder contains some examples of the BUGS language. Users can find descriptions and results at https://chjackson.github.io/openbugsdoc/. 

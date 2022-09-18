@@ -82,7 +82,7 @@ function find_dist(expr::Expr, target::Union{Expr, Symbol})
         end
         return sub_expr
     end
-    isnothing(dist) || error("Didn't find a stochastic assignment for $target.")
+    isnothing(dist) && error("Didn't find a stochastic assignment for $target.")
     return dist
 end
 
@@ -248,6 +248,17 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
     indices = expr.args[2:end]
     for (i, index) in enumerate(indices)
         if index isa Expr
+            if Meta.isexpr(index, :call) && index.args[1] == :(:)
+                lb = resolve(index.args[2], compiler_state) 
+                ub = resolve(index.args[3], compiler_state)
+                if lb isa Real && ub isa Real
+                    indices[i].args[2] = lb
+                    indices[i].args[3] = ub
+                else
+                    return __SKIP__
+                end
+            end
+
             resolved_index = resolve(tosymbolic(index), compiler_state)
             if !isa(resolved_index, Union{Number, UnitRange})
                 return __SKIP__
@@ -401,13 +412,13 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
             end
             lhs isa Symbol || error("LHS need to be simple.")
 
-            # rhs will be a distribution object, so handle the distribution right now
-            if rhs.head == :call
-                dist_func = rhs.args[1]
-                dist_func in DISTRIBUTIONS || error("$dist_func not defined.") # DISTRIBUTIONS defined in "primitive.jl"
-            elseif rhs.head in (:truncated, :censored, )
+            # rhs should be a distribution function
+            if rhs.head in (:truncated, :censored, )
                 dist_func = rhs.args[1].args[1]
                 dist_func in DISTRIBUTIONS || error("$dist_func not defined.") 
+            elseif rhs.head == :call
+                    dist_func = rhs.args[1]
+                    dist_func in DISTRIBUTIONS || error("$dist_func not defined.") 
             else
                 error("RHS needs to be a distribution function")
             end

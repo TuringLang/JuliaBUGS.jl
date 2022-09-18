@@ -10,10 +10,15 @@ const NA = missing
 function compile(m::NamedTuple)
     @assert keys(m) == (:name, :model_def, :data, :inits)
     chains = []
-    for init in m[:inits]
-        push!(chains, compile_graphppl(model_def = m[:model_def], data = m[:data], initials = init))
+    for i in 1:length(m[:inits])
+        push!(chains, compile_singlechain(m, i))
     end
     return chains
+end
+
+function compile_singlechain(m::NamedTuple, select)
+    @assert keys(m) == (:name, :model_def, :data, :inits)
+    return compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][select])
 end
 
 row_major_reshape(v::Vector, dim) = permutedims(reshape(v, dim), Tuple(reverse([i for i in 1:length(dim)])))
@@ -39,8 +44,8 @@ include("Volume_I/Seeds.jl")
 include("Volume_I/Stacks.jl")
 include("Volume_I/Surgical.jl")
 
-links = (
-    blocker = "https://chjackson.github.io/openbugsdoc/Examples/Blockers.html",    
+LINKS = (
+    blockers = "https://chjackson.github.io/openbugsdoc/Examples/Blockers.html",    
     bones = "https://chjackson.github.io/openbugsdoc/Examples/Bones.html",
     dogs = "https://chjackson.github.io/openbugsdoc/Examples/Dogs.html",
     dyes = "https://chjackson.github.io/openbugsdoc/Examples/Dyes.html",
@@ -63,8 +68,8 @@ links = (
     surgical_realistic = "https://chjackson.github.io/openbugsdoc/Examples/Surgical.html", 
 )
 
-examples = (
-    blocker = blockers,
+EXAMPLES = (
+    blockers = blockers,
     bones = bones,
     dogs = dogs,
     dyes = dyes,
@@ -87,6 +92,6 @@ examples = (
     surgical_realistic = surgical_realistic
 )
 
-export examples
+export EXAMPLES, LINKS
 
 end
