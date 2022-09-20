@@ -1,7 +1,5 @@
 using SymbolicPPL
 using SymbolicPPL:
-    bugsmodel,
-    bugsast,
     CompilerState,
     resolveif!,
     inverselinkfunction,
@@ -25,9 +23,9 @@ data = Dict(:N => 2, :g => [1, 2, 3])
 compiler_state = CompilerState()
 addlogicalrules!(data, compiler_state)
 @test compiler_state.logicalrules[tosymbolic(:N)] == Num(2)
-@test compiler_state.logicalrules[tosymbolic(Meta.parse("g[3]"))] == Num(3)
+@test compiler_state.logicalrules[ref_to_symbolic!("g[3]")] == Num(3)
 @test resolve(:N, compiler_state) == 2
-@test resolve(Meta.parse("g[2]"), compiler_state) == 2
+@test resolve(ref_to_symbolic!("g[2]"), compiler_state) == 2
 
 # tests for unrolling facilities
 expr = bugsmodel"""      
@@ -132,7 +130,6 @@ ref_to_symbolic!(Meta.parse("h[2]"), compiler_state)
 # case 4: slicing 
 s = ref_to_symbolic!(Meta.parse("s[2, 3:6]"), compiler_state)
 @test size(s) == (4,)
-@test Symbolics.isequal(s[1], tosymbolic(Meta.parse("s[2, 3]")))
 s = ref_to_symbolic!(Meta.parse("s[2, :]"), compiler_state)
 @test size(s) == (6,)
 s = ref_to_symbolic!(Meta.parse("s[2:3, :]"), compiler_state)
@@ -227,4 +224,4 @@ expr = bugsmodel"""
     alpha0 <- alpha.c - xbar * beta.c   
  """
 
-model = compile_graphppl(model_def = expr, data = data) # Inspected by eyes right now
+model = compile_graphppl(model_def = expr, data = data, initials=NamedTuple())

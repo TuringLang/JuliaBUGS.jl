@@ -1,6 +1,3 @@
-# TODO: make this a module and export the functions
-# names(MODULE_NAME) can get all the functions defined in a module
-
 using Distributions
 using LogExpFunctions
 import LogExpFunctions: logistic, logit, cloglog, cexpexp, log1pexp
@@ -11,10 +8,18 @@ using LinearAlgebra
 import LinearAlgebra: logdet
 import AbstractPPL
 using Symbolics
+using Statistics
 using IfElse
 using Turing:Flat
 
-const DISTRIBUTIONS = [:truncated, :censored, :dgamma, :dnorm, :dbeta, :dbin, :dexp, :dpois, :dflat, :dunif, :dbern]
+""" 
+    NA
+
+`NA` is alias for [`missing`](@ref).
+"""
+const NA = :missing
+
+const DISTRIBUTIONS = [:truncated, :censored, :dgamma, :dnorm, :dbeta, :dbin, :dcat, :dexp, :dpois, :dflat, :dunif, :dbern]
 
 const INVERSE_LINK_FUNCTION =
     (logit = :logistic, cloglog = :cexpexp, log = :exp, probit = :phi)
@@ -29,14 +34,12 @@ end
 
 """ 
     Distributions
-
-For now, the function argument `check_args` has to be used to avoid support
-checking, but some similar functionality should be provided to avoid sneaky
-wrong results.
-An alternative is directly use the underlying struct and basically write 
-our own type and constructors.
 """
+
+@register_symbolic dnorm(mu::Num, tau::Num)
 dnorm(mu, tau) = Normal(mu, 1 / sqrt(tau))
+
+@register_symbolic dbern(p::Num)
 dbern(p) = Bernoulli(p)
 
 dbin(p, n::Integer) = Binomial(n, p)
@@ -48,8 +51,12 @@ function dbin(p, n::AbstractFloat)
     end
 end
 
-dcat(p) = Categorical(p)
+@macroexpand @register_symbolic dcat(p::Vector{Num})
+@register_symbolic dcat(p::Vector{Num})
+dcat(p) = Categorical(p, check_args=false)
 dnegbin(p, r) = NegativeBinomial(r, p)
+
+@register_symbolic dpois(lambda::Num)
 dpois(lambda) = Poisson(lambda)
 dgeom(p) = Geometric(p)
 dunif(a, b) = Uniform(a, b)
@@ -63,10 +70,6 @@ dgamma(r, mu) = Gamma(r, 1/mu, check_args=false)
     Functions
 """
 phi(x) = Distributions.cdf(Normal(0, 1), x)
-
-# If don't register dpois, Poisson(a::Num) will create a Poisson{Num} object, but we want the Poisson constructor 
-# is the function expr instead of concrete types.
-@register_symbolic dpois(lambda::Num)
 
 arccos(x) = acos(x)
 arccosh(x) = acosh(x)
@@ -84,3 +87,7 @@ step(x::Symbolics.Num) = IfElse.ifelse(x>1,1,0)
 pow(base, exp) = base^exp
 inprod(v1, v2) = LinearAlgebra.dot(v1, v2)
 inverse(v) = inv(v)
+
+mean(v::Symbolics.Arr{Num}) = Statistics.mean(Symbolics.scalarize(v))
+
+# TODO: user can define functions by adding a function definition and `register_symbolic` it, maybe we can provide a macro to do these things.
