@@ -14,6 +14,7 @@ export infer_types
 export compile_graphppl, SampleFromPrior
 
 include("BUGSExamples/BUGSExamples.jl")
-
+using .BUGSExamples
+export EXAMPLES, LINKS
 
 end # module

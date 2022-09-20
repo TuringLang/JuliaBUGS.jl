@@ -14,12 +14,14 @@ struct CompilerState
     arrays::Dict{Symbol,Symbolics.Arr{Num}}
     logicalrules::Dict{Num,Num}
     stochasticrules::Dict{Num,Expr}
+    cache::Dict{Num, Num}
 end
 
 CompilerState() = CompilerState(
     Dict{Symbol,Symbolics.Arr{Num}}(),
     Dict{Num,Num}(),
     Dict{Num,Expr}(),
+    Dict{Num,Num}()
 )
 
 """
@@ -330,6 +332,9 @@ function resolve(variable, compiler_state::CompilerState)
 end
 
 function symbolic_eval(variable, compiler_state::CompilerState)
+    if in(variable, collect(keys(compiler_state.cache)))
+        return compiler_state.cache[variable]
+    end
     if variable isa Symbolics.Arr{Num}
         variable = Symbolics.scalarize(variable)
     end
@@ -344,6 +349,9 @@ function symbolic_eval(variable, compiler_state::CompilerState)
         try_evaluated in partial_trace && break # avoiding infinite loop
     end
 
+    if !isa(variable, Vector)
+        compiler_state.cache[variable] = try_evaluated
+    end
     return try_evaluated
 end
 symbolic_eval(variable::UnitRange{Int64}, compiler_state::CompilerState) = variable # Special case for array range

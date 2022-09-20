@@ -225,3 +225,11 @@ expr = bugsmodel"""
  """
 
 model = compile_graphppl(model_def = expr, data = data, initials=NamedTuple())
+
+## 
+using SymbolicPPL
+row_major_reshape(v::Vector, dim) = permutedims(reshape(v, dim), Tuple(reverse([i for i in 1:length(dim)])))
+const NA = missing
+m = epil
+@time model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
+print(collect(keys(model)))
