@@ -194,18 +194,9 @@ function tosymbolic(expr::Expr)
     if MacroTools.isexpr(expr, :ref)  
         return ref_to_symbolic(expr)
     else
-        ref_variables = []
-        ex = MacroTools.prewalk(expr) do sub_expr
-            if MacroTools.isexpr(sub_expr, :ref)
-                sym_var = tosymbolic(sub_expr)
-                push!(ref_variables, sym_var)
-                return tosymbol(sym_var)
-            else
-                return sub_expr
-            end
-        end
-        variables = find_all_variables(ex)
-        return create_sym_rhs(ex, vcat(ref_variables, variables))
+        variables = find_all_variables(expr)
+        expr = replace_variables(expr, variables)
+        return eval(expr)
     end
 end
 function tosymbolic(array_name::Symbol, array_size::Vector)
@@ -246,7 +237,7 @@ Return a symbolic variable for the referred array element. May mutate the compil
 ref_to_symbolic(s::String) = ref_to_symbolic(Meta.parse(s))
 function ref_to_symbolic(expr::Expr)
     name = expr.args[1]
-    indices = expr.args[2:end]
+    indices = map(eval, expr.args[2:end]) # deal with case like a[:(2-1):2]
     if any(x->!isa(x, Integer), indices)
         error("Only support integer indices.")
     end
@@ -441,6 +432,18 @@ function replace_variables(rhs::Expr, variables, compiler_state::CompilerState)
         end
     end
     return replaced_rhs, ref_variables
+end
+function replace_variables(ex::Expr, variables)
+    return MacroTools.prewalk(ex) do sub_expr
+        if MacroTools.isexpr(sub_expr, :ref)
+            sym_var = ref_to_symbolic(sub_expr)
+            return sym_var
+        elseif sub_expr isa Symbol && in(tosymbolic(sub_expr), variables)
+            return tosymbolic(sub_expr)
+        else
+            return sub_expr
+        end
+    end
 end
 
 """
