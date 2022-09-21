@@ -1,4 +1,5 @@
 using Distributions
+import Distributions: censored, truncated
 using LogExpFunctions
 import LogExpFunctions: logistic, logit, cloglog, cexpexp, log1pexp
 import Base: step
@@ -65,6 +66,15 @@ dflat() = Flat()
 dbeta(a, b) = Beta(a, b, check_args=false)
 dexp(lambda) = Exponential(1/lambda)
 dgamma(r, mu) = Gamma(r, 1/mu, check_args=false) 
+
+@register_symbolic dweib(v::Num, λ::Num)
+dweib(v, λ) = Weibull(v, 1/λ)
+
+@register_symbolic censored(d::Num, l::Num, u::Num)
+@register_symbolic censored_with_lower(d::Num, l::Num)
+@register_symbolic censored_with_upper(d::Num, u::Num)
+censored_with_lower(d, l) = censored(d, lower = l)
+censored_with_upper(d, u) = censored(d, upper = u)
 
 """
     Functions

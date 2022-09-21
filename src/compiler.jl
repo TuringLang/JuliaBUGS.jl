@@ -14,14 +14,12 @@ struct CompilerState
     arrays::Dict{Symbol,Symbolics.Arr{Num}}
     logicalrules::Dict{Num,Num}
     stochasticrules::Dict{Num,Expr}
-    cache::Dict{Num, Num}
 end
 
 CompilerState() = CompilerState(
     Dict{Symbol,Symbolics.Arr{Num}}(),
     Dict{Num,Num}(),
-    Dict{Num,Expr}(),
-    Dict{Num,Num}()
+    Dict{Num,Expr}()
 )
 
 """
@@ -104,6 +102,29 @@ function inverselinkfunction(expr::Expr)
             end
         end
         return sub_expr
+    end
+end
+
+"""
+    translate_censoring_expressions(expr)
+
+Turn `truncated` and `censored` expression to function calls.
+"""
+function translate_censoring_expressions(expr::Expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if Meta.isexpr(sub_expr, :censored)
+            l, u = sub_expr.args[2:3]
+
+            if l != :nothing && u != :nothing
+                return Expr(:call, :censored, sub_expr.args...)
+            elseif l != :nothing
+                return Expr(:call, :censored_with_lower, sub_expr.args[1], l)
+            else # u != :nothing
+                return Expr(:call, :censored_with_upper, sub_expr.args[1], u)
+            end
+        else
+            return sub_expr
+        end
     end
 end
 
@@ -330,16 +351,28 @@ function resolve(variable, compiler_state::CompilerState)
     resolved_variable = symbolic_eval(tosymbolic(variable), compiler_state)
     return Symbolics.unwrap(resolved_variable)
 end
-
 function symbolic_eval(variable, compiler_state::CompilerState)
-    if in(variable, collect(keys(compiler_state.cache)))
-        return compiler_state.cache[variable]
-    end
     if variable isa Symbolics.Arr{Num}
         variable = Symbolics.scalarize(variable)
     end
     partial_trace = []
     evaluated = Symbolics.substitute(variable, compiler_state.logicalrules)
+
+    let e = Symbolics.toexpr(evaluated) 
+        if Meta.isexpr(e, :call) && in(Symbol(e.args[1]), [:exp]) # if symbolicly traced, can be more general, only handle :exp now
+            func = e.args[1]
+            nargs = size(e.args)[1] - 1
+            args = arguments(Symbolics.unwrap(evaluated))
+            resolved_args = []
+            for i in 1:nargs
+                arg = Symbolics.wrap(args[i])
+                resolved_arg = symbolic_eval(arg, compiler_state)
+                push!(resolved_args, resolved_arg)
+            end
+            return func(resolved_args...)
+        end
+    end
+
     try_evaluated = Symbolics.substitute(evaluated, compiler_state.logicalrules)
     push!(partial_trace, try_evaluated)
 
@@ -349,9 +382,6 @@ function symbolic_eval(variable, compiler_state::CompilerState)
         try_evaluated in partial_trace && break # avoiding infinite loop
     end
 
-    if !isa(variable, Vector)
-        compiler_state.cache[variable] = try_evaluated
-    end
     return try_evaluated
 end
 symbolic_eval(variable::UnitRange{Int64}, compiler_state::CompilerState) = variable # Special case for array range
@@ -464,20 +494,6 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
         if arg.head == :(~)
             lhs, rhs = arg.args
 
-            if Meta.isexpr(rhs, [:truncated, :censored])
-                l, u = rhs.args[2:3]
-                parameters = Vector{Any}()
-                if l != :nothing
-                    push!(parameters, (:kw, :lower, l))
-                end
-                if u != :nothing
-                    push!(parameters, (:kw, :upper, u))
-                end
-                    
-                rhs = Expr(:call, rhs.head, (:parameters, parameters...), rhs.args[1])
-            end
-
-            # TODO: think about multivar distribution
             if MacroTools.isexpr(lhs, :ref)
                 lhs = ref_to_symbolic!(lhs, compiler_state)
                 if Symbolics.isequal(lhs, __SKIP__)
@@ -488,12 +504,10 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
                 lhs = tosymbolic(lhs)
             end
 
-            if rhs.head in (:truncated, :censored, )
-                dist_func = rhs.args[1].args[1]
-                dist_func in DISTRIBUTIONS || error("$dist_func not defined.") 
-            elseif rhs.head == :call
-                    dist_func = rhs.args[1]
-                    dist_func in DISTRIBUTIONS || error("$dist_func not defined.") 
+            if rhs.head == :call
+                dist_func = rhs.args[1]
+                dist_func in DISTRIBUTIONS || dist_func in (:truncated, :truncated_with_lower, :truncated__with_upper) || 
+                    dist_func in (:censored, :censored_with_lower, :censored__with_upper) || error("$dist_func not defined.") 
             else
                 error("RHS needs to be a distribution function")
             end
@@ -660,6 +674,8 @@ The exported top level function. `compile_graphppl` takes model definition and d
 function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTuple) 
     expr = inverselinkfunction(model_def)
     expr = convert_cumulative(expr)
+    expr = translate_censoring_expressions(expr)
+
     compiler_state = CompilerState()
     addlogicalrules!(data, compiler_state)
 
