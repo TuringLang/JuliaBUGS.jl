@@ -21,7 +21,7 @@ function compile_singlechain(m::NamedTuple, select)
     return compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][select])
 end
 
-row_major_reshape(v::Vector, dim) = permutedims(reshape(v, dim), Tuple(reverse([i for i in 1:length(dim)])))
+row_major_reshape(v::Vector, dim) = permutedims(reshape(v, reverse(dim)), Tuple(reverse([i for i in 1:length(dim)])))
 
 include("Volume_I/Blocker.jl")
 include("Volume_I/Bones.jl")

@@ -6,7 +6,7 @@
 - [x] epil
 - [x] equiv 
 - [ ] inhalers: slow compilation
-- [ ] kidney: `censor` not fully supported
+- [x] kidney
 - [ ] leuk
 - [ ] leukfr
 - [ ] last 

@@ -605,7 +605,7 @@ end
 
 function tograph(compiler_state::CompilerState)
     # node_name => (default_value, function, node_type)
-    to_graph = Dict()
+    to_graph = Dict{Symbol, Tuple{Union{Array{Float64}, Float64}, Function, Symbol}}()
 
     for key in keys(compiler_state.logicalrules)
         default_value = resolve(key, compiler_state)
@@ -620,8 +620,10 @@ function tograph(compiler_state::CompilerState)
         ex = compiler_state.logicalrules[key]
         # try evaluate the RHS, ideally, this will get ride of all the dependency on data nodes
         ex = resolve(ex, compiler_state)
+        ex = Symbolics.scalarize(ex)
         args = Symbolics.get_variables(ex)
         f_expr = Symbolics.build_function(ex, args...)
+
         # hack to make GraphPPL happy: change the function definition to return a Float64 type
         if isconstant
             f_expr.args[2].args[end] = Expr(:call, Float64, f_expr.args[2].args[end])
@@ -649,6 +651,11 @@ end
 
 issimpleexpression(expr) = Meta.isexpr(expr, (:(=), :~))
 
+"""
+    refinindices(expr)
+
+Check if all indices in the expression are resolved to concrete numbers.
+"""
 function refinindices(expr::Expr)::Bool
     exist = true
     MacroTools.prewalk(expr) do sub_expr
@@ -678,6 +685,7 @@ function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTu
 
     compiler_state = CompilerState()
     addlogicalrules!(data, compiler_state)
+    print("Finished reading data.\n")
 
     while true
         unrollforloops!(expr, compiler_state) ||
@@ -685,20 +693,26 @@ function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTu
             addlogicalrules!(expr, compiler_state) ||
             break
     end
+    print("Finished processing logical assignments.\n")
+
     addstochasticrules!(expr, compiler_state)
+    print("Finished processing stochastic assignments.\n")
 
     all(issimpleexpression, expr.args) || refinindices(expr) ||
         error("Has unresolvable loop bounds or if conditions.")
     model = tograph(compiler_state)
-    model_nt = (; model...)
+    print("Finished pre Model-building preparation.\n")
 
-    graphmodel = Model(; model_nt...)
+    graphmodel = Model(; model...);
+    print("Finish building Model.\n")
     
     for variable in keys(initials)
         if !isempty(size(initials[variable]))
             for i in CartesianIndices(initials[variable])
                 isequal(initials[variable][i], missing) && continue
-                vn = AbstractPPL.VarName(Symbol("$variable" * "$(collect(Tuple(i)))"))
+                s = bugs_to_julia("$variable") * "$(collect(Tuple(i)))"
+                n = tosymbolic(Meta.parse(s))
+                vn = AbstractPPL.VarName(tosymbol(n))
                 set_node_value!(graphmodel, vn, initials[variable][i])
             end
         else
