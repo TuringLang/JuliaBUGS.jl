@@ -108,7 +108,7 @@ end
 """
     translate_censoring_expressions(expr)
 
-Turn `truncated` and `censored` expression to function calls.
+Turn `censored` expression to function calls.
 """
 function translate_censoring_expressions(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
@@ -121,6 +121,29 @@ function translate_censoring_expressions(expr::Expr)
                 return Expr(:call, :censored_with_lower, sub_expr.args[1], l)
             else # u != :nothing
                 return Expr(:call, :censored_with_upper, sub_expr.args[1], u)
+            end
+        else
+            return sub_expr
+        end
+    end
+end
+
+"""
+    translate_truncating_expressions(expr)
+
+Turn `truncated` expression to function calls.
+"""
+function translate_truncating_expressions(expr::Expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if Meta.isexpr(sub_expr, :truncated)
+            l, u = sub_expr.args[2:3]
+
+            if l != :nothing && u != :nothing
+                return Expr(:call, :truncated, sub_expr.args...)
+            elseif l != :nothing
+                return Expr(:call, :truncated_with_lower, sub_expr.args[1], l)
+            else # u != :nothing
+                return Expr(:call, :truncated_with_upper, sub_expr.args[1], u)
             end
         else
             return sub_expr
@@ -506,7 +529,7 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
 
             if rhs.head == :call
                 dist_func = rhs.args[1]
-                dist_func in DISTRIBUTIONS || dist_func in (:truncated, :truncated_with_lower, :truncated__with_upper) || 
+                dist_func in DISTRIBUTIONS || dist_func in (:truncated, :truncated_with_lower, :truncated_with_upper) || 
                     dist_func in (:censored, :censored_with_lower, :censored__with_upper) || error("$dist_func not defined.") 
             else
                 error("RHS needs to be a distribution function")
@@ -682,6 +705,7 @@ function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTu
     expr = inverselinkfunction(model_def)
     expr = convert_cumulative(expr)
     expr = translate_censoring_expressions(expr)
+    expr = translate_truncating_expressions(expr)
 
     compiler_state = CompilerState()
     addlogicalrules!(data, compiler_state)

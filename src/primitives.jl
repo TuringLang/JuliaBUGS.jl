@@ -76,6 +76,12 @@ dweib(v, λ) = Weibull(v, 1/λ)
 censored_with_lower(d, l) = censored(d, lower = l)
 censored_with_upper(d, u) = censored(d, upper = u)
 
+@register_symbolic truncated(d::Num, l::Num, u::Num)
+@register_symbolic truncated_with_lower(d::Num, l::Num)
+@register_symbolic truncated_with_upper(d::Num, u::Num)
+truncated_with_lower(d, l) = truncated(d, lower = l)
+truncated_with_upper(d, u) = truncated(d, upper = u)
+
 """
     Functions
 """
@@ -99,5 +105,3 @@ inprod(v1, v2) = LinearAlgebra.dot(v1, v2)
 inverse(v) = inv(v)
 
 mean(v::Symbolics.Arr{Num}) = Statistics.mean(Symbolics.scalarize(v))
-
-# TODO: user can define functions by adding a function definition and `register_symbolic` it, maybe we can provide a macro to do these things.
