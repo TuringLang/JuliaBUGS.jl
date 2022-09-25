@@ -1,9 +1,11 @@
 using Distributions
-using AbstractPPL.GraphPPL: Model, set_node_value!
+using AbstractPPL.GraphPPL: Model
 using Symbolics
+using SymbolicUtils
 using Random
 using MacroTools
 using LinearAlgebra
+using Accessors
 
 """
     CompilerState
@@ -12,13 +14,13 @@ Store data during the compilation.
 """
 struct CompilerState
     arrays::Dict{Symbol,Symbolics.Arr{Num}}
-    logicalrules::Dict{Num,Num}
+    logicalrules::Dict{Any,Any}
     stochasticrules::Dict{Num,Expr}
 end
 
 CompilerState() = CompilerState(
     Dict{Symbol,Symbolics.Arr{Num}}(),
-    Dict{Num,Num}(),
+    Dict{Any,Any}(),
     Dict{Num,Expr}()
 )
 
@@ -424,11 +426,7 @@ function addlogicalrules!(data::Dict, compiler_state::CompilerState)
             compiler_state.logicalrules[tosymbolic(key)] = value
         elseif value isa Array
             sym_array = tosymbolic(key, collect(size(value)))
-            for i in eachindex(value)
-                if !isequal(value[i], missing)
-                    compiler_state.logicalrules[sym_array[i]] = value[i]
-                end
-            end
+            compiler_state.logicalrules[sym_array] = value
             compiler_state.arrays[key] = sym_array
         else
             error("Value type not supported.")
@@ -626,14 +624,53 @@ function recursive_find_variables(expr::Expr, variables::Vector{Any})
     end
 end
 
+scalarize_function_on_array(ex::SymbolicUtils.Term) = scalarize_function_on_array(Symbolics.wrap(ex))
+function scalarize_function_on_array(ex::Num)
+    ex_val = Symbolics.unwrap(ex)
+    if !istree(ex_val) || !isa(ex_val, SymbolicUtils.Term) 
+        return ex
+    end
+    arguments = Symbolics.arguments(ex_val)
+    new_ex_val = deepcopy(ex_val)
+    
+    # check if all symbolic terms has field arguemnts: 2x+3y
+    ret = Dict()
+    for (i, arg) in enumerate(arguments)
+        args = []
+        arr = :nothing
+        if isa(arg, Array)
+            arr = map(Symbolics.wrap, arg)
+            args = map(tosymbol, arr)
+            new_ex_val = @set new_ex_val.arguments[i] = arr
+            ret[arr] = args
+        elseif istree(arg)
+            new_ex_val = @set new_ex_val.arguments[i] = Symbolics.unwrap(scalarize_function_on_array(Symbolics.wrap(arg))[1])
+        else
+            continue
+        end
+    end
+
+    return Symbolics.wrap(new_ex_val), ret
+end
+
+function vcat_wo_repeat_elem(v1::Vector, v2::Vector)
+    v = deepcopy(v1)
+    for elem in v2
+        if elem ∉ v
+            push!(v, elem)
+        end
+    end
+    return v
+end
+
 function tograph(compiler_state::CompilerState)
     # node_name => (default_value, function, node_type)
     to_graph = Dict{Symbol, Tuple{Union{Array{Float64}, Float64}, Function, Symbol}}()
 
     for key in keys(compiler_state.logicalrules)
+        isempty(size(key)) || continue 
         default_value = resolve(key, compiler_state)
         
-        isconstant = false
         if isa(default_value, Real)
             # if the variable can be evaluated into a concrete value, then if it is used
             # somewhere else, the concrete value will be used, otherwise, it is a detached node
@@ -644,13 +681,28 @@ function tograph(compiler_state::CompilerState)
         # try evaluate the RHS, ideally, this will get ride of all the dependency on data nodes
         ex = resolve(ex, compiler_state)
         ex = Symbolics.scalarize(ex)
+        ex, arr_arg = scalarize_function_on_array(ex)
         args = Symbolics.get_variables(ex)
         f_expr = Symbolics.build_function(ex, args...)
 
-        # hack to make GraphPPL happy: change the function definition to return a Float64 type
-        if isconstant
-            f_expr.args[2].args[end] = Expr(:call, Float64, f_expr.args[2].args[end])
+        for arr in keys(arr_arg)
+            f_expr.args[1].args = vcat_wo_repeat_elem(f_expr.args[1].args, arr_arg[arr])
+            f_expr = MacroTools.prewalk(f_expr) do sub_expr
+                if MacroTools.isexpr(sub_expr)
+                    new_expr = deepcopy(sub_expr)
+                    for (i, a) in enumerate(sub_expr.args)
+                        if isequal(arr, a)
+                            new_expr.args[i] = Expr(:call, :row_major_reshape, Expr(:vect, arr_arg[arr]...), Expr(:tuple, size(arr)...))
+                            return new_expr
+                        end
+                    end
+                    return new_expr
+                else
+                    return sub_expr
+                end
+            end
         end
+
         to_graph[tosymbol(key)] = (Float64(0), eval(f_expr), :Logical)
     end
 
@@ -667,6 +719,67 @@ function tograph(compiler_state::CompilerState)
         func_expr = compiler_state.stochasticrules[key]
         to_graph[tosymbol(key)] =
             (default_value, eval(func_expr), type)
+    end
+
+    return to_graph
+end
+
+function tograph_w_expr(compiler_state::CompilerState)
+    # node_name => (default_value, function, node_type)
+    to_graph = Dict{Symbol, Tuple{Union{Array{Float64}, Float64}, Expr, Symbol}}()
+
+    for key in keys(compiler_state.logicalrules)
+        isempty(size(key)) || continue 
+        default_value = resolve(key, compiler_state)
+        
+        if isa(default_value, Real)
+            # if the variable can be evaluated into a concrete value, then if it is used
+            # somewhere else, the concrete value will be used, otherwise, it is a detached node
+            continue
+        end
+
+        ex = compiler_state.logicalrules[key]
+        # try evaluate the RHS, ideally, this will get ride of all the dependency on data nodes
+        ex = resolve(ex, compiler_state)
+        ex = Symbolics.scalarize(ex)
+        ex, arr_arg = scalarize_function_on_array(ex)
+        args = Symbolics.get_variables(ex)
+        f_expr = Symbolics.build_function(ex, args...)
+
+        for arr in keys(arr_arg)
+            f_expr.args[1].args = vcat_wo_repeat_elem(f_expr.args[1].args, arr_arg[arr])
+            f_expr = MacroTools.prewalk(f_expr) do sub_expr
+                if MacroTools.isexpr(sub_expr)
+                    new_x = deepcopy(sub_expr)
+                    for (i, a) in enumerate(sub_expr.args)
+                        if isequal(arr, a)
+                            new_x.args[i] = Expr(:call, :row_major_reshape, Expr(:vect, arr_arg[arr]...), Expr(:tuple, size(arr)...))
+                            return new_x
+                        end
+                    end
+                    return new_x
+                else
+                    return sub_expr
+                end
+            end
+        end
+
+        to_graph[tosymbol(key)] = (Float64(0), f_expr, :Logical)
+    end
+
+    for key in keys(compiler_state.stochasticrules)
+        type = :Stochastic
+        default_value = resolve(key, compiler_state)
+        if isa(default_value, Union{Integer,Float64})
+            type = :Observations
+        else
+            default_value = 0
+        end
+        default_value = Float64(default_value)
+
+        func_expr = compiler_state.stochasticrules[key]
+        to_graph[tosymbol(key)] =
+            (default_value, func_expr, type)
     end
 
     return to_graph
@@ -745,4 +858,32 @@ function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTu
     end
 
     return graphmodel
+end
+
+function compile_to_expr(; model_def::Expr, data::NamedTuple, initials::NamedTuple)
+    expr = inverselinkfunction(model_def)
+    expr = convert_cumulative(expr)
+    expr = translate_censoring_expressions(expr)
+    expr = translate_truncating_expressions(expr)
+
+    compiler_state = CompilerState()
+    addlogicalrules!(data, compiler_state)
+    print("Finished reading data.\n")
+
+    while true
+        unrollforloops!(expr, compiler_state) ||
+            resolveif!(expr, compiler_state) ||
+            addlogicalrules!(expr, compiler_state) ||
+            break
+    end
+    print("Finished processing logical assignments.\n")
+
+    addstochasticrules!(expr, compiler_state)
+    print("Finished processing stochastic assignments.\n")
+
+    all(issimpleexpression, expr.args) || refinindices(expr) ||
+        error("Has unresolvable loop bounds or if conditions.")
+    model = tograph_w_expr(compiler_state)
+
+    return model
 end

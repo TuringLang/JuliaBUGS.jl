@@ -1,14 +1,14 @@
 # Compile tests
 - [x] blocker
-- [ ] bones: slow compilation
+- [ ] bones: slow compilation 2591.650590 seconds (1.29 G allocations: 52.545 GiB, 0.45% gc time, 92.31% compilation time)
 - [ ] dogs: slow compilation
 - [x] dyes 
 - [x] epil
 - [x] equiv 
 - [ ] inhalers: slow compilation
 - [x] kidney
-- [ ] leuk
-- [ ] leukfr
+- [x] leuk
+- [x] leukfr
 - [ ] last 
 - [ ] magnesium
 - [ ] mice

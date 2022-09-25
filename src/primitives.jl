@@ -7,7 +7,8 @@ using SpecialFunctions
 import SpecialFunctions: gamma
 using LinearAlgebra
 import LinearAlgebra: logdet
-import AbstractPPL
+using AbstractPPL
+import AbstractPPL.GraphPPL.set_node_value!
 using Symbolics
 using Statistics
 using IfElse
@@ -31,7 +32,8 @@ function AbstractPPL.GraphPPL.set_node_value!(m::AbstractPPL.GraphPPL.Model, ind
     @assert typeof(m[ind].value[]) <: AbstractFloat
     m[ind].value[] = Float64(value)
 end
-    
+
+row_major_reshape(v::Vector, dim) = permutedims(reshape(v, reverse(dim)), Tuple(reverse([i for i in 1:length(dim)])))    
 
 """ 
     Distributions
@@ -52,13 +54,14 @@ function dbin(p, n::AbstractFloat)
     end
 end
 
-@macroexpand @register_symbolic dcat(p::Vector{Num})
 @register_symbolic dcat(p::Vector{Num})
 dcat(p) = Categorical(p, check_args=false)
+
 dnegbin(p, r) = NegativeBinomial(r, p)
 
 @register_symbolic dpois(lambda::Num)
 dpois(lambda) = Poisson(lambda)
+
 dgeom(p) = Geometric(p)
 dunif(a, b) = Uniform(a, b)
 dflat() = Flat()
