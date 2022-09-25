@@ -66,9 +66,14 @@ dgeom(p) = Geometric(p)
 dunif(a, b) = Uniform(a, b)
 dflat() = Flat()
 
-dbeta(a, b) = Beta(a, b, check_args=false)
+@register_symbolic dbeta(alpha::Num, beta::Num)
+dbeta(a, b) = Beta(a, b)
+
+@register_symbolic dexp(lambda::Num)
 dexp(lambda) = Exponential(1/lambda)
-dgamma(r, mu) = Gamma(r, 1/mu, check_args=false) 
+
+@register_symbolic dgamma(alpha::Num, beta::Num)
+dgamma(r, mu) = Gamma(r, 1/mu) 
 
 @register_symbolic dweib(v::Num, λ::Num)
 dweib(v, λ) = Weibull(v, 1/λ)

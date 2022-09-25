@@ -663,7 +663,7 @@ function vcat_wo_repeat_elem(v1::Vector, v2::Vector)
     return v
 end
 
-function tograph(compiler_state::CompilerState)
+function tograph(compiler_state::CompilerState, eval_ex::Bool)
     # node_name => (default_value, function, node_type)
     to_graph = Dict{Symbol, Tuple{Union{Array{Float64}, Float64}, Function, Symbol}}()
 
@@ -703,7 +703,7 @@ function tograph(compiler_state::CompilerState)
             end
         end
 
-        to_graph[tosymbol(key)] = (Float64(0), eval(f_expr), :Logical)
+        to_graph[tosymbol(key)] = (Float64(0), eval_ex ? eval(f_expr) : f_expr, :Logical)
     end
 
     for key in keys(compiler_state.stochasticrules)
@@ -718,68 +718,7 @@ function tograph(compiler_state::CompilerState)
 
         func_expr = compiler_state.stochasticrules[key]
         to_graph[tosymbol(key)] =
-            (default_value, eval(func_expr), type)
-    end
-
-    return to_graph
-end
-
-function tograph_w_expr(compiler_state::CompilerState)
-    # node_name => (default_value, function, node_type)
-    to_graph = Dict{Symbol, Tuple{Union{Array{Float64}, Float64}, Expr, Symbol}}()
-
-    for key in keys(compiler_state.logicalrules)
-        isempty(size(key)) || continue 
-        default_value = resolve(key, compiler_state)
-        
-        if isa(default_value, Real)
-            # if the variable can be evaluated into a concrete value, then if it is used
-            # somewhere else, the concrete value will be used, otherwise, it is a detached node
-            continue
-        end
-
-        ex = compiler_state.logicalrules[key]
-        # try evaluate the RHS, ideally, this will get ride of all the dependency on data nodes
-        ex = resolve(ex, compiler_state)
-        ex = Symbolics.scalarize(ex)
-        ex, arr_arg = scalarize_function_on_array(ex)
-        args = Symbolics.get_variables(ex)
-        f_expr = Symbolics.build_function(ex, args...)
-
-        for arr in keys(arr_arg)
-            f_expr.args[1].args = vcat_wo_repeat_elem(f_expr.args[1].args, arr_arg[arr])
-            f_expr = MacroTools.prewalk(f_expr) do sub_expr
-                if MacroTools.isexpr(sub_expr)
-                    new_x = deepcopy(sub_expr)
-                    for (i, a) in enumerate(sub_expr.args)
-                        if isequal(arr, a)
-                            new_x.args[i] = Expr(:call, :row_major_reshape, Expr(:vect, arr_arg[arr]...), Expr(:tuple, size(arr)...))
-                            return new_x
-                        end
-                    end
-                    return new_x
-                else
-                    return sub_expr
-                end
-            end
-        end
-
-        to_graph[tosymbol(key)] = (Float64(0), f_expr, :Logical)
-    end
-
-    for key in keys(compiler_state.stochasticrules)
-        type = :Stochastic
-        default_value = resolve(key, compiler_state)
-        if isa(default_value, Union{Integer,Float64})
-            type = :Observations
-        else
-            default_value = 0
-        end
-        default_value = Float64(default_value)
-
-        func_expr = compiler_state.stochasticrules[key]
-        to_graph[tosymbol(key)] =
-            (default_value, func_expr, type)
+            (default_value, eval_ex ? eval(func_expr) : func_expr, type)
     end
 
     return to_graph
@@ -809,16 +748,16 @@ function refinindices(expr::Expr)::Bool
     return exist
 end
 
-"""
-    compile_graphppl(model_def, data, initials)
-
-The exported top level function. `compile_graphppl` takes model definition and data and returns a GraphPPL.Model.
-"""
-function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTuple) 
+function preprocessing_expr(model_def::Expr)
     expr = inverselinkfunction(model_def)
     expr = convert_cumulative(expr)
     expr = translate_censoring_expressions(expr)
     expr = translate_truncating_expressions(expr)
+    return expr
+end
+
+function pre_Modelbuidling_processing(model_def::Expr, data::NamedTuple, eval_ex=true)
+    expr =preprocessing_expr(model_def)
 
     compiler_state = CompilerState()
     addlogicalrules!(data, compiler_state)
@@ -837,7 +776,16 @@ function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTu
 
     all(issimpleexpression, expr.args) || refinindices(expr) ||
         error("Has unresolvable loop bounds or if conditions.")
-    model = tograph(compiler_state)
+    return tograph(compiler_state, eval_ex)
+end
+
+"""
+    compile_graphppl(model_def, data, initials)
+
+The exported top level function. `compile_graphppl` takes model definition and data and returns a GraphPPL.Model.
+"""
+function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTuple) 
+    model = pre_Modelbuidling_processing(model_def, data)
     print("Finished pre Model-building preparation.\n")
 
     graphmodel = Model(; model...);
@@ -858,32 +806,4 @@ function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTu
     end
 
     return graphmodel
-end
-
-function compile_to_expr(; model_def::Expr, data::NamedTuple, initials::NamedTuple)
-    expr = inverselinkfunction(model_def)
-    expr = convert_cumulative(expr)
-    expr = translate_censoring_expressions(expr)
-    expr = translate_truncating_expressions(expr)
-
-    compiler_state = CompilerState()
-    addlogicalrules!(data, compiler_state)
-    print("Finished reading data.\n")
-
-    while true
-        unrollforloops!(expr, compiler_state) ||
-            resolveif!(expr, compiler_state) ||
-            addlogicalrules!(expr, compiler_state) ||
-            break
-    end
-    print("Finished processing logical assignments.\n")
-
-    addstochasticrules!(expr, compiler_state)
-    print("Finished processing stochastic assignments.\n")
-
-    all(issimpleexpression, expr.args) || refinindices(expr) ||
-        error("Has unresolvable loop bounds or if conditions.")
-    model = tograph_w_expr(compiler_state)
-
-    return model
 end
