@@ -2,10 +2,10 @@ module SymbolicPPL
 
 include("bugsast.jl")
 include("typechecker.jl")
+include("graphinfo.jl")
 include("compiler.jl")
 include("primitives.jl")
 include("gibbs.jl")
-
 
 # export @bugsast_str
 export @bugsast, @bugsmodel_str

@@ -1,11 +1,10 @@
 using Distributions
-using AbstractPPL.GraphPPL: Model
 using Symbolics
 using SymbolicUtils
 using Random
 using MacroTools
 using LinearAlgebra
-using Accessors
+using Setfield
 
 """
     CompilerState
@@ -624,11 +623,11 @@ function recursive_find_variables(expr::Expr, variables::Vector{Any})
     end
 end
 
-scalarize_function_on_array(ex::SymbolicUtils.Term) = scalarize_function_on_array(Symbolics.wrap(ex))
+scalarize_function_on_array(ex) = scalarize_function_on_array(Symbolics.wrap(ex))
 function scalarize_function_on_array(ex::Num)
     ex_val = Symbolics.unwrap(ex)
     if !istree(ex_val) || !isa(ex_val, SymbolicUtils.Term) 
-        return ex
+        return ex, Dict()
     end
     arguments = Symbolics.arguments(ex_val)
     new_ex_val = deepcopy(ex_val)
@@ -757,7 +756,7 @@ function preprocessing_expr(model_def::Expr)
 end
 
 function pre_Modelbuidling_processing(model_def::Expr, data::NamedTuple, eval_ex=true)
-    expr =preprocessing_expr(model_def)
+    expr = preprocessing_expr(model_def)
 
     compiler_state = CompilerState()
     addlogicalrules!(data, compiler_state)

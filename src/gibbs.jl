@@ -1,5 +1,4 @@
 using AbstractPPL
-import AbstractPPL.GraphPPL: set_node_value!, get_node_value, get_model_values, set_model_values!, get_nodekind
 using AbstractMCMC
 using MCMCChains
 using Random

@@ -247,7 +247,7 @@ julia> get_node_value(m, @varname s2)
 1.0
 ```
 """
-function set_node_value!(m::Model, ind::VarName, value::T) where T
+function set_node_value!(m::Model, ind::AbstractPPL.VarName, value::T) where T
     @assert typeof(m[ind].value[]) == T
     m[ind].value[] = value
 end

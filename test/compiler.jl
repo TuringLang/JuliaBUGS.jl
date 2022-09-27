@@ -228,7 +228,7 @@ model = compile_graphppl(model_def = expr, data = data, initials=NamedTuple())
 
 ## 
 using SymbolicPPL
-m = SymbolicPPL.BUGSExamples.EXAMPLES[:dogs];
-@time model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
+m = SymbolicPPL.BUGSExamples.EXAMPLES[:pumps];
+model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
 @run model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
 print(collect(keys(model)))

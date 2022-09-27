@@ -8,7 +8,6 @@ import SpecialFunctions: gamma
 using LinearAlgebra
 import LinearAlgebra: logdet
 using AbstractPPL
-import AbstractPPL.GraphPPL.set_node_value!
 using Symbolics
 using Statistics
 using IfElse
@@ -28,7 +27,7 @@ const INVERSE_LINK_FUNCTION =
 
 # Reload `set_node_value!`, sampling a Binomial will give a Integer type, while GraphPPL
 # only support Float right now, this is a work around
-function AbstractPPL.GraphPPL.set_node_value!(m::AbstractPPL.GraphPPL.Model, ind::AbstractPPL.VarName, value::Integer)
+function set_node_value!(m::Model, ind::AbstractPPL.VarName, value::Integer)
     @assert typeof(m[ind].value[]) <: AbstractFloat
     m[ind].value[] = Float64(value)
 end
