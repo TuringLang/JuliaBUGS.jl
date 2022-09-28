@@ -1,5 +1,6 @@
 using Distributions
 using Symbolics
+import Symbolics.isequal
 using SymbolicUtils
 using Random
 using MacroTools
@@ -22,37 +23,6 @@ CompilerState() = CompilerState(
     Dict{Any,Any}(),
     Dict{Num,Expr}()
 )
-
-"""
-    resolveif!(expr, compiler_state)
-
-Try ['resolve'](@ref) the condition of the `if` statement. If condition is true, hoist out the consequence; 
-otherwise, discard the whole `if` statement.
-"""
-function resolveif!(expr::Expr, compiler_state::CompilerState)
-    squashed = false
-    while any(arg -> Meta.isexpr(arg, :if), expr.args)
-        for (i, arg) in enumerate(expr.args)
-            if MacroTools.isexpr(arg, :if)
-                condition = arg.args[1]
-                block = arg.args[2]
-                @assert size(arg.args) === (2,)
-
-                cond = resolve(condition, compiler_state)
-                if cond isa Bool
-                    if cond
-                        splice!(expr.args, i, block.args)
-                    else
-                        deleteat!(expr.args, i)
-                    end
-                    squashed = true # mutate once only, call this function until no mutation to settle multiple ifs
-                    break
-                end
-            end
-        end
-    end
-    return squashed
-end
 
 """
     convert_cumulative(expr)
@@ -159,7 +129,7 @@ Unroll all the loops whose loop bounds can be partially evaluated to a constant.
 """
 function unrollforloops!(expr::Expr, compiler_state::CompilerState)
     hasunrolled = false
-    while hasforloop(expr, compiler_state)
+    while canunroll(expr, compiler_state)
         for (i, arg) in enumerate(expr.args)
             if arg.head == :for
                 unrolled = unrollforloop(arg, compiler_state)
@@ -173,18 +143,17 @@ function unrollforloops!(expr::Expr, compiler_state::CompilerState)
     return hasunrolled
 end
 
-function hasforloop(expr::Expr, compiler_state::CompilerState)
+is_integer(x) = isa(x, Real) && isinteger(x)
+
+function canunroll(expr::Expr, compiler_state::CompilerState)
     for arg in expr.args
         if arg.head == :for
             lower_bound, upper_bound = arg.args[1].args[2].args
             lower_bound = resolve(lower_bound, compiler_state)
             upper_bound = resolve(upper_bound, compiler_state)
-            if lower_bound isa Real &&
-                upper_bound isa Real &&
-               isinteger(lower_bound) &&
-               isinteger(upper_bound)
+            is_integer(lower_bound) &&
+                is_integer(upper_bound) &&
                 return true
-            end
         end
     end
     return false
@@ -197,10 +166,7 @@ function unrollforloop(expr::Expr, compiler_state::CompilerState)
 
     lower_bound = resolve(lower_bound, compiler_state)
     upper_bound = resolve(upper_bound, compiler_state)
-    if lower_bound isa Real &&
-        upper_bound isa Real &&
-       isinteger(lower_bound) &&
-       isinteger(upper_bound)
+    if is_integer(lower_bound) && is_integer(upper_bound)
         unrolled_exprs = []
         for i = lower_bound:upper_bound
             # Replace all the loop variables in array indices with integers
@@ -215,6 +181,37 @@ function unrollforloop(expr::Expr, compiler_state::CompilerState)
         # if loop bounds contain variables that can't be partial evaluated at this moment
         return expr
     end
+end
+
+"""
+    resolveif!(expr, compiler_state)
+
+Try ['resolve'](@ref) the condition of the `if` statement. If condition is true, hoist out the consequence; 
+otherwise, discard the whole `if` statement.
+"""
+function resolveif!(expr::Expr, compiler_state::CompilerState)
+    squashed = false
+    while any(arg -> Meta.isexpr(arg, :if), expr.args)
+        for (i, arg) in enumerate(expr.args)
+            if MacroTools.isexpr(arg, :if)
+                condition = arg.args[1]
+                block = arg.args[2]
+                @assert size(arg.args) === (2,)
+
+                cond = resolve(condition, compiler_state)
+                if cond isa Bool
+                    if cond
+                        splice!(expr.args, i, block.args)
+                    else
+                        deleteat!(expr.args, i)
+                    end
+                    squashed = true # mutate once only, call this function until no mutation to settle multiple ifs
+                    break
+                end
+            end
+        end
+    end
+    return squashed
 end
 
 """
@@ -296,7 +293,7 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
     name = expr.args[1]
     indices = expr.args[2:end]
     for (i, index) in enumerate(indices)
-        if index isa Expr
+        if index isa Expr || (index isa Symbol && index != :(:))
             if Meta.isexpr(index, :call) && index.args[1] == :(:)
                 lb = resolve(index.args[2], compiler_state) 
                 ub = resolve(index.args[3], compiler_state)
@@ -383,7 +380,7 @@ function symbolic_eval(variable, compiler_state::CompilerState)
     evaluated = Symbolics.substitute(variable, compiler_state.logicalrules)
 
     let e = Symbolics.toexpr(evaluated) 
-        if Meta.isexpr(e, :call) && in(Symbol(e.args[1]), [:exp]) # if symbolicly traced, can be more general, only handle :exp now
+        if Meta.isexpr(e, :call) && in(Symbol(e.args[1]), [:exp]) # if symbolically traced, can be more general, only handle :exp now
             func = e.args[1]
             nargs = size(e.args)[1] - 1
             args = arguments(Symbolics.unwrap(evaluated))
@@ -409,6 +406,8 @@ function symbolic_eval(variable, compiler_state::CompilerState)
     return try_evaluated
 end
 symbolic_eval(variable::UnitRange{Int64}, compiler_state::CompilerState) = variable # Special case for array range
+
+isequal(::SymbolicUtils.Symbolic, ::Missing) = false
 
 Base.in(key::Num, vs::Vector) = any(broadcast(Symbolics.isequal, key, vs))
 
@@ -478,8 +477,8 @@ function replace_variables(rhs::Expr, variables, compiler_state::CompilerState)
         if MacroTools.isexpr(sub_expr, :ref)
             sym_var = ref_to_symbolic!(sub_expr, compiler_state)
             if Symbolics.isequal(sym_var, __SKIP__) # Some index can't be resolved in this generation
-                push!(ref_variables, __SKIP__) # Put the SKIP signal in the returned variable vector
-                return sub_expr # TODO: might worth writing our own recursive traversal code to support early termination
+                push!(ref_variables, __SKIP__) 
+                return sub_expr
             end
             push!(ref_variables, sym_var)
             return sym_var
@@ -576,8 +575,8 @@ function find_ref_variables(rhs::Expr, compiler_state::CompilerState)
         if MacroTools.isexpr(sub_expr, :ref)
             sym_var = ref_to_symbolic!(sub_expr, compiler_state)
             sym_var = Symbolics.scalarize(sym_var)
-            if Symbolics.isequal(sym_var, __SKIP__) # Some index can't be resolved in this generation
-                push!(ref_variables, __SKIP__) # Put the SKIP signal in the returned variable vector
+            if Symbolics.isequal(sym_var, __SKIP__) # some index can't be resolved in this generation
+                push!(ref_variables, __SKIP__) 
                 return sub_expr
             end
             if !isempty(size(sym_var))
@@ -608,11 +607,9 @@ function find_all_variables(rhs::Expr)
 end
 
 function recursive_find_variables(expr::Expr, variables::Vector{Any})
-    # pre-order traversal is important here
     MacroTools.prewalk(expr) do sub_expr
         if MacroTools.isexpr(sub_expr, :call)
-            # doesn't touch function identifiers
-            for arg in sub_expr.args[2:end]
+            for arg in sub_expr.args[2:end] # only touch the arguments
                 if arg isa Symbol && !Base.occursin("[", string(arg))
                     push!(variables, arg)
                     continue
@@ -626,8 +623,9 @@ end
 scalarize_function_on_array(ex) = scalarize_function_on_array(Symbolics.wrap(ex))
 function scalarize_function_on_array(ex::Num)
     ex_val = Symbolics.unwrap(ex)
-    if !istree(ex_val) || !isa(ex_val, SymbolicUtils.Term) 
-        return ex, Dict()
+    istree(ex_val) || return ex, Dict()
+    if !isa(ex_val, SymbolicUtils.Term) 
+        ex_val = SymbolicUtils.toterm(ex_val)
     end
     arguments = Symbolics.arguments(ex_val)
     new_ex_val = deepcopy(ex_val)
@@ -643,7 +641,9 @@ function scalarize_function_on_array(ex::Num)
             new_ex_val = @set new_ex_val.arguments[i] = arr
             ret[arr] = args
         elseif istree(arg)
-            new_ex_val = @set new_ex_val.arguments[i] = Symbolics.unwrap(scalarize_function_on_array(Symbolics.wrap(arg))[1])
+            new_arg, r = Symbolics.unwrap(scalarize_function_on_array(Symbolics.wrap(arg)))
+            new_ex_val = @set new_ex_val.arguments[i] = Symbolics.unwrap(new_arg)
+            ret = merge(ret, r)
         else
             continue
         end
@@ -652,40 +652,29 @@ function scalarize_function_on_array(ex::Num)
     return Symbolics.wrap(new_ex_val), ret
 end
 
-function vcat_wo_repeat_elem(v1::Vector, v2::Vector)
-    v = deepcopy(v1)
-    for elem in v2
-        if elem ∉ v
-            push!(v, elem)
-        end
-    end
-    return v
-end
-
 function tograph(compiler_state::CompilerState, eval_ex::Bool)
     # node_name => (default_value, function, node_type)
-    to_graph = Dict{Symbol, Tuple{Union{Array{Float64}, Float64}, Function, Symbol}}()
+    to_graph = eval_ex ? Dict{Symbol, Tuple{Union{Array{Float64}, Float64}, Function, Symbol}}() : Dict()
 
     for key in keys(compiler_state.logicalrules)
         isempty(size(key)) || continue 
         default_value = resolve(key, compiler_state)
         
         if isa(default_value, Real)
-            # if the variable can be evaluated into a concrete value, then if it is used
-            # somewhere else, the concrete value will be used, otherwise, it is a detached node
+            # If the variable can be evaluated into a concrete value, then either the value is used
+            # somewhere else, or the variable is a detached node. Eithre case, we can skip it.
             continue
         end
 
         ex = compiler_state.logicalrules[key]
-        # try evaluate the RHS, ideally, this will get ride of all the dependency on data nodes
         ex = resolve(ex, compiler_state)
         ex = Symbolics.scalarize(ex)
         ex, arr_arg = scalarize_function_on_array(ex)
         args = Symbolics.get_variables(ex)
-        f_expr = Symbolics.build_function(ex, args...)
+        f_expr = Base.remove_linenums!(Symbolics.build_function(ex, args...))
 
         for arr in keys(arr_arg)
-            f_expr.args[1].args = vcat_wo_repeat_elem(f_expr.args[1].args, arr_arg[arr])
+            f_expr.args[1].args = collect(union(Set(f_expr.args[1].args), Set(arr_arg[arr])))
             f_expr = MacroTools.prewalk(f_expr) do sub_expr
                 if MacroTools.isexpr(sub_expr)
                     new_expr = deepcopy(sub_expr)

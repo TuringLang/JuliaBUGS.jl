@@ -39,7 +39,7 @@ leukfr = (
             dL0.star[j] <- r * (t[j+1]-t[j])
         }
         beta ~ dnorm(0.0,0.000001)
-        """, 
+    """, 
 
     data = (
         N = 42, T = 17, eps = 0.00001, Npairs = 21,
@@ -70,7 +70,3 @@ leukfr = (
         ), 
     ],
 )
-
-
-
-
