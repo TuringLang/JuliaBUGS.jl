@@ -32,7 +32,7 @@ lsat = (
             a[k] <- alpha[k] - mean(alpha[])
         }
         beta ~ dflat()T(0, )
-        """, 
+    """, 
 
     data = (
         N = 1000, R = 32, T = 5,

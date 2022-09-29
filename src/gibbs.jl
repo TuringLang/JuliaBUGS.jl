@@ -11,9 +11,9 @@ abstract type MHWithinGibbs <: GibbsSampler end
 struct SampleFromPrior <: MHWithinGibbs 
     all_children::Dict{VarName, Vector{VarName}} # TODO: this should be a part of Model
 end
-SampleFromPrior(model::AbstractPPL.GraphPPL.Model) = SampleFromPrior(getchildren(model))
+SampleFromPrior(model::Model) = SampleFromPrior(getchildren(model))
 
-function getchildren(model::AbstractPPL.GraphPPL.Model)
+function getchildren(model::Model)
     all_children = Dict{VarName, Vector{VarName}}()
     for vn in keys(model)
         children = []
@@ -29,7 +29,7 @@ end
 
 function AbstractMCMC.step(
     rng::Random.AbstractRNG, 
-    model::AbstractPPL.GraphPPL.Model, 
+    model::Model, 
     sampler::GibbsSampler;
     kwargs...
 )
@@ -53,7 +53,7 @@ end
 
 function AbstractMCMC.step(
     rng::Random.AbstractRNG, 
-    model::AbstractPPL.GraphPPL.Model, 
+    model::Model, 
     sampler::SampleFromPrior,
     state;
     kwargs...
@@ -109,7 +109,7 @@ end
 Recursively find all the children that are stochastic or observation nodes. At the same time, propagate 
 values via logical assignments.
 """
-function getfreevaraibles!(model::AbstractPPL.GraphPPL.Model, vn::VarName, allchildren::Dict{VarName, Vector{VarName}}, returnchildren::Vector{VarName})
+function getfreevaraibles!(model::Model, vn::VarName, allchildren::Dict{VarName, Vector{VarName}}, returnchildren::Vector{VarName})
     for child in allchildren[vn]
         input, _, f, kind = model[child]
         input_values = get_node_value(model, input)
@@ -127,7 +127,7 @@ end
 # ---------------- Adapted from Pavan's mh branch ----------------
 function AbstractMCMC.bundle_samples(
     samples, 
-    m::AbstractPPL.GraphPPL.Model, 
+    m::Model, 
     ::AbstractMCMC.AbstractSampler, 
     ::Any, 
     ::Type; 
@@ -136,7 +136,7 @@ function AbstractMCMC.bundle_samples(
     return Chains(m, samples)
 end
 
-function get_namemap(m::AbstractPPL.GraphPPL.Model; stochastic_only=true)
+function get_namemap(m::Model; stochastic_only=true)
     names = []
     nodes = []
     for vn in keys(m)
@@ -173,7 +173,7 @@ end
     Chains(m::Model, vals::Matrix{Float64})
 Constructor for MCMCChains.Chains. 
 """
-function MCMCChains.Chains(m::AbstractPPL.GraphPPL.Model, vals::Vector{NamedTuple{T, S}}) where {T, S}
+function MCMCChains.Chains(m::Model, vals::Vector{NamedTuple{T, S}}) where {T, S}
     names, nodes = get_namemap(m, stochastic_only=false)
     Chains(transpose(flatten_samples(vals, length(names), nodes)), names)
 end

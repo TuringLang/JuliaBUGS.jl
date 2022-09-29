@@ -1,11 +1,11 @@
 using Distributions
 using Symbolics
-import Symbolics.isequal
 using SymbolicUtils
 using Random
 using MacroTools
 using LinearAlgebra
 using Setfield
+import SymbolicUtils: toterm
 
 """
     CompilerState
@@ -24,15 +24,22 @@ CompilerState() = CompilerState(
     Dict{Num,Expr}()
 )
 
+""" 
+    Transform ASTs 
+
+Function name indicate the type of expression being transformed, all functions in this 
+section do not mutate the original expression.    
 """
-    convert_cumulative(expr)
+
+"""
+    cumulative(expr)
 
 Convert `cumulative(s1, s2)` to `cdf(distribution_of_s1, s2)`.
 """
-function convert_cumulative(expr::Expr)
+function cumulative(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, lhs_ = cumulative(s1_, s2_))
-            dist = find_dist(expr, s1)
+            dist = find_tilde_rhs(expr, s1)
             sub_expr.args[2].args[1] = :cdf 
             sub_expr.args[2].args[2] = dist
             return sub_expr
@@ -42,7 +49,7 @@ function convert_cumulative(expr::Expr)
     end
 end
 
-function find_dist(expr::Expr, target::Union{Expr, Symbol})
+function find_tilde_rhs(expr::Expr, target::Union{Expr, Symbol})
     dist = nothing
     MacroTools.postwalk(expr) do sub_expr
         if isexpr(sub_expr, :(~))
@@ -58,11 +65,11 @@ function find_dist(expr::Expr, target::Union{Expr, Symbol})
 end
 
 """
-    inverselinkfunction(expr)
+    linkfunction(expr)
 
 Call the inverse of the link function on the RHS so that the LHS is simple. 
 """
-function inverselinkfunction(expr::Expr)
+function linkfunction(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, f_(lhs_) = rhs_)
             if f in keys(INVERSE_LINK_FUNCTION)
@@ -77,11 +84,11 @@ function inverselinkfunction(expr::Expr)
 end
 
 """
-    translate_censoring_expressions(expr)
+    censored(expr)
 
 Turn `censored` expression to function calls.
 """
-function translate_censoring_expressions(expr::Expr)
+function censored(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if Meta.isexpr(sub_expr, :censored)
             l, u = sub_expr.args[2:3]
@@ -100,11 +107,11 @@ function translate_censoring_expressions(expr::Expr)
 end
 
 """
-    translate_truncating_expressions(expr)
+    truncated(expr)
 
 Turn `truncated` expression to function calls.
 """
-function translate_truncating_expressions(expr::Expr)
+function truncated(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if Meta.isexpr(sub_expr, :truncated)
             l, u = sub_expr.args[2:3]
@@ -123,16 +130,16 @@ function translate_truncating_expressions(expr::Expr)
 end
 
 """
-    unrollforloops!(expr, compiler_state)
+    unroll!(expr, compiler_state)
 
 Unroll all the loops whose loop bounds can be partially evaluated to a constant. 
 """
-function unrollforloops!(expr::Expr, compiler_state::CompilerState)
+function unroll!(expr::Expr, compiler_state::CompilerState)
     hasunrolled = false
     while canunroll(expr, compiler_state)
         for (i, arg) in enumerate(expr.args)
             if arg.head == :for
-                unrolled = unrollforloop(arg, compiler_state)
+                unrolled = unroll(arg, compiler_state)
                 splice!(expr.args, i, unrolled.args)
                 unrolled_flag = true
                 # unroll one loop at a time to avoid complication from mutation
@@ -159,7 +166,7 @@ function canunroll(expr::Expr, compiler_state::CompilerState)
     return false
 end
 
-function unrollforloop(expr::Expr, compiler_state::CompilerState)
+function unroll(expr::Expr, compiler_state::CompilerState)
     loop_var = expr.args[1].args[1]
     lower_bound, upper_bound = expr.args[1].args[2].args
     body = expr.args[2]
@@ -652,6 +659,20 @@ function scalarize_function_on_array(ex::Num)
     return Symbolics.wrap(new_ex_val), ret
 end
 
+# Bugs in SymbolicUtils.jl
+function SymbolicUtils.toterm(t::SymbolicUtils.Add{T}) where T
+    args = Any[t.coeff, ]
+    for (k, coeff) in t.dict
+        push!(args, coeff == 1 ? k : SymbolicUtils.Term{T}(*, [coeff, k]))
+    end
+    SymbolicUtils.Term{T}(+, args)
+end
+
+"""
+    tograph(compiler_state, eval_ex)
+
+Convert the rules to GraphPPL inputs.
+"""
 function tograph(compiler_state::CompilerState, eval_ex::Bool)
     # node_name => (default_value, function, node_type)
     to_graph = eval_ex ? Dict{Symbol, Tuple{Union{Array{Float64}, Float64}, Function, Symbol}}() : Dict()
@@ -736,53 +757,54 @@ function refinindices(expr::Expr)::Bool
     return exist
 end
 
-function preprocessing_expr(model_def::Expr)
-    expr = inverselinkfunction(model_def)
-    expr = convert_cumulative(expr)
-    expr = translate_censoring_expressions(expr)
-    expr = translate_truncating_expressions(expr)
+function transform_expr(model_def::Expr)
+    expr = linkfunction(model_def)
+    expr = cumulative(expr)
+    expr = censored(expr)
+    expr = truncated(expr)
     return expr
 end
 
-function pre_Modelbuidling_processing(model_def::Expr, data::NamedTuple, eval_ex=true)
-    expr = preprocessing_expr(model_def)
+ifprintln(s, verbose=false) = verbose && println(s)
 
-    compiler_state = CompilerState()
+function addrules(expr, data, verbose=false) 
+    expr_c = deepcopy(expr)
+    cs = CompilerState()
+    addrules!(expr_c, data, cs, verbose=verbose)
+    return expr_c, cs
+end
+function addrules!(expr, data, compiler_state; verbose=true)
     addlogicalrules!(data, compiler_state)
-    print("Finished reading data.\n")
+    ifprintln("Finish reading data.", verbose)
 
     while true
-        unrollforloops!(expr, compiler_state) ||
+        unroll!(expr, compiler_state) ||
             resolveif!(expr, compiler_state) ||
             addlogicalrules!(expr, compiler_state) ||
             break
     end
-    print("Finished processing logical assignments.\n")
+    ifprintln("Finish processing logical assignments.", verbose)
 
     addstochasticrules!(expr, compiler_state)
-    print("Finished processing stochastic assignments.\n")
+    ifprintln("Finish processing stochastic assignments.", verbose)
+end
 
-    all(issimpleexpression, expr.args) || refinindices(expr) ||
-        error("Has unresolvable loop bounds or if conditions.")
+function check_expr(expr)
+    return all(issimpleexpression, expr.args) && refinindices(expr)
+end
+
+function pregraph(model_def, data, eval_ex=true)
+    ori_expr = transform_expr(model_def)
+    expr, compiler_state = addrules(ori_expr, data)
+    check_expr(expr) || error("Has unresolvable loop bounds or if conditions.")
     return tograph(compiler_state, eval_ex)
 end
 
-"""
-    compile_graphppl(model_def, data, initials)
-
-The exported top level function. `compile_graphppl` takes model definition and data and returns a GraphPPL.Model.
-"""
-function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTuple) 
-    model = pre_Modelbuidling_processing(model_def, data)
-    print("Finished pre Model-building preparation.\n")
-
-    graphmodel = Model(; model...);
-    print("Finish building Model.\n")
-    
+function initialize!(graphmodel, initials)
     for variable in keys(initials)
         if !isempty(size(initials[variable]))
             for i in CartesianIndices(initials[variable])
-                isequal(initials[variable][i], missing) && continue
+                ismissing(initials[variable][i]) && continue
                 s = bugs_to_julia("$variable") * "$(collect(Tuple(i)))"
                 n = tosymbolic(Meta.parse(s))
                 vn = AbstractPPL.VarName(tosymbol(n))
@@ -792,6 +814,16 @@ function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTu
             set_node_value!(graphmodel, AbstractPPL.VarName(variable), initials[variable])
         end
     end
+end
 
+"""
+    compile_graphppl(model_def, data, initials)
+
+The exported top level function. `compile_graphppl` takes model definition and data and returns a GraphPPL.Model.
+"""
+function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTuple) 
+    model = pregraph(model_def, data)
+    graphmodel = Model(; model...);
+    initialize!(graphmodel, initials)
     return graphmodel
 end

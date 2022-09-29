@@ -2,16 +2,15 @@ using SymbolicPPL
 using SymbolicPPL:
     CompilerState,
     resolveif!,
-    inverselinkfunction,
-    unrollforloops!,
+    linkfunction,
+    unroll!,
     tosymbolic,
     resolve,
     symbolic_eval,
     ref_to_symbolic!,
+    ref_to_symbolic
     addlogicalrules!,
-    addstochasticrules!,
-    tograph,
-    compile_graphppl
+    addstochasticrules!
 using Test
 using Symbolics
 
@@ -19,13 +18,10 @@ using Symbolics
 
 # tests for `addlogicalrules` for data
 data = Dict(:N => 2, :g => [1, 2, 3])
-
 compiler_state = CompilerState()
 addlogicalrules!(data, compiler_state)
-@test compiler_state.logicalrules[tosymbolic(:N)] == Num(2)
-@test compiler_state.logicalrules[ref_to_symbolic!("g[3]")] == Num(3)
 @test resolve(:N, compiler_state) == 2
-@test resolve(ref_to_symbolic!("g[2]"), compiler_state) == 2
+@test resolve(ref_to_symbolic("g[2]"), compiler_state) == 2
 
 # tests for unrolling facilities
 expr = bugsmodel"""      
@@ -60,7 +56,7 @@ expr = bugsmodel"""
     # dummy assignment for easy understanding
     variable.1 <- 1
 """
-unrollforloops!(expr, compiler_state)
+unroll!(expr, compiler_state)
 
 intended_result = bugsmodel"""
     variable.0 <- 1
@@ -97,9 +93,9 @@ expr = bugsmodel"""
         }
     }     
 """
-unrollforloops!(expr, compiler_state)
+unroll!(expr, compiler_state)
 addlogicalrules!(expr, compiler_state)
-unrollforloops!(expr, compiler_state)
+unroll!(expr, compiler_state)
 
 intended_result = bugsmodel"""
     n[1] = 1
@@ -184,15 +180,14 @@ intended_expr = bugsmodel"""
     lhs <- exp(rhs)
     lhs <- phi(rhs)
 """
-@test inverselinkfunction(expr) == intended_expr
+@test linkfunction(expr) == intended_expr
 
 # test for symbolic_eval
 @variables a b c
 compiler_state = CompilerState(
-    Dict{Symbol,Array{Num}}(),
+    Dict{Symbol,Symbolics.Arr{Num}}(),
     Dict(a => b + c, b => 2, c => 3),
-    Dict{Num,Num}(),
-    Dict{Num,Any}(),
+    Dict{Num,Expr}()
 )
 @test symbolic_eval(a, compiler_state) == 5
 
@@ -224,11 +219,4 @@ expr = bugsmodel"""
     alpha0 <- alpha.c - xbar * beta.c   
  """
 
-model = compile_graphppl(model_def = expr, data = data, initials=NamedTuple())
-
-## 
-using SymbolicPPL
-m = SymbolicPPL.BUGSExamples.EXAMPLES[:pumps];
-model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
-@run model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
-print(collect(keys(model)))
+model = compile_graphppl(model_def = expr, data = data, initials=NamedTuple()) # testing for no error occurs

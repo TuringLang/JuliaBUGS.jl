@@ -1,5 +1,4 @@
 using Distributions
-import Distributions: censored, truncated
 using LogExpFunctions
 import LogExpFunctions: logistic, logit, cloglog, cexpexp, log1pexp
 import Base: step
@@ -36,6 +35,10 @@ row_major_reshape(v::Vector, dim) = permutedims(reshape(v, reverse(dim)), length
 
 """ 
     Univariate Distributions
+
+Every distribution function is registered as a symbolic function and later defined using corresponding 
+distribution in Distributions.jl. Symbolic registering stops function being evaluated at symbolic compilation
+stage. 
 """
 
 @register_symbolic dnorm(mu, tau) 
@@ -49,6 +52,7 @@ function dbin(p, n::Float64)
     @assert isinteger(n) "Second argument of `dbin` must be an integer"
     return Binomial(Integer(n), p)
 end
+dbin(p, n::Integer) = Binomial(n, p)
 
 @register_symbolic dnegbin(p, r)
 dnegbin(p, r) = NegativeBinomial(r, p)
@@ -56,8 +60,12 @@ dnegbin(p, r) = NegativeBinomial(r, p)
 @register_symbolic dpois(lambda)
 dpois(lambda) = Poisson(lambda)
 
+@register_symbolic dgeom(p)
 dgeom(p) = Geometric(p)
+
+@register_symbolic dunif(a, b)
 dunif(a, b) = Uniform(a, b)
+
 dflat() = Flat()
 
 @register_symbolic dbeta(alpha, beta)
@@ -86,14 +94,14 @@ dcat(p) = Categorical(p)
 @register_symbolic censored(d, l, u)
 @register_symbolic censored_with_lower(d, l)
 @register_symbolic censored_with_upper(d, u)
-censored_with_lower(d, l) = censored(d, lower = l)
-censored_with_upper(d, u) = censored(d, upper = u)
+censored_with_lower(d, l) = Distributions.censored(d, lower = l)
+censored_with_upper(d, u) = Distributions.censored(d, upper = u)
 
 @register_symbolic truncated(d, l, u)
 @register_symbolic truncated_with_lower(d, l)
 @register_symbolic truncated_with_upper(d, u)
-truncated_with_lower(d, l) = truncated(d, lower = l)
-truncated_with_upper(d, u) = truncated(d, upper = u)
+truncated_with_lower(d, l) = Distributions.truncated(d, lower = l)
+truncated_with_upper(d, u) = Distributions.truncated(d, upper = u)
 
 """
     Functions
