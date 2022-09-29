@@ -414,7 +414,7 @@ function symbolic_eval(variable, compiler_state::CompilerState)
 end
 symbolic_eval(variable::UnitRange{Int64}, compiler_state::CompilerState) = variable # Special case for array range
 
-isequal(::SymbolicUtils.Symbolic, ::Missing) = false
+Base.isequal(::SymbolicUtils.Symbolic, ::Missing) = false
 
 Base.in(key::Num, vs::Vector) = any(broadcast(Symbolics.isequal, key, vs))
 
@@ -740,16 +740,12 @@ issimpleexpression(expr) = Meta.isexpr(expr, (:(=), :~))
 
 Check if all indices in the expression are resolved to concrete numbers.
 """
-function refinindices(expr::Expr)::Bool
+function refinindices(expr)::Bool
     exist = true
     MacroTools.prewalk(expr) do sub_expr
         if Meta.isexpr(sub_expr, :ref)
-            for arg in sub_expr.args
-                MacroTools.postwalk(arg) do subsub_expr
-                    if Meta.isexpr(subsub_expr, :ref) 
-                        exist = false
-                    end
-                end
+            for arg in sub_expr.args[2:end]
+                exist = Meta.isexpr(arg, :ref) ? false : refinindices(arg)
             end
         end
         return sub_expr
@@ -790,7 +786,17 @@ function addrules!(expr, data, compiler_state; verbose=true)
 end
 
 function check_expr(expr)
-    return all(issimpleexpression, expr.args) && refinindices(expr)
+    if !all(issimpleexpression, expr.args)
+        for sub_expr in expr.args
+            if !issimpleexpression(sub_expr)
+                println("Expression $sub_expr is not a simple assignment.")
+            end
+            break
+        end
+        return false
+    end
+
+    return refinindices(expr)
 end
 
 function pregraph(model_def, data, eval_ex=true)

@@ -6,7 +6,8 @@ using SymbolicPPL:
     tograph,
     pregraph,
     ref_to_symbolic,
-    SampleFromPrior
+    SampleFromPrior,
+    check_expr
 using AbstractMCMC
 using Random
 
@@ -36,9 +37,10 @@ m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_realistic];
 
 ori_expr = transform_expr(m[:model_def])
 expr, compiler_state = addrules(ori_expr, m[:data], true);
+check_expr(expr)
 @run g = tograph(compiler_state, false);
 
-model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
+@time model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
 @run model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
 
 sampler = SampleFromPrior(model);

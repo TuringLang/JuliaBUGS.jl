@@ -11,13 +11,13 @@
 | dogs | 2 |
 | dyes  | 3 |
 | epil | 2 |
-| equiv | 2 |
+| equiv | 3 |
 | inhalers | 1 |
 | kidney | 2 |
 | leuk | 2 |
 | leukfr | 2 | 
 | last  | 1 | 
-| magnesium | 1 |
+| magnesium | 3 |
 | mice | | 
 | oxford | | 
 | pumps | 3 | 
@@ -27,3 +27,8 @@
 | stacks | | 
 | surgical_simple | |
 | surgical_realistic | | 
+
+- bones ~50min - ERROR: MethodError: no method matching cdf(::Distributions.Categorical{Float64, Vector{Float64}}, ::Missing)
+- dogs ~13min - error due to truncated flat is not defined
+- epil ~3min - sampling step encounter error, seems \mu is inf
+- equiv ~1min

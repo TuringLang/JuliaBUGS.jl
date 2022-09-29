@@ -66,6 +66,7 @@ dgeom(p) = Geometric(p)
 @register_symbolic dunif(a, b)
 dunif(a, b) = Uniform(a, b)
 
+# TODO: truncated and censored need to be defined (also possibly logdensity)
 dflat() = Flat()
 
 @register_symbolic dbeta(alpha, beta)
