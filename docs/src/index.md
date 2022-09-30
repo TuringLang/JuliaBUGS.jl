@@ -1,1 +1,1 @@
-
+The package has three major pieces: the parser, the compiler, and the graph representation. They should have separate pages. 
