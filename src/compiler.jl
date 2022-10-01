@@ -683,7 +683,7 @@ function tograph(compiler_state::CompilerState, eval_ex::Bool)
         
         if isa(default_value, Real)
             # If the variable can be evaluated into a concrete value, then either the value is used
-            # somewhere else, or the variable is a detached node. Eithre case, we can skip it.
+            # somewhere else or the variable is a detached node. Either case, we can skip it.
             continue
         end
 

@@ -43,7 +43,7 @@ GraphInfo{(sorted_vertices...)}.
 
 # Examples
 ```jl-doctest
-julia> using AbstractPPL
+julia> using SymbolicPPL
 
 julia> Model(
                s2 = (0.0, () -> InverseGamma(2.0,3.0), :Stochastic), 
@@ -122,7 +122,7 @@ of variables given by `T`.
 julia> inputs = (a = (), b = (), c = (:a, :b))
 (a = (), b = (), c = (:a, :b))
 
-julia> AbstractPPL.adjacency_matrix(inputs)
+julia> SymbolicPPL.adjacency_matrix(inputs)
 3×3 SparseMatrixCSC{Float64, Int64} with 2 stored entries:
   ⋅    ⋅    ⋅ 
   ⋅    ⋅    ⋅ 
@@ -195,7 +195,7 @@ Index a Model with a `VarName{p}` lens. Retrieves the `value``, `input`,
 # Examples
 
 ```jl-doctest 
-julia> using AbstractPPL
+julia> using SymbolicPPL
 
 julia> m = Model( s2 = (0.0, () -> InverseGamma(2.0,3.0), :Stochastic), 
                    μ = (1.0, () -> 1.0, :Logical), 
@@ -330,7 +330,7 @@ get_nodekind(m::Model, ind::VarName) = get(m[ind], @lens _.kind)
     
 Retrieve the nodes of kind `kind`. 
 """
-function get_nodes(m::AbstractPPL.GraphPPL.Model, kind::Symbol)
+function get_nodes(m::Model, kind::Symbol)
     if kind ∉ [:Logical, :Stochastic, :Observations]
         error("Node kind should be :Logical, :Stochastic or :Observations")
     end
@@ -422,7 +422,7 @@ Draw random samples from the model and mutate the node values.
 # Examples
 
 ```jl-doctest
-julia> import AbstractPPL.GraphPPL: Model, rand!
+julia> import SymbolicPPL: Model, rand!
        using Distributions
 
 julia> using Random; Random.seed!(1234)
@@ -444,7 +444,7 @@ s2 = (input = (), value = Base.RefValue{Float64}(2.7478186975593846), eval = var
 y = (input = (:μ, :s2), value = Base.RefValue{Float64}(0.3044653509044275), eval = var"#7#10"(), kind = :Stochastic)
 ```
 """
-function Random.rand!(rng::AbstractRNG, m::AbstractPPL.GraphPPL.Model{T}) where T
+function Random.rand!(rng::AbstractRNG, m::Model{T}) where T
     for vn in keys(m)
         input, _, f, kind = m[vn]
         input_values = get_node_value(m, input)
@@ -457,7 +457,7 @@ function Random.rand!(rng::AbstractRNG, m::AbstractPPL.GraphPPL.Model{T}) where 
     m
 end
 
-function Random.rand!(m::AbstractPPL.GraphPPL.Model{T}) where T
+function Random.rand!(m::Model{T}) where T
     rand!(Random.GLOBAL_RNG, m)
 end
 
@@ -471,8 +471,7 @@ Draw random samples from the model and mutate the node values.
 ```jl-doctest
 julia> using Random; Random.seed!(1234)
 
-julia> import AbstractPPL.GraphPPL: Model, rand
-[ Info: Precompiling AbstractPPL [7a57a42e-76ec-4ea3-a279-07e840d6d9cf]
+julia> import SymbolicPPL: Model, rand
 
 julia> using Distributions
 
@@ -504,8 +503,7 @@ Evaluate the log-densinty of the model.
 julia> using Random; Random.seed!(1234)
 MersenneTwister(1234)
 
-julia> import AbstractPPL.GraphPPL: Model, logdensityof
-[ Info: Precompiling AbstractPPL [7a57a42e-76ec-4ea3-a279-07e840d6d9cf]
+julia> import SymbolicPPL: Model, logdensityof
 
 julia> using Distributions
 
@@ -521,7 +519,7 @@ julia> logdensityof(m)
 -1.721713955868453
 ```
 """
-function DensityInterface.logdensityof(m::AbstractPPL.GraphPPL.Model)
+function DensityInterface.logdensityof(m::Model)
     logdensityof(m, get_model_values(m))
 end
 
@@ -536,8 +534,7 @@ Evaluate the log-densinty of the model.
 julia> using Random; Random.seed!(1234)
 MersenneTwister(1234)
 
-julia> import AbstractPPL.GraphPPL: Model, logdensityof, get_model_values
-[ Info: Precompiling AbstractPPL [7a57a42e-76ec-4ea3-a279-07e840d6d9cf]
+julia> import SymbolicPPL: Model, logdensityof, get_model_values
 
 julia> using Distributions
 
@@ -552,7 +549,7 @@ y = (input = (:μ, :s2), value = Base.RefValue{Float64}(0.0), eval = var"#7#10"(
 julia> logdensityof(m, get_model_values(m))
 -1.721713955868453
 """
-function DensityInterface.logdensityof(m::AbstractPPL.GraphPPL.Model{T}, v::NamedTuple{T, V}) where {T, V}
+function DensityInterface.logdensityof(m::Model{T}, v::NamedTuple{T, V}) where {T, V}
     lp = 0.0
     for vn in keys(m)
         input, _, f, kind = m[vn]

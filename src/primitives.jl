@@ -123,7 +123,9 @@ softplus(x) = log1pexp(x)
 step(x::Num) = IfElse.ifelse(x>1,1,0)
 
 pow(base, exp) = base^exp
-inprod(v1, v2) = LinearAlgebra.dot(v1, v2)
+@register_symbolic inverse(v::Vector)
 inverse(v) = inv(v)
 
 Statistics.mean(v::Symbolics.Arr{Num, 1}) = mean(Symbolics.scalarize(v))
+sd(v::Symbolics.Arr{Num, 1}) = Statistics.std(Symbolics.scalarize(v))
+inprod(a::Array, b::Array) = a*b
