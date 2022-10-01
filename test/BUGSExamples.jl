@@ -40,6 +40,8 @@ expr, compiler_state = addrules(ori_expr, m[:data], true);
 check_expr(expr)
 @run g = tograph(compiler_state, false);
 
+g = SymbolicPPL.pregraph(m[:model_def], m[:data], true, true);
+
 @time model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
 @run model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
 
@@ -47,3 +49,14 @@ sampler = SampleFromPrior(model);
 sample, state = AbstractMCMC.step(Random.default_rng(), model, sampler);
 sample, state = AbstractMCMC.step(Random.default_rng(), model, sampler, state);
 samples = AbstractMCMC.sample(model, sampler, 3);
+
+## 
+using AbstractPPL: VarName
+node = model[VarName(Symbol("mu[1]"))]
+k = keys(model);
+length(k)
+
+##
+using SymbolicPPL
+m = SymbolicPPL.BUGSExamples.EXAMPLES[:lsat];
+@time model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);

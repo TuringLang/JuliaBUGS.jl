@@ -263,6 +263,11 @@ tosymbolic(variable) = variable
 
 tosymbol(x) = beautify_ref_symbol(Symbolics.tosymbol(x))
 
+"""
+    beautify_ref_symbol(s)
+
+`Symbolics.tosymbol` return `getindex(g, 1)` for `g[1]`. This function beautifies it to `g[1]`.
+"""
 function beautify_ref_symbol(s::Symbol)
     m = match(r"getindex\((.*),\s(.*)\)", string(s))
     if !isnothing(m)
@@ -799,9 +804,9 @@ function check_expr(expr)
     return refinindices(expr)
 end
 
-function pregraph(model_def, data, eval_ex=true)
+function pregraph(model_def, data, eval_ex=true, verbose=false)
     ori_expr = transform_expr(model_def)
-    expr, compiler_state = addrules(ori_expr, data)
+    expr, compiler_state = addrules(ori_expr, data, verbose)
     check_expr(expr) || error("Has unresolvable loop bounds or if conditions.")
     return tograph(compiler_state, eval_ex)
 end
