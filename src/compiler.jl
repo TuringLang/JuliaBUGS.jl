@@ -832,8 +832,8 @@ end
 
 The exported top level function. `compile_graphppl` takes model definition and data and returns a GraphPPL.Model.
 """
-function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTuple) 
-    model = pregraph(model_def, data)
+function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTuple, verbose=false) 
+    model = pregraph(model_def, data, true, verbose)
     graphmodel = Model(; model...);
     initialize!(graphmodel, initials)
     return graphmodel
