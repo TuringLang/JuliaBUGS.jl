@@ -24,12 +24,16 @@ const DISTRIBUTIONS = [:truncated, :censored, :dgamma, :dnorm, :dbeta, :dbin, :d
 const INVERSE_LINK_FUNCTION =
     (logit = :logistic, cloglog = :cexpexp, log = :exp, probit = :phi)
 
-# Reload `set_node_value!`, sampling a Binomial will give a Integer type, while GraphPPL
-# only support Float right now, this is a work around
-function set_node_value!(m::Model, ind::VarName, value::Integer)
-    @assert typeof(m[ind].value[]) <: AbstractFloat
-    m[ind].value[] = Float64(value)
-end
+TRACED_FUNCTIONS = [:exp, ]
+
+VECTOR_FUNCTION = [:dcat, ]
+
+# # Reload `set_node_value!`, sampling a Binomial will give a Integer type, while GraphPPL
+# # only support Float right now, this is a work around
+# function set_node_value!(m::Model, ind::VarName, value::Integer)
+#     @assert typeof(m[ind].value[]) <: AbstractFloat
+#     m[ind].value[] = Float64(value)
+# end
 
 row_major_reshape(v::Vector, dim) = permutedims(reshape(v, reverse(dim)), length(dim):-1:1)    
 

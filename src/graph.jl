@@ -2,11 +2,10 @@ using Graphs
 
 struct BUGSGraph
     nodeenum::Dict{Symbol, Int32}
-    reversenodeenum::Dict{Int32, Symbol}
-    dag::DiGraph
+    reverse_nodeenum::Dict{Int32, Symbol}
+    digraph::DiGraph
     nodetype::Dict{Int32, Symbol}
-    observevalues::Dict{Int32, Real}
-    mutablevalues::Dict{Int32, Real}
+    observed_values::Dict{Int32, Real}
     nodefunc::Dict{Int32, Function}
     sortednode::Vector{Int32}
 end

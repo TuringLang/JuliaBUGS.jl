@@ -8,7 +8,7 @@ using SymbolicPPL:
     resolve,
     symbolic_eval,
     ref_to_symbolic!,
-    ref_to_symbolic
+    ref_to_symbolic,
     addlogicalrules!,
     addstochasticrules!
 using Test

@@ -14,22 +14,15 @@ Store data during the compilation.
 """
 struct CompilerState
     arrays::Dict{Symbol,Symbolics.Arr{Num}}
-    logicalrules::Dict{Any,Any}
-    stochasticrules::Dict{Num,Expr}
+    logicalrules::Dict
+    stochasticrules::Dict
 end
 
 CompilerState() = CompilerState(
     Dict{Symbol,Symbolics.Arr{Num}}(),
-    Dict{Any,Any}(),
-    Dict{Num,Expr}()
+    Dict(),
+    Dict()
 )
-
-""" 
-    Transform ASTs 
-
-Function name indicate the type of expression being transformed, all functions in this 
-section do not mutate the original expression.    
-"""
 
 """
     cumulative(expr)
@@ -60,7 +53,7 @@ function find_tilde_rhs(expr::Expr, target::Union{Expr, Symbol})
         end
         return sub_expr
     end
-    isnothing(dist) && error("Didn't find a stochastic assignment for $target.")
+    isnothing(dist) && error("Error handling cumulative expression: can't find a stochastic assignment for $target.")
     return dist
 end
 
@@ -130,6 +123,19 @@ function truncated(expr::Expr)
 end
 
 """
+    transform_expr(model_def)
+
+Transform the model definition to a form that is easier to work with.
+"""
+function transform_expr(model_def::Expr)
+    expr = linkfunction(model_def)
+    expr = cumulative(expr)
+    expr = censored(expr)
+    expr = truncated(expr)
+    return expr
+end
+
+"""
     unroll!(expr, compiler_state)
 
 Unroll all the loops whose loop bounds can be partially evaluated to a constant. 
@@ -142,7 +148,7 @@ function unroll!(expr::Expr, compiler_state::CompilerState)
                 unrolled = unroll(arg, compiler_state)
                 splice!(expr.args, i, unrolled.args)
                 unrolled_flag = true
-                # unroll one loop at a time to avoid complication from mutation
+                # unroll one loop at a time to avoid complication raised by mutation
                 break
             end
         end
@@ -224,10 +230,9 @@ end
 """
     tosymbolic(variable)
 
-Returns symbolic variable for multiple types of `variable`s. 
+Return symbolic variable for multiple types of `variable`s. 
 """
-tosymbolic(variable::Num) = variable
-tosymbolic(variable::Union{Integer,AbstractFloat}) = Num(variable)
+tosymbolic(variable::Union{Int, AbstractFloat}) = Num(variable)
 tosymbolic(variable::String) = tosymbolic(Symbol(variable))
 function tosymbolic(variable::Symbol)
     if Meta.isexpr(Meta.parse(string(variable)), :ref)
@@ -318,11 +323,11 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
             end
 
             resolved_index = resolve(tosymbolic(index), compiler_state)
-            if !isa(resolved_index, Union{Number, UnitRange})
+            if !isa(resolved_index, Union{Real, UnitRange})
                 return __SKIP__
             end 
 
-            if isa(resolved_index, Number) 
+            if isa(resolved_index, Real) 
                 isinteger(resolved_index) || error("Index of $expr needs to be integers.")
                 indices[i] = Integer(resolved_index)
             else
@@ -379,7 +384,7 @@ const __SKIP__ = tosymbolic("SKIP")
 
 Partially evaluate the variable in the context defined by compiler_state.
 """
-resolve(variable::Union{Integer,AbstractFloat}, compiler_state::CompilerState) = variable
+resolve(variable::Distributions.Distribution, compiler_state::CompilerState) = variable
 function resolve(variable, compiler_state::CompilerState)
     resolved_variable = symbolic_eval(tosymbolic(variable), compiler_state)
     return Symbolics.unwrap(resolved_variable)
@@ -392,7 +397,7 @@ function symbolic_eval(variable, compiler_state::CompilerState)
     evaluated = Symbolics.substitute(variable, compiler_state.logicalrules)
 
     let e = Symbolics.toexpr(evaluated) 
-        if Meta.isexpr(e, :call) && in(Symbol(e.args[1]), [:exp]) # if symbolically traced, can be more general, only handle :exp now
+        if Meta.isexpr(e, :call) && in(Symbol(e.args[1]), TRACED_FUNCTIONS) # if symbolically traced, can be more general, only handle :exp now
             func = e.args[1]
             nargs = size(e.args)[1] - 1
             args = arguments(Symbolics.unwrap(evaluated))
@@ -407,12 +412,12 @@ function symbolic_eval(variable, compiler_state::CompilerState)
     end
 
     try_evaluated = Symbolics.substitute(evaluated, compiler_state.logicalrules)
-    push!(partial_trace, try_evaluated)
+    try_evaluated isa Array || push!(partial_trace, try_evaluated)
 
     while !Symbolics.isequal(evaluated, try_evaluated)
         evaluated = try_evaluated
         try_evaluated = Symbolics.substitute(try_evaluated, compiler_state.logicalrules)
-        try_evaluated in partial_trace && break # avoiding infinite loop
+        try_evaluated isa Array || try_evaluated in partial_trace && break # avoiding infinite loop
     end
 
     return try_evaluated
@@ -478,6 +483,50 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
 end
 
 """
+    addstochasticrules!(expr, compiler_state::CompilerState)
+
+Process all the stochastic assignments and add them to `CompilerState.stochasticrules`.
+"""
+function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
+    for arg in expr.args
+        if arg.head == :(~)
+            lhs, rhs = arg.args
+
+            if MacroTools.isexpr(lhs, :ref)
+                lhs = ref_to_symbolic!(lhs, compiler_state)
+                if Symbolics.isequal(lhs, __SKIP__)
+                    error("Exists unresolvable indexing at $arg.")
+                end
+                tosymbol(lhs) isa Symbol || error("LHS need to be simple.")
+            else
+                lhs = tosymbolic(lhs)
+            end
+
+            if rhs.head == :call
+                dist_func = rhs.args[1]
+                dist_func in DISTRIBUTIONS || dist_func in (:truncated, :truncated_with_lower, :truncated_with_upper) || 
+                    dist_func in (:censored, :censored_with_lower, :censored__with_upper) || error("$dist_func not defined.") 
+            else
+                error("RHS needs to be a distribution function")
+            end
+
+            variables = find_all_variables(rhs)
+            rhs, ref_variables = replace_variables(rhs, variables, compiler_state)
+            if !isempty(ref_variables) && Symbolics.isequal(ref_variables[1], __SKIP__)
+                continue
+            end
+            sym_rhs = eval(rhs)
+
+            if haskey(compiler_state.stochasticrules, lhs)
+                Symbolics.isequal(sym_rhs, compiler_state.stochasticrules[lhs]) && continue
+                error("Repeated definition for $(lhs)")
+            end
+            compiler_state.stochasticrules[lhs] = sym_rhs
+        end
+    end
+end
+
+"""
     replace_variables(rhs, variables, compiler_state)
 
 Replace all the variables in the expression with a symbolic variable.
@@ -516,100 +565,10 @@ function replace_variables(ex::Expr, variables)
 end
 
 """
-    addstochasticrules!(expr, compiler_state::CompilerState)
+    find_all_variables(expr)
 
-Process all the stochastic assignments and add them to `CompilerState.stochasticrules`.
+Find all the variables in the expression.
 """
-function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
-    for arg in expr.args
-        if arg.head == :(~)
-            lhs, rhs = arg.args
-
-            if MacroTools.isexpr(lhs, :ref)
-                lhs = ref_to_symbolic!(lhs, compiler_state)
-                if Symbolics.isequal(lhs, __SKIP__)
-                    error("Exists unresolvable indexing at $arg.")
-                end
-                tosymbol(lhs) isa Symbol || error("LHS need to be simple.")
-            else
-                lhs = tosymbolic(lhs)
-            end
-
-            if rhs.head == :call
-                dist_func = rhs.args[1]
-                dist_func in DISTRIBUTIONS || dist_func in (:truncated, :truncated_with_lower, :truncated_with_upper) || 
-                    dist_func in (:censored, :censored_with_lower, :censored__with_upper) || error("$dist_func not defined.") 
-            else
-                error("RHS needs to be a distribution function")
-            end
-
-            rhs, ref_variables = find_ref_variables(rhs, compiler_state)
-            if !isempty(ref_variables) && Symbolics.isequal(ref_variables[1], __SKIP__)
-                error("Exists unresolvable indexing at $arg.")
-            end
-            variables = find_all_variables(rhs)
-
-            # replace all the variables that can be evaluated to a concrete number
-            datavars = Dict{Num, Real}()
-            argvars = Num[]
-            for var in vcat(variables, ref_variables)
-                resolved = resolve(var, compiler_state)
-                if resolved isa Number
-                    datavars[var] = resolved
-                else
-                    push!(argvars, var)
-                end
-            end
-            rhs = MacroTools.postwalk(rhs) do sub_expr
-                if sub_expr isa Symbol && tosymbolic(sub_expr) in keys(datavars)
-                    return datavars[tosymbolic(sub_expr)]
-                else
-                    return sub_expr
-                end
-            end
-
-            arguments = map(tosymbol, argvars)
-            func_expr = Expr(:(->), Expr(:tuple, arguments...), Expr(:block, rhs))
-
-            if haskey(compiler_state.stochasticrules, lhs) && func_expr != compiler_state.stochasticrules[lhs]
-                error("Repeated definition for $(lhs)")
-            end
-            
-            compiler_state.stochasticrules[lhs] = func_expr
-        end
-    end
-end
-
-find_ref_variables(rhs::Number, compiler_state::CompilerState) = rhs, []
-function find_ref_variables(rhs::Expr, compiler_state::CompilerState)
-    ref_variables = Num[]
-    replaced_rhs = MacroTools.prewalk(rhs) do sub_expr
-        if MacroTools.isexpr(sub_expr, :ref)
-            sym_var = ref_to_symbolic!(sub_expr, compiler_state)
-            sym_var = Symbolics.scalarize(sym_var)
-            if Symbolics.isequal(sym_var, __SKIP__) # some index can't be resolved in this generation
-                push!(ref_variables, __SKIP__) 
-                return sub_expr
-            end
-            if !isempty(size(sym_var))
-                sym_var = collect(Iterators.flatten(sym_var))
-                ref_variables = vcat(ref_variables, sym_var)
-                ret = Meta.parse("[]")
-                for var in sym_var
-                    push!(ret.args, tosymbol(var))
-                end
-                return ret
-            else
-                push!(ref_variables, sym_var)
-                return tosymbol(sym_var)
-            end
-        else
-            return sub_expr
-        end
-    end
-    return replaced_rhs, ref_variables
-end
-
 find_all_variables(rhs::Number) = []
 find_all_variables(rhs::Symbol) = Base.occursin("[", string(rhs)) ? [] : rhs
 function find_all_variables(rhs::Expr)
@@ -632,17 +591,32 @@ function recursive_find_variables(expr::Expr, variables::Vector{Any})
     end
 end
 
-scalarize_function_on_array(ex) = scalarize_function_on_array(Symbolics.wrap(ex))
-function scalarize_function_on_array(ex::Num)
-    ex_val = Symbolics.unwrap(ex)
-    istree(ex_val) || return ex, Dict()
+"""
+    scalarize(ex)
+
+Convert symbolic arrays in symbolic expressions to arrays of `Num`. Also return the mapping the array of `Num`
+to an array of Symbols.
+
+```julia-repo
+julia> using Symbolics; @register_symbolic foo(x::Vector)
+
+julia> @variables x[1:3]; Symbolics.scalarize(foo(x[1:3]))
+foo(SymbolicUtils.Term{Real, Nothing}[x[1], x[2], x[3]])
+
+julia> using SymbolicPPL; SymbolicPPL.scalarize(foo(x[1:3]))
+(foo(Num[x[1], x[2], x[3]]), Dict{Any, Any}(Num[x[1], x[2], x[3]] => [Symbol("x[1]"), Symbol("x[2]"), Symbol("x[3]")]))
+```
+"""
+scalarize(ex) = ex, Dict()
+function scalarize(ex::Num)
+    istree(Symbolics.unwrap(ex)) || return ex, Dict()
+    ex_val = Symbolics.unwrap(Symbolics.scalarize(ex))
     if !isa(ex_val, SymbolicUtils.Term) 
         ex_val = SymbolicUtils.toterm(ex_val)
     end
     arguments = Symbolics.arguments(ex_val)
     new_ex_val = deepcopy(ex_val)
     
-    # check if all symbolic terms has field arguemnts: 2x+3y
     ret = Dict()
     for (i, arg) in enumerate(arguments)
         args = []
@@ -653,7 +627,7 @@ function scalarize_function_on_array(ex::Num)
             new_ex_val = @set new_ex_val.arguments[i] = arr
             ret[arr] = args
         elseif istree(arg)
-            new_arg, r = Symbolics.unwrap(scalarize_function_on_array(Symbolics.wrap(arg)))
+            new_arg, r = Symbolics.unwrap(scalarize(Symbolics.wrap(arg)))
             new_ex_val = @set new_ex_val.arguments[i] = Symbolics.unwrap(new_arg)
             ret = merge(ret, r)
         else
@@ -665,6 +639,8 @@ function scalarize_function_on_array(ex::Num)
 end
 
 # Bugs in SymbolicUtils.jl
+# Fixed at: https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/471
+# Not in the latest release yet.
 function SymbolicUtils.toterm(t::SymbolicUtils.Add{T}) where T
     args = Any[t.coeff, ]
     for (k, coeff) in t.dict
@@ -676,29 +652,20 @@ end
 """
     tograph(compiler_state, eval_ex)
 
-Convert the rules to GraphPPL inputs.
+Build inputs to BUGSGraph from the rules in the compiler state.
 """
-function tograph(compiler_state::CompilerState, eval_ex::Bool)
-    # node_name => (default_value, function, node_type)
-    to_graph = eval_ex ? Dict{Symbol, Tuple{Union{Array{Float64}, Float64}, Function, Symbol}}() : Dict()
-
-    for key in keys(compiler_state.logicalrules)
+function tograph(compiler_state::CompilerState)
+    to_graph = Dict()
+    for key in keys(compiler_state.stochasticrules)
         isempty(size(key)) || continue 
-        default_value = resolve(key, compiler_state)
-        
-        if isa(default_value, Real)
-            # If the variable can be evaluated into a concrete value, then either the value is used
-            # somewhere else or the variable is a detached node. Either case, we can skip it.
-            continue
-        end
+        isa(resolve(key, compiler_state), Real) && continue
 
-        ex = compiler_state.logicalrules[key]
-        ex = resolve(ex, compiler_state)
-        ex = Symbolics.scalarize(ex)
-        ex, arr_arg = scalarize_function_on_array(ex)
+        ex = symbolic_eval(compiler_state.stochasticrules[key], compiler_state)
+        ex, arr_arg = scalarize(ex)
         args = Symbolics.get_variables(ex)
         f_expr = Base.remove_linenums!(Symbolics.build_function(ex, args...))
 
+        # promote all the array elements to the arguments, also use `row_major_reshape` to maintain the shape of the arrays
         for arr in keys(arr_arg)
             f_expr.args[1].args = collect(union(Set(f_expr.args[1].args), Set(arr_arg[arr])))
             f_expr = MacroTools.prewalk(f_expr) do sub_expr
@@ -717,66 +684,71 @@ function tograph(compiler_state::CompilerState, eval_ex::Bool)
             end
         end
 
-        to_graph[tosymbol(key)] = (Float64(0), eval_ex ? eval(f_expr) : f_expr, :Logical)
+        value = resolve(key, compiler_state)
+        isoberve = isa(value, Real)
+
+        to_graph[tosymbol(key)] = (isoberve ? value : 0, f_expr, isoberve)
     end
-
-    for key in keys(compiler_state.stochasticrules)
-        type = :Stochastic
-        default_value = resolve(key, compiler_state)
-        if isa(default_value, Union{Integer,Float64})
-            type = :Observations
-        else
-            default_value = 0
-        end
-        default_value = Float64(default_value)
-
-        func_expr = compiler_state.stochasticrules[key]
-        to_graph[tosymbol(key)] =
-            (default_value, eval_ex ? eval(func_expr) : func_expr, type)
-    end
-
     return to_graph
 end
 
-issimpleexpression(expr) = Meta.isexpr(expr, (:(=), :~))
-
-"""
-    refinindices(expr)
-
-Check if all indices in the expression are resolved to concrete numbers.
-"""
-function refinindices(expr)::Bool
-    exist = true
+function refinindices(expr, compiler_state)
     MacroTools.prewalk(expr) do sub_expr
         if Meta.isexpr(sub_expr, :ref)
             for arg in sub_expr.args[2:end]
-                exist = Meta.isexpr(arg, :ref) ? false : refinindices(arg)
+                Meta.isexpr(arg, :ref) &&
+                    Symbolics.isequal(ref_to_symbolic!(arg, compiler_state), __SKIP__) && 
+                    error("$sub_expr's index $arg can't be resolved.")
+                refinindices(arg, compiler_state)
             end
         end
         return sub_expr
     end
-    return exist
 end
 
-function transform_expr(model_def::Expr)
-    expr = linkfunction(model_def)
-    expr = cumulative(expr)
-    expr = censored(expr)
-    expr = truncated(expr)
-    return expr
+"""
+    check_expr(expr)
+
+Check if the model is static.
+"""
+function check_expr(expr, compiler_state::CompilerState)
+    # check if any loop or if remains
+    for sub_expr in expr.args
+        Meta.isexpr(sub_expr, (:(=), :~)) ||
+            error("Expression $sub_expr is not an assignment expression.")
+    end
+
+    # check if all array indices are resolvable
+    refinindices(expr, compiler_state)
 end
 
-ifprintln(s, verbose=false) = verbose && println(s)
-
-function addrules(expr, data, verbose=false) 
-    expr_c = deepcopy(expr)
-    cs = CompilerState()
-    addrules!(expr_c, data, cs, verbose=verbose)
-    return expr_c, cs
+struct BUGSChain
+    g::BUGSGraph
+    initializations::Dict{Int32, Real}
 end
-function addrules!(expr, data, compiler_state; verbose=true)
+
+function BUGSChain(g::BUGSGraph, initializations::Dict)
+    for (k, v) in pairs(initializations)
+        if v isa Array
+            for i in CartesianIndices(v)
+                ismissing(v[i]) && continue
+                s = bugs_to_julia("$k") * "$(collect(Tuple(i)))"
+                n = tosymbol(tosymbolic(Meta.parse(s)))
+                initializations[g.nodeenum[n]] = v[i]
+            end
+        else
+            initializations[g.nodeenum[k]] = v
+        end
+    end
+end
+
+compile(model_def::Expr) = compile(model_def, NamedTuple())
+compile(model_def::Expr, data::Dict) = compile(model_def, Tuple(data))
+function compile(model_def::Expr, data::NamedTuple)
+    expr = transform_expr(model_def)
+    compiler_state = CompilerState()
     addlogicalrules!(data, compiler_state)
-    ifprintln("Finish reading data.", verbose)
+    println("Finish reading data.")
 
     while true
         unroll!(expr, compiler_state) ||
@@ -784,57 +756,15 @@ function addrules!(expr, data, compiler_state; verbose=true)
             addlogicalrules!(expr, compiler_state) ||
             break
     end
-    ifprintln("Finish processing logical assignments.", verbose)
+    println("Finish processing logical assignments.")
+    check_expr(expr, compiler_state)
 
     addstochasticrules!(expr, compiler_state)
-    ifprintln("Finish processing stochastic assignments.", verbose)
+    println("Finish processing stochastic assignments.")
+    
+    g = tograph(compiler_state)
+    return BUGSGraph(g)
 end
+compile(model_def::Expr, data::NamedTuple, inits::NamedTuple) = BUGSChain(compile(model_def, data), inits)
+compile(model_def::Expr, data::NamedTuple, inits::Vector{NamedTuple}) = [compile(model_def, NamedTuple(data), NamedTuple(init)) for init in inits]
 
-function check_expr(expr)
-    if !all(issimpleexpression, expr.args)
-        for sub_expr in expr.args
-            if !issimpleexpression(sub_expr)
-                println("Expression $sub_expr is not a simple assignment.")
-            end
-            break
-        end
-        return false
-    end
-
-    return refinindices(expr)
-end
-
-function pregraph(model_def, data, eval_ex=true, verbose=false)
-    ori_expr = transform_expr(model_def)
-    expr, compiler_state = addrules(ori_expr, data, verbose)
-    check_expr(expr) || error("Has unresolvable loop bounds or if conditions.")
-    return tograph(compiler_state, eval_ex)
-end
-
-function initialize!(graphmodel, initials)
-    for variable in keys(initials)
-        if !isempty(size(initials[variable]))
-            for i in CartesianIndices(initials[variable])
-                ismissing(initials[variable][i]) && continue
-                s = bugs_to_julia("$variable") * "$(collect(Tuple(i)))"
-                n = tosymbolic(Meta.parse(s))
-                vn = AbstractPPL.VarName(tosymbol(n))
-                set_node_value!(graphmodel, vn, initials[variable][i])
-            end
-        else
-            set_node_value!(graphmodel, AbstractPPL.VarName(variable), initials[variable])
-        end
-    end
-end
-
-"""
-    compile_graphppl(model_def, data, initials)
-
-The exported top level function. `compile_graphppl` takes model definition and data and returns a GraphPPL.Model.
-"""
-function compile_graphppl(; model_def::Expr, data::NamedTuple, initials::NamedTuple, verbose=false) 
-    model = pregraph(model_def, data, true, verbose)
-    graphmodel = Model(; model...);
-    initialize!(graphmodel, initials)
-    return graphmodel
-end
