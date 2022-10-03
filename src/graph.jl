@@ -4,7 +4,7 @@ struct BUGSGraph
     nodeenum::Dict{Symbol, Int32}
     reverse_nodeenum::Dict{Int32, Symbol}
     digraph::DiGraph
-    nodetype::Dict{Int32, Symbol}
+    isoberve::Dict{Int32, Bool}
     observed_values::Dict{Int32, Real}
     nodefunc::Dict{Int32, Function}
     sortednode::Vector{Int32}
@@ -29,22 +29,15 @@ function BUGSGraph(tograph::Dict{Any, Any})
         end
     end
 
-    nodetypes = Dict{Int32, Symbol}()
+    isoberve = Dict{Int32, Bool}()
     for k in keys(tograph)
-        nodetypes[nodeenum[k]] = tograph[k][3]
+        isoberve[nodeenum[k]] = tograph[k][3]
     end
 
     observevalues = Dict{Int32, Real}()
     for k in keys(tograph)
         if tograph[k][3] == :Observations
             observevalues[nodeenum[k]] = tograph[k][1]
-        end
-    end
-
-    mutablevalues = Dict{Int32, Real}()
-    for k in keys(tograph)
-        if tograph[k][3] != :Observations
-            mutablevalues[nodeenum[k]] = tograph[k][1]
         end
     end
 
@@ -55,7 +48,7 @@ function BUGSGraph(tograph::Dict{Any, Any})
 
     sortednode = topological_sort_by_dfs(DAG)
 
-    return BUGSGraph(nodeenum, reversenodeenum, DAG, nodetypes, observevalues, mutablevalues, nodefunc, sortednode)
+    return BUGSGraph(nodeenum, reversenodeenum, DAG, isoberve, observevalues, nodefunc, sortednode)
 end
 
 

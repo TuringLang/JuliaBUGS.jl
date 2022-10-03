@@ -607,8 +607,7 @@ julia> using SymbolicPPL; SymbolicPPL.scalarize(foo(x[1:3]))
 (foo(Num[x[1], x[2], x[3]]), Dict{Any, Any}(Num[x[1], x[2], x[3]] => [Symbol("x[1]"), Symbol("x[2]"), Symbol("x[3]")]))
 ```
 """
-scalarize(ex) = ex, Dict()
-function scalarize(ex::Num)
+function scalarize(ex::Num, compiler_state::CompilerState)
     istree(Symbolics.unwrap(ex)) || return ex, Dict()
     ex_val = Symbolics.unwrap(Symbolics.scalarize(ex))
     if !isa(ex_val, SymbolicUtils.Term) 
@@ -619,15 +618,28 @@ function scalarize(ex::Num)
     
     ret = Dict()
     for (i, arg) in enumerate(arguments)
-        args = []
-        arr = :nothing
+        args = Set{Symbol}()
+        new_arg = Array{Num}(undef, size(arg))
         if isa(arg, Array)
-            arr = map(Symbolics.wrap, arg)
-            args = map(tosymbol, arr)
-            new_ex_val = @set new_ex_val.arguments[i] = arr
-            ret[arr] = args
+            for j in eachindex(arg)
+                new_arg[j] = Symbolics.wrap(arg[j])
+                elem = symbolic_eval(new_arg[j], compiler_state)
+                # need to recursively call scalarize here
+                new_arg[j], arg_map = scalarize(elem, compiler_state)
+                merge!(ret, arg_map)
+            end
+            new_arg = reduce(vcat, new_arg)
+            for a in new_arg
+                vars = Symbolics.get_variables(a)
+                for v in vars
+                    @assert v in keys(compiler_state.stochasticrules)
+                    push!(args, tosymbol(v))
+                end
+            end
+            new_ex_val = @set new_ex_val.arguments[i] = new_arg
+            ret[new_arg] = collect(args)
         elseif istree(arg)
-            new_arg, r = Symbolics.unwrap(scalarize(Symbolics.wrap(arg)))
+            new_arg, r = Symbolics.unwrap(scalarize(Symbolics.wrap(arg), compiler_state))
             new_ex_val = @set new_ex_val.arguments[i] = Symbolics.unwrap(new_arg)
             ret = merge(ret, r)
         else
@@ -637,6 +649,7 @@ function scalarize(ex::Num)
 
     return Symbolics.wrap(new_ex_val), ret
 end
+scalarize(ex, ::CompilerState) = ex, Dict()
 
 # Bugs in SymbolicUtils.jl
 # Fixed at: https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/471
@@ -657,11 +670,8 @@ Build inputs to BUGSGraph from the rules in the compiler state.
 function tograph(compiler_state::CompilerState)
     to_graph = Dict()
     for key in keys(compiler_state.stochasticrules)
-        isempty(size(key)) || continue 
-        isa(resolve(key, compiler_state), Real) && continue
-
         ex = symbolic_eval(compiler_state.stochasticrules[key], compiler_state)
-        ex, arr_arg = scalarize(ex)
+        ex, arr_arg = scalarize(ex, compiler_state)
         args = Symbolics.get_variables(ex)
         f_expr = Base.remove_linenums!(Symbolics.build_function(ex, args...))
 
@@ -673,8 +683,8 @@ function tograph(compiler_state::CompilerState)
                     new_expr = deepcopy(sub_expr)
                     for (i, a) in enumerate(sub_expr.args)
                         if isequal(arr, a)
-                            new_expr.args[i] = Expr(:call, :row_major_reshape, Expr(:vect, arr_arg[arr]...), Expr(:tuple, size(arr)...))
-                            return new_expr
+                            ex = Expr(:call, :row_major_reshape, Expr(:vect, (Symbolics.toexpr.(arr))...), Expr(:tuple, size(arr)...))
+                            new_expr.args[i] = getindex_to_ref(ex)
                         end
                     end
                     return new_expr
@@ -690,6 +700,18 @@ function tograph(compiler_state::CompilerState)
         to_graph[tosymbol(key)] = (isoberve ? value : 0, f_expr, isoberve)
     end
     return to_graph
+end
+
+function getindex_to_ref(expr)
+    return MacroTools.prewalk(expr) do sub_expr
+        # if MacroTools.@capture(sub_ex, getindex(name_, size__))
+        if MacroTools.isexpr(sub_expr, :call) && sub_expr.args[1] == getindex
+            sub_expr.head = :ref
+            sub_expr.args = sub_expr.args[2:end]
+            sub_expr = tosymbol(ref_to_symbolic(sub_expr))
+        end
+        return sub_expr
+    end
 end
 
 function refinindices(expr, compiler_state)
@@ -727,6 +749,7 @@ struct BUGSChain
     initializations::Dict{Int32, Real}
 end
 
+BUGSChain(g::BUGSGraph, initializations::NamedTuple) = BUGSChain(g, Dict(pairs(initializations)))
 function BUGSChain(g::BUGSGraph, initializations::Dict)
     for (k, v) in pairs(initializations)
         if v isa Array
