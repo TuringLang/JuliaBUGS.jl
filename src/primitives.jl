@@ -35,7 +35,12 @@ VECTOR_FUNCTION = [:dcat, ]
 #     m[ind].value[] = Float64(value)
 # end
 
-row_major_reshape(v::Vector, dim) = permutedims(reshape(v, reverse(dim)), length(dim):-1:1)    
+"""
+    rreshape
+
+Reshape the array `x` to the shape `dims`, row major order.
+"""
+rreshape(v::Vector, dim) = permutedims(reshape(v, reverse(dim)), length(dim):-1:1)    
 
 """ 
     Univariate Distributions
@@ -90,7 +95,7 @@ dweib(v, λ) = Weibull(v, 1/λ)
 """
 
 @register_symbolic dcat(p::Vector)
-dcat(p) = Categorical(p)
+dcat(p) = Categorical(p/sum(p))
 
 """ 
     Truncated and Censored Functions
@@ -133,3 +138,6 @@ inverse(v) = inv(v)
 Statistics.mean(v::Symbolics.Arr{Num, 1}) = mean(Symbolics.scalarize(v))
 sd(v::Symbolics.Arr{Num, 1}) = Statistics.std(Symbolics.scalarize(v))
 inprod(a::Array, b::Array) = a*b
+
+# dummy function used for testing
+@register_symbolic foo(v::Array)

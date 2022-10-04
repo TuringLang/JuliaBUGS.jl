@@ -4,7 +4,7 @@ using SymbolicPPL
 using MCMCChains
 using MCMCChains: summarize
 using StatsPlots
-using SymbolicPPL: row_major_reshape
+using SymbolicPPL: rreshape
 
 const NA = missing
 

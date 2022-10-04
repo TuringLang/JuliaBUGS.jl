@@ -13,8 +13,8 @@ Level Of Testing: a higher level is inclusive of lower levels
 | dyes  | 3 | | |
 | epil | 2 | 3 | sampling step encounter error, seems \mu is inf |
 | equiv | 3 | | | 
-| inhalers | 1 | | compile error: has loops | 
-| kidney | 2 | | | 
+| inhalers | 1 | | a[1], a[2], a[3] forms loops; MethodError(SymbolicPPL.truncated, (Turing.Flat(), -1000, a[2]), 0x00000000000084e2)| 
+| kidney | 2 | | compile(model_def, data) | 
 | leuk | 2 | | | 
 | leukfr | 2 | | | 
 | last | 1 | | | 

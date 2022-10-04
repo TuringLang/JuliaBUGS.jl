@@ -1,16 +1,13 @@
 module SymbolicPPL
 
 include("bugsast.jl")
-include("graphinfo.jl")
+include("graph.jl")
 include("compiler.jl")
 include("primitives.jl")
-include("gibbs.jl")
+# include("gibbs.jl")
 
-# export @bugsast_str
 export @bugsast, @bugsmodel_str
-export infer_types
-
-export compile_graphppl, SampleFromPrior
+export compile
 
 include("BUGSExamples/BUGSExamples.jl")
 using .BUGSExamples

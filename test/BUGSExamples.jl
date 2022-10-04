@@ -1,15 +1,8 @@
-using SymbolicPPL
-using SymbolicPPL: 
-    transform_expr,
-    addrules,
-    addrules!,
-    tograph,
-    pregraph,
-    ref_to_symbolic,
-    SampleFromPrior,
-    check_expr
-using AbstractMCMC
-using Random
+using SymbolicPPL; using SymbolicPPL: transform_expr, CompilerState, addlogicalrules!, unroll!, 
+addstochasticrules!, ref_to_symbolic!, resolve, ref_to_symbolic, tosymbol, symbolic_eval, scalarize, tograph,
+BUGSGraph, tosymbolic
+using MacroTools
+using Symbolics
 
 ##
 
@@ -35,28 +28,60 @@ m = SymbolicPPL.BUGSExamples.EXAMPLES[:stacks];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_simple];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_realistic];
 
-ori_expr = transform_expr(m[:model_def])
-expr, compiler_state = addrules(ori_expr, m[:data], true);
-check_expr(expr)
-@run g = tograph(compiler_state, false);
+@time model = compile(m[:model_def], m[:data]);
+@run model = compile(m[:model_def], m[:data], m[:inits][1]);
+##
+expr = transform_expr(m[:model_def]);
+compiler_state = CompilerState();
+addlogicalrules!(m[:data], compiler_state);
 
-g = SymbolicPPL.pregraph(m[:model_def], m[:data], true, true);
+while true
+    unroll!(expr, compiler_state) ||
+        addlogicalrules!(expr, compiler_state) ||
+        break
+end
+addstochasticrules!(expr, compiler_state);
+##
+g = tograph(compiler_state);
+gg = BUGSGraph(g);
+compile(m[:model_def], m[:data], m[:inits][1]);
 
-@time model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
-@run model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
+length(keys(gg.nodeenum))
 
-sampler = SampleFromPrior(model);
-sample, state = AbstractMCMC.step(Random.default_rng(), model, sampler);
-sample, state = AbstractMCMC.step(Random.default_rng(), model, sampler, state);
-samples = AbstractMCMC.sample(model, sampler, 3);
-
-## 
-using AbstractPPL: VarName
-node = model[VarName(Symbol("mu[1]"))]
-k = keys(model);
-length(k)
+g[Symbol("grade[1, 1]")]
+compiler_state.logicalrules[tosymbolic(Symbol("p[1, 1, 1]"))]
+resolve(compiler_state.logicalrules[tosymbolic(Symbol("p[1, 1, 1]"))], compiler_state)
+eval(g[Symbol("grade[1, 1]")][2])(1)
 
 ##
-using SymbolicPPL
-m = SymbolicPPL.BUGSExamples.EXAMPLES[:lsat];
-@time model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
+ex = @bugsast begin
+    g ~ dcat(p[1:3])
+    for i in 1:3
+        p[i] = q[i] + i
+        q[i] = foo(u[1:i])
+        u[i] ~ dnorm(0, 1)
+    end
+end
+
+expr = transform_expr(ex);
+compiler_state = CompilerState();
+addlogicalrules!(NamedTuple(), compiler_state);
+
+while true
+    unroll!(expr, compiler_state) ||
+        addlogicalrules!(expr, compiler_state) ||
+        break
+end
+addstochasticrules!(expr, compiler_state);
+
+@run g = tograph(compiler_state);
+
+##
+for m in SymbolicPPL.BUGSExamples.EXAMPLES
+    println(m[:name])
+    try
+        @time model = compile(m[:model_def], m[:data], m[:inits][1]);
+    catch e
+        println(e)
+    end
+end

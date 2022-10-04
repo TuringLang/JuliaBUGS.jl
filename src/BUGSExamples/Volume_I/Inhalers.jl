@@ -78,7 +78,7 @@ inhalers = (
 
     data = (
         N = 286, T = 2, G = 2, Npattern = 16, Ncut = 3,
-        pattern = row_major_reshape([
+        pattern = rreshape([
             1, 1,
             1, 2,
             1, 3,
@@ -96,7 +96,7 @@ inhalers = (
             4, 3,
             4, 4,
             ], (16, 2)),
-        Ncum = row_major_reshape([
+        Ncum = rreshape([
             59, 122,
             157, 170,
             173, 173,
@@ -113,11 +113,11 @@ inhalers = (
             285, 285,
             285, 286,
             286, 286], (16, 2)),
-        treat = row_major_reshape([
+        treat = rreshape([
             1, -1, -1, 1], (2, 2)),
-        period = row_major_reshape([
+        period = rreshape([
             1, -1, 1, -1], (2, 2)),
-        carry = row_major_reshape([
+        carry = rreshape([
             0, -1, 0, 1], (2, 2))
     ),
     

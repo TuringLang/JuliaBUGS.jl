@@ -616,18 +616,20 @@ function scalarize(ex::Num, compiler_state::CompilerState)
     arguments = Symbolics.arguments(ex_val)
     new_ex_val = deepcopy(ex_val)
     
-    ret = Dict()
+    arr_to_args = Dict()
+    arr_to_size = Dict()
     for (i, arg) in enumerate(arguments)
         args = Set{Symbol}()
         new_arg = Array{Num}(undef, size(arg))
+
         if isa(arg, Array)
             for j in eachindex(arg)
-                new_arg[j] = Symbolics.wrap(arg[j])
-                elem = symbolic_eval(new_arg[j], compiler_state)
-                # need to recursively call scalarize here
-                new_arg[j], arg_map = scalarize(elem, compiler_state)
-                merge!(ret, arg_map)
+                elem = symbolic_eval(Symbolics.wrap(arg[j]), compiler_state)
+                new_arg[j], r, s  = scalarize(elem, compiler_state)
+                arr_to_args = merge(arr_to_args, r)
+                arr_to_size = merge(arr_to_size, s)
             end
+            arr_to_size[new_arg] = size(arg)
             new_arg = reduce(vcat, new_arg)
             for a in new_arg
                 vars = Symbolics.get_variables(a)
@@ -637,30 +639,20 @@ function scalarize(ex::Num, compiler_state::CompilerState)
                 end
             end
             new_ex_val = @set new_ex_val.arguments[i] = new_arg
-            ret[new_arg] = collect(args)
+            arr_to_args[new_arg] = collect(args)
         elseif istree(arg)
-            new_arg, r = Symbolics.unwrap(scalarize(Symbolics.wrap(arg), compiler_state))
+            new_arg, r, s = scalarize(Symbolics.wrap(arg), compiler_state)
             new_ex_val = @set new_ex_val.arguments[i] = Symbolics.unwrap(new_arg)
-            ret = merge(ret, r)
+            arr_to_args = merge(arr_to_args, r)
+            arr_to_size = merge(arr_to_size, s)
         else
             continue
         end
     end
 
-    return Symbolics.wrap(new_ex_val), ret
+    return Symbolics.wrap(new_ex_val), arr_to_args, arr_to_size
 end
-scalarize(ex, ::CompilerState) = ex, Dict()
-
-# Bugs in SymbolicUtils.jl
-# Fixed at: https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/471
-# Not in the latest release yet.
-function SymbolicUtils.toterm(t::SymbolicUtils.Add{T}) where T
-    args = Any[t.coeff, ]
-    for (k, coeff) in t.dict
-        push!(args, coeff == 1 ? k : SymbolicUtils.Term{T}(*, [coeff, k]))
-    end
-    SymbolicUtils.Term{T}(+, args)
-end
+scalarize(ex, ::CompilerState) = ex, Dict(), Dict()
 
 """
     tograph(compiler_state, eval_ex)
@@ -671,19 +663,19 @@ function tograph(compiler_state::CompilerState)
     to_graph = Dict()
     for key in keys(compiler_state.stochasticrules)
         ex = symbolic_eval(compiler_state.stochasticrules[key], compiler_state)
-        ex, arr_arg = scalarize(ex, compiler_state)
+        ex, arr_to_args, arr_to_size = scalarize(ex, compiler_state)
         args = Symbolics.get_variables(ex)
         f_expr = Base.remove_linenums!(Symbolics.build_function(ex, args...))
 
-        # promote all the array elements to the arguments, also use `row_major_reshape` to maintain the shape of the arrays
-        for arr in keys(arr_arg)
-            f_expr.args[1].args = collect(union(Set(f_expr.args[1].args), Set(arr_arg[arr])))
+        for arr in keys(arr_to_args)
+            f_expr.args[1].args = collect(union(Set(f_expr.args[1].args), Set(arr_to_args[arr])))
             f_expr = MacroTools.prewalk(f_expr) do sub_expr
                 if MacroTools.isexpr(sub_expr)
                     new_expr = deepcopy(sub_expr)
                     for (i, a) in enumerate(sub_expr.args)
                         if isequal(arr, a)
-                            ex = Expr(:call, :row_major_reshape, Expr(:vect, (Symbolics.toexpr.(arr))...), Expr(:tuple, size(arr)...))
+                            # TODO: use rreshape to maintain original shape, maybe flatten and reshape is not necessary
+                            ex = Expr(:call, :rreshape, Expr(:vect, (Symbolics.toexpr.(arr))...), Expr(:tuple, arr_to_size[arr]...))
                             new_expr.args[i] = getindex_to_ref(ex)
                         end
                     end
@@ -712,6 +704,17 @@ function getindex_to_ref(expr)
         end
         return sub_expr
     end
+end
+
+# Bugs in SymbolicUtils.jl
+# Fixed at: https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/471
+# Not in the latest release yet.
+function SymbolicUtils.toterm(t::SymbolicUtils.Add{T}) where T
+    args = Any[t.coeff, ]
+    for (k, coeff) in t.dict
+        push!(args, coeff == 1 ? k : SymbolicUtils.Term{T}(*, [coeff, k]))
+    end
+    SymbolicUtils.Term{T}(+, args)
 end
 
 function refinindices(expr, compiler_state)
@@ -749,22 +752,6 @@ struct BUGSChain
     initializations::Dict{Int32, Real}
 end
 
-BUGSChain(g::BUGSGraph, initializations::NamedTuple) = BUGSChain(g, Dict(pairs(initializations)))
-function BUGSChain(g::BUGSGraph, initializations::Dict)
-    for (k, v) in pairs(initializations)
-        if v isa Array
-            for i in CartesianIndices(v)
-                ismissing(v[i]) && continue
-                s = bugs_to_julia("$k") * "$(collect(Tuple(i)))"
-                n = tosymbol(tosymbolic(Meta.parse(s)))
-                initializations[g.nodeenum[n]] = v[i]
-            end
-        else
-            initializations[g.nodeenum[k]] = v
-        end
-    end
-end
-
 compile(model_def::Expr) = compile(model_def, NamedTuple())
 compile(model_def::Expr, data::Dict) = compile(model_def, Tuple(data))
 function compile(model_def::Expr, data::NamedTuple)
@@ -788,6 +775,22 @@ function compile(model_def::Expr, data::NamedTuple)
     g = tograph(compiler_state)
     return BUGSGraph(g)
 end
-compile(model_def::Expr, data::NamedTuple, inits::NamedTuple) = BUGSChain(compile(model_def, data), inits)
+function compile(model_def::Expr, data::NamedTuple, inits::NamedTuple)
+    g = compile(model_def, data)
+    initializations = Dict{Int32, Real}()
+    for (k, v) in pairs(inits)
+        if v isa Array
+            for i in CartesianIndices(v)
+                ismissing(v[i]) && continue
+                s = bugs_to_julia("$k") * "$(collect(Tuple(i)))"
+                n = tosymbol(tosymbolic(Meta.parse(s)))
+                initializations[g.nodeenum[n]] = v[i]
+            end
+        else
+            initializations[g.nodeenum[k]] = v
+        end
+    end
+    return BUGSChain(g, initializations)
+end
 compile(model_def::Expr, data::NamedTuple, inits::Vector{NamedTuple}) = [compile(model_def, NamedTuple(data), NamedTuple(init)) for init in inits]
 

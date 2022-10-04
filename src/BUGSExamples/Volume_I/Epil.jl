@@ -38,7 +38,7 @@ epil = (
 
     data = (
         N = 59, T = 4,
-        Y = row_major_reshape([
+        Y = rreshape([
             5, 3, 3, 3,
             3, 5, 3, 3,
             2, 4, 0, 5,
