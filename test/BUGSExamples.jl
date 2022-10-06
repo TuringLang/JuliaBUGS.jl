@@ -1,9 +1,9 @@
-using SymbolicPPL; using SymbolicPPL: transform_expr, CompilerState, addlogicalrules!, unroll!, 
-addstochasticrules!, ref_to_symbolic!, resolve, ref_to_symbolic, tosymbol, symbolic_eval, scalarize, tograph,
-BUGSGraph, tosymbolic
-using MacroTools
-using Symbolics
-
+using SymbolicPPL
+using SymbolicPPL: transform_expr, CompilerState, addlogicalrules!, unroll!, addstochasticrules!, 
+ref_to_symbolic!, resolve, ref_to_symbolic, tosymbol, symbolic_eval, scalarize, tograph,
+BUGSGraph, tosymbolic, SampleFromPrior
+using Random
+using AbstractMCMC
 ##
 
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:blockers];
@@ -28,7 +28,7 @@ m = SymbolicPPL.BUGSExamples.EXAMPLES[:stacks];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_simple];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_realistic];
 
-@time model = compile(m[:model_def], m[:data]);
+@time model = compile(m[:model_def], m[:data], m[:inits][1]);
 @run model = compile(m[:model_def], m[:data], m[:inits][1]);
 ##
 expr = transform_expr(m[:model_def]);
@@ -41,42 +41,17 @@ while true
         break
 end
 addstochasticrules!(expr, compiler_state);
+
 ##
 g = tograph(compiler_state);
-gg = BUGSGraph(g);
-compile(m[:model_def], m[:data], m[:inits][1]);
-
-length(keys(gg.nodeenum))
-
-g[Symbol("grade[1, 1]")]
-compiler_state.logicalrules[tosymbolic(Symbol("p[1, 1, 1]"))]
-resolve(compiler_state.logicalrules[tosymbolic(Symbol("p[1, 1, 1]"))], compiler_state)
-eval(g[Symbol("grade[1, 1]")][2])(1)
+graph = BUGSGraph(g);
 
 ##
-ex = @bugsast begin
-    g ~ dcat(p[1:3])
-    for i in 1:3
-        p[i] = q[i] + i
-        q[i] = foo(u[1:i])
-        u[i] ~ dnorm(0, 1)
-    end
-end
+sampler = SampleFromPrior()
+sample, trace = AbstractMCMC.step(Random.default_rng(), model, sampler);
+sample1, trace1 = AbstractMCMC.step(Random.default_rng(), model, sampler, trace);
 
-expr = transform_expr(ex);
-compiler_state = CompilerState();
-addlogicalrules!(NamedTuple(), compiler_state);
-
-while true
-    unroll!(expr, compiler_state) ||
-        addlogicalrules!(expr, compiler_state) ||
-        break
-end
-addstochasticrules!(expr, compiler_state);
-
-@run g = tograph(compiler_state);
-
-##
+## run all examples
 for m in SymbolicPPL.BUGSExamples.EXAMPLES
     println(m[:name])
     try
@@ -84,4 +59,10 @@ for m in SymbolicPPL.BUGSExamples.EXAMPLES
     catch e
         println(e)
     end
+    try
+        sample, trace = AbstractMCMC.step(Random.default_rng(), model, sampler);
+    catch e
+        println(e)
+    end
+    println()
 end

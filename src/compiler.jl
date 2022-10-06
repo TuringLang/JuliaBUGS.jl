@@ -5,7 +5,7 @@ using Random
 using MacroTools
 using LinearAlgebra
 using Setfield
-import SymbolicUtils: toterm
+import SymbolicUtils: toterm, substitute
 
 """
     CompilerState
@@ -379,6 +379,37 @@ end
 
 const __SKIP__ = tosymbolic("SKIP")
 
+# https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/a42082ac90f951f677ce1e2a91cd1a0ddd4306c6/src/substitute.jl#L1
+# modified to handle `missing` data
+function SymbolicUtils.substitute(expr, dict; fold=true)
+    haskey(dict, expr) && return dict[expr]
+
+    if istree(expr)
+        op = substitute(operation(expr), dict; fold=fold)
+        if fold
+            canfold = !(op isa SymbolicUtils.Symbolic)
+            args = map(SymbolicUtils.unsorted_arguments(expr)) do x
+                x′ = substitute(x, dict; fold=fold)
+                x′ = ismissing(x′) ? x : x′
+                canfold = canfold && !(x′ isa SymbolicUtils.Symbolic)
+                x′
+            end
+            canfold && return op(args...)
+            args
+        else
+            args = map(x->substitute(x, dict, fold=fold), SymbolicUtils.unsorted_arguments(expr))
+        end
+
+        SymbolicUtils.similarterm(expr,
+                    op,
+                    args,
+                    SymbolicUtils.symtype(expr);
+                    metadata=SymbolicUtils.metadata(expr))
+    else
+        expr
+    end
+end
+
 """
     resolve(variable, compiler_state)
 
@@ -394,7 +425,7 @@ function symbolic_eval(variable, compiler_state::CompilerState)
         variable = Symbolics.scalarize(variable)
     end
     partial_trace = []
-    evaluated = Symbolics.substitute(variable, compiler_state.logicalrules)
+    evaluated = substitute(variable, compiler_state.logicalrules)
 
     let e = Symbolics.toexpr(evaluated) 
         if Meta.isexpr(e, :call) && in(Symbol(e.args[1]), TRACED_FUNCTIONS) # if symbolically traced, can be more general, only handle :exp now
@@ -411,12 +442,12 @@ function symbolic_eval(variable, compiler_state::CompilerState)
         end
     end
 
-    try_evaluated = Symbolics.substitute(evaluated, compiler_state.logicalrules)
+    try_evaluated = substitute(evaluated, compiler_state.logicalrules)
     try_evaluated isa Array || push!(partial_trace, try_evaluated)
 
     while !Symbolics.isequal(evaluated, try_evaluated)
         evaluated = try_evaluated
-        try_evaluated = Symbolics.substitute(try_evaluated, compiler_state.logicalrules)
+        try_evaluated = substitute(try_evaluated, compiler_state.logicalrules)
         try_evaluated isa Array || try_evaluated in partial_trace && break # avoiding infinite loop
     end
 
@@ -674,7 +705,6 @@ function tograph(compiler_state::CompilerState)
                     new_expr = deepcopy(sub_expr)
                     for (i, a) in enumerate(sub_expr.args)
                         if isequal(arr, a)
-                            # TODO: use rreshape to maintain original shape, maybe flatten and reshape is not necessary
                             ex = Expr(:call, :rreshape, Expr(:vect, (Symbolics.toexpr.(arr))...), Expr(:tuple, arr_to_size[arr]...))
                             new_expr.args[i] = getindex_to_ref(ex)
                         end
@@ -747,14 +777,7 @@ function check_expr(expr, compiler_state::CompilerState)
     refinindices(expr, compiler_state)
 end
 
-struct BUGSChain
-    g::BUGSGraph
-    initializations::Dict{Int32, Real}
-end
-
-compile(model_def::Expr) = compile(model_def, NamedTuple())
-compile(model_def::Expr, data::Dict) = compile(model_def, Tuple(data))
-function compile(model_def::Expr, data::NamedTuple)
+function compile_inter(model_def::Expr, data::NamedTuple)
     expr = transform_expr(model_def)
     compiler_state = CompilerState()
     addlogicalrules!(data, compiler_state)
@@ -773,24 +796,17 @@ function compile(model_def::Expr, data::NamedTuple)
     println("Finish processing stochastic assignments.")
     
     g = tograph(compiler_state)
+end
+
+compile(model_def::Expr) = compile(model_def, NamedTuple())
+compile(model_def::Expr, data::Dict) = compile(model_def, Tuple(data))
+function compile(model_def::Expr, data::NamedTuple)
+    g = compile_inter(model_def, data)
     return BUGSGraph(g)
 end
 function compile(model_def::Expr, data::NamedTuple, inits::NamedTuple)
-    g = compile(model_def, data)
-    initializations = Dict{Int32, Real}()
-    for (k, v) in pairs(inits)
-        if v isa Array
-            for i in CartesianIndices(v)
-                ismissing(v[i]) && continue
-                s = bugs_to_julia("$k") * "$(collect(Tuple(i)))"
-                n = tosymbol(tosymbolic(Meta.parse(s)))
-                initializations[g.nodeenum[n]] = v[i]
-            end
-        else
-            initializations[g.nodeenum[k]] = v
-        end
-    end
-    return BUGSChain(g, initializations)
+    g = compile_inter(model_def, data)
+    return BUGSGraph(g, inits)
 end
 compile(model_def::Expr, data::NamedTuple, inits::Vector{NamedTuple}) = [compile(model_def, NamedTuple(data), NamedTuple(init)) for init in inits]
 

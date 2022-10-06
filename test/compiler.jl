@@ -191,32 +191,25 @@ compiler_state = CompilerState(
 )
 @test symbolic_eval(a, compiler_state) == 5
 
-# test for the top function
-# example taken from https://chjackson.github.io/openbugsdoc/Examples/Rats.html (data simplified)
-data = (
-    x = [8.0, 15.0, 22.0, 29.0, 36.0],
-    xbar = 22,
-    N = 3,
-    T = 2,
-    Y = [151 199; 145 199; 147 214],
-)
+# test for function building
+ex = @bugsast begin
+    g ~ dcat(p[1:3])
+    for i in 1:3
+        p[i] = q[i] + i
+        q[i] = foo(u[1:i])
+        u[i] ~ dnorm(0, 1)
+    end
+end
 
-expr = bugsmodel"""
-    for(i in 1:N) {
-        for(j in 1:T) {
-            Y[i, j] ~ dnorm(mu[i, j], tau.c)
-            mu[i, j] <- alpha[i] + beta[i] * (x[j] - xbar)
-        }
-        alpha[i] ~ dnorm(alpha.c, alpha.tau)
-        beta[i] ~ dnorm(beta.c, beta.tau)
-    }
-    tau.c ~ dgamma(0.001, 0.001)
-    sigma <- 1 / sqrt(tau.c)
-    alpha.c ~ dnorm(0.0, 1.0E-6)   
-    alpha.tau ~ dgamma(0.001, 0.001)
-    beta.c ~ dnorm(0.0, 1.0E-6)
-    beta.tau ~ dgamma(0.001, 0.001)
-    alpha0 <- alpha.c - xbar * beta.c   
- """
+expr = transform_expr(ex);
+compiler_state = CompilerState();
+addlogicalrules!(NamedTuple(), compiler_state);
 
-model = compile_graphppl(model_def = expr, data = data, initials=NamedTuple()) # testing for no error occurs
+while true
+    unroll!(expr, compiler_state) ||
+        addlogicalrules!(expr, compiler_state) ||
+        break
+end
+addstochasticrules!(expr, compiler_state);
+
+g = tograph(compiler_state);

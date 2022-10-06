@@ -1,54 +1,117 @@
 using Graphs
+using AbstractPPL
+using DensityInterface
 
-struct BUGSGraph
-    nodeenum::Dict{Symbol, Int32}
-    reverse_nodeenum::Dict{Int32, Symbol}
+struct BUGSGraph <: AbstractPPL.AbstractProbabilisticProgram
+    nodeenum::Dict{Symbol, Integer}
+    reverse_nodeenum::Vector{Symbol}
     digraph::DiGraph
-    isoberve::Dict{Int32, Bool}
-    observed_values::Dict{Int32, Real}
-    nodefunc::Dict{Int32, Function}
-    sortednode::Vector{Int32}
+    sortednode::Vector{Integer}
+    parents::Vector{Vector{Integer}}
+    isoberve::BitVector
+    observed_values::Dict{Integer, Real}
+    nodefunc::Vector{Function}
+    initializations::Dict{Integer, Real}
 end
 
-function BUGSGraph(tograph::Dict{Any, Any})
-    nodeenum = Dict{Symbol, Int32}()
+function _BUGSGRAPH(tograph::Dict)
+    numnodes = length(keys(tograph))
+    
+    nodeenum = Dict{Symbol, Integer}()
     for (i, k) in enumerate(keys(tograph))
         nodeenum[k] = i
     end
-    reversenodeenum = Dict{Int32, Symbol}(v => k for (k, v) in nodeenum)
 
-    parents = Dict{Symbol, Vector}()
+    reverse_nodeenum = Vector{Symbol}(undef, numnodes)
+    for (k, v) in nodeenum
+        reverse_nodeenum[v] = k
+    end
+
+    parents = Vector{Vector{Integer}}(undef, numnodes)
     for k in keys(tograph)
-        parents[k] = tograph[k][2].args[1].args
+        pa = tograph[k][2].args[1].args
+        if isempty(pa)
+            parents[nodeenum[k]] = []
+        else
+            parents[nodeenum[k]] = [nodeenum[p] for p in pa]
+        end
     end
 
     DAG = DiGraph(length(keys(tograph)))
     for k in keys(tograph)
-        for p in parents[k]
-            add_edge!(DAG, nodeenum[p], nodeenum[k])
+        node = nodeenum[k]
+        for p in parents[node]
+            add_edge!(DAG, p, node)
         end
     end
+    sortednode = topological_sort_by_dfs(DAG)
 
-    isoberve = Dict{Int32, Bool}()
+    isoberve = BitVector(undef, numnodes)
+    observevalues = Dict{Integer, Real}()
+    nodefunc = Vector{Function}(undef, numnodes)
     for k in keys(tograph)
         isoberve[nodeenum[k]] = tograph[k][3]
-    end
-
-    observevalues = Dict{Int32, Real}()
-    for k in keys(tograph)
-        if tograph[k][3] == :Observations
+        if tograph[k][3]
+            @assert !isempty(tograph[k][1])
             observevalues[nodeenum[k]] = tograph[k][1]
         end
-    end
-
-    nodefunc = Dict{Int32, Function}()
-    for k in keys(tograph)
         nodefunc[nodeenum[k]] = eval(tograph[k][2])
     end
 
-    sortednode = topological_sort_by_dfs(DAG)
-
-    return BUGSGraph(nodeenum, reversenodeenum, DAG, isoberve, observevalues, nodefunc, sortednode)
+    return nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc
 end
 
+function BUGSGraph(tograph::Dict{Any, Any})
+    nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc = _BUGSGRAPH(tograph)
+    return BUGSGraph(nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc, Dict{Integer, Real}())
+end
 
+function BUGSGraph(tograph::Dict, inits::NamedTuple)
+    nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc = _BUGSGRAPH(tograph)
+    initializations = Dict{Integer, Real}()
+    for (k, v) in pairs(inits)
+        if v isa Array
+            for i in CartesianIndices(v)
+                ismissing(v[i]) && continue
+                s = bugs_to_julia("$k") * "$(collect(Tuple(i)))"
+                n = tosymbol(tosymbolic(Meta.parse(s)))
+                initializations[nodeenum[n]] = v[i]
+            end
+        else
+            initializations[nodeenum[k]] = v
+        end
+    end
+    return BUGSGraph(nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc, initializations)
+end
+
+struct Trace <: AbstractPPL.AbstractModelTrace
+    value::Vector{Real}
+    logp::Vector{Real}
+end
+
+function getdistribution(g::BUGSGraph, node::Integer)::Function
+    return function (value::Vector{Real})
+        (g.nodefunc[node])([value[p] for p in g.parents[node]]...)
+    end
+end
+getdistribution(g::BUGSGraph, node::Integer, trace::Trace) = getdistribution(g, node, trace.value)
+getdistribution(g::BUGSGraph, node::Integer, value::Vector{Real}) = getdistribution(g, node)(value)
+
+getparents(g::BUGSGraph, node::Integer) = g.parents[node]
+
+function getmarkovblanket(g::BUGSGraph, node::Integer)
+    mb = Set{Integer}()
+    push!(mb, node)
+    for p in inneighbors(g.digraph, node)
+        push!(mb, p)
+    end
+    for p in outneighbors(g.digraph, node)
+        push!(mb, p)
+        for c in inneighbors(g.digraph, p)
+            push!(mb, c)
+        end
+    end
+    return collect(mb)
+end
+
+getnumnodes(g::BUGSGraph) = length(g.nodeenum)
