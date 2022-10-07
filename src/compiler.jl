@@ -536,7 +536,7 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
             if rhs.head == :call
                 dist_func = rhs.args[1]
                 dist_func in DISTRIBUTIONS || dist_func in (:truncated, :truncated_with_lower, :truncated_with_upper) || 
-                    dist_func in (:censored, :censored_with_lower, :censored__with_upper) || error("$dist_func not defined.") 
+                    dist_func in (:censored, :censored_with_lower, :censored__with_upper) || error("Distribution $dist_func not defined.") 
             else
                 error("RHS needs to be a distribution function")
             end
@@ -650,17 +650,15 @@ function scalarize(ex::Num, compiler_state::CompilerState)
     arr_to_args = Dict()
     arr_to_size = Dict()
     for (i, arg) in enumerate(arguments)
-        args = Set{Symbol}()
-        new_arg = Array{Num}(undef, size(arg))
-
         if isa(arg, Array)
+            args = Set{Symbol}()
+            new_arg = Array{Num}(undef, size(arg))
             for j in eachindex(arg)
                 elem = symbolic_eval(Symbolics.wrap(arg[j]), compiler_state)
                 new_arg[j], r, s  = scalarize(elem, compiler_state)
                 arr_to_args = merge(arr_to_args, r)
                 arr_to_size = merge(arr_to_size, s)
             end
-            arr_to_size[new_arg] = size(arg)
             new_arg = reduce(vcat, new_arg)
             for a in new_arg
                 vars = Symbolics.get_variables(a)
@@ -670,7 +668,10 @@ function scalarize(ex::Num, compiler_state::CompilerState)
                 end
             end
             new_ex_val = @set new_ex_val.arguments[i] = new_arg
-            arr_to_args[new_arg] = collect(args)
+            if new_arg isa Array{Num}
+                arr_to_args[new_arg] = args
+                arr_to_size[new_arg] = size(arg)
+            end
         elseif istree(arg)
             new_arg, r, s = scalarize(Symbolics.wrap(arg), compiler_state)
             new_ex_val = @set new_ex_val.arguments[i] = Symbolics.unwrap(new_arg)
@@ -698,21 +699,17 @@ function tograph(compiler_state::CompilerState)
         args = Symbolics.get_variables(ex)
         f_expr = Base.remove_linenums!(Symbolics.build_function(ex, args...))
 
-        for arr in keys(arr_to_args)
-            f_expr.args[1].args = collect(union(Set(f_expr.args[1].args), Set(arr_to_args[arr])))
-            f_expr = MacroTools.prewalk(f_expr) do sub_expr
-                if MacroTools.isexpr(sub_expr)
-                    new_expr = deepcopy(sub_expr)
-                    for (i, a) in enumerate(sub_expr.args)
-                        if isequal(arr, a)
-                            ex = Expr(:call, :rreshape, Expr(:vect, (Symbolics.toexpr.(arr))...), Expr(:tuple, arr_to_size[arr]...))
-                            new_expr.args[i] = getindex_to_ref(ex)
-                        end
+        while !isempty(arr_to_args)
+            for arr in keys(arr_to_args)
+                f_expr.args[1].args = collect(union(Set(f_expr.args[1].args), Set(arr_to_args[arr])))
+                f_expr = MacroTools.postwalk(f_expr) do sub_expr
+                    if isequal(sub_expr, arr)
+                        delete!(arr_to_args, arr)
+                        return Expr(:call, :rreshape, Expr(:vect, (Symbolics.toexpr.(arr))...), Expr(:tuple, arr_to_size[arr]...))
+                    else
+                        return sub_expr
                     end
-                    return new_expr
-                else
-                    return sub_expr
-                end
+                end |> getindex_to_ref
             end
         end
 
@@ -795,7 +792,7 @@ function compile_inter(model_def::Expr, data::NamedTuple)
     addstochasticrules!(expr, compiler_state)
     println("Finish processing stochastic assignments.")
     
-    g = tograph(compiler_state)
+    return tograph(compiler_state)
 end
 
 compile(model_def::Expr) = compile(model_def, NamedTuple())
