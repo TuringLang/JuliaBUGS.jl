@@ -16,10 +16,12 @@ struct CompilerState
     arrays::Dict{Symbol,Symbolics.Arr{Num}}
     logicalrules::Dict
     stochasticrules::Dict
+    observations::Dict
 end
 
 CompilerState() = CompilerState(
     Dict{Symbol,Symbolics.Arr{Num}}(),
+    Dict(),
     Dict(),
     Dict()
 )
@@ -162,8 +164,8 @@ function canunroll(expr::Expr, compiler_state::CompilerState)
     for arg in expr.args
         if arg.head == :for
             lower_bound, upper_bound = arg.args[1].args[2].args
-            lower_bound = resolve(lower_bound, compiler_state)
-            upper_bound = resolve(upper_bound, compiler_state)
+            lower_bound = resolve(lower_bound, compiler_state.logicalrules)
+            upper_bound = resolve(upper_bound, compiler_state.logicalrules)
             is_integer(lower_bound) &&
                 is_integer(upper_bound) &&
                 return true
@@ -177,8 +179,8 @@ function unroll(expr::Expr, compiler_state::CompilerState)
     lower_bound, upper_bound = expr.args[1].args[2].args
     body = expr.args[2]
 
-    lower_bound = resolve(lower_bound, compiler_state)
-    upper_bound = resolve(upper_bound, compiler_state)
+    lower_bound = resolve(lower_bound, compiler_state.logicalrules)
+    upper_bound = resolve(upper_bound, compiler_state.logicalrules)
     if is_integer(lower_bound) && is_integer(upper_bound)
         unrolled_exprs = []
         for i = lower_bound:upper_bound
@@ -211,7 +213,7 @@ function resolveif!(expr::Expr, compiler_state::CompilerState)
                 block = arg.args[2]
                 @assert size(arg.args) === (2,)
 
-                cond = resolve(condition, compiler_state)
+                cond = resolve(condition, compiler_state.logicalrules)
                 if cond isa Bool
                     if cond
                         splice!(expr.args, i, block.args)
@@ -312,8 +314,8 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
     for (i, index) in enumerate(indices)
         if index isa Expr || (index isa Symbol && index != :(:))
             if Meta.isexpr(index, :call) && index.args[1] == :(:)
-                lb = resolve(index.args[2], compiler_state) 
-                ub = resolve(index.args[3], compiler_state)
+                lb = resolve(index.args[2], compiler_state.logicalrules) 
+                ub = resolve(index.args[3], compiler_state.logicalrules)
                 if lb isa Real && ub isa Real
                     indices[i].args[2] = lb
                     indices[i].args[3] = ub
@@ -322,7 +324,7 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
                 end
             end
 
-            resolved_index = resolve(tosymbolic(index), compiler_state)
+            resolved_index = resolve(tosymbolic(index), compiler_state.logicalrules)
             if !isa(resolved_index, Union{Real, UnitRange})
                 return __SKIP__
             end 
@@ -382,7 +384,7 @@ const __SKIP__ = tosymbolic("SKIP")
 # https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/a42082ac90f951f677ce1e2a91cd1a0ddd4306c6/src/substitute.jl#L1
 # modified to handle `missing` data
 function SymbolicUtils.substitute(expr, dict; fold=true)
-    haskey(dict, expr) && return dict[expr]
+    haskey(dict, expr) && return ismissing(dict[expr]) ? expr : dict[expr]
 
     if istree(expr)
         op = substitute(operation(expr), dict; fold=fold)
@@ -390,11 +392,10 @@ function SymbolicUtils.substitute(expr, dict; fold=true)
             canfold = !(op isa SymbolicUtils.Symbolic)
             args = map(SymbolicUtils.unsorted_arguments(expr)) do x
                 x′ = substitute(x, dict; fold=fold)
-                x′ = ismissing(x′) ? x : x′
                 canfold = canfold && !(x′ isa SymbolicUtils.Symbolic)
                 x′
             end
-            canfold && return op(args...)
+            canfold && return ismissing(op(args...)) ? expr : op(args...)
             args
         else
             args = map(x->substitute(x, dict, fold=fold), SymbolicUtils.unsorted_arguments(expr))
@@ -415,17 +416,17 @@ end
 
 Partially evaluate the variable in the context defined by compiler_state.
 """
-resolve(variable::Distributions.Distribution, compiler_state::CompilerState) = variable
-function resolve(variable, compiler_state::CompilerState)
-    resolved_variable = symbolic_eval(tosymbolic(variable), compiler_state)
+resolve(variable::Distributions.Distribution, rules::Dict) = variable
+function resolve(variable, rules::Dict)
+    resolved_variable = symbolic_eval(tosymbolic(variable), rules)
     return Symbolics.unwrap(resolved_variable)
 end
-function symbolic_eval(variable, compiler_state::CompilerState)
+function symbolic_eval(variable, rules::Dict)
     if variable isa Symbolics.Arr{Num}
         variable = Symbolics.scalarize(variable)
     end
     partial_trace = []
-    evaluated = substitute(variable, compiler_state.logicalrules)
+    evaluated = substitute(variable, rules)
 
     let e = Symbolics.toexpr(evaluated) 
         if Meta.isexpr(e, :call) && in(Symbol(e.args[1]), TRACED_FUNCTIONS) # if symbolically traced, can be more general, only handle :exp now
@@ -435,25 +436,25 @@ function symbolic_eval(variable, compiler_state::CompilerState)
             resolved_args = []
             for i in 1:nargs
                 arg = Symbolics.wrap(args[i])
-                resolved_arg = symbolic_eval(arg, compiler_state)
+                resolved_arg = symbolic_eval(arg, rules)
                 push!(resolved_args, resolved_arg)
             end
             return func(resolved_args...)
         end
     end
 
-    try_evaluated = substitute(evaluated, compiler_state.logicalrules)
+    try_evaluated = substitute(evaluated, rules)
     try_evaluated isa Array || push!(partial_trace, try_evaluated)
 
     while !Symbolics.isequal(evaluated, try_evaluated)
         evaluated = try_evaluated
-        try_evaluated = substitute(try_evaluated, compiler_state.logicalrules)
+        try_evaluated = substitute(try_evaluated, rules)
         try_evaluated isa Array || try_evaluated in partial_trace && break # avoiding infinite loop
     end
 
     return try_evaluated
 end
-symbolic_eval(variable::UnitRange{Int64}, compiler_state::CompilerState) = variable # Special case for array range
+symbolic_eval(variable::UnitRange{Int64}, rules::Dict) = variable # Special case for array range
 
 Base.isequal(::SymbolicUtils.Symbolic, ::Missing) = false
 
@@ -547,6 +548,10 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
                 continue
             end
             sym_rhs = eval(rhs)
+            
+            if sym_rhs isa Distributions.Distribution
+                nothing
+            end
 
             if haskey(compiler_state.stochasticrules, lhs)
                 Symbolics.isequal(sym_rhs, compiler_state.stochasticrules[lhs]) && continue
@@ -622,6 +627,29 @@ function recursive_find_variables(expr::Expr, variables::Vector{Any})
     end
 end
 
+# need to handle array indexing
+function extract_observations!(compiler_state::CompilerState)
+    for k in keys(compiler_state.stochasticrules)
+        resolved_val = resolve(k, compiler_state.logicalrules)
+        if resolved_val isa Real
+            compiler_state.observations[k] = resolved_val
+            if k in keys(compiler_state.logicalrules)
+                delete!(compiler_state.logicalrules, k)
+            elseif occursin("[", string(tosymbol(k)))
+                if k in keys(compiler_state.logicalrules)
+                    delete!(compiler_state.logicalrules, k)
+                    break
+                end
+                var = k.val.arguments[1].name
+                sym_arr = compiler_state.arrays[var]
+                @assert haskey(compiler_state.logicalrules, sym_arr) "Can't find the variable $k in the logical rules."
+                index = Tuple(Meta.parse(string(tosymbol(k))).args[2:end])
+                compiler_state.logicalrules[sym_arr][index...] = missing
+            end
+        end
+    end
+end
+
 """
     scalarize(ex)
 
@@ -653,7 +681,7 @@ function scalarize(ex::Num, compiler_state::CompilerState)
             args = Set{Symbol}()
             new_arg = Array{Num}(undef, size(arg))
             for j in eachindex(arg)
-                elem = symbolic_eval(Symbolics.wrap(arg[j]), compiler_state)
+                elem = symbolic_eval(Symbolics.wrap(arg[j]), compiler_state.logicalrules)
                 new_arg[j], r  = scalarize(elem, compiler_state)
                 sub_dict = merge(sub_dict, r)
             end
@@ -690,7 +718,7 @@ Build inputs to BUGSGraph from the rules in the compiler state.
 function tograph(compiler_state::CompilerState)
     to_graph = Dict()
     for key in keys(compiler_state.stochasticrules)
-        ex = symbolic_eval(compiler_state.stochasticrules[key], compiler_state)
+        ex = symbolic_eval(compiler_state.stochasticrules[key], compiler_state.logicalrules)
         ex, sub_dict = scalarize(ex, compiler_state)
         args = Symbolics.get_variables(ex)
         f_expr = Base.remove_linenums!(Symbolics.build_function(ex, args...))
@@ -712,8 +740,18 @@ function tograph(compiler_state::CompilerState)
             end
         end
 
-        value = resolve(key, compiler_state)
-        isoberve = isa(value, Real)
+        if !isempty(compiler_state.observations)
+            if haskey(compiler_state.observations, key)
+                value = compiler_state.observations[key]
+                isoberve = true
+            else
+                value = missing
+                isoberve = false
+            end
+        else
+            value = resolve(key, compiler_state.logicalrules)
+            isoberve = isa(value, Real)
+        end
 
         to_graph[tosymbol(key)] = (isoberve ? value : 0, MacroTools.prettify(f_expr), isoberve)
     end
@@ -791,6 +829,8 @@ function compile_inter(model_def::Expr, data::NamedTuple)
     addstochasticrules!(expr, compiler_state)
     println("Finish processing stochastic assignments.")
     
+    extract_observations!(compiler_state)
+
     return compiler_state
 end
 

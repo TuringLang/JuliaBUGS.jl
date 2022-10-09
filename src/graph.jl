@@ -171,7 +171,7 @@ getnodeenum(g::BUGSGraph, node::Symbol) = g.nodeenum[node]
 
 function shownodefunc(g::BUGSGraph, node::Integer)
     f_expr = g.nodefunc[node]
-
+    printfuncexpr(f_expr)
 end
 
 function printfuncexpr(f_expr::Expr)

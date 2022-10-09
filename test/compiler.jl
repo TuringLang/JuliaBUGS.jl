@@ -209,25 +209,3 @@ SymbolicPPL.querynode(compiler_state, :g)
 SymbolicPPL.querynode(compiler_state, Symbol("q[1, 1]"))
 
 g = compile(ex, NamedTuple())
-
-
-###
-
-using Turing
-using Random
-using SymbolicPPL
-##
-@model function m(a=1)
-    a ~ SymbolicPPL.dnorm(0, 1)
-    b ~ SymbolicPPL.dnorm(a, 1)
-    c ~ SymbolicPPL.dnorm(b, a^2)
-end
-rand(m())
-
-ex = @bugsast begin
-    a ~ dnorm(0, 1)
-    b ~ dnorm(a, 1)
-    c ~ dnorm(b, a^2)
-end 
-
-g = compile(ex, NamedTuple())

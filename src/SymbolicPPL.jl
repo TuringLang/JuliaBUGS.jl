@@ -6,6 +6,8 @@ include("compiler.jl")
 include("primitives.jl")
 include("gibbs.jl")
 include("distributions.jl")
+include("toturing.jl")
+
 
 export @bugsast, @bugsmodel_str
 export compile
