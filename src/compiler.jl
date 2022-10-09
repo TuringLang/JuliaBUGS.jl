@@ -647,17 +647,15 @@ function scalarize(ex::Num, compiler_state::CompilerState)
     arguments = Symbolics.arguments(ex_val)
     new_ex_val = deepcopy(ex_val)
     
-    arr_to_args = Dict()
-    arr_to_size = Dict()
+    sub_dict = Dict()
     for (i, arg) in enumerate(arguments)
         if isa(arg, Array)
             args = Set{Symbol}()
             new_arg = Array{Num}(undef, size(arg))
             for j in eachindex(arg)
                 elem = symbolic_eval(Symbolics.wrap(arg[j]), compiler_state)
-                new_arg[j], r, s  = scalarize(elem, compiler_state)
-                arr_to_args = merge(arr_to_args, r)
-                arr_to_size = merge(arr_to_size, s)
+                new_arg[j], r  = scalarize(elem, compiler_state)
+                sub_dict = merge(sub_dict, r)
             end
             new_arg = reduce(vcat, new_arg)
             for a in new_arg
@@ -669,22 +667,20 @@ function scalarize(ex::Num, compiler_state::CompilerState)
             end
             new_ex_val = @set new_ex_val.arguments[i] = new_arg
             if new_arg isa Array{Num}
-                arr_to_args[new_arg] = args
-                arr_to_size[new_arg] = size(arg)
+                sub_dict[new_arg] = (args, size(arg))
             end
         elseif istree(arg)
-            new_arg, r, s = scalarize(Symbolics.wrap(arg), compiler_state)
+            new_arg, r = scalarize(Symbolics.wrap(arg), compiler_state)
             new_ex_val = @set new_ex_val.arguments[i] = Symbolics.unwrap(new_arg)
-            arr_to_args = merge(arr_to_args, r)
-            arr_to_size = merge(arr_to_size, s)
+            sub_dict = merge(sub_dict, r)
         else
             continue
         end
     end
 
-    return Symbolics.wrap(new_ex_val), arr_to_args, arr_to_size
+    return Symbolics.wrap(new_ex_val), sub_dict
 end
-scalarize(ex, ::CompilerState) = ex, Dict(), Dict()
+scalarize(ex, ::CompilerState) = ex, Dict()
 
 """
     tograph(compiler_state, eval_ex)
@@ -695,20 +691,23 @@ function tograph(compiler_state::CompilerState)
     to_graph = Dict()
     for key in keys(compiler_state.stochasticrules)
         ex = symbolic_eval(compiler_state.stochasticrules[key], compiler_state)
-        ex, arr_to_args, arr_to_size = scalarize(ex, compiler_state)
+        ex, sub_dict = scalarize(ex, compiler_state)
         args = Symbolics.get_variables(ex)
         f_expr = Base.remove_linenums!(Symbolics.build_function(ex, args...))
 
-        while !isempty(arr_to_args)
-            for arr in keys(arr_to_args)
-                f_expr.args[1].args = collect(union(Set(f_expr.args[1].args), Set(arr_to_args[arr])))
+        while !isempty(sub_dict)
+            for arr in keys(sub_dict)
+                f_expr.args[1].args = collect(union(Set(f_expr.args[1].args), Set(sub_dict[arr][1])))
                 f_expr = MacroTools.postwalk(f_expr) do sub_expr
                     if isequal(sub_expr, arr)
-                        delete!(arr_to_args, arr)
-                        return Expr(:call, :rreshape, Expr(:vect, (Symbolics.toexpr.(arr))...), Expr(:tuple, arr_to_size[arr]...))
-                    else
-                        return sub_expr
+                        if length(sub_dict[arr][2]) == 2 && (sub_dict[arr][2][1] == 1 || sub_dict[arr][2][2] == 1)
+                            sub_expr = Expr(:vect, (Symbolics.toexpr.(arr))...)
+                        else
+                            sub_expr = Expr(:call, :rreshape, Expr(:vect, (Symbolics.toexpr.(arr))...), Expr(:tuple, sub_dict[arr][2]...))
+                        end
+                        delete!(sub_dict, arr)
                     end
+                    return sub_expr
                 end |> getindex_to_ref
             end
         end
@@ -716,7 +715,7 @@ function tograph(compiler_state::CompilerState)
         value = resolve(key, compiler_state)
         isoberve = isa(value, Real)
 
-        to_graph[tosymbol(key)] = (isoberve ? value : 0, f_expr, isoberve)
+        to_graph[tosymbol(key)] = (isoberve ? value : 0, MacroTools.prettify(f_expr), isoberve)
     end
     return to_graph
 end
@@ -792,18 +791,33 @@ function compile_inter(model_def::Expr, data::NamedTuple)
     addstochasticrules!(expr, compiler_state)
     println("Finish processing stochastic assignments.")
     
-    return tograph(compiler_state)
+    return compiler_state
+end
+
+function querynode(compiler_state::CompilerState, var::Symbol)
+    findkey = 0
+    if haskey(compiler_state.logicalrules, tosymbolic(var)) 
+        findkey = 1 
+    elseif haskey(compiler_state.stochasticrules, tosymbolic(var))
+        findkey = 2
+    end
+
+    if findkey == 0
+        error("BUGS model does not contain node $var")
+    end
+
+    ex = findkey == 1 ? compiler_state.logicalrules[tosymbolic(var)] : compiler_state.stochasticrules[tosymbolic(var)]
+    return ex
 end
 
 compile(model_def::Expr) = compile(model_def, NamedTuple())
 compile(model_def::Expr, data::Dict) = compile(model_def, Tuple(data))
 function compile(model_def::Expr, data::NamedTuple)
-    g = compile_inter(model_def, data)
-    return BUGSGraph(g)
+    compiler_state = compile_inter(model_def, data)
+    return BUGSGraph(tograph(compiler_state))
 end
 function compile(model_def::Expr, data::NamedTuple, inits::NamedTuple)
-    g = compile_inter(model_def, data)
-    return BUGSGraph(g, inits)
+    compiler_state = compile_inter(model_def, data)
+    return BUGSGraph(tograph(compiler_state), inits)
 end
 compile(model_def::Expr, data::NamedTuple, inits::Vector{NamedTuple}) = [compile(model_def, NamedTuple(data), NamedTuple(init)) for init in inits]
-

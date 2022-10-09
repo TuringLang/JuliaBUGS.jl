@@ -10,7 +10,8 @@ using SymbolicPPL:
     ref_to_symbolic!,
     ref_to_symbolic,
     addlogicalrules!,
-    addstochasticrules!
+    addstochasticrules!,
+    compile_inter
 using Test
 using Symbolics
 
@@ -193,23 +194,40 @@ compiler_state = CompilerState(
 
 # test for function building
 ex = @bugsast begin
-    g ~ dcat(p[1:3])
-    for i in 1:3
-        p[i] = q[i] + i
-        q[i] = foo(u[1:i])
-        u[i] ~ dnorm(0, 1)
+    g ~ bar(p[1:2, 1:3])
+    for i in 1:2    
+        for j in 1:3
+            p[i, j] = q[i, j] + i
+            q[i, j] = foobar(u[1:i, 1:j])
+            u[i, j] ~ dnorm(0, 1)
+        end
     end
 end
 
-expr = transform_expr(ex);
-compiler_state = CompilerState();
-addlogicalrules!(NamedTuple(), compiler_state);
+compiler_state = compile_inter(ex, NamedTuple())
+SymbolicPPL.querynode(compiler_state, :g)
+SymbolicPPL.querynode(compiler_state, Symbol("q[1, 1]"))
 
-while true
-    unroll!(expr, compiler_state) ||
-        addlogicalrules!(expr, compiler_state) ||
-        break
+g = compile(ex, NamedTuple())
+
+
+###
+
+using Turing
+using Random
+using SymbolicPPL
+##
+@model function m(a=1)
+    a ~ SymbolicPPL.dnorm(0, 1)
+    b ~ SymbolicPPL.dnorm(a, 1)
+    c ~ SymbolicPPL.dnorm(b, a^2)
 end
-addstochasticrules!(expr, compiler_state);
+rand(m())
 
-g = tograph(compiler_state);
+ex = @bugsast begin
+    a ~ dnorm(0, 1)
+    b ~ dnorm(a, 1)
+    c ~ dnorm(b, a^2)
+end 
+
+g = compile(ex, NamedTuple())

@@ -18,7 +18,8 @@ using IfElse
 """
 const NA = :missing
 
-const DISTRIBUTIONS = [:truncated, :censored, :dgamma, :dnorm, :dbeta, :dbin, :dcat, :dexp, :dpois, :dflat, :dunif, :dbern]
+const DISTRIBUTIONS = [:truncated, :censored, :dgamma, :dnorm, :dbeta, :dbin, :dcat, :dexp, :dpois, :dflat, 
+    :dunif, :dbern, :bar]
 
 const INVERSE_LINK_FUNCTION =
     (logit = :logistic, cloglog = :cexpexp, log = :exp, probit = :phi)
@@ -137,5 +138,8 @@ Statistics.mean(v::Symbolics.Arr{Num, 1}) = mean(Symbolics.scalarize(v))
 sd(v::Symbolics.Arr{Num, 1}) = Statistics.std(Symbolics.scalarize(v))
 inprod(a::Array, b::Array) = a*b
 
-# dummy function used for testing
+# dummy function used for testing -- do not use
 @register_symbolic foo(v::Array)
+foo(v) = sum(v)
+@register_symbolic bar(v::Array)
+bar(v) = dcat(reduce(vcat, v))

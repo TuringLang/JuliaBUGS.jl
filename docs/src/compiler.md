@@ -14,4 +14,6 @@ All the assignments are processed into rules, and evaluation of a variable is im
 
 ## Array 
 The challenge of support BUGS' array interface is that every element of an array can be either logical or stochastic, so we need to treat every array element as a separate variable. 
+The internal implementation of the array interface is based on [Symbolic Arrays]() from Symbolics.jl. 
+A none-trivial transformation procedure has to done to ensure the single-addressability of each array element.
 
