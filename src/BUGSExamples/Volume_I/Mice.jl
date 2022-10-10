@@ -19,13 +19,13 @@ mice = (
         """, 
 
     data = (
-        t = row_major_reshape([
+        t = rreshape([
             12, 1, 21, 25, 11, 26, 27, 30, 13, 12, 21, 20, 23, 25, 23, 29, 35, missing, 31, 36,
             32, 27, 23, 12, 18, missing, missing, 38, 29, 30, missing, 32, missing, missing, missing, missing, 25, 30, 37, 27,
             22, 26, missing, 28, 19, 15, 12, 35, 35, 10, 22, 18, missing, 12, missing, missing, 31, 24, 37, 29,
             27, 18, 22, 13, 18, 29, 28, missing, 16, 22, 26, 19, missing, missing, 17, 28, 26, 12, 17, 26
             ],(4, 20)),
-        var"t.cen" = row_major_reshape([
+        var"t.cen" = rreshape([
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 0,
             0, 0, 0, 0, 0, 40, 40, 0, 0, 0, 40, 0, 40, 40, 40, 40, 0, 0, 0, 0,
             0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24, 0, 40, 40, 0, 0, 0, 0,

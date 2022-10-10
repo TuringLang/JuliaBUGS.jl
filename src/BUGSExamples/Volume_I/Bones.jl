@@ -28,7 +28,7 @@ bones = (
     data = (
         nChild = 13, 
         nInd = 34,
-        gamma = row_major_reshape([
+        gamma = rreshape([
             0.7425, missing, missing, missing,
             10.2670, missing, missing, missing,
             10.5215, missing, missing, missing,
@@ -75,7 +75,7 @@ bones = (
             2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
             3, 3, 3, 3, 3, 3, 3, 3, 4, 5, 5, 5, 5, 5, 5
             ],
-        grade = row_major_reshape([
+        grade = rreshape([
             1, 1,       1, 1, 1, 1,       1, 1, 1,       1,       1,       1,       1, 1,       1,       1, 1,       1, 1, 2, 1,      1,       1,       1,       1, 1, 1, 1, 2, 1, 1, 2, 1, 1,
             2, 1,       1, 1, 2, 2,       1, 1, 1,       1,       1,       1,       1, 1,       1,       1, 1,       1, 1, 3, 1,      1,       1,       1,       1, 1, 1, 1, 3, 1, 1, 2, 1, 1,
             2, 1,       1, 1, 2, 2,       1, 1, 1,       1,       1,       1,       1, 1,       1,       1, 1,       1, 1, 3, 1,      1,       1,       1,       1, 1, 1, 1, 4, 3, 3, 3, 1, 1,
@@ -95,7 +95,7 @@ bones = (
     inits = [
         (
             theta = [0.5,1,2,3,5,6,7,8,9,12,13,16,18],
-            grade = row_major_reshape([
+            grade = rreshape([
                 missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, 
                 missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, 
                 missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, 
@@ -145,7 +145,7 @@ bones = (
         ), 
         (
             theta = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
-            grade = row_major_reshape([
+            grade = rreshape([
                 missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, 
                 missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, 
                 missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, 

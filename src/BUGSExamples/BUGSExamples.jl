@@ -4,6 +4,7 @@ using SymbolicPPL
 using MCMCChains
 using MCMCChains: summarize
 using StatsPlots
+using SymbolicPPL: rreshape
 
 const NA = missing
 
@@ -20,8 +21,6 @@ function compile_singlechain(m::NamedTuple, select)
     @assert keys(m) == (:name, :model_def, :data, :inits)
     return compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][select])
 end
-
-row_major_reshape(v::Vector, dim) = permutedims(reshape(v, dim), Tuple(reverse([i for i in 1:length(dim)])))
 
 include("Volume_I/Blocker.jl")
 include("Volume_I/Bones.jl")
@@ -55,7 +54,7 @@ LINKS = (
     kidney = "https://chjackson.github.io/openbugsdoc/Examples/Kidney.html",
     leuk = "https://chjackson.github.io/openbugsdoc/Examples/Leuk.html",
     leukfr = "https://chjackson.github.io/openbugsdoc/Examples/Leukfr.html",
-    last = "https://chjackson.github.io/openbugsdoc/Examples/Lsat.html",
+    lsat = "https://chjackson.github.io/openbugsdoc/Examples/Lsat.html",
     magnesium = "https://chjackson.github.io/openbugsdoc/Examples/Magnesium.html",
     mice = "https://chjackson.github.io/openbugsdoc/Examples/Mice.html",
     oxford = "https://chjackson.github.io/openbugsdoc/Examples/Oxford.html",
@@ -79,7 +78,7 @@ EXAMPLES = (
     kidney = kidney,
     leuk = leuk,
     leukfr = leukfr,
-    last = last,
+    lsat = lsat,
     magnesium = magnesium,
     mice = mice,
     oxford = oxford,

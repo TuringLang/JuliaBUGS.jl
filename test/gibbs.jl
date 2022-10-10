@@ -1,4 +1,5 @@
 using SymbolicPPL
+using SymbolicPPL: SampleFromPrior
 using StatsPlots
 using MCMCChains
 
@@ -23,7 +24,7 @@ fl=[1.9,2.6,1.8,1.2, 1.2,1.2,1.3,0.9,0.6,0.5,0.4,0.3,0.0,0.2,0.1,0.0,0.2,0.1, 0.
 initials = (alpha=100,beta=0,sigma=100)
 model = compile_graphppl(model_def=expr, data=data, initials=initials)
 
-sampler = SampleFromPrior(0, 0, getchildren(model))
+sampler = SampleFromPrior(model)
 samples = AbstractMCMC.sample(model, sampler, 12000, discard_initial =2000);
 plot(samples)
 summarize(samples)
