@@ -2,6 +2,7 @@ using Graphs
 using AbstractPPL
 using DensityInterface
 using MacroTools
+using Random
 
 struct BUGSGraph <: AbstractPPL.AbstractProbabilisticProgram
     nodeenum::Dict{Symbol, Integer}
@@ -9,9 +10,10 @@ struct BUGSGraph <: AbstractPPL.AbstractProbabilisticProgram
     digraph::DiGraph
     sortednode::Vector{Integer}
     parents::Vector{Vector{Integer}}
-    isoberve::BitVector
+    isobserve::BitVector
     observed_values::Dict{Integer, Real}
     nodefunc::Vector{Expr}
+    nodefuncptr::Vector{Function}
     initializations::Dict{Integer, Real}
 end
 
@@ -47,28 +49,30 @@ function _BUGSGRAPH(tograph::Dict)
     end
     sortednode = topological_sort_by_dfs(DAG)
 
-    isoberve = BitVector(undef, numnodes)
-    observevalues = Dict{Integer, Real}()
+    isobserve = BitVector(undef, numnodes)
+    observed_values = Dict{Integer, Real}()
     nodefunc = Vector{Expr}(undef, numnodes)
+    nodefuncptr = Vector{Function}(undef, numnodes)
     for k in keys(tograph)
-        isoberve[nodeenum[k]] = tograph[k][3]
+        isobserve[nodeenum[k]] = tograph[k][3]
         if tograph[k][3]
             @assert !isempty(tograph[k][1])
-            observevalues[nodeenum[k]] = tograph[k][1]
+            observed_values[nodeenum[k]] = tograph[k][1]
         end
         nodefunc[nodeenum[k]] = tograph[k][2]
+        nodefuncptr[nodeenum[k]] = eval(tograph[k][2])
     end
 
-    return nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc
+    return nodeenum, reverse_nodeenum, DAG, sortednode, parents, isobserve, observed_values, nodefunc, nodefuncptr
 end
 
 function BUGSGraph(tograph::Dict{Any, Any})
-    nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc = _BUGSGRAPH(tograph)
-    return BUGSGraph(nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc, Dict{Integer, Real}())
+    nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc, nodefuncptr = _BUGSGRAPH(tograph)
+    return BUGSGraph(nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc, nodefuncptr, Dict{Integer, Real}())
 end
 
 function BUGSGraph(tograph::Dict, inits::NamedTuple)
-    nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc = _BUGSGRAPH(tograph)
+    nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc, nodefuncptr = _BUGSGRAPH(tograph)
     initializations = Dict{Integer, Real}()
     for (k, v) in pairs(inits)
         if v isa Array
@@ -84,7 +88,7 @@ function BUGSGraph(tograph::Dict, inits::NamedTuple)
             initializations[nodeenum[k]] = v
         end
     end
-    return BUGSGraph(nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc, initializations)
+    return BUGSGraph(nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc, nodefuncptr, initializations)
 end
 
 struct Trace <: AbstractPPL.AbstractModelTrace
@@ -99,7 +103,7 @@ Return a Distribution.jl distribution.
 """
 function getdistribution(g::BUGSGraph, node::Integer)::Function
     return function (value::Vector{Real})
-        eval(g.nodefunc[node])([value[p] for p in g.parents[node]]...)
+        (g.nodefuncptr[node])([value[p] for p in g.parents[node]]...)
     end
 end
 getdistribution(g::BUGSGraph, node::Integer, trace::Trace) = getdistribution(g, node, trace.value)
@@ -189,3 +193,16 @@ function shownodefunc(g::BUGSGraph, node::Integer)
     println("Node Function: " * string(f_expr.args[2]))
 end
 
+function Random.rand(rng::Random.AbstractRNG, d::BUGSGraph) 
+    value = Vector{Real}(undef, getnumnodes(d))
+    for node in getsortednodes(d)
+        if d.isobserve[node]
+            value[node] = d.observed_values[node]
+        else
+            value[node] = rand(rng, getdistribution(d, node, value))
+        end
+    end
+    return value
+end
+
+Random.rand(d::BUGSGraph) = rand(Random.GLOBAL_RNG, d)

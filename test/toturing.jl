@@ -15,6 +15,7 @@ compile_inter(ex, (a=1, b=2))
 g = compile(ex, (a=1, b=2))
 
 model = toturing(g)
+inspect_toturing(g)
 rand(model())
 
 ##
@@ -28,4 +29,5 @@ compile_inter(ex, (a=[1, 2, missing], ))
 g = compile(ex, (a=[1, 2, missing], ))
 
 model = toturing(g)
+inspect_toturing(g)
 rand(model())

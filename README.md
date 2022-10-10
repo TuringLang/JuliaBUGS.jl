@@ -8,6 +8,51 @@ This implementation should be able to parse existing BUGS models and run them. I
 
 We are (as of autumn 2022) planning to continually keep working on this project, until we have a mature BUGS-compatible graphical PPL system integrated in the Turing ecosystem.
 
+## Example: Logistic Regression with Random Effects
+We will use the [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) model for demonstration. 
+The example concerns the proportion of seeds that germinated on each of 21 plates. The data is (rewritten in Julia's NamedTuple)
+
+```julia
+data = (
+    r = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3],
+    n = [39, 62, 81, 51, 39, 6, 74, 72, 51, 79, 13, 16, 30, 28, 45, 4, 12, 41, 30, 51, 7],
+    x1 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    x2 = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1],
+    N = 21,
+)
+```
+ 
+where `r[i]` is the number of germinated seeds and `n[i]` is the total number of the seeds on the $i$-th plate. 
+The model is constructed such that, let $p_i$ be the probability of germination on the $i$-th plate, 
+
+$$
+\begin{aligned}
+r_i &\sim \operatorname{Binomial}(p_i, n_i) \\
+logit(p_i) &\sim {\alpha}_0 + {\alpha}_1 x_{1i} + {\alpha}_2 x_{2i} + {\alpha}_{12} x_{1i} x_{2i} + b_{i} \\
+b_i &\sim \operatorname{Normal}(0, \tau)
+\end{aligned}
+$$
+
+where $x_{1i}$ and $x_{2i}$ are the seed type and root extract of the $i$-th plate.  
+The original BUGS program for the model is 
+```
+model
+{
+    for( i in 1 : N ) {
+        r[i] ~ dbin(p[i],n[i])
+        b[i] ~ dnorm(0.0,tau)
+        logit(p[i]) <- alpha0 + alpha1 * x1[i] + alpha2 * x2[i] +
+        alpha12 * x1[i] * x2[i] + b[i]
+    }
+    alpha0 ~ dnorm(0.0,1.0E-6)
+    alpha1 ~ dnorm(0.0,1.0E-6)
+    alpha2 ~ dnorm(0.0,1.0E-6)
+    alpha12 ~ dnorm(0.0,1.0E-6)
+    tau ~ dgamma(0.001,0.001)
+    sigma <- 1 / sqrt(tau)
+}
+```
+
 ## Modeling Language
 References:  
  - [MultiBUGS](https://www.multibugs.org/documentation/latest/)
@@ -18,14 +63,16 @@ We provide a macro solution which allows to directly use Julia code correspondin
 ```julia
 @bugsast begin
     for i in 1:N
-        Y[i] ~ dnorm(μ[i], τ)
-        μ[i] = α + β * (x[i] - x̄)
+        r[i] ~ dbin(p[i],n[i])
+        b[i] ~ dnorm(0.0,tau)
+        logit(p[i]) = alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] + b[i]
     end
-    τ ~ dgamma(0.001, 0.001)
-    σ = 1 / sqrt(τ)
-    logτ = log(τ)
-    α ~ dnorm(0.0, 1e-6)
-    β ~ dnorm(0.0, 1e-6)
+    alpha0 ~ dnorm(0.0,1.0E-6)
+    alpha1 ~ dnorm(0.0,1.0E-6)
+    alpha2 ~ dnorm(0.0,1.0E-6)
+    alpha12 ~ dnorm(0.0,1.0E-6)
+    tau ~ dgamma(0.001,0.001)
+    sigma = 1 / sqrt(tau)
 end
 ```
 BUGS syntax carries over almost one-to-one to Julia.
@@ -35,16 +82,18 @@ We provide a string macro `bugsmodel` to work with original (R-like) BUGS syntax
 
 ```julia
 bugsmodel"""
-    for (i in 1:5) {
-        y[i] ~ dnorm(mu[i], tau)
-        mu[i] <- alpha + beta*(x[i] - mean(x[]))
+    for( i in 1 : N ) {
+        r[i] ~ dbin(p[i],n[i])
+        b[i] ~ dnorm(0.0,tau)
+        logit(p[i]) <- alpha0 + alpha1 * x1[i] + alpha2 * x2[i] +
+        alpha12 * x1[i] * x2[i] + b[i]
     }
-    
-    alpha ~ dflat()
-    beta ~ dflat()
-    tau <- 1/sigma2
-    log(sigma2) <- 2*log.sigma
-    log.sigma ~ dflat()
+    alpha0 ~ dnorm(0.0,1.0E-6)
+    alpha1 ~ dnorm(0.0,1.0E-6)
+    alpha2 ~ dnorm(0.0,1.0E-6)
+    alpha12 ~ dnorm(0.0,1.0E-6)
+    tau ~ dgamma(0.001,0.001)
+    sigma <- 1 / sqrt(tau)
 """
 ```
 
@@ -52,61 +101,6 @@ This is simply the unmodified code in the `model { }` enclosure.
 We encourage users to write new program using the Julia-native syntax, because of better debuggability and perks like syntax highlighting. 
 
 ## Compilation
-### Compilation Target
-There are three major components of the compilation result: [Graphs.DiGraph](https://juliagraphs.org/Graphs.jl/dev/core_functions/module/#Graphs.DiGraph) for graph structure, node functions for all the variables in the DAG, and whether a variable is observed or assumed.
-
-#### The DAG
-User can retrieve the [Graphs.DiGraph](https://juliagraphs.org/Graphs.jl/dev/core_functions/module/#Graphs.DiGraph) object with
-```julia
-getDAG(g::BUGSGraph)
-```
-All nodes in the DAG is aliased with an integer number. 
-To look up the integer alias of a variable, user can use function
-
-```julia
-getnodeenum(g::BUGSGraph, node::Symbol).
-```
-
-Please note, if a variable is an array indexing, e.g., `g[2, 3]`, the blank in front of `3` is important. 
-Alternatively, we also provide a macro `@nodename` to facilitate formatting.
-
-```julia-repo
-julia> @nodename g[2,3]
-Symbol("g[2, 3]")
-```
-
-A reverse lookup function is also provided.
-
-```julia
-getnodename(g::BUGSGraph, node::Integer)
-```
-
-Other useful functions include
-
-```julia
-getnumnodes(g::BUGSGraph) # return number of nodes
-getsortednodes(g::BUGSGraph) # return nodes in topological order
-getparents(g::BUGSGraph, node::Integer)
-getchidren(g::BUGSGraph, node::Integer)
-getmarkovblanket(g::BUGSGraph, node::Integer) 
-```
-
-#### Node Functions
-Every node in the graph corresponds to a stochastic variable from the original program.
-The node function of a node is a function such that, when evaluated given the node's parents' value, will return a [Distributions.Distribution](https://github.com/JuliaStats/Distributions.jl) object.
-
-User can use `shownodefunc` to print out the node function
-
-```julia
-shownodefunc(g::BUGSGraph, node::Integer)
-```
-
-and 
-```julia
-getdistribution(g::BUGSGraph, node::Integer, value::Vector{Real}) 
-```
-
-to get the distribution object given the values of all the nodes.
 
 ### Compilation Interface
 The main function for compilation is 
@@ -117,37 +111,124 @@ compile(model_def::Expr, data::NamedTuple, inits::NamedTuple) # compile a BUGSGr
 compile(model_def::Expr, data::NamedTuple, inits::Vector{NamedTuple}) # compile a vector of BUGSGraph object with initializations
 ```
 
-User can also compile to a intermediate representation, a `CompilerState` object and check the corresponding expression for a variable using 
+so to compile the model definition given above, 
+
+```julia-repo
+# model_def is the julia AST generate by `@bugsast` or `bugsmodel`
+julia> model = compile(model_def, data); 
+
+julia> typeof(model)
+BUGSGraph
+```
+
+### Compilation Target
+As you can see, the result of the compilation is an object of the type `BUGSGraph`.
+There are three major components of a `BUGSGraph` object: [Graphs.DiGraph](https://juliagraphs.org/Graphs.jl/dev/core_functions/module/#Graphs.DiGraph) for graph structure, node functions for all the variables in the DAG, and whether a variable is observed or assumed.
+
+#### The DAG
+User can retrieve the [Graphs.DiGraph](https://juliagraphs.org/Graphs.jl/dev/core_functions/module/#Graphs.DiGraph) object with
+```julia-repo
+julia> dag = getDAG(model)
+{47, 89} directed simple Int64 graph
+```
+All nodes in the DAG is aliased with an integer number. 
+To look up the integer alias of a variable, user can use function
+
+```julia-repo
+julia> getnodeenum(model, @nodename r[1]) # equivalently getnodeenum(model, Symbol("r[1]"))
+3 
+```
+
+Please note, if a variable is an array indexing, e.g., `g[2, 3]`, the blank in front of `3` is important. 
+We provide the macro `@nodename` to facilitate formatting for array indexings.
+
+```julia-repo
+julia> @nodename g[2,3]
+Symbol("g[2, 3]")
+```
+
+A reverse lookup function is also provided.
+
+```julia-repo
+julia> getnodename(model, 3)
+Symbol("r[1]")
+```
+
+Other useful functions include
 
 ```julia
-querynode(compiler_state::CompilerState, var::Symbol)
+getnumnodes(g::BUGSGraph) # return number of nodes
+getsortednodes(g::BUGSGraph) # return nodes in topological order
+getparents(g::BUGSGraph, node::Integer) # return the parents of the node
+getchidren(g::BUGSGraph, node::Integer) # return the children of the node
+getmarkovblanket(g::BUGSGraph, node::Integer) # return the Markov Blanket of the node
+```
+
+#### Node Functions
+Every node in the graph corresponds to a stochastic variable from the original program.
+The node function of a node is a function such that, when evaluated given the node's parents' value, will return a [Distributions.Distribution](https://github.com/JuliaStats/Distributions.jl) object.
+
+User can use `shownodefunc` to print out the node function
+
+```julia-repo
+julia> shownodefunc(model, 3)
+Parent Nodes: alpha0, b[1]
+Node Function: begin
+    (SymbolicPPL.dbin)((/)(1, (+)(1, (exp)((+)((+)(0, (*)(-1, alpha0)), (*)(-1, var"b[1]"))))), 39)
+end
+```
+
+This may not be expected from the mathematical equation, but after substituting the data in one can verify that it is a correct. This simplification is powered by the symbolic algebra system we use during the compilation.
+
+User can use `rand(model::BUGSModel)` to generate a random trace of the program and `getdistribution(model::BUGSModel, node::Integer, value::Vector{Integer})` to get the distribution of the node evaluated with the program trace. 
+```julia-repo
+julia> value = rand(model);
+
+julia> getdistribution(model, 3, value)
+Distributions.Binomial{Float64}(n=39, p=0.0)
+```
+
+#### Debug Model
+User can choose compile to a `CompilerState` object and check the corresponding expression for a variable using 
+
+```julia-repo
+julia> model_cs = compile_inter(model_def, data);
+
+julia> querynode(model_cs, @nodename r[1])
+SymbolicPPL.dbin(p[1], n[1])
 ```
 
 ### Supported BUGS Distribution and Functions
 The library of supported BUGS distributions and utility functions are limited in the current version. 
 User can register them own distributions and functions with the macros
 
-```julia
-# Should be restricted to pure function that do simple operations
+```julia-repo
+julia> # Should be restricted to pure function that do simple operations
 @bugsfunction function f(x)
     return x + 1
 end
+
+julia> SymbolicPPL.f(2)
+3
 ```
 
 , and 
 
-```julia
-# Need to return a Distributions.Distribution 
+```julia-repo
+julia> # Need to return a Distributions.Distribution 
 @bugsdistributions function d(x)
     return Normal(0, x^2)
 end
+
+julia> SymbolicPPL.d(1)
+Distributions.Normal{Float64}(μ=0.0, σ=1.0)
 ```
 
-Please use these macros cautiously. 
+Please use these macros cautiously as they may cause name clashes and potential breaking behaviors.
 
 ### Inference
 #### Native Graph-Based Inference Algorithms
-We plan to implement a library of high performance graph-based inference algorithms in the future. Contributions are welcome and much appreciated. Interested contributors can check out the [implementation](https://github.com/TuringLang/SymbolicPPL.jl/blob/use_graphs/src/gibbs.jl) of a very simplistic Metropolis-within-Gibbs sampler for interface reference.
+We plan to implement a library of high performance graph-based inference algorithms in the future. Contributions are welcome and much appreciated. Interested contributors can check out the [implementation](https://github.com/TuringLang/SymbolicPPL.jl/blob/use_graphs/src/gibbs.jl) of a very simplistic [AbstractMCMC.jl](https://github.com/TuringLang/AbstractMCMC.jl) compatible Metropolis-within-Gibbs sampler for interface references. 
 
 #### Using Inference Infrastructure from [Turing.jl](https://github.com/TuringLang/Turing.jl)
 Users who want to run BUGS program right now can try out the `toturing` function, which will compile the `BUGSGraph` object to a `Turing.Model`.
@@ -155,10 +236,26 @@ Users who want to run BUGS program right now can try out the `toturing` function
 **Caution**: `toturing` is not yet well tested and we can't guarantee its correctness, bugs reports are welcomed.
 
 ```julia-repo
-julia> model = toturing(g::BUGSGraph) # model is a Turing.Model
+julia> m = @bugsast begin
+    a ~ dnorm(0, 1)
+    b ~ dnorm(a, 1)
+    c ~ dnorm(b, a^2)
+end; 
+
+julia> g = compile(ex, (a=1, b=2)); 
+
+julia> model = toturing(g);
+
+julia> rand(model())
+(c = 2.2019001981565207,)
 ```
 User can also check the input to Turing's compiler by 
 
-```julia
-inspect_toturing(g::BUGSGraph)
+```julia-repo
+julia> inspect_toturing(g)
+:(function bugsturing(; b = 2, a = 1)
+      a ~ Normal(0.0, 1.0)
+      b ~ SymbolicPPL.dnorm(a, 1)
+      c ~ SymbolicPPL.dnorm(b, a ^ 2)
+  end)
 ``` 

@@ -6,6 +6,7 @@ using MacroTools
 using LinearAlgebra
 using Setfield
 import SymbolicUtils: toterm, substitute
+using BangBang
 
 """
     CompilerState
@@ -646,7 +647,7 @@ function extract_observations!(compiler_state::CompilerState)
                 sym_arr = compiler_state.arrays[var]
                 @assert haskey(compiler_state.logicalrules, sym_arr) "Can't find the variable $k in the logical rules."
                 index = Tuple(Meta.parse(string(tosymbol(k))).args[2:end])
-                compiler_state.logicalrules[sym_arr][index...] = missing
+                setindex!!(compiler_state.logicalrules[sym_arr], missing, index...)
             end
         end
     end
@@ -755,7 +756,7 @@ function tograph(compiler_state::CompilerState)
             isoberve = isa(value, Real)
         end
 
-        to_graph[tosymbol(key)] = (isoberve ? value : 0, MacroTools.prettify(f_expr), isoberve)
+        to_graph[tosymbol(key)] = (isoberve ? value : 0, f_expr, isoberve)
     end
     return to_graph
 end
@@ -805,7 +806,7 @@ Check if the model is static.
 function check_expr(expr, compiler_state::CompilerState)
     # check if any loop or if remains
     for sub_expr in expr.args
-        Meta.isexpr(sub_expr, (:(=), :~)) ||
+        Meta.isexpr(sub_expr, (:(=), :~, :deleted)) ||
             error("Expression $sub_expr is not an assignment expression.")
     end
 

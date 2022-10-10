@@ -20,7 +20,7 @@ function AbstractMCMC.step(
     value = Vector{Real}(undef, num_nodes)
     logp = Vector{Real}(undef, num_nodes)
     for node in model.sortednode
-        if model.isoberve[node]
+        if model.isobserve[node]
             value[node] = model.observed_values[node]
             logp[node] = logdensityof(getdistribution(model, node, value), value[node])
         else
@@ -42,11 +42,10 @@ function AbstractMCMC.step(
     state::Trace;
     kwargs...
 )
-    num_nodes = getnumnodes(model)
     value = deepcopy(state.value)
     logp = deepcopy(state.logp)
     for node in model.sortednode
-        if model.isoberve[node]
+        if model.isobserve[node]
             value[node] = state.value[node]
             logp[node] = state.logp[node]
         else

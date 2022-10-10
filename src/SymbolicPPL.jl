@@ -14,6 +14,8 @@ export compile, compile_inter, querynode
 export getDAG, getnodeenum, getnodename, getnumnodes, getsortednodes, getmarkovblanket, getchidren, getparents, 
     shownodefunc, getdistribution, @nodename
 export toturing, inspect_toturing
+export @bugsfunction, @bugsdistributions
+export SampleFromPrior
 
 include("BUGSExamples/BUGSExamples.jl")
 using .BUGSExamples
