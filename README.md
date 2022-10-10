@@ -24,8 +24,8 @@ We provide a macro solution which allows to directly use Julia code correspondin
     τ ~ dgamma(0.001, 0.001)
     σ = 1 / sqrt(τ)
     logτ = log(τ)
-    α = dnorm(0.0, 1e-6)
-    β = dnorm(0.0, 1e-6)
+    α ~ dnorm(0.0, 1e-6)
+    β ~ dnorm(0.0, 1e-6)
 end
 ```
 BUGS syntax carries over almost one-to-one to Julia.
