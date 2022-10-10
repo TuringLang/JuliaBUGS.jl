@@ -1,3 +1,4 @@
+# TODO: import Turing's Flat definition now, later we should move Flat definition here and import the definition in Turing
 using Turing: Flat
 
 Distributions.cdf(d::Flat, x::Real) = 0
