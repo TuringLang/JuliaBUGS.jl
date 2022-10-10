@@ -65,6 +65,7 @@ We provide a macro solution which allows to directly use Julia code correspondin
     for i in 1:N
         r[i] ~ dbin(p[i],n[i])
         b[i] ~ dnorm(0.0,tau)
+        logit{}
         p[i] = logistic(alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] + b[i])
     end
     alpha0 ~ dnorm(0.0,1.0E-6)
@@ -75,7 +76,10 @@ We provide a macro solution which allows to directly use Julia code correspondin
     sigma = 1 / sqrt(tau)
 end
 ```
-BUGS syntax carries over almost one-to-one to Julia. TODO: link function
+BUGS syntax carries over almost one-to-one to Julia. 
+The only change is regarding the link functions, we encourage users to call the inverse function on the RHS instead of the original BGUS-style syntax. 
+The concern is that Julia use the "function call on LHS"-like syntax as a shorthand for function definition. 
+Thus the BUGS-style link function syntax maybe confusing for other Julia users.
 
 ### Support for Lagacy BUGS Programs
 We provide a string macro `bugsmodel` to work with original (R-like) BUGS syntax:
@@ -204,7 +208,7 @@ User can register them own distributions and functions with the macros
 
 ```julia-repo
 julia> # Should be restricted to pure function that do simple operations
-@bugsfunction function f(x)
+@primitive function f(x)
     return x + 1
 end
 

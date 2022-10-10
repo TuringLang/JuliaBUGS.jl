@@ -150,14 +150,14 @@ bar(v) = dcat(reduce(vcat, v))
 
 # TODO: are these macros too dangerous to be included?
 """
-    @bugsfunction
+    @primitive
 
 Macro to define a function that can be used in BUGS model. 
 !!! warning
     User should be cautious when using this macro, we recommend only use this macro for pure functions that do common 
     mathematical operations.
 """
-macro bugsfunction(ex)
+macro primitive(ex)
     def = MacroTools.splitdef(ex)
     reg_sym = Expr(:macrocall, Symbol("@register_symbolic"), LineNumberNode(@__LINE__, @__FILE__), Expr(:call, def[:name], def[:args]...))
     eval(reg_sym)
@@ -166,11 +166,11 @@ macro bugsfunction(ex)
 end
 
 """
-    @bugsdistributions
+    @bugsdistribution
 
 Macro to define a distribution that can be used in BUGS model. Must return a distribution object from defined in Distributions.jl.
 """
-macro bugsdistributions(ex)
+macro bugsdistribution(ex)
     def = MacroTools.splitdef(ex)
     push!(USER_DISTRIBUTIONS, def[:name])
     reg_sym = Expr(:macrocall, Symbol("@register_symbolic"), LineNumberNode(@__LINE__, @__FILE__), Expr(:call, def[:name], def[:args]...))

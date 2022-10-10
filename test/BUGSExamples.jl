@@ -66,17 +66,3 @@ for m in SymbolicPPL.BUGSExamples.EXAMPLES
     end
     println()
 end
-
-##
-model = compile(m[:model_def], m[:data]);
-model_cs = compile_inter(m[:model_def], m[:data]);
-
-typeof(model)
-dag = getDAG(model)
-
-sampler = SampleFromPrior()
-sample, trace = AbstractMCMC.step(Random.default_rng(), model, sampler);
-sample1, trace1 = AbstractMCMC.step(Random.default_rng(), model, sampler, trace);
-
-c = AbstractMCMC.sample(Random.default_rng(), model, sampler, 1000000);
-summarize(c)
