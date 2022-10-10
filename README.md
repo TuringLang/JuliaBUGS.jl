@@ -147,7 +147,7 @@ Please use these macros cautiously.
 
 ### Inference
 #### Native Graph-Based Inference Algorithms
-We plan to implement a library of high performance graph-based inference algorithms in the future. Contributions are welcome and much appreciated. Interested contributors can check out the [implementation](https://github.com/TuringLang/SymbolicPPL.jl/blob/use_graphs/src/gibbs.jl) of a very simplistic Metropolis-within_Gibbs sampler for interface reference.
+We plan to implement a library of high performance graph-based inference algorithms in the future. Contributions are welcome and much appreciated. Interested contributors can check out the [implementation](https://github.com/TuringLang/SymbolicPPL.jl/blob/use_graphs/src/gibbs.jl) of a very simplistic Metropolis-within-Gibbs sampler for interface reference.
 
 #### Using Inference Infrastructure from [Turing.jl](https://github.com/TuringLang/Turing.jl)
 Users who want to run BUGS program right now can try out the `toturing` function, which will compile the `BUGSGraph` object to a `Turing.Model`.
