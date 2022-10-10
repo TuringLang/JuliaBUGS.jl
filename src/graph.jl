@@ -177,10 +177,6 @@ end
 
 function shownodefunc(g::BUGSGraph, node::Integer)
     f_expr = g.nodefunc[node]
-    printfuncexpr(f_expr)
-end
-
-function printfuncexpr(f_expr::Expr)
     arguments = f_expr.args[1].args
     io = IOBuffer();
     for i in 1:length(arguments)
