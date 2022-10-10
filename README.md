@@ -65,7 +65,7 @@ We provide a macro solution which allows to directly use Julia code correspondin
     for i in 1:N
         r[i] ~ dbin(p[i],n[i])
         b[i] ~ dnorm(0.0,tau)
-        logit(p[i]) = alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] + b[i]
+        p[i] = logistic(alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] + b[i])
     end
     alpha0 ~ dnorm(0.0,1.0E-6)
     alpha1 ~ dnorm(0.0,1.0E-6)
@@ -75,7 +75,7 @@ We provide a macro solution which allows to directly use Julia code correspondin
     sigma = 1 / sqrt(tau)
 end
 ```
-BUGS syntax carries over almost one-to-one to Julia.
+BUGS syntax carries over almost one-to-one to Julia. TODO: link function
 
 ### Support for Lagacy BUGS Programs
 We provide a string macro `bugsmodel` to work with original (R-like) BUGS syntax:
