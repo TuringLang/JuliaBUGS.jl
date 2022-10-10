@@ -57,7 +57,7 @@ model
 References:  
  - [MultiBUGS](https://www.multibugs.org/documentation/latest/)
  - [OpenBUGS](https://chjackson.github.io/openbugsdoc/Manuals/ModelSpecification.html)
-### Writing New Models
+### Writing Model in Julia
 We provide a macro solution which allows to directly use Julia code corresponding to BUGS code:
 
 ```julia
@@ -77,7 +77,7 @@ end
 ```
 BUGS syntax carries over almost one-to-one to Julia.
 
-### Lagacy BUGS Programs
+### Support for Lagacy BUGS Programs
 We provide a string macro `bugsmodel` to work with original (R-like) BUGS syntax:
 
 ```julia
