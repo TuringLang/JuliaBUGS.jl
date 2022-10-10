@@ -29,7 +29,7 @@ kidney = (
 
     data = (
         N = 38, M = 2,
-        t = row_major_reshape([
+        t = rreshape([
             8, 16,
             23, NA,
             22, 28,
@@ -69,7 +69,7 @@ kidney = (
             NA, 78,
             63, NA
             ], (38, 2)),
-        var"t.cen" = row_major_reshape([
+        var"t.cen" = rreshape([
             0, 0,
             0, 13,
             0, 0,
@@ -108,7 +108,7 @@ kidney = (
             54, 16,
             6, 0,
             0, 8], (38, 2)),
-        age = row_major_reshape([
+        age = rreshape([
             28, 28,
             48, 48,
             32, 32,

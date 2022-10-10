@@ -13,7 +13,7 @@ Our implementation is built upon [Symbolics.jl](https://github.com/JuliaSymbolic
 All the assignments are processed into rules, and evaluation of a variable is implemented using the [`substitute`](https://symbolics.juliasymbolics.org/dev/manual/expression_manipulation/#SymbolicUtils.substitute) function.  
 
 ## Array 
-The challenge of support BUGS' array interface is that every element of an array can be either logical or stochastic, so we need to treat every array element as a separate variable. We won't go deep into the inner mechanism, rather let's see how array indexing work with some demos.
+The challenge of support BUGS' array interface is that every element of an array can be either logical or stochastic, so we need to treat every array element as a separate variable. 
+The internal implementation of the array interface is based on [Symbolic Arrays]() from Symbolics.jl. 
+A none-trivial transformation procedure has to done to ensure the single-addressability of each array element.
 
-## Inference on Graph
-We implemented a simple Metropolis-within-Gibbs sampler, given that inference algorithm is not the focus of this report, we'll just demonstrate the result. Curious reader can refer to our [implementation](https://github.com/TuringLang/SymbolicPPL.jl/blob/complier/src/gibbs.jl), and even better, we'll appreciate contributions.

@@ -1,16 +1,19 @@
 module SymbolicPPL
 
 include("bugsast.jl")
-include("graphinfo.jl")
+include("graph.jl")
 include("compiler.jl")
 include("primitives.jl")
 include("gibbs.jl")
+include("distributions.jl")
+include("toturing.jl")
 
-# export @bugsast_str
+
 export @bugsast, @bugsmodel_str
-export infer_types
-
-export compile_graphppl, SampleFromPrior
+export compile, compile_inter, querynode
+export getDAG, getnodeenum, getnodename, getnumnodes, getsortednodes, getmarkovblanket, getchidren, getparents, 
+    shownodefunc, getdistribution, @nodename
+export toturing, inspect_toturing
 
 include("BUGSExamples/BUGSExamples.jl")
 using .BUGSExamples

@@ -10,7 +10,8 @@ using AbstractPPL: VarName
 using Statistics
 import Statistics.mean
 using IfElse
-using Turing:Flat
+using MacroTools
+using Symbolics
 
 """ 
     NA
@@ -19,19 +20,31 @@ using Turing:Flat
 """
 const NA = :missing
 
-const DISTRIBUTIONS = [:truncated, :censored, :dgamma, :dnorm, :dbeta, :dbin, :dcat, :dexp, :dpois, :dflat, :dunif, :dbern]
+const DISTRIBUTIONS = [:truncated, :censored, :dgamma, :dnorm, :dbeta, :dbin, :dcat, :dexp, :dpois, :dflat, 
+    :dunif, :dbern, :bar]
+
+USER_DISTRIBUTIONS = []
 
 const INVERSE_LINK_FUNCTION =
     (logit = :logistic, cloglog = :cexpexp, log = :exp, probit = :phi)
 
-# Reload `set_node_value!`, sampling a Binomial will give a Integer type, while GraphPPL
-# only support Float right now, this is a work around
-function set_node_value!(m::Model, ind::VarName, value::Integer)
-    @assert typeof(m[ind].value[]) <: AbstractFloat
-    m[ind].value[] = Float64(value)
-end
+TRACED_FUNCTIONS = [:exp, ]
 
-row_major_reshape(v::Vector, dim) = permutedims(reshape(v, reverse(dim)), length(dim):-1:1)    
+VECTOR_FUNCTION = [:dcat, ]
+
+# # Reload `set_node_value!`, sampling a Binomial will give a Integer type, while GraphPPL
+# # only support Float right now, this is a work around
+# function set_node_value!(m::Model, ind::VarName, value::Integer)
+#     @assert typeof(m[ind].value[]) <: AbstractFloat
+#     m[ind].value[] = Float64(value)
+# end
+
+"""
+    rreshape
+
+Reshape the array `x` to the shape `dims`, row major order.
+"""
+rreshape(v::Vector, dim) = permutedims(reshape(v, reverse(dim)), length(dim):-1:1)    
 
 """ 
     Univariate Distributions
@@ -66,7 +79,6 @@ dgeom(p) = Geometric(p)
 @register_symbolic dunif(a, b)
 dunif(a, b) = Uniform(a, b)
 
-# TODO: truncated and censored need to be defined (also possibly logdensity)
 dflat() = Flat()
 
 @register_symbolic dbeta(alpha, beta)
@@ -86,7 +98,7 @@ dweib(v, λ) = Weibull(v, 1/λ)
 """
 
 @register_symbolic dcat(p::Vector)
-dcat(p) = Categorical(p)
+dcat(p) = Categorical(p/sum(p))
 
 """ 
     Truncated and Censored Functions
@@ -95,14 +107,14 @@ dcat(p) = Categorical(p)
 @register_symbolic censored(d, l, u)
 @register_symbolic censored_with_lower(d, l)
 @register_symbolic censored_with_upper(d, u)
-censored_with_lower(d, l) = Distributions.censored(d, lower = l)
-censored_with_upper(d, u) = Distributions.censored(d, upper = u)
+censored_with_lower(d, l) = Distributions.censored(d; lower = l)
+censored_with_upper(d, u) = Distributions.censored(d; upper = u)
 
 @register_symbolic truncated(d, l, u)
 @register_symbolic truncated_with_lower(d, l)
 @register_symbolic truncated_with_upper(d, u)
-truncated_with_lower(d, l) = Distributions.truncated(d, lower = l)
-truncated_with_upper(d, u) = Distributions.truncated(d, upper = u)
+truncated_with_lower(d, l) = Distributions.truncated(d; lower = l)
+truncated_with_upper(d, u) = Distributions.truncated(d; upper = u)
 
 """
     Functions
@@ -129,3 +141,40 @@ inverse(v) = inv(v)
 Statistics.mean(v::Symbolics.Arr{Num, 1}) = mean(Symbolics.scalarize(v))
 sd(v::Symbolics.Arr{Num, 1}) = Statistics.std(Symbolics.scalarize(v))
 inprod(a::Array, b::Array) = a*b
+
+# dummy function used for testing -- do not use
+@register_symbolic foo(v::Array)
+foo(v) = sum(v)
+@register_symbolic bar(v::Array)
+bar(v) = dcat(reduce(vcat, v))
+
+# TODO: are these macros too dangerous to be included?
+"""
+    @bugsfunction
+
+Macro to define a function that can be used in BUGS model. 
+!!! warning
+    User should be cautious when using this macro, we recommend only use this macro for pure functions that do common 
+    mathematical operations.
+"""
+macro bugsfunction(ex)
+    def = MacroTools.splitdef(ex)
+    reg_sym = Expr(:macrocall, Symbol("@register_symbolic"), LineNumberNode(@__LINE__, @__FILE__), Expr(:call, def[:name], def[:args]...))
+    eval(reg_sym)
+    eval(ex)
+    return nothing
+end
+
+"""
+    @bugsdistributions
+
+Macro to define a distribution that can be used in BUGS model. Must return a distribution object from defined in Distributions.jl.
+"""
+macro bugsdistributions(ex)
+    def = MacroTools.splitdef(ex)
+    push!(USER_DISTRIBUTIONS, def[:name])
+    reg_sym = Expr(:macrocall, Symbol("@register_symbolic"), LineNumberNode(@__LINE__, @__FILE__), Expr(:call, def[:name], def[:args]...))
+    eval(reg_sym)
+    eval(ex)
+    return nothing
+end

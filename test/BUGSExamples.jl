@@ -1,16 +1,9 @@
 using SymbolicPPL
-using SymbolicPPL: 
-    transform_expr,
-    addrules,
-    addrules!,
-    tograph,
-    pregraph,
-    ref_to_symbolic,
-    SampleFromPrior,
-    check_expr
-using AbstractMCMC
+using SymbolicPPL: transform_expr, CompilerState, addlogicalrules!, unroll!, addstochasticrules!, 
+ref_to_symbolic!, resolve, ref_to_symbolic, tosymbol, symbolic_eval, scalarize, tograph,
+BUGSGraph, tosymbolic, SampleFromPrior
 using Random
-
+using AbstractMCMC
 ##
 
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:blockers];
@@ -35,28 +28,41 @@ m = SymbolicPPL.BUGSExamples.EXAMPLES[:stacks];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_simple];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_realistic];
 
-ori_expr = transform_expr(m[:model_def])
-expr, compiler_state = addrules(ori_expr, m[:data], true);
-check_expr(expr)
-@run g = tograph(compiler_state, false);
+@time model = compile(m[:model_def], m[:data], m[:inits][1]);
+@run model = compile(m[:model_def], m[:data], m[:inits][1]);
+##
+expr = transform_expr(m[:model_def]);
+compiler_state = CompilerState();
+addlogicalrules!(m[:data], compiler_state);
 
-g = SymbolicPPL.pregraph(m[:model_def], m[:data], true, true);
-
-@time model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
-@run model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
-
-sampler = SampleFromPrior(model);
-sample, state = AbstractMCMC.step(Random.default_rng(), model, sampler);
-sample, state = AbstractMCMC.step(Random.default_rng(), model, sampler, state);
-samples = AbstractMCMC.sample(model, sampler, 3);
-
-## 
-using AbstractPPL: VarName
-node = model[VarName(Symbol("mu[1]"))]
-k = keys(model);
-length(k)
+while true
+    unroll!(expr, compiler_state) ||
+        addlogicalrules!(expr, compiler_state) ||
+        break
+end
+addstochasticrules!(expr, compiler_state);
 
 ##
-using SymbolicPPL
-m = SymbolicPPL.BUGSExamples.EXAMPLES[:lsat];
-@time model = compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][1]);
+g = tograph(compiler_state);
+graph = BUGSGraph(g);
+
+##
+sampler = SampleFromPrior()
+sample, trace = AbstractMCMC.step(Random.default_rng(), model, sampler);
+sample1, trace1 = AbstractMCMC.step(Random.default_rng(), model, sampler, trace);
+
+## run all examples
+for m in SymbolicPPL.BUGSExamples.EXAMPLES
+    println(m[:name])
+    try
+        @time model = compile(m[:model_def], m[:data], m[:inits][1]);
+    catch e
+        println(e)
+    end
+    try
+        sample, trace = AbstractMCMC.step(Random.default_rng(), model, sampler);
+    catch e
+        println(e)
+    end
+    println()
+end

@@ -2,17 +2,16 @@
 
 This package contains some infrastructure to work with graphical probabilistic models in symbolic form, consisting of a model DSL (which one could call "frontend"), an attempt of its formalization (ongoing work), and AbstractPPL-compatible evaluation facilities (i.e., sampling and density evaluation, conditioning, etc.).
 
+## Caution!
 
+This implementation should be able to parse existing BUGS models and run them. It is, however, still a bit sketchy and not yet ready for serious work.  
 
-## Syntax & model representation
+We are (as of autumn 2022) planning to continually keep working on this project, until we have a mature BUGS-compatible graphical PPL system integrated in the Turing ecosystem.
 
-WE provide some convenience functions to work with graphical models syntactically in Julia, inspired very much by [BUGS](https://www.mrc-bsu.cam.ac.uk/software/bugs/).
-BUGS (Bayesian inference Using Gibbs Sampling), as the name says, is a probabilistic programming system originally designed for Gibbs sampling.
-For this purpose, BUGS models define, implicitely, only a directed graph of variables, not an ordered sequence of statements like other PPLs.
-They do have the advantage of being relatively restricted (while still able to express a very large class of practically used models), and hence allowing lots of static analysis.  Specifically, stochastic control flow is disallowed (except for the “mixture model” case of indexing by a stochastic variable).
+## Modeling Language
 
-The original idea was to implement an actual parser from strings to Julia ASTs (`Expr`); this turned out to be very difficult, as I have not found any reliable parsing libraries in pure Julia (stable, flexible, debuggable, and with good error reporting).
-Instead, for now, there is, for one, a macro solution which allows to directly use Julia code corresponding to BUGS code:
+### Writing New Models
+We provide a macro solution which allows to directly use Julia code corresponding to BUGS code:
 
 ```julia
 @bugsast begin
@@ -27,45 +26,10 @@ Instead, for now, there is, for one, a macro solution which allows to directly u
     β = dnorm(0.0, 1e-6)
 end
 ```
+BUGS syntax carries over almost one-to-one to Julia.
 
-This is pretty neat, as BUGS syntax carries over almost one-to-one to Julia.
-The macro’s sole purpose is to check that only allowed syntactic forms are used, and apply some minor normalizations – most prominently, the conversion of stochastic statements (tildes) from `:call` expressions to first-class forms:
-
-```julia
-quote
-    for i = 1:N
-        $(Expr(:~, :(Y[i]), :(dnorm(μ[i], τ))))
-        μ[i] = α + β * (x[i] - x̄)
-    end
-    $(Expr(:~, :τ, :(dgamma(0.001, 0.001))))
-    σ = 1 / sqrt(τ)
-    logτ = log(τ)
-    α = dnorm(0.0, 1.0e-6)
-    β = dnorm(0.0, 1.0e-6)
-end
-```
-
-It should be reasonably easy to define anything else on top of this representation by using simple `if` statements, and `Meta.isexpr`.
-Interpolation (`$(…)`) is allowed in `@bugsast`; the result of the macro is a `:quote` expression, in which the interpolations are just left as is. I.e.,
-
-```julia
-@bugsast begin
-    x = $(myfunc(somevalue))
-end
-```
-
-will end up as 
-
-```julia
-quote
-    x = $(myfunc(somevalue))
-end
-```
-
-with quasiquotation working as usual.
-(Using interpolation, it is possible to construct ASTs which bypass validation and do not correspond to valid BUGS programs – use it with care.)
-
-In addition, there is a string macro `bugsmodel` which should work with original (R-like) BUGS syntax:
+### Lagacy BUGS Programs
+We provide a string macro `bugsmodel` to work with original (R-like) BUGS syntax:
 
 ```julia
 bugsmodel"""
@@ -82,69 +46,117 @@ bugsmodel"""
 """
 ```
 
-Internally, the only thing this does is apply a couple of regex-based substitutions to convert the code to the equivalent Julia, `Meta.parse` the result, and apply the same logic as `@bugsast`.
-This should work for copy-paste situations, but is of course suboptimal wrt. error handling and debugging of syntactic problems.
-All variable names are preventively wrapped in var-strings; this allows R-style names like `b.abd`.
+This is simply the unmodified code in the `model { }` enclosure.  
+We encourage users to write new program using the Julia-native syntax, because of better debuggability and perks like syntax highlighting. 
 
-### AST structure
+## Compilation
+### Compilation Target
+There are three major components of the compilation result: [Graphs.DiGraph](https://juliagraphs.org/Graphs.jl/dev/core_functions/module/#Graphs.DiGraph) for graph structure, node functions for all the variables in the DAG, and whether a variable is observed or assumed.
 
-Basically, all forms which obviously translate from BUGS to Julia are preserved in the equivalent Julia `Expr`s (`:call`, `:for`, `:if`, `:=`, `:ref`).
-The resulting code should be as close to executable as possible.
-Special forms are converted, though, in order to simplify pattern matching:
-
-- `~` statements are parsed as `:call` by Julia, and get their own form (`dc[i] ~ dunif(0, 20)` → `(:~, (:ref, :dc, :i), (:call, :dunif, 0, 20))`).
-- In logical assignments with link functions, the block on the right hand side, automatically created by the Julia parser, is removed.
-  The result is therefore an `:=` expression with a direct `:call` on the LHS.
-- Censoring and truncation annoations are converted to `:censored` and `:truncated` forms (`dnorm(x, μ) C (, 10)` → `(:censored, (:call, :dnorm, :x, :μ), :nothing, 100)`).
-  The left-out limits (`C (, 100)`) are filled with `nothing`.
-  In `@bugsast`, you may just use normal calls `truncated(dist, l, r)` and `censored(dist, l, r)`, which will be raised to special forms automatically.
-- Empty ranges are automatically filled with slices (`x[,]` → `(:ref, :x, :(:), :(:))`).
-
-In addition, forms that have both a `:call` representation and their own lowered form are tried to be normalized to the latter; currently, this concerns `getindex` to `:ref`, and `:` to `:(:)`.  `LineNumberNode`s are stripped completely.
-
-
-## Semantics
-
-The semantics of BUGS are not really made explicit.  I have tried to "reconstruct" a formalization and type system, but this is still ongoing work.
-
-BUGS programs, in contrast to some other PPLs, have the sole purpose of implicitly describing a directed graphical model.
-This means that they don’t really have operational semantics – there are not declarations of variables, input, outputs, etc., nor is order relevant.
-A program like
-
+#### The DAG
+User can retrieve the [Graphs.DiGraph](https://juliagraphs.org/Graphs.jl/dev/core_functions/module/#Graphs.DiGraph) object with
+```julia
+getDAG(g::BUGSGraph)
 ```
-model
-{
-  for( i in 1 : N ) {
-    for( j in 1 : T ) {
-      Y[i , j] ~ dnorm(mu[i , j], tau.c)
-      mu[i , j] <- alpha[i] + beta[i] * (x[j] - xbar)
-    }
-    alpha[i] ~ dnorm(alpha.c, alpha.tau)
-    beta[i] ~ dnorm(beta.c, beta.tau)
-  }
-  tau.c ~ dgamma(0.001, 0.001)
-  sigma <- 1 / sqrt(tau.c)
-  alpha.c ~ dnorm(0.0, 1.0E-6)
-  alpha.tau ~ dgamma(0.001, 0.001)
-  beta.c ~ dnorm(0.0, 1.0E-6)
-  beta.tau ~ dgamma(0.001, 0.001)
-  alpha0 <- alpha.c - xbar * beta.c
-}
+All nodes in the DAG is aliased with an integer number. 
+To look up the integer alias of a variable, user can use function
+
+```julia
+getnodeenum(g::BUGSGraph, node::Symbol).
 ```
 
-denotes only a certain relationship between (logical or stochastic) nodes in a graph.
-Variables are either names of nodes within the program (when on the LHS of a sampling or assignement statement, like `alpha` or `sigma`), or otherwise constant parts of the “data” (like `N` and `xbar`), with which a model must be combined to instantiate it.
+Please note, if a variable is an array indexing, e.g., `g[2, 3]`, the blank in front of `3` is important. 
+Alternatively, we also provide a macro `@nodename` to facilitate formatting.
 
-Loops are just a form of “plate notation”: they allow to concisely express repetition of equal statements over many constant indices, and are thus equivalent to their rolled-out form given the data.
+```julia-repo
+julia> @nodename g[2,3]
+Symbol("g[2, 3]")
+```
 
-> In the BUGS language the type information is fine grained: each component of a tensor can have
-> different type information. […] One common case is where some components of a tensor have
-> been observed while other components need to be estimated.
+A reverse lookup function is also provided.
 
-In addition to standard type checking of semantic consistency between variables and function calls, like any other expression-based language does, BUGS has the additional task of making sense of the indexed variables, which can occur in many places and arbitrary order, and ensuring that stochasticity is only used where it is allowed (e.g., not on the LHS of assignments, or within loop ranges).
+```julia
+getnodename(g::BUGSGraph, node::Integer)
+```
 
-A “type checker” for BUGS would therefore have multiple purposes:
+Other useful functions include
 
-1. Checking semantic constraints, such as correct argument types for functions and distributions,
-2. Checking stochasticity constraints, such as constantness of loop ranges,
-3. Unify types, ranks, and stochasticity of all variables – which can be specified in any order.
+```julia
+getnumnodes(g::BUGSGraph) # return number of nodes
+getsortednodes(g::BUGSGraph) # return nodes in topological order
+getparents(g::BUGSGraph, node::Integer)
+getchidren(g::BUGSGraph, node::Integer)
+getmarkovblanket(g::BUGSGraph, node::Integer) 
+```
+
+#### Node Functions
+Every node in the graph corresponds to a stochastic variable from the original program.
+The node function of a node is a function such that, when evaluated given the node's parents' value, will return a [Distributions.Distribution](https://github.com/JuliaStats/Distributions.jl) object.
+
+User can use `shownodefunc` to print out the node function
+
+```julia
+shownodefunc(g::BUGSGraph, node::Integer)
+```
+
+and 
+```julia
+getdistribution(g::BUGSGraph, node::Integer, value::Vector{Real}) 
+```
+
+to get the distribution object given the values of all the nodes.
+
+### Compilation Interface
+The main function for compilation is 
+
+```julia
+compile(model_def::Expr, data::NamedTuple) # compile a BUGSGraph object without initialization
+compile(model_def::Expr, data::NamedTuple, inits::NamedTuple) # compile a BUGSGraph object with initializations
+compile(model_def::Expr, data::NamedTuple, inits::Vector{NamedTuple}) # compile a vector of BUGSGraph object with initializations
+```
+
+User can also compile to a intermediate representation, a `CompilerState` object and check the corresponding expression for a variable using 
+
+```julia
+querynode(compiler_state::CompilerState, var::Symbol)
+```
+
+### Supported BUGS Distribution and Functions
+The library of supported BUGS distributions and utility functions are limited in the current version. 
+User can register them own distributions and functions with the macros
+
+```julia
+# Should be restricted to pure function that do simple operations
+@bugsfunction function f(x)
+    return x + 1
+end
+```
+
+, and 
+
+```julia
+# Need to return a Distributions.Distribution 
+@bugsdistributions function d(x)
+    return Normal(0, x^2)
+end
+```
+
+Please use these macros cautiously. 
+
+### Inference
+#### Native Graph-Based Inference Algorithms
+We plan to implement a library of high performance graph-based inference algorithms in the future. Contributions are welcome and much appreciated. Interested contributors can check out the [implementation](https://github.com/TuringLang/SymbolicPPL.jl/blob/use_graphs/src/gibbs.jl) of a very simplistic Metropolis-within_Gibbs sampler for interface reference.
+
+#### Using Inference Infrastructure from [Turing.jl](https://github.com/TuringLang/Turing.jl)
+Users who want to run BUGS program right now can try out the `toturing` function, which will compile the `BUGSGraph` object to a `Turing.Model`.
+
+**Caution**: `toturing` is not yet well tested and we can't guarantee its correctness, bugs reports are welcomed.
+
+```julia-repo
+julia> model = toturing(g::BUGSGraph) # model is a Turing.Model
+```
+User can also check the input to Turing's compiler by 
+
+```julia
+inspect_toturing(g::BUGSGraph)
+``` 

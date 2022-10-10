@@ -8,9 +8,10 @@ using SymbolicPPL:
     resolve,
     symbolic_eval,
     ref_to_symbolic!,
-    ref_to_symbolic
+    ref_to_symbolic,
     addlogicalrules!,
-    addstochasticrules!
+    addstochasticrules!,
+    compile_inter
 using Test
 using Symbolics
 
@@ -20,8 +21,8 @@ using Symbolics
 data = Dict(:N => 2, :g => [1, 2, 3])
 compiler_state = CompilerState()
 addlogicalrules!(data, compiler_state)
-@test resolve(:N, compiler_state) == 2
-@test resolve(ref_to_symbolic("g[2]"), compiler_state) == 2
+@test resolve(:N, compiler_state.logicalrules) == 2
+@test resolve(ref_to_symbolic("g[2]"), compiler_state.logicalrules) == 2
 
 # tests for unrolling facilities
 expr = bugsmodel"""      
@@ -189,34 +190,22 @@ compiler_state = CompilerState(
     Dict(a => b + c, b => 2, c => 3),
     Dict{Num,Expr}()
 )
-@test symbolic_eval(a, compiler_state) == 5
+@test symbolic_eval(a, compiler_state.logicalrules) == 5
 
-# test for the top function
-# example taken from https://chjackson.github.io/openbugsdoc/Examples/Rats.html (data simplified)
-data = (
-    x = [8.0, 15.0, 22.0, 29.0, 36.0],
-    xbar = 22,
-    N = 3,
-    T = 2,
-    Y = [151 199; 145 199; 147 214],
-)
+# test for function building
+ex = @bugsast begin
+    g ~ bar(p[1:2, 1:3])
+    for i in 1:2    
+        for j in 1:3
+            p[i, j] = q[i, j] + i
+            q[i, j] = foobar(u[1:i, 1:j])
+            u[i, j] ~ dnorm(0, 1)
+        end
+    end
+end
 
-expr = bugsmodel"""
-    for(i in 1:N) {
-        for(j in 1:T) {
-            Y[i, j] ~ dnorm(mu[i, j], tau.c)
-            mu[i, j] <- alpha[i] + beta[i] * (x[j] - xbar)
-        }
-        alpha[i] ~ dnorm(alpha.c, alpha.tau)
-        beta[i] ~ dnorm(beta.c, beta.tau)
-    }
-    tau.c ~ dgamma(0.001, 0.001)
-    sigma <- 1 / sqrt(tau.c)
-    alpha.c ~ dnorm(0.0, 1.0E-6)   
-    alpha.tau ~ dgamma(0.001, 0.001)
-    beta.c ~ dnorm(0.0, 1.0E-6)
-    beta.tau ~ dgamma(0.001, 0.001)
-    alpha0 <- alpha.c - xbar * beta.c   
- """
+compiler_state = compile_inter(ex, NamedTuple())
+SymbolicPPL.querynode(compiler_state, :g)
+SymbolicPPL.querynode(compiler_state, Symbol("q[1, 1]"))
 
-model = compile_graphppl(model_def = expr, data = data, initials=NamedTuple()) # testing for no error occurs
+g = compile(ex, NamedTuple())
