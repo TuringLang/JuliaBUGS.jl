@@ -220,7 +220,7 @@ julia> SymbolicPPL.f(2)
 
 ```julia-repo
 julia> # Need to return a Distributions.Distribution 
-@bugsdistributions function d(x)
+@bugsdistribution function d(x)
     return Normal(0, x^2)
 end
 
