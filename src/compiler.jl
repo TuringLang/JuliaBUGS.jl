@@ -482,7 +482,7 @@ function addlogicalrules!(data::Dict, compiler_state::CompilerState)
 end
 function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
     addednewrules = false
-    for arg in expr.args
+    for (i, arg) in enumerate(expr.args)
         if arg.head == :(=)
             lhs, rhs = arg.args
 
@@ -508,6 +508,7 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
                 error("Repeated definition for $(lhs)")
             end
             compiler_state.logicalrules[lhs] = sym_rhs
+            expr.args[i] = Expr(:deleted) # avoid repeat evaluation
             addednewrules = true
         end
     end
@@ -537,7 +538,8 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
             if rhs.head == :call
                 dist_func = rhs.args[1]
                 dist_func in DISTRIBUTIONS || dist_func in (:truncated, :truncated_with_lower, :truncated_with_upper) || 
-                    dist_func in (:censored, :censored_with_lower, :censored__with_upper) || error("Distribution $dist_func not defined.") 
+                    dist_func in (:censored, :censored_with_lower, :censored__with_upper) || dist_func in USER_DISTRIBUTIONS || 
+                    error("Distribution $dist_func not defined.") 
             else
                 error("RHS needs to be a distribution function")
             end

@@ -1,5 +1,5 @@
 # Cache
-Adding cache for `substitute` is the same as mutate the rule dictionary after every substitute. The concern is, if we what to support multi-threading, mutating rules might be causing sync issues, although it's unlikely to be severe, given that the mutation won't actually affect the result of `substitute`.
+Adding cache for `substitute` is the same as mutate the rule dictionary after every substitute. The concern is, if we what to support multi-threading, mutating rules might be causing sync issues, although it's unlikely to be severe, given that the mutation won't actually affect the result of `substitute`. 
 
 # Initialization with single array indexing
 For now, we only support whole array initialization of array and array elements. i.e., initializations like `g[1] = 1` is not allowed, instead, using `g = [1, 2, 3, 4]`.

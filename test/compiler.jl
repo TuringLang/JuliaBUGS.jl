@@ -21,8 +21,8 @@ using Symbolics
 data = Dict(:N => 2, :g => [1, 2, 3])
 compiler_state = CompilerState()
 addlogicalrules!(data, compiler_state)
-@test resolve(:N, compiler_state) == 2
-@test resolve(ref_to_symbolic("g[2]"), compiler_state) == 2
+@test resolve(:N, compiler_state.logicalrules) == 2
+@test resolve(ref_to_symbolic("g[2]"), compiler_state.logicalrules) == 2
 
 # tests for unrolling facilities
 expr = bugsmodel"""      
@@ -190,7 +190,7 @@ compiler_state = CompilerState(
     Dict(a => b + c, b => 2, c => 3),
     Dict{Num,Expr}()
 )
-@test symbolic_eval(a, compiler_state) == 5
+@test symbolic_eval(a, compiler_state.logicalrules) == 5
 
 # test for function building
 ex = @bugsast begin

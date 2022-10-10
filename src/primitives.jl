@@ -10,6 +10,8 @@ using AbstractPPL: VarName
 using Statistics
 import Statistics.mean
 using IfElse
+using MacroTools
+using Symbolics
 
 """ 
     NA
@@ -20,6 +22,8 @@ const NA = :missing
 
 const DISTRIBUTIONS = [:truncated, :censored, :dgamma, :dnorm, :dbeta, :dbin, :dcat, :dexp, :dpois, :dflat, 
     :dunif, :dbern, :bar]
+
+USER_DISTRIBUTIONS = []
 
 const INVERSE_LINK_FUNCTION =
     (logit = :logistic, cloglog = :cexpexp, log = :exp, probit = :phi)
@@ -143,3 +147,34 @@ inprod(a::Array, b::Array) = a*b
 foo(v) = sum(v)
 @register_symbolic bar(v::Array)
 bar(v) = dcat(reduce(vcat, v))
+
+# TODO: are these macros too dangerous to be included?
+"""
+    @bugsfunction
+
+Macro to define a function that can be used in BUGS model. 
+!!! warning
+    User should be cautious when using this macro, we recommend only use this macro for pure functions that do common 
+    mathematical operations.
+"""
+macro bugsfunction(ex)
+    def = MacroTools.splitdef(ex)
+    reg_sym = Expr(:macrocall, Symbol("@register_symbolic"), LineNumberNode(@__LINE__, @__FILE__), Expr(:call, def[:name], def[:args]...))
+    eval(reg_sym)
+    eval(ex)
+    return nothing
+end
+
+"""
+    @bugsdistributions
+
+Macro to define a distribution that can be used in BUGS model. Must return a distribution object from defined in Distributions.jl.
+"""
+macro bugsdistributions(ex)
+    def = MacroTools.splitdef(ex)
+    push!(USER_DISTRIBUTIONS, def[:name])
+    reg_sym = Expr(:macrocall, Symbol("@register_symbolic"), LineNumberNode(@__LINE__, @__FILE__), Expr(:call, def[:name], def[:args]...))
+    eval(reg_sym)
+    eval(ex)
+    return nothing
+end
