@@ -59,7 +59,7 @@ function _BUGSGRAPH(tograph::Dict)
             @assert !isempty(tograph[k][1])
             observed_values[nodeenum[k]] = tograph[k][1]
         end
-        nodefunc[nodeenum[k]] = tograph[k][2]
+        nodefunc[nodeenum[k]] = tograph[k][2] |> MacroTools.flatten |> MacroTools.resyntax
         nodefuncptr[nodeenum[k]] = eval(tograph[k][2])
     end
 

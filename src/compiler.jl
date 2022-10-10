@@ -384,6 +384,7 @@ const __SKIP__ = tosymbolic("SKIP")
 
 # https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/a42082ac90f951f677ce1e2a91cd1a0ddd4306c6/src/substitute.jl#L1
 # modified to handle `missing` data
+# TODO: find a way to achieve the same functionality without overwriting SymbolicUtils.substitute
 function SymbolicUtils.substitute(expr, dict; fold=true)
     haskey(dict, expr) && return ismissing(dict[expr]) ? expr : dict[expr]
 

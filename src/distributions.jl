@@ -1,30 +1,6 @@
-# Support for distributions that are part of BUGS but not implemented in Distributions.jl.
+using Turing: Flat
 
-# Modified from https://github.com/TuringLang/Turing.jl/blob/master/src/stdlib/distributions.jl
-"""
-    Flat
-
-The *flat distribution* is the improper distribution of real numbers that has the improper
-probability density function
-```math
-f(x) = 1.
-```
-"""
-struct Flat <: ContinuousUnivariateDistribution end
-
-Base.minimum(::Flat) = -Inf
-Base.maximum(::Flat) = Inf
-
-Base.rand(rng::Random.AbstractRNG, d::Flat) = rand(rng)
-Distributions.logpdf(::Flat, x::Real) = zero(x)
-
-# TODO: only implement `logpdf(d, ::Real)` if support for Distributions < 0.24 is dropped
-Distributions.pdf(d::Flat, x::Real) = exp(logpdf(d, x))
 Distributions.cdf(d::Flat, x::Real) = 0
-
-# For vec support
-Distributions.logpdf(::Flat, x::AbstractVector{<:Real}) = zero(x)
-Distributions.loglikelihood(::Flat, x::AbstractVector{<:Real}) = zero(eltype(x))
 
 """
     LeftTruncatedFlat
