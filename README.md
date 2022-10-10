@@ -9,7 +9,9 @@ This implementation should be able to parse existing BUGS models and run them. I
 We are (as of autumn 2022) planning to continually keep working on this project, until we have a mature BUGS-compatible graphical PPL system integrated in the Turing ecosystem.
 
 ## Modeling Language
-
+References:  
+ - [MultiBUGS](https://www.multibugs.org/documentation/latest/)
+ - [OpenBUGS](https://chjackson.github.io/openbugsdoc/Manuals/ModelSpecification.html)
 ### Writing New Models
 We provide a macro solution which allows to directly use Julia code corresponding to BUGS code:
 
