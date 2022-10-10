@@ -168,6 +168,12 @@ Return the node alias given the node name.
 """
 getnodeenum(g::BUGSGraph, node::Symbol) = g.nodeenum[node]
 
+getDAG(g::BUGSGraph) = g.digraph
+
+macro nodename(expr)
+    name = tosymbol(tosymbolic(expr))
+    return :($(QuoteNode(name)))
+end
 
 function shownodefunc(g::BUGSGraph, node::Integer)
     f_expr = g.nodefunc[node]
