@@ -28,7 +28,7 @@ The model is constructed such that, let $p_i$ be the probability of germination 
 $$
 \begin{aligned}
 r_i &\sim \operatorname{Binomial}(p_i, n_i) \\
-logit(p_i) &\sim \alpha_0 + \alpha_1 x_{1 i} + \alpha_2 x_{2i} + \alpha_{12} x_{1i} x_{2i} + b_{i} \\
+\operatorname{logit}(p_i) &\sim \alpha_0 + \alpha_1 x_{1 i} + \alpha_2 x_{2i} + \alpha_{12} x_{1i} x_{2i} + b_{i} \\
 b_i &\sim \operatorname{Normal}(0, \tau)
 \end{aligned}
 $$
