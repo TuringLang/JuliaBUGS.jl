@@ -191,6 +191,8 @@ julia> getdistribution(model, 3, value)
 Distributions.Binomial{Float64}(n=39, p=0.0)
 ```
 
+where `value` is a `Vector` indexed by nodes' integer alias.
+
 #### Debug Model
 User can choose compile to a `CompilerState` object and check the corresponding expression for a variable using 
 
