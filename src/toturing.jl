@@ -1,14 +1,14 @@
-using Turing
+using DynamicPPL
 using MacroTools
 using Distributions
 
 """
     toturing(g::SymbolicPPL.Graph)
 
-Convert a `SymbolicPPL.Graph` to a `Turing.Model`.
+Convert a `SymbolicPPL.Graph` to a `DynamicPPL.Model`.
 """
 function toturing(g::BUGSGraph)
-    turing_expr = Turing.DynamicPPL.model(@__MODULE__, LineNumberNode(@__LINE__, @__FILE__), inspect_toturing(g), false)
+    turing_expr = DynamicPPL.model(@__MODULE__, LineNumberNode(@__LINE__, @__FILE__), inspect_toturing(g), false)
     eval(turing_expr)
     return bugsturing # Potentially unsafe
 end
@@ -16,7 +16,7 @@ end
 """
     inspect_toturing(g)
 
-Return the input to `Turing.@model`.
+Return the input to `DynamicPPL.@model`.
 """
 function inspect_toturing(g::BUGSGraph)
     expr = []
