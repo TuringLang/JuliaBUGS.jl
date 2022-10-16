@@ -101,35 +101,40 @@ end
 
 Return a Distribution.jl distribution.
 """
-function getdistribution(g::BUGSGraph, node::Integer)::Function
-    return function (value::Vector{Real})
-        (g.nodefuncptr[node])([value[p] for p in g.parents[node]]...)
+function getdistribution(g::BUGSGraph, node::Integer, value::Vector{Real}, delta::Dict=Dict())::Distributions.Distribution
+    args = []
+    for p in g.parents[node]
+        if p in keys(delta)
+            push!(args, delta[p])
+        else
+            push!(args, value[p])
+        end
     end
+    return (g.nodefuncptr[node])(args...)
 end
 getdistribution(g::BUGSGraph, node::Integer, trace::Trace) = getdistribution(g, node, trace.value)
-getdistribution(g::BUGSGraph, node::Integer, value::Vector{Real}) = getdistribution(g, node)(value)
+getdistribution(g::BUGSGraph, node::Integer, trace::Trace, delta::Dict) = getdistribution(g, node, trace.value, delta)
 
 """
-    getparents(g, node)
+    parents(g, node)
 
 Return the parents of the node.
 """
-getparents(g::BUGSGraph, node::Integer) = g.parents[node]
+parents(g::BUGSGraph, node::Integer) = g.parents[node]
 
 """
-    getchildren(g, node)
+    children(g, node)
 
 Return the children of the node.
 """
-getchidren(g::BUGSGraph, node::Integer) = outneighbors(g.digraph, node)
-
+children(g::BUGSGraph, node::Integer) = outneighbors(g.digraph, node)
 
 """
-    getmarkovblanket(g, node)
+    markovblanket(g, node)
 
 Return the Markov blanket of the node.
 """
-function getmarkovblanket(g::BUGSGraph, node::Integer)
+function markovblanket(g::BUGSGraph, node::Integer)
     mb = Set{Integer}()
     push!(mb, node)
     for p in inneighbors(g.digraph, node)
@@ -144,12 +149,16 @@ function getmarkovblanket(g::BUGSGraph, node::Integer)
     return collect(mb)
 end
 
+function freevars(g::BUGSGraph, node::Integer)
+    return push!(outneighbors(g.digraph, node), node)
+end
+
 """
-    getnumnodes(g)
+    numnodes(g)
 
 Return the number of nodes.
 """
-getnumnodes(g::BUGSGraph) = length(g.nodeenum)
+numnodes(g::BUGSGraph) = length(g.nodeenum)
 
 """
     getsortednodes(g)
@@ -159,22 +168,37 @@ Return all nodes in topological order.
 getsortednodes(g::BUGSGraph) = g.sortednode
 
 """
-    getnodename(g, node)
+    nodename(g, node)
 
 Return the name of the node given the node alias.
 """
-getnodename(g::BUGSGraph, node::Integer) = g.reverse_nodeenum[node]
+nodename(g::BUGSGraph, node::Integer) = g.reverse_nodeenum[node]
 
 """
-    getnodeenum(g, node)
+    nodealias(g, node)
 
 Return the node alias given the node name.
 """
-getnodeenum(g::BUGSGraph, node::Symbol) = g.nodeenum[node]
+nodealias(g::BUGSGraph, node::Symbol) = g.nodeenum[node]
+
+assumednodes(g::BUGSGraph) = [i for i in 1:numnodes(g) if !g.isobserve[i]]
 
 getDAG(g::BUGSGraph) = g.digraph
 
-macro nodename(expr)
+function logdensityof(g::BUGSGraph, value::Vector{Real}, delta::Dict=Dict())
+    logp = 0.0
+    for node in g.sortednode
+        if node in keys(delta)
+            logp += logpdf(getdistribution(g, node, value, delta), delta[node])
+        else
+            logp += logpdf(getdistribution(g, node, value), value[node])
+        end
+    end
+    return logp
+end
+logdensityof(g::BUGSGraph, trace::Trace, delta::Dict=Dict()) = logdensityof(g, trace.value, delta)
+
+macro nn(expr)
     name = tosymbol(tosymbolic(expr))
     return :($(QuoteNode(name)))
 end
@@ -206,3 +230,5 @@ function Random.rand(rng::Random.AbstractRNG, d::BUGSGraph)
 end
 
 Random.rand(d::BUGSGraph) = rand(Random.GLOBAL_RNG, d)
+
+# TODO: plot with Graphs.jl, ref: https://sisl.github.io/BayesNets.jl/dev/usage/

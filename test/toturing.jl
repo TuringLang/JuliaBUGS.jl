@@ -1,8 +1,10 @@
-using Turing
 using Random
 using SymbolicPPL
-using SymbolicPPL:toturing, compile_inter
 using Distributions
+using AbstractMCMC
+using MCMCChains
+using AdvancedMH
+using Turing
 
 ##
 ex = @bugsast begin
@@ -31,3 +33,10 @@ g = compile(ex, (a=[1, 2, missing], ))
 model = toturing(g)
 inspect_toturing(g)
 rand(model())
+
+##
+m = SymbolicPPL.BUGSExamples.EXAMPLES[:rats];
+model = compile(m[:model_def], m[:data], m[:inits][1]);
+turing_model = toturing(model);
+sampler = MetropolisHastings(StaticProposal(Normal(0,1)))
+chn = sample(turing_model(), MH(), 10000)

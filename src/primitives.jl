@@ -79,7 +79,7 @@ dgeom(p) = Geometric(p)
 @register_symbolic dunif(a, b)
 dunif(a, b) = Uniform(a, b)
 
-dflat() = Flat()
+dflat() = DFlat()
 
 @register_symbolic dbeta(alpha, beta)
 dbeta(a, b) = Beta(a, b)
@@ -148,7 +148,7 @@ foo(v) = sum(v)
 @register_symbolic bar(v::Array)
 bar(v) = dcat(reduce(vcat, v))
 
-# TODO: are these macros too dangerous to be included?
+# TODO: add name collision check
 """
     @primitive
 
@@ -157,24 +157,11 @@ Macro to define a function that can be used in BUGS model.
     User should be cautious when using this macro, we recommend only use this macro for pure functions that do common 
     mathematical operations.
 """
-macro primitive(ex)
+macro primitive(ex, isdistribution = false)
     def = MacroTools.splitdef(ex)
     reg_sym = Expr(:macrocall, Symbol("@register_symbolic"), LineNumberNode(@__LINE__, @__FILE__), Expr(:call, def[:name], def[:args]...))
     eval(reg_sym)
     eval(ex)
-    return nothing
-end
-
-"""
-    @bugsdistribution
-
-Macro to define a distribution that can be used in BUGS model. Must return a distribution object from defined in Distributions.jl.
-"""
-macro bugsdistribution(ex)
-    def = MacroTools.splitdef(ex)
-    push!(USER_DISTRIBUTIONS, def[:name])
-    reg_sym = Expr(:macrocall, Symbol("@register_symbolic"), LineNumberNode(@__LINE__, @__FILE__), Expr(:call, def[:name], def[:args]...))
-    eval(reg_sym)
-    eval(ex)
+    isdistribution && push!(USER_DISTRIBUTIONS, def[:name])
     return nothing
 end

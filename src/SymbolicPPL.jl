@@ -11,11 +11,10 @@ include("toturing.jl")
 
 export @bugsast, @bugsmodel_str
 export compile, compile_inter, querynode
-export getDAG, getnodeenum, getnodename, getnumnodes, getsortednodes, getmarkovblanket, getchidren, getparents, 
+export getDAG, nodealias, nodename, numnodes, getsortednodes, markovblanket, children, parents, 
     shownodefunc, getdistribution, @nodename
 export toturing, inspect_toturing
 export @primitive, @bugsdistribution
-export SampleFromPrior
 
 include("BUGSExamples/BUGSExamples.jl")
 using .BUGSExamples

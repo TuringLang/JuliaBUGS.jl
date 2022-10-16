@@ -27,6 +27,22 @@ CompilerState() = CompilerState(
     Dict()
 )
 
+function querynode(compiler_state::CompilerState, var::Symbol)
+    findkey = 0
+    if haskey(compiler_state.logicalrules, tosymbolic(var)) 
+        findkey = 1 
+    elseif haskey(compiler_state.stochasticrules, tosymbolic(var))
+        findkey = 2
+    end
+
+    if findkey == 0
+        error("BUGS model does not contain node $var")
+    end
+
+    ex = findkey == 1 ? compiler_state.logicalrules[tosymbolic(var)] : compiler_state.stochasticrules[tosymbolic(var)]
+    return ex
+end
+
 """
     cumulative(expr)
 
@@ -631,7 +647,6 @@ function recursive_find_variables(expr::Expr, variables::Vector{Any})
     end
 end
 
-# need to handle array indexing
 function extract_observations!(compiler_state::CompilerState)
     for k in keys(compiler_state.stochasticrules)
         resolved_val = resolve(k, compiler_state.logicalrules)
@@ -819,41 +834,23 @@ function compile_inter(model_def::Expr, data::NamedTuple)
     expr = transform_expr(model_def)
     compiler_state = CompilerState()
     addlogicalrules!(data, compiler_state)
-    println("Finish reading data.")
-
     while true
         unroll!(expr, compiler_state) ||
             resolveif!(expr, compiler_state) ||
             addlogicalrules!(expr, compiler_state) ||
             break
     end
-    println("Finish processing logical assignments.")
     check_expr(expr, compiler_state)
-
     addstochasticrules!(expr, compiler_state)
-    println("Finish processing stochastic assignments.")
-    
     extract_observations!(compiler_state)
-
     return compiler_state
 end
 
-function querynode(compiler_state::CompilerState, var::Symbol)
-    findkey = 0
-    if haskey(compiler_state.logicalrules, tosymbolic(var)) 
-        findkey = 1 
-    elseif haskey(compiler_state.stochasticrules, tosymbolic(var))
-        findkey = 2
-    end
+"""
+    compile(model_def[, data[, initializations]])
 
-    if findkey == 0
-        error("BUGS model does not contain node $var")
-    end
-
-    ex = findkey == 1 ? compiler_state.logicalrules[tosymbolic(var)] : compiler_state.stochasticrules[tosymbolic(var)]
-    return ex
-end
-
+Compile a model definition into a BUGSGraph.
+"""
 compile(model_def::Expr) = compile(model_def, NamedTuple())
 compile(model_def::Expr, data::Dict) = compile(model_def, Tuple(data))
 function compile(model_def::Expr, data::NamedTuple)

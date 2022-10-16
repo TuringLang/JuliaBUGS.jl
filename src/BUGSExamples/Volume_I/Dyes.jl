@@ -6,8 +6,8 @@ dyes = (
         for(i in 1 : batches) {
             mu[i] ~ dnorm(theta, tau.btw)
             for(j in 1 : samples) {
-            y[i , j] ~ dnorm(mu[i], tau.with)
-            cumulative.y[i , j] <- cumulative(y[i , j], y[i , j])
+                y[i , j] ~ dnorm(mu[i], tau.with)
+                cumulative.y[i , j] <- cumulative(y[i , j], y[i , j])
             }
         }   
         sigma2.with <- 1 / tau.with

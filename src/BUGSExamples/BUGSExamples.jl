@@ -1,26 +1,9 @@
 module BUGSExamples
 
 using SymbolicPPL
-using MCMCChains
-using MCMCChains: summarize
-using StatsPlots
 using SymbolicPPL: rreshape
 
 const NA = missing
-
-function compile(m::NamedTuple)
-    @assert keys(m) == (:name, :model_def, :data, :inits)
-    chains = []
-    for i in 1:length(m[:inits])
-        push!(chains, compile_singlechain(m, i))
-    end
-    return chains
-end
-
-function compile_singlechain(m::NamedTuple, select)
-    @assert keys(m) == (:name, :model_def, :data, :inits)
-    return compile_graphppl(model_def = m[:model_def], data = m[:data], initials = m[:inits][select])
-end
 
 include("Volume_I/Blocker.jl")
 include("Volume_I/Bones.jl")

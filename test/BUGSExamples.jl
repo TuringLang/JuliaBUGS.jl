@@ -1,7 +1,5 @@
 using SymbolicPPL
-using SymbolicPPL: transform_expr, CompilerState, addlogicalrules!, unroll!, addstochasticrules!, 
-ref_to_symbolic!, resolve, ref_to_symbolic, tosymbol, symbolic_eval, scalarize, tograph,
-BUGSGraph, tosymbolic, SampleFromPrior
+using SymbolicPPL: tograph, BUGSGraph, tosymbolic, ProposeFromPrior
 using Random
 using AbstractMCMC
 ##
@@ -31,23 +29,12 @@ m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_realistic];
 @time model = compile(m[:model_def], m[:data], m[:inits][1]);
 @run model = compile(m[:model_def], m[:data], m[:inits][1]);
 ##
-expr = transform_expr(m[:model_def]);
-compiler_state = CompilerState();
-addlogicalrules!(m[:data], compiler_state);
-
-while true
-    unroll!(expr, compiler_state) ||
-        addlogicalrules!(expr, compiler_state) ||
-        break
-end
-addstochasticrules!(expr, compiler_state);
-
-##
+compiler_state = compile_inter(m[:model_def], m[:data]);
 @time g = tograph(compiler_state);
 graph = BUGSGraph(g);
 
 ##
-sampler = SampleFromPrior()
+sampler = ProposeFromPrior()
 sample, trace = AbstractMCMC.step(Random.default_rng(), model, sampler);
 sample1, trace1 = AbstractMCMC.step(Random.default_rng(), model, sampler, trace);
 

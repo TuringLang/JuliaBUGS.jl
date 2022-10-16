@@ -4,9 +4,14 @@ check_lhs(expr) = check_lhs(Bool, expr) || error("Invalid LHS expression `$expr`
 check_lhs(::Type{Bool}, expr) = false
 check_lhs(::Type{Bool}, ::Symbol) = true
 function check_lhs(::Type{Bool}, expr::Expr)
-    return Meta.isexpr(expr, :ref) ||
+    Meta.isexpr(expr, :call, 2) && ENTRY_FROM_BUGSAST &&
+        @warn("BUGS' link function syntax may cause confusion with Julia's function definition syntax. Consider calling the inverse of link functions on the RHS.
+        Corresponding Inverses: logit => logistic, cloglog => cexpexp, log => exp, probit => phi")
+    return Meta.isexpr(expr, :ref) || 
         (Meta.isexpr(expr, :call, 2) && check_lhs(Bool, expr.args[2]))
 end
+
+ENTRY_FROM_BUGSAST = true
 
 """
     bugsast_expression(expr)
@@ -143,6 +148,7 @@ Used expression heads: `:~` for tilde calls, `:ref` for indexing, `:(:)` for ran
 converted from `:call` variants.
 """
 macro bugsast(expr)
+    global ENTRY_FROM_BUGSAST = true
     return Meta.quot(bugsast(expr, __source__))
 end
 
@@ -186,6 +192,7 @@ end
 
 macro bugsmodel_str(s::String)
     # Convert and wrap the whole thing in a block for parsing
+    global ENTRY_FROM_BUGSAST = false
     transformed_code = "begin\n$(bugs_to_julia(s))\nend"
     try
         expr = Meta.parse(transformed_code)

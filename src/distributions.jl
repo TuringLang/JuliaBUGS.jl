@@ -1,7 +1,7 @@
 # Support for distributions that are part of BUGS but not implemented in Distributions.jl.
 
 # Modified from https://github.com/TuringLang/Turing.jl/blob/master/src/stdlib/distributions.jl
-# Rename `Flat` to `SPPLFlat` to avoid name conflict with Turing.jl
+# Rename `Flat` to `DFlat` to avoid name conflict with Turing.jl
 """
     Flat
 
@@ -11,21 +11,19 @@ probability density function
 f(x) = 1.
 ```
 """
-struct SPPLFlat <: ContinuousUnivariateDistribution end
+struct DFlat <: ContinuousUnivariateDistribution end
 
-Base.minimum(::SPPLFlat) = -Inf
-Base.maximum(::SPPLFlat) = Inf
+Base.minimum(::DFlat) = -Inf
+Base.maximum(::DFlat) = Inf
 
-Base.rand(rng::Random.AbstractRNG, d::SPPLFlat) = rand(rng)
-Distributions.logpdf(::SPPLFlat, x::Real) = zero(x)
-
-# TODO: only implement `logpdf(d, ::Real)` if support for Distributions < 0.24 is dropped
-Distributions.pdf(d::SPPLFlat, x::Real) = exp(logpdf(d, x))
-Distributions.cdf(d::SPPLFlat, x::Real) = 0
+Base.rand(rng::Random.AbstractRNG, d::DFlat) = rand(Uniform(-100, 100))
+Distributions.logpdf(::DFlat, x::Real) = zero(x)
+Distributions.pdf(d::DFlat, x::Real) = exp(logpdf(d, x))
+Distributions.cdf(d::DFlat, x::Real) = 0
 
 # For vec support
-Distributions.logpdf(::SPPLFlat, x::AbstractVector{<:Real}) = zero(x)
-Distributions.loglikelihood(::SPPLFlat, x::AbstractVector{<:Real}) = zero(eltype(x))
+Distributions.logpdf(::DFlat, x::AbstractVector{<:Real}) = zero(x)
+Distributions.loglikelihood(::DFlat, x::AbstractVector{<:Real}) = zero(eltype(x))
 
 """
     LeftTruncatedFlat
@@ -44,8 +42,6 @@ function Distributions.logpdf(d::LeftTruncatedFlat, x::Real)
     z = float(zero(x))
     return x <= d.l ? oftype(z, -Inf) : z
 end
-
-# TODO: only implement `logpdf(d, ::Real)` if support for Distributions < 0.24 is dropped
 Distributions.pdf(d::LeftTruncatedFlat, x::Real) = exp(logpdf(d, x))
 Distributions.cdf(d::LeftTruncatedFlat, x::Real) = 0
 
@@ -74,8 +70,6 @@ function Distributions.logpdf(d::RightTruncatedFlat, x::Real)
     z = float(zero(x))
     return x >= d.r ? oftype(z, Inf) : z
 end
-
-# TODO: only implement `logpdf(d, ::Real)` if support for Distributions < 0.24 is dropped
 Distributions.pdf(d::RightTruncatedFlat, x::Real) = exp(logpdf(d, x))
 Distributions.cdf(d::RightTruncatedFlat, x::Real) = 0
 
@@ -86,17 +80,17 @@ function Distributions.loglikelihood(d::RightTruncatedFlat, x::AbstractVector{<:
     return any(xi >= upper for xi in x) ? T(Inf) : zero(T)
 end
 
-function truncated(d::SPPLFlat, l::Real, r::Real)
+function truncated(d::DFlat, l::Real, r::Real)
     if l > r
         throw(ArgumentError("invalid truncation interval: $l > $r"))
     end
     return Uniform(l, r)
 end
 
-function truncated(d::SPPLFlat, l::Real, ::Nothing)
+function truncated(d::DFlat, l::Real, ::Nothing)
     return LeftTruncatedFlat(l)
 end
 
-function truncated(d::SPPLFlat, ::Nothing, r::Real)
+function truncated(d::DFlat, ::Nothing, r::Real)
     return RightTruncatedFlat(r)
 end
