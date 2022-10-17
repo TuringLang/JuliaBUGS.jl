@@ -199,7 +199,7 @@ User can choose compile to a `CompilerState` object and check the corresponding 
 ```julia-repo
 julia> model_cs = compile_inter(model_def, data);
 
-julia> querynode(model_cs, @nodename r[1])
+julia> querynode(model_cs, @nn r[1])
 SymbolicPPL.dbin(p[1], n[1])
 ```
 

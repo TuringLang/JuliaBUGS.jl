@@ -150,18 +150,42 @@ bar(v) = dcat(reduce(vcat, v))
 
 # TODO: add name collision check
 """
-    @primitive
+    @register_function
 
 Macro to define a function that can be used in BUGS model. 
 !!! warning
     User should be cautious when using this macro, we recommend only use this macro for pure functions that do common 
     mathematical operations.
+
+```@repl
+@register_function f(x) = x^2
+SymbolicPPL.f(2)
+```
 """
-macro primitive(ex, isdistribution = false)
+macro register_function(ex)
+    eval_registration(ex)
+    return nothing
+end
+
+"""
+    @register_function
+
+Macro to define a distribution that can be used in BUGS model. 
+
+```@repl
+@register_function d(x) = Normal(0, x^2)
+SymbolicPPL.d(1)
+```
+"""
+macro register_distribution(ex)
+    eval_registration(ex)
+    push!(USER_DISTRIBUTIONS, def[:name])
+    return nothing
+end
+
+function eval_registration(ex)
     def = MacroTools.splitdef(ex)
     reg_sym = Expr(:macrocall, Symbol("@register_symbolic"), LineNumberNode(@__LINE__, @__FILE__), Expr(:call, def[:name], def[:args]...))
     eval(reg_sym)
     eval(ex)
-    isdistribution && push!(USER_DISTRIBUTIONS, def[:name])
-    return nothing
 end
