@@ -221,9 +221,9 @@ julia> SymbolicPPL.f(2)
 
 ```julia-repo
 julia> # Need to return a Distributions.Distribution 
-@bugsdistribution function d(x)
+@primitive function d(x) 
     return Normal(0, x^2)
-end
+end true # if the second argument is specified to be true, then add distribution
 
 julia> SymbolicPPL.d(1)
 Distributions.Normal{Float64}(μ=0.0, σ=1.0)
