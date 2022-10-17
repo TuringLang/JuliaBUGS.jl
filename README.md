@@ -138,7 +138,7 @@ All nodes in the DAG is aliased with an integer number.
 To look up the integer alias of a variable, user can use function
 
 ```julia-repo
-julia> nodealias(model, @nn r[1]) # equivalently getnodeenum(model, Symbol("r[1]"))
+julia> nodealias(model, @nn r[1]) # equivalently nodealias(model, Symbol("r[1]"))
 3 
 ```
 
