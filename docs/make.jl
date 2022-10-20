@@ -1,4 +1,5 @@
-using Documenter, SymbolicPPL
+using Documenter 
+using SymbolicPPL
 
 makedocs(
     sitename = "SymbolicPPL.jl",

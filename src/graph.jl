@@ -1,6 +1,5 @@
-using Graphs
+using Graphs, MetaGraphsNext
 using Random
-using MetaGraphsNext
 
 struct VertexInfo
     sorted_inputs::Tuple

@@ -1,7 +1,6 @@
+using Distributions
 using DynamicPPL
 using MacroTools
-using Distributions
-using MetaGraphsNext
 
 function todppl(g::MetaDiGraph)
     expr = []
@@ -19,7 +18,6 @@ function todppl(g::MetaDiGraph)
     end
     args = [Expr(:kw, a, g[a].data) for a in vertices(g) if g[a].is_data]
     ex = Expr(:function, Expr(:call, :model, Expr(:parameters, args...)), Expr(:block, expr...))
-    # return ex
     eval(DynamicPPL.model(@__MODULE__, LineNumberNode(@__LINE__, @__FILE__), ex, false))
     return model
 end

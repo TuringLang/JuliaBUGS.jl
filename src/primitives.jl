@@ -1,17 +1,14 @@
-using Distributions
-using LogExpFunctions
-import LogExpFunctions: logistic, logit, cloglog, cexpexp, log1pexp
 import Base: step
-using SpecialFunctions
-import SpecialFunctions: gamma
-using LinearAlgebra
-import LinearAlgebra: logdet
-using AbstractPPL: VarName
-using Statistics
-import Statistics.mean
+
+using Distributions
 using IfElse
+using LinearAlgebra
+using LogExpFunctions
+using Statistics
 using MacroTools
+using SpecialFunctions
 using Symbolics
+
 
 """ 
     NA
@@ -31,13 +28,6 @@ const INVERSE_LINK_FUNCTION =
 TRACED_FUNCTIONS = [:exp, ]
 
 VECTOR_FUNCTION = [:dcat, ]
-
-# # Reload `set_node_value!`, sampling a Binomial will give a Integer type, while GraphPPL
-# # only support Float right now, this is a work around
-# function set_node_value!(m::Model, ind::VarName, value::Integer)
-#     @assert typeof(m[ind].value[]) <: AbstractFloat
-#     m[ind].value[] = Float64(value)
-# end
 
 """
     rreshape
@@ -138,7 +128,7 @@ pow(base, exp) = base^exp
 @register_symbolic inverse(v::Vector)
 inverse(v) = inv(v)
 
-Statistics.mean(v::Symbolics.Arr{Num, 1}) = mean(Symbolics.scalarize(v))
+Statistics.mean(v::Symbolics.Arr{Num, 1}) = Statistics.mean(Symbolics.scalarize(v))
 sd(v::Symbolics.Arr{Num, 1}) = Statistics.std(Symbolics.scalarize(v))
 inprod(a::Array, b::Array) = a*b
 

@@ -1,12 +1,10 @@
-using Distributions
-using Symbolics
-using SymbolicUtils
-using Random
-using MacroTools
-using LinearAlgebra
-using Setfield
-import SymbolicUtils: toterm, substitute
 using BangBang
+using Distributions
+using LinearAlgebra
+using MacroTools
+using Setfield
+using Symbolics, SymbolicUtils
+using Random
 
 """
     CompilerState
