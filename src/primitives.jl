@@ -142,12 +142,6 @@ Statistics.mean(v::Symbolics.Arr{Num, 1}) = mean(Symbolics.scalarize(v))
 sd(v::Symbolics.Arr{Num, 1}) = Statistics.std(Symbolics.scalarize(v))
 inprod(a::Array, b::Array) = a*b
 
-# dummy function used for testing -- do not use
-@register_symbolic foo(v::Array)
-foo(v) = sum(v)
-@register_symbolic bar(v::Array)
-bar(v) = dcat(reduce(vcat, v))
-
 # TODO: add name collision check
 """
     @register_function
@@ -178,8 +172,8 @@ SymbolicPPL.d(1)
 ```
 """
 macro register_distribution(ex)
-    eval_registration(ex)
-    push!(USER_DISTRIBUTIONS, def[:name])
+    dist_name = eval_registration(ex)
+    push!(USER_DISTRIBUTIONS, dist_name)
     return nothing
 end
 
@@ -188,4 +182,5 @@ function eval_registration(ex)
     reg_sym = Expr(:macrocall, Symbol("@register_symbolic"), LineNumberNode(@__LINE__, @__FILE__), Expr(:call, def[:name], def[:args]...))
     eval(reg_sym)
     eval(ex)
+    return def[:name]
 end

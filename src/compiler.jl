@@ -27,22 +27,6 @@ CompilerState() = CompilerState(
     Dict()
 )
 
-function querynode(compiler_state::CompilerState, var::Symbol)
-    findkey = 0
-    if haskey(compiler_state.logicalrules, tosymbolic(var)) 
-        findkey = 1 
-    elseif haskey(compiler_state.stochasticrules, tosymbolic(var))
-        findkey = 2
-    end
-
-    if findkey == 0
-        error("BUGS model does not contain node $var")
-    end
-
-    ex = findkey == 1 ? compiler_state.logicalrules[tosymbolic(var)] : compiler_state.stochasticrules[tosymbolic(var)]
-    return ex
-end
-
 """
     cumulative(expr)
 
@@ -82,19 +66,39 @@ end
 Call the inverse of the link function on the RHS so that the LHS is simple. 
 """
 function linkfunction(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if Meta.isexpr(sub_expr, :(~)) && Meta.isexpr(sub_expr.args[1], :call)
-            link_lhs, rhs = sub_expr.args
+    expr = MacroTools.postwalk(expr) do sub_expr
+        if Meta.isexpr(sub_expr, :link_function)
+            sub_expr = Expr(sub_expr.args...)
+        end
+        return sub_expr
+    end
 
-            link_fun, lhs = link_lhs.args
-            inter_var = String(link_fun) * "(" * String(lhs) * ")" |> Symbol
+    expr = MacroTools.prewalk(expr) do sub_expr
+        if sub_expr isa Expr
+            for (i, arg) in enumerate(sub_expr.args)
+                if Meta.isexpr(arg, :(~)) && Meta.isexpr(arg.args[1], :call)
+                    link_lhs, rhs = arg.args
+        
+                    link_fun, lhs = link_lhs.args
+                    inter_var = String(link_fun) * "(" * String(lhs) * ")" |> Symbol
+        
+                    splice!(
+                        sub_expr.args, 
+                        i, 
+                        [
+                            Expr(:(~), inter_var, rhs),
+                            Expr(:(=), inter_var, Expr(:call, link_fun, lhs)), # need this for observation
+                            Expr(:(=), lhs, Expr(:call, INVERSE_LINK_FUNCTION[link_fun], inter_var)) # need this for assumption
+                        ]
+                    )
+                end
+            end
+        end
+        return sub_expr
+    end
 
-            sub_expr = Expr(:block,
-                Expr(:(~), inter_var, rhs),
-                Expr(:(=), inter_var, Expr(:call, link_fun, lhs)), # need this for observation
-                Expr(:(=), lhs, Expr(:call, INVERSE_LINK_FUNCTION[link_fun], inter_var)) # need this for assumption
-            )
-        elseif @capture(sub_expr, f_(lhs_) = rhs_)
+    expr = MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, f_(lhs_) = rhs_)
             if f in keys(INVERSE_LINK_FUNCTION)
                 sub_expr.args[1] = lhs
                 sub_expr.args[2] = Expr(:call, INVERSE_LINK_FUNCTION[f], rhs)
@@ -103,7 +107,9 @@ function linkfunction(expr::Expr)
             end
         end
         return sub_expr
-    end |> MacroTools.flatten
+    end
+
+    return expr
 end
 
 """
@@ -489,11 +495,6 @@ Base.isequal(::SymbolicUtils.Symbolic, ::Missing) = false
 
 Base.in(key::Num, vs::Vector) = any(broadcast(Symbolics.isequal, key, vs))
 
-"""
-    addlogicalrules!(data, compiler_state)
-
-Process all the logical assignments and add them to `CompilerState.stochasticrules`.
-"""
 addlogicalrules!(data::NamedTuple, compiler_state::CompilerState) =
     addlogicalrules!(Dict(pairs(data)), compiler_state)
 function addlogicalrules!(data::Dict, compiler_state::CompilerState)
@@ -544,11 +545,6 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
     return addednewrules
 end
 
-"""
-    addstochasticrules!(expr, compiler_state::CompilerState)
-
-Process all the stochastic assignments and add them to `CompilerState.stochasticrules`.
-"""
 function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
     for arg in expr.args
         if arg.head == :(~)
@@ -631,11 +627,6 @@ function replace_variables(ex::Expr, variables)
     end
 end
 
-"""
-    find_all_variables(expr)
-
-Find all the variables in the expression.
-"""
 find_all_variables(rhs::Number) = []
 find_all_variables(rhs::Symbol) = Base.occursin("[", string(rhs)) ? [] : rhs
 function find_all_variables(rhs::Expr)
@@ -821,11 +812,6 @@ function refinindices(expr, compiler_state)
     end
 end
 
-"""
-    check_expr(expr)
-
-Check if the model is static.
-"""
 function check_expr(expr, compiler_state::CompilerState)
     # check if any loop or if remains
     for sub_expr in expr.args
@@ -838,9 +824,9 @@ function check_expr(expr, compiler_state::CompilerState)
 end
 
 """
-    compile(model_def[, data[, initializations]])
+    compile(model_def, data, target)
 
-Compile a model definition into a BUGSGraph.
+Compile the model definition `model_def` with data `data` and target `target`.
 """
 function compile(model_def::Expr, data::NamedTuple, target::Symbol) 
     @assert target in [:DynamicPPL, :IR, :Graph] "target must be one of [:DynamicPPL, :IR, :Graph]"

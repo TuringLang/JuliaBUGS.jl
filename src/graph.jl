@@ -1,5 +1,4 @@
 using Graphs
-import Graphs: topological_sort_by_dfs
 using Random
 using MetaGraphsNext
 
@@ -34,10 +33,6 @@ function to_metadigraph(pre_graph::Dict)
     return g
 end
 
-function Graphs.topological_sort_by_dfs(g::MetaDiGraph)
-    return get_label.(topological_sort_by_dfs(g.graph))
-end
-
 function process_initializations(inits::NamedTuple)
     initializations = Dict{Symbol, Real}()
     for (k, v) in pairs(inits)
@@ -62,7 +57,7 @@ end
 
 Return a Distribution.jl distribution.
 """
-function getdistribution(g::MetaDiGraph, node::Symbol, value::Vector{Real}, delta::Dict{Symbol, Real}=Dict{Symbol, Real}())::Distributions.Distribution
+function getdistribution(g::MetaDiGraph, node::Symbol, value::Dict{Symbol, Real}, delta::Dict{Symbol, <:Real}=Dict{Symbol, Float64}())::Distributions.Distribution
     args = []
     for p in g[node].sorted_inputs
         if p in keys(delta)

@@ -108,7 +108,7 @@ function bugsast_statement(expr::Expr, position=LineNumberNode(1, nothing))
         link_func = expr.args[3]
         eq = expr.args[4].args[1]
         lhs, rhs = bugsast_expression.(expr.args[4].args[2:end], (position,))
-        return Expr(eq, Expr(:call, link_func, lhs), rhs)
+        return Expr(:link_function, eq, Expr(:call, link_func, lhs), rhs)
     elseif Meta.isexpr(expr, :if, 2)
         condition, body = expr.args
         return Expr(:if, bugsast_expression(condition, position), bugsast_block(body, position))

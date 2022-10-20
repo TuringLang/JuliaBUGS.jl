@@ -6,7 +6,7 @@ using AbstractMCMC
 using Random
 
 ## Bayesian Linear regression: http://www.medicine.mcgill.ca/epidemiology/joseph/courses/epib-675/bayesreg.pdf
-model = compile(
+g = compile(
    bugsmodel"""
       for (i in 1:21) { # loop over cities 
          mu.dmf[i] <- alpha + beta*fl[i] # regression equation 
@@ -26,10 +26,14 @@ model = compile(
       dmf = [236, 246, 252, 258, 281, 303, 323, 343, 412, 444, 556, 652, 673, 703, 706, 722, 733, 772, 810, 823, 1027],
       fl = [1.9, 2.6, 1.8, 1.2, 1.2, 1.2, 1.3, 0.9, 0.6, 0.5, 0.4, 0.3, 0.0, 0.2, 0.1, 0.0, 0.2, 0.1, 0.0, 0.1, 0.1]
    ), 
-   (alpha=100, beta=0, sigma=100)
+   :Graph
 );
 
+model = SymbolicPPL.GraphModel(g)
 sampler = ProposeFromPrior()
-samples = AbstractMCMC.sample(model, sampler, 30000, discard_initial=2000)
+s, st = AbstractMCMC.step(Random.default_rng(), model, sampler; initializations=SymbolicPPL.process_initializations((alpha=100, beta=0, sigma=100)));
+s, st = AbstractMCMC.step(Random.default_rng(), model, sampler, st; initializations=SymbolicPPL.process_initializations((alpha=100, beta=0, sigma=100)));
+
+samples = AbstractMCMC.sample(model, sampler, 30000, discard_initial=2000; initializations=SymbolicPPL.process_initializations((alpha=100, beta=0, sigma=100)))
 plot(samples)
 summarize(samples)

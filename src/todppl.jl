@@ -1,11 +1,13 @@
 using DynamicPPL
 using MacroTools
 using Distributions
+using MetaGraphsNext
 
 function todppl(g::MetaDiGraph)
     expr = []
     args = Dict()
-    for n in topological_sort_by_dfs(g)
+    sorted_nodes = (x->label_for(g, x)).(topological_sort_by_dfs(g))
+    for n in sorted_nodes
         funccall = MacroTools.unresolve(deepcopy(g[n].func_expr))
         if isa(funccall, Expr)
             funccall.args[1] = Expr(:., :SymbolicPPL, QuoteNode(funccall.args[1]))

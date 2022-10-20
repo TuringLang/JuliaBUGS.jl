@@ -203,8 +203,8 @@ ex = @bugsast begin
     end
 end
 
-compiler_state = compile(ex, NamedTuple(), :IR)
-SymbolicPPL.querynode(compiler_state, :g)
-SymbolicPPL.querynode(compiler_state, Symbol("q[1, 1]"))
+@register_function foo(x::Array) = sum(x)
+@register_function foobar(x::Array) = sum(x)
+@register_distribution bar(x::Array) = SymbolicPPL.dcat(reduce(vcat, v))
 
-g = compile(ex, NamedTuple())
+compiler_state = compile(ex, NamedTuple(), :IR)

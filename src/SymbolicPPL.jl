@@ -4,7 +4,7 @@ include("bugsast.jl")
 include("graph.jl")
 include("compiler.jl")
 include("primitives.jl")
-# include("gibbs.jl")
+include("gibbs.jl")
 include("distributions.jl")
 include("todppl.jl")
 
