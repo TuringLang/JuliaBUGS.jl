@@ -10,8 +10,7 @@ using SymbolicPPL:
     ref_to_symbolic!,
     ref_to_symbolic,
     addlogicalrules!,
-    addstochasticrules!,
-    compile_inter
+    addstochasticrules!
 using Test
 using Symbolics
 
@@ -204,7 +203,7 @@ ex = @bugsast begin
     end
 end
 
-compiler_state = compile_inter(ex, NamedTuple())
+compiler_state = compile(ex, NamedTuple(), :IR)
 SymbolicPPL.querynode(compiler_state, :g)
 SymbolicPPL.querynode(compiler_state, Symbol("q[1, 1]"))
 

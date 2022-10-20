@@ -83,7 +83,18 @@ Call the inverse of the link function on the RHS so that the LHS is simple.
 """
 function linkfunction(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, f_(lhs_) = rhs_)
+        if Meta.isexpr(sub_expr, :(~)) && Meta.isexpr(sub_expr.args[1], :call)
+            link_lhs, rhs = sub_expr.args
+
+            link_fun, lhs = link_lhs.args
+            inter_var = String(link_fun) * "(" * String(lhs) * ")" |> Symbol
+
+            sub_expr = Expr(:block,
+                Expr(:(~), inter_var, rhs),
+                Expr(:(=), inter_var, Expr(:call, link_fun, lhs)), # need this for observation
+                Expr(:(=), lhs, Expr(:call, INVERSE_LINK_FUNCTION[link_fun], inter_var)) # need this for assumption
+            )
+        elseif @capture(sub_expr, f_(lhs_) = rhs_)
             if f in keys(INVERSE_LINK_FUNCTION)
                 sub_expr.args[1] = lhs
                 sub_expr.args[2] = Expr(:call, INVERSE_LINK_FUNCTION[f], rhs)
@@ -92,7 +103,7 @@ function linkfunction(expr::Expr)
             end
         end
         return sub_expr
-    end
+    end |> MacroTools.flatten
 end
 
 """
@@ -729,13 +740,8 @@ function scalarize(ex::Num, compiler_state::CompilerState)
 end
 scalarize(ex, ::CompilerState) = ex, Dict()
 
-"""
-    tograph(compiler_state, eval_ex)
-
-Build inputs to BUGSGraph from the rules in the compiler state.
-"""
-function tograph(compiler_state::CompilerState)
-    to_graph = Dict()
+function gen_output(compiler_state::CompilerState)
+    pregraph = Dict()
     for key in keys(compiler_state.stochasticrules)
         ex = symbolic_eval(compiler_state.stochasticrules[key], compiler_state.logicalrules)
         ex, sub_dict = scalarize(ex, compiler_state)
@@ -755,26 +761,27 @@ function tograph(compiler_state::CompilerState)
                         delete!(sub_dict, arr)
                     end
                     return sub_expr
-                end |> getindex_to_ref
+                end |> getindex_to_ref |> MacroTools.flatten |> MacroTools.resyntax
             end
         end
 
         if !isempty(compiler_state.observations)
             if haskey(compiler_state.observations, key)
                 value = compiler_state.observations[key]
-                isoberve = true
+                isdata = true
             else
                 value = missing
-                isoberve = false
+                isdata = false
             end
         else
             value = resolve(key, compiler_state.logicalrules)
-            isoberve = isa(value, Real)
+            isdata = isa(value, Real)
+            value = isdata ? value : missing
         end
 
-        to_graph[tosymbol(key)] = (isoberve ? value : 0, f_expr, isoberve)
+        pregraph[tosymbol(key)] = (value, f_expr, isdata)
     end
-    return to_graph
+    return pregraph
 end
 
 function getindex_to_ref(expr)
@@ -830,8 +837,16 @@ function check_expr(expr, compiler_state::CompilerState)
     refinindices(expr, compiler_state)
 end
 
-function compile_inter(model_def::Expr, data::NamedTuple)
+"""
+    compile(model_def[, data[, initializations]])
+
+Compile a model definition into a BUGSGraph.
+"""
+function compile(model_def::Expr, data::NamedTuple, target::Symbol) 
+    @assert target in [:DynamicPPL, :IR, :Graph] "target must be one of [:DynamicPPL, :IR, :Graph]"
+    
     expr = transform_expr(model_def)
+
     compiler_state = CompilerState()
     addlogicalrules!(data, compiler_state)
     while true
@@ -840,25 +855,15 @@ function compile_inter(model_def::Expr, data::NamedTuple)
             addlogicalrules!(expr, compiler_state) ||
             break
     end
+
     check_expr(expr, compiler_state)
+
     addstochasticrules!(expr, compiler_state)
     extract_observations!(compiler_state)
-    return compiler_state
-end
 
-"""
-    compile(model_def[, data[, initializations]])
+    target == :IR && return compiler_state
 
-Compile a model definition into a BUGSGraph.
-"""
-compile(model_def::Expr) = compile(model_def, NamedTuple())
-compile(model_def::Expr, data::Dict) = compile(model_def, Tuple(data))
-function compile(model_def::Expr, data::NamedTuple)
-    compiler_state = compile_inter(model_def, data)
-    return BUGSGraph(tograph(compiler_state))
+    g = to_metadigraph(gen_output(compiler_state))
+    target == :Graph && return g
+    target == :DynamicPPL && return todppl(g)
 end
-function compile(model_def::Expr, data::NamedTuple, inits::NamedTuple)
-    compiler_state = compile_inter(model_def, data)
-    return BUGSGraph(tograph(compiler_state), inits)
-end
-compile(model_def::Expr, data::NamedTuple, inits::Vector{NamedTuple}) = [compile(model_def, NamedTuple(data), NamedTuple(init)) for init in inits]

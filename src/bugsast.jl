@@ -1,17 +1,14 @@
+using MacroTools
+
 position_string(l::LineNumberNode) = string(l.file, ":", l.line)
 
 check_lhs(expr) = check_lhs(Bool, expr) || error("Invalid LHS expression `$expr`")
 check_lhs(::Type{Bool}, expr) = false
 check_lhs(::Type{Bool}, ::Symbol) = true
 function check_lhs(::Type{Bool}, expr::Expr)
-    Meta.isexpr(expr, :call, 2) && ENTRY_FROM_BUGSAST &&
-        @warn("BUGS' link function syntax may cause confusion with Julia's function definition syntax. Consider calling the inverse of link functions on the RHS.
-        Corresponding Inverses: logit => logistic, cloglog => cexpexp, log => exp, probit => phi")
     return Meta.isexpr(expr, :ref) || 
         (Meta.isexpr(expr, :call, 2) && check_lhs(Bool, expr.args[2]))
 end
-
-ENTRY_FROM_BUGSAST = true
 
 """
     bugsast_expression(expr)
@@ -106,6 +103,12 @@ function bugsast_statement(expr::Expr, position=LineNumberNode(1, nothing))
         lhs, rhs = bugsast_expression.(expr.args, (position,))
         check_lhs(lhs)
         return Expr(:(~), lhs, rhs)
+    elseif Meta.isexpr(expr, :macrocall, 4)
+        @assert expr.args[1]==Symbol("@link_function") "Only macro allowed is @link_function."
+        link_func = expr.args[3]
+        eq = expr.args[4].args[1]
+        lhs, rhs = bugsast_expression.(expr.args[4].args[2:end], (position,))
+        return Expr(eq, Expr(:call, link_func, lhs), rhs)
     elseif Meta.isexpr(expr, :if, 2)
         condition, body = expr.args
         return Expr(:if, bugsast_expression(condition, position), bugsast_block(body, position))
@@ -148,10 +151,27 @@ Used expression heads: `:~` for tilde calls, `:ref` for indexing, `:(:)` for ran
 converted from `:call` variants.
 """
 macro bugsast(expr)
-    global ENTRY_FROM_BUGSAST = true
-    return Meta.quot(bugsast(expr, __source__))
+    return Meta.quot(bugsast(expr, __source__) |> warn_link_function)
 end
 
+function warn_link_function(expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, f_(lhs_) = rhs_)
+            error(
+                "BUGS' link function syntax is not supported due to confusion with Julia function definition syntax. " * 
+                "Use the macro `@link_function`. E.g., for `logit(y) = x` " *
+                "use `@link_function logit y = x`."
+            )
+        elseif Meta.isexpr(sub_expr, :(~)) && Meta.isexpr(sub_expr.args[1], :call)
+            error(
+                "BUGS' link function syntax is not supported due to confusion with Julia function definition syntax. " *
+                "Use the macro `@link_function`. E.g., for `logit(y) ~ dnorm(0, 1)` " *
+                "use `@link_function logit y ~ dnorm(0, 1)`."
+            )
+        end
+        return sub_expr
+    end
+end
 
 function bugs_to_julia(s)
     # remove parentheses around loops
@@ -192,7 +212,6 @@ end
 
 macro bugsmodel_str(s::String)
     # Convert and wrap the whole thing in a block for parsing
-    global ENTRY_FROM_BUGSAST = false
     transformed_code = "begin\n$(bugs_to_julia(s))\nend"
     try
         expr = Meta.parse(transformed_code)

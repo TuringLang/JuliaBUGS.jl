@@ -1,8 +1,14 @@
 using AbstractMCMC
+using AbstractPPL
 using MCMCChains
 using Random
 using Distributions
 using Graphs
+
+struct Trace <: AbstractPPL.AbstractModelTrace
+    value::Vector{Real}
+    logp::Vector{Real}
+end
 
 abstract type GibbsSampler <: AbstractMCMC.AbstractSampler end
 

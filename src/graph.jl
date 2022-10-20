@@ -1,99 +1,60 @@
 using Graphs
-using AbstractPPL
-using DensityInterface
-using MacroTools
+import Graphs: topological_sort_by_dfs
 using Random
+using MetaGraphsNext
 
-struct BUGSGraph <: AbstractPPL.AbstractProbabilisticProgram
-    nodeenum::Dict{Symbol, Integer}
-    reverse_nodeenum::Vector{Symbol}
-    digraph::DiGraph
-    sortednode::Vector{Integer}
-    parents::Vector{Vector{Integer}}
-    isobserve::BitVector
-    observed_values::Dict{Integer, Real}
-    nodefunc::Vector{Expr}
-    nodefuncptr::Vector{Function}
-    initializations::Dict{Integer, Real}
+struct VertexInfo
+    sorted_inputs::Tuple
+    is_data::Bool
+    data::Union{Missing,Real}
+    func_expr::Expr
+    func_ptr::Function # a pointer to the eval-ed node_func
 end
 
-function _BUGSGRAPH(tograph::Dict)
-    numnodes = length(keys(tograph))
+function to_metadigraph(pre_graph::Dict)
+    g = MetaGraph(DiGraph(), Label = Symbol, VertexData = VertexInfo)
     
-    nodeenum = Dict{Symbol, Integer}()
-    for (i, k) in enumerate(keys(tograph))
-        nodeenum[k] = i
+    for k in keys(pre_graph)
+        vi = VertexInfo(
+            Tuple(pre_graph[k][2].args[1].args), 
+            pre_graph[k][3], 
+            pre_graph[k][1],
+            pre_graph[k][2],
+            eval(pre_graph[k][2])
+        )
+        g[k] = vi
     end
 
-    reverse_nodeenum = Vector{Symbol}(undef, numnodes)
-    for (k, v) in nodeenum
-        reverse_nodeenum[v] = k
-    end
-
-    parents = Vector{Vector{Integer}}(undef, numnodes)
-    for k in keys(tograph)
-        pa = tograph[k][2].args[1].args
-        if isempty(pa)
-            parents[nodeenum[k]] = []
-        else
-            parents[nodeenum[k]] = [nodeenum[p] for p in pa]
+    for k in keys(pre_graph)
+        for p in g[k].sorted_inputs
+            add_edge!(g, p, k, nothing) || error("Edge addition failed for $p -> $k.")
         end
     end
 
-    DAG = DiGraph(length(keys(tograph)))
-    for k in keys(tograph)
-        node = nodeenum[k]
-        for p in parents[node]
-            add_edge!(DAG, p, node)
-        end
-    end
-    sortednode = topological_sort_by_dfs(DAG)
-
-    isobserve = BitVector(undef, numnodes)
-    observed_values = Dict{Integer, Real}()
-    nodefunc = Vector{Expr}(undef, numnodes)
-    nodefuncptr = Vector{Function}(undef, numnodes)
-    for k in keys(tograph)
-        isobserve[nodeenum[k]] = tograph[k][3]
-        if tograph[k][3]
-            @assert !isempty(tograph[k][1])
-            observed_values[nodeenum[k]] = tograph[k][1]
-        end
-        nodefunc[nodeenum[k]] = tograph[k][2] |> MacroTools.flatten |> MacroTools.resyntax
-        nodefuncptr[nodeenum[k]] = eval(tograph[k][2])
-    end
-
-    return nodeenum, reverse_nodeenum, DAG, sortednode, parents, isobserve, observed_values, nodefunc, nodefuncptr
+    return g
 end
 
-function BUGSGraph(tograph::Dict{Any, Any})
-    nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc, nodefuncptr = _BUGSGRAPH(tograph)
-    return BUGSGraph(nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc, nodefuncptr, Dict{Integer, Real}())
+function Graphs.topological_sort_by_dfs(g::MetaDiGraph)
+    return get_label.(topological_sort_by_dfs(g.graph))
 end
 
-function BUGSGraph(tograph::Dict, inits::NamedTuple)
-    nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc, nodefuncptr = _BUGSGRAPH(tograph)
-    initializations = Dict{Integer, Real}()
+function process_initializations(inits::NamedTuple)
+    initializations = Dict{Symbol, Real}()
     for (k, v) in pairs(inits)
         if v isa Array
             for i in CartesianIndices(v)
                 ismissing(v[i]) && continue
                 s = bugs_to_julia("$k") * "$(collect(Tuple(i)))"
                 n = tosymbol(tosymbolic(Meta.parse(s)))
-                initializations[nodeenum[n]] = v[i]
+                initializations[n] = v[i]
             end
         else
             occursin("[", string(k)) && 
-                error("initializations of single elements of arrays not supported, please initialize the whole array.")
-            initializations[nodeenum[k]] = v
+                error("Initializations of single elements of arrays not supported, initialize the whole array instead.")
+            initializations[k] = v
         end
     end
-    return BUGSGraph(nodeenum, reverse_nodeenum, DAG, sortednode, parents, isoberve, observevalues, nodefunc, nodefuncptr, initializations)
-end
-
-struct Trace <: AbstractPPL.AbstractModelTrace
-    value::Vector{Real}
-    logp::Vector{Real}
+    return initializations
 end
 
 """
@@ -101,110 +62,20 @@ end
 
 Return a Distribution.jl distribution.
 """
-function getdistribution(g::BUGSGraph, node::Integer, value::Vector{Real}, delta::Dict=Dict())::Distributions.Distribution
+function getdistribution(g::MetaDiGraph, node::Symbol, value::Vector{Real}, delta::Dict{Symbol, Real}=Dict{Symbol, Real}())::Distributions.Distribution
     args = []
-    for p in g.parents[node]
+    for p in g[node].sorted_inputs
         if p in keys(delta)
             push!(args, delta[p])
         else
             push!(args, value[p])
         end
     end
-    return (g.nodefuncptr[node])(args...)
-end
-getdistribution(g::BUGSGraph, node::Integer, trace::Trace) = getdistribution(g, node, trace.value)
-getdistribution(g::BUGSGraph, node::Integer, trace::Trace, delta::Dict) = getdistribution(g, node, trace.value, delta)
-
-"""
-    parents(g, node)
-
-Return the parents of the node.
-"""
-parents(g::BUGSGraph, node::Integer) = g.parents[node]
-
-"""
-    children(g, node)
-
-Return the children of the node.
-"""
-children(g::BUGSGraph, node::Integer) = outneighbors(g.digraph, node)
-
-"""
-    markovblanket(g, node)
-
-Return the Markov blanket of the node.
-"""
-function markovblanket(g::BUGSGraph, node::Integer)
-    mb = Set{Integer}()
-    push!(mb, node)
-    for p in inneighbors(g.digraph, node)
-        push!(mb, p)
-    end
-    for p in outneighbors(g.digraph, node)
-        push!(mb, p)
-        for c in inneighbors(g.digraph, p)
-            push!(mb, c)
-        end
-    end
-    return collect(mb)
+    return (g[node].func_ptr)(args...)
 end
 
-function freevars(g::BUGSGraph, node::Integer)
-    return push!(outneighbors(g.digraph, node), node)
-end
-
-"""
-    numnodes(g)
-
-Return the number of nodes.
-"""
-numnodes(g::BUGSGraph) = length(g.nodeenum)
-
-"""
-    getsortednodes(g)
-
-Return all nodes in topological order.
-"""
-getsortednodes(g::BUGSGraph) = g.sortednode
-
-"""
-    nodename(g, node)
-
-Return the name of the node given the node alias.
-"""
-nodename(g::BUGSGraph, node::Integer) = g.reverse_nodeenum[node]
-
-"""
-    nodealias(g, node)
-
-Return the node alias given the node name.
-"""
-nodealias(g::BUGSGraph, node::Symbol) = g.nodeenum[node]
-
-assumednodes(g::BUGSGraph) = [i for i in 1:numnodes(g) if !g.isobserve[i]]
-
-getDAG(g::BUGSGraph) = g.digraph
-
-function logdensityof(g::BUGSGraph, value::Vector{Real}, delta::Dict=Dict())
-    logp = 0.0
-    for node in g.sortednode
-        if node in keys(delta)
-            logp += logpdf(getdistribution(g, node, value, delta), delta[node])
-        else
-            logp += logpdf(getdistribution(g, node, value), value[node])
-        end
-    end
-    return logp
-end
-logdensityof(g::BUGSGraph, trace::Trace, delta::Dict=Dict()) = logdensityof(g, trace.value, delta)
-
-macro nn(expr)
-    name = tosymbol(tosymbolic(expr))
-    return :($(QuoteNode(name)))
-end
-
-function shownodefunc(g::BUGSGraph, node::Integer)
-    f_expr = g.nodefunc[node]
+function shownodefunc(g::MetaDiGraph, node::Symbol)
+    f_expr = g[node].func_expr
     arguments = f_expr.args[1].args
     io = IOBuffer();
     for i in 1:length(arguments)
@@ -216,19 +87,3 @@ function shownodefunc(g::BUGSGraph, node::Integer)
     println("Parent Nodes: " * String(take!(io)))
     println("Node Function: " * string(f_expr.args[2]))
 end
-
-function Random.rand(rng::Random.AbstractRNG, d::BUGSGraph) 
-    value = Vector{Real}(undef, getnumnodes(d))
-    for node in getsortednodes(d)
-        if d.isobserve[node]
-            value[node] = d.observed_values[node]
-        else
-            value[node] = rand(rng, getdistribution(d, node, value))
-        end
-    end
-    return value
-end
-
-Random.rand(d::BUGSGraph) = rand(Random.GLOBAL_RNG, d)
-
-# TODO: plot with Graphs.jl, ref: https://sisl.github.io/BayesNets.jl/dev/usage/
