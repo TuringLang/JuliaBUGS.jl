@@ -106,8 +106,8 @@ function bugsast_statement(expr::Expr, position=LineNumberNode(1, nothing))
     elseif Meta.isexpr(expr, :macrocall, 4)
         @assert expr.args[1]==Symbol("@link_function") "Only macro allowed is @link_function."
         link_func = expr.args[3]
-        eq = expr.args[4].args[1]
-        lhs, rhs = bugsast_expression.(expr.args[4].args[2:end], (position,))
+        eq = expr.args[4].head
+        lhs, rhs = bugsast_expression.(expr.args[4].args[1:end], (position,))
         return Expr(:link_function, eq, Expr(:call, link_func, lhs), rhs)
     elseif Meta.isexpr(expr, :if, 2)
         condition, body = expr.args

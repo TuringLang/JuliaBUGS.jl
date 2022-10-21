@@ -1,5 +1,5 @@
 using SymbolicPPL
-using SymbolicPPL: tograph, tosymbolic, ProposeFromPrior
+using SymbolicPPL: ProposeFromPrior
 using Random
 using AbstractMCMC
 ##
@@ -32,21 +32,5 @@ m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_realistic];
 ##
 model = SymbolicPPL.GraphModel(g);
 sampler = ProposeFromPrior()
-sample, trace = AbstractMCMC.step(Random.default_rng(), model, sampler);
-sample1, trace1 = AbstractMCMC.step(Random.default_rng(), model, sampler, trace);
-
-## run all examples
-for m in SymbolicPPL.BUGSExamples.EXAMPLES
-    println(m[:name])
-    try
-        @time model = compile(m[:model_def], m[:data], m[:inits][1]);
-    catch e
-        println(e)
-    end
-    try
-        sample, trace = AbstractMCMC.step(Random.default_rng(), model, sampler);
-    catch e
-        println(e)
-    end
-    println()
-end
+s, state = AbstractMCMC.step(Random.default_rng(), model, sampler);
+s, state = AbstractMCMC.step(Random.default_rng(), model, sampler, state);

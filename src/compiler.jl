@@ -6,11 +6,6 @@ using Setfield
 using Symbolics, SymbolicUtils
 using Random
 
-"""
-    CompilerState
-
-Store data during the compilation. 
-"""
 struct CompilerState
     arrays::Dict{Symbol,Symbolics.Arr{Num}}
     logicalrules::Dict
@@ -25,11 +20,10 @@ CompilerState() = CompilerState(
     Dict()
 )
 
-"""
-    cumulative(expr)
+#
+# Regularize ASTs to make them easier to work with
+#
 
-Convert `cumulative(s1, s2)` to `cdf(distribution_of_s1, s2)`.
-"""
 function cumulative(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, lhs_ = cumulative(s1_, s2_))
@@ -58,11 +52,6 @@ function find_tilde_rhs(expr::Expr, target::Union{Expr, Symbol})
     return dist
 end
 
-"""
-    linkfunction(expr)
-
-Call the inverse of the link function on the RHS so that the LHS is simple. 
-"""
 function linkfunction(expr::Expr)
     expr = MacroTools.postwalk(expr) do sub_expr
         if Meta.isexpr(sub_expr, :link_function)
@@ -110,11 +99,6 @@ function linkfunction(expr::Expr)
     return expr
 end
 
-"""
-    censored(expr)
-
-Turn `censored` expression to function calls.
-"""
 function censored(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if Meta.isexpr(sub_expr, :censored)
@@ -133,11 +117,6 @@ function censored(expr::Expr)
     end
 end
 
-"""
-    truncated(expr)
-
-Turn `truncated` expression to function calls.
-"""
 function truncated(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if Meta.isexpr(sub_expr, :truncated)
@@ -156,11 +135,6 @@ function truncated(expr::Expr)
     end
 end
 
-"""
-    transform_expr(model_def)
-
-Transform the model definition to a form that is easier to work with.
-"""
 function transform_expr(model_def::Expr)
     expr = linkfunction(model_def)
     expr = cumulative(expr)
@@ -447,7 +421,7 @@ end
 """
     resolve(variable, compiler_state)
 
-Partially evaluate the variable in the context defined by compiler_state.
+Partially evaluate the variable in the environment defined by compiler_state.
 """
 resolve(variable::Distributions.Distribution, rules::Dict) = variable
 function resolve(variable, rules::Dict)
@@ -825,6 +799,11 @@ end
     compile(model_def, data, target)
 
 Compile the model definition `model_def` with data `data` and target `target`.
+
+# Arguemnts
+- `model_def`: the Julia Expr object returned from `@bugsast` or `bugsmodel`.
+- `data`: data and model prameters.
+- `target`: one of `:DynamicPPL`, `:IR`, or `:Graph`. 
 """
 function compile(model_def::Expr, data::NamedTuple, target::Symbol) 
     @assert target in [:DynamicPPL, :IR, :Graph] "target must be one of [:DynamicPPL, :IR, :Graph]"
