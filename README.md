@@ -129,7 +129,7 @@ Distributions.Normal{Float64}(μ=0.0, σ=1.0)
 ```
 
 After registering the function or distributions, they can be used just like any other functions or distributions provided by BUGS. 
- 
+
 Please use these macros with caution as they may cause name clashes and potential breaking behaviors.
 
 ## Compilation
@@ -154,7 +154,7 @@ julia> model = compile(model_def, data, :DynamicPPL);
 
 ## Inference
 
-Once compiled to a `Turing.Model`, user can choose inference algorithm supported by [`Turing.jl`](https://turing.ml/dev/docs/library/). Here we use `HMC` for
+Once compiled to a `Turing.Model`, user can choose [inference algorithms](https://turing.ml/dev/docs/library/) supported by Turing. Here we use `HMC` for demonstration, 
 
 ```julia-repo
 julia> using Turing; chn = sample(model(), HMC(0.1, 5), 12000, discard_initial = 1000);
