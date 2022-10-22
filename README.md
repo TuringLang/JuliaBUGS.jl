@@ -153,10 +153,47 @@ julia> model = compile(model_def, data, :DynamicPPL);
 
 ## Inference
 
-Once compiled to a `Turing.Model`, user can choose inference algorithm supported by [`Turing.jl`](https://turing.ml/dev/docs/library/).
+Once compiled to a `Turing.Model`, user can choose inference algorithm supported by [`Turing.jl`](https://turing.ml/dev/docs/library/). Here we use `HMC` for
 
 ```julia-repo
-julia> using Turing; chn = sample(model(), HMC(0.1, 5), 100000);
+julia> using Turing; chn = sample(model(), HMC(0.1, 5), 12000, discard_initial = 1000);
 
-julia> using StatsPlots; plot(s)
+julia> s[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]
+Chains MCMC chain (12000×5×1 Array{Float64, 3}):
+
+Iterations        = 1001:1:13000
+Number of chains  = 1
+Samples per chain = 12000
+Wall duration     = 8.87 seconds
+Compute duration  = 8.87 seconds
+parameters        = alpha1, alpha12, alpha2, tau, alpha0
+internals         = 
+
+Summary Statistics
+  parameters      mean       std   naive_se      mcse         ess      rhat   ess_per_sec 
+      Symbol   Float64   Float64    Float64   Float64     Float64   Float64       Float64 
+
+      alpha1    0.0782    0.3112     0.0028    0.0079   1537.3193    0.9999      173.3754
+     alpha12   -0.8223    0.4356     0.0040    0.0120   1287.7594    0.9999      145.2306
+      alpha2    1.3496    0.2764     0.0025    0.0068   1611.5933    0.9999      181.7518
+         tau   27.2953   45.8652     0.4187    3.5472     90.5342    1.0077       10.2102
+      alpha0   -0.5524    0.1969     0.0018    0.0042   1908.2302    1.0001      215.2058
+
+Quantiles
+  parameters      2.5%     25.0%     50.0%     75.0%      97.5% 
+      Symbol   Float64   Float64   Float64   Float64    Float64 
+
+      alpha1   -0.5283   -0.1172    0.0808    0.2873     0.6788
+     alpha12   -1.7122   -1.1049   -0.8147   -0.5458     0.0241
+      alpha2    0.8160    1.1761    1.3404    1.5205     1.9120
+         tau    2.4891    6.6951   12.0090   24.4123   159.0162
+      alpha0   -0.9477   -0.6790   -0.5507   -0.4268    -0.1586
+```
+
+One can verify the inference result is coherent with BUGS' result for [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) (here we reported `tau` instead of `sigma` with `sigma = 1 / sqrt(tau)`). 
+The output of `sample` is a [`Chains`](https://beta.turing.ml/MCMCChains.jl/stable/chains/) object, and visualization the results is easy,  
+
+```julia-repo
+julia> using StatsPlots; plot(s[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]).
+```
 
