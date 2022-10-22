@@ -6,7 +6,7 @@ makedocs(
     pages = [
         "Introduction" => "index.md",
         "API" => "api.md",
-        "BUGS to Julia AST" => "ast.md",
+        "AST Translation" => "ast.md",
     ]
 )
 
