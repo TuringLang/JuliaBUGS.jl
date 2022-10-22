@@ -13,12 +13,7 @@ struct CompilerState
     observations::Dict
 end
 
-CompilerState() = CompilerState(
-    Dict{Symbol,Symbolics.Arr{Num}}(),
-    Dict(),
-    Dict(),
-    Dict()
-)
+CompilerState() = CompilerState(Dict{Symbol,Symbolics.Arr{Num}}(), Dict(), Dict(), Dict())
 
 #
 # Regularize ASTs to make them easier to work with
@@ -30,6 +25,33 @@ function cumulative(expr::Expr)
             dist = find_tilde_rhs(expr, s1)
             sub_expr.args[2].args[1] = :cdf 
             sub_expr.args[2].args[2] = dist
+            return sub_expr
+        else
+            return sub_expr
+        end
+    end
+end
+
+function density(expr::Expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, lhs_ = density(s1_, s2_))
+            dist = find_tilde_rhs(expr, s1)
+            sub_expr.args[2].args[1] = :pdf 
+            sub_expr.args[2].args[2] = dist
+            return sub_expr
+        else
+            return sub_expr
+        end
+    end
+end
+
+function deviance(expr::Expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, lhs_ = deviance(s1_, s2_))
+            dist = find_tilde_rhs(expr, s1)
+            sub_expr.args[2].args[1] = :logpdf 
+            sub_expr.args[2].args[2] = dist
+            sub_expr.args[2] = Expr(:call, :*, -2, sub_expr.args[2])
             return sub_expr
         else
             return sub_expr
@@ -136,11 +158,7 @@ function truncated(expr::Expr)
 end
 
 function transform_expr(model_def::Expr)
-    expr = linkfunction(model_def)
-    expr = cumulative(expr)
-    expr = censored(expr)
-    expr = truncated(expr)
-    return expr
+    return model_def |> linkfunction |> censored |> truncated |> cumulative |> density |> deviance
 end
 
 """

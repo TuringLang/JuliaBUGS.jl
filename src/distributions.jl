@@ -1,3 +1,5 @@
+using Distributions
+
 # Support for distributions that are part of BUGS but not implemented in Distributions.jl.
 
 # Modified from https://github.com/TuringLang/Turing.jl/blob/master/src/stdlib/distributions.jl

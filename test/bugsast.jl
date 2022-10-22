@@ -85,3 +85,10 @@ interpolated = @bugsast begin
     log(x) = $(Expr(:call, :f, 10))
     y = x[$("sdf")] # muahaha...
 end
+
+e = @bugsast begin
+    s1 ~ dnorm(0, 1)
+    d = deviance(s1, s2)
+end
+
+SymbolicPPL.deviance(e)
