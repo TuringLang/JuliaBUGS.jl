@@ -194,6 +194,10 @@ One can verify the inference result is coherent with BUGS' result for [Seeds](ht
 The output of `sample` is a [`Chains`](https://beta.turing.ml/MCMCChains.jl/stable/chains/) object, and visualization the results is easy,  
 
 ```julia-repo
-julia> using StatsPlots; plot(s[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]).
+julia> using StatsPlots; plot(s[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]);
+
 ```
 
+With default settings, we get
+
+![seeds](https://user-images.githubusercontent.com/5433119/197317818-580f66c4-3f49-4204-8e8c-e149906d73df.svg)
