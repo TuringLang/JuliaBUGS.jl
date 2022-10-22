@@ -128,8 +128,9 @@ julia> SymbolicPPL.d(1)
 Distributions.Normal{Float64}(μ=0.0, σ=1.0)
 ```
 
-After registering the function or distributions, they can be used just like any other functions or distributions provided by BUGS.  
-**Caution** Please use these macros cautiously as they may cause name clashes and potential breaking behaviors.
+After registering the function or distributions, they can be used just like any other functions or distributions provided by BUGS. 
+ 
+Please use these macros with caution as they may cause name clashes and potential breaking behaviors.
 
 ## Compilation
 
