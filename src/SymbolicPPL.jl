@@ -12,8 +12,8 @@ export @bugsast, @bugsmodel_str
 export compile
 export @register_function, @register_distribution
 
-# include("BUGSExamples/BUGSExamples.jl")
-# using .BUGSExamples
-# export EXAMPLES, LINKS
+include("BUGSExamples/BUGSExamples.jl")
+using .BUGSExamples
+export EXAMPLES, LINKS
 
 end # module

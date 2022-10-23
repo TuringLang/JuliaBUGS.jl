@@ -208,3 +208,14 @@ end
 @register_distribution bar(x::Array) = SymbolicPPL.dcat(reduce(vcat, v))
 
 compiler_state = compile(ex, NamedTuple(), :IR)
+
+# test for using observed stochastic variable for loop bound
+expr = @bugsast begin 
+    a = 2
+    a ~ dnorm(0, 1)
+    for i = 1:a
+        b[i] ~ dnorm(0, 1)
+    end
+end
+
+g = compile(expr, NamedTuple(), :IR) # should error 

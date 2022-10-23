@@ -7,13 +7,14 @@ using Symbolics, SymbolicUtils
 using Random
 
 struct CompilerState
+    model_def::Expr
     arrays::Dict{Symbol,Symbolics.Arr{Num}}
     logicalrules::Dict
     stochasticrules::Dict
     observations::Dict
 end
 
-CompilerState() = CompilerState(Dict{Symbol,Symbolics.Arr{Num}}(), Dict(), Dict(), Dict())
+CompilerState(model_def::Expr) = CompilerState(deepcopy(model_def), Dict{Symbol,Symbolics.Arr{Num}}(), Dict(), Dict(), Dict())
 
 #
 # Regularize ASTs to make them easier to work with
@@ -571,8 +572,14 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
             end
 
             if haskey(compiler_state.stochasticrules, lhs)
-                Symbolics.isequal(sym_rhs, compiler_state.stochasticrules[lhs]) && continue
+                # Symbolics.isequal(sym_rhs, compiler_state.stochasticrules[lhs]) && continue
                 error("Repeated definition for $(lhs)")
+            end
+            
+            if haskey(compiler_state.logicalrules, lhs)
+                if !isa(resolve(lhs, compiler_state.logicalrules), Real)
+                    error("A stochastic variable cannot be used as LHS of logical assignments unless it's an observation.")
+                end
             end
             compiler_state.stochasticrules[lhs] = sym_rhs
         end
@@ -802,15 +809,32 @@ function refinindices(expr, compiler_state)
     end
 end
 
-function check_expr(expr, compiler_state::CompilerState)
+function is_fully_unrolled(expr, compiler_state::CompilerState)
     # check if any loop or if remains
     for sub_expr in expr.args
-        Meta.isexpr(sub_expr, (:(=), :~, :deleted)) ||
-            error("Expression $sub_expr is not an assignment expression.")
+        Meta.isexpr(sub_expr, (:~, :(=), :deleted)) ||
+            error("$sub_expr can't be resolved.")
     end
 
     # check if all array indices are resolvable
     refinindices(expr, compiler_state)
+end
+
+function check_expr(expr, compiler_state::CompilerState)
+    is_fully_unrolled(expr, compiler_state)
+
+    # check if there exist using observed stochastic variables for loop bounds or indexing
+    expr_copy = deepcopy(compiler_state.model_def)
+    while true
+        unroll!(expr_copy, compiler_state) ||
+        resolveif!(expr_copy, compiler_state) ||
+        break
+    end
+    try 
+        is_fully_unrolled(expr_copy, compiler_state)
+    catch e
+        error("Check the model definition for using observed stochastic variables as loop bounds or indexing.")
+    end
 end
 
 """
@@ -828,7 +852,7 @@ function compile(model_def::Expr, data::NamedTuple, target::Symbol)
     
     expr = transform_expr(model_def)
 
-    compiler_state = CompilerState()
+    compiler_state = CompilerState(expr)
     addlogicalrules!(data, compiler_state)
     while true
         unroll!(expr, compiler_state) ||
@@ -837,10 +861,10 @@ function compile(model_def::Expr, data::NamedTuple, target::Symbol)
             break
     end
 
-    check_expr(expr, compiler_state)
-
     addstochasticrules!(expr, compiler_state)
     extract_observations!(compiler_state)
+
+    check_expr(expr, compiler_state)
 
     target == :IR && return compiler_state
 
