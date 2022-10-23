@@ -635,7 +635,7 @@ end
 function recursive_find_variables(expr::Expr, variables::Vector{Any})
     MacroTools.prewalk(expr) do sub_expr
         if MacroTools.isexpr(sub_expr, :call)
-            for arg in sub_expr.args[2:end] # only touch the arguments
+            for arg in sub_expr.args[2:end] # only search through the arguments
                 if arg isa Symbol && !Base.occursin("[", string(arg))
                     push!(variables, arg)
                     continue

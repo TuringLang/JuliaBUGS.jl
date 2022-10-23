@@ -74,6 +74,4 @@ EXAMPLES = (
     surgical_realistic = surgical_realistic
 )
 
-export EXAMPLES, LINKS
-
 end

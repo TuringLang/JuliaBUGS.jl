@@ -1,7 +1,7 @@
 module SymbolicPPL
 
 include("bugsast.jl")
-include("graph.jl")
+include("graphs.jl")
 include("compiler.jl")
 include("primitives.jl")
 include("gibbs.jl")
@@ -13,7 +13,5 @@ export compile
 export @register_function, @register_distribution
 
 include("BUGSExamples/BUGSExamples.jl")
-using .BUGSExamples
-export EXAMPLES, LINKS
 
 end # module

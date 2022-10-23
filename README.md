@@ -4,9 +4,11 @@ This package contains some infrastructure to work with graphical probabilistic m
 
 ## Caution!
 
-This implementation should be able to parse existing BUGS models and run them. It is, however, still a bit sketchy and not yet ready for serious work.  
+This implementation should be able to parse existing BUGS models and run them. It is, however, still in its very early stage and not yet ready for serious work.  
 
 We are (as of autumn 2022) planning to continually keep working on this project, until we have a mature BUGS-compatible graphical PPL system integrated in the Turing ecosystem.
+
+**Nested indexing with stochastic variable is not supported. In BUGS, this language feature is most often used to write mixture models, for an example, refer to [Eyes](https://www.multibugs.org/examples/latest/Eyes.html). Nested indexing with data is supported otherwise.**
 
 ## Example: Logistic Regression with Random Effects
 We will use the [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) model for demonstration. 
@@ -54,9 +56,10 @@ model
 ```
 
 ## Modeling Language
-References:  
+Language References:  
  - [MultiBUGS](https://www.multibugs.org/documentation/latest/)
  - [OpenBUGS](https://chjackson.github.io/openbugsdoc/Manuals/ModelSpecification.html)
+
 ### Writing Model in Julia
 We provide a macro solution which allows users to write down model definitions using Julia:
 
@@ -202,3 +205,6 @@ julia> using StatsPlots; plot(s[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]);
 With default settings, we get
 
 ![seeds](https://user-images.githubusercontent.com/5433119/197317818-580f66c4-3f49-4204-8e8c-e149906d73df.svg)
+
+## More Examples
+We have transcribed all the examples from the first volume of the BUGS Examples, they can be find [here](https://www.multibugs.org/examples/latest/VolumeI.html). All the programs and data are included, and they can be compiled in a similar way as we have demonstrated before.
