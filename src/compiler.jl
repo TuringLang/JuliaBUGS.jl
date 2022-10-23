@@ -174,7 +174,7 @@ function unroll!(expr::Expr, compiler_state::CompilerState)
             if arg.head == :for
                 unrolled = unroll(arg, compiler_state)
                 splice!(expr.args, i, unrolled.args)
-                unrolled_flag = true
+                hasunrolled = true
                 # unroll one loop at a time to avoid complication raised by mutation
                 break
             end
@@ -187,7 +187,7 @@ is_integer(x) = isa(x, Real) && isinteger(x)
 
 function canunroll(expr::Expr, compiler_state::CompilerState)
     for arg in expr.args
-        if arg.head == :for
+        if Meta.isexpr(arg, :for)
             lower_bound, upper_bound = arg.args[1].args[2].args
             lower_bound = resolve(lower_bound, compiler_state.logicalrules)
             upper_bound = resolve(upper_bound, compiler_state.logicalrules)

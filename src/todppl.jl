@@ -8,7 +8,7 @@ function todppl(g::MetaDiGraph)
     args = Dict()
     sorted_nodes = (x->label_for(g, x)).(topological_sort_by_dfs(g))
     for n in sorted_nodes
-        f = g[n].func_expr.args[2] |> MacroTools.flatten |> MacroTools.unresolve
+        f = g[n].f_expr.args[2] |> MacroTools.flatten |> MacroTools.unresolve
         if isa(f, Expr)
             f.args[1] = Expr(:., :SymbolicPPL, QuoteNode(f.args[1]))
             push!(expr, Expr(:call, :(~), n, f))

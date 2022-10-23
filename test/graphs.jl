@@ -9,4 +9,4 @@ expr = @bugsast begin
 end
 
 g = compile(expr, NamedTuple(), :Graph)
-
+g[:d]

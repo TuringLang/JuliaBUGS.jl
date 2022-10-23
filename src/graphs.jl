@@ -2,11 +2,12 @@ using Graphs, MetaGraphsNext
 using Random
 
 struct VertexInfo
+    variable_name::Symbol
     sorted_inputs::Tuple
     is_data::Bool
     data::Union{Missing,Real}
-    func_expr::Expr
-    func_ptr::Function # a pointer to the eval-ed node_func
+    f_expr::Expr
+    f::Function
 end
 
 function to_metadigraph(pre_graph::Dict)
@@ -14,6 +15,7 @@ function to_metadigraph(pre_graph::Dict)
     
     for k in keys(pre_graph)
         vi = VertexInfo(
+            k,
             Tuple(pre_graph[k][2].args[1].args), 
             pre_graph[k][3], 
             pre_graph[k][1],
@@ -65,19 +67,28 @@ function getdistribution(g::MetaDiGraph, node::Symbol, value::Dict{Symbol, Real}
             push!(args, value[p])
         end
     end
-    return (g[node].func_ptr)(args...)
+    return (g[node].f)(args...)
 end
 
-function shownodefunc(g::MetaDiGraph, node::Symbol)
-    f_expr = g[node].func_expr
+function Base.show(io::IO, vinfo::VertexInfo)
+    f_expr = vinfo.f_expr
     arguments = f_expr.args[1].args
-    io = IOBuffer();
+    _io = IOBuffer();
     for i in 1:length(arguments)
-        print(io, arguments[i])
+        print(_io, arguments[i])
         if i < length(arguments)
-            print(io, ", ")
+            print(_io, ", ")
         end
     end
-    println("Parent Nodes: " * String(take!(io)))
-    println("Node Function: " * string(f_expr.args[2]))
+    d_expr = f_expr.args[2].args[1]
+    variables = find_all_variables(d_expr)
+    d_expr = replace_variables(d_expr, variables)
+    d_expr = eval(d_expr)
+    
+    println(io, "Variable Name: " * string(vinfo.variable_name))
+    println(io, "Variable Type: " * (vinfo.is_data ? "Observation" : "Assumption"))
+    vinfo.is_data && prinln(io, "Data: " * string(vinfo.data))
+    println(io, "Parent Nodes: " * String(take!(_io)))
+    print(io, "Node Function: ")
+    Base.show(io, d_expr)
 end
