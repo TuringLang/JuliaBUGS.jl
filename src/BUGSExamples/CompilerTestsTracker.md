@@ -12,7 +12,7 @@ Level Of Testing: a higher level is inclusive of lower levels
 | dyes  | 2 | | |
 | epil | 2 | | |
 | equiv | 2 | | | 
-| inhalers | 0 | | a[1], a[2], a[3] forms loops | 
+| inhalers | 0 | | model variables a[1], a[2], a[3] forms loops, can't compile to a DAG | 
 | kidney | 2 | | | 
 | leuk | 2 | | | 
 | leukfr | 2 | | | 
