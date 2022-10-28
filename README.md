@@ -81,7 +81,7 @@ end
 BUGS syntax carries over almost one-to-one to Julia. 
 The only change is regarding the link functions.
 Because Julia uses the "function call on LHS"-like syntax as a shorthand for function definition, BUGS' link function syntax can be unidiomatic and confusing.
-Thus, for logical assignments, users should call the inverse of the link function on the RHS. BUGS' link function syntax for stochastic assignments is not affected. 
+We adopt a more Julian syntax as demonstrated in the model definition above: instead of calling the link function, we call the inverse link function from the RHS. However, the Julian link function semantics internally is equivalent to the BUGS. 
 
 ### Support for Lagacy BUGS Programs
 We also provide a string macro `bugsmodel` to work with original (R-like) BUGS syntax:
@@ -125,7 +125,7 @@ julia> SymbolicPPL.f(2)
 julia> # Need to return a Distributions.Distribution 
 @register_distribution function d(x) 
     return Normal(0, x^2)
-end true 
+end 
 
 julia> SymbolicPPL.d(1)
 Distributions.Normal{Float64}(μ=0.0, σ=1.0)
@@ -133,7 +133,7 @@ Distributions.Normal{Float64}(μ=0.0, σ=1.0)
 
 After registering the function or distributions, they can be used just like any other functions or distributions provided by BUGS. 
 
-Please use these macros with caution as they may cause name clashes and potential breaking behaviors.
+Please use these macros with caution to avoid causing name clashes. Such name clashes would override default BUGS primitives and cause breaking behaviours.
 
 ## Compilation
 
@@ -144,9 +144,9 @@ compile(model_def::Expr, data::NamedTuple, target::Symbol),
 ```
 
 which takes three arguments: 
-- first argument is the output of `@bugsast` or `bugsmodel`, 
-- second argument is the data 
-- third argument is a `Symbol` indicating the output of the compilation. 
+- the first argument is the output of `@bugsast` or `bugsmodel`, 
+- the second argument is the data 
+- the third argument is a `Symbol` indicating the compilation target.
 
 To compile the `Seeds` model to a conditioned `Turing.Model`,  
 
@@ -162,7 +162,7 @@ Once compiled to a `Turing.Model`, user can choose [inference algorithms](https:
 ```julia-repo
 julia> using Turing; chn = sample(model(), HMC(0.1, 5), 12000, discard_initial = 1000);
 
-julia> s[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]
+julia> chn[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]
 Chains MCMC chain (12000×5×1 Array{Float64, 3}):
 
 Iterations        = 1001:1:13000
@@ -198,7 +198,7 @@ One can verify the inference result is coherent with BUGS' result for [Seeds](ht
 The output of `sample` is a [`Chains`](https://beta.turing.ml/MCMCChains.jl/stable/chains/) object, and visualization the results is easy,  
 
 ```julia-repo
-julia> using StatsPlots; plot(s[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]);
+julia> using StatsPlots; plot(chn[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]);
 
 ```
 
