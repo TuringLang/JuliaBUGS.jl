@@ -207,4 +207,4 @@ With default settings, we get
 ![seeds](https://user-images.githubusercontent.com/5433119/197317818-580f66c4-3f49-4204-8e8c-e149906d73df.svg)
 
 ## More Examples
-We have transcribed all the examples from the first volume of the BUGS Examples, they can be find [here](https://www.multibugs.org/examples/latest/VolumeI.html). All the programs and data are included, and they can be compiled in a similar way as we have demonstrated before.
+We have transcribed all the examples from the first volume of the BUGS Examples. The origianl examples can be found [here](https://www.multibugs.org/examples/latest/VolumeI.html), and the transcribed examples can be find [here](https://github.com/TuringLang/SymbolicPPL.jl/tree/master/src/BUGSExamples/Volume_I). All the programs and data are included, and they can be compiled in a similar way as we have demonstrated before.
