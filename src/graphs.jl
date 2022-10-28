@@ -1,5 +1,3 @@
-using Graphs, MetaGraphsNext
-using Random
 
 struct VertexInfo
     variable_name::Symbol

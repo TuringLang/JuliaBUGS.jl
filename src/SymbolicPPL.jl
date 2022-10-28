@@ -1,5 +1,19 @@
 module SymbolicPPL
 
+using BangBang
+using Distributions
+using DynamicPPL
+using Graphs, MetaGraphsNext
+using IfElse
+using LinearAlgebra
+using LogExpFunctions
+using MacroTools
+using Setfield
+using SpecialFunctions
+using Statistics
+using Symbolics, SymbolicUtils
+using Random
+
 include("bugsast.jl")
 include("graphs.jl")
 include("compiler.jl")

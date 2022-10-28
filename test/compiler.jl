@@ -210,12 +210,32 @@ end
 compiler_state = compile(ex, NamedTuple(), :IR)
 
 # test for using observed stochastic variable for loop bound
-expr = @bugsast begin 
-    a = 2
-    a ~ dnorm(0, 1)
-    for i = 1:a
-        b[i] ~ dnorm(0, 1)
+let err = nothing
+    try
+        g = compile(
+            @bugsast begin 
+                a = 2
+                a ~ dnorm(0, 1)
+                for i = 1:a
+                    b[i] ~ dnorm(0, 1)
+                end
+            end, 
+            NamedTuple(), :IR
+        )    
+    catch err
     end
+
+    @test err isa Exception
 end
 
-g = compile(expr, NamedTuple(), :IR) # should error 
+# test for link function handling in stochastic assignments
+expr = @bugsast begin
+    logit(x) ~ dnorm(0, 1)
+end
+
+expr = @bugsast begin
+    logit(x) ~ dnorm(0, 1)
+    x = 1
+end
+
+compile(expr, NamedTuple(), :IR)

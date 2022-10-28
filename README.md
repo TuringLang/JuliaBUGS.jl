@@ -8,7 +8,7 @@ This implementation should be able to parse existing BUGS models and run them. I
 
 We are (as of autumn 2022) planning to continually keep working on this project, until we have a mature BUGS-compatible graphical PPL system integrated in the Turing ecosystem.
 
-**Nested indexing with stochastic variable is not supported. In BUGS, this language feature is most often used to write mixture models, for an example, refer to [Eyes](https://www.multibugs.org/examples/latest/Eyes.html). Nested indexing with data is supported otherwise.**
+**Nested indexing with stochastic variable is not supported yet. In BUGS, this language feature is most often used to write mixture models, for an example, refer to [Eyes](https://www.multibugs.org/examples/latest/Eyes.html). Nested indexing with data is supported otherwise.**
 
 ## Example: Logistic Regression with Random Effects
 We will use the [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) model for demonstration. 
@@ -68,7 +68,7 @@ We provide a macro solution which allows users to write down model definitions u
     for i in 1:N
         r[i] ~ dbin(p[i],n[i])
         b[i] ~ dnorm(0.0,tau)
-        @link_function logit p[i] = alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] + b[i]
+        p[i] = logistic(alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] + b[i])
     end
     alpha0 ~ dnorm(0.0,1.0E-6)
     alpha1 ~ dnorm(0.0,1.0E-6)
@@ -81,7 +81,7 @@ end
 BUGS syntax carries over almost one-to-one to Julia. 
 The only change is regarding the link functions.
 Because Julia uses the "function call on LHS"-like syntax as a shorthand for function definition, BUGS' link function syntax can be unidiomatic and confusing.
-We adopt a macro syntax as demonstrated in the model definition above: instead of calling the link function, make link function the first argument to the macro.  
+Thus, for logical assignments, users should call the inverse of the link function on the RHS. BUGS' link function syntax for stochastic assignments is not affected. 
 
 ### Support for Lagacy BUGS Programs
 We also provide a string macro `bugsmodel` to work with original (R-like) BUGS syntax:

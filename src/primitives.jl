@@ -1,13 +1,6 @@
+# `Base.step`: Get the step size of an AbstractRange object.
+# BUGS step has a different meaning.
 import Base: step
-
-using Distributions
-using IfElse
-using LinearAlgebra
-using LogExpFunctions
-using Statistics
-using MacroTools
-using SpecialFunctions
-using Symbolics
 
 """ 
     NA

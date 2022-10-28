@@ -1,10 +1,3 @@
-using BangBang
-using Distributions
-using LinearAlgebra
-using MacroTools
-using Setfield
-using Symbolics, SymbolicUtils
-using Random
 
 struct CompilerState
     model_def::Expr
@@ -76,38 +69,8 @@ function find_tilde_rhs(expr::Expr, target::Union{Expr, Symbol})
 end
 
 function linkfunction(expr::Expr)
-    expr = MacroTools.postwalk(expr) do sub_expr
-        if Meta.isexpr(sub_expr, :link_function)
-            sub_expr = Expr(sub_expr.args...)
-        end
-        return sub_expr
-    end
-
-    expr = MacroTools.prewalk(expr) do sub_expr
-        if sub_expr isa Expr
-            for (i, arg) in enumerate(sub_expr.args)
-                if Meta.isexpr(arg, :(~)) && Meta.isexpr(arg.args[1], :call)
-                    link_lhs, rhs = arg.args
-        
-                    link_fun, lhs = link_lhs.args
-                    inter_var = String(link_fun) * "(" * String(lhs) * ")" |> Symbol
-        
-                    splice!(
-                        sub_expr.args, 
-                        i, 
-                        [
-                            Expr(:(~), inter_var, rhs),
-                            Expr(:(=), inter_var, Expr(:call, link_fun, lhs)), # need this for observation
-                            Expr(:(=), lhs, Expr(:call, INVERSE_LINK_FUNCTION[link_fun], inter_var)) # need this for assumption
-                        ]
-                    )
-                end
-            end
-        end
-        return sub_expr
-    end
-
-    expr = MacroTools.postwalk(expr) do sub_expr
+    # link functions in stochastic assignments will be handled later
+    return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, f_(lhs_) = rhs_)
             if f in keys(INVERSE_LINK_FUNCTION)
                 sub_expr.args[1] = lhs
@@ -118,8 +81,6 @@ function linkfunction(expr::Expr)
         end
         return sub_expr
     end
-
-    return expr
 end
 
 function censored(expr::Expr)
@@ -529,7 +490,7 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
                 error("Repeated definition for $(lhs)")
             end
             compiler_state.logicalrules[lhs] = sym_rhs
-            expr.args[i] = Expr(:deleted) # avoid repeat evaluation
+            expr.args[i] = Expr(:processed) # avoid repeat evaluation
             addednewrules = true
         end
     end
@@ -540,6 +501,27 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
     for arg in expr.args
         if arg.head == :(~)
             lhs, rhs = arg.args
+
+            if Meta.isexpr(lhs, :call)
+                f = lhs.args[1]
+                if f in keys(INVERSE_LINK_FUNCTION)
+                    lhs_var = lhs.args[2]
+                    lhs = String(f) * "(" * String(lhs_var) * ")" |> Symbol
+                    if resolve(tosymbolic(lhs_var), compiler_state.logicalrules) isa Real # observation
+                        addlogicalrules!(
+                            Expr(:block, Expr(:(=), lhs, Expr(:call, f, lhs_var))),
+                            compiler_state
+                        )
+                    else
+                        addlogicalrules!(
+                            Expr(:block, Expr(:(=), lhs_var, Expr(:call, INVERSE_LINK_FUNCTION[f], lhs))),
+                            compiler_state
+                        )
+                    end
+                else
+                    error("Link function $f not supported.")
+                end
+            end
 
             if MacroTools.isexpr(lhs, :ref)
                 lhs = ref_to_symbolic!(lhs, compiler_state)
@@ -812,7 +794,7 @@ end
 function is_fully_unrolled(expr, compiler_state::CompilerState)
     # check if any loop or if remains
     for sub_expr in expr.args
-        Meta.isexpr(sub_expr, (:~, :(=), :deleted)) ||
+        Meta.isexpr(sub_expr, (:~, :(=), :processed)) ||
             error("$sub_expr can't be resolved.")
     end
 

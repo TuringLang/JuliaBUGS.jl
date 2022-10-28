@@ -1,4 +1,3 @@
-using Distributions
 
 # Support for distributions that are part of BUGS but not implemented in Distributions.jl.
 

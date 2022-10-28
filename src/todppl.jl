@@ -1,7 +1,3 @@
-using Distributions
-using DynamicPPL
-using MacroTools
-using Graphs, MetaGraphsNext
 
 function todppl(g::MetaDiGraph)
     expr = []

@@ -1,4 +1,3 @@
-using MacroTools
 
 position_string(l::LineNumberNode) = string(l.file, ":", l.line)
 
@@ -103,12 +102,6 @@ function bugsast_statement(expr::Expr, position=LineNumberNode(1, nothing))
         lhs, rhs = bugsast_expression.(expr.args, (position,))
         check_lhs(lhs)
         return Expr(:(~), lhs, rhs)
-    elseif Meta.isexpr(expr, :macrocall, 4)
-        @assert expr.args[1]==Symbol("@link_function") "Only macro allowed is @link_function."
-        link_func = expr.args[3]
-        eq = expr.args[4].head
-        lhs, rhs = bugsast_expression.(expr.args[4].args[1:end], (position,))
-        return Expr(:link_function, eq, Expr(:call, link_func, lhs), rhs)
     elseif Meta.isexpr(expr, :if, 2)
         condition, body = expr.args
         return Expr(:if, bugsast_expression(condition, position), bugsast_block(body, position))
@@ -159,14 +152,8 @@ function warn_link_function(expr)
         if @capture(sub_expr, f_(lhs_) = rhs_)
             error(
                 "BUGS' link function syntax is not supported due to confusion with Julia function definition syntax. " * 
-                "Use the macro `@link_function`. E.g., for `logit(y) = x` " *
-                "use `@link_function logit y = x`."
-            )
-        elseif Meta.isexpr(sub_expr, :(~)) && Meta.isexpr(sub_expr.args[1], :call)
-            error(
-                "BUGS' link function syntax is not supported due to confusion with Julia function definition syntax. " *
-                "Use the macro `@link_function`. E.g., for `logit(y) ~ dnorm(0, 1)` " *
-                "use `@link_function logit y ~ dnorm(0, 1)`."
+                "Please rewrite logical assignment by calling the inverse of the link function on the RHS. " *
+                "Corresponding Inverses: logit => logistic, cloglog => cexpexp, log => exp, probit => phi. "
             )
         end
         return sub_expr
