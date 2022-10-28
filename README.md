@@ -4,9 +4,11 @@ This package contains some infrastructure to work with graphical probabilistic m
 
 ## Caution!
 
-This implementation should be able to parse existing BUGS models and run them. It is, however, still a bit sketchy and not yet ready for serious work.  
+This implementation should be able to parse existing BUGS models and run them. It is, however, still in its very early stage and not yet ready for serious work.  
 
 We are (as of autumn 2022) planning to continually keep working on this project, until we have a mature BUGS-compatible graphical PPL system integrated in the Turing ecosystem.
+
+**Nested indexing with stochastic variable is not supported yet. In BUGS, this language feature is most often used to write mixture models, for an example, refer to [Eyes](https://www.multibugs.org/examples/latest/Eyes.html). Nested indexing with data is supported otherwise.**
 
 ## Example: Logistic Regression with Random Effects
 We will use the [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) model for demonstration. 
@@ -54,11 +56,12 @@ model
 ```
 
 ## Modeling Language
-References:  
+Language References:  
  - [MultiBUGS](https://www.multibugs.org/documentation/latest/)
  - [OpenBUGS](https://chjackson.github.io/openbugsdoc/Manuals/ModelSpecification.html)
+
 ### Writing Model in Julia
-We provide a macro solution which allows to directly use Julia code corresponding to BUGS code:
+We provide a macro solution which allows users to write down model definitions using Julia:
 
 ```julia
 @bugsast begin
@@ -76,12 +79,12 @@ We provide a macro solution which allows to directly use Julia code correspondin
 end
 ```
 BUGS syntax carries over almost one-to-one to Julia. 
-The only change is regarding the link functions, we encourage users to call the inverse function on the RHS instead of the original BGUS-style syntax. 
-The concern is that Julia use the "function call on LHS"-like syntax as a shorthand for function definition. 
-Thus the BUGS-style link function syntax maybe confusing for other Julia users.
+The only change is regarding the link functions.
+Because Julia uses the "function call on LHS"-like syntax as a shorthand for function definition, BUGS' link function syntax can be unidiomatic and confusing.
+We adopt a more Julian syntax as demonstrated in the model definition above: instead of calling the link function, we call the inverse link function from the RHS. However, the Julian link function semantics internally is equivalent to the BUGS. 
 
 ### Support for Lagacy BUGS Programs
-We provide a string macro `bugsmodel` to work with original (R-like) BUGS syntax:
+We also provide a string macro `bugsmodel` to work with original (R-like) BUGS syntax:
 
 ```julia
 bugsmodel"""
@@ -103,113 +106,12 @@ bugsmodel"""
 This is simply the unmodified code in the `model { }` enclosure.  
 We encourage users to write new program using the Julia-native syntax, because of better debuggability and perks like syntax highlighting. 
 
-## Compilation
-
-### Compilation Interface
-The main function for compilation is 
-
-```julia
-compile(model_def::Expr, data::NamedTuple) # compile a BUGSGraph object without initialization
-compile(model_def::Expr, data::NamedTuple, inits::NamedTuple) # compile a BUGSGraph object with initializations
-compile(model_def::Expr, data::NamedTuple, inits::Vector{NamedTuple}) # compile a vector of BUGSGraph object with initializations
-```
-
-so to compile the model definition given above, 
-
-```julia-repo
-# model_def is the julia AST generate by `@bugsast` or `bugsmodel`
-julia> model = compile(model_def, data); 
-
-julia> typeof(model)
-BUGSGraph
-```
-
-### Compilation Target
-As you can see, the result of the compilation is an object of the type `BUGSGraph`.
-There are three major components of a `BUGSGraph` object: [Graphs.DiGraph](https://juliagraphs.org/Graphs.jl/dev/core_functions/module/#Graphs.DiGraph) for graph structure, node functions for all the variables in the DAG, and whether a variable is observed or assumed.
-
-#### The DAG
-User can retrieve the [Graphs.DiGraph](https://juliagraphs.org/Graphs.jl/dev/core_functions/module/#Graphs.DiGraph) object with
-```julia-repo
-julia> dag = getDAG(model)
-{47, 89} directed simple Int64 graph
-```
-All nodes in the DAG is aliased with an integer number. 
-To look up the integer alias of a variable, user can use function
-
-```julia-repo
-julia> getnodeenum(model, @nodename r[1]) # equivalently getnodeenum(model, Symbol("r[1]"))
-3 
-```
-
-Please note, if a variable is an array indexing, e.g., `g[2, 3]`, the blank in front of `3` is important. 
-We provide the macro `@nodename` to facilitate formatting for array indexings.
-
-```julia-repo
-julia> @nodename g[2,3]
-Symbol("g[2, 3]")
-```
-
-A reverse lookup function is also provided.
-
-```julia-repo
-julia> getnodename(model, 3)
-Symbol("r[1]")
-```
-
-Other useful functions include
-
-```julia
-getnumnodes(g::BUGSGraph) # return number of nodes
-getsortednodes(g::BUGSGraph) # return nodes in topological order
-getparents(g::BUGSGraph, node::Integer) # return the parents of the node
-getchidren(g::BUGSGraph, node::Integer) # return the children of the node
-getmarkovblanket(g::BUGSGraph, node::Integer) # return the Markov Blanket of the node
-```
-
-#### Node Functions
-Every node in the graph corresponds to a stochastic variable from the original program.
-The node function of a node is a function such that, when evaluated given the node's parents' value, will return a [Distributions.Distribution](https://github.com/JuliaStats/Distributions.jl) object.
-
-User can use `shownodefunc` to print out the node function
-
-```julia-repo
-julia> shownodefunc(model, 3)
-Parent Nodes: alpha0, b[1]
-Node Function: begin
-    (SymbolicPPL.dbin)((/)(1, (+)(1, (exp)((+)((+)(0, (*)(-1, alpha0)), (*)(-1, var"b[1]"))))), 39)
-end
-```
-
-This may not be expected from the mathematical equation, but after substituting the data in one can verify that it is a correct. This simplification is powered by the symbolic algebra system we use during the compilation.
-
-User can use `rand(model::BUGSModel)` to generate a random trace of the program and `getdistribution(model::BUGSModel, node::Integer, value::Vector{Integer})` to get the distribution of the node evaluated with the program trace. 
-```julia-repo
-julia> value = rand(model);
-
-julia> getdistribution(model, 3, value)
-Distributions.Binomial{Float64}(n=39, p=0.0)
-```
-
-where `value` is a `Vector` indexed by nodes' integer alias.
-
-#### Debug Model
-User can choose compile to a `CompilerState` object and check the corresponding expression for a variable using 
-
-```julia-repo
-julia> model_cs = compile_inter(model_def, data);
-
-julia> querynode(model_cs, @nodename r[1])
-SymbolicPPL.dbin(p[1], n[1])
-```
-
-### Supported BUGS Distribution and Functions
-The library of supported BUGS distributions and utility functions are limited in the current version. 
-User can register them own distributions and functions with the macros
+### Using Self-defined Functions and Distributions
+User can register their own functions and distributions with the macros
 
 ```julia-repo
 julia> # Should be restricted to pure function that do simple operations
-@primitive function f(x)
+@register_function function f(x)
     return x + 1
 end
 
@@ -221,46 +123,88 @@ julia> SymbolicPPL.f(2)
 
 ```julia-repo
 julia> # Need to return a Distributions.Distribution 
-@bugsdistribution function d(x)
+@register_distribution function d(x) 
     return Normal(0, x^2)
-end
+end 
 
 julia> SymbolicPPL.d(1)
 Distributions.Normal{Float64}(μ=0.0, σ=1.0)
 ```
 
-Please use these macros cautiously as they may cause name clashes and potential breaking behaviors.
+After registering the function or distributions, they can be used just like any other functions or distributions provided by BUGS. 
 
-### Inference
-#### Native Graph-Based Inference Algorithms
-We plan to implement a library of high performance graph-based inference algorithms in the future. Contributions are welcome and much appreciated. Interested contributors can check out the [implementation](https://github.com/TuringLang/SymbolicPPL.jl/blob/use_graphs/src/gibbs.jl) of a very simplistic [AbstractMCMC.jl](https://github.com/TuringLang/AbstractMCMC.jl) compatible Metropolis-within-Gibbs sampler for interface references. 
+Please use these macros with caution to avoid causing name clashes. Such name clashes would override default BUGS primitives and cause breaking behaviours.
 
-#### Using Inference Infrastructure from [Turing.jl](https://github.com/TuringLang/Turing.jl)
-Users who want to run BUGS program right now can try out the `toturing` function, which will compile the `BUGSGraph` object to a `Turing.Model`.
+## Compilation
 
-**Caution**: `toturing` is not yet well tested and we can't guarantee its correctness, bugs reports are welcomed.
+The main function for compilation is 
 
-```julia-repo
-julia> m = @bugsast begin
-    a ~ dnorm(0, 1)
-    b ~ dnorm(a, 1)
-    c ~ dnorm(b, a^2)
-end; 
-
-julia> g = compile(ex, (a=1, b=2)); 
-
-julia> model = toturing(g);
-
-julia> rand(model())
-(c = 2.2019001981565207,)
+```julia
+compile(model_def::Expr, data::NamedTuple, target::Symbol),
 ```
-User can also check the input to Turing's compiler by 
+
+which takes three arguments: 
+- the first argument is the output of `@bugsast` or `bugsmodel`, 
+- the second argument is the data 
+- the third argument is a `Symbol` indicating the compilation target.
+
+To compile the `Seeds` model to a conditioned `Turing.Model`,  
 
 ```julia-repo
-julia> inspect_toturing(g)
-:(function bugsturing(; b = 2, a = 1)
-      a ~ Normal(0.0, 1.0)
-      b ~ SymbolicPPL.dnorm(a, 1)
-      c ~ SymbolicPPL.dnorm(b, a ^ 2)
-  end)
-``` 
+julia> model = compile(model_def, data, :DynamicPPL); 
+
+```
+
+## Inference
+
+Once compiled to a `Turing.Model`, user can choose [inference algorithms](https://turing.ml/dev/docs/library/) supported by Turing. Here we use `HMC` for demonstration, 
+
+```julia-repo
+julia> using Turing; chn = sample(model(), HMC(0.1, 5), 12000, discard_initial = 1000);
+
+julia> chn[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]
+Chains MCMC chain (12000×5×1 Array{Float64, 3}):
+
+Iterations        = 1001:1:13000
+Number of chains  = 1
+Samples per chain = 12000
+Wall duration     = 8.87 seconds
+Compute duration  = 8.87 seconds
+parameters        = alpha1, alpha12, alpha2, tau, alpha0
+internals         = 
+
+Summary Statistics
+  parameters      mean       std   naive_se      mcse         ess      rhat   ess_per_sec 
+      Symbol   Float64   Float64    Float64   Float64     Float64   Float64       Float64 
+
+      alpha1    0.0782    0.3112     0.0028    0.0079   1537.3193    0.9999      173.3754
+     alpha12   -0.8223    0.4356     0.0040    0.0120   1287.7594    0.9999      145.2306
+      alpha2    1.3496    0.2764     0.0025    0.0068   1611.5933    0.9999      181.7518
+         tau   27.2953   45.8652     0.4187    3.5472     90.5342    1.0077       10.2102
+      alpha0   -0.5524    0.1969     0.0018    0.0042   1908.2302    1.0001      215.2058
+
+Quantiles
+  parameters      2.5%     25.0%     50.0%     75.0%      97.5% 
+      Symbol   Float64   Float64   Float64   Float64    Float64 
+
+      alpha1   -0.5283   -0.1172    0.0808    0.2873     0.6788
+     alpha12   -1.7122   -1.1049   -0.8147   -0.5458     0.0241
+      alpha2    0.8160    1.1761    1.3404    1.5205     1.9120
+         tau    2.4891    6.6951   12.0090   24.4123   159.0162
+      alpha0   -0.9477   -0.6790   -0.5507   -0.4268    -0.1586
+```
+
+One can verify the inference result is coherent with BUGS' result for [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) (here we reported `tau` instead of `sigma` with `sigma = 1 / sqrt(tau)`). 
+The output of `sample` is a [`Chains`](https://beta.turing.ml/MCMCChains.jl/stable/chains/) object, and visualization the results is easy,  
+
+```julia-repo
+julia> using StatsPlots; plot(chn[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]);
+
+```
+
+With default settings, we get
+
+![seeds](https://user-images.githubusercontent.com/5433119/197317818-580f66c4-3f49-4204-8e8c-e149906d73df.svg)
+
+## More Examples
+We have transcribed all the examples from the first volume of the BUGS Examples, they can be find [here](https://www.multibugs.org/examples/latest/VolumeI.html). All the programs and data are included, and they can be compiled in a similar way as we have demonstrated before.

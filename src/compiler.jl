@@ -1,43 +1,51 @@
-using Distributions
-using Symbolics
-using SymbolicUtils
-using Random
-using MacroTools
-using LinearAlgebra
-using Setfield
-import SymbolicUtils: toterm, substitute
-using BangBang
 
-"""
-    CompilerState
-
-Store data during the compilation. 
-"""
 struct CompilerState
+    model_def::Expr
     arrays::Dict{Symbol,Symbolics.Arr{Num}}
     logicalrules::Dict
     stochasticrules::Dict
     observations::Dict
 end
 
-CompilerState() = CompilerState(
-    Dict{Symbol,Symbolics.Arr{Num}}(),
-    Dict(),
-    Dict(),
-    Dict()
-)
+CompilerState(model_def::Expr) = CompilerState(deepcopy(model_def), Dict{Symbol,Symbolics.Arr{Num}}(), Dict(), Dict(), Dict())
 
-"""
-    cumulative(expr)
+#
+# Regularize ASTs to make them easier to work with
+#
 
-Convert `cumulative(s1, s2)` to `cdf(distribution_of_s1, s2)`.
-"""
 function cumulative(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, lhs_ = cumulative(s1_, s2_))
             dist = find_tilde_rhs(expr, s1)
             sub_expr.args[2].args[1] = :cdf 
             sub_expr.args[2].args[2] = dist
+            return sub_expr
+        else
+            return sub_expr
+        end
+    end
+end
+
+function density(expr::Expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, lhs_ = density(s1_, s2_))
+            dist = find_tilde_rhs(expr, s1)
+            sub_expr.args[2].args[1] = :pdf 
+            sub_expr.args[2].args[2] = dist
+            return sub_expr
+        else
+            return sub_expr
+        end
+    end
+end
+
+function deviance(expr::Expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, lhs_ = deviance(s1_, s2_))
+            dist = find_tilde_rhs(expr, s1)
+            sub_expr.args[2].args[1] = :logpdf 
+            sub_expr.args[2].args[2] = dist
+            sub_expr.args[2] = Expr(:call, :*, -2, sub_expr.args[2])
             return sub_expr
         else
             return sub_expr
@@ -60,12 +68,8 @@ function find_tilde_rhs(expr::Expr, target::Union{Expr, Symbol})
     return dist
 end
 
-"""
-    linkfunction(expr)
-
-Call the inverse of the link function on the RHS so that the LHS is simple. 
-"""
 function linkfunction(expr::Expr)
+    # link functions in stochastic assignments will be handled later
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, f_(lhs_) = rhs_)
             if f in keys(INVERSE_LINK_FUNCTION)
@@ -79,11 +83,6 @@ function linkfunction(expr::Expr)
     end
 end
 
-"""
-    censored(expr)
-
-Turn `censored` expression to function calls.
-"""
 function censored(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if Meta.isexpr(sub_expr, :censored)
@@ -102,11 +101,6 @@ function censored(expr::Expr)
     end
 end
 
-"""
-    truncated(expr)
-
-Turn `truncated` expression to function calls.
-"""
 function truncated(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if Meta.isexpr(sub_expr, :truncated)
@@ -125,17 +119,8 @@ function truncated(expr::Expr)
     end
 end
 
-"""
-    transform_expr(model_def)
-
-Transform the model definition to a form that is easier to work with.
-"""
 function transform_expr(model_def::Expr)
-    expr = linkfunction(model_def)
-    expr = cumulative(expr)
-    expr = censored(expr)
-    expr = truncated(expr)
-    return expr
+    return model_def |> linkfunction |> censored |> truncated |> cumulative |> density |> deviance
 end
 
 """
@@ -150,7 +135,7 @@ function unroll!(expr::Expr, compiler_state::CompilerState)
             if arg.head == :for
                 unrolled = unroll(arg, compiler_state)
                 splice!(expr.args, i, unrolled.args)
-                unrolled_flag = true
+                hasunrolled = true
                 # unroll one loop at a time to avoid complication raised by mutation
                 break
             end
@@ -163,7 +148,7 @@ is_integer(x) = isa(x, Real) && isinteger(x)
 
 function canunroll(expr::Expr, compiler_state::CompilerState)
     for arg in expr.args
-        if arg.head == :for
+        if Meta.isexpr(arg, :for)
             lower_bound, upper_bound = arg.args[1].args[2].args
             lower_bound = resolve(lower_bound, compiler_state.logicalrules)
             upper_bound = resolve(upper_bound, compiler_state.logicalrules)
@@ -416,7 +401,7 @@ end
 """
     resolve(variable, compiler_state)
 
-Partially evaluate the variable in the context defined by compiler_state.
+Partially evaluate the variable in the environment defined by compiler_state.
 """
 resolve(variable::Distributions.Distribution, rules::Dict) = variable
 function resolve(variable, rules::Dict)
@@ -462,11 +447,6 @@ Base.isequal(::SymbolicUtils.Symbolic, ::Missing) = false
 
 Base.in(key::Num, vs::Vector) = any(broadcast(Symbolics.isequal, key, vs))
 
-"""
-    addlogicalrules!(data, compiler_state)
-
-Process all the logical assignments and add them to `CompilerState.stochasticrules`.
-"""
 addlogicalrules!(data::NamedTuple, compiler_state::CompilerState) =
     addlogicalrules!(Dict(pairs(data)), compiler_state)
 function addlogicalrules!(data::Dict, compiler_state::CompilerState)
@@ -510,22 +490,38 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
                 error("Repeated definition for $(lhs)")
             end
             compiler_state.logicalrules[lhs] = sym_rhs
-            expr.args[i] = Expr(:deleted) # avoid repeat evaluation
+            expr.args[i] = Expr(:processed) # avoid repeat evaluation
             addednewrules = true
         end
     end
     return addednewrules
 end
 
-"""
-    addstochasticrules!(expr, compiler_state::CompilerState)
-
-Process all the stochastic assignments and add them to `CompilerState.stochasticrules`.
-"""
 function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
     for arg in expr.args
         if arg.head == :(~)
             lhs, rhs = arg.args
+
+            if Meta.isexpr(lhs, :call)
+                f = lhs.args[1]
+                if f in keys(INVERSE_LINK_FUNCTION)
+                    lhs_var = lhs.args[2]
+                    lhs = String(f) * "(" * String(lhs_var) * ")" |> Symbol
+                    if resolve(tosymbolic(lhs_var), compiler_state.logicalrules) isa Real # observation
+                        addlogicalrules!(
+                            Expr(:block, Expr(:(=), lhs, Expr(:call, f, lhs_var))),
+                            compiler_state
+                        )
+                    else
+                        addlogicalrules!(
+                            Expr(:block, Expr(:(=), lhs_var, Expr(:call, INVERSE_LINK_FUNCTION[f], lhs))),
+                            compiler_state
+                        )
+                    end
+                else
+                    error("Link function $f not supported.")
+                end
+            end
 
             if MacroTools.isexpr(lhs, :ref)
                 lhs = ref_to_symbolic!(lhs, compiler_state)
@@ -558,8 +554,14 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
             end
 
             if haskey(compiler_state.stochasticrules, lhs)
-                Symbolics.isequal(sym_rhs, compiler_state.stochasticrules[lhs]) && continue
+                # Symbolics.isequal(sym_rhs, compiler_state.stochasticrules[lhs]) && continue
                 error("Repeated definition for $(lhs)")
+            end
+            
+            if haskey(compiler_state.logicalrules, lhs)
+                if !isa(resolve(lhs, compiler_state.logicalrules), Real)
+                    error("A stochastic variable cannot be used as LHS of logical assignments unless it's an observation.")
+                end
             end
             compiler_state.stochasticrules[lhs] = sym_rhs
         end
@@ -604,11 +606,6 @@ function replace_variables(ex::Expr, variables)
     end
 end
 
-"""
-    find_all_variables(expr)
-
-Find all the variables in the expression.
-"""
 find_all_variables(rhs::Number) = []
 find_all_variables(rhs::Symbol) = Base.occursin("[", string(rhs)) ? [] : rhs
 function find_all_variables(rhs::Expr)
@@ -620,7 +617,7 @@ end
 function recursive_find_variables(expr::Expr, variables::Vector{Any})
     MacroTools.prewalk(expr) do sub_expr
         if MacroTools.isexpr(sub_expr, :call)
-            for arg in sub_expr.args[2:end] # only touch the arguments
+            for arg in sub_expr.args[2:end] # only search through the arguments
                 if arg isa Symbol && !Base.occursin("[", string(arg))
                     push!(variables, arg)
                     continue
@@ -631,7 +628,6 @@ function recursive_find_variables(expr::Expr, variables::Vector{Any})
     end
 end
 
-# need to handle array indexing
 function extract_observations!(compiler_state::CompilerState)
     for k in keys(compiler_state.stochasticrules)
         resolved_val = resolve(k, compiler_state.logicalrules)
@@ -714,13 +710,8 @@ function scalarize(ex::Num, compiler_state::CompilerState)
 end
 scalarize(ex, ::CompilerState) = ex, Dict()
 
-"""
-    tograph(compiler_state, eval_ex)
-
-Build inputs to BUGSGraph from the rules in the compiler state.
-"""
-function tograph(compiler_state::CompilerState)
-    to_graph = Dict()
+function gen_output(compiler_state::CompilerState)
+    pregraph = Dict()
     for key in keys(compiler_state.stochasticrules)
         ex = symbolic_eval(compiler_state.stochasticrules[key], compiler_state.logicalrules)
         ex, sub_dict = scalarize(ex, compiler_state)
@@ -740,26 +731,27 @@ function tograph(compiler_state::CompilerState)
                         delete!(sub_dict, arr)
                     end
                     return sub_expr
-                end |> getindex_to_ref
+                end |> getindex_to_ref |> MacroTools.flatten |> MacroTools.resyntax
             end
         end
 
         if !isempty(compiler_state.observations)
             if haskey(compiler_state.observations, key)
                 value = compiler_state.observations[key]
-                isoberve = true
+                isdata = true
             else
                 value = missing
-                isoberve = false
+                isdata = false
             end
         else
             value = resolve(key, compiler_state.logicalrules)
-            isoberve = isa(value, Real)
+            isdata = isa(value, Real)
+            value = isdata ? value : missing
         end
 
-        to_graph[tosymbol(key)] = (isoberve ? value : 0, f_expr, isoberve)
+        pregraph[tosymbol(key)] = (value, f_expr, isdata)
     end
-    return to_graph
+    return pregraph
 end
 
 function getindex_to_ref(expr)
@@ -799,69 +791,66 @@ function refinindices(expr, compiler_state)
     end
 end
 
-"""
-    check_expr(expr)
-
-Check if the model is static.
-"""
-function check_expr(expr, compiler_state::CompilerState)
+function is_fully_unrolled(expr, compiler_state::CompilerState)
     # check if any loop or if remains
     for sub_expr in expr.args
-        Meta.isexpr(sub_expr, (:(=), :~, :deleted)) ||
-            error("Expression $sub_expr is not an assignment expression.")
+        Meta.isexpr(sub_expr, (:~, :(=), :processed)) ||
+            error("$sub_expr can't be resolved.")
     end
 
     # check if all array indices are resolvable
     refinindices(expr, compiler_state)
 end
 
-function compile_inter(model_def::Expr, data::NamedTuple)
-    expr = transform_expr(model_def)
-    compiler_state = CompilerState()
-    addlogicalrules!(data, compiler_state)
-    println("Finish reading data.")
+function check_expr(expr, compiler_state::CompilerState)
+    is_fully_unrolled(expr, compiler_state)
 
+    # check if there exist using observed stochastic variables for loop bounds or indexing
+    expr_copy = deepcopy(compiler_state.model_def)
+    while true
+        unroll!(expr_copy, compiler_state) ||
+        resolveif!(expr_copy, compiler_state) ||
+        break
+    end
+    try 
+        is_fully_unrolled(expr_copy, compiler_state)
+    catch e
+        error("Check the model definition for using observed stochastic variables as loop bounds or indexing.")
+    end
+end
+
+"""
+    compile(model_def, data, target)
+
+Compile the model definition `model_def` with data `data` and target `target`.
+
+# Arguemnts
+- `model_def`: the Julia Expr object returned from `@bugsast` or `bugsmodel`.
+- `data`: data and model prameters.
+- `target`: one of `:DynamicPPL`, `:IR`, or `:Graph`. 
+"""
+function compile(model_def::Expr, data::NamedTuple, target::Symbol) 
+    @assert target in [:DynamicPPL, :IR, :Graph] "target must be one of [:DynamicPPL, :IR, :Graph]"
+    
+    expr = transform_expr(model_def)
+
+    compiler_state = CompilerState(expr)
+    addlogicalrules!(data, compiler_state)
     while true
         unroll!(expr, compiler_state) ||
             resolveif!(expr, compiler_state) ||
             addlogicalrules!(expr, compiler_state) ||
             break
     end
-    println("Finish processing logical assignments.")
-    check_expr(expr, compiler_state)
 
     addstochasticrules!(expr, compiler_state)
-    println("Finish processing stochastic assignments.")
-    
     extract_observations!(compiler_state)
 
-    return compiler_state
-end
+    check_expr(expr, compiler_state)
 
-function querynode(compiler_state::CompilerState, var::Symbol)
-    findkey = 0
-    if haskey(compiler_state.logicalrules, tosymbolic(var)) 
-        findkey = 1 
-    elseif haskey(compiler_state.stochasticrules, tosymbolic(var))
-        findkey = 2
-    end
+    target == :IR && return compiler_state
 
-    if findkey == 0
-        error("BUGS model does not contain node $var")
-    end
-
-    ex = findkey == 1 ? compiler_state.logicalrules[tosymbolic(var)] : compiler_state.stochasticrules[tosymbolic(var)]
-    return ex
+    g = to_metadigraph(gen_output(compiler_state))
+    target == :Graph && return g
+    target == :DynamicPPL && return todppl(g)
 end
-
-compile(model_def::Expr) = compile(model_def, NamedTuple())
-compile(model_def::Expr, data::Dict) = compile(model_def, Tuple(data))
-function compile(model_def::Expr, data::NamedTuple)
-    compiler_state = compile_inter(model_def, data)
-    return BUGSGraph(tograph(compiler_state))
-end
-function compile(model_def::Expr, data::NamedTuple, inits::NamedTuple)
-    compiler_state = compile_inter(model_def, data)
-    return BUGSGraph(tograph(compiler_state), inits)
-end
-compile(model_def::Expr, data::NamedTuple, inits::Vector{NamedTuple}) = [compile(model_def, NamedTuple(data), NamedTuple(init)) for init in inits]

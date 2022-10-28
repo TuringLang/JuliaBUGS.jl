@@ -10,8 +10,7 @@ using SymbolicPPL:
     ref_to_symbolic!,
     ref_to_symbolic,
     addlogicalrules!,
-    addstochasticrules!,
-    compile_inter
+    addstochasticrules!
 using Test
 using Symbolics
 
@@ -204,8 +203,39 @@ ex = @bugsast begin
     end
 end
 
-compiler_state = compile_inter(ex, NamedTuple())
-SymbolicPPL.querynode(compiler_state, :g)
-SymbolicPPL.querynode(compiler_state, Symbol("q[1, 1]"))
+@register_function foo(x::Array) = sum(x)
+@register_function foobar(x::Array) = sum(x)
+@register_distribution bar(x::Array) = SymbolicPPL.dcat(reduce(vcat, v))
 
-g = compile(ex, NamedTuple())
+compiler_state = compile(ex, NamedTuple(), :IR)
+
+# test for using observed stochastic variable for loop bound
+let err = nothing
+    try
+        g = compile(
+            @bugsast begin 
+                a = 2
+                a ~ dnorm(0, 1)
+                for i = 1:a
+                    b[i] ~ dnorm(0, 1)
+                end
+            end, 
+            NamedTuple(), :IR
+        )    
+    catch err
+    end
+
+    @test err isa Exception
+end
+
+# test for link function handling in stochastic assignments
+expr = @bugsast begin
+    logit(x) ~ dnorm(0, 1)
+end
+
+expr = @bugsast begin
+    logit(x) ~ dnorm(0, 1)
+    x = 1
+end
+
+compile(expr, NamedTuple(), :IR)

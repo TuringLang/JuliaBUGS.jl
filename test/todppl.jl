@@ -1,8 +1,10 @@
-using Turing
 using Random
 using SymbolicPPL
-using SymbolicPPL:toturing, compile_inter
 using Distributions
+using AbstractMCMC
+using MCMCChains
+using AdvancedMH
+using Turing
 
 ##
 ex = @bugsast begin
@@ -11,11 +13,7 @@ ex = @bugsast begin
     c ~ dnorm(b, a^2)
 end 
 
-compile_inter(ex, (a=1, b=2))
-g = compile(ex, (a=1, b=2))
-
-model = toturing(g)
-inspect_toturing(g)
+g = compile(ex, (a=1, b=2), :DynamicPPL)
 rand(model())
 
 ##
@@ -25,9 +23,5 @@ ex = @bugsast begin
     a[3] ~ dnorm(a[2], a[1]^2)
 end
 
-compile_inter(ex, (a=[1, 2, missing], ))
-g = compile(ex, (a=[1, 2, missing], ))
-
-model = toturing(g)
-inspect_toturing(g)
+g = compile(ex, (a=[1, 2, missing],), :DynamicPPL)
 rand(model())
