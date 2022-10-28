@@ -159,13 +159,13 @@ function warn_link_function(expr)
         if @capture(sub_expr, f_(lhs_) = rhs_)
             error(
                 "BUGS' link function syntax is not supported due to confusion with Julia function definition syntax. " * 
-                "Use the macro `@link_function`. E.g., for `logit(y) = x` " *
+                "Please use the macro `@link_function`. E.g., for `logit(y) = x` " *
                 "use `@link_function logit y = x`."
             )
         elseif Meta.isexpr(sub_expr, :(~)) && Meta.isexpr(sub_expr.args[1], :call)
             error(
                 "BUGS' link function syntax is not supported due to confusion with Julia function definition syntax. " *
-                "Use the macro `@link_function`. E.g., for `logit(y) ~ dnorm(0, 1)` " *
+                "Please use the macro `@link_function`. E.g., for `logit(y) ~ dnorm(0, 1)` " *
                 "use `@link_function logit y ~ dnorm(0, 1)`."
             )
         end
