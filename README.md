@@ -79,7 +79,7 @@ We provide a macro solution which allows users to write down model definitions u
 end
 ```
 BUGS syntax carries over almost one-to-one to Julia. 
-The only change is regarding the link functions.
+The only change is regarding the link functions in logical assignments.
 Because Julia uses the "function call on LHS"-like syntax as a shorthand for function definition, BUGS' link function syntax can be unidiomatic and confusing.
 We adopt a more Julian syntax as demonstrated in the model definition above: instead of calling the link function, we call the inverse link function from the RHS. However, the Julian link function semantics internally is equivalent to the BUGS. 
 
