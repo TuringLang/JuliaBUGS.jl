@@ -234,4 +234,4 @@ Compare the `Node Function` of `r[2]` with the original definition, we can see i
 
 
 ## More Examples
-We have transcribed all the examples from the first volume of the BUGS Examples. The origianl examples can be found [here](https://www.multibugs.org/examples/latest/VolumeI.html), and the transcribed examples can be find [here](https://github.com/TuringLang/SymbolicPPL.jl/tree/master/src/BUGSExamples/Volume_I). All the programs and data are included, and they can be compiled in a similar way as we have demonstrated before.
+We have transcribed all the examples from the first volume of the BUGS Examples ([origianl](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/SymbolicPPL.jl/tree/master/src/BUGSExamples/Volume_I)). All the programs and data are included, and they can be compiled in a similar way as we have demonstrated before.
