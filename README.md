@@ -79,7 +79,7 @@ We provide a macro solution which allows users to write down model definitions u
 end
 ```
 BUGS syntax carries over almost one-to-one to Julia. 
-The only change is regarding the link functions.
+The only change is regarding the link functions in logical assignments.
 Because Julia uses the "function call on LHS"-like syntax as a shorthand for function definition, BUGS' link function syntax can be unidiomatic and confusing.
 We adopt a more Julian syntax as demonstrated in the model definition above: instead of calling the link function, we call the inverse link function from the RHS. However, the Julian link function semantics internally is equivalent to the BUGS. 
 
@@ -233,4 +233,4 @@ Compare the `Node Function` of `r[2]` with the original definition, we can see i
 
 
 ## More Examples
-We have transcribed all the examples from the first volume of the BUGS Examples, they can be find [here](https://www.multibugs.org/examples/latest/VolumeI.html). All the programs and data are included, and they can be compiled in a similar way as we have demonstrated before.
+We have transcribed all the examples from the first volume of the BUGS Examples. The origianl examples can be found [here](https://www.multibugs.org/examples/latest/VolumeI.html), and the transcribed examples can be find [here](https://github.com/TuringLang/SymbolicPPL.jl/tree/master/src/BUGSExamples/Volume_I). All the programs and data are included, and they can be compiled in a similar way as we have demonstrated before.
