@@ -204,10 +204,11 @@ julia> using StatsPlots; plot(chn[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]);
 
 With default settings, we get
 
-![seeds](https://user-images.githubusercontent.com/5433119/197317818-580f66c4-3f49-4204-8e8c-e149906d73df.svg)
+![seeds](https://user-images.githubusercontent.com/5433119/198809451-6a9a2974-6015-4a6e-8508-a6e7dd35116f.svg)
 
 ## More Compilation Target
-**Work in Progress: fluid interface**  
+**Work in Progress: the interface can change drastically**
+
 User can also compile the model into a DAG by specifying the target to be `:Graph`.
 
 ```julia-repo
