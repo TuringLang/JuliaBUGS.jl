@@ -148,7 +148,7 @@ which takes three arguments:
 - the second argument is the data 
 - the third argument is a `Symbol` indicating the compilation target.
 
-To compile the `Seeds` model to a conditioned `Turing.Model`,  
+To compile the `Seeds` model to a conditioned `Turing.Model`, specify the target to be `:DynamicPPL`
 
 ```julia-repo
 julia> model = compile(model_def, data, :DynamicPPL); 
@@ -157,19 +157,19 @@ julia> model = compile(model_def, data, :DynamicPPL);
 
 ## Inference
 
-Once compiled to a `Turing.Model`, user can choose [inference algorithms](https://turing.ml/dev/docs/library/) supported by Turing. Here we use `HMC` for demonstration, 
+Once compiled to a `Turing.Model`, user can choose [inference algorithms](https://turing.ml/dev/docs/library/) supported by Turing. Here we use `NUTS` for demonstration, 
 
 ```julia-repo
-julia> using Turing; chn = sample(model(), HMC(0.1, 5), 12000, discard_initial = 1000);
+julia> using Turing; chn = sample(model(), NUTS(), 11000, discard_initial = 1000);
 
 julia> chn[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]
-Chains MCMC chain (12000×5×1 Array{Float64, 3}):
+Chains MCMC chain (11000×5×1 Array{Float64, 3}):
 
-Iterations        = 1001:1:13000
+Iterations        = 1001:1:12000
 Number of chains  = 1
-Samples per chain = 12000
-Wall duration     = 8.87 seconds
-Compute duration  = 8.87 seconds
+Samples per chain = 11000
+Wall duration     = 22.11 seconds
+Compute duration  = 22.11 seconds
 parameters        = alpha1, alpha12, alpha2, tau, alpha0
 internals         = 
 
@@ -177,21 +177,21 @@ Summary Statistics
   parameters      mean       std   naive_se      mcse         ess      rhat   ess_per_sec 
       Symbol   Float64   Float64    Float64   Float64     Float64   Float64       Float64 
 
-      alpha1    0.0782    0.3112     0.0028    0.0079   1537.3193    0.9999      173.3754
-     alpha12   -0.8223    0.4356     0.0040    0.0120   1287.7594    0.9999      145.2306
-      alpha2    1.3496    0.2764     0.0025    0.0068   1611.5933    0.9999      181.7518
-         tau   27.2953   45.8652     0.4187    3.5472     90.5342    1.0077       10.2102
-      alpha0   -0.5524    0.1969     0.0018    0.0042   1908.2302    1.0001      215.2058
+      alpha1    0.0842    0.3131     0.0030    0.0051   4329.1277    1.0004      195.7995
+     alpha12   -0.8335    0.4398     0.0042    0.0062   4528.4134    0.9999      204.8129
+      alpha2    1.3542    0.2773     0.0026    0.0043   4101.1509    1.0001      185.4885
+         tau   32.2479   63.7739     0.6081    3.0866    337.8219    1.0016       15.2791
+      alpha0   -0.5510    0.1937     0.0018    0.0031   4297.2842    1.0000      194.3593
 
 Quantiles
   parameters      2.5%     25.0%     50.0%     75.0%      97.5% 
       Symbol   Float64   Float64   Float64   Float64    Float64 
 
-      alpha1   -0.5283   -0.1172    0.0808    0.2873     0.6788
-     alpha12   -1.7122   -1.1049   -0.8147   -0.5458     0.0241
-      alpha2    0.8160    1.1761    1.3404    1.5205     1.9120
-         tau    2.4891    6.6951   12.0090   24.4123   159.0162
-      alpha0   -0.9477   -0.6790   -0.5507   -0.4268    -0.1586
+      alpha1   -0.5437   -0.1164    0.0875    0.2852     0.7015
+     alpha12   -1.7463   -1.1118   -0.8265   -0.5452     0.0110
+      alpha2    0.8301    1.1752    1.3467    1.5263     1.9199
+         tau    2.8413    7.0837   12.4850   26.2675   226.2762
+      alpha0   -0.9384   -0.6731   -0.5493   -0.4286    -0.1649
 ```
 
 One can verify the inference result is coherent with BUGS' result for [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) (here we reported `tau` instead of `sigma` with `sigma = 1 / sqrt(tau)`). 
@@ -205,6 +205,32 @@ julia> using StatsPlots; plot(chn[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]);
 With default settings, we get
 
 ![seeds](https://user-images.githubusercontent.com/5433119/197317818-580f66c4-3f49-4204-8e8c-e149906d73df.svg)
+
+## More Compilation Target
+**Work in Progress: fluid interface**  
+User can also compile the model into a DAG by specifying the target to be `:Graph`.
+
+```julia-repo
+julia> g = compile(model_def, data, :Graph); 
+
+```
+
+returns a [MetaDiGraph](https://juliagraphs.org/MetaGraphsNext.jl/dev/api/#MetaGraphsNext.MetaDiGraph).
+And every vertex in the graph corresponds to a stochastic variable, for example the variable `r[2]` 
+
+```julia-repo
+julia> g[Symbol("r[2]")]
+Variable Name: r[2]
+Variable Type: Observation
+Data: 23
+Parent Nodes: alpha0, b[2]
+Node Function: SymbolicPPL.dbin(1 / (1 + exp(-alpha0 - b[2])), 62)
+```
+
+`Node Function` is a function that produces a distribution given the values of parents stochastic variables.
+
+Compare the `Node Function` of `r[2]` with the original definition, we can see it has been largely simplified, thanks to [Symbolics.jl](https://symbolics.juliasymbolics.org/dev/) that we use internally. 
+
 
 ## More Examples
 We have transcribed all the examples from the first volume of the BUGS Examples, they can be find [here](https://www.multibugs.org/examples/latest/VolumeI.html). All the programs and data are included, and they can be compiled in a similar way as we have demonstrated before.
