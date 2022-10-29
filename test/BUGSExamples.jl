@@ -29,10 +29,14 @@ m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_realistic];
 @time g = compile(m[:model_def], m[:data], :Graph);
 @run g = compile(m[:model_def], m[:data], :Graph);
 
+model = SymbolicPPL.GraphModel(g);
 sampler = ProposeFromPrior()
 s, state = AbstractMCMC.step(Random.default_rng(), model, sampler);
 s, state = AbstractMCMC.step(Random.default_rng(), model, sampler, state);
 
-g = compile(m[:model_def], m[:data], :DynamicPPL);
-using Turing; chn = sample(g(), HMC(0.1, 5), 12000, discard_initial = 1000)
+model = SymbolicPPL.todppl(g)
+using Turing; chn = sample(model(), NUTS(), 12000, discard_initial = 1000)
+
+# blockers
 chn[[:d, Symbol("delta.new"), :tau]] # blockers
+using MCMCChains; Chains(map(x->1/sqrt(x), chn[[:tau]].value)) # sigma

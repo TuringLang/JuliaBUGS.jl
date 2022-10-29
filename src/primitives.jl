@@ -26,11 +26,12 @@ Reshape the array `x` to the shape `dims`, row major order.
 """
 rreshape(v::Vector, dim) = permutedims(reshape(v, reverse(dim)), length(dim):-1:1)    
 
+# functions whose names are the same will be be commented out, for reference only
+
 #
 # Standard functions
 #
 
-# functions whose names are the same will be be commented out, for reference only
 # abs
 # cloglog: from LogExpFunctions
 # cos
