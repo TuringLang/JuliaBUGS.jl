@@ -69,6 +69,7 @@ function getdistribution(g::MetaDiGraph, node::Symbol, value::Dict{Symbol, Real}
 end
 
 function Base.show(io::IO, vinfo::VertexInfo)
+    vinfo = deepcopy(vinfo)
     f_expr = vinfo.f_expr
     arguments = f_expr.args[1].args
     _io = IOBuffer();
@@ -79,13 +80,28 @@ function Base.show(io::IO, vinfo::VertexInfo)
         end
     end
     d_expr = f_expr.args[2].args[1]
-    variables = find_all_variables(d_expr)
-    d_expr = replace_variables(d_expr, variables)
+
+    function numify(expr)
+        MacroTools.prewalk(expr) do sub_expr
+            if Meta.isexpr(sub_expr, :call)
+                for (i, arg) in enumerate(sub_expr.args[2:end])
+                    if arg isa Symbol
+                        sub_expr.args[1+i] = tosymbolic(arg)
+                    elseif arg isa Expr
+                        sub_expr.args[1+i] = numify(arg) 
+                    end
+                end 
+            end
+            return sub_expr
+        end
+    end
+
+    d_expr = numify(d_expr)
     d_expr = eval(d_expr)
     
     println(io, "Variable Name: " * string(vinfo.variable_name))
     println(io, "Variable Type: " * (vinfo.is_data ? "Observation" : "Assumption"))
-    vinfo.is_data && prinln(io, "Data: " * string(vinfo.data))
+    vinfo.is_data && println(io, "Data: " * string(vinfo.data))
     println(io, "Parent Nodes: " * String(take!(_io)))
     print(io, "Node Function: ")
     Base.show(io, d_expr)
