@@ -26,6 +26,8 @@ m = SymbolicPPL.BUGSExamples.EXAMPLES[:stacks];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_simple];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_realistic];
 
+m = SymbolicPPL.BUGSExamples.EXAMPLES[:eyes];
+
 @time g = compile(m[:model_def], m[:data], :Graph);
 @run g = compile(m[:model_def], m[:data], :Graph);
 

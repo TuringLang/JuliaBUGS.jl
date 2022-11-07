@@ -214,5 +214,3 @@ macro bugsmodel_str(s::String)
         end
     end
 end
-
-

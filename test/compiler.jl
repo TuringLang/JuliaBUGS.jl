@@ -239,3 +239,32 @@ expr = @bugsast begin
 end
 
 compile(expr, NamedTuple(), :IR)
+
+# 
+expr = @bugsast begin
+    p[1] = 0.5
+    p[2] = 0.5
+    a[1] = 1
+    for i in 1:2
+        a[i] ~ dcat(p[:])
+        b[a[i]] ~ dnorm(0, 1)
+    end
+end
+
+compile(expr, NamedTuple(), :IR)
+
+# stochastic indexing
+expr = @bugsast begin
+    p[1] = 0.5
+    p[2] = 0.5
+    b[1] = 1
+    b[2] = 2
+    for i in 1:2
+        a[i] ~ dcat(p[:])
+        c[i] = b[a[i]]
+        d[i] ~ dnorm(c[i], 1)
+    end
+end
+
+cs = compile(expr, NamedTuple(), :IR)
+g = compile(expr, NamedTuple(), :Graph)

@@ -9,120 +9,6 @@ end
 
 CompilerState(model_def::Expr) = CompilerState(deepcopy(model_def), Dict{Symbol,Symbolics.Arr{Num}}(), Dict(), Dict(), Dict())
 
-#
-# Regularize ASTs to make them easier to work with
-#
-
-function cumulative(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, lhs_ = cumulative(s1_, s2_))
-            dist = find_tilde_rhs(expr, s1)
-            sub_expr.args[2].args[1] = :cdf 
-            sub_expr.args[2].args[2] = dist
-            return sub_expr
-        else
-            return sub_expr
-        end
-    end
-end
-
-function density(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, lhs_ = density(s1_, s2_))
-            dist = find_tilde_rhs(expr, s1)
-            sub_expr.args[2].args[1] = :pdf 
-            sub_expr.args[2].args[2] = dist
-            return sub_expr
-        else
-            return sub_expr
-        end
-    end
-end
-
-function deviance(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, lhs_ = deviance(s1_, s2_))
-            dist = find_tilde_rhs(expr, s1)
-            sub_expr.args[2].args[1] = :logpdf 
-            sub_expr.args[2].args[2] = dist
-            sub_expr.args[2] = Expr(:call, :*, -2, sub_expr.args[2])
-            return sub_expr
-        else
-            return sub_expr
-        end
-    end
-end
-
-function find_tilde_rhs(expr::Expr, target::Union{Expr, Symbol})
-    dist = nothing
-    MacroTools.postwalk(expr) do sub_expr
-        if isexpr(sub_expr, :(~))
-            if sub_expr.args[1] == target
-                isnothing(dist) || error("Exist two assignments to the same variable.")
-                dist = sub_expr.args[2]
-            end
-        end
-        return sub_expr
-    end
-    isnothing(dist) && error("Error handling cumulative expression: can't find a stochastic assignment for $target.")
-    return dist
-end
-
-function linkfunction(expr::Expr)
-    # link functions in stochastic assignments will be handled later
-    return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, f_(lhs_) = rhs_)
-            if f in keys(INVERSE_LINK_FUNCTION)
-                sub_expr.args[1] = lhs
-                sub_expr.args[2] = Expr(:call, INVERSE_LINK_FUNCTION[f], rhs)
-            else
-                error("Link function $f not supported.")
-            end
-        end
-        return sub_expr
-    end
-end
-
-function censored(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if Meta.isexpr(sub_expr, :censored)
-            l, u = sub_expr.args[2:3]
-
-            if l != :nothing && u != :nothing
-                return Expr(:call, :censored, sub_expr.args...)
-            elseif l != :nothing
-                return Expr(:call, :censored_with_lower, sub_expr.args[1], l)
-            else # u != :nothing
-                return Expr(:call, :censored_with_upper, sub_expr.args[1], u)
-            end
-        else
-            return sub_expr
-        end
-    end
-end
-
-function truncated(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if Meta.isexpr(sub_expr, :truncated)
-            l, u = sub_expr.args[2:3]
-
-            if l != :nothing && u != :nothing
-                return Expr(:call, :truncated, sub_expr.args...)
-            elseif l != :nothing
-                return Expr(:call, :truncated_with_lower, sub_expr.args[1], l)
-            else # u != :nothing
-                return Expr(:call, :truncated_with_upper, sub_expr.args[1], u)
-            end
-        else
-            return sub_expr
-        end
-    end
-end
-
-function transform_expr(model_def::Expr)
-    return model_def |> linkfunction |> censored |> truncated |> cumulative |> density |> deviance
-end
-
 """
     unroll!(expr, compiler_state)
 
@@ -279,9 +165,9 @@ function beautify_ref_symbol(s::Symbol)
 end
 
 """
-    ref_to_symbolic!(expr, compiler_state)
+    ref_to_symbolic(expr, compiler_state)
 
-Return a symbolic variable for the referred array element. May mutate the compiler_state.
+Return a symbolic variable for the referred array element. 
 """
 ref_to_symbolic(s::String) = ref_to_symbolic(Meta.parse(s))
 function ref_to_symbolic(expr::Expr)
@@ -293,8 +179,15 @@ function ref_to_symbolic(expr::Expr)
     ret = tosymbolic(name, indices)
     return ret[indices...]
 end
+
+"""
+    ref_to_symbolic!(expr, compiler_state)
+
+Return a symbolic variable for the referred array element. May mutate the content of `CompilerState.arrays`.
+"""
 function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
     numdims = length(expr.args) - 1
+    @assert numdims > 0 "Indices can't be empty, for `p[1:end]`, use shorthand `p[:]` instead."
     name = expr.args[1]
     indices = expr.args[2:end]
     for (i, index) in enumerate(indices)
@@ -331,6 +224,7 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
                 arraysize[i] = index[end]
             elseif index == :(:)
                 arraysize[i] = 1
+                indices[i] = Colon()
             end
         end
         array = tosymbolic(name, arraysize)
@@ -369,7 +263,6 @@ const __SKIP__ = tosymbolic("SKIP")
 
 # https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/a42082ac90f951f677ce1e2a91cd1a0ddd4306c6/src/substitute.jl#L1
 # modified to handle `missing` data
-# TODO: find a way to achieve the same functionality without overwriting SymbolicUtils.substitute
 function SymbolicUtils.substitute(expr, dict; fold=true)
     haskey(dict, expr) && return ismissing(dict[expr]) ? expr : dict[expr]
 
@@ -524,10 +417,22 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
             end
 
             if MacroTools.isexpr(lhs, :ref)
+                lhs_expr = lhs
                 lhs = ref_to_symbolic!(lhs, compiler_state)
                 if Symbolics.isequal(lhs, __SKIP__)
                     error("Exists unresolvable indexing at $arg.")
                 end
+
+                shape = size(lhs)
+                if all(x -> x == 1, shape)
+                    lhs = Symbolics.scalarize(lhs)
+                elseif count(x -> x > 1, shape) == 1 # multivariate Distribution
+                    # TODO
+                    error("Multivariate Distribution not supported for now.")
+                else
+                    error("LHS of stochastic assignment must be a scalar or a vector.")
+                end
+                
                 tosymbol(lhs) isa Symbol || error("LHS need to be simple.")
             else
                 lhs = tosymbolic(lhs)
@@ -560,6 +465,12 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
             
             if haskey(compiler_state.logicalrules, lhs)
                 if !isa(resolve(lhs, compiler_state.logicalrules), Real)
+                    # A corner case is using stochastic variable to index observations
+                    # e.g. a[i] ~ dcat(p[:]); x[a[i]] ~ Normal(0, 1)
+                    # in general, this usage should not be allowed, as it may cause repeated definition
+                    # of the same variable.
+                    # This suggests that we reserve stochastic indexing as a special syntax only
+                    # for writing mixture models
                     error("A stochastic variable cannot be used as LHS of logical assignments unless it's an observation.")
                 end
             end
@@ -781,9 +692,11 @@ function refinindices(expr, compiler_state)
     MacroTools.prewalk(expr) do sub_expr
         if Meta.isexpr(sub_expr, :ref)
             for arg in sub_expr.args[2:end]
-                Meta.isexpr(arg, :ref) &&
-                    Symbolics.isequal(ref_to_symbolic!(arg, compiler_state), __SKIP__) && 
-                    error("$sub_expr's index $arg can't be resolved.")
+                if Meta.isexpr(arg, :ref) 
+                    if !isa(resolve(arg, compiler_state.logicalrules), Real)
+                        error("$sub_expr's index $arg can't be resolved.")
+                    end
+                end
                 refinindices(arg, compiler_state)
             end
         end
@@ -791,33 +704,26 @@ function refinindices(expr, compiler_state)
     end
 end
 
-function is_fully_unrolled(expr, compiler_state::CompilerState)
-    # check if any loop or if remains
-    for sub_expr in expr.args
-        Meta.isexpr(sub_expr, (:~, :(=), :processed)) ||
-            error("$sub_expr can't be resolved.")
+function check_expr(expr, compiler_state::CompilerState)
+    expr = deepcopy(compiler_state.model_def)
+    while true
+        unroll!(expr, compiler_state) ||
+        resolveif!(expr, compiler_state) ||
+        break
     end
 
-    # check if all array indices are resolvable
+    unresolved_exprs = [arg for arg in expr.args if !Meta.isexpr(arg, (:~, :(=)))]
+    if !isempty(unresolved_exprs)
+        err_msg = IOBuffer()
+        for arg in expr.args
+            println(err_msg, "$arg can't be resolved. ")
+        end
+        error(String(take!(err_msg)))
+    end  
+
     refinindices(expr, compiler_state)
 end
 
-function check_expr(expr, compiler_state::CompilerState)
-    is_fully_unrolled(expr, compiler_state)
-
-    # check if there exist using observed stochastic variables for loop bounds or indexing
-    expr_copy = deepcopy(compiler_state.model_def)
-    while true
-        unroll!(expr_copy, compiler_state) ||
-        resolveif!(expr_copy, compiler_state) ||
-        break
-    end
-    try 
-        is_fully_unrolled(expr_copy, compiler_state)
-    catch e
-        error("Check the model definition for using observed stochastic variables as loop bounds or indexing.")
-    end
-end
 
 """
     compile(model_def, data, target)
@@ -846,6 +752,8 @@ function compile(model_def::Expr, data::NamedTuple, target::Symbol)
     addstochasticrules!(expr, compiler_state)
     extract_observations!(compiler_state)
 
+    # `check_expr` will try to unroll the origianl expr again to detect to test 
+    # using observed stochastic variables as loop bounds or indexing.
     check_expr(expr, compiler_state)
 
     target == :IR && return compiler_state

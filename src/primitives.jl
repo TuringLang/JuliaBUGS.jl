@@ -26,6 +26,10 @@ Reshape the array `x` to the shape `dims`, row major order.
 """
 rreshape(v::Vector, dim) = permutedims(reshape(v, reverse(dim)), length(dim):-1:1)    
 
+@register_symbolic get_index(x::Array, index)
+@register_symbolic get_index(x::Array, index::Array)
+get_index(x, i) = x[i...]
+
 # functions whose names are the same will be be commented out, for reference only
 
 #
@@ -294,3 +298,34 @@ function eval_registration(ex)
     eval(ex)
     return def[:name]
 end
+
+"""
+    remedy for indexing with stochastic variables
+
+```
+   a ~ dnorm(b, 1)
+   b = c[d]
+   d ~ dcat([0.5, 0.5]) 
+```
+
+can be reriten to 
+
+```
+   a ~ dnorm(b, 1)
+   b = sel(c[], d) # c is a vector
+   d ~ dcat([0.5, 0.5]) 
+```
+
+this will create an edge between a and every element of c, may not be efficient, but probably unavoidable.
+
+Possible Alternative:
+* this idea will make SPPL general-purpose, as it basically introduce control flow. *
+lazily evaluate the indexing, and only create the edge when the value is known.
+can also enumerate the graphs under the control flow. 
+
+I like the altenative approach better, as we can also make the graph dynamic in pytorch vs tf sense.
+it also has deep connection to the efficient inference by "cross-compile" general-purpose probpl with DAG
+
+"""
+# @register_symbolic sel(a::Vector, i::Int)
+# sel(a, i) = a[i] 

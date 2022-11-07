@@ -26,7 +26,10 @@ include("Volume_I/Seeds.jl")
 include("Volume_I/Stacks.jl")
 include("Volume_I/Surgical.jl")
 
+include("Volume_II/Eyes.jl")
+
 LINKS = (
+    # Volume I
     blockers = "https://chjackson.github.io/openbugsdoc/Examples/Blockers.html",    
     bones = "https://chjackson.github.io/openbugsdoc/Examples/Bones.html",
     dogs = "https://chjackson.github.io/openbugsdoc/Examples/Dogs.html",
@@ -48,6 +51,9 @@ LINKS = (
     stacks = "https://chjackson.github.io/openbugsdoc/Examples/Stacks.html",
     surgical_simple = "https://chjackson.github.io/openbugsdoc/Examples/Surgical.html",
     surgical_realistic = "https://chjackson.github.io/openbugsdoc/Examples/Surgical.html", 
+
+    # Volume II
+    eyes = "https://chjackson.github.io/openbugsdoc/Examples/Eyes.html",
 )
 
 EXAMPLES = (
@@ -71,7 +77,9 @@ EXAMPLES = (
     seeds = seeds,
     stacks = stacks,
     surgical_simple = surgical_simple,
-    surgical_realistic = surgical_realistic
+    surgical_realistic = surgical_realistic,
+
+    eyes = eyes,
 )
 
 end

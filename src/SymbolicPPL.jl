@@ -16,6 +16,7 @@ using Random
 
 include("bugsast.jl")
 include("graphs.jl")
+include("transform_ast.jl")
 include("compiler.jl")
 include("primitives.jl")
 include("gibbs.jl")

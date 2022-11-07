@@ -68,6 +68,7 @@ function getdistribution(g::MetaDiGraph, node::Symbol, value::Dict{Symbol, Real}
     return (g[node].f)(args...)
 end
 
+# TODO: support `get_index` for stochastic indexing
 function Base.show(io::IO, vinfo::VertexInfo)
     vinfo = deepcopy(vinfo)
     f_expr = vinfo.f_expr
