@@ -10,7 +10,7 @@ import Base: step
 const NA = :missing
 
 const DISTRIBUTIONS = [:truncated, :censored, :dgamma, :dnorm, :dbeta, :dbin, :dcat, :dexp, :dpois, :dflat, 
-    :dunif, :dbern, :bar]
+    :dunif, :dbern, :bar, :dmnorm, :ddirch, :dwish, ]
 
 USER_DISTRIBUTIONS = []
 
@@ -62,7 +62,7 @@ ranked(v::Vector, i::Int) = v[sortperm(v)[i]]; @register_symbolic ranked(v::Arra
 # round
 sd(v::Vector) = Statistics.std(v); sd(v::Symbolics.Arr{Num, 1}) = Statistics.std(Symbolics.scalarize(v))
 softplus(x) = log1pexp(x)
-sort(v::Vector) = sort(v); @register_symbolic sort(v::Array)
+sort(v::Vector) = Base.sort(v); @register_symbolic sort(v::Array)
 step(x) = ifelse(x > 0, 1, 0); step(x::Num) = IfElse.ifelse(x>1,1,0)
 # sum
 # trunc

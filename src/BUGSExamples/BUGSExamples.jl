@@ -27,6 +27,7 @@ include("Volume_I/Stacks.jl")
 include("Volume_I/Surgical.jl")
 
 include("Volume_II/Eyes.jl")
+include("Volume_II/BiRats.jl")
 
 LINKS = (
     # Volume I
@@ -53,7 +54,9 @@ LINKS = (
     surgical_realistic = "https://chjackson.github.io/openbugsdoc/Examples/Surgical.html", 
 
     # Volume II
+    birats = "https://chjackson.github.io/openbugsdoc/Examples/BiRats.html",
     eyes = "https://chjackson.github.io/openbugsdoc/Examples/Eyes.html",
+
 )
 
 EXAMPLES = (
@@ -79,6 +82,7 @@ EXAMPLES = (
     surgical_simple = surgical_simple,
     surgical_realistic = surgical_realistic,
 
+    birats = birats,
     eyes = eyes,
 )
 

@@ -141,6 +141,10 @@ end
 tosymbolic(variable) = variable
 
 tosymbol(x) = beautify_ref_symbol(Symbolics.tosymbol(x))
+function tosymbol(x::Symbolics.Arr{Num})
+    ex = Symbolics.toexpr(x)
+    return "$(ex.args[2])" * "[" * join([string(i) for i in ex.args[3:end]], ", ") * "]" |> Symbol
+end
 
 """
     beautify_ref_symbol(s)
@@ -366,6 +370,14 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
                 if Symbolics.isequal(lhs, __SKIP__)
                     continue
                 end
+
+                if lhs isa Symbolics.Arr
+                    elems = Symbolics.scalarize(lhs)
+                    for i in eachindex(lhs)
+                        compiler_state.logicalrules[elems[i]] = lhs[i]
+                    end
+                end
+
                 tosymbol(lhs) isa Symbol || error("LHS need to be simple.")
             else
                 lhs = tosymbolic(lhs)
@@ -417,23 +429,19 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
             end
 
             if MacroTools.isexpr(lhs, :ref)
-                lhs_expr = lhs
                 lhs = ref_to_symbolic!(lhs, compiler_state)
                 if Symbolics.isequal(lhs, __SKIP__)
                     error("Exists unresolvable indexing at $arg.")
                 end
 
-                shape = size(lhs)
-                if all(x -> x == 1, shape)
-                    lhs = Symbolics.scalarize(lhs)
-                elseif count(x -> x > 1, shape) == 1 # multivariate Distribution
-                    # TODO
-                    error("Multivariate Distribution not supported for now.")
-                else
-                    error("LHS of stochastic assignment must be a scalar or a vector.")
+                if lhs isa Symbolics.Arr
+                    elems = Symbolics.scalarize(lhs)
+                    for i in eachindex(lhs)
+                        compiler_state.logicalrules[elems[i]] = lhs[i]
+                    end
                 end
-                
-                tosymbol(lhs) isa Symbol || error("LHS need to be simple.")
+
+                @assert isa(tosymbol(lhs), Symbol) "LHS need to be simple."
             else
                 lhs = tosymbolic(lhs)
             end
@@ -600,7 +608,7 @@ function scalarize(ex::Num, compiler_state::CompilerState)
             for a in new_arg
                 vars = Symbolics.get_variables(a)
                 for v in vars
-                    @assert v in keys(compiler_state.stochasticrules)
+                    @assert v in keys(compiler_state.stochasticrules) "$v should be a stochastic variable."
                     push!(args, tosymbol(v))
                 end
             end

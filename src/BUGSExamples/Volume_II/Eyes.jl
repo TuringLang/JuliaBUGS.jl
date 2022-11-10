@@ -1,5 +1,4 @@
 # https://chjackson.github.io/openbugsdoc/Examples/Eyes.html
-# Indexing with stochastic variable, not supported yet
 
 eyes = (
     name = "eyes", 
