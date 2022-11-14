@@ -51,12 +51,7 @@ function tosymbolic(variable::Symbol)
         return ref_to_symbolic(string(variable))
     end
 
-    variable_with_metadata = SymbolicUtils.setmetadata(
-        SymbolicUtils.Sym{Real}(variable),
-        Symbolics.VariableSource,
-        (:variables, variable),
-    )
-    return Symbolics.wrap(variable_with_metadata)
+    return create_symbolic_variable(variable)
 end
 function tosymbolic(expr::Expr)
     if MacroTools.isexpr(expr, :ref)  
@@ -68,6 +63,15 @@ function tosymbolic(expr::Expr)
     end
 end
 tosymbolic(variable) = variable
+
+function create_symbolic_variable(variable::Symbol)
+    variable_with_metadata = SymbolicUtils.setmetadata(
+        SymbolicUtils.Sym{Real}(variable),
+        Symbolics.VariableSource,
+        (:variables, variable),
+    )
+    return Symbolics.wrap(variable_with_metadata)
+end
 
 function create_symbolic_array(array_name::Symbol, array_size::Vector)
     array_ranges = Tuple([(1:i) for i in array_size])

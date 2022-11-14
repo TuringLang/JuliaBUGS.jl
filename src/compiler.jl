@@ -200,8 +200,9 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState, skip_colon=
 
                 if lhs isa Symbolics.Arr
                     elems = Symbolics.scalarize(lhs)
-                    for i in eachindex(lhs)
-                        compiler_state.logicalrules[elems[i]] = lhs[i]
+                    lhs = create_symbolic_variable(tosymbol(lhs))
+                    for i in eachindex(elems)
+                        compiler_state.logicalrules[elems[i]] = get_index(lhs, i)
                     end
                 end
 
@@ -264,8 +265,10 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState, skip_col
 
                 if lhs isa Symbolics.Arr
                     elems = Symbolics.scalarize(lhs)
-                    for i in eachindex(lhs)
-                        compiler_state.logicalrules[elems[i]] = lhs[i]
+                    lhs = create_symbolic_variable(tosymbol(lhs))
+                    for i in eachindex(elems)
+                        # compiler_state.logicalrules[elems[i]] = get_index(lhs, collect(Tuple(i)))
+                        compiler_state.logicalrules[elems[i]] = get_index(lhs, i)
                     end
                 end
 
@@ -414,9 +417,7 @@ julia> using SymbolicPPL; SymbolicPPL.scalarize(foo(x[1:3]))
 """
 function scalarize(ex::Num, compiler_state::CompilerState)
     istree(Symbolics.unwrap(ex)) || return ex, Dict()
-    scalarized = symbolic_eval(Symbolics.scalarize(ex), compiler_state.logicalrules)
-    # ex_val = Symbolics.unwrap(Symbolics.scalarize(ex))
-    ex_val = Symbolics.unwrap(scalarized)
+    ex_val = Symbolics.unwrap(Symbolics.scalarize(ex))
     if !isa(ex_val, SymbolicUtils.Term) 
         ex_val = SymbolicUtils.toterm(ex_val)
     end

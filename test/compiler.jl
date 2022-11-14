@@ -332,13 +332,8 @@ data = (
 )
     
 cs = compile(model_def, data, :IR)
-@run o = SymbolicPPL.gen_output(cs)
+o = SymbolicPPL.gen_output(cs)
 g = compile(model_def, data, :Graph)
-
-for k in keys(o)
-    println(k)
-    println(o[k])
-end
 
 # test for erroring when LHS of logical assignment is data array element
 let err = nothing

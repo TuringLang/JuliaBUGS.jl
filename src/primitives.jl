@@ -26,6 +26,7 @@ Reshape the array `x` to the shape `dims`, row major order.
 """
 rreshape(v::Vector, dim) = permutedims(reshape(v, reverse(dim)), length(dim):-1:1)    
 
+@register_symbolic get_index(x, index)
 @register_symbolic get_index(x::Array, index)
 @register_symbolic get_index(x::Array, index::Array)
 get_index(x, i) = x[i...]
