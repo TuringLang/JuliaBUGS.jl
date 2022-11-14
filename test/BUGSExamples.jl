@@ -27,7 +27,11 @@ m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_simple];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_realistic];
 
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:eyes];
+m = SymbolicPPL.BUGSExamples.EXAMPLES[:birats];
 
+cs = compile(m[:model_def], m[:data], :IR);
+o = SymbolicPPL.gen_output(cs);
+SymbolicPPL.to_metadigraph(o)
 @time g = compile(m[:model_def], m[:data], :Graph);
 @run g = compile(m[:model_def], m[:data], :Graph);
 
@@ -42,3 +46,8 @@ using Turing; chn = sample(model(), NUTS(), 12000, discard_initial = 1000)
 # blockers
 chn[[:d, Symbol("delta.new"), :tau]] # blockers
 using MCMCChains; Chains(map(x->1/sqrt(x), chn[[:tau]].value)) # sigma
+
+for k in keys(o)
+    println(k)
+    println(o[k])
+end

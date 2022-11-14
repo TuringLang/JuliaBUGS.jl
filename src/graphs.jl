@@ -107,3 +107,5 @@ function Base.show(io::IO, vinfo::VertexInfo)
     print(io, "Node Function: ")
     Base.show(io, d_expr)
 end
+
+# TODO: plotting

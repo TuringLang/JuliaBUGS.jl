@@ -268,3 +268,89 @@ end
 
 cs = compile(expr, NamedTuple(), :IR)
 g = compile(expr, NamedTuple(), :Graph)
+
+# test for array LHS
+expr = @bugsast begin
+    g[1:2] = sort(x[:])
+    y = g[1] + 2
+end
+
+cs = compile(expr, (x = [4, 2],), :IR)
+@test SymbolicPPL.resolve(SymbolicPPL.tosymbolic(:y), cs.logicalrules) == 4
+
+# test for that order of expressions shouldn't affect colon indexing's correctness
+expr1 = @bugsast begin
+    u[1] = 2
+    u[2] = 3
+    a = mean(u[:])
+end
+
+expr2 = @bugsast begin
+    a = mean(u[:])
+    u[1] = 2
+    u[2] = 3
+end
+
+@test Symbolics.isequal(compile(expr1, NamedTuple(), :IR).logicalrules[tosymbolic(:a)], compile(expr2, NamedTuple(), :IR).logicalrules[tosymbolic(:a)])
+
+# corner case, need colon indexing for for loop bounds
+expr = @bugsast begin
+    a[1] = sum(u[1:2])
+    a[2] = sum(u[2:3])
+
+    B = sum(a[:])
+    for i in 1:B
+        v[i] = 1
+    end
+end
+
+data = (u = [1, 2, 3],)
+
+compile(expr, data, :IR).logicalrules
+
+# test for multivariate distributions, simplified from `BiRate`
+using SymbolicPPL: rreshape
+model_def = bugsmodel"""
+    for( i in 1 : 2 ) {
+        beta[i , 1 : 2] ~ dmnorm(mu.beta[], R[ , ])
+        for( j in 1 : 3 ) {
+            Y[i, j] ~ dnorm(mu[i , j], tauC)
+            mu[i, j] <- beta[i, 1] + beta[i, 2] * x[j]
+        }
+    }
+    mu.beta[1 : 2] ~ dmnorm(mean[], prec[ , ])
+    R[1 : 2 , 1 : 2] ~ dwish(Omega[ , ], 2)
+    tauC ~ dgamma(0.001, 0.001)
+"""
+
+data = (
+    x = [8.0, 15.0, 22.0, 29.0, 36.0], N = 30, T = 5,
+    Omega = rreshape([200, 0, 0, 0.2], (2, 2)),   
+    mean = [0,0],
+    prec = rreshape([1.0E-6, 0, 0, 1.0E-6], (2, 2)),
+    Y = rreshape([151, 199, 246, 283, 320, 145, ],(2,3)),
+)
+    
+cs = compile(model_def, data, :IR)
+@run o = SymbolicPPL.gen_output(cs)
+g = compile(model_def, data, :Graph)
+
+for k in keys(o)
+    println(k)
+    println(o[k])
+end
+
+# test for erroring when LHS of logical assignment is data array element
+let err = nothing
+    try
+        cs = compile(
+            @bugsast begin
+                u[1] = 2
+            end, 
+            (u = ones(2), ), :IR
+        )    
+    catch err
+    end
+
+    @test err isa Exception
+end

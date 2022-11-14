@@ -1,13 +1,26 @@
-
 struct CompilerState
     model_def::Expr
     arrays::Dict{Symbol,Symbolics.Arr{Num}}
+    data_arrays::Dict{Symbol,Symbolics.Arr{Num}} # keep track of data arrays, the size of these arrays are not inferred and not allowed to change
     logicalrules::Dict
     stochasticrules::Dict
     observations::Dict
 end
 
-CompilerState(model_def::Expr) = CompilerState(deepcopy(model_def), Dict{Symbol,Symbolics.Arr{Num}}(), Dict(), Dict(), Dict())
+function CompilerState(model_def::Expr) 
+    return CompilerState(
+        deepcopy(model_def), 
+        Dict{Symbol,Symbolics.Arr{Num}}(),
+        Dict{Symbol,Symbolics.Arr{Num}}(),
+        Dict(), 
+        Dict(), 
+        Dict()
+    )
+end
+
+# Regarding the correctness of the unrolling approach:
+# - BUGS doesn't allow repeated assignments, loop bounds are defined outside the loop
+# - assignments describe edges, finite graph indicated finite amount of assignments
 
 """
     unroll!(expr, compiler_state)
@@ -22,7 +35,7 @@ function unroll!(expr::Expr, compiler_state::CompilerState)
                 unrolled = unroll(arg, compiler_state)
                 splice!(expr.args, i, unrolled.args)
                 hasunrolled = true
-                # unroll one loop at a time to avoid complication raised by mutation
+                # unroll one loop at a time to avoid complication caused by mutation
                 break
             end
         end
@@ -101,199 +114,10 @@ function resolveif!(expr::Expr, compiler_state::CompilerState)
     return squashed
 end
 
-"""
-    tosymbolic(variable)
 
-Return symbolic variable for multiple types of `variable`s. 
-"""
-tosymbolic(variable::Union{Int, AbstractFloat}) = Num(variable)
-tosymbolic(variable::String) = tosymbolic(Symbol(variable))
-function tosymbolic(variable::Symbol)
-    if Meta.isexpr(Meta.parse(string(variable)), :ref)
-        return ref_to_symbolic(string(variable))
-    end
+function ref_to_symbolic end
 
-    variable_with_metadata = SymbolicUtils.setmetadata(
-        SymbolicUtils.Sym{Real}(variable),
-        Symbolics.VariableSource,
-        (:variables, variable),
-    )
-    return Symbolics.wrap(variable_with_metadata)
-end
-function tosymbolic(expr::Expr)
-    if MacroTools.isexpr(expr, :ref)  
-        return ref_to_symbolic(expr)
-    else
-        variables = find_all_variables(expr)
-        expr = replace_variables(expr, variables)
-        return eval(expr)
-    end
-end
-function tosymbolic(array_name::Symbol, array_size::Vector)
-    array_ranges = Tuple([(1:i) for i in array_size])
-    variable_with_metadata = SymbolicUtils.setmetadata(
-        SymbolicUtils.setmetadata(
-            SymbolicUtils.Sym{Array{Real, (length)(array_ranges)}}(array_name), Symbolics.ArrayShapeCtx, array_ranges), 
-            Symbolics.VariableSource, 
-            (:variables, array_name))
-    return Symbolics.wrap(variable_with_metadata)
-end
-tosymbolic(variable) = variable
-
-tosymbol(x) = beautify_ref_symbol(Symbolics.tosymbol(x))
-function tosymbol(x::Symbolics.Arr{Num})
-    ex = Symbolics.toexpr(x)
-    return "$(ex.args[2])" * "[" * join([string(i) for i in ex.args[3:end]], ", ") * "]" |> Symbol
-end
-
-"""
-    beautify_ref_symbol(s)
-
-`Symbolics.tosymbol` return `getindex(g, 1)` for `g[1]`. This function beautifies it to `g[1]`.
-"""
-function beautify_ref_symbol(s::Symbol)
-    m = match(r"getindex\((.*),\s(.*)\)", string(s))
-    if !isnothing(m)
-        indices = String[]
-        name = :nothing
-        while !isnothing(m)
-            push!(indices, m.captures[end])
-            name = m.captures[1]
-            m = match(r"(.*),\s(.*)",  string(m.captures[1]))
-        end
-        indices = reverse(map(Meta.parse, indices))
-        return Symbol("$name$indices")
-    else
-        return s
-    end
-end
-
-"""
-    ref_to_symbolic(expr, compiler_state)
-
-Return a symbolic variable for the referred array element. 
-"""
-ref_to_symbolic(s::String) = ref_to_symbolic(Meta.parse(s))
-function ref_to_symbolic(expr::Expr)
-    name = expr.args[1]
-    indices = map(eval, expr.args[2:end]) # deal with case like a[:(2-1):2]
-    if any(x->!isa(x, Integer), indices)
-        error("Only support integer indices.")
-    end
-    ret = tosymbolic(name, indices)
-    return ret[indices...]
-end
-
-"""
-    ref_to_symbolic!(expr, compiler_state)
-
-Return a symbolic variable for the referred array element. May mutate the content of `CompilerState.arrays`.
-"""
-function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState)
-    numdims = length(expr.args) - 1
-    @assert numdims > 0 "Indices can't be empty, for `p[1:end]`, use shorthand `p[:]` instead."
-    name = expr.args[1]
-    indices = expr.args[2:end]
-    for (i, index) in enumerate(indices)
-        if index isa Expr || (index isa Symbol && index != :(:))
-            if Meta.isexpr(index, :call) && index.args[1] == :(:)
-                lb = resolve(index.args[2], compiler_state.logicalrules) 
-                ub = resolve(index.args[3], compiler_state.logicalrules)
-                if lb isa Real && ub isa Real
-                    indices[i].args[2] = lb
-                    indices[i].args[3] = ub
-                else
-                    return __SKIP__
-                end
-            end
-
-            resolved_index = resolve(tosymbolic(index), compiler_state.logicalrules)
-            if !isa(resolved_index, Union{Real, UnitRange})
-                return __SKIP__
-            end 
-
-            if isa(resolved_index, Real) 
-                isinteger(resolved_index) || error("Index of $expr needs to be integers.")
-                indices[i] = Integer(resolved_index)
-            else
-                indices[i] = resolved_index
-            end
-        end
-    end
-
-    if !haskey(compiler_state.arrays, name)
-        arraysize = deepcopy(indices)
-        for (i, index) in enumerate(indices)
-            if index isa UnitRange
-                arraysize[i] = index[end]
-            elseif index == :(:)
-                arraysize[i] = 1
-                indices[i] = Colon()
-            end
-        end
-        array = tosymbolic(name, arraysize)
-        compiler_state.arrays[name] = array
-        return array[indices...]
-    end
-
-    # if array exists
-    array = compiler_state.arrays[name]
-    if ndims(array) == numdims
-        array_size = collect(size(array))
-        for (i, index) in enumerate(indices)
-            if index isa UnitRange
-                array_size[i] = max(array_size[i], index[end]) # in case 'high' is Expr
-            elseif index == :(:)
-                indices[i] = Colon()
-            elseif index isa Integer
-                array_size[i] = max(indices[i], array_size[i])
-            else
-                error("Indexing syntax is wrong.")
-            end
-        end
-
-        if all(array_size .== size(array))
-            return array[indices...]
-        else
-            compiler_state.arrays[name] = tosymbolic(name, array_size)
-            return compiler_state.arrays[name][indices...]
-        end
-    end
-
-    error("Dimension doesn't match!")
-end
-
-const __SKIP__ = tosymbolic("SKIP")
-
-# https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/a42082ac90f951f677ce1e2a91cd1a0ddd4306c6/src/substitute.jl#L1
-# modified to handle `missing` data
-function SymbolicUtils.substitute(expr, dict; fold=true)
-    haskey(dict, expr) && return ismissing(dict[expr]) ? expr : dict[expr]
-
-    if istree(expr)
-        op = substitute(operation(expr), dict; fold=fold)
-        if fold
-            canfold = !(op isa SymbolicUtils.Symbolic)
-            args = map(SymbolicUtils.unsorted_arguments(expr)) do x
-                x′ = substitute(x, dict; fold=fold)
-                canfold = canfold && !(x′ isa SymbolicUtils.Symbolic)
-                x′
-            end
-            canfold && return ismissing(op(args...)) ? expr : op(args...)
-            args
-        else
-            args = map(x->substitute(x, dict, fold=fold), SymbolicUtils.unsorted_arguments(expr))
-        end
-
-        SymbolicUtils.similarterm(expr,
-                    op,
-                    args,
-                    SymbolicUtils.symtype(expr);
-                    metadata=SymbolicUtils.metadata(expr))
-    else
-        expr
-    end
-end
+function ref_to_symbolic! end
 
 """
     resolve(variable, compiler_state)
@@ -344,29 +168,32 @@ Base.isequal(::SymbolicUtils.Symbolic, ::Missing) = false
 
 Base.in(key::Num, vs::Vector) = any(broadcast(Symbolics.isequal, key, vs))
 
-addlogicalrules!(data::NamedTuple, compiler_state::CompilerState) =
+addlogicalrules!(data::NamedTuple, compiler_state::CompilerState, skip_colon=true) =
     addlogicalrules!(Dict(pairs(data)), compiler_state)
-function addlogicalrules!(data::Dict, compiler_state::CompilerState)
+function addlogicalrules!(data::Dict, compiler_state::CompilerState, skip_colon=true)
     for (key, value) in data
         if value isa Number
             compiler_state.logicalrules[tosymbolic(key)] = value
         elseif value isa Array
-            sym_array = tosymbolic(key, collect(size(value)))
+            sym_array = create_symbolic_array(key, collect(size(value)))
             compiler_state.logicalrules[sym_array] = value
-            compiler_state.arrays[key] = sym_array
+            compiler_state.data_arrays[key] = sym_array
         else
             error("Value type not supported.")
         end
     end
 end
-function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
+function addlogicalrules!(expr::Expr, compiler_state::CompilerState, skip_colon=true)
     addednewrules = false
     for (i, arg) in enumerate(expr.args)
         if arg.head == :(=)
             lhs, rhs = arg.args
 
             if MacroTools.isexpr(lhs, :ref)
-                lhs = ref_to_symbolic!(lhs, compiler_state)
+                if lhs.args[1] in keys(compiler_state.data_arrays)
+                    error("Elements of data arrays can not be re-assigned.")
+                end
+                lhs = ref_to_symbolic!(lhs, compiler_state, skip_colon)
                 if Symbolics.isequal(lhs, __SKIP__)
                     continue
                 end
@@ -378,13 +205,13 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
                     end
                 end
 
-                tosymbol(lhs) isa Symbol || error("LHS need to be simple.")
+                @assert tosymbol(lhs) isa Symbol "LHS need to be simple."
             else
                 lhs = tosymbolic(lhs)
             end
 
             variables = find_all_variables(rhs)
-            rhs, ref_variables = replace_variables(rhs, variables, compiler_state)
+            rhs, ref_variables = replace_variables(rhs, variables, compiler_state, skip_colon)
             if !isempty(ref_variables) && Symbolics.isequal(ref_variables[1], __SKIP__)
                 continue
             end
@@ -402,8 +229,9 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState)
     return addednewrules
 end
 
-function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
-    for arg in expr.args
+function addstochasticrules!(expr::Expr, compiler_state::CompilerState, skip_colon=true)
+    addednewrules = false
+    for (i, arg) in enumerate(expr.args)
         if arg.head == :(~)
             lhs, rhs = arg.args
 
@@ -429,9 +257,9 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
             end
 
             if MacroTools.isexpr(lhs, :ref)
-                lhs = ref_to_symbolic!(lhs, compiler_state)
+                lhs = ref_to_symbolic!(lhs, compiler_state, skip_colon)
                 if Symbolics.isequal(lhs, __SKIP__)
-                    error("Exists unresolvable indexing at $arg.")
+                    continue
                 end
 
                 if lhs isa Symbolics.Arr
@@ -456,7 +284,7 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
             end
 
             variables = find_all_variables(rhs)
-            rhs, ref_variables = replace_variables(rhs, variables, compiler_state)
+            rhs, ref_variables = replace_variables(rhs, variables, compiler_state, skip_colon)
             if !isempty(ref_variables) && Symbolics.isequal(ref_variables[1], __SKIP__)
                 continue
             end
@@ -467,24 +295,22 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState)
             end
 
             if haskey(compiler_state.stochasticrules, lhs)
-                # Symbolics.isequal(sym_rhs, compiler_state.stochasticrules[lhs]) && continue
                 error("Repeated definition for $(lhs)")
             end
             
             if haskey(compiler_state.logicalrules, lhs)
                 if !isa(resolve(lhs, compiler_state.logicalrules), Real)
-                    # A corner case is using stochastic variable to index observations
-                    # e.g. a[i] ~ dcat(p[:]); x[a[i]] ~ Normal(0, 1)
-                    # in general, this usage should not be allowed, as it may cause repeated definition
-                    # of the same variable.
-                    # This suggests that we reserve stochastic indexing as a special syntax only
-                    # for writing mixture models
+                    # Stochastic variables used for indices of the LHS is not allowed.
                     error("A stochastic variable cannot be used as LHS of logical assignments unless it's an observation.")
                 end
             end
             compiler_state.stochasticrules[lhs] = sym_rhs
+            addednewrules = true
+            expr.args[i] = Expr(:stoch_processed)
         end
     end
+    
+    return addednewrules
 end
 
 """
@@ -492,15 +318,15 @@ end
 
 Replace all the variables in the expression with a symbolic variable.
 """
-replace_variables(rhs::Number, variables, compiler_state::CompilerState) = rhs, []
-function replace_variables(rhs::Expr, variables, compiler_state::CompilerState)
+replace_variables(rhs::Number, variables, compiler_state::CompilerState, skip_colon=true) = rhs, []
+function replace_variables(rhs::Expr, variables, compiler_state::CompilerState, skip_colon=true)
+    canresolve = true
     ref_variables = []
     replaced_rhs = MacroTools.prewalk(rhs) do sub_expr
         if MacroTools.isexpr(sub_expr, :ref)
-            sym_var = ref_to_symbolic!(sub_expr, compiler_state)
+            sym_var = ref_to_symbolic!(sub_expr, compiler_state, skip_colon)
             if Symbolics.isequal(sym_var, __SKIP__) # Some index can't be resolved in this generation
-                push!(ref_variables, __SKIP__) 
-                return sub_expr
+                canresolve = false 
             end
             push!(ref_variables, sym_var)
             return sym_var
@@ -510,7 +336,7 @@ function replace_variables(rhs::Expr, variables, compiler_state::CompilerState)
             return sub_expr
         end
     end
-    return replaced_rhs, ref_variables
+    return replaced_rhs, canresolve ? ref_variables : [__SKIP__, ]
 end
 function replace_variables(ex::Expr, variables)
     return MacroTools.prewalk(ex) do sub_expr
@@ -560,9 +386,10 @@ function extract_observations!(compiler_state::CompilerState)
                     break
                 end
                 var = k.val.arguments[1].name
-                sym_arr = compiler_state.arrays[var]
+                sym_arr = compiler_state.data_arrays[var]
                 @assert haskey(compiler_state.logicalrules, sym_arr) "Can't find the variable $k in the logical rules."
                 index = Tuple(Meta.parse(string(tosymbol(k))).args[2:end])
+                # potentially modify the referenced array, BangBang version should avoid this problem
                 setindex!!(compiler_state.logicalrules[sym_arr], missing, index...)
             end
         end
@@ -587,7 +414,9 @@ julia> using SymbolicPPL; SymbolicPPL.scalarize(foo(x[1:3]))
 """
 function scalarize(ex::Num, compiler_state::CompilerState)
     istree(Symbolics.unwrap(ex)) || return ex, Dict()
-    ex_val = Symbolics.unwrap(Symbolics.scalarize(ex))
+    scalarized = symbolic_eval(Symbolics.scalarize(ex), compiler_state.logicalrules)
+    # ex_val = Symbolics.unwrap(Symbolics.scalarize(ex))
+    ex_val = Symbolics.unwrap(scalarized)
     if !isa(ex_val, SymbolicUtils.Term) 
         ex_val = SymbolicUtils.toterm(ex_val)
     end
@@ -608,7 +437,24 @@ function scalarize(ex::Num, compiler_state::CompilerState)
             for a in new_arg
                 vars = Symbolics.get_variables(a)
                 for v in vars
-                    @assert v in keys(compiler_state.stochasticrules) "$v should be a stochastic variable."
+                    # make sure the arguments of a node function are other stochastic nodes
+                    # this also implicitly checks that all array indexings appear on the RHS also appear on the LHS
+                    if !haskey(compiler_state.stochasticrules, v)
+                        e = Symbolics.toexpr(v)
+                        e isa Symbol && error("$v should be a stochastic variable.")
+                        # then v is an array indexing
+                        @assert e.head == :call && e.args[1] == getindex
+                        find_match = false
+                        for k in keys(compiler_state.stochasticrules)
+                            !isa(k, Symbolics.Arr) && continue
+                            k_e = Symbolics.toexpr(k)
+                            if k_e.args[2] == e.args[2]
+                                find_match = true
+                                break
+                            end
+                        end
+                        !find_match && error("The array indexing $v should be a stochastic variable.")
+                    end
                     push!(args, tosymbol(v))
                 end
             end
@@ -675,7 +521,6 @@ end
 
 function getindex_to_ref(expr)
     return MacroTools.prewalk(expr) do sub_expr
-        # if MacroTools.@capture(sub_ex, getindex(name_, size__))
         if MacroTools.isexpr(sub_expr, :call) && sub_expr.args[1] == getindex
             sub_expr.head = :ref
             sub_expr.args = sub_expr.args[2:end]
@@ -683,17 +528,6 @@ function getindex_to_ref(expr)
         end
         return sub_expr
     end
-end
-
-# Bugs in SymbolicUtils.jl
-# Fixed at: https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/471
-# Not in the latest release yet.
-function SymbolicUtils.toterm(t::SymbolicUtils.Add{T}) where T
-    args = Any[t.coeff, ]
-    for (k, coeff) in t.dict
-        push!(args, coeff == 1 ? k : SymbolicUtils.Term{T}(*, [coeff, k]))
-    end
-    SymbolicUtils.Term{T}(+, args)
 end
 
 function refinindices(expr, compiler_state)
@@ -712,7 +546,7 @@ function refinindices(expr, compiler_state)
     end
 end
 
-function check_expr(expr, compiler_state::CompilerState)
+function check_expr(compiler_state::CompilerState)
     expr = deepcopy(compiler_state.model_def)
     while true
         unroll!(expr, compiler_state) ||
@@ -750,19 +584,26 @@ function compile(model_def::Expr, data::NamedTuple, target::Symbol)
 
     compiler_state = CompilerState(expr)
     addlogicalrules!(data, compiler_state)
-    while true
-        unroll!(expr, compiler_state) ||
-            resolveif!(expr, compiler_state) ||
-            addlogicalrules!(expr, compiler_state) ||
-            break
+    while true    
+        while true
+            unroll!(expr, compiler_state) ||
+                resolveif!(expr, compiler_state) ||
+                addlogicalrules!(expr, compiler_state) ||
+                addstochasticrules!(expr, compiler_state) || 
+                break
+        end
+        # leave expressions with colon indexing to the last
+        addlogicalrules!(expr, compiler_state, false) || break
     end
+    addstochasticrules!(expr, compiler_state, false)
 
-    addstochasticrules!(expr, compiler_state)
     extract_observations!(compiler_state)
+
+    @assert all(x->Meta.isexpr(x, (:processed, :stoch_processed)), expr.args) "Some expressions are not processed."
 
     # `check_expr` will try to unroll the origianl expr again to detect to test 
     # using observed stochastic variables as loop bounds or indexing.
-    check_expr(expr, compiler_state)
+    check_expr(compiler_state)
 
     target == :IR && return compiler_state
 
