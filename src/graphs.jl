@@ -1,4 +1,3 @@
-
 struct VertexInfo
     variable_name::Symbol
     sorted_inputs::Tuple
@@ -7,6 +6,8 @@ struct VertexInfo
     f_expr::Expr
     f::Function
 end
+
+# TODO: extra field to keep track of the distribution type: discrete or continuous
 
 function to_metadigraph(pre_graph::Dict)
     g = MetaGraph(DiGraph(), Label = Symbol, VertexData = VertexInfo)
@@ -56,7 +57,7 @@ end
 
 Return a Distribution.jl distribution.
 """
-function getdistribution(g::MetaDiGraph, node::Symbol, value::Dict{Symbol, Real}, delta::Dict{Symbol, <:Real}=Dict{Symbol, Float64}())::Distributions.Distribution
+function getdistribution(g::MetaDiGraph, node::Symbol, value::Dict{Symbol, Any}, delta=Dict{Symbol, Any}())::Distributions.Distribution
     args = []
     for p in g[node].sorted_inputs
         if p in keys(delta)
@@ -68,7 +69,6 @@ function getdistribution(g::MetaDiGraph, node::Symbol, value::Dict{Symbol, Real}
     return (g[node].f)(args...)
 end
 
-# TODO: support `get_index` for stochastic indexing
 function Base.show(io::IO, vinfo::VertexInfo)
     vinfo = deepcopy(vinfo)
     f_expr = vinfo.f_expr
@@ -81,24 +81,6 @@ function Base.show(io::IO, vinfo::VertexInfo)
         end
     end
     d_expr = f_expr.args[2].args[1]
-
-    function numify(expr)
-        MacroTools.prewalk(expr) do sub_expr
-            if Meta.isexpr(sub_expr, :call)
-                for (i, arg) in enumerate(sub_expr.args[2:end])
-                    if arg isa Symbol
-                        sub_expr.args[1+i] = tosymbolic(arg)
-                    elseif arg isa Expr
-                        sub_expr.args[1+i] = numify(arg) 
-                    end
-                end 
-            end
-            return sub_expr
-        end
-    end
-
-    d_expr = numify(d_expr)
-    d_expr = eval(d_expr)
     
     println(io, "Variable Name: " * string(vinfo.variable_name))
     println(io, "Variable Type: " * (vinfo.is_data ? "Observation" : "Assumption"))
@@ -108,4 +90,25 @@ function Base.show(io::IO, vinfo::VertexInfo)
     Base.show(io, d_expr)
 end
 
-# TODO: plotting
+"""
+    dry_run
+
+Return the distribution types and values of the random variables via ancestral sampling.
+"""
+dry_run(g) = dry_run(g, (x->label_for(g, x)).(topological_sort_by_dfs(g)))
+function dry_run(g, sorted_nodes)
+    value = Dict{Symbol, Any}()
+    dist_types = Dict{Any, Any}()
+    for node in sorted_nodes
+        if g[node].is_data
+            value[node] = g[node].data
+            dist_types[node] = typeof(getdistribution(g, node, value))
+        else
+            dist = getdistribution(g, node, value)
+            value[node] = rand(dist)
+            dist_types[node] = typeof(dist)
+        end
+    end
+    
+    return dist_types, value
+end

@@ -65,7 +65,7 @@ sd(v::Vector) = Statistics.std(v); sd(v::Symbolics.Arr{Num, 1}) = Statistics.std
 softplus(x) = log1pexp(x)
 sort(v::Vector) = Base.sort(v); @register_symbolic sort(v::Array)
 step(x) = ifelse(x > 0, 1, 0); step(x::Num) = IfElse.ifelse(x>1,1,0)
-Base.sum(x::Symbolics.Arr) = Base.sum(Symbolics.scalarize(x))
+sum(x::Symbolics.Arr) = Base.sum(Symbolics.scalarize(x))
 # trunc
 
 #

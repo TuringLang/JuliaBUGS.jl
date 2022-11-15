@@ -267,7 +267,6 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState, skip_col
                     elems = Symbolics.scalarize(lhs)
                     lhs = create_symbolic_variable(tosymbol(lhs))
                     for i in eachindex(elems)
-                        # compiler_state.logicalrules[elems[i]] = get_index(lhs, collect(Tuple(i)))
                         compiler_state.logicalrules[elems[i]] = get_index(lhs, i)
                     end
                 end
@@ -438,7 +437,7 @@ function scalarize(ex::Num, compiler_state::CompilerState)
             for a in new_arg
                 vars = Symbolics.get_variables(a)
                 for v in vars
-                    # make sure the arguments of a node function are other stochastic nodes
+                    # make sure the arguments of a node function are other stochastic variables
                     # this also implicitly checks that all array indexings appear on the RHS also appear on the LHS
                     if !haskey(compiler_state.stochasticrules, v)
                         e = Symbolics.toexpr(v)
@@ -497,7 +496,7 @@ function gen_output(compiler_state::CompilerState)
                         delete!(sub_dict, arr)
                     end
                     return sub_expr
-                end |> getindex_to_ref |> MacroTools.flatten |> MacroTools.resyntax
+                end |> getindex_to_ref |> MacroTools.resyntax 
             end
         end
 

@@ -4,7 +4,7 @@ using Metatheory
 
 # pattern matching
 r = @rule (~x)[~~i] => (x, i)
-r(:(x[1])) # (:x, Any[1])
+r(:(x[i])) # (:x, Any[1])
 
 function find_all_array_indices(expr)
     I = Dict{Symbol, Set{Any}}()
