@@ -39,6 +39,25 @@ function SymbolicUtils.toterm(t::SymbolicUtils.Add{T}) where T
     SymbolicUtils.Term{T}(+, args)
 end
 
+function create_symbolic_variable(variable::Symbol)
+    variable_with_metadata = SymbolicUtils.setmetadata(
+        SymbolicUtils.Sym{Real}(variable),
+        Symbolics.VariableSource,
+        (:variables, variable),
+    )
+    return Symbolics.wrap(variable_with_metadata)
+end
+
+function create_symbolic_array(array_name::Symbol, array_size::Vector)
+    array_ranges = Tuple([(1:i) for i in array_size])
+    variable_with_metadata = SymbolicUtils.setmetadata(
+        SymbolicUtils.setmetadata(
+            SymbolicUtils.Sym{Array{Real, (length)(array_ranges)}}(array_name), Symbolics.ArrayShapeCtx, array_ranges), 
+            Symbolics.VariableSource, 
+            (:variables, array_name))
+    return Symbolics.wrap(variable_with_metadata)
+end
+
 """
     tosymbolic(variable)
 
@@ -63,25 +82,6 @@ function tosymbolic(expr::Expr)
     end
 end
 tosymbolic(variable) = variable
-
-function create_symbolic_variable(variable::Symbol)
-    variable_with_metadata = SymbolicUtils.setmetadata(
-        SymbolicUtils.Sym{Real}(variable),
-        Symbolics.VariableSource,
-        (:variables, variable),
-    )
-    return Symbolics.wrap(variable_with_metadata)
-end
-
-function create_symbolic_array(array_name::Symbol, array_size::Vector)
-    array_ranges = Tuple([(1:i) for i in array_size])
-    variable_with_metadata = SymbolicUtils.setmetadata(
-        SymbolicUtils.setmetadata(
-            SymbolicUtils.Sym{Array{Real, (length)(array_ranges)}}(array_name), Symbolics.ArrayShapeCtx, array_ranges), 
-            Symbolics.VariableSource, 
-            (:variables, array_name))
-    return Symbolics.wrap(variable_with_metadata)
-end
 
 function tosymbol(x)
     ex = Symbolics.toexpr(x)

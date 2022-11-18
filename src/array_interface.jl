@@ -10,18 +10,6 @@
 # Notes on correctness:
 # - all indicies are need to appear on the LHS: this is implicitly checked by `gen_output` in `compiler.jl`
 
-function exist_colon_indexing(expr)
-    exist_colon = false
-    MacroTools.postwalk(expr) do sub_expr
-        if MacroTools.@capture(sub_expr, a_[is_])
-            if any(x->x==:(:), is)
-                exist_colon = true
-            end
-        end
-    end
-    return exist_colon
-end
-
 """
     ref_to_symbolic(expr, compiler_state)
 

@@ -7,9 +7,11 @@ struct VertexInfo
     f::Function
 end
 
-# TODO: extra field to keep track of the distribution type: discrete or continuous
+# TODO: change all `MetaDiGraph` to `BUGSGraph`
+BUGSGraph = MetaGraph{<:Any, Symbol, <:SimpleDiGraph, <:VertexInfo}
+# TODO: constructor for BUGSGraph
 
-function to_metadigraph(pre_graph::Dict)
+function tometadigraph(pre_graph::Dict)
     g = MetaGraph(DiGraph(), Label = Symbol, VertexData = VertexInfo)
     
     for k in keys(pre_graph)
@@ -31,25 +33,6 @@ function to_metadigraph(pre_graph::Dict)
     end
 
     return g
-end
-
-function process_initializations(inits::NamedTuple)
-    initializations = Dict{Symbol, Real}()
-    for (k, v) in pairs(inits)
-        if v isa Array
-            for i in CartesianIndices(v)
-                ismissing(v[i]) && continue
-                s = bugs_to_julia("$k") * "$(collect(Tuple(i)))"
-                n = tosymbol(tosymbolic(Meta.parse(s)))
-                initializations[n] = v[i]
-            end
-        else
-            occursin("[", string(k)) && 
-                error("Initializations of single elements of arrays not supported, initialize the whole array instead.")
-            initializations[k] = v
-        end
-    end
-    return initializations
 end
 
 """
@@ -91,7 +74,7 @@ function Base.show(io::IO, vinfo::VertexInfo)
 end
 
 """
-    dry_run
+    dry_run(g)
 
 Return the distribution types and values of the random variables via ancestral sampling.
 """
@@ -111,4 +94,9 @@ function dry_run(g, sorted_nodes)
     end
     
     return dist_types, value
+end
+
+import Graphs: merge_vertices
+function Graphs.merge_vertices(g::MetaDiGraph, vs)
+
 end

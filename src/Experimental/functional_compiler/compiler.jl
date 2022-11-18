@@ -1,3 +1,32 @@
+"""
+Functional Compiler
+
+Fundamental idea: assignments as rules for term-rewriting; pattern matching to handle indexing.
+E.g. (1)x[i] matches x: array name, i: index; (2) evaluate the RHS with x, i; (3) rewrite the original x[i] term.
+Do not need to unroll every loop.
+
+Possible indices of an array = {constants, expressions with loop bounds, expressions with other variables}
+Array size: lower bound = min(Possible indices of an array); upper bound = max(Possible indices of an array), which are both just 
+    expressions.
+
+Implementation idea:
+1. rename the loop var so that we can decouple the programs expressions to single line expressions and a dictionary of loop bounds
+2. enumerate all the possible combinations of loop bounds, then every stochastic variable will correspond to a subset of these combinations,
+    if the graph is static, then finitely many stochastic can be generated.
+
+Possible way to implement:
+* Metatheory.jl can be a good base for pattern matching and term rewriting
+* There might be a way to achieve this by modifying the current compiler: before and after each `substitute`, use `Symbolics.toexpr` 
+    to get the expression, then pattern matching and modify rule dictionary for the next `substitute` call.
+    
+Pro and cons compare to the unrolling solution:
+* Unrolling can be seen as aggressive caching
+* Unrolling uses more memory, but unlikely to be a magnitudes more, as finally we will generate a graph, so both O(|V| + |E|)
+* Unrolling based on Symbolics.jl may have some extra perks because Symbolics.jl implemented them
+
+Current plan: this is a very interesting idea, but it is not a priority right now
+"""
+
 using MacroTools
 using SymbolicUtils
 using Metatheory 

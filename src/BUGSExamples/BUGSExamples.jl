@@ -1,9 +1,7 @@
 module BUGSExamples
 
 using SymbolicPPL
-using SymbolicPPL: rreshape
-
-const NA = missing
+using SymbolicPPL: rreshape, NA
 
 include("Volume_I/Blocker.jl")
 include("Volume_I/Bones.jl")
@@ -56,7 +54,6 @@ LINKS = (
     # Volume II
     birats = "https://chjackson.github.io/openbugsdoc/Examples/BiRats.html",
     eyes = "https://chjackson.github.io/openbugsdoc/Examples/Eyes.html",
-
 )
 
 EXAMPLES = (

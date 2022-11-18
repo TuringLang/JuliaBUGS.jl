@@ -1,4 +1,3 @@
-
 function todppl(g::MetaDiGraph)
     expr = []
     args = Dict()
@@ -15,7 +14,22 @@ function todppl(g::MetaDiGraph)
     end
     args = [Expr(:kw, a, g[a].data) for a in (x->label_for(g,x)).(vertices(g)) if g[a].is_data]
     ex = Expr(:function, Expr(:call, :model, Expr(:parameters, args...)), Expr(:block, expr...))
-    println(ex)
     eval(DynamicPPL.model(@__MODULE__, LineNumberNode(@__LINE__, @__FILE__), ex, false))
     return model
+end
+
+function gen_variation_partition(g::MetaDiGraph)
+    dist_types = dry_run(g)[1]
+    dt = Dict{Any, Any}()
+    for k in keys(dist_types)
+        if dist_types[k] <: Sampleable{<:VariateForm,Discrete}
+            dt[k] = true
+        else
+            dt[k] = false
+        end
+    end
+
+    discrete_vars = [k for k in keys(dt) if dt[k]]
+    continuous_vars = [k for k in keys(dt) if !dt[k]]
+    return discrete_vars, continuous_vars
 end

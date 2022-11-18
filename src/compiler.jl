@@ -475,8 +475,9 @@ function scalarize(ex::Num, compiler_state::CompilerState)
 end
 scalarize(ex, ::CompilerState) = ex, Dict()
 
-function gen_output(compiler_state::CompilerState)
+function gen_output(compiler_state::CompilerState, inits)
     pregraph = Dict()
+    initializations = Dict()
     for key in keys(compiler_state.stochasticrules)
         ex = symbolic_eval(compiler_state.stochasticrules[key], compiler_state.logicalrules)
         ex, sub_dict = scalarize(ex, compiler_state)
@@ -516,7 +517,29 @@ function gen_output(compiler_state::CompilerState)
 
         pregraph[tosymbol(key)] = (value, f_expr, isdata)
     end
-    return pregraph
+    return pregraph, initializations
+end
+
+# TODO: combine this function into `gen_output`
+# TODO: multivariate case
+function process_initializations(g, inits::NamedTuple)
+    initializations = Dict{Symbol, Real}()
+    
+    for (k, v) in pairs(inits)
+        if v isa Array
+            for i in CartesianIndices(v)
+                ismissing(v[i]) && continue
+                s = bugs_to_julia("$k") * "$(collect(Tuple(i)))"
+                n = tosymbol(tosymbolic(Meta.parse(s)))
+                initializations[n] = v[i]
+            end
+        else
+            occursin("[", string(k)) && 
+                error("Initializations of single elements of arrays not supported, initialize the whole array instead.")
+            initializations[k] = v
+        end
+    end
+    return initializations
 end
 
 function getindex_to_ref(expr)
@@ -577,7 +600,7 @@ Compile the model definition `model_def` with data `data` and target `target`.
 - `data`: data and model prameters.
 - `target`: one of `:DynamicPPL`, `:IR`, or `:Graph`. 
 """
-function compile(model_def::Expr, data::NamedTuple, target::Symbol) 
+function compile(model_def::Expr, data::NamedTuple, target::Symbol, inits=nothing) 
     @assert target in [:DynamicPPL, :IR, :Graph] "target must be one of [:DynamicPPL, :IR, :Graph]"
     
     expr = transform_expr(model_def)
@@ -607,7 +630,9 @@ function compile(model_def::Expr, data::NamedTuple, target::Symbol)
 
     target == :IR && return compiler_state
 
-    g = to_metadigraph(gen_output(compiler_state))
-    target == :Graph && return g
-    target == :DynamicPPL && return todppl(g)
+    pre_graph, initializations = gen_output(compiler_state, inits)
+    g = tometadigraph(pre_graph)
+    target == :Graph && return g, initializations
+    
+    return todppl(g), initializations # target == :DynamicPPL
 end

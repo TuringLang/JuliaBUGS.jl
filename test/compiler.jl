@@ -331,30 +331,7 @@ data = (
     Y = rreshape([151, 199, 246, 283, 320, 145, ],(2,3)),
 )
     
-# cs = compile(model_def, data, :IR);
-# o = SymbolicPPL.gen_output(cs);
-# g = SymbolicPPL.to_metadigraph(o);
 g = compile(model_def, data, :Graph);
-dy, vs = SymbolicPPL.dry_run(g)
-
-using Graphs, MetaGraphsNext
-
-using TikzGraphs, TikzPictures
-t = TikzGraphs.plot(
-    g.graph, 
-    map(x->string(label_for(g, x)), vertices(g)), 
-    node_style="draw, rounded corners, fill=blue!10", 
-    edge_style="white"
-)
-# TikzPictures.save(SVG("test.svg"), t)
-
-using Plots, GraphRecipes
-graphplot(
-    g.graph,
-    names = map(x->label_for(g, x), vertices(g)),
-    curves = false,
-    method = :tree
-)
 
 # test for erroring when LHS of logical assignment is data array element
 let err = nothing

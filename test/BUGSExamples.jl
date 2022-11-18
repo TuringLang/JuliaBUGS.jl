@@ -1,9 +1,11 @@
 using SymbolicPPL
-using SymbolicPPL: ProposeFromPrior
-using Random
 using AbstractMCMC
+using MCMCChains
+using Random
+using Turing
 ##
 
+# Volume 1
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:blockers];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:bones];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:dogs];
@@ -26,23 +28,28 @@ m = SymbolicPPL.BUGSExamples.EXAMPLES[:stacks];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_simple];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_realistic];
 
+# Volume 2
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:eyes];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:birats];
 
-# cs = compile(m[:model_def], m[:data], :IR);
-# o = SymbolicPPL.gen_output(cs);
-# g = SymbolicPPL.to_metadigraph(o)
-@time g = compile(m[:model_def], m[:data], :Graph);
-@run g = compile(m[:model_def], m[:data], :Graph);
+g, inits = compile(m[:model_def], m[:data], :Graph);
+model = SymbolicPPL.todppl(g);
+d, c = SymbolicPPL.gen_variation_partition(g);
 
-model = SymbolicPPL.GraphModel(g);
-sampler = ProposeFromPrior()
-s, state = AbstractMCMC.step(Random.default_rng(), model, sampler);
-s, state = AbstractMCMC.step(Random.default_rng(), model, sampler, state);
+chn = sample(
+    model(),
+    Gibbs(MH(d...), HMC(0.05, 3, c...)),
+    10000;
+    # discard_initial = 1000
+)
 
-model = SymbolicPPL.todppl(g)
-using Turing; chn = sample(model(), NUTS(), 12000, discard_initial = 1000)
+e = @bugsast begin
+    a ~ dnorm(0, 1)
+    b ~ dnorm(a, 1)
+    c ~ dnorm(b, a)
+    b = 1
+end
 
-# blockers
-chn[[:d, Symbol("delta.new"), :tau]] # blockers
-using MCMCChains; Chains(map(x->1/sqrt(x), chn[[:tau]].value)) # sigma
+g, _ = compile(e, NamedTuple(), :Graph)
+
+TikzGraphs.plot(g)

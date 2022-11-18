@@ -1,6 +1,12 @@
-# `Base.step`: Get the step size of an AbstractRange object.
-# BUGS step has a different meaning.
-import Base: step
+const DISTRIBUTIONS = [:truncated, :censored, :dgamma, :dnorm, :dbeta, :dbin, :dcat, :dexp, :dpois, :dflat, 
+    :dunif, :dbern, :bar, :dmnorm, :ddirich, :dwish,]
+
+USER_DISTRIBUTIONS = []
+
+const INVERSE_LINK_FUNCTION =
+    (logit = :logistic, cloglog = :cexpexp, log = :exp, probit = :phi)
+
+TRACED_FUNCTIONS = [:exp,]
 
 """ 
     NA
@@ -8,16 +14,6 @@ import Base: step
 `NA` is alias for [`missing`](@ref).
 """
 const NA = :missing
-
-const DISTRIBUTIONS = [:truncated, :censored, :dgamma, :dnorm, :dbeta, :dbin, :dcat, :dexp, :dpois, :dflat, 
-    :dunif, :dbern, :bar, :dmnorm, :ddirch, :dwish, ]
-
-USER_DISTRIBUTIONS = []
-
-const INVERSE_LINK_FUNCTION =
-    (logit = :logistic, cloglog = :cexpexp, log = :exp, probit = :phi)
-
-TRACED_FUNCTIONS = [:exp, ]
 
 """
     rreshape
@@ -31,11 +27,9 @@ rreshape(v::Vector, dim) = permutedims(reshape(v, reverse(dim)), length(dim):-1:
 @register_symbolic get_index(x::Array, index::Array)
 get_index(x, i) = x[i...]
 
-# functions whose names are the same will be be commented out, for reference only
-
-#
-# Standard functions
-#
+###
+### Standard functions
+###
 
 # abs
 # cloglog: from LogExpFunctions
@@ -68,9 +62,9 @@ step(x) = ifelse(x > 0, 1, 0); step(x::Num) = IfElse.ifelse(x>1,1,0)
 sum(x::Symbolics.Arr) = Base.sum(Symbolics.scalarize(x))
 # trunc
 
-#
-# Trigonometric functions
-#
+###
+### Trigonometric functions
+###
 
 # sin
 arcsin(x) = asin(x)
@@ -82,34 +76,34 @@ arccosh(x) = acosh(x)
 arctan(x) = atan(x)
 arctanh(x) = atanh(x)
 
-#
-# Matrix Algebra
-#
+###
+### Matrix Algebra
+###
 
 t(v::Vector) = v'
 mexp(v::Matrix) = exp(v)
 var"eigen.vals"(v::Matrix) = eigen(v).values
 
-# 
-# Model Checking
-#
+### 
+### Model Checking
+###
 
 # replicate.post, replicate.prior, post.p.value, prior.p.value are not implemented, use facilities from MCMCChains instead
 
-# 
-# Functionals and differential equations
-#
+### 
+### Functionals and differential equations
+###
 
 # Better support in the future, use packages from SciML
 # `F(x)` LHS syntax not supported 
 
-# 
-# Distributions
-# 
+### 
+### Distributions
+### 
 
-#
-# Continuous univariate, unrestricted range
-# 
+###
+### Continuous univariate, unrestricted range
+### 
 
 @register_symbolic dnorm(mu, tau) 
 dnorm(mu, tau) = Normal(mu, 1 / sqrt(tau))
@@ -130,9 +124,9 @@ ddexp(μ, τ) = Laplace(μ, 1 / τ)
 
 dflat() = DFlat()
 
-#
-# Continuous univariate, restricted to be positive
-#
+###
+### Continuous univariate, restricted to be positive
+###
 @register_symbolic dexp(λ)
 dexp(λ) = Exponential(1/λ)
 
@@ -175,9 +169,9 @@ function df(n, m, μ, τ)
     return FDist(n, m)
 end
 
-#
-# Continuous univariate, restricted to a finite interval
-#
+###
+### Continuous univariate, restricted to a finite interval
+###
 
 @register_symbolic dunif(a, b)
 dunif(a, b) = Uniform(a, b)
@@ -185,9 +179,9 @@ dunif(a, b) = Uniform(a, b)
 @register_symbolic dbeta(alpha, beta)
 dbeta(a, b) = Beta(a, b)
 
-#
-# Continuous multivariate distributions
-#
+###
+### Continuous multivariate distributions
+###
 
 @register_symbolic dmnorm(μ::Vector, T::Matrix)
 dmnorm(μ::Vector, T::Matrix) = MvNormal(μ, T)
@@ -198,12 +192,12 @@ dmt(μ::Vector, T::Matrix, k) = MatrixTDist(k, μ, T, 1) #TODO: maybe wrong
 @register_symbolic dwish(R::Matrix, k)
 dwish(R::Matrix, k) = Wishart(k, R^(-1))
 
-@register_symbolic ddirch(θ::Vector)
-ddirch(θ::Vector) = Dirichlet(θ)
+@register_symbolic ddirich(θ::Vector)
+ddirich(θ::Vector) = Dirichlet(θ)
 
-#
-# Discrete univariate distributions
-#
+###
+### Discrete univariate distributions
+###
 
 @register_symbolic dbern(p)
 dbern(p) = Bernoulli(p)
@@ -234,9 +228,9 @@ function dhyp(n1, n2, m1, ψ)
     return Hypergeometric(n1, n2, m1)
 end
 
-#
-# Discrete multivariate distributions
-#
+###
+### Discrete multivariate distributions
+###
 
 @register_symbolic dmulti(θ::Vector, n)
 dmulti(θ::Vector, n) = Multinomial(n, θ)
@@ -299,34 +293,3 @@ function eval_registration(ex)
     eval(ex)
     return def[:name]
 end
-
-"""
-    remedy for indexing with stochastic variables
-
-```
-   a ~ dnorm(b, 1)
-   b = c[d]
-   d ~ dcat([0.5, 0.5]) 
-```
-
-can be reriten to 
-
-```
-   a ~ dnorm(b, 1)
-   b = sel(c[], d) # c is a vector
-   d ~ dcat([0.5, 0.5]) 
-```
-
-this will create an edge between a and every element of c, may not be efficient, but probably unavoidable.
-
-Possible Alternative:
-* this idea will make SPPL general-purpose, as it basically introduce control flow. *
-lazily evaluate the indexing, and only create the edge when the value is known.
-can also enumerate the graphs under the control flow. 
-
-I like the altenative approach better, as we can also make the graph dynamic in pytorch vs tf sense.
-it also has deep connection to the efficient inference by "cross-compile" general-purpose probpl with DAG
-
-"""
-# @register_symbolic sel(a::Vector, i::Int)
-# sel(a, i) = a[i] 
