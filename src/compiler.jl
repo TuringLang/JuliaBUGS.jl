@@ -1,10 +1,11 @@
 struct CompilerState
-    model_def::Expr
+    model_def::Expr # original model definition
     arrays::Dict{Symbol,Symbolics.Arr{Num}}
     data_arrays::Dict{Symbol,Symbolics.Arr{Num}} # keep track of data arrays, the size of these arrays are not inferred and not allowed to change
     logicalrules::Dict
     stochasticrules::Dict
     observations::Dict
+    multivariate_variables::Dict # Map renamed multivariate variables to their original symbolic arrays
 end
 
 function CompilerState(model_def::Expr) 
@@ -14,6 +15,7 @@ function CompilerState(model_def::Expr)
         Dict{Symbol,Symbolics.Arr{Num}}(),
         Dict(), 
         Dict(), 
+        Dict(),
         Dict()
     )
 end
@@ -21,7 +23,7 @@ end
 # Regarding the correctness of the unrolling approach:
 # - BUGS doesn't allow repeated assignments, loop bounds are defined outside the loop
 # - assignments describe edges, finite graph indicated finite amount of assignments
-
+# Two loops with mutually dependent loop bounds (loop bounds depend on variable defined in another loop) can not be unrolled. 
 """
     unroll!(expr, compiler_state)
 
@@ -200,7 +202,10 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState, skip_colon=
 
                 if lhs isa Symbolics.Arr
                     elems = Symbolics.scalarize(lhs)
-                    lhs = create_symbolic_variable(tosymbol(lhs))
+                    renamed_lhs = create_symbolic_variable(tosymbol(lhs)) 
+                    # change the lhs to a scalar, this scalar will be of array type during inference
+                    compiler_state.multivariate_variables[renamed_lhs] = lhs # keep the symbolic array for initialization
+                    lhs = renamed_lhs
                     for i in eachindex(elems)
                         compiler_state.logicalrules[elems[i]] = get_index(lhs, i)
                     end
@@ -265,7 +270,10 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState, skip_col
 
                 if lhs isa Symbolics.Arr
                     elems = Symbolics.scalarize(lhs)
-                    lhs = create_symbolic_variable(tosymbol(lhs))
+                    renamed_lhs = create_symbolic_variable(tosymbol(lhs)) 
+                    # change the lhs to a scalar, this scalar will be of array type during inference
+                    compiler_state.multivariate_variables[renamed_lhs] = lhs # keep the symbolic array for initialization
+                    lhs = renamed_lhs
                     for i in eachindex(elems)
                         compiler_state.logicalrules[elems[i]] = get_index(lhs, i)
                     end
@@ -398,6 +406,7 @@ function extract_observations!(compiler_state::CompilerState)
     end
 end
 
+# TODO: Alternatively, can make the first return item a gensym, so later equality check is cheaper.
 """
     scalarize(ex)
 
@@ -475,9 +484,8 @@ function scalarize(ex::Num, compiler_state::CompilerState)
 end
 scalarize(ex, ::CompilerState) = ex, Dict()
 
-function gen_output(compiler_state::CompilerState, inits)
+function gen_output(compiler_state::CompilerState)
     pregraph = Dict()
-    initializations = Dict()
     for key in keys(compiler_state.stochasticrules)
         ex = symbolic_eval(compiler_state.stochasticrules[key], compiler_state.logicalrules)
         ex, sub_dict = scalarize(ex, compiler_state)
@@ -488,7 +496,7 @@ function gen_output(compiler_state::CompilerState, inits)
             for arr in keys(sub_dict)
                 f_expr.args[1].args = collect(union(Set(f_expr.args[1].args), Set(sub_dict[arr][1])))
                 f_expr = MacroTools.postwalk(f_expr) do sub_expr
-                    if isequal(sub_expr, arr)
+                    if isequal(sub_expr, arr) # this equality check can be expensive, as it potentially requries comparing two type-unstable arrays
                         if length(sub_dict[arr][2]) == 2 && (sub_dict[arr][2][1] == 1 || sub_dict[arr][2][2] == 1)
                             sub_expr = Expr(:vect, (Symbolics.toexpr.(arr))...)
                         else
@@ -517,29 +525,61 @@ function gen_output(compiler_state::CompilerState, inits)
 
         pregraph[tosymbol(key)] = (value, f_expr, isdata)
     end
-    return pregraph, initializations
+    return pregraph
 end
 
-# TODO: combine this function into `gen_output`
-# TODO: multivariate case
-function process_initializations(g, inits::NamedTuple)
-    initializations = Dict{Symbol, Real}()
-    
-    for (k, v) in pairs(inits)
-        if v isa Array
-            for i in CartesianIndices(v)
-                ismissing(v[i]) && continue
-                s = bugs_to_julia("$k") * "$(collect(Tuple(i)))"
-                n = tosymbol(tosymbolic(Meta.parse(s)))
-                initializations[n] = v[i]
-            end
+process_initializations(inits::NamedTuple, pre_graph, compiler_state::CompilerState) = 
+    process_initializations(Dict(pairs(inits)), pre_graph, compiler_state)
+function process_initializations(inits::Dict, pre_graph, compiler_state::CompilerState)
+    # read initlization values
+    initilizations = Dict()
+    for (key, value) in inits
+        if value isa Number
+            @assert !occursin("[", string(key)) "Initializations of single elements of arrays not supported, initialize the whole array instead."
+            @assert haskey(pre_graph, key) "The variable $key is not a stochastic variable."
+            @assert !pre_graph[key][3] "The variable $key is an observed variable, initialization is not supported."
+            initilizations[tosymbolic(key)] = value
+        elseif value isa Array
+            @assert haskey(compiler_state.arrays, key) || haskey(compiler_state.data_arrays, key) "The variable $key is not an array in the model definition."
+            @assert size(value) == size(compiler_state.arrays[key]) || size(value) == size(compiler_state.data_arrays[key]) 
+                "The size of the initialization of $key does not match the size of the array."
+            sym_array = create_symbolic_array(key, collect(size(value)))   
+            initilizations[sym_array] = value
         else
-            occursin("[", string(k)) && 
-                error("Initializations of single elements of arrays not supported, initialize the whole array instead.")
-            initializations[k] = v
+            error("Value type not supported.")
         end
     end
-    return initializations
+
+    # produce output
+    ret = Dict()
+    for key in keys(compiler_state.stochasticrules)
+        if haskey(compiler_state.multivariate_variables, key)
+            let r = symbolic_eval(compiler_state.multivariate_variables[key], initilizations)
+                @assert r isa Array 
+                rr = similar(r, Any)
+                for (i, x) in enumerate(r)
+                    let xx = Symbolics.unwrap(x)
+                        if xx isa Number
+                            rr[i] = xx
+                        else
+                            rr[i] = missing
+                        end
+                    end
+                end
+                if !all(ismissing, rr)
+                    ret[tosymbol(key)] = rr
+                end
+            end
+        else
+            let r = resolve(key, initilizations)
+                if !Symbolics.isequal(r, key)
+                    ret[tosymbol(key)] = r
+                end
+            end
+        end
+    end
+
+    return ret
 end
 
 function getindex_to_ref(expr)
@@ -601,7 +641,7 @@ Compile the model definition `model_def` with data `data` and target `target`.
 - `target`: one of `:DynamicPPL`, `:IR`, or `:Graph`. 
 """
 function compile(model_def::Expr, data::NamedTuple, target::Symbol, inits=nothing) 
-    @assert target in [:DynamicPPL, :IR, :Graph] "target must be one of [:DynamicPPL, :IR, :Graph]"
+    @assert target in [:DynamicPPL, :IR, :Graph, ] "target must be one of [:DynamicPPL, :IR, :Graph]"
     
     expr = transform_expr(model_def)
 
@@ -630,9 +670,9 @@ function compile(model_def::Expr, data::NamedTuple, target::Symbol, inits=nothin
 
     target == :IR && return compiler_state
 
-    pre_graph, initializations = gen_output(compiler_state, inits)
-    g = tometadigraph(pre_graph)
-    target == :Graph && return g, initializations
+    pre_graph = gen_output(compiler_state)
+    g = tograph(pre_graph)
+    target == :Graph && return g
     
-    return todppl(g), initializations # target == :DynamicPPL
+    return todppl(g) # target == :DynamicPPL
 end

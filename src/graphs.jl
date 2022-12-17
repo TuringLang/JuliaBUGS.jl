@@ -7,11 +7,10 @@ struct VertexInfo
     f::Function
 end
 
-# TODO: change all `MetaDiGraph` to `BUGSGraph`
-BUGSGraph = MetaGraph{<:Any, Symbol, <:SimpleDiGraph, <:VertexInfo}
-# TODO: constructor for BUGSGraph
+# BUGSGraph is symnonymous with MetaDiGraph for now
+const BUGSGraph = MetaGraph{<:Any, Symbol, <:SimpleDiGraph, <:VertexInfo}
 
-function tometadigraph(pre_graph::Dict)
+function tograph(pre_graph::Dict)
     g = MetaGraph(DiGraph(), Label = Symbol, VertexData = VertexInfo)
     
     for k in keys(pre_graph)
@@ -40,7 +39,7 @@ end
 
 Return a Distribution.jl distribution.
 """
-function getdistribution(g::MetaDiGraph, node::Symbol, value::Dict{Symbol, Any}, delta=Dict{Symbol, Any}())::Distributions.Distribution
+function getdistribution(g::BUGSGraph, node::Symbol, value::Dict{Symbol, Any}, delta=Dict{Symbol, Any}())::Distributions.Distribution
     args = []
     for p in g[node].sorted_inputs
         if p in keys(delta)
@@ -97,6 +96,6 @@ function dry_run(g, sorted_nodes)
 end
 
 import Graphs: merge_vertices
-function Graphs.merge_vertices(g::MetaDiGraph, vs)
+function Graphs.merge_vertices(g::BUGSGraph, vs)
 
 end

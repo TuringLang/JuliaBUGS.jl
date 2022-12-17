@@ -32,7 +32,11 @@ m = SymbolicPPL.BUGSExamples.EXAMPLES[:surgical_realistic];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:eyes];
 m = SymbolicPPL.BUGSExamples.EXAMPLES[:birats];
 
-g, inits = compile(m[:model_def], m[:data], :Graph);
+cs = compile(m[:model_def], m[:data], :IR);
+pre_graph = SymbolicPPL.gen_output(cs);
+SymbolicPPL.process_initializations(m[:inits][1], pre_graph, cs)
+
+g = compile(m[:model_def], m[:data], :Graph);
 model = SymbolicPPL.todppl(g);
 d, c = SymbolicPPL.gen_variation_partition(g);
 
@@ -42,14 +46,3 @@ chn = sample(
     10000;
     # discard_initial = 1000
 )
-
-e = @bugsast begin
-    a ~ dnorm(0, 1)
-    b ~ dnorm(a, 1)
-    c ~ dnorm(b, a)
-    b = 1
-end
-
-g, _ = compile(e, NamedTuple(), :Graph)
-
-TikzGraphs.plot(g)

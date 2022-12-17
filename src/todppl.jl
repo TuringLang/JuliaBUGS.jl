@@ -1,4 +1,4 @@
-function todppl(g::MetaDiGraph)
+function todppl(g::BUGSGraph)
     expr = []
     args = Dict()
     sorted_nodes = (x->label_for(g, x)).(topological_sort_by_dfs(g))
@@ -15,10 +15,11 @@ function todppl(g::MetaDiGraph)
     args = [Expr(:kw, a, g[a].data) for a in (x->label_for(g,x)).(vertices(g)) if g[a].is_data]
     ex = Expr(:function, Expr(:call, :model, Expr(:parameters, args...)), Expr(:block, expr...))
     eval(DynamicPPL.model(@__MODULE__, LineNumberNode(@__LINE__, @__FILE__), ex, false))
+    println(ex)
     return model
 end
 
-function gen_variation_partition(g::MetaDiGraph)
+function gen_variation_partition(g::BUGSGraph)
     dist_types = dry_run(g)[1]
     dt = Dict{Any, Any}()
     for k in keys(dist_types)

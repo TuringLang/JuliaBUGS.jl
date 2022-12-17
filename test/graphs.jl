@@ -15,7 +15,7 @@ g[:d]
 using TikzGraphs, TikzPictures
 import TikzGraphs: plot
 
-function plot(g::MetaDiGraph)
+function plot(g)
     color_dict = Dict{Int, String}()
     for (i, node) in enumerate(vertices(g))
         if g[label_for(g, node)].is_data

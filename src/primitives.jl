@@ -13,7 +13,7 @@ TRACED_FUNCTIONS = [:exp,]
 
 `NA` is alias for [`missing`](@ref).
 """
-const NA = :missing
+const NA = missing
 
 """
     rreshape

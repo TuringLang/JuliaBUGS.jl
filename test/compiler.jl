@@ -331,6 +331,7 @@ data = (
     Y = rreshape([151, 199, 246, 283, 320, 145, ],(2,3)),
 )
     
+cs = compile(model_def, data, :IR);
 g = compile(model_def, data, :Graph);
 
 # test for erroring when LHS of logical assignment is data array element
