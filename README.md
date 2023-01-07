@@ -195,7 +195,7 @@ Quantiles
 ```
 
 One can verify the inference result is coherent with BUGS' result for [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) (here we reported `tau` instead of `sigma` with `sigma = 1 / sqrt(tau)`). 
-The output of `sample` is a [`Chains`](https://beta.turing.ml/MCMCChains.jl/stable/chains/) object, and visualizating of the results is easy to produce,  
+The output of `sample` is a [`Chains`](https://turinglang.github.io/MCMCChains.jl/stable/chains/) object, and visualizating of the results is easy to produce,  
 
 ```julia-repo
 julia> using StatsPlots; plot(chn[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]);
