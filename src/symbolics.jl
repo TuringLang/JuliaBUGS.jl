@@ -15,14 +15,14 @@ function SymbolicUtils.substitute(expr, dict; fold=true)
             canfold && return ismissing(op(args...)) ? expr : op(args...)
             args
         else
-            args = map(x->substitute(x, dict, fold=fold), SymbolicUtils.unsorted_arguments(expr))
+            args = map(x -> substitute(x, dict, fold=fold), SymbolicUtils.unsorted_arguments(expr))
         end
 
         SymbolicUtils.similarterm(expr,
-                    op,
-                    args,
-                    SymbolicUtils.symtype(expr);
-                    metadata=SymbolicUtils.metadata(expr))
+            op,
+            args,
+            SymbolicUtils.symtype(expr);
+            metadata=SymbolicUtils.metadata(expr))
     else
         expr
     end
@@ -31,8 +31,8 @@ end
 # Bugs in SymbolicUtils.jl
 # Fixed at: https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/471
 # Not in the latest release yet.
-function SymbolicUtils.toterm(t::SymbolicUtils.Add{T}) where T
-    args = Any[t.coeff, ]
+function SymbolicUtils.toterm(t::SymbolicUtils.Add{T}) where {T}
+    args = Any[t.coeff,]
     for (k, coeff) in t.dict
         push!(args, coeff == 1 ? k : SymbolicUtils.Term{T}(*, [coeff, k]))
     end
@@ -52,10 +52,23 @@ function create_symbolic_array(array_name::Symbol, array_size::Vector)
     array_ranges = Tuple([(1:i) for i in array_size])
     variable_with_metadata = SymbolicUtils.setmetadata(
         SymbolicUtils.setmetadata(
-            SymbolicUtils.Sym{Array{Real, (length)(array_ranges)}}(array_name), Symbolics.ArrayShapeCtx, array_ranges), 
-            Symbolics.VariableSource, 
-            (:variables, array_name))
+            SymbolicUtils.Sym{Array{Real,(length)(array_ranges)}}(array_name), Symbolics.ArrayShapeCtx, array_ranges),
+        Symbolics.VariableSource,
+        (:variables, array_name))
     return Symbolics.wrap(variable_with_metadata)
+end
+
+function replace_variables(ex::Expr)
+    f_symbols = find_functions(rhs)
+    return MacroTools.prewalk(ex) do sub_expr
+        if Meta.isexpr(sub_expr, :ref)
+            return ref_to_symbolic(sub_expr)
+        elseif sub_expr isa Symbol && !in(sub_expr, f_symbols)
+            return tosymbolic(sub_expr)
+        else
+            return sub_expr
+        end
+    end
 end
 
 """
@@ -63,24 +76,9 @@ end
 
 Return symbolic variable for multiple types of `variable`s. 
 """
-tosymbolic(variable::Union{Int, AbstractFloat}) = Num(variable)
-tosymbolic(variable::String) = tosymbolic(Symbol(variable))
-function tosymbolic(variable::Symbol)
-    if Meta.isexpr(Meta.parse(string(variable)), :ref)
-        return ref_to_symbolic(string(variable))
-    end
-
-    return create_symbolic_variable(variable)
-end
-function tosymbolic(expr::Expr)
-    if MacroTools.isexpr(expr, :ref)  
-        return ref_to_symbolic(expr)
-    else
-        variables = find_all_variables(expr)
-        expr = replace_variables(expr, variables)
-        return eval(expr)
-    end
-end
+tosymbolic(variable::Union{Int,AbstractFloat}) = Num(variable)
+tosymbolic(variable::Symbol) = Meta.isexpr(Meta.parse(string(variable)), :ref) ? ref_to_symbolic(string(variable)) : create_symbolic_variable(variable)
+tosymbolic(expr::Expr) = MacroTools.isexpr(expr, :ref) ? ref_to_symbolic(expr) : eval(replace_variables(expr))
 tosymbolic(variable) = variable
 
 function tosymbol(x)

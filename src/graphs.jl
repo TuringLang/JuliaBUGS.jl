@@ -7,17 +7,17 @@ struct VertexInfo
     f::Function
 end
 
-# BUGSGraph is symnonymous with MetaDiGraph for now
-const BUGSGraph = MetaGraph{<:Any, Symbol, <:SimpleDiGraph, <:VertexInfo}
+# BUGSGraph is synonymous with MetaDiGraph with VertexInfo vertex type
+const BUGSGraph = MetaGraph{<:Any,Symbol,<:SimpleDiGraph,<:VertexInfo}
 
 function tograph(pre_graph::Dict)
-    g = MetaGraph(DiGraph(), Label = Symbol, VertexData = VertexInfo)
-    
+    g = MetaGraph(DiGraph(), Label=Symbol, VertexData=VertexInfo)
+
     for k in keys(pre_graph)
         vi = VertexInfo(
             k,
-            Tuple(pre_graph[k][2].args[1].args), 
-            pre_graph[k][3], 
+            Tuple(pre_graph[k][2].args[1].args),
+            pre_graph[k][3],
             pre_graph[k][1],
             pre_graph[k][2],
             eval(pre_graph[k][2])
@@ -39,7 +39,7 @@ end
 
 Return a Distribution.jl distribution.
 """
-function getdistribution(g::BUGSGraph, node::Symbol, value::Dict{Symbol, Any}, delta=Dict{Symbol, Any}())::Distributions.Distribution
+function getdistribution(g::BUGSGraph, node::Symbol, value::Dict{Symbol,Any}, delta=Dict{Symbol,Any}())::Distributions.Distribution
     args = []
     for p in g[node].sorted_inputs
         if p in keys(delta)
@@ -55,7 +55,7 @@ function Base.show(io::IO, vinfo::VertexInfo)
     vinfo = deepcopy(vinfo)
     f_expr = vinfo.f_expr
     arguments = f_expr.args[1].args
-    _io = IOBuffer();
+    _io = IOBuffer()
     for i in 1:length(arguments)
         print(_io, arguments[i])
         if i < length(arguments)
@@ -63,7 +63,7 @@ function Base.show(io::IO, vinfo::VertexInfo)
         end
     end
     d_expr = f_expr.args[2].args[1]
-    
+
     println(io, "Variable Name: " * string(vinfo.variable_name))
     println(io, "Variable Type: " * (vinfo.is_data ? "Observation" : "Assumption"))
     vinfo.is_data && println(io, "Data: " * string(vinfo.data))
@@ -77,10 +77,10 @@ end
 
 Return the distribution types and values of the random variables via ancestral sampling.
 """
-dry_run(g) = dry_run(g, (x->label_for(g, x)).(topological_sort_by_dfs(g)))
+dry_run(g) = dry_run(g, (x -> label_for(g, x)).(topological_sort_by_dfs(g)))
 function dry_run(g, sorted_nodes)
-    value = Dict{Symbol, Any}()
-    dist_types = Dict{Any, Any}()
+    value = Dict{Symbol,Any}()
+    dist_types = Dict{Any,Any}()
     for node in sorted_nodes
         if g[node].is_data
             value[node] = g[node].data
@@ -91,7 +91,7 @@ function dry_run(g, sorted_nodes)
             dist_types[node] = typeof(dist)
         end
     end
-    
+
     return dist_types, value
 end
 

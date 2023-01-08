@@ -252,6 +252,8 @@ censored_with_upper(d, u) = Distributions.censored(d; upper = u)
 truncated_with_lower(d, l) = Distributions.truncated(d; lower = l)
 truncated_with_upper(d, u) = Distributions.truncated(d; upper = u)
 
+USER_FUNCTIONS = []
+
 """
     @register_function
 
@@ -266,6 +268,7 @@ SymbolicPPL.f(2)
 ```
 """
 macro register_function(ex)
+    push!(USER_FUNCTIONS, MacroTools.splitdef(ex)[:name])
     eval_registration(ex)
     return nothing
 end

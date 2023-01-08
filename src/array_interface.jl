@@ -8,7 +8,7 @@
 # 3. Slice indexing is simply slice indexing with the symbolic array.
 
 # Notes on correctness:
-# - all indicies are need to appear on the LHS: this is implicitly checked by `gen_output` in `compiler.jl`
+# - all indices must appear on the LHS: this is implicitly checked by `gen_output` in `compiler.jl`
 
 """
     ref_to_symbolic(expr, compiler_state)
@@ -18,10 +18,8 @@ Return a symbolic variable for the referred array element. No side-effect.
 ref_to_symbolic(s::String) = ref_to_symbolic(Meta.parse(s))
 function ref_to_symbolic(expr::Expr)
     name = expr.args[1]
-    indices = map(eval, expr.args[2:end]) # deal with case like a[:(2-1):2]
-    if any(x->!isa(x, Integer), indices)
-        error("Only support integer indices.")
-    end
+    indices = eval.(expr.args[2:end]) # deal with case like a[:(2-1):2]
+    @assert any(isinteger, indices) "Only support integer indices."
     ret = create_symbolic_array(name, indices)
     return ret[indices...]
 end
@@ -31,7 +29,7 @@ end
 
 Return a a symbolic variable or symbolic array for an `ref` expression.
 """
-function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState, skip_colon = true)
+function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState, skip_colon=true)
     numdims = length(expr.args) - 1
     @assert numdims > 0 "Indices can't be empty, for `p[1:end]`, use shorthand `p[:]` instead."
     name = expr.args[1]
@@ -39,7 +37,7 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState, skip_colon 
     for (i, index) in enumerate(indices)
         if index isa Expr || (index isa Symbol && index != :(:))
             if Meta.isexpr(index, :call) && index.args[1] == :(:)
-                lb = resolve(index.args[2], compiler_state.logicalrules) 
+                lb = resolve(index.args[2], compiler_state.logicalrules)
                 ub = resolve(index.args[3], compiler_state.logicalrules)
                 if lb isa Real && ub isa Real
                     indices[i].args[2] = lb
@@ -50,11 +48,11 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState, skip_colon 
             end
 
             resolved_index = resolve(tosymbolic(index), compiler_state.logicalrules)
-            if !isa(resolved_index, Union{Real, UnitRange})
+            if !isa(resolved_index, Union{Real,UnitRange})
                 return __SKIP__
-            end 
+            end
 
-            if isa(resolved_index, Real) 
+            if isa(resolved_index, Real)
                 isinteger(resolved_index) || error("Index of $expr needs to be integers.")
                 indices[i] = Integer(resolved_index)
             else
@@ -74,7 +72,7 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState, skip_colon 
             return array[indices...] # implicitly checking if indices are valid
         else
             error("Dimension mismatch.")
-        end 
+        end
     end
 
     if !haskey(compiler_state.arrays, name)
@@ -125,4 +123,5 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState, skip_colon 
     error("Dimension doesn't match!")
 end
 
-const __SKIP__ = tosymbolic("SKIP")
+const __SKIP__ = tosymbolic(:SKIP)
+isskip(x) = Symbolics.isequal(x, __SKIP__)
