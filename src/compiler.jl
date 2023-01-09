@@ -276,7 +276,7 @@ end
 
 Replace all the variables in the expression with a symbolic variable. Possibly mutate compiler_state by calling `ref_to_symbolic`.
 """
-replace_variables!(rhs::Number, compiler_state::CompilerState, skip_colon=true) = rhs, []
+replace_variables!(rhs::Number, compiler_state::CompilerState, skip_colon=true) = rhs
 function replace_variables!(rhs::Expr, compiler_state::CompilerState, skip_colon=true)
     skip = false
     f_symbols = find_functions(rhs)
@@ -327,21 +327,21 @@ function extract_observations!(compiler_state::CompilerState)
     end
 end
 
-# TODO: Alternatively, can make the first return item a gensym, so later equality check is cheaper.
 """
     scalarize(ex)
 
-Convert symbolic arrays in symbolic expressions to arrays of `Num`. Also return the mapping the array of `Num`
-to an array of Symbols.
+Convert symbolic arrays in symbolic expressions to arrays of `Num`. Also return the mapping the array of `Num` to the 
+array of corresponding Symbols and the shape of the array. This information is used later by `gen_f_expr`. 
 
-```julia-repo
+# Example
+```julia-repl
 julia> using Symbolics; @register_symbolic foo(x::Vector)
 
 julia> @variables x[1:3]; Symbolics.scalarize(foo(x[1:3]))
-foo(SymbolicUtils.Term{Real, Nothing}[x[1], x[2], x[3]])
+foo(SymbolicUtils.Term{Real, Nothing}[x[1], x[2], x[3]]) # want foo(Num[x[1], x[2], x[3]]) instead
 
-julia> using SymbolicPPL; SymbolicPPL.scalarize(foo(x[1:3]))
-(foo(Num[x[1], x[2], x[3]]), Dict{Any, Any}(Num[x[1], x[2], x[3]] => [Symbol("x[1]"), Symbol("x[2]"), Symbol("x[3]")]))
+julia> scalarize(foo(x[1:3]))
+(f(Num[u[1], u[2], u[3]]), Dict{Any, Any}(Num[u[1], u[2], u[3]] => (Set([Symbol("u[3]"), Symbol("u[2]"), Symbol("u[1]")]), (3,))))
 ```
 """
 function scalarize(ex::Num, compiler_state::CompilerState)
@@ -363,7 +363,7 @@ function scalarize(ex::Num, compiler_state::CompilerState)
                 new_arg[j], r = scalarize(elem, compiler_state)
                 sub_dict = merge(sub_dict, r)
             end
-            new_arg = reduce(vcat, new_arg)
+            new_arg = reduce(vcat, new_arg) # the size information is lost in new_arg, so we return `size(arg)` as well
             for a in new_arg
                 vars = Symbolics.get_variables(a)
                 for v in vars
@@ -442,8 +442,21 @@ function gen_f_expr(compiler_state, var)
     return f_expr |> unresolve |> MacroTools.resyntax
 end
 
-# Symbolics.jl generated f_exprs are Function-typed (Expr(:call, +, ...) as opposed to Expr(:call, :(+), ...))
-# MacroTools.unresolve use methodtable lookup, which can't be compiled, thus slow.
+"""
+    unresolve(expr)
+
+Unresolve the function objects in `expr` to symbols. Symbolics.jl generated f_exprs are Function-typed (Expr(:call, +, ...) 
+as opposed to Expr(:call, :(+), ...)). MacroTools.unresolve achieves similar function, but it uses methodtable lookup, which 
+is slow. The reliability of this implementation still need to be verified.
+
+# Examples
+```julia-repl
+julia > Expr(:call, +, 1, 1)
+:((+)(1, 1))
+
+julia > unresolve(Expr(:call, +, 1, 1))
+:(1 + 1)
+"""
 function unresolve(expr)
     return MacroTools.prewalk(expr) do sub_expr
         if MacroTools.isexpr(sub_expr, :call) && sub_expr.head == :call && sub_expr.args[1] isa Function
@@ -555,7 +568,7 @@ function process_initializations(inits::Dict, pre_graph, compiler_state::Compile
         end
     end
 
-    return init_dict
+    return NamedTuple(init_dict)
 end
 
 function refinindices(expr, compiler_state)
@@ -603,6 +616,7 @@ Compile the model definition `model_def` with data `data` and target `target`.
 - `model_def`: the Julia Expr object returned from `@bugsast` or `bugsmodel`.
 - `data`: data and model prameters.
 - `target`: one of `:DynamicPPL`, `:IR`, or `:Graph`. 
+- `inits`: initial values for the MCMC chain.
 """
 function compile(model_def::Expr, data::NamedTuple, target::Symbol, inits=nothing)
     @assert target in [:DynamicPPL, :IR, :Graph,] "target must be one of [:DynamicPPL, :IR, :Graph]"
@@ -620,8 +634,8 @@ function compile(model_def::Expr, data::NamedTuple, target::Symbol, inits=nothin
                 addstochasticrules!(expr, compiler_state) ||
                 break
         end
-        # leave expressions with colon indexing to the last
-        # if the following statement is needed to unroll further, then some loop bounds
+        # Leave expressions with colon indexing to the last.
+        # If the following statement is needed to unroll further, then some loop bounds
         # requires colon indexing to resolve. In case like that, if the loop body contains
         # the same array variables used in the loop bounds, we cannot guarantee the correctness. 
         addlogicalrules!(expr, compiler_state, false) || break

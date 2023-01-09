@@ -24,11 +24,7 @@ function gen_variation_partition(g::BUGSGraph)
     dist_types = dry_run(g)[1]
     dt = Dict{Any, Any}()
     for k in keys(dist_types)
-        if dist_types[k] <: Sampleable{<:VariateForm,Discrete}
-            dt[k] = true
-        else
-            dt[k] = false
-        end
+        dt[k] = dist_types[k] <: Sampleable{<:VariateForm,Discrete}
     end
 
     discrete_vars = [k for k in keys(dt) if dt[k]]

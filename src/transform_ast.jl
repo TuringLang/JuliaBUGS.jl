@@ -1,6 +1,6 @@
-#
-# Regularize ASTs to make them easier to work with
-#
+###
+### Regularize ASTs to make them easier to work with
+###
 
 function cumulative(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr

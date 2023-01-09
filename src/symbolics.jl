@@ -59,7 +59,7 @@ function create_symbolic_array(array_name::Symbol, array_size::Vector)
 end
 
 function replace_variables(ex::Expr)
-    f_symbols = find_functions(rhs)
+    f_symbols = find_functions(ex)
     return MacroTools.prewalk(ex) do sub_expr
         if Meta.isexpr(sub_expr, :ref)
             return ref_to_symbolic(sub_expr)

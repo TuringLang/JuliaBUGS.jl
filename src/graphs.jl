@@ -1,3 +1,8 @@
+"""
+    VertexInfo
+
+VertexInfo is a struct that holds the information for each node in the BUGS graph.
+"""
 struct VertexInfo
     variable_name::Symbol
     sorted_inputs::Tuple
@@ -7,7 +12,11 @@ struct VertexInfo
     f::Function
 end
 
-# BUGSGraph is synonymous with MetaDiGraph with VertexInfo vertex type
+"""
+    BUGSGraph
+
+BUGSGraph is synonymous with MetaGraphNext.MetaDiGraph with [`VertexInfo`](@ref) vertex type.
+"""
 const BUGSGraph = MetaGraph{<:Any,Symbol,<:SimpleDiGraph,<:VertexInfo}
 
 function tograph(pre_graph::Dict)
@@ -77,8 +86,8 @@ end
 
 Return the distribution types and values of the random variables via ancestral sampling.
 """
-dry_run(g) = dry_run(g, (x -> label_for(g, x)).(topological_sort_by_dfs(g)))
-function dry_run(g, sorted_nodes)
+dry_run(g::BUGSGraph) = dry_run(g, (x -> label_for(g, x)).(topological_sort_by_dfs(g)))
+function dry_run(g::BUGSGraph, sorted_nodes::Vector{Symbol})
     value = Dict{Symbol,Any}()
     dist_types = Dict{Any,Any}()
     for node in sorted_nodes
@@ -93,9 +102,4 @@ function dry_run(g, sorted_nodes)
     end
 
     return dist_types, value
-end
-
-import Graphs: merge_vertices
-function Graphs.merge_vertices(g::BUGSGraph, vs)
-
 end
