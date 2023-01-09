@@ -298,7 +298,45 @@ data = (
     Y=rreshape([151, 199, 246, 283, 320, 145,], (2, 3)),
 )
 
-cs = compile(model_def, data, :IR); # check cs.logicalrules and cs.stochasticrules for correctness by eyes
+cs = compile(model_def, data, :IR);
+# julia > cs.logicalrules
+# Dict{Any, Any} with 23 entries:
+#   mu[2, 2]        => x[2]*beta[2, 2] + beta[2, 1]
+#   Y[1:2,1:3]      => [151 199 246; 283 320 145]
+#   Omega[1:2,1:2]  => [200.0 0.0; 0.0 0.2]
+#   mu[1, 2]        => x[2]*beta[1, 2] + beta[1, 1]
+#   mu[2, 3]        => x[3]*beta[2, 2] + beta[2, 1]
+#   var"mu.beta"[1] => get_index(var"mu.beta[1:2]", 1)
+#   beta[2, 1]      => get_index(var"beta[2, 1:2]", 1)
+#   var"mu.beta"[2] => get_index(var"mu.beta[1:2]", 2)
+#   beta[1, 2]      => get_index(var"beta[1, 1:2]", 2)
+#   N               => 30
+#   prec[1:2,1:2]   => [1.0e-6 0.0; 0.0 1.0e-6]
+#   beta[1, 1]      => get_index(var"beta[1, 1:2]", 1)
+#   R[1, 2]         => get_index(var"R[1:2, 1:2]", 3)
+#   R[1, 1]         => get_index(var"R[1:2, 1:2]", 1)
+#   mu[2, 1]        => x[1]*beta[2, 2] + beta[2, 1]
+#   beta[2, 2]      => get_index(var"beta[2, 1:2]", 2)
+#   mean[1:2]       => [0, 0]
+#   R[2, 2]         => get_index(var"R[1:2, 1:2]", 4)
+#   x[1:5]          => [8.0, 15.0, 22.0, 29.0, 36.0]
+#   R[2, 1]         => get_index(var"R[1:2, 1:2]", 2)
+#   T               => 5
+#   mu[1, 1]        => x[1]*beta[1, 2] + beta[1, 1]
+#   mu[1, 3]        => x[3]*beta[1, 2] + beta[1, 1]
+# julia > cs.stochasticrules
+# Dict{Any, Any} with 11 entries:
+# Y[1, 2]           => dnorm(mu[1, 2], tauC)
+# Y[2, 2]           => dnorm(mu[2, 2], tauC)
+# var"beta[1, 1:2]" => dmnorm(var"mu.beta"[Colon()], R[Colon(), Colon()])
+# var"beta[2, 1:2]" => dmnorm(var"mu.beta"[Colon()], R[Colon(), Colon()])
+# Y[2, 3]           => dnorm(mu[2, 3], tauC)
+# Y[1, 3]           => dnorm(mu[1, 3], tauC)
+# Y[1, 1]           => dnorm(mu[1, 1], tauC)
+# Y[2, 1]           => dnorm(mu[2, 1], tauC)
+# var"R[1:2, 1:2]"  => dwish(Omega[Colon(), Colon()], 2)
+# var"mu.beta[1:2]" => dmnorm(mean[Colon()], prec[Colon(), Colon()])
+# tauC              => Gamma{Float64}(α=0.001, θ=1000.0)
 g = compile(model_def, data, :Graph);
 
 ## test for erroring when LHS of logical assignment is data array element
