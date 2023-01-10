@@ -8,7 +8,7 @@ on:
       # This is where pull requests from "bors try" are built.
       - trying
       # Build the main branch.
-      - main
+      - master
 
 jobs:
   test:
