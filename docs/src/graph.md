@@ -4,7 +4,7 @@ Directed Acyclic Graph (DAG) is classical representation of probabilistic models
 
 ## Node Data
 ```@docs
-VertexInfo
+SymbolicPPL.VertexInfo
 ```
 Vertex store the following information:
 - the name of the variable
