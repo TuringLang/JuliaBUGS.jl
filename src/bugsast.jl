@@ -5,8 +5,8 @@ check_lhs(expr) = check_lhs(Bool, expr) || error("Invalid LHS expression `$expr`
 check_lhs(::Type{Bool}, expr) = false
 check_lhs(::Type{Bool}, ::Symbol) = true
 function check_lhs(::Type{Bool}, expr::Expr)
-    return Meta.isexpr(expr, :ref) || 
-        (Meta.isexpr(expr, :call, 2) && check_lhs(Bool, expr.args[2]))
+    return Meta.isexpr(expr, :ref) ||
+           (Meta.isexpr(expr, :call, 2) && check_lhs(Bool, expr.args[2]))
 end
 
 """
@@ -42,7 +42,7 @@ function bugsast_index(expr, position=LineNumberNode(1, nothing))
 end
 
 function bugsast_expression(expr, position=LineNumberNode(1, nothing))
-    if expr isa Union{Symbol, Number}
+    if expr isa Union{Symbol,Number}
         return expr
     elseif Meta.isexpr(expr, :ref)
         return Expr(:ref, bugsast_index.(expr.args, (position,))...)
@@ -51,7 +51,9 @@ function bugsast_expression(expr, position=LineNumberNode(1, nothing))
             return Expr(:ref, bugsast_index.(expr.args[2:end], (position,))...)
         elseif expr.args[1] == :truncated || expr.args[1] == :censored
             if length(expr.args) == 4
-                return Expr(expr.args[1], bugsast_expression.(expr.args[2:end], (position,))...)
+                return Expr(
+                    expr.args[1], bugsast_expression.(expr.args[2:end], (position,))...
+                )
             else
                 error("Illegal $(expr.args[1]) form at $(position_string(position)): $expr")
             end
@@ -77,7 +79,9 @@ Check & normalize BUGS blocks, i.e., bodies of `if` and `for` statements.
 """
 function bugsast_block(expr, position=LineNumberNode(1, nothing))
     if Meta.isexpr(expr, :block)
-        stmts = [bugsast_statement(e, position) for e in expr.args if !(e isa LineNumberNode)]
+        stmts = [
+            bugsast_statement(e, position) for e in expr.args if !(e isa LineNumberNode)
+        ]
         return Expr(:block, stmts...)
     else
         try
@@ -104,14 +108,18 @@ function bugsast_statement(expr::Expr, position=LineNumberNode(1, nothing))
         return Expr(:(~), lhs, rhs)
     elseif Meta.isexpr(expr, :if, 2)
         condition, body = expr.args
-        return Expr(:if, bugsast_expression(condition, position), bugsast_block(body, position))
+        return Expr(
+            :if, bugsast_expression(condition, position), bugsast_block(body, position)
+        )
     elseif Meta.isexpr(expr, :for, 2)
         condition, body = expr.args
         if Meta.isexpr(condition, :(=), 2)
             var = condition.args[1]
             range = bugsast_range(condition.args[2], position)
             if !(var isa Symbol)
-                error("Illegal loop variable declaration at $(position_string(position)): `$condition`")
+                error(
+                    "Illegal loop variable declaration at $(position_string(position)): `$condition`",
+                )
             else
                 condition = Expr(:(=), var, range)
                 return Expr(:for, condition, bugsast_block(body, position))
@@ -144,16 +152,16 @@ Used expression heads: `:~` for tilde calls, `:ref` for indexing, `:(:)` for ran
 converted from `:call` variants.
 """
 macro bugsast(expr)
-    return Meta.quot(bugsast(expr, __source__) |> warn_link_function)
+    return Meta.quot(warn_link_function(bugsast(expr, __source__)))
 end
 
 function warn_link_function(expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, f_(lhs_) = rhs_)
             error(
-                "BUGS' link function syntax is not supported due to confusion with Julia function definition syntax. " * 
+                "BUGS' link function syntax is not supported due to confusion with Julia function definition syntax. " *
                 "Please rewrite logical assignment by calling the inverse of the link function on the RHS. " *
-                "Corresponding Inverses: logit => logistic, cloglog => cexpexp, log => exp, probit => phi. "
+                "Corresponding Inverses: logit => logistic, cloglog => cexpexp, log => exp, probit => phi. ",
             )
         end
         return sub_expr
@@ -163,7 +171,7 @@ end
 function bugs_to_julia(s)
     # remove parentheses around loops
     s = replace(s, r"for\p{Zs}*\((.*)\)\p{Zs}*{" => s"for \1 {")
-    
+
     s = replace(
         s,
         "<-" => "=",
@@ -179,19 +187,25 @@ function bugs_to_julia(s)
         # ignore floats (could otherwise overlap with identifiers: ., E, e)
         r"(((\p{N}+\.\p{N}+)|(\p{N}+\.?))([eE][+-]?\p{N}+)?)" => s"\1",
         # wrap variable names in var-strings (to allow variable names with .)
-        r"((?:(?:\p{L}\p{M}*)|\.)(?:(?:\p{L}\p{M}*)|\.|\p{N})*)" => s"var\"\1\"", 
+        r"((?:(?:\p{L}\p{M}*)|\.)(?:(?:\p{L}\p{M}*)|\.|\p{N})*)" => s"var\"\1\"",
     )
 
     # special censoring/truncation syntax is converted to function calls, with `nothing`
     # inserted for left-out bounds
     s = replace(
         s,
-        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*T\p{Zs}*\(\p{Zs}*,(.+)\)" => s"truncated(\1, nothing, \2)",
-        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*T\p{Zs}*\((.+),\p{Zs}*\)" => s"truncated(\1, \2, nothing)",
-        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*T\p{Zs}*\((.+),(.+)\)" => s"truncated(\1, \2, \3)",
-        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*C\p{Zs}*\(\p{Zs}*,(.+)\)" => s"censored(\1, nothing, \2)",
-        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*C\p{Zs}*\((.+),\p{Zs}*\)" => s"censored(\1, \2, nothing)",
-        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*C\p{Zs}*\((.+),(.+)\)" => s"censored(\1, \2, \3)",
+        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*T\p{Zs}*\(\p{Zs}*,(.+)\)" =>
+            s"truncated(\1, nothing, \2)",
+        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*T\p{Zs}*\((.+),\p{Zs}*\)" =>
+            s"truncated(\1, \2, nothing)",
+        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*T\p{Zs}*\((.+),(.+)\)" =>
+            s"truncated(\1, \2, \3)",
+        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*C\p{Zs}*\(\p{Zs}*,(.+)\)" =>
+            s"censored(\1, nothing, \2)",
+        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*C\p{Zs}*\((.+),\p{Zs}*\)" =>
+            s"censored(\1, \2, nothing)",
+        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*C\p{Zs}*\((.+),(.+)\)" =>
+            s"censored(\1, \2, \3)",
     )
 
     return s
@@ -214,5 +228,3 @@ macro bugsmodel_str(s::String)
         end
     end
 end
-
-

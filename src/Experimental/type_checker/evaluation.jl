@@ -20,8 +20,6 @@ function _to_sampler(expr::Expr)
     end
 end
 
-
-
 function to_density(model, free_vars...; fixed_vars...)
     transformed_lines = _to_density(model).args
     fixed_defs = [:($n = $v) for (n, v) in fixed_vars]
@@ -89,4 +87,3 @@ end
 #         return __target__
 #     end
 # end
-

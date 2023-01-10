@@ -8,13 +8,15 @@ LinkedList{T}(cs::T...) where {T} = foldr(Cons, cs; init=Nil{T}())
 LinkedList(cs::T...) where {T} = LinkedList{T}(cs...)
 Base.foldr(op, ::Nil; init) = init
 Base.foldr(op, l::Cons; init) = op(l.head, foldr(op, l.tail; init))
-Base.map(f, l::LinkedList{T}) where {T} =
-    foldr((x, acc) -> Cons(f(x), acc), l; init=Nil{T}())
+function Base.map(f, l::LinkedList{T}) where {T}
+    return foldr((x, acc) -> Cons(f(x), acc), l; init=Nil{T}())
+end
 pushfirst!!(l::LinkedList{T}, x::T) where {T} = Cons(x, l)
 pushfirst!!(l::LinkedList, xs...) = foldr(Cons, xs; init=l)
 pop(l::Cons) = l.head, l.tail
-Base.collect(l::LinkedList{T}) where {T} =
-    reverse!(foldr((x, acc) -> push!(acc, x), l; init=T[]))
+function Base.collect(l::LinkedList{T}) where {T}
+    return reverse!(foldr((x, acc) -> push!(acc, x), l; init=T[]))
+end
 
 Base.IteratorSize() = Base.SizeUnknown()
 Base.IteratorEltype() = Base.HasEltype()
@@ -23,9 +25,7 @@ Base.iterate(l::LinkedList) = iterate(l, l)
 Base.iterate(l::LinkedList, state::Nil) = nothing
 Base.iterate(l::LinkedList, state::Cons) = state.head, state.tail
 
-Base.show(io::IO, l::LinkedList) =
-    print(io, "LinkedList(", join(l, ", "), ")")
-
+Base.show(io::IO, l::LinkedList) = print(io, "LinkedList(", join(l, ", "), ")")
 
 ## TYPES ###############
 const ArgsTuple{T} = Tuple{Vararg{T}}
@@ -74,7 +74,7 @@ function Base.show(io::IO, t::BugsTensor)
 end
 Base.show(io::IO, t::TypeName) = print(io, t.name)
 
-const UncoloredType = Union{TypeName, BugsPrimType, BugsCompoundType}
+const UncoloredType = Union{TypeName,BugsPrimType,BugsCompoundType}
 
 let _instance = BugsTensor(Bugsℤ(), 0)
     global BugsInt() = _instance
@@ -87,7 +87,6 @@ end
 →(dom::Tuple{Vararg{BugsType}}, cod::BugsType) = BugsFun(dom, cod)
 ↝(dom::BugsType, cod::BugsType) = BugsDist((dom,), cod)
 ↝(dom::Tuple{Vararg{BugsType}}, cod::BugsType) = BugsDist(dom, cod)
-
 
 ## COLORS ##################
 @enum Color constant stochastic ∅
@@ -110,7 +109,6 @@ colorof(t::BugsType) = ∅
 uncolor(t::ColoredType) = t.type
 uncolor(t::BugsType) = t
 
-
 ## SUBTYPING ###############
 issubtype(t1::BugsType, t2::BugsType) = issubtype(uncolor(t1), uncolor(t2))
 issubtype(::BugsType, ::TypeName) = true
@@ -118,20 +116,23 @@ issubtype(::TypeName, ::BugsType) = true
 issubtype(t1::TypeName, t2::TypeName) = t1 == t2
 issubtype(t1::UncoloredType, t2::UncoloredType) = t1 == t2
 issubtype(::Bugsℤ, ::Bugsℝ) = true
-issubtype(t1::BugsTensor, t2::BugsTensor) = t1.rank == t2.rank && issubtype(t1.eltype, t2.eltype)
-
+function issubtype(t1::BugsTensor, t2::BugsTensor)
+    return t1.rank == t2.rank && issubtype(t1.eltype, t2.eltype)
+end
 
 ## UNIFICATION ##############
 freevars(t::BugsType) = freevars!(Set{TypeName}(), t)
 freevars!(fv, t::TypeName) = push!(fv, t)
 freevars!(fv, t::BugsPrimType) = fv
-freevars!(fv, t::BugsTransformType) = foldl(freevars!, t.dom, init=freevars!(fv, t.cod))
+freevars!(fv, t::BugsTransformType) = foldl(freevars!, t.dom; init=freevars!(fv, t.cod))
 freevars!(fv, t::BugsTensor) = freevars!(fv, t.eltype)
 freevars!(fv, t::ColoredType) = freevars!(fv, uncolor(t))
 
 occursin(n::TypeName, t::TypeName) = n == t
 occursin(n::TypeName, t::BugsPrimType) = false
-occursin(n::TypeName, t::BugsTransformType) = any(t -> occursin(n, t), t.dom) || occursin(n, t.cod)
+function occursin(n::TypeName, t::BugsTransformType)
+    return any(t -> occursin(n, t), t.dom) || occursin(n, t.cod)
+end
 occursin(n::TypeName, t::BugsTensor) = ocursin(n, t.eltype)
 occursin(n::TypeName, t::ColoredType) = occursin(n, uncolor(t))
 
@@ -145,9 +146,9 @@ Base.show(io::IO, c::Constraint) = print(io, "$(c.lhs) ≃ $(c.rhs)")
 const ConstraintSet = LinkedList{Constraint}
 
 struct Substitution
-    mapping::Dict{TypeName, <:BugsType}
+    mapping::Dict{TypeName,<:BugsType}
 end
-Substitution(xs...) = Substitution(Dict{TypeName, BugsType}(xs...))
+Substitution(xs...) = Substitution(Dict{TypeName,BugsType}(xs...))
 
 (σ::Substitution)(t::BugsType) = t
 (σ::Substitution)(t::BugsFun) = BugsFun(σ.(t.dom), σ(t.cod))
@@ -155,7 +156,7 @@ Substitution(xs...) = Substitution(Dict{TypeName, BugsType}(xs...))
 (σ::Substitution)(t::TypeName) = get(σ.mapping, t, t)
 
 function Base.:∘(σ::Substitution, γ::Substitution)
-    mapping = Dict{TypeName, BugsType}()
+    mapping = Dict{TypeName,BugsType}()
     for (X, T) in pairs(γ.mapping)
         mapping[X] = σ(T)
     end
@@ -180,12 +181,20 @@ function unify(𝒞::ConstraintSet)
             σ = Substitution(T => S)
             return unify(σ(𝒞′)) ∘ σ
         elseif S isa BugsFun && T isa BugsFun && length(S.dom) == length(T.dom)
-            cs = mapfoldl(Base.splat(≃), pushfirst!!, zip(S.dom, T.dom);
-                          init=ConstraintSet(S.cod ≃ T.cod))
+            cs = mapfoldl(
+                Base.splat(≃),
+                pushfirst!!,
+                zip(S.dom, T.dom);
+                init=ConstraintSet(S.cod ≃ T.cod),
+            )
             return unify(pushfirst!!(𝒞′, cs))
         elseif S isa BugsDist && T isa BugsDist && length(S.dom) == length(T.dom)
-            cs = mapfoldl(Base.splat(≃), pushfirst!!, zip(S.dom, T.dom);
-                          init=ConstraintSet(S.cod ≃ T.cod))
+            cs = mapfoldl(
+                Base.splat(≃),
+                pushfirst!!,
+                zip(S.dom, T.dom);
+                init=ConstraintSet(S.cod ≃ T.cod),
+            )
             return unify(pushfirst!!(𝒞′, cs...))
         elseif S isa BugsTensor && T isa BugsTensor && S.rank == T.rank
             return unify(pushfirst!!(𝒞′, S.eltype ≃ T.eltype))
@@ -197,12 +206,13 @@ function unify(𝒞::ConstraintSet)
     end
 end
 
-
 ## TYPE CHECKING ###########
-const Environment = LinkedList{Pair{Symbol, <:BugsType}}
+const Environment = LinkedList{Pair{Symbol,<:BugsType}}
 
 (σ::Substitution)(Γ::Environment) = map(((n, t),) -> n => σ(t), Γ)
-find(Γ::Environment, key::Symbol) = foldr(((k, v), found) -> k == key ? v : found, Γ; init=nothing)
+function find(Γ::Environment, key::Symbol)
+    return foldr(((k, v), found) -> k == key ? v : found, Γ; init=nothing)
+end
 
 function synthesize_color!!(𝒞, Γ, expr)
     if expr isa Symbol
@@ -243,7 +253,7 @@ function synthesize_color!!(𝒞, Γ, expr)
                 𝒞, Γ, arg_color = synthesize_color!!(𝒞, Γ, arg)
                 result_color = result_color ⊔ arg_color
             end
-            return 𝒞, Γ,  result_color
+            return 𝒞, Γ, result_color
         elseif t_fun isa BugsDist
             return 𝒞, Γ, stochastic
         else
@@ -286,7 +296,7 @@ function synthesize!!(𝒞, Γ, expr)
         A_rank = length(expr.args)
         𝒞, Γ, A_type = synthesize!!(𝒞, Γ, A)
         𝒞, Γ, A_color = synthesize_color!!(𝒞, Γ, A)
-        
+
         result_color = A_color
         result_rank = 0
         for ind in inds
@@ -331,31 +341,31 @@ end
 
 function check!!(𝒞, Γ, expr, t)
     if false
-        
-    # elseif Meta.isexpr(expr, :(=)) && t == BugsVoid()
-    #     lhs, rhs = expr.args
-    #     𝒞, t_left = synthesize!!(𝒞, Γ, lhs)
-    #     𝒞 = check!!(𝒞, Γ, rhs, t_left)
-    #     return 𝒞
-    # elseif Meta.isexpr(expr, :(~)) && t == BugsVoid()
-    #     lhs, rhs = expr.args
-    #     𝒞, t_left = synthesize!!(𝒞, Γ, lhs)
-    #     𝒞 = check!!(𝒞, Γ, lhs, t_left)
-    #     return 𝒞
-    # elseif Meta.isexpr(expr, :block) && t == BugsVoid()
-    #     # new𝒞 = foldl(expr.args; init=𝒞) do (stmt, acc𝒞)
-    #         # check(Γ, stmt, BugsVoid, acc𝒞)
-    #     # end
-    #     # return BugsVoid, new𝒞
-    #     return 𝒞
-    # elseif Meta.isexpr(expr, :if)
-        
-    # elseif Meta.isexpr(expr, :for)
-    #     condition, body = expr.args
-    #     var, range = condition.args
-    #     asserttype(range, BugsInt ∙ constant)
-    #     T, new𝒞 = check(push(Γ, var => BugsInt ∙ constant), body, 𝒞)
-    #     asserttype()
+
+        # elseif Meta.isexpr(expr, :(=)) && t == BugsVoid()
+        #     lhs, rhs = expr.args
+        #     𝒞, t_left = synthesize!!(𝒞, Γ, lhs)
+        #     𝒞 = check!!(𝒞, Γ, rhs, t_left)
+        #     return 𝒞
+        # elseif Meta.isexpr(expr, :(~)) && t == BugsVoid()
+        #     lhs, rhs = expr.args
+        #     𝒞, t_left = synthesize!!(𝒞, Γ, lhs)
+        #     𝒞 = check!!(𝒞, Γ, lhs, t_left)
+        #     return 𝒞
+        # elseif Meta.isexpr(expr, :block) && t == BugsVoid()
+        #     # new𝒞 = foldl(expr.args; init=𝒞) do (stmt, acc𝒞)
+        #         # check(Γ, stmt, BugsVoid, acc𝒞)
+        #     # end
+        #     # return BugsVoid, new𝒞
+        #     return 𝒞
+        # elseif Meta.isexpr(expr, :if)
+
+        # elseif Meta.isexpr(expr, :for)
+        #     condition, body = expr.args
+        #     var, range = condition.args
+        #     asserttype(range, BugsInt ∙ constant)
+        #     T, new𝒞 = check(push(Γ, var => BugsInt ∙ constant), body, 𝒞)
+        #     asserttype()
         #     return BugsVoid, new𝒞
     else
         𝒞, Γ, t_inferred = synthesize!!(𝒞, Γ, expr)
@@ -390,13 +400,10 @@ end
 checking_error(expr, t_expected...) = throw(BugsTypeError(expr, collect(t_expected)))
 synthesis_error(expr) = throw(BugsTypeError(expr, nothing))
 
-
 function infer_types(expr, Γ_base=Environment())
     𝒞, Γ, t = synthesize!!(ConstraintSet(), Γ_base, expr)
     σ = unify(𝒞)
     return σ(Γ), σ(t)
 end
 
-STANDARD_ENV = Environment(
-    :+ => BugsFun((BugsInt(), BugsInt()), BugsInt())
-)
+STANDARD_ENV = Environment(:+ => BugsFun((BugsInt(), BugsInt()), BugsInt()))

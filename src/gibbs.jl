@@ -6,17 +6,17 @@ using Distributions
 using Graphs, MetaGraphsNext
 
 struct Trace <: AbstractPPL.AbstractModelTrace
-    value::Dict{Symbol, Real}
-    logp::Dict{Symbol, Real}
+    value::Dict{Symbol,Real}
+    logp::Dict{Symbol,Real}
 end
 
 struct GraphModel <: AbstractPPL.AbstractProbabilisticProgram
-    g :: MetaDiGraph
+    g::BUGSGraph
     sorted_nodes::Vector{Symbol}
 end
 
-function GraphModel(g::MetaDiGraph)
-    sorted_nodes = (x->label_for(g, x)).(topological_sort_by_dfs(g))
+function GraphModel(g::BUGSGraph)
+    sorted_nodes = (x -> label_for(g, x)).(topological_sort_by_dfs(g))
     return GraphModel(g, sorted_nodes)
 end
 
@@ -27,13 +27,10 @@ abstract type MHWithinGibbs <: GibbsSampler end
 struct ProposeFromPrior <: MHWithinGibbs end
 
 function AbstractMCMC.step(
-    rng::Random.AbstractRNG, 
-    model::GraphModel, 
-    sampler::GibbsSampler;
-    kwargs...
+    rng::Random.AbstractRNG, model::GraphModel, sampler::GibbsSampler; kwargs...
 )
-    value = Dict{Symbol, Real}()
-    logp = Dict{Symbol, Float64}()
+    value = Dict{Symbol,Real}()
+    logp = Dict{Symbol,Float64}()
     for node in model.sorted_nodes
         if model.g[node].is_data
             data = model.g[node].data
@@ -49,20 +46,18 @@ function AbstractMCMC.step(
         end
     end
     report_variables = [n for n in model.sorted_nodes if !model.g[n].is_data]
-    return [value[v] for v in report_variables], (Trace(value, logp), report_variables,)
+    return [value[v] for v in report_variables], (Trace(value, logp), report_variables)
 end
 
 function AbstractMCMC.step(
-    rng::Random.AbstractRNG, 
-    model::GraphModel, 
-    sampler::ProposeFromPrior,
-    state;
-    kwargs...
+    rng::Random.AbstractRNG, model::GraphModel, sampler::ProposeFromPrior, state; kwargs...
 )
     trace, report_variables = state
     for node in model.sorted_nodes
         if model.g[node].is_data
-            trace.logp[node] = logpdf(getdistribution(model.g, node, trace.value), trace.value[node])
+            trace.logp[node] = logpdf(
+                getdistribution(model.g, node, trace.value), trace.value[node]
+            )
         else
             d = getdistribution(model.g, node, trace.value)
             x = trace.value[node]
@@ -74,11 +69,14 @@ function AbstractMCMC.step(
             logα += logpdf(d′, x′) - logpdf(d, x)
             for c in outneighbors(model.g, code_for(model.g, node))
                 v = label_for(model.g, c)
-                logα += logpdf(getdistribution(model.g, v, trace.value, Dict(node => x′)), trace.value[v])
+                logα += logpdf(
+                    getdistribution(model.g, v, trace.value, Dict(node => x′)),
+                    trace.value[v],
+                )
                 logα -= logpdf(getdistribution(model.g, v, trace.value), trace.value[v])
             end
 
-            if -randexp(rng) < logα 
+            if -randexp(rng) < logα
                 trace.value[node] = x′
                 trace.logp[node] = logpdf(d′, x′)
             else
@@ -86,16 +84,11 @@ function AbstractMCMC.step(
             end
         end
     end
-    return [trace.value[v] for v in report_variables], (trace, report_variables,)
+    return [trace.value[v] for v in report_variables], (trace, report_variables)
 end
 
 function AbstractMCMC.bundle_samples(
-    samples, 
-    model::GraphModel, 
-    ::AbstractMCMC.AbstractSampler, 
-    ::Any, 
-    ::Type; 
-    kwargs...
+    samples, model::GraphModel, ::AbstractMCMC.AbstractSampler, ::Any, ::Type; kwargs...
 )
     report_varaibles = [n for n in model.sorted_nodes if !model.g[n].is_data]
     return sort(Chains(samples, report_varaibles))

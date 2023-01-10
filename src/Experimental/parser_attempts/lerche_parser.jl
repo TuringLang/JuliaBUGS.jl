@@ -48,14 +48,15 @@ WS: /(?>[[:space:]]+)/
 
 struct BugsTransformer <: Transformer end
 
-parse(text) = Lerche.parse(
-    Lark(
-        bugs_grammar(),
-        parser="lalr",
-        lexer="standard",
-        # maybe_placeholders=true,
-        transformer=BugsTransformer(),
-    ),
-    text
-)
-    
+function parse(text)
+    return Lerche.parse(
+        Lark(
+            bugs_grammar();
+            parser="lalr",
+            lexer="standard",
+            # maybe_placeholders=true,
+            transformer=BugsTransformer(),
+        ),
+        text,
+    )
+end

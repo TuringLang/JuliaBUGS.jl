@@ -12,13 +12,7 @@ regression = @bugsast begin
     β = dnorm(0.0, 1e-6)
 end
 
-regression_data = (
-    x = [1,2,3,4,5],
-    Y = [1,3,3,3,5],
-    x̄ = 3,
-    N = 5
-)
-
+regression_data = (x=[1, 2, 3, 4, 5], Y=[1, 3, 3, 3, 5], x̄=3, N=5)
 
 rats = @bugsast begin
     for i in 1:N
@@ -56,7 +50,6 @@ hearts = @bugsast begin
     logit(θ) = δ
     delta ~ dnorm(0, 1e-4)
 end
-
 
 regions1 = @bugsast begin
     x[1] = 10

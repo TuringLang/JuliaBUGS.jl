@@ -16,7 +16,10 @@ using Random
 
 include("bugsast.jl")
 include("graphs.jl")
+include("symbolics.jl")
+include("transform_ast.jl")
 include("compiler.jl")
+include("array_interface.jl")
 include("primitives.jl")
 include("gibbs.jl")
 include("distributions.jl")
