@@ -11,3 +11,7 @@ makedocs(;
         "Graphical Representation" => "graph.md",
     ],
 )
+
+deploydocs(
+    repo = "github.com/TuringLang/SymbolicPPL.jl.git",
+)
