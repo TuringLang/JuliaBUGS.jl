@@ -1,12 +1,27 @@
-const DISTRIBUTIONS = [:truncated, :censored, :dgamma, :dnorm, :dbeta, :dbin, :dcat, :dexp, :dpois, :dflat, 
-    :dunif, :dbern, :bar, :dmnorm, :ddirich, :dwish,]
+const DISTRIBUTIONS = [
+    :truncated,
+    :censored,
+    :dgamma,
+    :dnorm,
+    :dbeta,
+    :dbin,
+    :dcat,
+    :dexp,
+    :dpois,
+    :dflat,
+    :dunif,
+    :dbern,
+    :bar,
+    :dmnorm,
+    :ddirich,
+    :dwish,
+]
 
 USER_DISTRIBUTIONS = []
 
-const INVERSE_LINK_FUNCTION =
-    (logit = :logistic, cloglog = :cexpexp, log = :exp, probit = :phi)
+const INVERSE_LINK_FUNCTION = (logit=:logistic, cloglog=:cexpexp, log=:exp, probit=:phi)
 
-TRACED_FUNCTIONS = [:exp,]
+TRACED_FUNCTIONS = [:exp]
 
 """ 
     NA
@@ -20,7 +35,7 @@ const NA = missing
 
 Reshape the array `x` to the shape `dims`, row major order.
 """
-rreshape(v::Vector, dim) = permutedims(reshape(v, reverse(dim)), length(dim):-1:1)    
+rreshape(v::Vector, dim) = permutedims(reshape(v, reverse(dim)), length(dim):-1:1)
 
 @register_symbolic get_index(x, index)
 @register_symbolic get_index(x::Array, index)
@@ -36,29 +51,35 @@ get_index(x, i) = x[i...]
 # cos
 equals(x, y) = x == y ? 1 : 0
 # exp
-inprod(a, b) = a*b
-inverse(v) = LinearAlgebra.inv(v); @register_symbolic inverse(v::Array)
+inprod(a, b) = a * b
+inverse(v) = LinearAlgebra.inv(v);
+@register_symbolic inverse(v::Array);
 # log
-logdet(v) = LinearAlgebra.logdet(v) 
+logdet(v) = LinearAlgebra.logdet(v)
 logfact(x) = log(factorial(x))
 loggam(x) = loggamma(x)
 # logit: from LogExpFunctions
 icloglog(x) = cexpexp(x)
 ilogit(x) = logistic(x)
 # max
-Statistics.mean(v::Symbolics.Arr{Num, 1}) = Statistics.mean(Symbolics.scalarize(v)) #; mean: from Statistics
+Statistics.mean(v::Symbolics.Arr{Num,1}) = Statistics.mean(Symbolics.scalarize(v)) #; mean: from Statistics
 # min
 phi(x) = Distributions.cdf(Normal(0, 1), x)
 pow(a, b) = a^b
 # probit: from LogExpFunctions
 # sqrt
-rank(v::Vector, i::Int) = sortperm(v)[i]; @register_symbolic rank(v::Array, i::Int)
-ranked(v::Vector, i::Int) = v[sortperm(v)[i]]; @register_symbolic ranked(v::Array, i::Int)
+rank(v::Vector, i::Int) = sortperm(v)[i];
+@register_symbolic rank(v::Array, i::Int);
+ranked(v::Vector, i::Int) = v[sortperm(v)[i]];
+@register_symbolic ranked(v::Array, i::Int);
 # round
-sd(v::Vector) = Statistics.std(v); sd(v::Symbolics.Arr{Num, 1}) = Statistics.std(Symbolics.scalarize(v))
+sd(v::Vector) = Statistics.std(v);
+sd(v::Symbolics.Arr{Num,1}) = Statistics.std(Symbolics.scalarize(v));
 softplus(x) = log1pexp(x)
-sort(v::Vector) = Base.sort(v); @register_symbolic sort(v::Array)
-step(x) = ifelse(x > 0, 1, 0); step(x::Num) = IfElse.ifelse(x>1,1,0)
+sort(v::Vector) = Base.sort(v);
+@register_symbolic sort(v::Array);
+step(x) = ifelse(x > 0, 1, 0);
+step(x::Num) = IfElse.ifelse(x > 1, 1, 0);
 sum(x::Symbolics.Arr) = Base.sum(Symbolics.scalarize(x))
 # trunc
 
@@ -105,7 +126,7 @@ var"eigen.vals"(v::Matrix) = eigen(v).values
 ### Continuous univariate, unrestricted range
 ### 
 
-@register_symbolic dnorm(mu, tau) 
+@register_symbolic dnorm(mu, tau)
 dnorm(mu, tau) = Normal(mu, 1 / sqrt(tau))
 
 @register_symbolic dlogis(mu, tau)
@@ -113,7 +134,7 @@ dlogis(μ, τ) = Logistic(μ, 1 / τ)
 
 @register_symbolic dt(μ, τ, k)
 function dt(μ, τ, k)
-    if μ != 1 || τ != 1 
+    if μ != 1 || τ != 1
         error("Only μ = 1 and τ = 1 are supported for Student's t distribution.")
     end
     return TDist(k)
@@ -128,16 +149,16 @@ dflat() = DFlat()
 ### Continuous univariate, restricted to be positive
 ###
 @register_symbolic dexp(λ)
-dexp(λ) = Exponential(1/λ)
+dexp(λ) = Exponential(1 / λ)
 
 @register_symbolic dgamma(a, b)
-dgamma(a, b) = Gamma(a, 1/b) 
+dgamma(a, b) = Gamma(a, 1 / b)
 
 @register dchisqr(k)
 dchisqr(k) = Chisq(k)
 
 @register_symbolic dweib(a, b)
-dweib(a, b) = Weibull(a, 1/b)
+dweib(a, b) = Weibull(a, 1 / b)
 
 @register_symbolic dlnorm(μ, τ)
 dlnorm(μ, τ) = LogNormal(μ, 1 / τ)
@@ -148,7 +169,7 @@ function var"gen.gamma"(a, b, c)
     if c != 1
         error("Only c = 1 is supported for generalized gamma distribution.")
     end
-    return Gamma(a, 1/b)
+    return Gamma(a, 1 / b)
 end
 dggamma(a, b, c) = var"gen.gamma"(a, b, c)
 
@@ -163,7 +184,7 @@ dgpar(μ, σ, η) = GeneralizedPareto(μ, σ, η)
 
 @register_symbolic df(n, m, μ, τ)
 function df(n, m, μ, τ)
-    if μ != 1 || τ != 1 
+    if μ != 1 || τ != 1
         error("Only μ = 1 and τ = 1 are supported for F distribution.")
     end
     return FDist(n, m)
@@ -221,7 +242,7 @@ dnegbin(p, r) = NegativeBinomial(r, p)
 dbetabin(a, b, n) = BetaBinomial(n, a, b)
 
 @register_symbolic dhyper(n1, n2, m1, ψ)
-function dhyp(n1, n2, m1, ψ) 
+function dhyp(n1, n2, m1, ψ)
     if ψ != 1
         error("Only ψ = 1 is supported for hypergeometric distribution.")
     end
@@ -235,7 +256,6 @@ end
 @register_symbolic dmulti(θ::Vector, n)
 dmulti(θ::Vector, n) = Multinomial(n, θ)
 
-
 """ 
     Truncated and Censored Functions
 """
@@ -243,14 +263,14 @@ dmulti(θ::Vector, n) = Multinomial(n, θ)
 @register_symbolic censored(d, l, u)
 @register_symbolic censored_with_lower(d, l)
 @register_symbolic censored_with_upper(d, u)
-censored_with_lower(d, l) = Distributions.censored(d; lower = l)
-censored_with_upper(d, u) = Distributions.censored(d; upper = u)
+censored_with_lower(d, l) = Distributions.censored(d; lower=l)
+censored_with_upper(d, u) = Distributions.censored(d; upper=u)
 
 @register_symbolic truncated(d, l, u)
 @register_symbolic truncated_with_lower(d, l)
 @register_symbolic truncated_with_upper(d, u)
-truncated_with_lower(d, l) = Distributions.truncated(d; lower = l)
-truncated_with_upper(d, u) = Distributions.truncated(d; upper = u)
+truncated_with_lower(d, l) = Distributions.truncated(d; lower=l)
+truncated_with_upper(d, u) = Distributions.truncated(d; upper=u)
 
 USER_FUNCTIONS = []
 
@@ -291,7 +311,12 @@ end
 
 function eval_registration(ex)
     def = MacroTools.splitdef(ex)
-    reg_sym = Expr(:macrocall, Symbol("@register_symbolic"), LineNumberNode(@__LINE__, @__FILE__), Expr(:call, def[:name], def[:args]...))
+    reg_sym = Expr(
+        :macrocall,
+        Symbol("@register_symbolic"),
+        LineNumberNode(@__LINE__, @__FILE__),
+        Expr(:call, def[:name], def[:args]...),
+    )
     eval(reg_sym)
     eval(ex)
     return def[:name]

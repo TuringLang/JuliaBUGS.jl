@@ -93,34 +93,31 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState, skip_colon=
         return array[indices...]
     end
 
-    # if array exists
+    @assert ndims(array) == numdims "Dimension doesn't match!"
+    # the array exists
     array = compiler_state.arrays[name]
-    if ndims(array) == numdims
-        array_size = collect(size(array))
-        for (i, index) in enumerate(indices)
-            if index isa UnitRange
-                array_size[i] = max(array_size[i], index[end]) # in case 'high' is Expr
-            elseif index == :(:)
-                if skip_colon
-                    return __SKIP__
-                end
-                indices[i] = Colon()
-            elseif index isa Integer
-                array_size[i] = max(indices[i], array_size[i])
-            else
-                error("Indexing syntax is wrong.")
+    array_size = collect(size(array))
+    for (i, index) in enumerate(indices)
+        if index isa UnitRange
+            array_size[i] = max(array_size[i], index[end]) # in case 'high' is Expr
+        elseif index == :(:)
+            if skip_colon
+                return __SKIP__
             end
-        end
-
-        if all(array_size .== size(array))
-            return array[indices...]
+            indices[i] = Colon()
+        elseif index isa Integer
+            array_size[i] = max(indices[i], array_size[i])
         else
-            compiler_state.arrays[name] = create_symbolic_array(name, array_size)
-            return compiler_state.arrays[name][indices...]
+            error("Indexing syntax is wrong.")
         end
     end
 
-    error("Dimension doesn't match!")
+    if all(array_size .== size(array))
+        return array[indices...]
+    else
+        compiler_state.arrays[name] = create_symbolic_array(name, array_size)
+        return compiler_state.arrays[name][indices...]
+    end
 end
 
 const __SKIP__ = tosymbolic(:SKIP)

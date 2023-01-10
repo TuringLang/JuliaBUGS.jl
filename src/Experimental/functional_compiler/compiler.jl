@@ -245,9 +245,9 @@ function create_rw(expr)
     end
     sort!(P; by=x -> string(x))
 
-    rw = Metatheory.PassThrough(Metatheory.Fixpoint(Metatheory.Postwalk(Metatheory.Chain(
-        P
-    ))))
+    rw = Metatheory.PassThrough(
+        Metatheory.Fixpoint(Metatheory.Postwalk(Metatheory.Chain(P)))
+    )
     return rw, P
 end
 

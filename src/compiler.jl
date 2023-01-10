@@ -57,9 +57,7 @@ function canunroll(expr::Expr, compiler_state::CompilerState)
             lower_bound, upper_bound = arg.args[1].args[2].args
             lower_bound = resolve(lower_bound, compiler_state.logicalrules)
             upper_bound = resolve(upper_bound, compiler_state.logicalrules)
-            is_integer(lower_bound) &&
-                is_integer(upper_bound) &&
-                return true
+            is_integer(lower_bound) && is_integer(upper_bound) && return true
         end
     end
     return false
@@ -74,10 +72,11 @@ function unroll(expr::Expr, compiler_state::CompilerState)
     upper_bound = resolve(upper_bound, compiler_state.logicalrules)
     if is_integer(lower_bound) && is_integer(upper_bound)
         unrolled_exprs = []
-        for i = lower_bound:upper_bound
+        for i in lower_bound:upper_bound
             # Replace all the loop variables in array indices with integers
-            replaced_expr =
-                MacroTools.postwalk(sub_expr -> sub_expr == loop_var ? i : sub_expr, body)
+            replaced_expr = MacroTools.postwalk(
+                sub_expr -> sub_expr == loop_var ? i : sub_expr, body
+            )
             push!(unrolled_exprs, replaced_expr.args...)
         end
         return Expr(:block, unrolled_exprs...)
@@ -279,7 +278,8 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState, skip_col
                 lhs = tosymbolic(lhs)
             end
             @assert !haskey(compiler_state.stochasticrules, lhs) "Repeated definition for $(lhs)"
-            @assert (!haskey(compiler_state.logicalrules, lhs) || isa(resolve(lhs, compiler_state.logicalrules), Real)) "A stochastic variable cannot be used as LHS of logical assignments unless it's an observation."
+            @assert !haskey(compiler_state.logicalrules, lhs) ||
+                isa(resolve(lhs, compiler_state.logicalrules), Real) "A stochastic variable cannot be used as LHS of logical assignments unless it's an observation."
             @assert rhs.head == :call "RHS needs to be a distribution function"
             @assert rhs.args[1] in vcat(
                 DISTRIBUTIONS,
@@ -417,7 +417,8 @@ function scalarize(ex::Num, compiler_state::CompilerState)
                                 break
                             end
                         end
-                        find_match || error("The array indexing $v should be a stochastic variable.")
+                        find_match ||
+                            error("The array indexing $v should be a stochastic variable.")
                     end
                     push!(args, tosymbol(v))
                 end
@@ -458,22 +459,32 @@ function gen_f_expr(compiler_state, var)
 
     while !isempty(sub_dict)
         for arr in keys(sub_dict)
-            f_expr.args[1].args = collect(union(Set(f_expr.args[1].args), Set(sub_dict[arr][1])))
-            f_expr = MacroTools.postwalk(f_expr) do sub_expr
-                if isequal(sub_expr, arr) # this equality check can be expensive, as it potentially requries comparing two type-unstable arrays
-                    if length(sub_dict[arr][2]) == 2 && (sub_dict[arr][2][1] == 1 || sub_dict[arr][2][2] == 1)
-                        sub_expr = Expr(:vect, (Symbolics.toexpr.(arr))...)
-                    else
-                        sub_expr = Expr(:call, :rreshape, Expr(:vect, (Symbolics.toexpr.(arr))...), Expr(:tuple, sub_dict[arr][2]...))
+            f_expr.args[1].args = collect(
+                union(Set(f_expr.args[1].args), Set(sub_dict[arr][1]))
+            )
+            f_expr = getindex_to_ref(
+                MacroTools.postwalk(f_expr) do sub_expr
+                    if isequal(sub_expr, arr) # this equality check can be expensive, as it potentially requries comparing two type-unstable arrays
+                        if length(sub_dict[arr][2]) == 2 &&
+                            (sub_dict[arr][2][1] == 1 || sub_dict[arr][2][2] == 1)
+                            sub_expr = Expr(:vect, (Symbolics.toexpr.(arr))...)
+                        else
+                            sub_expr = Expr(
+                                :call,
+                                :rreshape,
+                                Expr(:vect, (Symbolics.toexpr.(arr))...),
+                                Expr(:tuple, sub_dict[arr][2]...),
+                            )
+                        end
+                        delete!(sub_dict, arr)
                     end
-                    delete!(sub_dict, arr)
-                end
-                return sub_expr
-            end |> getindex_to_ref
+                    return sub_expr
+                end,
+            )
         end
     end
 
-    return f_expr |> unresolve |> MacroTools.resyntax
+    return MacroTools.resyntax(unresolve(f_expr))
 end
 
 """
@@ -493,7 +504,9 @@ julia > unresolve(Expr(:call, +, 1, 1))
 """
 function unresolve(expr)
     return MacroTools.prewalk(expr) do sub_expr
-        if MacroTools.isexpr(sub_expr, :call) && sub_expr.head == :call && sub_expr.args[1] isa Function
+        if MacroTools.isexpr(sub_expr, :call) &&
+            sub_expr.head == :call &&
+            sub_expr.args[1] isa Function
             sub_expr.args[1] = Symbol(sub_expr.args[1])
             # elseif sub_expr isa Distributions.Distribution
             #     sub_expr = Expr(:call, nameof(typeof(sub_expr)), Distributions.params(sub_expr)...)
@@ -555,8 +568,11 @@ end
 
 Generates a dictionary map varaible names to their initial values in the MCMC chain.
 """
-process_initializations(inits::NamedTuple, pre_graph, compiler_state::CompilerState) =
-    process_initializations(Dict(pairs(inits)), pre_graph, compiler_state)
+function process_initializations(
+    inits::NamedTuple, pre_graph, compiler_state::CompilerState
+)
+    return process_initializations(Dict(pairs(inits)), pre_graph, compiler_state)
+end
 function process_initializations(inits::Dict, pre_graph, compiler_state::CompilerState)
     # read initlization values
     initilizations = Dict()
@@ -567,8 +583,10 @@ function process_initializations(inits::Dict, pre_graph, compiler_state::Compile
             @assert !pre_graph[key][3] "The variable $key is an observed variable, initialization is not supported."
             initilizations[tosymbolic(key)] = value
         elseif value isa Array
-            @assert haskey(compiler_state.arrays, key) || haskey(compiler_state.data_arrays, key) "The variable $key is not an array in the model definition."
-            @assert size(value) == size(compiler_state.arrays[key]) || size(value) == size(compiler_state.data_arrays[key])
+            @assert haskey(compiler_state.arrays, key) ||
+                haskey(compiler_state.data_arrays, key) "The variable $key is not an array in the model definition."
+            @assert size(value) == size(compiler_state.arrays[key]) ||
+                size(value) == size(compiler_state.data_arrays[key])
             "The size of the initialization of $key does not match the size of the array."
             sym_array = create_symbolic_array(key, collect(size(value)))
             initilizations[sym_array] = value
@@ -581,7 +599,9 @@ function process_initializations(inits::Dict, pre_graph, compiler_state::Compile
     init_dict = Dict()
     for key in keys(compiler_state.stochasticrules)
         if haskey(compiler_state.multivariate_variables, key)
-            let r = symbolic_eval(compiler_state.multivariate_variables[key], initilizations)
+            let r = symbolic_eval(
+                    compiler_state.multivariate_variables[key], initilizations
+                )
                 @assert r isa Array
                 rr = similar(r, Any)
                 for (i, x) in enumerate(r)
@@ -624,9 +644,7 @@ end
 function check_expr(compiler_state::CompilerState)
     expr = deepcopy(compiler_state.model_def)
     while true
-        unroll!(expr, compiler_state) ||
-            resolveif!(expr, compiler_state) ||
-            break
+        unroll!(expr, compiler_state) || resolveif!(expr, compiler_state) || break
     end
 
     unresolved_exprs = [arg for arg in expr.args if !Meta.isexpr(arg, (:~, :(=)))]
@@ -638,7 +656,7 @@ function check_expr(compiler_state::CompilerState)
         error(String(take!(err_msg)))
     end
 
-    refinindices(expr, compiler_state)
+    return refinindices(expr, compiler_state)
 end
 
 """
@@ -653,7 +671,7 @@ Compile the model definition `model_def` with data `data` and target `target`.
 - `inits`: initial values for the MCMC chain.
 """
 function compile(model_def::Expr, data::NamedTuple, target::Symbol, inits=nothing)
-    @assert target in [:DynamicPPL, :IR, :Graph,] "target must be one of [:DynamicPPL, :IR, :Graph]"
+    @assert target in [:DynamicPPL, :IR, :Graph] "target must be one of [:DynamicPPL, :IR, :Graph]"
 
     expr = transform_expr(model_def)
 

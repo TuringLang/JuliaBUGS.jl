@@ -20,7 +20,7 @@ BUGSGraph is synonymous with MetaGraphNext.MetaDiGraph with [`VertexInfo`](@ref)
 const BUGSGraph = MetaGraph{<:Any,Symbol,<:SimpleDiGraph,<:VertexInfo}
 
 function tograph(pre_graph::Dict)
-    g = MetaGraph(DiGraph(), Label=Symbol, VertexData=VertexInfo)
+    g = MetaGraph(DiGraph(); Label=Symbol, VertexData=VertexInfo)
 
     for k in keys(pre_graph)
         vi = VertexInfo(
@@ -29,7 +29,7 @@ function tograph(pre_graph::Dict)
             pre_graph[k][3],
             pre_graph[k][1],
             pre_graph[k][2],
-            eval(pre_graph[k][2])
+            eval(pre_graph[k][2]),
         )
         g[k] = vi
     end
@@ -48,7 +48,9 @@ end
 
 Return a Distribution.jl distribution.
 """
-function getdistribution(g::BUGSGraph, node::Symbol, value::Dict{Symbol,Any}, delta=Dict{Symbol,Any}())::Distributions.Distribution
+function getdistribution(
+    g::BUGSGraph, node::Symbol, value::Dict{Symbol,Any}, delta=Dict{Symbol,Any}()
+)::Distributions.Distribution
     args = []
     for p in g[node].sorted_inputs
         if p in keys(delta)
@@ -78,7 +80,7 @@ function Base.show(io::IO, vinfo::VertexInfo)
     vinfo.is_data && println(io, "Data: " * string(vinfo.data))
     println(io, "Parent Nodes: " * String(take!(_io)))
     print(io, "Node Function: ")
-    Base.show(io, d_expr)
+    return Base.show(io, d_expr)
 end
 
 """

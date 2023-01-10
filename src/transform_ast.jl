@@ -6,7 +6,7 @@ function cumulative(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, lhs_ = cumulative(s1_, s2_))
             dist = find_tilde_rhs(expr, s1)
-            sub_expr.args[2].args[1] = :cdf 
+            sub_expr.args[2].args[1] = :cdf
             sub_expr.args[2].args[2] = dist
             return sub_expr
         else
@@ -19,7 +19,7 @@ function density(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, lhs_ = density(s1_, s2_))
             dist = find_tilde_rhs(expr, s1)
-            sub_expr.args[2].args[1] = :pdf 
+            sub_expr.args[2].args[1] = :pdf
             sub_expr.args[2].args[2] = dist
             return sub_expr
         else
@@ -32,7 +32,7 @@ function deviance(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, lhs_ = deviance(s1_, s2_))
             dist = find_tilde_rhs(expr, s1)
-            sub_expr.args[2].args[1] = :logpdf 
+            sub_expr.args[2].args[1] = :logpdf
             sub_expr.args[2].args[2] = dist
             sub_expr.args[2] = Expr(:call, :*, -2, sub_expr.args[2])
             return sub_expr
@@ -42,7 +42,7 @@ function deviance(expr::Expr)
     end
 end
 
-function find_tilde_rhs(expr::Expr, target::Union{Expr, Symbol})
+function find_tilde_rhs(expr::Expr, target::Union{Expr,Symbol})
     dist = nothing
     MacroTools.postwalk(expr) do sub_expr
         if isexpr(sub_expr, :(~))
@@ -53,7 +53,9 @@ function find_tilde_rhs(expr::Expr, target::Union{Expr, Symbol})
         end
         return sub_expr
     end
-    isnothing(dist) && error("Error handling cumulative expression: can't find a stochastic assignment for $target.")
+    isnothing(dist) && error(
+        "Error handling cumulative expression: can't find a stochastic assignment for $target.",
+    )
     return dist
 end
 
@@ -123,12 +125,14 @@ function stochastic_indexing(expr::Expr)
         end
         return sub_expr
     end
-    
+
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, v_[idxs__])
             for (i, idx) in enumerate(idxs)
                 if idx in alL_stochastic_lhs
-                    sub_expr = Expr(:call, :get_index, Expr(:ref, v, :(:)), Expr(:vect, idxs...))
+                    sub_expr = Expr(
+                        :call, :get_index, Expr(:ref, v, :(:)), Expr(:vect, idxs...)
+                    )
                     break
                 end
             end

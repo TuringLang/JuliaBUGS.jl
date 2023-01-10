@@ -53,7 +53,6 @@ function Distributions.loglikelihood(d::LeftTruncatedFlat, x::AbstractVector{<:R
     return any(xi <= lower for xi in x) ? T(-Inf) : zero(T)
 end
 
-
 """
     RightTruncatedFlat
 

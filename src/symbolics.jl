@@ -15,14 +15,18 @@ function SymbolicUtils.substitute(expr, dict; fold=true)
             canfold && return ismissing(op(args...)) ? expr : op(args...)
             args
         else
-            args = map(x -> substitute(x, dict, fold=fold), SymbolicUtils.unsorted_arguments(expr))
+            args = map(
+                x -> substitute(x, dict; fold=fold), SymbolicUtils.unsorted_arguments(expr)
+            )
         end
 
-        SymbolicUtils.similarterm(expr,
+        SymbolicUtils.similarterm(
+            expr,
             op,
             args,
             SymbolicUtils.symtype(expr);
-            metadata=SymbolicUtils.metadata(expr))
+            metadata=SymbolicUtils.metadata(expr),
+        )
     else
         expr
     end
@@ -36,14 +40,12 @@ function SymbolicUtils.toterm(t::SymbolicUtils.Add{T}) where {T}
     for (k, coeff) in t.dict
         push!(args, coeff == 1 ? k : SymbolicUtils.Term{T}(*, [coeff, k]))
     end
-    SymbolicUtils.Term{T}(+, args)
+    return SymbolicUtils.Term{T}(+, args)
 end
 
 function create_symbolic_variable(variable::Symbol)
     variable_with_metadata = SymbolicUtils.setmetadata(
-        SymbolicUtils.Sym{Real}(variable),
-        Symbolics.VariableSource,
-        (:variables, variable),
+        SymbolicUtils.Sym{Real}(variable), Symbolics.VariableSource, (:variables, variable)
     )
     return Symbolics.wrap(variable_with_metadata)
 end
@@ -52,9 +54,13 @@ function create_symbolic_array(array_name::Symbol, array_size::Vector)
     array_ranges = Tuple([(1:i) for i in array_size])
     variable_with_metadata = SymbolicUtils.setmetadata(
         SymbolicUtils.setmetadata(
-            SymbolicUtils.Sym{Array{Real,(length)(array_ranges)}}(array_name), Symbolics.ArrayShapeCtx, array_ranges),
+            SymbolicUtils.Sym{Array{Real,(length)(array_ranges)}}(array_name),
+            Symbolics.ArrayShapeCtx,
+            array_ranges,
+        ),
         Symbolics.VariableSource,
-        (:variables, array_name))
+        (:variables, array_name),
+    )
     return Symbolics.wrap(variable_with_metadata)
 end
 
@@ -77,12 +83,26 @@ end
 Return symbolic variable for multiple types of `variable`s. 
 """
 tosymbolic(variable::Union{Int,AbstractFloat}) = Num(variable)
-tosymbolic(variable::Symbol) = Meta.isexpr(Meta.parse(string(variable)), :ref) ? ref_to_symbolic(string(variable)) : create_symbolic_variable(variable)
-tosymbolic(expr::Expr) = MacroTools.isexpr(expr, :ref) ? ref_to_symbolic(expr) : eval(replace_variables(expr))
+function tosymbolic(variable::Symbol)
+    return if Meta.isexpr(Meta.parse(string(variable)), :ref)
+        ref_to_symbolic(string(variable))
+    else
+        create_symbolic_variable(variable)
+    end
+end
+function tosymbolic(expr::Expr)
+    return if MacroTools.isexpr(expr, :ref)
+        ref_to_symbolic(expr)
+    else
+        eval(replace_variables(expr))
+    end
+end
 tosymbolic(variable) = variable
 
 function tosymbol(x)
     ex = Symbolics.toexpr(x)
     ex isa Symbol && return ex
-    return "$(ex.args[2])" * "[" * join([string(i) for i in ex.args[3:end]], ", ") * "]" |> Symbol
+    return Symbol(
+        "$(ex.args[2])" * "[" * join([string(i) for i in ex.args[3:end]], ", ") * "]"
+    )
 end
