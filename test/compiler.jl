@@ -1,4 +1,16 @@
-using SymbolicPPL: CompilerState, compile, resolveif!, linkfunction, unroll!, tosymbolic, resolve, symbolic_eval, ref_to_symbolic!, ref_to_symbolic, addlogicalrules!, addstochasticrules!
+using SymbolicPPL:
+    CompilerState,
+    compile,
+    resolveif!,
+    linkfunction,
+    unroll!,
+    tosymbolic,
+    resolve,
+    symbolic_eval,
+    ref_to_symbolic!,
+    ref_to_symbolic,
+    addlogicalrules!,
+    addstochasticrules!
 using Test
 using Symbolics
 
@@ -97,8 +109,7 @@ end
 ## tests for `ref_to_symbolic!`
 # case 1: g[1] already exists
 @test Symbolics.isequal(
-    ref_to_symbolic!(Meta.parse("g[1]"), compiler_state),
-    tosymbolic(Meta.parse("g[1]")),
+    ref_to_symbolic!(Meta.parse("g[1]"), compiler_state), tosymbolic(Meta.parse("g[1]"))
 )
 # case 2: g[4] doesn't exist, size deduction is not carried out for data arrays, so should error
 let err = nothing
@@ -132,8 +143,7 @@ addlogicalrules!(expr, compiler_state)
 @variables c d
 intended_equation = tosymbolic(Meta.parse("h[3]")) + c * d * tosymbolic(Meta.parse("g[2]"))
 @test Symbolics.isequal(
-    compiler_state.logicalrules[tosymbolic(Meta.parse("v[2]"))],
-    intended_equation,
+    compiler_state.logicalrules[tosymbolic(Meta.parse("v[2]"))], intended_equation
 )
 
 ## tests for `if`
@@ -173,7 +183,15 @@ intended_expr = bugsmodel"""
 
 ## test for symbolic_eval
 @variables a b c
-compiler_state = CompilerState(Expr(:empty), Dict{Symbol,Symbolics.Arr{Num}}(), Dict{Symbol,Symbolics.Arr{Num}}(), Dict(a => b + c, b => 2, c => 3), Dict(), Dict(), Dict())
+compiler_state = CompilerState(
+    Expr(:empty),
+    Dict{Symbol,Symbolics.Arr{Num}}(),
+    Dict{Symbol,Symbolics.Arr{Num}}(),
+    Dict(a => b + c, b => 2, c => 3),
+    Dict(),
+    Dict(),
+    Dict(),
+)
 @test symbolic_eval(a, compiler_state.logicalrules) == 5
 
 ## test for function building
@@ -200,7 +218,7 @@ let err = nothing
         expr = @bugsast begin
             a = 2
             a ~ dnorm(0, 1)
-            for i = 1:a
+            for i in 1:a
                 b[i] ~ dnorm(0, 1)
             end
         end
@@ -259,7 +277,10 @@ expr2 = @bugsast begin
     u[2] = 3
 end
 
-@test Symbolics.isequal(compile(expr1, NamedTuple(), :IR).logicalrules[tosymbolic(:a)], compile(expr2, NamedTuple(), :IR).logicalrules[tosymbolic(:a)])
+@test Symbolics.isequal(
+    compile(expr1, NamedTuple(), :IR).logicalrules[tosymbolic(:a)],
+    compile(expr2, NamedTuple(), :IR).logicalrules[tosymbolic(:a)],
+)
 
 # corner case, need colon indexing for for loop bounds
 expr = @bugsast begin
@@ -291,11 +312,13 @@ model_def = bugsmodel"""
 """
 
 data = (
-    x=[8.0, 15.0, 22.0, 29.0, 36.0], N=30, T=5,
+    x=[8.0, 15.0, 22.0, 29.0, 36.0],
+    N=30,
+    T=5,
     Omega=rreshape([200, 0, 0, 0.2], (2, 2)),
     mean=[0, 0],
     prec=rreshape([1.0E-6, 0, 0, 1.0E-6], (2, 2)),
-    Y=rreshape([151, 199, 246, 283, 320, 145,], (2, 3)),
+    Y=rreshape([151, 199, 246, 283, 320, 145], (2, 3)),
 )
 
 cs = compile(model_def, data, :IR);
