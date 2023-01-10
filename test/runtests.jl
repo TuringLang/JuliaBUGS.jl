@@ -1,4 +1,4 @@
-using BugsModels
+using SymbolicPPL
 using Test
 
 include("bugsast.jl")
