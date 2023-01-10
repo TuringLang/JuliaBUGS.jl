@@ -9,12 +9,12 @@ For a scalar variable, logical assignment defines a simple rewriting rule. In th
 ```julia
 # Loop one
 for i in 1:N
-	for j in 1:i
-		g[i, j] = some_expr # def1
-	end
-	for j in i+1:N
-		g[i, j] = some_expr2 # def2
-	end
+    for j in 1:i
+        g[i, j] = some_expr # def1
+    end
+    for j in i+1:N
+        g[i, j] = some_expr2 # def2
+    end
 end
 ```
 

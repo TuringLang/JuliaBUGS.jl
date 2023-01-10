@@ -244,11 +244,21 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState, skip_col
                 @assert f in keys(INVERSE_LINK_FUNCTION) "Link function $f not supported."
 
                 lhs_var = lhs.args[2]
-                lhs = String(f) * "(" * String(lhs_var) * ")" |> Symbol
+                lhs = Symbol(String(f) * "(" * String(lhs_var) * ")")
                 if resolve(tosymbolic(lhs_var), compiler_state.logicalrules) isa Real # observation
-                    addlogicalrules!(Expr(:block, Expr(:(=), lhs, Expr(:call, f, lhs_var))), compiler_state)
+                    addlogicalrules!(
+                        Expr(:block, Expr(:(=), lhs, Expr(:call, f, lhs_var))),
+                        compiler_state,
+                    )
+
                 else
-                    addlogicalrules!(Expr(:block, Expr(:(=), lhs_var, Expr(:call, INVERSE_LINK_FUNCTION[f], lhs))), compiler_state)
+                    addlogicalrules!(
+                        Expr(
+                            :block,
+                            Expr(:(=), lhs_var, Expr(:call, INVERSE_LINK_FUNCTION[f], lhs)),
+                        ),
+                        compiler_state,
+                    )
                 end
                 lhs = tosymbolic(lhs)
             elseif MacroTools.isexpr(lhs, :ref)
@@ -269,9 +279,20 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState, skip_col
                 lhs = tosymbolic(lhs)
             end
             @assert !haskey(compiler_state.stochasticrules, lhs) "Repeated definition for $(lhs)"
-            @assert !haskey(compiler_state.logicalrules, lhs) || isa(resolve(lhs, compiler_state.logicalrules), Real) "A stochastic variable cannot be used as LHS of logical assignments unless it's an observation."
+            @assert (!haskey(compiler_state.logicalrules, lhs) || isa(resolve(lhs, compiler_state.logicalrules), Real)) "A stochastic variable cannot be used as LHS of logical assignments unless it's an observation."
             @assert rhs.head == :call "RHS needs to be a distribution function"
-            @assert rhs.args[1] in vcat(DISTRIBUTIONS, USER_DISTRIBUTIONS, [:truncated, :truncated_with_lower, :truncated_with_upper, :censored, :censored_with_lower, :censored__with_upper]) "Distribution $dist_func not defined."
+            @assert rhs.args[1] in vcat(
+                DISTRIBUTIONS,
+                USER_DISTRIBUTIONS,
+                [
+                    :truncated,
+                    :truncated_with_lower,
+                    :truncated_with_upper,
+                    :censored,
+                    :censored_with_lower,
+                    :censored__with_upper,
+                ],
+            ) "Distribution $dist_func not defined."
 
             rhs = replace_variables!(rhs, compiler_state, skip_colon)
             isskip(rhs) && continue
@@ -396,7 +417,7 @@ function scalarize(ex::Num, compiler_state::CompilerState)
                                 break
                             end
                         end
-                        !find_match && error("The array indexing $v should be a stochastic variable.")
+                        find_match || error("The array indexing $v should be a stochastic variable.")
                     end
                     push!(args, tosymbol(v))
                 end
