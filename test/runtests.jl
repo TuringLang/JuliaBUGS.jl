@@ -1,4 +1,5 @@
 using SymbolicPPL
+using Symbolics
 using Test
 
 include("bugsast.jl")
