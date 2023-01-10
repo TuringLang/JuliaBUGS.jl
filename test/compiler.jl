@@ -11,8 +11,6 @@ using SymbolicPPL:
     ref_to_symbolic,
     addlogicalrules!,
     addstochasticrules!
-using Test
-using Symbolics
 
 ## tests for `addlogicalrules` for data
 data = Dict(:N => 2, :g => [1, 2, 3])
