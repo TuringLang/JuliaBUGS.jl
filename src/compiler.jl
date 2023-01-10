@@ -12,7 +12,17 @@ struct CompilerState
     multivariate_variables::Dict
 end
 
-CompilerState(model_def::Expr) = CompilerState(deepcopy(model_def), Dict{Symbol,Symbolics.Arr{Num}}(), Dict{Symbol,Symbolics.Arr{Num}}(), Dict(), Dict(), Dict(), Dict())
+function CompilerState(model_def::Expr)
+    return CompilerState(
+        deepcopy(model_def),
+        Dict{Symbol,Symbolics.Arr{Num}}(),
+        Dict{Symbol,Symbolics.Arr{Num}}(),
+        Dict(),
+        Dict(),
+        Dict(),
+        Dict(),
+    )
+end
 
 # Regarding the correctness of the unrolling approach:
 # - BUGS doesn't allow repeated assignments, loop bounds are defined outside the loop
@@ -169,8 +179,9 @@ Base.isequal(::SymbolicUtils.Symbolic, ::Missing) = false
 
 Base.in(key::Num, vs::Vector) = any(broadcast(Symbolics.isequal, key, vs))
 
-addlogicalrules!(data::NamedTuple, compiler_state::CompilerState, skip_colon=true) =
-    addlogicalrules!(Dict(pairs(data)), compiler_state)
+function addlogicalrules!(data::NamedTuple, compiler_state::CompilerState, skip_colon=true)
+    return addlogicalrules!(Dict(pairs(data)), compiler_state)
+end
 function addlogicalrules!(data::Dict, compiler_state::CompilerState, skip_colon=true)
     for (key, value) in data
         if value isa Number
@@ -189,7 +200,9 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState, skip_colon=
     for (i, arg) in enumerate(expr.args)
         if arg.head == :(=)
             lhs, rhs = arg.args
-            @assert !haskey(compiler_state.logicalrules, lhs) error("$arg is a repeated definition for $(lhs)")
+            @assert !haskey(compiler_state.logicalrules, lhs) error(
+                "$arg is a repeated definition for $(lhs)"
+            )
 
             if MacroTools.isexpr(lhs, :ref)
                 @assert !haskey(compiler_state.data_arrays, lhs.args[1]) "$(lhs.args[1]) is data array element, elements of data arrays can not be re-assigned."
