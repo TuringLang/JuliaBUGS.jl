@@ -52,8 +52,8 @@ LINKS = (
     surgical_realistic = "https://chjackson.github.io/openbugsdoc/Examples/Surgical.html", 
 
     # Volume II
-    birats = "https://chjackson.github.io/openbugsdoc/Examples/BiRats.html",
-    eyes = "https://chjackson.github.io/openbugsdoc/Examples/Eyes.html",
+    birats="https://chjackson.github.io/openbugsdoc/Examples/BiRats.html",
+    eyes="https://chjackson.github.io/openbugsdoc/Examples/Eyes.html",
 )
 
 EXAMPLES = (

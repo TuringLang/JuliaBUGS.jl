@@ -6,7 +6,7 @@ using SymbolicPPL: BUGSExamples
 ##
 
 m = BUGSExamples.EXAMPLES[:dogs]
-expr = m[:model_def] |> transform_expr
+expr = transform_expr(m[:model_def])
 ## 
 
 """
@@ -15,7 +15,7 @@ expr = m[:model_def] |> transform_expr
 Return an expression with all loop variables renamed to unique names.
 """
 function rename_loopsvars(ex)
-    bounds = Dict{Symbol, Any}()
+    bounds = Dict{Symbol,Any}()
     expr = deepcopy(ex)
     rec_rename_loopvars!(expr, bounds)
     return expr, bounds
@@ -45,7 +45,10 @@ function separate_loops(expr)
     new_args = []
     for (i, arg) in enumerate(expr.args)
         if Meta.isexpr(arg, :for)
-            push!(new_args, map(x->Expr(:for, arg.args[1], x), separate_loops(arg.args[2]))...)
+            push!(
+                new_args,
+                map(x -> Expr(:for, arg.args[1], x), separate_loops(arg.args[2]))...,
+            )
         else
             push!(new_args, arg)
         end
@@ -70,7 +73,7 @@ Return the mapping from array variable to a list of Sets, and each Set contains 
 possible index expressions for the dimension. 
 """
 function find_indices(expr)
-    I = Dict{Symbol, Vector{Set{Any}}}()
+    I = Dict{Symbol,Vector{Set{Any}}}()
 
     MacroTools.postwalk(expr) do sub_expr
         if MacroTools.@capture(sub_expr, a_[is__])
@@ -82,20 +85,20 @@ function find_indices(expr)
             end
             for (i, index) in enumerate(is)
                 if index isa Real
-                    isinteger(index) || error("Index $index of $sub_expr needs to be integers.")
+                    isinteger(index) ||
+                        error("Index $index of $sub_expr needs to be integers.")
                     push!(I[a][i], index)
                 elseif Meta.isexpr(index, :call) && index.args[1] == :(:)
                     push!(I[a][i], index.args[2:end]...)
-                elseif index isa Union{Symbol, Expr} && index != :(:)
+                elseif index isa Union{Symbol,Expr} && index != :(:)
                     push!(I[a][i], index)
                 end
-            end     
+            end
         end
         return sub_expr
     end
 
     return I
-    
     # # collect all the sets in lists
     # II = Dict{Symbol, Vector{Vector{Any}}}()
     # for a in keys(I)
@@ -143,7 +146,7 @@ end
 function quote_other_vars(expr, vv)
     MacroTools.postwalk(expr) do sub_expr
         if sub_expr isa Symbol && sub_expr ∈ vv
-            sub_expr = QuoteNode(sub_expr) 
+            sub_expr = QuoteNode(sub_expr)
         end
         return sub_expr
     end
@@ -168,7 +171,7 @@ function getindex_to_ref(expr)
 end
 
 function parse_logical_assignments(expr)
-    L = Dict{Any, Any}()
+    L = Dict{Any,Any}()
 
     MacroTools.postwalk(expr) do sub_expr
         if MacroTools.@capture(sub_expr, a_ = b_) && !Meta.isexpr(b, :(:))
@@ -181,7 +184,7 @@ function parse_logical_assignments(expr)
 end
 
 function parse_stochastic_assignments(expr)
-    S = Dict{Any, Any}()
+    S = Dict{Any,Any}()
 
     MacroTools.postwalk(expr) do sub_expr
         if Meta.isexpr(sub_expr, :(~))
@@ -208,7 +211,7 @@ function create_rw(expr)
 
     L = parse_logical_assignments(e)
 
-    LL = Dict() 
+    LL = Dict()
     Ll = Dict() # logical assignments lhs is a symbol
     for l in keys(L)
         if !isa(l, Symbol)
@@ -218,11 +221,11 @@ function create_rw(expr)
         end
     end
     NL = Dict()
-    replace_e(expr, s, t) = MacroTools.prewalk(e -> e==s ? t : e, expr)
+    replace_e(expr, s, t) = MacroTools.prewalk(e -> e == s ? t : e, expr)
     for (l, r) in LL
         for (ll, rr) in Ll
-            l = quote_other_vars(replace_e(l, ll, rr), vv) |> ref_to_getindex
-            r = quote_other_vars(replace_e(r, ll, rr), vv) |> ref_to_getindex
+            l = ref_to_getindex(quote_other_vars(replace_e(l, ll, rr), vv))
+            r = ref_to_getindex(quote_other_vars(replace_e(r, ll, rr), vv))
         end
         NL[l] = r
     end
@@ -231,17 +234,20 @@ function create_rw(expr)
     P = []
     slots = loopvars
     for (l, r) in NL
-        push!(P, 
+        push!(
+            P,
             Metatheory.RewriteRule(
                 Expr(:(-->), l, r),
                 eval(Metatheory.Syntax.makepattern(l, [], loopvars, @__MODULE__)),
-                eval(Metatheory.Syntax.makepattern(r, [], loopvars, @__MODULE__))
-            )
+                eval(Metatheory.Syntax.makepattern(r, [], loopvars, @__MODULE__)),
+            ),
         )
     end
-    sort!(P, by = x -> x |> string)
+    sort!(P; by=x -> string(x))
 
-    rw = Metatheory.Chain(P) |> Metatheory.Postwalk |> Metatheory.Fixpoint |> Metatheory.PassThrough
+    rw = Metatheory.PassThrough(Metatheory.Fixpoint(Metatheory.Postwalk(Metatheory.Chain(
+        P
+    ))))
     return rw, P
 end
 

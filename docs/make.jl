@@ -9,5 +9,5 @@ makedocs(
         "AST Translation" => "ast.md",
         "Array Syntax" => "array.md",
         "Graphical Representation" => "graph.md",
-    ]
+    ],
 )

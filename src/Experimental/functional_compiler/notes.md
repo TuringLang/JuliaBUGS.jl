@@ -20,7 +20,7 @@ end
 
 The possible indices of `g` form a rectangular region `[1:N, 1:N]`; all tuples of `(i, j)` above the line `i=j` follow `def2`; otherwise, it follows `def1`. 
 
-Then if we want to eval`uate` `g[2, 3]` , because `2 < 3` we know we should use `def2` . 
+Then if we want to `eval`uate `g[2, 3]` , because `2 < 3` we know we should use `def2` . 
 
 Although the implementation is not necessarily easy, if indices are affine transformations of loop variables, the intuitions should follow. Complications arise when there are functions of loop variables exist (note, array indexing can also be seen as a function call). The analysis can be largely simplified if the data are available, but this is against our initial goal of abstract analysis without data.
 
