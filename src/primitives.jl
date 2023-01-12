@@ -1,3 +1,6 @@
+# TODO: the distributions and functions should be made into a separate module. 
+# TODO: then a macro similar to `register_function` can be used to import all the functions. 
+
 const DISTRIBUTIONS = [
     :truncated,
     :censored,

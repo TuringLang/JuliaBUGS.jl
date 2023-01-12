@@ -1,18 +1,19 @@
-# The Graph Representation Compile Target
+# Compilation Targets
 
+## DAG
 Directed Acyclic Graph (DAG) is classical representation of probabilistic models. 
 
-## Node Data
+### Node Data
 ```@docs
 SymbolicPPL.VertexInfo
 ```
 Vertex store the following information:
 - the name of the variable
 - the parents of the variable
-- the node function (see [Node Function](#node-function))
+- the node function (see [Node Function](#Node-Function)))
 - whether the variable is data or not
 
-## Node Function
+### Node Function
 The node function is a very flexible representation. 
 The requirement for a node function is that when evaluate with the input arguments, it returns a `Distribution` object.
 This may seems simple, but it can be very powerful.
@@ -27,7 +28,7 @@ function node_f(t, μ_1, μ_2, σ_1, σ_2)
 end
 ```
 
-## Plotting
+### Plotting
 A good way to debug a model is plotting the Bayesian Network. 
 We recommend using the `TikzGraphs` package to plot the Bayesian Network. 
 The following code shows how to plot the Bayesian Network of the model in the previous section. 
@@ -85,3 +86,7 @@ graphplot(
     method = :tree
 )
 ```
+
+## Turing Model
+
+## More to come

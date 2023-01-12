@@ -1,14 +1,18 @@
 """
     VertexInfo
 
-VertexInfo is a struct that holds the information for each node in the BUGS graph.
+Holds information for a node in a BUGSGraph. 
 """
 struct VertexInfo
     variable_name::Symbol
+    """ Ordered list of parent nodes' names, sorted according to the arguments of the node function. """ 
     sorted_inputs::Tuple
+    """ Indicate whether the variable is observation or need to be sampled. """
     is_data::Bool
     data::Union{Missing,Real}
+    """ Expression of the node function, save for definition query. """
     f_expr::Expr
+    """ Function object of the node function. """
     f::Function
 end
 
