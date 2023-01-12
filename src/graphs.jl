@@ -5,7 +5,7 @@ Holds information for a node in a BUGSGraph.
 """
 struct VertexInfo
     variable_name::Symbol
-    """ Ordered list of parent nodes' names, sorted according to the arguments of the node function. """ 
+    """ Ordered list of parent nodes' names, sorted according to the arguments of the node function. """
     sorted_inputs::Tuple
     """ Indicate whether the variable is observation or need to be sampled. """
     is_data::Bool
