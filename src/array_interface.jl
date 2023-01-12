@@ -93,9 +93,9 @@ function ref_to_symbolic!(expr::Expr, compiler_state::CompilerState, skip_colon=
         return array[indices...]
     end
 
-    @assert ndims(array) == numdims "Dimension doesn't match!"
     # the array exists
     array = compiler_state.arrays[name]
+    @assert ndims(array) == numdims "Dimension doesn't match!"
     array_size = collect(size(array))
     for (i, index) in enumerate(indices)
         if index isa UnitRange

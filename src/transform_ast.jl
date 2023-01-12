@@ -2,6 +2,8 @@
 ### Regularize ASTs to make them easier to work with
 ###
 
+# TODO: add a function check that colon indexing can not be used in loop bounds, if loop body assigns to elements from the same array
+
 function cumulative(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, lhs_ = cumulative(s1_, s2_))
@@ -142,5 +144,5 @@ function stochastic_indexing(expr::Expr)
 end
 
 function transform_expr(model_def::Expr)
-    return model_def |> linkfunction |> censored |> truncated |> cumulative |> density |> deviance |> stochastic_indexing
+    return stochastic_indexing(deviance(density(cumulative(truncated(censored(linkfunction(model_def)))))))
 end

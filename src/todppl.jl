@@ -1,5 +1,5 @@
 
-function todppl(g::BUGSGraph)
+function todppl(g::BUGSGraph, print_turing_program=true)
     expr = []
     args = Dict()
     sorted_nodes = (x -> label_for(g, x)).(topological_sort_by_dfs(g))
@@ -21,7 +21,7 @@ function todppl(g::BUGSGraph)
         :function, Expr(:call, :model, Expr(:parameters, args...)), Expr(:block, expr...)
     )
     eval(DynamicPPL.model(@__MODULE__, LineNumberNode(@__LINE__, @__FILE__), ex, false))
-    println(ex)
+    print_turing_program && println(ex)
     return model
 end
 
