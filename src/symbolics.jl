@@ -1,3 +1,6 @@
+# TODO: symbolicutils.jl version bump, we can remove the temporary fix
+# TODO: figure out how to avoid the `substitute` overload
+
 # https://github.com/JuliaSymbolics/SymbolicUtils.jl/blob/a42082ac90f951f677ce1e2a91cd1a0ddd4306c6/src/substitute.jl#L1
 # modified so that when the substitution result is `missing`, return the original expression
 function SymbolicUtils.substitute(expr, dict; fold=true)

@@ -215,7 +215,7 @@ function addlogicalrules!(expr::Expr, compiler_state::CompilerState, skip_colon=
                     compiler_state.multivariate_variables[renamed_lhs] = lhs # keep the symbolic array for initialization
                     lhs = renamed_lhs
                     for i in eachindex(elems)
-                        compiler_state.logicalrules[elems[i]] = get_index(lhs, i)
+                        compiler_state.logicalrules[elems[i]] = _getindex(lhs, i)
                     end
                 end
             else
@@ -271,7 +271,7 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState, skip_col
                     compiler_state.multivariate_variables[renamed_lhs] = lhs # keep the symbolic array for initialization
                     lhs = renamed_lhs
                     for i in eachindex(elems)
-                        compiler_state.logicalrules[elems[i]] = get_index(lhs, i)
+                        compiler_state.logicalrules[elems[i]] = _getindex(lhs, i)
                     end
                 end
             else
@@ -290,9 +290,9 @@ function addstochasticrules!(expr::Expr, compiler_state::CompilerState, skip_col
                     :truncated_with_upper,
                     :censored,
                     :censored_with_lower,
-                    :censored__with_upper,
+                    :censored_with_upper,
                 ],
-            ) "Distribution $dist_func not defined."
+            ) "Distribution $(rhs.args[1]) not defined."
 
             rhs = replace_variables!(rhs, compiler_state, skip_colon)
             isskip(rhs) && continue
@@ -319,7 +319,7 @@ function replace_variables!(rhs::Expr, compiler_state::CompilerState, skip_colon
             sym_var = ref_to_symbolic!(sub_expr, compiler_state, skip_colon)
             isskip(sym_var) && (skip = true)
             sub_expr = sym_var
-        elseif isa(sub_expr, Symbol) && !in(sub_expr, f_symbols)
+        elseif isa(sub_expr, Symbol) && !in(sub_expr, f_symbols) && sub_expr != :(:)
             sub_expr = tosymbolic(sub_expr)
         end
         return sub_expr
@@ -471,7 +471,7 @@ function gen_f_expr(compiler_state, var)
                         else
                             sub_expr = Expr(
                                 :call,
-                                :rreshape,
+                                :reshape, # TODO: verify row-major vs column-major
                                 Expr(:vect, (Symbolics.toexpr.(arr))...),
                                 Expr(:tuple, sub_dict[arr][2]...),
                             )

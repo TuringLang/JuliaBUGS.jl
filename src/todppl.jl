@@ -9,7 +9,13 @@ function todppl(g::BUGSGraph, print_turing_program=true)
             f.args[1] = Expr(:., :SymbolicPPL, QuoteNode(f.args[1]))
             push!(expr, Expr(:call, :(~), n, f))
         elseif isa(f, Distributions.Distribution)
-            f = Expr(:call, nameof(typeof(f)), Distributions.params(f)...)
+            dist_func = nameof(typeof(f))
+            if dist_func == :GenericMvTDist
+                dist_func = :MvTDist
+            elseif dist_func == :DiscreteNonParametric
+                dist_func = :Categorical
+            end
+            f = Expr(:call, dist_func, Distributions.params(f)...)
             push!(expr, Expr(:call, :(~), n, f))
         end
     end
