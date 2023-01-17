@@ -113,16 +113,16 @@ function truncated(expr::Expr)
 end
 
 function stochastic_indexing(expr::Expr)
-    alL_stochastic_lhs = []
+    all_stochastic_lhs = []
     MacroTools.postwalk(expr) do sub_expr
         if Meta.isexpr(sub_expr, :~)
             lhs, rhs = sub_expr.args
             if @capture(lhs, f_(nlhs_))
                 if f in keys(INVERSE_LINK_FUNCTION)
-                    push!(alL_stochastic_lhs, nlhs)
+                    push!(all_stochastic_lhs, nlhs)
                 end
             else
-                push!(alL_stochastic_lhs, lhs)
+                push!(all_stochastic_lhs, lhs)
             end
         end
         return sub_expr
@@ -130,14 +130,12 @@ function stochastic_indexing(expr::Expr)
 
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, v_[idxs__])
-            for (i, idx) in enumerate(idxs)
-                if idx in alL_stochastic_lhs
-                    sub_expr = Expr(
-                        :call, :get_index, Expr(:ref, v, :(:)), Expr(:vect, idxs...)
-                    )
-                    break
-                end
-            end
+            is_stochastic_var = (in(all_stochastic_lhs)).(idxs)
+            new_idxs = deepcopy(idxs)
+            new_idxs[is_stochastic_var] .= :(:)
+            sub_expr = Expr(
+                :call, :_getindex, Expr(:ref, v, new_idxs...), idxs...
+            )
         end
         return sub_expr
     end

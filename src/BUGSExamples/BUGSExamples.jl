@@ -1,7 +1,7 @@
 module BUGSExamples
 
 using SymbolicPPL
-using SymbolicPPL: rreshape, NA
+using SymbolicPPL: NA
 
 include("Volume_I/Blocker.jl")
 include("Volume_I/Bones.jl")

@@ -1,5 +1,7 @@
 # TODO: the distributions and functions should be made into a separate module. 
 # TODO: then a macro similar to `register_function` can be used to import all the functions. 
+# TODO: import all Distributions distribution functions.
+# TODO: test the functions and distributions against WinBUGS: construct model and use random generated data to test the interface.
 
 const DISTRIBUTIONS = [
     :truncated,
@@ -18,6 +20,7 @@ const DISTRIBUTIONS = [
     :dmnorm,
     :ddirich,
     :dwish,
+    :dmt,
 ]
 
 USER_DISTRIBUTIONS = []
@@ -40,10 +43,21 @@ Reshape the array `x` to the shape `dims`, row major order.
 """
 rreshape(v::Vector, dim) = permutedims(reshape(v, reverse(dim)), length(dim):-1:1)
 
-@register_symbolic get_index(x, index)
-@register_symbolic get_index(x::Array, index)
-@register_symbolic get_index(x::Array, index::Array)
-get_index(x, i) = x[i...]
+@register_symbolic _getindex(x, idx1)
+@register_symbolic _getindex(x::Array, idx1) false
+@register_symbolic _getindex(x::Array, idx1::Colon) false
+@register_symbolic _getindex(x::Array, idx1, idx2) false
+@register_symbolic _getindex(x::Array, idx1::Colon, idx2) false
+@register_symbolic _getindex(x::Array, idx1, idx2::Colon) false
+@register_symbolic _getindex(x::Array, idx1, idx2, idx3) false
+@register_symbolic _getindex(x::Array, idx1::Colon, idx2, idx3) false
+@register_symbolic _getindex(x::Array, idx1, idx2::Colon, idx3) false
+@register_symbolic _getindex(x::Array, idx1, idx2, idx3::Colon) false
+@register_symbolic _getindex(x::Array, idx1::Colon, idx2::Colon, idx3) false
+@register_symbolic _getindex(x::Array, idx1, idx2::Colon, idx3::Colon) false
+@register_symbolic _getindex(x::Array, idx1::Colon, idx2, idx3::Colon) false
+# @register_symbolic _getindex(x::Array, idx1, idx2, idx3, idx4)
+_getindex(x, i...) = x[i...]
 
 ###
 ### Standard functions
@@ -53,6 +67,7 @@ get_index(x, i) = x[i...]
 # cloglog: from LogExpFunctions
 # cos
 equals(x, y) = x == y ? 1 : 0
+@register_symbolic equals(x, y)
 # exp
 inprod(a, b) = a * b
 inverse(v) = LinearAlgebra.inv(v);
@@ -211,7 +226,7 @@ dbeta(a, b) = Beta(a, b)
 dmnorm(μ::Vector, T::Matrix) = MvNormal(μ, T)
 
 @register_symbolic dmt(μ::Vector, T::Matrix, k)
-dmt(μ::Vector, T::Matrix, k) = MatrixTDist(k, μ, T, 1) #TODO: maybe wrong
+dmt(μ::Vector, T::Matrix, k) = MvTDist(k, μ, T)
 
 @register_symbolic dwish(R::Matrix, k)
 dwish(R::Matrix, k) = Wishart(k, R^(-1))
@@ -229,7 +244,9 @@ dbern(p) = Bernoulli(p)
 @register_symbolic dbin(p, n)
 dbin(p, n) = Binomial(n, p)
 
-@register_symbolic dcat(p::Vector)
+# TODO: need to also register a scalar verison, in case p is a traced function call
+@register_symbolic dcat(p)
+@register_symbolic dcat(p::Vector) false
 dcat(p) = Categorical(p)
 
 @register_symbolic dpois(θ)
