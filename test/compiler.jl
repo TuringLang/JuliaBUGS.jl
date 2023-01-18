@@ -10,7 +10,7 @@ using SymbolicPPL:
     ref_to_symbolic!,
     ref_to_symbolic,
     addlogicalrules!,
-    addstochasticrules!
+    addstochasticrules!,
     rreshape
 
 
