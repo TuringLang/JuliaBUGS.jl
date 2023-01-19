@@ -10,7 +10,8 @@ using SymbolicPPL:
     ref_to_symbolic!,
     ref_to_symbolic,
     addlogicalrules!,
-    addstochasticrules!
+    addstochasticrules!,
+    rreshape
 
 ## tests for `addlogicalrules` for data
 data = Dict(:N => 2, :g => [1, 2, 3])
@@ -93,7 +94,6 @@ unroll!(expr, compiler_state)
 addlogicalrules!(expr, compiler_state)
 unroll!(expr, compiler_state)
 
-using MacroTools: @q
 intended_result = @q begin
     $(Expr(:logical_processed))
     m[1, 1] = 1 + 1
@@ -295,7 +295,6 @@ data = (u=[1, 2, 3],)
 compile(expr, data, :IR).logicalrules
 
 ## test for multivariate distributions, simplified from `BiRate`
-using SymbolicPPL: rreshape
 model_def = bugsmodel"""
     for( i in 1 : 2 ) {
         beta[i , 1 : 2] ~ dmnorm(mu.beta[], R[ , ])

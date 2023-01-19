@@ -44,10 +44,10 @@ hearts = @bugsast begin
 
     P[1] = p
     P[2] = 0
-    logit(p) = α
+    p = logistic(α)
     α ~ dnorm(0, 1e-4)
     β = exp(α)
-    logit(θ) = δ
+    θ = logistic(δ)
     delta ~ dnorm(0, 1e-4)
 end
 
@@ -75,6 +75,6 @@ regions3 = @bugsast begin
 end
 
 interpolated = @bugsast begin
-    log(x) = $(Expr(:call, :f, 10))
+    x = exp($(Expr(:call, :f, 10)))
     y = x[$("sdf")] # muahaha...
 end
