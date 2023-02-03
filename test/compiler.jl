@@ -204,7 +204,6 @@ ex = @bugsast begin
     end
 end
 
-@register_function foo(x::Array) = sum(x)
 @register_function foobar(x::Array) = sum(x)
 @register_distribution bar(v::Array) = SymbolicPPL.dcat(reduce(vcat, v))
 
