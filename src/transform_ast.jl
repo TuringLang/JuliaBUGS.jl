@@ -131,7 +131,7 @@ function stochastic_indexing(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, v_[idxs__])
             is_stochastic_var = (in(all_stochastic_lhs)).(idxs)
-            stochastic_index = findall(x->x==true, is_stochastic_var)
+            stochastic_index = findall(x -> x == true, is_stochastic_var)
             @assert length(stochastic_index) <= 1 "More than one stochastic index in $sub_expr."
             if length(stochastic_index) == 1
                 idx = stochastic_index[1]
