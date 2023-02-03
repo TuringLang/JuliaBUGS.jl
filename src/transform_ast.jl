@@ -134,9 +134,7 @@ function stochastic_indexing(expr::Expr)
             if any(is_stochastic_var)
                 new_idxs = deepcopy(idxs)
                 new_idxs[is_stochastic_var] .= :(:)
-                sub_expr = Expr(
-                    :call, :_getindex, Expr(:ref, v, new_idxs...), idxs...
-                )
+                sub_expr = Expr(:call, :_getindex, Expr(:ref, v, new_idxs...), idxs...)
             end
         end
         return sub_expr
