@@ -131,11 +131,13 @@ function stochastic_indexing(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, v_[idxs__])
             is_stochastic_var = (in(all_stochastic_lhs)).(idxs)
-            new_idxs = deepcopy(idxs)
-            new_idxs[is_stochastic_var] .= :(:)
-            sub_expr = Expr(
-                :call, :_getindex, Expr(:ref, v, new_idxs...), idxs...
-            )
+            if any(is_stochastic_var)
+                new_idxs = deepcopy(idxs)
+                new_idxs[is_stochastic_var] .= :(:)
+                sub_expr = Expr(
+                    :call, :_getindex, Expr(:ref, v, new_idxs...), idxs...
+                )
+            end
         end
         return sub_expr
     end
