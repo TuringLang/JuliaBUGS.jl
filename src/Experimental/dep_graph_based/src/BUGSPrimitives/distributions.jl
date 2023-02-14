@@ -1,3 +1,7 @@
+export dnorm, dlogis, dt, ddexp, dflat, dexp, dgamma, dchisqr, dweib, dlnorm, dggamma, dpar, dgev, dgpar, df, dunif, 
+dbeta, dmnorm, dmt, dwish, ddirich, dbern, dbin, dcat, dpois, dgeom, dnegbin, dbetabin, dhyper, dmulti, 
+censored_with_lower, censored_with_upper, truncated_with_lower, truncated_with_upper
+
 ### 
 ### Distributions
 ### 

@@ -1,3 +1,6 @@
+export abs, cloglog, cos, equals, exp, inprod, inverse, log, logdet, logfact, loggam, logit, icloglog, 
+ilogit, max, mean, min, phi, pow, probit, sqrt, rank, ranked, round, sd, softplus, sort, step, sum, trunc,
+sin, arcsin, arcsinh, cos, arccos, arccosh, tan, arctan, arctanh, t, mexp, var"eigen.vals"
 ###
 ### Standard functions
 ###
@@ -21,7 +24,7 @@ mean
 min
 phi(x) = Distributions.cdf(Normal(0, 1), x)
 pow(a, b) = a^b
-probit
+# probit # use the inverse function phi
 sqrt
 rank(v::Vector, i::Int) = sortperm(v)[i];
 ranked(v::Vector, i::Int) = v[sortperm(v)[i]];
@@ -30,7 +33,6 @@ sd(v::Vector) = Statistics.std(v);
 softplus(x) = log1pexp(x)
 sort(v::Vector) = Base.sort(v);
 step(x) = ifelse(x > 0, 1, 0);
-step(x::Num) = IfElse.ifelse(x > 1, 1, 0);
 sum
 trunc
 
