@@ -22,6 +22,13 @@ function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
     vars = lhs(pass, expr.args[1], env)
     for v in vars
         push!(pass.vars, v)
+        # if expr.head == :(=)
+        #     pass.var_types[v] = :logical
+        # elseif isnothing(eval(v, env))
+        #     pass.var_types[v] = :assumption
+        # else
+        #     pass.var_types[v] = :observation
+        # end
         pass.var_types[v] = expr.head == :(=) ? :logical : :stochastic
     end 
 end
@@ -63,10 +70,6 @@ function post_process(pass::CollectVariables)
         if any(iszero, v)
             warn("Array $k has holes.")
         end
-    end
-    # create a new variable representing the whole array
-    for k in keys(arrays_map)
-        push!(vars, Var(k, [1:s for s in size(arrays_map[k])]))
     end
 
     return vars, arrays_map, pass.var_types

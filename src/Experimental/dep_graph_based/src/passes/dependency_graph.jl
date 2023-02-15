@@ -4,18 +4,31 @@ struct DependencyGraph <: CompilerPass
     dep_graph::SimpleDiGraph
 end
 
-function DependencyGraph(vars::Vars, array_map::Dict)
+function DependencyGraph(vars::Vars, arrays_map::Dict)
+    vars = deepcopy(vars)
     dep_graph = SimpleDiGraph(length(vars.id_var_map))
-    # connect array slicing to elements
+
     for k in keys(vars.var_id_map)
         if k isa ArraySlice || k isa ArrayVariable
             scarlarized_vars = scalarize(k)
             for sv in scarlarized_vars
-                add_edge!(dep_graph, vars[sv], vars[k])
+                add_edge!(dep_graph, vars[k], vars[sv])
             end
         end
     end
-    return DependencyGraph(vars, array_map, dep_graph)
+
+    # create a new variable representing the whole array
+    for k in keys(arrays_map)
+        array_var = Var(k, [1:s for s in size(arrays_map[k])])
+        haskey(vars.var_id_map, array_var) && continue
+        push!(vars, array_var)
+        add_vertex!(dep_graph)
+        for sv in scalarize(array_var)
+            add_edge!(dep_graph, vars[sv], vars[array_var])
+        end
+    end
+
+    return DependencyGraph(vars, arrays_map, dep_graph)
 end
 
 lhs(::DependencyGraph, expr, env::Dict) = find_variables(expr, env)
@@ -33,6 +46,9 @@ Set{Any} with 3 elements:
   y[1]
   x[0, 0, 2]
 """
+rhs(::DependencyGraph, expr::Number, ::Dict) = Set()
+rhs(::DependencyGraph, expr::AbstractRange, ::Dict) = Set(nothing)
+rhs(::DependencyGraph, expr::Symbol, ::Dict) = Set([Var(expr)])
 function rhs(pass::DependencyGraph, expr::Expr, env::Dict)
     evaluated_expr = eval(expr, env)
     evaluated_expr isa Distributions.Distribution && return Set()
@@ -58,14 +74,12 @@ function rhs(pass::DependencyGraph, expr::Expr, env::Dict)
         return vars
     end
 end
-rhs(::DependencyGraph, expr::Number, ::Dict) = nothing
-rhs(::DependencyGraph, expr, env::Dict) = find_variables(expr, env)
 
 function assignment!(pass::DependencyGraph, expr::Expr, env::Dict)
     vars, arrays_map = pass.vars, pass.array_map
-    l_vars = collect(lhs(pass, expr.args[1], env))
+    l_var = lhs(pass, expr.args[1], env)
     r_vars = collect(rhs(pass, expr.args[2], env))
-    l_ids = [vars[v] for v in l_vars]
+    l_id = vars[l_var]
     r_ids = []
     for r_var in r_vars
         if r_var isa Scalar
@@ -84,9 +98,9 @@ function assignment!(pass::DependencyGraph, expr::Expr, env::Dict)
             end
         end
     end
-    for (l_id, r_id) in Iterators.product(l_ids, r_ids)
+    for r_id in r_ids
         add_edge!(pass.dep_graph, r_id, l_id)
     end
 end
 
-post_process(pass::DependencyGraph) = pass.dep_graph
+post_process(pass::DependencyGraph) = pass.vars, pass.dep_graph

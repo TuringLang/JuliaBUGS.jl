@@ -1,5 +1,7 @@
-using JuliaBUGS
+using Graphs, JuliaBUGS, Distributions
+using JuliaBUGS: CompilerPass, CollectVariables, DependencyGraph, NodeFunctions, program!, @bugsast, eval, Var, logjoint
 
+##
 model_def = @bugsast begin
     for i in 1:N
         for j in 1:T
@@ -69,9 +71,8 @@ tau_c = 1
 alpha_tau = 1
 beta_tau = 1
 
+initializations = Dict(:alpha => alpha, :beta => beta, :alpha_c => alpha_c, :beta_c => beta_c, :tau_c => tau_c, :alpha_tau => alpha_tau, :beta_tau => beta_tau)
 ##
-using Revise
-using JuliaBUGS: CompilerPass, CollectVariables, DependencyGraph, NodeFunctions, program!, @bugsast, eval
 
 model_def = @bugsast begin
     a ~ dnorm(0, 1)
@@ -79,20 +80,12 @@ model_def = @bugsast begin
     for i in 1:N
         c[i] ~ dnorm(a, b)
     end
-    g = e[1] * 2 + a
+    g = b * 2 + a
     d[1:3] ~ dmnorm(e[1:3], f[1:3, 1:3])
 end
 
 data = Dict(:N => 3, :f => [1 0 0; 0 1 0; 0 0 1], :e => [1, 2, 3])
+initializations = Dict(:a => 1, :b => 2, :c => [1, 2, 3], :d => [4, 5, 6])
 ##
 
-vars, arrays_map, var_types = program!(CollectVariables(), model_def, data)
-
-dg = DependencyGraph(vars).dep_graph
-using Graphs
-adjacency_matrix(dg)
-
-dep_graph = program!(DependencyGraph(vars, arrays_map), model_def, data)
-adjacency_matrix(dep_graph)
-
-node_args, node_funcs = program!(NodeFunctions(), model_def, data, arrays_map)
+logjoint(model_def, data, initializations)

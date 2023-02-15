@@ -77,6 +77,15 @@ function scalarize(v::Var)
     return scalarized_vars
 end
 
+function eval(v::Var, env::Dict)
+    haskey(env, v.name) || return nothing
+    if v isa Scalar
+        return env[v.name]
+    else
+        return env[v.name][v.indices...]
+    end
+end
+
 # per Philipp's suggestion, can use https://github.com/scheinerman/Bijections.jl in the future
 struct Vars
     var_id_map::Dict{Var, Int}
