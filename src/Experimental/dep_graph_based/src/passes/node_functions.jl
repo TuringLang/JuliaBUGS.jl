@@ -1,9 +1,11 @@
 struct NodeFunctions <: CompilerPass
     node_args::Dict
     node_functions::Dict
+    node_function_cache::Dict
+    evaled_func_cache::Dict
 end
 
-NodeFunctions() = NodeFunctions(Dict(), Dict())
+NodeFunctions() = NodeFunctions(Dict(), Dict(), Dict(), Dict())
 
 lhs(::NodeFunctions, expr::Symbol, env::Dict) = Var(expr)
 function lhs(::NodeFunctions, expr::Expr, env::Dict) 
@@ -35,22 +37,27 @@ function rhs(pass::NodeFunctions, expr::Expr, env::Dict, array_map)
     args = Dict()
     gen_expr = MacroTools.postwalk(replaced_expr) do sub_expr
         if sub_expr isa Var
-            gen_arg = Symbol(sub_expr)
+            gen_arg = gensym(:arg)
             args[sub_expr] = gen_arg
             return gen_arg
         else
             return sub_expr
         end
     end
+
+    if haskey(pass.node_function_cache, expr)
+        return pass.node_function_cache[expr], keys(args)
+    end
     
-    f_def = Dict(
+    f_expr = MacroTools.combinedef(Dict(
         :args => values(args),
         :body => gen_expr,
         :kwargs => Any[],
         :whereparams => Any[],
-    )
+    ))
+    pass.node_function_cache[expr] = f_expr
 
-    return MacroTools.combinedef(f_def), keys(args)
+    return f_expr, keys(args)
 end
 rhs(::NodeFunctions, expr, env::Dict) = find_variables(expr, env)
 
@@ -119,12 +126,19 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict, vargs...)
     @assert l_var isa Var
     r_func, r_vars = rhs(pass, expr.args[2], env, array_map)
 
+    if haskey(pass.evaled_func_cache, expr)
+        evaled_func = pass.evaled_func_cache[expr]
+    else
+        evaled_func = eval(r_func)
+        pass.evaled_func_cache[expr] = evaled_func
+    end
+
     if l_var in keys(pass.node_args)
         @assert pass.node_args[l_var] == r_vars
         @assert pass.node_functions[l_var] == r_func
     else
         pass.node_args[l_var] = r_vars
-        pass.node_functions[l_var] = eval(r_func)
+        pass.node_functions[l_var] = evaled_func
     end
 end
 
