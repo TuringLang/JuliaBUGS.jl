@@ -79,49 +79,20 @@ model_def = @bugsast begin
     for i in 1:N
         c[i] ~ dnorm(a, b)
     end
+    g = e[1] * 2 + a
     d[1:3] ~ dmnorm(e[1:3], f[1:3, 1:3])
 end
 
 data = Dict(:N => 3, :f => [1 0 0; 0 1 0; 0 0 1], :e => [1, 2, 3])
 ##
 
-vars, arrays_map = program!(CollectVariables(), model_def, data)
+vars, arrays_map, var_types = program!(CollectVariables(), model_def, data)
 
 dg = DependencyGraph(vars).dep_graph
 using Graphs
 adjacency_matrix(dg)
 
-dep_graph = program!(DependencyGraph(vars), model_def, data, vars, arrays_map)
+dep_graph = program!(DependencyGraph(vars, arrays_map), model_def, data)
 adjacency_matrix(dep_graph)
 
 node_args, node_funcs = program!(NodeFunctions(), model_def, data, arrays_map)
-
-JuliaBUGS.eval(:(dmnorm(e[1:3], f[1:3, 1:3])), data)
-JuliaBUGS.eval(:(dnorm(a, 1)), Dict(:a => 1.0))
-
-JuliaBUGS.extract_node_function(:(alpha[i] + beta[i] * (x[j] - xbar)))
-
-replace_vars()
-
-using JuliaBUGS: Var, ref_to_getindex, NodeFunctions, CompilerPass
-
-using MacroTools
-v_s(:(a + b + c)) |> dump
-
-varify_arrayelems(:(x[1] + f(x[2] + x[4]) + x[3])) |> dump
-
-expr = :(x[y[1] + 1])
-
-expr1 = varify_arrayelems(expr)
-
-expr2 = ref_to_getindex(expr1)
-varify_arrayvars(expr2, Dict(:x => collect(1:10))) |> dump
-
-replace_vars(:(x[y[1] + 1]), Dict(:x => collect(1:10), :y => collect(1:10))) |> dump
-
-using JuliaBUGS: rhs
-using Graphs
-rhs(:(x[y[1] + 1]), Dict(), Dict(:x => collect(1:10)))
-
-f_def = MacroTools.splitdef(:(function (x) x end))
-f_def[:body] = :(x + 1)

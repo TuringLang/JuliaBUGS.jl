@@ -1,8 +1,9 @@
 struct CollectVariables <: CompilerPass 
     vars::Vars
+    var_types::Dict
 end
 
-CollectVariables() = CollectVariables(Vars())
+CollectVariables() = CollectVariables(Vars(), Dict())
 
 find_variables(e::Symbol, ::Dict) = Var(e)
 function find_variables(expr::Expr, env::Dict)
@@ -12,7 +13,7 @@ function find_variables(expr::Expr, env::Dict)
     return Var(expr.args[1], idxs)
 end
 
-function lhs(pass::CollectVariables, expr::Symbol, env::Dict) 
+function lhs(pass::CollectVariables, expr, env::Dict) 
     lhs_var = find_variables(expr, env)
     return union(Set([lhs_var]), Set(vcat(scalarize(lhs_var))))
 end
@@ -21,7 +22,8 @@ function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
     vars = lhs(pass, expr.args[1], env)
     for v in vars
         push!(pass.vars, v)
-    end
+        pass.var_types[v] = expr.head == :(=) ? :logical : :stochastic
+    end 
 end
 
 function post_process(pass::CollectVariables)
@@ -67,5 +69,5 @@ function post_process(pass::CollectVariables)
         push!(vars, Var(k, [1:s for s in size(arrays_map[k])]))
     end
 
-    return vars, arrays_map
+    return vars, arrays_map, pass.var_types
 end

@@ -19,7 +19,7 @@ struct ArrayVariable <: Var
     indices::Array
 end
 
-isscalar(v::Var) = v isa Scalar
+isscalar(v::Var) = v isa Scalar || v isa ArrayElement
 
 Var(name::Symbol) = Scalar(name)
 Var(name::Symbol, index::Int) = ArrayElement(name, index)
