@@ -2,10 +2,9 @@ function logjoint(model_def::Expr, data, initializations)
     vars, arrays_map, var_types = program!(CollectVariables(), model_def, data)
     vars, dep_graph = program!(DependencyGraph(vars, arrays_map), model_def, data)
     node_args, node_funcs = program!(NodeFunctions(), model_def, data, arrays_map)
-    # evaled_node_funcs = Dict()
-    # for (k, v) in node_funcs
-    #     evaled_node_funcs[k] = eval(v)
-    # end
+    for e in edge(dep_graph)
+        println(vars.id_var_map[src(e)], " -> ", vars.id_var_map[dst(e)])
+    end
     inits = inits_to_trace(initializations, data, var_types)
     return logdensity(dep_graph, vars, var_types, node_funcs, node_args, inits)
 end
