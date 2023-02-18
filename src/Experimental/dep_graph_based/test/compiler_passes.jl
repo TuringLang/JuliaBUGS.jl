@@ -89,3 +89,32 @@ initializations = Dict(:a => 1, :b => 2, :c => [1, 2, 3], :d => [4, 5, 6])
 ##
 
 logjoint(model_def, data, initializations)
+
+using JuliaBUGS
+
+JuliaBUGS.eval(:(dnorm(x[y[1] + 1] + 1, 2)), Dict())
+
+JuliaBUGS.warn_indices(:a)
+
+a = Set([:a])
+in(:a, a)
+
+a = [undef 1; 2 3]
+any(i -> !isassigned(a, i), eachindex(a))
+
+using Bijections
+b = Bijection()
+
+b[:a] = 1
+length(b)
+haskey(b, :a)
+keys(b)
+print(b)
+for (k, v) in b
+    println(k, " => ", v)
+end
+
+using JuliaBUGS
+
+JuliaBUGS.eval(JuliaBUGS.Var(:b, [1]), Dict(:a => [1, 2, 3]))
+haskey(b, :a)

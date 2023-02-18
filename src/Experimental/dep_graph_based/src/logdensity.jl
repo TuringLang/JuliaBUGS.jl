@@ -1,9 +1,9 @@
 function logjoint(model_def::Expr, data, initializations)
     vars, arrays_map, var_types = program!(CollectVariables(), model_def, data)
-    vars, dep_graph = program!(DependencyGraph(vars, arrays_map), model_def, data)
+    dep_graph = program!(DependencyGraph(vars, arrays_map), model_def, data)
     node_args, node_funcs = program!(NodeFunctions(), model_def, data, arrays_map)
     inits = inits_to_trace(initializations, data, var_types)
-    return logdensity(dep_graph, vars, var_types, node_funcs, node_args, inits)
+    return logjoint(dep_graph, vars, var_types, node_funcs, node_args, inits)
 end
 
 function inits_to_trace(inits, data, var_types)
@@ -18,8 +18,10 @@ function inits_to_trace(inits, data, var_types)
     return trace
 end
 
-function logdensity(dep_graph, vars, var_types, node_funcs, node_args, trace)
-    sorted_node = filter(x -> vars.id_var_map[x] in keys(node_funcs), topological_sort_by_dfs(dep_graph))
+function logjoint(dep_graph, vars, var_types, node_funcs, node_args, trace)
+    sorted_node = filter(
+        x -> vars.id_var_map[x] in keys(node_funcs), topological_sort_by_dfs(dep_graph)
+    )
     logical_trace = Dict()
     logdensity = 0.0
     for s in sorted_node
@@ -40,4 +42,3 @@ function logdensity(dep_graph, vars, var_types, node_funcs, node_args, trace)
     end
     return logdensity
 end
-

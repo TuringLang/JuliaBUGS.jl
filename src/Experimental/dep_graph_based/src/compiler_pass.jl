@@ -23,7 +23,7 @@ Expr
 julia> eval(:(x[y[z[1] + 1] + 1] + 2), Dict()) # if a ref expr can't be evaluated, it's returned as is
 :(x[y[z[1] + 1] + 1] + 2)
 
-julia> JuliaBUGS.eval(:(dnorm(x[y[1] + 1] + 1, 2)), Dict())
+julia> JuliaBUGS.eval(:(dnorm(x[y[1] + 1] + 1, 2)), Dict()) # function calls 
 :(dnorm(x[y[1] + 1] + 1, 2))
 """
 eval(var::Number, ::Any) = var
@@ -48,7 +48,7 @@ function eval(var::Expr, env::Dict)
         evaled_var = Expr(var.head, var.args[1], args...)
         try
             return eval(evaled_var)
-        catch e
+        catch _
             return evaled_var
         end
     end
@@ -57,12 +57,11 @@ end
 """
     CompilerPass
 
-Abstract supertype for all compiler passes.
+Abstract supertype for all compiler passes. Concrete subtypes should store data needed and artifacts.
 """
 abstract type CompilerPass end
 
 function program!(pass::CompilerPass, expr::Expr, env::Dict, vargs...)
-    # pass should store the artifacts
     for ex in expr.args
         if Meta.isexpr(ex, [:(=), :(~)])
             assignment!(pass, ex, env, vargs...)

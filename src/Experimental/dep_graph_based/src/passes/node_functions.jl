@@ -1,23 +1,18 @@
 struct NodeFunctions <: CompilerPass
+    array_map
     node_args::Dict
     node_functions::Dict
     node_function_cache::Dict
     evaled_func_cache::Dict
 end
 
-NodeFunctions() = NodeFunctions(Dict(), Dict(), Dict(), Dict())
+NodeFunctions() = NodeFunctions(Dict(), Dict(), Dict(), Dict(), Dict())
 
-lhs(::NodeFunctions, expr::Symbol, env::Dict) = Var(expr)
-function lhs(::NodeFunctions, expr::Expr, env::Dict) 
-    @assert Meta.isexpr(expr, :ref) "Only symbol or array indexing is allowed on lhs."
-    idxs = map(x -> eval(x, env), expr.args[2:end])
-    @assert all(x -> x isa Number || x isa UnitRange, idxs) "Only number or range indexing is allowed on lhs."
-    return Var(expr.args[1], idxs)
-end
+lhs(::NodeFunctions, expr, env::Dict) = find_variables_on_lhs(expr, env)
 
 function rhs(pass::NodeFunctions, expr::Expr, env::Dict, array_map)
     evaluated_expr = eval(expr, env)
-    if evaluated_expr isa Distributions.Distribution 
+    if evaluated_expr isa Distributions.Distribution
         dist_func = nameof(typeof(evaluated_expr))
         if dist_func == :GenericMvTDist
             dist_func = :MvTDist
@@ -29,10 +24,11 @@ function rhs(pass::NodeFunctions, expr::Expr, env::Dict, array_map)
     end
     evaluated_expr isa Number && return :(() -> $evaluated_expr), []
     evaluated_expr isa Symbol && return :(identity), [Var(evaluated_expr)]
-    if Meta.isexpr(evaluated_expr, :ref) && all(x -> x isa Number || x isa UnitRange, evaluated_expr.args[2:end])
+    if Meta.isexpr(evaluated_expr, :ref) &&
+        all(x -> x isa Number || x isa UnitRange, evaluated_expr.args[2:end])
         return identity, [Var(evaluated_expr.args[1], evaluated_expr.args[2:end])]
     end
-  
+
     replaced_expr = replace_vars(evaluated_expr, array_map)
     args = Dict()
     gen_expr = MacroTools.postwalk(replaced_expr) do sub_expr
@@ -45,21 +41,23 @@ function rhs(pass::NodeFunctions, expr::Expr, env::Dict, array_map)
         end
     end
 
-    if haskey(pass.node_function_cache, expr)
+    haskey(pass.node_function_cache, expr) &&
         return pass.node_function_cache[expr], keys(args)
-    end
-    
-    f_expr = MacroTools.combinedef(Dict(
-        :args => values(args),
-        :body => gen_expr,
-        :kwargs => Any[],
-        :whereparams => Any[],
-    ))
+
+    f_expr = MacroTools.unblock(
+        MacroTools.combinedef(
+            Dict(
+                :args => values(args),
+                :body => gen_expr,
+                :kwargs => Any[],
+                :whereparams => Any[],
+            ),
+        ),
+    )
     pass.node_function_cache[expr] = f_expr
 
     return f_expr, keys(args)
 end
-rhs(::NodeFunctions, expr, env::Dict) = find_variables(expr, env)
 
 function replace_vars(expr, array_map)
     return varify_arrayvars(ref_to_getindex(varify_arrayelems(varify_scalars(expr))), array_map)
@@ -86,7 +84,8 @@ function varify_arrayelems(expr)
     return MacroTools.postwalk(expr) do sub_expr
         if MacroTools.@capture(sub_expr, f_(args__))
             for (i, arg) in enumerate(args)
-                if Meta.isexpr(arg, :ref) && all(x -> x isa Number || x isa UnitRange, arg.args[2:end])
+                if Meta.isexpr(arg, :ref) &&
+                    all(x -> x isa Number || x isa UnitRange, arg.args[2:end])
                     if all(x -> x isa Number, arg.args[2:end])
                         args[i] = Var(arg.args[1], arg.args[2:end])
                     else
@@ -118,13 +117,13 @@ function varify_arrayvars(expr, array_map)
             return sub_expr
         end
     end
-end 
+end
 
-function assignment!(pass::NodeFunctions, expr::Expr, env::Dict, vargs...)
-    array_map = vargs[1]
+function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
+    array_map = pass.array_map
     l_var = lhs(pass, expr.args[1], env)
     @assert l_var isa Var
-    r_func, r_vars = rhs(pass, expr.args[2], env, array_map)
+    r_func, r_var_args = rhs(pass, expr.args[2], env, array_map)
 
     if haskey(pass.evaled_func_cache, expr)
         evaled_func = pass.evaled_func_cache[expr]
@@ -134,10 +133,10 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict, vargs...)
     end
 
     if l_var in keys(pass.node_args)
-        @assert pass.node_args[l_var] == r_vars
+        @assert pass.node_args[l_var] == r_var_args
         @assert pass.node_functions[l_var] == r_func
     else
-        pass.node_args[l_var] = r_vars
+        pass.node_args[l_var] = r_var_args
         pass.node_functions[l_var] = evaled_func
     end
 end

@@ -1,37 +1,14 @@
-struct DependencyGraph <: CompilerPass 
+struct DependencyGraph <: CompilerPass
     vars::Vars
     array_map::Dict
     dep_graph::SimpleDiGraph
 end
-
 function DependencyGraph(vars::Vars, arrays_map::Dict)
-    vars = deepcopy(vars)
-    dep_graph = SimpleDiGraph(length(vars.id_var_map))
-
-    for k in keys(vars.var_id_map)
-        if k isa ArraySlice || k isa ArrayVariable
-            scarlarized_vars = scalarize(k)
-            for sv in scarlarized_vars
-                add_edge!(dep_graph, vars[k], vars[sv])
-            end
-        end
-    end
-
-    # create a new variable representing the whole array
-    for k in keys(arrays_map)
-        array_var = Var(k, [1:s for s in size(arrays_map[k])])
-        haskey(vars.var_id_map, array_var) && continue
-        push!(vars, array_var)
-        add_vertex!(dep_graph)
-        for sv in scalarize(array_var)
-            add_edge!(dep_graph, vars[sv], vars[array_var])
-        end
-    end
-
+    dep_graph = SimpleDiGraph(length(vars))
     return DependencyGraph(vars, arrays_map, dep_graph)
 end
 
-lhs(::DependencyGraph, expr, env::Dict) = find_variables(expr, env)
+lhs(::DependencyGraph, expr, env::Dict) = find_variables_on_lhs(expr, env)
 
 """
     rhs_variables(::DependencyGraph, expr, env)
@@ -54,8 +31,9 @@ function rhs(pass::DependencyGraph, expr::Expr, env::Dict)
     evaluated_expr isa Distributions.Distribution && return Set()
     evaluated_expr isa Number && return Set()
     evaluated_expr isa Symbol && return Set([Var(evaluated_expr)])
-    if Meta.isexpr(evaluated_expr, :ref) && all(x -> x isa Number || x isa UnitRange, evaluated_expr.args[2:end])
-        return Set([Var(evaluated_expr.args[1], evaluated_expr.args[2:end])]) 
+    if Meta.isexpr(evaluated_expr, :ref) &&
+        all(x -> x isa Number || x isa UnitRange, evaluated_expr.args[2:end])
+        return Set([Var(evaluated_expr.args[1], evaluated_expr.args[2:end])])
     end
 
     vars = Set()
@@ -78,8 +56,12 @@ end
 function assignment!(pass::DependencyGraph, expr::Expr, env::Dict)
     vars, arrays_map = pass.vars, pass.array_map
     l_var = lhs(pass, expr.args[1], env)
-    r_vars = collect(rhs(pass, expr.args[2], env))
     l_id = vars[l_var]
+    scalarized_l_ids = [vars[v] for v in vcat(scalarize(l_var))]
+    for l in scalarized_l_ids
+        add_edge!(pass.dep_graph, l_id, l)
+    end
+    r_vars = collect(rhs(pass, expr.args[2], env))
     r_ids = []
     for r_var in r_vars
         if r_var isa Scalar
@@ -103,4 +85,15 @@ function assignment!(pass::DependencyGraph, expr::Expr, env::Dict)
     end
 end
 
-post_process(pass::DependencyGraph) = pass.vars, pass.dep_graph
+function post_process(pass::DependencyGraph)
+    for v in keys(pass.vars)
+        if v isa ArrayVariable
+            scalarized_v = scalarize(v)
+            for s in scalarized_v
+                has_edge(pass.dep_graph, pass.vars[v], pass.vars[s]) && continue
+                add_edge!(pass.dep_graph, pass.vars[s], pass.vars[v])
+            end
+        end
+    end
+    return pass.dep_graph
+end
