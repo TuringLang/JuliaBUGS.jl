@@ -7,10 +7,14 @@ CollectVariables() = CollectVariables(Vars(), Dict())
 
 find_variables_on_lhs(e::Symbol, ::Dict) = Var(e)
 function find_variables_on_lhs(expr::Expr, env::Dict)
+    if Meta.isexpr(expr, :call)
+        @assert expr.args[1] in keys(INVERSE_LINK_FUNCTION) "Only link functions are allowed on lhs."
+        return find_variables_on_lhs(expr.args[1], env)
+    end
     @assert Meta.isexpr(expr, :ref) "Only symbol or array indexing is allowed on lhs."
     idxs = map(x -> eval(x, env), expr.args[2:end])
     msgs = map(warn_indices, idxs)
-    isempty(msgs) || error(join(msgs))
+    isempty(join(msgs)) || error(join(msgs))
     return Var(expr.args[1], idxs)
 end
 
@@ -36,8 +40,8 @@ function warn_indices(expr)
 end
 
 function lhs(::CollectVariables, expr, env::Dict)
-    lhs_vars = find_variables_on_lhs(expr, env)
-    return union(Set([lhs_var]), Set(vcat(scalarize(lhs_vars))))
+    lhs_var = find_variables_on_lhs(expr, env)
+    return union(Set([lhs_var]), Set(vcat(scalarize(lhs_var))))
 end
 
 function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
@@ -57,9 +61,11 @@ end
 function post_process(pass::CollectVariables)
     vars, var_types = pass.vars, pass.var_types
     array_elements = Dict()
-    for v in vars
+    for v in keys(vars)
         if v isa ArrayElement # because all ArraySlice are scalarized, we only need to check ArrayElement
-            haskey(array_elements, v.name) || (array_elements[v.name] = [])
+            if !haskey(array_elements, v.name)
+                array_elements[v.name] = []
+            end
             push!(array_elements[v.name], v)
         end
     end
@@ -92,7 +98,7 @@ function post_process(pass::CollectVariables)
 
     for v in keys(vars)
         if v isa ArraySlice
-            array_var = ArrayVariable(k, [1:s for s in size(arrays_map[k])])
+            array_var = ArrayVariable(v.name, [1:s for s in size(arrays_map[v.name])])
             if v == array_var
                 id = vars[v]
                 type = var_types[v]

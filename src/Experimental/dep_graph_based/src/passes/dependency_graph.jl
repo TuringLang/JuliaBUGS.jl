@@ -1,3 +1,10 @@
+function Base.show(io::IO, dg::SimpleDiGraph)
+    println(io, "Dependency Graph:")
+    for v in keys(dg.vars)
+        println(io, "  ", v, " || children: ", join(map(dg.vars, outneighbors(dg.dep_graph, dg.vars[v])), ", "), "; parents: ", join(map(dg.vars, inneighbors(dg.dep_graph, dg.vars[v])), ", "))
+    end
+end
+
 struct DependencyGraph <: CompilerPass
     vars::Vars
     array_map::Dict
@@ -57,9 +64,11 @@ function assignment!(pass::DependencyGraph, expr::Expr, env::Dict)
     vars, arrays_map = pass.vars, pass.array_map
     l_var = lhs(pass, expr.args[1], env)
     l_id = vars[l_var]
-    scalarized_l_ids = [vars[v] for v in vcat(scalarize(l_var))]
-    for l in scalarized_l_ids
-        add_edge!(pass.dep_graph, l_id, l)
+    if !isscalar(l_var)
+        scalarized_l_ids = [vars[v] for v in vcat(scalarize(l_var))]
+        for l in scalarized_l_ids
+            add_edge!(pass.dep_graph, l_id, l)
+        end
     end
     r_vars = collect(rhs(pass, expr.args[2], env))
     r_ids = []
@@ -95,5 +104,5 @@ function post_process(pass::DependencyGraph)
             end
         end
     end
-    return pass.dep_graph
+    return pass.dep_graph 
 end

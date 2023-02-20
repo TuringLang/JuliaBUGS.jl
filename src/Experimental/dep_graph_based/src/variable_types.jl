@@ -26,14 +26,14 @@ end
 
 isscalar(v::Var) = v isa Scalar || v isa ArrayElement
 
-size(::Scalar) = ()
-size(::ArrayElement) = ()
-size(v::ArraySlice) = Tuple(map(length, v.indices))
+Base.size(::Scalar) = ()
+Base.size(::ArrayElement) = ()
+Base.size(v::ArraySlice) = Tuple(map(length, v.indices))
 
 Var(name::Symbol) = Scalar(name)
 Var(name::Symbol, index::Int) = ArrayElement(name, index)
 function Var(name::Symbol, indices::Vector)
-    all(isinteger, indices) && return ArrayElement(name, indices)
+    all(x -> x isa Number && isinteger(x), indices) && return ArrayElement(name, indices)
     return ArraySlice(name, indices)
 end
 
@@ -100,7 +100,10 @@ function Base.push!(vars::Vars, v::Var)
 end
 
 function Base.show(io::IO, vars::Vars)
-    for (v, i) in vars
-        println(io, i, " => ", v)
+    print(io, "Vars(")
+    for (i, v) in enumerate(vars)
+        print(io, v.first, " => ", v.second)
+        i < length(vars) && print(io, ", ")
     end
+    print(io, ")")
 end

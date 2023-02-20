@@ -1,1 +1,0 @@
-# TODO: detect distribution type and variable transformation for HMC

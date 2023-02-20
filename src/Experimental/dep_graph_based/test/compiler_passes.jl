@@ -1,5 +1,5 @@
 using Graphs, JuliaBUGS, Distributions
-using JuliaBUGS: CompilerPass, CollectVariables, DependencyGraph, NodeFunctions, program!, @bugsast, eval, Var, logjoint
+using JuliaBUGS: CompilerPass, CollectVariables, DependencyGraph, NodeFunctions, program!, @bugsast, Var, logjoint
 
 ##
 model_def = @bugsast begin
@@ -20,7 +20,6 @@ model_def = @bugsast begin
     alpha0 = alpha_c - xbar * beta_c
 end
 
-## data
 x = [8.0, 15.0, 22.0, 29.0, 36.0]
 xbar = 22
 N = 30
@@ -60,7 +59,7 @@ Y = [
 
 data = Dict(:x => x, :xbar => xbar, :Y => Y, :N => N, :T => T)
 
-# initializations
+
 alpha = [250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
                   250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250]
 beta = [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
@@ -72,13 +71,20 @@ alpha_tau = 1
 beta_tau = 1
 
 initializations = Dict(:alpha => alpha, :beta => beta, :alpha_c => alpha_c, :beta_c => beta_c, :tau_c => tau_c, :alpha_tau => alpha_tau, :beta_tau => beta_tau)
+
 ##
 
+vars, array_map, var_types = program!(CollectVariables(), model_def, data)
+dep_graph = program!(DependencyGraph(vars, array_map), model_def, data)
+node_args, node_functions, link_functions = program!(NodeFunctions(array_map), model_def, data)
+
+t = logjoint(data, initializations, vars, var_types, dep_graph, node_functions, node_args, link_functions)
+##
 model_def = @bugsast begin
     a ~ dnorm(0, 1)
     b ~ dnorm(0, a)
     for i in 1:N
-        c[i] ~ dnorm(a, b)
+        logit(c[i]) ~ dnorm(a, b)
     end
     g = b * 2 + a
     d[1:3] ~ dmnorm(e[1:3], f[1:3, 1:3])
@@ -86,35 +92,3 @@ end
 
 data = Dict(:N => 3, :f => [1 0 0; 0 1 0; 0 0 1], :e => [1, 2, 3])
 initializations = Dict(:a => 1, :b => 2, :c => [1, 2, 3], :d => [4, 5, 6])
-##
-
-logjoint(model_def, data, initializations)
-
-using JuliaBUGS
-
-JuliaBUGS.eval(:(dnorm(x[y[1] + 1] + 1, 2)), Dict())
-
-JuliaBUGS.warn_indices(:a)
-
-a = Set([:a])
-in(:a, a)
-
-a = [undef 1; 2 3]
-any(i -> !isassigned(a, i), eachindex(a))
-
-using Bijections
-b = Bijection()
-
-b[:a] = 1
-length(b)
-haskey(b, :a)
-keys(b)
-print(b)
-for (k, v) in b
-    println(k, " => ", v)
-end
-
-using JuliaBUGS
-
-JuliaBUGS.eval(JuliaBUGS.Var(:b, [1]), Dict(:a => [1, 2, 3]))
-haskey(b, :a)

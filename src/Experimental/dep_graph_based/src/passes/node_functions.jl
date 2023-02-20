@@ -1,16 +1,25 @@
 struct NodeFunctions <: CompilerPass
     array_map
+    link_functions::Dict
     node_args::Dict
     node_functions::Dict
     node_function_cache::Dict
     evaled_func_cache::Dict
 end
 
-NodeFunctions() = NodeFunctions(Dict(), Dict(), Dict(), Dict(), Dict())
+NodeFunctions(array_map) = NodeFunctions(array_map, Dict(), Dict(), Dict(), Dict(), Dict())
 
-lhs(::NodeFunctions, expr, env::Dict) = find_variables_on_lhs(expr, env)
+function lhs(::NodeFunctions, expr::Expr, env::Dict)
+    if Meta.isexpr(expr, :call)
+        @assert length(expr.args) == 2
+        return find_variables_on_lhs(expr.args[2], env), expr.args[1]
+    end
+    return find_variables_on_lhs(expr, env), nothing
+end
+lhs(::NodeFunctions, expr, env::Dict) = find_variables_on_lhs(expr, env), nothing
 
-function rhs(pass::NodeFunctions, expr::Expr, env::Dict, array_map)
+function rhs(pass::NodeFunctions, expr::Expr, env::Dict)
+    array_map = pass.array_map
     evaluated_expr = eval(expr, env)
     if evaluated_expr isa Distributions.Distribution
         dist_func = nameof(typeof(evaluated_expr))
@@ -120,10 +129,12 @@ function varify_arrayvars(expr, array_map)
 end
 
 function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
-    array_map = pass.array_map
-    l_var = lhs(pass, expr.args[1], env)
+    l_var, link_func = lhs(pass, expr.args[1], env)
     @assert l_var isa Var
-    r_func, r_var_args = rhs(pass, expr.args[2], env, array_map)
+    if !isnothing(link_func)
+        pass.link_functions[l_var] = link_func
+    end
+    r_func, r_var_args = rhs(pass, expr.args[2], env)
 
     if haskey(pass.evaled_func_cache, expr)
         evaled_func = pass.evaled_func_cache[expr]
@@ -142,5 +153,5 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
 end
 
 function post_process(pass::NodeFunctions)
-    return pass.node_args, pass.node_functions
+    return pass.node_args, pass.node_functions, pass.link_functions
 end

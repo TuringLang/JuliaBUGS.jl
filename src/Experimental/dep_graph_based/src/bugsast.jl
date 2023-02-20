@@ -154,7 +154,7 @@ Used expression heads: `:~` for tilde calls, `:ref` for indexing, `:(:)` for ran
 converted from `:call` variants.
 """
 macro bugsast(expr)
-    return Meta.quot(linkfunction(warn_link_function(bugsast(expr, __source__))))
+    return Meta.quot(post_parsing_processing(warn_link_function(bugsast(expr, __source__))))
 end
 
 function warn_link_function(expr)
@@ -165,24 +165,6 @@ function warn_link_function(expr)
                 "Please rewrite the logical assignment by calling the inverse of the link function on the RHS. " *
                 "Corresponding Inverses: logit => logistic, cloglog => cexpexp, log => exp, probit => phi. ",
             )
-        end
-        return sub_expr
-    end
-end
-
-function linkfunction(expr::Expr)
-    # link functions in stochastic assignments will be handled later
-    INVERSE_LINK_FUNCTION = Dict(
-        :logit => :logistic, :cloglog => :cexpexp, :log => :exp, :probit => :phi
-    )
-    return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, f_(lhs_) = rhs_)
-            if f in keys(INVERSE_LINK_FUNCTION)
-                sub_expr.args[1] = lhs
-                sub_expr.args[2] = Expr(:call, INVERSE_LINK_FUNCTION[f], rhs)
-            else
-                error("Link function $f not supported.")
-            end
         end
         return sub_expr
     end
@@ -236,7 +218,7 @@ macro bugsmodel_str(s::String)
     transformed_code = "begin\n$(bugs_to_julia(s))\nend"
     try
         expr = Meta.parse(transformed_code)
-        return Meta.quot(linkfunction(bugsast(expr, __source__)))
+        return Meta.quot(post_parsing_processing(bugsast(expr, __source__)))
     catch e
         if e isa Base.Meta.ParseError
             # Meta.parse automatically uses file name "none" and position 1, so
@@ -246,5 +228,33 @@ macro bugsmodel_str(s::String)
         else
             rethrow()
         end
+    end
+end
+
+function post_parsing_processing(expr)
+    return (censored_truncated(linkfunction(expr)))
+end
+
+function linkfunction(expr::Expr)
+    # link functions in stochastic assignments will be handled later
+    return MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, f_(lhs_) = rhs_)
+            if f in keys(INVERSE_LINK_FUNCTION)
+                sub_expr.args[1] = lhs
+                sub_expr.args[2] = Expr(:call, INVERSE_LINK_FUNCTION[f], rhs)
+            else
+                error("Link function $f not supported.")
+            end
+        end
+        return sub_expr
+    end
+end
+
+function censored_truncated(expr::Expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if Meta.isexpr(sub_expr, [:censored, :truncated])
+            sub_expr = Expr(:call, sub_expr.head, sub_expr.args...)
+        end
+        return sub_expr
     end
 end
