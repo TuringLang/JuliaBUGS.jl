@@ -24,3 +24,8 @@ A complication arises when the rhs of a tilde function can evaluate to different
 Also, as we discussed, the node function can also be Turing model, which makes thing potentially more complicated.
 
 **For now, the target is to run BUGS model, so keep things simple.**
+
+* autodiff and logdensityproblems
+
+# Combine symbolic compiler with JuliaBUGS
+* 

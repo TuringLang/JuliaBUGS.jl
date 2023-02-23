@@ -1,4 +1,4 @@
-module SymbolicPPL
+module SymbolicExt
 
 using BangBang
 using Distributions
