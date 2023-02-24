@@ -1,4 +1,4 @@
-# SymbolicPPL.jl
+# JuliaBUGS.jl
 
 This package contains some infrastructure to work with graphical probabilistic models in symbolic form, consisting of a model DSL (which one could call "frontend"), an attempt of its formalization (ongoing work), and AbstractPPL-compatible evaluation facilities (i.e., sampling and density evaluation, conditioning, etc.).
 
@@ -113,7 +113,7 @@ julia> # Should be restricted to pure function that do simple operations
     return x + 1
 end
 
-julia> SymbolicPPL.f(2)
+julia> JuliaBUGS.f(2)
 3
 ```
 
@@ -125,7 +125,7 @@ julia> # Need to return a Distributions.Distribution
     return Normal(0, x^2)
 end 
 
-julia> SymbolicPPL.d(1)
+julia> JuliaBUGS.d(1)
 Distributions.Normal{Float64}(μ=0.0, σ=1.0)
 ```
 
@@ -223,7 +223,7 @@ Variable Name: r[2]
 Variable Type: Observation
 Data: 23
 Parent Nodes: alpha0, b[2]
-Node Function: SymbolicPPL.dbin(1 / (1 + exp(-alpha0 - b[2])), 62)
+Node Function: JuliaBUGS.dbin(1 / (1 + exp(-alpha0 - b[2])), 62)
 ```
 
 `Node Function` is a function that produces a distribution given the values of parents stochastic variables.
@@ -235,4 +235,4 @@ Compare the `Node Function` of `r[2]` with the original definition, we can see i
 - use `@register_distribution` to register function that take the indexing variable and other variables required to parametrize intended distributions
 
 ## More Examples
-We have transcribed all the examples from the first volume of the BUGS Examples ([origianl](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/SymbolicPPL.jl/tree/master/src/BUGSExamples/Volume_I)). All the programs and data are included, and they can be compiled in a similar way as we have demonstrated before.
+We have transcribed all the examples from the first volume of the BUGS Examples ([origianl](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/JuliaBUGS.jl/tree/master/src/BUGSExamples/Volume_I)). All the programs and data are included, and they can be compiled in a similar way as we have demonstrated before.
