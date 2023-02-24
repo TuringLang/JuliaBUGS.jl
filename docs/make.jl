@@ -1,8 +1,8 @@
 using Documenter
-using SymbolicPPL
+using JuliaBUGS
 
 makedocs(;
-    sitename="SymbolicPPL.jl",
+    sitename="JuliaBUGS.jl",
     pages=[
         "Introduction" => "index.md",
         "BUGS Language Reference" => "bugs_lang.md",
@@ -13,4 +13,4 @@ makedocs(;
     ],
 )
 
-deploydocs(; repo="github.com/TuringLang/SymbolicPPL.jl.git")
+deploydocs(; repo="github.com/TuringLang/JuliaBUGS.jl.git")

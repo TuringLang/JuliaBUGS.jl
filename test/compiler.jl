@@ -1,4 +1,4 @@
-using SymbolicPPL:
+using JuliaBUGS:
     CompilerState,
     compile,
     resolveif!,

@@ -148,5 +148,7 @@ function stochastic_indexing(expr::Expr)
 end
 
 function transform_expr(model_def::Expr)
-    return stochastic_indexing(deviance(density(cumulative(truncated(censored(linkfunction(model_def)))))))
+    return stochastic_indexing(
+        deviance(density(cumulative(truncated(censored(linkfunction(model_def))))))
+    )
 end
