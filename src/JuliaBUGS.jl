@@ -8,7 +8,7 @@ using MacroTools
 
 import Base: in, push!, ==, hash, Symbol, keys, size
 
-export @bugsast
+export @bugsast, @bugsmodel_str
 
 include("bugsast.jl")
 include("variable_types.jl")

@@ -5,6 +5,7 @@ using Distributions
 using DynamicPPL
 using Graphs, MetaGraphsNext
 using IfElse
+using JuliaBUGS
 using LinearAlgebra
 using LogExpFunctions
 using MacroTools
@@ -14,7 +15,6 @@ using Statistics
 using Symbolics, SymbolicUtils
 using Random
 
-include("bugsast.jl")
 include("graphs.jl")
 include("symbolics.jl")
 include("transform_ast.jl")
@@ -25,10 +25,7 @@ include("gibbs.jl")
 include("distributions.jl")
 include("todppl.jl")
 
-export @bugsast, @bugsmodel_str
 export compile
 export @register_function, @register_distribution
-
-include("BUGSExamples/BUGSExamples.jl")
 
 end # module

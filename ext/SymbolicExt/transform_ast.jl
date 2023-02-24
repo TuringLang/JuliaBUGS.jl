@@ -78,7 +78,7 @@ end
 
 function censored(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
-        if Meta.isexpr(sub_expr, :censored)
+        if Meta.isexpr(sub_expr, :call) && sub_expr.args[1] == :censored
             l, u = sub_expr.args[2:3]
 
             if l != :nothing && u != :nothing
@@ -96,7 +96,7 @@ end
 
 function truncated(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
-        if Meta.isexpr(sub_expr, :truncated)
+        if Meta.isexpr(sub_expr, :call) && sub_expr.args[1] == :truncated
             l, u = sub_expr.args[2:3]
 
             if l != :nothing && u != :nothing
