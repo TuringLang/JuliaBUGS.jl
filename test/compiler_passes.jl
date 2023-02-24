@@ -1,5 +1,13 @@
 using Graphs, JuliaBUGS, Distributions
-using JuliaBUGS: CompilerPass, CollectVariables, DependencyGraph, NodeFunctions, program!, @bugsast, Var, logjoint
+using JuliaBUGS:
+    CompilerPass,
+    CollectVariables,
+    DependencyGraph,
+    NodeFunctions,
+    program!,
+    @bugsast,
+    Var,
+    logjoint
 
 ##
 model_def = @bugsast begin
@@ -59,26 +67,75 @@ Y = [
 
 data = Dict(:x => x, :xbar => xbar, :Y => Y, :N => N, :T => T)
 
-
-alpha = [250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250,
-                  250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250]
-beta = [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-                  6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
+alpha = [
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+    250,
+]
+beta = [
+    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6
+]
 alpha_c = 150
 beta_c = 10
 tau_c = 1
 alpha_tau = 1
 beta_tau = 1
 
-initializations = Dict(:alpha => alpha, :beta => beta, :alpha_c => alpha_c, :beta_c => beta_c, :tau_c => tau_c, :alpha_tau => alpha_tau, :beta_tau => beta_tau)
+initializations = Dict(
+    :alpha => alpha,
+    :beta => beta,
+    :alpha_c => alpha_c,
+    :beta_c => beta_c,
+    :tau_c => tau_c,
+    :alpha_tau => alpha_tau,
+    :beta_tau => beta_tau,
+)
 
 ##
 
 vars, array_map, var_types = program!(CollectVariables(), model_def, data)
 dep_graph = program!(DependencyGraph(vars, array_map), model_def, data)
-node_args, node_functions, link_functions = program!(NodeFunctions(array_map), model_def, data)
+node_args, node_functions, link_functions = program!(
+    NodeFunctions(array_map), model_def, data
+)
 
-t = logjoint(data, initializations, vars, var_types, dep_graph, node_functions, node_args, link_functions)
+t = logjoint(
+    data,
+    initializations,
+    vars,
+    var_types,
+    dep_graph,
+    node_functions,
+    node_args,
+    link_functions,
+)
 ##
 model_def = @bugsast begin
     a ~ dnorm(0, 1)

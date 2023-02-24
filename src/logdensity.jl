@@ -1,9 +1,13 @@
 function logjoint(model_def::Expr, data, initializations)
     vars, arrays_map, var_types = program!(CollectVariables(), model_def, data)
     dep_graph = program!(DependencyGraph(vars, arrays_map), model_def, data)
-    node_args, node_functions, link_functions = program!(NodeFunctions(arrays_map), model_def, data, arrays_map)
+    node_args, node_functions, link_functions = program!(
+        NodeFunctions(arrays_map), model_def, data, arrays_map
+    )
     trace = inits_to_trace(initializations, data, var_types)
-    return logjoint(dep_graph, vars, var_types, node_functions, node_args, link_functions, trace)
+    return logjoint(
+        dep_graph, vars, var_types, node_functions, node_args, link_functions, trace
+    )
 end
 
 function inits_to_trace(inits, data, var_types)
@@ -18,7 +22,16 @@ function inits_to_trace(inits, data, var_types)
     return trace
 end
 
-function logjoint(data, initializations, vars, var_types, dep_graph, node_functions, node_args, link_functions)
+function logjoint(
+    data,
+    initializations,
+    vars,
+    var_types,
+    dep_graph,
+    node_functions,
+    node_args,
+    link_functions,
+)
     sorted_node = filter(
         x -> vars(x) in keys(node_functions), topological_sort_by_dfs(dep_graph)
     )
@@ -37,7 +50,7 @@ function logjoint(data, initializations, vars, var_types, dep_graph, node_functi
         end
         trace[var] = value
     end
-    
+
     logdensity = 0.0
     for node_id in sorted_node
         var = vars(node_id)
@@ -47,9 +60,14 @@ function logjoint(data, initializations, vars, var_types, dep_graph, node_functi
             trace[var] = Base.invokelatest(node_functions[var], arguments...)
         else
             if haskey(link_functions, var)
-                logdensity += logpdf(Base.invokelatest(node_functions[var], arguments...), eval(link_functions[var])(trace[var]))
+                logdensity += logpdf(
+                    Base.invokelatest(node_functions[var], arguments...),
+                    eval(link_functions[var])(trace[var]),
+                )
             else
-                logdensity += logpdf(Base.invokelatest(node_functions[var], arguments...), trace[var])
+                logdensity += logpdf(
+                    Base.invokelatest(node_functions[var], arguments...), trace[var]
+                )
             end
         end
     end

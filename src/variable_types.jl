@@ -105,5 +105,5 @@ function Base.show(io::IO, vars::Vars)
         print(io, v.first, " => ", v.second)
         i < length(vars) && print(io, ", ")
     end
-    print(io, ")")
+    return print(io, ")")
 end

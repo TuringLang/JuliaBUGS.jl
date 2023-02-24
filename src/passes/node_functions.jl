@@ -69,7 +69,9 @@ function rhs(pass::NodeFunctions, expr::Expr, env::Dict)
 end
 
 function replace_vars(expr, array_map)
-    return varify_arrayvars(ref_to_getindex(varify_arrayelems(varify_scalars(expr))), array_map)
+    return varify_arrayvars(
+        ref_to_getindex(varify_arrayelems(varify_scalars(expr))), array_map
+    )
 end
 
 function varify_scalars(expr)
