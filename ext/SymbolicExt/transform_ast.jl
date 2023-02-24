@@ -78,7 +78,7 @@ end
 
 function censored(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
-        if Meta.isexpr(sub_expr, :call) && sub_expr.args[1] == :censored
+        if Meta.isexpr(sub_expr, :censored)
             l, u = sub_expr.args[2:3]
 
             if l != :nothing && u != :nothing
@@ -96,7 +96,7 @@ end
 
 function truncated(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
-        if Meta.isexpr(sub_expr, :call) && sub_expr.args[1] == :truncated
+        if Meta.isexpr(sub_expr, :truncated)
             l, u = sub_expr.args[2:3]
 
             if l != :nothing && u != :nothing
@@ -131,11 +131,17 @@ function stochastic_indexing(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, v_[idxs__])
             is_stochastic_var = (in(all_stochastic_lhs)).(idxs)
-            new_idxs = deepcopy(idxs)
-            new_idxs[is_stochastic_var] .= :(:)
-            sub_expr = Expr(
-                :call, :_getindex, Expr(:ref, v, new_idxs...), idxs...
-            )
+            stochastic_index = findall(x -> x == true, is_stochastic_var)
+            @assert length(stochastic_index) <= 1 "More than one stochastic index in $sub_expr."
+            if length(stochastic_index) == 1
+                idx = stochastic_index[1]
+                @assert !Meta.isexpr(idx, :call) "When stochastic variable is used for indexing, it must be a variable, not in an expression."
+            end
+            if any(is_stochastic_var)
+                new_idxs = deepcopy(idxs)
+                new_idxs[is_stochastic_var] .= :(:)
+                sub_expr = Expr(:call, :_getindex, Expr(:ref, v, new_idxs...), idxs...)
+            end
         end
         return sub_expr
     end
