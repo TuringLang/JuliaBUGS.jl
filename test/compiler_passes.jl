@@ -1,13 +1,12 @@
 using Graphs, JuliaBUGS, Distributions
 using JuliaBUGS:
-    CompilerPass,
     CollectVariables,
     DependencyGraph,
     NodeFunctions,
-    program!,
-    @bugsast,
-    Var,
-    logjoint
+    ArrayElement,
+    ArraySlice,
+    ArrayVariable,
+    program!
 
 ##
 model_def = @bugsast begin
@@ -28,6 +27,7 @@ model_def = @bugsast begin
     alpha0 = alpha_c - xbar * beta_c
 end
 
+## original data
 x = [8.0, 15.0, 22.0, 29.0, 36.0]
 xbar = 22
 N = 30
@@ -67,41 +67,38 @@ Y = [
 
 data = Dict(:x => x, :xbar => xbar, :Y => Y, :N => N, :T => T)
 
-alpha = [
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
+alpha = ones(Integer, 30) .* 250
+beta = ones(Integer, 30) .* 6
+alpha_c = 150
+beta_c = 10
+tau_c = 1
+alpha_tau = 1
+beta_tau = 1
+
+initializations = Dict(
+    :alpha => alpha,
+    :beta => beta,
+    :alpha_c => alpha_c,
+    :beta_c => beta_c,
+    :tau_c => tau_c,
+    :alpha_tau => alpha_tau,
+    :beta_tau => beta_tau,
+)
+
+## simplified data
+x = [8.0, 15.0]
+xbar = 22
+N = 2
+T = 2
+Y = [
+    151 199
+    145 199
 ]
-beta = [
-    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6
-]
+
+data = Dict(:x => x, :xbar => xbar, :Y => Y, :N => N, :T => T)
+
+alpha = ones(Integer, T) .* 250
+beta = ones(Integer, T) .* 6
 alpha_c = 150
 beta_c = 10
 tau_c = 1
@@ -122,20 +119,16 @@ initializations = Dict(
 
 vars, array_map, var_types = program!(CollectVariables(), model_def, data)
 dep_graph = program!(DependencyGraph(vars, array_map), model_def, data)
-node_args, node_functions, link_functions = program!(
-    NodeFunctions(array_map), model_def, data
-)
+node_args, node_functions, link_functions = program!(NodeFunctions(vars, array_map), model_def, data)
 
-t = logjoint(
-    data,
-    initializations,
-    vars,
-    var_types,
-    dep_graph,
-    node_functions,
-    node_args,
-    link_functions,
-)
+m = JuliaBUGS.BUGSModel(vars, array_map, var_types, dep_graph, node_args, node_functions, link_functions)
+
+t = JuliaBUGS.Trace(m, data, initializations)
+f_t = JuliaBUGS.flatten(t)
+t == JuliaBUGS.unflatten(t, f_t)
+
+bs = JuliaBUGS.get_bijectors(m, t)
+
 ##
 model_def = @bugsast begin
     a ~ dnorm(0, 1)

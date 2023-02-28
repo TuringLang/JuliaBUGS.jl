@@ -73,3 +73,4 @@ function logjoint(
     end
     return logdensity
 end
+
