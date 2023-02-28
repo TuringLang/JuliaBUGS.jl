@@ -8,7 +8,9 @@ struct NodeFunctions <: CompilerPass
     evaled_func_cache::Dict
 end
 
-NodeFunctions(vars, array_map) = NodeFunctions(vars, array_map, Dict(), Dict(), Dict(), Dict(), Dict())
+function NodeFunctions(vars, array_map)
+    return NodeFunctions(vars, array_map, Dict(), Dict(), Dict(), Dict(), Dict())
+end
 
 function lhs(::NodeFunctions, expr::Expr, env::Dict)
     if Meta.isexpr(expr, :call)
@@ -51,8 +53,10 @@ function rhs(pass::NodeFunctions, expr::Expr, env::Dict)
         end
     end
 
-    haskey(pass.node_function_cache, expr) &&
-        return pass.node_function_cache[expr], keys(args)
+    # TODO: cache using expr as key has problem: 
+    # when constant in expr is evaled, node_function can vary between instantiations of the same expressions.
+    # haskey(pass.node_function_cache, expr) &&
+    #     return pass.node_function_cache[expr], keys(args)
 
     f_expr = MacroTools.unblock(
         MacroTools.combinedef(
@@ -64,7 +68,7 @@ function rhs(pass::NodeFunctions, expr::Expr, env::Dict)
             ),
         ),
     )
-    pass.node_function_cache[expr] = f_expr
+    # pass.node_function_cache[expr] = f_expr
 
     return f_expr, keys(args)
 end
@@ -139,13 +143,17 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
     end
     r_func, r_var_args = rhs(pass, expr.args[2], env)
 
-    if haskey(pass.evaled_func_cache, expr)
-        evaled_func = pass.evaled_func_cache[expr]
-    else
-        evaled_func = eval(r_func)
-        # evaled_func = r_func
-        pass.evaled_func_cache[expr] = evaled_func
-    end
+    # if haskey(pass.evaled_func_cache, expr)
+    #     evaled_func = pass.evaled_func_cache[expr]
+    # else
+    #     evaled_func = eval(r_func)
+    #     # evaled_func = r_func
+    #     pass.evaled_func_cache[expr] = evaled_func
+    # end
+
+    evaled_func = eval(r_func)
+    # evaled_func = r_func
+    pass.evaled_func_cache[expr] = evaled_func
 
     if l_var in keys(pass.node_args)
         @assert pass.node_args[l_var] == r_var_args
@@ -157,28 +165,41 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
 end
 
 function post_process(pass::NodeFunctions)
-    vars, array_map, node_args, node_functions, link_functions = pass.vars, pass.array_map, pass.node_args, pass.node_functions, pass.link_functions
-    
+    vars, array_map, node_args, node_functions, link_functions = pass.vars,
+    pass.array_map, pass.node_args, pass.node_functions,
+    pass.link_functions
+
     for var in keys(vars)
         if !haskey(node_args, var)
             @assert isa(var, ArrayElement) || isa(var, ArrayVariable)
             if var isa ArrayElement
                 # then come from either ArrayVariable or ArraySlice
-                source_var = filter(x -> (x isa ArrayVariable || x isa ArraySlice) && x.name == var.name, keys(node_args))
+                source_var = filter(
+                    x -> (x isa ArrayVariable || x isa ArraySlice) && x.name == var.name,
+                    keys(node_args),
+                )
                 @assert length(source_var) == 1
                 array_var = first(source_var)
                 @assert array_var in keys(node_args)
                 node_args[var] = [array_var]
-                node_functions[var] = MacroTools.postwalk(MacroTools.rmlines, :(
-                    (array_var, i) -> array_var[$(var.indices...)]
-                )) |> eval
+                node_functions[var] = eval(MacroTools.postwalk(
+                    MacroTools.rmlines, :((array_var) -> array_var[$(var.indices...)])
+                ))
+                # node_functions[var] = MacroTools.postwalk(
+                #     MacroTools.rmlines, :((array_var) -> array_var[$(var.indices...)])
+                # )
             else
                 array_elems = scalarize(var)
-                node_args[var] = array_elems
-                # @assert all(x -> x in keys(node_args), array_elems) # might not be true
-                node_functions[var] = MacroTools.postwalk(MacroTools.rmlines, :(
-                    (args...) -> reshape(collect(args), $(size(array_map[var.name])))
-                )) |> eval
+                node_args[var] = vcat(array_elems)
+                @assert all(x -> x in keys(node_args), array_elems) # might not be true
+                node_functions[var] = eval(MacroTools.postwalk(
+                    MacroTools.rmlines,
+                    :((args...) -> reshape(collect(args), $(size(array_map[var.name])))),
+                ))
+                # node_functions[var] = MacroTools.postwalk(
+                #     MacroTools.rmlines,
+                #     :((args...) -> reshape(collect(args), $(size(array_map[var.name])))),
+                # )
             end
         end
     end

@@ -2,6 +2,7 @@ module JuliaBUGS
 
 using AbstractPPL
 using Bijections
+using Bijectors
 using Distributions
 using Graphs
 using LogDensityProblems, LogDensityProblemsAD
