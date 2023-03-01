@@ -1,124 +1,96 @@
-
-struct Trace <: AbstractPPL.AbstractModelTrace
-    values::Dict{Var, Any}
-    logicals::Vector{Var}
-    observations::Vector{Var}
-    parameters::Vector{Var}
-end
-
-function Trace(vars, var_types, data, inits=nothing; force_init=false)
-    values = Dict()
-    logicals, parameters, observations = [], [], []
-    for var in keys(vars)
-        if var_types[var] == :logical
-            push!(logicals, var)
-            continue
-        else
-            value = JuliaBUGS.eval(var, data)
-            if !isnothing(value)
-                push!(observations, var)
-                values[var] = value
-                continue
-            end
-            push!(parameters, var)
-            value = JuliaBUGS.eval(var, inits)
-            if isnothing(value)
-                @assert !force_init
-                value = rand(size(var)...)
-            end
-            values[var] = value
-        end
-    end
-    return Trace(values, logicals, observations, parameters)
-end
-
-
 struct BUGSModel <: AbstractPPL.AbstractProbabilisticProgram
     vars
     array_map
     var_types
     dep_graph
+    sorted_nodes
     bijectors
     prior_types
     node_args
     node_functions
     link_functions
-    trace::Trace
-end 
+    partial_trace
+    parameters
+end
 
 function BUGSModel(vars, array_map, var_types, dep_graph, node_args, node_functions, link_functions, data, inits)
-    t = Trace(vars, var_types, data, inits)
-    trace = t.values
+    trace = Dict()
+    parameters = []
+    for var in keys(vars)
+        var_types[var] == :logical && continue
+        
+        value = JuliaBUGS.eval(var, data)
+        if !isnothing(value)
+            trace[var] = value
+            continue
+        end
 
-    sorted_nodes =  topological_sort_by_dfs(m.dep_graph)
-    bs, ds = Dict(), Dict()
+        push!(parameters, var)
+        value = JuliaBUGS.eval(var, inits)
+        isnothing(value) && error("$var is not initialized")
+        trace[var] = value
+    end
+
+    sorted_nodes =  topological_sort_by_dfs(dep_graph)
+    bijectors, prior_types = Dict(), Dict()
     for v_id in sorted_nodes
         var = vars(v_id)
         arguments = [trace[arg] for arg in node_args[var]]
         if var_types[var] == :logical
             trace[var] = Base.invokelatest(node_functions[var], arguments...)
         else
-            bs[var] = Bijectors.bijector(Base.invokelatest(node_functions[var], arguments...))
-            ds[var] = typeof(Base.invokelatest(node_functions[var], arguments...))
+            # TODO: for the same stochastic variable, node function can return different types of Distributions
+            # as long as the support is the consistent, it is fine
+            bijectors[var] = Bijectors.bijector(Base.invokelatest(node_functions[var], arguments...))
+            prior_types[var] = typeof(Base.invokelatest(node_functions[var], arguments...))
         end
     end
-    return bs
 
     return BUGSModel(
-        vars, array_map, var_types, dep_graph, bs, ds, node_args, node_functions, link_functions, t
+        vars, array_map, var_types, dep_graph, sorted_nodes, bijectors, prior_types, node_args, node_functions, link_functions, trace, parameters
     )
 end
 
-# TODO: add bijectors: during Trace creation with initializations and in `logdensity` computation 
-
-
-# return a Vector of values of parameters
-function flatten(t::Trace)
-    return vcat([t.values[var] for var in t.parameters]...)
+function flatten(trace, parameters)
+    return vcat([trace[var] for var in parameters]...)
 end
 
-function unflatten(t::Trace, flattened_vales)
-    values = t.values
-    for (var, value) in zip(t.parameters, flattened_vales)
-        values[var] = value
+function unflatten(trace, parameters, flattened_vales)
+    trace = deepcopy(trace)
+    for (var, value) in zip(parameters, flattened_vales)
+        trace[var] = value
     end
-    return Trace(values, t.logicals, t.observations, t.parameters)
+    return trace
 end
 
-function transform_and_flatten(t::Trace, bs)
-    return vcat([bs[var](t.values[var]) for var in t.parameters]...)
+function transform_and_flatten(trace, parameters, bijectors)
+    return vcat([bijectors[var](trace[var]) for var in parameters]...)
 end
 
-function untransform_and_unflatten(t::Trace, flattened_vales, bs)
-    values = t.values
-    for (var, value) in zip(t.parameters, flattened_vales)
-        values[var] = inv(bs[var])(value)
+function untransform_and_unflatten(trace, parameters, bijectors, flattened_vales)
+    trace = deepcopy(trace)
+    for (var, value) in zip(parameters, flattened_vales)
+        trace[var] = inv(bijectors[var])(value)
     end
-    return Trace(values, t.logicals, t.observations, t.parameters)
+    return trace
 end
 
 struct BUGSLogDensityProblem 
     m::BUGSModel
-    t::Trace
-    bs::Dict
-    ds::Dict
 end
 
 function (p::BUGSLogDensityProblem)(x)
-    t = untransform_and_unflatten(p.t, x, p.bs)
-    return logdensity(p.m, t)
+    trace = untransform_and_unflatten(p.m.partial_trace, p.m.parameters, p.m.bijectors, x)
+    return logjoint(p.m, trace)
 end
 
-function logdensity(m::BUGSModel, t)
-    trace = t.values
-    vars, var_types, dep_graph, node_args, node_functions, link_functions = m.vars, m.var_types, m.dep_graph, m.node_args, m.node_functions, m.link_functions
-    sorted_nodes =  topological_sort_by_dfs(dep_graph)
+function logjoint(m::BUGSModel, trace)
+    vars, var_types, dep_graph, sorted_nodes, node_args, node_functions, link_functions = m.vars, m.var_types, m.dep_graph, m.sorted_nodes, m.node_args, m.node_functions, m.link_functions
     logdensity = 0.0
     for v_id in sorted_nodes
         var = vars(v_id)
         arguments = [trace[arg] for arg in node_args[var]]
         if var_types[var] == :logical
-            @assert !haskey(trace, var)
             trace[var] = Base.invokelatest(node_functions[var], arguments...)
         else
             if haskey(link_functions, var)
@@ -133,26 +105,22 @@ function logdensity(m::BUGSModel, t)
             end
         end
     end
-    return logdensity, trace
+    return logdensity
 end
 
-function LogDensityProblems.logdensity(p::BUGSLogDensityProblem, t)
-    return p(t)
+function LogDensityProblems.logdensity(p::BUGSLogDensityProblem, params)
+    return p(params)
 end
 
 function LogDensityProblems.dimension(p::BUGSLogDensityProblem)
-    return length(flatten(p.t))
+    return length(flatten(p.m.trace, p.m.parameters))
 end
 
 function LogDensityProblems.capabilities(p::BUGSLogDensityProblem)
-    if all(p.ds, (x) -> x isa ContinuousUnivariateDistribution)
+    if all((x) -> x <: ContinuousUnivariateDistribution, values(p.m.prior_types))
         return LogDensityProblems.LogDensityOrder{1}()
     else
         return LogDensityProblems.LogDensityOrder{0}()
     end
 end
-
-
-
-
-# print the trace of two approach and compare them
+using LogDensityProblems
