@@ -1,3 +1,5 @@
+module BUGSPrimitives
+
 using Distributions
 using LinearAlgebra
 using LogExpFunctions
@@ -10,3 +12,5 @@ include("distributions.jl")
 const INVERSE_LINK_FUNCTION = Dict(
     :logit => :logistic, :cloglog => :cexpexp, :log => :exp, :probit => :phi
 )
+
+end

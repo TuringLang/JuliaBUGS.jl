@@ -9,7 +9,7 @@ struct BUGSModel <: AbstractPPL.AbstractProbabilisticProgram
     node_args
     node_functions
     link_functions
-    partial_trace
+    trace
     parameters
 end
 
@@ -52,7 +52,7 @@ function BUGSModel(vars, array_map, var_types, dep_graph, node_args, node_functi
 end
 
 function flatten(trace, parameters)
-    return vcat([trace[var] for var in parameters]...)
+    return vcat([deepcopy(trace[var]) for var in parameters]...)
 end
 
 function unflatten(trace, parameters, flattened_vales)
@@ -64,7 +64,7 @@ function unflatten(trace, parameters, flattened_vales)
 end
 
 function transform_and_flatten(trace, parameters, bijectors)
-    return vcat([bijectors[var](trace[var]) for var in parameters]...)
+    return vcat([bijectors[var](deepcopy(trace[var])) for var in parameters]...)
 end
 
 function untransform_and_unflatten(trace, parameters, bijectors, flattened_vales)
@@ -80,7 +80,7 @@ struct BUGSLogDensityProblem
 end
 
 function (p::BUGSLogDensityProblem)(x)
-    trace = untransform_and_unflatten(p.m.partial_trace, p.m.parameters, p.m.bijectors, x)
+    trace = untransform_and_unflatten(p.m.trace, p.m.parameters, p.m.bijectors, x)
     return logjoint(p.m, trace)
 end
 
@@ -123,4 +123,4 @@ function LogDensityProblems.capabilities(p::BUGSLogDensityProblem)
         return LogDensityProblems.LogDensityOrder{0}()
     end
 end
-using LogDensityProblems
+
