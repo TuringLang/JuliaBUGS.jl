@@ -9,7 +9,7 @@ using JuliaBUGS:
     program!,
     compile
 
-##
+#
 model_def = @bugsast begin
     for i in 1:N
         for j in 1:T
@@ -28,7 +28,7 @@ model_def = @bugsast begin
     alpha0 = alpha_c - xbar * beta_c
 end
 
-## data
+# data
 x = [8.0, 15.0, 22.0, 29.0, 36.0]
 xbar = 22
 N = 30
@@ -85,16 +85,13 @@ initializations = Dict(
     :tau_c => tau_c,
     :alpha_tau => alpha_tau,
     :beta_tau => beta_tau,
-)
+);
 
 ##
 
-m = compile(model_def, data, initializations);
-trace = m.trace;
-parameters = m.parameters;
-
-p = JuliaBUGS.BUGSLogDensityProblem(m)
-p(JuliaBUGS.transform_and_flatten(trace, parameters, m.bijectors))
+p = compile(model_def, data, initializations);
+params = JuliaBUGS.gen_init_params(p)
+p(JuliaBUGS.transform_and_flatten(trace, parameters, p.bijectors))
 
 ##
 using AdvancedHMC

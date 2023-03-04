@@ -1,12 +1,14 @@
 module JuliaBUGS
 
 using AbstractPPL
+using BangBang
 using Bijections
 using Bijectors
 using Distributions
 using Graphs
 using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
+using UnPack
 
 import Base: in, push!, ==, hash, Symbol, keys, size
 
@@ -31,7 +33,7 @@ function compile(model_definition, data, initializations)
     dep_graph = program!(DependencyGraph(vars, array_map), model_definition, data)
     node_args, node_functions, link_functions = program!(NodeFunctions(vars, array_map), model_definition, data)
 
-    return BUGSModel(vars, array_map, var_types, dep_graph, node_args, node_functions, link_functions, data, initializations)
+    return BUGSLogDensityProblem(vars, var_types, dep_graph, node_args, node_functions, link_functions, data, initializations)
 end
 
 export compile
