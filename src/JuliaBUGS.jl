@@ -1,6 +1,7 @@
 module JuliaBUGS
 
 using AbstractPPL
+using AdvancedHMC
 using BangBang
 using Bijections
 using Bijectors
@@ -8,7 +9,7 @@ using Distributions
 using Graphs
 using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
-using UnPack
+using ReverseDiff
 
 import Base: in, push!, ==, hash, Symbol, keys, size
 

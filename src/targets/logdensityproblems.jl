@@ -108,16 +108,16 @@ function logjoint(p::BUGSLogDensityProblem, trace)
     for var in sorted_nodes
         arguments = [trace[arg] for arg in node_args[var]]
         if var_types[var] == :logical
-            trace[var] = node_functions[var](arguments...)
+            trace[var] = Base.invokelatest(node_functions[var], arguments...)
         else
             if haskey(link_functions, var)
                 logjoint += logpdf(
-                    node_functions[var](arguments...),
+                    Base.invokelatest(node_functions[var], arguments...),
                     eval(link_functions[var])(trace[var]),
                 )
             else
                 logjoint += logpdf(
-                    node_functions[var](arguments...), trace[var]
+                    Base.invokelatest(node_functions[var], arguments...), trace[var]
                 )
             end
         end
@@ -130,13 +130,29 @@ function LogDensityProblems.logdensity(p::BUGSLogDensityProblem, x)
 end
 
 function LogDensityProblems.dimension(p::BUGSLogDensityProblem)
-    return length(flatten(p.m.trace, p.m.parameters))
+    return length(gen_init_params(p))
 end
 
 function LogDensityProblems.capabilities(p::BUGSLogDensityProblem)
-    if all((x) -> x <: ContinuousUnivariateDistribution, values(p.m.prior_types))
+    if all((x) -> x <: ContinuousUnivariateDistribution, values(p.prior_types))
         return LogDensityProblems.LogDensityOrder{1}()
     else
         return LogDensityProblems.LogDensityOrder{0}()
     end
+end
+
+function transform_samples(p::BUGSLogDensityProblem, flattened_vales::Vector)
+    trace = deepcopy(p.init_trace)
+    for (var, value) in zip(p.parameters, flattened_vales)
+        trace[var] = inv(p.bijectors[var])(value)
+    end
+    for var in p.sorted_nodes
+        arguments = [trace[arg] for arg in p.node_args[var]]
+        if p.var_types[var] == :logical
+            trace[var] = p.node_functions[var](arguments...)
+        else
+            continue
+        end
+    end
+    return trace
 end

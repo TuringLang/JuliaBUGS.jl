@@ -90,14 +90,15 @@ initializations = Dict(
 ##
 
 p = compile(model_def, data, initializations);
-params = JuliaBUGS.gen_init_params(p)
-p(JuliaBUGS.transform_and_flatten(trace, parameters, p.bijectors))
+initial_θ = JuliaBUGS.gen_init_params(p)
+p(initial_θ)
 
 ##
 using AdvancedHMC
 using ReverseDiff
+using LogDensityProblems
 
-D = length(initial_θ)
+D = LogDensityProblems.dimension(p)
 n_samples, n_adapts = 2000, 1000
 
 metric = DiagEuclideanMetric(D)
@@ -108,8 +109,23 @@ integrator = Leapfrog(initial_ϵ)
 proposal = NUTS{MultinomialTS, GeneralisedNoUTurn}(integrator)
 adaptor = StanHMCAdaptor(MassMatrixAdaptor(metric), StepSizeAdaptor(0.8, integrator))
 
-samples, stats = sample(hamiltonian, proposal, initial_θ, n_samples, adaptor, n_adapts; drop_warmup=true, progress=true)
+samples, stats = sample(hamiltonian, proposal, initial_θ, n_samples, adaptor, n_adapts; drop_warmup=true, progress=true);
 ##
 
 beta_c_samples = [samples[s][64] for s in 1:length(samples)]
 stats = mean(beta_c_samples), std(beta_c_samples) # Reference result: mean 6.186, variance 0.1088
+
+tau_c_samples = [samples[s][61] for s in 1:length(samples)]
+sigma_samples = map(x->1/sqrt(x), tau_c_samples)
+stats = mean(sigma_samples), std(sigma_samples) # Reference result: mean 6.092, sd 0.4672
+
+β_c_samples = [JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:beta_c)] for sample in samples]
+mean(β_c_samples), std(β_c_samples) # Reference result: mean 6.186, variance 0.1088
+
+σ_samples = [JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:sigma)] for sample in samples]
+mean(σ_samples), std(σ_samples) # Reference result: mean 6.186, variance 0.1088
+
+σ_0 = [JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:alpha0)] for sample in samples]
+mean(σ_0), std(σ_0)
+
+JuliaBUGS.test_BUGS_model(model_def, data, initializations)

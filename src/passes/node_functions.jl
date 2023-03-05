@@ -1,6 +1,6 @@
 struct NodeFunctions <: CompilerPass
-    vars
-    array_map
+    vars::Vars
+    array_map::Dict{}
     link_functions::Dict
     node_args::Dict
     node_functions::Dict
