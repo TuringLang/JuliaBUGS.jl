@@ -43,13 +43,16 @@ function BUGSLogDensityProblem(
     for var in sorted_nodes
         arguments = [init_trace[arg] for arg in node_args[var]]
         if var_types[var] == :logical
-            init_trace[var] = Base.invokelatest(node_functions[var], arguments...)
+            init_trace[var] = node_functions[var](arguments...)
         else
             # assume that: if a node function can return different types of Distributions, they would have the same support 
             bijectors[var] = Bijectors.bijector(
-                Base.invokelatest(node_functions[var], arguments...)
+                node_functions[var](arguments...)
             )
-            prior_types[var] = typeof(Base.invokelatest(node_functions[var], arguments...))
+            bijectors[var] = Bijectors.bijector(
+                node_functions[var](arguments...)
+            )
+            prior_types[var] = typeof(node_functions[var](arguments...))
         end
     end
 
@@ -108,16 +111,16 @@ function logjoint(p::BUGSLogDensityProblem, trace)
     for var in sorted_nodes
         arguments = [trace[arg] for arg in node_args[var]]
         if var_types[var] == :logical
-            trace[var] = Base.invokelatest(node_functions[var], arguments...)
+            trace[var] = node_functions[var](arguments...)
         else
             if haskey(link_functions, var)
                 logjoint += logpdf(
-                    Base.invokelatest(node_functions[var], arguments...),
+                    node_functions[var](arguments...),
                     eval(link_functions[var])(trace[var]),
                 )
             else
                 logjoint += logpdf(
-                    Base.invokelatest(node_functions[var], arguments...), trace[var]
+                    node_functions[var](arguments...), trace[var]
                 )
             end
         end

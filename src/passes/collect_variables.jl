@@ -81,18 +81,18 @@ function post_process(pass::CollectVariables)
     end
 
     # array_map need to handle ArraySlice
-    arrays_map = Dict()
+    array_map = Dict()
     for (k, v) in array_sizes
-        arrays_map[k] = Array{Int}(undef, v...)
+        array_map[k] = Array{Int}(undef, v...)
     end
     for v in keys(vars)
         if v isa ArrayElement
-            arrays_map[v.name][v.indices...] = vars[v]
+            array_map[v.name][v.indices...] = vars[v]
         end
     end
 
     # check if arrays in array_map has zeros
-    for (k, v) in arrays_map
+    for (k, v) in array_map
         if any(i -> !isassigned(v, i), eachindex(v))
             warn("Array $k has holes.")
         end
@@ -100,7 +100,7 @@ function post_process(pass::CollectVariables)
 
     for v in keys(vars)
         if v isa ArraySlice
-            array_var = ArrayVariable(v.name, [1:s for s in size(arrays_map[v.name])])
+            array_var = ArrayVariable(v.name, [1:s for s in size(array_map[v.name])])
             if v == array_var
                 id = vars[v]
                 type = var_types[v]
@@ -113,12 +113,12 @@ function post_process(pass::CollectVariables)
     end
 
     # TODO: add ArrayVariables and all the scalarized ArrayElements is conservative, can later evict these variables from the graph
-    for k in keys(arrays_map)
-        array_var = ArrayVariable(k, [1:s for s in size(arrays_map[k])])
+    for k in keys(array_map)
+        array_var = ArrayVariable(k, [1:s for s in size(array_map[k])])
         haskey(vars, array_var) && continue
         push!(vars, array_var)
         var_types[array_var] = :logical # added ArrayVariable is always logical
     end
 
-    return vars, arrays_map, var_types
+    return vars, array_map, var_types
 end

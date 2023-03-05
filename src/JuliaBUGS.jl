@@ -11,6 +11,9 @@ using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
 using ReverseDiff
 
+using RuntimeGeneratedFunctions
+RuntimeGeneratedFunctions.init(@__MODULE__)
+
 import Base: in, push!, ==, hash, Symbol, keys, size
 
 export @bugsast, @bugsmodel_str
