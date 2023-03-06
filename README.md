@@ -181,11 +181,13 @@ samples, stats = sample(hamiltonian, proposal, initial_θ, n_samples, adaptor, n
 The variable `samples` contains variable values in the unconstrained space, we can use the function `JuliaBUGS.transform_samples` to get a dictionary mapping variable names to their sample values.
 
 ```julia-repo
-julia> samples = transform_samples(samples, p); β_c_samples = [JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:beta_c)] for sample in samples]; mean(β_c_samples), std(β_c_samples) # Reference result: mean 6.186, variance 0.1088
+julia> alpha_0_samples = [JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:alpha0)] for sample in samples]; 
 
+julia> mean(alpha_0_samples), std(alpha_0_samples) # Reference result: mean -0.5499, variance 0.1965
+(-0.5432579688203603, 0.23682544392999907)
+```
 
-One can verify the inference result is coherent with BUGS' result for [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) (here we reported `tau` instead of `sigma` with `sigma = 1 / sqrt(tau)`). 
-The output of `sample` is a [`Chains`](https://turinglang.github.io/MCMCChains.jl/stable/chains/) object, and visualizating of the results is easy to produce,  
+One can verify the inference result is coherent with BUGS' result for [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html). 
 
 ## More Examples
 We have transcribed all the examples from the first volume of the BUGS Examples ([origianl](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/JuliaBUGS.jl/tree/master/src/BUGSExamples/Volume_I)). All the programs and data are included, and they can be compiled in a similar way as we have demonstrated before.
