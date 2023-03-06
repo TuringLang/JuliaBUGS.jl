@@ -34,7 +34,10 @@ function BUGSLogDensityProblem(
         push!(parameters, var)
         value = JuliaBUGS.eval(var, inits)
         # for now, parameters need to be initialized
-        isnothing(value) && error("$var is not initialized")
+        if isnothing(value)
+            value = rand(size(var)...)
+            println("No initial value provided for $var, initialized to $value by random sampling.")
+        end
         init_trace[var] = value
     end
 
@@ -71,8 +74,12 @@ function BUGSLogDensityProblem(
     )
 end
 
-function gen_init_params(p::BUGSLogDensityProblem)
-    return transform_and_flatten(p.init_trace, p.parameters, p.bijectors)
+function gen_init_params(p::BUGSLogDensityProblem, transform=true)
+    if transform 
+        return transform_and_flatten(p.init_trace, p.parameters, p.bijectors)
+    else
+        return flatten(p.init_trace, p.parameters)
+    end
 end
 
 function flatten(trace, parameters)
@@ -99,8 +106,12 @@ function unflatten_and_untransform(trace, parameters, bijectors, flattened_vales
     return trace
 end
 
-function (p::BUGSLogDensityProblem)(x)
-    trace = unflatten_and_untransform(p.init_trace, p.parameters, p.bijectors, x)
+function (p::BUGSLogDensityProblem)(x, transform=true)
+    if transform
+        trace = unflatten_and_untransform(p.init_trace, p.parameters, p.bijectors, x)
+    else
+        trace = unflatten(p.init_trace, p.parameters, x)
+    end
     return logjoint(p, trace)
 end
 

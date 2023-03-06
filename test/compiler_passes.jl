@@ -9,6 +9,10 @@ using JuliaBUGS:
     program!,
     compile
 
+using AdvancedHMC
+using ReverseDiff
+using LogDensityProblems
+
 #
 model_def = @bugsast begin
     for i in 1:N
@@ -89,18 +93,15 @@ initializations = Dict(
 
 ##
 
-vars, array_map, var_types = program!(CollectVariables(), model_def, data)
-dep_graph = program!(DependencyGraph(vars, array_map), model_def, data)
-node_args, node_functions, link_functions = program!(NodeFunctions(vars, array_map), model_def, data)
+vars, array_map, var_types = program!(CollectVariables(), model_def, data);
+dep_graph = program!(DependencyGraph(vars, array_map), model_def, data);
+node_args, node_functions, link_functions = program!(NodeFunctions(vars, array_map), model_def, data);
 
 p = compile(model_def, data, initializations);
 initial_θ = JuliaBUGS.gen_init_params(p)
 p(initial_θ)
 
 ##
-using AdvancedHMC
-using ReverseDiff
-using LogDensityProblems
 
 D = LogDensityProblems.dimension(p)
 n_samples, n_adapts = 2000, 1000
@@ -115,21 +116,12 @@ adaptor = StanHMCAdaptor(MassMatrixAdaptor(metric), StepSizeAdaptor(0.8, integra
 
 samples, stats = sample(hamiltonian, proposal, initial_θ, n_samples, adaptor, n_adapts; drop_warmup=true, progress=true);
 ##
-
-beta_c_samples = [samples[s][64] for s in 1:length(samples)]
-stats = mean(beta_c_samples), std(beta_c_samples) # Reference result: mean 6.186, variance 0.1088
-
-tau_c_samples = [samples[s][61] for s in 1:length(samples)]
-sigma_samples = map(x->1/sqrt(x), tau_c_samples)
-stats = mean(sigma_samples), std(sigma_samples) # Reference result: mean 6.092, sd 0.4672
-
 β_c_samples = [JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:beta_c)] for sample in samples]
 mean(β_c_samples), std(β_c_samples) # Reference result: mean 6.186, variance 0.1088
+@test isapprox(mean(β_c_samples), 6.186, atol=0.1)
+@test isapprox(std(β_c_samples), 0.1088, atol=0.1)
 
 σ_samples = [JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:sigma)] for sample in samples]
-mean(σ_samples), std(σ_samples) # Reference result: mean 6.186, variance 0.1088
-
-σ_0 = [JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:alpha0)] for sample in samples]
-mean(σ_0), std(σ_0)
-
-JuliaBUGS.test_BUGS_model(model_def, data, initializations)
+mean(σ_samples), std(σ_samples) # Reference result: mean 6.092, sd 0.4672
+@test isapprox(mean(σ_samples), 6.092, atol=0.1)
+@test isapprox(std(σ_samples), 0.4672, atol=0.1)

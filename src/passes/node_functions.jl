@@ -52,7 +52,8 @@ function rhs(pass::NodeFunctions, expr::Expr, env::Dict)
         end
     end
 
-    f_expr = MacroTools.unblock(
+    f_expr = MacroTools.postwalk(
+        MacroTools.unblock,
         MacroTools.combinedef(
             Dict(
                 :args => values(args),

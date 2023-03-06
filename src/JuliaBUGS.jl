@@ -6,6 +6,10 @@ using BangBang
 using Bijections
 using Bijectors
 using Distributions
+using LinearAlgebra
+using LogExpFunctions
+using SpecialFunctions
+using Statistics
 using Graphs
 using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
@@ -19,8 +23,28 @@ import Base: in, push!, ==, hash, Symbol, keys, size
 export @bugsast, @bugsmodel_str
 
 include("BUGSPrimitives/BUGSPrimitives.jl")
-
 using .BUGSPrimitives
+
+macro register_function(ex)
+    eval_registration(ex)
+end
+
+macro register_distribution(ex)
+    eval_registration(ex)
+end
+
+function eval_registration(ex)
+    def = MacroTools.splitdef(ex)
+    reg_sym = Expr(
+        :macrocall,
+        Symbol("@register_symbolic"),
+        LineNumberNode(@__LINE__, @__FILE__),
+        Expr(:call, def[:name], def[:args]...),
+    )
+    eval(reg_sym)
+    eval(ex)
+    return def[:name]
+end
 
 include("bugsast.jl")
 include("variable_types.jl")
@@ -31,8 +55,10 @@ include("passes/dependency_graph.jl")
 include("passes/node_functions.jl")
 include("targets/logdensityproblems.jl")
 
-
-function compile(model_definition, data, initializations)
+function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
+    return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)));
+end
+function compile(model_definition::Expr, data::Dict, initializations::Dict)
     vars, array_map, var_types = program!(CollectVariables(), model_definition, data)
     dep_graph = program!(DependencyGraph(vars, array_map), model_definition, data)
     node_args, node_functions, link_functions = program!(NodeFunctions(vars, array_map), model_definition, data)

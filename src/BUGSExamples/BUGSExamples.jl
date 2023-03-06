@@ -1,7 +1,7 @@
 module BUGSExamples
 
-using SymbolicPPL
-using SymbolicPPL: NA
+using JuliaBUGS
+const NA = missing
 
 include("Volume_I/Blocker.jl")
 include("Volume_I/Bones.jl")

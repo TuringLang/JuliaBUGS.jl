@@ -233,6 +233,13 @@ function post_parsing_processing(expr)
     return link_functions(expr)
 end
 
+const INVERSE_LINK_FUNCTION = Dict(
+    :logit => :logistic,
+    :cloglog => :cexpexp,
+    :log => :exp,
+    :probit => :phi,
+)
+
 function link_functions(expr::Expr)
     # link functions in stochastic assignments will be handled later
     return MacroTools.postwalk(expr) do sub_expr
