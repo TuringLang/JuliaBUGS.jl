@@ -12,6 +12,7 @@ using JuliaBUGS:
 using AdvancedHMC
 using ReverseDiff
 using LogDensityProblems
+using Test
 
 #
 model_def = @bugsast begin
