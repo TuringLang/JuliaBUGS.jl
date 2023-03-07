@@ -1,12 +1,10 @@
 # JuliaBUGS.jl
 
-This package contains some infrastructure to work with graphical probabilistic models in symbolic form, consisting of a model DSL (which one could call "frontend"), an attempt of its formalization (ongoing work), and AbstractPPL-compatible evaluation facilities (i.e., sampling and density evaluation, conditioning, etc.).
+A modern implementation of the BUGS language in Julia. 
 
 ## Caution!
 
-This implementation should be able to parse existing BUGS models and run them. It is, however, still in its very early stage and not yet ready for serious work.  
-
-We are (as of autumn 2022) planning to continually keep working on this project, until we have a mature BUGS-compatible graphical PPL system integrated in the Turing ecosystem.
+This is still a work in progress and may not be ready for serious use.
 
 ## Example: Logistic Regression with Random Effects
 We will use the [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) model for demonstration. 
@@ -135,104 +133,61 @@ Please use these macros with caution to avoid causing name clashes. Such name cl
 
 ## Compilation
 
-The main function for compilation is 
+For now, the `compile` function will create a `BUGSLogDensityProblem`, which is fully conform to [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl).
 
 ```julia
-compile(model_def::Expr, data::NamedTuple, target::Symbol),
+compile(model_def::Expr, data::Dict, initializations::Dict),
 ```
 
 which takes three arguments: 
 - the first argument is the output of `@bugsast` or `bugsmodel`, 
 - the second argument is the data 
-- the third argument is a `Symbol` indicating the compilation target.
+- the third argument is the initializations of the parameters, in the case of `pumps` model, it is
 
-To compile the `Seeds` model to a conditioned `Turing.Model`, specify the target to be `:DynamicPPL`
+```
+initializaitons = Dict(:alpha => 1, :beta => 1)
+```
 
+then we can compile the model with the data and initializations,
 ```julia-repo
-julia> model = compile(model_def, data, :DynamicPPL); 
+julia> p = compile(model_def, data, initializations);
 
 ```
 
 ## Inference
 
-Once compiled to a `Turing.Model`, user can choose [inference algorithms](https://turing.ml/dev/docs/library/) supported by Turing. Here we use `NUTS` for demonstration, 
+For a differentiable model, we can use [`AdvancedHMC.jl`](https://github.com/TuringLang/AdvancedHMC.jl) to perform inference. 
+We can start with the setup exactly the same as the example on the `AdvancedHMC.jl` page:
 
-```julia-repo
-julia> using Turing; chn = sample(model(), NUTS(), 11000, discard_initial = 1000);
+```julia
+using AdvancedHMC
+using ReverseDiff
+using LogDensityProblems
 
-julia> chn[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]
-Chains MCMC chain (11000×5×1 Array{Float64, 3}):
+D = LogDensityProblems.dimension(p)
+n_samples, n_adapts = 2000, 1000
 
-Iterations        = 1001:1:12000
-Number of chains  = 1
-Samples per chain = 11000
-Wall duration     = 22.11 seconds
-Compute duration  = 22.11 seconds
-parameters        = alpha1, alpha12, alpha2, tau, alpha0
-internals         = 
+metric = DiagEuclideanMetric(D)
+hamiltonian = Hamiltonian(metric, p, :ReverseDiff)
 
-Summary Statistics
-  parameters      mean       std   naive_se      mcse         ess      rhat   ess_per_sec 
-      Symbol   Float64   Float64    Float64   Float64     Float64   Float64       Float64 
+initial_ϵ = find_good_stepsize(hamiltonian, initial_θ)
+integrator = Leapfrog(initial_ϵ)
+proposal = NUTS{MultinomialTS, GeneralisedNoUTurn}(integrator)
+adaptor = StanHMCAdaptor(MassMatrixAdaptor(metric), StepSizeAdaptor(0.8, integrator))
 
-      alpha1    0.0842    0.3131     0.0030    0.0051   4329.1277    1.0004      195.7995
-     alpha12   -0.8335    0.4398     0.0042    0.0062   4528.4134    0.9999      204.8129
-      alpha2    1.3542    0.2773     0.0026    0.0043   4101.1509    1.0001      185.4885
-         tau   32.2479   63.7739     0.6081    3.0866    337.8219    1.0016       15.2791
-      alpha0   -0.5510    0.1937     0.0018    0.0031   4297.2842    1.0000      194.3593
-
-Quantiles
-  parameters      2.5%     25.0%     50.0%     75.0%      97.5% 
-      Symbol   Float64   Float64   Float64   Float64    Float64 
-
-      alpha1   -0.5437   -0.1164    0.0875    0.2852     0.7015
-     alpha12   -1.7463   -1.1118   -0.8265   -0.5452     0.0110
-      alpha2    0.8301    1.1752    1.3467    1.5263     1.9199
-         tau    2.8413    7.0837   12.4850   26.2675   226.2762
-      alpha0   -0.9384   -0.6731   -0.5493   -0.4286    -0.1649
+samples, stats = sample(hamiltonian, proposal, initial_θ, n_samples, adaptor, n_adapts; drop_warmup=true, progress=true);
 ```
 
-One can verify the inference result is coherent with BUGS' result for [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) (here we reported `tau` instead of `sigma` with `sigma = 1 / sqrt(tau)`). 
-The output of `sample` is a [`Chains`](https://turinglang.github.io/MCMCChains.jl/stable/chains/) object, and visualizating of the results is easy to produce,  
+The variable `samples` contains variable values in the unconstrained space, we can use the function `JuliaBUGS.transform_samples` to get a dictionary mapping variable names to their sample values.
 
 ```julia-repo
-julia> using StatsPlots; plot(chn[[:alpha0, :alpha1, :alpha12, :alpha2, :tau]]);
+julia> alpha_0_samples = [JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:alpha0)] for sample in samples]; 
 
+julia> mean(alpha_0_samples), std(alpha_0_samples) # Reference result: mean -0.5499, variance 0.1965
+(-0.5432579688203603, 0.23682544392999907)
 ```
 
-With default settings, we get
-
-![seeds](https://user-images.githubusercontent.com/5433119/198809451-6a9a2974-6015-4a6e-8508-a6e7dd35116f.svg)
-
-## More Compilation Target
-**Work in Progress: the interface can change drastically**
-
-User can also compile the model into a DAG by specifying the target to be `:Graph`.
-
-```julia-repo
-julia> g = compile(model_def, data, :Graph); 
-
-```
-
-returns a [MetaDiGraph](https://juliagraphs.org/MetaGraphsNext.jl/dev/api/#MetaGraphsNext.MetaDiGraph).
-And every vertex in the graph corresponds to a stochastic variable, for example the variable `r[2]` 
-
-```julia-repo
-julia> g[Symbol("r[2]")]
-Variable Name: r[2]
-Variable Type: Observation
-Data: 23
-Parent Nodes: alpha0, b[2]
-Node Function: JuliaBUGS.dbin(1 / (1 + exp(-alpha0 - b[2])), 62)
-```
-
-`Node Function` is a function that produces a distribution given the values of parents stochastic variables.
-
-Compare the `Node Function` of `r[2]` with the original definition, we can see it has been largely simplified, thanks to [Symbolics.jl](https://symbolics.juliasymbolics.org/dev/) that we use internally. 
-
-## Specifying Finite Mixture Models 
-- Stochastic indexing
-- use `@register_distribution` to register function that take the indexing variable and other variables required to parametrize intended distributions
+One can verify the inference result is coherent with BUGS' result for [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html). 
 
 ## More Examples
 We have transcribed all the examples from the first volume of the BUGS Examples ([origianl](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/JuliaBUGS.jl/tree/master/src/BUGSExamples/Volume_I)). All the programs and data are included, and they can be compiled in a similar way as we have demonstrated before.

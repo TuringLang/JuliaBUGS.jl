@@ -37,9 +37,9 @@ export abs,
     tan,
     arctan,
     arctanh,
-    t,
     mexp,
     var"eigen.vals"
+
 ###
 ### Standard functions
 ###

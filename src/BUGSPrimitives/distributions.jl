@@ -27,11 +27,7 @@ export dnorm,
     dnegbin,
     dbetabin,
     dhyper,
-    dmulti,
-    censored_with_lower,
-    censored_with_upper,
-    truncated_with_lower,
-    truncated_with_upper
+    dmulti
 
 ### 
 ### Distributions
@@ -140,13 +136,3 @@ end
 ###
 
 dmulti(θ::Vector, n) = Multinomial(n, θ)
-
-""" 
-    Truncated and Censored Functions
-"""
-
-censored_with_lower(d, l) = Distributions.censored(d; lower=l)
-censored_with_upper(d, u) = Distributions.censored(d; upper=u)
-
-truncated_with_lower(d, l) = Distributions.truncated(d; lower=l)
-truncated_with_upper(d, u) = Distributions.truncated(d; upper=u)

@@ -1,15 +1,20 @@
 using Graphs, JuliaBUGS, Distributions
 using JuliaBUGS:
-    CompilerPass,
     CollectVariables,
     DependencyGraph,
     NodeFunctions,
+    ArrayElement,
+    ArraySlice,
+    ArrayVariable,
     program!,
-    @bugsast,
-    Var,
-    logjoint
+    compile
 
-##
+using AdvancedHMC
+using ReverseDiff
+using LogDensityProblems
+using Test
+
+#
 model_def = @bugsast begin
     for i in 1:N
         for j in 1:T
@@ -28,6 +33,7 @@ model_def = @bugsast begin
     alpha0 = alpha_c - xbar * beta_c
 end
 
+# data
 x = [8.0, 15.0, 22.0, 29.0, 36.0]
 xbar = 22
 N = 30
@@ -67,41 +73,9 @@ Y = [
 
 data = Dict(:x => x, :xbar => xbar, :Y => Y, :N => N, :T => T)
 
-alpha = [
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-    250,
-]
-beta = [
-    6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6
-]
+# initializations
+alpha = ones(Integer, 30) .* 250
+beta = ones(Integer, 30) .* 6
 alpha_c = 150
 beta_c = 10
 tau_c = 1
@@ -116,36 +90,52 @@ initializations = Dict(
     :tau_c => tau_c,
     :alpha_tau => alpha_tau,
     :beta_tau => beta_tau,
-)
+);
 
 ##
 
-vars, array_map, var_types = program!(CollectVariables(), model_def, data)
-dep_graph = program!(DependencyGraph(vars, array_map), model_def, data)
-node_args, node_functions, link_functions = program!(
-    NodeFunctions(array_map), model_def, data
-)
+# vars, array_map, var_types = program!(CollectVariables(), model_def, data);
+# dep_graph = program!(DependencyGraph(vars, array_map), model_def, data);
+# node_args, node_functions, link_functions = program!(NodeFunctions(vars, array_map), model_def, data);
 
-t = logjoint(
-    data,
-    initializations,
-    vars,
-    var_types,
-    dep_graph,
-    node_functions,
-    node_args,
-    link_functions,
-)
+p = compile(model_def, data, initializations);
+initial_θ = JuliaBUGS.gen_init_params(p)
+p(initial_θ)
+
 ##
-model_def = @bugsast begin
-    a ~ dnorm(0, 1)
-    b ~ dnorm(0, a)
-    for i in 1:N
-        logit(c[i]) ~ dnorm(a, b)
-    end
-    g = b * 2 + a
-    d[1:3] ~ dmnorm(e[1:3], f[1:3, 1:3])
-end
 
-data = Dict(:N => 3, :f => [1 0 0; 0 1 0; 0 0 1], :e => [1, 2, 3])
-initializations = Dict(:a => 1, :b => 2, :c => [1, 2, 3], :d => [4, 5, 6])
+D = LogDensityProblems.dimension(p)
+n_samples, n_adapts = 2000, 1000
+
+metric = DiagEuclideanMetric(D)
+hamiltonian = Hamiltonian(metric, p, :ReverseDiff)
+
+initial_ϵ = find_good_stepsize(hamiltonian, initial_θ)
+integrator = Leapfrog(initial_ϵ)
+proposal = NUTS{MultinomialTS,GeneralisedNoUTurn}(integrator)
+adaptor = StanHMCAdaptor(MassMatrixAdaptor(metric), StepSizeAdaptor(0.8, integrator))
+
+samples, stats = sample(
+    hamiltonian,
+    proposal,
+    initial_θ,
+    n_samples,
+    adaptor,
+    n_adapts;
+    drop_warmup=true,
+    progress=true,
+);
+##
+β_c_samples = [
+    JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:beta_c)] for sample in samples
+];
+mean(β_c_samples), std(β_c_samples) # Reference result: mean 6.186, variance 0.1088
+@test isapprox(mean(β_c_samples), 6.186, atol=0.1)
+@test isapprox(std(β_c_samples), 0.1088, atol=0.1)
+
+σ_samples = [
+    JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:sigma)] for sample in samples
+];
+mean(σ_samples), std(σ_samples) # Reference result: mean 6.092, sd 0.4672
+@test isapprox(mean(σ_samples), 6.092, atol=0.1)
+@test isapprox(std(σ_samples), 0.4672, atol=0.1)

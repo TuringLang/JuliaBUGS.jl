@@ -9,7 +9,7 @@ find_variables_on_lhs(e::Symbol, ::Dict) = Var(e)
 function find_variables_on_lhs(expr::Expr, env::Dict)
     if Meta.isexpr(expr, :call)
         @assert expr.args[1] in keys(INVERSE_LINK_FUNCTION) "Only link functions are allowed on lhs."
-        return find_variables_on_lhs(expr.args[1], env)
+        return find_variables_on_lhs(expr.args[2], env)
     end
     @assert Meta.isexpr(expr, :ref) "Only symbol or array indexing is allowed on lhs."
     idxs = map(x -> eval(x, env), expr.args[2:end])
@@ -40,21 +40,22 @@ function warn_indices(expr)
 end
 
 function lhs(::CollectVariables, expr, env::Dict)
-    lhs_var = find_variables_on_lhs(expr, env)
-    return union(Set([lhs_var]), Set(vcat(scalarize(lhs_var))))
+    return find_variables_on_lhs(expr, env)
 end
 
 function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
-    variables = lhs(pass, expr.args[1], env)
-    for v in variables
+    v = lhs(pass, expr.args[1], env)
+    pass.var_types[v] = expr.head == :(=) ? :logical : :stochastic
+    if isscalar(v)
         push!(pass.vars, v)
-        if expr.head == :(=)
-            pass.var_types[v] = :logical
-        elseif isnothing(eval(v, env))
-            pass.var_types[v] = :assumption
-        else
-            pass.var_types[v] = :observation
-        end
+        return nothing
+    end
+    scalarized_vs = scalarize(v)
+    for v in scalarized_vs
+        pass.var_types[v] = :logical
+    end
+    for v in union(Set([v]), Set(vcat(scalarized_vs)))
+        push!(pass.vars, v)
     end
 end
 
@@ -79,18 +80,19 @@ function post_process(pass::CollectVariables)
         array_sizes[k] = array_size
     end
 
-    arrays_map = Dict()
+    # array_map need to handle ArraySlice
+    array_map = Dict()
     for (k, v) in array_sizes
-        arrays_map[k] = Array{Int}(undef, v...)
+        array_map[k] = Array{Int}(undef, v...)
     end
     for v in keys(vars)
         if v isa ArrayElement
-            arrays_map[v.name][v.indices...] = vars[v]
+            array_map[v.name][v.indices...] = vars[v]
         end
     end
 
     # check if arrays in array_map has zeros
-    for (k, v) in arrays_map
+    for (k, v) in array_map
         if any(i -> !isassigned(v, i), eachindex(v))
             warn("Array $k has holes.")
         end
@@ -98,7 +100,7 @@ function post_process(pass::CollectVariables)
 
     for v in keys(vars)
         if v isa ArraySlice
-            array_var = ArrayVariable(v.name, [1:s for s in size(arrays_map[v.name])])
+            array_var = ArrayVariable(v.name, [1:s for s in size(array_map[v.name])])
             if v == array_var
                 id = vars[v]
                 type = var_types[v]
@@ -110,11 +112,13 @@ function post_process(pass::CollectVariables)
         end
     end
 
-    for k in keys(arrays_map)
-        array_var = ArrayVariable(k, [1:s for s in size(arrays_map[k])])
+    # TODO: add ArrayVariables and all the scalarized ArrayElements is conservative, can later evict these variables from the graph
+    for k in keys(array_map)
+        array_var = ArrayVariable(k, [1:s for s in size(array_map[k])])
         haskey(vars, array_var) && continue
         push!(vars, array_var)
+        var_types[array_var] = :logical # added ArrayVariable is always logical
     end
 
-    return vars, arrays_map, var_types
+    return vars, array_map, var_types
 end

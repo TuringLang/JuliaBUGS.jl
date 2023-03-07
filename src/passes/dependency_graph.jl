@@ -1,18 +1,3 @@
-function Base.show(io::IO, dg::SimpleDiGraph)
-    println(io, "Dependency Graph:")
-    for v in keys(dg.vars)
-        println(
-            io,
-            "  ",
-            v,
-            " || children: ",
-            join(map(dg.vars, outneighbors(dg.dep_graph, dg.vars[v])), ", "),
-            "; parents: ",
-            join(map(dg.vars, inneighbors(dg.dep_graph, dg.vars[v])), ", "),
-        )
-    end
-end
-
 struct DependencyGraph <: CompilerPass
     vars::Vars
     array_map::Dict

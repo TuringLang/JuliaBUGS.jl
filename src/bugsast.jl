@@ -52,7 +52,9 @@ function bugsast_expression(expr, position=LineNumberNode(1, nothing))
         elseif expr.args[1] == :truncated || expr.args[1] == :censored
             if length(expr.args) == 4
                 return Expr(
-                    expr.args[1], bugsast_expression.(expr.args[2:end], (position,))...
+                    :call,
+                    expr.args[1],
+                    bugsast_expression.(expr.args[2:end], (position,))...,
                 )
             else
                 error("Illegal $(expr.args[1]) form at $(position_string(position)): $expr")
@@ -230,10 +232,14 @@ macro bugsmodel_str(s::String)
 end
 
 function post_parsing_processing(expr)
-    return (censored_truncated(linkfunction(expr)))
+    return link_functions(expr)
 end
 
-function linkfunction(expr::Expr)
+const INVERSE_LINK_FUNCTION = Dict(
+    :logit => :logistic, :cloglog => :cexpexp, :log => :exp, :probit => :phi
+)
+
+function link_functions(expr::Expr)
     # link functions in stochastic assignments will be handled later
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, f_(lhs_) = rhs_)
@@ -243,15 +249,6 @@ function linkfunction(expr::Expr)
             else
                 error("Link function $f not supported.")
             end
-        end
-        return sub_expr
-    end
-end
-
-function censored_truncated(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if Meta.isexpr(sub_expr, [:censored, :truncated])
-            sub_expr = Expr(:call, sub_expr.head, sub_expr.args...)
         end
         return sub_expr
     end
