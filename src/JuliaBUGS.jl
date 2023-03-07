@@ -1,6 +1,7 @@
 module JuliaBUGS
 
 using AbstractPPL
+using Accessors
 using AdvancedHMC
 using BangBang
 using Bijections
@@ -56,14 +57,24 @@ include("passes/node_functions.jl")
 include("targets/logdensityproblems.jl")
 
 function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
-    return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)));
+    return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
 end
-function compile(model_definition::Expr, data::Dict, initializations::Dict)
+function compile(model_definition::Expr, data::Dict, initializations::Dict; target=:LogDensityProblems)
     vars, array_map, var_types = program!(CollectVariables(), model_definition, data)
     dep_graph = program!(DependencyGraph(vars, array_map), model_definition, data)
     node_args, node_functions, link_functions = program!(NodeFunctions(vars, array_map), model_definition, data)
 
-    return BUGSLogDensityProblem(vars, var_types, dep_graph, node_args, node_functions, link_functions, data, initializations)
+    p = BUGSLogDensityProblem(vars, var_types, dep_graph, node_args, node_functions, link_functions, data, initializations)
+    inputs = gen_init_params(p)
+    f_tape = ReverseDiff.GradientTape(p, inputs)
+    compiled_tape = ReverseDiff.compile(f_tape)
+    all_results = ReverseDiff.DiffResults.GradientResult(inputs)
+    cfg = ReverseDiff.GradientConfig(inputs)
+    p = @set p.compiled_tape = compiled_tape
+    p = @set p.gradient_cfg = cfg
+    p = @set p.all_results = all_results
+    
+    return p
 end
 
 export compile

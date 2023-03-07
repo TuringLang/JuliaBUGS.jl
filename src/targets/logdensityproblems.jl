@@ -15,6 +15,10 @@ struct BUGSLogDensityProblem
     init_trace
     """ list of stochastic variables that can't be resolved from data """
     parameters
+    
+    compiled_tape
+    gradient_cfg
+    all_results
 end
 
 function BUGSLogDensityProblem(
@@ -33,7 +37,6 @@ function BUGSLogDensityProblem(
 
         push!(parameters, var)
         value = JuliaBUGS.eval(var, inits)
-        # for now, parameters need to be initialized
         if isnothing(value)
             value = rand(size(var)...)
             println("No initial value provided for $var, initialized to $value by random sampling.")
@@ -49,9 +52,6 @@ function BUGSLogDensityProblem(
             init_trace[var] = node_functions[var](arguments...)
         else
             # assume that: if a node function can return different types of Distributions, they would have the same support 
-            bijectors[var] = Bijectors.bijector(
-                node_functions[var](arguments...)
-            )
             bijectors[var] = Bijectors.bijector(
                 node_functions[var](arguments...)
             )
@@ -71,6 +71,9 @@ function BUGSLogDensityProblem(
         link_functions,
         init_trace,
         parameters,
+        nothing,
+        nothing,
+        nothing
     )
 end
 
@@ -147,8 +150,13 @@ function LogDensityProblems.dimension(p::BUGSLogDensityProblem)
     return length(gen_init_params(p))
 end
 
+function LogDensityProblems.logdensity_and_gradient(p::BUGSLogDensityProblem, x)
+    ReverseDiff.gradient!(p.all_results, p.compiled_tape, x)
+    return ReverseDiff.DiffResults.value(p.all_results), ReverseDiff.DiffResults.gradient(p.all_results)
+end
+
 function LogDensityProblems.capabilities(p::BUGSLogDensityProblem)
-    if all((x) -> x <: ContinuousUnivariateDistribution, values(p.prior_types))
+    if all((x) -> x <: ContinuousDistribution, values(p.prior_types))
         return LogDensityProblems.LogDensityOrder{1}()
     else
         return LogDensityProblems.LogDensityOrder{0}()
