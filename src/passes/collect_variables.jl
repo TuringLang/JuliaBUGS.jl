@@ -53,7 +53,7 @@ function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
     scalarized_vs = scalarize(v)
     for v in scalarized_vs
         pass.var_types[v] = :logical
-    end 
+    end
     for v in union(Set([v]), Set(vcat(scalarized_vs)))
         push!(pass.vars, v)
     end

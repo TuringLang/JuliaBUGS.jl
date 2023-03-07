@@ -27,11 +27,11 @@ include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
 
 macro register_function(ex)
-    eval_registration(ex)
+    return eval_registration(ex)
 end
 
 macro register_distribution(ex)
-    eval_registration(ex)
+    return eval_registration(ex)
 end
 
 function eval_registration(ex)
@@ -59,12 +59,25 @@ include("targets/logdensityproblems.jl")
 function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
     return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
 end
-function compile(model_definition::Expr, data::Dict, initializations::Dict; target=:LogDensityProblems)
+function compile(
+    model_definition::Expr, data::Dict, initializations::Dict; target=:LogDensityProblems
+)
     vars, array_map, var_types = program!(CollectVariables(), model_definition, data)
     dep_graph = program!(DependencyGraph(vars, array_map), model_definition, data)
-    node_args, node_functions, link_functions = program!(NodeFunctions(vars, array_map), model_definition, data)
+    node_args, node_functions, link_functions = program!(
+        NodeFunctions(vars, array_map), model_definition, data
+    )
 
-    p = BUGSLogDensityProblem(vars, var_types, dep_graph, node_args, node_functions, link_functions, data, initializations)
+    p = BUGSLogDensityProblem(
+        vars,
+        var_types,
+        dep_graph,
+        node_args,
+        node_functions,
+        link_functions,
+        data,
+        initializations,
+    )
     inputs = gen_init_params(p)
     f_tape = ReverseDiff.GradientTape(p, inputs)
     compiled_tape = ReverseDiff.compile(f_tape)
@@ -73,7 +86,6 @@ function compile(model_definition::Expr, data::Dict, initializations::Dict; targ
     p = @set p.compiled_tape = compiled_tape
     p = @set p.gradient_cfg = cfg
     p = @set p.all_results = all_results
-    
     return p
 end
 

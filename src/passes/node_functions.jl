@@ -147,7 +147,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
 
     @assert !in(l_var, keys(pass.node_args)) "Repeated assignment to $l_var"
     pass.node_args[l_var] = r_var_args
-    pass.node_functions[l_var] = evaled_func
+    return pass.node_functions[l_var] = evaled_func
 end
 
 function post_process(pass::NodeFunctions)
@@ -180,12 +180,10 @@ function post_process(pass::NodeFunctions)
                 f_name = Symbol("compose_" * String(Symbol(var)))
                 f_expr = MacroTools.postwalk(
                     MacroTools.rmlines,
-                    :( 
-                        function ($f_name)($(arg_list...))
-                            args = [$(arg_list...)]
-                            return reshape(collect(args), $(size(array_map[var.name])))
-                        end
-                    )
+                    :(function ($f_name)($(arg_list...))
+                        args = [$(arg_list...)]
+                        return reshape(collect(args), $(size(array_map[var.name])))
+                    end),
                 )
                 node_functions[var] = @RuntimeGeneratedFunction(f_expr)
             end

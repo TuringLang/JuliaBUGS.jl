@@ -52,7 +52,9 @@ function bugsast_expression(expr, position=LineNumberNode(1, nothing))
         elseif expr.args[1] == :truncated || expr.args[1] == :censored
             if length(expr.args) == 4
                 return Expr(
-                    :call, expr.args[1], bugsast_expression.(expr.args[2:end], (position,))...
+                    :call,
+                    expr.args[1],
+                    bugsast_expression.(expr.args[2:end], (position,))...,
                 )
             else
                 error("Illegal $(expr.args[1]) form at $(position_string(position)): $expr")
@@ -234,10 +236,7 @@ function post_parsing_processing(expr)
 end
 
 const INVERSE_LINK_FUNCTION = Dict(
-    :logit => :logistic,
-    :cloglog => :cexpexp,
-    :log => :exp,
-    :probit => :phi,
+    :logit => :logistic, :cloglog => :cexpexp, :log => :exp, :probit => :phi
 )
 
 function link_functions(expr::Expr)

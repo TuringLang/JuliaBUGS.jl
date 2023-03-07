@@ -15,7 +15,6 @@ struct BUGSLogDensityProblem
     init_trace
     """ list of stochastic variables that can't be resolved from data """
     parameters
-    
     compiled_tape
     gradient_cfg
     all_results
@@ -39,7 +38,9 @@ function BUGSLogDensityProblem(
         value = JuliaBUGS.eval(var, inits)
         if isnothing(value)
             value = rand(size(var)...)
-            println("No initial value provided for $var, initialized to $value by random sampling.")
+            println(
+                "No initial value provided for $var, initialized to $value by random sampling.",
+            )
         end
         init_trace[var] = value
     end
@@ -52,9 +53,7 @@ function BUGSLogDensityProblem(
             init_trace[var] = node_functions[var](arguments...)
         else
             # assume that: if a node function can return different types of Distributions, they would have the same support 
-            bijectors[var] = Bijectors.bijector(
-                node_functions[var](arguments...)
-            )
+            bijectors[var] = Bijectors.bijector(node_functions[var](arguments...))
             prior_types[var] = typeof(node_functions[var](arguments...))
         end
     end
@@ -73,12 +72,12 @@ function BUGSLogDensityProblem(
         parameters,
         nothing,
         nothing,
-        nothing
+        nothing,
     )
 end
 
 function gen_init_params(p::BUGSLogDensityProblem, transform=true)
-    if transform 
+    if transform
         return transform_and_flatten(p.init_trace, p.parameters, p.bijectors)
     else
         return flatten(p.init_trace, p.parameters)
@@ -119,8 +118,10 @@ function (p::BUGSLogDensityProblem)(x, transform=true)
 end
 
 function logjoint(p::BUGSLogDensityProblem, trace)
-    var_types, sorted_nodes, node_args, node_functions, link_functions, = p.var_types, p.sorted_nodes, p.node_args, p.node_functions, p.link_functions
-    
+    var_types, sorted_nodes, node_args, node_functions, link_functions, = p.var_types,
+    p.sorted_nodes, p.node_args, p.node_functions,
+    p.link_functions
+
     logjoint = 0.0
     for var in sorted_nodes
         arguments = [trace[arg] for arg in node_args[var]]
@@ -129,13 +130,10 @@ function logjoint(p::BUGSLogDensityProblem, trace)
         else
             if haskey(link_functions, var)
                 logjoint += logpdf(
-                    node_functions[var](arguments...),
-                    eval(link_functions[var])(trace[var]),
+                    node_functions[var](arguments...), eval(link_functions[var])(trace[var])
                 )
             else
-                logjoint += logpdf(
-                    node_functions[var](arguments...), trace[var]
-                )
+                logjoint += logpdf(node_functions[var](arguments...), trace[var])
             end
         end
     end
@@ -152,7 +150,8 @@ end
 
 function LogDensityProblems.logdensity_and_gradient(p::BUGSLogDensityProblem, x)
     ReverseDiff.gradient!(p.all_results, p.compiled_tape, x)
-    return ReverseDiff.DiffResults.value(p.all_results), ReverseDiff.DiffResults.gradient(p.all_results)
+    return ReverseDiff.DiffResults.value(p.all_results),
+    ReverseDiff.DiffResults.gradient(p.all_results)
 end
 
 function LogDensityProblems.capabilities(p::BUGSLogDensityProblem)

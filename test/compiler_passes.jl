@@ -112,17 +112,30 @@ hamiltonian = Hamiltonian(metric, p, :ReverseDiff)
 
 initial_ϵ = find_good_stepsize(hamiltonian, initial_θ)
 integrator = Leapfrog(initial_ϵ)
-proposal = NUTS{MultinomialTS, GeneralisedNoUTurn}(integrator)
+proposal = NUTS{MultinomialTS,GeneralisedNoUTurn}(integrator)
 adaptor = StanHMCAdaptor(MassMatrixAdaptor(metric), StepSizeAdaptor(0.8, integrator))
 
-samples, stats = sample(hamiltonian, proposal, initial_θ, n_samples, adaptor, n_adapts; drop_warmup=true, progress=true);
+samples, stats = sample(
+    hamiltonian,
+    proposal,
+    initial_θ,
+    n_samples,
+    adaptor,
+    n_adapts;
+    drop_warmup=true,
+    progress=true,
+);
 ##
-β_c_samples = [JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:beta_c)] for sample in samples];
+β_c_samples = [
+    JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:beta_c)] for sample in samples
+];
 mean(β_c_samples), std(β_c_samples) # Reference result: mean 6.186, variance 0.1088
 @test isapprox(mean(β_c_samples), 6.186, atol=0.1)
 @test isapprox(std(β_c_samples), 0.1088, atol=0.1)
 
-σ_samples = [JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:sigma)] for sample in samples];
+σ_samples = [
+    JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:sigma)] for sample in samples
+];
 mean(σ_samples), std(σ_samples) # Reference result: mean 6.092, sd 0.4672
 @test isapprox(mean(σ_samples), 6.092, atol=0.1)
 @test isapprox(std(σ_samples), 0.4672, atol=0.1)
