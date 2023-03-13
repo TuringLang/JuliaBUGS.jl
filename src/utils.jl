@@ -8,10 +8,12 @@ function ref_to_getindex(expr)
     end
 end
 
-function print_to_file(x::Dict, filename="output.jl")
+function print_to_file(x, filename="output.jl")
     file_path = "/home/sunxd/JuliaBUGS.jl/notebooks/" * filename
     open(file_path, "w+") do f
-        for (k, v) in trace
+        ks = collect(keys(x))
+        for k in ks
+            v = x[k]
             println(f, k, " = ", v)
         end
     end

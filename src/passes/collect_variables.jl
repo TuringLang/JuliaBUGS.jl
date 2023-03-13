@@ -83,7 +83,7 @@ function post_process(pass::CollectVariables)
     # array_map need to handle ArraySlice
     array_map = Dict()
     for (k, v) in array_sizes
-        array_map[k] = Array{Int}(undef, v...)
+        array_map[k] = -1 .* ones(Int, v...)
     end
     for v in keys(vars)
         if v isa ArrayElement

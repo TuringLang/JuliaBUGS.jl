@@ -77,6 +77,16 @@ function scalarize(v::Var)
     end
     return scalarized_vars
 end
+function scalarize(v::Var, array_map)
+    scalarized_vars = scalarize(v)
+    cleaned_scalarized_vars = Var[]
+    for v in scalarized_vars
+        if array_map[v.name][v.indices...] != -1
+            push!(cleaned_scalarized_vars, v)
+        end
+    end
+    return cleaned_scalarized_vars
+end
 
 function eval(v::Var, env::Dict)
     haskey(env, v.name) || return nothing
@@ -95,7 +105,7 @@ A bijection between variables and IDs.
 const Vars = Bijection{Var,Int}
 
 function Base.push!(vars::Vars, v::Var)
-    haskey(vars, v) && return nothing
+    haskey(vars, v) && return nothing 
     return vars[v] = length(vars) + 1
 end
 

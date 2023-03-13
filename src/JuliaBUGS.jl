@@ -19,7 +19,7 @@ using ReverseDiff
 using RuntimeGeneratedFunctions
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-import Base: in, push!, ==, hash, Symbol, keys, size
+import Base: in, push!, ==, hash, Symbol, keys, size, isless
 
 export @bugsast, @bugsmodel_str
 
@@ -64,7 +64,7 @@ function compile(
 )
     vars, array_map, var_types = program!(CollectVariables(), model_definition, data)
     dep_graph = program!(DependencyGraph(vars, array_map), model_definition, data)
-    node_args, node_functions, link_functions = program!(
+    node_args, node_f_exprs, link_functions = program!(
         NodeFunctions(vars, array_map), model_definition, data
     )
 
@@ -73,7 +73,7 @@ function compile(
         var_types,
         dep_graph,
         node_args,
-        node_functions,
+        node_f_exprs,
         link_functions,
         data,
         initializations,

@@ -24,8 +24,8 @@ Set{Any} with 3 elements:
   x[0, 0, 2]
 """
 rhs(::DependencyGraph, expr::Number, ::Dict) = Set()
-rhs(::DependencyGraph, expr::AbstractRange, ::Dict) = Set(nothing)
-rhs(::DependencyGraph, expr::Symbol, ::Dict) = Set([Var(expr)])
+rhs(::DependencyGraph, expr::AbstractRange, ::Dict) = Set()
+rhs(::DependencyGraph, expr::Symbol, ::Dict) = expr != :nothing ? Set([Var(expr)]) : Set()
 function rhs(pass::DependencyGraph, expr::Expr, env::Dict)
     evaluated_expr = eval(expr, env)
     evaluated_expr isa Distributions.Distribution && return Set()
@@ -54,11 +54,11 @@ function rhs(pass::DependencyGraph, expr::Expr, env::Dict)
 end
 
 function assignment!(pass::DependencyGraph, expr::Expr, env::Dict)
-    vars, arrays_map = pass.vars, pass.array_map
+    vars, array_map = pass.vars, pass.array_map
     l_var = lhs(pass, expr.args[1], env)
     l_id = vars[l_var]
     if !isscalar(l_var)
-        scalarized_l_ids = [vars[v] for v in vcat(scalarize(l_var))]
+        scalarized_l_ids = [vars[v] for v in vcat(scalarize(l_var, array_map))]
         for l in scalarized_l_ids
             add_edge!(pass.dep_graph, l_id, l)
         end
@@ -77,7 +77,7 @@ function assignment!(pass::DependencyGraph, expr::Expr, env::Dict)
                     push!(idxs, r_var.indices[i])
                 end
             end
-            for r_id in Iterators.flatten(arrays_map[r_var.name][idxs...])
+            for r_id in Iterators.flatten(array_map[r_var.name][idxs...])
                 push!(r_ids, r_id)
             end
         end
@@ -90,7 +90,7 @@ end
 function post_process(pass::DependencyGraph)
     for v in keys(pass.vars)
         if v isa ArrayVariable
-            scalarized_v = scalarize(v)
+            scalarized_v = scalarize(v, pass.array_map)
             for s in scalarized_v
                 has_edge(pass.dep_graph, pass.vars[v], pass.vars[s]) && continue
                 add_edge!(pass.dep_graph, pass.vars[s], pass.vars[v])

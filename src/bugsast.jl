@@ -232,7 +232,7 @@ macro bugsmodel_str(s::String)
 end
 
 function post_parsing_processing(expr)
-    return link_functions(expr)
+    return cumulative(density(deviance(link_functions(expr))))
 end
 
 const INVERSE_LINK_FUNCTION = Dict(
@@ -252,4 +252,61 @@ function link_functions(expr::Expr)
         end
         return sub_expr
     end
+end
+
+function cumulative(expr::Expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, lhs_ = cumulative(s1_, s2_))
+            dist = find_tilde_rhs(expr, s1)
+            sub_expr.args[2].args[1] = :cdf
+            sub_expr.args[2].args[2] = dist
+            return sub_expr
+        else
+            return sub_expr
+        end
+    end
+end
+
+function density(expr::Expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, lhs_ = density(s1_, s2_))
+            dist = find_tilde_rhs(expr, s1)
+            sub_expr.args[2].args[1] = :pdf
+            sub_expr.args[2].args[2] = dist
+            return sub_expr
+        else
+            return sub_expr
+        end
+    end
+end
+
+function deviance(expr::Expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, lhs_ = deviance(s1_, s2_))
+            dist = find_tilde_rhs(expr, s1)
+            sub_expr.args[2].args[1] = :logpdf
+            sub_expr.args[2].args[2] = dist
+            sub_expr.args[2] = Expr(:call, :*, -2, sub_expr.args[2])
+            return sub_expr
+        else
+            return sub_expr
+        end
+    end
+end
+
+function find_tilde_rhs(expr::Expr, target::Union{Expr,Symbol})
+    dist = nothing
+    MacroTools.postwalk(expr) do sub_expr
+        if isexpr(sub_expr, :(~))
+            if sub_expr.args[1] == target
+                isnothing(dist) || error("Exist two assignments to the same variable.")
+                dist = sub_expr.args[2]
+            end
+        end
+        return sub_expr
+    end
+    isnothing(dist) && error(
+        "Error handling cumulative expression: can't find a stochastic assignment for $target.",
+    )
+    return dist
 end
