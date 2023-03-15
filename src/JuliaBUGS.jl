@@ -11,7 +11,7 @@ using LinearAlgebra
 using LogExpFunctions
 using SpecialFunctions
 using Statistics
-using Graphs
+using Graphs, MetaGraphsNext
 using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
 using ReverseDiff

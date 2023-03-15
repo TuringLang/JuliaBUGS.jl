@@ -167,6 +167,7 @@ function LogDensityProblems.dimension(p::BUGSLogDensityProblem)
     return length(gen_init_params(p))
 end
 
+# TODO: check https://github.com/tpapp/LogDensityProblemsAD.jl/blob/master/ext/LogDensityProblemsADReverseDiffExt.jl
 function LogDensityProblems.logdensity_and_gradient(p::BUGSLogDensityProblem, x)
     ReverseDiff.gradient!(p.all_results, p.compiled_tape, x)
     return ReverseDiff.DiffResults.value(p.all_results),
@@ -196,88 +197,3 @@ function transform_samples(p::BUGSLogDensityProblem, flattened_vales::Vector)
     end
     return trace
 end
-
-# # @generated function logp(p::BUGSLogDensityProblem, x::AbstractVector)
-# function logp(p::BUGSLogDensityProblem, x::AbstractVector)
-#     var_types, sorted_nodes, node_args, node_f_exprs, link_functions = p.var_types,
-#             p.sorted_nodes, p.node_args, p.node_f_exprs, p.link_functions
-
-#     trace = unflatten_and_untransform(p.init_trace, p.parameters, p.bijectors, x)
-
-#     final_f_body = Expr[]
-#     for var in sorted_nodes
-#         if var_types[var] == :logical
-#             f_expr = node_f_exprs[var]
-#             arguments = [trace[arg] for arg in node_args[var]]
-#             sub_dict = Dict()
-#             for (arg, value) in zip(node_args[var], arguments)
-#                 sub_dict[arg] = value
-#             end
-#             f_body = MacroTools.splitdef(f_expr)[:body]
-#             f_expr_subed = MacroTools.postwalk((x) -> haskey(sub_dict, x) ? sub_dict[x] : x, f_body)
-
-#             expr = @q begin
-#                 trace[$var] = $f_expr_subed
-#             end
-#             push!(final_f_body, expr)
-#         end
-#     end
-
-#     return final_f_body
-# end
-
-
-# using MacroTools: @q
-# function gen_logp_function(p::BUGSLogDensityProblem, x)
-#     var_types, sorted_nodes, node_args, node_f_exprs, link_functions, = p.var_types,
-#             p.sorted_nodes, p.node_args, p.node_f_exprs, p.link_functions
-
-#     template = @q begin
-#         function compute_logjoint(p::BUGSLogDensityProblem, x)
-#             trace = unflatten_and_untransform(p.init_trace, p.parameters, p.bijectors, x)
-#             logjoint = 0.0
-#             return logjoint
-#         end
-#     end
-
-#     trace = unflatten_and_untransform(p.init_trace, p.parameters, p.bijectors, x)
-
-#     f_body = Expr[]
-#     for var in sorted_nodes
-#         if var_types[var] == :logical
-#             f_expr = node_f_exprs[var]
-#             arguments = [trace[arg] for arg in node_args[var]]
-#             sub_dict = Dict()
-#             for (arg, value) in zip(node_args[var], arguments)
-#                 sub_dict[arg] = value
-#             end
-#             f_expr_subed = MacroTools.postwalk((x) -> haskey(sub_dict) ? sub_dict[x] : x, f_expr)
-
-#             expr = @q begin
-#                 trace[$var] = $f_expr_subed
-#             end
-#             push!(f_body, expr)
-#         # else
-#         #     if haskey(link_functions, var)
-#         #         expr = @q begin
-#         #             logjoint += logpdf(
-#         #                 (node_functions[$var])([trace[arg] for arg in node_args[var]]...), eval(link_functions[$var])(trace[$var])
-#         #             )
-#         #         end
-
-#         #         logjoint += logpdf(
-#         #             (node_functions[var])(arguments...), eval(link_functions[var])(trace[var])
-#         #         )
-#         #     else
-#         #         logjoint += logpdf((node_functions[var])(arguments...), trace[var])
-#         #     end
-            
-#         #     expr = @q begin
-#         end
-
-            
-#     end
-
-
-#     return f_body
-# end

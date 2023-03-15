@@ -45,7 +45,15 @@ end
 
 function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
     v = lhs(pass, expr.args[1], env)
-    pass.var_types[v] = expr.head == :(=) ? :logical : :stochastic
+    var_type = expr.head == :(=) ? :logical : :stochastic
+    if haskey(pass.var_types, v)
+        if pass.var_types[v] == var_type
+            error("Repeated assignment to $v.")
+        else
+            var_type = :both
+        end
+    end
+    pass.var_types[v] = var_type
     if isscalar(v)
         push!(pass.vars, v)
         return nothing
@@ -83,7 +91,7 @@ function post_process(pass::CollectVariables)
     # array_map need to handle ArraySlice
     array_map = Dict()
     for (k, v) in array_sizes
-        array_map[k] = -1 .* ones(Int, v...)
+        array_map[k] = zeros(Int, v...)
     end
     for v in keys(vars)
         if v isa ArrayElement
@@ -93,13 +101,16 @@ function post_process(pass::CollectVariables)
 
     # check if arrays in array_map has zeros
     for (k, v) in array_map
-        if any(i -> !isassigned(v, i), eachindex(v))
-            warn("Array $k has holes.")
+        for v_ele in v
+            if iszero(v_ele)
+                @warn("Array $k has holes at $v_ele.")
+            end
         end
     end
 
     for v in keys(vars)
         if v isa ArraySlice
+            # TODO: generalize index to allow holes
             array_var = ArrayVariable(v.name, [1:s for s in size(array_map[v.name])])
             if v == array_var
                 id = vars[v]
