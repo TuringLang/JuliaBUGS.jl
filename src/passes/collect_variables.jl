@@ -101,9 +101,10 @@ function post_process(pass::CollectVariables)
 
     # check if arrays in array_map has zeros
     for (k, v) in array_map
-        for v_ele in v
+        for i in CartesianIndices(v)
+            v_ele = v[i]
             if iszero(v_ele)
-                @warn("Array $k has holes at $v_ele.")
+                @warn("Array $k has holes at $(Tuple(i)).")
             end
         end
     end

@@ -36,6 +36,12 @@ function rhs(pass::NodeFunctions, expr, env::Dict)
             gen_arg = Symbol(sub_expr)
             args[sub_expr] = gen_arg
             return gen_arg
+        elseif sub_expr isa Array{Var}
+            gen_arg = Symbol.(sub_expr)
+            for (i, v) in enumerate(sub_expr)
+                args[v] = gen_arg[i]
+            end
+            return Expr(:call, :reshape, Expr(:vect, gen_arg...), (size(sub_expr)...))
         else
             return sub_expr
         end
@@ -88,6 +94,7 @@ function varify_arrayelems(expr)
                     if all(x -> x isa Number, arg.args[2:end])
                         args[i] = Var(arg.args[1], arg.args[2:end])
                     else
+                        # TODO: possibly the right thing to do is scalarize(Var(arg.args[1], arg.args[2:end]), array_map)
                         args[i] = scalarize(Var(arg.args[1], arg.args[2:end]))
                     end
                 else
@@ -95,6 +102,16 @@ function varify_arrayelems(expr)
                 end
             end
             return Expr(:call, f, args...)
+        else
+            return sub_expr
+        end
+    end
+end
+
+function ref_to_getindex(expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if Meta.isexpr(sub_expr, :ref)
+            return Expr(:call, :getindex, sub_expr.args...)
         else
             return sub_expr
         end
@@ -160,7 +177,7 @@ function post_process(pass::NodeFunctions)
                     MacroTools.rmlines, :((array_var) -> array_var[$(var.indices...)])
                 )
             else
-                array_elems = scalarize(var)
+                array_elems = scalarize(var, array_map)
                 node_args[var] = vcat(array_elems)
                 @assert all(x -> x in keys(node_args), array_elems) # might not be true
                 arg_list = [Symbol("arg" * string(i)) for i in 1:length(array_elems)]

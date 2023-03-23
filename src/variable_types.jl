@@ -81,7 +81,7 @@ function scalarize(v::Var, array_map)
     scalarized_vars = scalarize(v)
     cleaned_scalarized_vars = Var[]
     for v in scalarized_vars
-        if array_map[v.name][v.indices...] != -1
+        if !iszero(array_map[v.name][v.indices...])
             push!(cleaned_scalarized_vars, v)
         end
     end
@@ -90,10 +90,11 @@ end
 
 function eval(v::Var, env::Dict)
     haskey(env, v.name) || return nothing
-    if v isa Scalar
-        return env[v.name]
+    value = v isa Scalar ? env[v.name] : env[v.name][v.indices...]
+    if ismissing(value)
+        return nothing
     else
-        return env[v.name][v.indices...]
+        return value
     end
 end
 
