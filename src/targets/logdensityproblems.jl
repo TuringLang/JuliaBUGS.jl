@@ -35,7 +35,7 @@ function BUGSLogDensityProblem(
         else
             if isempty(MacroTools.splitdef(v)[:args])
                 evaled_v = Base.invokelatest(eval(v))
-                @assert evaled_v isa Distributions.Distribution
+                # @assert evaled_v isa Distributions.Distribution
                 node_functions[k] = () -> evaled_v
             else
                 node_functions[k] = @RuntimeGeneratedFunction(v)
@@ -71,7 +71,6 @@ function BUGSLogDensityProblem(
     for var in sorted_nodes
         arguments = [init_trace[arg] for arg in node_args[var]]
         if var_types[var] == :logical
-            println("working with $var")
             init_trace[var] = (node_functions[var])(arguments...)
         else
             # assume that: if a node function can return different types of Distributions, they would have the same support 

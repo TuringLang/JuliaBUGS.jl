@@ -93,6 +93,10 @@ function post_process(pass::DependencyGraph)
         if v isa ArrayVariable
             scalarized_v = scalarize(v)
             for s in scalarized_v
+                if haskey(pass.missing_elements, v.name) && s in pass.missing_elements[v.name]
+                    add_edge!(pass.dep_graph, pass.vars[s], pass.vars[v])
+                    continue
+                end
                 has_edge(pass.dep_graph, pass.vars[v], pass.vars[s]) && continue
                 add_edge!(pass.dep_graph, pass.vars[s], pass.vars[v])
             end

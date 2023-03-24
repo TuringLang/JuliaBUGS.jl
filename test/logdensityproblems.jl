@@ -15,7 +15,7 @@ include("../src/BUGSExamples/BUGSExamples.jl")
 volume_i_examples = BUGSExamples.volume_i_examples;
 
 ##
-v = volume_i_examples[:bones];
+v = volume_i_examples[:dogs];
 # v = volume_i_examples[:rats];
 model_def = v.model_def;
 data = v.data; data = convert(Dict, data);
@@ -27,7 +27,7 @@ vars, array_map, var_types, missing_elements = program!(CollectVariables(array_s
 dep_graph = program!(DependencyGraph(vars, array_map, missing_elements), model_def, data);
 node_args, node_f_exprs, link_functions = program!(NodeFunctions(vars, array_map, missing_elements), model_def, data);
 
-function print_to_file(x, filepath="/home/sunxd/notebooks/output.jl")
+function print_to_file(x, filepath="/home/sunxd/Workspace/output.jl")
     open(filepath, "w+") do f
         ks = collect(keys(x))
         for k in ks
@@ -36,7 +36,8 @@ function print_to_file(x, filepath="/home/sunxd/notebooks/output.jl")
         end
     end
 end
-print_to_file(node_f_exprs)
+# print_to_file(node_args)
+# print_to_file(node_f_exprs)
 ##
 @run p = BUGSLogDensityProblem(vars, var_types, dep_graph, node_args, node_f_exprs, link_functions, data, inits)
 p = BUGSLogDensityProblem(vars, var_types, dep_graph, node_args, node_f_exprs, link_functions, data, inits);

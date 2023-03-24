@@ -160,11 +160,6 @@ function post_process(pass::NodeFunctions)
     pass.array_map, pass.missing_elements, pass.node_args, pass.node_f_exprs,
     pass.link_functions
 
-    for (k, v) in missing_elements
-        node_args[v] = []
-        node_f_exprs[v] = :missing
-    end
-
     for var in keys(vars)
         if !haskey(node_args, var)
             @assert isa(var, ArrayElement) || isa(var, ArrayVariable)
@@ -197,6 +192,11 @@ function post_process(pass::NodeFunctions)
             end
         end
     end 
+
+    for v in vcat(collect(values(missing_elements))...)
+        node_args[v] = []
+        node_f_exprs[v] = :missing
+    end
 
     return node_args, node_f_exprs, link_functions
 end

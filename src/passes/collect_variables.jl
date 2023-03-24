@@ -120,6 +120,7 @@ function post_process(pass::CollectVariables)
                 # @warn("Array $k has holes at $(Tuple(i)).")
                 id = push!(vars, ArrayElement(k, collect(Tuple(i))))
                 array_map[k][i] = id
+                var_types[ArrayElement(k, collect(Tuple(i)))] = :logical
                 if !haskey(missing_elements, k)
                     missing_elements[k] = []
                 end
