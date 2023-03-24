@@ -15,17 +15,17 @@ include("../src/BUGSExamples/BUGSExamples.jl")
 volume_i_examples = BUGSExamples.volume_i_examples;
 
 ##
-# v = volume_i_examples[:bones];
-v = volume_i_examples[:rats];
+v = volume_i_examples[:bones];
+# v = volume_i_examples[:rats];
 model_def = v.model_def;
 data = v.data; data = convert(Dict, data);
 inits = v.inits[1]; inits = convert(Dict, inits);
 
 # p = compile(model_def, data, inits)
 array_sizes = JuliaBUGS.pre_process_data(data);
-vars, array_map, var_types = program!(CollectVariables(array_sizes), model_def, data);
-dep_graph = program!(DependencyGraph(vars, array_map), model_def, data);
-node_args, node_f_exprs, link_functions = program!(NodeFunctions(vars, array_map), model_def, data);
+vars, array_map, var_types, missing_elements = program!(CollectVariables(array_sizes), model_def, data);
+dep_graph = program!(DependencyGraph(vars, array_map, missing_elements), model_def, data);
+node_args, node_f_exprs, link_functions = program!(NodeFunctions(vars, array_map, missing_elements), model_def, data);
 
 function print_to_file(x, filepath="/home/sunxd/notebooks/output.jl")
     open(filepath, "w+") do f

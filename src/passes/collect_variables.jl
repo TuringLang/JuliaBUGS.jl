@@ -110,19 +110,26 @@ function post_process(pass::CollectVariables)
         end
     end
 
-    # check if arrays in array_map has zeros
+    # check if arrays in array_map has holes
+    # only data array variables and variables appearing in the lhs can be used on the rhs
+    missing_elements = Dict()
     for (k, v) in array_map
         for i in CartesianIndices(v)
             v_ele = v[i]
             if iszero(v_ele)
-                @warn("Array $k has holes at $(Tuple(i)).")
+                # @warn("Array $k has holes at $(Tuple(i)).")
+                id = push!(vars, ArrayElement(k, collect(Tuple(i))))
+                array_map[k][i] = id
+                if !haskey(missing_elements, k)
+                    missing_elements[k] = []
+                end
+                push!(missing_elements[k], ArrayElement(k, collect(Tuple(i))))
             end
         end
     end
 
     for v in keys(vars)
         if v isa ArraySlice
-            # TODO: generalize index to allow holes
             array_var = ArrayVariable(v.name, [1:s for s in size(array_map[v.name])])
             if v == array_var
                 id = vars[v]
@@ -135,7 +142,6 @@ function post_process(pass::CollectVariables)
         end
     end
 
-    # TODO: add ArrayVariables and all the scalarized ArrayElements is conservative, can later evict these variables from the graph
     for k in keys(array_map)
         array_var = ArrayVariable(k, [1:s for s in size(array_map[k])])
         haskey(vars, array_var) && continue
@@ -143,5 +149,5 @@ function post_process(pass::CollectVariables)
         var_types[array_var] = :logical # added ArrayVariable is always logical
     end
 
-    return vars, array_map, var_types
+    return vars, array_map, var_types, missing_elements
 end

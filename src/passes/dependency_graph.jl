@@ -2,10 +2,11 @@ struct DependencyGraph <: CompilerPass
     vars::Vars
     array_map::Dict
     dep_graph::SimpleDiGraph
+    missing_elements::Dict
 end
-function DependencyGraph(vars::Vars, arrays_map::Dict)
+function DependencyGraph(vars::Vars, arrays_map::Dict, missing_elements::Dict)
     dep_graph = SimpleDiGraph(length(vars))
-    return DependencyGraph(vars, arrays_map, dep_graph)
+    return DependencyGraph(vars, arrays_map, dep_graph, missing_elements)
 end
 
 lhs(::DependencyGraph, expr, env::Dict) = find_variables_on_lhs(expr, env)
@@ -58,7 +59,7 @@ function assignment!(pass::DependencyGraph, expr::Expr, env::Dict)
     l_var = lhs(pass, expr.args[1], env)
     l_id = vars[l_var]
     if !isscalar(l_var)
-        scalarized_l_ids = [vars[v] for v in vcat(scalarize(l_var, array_map))]
+        scalarized_l_ids = [vars[v] for v in vcat(scalarize(l_var))]
         for l in scalarized_l_ids
             add_edge!(pass.dep_graph, l_id, l)
         end
@@ -90,7 +91,7 @@ end
 function post_process(pass::DependencyGraph)
     for v in keys(pass.vars)
         if v isa ArrayVariable
-            scalarized_v = scalarize(v, pass.array_map)
+            scalarized_v = scalarize(v)
             for s in scalarized_v
                 has_edge(pass.dep_graph, pass.vars[v], pass.vars[s]) && continue
                 add_edge!(pass.dep_graph, pass.vars[s], pass.vars[v])

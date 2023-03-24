@@ -1,13 +1,14 @@
 struct NodeFunctions <: CompilerPass
     vars::Vars
     array_map::Dict{}
+    missing_elements::Dict
     link_functions::Dict
     node_args::Dict
     node_f_exprs::Dict
 end
 
-function NodeFunctions(vars, array_map)
-    return NodeFunctions(vars, array_map, Dict(), Dict(), Dict())
+function NodeFunctions(vars, array_map, missing_elements)
+    return NodeFunctions(vars, array_map, missing_elements, Dict(), Dict(), Dict())
 end
 
 function lhs(::NodeFunctions, expr::Expr, env::Dict)
@@ -94,7 +95,6 @@ function varify_arrayelems(expr)
                     if all(x -> x isa Number, arg.args[2:end])
                         args[i] = Var(arg.args[1], arg.args[2:end])
                     else
-                        # TODO: possibly the right thing to do is scalarize(Var(arg.args[1], arg.args[2:end]), array_map)
                         args[i] = scalarize(Var(arg.args[1], arg.args[2:end]))
                     end
                 else
@@ -156,9 +156,14 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
 end
 
 function post_process(pass::NodeFunctions)
-    vars, array_map, node_args, node_f_exprs, link_functions = pass.vars,
-    pass.array_map, pass.node_args, pass.node_f_exprs,
+    vars, array_map, missing_elements, node_args, node_f_exprs, link_functions = pass.vars,
+    pass.array_map, pass.missing_elements, pass.node_args, pass.node_f_exprs,
     pass.link_functions
+
+    for (k, v) in missing_elements
+        node_args[v] = []
+        node_f_exprs[v] = :missing
+    end
 
     for var in keys(vars)
         if !haskey(node_args, var)
@@ -177,9 +182,9 @@ function post_process(pass::NodeFunctions)
                     MacroTools.rmlines, :((array_var) -> array_var[$(var.indices...)])
                 )
             else
-                array_elems = scalarize(var, array_map)
+                array_elems = scalarize(var)
                 node_args[var] = vcat(array_elems)
-                @assert all(x -> x in keys(node_args), array_elems) # might not be true
+                # @assert all(x -> x in keys(node_args), array_elems) # might not be true
                 arg_list = [Symbol("arg" * string(i)) for i in 1:length(array_elems)]
                 f_name = Symbol("compose_" * String(Symbol(var)))
                 node_f_exprs[var] = MacroTools.postwalk(
@@ -191,7 +196,7 @@ function post_process(pass::NodeFunctions)
                 )
             end
         end
-    end
+    end 
 
     return node_args, node_f_exprs, link_functions
 end

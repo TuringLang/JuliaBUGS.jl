@@ -77,16 +77,6 @@ function scalarize(v::Var)
     end
     return scalarized_vars
 end
-function scalarize(v::Var, array_map)
-    scalarized_vars = scalarize(v)
-    cleaned_scalarized_vars = Var[]
-    for v in scalarized_vars
-        if !iszero(array_map[v.name][v.indices...])
-            push!(cleaned_scalarized_vars, v)
-        end
-    end
-    return cleaned_scalarized_vars
-end
 
 function eval(v::Var, env::Dict)
     haskey(env, v.name) || return nothing

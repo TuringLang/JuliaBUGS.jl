@@ -30,6 +30,8 @@ function BUGSLogDensityProblem(
             node_functions[k] = () -> v
         elseif v == :identity
             node_functions[k] = identity
+        elseif v == :missing
+            node_functions[k] = () -> missing
         else
             if isempty(MacroTools.splitdef(v)[:args])
                 evaled_v = Base.invokelatest(eval(v))
