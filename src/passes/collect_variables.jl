@@ -1,9 +1,10 @@
 struct CollectVariables <: CompilerPass
     vars::Vars
     var_types::Dict
+    array_sizes
 end
 
-CollectVariables() = CollectVariables(Vars(), Dict())
+CollectVariables(array_sizes) = CollectVariables(Vars(), Dict(), array_sizes)
 
 find_variables_on_lhs(e::Symbol, ::Dict) = Var(e)
 function find_variables_on_lhs(expr::Expr, env::Dict)
@@ -68,7 +69,7 @@ function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
 end
 
 function post_process(pass::CollectVariables)
-    vars, var_types = pass.vars, pass.var_types
+    vars, var_types, array_sizes = pass.vars, pass.var_types, pass.array_sizes
     array_elements = Dict()
     for v in keys(vars)
         if v isa ArrayElement # because all ArraySlice are scalarized, we only need to check ArrayElement
@@ -78,14 +79,24 @@ function post_process(pass::CollectVariables)
             push!(array_elements[v.name], v)
         end
     end
-    array_sizes = Dict()
+    for k in keys(array_sizes)
+        if !haskey(array_elements, k)
+            delete!(array_sizes, k)
+        end
+    end
     for (k, v) in array_elements
         @assert all(x -> length(x.indices) == length(v[1].indices), v) "$k dimension mismatch."
         array_size = Vector(undef, length(v[1].indices))
         for i in 1:length(v[1].indices)
             array_size[i] = maximum(x -> x.indices[i], v)
         end
-        array_sizes[k] = array_size
+        if haskey(array_sizes, k)
+            if !all.(array_sizes[k] >= array_size)
+                error("Array $k dimension mismatch.")
+            end
+        else
+            array_sizes[k] = array_size
+        end
     end
 
     # array_map need to handle ArraySlice

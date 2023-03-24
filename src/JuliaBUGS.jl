@@ -55,13 +55,29 @@ include("passes/dependency_graph.jl")
 include("passes/node_functions.jl")
 include("targets/logdensityproblems.jl")
 
+# TODO: adapt DataFrames.jl
+
+function pre_process_data(data::Dict)
+    array_sizes = Dict()
+    
+    for (k, v) in data
+        if v isa AbstractArray
+            array_sizes[k] = collect(size(v))
+        end
+    end
+
+    return array_sizes
+end
+            
+
 function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
     return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
 end
 function compile(
     model_definition::Expr, data::Dict, initializations::Dict; target=:LogDensityProblems
 )
-    vars, array_map, var_types = program!(CollectVariables(), model_definition, data)
+    array_sizes = pre_process_data(data)
+    vars, array_map, var_types = program!(CollectVariables(array_sizes), model_definition, data)
     dep_graph = program!(DependencyGraph(vars, array_map), model_definition, data)
     node_args, node_f_exprs, link_functions = program!(
         NodeFunctions(vars, array_map), model_definition, data
