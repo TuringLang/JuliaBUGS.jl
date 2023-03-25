@@ -9,9 +9,12 @@ struct BUGSLogDensityProblem
     bijectors
     """ map variables to type of their prior distribution """
     prior_types
-    node_args
-    node_f_exprs
-    node_functions
+    logical_node_args
+    logical_node_f_exprs
+    stochastic_node_args
+    stochastic_node_f_exprs
+    logical_node_functions
+    stochastic_node_functions
     link_functions
     init_trace
     """ list of stochastic variables that can't be resolved from data """
@@ -22,31 +25,41 @@ struct BUGSLogDensityProblem
 end
 
 function BUGSLogDensityProblem(
-    vars, var_types, dep_graph, node_args, node_f_exprs, link_functions, data, inits
+    vars, var_types, dep_graph, logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, data, inits
 )
-    node_functions = Dict()
-    for (k, v) in node_f_exprs
+    logical_node_functions, stochastic_node_functions = Dict(), Dict()
+    for (k, v) in logical_node_f_exprs
         if v isa Number
-            node_functions[k] = () -> v
+            logical_node_functions[k] = () -> v
         elseif v == :identity
-            node_functions[k] = identity
+            logical_node_functions[k] = identity
         elseif v == :missing
-            node_functions[k] = () -> missing
+            logical_node_functions[k] = () -> missing
         else
             if isempty(MacroTools.splitdef(v)[:args])
                 evaled_v = Base.invokelatest(eval(v))
                 # @assert evaled_v isa Distributions.Distribution
-                node_functions[k] = () -> evaled_v
+                logical_node_functions[k] = () -> evaled_v
             else
-                node_functions[k] = @RuntimeGeneratedFunction(v)
+                logical_node_functions[k] = @RuntimeGeneratedFunction(v)
             end
+        end
+    end
+
+    for (k, v) in stochastic_node_f_exprs
+        if isempty(MacroTools.splitdef(v)[:args])
+            # @assert evaled_v isa Distributions.Distribution
+            evaled_v = Base.invokelatest(eval(v))
+            stochastic_node_functions[k] = () -> evaled_v
+        else
+            stochastic_node_functions[k] = @RuntimeGeneratedFunction(v)
         end
     end
 
     init_trace = Dict()
     parameters = []
     for var in keys(vars)
-        var_types[var] == :logical && continue
+        var_types[var] != :stochastic && continue # this stage only deal with stochastic nodes
 
         value = JuliaBUGS.eval(var, data)
         if !isnothing(value)
@@ -69,13 +82,20 @@ function BUGSLogDensityProblem(
     sorted_nodes = map(vars, topological_sort_by_dfs(dep_graph))
     bijectors, prior_types = Dict(), Dict()
     for var in sorted_nodes
-        arguments = [init_trace[arg] for arg in node_args[var]]
         if var_types[var] == :logical
-            init_trace[var] = (node_functions[var])(arguments...)
+            arguments = [init_trace[arg] for arg in logical_node_args[var]]
+            init_trace[var] = (logical_node_functions[var])(arguments...)
+        elseif var_types[var] == :both
+            arguments = [init_trace[arg] for arg in logical_node_args[var]]
+            init_trace[var] = (logical_node_functions[var])(arguments...)
+            arguments = [init_trace[arg] for arg in stochastic_node_args[var]]
+            bijectors[var] = Bijectors.bijector((stochastic_node_functions[var])(arguments...))
+            prior_types[var] = typeof((stochastic_node_functions[var])(arguments...))
         else
-            # assume that: if a node function can return different types of Distributions, they would have the same support 
-            bijectors[var] = Bijectors.bijector((node_functions[var])(arguments...))
-            prior_types[var] = typeof((node_functions[var])(arguments...))
+            # assume that: if a node function can return different types of Distributions, they would have the same support
+            arguments = [init_trace[arg] for arg in stochastic_node_args[var]] 
+            bijectors[var] = Bijectors.bijector((stochastic_node_functions[var])(arguments...))
+            prior_types[var] = typeof((stochastic_node_functions[var])(arguments...))
         end
     end
 
@@ -86,9 +106,12 @@ function BUGSLogDensityProblem(
         sorted_nodes,
         bijectors,
         prior_types,
-        node_args,
-        node_f_exprs,
-        node_functions,
+        logical_node_args,
+        logical_node_f_exprs,
+        stochastic_node_args,
+        stochastic_node_f_exprs,
+        logical_node_functions,
+        stochastic_node_functions,
         link_functions,
         init_trace,
         parameters,
@@ -140,22 +163,38 @@ function (p::BUGSLogDensityProblem)(x, transform=true)
 end
 
 function logjoint(p::BUGSLogDensityProblem, trace)
-    var_types, sorted_nodes, node_args, node_functions, link_functions, = p.var_types,
-    p.sorted_nodes, p.node_args, p.node_functions,
-    p.link_functions
+    var_types = p.var_types
+    sorted_nodes = p.sorted_nodes
+    logical_node_args = p.logical_node_args
+    logical_node_functions = p.logical_node_functions
+    stochastic_node_args = p.stochastic_node_args
+    stochastic_node_functions = p.stochastic_node_functions
+    link_functions = p.link_functions
 
     logjoint = 0.0
     for var in sorted_nodes
-        arguments = [trace[arg] for arg in node_args[var]]
         if var_types[var] == :logical
-            trace[var] = node_functions[var](arguments...)
-        else
+            arguments = [trace[arg] for arg in logical_node_args[var]]
+            trace[var] = logical_node_functions[var](arguments...)
+        elseif var_types[var] == :both
+            arguments = [trace[arg] for arg in logical_node_args[var]]
+            trace[var] = logical_node_functions[var](arguments...)
+            arguments = [trace[arg] for arg in stochastic_node_args[var]]
             if haskey(link_functions, var)
                 logjoint += logpdf(
-                    (node_functions[var])(arguments...), eval(link_functions[var])(trace[var])
+                    (stochastic_node_functions[var])(arguments...), eval(link_functions[var])(trace[var])
                 )
             else
-                logjoint += logpdf((node_functions[var])(arguments...), trace[var])
+                logjoint += logpdf((stochastic_node_functions[var])(arguments...), trace[var])
+            end
+        else
+            arguments = [trace[arg] for arg in stochastic_node_args[var]]
+            if haskey(link_functions, var)
+                logjoint += logpdf(
+                    (stochastic_node_functions[var])(arguments...), eval(link_functions[var])(trace[var])
+                )
+            else
+                logjoint += logpdf((stochastic_node_functions[var])(arguments...), trace[var])
             end
         end
     end
@@ -193,7 +232,7 @@ function transform_samples(p::BUGSLogDensityProblem, flattened_vales::Vector)
     for var in p.sorted_nodes
         arguments = [trace[arg] for arg in p.node_args[var]]
         if p.var_types[var] == :logical
-            trace[var] = (p.node_functions[var])(arguments...)
+            trace[var] = (p.logical_node_functions[var])(arguments...)
         else
             continue
         end

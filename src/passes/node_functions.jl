@@ -3,12 +3,14 @@ struct NodeFunctions <: CompilerPass
     array_map::Dict{}
     missing_elements::Dict
     link_functions::Dict
-    node_args::Dict
-    node_f_exprs::Dict
+    logical_node_args::Dict
+    logical_node_f_exprs::Dict
+    stochastic_node_args::Dict
+    stochastic_node_f_exprs::Dict
 end
 
 function NodeFunctions(vars, array_map, missing_elements)
-    return NodeFunctions(vars, array_map, missing_elements, Dict(), Dict(), Dict())
+    return NodeFunctions(vars, array_map, missing_elements, Dict(), Dict(), Dict(), Dict(), Dict())
 end
 
 function lhs(::NodeFunctions, expr::Expr, env::Dict)
@@ -143,46 +145,51 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
     end
     r_func, r_var_args = rhs(pass, expr.args[2], env)
 
-    # TODO: handle case where a variable is both logical and stochastic
-    @assert !in(l_var, keys(pass.node_args)) "Repeated assignment to $l_var"
-    pass.node_args[l_var] = r_var_args
-    if r_func isa Number || r_func == :identity
-        pass.node_f_exprs[l_var] = r_func
+    if expr.head == :(=)
+        @assert !in(l_var, keys(pass.logical_node_args)) "Repeated assignment to $l_var"
+        pass.logical_node_args[l_var] = r_var_args
+        pass.logical_node_f_exprs[l_var] = r_func
     else
-        pass.node_f_exprs[l_var] = r_func
+        @assert expr.head == :(~)
+        pass.stochastic_node_args[l_var] = r_var_args
+        pass.stochastic_node_f_exprs[l_var] = r_func
     end
-
     return nothing
 end
 
 function post_process(pass::NodeFunctions)
-    vars, array_map, missing_elements, node_args, node_f_exprs, link_functions = pass.vars,
-    pass.array_map, pass.missing_elements, pass.node_args, pass.node_f_exprs,
-    pass.link_functions
+
+    vars = pass.vars
+    array_map = pass.array_map
+    missing_elements = pass.missing_elements
+    logical_node_args = pass.logical_node_args
+    logical_node_f_exprs = pass.logical_node_f_exprs
+    stochastic_node_args = pass.stochastic_node_args
+    stochastic_node_f_exprs = pass.stochastic_node_f_exprs
+    link_functions = pass.link_functions
 
     for var in keys(vars)
-        if !haskey(node_args, var)
+        if !haskey(logical_node_args, var) && !haskey(stochastic_node_args, var)
             @assert isa(var, ArrayElement) || isa(var, ArrayVariable)
             if var isa ArrayElement
                 # then come from either ArrayVariable or ArraySlice
                 source_var = filter(
                     x -> (x isa ArrayVariable || x isa ArraySlice) && x.name == var.name,
-                    keys(node_args),
+                    vcat(map(collect, [keys(logical_node_args), keys(stochastic_node_args)])...),
                 )
                 @assert length(source_var) == 1
                 array_var = first(source_var)
-                @assert array_var in keys(node_args)
-                node_args[var] = [array_var]
-                node_f_exprs[var] = MacroTools.postwalk(
+                logical_node_args[var] = [array_var]
+                logical_node_f_exprs[var] = MacroTools.postwalk(
                     MacroTools.rmlines, :((array_var) -> array_var[$(var.indices...)])
                 )
             else
                 array_elems = scalarize(var)
-                node_args[var] = vcat(array_elems)
+                logical_node_args[var] = vcat(array_elems)
                 # @assert all(x -> x in keys(node_args), array_elems) # might not be true
                 arg_list = [Symbol("arg" * string(i)) for i in 1:length(array_elems)]
                 f_name = Symbol("compose_" * String(Symbol(var)))
-                node_f_exprs[var] = MacroTools.postwalk(
+                logical_node_f_exprs[var] = MacroTools.postwalk(
                     MacroTools.rmlines,
                     :(function ($f_name)($(arg_list...))
                         args = [$(arg_list...)]
@@ -194,9 +201,9 @@ function post_process(pass::NodeFunctions)
     end 
 
     for v in vcat(collect(values(missing_elements))...)
-        node_args[v] = []
-        node_f_exprs[v] = :missing
+        logical_node_args[v] = []
+        logical_node_f_exprs[v] = :missing
     end
 
-    return node_args, node_f_exprs, link_functions
+    return logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions
 end
