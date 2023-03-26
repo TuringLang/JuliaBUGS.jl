@@ -88,6 +88,10 @@ function eval(v::Var, env::Dict)
     end
 end
 
+function VarName(v::Var)
+    return eval(AbstractPPL.drop_escape(AbstractPPL.varname(Meta.parse(string(Symbol(v))))))
+end
+
 """
     Vars
 

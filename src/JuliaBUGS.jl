@@ -19,12 +19,14 @@ using ReverseDiff
 using RuntimeGeneratedFunctions
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
+import Base
 import Base: in, push!, ==, hash, Symbol, keys, size, isless
 
 export @bugsast, @bugsmodel_str
 
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
+using .BUGSPrimitives: step
 
 macro register_function(ex)
     return eval_registration(ex)
@@ -74,25 +76,14 @@ function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
     return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
 end
 function compile(
-    model_definition::Expr, data::Dict, initializations::Dict; target=:LogDensityProblems
+    model_def::Expr, data::Dict, inits::Dict; target=:LogDensityProblems
 )
     array_sizes = pre_process_data(data)
-    vars, array_map, var_types = program!(CollectVariables(array_sizes), model_definition, data)
-    dep_graph = program!(DependencyGraph(vars, array_map), model_definition, data)
-    node_args, node_f_exprs, link_functions = program!(
-        NodeFunctions(vars, array_map), model_definition, data
-    )
+    vars, array_map, var_types, missing_elements = program!(CollectVariables(array_sizes), model_def, data);
+    dep_graph = program!(DependencyGraph(vars, array_map, missing_elements), model_def, data);
+    logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables = program!(NodeFunctions(vars, array_map, missing_elements), model_def, data);
 
-    p = BUGSLogDensityProblem(
-        vars,
-        var_types,
-        dep_graph,
-        node_args,
-        node_f_exprs,
-        link_functions,
-        data,
-        initializations,
-    )
+    p = BUGSLogDensityProblem(vars, var_types, dep_graph, logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables, data, inits);
     inputs = gen_init_params(p)
     f_tape = ReverseDiff.GradientTape(p, inputs)
     compiled_tape = ReverseDiff.compile(f_tape)

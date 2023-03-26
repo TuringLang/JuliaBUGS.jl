@@ -75,7 +75,7 @@ function varify_scalars(expr)
     return MacroTools.postwalk(expr) do sub_expr
         if MacroTools.@capture(sub_expr, f_(args__))
             for (i, arg) in enumerate(args)
-                if arg isa Symbol
+                if arg isa Symbol && arg != :nothing
                     args[i] = Var(arg)
                 else
                     args[i] = varify_scalars(arg)
@@ -125,9 +125,16 @@ function varify_arrayvars(expr, array_map)
         @assert !Meta.isexpr(sub_expr, :ref)
         if MacroTools.@capture(sub_expr, f_(args__))
             if f == :getindex
-                args[1] = Var(args[1], array_map)
+                if !isa(args[1], Var)
+                    array_size = collect(size(array_map[args[1]]))
+                    array_size = map(x -> 1:x, array_size)
+                    args[1] = Var(args[1], array_size)
+                end
             end
             for (i, arg) in enumerate(args)
+                if arg isa Var || arg == Colon()
+                    continue
+                end
                 args[i] = varify_arrayvars(arg, array_map)
             end
             return Expr(:call, f, args...)
@@ -168,6 +175,7 @@ function post_process(pass::NodeFunctions)
     stochastic_node_f_exprs = pass.stochastic_node_f_exprs
     link_functions = pass.link_functions
 
+    array_variables = []
     for var in keys(vars)
         if !haskey(logical_node_args, var) && !haskey(stochastic_node_args, var)
             @assert isa(var, ArrayElement) || isa(var, ArrayVariable)
@@ -184,16 +192,23 @@ function post_process(pass::NodeFunctions)
                     MacroTools.rmlines, :((array_var) -> array_var[$(var.indices...)])
                 )
             else
+                push!(array_variables, var)
                 array_elems = scalarize(var)
                 logical_node_args[var] = vcat(array_elems)
                 # @assert all(x -> x in keys(node_args), array_elems) # might not be true
-                arg_list = [Symbol("arg" * string(i)) for i in 1:length(array_elems)]
+                # arg_list = [Symbol("arg" * string(i)) for i in 1:length(array_elems)]
                 f_name = Symbol("compose_" * String(Symbol(var)))
+                # logical_node_f_exprs[var] = MacroTools.postwalk(
+                #     MacroTools.rmlines,
+                #     :(function ($f_name)($(arg_list...))
+                #         args = [$(arg_list...)]
+                #         return reshape(collect(args), $(size(array_map[var.name])))
+                #     end),
+                # )
                 logical_node_f_exprs[var] = MacroTools.postwalk(
                     MacroTools.rmlines,
-                    :(function ($f_name)($(arg_list...))
-                        args = [$(arg_list...)]
-                        return reshape(collect(args), $(size(array_map[var.name])))
+                    :(function ($f_name)(args::Vector)
+                        return reshape(args, $(size(array_map[var.name])))
                     end),
                 )
             end
@@ -205,5 +220,5 @@ function post_process(pass::NodeFunctions)
         logical_node_f_exprs[v] = :missing
     end
 
-    return logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions
+    return logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables
 end

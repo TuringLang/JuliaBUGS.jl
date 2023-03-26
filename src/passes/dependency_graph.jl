@@ -27,11 +27,19 @@ Set{Any} with 3 elements:
 rhs(::DependencyGraph, expr::Number, ::Dict) = Set()
 rhs(::DependencyGraph, expr::AbstractRange, ::Dict) = Set()
 rhs(::DependencyGraph, expr::Symbol, ::Dict) = expr != :nothing ? Set([Var(expr)]) : Set()
+rhs(::DependencyGraph, ::Colon, ::Dict) = Set()
 function rhs(pass::DependencyGraph, expr::Expr, env::Dict)
     evaluated_expr = eval(expr, env)
     evaluated_expr isa Distributions.Distribution && return Set()
     evaluated_expr isa Number && return Set()
     evaluated_expr isa Symbol && return Set([Var(evaluated_expr)])
+    if Meta.isexpr(evaluated_expr, :ref)
+        for (i, e) in enumerate(evaluated_expr.args[2:end])
+            if e == Colon()
+                evaluated_expr.args[i+1] = 1:size(pass.array_map[evaluated_expr.args[1]])[i]
+            end
+        end
+    end
     if Meta.isexpr(evaluated_expr, :ref) &&
         all(x -> x isa Number || x isa UnitRange, evaluated_expr.args[2:end])
         return Set([Var(evaluated_expr.args[1], evaluated_expr.args[2:end])])

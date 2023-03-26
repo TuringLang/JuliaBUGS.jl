@@ -4,7 +4,7 @@ struct CollectVariables <: CompilerPass
     array_sizes
 end
 
-CollectVariables(array_sizes) = CollectVariables(Vars(), Dict(), array_sizes)
+CollectVariables(data_array_sizes) = CollectVariables(Vars(), Dict(), deepcopy(data_array_sizes))
 
 find_variables_on_lhs(e::Symbol, ::Dict) = Var(e)
 function find_variables_on_lhs(expr::Expr, env::Dict)
@@ -48,7 +48,7 @@ function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
     v = lhs(pass, expr.args[1], env)
     var_type = expr.head == :(=) ? :logical : :stochastic
     if haskey(pass.var_types, v)
-        if pass.var_types[v] == var_type
+        if pass.var_types[v] == var_type || pass.var_types[v] == :both
             error("Repeated assignment to $v.")
         else
             var_type = :both
@@ -69,7 +69,10 @@ function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
 end
 
 function post_process(pass::CollectVariables)
-    vars, var_types, array_sizes = pass.vars, pass.var_types, pass.array_sizes
+    vars = pass.vars
+    var_types = pass.var_types
+    array_sizes = pass.array_sizes
+
     array_elements = Dict()
     for v in keys(vars)
         if v isa ArrayElement # because all ArraySlice are scalarized, we only need to check ArrayElement
@@ -92,7 +95,7 @@ function post_process(pass::CollectVariables)
         end
         if haskey(array_sizes, k)
             if !all.(array_sizes[k] >= array_size)
-                error("Array $k dimension mismatch.")
+                error("Array $k is a data array, size can't be changed, but got $array_size.")
             end
         else
             array_sizes[k] = array_size

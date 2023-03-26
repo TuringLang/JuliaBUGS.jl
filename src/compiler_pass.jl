@@ -28,7 +28,11 @@ julia> JuliaBUGS.eval(:(dnorm(x[y[1] + 1] + 1, 2)), Dict()) # function calls
 """
 eval(var::Number, ::Any) = var
 eval(var::UnitRange, ::Dict) = var
-eval(var::Symbol, env::Dict) = haskey(env, var) && !ismissing(env[var]) ? env[var] : var
+function eval(var::Symbol, env::Dict)
+    var == :(:) && return Colon()
+    return haskey(env, var) && !ismissing(env[var]) ? env[var] : var
+end
+eval(::Colon, ::Dict) = Colon()
 function eval(var::Expr, env::Dict)
     if Meta.isexpr(var, :ref)
         MacroTools.postwalk(var) do sub_expr
@@ -38,7 +42,7 @@ function eval(var::Expr, env::Dict)
             return sub_expr
         end
         idxs = (ex -> eval(ex, env)).(var.args[2:end])
-        if all(x -> x isa Number || x isa UnitRange, idxs) && haskey(env, var.args[1])
+        if all(x -> x isa Number || x isa UnitRange || x == Colon(), idxs) && haskey(env, var.args[1])
             value = getindex(env[var.args[1]], idxs...)
             if ismissing(value)
                 return Expr(:ref, var.args[1], idxs...)
