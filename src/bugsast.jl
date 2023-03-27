@@ -232,6 +232,13 @@ macro bugsmodel_str(s::String)
 end
 
 function post_parsing_processing(expr)
+    expr = MacroTools.postwalk(expr) do sub_expr
+        if sub_expr == :step
+            return _step
+        else
+            return sub_expr
+        end
+    end
     return cumulative(density(deviance(link_functions(expr))))
 end
 

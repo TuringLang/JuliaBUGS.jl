@@ -24,7 +24,7 @@ lsat = (
               logit(p[j, k]) <- beta * theta[j] - alpha[k]
               r[j, k] ~ dbern(p[j, k])
           }
-          heta[j] ~ dnorm(0, 1)
+          theta[j] ~ dnorm(0, 1)
       }
       # Priors
       for (k in 1 : T) {

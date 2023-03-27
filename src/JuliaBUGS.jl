@@ -19,14 +19,12 @@ using ReverseDiff
 using RuntimeGeneratedFunctions
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-import Base
 import Base: in, push!, ==, hash, Symbol, keys, size, isless
 
 export @bugsast, @bugsmodel_str
 
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
-using .BUGSPrimitives: step
 
 macro register_function(ex)
     return eval_registration(ex)

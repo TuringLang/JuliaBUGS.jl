@@ -53,7 +53,8 @@ function rhs(pass::DependencyGraph, expr::Expr, env::Dict)
         return vars
     else # then it's a :ref expression
         idxs = deepcopy(evaluated_expr.args[2:end])
-        idxs[findall(x -> !isa(x, Number) || !isa(x, UniteRange), idxs)] .= 0 # mark the dimensions with variable indexing
+        # TODO: don't need to do this anymore, just use array_map to work out the array variable
+        idxs[findall(x -> !isa(x, Number) || !isa(x, UnitRange), idxs)] .= 0 # mark the dimensions with variable indexing
         push!(vars, Var(evaluated_expr.args[1], idxs)) # dimension with variable indexing is set to 0
         for idx in evaluated_expr.args[2:end]
             union!(vars, rhs(pass, idx, env))
@@ -85,6 +86,11 @@ function assignment!(pass::DependencyGraph, expr::Expr, env::Dict)
                 else
                     push!(idxs, r_var.indices[i])
                 end
+            end
+            if !haskey(array_map, r_var.name)
+                # then r_var is data
+                @assert haskey(env, r_var.name)
+                continue
             end
             for r_id in Iterators.flatten(array_map[r_var.name][idxs...])
                 push!(r_ids, r_id)

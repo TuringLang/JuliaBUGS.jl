@@ -126,9 +126,13 @@ function varify_arrayvars(expr, array_map)
         if MacroTools.@capture(sub_expr, f_(args__))
             if f == :getindex
                 if !isa(args[1], Var)
-                    array_size = collect(size(array_map[args[1]]))
-                    array_size = map(x -> 1:x, array_size)
-                    args[1] = Var(args[1], array_size)
+                    if haskey(array_map, args[1])
+                        array_size = collect(size(array_map[args[1]]))
+                        array_size = map(x -> 1:x, array_size)
+                        args[1] = Var(args[1], array_size)
+                    else
+                        @warn("Array $(args[1]) should be data array.")
+                    end
                 end
             end
             for (i, arg) in enumerate(args)
