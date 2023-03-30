@@ -79,6 +79,18 @@ function assignment!(pass::DependencyGraph, expr::Expr, env::Dict)
         if r_var isa Scalar
             push!(r_ids, vars[r_var])
         else
+            if !haskey(array_map, r_var.name)
+                # then r_var is data
+                # TODO: very hacky, need to fix this
+                @assert haskey(env, r_var.name)
+                array_size = collect(size(env[r_var.name]))
+                array_size = map(x -> 1:x, array_size)
+                var = Var(r_var.name, array_size)
+                @assert haskey(vars, var)
+                push!(r_ids, vars[var])
+                continue
+            end
+
             idxs = Any[]
             for i in eachindex(r_var.indices)
                 if r_var.indices[i] == 0
@@ -86,11 +98,6 @@ function assignment!(pass::DependencyGraph, expr::Expr, env::Dict)
                 else
                     push!(idxs, r_var.indices[i])
                 end
-            end
-            if !haskey(array_map, r_var.name)
-                # then r_var is data
-                @assert haskey(env, r_var.name)
-                continue
             end
             for r_id in Iterators.flatten(array_map[r_var.name][idxs...])
                 push!(r_ids, r_id)
@@ -104,7 +111,7 @@ end
 
 function post_process(pass::DependencyGraph)
     for v in keys(pass.vars)
-        if v isa ArrayVariable
+        if v isa ArrayVariable && v.name in keys(pass.array_map) # exclude data arrays
             scalarized_v = scalarize(v)
             for s in scalarized_v
                 if haskey(pass.missing_elements, v.name) && s in pass.missing_elements[v.name]

@@ -73,6 +73,10 @@ function post_process(pass::CollectVariables)
     var_types = pass.var_types
     array_sizes = pass.array_sizes
 
+    for (k, v) in array_sizes
+        push!(vars, ArrayVariable(k, [1:s for s in v]))
+    end
+
     array_elements = Dict()
     for v in keys(vars)
         if v isa ArrayElement # because all ArraySlice are scalarized, we only need to check ArrayElement

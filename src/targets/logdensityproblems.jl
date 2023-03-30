@@ -18,6 +18,7 @@ struct BUGSLogDensityProblem
     link_functions
     array_variables
     init_trace
+    variable_store
     """ list of stochastic variables that can't be resolved from data """
     parameters
     compiled_tape
@@ -60,6 +61,9 @@ function BUGSLogDensityProblem(
     init_trace = Dict()
     parameters = []
     for var in keys(vars)
+        if !haskey(var_types, var) # data array
+            continue
+        end
         var_types[var] != :stochastic && continue # this stage only deal with stochastic nodes
 
         value = JuliaBUGS.eval(var, data)
@@ -83,6 +87,14 @@ function BUGSLogDensityProblem(
     sorted_nodes = map(vars, topological_sort_by_dfs(dep_graph))
     bijectors, prior_types = Dict(), Dict()
     for var in sorted_nodes
+        if var isa ArrayVariable && haskey(data, var.name)
+            init_trace[var] = data[var.name]
+        end
+    end
+    for var in sorted_nodes
+        if var isa ArrayVariable && haskey(data, var.name)
+            continue
+        end
         if var_types[var] == :logical
             arguments = [init_trace[arg] for arg in logical_node_args[var]]
             if var in array_variables
@@ -126,6 +138,7 @@ function BUGSLogDensityProblem(
         link_functions,
         array_variables,
         init_trace,
+        data,
         parameters,
         nothing,
         nothing,
@@ -187,6 +200,9 @@ function logjoint(p::BUGSLogDensityProblem, trace)
 
     logjoint = 0.0
     for var in sorted_nodes
+        if !haskey(var_types, var) # data array
+            continue
+        end
         if var_types[var] == :logical
             arguments = [trace[arg] for arg in logical_node_args[var]]
             # trace[var] = logical_node_functions[var](arguments...)

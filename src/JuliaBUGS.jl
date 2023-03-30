@@ -68,28 +68,29 @@ function pre_process_data(data::Dict)
 
     return array_sizes
 end
-            
 
 function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
     return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
 end
 function compile(
-    model_def::Expr, data::Dict, inits::Dict; target=:LogDensityProblems
+    model_def::Expr, data::Dict, inits::Dict; target = :LogDensityProblems, compile_tape = true
 )
     array_sizes = pre_process_data(data)
     vars, array_map, var_types, missing_elements = program!(CollectVariables(array_sizes), model_def, data);
     dep_graph = program!(DependencyGraph(vars, array_map, missing_elements), model_def, data);
-    logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables = program!(NodeFunctions(vars, array_map, missing_elements), model_def, data);
+    logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables = program!(NodeFunctions(data, vars, array_map, missing_elements), model_def, data);
 
     p = BUGSLogDensityProblem(vars, var_types, dep_graph, logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables, data, inits);
-    inputs = gen_init_params(p)
-    f_tape = ReverseDiff.GradientTape(p, inputs)
-    compiled_tape = ReverseDiff.compile(f_tape)
-    all_results = ReverseDiff.DiffResults.GradientResult(inputs)
-    cfg = ReverseDiff.GradientConfig(inputs)
-    p = @set p.compiled_tape = compiled_tape
-    p = @set p.gradient_cfg = cfg
-    p = @set p.all_results = all_results
+    if compile_tape
+        inputs = gen_init_params(p)
+        f_tape = ReverseDiff.GradientTape(p, inputs)
+        compiled_tape = ReverseDiff.compile(f_tape)
+        all_results = ReverseDiff.DiffResults.GradientResult(inputs)
+        cfg = ReverseDiff.GradientConfig(inputs)
+        p = @set p.compiled_tape = compiled_tape
+        p = @set p.gradient_cfg = cfg
+        p = @set p.all_results = all_results
+    end
     return p
 end
 
