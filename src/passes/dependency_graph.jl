@@ -36,7 +36,8 @@ function rhs(pass::DependencyGraph, expr::Expr, env::Dict)
     if Meta.isexpr(evaluated_expr, :ref)
         for (i, e) in enumerate(evaluated_expr.args[2:end])
             if e == Colon()
-                evaluated_expr.args[i+1] = 1:size(pass.array_map[evaluated_expr.args[1]])[i]
+                evaluated_expr.args[i + 1] =
+                    1:size(pass.array_map[evaluated_expr.args[1]])[i]
             end
         end
     end
@@ -114,7 +115,8 @@ function post_process(pass::DependencyGraph)
         if v isa ArrayVariable && v.name in keys(pass.array_map) # exclude data arrays
             scalarized_v = scalarize(v)
             for s in scalarized_v
-                if haskey(pass.missing_elements, v.name) && s in pass.missing_elements[v.name]
+                if haskey(pass.missing_elements, v.name) &&
+                    s in pass.missing_elements[v.name]
                     add_edge!(pass.dep_graph, pass.vars[s], pass.vars[v])
                     continue
                 end

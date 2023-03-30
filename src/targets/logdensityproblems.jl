@@ -27,7 +27,17 @@ struct BUGSLogDensityProblem
 end
 
 function BUGSLogDensityProblem(
-    vars, var_types, dep_graph, logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables, data, inits
+    vars,
+    var_types,
+    dep_graph,
+    logical_node_args,
+    logical_node_f_exprs,
+    stochastic_node_args,
+    stochastic_node_f_exprs,
+    link_functions,
+    array_variables,
+    data,
+    inits,
 )
     logical_node_functions, stochastic_node_functions = Dict(), Dict()
     for (k, v) in logical_node_f_exprs
@@ -112,12 +122,16 @@ function BUGSLogDensityProblem(
             end
             # init_trace[var] = (logical_node_functions[var])(arguments...)
             arguments = [init_trace[arg] for arg in stochastic_node_args[var]]
-            bijectors[var] = Bijectors.bijector((stochastic_node_functions[var])(arguments...))
+            bijectors[var] = Bijectors.bijector(
+                (stochastic_node_functions[var])(arguments...)
+            )
             prior_types[var] = typeof((stochastic_node_functions[var])(arguments...))
         else
             # assume that: if a node function can return different types of Distributions, they would have the same support
-            arguments = [init_trace[arg] for arg in stochastic_node_args[var]] 
-            bijectors[var] = Bijectors.bijector((stochastic_node_functions[var])(arguments...))
+            arguments = [init_trace[arg] for arg in stochastic_node_args[var]]
+            bijectors[var] = Bijectors.bijector(
+                (stochastic_node_functions[var])(arguments...)
+            )
             prior_types[var] = typeof((stochastic_node_functions[var])(arguments...))
         end
     end
@@ -222,19 +236,25 @@ function logjoint(p::BUGSLogDensityProblem, trace)
             arguments = [trace[arg] for arg in stochastic_node_args[var]]
             if haskey(link_functions, var)
                 logjoint += logpdf(
-                    (stochastic_node_functions[var])(arguments...), eval(link_functions[var])(trace[var])
+                    (stochastic_node_functions[var])(arguments...),
+                    eval(link_functions[var])(trace[var]),
                 )
             else
-                logjoint += logpdf((stochastic_node_functions[var])(arguments...), trace[var])
+                logjoint += logpdf(
+                    (stochastic_node_functions[var])(arguments...), trace[var]
+                )
             end
         else
             arguments = [trace[arg] for arg in stochastic_node_args[var]]
             if haskey(link_functions, var)
                 logjoint += logpdf(
-                    (stochastic_node_functions[var])(arguments...), eval(link_functions[var])(trace[var])
+                    (stochastic_node_functions[var])(arguments...),
+                    eval(link_functions[var])(trace[var]),
                 )
             else
-                logjoint += logpdf((stochastic_node_functions[var])(arguments...), trace[var])
+                logjoint += logpdf(
+                    (stochastic_node_functions[var])(arguments...), trace[var]
+                )
             end
         end
     end

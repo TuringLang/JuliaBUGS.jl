@@ -100,7 +100,7 @@ A bijection between variables and IDs.
 const Vars = Bijection{Var,Int}
 
 function Base.push!(vars::Vars, v::Var)
-    haskey(vars, v) && return nothing 
+    haskey(vars, v) && return nothing
     return vars[v] = length(vars) + 1
 end
 

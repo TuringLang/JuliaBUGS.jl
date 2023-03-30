@@ -59,7 +59,7 @@ include("targets/logdensityproblems.jl")
 
 function pre_process_data(data::Dict)
     array_sizes = Dict()
-    
+
     for (k, v) in data
         if v isa AbstractArray
             array_sizes[k] = collect(size(v))
@@ -73,14 +73,32 @@ function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
     return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
 end
 function compile(
-    model_def::Expr, data::Dict, inits::Dict; target = :LogDensityProblems, compile_tape = true
+    model_def::Expr, data::Dict, inits::Dict; target=:LogDensityProblems, compile_tape=true
 )
     array_sizes = pre_process_data(data)
-    vars, array_map, var_types, missing_elements = program!(CollectVariables(array_sizes), model_def, data);
-    dep_graph = program!(DependencyGraph(vars, array_map, missing_elements), model_def, data);
-    logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables = program!(NodeFunctions(data, vars, array_map, missing_elements), model_def, data);
+    vars, array_map, var_types, missing_elements = program!(
+        CollectVariables(array_sizes), model_def, data
+    )
+    dep_graph = program!(
+        DependencyGraph(vars, array_map, missing_elements), model_def, data
+    )
+    logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables = program!(
+        NodeFunctions(data, vars, array_map, missing_elements), model_def, data
+    )
 
-    p = BUGSLogDensityProblem(vars, var_types, dep_graph, logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables, data, inits);
+    p = BUGSLogDensityProblem(
+        vars,
+        var_types,
+        dep_graph,
+        logical_node_args,
+        logical_node_f_exprs,
+        stochastic_node_args,
+        stochastic_node_f_exprs,
+        link_functions,
+        array_variables,
+        data,
+        inits,
+    )
     if compile_tape
         inputs = gen_init_params(p)
         f_tape = ReverseDiff.GradientTape(p, inputs)

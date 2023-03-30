@@ -1,5 +1,13 @@
 using JuliaBUGS
-using JuliaBUGS: CollectVariables, DependencyGraph, NodeFunctions, program!, BUGSLogDensityProblem, ArrayVariable, ArrayElement, ArraySlice
+using JuliaBUGS:
+    CollectVariables,
+    DependencyGraph,
+    NodeFunctions,
+    program!,
+    BUGSLogDensityProblem,
+    ArrayVariable,
+    ArrayElement,
+    ArraySlice
 using AdvancedHMC
 using ReverseDiff
 using LogDensityProblems
@@ -20,14 +28,20 @@ volume_i_examples = BUGSExamples.volume_i_examples;
 ##
 v = volume_i_examples[:equiv];
 model_def = v.model_def;
-data = v.data; data = convert(Dict, data);
-inits = v.inits[1]; inits = convert(Dict, inits);
+data = v.data;
+data = convert(Dict, data);
+inits = v.inits[1];
+inits = convert(Dict, inits);
 ##
-p = compile(model_def, data, inits; compile_tape = false);
+p = compile(model_def, data, inits; compile_tape=false);
 array_sizes = JuliaBUGS.pre_process_data(data);
-vars, array_map, var_types, missing_elements = program!(CollectVariables(array_sizes), model_def, data);
+vars, array_map, var_types, missing_elements = program!(
+    CollectVariables(array_sizes), model_def, data
+);
 dep_graph = program!(DependencyGraph(vars, array_map, missing_elements), model_def, data);
-logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables = program!(NodeFunctions(data, vars, array_map, missing_elements), model_def, data);
+logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables = program!(
+    NodeFunctions(data, vars, array_map, missing_elements), model_def, data
+);
 
 ##
 function print_to_file(x, filepath="/home/sunxd/Workspace/JuliaBUGS_outputs/output.jl")
@@ -43,11 +57,37 @@ end
 print_to_file(vars)
 print_to_file(var_types)
 # print_to_file(node_args)
-print_to_file(logical_node_args, "/home/sunxd/Workspace/JuliaBUGS_outputs/logical_node_args.jl")
+print_to_file(
+    logical_node_args, "/home/sunxd/Workspace/JuliaBUGS_outputs/logical_node_args.jl"
+)
 print_to_file(logical_node_f_exprs)
 ##
-@run p = BUGSLogDensityProblem(vars, var_types, dep_graph, logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables, data, inits)
-p = BUGSLogDensityProblem(vars, var_types, dep_graph, logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables, data, inits);
+@run p = BUGSLogDensityProblem(
+    vars,
+    var_types,
+    dep_graph,
+    logical_node_args,
+    logical_node_f_exprs,
+    stochastic_node_args,
+    stochastic_node_f_exprs,
+    link_functions,
+    array_variables,
+    data,
+    inits,
+)
+p = BUGSLogDensityProblem(
+    vars,
+    var_types,
+    dep_graph,
+    logical_node_args,
+    logical_node_f_exprs,
+    stochastic_node_args,
+    stochastic_node_f_exprs,
+    link_functions,
+    array_variables,
+    data,
+    inits,
+);
 initial_θ = JuliaBUGS.gen_init_params(p);
 logp = p(initial_θ)
 
@@ -85,7 +125,7 @@ function test_all_examples(examples, report_file, examples_to_test)
             data = v.data
             inits = v.inits[1]
             try
-                p = compile(model_def, data, inits; compile_tape = false)
+                p = compile(model_def, data, inits; compile_tape=false)
                 initial_θ = JuliaBUGS.gen_init_params(p)
                 logp = p(initial_θ)
                 println(f, "logp = ", logp)

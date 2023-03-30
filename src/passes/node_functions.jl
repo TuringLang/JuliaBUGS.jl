@@ -11,7 +11,9 @@ struct NodeFunctions <: CompilerPass
 end
 
 function NodeFunctions(data, vars, array_map, missing_elements)
-    return NodeFunctions(data, vars, array_map, missing_elements, Dict(), Dict(), Dict(), Dict(), Dict())
+    return NodeFunctions(
+        data, vars, array_map, missing_elements, Dict(), Dict(), Dict(), Dict(), Dict()
+    )
 end
 
 function lhs(::NodeFunctions, expr::Expr, env::Dict)
@@ -60,7 +62,7 @@ function rhs(pass::NodeFunctions, expr, env::Dict)
             return Expr(:ref, arr, new_idxs...)
         else
             return sub_expr
-        end 
+        end
     end
 
     f_expr = MacroTools.postwalk(
@@ -226,7 +228,11 @@ function post_process(pass::NodeFunctions)
                 # then come from either ArrayVariable or ArraySlice
                 source_var = filter(
                     x -> (x isa ArrayVariable || x isa ArraySlice) && x.name == var.name,
-                    vcat(map(collect, [keys(logical_node_args), keys(stochastic_node_args)])...),
+                    vcat(
+                        map(
+                            collect, [keys(logical_node_args), keys(stochastic_node_args)]
+                        )...,
+                    ),
                 )
                 @assert length(source_var) == 1
                 array_var = first(source_var)
@@ -258,12 +264,14 @@ function post_process(pass::NodeFunctions)
                 # TODO: for now, handle this in logdensityproblems, this is a leak of abstraction, need to be addressed
             end
         end
-    end 
+    end
 
     for v in vcat(collect(values(missing_elements))...)
         logical_node_args[v] = []
         logical_node_f_exprs[v] = :missing
     end
 
-    return logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables
+    return logical_node_args,
+    logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions,
+    array_variables
 end

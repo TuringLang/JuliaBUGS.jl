@@ -4,7 +4,9 @@ struct CollectVariables <: CompilerPass
     array_sizes
 end
 
-CollectVariables(data_array_sizes) = CollectVariables(Vars(), Dict(), deepcopy(data_array_sizes))
+function CollectVariables(data_array_sizes)
+    return CollectVariables(Vars(), Dict(), deepcopy(data_array_sizes))
+end
 
 find_variables_on_lhs(e::Symbol, ::Dict) = Var(e)
 function find_variables_on_lhs(expr::Expr, env::Dict)
@@ -99,7 +101,9 @@ function post_process(pass::CollectVariables)
         end
         if haskey(array_sizes, k)
             if !all.(array_sizes[k] >= array_size)
-                error("Array $k is a data array, size can't be changed, but got $array_size.")
+                error(
+                    "Array $k is a data array, size can't be changed, but got $array_size."
+                )
             end
         else
             array_sizes[k] = array_size

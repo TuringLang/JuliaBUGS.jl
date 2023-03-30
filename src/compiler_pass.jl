@@ -42,7 +42,8 @@ function eval(var::Expr, env::Dict)
             return sub_expr
         end
         idxs = (ex -> eval(ex, env)).(var.args[2:end])
-        if all(x -> x isa Number || x isa UnitRange || x == Colon(), idxs) && haskey(env, var.args[1])
+        if all(x -> x isa Number || x isa UnitRange || x == Colon(), idxs) &&
+            haskey(env, var.args[1])
             value = getindex(env[var.args[1]], idxs...)
             if ismissing(value)
                 return Expr(:ref, var.args[1], idxs...)
@@ -58,7 +59,8 @@ function eval(var::Expr, env::Dict)
         evaled_var = var_with_evaled_arg
         try
             evaled_var = eval(var_with_evaled_arg)
-        catch _ end
+        catch _
+        end
 
         if evaled_var isa Distributions.Distribution
             return var_with_evaled_arg

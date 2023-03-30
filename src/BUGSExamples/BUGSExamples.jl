@@ -79,9 +79,6 @@ volume_i_examples = (
     surgical_realistic=surgical_realistic,
 )
 
-volume_ii_examples = (
-    birats=birats,
-    eyes=eyes,
-)
+volume_ii_examples = (birats=birats, eyes=eyes)
 
 end

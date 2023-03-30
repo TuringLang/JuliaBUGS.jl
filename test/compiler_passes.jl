@@ -96,7 +96,9 @@ initializations = Dict(
 
 vars, array_map, var_types = program!(CollectVariables(), model_def, data);
 dep_graph = program!(DependencyGraph(vars, array_map), model_def, data);
-node_args, f_exprs, link_functions = program!(NodeFunctions(vars, array_map), model_def, data);
+node_args, f_exprs, link_functions = program!(
+    NodeFunctions(vars, array_map), model_def, data
+);
 
 p = compile(model_def, data, initializations);
 initial_θ = JuliaBUGS.gen_init_params(p);
