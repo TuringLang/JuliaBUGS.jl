@@ -1,9 +1,12 @@
 struct CollectVariables <: CompilerPass
     vars::Vars
     var_types::Dict
+    array_sizes
 end
 
-CollectVariables() = CollectVariables(Vars(), Dict())
+function CollectVariables(data_array_sizes)
+    return CollectVariables(Vars(), Dict(), deepcopy(data_array_sizes))
+end
 
 find_variables_on_lhs(e::Symbol, ::Dict) = Var(e)
 function find_variables_on_lhs(expr::Expr, env::Dict)
@@ -45,7 +48,15 @@ end
 
 function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
     v = lhs(pass, expr.args[1], env)
-    pass.var_types[v] = expr.head == :(=) ? :logical : :stochastic
+    var_type = expr.head == :(=) ? :logical : :stochastic
+    if haskey(pass.var_types, v)
+        if pass.var_types[v] == var_type || pass.var_types[v] == :both
+            error("Repeated assignment to $v.")
+        else
+            var_type = :both
+        end
+    end
+    pass.var_types[v] = var_type
     if isscalar(v)
         push!(pass.vars, v)
         return nothing
@@ -60,7 +71,14 @@ function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
 end
 
 function post_process(pass::CollectVariables)
-    vars, var_types = pass.vars, pass.var_types
+    vars = pass.vars
+    var_types = pass.var_types
+    array_sizes = pass.array_sizes
+
+    for (k, v) in array_sizes
+        push!(vars, ArrayVariable(k, [1:s for s in v]))
+    end
+
     array_elements = Dict()
     for v in keys(vars)
         if v isa ArrayElement # because all ArraySlice are scalarized, we only need to check ArrayElement
@@ -70,20 +88,32 @@ function post_process(pass::CollectVariables)
             push!(array_elements[v.name], v)
         end
     end
-    array_sizes = Dict()
+    for k in keys(array_sizes)
+        if !haskey(array_elements, k)
+            delete!(array_sizes, k)
+        end
+    end
     for (k, v) in array_elements
         @assert all(x -> length(x.indices) == length(v[1].indices), v) "$k dimension mismatch."
         array_size = Vector(undef, length(v[1].indices))
         for i in 1:length(v[1].indices)
             array_size[i] = maximum(x -> x.indices[i], v)
         end
-        array_sizes[k] = array_size
+        if haskey(array_sizes, k)
+            if !all.(array_sizes[k] >= array_size)
+                error(
+                    "Array $k is a data array, size can't be changed, but got $array_size."
+                )
+            end
+        else
+            array_sizes[k] = array_size
+        end
     end
 
     # array_map need to handle ArraySlice
     array_map = Dict()
     for (k, v) in array_sizes
-        array_map[k] = Array{Int}(undef, v...)
+        array_map[k] = zeros(Int, v...)
     end
     for v in keys(vars)
         if v isa ArrayElement
@@ -91,10 +121,22 @@ function post_process(pass::CollectVariables)
         end
     end
 
-    # check if arrays in array_map has zeros
+    # check if arrays in array_map has holes
+    # only data array variables and variables appearing in the lhs can be used on the rhs
+    missing_elements = Dict()
     for (k, v) in array_map
-        if any(i -> !isassigned(v, i), eachindex(v))
-            warn("Array $k has holes.")
+        for i in CartesianIndices(v)
+            v_ele = v[i]
+            if iszero(v_ele)
+                # @warn("Array $k has holes at $(Tuple(i)).")
+                id = push!(vars, ArrayElement(k, collect(Tuple(i))))
+                array_map[k][i] = id
+                var_types[ArrayElement(k, collect(Tuple(i)))] = :logical
+                if !haskey(missing_elements, k)
+                    missing_elements[k] = []
+                end
+                push!(missing_elements[k], ArrayElement(k, collect(Tuple(i))))
+            end
         end
     end
 
@@ -112,7 +154,6 @@ function post_process(pass::CollectVariables)
         end
     end
 
-    # TODO: add ArrayVariables and all the scalarized ArrayElements is conservative, can later evict these variables from the graph
     for k in keys(array_map)
         array_var = ArrayVariable(k, [1:s for s in size(array_map[k])])
         haskey(vars, array_var) && continue
@@ -120,5 +161,5 @@ function post_process(pass::CollectVariables)
         var_types[array_var] = :logical # added ArrayVariable is always logical
     end
 
-    return vars, array_map, var_types
+    return vars, array_map, var_types, missing_elements
 end

@@ -28,7 +28,11 @@ julia> JuliaBUGS.eval(:(dnorm(x[y[1] + 1] + 1, 2)), Dict()) # function calls
 """
 eval(var::Number, ::Any) = var
 eval(var::UnitRange, ::Dict) = var
-eval(var::Symbol, env::Dict) = haskey(env, var) ? env[var] : var
+function eval(var::Symbol, env::Dict)
+    var == :(:) && return Colon()
+    return haskey(env, var) && !ismissing(env[var]) ? env[var] : var
+end
+eval(::Colon, ::Dict) = Colon()
 function eval(var::Expr, env::Dict)
     if Meta.isexpr(var, :ref)
         MacroTools.postwalk(var) do sub_expr
@@ -38,17 +42,29 @@ function eval(var::Expr, env::Dict)
             return sub_expr
         end
         idxs = (ex -> eval(ex, env)).(var.args[2:end])
-        if all(x -> x isa Number || x isa UnitRange, idxs) && haskey(env, var.args[1])
-            return getindex(env[var.args[1]], idxs...)
+        if all(x -> x isa Number || x isa UnitRange || x == Colon(), idxs) &&
+            haskey(env, var.args[1])
+            value = getindex(env[var.args[1]], idxs...)
+            if ismissing(value)
+                return Expr(:ref, var.args[1], idxs...)
+            else
+                return value
+            end
         else
             return Expr(:ref, var.args[1], idxs...)
         end
     else
         args = map(ex -> eval(ex, env), var.args[2:end])
-        evaled_var = Expr(var.head, var.args[1], args...)
+        var_with_evaled_arg = Expr(var.head, var.args[1], args...)
+        evaled_var = var_with_evaled_arg
         try
-            return eval(evaled_var)
+            evaled_var = eval(var_with_evaled_arg)
         catch _
+        end
+
+        if evaled_var isa Distributions.Distribution
+            return var_with_evaled_arg
+        else
             return evaled_var
         end
     end

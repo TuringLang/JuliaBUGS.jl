@@ -55,7 +55,7 @@ include("Volume_II/BiRats.jl")
 # eyes="https://chjackson.github.io/openbugsdoc/Examples/Eyes.html",
 ###
 
-EXAMPLES = (
+volume_i_examples = (
     blockers=blockers,
     bones=bones,
     dogs=dogs,
@@ -77,8 +77,8 @@ EXAMPLES = (
     stacks=stacks,
     surgical_simple=surgical_simple,
     surgical_realistic=surgical_realistic,
-    birats=birats,
-    eyes=eyes,
 )
+
+volume_ii_examples = (birats=birats, eyes=eyes)
 
 end

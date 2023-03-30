@@ -14,7 +14,7 @@ using ReverseDiff
 using LogDensityProblems
 using Test
 
-#
+##
 model_def = @bugsast begin
     for i in 1:N
         for j in 1:T
@@ -94,12 +94,14 @@ initializations = Dict(
 
 ##
 
-# vars, array_map, var_types = program!(CollectVariables(), model_def, data);
-# dep_graph = program!(DependencyGraph(vars, array_map), model_def, data);
-# node_args, node_functions, link_functions = program!(NodeFunctions(vars, array_map), model_def, data);
+vars, array_map, var_types = program!(CollectVariables(), model_def, data);
+dep_graph = program!(DependencyGraph(vars, array_map), model_def, data);
+node_args, f_exprs, link_functions = program!(
+    NodeFunctions(vars, array_map), model_def, data
+);
 
 p = compile(model_def, data, initializations);
-initial_θ = JuliaBUGS.gen_init_params(p)
+initial_θ = JuliaBUGS.gen_init_params(p);
 p(initial_θ)
 
 ##

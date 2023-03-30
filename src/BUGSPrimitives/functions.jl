@@ -25,7 +25,7 @@ export abs,
     sd,
     softplus,
     sort,
-    step,
+    _step,
     sum,
     trunc,
     sin,
@@ -71,7 +71,7 @@ round
 sd(v::Vector) = Statistics.std(v);
 softplus(x) = log1pexp(x)
 sort(v::Vector) = Base.sort(v);
-step(x) = ifelse(x > 0, 1, 0);
+_step(x) = ifelse(x > 0, 1, 0);
 sum
 trunc
 

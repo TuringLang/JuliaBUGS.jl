@@ -11,7 +11,7 @@ using LinearAlgebra
 using LogExpFunctions
 using SpecialFunctions
 using Statistics
-using Graphs
+using Graphs, MetaGraphsNext
 using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
 using ReverseDiff
@@ -19,7 +19,7 @@ using ReverseDiff
 using RuntimeGeneratedFunctions
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-import Base: in, push!, ==, hash, Symbol, keys, size
+import Base: in, push!, ==, hash, Symbol, keys, size, isless
 
 export @bugsast, @bugsmodel_str
 
@@ -50,42 +50,65 @@ end
 include("bugsast.jl")
 include("variable_types.jl")
 include("compiler_pass.jl")
-include("utils.jl")
 include("passes/collect_variables.jl")
 include("passes/dependency_graph.jl")
 include("passes/node_functions.jl")
 include("targets/logdensityproblems.jl")
 
+# TODO: adapt DataFrames.jl
+
+function pre_process_data(data::Dict)
+    array_sizes = Dict()
+
+    for (k, v) in data
+        if v isa AbstractArray
+            array_sizes[k] = collect(size(v))
+        end
+    end
+
+    return array_sizes
+end
+
 function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
     return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
 end
 function compile(
-    model_definition::Expr, data::Dict, initializations::Dict; target=:LogDensityProblems
+    model_def::Expr, data::Dict, inits::Dict; target=:LogDensityProblems, compile_tape=true
 )
-    vars, array_map, var_types = program!(CollectVariables(), model_definition, data)
-    dep_graph = program!(DependencyGraph(vars, array_map), model_definition, data)
-    node_args, node_functions, link_functions = program!(
-        NodeFunctions(vars, array_map), model_definition, data
+    array_sizes = pre_process_data(data)
+    vars, array_map, var_types, missing_elements = program!(
+        CollectVariables(array_sizes), model_def, data
+    )
+    dep_graph = program!(
+        DependencyGraph(vars, array_map, missing_elements), model_def, data
+    )
+    logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables = program!(
+        NodeFunctions(data, vars, array_map, missing_elements), model_def, data
     )
 
     p = BUGSLogDensityProblem(
         vars,
         var_types,
         dep_graph,
-        node_args,
-        node_functions,
+        logical_node_args,
+        logical_node_f_exprs,
+        stochastic_node_args,
+        stochastic_node_f_exprs,
         link_functions,
+        array_variables,
         data,
-        initializations,
+        inits,
     )
-    inputs = gen_init_params(p)
-    f_tape = ReverseDiff.GradientTape(p, inputs)
-    compiled_tape = ReverseDiff.compile(f_tape)
-    all_results = ReverseDiff.DiffResults.GradientResult(inputs)
-    cfg = ReverseDiff.GradientConfig(inputs)
-    p = @set p.compiled_tape = compiled_tape
-    p = @set p.gradient_cfg = cfg
-    p = @set p.all_results = all_results
+    if compile_tape
+        inputs = gen_init_params(p)
+        f_tape = ReverseDiff.GradientTape(p, inputs)
+        compiled_tape = ReverseDiff.compile(f_tape)
+        all_results = ReverseDiff.DiffResults.GradientResult(inputs)
+        cfg = ReverseDiff.GradientConfig(inputs)
+        p = @set p.compiled_tape = compiled_tape
+        p = @set p.gradient_cfg = cfg
+        p = @set p.all_results = all_results
+    end
     return p
 end
 

@@ -80,11 +80,16 @@ end
 
 function eval(v::Var, env::Dict)
     haskey(env, v.name) || return nothing
-    if v isa Scalar
-        return env[v.name]
+    value = v isa Scalar ? env[v.name] : env[v.name][v.indices...]
+    if ismissing(value)
+        return nothing
     else
-        return env[v.name][v.indices...]
+        return value
     end
+end
+
+function VarName(v::Var)
+    return eval(AbstractPPL.drop_escape(AbstractPPL.varname(Meta.parse(string(Symbol(v))))))
 end
 
 """
