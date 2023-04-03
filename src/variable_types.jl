@@ -7,40 +7,33 @@ abstract type Var end
 
 struct Scalar <: Var
     name::Symbol
+    indices::Tuple{}
 end
 
-struct ArrayElement <: Var
+struct ArrayElement{N} <: Var
     name::Symbol
-    indices::Array
+    indices::NTuple{N, Int}
 end
 
-struct ArraySlice <: Var
+struct ArrayVar{N} <: Var
     name::Symbol
-    indices::Array
-end
-
-struct ArrayVariable <: Var
-    name::Symbol
-    indices::Array
+    indices::Tuple{N, Union{Int, UnitRange, Colon}}
 end
 
 isscalar(v::Var) = v isa Scalar || v isa ArrayElement
 
 Base.size(::Scalar) = ()
 Base.size(::ArrayElement) = ()
-Base.size(v::ArraySlice) = Tuple(map(length, v.indices))
+Base.size(v::ArrayVar) = Tuple(map(length, v.indices))
 
-Var(name::Symbol) = Scalar(name)
-Var(name::Symbol, index::Int) = ArrayElement(name, index)
+Var(name::Symbol) = Scalar(name, ())
+Var(name::Symbol, index::Int) = ArrayElement(name, (index))
 function Var(name::Symbol, indices::Vector)
     all(x -> x isa Number && isinteger(x), indices) && return ArrayElement(name, indices)
-    return ArraySlice(name, indices)
+    return ArrayVar(name, indices)
 end
 
 Base.Symbol(v::Scalar) = v.name
-function Base.Symbol(v::ArrayVariable)
-    return Symbol(v.name, "[", join([:(:) for i in 1:length(v.indices)], ", "), "]")
-end
 function Base.Symbol(v::Var)
     return Symbol(v.name, "[", join(v.indices, ", "), "]")
 end
@@ -48,27 +41,14 @@ end
 function hash(v::Var, h::UInt)
     return hash(v.name, hash(isscalar(v) ? false : v.indices, h))
 end
-
-function Base.:(==)(v1::ArraySlice, v2::ArrayVariable)
-    return v1.name == v2.name && v1.indices == v2.indices
-end
-Base.:(==)(v1::ArrayVariable, v2::ArraySlice) = v2 == v1
 function Base.:(==)(v1::Var, v2::Var)
     typeof(v1) != typeof(v2) && return false
     return v1.name == v2.name && v1.indices == v2.indices
 end
 
 Base.show(io::IO, v::Scalar) = print(io, v.name)
-function Base.show(io::IO, v::ArrayVariable)
-    print_indices = [:(:) for _ in 1:length(v.indices)]
-    return print(io, v.name, "[", join(print_indices, ", "), "]")
-end
 function Base.show(io::IO, v::Var)
     return print(io, v.name, "[", join(v.indices, ", "), "]")
-end
-
-function Base.in(v::Var, u::Union(ArrayVariable, ArraySlice))
-    return v.name == u.name && all(x -> x in u.indices, v.indices)
 end
 
 scalarize(v::Scalar) = [v]
@@ -82,34 +62,13 @@ function scalarize(v::Var)
     return scalarized_vars
 end
 
-function eval(v::Var, env::Dict)
-    haskey(env, v.name) || return nothing
-    value = v isa Scalar ? env[v.name] : env[v.name][v.indices...]
-    ismissing(value) && return nothing
-    return value
-end
+# function eval(v::Var, env::Dict)
+#     haskey(env, v.name) || return nothing
+#     value = v isa Scalar ? env[v.name] : env[v.name][v.indices...]
+#     ismissing(value) && return nothing
+#     return value
+# end
 
 function VarName(v::Var)
     return eval(AbstractPPL.drop_escape(AbstractPPL.varname(Meta.parse(string(Symbol(v))))))
 end
-
-# """
-#     Vars
-
-# A bijection between variables and IDs.
-# """
-# const Vars = Bijection{Var,Int}
-
-# function Base.push!(vars::Vars, v::Var)
-#     haskey(vars, v) && return nothing
-#     return vars[v] = length(vars) + 1
-# end
-
-# function Base.show(io::IO, vars::Vars)
-#     print(io, "Vars(")
-#     for (i, v) in enumerate(vars)
-#         print(io, v.first, " => ", v.second)
-#         i < length(vars) && print(io, ", ")
-#     end
-#     return print(io, ")")
-# end

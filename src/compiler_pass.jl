@@ -14,10 +14,8 @@ traverses the AST and calls `assignment!` and `tilde_assignment!` for each assig
 """
 function program!(pass::CompilerPass, expr::Expr, env::Dict, vargs...)
     for ex in expr.args
-        if Meta.isexpr(ex, :(=))
+        if Meta.isexpr(ex, [:(=), :(~)])
             assignment!(pass, ex, env, vargs...)
-        elseif Meta.isexpr(ex, :(~))
-            tilde_assignment!(pass, ex, env, vargs...)
         elseif Meta.isexpr(ex, :for)
             for_loop!(pass, ex, env, vargs...)
         else
@@ -47,7 +45,5 @@ function for_loop!(pass::CompilerPass, expr, env, vargs...)
 end
 
 function assignment!(::CompilerPass, expr::Expr, env::Dict, vargs...) end
-
-function tilde_assignment!(pass::CompilerPass, expr::Expr, env::Dict, vargs...)end
 
 function post_process(pass::CompilerPass, expr, env, vargs...) end

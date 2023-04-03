@@ -4,7 +4,7 @@
 Evaluate `expr` in the environment `env`.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> eval(:(x[1]), Dict(:x => [1, 2, 3])) # array indexing is evaluated if possible
 1
 
