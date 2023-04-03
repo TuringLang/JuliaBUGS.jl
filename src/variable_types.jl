@@ -67,6 +67,10 @@ function Base.show(io::IO, v::Var)
     return print(io, v.name, "[", join(v.indices, ", "), "]")
 end
 
+function Base.in(v::Var, u::Union(ArrayVariable, ArraySlice))
+    return v.name == u.name && all(x -> x in u.indices, v.indices)
+end
+
 scalarize(v::Scalar) = [v]
 scalarize(v::ArrayElement) = [v]
 function scalarize(v::Var)
@@ -81,34 +85,31 @@ end
 function eval(v::Var, env::Dict)
     haskey(env, v.name) || return nothing
     value = v isa Scalar ? env[v.name] : env[v.name][v.indices...]
-    if ismissing(value)
-        return nothing
-    else
-        return value
-    end
+    ismissing(value) && return nothing
+    return value
 end
 
 function VarName(v::Var)
     return eval(AbstractPPL.drop_escape(AbstractPPL.varname(Meta.parse(string(Symbol(v))))))
 end
 
-"""
-    Vars
+# """
+#     Vars
 
-A bijection between variables and IDs.
-"""
-const Vars = Bijection{Var,Int}
+# A bijection between variables and IDs.
+# """
+# const Vars = Bijection{Var,Int}
 
-function Base.push!(vars::Vars, v::Var)
-    haskey(vars, v) && return nothing
-    return vars[v] = length(vars) + 1
-end
+# function Base.push!(vars::Vars, v::Var)
+#     haskey(vars, v) && return nothing
+#     return vars[v] = length(vars) + 1
+# end
 
-function Base.show(io::IO, vars::Vars)
-    print(io, "Vars(")
-    for (i, v) in enumerate(vars)
-        print(io, v.first, " => ", v.second)
-        i < length(vars) && print(io, ", ")
-    end
-    return print(io, ")")
-end
+# function Base.show(io::IO, vars::Vars)
+#     print(io, "Vars(")
+#     for (i, v) in enumerate(vars)
+#         print(io, v.first, " => ", v.second)
+#         i < length(vars) && print(io, ", ")
+#     end
+#     return print(io, ")")
+# end

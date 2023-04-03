@@ -234,7 +234,7 @@ end
 function post_parsing_processing(expr)
     expr = MacroTools.postwalk(expr) do sub_expr
         if sub_expr == :step
-            return _step
+            return :_step
         else
             return sub_expr
         end
@@ -247,9 +247,8 @@ const INVERSE_LINK_FUNCTION = Dict(
 )
 
 function link_functions(expr::Expr)
-    # link functions in stochastic assignments will be handled later
     return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, f_(lhs_) = rhs_)
+        if @capture(sub_expr, f_(lhs_) = rhs_) # only transform logical assignments
             if f in keys(INVERSE_LINK_FUNCTION)
                 sub_expr.args[1] = lhs
                 sub_expr.args[2] = Expr(:call, INVERSE_LINK_FUNCTION[f], rhs)
