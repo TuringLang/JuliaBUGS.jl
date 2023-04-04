@@ -1,12 +1,20 @@
 struct NodeFunctions{VT} <: CompilerPass
-    vars::VT
+    vars::VT    
+    transformed_variables::Dict
     link_functions::Dict
     logical_node_args::Dict
     logical_node_f_exprs::Dict
     stochastic_node_args::Dict
     stochastic_node_f_exprs::Dict
 end
-NodeFunctions(vars) = NodeFunctions(vars, Dict(), Dict(), Dict(), Dict(), Dict())
+
+function NodeFunctions(vars, array_sizes)
+    transformed_variables = Dict()
+    for (k, v) in array_sizes
+        transformed_variables[k] = Array(undef, v...)
+    end
+    NodeFunctions(vars, collect(pairs(transformed_variables)), Dict(), Dict(), Dict(), Dict(), Dict())
+end
 
 # Generate an expression to reconstruct a given distribution object
 function toexpr(dist::Distributions.Distribution)
@@ -15,19 +23,7 @@ function toexpr(dist::Distributions.Distribution)
     return Expr(:call, dist_type, dist_params...)
 end
 
-function process_rhs(expr, env::Dict)
-    evaluated_expr = eval(expr, env)
-    if isa(evaled_var, Distributions.Distribution)
-        evaluated_expr = dist_to_expr(evaluated_expr)
-    end
-    
-    evaluated_expr isa Number && return evaluated_expr, []
-    evaluated_expr isa Symbol && return :identity, [Var(evaluated_expr)]
-    if Meta.isexpr(evaluated_expr, :ref) &&
-        all(x -> x isa Number || x isa UnitRange, evaluated_expr.args[2:end])
-        return :identity, [Var(evaluated_expr.args[1], evaluated_expr.args[2:end])]
-    end
-
+function process_rhs(evaluated_expr::Expr, env::Dict)
     replaced_expr = replace_vars(evaluated_expr, array_map, env)
     args = Dict()
     gen_expr = MacroTools.postwalk(replaced_expr) do sub_expr
@@ -189,6 +185,31 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
 
     link_function = Meta.isexpr(lhs_expr, :call) ? lhs.args[1] : identity
     l_var = find_variables_on_lhs(Meta.isexpr(lhs_expr, :call) ? lhs.args[2] : lhs_expr, env)
+    
+    l_vn = VarName(l_var)
+    evaluated_rhs = eval(rhs_expr, env)
+    # RHS can be evaluated, it is transformed variables, so we treat it as data later
+    if evaluated_rhs isa Number || evaluated_rhs isa AbstractArray
+        pass.transformed_variables = set(pass.transformed_variables, l_vn, evaluated_rhs)
+        return nothing
+    end
+
+    # RHS is a Symbol
+    if evaluated_rhs isa Symbol
+        @assert isscalar(l_var)
+        # do something
+    end
+
+    if Meta.isexpr(evaluated_expr, :ref) &&
+        all(x -> x isa Union{Number, UnitRange, Colon}, evaluated_expr.args[2:end])
+        # check lhs size, complication: Colon
+    end
+
+    if isa(evaled_var, Distributions.Distribution)
+        evaluated_expr = dist_to_expr(evaluated_expr)
+    end
+    
+    
     pass.link_functions[l_var] = link_function
     
     r_func, r_var_args = rhs(pass, expr.args[2], env)
