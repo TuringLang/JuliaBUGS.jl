@@ -1,8 +1,7 @@
 @enum VariableTypes begin
     Logical
     Stochastic
-    """ A variables of type `TransformedStochastic` appears on the LHS of both a logical assignment and a stochastic assignment. """
-    TransformedStochastic
+    TransformedStochastic # stochastic variable that is transformed by a deterministic function
 end
 
 """
@@ -17,7 +16,7 @@ struct CollectVariables <: CompilerPass
     vars::Set{Var}
     var_types::Dict{Var, VariableTypes}
 end
-CollectVariables() = CollectVariables(Set{Var}, Dict{Var, VariableTypes})
+CollectVariables() = CollectVariables(Set{Var}(), Dict{Var, VariableTypes}())
 
 """
     find_variables_on_lhs(expr, env)
@@ -79,7 +78,7 @@ function check_idxs(v_name::Symbol, idxs::Array, env::Dict)
 end
 
 function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
-    (t, t_) = Meta.isexpr(ex, :(=)) ? (Logical, Stochastic) : (Stochastic, Logical)
+    (t, t_) = Meta.isexpr(expr, :(=)) ? (Logical, Stochastic) : (Stochastic, Logical)
     v = find_variables_on_lhs(expr.args[1], env)
     isnothing(eval(v, env)) || Meta.isexpr(expr, :(=)) && error("$v is data, can't be assigned to.")
     push!(pass.vars, v)
@@ -98,7 +97,7 @@ function post_process(pass::CollectVariables, expr, env::Dict)
 
     array_elements = Dict([v.name => [] for v in vars if v.indices != ()])    
     for v in vars
-        push!(array_elements[v.name], v)
+        v.indices != () && push!(array_elements[v.name], v)
     end
 
     array_sizes = Dict{Symbol, Vector{Int}}()
@@ -115,18 +114,3 @@ function post_process(pass::CollectVariables, expr, env::Dict)
 
     return vars, var_types, array_sizes
 end
-
-"""
-Previously, we add every array elements and array variable to the graph, because we 
-want to capture fine-grain dependency. Corner case like:
-
-x = [1, 2, missing, missing] # data
-x[3] ~ dnorm
-x[2:3] ~ dmnorm # TODO: check x[2:3] should be same type
-y = sum(x[:])
-
-x -> y 
-
-in this case, variable pass will collect x[3] and y
-
-"""

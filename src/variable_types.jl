@@ -28,7 +28,7 @@ Base.size(v::ArrayVar) = Tuple(map(length, v.indices))
 
 Var(name::Symbol) = Scalar(name, ())
 Var(name::Symbol, index::Int) = ArrayElement(name, (index))
-function Var(name::Symbol, indices::Vector)
+function Var(name::Symbol, indices)
     all(x -> x isa Number && isinteger(x), indices) && return ArrayElement(name, indices)
     return ArrayVar(name, indices)
 end
@@ -62,12 +62,20 @@ function scalarize(v::Var)
     return scalarized_vars
 end
 
-# function eval(v::Var, env::Dict)
-#     haskey(env, v.name) || return nothing
-#     value = v isa Scalar ? env[v.name] : env[v.name][v.indices...]
-#     ismissing(value) && return nothing
-#     return value
-# end
+function eval(v::Var, env::Dict)
+    haskey(env, v.name) || return nothing
+    if isscalar(v)
+        value = env[v.name]
+        return ismissing(value) ? nothing : value
+    else
+        value = env[v.name][v.indices...]
+        if any(ismissing, value)
+            return nothing
+        else
+            return value
+        end
+    end
+end
 
 function VarName(v::Var)
     return eval(AbstractPPL.drop_escape(AbstractPPL.varname(Meta.parse(string(Symbol(v))))))

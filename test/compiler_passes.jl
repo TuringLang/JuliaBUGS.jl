@@ -1,11 +1,10 @@
 using Graphs, JuliaBUGS, Distributions
 using JuliaBUGS:
     CollectVariables,
-    DependencyGraph,
+    # DependencyGraph,
     NodeFunctions,
     ArrayElement,
-    ArraySlice,
-    ArrayVariable,
+    ArrayVar,
     program!,
     compile
 
@@ -94,7 +93,7 @@ initializations = Dict(
 
 ##
 
-vars, array_map, var_types = program!(CollectVariables(), model_def, data);
+vars, array_map, array_sizes = program!(CollectVariables(), model_def, data);
 dep_graph = program!(DependencyGraph(vars, array_map), model_def, data);
 node_args, f_exprs, link_functions = program!(
     NodeFunctions(vars, array_map), model_def, data

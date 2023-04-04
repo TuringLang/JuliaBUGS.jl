@@ -1,13 +1,13 @@
 using JuliaBUGS
-using JuliaBUGS:
-    CollectVariables,
-    DependencyGraph,
-    NodeFunctions,
-    program!,
-    BUGSLogDensityProblem,
-    ArrayVariable,
-    ArrayElement,
-    ArraySlice
+# using JuliaBUGS:
+#     CollectVariables,
+#     # DependencyGraph,
+#     NodeFunctions,
+#     program!,
+#     # BUGSLogDensityProblem,
+#     # ArrayVariable,
+#     # ArrayElement,
+#     ArrayVar
 using AdvancedHMC
 using ReverseDiff
 using LogDensityProblems
@@ -19,7 +19,7 @@ using BenchmarkTools
 using NamedTupleTools
 using BangBang
 using Graphs
-using Bijectionss
+# using Bijections
 using ProgressMeter
 ##
 include("../src/BUGSExamples/BUGSExamples.jl")
