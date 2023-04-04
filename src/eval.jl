@@ -57,6 +57,6 @@ function eval(var::Expr, env::Dict)
         var_with_evaled_arg = Expr(var.head, var.args[1], args...)
         evaled_var = var_with_evaled_arg
         try evaled_var = eval(var_with_evaled_arg) catch end
-        return isa(evaled_var, Distributions.Distribution) ? var_with_evaled_arg : evaled_var
+        return evaled_var
     end
 end

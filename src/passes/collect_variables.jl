@@ -35,6 +35,7 @@ Var(:x, [1, 2:3])
 julia> find_variables_on_lhs(:(x[f(y), 2:3]), Dict())
 ERROR: Some indices on the lhs can't be fully resolved. Argument 1: f(y). 
 [...]
+```
 """
 find_variables_on_lhs(e::Symbol, ::Dict) = Var(e)
 function find_variables_on_lhs(expr::Expr, env::Dict)

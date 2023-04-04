@@ -316,3 +316,95 @@ function find_tilde_rhs(expr::Expr, target::Union{Expr,Symbol})
     )
     return dist
 end
+
+"""
+    loop_fission(expr)
+
+Fission a loop into multiple loops.
+
+# Example
+```julia-repl
+julia> expr = :(
+              for i = 1:10
+                for j = 1:10
+                     x[i, j] = i + j
+                end
+                y[i] = i
+              end
+         ); loop_fission(expr)
+quote
+    for i = 1:10
+        for j = 1:10
+            x[i, j] = i + j
+        end
+    end
+    for i = 1:10
+        y[i] = i
+    end
+end
+```
+"""
+function loop_fission(expr::Expr)
+    loops = loop_fission_helper(expr)
+    new_expr = MacroTools.prewalk(expr) do sub_expr
+        if !MacroTools.@capture(sub_expr, for loop_var_ = l_:h_ body__ end)
+            return sub_expr
+        end
+    end 
+    if isnothing(new_expr)
+        new_expr = Expr(:block)
+    end 
+    filter!(x -> x !== nothing, new_expr.args)
+    for l in loops
+        push!(new_expr.args, generate_loop_expr(l))
+    end
+    return new_expr
+end
+
+function loop_fission_helper(expr::Expr)
+    loops = []
+    MacroTools.prewalk(expr) do sub_expr
+        if MacroTools.@capture(sub_expr, for loop_var_ = l_:h_ body__ end)
+            loops = []
+            for ex in body
+                if Meta.isexpr(ex, :for)
+                    inner_loops = loop_fission_helper(ex)
+                    for inner_l in inner_loops
+                        push!(loops, (loop_var, l, h, inner_l))
+                    end
+                    
+                else
+                    push!(loops, (loop_var, l, h, ex))
+                end
+            end
+            return nothing
+        end
+        return sub_expr
+    end
+    return loops
+end
+
+function generate_loop_expr(loop)
+    loop_var, l, h, remaining = loop
+    if !isa(remaining, Expr)
+        remaining = generate_loop_expr(remaining)
+    end
+    return MacroTools.prewalk(rmlines, :(for $loop_var = $l:$h
+        $remaining
+    end))
+end
+
+expr = MacroTools.@q begin
+    for i = 1:Num
+        $(Expr(:~, :(rc[i]), :(dbin(pc[i], nc[i]))))
+        $(Expr(:~, :(rt[i]), :(dbin(pt[i], nt[i]))))
+        pc[i] = logistic(mu[i])
+        pt[i] = logistic(mu[i] + delta[i])
+        $(Expr(:~, :(mu[i]), :(dnorm(0.0, 1.0e-5))))
+        $(Expr(:~, :(delta[i]), :(dnorm(d, tau))))
+    end
+    $(Expr(:~, :d, :(dnorm(0.0, 1.0e-6))))
+    $(Expr(:~, :tau, :(dgamma(0.001, 0.001))))
+    $(Expr(:~, Symbol("delta.new"), :(dnorm(d, tau))))
+    sigma = 1 / sqrt(tau)
+end

@@ -1,33 +1,26 @@
-struct NodeFunctions <: CompilerPass
-    data
-    vars::Vars
-    array_map::Dict{}
-    missing_elements::Dict
+struct NodeFunctions{VT} <: CompilerPass
+    vars::VT
     link_functions::Dict
     logical_node_args::Dict
     logical_node_f_exprs::Dict
     stochastic_node_args::Dict
     stochastic_node_f_exprs::Dict
 end
+NodeFunctions(vars) = NodeFunctions(vars, Dict(), Dict(), Dict(), Dict(), Dict())
 
-function NodeFunctions(data, vars, array_map, missing_elements)
-    return NodeFunctions(
-        data, vars, array_map, missing_elements, Dict(), Dict(), Dict(), Dict(), Dict()
-    )
+# Generate an expression to reconstruct a given distribution object
+function toexpr(dist::Distributions.Distribution)
+    dist_type = typeof(dist)
+    dist_params = params(dist)
+    return Expr(:call, dist_type, dist_params...)
 end
 
-function lhs(::NodeFunctions, expr::Expr, env::Dict)
-    if Meta.isexpr(expr, :call)
-        @assert length(expr.args) == 2
-        return find_variables_on_lhs(expr.args[2], env), expr.args[1]
-    end
-    return find_variables_on_lhs(expr, env), nothing
-end
-lhs(::NodeFunctions, expr, env::Dict) = find_variables_on_lhs(expr, env), nothing
-
-function rhs(pass::NodeFunctions, expr, env::Dict)
-    array_map = pass.array_map
+function process_rhs(expr, env::Dict)
     evaluated_expr = eval(expr, env)
+    if isa(evaled_var, Distributions.Distribution)
+        evaluated_expr = dist_to_expr(evaluated_expr)
+    end
+    
     evaluated_expr isa Number && return evaluated_expr, []
     evaluated_expr isa Symbol && return :identity, [Var(evaluated_expr)]
     if Meta.isexpr(evaluated_expr, :ref) &&
@@ -190,11 +183,14 @@ function varify_arrayvars(expr, array_map, env)
 end
 
 function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
-    l_var, link_func = lhs(pass, expr.args[1], env)
-    @assert l_var isa Var
-    if !isnothing(link_func)
-        pass.link_functions[l_var] = link_func
-    end
+    assignment_type = expr.head
+    lhs_expr = expr.args[1]
+    rhs_expr = expr.args[2]
+
+    link_function = Meta.isexpr(lhs_expr, :call) ? lhs.args[1] : identity
+    l_var = find_variables_on_lhs(Meta.isexpr(lhs_expr, :call) ? lhs.args[2] : lhs_expr, env)
+    pass.link_functions[l_var] = link_function
+    
     r_func, r_var_args = rhs(pass, expr.args[2], env)
 
     if expr.head == :(=)
