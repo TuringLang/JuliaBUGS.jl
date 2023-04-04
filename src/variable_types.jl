@@ -1,6 +1,5 @@
 """
     Var
-
 A variable type that can be used to represent a scalar or an array element.
 """
 abstract type Var end
@@ -17,7 +16,7 @@ end
 
 struct ArrayVar{N} <: Var
     name::Symbol
-    indices::Tuple{N, Union{Int, UnitRange, Colon}}
+    indices::NTuple{N, Union{Int, UnitRange, Colon}}
 end
 
 isscalar(v::Var) = v isa Scalar || v isa ArrayElement
@@ -57,7 +56,7 @@ function scalarize(v::Var)
     collected_indices = collect(Iterators.product(v.indices...))
     scalarized_vars = Array{Var}(undef, size(collected_indices)...)
     for i in eachindex(collected_indices)
-        scalarized_vars[i] = Var(v.name, collect(collected_indices[i]))
+        scalarized_vars[i] = Var(v.name, collected_indices[i])
     end
     return scalarized_vars
 end

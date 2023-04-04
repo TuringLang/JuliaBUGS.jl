@@ -67,29 +67,10 @@ Convert all array elements in `expr` to `Var`s.
 # Examples
 
 ```jldoctest
-julia> expr = :(a[1, 2] + b[3, 4] + c[5, 6]) |> dump
-Expr
-  head: Symbol call
-  args: Array{Any}((4,))
-    1: Symbol +
-    2: Expr
-      head: Symbol ref
-      args: Array{Any}((3,))
-        1: Symbol a
-        2: Int64 1
-        3: Int64 2
-    3: Expr
-      head: Symbol ref
-      args: Array{Any}((3,))
-        1: Symbol b
-        2: Int64 3
-        3: Int64 4
-    4: Expr
-      head: Symbol ref
-      args: Array{Any}((3,))
-        1: Symbol c
-        2: Int64 5
-        3: Int64 6
+julia> expr = JuliaBUGS.eval(:(a[1, 2] + b[1, 1:2]), Dict());
+
+julia> varify_arrayelems(expr) # b[1, 1:2] is scalarized
+:(a[1, 2] + Var[b[1, 1], b[1, 2]])
 
 ```
 """
@@ -97,12 +78,11 @@ function varify_arrayelems(expr)
     return MacroTools.postwalk(expr) do sub_expr
         if MacroTools.@capture(sub_expr, f_(args__))
             for (i, arg) in enumerate(args)
-                if Meta.isexpr(arg, :ref) &&
-                    all(x -> x isa Number || x isa UnitRange, arg.args[2:end])
+                if Meta.isexpr(arg, :ref) && all(x -> x isa Union{Number, UnitRange, Colon}, arg.args[2:end])
                     if all(x -> x isa Number, arg.args[2:end])
-                        args[i] = Var(arg.args[1], arg.args[2:end])
+                        args[i] = Var(arg.args[1], Tuple(arg.args[2:end]))
                     else
-                        args[i] = scalarize(Var(arg.args[1], arg.args[2:end]))
+                        args[i] = scalarize(Var(arg.args[1], Tuple(arg.args[2:end])))
                     end
                 else
                     args[i] = varify_arrayelems(arg)
@@ -125,34 +105,35 @@ function ref_to_getindex(expr)
     end
 end
 
+"""
+    varify_arrayvars(expr)
 
-function varify_arrayvars(expr, array_map, env)
-    return MacroTools.postwalk(expr) do sub_expr
-        @assert !Meta.isexpr(sub_expr, :ref)
+Convert all array variables in `expr` to `Var`s.
+
+# Examples
+
+```jldoctest
+julia> expr = :(x[y[1] + 1] + 1); evaled_expr = JuliaBUGS.eval(expr, Dict());
+
+julia> part_var_expr = varify_arrayelems(varify_scalars(evaled_expr));
+
+julia> varify_arrayvars(ref_to_getindex(part_var_expr)) |> dump
+
+'''
+"""
+function varify_arrayvars(expr)
+    return MacroTools.prewalk(expr) do sub_expr
         if MacroTools.@capture(sub_expr, f_(args__))
             if f == :getindex
-                if !isa(args[1], Var)
-                    if haskey(array_map, args[1])
-                        if all(x -> x isa Number, args[2:end]) # TODO: this should be done in `varify_arrayelems`, figure out what's wrong
-                            return Var(args[1], args[2:end])
-                        else
-                            array_size = collect(size(array_map[args[1]]))
-                            array_size = map(x -> 1:x, array_size)
-                            args[1] = Var(args[1], array_size)
-                        end
-                    else
-                        @assert args[1] in keys(env)
-                        array_size = collect(size(env[args[1]]))
-                        array_size = map(x -> 1:x, array_size)
-                        args[1] = Var(args[1], array_size)
-                    end
-                end
+                @assert !all(x -> x isa Union{Number, UnitRange, Colon}, args[2:end])
+                # @assert !isa(args[1], Var) # postwalk may revisit the same code 
+                args[1] isa Var || (args[1] = Var(args[1], Tuple([Colon() for i in 1:length(args)-1])))
             end
             for (i, arg) in enumerate(args)
                 if arg isa Var || arg == Colon()
                     continue
                 end
-                args[i] = varify_arrayvars(arg, array_map, env)
+                args[i] = varify_arrayvars(arg)
             end
             return Expr(:call, f, args...)
         else
@@ -160,9 +141,9 @@ function varify_arrayvars(expr, array_map, env)
         end
     end
 end
+##
+varify_arrayvars(ref_to_getindex(part_var_expr))
 
-function replace_vars(expr, array_map, env)
-    return varify_arrayvars(
-        ref_to_getindex(varify_arrayelems(varify_scalars(expr))), array_map, env
-    )
+function replace_vars(expr)
+    return varify_arrayvars(ref_to_getindex(varify_arrayelems(varify_scalars(expr))))
 end

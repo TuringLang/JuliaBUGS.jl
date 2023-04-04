@@ -393,18 +393,3 @@ function generate_loop_expr(loop)
         $remaining
     end))
 end
-
-expr = MacroTools.@q begin
-    for i = 1:Num
-        $(Expr(:~, :(rc[i]), :(dbin(pc[i], nc[i]))))
-        $(Expr(:~, :(rt[i]), :(dbin(pt[i], nt[i]))))
-        pc[i] = logistic(mu[i])
-        pt[i] = logistic(mu[i] + delta[i])
-        $(Expr(:~, :(mu[i]), :(dnorm(0.0, 1.0e-5))))
-        $(Expr(:~, :(delta[i]), :(dnorm(d, tau))))
-    end
-    $(Expr(:~, :d, :(dnorm(0.0, 1.0e-6))))
-    $(Expr(:~, :tau, :(dgamma(0.001, 0.001))))
-    $(Expr(:~, Symbol("delta.new"), :(dnorm(d, tau))))
-    sigma = 1 / sqrt(tau)
-end
