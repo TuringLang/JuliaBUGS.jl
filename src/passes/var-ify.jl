@@ -8,15 +8,6 @@ function getindex_to_ref(expr)
     end
 end
 
-function cast_to_integer_if_integer(x)
-    # Check if x is an integer or a floating-point number with an integer value
-    if isa(x, Integer) || (isa(x, AbstractFloat) && isinteger(x))
-        return Int(x)  # Convert x to an integer
-    else
-        return x  # Return the original value
-    end
-end
-
 """
     varify_scalars(expr)
 
@@ -39,7 +30,6 @@ Expr
     4: ArrayElement{0}
       name: Symbol c
       indices: Tuple{} ()
-
 ```
 """
 function varify_scalars(expr)
@@ -71,7 +61,6 @@ julia> expr = JuliaBUGS.eval(:(a[1, 2] + b[1, 1:2]), Dict());
 
 julia> varify_arrayelems(expr) # b[1, 1:2] is scalarized
 :(a[1, 2] + Var[b[1, 1], b[1, 2]])
-
 ```
 """
 function varify_arrayelems(expr)
@@ -95,16 +84,6 @@ function varify_arrayelems(expr)
     end
 end
 
-function ref_to_getindex(expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if Meta.isexpr(sub_expr, :ref)
-            return Expr(:call, :getindex, sub_expr.args...)
-        else
-            return sub_expr
-        end
-    end
-end
-
 """
     varify_arrayvars(expr)
 
@@ -118,7 +97,7 @@ julia> expr = :(x[y[1] + 1] + 1); evaled_expr = JuliaBUGS.eval(expr, Dict());
 julia> part_var_expr = varify_arrayelems(varify_scalars(evaled_expr));
 
 julia> varify_arrayvars(ref_to_getindex(part_var_expr)) |> dump
-
+:(getindex(x[Colon()], y[1] + 1) + 1)
 '''
 """
 function varify_arrayvars(expr)
@@ -141,9 +120,4 @@ function varify_arrayvars(expr)
         end
     end
 end
-##
-varify_arrayvars(ref_to_getindex(part_var_expr))
 
-function replace_vars(expr)
-    return varify_arrayvars(ref_to_getindex(varify_arrayelems(varify_scalars(expr))))
-end

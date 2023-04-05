@@ -47,6 +47,19 @@ function find_variables_on_lhs(expr::Expr, env::Dict)
     end
 end
 
+"""
+    check_idxs(v_name::Symbol, idxs::Array, env::Dict)
+
+Check if the indices are valid. The indices can be either numbers, unit ranges, or colons. If the variable is a data array,
+check if the indices are out of bound.
+
+# Examples
+```jldoctest
+julia> check_idxs(:x, [1:2,], Dict(:x => [1, missing]))
+ERROR: Some elements of x[1:2] are missing, some are not.
+[...]
+```
+"""
 function check_idxs(v_name::Symbol, idxs::Array, env::Dict)
     # check if some index is not resolved
     unresolved_indices = findall(x -> !isa(x, Union{Number, UnitRange, Colon}), idxs)
@@ -73,6 +86,13 @@ function check_idxs(v_name::Symbol, idxs::Array, env::Dict)
     if !isempty(colon_idxs)
         if !haskey(v_name, env)
             error("Implicit indexing with colon is only supported when the array is a data array.")
+        end
+    end
+    # if the variable is multi-dimensional and data, check they must all be missing or all provided
+    if v_name in keys(env) && any(x -> x isa Union{UnitRange, Colon}, idxs)
+        vs = env[v_name][idxs...]
+        if !all(ismissing, vs) && !all(!ismissing, vs)
+            error("Some elements of $v_name[$(idxs...)] are missing, some are not.")
         end
     end
 end
@@ -105,12 +125,23 @@ function post_process(pass::CollectVariables, expr, env::Dict)
         k in keys(env) && continue # skip data arrays
         numdims = length(v[1].indices)
         @assert all(x -> length(x.indices) == numdims, v) "$k dimension mismatch."
-        array_size = Vector(undef, numdims)
+        array_size = Vector(falseundef, numdims)
         for i in 1:numdims
             array_size[i] = maximum(x -> isa(x.indices[i], Number) ? x.indices[i] : x.indices[i].stop, v)
         end
         array_sizes[k] = array_size
     end
+
+    # check collision/redefinition by generating a map indicating which elements are assigned. the bit map is also used to check
+    # that variable used on the rhs is defined on the lhs.
+    array_bitmap = Dict([k => BitArray(undef, v...) for (k, v) in array_sizes])
+    for (k, v) in array_elements
+        k in keys(env) && continue # skip data arrays
+        # TODO:
+    end
+
+
+
 
     return vars, var_types, array_sizes
 end
