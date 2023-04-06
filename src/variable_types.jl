@@ -1,6 +1,7 @@
 """
     Var
-A variable type that can be used to represent a scalar or an array element.
+
+A lightweight type for representing variables in a model.
 """
 abstract type Var end
 
@@ -19,16 +20,16 @@ struct ArrayVar{N} <: Var
     indices::NTuple{N, Union{Int, UnitRange, Colon}}
 end
 
-isscalar(v::Var) = v isa Scalar || v isa ArrayElement
-
-Base.size(::Scalar) = ()
-Base.size(::ArrayElement) = ()
-Base.size(v::ArrayVar) = Tuple(map(length, v.indices))
-
 Var(name::Symbol) = Scalar(name, ())
-Var(name::Symbol, index::Int) = ArrayElement(name, (index))
-function Var(name::Symbol, indices)
-    all(x -> x isa Number && isinteger(x), indices) && return ArrayElement(name, indices)
+function Var(name::Symbol, indices::NTuple)
+    indices = map(indices) do i
+        if i isa AbstractFloat
+            isinteger(i) && return Int(i)
+            error("Indices must be integers.")
+        end
+        return i
+    end
+    all(x -> x isa Integer, indices) && return ArrayElement(name, indices)
     return ArrayVar(name, indices)
 end
 
@@ -40,6 +41,7 @@ end
 function hash(v::Var, h::UInt)
     return hash(v.name, hash(isscalar(v) ? false : v.indices, h))
 end
+
 function Base.:(==)(v1::Var, v2::Var)
     typeof(v1) != typeof(v2) && return false
     return v1.name == v2.name && v1.indices == v2.indices
@@ -62,20 +64,19 @@ function scalarize(v::Var)
 end
 
 function eval(v::Var, env::Dict)
-    haskey(env, v.name) || return nothing
-    if isscalar(v)
-        value = env[v.name]
-        return ismissing(value) ? nothing : value
-    else
-        value = env[v.name][v.indices...]
-        if any(ismissing, value)
-            return nothing
-        else
-            return value
-        end
-    end
+    !haskey(env, v.name) && return nothing
+    v isa Scalar && return env[v.name]
+    
+    value = env[v.name][v.indices...]
+    any(ismissing, value) && return nothing
+    return value
 end
 
-function VarName(v::Var)
-    return eval(AbstractPPL.drop_escape(AbstractPPL.varname(Meta.parse(string(Symbol(v))))))
+function varname(v::Scalar)
+    lens = AbstractPPL.IdentityLens()
+    return AbstractPPL.VarName{v.name}(lens)
+end
+function varname(v::Var)
+    lens = AbstractPPL.IndexLens(v.indices)
+    return AbstractPPL.VarName{v.name}(lens)
 end
