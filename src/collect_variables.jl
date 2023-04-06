@@ -1,7 +1,6 @@
 @enum VariableTypes begin
     Logical
     Stochastic
-    TransformedStochastic # stochastic variable that is transformed by a deterministic function
 end
 
 """
@@ -9,14 +8,13 @@ end
 
 This pass collects all the possible variables appear on the LHS of both logical and stochastic assignments. Collecting the 
 variable serves two purpose: 1) all the variables used on the RHS must be defined on the LHS or specified in the data; 2) we need all
-the array elements to determine the size of the array variables on the RHS. The pass also collect information about the 
-variable types, i.e., logical or stochastic.
+the array elements to determine the size of the array variables on the RHS.
 """
 struct CollectVariables <: CompilerPass
-    vars::Set{Var}
-    var_types::Dict{Var, VariableTypes}
+    vars::Dict{Var, VariableTypes}
+    transformed_variables::Dict{Var, Union{Real, Array{<:Real}}}
 end
-CollectVariables() = CollectVariables(Set{Var}(), Dict{Var, VariableTypes}())
+CollectVariables() = CollectVariables(Dict{Var, VariableTypes}(), Dict{Var, Union{Real, Array{<:Real}}}())
 
 """
     find_variables_on_lhs(expr, env)
@@ -38,13 +36,9 @@ ERROR: Some indices on the lhs can't be fully resolved. Argument 1: f(y).
 """
 find_variables_on_lhs(e::Symbol, ::Dict) = Var(e)
 function find_variables_on_lhs(expr::Expr, env::Dict)
-    if Meta.isexpr(expr, :call)
-        return find_variables_on_lhs(expr.args[2], env)
-    else # Meta.isexpr(expr, :ref)
-        idxs = map(x -> eval(x, env), expr.args[2:end])
-        check_idxs(expr.args[1], idxs, env)
-        return Var(expr.args[1], Tuple(idxs))
-    end
+    @assert Meta.isexpr(expr, :ref)
+    idxs = map(x -> eval(x, env), expr.args[2:end])
+    return Var(expr.args[1], Tuple(idxs))
 end
 
 """
@@ -55,12 +49,12 @@ check if the indices are out of bound.
 
 # Examples
 ```jldoctest
-julia> check_idxs(:x, [1:2,], Dict(:x => [1, missing]))
-ERROR: Some elements of x[1:2] are missing, some are not.
+julia> check_idxs(:x, (1:2,), Dict(:x => [1, missing]))
+ERROR: Some elements of x[1:2] are specified by data, some are not.
 [...]
 ```
 """
-function check_idxs(v_name::Symbol, idxs::Array, env::Dict)
+function check_idxs(v_name::Symbol, idxs::NTuple, env::Dict)
     # check if some index is not resolved
     unresolved_indices = findall(x -> !isa(x, Union{Number, UnitRange, Colon}), idxs)
     if !isempty(unresolved_indices)
@@ -98,25 +92,26 @@ function check_idxs(v_name::Symbol, idxs::Array, env::Dict)
 end
 
 function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
-    (t, t_) = Meta.isexpr(expr, :(=)) ? (Logical, Stochastic) : (Stochastic, Logical)
-    v = find_variables_on_lhs(expr.args[1], env)
-    isnothing(eval(v, env)) || Meta.isexpr(expr, :(=)) && error("$v is data, can't be assigned to.")
-    push!(pass.vars, v)
-    if !haskey(pass.var_types, v) 
-        pass.var_types[v] = t
-    elseif pass.var_types[v] == t_
-        pass.var_types[v] = TransformedStochastic
-    else 
+    lhs_expr, rhs_expr = expr.args[1:2]
+
+    v = find_variables_on_lhs(Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env)
+    !isa(v, Scalar) && check_idxs(v.name, v.indices, env)
+    !isnothing(eval(v, env)) && Meta.isexpr(expr, :(=)) && error("$v is data, can't be assigned to.")
+    
+    rhs = eval(rhs_expr, env)
+    is_transformed_var = rhs isa Union{Number, Array{<:Number}} ? ture : false
+    is_transformed_var && pass.transformed_variables[v] = rhs
+
+    var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
+    haskey(pass.vars, v) && (var_type == pass.vars[v] || !is_transformed_var) && 
         error("Repeated assignment to $v.")
-    end
+
+    pass.vars[v] = var_type
 end
 
 function post_process(pass::CollectVariables, expr, env::Dict)
-    vars = pass.vars
-    var_types = pass.var_types
-
-    array_elements = Dict([v.name => [] for v in vars if v.indices != ()])    
-    for v in vars
+    array_elements = Dict([v.name => [] for v in pass.vars if v.indices != ()])    
+    for v in pass.vars
         v.indices != () && push!(array_elements[v.name], v)
     end
 
@@ -125,23 +120,61 @@ function post_process(pass::CollectVariables, expr, env::Dict)
         k in keys(env) && continue # skip data arrays
         numdims = length(v[1].indices)
         @assert all(x -> length(x.indices) == numdims, v) "$k dimension mismatch."
-        array_size = Vector(falseundef, numdims)
+        array_size = Vector(undef, numdims)
         for i in 1:numdims
             array_size[i] = maximum(x -> isa(x.indices[i], Number) ? x.indices[i] : x.indices[i].stop, v)
         end
         array_sizes[k] = array_size
     end
 
-    # check collision/redefinition by generating a map indicating which elements are assigned. the bit map is also used to check
-    # that variable used on the rhs is defined on the lhs.
-    array_bitmap = Dict([k => BitArray(undef, v...) for (k, v) in array_sizes])
-    for (k, v) in array_elements
-        k in keys(env) && continue # skip data arrays
-        # TODO:
+    transformed_variables = Dict()
+    for tv in pass.transformed_variables
+        if tv isa Scalar 
+            transformed_variables[tv] = pass.transformed_variables[tv]
+        else
+            !haskey(transformed_variables, tv.name) && transformed_variables[tv.name] = fill(missing, array_sizes[tv.name]...)
+            transformed_variables[tv.name][tv.indices...] .= pass.transformed_variables[tv]
+        end
     end
 
+    # scalar is already checked in `assignment!`
+    logical_bitmap = Dict([k => falses(v...) for (k, v) in array_sizes])
+    stochastic_bitmap = deepcopy(logical_bitmap)
+    for (k, v) in vars
+        k isa Scalar && continue
+        k.name in keys(env) && continue # skip data arrays
+        bitmap = k isa Logical ? logical_bitmap : stochastic_bitmap
+        for v_ in scalarize(v)
+            if bitmap[v_.name][v_.indices...]
+                error("Repeated assignment to $v_.")
+            else
+                bitmap[e_.name][e_.indices...] = true
+            end
+        end
+    end
 
+    # corner case: x[1:2] = something, x[3] = something, x[1:3] ~ dmnorm()
+    overlap = Dict()
+    for k in keys(logical_bitmap)
+        overlap[k] = xor.(logical_bitmap, stochastic_bitmap)
+    end
 
+    for (k, v) in overlap
+        if any(v)
+            idxs = findall(v)
+            for i in idxs
+                !haskey(transformed_variables, k) && error("Logical and stochastic variables overlap on $k[$(i...)].")
+                transformed_variables[k][i...]!= missing && continue
+                error("Logical and stochastic variables overlap on $k[$(i...)].")
+            end
+        end
+    end
 
-    return vars, var_types, array_sizes
+    # used to check if a variable is defined on the lhs
+    array_bitmap = Dict()
+    for k in keys(logical_bitmap)
+        array_bitmap[k] = &.(logical_bitmap, stochastic_bitmap)
+    end
+    
+    return vars, array_sizes
 end
