@@ -93,7 +93,7 @@ initializations = Dict(
 
 ##
 
-vars, array_map, array_sizes = program!(CollectVariables(), model_def, data);
+vars, array_sizes, transformed_variables, array_bitmap = program!(CollectVariables(), model_def, data);
 dep_graph = program!(DependencyGraph(vars, array_map), model_def, data);
 node_args, f_exprs, link_functions = program!(
     NodeFunctions(vars, array_map), model_def, data

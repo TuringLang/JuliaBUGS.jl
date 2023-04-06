@@ -56,9 +56,7 @@ end
 """
     CollectVariables
 
-This pass collects all the possible variables appear on the LHS of both logical and stochastic assignments. Collecting the 
-variable serves two purpose: 1) all the variables used on the RHS must be defined on the LHS or specified in the data; 2) we need all
-the array elements to determine the size of the array variables on the RHS.
+This pass collects all the possible variables appear on the LHS of both logical and stochastic assignments. 
 """
 struct CollectVariables <: CompilerPass
     vars::Dict{Var, VariableTypes}
@@ -78,10 +76,6 @@ Var(:x, [1, 2])
 
 julia> find_variables_on_lhs(:(x[1, 2:3]), Dict())
 Var(:x, [1, 2:3])
-
-julia> find_variables_on_lhs(:(x[f(y), 2:3]), Dict())
-ERROR: Some indices on the lhs can't be fully resolved. Argument 1: f(y). 
-[...]
 ```
 """
 find_variables_on_lhs(e::Symbol, ::Dict) = Var(e)
@@ -101,6 +95,10 @@ check if the indices are out of bound.
 ```jldoctest
 julia> check_idxs(:x, (1:2,), Dict(:x => [1, missing]))
 ERROR: Some elements of x[1:2] are specified by data, some are not.
+[...]
+
+julia> check_idxs(:x, (f(y), 2:3)), Dict())
+ERROR: Some indices on the lhs can't be fully resolved. Argument 1: f(y). 
 [...]
 ```
 """
@@ -148,20 +146,24 @@ function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
     !isa(v, Scalar) && check_idxs(v.name, v.indices, env)
     !isnothing(eval(v, env)) && Meta.isexpr(expr, :(=)) && error("$v is data, can't be assigned to.")
     
-    rhs = eval(rhs_expr, env)
-    is_transformed_var = (rhs isa Union{Number, Array{<:Number}}) ? ture : false
-    is_transformed_var && (pass.transformed_variables[v] = rhs)
-
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
-    haskey(pass.vars, v) && (var_type == pass.vars[v] || !is_transformed_var) && error("Repeated assignment to $v.")
-
-    pass.vars[v] = haskey(pass.vars, v) ? Stochastic : var_type
+    haskey(pass.vars, v) && var_type == pass.vars[v] && error("Repeated assignment to $v.")
+    if var_type == Logical
+        rhs = eval(rhs_expr, env)
+        can_evaluate = (rhs isa Union{Number, Array{<:Number}}) ? true : false
+        can_evaluate && (pass.transformed_variables[v] = rhs)
+        haskey(pass.vars, v) && !can_evaluate && 
+            error("$v is assigned to by both logical and stochastic assignments, 
+            only allowed when the variable is a transformation of data.")
+        haskey(pass.vars, v) && (var_type = Stochastic)
+    end
+    pass.vars[v] = var_type
 end
 
 function post_process(pass::CollectVariables, expr, env::Dict)
-    array_elements = Dict([v.name => [] for v in pass.vars if v.indices != ()])    
-    for v in pass.vars
-        v.indices != () && push!(array_elements[v.name], v)
+    array_elements = Dict([v.name => [] for v in keys(pass.vars) if v.indices != ()])
+    for v in keys(pass.vars)
+        !isa(v, Scalar) && push!(array_elements[v.name], v)
     end
 
     array_sizes = Dict{Symbol, Vector{Int}}()
@@ -177,27 +179,35 @@ function post_process(pass::CollectVariables, expr, env::Dict)
     end
 
     transformed_variables = Dict()
-    for tv in pass.transformed_variables
-        if tv isa Scalar 
+    for tv in keys(pass.transformed_variables)
+        if tv isa Scalar
             transformed_variables[tv] = pass.transformed_variables[tv]
         else
-            !haskey(transformed_variables, tv.name) && transformed_variables[tv.name] = fill(missing, array_sizes[tv.name]...)
-            transformed_variables[tv.name][tv.indices...] .= pass.transformed_variables[tv]
+            if !haskey(transformed_variables, tv.name)
+                tvs = fill(missing, array_sizes[tv.name]...)
+                transformed_variables[tv.name] = convert(Array{Union{Missing, Number}}, tvs)
+            end
+            transformed_variables[tv.name][tv.indices...] = pass.transformed_variables[tv]
+        end
+    end
+    for (k, v) in transformed_variables
+        if !any(ismissing, v)
+            transformed_variables[k] = convert(Array{Number}, v)
         end
     end
 
     # scalar is already checked in `assignment!`
     logical_bitmap = Dict([k => falses(v...) for (k, v) in array_sizes])
     stochastic_bitmap = deepcopy(logical_bitmap)
-    for (k, v) in vars
+    for (k, v) in pass.vars
         k isa Scalar && continue
         k.name in keys(env) && continue # skip data arrays
-        bitmap = k isa Logical ? logical_bitmap : stochastic_bitmap
-        for v_ in scalarize(v)
+        bitmap = k == Logical ? logical_bitmap : stochastic_bitmap
+        for v_ in scalarize(k)
             if bitmap[v_.name][v_.indices...]
                 error("Repeated assignment to $v_.")
             else
-                bitmap[e_.name][e_.indices...] = true
+                bitmap[v_.name][v_.indices...] = true
             end
         end
     end
@@ -205,7 +215,7 @@ function post_process(pass::CollectVariables, expr, env::Dict)
     # corner case: x[1:2] = something, x[3] = something, x[1:3] ~ dmnorm()
     overlap = Dict()
     for k in keys(logical_bitmap)
-        overlap[k] = xor.(logical_bitmap, stochastic_bitmap)
+        overlap[k] = logical_bitmap[k]  .⊽ stochastic_bitmap[k]
     end
 
     for (k, v) in overlap
@@ -222,8 +232,8 @@ function post_process(pass::CollectVariables, expr, env::Dict)
     # used to check if a variable is defined on the lhs
     array_bitmap = Dict()
     for k in keys(logical_bitmap)
-        array_bitmap[k] = &.(logical_bitmap, stochastic_bitmap)
+        array_bitmap[k] = logical_bitmap[k] .| stochastic_bitmap[k]
     end
     
-    return vars, array_sizes
+    return pass.vars, array_sizes, transformed_variables, array_bitmap
 end

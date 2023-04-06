@@ -39,7 +39,7 @@ function Base.Symbol(v::Var)
 end
 
 function hash(v::Var, h::UInt)
-    return hash(v.name, hash(isscalar(v) ? false : v.indices, h))
+    return hash(v.name, hash(v.indices, h))
 end
 
 function Base.:(==)(v1::Var, v2::Var)
@@ -71,6 +71,23 @@ function eval(v::Var, env::Dict)
     any(ismissing, value) && return nothing
     return value
 end
+
+# function eval(v::Var, env::Dict)
+#     haskey(env, v.name) || return v
+#     v isa Scalar && return env[v.name]
+    
+#     value = env[v.name][v.indices...]
+#     if any(ismissing, value)
+#         ret_value = Array{Union{Var, Number}}(undef, size(value)...)
+#         scalarized_vars = scalarize(v)
+#         for i in eachindex(value)
+#             value[i] === missing && (ret_value[i] = scalarized_vars[i])
+#         end
+#         return ret_value
+#     else
+#         return value
+#     end
+# end
 
 function varname(v::Scalar)
     lens = AbstractPPL.IdentityLens()
