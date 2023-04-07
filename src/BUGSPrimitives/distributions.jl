@@ -19,6 +19,7 @@ export dnorm,
     dmt,
     dwish,
     ddirich,
+    # Discrete distributions
     dbern,
     dbin,
     dcat,

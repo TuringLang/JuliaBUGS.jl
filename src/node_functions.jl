@@ -1,28 +1,12 @@
 struct NodeFunctions{VT} <: CompilerPass
     vars::VT
-    var_types::Dict
     array_sizes::Dict
-    transformed_variables::Dict
-    link_functions::Dict
-    logical_node_args::Dict
-    logical_node_f_exprs::Dict
-    stochastic_node_args::Dict
-    stochastic_node_f_exprs::Dict
-end
-NodeFunctions(vars, var_types, array_sizes) = NodeFunctions(
-    vars,
-    var_types,
-    array_sizes,
-    Dict(),
-    Dict(),
-    Dict(),
-    Dict(),
-    Dict(),
-    Dict(),
-)
+    array_bitmap::Dict
 
-try_case_to_int(x::Integer) = x
-try_case_to_int(x::AbstractFloat) = isinteger(x) ? Int(x) : x
+    link_functions::Dict
+    node_args::Dict
+    node_f_exprs::Dict
+end
 
 # Generate an expression to reconstruct a given distribution object
 function toexpr(dist::Distributions.Distribution)
@@ -31,29 +15,204 @@ function toexpr(dist::Distributions.Distribution)
     return Expr(:call, dist_type, dist_params...)
 end
 
+function getindex_to_ref(expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if Meta.isexpr(sub_expr, :call) && sub_expr.args[1] == :getindex
+            return Expr(:ref, sub_expr.args[2:end]...)
+        else
+            return sub_expr
+        end
+    end
+end
+
+"""
+    varify_scalars(expr)
+
+Convert all symbols in `expr` to `Var`s.
+
+# Examples
+
+```jldoctest
+julia> expr = :(a + b + c) |> dump
+Expr
+  head: Symbol call
+  args: Array{Any}((4,))
+    1: Symbol +
+    2: ArrayElement{0}
+      name: Symbol a
+      indices: Tuple{} ()
+    3: ArrayElement{0}
+      name: Symbol b
+      indices: Tuple{} ()
+    4: ArrayElement{0}
+      name: Symbol c
+      indices: Tuple{} ()
+```
+"""
+function varify_scalars(expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if MacroTools.@capture(sub_expr, f_(args__))
+            for (i, arg) in enumerate(args)
+                if arg isa Symbol && arg != :nothing
+                    args[i] = Var(arg)
+                else
+                    args[i] = varify_scalars(arg)
+                end
+            end
+            return Expr(:call, f, args...)
+        else
+            return sub_expr
+        end
+    end
+end
+
+"""
+    varify_arrayelems(expr)
+
+Convert all array elements in `expr` to `Var`s.
+
+# Examples
+
+```jldoctest
+julia> expr = JuliaBUGS.eval(:(a[1, 2] + b[1, 1:2]), Dict());
+
+julia> varify_arrayelems(expr) # b[1, 1:2] is scalarized
+:(a[1, 2] + Var[b[1, 1], b[1, 2]])
+```
+"""
+function varify_arrayelems(expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if MacroTools.@capture(sub_expr, f_(args__))
+            for (i, arg) in enumerate(args)
+                if Meta.isexpr(arg, :ref) && all(x -> x isa Union{Number, UnitRange, Colon}, arg.args[2:end])
+                    if all(x -> x isa Number, arg.args[2:end])
+                        args[i] = Var(arg.args[1], Tuple(arg.args[2:end]))
+                    else
+                        args[i] = scalarize(Var(arg.args[1], Tuple(arg.args[2:end])))
+                    end
+                else
+                    args[i] = varify_arrayelems(arg)
+                end
+            end
+            return Expr(:call, f, args...)
+        else
+            return sub_expr
+        end
+    end
+end
+
+"""
+    varify_arrayvars(expr)
+
+Convert all array variables in `expr` to `Var`s.
+
+# Examples
+
+```jldoctest
+julia> expr = :(x[y[1] + 1] + 1); evaled_expr = JuliaBUGS.eval(expr, Dict());
+
+julia> part_var_expr = varify_arrayelems(varify_scalars(evaled_expr));
+
+julia> varify_arrayvars(ref_to_getindex(part_var_expr)) |> dump
+:(getindex(x[Colon()], y[1] + 1) + 1)
+'''
+"""
+function varify_arrayvars(expr)
+    return MacroTools.prewalk(expr) do sub_expr
+        if MacroTools.@capture(sub_expr, f_(args__))
+            if f == :getindex
+                @assert !all(x -> x isa Union{Number, UnitRange, Colon}, args[2:end])
+                # @assert !isa(args[1], Var) # postwalk may revisit the same code 
+                args[1] isa Var || (args[1] = Var(args[1], Tuple([Colon() for i in 1:length(args)-1])))
+            end
+            for (i, arg) in enumerate(args)
+                if arg isa Var || arg == Colon()
+                    continue
+                end
+                args[i] = varify_arrayvars(arg)
+            end
+            return Expr(:call, f, args...)
+        else
+            return sub_expr
+        end
+    end
+end
+
+try_case_to_int(x::Integer) = x
+try_case_to_int(x::AbstractFloat) = isinteger(x) ? Int(x) : x
+
 # by substituting all the variables in an expression with `Var`s, later we can filter out the variables
 function replace_vars(expr)
     return varify_arrayvars(ref_to_getindex(varify_arrayelems(varify_scalars(expr))))
 end
 
+"""
+    concretize_colon(expr, array_sizes)
+
+Replace all `Colon()`s in `expr` with the corresponding array size.
+
+# Examples
+
+```jldoctest
+julia> JuliaBUGS.concretize_colon(:(f(x[1, :])), Dict(:x => [2, 3]))
+:(f(x[1, 3]))
+```
+"""
+function concretize_colon(expr::Expr, array_sizes) 
+    return MacroTools.postwalk(expr) do sub_expr
+        if MacroTools.@capture(sub_expr, x_[idx__])
+            for i in 1:length(idx)
+                if idx[i] == :(:)
+                    idx[i] = array_sizes[x][i]
+                end
+            end
+            return Expr(:ref, x, idx...)
+        end
+        return sub_expr
+    end
+end
+
+# TODO: can merge transformed_variables with data to get env, require to know what are transformed variables, and what are second-order constant propagations
 function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
     lhs_expr, rhs_expr = expr.args[1:2]
+    var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
-    link_function = Meta.isexpr(lhs_expr, :call) ? lhs.args[1] : identity
-    l_var = find_variables_on_lhs(Meta.isexpr(lhs_expr, :call) ? lhs.args[2] : lhs_expr, env)
+    link_function = Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[1] : identity
+    lhs_var = find_variables_on_lhs(Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env)
     
-    evaluated_rhs = eval(rhs_expr, env)
-    if evaluated_rhs isa Number || evaluated_rhs isa AbstractArray # transformed variables, treated as data later
-        # TODO: assign value to pass.transformed_variables
-        # TODO: generated quantities and forward samplings are handled at the graph level -- they are leafs
-    elseif evaluated_rhs isa Symbol
-        @assert isscalar(l_var)
-        # TODO:  
-    elseif Meta.isexpr(evaluated_expr, :ref) && all(x -> x isa Union{Number, UnitRange, Colon}, evaluated_expr.args[2:end])
-        # TODO: check if the size match with lhs, in case of Colon indexing, use pass.array_sizes
-        # TODO: rhs is not evaled to concrete value, two possibility: (1) data, but contains missing; (2) another variable
-    elseif isa(evaled_var, Distributions.Distribution)
-        # TODO: use `toexpr` to get the expression to reconstruct the distribution; alternatively, try use `rhs_expr`, but need to handle possible data variables
+    rhs = eval(concretize_colon(rhs_expr, pass.array_sizes), env)
+    rhs isa Union{Number, Array{<:Number}} && return
+
+    if rhs isa Symbol
+        @assert lhs isa Union{Scalar, ArrayElement}
+        node_function = :identity
+        node_args = [Var(rhs)]
+    elseif Meta.isexpr(rhs, :ref) && all(x -> x isa Union{Number, UnitRange}, rhs.args[2:end])
+        rhs_var = Var(rhs.args[1], Tuple(rhs.args[2:end]))
+        rhs_array_var = Var(rhs.args[1], Tuple(pass.array_sizes[rhs.args[1]]))
+        size(rhs_var) == size(lhs_var) || error("Size mismatch between lhs and rhs at expression $expr")
+        if lhs_var isa ArrayElement
+            node_function = :identity
+            node_args = [lhs_var]
+            dependencies = [rhs_var]
+        else
+            # rhs is not evaluated into a concrete value, then at least some elements of the rhs array are not data
+            evaled_rhs_var = eval_var(rhs, env)
+            non_data_vars = filter(x -> x isa Var, rhs)
+            for v in non_data_vars
+                @assert pass.array_bitmap[v.name][v.indices...] "Variable $v is not defined."
+            end
+            # fine-grain dependency is guaranteed
+            node_function = MacroTools.@q function $(Symbol(lhs))($(rhs_var.name))
+                return $(rhs_var.name)[$(rhs_var.indices...)]
+            end
+            node_args = [rhs_array_var]
+            dependencies = non_data_vars
+        end
+    elseif isa(rhs, Distributions.Distribution)
+        node_function = Expr(rhs_expr.head, rhs_expr.args[1], map(ex -> eval(ex, env), rhs_expr.args[2:end])...)
+        node_args = []
+        dependencies = []
     else
         replaced_expr = replace_vars(evaluated_expr, array_map, env)
 
@@ -99,15 +258,15 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
         r_func, r_var_args = f_expr, keys(args)
     end
 
-    pass.link_functions[l_var] = link_function
+    pass.link_functions[rhs] = link_function
     if expr.head == :(=)
-        @assert !in(l_var, keys(pass.logical_node_args)) "Repeated assignment to $l_var"
-        pass.logical_node_args[l_var] = r_var_args
-        pass.logical_node_f_exprs[l_var] = r_func
+        @assert !in(rhs, keys(pass.logical_node_args)) "Repeated assignment to $rhs"
+        pass.logical_node_args[rhs] = r_var_args
+        pass.logical_node_f_exprs[rhs] = r_func
     else
         @assert expr.head == :(~)
-        pass.stochastic_node_args[l_var] = r_var_args
-        pass.stochastic_node_f_exprs[l_var] = r_func
+        pass.stochastic_node_args[rhs] = r_var_args
+        pass.stochastic_node_f_exprs[rhs] = r_func
     end
     return nothing
 end

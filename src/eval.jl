@@ -52,7 +52,7 @@ function eval(var::Expr, env::Dict)
             return ismissing(value) ? Expr(:ref, var.args[1], idxs...) : value
         end
         return Expr(:ref, var.args[1], idxs...)
-    else
+    else # function call
         args = map(ex -> eval(ex, env), var.args[2:end])
         var_with_evaled_arg = Expr(var.head, var.args[1], args...)
         evaled_var = var_with_evaled_arg

@@ -54,6 +54,15 @@ include("compiler_pass.jl")
 include("node_functions.jl")
 include("logdensityproblems.jl")
 
+function check_data(data)
+    for (k, v) in data
+        if !isa(v, Array)
+            v == missing && throw(ArgumentError("missing data: $k"))
+        end
+    end
+end
+
+
 function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
     return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
 end
@@ -65,6 +74,8 @@ function compile(
     # data should not be put in trace, may inflate the size of the trace
     # we can use the size of data array during compilation, and shape of data arrays will not change during execution
     # value of data array can be changed during execution
+
+    check_data(data)
     
     vars, array_map, var_types, missing_elements = program!(
         CollectVariables(), model_def, data
