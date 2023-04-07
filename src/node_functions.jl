@@ -138,6 +138,36 @@ function varify_arrayvars(expr)
     end
 end
 
+function find_vars(x::Expr, array_sizes)
+    args, deps = Set(), Set()
+    if Meta.isexpr(x, :ref) && all(x -> x isa Union{Number, UnitRange}, rhs.args[2:end])
+        push!(deps, Var(x.args[1], Tuple(x.args[2:end])))
+        push!(args, Var(x.args[1], Tuple([1:s for s in array_sizes[x.args[1]]])))
+        return :identity, [Var(x.args[1], Tuple(x.args[2:end]))]
+    else
+        deps = []
+        if x.head == :call
+            f = x.args[1]
+            args = x.args[2:end]
+            for arg in args
+                if arg isa Symbol
+                    push!(deps, Var(arg))
+                elseif arg isa Expr
+                    if Meta.isexpr(arg, :ref) && all(x -> x isa Union{Number, UnitRange}, arg.args[2:end])
+                        push!(deps, Var(arg.args[1], Tuple(arg.args[2:end])))
+                    else
+                    end
+                end
+            end
+            
+
+        else # x.head == :ref
+            var = x.args[1]
+            idxs = x.args[2:end]
+        end
+    end
+end
+
 try_case_to_int(x::Integer) = x
 try_case_to_int(x::AbstractFloat) = isinteger(x) ? Int(x) : x
 
@@ -145,6 +175,8 @@ try_case_to_int(x::AbstractFloat) = isinteger(x) ? Int(x) : x
 function replace_vars(expr)
     return varify_arrayvars(ref_to_getindex(varify_arrayelems(varify_scalars(expr))))
 end
+
+#TODO: varify should get the dependencies and return course-grained exprs
 
 """
     concretize_colon(expr, array_sizes)
@@ -163,7 +195,7 @@ function concretize_colon(expr::Expr, array_sizes)
         if MacroTools.@capture(sub_expr, x_[idx__])
             for i in 1:length(idx)
                 if idx[i] == :(:)
-                    idx[i] = array_sizes[x][i]
+                    idx[i] = Expr(:call, :(:), 1, array_sizes[x][i])
                 end
             end
             return Expr(:ref, x, idx...)
@@ -171,6 +203,8 @@ function concretize_colon(expr::Expr, array_sizes)
         return sub_expr
     end
 end
+
+@inline create_array_var(n, array_sizes) = Var(n, Tuple([1:s for s in array_sizes[s]]))
 
 # TODO: can merge transformed_variables with data to get env, require to know what are transformed variables, and what are second-order constant propagations
 function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
@@ -180,7 +214,8 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
     link_function = Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[1] : identity
     lhs_var = find_variables_on_lhs(Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env)
     
-    rhs = eval(concretize_colon(rhs_expr, pass.array_sizes), env)
+    rhs_expr = concretize_colon(rhs_expr, pass.array_sizes)
+    rhs = eval(rhs_expr, env)
     rhs isa Union{Number, Array{<:Number}} && return
 
     if rhs isa Symbol
@@ -189,7 +224,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
         node_args = [Var(rhs)]
     elseif Meta.isexpr(rhs, :ref) && all(x -> x isa Union{Number, UnitRange}, rhs.args[2:end])
         rhs_var = Var(rhs.args[1], Tuple(rhs.args[2:end]))
-        rhs_array_var = Var(rhs.args[1], Tuple(pass.array_sizes[rhs.args[1]]))
+        rhs_array_var = create_array_var(rhs_var.name, pass.array_sizes)
         size(rhs_var) == size(lhs_var) || error("Size mismatch between lhs and rhs at expression $expr")
         if lhs_var isa ArrayElement
             node_function = :identity
@@ -209,11 +244,10 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
             node_args = [rhs_array_var]
             dependencies = non_data_vars
         end
-    elseif isa(rhs, Distributions.Distribution)
-        node_function = Expr(rhs_expr.head, rhs_expr.args[1], map(ex -> eval(ex, env), rhs_expr.args[2:end])...)
-        node_args = []
-        dependencies = []
     else
+        if isa(rhs, Distributions.Distribution) #TODO: need range to be evaluated, fix this
+            rhs = rhs_expr
+        end
         replaced_expr = replace_vars(evaluated_expr, array_map, env)
 
         args = Dict()

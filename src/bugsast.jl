@@ -393,3 +393,19 @@ function generate_loop_expr(loop)
         $remaining
     end))
 end
+
+function check_idxs(expr::Expr)
+    return MacroTools.prewalk(expr) do sub_expr
+        if MacroTools.@capture(sub_expr, x_[idxs__])
+            for idx in idxs
+                MacroTools.postwalk(idx) do ssub_expr
+                    if Meta.isexpr(ssub_expr, :call) && !in(ssub_expr.args[1], [:+, :-, :*, :/, :(:)])
+                        error("At $sub_expr: Only +, -, *, / are allowed in indexing.")
+                    end
+                    return ssub_expr
+                end
+            end
+        end
+        return sub_expr
+    end
+end

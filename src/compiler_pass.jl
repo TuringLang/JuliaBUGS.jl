@@ -29,7 +29,7 @@ function for_loop!(pass::CompilerPass, expr, env, vargs...)
     loop_var = expr.args[1].args[1]
     lb, ub = expr.args[1].args[2].args
     body = expr.args[2]
-    lb, ub = eval(lb, env), eval(ub, env)
+    lb, ub = eval_(lb, env), eval_(ub, env)
     @assert lb isa Int && ub isa Int "Only integer ranges are supported"
     for i in lb:ub
         for ex in body.args
@@ -81,7 +81,7 @@ Var(:x, [1, 2:3])
 find_variables_on_lhs(e::Symbol, ::Dict) = Var(e)
 function find_variables_on_lhs(expr::Expr, env::Dict)
     @assert Meta.isexpr(expr, :ref)
-    idxs = map(x -> eval(x, env), expr.args[2:end])
+    idxs = map(x -> eval_(x, env), expr.args[2:end])
     return Var(expr.args[1], Tuple(idxs))
 end
 
@@ -144,12 +144,12 @@ function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
 
     v = find_variables_on_lhs(Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env)
     !isa(v, Scalar) && check_idxs(v.name, v.indices, env)
-    !isnothing(eval(v, env)) && Meta.isexpr(expr, :(=)) && error("$v is data, can't be assigned to.")
+    !isnothing(eval_(v, env)) && Meta.isexpr(expr, :(=)) && error("$v is data, can't be assigned to.")
     
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
     haskey(pass.vars, v) && var_type == pass.vars[v] && error("Repeated assignment to $v.")
     if var_type == Logical
-        rhs = eval(rhs_expr, env)
+        rhs = eval_(rhs_expr, env)
         can_evaluate = (rhs isa Union{Number, Array{<:Number}}) ? true : false
         can_evaluate && (pass.transformed_variables[v] = rhs)
         haskey(pass.vars, v) && !can_evaluate && 
