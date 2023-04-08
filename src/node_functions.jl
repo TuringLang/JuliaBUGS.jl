@@ -8,179 +8,107 @@ struct NodeFunctions{VT} <: CompilerPass
     node_f_exprs::Dict
 end
 
-# Generate an expression to reconstruct a given distribution object
-function toexpr(dist::Distributions.Distribution)
-    dist_type = typeof(dist)
-    dist_params = params(dist)
-    return Expr(:call, dist_type, dist_params...)
-end
-
-function getindex_to_ref(expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if Meta.isexpr(sub_expr, :call) && sub_expr.args[1] == :getindex
-            return Expr(:ref, sub_expr.args[2:end]...)
-        else
-            return sub_expr
+# assume no Colon indexing anymore
+# by eval, get deps and args
+f(var::Number, ::Dict) = var, Set(), Set()
+f(var::UnitRange, ::Dict) = var, Set(), Set()
+f(var::Symbol, env::Dict) = haskey(env, var) ? env[var] : var, Set(), Set()
+function f(var::Expr, env::Dict)
+    deps, args = Set(), Set()
+    if Meta.isexpr(var, :ref)
+        idxs = []
+        for i in 2:length(var.args)
+            e, d, a = f(var.args[i], env)
+            push!(idxs, e)
+            union!(deps, d)
+            union!(args, a)
         end
-    end
-end
 
-"""
-    varify_scalars(expr)
-
-Convert all symbols in `expr` to `Var`s.
-
-# Examples
-
-```jldoctest
-julia> expr = :(a + b + c) |> dump
-Expr
-  head: Symbol call
-  args: Array{Any}((4,))
-    1: Symbol +
-    2: ArrayElement{0}
-      name: Symbol a
-      indices: Tuple{} ()
-    3: ArrayElement{0}
-      name: Symbol b
-      indices: Tuple{} ()
-    4: ArrayElement{0}
-      name: Symbol c
-      indices: Tuple{} ()
-```
-"""
-function varify_scalars(expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if MacroTools.@capture(sub_expr, f_(args__))
-            for (i, arg) in enumerate(args)
-                if arg isa Symbol && arg != :nothing
-                    args[i] = Var(arg)
-                else
-                    args[i] = varify_scalars(arg)
-                end
+        if all(x -> x isa Number, idxs)
+            if haskey(env, var.args[1])
+                return env[var.args[1]][idxs...], deps, args
+            else
+                push!(deps, ArrayElement(var.args[1], Tuple(idxs)))
+                push!(args, ArrayVar(var.args[1], ()))
+                return Expr(var.head, var.args[1], idxs...), deps, args
             end
-            return Expr(:call, f, args...)
-        else
-            return sub_expr
-        end
-    end
-end
 
-"""
-    varify_arrayelems(expr)
-
-Convert all array elements in `expr` to `Var`s.
-
-# Examples
-
-```jldoctest
-julia> expr = JuliaBUGS.eval(:(a[1, 2] + b[1, 1:2]), Dict());
-
-julia> varify_arrayelems(expr) # b[1, 1:2] is scalarized
-:(a[1, 2] + Var[b[1, 1], b[1, 2]])
-```
-"""
-function varify_arrayelems(expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if MacroTools.@capture(sub_expr, f_(args__))
-            for (i, arg) in enumerate(args)
-                if Meta.isexpr(arg, :ref) && all(x -> x isa Union{Number, UnitRange, Colon}, arg.args[2:end])
-                    if all(x -> x isa Number, arg.args[2:end])
-                        args[i] = Var(arg.args[1], Tuple(arg.args[2:end]))
-                    else
-                        args[i] = scalarize(Var(arg.args[1], Tuple(arg.args[2:end])))
+        elseif all(x -> x isa Union{Number, UnitRange}, idxs)
+            if haskey(env, var.args[1])
+                value = getindex(env[var.args[1]], idxs...)
+                
+                if any(ismissing, value)
+                    missing_idxs = findall(ismissing, value)
+                    for idx in missing_idxs
+                        push!(deps, ArrayElement(var.args[1], Tuple(idx)))
                     end
-                else
-                    args[i] = varify_arrayelems(arg)
                 end
+                push!(args, ArrayVar(var.args[1], ()))
+                return value, deps, args
+            else
+                push!(deps, ArrayElement(var.args[1], Tuple(idxs)))
+                push!(args, ArrayVar(var.args[1], ()))
+                return Expr(var.head, var.args[1], idxs...), deps, args
             end
-            return Expr(:call, f, args...)
-        else
-            return sub_expr
+        end
+
+        for i in idxs
+            if i isa Symbol
+                push!(deps, i)
+                push!(args, i)
+            end
+        end
+        push!(args, ArrayVar(var.args[1], ()))
+        push!(deps, ArrayVar(var.args[1], ()))
+        return Expr(var.head, var.args[1], idxs...), deps, args
+    else # function call
+        args_ = []
+        for i in 2:length(var.args)
+            e, d, a = f(var.args[i], env)
+            push!(args_, e)
+            union!(deps, d)
+            union!(args, a)
+        end
+
+        for i in args_
+            if i isa Symbol
+                push!(deps, i)
+                push!(args, i)
+            end
+        end
+
+        try
+            return eval(Expr(var.head, var.args[1], args_...)), deps, args
+        catch _
+            return Expr(var.head, var.args[1], args_...), deps, args
         end
     end
 end
 
-"""
-    varify_arrayvars(expr)
-
-Convert all array variables in `expr` to `Var`s.
-
-# Examples
-
-```jldoctest
-julia> expr = :(x[y[1] + 1] + 1); evaled_expr = JuliaBUGS.eval(expr, Dict());
-
-julia> part_var_expr = varify_arrayelems(varify_scalars(evaled_expr));
-
-julia> varify_arrayvars(ref_to_getindex(part_var_expr)) |> dump
-:(getindex(x[Colon()], y[1] + 1) + 1)
-'''
-"""
-function varify_arrayvars(expr)
-    return MacroTools.prewalk(expr) do sub_expr
-        if MacroTools.@capture(sub_expr, f_(args__))
-            if f == :getindex
-                @assert !all(x -> x isa Union{Number, UnitRange, Colon}, args[2:end])
-                # @assert !isa(args[1], Var) # postwalk may revisit the same code 
-                args[1] isa Var || (args[1] = Var(args[1], Tuple([Colon() for i in 1:length(args)-1])))
-            end
-            for (i, arg) in enumerate(args)
-                if arg isa Var || arg == Colon()
-                    continue
-                end
-                args[i] = varify_arrayvars(arg)
-            end
-            return Expr(:call, f, args...)
-        else
-            return sub_expr
-        end
-    end
-end
-
-function find_vars(x::Expr, array_sizes)
-    args, deps = Set(), Set()
-    if Meta.isexpr(x, :ref) && all(x -> x isa Union{Number, UnitRange}, rhs.args[2:end])
-        push!(deps, Var(x.args[1], Tuple(x.args[2:end])))
-        push!(args, Var(x.args[1], Tuple([1:s for s in array_sizes[x.args[1]]])))
-        return :identity, [Var(x.args[1], Tuple(x.args[2:end]))]
+# node function itself is only constproped, but not evaled
+function constprop(x, env)
+    if x isa Number
+        return x
+    elseif x isa Symbol
+        return haskey(env, x) ? env[x] : x
     else
-        deps = []
-        if x.head == :call
-            f = x.args[1]
-            args = x.args[2:end]
-            for arg in args
-                if arg isa Symbol
-                    push!(deps, Var(arg))
-                elseif arg isa Expr
-                    if Meta.isexpr(arg, :ref) && all(x -> x isa Union{Number, UnitRange}, arg.args[2:end])
-                        push!(deps, Var(arg.args[1], Tuple(arg.args[2:end])))
-                    else
-                    end
-                end
+
+        for i in 2:length(x.args)
+            if x.args[i] isa Union{Number, UnitRange}
+                x.args[i] = constprop(x.args[i], env)
+            elseif Meta.isexpr(x.args[i], :ref) && all(x -> x isa Number, x.args[i].args[2:end]) && haskey(env, x.args[i].args[1])
+                x.args[i] = env[x.args[i].args[1]][x.args[i].args[2:end]...]
+            else
+                x.args[i] = constprop(x.args[i], env)
             end
-            
-
-        else # x.head == :ref
-            var = x.args[1]
-            idxs = x.args[2:end]
         end
-    end
-end
 
-function find_deps(expr::Expr, env)
-    # we actually care about missing values now
+    end
+    return x
 end
 
 try_case_to_int(x::Integer) = x
 try_case_to_int(x::AbstractFloat) = isinteger(x) ? Int(x) : x
-
-# by substituting all the variables in an expression with `Var`s, later we can filter out the variables
-function replace_vars(expr)
-    return varify_arrayvars(ref_to_getindex(varify_arrayelems(varify_scalars(expr))))
-end
-
-#TODO: varify should get the dependencies and return course-grained exprs
 
 """
     concretize_colon(expr, array_sizes)

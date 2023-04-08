@@ -48,7 +48,6 @@ function eval_registration(ex)
 end
 
 include("bugsast.jl")
-include("eval.jl")
 include("variable_types.jl")
 include("compiler_pass.jl")
 include("node_functions.jl")

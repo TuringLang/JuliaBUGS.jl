@@ -30,39 +30,6 @@ export dnorm,
     dhyper,
     dmulti
 
-DISTRIBUTIONS = [
-    :dnorm,
-    :dlogis,
-    :dt,
-    :ddexp,
-    :dflat,
-    :dexp,
-    :dgamma,
-    :dchisqr,
-    :dweib,
-    :dlnorm,
-    :dggamma,
-    :dpar,
-    :dgev,
-    :dgpar,
-    :df,
-    :dunif,
-    :dbeta,
-    :dmnorm,
-    :dmt,
-    :dwish,
-    :ddirich,
-    :dbern,
-    :dbin,
-    :dcat,
-    :dpois,
-    :dgeom,
-    :dnegbin,
-    :dbetabin,
-    :dhyper,
-    :dmulti
-]
-export DISTRIBUTIONS
 # Support for distributions that are part of BUGS but not implemented in Distributions.jl.
 
 # Modified from https://github.com/TuringLang/Turing.jl/blob/master/src/stdlib/distributions.jl
