@@ -53,3 +53,5 @@ Also, as we discussed, the node function can also be Turing model, which makes t
 * separate generated quantities and variable transformation
 
 * white list distribution functions
+
+* manage Int or Float variables, use distribution type to determine the type

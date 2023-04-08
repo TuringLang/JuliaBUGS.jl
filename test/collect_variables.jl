@@ -1,3 +1,4 @@
+using JuliaBUGS
 using JuliaBUGS:
     CollectVariables,
     # DependencyGraph,

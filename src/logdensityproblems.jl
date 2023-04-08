@@ -299,3 +299,12 @@ function transform_samples(p::BUGSLogDensityProblem, flattened_vales::Vector)
     end
     return trace
 end
+
+# Float a custom array interface
+struct SplitArray
+    data
+    trace
+    missing_elems
+end
+# https://docs.julialang.org/en/v1/manual/interfaces/#man-interface-array
+# provide some run time protection -- data array not allowed to be modified

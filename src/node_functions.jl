@@ -8,35 +8,52 @@ struct NodeFunctions{VT} <: CompilerPass
     node_f_exprs::Dict
 end
 
-# assume no Colon indexing anymore
-# by eval, get deps and args
-f(var::Number, ::Dict) = var, Set(), Set()
-f(var::UnitRange, ::Dict) = var, Set(), Set()
-f(var::Symbol, env::Dict) = haskey(env, var) ? env[var] : var, Set(), Set()
-function f(var::Expr, env::Dict)
+"""
+    evaluate_(var, env)
+
+Evaluate `var` in the environment `env`. Return the evaluated value, the set of variables that `var` depends 
+on, and the arguments of the node function based on `var`. Assume all Colon indexing has been concretized.
+
+# Examples
+julia> evaluate_(:(x[a]), Dict())
+(:(x[a]), Set(Any[:a, x[]]), Set(Any[:a, x[]]))
+
+julia> evaluate_(:(x[a]), Dict(:a => 1))
+(:(x[1]), Set(Any[x[1]]), Set(Any[x[]]))
+
+julia> evaluate_(:(x[y[1]+1]+a+1), Dict())
+(:(x[y[1] + 1] + a + 1), Set(Any[:a, y[1], x[]]), Set(Any[:a, y[], x[]]))
+
+julia> evaluate_(:(getindex(x[1:2, 1:3], a, b)), Dict(:x => [1 2 3; 4 5 6]))
+(:(getindex([1 2 3; 4 5 6], a, b)), Set(Any[:a, :b]), Set(Any[:a, :b, x[]]))
+
+julia> evaluate_(:(getindex(x[1:2, 1:3], a, b)), Dict(:x => [1 2 missing; 4 5 6]))
+(:(getindex(Union{Missing, Int64}[1 2 missing; 4 5 6], a, b)), Set(Any[:a, :b, x[1, 3]]), Set(Any[:a, :b, x[]]))
+```
+"""
+evaluate_(var::Number, ::Dict) = var, Set(), Set()
+evaluate_(var::UnitRange, ::Dict) = var, Set(), Set()
+evaluate_(var::Symbol, env::Dict) = haskey(env, var) ? env[var] : var, Set(), Set()
+function evaluate_(var::Expr, env::Dict)
     deps, args = Set(), Set()
     if Meta.isexpr(var, :ref)
         idxs = []
         for i in 2:length(var.args)
-            e, d, a = f(var.args[i], env)
-            push!(idxs, e)
-            union!(deps, d)
-            union!(args, a)
+            e, d, a = evaluate_(var.args[i], env)
+            push!(idxs, e); union!(deps, d); union!(args, a)
         end
 
         if all(x -> x isa Number, idxs)
-            if haskey(env, var.args[1])
+            if haskey(env, var.args[1]) # data, the constant is plugged in
                 return env[var.args[1]][idxs...], deps, args
-            else
-                push!(deps, ArrayElement(var.args[1], Tuple(idxs)))
-                push!(args, ArrayVar(var.args[1], ()))
+            else # then it's a variable
+                push!(deps, ArrayElement(var.args[1], Tuple(idxs))) # add the variable for fine-grain dependency
+                push!(args, ArrayVar(var.args[1], ())) # add the corresponding array variable for node function arguments
                 return Expr(var.head, var.args[1], idxs...), deps, args
             end
-
         elseif all(x -> x isa Union{Number, UnitRange}, idxs)
             if haskey(env, var.args[1])
                 value = getindex(env[var.args[1]], idxs...)
-                
                 if any(ismissing, value)
                     missing_idxs = findall(ismissing, value)
                     for idx in missing_idxs
@@ -52,57 +69,45 @@ function f(var::Expr, env::Dict)
             end
         end
 
-        for i in idxs
-            if i isa Symbol
-                push!(deps, i)
-                push!(args, i)
-            end
+        for i in idxs # if an index is a Symbol, then it's a variable
+            i isa Symbol && (push!(deps, i); push!(args, i))
         end
         push!(args, ArrayVar(var.args[1], ()))
         push!(deps, ArrayVar(var.args[1], ()))
         return Expr(var.head, var.args[1], idxs...), deps, args
     else # function call
-        args_ = []
+        fun_args = []
         for i in 2:length(var.args)
-            e, d, a = f(var.args[i], env)
-            push!(args_, e)
-            union!(deps, d)
-            union!(args, a)
+            e, d, a = evaluate_(var.args[i], env)
+            push!(fun_args, e); union!(deps, d); union!(args, a)
         end
 
-        for i in args_
-            if i isa Symbol
-                push!(deps, i)
-                push!(args, i)
-            end
+        for a in fun_args
+            a isa Symbol && (push!(deps, a); push!(args, a))
         end
 
         try
-            return eval(Expr(var.head, var.args[1], args_...)), deps, args
+            return eval(Expr(var.head, var.args[1], fun_args...)), deps, args
         catch _
-            return Expr(var.head, var.args[1], args_...), deps, args
+            return Expr(var.head, var.args[1], fun_args...), deps, args
         end
     end
 end
 
-# node function itself is only constproped, but not evaled
+"""
+    constprop(x, env)
+
+Constant propagation for `x` in the environment `env`. Return the constant propagated expression.
+"""
+constprop(x::Number, env) = x
+constprop(x::Symbol, env) = haskey(env, x) ? env[x] : x
 function constprop(x, env)
-    if x isa Number
-        return x
-    elseif x isa Symbol
-        return haskey(env, x) ? env[x] : x
-    else
-
-        for i in 2:length(x.args)
-            if x.args[i] isa Union{Number, UnitRange}
-                x.args[i] = constprop(x.args[i], env)
-            elseif Meta.isexpr(x.args[i], :ref) && all(x -> x isa Number, x.args[i].args[2:end]) && haskey(env, x.args[i].args[1])
-                x.args[i] = env[x.args[i].args[1]][x.args[i].args[2:end]...]
-            else
-                x.args[i] = constprop(x.args[i], env)
-            end
+    for i in 2:length(x.args)
+        if Meta.isexpr(x.args[i], :ref) && all(x -> x isa Number, x.args[i].args[2:end]) && haskey(env, x.args[i].args[1])
+            x.args[i] = env[x.args[i].args[1]][x.args[i].args[2:end]...]
+        else
+            x.args[i] = constprop(x.args[i], env)
         end
-
     end
     return x
 end
@@ -122,7 +127,7 @@ julia> JuliaBUGS.concretize_colon(:(f(x[1, :])), Dict(:x => [2, 3]))
 :(f(x[1, 3]))
 ```
 """
-function concretize_colon(expr::Expr, array_sizes) 
+function concretize_colon_indexing(expr::Expr, array_sizes) 
     return MacroTools.postwalk(expr) do sub_expr
         if MacroTools.@capture(sub_expr, x_[idx__])
             for i in 1:length(idx)
@@ -146,8 +151,8 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
     link_function = Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[1] : identity
     lhs_var = find_variables_on_lhs(Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env)
     
-    rhs_expr = concretize_colon(rhs_expr, pass.array_sizes)
-    rhs = eval(rhs_expr, env)
+    rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes)
+    rhs = evaluate(rhs_expr, env)
     rhs isa Union{Number, Array{<:Number}} && return
 
     if rhs isa Symbol
@@ -164,12 +169,13 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
             dependencies = [rhs_var]
         else
             # rhs is not evaluated into a concrete value, then at least some elements of the rhs array are not data
-            evaled_rhs_var = eval_var(rhs, env)
-            non_data_vars = filter(x -> x isa Var, rhs)
+            non_data_vars = filter(x -> x isa Var, evaluate(rhs, env))
             for v in non_data_vars
                 @assert pass.array_bitmap[v.name][v.indices...] "Variable $v is not defined."
             end
             # fine-grain dependency is guaranteed
+            # TODO: if Stochastic, rhs has to be the same type
+            # if Logical, rhs can have missing values, node function probably should be finer grained 
             node_function = MacroTools.@q function $(Symbol(lhs))($(rhs_var.name))
                 return $(rhs_var.name)[$(rhs_var.indices...)]
             end
@@ -182,6 +188,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
         end
         replaced_expr = replace_vars(evaluated_expr, array_map, env)
 
+        #TODO: add type signature to args
         args = Dict()
         gen_expr = MacroTools.postwalk(replaced_expr) do sub_expr
             if sub_expr isa Var

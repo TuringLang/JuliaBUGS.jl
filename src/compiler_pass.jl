@@ -214,6 +214,7 @@ function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
     !isa(v, Scalar) && check_idxs(v.name, v.indices, env)
     is_resolved(evaluate(v, env)) && Meta.isexpr(expr, :(=)) && error("$v is data, can't be assigned to.")
     
+    # TODO: a undefined behavior: if LHS is multi dimensional, and RHS can only be partially resolved, can be fine grained 
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
     haskey(pass.vars, v) && var_type == pass.vars[v] && error("Repeated assignment to $v.")
     if var_type == Logical

@@ -249,11 +249,11 @@ const INVERSE_LINK_FUNCTION = Dict(
 function link_functions(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, f_(lhs_) = rhs_) # only transform logical assignments
-            if f in keys(INVERSE_LINK_FUNCTION)
+            if evaluate_ in keys(INVERSE_LINK_FUNCTION)
                 sub_expr.args[1] = lhs
-                sub_expr.args[2] = Expr(:call, INVERSE_LINK_FUNCTION[f], rhs)
+                sub_expr.args[2] = Expr(:call, INVERSE_LINK_FUNCTION[evaluate_], rhs)
             else
-                error("Link function $f not supported.")
+                error("Link function $evaluate_ not supported.")
             end
         end
         return sub_expr
