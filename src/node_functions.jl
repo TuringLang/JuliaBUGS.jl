@@ -114,9 +114,6 @@ function constprop(x, env)
     return x
 end
 
-try_case_to_int(x::Integer) = x
-try_case_to_int(x::AbstractFloat) = isinteger(x) ? Int(x) : x
-
 """
     concretize_colon(expr, array_sizes)
 
@@ -184,48 +181,35 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
         end
     else
         rhs_expr = constprop(rhs_expr, env)
-        _, dependencies, node_args = evaluate_dependencies(rhs_expr, env)
+        _, dependencies, node_args = evaluate_(rhs_expr, env)
 
         rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
             if @capture(sub_expr, arr_[idxs__])
-                new_idxs = [:(try_case_to_int($(idx))) for idx in idxs]
+                new_idxs = [idx isa Integer ? idx : :(Int($(idx))) for idx in idxs]
                 return Expr(:ref, arr, new_idxs...)
             end
             return sub_expr
         end
 
-        args = convert(Array{Any}, deepcopy(args))
+        args = convert(Array{Any}, deepcopy(collect(node_args)))
         for (i, arg) in enumerate(args)
             if arg isa ArrayVar
                 args[i] = Expr(:(::), arg.name, :Array)
-            elseif arg isa Scalar
-                args[i] = arg.name
+            elseif arg isa Symbol
+                continue
             else
                 error()
             end
         end
-        node_function = MacroTools.combinedef(
-            Dict(
-                :args => args,
-                :body => MacroTools.postwalk(rhs_expr) do sub_expr
-                    if @capture(sub_expr, arr_[idxs__])
-                        new_idxs = [:(try_case_to_int($(idx))) for idx in idxs]
-                        return Expr(:ref, arr, new_idxs...)
-                    end
-                    return sub_expr
-                end,
-                :kwargs => Any[],
-                :whereparams => Any[],
-            )
-        )
+        node_function = Expr(:(->), Expr(:tuple, args...), rhs_expr)
     end
 
     pass.link_functions[lhs_var] = link_function
-    pass.node_args[lhs_var] = node_args
+    pass.node_args[lhs_var] = collect(node_args)
     pass.node_functions[lhs_var] = node_function
-    pass.dependencies[lhs_var] = dependencies
+    pass.dependencies[lhs_var] = collect(dependencies)
 end
 
-function post_process(pass::NodeFunctions)
+function post_process(pass::NodeFunctions, expr, env, vargs...)
     return pass
 end
