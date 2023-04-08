@@ -87,7 +87,7 @@ function scalarize(v::Var)
 end
 
 """
-    eval_var(v::Var, env::Dict)
+    evaluate(v::Var, env::Dict)
 
 Evaluate `v` in the environment `env`. If `v` is a scalar, return the value of `v` in `env`. If `v` is an array, 
 return an array of the same size as `v` with the values of `v` in `env` and `Var`s for the missing values. If `v` 
@@ -101,7 +101,7 @@ julia> eval(Var(:x, (1:2, )), Dict(:x => [1, missing]))
   x[2]
 ```
 """
-function eval_var(v::Var, env::Dict)
+function evaluate(v::Var, env::Dict)
     haskey(env, v.name) || return v
     v isa Scalar && return env[v.name]
     if v isa ArrayElement

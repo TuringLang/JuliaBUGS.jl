@@ -62,7 +62,6 @@ function check_data(data)
     end
 end
 
-
 function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
     return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
 end

@@ -168,6 +168,10 @@ function find_vars(x::Expr, array_sizes)
     end
 end
 
+function find_deps(expr::Expr, env)
+    # we actually care about missing values now
+end
+
 try_case_to_int(x::Integer) = x
 try_case_to_int(x::AbstractFloat) = isinteger(x) ? Int(x) : x
 

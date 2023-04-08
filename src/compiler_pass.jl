@@ -29,7 +29,7 @@ function for_loop!(pass::CompilerPass, expr, env, vargs...)
     loop_var = expr.args[1].args[1]
     lb, ub = expr.args[1].args[2].args
     body = expr.args[2]
-    lb, ub = eval_(lb, env), eval_(ub, env)
+    lb, ub = evaluate(lb, env), evaluate(ub, env)
     @assert lb isa Int && ub isa Int "Only integer ranges are supported"
     for i in lb:ub
         for ex in body.args
@@ -60,9 +60,9 @@ This pass collects all the possible variables appear on the LHS of both logical 
 """
 struct CollectVariables <: CompilerPass
     vars::Dict{Var, VariableTypes}
-    transformed_variables::Dict{Var, Union{Real, Array{<:Real}}}
+    transformed_variables::Dict{Var, Union{Number, Array{<:Number}}}
 end
-CollectVariables() = CollectVariables(Dict{Var, VariableTypes}(), Dict{Var, Union{Real, Array{<:Real}}}())
+CollectVariables() = CollectVariables(Dict{Var, VariableTypes}(), Dict{Var, Union{Number, Array{<:Number}}}())
 
 """
     find_variables_on_lhs(expr, env)
@@ -81,12 +81,12 @@ Var(:x, [1, 2:3])
 find_variables_on_lhs(e::Symbol, ::Dict) = Var(e)
 function find_variables_on_lhs(expr::Expr, env::Dict)
     @assert Meta.isexpr(expr, :ref)
-    idxs = map(x -> eval_(x, env), expr.args[2:end])
+    idxs = map(x -> evaluate(x, env), expr.args[2:end])
     return Var(expr.args[1], Tuple(idxs))
 end
 
 """
-    check_idxs(v_name::Symbol, idxs::Array, env::Dict)
+    check_idxs(v_name::Symbol, idxs, env::Dict)
 
 Check if the indices are valid. The indices can be either numbers, unit ranges, or colons. If the variable is a data array,
 check if the indices are out of bound.
@@ -102,7 +102,7 @@ ERROR: Some indices on the lhs can't be fully resolved. Argument 1: f(y).
 [...]
 ```
 """
-function check_idxs(v_name::Symbol, idxs::NTuple, env::Dict)
+function check_idxs(v_name::Symbol, idxs, env::Dict)
     # check if some index is not resolved
     unresolved_indices = findall(x -> !isa(x, Union{Number, UnitRange, Colon}), idxs)
     if !isempty(unresolved_indices)
@@ -139,20 +139,87 @@ function check_idxs(v_name::Symbol, idxs::NTuple, env::Dict)
     end
 end
 
+"""
+    eval(::CollectVariables, var, env)
+
+Evaluate `expr` in the environment `env`.
+
+# Examples
+```jldoctest
+julia> evaluate(:(x[1]), Dict(:x => [1, 2, 3])) # array indexing is evaluated if possible
+1
+
+julia> evaluate(:(x[1] + 1), Dict(:x => [1, 2, 3]))
+2
+
+julia> evaluate(:(x[1:2]), Dict()) |> Meta.show_sexpr # ranges are evaluated
+(:ref, :x, 1:2)
+
+julia> evaluate(:(x[1:2]), Dict(:x => [1, 2, 3])) # ranges are evaluated
+2-element Vector{Int64}:
+ 1
+ 2
+
+julia> evaluate(:(x[1:3]), Dict(:x => [1, 2, missing])) # if an element is missing, it's returned as is
+:(x[1:3])
+
+julia> evaluate(:(x[y[1] + 1] + 1), Dict()) # if a ref expr can't be evaluated, it's returned as is
+:(x[y[1] + 1] + 1)
+
+julia> evaluate(:(sum(x[:])), Dict(:x => [1, 2, 3])) # function calls are evaluated if possible
+6
+
+julia> evaluate(:(f(1)), Dict()) # if a function call can't be evaluated, it's returned as is
+:(f(1))
+"""
+evaluate(var::Number, ::Dict) = var
+evaluate(var::UnitRange, ::Dict) = var
+evaluate(::Colon, ::Dict) = Colon()
+function evaluate(var::Symbol, env::Dict)
+    var == :(:) && return Colon()
+    return haskey(env, var) ? env[var] : var
+end
+function evaluate(var::Expr, env::Dict)
+    if Meta.isexpr(var, :ref)
+        idxs = (ex -> evaluate(ex, env)).(var.args[2:end])
+        !isa(idxs, Array) && (idxs = [idxs])
+        if all(x -> x isa Number, idxs) && haskey(env, var.args[1])
+            for i in eachindex(idxs)
+                if !isa(idxs[i], Integer) && !isinteger(idxs[i])
+                    error("Array indices must be integers or UnitRanges.")
+                end
+            end
+            return env[var.args[1]][idxs...]
+        elseif all(x -> x isa Union{Number, UnitRange, Colon, Array}, idxs) && haskey(env, var.args[1])
+            value = getindex(env[var.args[1]], idxs...) # can use `view` here
+            !any(ismissing, value) && return value
+        end
+        return Expr(var.head, var.args[1], idxs...)
+    else # function call
+        args = map(ex -> evaluate(ex, env), var.args[2:end])
+        try
+            return eval(Expr(var.head, var.args[1], args...))
+        catch _
+            return Expr(var.head, var.args[1], args...)
+        end
+    end
+end
+
+@inline is_resolved(x) = x isa Number || x isa Array{<:Number}
+
 function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
     lhs_expr, rhs_expr = expr.args[1:2]
 
     v = find_variables_on_lhs(Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env)
     !isa(v, Scalar) && check_idxs(v.name, v.indices, env)
-    !isnothing(eval_(v, env)) && Meta.isexpr(expr, :(=)) && error("$v is data, can't be assigned to.")
+    is_resolved(evaluate(v, env)) && Meta.isexpr(expr, :(=)) && error("$v is data, can't be assigned to.")
     
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
     haskey(pass.vars, v) && var_type == pass.vars[v] && error("Repeated assignment to $v.")
     if var_type == Logical
-        rhs = eval_(rhs_expr, env)
-        can_evaluate = (rhs isa Union{Number, Array{<:Number}}) ? true : false
-        can_evaluate && (pass.transformed_variables[v] = rhs)
-        haskey(pass.vars, v) && !can_evaluate && 
+        rhs = evaluate(rhs_expr, env)
+        is_resolved(rhs) && (pass.transformed_variables[v] = rhs)
+        haskey(pass.vars, v) && is_resolved(rhs) && 
             error("$v is assigned to by both logical and stochastic assignments, 
             only allowed when the variable is a transformation of data.")
         haskey(pass.vars, v) && (var_type = Stochastic)
