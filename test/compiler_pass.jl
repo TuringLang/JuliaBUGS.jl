@@ -140,3 +140,30 @@ mean(β_c_samples), std(β_c_samples) # Reference result: mean 6.186, variance 0
 mean(σ_samples), std(σ_samples) # Reference result: mean 6.092, sd 0.4672
 @test isapprox(mean(σ_samples), 6.092, atol=0.1)
 @test isapprox(std(σ_samples), 0.4672, atol=0.1)
+
+using JuliaBUGS
+using JuliaBUGS:
+    CollectVariables,
+    # DependencyGraph,
+    # NodeFunctions,
+    ArrayElement,
+    ArrayVar,
+    program!,
+    compile
+
+##
+model_def = @bugsast begin
+    for i in 1:N
+        x[i] = d[i] * 2
+        x[i] ~ dnorm(0, 1)
+    end
+end
+
+data = (
+    N = 10,
+    d = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+) |> Dict ∘ pairs
+
+##
+
+vars, array_sizes, transformed_variables, array_bitmap = program!(CollectVariables(), model_def, data);

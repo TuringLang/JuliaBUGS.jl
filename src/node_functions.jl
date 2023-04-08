@@ -5,8 +5,10 @@ struct NodeFunctions{VT} <: CompilerPass
 
     link_functions::Dict
     node_args::Dict
-    node_f_exprs::Dict
+    node_functions::Dict
+    dependencies::Dict
 end
+NodeFunctions(vars, array_sizes, array_bitmap) = NodeFunctions(vars, array_sizes, array_bitmap, Dict(), Dict(), Dict(), Dict())
 
 """
     evaluate_(var, env)
@@ -153,19 +155,22 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
     
     rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes)
     rhs = evaluate(rhs_expr, env)
-    rhs isa Union{Number, Array{<:Number}} && return
+    var_type == Logical && rhs isa Union{Number, Array{<:Number}} && return
 
     if rhs isa Symbol
         @assert lhs isa Union{Scalar, ArrayElement}
         node_function = :identity
         node_args = [Var(rhs)]
+        dependencies = [Var(rhs)]
     elseif Meta.isexpr(rhs, :ref) && all(x -> x isa Union{Number, UnitRange}, rhs.args[2:end])
+        @assert var_type == Logical # if rhs is a variable, then the expression must be logical
         rhs_var = Var(rhs.args[1], Tuple(rhs.args[2:end]))
         rhs_array_var = create_array_var(rhs_var.name, pass.array_sizes)
         size(rhs_var) == size(lhs_var) || error("Size mismatch between lhs and rhs at expression $expr")
         if lhs_var isa ArrayElement
-            node_function = :identity
-            node_args = [lhs_var]
+            @assert pass.array_bitmap[v.name][v.indices...] "Variable $v is not defined."
+            node_function = MacroTools.@q ($(rhs_var.name)::Array) -> $(rhs_var.name)[$(rhs_var.indices...)]
+            node_args = [rhs_array_var]
             dependencies = [rhs_var]
         else
             # rhs is not evaluated into a concrete value, then at least some elements of the rhs array are not data
@@ -173,140 +178,54 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
             for v in non_data_vars
                 @assert pass.array_bitmap[v.name][v.indices...] "Variable $v is not defined."
             end
-            # fine-grain dependency is guaranteed
-            # TODO: if Stochastic, rhs has to be the same type
-            # if Logical, rhs can have missing values, node function probably should be finer grained 
-            node_function = MacroTools.@q function $(Symbol(lhs))($(rhs_var.name))
-                return $(rhs_var.name)[$(rhs_var.indices...)]
-            end
+            node_function = MacroTools.@q ($(rhs_var.name)::Array) -> $(rhs_var.name)[$(rhs_var.indices...)]
             node_args = [rhs_array_var]
             dependencies = non_data_vars
         end
     else
-        if isa(rhs, Distributions.Distribution) #TODO: need range to be evaluated, fix this
-            rhs = rhs_expr
-        end
-        replaced_expr = replace_vars(evaluated_expr, array_map, env)
+        rhs_expr = constprop(rhs_expr, env)
+        _, dependencies, node_args = evaluate_dependencies(rhs_expr, env)
 
-        #TODO: add type signature to args
-        args = Dict()
-        gen_expr = MacroTools.postwalk(replaced_expr) do sub_expr
-            if sub_expr isa Var
-                gen_arg = Symbol(sub_expr)
-                args[sub_expr] = gen_arg
-                return gen_arg
-            elseif sub_expr isa Array{Var}
-                gen_arg = Symbol.(sub_expr)
-                for (i, v) in enumerate(sub_expr)
-                    args[v] = gen_arg[i]
-                end
-                return Expr(:call, :reshape, Expr(:vect, gen_arg...), (size(sub_expr)...))
-            else
-                return sub_expr
-            end
-        end
-
-        gen_expr = getindex_to_ref(gen_expr)
-        gen_expr = MacroTools.postwalk(gen_expr) do sub_expr
+        rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
             if @capture(sub_expr, arr_[idxs__])
-                new_idxs = [:(try_case_to_int($(idx))) for idx in idxs] # TODO: for now, we just cast to integer, but we should check if the index is an integer
+                new_idxs = [:(try_case_to_int($(idx))) for idx in idxs]
                 return Expr(:ref, arr, new_idxs...)
-            else
-                return sub_expr
             end
+            return sub_expr
         end
 
-        f_expr = MacroTools.postwalk(
-            MacroTools.unblock,
-            MacroTools.combinedef(
-                Dict(
-                    :args => values(args),
-                    :body => gen_expr,
-                    :kwargs => Any[],
-                    :whereparams => Any[],
-                ),
-            ),
+        args = convert(Array{Any}, deepcopy(args))
+        for (i, arg) in enumerate(args)
+            if arg isa ArrayVar
+                args[i] = Expr(:(::), arg.name, :Array)
+            elseif arg isa Scalar
+                args[i] = arg.name
+            else
+                error()
+            end
+        end
+        node_function = MacroTools.combinedef(
+            Dict(
+                :args => args,
+                :body => MacroTools.postwalk(rhs_expr) do sub_expr
+                    if @capture(sub_expr, arr_[idxs__])
+                        new_idxs = [:(try_case_to_int($(idx))) for idx in idxs]
+                        return Expr(:ref, arr, new_idxs...)
+                    end
+                    return sub_expr
+                end,
+                :kwargs => Any[],
+                :whereparams => Any[],
+            )
         )
-
-        r_func, r_var_args = f_expr, keys(args)
     end
 
-    pass.link_functions[rhs] = link_function
-    if expr.head == :(=)
-        @assert !in(rhs, keys(pass.logical_node_args)) "Repeated assignment to $rhs"
-        pass.logical_node_args[rhs] = r_var_args
-        pass.logical_node_f_exprs[rhs] = r_func
-    else
-        @assert expr.head == :(~)
-        pass.stochastic_node_args[rhs] = r_var_args
-        pass.stochastic_node_f_exprs[rhs] = r_func
-    end
-    return nothing
+    pass.link_functions[lhs_var] = link_function
+    pass.node_args[lhs_var] = node_args
+    pass.node_functions[lhs_var] = node_function
+    pass.dependencies[lhs_var] = dependencies
 end
 
 function post_process(pass::NodeFunctions)
-    data = pass.data
-    vars = pass.vars
-    array_map = pass.array_map
-    missing_elements = pass.missing_elements
-    logical_node_args = pass.logical_node_args
-    logical_node_f_exprs = pass.logical_node_f_exprs
-    stochastic_node_args = pass.stochastic_node_args
-    stochastic_node_f_exprs = pass.stochastic_node_f_exprs
-    link_functions = pass.link_functions
-
-    array_variables = []
-    for var in keys(vars)
-        if !haskey(logical_node_args, var) && !haskey(stochastic_node_args, var) # variables without node functions
-            @assert isa(var, ArrayElement) || isa(var, ArrayVariable)
-            if var isa ArrayElement
-                # then come from either ArrayVariable or ArraySlice
-                source_var = filter(
-                    x -> (x isa ArrayVariable || x isa ArraySlice) && x.name == var.name,
-                    vcat(
-                        map(
-                            collect, [keys(logical_node_args), keys(stochastic_node_args)]
-                        )...,
-                    ),
-                )
-                @assert length(source_var) == 1
-                array_var = first(source_var)
-                logical_node_args[var] = [array_var]
-                logical_node_f_exprs[var] = MacroTools.postwalk(
-                    MacroTools.rmlines, :((array_var) -> array_var[$(var.indices...)])
-                )
-            elseif var.name in keys(array_map)
-                push!(array_variables, var)
-                array_elems = scalarize(var)
-                logical_node_args[var] = vcat(array_elems)
-                # @assert all(x -> x in keys(node_args), array_elems) # might not be true
-                # arg_list = [Symbol("arg" * string(i)) for i in 1:length(array_elems)]
-                f_name = Symbol("compose_" * String(Symbol(var)))
-                # logical_node_f_exprs[var] = MacroTools.postwalk(
-                #     MacroTools.rmlines,
-                #     :(function ($f_name)($(arg_list...))
-                #         args = [$(arg_list...)]
-                #         return reshape(collect(args), $(size(array_map[var.name])))
-                #     end),
-                # )
-                logical_node_f_exprs[var] = MacroTools.postwalk(
-                    MacroTools.rmlines,
-                    :(function ($f_name)(args::Vector)
-                        return reshape(args, $(size(array_map[var.name])))
-                    end),
-                )
-            else # data array
-                # TODO: for now, handle this in logdensityproblems, this is a leak of abstraction, need to be addressed
-            end
-        end
-    end
-
-    for v in vcat(collect(values(missing_elements))...)
-        logical_node_args[v] = []
-        logical_node_f_exprs[v] = :missing
-    end
-
-    return logical_node_args,
-    logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions,
-    array_variables
+    return pass
 end
