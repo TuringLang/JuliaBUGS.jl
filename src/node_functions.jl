@@ -14,23 +14,24 @@ NodeFunctions(vars, array_sizes, array_bitmap) = NodeFunctions(vars, array_sizes
     evaluate_(var, env)
 
 Evaluate `var` in the environment `env`. Return the evaluated value, the set of variables that `var` depends 
-on, and the arguments of the node function based on `var`. Assume all Colon indexing has been concretized.
+on, and the arguments of the node function based on `var`. Array elements and array variables are represented
+by tuples in the returned value. Assume all Colon indexing has been concretized.
 
 # Examples
 julia> evaluate_(:(x[a]), Dict())
-(:(x[a]), Set(Any[:a, x[]]), Set(Any[:a, x[]]))
+(:(x[a]), Set(Any[:a, (:x, ())]), Set(Any[:a, (:x, ())]))
 
 julia> evaluate_(:(x[a]), Dict(:a => 1))
-(:(x[1]), Set(Any[x[1]]), Set(Any[x[]]))
+(:(x[1]), Set(Any[(:x, (1,))]), Set(Any[(:x, ())]))
 
 julia> evaluate_(:(x[y[1]+1]+a+1), Dict())
-(:(x[y[1] + 1] + a + 1), Set(Any[:a, y[1], x[]]), Set(Any[:a, y[], x[]]))
+(:(x[y[1] + 1] + a + 1), Set(Any[:a, (:x, ()), (:y, (1,))]), Set(Any[:a, (:x, ()), (:y, ())]))
 
 julia> evaluate_(:(getindex(x[1:2, 1:3], a, b)), Dict(:x => [1 2 3; 4 5 6]))
-(:(getindex([1 2 3; 4 5 6], a, b)), Set(Any[:a, :b]), Set(Any[:a, :b, x[]]))
+(:(getindex([1 2 3; 4 5 6], a, b)), Set(Any[:a, :b]), Set(Any[:a, :b, (:x, ())]))
 
 julia> evaluate_(:(getindex(x[1:2, 1:3], a, b)), Dict(:x => [1 2 missing; 4 5 6]))
-(:(getindex(Union{Missing, Int64}[1 2 missing; 4 5 6], a, b)), Set(Any[:a, :b, x[1, 3]]), Set(Any[:a, :b, x[]]))
+(:(getindex(Union{Missing, Int64}[1 2 missing; 4 5 6], a, b)), Set(Any[:a, :b, (:x, (1, 3))]), Set(Any[:a, :b, (:x, ())]))
 ```
 """
 evaluate_(var::Number, ::Dict) = var, Set(), Set()
@@ -49,8 +50,8 @@ function evaluate_(var::Expr, env::Dict)
             if haskey(env, var.args[1]) # data, the constant is plugged in
                 return env[var.args[1]][idxs...], deps, args
             else # then it's a variable
-                push!(deps, ArrayElement(var.args[1], Tuple(idxs))) # add the variable for fine-grain dependency
-                push!(args, ArrayVar(var.args[1], ())) # add the corresponding array variable for node function arguments
+                push!(deps, (var.args[1], Tuple(idxs))) # add the variable for fine-grain dependency
+                push!(args, (var.args[1], ())) # add the corresponding array variable for node function arguments
                 return Expr(var.head, var.args[1], idxs...), deps, args
             end
         elseif all(x -> x isa Union{Number, UnitRange}, idxs)
@@ -59,14 +60,14 @@ function evaluate_(var::Expr, env::Dict)
                 if any(ismissing, value)
                     missing_idxs = findall(ismissing, value)
                     for idx in missing_idxs
-                        push!(deps, ArrayElement(var.args[1], Tuple(idx)))
+                        push!(deps, (var.args[1], Tuple(idx)))
                     end
                 end
-                push!(args, ArrayVar(var.args[1], ()))
+                push!(args, (var.args[1], ()))
                 return value, deps, args
             else
-                push!(deps, ArrayElement(var.args[1], Tuple(idxs)))
-                push!(args, ArrayVar(var.args[1], ()))
+                push!(deps, (var.args[1], Tuple(idxs)))
+                push!(args, (var.args[1], ()))
                 return Expr(var.head, var.args[1], idxs...), deps, args
             end
         end
@@ -74,8 +75,8 @@ function evaluate_(var::Expr, env::Dict)
         for i in idxs # if an index is a Symbol, then it's a variable
             i isa Symbol && (push!(deps, i); push!(args, i))
         end
-        push!(args, ArrayVar(var.args[1], ()))
-        push!(deps, ArrayVar(var.args[1], ()))
+        push!(args, (var.args[1], ()))
+        push!(deps, (var.args[1], ()))
         return Expr(var.head, var.args[1], idxs...), deps, args
     else # function call
         fun_args = []
@@ -140,7 +141,11 @@ function concretize_colon_indexing(expr::Expr, array_sizes)
     end
 end
 
-@inline create_array_var(n, array_sizes) = Var(n, Tuple([1:s for s in array_sizes[s]]))
+@inline create_array_var(n, array_sizes) = Var(n, Tuple([1:s for s in array_sizes[n]]))
+
+try_cast_to_int(x::Integer) = x
+try_cast_to_int(x::Real) = Int(x)
+try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
 # TODO: can merge transformed_variables with data to get env, require to know what are transformed variables, and what are second-order constant propagations
 function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
@@ -183,31 +188,43 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
         rhs_expr = constprop(rhs_expr, env)
         _, dependencies, node_args = evaluate_(rhs_expr, env)
 
+        dependencies, node_args = map(
+            x -> map(x) do x_elem
+                if x_elem isa Symbol
+                    return Var(x_elem)
+                elseif x_elem isa Tuple && last(x_elem) == ()
+                    return create_array_var(first(x_elem), pass.array_sizes)
+                else # x_elem isa ArrayElement
+                    return ArrayElement(first(x_elem), last(x_elem))
+                end
+            end, map(collect, (dependencies, node_args))
+        )
+
         rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
             if @capture(sub_expr, arr_[idxs__])
-                new_idxs = [idx isa Integer ? idx : :(Int($(idx))) for idx in idxs]
+                new_idxs = [idx isa Integer ? idx : :(JuliaBUGS.try_cast_to_int($(idx))) for idx in idxs]
                 return Expr(:ref, arr, new_idxs...)
             end
             return sub_expr
         end
 
-        args = convert(Array{Any}, deepcopy(collect(node_args)))
+        args = convert(Array{Any}, deepcopy(node_args))
         for (i, arg) in enumerate(args)
             if arg isa ArrayVar
                 args[i] = Expr(:(::), arg.name, :Array)
-            elseif arg isa Symbol
-                continue
+            elseif arg isa Scalar
+                args[i] = arg.name
             else
-                error()
+                error("Unexpected argument type: $arg")
             end
         end
         node_function = Expr(:(->), Expr(:tuple, args...), rhs_expr)
     end
 
     pass.link_functions[lhs_var] = link_function
-    pass.node_args[lhs_var] = collect(node_args)
+    pass.node_args[lhs_var] = node_args
     pass.node_functions[lhs_var] = node_function
-    pass.dependencies[lhs_var] = collect(dependencies)
+    pass.dependencies[lhs_var] = dependencies
 end
 
 function post_process(pass::NodeFunctions, expr, env, vargs...)

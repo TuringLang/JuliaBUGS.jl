@@ -301,6 +301,11 @@ function post_process(pass::CollectVariables, expr, env::Dict)
     for k in keys(logical_bitmap)
         array_bitmap[k] = logical_bitmap[k] .| stochastic_bitmap[k]
     end
+
+    # it is possible that a logical variable is constant and never appear one the LHS of ~
+    # this variable's value is captured by `transformed_variables`
+    # we still include it in `vars`, but later in the graph, this is a logical root node,
+    # and its value will be cached 
     
     return pass.vars, array_sizes, transformed_variables, array_bitmap
 end
