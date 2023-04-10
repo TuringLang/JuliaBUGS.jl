@@ -1,19 +1,23 @@
-using Graphs, JuliaBUGS, Distributions
-using JuliaBUGS:
-    CollectVariables,
-    # DependencyGraph,
-    NodeFunctions,
-    ArrayElement,
-    ArrayVar,
-    program!,
-    compile
+using JuliaBUGS
+using JuliaBUGS: Var, program!, CollectVariables, NodeFunctions
+using UnPack
 
-using AdvancedHMC
-using ReverseDiff
-using LogDensityProblems
-using Test
+## Linear regression
+model_def = @bugsast begin
+    for i in 1:N
+        Y[i] ~ dnorm(μ[i], τ)
+        μ[i] = α + β * (x[i] - xbar)
+    end
+    τ ~ dgamma(0.001, 0.001)
+    σ = 1 / sqrt(τ)
+    logτ = log(τ)
+    α = dnorm(0.0, 1e-6)
+    β = dnorm(0.0, 1e-6)
+end
 
-##
+data = (x=[1, 2, 3, 4, 5], Y=[1, 3, 3, 3, 5], xbar = 3, N=5)
+
+## Rats
 model_def = @bugsast begin
     for i in 1:N
         for j in 1:T
@@ -81,7 +85,7 @@ tau_c = 1
 alpha_tau = 1
 beta_tau = 1
 
-initializations = Dict(
+inits = Dict(
     :alpha => alpha,
     :beta => beta,
     :alpha_c => alpha_c,
@@ -90,80 +94,15 @@ initializations = Dict(
     :alpha_tau => alpha_tau,
     :beta_tau => beta_tau,
 );
+##
+include("/home/sunxd/JuliaBUGS.jl/src/BUGSExamples/Volume_I/Bones.jl");
+model_def = bones.model_def;
+data = Dict(pairs(bones.data));
+inits = Dict(pairs(bones.inits[1]));
+
 
 ##
 
 vars, array_sizes, transformed_variables, array_bitmap = program!(CollectVariables(), model_def, data);
-dep_graph = program!(DependencyGraph(vars, array_map), model_def, data);
-node_args, f_exprs, link_functions = program!(
-    NodeFunctions(vars, array_map), model_def, data
-);
-
-p = compile(model_def, data, initializations);
-initial_θ = JuliaBUGS.gen_init_params(p);
-p(initial_θ)
-
-##
-
-D = LogDensityProblems.dimension(p)
-n_samples, n_adapts = 2000, 1000
-
-metric = DiagEuclideanMetric(D)
-hamiltonian = Hamiltonian(metric, p, :ReverseDiff)
-
-initial_ϵ = find_good_stepsize(hamiltonian, initial_θ)
-integrator = Leapfrog(initial_ϵ)
-proposal = NUTS{MultinomialTS,GeneralisedNoUTurn}(integrator)
-adaptor = StanHMCAdaptor(MassMatrixAdaptor(metric), StepSizeAdaptor(0.8, integrator))
-
-samples, stats = sample(
-    hamiltonian,
-    proposal,
-    initial_θ,
-    n_samples,
-    adaptor,
-    n_adapts;
-    drop_warmup=true,
-    progress=true,
-);
-##
-β_c_samples = [
-    JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:beta_c)] for sample in samples
-];
-mean(β_c_samples), std(β_c_samples) # Reference result: mean 6.186, variance 0.1088
-@test isapprox(mean(β_c_samples), 6.186, atol=0.1)
-@test isapprox(std(β_c_samples), 0.1088, atol=0.1)
-
-σ_samples = [
-    JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:sigma)] for sample in samples
-];
-mean(σ_samples), std(σ_samples) # Reference result: mean 6.092, sd 0.4672
-@test isapprox(mean(σ_samples), 6.092, atol=0.1)
-@test isapprox(std(σ_samples), 0.4672, atol=0.1)
-
-using JuliaBUGS
-using JuliaBUGS:
-    CollectVariables,
-    # DependencyGraph,
-    # NodeFunctions,
-    ArrayElement,
-    ArrayVar,
-    program!,
-    compile
-
-##
-model_def = @bugsast begin
-    for i in 1:N
-        x[i] = d[i] * 2
-        x[i] ~ dnorm(0, 1)
-    end
-end
-
-data = (
-    N = 10,
-    d = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-) |> Dict ∘ pairs
-
-##
-
-vars, array_sizes, transformed_variables, array_bitmap = program!(CollectVariables(), model_def, data);
+pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, data);
+@unpack vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = pass
