@@ -269,7 +269,7 @@ function post_process(pass::CollectVariables, expr, env::Dict)
     for (k, v) in pass.vars
         k isa Scalar && continue
         k.name in keys(env) && continue # skip data arrays
-        bitmap = k == Logical ? logical_bitmap : stochastic_bitmap
+        bitmap = v == Logical ? logical_bitmap : stochastic_bitmap
         for v_ in scalarize(k)
             if bitmap[v_.name][v_.indices...]
                 error("Repeated assignment to $v_.")
@@ -282,14 +282,14 @@ function post_process(pass::CollectVariables, expr, env::Dict)
     # corner case: x[1:2] = something, x[3] = something, x[1:3] ~ dmnorm()
     overlap = Dict()
     for k in keys(logical_bitmap)
-        overlap[k] = logical_bitmap[k]  .⊽ stochastic_bitmap[k]
+        overlap[k] = logical_bitmap[k]  .& stochastic_bitmap[k]
     end
 
     for (k, v) in overlap
         if any(v)
             idxs = findall(v)
             for i in idxs
-                !haskey(transformed_variables, k) && error("Logical and stochastic variables overlap on $k[$(i...)].")
+                !haskey(transformed_variables, k) && error("Logical and stochastic variables overlap on $k[$i].")
                 transformed_variables[k][i...]!= missing && continue
                 error("Logical and stochastic variables overlap on $k[$(i...)].")
             end

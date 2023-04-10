@@ -170,7 +170,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
         rhs_array_var = create_array_var(rhs_var.name, pass.array_sizes)
         size(rhs_var) == size(lhs_var) || error("Size mismatch between lhs and rhs at expression $expr")
         if lhs_var isa ArrayElement
-            @assert pass.array_bitmap[v.name][v.indices...] "Variable $v is not defined."
+            @assert pass.array_bitmap[rhs_var.name][rhs_var.indices...] "Variable $rhs_var is not defined."
             node_function = MacroTools.@q ($(rhs_var.name)::Array) -> $(rhs_var.name)[$(rhs_var.indices...)]
             node_args = [rhs_array_var]
             dependencies = [rhs_var]
@@ -194,8 +194,8 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
                     return Var(x_elem)
                 elseif x_elem isa Tuple && last(x_elem) == ()
                     return create_array_var(first(x_elem), pass.array_sizes)
-                else # x_elem isa ArrayElement
-                    return ArrayElement(first(x_elem), last(x_elem))
+                else
+                    return Var(first(x_elem), last(x_elem))
                 end
             end, map(collect, (dependencies, node_args))
         )
