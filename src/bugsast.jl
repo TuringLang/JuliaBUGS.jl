@@ -157,6 +157,8 @@ macro bugsast(expr)
     return Meta.quot(post_parsing_processing(warn_link_function(bugsast(expr, __source__))))
 end
 
+# TODO: check RHS of `=` can't be a distribution function
+
 function warn_link_function(expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, f_(lhs_) = rhs_)

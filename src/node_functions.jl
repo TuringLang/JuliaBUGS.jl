@@ -102,14 +102,24 @@ end
 
 Constant propagation for `x` in the environment `env`. Return the constant propagated expression.
 """
-constprop(x::Number, env) = x
-constprop(x::Symbol, env) = haskey(env, x) ? env[x] : x
 function constprop(x, env)
+    try_constprop = _constprop(x, env)
+    while try_constprop != x
+        x = try_constprop
+        try_constprop = _constprop(x, env)
+    end
+    return x
+end
+
+_constprop(x::Number, env) = x
+_constprop(x::Symbol, env) = haskey(env, x) ? env[x] : x
+function _constprop(x, env)
+    x = deepcopy(x)
     for i in 2:length(x.args)
         if Meta.isexpr(x.args[i], :ref) && all(x -> x isa Number, x.args[i].args[2:end]) && haskey(env, x.args[i].args[1])
             x.args[i] = env[x.args[i].args[1]][x.args[i].args[2:end]...]
         else
-            x.args[i] = constprop(x.args[i], env)
+            x.args[i] = _constprop(x.args[i], env)
         end
     end
     return x

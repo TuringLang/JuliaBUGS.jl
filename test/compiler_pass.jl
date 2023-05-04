@@ -11,11 +11,16 @@ model_def = @bugsast begin
     τ ~ dgamma(0.001, 0.001)
     σ = 1 / sqrt(τ)
     logτ = log(τ)
-    α = dnorm(0.0, 1e-6)
-    β = dnorm(0.0, 1e-6)
+    α ~ dnorm(0.0, 1e-6)
+    β ~ dnorm(0.0, 1e-6)
 end
 
-data = (x=[1, 2, 3, 4, 5], Y=[1, 3, 3, 3, 5], xbar = 3, N=5)
+data = Dict(
+    :x=>[1, 2, 3, 4, 5], 
+    :Y=>[1, 3, 3, 3, 5], 
+    :xbar => 3, 
+    :N=>5
+)
 
 ## Rats
 model_def = @bugsast begin

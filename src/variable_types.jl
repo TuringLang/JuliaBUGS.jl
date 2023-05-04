@@ -47,6 +47,11 @@ function Base.Symbol(v::Var)
     return Symbol(v.name, "[", join(v.indices, ", "), "]")
 end
 
+toexpr(r::Number) = r
+toexpr(r::UnitRange) = Expr(:call, :(:), r.start, r.stop)
+toexpr(v::Scalar) = v.name
+toexpr(v::Var) = Expr(:ref, v.name, toexpr.(v.indices)...)
+
 function hash(v::Var, h::UInt)
     return hash(v.name, hash(v.indices, h))
 end
@@ -110,13 +115,4 @@ function evaluate(v::Var, env::Dict)
     end
     value = map(x -> eval_var(x, env), scalarize(v))
     return reshape(value, size(v))
-end
-
-function varname(v::Scalar)
-    lens = AbstractPPL.IdentityLens()
-    return AbstractPPL.VarName{v.name}(lens)
-end
-function varname(v::Var)
-    lens = AbstractPPL.IndexLens(v.indices)
-    return AbstractPPL.VarName{v.name}(lens)
 end
