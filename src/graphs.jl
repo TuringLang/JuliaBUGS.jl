@@ -78,7 +78,7 @@ end
 _inv(::typeof(logit)) = probit
 _inv(::typeof(cloglog)) = cloglog
 _inv(::typeof(log)) = exp
-function probit(x) end
+function probit end
 _inv(::typeof(probit)) = logit
 _inv(identity) = identity
 
@@ -95,44 +95,42 @@ function create_varinfo(g, sorted_nodes, vars, array_sizes, data, inits)
     return initialize_vi(g, sorted_nodes, vi, data, inits)
 end
 
-unpack(ni::NodeInfo) = ni.node_type, ni.link_function, ni.node_function, ni.node_args
+@inline unpack(ni::NodeInfo) = ni.node_type, ni.link_function, ni.node_function, ni.node_args
 
-function initialize_vi(g, sorted_nodes, vi, data, inits)
+function initialize_vi(g, sorted_nodes, vi, data, inits; transform_variables=true)
     vi = deepcopy(vi)
     parameters = VarName[]
-    bijectors = Dict{VarName,Any}()
     logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
         node_type, link_function, node_function, args_vn = unpack(ni)
         args = [vi[x] for x in args_vn]
         if node_type == JuliaBUGS.Logical
-            value = node_function(args...)
+            value = (node_function)(args...)
             @assert value isa Union{Number, Array{<:Number}}
-            setindex!!(vi, node_function(args...), vn)
+            vi = setindex!!(vi, value, vn)
         else
-            dist = node_function(args...)
+            dist = (node_function)(args...)
             value = evaluate(data, vn)
-            bijectors[vn] = bijector(dist)
-            if isnothing(value)
-                value = evaluate(inits, vn)
-                if isnothing(value)
-                    prinln("initialization for $vn is not provided, sampling from prior")
-                    value = rand(dist)
-                    value = inverse(bijectors[vn])(value)
-                end
+            isnothing(value) && push!(parameters, vn)
+            isnothing(value) && (value = evaluate(inits, vn))
+            if !isnothing(value)
+                logp += logpdf(dist, (link_function)(value))
+                vi = setindex!!(vi, value, vn)
+            else
+                println("initialization for $vn is not provided, sampling from prior");
+                value = rand(dist)
+                logp += logpdf(dist, value)
+                value = _inv(link_function)(value)
+                vi = setindex!!(vi, value, vn)
             end
-            bijectors[vn] = bijector(dist)
-            push!(parameters, vn)
-            value = _inv(link_function)(value)
-            setindex!!(vi, value, vn)
-            logp += logpdf(dist, value)
         end
     end
     l = sum([_length(x) for x in parameters])
-    # TODO: for now, always transfer the variables
-    # TODO: unify the Transform type with simvarinfo
-    return (@set vi.logp = logp), VarInfoReconstruct{l, DynamicPPL.DynamicTransformation}(vi, parameters, bijectors, g, sorted_nodes)
+    vi = @set vi.logp = logp
+    vi = DynamicPPL.settrans!!(vi, transform_variables)
+    transform_type = transform_variables ? DynamicPPL.DynamicTransformation : DynamicPPL.IdentityTransformation
+    return vi, VarInfoReconstruct{l, transform_type}(vi, parameters, g, sorted_nodes)
 end
 
 function _length(vn::VarName)
@@ -141,42 +139,38 @@ function _length(vn::VarName)
 end
 
 struct VarInfoReconstruct{L, T<:DynamicPPL.AbstractTransformation}
-    prototype
-    parameters
-    transformations
-    g
-    sorted_nodes
+    prototype::SimpleVarInfo
+    parameters::Vector{VarName}
+    g::BUGSGraph
+    sorted_nodes::Vector{VarName}
 end
 
-function (re::VarInfoReconstruct{L, DynamicPPL.DynamicTransformation})(flattened_values) where L
+function (re::VarInfoReconstruct{L, DynamicPPL.DynamicTransformation})(flattened_values::AbstractVector) where L
     @assert length(flattened_values) == L
+    vi, parameters, g, sorted_nodes = deepcopy(re.prototype), re.parameters, re.g, re.sorted_nodes
     current_idx = 1
-    vi = deepcopy(re.prototype)
-    parameters = re.parameters
-    g = re.g
-    sorted_nodes = re.sorted_nodes
-    for p in parameters # set values first
-        l = _length(p)
-        value = flattened_values[current_idx:current_idx+l-1]
-        value = length(value) == 1 ? value[1] : value
-        value = Bijectors.inverse(re.transformations[p])(value)
-        current_idx += l
-        setindex!!(vi, value, p)
-    end
     logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
         node_type, link_function, node_function, args_vn = unpack(ni)
         args = [vi[x] for x in args_vn]
         
-        # TODO: skip variables whose ancestors never changed
         if node_type == JuliaBUGS.Logical
             value = node_function(args...)
             setindex!!(vi, value, vn)
         else
             dist = node_function(args...)
-            value = vi[vn]
-            logp += logpdf(dist, _inv(link_function)(value))
+            if vn in parameters
+                l = _length(vn)
+                value = l == 1 ? flattened_values[current_idx] : flattened_values[current_idx:current_idx+l-1]
+                value = invlink(dist, value)
+                current_idx += l
+                setindex!!(vi, value, vn)
+                logp += logpdf(dist, (link_function)(value))
+            else
+                value = vi[vn]
+                logp += logpdf(dist, (link_function)(value))
+            end
         end
     end
     return @set vi.logp = logp
@@ -184,22 +178,20 @@ end
 
 # `re` with no argument is ancestral sampling
 function (re::VarInfoReconstruct{L, DynamicPPL.DynamicTransformation})() where L
-    vi = deepcopy(re.prototype)
+    vi, g, sorted_nodes = deepcopy(re.prototype), re.parameters, re.g, re.sorted_nodes
     logp = 0.0
-    g = re.g
-    sorted_nodes = re.sorted_nodes
     for vn in sorted_nodes
         ni = g[vn]
         node_type, link_function, node_function, args_vn = unpack(ni)
         args = [vi[x] for x in args_vn]
-        # TODO: skip variables whose ancestors never changed
         if node_type == JuliaBUGS.Logical
             value = node_function(args...)
             setindex!!(vi, value, vn)
         else
             dist = node_function(args...)
             value = rand(dist)
-            logp += logpdf(dist, _inv(link_function)(value))
+            logp += logpdf(dist, value)
+            setindex!!(vi, _inv(link_function)(value), vn)
         end
     end
     return @set vi.logp = logp

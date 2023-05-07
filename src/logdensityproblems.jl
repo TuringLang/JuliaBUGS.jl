@@ -1,5 +1,5 @@
 struct BUGSLogDensityProblem 
-    re::JuliaBUGS.VarInfoReconstruct
+    re::VarInfoReconstruct
 end
 
 function (p::BUGSLogDensityProblem)(x) 
@@ -11,11 +11,12 @@ function LogDensityProblems.logdensity(p::BUGSLogDensityProblem, x::AbstractArra
     return p(x)
 end
 
-_dimension(re::JuliaBUGS.VarInfoReconstruct{L, DynamicPPL.DynamicTransformation}) where L = L
+_dimension(::VarInfoReconstruct{L, DynamicPPL.DynamicTransformation}) where L = L
 function LogDensityProblems.dimension(p::BUGSLogDensityProblem) 
     _dimension(p.re)
 end
 
+# LogDensityProblemsAD will set this to 1 
 function LogDensityProblems.capabilities(::BUGSLogDensityProblem) 
     return LogDensityProblems.LogDensityOrder{0}
 end

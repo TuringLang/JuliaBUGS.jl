@@ -10,6 +10,16 @@ struct NodeFunctions{VT} <: CompilerPass
 end
 NodeFunctions(vars, array_sizes, array_bitmap) = NodeFunctions(vars, array_sizes, array_bitmap, Dict(), Dict(), Dict(), Dict())
 
+function unpack(pass::NodeFunctions)
+    return pass.vars,
+    pass.array_sizes,
+    pass.array_bitmap,
+    pass.link_functions,
+    pass.node_args,
+    pass.node_functions,
+    pass.dependencies
+end
+
 """
     evaluate_(var, env)
 

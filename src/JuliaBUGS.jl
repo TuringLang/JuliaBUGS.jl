@@ -30,11 +30,12 @@ include("logdensityproblems.jl")
 
 export @bugsast, @bugsmodel_str
 
-function check_data(data)
-    for (k, v) in data
-        if !isa(v, Array)
-            v == missing && throw(ArgumentError("missing data: $k"))
-        end
+export compile
+
+function check_input(input::Union{NamedTuple,Dict})
+    for (k, v) in input
+        @assert k isa Symbol
+        @assert v isa Array{Union{<:Real,Missing}} || v isa Array{<:Real} || v isa Real
     end
 end
 
@@ -42,9 +43,33 @@ function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
     return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
 end
 function compile(
-    model_def::Expr, data::Dict, inits::Dict; target=:LogDensityProblems, compile_tape=true
+    model_def::Expr, data::Dict, inits::Dict; target=:logdensityproblem, ad_backend=:reversediff
 )
-    error("Not implemented")
+    check_input.((data, inits))
+
+    target == :logdensityproblem || error("Only :logdensityproblem is supported for now")
+
+    vars, array_sizes, transformed_variables, array_bitmap = program!(
+        CollectVariables(), model_def, data
+    )
+    pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, data)
+
+    vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = unpack(
+        pass
+    )
+    g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
+    sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
+    
+    vi, re = invokelatest(create_varinfo, g, sorted_nodes, vars, array_sizes, data, inits)
+    if ad_backend == :none
+        p = BUGSLogDensityProblem(re)
+    elseif ad_backend == :reversediff
+        p = invokelatest(ADgradient, :ReverseDiff, BUGSLogDensityProblem(re); compile=Val(true))
+    else
+        error("Only :reversediff is supported for now")
+    end
+    
+    return p
 end
 
 end
