@@ -28,6 +28,9 @@ function to_varname(v::Var)
     return AbstractPPL.VarName{v.name}(lens)
 end
 
+# node function for added variable, no computation and effects
+function noop() end
+
 function create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
     g = MetaGraph(
         SimpleDiGraph{Int64}();
@@ -35,8 +38,9 @@ function create_BUGSGraph(vars, link_functions, node_args, node_functions, depen
         label_type=VarName,
         vertex_data_type=NodeInfo,
     )
-    variables = keys(vars);
-    for var in variables
+
+    # TODO: if var multi-dim, then need to scalarize
+    for var in keys(vars)
         vn = to_varname(var)
         to_varname_dropindex(v::Var) = AbstractPPL.VarName{v.name}(AbstractPPL.IdentityLens())
         vn_args = map(to_varname_dropindex, node_args[var]) # args are variables without indices
@@ -45,7 +49,7 @@ function create_BUGSGraph(vars, link_functions, node_args, node_functions, depen
         )
         add_vertex!(g, vn, node_data)
     end
-    for var in variables
+    for var in keys(vars)
         for dep in dependencies[var]
             dep_vn = to_varname(dep)
             vn = to_varname(var)
@@ -118,7 +122,7 @@ function initialize_vi(g, sorted_nodes, vi, data, inits; transform_variables=tru
                 logp += logpdf(dist, (link_function)(value))
                 vi = setindex!!(vi, value, vn)
             else
-                println("initialization for $vn is not provided, sampling from prior");
+                # println("initialization for $vn is not provided, sampling from prior");
                 value = rand(dist)
                 logp += logpdf(dist, value)
                 value = _inv(link_function)(value)

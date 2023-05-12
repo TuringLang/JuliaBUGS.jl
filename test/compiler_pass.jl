@@ -2,7 +2,7 @@ using JuliaBUGS
 using JuliaBUGS: Var, program!, CollectVariables, NodeFunctions
 using UnPack
 
-## Linear regression
+## Linear regression -- simple example
 model_def = @bugsast begin
     for i in 1:N
         Y[i] ~ dnorm(μ[i], τ)
@@ -22,7 +22,7 @@ data = Dict(
     :N=>5
 )
 
-## Rats
+## Rats -- a little more advanced 
 model_def = @bugsast begin
     for i in 1:N
         for j in 1:T
@@ -99,15 +99,14 @@ inits = Dict(
     :alpha_tau => alpha_tau,
     :beta_tau => beta_tau,
 );
+
 ##
 include("/home/sunxd/JuliaBUGS.jl/src/BUGSExamples/Volume_I/Bones.jl");
 model_def = bones.model_def;
 data = Dict(pairs(bones.data));
 inits = Dict(pairs(bones.inits[1]));
 
-
 ##
-
 vars, array_sizes, transformed_variables, array_bitmap = program!(CollectVariables(), model_def, data);
 pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, data);
 @unpack vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = pass

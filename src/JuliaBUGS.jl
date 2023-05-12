@@ -35,7 +35,17 @@ export compile
 function check_input(input::Union{NamedTuple,Dict})
     for (k, v) in input
         @assert k isa Symbol
-        @assert v isa Array{Union{<:Real,Missing}} || v isa Array{<:Real} || v isa Real
+        # v has three possibilities: 1. number 2. array of numbers 3. array mixed with numbers and missing
+        # check this
+        if v isa Number
+            continue
+        elseif v isa AbstractArray
+            for i in v
+                @assert i isa Number || ismissing(i)
+            end
+        else
+            error("Input $k is not a number or an array of numbers")
+        end
     end
 end
 
@@ -60,11 +70,11 @@ function compile(
     g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
     
-    vi, re = invokelatest(create_varinfo, g, sorted_nodes, vars, array_sizes, data, inits)
+    vi, re = @invokelatest create_varinfo(g, sorted_nodes, vars, array_sizes, data, inits)
     if ad_backend == :none
         p = BUGSLogDensityProblem(re)
     elseif ad_backend == :reversediff
-        p = invokelatest(ADgradient, :ReverseDiff, BUGSLogDensityProblem(re); compile=Val(true))
+        p = @invokelatest ADgradient(:ReverseDiff, BUGSLogDensityProblem(re); compile=Val(true))
     else
         error("Only :reversediff is supported for now")
     end

@@ -127,7 +127,8 @@ function _constprop(x, env)
     x = deepcopy(x)
     for i in 2:length(x.args)
         if Meta.isexpr(x.args[i], :ref) && all(x -> x isa Number, x.args[i].args[2:end]) && haskey(env, x.args[i].args[1])
-            x.args[i] = env[x.args[i].args[1]][x.args[i].args[2:end]...]
+            val = env[x.args[i].args[1]][x.args[i].args[2:end]...]
+            x.args[i] = ismissing(val) ? x.args[i] : val
         else
             x.args[i] = _constprop(x.args[i], env)
         end
