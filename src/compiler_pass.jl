@@ -177,7 +177,8 @@ evaluate(var::UnitRange, ::Dict) = var
 evaluate(::Colon, ::Dict) = Colon()
 function evaluate(var::Symbol, env::Dict)
     var == :(:) && return Colon()
-    return haskey(env, var) ? env[var] : var
+    value = haskey(env, var) ? env[var] : var
+    return ismissing(value) ? var : value
 end
 function evaluate(var::Expr, env::Dict)
     if Meta.isexpr(var, :ref)
@@ -189,7 +190,8 @@ function evaluate(var::Expr, env::Dict)
                     error("Array indices must be integers or UnitRanges.")
                 end
             end
-            return env[var.args[1]][idxs...]
+            value = env[var.args[1]][idxs...]
+            return ismissing(value) ? Expr(var.head, var.args[1], idxs...) : value
         elseif all(x -> x isa Union{Number, UnitRange, Colon, Array}, idxs) && haskey(env, var.args[1])
             value = getindex(env[var.args[1]], idxs...) # can use `view` here
             !any(ismissing, value) && return value

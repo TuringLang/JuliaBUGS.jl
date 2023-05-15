@@ -1,13 +1,46 @@
+abstract type NodeInfo end
+
 """
-    NodeInfo
+    AuxiliaryNodeInfo
+
+Indicate the node is created by the compiler and not in the original BUGS model. These nodes
+are only used to determine dependencies.
+"""
+struct AuxiliaryNodeInfo <: NodeInfo end 
+
+"""
+    ConcreteNodeInfo
 
 Define the information stored in each node of the BUGS graph.
 """
-struct NodeInfo
+struct ConcreteNodeInfo <: NodeInfo
     node_type::VariableTypes
     link_function::Function
     node_function::Function
     node_args::Vector{VarName}
+end
+
+struct ConcreteNodeInfoConstruct
+    vars
+    link_functions
+    node_functions
+    node_args
+end
+
+function (constructor::ConcreteNodeInfoConstruct)(var::Var)
+    if var in keys(constructor.vars) 
+        return ConcreteNodeInfo(
+            constructor.vars[var],
+            eval(constructor.link_functions[var]), 
+            eval(constructor.node_functions[var]),
+            map(
+                v -> AbstractPPL.VarName{v.name}(AbstractPPL.IdentityLens()), 
+                constructor.node_args[var]
+            )
+        )
+    else
+        return AuxiliaryNodeInfo()
+    end
 end
 
 """
@@ -28,8 +61,33 @@ function to_varname(v::Var)
     return AbstractPPL.VarName{v.name}(lens)
 end
 
-# node function for added variable, no computation and effects
-function noop() end
+function check_and_add_vertex!(g::BUGSGraph, v::VarName, data::NodeInfo)
+    if haskey(g, v) 
+        if g[v] isa AuxiliaryNodeInfo && data isa ConcreteNodeInfo
+            set_data!(g, v, data)
+        # else # TODO: unstable test, link_function and node_function are anonymous functions
+        #     @assert g[v].node_type == data.node_type && g[v].node_args == data.node_args
+        end
+    else
+        add_vertex!(g, v, data)
+    end
+end
+
+function scalarize_then_add_edge!(g::BUGSGraph, v::Var; lhs_or_rhs=:lhs)
+    scalarized_v = vcat(scalarize(v)...)
+    length(scalarized_v) == 1 && return
+    v = to_varname(v)
+    for v_elem in map(to_varname, scalarized_v)
+        add_vertex!(g, v_elem, AuxiliaryNodeInfo()) # may fail, but it's ok
+        if lhs_or_rhs == :lhs
+            add_edge!(g, v, v_elem)
+        elseif lhs_or_rhs == :rhs
+            add_edge!(g, v_elem, v)
+        else
+            error("Unknown argument $lhs_or_rhs")
+        end
+    end
+end
 
 function create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
     g = MetaGraph(
@@ -38,22 +96,16 @@ function create_BUGSGraph(vars, link_functions, node_args, node_functions, depen
         label_type=VarName,
         vertex_data_type=NodeInfo,
     )
-
-    # TODO: if var multi-dim, then need to scalarize
-    for var in keys(vars)
-        vn = to_varname(var)
-        to_varname_dropindex(v::Var) = AbstractPPL.VarName{v.name}(AbstractPPL.IdentityLens())
-        vn_args = map(to_varname_dropindex, node_args[var]) # args are variables without indices
-        node_data = NodeInfo(
-            vars[var], eval(link_functions[var]), eval(node_functions[var]), vn_args
-        )
-        add_vertex!(g, vn, node_data)
-    end
-    for var in keys(vars)
-        for dep in dependencies[var]
-            dep_vn = to_varname(dep)
-            vn = to_varname(var)
-            add_edge!(g, dep_vn, vn)
+    construct = ConcreteNodeInfoConstruct(vars, link_functions, node_functions, node_args)
+    for l in keys(vars) # l for LHS variable
+        l_vn = to_varname(l)
+        check_and_add_vertex!(g, l_vn, construct(l))
+        scalarize_then_add_edge!(g, l; lhs_or_rhs=:lhs)
+        for r in dependencies[l]
+            r_vn = to_varname(r)
+            check_and_add_vertex!(g, r_vn, construct(r))
+            add_edge!(g, r_vn, l_vn)
+            scalarize_then_add_edge!(g, r; lhs_or_rhs=:rhs)
         end
     end
     return g
@@ -90,7 +142,7 @@ function evaluate(env::Dict, vn::VarName)
     sym = getsym(vn)
     ret = nothing
     try ret = get(env[sym], getlens(vn)) catch _ end
-    return ret
+    return ismissing(ret) ? nothing : ret
 end
 
 function create_varinfo(g, sorted_nodes, vars, array_sizes, data, inits)
@@ -107,6 +159,7 @@ function initialize_vi(g, sorted_nodes, vi, data, inits; transform_variables=tru
     logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
+        ni isa ConcreteNodeInfo || continue
         node_type, link_function, node_function, args_vn = unpack(ni)
         args = [vi[x] for x in args_vn]
         if node_type == JuliaBUGS.Logical

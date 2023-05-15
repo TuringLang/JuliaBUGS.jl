@@ -44,8 +44,26 @@ export abs,
 ### Standard functions
 ###
 
+"""
+    abs(x)
+
+Absolute value of `x`.
+"""
 abs
+
+"""
+    cloglog(x)
+
+Complementary log-log function of `x`. ``cloglog(x) = log(-log(1 - x))``.
+https://juliastats.org/LogExpFunctions.jl/stable/#LogExpFunctions.cloglog
+"""
 cloglog
+
+"""
+    cos(x)
+
+Cosine of `x`.
+"""
 cos
 equals(x, y) = x == y ? 1 : 0
 exp

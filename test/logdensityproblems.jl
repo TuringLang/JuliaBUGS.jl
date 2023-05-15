@@ -6,36 +6,106 @@ using ReverseDiff
 using LogDensityProblems, LogDensityProblemsAD
 using JuliaBUGS: BUGSLogDensityProblem
 using DynamicPPL
+using ProgressMeter
 ##
+include("/home/sunxd/JuliaBUGS.jl/src/BUGSExamples/BUGSExamples.jl");
 volume_i_examples = BUGSExamples.volume_i_examples;
 
 ##
-m = volume_i_examples[keys(volume_i_examples)[2]]
+# m = volume_i_examples[keys(volume_i_examples)[1]]
+m = volume_i_examples[:bones]
 model_def = m[:model_def]
 data = Dict(pairs(m[:data]));
 inits = Dict(pairs(m[:inits][1]));
+println(m.name)
+
 ##
 vars, array_sizes, transformed_variables, array_bitmap = program!(CollectVariables(), model_def, data);
 pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, data);
 vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = unpack(pass);
 
-function print_to_file(x, filepath="/home/sunxd/JuliaBUGS.jl/test/output.jl")
-    open(filepath, "w+") do f
-        ks = collect(keys(x))
-        for k in ks
-            v = x[k]
-            println(f, k, " = ", v)
+##
+g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies);
+sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g));
+vi, re = create_varinfo(g, sorted_nodes, vars, array_sizes, data, inits);
+vi.logp
+##
+p = ADgradient(:ReverseDiff, BUGSLogDensityProblem(re); compile=Val(true));
+##
+example_names = (
+    :blockers,
+    :bones,
+    :dogs,
+    :dyes,
+    :epil,
+    :equiv,
+    # :inhalers,
+    :kidney,
+    :leuk,
+    :leukfr,
+    :lsat,
+    :magnesium,
+    :mice,
+    :oxford,
+    :pumps,
+    :rats,
+    :salm,
+    :seeds,
+    :stacks,
+    :surgical_simple,
+    :surgical_realistic,
+)
+function test_all_examples(examples, examples_to_test, print_to_stdout=false, report_file="/home/sunxd/JuliaBUGS.jl/test/test_report.jl")
+    output_stream = print_to_stdout ? stdout : open(report_file, "w+")
+
+    p = Progress(length(examples_to_test), desc="Testing: ")
+
+    try
+        for k in examples_to_test
+            ProgressMeter.next!(p, showvalues=[(:Example, k)])
+            m = examples[k]
+            println(output_stream, "Testing $(k) ...")
+            model_def = m[:model_def]
+            data = Dict(pairs(m[:data]));
+            inits = Dict(pairs(m[:inits][1]));
+            try
+                vars, array_sizes, transformed_variables, array_bitmap = program!(CollectVariables(), model_def, data);
+                pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, data);
+                vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = unpack(pass);
+                g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies);
+                sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g));
+                vi, re = @invokelatest create_varinfo(g, sorted_nodes, vars, array_sizes, data, inits);
+                println(output_stream, "logp: $(vi.logp)")
+            catch e
+                println(output_stream, "Error in example $(k): ", e)
+            end
+            println(output_stream)
+        end
+    finally
+        if !print_to_stdout
+            close(output_stream)
         end
     end
 end
 
-print_to_file(vars)
+function test_single_example(examples, example_name)
+    k = example_name
+    m = examples[k]
+    model_def = m[:model_def]
+    data = Dict(pairs(m[:data]));
+    inits = Dict(pairs(m[:inits][1]));
+    vars, array_sizes, transformed_variables, array_bitmap = program!(CollectVariables(), model_def, data);
+    pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, data);
+    vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = unpack(pass);
+    g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies);
+    sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g));
+    vi, re = @invokelatest create_varinfo(g, sorted_nodes, vars, array_sizes, data, inits);
+    println("logp: $(vi.logp)")
+end
+test_all_examples(volume_i_examples, example_names)
+test_all_examples(volume_i_examples, (:rats,), true)
 
-##
-@run g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies);
-sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g));
-vi, re = create_varinfo(g, sorted_nodes, vars, array_sizes, data, inits);
-p = ADgradient(:ReverseDiff, BUGSLogDensityProblem(re); compile=Val(true));
+@run test_single_example(volume_i_examples, :bones)
 ##
 @run p = compile(model_def, data, inits)
 p = compile(model_def, data, inits)
@@ -56,31 +126,17 @@ mean(chains[:beta_c])
 using AdvancedHMC
 using LinearAlgebra
 
-# Choose parameter dimensionality and initial parameter value
 D = LogDensityProblems.dimension(p); 
-initial_θ = rand(D)
-
-# Set the number of samples to draw and warmup iterations
 n_samples, n_adapts = 2_000, 1_000
 
-# Define a Hamiltonian system
+initial_θ = rand(D)
 metric = DiagEuclideanMetric(D)
 hamiltonian = Hamiltonian(metric, p, ReverseDiff)
-
-# Define a leapfrog solver, with initial step size chosen heuristically
 initial_ϵ = find_good_stepsize(hamiltonian, initial_θ)
 integrator = Leapfrog(initial_ϵ)
-
-# Define an HMC sampler, with the following components
-#   - multinomial sampling scheme,
-#   - generalised No-U-Turn criteria, and
-#   - windowed adaption for step-size and diagonal mass matrix
 proposal = NUTS{MultinomialTS, GeneralisedNoUTurn}(integrator)
 adaptor = StanHMCAdaptor(MassMatrixAdaptor(metric), StepSizeAdaptor(0.8, integrator))
 
-# Run the sampler to draw samples from the specified Gaussian, where
-#   - `samples` will store the samples
-#   - `stats` will store diagnostic statistics for each sample
 samples, stats = sample(hamiltonian, proposal, initial_θ, n_samples, adaptor, n_adapts; progress=true, drop_warmup=true)
 
 beta_c_samples = [samples[s][2] for s in 1:length(samples)]

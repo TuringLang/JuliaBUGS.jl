@@ -46,7 +46,11 @@ julia> evaluate_(:(getindex(x[1:2, 1:3], a, b)), Dict(:x => [1 2 missing; 4 5 6]
 """
 evaluate_(var::Number, ::Dict) = var, Set(), Set()
 evaluate_(var::UnitRange, ::Dict) = var, Set(), Set()
-evaluate_(var::Symbol, env::Dict) = haskey(env, var) ? env[var] : var, Set(), Set()
+function evaluate_(var::Symbol, env::Dict)
+    value = haskey(env, var) ? env[var] : var
+    @assert !ismissing(value) "Scalar variables in data can't be missing, but $var given as missing"
+    return ismissing(value) ? var : value, Set(), Set()
+end 
 function evaluate_(var::Expr, env::Dict)
     deps, args = Set(), Set()
     if Meta.isexpr(var, :ref)
@@ -58,7 +62,13 @@ function evaluate_(var::Expr, env::Dict)
 
         if all(x -> x isa Number, idxs)
             if haskey(env, var.args[1]) # data, the constant is plugged in
-                return env[var.args[1]][idxs...], deps, args
+                value = getindex(env[var.args[1]], idxs...)
+                if ismissing(value) # var is a variable
+                    push!(deps, (var.args[1], Tuple(idxs)))
+                    push!(args, (var.args[1], ()))
+                    value = Expr(var.head, var.args[1], idxs...)
+                end
+                return value, deps, args
             else # then it's a variable
                 push!(deps, (var.args[1], Tuple(idxs))) # add the variable for fine-grain dependency
                 push!(args, (var.args[1], ())) # add the corresponding array variable for node function arguments
@@ -162,7 +172,15 @@ function concretize_colon_indexing(expr::Expr, array_sizes)
     end
 end
 
-@inline create_array_var(n, array_sizes) = Var(n, Tuple([1:s for s in array_sizes[n]]))
+function create_array_var(n, array_sizes, env)
+    if haskey(array_sizes, n)
+        return Var(n, Tuple([1:s for s in array_sizes[n]]))
+    else
+        @assert haskey(env, n)
+        @assert env[n] isa Union{Array{Union{Missing, Float64}}, Array{Union{Missing, Int64}}}
+        return Var(n, Tuple([1:i for i in size(env[n])]))      
+    end
+end
 
 try_cast_to_int(x::Integer) = x
 try_cast_to_int(x::Real) = Int(x)
@@ -188,7 +206,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
     elseif Meta.isexpr(rhs, :ref) && all(x -> x isa Union{Number, UnitRange}, rhs.args[2:end])
         @assert var_type == Logical # if rhs is a variable, then the expression must be logical
         rhs_var = Var(rhs.args[1], Tuple(rhs.args[2:end]))
-        rhs_array_var = create_array_var(rhs_var.name, pass.array_sizes)
+        rhs_array_var = create_array_var(rhs_var.name, pass.array_sizes, env)
         size(rhs_var) == size(lhs_var) || error("Size mismatch between lhs and rhs at expression $expr")
         if lhs_var isa ArrayElement
             @assert pass.array_bitmap[rhs_var.name][rhs_var.indices...] "Variable $rhs_var is not defined."
@@ -214,7 +232,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
                 if x_elem isa Symbol
                     return Var(x_elem)
                 elseif x_elem isa Tuple && last(x_elem) == ()
-                    return create_array_var(first(x_elem), pass.array_sizes)
+                    return create_array_var(first(x_elem), pass.array_sizes, env)
                 else
                     return Var(first(x_elem), last(x_elem))
                 end
