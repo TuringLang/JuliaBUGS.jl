@@ -190,7 +190,7 @@ function evaluate(var::Expr, env::Dict)
                     error("Array indices must be integers or UnitRanges.")
                 end
             end
-            value = env[var.args[1]][idxs...]
+            value = env[var.args[1]][Int.(idxs)...]
             return ismissing(value) ? Expr(var.head, var.args[1], idxs...) : value
         elseif all(x -> x isa Union{Number, UnitRange, Colon, Array}, idxs) && haskey(env, var.args[1])
             value = getindex(env[var.args[1]], idxs...) # can use `view` here
@@ -221,7 +221,7 @@ function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
     if var_type == Logical
         rhs = evaluate(rhs_expr, env)
         is_resolved(rhs) && (pass.transformed_variables[v] = rhs)
-        haskey(pass.vars, v) && is_resolved(rhs) && 
+        haskey(pass.vars, v) && !is_resolved(rhs) && 
             error("$v is assigned to by both logical and stochastic assignments, 
             only allowed when the variable is a transformation of data.")
         haskey(pass.vars, v) && (var_type = Stochastic)
@@ -250,7 +250,7 @@ function post_process(pass::CollectVariables, expr, env::Dict)
     transformed_variables = Dict()
     for tv in keys(pass.transformed_variables)
         if tv isa Scalar
-            transformed_variables[tv] = pass.transformed_variables[tv]
+            transformed_variables[tv.name] = pass.transformed_variables[tv]
         else
             if !haskey(transformed_variables, tv.name)
                 tvs = fill(missing, array_sizes[tv.name]...)
@@ -260,7 +260,7 @@ function post_process(pass::CollectVariables, expr, env::Dict)
         end
     end
     for (k, v) in transformed_variables
-        if !any(ismissing, v)
+        if v isa Array && !any(ismissing, v)
             transformed_variables[k] = convert(Array{Number}, v)
         end
     end

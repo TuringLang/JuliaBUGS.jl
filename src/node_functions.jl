@@ -93,7 +93,7 @@ function evaluate_(var::Expr, env::Dict)
         end
 
         for i in idxs # if an index is a Symbol, then it's a variable
-            i isa Symbol && (push!(deps, i); push!(args, i))
+            i isa Symbol && i != :nothing && i != :(:) && (push!(deps, i); push!(args, i))
         end
         push!(args, (var.args[1], ()))
         push!(deps, (var.args[1], ()))
@@ -106,7 +106,7 @@ function evaluate_(var::Expr, env::Dict)
         end
 
         for a in fun_args
-            a isa Symbol && (push!(deps, a); push!(args, a))
+            a isa Symbol && a != :nothing && a != :(:) && (push!(deps, a); push!(args, a))
         end
 
         try
@@ -137,7 +137,7 @@ function _constprop(x, env)
     x = deepcopy(x)
     for i in 2:length(x.args)
         if Meta.isexpr(x.args[i], :ref) && all(x -> x isa Number, x.args[i].args[2:end]) && haskey(env, x.args[i].args[1])
-            val = env[x.args[i].args[1]][x.args[i].args[2:end]...]
+            val = env[x.args[i].args[1]][try_cast_to_int.(x.args[i].args[2:end])...]
             x.args[i] = ismissing(val) ? x.args[i] : val
         else
             x.args[i] = _constprop(x.args[i], env)
@@ -158,12 +158,17 @@ julia> JuliaBUGS.concretize_colon(:(f(x[1, :])), Dict(:x => [2, 3]))
 :(f(x[1, 3]))
 ```
 """
-function concretize_colon_indexing(expr::Expr, array_sizes) 
+function concretize_colon_indexing(expr::Expr, array_sizes, data) 
     return MacroTools.postwalk(expr) do sub_expr
         if MacroTools.@capture(sub_expr, x_[idx__])
             for i in 1:length(idx)
                 if idx[i] == :(:)
-                    idx[i] = Expr(:call, :(:), 1, array_sizes[x][i])
+                    if haskey(array_sizes, x)
+                        idx[i] = Expr(:call, :(:), 1, array_sizes[x][i])
+                    else
+                        @assert haskey(data, x)
+                        idx[i] = Expr(:call, :(:), 1, size(data[x])[i])
+                    end
                 end
             end
             return Expr(:ref, x, idx...)
@@ -177,7 +182,8 @@ function create_array_var(n, array_sizes, env)
         return Var(n, Tuple([1:s for s in array_sizes[n]]))
     else
         @assert haskey(env, n)
-        @assert env[n] isa Union{Array{Union{Missing, Float64}}, Array{Union{Missing, Int64}}}
+        # @assert env[n] isa Union{Array{Union{Missing, Float64}}, Array{Union{Missing, Int64}}}
+        @assert env[n] isa Array
         return Var(n, Tuple([1:i for i in size(env[n])]))      
     end
 end
@@ -186,17 +192,16 @@ try_cast_to_int(x::Integer) = x
 try_cast_to_int(x::Real) = Int(x)
 try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
-# TODO: can merge transformed_variables with data to get env, require to know what are transformed variables, and what are second-order constant propagations
 function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
     lhs_expr, rhs_expr = expr.args[1:2]
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
     link_function = Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[1] : identity
     lhs_var = find_variables_on_lhs(Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env)
-    
-    rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes)
+    var_type == Logical && evaluate(lhs_var, env) isa Union{Number, Array{<:Number}} && return
+
+    rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes, env)
     rhs = evaluate(rhs_expr, env)
-    var_type == Logical && rhs isa Union{Number, Array{<:Number}} && return
 
     if rhs isa Symbol
         @assert lhs isa Union{Scalar, ArrayElement}
@@ -225,39 +230,46 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
         end
     else
         rhs_expr = constprop(rhs_expr, env)
-        _, dependencies, node_args = evaluate_(rhs_expr, env)
+        evaled_rhs, dependencies, node_args = evaluate_(rhs_expr, env)
 
-        dependencies, node_args = map(
-            x -> map(x) do x_elem
-                if x_elem isa Symbol
-                    return Var(x_elem)
-                elseif x_elem isa Tuple && last(x_elem) == ()
-                    return create_array_var(first(x_elem), pass.array_sizes, env)
-                else
-                    return Var(first(x_elem), last(x_elem))
+        # rhs can be evaluated into a concrete value here, because including transformed variables in the data
+        # is effectively constant propagation
+        if is_resolved(evaled_rhs)
+            node_function = Expr(:(->), Expr(:tuple, ), Expr(:block, evaled_rhs))
+            node_args = []
+        else
+            dependencies, node_args = map(
+                x -> map(x) do x_elem
+                    if x_elem isa Symbol
+                        return Var(x_elem)
+                    elseif x_elem isa Tuple && last(x_elem) == ()
+                        return create_array_var(first(x_elem), pass.array_sizes, env)
+                    else
+                        return Var(first(x_elem), last(x_elem))
+                    end
+                end, map(collect, (dependencies, node_args))
+            )
+
+            rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
+                if @capture(sub_expr, arr_[idxs__])
+                    new_idxs = [idx isa Integer ? idx : :(JuliaBUGS.try_cast_to_int($(idx))) for idx in idxs]
+                    return Expr(:ref, arr, new_idxs...)
                 end
-            end, map(collect, (dependencies, node_args))
-        )
-
-        rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
-            if @capture(sub_expr, arr_[idxs__])
-                new_idxs = [idx isa Integer ? idx : :(JuliaBUGS.try_cast_to_int($(idx))) for idx in idxs]
-                return Expr(:ref, arr, new_idxs...)
+                return sub_expr
             end
-            return sub_expr
-        end
 
-        args = convert(Array{Any}, deepcopy(node_args))
-        for (i, arg) in enumerate(args)
-            if arg isa ArrayVar
-                args[i] = Expr(:(::), arg.name, :Array)
-            elseif arg isa Scalar
-                args[i] = arg.name
-            else
-                error("Unexpected argument type: $arg")
+            args = convert(Array{Any}, deepcopy(node_args))
+            for (i, arg) in enumerate(args)
+                if arg isa ArrayVar
+                    args[i] = Expr(:(::), arg.name, :Array)
+                elseif arg isa Scalar
+                    args[i] = arg.name
+                else
+                    error("Unexpected argument type: $arg")
+                end
             end
+            node_function = Expr(:(->), Expr(:tuple, args...), rhs_expr)
         end
-        node_function = Expr(:(->), Expr(:tuple, args...), rhs_expr)
     end
 
     pass.link_functions[lhs_var] = link_function
@@ -267,5 +279,11 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
 end
 
 function post_process(pass::NodeFunctions, expr, env, vargs...)
+    for var in keys(pass.vars) # remove transformed variables
+        pass.vars[var] == Stochastic && continue
+        if evaluate(var, env) isa Union{Number, Array{<:Number}}
+            delete!(pass.vars, var)
+        end
+    end
     return pass
 end

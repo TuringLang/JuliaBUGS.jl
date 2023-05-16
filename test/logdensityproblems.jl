@@ -13,7 +13,7 @@ volume_i_examples = BUGSExamples.volume_i_examples;
 
 ##
 # m = volume_i_examples[keys(volume_i_examples)[1]]
-m = volume_i_examples[:bones]
+m = volume_i_examples[:dogs]
 model_def = m[:model_def]
 data = Dict(pairs(m[:data]));
 inits = Dict(pairs(m[:inits][1]));
@@ -21,13 +21,37 @@ println(m.name)
 
 ##
 vars, array_sizes, transformed_variables, array_bitmap = program!(CollectVariables(), model_def, data);
-pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, data);
+pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, merge_dicts(data, transformed_variables));
 vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = unpack(pass);
+
+function merge_dicts(d1::Dict, d2::Dict)
+    merged_dict = Dict()
+
+    for key in union(keys(d1), keys(d2))
+        if haskey(d1, key) && haskey(d2, key)
+            @assert (isa(d1[key], Array) && isa(d2[key], Array) && size(d1[key]) == size(d2[key])) || (isa(d1[key], Number) && isa(d2[key], Number) && d1[key] == d2[key])
+            merged_dict[key] = isa(d1[key], Array) ? coalesce.(d1[key], d2[key]) : d1[key]
+        else
+            merged_dict[key] = haskey(d1, key) ? d1[key] : d2[key]
+        end
+    end
+
+    return merged_dict
+end
+merge_dicts(data, transformed_variables)
+
+s = 0
+for(k, v) in transformed_variables
+    k == :y && continue
+    # find the number of elements that are not missing
+    s += count(!ismissing, v)
+end
+s
 
 ##
 g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies);
 sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g));
-vi, re = create_varinfo(g, sorted_nodes, vars, array_sizes, data, inits);
+vi, re = create_varinfo(g, sorted_nodes, vars, array_sizes, merge_dicts(data, transformed_variables), inits);
 vi.logp
 ##
 p = ADgradient(:ReverseDiff, BUGSLogDensityProblem(re); compile=Val(true));
@@ -55,7 +79,7 @@ example_names = (
     :surgical_simple,
     :surgical_realistic,
 )
-function test_all_examples(examples, examples_to_test, print_to_stdout=false, report_file="/home/sunxd/JuliaBUGS.jl/test/test_report.jl")
+function test_all_examples(examples, examples_to_test, print_to_stdout=false, report_file="/home/sunxd/JuliaBUGS.jl/debug_outputs/test_report.jl")
     output_stream = print_to_stdout ? stdout : open(report_file, "w+")
 
     p = Progress(length(examples_to_test), desc="Testing: ")
@@ -70,11 +94,11 @@ function test_all_examples(examples, examples_to_test, print_to_stdout=false, re
             inits = Dict(pairs(m[:inits][1]));
             try
                 vars, array_sizes, transformed_variables, array_bitmap = program!(CollectVariables(), model_def, data);
-                pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, data);
+                pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, merge_dicts(data, transformed_variables));
                 vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = unpack(pass);
                 g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies);
                 sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g));
-                vi, re = @invokelatest create_varinfo(g, sorted_nodes, vars, array_sizes, data, inits);
+                vi, re = @invokelatest create_varinfo(g, sorted_nodes, vars, array_sizes, merge_dicts(data, transformed_variables), inits);
                 println(output_stream, "logp: $(vi.logp)")
             catch e
                 println(output_stream, "Error in example $(k): ", e)
