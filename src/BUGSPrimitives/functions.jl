@@ -111,7 +111,7 @@ end
 
 Logit function of `x`. ``logit(x) = log(x / (1 - x))``.
 """
-function logit(x)
+function logistic(x)
     return LogExpFunctions.logistic(x)
 end
 

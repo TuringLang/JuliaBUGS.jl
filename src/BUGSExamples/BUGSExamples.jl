@@ -1,7 +1,6 @@
 module BUGSExamples
 
-using JuliaBUGS
-const NA = missing
+using JuliaBUGS: @bugsast, @bugsmodel_str
 
 include("Volume_I/Blocker.jl")
 include("Volume_I/Bones.jl")
