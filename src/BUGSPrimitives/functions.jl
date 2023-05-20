@@ -166,7 +166,7 @@ end
 Return `a` raised to the power of `b`.
 """
 function pow(a, b)
-    return Base.Math.pow(a, b)
+    return a^b
 end
 
 """
