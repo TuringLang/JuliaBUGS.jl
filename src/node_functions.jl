@@ -235,41 +235,50 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
         # rhs can be evaluated into a concrete value here, because including transformed variables in the data
         # is effectively constant propagation
         if is_resolved(evaled_rhs)
-            node_function = Expr(:(->), Expr(:tuple, ), Expr(:block, evaled_rhs))
-            node_args = []
-        else
-            dependencies, node_args = map(
-                x -> map(x) do x_elem
-                    if x_elem isa Symbol
-                        return Var(x_elem)
-                    elseif x_elem isa Tuple && last(x_elem) == ()
-                        return create_array_var(first(x_elem), pass.array_sizes, env)
-                    else
-                        return Var(first(x_elem), last(x_elem))
-                    end
-                end, map(collect, (dependencies, node_args))
-            )
-
-            rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
-                if @capture(sub_expr, arr_[idxs__])
-                    new_idxs = [idx isa Integer ? idx : :(JuliaBUGS.try_cast_to_int($(idx))) for idx in idxs]
-                    return Expr(:ref, arr, new_idxs...)
-                end
-                return sub_expr
+            if lhs_var.indices == ()
+                env[lhs_var.name] = evaled_rhs
+            elseif haskey(env, lhs_var.name)
+                env[lhs_var.name][lhs_var.indices...] = evaled_rhs
+            else
+                arr = fill(missing, pass.array_sizes[lhs_var.name]...)
+                env[lhs_var.name] = convert(Array{Union{Missing, typeof(evaled_rhs)}}, arr)                
+                env[lhs_var.name][lhs_var.indices...] = evaled_rhs
             end
-
-            args = convert(Array{Any}, deepcopy(node_args))
-            for (i, arg) in enumerate(args)
-                if arg isa ArrayVar
-                    args[i] = Expr(:(::), arg.name, :Array)
-                elseif arg isa Scalar
-                    args[i] = arg.name
-                else
-                    error("Unexpected argument type: $arg")
-                end
-            end
-            node_function = Expr(:(->), Expr(:tuple, args...), rhs_expr)
+            return
         end
+        
+        dependencies, node_args = map(
+            x -> map(x) do x_elem
+                if x_elem isa Symbol
+                    return Var(x_elem)
+                elseif x_elem isa Tuple && last(x_elem) == ()
+                    return create_array_var(first(x_elem), pass.array_sizes, env)
+                else
+                    return Var(first(x_elem), last(x_elem))
+                end
+            end, map(collect, (dependencies, node_args))
+        )
+
+        rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
+            if @capture(sub_expr, arr_[idxs__])
+                new_idxs = [idx isa Integer ? idx : :(JuliaBUGS.try_cast_to_int($(idx))) for idx in idxs]
+                return Expr(:ref, arr, new_idxs...)
+            end
+            return sub_expr
+        end
+
+        args = convert(Array{Any}, deepcopy(node_args))
+        for (i, arg) in enumerate(args)
+            if arg isa ArrayVar
+                args[i] = Expr(:(::), arg.name, :Array)
+            elseif arg isa Scalar
+                args[i] = arg.name
+            else
+                error("Unexpected argument type: $arg")
+            end
+        end
+        node_function = Expr(:(->), Expr(:tuple, args...), rhs_expr)
+        
     end
 
     pass.link_functions[lhs_var] = link_function

@@ -120,15 +120,6 @@ Distributions.maximum(::Flat) = Inf
 Distributions.pdf(::Flat, x::Real) = 1.0
 Distributions.logpdf(::Flat, x::Real) = 0.0
 
-Distributions.cdf(::Flat, x::Real) = throw(NotImplementedError())
-Distributions.logcdf(::Flat, x::Real) = throw(NotImplementedError())
-
-Distributions.quantile(::Flat, q::Real) = throw(NotImplementedError())
-Distributions.cquantile(::Flat, q::Real) = throw(NotImplementedError())
-
-Distributions.rand(::Flat) = throw(NotImplementedError())
-Distributions.rand(::Flat, n::Int) = throw(NotImplementedError())
-
 struct LeftTruncatedFlat <: ContinuousUnivariateDistribution
     a::Real
 end
@@ -167,15 +158,15 @@ Distributions.maximum(d::TruncatedFlat) = d.b
 Distributions.pdf(d::TruncatedFlat, x::Real) = (d.a <= x <= d.b) ? 1.0/(d.b - d.a) : 0.0
 Distributions.logpdf(d::TruncatedFlat, x::Real) = log(pdf(d, x))
 
-function truncated(::Flat, l::Real, r::Real)
+function Distributions.truncated(::Flat, l::Real, r::Real)
     return TruncatedFlat(l, r)
 end
 
-function truncated(::Flat, l::Real, ::Nothing)
+function Distributions.truncated(::Flat, l::Real, ::Nothing)
     return LeftTruncatedFlat(l)
 end
 
-function truncated(::Flat, ::Nothing, r::Real)
+function Distributions.truncated(::Flat, ::Nothing, r::Real)
     return RightTruncatedFlat(r)
 end
 
