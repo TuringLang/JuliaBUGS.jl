@@ -8,7 +8,9 @@ struct NodeFunctions{VT} <: CompilerPass
     node_functions::Dict
     dependencies::Dict
 end
-NodeFunctions(vars, array_sizes, array_bitmap) = NodeFunctions(vars, array_sizes, array_bitmap, Dict(), Dict(), Dict(), Dict())
+function NodeFunctions(vars, array_sizes, array_bitmap)
+    return NodeFunctions(vars, array_sizes, array_bitmap, Dict(), Dict(), Dict(), Dict())
+end
 
 function unpack(pass::NodeFunctions)
     return pass.vars,
@@ -50,14 +52,16 @@ function evaluate_(var::Symbol, env::Dict)
     value = haskey(env, var) ? env[var] : var
     @assert !ismissing(value) "Scalar variables in data can't be missing, but $var given as missing"
     return ismissing(value) ? var : value, Set(), Set()
-end 
+end
 function evaluate_(var::Expr, env::Dict)
     deps, args = Set(), Set()
     if Meta.isexpr(var, :ref)
         idxs = []
         for i in 2:length(var.args)
             e, d, a = evaluate_(var.args[i], env)
-            push!(idxs, e); union!(deps, d); union!(args, a)
+            push!(idxs, e)
+            union!(deps, d)
+            union!(args, a)
         end
 
         if all(x -> x isa Number, idxs)
@@ -74,7 +78,7 @@ function evaluate_(var::Expr, env::Dict)
                 push!(args, (var.args[1], ())) # add the corresponding array variable for node function arguments
                 return Expr(var.head, var.args[1], idxs...), deps, args
             end
-        elseif all(x -> x isa Union{Number, UnitRange}, idxs)
+        elseif all(x -> x isa Union{Number,UnitRange}, idxs)
             if haskey(env, var.args[1])
                 value = getindex(env[var.args[1]], idxs...)
                 if any(ismissing, value)
@@ -102,7 +106,9 @@ function evaluate_(var::Expr, env::Dict)
         fun_args = []
         for i in 2:length(var.args)
             e, d, a = evaluate_(var.args[i], env)
-            push!(fun_args, e); union!(deps, d); union!(args, a)
+            push!(fun_args, e)
+            union!(deps, d)
+            union!(args, a)
         end
 
         for a in fun_args
@@ -136,7 +142,9 @@ _constprop(x::Symbol, env) = haskey(env, x) ? env[x] : x
 function _constprop(x, env)
     x = deepcopy(x)
     for i in 2:length(x.args)
-        if Meta.isexpr(x.args[i], :ref) && all(x -> x isa Number, x.args[i].args[2:end]) && haskey(env, x.args[i].args[1])
+        if Meta.isexpr(x.args[i], :ref) &&
+            all(x -> x isa Number, x.args[i].args[2:end]) &&
+            haskey(env, x.args[i].args[1])
             val = env[x.args[i].args[1]][try_cast_to_int.(x.args[i].args[2:end])...]
             x.args[i] = ismissing(val) ? x.args[i] : val
         else
@@ -158,7 +166,7 @@ julia> JuliaBUGS.concretize_colon(:(f(x[1, :])), Dict(:x => [2, 3]))
 :(f(x[1, 3]))
 ```
 """
-function concretize_colon_indexing(expr::Expr, array_sizes, data) 
+function concretize_colon_indexing(expr::Expr, array_sizes, data)
     return MacroTools.postwalk(expr) do sub_expr
         if MacroTools.@capture(sub_expr, x_[idx__])
             for i in 1:length(idx)
@@ -184,7 +192,7 @@ function create_array_var(n, array_sizes, env)
         @assert haskey(env, n)
         # @assert env[n] isa Union{Array{Union{Missing, Float64}}, Array{Union{Missing, Int64}}}
         @assert env[n] isa Array
-        return Var(n, Tuple([1:i for i in size(env[n])]))      
+        return Var(n, Tuple([1:i for i in size(env[n])]))
     end
 end
 
@@ -197,25 +205,32 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
     link_function = Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[1] : identity
-    lhs_var = find_variables_on_lhs(Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env)
-    var_type == Logical && evaluate(lhs_var, env) isa Union{Number, Array{<:Number}} && return
+    lhs_var = find_variables_on_lhs(
+        Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
+    )
+    var_type == Logical &&
+        evaluate(lhs_var, env) isa Union{Number,Array{<:Number}} &&
+        return nothing
 
     rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes, env)
     rhs = evaluate(rhs_expr, env)
 
     if rhs isa Symbol
-        @assert lhs isa Union{Scalar, ArrayElement}
+        @assert lhs isa Union{Scalar,ArrayElement}
         node_function = :identity
         node_args = [Var(rhs)]
         dependencies = [Var(rhs)]
-    elseif Meta.isexpr(rhs, :ref) && all(x -> x isa Union{Number, UnitRange}, rhs.args[2:end])
+    elseif Meta.isexpr(rhs, :ref) &&
+        all(x -> x isa Union{Number,UnitRange}, rhs.args[2:end])
         @assert var_type == Logical # if rhs is a variable, then the expression must be logical
         rhs_var = Var(rhs.args[1], Tuple(rhs.args[2:end]))
         rhs_array_var = create_array_var(rhs_var.name, pass.array_sizes, env)
-        size(rhs_var) == size(lhs_var) || error("Size mismatch between lhs and rhs at expression $expr")
+        size(rhs_var) == size(lhs_var) ||
+            error("Size mismatch between lhs and rhs at expression $expr")
         if lhs_var isa ArrayElement
             @assert pass.array_bitmap[rhs_var.name][rhs_var.indices...] "Variable $rhs_var is not defined."
-            node_function = MacroTools.@q ($(rhs_var.name)::Array) -> $(rhs_var.name)[$(rhs_var.indices...)]
+            node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
+                $(rhs_var.name)[$(rhs_var.indices...)]
             node_args = [rhs_array_var]
             dependencies = [rhs_var]
         else
@@ -224,7 +239,8 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
             for v in non_data_vars
                 @assert pass.array_bitmap[v.name][v.indices...] "Variable $v is not defined."
             end
-            node_function = MacroTools.@q ($(rhs_var.name)::Array) -> $(rhs_var.name)[$(rhs_var.indices...)]
+            node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
+                $(rhs_var.name)[$(rhs_var.indices...)]
             node_args = [rhs_array_var]
             dependencies = non_data_vars
         end
@@ -235,7 +251,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
         # rhs can be evaluated into a concrete value here, because including transformed variables in the data
         # is effectively constant propagation
         if is_resolved(evaled_rhs)
-            node_function = Expr(:(->), Expr(:tuple, ), Expr(:block, evaled_rhs))
+            node_function = Expr(:(->), Expr(:tuple), Expr(:block, evaled_rhs))
             node_args = []
             # we can also directly save the evaled variable to `env` and later convert to var_store
             # issue is that we need to do this in steps, const propagation need to a separate pass
@@ -250,12 +266,16 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
                     else
                         return Var(first(x_elem), last(x_elem))
                     end
-                end, map(collect, (dependencies, node_args))
+                end,
+                map(collect, (dependencies, node_args)),
             )
 
             rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
                 if @capture(sub_expr, arr_[idxs__])
-                    new_idxs = [idx isa Integer ? idx : :(JuliaBUGS.try_cast_to_int($(idx))) for idx in idxs]
+                    new_idxs = [
+                        idx isa Integer ? idx : :(JuliaBUGS.try_cast_to_int($(idx))) for
+                        idx in idxs
+                    ]
                     return Expr(:ref, arr, new_idxs...)
                 end
                 return sub_expr
@@ -278,13 +298,13 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
     pass.link_functions[lhs_var] = link_function
     pass.node_args[lhs_var] = node_args
     pass.node_functions[lhs_var] = node_function
-    pass.dependencies[lhs_var] = dependencies
+    return pass.dependencies[lhs_var] = dependencies
 end
 
 function post_process(pass::NodeFunctions, expr, env, vargs...)
     for var in keys(pass.vars) # remove transformed variables
         pass.vars[var] == Stochastic && continue
-        if evaluate(var, env) isa Union{Number, Array{<:Number}}
+        if evaluate(var, env) isa Union{Number,Array{<:Number}}
             delete!(pass.vars, var)
         end
     end

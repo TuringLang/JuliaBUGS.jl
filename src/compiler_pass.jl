@@ -59,10 +59,14 @@ end
 This pass collects all the possible variables appear on the LHS of both logical and stochastic assignments. 
 """
 struct CollectVariables <: CompilerPass
-    vars::Dict{Var, VariableTypes}
-    transformed_variables::Dict{Var, Union{Number, Array{<:Number}}}
+    vars::Dict{Var,VariableTypes}
+    transformed_variables::Dict{Var,Union{Number,Array{<:Number}}}
 end
-CollectVariables() = CollectVariables(Dict{Var, VariableTypes}(), Dict{Var, Union{Number, Array{<:Number}}}())
+function CollectVariables()
+    return CollectVariables(
+        Dict{Var,VariableTypes}(), Dict{Var,Union{Number,Array{<:Number}}}()
+    )
+end
 
 """
     find_variables_on_lhs(expr, env)
@@ -104,7 +108,7 @@ ERROR: Some indices on the lhs can't be fully resolved. Argument 1: f(y).
 """
 function check_idxs(v_name::Symbol, idxs, env::Dict)
     # check if some index is not resolved
-    unresolved_indices = findall(x -> !isa(x, Union{Number, UnitRange, Colon}), idxs)
+    unresolved_indices = findall(x -> !isa(x, Union{Number,UnitRange,Colon}), idxs)
     if !isempty(unresolved_indices)
         msg = "Some indices on the lhs can't be fully resolved. "
         for i in unresolved_indices
@@ -127,11 +131,13 @@ function check_idxs(v_name::Symbol, idxs, env::Dict)
     colon_idxs = findall(x -> x == Colon(), idxs)
     if !isempty(colon_idxs)
         if !haskey(v_name, env)
-            error("Implicit indexing with colon is only supported when the array is a data array.")
+            error(
+                "Implicit indexing with colon is only supported when the array is a data array.",
+            )
         end
     end
     # if the variable is multi-dimensional and data, check they must all be missing or all provided
-    if v_name in keys(env) && any(x -> x isa Union{UnitRange, Colon}, idxs)
+    if v_name in keys(env) && any(x -> x isa Union{UnitRange,Colon}, idxs)
         vs = env[v_name][idxs...]
         if !all(ismissing, vs) && !all(!ismissing, vs)
             error("Some elements of $v_name[$(idxs...)] are missing, some are not.")
@@ -192,7 +198,8 @@ function evaluate(var::Expr, env::Dict)
             end
             value = env[var.args[1]][Int.(idxs)...]
             return ismissing(value) ? Expr(var.head, var.args[1], idxs...) : value
-        elseif all(x -> x isa Union{Number, UnitRange, Colon, Array}, idxs) && haskey(env, var.args[1])
+        elseif all(x -> x isa Union{Number,UnitRange,Colon,Array}, idxs) &&
+            haskey(env, var.args[1])
             value = getindex(env[var.args[1]], idxs...) # can use `view` here
             !any(ismissing, value) && return value
         end
@@ -212,21 +219,26 @@ end
 function assignment!(pass::CollectVariables, expr::Expr, env::Dict)
     lhs_expr, rhs_expr = expr.args[1:2]
 
-    v = find_variables_on_lhs(Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env)
+    v = find_variables_on_lhs(
+        Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
+    )
     !isa(v, Scalar) && check_idxs(v.name, v.indices, env)
-    is_resolved(evaluate(v, env)) && Meta.isexpr(expr, :(=)) && error("$v is data, can't be assigned to.")
-    
+    is_resolved(evaluate(v, env)) &&
+        Meta.isexpr(expr, :(=)) &&
+        error("$v is data, can't be assigned to.")
+
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
     haskey(pass.vars, v) && var_type == pass.vars[v] && error("Repeated assignment to $v.")
     if var_type == Logical
         rhs = evaluate(rhs_expr, env)
         is_resolved(rhs) && (pass.transformed_variables[v] = rhs)
-        haskey(pass.vars, v) && !is_resolved(rhs) && 
+        haskey(pass.vars, v) &&
+            !is_resolved(rhs) &&
             error("$v is assigned to by both logical and stochastic assignments, 
             only allowed when the variable is a transformation of data.")
         haskey(pass.vars, v) && (var_type = Stochastic)
     end
-    pass.vars[v] = var_type
+    return pass.vars[v] = var_type
 end
 
 function post_process(pass::CollectVariables, expr, env::Dict)
@@ -235,14 +247,16 @@ function post_process(pass::CollectVariables, expr, env::Dict)
         !isa(v, Scalar) && push!(array_elements[v.name], v)
     end
 
-    array_sizes = Dict{Symbol, Vector{Int}}()
+    array_sizes = Dict{Symbol,Vector{Int}}()
     for (k, v) in array_elements
         k in keys(env) && continue # skip data arrays
         numdims = length(v[1].indices)
         @assert all(x -> length(x.indices) == numdims, v) "$k dimension mismatch."
         array_size = Vector(undef, numdims)
         for i in 1:numdims
-            array_size[i] = maximum(x -> isa(x.indices[i], Number) ? x.indices[i] : x.indices[i].stop, v)
+            array_size[i] = maximum(
+                x -> isa(x.indices[i], Number) ? x.indices[i] : x.indices[i].stop, v
+            )
         end
         array_sizes[k] = array_size
     end
@@ -254,7 +268,7 @@ function post_process(pass::CollectVariables, expr, env::Dict)
         else
             if !haskey(transformed_variables, tv.name)
                 tvs = fill(missing, array_sizes[tv.name]...)
-                transformed_variables[tv.name] = convert(Array{Union{Missing, Number}}, tvs)
+                transformed_variables[tv.name] = convert(Array{Union{Missing,Number}}, tvs)
             end
             transformed_variables[tv.name][tv.indices...] = pass.transformed_variables[tv]
         end
@@ -284,15 +298,16 @@ function post_process(pass::CollectVariables, expr, env::Dict)
     # corner case: x[1:2] = something, x[3] = something, x[1:3] ~ dmnorm()
     overlap = Dict()
     for k in keys(logical_bitmap)
-        overlap[k] = logical_bitmap[k]  .& stochastic_bitmap[k]
+        overlap[k] = logical_bitmap[k] .& stochastic_bitmap[k]
     end
 
     for (k, v) in overlap
         if any(v)
             idxs = findall(v)
             for i in idxs
-                !haskey(transformed_variables, k) && error("Logical and stochastic variables overlap on $k[$i].")
-                transformed_variables[k][i...]!= missing && continue
+                !haskey(transformed_variables, k) &&
+                    error("Logical and stochastic variables overlap on $k[$i].")
+                transformed_variables[k][i...] != missing && continue
                 error("Logical and stochastic variables overlap on $k[$(i...)].")
             end
         end
@@ -308,6 +323,6 @@ function post_process(pass::CollectVariables, expr, env::Dict)
     # this variable's value is captured by `transformed_variables`
     # we still include it in `vars`, but later in the graph, this is a logical root node,
     # and its value will be cached 
-    
+
     return pass.vars, array_sizes, transformed_variables, array_bitmap
 end

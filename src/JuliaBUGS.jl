@@ -21,12 +21,79 @@ import Distributions: truncated
 
 # user defined functions and distributions are not supported yet
 include("BUGSPrimitives/BUGSPrimitives.jl")
-using JuliaBUGS.BUGSPrimitives: abs, cloglog, equals, exp, inprod, inverse, log, logdet, logfact, loggam, 
-icloglog, logit, mexp, max, mean, min, phi, pow, sqrt, rank, ranked, round, sd, 
-softplus, sort, _step, sum, trunc, sin, arcsin, arcsinh, cos, arccos, arccosh, tan, arctan, arctanh
-using JuliaBUGS.BUGSPrimitives: dnorm, dlogis, dt, ddexp, dflat, dexp, dchisqr, dweib, dlnorm, dgamma, dpar, dgev, dgpar, df, dunif, dbeta, dmnorm,
-dmt, dwish, ddirich, dbern, dbin, dcat, dpois, dgeom, dnegbin, dbetabin, dhyper, dmulti, TDistShiftedScaled, Flat, 
-LeftTruncatedFlat, RightTruncatedFlat, TruncatedFlat
+using JuliaBUGS.BUGSPrimitives:
+    abs,
+    cloglog,
+    equals,
+    exp,
+    inprod,
+    inverse,
+    log,
+    logdet,
+    logfact,
+    loggam,
+    icloglog,
+    logit,
+    mexp,
+    max,
+    mean,
+    min,
+    phi,
+    pow,
+    sqrt,
+    rank,
+    ranked,
+    round,
+    sd,
+    softplus,
+    sort,
+    _step,
+    sum,
+    trunc,
+    sin,
+    arcsin,
+    arcsinh,
+    cos,
+    arccos,
+    arccosh,
+    tan,
+    arctan,
+    arctanh
+using JuliaBUGS.BUGSPrimitives:
+    dnorm,
+    dlogis,
+    dt,
+    ddexp,
+    dflat,
+    dexp,
+    dchisqr,
+    dweib,
+    dlnorm,
+    dgamma,
+    dpar,
+    dgev,
+    dgpar,
+    df,
+    dunif,
+    dbeta,
+    dmnorm,
+    dmt,
+    dwish,
+    ddirich,
+    dbern,
+    dbin,
+    dcat,
+    dpois,
+    dgeom,
+    dnegbin,
+    dbetabin,
+    dhyper,
+    dmulti,
+    TDistShiftedScaled,
+    Flat,
+    LeftTruncatedFlat,
+    RightTruncatedFlat,
+    TruncatedFlat
 
 include("bugsast.jl")
 include("variable_types.jl")
@@ -61,7 +128,9 @@ function merge_dicts(d1::Dict, d2::Dict)
 
     for key in union(keys(d1), keys(d2))
         if haskey(d1, key) && haskey(d2, key)
-            @assert (isa(d1[key], Array) && isa(d2[key], Array) && size(d1[key]) == size(d2[key])) || (isa(d1[key], Number) && isa(d2[key], Number) && d1[key] == d2[key])
+            @assert (
+                isa(d1[key], Array) && isa(d2[key], Array) && size(d1[key]) == size(d2[key])
+            ) || (isa(d1[key], Number) && isa(d2[key], Number) && d1[key] == d2[key])
             merged_dict[key] = isa(d1[key], Array) ? coalesce.(d1[key], d2[key]) : d1[key]
         else
             merged_dict[key] = haskey(d1, key) ? d1[key] : d2[key]
@@ -75,7 +144,11 @@ function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
     return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
 end
 function compile(
-    model_def::Expr, data::Dict, inits::Dict; target=:logdensityproblem, ad_backend=:reversediff
+    model_def::Expr,
+    data::Dict,
+    inits::Dict;
+    target=:logdensityproblem,
+    ad_backend=:reversediff,
 )
     check_input.((data, inits))
 
@@ -92,16 +165,20 @@ function compile(
     )
     g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
-    
-    vi, re = @invokelatest create_varinfo(g, sorted_nodes, vars, array_sizes, merged_data, inits)
+
+    vi, re = @invokelatest create_varinfo(
+        g, sorted_nodes, vars, array_sizes, merged_data, inits
+    )
     if ad_backend == :none
         p = BUGSLogDensityProblem(re)
     elseif ad_backend == :reversediff
-        p = @invokelatest ADgradient(:ReverseDiff, BUGSLogDensityProblem(re); compile=Val(true))
+        p = @invokelatest ADgradient(
+            :ReverseDiff, BUGSLogDensityProblem(re); compile=Val(true)
+        )
     else
         error("Only :reversediff is supported for now")
     end
-    
+
     return p
 end
 

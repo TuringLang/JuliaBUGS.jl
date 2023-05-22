@@ -349,13 +349,18 @@ end
 function loop_fission(expr::Expr)
     loops = loop_fission_helper(expr)
     new_expr = MacroTools.prewalk(expr) do sub_expr
-        if !MacroTools.@capture(sub_expr, for loop_var_ = l_:h_ body__ end)
+        if !MacroTools.@capture(
+            sub_expr,
+            for loop_var_ in l_:h_
+                body__
+            end
+        )
             return sub_expr
         end
-    end 
+    end
     if isnothing(new_expr)
         new_expr = Expr(:block)
-    end 
+    end
     filter!(x -> x !== nothing, new_expr.args)
     for l in loops
         push!(new_expr.args, generate_loop_expr(l))
@@ -366,7 +371,12 @@ end
 function loop_fission_helper(expr::Expr)
     loops = []
     MacroTools.prewalk(expr) do sub_expr
-        if MacroTools.@capture(sub_expr, for loop_var_ = l_:h_ body__ end)
+        if MacroTools.@capture(
+            sub_expr,
+            for loop_var_ in l_:h_
+                body__
+            end
+        )
             loops = []
             for ex in body
                 if Meta.isexpr(ex, :for)
@@ -374,7 +384,7 @@ function loop_fission_helper(expr::Expr)
                     for inner_l in inner_loops
                         push!(loops, (loop_var, l, h, inner_l))
                     end
-                    
+
                 else
                     push!(loops, (loop_var, l, h, ex))
                 end
@@ -391,9 +401,11 @@ function generate_loop_expr(loop)
     if !isa(remaining, Expr)
         remaining = generate_loop_expr(remaining)
     end
-    return MacroTools.prewalk(rmlines, :(for $loop_var = $l:$h
-        $remaining
-    end))
+    return MacroTools.prewalk(rmlines, :(
+        for $loop_var in ($l):($h)
+            $remaining
+        end
+    ))
 end
 
 function check_idxs(expr::Expr)
@@ -401,7 +413,8 @@ function check_idxs(expr::Expr)
         if MacroTools.@capture(sub_expr, x_[idxs__])
             for idx in idxs
                 MacroTools.postwalk(idx) do ssub_expr
-                    if Meta.isexpr(ssub_expr, :call) && !in(ssub_expr.args[1], [:+, :-, :*, :/, :(:)])
+                    if Meta.isexpr(ssub_expr, :call) &&
+                        !in(ssub_expr.args[1], [:+, :-, :*, :/, :(:)])
                         error("At $sub_expr: Only +, -, *, / are allowed in indexing.")
                     end
                     return ssub_expr

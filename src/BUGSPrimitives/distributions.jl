@@ -75,7 +75,9 @@ struct TDistShiftedScaled <: ContinuousUnivariateDistribution
 end
 
 Distributions.pdf(d::TDistShiftedScaled, x::Real) = pdf(TDist(d.ν), (x - d.μ) / d.σ) / d.σ
-Distributions.logpdf(d::TDistShiftedScaled, x::Real) = logpdf(TDist(d.ν), (x - d.μ) / d.σ) - log(d.σ)
+function Distributions.logpdf(d::TDistShiftedScaled, x::Real)
+    return logpdf(TDist(d.ν), (x - d.μ) / d.σ) - log(d.σ)
+end
 
 """
     ddexp(μ, τ)
@@ -94,7 +96,6 @@ function ddexp(μ, τ)
     return Laplace(μ, b)
 end
 
-
 """
     dflat()
 
@@ -111,8 +112,7 @@ dflat() = Flat()
 
 Implement the flat distribution mimicking the behavior of the `dflat` distribution in WinBUGS.
 """
-struct Flat <: ContinuousUnivariateDistribution
-end
+struct Flat <: ContinuousUnivariateDistribution end
 
 Distributions.minimum(::Flat) = -Inf
 Distributions.maximum(::Flat) = Inf
@@ -149,13 +149,15 @@ struct TruncatedFlat <: ContinuousUnivariateDistribution
     a::Real
     b::Real
 
-    TruncatedFlat(a::Real, b::Real) = (a < b) ? new(a, b) : throw(DomainError((a, b), "Requires a < b"))
+    function TruncatedFlat(a::Real, b::Real)
+        return (a < b) ? new(a, b) : throw(DomainError((a, b), "Requires a < b"))
+    end
 end
 
 Distributions.minimum(d::TruncatedFlat) = d.a
 Distributions.maximum(d::TruncatedFlat) = d.b
 
-Distributions.pdf(d::TruncatedFlat, x::Real) = (d.a <= x <= d.b) ? 1.0/(d.b - d.a) : 0.0
+Distributions.pdf(d::TruncatedFlat, x::Real) = (d.a <= x <= d.b) ? 1.0 / (d.b - d.a) : 0.0
 Distributions.logpdf(d::TruncatedFlat, x::Real) = log(pdf(d, x))
 
 function Distributions.truncated(::Flat, l::Real, r::Real)
@@ -217,7 +219,6 @@ f(x|a,b) = \\frac{b a (bx)^{a-1}}{e^{(bx)^a}}
 function dweib(a, b)
     return Weibull(a, 1 / b)
 end
-
 
 """
     dlnorm(μ, τ)
@@ -309,7 +310,11 @@ Raises a warning if `μ ≠ 0` or `τ ≠ 1`, as these cases are not fully suppo
 """
 function df(n::Real, m::Real, μ::Real=0, τ::Real=1)
     if μ ≠ 0 || τ ≠ 1
-        throw(ArgumentError("Non-standard location and scale parameters are not fully supported. The function will return a standard F-distribution."))
+        throw(
+            ArgumentError(
+                "Non-standard location and scale parameters are not fully supported. The function will return a standard F-distribution.",
+            ),
+        )
     end
     return FDist(n, m)
 end

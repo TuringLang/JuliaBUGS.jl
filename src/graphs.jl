@@ -6,7 +6,7 @@ abstract type NodeInfo end
 Indicate the node is created by the compiler and not in the original BUGS model. These nodes
 are only used to determine dependencies.
 """
-struct AuxiliaryNodeInfo <: NodeInfo end 
+struct AuxiliaryNodeInfo <: NodeInfo end
 
 """
     ConcreteNodeInfo
@@ -28,15 +28,15 @@ struct ConcreteNodeInfoConstruct
 end
 
 function (constructor::ConcreteNodeInfoConstruct)(var::Var)
-    if var in keys(constructor.vars) 
+    if var in keys(constructor.vars)
         return ConcreteNodeInfo(
             constructor.vars[var],
-            eval(constructor.link_functions[var]), 
+            eval(constructor.link_functions[var]),
             eval(constructor.node_functions[var]),
             map(
-                v -> AbstractPPL.VarName{v.name}(AbstractPPL.IdentityLens()), 
-                constructor.node_args[var]
-            )
+                v -> AbstractPPL.VarName{v.name}(AbstractPPL.IdentityLens()),
+                constructor.node_args[var],
+            ),
         )
     else
         return AuxiliaryNodeInfo()
@@ -62,11 +62,11 @@ function to_varname(v::Var)
 end
 
 function check_and_add_vertex!(g::BUGSGraph, v::VarName, data::NodeInfo)
-    if haskey(g, v) 
+    if haskey(g, v)
         if g[v] isa AuxiliaryNodeInfo && data isa ConcreteNodeInfo
             set_data!(g, v, data)
-        # else # TODO: unstable test, link_function and node_function are anonymous functions
-        #     @assert g[v].node_type == data.node_type && g[v].node_args == data.node_args
+            # else # TODO: unstable test, link_function and node_function are anonymous functions
+            #     @assert g[v].node_type == data.node_type && g[v].node_args == data.node_args
         end
     else
         add_vertex!(g, v, data)
@@ -75,7 +75,7 @@ end
 
 function scalarize_then_add_edge!(g::BUGSGraph, v::Var; lhs_or_rhs=:lhs)
     scalarized_v = vcat(scalarize(v)...)
-    length(scalarized_v) == 1 && return
+    length(scalarized_v) == 1 && return nothing
     v = to_varname(v)
     for v_elem in map(to_varname, scalarized_v)
         add_vertex!(g, v_elem, AuxiliaryNodeInfo()) # may fail, but it's ok
@@ -141,7 +141,10 @@ _inv(identity) = identity
 function evaluate(env::Dict, vn::VarName)
     sym = getsym(vn)
     ret = nothing
-    try ret = get(env[sym], getlens(vn)) catch _ end
+    try
+        ret = get(env[sym], getlens(vn))
+    catch _
+    end
     return ismissing(ret) ? nothing : ret
 end
 
@@ -151,7 +154,9 @@ function create_varinfo(g, sorted_nodes, vars, array_sizes, data, inits)
     return initialize_vi(g, sorted_nodes, vi, data, inits)
 end
 
-@inline unpack(ni::NodeInfo) = ni.node_type, ni.link_function, ni.node_function, ni.node_args
+@inline function unpack(ni::NodeInfo)
+    return ni.node_type, ni.link_function, ni.node_function, ni.node_args
+end
 
 function initialize_vi(g, sorted_nodes, vi, data, inits; transform_variables=true)
     vi = deepcopy(vi)
@@ -164,7 +169,7 @@ function initialize_vi(g, sorted_nodes, vi, data, inits; transform_variables=tru
         args = [vi[x] for x in args_vn]
         if node_type == JuliaBUGS.Logical
             value = (node_function)(args...)
-            @assert value isa Union{Number, Array{<:Number}}
+            @assert value isa Union{Number,Array{<:Number}}
             vi = setindex!!(vi, value, vn)
         else
             dist = (node_function)(args...)
@@ -186,8 +191,12 @@ function initialize_vi(g, sorted_nodes, vi, data, inits; transform_variables=tru
     l = sum([_length(x) for x in parameters])
     vi = @set vi.logp = logp
     vi = DynamicPPL.settrans!!(vi, transform_variables)
-    transform_type = transform_variables ? DynamicPPL.DynamicTransformation : DynamicPPL.IdentityTransformation
-    return vi, VarInfoReconstruct{l, transform_type}(vi, parameters, g, sorted_nodes)
+    transform_type = if transform_variables
+        DynamicPPL.DynamicTransformation
+    else
+        DynamicPPL.IdentityTransformation
+    end
+    return vi, VarInfoReconstruct{l,transform_type}(vi, parameters, g, sorted_nodes)
 end
 
 function _length(vn::VarName)
@@ -195,23 +204,27 @@ function _length(vn::VarName)
     return prod([length(index_range) for index_range in getlens(vn).indices])
 end
 
-struct VarInfoReconstruct{L, T<:DynamicPPL.AbstractTransformation}
+struct VarInfoReconstruct{L,T<:DynamicPPL.AbstractTransformation}
     prototype::SimpleVarInfo
     parameters::Vector{VarName}
     g::BUGSGraph
     sorted_nodes::Vector{VarName}
 end
 
-function (re::VarInfoReconstruct{L, DynamicPPL.DynamicTransformation})(flattened_values::AbstractVector) where L
+function (re::VarInfoReconstruct{L,DynamicPPL.DynamicTransformation})(
+    flattened_values::AbstractVector
+) where {L}
     @assert length(flattened_values) == L
-    vi, parameters, g, sorted_nodes = deepcopy(re.prototype), re.parameters, re.g, re.sorted_nodes
+    vi, parameters, g, sorted_nodes = deepcopy(re.prototype),
+    re.parameters, re.g,
+    re.sorted_nodes
     current_idx = 1
     logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
         node_type, link_function, node_function, args_vn = unpack(ni)
         args = [vi[x] for x in args_vn]
-        
+
         if node_type == JuliaBUGS.Logical
             value = node_function(args...)
             setindex!!(vi, value, vn)
@@ -219,7 +232,11 @@ function (re::VarInfoReconstruct{L, DynamicPPL.DynamicTransformation})(flattened
             dist = node_function(args...)
             if vn in parameters
                 l = _length(vn)
-                value = l == 1 ? flattened_values[current_idx] : flattened_values[current_idx:current_idx+l-1]
+                value = if l == 1
+                    flattened_values[current_idx]
+                else
+                    flattened_values[current_idx:(current_idx + l - 1)]
+                end
                 value = invlink(dist, value)
                 current_idx += l
                 setindex!!(vi, value, vn)
@@ -234,7 +251,7 @@ function (re::VarInfoReconstruct{L, DynamicPPL.DynamicTransformation})(flattened
 end
 
 # `re` with no argument is ancestral sampling
-function (re::VarInfoReconstruct{L, DynamicPPL.DynamicTransformation})() where L
+function (re::VarInfoReconstruct{L,DynamicPPL.DynamicTransformation})() where {L}
     vi, g, sorted_nodes = deepcopy(re.prototype), re.parameters, re.g, re.sorted_nodes
     logp = 0.0
     for vn in sorted_nodes

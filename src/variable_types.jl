@@ -12,12 +12,12 @@ end
 
 struct ArrayElement{N} <: Var
     name::Symbol
-    indices::NTuple{N, Int}
+    indices::NTuple{N,Int}
 end
 
 struct ArrayVar{N} <: Var
     name::Symbol
-    indices::NTuple{N, Union{Int, UnitRange, Colon}}
+    indices::NTuple{N,Union{Int,UnitRange,Colon}}
 end
 
 Var(name::Symbol) = Scalar(name, ())
