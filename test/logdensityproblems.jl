@@ -1,98 +1,61 @@
 using JuliaBUGS
-using JuliaBUGS:
-    CollectVariables,
-    DependencyGraph,
-    NodeFunctions,
-    program!,
-    BUGSLogDensityProblem,
-    ArrayVariable,
-    ArrayElement,
-    ArraySlice
-using AdvancedHMC
+using JuliaBUGS: create_BUGSGraph, create_varinfo, compile, unpack
+using JuliaBUGS: program!, CollectVariables, NodeFunctions
+using Graphs, MetaGraphsNext
 using ReverseDiff
-using LogDensityProblems
-using Statistics
-using AdvancedMH
-using LinearAlgebra
-using Distributions
-using BenchmarkTools
-using NamedTupleTools
-using BangBang
-using Graphs
-using Bijectionss
+using LogDensityProblems, LogDensityProblemsAD
+using JuliaBUGS: BUGSLogDensityProblem
+using DynamicPPL
 using ProgressMeter
 ##
-include("../src/BUGSExamples/BUGSExamples.jl")
+include("/home/sunxd/JuliaBUGS.jl/src/BUGSExamples/BUGSExamples.jl");
 volume_i_examples = BUGSExamples.volume_i_examples;
 
 ##
-v = volume_i_examples[:equiv];
-model_def = v.model_def;
-data = v.data;
-data = convert(Dict, data);
-inits = v.inits[1];
-inits = convert(Dict, inits);
-##
-p = compile(model_def, data, inits; compile_tape=false);
-array_sizes = JuliaBUGS.pre_process_data(data);
-vars, array_map, var_types, missing_elements = program!(
-    CollectVariables(array_sizes), model_def, data
-);
-dep_graph = program!(DependencyGraph(vars, array_map, missing_elements), model_def, data);
-logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables = program!(
-    NodeFunctions(data, vars, array_map, missing_elements), model_def, data
-);
+# m = volume_i_examples[keys(volume_i_examples)[1]]
+m = volume_i_examples[:dogs]
+model_def = m[:model_def]
+data = Dict(pairs(m[:data]));
+inits = Dict(pairs(m[:inits][1]));
+println(m.name)
 
 ##
-function print_to_file(x, filepath="/home/sunxd/Workspace/JuliaBUGS_outputs/output.jl")
-    open(filepath, "w+") do f
-        ks = collect(keys(x))
-        for k in ks
-            v = x[k]
-            println(f, k, " = ", v)
+vars, array_sizes, transformed_variables, array_bitmap = program!(CollectVariables(), model_def, data);
+pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, merge_dicts(data, transformed_variables));
+vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = unpack(pass);
+
+function merge_dicts(d1::Dict, d2::Dict)
+    merged_dict = Dict()
+
+    for key in union(keys(d1), keys(d2))
+        if haskey(d1, key) && haskey(d2, key)
+            @assert (isa(d1[key], Array) && isa(d2[key], Array) && size(d1[key]) == size(d2[key])) || (isa(d1[key], Number) && isa(d2[key], Number) && d1[key] == d2[key])
+            merged_dict[key] = isa(d1[key], Array) ? coalesce.(d1[key], d2[key]) : d1[key]
+        else
+            merged_dict[key] = haskey(d1, key) ? d1[key] : d2[key]
         end
     end
+
+    return merged_dict
 end
+merge_dicts(data, transformed_variables)
 
-print_to_file(vars)
-print_to_file(var_types)
-# print_to_file(node_args)
-print_to_file(
-    logical_node_args, "/home/sunxd/Workspace/JuliaBUGS_outputs/logical_node_args.jl"
-)
-print_to_file(logical_node_f_exprs)
+s = 0
+for(k, v) in transformed_variables
+    k == :y && continue
+    # find the number of elements that are not missing
+    s += count(!ismissing, v)
+end
+s
+
 ##
-@run p = BUGSLogDensityProblem(
-    vars,
-    var_types,
-    dep_graph,
-    logical_node_args,
-    logical_node_f_exprs,
-    stochastic_node_args,
-    stochastic_node_f_exprs,
-    link_functions,
-    array_variables,
-    data,
-    inits,
-)
-p = BUGSLogDensityProblem(
-    vars,
-    var_types,
-    dep_graph,
-    logical_node_args,
-    logical_node_f_exprs,
-    stochastic_node_args,
-    stochastic_node_f_exprs,
-    link_functions,
-    array_variables,
-    data,
-    inits,
-);
-initial_θ = JuliaBUGS.gen_init_params(p);
-logp = p(initial_θ)
-
-## run all examples
-report_file = "/home/sunxd/Workspace/JuliaBUGS_outputs/test_report.jl"
+g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies);
+sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g));
+vi, re = create_varinfo(g, sorted_nodes, vars, array_sizes, merge_dicts(data, transformed_variables), inits);
+vi.logp
+##
+p = ADgradient(:ReverseDiff, BUGSLogDensityProblem(re); compile=Val(true));
+##
 example_names = (
     :blockers,
     :bones,
@@ -116,80 +79,89 @@ example_names = (
     :surgical_simple,
     :surgical_realistic,
 )
-function test_all_examples(examples, report_file, examples_to_test)
-    open(report_file, "w+") do f
+function test_all_examples(examples, examples_to_test, print_to_stdout=false, report_file="/home/sunxd/JuliaBUGS.jl/debug_outputs/test_report.jl")
+    output_stream = print_to_stdout ? stdout : open(report_file, "w+")
+
+    p = Progress(length(examples_to_test), desc="Testing: ")
+
+    try
         for k in examples_to_test
-            v = examples[k]
-            println(f, "Testing $(k) ...")
-            model_def = v.model_def
-            data = v.data
-            inits = v.inits[1]
+            ProgressMeter.next!(p, showvalues=[(:Example, k)])
+            m = examples[k]
+            println(output_stream, "Testing $(k) ...")
+            model_def = m[:model_def]
+            data = Dict(pairs(m[:data]));
+            inits = Dict(pairs(m[:inits][1]));
             try
-                p = compile(model_def, data, inits; compile_tape=false)
-                initial_θ = JuliaBUGS.gen_init_params(p)
-                logp = p(initial_θ)
-                println(f, "logp = ", logp)
+                vars, array_sizes, transformed_variables, array_bitmap = program!(CollectVariables(), model_def, data);
+                pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, merge_dicts(data, transformed_variables));
+                vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = unpack(pass);
+                g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies);
+                sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g));
+                vi, re = @invokelatest create_varinfo(g, sorted_nodes, vars, array_sizes, merge_dicts(data, transformed_variables), inits);
+                println(output_stream, "logp: $(vi.logp)")
             catch e
-                println(f, "Error: ", e)
+                println(output_stream, "Error in example $(k): ", e)
             end
-            println(f)
+            println(output_stream)
+        end
+    finally
+        if !print_to_stdout
+            close(output_stream)
         end
     end
 end
 
-test_all_examples(volume_i_examples, report_file, example_names)
+function test_single_example(examples, example_name)
+    k = example_name
+    m = examples[k]
+    model_def = m[:model_def]
+    data = Dict(pairs(m[:data]));
+    inits = Dict(pairs(m[:inits][1]));
+    vars, array_sizes, transformed_variables, array_bitmap = program!(CollectVariables(), model_def, data);
+    pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, data);
+    vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = unpack(pass);
+    g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies);
+    sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g));
+    vi, re = @invokelatest create_varinfo(g, sorted_nodes, vars, array_sizes, data, inits);
+    println("logp: $(vi.logp)")
+end
+test_all_examples(volume_i_examples, example_names)
+test_all_examples(volume_i_examples, (:rats,), true)
 
-## HMC
-p = compile(model_def, data, init)
-initial_θ = JuliaBUGS.gen_init_params(p)
+@run test_single_example(volume_i_examples, :bones)
+##
+@run p = compile(model_def, data, inits)
+p = compile(model_def, data, inits)
 
-D = LogDensityProblems.dimension(p)
-n_samples, n_adapts = 2000, 1000
+D = LogDensityProblems.dimension(p);
+logp, grad = LogDensityProblems.logdensity_and_gradient(p, rand(D))
+logp = LogDensityProblems.logdensity(p, rand(D))
 
-metric = AdvancedHMC.DiagEuclideanMetric(D)
-hamiltonian = AdvancedHMC.Hamiltonian(metric, p, :ReverseDiff)
+##
+using DynamicHMC, Random
+using MCMCChains, Statistics
 
+results = mcmc_with_warmup(Random.GLOBAL_RNG, p, 1000)
+chains = Chains(transpose(results.posterior_matrix), Symbol.(p.ℓ.re.parameters))
+mean(chains[:beta_c])
+
+##
+using AdvancedHMC
+using LinearAlgebra
+
+D = LogDensityProblems.dimension(p); 
+n_samples, n_adapts = 2_000, 1_000
+
+initial_θ = rand(D)
+metric = DiagEuclideanMetric(D)
+hamiltonian = Hamiltonian(metric, p, ReverseDiff)
 initial_ϵ = find_good_stepsize(hamiltonian, initial_θ)
 integrator = Leapfrog(initial_ϵ)
-proposal = NUTS{MultinomialTS,GeneralisedNoUTurn}(integrator)
+proposal = NUTS{MultinomialTS, GeneralisedNoUTurn}(integrator)
 adaptor = StanHMCAdaptor(MassMatrixAdaptor(metric), StepSizeAdaptor(0.8, integrator))
 
-samples, stats = sample(
-    hamiltonian,
-    proposal,
-    initial_θ,
-    n_samples,
-    adaptor,
-    n_adapts;
-    drop_warmup=true,
-    progress=true,
-)
-traces = [JuliaBUGS.transform_samples(p, sample) for sample in samples]
-open("/home/sunxd/JuliaBUGS.jl/notebooks/output.jl", "w+") do f
-    for k in p.parameters
-        k_samples = [trace[k] for trace in traces]
-        m = mean(k_samples)
-        s = std(k_samples)
-        println(f, k, " = ", m, " ± ", s)
-    end
-end
-##
+samples, stats = sample(hamiltonian, proposal, initial_θ, n_samples, adaptor, n_adapts; progress=true, drop_warmup=true)
 
-## RWMH
-p = compile(model_def, data, init)
-initial_θ = JuliaBUGS.gen_init_params(p)
-
-D = LogDensityProblems.dimension(p)
-spl = RWMH(MvNormal(zeros(D), I))
-samples = sample(p, spl, 100000)
-
-traces = [JuliaBUGS.transform_samples(p, sample.params) for sample in samples]
-open("/home/sunxd/JuliaBUGS.jl/notebooks/output.jl", "w+") do f
-    for k in p.parameters
-        k_samples = [trace[k] for trace in traces]
-        m = mean(k_samples)
-        s = std(k_samples)
-        println(f, k, " = ", m, " ± ", s)
-    end
-end
-##
+beta_c_samples = [samples[s][2] for s in 1:length(samples)]
+stats = mean(beta_c_samples), std(beta_c_samples) # Reference result: mean 6.186, variance 0.1088

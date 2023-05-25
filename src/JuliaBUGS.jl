@@ -1,117 +1,185 @@
 module JuliaBUGS
 
 using AbstractPPL
-using Accessors
-using AdvancedHMC
-using BangBang
-using Bijections
 using Bijectors
+using BangBang
 using Distributions
+using DynamicPPL
 using LinearAlgebra
 using LogExpFunctions
 using SpecialFunctions
 using Statistics
+using Setfield
 using Graphs, MetaGraphsNext
 using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
 using ReverseDiff
 
-using RuntimeGeneratedFunctions
-RuntimeGeneratedFunctions.init(@__MODULE__)
+import Base: ==, hash, Symbol, size
 
-import Base: in, push!, ==, hash, Symbol, keys, size, isless
+import Distributions: truncated
 
-export @bugsast, @bugsmodel_str
-
+# user defined functions and distributions are not supported yet
 include("BUGSPrimitives/BUGSPrimitives.jl")
-using .BUGSPrimitives
-
-macro register_function(ex)
-    return eval_registration(ex)
-end
-
-macro register_distribution(ex)
-    return eval_registration(ex)
-end
-
-function eval_registration(ex)
-    def = MacroTools.splitdef(ex)
-    reg_sym = Expr(
-        :macrocall,
-        Symbol("@register_symbolic"),
-        LineNumberNode(@__LINE__, @__FILE__),
-        Expr(:call, def[:name], def[:args]...),
-    )
-    eval(reg_sym)
-    eval(ex)
-    return def[:name]
-end
+using JuliaBUGS.BUGSPrimitives:
+    abs,
+    cloglog,
+    equals,
+    exp,
+    inprod,
+    inverse,
+    log,
+    logdet,
+    logfact,
+    loggam,
+    icloglog,
+    logit,
+    mexp,
+    max,
+    mean,
+    min,
+    phi,
+    pow,
+    sqrt,
+    rank,
+    ranked,
+    round,
+    sd,
+    softplus,
+    sort,
+    _step,
+    sum,
+    trunc,
+    sin,
+    arcsin,
+    arcsinh,
+    cos,
+    arccos,
+    arccosh,
+    tan,
+    arctan,
+    arctanh
+using JuliaBUGS.BUGSPrimitives:
+    dnorm,
+    dlogis,
+    dt,
+    ddexp,
+    dflat,
+    dexp,
+    dchisqr,
+    dweib,
+    dlnorm,
+    dgamma,
+    dpar,
+    dgev,
+    dgpar,
+    df,
+    dunif,
+    dbeta,
+    dmnorm,
+    dmt,
+    dwish,
+    ddirich,
+    dbern,
+    dbin,
+    dcat,
+    dpois,
+    dgeom,
+    dnegbin,
+    dbetabin,
+    dhyper,
+    dmulti,
+    TDistShiftedScaled,
+    Flat,
+    LeftTruncatedFlat,
+    RightTruncatedFlat,
+    TruncatedFlat
 
 include("bugsast.jl")
 include("variable_types.jl")
 include("compiler_pass.jl")
-include("passes/collect_variables.jl")
-include("passes/dependency_graph.jl")
-include("passes/node_functions.jl")
-include("targets/logdensityproblems.jl")
+include("node_functions.jl")
+include("graphs.jl")
+include("logdensityproblems.jl")
 
-# TODO: adapt DataFrames.jl
+export @bugsast, @bugsmodel_str
 
-function pre_process_data(data::Dict)
-    array_sizes = Dict()
+export compile
 
-    for (k, v) in data
-        if v isa AbstractArray
-            array_sizes[k] = collect(size(v))
+function check_input(input::Union{NamedTuple,Dict})
+    for (k, v) in input
+        @assert k isa Symbol
+        # v has three possibilities: 1. number 2. array of numbers 3. array mixed with numbers and missing
+        # check this
+        if v isa Number
+            continue
+        elseif v isa AbstractArray
+            for i in v
+                @assert i isa Number || ismissing(i)
+            end
+        else
+            error("Input $k is not a number or an array of numbers")
+        end
+    end
+end
+
+function merge_dicts(d1::Dict, d2::Dict)
+    merged_dict = Dict()
+
+    for key in union(keys(d1), keys(d2))
+        if haskey(d1, key) && haskey(d2, key)
+            @assert (
+                isa(d1[key], Array) && isa(d2[key], Array) && size(d1[key]) == size(d2[key])
+            ) || (isa(d1[key], Number) && isa(d2[key], Number) && d1[key] == d2[key])
+            merged_dict[key] = isa(d1[key], Array) ? coalesce.(d1[key], d2[key]) : d1[key]
+        else
+            merged_dict[key] = haskey(d1, key) ? d1[key] : d2[key]
         end
     end
 
-    return array_sizes
+    return merged_dict
 end
 
 function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
     return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
 end
 function compile(
-    model_def::Expr, data::Dict, inits::Dict; target=:LogDensityProblems, compile_tape=true
+    model_def::Expr,
+    data::Dict,
+    inits::Dict;
+    target=:logdensityproblem,
+    ad_backend=:reversediff,
 )
-    array_sizes = pre_process_data(data)
-    vars, array_map, var_types, missing_elements = program!(
-        CollectVariables(array_sizes), model_def, data
-    )
-    dep_graph = program!(
-        DependencyGraph(vars, array_map, missing_elements), model_def, data
-    )
-    logical_node_args, logical_node_f_exprs, stochastic_node_args, stochastic_node_f_exprs, link_functions, array_variables = program!(
-        NodeFunctions(data, vars, array_map, missing_elements), model_def, data
+    check_input.((data, inits))
+
+    target == :logdensityproblem || error("Only :logdensityproblem is supported for now")
+
+    vars, array_sizes, transformed_variables, array_bitmap = program!(
+        CollectVariables(), model_def, data
     )
 
-    p = BUGSLogDensityProblem(
-        vars,
-        var_types,
-        dep_graph,
-        logical_node_args,
-        logical_node_f_exprs,
-        stochastic_node_args,
-        stochastic_node_f_exprs,
-        link_functions,
-        array_variables,
-        data,
-        inits,
+    merged_data = merge_dicts(deepcopy(data), transformed_variables)
+    pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, merged_data)
+    vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = unpack(
+        pass
     )
-    if compile_tape
-        inputs = gen_init_params(p)
-        f_tape = ReverseDiff.GradientTape(p, inputs)
-        compiled_tape = ReverseDiff.compile(f_tape)
-        all_results = ReverseDiff.DiffResults.GradientResult(inputs)
-        cfg = ReverseDiff.GradientConfig(inputs)
-        p = @set p.compiled_tape = compiled_tape
-        p = @set p.gradient_cfg = cfg
-        p = @set p.all_results = all_results
+    g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
+    sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
+
+    vi, re = @invokelatest create_varinfo(
+        g, sorted_nodes, vars, array_sizes, merged_data, inits
+    )
+    if ad_backend == :none
+        p = BUGSLogDensityProblem(re)
+    elseif ad_backend == :reversediff
+        p = @invokelatest ADgradient(
+            :ReverseDiff, BUGSLogDensityProblem(re); compile=Val(true)
+        )
+    else
+        error("Only :reversediff is supported for now")
     end
+
     return p
 end
-
-export compile
 
 end

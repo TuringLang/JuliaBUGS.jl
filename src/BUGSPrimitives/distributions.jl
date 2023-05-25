@@ -1,234 +1,567 @@
-export dnorm,
-    dlogis,
-    dt,
-    ddexp,
-    dflat,
-    dexp,
-    dgamma,
-    dchisqr,
-    dweib,
-    dlnorm,
-    dggamma,
-    dpar,
-    dgev,
-    dgpar,
-    df,
-    dunif,
-    dbeta,
-    dmnorm,
-    dmt,
-    dwish,
-    ddirich,
-    dbern,
-    dbin,
-    dcat,
-    dpois,
-    dgeom,
-    dnegbin,
-    dbetabin,
-    dhyper,
-    dmulti
+"""
+    dnorm(μ, τ)
 
-# Support for distributions that are part of BUGS but not implemented in Distributions.jl.
+Return a [Normal](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Normal) 
+distribution object with mean `μ` and precision `τ` (the reciprocal of variance).
 
-# Modified from https://github.com/TuringLang/Turing.jl/blob/master/src/stdlib/distributions.jl
-# Rename `Flat` to `DFlat` to avoid name conflict with Turing.jl
+The mathematical form of the PDF for a Normal distribution in WinBUGS is given by:
+
+```math
+f(x|μ,τ) = \\sqrt{\\frac{τ}{2π}} e^{-τ \\frac{(x-μ)^2}{2}}
+```
+
+In Julia, this function uses mean ``μ`` and standard deviation ``σ = \\sqrt{1 / τ}``.
+"""
+function dnorm(μ, τ)
+    σ = √(1 / τ)
+    return Normal(μ, σ)
+end
+
+"""
+    dlogis(μ, τ)
+
+Return a [Logistic](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Logistic) 
+distribution object with location parameter `μ` and scale parameter `s`, where ``s = 1 / √τ``.
+
+The mathematical form of the PDF for a Logistic distribution in WinBUGS is given by:
+
+```math
+f(x|μ,τ) = \\frac{\\sqrt{τ} e^{-\\sqrt{τ}(x-μ)}}{(1+e^{-\\sqrt{τ}(x-μ)})^2}
+```
+"""
+function dlogis(μ, τ)
+    s = 1 / √τ
+    return Logistic(μ, s)
+end
+
+"""
+    dt(μ, τ, ν)
+
+Return a Student's t-distribution object with `ν` degrees of freedom, location `μ`, and scale ``σ = √(1 / τ)``. If `μ` is 0 and `σ` is 1, the function returns a `Tdist` object. Otherwise, it returns a `TDistShiftedScaled` object.
+
+The mathematical form of the PDF for a Student's t-distribution is given by:
+
+```math
+f(x|ν,μ,σ) = \\frac{Γ((ν+1)/2)}{Γ(ν/2) √{νπσ}}
+\\left(1+\\frac{1}{ν}\\left(\\frac{x-μ}{σ}\\right)^2\\right)^{-\\frac{ν+1}{2}}
+```
+
+The mathematical form of the log-PDF for a Student's t-distribution is given by:
+```math
+log(f(x|ν,μ,σ)) = log(Γ((ν+1)/2)) - log(Γ(ν/2)) - \\frac{1}{2}log(νπσ) - \\frac{ν+1}{2} log\\left(1+\\frac{1}{ν}\\left(\\frac{x-μ}{σ}\\right)^2\\right)
+```
+
+In the above, `x` is the random variable, `ν` is the degrees of freedom, `μ` is the location parameter, and `σ` is the scale parameter.
+
+This implementation of the Student's t-distribution in Julia allows for a shift (determined by `μ`) and a scale (determined by `σ`) of the standard Student's t-distribution provided by the Distributions package.
+
+Only `pdf` and `logpdf` are implemented for this distribution.
+"""
+function dt(μ, τ, ν)
+    σ = √(1 / τ)
+    if μ == 0 && σ == 1
+        return TDist(ν)
+    else
+        return TDistShiftedScaled(ν, μ, σ)
+    end
+end
+
+struct TDistShiftedScaled <: ContinuousUnivariateDistribution
+    ν::Real
+    μ::Real
+    σ::Real
+
+    TDistShiftedScaled(ν::Real, μ::Real, σ::Real) = new(ν, μ, σ)
+end
+
+Distributions.pdf(d::TDistShiftedScaled, x::Real) = pdf(TDist(d.ν), (x - d.μ) / d.σ) / d.σ
+function Distributions.logpdf(d::TDistShiftedScaled, x::Real)
+    return logpdf(TDist(d.ν), (x - d.μ) / d.σ) - log(d.σ)
+end
+
+"""
+    ddexp(μ, τ)
+
+Return a [Laplace (Double Exponential)](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Laplace) 
+distribution object with location `μ` and scale ``b = 1 / √τ``.
+
+The mathematical form of the PDF for a Laplace distribution in WinBUGS is given by:
+
+```math
+f(x|μ,τ) = \\frac{\\sqrt{τ}}{2} e^{-\\sqrt{τ} |x-μ|}
+```end
+"""
+function ddexp(μ, τ)
+    b = 1 / √τ
+    return Laplace(μ, b)
+end
+
+"""
+    dflat()
+
+A distribution type representing a flat (uniform) prior over the real line. This is not a valid
+probability distribution, but can be used to represent a non-informative prior in Bayesian statistics.
+The cdf, logcdf, quantile, cquantile, rand, and rand methods are not implemented
+for this distribution, as they don't have meaningful definitions in the context of a flat prior.
+When use in a model, the parameters always need to be initialized to a valid value.
+"""
+dflat() = Flat()
+
 """
     Flat
 
-The *flat distribution* is the improper distribution of real numbers that has the improper
-probability density function
-```math
-f(x) = 1.
-```
+Implement the flat distribution mimicking the behavior of the `dflat` distribution in WinBUGS.
 """
-struct DFlat <: ContinuousUnivariateDistribution end
+struct Flat <: ContinuousUnivariateDistribution end
 
-Base.minimum(::DFlat) = -Inf
-Base.maximum(::DFlat) = Inf
+Distributions.minimum(::Flat) = -Inf
+Distributions.maximum(::Flat) = Inf
 
-Base.rand(rng::Random.AbstractRNG, d::DFlat) = rand(Uniform(-100, 100))
-Distributions.logpdf(::DFlat, x::Real) = zero(x)
-Distributions.pdf(d::DFlat, x::Real) = exp(logpdf(d, x))
-Distributions.cdf(d::DFlat, x::Real) = 0
+Distributions.pdf(::Flat, x::Real) = 1.0
+Distributions.logpdf(::Flat, x::Real) = 0.0
 
-# For vec support
-Distributions.logpdf(::DFlat, x::AbstractVector{<:Real}) = zero(x)
-Distributions.loglikelihood(::DFlat, x::AbstractVector{<:Real}) = zero(eltype(x))
-
-"""
-    LeftTruncatedFlat
-
-Left truncated version of the flat distribution.
-"""
-struct LeftTruncatedFlat{T<:Real} <: ContinuousUnivariateDistribution
-    l::T
+struct LeftTruncatedFlat <: ContinuousUnivariateDistribution
+    a::Real
 end
 
-Base.minimum(d::LeftTruncatedFlat) = d.l
-Base.maximum(d::LeftTruncatedFlat) = Inf
+Distributions.minimum(d::LeftTruncatedFlat) = d.a
+Distributions.maximum(::LeftTruncatedFlat) = Inf
 
-Base.rand(rng::Random.AbstractRNG, d::LeftTruncatedFlat) = rand(rng) + d.l
-function Distributions.logpdf(d::LeftTruncatedFlat, x::Real)
-    z = float(zero(x))
-    return x <= d.l ? oftype(z, -Inf) : z
-end
-Distributions.pdf(d::LeftTruncatedFlat, x::Real) = exp(logpdf(d, x))
-Distributions.cdf(d::LeftTruncatedFlat, x::Real) = 0
+Distributions.pdf(d::LeftTruncatedFlat, x::Real) = x >= d.a ? 1.0 : 0.0
+Distributions.logpdf(d::LeftTruncatedFlat, x::Real) = x >= d.a ? 0.0 : -Inf
 
-# For vec support
-function Distributions.loglikelihood(d::LeftTruncatedFlat, x::AbstractVector{<:Real})
-    lower = d.l
-    T = float(eltype(x))
-    return any(xi <= lower for xi in x) ? T(-Inf) : zero(T)
+struct RightTruncatedFlat <: ContinuousUnivariateDistribution
+    b::Real
 end
+
+Distributions.minimum(::RightTruncatedFlat) = -Inf
+Distributions.maximum(d::RightTruncatedFlat) = d.b
+
+Distributions.pdf(d::RightTruncatedFlat, x::Real) = x <= d.b ? 1.0 : 0.0
+Distributions.logpdf(d::RightTruncatedFlat, x::Real) = x <= d.b ? 0.0 : -Inf
 
 """
-    RightTruncatedFlat
+    TruncatedFlat
 
-Right truncated version of the flat distribution.
+Truncated version of the flat distribution.
 """
-struct RightTruncatedFlat{T<:Real} <: ContinuousUnivariateDistribution
-    r::T
-end
+struct TruncatedFlat <: ContinuousUnivariateDistribution
+    a::Real
+    b::Real
 
-Base.minimum(d::RightTruncatedFlat) = -Inf
-Base.maximum(d::RightTruncatedFlat) = d.r
-
-Base.rand(rng::Random.AbstractRNG, d::RightTruncatedFlat) = -rand(rng) + d.r
-function Distributions.logpdf(d::RightTruncatedFlat, x::Real)
-    z = float(zero(x))
-    return x >= d.r ? oftype(z, Inf) : z
-end
-Distributions.pdf(d::RightTruncatedFlat, x::Real) = exp(logpdf(d, x))
-Distributions.cdf(d::RightTruncatedFlat, x::Real) = 0
-
-# For vec support
-function Distributions.loglikelihood(d::RightTruncatedFlat, x::AbstractVector{<:Real})
-    upper = d.r
-    T = float(eltype(x))
-    return any(xi >= upper for xi in x) ? T(Inf) : zero(T)
-end
-
-function truncated(d::DFlat, l::Real, r::Real)
-    if l > r
-        throw(ArgumentError("invalid truncation interval: $l > $r"))
+    function TruncatedFlat(a::Real, b::Real)
+        return (a < b) ? new(a, b) : throw(DomainError((a, b), "Requires a < b"))
     end
-    return Uniform(l, r)
 end
 
-function truncated(d::DFlat, l::Real, ::Nothing)
+Distributions.minimum(d::TruncatedFlat) = d.a
+Distributions.maximum(d::TruncatedFlat) = d.b
+
+Distributions.pdf(d::TruncatedFlat, x::Real) = (d.a <= x <= d.b) ? 1.0 / (d.b - d.a) : 0.0
+Distributions.logpdf(d::TruncatedFlat, x::Real) = log(pdf(d, x))
+
+function Distributions.truncated(::Flat, l::Real, r::Real)
+    return TruncatedFlat(l, r)
+end
+
+function Distributions.truncated(::Flat, l::Real, ::Nothing)
     return LeftTruncatedFlat(l)
 end
 
-function truncated(d::DFlat, ::Nothing, r::Real)
+function Distributions.truncated(::Flat, ::Nothing, r::Real)
     return RightTruncatedFlat(r)
 end
 
-### 
-### Distributions
-### 
+"""
+    dexp(λ)
 
-###
-### Continuous univariate, unrestricted range
-### 
+Return an [Exponential](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Exponential) 
+distribution object with rate `λ`, where the rate is defined as ``1 / λ`` in Julia's `Distributions` package.
 
-dnorm(mu, tau) = Normal(mu, 1 / sqrt(tau))
+The mathematical form of the PDF for an Exponential distribution in WinBUGS is given by:
 
-dlogis(μ, τ) = Logistic(μ, 1 / τ)
-
-function dt(μ, τ, k)
-    if μ != 1 || τ != 1
-        error("Only μ = 1 and τ = 1 are supported for Student's t distribution.")
-    end
-    return TDist(k)
+```math
+f(x|λ) = λ e^{-λ x}
+```end
+"""
+function dexp(λ)
+    return Exponential(1 / λ)
 end
 
-ddexp(μ, τ) = Laplace(μ, 1 / τ)
+"""
+    dchisqr(k)
 
-dflat() = DFlat()
+Return a [Chi-squared](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Chisq) 
+distribution object with `k` degrees of freedom.
 
-###
-### Continuous univariate, restricted to be positive
-###
-dexp(λ) = Exponential(1 / λ)
+The mathematical form of the PDF for a Chi-squared distribution in WinBUGS is given by:
 
-dgamma(a, b) = Gamma(a, 1 / b)
-
-dchisqr(k) = Chisq(k)
-
-dweib(a, b) = Weibull(a, 1 / b)
-
-dlnorm(μ, τ) = LogNormal(μ, 1 / τ)
-
-function var"gen.gamma"(a, b, c)
-    if c != 1
-        error("Only c = 1 is supported for generalized gamma distribution.")
-    end
-    return Gamma(a, 1 / b)
+```math
+f(x|k) = \\frac{1}{2^{k/2} Γ(k/2)} x^{k/2 - 1} e^{-x/2}
+```end
+"""
+function dchisqr(k)
+    return Chisq(k)
 end
-dggamma(a, b, c) = var"gen.gamma"(a, b, c)
 
-dpar(a, b) = Pareto(a, b)
+"""
+    dweib(a, b)
 
-dgev(μ, σ, η) = GeneralizedExtremeValue(μ, σ, η)
+Return a [Weibull](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Weibull) 
+distribution object with shape `a` and scale ``λ = 1 / b``.
 
-dgpar(μ, σ, η) = GeneralizedPareto(μ, σ, η)
+The mathematical form of the PDF for a Weibull distribution in WinBUGS is given by:
 
-function df(n, m, μ, τ)
-    if μ != 1 || τ != 1
-        error("Only μ = 1 and τ = 1 are supported for F distribution.")
+```math
+f(x|a,b) = \\frac{b a (bx)^{a-1}}{e^{(bx)^a}}
+```end
+"""
+function dweib(a, b)
+    return Weibull(a, 1 / b)
+end
+
+"""
+    dlnorm(μ, τ)
+
+Return a [LogNormal](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.LogNormal) 
+distribution object with location `μ` and scale ``σ = 1 / √τ``.
+
+The mathematical form of the PDF for a LogNormal distribution in WinBUGS is given by:
+
+```math
+f(x|μ,τ) = \\frac{\\sqrt{τ}}{x\\sqrt{2π}} e^{-τ/2 (\\log(x) - μ)^2}
+```end
+"""
+function dlnorm(μ, τ)
+    return LogNormal(μ, 1 / √τ)
+end
+
+"""
+    dgamma(a, b)
+
+Return a [Gamma](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Gamma) 
+distribution object with shape `a` and scale ``θ = 1 / b``.
+
+The mathematical form of the PDF for a Gamma distribution in WinBUGS is given by:
+
+```math
+f(x|a,b) = \\frac{b^a}{Γ(a)} x^{a-1} e^{-bx}
+```end
+"""
+function dgamma(a, b)
+    θ = 1 / b
+    return Gamma(a, θ)
+end
+
+"""
+    dpar(a, b)
+
+Return a [Pareto](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Pareto) 
+distribution object with scale `a` and shape `b`.
+
+The mathematical form of the PDF for a Pareto distribution in WinBUGS is given by:
+
+```math
+f(x|a,b) = \\frac{ba^b}{x^{b+1}}
+```end
+"""
+function dpar(a, b)
+    return Pareto(a, b)
+end
+
+"""
+    dgev(μ, σ, η)
+
+Return a [GeneralizedExtremeValue](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.GeneralizedExtremeValue) 
+distribution object with location `μ`, scale `σ`, and shape `η`.
+
+The mathematical form of the PDF for a Generalized Extreme Value distribution in WinBUGS is given by:
+
+```math
+f(x|μ,σ,η) = \\frac{1}{σ} (1 + η ((x - μ)/σ))^{-1/η - 1} e^{-(1 + η ((x - μ)/σ))^{-1/η}}
+```end
+"""
+function dgev(μ, σ, η)
+    return GeneralizedExtremeValue(μ, σ, η)
+end
+
+"""
+    dgpar(μ, σ, η)
+
+Return a [GeneralizedPareto](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.GeneralizedPareto) 
+distribution object with location `μ`, scale `σ`, and shape `η`.
+
+The mathematical form of the PDF for a Generalized Pareto distribution in WinBUGS is given by:
+
+```math
+f(x|μ,σ,η) = \\frac{1}{σ} (1 + η ((x - μ)/σ))^{-1/η - 1}
+```end
+"""
+function dgpar(μ, σ, η)
+    return GeneralizedPareto(μ, σ, η)
+end
+
+"""
+    df(n::Real, m::Real, μ::Real=0, τ::Real=1)
+
+Return an [F-distribution](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.FDist) 
+object with `n` and `m` degrees of freedom, location `μ`, and scale `τ`.
+Raises a warning if `μ ≠ 0` or `τ ≠ 1`, as these cases are not fully supported.
+"""
+function df(n::Real, m::Real, μ::Real=0, τ::Real=1)
+    if μ ≠ 0 || τ ≠ 1
+        throw(
+            ArgumentError(
+                "Non-standard location and scale parameters are not fully supported. The function will return a standard F-distribution.",
+            ),
+        )
     end
     return FDist(n, m)
 end
 
-###
-### Continuous univariate, restricted to a finite interval
-###
+"""
+    dunif(a, b)
 
-dunif(a, b) = Uniform(a, b)
+Return a [Uniform](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Uniform) 
+distribution object with lower bound `a` and upper bound `b`.
 
-dbeta(a, b) = Beta(a, b)
+The mathematical form of the PDF for a Uniform distribution in WinBUGS is given by:
 
-###
-### Continuous multivariate distributions
-###
+```math
+f(x|a,b) = \\frac{1}{b - a}
+```end
+"""
+function dunif(a, b)
+    return Uniform(a, b)
+end
 
-dmnorm(μ::Vector, T::Matrix) = MvNormal(μ, T)
+"""
+    dbeta(a, b)
 
-dmt(μ::Vector, T::Matrix, k) = MvTDist(k, μ, T)
+Return a [Beta](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Beta) 
+distribution object with shape parameters `a` and `b`.
 
-dwish(R::Matrix, k) = Wishart(k, R^(-1))
+The mathematical form of the PDF for a Beta distribution in WinBUGS is given by:
 
-ddirich(θ::Vector) = Dirichlet(θ)
+```math
+f(x|a,b) = \\frac{x^{a-1} (1 - x)^{b-1}}{B(a, b)}
+```end
+"""
+function dbeta(a, b)
+    return Beta(a, b)
+end
 
-###
-### Discrete univariate distributions
-###
+"""
+    dmnorm(μ::Vector, T::Matrix)
 
-dbern(p) = Bernoulli(p)
+Return a [Multivariate Normal](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.MvNormal) 
+distribution object with mean vector `μ` and precision matrix `T`.
 
-dbin(p, n) = Binomial(n, p)
+The mathematical form of the PDF for a Multivariate Normal distribution in WinBUGS is given by:
 
-dcat(p) = Categorical(p)
+```math
+f(x|μ,T) = (2π)^{-k/2} |T|^{1/2} e^{-1/2 (x-μ)' T (x-μ)}
+```end
+"""
+function dmnorm(μ::Vector, T::Matrix)
+    return MvNormal(μ, T)
+end
 
-dpois(θ) = Poisson(θ)
+"""
+    dmt(μ::Vector, T::Matrix, k)
 
-dgeom(θ) = Geometric(θ)
+Return a [Multivariate T](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.MvTDist) 
+distribution object with mean vector `μ`, precision matrix `T`, and `k` degrees of freedom.
 
-dnegbin(p, r) = NegativeBinomial(r, p)
+The mathematical form of the PDF for a Multivariate T distribution in WinBUGS is given by:
 
-dbetabin(a, b, n) = BetaBinomial(n, a, b)
+```math
+f(x|μ,T,k) = Γ((k+p)/2) / (Γ(k/2) (kπ)^{p/2} |T|^{1/2}) (1 + 1/k (x-μ)' T (x-μ))^{-((k+p)/2)}
+```end
+"""
+function dmt(μ::Vector, T::Matrix, k)
+    return MvTDist(k, μ, T)
+end
 
+"""
+    dwish(R::Matrix, k)
+
+Return a [Wishart](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.Wishart) 
+distribution object with `k` degrees of freedom and scale matrix `R^(-1)`.
+
+The mathematical form of the PDF for a Wishart distribution in WinBUGS is given by:
+
+```math
+f(X|R,k) = |X|^{(k-p-1)/2} e^{-1/2 tr(RX)} / (2^{kp/2} |R|^{k/2} Γ_p(k/2))
+```end
+"""
+function dwish(R::Matrix, k)
+    return Wishart(k, inv(R))
+end
+
+"""
+    ddirich(θ::Vector)
+
+Return a [Dirichlet](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.Dirichlet) 
+distribution object with parameters `θ`.
+
+The mathematical form of the PDF for a Dirichlet distribution in WinBUGS is given by:
+
+```math
+f(x|θ) = Γ(∑θ) / ∏Γ(θ) ∏x^{θ-1}
+```end
+"""
+function ddirich(θ::Vector)
+    return Dirichlet(θ)
+end
+
+"""
+    dbern(p)
+
+Return a [Bernoulli](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Bernoulli) 
+distribution object with success probability `p`.
+
+The mathematical form of the PMF for a Bernoulli distribution in WinBUGS is given by:
+
+```math
+P(x|p) = p^x (1 - p)^{1-x}
+```end
+"""
+function dbern(p)
+    return Bernoulli(p)
+end
+
+"""
+    dbin(p, n)
+
+Return a [Binomial](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Binomial) 
+distribution object with number of trials `n` and success probability `p`.
+
+The mathematical form of the PMF for a Binomial distribution in WinBUGS is given by:
+
+```math
+P(x|n,p) = C(n, x) p^x (1 - p)^{n-x}
+```end
+"""
+function dbin(p, n)
+    return Binomial(n, p)
+end
+
+"""
+    dcat(p)
+
+Return a [Categorical](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.Categorical) 
+distribution object with probabilities `p`.
+
+The mathematical form of the PMF for a Categorical distribution in WinBUGS is given by:
+
+```math
+P(x|p) = p[x]
+```end
+"""
+function dcat(p)
+    return Categorical(p)
+end
+
+"""
+    dpois(θ)
+
+Return a [Poisson](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Poisson) 
+distribution object with mean (and variance) `θ`.
+
+The mathematical form of the PMF for a Poisson distribution in WinBUGS is given by:
+
+```math
+P(x|θ) = e^{-θ} θ^x / x!
+```end
+"""
+function dpois(θ)
+    return Poisson(θ)
+end
+
+"""
+    dgeom(θ)
+
+Return a [Geometric](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Geometric) 
+distribution object with success probability `θ`.
+
+The mathematical form of the PMF for a Geometric distribution in WinBUGS is given by:
+
+```math
+P(x|θ) = (1 - θ)^{x-1} θ
+```end
+"""
+function dgeom(θ)
+    return Geometric(θ)
+end
+
+"""
+    dnegbin(p, r)
+
+Return a [Negative Binomial](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.NegativeBinomial) 
+distribution object with number of failures `r` and success probability `p`.
+
+The mathematical form of the PMF for a Negative Binomial distribution in WinBUGS is given by:
+
+```math
+P(x|r,p) = C(x + r - 1, x) (1 - p)^x p^r
+```end
+"""
+function dnegbin(p, r)
+    return NegativeBinomial(r, p)
+end
+
+"""
+    dbetabin(a, b, n)
+
+Return a [Beta Binomial](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.BetaBinomial) 
+distribution object with number of trials `n` and shape parameters `a` and `b`.
+
+The mathematical form of the PMF for a Beta Binomial distribution in WinBUGS is given by:
+
+```math
+P(x|a,b,n) = C(n, x) B(x + a, n - x + b) / B(a, b)
+```end
+"""
+function dbetabin(a, b, n)
+    return BetaBinomial(n, a, b)
+end
+
+"""
+    dhyper(n1, n2, m1, ψ)
+
+Return a [Hypergeometric](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Hypergeometric)I apologize for the cut-off. Here's the continuation:
+
+```julia
+distribution object with total number of successes `n1`, total number of failures `n2`, and number of trials `m1`.
+
+Only `ψ = 1` is currently supported for hypergeometric distribution in this function.
+
+The mathematical form of the PMF for a Hypergeometric distribution in WinBUGS is given by:
+
+```math
+P(x|n1,n2,m1,ψ) = C(n1, x) C(n2, m1 - x) / C(n1 + n2, m1)
+```end
+"""
 function dhyper(n1, n2, m1, ψ)
     if ψ != 1
-        error("Only ψ = 1 is supported for hypergeometric distribution.")
+        throw(ArgumentError("dhyper only supports ψ = 1"))
     end
     return Hypergeometric(n1, n2, m1)
 end
 
-###
-### Discrete multivariate distributions
-###
+"""
+    dmulti(θ::Vector, n)
 
-dmulti(θ::Vector, n) = Multinomial(n, θ)
+Return a [Multinomial](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.Multinomial) 
+distribution object with number of trials `n` and success probabilities `θ`.
+
+The mathematical form of the PMF for a Multinomial distribution in WinBUGS is given by:
+
+```math
+P(x|n,θ) = C(n, x) ∏θ^{x}
+```end
+"""
+function dmulti(θ::Vector, n)
+    return Multinomial(n, θ)
+end

@@ -157,6 +157,8 @@ macro bugsast(expr)
     return Meta.quot(post_parsing_processing(warn_link_function(bugsast(expr, __source__))))
 end
 
+# TODO: check RHS of `=` can't be a distribution function
+
 function warn_link_function(expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, f_(lhs_) = rhs_)
@@ -234,7 +236,7 @@ end
 function post_parsing_processing(expr)
     expr = MacroTools.postwalk(expr) do sub_expr
         if sub_expr == :step
-            return _step
+            return :_step
         else
             return sub_expr
         end
@@ -247,9 +249,8 @@ const INVERSE_LINK_FUNCTION = Dict(
 )
 
 function link_functions(expr::Expr)
-    # link functions in stochastic assignments will be handled later
     return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, f_(lhs_) = rhs_)
+        if @capture(sub_expr, f_(lhs_) = rhs_) # only transform logical assignments
             if f in keys(INVERSE_LINK_FUNCTION)
                 sub_expr.args[1] = lhs
                 sub_expr.args[2] = Expr(:call, INVERSE_LINK_FUNCTION[f], rhs)
@@ -316,4 +317,110 @@ function find_tilde_rhs(expr::Expr, target::Union{Expr,Symbol})
         "Error handling cumulative expression: can't find a stochastic assignment for $target.",
     )
     return dist
+end
+
+"""
+    loop_fission(expr)
+
+Fission a loop into multiple loops.
+
+# Example
+```julia-repl
+julia> expr = :(
+              for i = 1:10
+                for j = 1:10
+                     x[i, j] = i + j
+                end
+                y[i] = i
+              end
+         ); loop_fission(expr)
+quote
+    for i = 1:10
+        for j = 1:10
+            x[i, j] = i + j
+        end
+    end
+    for i = 1:10
+        y[i] = i
+    end
+end
+```
+"""
+function loop_fission(expr::Expr)
+    loops = loop_fission_helper(expr)
+    new_expr = MacroTools.prewalk(expr) do sub_expr
+        if !MacroTools.@capture(
+            sub_expr,
+            for loop_var_ in l_:h_
+                body__
+            end
+        )
+            return sub_expr
+        end
+    end
+    if isnothing(new_expr)
+        new_expr = Expr(:block)
+    end
+    filter!(x -> x !== nothing, new_expr.args)
+    for l in loops
+        push!(new_expr.args, generate_loop_expr(l))
+    end
+    return new_expr
+end
+
+function loop_fission_helper(expr::Expr)
+    loops = []
+    MacroTools.prewalk(expr) do sub_expr
+        if MacroTools.@capture(
+            sub_expr,
+            for loop_var_ in l_:h_
+                body__
+            end
+        )
+            loops = []
+            for ex in body
+                if Meta.isexpr(ex, :for)
+                    inner_loops = loop_fission_helper(ex)
+                    for inner_l in inner_loops
+                        push!(loops, (loop_var, l, h, inner_l))
+                    end
+
+                else
+                    push!(loops, (loop_var, l, h, ex))
+                end
+            end
+            return nothing
+        end
+        return sub_expr
+    end
+    return loops
+end
+
+function generate_loop_expr(loop)
+    loop_var, l, h, remaining = loop
+    if !isa(remaining, Expr)
+        remaining = generate_loop_expr(remaining)
+    end
+    return MacroTools.prewalk(rmlines, :(
+        for $loop_var in ($l):($h)
+            $remaining
+        end
+    ))
+end
+
+function check_idxs(expr::Expr)
+    return MacroTools.prewalk(expr) do sub_expr
+        if MacroTools.@capture(sub_expr, x_[idxs__])
+            for idx in idxs
+                MacroTools.postwalk(idx) do ssub_expr
+                    if Meta.isexpr(ssub_expr, :call) &&
+                        !in(ssub_expr.args[1], [:+, :-, :*, :/, :(:)])
+                        error("At $sub_expr: Only +, -, *, / are allowed in indexing.")
+                    end
+                    return ssub_expr
+                end
+            end
+        end
+        return sub_expr
+    end
 end
