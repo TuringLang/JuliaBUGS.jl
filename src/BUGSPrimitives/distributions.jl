@@ -89,7 +89,7 @@ The mathematical form of the PDF for a Laplace distribution in WinBUGS is given 
 
 ```math
 f(x|μ,τ) = \\frac{\\sqrt{τ}}{2} e^{-\\sqrt{τ} |x-μ|}
-```end
+```
 """
 function ddexp(μ, τ)
     b = 1 / √τ
@@ -182,7 +182,7 @@ The mathematical form of the PDF for an Exponential distribution in WinBUGS is g
 
 ```math
 f(x|λ) = λ e^{-λ x}
-```end
+```
 """
 function dexp(λ)
     return Exponential(1 / λ)
@@ -198,7 +198,7 @@ The mathematical form of the PDF for a Chi-squared distribution in WinBUGS is gi
 
 ```math
 f(x|k) = \\frac{1}{2^{k/2} Γ(k/2)} x^{k/2 - 1} e^{-x/2}
-```end
+```
 """
 function dchisqr(k)
     return Chisq(k)
@@ -214,7 +214,7 @@ The mathematical form of the PDF for a Weibull distribution in WinBUGS is given 
 
 ```math
 f(x|a,b) = \\frac{b a (bx)^{a-1}}{e^{(bx)^a}}
-```end
+```
 """
 function dweib(a, b)
     return Weibull(a, 1 / b)
@@ -230,7 +230,7 @@ The mathematical form of the PDF for a LogNormal distribution in WinBUGS is give
 
 ```math
 f(x|μ,τ) = \\frac{\\sqrt{τ}}{x\\sqrt{2π}} e^{-τ/2 (\\log(x) - μ)^2}
-```end
+```
 """
 function dlnorm(μ, τ)
     return LogNormal(μ, 1 / √τ)
@@ -246,7 +246,7 @@ The mathematical form of the PDF for a Gamma distribution in WinBUGS is given by
 
 ```math
 f(x|a,b) = \\frac{b^a}{Γ(a)} x^{a-1} e^{-bx}
-```end
+```
 """
 function dgamma(a, b)
     θ = 1 / b
@@ -263,7 +263,7 @@ The mathematical form of the PDF for a Pareto distribution in WinBUGS is given b
 
 ```math
 f(x|a,b) = \\frac{ba^b}{x^{b+1}}
-```end
+```
 """
 function dpar(a, b)
     return Pareto(a, b)
@@ -279,7 +279,7 @@ The mathematical form of the PDF for a Generalized Extreme Value distribution in
 
 ```math
 f(x|μ,σ,η) = \\frac{1}{σ} (1 + η ((x - μ)/σ))^{-1/η - 1} e^{-(1 + η ((x - μ)/σ))^{-1/η}}
-```end
+```
 """
 function dgev(μ, σ, η)
     return GeneralizedExtremeValue(μ, σ, η)
@@ -295,7 +295,7 @@ The mathematical form of the PDF for a Generalized Pareto distribution in WinBUG
 
 ```math
 f(x|μ,σ,η) = \\frac{1}{σ} (1 + η ((x - μ)/σ))^{-1/η - 1}
-```end
+```
 """
 function dgpar(μ, σ, η)
     return GeneralizedPareto(μ, σ, η)
@@ -329,7 +329,7 @@ The mathematical form of the PDF for a Uniform distribution in WinBUGS is given 
 
 ```math
 f(x|a,b) = \\frac{1}{b - a}
-```end
+```
 """
 function dunif(a, b)
     return Uniform(a, b)
@@ -345,7 +345,7 @@ The mathematical form of the PDF for a Beta distribution in WinBUGS is given by:
 
 ```math
 f(x|a,b) = \\frac{x^{a-1} (1 - x)^{b-1}}{B(a, b)}
-```end
+```
 """
 function dbeta(a, b)
     return Beta(a, b)
@@ -361,7 +361,7 @@ The mathematical form of the PDF for a Multivariate Normal distribution in WinBU
 
 ```math
 f(x|μ,T) = (2π)^{-k/2} |T|^{1/2} e^{-1/2 (x-μ)' T (x-μ)}
-```end
+```
 """
 function dmnorm(μ::Vector, T::Matrix)
     return MvNormal(μ, T)
@@ -377,7 +377,7 @@ The mathematical form of the PDF for a Multivariate T distribution in WinBUGS is
 
 ```math
 f(x|μ,T,k) = Γ((k+p)/2) / (Γ(k/2) (kπ)^{p/2} |T|^{1/2}) (1 + 1/k (x-μ)' T (x-μ))^{-((k+p)/2)}
-```end
+```
 """
 function dmt(μ::Vector, T::Matrix, k)
     return MvTDist(k, μ, T)
@@ -393,7 +393,7 @@ The mathematical form of the PDF for a Wishart distribution in WinBUGS is given 
 
 ```math
 f(X|R,k) = |X|^{(k-p-1)/2} e^{-1/2 tr(RX)} / (2^{kp/2} |R|^{k/2} Γ_p(k/2))
-```end
+```
 """
 function dwish(R::Matrix, k)
     return Wishart(k, inv(R))
@@ -409,7 +409,7 @@ The mathematical form of the PDF for a Dirichlet distribution in WinBUGS is give
 
 ```math
 f(x|θ) = Γ(∑θ) / ∏Γ(θ) ∏x^{θ-1}
-```end
+```
 """
 function ddirich(θ::Vector)
     return Dirichlet(θ)
@@ -425,7 +425,7 @@ The mathematical form of the PMF for a Bernoulli distribution in WinBUGS is give
 
 ```math
 P(x|p) = p^x (1 - p)^{1-x}
-```end
+```
 """
 function dbern(p)
     return Bernoulli(p)
@@ -441,7 +441,7 @@ The mathematical form of the PMF for a Binomial distribution in WinBUGS is given
 
 ```math
 P(x|n,p) = C(n, x) p^x (1 - p)^{n-x}
-```end
+```
 """
 function dbin(p, n)
     return Binomial(n, p)
@@ -457,7 +457,7 @@ The mathematical form of the PMF for a Categorical distribution in WinBUGS is gi
 
 ```math
 P(x|p) = p[x]
-```end
+```
 """
 function dcat(p)
     return Categorical(p)
@@ -473,7 +473,7 @@ The mathematical form of the PMF for a Poisson distribution in WinBUGS is given 
 
 ```math
 P(x|θ) = e^{-θ} θ^x / x!
-```end
+```
 """
 function dpois(θ)
     return Poisson(θ)
@@ -489,7 +489,7 @@ The mathematical form of the PMF for a Geometric distribution in WinBUGS is give
 
 ```math
 P(x|θ) = (1 - θ)^{x-1} θ
-```end
+```
 """
 function dgeom(θ)
     return Geometric(θ)
@@ -505,7 +505,7 @@ The mathematical form of the PMF for a Negative Binomial distribution in WinBUGS
 
 ```math
 P(x|r,p) = C(x + r - 1, x) (1 - p)^x p^r
-```end
+```
 """
 function dnegbin(p, r)
     return NegativeBinomial(r, p)
@@ -521,7 +521,7 @@ The mathematical form of the PMF for a Beta Binomial distribution in WinBUGS is 
 
 ```math
 P(x|a,b,n) = C(n, x) B(x + a, n - x + b) / B(a, b)
-```end
+```
 """
 function dbetabin(a, b, n)
     return BetaBinomial(n, a, b)
@@ -530,9 +530,7 @@ end
 """
     dhyper(n1, n2, m1, ψ)
 
-Return a [Hypergeometric](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Hypergeometric)I apologize for the cut-off. Here's the continuation:
-
-```julia
+Return a [Hypergeometric](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Hypergeometric) 
 distribution object with total number of successes `n1`, total number of failures `n2`, and number of trials `m1`.
 
 Only `ψ = 1` is currently supported for hypergeometric distribution in this function.
@@ -540,8 +538,8 @@ Only `ψ = 1` is currently supported for hypergeometric distribution in this fun
 The mathematical form of the PMF for a Hypergeometric distribution in WinBUGS is given by:
 
 ```math
-P(x|n1,n2,m1,ψ) = C(n1, x) C(n2, m1 - x) / C(n1 + n2, m1)
-```end
+p(x | n1, n2, m1, \\psi) = \\frac{\\binom{n1}{x} \\binom{n2}{m1 - x} \\psi^x}{\\sum_{i=\\max(0, m1-n2)}^{\\min(n1,m1)} \\binom{n1}{i} \\binom{n2}{m1 - i} \\psi^i}
+```
 """
 function dhyper(n1, n2, m1, ψ)
     if ψ != 1
@@ -560,7 +558,7 @@ The mathematical form of the PMF for a Multinomial distribution in WinBUGS is gi
 
 ```math
 P(x|n,θ) = C(n, x) ∏θ^{x}
-```end
+```
 """
 function dmulti(θ::Vector, n)
     return Multinomial(n, θ)

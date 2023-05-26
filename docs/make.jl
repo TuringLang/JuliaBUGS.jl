@@ -1,5 +1,6 @@
 using Documenter
 using JuliaBUGS
+using JuliaBUGS: compile
 using JuliaBUGS.BUGSPrimitives:
     abs,
     cloglog,

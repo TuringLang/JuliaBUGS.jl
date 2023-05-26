@@ -10,7 +10,11 @@ end
 """
     cloglog(x)
 
-Complementary log-log function of `x`. ``cloglog(x) = log(-log(1 - x))``.
+Complementary log-log function of `x`. 
+
+```math
+cloglog(x) = log(-log(1 - x))
+```
 """
 function cloglog(x)
     return LogExpFunctions.cloglog(x)
@@ -91,7 +95,11 @@ end
 """
     logit(x)
 
-Logit function of `x`. ``logit(x) = log(x / (1 - x))``.
+Logit function of `x`. 
+    
+```math
+logit(x) = log(x / (1 - x))
+```
 """
 function logit(x)
     return LogExpFunctions.logit(x)
@@ -100,7 +108,11 @@ end
 """
     icloglog(x)
 
-Inverse complementary log-log function of `x`. ``icloglog(x) = 1 - exp(-exp(x))``.
+Inverse complementary log-log function of `x`. 
+
+```math
+icloglog(x) = 1 - exp(-exp(x))
+```
 """
 function icloglog(x)
     return LogExpFunctions.cexpexp(x)
@@ -109,7 +121,11 @@ end
 """
     logit(x)
 
-Logit function of `x`. ``logit(x) = log(x / (1 - x))``.
+Logit function of `x`. 
+    
+```math
+logit(x) = log(x / (1 - x))
+```
 """
 function logistic(x)
     return LogExpFunctions.logistic(x)
