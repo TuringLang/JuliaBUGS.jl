@@ -140,6 +140,11 @@ function merge_dicts(d1::Dict, d2::Dict)
     return merged_dict
 end
 
+"""
+    compile(model_def, data, initializations)
+
+Compile a BUGS model into a log density problem.
+"""
 function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
     return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
 end
