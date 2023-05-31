@@ -2,8 +2,11 @@
 dnorm
 dlogis
 dt
+TDistShiftedScaled
 ddexp
 dflat
+Flat
+TruncatedFlat
 dexp
 dchisqr
 dweib
