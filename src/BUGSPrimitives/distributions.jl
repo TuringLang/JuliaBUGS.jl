@@ -1,16 +1,18 @@
 """
     dnorm(μ, τ)
 
-Return a [Normal](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Normal) 
-distribution object with mean `μ` and precision `τ` (the reciprocal of variance).
+Construct a [Normal](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Normal) 
+distribution object in Julia using mean `μ` and precision `τ` as parameters. 
 
-The mathematical form of the PDF for a Normal distribution in WinBUGS is given by:
+In many statistical contexts, including the BUGS family of software, the Normal distribution is parametrized using precision, which is defined as the reciprocal of the variance. In contrast, Julia's Distributions package parametrizes the Normal distribution using mean (`μ`) and standard deviation (`σ`). This function accepts the mean `μ` and precision `τ` as inputs, then calculates the standard deviation as `σ = √(1 / τ)`, and returns a Normal distribution object with mean `μ` and standard deviation `σ`.
+
+The probability density function (PDF) of the Normal distribution as defined in the BUGS family of software is:
 
 ```math
-f(x|μ,τ) = \\sqrt{\\frac{τ}{2π}} e^{-τ \\frac{(x-μ)^2}{2}}
+p(x|μ,τ) = \\sqrt{\\frac{τ}{2π}} e^{-τ \\frac{(x-μ)^2}{2}}
 ```
 
-In Julia, this function uses mean ``μ`` and standard deviation ``σ = \\sqrt{1 / τ}``.
+In this equation, `x` is the random variable, `μ` is the mean of the distribution, and `τ` is the precision.
 """
 function dnorm(μ, τ)
     σ = √(1 / τ)
@@ -23,10 +25,10 @@ end
 Return a [Logistic](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Logistic) 
 distribution object with location parameter `μ` and scale parameter `s`, where ``s = 1 / √τ``.
 
-The mathematical form of the PDF for a Logistic distribution in WinBUGS is given by:
+The mathematical form of the PDF for a Logistic distribution in the BUGS family of softwares is given by:
 
 ```math
-f(x|μ,τ) = \\frac{\\sqrt{τ} e^{-\\sqrt{τ}(x-μ)}}{(1+e^{-\\sqrt{τ}(x-μ)})^2}
+p(x|μ,τ) = \\frac{\\sqrt{τ} e^{-\\sqrt{τ}(x-μ)}}{(1+e^{-\\sqrt{τ}(x-μ)})^2}
 ```
 """
 function dlogis(μ, τ)
@@ -35,37 +37,17 @@ function dlogis(μ, τ)
 end
 
 """
-    dt(μ, τ, ν)
+    TDistShiftedScaled(ν, μ, σ)
 
-Return a Student's t-distribution object with `ν` degrees of freedom, location `μ`, and scale ``σ = √(1 / τ)``. If `μ` is 0 and `σ` is 1, the function returns a `Tdist` object. Otherwise, it returns a `TDistShiftedScaled` object.
+A Student's t-distribution object with `ν` degrees of freedom, location `μ`, and scale `σ`. 
 
-The mathematical form of the PDF for a Student's t-distribution is given by:
-
-```math
-f(x|ν,μ,σ) = \\frac{Γ((ν+1)/2)}{Γ(ν/2) √{νπσ}}
-\\left(1+\\frac{1}{ν}\\left(\\frac{x-μ}{σ}\\right)^2\\right)^{-\\frac{ν+1}{2}}
-```
-
-The mathematical form of the log-PDF for a Student's t-distribution is given by:
-```math
-log(f(x|ν,μ,σ)) = log(Γ((ν+1)/2)) - log(Γ(ν/2)) - \\frac{1}{2}log(νπσ) - \\frac{ν+1}{2} log\\left(1+\\frac{1}{ν}\\left(\\frac{x-μ}{σ}\\right)^2\\right)
-```
-
-In the above, `x` is the random variable, `ν` is the degrees of freedom, `μ` is the location parameter, and `σ` is the scale parameter.
-
-This implementation of the Student's t-distribution in Julia allows for a shift (determined by `μ`) and a scale (determined by `σ`) of the standard Student's t-distribution provided by the Distributions package.
+This struct allows for a shift (determined by `μ`) and a scale (determined by `σ`) of the standard Student's t-distribution provided by the Distributions package. 
 
 Only `pdf` and `logpdf` are implemented for this distribution.
-"""
-function dt(μ, τ, ν)
-    σ = √(1 / τ)
-    if μ == 0 && σ == 1
-        return TDist(ν)
-    else
-        return TDistShiftedScaled(ν, μ, σ)
-    end
-end
 
+# See Also
+[TDist](https://juliastats.org/Distributions.jl/stable/univariate/#Distributions.TDist)
+"""
 struct TDistShiftedScaled <: ContinuousUnivariateDistribution
     ν::Real
     μ::Real
@@ -80,15 +62,44 @@ function Distributions.logpdf(d::TDistShiftedScaled, x::Real)
 end
 
 """
+    dt(μ, τ, ν)
+
+Construct a Student's t-distribution object with `ν` degrees of freedom, location `μ`, and scale ``σ = √(1 / τ)``. 
+
+If `μ` is 0 and `σ` is 1, the function returns a [TDist](https://juliastats.org/Distributions.jl/stable/univariate/#Distributions.TDist) object from Distributions.jl. Otherwise, it returns a [`TDistShiftedScaled`](@ref) object.
+
+The mathematical form of the PDF for a Student's t-distribution is given by:
+
+```math
+p(x|ν,μ,σ) = \\frac{Γ((ν+1)/2)}{Γ(ν/2) √{νπσ}}
+\\left(1+\\frac{1}{ν}\\left(\\frac{x-μ}{σ}\\right)^2\\right)^{-\\frac{ν+1}{2}}
+```end
+
+The mathematical form of the log-PDF for a Student's t-distribution is given by:
+
+```math
+log(p(x|ν,μ,σ)) = log(Γ((ν+1)/2)) - log(Γ(ν/2)) - \\frac{1}{2}log(νπσ) - \\frac{ν+1}{2} log\\left(1+\\frac{1}{ν}\\left(\\frac{x-μ}{σ}\\right)^2\\right)
+```
+"""
+function dt(μ, τ, ν)
+    σ = √(1 / τ)
+    if μ == 0 && σ == 1
+        return TDist(ν)
+    else
+        return TDistShiftedScaled(ν, μ, σ)
+    end
+end
+
+"""
     ddexp(μ, τ)
 
 Return a [Laplace (Double Exponential)](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Laplace) 
 distribution object with location `μ` and scale ``b = 1 / √τ``.
 
-The mathematical form of the PDF for a Laplace distribution in WinBUGS is given by:
+The mathematical form of the PDF for a Laplace distribution in the BUGS family of softwares is given by:
 
 ```math
-f(x|μ,τ) = \\frac{\\sqrt{τ}}{2} e^{-\\sqrt{τ} |x-μ|}
+p(x|μ,τ) = \\frac{\\sqrt{τ}}{2} e^{-\\sqrt{τ} |x-μ|}
 ```
 """
 function ddexp(μ, τ)
@@ -110,7 +121,7 @@ dflat() = Flat()
 """
     Flat
 
-Implement the flat distribution mimicking the behavior of the `dflat` distribution in WinBUGS.
+Implement the flat distribution mimicking the behavior of the `dflat` distribution in the BUGS family of softwares.
 """
 struct Flat <: ContinuousUnivariateDistribution end
 
@@ -178,14 +189,31 @@ end
 Return an [Exponential](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Exponential) 
 distribution object with rate `λ`, where the rate is defined as ``1 / λ`` in Julia's `Distributions` package.
 
-The mathematical form of the PDF for an Exponential distribution in WinBUGS is given by:
+The mathematical form of the PDF for an Exponential distribution in the BUGS family of softwares is given by:
 
 ```math
-f(x|λ) = λ e^{-λ x}
+p(x|λ) = λ e^{-λ x}
 ```
 """
 function dexp(λ)
     return Exponential(1 / λ)
+end
+
+"""
+    dgamma(a, b)
+
+Return a [Gamma](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Gamma) 
+distribution object with shape `a` and scale ``θ = 1 / b``.
+
+The mathematical form of the PDF for a Gamma distribution in the BUGS family of softwares is given by:
+
+```math
+p(x|a,b) = \\frac{b^a}{Γ(a)} x^{a-1} e^{-bx}
+```
+"""
+function dgamma(a, b)
+    θ = 1 / b
+    return Gamma(a, θ)
 end
 
 """
@@ -194,10 +222,10 @@ end
 Return a [Chi-squared](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Chisq) 
 distribution object with `k` degrees of freedom.
 
-The mathematical form of the PDF for a Chi-squared distribution in WinBUGS is given by:
+The mathematical form of the PDF for a Chi-squared distribution in the BUGS family of softwares is given by:
 
 ```math
-f(x|k) = \\frac{1}{2^{k/2} Γ(k/2)} x^{k/2 - 1} e^{-x/2}
+p(x|k) = \\frac{1}{2^{k/2} Γ(k/2)} x^{k/2 - 1} e^{-x/2}
 ```
 """
 function dchisqr(k)
@@ -208,12 +236,14 @@ end
     dweib(a, b)
 
 Return a [Weibull](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Weibull) 
-distribution object with shape `a` and scale ``λ = 1 / b``.
+distribution object with shape parameter `a` and scale parameter ``λ = 1 / b``.
 
-The mathematical form of the PDF for a Weibull distribution in WinBUGS is given by:
+The Weibull distribution is a common model for event times. The hazard or instantaneous risk of the event is \\(h(x) = abx^{a-1}\\). For `a < 1` the hazard decreases with `x`; for `a > 1` it increases. `a = 1` results in the exponential distribution with constant hazard.
+
+The mathematical form of the probability density function (PDF) for a Weibull distribution in the BUGS family of softwares is given by:
 
 ```math
-f(x|a,b) = \\frac{b a (bx)^{a-1}}{e^{(bx)^a}}
+p(x|a,b) = abx^{a-1}e^{-b x^a}
 ```
 """
 function dweib(a, b)
@@ -226,10 +256,10 @@ end
 Return a [LogNormal](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.LogNormal) 
 distribution object with location `μ` and scale ``σ = 1 / √τ``.
 
-The mathematical form of the PDF for a LogNormal distribution in WinBUGS is given by:
+The mathematical form of the PDF for a LogNormal distribution in the BUGS family of softwares is given by:
 
 ```math
-f(x|μ,τ) = \\frac{\\sqrt{τ}}{x\\sqrt{2π}} e^{-τ/2 (\\log(x) - μ)^2}
+p(x|μ,τ) = \\frac{\\sqrt{τ}}{x\\sqrt{2π}} e^{-τ/2 (\\log(x) - μ)^2}
 ```
 """
 function dlnorm(μ, τ)
@@ -237,36 +267,23 @@ function dlnorm(μ, τ)
 end
 
 """
-    dgamma(a, b)
-
-Return a [Gamma](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Gamma) 
-distribution object with shape `a` and scale ``θ = 1 / b``.
-
-The mathematical form of the PDF for a Gamma distribution in WinBUGS is given by:
-
-```math
-f(x|a,b) = \\frac{b^a}{Γ(a)} x^{a-1} e^{-bx}
-```
-"""
-function dgamma(a, b)
-    θ = 1 / b
-    return Gamma(a, θ)
-end
-
-"""
     dpar(a, b)
 
 Return a [Pareto](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Pareto) 
-distribution object with scale `a` and shape `b`.
+distribution object with scale parameter `b` and shape parameter `a`.
 
-The mathematical form of the PDF for a Pareto distribution in WinBUGS is given by:
+The Pareto distribution, also known as the "80-20 rule", states that for many events, roughly 80% of the effects come from 20% of the causes. In terms of wealth distribution, it's often observed that 20% of the population owns 80% of a society's wealth. 
+
+The mathematical form of the probability density function (PDF) for a Pareto distribution in the BUGS family of softwares is given by:
 
 ```math
-f(x|a,b) = \\frac{ba^b}{x^{b+1}}
+p(x|a,b) = \\frac{a b^a}{x^{a+1}}
 ```
+
+In Julia, this function uses scale parameter `b` and shape parameter `a` to construct a `Pareto(b, a)` distribution object from the `Distributions` package.
 """
 function dpar(a, b)
-    return Pareto(a, b)
+    return Pareto(b, a)
 end
 
 """
@@ -275,11 +292,15 @@ end
 Return a [GeneralizedExtremeValue](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.GeneralizedExtremeValue) 
 distribution object with location `μ`, scale `σ`, and shape `η`.
 
-The mathematical form of the PDF for a Generalized Extreme Value distribution in WinBUGS is given by:
+The mathematical form of the PDF for a Generalized Extreme Value distribution in the BUGS family of softwares is given by:
 
 ```math
-f(x|μ,σ,η) = \\frac{1}{σ} (1 + η ((x - μ)/σ))^{-1/η - 1} e^{-(1 + η ((x - μ)/σ))^{-1/η}}
+p(x|μ,σ,η) = \\frac{1}{σ} \\left(1 + η \\frac{x - μ}{σ}\\right)^{-\\frac{1}{η} - 1} e^{-\\left(1 + η \\frac{x - μ}{σ}\\right)^{-\\frac{1}{η}}}
 ```
+
+where `x` is the random variable, `μ` is the location parameter, `σ` is the scale parameter, and `η` is the shape parameter. Note that the expression `1 + η ((x - μ)/σ)` must be greater than zero for the function to be defined.
+
+In Julia, this function returns a `GeneralizedExtremeValue(μ, σ, η)` distribution object from the `Distributions` package.
 """
 function dgev(μ, σ, η)
     return GeneralizedExtremeValue(μ, σ, η)
@@ -291,10 +312,10 @@ end
 Return a [GeneralizedPareto](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.GeneralizedPareto) 
 distribution object with location `μ`, scale `σ`, and shape `η`.
 
-The mathematical form of the PDF for a Generalized Pareto distribution in WinBUGS is given by:
+The mathematical form of the PDF for a Generalized Pareto distribution in the BUGS family of softwares is given by:
 
 ```math
-f(x|μ,σ,η) = \\frac{1}{σ} (1 + η ((x - μ)/σ))^{-1/η - 1}
+p(x|μ,σ,η) = \\frac{1}{σ} (1 + η ((x - μ)/σ))^{-1/η - 1}
 ```
 """
 function dgpar(μ, σ, η)
@@ -307,6 +328,16 @@ end
 Return an [F-distribution](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.FDist) 
 object with `n` and `m` degrees of freedom, location `μ`, and scale `τ`.
 Raises a warning if `μ ≠ 0` or `τ ≠ 1`, as these cases are not fully supported.
+
+The mathematical form of the PDF for an F-distribution in the BUGS family of softwares is given by:
+
+```math
+p(x|n, m, μ, τ) = \\frac{\\Gamma\\left(\\frac{n+m}{2}\\right)}{\\Gamma\\left(\\frac{n}{2}\\right) \\Gamma\\left(\\frac{m}{2}\\right)} \\left(\\frac{n}{m}\\right)^{\\frac{n}{2}} \\sqrt{τ} \\left(\\sqrt{τ}(x - μ)\\right)^{\\frac{n}{2}-1} \\left(1 + \\frac{n \\sqrt{τ}(x-μ)}{m}\\right)^{-\\frac{n+m}{2}}
+```
+
+where `x` is the random variable, `n` and `m` are the degrees of freedom, `μ` is the location parameter, and `τ` is the scale parameter. Note that the expression `1 + n sqrt(τ)(x - μ) / m` must be greater than zero for the function to be defined.
+
+In Julia, this function returns an `FDist(n, m)` distribution object from the `Distributions` package if `μ = 0` and `τ = 1`.
 """
 function df(n::Real, m::Real, μ::Real=0, τ::Real=1)
     if μ ≠ 0 || τ ≠ 1
@@ -319,16 +350,17 @@ function df(n::Real, m::Real, μ::Real=0, τ::Real=1)
     return FDist(n, m)
 end
 
+
 """
     dunif(a, b)
 
 Return a [Uniform](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Uniform) 
 distribution object with lower bound `a` and upper bound `b`.
 
-The mathematical form of the PDF for a Uniform distribution in WinBUGS is given by:
+The mathematical form of the PDF for a Uniform distribution in the BUGS family of softwares is given by:
 
 ```math
-f(x|a,b) = \\frac{1}{b - a}
+p(x|a,b) = \\frac{1}{b - a}
 ```
 """
 function dunif(a, b)
@@ -341,10 +373,10 @@ end
 Return a [Beta](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Beta) 
 distribution object with shape parameters `a` and `b`.
 
-The mathematical form of the PDF for a Beta distribution in WinBUGS is given by:
+The mathematical form of the PDF for a Beta distribution in the BUGS family of softwares is given by:
 
 ```math
-f(x|a,b) = \\frac{x^{a-1} (1 - x)^{b-1}}{B(a, b)}
+p(x|a,b) = \\frac{\\Gamma(a + b)}{\\Gamma(a)\\Gamma(b)} x^{a-1} (1 - x)^{b-1}
 ```
 """
 function dbeta(a, b)
@@ -357,10 +389,10 @@ end
 Return a [Multivariate Normal](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.MvNormal) 
 distribution object with mean vector `μ` and precision matrix `T`.
 
-The mathematical form of the PDF for a Multivariate Normal distribution in WinBUGS is given by:
+The mathematical form of the PDF for a Multivariate Normal distribution in the BUGS family of softwares is given by:
 
 ```math
-f(x|μ,T) = (2π)^{-k/2} |T|^{1/2} e^{-1/2 (x-μ)' T (x-μ)}
+p(x|μ,T) = (2π)^{-k/2} |T|^{1/2} e^{-1/2 (x-μ)' T (x-μ)}
 ```
 """
 function dmnorm(μ::Vector, T::Matrix)
@@ -373,11 +405,12 @@ end
 Return a [Multivariate T](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.MvTDist) 
 distribution object with mean vector `μ`, precision matrix `T`, and `k` degrees of freedom.
 
-The mathematical form of the PDF for a Multivariate T distribution in WinBUGS is given by:
+The mathematical form of the PDF for a Multivariate T distribution in the BUGS family of softwares is given by:
 
 ```math
-f(x|μ,T,k) = Γ((k+p)/2) / (Γ(k/2) (kπ)^{p/2} |T|^{1/2}) (1 + 1/k (x-μ)' T (x-μ))^{-((k+p)/2)}
+p(x|k,μ,Σ) = \\frac{\\Gamma((k+p)/2)}{\\Gamma(k/2) (k\\pi)^{p/2} |Σ|^{1/2}} \\left(1 + \\frac{1}{k} (x-μ)^T Σ^{-1} (x-μ)\\right)^{-\\frac{k+p}{2}}
 ```
+where x is the random variable, k is the degrees of freedom, μ is the mean vector, Σ is the scale matrix, and p is the dimension of x.
 """
 function dmt(μ::Vector, T::Matrix, k)
     return MvTDist(k, μ, T)
@@ -389,10 +422,10 @@ end
 Return a [Wishart](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.Wishart) 
 distribution object with `k` degrees of freedom and scale matrix `R^(-1)`.
 
-The mathematical form of the PDF for a Wishart distribution in WinBUGS is given by:
+The mathematical form of the PDF for a Wishart distribution in the BUGS family of softwares is given by:
 
 ```math
-f(X|R,k) = |X|^{(k-p-1)/2} e^{-1/2 tr(RX)} / (2^{kp/2} |R|^{k/2} Γ_p(k/2))
+p(X|R,k) = |X|^{(k-p-1)/2} e^{-1/2 tr(RX)} / (2^{kp/2} |R|^{k/2} Γ_p(k/2))
 ```
 """
 function dwish(R::Matrix, k)
@@ -405,11 +438,13 @@ end
 Return a [Dirichlet](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.Dirichlet) 
 distribution object with parameters `θ`.
 
-The mathematical form of the PDF for a Dirichlet distribution in WinBUGS is given by:
+The mathematical form of the PDF for a Dirichlet distribution in the BUGS family of softwares is given by:
 
 ```math
-f(x|θ) = Γ(∑θ) / ∏Γ(θ) ∏x^{θ-1}
+p(x|θ) = \\frac{Γ(\\sum θ)}{∏ Γ(θ)} ∏ x_i^{θ_i - 1}
 ```
+
+where `x` is a vector of random variables, each element `x_i` of which is between 0 and 1, and the elements of `x` sum up to 1. `θ` is a vector of parameters, each `θ_i` of which is greater than 0.
 """
 function ddirich(θ::Vector)
     return Dirichlet(θ)
@@ -421,10 +456,10 @@ end
 Return a [Bernoulli](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Bernoulli) 
 distribution object with success probability `p`.
 
-The mathematical form of the PMF for a Bernoulli distribution in WinBUGS is given by:
+The mathematical form of the PMF for a Bernoulli distribution in the BUGS family of softwares is given by:
 
 ```math
-P(x|p) = p^x (1 - p)^{1-x}
+p(x|p) = p^x (1 - p)^{1-x}
 ```
 """
 function dbern(p)
@@ -437,11 +472,13 @@ end
 Return a [Binomial](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Binomial) 
 distribution object with number of trials `n` and success probability `p`.
 
-The mathematical form of the PMF for a Binomial distribution in WinBUGS is given by:
+The mathematical form of the PMF for a Binomial distribution in the BUGS family of softwares is given by:
 
 ```math
-P(x|n,p) = C(n, x) p^x (1 - p)^{n-x}
-```
+p(x|n,p) = \\binom{n}{x} p^x (1 - p)^{n-x}
+```end
+
+where `x` is a random variable that can take the values from 0 to `n`.
 """
 function dbin(p, n)
     return Binomial(n, p)
@@ -453,10 +490,10 @@ end
 Return a [Categorical](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.Categorical) 
 distribution object with probabilities `p`.
 
-The mathematical form of the PMF for a Categorical distribution in WinBUGS is given by:
+The mathematical form of the PMF for a Categorical distribution in the BUGS family of softwares is given by:
 
 ```math
-P(x|p) = p[x]
+p(x|p) = p[x]
 ```
 """
 function dcat(p)
@@ -469,10 +506,10 @@ end
 Return a [Poisson](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Poisson) 
 distribution object with mean (and variance) `θ`.
 
-The mathematical form of the PMF for a Poisson distribution in WinBUGS is given by:
+The mathematical form of the PMF for a Poisson distribution in the BUGS family of softwares is given by:
 
 ```math
-P(x|θ) = e^{-θ} θ^x / x!
+p(x|θ) = e^{-θ} θ^x / x!
 ```
 """
 function dpois(θ)
@@ -485,10 +522,10 @@ end
 Return a [Geometric](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Geometric) 
 distribution object with success probability `θ`.
 
-The mathematical form of the PMF for a Geometric distribution in WinBUGS is given by:
+The mathematical form of the PMF for a Geometric distribution in the BUGS family of softwares is given by:
 
 ```math
-P(x|θ) = (1 - θ)^{x-1} θ
+p(x|θ) = (1 - θ)^{x-1} θ
 ```
 """
 function dgeom(θ)
@@ -501,11 +538,13 @@ end
 Return a [Negative Binomial](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.NegativeBinomial) 
 distribution object with number of failures `r` and success probability `p`.
 
-The mathematical form of the PMF for a Negative Binomial distribution in WinBUGS is given by:
+The mathematical form of the PMF for a Negative Binomial distribution in the BUGS family of softwares is given by:
 
 ```math
-P(x|r,p) = C(x + r - 1, x) (1 - p)^x p^r
+P(x|r,p) = \\binom{x + r - 1}{x} (1 - p)^x p^r
 ```
+
+where `x` is a random variable that can take non-negative integer values.
 """
 function dnegbin(p, r)
     return NegativeBinomial(r, p)
@@ -517,11 +556,13 @@ end
 Return a [Beta Binomial](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.BetaBinomial) 
 distribution object with number of trials `n` and shape parameters `a` and `b`.
 
-The mathematical form of the PMF for a Beta Binomial distribution in WinBUGS is given by:
+The mathematical form of the PMF for a Beta Binomial distribution in the BUGS family of softwares is given by:
 
 ```math
-P(x|a,b,n) = C(n, x) B(x + a, n - x + b) / B(a, b)
+P(x|a, b, n) = \\binom{n}{x} \\binom{a + b - 1}{a + x - 1} / \\binom{a + b + n - 1}{n}
 ```
+
+where `x` is the number of successful trials, `n` is the total number of trials, `a` and `b` are the shape parameters of the Beta distribution.
 """
 function dbetabin(a, b, n)
     return BetaBinomial(n, a, b)
@@ -531,14 +572,23 @@ end
     dhyper(n1, n2, m1, ψ)
 
 Return a [Hypergeometric](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Hypergeometric) 
-distribution object with total number of successes `n1`, total number of failures `n2`, and number of trials `m1`.
+distribution object. This distribution is used when sampling without replacement from a population consisting of 
+`n1` successes and `n2` failures, with `m1` being the number of trials or the sample size.
 
-Only `ψ = 1` is currently supported for hypergeometric distribution in this function.
+`ψ` is a scaling parameter which is currently unsupported in this function. Only `ψ = 1` is currently supported.
 
-The mathematical form of the PMF for a Hypergeometric distribution in WinBUGS is given by:
+The mathematical form of the PMF for a Hypergeometric distribution in the BUGS family of softwares is given by:
 
 ```math
 p(x | n1, n2, m1, \\psi) = \\frac{\\binom{n1}{x} \\binom{n2}{m1 - x} \\psi^x}{\\sum_{i=\\max(0, m1-n2)}^{\\min(n1,m1)} \\binom{n1}{i} \\binom{n2}{m1 - i} \\psi^i}
+```
+
+In this formula, `x` is the number of successes in the sample, `n1` is the total number of successes in the population, `n2` is the total number of failures in the population, `m1` is the number of trials, and `\\psi` is a scaling parameter.
+
+The sum in the denominator is over `i` from `u0` to `u1`, where
+
+```math
+u_0 = \\max(0, m1 - n2), \\quad u_1 = \\min(n1, m1), \\quad \\text{and} \\quad u_0 \\leq x \\leq u_1
 ```
 """
 function dhyper(n1, n2, m1, ψ)
@@ -554,12 +604,15 @@ end
 Return a [Multinomial](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.Multinomial) 
 distribution object with number of trials `n` and success probabilities `θ`.
 
-The mathematical form of the PMF for a Multinomial distribution in WinBUGS is given by:
+The mathematical form of the PMF for a Multinomial distribution in the BUGS family of softwares is given by:
 
 ```math
-P(x|n,θ) = C(n, x) ∏θ^{x}
+P(x|n,θ) = \\frac{n!}{∏_{r} x_{r}!} ∏_{r} θ_{r}^{x_{r}}
 ```
+
+where `x` is a vector of length `R` representing the count of successes in each of `R` categories, `n` is the total number of trials, and `θ` is a vector of length `R` representing the probability of success in each of `R` categories. The symbol `∏` denotes the product over all categories.
 """
 function dmulti(θ::Vector, n)
     return Multinomial(n, θ)
 end
+
