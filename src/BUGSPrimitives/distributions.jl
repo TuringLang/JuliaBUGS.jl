@@ -350,7 +350,6 @@ function df(n::Real, m::Real, μ::Real=0, τ::Real=1)
     return FDist(n, m)
 end
 
-
 """
     dunif(a, b)
 
@@ -615,4 +614,3 @@ where `x` is a vector of length `R` representing the count of successes in each 
 function dmulti(θ::Vector, n)
     return Multinomial(n, θ)
 end
-
