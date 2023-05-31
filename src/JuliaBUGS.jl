@@ -171,14 +171,14 @@ function compile(
     g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
 
-    vi, re = @invokelatest create_varinfo(
-        g, sorted_nodes, vars, array_sizes, merged_data, inits
+    vi, re = Base.invokelatest(
+        create_varinfo, g, sorted_nodes, vars, array_sizes, merged_data, inits
     )
     if ad_backend == :none
         p = BUGSLogDensityProblem(re)
     elseif ad_backend == :reversediff
-        p = @invokelatest ADgradient(
-            :ReverseDiff, BUGSLogDensityProblem(re); compile=Val(true)
+        p = Base.invokelatest(
+            ADgradient, :ReverseDiff, BUGSLogDensityProblem(re); compile=Val(true)
         )
     else
         error("Only :reversediff is supported for now")
