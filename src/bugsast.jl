@@ -1,25 +1,7 @@
-
-position_string(l::LineNumberNode) = string(l.file, ":", l.line)
-
-check_lhs(expr) = check_lhs(Bool, expr) || error("Invalid LHS expression `$expr`")
-check_lhs(::Type{Bool}, expr) = false
-check_lhs(::Type{Bool}, ::Symbol) = true
-function check_lhs(::Type{Bool}, expr::Expr)
-    return Meta.isexpr(expr, :ref) ||
-           (Meta.isexpr(expr, :call, 2) && check_lhs(Bool, expr.args[2]))
-end
-
-"""
-    bugsast_expression(expr)
-
-Check & normalize BUGS expressions (function calls, variables, literals, indexed variables).
-"""
-function bugsast_expression end
-
 """
     bugsast_range(expr)
 
-Check & normalize BUGS ranges.
+Check and normalize BUGS ranges.
 """
 function bugsast_range(expr, position=LineNumberNode(1, nothing))
     if Meta.isexpr(expr, :(:)) && length(expr.args) in (0, 2)
@@ -41,6 +23,13 @@ function bugsast_index(expr, position=LineNumberNode(1, nothing))
     end
 end
 
+position_string(l::LineNumberNode) = string(l.file, ":", l.line)
+
+"""
+    bugsast_expression(expr)
+
+Check & normalize BUGS expressions (function calls, variables, literals, indexed variables).
+"""
 function bugsast_expression(expr, position=LineNumberNode(1, nothing))
     if expr isa Union{Symbol,Number}
         return expr
@@ -92,6 +81,14 @@ function bugsast_block(expr, position=LineNumberNode(1, nothing))
             error("Expression `$expr` at $(position_string(position)) is not a block")
         end
     end
+end
+
+check_lhs(expr) = check_lhs(Bool, expr) || error("Invalid LHS expression `$expr`")
+check_lhs(::Type{Bool}, expr) = false
+check_lhs(::Type{Bool}, ::Symbol) = true
+function check_lhs(::Type{Bool}, expr::Expr)
+    return Meta.isexpr(expr, :ref) ||
+           (Meta.isexpr(expr, :call, 2) && check_lhs(Bool, expr.args[2]))
 end
 
 """
@@ -157,15 +154,13 @@ macro bugsast(expr)
     return Meta.quot(post_parsing_processing(warn_link_function(bugsast(expr, __source__))))
 end
 
-# TODO: check RHS of `=` can't be a distribution function
-
 function warn_link_function(expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, f_(lhs_) = rhs_)
             error(
-                "BUGS' link function syntax is not supported due to confusion with Julia function definition syntax. " *
-                "Please rewrite the logical assignment by calling the inverse of the link function on the RHS. " *
-                "Corresponding Inverses: logit => logistic, cloglog => cexpexp, log => exp, probit => phi. ",
+                "Link function syntax in BUGS is not supported with @bugsast due to conflicts with Julia syntax. 
+                Please rewrite logical assignments by using the inverse of the link function on the RHS. 
+                Inverse mappings are: logit => logistic, cloglog => cexpexp, log => exp, probit => phi."
             )
         end
         return sub_expr
