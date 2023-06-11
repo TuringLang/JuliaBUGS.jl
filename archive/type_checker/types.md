@@ -39,6 +39,14 @@ data.
 > different type information. […] One common case is where some components of a tensor have
 > been observed while other components need to be estimated.
 
+In addition to standard type checking of semantic consistency between variables and function calls, like any other expression-based language does, BUGS has the additional task of making sense of the indexed variables, which can occur in many places and arbitrary order, and ensuring that stochasticity is only used where it is allowed (e.g., not on the LHS of assignments, or within loop ranges).
+
+A “type checker” for BUGS would therefore have multiple purposes:
+
+1. Checking semantic constraints, such as correct argument types for functions and distributions,
+2. Checking stochasticity constraints, such as constantness of loop ranges,
+3. Unify types, ranks, and stochasticity of all variables – which can be specified in any order.
+
 # Formalization
 
 The type system of BUGS has several interesting properties compared to an off-the-shelf lambda
