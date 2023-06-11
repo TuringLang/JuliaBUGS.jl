@@ -160,7 +160,7 @@ function warn_link_function(expr)
             error(
                 "Link function syntax in BUGS is not supported with @bugsast due to conflicts with Julia syntax. 
                 Please rewrite logical assignments by using the inverse of the link function on the RHS. 
-                Inverse mappings are: logit => logistic, cloglog => cexpexp, log => exp, probit => phi."
+                Inverse mappings are: logit => logistic, cloglog => cexpexp, log => exp, probit => phi.",
             )
         end
         return sub_expr
