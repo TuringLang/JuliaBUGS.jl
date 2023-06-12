@@ -13,11 +13,14 @@ using Setfield
 using Graphs, MetaGraphsNext
 using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
+using UnPack
 using ReverseDiff
 
 import Base: ==, hash, Symbol, size
-
 import Distributions: truncated
+
+export @bugsast, @bugsmodel_str
+export compile
 
 # user defined functions and distributions are not supported yet
 include("BUGSPrimitives/BUGSPrimitives.jl")
@@ -102,9 +105,7 @@ include("node_functions.jl")
 include("graphs.jl")
 include("logdensityproblems.jl")
 
-export @bugsast, @bugsmodel_str
-
-export compile
+include("BUGSExamples/BUGSExamples.jl")
 
 function check_input(input::Union{NamedTuple,Dict})
     for (k, v) in input
@@ -156,17 +157,14 @@ function compile(
     ad_backend=:reversediff,
 )
     check_input.((data, inits))
-
     target == :logdensityproblem || error("Only :logdensityproblem is supported for now")
 
     vars, array_sizes, transformed_variables, array_bitmap = program!(
         CollectVariables(), model_def, data
     )
-
     merged_data = merge_dicts(deepcopy(data), transformed_variables)
-    pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, merged_data)
-    vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = unpack(
-        pass
+    vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = program!(
+        NodeFunctions(vars, array_sizes, array_bitmap), model_def, merged_data
     )
     g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))

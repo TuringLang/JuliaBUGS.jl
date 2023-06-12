@@ -1,5 +1,5 @@
 using JuliaBUGS
-using JuliaBUGS: create_BUGSGraph, create_varinfo, compile, unpack
+using JuliaBUGS: create_BUGSGraph, create_varinfo, compile, merge_dicts
 using JuliaBUGS: program!, CollectVariables, NodeFunctions
 using Graphs, MetaGraphsNext
 using ReverseDiff
@@ -9,7 +9,7 @@ using DynamicPPL
 using ProgressMeter
 ##
 include("/home/sunxd/JuliaBUGS.jl/src/BUGSExamples/BUGSExamples.jl");
-volume_i_examples = BUGSExamples.volume_i_examples;
+volume_i_examples = JuliaBUGS.BUGSExamples.volume_i_examples;
 
 ##
 # m = volume_i_examples[keys(volume_i_examples)[1]]
@@ -21,8 +21,10 @@ println(m.name)
 
 ##
 vars, array_sizes, transformed_variables, array_bitmap = program!(CollectVariables(), model_def, data);
-pass = program!(NodeFunctions(vars, array_sizes, array_bitmap), model_def, merge_dicts(data, transformed_variables));
-vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = unpack(pass);
+merged_data = merge_dicts(deepcopy(data), transformed_variables);
+vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = program!(
+    NodeFunctions(vars, array_sizes, array_bitmap), model_def, merged_data
+);
 
 function merge_dicts(d1::Dict, d2::Dict)
     merged_dict = Dict()

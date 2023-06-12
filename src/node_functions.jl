@@ -12,53 +12,43 @@ function NodeFunctions(vars, array_sizes, array_bitmap)
     return NodeFunctions(vars, array_sizes, array_bitmap, Dict(), Dict(), Dict(), Dict())
 end
 
-function unpack(pass::NodeFunctions)
-    return pass.vars,
-    pass.array_sizes,
-    pass.array_bitmap,
-    pass.link_functions,
-    pass.node_args,
-    pass.node_functions,
-    pass.dependencies
-end
-
 """
-    evaluate_(var, env)
+    evaluate_and_track_dependencies(var, env)
 
 Evaluate `var` in the environment `env`. Return the evaluated value, the set of variables that `var` depends 
 on, and the arguments of the node function based on `var`. Array elements and array variables are represented
 by tuples in the returned value. Assume all Colon indexing has been concretized.
 
 # Examples
-julia> evaluate_(:(x[a]), Dict())
+julia> evaluate_and_track_dependencies(:(x[a]), Dict())
 (:(x[a]), Set(Any[:a, (:x, ())]), Set(Any[:a, (:x, ())]))
 
-julia> evaluate_(:(x[a]), Dict(:a => 1))
+julia> evaluate_and_track_dependencies(:(x[a]), Dict(:a => 1))
 (:(x[1]), Set(Any[(:x, (1,))]), Set(Any[(:x, ())]))
 
-julia> evaluate_(:(x[y[1]+1]+a+1), Dict())
+julia> evaluate_and_track_dependencies(:(x[y[1]+1]+a+1), Dict())
 (:(x[y[1] + 1] + a + 1), Set(Any[:a, (:x, ()), (:y, (1,))]), Set(Any[:a, (:x, ()), (:y, ())]))
 
-julia> evaluate_(:(getindex(x[1:2, 1:3], a, b)), Dict(:x => [1 2 3; 4 5 6]))
+julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), Dict(:x => [1 2 3; 4 5 6]))
 (:(getindex([1 2 3; 4 5 6], a, b)), Set(Any[:a, :b]), Set(Any[:a, :b, (:x, ())]))
 
-julia> evaluate_(:(getindex(x[1:2, 1:3], a, b)), Dict(:x => [1 2 missing; 4 5 6]))
+julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), Dict(:x => [1 2 missing; 4 5 6]))
 (:(getindex(Union{Missing, Int64}[1 2 missing; 4 5 6], a, b)), Set(Any[:a, :b, (:x, (1, 3))]), Set(Any[:a, :b, (:x, ())]))
 ```
 """
-evaluate_(var::Number, ::Dict) = var, Set(), Set()
-evaluate_(var::UnitRange, ::Dict) = var, Set(), Set()
-function evaluate_(var::Symbol, env::Dict)
+evaluate_and_track_dependencies(var::Number, ::Dict) = var, Set(), Set()
+evaluate_and_track_dependencies(var::UnitRange, ::Dict) = var, Set(), Set()
+function evaluate_and_track_dependencies(var::Symbol, env::Dict)
     value = haskey(env, var) ? env[var] : var
     @assert !ismissing(value) "Scalar variables in data can't be missing, but $var given as missing"
     return ismissing(value) ? var : value, Set(), Set()
 end
-function evaluate_(var::Expr, env::Dict)
+function evaluate_and_track_dependencies(var::Expr, env::Dict)
     deps, args = Set(), Set()
     if Meta.isexpr(var, :ref)
         idxs = []
         for i in 2:length(var.args)
-            e, d, a = evaluate_(var.args[i], env)
+            e, d, a = evaluate_and_track_dependencies(var.args[i], env)
             push!(idxs, e)
             union!(deps, d)
             union!(args, a)
@@ -105,7 +95,7 @@ function evaluate_(var::Expr, env::Dict)
     else # function call
         fun_args = []
         for i in 2:length(var.args)
-            e, d, a = evaluate_(var.args[i], env)
+            e, d, a = evaluate_and_track_dependencies(var.args[i], env)
             push!(fun_args, e)
             union!(deps, d)
             union!(args, a)
@@ -126,20 +116,20 @@ end
 """
     constprop(x, env)
 
-Constant propagation for `x` in the environment `env`. Return the constant propagated expression.
+Try to plugin the value into x if the value is concrete.
 """
-function constprop(x, env)
-    try_constprop = _constprop(x, env)
+function plugin_value_from_env(x, env)
+    try_constprop = _plugin_value_from_env(x, env)
     while try_constprop != x
         x = try_constprop
-        try_constprop = _constprop(x, env)
+        try_constprop = _plugin_value_from_env(x, env)
     end
     return x
 end
 
-_constprop(x::Number, env) = x
-_constprop(x::Symbol, env) = haskey(env, x) ? env[x] : x
-function _constprop(x, env)
+_plugin_value_from_env(x::Number, env) = x
+_plugin_value_from_env(x::Symbol, env) = haskey(env, x) ? env[x] : x
+function _plugin_value_from_env(x, env)
     x = deepcopy(x)
     for i in 2:length(x.args)
         if Meta.isexpr(x.args[i], :ref) &&
@@ -148,7 +138,7 @@ function _constprop(x, env)
             val = env[x.args[i].args[1]][try_cast_to_int.(x.args[i].args[2:end])...]
             x.args[i] = ismissing(val) ? x.args[i] : val
         else
-            x.args[i] = _constprop(x.args[i], env)
+            x.args[i] = _plugin_value_from_env(x.args[i], env)
         end
     end
     return x
@@ -245,8 +235,8 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
             dependencies = non_data_vars
         end
     else
-        rhs_expr = constprop(rhs_expr, env)
-        evaled_rhs, dependencies, node_args = evaluate_(rhs_expr, env)
+        rhs_expr = plugin_value_from_env(rhs_expr, env)
+        evaled_rhs, dependencies, node_args = evaluate_and_track_dependencies(rhs_expr, env)
 
         # rhs can be evaluated into a concrete value here, because including transformed variables in the data
         # is effectively constant propagation
@@ -308,5 +298,6 @@ function post_process(pass::NodeFunctions, expr, env, vargs...)
             delete!(pass.vars, var)
         end
     end
-    return pass
+    @unpack vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = pass
+    return vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies
 end

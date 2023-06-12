@@ -2,15 +2,27 @@ module BUGSExamples
 
 using JuliaBUGS: @bugsast, @bugsmodel_str
 
-function include_children_files(folder_path, exclude_files=String[])
-    for file in readdir(folder_path)
-        if isfile(joinpath(folder_path, file)) && !(file in exclude_files)
-            include(joinpath(folder_path, file))
-        end
-    end
-end
+include("Volume_I/Blocker.jl")
+include("Volume_I/Bones.jl")
+include("Volume_I/Dogs.jl")
+include("Volume_I/Dyes.jl")
+include("Volume_I/Epil.jl")
+include("Volume_I/Equiv.jl")
+# include("Volume_I/Inhalers.jl")
+include("Volume_I/Kidney.jl")
+include("Volume_I/Leuk.jl")
+include("Volume_I/LeukFr.jl")
+include("Volume_I/LSAT.jl")
+include("Volume_I/Magnesium.jl")
+include("Volume_I/Mice.jl")
+include("Volume_I/Oxford.jl")
+include("Volume_I/Pumps.jl")
+include("Volume_I/Rats.jl")
+include("Volume_I/Salm.jl")
+include("Volume_I/Seeds.jl")
+include("Volume_I/Stacks.jl")
+include("Volume_I/Surgical.jl")
 
-include_children_files("/home/sunxd/JuliaBUGS.jl/src/BUGSExamples/" * "Volume_I")
 volume_i_examples = (
     blockers=blockers,
     bones=bones,

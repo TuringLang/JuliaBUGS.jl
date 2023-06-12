@@ -146,7 +146,7 @@ function check_idxs(v_name::Symbol, idxs, env::Dict)
 end
 
 """
-    eval(::CollectVariables, var, env)
+    evaluate(::CollectVariables, var, env)
 
 Evaluate `expr` in the environment `env`.
 

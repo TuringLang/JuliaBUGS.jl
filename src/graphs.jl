@@ -154,10 +154,6 @@ function create_varinfo(g, sorted_nodes, vars, array_sizes, data, inits)
     return initialize_vi(g, sorted_nodes, vi, data, inits)
 end
 
-@inline function unpack(ni::NodeInfo)
-    return ni.node_type, ni.link_function, ni.node_function, ni.node_args
-end
-
 function initialize_vi(g, sorted_nodes, vi, data, inits; transform_variables=true)
     vi = deepcopy(vi)
     parameters = VarName[]
@@ -165,8 +161,8 @@ function initialize_vi(g, sorted_nodes, vi, data, inits; transform_variables=tru
     for vn in sorted_nodes
         ni = g[vn]
         ni isa ConcreteNodeInfo || continue
-        node_type, link_function, node_function, args_vn = unpack(ni)
-        args = [vi[x] for x in args_vn]
+        @unpack node_type, link_function, node_function, node_args = ni
+        args = [vi[x] for x in node_args]
         if node_type == JuliaBUGS.Logical
             value = (node_function)(args...)
             @assert value isa Union{Number,Array{<:Number}}
@@ -222,8 +218,8 @@ function (re::VarInfoReconstruct{L,DynamicPPL.DynamicTransformation})(
     logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
-        node_type, link_function, node_function, args_vn = unpack(ni)
-        args = [vi[x] for x in args_vn]
+        @unpack node_type, link_function, node_function, node_args = ni
+        args = [vi[x] for x in node_args]
 
         if node_type == JuliaBUGS.Logical
             value = node_function(args...)
@@ -256,8 +252,8 @@ function (re::VarInfoReconstruct{L,DynamicPPL.DynamicTransformation})() where {L
     logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
-        node_type, link_function, node_function, args_vn = unpack(ni)
-        args = [vi[x] for x in args_vn]
+        @unpack node_type, link_function, node_function, node_args = ni
+        args = [vi[x] for x in node_args]
         if node_type == JuliaBUGS.Logical
             value = node_function(args...)
             setindex!!(vi, value, vn)
