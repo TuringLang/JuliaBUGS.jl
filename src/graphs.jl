@@ -173,14 +173,16 @@ function initialize_vi(g, sorted_nodes, vi, data, inits; transform_variables=tru
             isnothing(value) && push!(parameters, vn)
             isnothing(value) && (value = evaluate(inits, vn))
             if !isnothing(value)
-                logp += logpdf(dist, (link_function)(value))
-                vi = setindex!!(vi, value, vn)
+                logp += logpdf_with_trans(dist, (link_function)(value), true)
+                transformed_value = link(dist, value)
+                vi = setindex!!(vi, transformed_value, vn)
             else
                 # println("initialization for $vn is not provided, sampling from prior");
                 value = rand(dist)
-                logp += logpdf(dist, value)
-                value = _inv(link_function)(value)
-                vi = setindex!!(vi, value, vn)
+                transformed_value = link(dist, value)
+                logp += logpdf_with_trans(dist, value, true)
+                transformed_value = _inv(link_function)(transformed_value)
+                vi = setindex!!(vi, transformed_value, vn)
             end
         end
     end
@@ -236,10 +238,10 @@ function (re::VarInfoReconstruct{L,DynamicPPL.DynamicTransformation})(
                 value = invlink(dist, value)
                 current_idx += l
                 setindex!!(vi, value, vn)
-                logp += logpdf(dist, (link_function)(value))
+                logp += logpdf_with_trans(dist, (link_function)(value), true)
             else
                 value = vi[vn]
-                logp += logpdf(dist, (link_function)(value))
+                logp += logpdf_with_trans(dist, (link_function)(value), true)
             end
         end
     end
@@ -248,7 +250,7 @@ end
 
 # `re` with no argument is ancestral sampling
 function (re::VarInfoReconstruct{L,DynamicPPL.DynamicTransformation})() where {L}
-    vi, g, sorted_nodes = deepcopy(re.prototype), re.parameters, re.g, re.sorted_nodes
+    vi, g, sorted_nodes = deepcopy(re.prototype), re.g, re.sorted_nodes
     logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
@@ -260,8 +262,10 @@ function (re::VarInfoReconstruct{L,DynamicPPL.DynamicTransformation})() where {L
         else
             dist = node_function(args...)
             value = rand(dist)
-            logp += logpdf(dist, value)
-            setindex!!(vi, _inv(link_function)(value), vn)
+            transformed_value = link(dist, value)
+            logp += logpdf_with_trans(dist, value, true)
+            transformed_value = _inv(link_function)(transformed_value)
+            vi = setindex!!(vi, transformed_value, vn)
         end
     end
     return @set vi.logp = logp
