@@ -131,12 +131,12 @@ function initialize_var_store(data, vars, array_sizes)
     return var_store
 end
 
-_inv(::typeof(logit)) = probit
-_inv(::typeof(cloglog)) = cloglog
-_inv(::typeof(log)) = exp
+inverse_link_function(::typeof(logit)) = probit
+inverse_link_function(::typeof(cloglog)) = cloglog
+inverse_link_function(::typeof(log)) = exp
 function probit end
-_inv(::typeof(probit)) = logit
-_inv(identity) = identity
+inverse_link_function(::typeof(probit)) = logit
+inverse_link_function(identity) = identity
 
 function evaluate(env::Dict, vn::VarName)
     sym = getsym(vn)
@@ -148,6 +148,7 @@ function evaluate(env::Dict, vn::VarName)
     return ismissing(ret) ? nothing : ret
 end
 
+# we create a SimpleVarInfo to wrap the variable store, the variable store should store untransformed variables
 function create_varinfo(g, sorted_nodes, vars, array_sizes, data, inits)
     vs = initialize_var_store(data, vars, array_sizes)
     vi = SimpleVarInfo(vs)
@@ -173,16 +174,14 @@ function initialize_vi(g, sorted_nodes, vi, data, inits; transform_variables=tru
             isnothing(value) && push!(parameters, vn)
             isnothing(value) && (value = evaluate(inits, vn))
             if !isnothing(value)
-                logp += logpdf_with_trans(dist, (link_function)(value), true)
-                transformed_value = link(dist, value)
-                vi = setindex!!(vi, transformed_value, vn)
+                # here the value is untransformed version
+                logp += logpdf(dist, (link_function)(value))
+                vi = setindex!!(vi, value, vn)
             else
                 # println("initialization for $vn is not provided, sampling from prior");
                 value = rand(dist)
-                transformed_value = link(dist, value)
-                logp += logpdf_with_trans(dist, value, true)
-                transformed_value = _inv(link_function)(transformed_value)
-                vi = setindex!!(vi, transformed_value, vn)
+                logp += logpdf(dist, value)
+                vi = setindex!!(vi, inverse_link_function(link_function)(value), vn)
             end
         end
     end
@@ -264,9 +263,31 @@ function (re::VarInfoReconstruct{L,DynamicPPL.DynamicTransformation})() where {L
             value = rand(dist)
             transformed_value = link(dist, value)
             logp += logpdf_with_trans(dist, value, true)
-            transformed_value = _inv(link_function)(transformed_value)
+            transformed_value = inverse_link_function(link_function)(transformed_value)
             vi = setindex!!(vi, transformed_value, vn)
         end
     end
     return @set vi.logp = logp
+end
+
+function reeval_logp_and_return(re::VarInfoReconstruct{L,DynamicPPL.DynamicTransformation}) where {L}
+    vi, g, sorted_nodes = deepcopy(re.prototype), re.g, re.sorted_nodes
+    logp = 0.0
+    for vn in sorted_nodes
+        ni = g[vn]
+        @unpack node_type, link_function, node_function, node_args = ni
+        args = [vi[x] for x in node_args]
+        if node_type == JuliaBUGS.Logical
+            value = node_function(args...)
+            setindex!!(vi, value, vn)
+        else
+            dist = node_function(args...)
+            value = rand(dist)
+            transformed_value = link(dist, value)
+            logp += logpdf_with_trans(dist, value, true)
+            transformed_value = inverse_link_function(link_function)(transformed_value)
+            vi = setindex!!(vi, transformed_value, vn)
+        end
+    end
+    return logp
 end
