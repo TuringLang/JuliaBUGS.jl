@@ -193,7 +193,7 @@ function initialize_vi(g, sorted_nodes, vi, data, inits; transform_variables=tru
     else
         DynamicPPL.IdentityTransformation
     end
-    return vi, VarInfoReconstruct{l,transform_type}(vi, parameters, g, sorted_nodes)
+    return VarInfoReconstruct{l,transform_type}(vi, parameters, g, sorted_nodes)
 end
 
 function _length(vn::VarName)
@@ -208,18 +208,18 @@ struct VarInfoReconstruct{L,T<:DynamicPPL.AbstractTransformation}
     sorted_nodes::Vector{VarName}
 end
 
-function (re::VarInfoReconstruct{L,DynamicPPL.DynamicTransformation})(
-    flattened_values::AbstractVector
-) where {L}
+# assume flattened_values are transformed
+function (re::VarInfoReconstruct{L,T})(flattened_values::AbstractVector) where {L,T}
     @assert length(flattened_values) == L
-    vi, parameters, g, sorted_nodes = deepcopy(re.prototype),
-    re.parameters, re.g,
-    re.sorted_nodes
+    @unpack prototype, parameters, g, sorted_nodes = re
+    vi = deepcopy(prototype)
     current_idx = 1
     logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
+        ni isa ConcreteNodeInfo || continue
         @unpack node_type, link_function, node_function, node_args = ni
+        # all variables in the var_store are untransformed
         args = [vi[x] for x in node_args]
 
         if node_type == JuliaBUGS.Logical
@@ -227,54 +227,61 @@ function (re::VarInfoReconstruct{L,DynamicPPL.DynamicTransformation})(
             setindex!!(vi, value, vn)
         else
             dist = node_function(args...)
-            if vn in parameters
+            if vn in parameters # the value of parameter variables are stored in flattened_values
                 l = _length(vn)
                 value = if l == 1
                     flattened_values[current_idx]
                 else
                     flattened_values[current_idx:(current_idx + l - 1)]
                 end
-                value = invlink(dist, value)
                 current_idx += l
+                
+                if T == DynamicPPL.DynamicTransformation
+                    value = invlink(dist, value)
+                end
                 setindex!!(vi, value, vn)
-                logp += logpdf_with_trans(dist, (link_function)(value), true)
+                logp += logpdf(dist, (link_function)(value))
             else
                 value = vi[vn]
-                logp += logpdf_with_trans(dist, (link_function)(value), true)
+                logp += logpdf(dist, (link_function)(value))
             end
         end
     end
     return @set vi.logp = logp
 end
 
-# `re` with no argument is ancestral sampling
-function (re::VarInfoReconstruct{L,DynamicPPL.DynamicTransformation})() where {L}
-    vi, g, sorted_nodes = deepcopy(re.prototype), re.g, re.sorted_nodes
+function eval_logp(re::VarInfoReconstruct{L,T}) where {L,T}
+    @info T
+    @unpack prototype, parameters, g, sorted_nodes = re
+    vi = deepcopy(prototype)
     logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
+        ni isa ConcreteNodeInfo || continue
         @unpack node_type, link_function, node_function, node_args = ni
+        node_type == JuliaBUGS.Logical && continue
         args = [vi[x] for x in node_args]
-        if node_type == JuliaBUGS.Logical
-            value = node_function(args...)
-            setindex!!(vi, value, vn)
+
+        dist = node_function(args...)
+        value = (link_function)(vi[vn])
+        if T == DynamicPPL.DynamicTransformation
+            logp += logpdf(transformed(dist), link(dist, value))
         else
-            dist = node_function(args...)
-            value = rand(dist)
-            transformed_value = link(dist, value)
-            logp += logpdf_with_trans(dist, value, true)
-            transformed_value = inverse_link_function(link_function)(transformed_value)
-            vi = setindex!!(vi, transformed_value, vn)
+            logp += logpdf(dist, value)
         end
     end
     return @set vi.logp = logp
 end
 
-function reeval_logp_and_return(re::VarInfoReconstruct{L,DynamicPPL.DynamicTransformation}) where {L}
-    vi, g, sorted_nodes = deepcopy(re.prototype), re.g, re.sorted_nodes
+# TODO: use `AbstractPPL.evaluate!!` interface in the future, for now, this is more for testing
+# The `DynamicPPL.AbstractTransformation` type only affects the logp calculation
+function ancestral_sampling(re::VarInfoReconstruct{L,T}) where {L,T}
+    @unpack prototype, parameters, g, sorted_nodes = re
+    vi = deepcopy(prototype)
     logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
+        ni isa ConcreteNodeInfo || continue
         @unpack node_type, link_function, node_function, node_args = ni
         args = [vi[x] for x in node_args]
         if node_type == JuliaBUGS.Logical
@@ -282,12 +289,15 @@ function reeval_logp_and_return(re::VarInfoReconstruct{L,DynamicPPL.DynamicTrans
             setindex!!(vi, value, vn)
         else
             dist = node_function(args...)
-            value = rand(dist)
-            transformed_value = link(dist, value)
-            logp += logpdf_with_trans(dist, value, true)
-            transformed_value = inverse_link_function(link_function)(transformed_value)
-            vi = setindex!!(vi, transformed_value, vn)
+            value = rand(dist) # sample from untransformed prior, samples value is the result of possible link function application
+            if T == DynamicPPL.DynamicTransformation
+                b = bijector(dist)
+                logp += logpdf(transformed(dist, b), transform(b, value))
+            else
+                logp += logpdf(dist, value)
+            end
+            vi = setindex!!(vi, inverse_link_function(link_function)(value), vn)
         end
     end
-    return logp
+    return @set vi.logp = logp
 end

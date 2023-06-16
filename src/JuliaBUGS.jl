@@ -142,9 +142,24 @@ function merge_dicts(d1::Dict, d2::Dict)
 end
 
 """
-    compile(model_def, data, initializations)
+    compile(model_def, data, initializations; target=:logdensityproblem, ad_backend=:reversediff, compile_tape=false)
 
 Compile a BUGS model into a log density problem.
+
+# Arguments
+- `model_def::Expr`: The BUGS model definition.
+- `data::NamedTuple` or `Dict`: The data to be used in the model. If a NamedTuple is passed, it will be converted to a Dict.
+- `initializations::NamedTuple` or `Dict`: The initial values for the model parameters. If a NamedTuple is passed, it will be converted to a Dict.
+- `target` (optional, keyword): The target output format. Currently, only `:logdensityproblem` is supported.
+- `ad_backend` (optional, keyword): The automatic differentiation (AD) backend to use. Currently, only `:reversediff` and `:none` are supported.
+- `compile_tape` (optional, keyword): A boolean flag indicating whether to compile the computation graph for ReverseDiff. Defaults to `false`.
+
+# Returns
+- A `LogDensityProblem` object representing the compiled model.
+
+# Errors
+- Will error if `target` is not `:logdensityproblem`.
+- Will error if `ad_backend` is not `:reversediff` or `:nothing`.
 """
 function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
     return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
@@ -155,6 +170,7 @@ function compile(
     inits::Dict;
     target=:logdensityproblem,
     ad_backend=:reversediff,
+    compile_tape=false
 )
     check_input.((data, inits))
     target == :logdensityproblem || error("Only :logdensityproblem is supported for now")
@@ -169,14 +185,14 @@ function compile(
     g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
 
-    vi, re = Base.invokelatest(
+    re = Base.invokelatest(
         create_varinfo, g, sorted_nodes, vars, array_sizes, merged_data, inits
     )
     if ad_backend == :none
         p = BUGSLogDensityProblem(re)
     elseif ad_backend == :reversediff
         p = Base.invokelatest(
-            ADgradient, :ReverseDiff, BUGSLogDensityProblem(re); compile=Val(true)
+            ADgradient, :ReverseDiff, BUGSLogDensityProblem(re); compile=Val(compile_tape)
         )
     else
         error("Only :reversediff is supported for now")
