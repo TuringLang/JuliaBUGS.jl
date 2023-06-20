@@ -251,6 +251,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
     return @set vi.logp = logp
 end
 
+# ignore link function for now
 AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultContext()) 
 function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model
@@ -264,8 +265,13 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
         node_type == JuliaBUGS.Logical && continue
         args = [vi[x] for x in node_args]
         dist = node_function(args...)
-        if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation
-            logp += logpdf(dist, link(dist, (link_function)(vi[vn]))) # TODO: work with this
+        val = link_function(vi[vn])
+        # g(x) ~ Normal(...)
+        # x ~ (g⁻¹) Normal(...) = transformed(Normal(...), g⁻¹)
+        
+        if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
+            val_transformed, logjac = with_logabsdet_jacobian(DynamicPPL.inverse(bijector(dist)), val)
+            logp += logpdf(dist, val_transformed) + logjac
         else
             logp += logpdf(dist, (link_function)(vi[vn]))
         end

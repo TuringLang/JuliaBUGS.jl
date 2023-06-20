@@ -147,7 +147,7 @@ function merge_dicts(d1::Dict, d2::Dict)
 end
 
 """
-    compile(model_def, data, initializations; target=:logdensityproblem, ad_backend=:reversediff, compile_tape=false)
+    compile(model_def, data, initializations)
 
 Compile a BUGS model into a log density problem.
 
@@ -155,31 +155,15 @@ Compile a BUGS model into a log density problem.
 - `model_def::Expr`: The BUGS model definition.
 - `data::NamedTuple` or `Dict`: The data to be used in the model. If a NamedTuple is passed, it will be converted to a Dict.
 - `initializations::NamedTuple` or `Dict`: The initial values for the model parameters. If a NamedTuple is passed, it will be converted to a Dict.
-- `target` (optional, keyword): The target output format. Currently, only `:logdensityproblem` is supported.
-- `ad_backend` (optional, keyword): The automatic differentiation (AD) backend to use. Currently, only `:reversediff` and `:none` are supported.
-- `compile_tape` (optional, keyword): A boolean flag indicating whether to compile the computation graph for ReverseDiff. Defaults to `false`.
 
 # Returns
-- A `LogDensityProblem` object representing the compiled model.
-
-# Errors
-- Will error if `target` is not `:logdensityproblem`.
-- Will error if `ad_backend` is not `:reversediff` or `:nothing`.
+- A [`BUGSModel`](@ref) object representing the compiled model.
 """
 function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
     return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
 end
-function compile(
-    model_def::Expr,
-    data::Dict,
-    inits::Dict;
-    target=:logdensityproblem,
-    ad_backend=:reversediff,
-    compile_tape=false,
-)
+function compile(model_def::Expr, data::Dict, inits::Dict)
     check_input.((data, inits))
-    target == :logdensityproblem || error("Only :logdensityproblem is supported for now")
-
     vars, array_sizes, transformed_variables, array_bitmap = program!(
         CollectVariables(), model_def, data
     )
@@ -187,23 +171,15 @@ function compile(
     vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = program!(
         NodeFunctions(vars, array_sizes, array_bitmap), model_def, merged_data
     )
-    g = create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
+    g = BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
-
-    re = Base.invokelatest(
-        create_varinfo, g, sorted_nodes, vars, array_sizes, merged_data, inits
+    return Base.invokelatest(
+        BUGSModel, g, sorted_nodes, vars, array_sizes, merged_data, inits
     )
-    if ad_backend == :none
-        p = BUGSLogDensityProblem(re)
-    elseif ad_backend == :reversediff
-        p = Base.invokelatest(
-            ADgradient, :ReverseDiff, BUGSLogDensityProblem(re); compile=Val(compile_tape)
-        )
-    else
-        error("Only :reversediff is supported for now")
-    end
-
-    return p
 end
+
+compile(model_def::Expr, data::NamedTuple) = compile(model_def, Dict(pairs(data)), Dict())
+compile(model, data::Dict) = compile(model, data, Dict())
+compile(model_def::Expr) = compile(model_def, Dict(), Dict())
 
 end
