@@ -177,6 +177,15 @@ function phi(x)
 end
 
 """
+    probit
+
+Inverse of [`phi`](@ref).
+"""
+function probit(e)
+    return quantile(Normal(0, 1), e)
+end
+
+"""
     pow(a, b)
 
 Return `a` raised to the power of `b`.

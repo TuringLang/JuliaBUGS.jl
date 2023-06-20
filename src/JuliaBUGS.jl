@@ -1,6 +1,7 @@
 module JuliaBUGS
 
 using AbstractPPL
+using AbstractMCMC
 using Bijectors
 using BangBang
 using Distributions
@@ -15,9 +16,12 @@ using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
 using UnPack
 using ReverseDiff
+using Random
 
 import Base: ==, hash, Symbol, size
 import Distributions: truncated
+import AbstractPPL: AbstractContext, evaluate!!
+import DynamicPPL: settrans!!
 
 export @bugsast, @bugsmodel_str
 export compile
@@ -43,6 +47,7 @@ using JuliaBUGS.BUGSPrimitives:
     min,
     phi,
     pow,
+    probit,
     sqrt,
     rank,
     ranked,
@@ -103,7 +108,7 @@ include("variable_types.jl")
 include("compiler_pass.jl")
 include("node_functions.jl")
 include("graphs.jl")
-include("logdensityproblems.jl")
+# include("logdensityproblems.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 
@@ -170,7 +175,7 @@ function compile(
     inits::Dict;
     target=:logdensityproblem,
     ad_backend=:reversediff,
-    compile_tape=false
+    compile_tape=false,
 )
     check_input.((data, inits))
     target == :logdensityproblem || error("Only :logdensityproblem is supported for now")
