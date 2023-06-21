@@ -110,7 +110,7 @@ The model object for a BUGS model.
 """
 struct BUGSModel <: AbstractPPL.AbstractProbabilisticProgram
     param_length::Int
-    varinfo::SimpleVarInfo # for uniformity, all values in varinfo are untransformed
+    varinfo::SimpleVarInfo # TODO: maybe separate `varinfo` from BUGSModel
     parameters::Vector{VarName}
     g::BUGSGraph
     sorted_nodes::Vector{VarName}
@@ -173,11 +173,16 @@ function initialize_var_store(data, vars, array_sizes)
     return var_store
 end
 
-inverse_link_function(::typeof(logit)) = probit
-inverse_link_function(::typeof(cloglog)) = cloglog
+inverse_link_function(::typeof(logit)) = logistic
+inverse_link_function(::typeof(cloglog)) = cexpexp
 inverse_link_function(::typeof(log)) = exp
-inverse_link_function(::typeof(probit)) = logit
+inverse_link_function(::typeof(probit)) = phi
 inverse_link_function(identity) = identity
+
+import DynamicPPL: settrans!!
+function DynamicPPL.settrans!!(m::BUGSModel, if_trans::Bool)
+    return @set m.varinfo = DynamicPPL.settrans!!(m.varinfo, if_trans)
+end
 
 function evaluate(vn::VarName, env::Dict)
     sym = getsym(vn)

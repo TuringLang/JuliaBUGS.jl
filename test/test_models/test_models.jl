@@ -35,3 +35,8 @@ vi = DynamicPPL.settrans!!(vi, false)
 test_model_1_bugs = @set test_model_1_bugs.varinfo = vi
 evaluate!!(test_model_1_bugs, JuliaBUGS.DefaultContext()).logp
 last(evaluate!!(test_model_1_dppl, vi, DynamicPPL.DefaultContext())).logp
+
+using Bijectors
+b = Bijectors.Logit(0, 10)
+dist = transformed(Gamma(2, 2), b)
+rand(dist)

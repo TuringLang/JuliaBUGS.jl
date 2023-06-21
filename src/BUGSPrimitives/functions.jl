@@ -119,12 +119,12 @@ function icloglog(x)
 end
 
 """
-    logit(x)
+    logistic(x)
 
-Logit function of `x`. 
+Logistic function of `x`.
     
 ```math
-logit(x) = log(x / (1 - x))
+logistic(x) = 1 / (1 + exp(-x))
 ```
 """
 function logistic(x)
