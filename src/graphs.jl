@@ -18,7 +18,7 @@ struct ConcreteNodeInfo <: NodeInfo
     link_function::Function
     node_function::Function
     node_args::Vector{VarName}
-end
+end 
 
 function ConcreteNodeInfo(var::Var, vars, link_functions, node_functions, node_args)
     return ConcreteNodeInfo(
@@ -120,7 +120,6 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
     vs = initialize_var_store(data, vars, array_sizes)
     vi = SimpleVarInfo(vs)
     parameters = VarName[]
-    logp = 0.0
     for vn in sorted_nodes
         g[vn] isa AuxiliaryNodeInfo && continue
         
@@ -137,19 +136,14 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
             isnothing(value) && push!(parameters, vn)
             isnothing(value) && (value = evaluate(vn, inits))
             if !isnothing(value)
-                # here the value is untransformed version
-                logp += logpdf(dist, (link_function)(value))
                 vi = setindex!!(vi, value, vn)
             else
-                # println("initialization for $vn is not provided, sampling from prior");
-                value = rand(dist)
-                logp += logpdf(dist, value)
-                vi = setindex!!(vi, inverse_link_function(link_function)(value), vn)
+                # if not initialized, just set to zeros
+                vi = setindex!!(vi, zeros(size(dist)), vn)
             end
         end
     end
     l = sum([_length(x) for x in parameters])
-    vi = @set vi.logp = logp
     return BUGSModel(l, vi, parameters, g, sorted_nodes)
 end
 
@@ -173,13 +167,6 @@ function initialize_var_store(data, vars, array_sizes)
     return var_store
 end
 
-inverse_link_function(::typeof(logit)) = logistic
-inverse_link_function(::typeof(cloglog)) = cexpexp
-inverse_link_function(::typeof(log)) = exp
-inverse_link_function(::typeof(probit)) = phi
-inverse_link_function(identity) = identity
-
-import DynamicPPL: settrans!!
 function DynamicPPL.settrans!!(m::BUGSModel, if_trans::Bool)
     return @set m.varinfo = DynamicPPL.settrans!!(m.varinfo, if_trans)
 end
@@ -243,9 +230,12 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
             setindex!!(vi, value, vn)
         else
             dist = node_function(args...)
-            spl = rand(ctx.rng, dist)
-            value = inverse_link_function(link_function)(spl)
-            if T == DynamicPPL.DynamicTransformation
+            if link_function != identity
+                dist = transformed(dist, bijector(link_function))
+            end
+            value = rand(ctx.rng, dist)
+            if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
+                val_transformed, logjac = with_logabsdet_jacobian(DynamicPPL.inverse(bijector(dist)), val)
                 logp += logpdf(transformed(dist), spl)
             else
                 logp += logpdf(dist, spl)
@@ -270,6 +260,9 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
         node_type == JuliaBUGS.Logical && continue
         args = [vi[x] for x in node_args]
         dist = node_function(args...)
+        if link_function != identity
+            dist = transformed(dist, bijector(link_function))
+        end
         val = link_function(vi[vn])
         # g(x) ~ Normal(...)
         # x ~ (g⁻¹) Normal(...) = transformed(Normal(...), g⁻¹)

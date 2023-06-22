@@ -10,7 +10,7 @@ end
 """
     cloglog(x)
 
-Complementary log-log function of `x`. 
+Complementary log-log function of `x`. Can be used as link function.
 
 ```math
 cloglog(x) = log(-log(1 - x))
@@ -18,6 +18,19 @@ cloglog(x) = log(-log(1 - x))
 """
 function cloglog(x)
     return LogExpFunctions.cloglog(x)
+end
+
+"""
+    cexpexp(x)
+
+Complementary exponential of the complementary exponential of `x`.
+
+```math
+cexpexp(x) = 1 - exp(-exp(x))
+```
+"""
+function cexpexp(x)
+    return LogExpFunctions.cexpexp(x)
 end
 
 """
@@ -39,6 +52,24 @@ function exp(x)
 end
 
 """
+    icloglog(x)
+
+Inverse complementary log-log function of `x`. Alias for [`cexpexp(x)`](@ref).
+"""
+function icloglog(x)
+    return LogExpFunctions.cexpexp(x)
+end
+
+"""
+    ilogit(x)
+
+Inverse logit function of `x`. Alias for `logistic(x)`.
+"""
+function ilogit(x)
+    return logistic(x)
+end
+
+"""
     inprod(a, b)
 
 Inner product of `a` and `b`.
@@ -52,7 +83,7 @@ end
 
 Inverse of matrix `v`.
 """
-function inverse(v)
+function inverse(v::AbstractArray{T, 2} where T)
     return LinearAlgebra.inv(v)
 end
 
@@ -103,19 +134,6 @@ logit(x) = log(x / (1 - x))
 """
 function logit(x)
     return LogExpFunctions.logit(x)
-end
-
-"""
-    icloglog(x)
-
-Inverse complementary log-log function of `x`. 
-
-```math
-icloglog(x) = 1 - exp(-exp(x))
-```
-"""
-function icloglog(x)
-    return LogExpFunctions.cexpexp(x)
 end
 
 """
