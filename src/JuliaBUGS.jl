@@ -107,8 +107,9 @@ include("bugsast.jl")
 include("variable_types.jl")
 include("compiler_pass.jl")
 include("node_functions.jl")
+include("bijectors.jl")
 include("graphs.jl")
-# include("logdensityproblems.jl")
+include("logdensityproblems.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 
@@ -147,14 +148,14 @@ function merge_dicts(d1::Dict, d2::Dict)
 end
 
 """
-    compile(model_def, data, initializations)
+    compile(model_def[, data, initializations])
 
 Compile a BUGS model into a log density problem.
 
 # Arguments
 - `model_def::Expr`: The BUGS model definition.
-- `data::NamedTuple` or `Dict`: The data to be used in the model. If a NamedTuple is passed, it will be converted to a Dict.
-- `initializations::NamedTuple` or `Dict`: The initial values for the model parameters. If a NamedTuple is passed, it will be converted to a Dict.
+- `data::NamedTuple` or `Dict`: The data to be used in the model. If none is passed, the data will be assumed to be empty.
+- `initializations::NamedTuple` or `Dict`: The initial values for the model parameters. If none is passed, the parameters will be assumed to be initialized to zero.
 
 # Returns
 - A [`BUGSModel`](@ref) object representing the compiled model.
@@ -177,7 +178,6 @@ function compile(model_def::Expr, data::Dict, inits::Dict)
         BUGSModel, g, sorted_nodes, vars, array_sizes, merged_data, inits
     )
 end
-
 compile(model_def::Expr, data::NamedTuple) = compile(model_def, Dict(pairs(data)), Dict())
 compile(model, data::Dict) = compile(model, data, Dict())
 compile(model_def::Expr) = compile(model_def, Dict(), Dict())

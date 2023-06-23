@@ -18,7 +18,7 @@ struct ConcreteNodeInfo <: NodeInfo
     link_function::Function
     node_function::Function
     node_args::Vector{VarName}
-end 
+end
 
 function ConcreteNodeInfo(var::Var, vars, link_functions, node_functions, node_args)
     return ConcreteNodeInfo(
@@ -55,11 +55,15 @@ function BUGSGraph(vars, link_functions, node_args, node_functions, dependencies
     )
     for l in keys(vars) # l for LHS variable
         l_vn = to_varname(l)
-        check_and_add_vertex!(g, l_vn, NodeInfo(l, vars, link_functions, node_functions, node_args))
+        check_and_add_vertex!(
+            g, l_vn, NodeInfo(l, vars, link_functions, node_functions, node_args)
+        )
         scalarize_then_add_edge!(g, l; lhs_or_rhs=:lhs)
         for r in dependencies[l]
             r_vn = to_varname(r)
-            check_and_add_vertex!(g, r_vn, NodeInfo(r, vars, link_functions, node_functions, node_args))
+            check_and_add_vertex!(
+                g, r_vn, NodeInfo(r, vars, link_functions, node_functions, node_args)
+            )
             add_edge!(g, r_vn, l_vn)
             scalarize_then_add_edge!(g, r; lhs_or_rhs=:rhs)
         end
@@ -122,7 +126,7 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
     parameters = VarName[]
     for vn in sorted_nodes
         g[vn] isa AuxiliaryNodeInfo && continue
-        
+
         ni = g[vn]
         @unpack node_type, link_function, node_function, node_args = ni
         args = [vi[x] for x in node_args]
@@ -214,14 +218,16 @@ Given values of parameters, compute the log joint density.
 """
 struct loglikelihoodContext <: AbstractPPL.AbstractContext end
 
-AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG) = evaluate!!(model, SamplingContext(rng))
+function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
+    return evaluate!!(model, SamplingContext(rng))
+end
 function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model
     vi = deepcopy(varinfo)
     logp = 0.0
     for vn in sorted_nodes
         g[vn] isa AuxiliaryNodeInfo && continue
-        
+
         ni = g[vn]
         @unpack node_type, link_function, node_function, node_args = ni
         args = [vi[x] for x in node_args]
@@ -231,14 +237,16 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
         else
             dist = node_function(args...)
             if link_function != identity
-                dist = transformed(dist, bijector(link_function))
+                dist = transformed(dist, bijector_of_link_function(link_function))
             end
             value = rand(ctx.rng, dist)
             if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
-                val_transformed, logjac = with_logabsdet_jacobian(DynamicPPL.inverse(bijector(dist)), val)
-                logp += logpdf(transformed(dist), spl)
+                value_transformed, logjac = with_logabsdet_jacobian(
+                    DynamicPPL.inverse(bijector(dist)), val
+                )
+                logp += logpdf(transformed(dist), value_transformed) + logjac
             else
-                logp += logpdf(dist, spl)
+                logp += logpdf(dist, value)
             end
             vi = setindex!!(vi, value, vn)
         end
@@ -247,7 +255,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
 end
 
 # ignore link function for now
-AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultContext()) 
+AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultContext())
 function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model
     vi = deepcopy(varinfo)
@@ -261,17 +269,16 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
         args = [vi[x] for x in node_args]
         dist = node_function(args...)
         if link_function != identity
-            dist = transformed(dist, bijector(link_function))
+            dist = transformed(dist, bijector_of_link_function(link_function))
         end
-        val = link_function(vi[vn])
-        # g(x) ~ Normal(...)
-        # x ~ (g⁻¹) Normal(...) = transformed(Normal(...), g⁻¹)
-        
+        value = vi[vn]
         if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
-            val_transformed, logjac = with_logabsdet_jacobian(DynamicPPL.inverse(bijector(dist)), val)
-            logp += logpdf(dist, val_transformed) + logjac
+            value_transformed, logjac = with_logabsdet_jacobian(
+                DynamicPPL.inverse(bijector(dist)), val
+            )
+            logp += logpdf(transformed(dist), value_transformed) + logjac
         else
-            logp += logpdf(dist, (link_function)(vi[vn]))
+            logp += logpdf(dist, value)
         end
     end
     return @set vi.logp = logp
@@ -281,11 +288,12 @@ function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVect
     @assert length(flattened_values) == model.param_length
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model
     vi = deepcopy(varinfo)
-    current_idx = 1; logp = 0.0
+    current_idx = 1
+    logp = 0.0
     for vn in sorted_nodes
         g[vn] isa AuxiliaryNodeInfo && continue
-        
-        ni = g[vn]   
+
+        ni = g[vn]
         @unpack node_type, link_function, node_function, node_args = ni
         args = [vi[x] for x in node_args]
         if node_type == JuliaBUGS.Logical
@@ -293,23 +301,30 @@ function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVect
             setindex!!(vi, value, vn)
         else
             dist = node_function(args...)
+            if link_function != identity
+                dist = transformed(dist, bijector_of_link_function(link_function))
+            end
             if vn in parameters # the value of parameter variables are stored in flattened_values
                 l = _length(vn)
-                value = if l == 1
+                value_transformed = if l == 1
                     flattened_values[current_idx]
                 else
                     flattened_values[current_idx:(current_idx + l - 1)]
                 end
                 current_idx += l
-                
-                if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation
-                    value = invlink(dist, value)
+
+                value = invlink(dist, value_transformed)
+                if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
+                    value_transformed, logjac = with_logabsdet_jacobian(
+                        DynamicPPL.inverse(bijector(dist)), val
+                    )
+                    logp += logpdf(transformed(dist), value_transformed) + logjac
                 end
-                setindex!!(vi, value, vn)
+                vi = setindex!!(vi, value, vn)
                 logp += logpdf(dist, (link_function)(value))
             else
                 value = vi[vn]
-                logp += logpdf(dist, (link_function)(value))
+                logp += logpdf(dist, value)
             end
         end
     end

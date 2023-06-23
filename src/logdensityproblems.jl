@@ -10,9 +10,3 @@ end
 function LogDensityProblems.capabilities(::BUGSModel)
     return LogDensityProblems.LogDensityOrder{0}
 end
-
-# TODO: add these to package extension
-# use with ReverseDiff
-# using ReverseDiff
-# using LogDensityProblemsAD
-# p = ADgradient(:ReverseDiff, model; compile=Val(true))
