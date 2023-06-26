@@ -41,3 +41,9 @@ function test_single_example(example_name, transform::Bool = true)
 
     @test turing_logp ≈ julia_bugs_logp atol = 1e-6
 end
+
+@testitem "turing_logp" begin
+    for example_name in tested_bugs_examples
+        test_single_example(example_name)
+    end
+end

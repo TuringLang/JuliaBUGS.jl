@@ -1,22 +1,18 @@
 module JuliaBUGS
 
-using AbstractPPL
 using AbstractMCMC
-using Bijectors
+using AbstractPPL
 using BangBang
+using Bijectors
 using Distributions
 using DynamicPPL
-using LinearAlgebra
-using LogExpFunctions
-using SpecialFunctions
-using Statistics
-using Setfield
-using Graphs, MetaGraphsNext
-using LogDensityProblems, LogDensityProblemsAD
+using Graphs
+using LogDensityProblems
 using MacroTools
-using UnPack
-using ReverseDiff
+using MetaGraphsNext
 using Random
+using Setfield
+using UnPack
 
 import Base: ==, hash, Symbol, size
 import Distributions: truncated
@@ -28,80 +24,7 @@ export compile
 
 # user defined functions and distributions are not supported yet
 include("BUGSPrimitives/BUGSPrimitives.jl")
-using JuliaBUGS.BUGSPrimitives:
-    abs,
-    cloglog,
-    equals,
-    exp,
-    inprod,
-    inverse,
-    log,
-    logdet,
-    logfact,
-    loggam,
-    icloglog,
-    logit,
-    mexp,
-    max,
-    mean,
-    min,
-    phi,
-    pow,
-    probit,
-    sqrt,
-    rank,
-    ranked,
-    round,
-    sd,
-    softplus,
-    sort,
-    _step,
-    sum,
-    trunc,
-    sin,
-    arcsin,
-    arcsinh,
-    cos,
-    arccos,
-    arccosh,
-    tan,
-    arctan,
-    arctanh
-using JuliaBUGS.BUGSPrimitives:
-    dnorm,
-    dlogis,
-    dt,
-    ddexp,
-    dflat,
-    dexp,
-    dchisqr,
-    dweib,
-    dlnorm,
-    dgamma,
-    dpar,
-    dgev,
-    dgpar,
-    df,
-    dunif,
-    dbeta,
-    dmnorm,
-    dmt,
-    dwish,
-    ddirich,
-    dbern,
-    dbin,
-    dcat,
-    dpois,
-    dgeom,
-    dnegbin,
-    dbetabin,
-    dhyper,
-    dmulti,
-    TDistShiftedScaled,
-    Flat,
-    LeftTruncatedFlat,
-    RightTruncatedFlat,
-    TruncatedFlat
+using .BUGSPrimitives
 
 include("bugsast.jl")
 include("variable_types.jl")
@@ -115,9 +38,8 @@ include("BUGSExamples/BUGSExamples.jl")
 
 function check_input(input::Union{NamedTuple,Dict})
     for (k, v) in input
-        @assert k isa Symbol
-        # v has three possibilities: 1. number 2. array of numbers 3. array mixed with numbers and missing
-        # check this
+        @assert k isa Symbol "Variable name $k must be a Symbol"
+
         if v isa Number
             continue
         elseif v isa AbstractArray
@@ -130,15 +52,63 @@ function check_input(input::Union{NamedTuple,Dict})
     end
 end
 
+"""
+    merge_dicts(d1::Dict, d2::Dict) -> Dict
+
+Merge two dictionaries, `d1` and `d2`, into a single dictionary. The function assumes that the values in
+the input dictionaries are either `Number` or `Array` with matching sizes. If a key exists in both `d1` and `d2`,
+the merged dictionary will contain the non-missing values from `d1` and `d2`. If a key exists only in one of the
+dictionaries, the resulting dictionary will contain the key-value pair from the respective dictionary.
+
+# Arguments
+- `d1::Dict`: The first dictionary to merge.
+- `d2::Dict`: The second dictionary to merge.
+
+# Returns
+- `merged_dict::Dict`: A new dictionary containing the merged key-value pairs from `d1` and `d2`.
+
+# Example
+```jldoctest
+julia> d1 = Dict("a" => [1, 2, missing], "b" => 42);
+
+julia> d2 = Dict("a" => [missing, 2, 4], "c" => -1);
+
+julia> d3 = Dict("a" => [missing, 3, 4], "c" => -1); # value collision
+
+julia> merge_dicts(d1, d2)
+Dict{Any, Any} with 3 entries:
+  "c" => -1
+  "b" => 42
+  "a" => [1, 2, 4]
+
+julia> merge_dicts(d1, d3)
+ERROR: The arrays in key 'a' have different non-missing values at the same positions.
+[...]
+```
+"""
 function merge_dicts(d1::Dict, d2::Dict)
     merged_dict = Dict()
 
-    for key in union(keys(d1), keys(d2))
-        if haskey(d1, key) && haskey(d2, key)
-            @assert (
-                isa(d1[key], Array) && isa(d2[key], Array) && size(d1[key]) == size(d2[key])
-            ) || (isa(d1[key], Number) && isa(d2[key], Number) && d1[key] == d2[key])
-            merged_dict[key] = isa(d1[key], Array) ? coalesce.(d1[key], d2[key]) : d1[key]
+    for key in Base.union(keys(d1), keys(d2))
+        in_both_dicts = haskey(d1, key) && haskey(d2, key)
+        values_match_type = in_both_dicts && (
+            (isa(d1[key], Array) && isa(d2[key], Array) && size(d1[key]) == size(d2[key])) ||
+            (isa(d1[key], Number) && isa(d2[key], Number) && d1[key] == d2[key])
+        )
+
+        if values_match_type
+            if isa(d1[key], Array)
+                # Check if any position has different non-missing values in the two arrays.
+                if !all(i -> (ismissing(d1[key][i]) || ismissing(d2[key][i]) || d1[key][i] == d2[key][i]),
+                        1:length(d1[key]))
+                    error("The arrays in key '$(key)' have different non-missing values at the same positions.")
+                end
+                merged_value = coalesce.(d1[key], d2[key])
+            else
+                merged_value = d1[key]
+            end
+
+            merged_dict[key] = merged_value
         else
             merged_dict[key] = haskey(d1, key) ? d1[key] : d2[key]
         end
@@ -146,6 +116,7 @@ function merge_dicts(d1::Dict, d2::Dict)
 
     return merged_dict
 end
+
 
 """
     compile(model_def[, data, initializations])

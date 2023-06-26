@@ -12,14 +12,25 @@ function NodeFunctions(vars, array_sizes, array_bitmap)
     return NodeFunctions(vars, array_sizes, array_bitmap, Dict(), Dict(), Dict(), Dict())
 end
 
+# TODO: this function can be too confusing
 """
     evaluate_and_track_dependencies(var, env)
 
-Evaluate `var` in the environment `env`. Return the evaluated value, the set of variables that `var` depends 
-on, and the arguments of the node function based on `var`. Array elements and array variables are represented
-by tuples in the returned value. Assume all Colon indexing has been concretized.
+Evaluate `var` in the environment `env` while tracking its dependencies and node function arguments.
+
+This function aims to extract two related but nuanced pieces of information:
+    1. Fine-grained dependency information, which is used to construct the dependency graph.
+    2. Variables used for node function arguments, which only care about the variable names and types (number or array), not the index.
+    
+The function returns three values:
+    1. An evaluated `var`.
+    2. A `Set` of dependency information.
+    3. A `Set` of node function arguments information.
+
+Array elements and array variables are represented by tuples in the returned value. All `Colon` indexing is assumed to be concretized.
 
 # Examples
+```jldoctest
 julia> evaluate_and_track_dependencies(:(x[a]), Dict())
 (:(x[a]), Set(Any[:a, (:x, ())]), Set(Any[:a, (:x, ())]))
 
@@ -41,7 +52,7 @@ evaluate_and_track_dependencies(var::UnitRange, ::Dict) = var, Set(), Set()
 function evaluate_and_track_dependencies(var::Symbol, env::Dict)
     value = haskey(env, var) ? env[var] : var
     @assert !ismissing(value) "Scalar variables in data can't be missing, but $var given as missing"
-    return ismissing(value) ? var : value, Set(), Set()
+    return value, Set(), Set()
 end
 function evaluate_and_track_dependencies(var::Expr, env::Dict)
     deps, args = Set(), Set()
@@ -114,46 +125,65 @@ function evaluate_and_track_dependencies(var::Expr, env::Dict)
 end
 
 """
-    constprop(x, env)
+    replace_constants_in_expr(x, env)
 
-Try to plugin the value into x if the value is concrete.
+Replace the constants in the expression `x` with their actual values from the environment `env` if the values are concrete.
+
+# Examples
+```jldoctest
+julia> env = Dict(:a => 1, :b => 2, :c => 3);
+
+julia> replace_constants_in_expr(:(a * b + c), env)
+:(1 * 2 + 3)
+
+julia> replace_constants_in_expr(:(a + b * sin(c)), env) # won't try to evaluate function calls
+:(1 + 2 * sin(3))
+
+julia> replace_constants_in_expr(:(x[a]), Dict(:x => [10, 20, 30], :a => 2)) # indexing into arrays are done if possible
+20
+
+julia> replace_constants_in_expr(:(x[a] + b), Dict(:x => [10, 20, 30], :a => 2, :b => 5))
+:(20 + 5)
+
+julia> replace_constants_in_expr(:(x[1] + y[1]), Dict(:x => [10, 20, 30], :y => [40, 50, 60]))
+:(10 + 40)
+```
 """
-function plugin_value_from_env(x, env)
-    try_constprop = _plugin_value_from_env(x, env)
-    while try_constprop != x
-        x = try_constprop
-        try_constprop = _plugin_value_from_env(x, env)
+function replace_constants_in_expr(x, env)
+    result = _replace_constants_in_expr(x, env)
+    while result != x
+        x = result
+        result = _replace_constants_in_expr(x, env)
     end
     return x
 end
 
-_plugin_value_from_env(x::Number, env) = x
-_plugin_value_from_env(x::Symbol, env) = haskey(env, x) ? env[x] : x
-function _plugin_value_from_env(x, env)
-    x = deepcopy(x)
-    for i in 2:length(x.args)
-        if Meta.isexpr(x.args[i], :ref) &&
-            all(x -> x isa Number, x.args[i].args[2:end]) &&
-            haskey(env, x.args[i].args[1])
-            val = env[x.args[i].args[1]][try_cast_to_int.(x.args[i].args[2:end])...]
-            x.args[i] = ismissing(val) ? x.args[i] : val
-        else
-            x.args[i] = _plugin_value_from_env(x.args[i], env)
+_replace_constants_in_expr(x::Number, env) = x
+_replace_constants_in_expr(x::Symbol, env) = get(env, x, x)
+function _replace_constants_in_expr(x, env)
+    if Meta.isexpr(x, :ref) && all(x -> x isa Number, x.args[2:end])
+        if haskey(env, x.args[1])
+            val = env[x.args[1]][try_cast_to_int.(x.args[2:end])...]
+            x = ismissing(val) ? x : val
+        end
+    elseif !isa(x, Symbol) && !isa(x, Number)
+        x = deepcopy(x)
+        for i in 2:length(x.args)
+            x.args[i] = _replace_constants_in_expr(x.args[i], env)
         end
     end
     return x
 end
 
 """
-    concretize_colon(expr, array_sizes)
+    concretize_colon_indexing(expr, array_sizes, data)
 
-Replace all `Colon()`s in `expr` with the corresponding array size.
+Replace all `Colon()`s in `expr` with the corresponding array size, using either the `array_sizes` or the `data` dictionaries.
 
 # Examples
-
 ```jldoctest
-julia> JuliaBUGS.concretize_colon(:(f(x[1, :])), Dict(:x => [2, 3]))
-:(f(x[1, 3]))
+julia> concretize_colon_indexing(:(f(x[1, :])), Dict(:x => (3, 4)), Dict(:x => [1 2 3 4; 5 6 7 8; 9 10 11 12]))
+:(f(x[1, 1:4]))
 ```
 """
 function concretize_colon_indexing(expr::Expr, array_sizes, data)
@@ -175,21 +205,36 @@ function concretize_colon_indexing(expr::Expr, array_sizes, data)
     end
 end
 
+"""
+    create_array_var(n, array_sizes, env)
+
+Create an array variable with the name `n` and indices based on the sizes specified in `array_sizes` or `env`.
+
+# Examples
+```jldoctest
+julia> array_sizes = Dict(:x => (2, 3));
+
+julia> env = Dict(:y => [1 2; 3 4]);
+
+julia> create_array_var(:x, array_sizes, env)
+x[1:2, 1:3]
+
+julia> create_array_var(:y, array_sizes, env)
+y[1:2, 1:2]
+```
+"""
 function create_array_var(n, array_sizes, env)
-    if haskey(array_sizes, n)
-        return Var(n, Tuple([1:s for s in array_sizes[n]]))
-    else
-        @assert haskey(env, n)
-        # @assert env[n] isa Union{Array{Union{Missing, Float64}}, Array{Union{Missing, Int64}}}
-        @assert env[n] isa Array
-        return Var(n, Tuple([1:i for i in size(env[n])]))
-    end
+    sizes = get(array_sizes, n, get(env, n, nothing))
+    @assert sizes !== nothing "Array size information not found for variable $n"
+    indices = sizes isa Array ? Tuple([1:i for i in size(sizes)]) : Tuple([1:s for s in sizes])
+    return Var(n, indices)
 end
 
 try_cast_to_int(x::Integer) = x
 try_cast_to_int(x::Real) = Int(x)
 try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
+# TODO: too long and confusing, need to refactor
 function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
     lhs_expr, rhs_expr = expr.args[1:2]
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
@@ -235,7 +280,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
             dependencies = non_data_vars
         end
     else
-        rhs_expr = plugin_value_from_env(rhs_expr, env)
+        rhs_expr = replace_constants_in_expr(rhs_expr, env)
         evaled_rhs, dependencies, node_args = evaluate_and_track_dependencies(rhs_expr, env)
 
         # rhs can be evaluated into a concrete value here, because including transformed variables in the data
@@ -292,12 +337,16 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
 end
 
 function post_process(pass::NodeFunctions, expr, env, vargs...)
-    for var in keys(pass.vars) # remove transformed variables
-        pass.vars[var] == Stochastic && continue
-        if evaluate(var, env) isa Union{Number,Array{<:Number}}
+    for (var, var_type) in pass.vars
+        if var_type != Stochastic && evaluate(var, env) isa Union{Number,Array{<:Number}}
             delete!(pass.vars, var)
         end
     end
-    @unpack vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = pass
-    return vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies
+    return pass.vars,
+    pass.array_sizes,
+    pass.array_bitmap,
+    pass.link_functions,
+    pass.node_args,
+    pass.node_functions,
+    pass.dependencies
 end

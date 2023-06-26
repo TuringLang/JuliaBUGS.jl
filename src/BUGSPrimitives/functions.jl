@@ -57,7 +57,7 @@ end
 Inverse complementary log-log function of `x`. Alias for [`cexpexp(x)`](@ref).
 """
 function icloglog(x)
-    return LogExpFunctions.cexpexp(x)
+    return cexpexp(x)
 end
 
 """
@@ -154,7 +154,7 @@ end
 
 Matrix exponential of `x`.
 """
-function mexp(x)
+function mexp(x::AbstractMatrix)
     return exp(x)
 end
 
@@ -172,7 +172,7 @@ end
 
 Return the mean of the input vector `v`.
 """
-function mean(v::AbstractVector)
+function mean(v)
     return Statistics.mean(v)
 end
 
@@ -222,11 +222,11 @@ function sqrt(x)
 end
 
 """
-    rank(v::Vector, i::Int)
+    rank(v::AbstractVector, i::Int)
 
 Return the rank of the `i`-th element of `v`.
 """
-function rank(v::Vector, i::Int)
+function rank(v::AbstractVector, i::Int)
     return v[sortperm(v)[i]]
 end
 

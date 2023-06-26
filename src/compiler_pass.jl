@@ -8,9 +8,13 @@ abstract type CompilerPass end
 """
     program!(pass::CompilerPass, expr::Expr, env::Dict, vargs...)
 
-All compiler pass share the same interface. `program!` is the entry point for the compiler pass. It
-traverses the AST and calls `assignment!` and `tilde_assignment!` for each assignment. It also calls
-`for_loop!` for each for loop. Finally, it calls `post_process` to do any post processing.
+The entry point for a compiler pass, which traverses the AST and performs specific actions like assignment and for-loop processing.
+This function should be implemented for every concrete subtype of CompilerPass.
+
+Arguments:
+- pass: Instance of a concrete CompilerPass subtype.
+- expr: An Expr object representing the AST to be traversed.
+- env: A Dict object representing the environment.
 """
 function program!(pass::CompilerPass, expr::Expr, env::Dict, vargs...)
     for ex in expr.args
@@ -25,6 +29,11 @@ function program!(pass::CompilerPass, expr::Expr, env::Dict, vargs...)
     return post_process(pass, expr, env, vargs...)
 end
 
+"""
+    for_loop!(pass::CompilerPass, expr, env, vargs...)
+
+Processes a for-loop from a traversed AST.
+"""
 function for_loop!(pass::CompilerPass, expr, env, vargs...)
     loop_var = expr.args[1].args[1]
     lb, ub = expr.args[1].args[2].args
@@ -44,8 +53,28 @@ function for_loop!(pass::CompilerPass, expr, env, vargs...)
     end
 end
 
+"""
+    assignment!(pass::CompilerPass, expr::Expr, env::Dict, vargs...)
+
+Performs an assignment operation on a traversed AST. Should be implemented for every concrete subtype of CompilerPass.
+
+Arguments:
+- pass: Instance of a concrete CompilerPass subtype.
+- expr: An Expr object representing the assignment operation.
+- env: A Dict object representing the environment.
+"""
 function assignment!(::CompilerPass, expr::Expr, env::Dict, vargs...) end
 
+"""
+    post_process(pass::CompilerPass, expr, env, vargs...)
+
+Performs any post-processing necessary after traversing the AST. Should be implemented for every concrete subtype of CompilerPass.
+
+Arguments:
+- pass: Instance of a concrete CompilerPass subtype.
+- expr: An Expr object representing the traversed AST.
+- env: A Dict object representing the environment.
+"""
 function post_process(pass::CompilerPass, expr, env, vargs...) end
 
 @enum VariableTypes begin
@@ -76,10 +105,10 @@ Find all the variables on the LHS of an assignment. The variables can be either 
 # Examples
 ```jldoctest
 julia> find_variables_on_lhs(:(x[1, 2]), Dict())
-Var(:x, [1, 2])
+x[1, 2]
 
 julia> find_variables_on_lhs(:(x[1, 2:3]), Dict())
-Var(:x, [1, 2:3])
+x[1, 2:3]
 ```
 """
 find_variables_on_lhs(e::Symbol, ::Dict) = Var(e)
@@ -90,54 +119,125 @@ function find_variables_on_lhs(expr::Expr, env::Dict)
 end
 
 """
-    check_idxs(v_name::Symbol, idxs, env::Dict)
+    check_unresolved_indices(idxs)
 
-Check if the indices are valid. The indices can be either numbers, unit ranges, or colons. If the variable is a data array,
-check if the indices are out of bound.
+Check if indices contain unresolved values and raise an error if found.
 
-# Examples
+# Arguments
+- `idxs`: Indices to check.
+
+# Example
 ```jldoctest
-julia> check_idxs(:x, (1:2,), Dict(:x => [1, missing]))
-ERROR: Some elements of x[1:2] are specified by data, some are not.
-[...]
+julia> check_unresolved_indices([1, 2, 3])
 
-julia> check_idxs(:x, (f(y), 2:3)), Dict())
-ERROR: Some indices on the lhs can't be fully resolved. Argument 1: f(y). 
+julia> check_unresolved_indices((1, 2, :(f(x))))
+ERROR: Some indices on the lhs can't be fully resolved. Argument at position 3: f(x).
 [...]
 ```
 """
-function check_idxs(v_name::Symbol, idxs, env::Dict)
-    # check if some index is not resolved
+function check_unresolved_indices(idxs)
     unresolved_indices = findall(x -> !isa(x, Union{Number,UnitRange,Colon}), idxs)
-    if !isempty(unresolved_indices)
-        msg = "Some indices on the lhs can't be fully resolved. "
-        for i in unresolved_indices
-            msg *= "Argument $i: $(expr.args[i+1]). "
-        end
-        error(msg)
+    if isempty(unresolved_indices)
+        return
     end
-    # if the array is a data array, check if the index is out of bound
-    if v_name in keys(env)
-        @assert isequal(length(idxs), ndims(env[v_name])) "Dimension mismatch."
-        for i in 1:length(idxs)
-            if idxs[i] isa Number
-                @assert idxs[i] <= size(env[v_name], i) "Index out of bound."
-            elseif idxs[i] isa UnitRange
-                @assert idxs[i].stop <= size(env[v_name], i) "Index out of bound."
-            end
+    msg = "Some indices on the lhs can't be fully resolved. "
+    for i in unresolved_indices
+        msg *= "Argument at position $i: $(idxs[i]). "
+    end
+    error(msg)
+end
+
+"""
+    check_out_of_bounds(v_name::Symbol, idxs, env::Dict)
+
+Check if the variable `v_name`'s indices are out of bounds in the given environment `env`.
+
+# Arguments
+- `v_name::Symbol`: Variable name.
+- `idxs`: Indices to check.
+- `env::Dict`: Current environment variables.
+
+# Example
+```jldoctest
+julia> env = Dict(:A => rand(3, 3));
+
+julia> check_out_of_bounds(:A, (1, 2), env)
+
+julia> check_out_of_bounds(:A, (4, 3), env)
+ERROR: AssertionError: Index out of bound.
+[...]
+```
+"""
+function check_out_of_bounds(v_name::Symbol, idxs, env::Dict)
+    if !(v_name in keys(env))
+        return
+    end
+    array_dim_length = length(idxs)
+    @assert isequal(array_dim_length, ndims(env[v_name])) "Dimension mismatch."
+    for i in 1:array_dim_length
+        if idxs[i] isa Number
+            @assert idxs[i] <= size(env[v_name], i) "Index out of bound."
+        elseif idxs[i] isa UnitRange
+            @assert idxs[i].stop <= size(env[v_name], i) "Index out of bound."
         end
     end
-    # check colon index only allow in data array
+end
+
+"""
+    check_implicit_indexing(v_name::Symbol, idxs, env::Dict)
+
+Check if the variable `v_name`'s indices use implicit indexing with colons, and raise an error if not supported.
+
+# Arguments
+- `v_name::Symbol`: Variable name.
+- `idxs`: Indices to check.
+- `env::Dict`: Current environment variables.
+
+# Example
+```jldoctest
+julia> env = Dict(:B => rand(2, 2));
+
+julia> check_implicit_indexing(:B, (Colon(), 1), env)
+
+julia> check_implicit_indexing(:C, (Colon(), 1), env)
+ERROR: Implicit indexing with colon is only supported when the array is a data array.
+[...]
+```
+"""
+function check_implicit_indexing(v_name::Symbol, idxs, env::Dict)
     colon_idxs = findall(x -> x == Colon(), idxs)
-    if !isempty(colon_idxs)
-        if !haskey(v_name, env)
-            error(
-                "Implicit indexing with colon is only supported when the array is a data array.",
-            )
-        end
+    if isempty(colon_idxs)
+        return
     end
-    # if the variable is multi-dimensional and data, check they must all be missing or all provided
-    if v_name in keys(env) && any(x -> x isa Union{UnitRange,Colon}, idxs)
+    if !haskey(env, v_name)
+        error("Implicit indexing with colon is only supported when the array is a data array.")
+    end
+end
+
+"""
+    check_partial_missing_values(v_name::Symbol, idxs, env::Dict)
+
+Check if the variable `v_name`'s indices have partial missing values and raise an error if found.
+
+# Arguments
+- `v_name::Symbol`: Variable name.
+- `idxs`: Indices to check.
+- `env::Dict`: Current environment variables.
+
+# Example
+```jldoctest
+julia> env = Dict(:D => [1, missing, 2]);
+
+julia> check_partial_missing_values(:D, (1:3, ), env)
+ERROR: Some elements of D[1:3] are missing, some are not.
+[...]
+```
+"""
+function check_partial_missing_values(v_name::Symbol, idxs, env::Dict)
+    if !(v_name in keys(env))
+        return
+    end
+    if any(x -> x isa Union{UnitRange,Colon}, idxs)
         vs = env[v_name][idxs...]
         if !all(ismissing, vs) && !all(!ismissing, vs)
             error("Some elements of $v_name[$(idxs...)] are missing, some are not.")
@@ -146,9 +246,29 @@ function check_idxs(v_name::Symbol, idxs, env::Dict)
 end
 
 """
-    evaluate(::CollectVariables, var, env)
+    check_idxs(v_name::Symbol, idxs, env::Dict)
 
-Evaluate `expr` in the environment `env`.
+Check the validity of the indices `idxs` for the variable `v_name` in the environment `env`.
+
+This function checks for unresolved indices, out-of-bounds indices, unsupported implicit indexing, and partial missing values.
+
+# Arguments
+- `v_name::Symbol`: Variable name.
+- `idxs`: Indices to check.
+- `env::Dict`: Current environment variables.
+```
+"""
+function check_idxs(v_name::Symbol, idxs, env::Dict)
+    check_unresolved_indices(idxs)
+    check_out_of_bounds(v_name, idxs, env)
+    check_implicit_indexing(v_name, idxs, env)
+    check_partial_missing_values(v_name, idxs, env)
+end
+
+"""
+    evaluate(var, env)
+
+Evaluate `var` in the environment `env`.
 
 # Examples
 ```jldoctest
@@ -166,7 +286,7 @@ julia> evaluate(:(x[1:2]), Dict(:x => [1, 2, 3])) # ranges are evaluated
  1
  2
 
-julia> evaluate(:(x[1:3]), Dict(:x => [1, 2, missing])) # if an element is missing, it's returned as is
+julia> evaluate(:(x[1:3]), Dict(:x => [1, 2, missing])) # when evaluate an array, if any element is missing, original expr is returned
 :(x[1:3])
 
 julia> evaluate(:(x[y[1] + 1] + 1), Dict()) # if a ref expr can't be evaluated, it's returned as is
@@ -321,8 +441,7 @@ function post_process(pass::CollectVariables, expr, env::Dict)
 
     # it is possible that a logical variable is constant and never appear one the LHS of ~
     # this variable's value is captured by `transformed_variables`
-    # we still include it in `vars`, but later in the graph, this is a logical root node,
-    # and its value will be cached 
+    # we still include it in `vars` for now
 
     return pass.vars, array_sizes, transformed_variables, array_bitmap
 end
