@@ -47,10 +47,7 @@ turing_logp_no_trans = getlogp(
 )
 
 julia_bugs_logp_no_trans = getlogp(
-    evaluate!!(
-        DynamicPPL.settrans!!(bugs_model, false), 
-        JuliaBUGS.DefaultContext()
-    )
+    evaluate!!(DynamicPPL.settrans!!(bugs_model, false), JuliaBUGS.DefaultContext())
 )
 
 turing_logp_with_trans = getlogp(
@@ -62,8 +59,8 @@ turing_logp_with_trans = getlogp(
 )
 
 julia_bugs_logp_with_trans = getlogp(
-    evaluate!!(
-        DynamicPPL.settrans!!(bugs_model, true), 
-        JuliaBUGS.DefaultContext()
-    )
+    evaluate!!(DynamicPPL.settrans!!(bugs_model, true), JuliaBUGS.DefaultContext())
 )
+
+@test turing_logp_no_trans ≈ bugs_logp_no_trans atol = 1e-6
+@test turing_logp_with_trans ≈ julia_bugs_logp_with_trans atol = 1e-6

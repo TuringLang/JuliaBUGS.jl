@@ -19,7 +19,7 @@ inits = JuliaBUGS.BUGSExamples.VOLUME_I[:dogs].inits[1]
         p[i, 1] = 0
 
         for j in 2:Trials
-            xa[i, j] = sum(Y[i, 1:j-1])
+            xa[i, j] = sum(Y[i, 1:(j - 1)])
             xs[i, j] = j - 1 - xa[i, j]
             p[i, j] = exp(alpha * xa[i, j] + beta * xs[i, j])
             y[i, j] = 1 - Y[i, j]
@@ -48,10 +48,7 @@ turing_logp_no_trans = getlogp(
 )
 
 julia_bugs_logp_no_trans = getlogp(
-    evaluate!!(
-        DynamicPPL.settrans!!(bugs_model, false), 
-        JuliaBUGS.DefaultContext()
-    )
+    evaluate!!(DynamicPPL.settrans!!(bugs_model, false), JuliaBUGS.DefaultContext())
 )
 
 turing_logp_with_trans = getlogp(
@@ -63,8 +60,8 @@ turing_logp_with_trans = getlogp(
 )
 
 julia_bugs_logp_with_trans = getlogp(
-    evaluate!!(
-        DynamicPPL.settrans!!(bugs_model, true), 
-        JuliaBUGS.DefaultContext()
-    )
+    evaluate!!(DynamicPPL.settrans!!(bugs_model, true), JuliaBUGS.DefaultContext())
 )
+
+@test turing_logp_no_trans ≈ bugs_logp_no_trans atol = 1e-6
+@test turing_logp_with_trans ≈ julia_bugs_logp_with_trans atol = 1e-6

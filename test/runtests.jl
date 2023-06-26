@@ -38,42 +38,45 @@ end
 end
 
 @testset "Compiler Passes" begin
-    # TODO: ideally, there should be a model that test
-    # 1. array size inference, also test bitmaps
-    # 2. nested indexing
-    # 3. for loops, including nesting
+    # TODO: test output of compiler passes, particularly the array size deduction, nested indexing
 end
 
-@testset "Compile" begin
-    # test that all the BUGS examples from volume 1 can be compiled without error
-end
-
-@test "Log Joint with DynamicPPL" begin
-    @model function rats(Y, x, xbar, N, T)
-        var"alpha.c" ~ JuliaBUGS.dnorm(0.0, 1.0E-6)
-        var"alpha.tau" ~ JuliaBUGS.dgamma(0.001, 0.001)
-        var"beta.c" ~ JuliaBUGS.dnorm(0.0, 1.0E-6)
-        var"beta.tau" ~ JuliaBUGS.dgamma(0.001, 0.001)
-        var"tau.c" ~ JuliaBUGS.dgamma(0.001, 0.001)
-    
-        alpha = Vector{Real}(undef, N)
-        beta = Vector{Real}(undef, N)
-        mu = Matrix{Real}(undef, N, T)
-    
-        for i in 1:N
-            alpha[i] ~ JuliaBUGS.dnorm(var"alpha.c", var"alpha.tau")
-            beta[i] ~ JuliaBUGS.dnorm(var"beta.c", var"beta.tau")
-    
-            for j in 1:T
-                mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)
-                Y[i, j] ~ JuliaBUGS.dnorm(mu[i, j], var"tau.c")
-            end
-        end
-    
-        sigma = 1 / sqrt(var"tau.c")
-        alpha0 = var"alpha.c" - xbar * var"beta.c"
-    
-        return alpha0, sigma
+@testset "Compile W/O Error" begin
+    for m in [
+        :blockers,
+        :bones,
+        :dogs,
+        :dyes,
+        :epil,
+        :equiv,
+        :kidney,
+        :leuk,
+        :leukfr,
+        :lsat,
+        :magnesium,
+        :mice,
+        :oxford,
+        :pumps,
+        :rats,
+        :salm,
+        :seeds,
+        :stacks,
+        :surgical_simple,
+        :surgical_realistic,
+    ]
+        model_def = JuliaBUGS.BUGSExamples.VOLUME_I[m].model_def
+        data = JuliaBUGS.BUGSExamples.VOLUME_I[m].data
+        inits = JuliaBUGS.BUGSExamples.VOLUME_I[m].inits[1]
+        model = compile(model_def, data, inits)
     end
+end
 
+@testset "Log Joint with DynamicPPL" begin
+    include("logp_dynamicppl/binomial.jl")
+    include("logp_dynamicppl/gamma.jl")
+
+    include("logp_dynamicppl/blockers.jl")
+    include("logp_dynamicppl/bones.jl")
+    include("logp_dynamicppl/dogs.jl")
+    include("logp_dynamicppl/rats.jl")
 end
