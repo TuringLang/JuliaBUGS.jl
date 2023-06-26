@@ -5,7 +5,8 @@ using Setfield
 using Test
 using UnPack
 
-using JuliaBUGS: CollectVariables, program!, Var, Stochastic, Logical, evaluate!!, DefaultContext
+using JuliaBUGS:
+    CollectVariables, program!, Var, Stochastic, Logical, evaluate!!, DefaultContext
 using JuliaBUGS.BUGSPrimitives
 ##
 
@@ -41,34 +42,33 @@ end
     # TODO: test output of compiler passes, particularly the array size deduction, nested indexing
 end
 
-@testset "Compile W/O Error" begin
-    for m in [
-        :blockers,
-        :bones,
-        :dogs,
-        :dyes,
-        :epil,
-        :equiv,
-        :kidney,
-        :leuk,
-        :leukfr,
-        :lsat,
-        :magnesium,
-        :mice,
-        :oxford,
-        :pumps,
-        :rats,
-        :salm,
-        :seeds,
-        :stacks,
-        :surgical_simple,
-        :surgical_realistic,
-    ]
-        model_def = JuliaBUGS.BUGSExamples.VOLUME_I[m].model_def
-        data = JuliaBUGS.BUGSExamples.VOLUME_I[m].data
-        inits = JuliaBUGS.BUGSExamples.VOLUME_I[m].inits[1]
-        model = compile(model_def, data, inits)
-    end
+@testset "Compile $m" failfast = false for m in [
+    :blockers,
+    :bones,
+    :dogs,
+    :dyes,
+    :epil,
+    :equiv,
+    :kidney,
+    :leuk,
+    :leukfr,
+    :lsat,
+    :magnesium,
+    :mice,
+    :oxford,
+    :pumps,
+    :rats,
+    :salm,
+    :seeds,
+    :stacks,
+    :surgical_simple,
+    :surgical_realistic,
+]
+    model_def = JuliaBUGS.BUGSExamples.VOLUME_I[m].model_def
+    data = JuliaBUGS.BUGSExamples.VOLUME_I[m].data
+    inits = JuliaBUGS.BUGSExamples.VOLUME_I[m].inits[1]
+    model = compile(model_def, data, inits)
+    println("Compiled $m")
 end
 
 @testset "Log Joint with DynamicPPL" begin
