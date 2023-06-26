@@ -1,12 +1,28 @@
-using JuliaBUGS: dnorm, dgamma, dbin, dcat
+@model function rats(Y, x, xbar, N, T)
+    var"alpha.c" ~ JuliaBUGS.dnorm(0.0, 1.0E-6)
+    var"alpha.tau" ~ JuliaBUGS.dgamma(0.001, 0.001)
+    var"beta.c" ~ JuliaBUGS.dnorm(0.0, 1.0E-6)
+    var"beta.tau" ~ JuliaBUGS.dgamma(0.001, 0.001)
+    var"tau.c" ~ JuliaBUGS.dgamma(0.001, 0.001)
 
-using JuliaBUGS: logistic, exp
+    alpha = Vector{Real}(undef, N)
+    beta = Vector{Real}(undef, N)
+    mu = Matrix{Real}(undef, N, T)
 
-include("test_models/bugs_models_in_turing.jl")
-tested_bugs_examples = [:rats, :blockers, :bones, :dogs]
+    for i in 1:N
+        alpha[i] ~ JuliaBUGS.dnorm(var"alpha.c", var"alpha.tau")
+        beta[i] ~ JuliaBUGS.dnorm(var"beta.c", var"beta.tau")
 
-for example_name in tested_bugs_examples
-    test_single_example(example_name)
+        for j in 1:T
+            mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)
+            Y[i, j] ~ JuliaBUGS.dnorm(mu[i, j], var"tau.c")
+        end
+    end
+
+    sigma = 1 / sqrt(var"tau.c")
+    alpha0 = var"alpha.c" - xbar * var"beta.c"
+
+    return alpha0, sigma
 end
 
 # use eval to unpack the data, this is unsafe, only use it for testing
@@ -15,6 +31,9 @@ function unpack_with_eval(obj::NamedTuple)
         eval(Expr(:(=), field, :($obj.$field)))
     end
 end
+
+
+
 
 function test_single_example(example_name, transform::Bool = true)
     example = getfield(JuliaBUGS.BUGSExamples.volume_i_examples, example_name)
@@ -47,3 +66,32 @@ end
         test_single_example(example_name)
     end
 end
+
+
+
+using Turing, Test
+test_model_def_1 = @bugsast begin
+    a ~ dgamma(2, 2)
+end
+test_model_1_bugs = compile(test_model_def_1, Dict(), Dict(:a=>2))
+@model function test_model_1_dppl_func()
+    a ~ dgamma(2, 2)
+end
+test_model_1_dppl = test_model_1_dppl_func()
+vi = SimpleVarInfo(Dict((@varname(a) => 2)))
+
+# DynamicTransformation
+vi = DynamicPPL.settrans!!(vi, true)
+test_model_1_bugs = @set test_model_1_bugs.varinfo = vi
+evaluate!!(test_model_1_bugs, JuliaBUGS.DefaultContext()).logp
+last(evaluate!!(test_model_1_dppl, DynamicPPL.settrans!!(vi, true), DynamicPPL.DefaultContext())).logp
+# NoTransformation
+vi = DynamicPPL.settrans!!(vi, false)
+test_model_1_bugs = @set test_model_1_bugs.varinfo = vi
+evaluate!!(test_model_1_bugs, JuliaBUGS.DefaultContext()).logp
+last(evaluate!!(test_model_1_dppl, vi, DynamicPPL.DefaultContext())).logp
+
+using Bijectors
+b = Bijectors.Logit(0, 10)
+dist = transformed(Gamma(2, 2), b)
+rand(dist)

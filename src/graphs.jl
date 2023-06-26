@@ -241,10 +241,10 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
             end
             value = rand(ctx.rng, dist)
             if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
-                value_transformed, logjac = with_logabsdet_jacobian(
+                value_transformed, logabsdetjac = with_logabsdet_jacobian(
                     DynamicPPL.inverse(bijector(dist)), val
                 )
-                logp += logpdf(transformed(dist), value_transformed) + logjac
+                logp += logpdf(dist, value_transformed) + logabsdetjac
             else
                 logp += logpdf(dist, value)
             end
@@ -254,7 +254,6 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
     return @set vi.logp = logp
 end
 
-# ignore link function for now
 AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultContext())
 function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model
@@ -272,11 +271,11 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
             dist = transformed(dist, bijector_of_link_function(link_function))
         end
         value = vi[vn]
-        if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
-            value_transformed, logjac = with_logabsdet_jacobian(
-                DynamicPPL.inverse(bijector(dist)), val
+        if DynamicPPL.transformation(vi) isa DynamicPPL.DynamicTransformation
+            value_transformed, logabsdetjac = with_logabsdet_jacobian(
+                Bijectors.inverse(bijector(dist)), value
             )
-            logp += logpdf(transformed(dist), value_transformed) + logjac
+            logp += logpdf(dist, value_transformed) + logabsdetjac
         else
             logp += logpdf(dist, value)
         end
@@ -315,19 +314,18 @@ function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVect
 
                 value = invlink(dist, value_transformed)
                 if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
-                    value_transformed, logjac = with_logabsdet_jacobian(
-                        DynamicPPL.inverse(bijector(dist)), val
+                    value_transformed, logabsdetjac = with_logabsdet_jacobian(
+                        Bijectors.inverse(bijector(dist)), value
                     )
-                    logp += logpdf(transformed(dist), value_transformed) + logjac
+                    logp += logpdf(dist, value_transformed) + logabsdetjac
+                else
+                    logp += logpdf(dist, value)
                 end
                 vi = setindex!!(vi, value, vn)
-                logp += logpdf(dist, (link_function)(value))
             else
-                value = vi[vn]
-                logp += logpdf(dist, value)
+                logp += logpdf(dist, vi[vn]) 
             end
         end
     end
-    vi = @set vi.logp = logp
-    return vi
+    return @set vi.logp = logp
 end
