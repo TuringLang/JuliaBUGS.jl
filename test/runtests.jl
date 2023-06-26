@@ -42,7 +42,7 @@ end
     # TODO: test output of compiler passes, particularly the array size deduction, nested indexing
 end
 
-@testset "Compile $m" failfast = false for m in [
+@testset "Compile $m" for m in [
     :blockers,
     :bones,
     :dogs,
