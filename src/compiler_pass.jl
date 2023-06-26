@@ -138,13 +138,13 @@ ERROR: Some indices on the lhs can't be fully resolved. Argument at position 3: 
 function check_unresolved_indices(idxs)
     unresolved_indices = findall(x -> !isa(x, Union{Number,UnitRange,Colon}), idxs)
     if isempty(unresolved_indices)
-        return
+        return nothing
     end
     msg = "Some indices on the lhs can't be fully resolved. "
     for i in unresolved_indices
         msg *= "Argument at position $i: $(idxs[i]). "
     end
-    error(msg)
+    return error(msg)
 end
 
 """
@@ -170,7 +170,7 @@ ERROR: AssertionError: Index out of bound.
 """
 function check_out_of_bounds(v_name::Symbol, idxs, env::Dict)
     if !(v_name in keys(env))
-        return
+        return nothing
     end
     array_dim_length = length(idxs)
     @assert isequal(array_dim_length, ndims(env[v_name])) "Dimension mismatch."
@@ -207,10 +207,12 @@ ERROR: Implicit indexing with colon is only supported when the array is a data a
 function check_implicit_indexing(v_name::Symbol, idxs, env::Dict)
     colon_idxs = findall(x -> x == Colon(), idxs)
     if isempty(colon_idxs)
-        return
+        return nothing
     end
     if !haskey(env, v_name)
-        error("Implicit indexing with colon is only supported when the array is a data array.")
+        error(
+            "Implicit indexing with colon is only supported when the array is a data array."
+        )
     end
 end
 
@@ -235,7 +237,7 @@ ERROR: Some elements of D[1:3] are missing, some are not.
 """
 function check_partial_missing_values(v_name::Symbol, idxs, env::Dict)
     if !(v_name in keys(env))
-        return
+        return nothing
     end
     if any(x -> x isa Union{UnitRange,Colon}, idxs)
         vs = env[v_name][idxs...]
@@ -262,7 +264,7 @@ function check_idxs(v_name::Symbol, idxs, env::Dict)
     check_unresolved_indices(idxs)
     check_out_of_bounds(v_name, idxs, env)
     check_implicit_indexing(v_name, idxs, env)
-    check_partial_missing_values(v_name, idxs, env)
+    return check_partial_missing_values(v_name, idxs, env)
 end
 
 """

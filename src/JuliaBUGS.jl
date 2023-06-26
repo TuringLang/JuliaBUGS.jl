@@ -91,17 +91,29 @@ function merge_dicts(d1::Dict, d2::Dict)
 
     for key in Base.union(keys(d1), keys(d2))
         in_both_dicts = haskey(d1, key) && haskey(d2, key)
-        values_match_type = in_both_dicts && (
-            (isa(d1[key], Array) && isa(d2[key], Array) && size(d1[key]) == size(d2[key])) ||
-            (isa(d1[key], Number) && isa(d2[key], Number) && d1[key] == d2[key])
-        )
+        values_match_type =
+            in_both_dicts && (
+                (
+                    isa(d1[key], Array) &&
+                    isa(d2[key], Array) &&
+                    size(d1[key]) == size(d2[key])
+                ) || (isa(d1[key], Number) && isa(d2[key], Number) && d1[key] == d2[key])
+            )
 
         if values_match_type
             if isa(d1[key], Array)
                 # Check if any position has different non-missing values in the two arrays.
-                if !all(i -> (ismissing(d1[key][i]) || ismissing(d2[key][i]) || d1[key][i] == d2[key][i]),
-                        1:length(d1[key]))
-                    error("The arrays in key '$(key)' have different non-missing values at the same positions.")
+                if !all(
+                    i -> (
+                        ismissing(d1[key][i]) ||
+                        ismissing(d2[key][i]) ||
+                        d1[key][i] == d2[key][i]
+                    ),
+                    1:length(d1[key]),
+                )
+                    error(
+                        "The arrays in key '$(key)' have different non-missing values at the same positions.",
+                    )
                 end
                 merged_value = coalesce.(d1[key], d2[key])
             else
@@ -116,7 +128,6 @@ function merge_dicts(d1::Dict, d2::Dict)
 
     return merged_dict
 end
-
 
 """
     compile(model_def[, data, initializations])

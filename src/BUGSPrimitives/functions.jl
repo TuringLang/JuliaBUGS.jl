@@ -83,7 +83,7 @@ end
 
 Inverse of matrix `v`.
 """
-function inverse(v::AbstractArray{T, 2} where T)
+function inverse(v::AbstractArray{T,2} where {T})
     return LinearAlgebra.inv(v)
 end
 

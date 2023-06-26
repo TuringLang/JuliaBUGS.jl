@@ -6,7 +6,7 @@ using LogExpFunctions
 using Random
 using SpecialFunctions
 using Statistics
-import InverseFunctions
+using InverseFunctions: InverseFunctions
 
 include("functions.jl")
 include("distributions.jl")

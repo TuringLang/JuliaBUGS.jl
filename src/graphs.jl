@@ -323,7 +323,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVect
                 end
                 vi = setindex!!(vi, value, vn)
             else
-                logp += logpdf(dist, vi[vn]) 
+                logp += logpdf(dist, vi[vn])
             end
         end
     end

@@ -226,7 +226,8 @@ y[1:2, 1:2]
 function create_array_var(n, array_sizes, env)
     sizes = get(array_sizes, n, get(env, n, nothing))
     @assert sizes !== nothing "Array size information not found for variable $n"
-    indices = sizes isa Array ? Tuple([1:i for i in size(sizes)]) : Tuple([1:s for s in sizes])
+    indices =
+        sizes isa Array ? Tuple([1:i for i in size(sizes)]) : Tuple([1:s for s in sizes])
     return Var(n, indices)
 end
 

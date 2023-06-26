@@ -75,8 +75,6 @@ using JuliaBUGS.BUGSPrimitives:
     RightTruncatedFlat,
     TruncatedFlat
 
-using JuliaBUGS: Var, create_array_var, replace_constants_in_expr, evaluate_and_track_dependencies
-
 makedocs(;
     sitename="JuliaBUGS.jl",
     pages=[
