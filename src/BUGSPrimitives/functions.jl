@@ -172,9 +172,7 @@ end
 
 Return the mean of the input vector `v`.
 """
-function mean(v)
-    return Statistics.mean(v)
-end
+mean
 
 """
     min(args...)

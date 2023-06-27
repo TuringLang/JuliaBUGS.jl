@@ -2,7 +2,7 @@ bugs_model_def = JuliaBUGS.BUGSExamples.VOLUME_I[:rats].model_def
 data = JuliaBUGS.BUGSExamples.VOLUME_I[:rats].data
 inits = JuliaBUGS.BUGSExamples.VOLUME_I[:rats].inits[1]
 
-@unpack N, T, x, xbar, Y = data
+bugs_model = compile(bugs_model_def, data, inits)
 
 @model function rats(Y, x, xbar, N, T)
     var"alpha.c" ~ dnorm(0.0, 1.0E-6)
@@ -31,35 +31,9 @@ inits = JuliaBUGS.BUGSExamples.VOLUME_I[:rats].inits[1]
     return alpha0, sigma
 end
 
-turing_model = rats(Y, x, xbar, N, T)
+@unpack N, T, x, xbar, Y = data
+dppl_model = rats(Y, x, xbar, N, T)
 
-bugs_model = compile(bugs_model_def, data, inits)
-
-vi = deepcopy(bugs_model.varinfo)
-
-turing_logp_no_trans = getlogp(
-    last(
-        DynamicPPL.evaluate!!(
-            turing_model, DynamicPPL.settrans!!(vi, false), DynamicPPL.DefaultContext()
-        ),
-    ),
-)
-
-julia_bugs_logp_no_trans = getlogp(
-    evaluate!!(DynamicPPL.settrans!!(bugs_model, false), JuliaBUGS.DefaultContext())
-)
-
-turing_logp_with_trans = getlogp(
-    last(
-        DynamicPPL.evaluate!!(
-            turing_model, DynamicPPL.settrans!!(vi, true), DynamicPPL.DefaultContext()
-        ),
-    ),
-)
-
-julia_bugs_logp_with_trans = getlogp(
-    evaluate!!(DynamicPPL.settrans!!(bugs_model, true), JuliaBUGS.DefaultContext())
-)
-
-@test turing_logp_no_trans ≈ bugs_logp_no_trans atol = 1e-6
-@test turing_logp_with_trans ≈ julia_bugs_logp_with_trans atol = 1e-6
+for t in [true, false]
+    compare_dppl_bugs_logps(dppl_model, bugs_model, t)
+end

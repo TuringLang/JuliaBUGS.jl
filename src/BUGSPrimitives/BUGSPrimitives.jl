@@ -8,6 +8,8 @@ using SpecialFunctions
 using Statistics
 using InverseFunctions: InverseFunctions
 
+using Statistics: mean
+
 include("functions.jl")
 include("distributions.jl")
 

@@ -143,7 +143,7 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
                 vi = setindex!!(vi, value, vn)
             else
                 # if not initialized, just set to zeros
-                vi = setindex!!(vi, zeros(size(dist)), vn)
+                vi = setindex!!(vi, length(dist) == 1 ? 0.0 : zeros(length(dist)), vn)
             end
         end
     end

@@ -1,4 +1,5 @@
 using Bijectors
+using Documenter
 using DynamicPPL
 using JuliaBUGS
 using Setfield
@@ -8,7 +9,7 @@ using UnPack
 using JuliaBUGS:
     CollectVariables, program!, Var, Stochastic, Logical, evaluate!!, DefaultContext
 using JuliaBUGS.BUGSPrimitives
-##
+using JuliaBUGS.BUGSPrimitives: mean
 
 @testset "Function Unit Tests" begin
     DocMeta.setdocmeta!(
@@ -68,7 +69,22 @@ end
     data = JuliaBUGS.BUGSExamples.VOLUME_I[m].data
     inits = JuliaBUGS.BUGSExamples.VOLUME_I[m].inits[1]
     model = compile(model_def, data, inits)
-    println("Compiled $m")
+end
+
+function compare_dppl_bugs_logps(dppl_model, bugs_model, transform=false)
+    turing_logp = getlogp(
+        last(
+            DynamicPPL.evaluate!!(
+                dppl_model,
+                DynamicPPL.settrans!!(bugs_model.varinfo, transform),
+                DynamicPPL.DefaultContext(),
+            ),
+        ),
+    )
+    bugs_logp = getlogp(
+        evaluate!!(DynamicPPL.settrans!!(bugs_model, transform), JuliaBUGS.DefaultContext())
+    )
+    @test turing_logp ≈ bugs_logp atol = 1e-6
 end
 
 @testset "Log Joint with DynamicPPL" begin

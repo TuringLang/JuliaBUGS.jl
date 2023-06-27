@@ -2,7 +2,7 @@ bugs_model_def = JuliaBUGS.BUGSExamples.VOLUME_I[:dogs].model_def
 data = JuliaBUGS.BUGSExamples.VOLUME_I[:dogs].data
 inits = JuliaBUGS.BUGSExamples.VOLUME_I[:dogs].inits[1]
 
-@unpack Dogs, Trials, Y = data
+bugs_model = compile(bugs_model_def, data, inits)
 
 @model function dogs(Y, Dogs, Trials)
     alpha ~ dunif(-10, -0.00001)
@@ -33,35 +33,9 @@ inits = JuliaBUGS.BUGSExamples.VOLUME_I[:dogs].inits[1]
     return A, B
 end
 
-turing_model = dogs(Y, Dogs, Trials)
+@unpack Dogs, Trials, Y = data
+dppl_model = dogs(Y, Dogs, Trials)
 
-bugs_model = compile(bugs_model_def, data, inits)
-
-vi = deepcopy(bugs_model.varinfo)
-
-turing_logp_no_trans = getlogp(
-    last(
-        DynamicPPL.evaluate!!(
-            turing_model, DynamicPPL.settrans!!(vi, false), DynamicPPL.DefaultContext()
-        ),
-    ),
-)
-
-julia_bugs_logp_no_trans = getlogp(
-    evaluate!!(DynamicPPL.settrans!!(bugs_model, false), JuliaBUGS.DefaultContext())
-)
-
-turing_logp_with_trans = getlogp(
-    last(
-        DynamicPPL.evaluate!!(
-            turing_model, DynamicPPL.settrans!!(vi, true), DynamicPPL.DefaultContext()
-        ),
-    ),
-)
-
-julia_bugs_logp_with_trans = getlogp(
-    evaluate!!(DynamicPPL.settrans!!(bugs_model, true), JuliaBUGS.DefaultContext())
-)
-
-@test turing_logp_no_trans ≈ bugs_logp_no_trans atol = 1e-6
-@test turing_logp_with_trans ≈ julia_bugs_logp_with_trans atol = 1e-6
+for t in [true, false]
+    compare_dppl_bugs_logps(dppl_model, bugs_model, t)
+end

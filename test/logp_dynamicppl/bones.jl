@@ -2,7 +2,7 @@ bugs_model_def = JuliaBUGS.BUGSExamples.VOLUME_I[:bones].model_def
 data = JuliaBUGS.BUGSExamples.VOLUME_I[:bones].data
 inits = JuliaBUGS.BUGSExamples.VOLUME_I[:bones].inits[1]
 
-@unpack grade, nChild, nInd, ncat, gamma, delta = data
+bugs_model = compile(bugs_model_def, data, inits)
 
 @model function bones(grade, nChild, nInd, ncat, gamma, delta)
     theta = Vector{Real}(undef, nChild)
@@ -32,35 +32,9 @@ inits = JuliaBUGS.BUGSExamples.VOLUME_I[:bones].inits[1]
     end
 end
 
-turing_model = bones(grade, nChild, nInd, ncat, gamma, delta)
+@unpack grade, nChild, nInd, ncat, gamma, delta = data
+dppl_model = bones(grade, nChild, nInd, ncat, gamma, delta)
 
-bugs_model = compile(bugs_model_def, data, inits)
-
-vi = deepcopy(bugs_model.varinfo)
-
-turing_logp_no_trans = getlogp(
-    last(
-        DynamicPPL.evaluate!!(
-            turing_model, DynamicPPL.settrans!!(vi, false), DynamicPPL.DefaultContext()
-        ),
-    ),
-)
-
-julia_bugs_logp_no_trans = getlogp(
-    evaluate!!(DynamicPPL.settrans!!(bugs_model, false), JuliaBUGS.DefaultContext())
-)
-
-turing_logp_with_trans = getlogp(
-    last(
-        DynamicPPL.evaluate!!(
-            turing_model, DynamicPPL.settrans!!(vi, true), DynamicPPL.DefaultContext()
-        ),
-    ),
-)
-
-julia_bugs_logp_with_trans = getlogp(
-    evaluate!!(DynamicPPL.settrans!!(bugs_model, true), JuliaBUGS.DefaultContext())
-)
-
-@test turing_logp_no_trans ≈ bugs_logp_no_trans atol = 1e-6
-@test turing_logp_with_trans ≈ julia_bugs_logp_with_trans atol = 1e-6
+for t in [true, false]
+    compare_dppl_bugs_logps(dppl_model, bugs_model, t)
+end
