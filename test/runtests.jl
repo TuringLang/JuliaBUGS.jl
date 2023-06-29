@@ -91,8 +91,8 @@ end
     include("logp_dynamicppl/binomial.jl")
     include("logp_dynamicppl/gamma.jl")
 
-    include("logp_dynamicppl/blockers.jl")
-    include("logp_dynamicppl/bones.jl")
-    include("logp_dynamicppl/dogs.jl")
+    # include("logp_dynamicppl/blockers.jl")
+    # include("logp_dynamicppl/bones.jl")
+    # include("logp_dynamicppl/dogs.jl")
     include("logp_dynamicppl/rats.jl")
 end

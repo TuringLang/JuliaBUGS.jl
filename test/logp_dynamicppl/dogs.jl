@@ -39,3 +39,6 @@ dppl_model = dogs(Y, Dogs, Trials)
 for t in [true, false]
     compare_dppl_bugs_logps(dppl_model, bugs_model, t)
 end
+
+# this currently broken
+# at first glance, `y` is going to be sampled, but since I am using the `DefaultContext`, does it matter?

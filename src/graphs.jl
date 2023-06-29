@@ -211,13 +211,6 @@ struct SamplingContext <: AbstractPPL.AbstractContext
     rng::Random.AbstractRNG
 end
 
-"""
-    loglikelihoodContext
-
-Given values of parameters, compute the log joint density.
-"""
-struct loglikelihoodContext <: AbstractPPL.AbstractContext end
-
 function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
     return evaluate!!(model, SamplingContext(rng))
 end
@@ -279,6 +272,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
         else
             logp += logpdf(dist, value)
         end
+        
     end
     return @set vi.logp = logp
 end
