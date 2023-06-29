@@ -272,7 +272,6 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
         else
             logp += logpdf(dist, value)
         end
-        
     end
     return @set vi.logp = logp
 end
