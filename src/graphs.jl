@@ -20,24 +20,18 @@ struct ConcreteNodeInfo <: NodeInfo
     node_args::Vector{VarName}
 end
 
-struct ConcreteNodeInfoConstruct
-    vars
-    link_functions
-    node_functions
-    node_args
+function ConcreteNodeInfo(var::Var, vars, link_functions, node_functions, node_args)
+    return ConcreteNodeInfo(
+        vars[var],
+        eval(link_functions[var]),
+        eval(node_functions[var]),
+        map(v -> AbstractPPL.VarName{v.name}(AbstractPPL.IdentityLens()), node_args[var]),
+    )
 end
 
-function (constructor::ConcreteNodeInfoConstruct)(var::Var)
-    if var in keys(constructor.vars)
-        return ConcreteNodeInfo(
-            constructor.vars[var],
-            eval(constructor.link_functions[var]),
-            eval(constructor.node_functions[var]),
-            map(
-                v -> AbstractPPL.VarName{v.name}(AbstractPPL.IdentityLens()),
-                constructor.node_args[var],
-            ),
-        )
+function NodeInfo(var::Var, vars, link_functions, node_functions, node_args)
+    if var in keys(vars)
+        return ConcreteNodeInfo(var, vars, link_functions, node_functions, node_args)
     else
         return AuxiliaryNodeInfo()
     end
@@ -52,6 +46,31 @@ const BUGSGraph = MetaGraph{
     Int64,SimpleDiGraph{Int64},VarName,NodeInfo,Nothing,Nothing,Nothing,Float64
 }
 
+function BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
+    g = MetaGraph(
+        SimpleDiGraph{Int64}();
+        weight_function=nothing,
+        label_type=VarName,
+        vertex_data_type=NodeInfo,
+    )
+    for l in keys(vars) # l for LHS variable
+        l_vn = to_varname(l)
+        check_and_add_vertex!(
+            g, l_vn, NodeInfo(l, vars, link_functions, node_functions, node_args)
+        )
+        scalarize_then_add_edge!(g, l; lhs_or_rhs=:lhs)
+        for r in dependencies[l]
+            r_vn = to_varname(r)
+            check_and_add_vertex!(
+                g, r_vn, NodeInfo(r, vars, link_functions, node_functions, node_args)
+            )
+            add_edge!(g, r_vn, l_vn)
+            scalarize_then_add_edge!(g, r; lhs_or_rhs=:rhs)
+        end
+    end
+    return g
+end
+
 function to_varname(v::Scalar)
     lens = AbstractPPL.IdentityLens()
     return AbstractPPL.VarName{v.name}(lens)
@@ -63,10 +82,9 @@ end
 
 function check_and_add_vertex!(g::BUGSGraph, v::VarName, data::NodeInfo)
     if haskey(g, v)
-        if g[v] isa AuxiliaryNodeInfo && data isa ConcreteNodeInfo
+        data isa AuxiliaryNodeInfo && return nothing
+        if g[v] isa AuxiliaryNodeInfo
             set_data!(g, v, data)
-            # else # TODO: unstable test, link_function and node_function are anonymous functions
-            #     @assert g[v].node_type == data.node_type && g[v].node_args == data.node_args
         end
     else
         add_vertex!(g, v, data)
@@ -89,26 +107,48 @@ function scalarize_then_add_edge!(g::BUGSGraph, v::Var; lhs_or_rhs=:lhs)
     end
 end
 
-function create_BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
-    g = MetaGraph(
-        SimpleDiGraph{Int64}();
-        weight_function=nothing,
-        label_type=VarName,
-        vertex_data_type=NodeInfo,
-    )
-    construct = ConcreteNodeInfoConstruct(vars, link_functions, node_functions, node_args)
-    for l in keys(vars) # l for LHS variable
-        l_vn = to_varname(l)
-        check_and_add_vertex!(g, l_vn, construct(l))
-        scalarize_then_add_edge!(g, l; lhs_or_rhs=:lhs)
-        for r in dependencies[l]
-            r_vn = to_varname(r)
-            check_and_add_vertex!(g, r_vn, construct(r))
-            add_edge!(g, r_vn, l_vn)
-            scalarize_then_add_edge!(g, r; lhs_or_rhs=:rhs)
+"""
+    BUGSModel
+
+The model object for a BUGS model.
+"""
+struct BUGSModel <: AbstractPPL.AbstractProbabilisticProgram
+    param_length::Int
+    varinfo::SimpleVarInfo # TODO: maybe separate `varinfo` from BUGSModel
+    parameters::Vector{VarName}
+    g::BUGSGraph
+    sorted_nodes::Vector{VarName}
+end
+
+function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
+    vs = initialize_var_store(data, vars, array_sizes)
+    vi = SimpleVarInfo(vs)
+    parameters = VarName[]
+    for vn in sorted_nodes
+        g[vn] isa AuxiliaryNodeInfo && continue
+
+        ni = g[vn]
+        @unpack node_type, link_function, node_function, node_args = ni
+        args = [vi[x] for x in node_args]
+        if node_type == JuliaBUGS.Logical
+            value = (node_function)(args...)
+            @assert value isa Union{Number,Array{<:Number}}
+            vi = setindex!!(vi, value, vn)
+        else
+            dist = (node_function)(args...)
+            value = evaluate(vn, data)
+            isnothing(value) && push!(parameters, vn)
+            isnothing(value) && (value = evaluate(vn, inits))
+            if !isnothing(value)
+                vi = setindex!!(vi, value, vn)
+            else
+                # if not initialized, just set to zeros
+                vi = setindex!!(vi, length(dist) == 1 ? 0.0 : zeros(length(dist)), vn)
+            end
         end
     end
-    return g
+    l = sum([_length(x) for x in parameters])
+    return BUGSModel(l, vi, parameters, g, sorted_nodes)
 end
 
 function initialize_var_store(data, vars, array_sizes)
@@ -131,14 +171,11 @@ function initialize_var_store(data, vars, array_sizes)
     return var_store
 end
 
-_inv(::typeof(logit)) = probit
-_inv(::typeof(cloglog)) = cloglog
-_inv(::typeof(log)) = exp
-function probit end
-_inv(::typeof(probit)) = logit
-_inv(identity) = identity
+function DynamicPPL.settrans!!(m::BUGSModel, if_trans::Bool)
+    return @set m.varinfo = DynamicPPL.settrans!!(m.varinfo, if_trans)
+end
 
-function evaluate(env::Dict, vn::VarName)
+function evaluate(vn::VarName, env::Dict)
     sym = getsym(vn)
     ret = nothing
     try
@@ -148,124 +185,139 @@ function evaluate(env::Dict, vn::VarName)
     return ismissing(ret) ? nothing : ret
 end
 
-function create_varinfo(g, sorted_nodes, vars, array_sizes, data, inits)
-    vs = initialize_var_store(data, vars, array_sizes)
-    vi = SimpleVarInfo(vs)
-    return initialize_vi(g, sorted_nodes, vi, data, inits)
-end
-
-@inline function unpack(ni::NodeInfo)
-    return ni.node_type, ni.link_function, ni.node_function, ni.node_args
-end
-
-function initialize_vi(g, sorted_nodes, vi, data, inits; transform_variables=true)
-    vi = deepcopy(vi)
-    parameters = VarName[]
-    logp = 0.0
-    for vn in sorted_nodes
-        ni = g[vn]
-        ni isa ConcreteNodeInfo || continue
-        node_type, link_function, node_function, args_vn = unpack(ni)
-        args = [vi[x] for x in args_vn]
-        if node_type == JuliaBUGS.Logical
-            value = (node_function)(args...)
-            @assert value isa Union{Number,Array{<:Number}}
-            vi = setindex!!(vi, value, vn)
-        else
-            dist = (node_function)(args...)
-            value = evaluate(data, vn)
-            isnothing(value) && push!(parameters, vn)
-            isnothing(value) && (value = evaluate(inits, vn))
-            if !isnothing(value)
-                logp += logpdf(dist, (link_function)(value))
-                vi = setindex!!(vi, value, vn)
-            else
-                # println("initialization for $vn is not provided, sampling from prior");
-                value = rand(dist)
-                logp += logpdf(dist, value)
-                value = _inv(link_function)(value)
-                vi = setindex!!(vi, value, vn)
-            end
-        end
-    end
-    l = sum([_length(x) for x in parameters])
-    vi = @set vi.logp = logp
-    vi = DynamicPPL.settrans!!(vi, transform_variables)
-    transform_type = if transform_variables
-        DynamicPPL.DynamicTransformation
-    else
-        DynamicPPL.IdentityTransformation
-    end
-    return vi, VarInfoReconstruct{l,transform_type}(vi, parameters, g, sorted_nodes)
-end
-
+# not reloading Base.length, the function only work for a specific subset of VarNames and should not be used elsewhere
 function _length(vn::VarName)
     getlens(vn) isa Setfield.IdentityLens && return 1
     return prod([length(index_range) for index_range in getlens(vn).indices])
 end
 
-struct VarInfoReconstruct{L,T<:DynamicPPL.AbstractTransformation}
-    prototype::SimpleVarInfo
-    parameters::Vector{VarName}
-    g::BUGSGraph
-    sorted_nodes::Vector{VarName}
+function DynamicPPL.settrans!!(m::BUGSModel)
+    return @set m.vi = DynamicPPL.settrans!!(vi, transform_variables)
 end
 
-function (re::VarInfoReconstruct{L,DynamicPPL.DynamicTransformation})(
-    flattened_values::AbstractVector
-) where {L}
-    @assert length(flattened_values) == L
-    vi, parameters, g, sorted_nodes = deepcopy(re.prototype),
-    re.parameters, re.g,
-    re.sorted_nodes
-    current_idx = 1
+"""
+    DefaultContext
+
+Use values in varinfo to compute the log joint density.
+"""
+struct DefaultContext <: AbstractPPL.AbstractContext end
+
+"""
+    SamplingContext
+
+Do an ancestral sampling of the model parameters. Also accumulate log joint density.
+"""
+struct SamplingContext <: AbstractPPL.AbstractContext
+    rng::Random.AbstractRNG
+end
+
+function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
+    return evaluate!!(model, SamplingContext(rng))
+end
+function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
+    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
+    vi = deepcopy(varinfo)
     logp = 0.0
     for vn in sorted_nodes
-        ni = g[vn]
-        node_type, link_function, node_function, args_vn = unpack(ni)
-        args = [vi[x] for x in args_vn]
+        g[vn] isa AuxiliaryNodeInfo && continue
 
+        ni = g[vn]
+        @unpack node_type, link_function, node_function, node_args = ni
+        args = [vi[x] for x in node_args]
         if node_type == JuliaBUGS.Logical
             value = node_function(args...)
             setindex!!(vi, value, vn)
         else
             dist = node_function(args...)
-            if vn in parameters
-                l = _length(vn)
-                value = if l == 1
-                    flattened_values[current_idx]
-                else
-                    flattened_values[current_idx:(current_idx + l - 1)]
-                end
-                value = invlink(dist, value)
-                current_idx += l
-                setindex!!(vi, value, vn)
-                logp += logpdf(dist, (link_function)(value))
-            else
-                value = vi[vn]
-                logp += logpdf(dist, (link_function)(value))
+            if link_function != identity
+                dist = transformed(dist, bijector_of_link_function(link_function))
             end
+            value = rand(ctx.rng, dist)
+            if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
+                value_transformed, logabsdetjac = with_logabsdet_jacobian(
+                    DynamicPPL.inverse(bijector(dist)), val
+                )
+                logp += logpdf(dist, value_transformed) + logabsdetjac
+            else
+                logp += logpdf(dist, value)
+            end
+            vi = setindex!!(vi, value, vn)
         end
     end
     return @set vi.logp = logp
 end
 
-# `re` with no argument is ancestral sampling
-function (re::VarInfoReconstruct{L,DynamicPPL.DynamicTransformation})() where {L}
-    vi, g, sorted_nodes = deepcopy(re.prototype), re.parameters, re.g, re.sorted_nodes
+AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultContext())
+function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
+    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
+    vi = deepcopy(varinfo)
     logp = 0.0
     for vn in sorted_nodes
+        g[vn] isa AuxiliaryNodeInfo && continue
+
         ni = g[vn]
-        node_type, link_function, node_function, args_vn = unpack(ni)
-        args = [vi[x] for x in args_vn]
+        @unpack node_type, link_function, node_function, node_args = ni
+        node_type == JuliaBUGS.Logical && continue
+        args = [vi[x] for x in node_args]
+        dist = node_function(args...)
+        if link_function != identity
+            dist = transformed(dist, bijector_of_link_function(link_function))
+        end
+        value = vi[vn]
+        if DynamicPPL.transformation(vi) isa DynamicPPL.DynamicTransformation
+            value_transformed, logabsdetjac = with_logabsdet_jacobian(
+                Bijectors.inverse(bijector(dist)), value
+            )
+            logp += logpdf(dist, value_transformed) + logabsdetjac
+        else
+            logp += logpdf(dist, value)
+        end
+    end
+    return @set vi.logp = logp
+end
+
+function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVector)
+    @assert length(flattened_values) == model.param_length
+    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
+    vi = deepcopy(varinfo)
+    current_idx = 1
+    logp = 0.0
+    for vn in sorted_nodes
+        g[vn] isa AuxiliaryNodeInfo && continue
+
+        ni = g[vn]
+        @unpack node_type, link_function, node_function, node_args = ni
+        args = [vi[x] for x in node_args]
         if node_type == JuliaBUGS.Logical
             value = node_function(args...)
             setindex!!(vi, value, vn)
         else
             dist = node_function(args...)
-            value = rand(dist)
-            logp += logpdf(dist, value)
-            setindex!!(vi, _inv(link_function)(value), vn)
+            if link_function != identity
+                dist = transformed(dist, bijector_of_link_function(link_function))
+            end
+            if vn in parameters # the value of parameter variables are stored in flattened_values
+                l = _length(vn)
+                value_transformed = if l == 1
+                    flattened_values[current_idx]
+                else
+                    flattened_values[current_idx:(current_idx + l - 1)]
+                end
+                current_idx += l
+
+                value = invlink(dist, value_transformed)
+                if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
+                    value_transformed, logabsdetjac = with_logabsdet_jacobian(
+                        Bijectors.inverse(bijector(dist)), value
+                    )
+                    logp += logpdf(dist, value_transformed) + logabsdetjac
+                else
+                    logp += logpdf(dist, value)
+                end
+                vi = setindex!!(vi, value, vn)
+            else
+                logp += logpdf(dist, vi[vn])
+            end
         end
     end
     return @set vi.logp = logp

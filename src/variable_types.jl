@@ -75,7 +75,7 @@ All indices of `v` must be integer or UnitRange.
 # Examples
 ```jldoctest
 julia> scalarize(Var(:x, (1, 2:3)))
-2-element Vector{JuliaBUGS.Var}:
+2-element Vector{Var}:
  x[1, 2]
  x[1, 3]
 ```
@@ -100,7 +100,7 @@ represent a multi-dimensional array, the return value is always scalarized, even
 
 # Examples
 ```jldoctest
-julia> eval(Var(:x, (1:2, )), Dict(:x => [1, missing]))
+julia> evaluate(Var(:x, (1:2, )), Dict(:x => [1, missing]))
 2-element Vector{Any}:
  1
   x[2]
@@ -113,6 +113,6 @@ function evaluate(v::Var, env::Dict)
         value = env[v.name][v.indices...]
         return ismissing(value) ? v : value
     end
-    value = map(x -> eval_var(x, env), scalarize(v))
+    value = map(x -> evaluate(x, env), scalarize(v))
     return reshape(value, size(v))
 end

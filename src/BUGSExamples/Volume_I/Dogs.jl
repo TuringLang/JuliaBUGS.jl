@@ -16,8 +16,8 @@ dogs = (
               y[i, j] ~ dbern(p[i, j])
           }
       }
-      alpha ~ dflat()T(, -0.00001)
-      beta ~ dflat()T(, -0.00001)
+      alpha ~ dunif(-10, -0.00001)
+      beta ~ dunif(-10, -0.00001)
       A <- exp(alpha)
       B <- exp(beta)
       """,

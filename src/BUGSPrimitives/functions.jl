@@ -10,7 +10,7 @@ end
 """
     cloglog(x)
 
-Complementary log-log function of `x`. 
+Complementary log-log function of `x`. Can be used as link function.
 
 ```math
 cloglog(x) = log(-log(1 - x))
@@ -18,6 +18,19 @@ cloglog(x) = log(-log(1 - x))
 """
 function cloglog(x)
     return LogExpFunctions.cloglog(x)
+end
+
+"""
+    cexpexp(x)
+
+Complementary exponential of the complementary exponential of `x`.
+
+```math
+cexpexp(x) = 1 - exp(-exp(x))
+```
+"""
+function cexpexp(x)
+    return LogExpFunctions.cexpexp(x)
 end
 
 """
@@ -39,6 +52,24 @@ function exp(x)
 end
 
 """
+    icloglog(x)
+
+Inverse complementary log-log function of `x`. Alias for [`cexpexp(x)`](@ref).
+"""
+function icloglog(x)
+    return cexpexp(x)
+end
+
+"""
+    ilogit(x)
+
+Inverse logit function of `x`. Alias for `logistic(x)`.
+"""
+function ilogit(x)
+    return logistic(x)
+end
+
+"""
     inprod(a, b)
 
 Inner product of `a` and `b`.
@@ -52,7 +83,7 @@ end
 
 Inverse of matrix `v`.
 """
-function inverse(v)
+function inverse(v::AbstractArray{T,2} where {T})
     return LinearAlgebra.inv(v)
 end
 
@@ -106,25 +137,12 @@ function logit(x)
 end
 
 """
-    icloglog(x)
+    logistic(x)
 
-Inverse complementary log-log function of `x`. 
-
-```math
-icloglog(x) = 1 - exp(-exp(x))
-```
-"""
-function icloglog(x)
-    return LogExpFunctions.cexpexp(x)
-end
-
-"""
-    logit(x)
-
-Logit function of `x`. 
+Logistic function of `x`.
     
 ```math
-logit(x) = log(x / (1 - x))
+logistic(x) = 1 / (1 + exp(-x))
 ```
 """
 function logistic(x)
@@ -136,7 +154,7 @@ end
 
 Matrix exponential of `x`.
 """
-function mexp(x)
+function mexp(x::AbstractMatrix)
     return exp(x)
 end
 
@@ -154,9 +172,7 @@ end
 
 Return the mean of the input vector `v`.
 """
-function mean(v::AbstractVector)
-    return Statistics.mean(v)
-end
+mean
 
 """
     min(args...)
@@ -174,6 +190,15 @@ Cumulative distribution function (CDF) of the standard normal distribution evalu
 """
 function phi(x)
     return Distributions.cdf(Distributions.Normal(0, 1), x)
+end
+
+"""
+    probit
+
+Inverse of [`phi`](@ref).
+"""
+function probit(e)
+    return quantile(Normal(0, 1), e)
 end
 
 """
@@ -195,11 +220,11 @@ function sqrt(x)
 end
 
 """
-    rank(v::Vector, i::Int)
+    rank(v::AbstractVector, i::Int)
 
 Return the rank of the `i`-th element of `v`.
 """
-function rank(v::Vector, i::Int)
+function rank(v::AbstractVector, i::Int)
     return v[sortperm(v)[i]]
 end
 

@@ -1,8 +1,0 @@
-[deps]
-AdvancedHMC = "0bf59076-c3b1-5ca4-86bd-e02cd72cde3d"
-Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
-Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
-LogDensityProblems = "6fdf6af0-433a-55f7-b3ed-c6c6e0b8df7c"
-MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
-ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
