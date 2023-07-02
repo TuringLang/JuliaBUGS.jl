@@ -1,0 +1,1 @@
+This folder contains some Markdown file temps to recreate the BUGS examples from the BUGS websites.
