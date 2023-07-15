@@ -69,11 +69,6 @@ function process_block!(tv, loc, text, jp, diagnostics)
     return loc
 end
 
-function emit_diagnostic(stream::ParseStream, byterange::AbstractUnitRange; kws...)
-    emit_diagnostic(stream.diagnostics, byterange; kws...)
-    return nothing
-end
-
 function process_for!(tv, loc, text, jp, diagnostics)
     push!(jp, tv[loc]) # just "for"
     loc += 1
@@ -92,7 +87,7 @@ end
 
 function expect!(tv, loc, text, jp, diagnostics, expected, copy, sub=nothing)
     k = kind(tv[loc])
-    if k == expected
+    if k == expected || k in expected
         if copy
             if isnothing(sub)
                 push!(jp, tv[loc])
@@ -125,8 +120,6 @@ function process_for_cond!(tv, loc, text, jp, diagnostics)
 
     return loc
 end
-
-
 
 function process_variable_name!(tv, loc, text, jp, diagnostics)
     var_name = ""
@@ -180,12 +173,103 @@ function process_indices!(tv, loc, text, jp, diagnostics)
     return loc
 end
 
-# expressions are delimited by ";" or "\n"" or "," or "}"
 function process_expressions!(tv, loc, text, jp, diagnostics)
+    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
+    k = kind(tv[loc])
+    loc = process_single_op!(tv, loc, text, jp, diagnostics, [K"+", K"-"]) # check for unary + and -
+    loc = expect!(tv, loc, text, jp, diagnostics, [K"Integer", K"Identifier"], false)
+    while k == K"}" || k == K";" || k == K"NewlineWs" || k == K","
+        loc = skip_trivia!(tv, loc, text, jp, diagnostics)
+        loc = process_single_term!(tv, loc, text, jp, diagnostics)
+        loc = process_single_op!(tv, loc, text, jp, diagnostics, [K"+", K"-", K"*", K"/"])
+    end
+    return loc
+end
 
+function process_single_term!(tv, loc, text, jp, diagnostics)
+    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
+    k = kind(tv[loc])
+    if k == K"Integer" || k == K"Float"
+        push!(jp, tv[loc])
+        loc += 1
+        return loc
+    else
+    if k == K"Identifier"
+        loc = process_variable_name!(tv, loc, text, jp, diagnostics)
+        if kind(tv[loc+1]) == K"("
+            loc = process_call_args!(tv, loc, text, jp, diagnostics)
+            loc = expect!(tv, loc, text, jp, diagnostics, K")", true)
+        end
+    else
+        push!(diagnostics, Diagnostic(tv[loc].range.start, tv[loc].range.stop, :error, "Expected `variable name` or `function call`"))
+    end
+    return loc
+end
+
+function process_call_args!(tv, loc, text, jp, diagnostics)
+    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
+    k = kind(tv[loc])
+    if k == K")"
+        return loc
+    end
+    while k != K")"
+        loc = process_expression!(tv, loc, text, jp, diagnostics)
+        loc = skip_trivia!(tv, loc, text, jp, diagnostics)
+        k = kind(tv[loc])
+        if k == K")"
+            return loc
+        elseif k == K","
+            push!(jp, tv[loc])
+            loc += 1
+            loc = skip_trivia!(tv, loc, text, jp, diagnostics)
+            k = kind(tv[loc])
+        else
+            push!(diagnostics, Diagnostic(tv[loc].range.start, tv[loc].range.stop, :error, "Expected `,` or `)`"))
+        end
+    end
+    return loc
+end
+
+function process_single_op!(tv, loc, text, jp, diagnostics, ops)
+    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
+    k = kind(tv[loc])
+    if k in ops
+        push!(jp, tv[loc])
+        loc += 1
+    end
+    return loc
+end
+
+function process_assign_sign!(tv, loc, text, jp, diagnostics)
+    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
+    k = kind(tv[loc])
+    if k == K"<"
+        if kind(tv[loc+1]) == K"-"
+            push!(jp, K"=")
+            loc += 2
+        else
+            push!(diagnostics, Diagnostic(tv[loc].range.start, tv[loc].range.stop, :error, "Expected `<-`"))
+        end
+    else # k == K"<--"
+        push!(jp, K"=")
+        loc += 1
+        loc = process_single_op!(tv, loc, text, jp, diagnostics, [K"-"])
+
+    end
+    return loc
 end
 
 function process_assignment!(tv, loc, text, jp, diagnostics)
-    
+    loc = process_single_term!(tv, loc, text, jp, diagnostics)
+    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
+    if kind(tv[loc]) == K"<" || kind(tv[loc]) == K"<--"
+        loc = process_assign_sign!(tv, loc, text, jp, diagnostics)
+    elseif kind(tv[loc]) == K"~"
+        push!(jp, K"=")
+        loc += 1
+    else
+        push!(diagnostics, Diagnostic(tv[loc].range.start, tv[loc].range.stop, :error, "Expected `<-` or `~`"))
+    end
+    loc = process_expressions!(tv, loc, text, jp, diagnostics)
+    return loc
 end
-
