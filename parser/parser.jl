@@ -6,6 +6,7 @@ using JuliaSyntax: @K_str, @KSet_str, tokenize, untokenize, Diagnostic
 # 2. inspect tokens and build the Julia version of the program in the form of a vector of tokens
 # 3. when it is appropriate to do so, just push the token to the Julia version of the program vector
 # 4. at the same time, some errors are detected and diagnostics are pushed to the diagnostics vector; also some tokens may be deleted, combined, or replaced 
+# 5. error recovery is very primitive: the heuristic is user forget something instead of put something wrong, a slightly more sophisticated approach is doing two versions: both "discard" and skip
 
 mutable struct PState
     token_vec::Vector{Any}
@@ -331,6 +332,17 @@ function test_on(f, str)
     return ps
 end
 
+function parse(prog::String)
+    ps = PState(prog)
+    process_toplevel!(ps)
+    if !isempty(ps.diagnostics)
+        io = IOBuffer()
+        JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
+        error("Errors in the program: \n $(String(take!(io)))")
+    end
+    return JuliaSyntax.parseall(JuliaSyntax.SyntaxNode, to_julia_program(ps.julia_token_vec, ps.text))
+end
+
 ##
 test_on(process_toplevel!, "model { } ")
 
@@ -385,3 +397,23 @@ test_on(process_toplevel!, """model
 
 test_on(process_indexing!, "[1, 2, 3]");
 test_on(process_variable!, "a[1, 2, 3]");
+
+parse("""model
+{
+    for i in 1 : N ) {
+        for( j in 1 : T ) {
+           Y[i , j] ~ dnorm(mu[i , j],tau.c)
+           mu[i , j] <- alpha[i] + beta[i] * (x[j] - xbar)
+        }
+        alpha[i] ~ dnorm(alpha.c,alpha.tau)
+        beta[i] ~ dnorm(beta.c,beta.tau)
+     }
+     tau.c ~ dgamma(0.001,0.001)
+     sigma <- 1 / sqrt(tau.c)
+     alpha.c ~ dnorm(0.0,1.0E-6)   
+     alpha.tau ~ dgamma(0.001,0.001)
+     beta.c ~ dnorm(0.0,1.0E-6)
+     beta.tau ~ dgamma(0.001,0.001)
+     alpha0 <- alpha.c - xbar * beta.c   
+}
+""")
