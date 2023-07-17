@@ -1,297 +1,387 @@
-
-
 using JuliaSyntax
-using JuliaSyntax: @K_str, parse!, position, bump_trivia, ParseStream, ParseState, build_tree, GreenNode, SyntaxNode, peek_token, TRIVIA_FLAG, EMPTY_FLAGS
+using JuliaSyntax: @K_str, @KSet_str, tokenize, untokenize, Diagnostic
 
-# JuliaSyntax's tokenizer will not parse most of BUGS keyword into tokens
-# use this function to do symbol comparison
-function peek_symbol(ps, n=1)
-    nt = JuliaSyntax.peek_full_token(ps, n)
-    return Symbol(ps.textbuf[nt.first_byte:nt.last_byte])
+# the general idea is:
+# 1. use `tokenize` to get the token vector
+# 2. inspect tokens and build the Julia version of the program in the form of a vector of tokens
+# 3. when it is appropriate to do so, just push the token to the Julia version of the program vector
+# 4. at the same time, some errors are detected and diagnostics are pushed to the diagnostics vector; also some tokens may be deleted, combined, or replaced 
+
+mutable struct PState
+    token_vec::Vector{Any}
+    current_index::Int
+    text::String
+    julia_token_vec::Vector{Any}
+    diagnostics::Vector{Diagnostic}
+end
+##
+function PState(text::String)
+    token_vec = filter(x -> kind(x) != K"error", tokenize(text))
+    return PState(token_vec, 1, text, Any[], Diagnostic[])
 end
 
-function parse_and_show(production::Function, code)
-    st = ParseStream(code)
-    production(st)
-    t = JuliaSyntax.build_tree(GreenNode, st)
-    show(stdout, MIME"text/plain"(), t, code, show_trivia=true)
-    if !isempty(st.diagnostics)
-        println()
-        for d in st.diagnostics
-            JuliaSyntax.show_diagnostic(stdout, d, code)
-        end
-    end
-    t
-end
-
-# build the parser from the bottom up
-
-# parse atoms
-ps = ParseStream("a ")
-ps = PS("a.b.c + b")
-ps.lookahead_index
-peek(ps, 5)
-peek(ps, 5)
-ps.tokens
-ts = []
-push!(ts, "var")
-push!(ts, "\"")
-pos = position(ps)
-ps.textbuf[pos.range_index]
-push!(ts, ps.textbuf[])
-emit(ps, )
-bump_glue(ps, K"Identifier", EMPTY_FLAGS, 5)
-build_tree(GreenNode, ps)
-t = ps.tokens[2]
-Symbol(ps.textbuf[1:t.next_byte-1])
-peek(ps)
-
-ps = PS("<-- b")
-peek(ps)
-JuliaSyntax.bump_split(ps, (1, K"<", EMPTY_FLAGS), (1, K"-", EMPTY_FLAGS), (1, K"-", EMPTY_FLAGS))
-build_tree(SyntaxNode, ps)
-
-"""
-Bump several tokens, gluing them together into a single token
-
-This is for use in special circumstances where the parser needs to resolve
-lexing ambiguities. There's no special whitespace handling — bump any
-whitespace if necessary with bump_trivia.
-"""
-function bump_glue(stream::ParseStream, kind, flags, num_tokens)
-    i = stream.lookahead_index
-    h = JuliaSyntax.SyntaxHead(kind, flags)
-    push!(stream.tokens, JuliaSyntax.SyntaxToken(h, kind, false,
-                                     stream.lookahead[i+num_tokens].next_byte))
-    stream.lookahead_index += num_tokens
-    stream.peek_count = 0
-    return position(stream)
-end
-
-function parse_atom(st, jp)
-    bump_trivia(st, skip_newlines=true)
-    mark = position(st)
-    k = peek(st)
-    if k == K"Identifier"
-        if peek(st, 2) == K"."
-            
-            parse_period_separated_identifier(st)
-        else
-            bump(st)
-        end
-    elseif k in (K"-", K"+") # unary minus and plus
-        bump(st)
-        parse_atom(st)
-        emit(st, mark, K"call")
-    elseif k == K"("
-        bump(st, TRIVIA_FLAG)
-        parse_expression(st)
-        if peek(st) == K")"
-            bump(st, TRIVIA_FLAG)
-            # emit(st, mark, K"(")
-        else
-            bump_invisible(st, K"error", TRIVIA_FLAG,
-                           error="Expected `)` following expression")
-        end
-    elseif k == K"begin"
-        bump(st, TRIVIA_FLAG)
-        parse_block(st, K"end", mark)
+function consume!(ps::PState, substitute=nothing)
+    if isnothing(substitute)
+        push!(ps.julia_token_vec, ps.token_vec[ps.current_index])
     else
-        bump(st)
-        emit(st, mark, K"error",
-             error="Expected literal, identifier or opening parenthesis")
+        push!(ps.julia_token_vec, substitute)
+    end
+    ps.current_index += 1
+end
+
+function discard!(ps::PState)
+    ps.current_index += 1
+end
+
+function add_diagnostic(ps, msg::String)
+    # check if the current token is EOF
+    if ps.current_index > length(ps.token_vec)
+        diagnostic = JuliaSyntax.Diagnostic(0, 0, :error, msg)
+        @assert diagnostic ∉ ps.diagnostics
+        push!(ps.diagnostics, diagnostic)
+        return
+    end
+    low = first(ps.token_vec[ps.current_index].range)
+    high = last(ps.token_vec[ps.current_index].range)
+    diagnostic = JuliaSyntax.Diagnostic(low, high, :error, msg)
+    if diagnostic in ps.diagnostics # TODO: this check may be too expensive
+        error("Encounter duplicate diagnostic, suspect infinite loop, stop and fix first.")
+    end
+    push!(ps.diagnostics, diagnostic)
+end
+
+
+function peek(ps::PState, n=1)
+    if ps.current_index+n-1 > length(ps.token_vec)
+        return K"EndMarker"
+    end
+    return kind(ps.token_vec[ps.current_index+n-1])
+end
+
+function peek_raw(ps::PState, n=1)
+    if ps.current_index+n-1 > length(ps.token_vec)
+        return "EOF"
+    end
+    return untokenize(ps.token_vec[ps.current_index+n-1], ps.text)
+end
+
+function process_trivia!(ps::PState, skip_newline=true)
+    deliminators = collect(KSet"Whitespace Comment")
+    if skip_newline
+        push!(deliminators, K"NewlineWs")
+    end
+    while peek(ps) ∈ deliminators
+        consume!(ps)
     end
 end
-    
 
-function parse_toplevel(ps)
-    mark = position(ps)
-    bump_trivia(ps, skip_newlines=true)
+function process_toplevel!(ps::PState)
+    expect!(ps, "model", "begin")
+    expect_and_discard!(ps, "{")
+    process_statements!(ps)
+    expect!(ps, "}", "end")
+    process_trivia!(ps)
+end
+
+function process_statements!(ps::PState)
+    process_trivia!(ps)
     while true
-        bump_trivia(ps, skip_newlines=true)
-        if peek(ps) == K"EndMarker"
-            JuliaSyntax.bump_trivia(ps; skip_newlines=true)
-            break
+        if peek(ps) == K"for"
+            process_for!(ps)
+        elseif peek(ps) == K"Identifier"
+            process_assignment!(ps)
         else
-            if peek_symbol(ps) == :model
-                # support model {}
-                parse_model(ps)
-            else # also support model definition without model keyword
-                parse_stmts(ps)
-            end
+            break
         end
+        process_trivia!(ps, )
     end
-    return JuliaSyntax.emit(ps, mark, K"toplevel")
 end
 
-function parse_model(ps)
-    mark = position(ps)
-    if peek(ps) == K"{"
-        bump(ps, JuliaSyntax.TRIVIA_FLAG;)
-        parse_stmts(ps)
-    else
-        # emit error: require `{`
-        JuliaSyntax.bump(ps; error="Expected `{`")
+function process_assignment!(ps::PState)
+    process_variable!(ps)
+    process_trivia!(ps)
+    if peek(ps) == K"<--"
+        discard!(ps)
+        push!(ps.julia_token_vec, "=")
+        push!(ps.julia_token_vec, "-")
+        process_identifier_led_expression!(ps)
+        return
     end
-    # parse_trailing_curly_bracket(ps)
-    # emit something
+
+    if peek(ps) == K"~"
+        consume!(ps)
+    elseif peek(ps) == K"<"
+        if peek(ps, 2) == K"-"
+            discard!(ps)
+            discard!(ps)
+            push!(ps.julia_token_vec, "=")
+        else
+            add_diagnostic(ps, "Expecting <-")
+        end
+    else
+        add_diagnostic(ps, "Expecting <- or ~")
+    end
+    process_expression!(ps)
+    process_trivia!(ps) # consume newline or ;
+end
+
+function process_for!(ps)
+    consume!(ps) # consume the "for"
+    expect_and_discard!(ps, "(")
+
+    process_variable!(ps)
+    expect!(ps, "in")
+    process_range!(ps)
+    expect_and_discard!(ps, ")")
+
+    expect_and_discard!(ps, "{")
+    process_statements!(ps)
+    expect!(ps, "}", "end")
+end
+
+function process_range!(ps)
+    expect_and_process_atom!(ps)
+    expect!(ps, ":")
+    expect_and_process_atom!(ps)
+end
+
+# numerals or variables
+function expect_and_process_atom!(ps)
+    process_trivia!(ps)
+    if peek(ps) ∈ KSet"Integer Float"
+        consume!(ps)
+    elseif peek(ps) == K"Identifier"
+        process_variable!(ps, false)
+    else
+        add_diagnostic(ps, "Loop bounds must be numerals or variables")
+    end
+end
+# sub cases
+# unary +, -
+# function call: f(x+z, y)
+# variable: x, a.b
+function process_expression!(ps::PState, terminators=KSet"; NewlineWs EndMarker")
+    process_trivia!(ps)
+    if peek(ps) ∈ KSet"+ -" # only allow a single + or - at the beginning
+        consume!(ps)
+    end
+    process_identifier_led_expression!(ps, terminators)
+end
+
+function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs EndMarker")
+    process_trivia!(ps)
+    while true
+        if peek(ps) ∈ KSet"Integer Float"
+            consume!(ps)
+        elseif peek(ps) == K"Identifier"
+            if peek(ps, 2) == K"("
+                consume!(ps) # consume the function name
+                consume!(ps) # consume the "("
+                process_call_args!(ps)
+                expect!(ps, ")")
+            else
+                process_variable!(ps) # "a.b(args)" falls into this case
+                if peek(ps) == K"("
+                    process_call_args!(ps)
+                    expect!(ps, ")")
+                end
+            end
+        elseif peek(ps) == K"("
+            consume!(ps)
+            process_expression!(ps, KSet")")
+            expect!(ps, ")")
+        else
+            add_diagnostic(ps, "Expecting variable or parenthesized expressions")
+        end
+        process_trivia!(ps, false)
+        if peek(ps) ∈ terminators
+            if peek(ps) == K";" # others will be consumed by process_trivia!
+                consume!(ps)
+            end
+            return
+        end
+        expect!(ps, ("+", "-", "*", "/", "^"))
+        process_trivia!(ps)
+    end
+end
+
+function process_variable!(ps::PState, allow_indexing=true)
+    process_trivia!(ps)
+
+    if peek(ps, 2) ∉ KSet". ["
+        consume!(ps)
+        return
+    end
+
+    if peek(ps, 2) == K"."
+        variable_name_buffer = String[]
+        while peek(ps) == K"Identifier"
+            push!(variable_name_buffer, peek_raw(ps))
+            discard!(ps)
+            if peek(ps) != K"."
+                break
+            end
+            push!(variable_name_buffer, ".")
+            discard!(ps)
+        end
+
+        push!(ps.julia_token_vec, "var\"$(join(variable_name_buffer, ""))\"")
+    else
+        consume!(ps)
+    end
+
+    if !allow_indexing
+        return
+    end
+
+    if peek(ps) == K"["
+        process_indexing!(ps)
+    end
+end
+
+function process_indexing!(ps::PState)
+    expect!(ps, "[")
+    process_trivia!(ps)
+    while peek_raw(ps) != "," && peek(ps) != "EndMarker"
+        process_index!(ps)
+        process_trivia!(ps)
+        if peek_raw(ps) != ","
+            break
+        end
+        expect!(ps, ",")
+        process_trivia!(ps)
+    end
+    expect!(ps, "]")
+end
+
+# index can be expression, or range
+function process_index!(ps)
+    process_expression!(ps, KSet": , ]")
+    if peek_raw(ps) == ":"
+        consume!(ps)
+        process_expression!(ps, KSet", ]")
+    end
+end
+
+function process_call_args!(ps)
+    process_trivia!(ps)
+    while peek(ps) != "," && peek(ps) != "EndMarker"
+        process_expression!(ps, KSet", ) EndMarker")
+        if peek(ps) == K")"
+            break
+        end
+        expect!(ps, ",")
+        process_trivia!(ps)
+    end
+end
+
+function expect!(ps::PState, expected::String, substitute=nothing)
+    process_trivia!(ps)
+    if peek_raw(ps) != expected
+        add_diagnostic(ps, "Expecting '$expected'")
+    else
+        consume!(ps, substitute)
+    end
+end
+
+function expect!(ps::PState, expected::Tuple, substitute=nothing)
+    process_trivia!(ps)
+    if peek_raw(ps) ∉ expected
+        add_diagnostic(ps, "Expecting '$expected'")
+    else
+        consume!(ps, substitute)
+    end
+end
+
+function expect_and_discard!(ps::PState, expected::String)
+    process_trivia!(ps)
+    if peek_raw(ps) != expected
+        add_diagnostic(ps, "Expecting '$expected'")
+    else
+        discard!(ps)
+    end
+end
+
+function to_julia_program(julia_token_vec, text)
+    program = ""
+    for t in julia_token_vec
+        if t isa String
+            program *= t
+        else
+            str = untokenize(t, text)
+            program *= str
+        end
+    end
+    return program
+end
+
+function test_on(f, str)
+    ps = PState(str)
+    f(ps)
+    if ps.current_index > length(ps.token_vec)
+        println("finished")
+    else
+        println("next token: $(untokenize(ps.token_vec[ps.current_index], ps.text))", )
+    end
+    # @show ps.julia_token_vec
+    println(to_julia_program(ps.julia_token_vec, ps.text))
+    io = IOBuffer()
+    JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
+    println(String(take!(io)))
     return ps
 end
 
-# BUGS allows using `;` for multiple statements on the same line and also `#` for comments
-function parse_stmts(ps)
-    mark = position(ps)
-    return parse_Nary(ps, parse_assignment, (K";",), (K"NewlineWs",))
-end
+##
+test_on(process_toplevel!, "model { } ")
 
-function parse_link_function(ps, allowed_functions=[])
-    mark = position(ps)
-    bump_trivia(ps)
-    if isempty(allowed_functions) # don't check link function names    
-        if peek(ps) == K"Identifier"
-            bump(ps)
-        else
-            bump(ps, JuliaSyntax.TRIVIA_FLAG;
-                 error="Expected identifier for link function") # TODO: look into emit error, keep it simple now
-        end
-    else
-        if peek_symbol(ps) in allowed_functions
-            bump(ps)
-        else
-            bump(ps, JuliaSyntax.TRIVIA_FLAG;
-                 error="Expected link function name") # TODO: look into emit error, keep it simple now
-        end
-    end
-    if peek(ps) == K"("
-        bump(ps, JuliaSyntax.TRIVIA_FLAG)
-        parse_variable_name(ps)
-        if peek(ps) == K")"
-            bump(ps)
-            parse_assignment(ps)
-        else
-            bump(ps, JuliaSyntax.TRIVIA_FLAG;
-                 error="Expected `)` following link function")
-        end
-    else
-        bump(ps, JuliaSyntax.TRIVIA_FLAG;
-             error="Expected `(` following link function") 
-    end
-end
+test_on(process_trivia!, "  \n  a")
 
-function parse_variable_name(ps)
-    mark = position(ps)
-    bump_trivia(ps)
-    # need to handle R style variable names, i.e. `a.b`
-   
-    if peek(ps) == K"["
-        # bump
-        # parse range (may contain `,`)
-        if peek(ps) == K"]"
-            # bump
-        else
-            # error
-        end
-    else
-        parse_period_separated_identifier(ps)
-    end
-end
+test_on(process_variable!, "a.b.c")
+test_on(process_variable!, "x ")
 
-function parse_period_separated_identifier(ps)
-    # similar to Nary, but don't bump until whitespace or newline
-    mark = position(ps)
-    bump_trivia(ps)
-    k = peek(ps)
+test_on(process_expression!, "a.b.c + 1")
 
-    #TODO: first check "." not the first character, not necessary, because the tokenizer handles it
+test_on(process_assignment!, "x = 1+12")
 
-    if k == K"EndMarker" || k == K"NewlineWs" || k == K")"
-        return nothing
-    end
-    name_buffer = []
-    k = peek(ps)
-    n_pieces = 0
-    while peek(ps) != K"EndMarker" && peek(ps) != K"NewlineWs"
-        if k == K"Identifer"
-            push!(name_buffer, peek_symbol(ps))
-            n_pieces += 1
-        elseif l == K"."
+test_on(process_for!, "for (i in 1:10) { }")
 
-        end
-    end
-    # customized bumping
-    # TODO: figure out how to add var"", also need to skip the correct number of bytes
-end
+test_on(process_range!, "1:10")
 
-prog = "#some comment\n a.b.c"
-ps = ParseStream(prog)
-bump_trivia(ps)
-dump(ps)
-ps.lookahead_index    
+ps = test_on(process_assignment!, """
+    alpha[i] ~ dnorm(alpha.c,alpha.tau)
+""");
 
-function parse_assignment(ps) 
-    mark = position(ps)
-    bump_trivia(ps)
-    k = peek(ps)
-    if k == K"<" 
-        if peek(ps, 2) == K"-"
-            # TODO: replace with K"="
-            # TODO: do some skipping and byte management
-            parse_expression(ps)
-        else
-            bump(ps, JuliaSyntax.TRIVIA_FLAG;
-                 error="Expected `<-`")
-        end
-    elseif k == K"<--"
-        # TODO: find a way to break this into two tokens
-        # work out the `seek` and all that
-        # TODO: probably need to work with Lexer
-    elseif k == K"~"
-        parse_distributions(ps)
-    else
-        bump(ps, JuliaSyntax.TRIVIA_FLAG;
-             error="Expected `<-` or `~`")
-    end
-end
+test_on(process_toplevel!, """model
+{
+   for( i in 1 : N ) {
+      for( j in 1 : T ) {
+         Y[i , j] ~ dnorm(mu[i , j],tau.c)
+      }
+      alpha[i] ~ dnorm(alpha.c,alpha.tau)
+   }
+}
+""")
 
-ps = ParseStream("var\"a.b\"")
-parse!(ps)
-ps.tokens
-tokenize("var\"a.b\"")
+test_on(process_toplevel!, """model
+{
+    for( i in 1 : N ) {
+        for( j in 1 : T ) {
+           Y[i , j] ~ dnorm(mu[i , j],tau.c)
+           mu[i , j] <- alpha[i] + beta[i] * (x[j] - xbar)
+        }
+        alpha[i] ~ dnorm(alpha.c,alpha.tau)
+        beta[i] ~ dnorm(beta.c,beta.tau)
+     }
+     tau.c ~ dgamma(0.001,0.001)
+     sigma <- 1 / sqrt(tau.c)
+     alpha.c ~ dnorm(0.0,1.0E-6)   
+     alpha.tau ~ dgamma(0.001,0.001)
+     beta.c ~ dnorm(0.0,1.0E-6)
+     beta.tau ~ dgamma(0.001,0.001)
+     alpha0 <- alpha.c - xbar * beta.c   
+}
+"""
+);
 
-untokenize(tokenize("var\"a.b\"")[3], "var\"a.b\"")
-
-function parse_expression(ps)
-    # parse expression on the RHS of logical assignment
-    # end with ;
-    # TODO: just reuse Julia's parser for this part
-end
-
-function parse_Nary(ps, down, delimiters, closing_tokens)
-    bump_trivia(ps)
-    k = peek(ps)
-    if k in closing_tokens
-        return nothing
-    end
-    n_delims = 0
-    if k in delimiters
-        # allow leading delimiters
-        # ; a  ==>  (block a)
-    else
-        # a ; b  ==>  (block a b)
-        down(ps)
-    end
-    while peek(ps) in delimiters
-        bump(ps, JuliaSyntax.TRIVIA_FLAG)
-        n_delims += 1
-        k = peek(ps)
-        if k == K"EndMarker" || k in closing_tokens
-            break
-        elseif k in delimiters
-            # ignore empty delimited sections
-            # a;;;b  ==>  (block a b)
-            continue
-        end
-        down(ps)
-    end
-    return n_delims != 0
-end
+test_on(process_indexing!, "[1, 2, 3]");
+test_on(process_variable!, "a[1, 2, 3]");
