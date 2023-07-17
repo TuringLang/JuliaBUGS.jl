@@ -1,17 +1,4 @@
-## General Idea
-# - Use the tokenizer and Expr & Syntax Tree generating facilities of `JuliaSyntax`
-#     - Issues to resolve
-#         - The tokenizer will not treat `<-` as a native token
-#             - `<` and `-` need to be fused and translated to `=`
-#             - `<--` need to be split into `<-` and `-`, the former is translated to `=`
-#         - variable names with `.` need to be wrapped in `var`
-#         - JuliaSyntax does "lossless" parsing, it doesn't store token object, but store the byte location of the texts. The implication is that generating the Expr or Syntax Tree requires a Julia version of the program
-#             - The solution is to keep a Julia version of the program text alongside the parsing process.
-#             - Complexity:
-#                 - Translate the BUGS program as we go, and keep a Julia version of the program text
-#                 - Trivia (whitespace and newlines) need to be handled
-#     - Things still not clear yet
-#         - How to sort out diagnostics
+
 
 using JuliaSyntax
 using JuliaSyntax: @K_str, parse!, position, bump_trivia, ParseStream, ParseState, build_tree, GreenNode, SyntaxNode, peek_token, TRIVIA_FLAG, EMPTY_FLAGS

@@ -1,275 +1,271 @@
 using JuliaSyntax
-using JuliaSyntax: tokenize, Diagnostic, head, kind
+using JuliaSyntax: tokenize, Diagnostic, kind
 
-prog = """model
-{
-   for( i in 1 : N ) {
-      for( j in 1 : T ) {
-         Y[i , j] ~ dnorm(mu[i , j],tau.c)
-         mu[i , j] <- alpha[i] + beta[i] * (x[j] - xbar)
-      }
-      alpha[i] ~ dnorm(alpha.c,alpha.tau)
-      beta[i] ~ dnorm(beta.c,beta.tau)
-   }
-   tau.c ~ dgamma(0.001,0.001)
-   sigma <- 1 / sqrt(tau.c)
-   alpha.c ~ dnorm(0.0,1.0E-6)   
-   alpha.tau ~ dgamma(0.001,0.001)
-   beta.c ~ dnorm(0.0,1.0E-6)
-   beta.tau ~ dgamma(0.001,0.001)
-   alpha0 <- alpha.c - xbar * beta.c   
-}
-"""
 
-tv = tokenize(prog)
 
-# the general idea is:
-# 1. use `tokenize` to get the token vector
-# 2. inspect tokens and build the Julia version of the program in the form of a vector of tokens
-# 3. when it is appropriate to do so, just push the token to the Julia version of the program vector
-# 4. at the same time, some errors are detected and diagnostics are pushed to the diagnostics vector; also some tokens may be deleted, combined, or replaced 
 
-function process_toplevel(tv, loc, text, jp, diagnostics)
-    if untokenize(tv[1]) == "model"
-        loc = skip_trivia!(tv, loc, jp, text, diagnostics)
-        k = kind(tv[loc])
-        if k != K"{"
-            push!(diagnostics, Diagnostics(tv[loc].range.start, tv[loc].range.stop, :error, "Expected `{`"))
+# copy trivia tokens to Julia program
+function skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    while kind(token_vec[current_index]) == K"NewlineWs" || kind(token_vec[current_index]) == K"Comment" || kind(token_vec[current_index]) == K"Whitespace"
+        push!(julia_token_vec, token_vec[current_index]) # copy the current token
+        current_index += 1
+    end
+    return current_index
+end
+
+function process_toplevel!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    kind(token_vec[current_index]) == K"EndMarker" && return nothing
+    if untokenize(token_vec[1], text) == "model"
+        current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+        kind(token_vec[current_index]) == K"EndMarker" && return nothing
+        if kind(token_vec[current_index]) == K"{"
+            push!(julia_token_vec, K"begin")
+            current_index += 1
+        else
+            push!(diagnostics, Diagnostic(token_vec[current_index].range.start, token_vec[current_index].range.stop, :error, "Expected `{`"))
         end
-        process_block!(tv, loc, text, jp, diagnostics)
-    else
-        # assume not wrapped in model{}
-        process_block!(tv, loc, text, jp, diagnostics)
+        current_index = process_bcurrent_indexk!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    else # also accept program without `model` keyword
+        current_index = process_bcurrent_indexk!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    end
+    current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    if peek_kind(token_vec, current_index) == K"EndMarker"
+        push!(diagnostics, Diagnostic(token_vec[current_index].range.start, token_vec[current_index].range.stop, :error, "Expected `}`"))
+        push!(julia_token_vec, K"end")
+    end
+    current_index = expect!(token_vec, current_index, text, julia_token_vec, diagnostics, K"}", true, K"end")
+    skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    if peek_kind(token_vec, current_index) != K"EndMarker"
+        push!(diagnostics, Diagnostic(token_vec[current_index].range.start, token_vec[current_index].range.stop, :error, "Program outside of `model` bcurrent_indexk"))
     end
 end
 
-function skip_trivia!(tv, loc, text, jp, diagnostics)
-    k = kind(tv[loc])
-    while k == K"Whitespace" || k == K"Comment" || k == K"NewlineWs"
-        push!(jp, tv[loc])
-        loc += 1
-    end
-    return loc
-end
 
-function process_block!(tv, loc, text, jp, diagnostics)
-    k = kind(tv[loc])
-    while k != K"EndMarker" && k != K"}"
-        loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-        k = kind(tv[loc])
-        if k == K"Identifer"
-            loc = process_assignment!(tv, loc, text, jp, diagnostics)
-        elseif k == K"for"
-            loc = process_for!(tv, loc, text, jp, diagnostics)
+
+function process_bcurrent_indexk!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    while kind(token_vec[current_index]) != K"EndMarker" && kind(token_vec[current_index]) != K"}"
+        current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+        if kind(token_vec[current_index]) == K"Identifier"
+            current_index = process_assignment!(token_vec, current_index, text, julia_token_vec, diagnostics)
+        elseif kind(token_vec[current_index]) == K"for"
+            current_index = process_for!(token_vec, current_index, text, julia_token_vec, diagnostics)
         else
             # we won't implement back tracking for more complicated error recovery
-            @error "in function `process_block!`, unexpected token: $k"
+            @error "in function `process_bcurrent_indexk!`, unexpected token: $k"
         end
     end
-    return loc
+    return current_index
 end
 
-function process_for!(tv, loc, text, jp, diagnostics)
-    push!(jp, tv[loc]) # just "for"
-    loc += 1
-    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
+function process_for!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    push!(julia_token_vec, token_vec[current_index]) # just "for"
+    current_index += 1
+    current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
     # TODO: check against newline, because it delimits expressions
     
-    loc = expect!(tv, loc, text, jp, diagnostics, K"(", false)
-    loc = process_for_cond!(tv, loc, text, jp, diagnostics)
-    loc = expect!(tv, loc, text, jp, diagnostics, K")", false)
+    current_index = expect!(token_vec, current_index, text, julia_token_vec, diagnostics, K"(", false)
+    current_index = process_for_cond!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    current_index = expect!(token_vec, current_index, text, julia_token_vec, diagnostics, K")", false)
 
-    loc = expect!(tv, loc, text, jp, diagnostics, K"{", false)
-    loc = process_block!(tv, loc, text, jp, diagnostics)
-    loc = expect!(tv, loc, text, jp, diagnostics, K"}", true, K"end")
-    return loc
+    current_index = expect!(token_vec, current_index, text, julia_token_vec, diagnostics, K"{", false)
+    current_index = process_bcurrent_indexk!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    current_index = expect!(token_vec, current_index, text, julia_token_vec, diagnostics, K"}", true, K"end")
+    return current_index
 end
 
-function expect!(tv, loc, text, jp, diagnostics, expected, copy, sub=nothing)
-    k = kind(tv[loc])
-    if k == expected || k in expected
+
+function expect!(token_vec, current_index, text, julia_token_vec, diagnostics, expected, copy, sub=nothing)
+    if kind(token_vec[current_index]) == expected || kind(token_vec[current_index]) in expected
         if copy
             if isnothing(sub)
-                push!(jp, tv[loc])
+                push!(julia_token_vec, token_vec[current_index])
             else
-                push!(jp, sub)
+                push!(julia_token_vec, sub)
             end
         end
-        loc += 1
+        current_index += 1
     else
-        push!(diagnostics, Diagnostic(tv[loc].range.start, tv[loc].range.stop, :error, "Expected `$expected`"))
+        push!(diagnostics, Diagnostic(token_vec[current_index].range.start, token_vec[current_index].range.stop, :error, "Expected `$expected`"))
     end
-    return loc
+    return current_index
 end
 
-function process_for_cond!(tv, loc, text, jp, diagnostics)
-    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-    k = kind(tv[loc])
-    k != K"Identifier" && push!(diagnostics, Diagnostics(tv[loc].range.start, tv[loc].range.stop, :error, "Expected `loop variable`"))
-    loc = process_variable_name!(tv, loc, text, jp, diagnostics)
+function process_for_cond!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    kind(token_vec[current_index]) != K"Identifier" && push!(diagnostics, Diagnostics(token_vec[current_index].range.start, token_vec[current_index].range.stop, :error, "Expected `loop variable`"))
+    current_index = process_variable_name!(token_vec, current_index, text, julia_token_vec, diagnostics)
 
-    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-    loc = expect!(tv, loc, text, jp, diagnostics, K"in", true)
-    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
+    current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    current_index = expect!(token_vec, current_index, text, julia_token_vec, diagnostics, K"in", true)
+    current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
 
-    loc = expect!(tv, loc, text, jp, diagnostics, K"Integer", true)
-    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-    loc = expect!(tv, loc, text, jp, diagnostics, K":", true)
-    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-    loc = expect!(tv, loc, text, jp, diagnostics, K"Integer", true)
+    current_index = expect!(token_vec, current_index, text, julia_token_vec, diagnostics, K"Integer", true)
+    current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    current_index = expect!(token_vec, current_index, text, julia_token_vec, diagnostics, K":", true)
+    current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    current_index = expect!(token_vec, current_index, text, julia_token_vec, diagnostics, K"Integer", true)
 
-    return loc
+    return current_index
 end
 
-function process_variable_name!(tv, loc, text, jp, diagnostics)
+function process_variable_name!(token_vec, current_index, text, julia_token_vec, diagnostics)
     var_name = ""
-    while kind(head(tv[loc])) == K"Identifier" && kind(head(tv[loc+1])) == K"."
-        var_name *= untokenize(tv[loc], text) * untokenize(tv[loc+1], text)
-        loc += 2
+    if current_index == length(token_vec)
+        push!(js, token_vec[current_index])
+        current_index += 1
+        return current_index
+    end
+    while kind(head(token_vec[current_index])) == K"Identifier" && kind(head(token_vec[current_index+1])) == K"."
+        var_name *= untokenize(token_vec[current_index], text) * untokenize(token_vec[current_index+1], text)
+        current_index += 2
+        if current_index == length(token_vec)
+            push!(js, token_vec[current_index])
+            current_index += 1
+            return current_index
+        end
     end
     if var_name != "" 
-        if kind(head(tv[loc])) == K"Identifier"
-            var_name *= untokenize(tv[loc], text)
-            loc += 1
+        if kind(head(token_vec[current_index])) == K"Identifier"
+            var_name *= untokenize(token_vec[current_index], text)
+            current_index += 1
         else
-            push!(diagnostics, Diagnostic(tv[loc].range.start, tv[loc].range.stop, :error, "Expected `variable name`"))
+            push!(diagnostics, Diagnostic(token_vec[current_index].range.start, token_vec[current_index].range.stop, :error, "Expected `variable name`"))
         end
     else
-        var_name = untokenize(tv[loc], text)
-        loc += 1
+        var_name = untokenize(token_vec[current_index], text)
+        current_index += 1
     end
-    push!(jp, K"var", K"\"", var_name, K"\"")
-    if loc <= length(tv) && kind(tv[loc]) == K"["
-        push!(jp, tv[loc])
-        loc = process_indices!(tv, loc+1, text, jp, diagnostics)
-        loc = expect!(tv, loc, text, jp, diagnostics, K"]", true)
+    push!(julia_token_vec, K"var", K"\"", var_name, K"\"")
+    if current_index <= length(token_vec) && kind(token_vec[current_index]) == K"["
+        push!(julia_token_vec, token_vec[current_index])
+        current_index = process_indices!(token_vec, current_index+1, text, julia_token_vec, diagnostics)
+        current_index = expect!(token_vec, current_index, text, julia_token_vec, diagnostics, K"]", true)
     end
-    return loc
+    return current_index
 end
 
 # example tokenize("[1, 1:2, ]" white space before ] or , is special case, add ":" to the output
-function process_indices!(tv, loc, text, jp, diagnostics)
-    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-    k = kind(tv[loc])
-    if k == K"]"
-        return loc
+function process_indices!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    if kind(token_vec[current_index]) == K"]"
+        return current_index
     end
-    while k != K"]"
-        loc = process_expression!(tv, loc, text, jp, diagnostics)
-        loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-        k = kind(tv[loc])
-        if k == K"]"
-            push!(jp, ":")
-            return loc
-        elseif k == K","
-            push!(jp, tv[loc])
-            loc += 1
-            loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-            k = kind(tv[loc])
+    while kind(token_vec[current_index]) != K"]"
+        current_index = process_expression!(token_vec, current_index, text, julia_token_vec, diagnostics)
+        current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+        if kind(token_vec[current_index]) == K"]"
+            push!(julia_token_vec, ":")
+            return current_index
+        elseif kind(token_vec[current_index]) == K","
+            push!(julia_token_vec, token_vec[current_index])
+            current_index += 1
+            current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
         else
-            push!(diagnostics, Diagnostic(tv[loc].range.start, tv[loc].range.stop, :error, "Expected `,` or `]`"))
+            push!(diagnostics, Diagnostic(token_vec[current_index].range.start, token_vec[current_index].range.stop, :error, "Expected `,` or `]`"))
         end
     end
-    return loc
+    return current_index
 end
 
-function process_expressions!(tv, loc, text, jp, diagnostics)
-    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-    k = kind(tv[loc])
-    loc = process_single_op!(tv, loc, text, jp, diagnostics, [K"+", K"-"]) # check for unary + and -
-    loc = expect!(tv, loc, text, jp, diagnostics, [K"Integer", K"Identifier"], false)
-    while k == K"}" || k == K";" || k == K"NewlineWs" || k == K","
-        loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-        loc = process_single_term!(tv, loc, text, jp, diagnostics)
-        loc = process_single_op!(tv, loc, text, jp, diagnostics, [K"+", K"-", K"*", K"/"])
+function process_expressions!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    current_index = process_single_op!(token_vec, current_index, text, julia_token_vec, diagnostics, [K"+", K"-"]) # check for unary + and -
+    k = kind(token_vec[current_index])
+    if k != K"Identifier" && k != K"Integer" && k != K"Float" && k != K"("
+        push!(diagnostics, Diagnostic(token_vec[current_index].range.start, token_vec[current_index].range.stop, :error, "Expected `expression`"))
     end
-    return loc
+    # TODO: deal with brackets
+    while !(k == K"}" || k == K";" || k == K"NewlineWs" || k == K",")
+        current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+        current_index = process_single_term!(token_vec, current_index, text, julia_token_vec, diagnostics)
+        current_index = process_single_op!(token_vec, current_index, text, julia_token_vec, diagnostics, [K"+", K"-", K"*", K"/"])
+        k = kind(token_vec[current_index])
+    end
+    return current_index
 end
 
-function process_single_term!(tv, loc, text, jp, diagnostics)
-    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-    k = kind(tv[loc])
+function process_single_term!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    current_index == length(token_vec) && return current_index
+    current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    k = kind(token_vec[current_index])
     if k == K"Integer" || k == K"Float"
-        push!(jp, tv[loc])
-        loc += 1
-        return loc
-    else
+        push!(julia_token_vec, token_vec[current_index])
+        current_index += 1
+        return current_index
+    end
     if k == K"Identifier"
-        loc = process_variable_name!(tv, loc, text, jp, diagnostics)
-        if kind(tv[loc+1]) == K"("
-            loc = process_call_args!(tv, loc, text, jp, diagnostics)
-            loc = expect!(tv, loc, text, jp, diagnostics, K")", true)
+        current_index = process_variable_name!(token_vec, current_index, text, julia_token_vec, diagnostics)
+        current_index == length(token_vec) && return current_index
+        if kind(token_vec[current_index+1]) == K"("
+            current_index = process_call_args!(token_vec, current_index, text, julia_token_vec, diagnostics)
+            current_index = expect!(token_vec, current_index, text, julia_token_vec, diagnostics, K")", true)
         end
     else
-        push!(diagnostics, Diagnostic(tv[loc].range.start, tv[loc].range.stop, :error, "Expected `variable name` or `function call`"))
+        push!(diagnostics, Diagnostic(token_vec[current_index].range.start, token_vec[current_index].range.stop, :error, "Expected `variable name` or `function call`"))
     end
-    return loc
+    return current_index
 end
 
-function process_call_args!(tv, loc, text, jp, diagnostics)
-    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-    k = kind(tv[loc])
-    if k == K")"
-        return loc
+function process_call_args!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    if kind(token_vec[current_index]) == K")"
+        return current_index
     end
-    while k != K")"
-        loc = process_expression!(tv, loc, text, jp, diagnostics)
-        loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-        k = kind(tv[loc])
-        if k == K")"
-            return loc
-        elseif k == K","
-            push!(jp, tv[loc])
-            loc += 1
-            loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-            k = kind(tv[loc])
+    while kind(token_vec[current_index]) != K")"
+        current_index = process_expression!(token_vec, current_index, text, julia_token_vec, diagnostics)
+        current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+        if kind(token_vec[current_index]) == K")"
+            return current_index
+        elseif kind(token_vec[current_index]) == K","
+            push!(julia_token_vec, token_vec[current_index])
+            current_index += 1
+            current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
         else
-            push!(diagnostics, Diagnostic(tv[loc].range.start, tv[loc].range.stop, :error, "Expected `,` or `)`"))
+            push!(diagnostics, Diagnostic(token_vec[current_index].range.start, token_vec[current_index].range.stop, :error, "Expected `,` or `)`"))
         end
     end
-    return loc
+    return current_index
 end
 
-function process_single_op!(tv, loc, text, jp, diagnostics, ops)
-    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-    k = kind(tv[loc])
-    if k in ops
-        push!(jp, tv[loc])
-        loc += 1
+function process_single_op!(token_vec, current_index, text, julia_token_vec, diagnostics, ops)
+    current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    if kind(token_vec[current_index]) in ops
+        push!(julia_token_vec, token_vec[current_index])
+        current_index += 1
     end
-    return loc
+    return current_index
 end
 
-function process_assign_sign!(tv, loc, text, jp, diagnostics)
-    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-    k = kind(tv[loc])
-    if k == K"<"
-        if kind(tv[loc+1]) == K"-"
-            push!(jp, K"=")
-            loc += 2
+function process_assign_sign!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    if kind(token_vec[current_index]) == K"<"
+        current_index == length(token_vec) && return current_index
+        if kind(token_vec[current_index+1]) == K"-"
+            push!(julia_token_vec, K"=")
+            current_index += 2
         else
-            push!(diagnostics, Diagnostic(tv[loc].range.start, tv[loc].range.stop, :error, "Expected `<-`"))
+            push!(diagnostics, Diagnostic(token_vec[current_index].range.start, token_vec[current_index].range.stop, :error, "Expected `<-`"))
         end
     else # k == K"<--"
-        push!(jp, K"=")
-        loc += 1
-        loc = process_single_op!(tv, loc, text, jp, diagnostics, [K"-"])
-
+        push!(julia_token_vec, K"=")
+        current_index += 1
+        current_index = process_single_op!(token_vec, current_index, text, julia_token_vec, diagnostics, [K"-"])
     end
-    return loc
+    return current_index
 end
 
-function process_assignment!(tv, loc, text, jp, diagnostics)
-    loc = process_single_term!(tv, loc, text, jp, diagnostics)
-    loc = skip_trivia!(tv, loc, text, jp, diagnostics)
-    if kind(tv[loc]) == K"<" || kind(tv[loc]) == K"<--"
-        loc = process_assign_sign!(tv, loc, text, jp, diagnostics)
-    elseif kind(tv[loc]) == K"~"
-        push!(jp, K"=")
-        loc += 1
+function process_assignment!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    current_index = process_single_term!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    current_index = skip_trivia!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    if kind(token_vec[current_index]) == K"<" || kind(token_vec[current_index]) == K"<--"
+        current_index = process_assign_sign!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    elseif kind(token_vec[current_index]) == K"~"
+        push!(julia_token_vec, K"=")
+        current_index += 1
     else
-        push!(diagnostics, Diagnostic(tv[loc].range.start, tv[loc].range.stop, :error, "Expected `<-` or `~`"))
+        push!(diagnostics, Diagnostic(token_vec[current_index].range.start, token_vec[current_index].range.stop, :error, "Expected `<-` or `~`"))
     end
-    loc = process_expressions!(tv, loc, text, jp, diagnostics)
-    return loc
+    current_index = process_expressions!(token_vec, current_index, text, julia_token_vec, diagnostics)
+    return current_index
 end
