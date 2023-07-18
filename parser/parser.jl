@@ -1,6 +1,10 @@
 using JuliaSyntax
 using JuliaSyntax: @K_str, @KSet_str, tokenize, untokenize, Diagnostic
 
+# ! the point is: for any program not in BUGS syntax, an error will be reported
+# ! we really want to make this robust and well coded, so that we don't have to retouch this heavily in the future
+# TODO: add tests and documentation (consider interpolations)  
+
 # the general idea is:
 # 1. use `tokenize` to get the token vector
 # 2. inspect tokens and build the Julia version of the program in the form of a vector of tokens
