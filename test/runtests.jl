@@ -71,19 +71,20 @@ end
     model = compile(model_def, data, inits)
 end
 
-function compare_dppl_bugs_logps(dppl_model, bugs_model, transform=false)
+function compare_dppl_bugs_logps(dppl_model, bugs_model, if_transform=false)
     turing_logp = getlogp(
         last(
             DynamicPPL.evaluate!!(
                 dppl_model,
-                DynamicPPL.settrans!!(bugs_model.varinfo, transform),
+                DynamicPPL.settrans!!(bugs_model.varinfo, if_transform),
                 DynamicPPL.DefaultContext(),
             ),
         ),
     )
     bugs_logp = getlogp(
-        evaluate!!(DynamicPPL.settrans!!(bugs_model, transform), JuliaBUGS.DefaultContext())
+        evaluate!!(DynamicPPL.settrans!!(bugs_model, if_transform), JuliaBUGS.DefaultContext())
     )
+    @show turing_logp bugs_logp
     @test turing_logp ≈ bugs_logp atol = 1e-6
 end
 
