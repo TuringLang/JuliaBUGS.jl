@@ -132,7 +132,7 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
         args = [vi[x] for x in node_args]
         if node_type == JuliaBUGS.Logical
             value = (node_function)(args...)
-            @assert value isa Union{Number,Array{<:Number}}
+            @assert value isa Union{Number,Array{<:Number}} "$value is not a number or array"
             vi = setindex!!(vi, value, vn)
         else
             dist = (node_function)(args...)
@@ -193,6 +193,14 @@ end
 
 function DynamicPPL.settrans!!(m::BUGSModel)
     return @set m.vi = DynamicPPL.settrans!!(vi, transform_variables)
+end
+
+function get_params_varinfo(m::BUGSModel)
+    d = Dict{VarName,Any}()
+    for param in m.parameters
+        d[param] = m.varinfo[param]
+    end
+    return SimpleVarInfo(d)
 end
 
 """
