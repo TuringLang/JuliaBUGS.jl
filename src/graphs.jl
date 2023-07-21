@@ -258,6 +258,7 @@ end
 AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultContext())
 function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model
+    logp_sites = Dict()
     vi = deepcopy(varinfo)
     logp = 0.0
     for vn in sorted_nodes
@@ -272,16 +273,19 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
             dist = transformed(dist, bijector_of_link_function(link_function))
         end
         value = vi[vn]
+        _logp = logp
         if DynamicPPL.transformation(vi) isa DynamicPPL.DynamicTransformation
             value_transformed, logabsdetjac = with_logabsdet_jacobian(
                 Bijectors.inverse(bijector(dist)), value
             )
             logp += logpdf(dist, value_transformed) + logabsdetjac
+            logp_sites[vn] = (logp - _logp, value_transformed, dist)
         else
             logp += logpdf(dist, value)
+            logp_sites[vn] = (logp - _logp, value, dist)
         end
     end
-    return @set vi.logp = logp
+    return (@set vi.logp = logp), logp_sites
 end
 
 function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVector)

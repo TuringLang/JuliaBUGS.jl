@@ -6,6 +6,8 @@ using Setfield
 using Test
 using UnPack
 
+using DynamicPPL: getlogp, settrans!!
+
 using JuliaBUGS:
     CollectVariables, program!, Var, Stochastic, Logical, evaluate!!, DefaultContext
 using JuliaBUGS.BUGSPrimitives
