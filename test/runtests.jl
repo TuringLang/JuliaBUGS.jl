@@ -99,5 +99,5 @@ end
     include("logp_dynamicppl/blockers.jl")
     include("logp_dynamicppl/bones.jl")
     # include("logp_dynamicppl/dogs.jl") # dogs is a strange example, come back to this later
-    include("logp_dynamicppl/rats.jl")
+    # include("logp_dynamicppl/rats.jl")
 end
