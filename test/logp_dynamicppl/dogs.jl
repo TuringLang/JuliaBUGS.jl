@@ -4,25 +4,22 @@ inits = JuliaBUGS.BUGSExamples.VOLUME_I[:dogs].inits[1]
 
 bugs_model = compile(bugs_model_def, data, inits)
 
-@model function dogs(Y, Dogs, Trials)
-    alpha ~ dunif(-10, -0.00001)
-    beta ~ dunif(-10, -0.00001)
+JuliaBUGS.get_params_varinfo(bugs_model)
 
-    xa = Matrix{Real}(undef, Dogs, Trials)
-    xs = Matrix{Real}(undef, Dogs, Trials)
+@model function dogs(Dogs, Trials, y)
+    alpha ~ RightTruncatedFlat(-0.00001)
+    beta ~ RightTruncatedFlat(-0.00001)
+
     p = Matrix{Real}(undef, Dogs, Trials)
-    y = Matrix{Real}(undef, Dogs, Trials)
+    for i in 1:Dogs
+        p[i, 1] = 0
+        for j in 2:Trials
+            p[i, j] = exp(alpha * xa[i, j] + beta * xs[i, j])
+        end
+    end
 
     for i in 1:Dogs
-        xa[i, 1] = 0
-        xs[i, 1] = 0
-        p[i, 1] = 0
-
         for j in 2:Trials
-            xa[i, j] = sum(Y[i, 1:(j - 1)])
-            xs[i, j] = j - 1 - xa[i, j]
-            p[i, j] = exp(alpha * xa[i, j] + beta * xs[i, j])
-            y[i, j] = 1 - Y[i, j]
             y[i, j] ~ dbern(p[i, j])
         end
     end
@@ -34,9 +31,21 @@ bugs_model = compile(bugs_model_def, data, inits)
 end
 
 @unpack Dogs, Trials, Y = data
-dppl_model = dogs(Y, Dogs, Trials)
+y = Matrix{Real}(undef, Dogs, Trials)
+xa = Matrix{Real}(undef, Dogs, Trials)
+xs = Matrix{Real}(undef, Dogs, Trials)
+for i in 1:Dogs
+    xa[i, 1] = 0
+    xs[i, 1] = 0
+    for j in 2:Trials
+        xa[i, j] = sum(Y[i, 1:(j - 1)])
+        xs[i, j] = j - 1 - xa[i, j]
+        y[i, j] = 1 - Y[i, j]
+    end
+end
+dppl_model = dogs(Dogs, Trials, y)
 
-for t in [true, false]
+for t in [false, true]
     compare_dppl_bugs_logps(dppl_model, bugs_model, t)
 end
 

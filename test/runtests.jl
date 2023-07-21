@@ -86,7 +86,7 @@ function compare_dppl_bugs_logps(dppl_model, bugs_model, if_transform=false)
     bugs_logp = getlogp(
         evaluate!!(DynamicPPL.settrans!!(bugs_model, if_transform), JuliaBUGS.DefaultContext())
     )
-    @show turing_logp bugs_logp
+    @debug turing_logp bugs_logp
     @test turing_logp ≈ bugs_logp atol = 1e-6
 end
 
@@ -94,8 +94,8 @@ end
     include("logp_dynamicppl/binomial.jl")
     include("logp_dynamicppl/gamma.jl")
 
-    # include("logp_dynamicppl/blockers.jl")
-    # include("logp_dynamicppl/bones.jl")
-    # include("logp_dynamicppl/dogs.jl")
+    include("logp_dynamicppl/blockers.jl")
+    include("logp_dynamicppl/bones.jl")
+    # include("logp_dynamicppl/dogs.jl") # dogs is a strange example, come back to this later
     include("logp_dynamicppl/rats.jl")
 end
