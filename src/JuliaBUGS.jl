@@ -36,7 +36,7 @@ include("logdensityproblems.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 
-function check_input(input::Union{NamedTuple, AbstractDict})
+function check_input(input::Union{NamedTuple,AbstractDict})
     for (k, v) in input
         @assert k isa Symbol "Variable name $k must be a Symbol"
 
@@ -142,7 +142,11 @@ Compile a BUGS model into a log density problem.
 # Returns
 - A [`BUGSModel`](@ref) object representing the compiled model.
 """
-function compile(model_def::Expr, data::Union{NamedTuple, AbstractDict}, initializations::Union{NamedTuple, AbstractDict})
+function compile(
+    model_def::Expr,
+    data::Union{NamedTuple,AbstractDict},
+    initializations::Union{NamedTuple,AbstractDict},
+)
     return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
 end
 function compile(model_def::Expr, data::AbstractDict, inits::AbstractDict)

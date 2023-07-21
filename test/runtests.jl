@@ -84,7 +84,9 @@ function compare_dppl_bugs_logps(dppl_model, bugs_model, if_transform=false)
         ),
     )
     bugs_logp = getlogp(
-        evaluate!!(DynamicPPL.settrans!!(bugs_model, if_transform), JuliaBUGS.DefaultContext())
+        evaluate!!(
+            DynamicPPL.settrans!!(bugs_model, if_transform), JuliaBUGS.DefaultContext()
+        ),
     )
     @debug turing_logp bugs_logp
     @test turing_logp ≈ bugs_logp atol = 1e-6
