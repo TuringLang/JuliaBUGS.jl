@@ -23,7 +23,6 @@ model_def = @bugsast begin
     alpha0 = alpha_c - xbar * beta_c
 end
 bugs_model = compile(model_def, data, inits);
-params_vi = JuliaBUGS.get_params_varinfo(bugs_model)
 
 @model function rats(Y, x, xbar, N, T)
     tau_c ~ dgamma(0.001, 0.001)
@@ -54,10 +53,11 @@ params_vi = JuliaBUGS.get_params_varinfo(bugs_model)
 end
 dppl_model = rats(Y, x, xbar, N, T)
 
-# test if JuliaBUGS and DynamicPPL agree on parameters in the model
-@test params_in_dppl_model(dppl_model) == keys(vi)
-
 vi, bugs_logp = get_vi_logp(bugs_model, false)
+params_vi = JuliaBUGS.get_params_varinfo(bugs_model, vi)
+# test if JuliaBUGS and DynamicPPL agree on parameters in the model
+@test params_in_dppl_model(dppl_model) == keys(params_vi)
+
 vi, dppl_logp = get_vi_logp(dppl_model, vi, false)
 @test bugs_logp ≈ -174029.387 rtol = 1E-6 # reference value from ProbPALA
 @test bugs_logp ≈ dppl_logp rtol = 1E-6

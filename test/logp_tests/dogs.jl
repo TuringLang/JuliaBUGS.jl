@@ -4,26 +4,31 @@ inits = JuliaBUGS.BUGSExamples.VOLUME_I[:dogs].inits[1]
 
 bugs_model = compile(bugs_model_def, data, inits)
 
-JuliaBUGS.get_params_varinfo(bugs_model)
-
-@model function dogs(Dogs, Trials, y)
-    alpha ~ RightTruncatedFlat(-0.00001)
-    beta ~ RightTruncatedFlat(-0.00001)
-
-    p = Matrix{Real}(undef, Dogs, Trials)
+@model function dogs(Dogs, Trials, Y, y)
+    # Initialize matrices
+    xa = zeros(Dogs, Trials)
+    xs = zeros(Dogs, Trials)
+    p = zeros(Dogs, Trials)
+    
+    # Flat priors for alpha and beta, restricted to (-∞, -0.00001)
+    alpha ~ dunif(-10, -1.0e-5)
+    beta ~ dunif(-10, -1.0e-5)
+    
     for i in 1:Dogs
+        xa[i, 1] = 0
+        xs[i, 1] = 0
         p[i, 1] = 0
-        for j in 2:Trials
-            p[i, j] = exp(alpha * xa[i, j] + beta * xs[i, j])
-        end
-    end
 
-    for i in 1:Dogs
         for j in 2:Trials
+            xa[i, j] = sum(Y[i, 1:j-1])
+            xs[i, j] = j - 1 - xa[i, j]
+            p[i, j] = exp(alpha * xa[i, j] + beta * xs[i, j])
+            # The Bernoulli likelihood
             y[i, j] ~ dbern(p[i, j])
         end
     end
 
+    # Transformation to positive values
     A = exp(alpha)
     B = exp(beta)
 
@@ -31,43 +36,17 @@ JuliaBUGS.get_params_varinfo(bugs_model)
 end
 
 @unpack Dogs, Trials, Y = data
-y = Matrix{Real}(undef, Dogs, Trials)
-xa = Matrix{Real}(undef, Dogs, Trials)
-xs = Matrix{Real}(undef, Dogs, Trials)
-for i in 1:Dogs
-    xa[i, 1] = 0
-    xs[i, 1] = 0
-    y[i, 1] = 0
-    for j in 2:Trials
-        xa[i, j] = sum(Y[i, 1:(j - 1)])
-        xs[i, j] = j - 1 - xa[i, j]
-        y[i, j] = 1 - Y[i, j]
-    end
-end
-dppl_model = dogs(Dogs, Trials, y)
-##
-for t in [false, true]
-    compare_dppl_bugs_logps(dppl_model, bugs_model, t)
-end
+dppl_model = dogs(Dogs, Trials, Y, 1 .- Y)
 
-# this currently broken
-# at first glance, `y` is going to be sampled, but since I am using the `DefaultContext`, does it matter?
+vi, bugs_logp = get_vi_logp(bugs_model, false)
+# test if JuliaBUGS and DynamicPPL agree on parameters in the model
+# @test params_in_dppl_model(dppl_model) == keys(vi)
+vi = JuliaBUGS.get_params_varinfo(bugs_model, vi)
 
-if_transform=false
-turing_logp = getlogp(
-    last(
-        DynamicPPL.evaluate!!(
-            dppl_model,
-            DynamicPPL.settrans!!(bugs_model.varinfo, false),
-            DynamicPPL.DefaultContext(),
-        ),
-    ),
-)
-bugs_logp = getlogp(
-    evaluate!!(
-        DynamicPPL.settrans!!(bugs_model, false), JuliaBUGS.DefaultContext()
-    ),
-)
+_, dppl_logp = get_vi_logp(dppl_model, vi, false)
+@test bugs_logp ≈ -1243.188922 rtol = 1E-6 # reference value from ProbPALA
+@test bugs_logp ≈ dppl_logp rtol = 1E-6
 
-# ProbPALA reference: -1243.188922
-
+vi, bugs_logp = get_vi_logp(bugs_model, true)
+vi, dppl_logp = get_vi_logp(dppl_model, vi, true)
+@test bugs_logp ≈ dppl_logp rtol = 1E-6

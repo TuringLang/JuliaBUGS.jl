@@ -36,10 +36,7 @@ end
 
 function get_vi_logp(model::JuliaBUGS.BUGSModel, if_transform)
     vi = JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(model, if_transform))
-    return settrans!!(
-        JuliaBUGS.get_params_varinfo((@set model.varinfo = vi)), if_transform
-    ),
-    getlogp(vi)
+    return vi, getlogp(vi)
 end
 
 function params_in_dppl_model(dppl_model)
@@ -51,14 +48,15 @@ function params_in_dppl_model(dppl_model)
 end
 
 @testset "$s" for s in [
-    # simple cases
-    binomial,
-    gamma,
+    # single stochastic variable tests
+    :binomial,
+    :gamma,
+
     # BUGS examples
-    blockers,
-    bones,
-    # dogs,
-    rats,
+    :blockers,
+    :bones,
+    :dogs,
+    :rats,
 ]
     include("logp_tests/$s.jl")
 end

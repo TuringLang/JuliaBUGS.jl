@@ -33,6 +33,15 @@ end
 @unpack rt, nt, rc, nc, Num = data
 dppl_model = blockers(rc, rt, nc, nt, Num)
 
-for t in [true, false]
-    compare_dppl_bugs_logps(dppl_model, bugs_model, t)
-end
+vi, bugs_logp = get_vi_logp(bugs_model, false)
+params_vi = JuliaBUGS.get_params_varinfo(bugs_model, vi)
+# test if JuliaBUGS and DynamicPPL agree on parameters in the model
+@test params_in_dppl_model(dppl_model) == keys(params_vi)
+
+vi, dppl_logp = get_vi_logp(dppl_model, vi, false)
+@test bugs_logp ≈ -8418.416388 rtol = 1E-6
+@test bugs_logp ≈ dppl_logp rtol = 1E-6
+
+vi, bugs_logp = get_vi_logp(bugs_model, true)
+vi, dppl_logp = get_vi_logp(dppl_model, vi, true)
+@test bugs_logp ≈ dppl_logp rtol = 1E-6

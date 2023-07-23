@@ -194,11 +194,14 @@ function _length(vn::VarName)
 end
 
 function get_params_varinfo(m::BUGSModel)
+    return get_params_varinfo(m, m.varinfo)
+end
+function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
     d = Dict{VarName,Any}()
     for param in m.parameters
-        d[param] = m.varinfo[param]
+        d[param] = vi[param]
     end
-    return SimpleVarInfo(d, m.varinfo.logp)
+    return SimpleVarInfo(d, vi.logp, vi.transformation)
 end
 
 """
