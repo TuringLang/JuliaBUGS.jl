@@ -26,7 +26,7 @@ function load_dictionary(example_name, data_or_init, replace_period=true)
     else
         error("data_or_init must be either :data or :init")
     end
-    d = Dict{Symbol, Any}()
+    d = Dict{Symbol,Any}()
     for _k in keys(_d)
         if replace_period
             k = Symbol(replace(String(_k), "." => "_"))
@@ -36,8 +36,12 @@ function load_dictionary(example_name, data_or_init, replace_period=true)
     return d
 end
 
+# ! reloading `DynamicPPL.tilde_assume` so that: when variable has value varinfo, `assume` return the 
+# value instead of the transformed value
 import DynamicPPL: tilde_assume
-function DynamicPPL.tilde_assume(::DynamicPPL.IsLeaf, context::DynamicPPL.DefaultContext, right, vn, vi)
+function DynamicPPL.tilde_assume(
+    ::DynamicPPL.IsLeaf, context::DynamicPPL.DefaultContext, right, vn, vi
+)
     r = vi[vn, right]
     # return vi[vn], Bijectors.logpdf_with_trans(right, r, istrans(vi, vn)), vi
     return r, Bijectors.logpdf_with_trans(right, r, istrans(vi, vn)), vi
@@ -51,25 +55,22 @@ function get_vi_logp(model::DynamicPPL.Model, varinfo, if_transform)
 end
 
 function get_vi_logp(model::JuliaBUGS.BUGSModel, if_transform)
-    vi = JuliaBUGS.evaluate!!(
-        DynamicPPL.settrans!!(model, if_transform)
-    )
-    return settrans!!(JuliaBUGS.get_params_varinfo((@set model.varinfo = vi)), if_transform), getlogp(vi)
+    vi = JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(model, if_transform))
+    return settrans!!(
+        JuliaBUGS.get_params_varinfo((@set model.varinfo = vi)), if_transform
+    ),
+    getlogp(vi)
 end
 
-include("logp_dynamicppl/binomial.jl")
-include("logp_dynamicppl/gamma.jl")
-
-include("logp_dynamicppl/blockers.jl")
-include("logp_dynamicppl/bones.jl")
-# include("logp_dynamicppl/dogs.jl") # dogs is a strange example, come back to this later
-include("logp_dynamicppl/rats.jl")
-
-# why DynamicPPL is not a good target to test BUGS models
-# currently, I produce a varinfo with the BUGS model
-# I initially thought, by using this varinfo with `evaluate!!` with DefaultContext 
-
-# TODO: write a `Context` that only use values from VarInfo and disregard other things 
-
-# the issue is, it does use the value from VarInfo, but it bind the variable to a transformed value because it hits the 
-# `isassumption` clause
+@testset "$s" for s in [
+    # simple cases
+    binomial,
+    gamma,
+    # BUGS examples
+    blockers,
+    bones,
+    # dogs,
+    rats,
+]
+    include("logp_dynamicppl/$s.jl")
+end
