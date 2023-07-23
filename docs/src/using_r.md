@@ -129,7 +129,7 @@ OrderedDict{Symbol, Any} with 1 entry:
   :a_b => 1.0
 ```
 
-The issue here is that the data layout in BUGS assumes the data is stored in row-major order, while R stores data in column-major order.
+The issue here is that the data layout in BUGS assumes the data is stored in row-major order, while R stores data in column-major order. (`Stan` developers has worked out data and initializations of BUGS models in R, and can be found [here](https://github.com/stan-dev/example-models/tree/master/bugs_examples))
 
 If you want to load data using the R interface, but the data source is in the same layout as BUGS, you can process the data in Julia, for instance
 ```julia

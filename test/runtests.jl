@@ -1,3 +1,4 @@
+using AbstractPPL
 using Bijectors
 using Documenter
 using DynamicPPL
@@ -73,31 +74,6 @@ end
     model = compile(model_def, data, inits)
 end
 
-function compare_dppl_bugs_logps(dppl_model, bugs_model, if_transform=false)
-    turing_logp = getlogp(
-        last(
-            DynamicPPL.evaluate!!(
-                dppl_model,
-                DynamicPPL.settrans!!(bugs_model.varinfo, if_transform),
-                DynamicPPL.DefaultContext(),
-            ),
-        ),
-    )
-    bugs_logp = getlogp(
-        evaluate!!(
-            DynamicPPL.settrans!!(bugs_model, if_transform), JuliaBUGS.DefaultContext()
-        ),
-    )
-    @debug turing_logp bugs_logp
-    @test turing_logp ≈ bugs_logp atol = 1e-6
-end
-
 @testset "Log Joint with DynamicPPL" begin
-    include("logp_dynamicppl/binomial.jl")
-    include("logp_dynamicppl/gamma.jl")
-
-    include("logp_dynamicppl/blockers.jl")
-    include("logp_dynamicppl/bones.jl")
-    # include("logp_dynamicppl/dogs.jl") # dogs is a strange example, come back to this later
-    include("logp_dynamicppl/rats.jl")
+    include("run_logp_tests.jl")
 end
