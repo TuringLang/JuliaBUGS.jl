@@ -15,7 +15,7 @@ end
 
 regression_data = (x=[1, 2, 3, 4, 5], Y=[1, 3, 3, 3, 5], x̄=3, N=5)
 
-rats = @bugsast begin
+_rats = @bugsast begin
     for i in 1:N
         for j in 1:T
             Y[i, j] ~ dnorm(μ[i, j], τ_c)
@@ -34,7 +34,7 @@ rats = @bugsast begin
     α₀ = α_c - x̄ * β_c
 end
 
-hearts = @bugsast begin
+_hearts = @bugsast begin
     for i in 1:N
         y[i] ~ dbin(q[i], t[i])
         q[i] = P[state1[i]]
@@ -52,7 +52,7 @@ hearts = @bugsast begin
     delta ~ dnorm(0, 1e-4)
 end
 
-regions1 = @bugsast begin
+_regions1 = @bugsast begin
     x[1] = 10
     x[2] ~ dnorm(0, 1)
     for i in 1:x[1]
@@ -60,14 +60,14 @@ regions1 = @bugsast begin
     end
 end
 
-regions2 = @bugsast begin
+_regions2 = @bugsast begin
     x[2] ~ dnorm(0, 1)
     for i in 1:x[1]
         y[i] = i
     end
 end
 
-regions3 = @bugsast begin
+_regions3 = @bugsast begin
     x1 = 10
     x2 ~ dnorm(0, 1)
     for i in 1:x1
@@ -75,13 +75,13 @@ regions3 = @bugsast begin
     end
 end
 
-interpolated = @bugsast begin
+_interpolated = @bugsast begin
     x = exp($(Expr(:call, :f, 10)))
     y = x[$("sdf")] # muahaha...
 end
 
 # bugsmodel
-kidney_transplants = bugsmodel"""
+_kidney_transplants = bugsmodel"""
 for (i in 1:N) {
     Score[i] ~ dcat(p[i,])
     p[i,1] <- 1 - Q[i,1]
