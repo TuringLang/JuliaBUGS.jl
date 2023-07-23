@@ -1,22 +1,3 @@
-function compare_dppl_bugs_logps(dppl_model, bugs_model, if_transform=false)
-    turing_logp = getlogp(
-        last(
-            DynamicPPL.evaluate!!(
-                dppl_model,
-                DynamicPPL.settrans!!(bugs_model.varinfo, if_transform),
-                DynamicPPL.DefaultContext(),
-            ),
-        ),
-    )
-    bugs_logp = getlogp(
-        evaluate!!(
-            DynamicPPL.settrans!!(bugs_model, if_transform), JuliaBUGS.DefaultContext()
-        ),
-    )
-    @debug turing_logp bugs_logp
-    @test turing_logp ≈ bugs_logp atol = 1e-6
-end
-
 function load_dictionary(example_name, data_or_init, replace_period=true)
     example = JuliaBUGS.BUGSExamples.VOLUME_I[example_name]
     if data_or_init == :data
@@ -43,8 +24,7 @@ function DynamicPPL.tilde_assume(
     ::DynamicPPL.IsLeaf, context::DynamicPPL.DefaultContext, right, vn, vi
 )
     r = vi[vn, right]
-    # return vi[vn], Bijectors.logpdf_with_trans(right, r, istrans(vi, vn)), vi
-    return r, Bijectors.logpdf_with_trans(right, r, istrans(vi, vn)), vi
+    return vi[vn], Bijectors.logpdf_with_trans(right, r, istrans(vi, vn)), vi
 end
 
 function get_vi_logp(model::DynamicPPL.Model, varinfo, if_transform)
@@ -62,6 +42,14 @@ function get_vi_logp(model::JuliaBUGS.BUGSModel, if_transform)
     getlogp(vi)
 end
 
+function params_in_dppl_model(dppl_model)
+    return keys(
+        DynamicPPL.evaluate!!(
+            dppl_model, SimpleVarInfo(Dict{VarName,Any}()), DynamicPPL.SamplingContext()
+        )[2],
+    )
+end
+
 @testset "$s" for s in [
     # simple cases
     binomial,
@@ -72,5 +60,5 @@ end
     # dogs,
     rats,
 ]
-    include("logp_dynamicppl/$s.jl")
+    include("logp_tests/$s.jl")
 end

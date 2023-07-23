@@ -37,6 +37,7 @@ xs = Matrix{Real}(undef, Dogs, Trials)
 for i in 1:Dogs
     xa[i, 1] = 0
     xs[i, 1] = 0
+    y[i, 1] = 0
     for j in 2:Trials
         xa[i, j] = sum(Y[i, 1:(j - 1)])
         xs[i, j] = j - 1 - xa[i, j]
@@ -44,10 +45,29 @@ for i in 1:Dogs
     end
 end
 dppl_model = dogs(Dogs, Trials, y)
-
+##
 for t in [false, true]
     compare_dppl_bugs_logps(dppl_model, bugs_model, t)
 end
 
 # this currently broken
 # at first glance, `y` is going to be sampled, but since I am using the `DefaultContext`, does it matter?
+
+if_transform=false
+turing_logp = getlogp(
+    last(
+        DynamicPPL.evaluate!!(
+            dppl_model,
+            DynamicPPL.settrans!!(bugs_model.varinfo, false),
+            DynamicPPL.DefaultContext(),
+        ),
+    ),
+)
+bugs_logp = getlogp(
+    evaluate!!(
+        DynamicPPL.settrans!!(bugs_model, false), JuliaBUGS.DefaultContext()
+    ),
+)
+
+# ProbPALA reference: -1243.188922
+

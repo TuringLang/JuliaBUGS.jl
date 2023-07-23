@@ -1,78 +1,8 @@
 # prepare data
-data = JuliaBUGS.BUGSExamples.VOLUME_I[:rats].data
-@unpack N, T, x, xbar, Y = data
+data = load_dictionary(:rats, :data, true)
+inits = load_dictionary(:rats, :init, true)
 
-inits = (
-    alpha=[
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-        250,
-    ],
-    beta=[
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-        6,
-    ],
-    alpha_c=150,
-    beta_c=10,
-    tau_c=1,
-    alpha_tau=1,
-    beta_tau=1,
-)
+@unpack N, T, x, xbar, Y = data
 
 # prepare models
 model_def = @bugsast begin
@@ -122,13 +52,16 @@ params_vi = JuliaBUGS.get_params_varinfo(bugs_model)
 
     return sigma, alpha0
 end
-
 dppl_model = rats(Y, x, xbar, N, T)
-svi = DynamicPPL.evaluate!!(
-    dppl_model, SimpleVarInfo(Dict{VarName,Any}()), DynamicPPL.SamplingContext()
-)[2]
-keys(params_vi.values) == keys(svi.values) # test that the parameters match
 
-for t in [true, false]
-    compare_dppl_bugs_logps(dppl_model, bugs_model, t)
-end
+# test if JuliaBUGS and DynamicPPL agree on parameters in the model
+@test params_in_dppl_model(dppl_model) == keys(vi)
+
+vi, bugs_logp = get_vi_logp(bugs_model, false)
+vi, dppl_logp = get_vi_logp(dppl_model, vi, false)
+@test bugs_logp ≈ -174029.387 rtol = 1E-6 # reference value from ProbPALA
+@test bugs_logp ≈ dppl_logp rtol = 1E-6
+
+vi, bugs_logp = get_vi_logp(bugs_model, true)
+vi, dppl_logp = get_vi_logp(dppl_model, vi, true)
+@test bugs_logp ≈ dppl_logp rtol = 1E-6
