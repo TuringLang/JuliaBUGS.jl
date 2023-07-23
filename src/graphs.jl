@@ -17,6 +17,7 @@ struct ConcreteNodeInfo <: NodeInfo
     node_type::VariableTypes
     link_function::Function
     node_function::Function
+    node_function_expr::Expr
     node_args::Vector{VarName}
 end
 
@@ -25,6 +26,7 @@ function ConcreteNodeInfo(var::Var, vars, link_functions, node_functions, node_a
         vars[var],
         eval(link_functions[var]),
         eval(node_functions[var]),
+        node_functions[var],
         map(v -> AbstractPPL.VarName{v.name}(AbstractPPL.IdentityLens()), node_args[var]),
     )
 end
@@ -191,16 +193,12 @@ function _length(vn::VarName)
     return prod([length(index_range) for index_range in getlens(vn).indices])
 end
 
-function DynamicPPL.settrans!!(m::BUGSModel)
-    return @set m.vi = DynamicPPL.settrans!!(vi, transform_variables)
-end
-
 function get_params_varinfo(m::BUGSModel)
     d = Dict{VarName,Any}()
     for param in m.parameters
         d[param] = m.varinfo[param]
     end
-    return SimpleVarInfo(d)
+    return SimpleVarInfo(d, m.varinfo.logp)
 end
 
 """
@@ -276,7 +274,6 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
             value_transformed, logabsdetjac = with_logabsdet_jacobian(
                 Bijectors.inverse(bijector(dist)), value
             )
-            setindex!!(vi, value_transformed, vn) # if DynamicTransformation, vi stores the transformed values
             logp += logpdf(dist, value_transformed) + logabsdetjac
         else
             logp += logpdf(dist, value)
