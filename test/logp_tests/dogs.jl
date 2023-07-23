@@ -9,18 +9,18 @@ bugs_model = compile(bugs_model_def, data, inits)
     xa = zeros(Dogs, Trials)
     xs = zeros(Dogs, Trials)
     p = zeros(Dogs, Trials)
-    
+
     # Flat priors for alpha and beta, restricted to (-∞, -0.00001)
     alpha ~ dunif(-10, -1.0e-5)
     beta ~ dunif(-10, -1.0e-5)
-    
+
     for i in 1:Dogs
         xa[i, 1] = 0
         xs[i, 1] = 0
         p[i, 1] = 0
 
         for j in 2:Trials
-            xa[i, j] = sum(Y[i, 1:j-1])
+            xa[i, j] = sum(Y[i, 1:(j - 1)])
             xs[i, j] = j - 1 - xa[i, j]
             p[i, j] = exp(alpha * xa[i, j] + beta * xs[i, j])
             # The Bernoulli likelihood
