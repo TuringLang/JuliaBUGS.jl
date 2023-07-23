@@ -53,3 +53,17 @@ function plot(graph::BUGSGraph, parameters::Vector{VarName})
     )
 end
 ```
+
+## Providing observations for parameters of the model will break the dependencies
+E.g.
+```julia
+model_def = @bugast begin
+    a ~ Normal(0, 1)
+    b ~ Normal(0, 1)
+    c ~ Normal(a, b)
+end
+
+data = (a=1.0, b=2.0)
+```
+the generated graph in this case will not contain edges `a -> c` and `b -> c`. And node function of `c` will be `c ~ Normal(1.0, 2.0)`. Ancestral sampling in this model will not sample `a` and `b` and will only sample `c` from `Normal(1.0, 2.0)`.
+This behavior suggests that the model is constructed with the model definition and **the data**. Given different data, the model constructed may have different behaviors.
