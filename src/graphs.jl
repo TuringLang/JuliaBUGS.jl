@@ -17,6 +17,7 @@ struct ConcreteNodeInfo <: NodeInfo
     node_type::VariableTypes
     link_function::Function
     node_function::Function
+    node_function_expr::Expr
     node_args::Vector{VarName}
 end
 
@@ -25,6 +26,7 @@ function ConcreteNodeInfo(var::Var, vars, link_functions, node_functions, node_a
         vars[var],
         eval(link_functions[var]),
         eval(node_functions[var]),
+        node_functions[var],
         map(v -> AbstractPPL.VarName{v.name}(AbstractPPL.IdentityLens()), node_args[var]),
     )
 end
@@ -132,7 +134,7 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
         args = [vi[x] for x in node_args]
         if node_type == JuliaBUGS.Logical
             value = (node_function)(args...)
-            @assert value isa Union{Number,Array{<:Number}}
+            @assert value isa Union{Number,Array{<:Number}} "$value is not a number or array"
             vi = setindex!!(vi, value, vn)
         else
             dist = (node_function)(args...)
@@ -191,8 +193,15 @@ function _length(vn::VarName)
     return prod([length(index_range) for index_range in getlens(vn).indices])
 end
 
-function DynamicPPL.settrans!!(m::BUGSModel)
-    return @set m.vi = DynamicPPL.settrans!!(vi, transform_variables)
+function get_params_varinfo(m::BUGSModel)
+    return get_params_varinfo(m, m.varinfo)
+end
+function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
+    d = Dict{VarName,Any}()
+    for param in m.parameters
+        d[param] = vi[param]
+    end
+    return SimpleVarInfo(d, vi.logp, vi.transformation)
 end
 
 """
