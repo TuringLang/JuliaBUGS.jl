@@ -86,7 +86,7 @@ ERROR: The arrays in key 'a' have different non-missing values at the same posit
 ```
 """
 function merge_collections(d1, d2, output_NamedTuple=true)
-    merged_dict = Dict{Symbol, Any}()
+    merged_dict = Dict{Symbol,Any}()
 
     for key in Base.union(keys(d1), keys(d2))
         in_both_dicts = haskey(d1, key) && haskey(d2, key)
