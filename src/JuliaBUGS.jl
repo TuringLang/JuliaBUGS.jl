@@ -159,6 +159,9 @@ function compile(model_def::Expr, data, inits)
     return Base.invokelatest(
         BUGSModel, g, sorted_nodes, vars, array_sizes, merged_data, inits
     )
+    # return BUGSModel(
+    #     g, sorted_nodes, vars, array_sizes, merged_data, inits
+    # )
 end
 
 end
