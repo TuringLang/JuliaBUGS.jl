@@ -111,7 +111,13 @@ end
 # `_eval` mimic `eval` function, but use precompiled functions. This is possible because BUGS essentially only has
 # two kinds of expressions: function calls and indexing.
 # `env` is a dictionary mapping symbols in `expr` to values, values can be arrays or scalars
-_eval(expr::Symbol, env) = env[expr]
+function _eval(expr::Symbol, env)
+    if expr == :nothing
+        return nothing
+    else # intentional strict, all corner cases should be handled above
+        return env[expr]
+    end
+end
 function _eval(expr::Expr, env)
     if Meta.isexpr(expr, :call) # TODO: should check that the function is defined
         f = expr.args[1]

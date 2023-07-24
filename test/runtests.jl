@@ -74,6 +74,17 @@ end
     model = compile(model_def, data, inits)
 end
 
-@testset "Log Joint with DynamicPPL" begin
-    include("run_logp_tests.jl")
+include("run_logp_tests.jl")
+@testset "Log Density test for $s" for s in [
+    # single stochastic variable tests
+    :binomial,
+    :gamma,
+
+    # BUGS examples
+    :blockers,
+    :bones,
+    :dogs,
+    :rats,
+]
+    include("logp_tests/$s.jl")
 end
