@@ -16,6 +16,37 @@ include("distributions.jl")
 InverseFunctions.inverse(::typeof(phi)) = probit
 InverseFunctions.inverse(::typeof(probit)) = phi
 
+const BUGS_FUNCTIONS = [
+    :cloglog,
+    :cexpexp,
+    :equals,
+    :icloglog,
+    :ilogit,
+    :inprod,
+    :inverse,
+    :logdet,
+    :logfact,
+    :loggam,
+    :logit,
+    :logistic,
+    :mexp,
+    :mean,
+    :phi,
+    :probit,
+    :pow,
+    :rank,
+    :ranked,
+    :sd,
+    :softplus,
+    :_step,
+    :arcsin,
+    :arcsinh,
+    :arccos,
+    :arccosh,
+    :arctan,
+    :arctanh
+]
+
 # functions
 export cloglog,
     cexpexp,
@@ -81,5 +112,4 @@ export dnorm,
     LeftTruncatedFlat,
     RightTruncatedFlat,
     TruncatedFlat
-
 end

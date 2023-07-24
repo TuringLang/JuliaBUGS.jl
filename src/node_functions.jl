@@ -116,9 +116,9 @@ function evaluate_and_track_dependencies(var::Expr, env)
             a isa Symbol && a != :nothing && a != :(:) && (push!(deps, a); push!(args, a))
         end
 
-        try
-            return eval(Expr(var.head, var.args[1], fun_args...)), deps, args
-        catch _
+        if (var.args[1] ∈ BUGSPrimitives.BUGS_FUNCTIONS || var.args[1] ∈ (:+, :-, :*, :/, :^, :(:))) && all(is_resolved, args)
+            return getfield(JuliaBUGS, var.args[1])(fun_args...), deps, args
+        else
             return Expr(var.head, var.args[1], fun_args...), deps, args
         end
     end
@@ -240,7 +240,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
     lhs_expr, rhs_expr = expr.args[1:2]
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
-    link_function = Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[1] : identity
+    link_function = Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[1] : :identity
     lhs_var = find_variables_on_lhs(
         Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
     )
