@@ -1,3 +1,4 @@
+using AbstractPPL
 using Bijectors
 using Documenter
 using DynamicPPL
@@ -5,6 +6,8 @@ using JuliaBUGS
 using Setfield
 using Test
 using UnPack
+
+using DynamicPPL: getlogp, settrans!!
 
 using JuliaBUGS:
     CollectVariables, program!, Var, Stochastic, Logical, evaluate!!, DefaultContext
@@ -71,28 +74,6 @@ end
     model = compile(model_def, data, inits)
 end
 
-function compare_dppl_bugs_logps(dppl_model, bugs_model, transform=false)
-    turing_logp = getlogp(
-        last(
-            DynamicPPL.evaluate!!(
-                dppl_model,
-                DynamicPPL.settrans!!(bugs_model.varinfo, transform),
-                DynamicPPL.DefaultContext(),
-            ),
-        ),
-    )
-    bugs_logp = getlogp(
-        evaluate!!(DynamicPPL.settrans!!(bugs_model, transform), JuliaBUGS.DefaultContext())
-    )
-    @test turing_logp ≈ bugs_logp atol = 1e-6
-end
-
 @testset "Log Joint with DynamicPPL" begin
-    include("logp_dynamicppl/binomial.jl")
-    include("logp_dynamicppl/gamma.jl")
-
-    # include("logp_dynamicppl/blockers.jl")
-    # include("logp_dynamicppl/bones.jl")
-    # include("logp_dynamicppl/dogs.jl")
-    include("logp_dynamicppl/rats.jl")
+    include("run_logp_tests.jl")
 end

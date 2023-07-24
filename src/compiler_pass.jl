@@ -39,7 +39,7 @@ function for_loop!(pass::CompilerPass, expr, env, vargs...)
     lb, ub = expr.args[1].args[2].args
     body = expr.args[2]
     lb, ub = evaluate(lb, env), evaluate(ub, env)
-    @assert lb isa Int && ub isa Int "Only integer ranges are supported"
+    @assert all(isinteger.((lb, ub))) "Only integer ranges are supported"
     for i in lb:ub
         for ex in body.args
             if Meta.isexpr(ex, [:(=), :(~)])
