@@ -329,10 +329,10 @@ function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVect
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
-            value =  _eval(expr, args)
+            value = _eval(expr, args)
             setindex!!(vi, value, vn)
         else
-            dist =  _eval(expr, args)
+            dist = _eval(expr, args)
             if link_function_expr != :identity
                 dist = transformed(dist, bijector_of_link_function(link_function_expr))
             end
