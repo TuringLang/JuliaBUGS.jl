@@ -68,17 +68,17 @@ Merge two collections, `c1` and `c2`, which can be either dictionaries or named 
 
 # Example
 ```jldoctest
-julia> d1 = Dict("a" => [1, 2, missing], "b" => 42);
+julia> d1 = Dict(:a => [1, 2, missing], :b => 42);
 
-julia> d2 = Dict("a" => [missing, 2, 4], "c" => -1);
+julia> d2 = Dict(:a => [missing, 2, 4], :c => -1);
 
-julia> d3 = Dict("a" => [missing, 3, 4], "c" => -1); # value collision
+julia> d3 = Dict(:a => [missing, 3, 4], :c => -1); # value collision
 
 julia> merge_collections(d1, d2, false)
-Dict{Any, Any} with 3 entries:
-  "c" => -1
-  "b" => 42
-  "a" => [1, 2, 4]
+Dict{Symbol, Any} with 3 entries:
+  :a => [1, 2, 4]
+  :b => 42
+  :c => -1
 
 julia> merge_collections(d1, d3, false)
 ERROR: The arrays in key 'a' have different non-missing values at the same positions.
