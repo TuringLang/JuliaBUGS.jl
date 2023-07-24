@@ -150,7 +150,7 @@ function compile(model_def::Expr, data, inits)
     vars, array_sizes, transformed_variables, array_bitmap = program!(
         CollectVariables(), model_def, data
     )
-    merged_data = merge_dicts(deepcopy(data), transformed_variables)
+    merged_data = merge_collections(deepcopy(data), transformed_variables)
     vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = program!(
         NodeFunctions(vars, array_sizes, array_bitmap), model_def, merged_data
     )
