@@ -156,11 +156,13 @@ end
 function initialize_var_store(data, vars, array_sizes)
     var_store = Dict{VarName,Any}()
     array_vn(k::Symbol) = AbstractPPL.VarName{Symbol(k)}(AbstractPPL.IdentityLens())
-    for (k, v) in data
+    for k in keys(data)
+        v = data[k]
         vn = array_vn(k)
         var_store[vn] = v
     end
-    for (k, v) in array_sizes
+    for k in keys(array_sizes)
+        v = array_sizes[k]
         vn = array_vn(k)
         haskey(var_store, vn) || (var_store[vn] = zeros(v...))
     end
@@ -177,7 +179,7 @@ function DynamicPPL.settrans!!(m::BUGSModel, if_trans::Bool)
     return @set m.varinfo = DynamicPPL.settrans!!(m.varinfo, if_trans)
 end
 
-function evaluate(vn::VarName, env::Dict)
+function evaluate(vn::VarName, env)
     sym = getsym(vn)
     ret = nothing
     try
