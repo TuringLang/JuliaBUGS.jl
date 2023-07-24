@@ -25,7 +25,7 @@ using JuliaBUGS.BUGSPrimitives: mean
             evaluate_and_track_dependencies,
             find_variables_on_lhs,
             evaluate,
-            merge_dicts,
+            merge_collections,
             scalarize,
             concretize_colon_indexing,
             check_unresolved_indices,
