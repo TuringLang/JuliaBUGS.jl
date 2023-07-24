@@ -15,8 +15,7 @@ Define the information stored in each node of the BUGS graph.
 """
 struct ConcreteNodeInfo <: NodeInfo
     node_type::VariableTypes
-    link_function::Function
-    node_function::Function
+    link_function_expr::Union{Expr,Symbol}
     node_function_expr::Expr
     node_args::Vector{VarName}
 end
@@ -24,8 +23,7 @@ end
 function ConcreteNodeInfo(var::Var, vars, link_functions, node_functions, node_args)
     return ConcreteNodeInfo(
         vars[var],
-        eval(link_functions[var]),
-        eval(node_functions[var]),
+        link_functions[var],
         node_functions[var],
         map(v -> AbstractPPL.VarName{v.name}(AbstractPPL.IdentityLens()), node_args[var]),
     )
@@ -109,6 +107,33 @@ function scalarize_then_add_edge!(g::BUGSGraph, v::Var; lhs_or_rhs=:lhs)
     end
 end
 
+# TODO: add documentation
+# `_eval` mimic `eval` function, but use precompiled functions. This is possible because BUGS essentially only has
+# two kinds of expressions: function calls and indexing.
+# `env` is a dictionary mapping symbols in `expr` to values, values can be arrays or scalars
+_eval(expr::Symbol, env) = env[expr]
+function _eval(expr::Expr, env)
+    if Meta.isexpr(expr, :call) # TODO: should check that the function is defined
+        f = expr.args[1]
+        args = [_eval(arg, env) for arg in expr.args[2:end]]
+        if f isa Expr # JuliaBUGS.some_function
+            f = f.args[2].value
+        end
+        return getfield(JuliaBUGS, f)(args...)
+    elseif Meta.isexpr(expr, :ref)
+        array = _eval(expr.args[1], env)
+        indices = [_eval(arg, env) for arg in expr.args[2:end]]
+        return array[indices...]
+    elseif Meta.isexpr(expr, :block)
+        return _eval(expr.args[end], env)
+    else
+        error("Unknown expression type: $expr")
+    end
+end
+function _eval(expr, env)
+    return expr
+end
+
 """
     BUGSModel
 
@@ -130,14 +155,15 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
         g[vn] isa AuxiliaryNodeInfo && continue
 
         ni = g[vn]
-        @unpack node_type, link_function, node_function, node_args = ni
-        args = [vi[x] for x in node_args]
+        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
+        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+        expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
-            value = (node_function)(args...)
+            value = _eval(expr, args)
             @assert value isa Union{Number,Array{<:Number}} "$value is not a number or array"
             vi = setindex!!(vi, value, vn)
         else
-            dist = (node_function)(args...)
+            dist = _eval(expr, args)
             value = evaluate(vn, data)
             isnothing(value) && push!(parameters, vn)
             isnothing(value) && (value = evaluate(vn, inits))
@@ -233,15 +259,16 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
         g[vn] isa AuxiliaryNodeInfo && continue
 
         ni = g[vn]
-        @unpack node_type, link_function, node_function, node_args = ni
-        args = [vi[x] for x in node_args]
+        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
+        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+        expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
-            value = node_function(args...)
+            value = _eval(expr, args)
             setindex!!(vi, value, vn)
         else
-            dist = node_function(args...)
-            if link_function != identity
-                dist = transformed(dist, bijector_of_link_function(link_function))
+            dist = _eval(expr, args)
+            if link_function_expr != :identity
+                dist = transformed(dist, bijector_of_link_function(link_function_expr))
             end
             value = rand(ctx.rng, dist)
             if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
@@ -267,12 +294,13 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
         g[vn] isa AuxiliaryNodeInfo && continue
 
         ni = g[vn]
-        @unpack node_type, link_function, node_function, node_args = ni
+        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
         node_type == JuliaBUGS.Logical && continue
-        args = [vi[x] for x in node_args]
-        dist = node_function(args...)
-        if link_function != identity
-            dist = transformed(dist, bijector_of_link_function(link_function))
+        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+        expr = node_function_expr.args[2]
+        dist = _eval(expr, args)
+        if link_function_expr != :identity
+            dist = transformed(dist, bijector_of_link_function(link_function_expr))
         end
         value = vi[vn]
         if DynamicPPL.transformation(vi) isa DynamicPPL.DynamicTransformation
@@ -297,15 +325,16 @@ function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVect
         g[vn] isa AuxiliaryNodeInfo && continue
 
         ni = g[vn]
-        @unpack node_type, link_function, node_function, node_args = ni
-        args = [vi[x] for x in node_args]
+        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
+        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+        expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
-            value = node_function(args...)
+            value =  _eval(expr, args)
             setindex!!(vi, value, vn)
         else
-            dist = node_function(args...)
-            if link_function != identity
-                dist = transformed(dist, bijector_of_link_function(link_function))
+            dist =  _eval(expr, args)
+            if link_function_expr != :identity
+                dist = transformed(dist, bijector_of_link_function(link_function_expr))
             end
             if vn in parameters # the value of parameter variables are stored in flattened_values
                 l = _length(vn)

@@ -22,7 +22,16 @@ Bijectors.transform(::Phi, x::Real) = phi(x)
 Bijectors.transform(::Inverse{Phi}, x::Real) = probit(x)
 Bijectors.logabsdet(::Phi, x::Real) = -0.5 * (x^2 + log(2π))
 
-bijector_of_link_function(::typeof(logit)) = LogisticBijector()
-bijector_of_link_function(::typeof(cloglog)) = CExpExp()
-bijector_of_link_function(::typeof(log)) = ExpBijector()
-bijector_of_link_function(::typeof(probit)) = Phi()
+function bijector_of_link_function(link_function::Symbol)
+    if link_function == :logit
+        return LogisticBijector()
+    elseif link_function == :cloglog
+        return CExpExp()
+    elseif link_function == :log
+        return ExpBijector()
+    elseif link_function == :probit
+        return Phi()
+    else
+        error("Link function '$(link_function)' not supported.")
+    end
+end

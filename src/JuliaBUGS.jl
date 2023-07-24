@@ -156,12 +156,9 @@ function compile(model_def::Expr, data, inits)
     )
     g = BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
-    return Base.invokelatest(
-        BUGSModel, g, sorted_nodes, vars, array_sizes, merged_data, inits
+    return BUGSModel(
+        g, sorted_nodes, vars, array_sizes, merged_data, inits
     )
-    # return BUGSModel(
-    #     g, sorted_nodes, vars, array_sizes, merged_data, inits
-    # )
 end
 
 end

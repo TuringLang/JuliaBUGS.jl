@@ -47,6 +47,43 @@ const BUGS_FUNCTIONS = [
     :arctanh
 ]
 
+const BUGS_DISTRIBUTIOND = [
+    :dnorm,
+    :dlogis,
+    :dt,
+    :ddexp,
+    :dflat,
+    :dexp,
+    :dchisqr,
+    :dweib,
+    :dlnorm,
+    :dgamma,
+    :dpar,
+    :dgev,
+    :dgpar,
+    :df,
+    :dunif,
+    :dbeta,
+    :dmnorm,
+    :dmt,
+    :dwish,
+    :ddirich,
+    :dbern,
+    :dbin,
+    :dcat,
+    :dpois,
+    :dgeom,
+    :dnegbin,
+    :dbetabin,
+    :dhyper,
+    :dmulti,
+    :TDistShiftedScaled,
+    :Flat,
+    :LeftTruncatedFlat,
+    :RightTruncatedFlat,
+    :TruncatedFlat
+]
+
 # functions
 export cloglog,
     cexpexp,
