@@ -44,7 +44,7 @@ const BUGS_FUNCTIONS = [
     :arccos,
     :arccosh,
     :arctan,
-    :arctanh
+    :arctanh,
 ]
 
 const BUGS_DISTRIBUTIOND = [
@@ -81,7 +81,7 @@ const BUGS_DISTRIBUTIOND = [
     :Flat,
     :LeftTruncatedFlat,
     :RightTruncatedFlat,
-    :TruncatedFlat
+    :TruncatedFlat,
 ]
 
 # functions

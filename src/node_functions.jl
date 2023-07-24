@@ -116,7 +116,10 @@ function evaluate_and_track_dependencies(var::Expr, env)
             a isa Symbol && a != :nothing && a != :(:) && (push!(deps, a); push!(args, a))
         end
 
-        if (var.args[1] ∈ BUGSPrimitives.BUGS_FUNCTIONS || var.args[1] ∈ (:+, :-, :*, :/, :^, :(:))) && all(is_resolved, args)
+        if (
+            var.args[1] ∈ BUGSPrimitives.BUGS_FUNCTIONS ||
+            var.args[1] ∈ (:+, :-, :*, :/, :^, :(:))
+        ) && all(is_resolved, args)
             return getfield(JuliaBUGS, var.args[1])(fun_args...), deps, args
         else
             return Expr(var.head, var.args[1], fun_args...), deps, args

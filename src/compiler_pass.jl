@@ -326,8 +326,9 @@ function evaluate(var::Expr, env)
             !any(ismissing, value) && return value
         end
         return Expr(var.head, var.args[1], idxs...)
-    elseif var.args[1] ∈ BUGSPrimitives.BUGS_FUNCTIONS || var.args[1] ∈ (:+, :-, :*, :/, :^, :(:)) # function call
-    # elseif isdefined(JuliaBUGS, var.args[1])
+    elseif var.args[1] ∈ BUGSPrimitives.BUGS_FUNCTIONS ||
+        var.args[1] ∈ (:+, :-, :*, :/, :^, :(:)) # function call
+        # elseif isdefined(JuliaBUGS, var.args[1])
         f = var.args[1]
         args = map(ex -> evaluate(ex, env), var.args[2:end])
         if all(is_resolved, args)
