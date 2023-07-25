@@ -25,7 +25,7 @@ using JuliaBUGS.BUGSPrimitives: mean
             evaluate_and_track_dependencies,
             find_variables_on_lhs,
             evaluate,
-            merge_dicts,
+            merge_collections,
             scalarize,
             concretize_colon_indexing,
             check_unresolved_indices,
@@ -74,6 +74,17 @@ end
     model = compile(model_def, data, inits)
 end
 
-@testset "Log Joint with DynamicPPL" begin
-    include("run_logp_tests.jl")
+include("run_logp_tests.jl")
+@testset "Log Density test for $s" for s in [
+    # single stochastic variable tests
+    :binomial,
+    :gamma,
+
+    # BUGS examples
+    :blockers,
+    :bones,
+    :dogs,
+    :rats,
+]
+    include("logp_tests/$s.jl")
 end

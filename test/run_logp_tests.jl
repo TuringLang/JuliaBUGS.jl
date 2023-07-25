@@ -46,17 +46,3 @@ function params_in_dppl_model(dppl_model)
         )[2],
     )
 end
-
-@testset "$s" for s in [
-    # single stochastic variable tests
-    :binomial,
-    :gamma,
-
-    # BUGS examples
-    :blockers,
-    :bones,
-    :dogs,
-    :rats,
-]
-    include("logp_tests/$s.jl")
-end
