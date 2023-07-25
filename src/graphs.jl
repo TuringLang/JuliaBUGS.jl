@@ -142,7 +142,7 @@ function _eval(expr::Expr, env)
     end
 end
 function _eval(expr, env)
-    error("Unknown expression type: $expr of type $(typeof(expr))")
+    return error("Unknown expression type: $expr of type $(typeof(expr))")
 end
 
 """
