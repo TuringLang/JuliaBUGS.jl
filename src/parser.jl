@@ -25,11 +25,11 @@ function consume!(ps::ProcessState, substitute=nothing)
     else
         push!(ps.julia_token_vec, substitute)
     end
-    ps.current_index += 1
+    return ps.current_index += 1
 end
 
 function discard!(ps::ProcessState)
-    ps.current_index += 1
+    return ps.current_index += 1
 end
 
 function add_diagnostic(ps, msg::String)
@@ -38,7 +38,7 @@ function add_diagnostic(ps, msg::String)
         diagnostic = JuliaSyntax.Diagnostic(0, 0, :error, msg)
         @assert diagnostic ∉ ps.diagnostics
         push!(ps.diagnostics, diagnostic)
-        return
+        return nothing
     end
     low = first(ps.token_vec[ps.current_index].range)
     high = last(ps.token_vec[ps.current_index].range)
@@ -46,30 +46,30 @@ function add_diagnostic(ps, msg::String)
     if diagnostic in ps.diagnostics # TODO: this check may be too expensive
         error("Encounter duplicate diagnostic, suspect infinite loop, stop and fix first.")
     end
-    push!(ps.diagnostics, diagnostic)
+    return push!(ps.diagnostics, diagnostic)
 end
 
 function peek(ps::ProcessState, n=1)
-    if ps.current_index+n-1 > length(ps.token_vec)
+    if ps.current_index + n - 1 > length(ps.token_vec)
         return K"EndMarker"
     end
-    return kind(ps.token_vec[ps.current_index+n-1])
+    return kind(ps.token_vec[ps.current_index + n - 1])
 end
 
 function peek_raw(ps::ProcessState, n=1)
-    if ps.current_index+n-1 > length(ps.token_vec)
+    if ps.current_index + n - 1 > length(ps.token_vec)
         return "EOF"
     end
-    return untokenize(ps.token_vec[ps.current_index+n-1], ps.text)
+    return untokenize(ps.token_vec[ps.current_index + n - 1], ps.text)
 end
 
 function peek_non_trivia(ps::ProcessState, skip_newline=true)
     trivia_tokens = KSet"Whitespace Comment"
     skip_newline && (trivia_tokens = trivia_tokens ∪ KSet"NewlineWs")
-    
+
     # Save the current state
     saved_index = ps.current_index
-    
+
     # Skip over trivia
     while kind(ps.token_vec[saved_index]) ∈ trivia_tokens
         saved_index += 1
@@ -83,7 +83,7 @@ function peek_non_trivia(ps::ProcessState, skip_newline=true)
 end
 
 function process_trivia!(ps::ProcessState, skip_newline=true)
-    trivia_tokens  = KSet"Whitespace Comment"
+    trivia_tokens = KSet"Whitespace Comment"
     skip_newline && (trivia_tokens = (trivia_tokens ∪ KSet"NewlineWs"))
     while peek(ps) ∈ trivia_tokens
         consume!(ps)
@@ -95,7 +95,7 @@ function process_toplevel!(ps::ProcessState)
     expect!(ps, "{", "begin")
     process_statements!(ps)
     expect!(ps, "}", "end")
-    process_trivia!(ps)
+    return process_trivia!(ps)
 end
 
 function process_statements!(ps::ProcessState)
@@ -116,7 +116,7 @@ function process_assignment!(ps::ProcessState)
         consume!(ps) # consume the "("
         process_trivia!(ps)
         process_variable!(ps) # link functions can only take one argument
-        process_trivia!(ps) 
+        process_trivia!(ps)
         expect!(ps, ")")
     end
     process_trivia!(ps)
@@ -125,7 +125,7 @@ function process_assignment!(ps::ProcessState)
         consume!(ps)
         process_tilde_rhs!(ps)
         process_trivia!(ps)
-        return
+        return nothing
     end
 
     if ps.allow_eq && peek(ps) == K"="
@@ -148,7 +148,7 @@ function process_assignment!(ps::ProcessState)
     end
 
     process_expression!(ps)
-    process_trivia!(ps)
+    return process_trivia!(ps)
 end
 
 function process_for!(ps)
@@ -165,27 +165,29 @@ function process_for!(ps)
 
     expect_and_discard!(ps, "{")
     process_statements!(ps)
-    expect!(ps, "}", "end")
+    return expect!(ps, "}", "end")
 end
 
 function process_range!(ps)
     process_expression!(ps, KSet": , ]")
     expect!(ps, ":")
-    process_expression!(ps, KSet")")
+    return process_expression!(ps, KSet")")
 end
 
-function process_expression!(ps::ProcessState, terminators=KSet"; NewlineWs EndMarker } for")
+function process_expression!(
+    ps::ProcessState, terminators=KSet"; NewlineWs EndMarker } for"
+)
     process_trivia!(ps)
     if peek(ps) ∈ KSet"+ -" # only allow a single + or - at the beginning
         consume!(ps)
     end
-    process_identifier_led_expression!(ps, terminators)
+    return process_identifier_led_expression!(ps, terminators)
 end
 
 function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs EndMarker")
     process_trivia!(ps)
     if peek(ps) ∈ terminators
-        return
+        return nothing
     end
     while true
         if peek(ps) ∈ KSet"Integer Float"
@@ -217,7 +219,7 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
             elseif peek(ps) == K"for" # in case of `for(i in 1:10)`, otherwise `fori ...`
                 push!(ps.julia_token_vec, "\n")
             end
-            return
+            return nothing
         end
         expect!(ps, ("+", "-", "*", "/", "^"))
         process_trivia!(ps)
@@ -254,8 +256,8 @@ function process_tilde_rhs!(ps::ProcessState)
     else
         push!(julia_token_vec, buffer...)
         ps.julia_token_vec = julia_token_vec
-    end 
-end 
+    end
+end
 
 function process_variable!(ps::ProcessState, allow_indexing=true)
     process_trivia!(ps)
@@ -263,9 +265,9 @@ function process_variable!(ps::ProcessState, allow_indexing=true)
     # if a simple variable, just consume it and return
     if peek(ps, 2) ∉ KSet". ["
         consume!(ps)
-        return
+        return nothing
     end
-    
+
     # deal with cases like `a.b.c` and `a.b.c[i]`
     if peek(ps, 2) == K"."
         variable_name_buffer = String[]
@@ -281,11 +283,11 @@ function process_variable!(ps::ProcessState, allow_indexing=true)
         if ps.replace_period
             push!(ps.julia_token_vec, join(variable_name_buffer, "_"))
         else
-            push!(ps.julia_token_vec,  "var\"$(join(variable_name_buffer, "."))\"")
+            push!(ps.julia_token_vec, "var\"$(join(variable_name_buffer, "."))\"")
         end
 
         if peek(ps) != K"["
-            return
+            return nothing
         end
     else
         consume!(ps)
@@ -315,7 +317,7 @@ function process_indexing!(ps::ProcessState)
             expect!(ps, ",")
         end
     end
-    expect!(ps, "]")
+    return expect!(ps, "]")
 end
 
 # index can be expression, or range
@@ -394,5 +396,5 @@ function parse(prog::String, replace_period=true, format_output=true)
     # return JuliaSyntax.parseall(JuliaSyntax.SyntaxNode, to_julia_program(ps.julia_token_vec, ps.text))
     julia_program = to_julia_program(ps.julia_token_vec, ps.text)
     format_output && (julia_program = format_text(julia_program))
-    println(julia_program)
+    return println(julia_program)
 end
