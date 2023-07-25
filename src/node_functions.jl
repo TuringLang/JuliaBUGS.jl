@@ -47,14 +47,14 @@ julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), Dict(:x =
 (:(getindex(Union{Missing, Int64}[1 2 missing; 4 5 6], a, b)), Set(Any[:a, :b, (:x, (1, 3))]), Set(Any[:a, :b, (:x, ())]))
 ```
 """
-evaluate_and_track_dependencies(var::Number, ::Dict) = var, Set(), Set()
-evaluate_and_track_dependencies(var::UnitRange, ::Dict) = var, Set(), Set()
-function evaluate_and_track_dependencies(var::Symbol, env::Dict)
+evaluate_and_track_dependencies(var::Number, env) = var, Set(), Set()
+evaluate_and_track_dependencies(var::UnitRange, env) = var, Set(), Set()
+function evaluate_and_track_dependencies(var::Symbol, env)
     value = haskey(env, var) ? env[var] : var
     @assert !ismissing(value) "Scalar variables in data can't be missing, but $var given as missing"
     return value, Set(), Set()
 end
-function evaluate_and_track_dependencies(var::Expr, env::Dict)
+function evaluate_and_track_dependencies(var::Expr, env)
     deps, args = Set(), Set()
     if Meta.isexpr(var, :ref)
         idxs = []
@@ -116,9 +116,12 @@ function evaluate_and_track_dependencies(var::Expr, env::Dict)
             a isa Symbol && a != :nothing && a != :(:) && (push!(deps, a); push!(args, a))
         end
 
-        try
-            return eval(Expr(var.head, var.args[1], fun_args...)), deps, args
-        catch _
+        if (
+            var.args[1] ∈ BUGSPrimitives.BUGS_FUNCTIONS ||
+            var.args[1] ∈ (:+, :-, :*, :/, :^, :(:))
+        ) && all(is_resolved, args)
+            return getfield(JuliaBUGS, var.args[1])(fun_args...), deps, args
+        else
             return Expr(var.head, var.args[1], fun_args...), deps, args
         end
     end
@@ -236,11 +239,11 @@ try_cast_to_int(x::Real) = Int(x)
 try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
 # TODO: too long and confusing, need to refactor
-function assignment!(pass::NodeFunctions, expr::Expr, env::Dict)
+function assignment!(pass::NodeFunctions, expr::Expr, env)
     lhs_expr, rhs_expr = expr.args[1:2]
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
-    link_function = Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[1] : identity
+    link_function = Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[1] : :identity
     lhs_var = find_variables_on_lhs(
         Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
     )

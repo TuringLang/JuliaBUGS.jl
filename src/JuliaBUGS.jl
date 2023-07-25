@@ -36,10 +36,11 @@ include("logdensityproblems.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 
-function check_input(input::Union{NamedTuple,Dict})
-    for (k, v) in input
+function check_input(input::Union{NamedTuple,AbstractDict})
+    for k in keys(input)
         @assert k isa Symbol "Variable name $k must be a Symbol"
 
+        v = input[k]
         if v isa Number
             continue
         elseif v isa AbstractArray
@@ -53,41 +54,39 @@ function check_input(input::Union{NamedTuple,Dict})
 end
 
 """
-    merge_dicts(d1::Dict, d2::Dict) -> Dict
+    merge_collections(c1::Union{Dict, NamedTuple}, c2::Union{Dict, NamedTuple}, output_NamedTuple::Bool=true) -> Union{Dict, NamedTuple}
 
-Merge two dictionaries, `d1` and `d2`, into a single dictionary. The function assumes that the values in
-the input dictionaries are either `Number` or `Array` with matching sizes. If a key exists in both `d1` and `d2`,
-the merged dictionary will contain the non-missing values from `d1` and `d2`. If a key exists only in one of the
-dictionaries, the resulting dictionary will contain the key-value pair from the respective dictionary.
+Merge two collections, `c1` and `c2`, which can be either dictionaries or named tuples, into a single collection (dictionary or named tuple). The function assumes that the values in the input collections are either `Number` or `Array` with matching sizes. If a key exists in both `c1` and `c2`, the merged collection will contain the non-missing values from `c1` and `c2`. If a key exists only in one of the collections, the resulting collection will contain the key-value pair from the respective collection.
 
 # Arguments
-- `d1::Dict`: The first dictionary to merge.
-- `d2::Dict`: The second dictionary to merge.
+- `c1::Union{Dict, NamedTuple}`: The first collection to merge.
+- `c2::Union{Dict, NamedTuple}`: The second collection to merge.
+- `output_NamedTuple::Bool=true`: Determines the type of the output collection. If true, the function outputs a NamedTuple. If false, it outputs a Dict.
 
 # Returns
-- `merged_dict::Dict`: A new dictionary containing the merged key-value pairs from `d1` and `d2`.
+- `merged::Union{Dict, NamedTuple}`: A new collection containing the merged key-value pairs from `c1` and `c2`.
 
 # Example
 ```jldoctest
-julia> d1 = Dict("a" => [1, 2, missing], "b" => 42);
+julia> d1 = Dict(:a => [1, 2, missing], :b => 42);
 
-julia> d2 = Dict("a" => [missing, 2, 4], "c" => -1);
+julia> d2 = Dict(:a => [missing, 2, 4], :c => -1);
 
-julia> d3 = Dict("a" => [missing, 3, 4], "c" => -1); # value collision
+julia> d3 = Dict(:a => [missing, 3, 4], :c => -1); # value collision
 
-julia> merge_dicts(d1, d2)
-Dict{Any, Any} with 3 entries:
-  "c" => -1
-  "b" => 42
-  "a" => [1, 2, 4]
+julia> merge_collections(d1, d2, false)
+Dict{Symbol, Any} with 3 entries:
+  :a => [1, 2, 4]
+  :b => 42
+  :c => -1
 
-julia> merge_dicts(d1, d3)
+julia> merge_collections(d1, d3, false)
 ERROR: The arrays in key 'a' have different non-missing values at the same positions.
 [...]
 ```
 """
-function merge_dicts(d1::Dict, d2::Dict)
-    merged_dict = Dict()
+function merge_collections(d1, d2, output_NamedTuple=true)
+    merged_dict = Dict{Symbol,Any}()
 
     for key in Base.union(keys(d1), keys(d2))
         in_both_dicts = haskey(d1, key) && haskey(d2, key)
@@ -126,7 +125,11 @@ function merge_dicts(d1::Dict, d2::Dict)
         end
     end
 
-    return merged_dict
+    if output_NamedTuple
+        return NamedTuple{Tuple(keys(merged_dict))}(values(merged_dict))
+    else
+        return merged_dict
+    end
 end
 
 """
@@ -142,26 +145,18 @@ Compile a BUGS model into a log density problem.
 # Returns
 - A [`BUGSModel`](@ref) object representing the compiled model.
 """
-function compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
-    return compile(model_def, Dict(pairs(data)), Dict(pairs(initializations)))
-end
-function compile(model_def::Expr, data::Dict, inits::Dict)
+function compile(model_def::Expr, data, inits)
     check_input.((data, inits))
     vars, array_sizes, transformed_variables, array_bitmap = program!(
         CollectVariables(), model_def, data
     )
-    merged_data = merge_dicts(deepcopy(data), transformed_variables)
+    merged_data = merge_collections(deepcopy(data), transformed_variables)
     vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = program!(
         NodeFunctions(vars, array_sizes, array_bitmap), model_def, merged_data
     )
     g = BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
-    return Base.invokelatest(
-        BUGSModel, g, sorted_nodes, vars, array_sizes, merged_data, inits
-    )
+    return BUGSModel(g, sorted_nodes, vars, array_sizes, merged_data, inits)
 end
-compile(model_def::Expr, data::NamedTuple) = compile(model_def, Dict(pairs(data)), Dict())
-compile(model, data::Dict) = compile(model, data, Dict())
-compile(model_def::Expr) = compile(model_def, Dict(), Dict())
 
 end
