@@ -12,7 +12,6 @@ mutable struct ProcessState
     replace_period::Bool
     allow_eq::Bool
 end
-##
 
 function ProcessState(text::String, replace_period=true, allow_eq=true)
     token_vec = filter(x -> kind(x) != K"error", tokenize(text))
@@ -32,7 +31,34 @@ function discard!(ps::ProcessState)
     return ps.current_index += 1
 end
 
-function add_diagnostic(ps, msg::String)
+function expect!(ps::ProcessState, expected::String, substitute=nothing)
+    process_trivia!(ps)
+    if peek_raw(ps) != expected
+        add_diagnostic!(ps, "Expecting '$expected'")
+    else
+        consume!(ps, substitute)
+    end
+end
+
+function expect!(ps::ProcessState, expected::Tuple, substitute=nothing)
+    process_trivia!(ps)
+    if peek_raw(ps) ∉ expected
+        add_diagnostic!(ps, "Expecting '$expected'")
+    else
+        consume!(ps, substitute)
+    end
+end
+
+function expect_and_discard!(ps::ProcessState, expected::String)
+    process_trivia!(ps)
+    if peek_raw(ps) != expected
+        add_diagnostic!(ps, "Expecting '$expected'")
+    else
+        discard!(ps)
+    end
+end
+
+function add_diagnostic!(ps, msg::String)
     # check if the current token is EOF
     if ps.current_index > length(ps.token_vec)
         diagnostic = JuliaSyntax.Diagnostic(0, 0, :error, msg)
@@ -63,7 +89,7 @@ function peek_raw(ps::ProcessState, n=1)
     return untokenize(ps.token_vec[ps.current_index + n - 1], ps.text)
 end
 
-function peek_non_trivia(ps::ProcessState, skip_newline=true)
+function peek_next_non_trivia(ps::ProcessState, skip_newline=true)
     trivia_tokens = KSet"Whitespace Comment"
     skip_newline && (trivia_tokens = trivia_tokens ∪ KSet"NewlineWs")
 
@@ -80,6 +106,13 @@ function peek_non_trivia(ps::ProcessState, skip_newline=true)
 
     # Return the kind of the next non-trivia token
     return kind(ps.token_vec[saved_index])
+end
+
+function look_back(ps::ProcessState, n=1)
+    if n > length(ps.julia_token_vec)
+        return K"TOMBSTONE"
+    end
+    return kind(ps.julia_token_vec[end - n + 1])
 end
 
 function process_trivia!(ps::ProcessState, skip_newline=true)
@@ -144,7 +177,7 @@ function process_assignment!(ps::ProcessState)
         if ps.allow_eq
             push!(allowed_assignment_signs, "=")
         end
-        add_diagnostic(ps, "Expecting $(join(allowed_assignment_signs, ", "))")
+        add_diagnostic!(ps, "Expecting $(join(allowed_assignment_signs, ", "))")
     end
 
     process_expression!(ps)
@@ -175,7 +208,7 @@ function process_range!(ps)
 end
 
 function process_expression!(
-    ps::ProcessState, terminators=KSet"; NewlineWs EndMarker } for"
+    ps::ProcessState, terminators=KSet"; NewlineWs EndMarker { } for"
 )
     process_trivia!(ps)
     if peek(ps) ∈ KSet"+ -" # only allow a single + or - at the beginning
@@ -210,7 +243,7 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
             process_expression!(ps, KSet")")
             expect!(ps, ")")
         else
-            add_diagnostic(ps, "Expecting variable or parenthesized expressions")
+            add_diagnostic!(ps, "Expecting variable or parenthesized expressions")
         end
         process_trivia!(ps, false)
         if peek(ps) ∈ terminators
@@ -241,13 +274,13 @@ function process_tilde_rhs!(ps::ProcessState)
         push!(julia_token_vec, peek_raw(ps) == "C" ? " censored(" : " truncated(")
         push!(julia_token_vec, buffer..., ", ")
         ps.julia_token_vec = julia_token_vec
-        if peek_non_trivia(ps) == K","
+        if peek_next_non_trivia(ps) == K","
             push!(julia_token_vec, "nothing")
         else
             process_expression!(ps, KSet",")
         end
         expect!(ps, ",")
-        if peek_non_trivia(ps) == K")"
+        if peek_next_non_trivia(ps) == K")"
             push!(ps.julia_token_vec, "nothing")
         else
             process_expression!(ps, KSet")")
@@ -332,7 +365,9 @@ end
 function process_call_args!(ps)
     process_trivia!(ps)
     while peek(ps) != "," && peek(ps) != "EndMarker"
-        process_expression!(ps, KSet", ) EndMarker")
+        process_expression!(ps, KSet", ) EndMarker") # TODO: to handle error cases, should have a default set of terminators
+        # can be implemented as a part of error recovery, essentially: "I see this terminator, but haven't seen the intended
+        # terminators yet, so somethings wrong, now try assume here is a terminator and continue" 
         if peek(ps) == K")"
             break
         end
@@ -341,37 +376,9 @@ function process_call_args!(ps)
     end
 end
 
-function expect!(ps::ProcessState, expected::String, substitute=nothing)
-    process_trivia!(ps)
-    if peek_raw(ps) != expected
-        add_diagnostic(ps, "Expecting '$expected'")
-    else
-        consume!(ps, substitute)
-    end
-end
-
-function expect!(ps::ProcessState, expected::Tuple, substitute=nothing)
-    process_trivia!(ps)
-    if peek_raw(ps) ∉ expected
-        add_diagnostic(ps, "Expecting '$expected'")
-    else
-        consume!(ps, substitute)
-    end
-end
-
-function expect_and_discard!(ps::ProcessState, expected::String)
-    process_trivia!(ps)
-    if peek_raw(ps) != expected
-        add_diagnostic(ps, "Expecting '$expected'")
-    else
-        discard!(ps)
-    end
-end
-
 function to_julia_program(ps::ProcessState)
     return to_julia_program(ps.julia_token_vec, ps.text)
 end
-
 function to_julia_program(julia_token_vec, text)
     program = ""
     for t in julia_token_vec
@@ -393,8 +400,8 @@ function parse(prog::String, replace_period=true, format_output=true)
         JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
         error("Errors in the program: \n $(String(take!(io)))")
     end
-    # return JuliaSyntax.parseall(JuliaSyntax.SyntaxNode, to_julia_program(ps.julia_token_vec, ps.text))
     julia_program = to_julia_program(ps.julia_token_vec, ps.text)
     format_output && (julia_program = format_text(julia_program))
     return println(julia_program)
+    # return Meta.parse(julia_program)
 end
