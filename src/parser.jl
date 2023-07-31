@@ -42,11 +42,7 @@ function discard!(ps::ProcessState)
     return ps.current_index += 1
 end
 
-function try_recovery!(ps::ProcessState, terminators)
-    
-end
-
-function expect!(ps::ProcessState, expected::String, substitute=nothing, err_msg=nothing)
+function expect!(ps::ProcessState, expected::String, substitute=nothing)
     process_trivia!(ps)
     if peek_raw(ps) != expected
         add_diagnostic!(ps, "Expecting '$expected'")
@@ -55,7 +51,7 @@ function expect!(ps::ProcessState, expected::String, substitute=nothing, err_msg
     end
 end
 
-function expect!(ps::ProcessState, expected::Tuple, substitute=nothing, err_msg=nothing)
+function expect!(ps::ProcessState, expected::Tuple, substitute=nothing)
     process_trivia!(ps)
     if peek_raw(ps) ∉ expected
         add_diagnostic!(ps, "Expecting '$expected'")
@@ -84,7 +80,8 @@ function add_diagnostic!(ps, msg::String)
     low = first(ps.token_vec[ps.current_index].range)
     high = last(ps.token_vec[ps.current_index].range)
     diagnostic = JuliaSyntax.Diagnostic(low, high, :error, msg)
-    if diagnostic in ps.diagnostics # TODO: this check may be too expensive
+    
+    if any((x->x.first_byte==low).(ps.diagnostics))
         # give the pervious several tokens
         txt = ""
         for i in 1:min(10, ps.current_index)
@@ -161,14 +158,21 @@ function process_statements!(ps::ProcessState)
     while peek(ps) ∈ KSet"for Identifier"
         if peek(ps) == K"for"
             process_for!(ps)
+        elseif peek(ps) == K"Identifier" && (peek(ps, 2) == K"(" || peek(ps, 3) == K"(") # wrong spelling 
+            expect!(ps, "for")
+            process_for!(ps)
         else # peek(ps) == K"Identifier"
             process_assignment!(ps)
         end
         process_trivia!(ps)
     end
+    if peek(ps) ∉ KSet"for Identifier" # won't try to recover, just throw an error
+        error("Unsupported statement at $(ps.current_index): $(peek_raw(ps))")
+    end
 end
 
 function process_assignment!(ps::ProcessState)
+    # the first token is guaranteed to be an identifier
     process_lhs!(ps)
 
     if peek(ps) == K"~"
@@ -223,10 +227,14 @@ function process_lhs!(ps::ProcessState)
 end
 
 function process_for!(ps)
-    consume!(ps) # consume the "for"
+    if peek(ps) == K"for"
+        consume!(ps)
+    else
+        discard!(ps)
+    end
     expect_and_discard!(ps, "(")
     if peek(ps) == K"Identifier"
-        push!(ps.julia_token_vec, " ")
+        push!(ps.julia_token_vec, " ") # add white space between "for" and the loop variable
     end
 
     process_variable!(ps)
@@ -281,7 +289,7 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
             process_expression!(ps, KSet")")
             expect!(ps, ")")
         else
-            add_diagnostic!(ps, "Expecting variable or parenthesized expressions")
+            error("Expecting variable or parenthesized expressions, but got $(peek_raw(ps))")
         end
         process_trivia!(ps, false)
         if peek(ps) ∈ terminators
@@ -292,7 +300,11 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
             end
             return nothing
         end
-        expect!(ps, ("+", "-", "*", "/", "^"))
+        if peek(ps) ∈ KSet"+ - * / ^"
+            consume!(ps)
+        else
+            error("Expecting operator none of + - * / ^, but got $(peek_raw(ps))")
+        end
         process_trivia!(ps)
     end
 end
@@ -364,6 +376,9 @@ function process_variable!(ps::ProcessState, allow_indexing=true)
 
         if peek(ps) != K"["
             return nothing
+        elseif peek(simulate(process_trivia!, ps)) == K"]"
+            add_diagnostic!(ps, "Whitespace is not allowed between variable name and indexing.")
+            process_trivia!(ps)
         end
     else
         consume!(ps)
@@ -408,9 +423,7 @@ end
 function process_call_args!(ps)
     process_trivia!(ps)
     while peek(ps) != "," && peek(ps) != "EndMarker"
-        process_expression!(ps, KSet", ) EndMarker") # TODO: to handle error cases, should have a default set of terminators
-        # can be implemented as a part of error recovery, essentially: "I see this terminator, but haven't seen the intended
-        # terminators yet, so somethings wrong, now try assume here is a terminator and continue" 
+        process_expression!(ps, KSet", ) EndMarker")
         if peek(ps) == K")"
             break
         end
