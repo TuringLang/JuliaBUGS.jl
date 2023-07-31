@@ -100,8 +100,15 @@ function peek(ps::ProcessState, n=1)
     if ps.current_index + n - 1 > length(ps.token_vec)
         return K"EndMarker"
     end
-    return kind(ps.token_vec[ps.current_index + n - 1])
+    # TODO: Julia keywords will be tokenzied, but some of them should be treated as identifiers
+    k = kind(ps.token_vec[ps.current_index + n - 1])
+    if k ∈ WHITELIST
+        return k
+    end
+    error("Unexpected token kind: $k")
 end
+
+WHITELIST = KSet"Whitespace Comment NewlineWs EndMarker for in , { } ( ) [ ] : ; ~ < - <-- = + - * / ^ . Identifier Integer Float TOMBSTONE error"
 
 function peek_raw(ps::ProcessState, n=1)
     if ps.current_index + n - 1 > length(ps.token_vec)
@@ -158,16 +165,10 @@ function process_statements!(ps::ProcessState)
     while peek(ps) ∈ KSet"for Identifier"
         if peek(ps) == K"for"
             process_for!(ps)
-        elseif peek(ps) == K"Identifier" && (peek(ps, 2) == K"(" || peek(ps, 3) == K"(") # wrong spelling 
-            expect!(ps, "for")
-            process_for!(ps)
         else # peek(ps) == K"Identifier"
             process_assignment!(ps)
         end
         process_trivia!(ps)
-    end
-    if peek(ps) ∉ KSet"for Identifier" # won't try to recover, just throw an error
-        error("Unsupported statement at $(ps.current_index): $(peek_raw(ps))")
     end
 end
 
@@ -188,6 +189,14 @@ function process_assignment!(ps::ProcessState)
         discard!(ps) # discard the "<"
         discard!(ps) # discard the "-"
         push!(ps.julia_token_vec, "=")
+    elseif peek(ps) == K"<" && peek(ps, 2) ∈ KSet"Integer Float" && startswith(peek_raw(ps, 2), "-")
+        push!(ps.julia_token_vec, "=")
+        push!(ps.julia_token_vec, peek_raw(ps, 2)[2:end]) # "<-1" should become "=1" but tokenized as "<" "-1" 
+        discard!(ps) # discard the "<"
+        discard!(ps)
+        if peek(ps) ∈ KSet"; NewlineWs EndMarker { } for , "
+            return process_trivia!(ps)
+        end
     elseif peek(ps) == K"<--"
         discard!(ps) # discard the "<--"
         push!(ps.julia_token_vec, "=")
@@ -206,7 +215,7 @@ function process_assignment!(ps::ProcessState)
 end
 
 function process_lhs!(ps::ProcessState)
-    if peek_raw(ps) ∈ ("logit", "cloglog", "log", "probit") # link function
+    if peek_raw(ps) ∈ ("logit", "cloglog", "log", "probit") && peek(ps, 2) != K"." # link function 
         consume!(ps) # consume the link function
         expect!(ps, "(")
         process_variable!(ps) # link functions can only take one argument
@@ -244,7 +253,7 @@ function process_for!(ps)
 
     expect_and_discard!(ps, "{")
     process_statements!(ps)
-    return expect!(ps, "}", "end")
+    return expect!(ps, "}", " end") # add extra white space in case of "}}"
 end
 
 function process_range!(ps)
@@ -280,19 +289,23 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
             else
                 process_variable!(ps) # "a.b(args)" falls into this case
                 if peek(ps) == K"("
+                    consume!(ps) # consume the "("
                     process_call_args!(ps)
                     expect!(ps, ")")
                 end
             end
-        elseif peek(ps) == K"("
+        elseif peek(ps) == K"(" # maybe function call args or just a parenthesized expression
             consume!(ps)
             process_expression!(ps, KSet")")
             expect!(ps, ")")
-        else
-            error("Expecting variable or parenthesized expressions, but got $(peek_raw(ps))")
         end
         process_trivia!(ps, false)
-        if peek(ps) ∈ terminators
+
+        if peek_next_non_trivia(ps) ∈ KSet"+ - * / ^"
+            while peek(ps) == K"NewlineWs"
+                discard!(ps)
+            end
+        elseif peek(ps) ∈ terminators
             if peek(ps) == K";" # others will be consumed by process_trivia!
                 consume!(ps)
             elseif peek(ps) == K"for" # in case of `for(i in 1:10)`, otherwise `fori ...`
@@ -300,10 +313,18 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
             end
             return nothing
         end
+
         if peek(ps) ∈ KSet"+ - * / ^"
             consume!(ps)
+        elseif peek(ps) ∈ KSet"Integer Float" && startswith(peek_raw(ps), "-")
+            push!(ps.julia_token_vec, "- ")
+            push!(ps.julia_token_vec, peek_raw(ps)[2:end])
+            discard!(ps)
+        elseif peek(ps) ∈ KSet"Identifier for"
+            push!(ps.julia_token_vec, ";")
+            process_statements!(ps)
         else
-            error("Expecting operator none of + - * / ^, but got $(peek_raw(ps))")
+            add_diagnostic!(ps, "Expecting operator none of + - * / ^, but got $(peek_raw(ps))")
         end
         process_trivia!(ps)
     end
@@ -336,9 +357,17 @@ function process_tilde_rhs!(ps::ProcessState)
             process_expression!(ps, KSet")")
         end
         expect!(ps, ")")
-    else
-        push!(julia_token_vec, buffer...)
-        ps.julia_token_vec = julia_token_vec
+        if peek(ps) == K";"
+            consume!(ps)
+        end
+        return nothing
+    end
+
+    push!(julia_token_vec, buffer...)
+    ps.julia_token_vec = julia_token_vec
+    
+    if peek(ps) == K";"
+        consume!(ps)
     end
 end
 
