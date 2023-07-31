@@ -2,7 +2,6 @@ using JuliaSyntax
 using JuliaSyntax: @K_str, @KSet_str, tokenize, untokenize, Diagnostic
 using JuliaFormatter
 
-# called `ProcessState` instead of `ParseState` because it's not really "parsing"
 mutable struct ProcessState
     token_vec::Vector{JuliaSyntax.Token}
     current_index::Int
@@ -18,6 +17,18 @@ function ProcessState(text::String, replace_period=true, allow_eq=true)
     return ProcessState(token_vec, 1, text, Any[], Diagnostic[], replace_period, allow_eq)
 end
 
+function ProcessState(ps::ProcessState)
+    return ProcessState(
+        ps.token_vec,
+        ps.current_index,
+        ps.text,
+        deepcopy(ps.julia_token_vec),
+        deepcopy(ps.diagnostics),
+        ps.replace_period,
+        ps.allow_eq,
+    )
+end
+
 function consume!(ps::ProcessState, substitute=nothing)
     if isnothing(substitute)
         push!(ps.julia_token_vec, ps.token_vec[ps.current_index])
@@ -31,7 +42,11 @@ function discard!(ps::ProcessState)
     return ps.current_index += 1
 end
 
-function expect!(ps::ProcessState, expected::String, substitute=nothing)
+function try_recovery!(ps::ProcessState, terminators)
+    
+end
+
+function expect!(ps::ProcessState, expected::String, substitute=nothing, err_msg=nothing)
     process_trivia!(ps)
     if peek_raw(ps) != expected
         add_diagnostic!(ps, "Expecting '$expected'")
@@ -40,7 +55,7 @@ function expect!(ps::ProcessState, expected::String, substitute=nothing)
     end
 end
 
-function expect!(ps::ProcessState, expected::Tuple, substitute=nothing)
+function expect!(ps::ProcessState, expected::Tuple, substitute=nothing, err_msg=nothing)
     process_trivia!(ps)
     if peek_raw(ps) ∉ expected
         add_diagnostic!(ps, "Expecting '$expected'")
@@ -70,6 +85,15 @@ function add_diagnostic!(ps, msg::String)
     high = last(ps.token_vec[ps.current_index].range)
     diagnostic = JuliaSyntax.Diagnostic(low, high, :error, msg)
     if diagnostic in ps.diagnostics # TODO: this check may be too expensive
+        # give the pervious several tokens
+        txt = ""
+        for i in 1:min(10, ps.current_index)
+            txt = untokenize(ps.token_vec[ps.current_index - i + 1], ps.text) * txt
+        end
+        println("Stopped at $txt, Errors occurred in the program:")
+        io = IOBuffer()
+        JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
+        println(String(take!(io)))
         error("Encounter duplicate diagnostic, suspect infinite loop, stop and fix first.")
     end
     return push!(ps.diagnostics, diagnostic)
@@ -93,19 +117,20 @@ function peek_next_non_trivia(ps::ProcessState, skip_newline=true)
     trivia_tokens = KSet"Whitespace Comment"
     skip_newline && (trivia_tokens = trivia_tokens ∪ KSet"NewlineWs")
 
-    # Save the current state
-    saved_index = ps.current_index
-
-    # Skip over trivia
-    while kind(ps.token_vec[saved_index]) ∈ trivia_tokens
-        saved_index += 1
-        if saved_index > length(ps.token_vec)
+    seek_index = ps.current_index
+    while kind(ps.token_vec[seek_index]) ∈ trivia_tokens
+        seek_index += 1
+        if seek_index > length(ps.token_vec)
             return K"EndMarker"
         end
     end
+    return kind(ps.token_vec[seek_index])
+end
 
-    # Return the kind of the next non-trivia token
-    return kind(ps.token_vec[saved_index])
+function simulate(process_function, ps::ProcessState, args...) # ps is always the first argument of process_functions
+    ps_copy = ProcessState(ps)
+    (process_function)(ps_copy, args...)
+    return ps_copy
 end
 
 function look_back(ps::ProcessState, n=1)
@@ -144,15 +169,7 @@ function process_statements!(ps::ProcessState)
 end
 
 function process_assignment!(ps::ProcessState)
-    process_variable!(ps)
-    if peek(ps) == K"(" # link function
-        consume!(ps) # consume the "("
-        process_trivia!(ps)
-        process_variable!(ps) # link functions can only take one argument
-        process_trivia!(ps)
-        expect!(ps, ")")
-    end
-    process_trivia!(ps)
+    process_lhs!(ps)
 
     if peek(ps) == K"~"
         consume!(ps)
@@ -164,11 +181,11 @@ function process_assignment!(ps::ProcessState)
     if ps.allow_eq && peek(ps) == K"="
         consume!(ps)
     elseif peek(ps) == K"<" && peek(ps, 2) == K"-"
-        discard!(ps)
-        discard!(ps)
+        discard!(ps) # discard the "<"
+        discard!(ps) # discard the "-"
         push!(ps.julia_token_vec, "=")
     elseif peek(ps) == K"<--"
-        discard!(ps)
+        discard!(ps) # discard the "<--"
         push!(ps.julia_token_vec, "=")
         push!(ps.julia_token_vec, "-")
         process_identifier_led_expression!(ps)
@@ -181,6 +198,27 @@ function process_assignment!(ps::ProcessState)
     end
 
     process_expression!(ps)
+    return process_trivia!(ps)
+end
+
+function process_lhs!(ps::ProcessState)
+    if peek_raw(ps) ∈ ("logit", "cloglog", "log", "probit") # link function
+        consume!(ps) # consume the link function
+        expect!(ps, "(")
+        process_variable!(ps) # link functions can only take one argument
+        process_trivia!(ps)
+        expect!(ps, ")")
+    elseif any(Base.Fix1(startswith, peek_raw(ps)).(["logit", "cloglog", "log", "probit"]))
+        # missing left parentheses if right parentheses is present
+        ps_copy = simulate(process_variable!, ps)
+        if peek(ps_copy) == K")"
+            add_diagnostic!(ps, "Missing left parentheses")
+        else # then it's just a variable name start with one of "logit", "cloglog", "log", "probit"
+            process_variable!(ps)
+        end
+    else
+        process_variable!(ps)
+    end
     return process_trivia!(ps)
 end
 
@@ -208,7 +246,7 @@ function process_range!(ps)
 end
 
 function process_expression!(
-    ps::ProcessState, terminators=KSet"; NewlineWs EndMarker { } for"
+    ps::ProcessState, terminators=KSet"; NewlineWs EndMarker { } for , "
 )
     process_trivia!(ps)
     if peek(ps) ∈ KSet"+ -" # only allow a single + or - at the beginning
@@ -303,6 +341,11 @@ function process_variable!(ps::ProcessState, allow_indexing=true)
 
     # deal with cases like `a.b.c` and `a.b.c[i]`
     if peek(ps, 2) == K"."
+        if peek(ps, 3) != K"Identifier"
+            add_diagnostic!(ps, "Variable names can't end with '.'.")
+
+            return nothing
+        end
         variable_name_buffer = String[]
         while peek(ps) == K"Identifier"
             push!(variable_name_buffer, peek_raw(ps))
