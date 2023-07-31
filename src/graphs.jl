@@ -145,6 +145,25 @@ function _eval(expr, env)
     return error("Unknown expression type: $expr of type $(typeof(expr))")
 end
 
+function stochastic_neighbors(g::BUGSGraph, v::VarName, f)
+    stochastic_neighbors = ConcreteNodeInfo[]
+    for u in f(g, v)
+        if g[u] isa ConcreteNodeInfo
+            if g[u].node_tupe == Stochastic
+                push!(stochastic_neighbors, g[u])
+            else
+                push!(stochastic_neighbors, stochastic_neighbors(g, u, f))
+            end
+        else
+            push!(stochastic_neighbors, stochastic_neighbors(g, u, f))
+        end 
+    end
+    return stochastic_neighbors
+end
+
+stochastic_inneighbors(g, v) = stochastic_neighbors(g, v, inneighbor_labels)
+stochastic_outneighbors(g, v) = stochastic_neighbors(g, v, outneighbor_labels)
+
 """
     BUGSModel
 
