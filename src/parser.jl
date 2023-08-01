@@ -14,8 +14,20 @@ end
 
 function ProcessState(text::String, replace_period=true, allow_eq=true)
     token_vec = filter(x -> kind(x) != K"error", tokenize(text))
+    unallowed_words = String[]
+    for t in token_vec
+        if kind(t) ∉ WHITELIST
+            push!(unallowed_words, untokenize(t, text))
+        end
+    end
+    if !isempty(unallowed_words)
+        error("Unallowed words: $(join(unallowed_words, ", "))")
+    end
     return ProcessState(token_vec, 1, text, Any[], Diagnostic[], replace_period, allow_eq)
 end
+
+# Using Julia's parsing facility has some effects on the set of language we support: Julia reserved words are not allowed to be used as variable names
+WHITELIST = KSet"Whitespace Comment NewlineWs EndMarker for in , { } ( ) [ ] : ; ~ < - <-- = + - * / ^ . Identifier Integer Float TOMBSTONE error"
 
 function ProcessState(ps::ProcessState)
     return ProcessState(
@@ -80,8 +92,8 @@ function add_diagnostic!(ps, msg::String)
     low = first(ps.token_vec[ps.current_index].range)
     high = last(ps.token_vec[ps.current_index].range)
     diagnostic = JuliaSyntax.Diagnostic(low, high, :error, msg)
-    
-    if any((x->x.first_byte==low).(ps.diagnostics))
+
+    if any((x -> x.first_byte == low).(ps.diagnostics))
         # give the pervious several tokens
         txt = ""
         for i in 1:min(10, ps.current_index)
@@ -100,15 +112,8 @@ function peek(ps::ProcessState, n=1)
     if ps.current_index + n - 1 > length(ps.token_vec)
         return K"EndMarker"
     end
-    # TODO: Julia keywords will be tokenzied, but some of them should be treated as identifiers
-    k = kind(ps.token_vec[ps.current_index + n - 1])
-    if k ∈ WHITELIST
-        return k
-    end
-    error("Unexpected token kind: $k")
+    return kind(ps.token_vec[ps.current_index + n - 1])
 end
-
-WHITELIST = KSet"Whitespace Comment NewlineWs EndMarker for in , { } ( ) [ ] : ; ~ < - <-- = + - * / ^ . Identifier Integer Float TOMBSTONE error"
 
 function peek_raw(ps::ProcessState, n=1)
     if ps.current_index + n - 1 > length(ps.token_vec)
@@ -189,7 +194,9 @@ function process_assignment!(ps::ProcessState)
         discard!(ps) # discard the "<"
         discard!(ps) # discard the "-"
         push!(ps.julia_token_vec, "=")
-    elseif peek(ps) == K"<" && peek(ps, 2) ∈ KSet"Integer Float" && startswith(peek_raw(ps, 2), "-")
+    elseif peek(ps) == K"<" &&
+        peek(ps, 2) ∈ KSet"Integer Float" &&
+        startswith(peek_raw(ps, 2), "-")
         push!(ps.julia_token_vec, "=")
         push!(ps.julia_token_vec, peek_raw(ps, 2)[2:end]) # "<-1" should become "=1" but tokenized as "<" "-1" 
         discard!(ps) # discard the "<"
@@ -324,7 +331,9 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
             push!(ps.julia_token_vec, ";")
             process_statements!(ps)
         else
-            add_diagnostic!(ps, "Expecting operator none of + - * / ^, but got $(peek_raw(ps))")
+            add_diagnostic!(
+                ps, "Expecting operator none of + - * / ^, but got $(peek_raw(ps))"
+            )
         end
         process_trivia!(ps)
     end
@@ -365,7 +374,7 @@ function process_tilde_rhs!(ps::ProcessState)
 
     push!(julia_token_vec, buffer...)
     ps.julia_token_vec = julia_token_vec
-    
+
     if peek(ps) == K";"
         consume!(ps)
     end
@@ -406,7 +415,9 @@ function process_variable!(ps::ProcessState, allow_indexing=true)
         if peek(ps) != K"["
             return nothing
         elseif peek(simulate(process_trivia!, ps)) == K"]"
-            add_diagnostic!(ps, "Whitespace is not allowed between variable name and indexing.")
+            add_diagnostic!(
+                ps, "Whitespace is not allowed between variable name and indexing."
+            )
             process_trivia!(ps)
         end
     else
