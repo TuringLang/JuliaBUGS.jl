@@ -1141,6 +1141,12 @@ model
 }
 """)
 
+process_statements!(ps)
+
+parse("model{
+   log(mu[i, j, k]) <- lambda[i, j] + alpha[k] + beta[i, k] + gamma[j, k]
+}")
+
 # Endo
 parse("""
 model

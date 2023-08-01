@@ -26,7 +26,7 @@ function ProcessState(text::String, replace_period=true, allow_eq=true)
     return ProcessState(token_vec, 1, text, Any[], Diagnostic[], replace_period, allow_eq)
 end
 
-# Using Julia's parsing facility has some effects on the set of language we support: Julia reserved words are not allowed to be used as variable names
+# Julia's reserved words are not allowed to be used as variable names
 WHITELIST = KSet"Whitespace Comment NewlineWs EndMarker for in , { } ( ) [ ] : ; ~ < - <-- = + - * / ^ . Identifier Integer Float TOMBSTONE error"
 
 function ProcessState(ps::ProcessState)
@@ -95,15 +95,10 @@ function add_diagnostic!(ps, msg::String)
 
     if any((x -> x.first_byte == low).(ps.diagnostics))
         # give the pervious several tokens
-        txt = ""
-        for i in 1:min(10, ps.current_index)
-            txt = untokenize(ps.token_vec[ps.current_index - i + 1], ps.text) * txt
-        end
-        println("Stopped at $txt, Errors occurred in the program:")
         io = IOBuffer()
         JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
         println(String(take!(io)))
-        error("Encounter duplicate diagnostic, suspect infinite loop, stop and fix first.")
+        error("Encounter duplicated error, aborting.")
     end
     return push!(ps.diagnostics, diagnostic)
 end
@@ -122,16 +117,20 @@ function peek_raw(ps::ProcessState, n=1)
     return untokenize(ps.token_vec[ps.current_index + n - 1], ps.text)
 end
 
-function peek_next_non_trivia(ps::ProcessState, skip_newline=true)
+function peek_next_non_trivia(ps::ProcessState, skip_newline=true, n=1)
     trivia_tokens = KSet"Whitespace Comment"
     skip_newline && (trivia_tokens = trivia_tokens ∪ KSet"NewlineWs")
 
     seek_index = ps.current_index
-    while kind(ps.token_vec[seek_index]) ∈ trivia_tokens
-        seek_index += 1
-        if seek_index > length(ps.token_vec)
-            return K"EndMarker"
+    token_count = 0
+    while token_count <= n
+        while kind(ps.token_vec[seek_index]) ∈ trivia_tokens
+            seek_index += 1
+            if seek_index > length(ps.token_vec)
+                return K"EndMarker"
+            end
         end
+        token_count += 1
     end
     return kind(ps.token_vec[seek_index])
 end
@@ -161,6 +160,9 @@ function process_toplevel!(ps::ProcessState)
     expect_and_discard!(ps, "model")
     expect!(ps, "{", "begin")
     process_statements!(ps)
+    if peek(ps) != K"}"
+        add_diagnostic!(ps, "Parsing finished without get to the end of the program. $(peek_raw(ps)) is not expected to lead an statement.")
+    end
     expect!(ps, "}", "end")
     return process_trivia!(ps)
 end
@@ -244,11 +246,8 @@ function process_lhs!(ps::ProcessState)
 end
 
 function process_for!(ps)
-    if peek(ps) == K"for"
-        consume!(ps)
-    else
-        discard!(ps)
-    end
+    consume!(ps) # consume the "for"
+
     expect_and_discard!(ps, "(")
     if peek(ps) == K"Identifier"
         push!(ps.julia_token_vec, " ") # add white space between "for" and the loop variable
@@ -256,6 +255,7 @@ function process_for!(ps)
 
     process_variable!(ps)
     expect!(ps, "in")
+
     process_range!(ps)
     expect_and_discard!(ps, ")")
 
