@@ -161,7 +161,10 @@ function process_toplevel!(ps::ProcessState)
     expect!(ps, "{", "begin")
     process_statements!(ps)
     if peek(ps) != K"}"
-        add_diagnostic!(ps, "Parsing finished without get to the end of the program. $(peek_raw(ps)) is not expected to lead an statement.")
+        add_diagnostic!(
+            ps,
+            "Parsing finished without get to the end of the program. $(peek_raw(ps)) is not expected to lead an statement.",
+        )
     end
     expect!(ps, "}", "end")
     return process_trivia!(ps)
@@ -202,7 +205,10 @@ function process_assignment!(ps::ProcessState)
         t = ps.token_vec[ps.current_index]
         low = t.range.start
         high = t.range.stop
-        replaced_tokens = [Token(JuliaSyntax.SyntaxHead(K"-", JuliaSyntax.EMPTY_FLAGS), low:low+1), Token(t.head, low+1:high)]
+        replaced_tokens = [
+            Token(JuliaSyntax.SyntaxHead(K"-", JuliaSyntax.EMPTY_FLAGS), low:(low + 1)),
+            Token(t.head, (low + 1):high),
+        ]
         splice!(ps.token_vec, ps.current_index, replaced_tokens)
         discard!(ps) # discard the "<"
         discard!(ps) # discard the "-"

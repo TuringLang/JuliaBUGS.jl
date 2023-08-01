@@ -1352,7 +1352,8 @@ x[i] ~ dpois(mu[i])
 """)
 
 # Fire -- this should error on pi < -3.14159565
-parse("""
+parse(
+    """
 model{
 
 for ( i in 1 : N){
@@ -1387,7 +1388,8 @@ delta ~ dbern(r)
 tau <- 1 / pow(sigma, 2)
 
 }
-""")
+""",
+)
 
 # Hepatitis
 parse("""
@@ -1709,7 +1711,8 @@ var.BQ <- inprod(p.strata[], BQ.dev[])}
 """)
 
 # Hips model 4
-parse("""
+parse(
+    """
 model {
 
 # Evidence
@@ -1839,7 +1842,8 @@ mean.C.incr <- mean.C[2] - mean.C[1]
 mean.BQ.incr <- mean.BQ[2] - mean.BQ[1]
 mean.ICER <- mean.C.incr / mean.BQ.incr }
    
-   """)
+   """
+)
 
 # Jama River Valley Ecuador
 parse("""
