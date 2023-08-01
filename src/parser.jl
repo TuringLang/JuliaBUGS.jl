@@ -196,14 +196,15 @@ function process_assignment!(ps::ProcessState)
         push!(ps.julia_token_vec, "=")
     elseif peek(ps) == K"<" &&
         peek(ps, 2) ∈ KSet"Integer Float" &&
-        startswith(peek_raw(ps, 2), "-")
-        push!(ps.julia_token_vec, "=")
-        push!(ps.julia_token_vec, peek_raw(ps, 2)[2:end]) # "<-1" should become "=1" but tokenized as "<" "-1" 
+        startswith(peek_raw(ps, 2), "-") # special case: `a <-1` is tokenized as `a`, `<`, and `-1`
+        t = ps.token_vec[ps.current_index]
+        low = t.range.start
+        high = t.range.stop
+        replaced_tokens = [Token(JuliaSyntax.SyntaxHead(K"-", JuliaSyntax.EMPTY_FLAGS), low:low+1), Token(t.head, low+1:high)]
+        splice!(ps.token_vec, ps.current_index, replaced_tokens)
         discard!(ps) # discard the "<"
-        discard!(ps)
-        if peek(ps) ∈ KSet"; NewlineWs EndMarker { } for , "
-            return process_trivia!(ps)
-        end
+        discard!(ps) # discard the "-"
+        push!(ps.julia_token_vec, "=")
     elseif peek(ps) == K"<--"
         discard!(ps) # discard the "<--"
         push!(ps.julia_token_vec, "=")
@@ -222,7 +223,7 @@ function process_assignment!(ps::ProcessState)
 end
 
 function process_lhs!(ps::ProcessState)
-    if peek_raw(ps) ∈ ("logit", "cloglog", "log", "probit") && peek(ps, 2) != K"." # link function 
+    if peek_raw(ps) ∈ ("logit", "cloglog", "log", "probit") && peek(ps, 2) != K"." # link functions 
         consume!(ps) # consume the link function
         expect!(ps, "(")
         process_variable!(ps) # link functions can only take one argument
@@ -327,7 +328,7 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
             push!(ps.julia_token_vec, "- ")
             push!(ps.julia_token_vec, peek_raw(ps)[2:end])
             discard!(ps)
-        elseif peek(ps) ∈ KSet"Identifier for"
+        elseif peek(ps) ∈ KSet"Identifier for" # heuristic: the ";" is forgotten, so insert one
             push!(ps.julia_token_vec, ";")
             process_statements!(ps)
         else
