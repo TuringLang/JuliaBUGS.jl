@@ -27,6 +27,7 @@ include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
 
 include("bugsast.jl")
+include("parser.jl")
 include("variable_types.jl")
 include("compiler_pass.jl")
 include("node_functions.jl")
