@@ -370,6 +370,8 @@ function assignment!(pass::CollectVariables, expr::Expr, env)
 end
 
 function post_process(pass::CollectVariables, expr, env)
+    # TODO: can we distinguish observed stochastic variable used in loop bounds or computing indices?
+
     array_elements = Dict([v.name => [] for v in keys(pass.vars) if v.indices != ()])
     for v in keys(pass.vars)
         !isa(v, Scalar) && push!(array_elements[v.name], v)

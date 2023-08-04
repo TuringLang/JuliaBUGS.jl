@@ -12,7 +12,6 @@ function NodeFunctions(vars, array_sizes, array_bitmap)
     return NodeFunctions(vars, array_sizes, array_bitmap, Dict(), Dict(), Dict(), Dict())
 end
 
-# TODO: this function can be too confusing
 """
     evaluate_and_track_dependencies(var, env)
 

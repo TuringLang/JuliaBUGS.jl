@@ -110,7 +110,7 @@ end
 # TODO: add documentation
 # `_eval` mimic `eval` function, but use precompiled functions. This is possible because BUGS essentially only has
 # two kinds of expressions: function calls and indexing.
-# `env` is a dictionary mapping symbols in `expr` to values, values can be arrays or scalars
+# `env` is a dictionary or NT mapping symbols in `expr` to values, values can be arrays or scalars
 function _eval(expr::Number, env)
     return expr
 end
@@ -146,19 +146,25 @@ function _eval(expr, env)
 end
 
 function stochastic_neighbors(g::BUGSGraph, v::VarName, f)
-    stochastic_neighbors = ConcreteNodeInfo[]
+    stochastic_neighbors_vec = ConcreteNodeInfo[]
     for u in f(g, v)
         if g[u] isa ConcreteNodeInfo
-            if g[u].node_tupe == Stochastic
-                push!(stochastic_neighbors, g[u])
+            if g[u].node_type == Stochastic
+                push!(stochastic_neighbors_vec, g[u])
             else
-                push!(stochastic_neighbors, stochastic_neighbors(g, u, f))
+                ns = stochastic_neighbors(g, u, f)
+                for n in ns
+                    push!(stochastic_neighbors_vec, n)
+                end
             end
         else
-            push!(stochastic_neighbors, stochastic_neighbors(g, u, f))
+            ns = stochastic_neighbors(g, u, f)
+            for n in ns
+                push!(stochastic_neighbors_vec, n)
+            end
         end 
     end
-    return stochastic_neighbors
+    return stochastic_neighbors_vec
 end
 
 stochastic_inneighbors(g, v) = stochastic_neighbors(g, v, inneighbor_labels)

@@ -22,6 +22,8 @@ import DynamicPPL: settrans!!
 export @bugsast, @bugsmodel_str
 export compile
 
+export @varname
+
 # user defined functions and distributions are not supported yet
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
