@@ -145,26 +145,49 @@ function _eval(expr, env)
     return error("Unknown expression type: $expr of type $(typeof(expr))")
 end
 
+function markov_blanket(g, v::VarName)
+    parents = stochastic_inneighbors(g, v)
+    children = stochastic_outneighbors(g, v)
+    co_parents = VarName[]
+    for p in children
+        co_parents = vcat(co_parents, stochastic_inneighbors(g, p))
+    end
+    return unique(vcat(parents, children, co_parents...))
+end
+
+function markov_blanket(g, v::Union{Vector{VarName}, NTuple{N,VarName}} where N)
+    blanket = VarName[]
+    
+    for vn in v
+        blanket = vcat(blanket, markov_blanket(g, vn))
+    end
+    return unique(blanket)
+end
+
 function stochastic_neighbors(g::BUGSGraph, v::VarName, f)
-    stochastic_neighbors_vec = ConcreteNodeInfo[]
+    stochastic_neighbors_vec = VarName[]
+    logical_en_route = VarName[] # logical variables
     for u in f(g, v)
         if g[u] isa ConcreteNodeInfo
             if g[u].node_type == Stochastic
-                push!(stochastic_neighbors_vec, g[u])
+                push!(stochastic_neighbors_vec, u)
             else
+                push!(logical_en_route, u)
                 ns = stochastic_neighbors(g, u, f)
                 for n in ns
                     push!(stochastic_neighbors_vec, n)
                 end
             end
         else
+            # auxiliary nodes are not counted as logical nodes
             ns = stochastic_neighbors(g, u, f)
             for n in ns
                 push!(stochastic_neighbors_vec, n)
             end
         end 
     end
-    return stochastic_neighbors_vec
+    # return stochastic_neighbors_vec, logical_en_route
+    return [stochastic_neighbors_vec..., logical_en_route...]
 end
 
 stochastic_inneighbors(g, v) = stochastic_neighbors(g, v, inneighbor_labels)
@@ -288,6 +311,14 @@ struct SamplingContext <: AbstractPPL.AbstractContext
     rng::Random.AbstractRNG
 end
 
+struct LogDensityContext <: AbstractPPL.AbstractContext
+    flattened_values::AbstractVector
+end
+
+struct MarkovBlanketContext <: AbstractPPL.AbstractContext
+    blanket::Vector{VarName}
+end
+
 function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
     return evaluate!!(model, SamplingContext(rng))
 end
@@ -355,13 +386,93 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
     return @set vi.logp = logp
 end
 
-function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVector)
+function AbstractPPL.evaluate!!(model::BUGSModel, ctx::LogDensityContext)
+    flattened_values = ctx.flattened_values
     @assert length(flattened_values) == model.param_length
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model
     vi = deepcopy(varinfo)
     current_idx = 1
     logp = 0.0
     for vn in sorted_nodes
+        g[vn] isa AuxiliaryNodeInfo && continue
+
+        ni = g[vn]
+        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
+        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+        expr = node_function_expr.args[2]
+        if node_type == JuliaBUGS.Logical
+            value = _eval(expr, args)
+            setindex!!(vi, value, vn)
+        else
+            dist = _eval(expr, args)
+            if link_function_expr != :identity
+                dist = transformed(dist, bijector_of_link_function(link_function_expr))
+            end
+            if vn in parameters # the value of parameter variables are stored in flattened_values
+                l = _length(vn)
+                value_transformed = if l == 1
+                    flattened_values[current_idx]
+                else
+                    flattened_values[current_idx:(current_idx + l - 1)]
+                end
+                current_idx += l
+
+                value = invlink(dist, value_transformed)
+                if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
+                    value_transformed, logabsdetjac = with_logabsdet_jacobian(
+                        Bijectors.inverse(bijector(dist)), value
+                    )
+                    logp += logpdf(dist, value_transformed) + logabsdetjac
+                else
+                    logp += logpdf(dist, value)
+                end
+                vi = setindex!!(vi, value, vn)
+            else
+                logp += logpdf(dist, vi[vn])
+            end
+        end
+    end
+    return @set vi.logp = logp
+end
+
+function AbstractPPL.evaluate!!(model::BUGSModel, ctx::MarkovBlanketContext)
+    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
+    vi = deepcopy(varinfo)
+    logp = 0.0
+    for vn in sorted_nodes
+        vn in ctx.blanket || continue
+        g[vn] isa AuxiliaryNodeInfo && continue
+
+        ni = g[vn]
+        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
+        node_type == JuliaBUGS.Logical && continue
+        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+        expr = node_function_expr.args[2]
+        dist = _eval(expr, args)
+        if link_function_expr != :identity
+            dist = transformed(dist, bijector_of_link_function(link_function_expr))
+        end
+        value = vi[vn]
+        if DynamicPPL.transformation(vi) isa DynamicPPL.DynamicTransformation
+            value_transformed, logabsdetjac = with_logabsdet_jacobian(
+                Bijectors.inverse(bijector(dist)), value
+            )
+            logp += logpdf(dist, value_transformed) + logabsdetjac
+        else
+            logp += logpdf(dist, value)
+        end
+    end
+    return @set vi.logp = logp
+end
+
+function AbstractPPL.evaluate!!(model::BUGSModel, ctx::MarkovBlanketContext, flattened_values::AbstractVector)
+    @assert length(flattened_values) == model.param_length
+    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
+    vi = deepcopy(varinfo)
+    current_idx = 1
+    logp = 0.0
+    for vn in sorted_nodes
+        vn in ctx.blanket || continue
         g[vn] isa AuxiliaryNodeInfo && continue
 
         ni = g[vn]

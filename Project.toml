@@ -26,6 +26,17 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
+[weakdeps]
+GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
+GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
+GraphPlot = "a2cc645c-3eea-5389-862e-a155d0052231"
+TikzGraphs = "b4f28e30-c73f-5eaf-a395-8a9db949a742"
+
+[extensions]
+JuliaBUGSGraphMakieExt = ["GraphMakie", "GLMakie"]
+JuliaBUGSGraphPlotExt = ["GraphPlot"]
+JuliaBUGSTikzGraphsExt = ["TikzGraphs"]
+
 [extras]
 AdvancedHMC = "0bf59076-c3b1-5ca4-86bd-e02cd72cde3d"
 LogDensityProblemsAD = "996a588d-648d-4e1f-a8f0-a84b347e47b1"

@@ -88,3 +88,7 @@ include("run_logp_tests.jl")
 ]
     include("logp_tests/$s.jl")
 end
+
+@testset "Markov Blanket" begin
+    include("graphs.jl")
+end

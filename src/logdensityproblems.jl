@@ -1,5 +1,5 @@
 function LogDensityProblems.logdensity(model::BUGSModel, x::AbstractArray)
-    vi = evaluate!!(model, x)
+    vi = evaluate!!(model, LogDensityContext(x))
     return DynamicPPL.getlogp(vi)
 end
 
