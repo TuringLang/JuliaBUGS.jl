@@ -40,6 +40,7 @@ end
 @testset "Parser" begin
     # TODO: add more explicit tests for the parser
     include("bugsast.jl")
+    include("parser.jl")
 end
 
 @testset "Compiler Passes" begin
