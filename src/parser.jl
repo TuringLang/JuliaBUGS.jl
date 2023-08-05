@@ -21,6 +21,12 @@ function ProcessState(text::String, replace_period=true, allow_eq=true)
         end
     end
     if !isempty(unallowed_words)
+        # tokenize errors are generally corner cases that are side effects of the tokenizer
+        # and the fact that it's designed for Julia, not BUGS
+        # maybe the correct strategy is handle these error on a case by case basis
+        # one such corner case: `<---2` will not be tokenized to `<--` and `-2`, but `InvalidOperator` and `-2` 
+        # other possible errors:
+        # https://github.com/JuliaLang/JuliaSyntax.jl/blob/84ccafe9293efb643461995a5f4339ae5913612d/src/kinds.jl#L15C2-L32
         error("Unallowed words: $(join(unallowed_words, ", "))")
     end
     return ProcessState(token_vec, 1, text, Any[], Diagnostic[], replace_period, allow_eq)
@@ -292,7 +298,9 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
         return nothing
     end
     while true
-        if peek(ps) ∈ KSet"Integer Float"
+        if peek(ps) ∈ KSet"Integer Float" # TODO: maybe use JuliaSyntax.is_literal instead
+            # `-2` will be tokenized to token `-2`, the current design allow "- -2", which doesn't 
+            # seem to be a problem to Julia
             consume!(ps)
         elseif peek(ps) == K"Identifier"
             if peek(ps, 2) == K"("
