@@ -60,7 +60,7 @@ Language References:
 We provide a macro solution which allows users to write down model definitions using Julia:
 
 ```julia
-@bugsast begin
+@bugs begin
     for i in 1:N
         r[i] ~ dbin(p[i],n[i])
         b[i] ~ dnorm(0.0,tau)

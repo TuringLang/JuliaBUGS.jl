@@ -1,9 +1,9 @@
 using JuliaSyntax
-using JuliaSyntax: @K_str, @KSet_str, tokenize, untokenize, Diagnostic
-using JuliaFormatter
+using JuliaSyntax: @K_str, @KSet_str, tokenize, untokenize, Diagnostic, Token
+# using JuliaFormatter # can make into a PkgExt
 
 mutable struct ProcessState
-    token_vec::Vector{JuliaSyntax.Token}
+    token_vec::Vector{Token}
     current_index::Int
     text::String
     julia_token_vec::Vector{Any}
@@ -13,9 +13,32 @@ mutable struct ProcessState
 end
 
 function ProcessState(text::String, replace_period=true, allow_eq=true)
-    token_vec = filter(x -> kind(x) != K"error", tokenize(text))
+    token_vec = filter(x -> kind(x) != K"error", tokenize(text)) # generic "error" is disregarded
+    disallowed_words = Token[]
+    for t in token_vec
+        if kind(t) ∉ WHITELIST
+            push!(disallowed_words, t)
+        end
+    end
+    if !isempty(disallowed_words)
+        diagnostics = Diagnostic[]
+        for w in disallowed_words
+            if JuliaSyntax.is_error(w) || kind(w) == K"ErrorInvalidOperator"
+                error = "Error occurs, error kind is $(string(kind(w))), characters are $(untokenize(w, text))"
+            else
+                error = "Disallowed word '$(untokenize(w, text))'"
+            end
+            push!(diagnostics, Diagnostic(w.range.start, w.range.stop, :error, error))
+        end
+        io = IOBuffer()
+        JuliaSyntax.show_diagnostics(io, diagnostics, text)
+        error("Errors occurs while tokenizing: \n $(String(take!(io)))")
+    end
     return ProcessState(token_vec, 1, text, Any[], Diagnostic[], replace_period, allow_eq)
 end
+
+# Julia's reserved words are not allowed to be used as variable names
+WHITELIST = KSet"Whitespace Comment NewlineWs EndMarker for in , { } ( ) [ ] : ; ~ < - <-- = + - * / ^ . Identifier Integer Float TOMBSTONE error"
 
 function ProcessState(ps::ProcessState)
     return ProcessState(
@@ -80,18 +103,12 @@ function add_diagnostic!(ps, msg::String)
     low = first(ps.token_vec[ps.current_index].range)
     high = last(ps.token_vec[ps.current_index].range)
     diagnostic = JuliaSyntax.Diagnostic(low, high, :error, msg)
-    
-    if any((x->x.first_byte==low).(ps.diagnostics))
-        # give the pervious several tokens
-        txt = ""
-        for i in 1:min(10, ps.current_index)
-            txt = untokenize(ps.token_vec[ps.current_index - i + 1], ps.text) * txt
-        end
-        println("Stopped at $txt, Errors occurred in the program:")
+
+    if any((x -> x.first_byte == low).(ps.diagnostics))
         io = IOBuffer()
         JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
         println(String(take!(io)))
-        error("Encounter duplicate diagnostic, suspect infinite loop, stop and fix first.")
+        error("Encounter duplicated error, aborting.")
     end
     return push!(ps.diagnostics, diagnostic)
 end
@@ -100,15 +117,8 @@ function peek(ps::ProcessState, n=1)
     if ps.current_index + n - 1 > length(ps.token_vec)
         return K"EndMarker"
     end
-    # TODO: Julia keywords will be tokenzied, but some of them should be treated as identifiers
-    k = kind(ps.token_vec[ps.current_index + n - 1])
-    if k ∈ WHITELIST
-        return k
-    end
-    error("Unexpected token kind: $k")
+    return kind(ps.token_vec[ps.current_index + n - 1])
 end
-
-WHITELIST = KSet"Whitespace Comment NewlineWs EndMarker for in , { } ( ) [ ] : ; ~ < - <-- = + - * / ^ . Identifier Integer Float TOMBSTONE error"
 
 function peek_raw(ps::ProcessState, n=1)
     if ps.current_index + n - 1 > length(ps.token_vec)
@@ -117,16 +127,24 @@ function peek_raw(ps::ProcessState, n=1)
     return untokenize(ps.token_vec[ps.current_index + n - 1], ps.text)
 end
 
-function peek_next_non_trivia(ps::ProcessState, skip_newline=true)
+function peek_next_non_trivia(ps::ProcessState, skip_newline=true, n=1)
+    if ps.current_index + n - 1 > length(ps.token_vec)
+        return K"EndMarker"
+    end
+
     trivia_tokens = KSet"Whitespace Comment"
     skip_newline && (trivia_tokens = trivia_tokens ∪ KSet"NewlineWs")
 
     seek_index = ps.current_index
-    while kind(ps.token_vec[seek_index]) ∈ trivia_tokens
-        seek_index += 1
-        if seek_index > length(ps.token_vec)
-            return K"EndMarker"
+    token_count = 0
+    while token_count <= n
+        while kind(ps.token_vec[seek_index]) ∈ trivia_tokens
+            seek_index += 1
+            if seek_index > length(ps.token_vec)
+                return K"EndMarker"
+            end
         end
+        token_count += 1
     end
     return kind(ps.token_vec[seek_index])
 end
@@ -156,6 +174,12 @@ function process_toplevel!(ps::ProcessState)
     expect_and_discard!(ps, "model")
     expect!(ps, "{", "begin")
     process_statements!(ps)
+    if peek(ps) != K"}"
+        add_diagnostic!(
+            ps,
+            "Parsing finished without get to the end of the program. $(peek_raw(ps)) is not expected to lead an statement.",
+        )
+    end
     expect!(ps, "}", "end")
     return process_trivia!(ps)
 end
@@ -173,7 +197,6 @@ function process_statements!(ps::ProcessState)
 end
 
 function process_assignment!(ps::ProcessState)
-    # the first token is guaranteed to be an identifier
     process_lhs!(ps)
 
     if peek(ps) == K"~"
@@ -189,14 +212,20 @@ function process_assignment!(ps::ProcessState)
         discard!(ps) # discard the "<"
         discard!(ps) # discard the "-"
         push!(ps.julia_token_vec, "=")
-    elseif peek(ps) == K"<" && peek(ps, 2) ∈ KSet"Integer Float" && startswith(peek_raw(ps, 2), "-")
-        push!(ps.julia_token_vec, "=")
-        push!(ps.julia_token_vec, peek_raw(ps, 2)[2:end]) # "<-1" should become "=1" but tokenized as "<" "-1" 
+    elseif peek(ps) == K"<" &&
+        peek(ps, 2) ∈ KSet"Integer Float" &&
+        startswith(peek_raw(ps, 2), "-") # special case: `a <-1` is tokenized as `a`, `<`, and `-1`
+        t = ps.token_vec[ps.current_index]
+        low = t.range.start
+        high = t.range.stop
+        replaced_tokens = [
+            Token(JuliaSyntax.SyntaxHead(K"-", JuliaSyntax.EMPTY_FLAGS), low:(low + 1)),
+            Token(t.head, (low + 1):high),
+        ]
+        splice!(ps.token_vec, ps.current_index, replaced_tokens)
         discard!(ps) # discard the "<"
-        discard!(ps)
-        if peek(ps) ∈ KSet"; NewlineWs EndMarker { } for , "
-            return process_trivia!(ps)
-        end
+        discard!(ps) # discard the "-"
+        push!(ps.julia_token_vec, "=")
     elseif peek(ps) == K"<--"
         discard!(ps) # discard the "<--"
         push!(ps.julia_token_vec, "=")
@@ -215,7 +244,7 @@ function process_assignment!(ps::ProcessState)
 end
 
 function process_lhs!(ps::ProcessState)
-    if peek_raw(ps) ∈ ("logit", "cloglog", "log", "probit") && peek(ps, 2) != K"." # link function 
+    if peek_raw(ps) ∈ ("logit", "cloglog", "log", "probit") && peek(ps, 2) != K"." # link functions 
         consume!(ps) # consume the link function
         expect!(ps, "(")
         process_variable!(ps) # link functions can only take one argument
@@ -236,11 +265,8 @@ function process_lhs!(ps::ProcessState)
 end
 
 function process_for!(ps)
-    if peek(ps) == K"for"
-        consume!(ps)
-    else
-        discard!(ps)
-    end
+    consume!(ps) # consume the "for"
+
     expect_and_discard!(ps, "(")
     if peek(ps) == K"Identifier"
         push!(ps.julia_token_vec, " ") # add white space between "for" and the loop variable
@@ -248,6 +274,7 @@ function process_for!(ps)
 
     process_variable!(ps)
     expect!(ps, "in")
+
     process_range!(ps)
     expect_and_discard!(ps, ")")
 
@@ -279,6 +306,9 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
     end
     while true
         if peek(ps) ∈ KSet"Integer Float"
+            # `-2` will be tokenized to token `-2`, which means the current design allow "- -2"
+            # Julia handles this well and in a intuitive way; may not be native to BUGS, but
+            # it's a unambiguous syntax, so we allow it
             consume!(ps)
         elseif peek(ps) == K"Identifier"
             if peek(ps, 2) == K"("
@@ -320,11 +350,13 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
             push!(ps.julia_token_vec, "- ")
             push!(ps.julia_token_vec, peek_raw(ps)[2:end])
             discard!(ps)
-        elseif peek(ps) ∈ KSet"Identifier for"
+        elseif peek(ps) ∈ KSet"Identifier for" # heuristic: the ";" is forgotten, so insert one
             push!(ps.julia_token_vec, ";")
             process_statements!(ps)
         else
-            add_diagnostic!(ps, "Expecting operator none of + - * / ^, but got $(peek_raw(ps))")
+            add_diagnostic!(
+                ps, "Expecting operator none of + - * / ^, but got $(peek_raw(ps))"
+            )
         end
         process_trivia!(ps)
     end
@@ -365,9 +397,11 @@ function process_tilde_rhs!(ps::ProcessState)
 
     push!(julia_token_vec, buffer...)
     ps.julia_token_vec = julia_token_vec
-    
+
     if peek(ps) == K";"
         consume!(ps)
+    elseif peek_next_non_trivia(ps) == K"Identifier" # heuristic: the ";" is forgotten, so insert one
+        push!(julia_token_vec, ";")
     end
 end
 
@@ -406,7 +440,9 @@ function process_variable!(ps::ProcessState, allow_indexing=true)
         if peek(ps) != K"["
             return nothing
         elseif peek(simulate(process_trivia!, ps)) == K"]"
-            add_diagnostic!(ps, "Whitespace is not allowed between variable name and indexing.")
+            add_diagnostic!(
+                ps, "Whitespace is not allowed between variable name and indexing."
+            )
             process_trivia!(ps)
         end
     else
@@ -475,18 +511,4 @@ function to_julia_program(julia_token_vec, text)
         end
     end
     return program
-end
-
-function parse(prog::String, replace_period=true, format_output=true)
-    ps = ProcessState(prog, replace_period)
-    process_toplevel!(ps)
-    if !isempty(ps.diagnostics)
-        io = IOBuffer()
-        JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
-        error("Errors in the program: \n $(String(take!(io)))")
-    end
-    julia_program = to_julia_program(ps.julia_token_vec, ps.text)
-    format_output && (julia_program = format_text(julia_program))
-    return println(julia_program)
-    # return Meta.parse(julia_program)
 end

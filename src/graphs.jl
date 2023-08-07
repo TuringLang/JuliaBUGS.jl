@@ -210,6 +210,10 @@ end
 # (i.e., the `node_function_expr` are embedded with all the data), we can lean
 # down the variable store and only contains observational data, logical variable values, 
 # and model parameters
+# TODO: because all the (useful) data are already plugged into the expressions
+# (i.e., the `node_function_expr` are embedded with all the data), we can lean
+# down the variable store and only contains observational data, logical variable values, 
+# and model parameters
 function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
     vs = initialize_var_store(data, vars, array_sizes)
     vi = SimpleVarInfo(vs)
