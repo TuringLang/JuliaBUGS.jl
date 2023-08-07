@@ -43,6 +43,15 @@ ps = ProcessState("[, 3]")
 process_indexing!(ps)
 to_julia_program(ps)
 
+# test error handling of special errors
+ps = ProcessState("<---2")
+# tokenize errors are generally corner cases that are side effects of the tokenizer
+# and the fact that it's designed for Julia, not BUGS
+# maybe the correct strategy is handle these error on a case by case basis
+# one such corner case: `<---2` will not be tokenized to `<--` and `-2`, but `InvalidOperator` and `-2` 
+# other possible errors:
+# https://github.com/JuliaLang/JuliaSyntax.jl/blob/84ccafe9293efb643461995a5f4339ae5913612d/src/kinds.jl#L15C2-L32
+
 function test_process_trivia!()
     # Test 1: Processing whitespace
     ps = ProcessState("   model")
@@ -82,6 +91,40 @@ test_on(
 }
 """,
 )
+
+using Base.StackTraces
+
+function risky_function()
+    error("Something went wrong in risky_function!")
+end
+
+function another_function()
+    risky_function()
+end
+
+function demo_function()
+    try
+        another_function()
+    catch e
+        println("Exception caught: ", e)
+
+        # Get the backtrace and convert it to a stacktrace
+        bt = catch_backtrace()
+        st = stacktrace(bt)
+
+        # Display the stacktrace in a readable format
+        for frame in st
+            println(frame)
+        end
+
+        # If you want to identify the function that threw the exception, it's 
+        # typically one of the top entries in the stacktrace. You can retrieve it as:
+        throwing_function = st[1]
+        println("\nThe exception was thrown from: ", throwing_function)
+    end
+end
+
+demo_function()
 
 parse("""model
 {

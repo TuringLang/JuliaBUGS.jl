@@ -65,6 +65,10 @@ Panic mode is a last resort. Ideally, we want try to sync up the parsing state a
 * Consecutive errors
     * This can be very tricky, because the detection is very difficult in the worst case. If we have a state syncing function for every state, and the lookahead length is 2, then we can match the "next token" and enter the next state and then try to sync again in that state.
 
+Cases we can handle by matching
+
+The difficulty comes from the fact that the tokenizer is not built for BUGS
+
 Some starting code
 ```julia
 function sync_state(ps::ProcessState, current_token::String, next_token::Tuple)
@@ -94,3 +98,85 @@ function skip_until(ps::ProcessState, t::String, depth_limit=5)
     return seek_index # maybe actual location in the text 
 end
 ```
+
+More prototype code on a later try
+```julia
+function discard_until!(ps::ProcessState, targets::Vector{String})
+    discarded_program_piece = ""
+    text_pos_pre = peek(ps).range.start
+    while peek_raw(ps) ∉ targets
+        discarded_program_piece *= peek_raw(ps)
+        discard!(ps)
+    end
+    text_pos_post = peek(ps).range.start - 1
+    return (text_pos_pre, text_pos_post), discarded_program_piece
+end
+
+struct ParseException <: Exception end
+
+function process_toplevel!(ps::ProcessState)
+    expect_and_discard!(ps, "model")
+    expect!(ps, "{", "begin")
+    try # use exception to discard call stack
+        process_statements!(ps)
+    catch e
+        if e isa ParseException
+            try_recovery!(ps)
+            return nothing
+        else
+            rethrow(e)
+        end
+    end
+    if peek(ps) != K"}"
+        add_diagnostic!(
+            ps,
+            "Parsing finished without get to the end of the program. $(peek_raw(ps)) is not expected to lead an statement.",
+        )
+    end
+    expect!(ps, "}", "end")
+    return process_trivia!(ps)
+end
+
+# panic mode recovery
+function try_recovery!(ps)
+    # seek to the closest sync point and dispatch to the corresponding `process_` function
+
+    # sync points: for, ;, <, ~, {, } 
+    # `\n` is not good, because we allow multiline expressions as C does
+    (text_pos_pre, text_pos_post), discarded_program_piece = discard_until!(ps, ["for", ";", "<", "~", "{"])
+    
+    try
+        if peek_raw(ps) == "for"
+        elseif peek_raw(ps) == ";"
+            consume!(ps)
+            process_statements!(ps)
+        elseif peek_raw(ps) in ("<", "~")
+            recovery_function(ps) = process_assignment!(ps)
+        elseif peek_raw(ps) == "{"
+            # TODO: this is for loop body
+        end
+        # finish the current statement and move on
+        # possibly throw exception while in a for loop
+        process_statements!(ps) 
+    catch e
+        if e isa ParseException
+            try_recovery!(ps)
+        else
+            rethrow(e)
+        end
+    end
+end
+```
+
+Notes on the try on implementing `panic mode`:
+* What I tried
+    * throw error when we detect that the `current_pos` is not moving forward, this is implemented implicitly in `add_diagnostic!` function -- when two diagnostics are added with the same `current_pos`, then we throw an error
+    * my plan was instead of throwing an error, we can enter the panic mode, and try to recover
+    * recovery in concept is also simple, we just need to skip tokens until a synchronization point is found, and then dispatch to the corresponding `process_` function
+    * the issue is rooted in the mutual recursive nature of the program, when we throw an exception, we are in a deep call stack, so reentry to the previous function requires some thinking
+    
+
+    * **After some thinking** a monolithic recovery may not be the best idea, we should put try catch in
+        * `process_for`: wrapping `process_statements!` so we have a chance to return to the for loop to wrap it up
+        * `process_statements!`: wrap the while loop body
+    * point is the recovery requirements are different for different functions, so we should put the try catch in the functions themselves

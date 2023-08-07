@@ -150,7 +150,7 @@ allowed syntax is used, and normalizes certain expressions.
 Used expression heads: `:~` for tilde calls, `:ref` for indexing, `:(:)` for ranges.  These are
 converted from `:call` variants.
 """
-macro bugsast(expr)
+macro bugs(expr)
     return Meta.quot(post_parsing_processing(warn_link_function(bugsast(expr, __source__))))
 end
 
@@ -210,6 +210,22 @@ function bugs_to_julia(s)
     return s
 end
 
+function parse(prog::String, replace_period=true, format_output=true)
+    ps = ProcessState(prog, replace_period)
+    process_toplevel!(ps)
+    if !isempty(ps.diagnostics)
+        io = IOBuffer()
+        JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
+        error("Errors in the program: \n $(String(take!(io)))")
+    end
+    julia_program = to_julia_program(ps.julia_token_vec, ps.text)
+    format_output && (julia_program = format_text(julia_program))
+    # return println(julia_program)
+    expr = Meta.parse(julia_program)
+    return Meta.quot(post_parsing_processing(bugsast(expr, LineNumberNode(1, Symbol(@__FILE__)))))
+end
+
+# during the transition phase, this macro is kept, but for internal use only
 macro bugsmodel_str(s::String)
     # Convert and wrap the whole thing in a block for parsing
     transformed_code = "begin\n$(bugs_to_julia(s))\nend"

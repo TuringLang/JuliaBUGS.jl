@@ -13,21 +13,26 @@ mutable struct ProcessState
 end
 
 function ProcessState(text::String, replace_period=true, allow_eq=true)
-    token_vec = filter(x -> kind(x) != K"error", tokenize(text))
-    unallowed_words = String[]
+    token_vec = filter(x -> kind(x) != K"error", tokenize(text)) # generic "error" is disregarded
+    disallowed_words = String[]
     for t in token_vec
         if kind(t) ∉ WHITELIST
-            push!(unallowed_words, untokenize(t, text))
+            push!(disallowed_words, t)
         end
     end
-    if !isempty(unallowed_words)
-        # tokenize errors are generally corner cases that are side effects of the tokenizer
-        # and the fact that it's designed for Julia, not BUGS
-        # maybe the correct strategy is handle these error on a case by case basis
-        # one such corner case: `<---2` will not be tokenized to `<--` and `-2`, but `InvalidOperator` and `-2` 
-        # other possible errors:
-        # https://github.com/JuliaLang/JuliaSyntax.jl/blob/84ccafe9293efb643461995a5f4339ae5913612d/src/kinds.jl#L15C2-L32
-        error("Unallowed words: $(join(unallowed_words, ", "))")
+    if !isempty(disallowed_words)
+        diagnostics = Diagnostic[]
+        for w in disallowed_words
+            if JuliaSyntax.is_error || kind(w) == K"ErrorInvalidOperator"
+                error = "Error occurs, error kind is $(string(kind(w))), characters are $(untokenize(w, text))"
+            else
+                error = "Disallowed word '$(untokenize(w, text))'"
+            end  
+            push!(diagnostics, error)
+        end
+        io = IOBuffer()
+        JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
+        error("Errors occurs while tokenizing: \n $(String(take!(io)))")    
     end
     return ProcessState(token_vec, 1, text, Any[], Diagnostic[], replace_period, allow_eq)
 end
@@ -100,7 +105,6 @@ function add_diagnostic!(ps, msg::String)
     diagnostic = JuliaSyntax.Diagnostic(low, high, :error, msg)
 
     if any((x -> x.first_byte == low).(ps.diagnostics))
-        # give the pervious several tokens
         io = IOBuffer()
         JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
         println(String(take!(io)))
@@ -182,6 +186,7 @@ function process_statements!(ps::ProcessState)
         if peek(ps) == K"for"
             process_for!(ps)
         else # peek(ps) == K"Identifier"
+            process_lhs!(ps)
             process_assignment!(ps)
         end
         process_trivia!(ps)
@@ -189,9 +194,7 @@ function process_statements!(ps::ProcessState)
 end
 
 function process_assignment!(ps::ProcessState)
-    # the first token is guaranteed to be an identifier
-    process_lhs!(ps)
-
+    # left-hand side of the assignment is already processed before calling this function
     if peek(ps) == K"~"
         consume!(ps)
         process_tilde_rhs!(ps)
@@ -298,9 +301,10 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
         return nothing
     end
     while true
-        if peek(ps) ∈ KSet"Integer Float" # TODO: maybe use JuliaSyntax.is_literal instead
-            # `-2` will be tokenized to token `-2`, the current design allow "- -2", which doesn't 
-            # seem to be a problem to Julia
+        if peek(ps) ∈ KSet"Integer Float"
+            # `-2` will be tokenized to token `-2`, which means the current design allow "- -2"
+            # Julia handles this well and in a intuitive way; may not be native to BUGS, but
+            # it's a unambiguous syntax, so we allow it
             consume!(ps)
         elseif peek(ps) == K"Identifier"
             if peek(ps, 2) == K"("
@@ -501,18 +505,4 @@ function to_julia_program(julia_token_vec, text)
         end
     end
     return program
-end
-
-function parse(prog::String, replace_period=true, format_output=true)
-    ps = ProcessState(prog, replace_period)
-    process_toplevel!(ps)
-    if !isempty(ps.diagnostics)
-        io = IOBuffer()
-        JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
-        error("Errors in the program: \n $(String(take!(io)))")
-    end
-    julia_program = to_julia_program(ps.julia_token_vec, ps.text)
-    format_output && (julia_program = format_text(julia_program))
-    return println(julia_program)
-    # return Meta.parse(julia_program)
 end
