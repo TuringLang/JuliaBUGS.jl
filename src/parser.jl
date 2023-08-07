@@ -27,12 +27,12 @@ function ProcessState(text::String, replace_period=true, allow_eq=true)
                 error = "Error occurs, error kind is $(string(kind(w))), characters are $(untokenize(w, text))"
             else
                 error = "Disallowed word '$(untokenize(w, text))'"
-            end  
+            end
             push!(diagnostics, Diagnostic(w.range.start, w.range.stop, :error, error))
         end
         io = IOBuffer()
         JuliaSyntax.show_diagnostics(io, diagnostics, text)
-        error("Errors occurs while tokenizing: \n $(String(take!(io)))")    
+        error("Errors occurs while tokenizing: \n $(String(take!(io)))")
     end
     return ProcessState(token_vec, 1, text, Any[], Diagnostic[], replace_period, allow_eq)
 end
@@ -131,7 +131,7 @@ function peek_next_non_trivia(ps::ProcessState, skip_newline=true, n=1)
     if ps.current_index + n - 1 > length(ps.token_vec)
         return K"EndMarker"
     end
-    
+
     trivia_tokens = KSet"Whitespace Comment"
     skip_newline && (trivia_tokens = trivia_tokens ∪ KSet"NewlineWs")
 
