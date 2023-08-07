@@ -30,7 +30,7 @@ inits = (
     sd_eta=0.5,
 )
 
-model_def = @bugsast begin
+model_def = @bugs begin
     # Outcomes with person-level data available
     for i in 1:n_indexed
         outcome_y[i] ~ dnorm(mu_indexed[i], tau_epsilon)

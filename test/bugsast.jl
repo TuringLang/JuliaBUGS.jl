@@ -1,7 +1,7 @@
 # more examples can be found here: https://www.mrc-bsu.cam.ac.uk/software/bugs/
 
 # bugsast
-regression = @bugsast begin
+regression = @bugs begin
     for i in 1:N
         Y[i] ~ dnorm(μ[i], τ)
         μ[i] = α + β * (x[i] - x̄)
@@ -15,7 +15,7 @@ end
 
 regression_data = (x=[1, 2, 3, 4, 5], Y=[1, 3, 3, 3, 5], x̄=3, N=5)
 
-_rats = @bugsast begin
+_rats = @bugs begin
     for i in 1:N
         for j in 1:T
             Y[i, j] ~ dnorm(μ[i, j], τ_c)
@@ -34,7 +34,7 @@ _rats = @bugsast begin
     α₀ = α_c - x̄ * β_c
 end
 
-_hearts = @bugsast begin
+_hearts = @bugs begin
     for i in 1:N
         y[i] ~ dbin(q[i], t[i])
         q[i] = P[state1[i]]
@@ -52,7 +52,7 @@ _hearts = @bugsast begin
     delta ~ dnorm(0, 1e-4)
 end
 
-_regions1 = @bugsast begin
+_regions1 = @bugs begin
     x[1] = 10
     x[2] ~ dnorm(0, 1)
     for i in 1:x[1]
@@ -60,14 +60,14 @@ _regions1 = @bugsast begin
     end
 end
 
-_regions2 = @bugsast begin
+_regions2 = @bugs begin
     x[2] ~ dnorm(0, 1)
     for i in 1:x[1]
         y[i] = i
     end
 end
 
-_regions3 = @bugsast begin
+_regions3 = @bugs begin
     x1 = 10
     x2 ~ dnorm(0, 1)
     for i in 1:x1
@@ -75,81 +75,81 @@ _regions3 = @bugsast begin
     end
 end
 
-_interpolated = @bugsast begin
+_interpolated = @bugs begin
     x = exp($(Expr(:call, :f, 10)))
     y = x[$("sdf")] # muahaha...
 end
 
-# bugsmodel
-_kidney_transplants = bugsmodel"""
-for (i in 1:N) {
-    Score[i] ~ dcat(p[i,])
-    p[i,1] <- 1 - Q[i,1]
+# # bugsmodel
+# _kidney_transplants = bugsmodel"""
+# for (i in 1:N) {
+#     Score[i] ~ dcat(p[i,])
+#     p[i,1] <- 1 - Q[i,1]
 
-    for (r in 2:5) {
-        p[i,r] <- Q[i,r-1] - Q[i,r]
-    }
+#     for (r in 2:5) {
+#         p[i,r] <- Q[i,r-1] - Q[i,r]
+#     }
 
-    p[i,6] <- Q[i,5]
+#     p[i,6] <- Q[i,5]
 
-    for (r in 1:5) {
-        logit(Q[i,r]) <- b.apd*lAPD[i] - c[r]
-    }
-}
+#     for (r in 1:5) {
+#         logit(Q[i,r]) <- b.apd*lAPD[i] - c[r]
+#     }
+# }
 
-for (i in 1:5) {
-    dc[i] ~ dunif(0, 20)
-}
+# for (i in 1:5) {
+#     dc[i] ~ dunif(0, 20)
+# }
 
-c[1] <- dc[1]
+# c[1] <- dc[1]
 
-for (i in 2:5) {
-    c[i] <- c[i-1] + dc[i]
-}
+# for (i in 2:5) {
+#     c[i] <- c[i-1] + dc[i]
+# }
 
-b.apd ~ dnorm(0, 1.0E-03)
-or.apd <- exp(b.apd)
-"""
+# b.apd ~ dnorm(0, 1.0E-03)
+# or.apd <- exp(b.apd)
+# """
 
-growth_curve = bugsmodel"""
-for (i in 1:5) {
-    y[i] ~ dnorm(mu[i], tau)
-    mu[i] <- alpha + beta*(x[i] - mean(x[]))
-}
+# growth_curve = bugsmodel"""
+# for (i in 1:5) {
+#     y[i] ~ dnorm(mu[i], tau)
+#     mu[i] <- alpha + beta*(x[i] - mean(x[]))
+# }
 
-alpha ~ dflat()
-beta ~ dflat()
-tau <- 1/sigma2
-log(sigma2) <- 2*log.sigma
-log.sigma ~ dflat()
-"""
+# alpha ~ dflat()
+# beta ~ dflat()
+# tau <- 1/sigma2
+# log(sigma2) <- 2*log.sigma
+# log.sigma ~ dflat()
+# """
 
-jaws = bugsmodel"""
-for (i in 1:20) { Y[i, 1:4] ~ dmnorm(mu[], Sigma.inv[,]) }
-for (j in 1:4) { mu[j] <- alpha + beta*x[j] }
-alpha ~ dnorm(0, 0.0001)
-beta ~ dnorm(0, 0.0001)
-Sigma.inv[1:4, 1:4] ~ dwish(R[,], 4)
-Sigma[1:4, 1:4] <- inverse(Sigma.inv[,])
-"""
+# jaws = bugsmodel"""
+# for (i in 1:20) { Y[i, 1:4] ~ dmnorm(mu[], Sigma.inv[,]) }
+# for (j in 1:4) { mu[j] <- alpha + beta*x[j] }
+# alpha ~ dnorm(0, 0.0001)
+# beta ~ dnorm(0, 0.0001)
+# Sigma.inv[1:4, 1:4] ~ dwish(R[,], 4)
+# Sigma[1:4, 1:4] <- inverse(Sigma.inv[,])
+# """
 
-truncation = bugsmodel"""
-a ~ dwish(R[,], 4) C (0, 1)
-a ~ dwish(R[,], 4) C (,1)
-a ~ dwish(R[,], 4) C (0,)
-a ~ dwish(R[,], 4) T (0, 1)
-log(x) <- dnorm()C(, 100)
-"""
+# truncation = bugsmodel"""
+# a ~ dwish(R[,], 4) C (0, 1)
+# a ~ dwish(R[,], 4) C (,1)
+# a ~ dwish(R[,], 4) C (0,)
+# a ~ dwish(R[,], 4) T (0, 1)
+# log(x) <- dnorm()C(, 100)
+# """
 
-jaws = bugsmodel"""
-for(i in 1:20) { 
-    Y[i, 1:4] ~ dmnorm(mu[], Sigma.inv[,]) 
-}
-if(equal(x, 1)) {
-     y ~ dbla()
-}
+# jaws = bugsmodel"""
+# for(i in 1:20) { 
+#     Y[i, 1:4] ~ dmnorm(mu[], Sigma.inv[,]) 
+# }
+# if(equal(x, 1)) {
+#      y ~ dbla()
+# }
 
-if	 (equal(x, 1)) {
-     y ~ dbla()
-}
-"""
+# if	 (equal(x, 1)) {
+#      y ~ dbla()
+# }
+# """

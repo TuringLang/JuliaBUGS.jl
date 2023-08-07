@@ -665,7 +665,7 @@ end
 Compile the model definition `model_def` with data `data` and target `target`.
 
 # Arguemnts
-- `model_def`: the Julia Expr object returned from `@bugsast` or `bugsmodel`.
+- `model_def`: the Julia Expr object returned from `@bugs` or `parse_bugs`.
 - `data`: data and model prameters.
 - `target`: one of `:DynamicPPL`, `:IR`, or `:Graph`. 
 - `inits`: initial values for the MCMC chain.
