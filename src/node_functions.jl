@@ -287,6 +287,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
         rhs_expr = replace_constants_in_expr(rhs_expr, env)
         evaled_rhs, dependencies, node_args = evaluate_and_track_dependencies(rhs_expr, env)
 
+        # TODO: since we are not evaluating the node function expressions anymore, we don't have to store the expression like anonymous functions 
         # rhs can be evaluated into a concrete value here, because including transformed variables in the data
         # is effectively constant propagation
         if is_resolved(evaled_rhs)

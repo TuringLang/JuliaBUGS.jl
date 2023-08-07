@@ -1,4 +1,4 @@
-model_def = @bugsast begin
+model_def = @bugs begin
     a ~ dgamma(0.001, 0.001)
 end
 

@@ -19,7 +19,7 @@ import Distributions: truncated
 import AbstractPPL: AbstractContext, evaluate!!
 import DynamicPPL: settrans!!
 
-export @bugsast, @bugsmodel_str
+export @bugs, parse_bugs
 export compile
 
 # user defined functions and distributions are not supported yet
@@ -27,6 +27,7 @@ include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
 
 include("bugsast.jl")
+include("parser.jl")
 include("variable_types.jl")
 include("compiler_pass.jl")
 include("node_functions.jl")

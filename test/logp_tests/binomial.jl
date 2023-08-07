@@ -1,4 +1,4 @@
-model_def = @bugsast begin
+model_def = @bugs begin
     a ~ dbin(0.1, 10)
 end
 

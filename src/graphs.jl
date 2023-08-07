@@ -111,9 +111,14 @@ end
 # `_eval` mimic `eval` function, but use precompiled functions. This is possible because BUGS essentially only has
 # two kinds of expressions: function calls and indexing.
 # `env` is a dictionary mapping symbols in `expr` to values, values can be arrays or scalars
+function _eval(expr::Number, env)
+    return expr
+end
 function _eval(expr::Symbol, env)
     if expr == :nothing
         return nothing
+    elseif expr == :(:)
+        return Colon()
     else # intentional strict, all corner cases should be handled above
         return env[expr]
     end
@@ -137,7 +142,7 @@ function _eval(expr::Expr, env)
     end
 end
 function _eval(expr, env)
-    return expr
+    return error("Unknown expression type: $expr of type $(typeof(expr))")
 end
 
 """
@@ -153,6 +158,10 @@ struct BUGSModel <: AbstractPPL.AbstractProbabilisticProgram
     sorted_nodes::Vector{VarName}
 end
 
+# TODO: because all the (useful) data are already plugged into the expressions
+# (i.e., the `node_function_expr` are embedded with all the data), we can lean
+# down the variable store and only contains observational data, logical variable values, 
+# and model parameters
 function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
     vs = initialize_var_store(data, vars, array_sizes)
     vi = SimpleVarInfo(vs)

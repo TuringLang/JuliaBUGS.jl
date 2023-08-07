@@ -5,7 +5,7 @@ inits = load_dictionary(:rats, :init, true)
 @unpack N, T, x, xbar, Y = data
 
 # prepare models
-model_def = @bugsast begin
+model_def = @bugs begin
     for i in 1:N
         for j in 1:T
             Y[i, j] ~ dnorm(mu[i, j], tau_c)
