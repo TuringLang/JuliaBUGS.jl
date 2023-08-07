@@ -19,7 +19,7 @@ import Distributions: truncated
 import AbstractPPL: AbstractContext, evaluate!!
 import DynamicPPL: settrans!!
 
-export @bugs, parse
+export @bugs, parse_bugs
 export compile
 
 # user defined functions and distributions are not supported yet

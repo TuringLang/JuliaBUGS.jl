@@ -1,6 +1,6 @@
 module BUGSExamples
 
-using JuliaBUGS: @bugsast, @bugsmodel_str
+using JuliaBUGS: @bugs, @bugsmodel_str
 
 include("Volume_I/Blocker.jl")
 include("Volume_I/Bones.jl")

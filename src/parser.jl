@@ -1,9 +1,9 @@
 using JuliaSyntax
-using JuliaSyntax: @K_str, @KSet_str, tokenize, untokenize, Diagnostic
-using JuliaFormatter
+using JuliaSyntax: @K_str, @KSet_str, tokenize, untokenize, Diagnostic, Token
+# using JuliaFormatter # can make into a PkgExt
 
 mutable struct ProcessState
-    token_vec::Vector{JuliaSyntax.Token}
+    token_vec::Vector{Token}
     current_index::Int
     text::String
     julia_token_vec::Vector{Any}
@@ -14,7 +14,7 @@ end
 
 function ProcessState(text::String, replace_period=true, allow_eq=true)
     token_vec = filter(x -> kind(x) != K"error", tokenize(text)) # generic "error" is disregarded
-    disallowed_words = String[]
+    disallowed_words = Token[]
     for t in token_vec
         if kind(t) ∉ WHITELIST
             push!(disallowed_words, t)
@@ -23,15 +23,15 @@ function ProcessState(text::String, replace_period=true, allow_eq=true)
     if !isempty(disallowed_words)
         diagnostics = Diagnostic[]
         for w in disallowed_words
-            if JuliaSyntax.is_error || kind(w) == K"ErrorInvalidOperator"
+            if JuliaSyntax.is_error(w) || kind(w) == K"ErrorInvalidOperator"
                 error = "Error occurs, error kind is $(string(kind(w))), characters are $(untokenize(w, text))"
             else
                 error = "Disallowed word '$(untokenize(w, text))'"
             end  
-            push!(diagnostics, error)
+            push!(diagnostics, Diagnostic(w.range.start, w.range.stop, :error, error))
         end
         io = IOBuffer()
-        JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
+        JuliaSyntax.show_diagnostics(io, diagnostics, text)
         error("Errors occurs while tokenizing: \n $(String(take!(io)))")    
     end
     return ProcessState(token_vec, 1, text, Any[], Diagnostic[], replace_period, allow_eq)
@@ -128,6 +128,10 @@ function peek_raw(ps::ProcessState, n=1)
 end
 
 function peek_next_non_trivia(ps::ProcessState, skip_newline=true, n=1)
+    if ps.current_index + n - 1 > length(ps.token_vec)
+        return K"EndMarker"
+    end
+    
     trivia_tokens = KSet"Whitespace Comment"
     skip_newline && (trivia_tokens = trivia_tokens ∪ KSet"NewlineWs")
 
@@ -186,7 +190,6 @@ function process_statements!(ps::ProcessState)
         if peek(ps) == K"for"
             process_for!(ps)
         else # peek(ps) == K"Identifier"
-            process_lhs!(ps)
             process_assignment!(ps)
         end
         process_trivia!(ps)
@@ -194,7 +197,8 @@ function process_statements!(ps::ProcessState)
 end
 
 function process_assignment!(ps::ProcessState)
-    # left-hand side of the assignment is already processed before calling this function
+    process_lhs!(ps)
+
     if peek(ps) == K"~"
         consume!(ps)
         process_tilde_rhs!(ps)
@@ -396,6 +400,8 @@ function process_tilde_rhs!(ps::ProcessState)
 
     if peek(ps) == K";"
         consume!(ps)
+    elseif peek_next_non_trivia(ps) == K"Identifier" # heuristic: the ";" is forgotten, so insert one
+        push!(julia_token_vec, ";")
     end
 end
 
