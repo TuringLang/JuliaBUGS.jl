@@ -222,7 +222,9 @@ function parse(prog::String, replace_period=true, format_output=true)
     format_output && (julia_program = format_text(julia_program))
     # return println(julia_program)
     expr = Meta.parse(julia_program)
-    return Meta.quot(post_parsing_processing(bugsast(expr, LineNumberNode(1, Symbol(@__FILE__)))))
+    return Meta.quot(
+        post_parsing_processing(bugsast(expr, LineNumberNode(1, Symbol(@__FILE__))))
+    )
 end
 
 # during the transition phase, this macro is kept, but for internal use only

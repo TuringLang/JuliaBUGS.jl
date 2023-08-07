@@ -27,12 +27,12 @@ function ProcessState(text::String, replace_period=true, allow_eq=true)
                 error = "Error occurs, error kind is $(string(kind(w))), characters are $(untokenize(w, text))"
             else
                 error = "Disallowed word '$(untokenize(w, text))'"
-            end  
+            end
             push!(diagnostics, error)
         end
         io = IOBuffer()
         JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
-        error("Errors occurs while tokenizing: \n $(String(take!(io)))")    
+        error("Errors occurs while tokenizing: \n $(String(take!(io)))")
     end
     return ProcessState(token_vec, 1, text, Any[], Diagnostic[], replace_period, allow_eq)
 end

@@ -95,11 +95,11 @@ test_on(
 using Base.StackTraces
 
 function risky_function()
-    error("Something went wrong in risky_function!")
+    return error("Something went wrong in risky_function!")
 end
 
 function another_function()
-    risky_function()
+    return risky_function()
 end
 
 function demo_function()
