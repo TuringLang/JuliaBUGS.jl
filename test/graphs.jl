@@ -32,3 +32,6 @@ l = @varname l
 @test Set(Symbol.(markov_blanket(g, a))) == Set([:f, :b, :a, :d, :e, :c, :h, :g, :i])
 @test Set(Symbol.(markov_blanket(g, (a, l)))) ==
     Set([:f, :b, :a, :d, :e, :c, :h, :g, :i, :l])
+
+# Test `MarkovBlanketCoveredModel`
+# Idea: use conditioned `BUGSModel`

@@ -80,10 +80,11 @@ Because Julia uses the "function call on LHS"-like syntax as a shorthand for fun
 We adopt a more Julian syntax as demonstrated in the model definition above: instead of calling the link function, we call the inverse link function from the RHS. However, the Julian link function semantics internally is equivalent to the BUGS. 
 
 ### Support for Lagacy BUGS Programs
-We also provide a string macro `bugsmodel` to work with original (R-like) BUGS syntax:
+We also provide function `parse_bugs` to work with original (R-like) BUGS syntax:
 
 ```julia
-bugsmodel"""
+parse_bugs("""
+model{
     for( i in 1 : N ) {
         r[i] ~ dbin(p[i],n[i])
         b[i] ~ dnorm(0.0,tau)
@@ -96,11 +97,12 @@ bugsmodel"""
     alpha12 ~ dnorm(0.0,1.0E-6)
     tau ~ dgamma(0.001,0.001)
     sigma <- 1 / sqrt(tau)
-"""
+}
+""")
 ```
 
-This is simply the unmodified code in the `model { }` enclosure.  
-We encourage users to write new program using the Julia-native syntax, because of better debuggability and perks like syntax highlighting. 
+By default, `parse_bugs` will translate R-style variable names like `a.b.c` to `a_b_c`.
+We still encourage users to write new program using the Julia-native syntax, because of better debuggability and perks like syntax highlighting. 
 
 ### Using Self-defined Functions and Distributions
 User can register their own functions and distributions with the macros

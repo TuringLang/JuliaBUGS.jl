@@ -199,17 +199,13 @@ stochastic_outneighbors(g, v) = stochastic_neighbors(g, v, outneighbor_labels)
 The model object for a BUGS model.
 """
 struct BUGSModel <: AbstractPPL.AbstractProbabilisticProgram
-    param_length::Int
+    param_length::Int # not the same as length(parameters), because parameters can be arrays
     varinfo::SimpleVarInfo # TODO: maybe separate `varinfo` from BUGSModel
     parameters::Vector{VarName}
     g::BUGSGraph
     sorted_nodes::Vector{VarName}
 end
 
-# TODO: because all the (useful) data are already plugged into the expressions
-# (i.e., the `node_function_expr` are embedded with all the data), we can lean
-# down the variable store and only contains observational data, logical variable values, 
-# and model parameters
 # TODO: because all the (useful) data are already plugged into the expressions
 # (i.e., the `node_function_expr` are embedded with all the data), we can lean
 # down the variable store and only contains observational data, logical variable values, 
@@ -299,6 +295,40 @@ function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
     return SimpleVarInfo(d, vi.logp, vi.transformation)
 end
 
+struct ConditionedBUGSModel <: BUGSModel
+    # also need to store the conditioned values
+    # do I really care about the data in variable store?
+    # the data are already there, other values can be throw away any how
+end
+
+struct MarkovBlanketCoveredModel <: BUGSModel
+    param_length::Int
+    model::BUGSModel
+    blanket::Vector{VarName}
+end
+
+function MarkovBlanketCoveredModel(m::BUGSModel, var_group::Union{VarName,Vector{VarName}})
+    # TODO: check that all variables in var_group are stochastic variables
+    # warn if variables in var_group are not parameters
+    non_vars = VarName[]
+    non_stochastic_vars = VarName[]
+    observation_vars = VarName[]
+    for var in var_group
+        if var ∉ labels(m.g)
+            push!(non_vars, var)
+        elseif m.g[var] isa AuxiliaryNodeInfo
+            push!(non_stochastic_vars, var)
+        elseif var ∉ m.parameters
+            push!(observation_vars, var)
+        end
+    end
+    length(non_vars) > 0 && error("Variables $(non_vars) are not in the model")
+    length(non_stochastic_vars) > 0 && error("Variables $(non_stochastic_vars) are not stochastic variables")
+    length(observation_vars) > 0 && warn("Variables $(observation_vars) are not parameters, they will be ignored")
+    blanket = markov_blanket(m.g, var_group)
+    return MarkovBlanketCoveredModel(sum([_length(x) for x in parameters]), m, blanket)
+end
+
 """
     DefaultContext
 
@@ -318,6 +348,9 @@ end
 struct LogDensityContext <: AbstractPPL.AbstractContext
     flattened_values::AbstractVector
 end
+
+# TODO: maybe a parameterized LogDensityContext that can store either SimpleVarInfo and flattened_values 
+# so that varinfo can be optionally provided for logp calculation
 
 struct MarkovBlanketContext <: AbstractPPL.AbstractContext
     blanket::Vector{VarName}
