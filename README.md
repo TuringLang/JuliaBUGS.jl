@@ -56,6 +56,10 @@ Language References:
  - [MultiBUGS](https://www.multibugs.org/documentation/latest/)
  - [OpenBUGS](https://chjackson.github.io/openbugsdoc/Manuals/ModelSpecification.html)
 
+Implementations in C++ and R:
+- [JAGS](https://sourceforge.net/p/mcmc-jags/code-0/ci/default/tree/) and its [user manual](https://people.stat.sc.edu/hansont/stat740/jags_user_manual.pdf)
+- [Nimble](https://r-nimble.org/)
+
 ### Writing Model in Julia
 We provide a macro solution which allows users to write down model definitions using Julia:
 
@@ -191,3 +195,4 @@ One can verify the inference result is coherent with BUGS' result for [Seeds](ht
 
 ## More Examples
 We have transcribed all the examples from the first volume of the BUGS Examples ([origianl](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/JuliaBUGS.jl/tree/master/src/BUGSExamples/Volume_I)). All the programs and data are included, and they can be compiled in a similar way as we have demonstrated before.
+
