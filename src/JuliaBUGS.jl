@@ -142,8 +142,8 @@ Compile a BUGS model into a log density problem.
 
 # Arguments
 - `model_def::Expr`: The BUGS model definition.
-- `data::NamedTuple` or `Dict`: The data to be used in the model. If none is passed, the data will be assumed to be empty.
-- `initializations::NamedTuple` or `Dict`: The initial values for the model parameters. If none is passed, the parameters will be assumed to be initialized to zero.
+- `data::NamedTuple` or `AbstractDict`: The data to be used in the model. If none is passed, the data will be assumed to be empty.
+- `initializations::NamedTuple` or `AbstractDict`: The initial values for the model parameters. If none is passed, the parameters will be assumed to be initialized to zero.
 
 # Returns
 - A [`BUGSModel`](@ref) object representing the compiled model.
