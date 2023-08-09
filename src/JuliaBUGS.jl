@@ -7,7 +7,7 @@ using Bijectors
 using Distributions
 using DynamicPPL
 using Graphs
-using LogDensityProblems
+using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
 using MetaGraphsNext
 using Random

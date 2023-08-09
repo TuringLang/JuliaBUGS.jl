@@ -5,7 +5,8 @@ using JuliaBUGS:
     stochastic_inneighbors,
     stochastic_outneighbors,
     markov_blanket
-using JuliaBUGS: MarkovBlanketCoveredBUGSModel, evaluate!!, DefaultContext
+using JuliaBUGS:
+    MarkovBlanketCoveredBUGSModel, evaluate!!, DefaultContext, LogDensityContext
 using JuliaBUGS.BUGSPrimitives
 using Graphs, MetaGraphsNext
 using Distributions
@@ -56,10 +57,9 @@ model = compile(test_model, NamedTuple(), inits)
 
 c = @varname c
 markov_blanket(model.g, c)
-@test Set(Symbol.(markov_blanket(g, c))) == Set([:l, :a, :b, :c, :f])
+@test Set(Symbol.(markov_blanket(model.g, c))) == Set([:l, :a, :b, :c, :f])
 
 mb_model = MarkovBlanketCoveredBUGSModel(model, c)
-
 @test begin
     logp = 0
     logp += logpdf(dnorm(1.0, 3.0), 1.0) # a
@@ -68,3 +68,17 @@ mb_model = MarkovBlanketCoveredBUGSModel(model, c)
     logp += logpdf(dnorm(-2.0, 1.0), 3.0) # c
     logp
 end == evaluate!!(mb_model, DefaultContext()).logp
+
+# test LogDensityContext
+@test begin
+    logp = 0
+    logp += logpdf(dnorm(1.0, 3.0), 1.0) # a, where f = 1.0
+    logp += logpdf(dnorm(0.0, 1.0), 2.0) # b
+    logp += logpdf(dnorm(0.0, 1.0), -2.0) # l
+    logp += logpdf(dnorm(-2.0, 1.0), 3.0) # c
+    logp += logpdf(dnorm(0.0, 1.0), 4.0) # i
+    logp += logpdf(dnorm(2.0, 1.0), 4.0) # d, where g = 2.0
+    logp += logpdf(dnorm(4.0, 4.0), 5.0) # e, where h = 4.0
+    logp
+end ≈ evaluate!!(model, LogDensityContext([4.0, 2.0, -2.0, 3.0, 1.0, 5.0, 4.0])).logp atol =
+    1e-8
