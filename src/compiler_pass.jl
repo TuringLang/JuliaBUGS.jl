@@ -77,7 +77,7 @@ Arguments:
 """
 function post_process(pass::CompilerPass, expr, env, vargs...) end
 
-@enum VariableTypes begin
+@enum VariableTypes::Bool begin
     Logical
     Stochastic
 end
@@ -91,6 +91,7 @@ struct CollectVariables <: CompilerPass
     vars::Dict{Var,VariableTypes}
     transformed_variables::Dict{Var,Union{Number,Array{<:Number}}}
 end
+
 function CollectVariables()
     return CollectVariables(
         Dict{Var,VariableTypes}(), Dict{Var,Union{Number,Array{<:Number}}}()
@@ -370,8 +371,6 @@ function assignment!(pass::CollectVariables, expr::Expr, env)
 end
 
 function post_process(pass::CollectVariables, expr, env)
-    # TODO: can we distinguish observed stochastic variable used in loop bounds or computing indices?
-
     array_elements = Dict([v.name => [] for v in keys(pass.vars) if v.indices != ()])
     for v in keys(pass.vars)
         !isa(v, Scalar) && push!(array_elements[v.name], v)

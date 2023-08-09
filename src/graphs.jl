@@ -107,11 +107,6 @@ function scalarize_then_add_edge!(g::BUGSGraph, v::Var; lhs_or_rhs=:lhs)
     end
 end
 
-
-
-
-
-
 """
     _eval(expr, env)
 
@@ -135,10 +130,10 @@ function _eval(expr::Expr, env)
     if Meta.isexpr(expr, :call) # TODO: should check that the function is defined
         f = expr.args[1]
         args = [_eval(arg, env) for arg in expr.args[2:end]]
-        if f isa Expr # JuliaBUGS.some_function
+        if f isa Expr # `JuliaBUGS.some_function` like
             f = f.args[2].value
         end
-        return getfield(JuliaBUGS, f)(args...)
+        return getfield(JuliaBUGS, f)(args...) # assume all functions used are available under `JuliaBUGS`
     elseif Meta.isexpr(expr, :ref)
         array = _eval(expr.args[1], env)
         indices = [_eval(arg, env) for arg in expr.args[2:end]]
@@ -153,23 +148,21 @@ function _eval(expr, env)
     return error("Unknown expression type: $expr of type $(typeof(expr))")
 end
 
+abstract type AbstractBUGSModel <: AbstractPPL.AbstractProbabilisticProgram end
+
 """
     BUGSModel
 
 The model object for a BUGS model.
 """
-struct BUGSModel <: AbstractPPL.AbstractProbabilisticProgram
-    param_length::Int # not the same as length(parameters), because parameters can be arrays
-    varinfo::SimpleVarInfo # TODO: maybe separate `varinfo` from BUGSModel
+struct BUGSModel <: AbstractBUGSModel
+    param_length::Int
+    varinfo::SimpleVarInfo
     parameters::Vector{VarName}
     g::BUGSGraph
     sorted_nodes::Vector{VarName}
 end
 
-# TODO: because all the (useful) data are already plugged into the expressions
-# (i.e., the `node_function_expr` are embedded with all the data), we can lean
-# down the variable store and only contains observational data, logical variable values, 
-# and model parameters
 function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
     vs = initialize_var_store(data, vars, array_sizes)
     vi = SimpleVarInfo(vs)
@@ -238,7 +231,7 @@ function evaluate(vn::VarName, env)
     return ismissing(ret) ? nothing : ret
 end
 
-# not reloading Base.length, the function only work for a specific subset of VarNames and should not be used elsewhere
+# doesn't work for all `VarNames`, should not be used elsewhere
 function _length(vn::VarName)
     getlens(vn) isa Setfield.IdentityLens && return 1
     return prod([length(index_range) for index_range in getlens(vn).indices])
@@ -255,13 +248,18 @@ function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
     return SimpleVarInfo(d, vi.logp, vi.transformation)
 end
 
-struct MarkovBlanketCoveredModel
+"""
+    MarkovBlanketCoveredBUGSModel
+
+The model object for a BUGS model with Markov blanket covered.
+"""
+struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
     param_length::Int
     blanket::Vector{VarName}
     model::BUGSModel
 end
 
-function MarkovBlanketCoveredModel(m::BUGSModel, var_group::Union{VarName,Vector{VarName}})
+function MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group::Union{VarName,Vector{VarName}})
     non_vars = VarName[]
     non_stochastic_vars = VarName[]
     observation_vars = VarName[]
@@ -345,15 +343,13 @@ struct SamplingContext <: AbstractPPL.AbstractContext
     rng::Random.AbstractRNG
 end
 
+"""
+    LogDensityContext
+
+Use the given values to compute the log joint density.
+"""
 struct LogDensityContext <: AbstractPPL.AbstractContext
     flattened_values::AbstractVector
-end
-
-# TODO: maybe a parameterized LogDensityContext that can store either SimpleVarInfo and flattened_values 
-# so that varinfo can be optionally provided for logp calculation
-
-struct MarkovBlanketContext <: AbstractPPL.AbstractContext
-    blanket::Vector{VarName}
 end
 
 function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
@@ -472,12 +468,12 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::LogDensityContext)
     return @set vi.logp = logp
 end
 
-function AbstractPPL.evaluate!!(model::BUGSModel, ctx::MarkovBlanketContext)
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
+function AbstractPPL.evaluate!!(model::MarkovBlanketCoveredBUGSModel, ::DefaultContext)
+    @unpack param_length, varinfo, parameters, g, sorted_nodes = model.model
     vi = deepcopy(varinfo)
     logp = 0.0
     for vn in sorted_nodes
-        vn in ctx.blanket || continue
+        vn in model.blanket || continue
         g[vn] isa AuxiliaryNodeInfo && continue
 
         ni = g[vn]
@@ -502,14 +498,15 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::MarkovBlanketContext)
     return @set vi.logp = logp
 end
 
-function AbstractPPL.evaluate!!(model::BUGSModel, ctx::MarkovBlanketContext, flattened_values::AbstractVector)
+function AbstractPPL.evaluate!!(model::MarkovBlanketCoveredBUGSModel, ctx::LogDensityContext)
+    flattened_values = ctx.flattened_values
     @assert length(flattened_values) == model.param_length
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
+    @unpack param_length, varinfo, parameters, g, sorted_nodes = model.model
     vi = deepcopy(varinfo)
     current_idx = 1
     logp = 0.0
     for vn in sorted_nodes
-        vn in ctx.blanket || continue
+        vn in model.blanket || continue
         g[vn] isa AuxiliaryNodeInfo && continue
 
         ni = g[vn]

@@ -1,12 +1,12 @@
-function LogDensityProblems.logdensity(model::BUGSModel, x::AbstractArray)
+function LogDensityProblems.logdensity(model::AbstractBUGSModel, x::AbstractArray)
     vi = evaluate!!(model, LogDensityContext(x))
     return DynamicPPL.getlogp(vi)
 end
 
-function LogDensityProblems.dimension(model::BUGSModel)
+function LogDensityProblems.dimension(model::AbstractBUGSModel)
     return model.param_length
 end
 
-function LogDensityProblems.capabilities(::BUGSModel)
+function LogDensityProblems.capabilities(::AbstractBUGSModel)
     return LogDensityProblems.LogDensityOrder{0}
 end
