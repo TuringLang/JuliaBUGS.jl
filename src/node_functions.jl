@@ -234,10 +234,9 @@ function create_array_var(n, array_sizes, env)
 end
 
 try_cast_to_int(x::Integer) = x
-try_cast_to_int(x::Real) = Int(x)
+try_cast_to_int(x::Real) = Int(x) # will error if !isinteger(x)
 try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
-# TODO: too long and confusing, need to refactor
 function assignment!(pass::NodeFunctions, expr::Expr, env)
     lhs_expr, rhs_expr = expr.args[1:2]
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic

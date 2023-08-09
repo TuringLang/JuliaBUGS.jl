@@ -107,10 +107,18 @@ function scalarize_then_add_edge!(g::BUGSGraph, v::Var; lhs_or_rhs=:lhs)
     end
 end
 
-# TODO: add documentation
-# `_eval` mimic `eval` function, but use precompiled functions. This is possible because BUGS essentially only has
-# two kinds of expressions: function calls and indexing.
-# `env` is a dictionary or NT mapping symbols in `expr` to values, values can be arrays or scalars
+
+
+
+
+
+"""
+    _eval(expr, env)
+
+`_eval` mimics `Base.eval`, but uses precompiled functions. This is possible because the expressions we want to 
+evaluate only have two kinds of expressions: function calls and indexing.
+`env` is a data structure mapping symbols in `expr` to values, values can be arrays or scalars
+"""
 function _eval(expr::Number, env)
     return expr
 end
@@ -144,54 +152,6 @@ end
 function _eval(expr, env)
     return error("Unknown expression type: $expr of type $(typeof(expr))")
 end
-
-function markov_blanket(g, v::VarName)
-    parents = stochastic_inneighbors(g, v)
-    children = stochastic_outneighbors(g, v)
-    co_parents = VarName[]
-    for p in children
-        co_parents = vcat(co_parents, stochastic_inneighbors(g, p))
-    end
-    return unique(vcat(parents, children, co_parents...))
-end
-
-function markov_blanket(g, v::Union{Vector{VarName}, NTuple{N,VarName}} where N)
-    blanket = VarName[]
-    
-    for vn in v
-        blanket = vcat(blanket, markov_blanket(g, vn))
-    end
-    return unique(blanket)
-end
-
-function stochastic_neighbors(g::BUGSGraph, v::VarName, f)
-    stochastic_neighbors_vec = VarName[]
-    logical_en_route = VarName[] # logical variables
-    for u in f(g, v)
-        if g[u] isa ConcreteNodeInfo
-            if g[u].node_type == Stochastic
-                push!(stochastic_neighbors_vec, u)
-            else
-                push!(logical_en_route, u)
-                ns = stochastic_neighbors(g, u, f)
-                for n in ns
-                    push!(stochastic_neighbors_vec, n)
-                end
-            end
-        else
-            # auxiliary nodes are not counted as logical nodes
-            ns = stochastic_neighbors(g, u, f)
-            for n in ns
-                push!(stochastic_neighbors_vec, n)
-            end
-        end 
-    end
-    # return stochastic_neighbors_vec, logical_en_route
-    return [stochastic_neighbors_vec..., logical_en_route...]
-end
-
-stochastic_inneighbors(g, v) = stochastic_neighbors(g, v, inneighbor_labels)
-stochastic_outneighbors(g, v) = stochastic_neighbors(g, v, outneighbor_labels)
 
 """
     BUGSModel
@@ -295,21 +255,13 @@ function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
     return SimpleVarInfo(d, vi.logp, vi.transformation)
 end
 
-struct ConditionedBUGSModel <: BUGSModel
-    # also need to store the conditioned values
-    # do I really care about the data in variable store?
-    # the data are already there, other values can be throw away any how
-end
-
-struct MarkovBlanketCoveredModel <: BUGSModel
+struct MarkovBlanketCoveredModel
     param_length::Int
-    model::BUGSModel
     blanket::Vector{VarName}
+    model::BUGSModel
 end
 
 function MarkovBlanketCoveredModel(m::BUGSModel, var_group::Union{VarName,Vector{VarName}})
-    # TODO: check that all variables in var_group are stochastic variables
-    # warn if variables in var_group are not parameters
     non_vars = VarName[]
     non_stochastic_vars = VarName[]
     observation_vars = VarName[]
@@ -326,8 +278,56 @@ function MarkovBlanketCoveredModel(m::BUGSModel, var_group::Union{VarName,Vector
     length(non_stochastic_vars) > 0 && error("Variables $(non_stochastic_vars) are not stochastic variables")
     length(observation_vars) > 0 && warn("Variables $(observation_vars) are not parameters, they will be ignored")
     blanket = markov_blanket(m.g, var_group)
-    return MarkovBlanketCoveredModel(sum([_length(x) for x in parameters]), m, blanket)
+    return MarkovBlanketCoveredModel(sum([_length(x) for x in parameters]), blanket, m)
 end
+
+function markov_blanket(g, v::VarName)
+    parents = stochastic_inneighbors(g, v)
+    children = stochastic_outneighbors(g, v)
+    co_parents = VarName[]
+    for p in children
+        co_parents = vcat(co_parents, stochastic_inneighbors(g, p))
+    end
+    return unique(vcat(parents, children, co_parents...))
+end
+
+function markov_blanket(g, v::Union{Vector{VarName}, NTuple{N,VarName}} where N)
+    blanket = VarName[]
+    
+    for vn in v
+        blanket = vcat(blanket, markov_blanket(g, vn))
+    end
+    return unique(blanket)
+end
+
+function stochastic_neighbors(g::BUGSGraph, v::VarName, f)
+    stochastic_neighbors_vec = VarName[]
+    logical_en_route = VarName[] # logical variables
+    for u in f(g, v)
+        if g[u] isa ConcreteNodeInfo
+            if g[u].node_type == Stochastic
+                push!(stochastic_neighbors_vec, u)
+            else
+                push!(logical_en_route, u)
+                ns = stochastic_neighbors(g, u, f)
+                for n in ns
+                    push!(stochastic_neighbors_vec, n)
+                end
+            end
+        else
+            # auxiliary nodes are not counted as logical nodes
+            ns = stochastic_neighbors(g, u, f)
+            for n in ns
+                push!(stochastic_neighbors_vec, n)
+            end
+        end 
+    end
+    # return stochastic_neighbors_vec, logical_en_route
+    return [stochastic_neighbors_vec..., logical_en_route...]
+end
+
+stochastic_inneighbors(g, v) = stochastic_neighbors(g, v, inneighbor_labels)
+stochastic_outneighbors(g, v) = stochastic_neighbors(g, v, outneighbor_labels)
 
 """
     DefaultContext
