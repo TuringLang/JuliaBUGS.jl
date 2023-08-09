@@ -259,10 +259,15 @@ struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
     model::BUGSModel
 end
 
-function MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group::Union{VarName,Vector{VarName}})
+function MarkovBlanketCoveredBUGSModel(
+    m::BUGSModel, var_group::Union{VarName,Vector{VarName}}
+)
     non_vars = VarName[]
     non_stochastic_vars = VarName[]
     observation_vars = VarName[]
+    if var_group isa VarName
+        var_group = [var_group]
+    end
     for var in var_group
         if var ∉ labels(m.g)
             push!(non_vars, var)
@@ -273,10 +278,12 @@ function MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group::Union{VarName,Ve
         end
     end
     length(non_vars) > 0 && error("Variables $(non_vars) are not in the model")
-    length(non_stochastic_vars) > 0 && error("Variables $(non_stochastic_vars) are not stochastic variables")
-    length(observation_vars) > 0 && warn("Variables $(observation_vars) are not parameters, they will be ignored")
+    length(non_stochastic_vars) > 0 &&
+        error("Variables $(non_stochastic_vars) are not stochastic variables")
+    length(observation_vars) > 0 &&
+        warn("Variables $(observation_vars) are not parameters, they will be ignored")
     blanket = markov_blanket(m.g, var_group)
-    return MarkovBlanketCoveredModel(sum([_length(x) for x in parameters]), blanket, m)
+    return MarkovBlanketCoveredBUGSModel(sum([_length(x) for x in blanket]), blanket, m)
 end
 
 function markov_blanket(g, v::VarName)
@@ -289,9 +296,9 @@ function markov_blanket(g, v::VarName)
     return unique(vcat(parents, children, co_parents...))
 end
 
-function markov_blanket(g, v::Union{Vector{VarName}, NTuple{N,VarName}} where N)
+function markov_blanket(g, v)
     blanket = VarName[]
-    
+
     for vn in v
         blanket = vcat(blanket, markov_blanket(g, vn))
     end
@@ -318,7 +325,7 @@ function stochastic_neighbors(g::BUGSGraph, v::VarName, f)
             for n in ns
                 push!(stochastic_neighbors_vec, n)
             end
-        end 
+        end
     end
     # return stochastic_neighbors_vec, logical_en_route
     return [stochastic_neighbors_vec..., logical_en_route...]
@@ -498,7 +505,9 @@ function AbstractPPL.evaluate!!(model::MarkovBlanketCoveredBUGSModel, ::DefaultC
     return @set vi.logp = logp
 end
 
-function AbstractPPL.evaluate!!(model::MarkovBlanketCoveredBUGSModel, ctx::LogDensityContext)
+function AbstractPPL.evaluate!!(
+    model::MarkovBlanketCoveredBUGSModel, ctx::LogDensityContext
+)
     flattened_values = ctx.flattened_values
     @assert length(flattened_values) == model.param_length
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model.model

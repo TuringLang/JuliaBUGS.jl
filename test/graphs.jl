@@ -5,10 +5,13 @@ using JuliaBUGS:
     stochastic_inneighbors,
     stochastic_outneighbors,
     markov_blanket
+using JuliaBUGS: MarkovBlanketCoveredBUGSModel, evaluate!!, DefaultContext
+using JuliaBUGS.BUGSPrimitives
 using Graphs, MetaGraphsNext
+using Distributions
 using Test
 
-test_model = @bugsast begin
+test_model = @bugs begin
     a ~ dnorm(f, c)
     f = b - 1
     b ~ dnorm(0, 1)
@@ -33,5 +36,35 @@ l = @varname l
 @test Set(Symbol.(markov_blanket(g, (a, l)))) ==
     Set([:f, :b, :a, :d, :e, :c, :h, :g, :i, :l])
 
-# Test `MarkovBlanketCoveredModel`
-# Idea: use conditioned `BUGSModel`
+# construct a SimpleVarInfo
+inits = Dict(
+    :a => 1.0,
+    :b => 2.0,
+    :c => 3.0,
+    :d => 4.0,
+    :e => 5.0,
+
+    # :f => 1.0,
+    # :g => 2.0,
+    # :h => 4.0,
+
+    :i => 4.0,
+    :l => -2.0,
+)
+
+model = compile(test_model, NamedTuple(), inits)
+
+c = @varname c
+markov_blanket(model.g, c)
+@test Set(Symbol.(markov_blanket(g, c))) == Set([:l, :a, :b, :c, :f])
+
+mb_model = MarkovBlanketCoveredBUGSModel(model, c)
+
+@test begin
+    logp = 0
+    logp += logpdf(dnorm(1.0, 3.0), 1.0) # a
+    logp += logpdf(dnorm(0.0, 1.0), 2.0) # b
+    logp += logpdf(dnorm(0.0, 1.0), -2.0) # l
+    logp += logpdf(dnorm(-2.0, 1.0), 3.0) # c
+    logp
+end == evaluate!!(mb_model, DefaultContext()).logp
