@@ -52,6 +52,9 @@ model
 ```
 
 ## Modeling Language
+
+BUGS language syntax: [BNF definition](https://github.com/TuringLang/JuliaBUGS.jl/blob/master/archive/parser_attempts/BNF.txt)
+
 Language References:  
  - [MultiBUGS](https://www.multibugs.org/documentation/latest/)
  - [OpenBUGS](https://chjackson.github.io/openbugsdoc/Manuals/ModelSpecification.html)
