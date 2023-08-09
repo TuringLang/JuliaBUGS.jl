@@ -53,7 +53,7 @@ model
 
 ## Modeling Language
 
-BUGS language syntax: [ANF definition](https://github.com/TuringLang/JuliaBUGS.jl/blob/master/archive/parser_attempts/BNF.txt)
+BUGS language syntax: [BNF definition](https://github.com/TuringLang/JuliaBUGS.jl/blob/master/archive/parser_attempts/BNF.txt)
 
 Language References:  
  - [MultiBUGS](https://www.multibugs.org/documentation/latest/)
