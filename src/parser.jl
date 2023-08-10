@@ -184,7 +184,7 @@ function process_toplevel!(ps::ProcessState)
     return process_trivia!(ps)
 end
 
-function process_toplevel_no_enclosure!(ps::ProcessState) 
+function process_toplevel_no_enclosure!(ps::ProcessState)
     push!(ps.julia_token_vec, "begin \n")
     process_statements!(ps)
     push!(ps.julia_token_vec, "\n end")
