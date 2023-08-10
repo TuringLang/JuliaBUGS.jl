@@ -184,6 +184,13 @@ function process_toplevel!(ps::ProcessState)
     return process_trivia!(ps)
 end
 
+function process_toplevel_no_enclosure!(ps::ProcessState) 
+    push!(ps.julia_token_vec, "begin \n")
+    process_statements!(ps)
+    push!(ps.julia_token_vec, "\n end")
+    return process_trivia!(ps)
+end
+
 function process_statements!(ps::ProcessState)
     process_trivia!(ps)
     while peek(ps) ∈ KSet"for Identifier"
@@ -371,8 +378,9 @@ function process_tilde_rhs!(ps::ProcessState)
     expect!(ps, "(")
     process_call_args!(ps)
     expect!(ps, ")")
+    process_trivia!(ps, false) # allow whitespace 
     if peek_raw(ps) in ["T", "C"]
-        discard!(ps)
+        discard!(ps) # discard the "T" or "C"
         expect_and_discard!(ps, "(")
         push!(julia_token_vec, peek_raw(ps) == "C" ? " censored(" : " truncated(")
         push!(julia_token_vec, buffer..., ", ")

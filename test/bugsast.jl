@@ -80,76 +80,70 @@ _interpolated = @bugs begin
     y = x[$("sdf")] # muahaha...
 end
 
-# # bugsmodel
-# _kidney_transplants = bugsmodel"""
-# for (i in 1:N) {
-#     Score[i] ~ dcat(p[i,])
-#     p[i,1] <- 1 - Q[i,1]
+using JuliaBUGS: parse_bugs, parse_to_julia
 
-#     for (r in 2:5) {
-#         p[i,r] <- Q[i,r-1] - Q[i,r]
-#     }
+parse_bugs_no_enclosure = x -> parse_bugs(x; no_enclosure=true)
 
-#     p[i,6] <- Q[i,5]
+# bugsmodel
+_kidney_transplants = parse_bugs_no_enclosure("""
+for (i in 1:N) {
+    Score[i] ~ dcat(p[i,])
+    p[i,1] <- 1 - Q[i,1]
 
-#     for (r in 1:5) {
-#         logit(Q[i,r]) <- b.apd*lAPD[i] - c[r]
-#     }
-# }
+    for (r in 2:5) {
+        p[i,r] <- Q[i,r-1] - Q[i,r]
+    }
 
-# for (i in 1:5) {
-#     dc[i] ~ dunif(0, 20)
-# }
+    p[i,6] <- Q[i,5]
 
-# c[1] <- dc[1]
+    for (r in 1:5) {
+        logit(Q[i,r]) <- b.apd*lAPD[i] - c[r]
+    }
+}
 
-# for (i in 2:5) {
-#     c[i] <- c[i-1] + dc[i]
-# }
+for (i in 1:5) {
+    dc[i] ~ dunif(0, 20)
+}
 
-# b.apd ~ dnorm(0, 1.0E-03)
-# or.apd <- exp(b.apd)
-# """
+c[1] <- dc[1]
 
-# growth_curve = bugsmodel"""
-# for (i in 1:5) {
-#     y[i] ~ dnorm(mu[i], tau)
-#     mu[i] <- alpha + beta*(x[i] - mean(x[]))
-# }
+for (i in 2:5) {
+    c[i] <- c[i-1] + dc[i]
+}
 
-# alpha ~ dflat()
-# beta ~ dflat()
-# tau <- 1/sigma2
-# log(sigma2) <- 2*log.sigma
-# log.sigma ~ dflat()
-# """
+b.apd ~ dnorm(0, 1.0E-03)
+or.apd <- exp(b.apd)
+""")
 
-# jaws = bugsmodel"""
-# for (i in 1:20) { Y[i, 1:4] ~ dmnorm(mu[], Sigma.inv[,]) }
-# for (j in 1:4) { mu[j] <- alpha + beta*x[j] }
-# alpha ~ dnorm(0, 0.0001)
-# beta ~ dnorm(0, 0.0001)
-# Sigma.inv[1:4, 1:4] ~ dwish(R[,], 4)
-# Sigma[1:4, 1:4] <- inverse(Sigma.inv[,])
-# """
+growth_curve = parse_bugs_no_enclosure("""
+for (i in 1:5) {
+    y[i] ~ dnorm(mu[i], tau)
+    mu[i] <- alpha + beta*(x[i] - mean(x[]))
+}
 
-# truncation = bugsmodel"""
-# a ~ dwish(R[,], 4) C (0, 1)
-# a ~ dwish(R[,], 4) C (,1)
-# a ~ dwish(R[,], 4) C (0,)
-# a ~ dwish(R[,], 4) T (0, 1)
-# log(x) <- dnorm()C(, 100)
-# """
+alpha ~ dflat()
+beta ~ dflat()
+tau <- 1/sigma2
+log(sigma2) <- 2*log.sigma
+log.sigma ~ dflat()
+""")
 
-# jaws = bugsmodel"""
-# for(i in 1:20) { 
-#     Y[i, 1:4] ~ dmnorm(mu[], Sigma.inv[,]) 
-# }
-# if(equal(x, 1)) {
-#      y ~ dbla()
-# }
+jaws = parse_bugs_no_enclosure("""
+for (i in 1:20) { Y[i, 1:4] ~ dmnorm(mu[], Sigma.inv[,]) }
+for (j in 1:4) { mu[j] <- alpha + beta*x[j] }
+alpha ~ dnorm(0, 0.0001)
+beta ~ dnorm(0, 0.0001)
+Sigma.inv[1:4, 1:4] ~ dwish(R[,], 4)
+Sigma[1:4, 1:4] <- inverse(Sigma.inv[,])
+""")
 
-# if	 (equal(x, 1)) {
-#      y ~ dbla()
-# }
-# """
+truncation = parse_bugs_no_enclosure("""
+a ~ dwish(R[,], 4) C (0, 1)
+a ~ dwish(R[,], 4) C (,1)
+a ~ dwish(R[,], 4) C (0,)
+a ~ dwish(R[,], 4) T (0, 1)
+""")
+
+@test_throws ErrorException parse_bugs_no_enclosure("""
+    log(x) <- dnorm()C(, 100)
+""")

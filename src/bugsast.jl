@@ -151,7 +151,7 @@ Used expression heads: `:~` for tilde calls, `:ref` for indexing, `:(:)` for ran
 converted from `:call` variants.
 """
 macro bugs(expr)
-    return Meta.quot(post_parsing_processing(warn_link_function(bugsast(expr, __source__))))
+    return Meta.quot(post_processing_expr(warn_link_function(bugsast(expr, __source__))))
 end
 
 function warn_link_function(expr)
@@ -210,17 +210,27 @@ function bugs_to_julia(s)
     return s
 end
 
-function parse_bugs(prog::String, replace_period=true)
+function parse_to_julia end
+
+function parse_to_julia(prog::String, replace_period=true, no_enclosure=false)
     ps = ProcessState(prog, replace_period)
-    process_toplevel!(ps)
+    if no_enclosure
+        process_toplevel_no_enclosure!(ps)
+    else
+        process_toplevel!(ps)
+    end
     if !isempty(ps.diagnostics)
         io = IOBuffer()
         JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
         error("Errors in the program: \n $(String(take!(io)))")
     end
-    julia_program = to_julia_program(ps.julia_token_vec, ps.text)
+    return to_julia_program(ps.julia_token_vec, ps.text)
+end
+
+function parse_bugs(prog::String; replace_period=true, no_enclosure=false)
+    julia_program = parse_to_julia(prog, replace_period, no_enclosure)
     expr = Meta.parse(julia_program)
-    return post_parsing_processing(bugsast(expr, LineNumberNode(1, Symbol(@__FILE__))))
+    return post_processing_expr(bugsast(expr, LineNumberNode(1, Symbol(@__FILE__))))
 end
 
 # during the transition phase, this macro is kept, but for internal use only
@@ -229,7 +239,7 @@ macro bugsmodel_str(s::String)
     transformed_code = "begin\n$(bugs_to_julia(s))\nend"
     try
         expr = Meta.parse(transformed_code)
-        return Meta.quot(post_parsing_processing(bugsast(expr, __source__)))
+        return Meta.quot(post_processing_expr(bugsast(expr, __source__)))
     catch e
         if e isa Base.Meta.ParseError
             # Meta.parse automatically uses file name "none" and position 1, so
@@ -242,10 +252,10 @@ macro bugsmodel_str(s::String)
     end
 end
 
-function post_parsing_processing(expr)
+function post_processing_expr(expr)
     expr = MacroTools.postwalk(expr) do sub_expr
         if sub_expr == :step
-            return :_step
+            return :_step # `step` is a Julia `Base` function
         else
             return sub_expr
         end
@@ -257,6 +267,11 @@ const INVERSE_LINK_FUNCTION = Dict(
     :logit => :logistic, :cloglog => :cexpexp, :log => :exp, :probit => :phi
 )
 
+"""
+    link_functions(expr)
+In case of logical assignments with the link function syntax, the statement is transformed 
+to a regular assignment with the inverse link function applied to the RHS.
+"""
 function link_functions(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, f_(lhs_) = rhs_) # only transform logical assignments
