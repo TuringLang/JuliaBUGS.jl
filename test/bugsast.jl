@@ -115,7 +115,8 @@ or.apd <- exp(b.apd)
 }
 """)
 
-growth_curve = @bugs("""
+growth_curve = @bugs(
+    """
 for (i in 1:5) {
     y[i] ~ dnorm(mu[i], tau)
     mu[i] <- alpha + beta*(x[i] - mean(x[]))
@@ -126,20 +127,31 @@ beta ~ dflat()
 tau <- 1/sigma2
 log(sigma2) <- 2*log.sigma
 log.sigma ~ dflat()
-""", true, true)
+""",
+    true,
+    true
+)
 
-jaws = @bugs("""
+jaws = @bugs(
+    """
 for (i in 1:20) { Y[i, 1:4] ~ dmnorm(mu[], Sigma.inv[,]) }
 for (j in 1:4) { mu[j] <- alpha + beta*x[j] }
 alpha ~ dnorm(0, 0.0001)
 beta ~ dnorm(0, 0.0001)
 Sigma.inv[1:4, 1:4] ~ dwish(R[,], 4)
 Sigma[1:4, 1:4] <- inverse(Sigma.inv[,])
-""", true, true)
+""",
+    true,
+    true
+)
 
-truncation = @bugs("""
+truncation = @bugs(
+    """
 a ~ dwish(R[,], 4) C (0, 1)
 a ~ dwish(R[,], 4) C (,1)
 a ~ dwish(R[,], 4) C (0,)
 a ~ dwish(R[,], 4) T (0, 1)
-""", true, true)
+""",
+    true,
+    true
+)
