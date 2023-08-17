@@ -80,8 +80,6 @@ _interpolated = @bugs begin
     y = x[$("sdf")] # muahaha...
 end
 
-using JuliaBUGS: parse_bugs, parse_to_julia
-
 # bugsmodel
 _kidney_transplants = @bugs("""
 model{

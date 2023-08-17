@@ -33,7 +33,7 @@ $$
 
 where $x_{1i}$ and $x_{2i}$ are the seed type and root extract of the $i$-th plate.  
 The original BUGS program for the model is:
-```BUGS
+```R
 model
 {
     for( i in 1 : N ) {

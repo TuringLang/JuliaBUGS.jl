@@ -38,7 +38,6 @@ using JuliaBUGS.BUGSPrimitives: mean
 end
 
 @testset "Parser" begin
-    # TODO: add more explicit tests for the parser
     include("bugsast.jl")
     include("parser.jl")
 end
