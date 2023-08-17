@@ -19,7 +19,7 @@ import Distributions: truncated
 import AbstractPPL: AbstractContext, evaluate!!
 import DynamicPPL: settrans!!
 
-export @bugs, parse_bugs
+export @bugs
 export compile
 
 export @varname

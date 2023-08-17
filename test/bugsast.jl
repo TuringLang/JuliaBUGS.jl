@@ -82,10 +82,9 @@ end
 
 using JuliaBUGS: parse_bugs, parse_to_julia
 
-parse_bugs_no_enclosure = x -> parse_bugs(x; no_enclosure=true)
-
 # bugsmodel
-_kidney_transplants = parse_bugs_no_enclosure("""
+_kidney_transplants = @bugs("""
+model{
 for (i in 1:N) {
     Score[i] ~ dcat(p[i,])
     p[i,1] <- 1 - Q[i,1]
@@ -113,9 +112,10 @@ for (i in 2:5) {
 
 b.apd ~ dnorm(0, 1.0E-03)
 or.apd <- exp(b.apd)
+}
 """)
 
-growth_curve = parse_bugs_no_enclosure("""
+growth_curve = @bugs("""
 for (i in 1:5) {
     y[i] ~ dnorm(mu[i], tau)
     mu[i] <- alpha + beta*(x[i] - mean(x[]))
@@ -126,24 +126,20 @@ beta ~ dflat()
 tau <- 1/sigma2
 log(sigma2) <- 2*log.sigma
 log.sigma ~ dflat()
-""")
+""", true, true)
 
-jaws = parse_bugs_no_enclosure("""
+jaws = @bugs("""
 for (i in 1:20) { Y[i, 1:4] ~ dmnorm(mu[], Sigma.inv[,]) }
 for (j in 1:4) { mu[j] <- alpha + beta*x[j] }
 alpha ~ dnorm(0, 0.0001)
 beta ~ dnorm(0, 0.0001)
 Sigma.inv[1:4, 1:4] ~ dwish(R[,], 4)
 Sigma[1:4, 1:4] <- inverse(Sigma.inv[,])
-""")
+""", true, true)
 
-truncation = parse_bugs_no_enclosure("""
+truncation = @bugs("""
 a ~ dwish(R[,], 4) C (0, 1)
 a ~ dwish(R[,], 4) C (,1)
 a ~ dwish(R[,], 4) C (0,)
 a ~ dwish(R[,], 4) T (0, 1)
-""")
-
-@test_throws ErrorException parse_bugs_no_enclosure("""
-    log(x) <- dnorm()C(, 100)
-""")
+""", true, true)

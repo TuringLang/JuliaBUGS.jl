@@ -2,12 +2,16 @@
 
 surgical_simple = (
     name="Surgical",
-    model_def=bugsmodel"""
-      for( i in 1 : N ) {
-          p[i] ~ dbeta(1.0, 1.0)
-          r[i] ~ dbin(p[i], n[i])
-      }
-      """,
+    model_def=@bugs(
+        """
+for( i in 1 : N ) {
+    p[i] ~ dbeta(1.0, 1.0)
+    r[i] ~ dbin(p[i], n[i])
+}
+""",
+        false,
+        true
+    ),
     data=(
         n=[47, 148, 119, 810, 211, 196, 148, 215, 207, 97, 256, 360],
         r=[0, 18, 8, 46, 8, 13, 9, 31, 14, 8, 29, 24],
@@ -21,17 +25,21 @@ surgical_simple = (
 
 surgical_realistic = (
     name="Surgical",
-    model_def=bugsmodel"""
-      for( i in 1 : N ) {
-          b[i] ~ dnorm(mu,tau)
-          r[i] ~ dbin(p[i],n[i])
-          logit(p[i]) <- b[i]
-      }
-      pop.mean <- exp(mu) / (1 + exp(mu))
-      mu ~ dnorm(0.0,1.0E-6)
-      sigma <- 1 / sqrt(tau)
-      tau ~ dgamma(0.001,0.001)
-      """,
+    model_def=@bugs(
+        """
+for( i in 1 : N ) {
+    b[i] ~ dnorm(mu,tau)
+    r[i] ~ dbin(p[i],n[i])
+    logit(p[i]) <- b[i]
+}
+pop.mean <- exp(mu) / (1 + exp(mu))
+mu ~ dnorm(0.0,1.0E-6)
+sigma <- 1 / sqrt(tau)
+tau ~ dgamma(0.001,0.001)
+""",
+        false,
+        true
+    ),
     data=(
         n=[47, 148, 119, 810, 211, 196, 148, 215, 207, 97, 256, 360],
         r=[0, 18, 8, 46, 8, 13, 9, 31, 14, 8, 29, 24],

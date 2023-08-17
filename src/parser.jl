@@ -408,7 +408,7 @@ function process_tilde_rhs!(ps::ProcessState)
 
     if peek(ps) == K";"
         consume!(ps)
-    elseif peek_next_non_trivia(ps) == K"Identifier" # heuristic: the ";" is forgotten, so insert one
+    elseif peek_next_non_trivia(ps, false) == K"Identifier" # heuristic: the ";" is forgotten, so insert one
         push!(julia_token_vec, ";")
     end
 end
@@ -519,4 +519,18 @@ function to_julia_program(julia_token_vec, text)
         end
     end
     return program
+end
+function to_julia_program(prog::String, replace_period=true, no_enclosure=false)
+    ps = ProcessState(prog, replace_period)
+    if no_enclosure
+        process_toplevel_no_enclosure!(ps)
+    else
+        process_toplevel!(ps)
+    end
+    if !isempty(ps.diagnostics)
+        io = IOBuffer()
+        JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
+        error("Errors in the program: \n $(String(take!(io)))")
+    end
+    return to_julia_program(ps.julia_token_vec, ps.text)
 end

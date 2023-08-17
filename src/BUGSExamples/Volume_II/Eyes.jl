@@ -2,19 +2,23 @@
 
 eyes = (
     name="eyes",
-    model_def=bugsmodel"""
-      for( i in 1 : N ) {
-          y[i] ~ dnorm(mu[i], tau)
-          mu[i] <- lambda[T[i]]
-          T[i] ~ dcat(P[])
-      }   
-      P[1:2] ~ ddirich(alpha[])
-      theta ~ dunif(0.0, 1000)
-      lambda[2] <- lambda[1] + theta
-      lambda[1] ~ dnorm(0.0, 1.0E-6)
-      tau ~ dgamma(0.001, 0.001) 
-      sigma <- 1 / sqrt(tau)
-  """,
+    model_def=@bugs(
+        """
+    for( i in 1 : N ) {
+        y[i] ~ dnorm(mu[i], tau)
+        mu[i] <- lambda[T[i]]
+        T[i] ~ dcat(P[])
+    }   
+    P[1:2] ~ ddirich(alpha[])
+    theta ~ dunif(0.0, 1000)
+    lambda[2] <- lambda[1] + theta
+    lambda[1] ~ dnorm(0.0, 1.0E-6)
+    tau ~ dgamma(0.001, 0.001) 
+    sigma <- 1 / sqrt(tau)
+""",
+        false,
+        true
+    ),
     data=(
         y=[
             529.0,
@@ -119,5 +123,7 @@ eyes = (
             2,
         ],
     ),
-    inits=[(lambda=[535, missing], theta=5, tau=0.1), (lambda=[100, missing], theta=50, tau=1)],
+    inits=[
+        (lambda=[535, missing], theta=5, tau=0.1), (lambda=[100, missing], theta=50, tau=1)
+    ],
 )

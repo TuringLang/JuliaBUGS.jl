@@ -2,21 +2,25 @@
 
 mice = (
     name="Mice",
-    model_def=bugsmodel"""
-      for(i in 1 : M) {
-          for(j in 1 : N) {
-              t[i, j] ~ dweib(r, mu[i])C(t.cen[i, j],)
-              cumulative.t[i, j] <- cumulative(t[i, j], t[i, j])
-          }
-          mu[i] <- exp(beta[i])
-          beta[i] ~ dnorm(0.0, 0.001)
-          median[i] <- pow(log(2) * exp(-beta[i]), 1/r)
-      }
-      r ~ dexp(0.001)
-      veh.control <- beta[2] - beta[1]
-      test.sub <- beta[3] - beta[1]
-      pos.control <- beta[4] - beta[1]
-      """,
+    model_def=@bugs(
+        """
+for(i in 1 : M) {
+    for(j in 1 : N) {
+        t[i, j] ~ dweib(r, mu[i])C(t.cen[i, j],)
+        cumulative.t[i, j] <- cumulative(t[i, j], t[i, j])
+    }
+    mu[i] <- exp(beta[i])
+    beta[i] ~ dnorm(0.0, 0.001)
+    median[i] <- pow(log(2) * exp(-beta[i]), 1/r)
+}
+r ~ dexp(0.001)
+veh.control <- beta[2] - beta[1]
+test.sub <- beta[3] - beta[1]
+pos.control <- beta[4] - beta[1]
+""",
+        false,
+        true
+    ),
     data=(
         t=[
             12 1 21 25 11 26 27 30 13 12 21 20 23 25 23 29 35 missing 31 36

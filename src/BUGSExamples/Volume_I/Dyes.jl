@@ -2,20 +2,24 @@
 
 dyes = (
     name="Dyes",
-    model_def=bugsmodel"""
-      for(i in 1 : batches) {
-          mu[i] ~ dnorm(theta, tau.btw)
-          for(j in 1 : samples) {
-              y[i , j] ~ dnorm(mu[i], tau.with)
-              cumulative.y[i , j] <- cumulative(y[i , j], y[i , j])
-          }
-      }   
-      sigma2.with <- 1 / tau.with
-      sigma2.btw <- 1 / tau.btw
-      tau.with ~ dgamma(0.001, 0.001)
-      tau.btw ~ dgamma(0.001, 0.001)
-      theta ~ dnorm(0.0, 1.0E-10)
-      """,
+    model_def=@bugs(
+        """
+for(i in 1 : batches) {
+    mu[i] ~ dnorm(theta, tau.btw)
+    for(j in 1 : samples) {
+        y[i , j] ~ dnorm(mu[i], tau.with)
+        cumulative.y[i , j] <- cumulative(y[i , j], y[i , j])
+    }
+}   
+sigma2.with <- 1 / tau.with
+sigma2.btw <- 1 / tau.btw
+tau.with ~ dgamma(0.001, 0.001)
+tau.btw ~ dgamma(0.001, 0.001)
+theta ~ dnorm(0.0, 1.0E-10)
+""",
+        false,
+        true
+    ),
     data=(
         batches=6,
         samples=5,

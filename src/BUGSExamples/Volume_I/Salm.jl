@@ -2,22 +2,26 @@
 
 salm = (
     name="Salm",
-    model_def=bugsmodel"""
-      for( i in 1 : doses ) {
-          for( j in 1 : plates ) {
-              y[i , j] ~ dpois(mu[i , j])
-              log(mu[i , j]) <- alpha + beta * log(x[i] + 10) +
-                  gamma * x[i] + lambda[i , j]
-              lambda[i , j] ~ dnorm(0.0, tau)   
-              cumulative.y[i , j] <- cumulative(y[i , j], y[i , j])
-          }
-      }
-      alpha ~ dnorm(0.0,1.0E-6)
-      beta ~ dnorm(0.0,1.0E-6)
-      gamma ~ dnorm(0.0,1.0E-6)
-      tau ~ dgamma(0.001, 0.001)
-      sigma <- 1 / sqrt(tau)
-      """,
+    model_def=@bugs(
+        """
+for( i in 1 : doses ) {
+    for( j in 1 : plates ) {
+        y[i , j] ~ dpois(mu[i , j])
+        log(mu[i , j]) <- alpha + beta * log(x[i] + 10) +
+            gamma * x[i] + lambda[i , j]
+        lambda[i , j] ~ dnorm(0.0, tau)   
+        cumulative.y[i , j] <- cumulative(y[i , j], y[i , j])
+    }
+}
+alpha ~ dnorm(0.0,1.0E-6)
+beta ~ dnorm(0.0,1.0E-6)
+gamma ~ dnorm(0.0,1.0E-6)
+tau ~ dgamma(0.001, 0.001)
+sigma <- 1 / sqrt(tau)
+""",
+        false,
+        true
+    ),
     data=(
         doses=6,
         plates=3,

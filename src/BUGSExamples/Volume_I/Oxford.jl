@@ -2,24 +2,28 @@
 
 oxford = (
     name="Oxford",
-    model_def=bugsmodel"""
-      for (i in 1 : K) {
-          r0[i] ~ dbin(p0[i], n0[i])
-          r1[i] ~ dbin(p1[i], n1[i])
-          logit(p0[i]) <- mu[i]
-          logit(p1[i]) <- mu[i] + logPsi[i]
-          logPsi[i] <- alpha + beta1 * year[i] + beta2 * (year[i] * year[i] - 22) + b[i]
-          b[i] ~ dnorm(0, tau)
-          mu[i] ~ dnorm(0.0, 1.0E-6)
-          cumulative.r0[i] <- cumulative(r0[i], r0[i])
-          cumulative.r1[i] <- cumulative(r1[i], r1[i])
-      }
-      alpha ~ dnorm(0.0, 1.0E-6)
-      beta1 ~ dnorm(0.0, 1.0E-6)
-      beta2 ~ dnorm(0.0, 1.0E-6)
-      tau ~ dgamma(1.0E-3, 1.0E-3)
-      sigma <- 1 / sqrt(tau)
-      """,
+    model_def=@bugs(
+        """
+for (i in 1 : K) {
+    r0[i] ~ dbin(p0[i], n0[i])
+    r1[i] ~ dbin(p1[i], n1[i])
+    logit(p0[i]) <- mu[i]
+    logit(p1[i]) <- mu[i] + logPsi[i]
+    logPsi[i] <- alpha + beta1 * year[i] + beta2 * (year[i] * year[i] - 22) + b[i]
+    b[i] ~ dnorm(0, tau)
+    mu[i] ~ dnorm(0.0, 1.0E-6)
+    cumulative.r0[i] <- cumulative(r0[i], r0[i])
+    cumulative.r1[i] <- cumulative(r1[i], r1[i])
+}
+alpha ~ dnorm(0.0, 1.0E-6)
+beta1 ~ dnorm(0.0, 1.0E-6)
+beta2 ~ dnorm(0.0, 1.0E-6)
+tau ~ dgamma(1.0E-3, 1.0E-3)
+sigma <- 1 / sqrt(tau)
+""",
+        false,
+        true
+    ),
     data=(
         r1=[
             3,
