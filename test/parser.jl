@@ -12,7 +12,7 @@ using JuliaBUGS:
     process_range!,
     process_indexing!,
     process_tilde_rhs!
-using JuliaBUGS: peek, parse_bugs
+using JuliaBUGS: peek
 using JuliaSyntax: @K_str
 using JuliaSyntax
 JuliaSyntax.enable_in_core!()
@@ -160,7 +160,7 @@ end
 end
 
 @testset "Parse BUGS Example Programs" begin
-    parse_bugs("""model
+    @bugs("""model
 {
     for( i in 1 : N ) {
         for( j in 1 : T ) {
@@ -180,7 +180,7 @@ end
 }
 """)
 
-    parse_bugs("""
+    @bugs("""
     model
        {
           for (i in 1 : K) {
@@ -202,7 +202,7 @@ end
        }
     """)
 
-    parse_bugs(
+    @bugs(
         """
 model
 {
@@ -279,7 +279,7 @@ model
     )
 
     # pumps
-    parse_bugs("""
+    @bugs("""
     model
     {
        for (i in 1 : N) {
@@ -292,7 +292,7 @@ model
     }""")
 
     # Dogs
-    parse_bugs("""
+    @bugs("""
     model
        {
           for (i in 1 : Dogs) {
@@ -313,7 +313,7 @@ model
     """)
 
     # seeds
-    parse_bugs("""
+    @bugs("""
     model
     {
        for( i in 1 : N ) {
@@ -331,7 +331,7 @@ model
     }""")
 
     # surgical
-    parse_bugs("""
+    @bugs("""
     model
     {
        for( i in 1 : N ) {
@@ -347,7 +347,7 @@ model
     """)
 
     # Magnesium
-    p = parse_bugs(
+    p = @bugs(
         """
     model
        {
@@ -422,7 +422,7 @@ model
     )
 
     # salm
-    parse_bugs("""
+    @bugs("""
     model
     {
        for( i in 1 : doses ) {
@@ -442,7 +442,7 @@ model
     """)
 
     # Equiv
-    parse_bugs("""
+    @bugs("""
     model
        {
           for( k in 1 : P ) {
@@ -466,7 +466,7 @@ model
     """)
 
     # Dyes
-    parse_bugs("""
+    @bugs("""
     model
     {
        for(i in 1 : batches) {
@@ -484,7 +484,7 @@ model
     """)
 
     # Stacks
-    parse_bugs("""
+    @bugs("""
     model
     {
     # Standardise x's and coefficients
@@ -522,7 +522,7 @@ model
     }""")
 
     # Epil
-    parse_bugs("""
+    @bugs("""
     model
     {
        for(j in 1 : N) {
@@ -565,7 +565,7 @@ model
     """)
 
     # Blockers
-    parse_bugs("""
+    @bugs("""
     model
     {
     for( i in 1 : Num ) {
@@ -584,7 +584,7 @@ model
     """)
 
     # Oxford
-    parse_bugs("""
+    @bugs("""
     model
     {
        for (i in 1 : K) {
@@ -605,7 +605,7 @@ model
     """)
 
     # Lsat
-    parse_bugs("""
+    @bugs("""
     model
     {
     # Calculate individual (binary) responses to each test from multinomial data
@@ -639,7 +639,7 @@ model
     """)
 
     # Bones
-    parse_bugs("""
+    @bugs("""
     model
     {
        for (i in 1 : nChild) {
@@ -665,7 +665,7 @@ model
     """)
 
     # Inhaler
-    parse_bugs(
+    @bugs(
         """
 model
 {
@@ -741,7 +741,7 @@ model
     )
 
     # Mice
-    parse_bugs("""
+    @bugs("""
     model
     {   
        for(i in 1 : M) {
@@ -761,7 +761,7 @@ model
     """)
 
     # Kidney
-    parse_bugs("""
+    @bugs("""
     model
     {
        for (i in 1 : N) {
@@ -790,7 +790,7 @@ model
     """)
 
     # Leuk
-    parse_bugs("""
+    @bugs("""
     model
     {
     # Set up data
@@ -826,7 +826,7 @@ model
     """)
 
     # LeukFr
-    parse_bugs("""
+    @bugs("""
     model
        {
        # Set up data
@@ -867,7 +867,7 @@ model
     ## Start Volume II
 
     # Dugongs
-    parse_bugs("""
+    @bugs("""
     model
     {
        for( i in 1 : N ) {
@@ -884,7 +884,7 @@ model
     """)
 
     # Orange Trees -- with `<--``
-    parse_bugs("""
+    @bugs("""
     model {
        for (i in 1:K) {
           for (j in 1:n) {
@@ -909,7 +909,7 @@ model
     """)
 
     # Orange Trees MVN
-    parse_bugs("""
+    @bugs("""
     model {
        for (i in 1:K) {
           for (j in 1:n) {
@@ -932,7 +932,7 @@ model
 
     # Biopsies -- empty indices and `true` variable name 
     # ! this should fail, because `true` and `error` is a reserved word
-    @test_throws ErrorException parse_bugs("""
+    @test_throws ErrorException @bugs("""
     model
     {
        for (i in 1 : ns){
@@ -948,7 +948,7 @@ model
     """)
 
     # eyes
-    parse_bugs("""
+    @bugs("""
     model
     {
        for( i in 1 : N ) {
@@ -965,7 +965,7 @@ model
     """)
 
     # hearts
-    parse_bugs("""
+    @bugs("""
     model
     {
        for (i in 1 : N) {
@@ -986,7 +986,7 @@ model
     """)
 
     # Air
-    parse_bugs("""
+    @bugs("""
     model
     {
        for(j in 1 : J) {
@@ -1001,7 +1001,7 @@ model
     """)
 
     # Cervix
-    parse_bugs("""
+    @bugs("""
     model
     {
        for (i in 1 : N) {
@@ -1027,7 +1027,7 @@ model
     """)
 
     # Jaws
-    parse_bugs("""
+    @bugs("""
     model
     {
     beta0 ~ dnorm(0.0, 0.001)
@@ -1044,7 +1044,7 @@ model
     """)
 
     # BiRats
-    parse_bugs("""
+    @bugs("""
     model
     {
     for( i in 1 : N ) {
@@ -1063,7 +1063,7 @@ model
     """)
 
     # Schools
-    parse_bugs("""
+    @bugs("""
     model
     {
        for(p in 1 : N) {
@@ -1101,7 +1101,7 @@ model
     """)
 
     # Ice
-    parse_bugs("""
+    @bugs("""
     model
     {
        for (i in 1:I) {
@@ -1140,7 +1140,7 @@ model
     """)
 
     # Beetles
-    parse_bugs("""
+    @bugs("""
     model
     {
     for( i in 1 : N ) {
@@ -1155,7 +1155,7 @@ model
     """)
 
     # Alligators
-    parse_bugs("""
+    @bugs("""
     model
     {
 
@@ -1222,7 +1222,7 @@ model
     """)
 
     # Endo
-    parse_bugs("""
+    @bugs("""
     model
        {
        # transform collapsed data into full
@@ -1276,7 +1276,7 @@ model
     """)
 
     # Stagnant
-    parse_bugs("""
+    @bugs("""
     model
     {
     for( i in 1 : N ) {
@@ -1296,7 +1296,7 @@ model
     """)
 
     # Asia
-    parse_bugs("""
+    @bugs("""
     model{
     smoking ~ dcat(p.smoking[1:2])
     tuberculosis ~ dcat(p.tuberculosis[asia,1:2])
@@ -1309,7 +1309,7 @@ model
     """)
 
     # Pigs
-    parse_bugs("""
+    @bugs("""
     model
     {
     q ~ dunif(0,1) # prevalence of a1
@@ -1352,7 +1352,7 @@ model
     """)
 
     # t-df
-    parse_bugs("""
+    @bugs("""
     model {
        for (i in 1:1000) {
           y[i] ~ dt(0, 1, d)
@@ -1360,7 +1360,7 @@ model
        d ~ dunif(2, 100)         # degrees of freedom must be at least two
     }      """)
     #   test truncation
-    parse_bugs("""model {
+    @bugs("""model {
        for (i in 1:1000) {
           y[i] ~ dt(0, 1, d)T(-50, 50)
        }
@@ -1369,7 +1369,7 @@ model
     """)
 
     # Camel
-    parse_bugs("""
+    @bugs("""
     model
     {
        for (i in 1 : N){
@@ -1388,7 +1388,7 @@ model
     """)
 
     # Eye Tracking
-    parse_bugs("""
+    @bugs("""
     model{   
        for( i in 1 : N ) {
           S[i] ~ dcat(pi[])
@@ -1426,7 +1426,7 @@ model
     """)
 
     # Fire -- this should error on pi < -3.14159565
-    parse_bugs(
+    @bugs(
         """
     model{
 
@@ -1466,7 +1466,7 @@ model
     )
 
     # Hepatitis
-    parse_bugs("""
+    @bugs("""
     model
     {
     for( i in 1 : N ) {
@@ -1489,7 +1489,7 @@ model
     """)
 
     # Hips model 1
-    parse_bugs("""
+    @bugs("""
     model {
 
     for(k in 1 : K) { # loop over strata
@@ -1593,7 +1593,7 @@ model
     """)
 
     # Hips model 2
-    parse_bugs("""
+    @bugs("""
     model {
 
     for(k in 1 : K) { # loop over strata
@@ -1684,7 +1684,7 @@ model
     """)
 
     # Hips model 3
-    parse_bugs("""
+    @bugs("""
     model {
 
     for(k in 1 : K) { # loop over strata
@@ -1785,7 +1785,7 @@ model
     """)
 
     # Hips model 4
-    parse_bugs(
+    @bugs(
         """
     model {
 
@@ -1920,7 +1920,7 @@ model
     )
 
     # Jama River Valley Ecuador
-    parse_bugs("""
+    @bugs("""
     model{
           for (i in 1 : nDate){
              theta[i] ~ dunif(beta[phase[i]], alpha[phase[i]] )
@@ -1956,7 +1956,7 @@ model
        """)
 
     # Pig Weight Gain
-    parse_bugs("""
+    @bugs("""
     model{
           y[1:s] ~ dmulti(th[1 : s] , n)
           sum.g <- sum(g[])
@@ -2000,7 +2000,7 @@ model
        """)
 
     # Pines
-    parse_bugs("""
+    @bugs("""
     model{
     # standardise data
     for(i in 1:N){
@@ -2052,7 +2052,7 @@ model
     """)
 
     # St Veit
-    parse_bugs("""
+    @bugs("""
     model{
        theta[1] ~ dunif(theta[2], theta.max)
        theta[2] ~ dunif(theta[3], theta[1])
@@ -2098,7 +2098,7 @@ model
     # Start Volume IV
 
     # SeedsDataCloning
-    parse_bugs("""
+    @bugs("""
     model
     {
        for( i in 1 : N ) {
@@ -2121,7 +2121,7 @@ model
     """)
 
     # coins
-    parse_bugs("""
+    @bugs("""
     model{
     p ~ dunif(0, 1)
     for (i in 1 : 10){
@@ -2135,7 +2135,7 @@ model
     """)
 
     # Smart phones
-    parse_bugs("""
+    @bugs("""
     model{
        N <- sum(r[])
        rNew[1 : 3] ~ dmulti(pHat[1 : 3] , N) # replicate data
@@ -2149,7 +2149,7 @@ model
     """)
 
     # Abbey National
-    parse_bugs("""
+    @bugs("""
     model{
        for(i in 2 : N){
           z[i] ~ dstable(alpha, beta, gamma, delta)   
@@ -2168,7 +2168,7 @@ model
     """)
 
     # Beetles
-    parse_bugs("""
+    @bugs("""
     model
     {
        for(i in 1 : N) {
@@ -2188,7 +2188,7 @@ model
     """)
 
     # Preeclampsia
-    parse_bugs("""
+    @bugs("""
     model {
        for (i in 1:N) {
        x.C[i] ~ dbin(pi.C[i], n.C[i])
@@ -2203,7 +2203,7 @@ model
 
     # Lotka-Volterra
     # ! currently error, `D` function is not defined, probably won't impelment 
-    @test_throws ErrorException parse_bugs(
+    @test_throws ErrorException @bugs(
         """
     model
     {
@@ -2241,7 +2241,7 @@ model
     # ! similarly, `D` function is not defined
 
     # Pollution
-    parse_bugs("""
+    @bugs("""
     model {
 
     #likelihood
