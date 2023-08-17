@@ -112,7 +112,7 @@ end
 
 `_eval` mimics `Base.eval`, but uses precompiled functions. This is possible because the expressions we want to 
 evaluate only have two kinds of expressions: function calls and indexing.
-`env` is a data structure mapping symbols in `expr` to values, values can be arrays or scalars
+`env` is a data structure mapping symbols in `expr` to values, values can be arrays or scalars.
 """
 function _eval(expr::Number, env)
     return expr
@@ -252,6 +252,8 @@ end
     MarkovBlanketCoveredBUGSModel
 
 The model object for a BUGS model with Markov blanket covered.
+The `blanket` field is a vector of `VarName` that contains the Markov blanket of the variables and 
+the variables themselves.
 """
 struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
     param_length::Int
@@ -259,33 +261,45 @@ struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
     model::BUGSModel
 end
 
-function MarkovBlanketCoveredBUGSModel(
-    m::BUGSModel, var_group::Union{VarName,Vector{VarName}}
-)
+"""
+    MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group)
+
+`var_group` can be a single `VarName` or a vector of `VarName`. The variable in `var_group` 
+must be a variable in the model; logical variables in `var_group` will not error, but will be ignored.
+"""
+function MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group::VarName)
+    return MarkovBlanketCoveredBUGSModel(m, [var_group])
+end
+function MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group::Vector{VarName})
     non_vars = VarName[]
-    non_stochastic_vars = VarName[]
-    observation_vars = VarName[]
-    if var_group isa VarName
-        var_group = [var_group]
-    end
+    logical_vars = VarName[]
     for var in var_group
-        if var ∉ labels(m.g)
+        if var ∉ labels(m.g) || m.g[var] isa AuxiliaryNodeInfo
             push!(non_vars, var)
-        elseif m.g[var] isa AuxiliaryNodeInfo
-            push!(non_stochastic_vars, var)
-        elseif var ∉ m.parameters
-            push!(observation_vars, var)
+        elseif m.g[var].node_type == Logical
+            push!(logical_vars, var)
         end
     end
-    length(non_vars) > 0 && error("Variables $(non_vars) are not in the model")
-    length(non_stochastic_vars) > 0 &&
-        error("Variables $(non_stochastic_vars) are not stochastic variables")
-    length(observation_vars) > 0 &&
-        warn("Variables $(observation_vars) are not parameters, they will be ignored")
+    isempty(non_vars) || error("Variables $(non_vars) are not in the model")
+    isempty(logical_vars) ||
+        warn("Variables $(logical_vars) are not stochastic variables, they will be ignored")
     blanket = markov_blanket(m.g, var_group)
-    return MarkovBlanketCoveredBUGSModel(sum([_length(x) for x in blanket]), blanket, m)
+    blanket_with_vars = union(blanket, var_group)
+    param_length = sum(_length(vn) for vn in blanket_with_vars if vn in m.parameters)
+    return MarkovBlanketCoveredBUGSModel(param_length, blanket_with_vars, m)
 end
 
+"""
+    markov_blanket(g::BUGSModel, v)
+
+Find the Markov blanket of `v` in `g`. `v` can be a single `VarName` or a vector of `VarName`.
+In the case of vector, the Markov blanket of the union of the markov blankets of each variable 
+minus the variables themselves.
+
+Reference: 
+- https://en.wikipedia.org/wiki/Markov_blanket
+- Liu, X.-Q., & Liu, X.-S. (2018). Markov Blanket and Markov Boundary of Multiple Variables. Journal of Machine Learning Research, 19(43), 1–50.
+"""
 function markov_blanket(g, v::VarName)
     parents = stochastic_inneighbors(g, v)
     children = stochastic_outneighbors(g, v)
@@ -293,19 +307,31 @@ function markov_blanket(g, v::VarName)
     for p in children
         co_parents = vcat(co_parents, stochastic_inneighbors(g, p))
     end
-    return unique(vcat(parents, children, co_parents...))
+    blanket = unique(vcat(parents, children, co_parents...))
+    return [x for x in blanket if x != v]
 end
 
 function markov_blanket(g, v)
     blanket = VarName[]
-
     for vn in v
         blanket = vcat(blanket, markov_blanket(g, vn))
     end
-    return unique(blanket)
+    return [x for x in unique(blanket) if x ∉ v]
 end
 
-function stochastic_neighbors(g::BUGSGraph, v::VarName, f)
+"""
+    stochastic_neighbors(g::BUGSModel, c::VarName, f)
+   
+Internal function to find all the stochastic neighbors (parents or children), returns a vector of
+`VarName` containing the stochastic neighbors and the logical variables along the paths.
+"""
+function stochastic_neighbors(
+    g::BUGSGraph,
+    v::VarName,
+    f::Union{
+        typeof(MetaGraphsNext.inneighbor_labels),typeof(MetaGraphsNext.outneighbor_labels)
+    },
+)
     stochastic_neighbors_vec = VarName[]
     logical_en_route = VarName[] # logical variables
     for u in f(g, v)
@@ -327,12 +353,26 @@ function stochastic_neighbors(g::BUGSGraph, v::VarName, f)
             end
         end
     end
-    # return stochastic_neighbors_vec, logical_en_route
     return [stochastic_neighbors_vec..., logical_en_route...]
 end
 
-stochastic_inneighbors(g, v) = stochastic_neighbors(g, v, inneighbor_labels)
-stochastic_outneighbors(g, v) = stochastic_neighbors(g, v, outneighbor_labels)
+"""
+    stochastic_inneighbors(g::BUGSModel, v::VarName)
+
+Find all the stochastic inneighbors (parents) of `v`.
+"""
+function stochastic_inneighbors(g, v) 
+    return stochastic_neighbors(g, v, MetaGraphsNext.inneighbor_labels)
+end
+
+"""
+    stochastic_outneighbors(g::BUGSModel, v::VarName)
+
+Find all the stochastic outneighbors (children) of `v`.
+"""
+function stochastic_outneighbors(g, v)
+    return stochastic_neighbors(g, v, MetaGraphsNext.outneighbor_labels)
+end
 
 """
     DefaultContext

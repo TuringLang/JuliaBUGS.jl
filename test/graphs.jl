@@ -33,9 +33,8 @@ l = @varname l
 @test Set(Symbol.(stochastic_inneighbors(g, a))) == Set([:b, :c, :f])
 @test Set(Symbol.(stochastic_outneighbors(g, a))) == Set([:d, :e, :h, :g])
 
-@test Set(Symbol.(markov_blanket(g, a))) == Set([:f, :b, :a, :d, :e, :c, :h, :g, :i])
-@test Set(Symbol.(markov_blanket(g, (a, l)))) ==
-    Set([:f, :b, :a, :d, :e, :c, :h, :g, :i, :l])
+@test Set(Symbol.(markov_blanket(g, a))) == Set([:f, :b, :d, :e, :c, :h, :g, :i])
+@test Set(Symbol.(markov_blanket(g, (a, l)))) == Set([:f, :b, :d, :e, :c, :h, :g, :i])
 
 # construct a SimpleVarInfo
 inits = Dict(

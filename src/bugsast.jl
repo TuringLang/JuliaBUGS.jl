@@ -369,7 +369,10 @@ function check_idxs(expr::Expr)
     end
 end
 
-# during the transition phase, this macro is kept, but for internal use only
+# This follow code are from early days of the parser, which uses a Julia String macro to
+# transform BUGS program into Julia program
+# We have since implemented a new parser, see `parser.jl`
+
 # macro _bugsmodel_str(s::String)
 #     # Convert and wrap the whole thing in a block for parsing
 #     transformed_code = "begin\n$(bugs_to_julia(s))\nend"
