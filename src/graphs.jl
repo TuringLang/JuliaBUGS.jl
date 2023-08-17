@@ -191,7 +191,7 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
             end
         end
     end
-    l = sum([_length(x) for x in parameters])
+    l = reduce(sum, [_length(x) for x in parameters]; init=0)
     return BUGSModel(l, vi, parameters, g, sorted_nodes)
 end
 
@@ -285,7 +285,7 @@ function MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group::Vector{VarName})
         warn("Variables $(logical_vars) are not stochastic variables, they will be ignored")
     blanket = markov_blanket(m.g, var_group)
     blanket_with_vars = union(blanket, var_group)
-    param_length = sum(_length(vn) for vn in blanket_with_vars if vn in m.parameters)
+    param_length = reduce(sum, [_length(vn) for vn in blanket_with_vars if vn in m.parameters]; init=0)
     return MarkovBlanketCoveredBUGSModel(param_length, blanket_with_vars, m)
 end
 
@@ -362,7 +362,7 @@ end
 
 Find all the stochastic inneighbors (parents) of `v`.
 """
-function stochastic_inneighbors(g, v) 
+function stochastic_inneighbors(g, v)
     return stochastic_neighbors(g, v, MetaGraphsNext.inneighbor_labels)
 end
 
