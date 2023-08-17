@@ -1,6 +1,6 @@
 # JuliaBUGS.jl
 
-A modern implementation of the BUGS language in Julia. 
+A modern implementation of the BUGS probabilistic programming language in Julia. 
 
 ## Caution!
 
@@ -8,7 +8,7 @@ This is still a work in progress and may not be ready for serious use.
 
 ## Example: Logistic Regression with Random Effects
 We will use the [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) model for demonstration. 
-The example concerns the proportion of seeds that germinated on each of 21 plates. The data is (rewritten in Julia's NamedTuple)
+This example concerns the proportion of seeds that germinated on each of 21 plates. Here, we transform the data into a `NamedTuple`:
 
 ```julia
 data = (
@@ -19,9 +19,9 @@ data = (
     N = 21,
 )
 ```
- 
+
 where `r[i]` is the number of germinated seeds and `n[i]` is the total number of the seeds on the $i$-th plate. 
-The model is constructed such that, let $p_i$ be the probability of germination on the $i$-th plate, 
+Let $p_i$ be the probability of germination on the $i$-th plate. Then the model is defined by:
 
 $$
 \begin{aligned}
@@ -32,8 +32,8 @@ b_i &\sim \text{Normal}(0, \tau)
 $$
 
 where $x_{1i}$ and $x_{2i}$ are the seed type and root extract of the $i$-th plate.  
-The original BUGS program for the model is 
-```
+The original BUGS program for the model is:
+```BUGS
 model
 {
     for( i in 1 : N ) {
@@ -42,42 +42,51 @@ model
         logit(p[i]) <- alpha0 + alpha1 * x1[i] + alpha2 * x2[i] +
         alpha12 * x1[i] * x2[i] + b[i]
     }
-    alpha0 ~ dnorm(0.0,1.0E-6)
-    alpha1 ~ dnorm(0.0,1.0E-6)
-    alpha2 ~ dnorm(0.0,1.0E-6)
-    alpha12 ~ dnorm(0.0,1.0E-6)
-    tau ~ dgamma(0.001,0.001)
+    alpha0 ~ dnorm(0.0, 1.0E-6)
+    alpha1 ~ dnorm(0.0, 1.0E-6)
+    alpha2 ~ dnorm(0.0, 1.0E-6)
+    alpha12 ~ dnorm(0.0, 1.0E-6)
+    tau ~ dgamma(0.001, 0.001)
     sigma <- 1 / sqrt(tau)
 }
 ```
 
 ## Modeling Language
+
+### Writing a Model in BUGS
+BUGS language syntax: [BNF definition](https://github.com/TuringLang/JuliaBUGS.jl/blob/master/archive/parser_attempts/BNF.txt)
+
 Language References:  
  - [MultiBUGS](https://www.multibugs.org/documentation/latest/)
  - [OpenBUGS](https://chjackson.github.io/openbugsdoc/Manuals/ModelSpecification.html)
 
-### Writing Model in Julia
+Implementations in C++ and R:
+- [JAGS](https://sourceforge.net/p/mcmc-jags/code-0/ci/default/tree/) and its [user manual](https://people.stat.sc.edu/hansont/stat740/jags_user_manual.pdf)
+- [Nimble](https://r-nimble.org/)
+
+### Writing a Model in Julia
 We provide a macro solution which allows users to write down model definitions using Julia:
 
 ```julia
 @bugs begin
     for i in 1:N
-        r[i] ~ dbin(p[i],n[i])
-        b[i] ~ dnorm(0.0,tau)
+        r[i] ~ dbin(p[i], n[i])
+        b[i] ~ dnorm(0.0, tau)
         p[i] = logistic(alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] + b[i])
     end
-    alpha0 ~ dnorm(0.0,1.0E-6)
-    alpha1 ~ dnorm(0.0,1.0E-6)
-    alpha2 ~ dnorm(0.0,1.0E-6)
-    alpha12 ~ dnorm(0.0,1.0E-6)
-    tau ~ dgamma(0.001,0.001)
+    alpha0 ~ dnorm(0.0, 1.0E-6)
+    alpha1 ~ dnorm(0.0, 1.0E-6)
+    alpha2 ~ dnorm(0.0, 1.0E-6)
+    alpha12 ~ dnorm(0.0, 1.0E-6)
+    tau ~ dgamma(0.001, 0.001)
     sigma = 1 / sqrt(tau)
 end
 ```
-BUGS syntax carries over almost one-to-one to Julia. 
-The only change is regarding the link functions in logical assignments.
-Because Julia uses the "function call on LHS"-like syntax as a shorthand for function definition, BUGS' link function syntax can be unidiomatic and confusing.
-We adopt a more Julian syntax as demonstrated in the model definition above: instead of calling the link function, we call the inverse link function from the RHS. However, the Julian link function semantics internally is equivalent to the BUGS. 
+BUGS syntax carries over almost one-to-one to Julia, with a few minor exceptions.
+In general, when basic Julia syntax and BUGS syntax conflict, it is necessary to use Julia syntax. 
+For example, curly braces are replaced with `begin ... end` blocks, and `for` loops do not require parentheses.
+In addition, Julia uses `f(x) = ...` as a shorthand for function definition, so BUGS' link function syntax can be confusing and ambiguous. 
+Thus, instead of calling the link function, we call the inverse link function from the RHS.
 
 ### Support for Lagacy BUGS Programs
 We also provide function `parse_bugs` to work with original (R-like) BUGS syntax:
@@ -105,9 +114,9 @@ By default, `parse_bugs` will translate R-style variable names like `a.b.c` to `
 We still encourage users to write new program using the Julia-native syntax, because of better debuggability and perks like syntax highlighting. 
 
 ### Using Self-defined Functions and Distributions
-User can register their own functions and distributions with the macros
+Users can register their own functions and distributions with macros. However, note that any functions used with must be _pure_ mathematical functions, i.e. they must be side-effect free.
 
-```julia-repo
+```julia-repl
 julia> # Should be restricted to pure function that do simple operations
 @register_function function f(x)
     return x + 1
@@ -119,7 +128,7 @@ julia> JuliaBUGS.f(2)
 
 , and 
 
-```julia-repo
+```julia-repl
 julia> # Need to return a Distributions.Distribution 
 @register_distribution function d(x) 
     return Normal(0, x^2)
@@ -129,7 +138,7 @@ julia> JuliaBUGS.d(1)
 Distributions.Normal{Float64}(μ=0.0, σ=1.0)
 ```
 
-After registering the function or distributions, they can be used just like any other functions or distributions provided by BUGS. 
+After registering the function or distributions, they can be used just like any other functions or distributions provided by BUGS.
 
 Please use these macros with caution to avoid causing name clashes. Such name clashes would override default BUGS primitives and cause breaking behaviours.
 
@@ -142,18 +151,17 @@ compile(model_def::Expr, data::Dict, initializations::Dict),
 ```
 
 which takes three arguments: 
-- the first argument is the output of `@bugsast` or `bugsmodel`, 
-- the second argument is the data 
-- the third argument is the initializations of the parameters, in the case of `pumps` model, it is
+- the output of `@bugsast` or `bugsmodel`, 
+- the data, and
+- the initializations for all parameters.
 
 ```
-initializaitons = Dict(:alpha => 1, :beta => 1)
+initializations = Dict(:alpha => 1, :beta => 1)
 ```
 
 then we can compile the model with the data and initializations,
-```julia-repo
-julia> p = compile(model_def, data, initializations);
-
+```julia-repl
+julia> p = compile(model_def, data, initializations)
 ```
 
 ## Inference
@@ -177,19 +185,22 @@ integrator = Leapfrog(initial_ϵ)
 proposal = NUTS{MultinomialTS, GeneralisedNoUTurn}(integrator)
 adaptor = StanHMCAdaptor(MassMatrixAdaptor(metric), StepSizeAdaptor(0.8, integrator))
 
-samples, stats = sample(hamiltonian, proposal, initial_θ, n_samples, adaptor, n_adapts; drop_warmup=true, progress=true);
+samples, stats = sample(
+    hamiltonian, proposal, initial_θ, n_samples, adaptor, n_adapts;
+    drop_warmup=true, progress=true
+)
 ```
 
 The variable `samples` contains variable values in the unconstrained space, we can use the function `JuliaBUGS.transform_samples` to get a dictionary mapping variable names to their sample values.
 
-```julia-repo
-julia> alpha_0_samples = [JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:alpha0)] for sample in samples]; 
+```julia-repl
+julia> alpha_0_samples = [JuliaBUGS.transform_samples(p, sample)[JuliaBUGS.Var(:alpha0)] for sample in samples]
 
-julia> mean(alpha_0_samples), std(alpha_0_samples) # Reference result: mean -0.5499, variance 0.1965
+julia> mean(alpha_0_samples), std(alpha_0_samples)  # Reference result: mean -0.5499, variance 0.1965
 (-0.5432579688203603, 0.23682544392999907)
 ```
 
-One can verify the inference result is coherent with BUGS' result for [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html). 
+Which is consistent with the result in the [OpenBUGS seeds example](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html).
 
 ## More Examples
-We have transcribed all the examples from the first volume of the BUGS Examples ([origianl](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/JuliaBUGS.jl/tree/master/src/BUGSExamples/Volume_I)). All the programs and data are included, and they can be compiled in a similar way as we have demonstrated before.
+We have transcribed all the examples from the first volume of the BUGS Examples ([original](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/JuliaBUGS.jl/tree/master/src/BUGSExamples/Volume_I)). All programs and data are included, and can be compiled using the steps described in the tutorial above.
