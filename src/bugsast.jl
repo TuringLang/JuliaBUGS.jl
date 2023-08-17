@@ -156,7 +156,9 @@ end
 macro bugs(prog::String, replace_period=true, no_enclosure=false)
     julia_program = to_julia_program(prog, replace_period, no_enclosure)
     expr = Base.Expr(JuliaSyntax.parse(SyntaxNode, julia_program))
-    return Meta.quot(post_processing_expr(bugsast(expr, LineNumberNode(1, Symbol(@__FILE__)))))
+    return Meta.quot(
+        post_processing_expr(bugsast(expr, LineNumberNode(1, Symbol(@__FILE__))))
+    )
 end
 
 function warn_link_function(expr)
