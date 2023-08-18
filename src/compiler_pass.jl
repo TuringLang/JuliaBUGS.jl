@@ -77,7 +77,7 @@ Arguments:
 """
 function post_process(pass::CompilerPass, expr, env, vargs...) end
 
-@enum VariableTypes begin
+@enum VariableTypes::Bool begin
     Logical
     Stochastic
 end
@@ -91,6 +91,7 @@ struct CollectVariables <: CompilerPass
     vars::Dict{Var,VariableTypes}
     transformed_variables::Dict{Var,Union{Number,Array{<:Number}}}
 end
+
 function CollectVariables()
     return CollectVariables(
         Dict{Var,VariableTypes}(), Dict{Var,Union{Number,Array{<:Number}}}()

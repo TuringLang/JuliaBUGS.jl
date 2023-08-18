@@ -2,37 +2,41 @@
 
 lsat = (
     name="LSAT",
-    model_def=bugsmodel"""
-      # Calculate individual (binary) responses to each test from multinomial data
-      for (j in 1 : culm[1]) {
-          for (k in 1 : T) {
-              r[j, k] <- response[1, k]
-          }
-      }
-      
-      for (i in 2 : R) {
-          for (j in culm[i - 1] + 1 : culm[i]) {
-              for (k in 1 : T) {
-                  r[j, k] <- response[i, k]
-              }
-          }
-      }
-      
-      # Rasch model
-      for (j in 1 : N) {
-          for (k in 1 : T) {
-              logit(p[j, k]) <- beta * theta[j] - alpha[k]
-              r[j, k] ~ dbern(p[j, k])
-          }
-          theta[j] ~ dnorm(0, 1)
-      }
-      # Priors
-      for (k in 1 : T) {
-          alpha[k] ~ dnorm(0, 0.0001)
-          a[k] <- alpha[k] - mean(alpha[])
-      }
-      beta ~ dflat()T(0, )
-  """,
+    model_def=@bugs(
+        """
+    # Calculate individual (binary) responses to each test from multinomial data
+    for (j in 1 : culm[1]) {
+        for (k in 1 : T) {
+            r[j, k] <- response[1, k]
+        }
+    }
+    
+    for (i in 2 : R) {
+        for (j in culm[i - 1] + 1 : culm[i]) {
+            for (k in 1 : T) {
+                r[j, k] <- response[i, k]
+            }
+        }
+    }
+    
+    # Rasch model
+    for (j in 1 : N) {
+        for (k in 1 : T) {
+            logit(p[j, k]) <- beta * theta[j] - alpha[k]
+            r[j, k] ~ dbern(p[j, k])
+        }
+        theta[j] ~ dnorm(0, 1)
+    }
+    # Priors
+    for (k in 1 : T) {
+        alpha[k] ~ dnorm(0, 0.0001)
+        a[k] <- alpha[k] - mean(alpha[])
+    }
+    beta ~ dflat()T(0, )
+""",
+        false,
+        true
+    ),
     data=(
         N=1000,
         R=32,

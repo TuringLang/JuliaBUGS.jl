@@ -2,30 +2,34 @@
 
 kidney = (
     missingme="Kidney",
-    model_def=bugsmodel"""
-  for (i in 1 : N) {
-      for (j in 1 : M) {
-          # Survival times bounded below by censoring times:
-          t[i,j] ~ dweib(r, mu[i,j])C(t.cen[i, j], );
-          log(mu[i,j ]) <- alpha + beta.age * age[i, j] + beta.sex *sex[i] + beta.dis[disease[i]] + b[i];
-          cumulative.t[i,j] <- cumulative(t[i,j], t[i,j])
-      }
-      # Random effects:
-      b[i] ~ dnorm(0.0, tau)
-  }
+    model_def=@bugs(
+        """
+for (i in 1 : N) {
+    for (j in 1 : M) {
+        # Survival times bounded below by censoring times:
+        t[i,j] ~ dweib(r, mu[i,j])C(t.cen[i, j], );
+        log(mu[i,j ]) <- alpha + beta.age * age[i, j] + beta.sex *sex[i] + beta.dis[disease[i]] + b[i];
+        cumulative.t[i,j] <- cumulative(t[i,j], t[i,j])
+    }
+    # Random effects:
+    b[i] ~ dnorm(0.0, tau)
+}
 
-  # Priors:
-  alpha ~ dnorm(0.0, 0.0001);
-  beta.age ~ dnorm(0.0, 0.0001);
-  beta.sex ~ dnorm(0.0, 0.0001);
-  # beta.dis[1] <- 0; # corner-point constraint
-  for(k in 2 : 4) {
-      beta.dis[k] ~ dnorm(0.0, 0.0001);
-  }
-  tau ~ dgamma(1.0E-3, 1.0E-3);
-  r ~ dgamma(1.0, 1.0E-3);
-  sigma <- 1 / sqrt(tau); # s.d. of random effects
-  """,
+# Priors:
+alpha ~ dnorm(0.0, 0.0001);
+beta.age ~ dnorm(0.0, 0.0001);
+beta.sex ~ dnorm(0.0, 0.0001);
+# beta.dis[1] <- 0; # corner-point constraint
+for(k in 2 : 4) {
+    beta.dis[k] ~ dnorm(0.0, 0.0001);
+}
+tau ~ dgamma(1.0E-3, 1.0E-3);
+r ~ dgamma(1.0, 1.0E-3);
+sigma <- 1 / sqrt(tau); # s.d. of random effects
+""",
+        false,
+        true
+    ),
     data=(
         N=38,
         M=2,

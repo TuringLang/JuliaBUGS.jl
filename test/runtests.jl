@@ -38,7 +38,6 @@ using JuliaBUGS.BUGSPrimitives: mean
 end
 
 @testset "Parser" begin
-    # TODO: add more explicit tests for the parser
     include("bugsast.jl")
     include("parser.jl")
 end
@@ -88,4 +87,8 @@ include("run_logp_tests.jl")
     :rats,
 ]
     include("logp_tests/$s.jl")
+end
+
+@testset "Markov Blanket" begin
+    include("graphs.jl")
 end

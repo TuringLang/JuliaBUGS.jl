@@ -184,6 +184,13 @@ function process_toplevel!(ps::ProcessState)
     return process_trivia!(ps)
 end
 
+function process_toplevel_no_enclosure!(ps::ProcessState)
+    push!(ps.julia_token_vec, "begin \n")
+    process_statements!(ps)
+    push!(ps.julia_token_vec, "\n end")
+    return process_trivia!(ps)
+end
+
 function process_statements!(ps::ProcessState)
     process_trivia!(ps)
     while peek(ps) ∈ KSet"for Identifier"
@@ -371,8 +378,9 @@ function process_tilde_rhs!(ps::ProcessState)
     expect!(ps, "(")
     process_call_args!(ps)
     expect!(ps, ")")
+    process_trivia!(ps, false) # allow whitespace 
     if peek_raw(ps) in ["T", "C"]
-        discard!(ps)
+        discard!(ps) # discard the "T" or "C"
         expect_and_discard!(ps, "(")
         push!(julia_token_vec, peek_raw(ps) == "C" ? " censored(" : " truncated(")
         push!(julia_token_vec, buffer..., ", ")
@@ -400,7 +408,7 @@ function process_tilde_rhs!(ps::ProcessState)
 
     if peek(ps) == K";"
         consume!(ps)
-    elseif peek_next_non_trivia(ps) == K"Identifier" # heuristic: the ";" is forgotten, so insert one
+    elseif peek_next_non_trivia(ps, false) == K"Identifier" # heuristic: the ";" is forgotten, so insert one
         push!(julia_token_vec, ";")
     end
 end
@@ -511,4 +519,35 @@ function to_julia_program(julia_token_vec, text)
         end
     end
     return program
+end
+
+"""
+    to_julia_program
+
+Convert a BUGS program to a Julia program.
+
+# Arguments
+- `prog::String`: A string containing the BUGS program that needs to be converted.
+- `replace_period::Bool=true`: A flag to determine whether periods should be replaced in the 
+conversion process. If `true`, periods in variable names or other relevant places will be 
+replaced with an underscore. If `false`, periods will be retained, and variable name will be
+wrapped in `var"..."` to avoid syntax error.
+- `no_enclosure::Bool=false`: A flag to determine the enclosure processing strategy. 
+If `true`, the parse will not enforce the requirement that the program body to be enclosed in
+"model { ... }". 
+
+"""
+function to_julia_program(prog::String, replace_period=true, no_enclosure=false)
+    ps = ProcessState(prog, replace_period)
+    if no_enclosure
+        process_toplevel_no_enclosure!(ps)
+    else
+        process_toplevel!(ps)
+    end
+    if !isempty(ps.diagnostics)
+        io = IOBuffer()
+        JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
+        error("Errors in the program: \n $(String(take!(io)))")
+    end
+    return to_julia_program(ps.julia_token_vec, ps.text)
 end

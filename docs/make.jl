@@ -80,7 +80,7 @@ makedocs(;
     pages=[
         "Introduction" => "index.md",
         "API" => "api.md",
-        "Parser Implementation" => "ast.md",
+        # "Parser Implementation" => "ast.md",
         "Functions" => "functions.md",
         "Distributions" => "distributions.md",
     ],

@@ -170,3 +170,20 @@ functional form of logical nodes is very similar to that for derivatives and use
 scheme
 
 BUGS separates management of logical and stochastic variables, essentially two graphs. Logical variables are stored in an array and values are updated with values in earlier positions of the array.
+
+# Blurred Line Between Data and Observed Stochastic Variables
+One subtle and maybe debatable aspect of `BUGS`' syntax is that the value(observation) of an observed stochastic variable is the same as any model parameters provided in the `data`.
+For instance, the following program is legal.
+```R
+model {
+    N ~ dcat(p[])
+    for (i in 1:N) {
+        y[i] ~ dnorm(mu, tau)
+    }
+    p[1] <- 0.5
+    p[2] <- 0.5
+}
+```
+For an observation to be used in loop bounds or indexing, it must be included in the given `data`, not a transformed variable.
+The current version of `JuliaBUGS` is consistent with this behavior, although the earlier `SymbolicPPL` disallows this.  
+It is possible to implement this check in `JuliaBUGS`. For a naive implementation, we can just invalidate(e.g. mark as `missing`) all observations after the first pass, and check if any of them are used in loop bounds or indexing. But at this time, we don't have plan to implementing this check.

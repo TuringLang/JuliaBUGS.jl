@@ -142,7 +142,7 @@ function bugsast(expr, position=LineNumberNode(1, nothing))
 end
 
 """
-    @bugsast(expr)
+    @bugs(expr)
 
 Convert Julia code to an `Expr` that can be used as the AST of a BUGS program.  Checks that only
 allowed syntax is used, and normalizes certain expressions.  
@@ -151,7 +151,14 @@ Used expression heads: `:~` for tilde calls, `:ref` for indexing, `:(:)` for ran
 converted from `:call` variants.
 """
 macro bugs(expr)
-    return Meta.quot(post_parsing_processing(warn_link_function(bugsast(expr, __source__))))
+    return Meta.quot(post_processing_expr(warn_link_function(bugsast(expr, __source__))))
+end
+macro bugs(prog::String, replace_period=true, no_enclosure=false)
+    julia_program = to_julia_program(prog, replace_period, no_enclosure)
+    expr = Base.Expr(JuliaSyntax.parsestmt(SyntaxNode, julia_program))
+    return Meta.quot(
+        post_processing_expr(bugsast(expr, LineNumberNode(1, Symbol(@__FILE__))))
+    )
 end
 
 function warn_link_function(expr)
@@ -167,85 +174,10 @@ function warn_link_function(expr)
     end
 end
 
-function bugs_to_julia(s)
-    # remove parentheses around loops
-    s = replace(s, r"for\p{Zs}*\((.*)\)\p{Zs}*{" => s"for \1 {")
-
-    s = replace(
-        s,
-        "<-" => "=",
-        # blocks in if and for replaced by respective delimiters (; ≃ \n)
-        "{" => ";",
-        "}" => "end",
-        # empty slices (with lookahead to replace multiple in a series)
-        r"\[\p{Zs}*\]" => "[:]",
-        r"\[\p{Zs}*(?=,)" => "[:",
-        r",\p{Zs}*(?=[,\]])" => ",:",
-        # ignore reserved words (\b is word boundary)
-        r"\b(in|for|if|C|T)\b" => s"\1",
-        # ignore floats (could otherwise overlap with identifiers: ., E, e)
-        r"(((\p{N}+\.\p{N}+)|(\p{N}+\.?))([eE][+-]?\p{N}+)?)" => s"\1",
-        # wrap variable names in var-strings (to allow variable names with .)
-        r"((?:(?:\p{L}\p{M}*)|\.)(?:(?:\p{L}\p{M}*)|\.|\p{N})*)" => s"var\"\1\"",
-    )
-
-    # special censoring/truncation syntax is converted to function calls, with `nothing`
-    # inserted for left-out bounds
-    s = replace(
-        s,
-        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*T\p{Zs}*\(\p{Zs}*,(.+)\)" =>
-            s"truncated(\1, nothing, \2)",
-        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*T\p{Zs}*\((.+),\p{Zs}*\)" =>
-            s"truncated(\1, \2, nothing)",
-        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*T\p{Zs}*\((.+),(.+)\)" =>
-            s"truncated(\1, \2, \3)",
-        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*C\p{Zs}*\(\p{Zs}*,(.+)\)" =>
-            s"censored(\1, nothing, \2)",
-        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*C\p{Zs}*\((.+),\p{Zs}*\)" =>
-            s"censored(\1, \2, nothing)",
-        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*C\p{Zs}*\((.+),(.+)\)" =>
-            s"censored(\1, \2, \3)",
-    )
-
-    return s
-end
-
-function parse_bugs(prog::String, replace_period=true)
-    ps = ProcessState(prog, replace_period)
-    process_toplevel!(ps)
-    if !isempty(ps.diagnostics)
-        io = IOBuffer()
-        JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
-        error("Errors in the program: \n $(String(take!(io)))")
-    end
-    julia_program = to_julia_program(ps.julia_token_vec, ps.text)
-    expr = Meta.parse(julia_program)
-    return post_parsing_processing(bugsast(expr, LineNumberNode(1, Symbol(@__FILE__))))
-end
-
-# during the transition phase, this macro is kept, but for internal use only
-macro bugsmodel_str(s::String)
-    # Convert and wrap the whole thing in a block for parsing
-    transformed_code = "begin\n$(bugs_to_julia(s))\nend"
-    try
-        expr = Meta.parse(transformed_code)
-        return Meta.quot(post_parsing_processing(bugsast(expr, __source__)))
-    catch e
-        if e isa Base.Meta.ParseError
-            # Meta.parse automatically uses file name "none" and position 1, so
-            # I think this should always work?
-            new_msg = replace(e.msg, "none:1" => position_string(__source__))
-            rethrow(ErrorException(new_msg))
-        else
-            rethrow()
-        end
-    end
-end
-
-function post_parsing_processing(expr)
+function post_processing_expr(expr)
     expr = MacroTools.postwalk(expr) do sub_expr
         if sub_expr == :step
-            return :_step
+            return :_step # `step` is a Julia `Base` function
         else
             return sub_expr
         end
@@ -257,6 +189,11 @@ const INVERSE_LINK_FUNCTION = Dict(
     :logit => :logistic, :cloglog => :cexpexp, :log => :exp, :probit => :phi
 )
 
+"""
+    link_functions(expr)
+In case of logical assignments with the link function syntax, the statement is transformed 
+to a regular assignment with the inverse link function applied to the RHS.
+"""
 function link_functions(expr::Expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, f_(lhs_) = rhs_) # only transform logical assignments
@@ -432,4 +369,69 @@ function check_idxs(expr::Expr)
         end
         return sub_expr
     end
+end
+
+# This follow code are from early days of the parser, which uses a Julia String macro to
+# transform BUGS program into Julia program
+# We have since implemented a new parser, see `parser.jl`
+
+macro _bugsmodel_str(s::String)
+    # Convert and wrap the whole thing in a block for parsing
+    transformed_code = "begin\n$(bugs_to_julia(s))\nend"
+    try
+        expr = Meta.parse(transformed_code)
+        return Meta.quot(post_processing_expr(bugsast(expr, __source__)))
+    catch e
+        if e isa Base.Meta.ParseError
+            # Meta.parse automatically uses file name "none" and position 1, so
+            # I think this should always work?
+            new_msg = replace(e.msg, "none:1" => position_string(__source__))
+            rethrow(ErrorException(new_msg))
+        else
+            rethrow()
+        end
+    end
+end
+
+function _bugs_to_julia(s)
+    # remove parentheses around loops
+    s = replace(s, r"for\p{Zs}*\((.*)\)\p{Zs}*{" => s"for \1 {")
+
+    s = replace(
+        s,
+        "<-" => "=",
+        # blocks in if and for replaced by respective delimiters (; ≃ \n)
+        "{" => ";",
+        "}" => "end",
+        # empty slices (with lookahead to replace multiple in a series)
+        r"\[\p{Zs}*\]" => "[:]",
+        r"\[\p{Zs}*(?=,)" => "[:",
+        r",\p{Zs}*(?=[,\]])" => ",:",
+        # ignore reserved words (\b is word boundary)
+        r"\b(in|for|if|C|T)\b" => s"\1",
+        # ignore floats (could otherwise overlap with identifiers: ., E, e)
+        r"(((\p{N}+\.\p{N}+)|(\p{N}+\.?))([eE][+-]?\p{N}+)?)" => s"\1",
+        # wrap variable names in var-strings (to allow variable names with .)
+        r"((?:(?:\p{L}\p{M}*)|\.)(?:(?:\p{L}\p{M}*)|\.|\p{N})*)" => s"var\"\1\"",
+    )
+
+    # special censoring/truncation syntax is converted to function calls, with `nothing`
+    # inserted for left-out bounds
+    s = replace(
+        s,
+        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*T\p{Zs}*\(\p{Zs}*,(.+)\)" =>
+            s"truncated(\1, nothing, \2)",
+        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*T\p{Zs}*\((.+),\p{Zs}*\)" =>
+            s"truncated(\1, \2, nothing)",
+        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*T\p{Zs}*\((.+),(.+)\)" =>
+            s"truncated(\1, \2, \3)",
+        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*C\p{Zs}*\(\p{Zs}*,(.+)\)" =>
+            s"censored(\1, nothing, \2)",
+        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*C\p{Zs}*\((.+),\p{Zs}*\)" =>
+            s"censored(\1, \2, nothing)",
+        r"(var\"[^\"]+\"\([^~<=]*\))\p{Zs}*C\p{Zs}*\((.+),(.+)\)" =>
+            s"censored(\1, \2, \3)",
+    )
+
+    return s
 end

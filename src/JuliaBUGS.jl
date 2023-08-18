@@ -7,7 +7,7 @@ using Bijectors
 using Distributions
 using DynamicPPL
 using Graphs
-using LogDensityProblems
+using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
 using MetaGraphsNext
 using Random
@@ -19,8 +19,10 @@ import Distributions: truncated
 import AbstractPPL: AbstractContext, evaluate!!
 import DynamicPPL: settrans!!
 
-export @bugs, parse_bugs
+export @bugs
 export compile
+
+export @varname
 
 # user defined functions and distributions are not supported yet
 include("BUGSPrimitives/BUGSPrimitives.jl")
@@ -140,8 +142,8 @@ Compile a BUGS model into a log density problem.
 
 # Arguments
 - `model_def::Expr`: The BUGS model definition.
-- `data::NamedTuple` or `Dict`: The data to be used in the model. If none is passed, the data will be assumed to be empty.
-- `initializations::NamedTuple` or `Dict`: The initial values for the model parameters. If none is passed, the parameters will be assumed to be initialized to zero.
+- `data::NamedTuple` or `AbstractDict`: The data to be used in the model. If none is passed, the data will be assumed to be empty.
+- `initializations::NamedTuple` or `AbstractDict`: The initial values for the model parameters. If none is passed, the parameters will be assumed to be initialized to zero.
 
 # Returns
 - A [`BUGSModel`](@ref) object representing the compiled model.
@@ -158,6 +160,73 @@ function compile(model_def::Expr, data, inits)
     g = BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
     return BUGSModel(g, sorted_nodes, vars, array_sizes, merged_data, inits)
+end
+
+"""
+    @register_primitive(expr)
+
+Currently, only function defined in the `BUGSPrimitives` module can be used in the model definition. 
+This macro allows the user to register a user-defined function or distribution to be used in the model definition.
+
+Example:
+```julia
+julia> @register_primitive function f(x) # function
+    return x + 1
+end
+
+julia> JuliaBUGS.f(1)
+2
+
+julia> @register_primitive d(x) = Normal(0, x^2) # distribution
+
+julia> JuliaBUGS.d(1)
+Distributions.Normal{Float64}(μ=0.0, σ=1.0)
+```
+"""
+macro register_primitive(expr)
+    def = MacroTools.splitdef(expr)
+    func_name = def[:name]
+    func_expr = MacroTools.combinedef(def)
+    return quote
+        @eval JuliaBUGS begin
+            # export $func_name
+            $func_expr
+        end
+    end
+end
+
+"""
+    @register_primitive(func)
+
+`@register_primitive` can also be used to register function without definition.
+
+Example
+```julia
+julia> f(x) = x + 1
+
+julia> @register_primitive(f)
+
+julia> JuliaBUGS.f(1)
+2
+```
+"""
+macro register_primitive(func::Symbol)
+    return quote
+        @eval JuliaBUGS begin
+            $func_name = Main.$func
+        end
+    end
+end
+macro register_primitive(funcs::Vararg{Symbol})
+    exprs = Expr(:block)
+    for func in funcs
+        push!(exprs.args, :($func = Main.$func))
+    end
+    return quote
+        @eval JuliaBUGS begin
+            $exprs
+        end
+    end
 end
 
 end
