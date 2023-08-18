@@ -165,7 +165,7 @@ julia> model = compile(model_def, data, initializations)
 For example, with `ReverseDiff.jl`
 
 ```julia
-using LogDensityProblemsAD
+using LogDensityProblemsAD, ReverseDiff
 
 ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 ```
