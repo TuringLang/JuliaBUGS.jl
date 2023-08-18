@@ -181,22 +181,23 @@ For instance,
 
 ```julia
 using AdvancedHMC, AbstractMCMC
-using ReverseDiff
-using LogDensityProblems
 
-D = LogDensityProblems.dimension(model); initial_θ = rand(D)
 n_samples, n_adapts = 2000, 1000
 
+integrator = Leapfrog(0.1)
 metric = DiagEuclideanMetric(D)
-hamiltonian = Hamiltonian(metric, model, :ReverseDiff)
-
-initial_ϵ = find_good_stepsize(hamiltonian, initial_θ)
-integrator = Leapfrog(initial_ϵ)
-
 kernel = HMCKernel(Trajectory{MultinomialTS}(integrator, GeneralisedNoUTurn()))
 adaptor = StanHMCAdaptor(MassMatrixAdaptor(metric), StepSizeAdaptor(0.8, integrator))
 
-samples, stats = sample(hamiltonian, kernel, initial_θ, n_samples, adaptor, n_adapts; progress=true)
+samples_and_stats = AbstractMCMC.sample(
+             AdvancedHMC.LogDensityModel(ad_model),
+             HMCSampler(kernel, metric, adaptor),
+             n_adapts + n_samples;
+             nadapts = n_adapts,
+             init_params = initial_θ,
+         )
+
+samples = map(s->s.z.θ, samples_and_stats)
 ```
 
 The variable `samples` contains variable values in the unconstrained space. 
