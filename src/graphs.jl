@@ -353,7 +353,7 @@ end
 must be a variable in the model; logical variables in `var_group` will not error, but will be ignored.
 """
 function MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group::VarName)
-    return MarkovBlanketCoveredBUGSModel(m, [var_group])
+    return MarkovBlanketCoveredBUGSModel(m, VarName[var_group])
 end
 function MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group::Vector{VarName})
     non_vars = VarName[]

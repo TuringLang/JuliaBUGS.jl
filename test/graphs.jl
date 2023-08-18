@@ -56,7 +56,7 @@ model = compile(test_model, NamedTuple(), inits)
 
 c = @varname c
 markov_blanket(model.g, c)
-@test Set(Symbol.(markov_blanket(model.g, c))) == Set([:l, :a, :b, :c, :f])
+@test Set(Symbol.(markov_blanket(model.g, c))) == Set([:l, :a, :b, :f])
 
 mb_model = MarkovBlanketCoveredBUGSModel(model, c)
 @test begin
