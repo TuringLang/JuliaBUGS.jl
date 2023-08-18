@@ -116,7 +116,7 @@ We still encourage users to write new programs using the Julia-native syntax, be
 ### Using Self-defined Functions and Distributions
 Users can register their own functions and distributions with macros. However, note that any functions used with must be _pure_ mathematical functions, i.e. they must be side-effect free.
 
-```julia-repl
+```julia
 julia> # Should be restricted to pure function that do simple operations
 @register_primitive function f(x)
     return x + 1
