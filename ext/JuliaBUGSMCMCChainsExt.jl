@@ -33,7 +33,9 @@ function MCMCChains.Chains(
     logical_roots = filter(l_var -> l_var in find_logical_roots(g), model.sorted_nodes)
     all_vars = VarName[model.parameters..., logical_roots...]
     model = settrans!!(model, true)
-    values = [evaluate!!(model, LogDensityContext(), samples[i])[all_vars] for i in 1:num_spls]
+    values = [
+        evaluate!!(model, LogDensityContext(), samples[i])[all_vars] for i in 1:num_spls
+    ]
 
     return Chains(values, Symbol.(all_vars))
 end
