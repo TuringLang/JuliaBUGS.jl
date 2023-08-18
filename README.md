@@ -186,14 +186,9 @@ n_samples, n_adapts = 2000, 1000
 
 D = LogDensityProblems.dimension(model); initial_θ = rand(D)
 
-integrator = Leapfrog(0.1)
-metric = DiagEuclideanMetric(D)
-kernel = HMCKernel(Trajectory{MultinomialTS}(integrator, GeneralisedNoUTurn()))
-adaptor = StanHMCAdaptor(MassMatrixAdaptor(metric), StepSizeAdaptor(0.8, integrator))
-
 samples_and_stats = AbstractMCMC.sample(
                     AdvancedHMC.LogDensityModel(ad_model),
-                    HMCSampler(kernel, metric, adaptor),
+                    NUTS(0.8),
                     n_samples;
                     n_adapts = n_adapts,
                     init_params = initial_θ,
