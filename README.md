@@ -187,12 +187,12 @@ n_samples, n_adapts = 2000, 1000
 D = LogDensityProblems.dimension(model); initial_θ = rand(D)
 
 samples_and_stats = AbstractMCMC.sample(
-                    AdvancedHMC.LogDensityModel(ad_model),
-                    NUTS(0.8),
-                    n_samples;
-                    n_adapts = n_adapts,
-                    init_params = initial_θ,
-                    discard_initial = n_adapts
+                        AdvancedHMC.LogDensityModel(ad_model),
+                        NUTS(0.8),
+                        n_samples;
+                        n_adapts = n_adapts,
+                        init_params = initial_θ,
+                        discard_initial = n_adapts
                     )
 
 samples = map(s->s.z.θ, samples_and_stats)
