@@ -180,9 +180,11 @@ For a differentiable model, we can use [`AdvancedHMC.jl`](https://github.com/Tur
 For instance,
 
 ```julia
-using AdvancedHMC, AbstractMCMC
+using AdvancedHMC, AbstractMCMC, LogDensityProblems
 
 n_samples, n_adapts = 2000, 1000
+
+D = LogDensityProblems.dimension(model); initial_θ = rand(D)
 
 integrator = Leapfrog(0.1)
 metric = DiagEuclideanMetric(D)
