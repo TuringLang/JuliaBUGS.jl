@@ -170,7 +170,7 @@ end
 
 Return all the logical variables without stochastic descendants. The values of these variables 
 do not affect sampling process. These variables are "generated quantities" traditionally.
-""" 
+"""
 function find_logical_roots(g)
     graph_roots = VarName[] # root nodes of the graph
     for n in labels(g)
@@ -184,7 +184,9 @@ function find_logical_roots(g)
     logical_roots = VarName[]
     for n in graph_roots
         if g[n] isa AuxiliaryNodeInfo
-            error("AuxiliaryNodeInfo: $(g[n]) is a root of the graph, it shouldn't be an AuxiliaryNodeInfo")
+            error(
+                "AuxiliaryNodeInfo: $(g[n]) is a root of the graph, it shouldn't be an AuxiliaryNodeInfo",
+            )
         end
         if g[n].node_type == Stochastic
             continue
@@ -549,7 +551,9 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
     return @set vi.logp = logp
 end
 
-function AbstractPPL.evaluate!!(model::BUGSModel, ::LogDensityContext, flattened_values::AbstractVector)
+function AbstractPPL.evaluate!!(
+    model::BUGSModel, ::LogDensityContext, flattened_values::AbstractVector
+)
     @assert length(flattened_values) == model.param_length
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model
     vi = deepcopy(varinfo)
@@ -628,7 +632,9 @@ function AbstractPPL.evaluate!!(model::MarkovBlanketCoveredBUGSModel, ::DefaultC
 end
 
 function AbstractPPL.evaluate!!(
-    model::MarkovBlanketCoveredBUGSModel, ::LogDensityContext, flattened_values::AbstractVector
+    model::MarkovBlanketCoveredBUGSModel,
+    ::LogDensityContext,
+    flattened_values::AbstractVector,
 )
     @assert length(flattened_values) == model.param_length
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model.model
