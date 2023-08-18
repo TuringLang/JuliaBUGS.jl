@@ -131,7 +131,7 @@ julia> JuliaBUGS.f(2)
 ```julia
 julia> f(x) = x + 1
 
-julia> JuliaBUGS.introduce_function(f)
+julia> @register_primitive(f)
 
 julia> JuliaBUGS.f(1)
 2
