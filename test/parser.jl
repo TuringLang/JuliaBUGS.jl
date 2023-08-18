@@ -12,7 +12,7 @@ using JuliaBUGS:
     process_range!,
     process_indexing!,
     process_tilde_rhs!
-using JuliaBUGS: peek, parse_bugs
+using JuliaBUGS: peek, to_julia_program
 using JuliaSyntax: @K_str
 using JuliaSyntax
 JuliaSyntax.enable_in_core!()
@@ -157,6 +157,10 @@ end
     # one such corner case: `<---2` will not be tokenized to `<--` and `-2`, but `InvalidOperator` and `-2` 
     # test error handling of special errors
     @test_throws ErrorException JuliaBUGS.ProcessState("<---2")
+end
+
+function parse_bugs(prog)
+    return Meta.parse(to_julia_program(prog, true, false))
 end
 
 @testset "Parse BUGS Example Programs" begin
