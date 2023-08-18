@@ -126,7 +126,7 @@ julia> JuliaBUGS.f(2)
 3
 ```
 
-, users can also `introduce` a function into `JuliaBUGS`, by 
+users can also `introduce` a function into `JuliaBUGS`, by 
 
 ```julia
 julia> f(x) = x + 1
