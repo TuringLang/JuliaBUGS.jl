@@ -68,7 +68,24 @@ function BUGSGraph(vars, link_functions, node_args, node_functions, dependencies
             scalarize_then_add_edge!(g, r; lhs_or_rhs=:rhs)
         end
     end
+    # remove_auxiliary_nodes!(g)
     return g
+end
+
+function remove_auxiliary_nodes!(g::BUGSGraph)
+    for v in labels(g)
+        if g[v] isa AuxiliaryNodeInfo
+            # fix dependencies
+            children = outneighbor_labels(g, v)
+            parents = inneighbor_labels(g, v)
+            for c in children
+                for p in parents
+                    add_edge!(g, p, c)
+                end
+            end
+            remove_vertex!(g, v)
+        end
+    end
 end
 
 function to_varname(v::Scalar)
@@ -96,7 +113,7 @@ function scalarize_then_add_edge!(g::BUGSGraph, v::Var; lhs_or_rhs=:lhs)
     length(scalarized_v) == 1 && return nothing
     v = to_varname(v)
     for v_elem in map(to_varname, scalarized_v)
-        add_vertex!(g, v_elem, AuxiliaryNodeInfo()) # may fail, but it's ok
+        add_vertex!(g, v_elem, AuxiliaryNodeInfo()) # may fail, in that case, the existing node may be concrete, so we don't need to add it
         if lhs_or_rhs == :lhs
             add_edge!(g, v, v_elem)
         elseif lhs_or_rhs == :rhs
@@ -127,7 +144,7 @@ function _eval(expr::Symbol, env)
     end
 end
 function _eval(expr::Expr, env)
-    if Meta.isexpr(expr, :call) # TODO: should check that the function is defined
+    if Meta.isexpr(expr, :call)
         f = expr.args[1]
         args = [_eval(arg, env) for arg in expr.args[2:end]]
         if f isa Expr # `JuliaBUGS.some_function` like
@@ -147,6 +164,62 @@ end
 function _eval(expr, env)
     return error("Unknown expression type: $expr of type $(typeof(expr))")
 end
+
+"""
+    find_logical_roots(g::BUGSGraph)
+
+Return all the logical variables without stochastic descendants. The values of these variables 
+do not affect sampling process. These variables are "generated quantities" traditionally.
+""" 
+function find_logical_roots(g)
+    graph_roots = VarName[] # root nodes of the graph
+    for n in labels(g)
+        if isempty(outneighbor_labels(g, n))
+            push!(graph_roots, n)
+        end
+    end
+
+    # what are these variables
+    # variables's children are either roots or recursively defined
+    logical_roots = VarName[]
+    for n in graph_roots
+        if g[n] isa AuxiliaryNodeInfo
+            error("AuxiliaryNodeInfo: $(g[n]) is a root of the graph, it shouldn't be an AuxiliaryNodeInfo")
+        end
+        if g[n].node_type == Stochastic
+            continue
+        else
+            recursive_helper(g, n, logical_roots)
+        end
+    end
+    return logical_roots
+end
+
+function recursive_helper(g, n, logical_roots)
+    if n in logical_roots
+        return nothing
+    end
+    push!(logical_roots, n)
+    parents = inneighbor_labels(g, n)
+    for p in parents
+        if p in logical_roots # already visited
+            continue
+        end
+        if !(g[p] isa AuxiliaryNodeInfo) && g[p].node_type == Stochastic
+            continue
+        end
+        # then `p` is either a logical node or an auxiliary node
+        if any(x -> g[x].node_type == Stochastic, outneighbor_labels(g, p)) # if the node has stochastic children, it is not a root
+            continue
+        elseif !(g[p] isa AuxiliaryNodeInfo) # g[p].node_type == Logical
+            push!(logical_roots, p)
+        end
+        recursive_helper(g, p, logical_roots)
+    end
+end
+
+# TODO: observation stochastic variables form a barrier such that, assumed stochastic variable that are
+# descendants of those variables do not affect the log joint density. This is not implemented yet.
 
 abstract type AbstractBUGSModel <: AbstractPPL.AbstractProbabilisticProgram end
 
@@ -191,7 +264,7 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
             end
         end
     end
-    l = reduce(sum, [_length(x) for x in parameters]; init=0)
+    l = isempty(parameters) ? 0 : sum(_length(x) for x in parameters)
     return BUGSModel(l, vi, parameters, g, sorted_nodes)
 end
 
@@ -231,7 +304,17 @@ function evaluate(vn::VarName, env)
     return ismissing(ret) ? nothing : ret
 end
 
-# doesn't work for all `VarNames`, should not be used elsewhere
+"""
+    _length(vn::VarName)
+
+Return the length of a possible variable identified by `vn`.
+Only valid if `vn` is:
+    - a scalar
+    - an array indexing whose indices are concrete(no `start`, `end`, `:`)
+
+! Should not be used outside of the usage demonstrate in this file.
+
+"""
 function _length(vn::VarName)
     getlens(vn) isa Setfield.IdentityLens && return 1
     return prod([length(index_range) for index_range in getlens(vn).indices])
@@ -285,9 +368,8 @@ function MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group::Vector{VarName})
         warn("Variables $(logical_vars) are not stochastic variables, they will be ignored")
     blanket = markov_blanket(m.g, var_group)
     blanket_with_vars = union(blanket, var_group)
-    param_length = reduce(
-        sum, [_length(vn) for vn in blanket_with_vars if vn in m.parameters]; init=0
-    )
+    params = [vn for vn in blanket_with_vars if vn in m.parameters]
+    param_length = isempty(params) ? 0 : sum(_length(vn) for vn in params)
     return MarkovBlanketCoveredBUGSModel(param_length, blanket_with_vars, m)
 end
 
@@ -299,7 +381,7 @@ The Markov Blanket of a variable is the set of variables that shield the variabl
 network. Effectively, the Markov blanket of a variable is the set of its parents, its children, and
 its children's other parents (reference: https://en.wikipedia.org/wiki/Markov_blanket).
 
-In the case of vector, the Markov blanket of the union of the markov blankets of each variable 
+In the case of vector, the Markov Blanket is the union of the Markov Blankets of each variable 
 minus the variables themselves (reference: Liu, X.-Q., & Liu, X.-S. (2018). Markov Blanket and Markov 
 Boundary of Multiple Variables. Journal of Machine Learning Research, 19(43), 1–50.)
 """
@@ -398,9 +480,7 @@ end
 
 Use the given values to compute the log joint density.
 """
-struct LogDensityContext <: AbstractPPL.AbstractContext
-    flattened_values::AbstractVector
-end
+struct LogDensityContext <: AbstractPPL.AbstractContext end
 
 function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
     return evaluate!!(model, SamplingContext(rng))
@@ -469,8 +549,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
     return @set vi.logp = logp
 end
 
-function AbstractPPL.evaluate!!(model::BUGSModel, ctx::LogDensityContext)
-    flattened_values = ctx.flattened_values
+function AbstractPPL.evaluate!!(model::BUGSModel, ::LogDensityContext, flattened_values::AbstractVector)
     @assert length(flattened_values) == model.param_length
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model
     vi = deepcopy(varinfo)
@@ -549,9 +628,8 @@ function AbstractPPL.evaluate!!(model::MarkovBlanketCoveredBUGSModel, ::DefaultC
 end
 
 function AbstractPPL.evaluate!!(
-    model::MarkovBlanketCoveredBUGSModel, ctx::LogDensityContext
+    model::MarkovBlanketCoveredBUGSModel, ::LogDensityContext, flattened_values::AbstractVector
 )
-    flattened_values = ctx.flattened_values
     @assert length(flattened_values) == model.param_length
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model.model
     vi = deepcopy(varinfo)

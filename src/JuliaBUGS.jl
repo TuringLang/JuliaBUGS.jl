@@ -196,24 +196,37 @@ macro register_primitive(expr)
 end
 
 """
-    introduce_function(func::Function)
+    @register_primitive(func)
 
-Introduce a function to the `JuliaBUGS` module. This function can be used in the model definition.
-This function doesn't require the definition of the function.
+`@register_primitive` can also be used to register function without definition.
 
 Example
 ```julia
 julia> f(x) = x + 1
 
-julia> JuliaBUGS.introduce_function(f)
+julia> @register_primitive(f)
 
 julia> JuliaBUGS.f(1)
 2
 ```
 """
-function introduce_function(func::Function)
-    func_name = Symbol(string(func))
-    return eval(:($func_name = $func))
+macro register_primitive(func::Symbol)
+    return quote
+        @eval JuliaBUGS begin
+            $func_name = Main.$func
+        end
+    end
+end
+macro register_primitive(funcs::Vararg{Symbol})
+    exprs = Expr(:block)
+    for func in funcs
+        push!(exprs.args, :($func = Main.$func))
+    end
+    return quote
+        @eval JuliaBUGS begin
+            $exprs
+        end
+    end
 end
 
 end

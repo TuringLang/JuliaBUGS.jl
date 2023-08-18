@@ -29,11 +29,13 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
 GraphPlot = "a2cc645c-3eea-5389-862e-a155d0052231"
+MCMCChains = "c7f686f2-ff18-58e9-bc7b-31028e88f75d"
 TikzGraphs = "b4f28e30-c73f-5eaf-a395-8a9db949a742"
 
 [extensions]
 JuliaBUGSGraphMakieExt = ["GraphMakie", "GLMakie"]
 JuliaBUGSGraphPlotExt = ["GraphPlot"]
+JuliaBUGSMCMCChainsExt = ["MCMCChains"]
 JuliaBUGSTikzGraphsExt = ["TikzGraphs"]
 
 [compat]
