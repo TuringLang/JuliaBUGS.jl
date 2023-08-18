@@ -164,7 +164,7 @@ function parse_bugs(prog)
 end
 
 @testset "Parse BUGS Example Programs" begin
-    @bugs("""model
+    parse_bugs("""model
 {
     for( i in 1 : N ) {
         for( j in 1 : T ) {
@@ -184,7 +184,7 @@ end
 }
 """)
 
-    @bugs("""
+    parse_bugs("""
     model
        {
           for (i in 1 : K) {
@@ -206,84 +206,82 @@ end
        }
     """)
 
-    @bugs(
-        """
-model
-{
-#
-# Construct individual response data from contingency table
-#
-   for (i in 1 : Ncum[1, 1]) {
-      group[i] <- 1
-      for (t in 1 : T) { response[i, t] <- pattern[1, t] }
-   }
-   for (i in (Ncum[1,1] + 1) : Ncum[1, 2]) {
-      group[i] <- 2 for (t in 1 : T) { response[i, t] <- pattern[1, t] }
-   }
+    parse_bugs("""
+  model
+  {
+  #
+  # Construct individual response data from contingency table
+  #
+     for (i in 1 : Ncum[1, 1]) {
+        group[i] <- 1
+        for (t in 1 : T) { response[i, t] <- pattern[1, t] }
+     }
+     for (i in (Ncum[1,1] + 1) : Ncum[1, 2]) {
+        group[i] <- 2 for (t in 1 : T) { response[i, t] <- pattern[1, t] }
+     }
 
-   for (k in 2 : Npattern) {
-      for(i in (Ncum[k - 1, 2] + 1) : Ncum[k, 1]) {
-         group[i] <- 1 for (t in 1 : T) { response[i, t] <- pattern[k, t] }
-      }
-      for(i in (Ncum[k, 1] + 1) : Ncum[k, 2]) {
-         group[i] <- 2 for (t in 1 : T) { response[i, t] <- pattern[k, t] }
-      }
-   }
-#
-# Model
-#
-   for (i in 1 : N) {
-      for (t in 1 : T) {
-         for (j in 1 : Ncut) {
-#
-# Cumulative probability of worse response than j
-#
-            logit(Q[i, t, j]) <- -(a[j] + mu[group[i], t] + b[i])
-         }
-#
-# Probability of response = j
-#
-         p[i, t, 1] <- 1 - Q[i, t, 1]
-         for (j in 2 : Ncut) { p[i, t, j] <- Q[i, t, j - 1] - Q[i, t, j] }
-         p[i, t, (Ncut+1)] <- Q[i, t, Ncut]
+     for (k in 2 : Npattern) {
+        for(i in (Ncum[k - 1, 2] + 1) : Ncum[k, 1]) {
+           group[i] <- 1 for (t in 1 : T) { response[i, t] <- pattern[k, t] }
+        }
+        for(i in (Ncum[k, 1] + 1) : Ncum[k, 2]) {
+           group[i] <- 2 for (t in 1 : T) { response[i, t] <- pattern[k, t] }
+        }
+     }
+  #
+  # Model
+  #
+     for (i in 1 : N) {
+        for (t in 1 : T) {
+           for (j in 1 : Ncut) {
+  #
+  # Cumulative probability of worse response than j
+  #
+              logit(Q[i, t, j]) <- -(a[j] + mu[group[i], t] + b[i])
+           }
+  #
+  # Probability of response = j
+  #
+           p[i, t, 1] <- 1 - Q[i, t, 1]
+           for (j in 2 : Ncut) { p[i, t, j] <- Q[i, t, j - 1] - Q[i, t, j] }
+           p[i, t, (Ncut+1)] <- Q[i, t, Ncut]
 
-         response[i, t] ~ dcat(p[i, t, ])
-         cumulative.response[i, t] <- cumulative(response[i, t], response[i, t])
-      }
-#
-# Subject (random) effects
-#
-      b[i] ~ dnorm(0.0, tau)
-}
+           response[i, t] ~ dcat(p[i, t, ])
+           cumulative.response[i, t] <- cumulative(response[i, t], response[i, t])
+        }
+  #
+  # Subject (random) effects
+  #
+        b[i] ~ dnorm(0.0, tau)
+  }
 
-#
-# Fixed effects
-#
-   for (g in 1 : G) {
-      for(t in 1 : T) {
-# logistic mean for group i in period t
-         mu[g, t] <- beta * treat[g, t] / 2 + pi * period[g, t] / 2 + kappa * carry[g, t]
-      }
-   }
-   beta ~ dnorm(0, 1.0E-06)
-   pi ~ dnorm(0, 1.0E-06)
-   kappa ~ dnorm(0, 1.0E-06)
+  #
+  # Fixed effects
+  #
+     for (g in 1 : G) {
+        for(t in 1 : T) {
+  # logistic mean for group i in period t
+           mu[g, t] <- beta * treat[g, t] / 2 + pi * period[g, t] / 2 + kappa * carry[g, t]
+        }
+     }
+     beta ~ dnorm(0, 1.0E-06)
+     pi ~ dnorm(0, 1.0E-06)
+     kappa ~ dnorm(0, 1.0E-06)
 
-# ordered cut points for underlying continuous latent variable
-   a[1] ~ dflat()T(-1000, a[2])
-   a[2] ~ dflat()T(a[1], a[3])
-   a[3] ~ dflat()T(a[2], 1000)
+  # ordered cut points for underlying continuous latent variable
+     a[1] ~ dflat()T(-1000, a[2])
+     a[2] ~ dflat()T(a[1], a[3])
+     a[3] ~ dflat()T(a[2], 1000)
 
-   tau ~ dgamma(0.001, 0.001)
-   sigma <- sqrt(1 / tau)
-   log.sigma <- log(sigma)
+     tau ~ dgamma(0.001, 0.001)
+     sigma <- sqrt(1 / tau)
+     log.sigma <- log(sigma)
 
-}
-"""
-    )
+  }
+  """)
 
     # pumps
-    @bugs("""
+    parse_bugs("""
     model
     {
        for (i in 1 : N) {
@@ -296,7 +294,7 @@ model
     }""")
 
     # Dogs
-    @bugs("""
+    parse_bugs("""
     model
        {
           for (i in 1 : Dogs) {
@@ -317,7 +315,7 @@ model
     """)
 
     # seeds
-    @bugs("""
+    parse_bugs("""
     model
     {
        for( i in 1 : N ) {
@@ -335,7 +333,7 @@ model
     }""")
 
     # surgical
-    @bugs("""
+    parse_bugs("""
     model
     {
        for( i in 1 : N ) {
@@ -351,7 +349,7 @@ model
     """)
 
     # Magnesium
-    p = @bugs(
+    p = parse_bugs(
         """
     model
        {
@@ -426,7 +424,7 @@ model
     )
 
     # salm
-    @bugs("""
+    parse_bugs("""
     model
     {
        for( i in 1 : doses ) {
@@ -446,7 +444,7 @@ model
     """)
 
     # Equiv
-    @bugs("""
+    parse_bugs("""
     model
        {
           for( k in 1 : P ) {
@@ -470,7 +468,7 @@ model
     """)
 
     # Dyes
-    @bugs("""
+    parse_bugs("""
     model
     {
        for(i in 1 : batches) {
@@ -488,7 +486,7 @@ model
     """)
 
     # Stacks
-    @bugs("""
+    parse_bugs("""
     model
     {
     # Standardise x's and coefficients
@@ -526,7 +524,7 @@ model
     }""")
 
     # Epil
-    @bugs("""
+    parse_bugs("""
     model
     {
        for(j in 1 : N) {
@@ -569,7 +567,7 @@ model
     """)
 
     # Blockers
-    @bugs("""
+    parse_bugs("""
     model
     {
     for( i in 1 : Num ) {
@@ -588,7 +586,7 @@ model
     """)
 
     # Oxford
-    @bugs("""
+    parse_bugs("""
     model
     {
        for (i in 1 : K) {
@@ -609,7 +607,7 @@ model
     """)
 
     # Lsat
-    @bugs("""
+    parse_bugs("""
     model
     {
     # Calculate individual (binary) responses to each test from multinomial data
@@ -643,7 +641,7 @@ model
     """)
 
     # Bones
-    @bugs("""
+    parse_bugs("""
     model
     {
        for (i in 1 : nChild) {
@@ -669,83 +667,81 @@ model
     """)
 
     # Inhaler
-    @bugs(
-        """
-model
-{
-#
-# Construct individual response data from contingency table
-#
-   for (i in 1 : Ncum[1, 1]) {
-      group[i] <- 1
-      for (t in 1 : T) { response[i, t] <- pattern[1, t] }
-   }
-   for (i in (Ncum[1,1] + 1) : Ncum[1, 2]) {
-      group[i] <- 2 for (t in 1 : T) { response[i, t] <- pattern[1, t] }
-   }
+    parse_bugs("""
+  model
+  {
+  #
+  # Construct individual response data from contingency table
+  #
+     for (i in 1 : Ncum[1, 1]) {
+        group[i] <- 1
+        for (t in 1 : T) { response[i, t] <- pattern[1, t] }
+     }
+     for (i in (Ncum[1,1] + 1) : Ncum[1, 2]) {
+        group[i] <- 2 for (t in 1 : T) { response[i, t] <- pattern[1, t] }
+     }
 
-   for (k in 2 : Npattern) {
-      for(i in (Ncum[k - 1, 2] + 1) : Ncum[k, 1]) {
-         group[i] <- 1 for (t in 1 : T) { response[i, t] <- pattern[k, t] }
-      }
-      for(i in (Ncum[k, 1] + 1) : Ncum[k, 2]) {
-         group[i] <- 2 for (t in 1 : T) { response[i, t] <- pattern[k, t] }
-      }
-   }
-#
-# Model
-#
-   for (i in 1 : N) {
-      for (t in 1 : T) {
-         for (j in 1 : Ncut) {
-#
-# Cumulative probability of worse response than j
-#
-            logit(Q[i, t, j]) <- -(a[j] + mu[group[i], t] + b[i])
-         }
-#
-# Probability of response = j
-#
-         p[i, t, 1] <- 1 - Q[i, t, 1]
-         for (j in 2 : Ncut) { p[i, t, j] <- Q[i, t, j - 1] - Q[i, t, j] }
-         p[i, t, (Ncut+1)] <- Q[i, t, Ncut]
+     for (k in 2 : Npattern) {
+        for(i in (Ncum[k - 1, 2] + 1) : Ncum[k, 1]) {
+           group[i] <- 1 for (t in 1 : T) { response[i, t] <- pattern[k, t] }
+        }
+        for(i in (Ncum[k, 1] + 1) : Ncum[k, 2]) {
+           group[i] <- 2 for (t in 1 : T) { response[i, t] <- pattern[k, t] }
+        }
+     }
+  #
+  # Model
+  #
+     for (i in 1 : N) {
+        for (t in 1 : T) {
+           for (j in 1 : Ncut) {
+  #
+  # Cumulative probability of worse response than j
+  #
+              logit(Q[i, t, j]) <- -(a[j] + mu[group[i], t] + b[i])
+           }
+  #
+  # Probability of response = j
+  #
+           p[i, t, 1] <- 1 - Q[i, t, 1]
+           for (j in 2 : Ncut) { p[i, t, j] <- Q[i, t, j - 1] - Q[i, t, j] }
+           p[i, t, (Ncut+1)] <- Q[i, t, Ncut]
 
-         response[i, t] ~ dcat(p[i, t, ])
-      }
-#
-# Subject (random) effects
-#
-      b[i] ~ dnorm(0.0, tau)
-}
+           response[i, t] ~ dcat(p[i, t, ])
+        }
+  #
+  # Subject (random) effects
+  #
+        b[i] ~ dnorm(0.0, tau)
+  }
 
-#
-# Fixed effects
-#
-   for (g in 1 : G) {
-      for(t in 1 : T) {
-# logistic mean for group i in period t
-         mu[g, t] <- beta * treat[g, t] / 2 + pi * period[g, t] / 2 + kappa * carry[g, t]
-      }
-   }
-   beta ~ dnorm(0, 1.0E-06)
-   pi ~ dnorm(0, 1.0E-06)
-   kappa ~ dnorm(0, 1.0E-06)
+  #
+  # Fixed effects
+  #
+     for (g in 1 : G) {
+        for(t in 1 : T) {
+  # logistic mean for group i in period t
+           mu[g, t] <- beta * treat[g, t] / 2 + pi * period[g, t] / 2 + kappa * carry[g, t]
+        }
+     }
+     beta ~ dnorm(0, 1.0E-06)
+     pi ~ dnorm(0, 1.0E-06)
+     kappa ~ dnorm(0, 1.0E-06)
 
-# ordered cut points for underlying continuous latent variable
-   a[1] ~ dunif(-1000, a[2])
-   a[2] ~ dunif(a[1], a[3])
-   a[3] ~ dunif(a[2], 1000)
+  # ordered cut points for underlying continuous latent variable
+     a[1] ~ dunif(-1000, a[2])
+     a[2] ~ dunif(a[1], a[3])
+     a[3] ~ dunif(a[2], 1000)
 
-   tau ~ dgamma(0.001, 0.001)
-   sigma <- sqrt(1 / tau)
-   log.sigma <- log(sigma)
+     tau ~ dgamma(0.001, 0.001)
+     sigma <- sqrt(1 / tau)
+     log.sigma <- log(sigma)
 
-}
-"""
-    )
+  }
+  """)
 
     # Mice
-    @bugs("""
+    parse_bugs("""
     model
     {   
        for(i in 1 : M) {
@@ -765,7 +761,7 @@ model
     """)
 
     # Kidney
-    @bugs("""
+    parse_bugs("""
     model
     {
        for (i in 1 : N) {
@@ -794,7 +790,7 @@ model
     """)
 
     # Leuk
-    @bugs("""
+    parse_bugs("""
     model
     {
     # Set up data
@@ -830,7 +826,7 @@ model
     """)
 
     # LeukFr
-    @bugs("""
+    parse_bugs("""
     model
        {
        # Set up data
@@ -871,7 +867,7 @@ model
     ## Start Volume II
 
     # Dugongs
-    @bugs("""
+    parse_bugs("""
     model
     {
        for( i in 1 : N ) {
@@ -888,7 +884,7 @@ model
     """)
 
     # Orange Trees -- with `<--``
-    @bugs("""
+    parse_bugs("""
     model {
        for (i in 1:K) {
           for (j in 1:n) {
@@ -913,7 +909,7 @@ model
     """)
 
     # Orange Trees MVN
-    @bugs("""
+    parse_bugs("""
     model {
        for (i in 1:K) {
           for (j in 1:n) {
@@ -936,7 +932,7 @@ model
 
     # Biopsies -- empty indices and `true` variable name 
     # ! this should fail, because `true` and `error` is a reserved word
-    @test_throws ErrorException @bugs("""
+    @test_throws ErrorException parse_bugs("""
     model
     {
        for (i in 1 : ns){
@@ -952,7 +948,7 @@ model
     """)
 
     # eyes
-    @bugs("""
+    parse_bugs("""
     model
     {
        for( i in 1 : N ) {
@@ -969,7 +965,7 @@ model
     """)
 
     # hearts
-    @bugs("""
+    parse_bugs("""
     model
     {
        for (i in 1 : N) {
@@ -990,7 +986,7 @@ model
     """)
 
     # Air
-    @bugs("""
+    parse_bugs("""
     model
     {
        for(j in 1 : J) {
@@ -1005,7 +1001,7 @@ model
     """)
 
     # Cervix
-    @bugs("""
+    parse_bugs("""
     model
     {
        for (i in 1 : N) {
@@ -1031,7 +1027,7 @@ model
     """)
 
     # Jaws
-    @bugs("""
+    parse_bugs("""
     model
     {
     beta0 ~ dnorm(0.0, 0.001)
@@ -1048,7 +1044,7 @@ model
     """)
 
     # BiRats
-    @bugs("""
+    parse_bugs("""
     model
     {
     for( i in 1 : N ) {
@@ -1067,7 +1063,7 @@ model
     """)
 
     # Schools
-    @bugs("""
+    parse_bugs("""
     model
     {
        for(p in 1 : N) {
@@ -1105,7 +1101,7 @@ model
     """)
 
     # Ice
-    @bugs("""
+    parse_bugs("""
     model
     {
        for (i in 1:I) {
@@ -1144,7 +1140,7 @@ model
     """)
 
     # Beetles
-    @bugs("""
+    parse_bugs("""
     model
     {
     for( i in 1 : N ) {
@@ -1159,7 +1155,7 @@ model
     """)
 
     # Alligators
-    @bugs("""
+    parse_bugs("""
     model
     {
 
@@ -1226,7 +1222,7 @@ model
     """)
 
     # Endo
-    @bugs("""
+    parse_bugs("""
     model
        {
        # transform collapsed data into full
@@ -1280,7 +1276,7 @@ model
     """)
 
     # Stagnant
-    @bugs("""
+    parse_bugs("""
     model
     {
     for( i in 1 : N ) {
@@ -1300,7 +1296,7 @@ model
     """)
 
     # Asia
-    @bugs("""
+    parse_bugs("""
     model{
     smoking ~ dcat(p.smoking[1:2])
     tuberculosis ~ dcat(p.tuberculosis[asia,1:2])
@@ -1313,7 +1309,7 @@ model
     """)
 
     # Pigs
-    @bugs("""
+    parse_bugs("""
     model
     {
     q ~ dunif(0,1) # prevalence of a1
@@ -1356,7 +1352,7 @@ model
     """)
 
     # t-df
-    @bugs("""
+    parse_bugs("""
     model {
        for (i in 1:1000) {
           y[i] ~ dt(0, 1, d)
@@ -1364,7 +1360,7 @@ model
        d ~ dunif(2, 100)         # degrees of freedom must be at least two
     }      """)
     #   test truncation
-    @bugs("""model {
+    parse_bugs("""model {
        for (i in 1:1000) {
           y[i] ~ dt(0, 1, d)T(-50, 50)
        }
@@ -1373,7 +1369,7 @@ model
     """)
 
     # Camel
-    @bugs("""
+    parse_bugs("""
     model
     {
        for (i in 1 : N){
@@ -1392,7 +1388,7 @@ model
     """)
 
     # Eye Tracking
-    @bugs("""
+    parse_bugs("""
     model{   
        for( i in 1 : N ) {
           S[i] ~ dcat(pi[])
@@ -1430,7 +1426,7 @@ model
     """)
 
     # Fire -- this should error on pi < -3.14159565
-    @bugs(
+    parse_bugs(
         """
     model{
 
@@ -1470,7 +1466,7 @@ model
     )
 
     # Hepatitis
-    @bugs("""
+    parse_bugs("""
     model
     {
     for( i in 1 : N ) {
@@ -1493,7 +1489,7 @@ model
     """)
 
     # Hips model 1
-    @bugs("""
+    parse_bugs("""
     model {
 
     for(k in 1 : K) { # loop over strata
@@ -1597,7 +1593,7 @@ model
     """)
 
     # Hips model 2
-    @bugs("""
+    parse_bugs("""
     model {
 
     for(k in 1 : K) { # loop over strata
@@ -1688,7 +1684,7 @@ model
     """)
 
     # Hips model 3
-    @bugs("""
+    parse_bugs("""
     model {
 
     for(k in 1 : K) { # loop over strata
@@ -1789,7 +1785,7 @@ model
     """)
 
     # Hips model 4
-    @bugs(
+    parse_bugs(
         """
     model {
 
@@ -1924,7 +1920,7 @@ model
     )
 
     # Jama River Valley Ecuador
-    @bugs("""
+    parse_bugs("""
     model{
           for (i in 1 : nDate){
              theta[i] ~ dunif(beta[phase[i]], alpha[phase[i]] )
@@ -1960,7 +1956,7 @@ model
        """)
 
     # Pig Weight Gain
-    @bugs("""
+    parse_bugs("""
     model{
           y[1:s] ~ dmulti(th[1 : s] , n)
           sum.g <- sum(g[])
@@ -2004,7 +2000,7 @@ model
        """)
 
     # Pines
-    @bugs("""
+    parse_bugs("""
     model{
     # standardise data
     for(i in 1:N){
@@ -2056,7 +2052,7 @@ model
     """)
 
     # St Veit
-    @bugs("""
+    parse_bugs("""
     model{
        theta[1] ~ dunif(theta[2], theta.max)
        theta[2] ~ dunif(theta[3], theta[1])
@@ -2102,7 +2098,7 @@ model
     # Start Volume IV
 
     # SeedsDataCloning
-    @bugs("""
+    parse_bugs("""
     model
     {
        for( i in 1 : N ) {
@@ -2125,7 +2121,7 @@ model
     """)
 
     # coins
-    @bugs("""
+    parse_bugs("""
     model{
     p ~ dunif(0, 1)
     for (i in 1 : 10){
@@ -2139,7 +2135,7 @@ model
     """)
 
     # Smart phones
-    @bugs("""
+    parse_bugs("""
     model{
        N <- sum(r[])
        rNew[1 : 3] ~ dmulti(pHat[1 : 3] , N) # replicate data
@@ -2153,7 +2149,7 @@ model
     """)
 
     # Abbey National
-    @bugs("""
+    parse_bugs("""
     model{
        for(i in 2 : N){
           z[i] ~ dstable(alpha, beta, gamma, delta)   
@@ -2172,7 +2168,7 @@ model
     """)
 
     # Beetles
-    @bugs("""
+    parse_bugs("""
     model
     {
        for(i in 1 : N) {
@@ -2192,7 +2188,7 @@ model
     """)
 
     # Preeclampsia
-    @bugs("""
+    parse_bugs("""
     model {
        for (i in 1:N) {
        x.C[i] ~ dbin(pi.C[i], n.C[i])
@@ -2207,7 +2203,7 @@ model
 
     # Lotka-Volterra
     # ! currently error, `D` function is not defined, probably won't impelment 
-    @test_throws ErrorException @bugs(
+    @test_throws ErrorException parse_bugs(
         """
     model
     {
@@ -2245,7 +2241,7 @@ model
     # ! similarly, `D` function is not defined
 
     # Pollution
-    @bugs("""
+    parse_bugs("""
     model {
 
     #likelihood
