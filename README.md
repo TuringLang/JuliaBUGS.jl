@@ -192,12 +192,13 @@ kernel = HMCKernel(Trajectory{MultinomialTS}(integrator, GeneralisedNoUTurn()))
 adaptor = StanHMCAdaptor(MassMatrixAdaptor(metric), StepSizeAdaptor(0.8, integrator))
 
 samples_and_stats = AbstractMCMC.sample(
-             AdvancedHMC.LogDensityModel(ad_model),
-             HMCSampler(kernel, metric, adaptor),
-             n_adapts + n_samples;
-             nadapts = n_adapts,
-             init_params = initial_θ,
-         )
+                    AdvancedHMC.LogDensityModel(ad_model),
+                    HMCSampler(kernel, metric, adaptor),
+                    n_samples;
+                    n_adapts = n_adapts,
+                    init_params = initial_θ,
+                    discard_initial = n_adapts
+                    )
 
 samples = map(s->s.z.θ, samples_and_stats)
 ```
