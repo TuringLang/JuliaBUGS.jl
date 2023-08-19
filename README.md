@@ -158,7 +158,7 @@ initializations = Dict(:alpha => 1, :beta => 1)
 
 then we can compile the model with the data and initializations,
 ```julia
-julia> model = compile(model_def, data, initializations)
+model = compile(model_def, data, initializations)
 ```
 
 `LogDensityProblemsAD.jl` defined some extensions that support automatic differentiation packages.
