@@ -68,7 +68,7 @@ Implementations in C++ and R:
 We provide a macro solution which allows users to write down model definitions using Julia:
 
 ```julia
-@bugs begin
+model_def = @bugs begin
     for i in 1:N
         r[i] ~ dbin(p[i], n[i])
         b[i] ~ dnorm(0.0, tau)
@@ -82,17 +82,17 @@ We provide a macro solution which allows users to write down model definitions u
     sigma = 1 / sqrt(tau)
 end
 ```
-BUGS syntax carries over almost one-to-one to Julia, with a few minor exceptions.
+BUGS syntax carries over almost one-to-one to Julia, with minor exceptions.
 In general, when basic Julia syntax and BUGS syntax conflict, it is necessary to use Julia syntax. 
 For example, curly braces are replaced with `begin ... end` blocks, and `for` loops do not require parentheses.
 In addition, Julia uses `f(x) = ...` as a shorthand for function definition, so BUGS' link function syntax can be confusing and ambiguous. 
 Thus, instead of calling the link function, we call the inverse link function from the RHS.
 
-### Support for Lagacy BUGS Programs
+### Support for Legacy BUGS Programs
 The `@bugs` macro also works with original (R-like) BUGS syntax:
 
 ```julia
-@bugs("""
+model_def = @bugs("""
 model{
     for( i in 1 : N ) {
         r[i] ~ dbin(p[i],n[i])
@@ -114,10 +114,10 @@ By default, `@bugs` will translate R-style variable names like `a.b.c` to `a_b_c
 We still encourage users to write new programs using the Julia-native syntax, because of better debuggability and perks like syntax highlighting. 
 
 ### Using Self-defined Functions and Distributions
-Users can register their own functions and distributions with macros. However, note that any functions used with must be _pure_ mathematical functions, i.e. they must be side-effect free.
+Users can register their own functions and distributions with macros. However, note that any functions used must be _pure_ mathematical functions, i.e., side-effect free.
 
 ```julia
-julia> # Should be restricted to pure function that do simple operations
+julia> # Should be restricted to pure functions that do simple operations
 @register_primitive function f(x)
     return x + 1
 end
@@ -126,7 +126,7 @@ julia> JuliaBUGS.f(2)
 3
 ```
 
-users can also `introduce` a function into `JuliaBUGS`, by 
+Users can also `introduce` a function into `JuliaBUGS`, by 
 
 ```julia
 julia> f(x) = x + 1
@@ -147,21 +147,21 @@ For now, the `compile` function will create a `BUGSModel`, which implements [`Lo
 compile(model_def::Expr, data, initializations),
 ```
 
-which takes three arguments: 
+The function `compile` takes three arguments: 
 - the output of `@bugs`, 
 - the data, and
 - the initializations of parameters.
 
-```
+```julia
 initializations = Dict(:alpha => 1, :beta => 1)
 ```
 
 then we can compile the model with the data and initializations,
-```julia-repl
-julia> model = compile(model_def, data, initializations)
+```julia
+model = compile(model_def, data, initializations)
 ```
 
-`LogDensityProblemsAD.jl` defined some extensions support automatic differentiation packages.
+`LogDensityProblemsAD.jl` defined some extensions that support automatic differentiation packages.
 For example, with `ReverseDiff.jl`
 
 ```julia
@@ -169,8 +169,8 @@ using LogDensityProblemsAD, ReverseDiff
 
 ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 ```
-here `ad_model` will also implement all the interface of `LogDensityProblems.jl`. 
-`LogDensityProblemsAD.jl` will automatically add interface function `logdensity_and_gradient` to the model, which will return the log density and gradient of the model.  
+Here `ad_model` will also implement all the interfaces of `LogDensityProblems.jl`. 
+`LogDensityProblemsAD.jl` will automatically add the interface function `logdensity_and_gradient` to the model, which will return the log density and gradient of the model.  
 And `ad_model` can be used in the same way as `model` in the example below.
 
 
@@ -252,7 +252,7 @@ Quantiles
 
 ```
 
-Which is consistent with the result in the [OpenBUGS seeds example](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html).
+This is consistent with the result in the [OpenBUGS seeds example](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html).
 
 ## More Examples
 We have transcribed all the examples from the first volume of the BUGS Examples ([original](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/JuliaBUGS.jl/tree/master/src/BUGSExamples/Volume_I)). All programs and data are included, and can be compiled using the steps described in the tutorial above.
