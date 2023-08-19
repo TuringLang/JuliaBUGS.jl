@@ -165,7 +165,7 @@ julia> model = compile(model_def, data, initializations)
 For example, with `ReverseDiff.jl`
 
 ```julia
-using LogDensityProblemsAD
+using LogDensityProblemsAD, ReverseDiff
 
 ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 ```
@@ -180,23 +180,22 @@ For a differentiable model, we can use [`AdvancedHMC.jl`](https://github.com/Tur
 For instance,
 
 ```julia
-using AdvancedHMC, AbstractMCMC
-using ReverseDiff
-using LogDensityProblems
+using AdvancedHMC, AbstractMCMC, LogDensityProblems
 
-D = LogDensityProblems.dimension(model); initial_θ = rand(D)
 n_samples, n_adapts = 2000, 1000
 
-metric = DiagEuclideanMetric(D)
-hamiltonian = Hamiltonian(metric, model, :ReverseDiff)
+D = LogDensityProblems.dimension(model); initial_θ = rand(D)
 
-initial_ϵ = find_good_stepsize(hamiltonian, initial_θ)
-integrator = Leapfrog(initial_ϵ)
+samples_and_stats = AbstractMCMC.sample(
+                        ad_model,
+                        NUTS(0.8),
+                        n_samples;
+                        n_adapts = n_adapts,
+                        init_params = initial_θ,
+                        discard_initial = n_adapts
+                    )
 
-kernel = HMCKernel(Trajectory{MultinomialTS}(integrator, GeneralisedNoUTurn()))
-adaptor = StanHMCAdaptor(MassMatrixAdaptor(metric), StepSizeAdaptor(0.8, integrator))
-
-samples, stats = sample(hamiltonian, kernel, initial_θ, n_samples, adaptor, n_adapts; progress=true)
+samples = map(s->s.z.θ, samples_and_stats)
 ```
 
 The variable `samples` contains variable values in the unconstrained space. 
