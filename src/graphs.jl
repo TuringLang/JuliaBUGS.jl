@@ -85,7 +85,10 @@ function check_undeclared_variables(g::BUGSGraph, vars)
             children = outneighbor_labels(g, v)
             parents = inneighbor_labels(g, v)
             if isempty(parents) || isempty(children)
-                if !any(AbstractPPL.subsumes(u, v) for u in to_varname.(keys(vars)))
+                if !any(
+                    AbstractPPL.subsumes(u, v) || AbstractPPL.subsumes(v, u) for # corner case x[1:1] and x[1], e.g. Leuk
+                    u in to_varname.(keys(vars))
+                )
                     push!(undeclared_vars, v)
                 end
             end
