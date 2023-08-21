@@ -29,7 +29,7 @@ function AbstractMCMC.bundle_samples(
     chain_type::Type{Chains};
     discard_initial=0,
     thinning=1,
-    model_type::AbstractBUGSModel=logdensitymodel.logdensity.ℓ
+    model_type::AbstractBUGSModel=logdensitymodel.logdensity.ℓ,
     kwargs...,
 )
     model = logdensitymodel.logdensity.ℓ
