@@ -30,10 +30,10 @@ function AbstractMCMC.bundle_samples(
     chain_type::Type{Chains};
     discard_initial=0,
     thinning=1,
-    model::AbstractBUGSModel = logdensitymodel.logdensity.ℓ,
+    model::AbstractBUGSModel=logdensitymodel.logdensity.ℓ,
     kwargs...,
 )
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model 
+    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
 
     # Turn all the transitions into a vector-of-vectors.
     t = ts[1]
