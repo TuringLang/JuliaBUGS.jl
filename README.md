@@ -180,7 +180,7 @@ For a differentiable model, we can use [`AdvancedHMC.jl`](https://github.com/Tur
 For instance,
 
 ```julia
-using AdvancedHMC, AbstractMCMC, LogDensityProblems
+using AdvancedHMC, AbstractMCMC, LogDensityProblems, MCMCChains
 
 n_samples, n_adapts = 2000, 1000
 
@@ -194,61 +194,48 @@ samples_and_stats = AbstractMCMC.sample(
                         init_params = initial_θ,
                         discard_initial = n_adapts
                     )
-
-samples = map(s->s.z.θ, samples_and_stats)
 ```
 
-The variable `samples` contains variable values in the unconstrained space. 
-We reloaded the `MCMCChains.Chains` function with package extension to create a named `MCMCChains.Chains` object:
-```julia
-using MCMCChains
+This will return the MCMC Chain,
 
-MCMCChains.Chains(samples, model)
-```
-this will return something similar to
 ```julia
-Chains MCMC chain (2000×27×1 Array{Float64, 3}):
+Chains MCMC chain (2000×40×1 Array{Real, 3}):
 
-Iterations        = 1:1:2000
+Iterations        = 1001:1:3000
 Number of chains  = 1
 Samples per chain = 2000
 parameters        = alpha0, alpha12, alpha1, alpha2, tau, b[16], b[12], b[10], b[14], b[13], b[7], b[6], b[20], b[1], b[4], b[5], b[2], b[18], b[8], b[3], b[9], b[21], b[17], b[15], b[11], b[19], sigma
+internals         = lp, n_steps, is_accept, acceptance_rate, log_density, hamiltonian_energy, hamiltonian_energy_error, max_hamiltonian_energy_error, tree_depth, numerical_error, step_size, nom_step_size, is_adapt
 
 Summary Statistics
   parameters      mean       std      mcse    ess_bulk    ess_tail      rhat   ess_per_sec 
-      Symbol   Float64   Float64   Float64     Float64     Float64   Float64       Missing 
+      Symbol   Float64   Float64   Float64        Real     Float64   Float64       Missing 
 
-      alpha0   -0.5623    0.2247    0.0084    719.7526   1011.4760    0.9999       missing
-     alpha12   -0.8855    0.4874    0.0174    770.5197   1123.7505    0.9998       missing
-      alpha1    0.0655    0.3528    0.0125    768.3965   1110.4095    1.0012       missing
-      alpha2    1.4002    0.3135    0.0114    765.6003    929.3141    1.0002       missing
-         tau    9.7166   10.6698    0.6379    323.1786    362.5801    1.0000       missing
-       b[16]   -0.2285    0.4025    0.0098   1819.8930   1164.0437    1.0004       missing
-       b[12]    0.1889    0.3268    0.0088   1445.0574   1032.6184    1.0001       missing
-       b[10]   -0.3495    0.2713    0.0083   1099.6773    961.3578    1.0009       missing
-       b[14]   -0.1925    0.3196    0.0078   1664.2264   1348.2639    0.9999       missing
-       b[13]   -0.0959    0.3138    0.0076   1707.8788   1138.8372    1.0001       missing
-        b[7]    0.0604    0.2646    0.0072   1383.1284    975.9354    1.0003       missing
+      alpha0   -0.5642    0.2320    0.0084    766.9305   1022.5211    1.0021       missing
+     alpha12   -0.8489    0.5247    0.0170    946.0418   1044.1109    1.0002       missing
+      alpha1    0.0587    0.3715    0.0119    966.4367   1233.2257    1.0007       missing
+      alpha2    1.3852    0.3410    0.0127    712.2978    974.1566    1.0002       missing
+         tau    1.8880    0.7705    0.0447    348.9331    338.3655    1.0030       missing
+       b[16]   -0.2445    0.4459    0.0132   1528.0578    843.8225    1.0003       missing
+       b[12]    0.2050    0.3602    0.0086   1868.6126   1202.1363    0.9996       missing
+       b[10]   -0.3500    0.2893    0.0090   1047.3119   1245.9358    1.0008       missing
       ⋮           ⋮         ⋮         ⋮          ⋮           ⋮          ⋮           ⋮
-                                                                             16 rows omitted
+                                                                             19 rows omitted
 
 Quantiles
   parameters      2.5%     25.0%     50.0%     75.0%     97.5% 
       Symbol   Float64   Float64   Float64   Float64   Float64 
 
-      alpha0   -1.0244   -0.7060   -0.5580   -0.4169   -0.1216
-     alpha12   -1.8774   -1.2014   -0.8808   -0.5623    0.0452
-      alpha1   -0.6179   -0.1688    0.0700    0.2930    0.7607
-      alpha2    0.8000    1.1813    1.3962    1.6003    2.0375
-         tau    1.8911    4.1197    6.8022   10.7377   44.1010
-       b[16]   -1.1361   -0.4566   -0.1894    0.0348    0.4922
-       b[12]   -0.3743   -0.0240    0.1627    0.3804    0.9120
-       b[10]   -0.9361   -0.5141   -0.3324   -0.1626    0.1498
-       b[14]   -0.8790   -0.3938   -0.1720    0.0134    0.4111
-       b[13]   -0.7391   -0.2900   -0.0936    0.1062    0.5369
-        b[7]   -0.4485   -0.1096    0.0581    0.2296    0.5896
+      alpha0   -1.0143   -0.7143   -0.5590   -0.4100   -0.1185
+     alpha12   -1.9063   -1.1812   -0.8296   -0.5153    0.1521
+      alpha1   -0.6550   -0.1822    0.0512    0.2885    0.8180
+      alpha2    0.7214    1.1663    1.3782    1.5998    2.0986
+         tau    0.5461    1.3941    1.8353    2.3115    3.6225
+       b[16]   -1.2359   -0.4836   -0.1909    0.0345    0.5070
+       b[12]   -0.4493   -0.0370    0.1910    0.4375    0.9828
+       b[10]   -0.9570   -0.5264   -0.3331   -0.1514    0.1613
       ⋮           ⋮         ⋮         ⋮         ⋮         ⋮
-                                                 16 rows omitted
+                                                 19 rows omitted
 
 ```
 
