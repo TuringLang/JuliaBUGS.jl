@@ -10,7 +10,8 @@ using JuliaBUGS:
     BUGSModel,
     LogDensityContext,
     evaluate!!,
-    VarName
+    VarName,
+    AbstractBUGSModel
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
@@ -29,11 +30,10 @@ function AbstractMCMC.bundle_samples(
     chain_type::Type{Chains};
     discard_initial=0,
     thinning=1,
-    model_type::AbstractBUGSModel=logdensitymodel.logdensity.ℓ,
+    model::AbstractBUGSModel = logdensitymodel.logdensity.ℓ,
     kwargs...,
 )
-    model = logdensitymodel.logdensity.ℓ
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model "The model passed in does not seem to be a BUGSModel, but of type $(typeof(logdensitymodel))."
+    @unpack param_length, varinfo, parameters, g, sorted_nodes = model 
 
     # Turn all the transitions into a vector-of-vectors.
     t = ts[1]
