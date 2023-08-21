@@ -190,6 +190,7 @@ samples_and_stats = AbstractMCMC.sample(
                         ad_model,
                         NUTS(0.8),
                         n_samples;
+                        chain_type = Chains,
                         n_adapts = n_adapts,
                         init_params = initial_θ,
                         discard_initial = n_adapts

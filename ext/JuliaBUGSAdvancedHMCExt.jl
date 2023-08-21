@@ -23,16 +23,16 @@ using AdvancedHMC: Transition, stat
 
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:Transition},
-    model::AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
     sampler::AbstractMCMC.AbstractSampler,
     state,
-    chain_type::Type{T};
+    chain_type::Type{Chains};
     discard_initial=0,
     thinning=1,
     kwargs...,
-) where {T}
-    model = model.logdensity.ℓ
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
+)
+    model = logdensitymodel.logdensity.ℓ
+    @unpack param_length, varinfo, parameters, g, sorted_nodes = model "The model passed in does not seem to be a BUGSModel, but of type $(typeof(logdensitymodel))."
 
     # Turn all the transitions into a vector-of-vectors.
     t = ts[1]
