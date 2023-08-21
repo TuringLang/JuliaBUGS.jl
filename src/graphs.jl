@@ -261,14 +261,6 @@ struct BUGSModel <: AbstractBUGSModel
     sorted_nodes::Vector{VarName}
 end
 
-# Temporarily hack, resolves:
-# setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
-# function BangBang.possible(
-#     ::typeof(BangBang._setindex!), ::AbstractArray{Union{Int, Float},N}, ::AbstractArray{T,M}, ::Vararg
-# ) where {N,M}
-#     return N >= M
-# end
-
 function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
     T = promote_type(eltype(xs), eltype(v))
     ys = similar(xs, T)
@@ -564,7 +556,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
             value = _eval(expr, args)
-            setindex!!(vi, value, vn)
+            vi = setindex!!(vi, value, vn)
         else
             dist = _eval(expr, args)
             if link_function_expr != :identity
@@ -632,7 +624,7 @@ function AbstractPPL.evaluate!!(
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
             value = _eval(expr, args)
-            setindex!!(vi, value, vn)
+            vi = setindex!!(vi, value, vn)
         else
             dist = _eval(expr, args)
             if link_function_expr != :identity
@@ -715,7 +707,7 @@ function AbstractPPL.evaluate!!(
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
             value = _eval(expr, args)
-            setindex!!(vi, value, vn)
+            vi = setindex!!(vi, value, vn)
         else
             dist = _eval(expr, args)
             if link_function_expr != :identity
