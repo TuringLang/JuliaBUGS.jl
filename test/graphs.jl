@@ -96,7 +96,6 @@ model = compile(
     test_model, Dict(:R => [200 0; 0 0.2], :sigma => [1.0E-6 0; 0 1.0E-6]), NamedTuple()
 )
 
-# z[1,1], x[1], x[2] are auxiliary nodes created and removed at the end
+# z[1,1], x[1], x[2] are auxiliary nodes created, and removed at the end
 @test Set(Symbol.(labels(model.g))) ==
     Set([Symbol("mu[1]"), Symbol("x[1:2]"), Symbol("z[1:2,1:2]"), Symbol("mu[2]"), :y])
-
