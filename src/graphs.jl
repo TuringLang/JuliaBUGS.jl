@@ -220,7 +220,7 @@ function find_generated_vars(g)
 
     generated_vars = VarName[]
     for n in graph_roots
-        if g[n].node_type == logical
+        if g[n].node_type == Logical
             push!(generated_vars, n) # graph roots that are Logical nodes are generated variables
             find_generated_vars_recursive_helper(g, n, generated_vars)
         end
