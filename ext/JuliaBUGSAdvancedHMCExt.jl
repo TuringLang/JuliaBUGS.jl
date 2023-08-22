@@ -1,16 +1,14 @@
 module JuliaBUGSAdvancedHMCExt
 
+# The main purpose of this extension is to add `generated_quantities` to the final chains.
+# So directly calling the AdvancedHMCMCMCChainsExt is not feasible.
+
 using JuliaBUGS
 using JuliaBUGS:
-    Logical,
-    Stochastic,
-    AuxiliaryNodeInfo,
-    _eval,
-    find_logical_roots,
-    BUGSModel,
+    find_generated_vars,
+    param_names,
     LogDensityContext,
-    evaluate!!,
-    VarName
+    evaluate!!
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
@@ -40,7 +38,7 @@ function AbstractMCMC.bundle_samples(
     tstat_names = collect(keys(tstat))
 
     samples = [t.z.θ for t in ts]
-    generated_vars = filter(l_var -> l_var in find_logical_roots(g), model.sorted_nodes)
+    generated_vars = filter(l_var -> l_var in find_generated_vars(g), model.sorted_nodes)
     model = settrans!!(model, true)
     generate_quantities = [
         evaluate!!(model, LogDensityContext(), samples[i])[generated_vars] for
@@ -55,12 +53,11 @@ function AbstractMCMC.bundle_samples(
         ) for i in eachindex(ts)
     ]
 
-    param_names = Symbol.(model.parameters)
-    generated_vars_names = Symbol.(generated_vars)
+    param_names = param_names(model)
     return Chains(
         vals,
-        vcat(param_names, generated_vars_names, tstat_names),
-        (parameters=vcat(param_names, generated_vars_names), internals=tstat_names);
+        vcat(param_names, Symbol.(generated_vars), tstat_names),
+        (parameters=vcat(param_names, Symbol.(generated_vars)), internals=tstat_names);
         start=discard_initial + 1,
         thin=thinning,
     )
