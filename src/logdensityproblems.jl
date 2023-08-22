@@ -8,5 +8,5 @@ function LogDensityProblems.dimension(model::AbstractBUGSModel)
 end
 
 function LogDensityProblems.capabilities(::AbstractBUGSModel)
-    return LogDensityProblems.LogDensityOrder{0}
+    return LogDensityProblems.LogDensityOrder{0}()
 end

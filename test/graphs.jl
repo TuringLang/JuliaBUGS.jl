@@ -25,17 +25,6 @@ test_model = @bugs begin
     l ~ dnorm(0, 1)
 end
 
-model = compile(test_model, NamedTuple(), NamedTuple())
-g = model.g
-
-a = @varname a
-l = @varname l
-@test Set(Symbol.(stochastic_inneighbors(g, a))) == Set([:b, :c, :f])
-@test Set(Symbol.(stochastic_outneighbors(g, a))) == Set([:d, :e, :h, :g])
-
-@test Set(Symbol.(markov_blanket(g, a))) == Set([:f, :b, :d, :e, :c, :h, :g, :i])
-@test Set(Symbol.(markov_blanket(g, (a, l)))) == Set([:f, :b, :d, :e, :c, :h, :g, :i])
-
 # construct a SimpleVarInfo
 inits = Dict(
     :a => 1.0,
@@ -53,6 +42,15 @@ inits = Dict(
 )
 
 model = compile(test_model, NamedTuple(), inits)
+g = model.g
+
+a = @varname a
+l = @varname l
+@test Set(Symbol.(stochastic_inneighbors(g, a))) == Set([:b, :c, :f])
+@test Set(Symbol.(stochastic_outneighbors(g, a))) == Set([:d, :e, :h, :g])
+
+@test Set(Symbol.(markov_blanket(g, a))) == Set([:f, :b, :d, :e, :c, :h, :g, :i])
+@test Set(Symbol.(markov_blanket(g, (a, l)))) == Set([:f, :b, :d, :e, :c, :h, :g, :i])
 
 c = @varname c
 markov_blanket(model.g, c)
@@ -81,3 +79,23 @@ end == evaluate!!(mb_model, DefaultContext()).logp
     logp
 end ≈ evaluate!!(model, LogDensityContext(), [4.0, 2.0, -2.0, 3.0, 1.0, 5.0, 4.0]).logp atol =
     1e-8
+
+# AuxiliaryNodeInfo
+test_model = @bugs begin
+    x[1:2] ~ dmnorm(mu[:], sigma[:, :])
+    for i in 1:2
+        mu[i] ~ dnorm(0, 1)
+    end
+    z[1:2, 1:2] ~ dwish(R[:, :], 2)
+    y ~ dnorm(x[1], x[2] + 1 + z[1, 1])
+end
+
+model = compile(
+    test_model,
+    Dict(:R => [200 0; 0 0.2], :sigma => [1.0E-6 0; 0 1.0E-6]),
+    Dict(:x => [1.0, 2.0], :z => zeros(2, 2)),
+)
+
+# z[1,1], x[1], x[2] are auxiliary nodes created, and removed at the end
+@test Set(Symbol.(labels(model.g))) ==
+    Set([Symbol("mu[1]"), Symbol("x[1:2]"), Symbol("z[1:2,1:2]"), Symbol("mu[2]"), :y])

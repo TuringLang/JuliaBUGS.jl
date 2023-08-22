@@ -5,6 +5,13 @@ abstract type NodeInfo end
 
 Indicate the node is created by the compiler and not in the original BUGS model. These nodes
 are only used to determine dependencies.
+
+E.g., x[1:2] ~ dmnorm(...); y = x[1] + 1
+In this case, x[1] is a auxiliary node, because it doesn't appear on the LHS of any expression.
+But we still need to introduce it to determine the dependency between `y` and `x[1:2]`.
+
+In the current implementation, `AuxiliaryNodeInfo` is only used when constructing the graph,
+and will all be removed right before returning the graph. 
 """
 struct AuxiliaryNodeInfo <: NodeInfo end
 
@@ -58,6 +65,8 @@ function BUGSGraph(vars, link_functions, node_args, node_functions, dependencies
         check_and_add_vertex!(
             g, l_vn, NodeInfo(l, vars, link_functions, node_functions, node_args)
         )
+        # The use of AuxiliaryNodeInfo is also to save computation, becasue otherwise, 
+        # every time we introduce a new node, we need to check `subsumes` or by all the existing nodes.
         scalarize_then_add_edge!(g, l; lhs_or_rhs=:lhs)
         for r in dependencies[l]
             r_vn = to_varname(r)
@@ -68,22 +77,50 @@ function BUGSGraph(vars, link_functions, node_args, node_functions, dependencies
             scalarize_then_add_edge!(g, r; lhs_or_rhs=:rhs)
         end
     end
-    # remove_auxiliary_nodes!(g)
+    check_undeclared_variables(g, vars)
+    remove_auxiliary_nodes!(g)
     return g
 end
 
-function remove_auxiliary_nodes!(g::BUGSGraph)
+"""
+    check_undeclared_variables
+
+Check for undeclared variables within the model definition
+"""
+function check_undeclared_variables(g::BUGSGraph, vars)
+    undeclared_vars = VarName[]
     for v in labels(g)
+        if g[v] isa AuxiliaryNodeInfo
+            children = outneighbor_labels(g, v)
+            parents = inneighbor_labels(g, v)
+            if isempty(parents) || isempty(children)
+                if !any(
+                    AbstractPPL.subsumes(u, v) || AbstractPPL.subsumes(v, u) for # corner case x[1:1] and x[1], e.g. Leuk
+                    u in to_varname.(keys(vars))
+                )
+                    push!(undeclared_vars, v)
+                end
+            end
+        end
+    end
+    if !isempty(undeclared_vars)
+        error("Undeclared variables: $(string.(Symbol.(undeclared_vars)))")
+    end
+end
+
+function remove_auxiliary_nodes!(g::BUGSGraph)
+    for v in collect(labels(g))
         if g[v] isa AuxiliaryNodeInfo
             # fix dependencies
             children = outneighbor_labels(g, v)
             parents = inneighbor_labels(g, v)
             for c in children
                 for p in parents
+                    @assert !any(x -> x isa AuxiliaryNodeInfo, (g[c], g[p])) "Auxiliary nodes should not have neighbors that are also auxiliary nodes, but at least one of $(g[c]) and $(g[p]) are."
                     add_edge!(g, p, c)
                 end
             end
-            remove_vertex!(g, v)
+            delete!(g, v)
         end
     end
 end
@@ -114,10 +151,12 @@ function scalarize_then_add_edge!(g::BUGSGraph, v::Var; lhs_or_rhs=:lhs)
     v = to_varname(v)
     for v_elem in map(to_varname, scalarized_v)
         add_vertex!(g, v_elem, AuxiliaryNodeInfo()) # may fail, in that case, the existing node may be concrete, so we don't need to add it
-        if lhs_or_rhs == :lhs
-            add_edge!(g, v, v_elem)
+        if lhs_or_rhs == :lhs # if an edge exist between v and scalaized elements, don't add again
+            !Graphs.has_edge(g, code_for(g, v_elem), code_for(g, v)) &&
+                add_edge!(g, v, v_elem)
         elseif lhs_or_rhs == :rhs
-            add_edge!(g, v_elem, v)
+            !Graphs.has_edge(g, code_for(g, v), code_for(g, v_elem)) &&
+                add_edge!(g, v_elem, v)
         else
             error("Unknown argument $lhs_or_rhs")
         end
@@ -166,12 +205,12 @@ function _eval(expr, env)
 end
 
 """
-    find_logical_roots(g::BUGSGraph)
+    find_generated_vars(g::BUGSGraph)
 
 Return all the logical variables without stochastic descendants. The values of these variables 
-do not affect sampling process. These variables are "generated quantities" traditionally.
+do not affect sampling process. These variables are called "generated quantities" traditionally.
 """
-function find_logical_roots(g)
+function find_generated_vars(g)
     graph_roots = VarName[] # root nodes of the graph
     for n in labels(g)
         if isempty(outneighbor_labels(g, n))
@@ -179,51 +218,38 @@ function find_logical_roots(g)
         end
     end
 
-    # what are these variables
-    # variables's children are either roots or recursively defined
-    logical_roots = VarName[]
+    generated_vars = VarName[]
     for n in graph_roots
-        if g[n] isa AuxiliaryNodeInfo
-            error(
-                "AuxiliaryNodeInfo: $(g[n]) is a root of the graph, it shouldn't be an AuxiliaryNodeInfo",
-            )
-        end
-        if g[n].node_type == Stochastic
-            continue
-        else
-            recursive_helper(g, n, logical_roots)
+        if g[n].node_type == Logical
+            push!(generated_vars, n) # graph roots that are Logical nodes are generated variables
+            find_generated_vars_recursive_helper(g, n, generated_vars)
         end
     end
-    return logical_roots
+    return generated_vars
 end
 
-function recursive_helper(g, n, logical_roots)
-    if n in logical_roots
+function find_generated_vars_recursive_helper(g, n, generated_vars)
+    if n in generated_vars # already visited
         return nothing
     end
-    push!(logical_roots, n)
-    parents = inneighbor_labels(g, n)
-    for p in parents
-        if p in logical_roots # already visited
+    for p in inneighbor_labels(g, n) # parents
+        if p in generated_vars # already visited
             continue
         end
-        if !(g[p] isa AuxiliaryNodeInfo) && g[p].node_type == Stochastic
+        if g[p].node_type == Stochastic
             continue
+        end # p is a Logical Node
+        if !any(x -> g[x].node_type == Stochastic, outneighbor_labels(g, p)) # if the node has stochastic children, it is not a root
+            push!(generated_vars, p)
         end
-        # then `p` is either a logical node or an auxiliary node
-        if any(x -> g[x].node_type == Stochastic, outneighbor_labels(g, p)) # if the node has stochastic children, it is not a root
-            continue
-        elseif !(g[p] isa AuxiliaryNodeInfo) # g[p].node_type == Logical
-            push!(logical_roots, p)
-        end
-        recursive_helper(g, p, logical_roots)
+        find_generated_vars_recursive_helper(g, p, generated_vars)
     end
 end
 
-# TODO: observation stochastic variables form a barrier such that, assumed stochastic variable that are
-# descendants of those variables do not affect the log joint density. This is not implemented yet.
-
-abstract type AbstractBUGSModel <: AbstractPPL.AbstractProbabilisticProgram end
+# AbstractBUGSModel can't be a subtype of AbstractProbabilisticProgram (<: AbstractMCMC.AbstractModel)
+# because it will then dispatched to https://github.com/TuringLang/AbstractMCMC.jl/blob/d7c549fe41a80c1f164423c7ac458425535f624b/src/sample.jl#L81
+# instead of https://github.com/TuringLang/AbstractMCMC.jl/blob/d7c549fe41a80c1f164423c7ac458425535f624b/src/logdensityproblems.jl#L90
+abstract type AbstractBUGSModel end
 
 """
     BUGSModel
@@ -238,31 +264,86 @@ struct BUGSModel <: AbstractBUGSModel
     sorted_nodes::Vector{VarName}
 end
 
+# Resolves: setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
+# Alternatively, can overload BangBang.possible(
+#     ::typeof(BangBang._setindex!), ::C, ::T, ::Vararg
+# )
+# to allow mutation, but the current solution seems create less possible problems, albeit less efficient.
+function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
+    T = promote_type(eltype(xs), eltype(v))
+    ys = similar(xs, T)
+    if eltype(xs) !== Union{}
+        copy!(ys, xs)
+    end
+    ys[I...] = v
+    return ys
+end
+
+"""
+    param_names(m::BUGSModel)
+
+Return the names of the parameters in the model.
+"""
+param_names(m::BUGSModel) = m.parameters
+
+"""
+    all_variables(m::BUGSModel)
+
+Return the names of all the variables in the model.
+"""
+all_variables(m::BUGSModel) = labels(m.g)
+
+"""
+    generated_variables(m::BUGSModel)
+
+Return the names of the generated variables in the model.
+"""
+generated_variables(m::BUGSModel) = find_generated_vars(m.g)
+
+struct UninitializedVariableError <: Exception
+    msg::String
+end
+
 function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
     vs = initialize_var_store(data, vars, array_sizes)
     vi = SimpleVarInfo(vs)
     parameters = VarName[]
     for vn in sorted_nodes
-        g[vn] isa AuxiliaryNodeInfo && continue
+        @assert !(g[vn] isa AuxiliaryNodeInfo) "Auxiliary nodes should not be in the graph, but $(g[vn]) is."
 
         ni = g[vn]
         @unpack node_type, link_function_expr, node_function_expr, node_args = ni
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
-            value = _eval(expr, args)
-            @assert value isa Union{Number,Array{<:Number}} "$value is not a number or array"
+            value = try
+                _eval(expr, args)
+            catch _
+                rethrow(
+                    UninitializedVariableError(
+                        "Encounter error when evaluating the RHS of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) directly first if not yet.",
+                    ),
+                )
+            end
+            @assert value isa Union{Real,Array{<:Real}} "$value is not a number or array"
             vi = setindex!!(vi, value, vn)
         else
-            dist = _eval(expr, args)
+            dist = try
+                _eval(expr, args)
+            catch _
+                rethrow(
+                    UninitializedVariableError(
+                        "Encounter support error when evaluating the distribution of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) first if not yet.",
+                    ),
+                )
+            end
             value = evaluate(vn, data)
             isnothing(value) && push!(parameters, vn)
             isnothing(value) && (value = evaluate(vn, inits))
             if !isnothing(value)
                 vi = setindex!!(vi, value, vn)
             else
-                # if not initialized, just set to zeros
-                vi = setindex!!(vi, length(dist) == 1 ? 0.0 : zeros(length(dist)), vn)
+                vi = setindex!!(vi, rand(dist), vn)
             end
         end
     end
@@ -281,12 +362,15 @@ function initialize_var_store(data, vars, array_sizes)
     for k in keys(array_sizes)
         v = array_sizes[k]
         vn = array_vn(k)
-        haskey(var_store, vn) || (var_store[vn] = zeros(v...))
+        if !haskey(var_store, vn)
+            # var_store[vn] = zeros(v...)
+            var_store[vn] = Array{Float64}(undef, v...)
+        end
     end
     for v in keys(vars)
         if v isa Scalar
             vn = to_varname(v)
-            var_store[vn] = 0.0 # TODO: assume all scalars are floating point numbers now
+            var_store[vn] = 0.0
         end
     end
     return var_store
@@ -314,7 +398,7 @@ Only valid if `vn` is:
     - a scalar
     - an array indexing whose indices are concrete(no `start`, `end`, `:`)
 
-! Should not be used outside of the usage demonstrate in this file.
+! Should not be used outside of the usage demonstrated in this file.
 
 """
 function _length(vn::VarName)
@@ -359,7 +443,7 @@ function MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group::Vector{VarName})
     non_vars = VarName[]
     logical_vars = VarName[]
     for var in var_group
-        if var ∉ labels(m.g) || m.g[var] isa AuxiliaryNodeInfo
+        if var ∉ labels(m.g)
             push!(non_vars, var)
         elseif m.g[var].node_type == Logical
             push!(logical_vars, var)
@@ -476,6 +560,7 @@ Do an ancestral sampling of the model parameters. Also accumulate log joint dens
 struct SamplingContext <: AbstractPPL.AbstractContext
     rng::Random.AbstractRNG
 end
+SamplingContext() = SamplingContext(Random.default_rng())
 
 """
     LogDensityContext
@@ -492,15 +577,13 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
     vi = deepcopy(varinfo)
     logp = 0.0
     for vn in sorted_nodes
-        g[vn] isa AuxiliaryNodeInfo && continue
-
         ni = g[vn]
         @unpack node_type, link_function_expr, node_function_expr, node_args = ni
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
             value = _eval(expr, args)
-            setindex!!(vi, value, vn)
+            vi = setindex!!(vi, value, vn)
         else
             dist = _eval(expr, args)
             if link_function_expr != :identity
@@ -527,8 +610,6 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
     vi = deepcopy(varinfo)
     logp = 0.0
     for vn in sorted_nodes
-        g[vn] isa AuxiliaryNodeInfo && continue
-
         ni = g[vn]
         @unpack node_type, link_function_expr, node_function_expr, node_args = ni
         node_type == JuliaBUGS.Logical && continue
@@ -560,15 +641,13 @@ function AbstractPPL.evaluate!!(
     current_idx = 1
     logp = 0.0
     for vn in sorted_nodes
-        g[vn] isa AuxiliaryNodeInfo && continue
-
         ni = g[vn]
         @unpack node_type, link_function_expr, node_function_expr, node_args = ni
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
             value = _eval(expr, args)
-            setindex!!(vi, value, vn)
+            vi = setindex!!(vi, value, vn)
         else
             dist = _eval(expr, args)
             if link_function_expr != :identity
@@ -607,7 +686,6 @@ function AbstractPPL.evaluate!!(model::MarkovBlanketCoveredBUGSModel, ::DefaultC
     logp = 0.0
     for vn in sorted_nodes
         vn in model.blanket || continue
-        g[vn] isa AuxiliaryNodeInfo && continue
 
         ni = g[vn]
         @unpack node_type, link_function_expr, node_function_expr, node_args = ni
@@ -643,7 +721,6 @@ function AbstractPPL.evaluate!!(
     logp = 0.0
     for vn in sorted_nodes
         vn in model.blanket || continue
-        g[vn] isa AuxiliaryNodeInfo && continue
 
         ni = g[vn]
         @unpack node_type, link_function_expr, node_function_expr, node_args = ni
@@ -651,7 +728,7 @@ function AbstractPPL.evaluate!!(
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
             value = _eval(expr, args)
-            setindex!!(vi, value, vn)
+            vi = setindex!!(vi, value, vn)
         else
             dist = _eval(expr, args)
             if link_function_expr != :identity
