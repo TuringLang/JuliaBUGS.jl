@@ -4,7 +4,7 @@ module JuliaBUGSAdvancedHMCExt
 # So directly calling the AdvancedHMCMCMCChainsExt is not feasible.
 
 using JuliaBUGS
-using JuliaBUGS: find_generated_vars, param_names, LogDensityContext, evaluate!!
+using JuliaBUGS: find_generated_vars, LogDensityContext, evaluate!!
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
