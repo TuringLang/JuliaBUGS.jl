@@ -4,7 +4,7 @@ module JuliaBUGSAdvancedHMCExt
 # So directly calling the AdvancedHMCMCMCChainsExt is not feasible.
 
 using JuliaBUGS
-using JuliaBUGS: find_generated_vars, LogDensityContext, evaluate!!
+using JuliaBUGS: AbstractBUGSModel, find_generated_vars, LogDensityContext, evaluate!!
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
@@ -23,10 +23,9 @@ function AbstractMCMC.bundle_samples(
     chain_type::Type{Chains};
     discard_initial=0,
     thinning=1,
+    model::AbstractBUGSModel=logdensitymodel.logdensity.ℓ,
     kwargs...,
 )
-    model = logdensitymodel.logdensity.ℓ
-    @assert model isa JuliaBUGS.BUGSModel "model must be a BUGSModel"
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model
 
     # Turn all the transitions into a vector-of-vectors.
