@@ -7,9 +7,7 @@ using JuliaBUGS.MetaGraphsNext
 function GraphPlot.plot(g::JuliaBUGS.BUGSGraph, parameters)
     colors = []
     for node in labels(g)
-        if g[node] isa JuliaBUGS.AuxiliaryNodeInfo
-            push!(colors, :blue)
-        elseif g[node].node_type == JuliaBUGS.Stochastic
+        if g[node].node_type == JuliaBUGS.Stochastic
             if node in parameters
                 push!(colors, :green)
             else
