@@ -18,7 +18,7 @@ using AdvancedHMC: Transition, stat
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:Transition},
     logdensitymodel::AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
-    sampler::AbstractMCMC.AbstractSampler,
+    sampler::AdvancedHMC.AbstractHMCSampler,
     state,
     chain_type::Type{Chains};
     discard_initial=0,
