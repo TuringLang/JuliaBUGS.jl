@@ -1,7 +1,9 @@
 using Documenter
 using JuliaBUGS
-using JuliaBUGS: compile, BUGSModel
+using JuliaBUGS: compile, BUGSModel, BUGSGraph, ConcreteNodeInfo
+using MetaGraphsNext
 using JuliaBUGS.BUGSPrimitives
+using DynamicPPL: SimpleVarInfo
 
 makedocs(;
     sitename="JuliaBUGS.jl",

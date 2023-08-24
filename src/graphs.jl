@@ -18,7 +18,17 @@ struct AuxiliaryNodeInfo <: NodeInfo end
 """
     ConcreteNodeInfo
 
-Define the information stored in each node of the BUGS graph.
+Defines the information stored in each node of the BUGS graph, encapsulating the essential characteristics 
+and functions associated with a node within the BUGS model's dependency graph.
+
+# Fields
+
+- `node_type::VariableTypes`: Specifies whether the node is a stochastic or logical variable.
+- `link_function_expr::Union{Expr,Symbol}`: The link function expression.
+- `node_function_expr::Expr`: The node function expression.
+- `node_args::Vector{VarName}`: A vector containing the names of the variables that are 
+    arguments to the node function.
+
 """
 struct ConcreteNodeInfo <: NodeInfo
     node_type::VariableTypes
@@ -47,7 +57,9 @@ end
 """
     BUGSGraph
 
-The graph object for a BUGS model. Just an alias of `MetaGraph` with specified types.
+The `BUGSGraph` object represents the graph structure for a BUGS model. It is a type alias for
+[`MetaGraphsNext.MetaGraph`](https://juliagraphs.org/MetaGraphsNext.jl/dev/api/#MetaGraphsNext.MetaGraph)
+with node type specified to [`ConcreteNodeInfo`](@ref).
 """
 const BUGSGraph = MetaGraph{
     Int64,SimpleDiGraph{Int64},VarName,NodeInfo,Nothing,Nothing,Nothing,Float64
@@ -254,8 +266,22 @@ abstract type AbstractBUGSModel end
 """
     BUGSModel
 
-The model object for a BUGS model.
+The `BUGSModel` object is used for inference and represents the output of compilation. It fully implements the
+[`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
+
+# Fields
+
+- `param_length::Int`: The length of the parameters vector, defining the number of parameters in the model.
+- `varinfo::SimpleVarInfo`: An instance of 
+    [`DynamicPPL.SimpleVarInfo`](https://turinglang.org/DynamicPPL.jl/dev/api/#DynamicPPL.SimpleVarInfo), 
+    specifically a dictionary that maps both data and value of variables in the model to the corresponding values.
+- `parameters::Vector{VarName}`: A vector containing the names of the parameters in the model. These parameters are defined to be 
+    stochastic variables that are not observed.
+- `g::BUGSGraph`: An instance of [`BUGSGraph`](@ref), representing the dependency graph of the model.
+- `sorted_nodes::Vector{VarName}`: A vector containing the names of all the variables in the model, sorted in topological order.
+
 """
+
 struct BUGSModel <: AbstractBUGSModel
     param_length::Int
     varinfo::SimpleVarInfo

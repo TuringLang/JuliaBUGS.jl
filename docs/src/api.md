@@ -5,4 +5,6 @@
 ```@docs
 compile
 BUGSModel
+ConcreteNodeInfo
+BUGSGraph
 ```
