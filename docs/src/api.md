@@ -1,7 +1,5 @@
 # API
 
-## Compile 
-
 ```@docs
 @bugs
 compile
