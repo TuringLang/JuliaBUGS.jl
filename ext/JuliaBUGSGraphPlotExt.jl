@@ -4,7 +4,10 @@ using GraphPlot
 using JuliaBUGS
 using JuliaBUGS.MetaGraphsNext
 
-function GraphPlot.plot(g::JuliaBUGS.BUGSGraph, parameters)
+function GraphPlot.gplot(m::JuliaBUGS.BUGSModel)
+    return GraphPlot.gplot(m.g, m.parameters)
+end
+function GraphPlot.gplot(g::JuliaBUGS.BUGSGraph, parameters)
     colors = []
     for node in labels(g)
         if g[node].node_type == JuliaBUGS.Stochastic

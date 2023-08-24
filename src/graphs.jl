@@ -281,7 +281,6 @@ The `BUGSModel` object is used for inference and represents the output of compil
 - `sorted_nodes::Vector{VarName}`: A vector containing the names of all the variables in the model, sorted in topological order.
 
 """
-
 struct BUGSModel <: AbstractBUGSModel
     param_length::Int
     varinfo::SimpleVarInfo
