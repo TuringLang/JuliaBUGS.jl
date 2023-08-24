@@ -5,6 +5,9 @@ using GraphMakie
 using JuliaBUGS
 using JuliaBUGS.MetaGraphsNext
 
+function GraphMakie.graphplot(m::JuliaBUGS.BUGSModel)
+    return graphplot(m.g, m.parameters)
+end
 function GraphMakie.graphplot(g::JuliaBUGS.BUGSGraph, parameters)
     colors = []
     for node in labels(g)

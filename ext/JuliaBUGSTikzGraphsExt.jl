@@ -1,9 +1,13 @@
-module JuliaBUGSTikzGraph
+module JuliaBUGSTikzGraphsExt
 
 using TikzGraphs
+using JuliaBUGS
 using JuliaBUGS.MetaGraphsNext
 
-function TikzGraphs.plot(graph::BUGSGraph, parameters)
+function TikzGraphs.plot(m::JuliaBUGS.BUGSModel)
+    return TikzGraphs.plot(m.g, m.parameters)
+end
+function TikzGraphs.plot(graph::JuliaBUGS.BUGSGraph, parameters)
     color_dict = Dict{Int,String}()
     for (i, node) in enumerate(labels(graph))
         if node in parameters

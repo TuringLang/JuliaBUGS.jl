@@ -153,6 +153,19 @@ converted from `:call` variants.
 macro bugs(expr)
     return Meta.quot(post_processing_expr(warn_link_function(bugsast(expr, __source__))))
 end
+
+"""
+    @bugs(prog::String, replace_period=true, no_enclosure=false)
+
+Produce similar output as [`@bugs`](@ref), but takes a string as input.  This is useful for 
+parsing original BUGS programs.
+
+# Arguments
+- `prog::String`: The BUGS program code as a string.
+- `replace_period::Bool`: If true, periods in the BUGS code will be replaced (default `true`).
+- `no_enclosure::Bool`: If true, the parser will not expect the program to be wrapped between `model{ }` (default `false`).
+
+"""
 macro bugs(prog::String, replace_period=true, no_enclosure=false)
     julia_program = to_julia_program(prog, replace_period, no_enclosure)
     expr = Base.Expr(JuliaSyntax.parsestmt(SyntaxNode, julia_program))
@@ -377,7 +390,7 @@ end
 
 macro _bugsmodel_str(s::String)
     # Convert and wrap the whole thing in a block for parsing
-    transformed_code = "begin\n$(bugs_to_julia(s))\nend"
+    transformed_code = "begin\n$(_bugs_to_julia(s))\nend"
     try
         expr = Meta.parse(transformed_code)
         return Meta.quot(post_processing_expr(bugsast(expr, __source__)))

@@ -1,15 +1,18 @@
-# Using R in Julia
-Julia has an easy-to-use interface to R. 
+# Integrating R in Julia
 
-The [`RCall.jl`](https://github.com/JuliaInterop/RCall.jl) package generally provides a Julia interface to R functions, and 
-the [`RData.jl`](https://github.com/JuliaData/RData.jl) package might be helpful for reading R data files.
+Julia offers a seamless interface to the [`R` language](https://www.r-project.org/about.html). 
 
-# Reading BUGS `data` and `init` from R like lists
-The example data and inits from BUGS can be read into Julia using the `RCall.jl` package.
-For example, the data from `Rats` provided in `OpenBUGS` can be found [here](https://chjackson.github.io/openbugsdoc/Examples/Ratsdata.html).
+- The [`RCall.jl`](https://github.com/JuliaInterop/RCall.jl) package enables interaction with R functions in Julia.
+- The [`RData.jl`](https://github.com/JuliaData/RData.jl) package allows interfacing with R data in Julia.
+
+## Reading BUGS `data` and `init` from R like lists
+> **Warning**: The data layout in BUGS assumes that the data is stored in row-major order, while R uses column-major order. This discrepancy can lead to issues. [`Stan`](https://mc-stan.org/) developers have transformed the data and initializations of example BUGS models for R, which can be found [here](https://github.com/stan-dev/example-models/tree/master/bugs_examples).
+
+### Reading the `list` data structure from R
+The data for `Rats` is available [here](https://chjackson.github.io/openbugsdoc/Examples/Ratsdata.html). 
 
 In Julia, we can read this data into a Julia dictionary using the `RCall.jl` package.
-```julia
+```julia-repl
 julia> using RCall
 
 julia> data = R"
@@ -99,9 +102,9 @@ $Y
 [30,]  331  314  317  323  324
 ```
 
-equivalently, `reval(s::String)` will produce the same result in this case.
+alternatively, `reval(s::String)` will produce the same result in this case.
 
-If the data is stores in a file, user can use a function similar to
+If the data is stores in a file, user can use function (may require customizing the function to fit specific needs)
 ```julia
 function read_rlist_to_dictionary(filepath::String)
     r_data = open(filepath) do f
@@ -111,9 +114,8 @@ function read_rlist_to_dictionary(filepath::String)
     return rcopy(r_data)
 end
 ```
-
-User can save the result to a Julia variable and access the data as a Julia dictionary.
-```julia
+, and save the result to a Julia variable and access the data as a Julia dictionary
+```julia-repl
 julia> rcopy(data)
 OrderedDict{Symbol, Any} with 5 entries:
   :x    => [8.0, 15.0, 22.0, 29.0, 36.0]
@@ -122,6 +124,7 @@ OrderedDict{Symbol, Any} with 5 entries:
   :T    => 5.0
   :Y    => [151.0 141.0 … 157.0 132.0; 199.0 189.0 … 212.0 185.0; … ; 298.0 273.0 … 285.0 286.0; 331.0 314.0 … 323.0 324.0]
 ```
+
 It is worth noting that `rcopy` will automatically convert data names contains `.` to `_` in Julia. E.g.
 ```julia
 julia> rcopy(R"list(a.b = 1)")
@@ -129,10 +132,9 @@ OrderedDict{Symbol, Any} with 1 entry:
   :a_b => 1.0
 ```
 
-The issue here is that the data layout in BUGS assumes the data is stored in row-major order, while R stores data in column-major order. (`Stan` developers has worked out data and initializations of BUGS models in R, and can be found [here](https://github.com/stan-dev/example-models/tree/master/bugs_examples))
-
+### Transform Dta read from R to Julia convention
 If you want to load data using the R interface, but the data source is in the same layout as BUGS, you can process the data in Julia, for instance
-```julia
+```julia-repl
 # define a row-major reshape function, because Julia's `reshape` is column-major
 julia> function rreshape(v::Vector, dim)
            return permutedims(reshape(v, reverse(dim)), length(dim):-1:1)
@@ -159,4 +161,5 @@ julia> rreshape(vcat(data[:Y]...), (30, 5))
  137.0  180.0  219.0  258.0  291.0
  153.0  200.0  244.0  286.0  324.0
 ```
-User should be advised to verify the data layout before using the data.
+
+Please always verify the data before using.
