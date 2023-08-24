@@ -1,6 +1,7 @@
 ```@docs
 abs
 cloglog
+cexpexp
 equals
 exp
 inprod
