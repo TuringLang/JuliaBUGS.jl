@@ -46,8 +46,10 @@ function try_recovery!(ps)
 
     # sync points: for, ;, <, ~, {, } 
     # `\n` is not good, because we allow multiline expressions as C does
-    (text_pos_pre, text_pos_post), discarded_program_piece = discard_until!(ps, ["for", ";", "<", "~", "{"])
-    
+    (text_pos_pre, text_pos_post), discarded_program_piece = discard_until!(
+        ps, ["for", ";", "<", "~", "{"]
+    )
+
     try
         if peek_raw(ps) == "for"
         elseif peek_raw(ps) == ";"
@@ -60,7 +62,7 @@ function try_recovery!(ps)
         end
         # finish the current statement and move on
         # possibly throw exception while in a for loop
-        process_statements!(ps) 
+        process_statements!(ps)
     catch e
         if e isa ParseException
             try_recovery!(ps)
@@ -91,7 +93,6 @@ end
 #   - The point is that the recovery requirements are different for different
 #     functions, so we should put the try-catch in the functions themselves.
 
-
 ## State Syncing
 # Recursive descent parser can be viewed as a state machine. We can try to sync up the parsing state and continue parsing. 
 # Some thoughts:
@@ -116,10 +117,10 @@ function sync_state(ps::ProcessState, current_token::String, next_token::Tuple)
     if peek_raw(ps) == current_token && peek_raw(ps, 2) in next_token
         return nothing
     elseif peek_raw(ps) == current_token ## peek_raw(ps, 2) != next_token
-        # start an error diagnostic
-        # then we seek till one of the next_token is found
-        # if not found anything in the given budget, add to the diagnostic
-        # add a special place_holder and move on
+    # start an error diagnostic
+    # then we seek till one of the next_token is found
+    # if not found anything in the given budget, add to the diagnostic
+    # add a special place_holder and move on
     elseif peek_raw(ps, 2) == next_token # peek_raw(ps) != current_token
     else
     end
@@ -138,4 +139,3 @@ function skip_until(ps::ProcessState, t::String, depth_limit=5)
     end
     return seek_index # maybe the actual location in the text 
 end
-
