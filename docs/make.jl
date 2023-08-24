@@ -17,7 +17,8 @@ makedocs(;
         "Plotting" => "graph_plotting.md",
         "R Interface" => "R_interface.md",
         "Pitfalls" => "pitfalls.md",
-        "For Developers" => ["Parser" => "parser.md"],
+        "For Developers" =>
+            ["Parser" => "parser.md", "Notes on BUGS Implementations" => "BUGS_notes.md"],
     ],
 )
 
