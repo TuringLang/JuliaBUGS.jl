@@ -7,7 +7,6 @@ AbstractPPL = "7a57a42e-76ec-4ea3-a279-07e840d6d9cf"
 BangBang = "198e06fe-97b7-11e9-32a5-e1d131e6ad66"
 Bijectors = "76274a88-744f-5084-9051-94815aaf08c4"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
-DistributionsAD = "ced4e74d-a319-5a8a-b0ac-84af2272839c"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DynamicPPL = "366bfd00-2699-11ea-058f-f148b4cae6d8"
 Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
@@ -41,6 +40,22 @@ JuliaBUGSGraphPlotExt = ["GraphPlot"]
 JuliaBUGSTikzGraphsExt = ["TikzGraphs"]
 
 [compat]
+AbstractPPL = "0.6"
+BangBang = "0.3"
+Bijectors = "0.13"
+Distributions = "0.23.8, 0.24, 0.25"
+DynamicPPL = "0.22, 0.23"
+Graphs = "1.4.1"
+InverseFunctions = "0.1"
+JuliaSyntax = "0.4"
+LogDensityProblems = "2"
+LogDensityProblemsAD = "1.6"
+LogExpFunctions = "0.3"
+MacroTools = ">=0.5.6"
+MetaGraphsNext = "0.5"
+Setfield = "0.7.1, 0.8, 1"
+SpecialFunctions = "2"
+UnPack = "1"
 julia = ">=1.8"
 
 [extras]

@@ -1,7 +1,6 @@
 module BUGSPrimitives
 
 using Distributions
-using DistributionsAD
 using LinearAlgebra
 using LogExpFunctions
 using Random
