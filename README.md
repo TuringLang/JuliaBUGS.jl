@@ -4,7 +4,7 @@ A modern implementation of the BUGS probabilistic programming language in Julia.
 
 ## Caution!
 
-This is still a work in progress and may not be ready for serious use.
+JuliaBUGS is still in beta and may not be ready for serious use.
 
 ## Example: Logistic Regression with Random Effects
 We will use the [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) model for demonstration. 
