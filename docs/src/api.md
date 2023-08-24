@@ -3,6 +3,7 @@
 ## Compile 
 
 ```@docs
+@bugs
 compile
 BUGSModel
 ConcreteNodeInfo

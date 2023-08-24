@@ -1,6 +1,6 @@
 using Documenter
 using JuliaBUGS
-using JuliaBUGS: compile, BUGSModel, BUGSGraph, ConcreteNodeInfo
+using JuliaBUGS: @bugs, compile, BUGSModel, BUGSGraph, ConcreteNodeInfo
 using MetaGraphsNext
 using JuliaBUGS.BUGSPrimitives
 using DynamicPPL: SimpleVarInfo
@@ -14,6 +14,7 @@ makedocs(;
             "Functions" => "functions.md",
             "Distributions" => "distributions.md",
         ],
+        "R Interface" => "R_interface.md",
     ],
 )
 
