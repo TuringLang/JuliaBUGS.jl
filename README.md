@@ -10,7 +10,7 @@ JuliaBUGS is still in beta and may not be ready for serious use.
 To install the package, run the following command in the Julia REPL:
 ```julia
 ]  # Enter Pkg mode by pressing `] `
-(@v1.9) pkg> add git@github.com:TuringLang/JuliaBUGS.jl.git
+(@v1.9) pkg> add https://github.com/TuringLang/JuliaBUGS.jl.git
 ```
 Then run the following command to use the package:
 ```julia
