@@ -43,18 +43,18 @@ model = compile(model_def, NamedTuple(), inits)
 using TikzGraphs
 TikzGraphs.plot(model)
 ```
-![TikzGraphs](../assets/tikz.svg)
+![TikzGraphs](https://github.com/TuringLang/JuliaBUGS.jl/blob/master/docs/assets/tikz.svg)
 
 ## [`GraphPlot.jl`](https://github.com/JuliaGraphs/GraphPlot.jl)
 ```julia
 using GraphPlot
 gplot(model)
 ```
-![GraphPlot](../assets/graphplot.svg)
+![GraphPlot](https://github.com/TuringLang/JuliaBUGS.jl/blob/master/docs/graphplot.svg)
 
 ## [`GraphMakie.jl`](https://github.com/MakieOrg/GraphMakie.jl)
 ```julia
 using GLMakie, GraphMakie
 graphplot(model)
 ```
-![GraphMakie](../assets/makie.jpg)
+![GraphMakie](https://github.com/TuringLang/JuliaBUGS.jl/blob/master/docs/makie.jpg)
