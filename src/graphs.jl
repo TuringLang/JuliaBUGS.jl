@@ -15,6 +15,9 @@ and will all be removed right before returning the graph.
 """
 struct AuxiliaryNodeInfo <: NodeInfo end
 
+# TODO: can also allow link_function to be a function, this can happen when user specifies it
+# in this case, node_args maybe needed, otherwise, maybe need to get  
+
 """
     ConcreteNodeInfo
 
@@ -37,7 +40,7 @@ struct ConcreteNodeInfo <: NodeInfo
     node_args::Vector{VarName}
 end
 
-# TODO: `node_args` strictly speaking is not necessary, because it can be inferred from `node_function_expr`.
+# TODO: by default, `node_args` can be extracted from `node_function_expr`, but in the future, if we allow more flexible types and node function can be function instead of Expr, then the node_args need to be provided by the user
 
 function ConcreteNodeInfo(var::Var, vars, link_functions, node_functions, node_args)
     return ConcreteNodeInfo(
@@ -543,25 +546,27 @@ struct LogDensityContext <: AbstractPPL.AbstractContext end
 # TODO: DynamicPPL returns (value, logp, vi), should we?
 
 function observe(
-    ctx, graph, vn, vi; transformed=transformation(vi) == DynamicTransformation()
+    ctx,
+    graph,
+    vn,
+    vi;
+    transformed=transformation(vi) == DynamicTransformation(),
+    module_under=JuliaBUGS,
 )
-    @unpack node_type, link_function_expr, node_function_expr, node_args = graph[vn]
-    # TODO: node_args are not strictly useful
-    
-    args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-    expr = node_function_expr.args[2]
-    dist = _eval(expr, args)
+    dist = eval(module_under, graph[vn], vi)
     @set vi.logp += logpdf(dist, vi[vn])
 end
 
 function assume(
-    ctx, graph, vn, vi; transformed=transformation(vi) == DynamicTransformation()
+    ctx,
+    graph,
+    vn,
+    vi;
+    transformed=transformation(vi) == DynamicTransformation(),
+    module_under=JuliaBUGS,
 )
-    @unpack node_type, link_function_expr, node_function_expr, node_args = graph[vn]
-    args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-    expr = node_function_expr.args[2]
-    dist = _eval(expr, args)
-    if link_function_expr != :identity
+    dist = eval(module_under, graph[vn], vi)
+    if graph[vn].link_function_expr != :identity
         dist = transformed(dist, bijector_of_link_function(link_function_expr))
     end
     value = rand(ctx.rng, dist)
@@ -576,6 +581,11 @@ function assume(
     @set vi = setindex!!(vi, value, vn)
 end
 
+function logical(ctx, graph, vn, vi; module_under=JuliaBUGS)
+    value = eval(module_under, graph[vn], vi)
+    @set vi = setindex!!(vi, value, vn)
+end
+
 function eval(m::Module, ni::NodeInfo, vi)
     @unpack node_type, link_function_expr, node_function_expr, node_args = ni
     args = Dict(getsym(arg) => vi[arg] for arg in node_args)
@@ -583,12 +593,15 @@ function eval(m::Module, ni::NodeInfo, vi)
     return _eval(m, expr, args)
 end
 
-function eval(node::NodeInfo, vi)
-    return eval(JuliaBUGS, node, vi)
+function eval(ni::NodeInfo, vi)
+    return eval(JuliaBUGS, ni, vi)
 end
 
 function eval(m::Module, expr, vi::SimpleVarInfo)
-
+    @unpack node_type, link_function_expr, node_function_expr, node_args = graph[vn]
+    args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+    expr = node_function_expr.args[2]
+    return _eval(expr, args)
 end
 
 function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
@@ -597,61 +610,28 @@ end
 function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model
     vi = deepcopy(varinfo)
-    logp = 0.0
+    @set vi.logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
-        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
-            value = _eval(expr, args)
-            vi = setindex!!(vi, value, vn)
+        if g[vn].node_type == Logical
+            vi = logical(ctx, g, vn, vi)
         else
-            dist = _eval(expr, args)
-            if link_function_expr != :identity
-                dist = transformed(dist, bijector_of_link_function(link_function_expr))
-            end
-            value = rand(ctx.rng, dist)
-            if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
-                value_transformed, logabsdetjac = with_logabsdet_jacobian(
-                    DynamicPPL.inverse(bijector(dist)), val
-                )
-                logp += logpdf(dist, value_transformed) + logabsdetjac
-            else
-                logp += logpdf(dist, value)
-            end
-            vi = setindex!!(vi, value, vn)
+            vi = assume(ctx, g, vn, vi)
         end
     end
-    return @set vi.logp = logp
+    return vi
 end
 
 AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultContext())
-function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
+function AbstractPPL.evaluate!!(model::BUGSModel, ctx::DefaultContext)
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model
     vi = deepcopy(varinfo)
-    logp = 0.0
+    @set vi.logp = 0.0
     for vn in sorted_nodes
-        ni = g[vn]
-        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
-        node_type == JuliaBUGS.Logical && continue
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-        expr = node_function_expr.args[2]
-        dist = _eval(expr, args)
-        if link_function_expr != :identity
-            dist = transformed(dist, bijector_of_link_function(link_function_expr))
-        end
-        value = vi[vn]
-        if DynamicPPL.transformation(vi) isa DynamicPPL.DynamicTransformation
-            value_transformed, logabsdetjac = with_logabsdet_jacobian(
-                Bijectors.inverse(bijector(dist)), value
-            )
-            logp += logpdf(dist, value_transformed) + logabsdetjac
-        else
-            logp += logpdf(dist, value)
-        end
+        g[vn].node_type == Logical && continue
+        vi = observe(ctx, g, vn, vi)
     end
-    return @set vi.logp = logp
+    return vi
 end
 
 function AbstractPPL.evaluate!!(
