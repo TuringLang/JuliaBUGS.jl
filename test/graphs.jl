@@ -57,6 +57,11 @@ markov_blanket(model.g, c)
 @test Set(Symbol.(markov_blanket(model.g, c))) == Set([:l, :a, :b, :f])
 
 mb_model = MarkovBlanketCoveredBUGSModel(model, c)
+# Check if the fields are correctly set
+@test mbcm.param_length == 4
+@test Set(Symbol.(mbcm.blanket)) == Set([:f, :b, :d, :e, :c, :h, :g, :i])
+@test mbcm.model == model
+
 @test begin
     logp = 0
     logp += logpdf(dnorm(1.0, 3.0), 1.0) # a

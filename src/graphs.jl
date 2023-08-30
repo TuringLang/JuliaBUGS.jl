@@ -453,35 +453,27 @@ struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
     param_length::Int
     blanket::Vector{VarName}
     model::BUGSModel
-end
 
-"""
-    MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group)
-
-`var_group` can be a single `VarName` or a vector of `VarName`. The variable in `var_group` 
-must be a variable in the model; logical variables in `var_group` will not error, but will be ignored.
-"""
-function MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group::VarName)
-    return MarkovBlanketCoveredBUGSModel(m, VarName[var_group])
-end
-function MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group::Vector{VarName})
-    non_vars = VarName[]
-    logical_vars = VarName[]
-    for var in var_group
-        if var ∉ labels(m.g)
-            push!(non_vars, var)
-        elseif m.g[var].node_type == Logical
-            push!(logical_vars, var)
+    function MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group::Union{VarName, Vector{VarName}})
+        var_group = var_group isa VarName ? [var_group] : var_group
+        non_vars = VarName[]
+        logical_vars = VarName[]
+        for var in var_group
+            if var ∉ labels(m.g)
+                push!(non_vars, var)
+            elseif m.g[var].node_type == Logical
+                push!(logical_vars, var)
+            end
         end
+        isempty(non_vars) || error("Variables $(non_vars) are not in the model")
+        isempty(logical_vars) ||
+            warn("Variables $(logical_vars) are not stochastic variables, they will be ignored")
+        blanket = markov_blanket(m.g, var_group)
+        blanket_with_vars = union(blanket, var_group)
+        params = [vn for vn in blanket_with_vars if vn in m.parameters]
+        param_length = isempty(params) ? 0 : sum(_length(vn) for vn in params)
+        new(param_length, blanket_with_vars, m)
     end
-    isempty(non_vars) || error("Variables $(non_vars) are not in the model")
-    isempty(logical_vars) ||
-        warn("Variables $(logical_vars) are not stochastic variables, they will be ignored")
-    blanket = markov_blanket(m.g, var_group)
-    blanket_with_vars = union(blanket, var_group)
-    params = [vn for vn in blanket_with_vars if vn in m.parameters]
-    param_length = isempty(params) ? 0 : sum(_length(vn) for vn in params)
-    return MarkovBlanketCoveredBUGSModel(param_length, blanket_with_vars, m)
 end
 
 """
