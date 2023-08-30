@@ -1,6 +1,5 @@
 using JuliaSyntax
 using JuliaSyntax: @K_str, @KSet_str, tokenize, untokenize, Diagnostic, Token
-# using JuliaFormatter # can make into a PkgExt
 
 mutable struct ProcessState
     token_vec::Vector{Token}

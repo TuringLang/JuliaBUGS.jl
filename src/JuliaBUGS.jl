@@ -16,7 +16,7 @@ using UnPack
 import Base: ==, hash, Symbol, size
 import Distributions: truncated
 import AbstractPPL: AbstractContext, evaluate!!
-import DynamicPPL: settrans!!
+import DynamicPPL: settrans!!, transformation, DynamicTransformation, NoTransformation
 
 export @bugs
 export compile

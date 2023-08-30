@@ -285,7 +285,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
             dependencies = non_data_vars
         end
     else
-        rhs_expr = replace_constants_in_expr(rhs_expr, env)
+        rhs_expr = replace_constants_in_expr(rhs_expr, env) # if we omit this, then variables in for loop can share the same expression
         evaled_rhs, dependencies, node_args = evaluate_and_track_dependencies(rhs_expr, env)
 
         # TODO: since we are not evaluating the node function expressions anymore, we don't have to store the expression like anonymous functions 

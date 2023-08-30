@@ -37,6 +37,8 @@ struct ConcreteNodeInfo <: NodeInfo
     node_args::Vector{VarName}
 end
 
+# TODO: `node_args` strictly speaking is not necessary, because it can be inferred from `node_function_expr`.
+
 function ConcreteNodeInfo(var::Var, vars, link_functions, node_functions, node_args)
     return ConcreteNodeInfo(
         vars[var],
@@ -176,47 +178,6 @@ function scalarize_then_add_edge!(g::BUGSGraph, v::Var; lhs_or_rhs=:lhs)
 end
 
 """
-    _eval(expr, env)
-
-`_eval` mimics `Base.eval`, but uses precompiled functions. This is possible because the expressions we want to 
-evaluate only have two kinds of expressions: function calls and indexing.
-`env` is a data structure mapping symbols in `expr` to values, values can be arrays or scalars.
-"""
-function _eval(expr::Number, env)
-    return expr
-end
-function _eval(expr::Symbol, env)
-    if expr == :nothing
-        return nothing
-    elseif expr == :(:)
-        return Colon()
-    else # intentional strict, all corner cases should be handled above
-        return env[expr]
-    end
-end
-function _eval(expr::Expr, env)
-    if Meta.isexpr(expr, :call)
-        f = expr.args[1]
-        args = [_eval(arg, env) for arg in expr.args[2:end]]
-        if f isa Expr # `JuliaBUGS.some_function` like
-            f = f.args[2].value
-        end
-        return getfield(JuliaBUGS, f)(args...) # assume all functions used are available under `JuliaBUGS`
-    elseif Meta.isexpr(expr, :ref)
-        array = _eval(expr.args[1], env)
-        indices = [_eval(arg, env) for arg in expr.args[2:end]]
-        return array[indices...]
-    elseif Meta.isexpr(expr, :block)
-        return _eval(expr.args[end], env)
-    else
-        error("Unknown expression type: $expr")
-    end
-end
-function _eval(expr, env)
-    return error("Unknown expression type: $expr of type $(typeof(expr))")
-end
-
-"""
     find_generated_vars(g::BUGSGraph)
 
 Return all the logical variables without stochastic descendants. The values of these variables 
@@ -287,21 +248,6 @@ struct BUGSModel <: AbstractBUGSModel
     parameters::Vector{VarName}
     g::BUGSGraph
     sorted_nodes::Vector{VarName}
-end
-
-# Resolves: setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
-# Alternatively, can overload BangBang.possible(
-#     ::typeof(BangBang._setindex!), ::C, ::T, ::Vararg
-# )
-# to allow mutation, but the current solution seems create less possible problems, albeit less efficient.
-function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
-    T = promote_type(eltype(xs), eltype(v))
-    ys = similar(xs, T)
-    if eltype(xs) !== Union{}
-        copy!(ys, xs)
-    end
-    ys[I...] = v
-    return ys
 end
 
 """
@@ -593,6 +539,57 @@ SamplingContext() = SamplingContext(Random.default_rng())
 Use the given values to compute the log joint density.
 """
 struct LogDensityContext <: AbstractPPL.AbstractContext end
+
+# TODO: DynamicPPL returns (value, logp, vi), should we?
+
+function observe(
+    ctx, graph, vn, vi; transformed=transformation(vi) == DynamicTransformation()
+)
+    @unpack node_type, link_function_expr, node_function_expr, node_args = graph[vn]
+    # TODO: node_args are not strictly useful
+    
+    args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+    expr = node_function_expr.args[2]
+    dist = _eval(expr, args)
+    @set vi.logp += logpdf(dist, vi[vn])
+end
+
+function assume(
+    ctx, graph, vn, vi; transformed=transformation(vi) == DynamicTransformation()
+)
+    @unpack node_type, link_function_expr, node_function_expr, node_args = graph[vn]
+    args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+    expr = node_function_expr.args[2]
+    dist = _eval(expr, args)
+    if link_function_expr != :identity
+        dist = transformed(dist, bijector_of_link_function(link_function_expr))
+    end
+    value = rand(ctx.rng, dist)
+    if transformed
+        value_transformed, logabsdetjac = with_logabsdet_jacobian(
+            Bijectors.inverse(bijector(dist)), value
+        )
+        @set vi.logp += logpdf(dist, value_transformed) + logabsdetjac
+    else
+        @set vi.logp += logpdf(dist, value)
+    end
+    @set vi = setindex!!(vi, value, vn)
+end
+
+function eval(m::Module, ni::NodeInfo, vi)
+    @unpack node_type, link_function_expr, node_function_expr, node_args = ni
+    args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+    expr = node_function_expr.args[2]
+    return _eval(m, expr, args)
+end
+
+function eval(node::NodeInfo, vi)
+    return eval(JuliaBUGS, node, vi)
+end
+
+function eval(m::Module, expr, vi::SimpleVarInfo)
+
+end
 
 function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
     return evaluate!!(model, SamplingContext(rng))
