@@ -454,7 +454,9 @@ struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
     blanket::Vector{VarName}
     model::BUGSModel
 
-    function MarkovBlanketCoveredBUGSModel(m::BUGSModel, var_group::Union{VarName, Vector{VarName}})
+    function MarkovBlanketCoveredBUGSModel(
+        m::BUGSModel, var_group::Union{VarName,Vector{VarName}}
+    )
         var_group = var_group isa VarName ? [var_group] : var_group
         non_vars = VarName[]
         logical_vars = VarName[]
@@ -466,13 +468,14 @@ struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
             end
         end
         isempty(non_vars) || error("Variables $(non_vars) are not in the model")
-        isempty(logical_vars) ||
-            warn("Variables $(logical_vars) are not stochastic variables, they will be ignored")
+        isempty(logical_vars) || warn(
+            "Variables $(logical_vars) are not stochastic variables, they will be ignored",
+        )
         blanket = markov_blanket(m.g, var_group)
         blanket_with_vars = union(blanket, var_group)
         params = [vn for vn in blanket_with_vars if vn in m.parameters]
         param_length = isempty(params) ? 0 : sum(_length(vn) for vn in params)
-        new(param_length, blanket_with_vars, m)
+        return new(param_length, blanket_with_vars, m)
     end
 end
 
