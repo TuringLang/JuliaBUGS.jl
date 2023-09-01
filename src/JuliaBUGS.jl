@@ -26,6 +26,16 @@ export @varname
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
 
+@enum VariableTypes::Bool begin
+    Logical
+    Stochastic
+end
+
+@enum StochasticVariableTypes::Bool begin
+    Observation
+    Assumption
+end
+
 include("bugsast.jl")
 include("parser.jl")
 include("variable_types.jl")
@@ -37,16 +47,6 @@ include("graphs.jl")
 include("logdensityproblems.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
-
-@enum VariableTypes::Bool begin
-    Logical
-    Stochastic
-end
-
-@enum StochasticVariableTypes::Bool begin
-    Observation
-    Assumption
-end
 
 function check_input(input::Union{NamedTuple,AbstractDict})
     for k in keys(input)

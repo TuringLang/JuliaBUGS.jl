@@ -4,7 +4,7 @@ function LogDensityProblems.logdensity(model::AbstractBUGSModel, x::AbstractArra
 end
 
 function LogDensityProblems.dimension(model::AbstractBUGSModel)
-    return model.param_length
+    return get_param_length(model)
 end
 
 function LogDensityProblems.capabilities(::AbstractBUGSModel)

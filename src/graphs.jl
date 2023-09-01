@@ -65,7 +65,7 @@ function ConcreteNodeInfo(var::Var, vars, link_functions, node_functions, node_a
     )
 end
 
-function is_logical(ni::ConcreteNodeInfo) 
+function is_logical(ni::ConcreteNodeInfo)
     return ni.node_type == Logical
 end
 
@@ -296,6 +296,68 @@ struct BUGSModel <: AbstractBUGSModel
     parameters::Vector{VarName}
     g::BUGSGraph
     sorted_nodes::Vector{VarName}
+
+    function BUGSModel(g::BUGSGraph, sorted_nodes, vars, array_sizes, data, inits)
+        vi = SimpleVarInfo(initialize_var_store(data, vars, array_sizes))
+        parameters = VarName[]
+        no_transformation_param_length = 0
+        dynamic_transformation_param_length = 0
+        for vn in sorted_nodes
+            ni = g[vn]
+            @unpack node_type, link_function_expr, node_function_expr, node_args = ni
+            args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+            expr = node_function_expr.args[2]
+            if node_type == JuliaBUGS.Logical
+                value = try
+                    _eval(expr, args)
+                catch _
+                    rethrow(
+                        UninitializedVariableError(
+                            "Encounter error when evaluating the RHS of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) directly first if not yet.",
+                        ),
+                    )
+                end
+                @assert value isa Union{Real,Array{<:Real}} "$value is not a number or array"
+                vi = setindex!!(vi, value, vn)
+            else
+                dist = try
+                    _eval(expr, args)
+                catch _
+                    rethrow(
+                        UninitializedVariableError(
+                            "Encounter support error when evaluating the distribution of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) first if not yet.",
+                        ),
+                    )
+                end
+                value = evaluate(vn, data)
+                isnothing(value) && push!(parameters, vn)
+                no_transformation_param_length += length(dist)
+                @assert length(dist) == _length(vn) begin
+                    "length of distribution $dist: $(length(dist)) does not match length of variable $vn: $(_length(vn)), " *
+                    "please note that if the distribution is a multivariate distribution, " *
+                    "the left hand side variable should use explicit indexing, e.g. x[1:2] ~ dmnorm(...)."
+                end
+                dynamic_transformation_param_length += length(Bijectors.transformed(dist))
+                isnothing(value) && (value = evaluate(vn, inits))
+                if !isnothing(value)
+                    vi = setindex!!(vi, value, vn)
+                else
+                    vi = setindex!!(vi, rand(dist), vn)
+                end
+            end
+        end
+        # TODO: remove after verification
+        @assert (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) ==
+            no_transformation_param_length
+        return new(
+            no_transformation_param_length,
+            dynamic_transformation_param_length,
+            vi,
+            parameters,
+            g,
+            sorted_nodes,
+        )
+    end
 end
 
 function observation_or_assumption(model::BUGSModel, ctx, vn::VarName)
@@ -320,6 +382,14 @@ Return the names of all the variables in the model.
 """
 all_variables(m::BUGSModel) = labels(m.g)
 
+function get_param_length(m::Union{BUGSModel, MarkovBlanketCoveredBUGSModel})
+    return if transformation(m.varinfo) isa DynamicPPL.DynamicTransformation
+        m.dynamic_transformation_param_length
+    else
+        m.no_transformation_param_length
+    end
+end
+
 """
     generated_variables(m::BUGSModel)
 
@@ -329,57 +399,6 @@ generated_variables(m::BUGSModel) = find_generated_vars(m.g)
 
 struct UninitializedVariableError <: Exception
     msg::String
-end
-
-function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
-    vs = initialize_var_store(data, vars, array_sizes)
-    vi = SimpleVarInfo(vs)
-    parameters = VarName[]
-    no_transformation_param_length = 0
-    dynamic_transformation_param_length = 0
-    for vn in sorted_nodes
-        ni = g[vn]
-        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
-            value = try
-                _eval(expr, args)
-            catch _
-                rethrow(
-                    UninitializedVariableError(
-                        "Encounter error when evaluating the RHS of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) directly first if not yet.",
-                    ),
-                )
-            end
-            @assert value isa Union{Real,Array{<:Real}} "$value is not a number or array"
-            vi = setindex!!(vi, value, vn)
-        else
-            dist = try
-                _eval(expr, args)
-            catch _
-                rethrow(
-                    UninitializedVariableError(
-                        "Encounter support error when evaluating the distribution of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) first if not yet.",
-                    ),
-                )
-            end
-            value = evaluate(vn, data)
-            isnothing(value) && push!(parameters, vn)
-            no_transformation_param_length += length(dist)
-            @assert length(dist) == _length(vn) "length of distribution does not match length of variable"
-            dynamic_transformation_param_length += length(Bijectors.transformed(dist))
-            isnothing(value) && (value = evaluate(vn, inits))
-            if !isnothing(value)
-                vi = setindex!!(vi, value, vn)
-            else
-                vi = setindex!!(vi, rand(dist), vn)
-            end
-        end
-    end
-    # TODO: remove after verification
-    @assert (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) == no_transformation_param_length
-    return BUGSModel(no_transformation_param_length, dynamic_transformation_param_length, vi, parameters, g, sorted_nodes)
 end
 
 function initialize_var_store(data, vars, array_sizes)
@@ -411,7 +430,7 @@ function DynamicPPL.settrans!!(m::BUGSModel, if_trans::Bool)
     return @set m.varinfo = DynamicPPL.settrans!!(m.varinfo, if_trans)
 end
 
-function evaluate(vn::VarName, env)
+function JuliaBUGS.evaluate(vn::VarName, env)
     sym = getsym(vn)
     ret = nothing
     try
@@ -419,22 +438,6 @@ function evaluate(vn::VarName, env)
     catch _
     end
     return ismissing(ret) ? nothing : ret
-end
-
-"""
-    _length(vn::VarName)
-
-Return the length of a possible variable identified by `vn`.
-Only valid if `vn` is:
-    - a scalar
-    - an array indexing whose indices are concrete(no `start`, `end`, `:`)
-
-! Should not be used outside of the usage demonstrated in this file.
-
-"""
-function _length(vn::VarName)
-    getlens(vn) isa Setfield.IdentityLens && return 1
-    return prod([length(index_range) for index_range in getlens(vn).indices])
 end
 
 function get_params_varinfo(m::BUGSModel)
@@ -604,7 +607,7 @@ Interface function for evaluating logical nodes in the model.
 """
 logical_evaluate
 
-function observe(
+function JuliaBUGS.observe(
     ctx::AbstractBUGSContext,
     graph::BUGSGraph,
     vn::VarName,
@@ -613,15 +616,14 @@ function observe(
     module_under=JuliaBUGS,
 )
     dist = eval(module_under, graph[vn], vi)
-    @set vi.logp += logpdf(dist, vi[vn])
+    return acclogp!!(vi, logpdf(dist, vi[vn]))
 end
 
-function assume(
-    rng::Random.AbstractRNG=ctx.rng, # TODO: assume name `rng`
+function JuliaBUGS.assume(
     ctx::AbstractBUGSContext,
-    graph,
-    vn,
-    vi;
+    graph::BUGSGraph,
+    vn::VarName,
+    vi::SimpleVarInfo;
     transformed=transformation(vi) == DynamicTransformation(),
     module_under=JuliaBUGS,
 )
@@ -629,34 +631,27 @@ function assume(
     if graph[vn].link_function_expr != :identity
         dist = transformed(dist, bijector_of_link_function(link_function_expr))
     end
-    value = rand(rng, dist)
+    value = rand(ctx.rng, dist)
     if transformed
         value_transformed, logabsdetjac = with_logabsdet_jacobian(
             Bijectors.inverse(bijector(dist)), value
         )
-        @set vi.logp += logpdf(dist, value_transformed) + logabsdetjac
+        acclogp!!(vi, logpdf(dist, value_transformed) + logabsdetjac)
     else
-        @set vi.logp += logpdf(dist, value)
+        acclogp!!(vi, logpdf(dist, value))
     end
-    @set vi = setindex!!(vi, value, vn)
+    return setindex!!(vi, value, vn)
 end
 
-function logical_evaluate(ctx, graph, vn, vi; module_under=JuliaBUGS)
-    value = eval(module_under, graph[vn], vi)
-    @set vi = setindex!!(vi, value, vn)
+function logical_evaluate(
+    ::AbstractBUGSContext,
+    graph::BUGSGraph,
+    vn::VarName,
+    vi::SimpleVarInfo;
+    module_under=JuliaBUGS,
+)
+    return setindex!!(vi, eval(module_under, graph[vn], vi), vn)
 end
-
-
-
-
-# for a context like SamplingContext, we essentially treat all the stochastic variables as assumptions
-# there are two ways to do this:
-# implement `observe` to do what `assume` does
-# or
-# implement observation_or_assumption to dispatch all to `assume`
-
-# in favor of the second one, because it is more coherent
-
 
 """
     DefaultContext
@@ -681,7 +676,6 @@ SamplingContext() = SamplingContext(Random.default_rng())
 Use the given values to compute the log joint density.
 """
 struct LogDensityContext <: AbstractPPL.AbstractContext end
-function reconstruct(model, flattened_values) end
 
 function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
     return evaluate!!(model, SamplingContext(rng))
@@ -691,11 +685,18 @@ AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, Default
 observation_or_assumption(model::BUGSModel, ctx::SamplingContext, vn::VarName) = Assumption
 observation_or_assumption(model::BUGSModel, ctx::DefaultContext, vn::VarName) = Observation
 
-# default implementation
+function node_iterator(model::BUGSModel, ctx)
+    return model.sorted_nodes
+end
+
+function node_iterator(model::MarkovBlanketCoveredBUGSModel, ctx)
+    return model.blanket
+end
+
 function AbstractPPL.evaluate!!(model::BUGSModel, ctx::AbstractBUGSContext)
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
-    vi = deepcopy(varinfo)
-    @set vi.logp = 0.0
+    g = model.g
+    vi = deepcopy(model.varinfo)
+    setlogp!!(vi::SimpleVarInfo, 0)
     for vn in node_iterator(model, ctx)
         if is_logical(g[vn])
             vi = logical_evaluate(ctx, g, vn, vi)
@@ -710,111 +711,52 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::AbstractBUGSContext)
     return vi
 end
 
-function node_iterator(model::BUGSModel, ctx)
-    return model.sorted_nodes
-end
-
-function node_iterator(model::MarkovBlanketCoveredBUGSModel, ctx)
-    return model.blanket
-end
-
-function reconstruct(
-    model::BUGSModel, ::LogDensityContext, flattened_values::AbstractVector
-)
-    @assert length(flattened_values) == model.param_length
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
-    vi = deepcopy(varinfo)
-    current_idx = 1
-    logp = 0.0
-    for vn in sorted_nodes
-        ni = g[vn]
-        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
-            value = _eval(expr, args)
-            vi = setindex!!(vi, value, vn)
-        else
-            dist = _eval(expr, args)
-            if link_function_expr != :identity
-                dist = transformed(dist, bijector_of_link_function(link_function_expr))
-            end
-            if vn in parameters # the value of parameter variables are stored in flattened_values
-                l = _length(vn)
-                value_transformed = if l == 1
-                    flattened_values[current_idx]
-                else
-                    flattened_values[current_idx:(current_idx + l - 1)]
-                end
-                current_idx += l
-
-                value = invlink(dist, value_transformed)
-                if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
-                    value_transformed, logabsdetjac = with_logabsdet_jacobian(
-                        Bijectors.inverse(bijector(dist)), value
-                    )
-                    logp += logpdf(dist, value_transformed) + logabsdetjac
-                else
-                    logp += logpdf(dist, value)
-                end
-                vi = setindex!!(vi, value, vn)
-            else
-                logp += logpdf(dist, vi[vn])
-            end
-        end
-    end
-    return @set vi.logp = logp
-end
-
 function AbstractPPL.evaluate!!(
-    model::MarkovBlanketCoveredBUGSModel,
-    ::LogDensityContext,
-    flattened_values::AbstractVector,
+    model::BUGSModel, ctx::LogDensityContext, flattened_values::AbstractVector
 )
-    @assert length(flattened_values) == model.param_length
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model.model
-    vi = deepcopy(varinfo)
-    current_idx = 1
-    logp = 0.0
-    for vn in sorted_nodes
-        vn in model.blanket || continue
-
-        ni = g[vn]
-        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
-            value = _eval(expr, args)
-            vi = setindex!!(vi, value, vn)
+    transformed = transformation(model.varinfo) == DynamicTransformation()
+    param_length = if transformed
+        model.dynamic_transformation_param_length
+    else
+        model.no_transformation_param_length
+    end
+    @assert length(flattened_values) == param_length
+    g = model.g
+    vi = deepcopy(model.varinfo)
+    setlogp!!(vi::SimpleVarInfo, 0)
+    for vn in node_iterator(model, ctx)
+        if is_logical(g[vn])
+            vi = logical_evaluate(ctx, g, vn, vi)
         else
             dist = _eval(expr, args)
             if link_function_expr != :identity
                 dist = transformed(dist, bijector_of_link_function(link_function_expr))
             end
-            if vn in parameters # the value of parameter variables are stored in flattened_values
-                l = _length(vn)
-                # TODO: what of value_transformed is not vector?
-                value_transformed = if l == 1
-                    flattened_values[current_idx]
-                else
-                    flattened_values[current_idx:(current_idx + l - 1)]
-                end
-                current_idx += l
-
-                value = invlink(dist, value_transformed)
-                if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
+            if assume_or_observe(model, ctx, vn) == Assumption
+                if transformed
+                    l = length(transformed(dist))
+                    value = DynamicPPL.invlink_and_reconstruct(
+                        dist, flattened_values[current_idx:(current_idx + l - 1)]
+                    )
+                    current_idx += l
                     value_transformed, logabsdetjac = with_logabsdet_jacobian(
                         Bijectors.inverse(bijector(dist)), value
                     )
-                    logp += logpdf(dist, value_transformed) + logabsdetjac
+                    setlogp!!(vi, logpdf(dist, value_transformed) + logabsdetjac)
                 else
-                    logp += logpdf(dist, value)
+                    l = length(dist)
+                    value = reconstruct(
+                        dist, flattened_values[current_idx:(current_idx + l - 1)]
+                    )
+                    current_idx += l
+                    value = invlink(dist, value_transformed)
+                    setlogp!!(vi, logpdf(dist, value))
                 end
                 vi = setindex!!(vi, value, vn)
             else
-                logp += logpdf(dist, vi[vn])
+                setlogp!!(vi, logpdf(dist, vi[vn]))
             end
         end
     end
-    return @set vi.logp = logp
+    return vi
 end
