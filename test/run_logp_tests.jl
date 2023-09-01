@@ -17,8 +17,11 @@ function load_dictionary(example_name, data_or_init, replace_period=true)
     return d
 end
 
-# ! reloading `DynamicPPL.tilde_assume` so that: when variable has value varinfo, `assume` return the 
-# value instead of the transformed value
+# reloading `DynamicPPL.tilde_assume` so that: 
+# in JuliaBUGS, `varinfo` always stores the values in their original space, and all downstream computation
+# uses these values
+# in DynamicPPL, `tilde_assume` returns and later bounds the variable to its transformed value. 
+# We overwrite this behavior only for testing purposes. And it should be cautious that the behavior can change.
 import DynamicPPL: tilde_assume
 function DynamicPPL.tilde_assume(
     ::DynamicPPL.IsLeaf, context::DynamicPPL.DefaultContext, right, vn, vi
