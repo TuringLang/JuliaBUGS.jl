@@ -64,7 +64,7 @@ markov_blanket(model.g, c)
 
 mb_model = MarkovBlanketCoveredBUGSModel(model, c)
 # tests for MarkovBlanketCoveredBUGSModel constructor
-@test mb_model.param_length == 4
+@test JuliaBUGS.get_param_length(mb_model) == 4
 @test Set(Symbol.(mb_model.blanket)) == Set([:l, :a, :b, :f, :c])
 @test mb_model.model == model
 
@@ -134,11 +134,11 @@ vi = JuliaBUGS.observe(DefaultContext(), g, @varname(a), test_model.varinfo)
 @test vi isa SimpleVarInfo
 @test vi.logp == logpdf(Normal(1.0, 1.0), 1.0)
 
-using DynamicPPL, Distributions, Bijectors, LogDensityProblems
-
 test_lkj = @bugs begin
     x[1:10, 1:10] ~ LKJ(10, 0.5)
 end
 
-model = compile(test_lkj, Dict(), Dict())
+test_lkj_model = compile(test_lkj, Dict(), Dict())
 
+@test JuliaBUGS.get_param_length(test_lkj_model) == 100
+@test JuliaBUGS.get_param_length(JuliaBUGS.settrans!!(test_lkj_model, true)) == 45

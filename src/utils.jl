@@ -32,8 +32,7 @@ function _eval(m::Module, expr::Expr, env)
         f = expr.args[1]
         args = [_eval(m, arg, env) for arg in expr.args[2:end]]
         if f isa Expr # `JuliaBUGS.some_function` like
-            # f = f.args[2].value
-            error("Internal bugs: $f should not start with JuliaBUGS.")
+            f = f.args[2].value
         end
         return getfield(m, f)(args...)
     elseif Meta.isexpr(expr, :ref)

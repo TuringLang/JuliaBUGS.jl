@@ -296,68 +296,68 @@ struct BUGSModel <: AbstractBUGSModel
     parameters::Vector{VarName}
     g::BUGSGraph
     sorted_nodes::Vector{VarName}
+end
 
-    function BUGSModel(g::BUGSGraph, sorted_nodes, vars, array_sizes, data, inits)
-        vi = SimpleVarInfo(initialize_var_store(data, vars, array_sizes))
-        parameters = VarName[]
-        no_transformation_param_length = 0
-        dynamic_transformation_param_length = 0
-        for vn in sorted_nodes
-            ni = g[vn]
-            @unpack node_type, link_function_expr, node_function_expr, node_args = ni
-            args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-            expr = node_function_expr.args[2]
-            if node_type == JuliaBUGS.Logical
-                value = try
-                    _eval(expr, args)
-                catch _
-                    rethrow(
-                        UninitializedVariableError(
-                            "Encounter error when evaluating the RHS of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) directly first if not yet.",
-                        ),
-                    )
-                end
-                @assert value isa Union{Real,Array{<:Real}} "$value is not a number or array"
+function BUGSModel(g::BUGSGraph, sorted_nodes, vars, array_sizes, data, inits)
+    vi = SimpleVarInfo(initialize_var_store(data, vars, array_sizes))
+    parameters = VarName[]
+    no_transformation_param_length = 0
+    dynamic_transformation_param_length = 0
+    for vn in sorted_nodes
+        ni = g[vn]
+        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
+        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+        expr = node_function_expr.args[2]
+        if node_type == JuliaBUGS.Logical
+            value = try
+                _eval(expr, args)
+            catch _
+                rethrow(
+                    UninitializedVariableError(
+                        "Encounter error when evaluating the RHS of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) directly first if not yet.",
+                    ),
+                )
+            end
+            @assert value isa Union{Real,Array{<:Real}} "$value is not a number or array"
+            vi = setindex!!(vi, value, vn)
+        else
+            dist = try
+                _eval(expr, args)
+            catch _
+                rethrow(
+                    UninitializedVariableError(
+                        "Encounter support error when evaluating the distribution of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) first if not yet.",
+                    ),
+                )
+            end
+            value = evaluate(vn, data)
+            isnothing(value) && push!(parameters, vn)
+            no_transformation_param_length += length(dist)
+            @assert length(dist) == _length(vn) begin
+                "length of distribution $dist: $(length(dist)) does not match length of variable $vn: $(_length(vn)), " *
+                "please note that if the distribution is a multivariate distribution, " *
+                "the left hand side variable should use explicit indexing, e.g. x[1:2] ~ dmnorm(...)."
+            end
+            dynamic_transformation_param_length += length(Bijectors.transformed(dist))
+            isnothing(value) && (value = evaluate(vn, inits))
+            if !isnothing(value)
                 vi = setindex!!(vi, value, vn)
             else
-                dist = try
-                    _eval(expr, args)
-                catch _
-                    rethrow(
-                        UninitializedVariableError(
-                            "Encounter support error when evaluating the distribution of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) first if not yet.",
-                        ),
-                    )
-                end
-                value = evaluate(vn, data)
-                isnothing(value) && push!(parameters, vn)
-                no_transformation_param_length += length(dist)
-                @assert length(dist) == _length(vn) begin
-                    "length of distribution $dist: $(length(dist)) does not match length of variable $vn: $(_length(vn)), " *
-                    "please note that if the distribution is a multivariate distribution, " *
-                    "the left hand side variable should use explicit indexing, e.g. x[1:2] ~ dmnorm(...)."
-                end
-                dynamic_transformation_param_length += length(Bijectors.transformed(dist))
-                isnothing(value) && (value = evaluate(vn, inits))
-                if !isnothing(value)
-                    vi = setindex!!(vi, value, vn)
-                else
-                    vi = setindex!!(vi, rand(dist), vn)
-                end
+                vi = setindex!!(vi, rand(dist), vn)
             end
         end
-        # TODO: remove after verification
-        @assert (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) ==
-            no_transformation_param_length
-        return new(
-            no_transformation_param_length,
-            dynamic_transformation_param_length,
-            vi,
-            parameters,
-            g,
-            sorted_nodes,
-        )
     end
+    # TODO: remove after verification
+    @assert (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) ==
+        no_transformation_param_length
+    return BUGSModel(
+        no_transformation_param_length,
+        dynamic_transformation_param_length,
+        vi,
+        parameters,
+        g,
+        sorted_nodes,
+    )
 end
 
 function observation_or_assumption(model::BUGSModel, ctx, vn::VarName)
@@ -381,14 +381,6 @@ param_names(m::BUGSModel) = m.parameters
 Return the names of all the variables in the model.
 """
 all_variables(m::BUGSModel) = labels(m.g)
-
-function get_param_length(m::Union{BUGSModel, MarkovBlanketCoveredBUGSModel})
-    return if transformation(m.varinfo) isa DynamicPPL.DynamicTransformation
-        m.dynamic_transformation_param_length
-    else
-        m.no_transformation_param_length
-    end
-end
 
 """
     generated_variables(m::BUGSModel)
@@ -459,12 +451,13 @@ The `blanket` field is a vector of `VarName` that contains the Markov blanket of
 the variables themselves.
 """
 struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
-    param_length::Int
+    no_transformation_param_length::Int
+    dynamic_transformation_param_length::Int
     blanket::Vector{VarName}
     model::BUGSModel
 
     function MarkovBlanketCoveredBUGSModel(
-        m::BUGSModel, var_group::Union{VarName,Vector{VarName}}
+        m::BUGSModel, var_group::Union{VarName,Vector{VarName}}; module_under=JuliaBUGS
     )
         var_group = var_group isa VarName ? [var_group] : var_group
         non_vars = VarName[]
@@ -482,10 +475,55 @@ struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
         )
         blanket = markov_blanket(m.g, var_group)
         blanket_with_vars = union(blanket, var_group)
-        params = [vn for vn in blanket_with_vars if vn in m.parameters]
-        param_length = isempty(params) ? 0 : sum(_length(vn) for vn in params)
-        return new(param_length, blanket_with_vars, m)
+        no_transformation_param_length = 0
+        dynamic_transformation_param_length = 0
+        for vn in m.sorted_nodes
+            if vn in blanket_with_vars && !is_logical(m.g[vn])
+                dist = eval(module_under, m.g[vn], m.varinfo)
+                no_transformation_param_length += length(dist)
+                dynamic_transformation_param_length += length(Bijectors.transformed(dist))
+            end
+        end
+        return new(
+            no_transformation_param_length,
+            dynamic_transformation_param_length,
+            blanket_with_vars,
+            m,
+        )
     end
+end
+
+transformation(m::BUGSModel) = DynamicPPL.transformation(m.varinfo)
+transformation(m::MarkovBlanketCoveredBUGSModel) = transformation(m.model)
+
+get_graph(m::BUGSModel) = m.g
+get_graph(m::MarkovBlanketCoveredBUGSModel) = m.model.g
+
+get_varinfo(m::BUGSModel) = m.varinfo
+get_varinfo(m::MarkovBlanketCoveredBUGSModel) = m.model.varinfo
+
+function get_param_length(m::Union{BUGSModel,MarkovBlanketCoveredBUGSModel})
+    return if transformation(m) isa DynamicPPL.DynamicTransformation
+        m.dynamic_transformation_param_length
+    else
+        m.no_transformation_param_length
+    end
+end
+
+"""
+    _length(vn::VarName)
+
+Return the length of a possible variable identified by `vn`.
+Only valid if `vn` is:
+    - a scalar
+    - an array indexing whose indices are concrete(no `start`, `end`, `:`)
+
+! Should not be used outside of the usage demonstrated in this file.
+
+"""
+function _length(vn::VarName)
+    getlens(vn) isa Setfield.IdentityLens && return 1
+    return prod([length(index_range) for index_range in getlens(vn).indices])
 end
 
 """
@@ -660,7 +698,7 @@ struct DefaultContext <: AbstractBUGSContext end
 
 Do an ancestral sampling of the model parameters. Also accumulate log joint density.
 """
-struct SamplingContext <: AbstractPPL.AbstractContext
+struct SamplingContext <: AbstractBUGSContext
     rng::Random.AbstractRNG
 end
 SamplingContext() = SamplingContext(Random.default_rng())
@@ -670,7 +708,7 @@ SamplingContext() = SamplingContext(Random.default_rng())
 
 Use the given values to compute the log joint density.
 """
-struct LogDensityContext <: AbstractPPL.AbstractContext end
+struct LogDensityContext <: AbstractBUGSContext end
 
 function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
     return evaluate!!(model, SamplingContext(rng))
@@ -679,6 +717,9 @@ AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, Default
 
 observation_or_assumption(model::BUGSModel, ctx::SamplingContext, vn::VarName) = Assumption
 observation_or_assumption(model::BUGSModel, ctx::DefaultContext, vn::VarName) = Observation
+function observation_or_assumption(model::MarkovBlanketCoveredBUGSModel, ctx, vn)
+    return observation_or_assumption(model.model, ctx, vn)
+end
 
 function node_iterator(model::BUGSModel, ctx)
     return model.sorted_nodes
@@ -688,15 +729,17 @@ function node_iterator(model::MarkovBlanketCoveredBUGSModel, ctx)
     return model.blanket
 end
 
-function AbstractPPL.evaluate!!(model::BUGSModel, ctx::AbstractBUGSContext)
-    g = model.g
-    vi = deepcopy(model.varinfo)
+function AbstractPPL.evaluate!!(
+    model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel}, ctx::AbstractBUGSContext
+)
+    g = get_graph(model)
+    vi = deepcopy(get_varinfo(model))
     setlogp!!(vi::SimpleVarInfo, 0)
     for vn in node_iterator(model, ctx)
         if is_logical(g[vn])
             vi = logical_evaluate(ctx, g, vn, vi)
         else
-            if assume_or_observe(model, ctx, vn) == Observation
+            if observation_or_assumption(model, ctx, vn) == Observation
                 vi = observe(ctx, g, vn, vi)
             else
                 vi = assume(ctx, g, vn, vi)
@@ -707,28 +750,32 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::AbstractBUGSContext)
 end
 
 function AbstractPPL.evaluate!!(
-    model::BUGSModel, ctx::LogDensityContext, flattened_values::AbstractVector
+    model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel},
+    ctx::LogDensityContext,
+    flattened_values::AbstractVector;
+    under_module=JuliaBUGS,
 )
-    transformed = transformation(model.varinfo) == DynamicTransformation()
-    param_length = if transformed
+    if_transformed = transformation(model.varinfo) == DynamicTransformation()
+    param_length = if if_transformed
         model.dynamic_transformation_param_length
     else
         model.no_transformation_param_length
     end
     @assert length(flattened_values) == param_length
-    g = model.g
-    vi = deepcopy(model.varinfo)
-    setlogp!!(vi::SimpleVarInfo, 0)
+    g = get_graph(model)
+    vi = deepcopy(get_varinfo(model))
+    vi = setlogp!!(vi, 0)
+    current_idx = 1
     for vn in node_iterator(model, ctx)
         if is_logical(g[vn])
             vi = logical_evaluate(ctx, g, vn, vi)
         else
-            dist = _eval(expr, args)
-            if link_function_expr != :identity
+            dist = eval(under_module, g[vn], vi)
+            if g[vn].link_function_expr != :identity
                 dist = transformed(dist, bijector_of_link_function(link_function_expr))
             end
-            if assume_or_observe(model, ctx, vn) == Assumption
-                if transformed
+            if observation_or_assumption(model, ctx, vn) == Assumption
+                if if_transformed
                     l = length(transformed(dist))
                     value = DynamicPPL.invlink_and_reconstruct(
                         dist, flattened_values[current_idx:(current_idx + l - 1)]
@@ -737,19 +784,19 @@ function AbstractPPL.evaluate!!(
                     value_transformed, logabsdetjac = with_logabsdet_jacobian(
                         Bijectors.inverse(bijector(dist)), value
                     )
-                    setlogp!!(vi, logpdf(dist, value_transformed) + logabsdetjac)
+                    vi = acclogp!!(vi, logpdf(dist, value_transformed) + logabsdetjac)
                 else
                     l = length(dist)
                     value = reconstruct(
                         dist, flattened_values[current_idx:(current_idx + l - 1)]
                     )
                     current_idx += l
-                    value = invlink(dist, value_transformed)
-                    setlogp!!(vi, logpdf(dist, value))
+                    value = invlink(dist, value) # in case of link function
+                    vi = acclogp!!(vi, logpdf(dist, value))
                 end
                 vi = setindex!!(vi, value, vn)
             else
-                setlogp!!(vi, logpdf(dist, vi[vn]))
+                vi = acclogp!!(vi, logpdf(dist, vi[vn]))
             end
         end
     end
