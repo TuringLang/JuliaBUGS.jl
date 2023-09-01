@@ -129,8 +129,10 @@ vi = JuliaBUGS.observe(DefaultContext(), g, @varname(a), test_model.varinfo)
 @test vi isa SimpleVarInfo
 @test vi.logp == logpdf(Normal(1.0, 1.0), 1.0)
 
+using DynamicPPL, Distributions, Bijectors, LogDensityProblems
+
 test_lkj = @bugs begin
-    x ~ LKJ(10, 0.5)
+    x[1:10, 1:10] ~ LKJ(10, 0.5)
 end
 
 model = compile(test_lkj, Dict(), Dict())
