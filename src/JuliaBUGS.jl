@@ -23,7 +23,6 @@ export compile
 
 export @varname
 
-# user defined functions and distributions are not supported yet
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
 
@@ -33,10 +32,21 @@ include("variable_types.jl")
 include("compiler_pass.jl")
 include("node_functions.jl")
 include("bijectors.jl")
+include("utils.jl")
 include("graphs.jl")
 include("logdensityproblems.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
+
+@enum VariableTypes::Bool begin
+    Logical
+    Stochastic
+end
+
+@enum StochasticVariableTypes::Bool begin
+    Observation
+    Assumption
+end
 
 function check_input(input::Union{NamedTuple,AbstractDict})
     for k in keys(input)

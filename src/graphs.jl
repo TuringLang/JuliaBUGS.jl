@@ -1,4 +1,23 @@
+"""
+    NodeInfo
+
+Abstract type for storing node information in the BUGS model's dependency graph.
+"""
 abstract type NodeInfo end
+
+"""
+    is_logical
+
+Determines if a node is logical. This is not model or context dependent.
+"""
+is_logical
+
+"""
+    eval(m::Module, ni::NodeInfo, env)
+
+Evaluates a node. If the node is not logical, it returns a Distribution.
+"""
+function eval(m::Module, ni::NodeInfo, env) end
 
 """
     AuxiliaryNodeInfo
@@ -14,9 +33,6 @@ In the current implementation, `AuxiliaryNodeInfo` is only used when constructin
 and will all be removed right before returning the graph. 
 """
 struct AuxiliaryNodeInfo <: NodeInfo end
-
-# TODO: can also allow link_function to be a function, this can happen when user specifies it
-# in this case, node_args maybe needed, otherwise, maybe need to get  
 
 """
     ConcreteNodeInfo
@@ -40,8 +56,6 @@ struct ConcreteNodeInfo <: NodeInfo
     node_args::Vector{VarName}
 end
 
-# TODO: by default, `node_args` can be extracted from `node_function_expr`, but in the future, if we allow more flexible types and node function can be function instead of Expr, then the node_args need to be provided by the user
-
 function ConcreteNodeInfo(var::Var, vars, link_functions, node_functions, node_args)
     return ConcreteNodeInfo(
         vars[var],
@@ -51,12 +65,25 @@ function ConcreteNodeInfo(var::Var, vars, link_functions, node_functions, node_a
     )
 end
 
-function NodeInfo(var::Var, vars, link_functions, node_functions, node_args)
-    if var in keys(vars)
-        return ConcreteNodeInfo(var, vars, link_functions, node_functions, node_args)
-    else
-        return AuxiliaryNodeInfo()
-    end
+function is_logical(ni::ConcreteNodeInfo) 
+    return ni.node_type == Logical
+end
+
+"""
+    eval([m::Module, ]ni::ConcreteNodeInfo, vi)
+
+Evaluate a node under a specified module `m`. If no module is provided, the default module used is JuliaBUGS.
+This function unpacks the node information from `ni` and evaluates the node function expression using the arguments
+from the provided `vi` (variable information).
+"""
+function eval(ni::ConcreteNodeInfo, vi)
+    return eval(JuliaBUGS, ni, vi)
+end
+function eval(m::Module, ni::ConcreteNodeInfo, vi)
+    @unpack node_type, link_function_expr, node_function_expr, node_args = ni
+    args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+    expr = node_function_expr.args[2]
+    return _eval(m, expr, args)
 end
 
 """
@@ -80,7 +107,7 @@ function BUGSGraph(vars, link_functions, node_args, node_functions, dependencies
     for l in keys(vars) # l for LHS variable
         l_vn = to_varname(l)
         check_and_add_vertex!(
-            g, l_vn, NodeInfo(l, vars, link_functions, node_functions, node_args)
+            g, l_vn, create_nodeinfo(l, vars, link_functions, node_functions, node_args)
         )
         # The use of AuxiliaryNodeInfo is also to save computation, becasue otherwise, 
         # every time we introduce a new node, we need to check `subsumes` or by all the existing nodes.
@@ -88,7 +115,7 @@ function BUGSGraph(vars, link_functions, node_args, node_functions, dependencies
         for r in dependencies[l]
             r_vn = to_varname(r)
             check_and_add_vertex!(
-                g, r_vn, NodeInfo(r, vars, link_functions, node_functions, node_args)
+                g, r_vn, create_nodeinfo(r, vars, link_functions, node_functions, node_args)
             )
             add_edge!(g, r_vn, l_vn)
             scalarize_then_add_edge!(g, r; lhs_or_rhs=:rhs)
@@ -97,6 +124,14 @@ function BUGSGraph(vars, link_functions, node_args, node_functions, dependencies
     check_undeclared_variables(g, vars)
     remove_auxiliary_nodes!(g)
     return g
+end
+
+function create_nodeinfo(var::Var, vars, link_functions, node_functions, node_args)
+    if var in keys(vars)
+        return ConcreteNodeInfo(var, vars, link_functions, node_functions, node_args)
+    else
+        return AuxiliaryNodeInfo()
+    end
 end
 
 """
@@ -233,9 +268,18 @@ abstract type AbstractBUGSModel end
 The `BUGSModel` object is used for inference and represents the output of compilation. It fully implements the
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
 
+During the inference, `varinfo` serves as the runtime environment, housing the current values of variables. 
+These values are always stored in their native (possibly constraint) spaces. The `varinfo` object encapsulates 
+the program's state at different evaluation points, adhering to a chosen topological order of the 
+underlying dependency graph. It's worth noting that multiple topological orders can exist that form an 
+equivalence class; any of these orders will yield a consistent final state for `varinfo`. When a variable's 
+value is updated, it's imperative to also update the values of all its logical descendants to maintain 
+state consistency.
+
 # Fields
 
-- `param_length::Int`: The length of the parameters vector, defining the number of parameters in the model.
+- `no_transformation_param_length::Int`: The length of the parameters vector without transformation, defining the number of parameters in the model.
+- `dynamic_transformation_param_length::Int`: The length of the parameters vector with dynamic transformation.
 - `varinfo::SimpleVarInfo`: An instance of 
     [`DynamicPPL.SimpleVarInfo`](https://turinglang.org/DynamicPPL.jl/dev/api/#DynamicPPL.SimpleVarInfo), 
     specifically a dictionary that maps both data and value of variables in the model to the corresponding values.
@@ -246,11 +290,20 @@ The `BUGSModel` object is used for inference and represents the output of compil
 
 """
 struct BUGSModel <: AbstractBUGSModel
-    param_length::Int
+    no_transformation_param_length::Int
+    dynamic_transformation_param_length::Int
     varinfo::SimpleVarInfo
     parameters::Vector{VarName}
     g::BUGSGraph
     sorted_nodes::Vector{VarName}
+end
+
+function observation_or_assumption(model::BUGSModel, ctx, vn::VarName)
+    if vn in model.parameters
+        return Assumption
+    else
+        return Observation
+    end
 end
 
 """
@@ -282,9 +335,9 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
     vs = initialize_var_store(data, vars, array_sizes)
     vi = SimpleVarInfo(vs)
     parameters = VarName[]
+    no_transformation_param_length = 0
+    dynamic_transformation_param_length = 0
     for vn in sorted_nodes
-        @assert !(g[vn] isa AuxiliaryNodeInfo) "Auxiliary nodes should not be in the graph, but $(g[vn]) is."
-
         ni = g[vn]
         @unpack node_type, link_function_expr, node_function_expr, node_args = ni
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
@@ -313,6 +366,9 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
             end
             value = evaluate(vn, data)
             isnothing(value) && push!(parameters, vn)
+            no_transformation_param_length += length(dist)
+            @assert length(dist) == _length(vn) "length of distribution does not match length of variable"
+            dynamic_transformation_param_length += length(Bijectors.transformed(dist))
             isnothing(value) && (value = evaluate(vn, inits))
             if !isnothing(value)
                 vi = setindex!!(vi, value, vn)
@@ -321,8 +377,9 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
             end
         end
     end
-    l = isempty(parameters) ? 0 : sum(_length(x) for x in parameters)
-    return BUGSModel(l, vi, parameters, g, sorted_nodes)
+    # TODO: remove after verification
+    @assert (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) == no_transformation_param_length
+    return BUGSModel(no_transformation_param_length, dynamic_transformation_param_length, vi, parameters, g, sorted_nodes)
 end
 
 function initialize_var_store(data, vars, array_sizes)
@@ -520,11 +577,93 @@ function stochastic_outneighbors(g, v)
 end
 
 """
+    AbstractBUGSContext
+
+Abstract type for defining the context in which a BUGS model is evaluated.
+"""
+abstract type AbstractBUGSContext <: AbstractPPL.AbstractContext end
+
+"""
+    assume
+
+Interface function for handling unobserved (latent) variables in the model.
+"""
+assume
+
+"""
+    observe
+
+Interface function for handling observed variables in the model.
+"""
+observe
+
+"""
+    logical_evaluate
+
+Interface function for evaluating logical nodes in the model.
+"""
+logical_evaluate
+
+function observe(
+    ctx::AbstractBUGSContext,
+    graph::BUGSGraph,
+    vn::VarName,
+    vi::SimpleVarInfo;
+    transformed=transformation(vi) == DynamicTransformation(),
+    module_under=JuliaBUGS,
+)
+    dist = eval(module_under, graph[vn], vi)
+    @set vi.logp += logpdf(dist, vi[vn])
+end
+
+function assume(
+    rng::Random.AbstractRNG=ctx.rng, # TODO: assume name `rng`
+    ctx::AbstractBUGSContext,
+    graph,
+    vn,
+    vi;
+    transformed=transformation(vi) == DynamicTransformation(),
+    module_under=JuliaBUGS,
+)
+    dist = eval(module_under, graph[vn], vi)
+    if graph[vn].link_function_expr != :identity
+        dist = transformed(dist, bijector_of_link_function(link_function_expr))
+    end
+    value = rand(rng, dist)
+    if transformed
+        value_transformed, logabsdetjac = with_logabsdet_jacobian(
+            Bijectors.inverse(bijector(dist)), value
+        )
+        @set vi.logp += logpdf(dist, value_transformed) + logabsdetjac
+    else
+        @set vi.logp += logpdf(dist, value)
+    end
+    @set vi = setindex!!(vi, value, vn)
+end
+
+function logical_evaluate(ctx, graph, vn, vi; module_under=JuliaBUGS)
+    value = eval(module_under, graph[vn], vi)
+    @set vi = setindex!!(vi, value, vn)
+end
+
+
+
+
+# for a context like SamplingContext, we essentially treat all the stochastic variables as assumptions
+# there are two ways to do this:
+# implement `observe` to do what `assume` does
+# or
+# implement observation_or_assumption to dispatch all to `assume`
+
+# in favor of the second one, because it is more coherent
+
+
+"""
     DefaultContext
 
 Use values in varinfo to compute the log joint density.
 """
-struct DefaultContext <: AbstractPPL.AbstractContext end
+struct DefaultContext <: AbstractBUGSContext end
 
 """
     SamplingContext
@@ -542,99 +681,44 @@ SamplingContext() = SamplingContext(Random.default_rng())
 Use the given values to compute the log joint density.
 """
 struct LogDensityContext <: AbstractPPL.AbstractContext end
-
-# TODO: DynamicPPL returns (value, logp, vi), should we?
-
-function observe(
-    ctx,
-    graph,
-    vn,
-    vi;
-    transformed=transformation(vi) == DynamicTransformation(),
-    module_under=JuliaBUGS,
-)
-    dist = eval(module_under, graph[vn], vi)
-    @set vi.logp += logpdf(dist, vi[vn])
-end
-
-function assume(
-    ctx,
-    graph,
-    vn,
-    vi;
-    transformed=transformation(vi) == DynamicTransformation(),
-    module_under=JuliaBUGS,
-)
-    dist = eval(module_under, graph[vn], vi)
-    if graph[vn].link_function_expr != :identity
-        dist = transformed(dist, bijector_of_link_function(link_function_expr))
-    end
-    value = rand(ctx.rng, dist)
-    if transformed
-        value_transformed, logabsdetjac = with_logabsdet_jacobian(
-            Bijectors.inverse(bijector(dist)), value
-        )
-        @set vi.logp += logpdf(dist, value_transformed) + logabsdetjac
-    else
-        @set vi.logp += logpdf(dist, value)
-    end
-    @set vi = setindex!!(vi, value, vn)
-end
-
-function logical(ctx, graph, vn, vi; module_under=JuliaBUGS)
-    value = eval(module_under, graph[vn], vi)
-    @set vi = setindex!!(vi, value, vn)
-end
-
-function eval(m::Module, ni::NodeInfo, vi)
-    @unpack node_type, link_function_expr, node_function_expr, node_args = ni
-    args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-    expr = node_function_expr.args[2]
-    return _eval(m, expr, args)
-end
-
-function eval(ni::NodeInfo, vi)
-    return eval(JuliaBUGS, ni, vi)
-end
-
-function eval(m::Module, expr, vi::SimpleVarInfo)
-    @unpack node_type, link_function_expr, node_function_expr, node_args = graph[vn]
-    args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-    expr = node_function_expr.args[2]
-    return _eval(expr, args)
-end
+function reconstruct(model, flattened_values) end
 
 function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
     return evaluate!!(model, SamplingContext(rng))
 end
-function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
+AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultContext())
+
+observation_or_assumption(model::BUGSModel, ctx::SamplingContext, vn::VarName) = Assumption
+observation_or_assumption(model::BUGSModel, ctx::DefaultContext, vn::VarName) = Observation
+
+# default implementation
+function AbstractPPL.evaluate!!(model::BUGSModel, ctx::AbstractBUGSContext)
     @unpack param_length, varinfo, parameters, g, sorted_nodes = model
     vi = deepcopy(varinfo)
     @set vi.logp = 0.0
-    for vn in sorted_nodes
-        ni = g[vn]
-        if g[vn].node_type == Logical
-            vi = logical(ctx, g, vn, vi)
+    for vn in node_iterator(model, ctx)
+        if is_logical(g[vn])
+            vi = logical_evaluate(ctx, g, vn, vi)
         else
-            vi = assume(ctx, g, vn, vi)
+            if assume_or_observe(model, ctx, vn) == Observation
+                vi = observe(ctx, g, vn, vi)
+            else
+                vi = assume(ctx, g, vn, vi)
+            end
         end
     end
     return vi
 end
 
-AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultContext())
-function AbstractPPL.evaluate!!(model::BUGSModel, ctx::DefaultContext)
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
-    vi = deepcopy(varinfo)
-    @set vi.logp = 0.0
-    for vn in sorted_nodes
-        g[vn].node_type == Logical && continue
-        vi = observe(ctx, g, vn, vi)
-    end
-    return vi
+function node_iterator(model::BUGSModel, ctx)
+    return model.sorted_nodes
 end
 
-function AbstractPPL.evaluate!!(
+function node_iterator(model::MarkovBlanketCoveredBUGSModel, ctx)
+    return model.blanket
+end
+
+function reconstruct(
     model::BUGSModel, ::LogDensityContext, flattened_values::AbstractVector
 )
     @assert length(flattened_values) == model.param_length
@@ -682,35 +766,6 @@ function AbstractPPL.evaluate!!(
     return @set vi.logp = logp
 end
 
-function AbstractPPL.evaluate!!(model::MarkovBlanketCoveredBUGSModel, ::DefaultContext)
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model.model
-    vi = deepcopy(varinfo)
-    logp = 0.0
-    for vn in sorted_nodes
-        vn in model.blanket || continue
-
-        ni = g[vn]
-        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
-        node_type == JuliaBUGS.Logical && continue
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-        expr = node_function_expr.args[2]
-        dist = _eval(expr, args)
-        if link_function_expr != :identity
-            dist = transformed(dist, bijector_of_link_function(link_function_expr))
-        end
-        value = vi[vn]
-        if DynamicPPL.transformation(vi) isa DynamicPPL.DynamicTransformation
-            value_transformed, logabsdetjac = with_logabsdet_jacobian(
-                Bijectors.inverse(bijector(dist)), value
-            )
-            logp += logpdf(dist, value_transformed) + logabsdetjac
-        else
-            logp += logpdf(dist, value)
-        end
-    end
-    return @set vi.logp = logp
-end
-
 function AbstractPPL.evaluate!!(
     model::MarkovBlanketCoveredBUGSModel,
     ::LogDensityContext,
@@ -738,6 +793,7 @@ function AbstractPPL.evaluate!!(
             end
             if vn in parameters # the value of parameter variables are stored in flattened_values
                 l = _length(vn)
+                # TODO: what of value_transformed is not vector?
                 value_transformed = if l == 1
                     flattened_values[current_idx]
                 else

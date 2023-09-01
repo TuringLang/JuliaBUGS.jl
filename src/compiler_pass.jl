@@ -77,11 +77,6 @@ Arguments:
 """
 function post_process(pass::CompilerPass, expr, env, vargs...) end
 
-@enum VariableTypes::Bool begin
-    Logical
-    Stochastic
-end
-
 """
     CollectVariables
 

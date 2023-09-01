@@ -6,10 +6,16 @@ using JuliaBUGS:
     stochastic_outneighbors,
     markov_blanket
 using JuliaBUGS:
-    MarkovBlanketCoveredBUGSModel, evaluate!!, DefaultContext, LogDensityContext
+    MarkovBlanketCoveredBUGSModel,
+    evaluate!!,
+    DefaultContext,
+    LogDensityContext,
+    ConcreteNodeInfo,
+    SimpleVarInfo
 using JuliaBUGS.BUGSPrimitives
 using Graphs, MetaGraphsNext
 using Distributions
+using MacroTools
 using Test
 
 test_model = @bugs begin
@@ -99,3 +105,33 @@ model = compile(
 # z[1,1], x[1], x[2] are auxiliary nodes created, and removed at the end
 @test Set(Symbol.(labels(model.g))) ==
     Set([Symbol("mu[1]"), Symbol("x[1:2]"), Symbol("z[1:2,1:2]"), Symbol("mu[2]"), :y])
+
+# test for `eval`uating NodeInfo
+ni = ConcreteNodeInfo(
+    JuliaBUGS.Stochastic,
+    :identity,
+    (MacroTools.@q (x, y) -> dnorm(x, y)),
+    [@varname(x), @varname(y)],
+)
+
+@test JuliaBUGS.eval(ni, SimpleVarInfo(Dict(@varname(x) => 1.0, @varname(y) => 1.0))) == Normal(1.0, 1.0)
+
+test_model = compile(
+    (@bugs begin
+        a ~ dnorm(x, y)
+        x ~ dnorm(0, 1)
+        y ~ dnorm(0, 1)
+    end), 
+    Dict(), Dict(:a => 1.0, :x => 1.0, :y => 1.0)
+)
+g = test_model.g
+vi = JuliaBUGS.observe(DefaultContext(), g, @varname(a), test_model.varinfo)
+@test vi isa SimpleVarInfo
+@test vi.logp == logpdf(Normal(1.0, 1.0), 1.0)
+
+test_lkj = @bugs begin
+    x ~ LKJ(10, 0.5)
+end
+
+model = compile(test_lkj, Dict(), Dict())
+
