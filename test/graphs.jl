@@ -15,6 +15,7 @@ using JuliaBUGS:
 using JuliaBUGS.BUGSPrimitives
 using Graphs, MetaGraphsNext
 using Distributions
+using DynamicPPL
 using MacroTools
 using Test
 
@@ -133,12 +134,3 @@ g = test_model.g
 vi = JuliaBUGS.observe(DefaultContext(), g, @varname(a), test_model.varinfo)
 @test vi isa SimpleVarInfo
 @test vi.logp == logpdf(Normal(1.0, 1.0), 1.0)
-
-test_lkj = @bugs begin
-    x[1:10, 1:10] ~ LKJ(10, 0.5)
-end
-
-test_lkj_model = compile(test_lkj, Dict(), Dict())
-
-@test JuliaBUGS.get_param_length(test_lkj_model) == 100
-@test JuliaBUGS.get_param_length(JuliaBUGS.settrans!!(test_lkj_model, true)) == 45

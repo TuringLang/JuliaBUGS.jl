@@ -268,14 +268,6 @@ abstract type AbstractBUGSModel end
 The `BUGSModel` object is used for inference and represents the output of compilation. It fully implements the
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
 
-During the inference, `varinfo` serves as the runtime environment, housing the current values of variables. 
-These values are always stored in their native (possibly constraint) spaces. The `varinfo` object encapsulates 
-the program's state at different evaluation points, adhering to a chosen topological order of the 
-underlying dependency graph. It's worth noting that multiple topological orders can exist that form an 
-equivalence class; any of these orders will yield a consistent final state for `varinfo`. When a variable's 
-value is updated, it's imperative to also update the values of all its logical descendants to maintain 
-state consistency.
-
 # Fields
 
 - `no_transformation_param_length::Int`: The length of the parameters vector without transformation, defining the number of parameters in the model.
@@ -360,14 +352,6 @@ function BUGSModel(g::BUGSGraph, sorted_nodes, vars, array_sizes, data, inits)
     )
 end
 
-function observation_or_assumption(model::BUGSModel, ctx, vn::VarName)
-    if vn in model.parameters
-        return Assumption
-    else
-        return Observation
-    end
-end
-
 """
     param_names(m::BUGSModel)
 
@@ -418,10 +402,6 @@ function initialize_var_store(data, vars, array_sizes)
     return var_store
 end
 
-function DynamicPPL.settrans!!(m::BUGSModel, if_trans::Bool)
-    return @set m.varinfo = DynamicPPL.settrans!!(m.varinfo, if_trans)
-end
-
 function JuliaBUGS.evaluate(vn::VarName, env)
     sym = getsym(vn)
     ret = nothing
@@ -455,42 +435,41 @@ struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
     dynamic_transformation_param_length::Int
     blanket::Vector{VarName}
     model::BUGSModel
+end
 
-    function MarkovBlanketCoveredBUGSModel(
-        m::BUGSModel, var_group::Union{VarName,Vector{VarName}}; module_under=JuliaBUGS
-    )
-        var_group = var_group isa VarName ? [var_group] : var_group
-        non_vars = VarName[]
-        logical_vars = VarName[]
-        for var in var_group
-            if var ∉ labels(m.g)
-                push!(non_vars, var)
-            elseif m.g[var].node_type == Logical
-                push!(logical_vars, var)
-            end
+function MarkovBlanketCoveredBUGSModel(
+    m::BUGSModel, var_group::Union{VarName,Vector{VarName}}; module_under=JuliaBUGS
+)
+    var_group = var_group isa VarName ? [var_group] : var_group
+    non_vars = VarName[]
+    logical_vars = VarName[]
+    for var in var_group
+        if var ∉ labels(m.g)
+            push!(non_vars, var)
+        elseif m.g[var].node_type == Logical
+            push!(logical_vars, var)
         end
-        isempty(non_vars) || error("Variables $(non_vars) are not in the model")
-        isempty(logical_vars) || warn(
-            "Variables $(logical_vars) are not stochastic variables, they will be ignored",
-        )
-        blanket = markov_blanket(m.g, var_group)
-        blanket_with_vars = union(blanket, var_group)
-        no_transformation_param_length = 0
-        dynamic_transformation_param_length = 0
-        for vn in m.sorted_nodes
-            if vn in blanket_with_vars && !is_logical(m.g[vn])
-                dist = eval(module_under, m.g[vn], m.varinfo)
-                no_transformation_param_length += length(dist)
-                dynamic_transformation_param_length += length(Bijectors.transformed(dist))
-            end
-        end
-        return new(
-            no_transformation_param_length,
-            dynamic_transformation_param_length,
-            blanket_with_vars,
-            m,
-        )
     end
+    isempty(non_vars) || error("Variables $(non_vars) are not in the model")
+    isempty(logical_vars) ||
+        warn("Variables $(logical_vars) are not stochastic variables, they will be ignored")
+    blanket = markov_blanket(m.g, var_group)
+    blanket_with_vars = union(blanket, var_group)
+    no_transformation_param_length = 0
+    dynamic_transformation_param_length = 0
+    for vn in m.sorted_nodes
+        if vn in blanket_with_vars && !is_logical(m.g[vn])
+            dist = eval(module_under, m.g[vn], m.varinfo)
+            no_transformation_param_length += length(dist)
+            dynamic_transformation_param_length += length(Bijectors.transformed(dist))
+        end
+    end
+    return MarkovBlanketCoveredBUGSModel(
+        no_transformation_param_length,
+        dynamic_transformation_param_length,
+        blanket_with_vars,
+        m,
+    )
 end
 
 transformation(m::BUGSModel) = DynamicPPL.transformation(m.varinfo)
@@ -717,6 +696,14 @@ AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, Default
 
 observation_or_assumption(model::BUGSModel, ctx::SamplingContext, vn::VarName) = Assumption
 observation_or_assumption(model::BUGSModel, ctx::DefaultContext, vn::VarName) = Observation
+function observation_or_assumption(model::BUGSModel, ctx::LogDensityContext, vn::VarName)
+    if vn in model.parameters
+        Assumption
+    else
+        Observation
+    end
+end
+
 function observation_or_assumption(model::MarkovBlanketCoveredBUGSModel, ctx, vn)
     return observation_or_assumption(model.model, ctx, vn)
 end
@@ -727,6 +714,14 @@ end
 
 function node_iterator(model::MarkovBlanketCoveredBUGSModel, ctx)
     return model.blanket
+end
+
+function DynamicPPL.settrans!!(m::BUGSModel, if_trans::Bool)
+    return @set m.varinfo = DynamicPPL.settrans!!(m.varinfo, if_trans)
+end
+
+function DynamicPPL.settrans!!(m::MarkovBlanketCoveredBUGSModel, if_trans::Bool)
+    return @set m.model = DynamicPPL.settrans!!(m.model, if_trans)
 end
 
 function AbstractPPL.evaluate!!(
@@ -753,7 +748,7 @@ function AbstractPPL.evaluate!!(
     model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel},
     ctx::LogDensityContext,
     flattened_values::AbstractVector;
-    under_module=JuliaBUGS,
+    module_under=JuliaBUGS,
 )
     if_transformed = transformation(model.varinfo) == DynamicTransformation()
     param_length = if if_transformed
@@ -770,28 +765,35 @@ function AbstractPPL.evaluate!!(
         if is_logical(g[vn])
             vi = logical_evaluate(ctx, g, vn, vi)
         else
-            dist = eval(under_module, g[vn], vi)
-            if g[vn].link_function_expr != :identity
+            dist = eval(module_under, g[vn], vi)
+            if_non_trivial_link_function = g[vn].link_function_expr != :identity
+            if if_non_trivial_link_function
                 dist = transformed(dist, bijector_of_link_function(link_function_expr))
             end
             if observation_or_assumption(model, ctx, vn) == Assumption
                 if if_transformed
                     l = length(transformed(dist))
-                    value = DynamicPPL.invlink_and_reconstruct(
-                        dist, flattened_values[current_idx:(current_idx + l - 1)]
-                    )
+                    # value = DynamicPPL.invlink_and_reconstruct(
+                    #     dist, flattened_values[current_idx:(current_idx + l - 1)]
+                    # )
+                    
+                    # value_transformed, logabsdetjac = with_logabsdet_jacobian(
+                    #     Bijectors.inverse(bijector(dist)), value
+                    # )
+                    f = DynamicPPL.invlink_transform(dist)
+                    value, logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(f, dist, flattened_values[current_idx:(current_idx + l - 1)])
                     current_idx += l
-                    value_transformed, logabsdetjac = with_logabsdet_jacobian(
-                        Bijectors.inverse(bijector(dist)), value
-                    )
-                    vi = acclogp!!(vi, logpdf(dist, value_transformed) + logabsdetjac)
+                    
+                    vi = acclogp!!(vi, logpdf(dist, value) + logjac)
                 else
                     l = length(dist)
                     value = reconstruct(
                         dist, flattened_values[current_idx:(current_idx + l - 1)]
                     )
                     current_idx += l
-                    value = invlink(dist, value) # in case of link function
+                    if if_non_trivial_link_function
+                        value = invlink(dist, value)
+                    end
                     vi = acclogp!!(vi, logpdf(dist, value))
                 end
                 vi = setindex!!(vi, value, vn)

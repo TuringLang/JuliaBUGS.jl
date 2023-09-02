@@ -79,6 +79,7 @@ include("run_logp_tests.jl")
     # single stochastic variable tests
     :binomial,
     :gamma,
+    :lkj,
 
     # BUGS examples
     :blockers,

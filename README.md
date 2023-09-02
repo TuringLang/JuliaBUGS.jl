@@ -125,7 +125,11 @@ By default, `@bugs` will translate R-style variable names like `a.b.c` to `a_b_c
 We still encourage users to write new programs using the Julia-native syntax, because of better debuggability and perks like syntax highlighting. 
 
 ### Using Self-defined Functions and Distributions
-Users can register their own functions and distributions with macros. However, note that any functions used must be _pure_ mathematical functions, i.e., side-effect free.
+Users can register their own functions and distributions with macros. 
+However, note that any functions used must be _pure_ mathematical functions, i.e., side-effect free.
+
+It is allowed to register a function that returns varying types of `Distribution` depending on the inputs. 
+But it's important to ensure that the `length` of the distribution remains consistent across all potential returned distributions.
 
 ```julia
 julia> # Should be restricted to pure functions that do simple operations
