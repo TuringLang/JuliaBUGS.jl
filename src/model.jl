@@ -93,24 +93,32 @@ function BUGSModel(g::BUGSGraph, sorted_nodes, vars, array_sizes, data, inits)
                 )
             end
             value = evaluate(vn, data)
-            isnothing(value) && push!(parameters, vn)
-            no_transformation_param_length += length(dist)
-            @assert length(dist) == _length(vn) begin
-                "length of distribution $dist: $(length(dist)) does not match length of variable $vn: $(_length(vn)), " *
-                "please note that if the distribution is a multivariate distribution, " *
-                "the left hand side variable should use explicit indexing, e.g. x[1:2] ~ dmnorm(...)."
-            end
-            dynamic_transformation_param_length += length(Bijectors.transformed(dist))
-            isnothing(value) && (value = evaluate(vn, inits))
-            if !isnothing(value)
-                vi = setindex!!(vi, value, vn)
+            if isnothing(value) # not observed
+                push!(parameters, vn)
+                no_transformation_param_length += length(dist)
+                @assert length(dist) == _length(vn) begin
+                    "length of distribution $dist: $(length(dist)) does not match length of variable $vn: $(_length(vn)), " *
+                    "please note that if the distribution is a multivariate distribution, " *
+                    "the left hand side variable should use explicit indexing, e.g. x[1:2] ~ dmnorm(...)."
+                end
+                if bijector(dist) == identity
+                    dynamic_transformation_param_length += length(dist)
+                else
+                    dynamic_transformation_param_length += length(Bijectors.transformed(dist))
+                end
+                value = evaluate(vn, inits) # use inits to initialize the value if available
+                if !isnothing(value)
+                    vi = setindex!!(vi, value, vn)
+                else
+                    vi = setindex!!(vi, rand(dist), vn)
+                end
             else
-                vi = setindex!!(vi, rand(dist), vn)
+                vi = setindex!!(vi, value, vn) # observed
             end
         end
     end
     @assert (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) ==
-        no_transformation_param_length
+        no_transformation_param_length "$(isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) $no_transformation_param_length"
     return BUGSModel(
         no_transformation_param_length,
         dynamic_transformation_param_length,
@@ -294,10 +302,14 @@ function MarkovBlanketCoveredBUGSModel(
     no_transformation_param_length = 0
     dynamic_transformation_param_length = 0
     for vn in m.sorted_nodes
-        if vn in blanket_with_vars && !is_logical(m.g[vn])
+        if vn in blanket_with_vars && !is_logical(m.g[vn]) && vn ∈ m.parameters
             dist = eval(module_under, m.g[vn], m.varinfo)
             no_transformation_param_length += length(dist)
-            dynamic_transformation_param_length += length(Bijectors.transformed(dist))
+            if bijector(dist) == identity
+                dynamic_transformation_param_length += length(dist)
+            else
+                dynamic_transformation_param_length += length(Bijectors.transformed(dist))
+            end
         end
     end
     return MarkovBlanketCoveredBUGSModel(
@@ -410,8 +422,6 @@ function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
     return evaluate!!(model, SamplingContext(rng))
 end
 AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultContext())
-
-
 
 observation_or_assumption(model::BUGSModel, ctx::SamplingContext, vn::VarName) = Assumption
 observation_or_assumption(model::BUGSModel, ctx::DefaultContext, vn::VarName) = Observation

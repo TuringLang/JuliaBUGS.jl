@@ -1,18 +1,28 @@
 using AbstractPPL
 using Bijectors
+using Distributions
 using Documenter
 using DynamicPPL
+using DynamicPPL: getlogp, settrans!!
+using Graphs, MetaGraphsNext
 using JuliaBUGS
+using JuliaBUGS:
+    CollectVariables, program!, Var, Stochastic, Logical, evaluate!!, DefaultContext, BUGSGraph,
+    stochastic_neighbors,
+    stochastic_inneighbors,
+    stochastic_outneighbors,
+    markov_blanket, MarkovBlanketCoveredBUGSModel,
+    evaluate!!,
+    LogDensityContext,
+    ConcreteNodeInfo,
+    SimpleVarInfo
+using JuliaBUGS.BUGSPrimitives
+using JuliaBUGS.BUGSPrimitives: mean
+using LogDensityProblems
+using MacroTools
 using Setfield
 using Test
 using UnPack
-
-using DynamicPPL: getlogp, settrans!!
-
-using JuliaBUGS:
-    CollectVariables, program!, Var, Stochastic, Logical, evaluate!!, DefaultContext
-using JuliaBUGS.BUGSPrimitives
-using JuliaBUGS.BUGSPrimitives: mean
 
 @testset "Function Unit Tests" begin
     DocMeta.setdocmeta!(
