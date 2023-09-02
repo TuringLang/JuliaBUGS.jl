@@ -50,6 +50,32 @@ function _eval(expr, env)
     return _eval(JuliaBUGS, expr, env)
 end
 
+function JuliaBUGS.evaluate(vn::VarName, env)
+    sym = getsym(vn)
+    ret = nothing
+    try
+        ret = get(env[sym], getlens(vn))
+    catch _
+    end
+    return ismissing(ret) ? nothing : ret
+end
+
+"""
+    _length(vn::VarName)
+
+Return the length of a possible variable identified by `vn`.
+Only valid if `vn` is:
+    - a scalar
+    - an array indexing whose indices are concrete(no `start`, `end`, `:`)
+
+! Should not be used outside of the usage demonstrated in this package.
+
+"""
+function _length(vn::VarName)
+    getlens(vn) isa Setfield.IdentityLens && return 1
+    return prod([length(index_range) for index_range in getlens(vn).indices])
+end
+
 # Resolves: setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
 # Alternatively, can overload BangBang.possible(
 #     ::typeof(BangBang._setindex!), ::C, ::T, ::Vararg

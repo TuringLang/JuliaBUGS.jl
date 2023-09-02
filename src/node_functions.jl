@@ -245,6 +245,14 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
     link_function = Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[1] : :identity
+
+    # disallow link functions in stochastic assignments
+    if link_function != :identity
+        error(
+            "Link functions in stochastic assignment are not supported yet, but $link_function found in expression $expr",
+        )
+    end
+
     lhs_var = find_variables_on_lhs(
         Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
     )

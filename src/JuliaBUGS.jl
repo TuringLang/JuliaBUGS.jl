@@ -44,6 +44,7 @@ include("node_functions.jl")
 include("bijectors.jl")
 include("utils.jl")
 include("graphs.jl")
+include("model.jl")
 include("logdensityproblems.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
