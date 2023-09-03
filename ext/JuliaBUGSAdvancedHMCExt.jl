@@ -23,18 +23,19 @@ function AbstractMCMC.bundle_samples(
     chain_type::Type{Chains};
     discard_initial=0,
     thinning=1,
-    model::AbstractBUGSModel=logdensitymodel.logdensity.ℓ,
+    model::JuliaBUGS.BUGSModel=logdensitymodel.logdensity.ℓ, # MarkovBlanketCoveredBUGSModel not supported yet
     kwargs...,
 )
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
-
+    println("hit")
     # Turn all the transitions into a vector-of-vectors.
     t = ts[1]
     tstat = merge((; lp=t.z.ℓπ.value), stat(t))
     tstat_names = collect(keys(tstat))
 
     samples = [t.z.θ for t in ts]
-    generated_vars = filter(l_var -> l_var in find_generated_vars(g), model.sorted_nodes)
+    generated_vars = filter(
+        l_var -> l_var in find_generated_vars(model.g), model.sorted_nodes
+    )
     model = settrans!!(model, true)
     generate_quantities = [
         evaluate!!(model, LogDensityContext(), samples[i])[generated_vars] for

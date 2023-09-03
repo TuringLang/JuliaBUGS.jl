@@ -1,4 +1,6 @@
 using AbstractPPL
+using AbstractMCMC
+using AdvancedHMC
 using Bijectors
 using Distributions
 using Documenter
@@ -26,8 +28,9 @@ using JuliaBUGS:
     SimpleVarInfo
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.BUGSPrimitives: mean
-using LogDensityProblems
+using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
+using MCMCChains
 using Setfield
 using Test
 using UnPack
@@ -109,4 +112,8 @@ end
 
 @testset "Markov Blanket" begin
     include("graphs.jl")
+end
+
+@testset "Inference Test" begin
+    include("inference_test.jl")
 end

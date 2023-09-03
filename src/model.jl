@@ -61,7 +61,7 @@ struct BUGSModel <: AbstractBUGSModel
 end
 
 function BUGSModel(g::BUGSGraph, sorted_nodes, vars, array_sizes, data, inits)
-    vi = SimpleVarInfo(initialize_var_store(data, vars, array_sizes))
+    vi = DynamicPPL.settrans!!(SimpleVarInfo(initialize_var_store(data, vars, array_sizes)), true)
     parameters = VarName[]
     no_transformation_param_length = 0
     dynamic_transformation_param_length = 0
@@ -376,6 +376,7 @@ Use the given values to compute the log joint density.
 """
 struct LogDensityContext <: AbstractBUGSContext end
 
+# TODO: if varinfo only store untransformed values, should we use `logabsdetjac`?
 # Default implementations
 function JuliaBUGS.observe(
     ctx::AbstractBUGSContext,
@@ -500,18 +501,16 @@ function AbstractPPL.evaluate!!(
             vi = logical_evaluate(ctx, g, vn, vi)
         else
             dist = eval(module_under, g[vn], vi)
-            if_non_trivial_link_function = g[vn].link_function_expr != :identity
-            if if_non_trivial_link_function
-                dist = transformed(dist, bijector_of_link_function(link_function_expr))
-            end
             if observation_or_assumption(model, ctx, vn) == Assumption
                 if if_transformed
                     l = length(transformed(dist))
-                    f = DynamicPPL.invlink_transform(dist)
                     value, logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
-                        f, dist, flattened_values[current_idx:(current_idx + l - 1)]
+                        DynamicPPL.invlink_transform(dist),
+                        dist,
+                        flattened_values[current_idx:(current_idx + l - 1)],
                     )
                     current_idx += l
+                    vi = setindex!!(vi, value, vn)
                     vi = acclogp!!(vi, logpdf(dist, value) + logjac)
                 else
                     l = length(dist)
@@ -519,12 +518,9 @@ function AbstractPPL.evaluate!!(
                         dist, flattened_values[current_idx:(current_idx + l - 1)]
                     )
                     current_idx += l
-                    if if_non_trivial_link_function
-                        value = invlink(dist, value)
-                    end
+                    vi = setindex!!(vi, value, vn)
                     vi = acclogp!!(vi, logpdf(dist, value))
                 end
-                vi = setindex!!(vi, value, vn)
             else
                 vi = acclogp!!(vi, logpdf(dist, vi[vn]))
             end

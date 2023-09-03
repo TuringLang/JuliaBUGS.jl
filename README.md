@@ -159,7 +159,7 @@ After registering the function or distributions, they can be used just like any 
 For now, the `compile` function will create a `BUGSModel`, which implements [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
 
 ```julia
-compile(model_def::Expr, data, initializations),
+compile(model_def::Expr, data, initializations)
 ```
 
 The function `compile` takes three arguments: 
@@ -201,7 +201,7 @@ n_samples, n_adapts = 2000, 1000
 
 D = LogDensityProblems.dimension(model); initial_θ = rand(D)
 
-samples_and_stats = AbstractMCMC.sample(
+@run samples_and_stats = AbstractMCMC.sample(
                         ad_model,
                         NUTS(0.8),
                         n_samples;
