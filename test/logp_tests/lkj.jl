@@ -26,7 +26,8 @@ vi, bugs_logp = get_vi_logp(test_lkj_model, false)
 dppl_logp = LogDensityProblems.logdensity(p, vcat(test_θ...))
 @test bugs_logp ≈ dppl_logp rtol = 1E-6
 
-vi, bugs_logp = get_vi_logp(test_lkj_model, true)
-bugs_logp = evaluate!!(settrans!!(test_lkj_model, true), LogDensityContext(), test_θ_transformed).logp
+vi, bugs_logp_default_ctx = get_vi_logp(test_lkj_model, true)
+bugs_logp_logp_ctx = evaluate!!(settrans!!(test_lkj_model, true), LogDensityContext(), test_θ_transformed).logp
+@test bugs_logp_default_ctx == bugs_logp_logp_ctx
 dppl_logp = LogDensityProblems.logdensity(t_p, test_θ_transformed)
-@test bugs_logp ≈ dppl_logp rtol = 1E-6
+@test bugs_logp_default_ctx ≈ dppl_logp rtol = 1E-6

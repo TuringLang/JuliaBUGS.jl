@@ -104,7 +104,9 @@ function BUGSModel(g::BUGSGraph, sorted_nodes, vars, array_sizes, data, inits)
                 if bijector(dist) == identity
                     dynamic_transformation_param_length += length(dist)
                 else
-                    dynamic_transformation_param_length += length(Bijectors.transformed(dist))
+                    dynamic_transformation_param_length += length(
+                        Bijectors.transformed(dist)
+                    )
                 end
                 value = evaluate(vn, inits) # use inits to initialize the value if available
                 if !isnothing(value)
@@ -380,11 +382,21 @@ function JuliaBUGS.observe(
     graph::BUGSGraph,
     vn::VarName,
     vi::SimpleVarInfo;
-    transformed=transformation(vi) == DynamicTransformation(),
+    if_transformed=transformation(vi) == DynamicTransformation(),
     module_under=JuliaBUGS,
 )
     dist = eval(module_under, graph[vn], vi)
-    return acclogp!!(vi, logpdf(dist, vi[vn]))
+    value = vi[vn]
+    if if_transformed
+        acclogp!!(
+            vi,
+            logpdf(dist, value) + logabsdetjac(
+                DynamicPPL.invlink_transform(dist), transform(bijector(dist), vi[vn])
+            ),
+        )
+    else
+        acclogp!!(vi, logpdf(dist, value))
+    end
 end
 
 function JuliaBUGS.assume(
@@ -398,10 +410,12 @@ function JuliaBUGS.assume(
     dist = eval(module_under, graph[vn], vi)
     value = rand(ctx.rng, dist)
     if if_transformed
-        value_transformed, logabsdetjac = with_logabsdet_jacobian(
-            Bijectors.inverse(bijector(dist)), value
+        acclogp!!(
+            vi,
+            logpdf(dist, value) + logabsdetjac(
+                DynamicPPL.invlink_transform(dist), transform(bijector(dist), vi[vn])
+            ),
         )
-        acclogp!!(vi, logpdf(dist, value_transformed) + logabsdetjac)
     else
         acclogp!!(vi, logpdf(dist, value))
     end
@@ -423,8 +437,8 @@ function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
 end
 AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultContext())
 
-observation_or_assumption(model::BUGSModel, ctx::SamplingContext, vn::VarName) = Assumption
 observation_or_assumption(model::BUGSModel, ctx::DefaultContext, vn::VarName) = Observation
+observation_or_assumption(model::BUGSModel, ctx::SamplingContext, vn::VarName) = Assumption
 function observation_or_assumption(model::BUGSModel, ctx::LogDensityContext, vn::VarName)
     if vn in model.parameters
         Assumption
@@ -455,9 +469,9 @@ function AbstractPPL.evaluate!!(
             vi = logical_evaluate(ctx, g, vn, vi)
         else
             if observation_or_assumption(model, ctx, vn) == Observation
-                vi = observe(ctx, g, vn, vi)
+                vi = JuliaBUGS.observe(ctx, g, vn, vi)
             else
-                vi = assume(ctx, g, vn, vi)
+                vi = JuliaBUGS.assume(ctx, g, vn, vi)
             end
         end
     end

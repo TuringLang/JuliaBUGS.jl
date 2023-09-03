@@ -47,6 +47,7 @@ _, dppl_logp = get_vi_logp(dppl_model, vi, false)
 @test bugs_logp ≈ -1243.188922 rtol = 1E-6 # reference value from ProbPALA
 @test bugs_logp ≈ dppl_logp rtol = 1E-6
 
-vi, bugs_logp = get_vi_logp(bugs_model, true)
-vi, dppl_logp = get_vi_logp(dppl_model, vi, true)
+_, bugs_logp = get_vi_logp(bugs_model, true)
+vi = prepare_transformed_varinfo(bugs_model)
+_, dppl_logp = get_vi_logp(dppl_model, vi, true)
 @test bugs_logp ≈ dppl_logp rtol = 1E-6

@@ -58,10 +58,11 @@ params_vi = JuliaBUGS.get_params_varinfo(bugs_model, vi)
 # test if JuliaBUGS and DynamicPPL agree on parameters in the model
 @test params_in_dppl_model(dppl_model) == keys(params_vi)
 
-vi, dppl_logp = get_vi_logp(dppl_model, vi, false)
+_, dppl_logp = get_vi_logp(dppl_model, vi, false)
 @test bugs_logp ≈ -174029.387 rtol = 1E-6 # reference value from ProbPALA
 @test bugs_logp ≈ dppl_logp rtol = 1E-6
 
-vi, bugs_logp = get_vi_logp(bugs_model, true)
-vi, dppl_logp = get_vi_logp(dppl_model, vi, true)
+_, bugs_logp = get_vi_logp(bugs_model, true)
+vi = prepare_transformed_varinfo(bugs_model)
+_, dppl_logp = get_vi_logp(dppl_model, vi, true)
 @test bugs_logp ≈ dppl_logp rtol = 1E-6

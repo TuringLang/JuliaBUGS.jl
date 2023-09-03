@@ -7,11 +7,19 @@ using DynamicPPL: getlogp, settrans!!
 using Graphs, MetaGraphsNext
 using JuliaBUGS
 using JuliaBUGS:
-    CollectVariables, program!, Var, Stochastic, Logical, evaluate!!, DefaultContext, BUGSGraph,
+    CollectVariables,
+    program!,
+    Var,
+    Stochastic,
+    Logical,
+    evaluate!!,
+    DefaultContext,
+    BUGSGraph,
     stochastic_neighbors,
     stochastic_inneighbors,
     stochastic_outneighbors,
-    markov_blanket, MarkovBlanketCoveredBUGSModel,
+    markov_blanket,
+    MarkovBlanketCoveredBUGSModel,
     evaluate!!,
     LogDensityContext,
     ConcreteNodeInfo,
@@ -84,20 +92,19 @@ end
     model = compile(model_def, data, inits)
 end
 
-include("run_logp_tests.jl")
-@testset "Log Density test for $s" for s in [
-    # single stochastic variable tests
-    :binomial,
-    :gamma,
-    :lkj,
+@testset "Log Probability Test" begin
+    include("run_logp_tests.jl")
+    @testset "Single stochastic variable test" begin
+        @testset "test for $s" for s in [:binomial, :gamma, :lkj]
+            include("logp_tests/$s.jl")
+        end
+    end
 
-    # BUGS examples
-    :blockers,
-    :bones,
-    :dogs,
-    :rats,
-]
-    include("logp_tests/$s.jl")
+    @testset "BUGS examples" begin
+        @testset "test for $s" for s in [:blockers, :bones, :dogs, :rats]
+            include("logp_tests/$s.jl")
+        end
+    end
 end
 
 @testset "Markov Blanket" begin

@@ -42,6 +42,7 @@ vi, dppl_logp = get_vi_logp(dppl_model, vi, false)
 @test bugs_logp ≈ -8418.416388 rtol = 1E-6
 @test bugs_logp ≈ dppl_logp rtol = 1E-6
 
-vi, bugs_logp = get_vi_logp(bugs_model, true)
-vi, dppl_logp = get_vi_logp(dppl_model, vi, true)
+_, bugs_logp = get_vi_logp(bugs_model, true)
+vi = prepare_transformed_varinfo(bugs_model)
+_, dppl_logp = get_vi_logp(dppl_model, vi, true)
 @test bugs_logp ≈ dppl_logp rtol = 1E-6
