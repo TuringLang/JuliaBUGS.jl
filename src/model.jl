@@ -61,7 +61,9 @@ struct BUGSModel <: AbstractBUGSModel
 end
 
 function BUGSModel(g::BUGSGraph, sorted_nodes, vars, array_sizes, data, inits)
-    vi = DynamicPPL.settrans!!(SimpleVarInfo(initialize_var_store(data, vars, array_sizes)), true)
+    vi = DynamicPPL.settrans!!(
+        SimpleVarInfo(initialize_var_store(data, vars, array_sizes)), true
+    )
     parameters = VarName[]
     no_transformation_param_length = 0
     dynamic_transformation_param_length = 0
