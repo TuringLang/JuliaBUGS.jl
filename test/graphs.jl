@@ -99,16 +99,14 @@ ni = ConcreteNodeInfo(
     [@varname(x), @varname(y)],
 )
 
-@test JuliaBUGS.eval(ni, SimpleVarInfo(Dict(@varname(x) => 1.0, @varname(y) => 1.0))) == Normal(1.0, 1.0)
+@test JuliaBUGS.eval(ni, SimpleVarInfo(Dict(@varname(x) => 1.0, @varname(y) => 1.0))) ==
+    Normal(1.0, 1.0)
 
-test_model = compile(
-    (@bugs begin
-        a ~ dnorm(x, y)
-        x ~ dnorm(0, 1)
-        y ~ dnorm(0, 1)
-    end), 
-    Dict(), Dict(:a => 1.0, :x => 1.0, :y => 1.0)
-)
+test_model = compile((@bugs begin
+    a ~ dnorm(x, y)
+    x ~ dnorm(0, 1)
+    y ~ dnorm(0, 1)
+end), Dict(), Dict(:a => 1.0, :x => 1.0, :y => 1.0))
 g = test_model.g
 vi = JuliaBUGS.observe(DefaultContext(), g, @varname(a), test_model.varinfo)
 @test vi isa SimpleVarInfo
