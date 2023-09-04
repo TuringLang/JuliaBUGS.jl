@@ -17,17 +17,6 @@ function load_dictionary(example_name, data_or_init, replace_period=true)
     return d
 end
 
-function prepare_transformed_varinfo(m::JuliaBUGS.BUGSModel)
-    d = Dict()
-    for vn in m.parameters
-        orig_value = m.varinfo[vn]
-        dist = JuliaBUGS.eval(m.g[vn], m.varinfo)
-        trans_value = transform(bijector(dist), orig_value)
-        d[vn] = trans_value
-    end
-    return SimpleVarInfo(d)
-end
-
 function get_vi_logp(model::DynamicPPL.Model, varinfo, if_transform)
     ret_val, vi = DynamicPPL.evaluate!!(
         model, DynamicPPL.settrans!!(varinfo, if_transform), DynamicPPL.DefaultContext()

@@ -177,98 +177,21 @@ use values from `vi` to create the returned `SimpleVarInfo` object.
 function get_params_varinfo(m::BUGSModel)
     return get_params_varinfo(m, m.varinfo)
 end
-function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
+function get_params_varinfo(
+    m::BUGSModel,
+    vi::SimpleVarInfo,
+    if_transformed=vi.transformation == DynamicTransformation(),
+)
     d = Dict{VarName,Any}()
-    for param in m.parameters
-        d[param] = vi[param]
+    for vn in m.parameters
+        value = m.varinfo[vn]
+        if if_transformed
+            dist = JuliaBUGS.eval(m.g[vn], m.varinfo)
+            value = transform(bijector(dist), value)
+        end
+        d[vn] = value
     end
     return SimpleVarInfo(d, vi.logp, vi.transformation)
-end
-
-"""
-    markov_blanket(g::BUGSModel, v)
-
-Find the Markov blanket of `v` in `g`. `v` can be a single `VarName` or a vector of `VarName`.
-The Markov Blanket of a variable is the set of variables that shield the variable from the rest of the
-network. Effectively, the Markov blanket of a variable is the set of its parents, its children, and
-its children's other parents (reference: https://en.wikipedia.org/wiki/Markov_blanket).
-
-In the case of vector, the Markov Blanket is the union of the Markov Blankets of each variable 
-minus the variables themselves (reference: Liu, X.-Q., & Liu, X.-S. (2018). Markov Blanket and Markov 
-Boundary of Multiple Variables. Journal of Machine Learning Research, 19(43), 1–50.)
-"""
-function markov_blanket(g, v::VarName)
-    parents = stochastic_inneighbors(g, v)
-    children = stochastic_outneighbors(g, v)
-    co_parents = VarName[]
-    for p in children
-        co_parents = vcat(co_parents, stochastic_inneighbors(g, p))
-    end
-    blanket = unique(vcat(parents, children, co_parents...))
-    return [x for x in blanket if x != v]
-end
-
-function markov_blanket(g, v)
-    blanket = VarName[]
-    for vn in v
-        blanket = vcat(blanket, markov_blanket(g, vn))
-    end
-    return [x for x in unique(blanket) if x ∉ v]
-end
-
-"""
-    stochastic_neighbors(g::BUGSModel, c::VarName, f)
-   
-Internal function to find all the stochastic neighbors (parents or children), returns a vector of
-`VarName` containing the stochastic neighbors and the logical variables along the paths.
-"""
-function stochastic_neighbors(
-    g::BUGSGraph,
-    v::VarName,
-    f::Union{
-        typeof(MetaGraphsNext.inneighbor_labels),typeof(MetaGraphsNext.outneighbor_labels)
-    },
-)
-    stochastic_neighbors_vec = VarName[]
-    logical_en_route = VarName[] # logical variables
-    for u in f(g, v)
-        if g[u] isa ConcreteNodeInfo
-            if g[u].node_type == Stochastic
-                push!(stochastic_neighbors_vec, u)
-            else
-                push!(logical_en_route, u)
-                ns = stochastic_neighbors(g, u, f)
-                for n in ns
-                    push!(stochastic_neighbors_vec, n)
-                end
-            end
-        else
-            # auxiliary nodes are not counted as logical nodes
-            ns = stochastic_neighbors(g, u, f)
-            for n in ns
-                push!(stochastic_neighbors_vec, n)
-            end
-        end
-    end
-    return [stochastic_neighbors_vec..., logical_en_route...]
-end
-
-"""
-    stochastic_inneighbors(g::BUGSModel, v::VarName)
-
-Find all the stochastic inneighbors (parents) of `v`.
-"""
-function stochastic_inneighbors(g, v)
-    return stochastic_neighbors(g, v, MetaGraphsNext.inneighbor_labels)
-end
-
-"""
-    stochastic_outneighbors(g::BUGSModel, v::VarName)
-
-Find all the stochastic outneighbors (children) of `v`.
-"""
-function stochastic_outneighbors(g, v)
-    return stochastic_neighbors(g, v, MetaGraphsNext.outneighbor_labels)
 end
 
 """
@@ -330,9 +253,7 @@ get_graph(m::MarkovBlanketCoveredBUGSModel) = m.model.g
 
 get_varinfo(m::MarkovBlanketCoveredBUGSModel) = m.model.varinfo
 
-function node_iterator(model::MarkovBlanketCoveredBUGSModel, ctx)
-    return model.blanket
-end
+node_iterator(model::MarkovBlanketCoveredBUGSModel, ctx) = model.blanket
 
 """
     get_param_length(m::Union{BUGSModel,MarkovBlanketCoveredBUGSModel})
@@ -346,6 +267,8 @@ function get_param_length(m::Union{BUGSModel,MarkovBlanketCoveredBUGSModel})
         m.no_transformation_param_length
     end
 end
+
+# Contexts for evaluating BUGS models
 
 """
     AbstractBUGSContext
@@ -378,8 +301,11 @@ Use the given values to compute the log joint density.
 """
 struct LogDensityContext <: AbstractBUGSContext end
 
-# TODO: if varinfo only store untransformed values, should we use `logabsdetjac`?
 # Default implementations
+
+# A subtle point about the value of `logp`:
+# If `DynamicTransformation`, then we assume the values of the parameters are inverse transformed values,
+# so when computing the log joint density, we need to consider the Jacobian of the transformation. 
 function JuliaBUGS.observe(
     ctx::AbstractBUGSContext,
     graph::BUGSGraph,
@@ -412,16 +338,7 @@ function JuliaBUGS.assume(
 )
     dist = eval(module_under, graph[vn], vi)
     value = rand(ctx.rng, dist)
-    if if_transformed
-        acclogp!!(
-            vi,
-            logpdf(dist, value) + logabsdetjac(
-                DynamicPPL.invlink_transform(dist), transform(bijector(dist), vi[vn])
-            ),
-        )
-    else
-        acclogp!!(vi, logpdf(dist, value))
-    end
+    acclogp!!(vi, logpdf(dist, value))
     return setindex!!(vi, value, vn)
 end
 

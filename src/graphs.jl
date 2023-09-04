@@ -233,3 +233,89 @@ function find_generated_vars_recursive_helper(g, n, generated_vars)
         find_generated_vars_recursive_helper(g, p, generated_vars)
     end
 end
+
+"""
+    stochastic_neighbors(g::BUGSGraph, c::VarName, f)
+   
+Internal function to find all the stochastic neighbors (parents or children), returns a vector of
+`VarName` containing the stochastic neighbors and the logical variables along the paths.
+"""
+function stochastic_neighbors(
+    g::BUGSGraph,
+    v::VarName,
+    f::Union{
+        typeof(MetaGraphsNext.inneighbor_labels),typeof(MetaGraphsNext.outneighbor_labels)
+    },
+)
+    stochastic_neighbors_vec = VarName[]
+    logical_en_route = VarName[] # logical variables
+    for u in f(g, v)
+        if g[u] isa ConcreteNodeInfo
+            if g[u].node_type == Stochastic
+                push!(stochastic_neighbors_vec, u)
+            else
+                push!(logical_en_route, u)
+                ns = stochastic_neighbors(g, u, f)
+                for n in ns
+                    push!(stochastic_neighbors_vec, n)
+                end
+            end
+        else
+            # auxiliary nodes are not counted as logical nodes
+            ns = stochastic_neighbors(g, u, f)
+            for n in ns
+                push!(stochastic_neighbors_vec, n)
+            end
+        end
+    end
+    return [stochastic_neighbors_vec..., logical_en_route...]
+end
+
+"""
+    stochastic_inneighbors(g::BUGSGraph, v::VarName)
+
+Find all the stochastic inneighbors (parents) of `v`.
+"""
+function stochastic_inneighbors(g, v)
+    return stochastic_neighbors(g, v, MetaGraphsNext.inneighbor_labels)
+end
+
+"""
+    stochastic_outneighbors(g::BUGSGraph, v::VarName)
+
+Find all the stochastic outneighbors (children) of `v`.
+"""
+function stochastic_outneighbors(g, v)
+    return stochastic_neighbors(g, v, MetaGraphsNext.outneighbor_labels)
+end
+
+"""
+    markov_blanket(g::BUGSGraph, v)
+
+Find the Markov blanket of `v` in `g`. `v` can be a single `VarName` or a vector of `VarName`.
+The Markov Blanket of a variable is the set of variables that shield the variable from the rest of the
+network. Effectively, the Markov blanket of a variable is the set of its parents, its children, and
+its children's other parents (reference: https://en.wikipedia.org/wiki/Markov_blanket).
+
+In the case of vector, the Markov Blanket is the union of the Markov Blankets of each variable 
+minus the variables themselves (reference: Liu, X.-Q., & Liu, X.-S. (2018). Markov Blanket and Markov 
+Boundary of Multiple Variables. Journal of Machine Learning Research, 19(43), 1–50.)
+"""
+function markov_blanket(g, v::VarName)
+    parents = stochastic_inneighbors(g, v)
+    children = stochastic_outneighbors(g, v)
+    co_parents = VarName[]
+    for p in children
+        co_parents = vcat(co_parents, stochastic_inneighbors(g, p))
+    end
+    blanket = unique(vcat(parents, children, co_parents...))
+    return [x for x in blanket if x != v]
+end
+
+function markov_blanket(g, v)
+    blanket = VarName[]
+    for vn in v
+        blanket = vcat(blanket, markov_blanket(g, vn))
+    end
+    return [x for x in unique(blanket) if x ∉ v]
+end

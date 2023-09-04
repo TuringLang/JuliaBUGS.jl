@@ -9,12 +9,13 @@ end
 test_lkj_model = compile(test_lkj, Dict(), Dict(:x => test_θ))
 
 # test param length given trans-dim bijectors
-@test JuliaBUGS.get_param_length(test_lkj_model) == 100
-@test JuliaBUGS.get_param_length(JuliaBUGS.settrans!!(test_lkj_model, true)) == 45
+@test JuliaBUGS.get_param_length(JuliaBUGS.settrans!!(test_lkj_model, false)) == 100
+@test JuliaBUGS.get_param_length(test_lkj_model) == 45
 
 @model function lkj_test()
     x = Matrix{Float64}(undef, 10, 10)
-    return x ~ LKJ(10, 0.5)
+    x ~ LKJ(10, 0.5)
+    return x
 end
 
 dppl_model = lkj_test()
@@ -38,3 +39,5 @@ bugs_logp_logp_ctx =
 @test bugs_logp_default_ctx == bugs_logp_logp_ctx
 dppl_logp = LogDensityProblems.logdensity(t_p, test_θ_transformed)
 @test bugs_logp_default_ctx ≈ dppl_logp rtol = 1E-6
+
+DynamicPPL.evaluate!!(dppl_model, DynamicPPL.link!!(SimpleVarInfo(dppl_model), dppl_model), DynamicPPL.DefaultContext())[2]
