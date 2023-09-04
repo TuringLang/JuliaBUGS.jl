@@ -61,13 +61,7 @@ struct BUGSModel <: AbstractBUGSModel
 end
 
 function BUGSModel(
-    g::BUGSGraph,
-    sorted_nodes,
-    vars,
-    array_sizes,
-    data,
-    inits;
-    use_bijectors=true,
+    g::BUGSGraph, sorted_nodes, vars, array_sizes, data, inits; use_bijectors=true
 )
     vi = DynamicPPL.settrans!!(
         SimpleVarInfo(initialize_var_store(data, vars, array_sizes)), use_bijectors
@@ -363,10 +357,16 @@ end
 function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
     return evaluate!!(model, SamplingBUGSContext(rng))
 end
-AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultBUGSContext())
+function AbstractPPL.evaluate!!(model::BUGSModel)
+    return AbstractPPL.evaluate!!(model, DefaultBUGSContext())
+end
 
-observation_or_assumption(model::BUGSModel, ctx::DefaultBUGSContext, vn::VarName) = Observation
-observation_or_assumption(model::BUGSModel, ctx::SamplingBUGSContext, vn::VarName) = Assumption
+function observation_or_assumption(model::BUGSModel, ctx::DefaultBUGSContext, vn::VarName)
+    return Observation
+end
+function observation_or_assumption(model::BUGSModel, ctx::SamplingBUGSContext, vn::VarName)
+    return Assumption
+end
 function observation_or_assumption(model::BUGSModel, ctx::LogDensityContext, vn::VarName)
     if vn in model.parameters
         Assumption

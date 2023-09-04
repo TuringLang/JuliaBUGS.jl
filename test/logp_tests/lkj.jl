@@ -28,15 +28,17 @@ t_p = DynamicPPL.LogDensityFunction(
     DynamicPPL.DefaultContext(),
 )
 
-bugs_logp = JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(bugs_model, false), DefaultBUGSContext()).logp
+bugs_logp =
+    JuliaBUGS.evaluate!!(
+        DynamicPPL.settrans!!(bugs_model, false), DefaultBUGSContext()
+    ).logp
 dppl_logp = LogDensityProblems.logdensity(p, vcat(test_θ...))
 @test bugs_logp ≈ dppl_logp rtol = 1E-6
 
-bugs_logp = JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(bugs_model, true), DefaultBUGSContext()).logp
+bugs_logp =
+    JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(bugs_model, true), DefaultBUGSContext()).logp
 bugs_logp_logp_ctx =
-    evaluate!!(
-        settrans!!(bugs_model, true), LogDensityContext(), test_θ_transformed
-    ).logp
+    evaluate!!(settrans!!(bugs_model, true), LogDensityContext(), test_θ_transformed).logp
 @test bugs_logp == bugs_logp_logp_ctx
 dppl_logp = LogDensityProblems.logdensity(t_p, test_θ_transformed)
 @test bugs_logp ≈ dppl_logp rtol = 1E-6

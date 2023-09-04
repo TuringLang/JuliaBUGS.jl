@@ -56,10 +56,7 @@ dppl_model = rats(Y, x, xbar, N, T)
 
 bugs_model = DynamicPPL.settrans!!(bugs_model, false)
 @test transformation(bugs_model) == DynamicPPL.NoTransformation()
-bugs_logp =
-    JuliaBUGS.evaluate!!(
-        bugs_model, DefaultBUGSContext()
-    ).logp
+bugs_logp = JuliaBUGS.evaluate!!(bugs_model, DefaultBUGSContext()).logp
 params_vi = JuliaBUGS.get_params_varinfo(bugs_model, vi)
 # test if JuliaBUGS and DynamicPPL agree on parameters in the model
 @test params_in_dppl_model(dppl_model) == keys(params_vi)
@@ -73,14 +70,12 @@ dppl_logp =
 
 bugs_model = DynamicPPL.settrans!!(bugs_model, true)
 @test transformation(bugs_model) == DynamicPPL.DynamicTransformation()
-bugs_logp =
-    JuliaBUGS.evaluate!!(bugs_model, DefaultBUGSContext()).logp
+bugs_logp = JuliaBUGS.evaluate!!(bugs_model, DefaultBUGSContext()).logp
 dppl_logp =
     DynamicPPL.evaluate!!(
-        dppl_model,
-        get_params_varinfo(bugs_model),
-        DynamicPPL.DefaultContext(),
+        dppl_model, get_params_varinfo(bugs_model), DynamicPPL.DefaultContext()
     )[2].logp
 @test bugs_logp ≈ dppl_logp rtol = 1E-6
 
-@test JuliaBUGS.get_param_length(bugs_model) == LogDensityProblems.dimension(DynamicPPL.LogDensityFunction(dppl_model))
+@test JuliaBUGS.get_param_length(bugs_model) ==
+    LogDensityProblems.dimension(DynamicPPL.LogDensityFunction(dppl_model))
