@@ -10,8 +10,8 @@ bugs_model = compile(test_lkj, Dict(), Dict(:x => test_θ))
 vi = bugs_model.varinfo
 
 # test param length given trans-dim bijectors
-@test JuliaBUGS.get_param_length(JuliaBUGS.settrans!!(test_lkj_model, false)) == 100
-@test JuliaBUGS.get_param_length(JuliaBUGS.settrans!!(test_lkj_model, true)) == 45
+@test JuliaBUGS.get_param_length(JuliaBUGS.settrans!!(bugs_model, false)) == 100
+@test JuliaBUGS.get_param_length(JuliaBUGS.settrans!!(bugs_model, true)) == 45
 
 @model function lkj_test()
     x = Matrix{Float64}(undef, 10, 10)
