@@ -47,6 +47,7 @@ The `BUGSModel` object is used for inference and represents the output of compil
     specifically a dictionary that maps both data and value of variables in the model to the corresponding values.
 - `parameters::Vector{VarName}`: A vector containing the names of the parameters in the model. These parameters are defined to be 
     stochastic variables that are not observed.
+- `param_lengths::Dict{VarName, Tuple{Int, Int}}`: A vector containing the lengths of the parameters (untransformed and post-transformed) in the model.
 - `g::BUGSGraph`: An instance of [`BUGSGraph`](@ref), representing the dependency graph of the model.
 - `sorted_nodes::Vector{VarName}`: A vector containing the names of all the variables in the model, sorted in topological order.
 
@@ -56,6 +57,7 @@ struct BUGSModel <: AbstractBUGSModel
     dynamic_transformation_param_length::Int
     varinfo::SimpleVarInfo
     parameters::Vector{VarName}
+    param_lengths::Dict{VarName, Tuple{Int, Int}}
     g::BUGSGraph
     sorted_nodes::Vector{VarName}
 end
@@ -69,6 +71,7 @@ function BUGSModel(
     parameters = VarName[]
     no_transformation_param_length = 0
     dynamic_transformation_param_length = 0
+    param_lengths = Dict{VarName, Tuple{Int, Int}}()
     for vn in sorted_nodes
         ni = g[vn]
         @unpack node_type, link_function_expr, node_function_expr, node_args = ni
@@ -99,19 +102,21 @@ function BUGSModel(
             value = evaluate(vn, data)
             if isnothing(value) # not observed
                 push!(parameters, vn)
-                no_transformation_param_length += length(dist)
+                this_param_length = length(dist)
+                no_transformation_param_length += this_param_length
+                
                 @assert length(dist) == _length(vn) begin
                     "length of distribution $dist: $(length(dist)) does not match length of variable $vn: $(_length(vn)), " *
                     "please note that if the distribution is a multivariate distribution, " *
                     "the left hand side variable should use explicit indexing, e.g. x[1:2] ~ dmnorm(...)."
                 end
                 if bijector(dist) == identity
-                    dynamic_transformation_param_length += length(dist)
+                    this_param_transformed_length = this_param_length
                 else
-                    dynamic_transformation_param_length += length(
-                        Bijectors.transformed(dist)
-                    )
+                    this_param_transformed_length = length(Bijectors.transformed(dist))
                 end
+                param_lengths[vn] = (this_param_length, this_param_transformed_length)
+                dynamic_transformation_param_length += this_param_transformed_length
                 value = evaluate(vn, inits) # use inits to initialize the value if available
                 if !isnothing(value)
                     vi = setindex!!(vi, value, vn)
@@ -130,6 +135,7 @@ function BUGSModel(
         dynamic_transformation_param_length,
         vi,
         parameters,
+        param_lengths,
         g,
         sorted_nodes,
     )
@@ -406,6 +412,7 @@ function AbstractPPL.evaluate!!(
     return vi
 end
 
+
 function AbstractPPL.evaluate!!(
     model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel},
     ctx::LogDensityContext,
@@ -422,6 +429,11 @@ function AbstractPPL.evaluate!!(
     g = get_graph(model)
     vi = deepcopy(get_varinfo(model))
     vi = setlogp!!(vi, 0)
+    param_lengths = if model isa BUGSModel 
+        model.param_lengths
+    else
+        model.model.param_lengths
+    end
     current_idx = 1
     for vn in node_iterator(model, ctx)
         if is_logical(g[vn])
@@ -430,7 +442,7 @@ function AbstractPPL.evaluate!!(
             dist = eval(module_under, g[vn], vi)
             if observation_or_assumption(model, ctx, vn) == Assumption
                 if if_transformed
-                    l = length(transformed(dist))
+                    l = param_lengths[vn][2]
                     value, logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
                         DynamicPPL.invlink_transform(dist),
                         dist,
@@ -440,7 +452,7 @@ function AbstractPPL.evaluate!!(
                     vi = setindex!!(vi, value, vn)
                     vi = acclogp!!(vi, logpdf(dist, value) + logjac)
                 else
-                    l = length(dist)
+                    l = param_lengths[vn][1]
                     value = reconstruct(
                         dist, flattened_values[current_idx:(current_idx + l - 1)]
                     )
