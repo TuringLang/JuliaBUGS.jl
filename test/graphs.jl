@@ -55,7 +55,7 @@ mb_model = MarkovBlanketCoveredBUGSModel(model, c)
     logp += logpdf(dnorm(0.0, 1.0), -2.0) # l
     logp += logpdf(dnorm(-2.0, 1.0), 3.0) # c
     logp
-end == evaluate!!(mb_model, DefaultContext()).logp
+end == evaluate!!(mb_model, DefaultBUGSContext()).logp
 
 # test LogDensityContext
 @test begin
@@ -108,6 +108,6 @@ test_model = compile((@bugs begin
     y ~ dnorm(0, 1)
 end), Dict(), Dict(:a => 1.0, :x => 1.0, :y => 1.0))
 g = test_model.g
-vi = JuliaBUGS.observe(DefaultContext(), g, @varname(a), test_model.varinfo)
+vi = JuliaBUGS.observe(DefaultBUGSContext(), g, @varname(a), test_model.varinfo)
 @test vi isa SimpleVarInfo
 @test vi.logp == logpdf(Normal(1.0, 1.0), 1.0)

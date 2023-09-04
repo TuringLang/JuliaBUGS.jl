@@ -3,6 +3,7 @@ data = JuliaBUGS.BUGSExamples.VOLUME_I[:blockers].data
 inits = JuliaBUGS.BUGSExamples.VOLUME_I[:blockers].inits[1]
 
 bugs_model = compile(bugs_model_def, data, inits)
+vi = JuliaBUGS.get_varinfo(bugs_model)
 
 @model function blockers(rc, rt, nc, nt, Num)
     d ~ dnorm(0.0, 1.0E-6)
@@ -33,16 +34,27 @@ end
 @unpack rt, nt, rc, nc, Num = data
 dppl_model = blockers(rc, rt, nc, nt, Num)
 
-vi, bugs_logp = get_vi_logp(bugs_model, false)
+bugs_logp =
+    JuliaBUGS.evaluate!!(
+        DynamicPPL.settrans!!(bugs_model, false), DefaultBUGSContext()
+    ).logp
 params_vi = JuliaBUGS.get_params_varinfo(bugs_model, vi)
 # test if JuliaBUGS and DynamicPPL agree on parameters in the model
 @test params_in_dppl_model(dppl_model) == keys(params_vi)
 
-vi, dppl_logp = get_vi_logp(dppl_model, vi, false)
+dppl_logp =
+    DynamicPPL.evaluate!!(
+        dppl_model, DynamicPPL.settrans!!(vi, false), DynamicPPL.DefaultContext()
+    )[2].logp
 @test bugs_logp ≈ -8418.416388 rtol = 1E-6
 @test bugs_logp ≈ dppl_logp rtol = 1E-6
 
-_, bugs_logp = get_vi_logp(bugs_model, true)
-vi = prepare_transformed_varinfo(bugs_model)
-_, dppl_logp = get_vi_logp(dppl_model, vi, true)
+bugs_logp =
+    JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(bugs_model, true), DefaultBUGSContext()).logp
+dppl_logp =
+    DynamicPPL.evaluate!!(
+        dppl_model,
+        DynamicPPL.settrans!!(get_params_varinfo(bugs_model), true),
+        DynamicPPL.DefaultContext(),
+    )[2].logp
 @test bugs_logp ≈ dppl_logp rtol = 1E-6

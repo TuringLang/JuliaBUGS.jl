@@ -60,9 +60,17 @@ struct BUGSModel <: AbstractBUGSModel
     sorted_nodes::Vector{VarName}
 end
 
-function BUGSModel(g::BUGSGraph, sorted_nodes, vars, array_sizes, data, inits)
+function BUGSModel(
+    g::BUGSGraph,
+    sorted_nodes,
+    vars,
+    array_sizes,
+    data,
+    inits;
+    use_bijectors=true,
+)
     vi = DynamicPPL.settrans!!(
-        SimpleVarInfo(initialize_var_store(data, vars, array_sizes)), true
+        SimpleVarInfo(initialize_var_store(data, vars, array_sizes)), use_bijectors
     )
     parameters = VarName[]
     no_transformation_param_length = 0
@@ -282,17 +290,17 @@ abstract type AbstractBUGSContext <: AbstractPPL.AbstractContext end
 
 Use values in varinfo to compute the log joint density.
 """
-struct DefaultContext <: AbstractBUGSContext end
+struct DefaultBUGSContext <: AbstractBUGSContext end
 
 """
     SamplingContext
 
 Do an ancestral sampling of the model parameters. Also accumulate log joint density.
 """
-struct SamplingContext <: AbstractBUGSContext
+struct SamplingBUGSContext <: AbstractBUGSContext
     rng::Random.AbstractRNG
 end
-SamplingContext() = SamplingContext(Random.default_rng())
+SamplingBUGSContext() = SamplingBUGSContext(Random.default_rng())
 
 """
     LogDensityContext
@@ -353,12 +361,12 @@ function logical_evaluate(
 end
 
 function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
-    return evaluate!!(model, SamplingContext(rng))
+    return evaluate!!(model, SamplingBUGSContext(rng))
 end
-AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultContext())
+AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultBUGSContext())
 
-observation_or_assumption(model::BUGSModel, ctx::DefaultContext, vn::VarName) = Observation
-observation_or_assumption(model::BUGSModel, ctx::SamplingContext, vn::VarName) = Assumption
+observation_or_assumption(model::BUGSModel, ctx::DefaultBUGSContext, vn::VarName) = Observation
+observation_or_assumption(model::BUGSModel, ctx::SamplingBUGSContext, vn::VarName) = Assumption
 function observation_or_assumption(model::BUGSModel, ctx::LogDensityContext, vn::VarName)
     if vn in model.parameters
         Assumption

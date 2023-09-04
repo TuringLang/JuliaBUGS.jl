@@ -23,6 +23,7 @@ model_def = @bugs begin
     alpha0 = alpha_c - xbar * beta_c
 end
 bugs_model = compile(model_def, data, inits);
+vi = JuliaBUGS.get_varinfo(bugs_model)
 
 @model function rats(Y, x, xbar, N, T)
     tau_c ~ dgamma(0.001, 0.001)
@@ -53,16 +54,33 @@ bugs_model = compile(model_def, data, inits);
 end
 dppl_model = rats(Y, x, xbar, N, T)
 
-vi, bugs_logp = get_vi_logp(bugs_model, false)
+bugs_model = DynamicPPL.settrans!!(bugs_model, false)
+@test transformation(bugs_model) == DynamicPPL.NoTransformation()
+bugs_logp =
+    JuliaBUGS.evaluate!!(
+        bugs_model, DefaultBUGSContext()
+    ).logp
 params_vi = JuliaBUGS.get_params_varinfo(bugs_model, vi)
 # test if JuliaBUGS and DynamicPPL agree on parameters in the model
 @test params_in_dppl_model(dppl_model) == keys(params_vi)
 
-_, dppl_logp = get_vi_logp(dppl_model, vi, false)
+dppl_logp =
+    DynamicPPL.evaluate!!(
+        dppl_model, DynamicPPL.settrans!!(vi, false), DynamicPPL.DefaultContext()
+    )[2].logp
 @test bugs_logp ≈ -174029.387 rtol = 1E-6 # reference value from ProbPALA
 @test bugs_logp ≈ dppl_logp rtol = 1E-6
 
-_, bugs_logp = get_vi_logp(bugs_model, true)
-vi = prepare_transformed_varinfo(bugs_model)
-_, dppl_logp = get_vi_logp(dppl_model, vi, true)
+bugs_model = DynamicPPL.settrans!!(bugs_model, true)
+@test transformation(bugs_model) == DynamicPPL.DynamicTransformation()
+bugs_logp =
+    JuliaBUGS.evaluate!!(bugs_model, DefaultBUGSContext()).logp
+dppl_logp =
+    DynamicPPL.evaluate!!(
+        dppl_model,
+        get_params_varinfo(bugs_model),
+        DynamicPPL.DefaultContext(),
+    )[2].logp
 @test bugs_logp ≈ dppl_logp rtol = 1E-6
+
+@test JuliaBUGS.get_param_length(bugs_model) == LogDensityProblems.dimension(DynamicPPL.LogDensityFunction(dppl_model))

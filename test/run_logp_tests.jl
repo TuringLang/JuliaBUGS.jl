@@ -17,18 +17,6 @@ function load_dictionary(example_name, data_or_init, replace_period=true)
     return d
 end
 
-function get_vi_logp(model::DynamicPPL.Model, varinfo, if_transform)
-    ret_val, vi = DynamicPPL.evaluate!!(
-        model, DynamicPPL.settrans!!(varinfo, if_transform), DynamicPPL.DefaultContext()
-    )
-    return vi, getlogp(vi)
-end
-
-function get_vi_logp(model::JuliaBUGS.BUGSModel, if_transform)
-    vi = JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(model, if_transform), DefaultContext())
-    return vi, getlogp(vi)
-end
-
 function params_in_dppl_model(dppl_model)
     return keys(
         DynamicPPL.evaluate!!(

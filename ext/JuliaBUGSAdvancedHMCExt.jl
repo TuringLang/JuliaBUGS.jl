@@ -26,7 +26,6 @@ function AbstractMCMC.bundle_samples(
     model::JuliaBUGS.BUGSModel=logdensitymodel.logdensity.ℓ, # MarkovBlanketCoveredBUGSModel not supported yet
     kwargs...,
 )
-    println("hit")
     # Turn all the transitions into a vector-of-vectors.
     t = ts[1]
     tstat = merge((; lp=t.z.ℓπ.value), stat(t))

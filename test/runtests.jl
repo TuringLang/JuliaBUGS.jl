@@ -15,7 +15,7 @@ using JuliaBUGS:
     Stochastic,
     Logical,
     evaluate!!,
-    DefaultContext,
+    DefaultBUGSContext,
     BUGSGraph,
     stochastic_neighbors,
     stochastic_inneighbors,
@@ -25,12 +25,16 @@ using JuliaBUGS:
     evaluate!!,
     LogDensityContext,
     ConcreteNodeInfo,
-    SimpleVarInfo
+    SimpleVarInfo,
+    get_params_varinfo,
+    get_varinfo,
+    transformation
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.BUGSPrimitives: mean
 using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
 using MCMCChains
+using ReverseDiff
 using Setfield
 using Test
 using UnPack
