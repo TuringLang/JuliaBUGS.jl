@@ -57,7 +57,7 @@ struct BUGSModel <: AbstractBUGSModel
     dynamic_transformation_param_length::Int
     varinfo::SimpleVarInfo
     parameters::Vector{VarName}
-    param_lengths::Dict{VarName, Tuple{Int, Int}}
+    param_lengths::Dict{VarName,Tuple{Int,Int}}
     g::BUGSGraph
     sorted_nodes::Vector{VarName}
 end
@@ -71,7 +71,7 @@ function BUGSModel(
     parameters = VarName[]
     no_transformation_param_length = 0
     dynamic_transformation_param_length = 0
-    param_lengths = Dict{VarName, Tuple{Int, Int}}()
+    param_lengths = Dict{VarName,Tuple{Int,Int}}()
     for vn in sorted_nodes
         ni = g[vn]
         @unpack node_type, link_function_expr, node_function_expr, node_args = ni
@@ -104,7 +104,7 @@ function BUGSModel(
                 push!(parameters, vn)
                 this_param_length = length(dist)
                 no_transformation_param_length += this_param_length
-                
+
                 @assert length(dist) == _length(vn) begin
                     "length of distribution $dist: $(length(dist)) does not match length of variable $vn: $(_length(vn)), " *
                     "please note that if the distribution is a multivariate distribution, " *
@@ -146,6 +146,8 @@ get_graph(m::BUGSModel) = m.g
 transformation(m::BUGSModel) = DynamicPPL.transformation(m.varinfo)
 
 get_varinfo(m::BUGSModel) = m.varinfo
+
+get_param_lengths(m::BUGSModel) = m.param_lengths
 
 function node_iterator(model::BUGSModel, ctx)
     return model.sorted_nodes
@@ -260,6 +262,8 @@ transformation(m::MarkovBlanketCoveredBUGSModel) = transformation(m.model)
 get_graph(m::MarkovBlanketCoveredBUGSModel) = m.model.g
 
 get_varinfo(m::MarkovBlanketCoveredBUGSModel) = m.model.varinfo
+
+get_param_lengths(m::MarkovBlanketCoveredBUGSModel) = m.model.param_lengths
 
 node_iterator(model::MarkovBlanketCoveredBUGSModel, ctx) = model.blanket
 
@@ -412,14 +416,13 @@ function AbstractPPL.evaluate!!(
     return vi
 end
 
-
 function AbstractPPL.evaluate!!(
     model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel},
     ctx::LogDensityContext,
     flattened_values::AbstractVector;
+    if_transformed=transformation(model) == DynamicTransformation(),
     module_under=JuliaBUGS,
 )
-    if_transformed = transformation(model.varinfo) == DynamicTransformation()
     param_length = if if_transformed
         model.dynamic_transformation_param_length
     else
@@ -429,11 +432,7 @@ function AbstractPPL.evaluate!!(
     g = get_graph(model)
     vi = deepcopy(get_varinfo(model))
     vi = setlogp!!(vi, 0)
-    param_lengths = if model isa BUGSModel 
-        model.param_lengths
-    else
-        model.model.param_lengths
-    end
+    param_lengths = get_param_lengths(model)
     current_idx = 1
     for vn in node_iterator(model, ctx)
         if is_logical(g[vn])
