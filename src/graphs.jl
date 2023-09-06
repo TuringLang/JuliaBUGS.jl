@@ -7,8 +7,8 @@ Indicate the node is created by the compiler and not in the original BUGS model.
 are only used to determine dependencies.
 
 E.g., x[1:2] ~ dmnorm(...); y = x[1] + 1
-In this case, x[1] is a auxiliary node, because it doesn't appear on the LHS of any expression.
-But we still need to introduce it to determine the dependency between `y` and `x[1:2]`.
+In this case, x[1] is an auxiliary node because it doesn't appear on the LHS of any expression.
+But we must still introduce it to determine the dependency between `y` and `x[1:2]`.
 
 In the current implementation, `AuxiliaryNodeInfo` is only used when constructing the graph,
 and will all be removed right before returning the graph. 
@@ -682,7 +682,7 @@ function AbstractPPL.evaluate!!(
                 end
                 current_idx += l
 
-                value = invlink(dist, value_transformed)
+                value = Bijectors.invlink(dist, value_transformed)
                 if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
                     value_transformed, logabsdetjac = with_logabsdet_jacobian(
                         Bijectors.inverse(bijector(dist)), value
@@ -763,7 +763,7 @@ function AbstractPPL.evaluate!!(
                 end
                 current_idx += l
 
-                value = invlink(dist, value_transformed)
+                value = Bijectors.invlink(dist, value_transformed)
                 if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
                     value_transformed, logabsdetjac = with_logabsdet_jacobian(
                         Bijectors.inverse(bijector(dist)), value
