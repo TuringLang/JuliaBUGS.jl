@@ -66,6 +66,15 @@ function Base.show(io::IO, v::Var)
     return print(io, v.name, "[", join(v.indices, ", "), "]")
 end
 
+function to_varname(v::Scalar)
+    lens = AbstractPPL.IdentityLens()
+    return AbstractPPL.VarName{v.name}(lens)
+end
+function to_varname(v::Var)
+    lens = AbstractPPL.IndexLens(v.indices)
+    return AbstractPPL.VarName{v.name}(lens)
+end
+
 """
     scalarize(v::Var)
 
