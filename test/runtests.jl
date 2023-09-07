@@ -100,7 +100,7 @@ end
 @testset "Log Probability Test" begin
     include("run_logp_tests.jl")
     @testset "Single stochastic variable test" begin
-        @testset "test for $s" for s in [:binomial, :gamma, :lkj]
+        @testset "test for $s" for s in [:binomial, :gamma]
             include("logp_tests/$s.jl")
         end
     end

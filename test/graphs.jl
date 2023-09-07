@@ -57,6 +57,7 @@ mb_logp = begin
 end
 
 @test mb_logp == evaluate!!(mb_model, DefaultContext()).logp
+# order: b, l, c, a
 @test mb_logp == evaluate!!(mb_model, LogDensityContext(), [2.0, -2.0, 3.0, 1.0]).logp
 
 # test LogDensityContext
