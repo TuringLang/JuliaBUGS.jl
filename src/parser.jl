@@ -1,6 +1,5 @@
 using JuliaSyntax
 using JuliaSyntax: @K_str, @KSet_str, tokenize, untokenize, Diagnostic, Token
-# using JuliaFormatter # can make into a PkgExt
 
 mutable struct ProcessState
     token_vec::Vector{Token}
@@ -551,6 +550,9 @@ function to_julia_program(prog::String, replace_period=true, no_enclosure=false)
     end
     return to_julia_program(ps.julia_token_vec, ps.text)
 end
+
+# end of parser
+# start of @bugs macro related code
 
 """
     bugsast_range(expr)

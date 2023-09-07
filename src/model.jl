@@ -29,21 +29,6 @@ struct BUGSModel <: AbstractBUGSModel
     sorted_nodes::Vector{VarName}
 end
 
-# Resolves: setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
-# Alternatively, can overload BangBang.possible(
-#     ::typeof(BangBang._setindex!), ::C, ::T, ::Vararg
-# )
-# to allow mutation, but the current solution seems create less possible problems, albeit less efficient.
-function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
-    T = promote_type(eltype(xs), eltype(v))
-    ys = similar(xs, T)
-    if eltype(xs) !== Union{}
-        copy!(ys, xs)
-    end
-    ys[I...] = v
-    return ys
-end
-
 """
     param_names(m::BUGSModel)
 
@@ -143,32 +128,6 @@ end
 
 function DynamicPPL.settrans!!(m::BUGSModel, if_trans::Bool)
     return @set m.varinfo = DynamicPPL.settrans!!(m.varinfo, if_trans)
-end
-
-function evaluate(vn::VarName, env)
-    sym = getsym(vn)
-    ret = nothing
-    try
-        ret = get(env[sym], getlens(vn))
-    catch _
-    end
-    return ismissing(ret) ? nothing : ret
-end
-
-"""
-    _length(vn::VarName)
-
-Return the length of a possible variable identified by `vn`.
-Only valid if `vn` is:
-    - a scalar
-    - an array indexing whose indices are concrete(no `start`, `end`, `:`)
-
-! Should not be used outside of the usage demonstrated in this file.
-
-"""
-function _length(vn::VarName)
-    getlens(vn) isa Setfield.IdentityLens && return 1
-    return prod([length(index_range) for index_range in getlens(vn).indices])
 end
 
 function get_params_varinfo(m::BUGSModel)
