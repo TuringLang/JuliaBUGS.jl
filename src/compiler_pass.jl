@@ -806,7 +806,8 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
 
     pass.node_args[lhs_var] = node_args
     pass.node_functions[lhs_var] = node_function
-    return pass.dependencies[lhs_var] = dependencies
+    pass.dependencies[lhs_var] = dependencies
+    return nothing
 end
 
 function post_process(pass::NodeFunctions, expr, env, vargs...)
@@ -816,9 +817,6 @@ function post_process(pass::NodeFunctions, expr, env, vargs...)
         end
     end
     return pass.vars,
-    pass.array_sizes,
-    pass.array_bitmap,
-    pass.node_args,
-    pass.node_functions,
+    pass.array_sizes, pass.array_bitmap, pass.node_args, pass.node_functions,
     pass.dependencies
 end
