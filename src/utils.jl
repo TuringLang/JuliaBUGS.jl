@@ -84,3 +84,39 @@ function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
     ys[I...] = v
     return ys
 end
+
+# defines some default bijectors for link functions
+# these are currently not in use, because we transform the expression by calling inverse functions 
+# on the RHS (in the case of logical assignment) or disallow the use of link functions (in the case of
+# stochastic assignments)
+
+struct LogisticBijector <: Bijectors.Bijector end
+
+Bijectors.transform(::LogisticBijector, x::Real) = logistic(x)
+Bijectors.transform(::Inverse{LogisticBijector}, x::Real) = logit(x)
+Bijectors.logabsdet(::LogisticBijector, x::Real) = log(logistic(x)) + log(1 - logistic(x))
+
+struct CExpExp <: Bijectors.Bijector end
+
+Bijectors.transform(::CExpExp, x::Real) = icloglog(x)
+Bijectors.transform(::Inverse{CExpExp}, x::Real) = cloglog(x)
+Bijectors.logabsdet(::CExpExp, x::Real) = -log(cloglog(-x))
+
+struct ExpBijector <: Bijectors.Bijector end
+
+Bijectors.transform(::ExpBijector, x::Real) = exp(x)
+Bijectors.transform(::Inverse{ExpBijector}, x::Real) = log(x)
+Bijectors.logabsdet(::ExpBijector, x::Real) = x
+
+struct Phi <: Bijectors.Bijector end
+
+Bijectors.transform(::Phi, x::Real) = phi(x)
+Bijectors.transform(::Inverse{Phi}, x::Real) = probit(x)
+Bijectors.logabsdet(::Phi, x::Real) = -0.5 * (x^2 + log(2π))
+
+link_function_to_bijector_mapping = Dict(
+    :logit => LogisticBijector(),
+    :cloglog => CExpExp(),
+    :log => ExpBijector(),
+    :probit => Phi(),
+)
