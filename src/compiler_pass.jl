@@ -465,13 +465,12 @@ struct NodeFunctions{VT} <: CompilerPass
     array_sizes::Dict
     array_bitmap::Dict
 
-    link_functions::Dict
     node_args::Dict
     node_functions::Dict
     dependencies::Dict
 end
 function NodeFunctions(vars, array_sizes, array_bitmap)
-    return NodeFunctions(vars, array_sizes, array_bitmap, Dict(), Dict(), Dict(), Dict())
+    return NodeFunctions(vars, array_sizes, array_bitmap, Dict(), Dict(), Dict())
 end
 
 """
@@ -805,7 +804,6 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
         end
     end
 
-    pass.link_functions[lhs_var] = link_function
     pass.node_args[lhs_var] = node_args
     pass.node_functions[lhs_var] = node_function
     return pass.dependencies[lhs_var] = dependencies
@@ -820,7 +818,6 @@ function post_process(pass::NodeFunctions, expr, env, vargs...)
     return pass.vars,
     pass.array_sizes,
     pass.array_bitmap,
-    pass.link_functions,
     pass.node_args,
     pass.node_functions,
     pass.dependencies
