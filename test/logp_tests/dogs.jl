@@ -40,9 +40,7 @@ end
 dppl_model = dogs(Dogs, Trials, Y, 1 .- Y)
 
 bugs_logp =
-    JuliaBUGS.evaluate!!(
-        DynamicPPL.settrans!!(bugs_model, false), DefaultContext()
-    ).logp
+    JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(bugs_model, false), DefaultContext()).logp
 
 dppl_logp =
     DynamicPPL.evaluate!!(

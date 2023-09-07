@@ -57,6 +57,8 @@ mb_model = MarkovBlanketCoveredBUGSModel(model, c)
     logp
 end == evaluate!!(mb_model, DefaultContext()).logp
 
+# TODO: add test for LogDensityContext
+
 # test LogDensityContext
 @test begin
     logp = 0

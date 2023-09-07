@@ -347,7 +347,7 @@ function AbstractPPL.evaluate!!(
     flattened_values::AbstractVector,
 )
     @assert length(flattened_values) == model.param_length
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
+    @unpack param_length, varinfo, parameters, g, sorted_nodes = model.model
     vi = deepcopy(varinfo)
     current_idx = 1
     logp = 0.0

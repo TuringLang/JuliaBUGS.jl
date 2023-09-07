@@ -71,17 +71,13 @@ function BUGSGraph(vars, node_args, node_functions, dependencies)
     )
     for l in keys(vars) # l for LHS variable
         l_vn = to_varname(l)
-        check_and_add_vertex!(
-            g, l_vn, NodeInfo(l, vars, node_functions, node_args)
-        )
+        check_and_add_vertex!(g, l_vn, NodeInfo(l, vars, node_functions, node_args))
         # The use of AuxiliaryNodeInfo is also to save computation, becasue otherwise, 
         # every time we introduce a new node, we need to check `subsumes` or by all the existing nodes.
         scalarize_then_add_edge!(g, l; lhs_or_rhs=:lhs)
         for r in dependencies[l]
             r_vn = to_varname(r)
-            check_and_add_vertex!(
-                g, r_vn, NodeInfo(r, vars, node_functions, node_args)
-            )
+            check_and_add_vertex!(g, r_vn, NodeInfo(r, vars, node_functions, node_args))
             add_edge!(g, r_vn, l_vn)
             scalarize_then_add_edge!(g, r; lhs_or_rhs=:rhs)
         end

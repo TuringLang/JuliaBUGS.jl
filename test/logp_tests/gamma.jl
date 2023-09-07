@@ -13,9 +13,7 @@ end
 dppl_model = dppl_gamma_model()
 
 bugs_logp =
-    JuliaBUGS.evaluate!!(
-        DynamicPPL.settrans!!(bugs_model, false), DefaultContext()
-    ).logp
+    JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(bugs_model, false), DefaultContext()).logp
 params_vi = JuliaBUGS.get_params_varinfo(bugs_model, vi)
 # test if JuliaBUGS and DynamicPPL agree on parameters in the model
 @test params_in_dppl_model(dppl_model) == keys(params_vi)
