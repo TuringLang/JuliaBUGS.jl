@@ -10,7 +10,7 @@ JuliaBUGS is still in beta and may not be ready for serious use.
 To install the package, run the following command in the Julia REPL:
 ```julia
 ]  # Enter Pkg mode by pressing `] `
-(@v1.9) pkg> add https://github.com/TuringLang/JuliaBUGS.jl.git
+(@v1.9) pkg> add JuliaBUGS
 ```
 Then run the following command to use the package:
 ```julia
@@ -32,7 +32,7 @@ data = (
 ```
 
 where `r[i]` is the number of germinated seeds and `n[i]` is the total number of the seeds on the $i$-th plate. 
-Let $p_i$ be the probability of germination on the $i$-th plate. Then the model is defined by:
+Let $p_i$ be the probability of germination on the $i$-th plate. Then, the model is defined by:
 
 $$
 \begin{aligned}
