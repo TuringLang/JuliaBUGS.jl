@@ -1,17 +1,3 @@
-using JuliaBUGS
-using JuliaBUGS:
-    BUGSGraph,
-    stochastic_neighbors,
-    stochastic_inneighbors,
-    stochastic_outneighbors,
-    markov_blanket
-using JuliaBUGS:
-    MarkovBlanketCoveredBUGSModel, evaluate!!, DefaultContext, LogDensityContext
-using JuliaBUGS.BUGSPrimitives
-using Graphs, MetaGraphsNext
-using Distributions
-using Test
-
 test_model = @bugs begin
     a ~ dnorm(f, c)
     f = b - 1
