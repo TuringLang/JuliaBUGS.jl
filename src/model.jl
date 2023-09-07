@@ -280,7 +280,7 @@ function AbstractPPL.evaluate!!(
         else
             dist = _eval(expr, args)
             if vn in parameters # the value of parameter variables are stored in flattened_values
-                l = _length(dist)
+                l = length(dist)
                 if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
                     value_transformed = flattened_values[current_idx:(current_idx + l - 1)]
                     current_idx += l
