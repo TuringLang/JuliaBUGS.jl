@@ -709,7 +709,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
     # disallow link functions in stochastic assignments
     if link_function != :identity
         error(
-            "Link functions in stochastic assignment are not supported yet, but $link_function found in expression $expr",
+            "Link functions $link_function in stochastic assignment expression $expr are not permited.",
         )
     end
 

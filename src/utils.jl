@@ -96,7 +96,7 @@ Bijectors.transform(::LogisticBijector, x::Real) = logistic(x)
 Bijectors.transform(::Inverse{LogisticBijector}, x::Real) = logit(x)
 Bijectors.logabsdet(::LogisticBijector, x::Real) = log(logistic(x)) + log(1 - logistic(x))
 
-struct CExpExp <: Bijectors.Bijector end
+struct CExpExpBijector <: Bijectors.Bijector end
 
 Bijectors.transform(::CExpExp, x::Real) = icloglog(x)
 Bijectors.transform(::Inverse{CExpExp}, x::Real) = cloglog(x)
@@ -108,7 +108,7 @@ Bijectors.transform(::ExpBijector, x::Real) = exp(x)
 Bijectors.transform(::Inverse{ExpBijector}, x::Real) = log(x)
 Bijectors.logabsdet(::ExpBijector, x::Real) = x
 
-struct Phi <: Bijectors.Bijector end
+struct PhiBijector <: Bijectors.Bijector end
 
 Bijectors.transform(::Phi, x::Real) = phi(x)
 Bijectors.transform(::Inverse{Phi}, x::Real) = probit(x)
