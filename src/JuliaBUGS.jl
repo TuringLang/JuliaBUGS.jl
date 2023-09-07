@@ -156,7 +156,7 @@ function compile(model_def::Expr, data, inits)
     vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = program!(
         NodeFunctions(vars, array_sizes, array_bitmap), model_def, merged_data
     )
-    g = BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
+    g = BUGSGraph(vars, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
     return BUGSModel(g, sorted_nodes, vars, array_sizes, merged_data, inits)
 end

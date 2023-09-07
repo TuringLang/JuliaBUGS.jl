@@ -3,7 +3,7 @@ data = JuliaBUGS.BUGSExamples.VOLUME_I[:dogs].data
 inits = JuliaBUGS.BUGSExamples.VOLUME_I[:dogs].inits[1]
 
 bugs_model = compile(bugs_model_def, data, inits)
-vi = JuliaBUGS.get_varinfo(bugs_model)
+vi = bugs_model.varinfo
 
 @model function dogs(Dogs, Trials, Y, y)
     # Initialize matrices
@@ -41,7 +41,7 @@ dppl_model = dogs(Dogs, Trials, Y, 1 .- Y)
 
 bugs_logp =
     JuliaBUGS.evaluate!!(
-        DynamicPPL.settrans!!(bugs_model, false), DefaultBUGSContext()
+        DynamicPPL.settrans!!(bugs_model, false), DefaultContext()
     ).logp
 
 dppl_logp =
@@ -52,11 +52,11 @@ dppl_logp =
 @test bugs_logp ≈ dppl_logp rtol = 1E-6
 
 bugs_logp =
-    JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(bugs_model, true), DefaultBUGSContext()).logp
+    JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(bugs_model, true), DefaultContext()).logp
 dppl_logp =
     DynamicPPL.evaluate!!(
         dppl_model,
-        DynamicPPL.settrans!!(get_params_varinfo(bugs_model), true),
+        DynamicPPL.link!!(get_params_varinfo(bugs_model), dppl_model),
         DynamicPPL.DefaultContext(),
     )[2].logp
 @test bugs_logp ≈ dppl_logp rtol = 1E-6

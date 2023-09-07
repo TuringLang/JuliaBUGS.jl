@@ -252,7 +252,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
                 value_transformed = transform(bijector(dist), value)
                 logp +=
                     logpdf(dist, value) +
-                    logabsdetjac(inverse(bijector(dist)), value_transformed)
+                    logabsdetjac(Bijectors.inverse(bijector(dist)), value_transformed)
             else
                 logp += logpdf(dist, value)
             end
@@ -286,7 +286,7 @@ function AbstractPPL.evaluate!!(
                     current_idx += l
                     # TODO: this use `DynamicPPL.reconstruct`, which needs attention when decoupling from DynamicPPL
                     value, logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
-                        inverse(bijector(dist)), dist, value_transformed
+                        Bijectors.inverse(bijector(dist)), dist, value_transformed
                     )
                     logp += logpdf(dist, value) + logjac
                     vi = setindex!!(vi, value, vn)
@@ -332,7 +332,7 @@ function AbstractPPL.evaluate!!(model::MarkovBlanketCoveredBUGSModel, ::DefaultC
                 value_transformed = transform(bijector(dist), value)
                 logp +=
                     logpdf(dist, value) +
-                    logabsdetjac(inverse(bijector(dist)), value_transformed)
+                    logabsdetjac(Bijectors.inverse(bijector(dist)), value_transformed)
             else
                 logp += logpdf(dist, value)
             end
@@ -372,7 +372,7 @@ function AbstractPPL.evaluate!!(
                     current_idx += l
                     # TODO: this use `DynamicPPL.reconstruct`, which needs attention when decoupling from DynamicPPL
                     value, logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
-                        inverse(bijector(dist)), dist, value_transformed
+                        Bijectors.inverse(bijector(dist)), dist, value_transformed
                     )
                     logp += logpdf(dist, value) + logjac
                     vi = setindex!!(vi, value, vn)

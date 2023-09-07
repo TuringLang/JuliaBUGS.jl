@@ -15,7 +15,7 @@ using JuliaBUGS:
     Stochastic,
     Logical,
     evaluate!!,
-    DefaultBUGSContext,
+    DefaultContext,
     BUGSGraph,
     stochastic_neighbors,
     stochastic_inneighbors,
@@ -26,9 +26,7 @@ using JuliaBUGS:
     LogDensityContext,
     ConcreteNodeInfo,
     SimpleVarInfo,
-    get_params_varinfo,
-    get_varinfo,
-    transformation
+    get_params_varinfo
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.BUGSPrimitives: mean
 using LogDensityProblems, LogDensityProblemsAD
