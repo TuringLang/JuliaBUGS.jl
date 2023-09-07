@@ -33,6 +33,7 @@ include("variable_types.jl")
 include("compiler_pass.jl")
 include("bijectors.jl")
 include("graphs.jl")
+include("model.jl")
 include("logdensityproblems.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
