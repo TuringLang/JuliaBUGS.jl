@@ -224,8 +224,7 @@ function markov_blanket(g::BUGSGraph, v::VarName)
     return [x for x in blanket if x != v]
 end
 
-markov_blanket(g::BUGSGraph, v::NTuple{N,VarName}) where {N} = markov_blanket(g, collect(v))
-function markov_blanket(g::BUGSGraph, v::Vector{VarName})
+function markov_blanket(g::BUGSGraph, v)
     blanket = VarName[]
     for vn in v
         blanket = vcat(blanket, markov_blanket(g, vn))
