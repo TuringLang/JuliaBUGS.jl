@@ -3,6 +3,8 @@
 # instead of https://github.com/TuringLang/AbstractMCMC.jl/blob/d7c549fe41a80c1f164423c7ac458425535f624b/src/logdensityproblems.jl#L90
 abstract type AbstractBUGSModel end
 
+
+
 """
     BUGSModel
 
@@ -11,7 +13,11 @@ The `BUGSModel` object is used for inference and represents the output of compil
 
 # Fields
 
-- `param_length::Int`: The length of the parameters vector, defining the number of parameters in the model.
+- `param_length::Int`: The length of the parameters vector, defining the number of parameters in the model, store a tuple of integers,
+    where the first integer is the length of the parameters vector in the original space, and the second integer is the length of the 
+    parameters vector in the transformed space.
+- `var_lengths::Dict{VarName,Tuple{Int,Int}}`: A dictionary that maps the names of the variables in the model to the corresponding
+    lengths of the variables in the original space and the transformed space.
 - `varinfo::SimpleVarInfo`: An instance of 
     [`DynamicPPL.SimpleVarInfo`](https://turinglang.org/DynamicPPL.jl/dev/api/#DynamicPPL.SimpleVarInfo), 
     specifically a dictionary that maps both data and value of variables in the model to the corresponding values.
@@ -22,7 +28,8 @@ The `BUGSModel` object is used for inference and represents the output of compil
 
 """
 struct BUGSModel <: AbstractBUGSModel
-    param_length::Int
+    param_length::Tuple{Int, Int}
+    var_lengths::Dict{VarName,Tuple{Int,Int}}
     varinfo::SimpleVarInfo
     parameters::Vector{VarName}
     g::BUGSGraph
@@ -58,6 +65,10 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
     vs = initialize_var_store(data, vars, array_sizes)
     vi = SimpleVarInfo(vs)
     parameters = VarName[]
+    no_transformation_param_length = 0
+    dynamic_transformation_param_length = 0
+    var_lengths = Dict{VarName,Tuple{Int,Int}}() #= need to store the lengths of variables, 
+    because length(::TransformedDistribution) produces problems with autodiff =#
     for vn in sorted_nodes
         @assert !(g[vn] isa AuxiliaryNodeInfo) "Auxiliary nodes should not be in the graph, but $(g[vn]) is."
 
@@ -87,18 +98,45 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
                     ),
                 )
             end
-            value = evaluate(vn, data)
-            isnothing(value) && push!(parameters, vn)
-            isnothing(value) && (value = evaluate(vn, inits))
-            if !isnothing(value)
+            value = evaluate(vn, data) # `evaluate(::VarName, env)` is defined in `src/utils.jl`
+            if isnothing(value) # not observed
+                push!(parameters, vn)
+                this_param_length = length(dist)
+                no_transformation_param_length += this_param_length
+
+                @assert length(dist) == _length(vn) begin
+                    "length of distribution $dist: $(length(dist)) does not match length of variable $vn: $(_length(vn)), " *
+                    "please note that if the distribution is a multivariate distribution, " *
+                    "the left hand side variable should use explicit indexing, e.g. x[1:2] ~ dmnorm(...)."
+                end
+                if bijector(dist) == identity
+                    this_param_transformed_length = this_param_length
+                else
+                    this_param_transformed_length = length(Bijectors.transformed(dist))
+                end
+                var_lengths[vn] = (this_param_length, this_param_transformed_length)
+                dynamic_transformation_param_length += this_param_transformed_length
+                value = evaluate(vn, inits) # use inits to initialize the value if available
+                if !isnothing(value)
+                    vi = setindex!!(vi, value, vn)
+                else
+                    vi = setindex!!(vi, rand(dist), vn)
+                end
+            else # observed
                 vi = setindex!!(vi, value, vn)
-            else
-                vi = setindex!!(vi, rand(dist), vn)
             end
         end
     end
-    l = isempty(parameters) ? 0 : sum(_length(x) for x in parameters)
-    return BUGSModel(l, vi, parameters, g, sorted_nodes)
+    @assert (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) ==
+        no_transformation_param_length "$(isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) $no_transformation_param_length"
+    return BUGSModel(
+        (no_transformation_param_length, dynamic_transformation_param_length),
+        var_lengths,
+        vi,
+        parameters,
+        g,
+        sorted_nodes,
+    )
 end
 
 function initialize_var_store(data, vars, array_sizes)
@@ -149,33 +187,47 @@ The `blanket` field is a vector of `VarName` that contains the Markov blanket of
 the variables themselves.
 """
 struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
-    param_length::Int
+    param_length::Tuple{Int, Int}
     blanket::Vector{VarName}
     model::BUGSModel
+end
 
-    function MarkovBlanketCoveredBUGSModel(
-        m::BUGSModel, var_group::Union{VarName,Vector{VarName}}
-    )
-        var_group = var_group isa VarName ? [var_group] : var_group
-        non_vars = VarName[]
-        logical_vars = VarName[]
-        for var in var_group
-            if var ∉ labels(m.g)
-                push!(non_vars, var)
-            elseif m.g[var].node_type == Logical
-                push!(logical_vars, var)
+function MarkovBlanketCoveredBUGSModel(
+    m::BUGSModel, var_group::Union{VarName,Vector{VarName}}
+)
+    var_group = var_group isa VarName ? [var_group] : var_group
+    non_vars = VarName[]
+    logical_vars = VarName[]
+    for var in var_group
+        if var ∉ labels(m.g)
+            push!(non_vars, var)
+        elseif m.g[var].node_type == Logical
+            push!(logical_vars, var)
+        end
+    end
+    isempty(non_vars) || error("Variables $(non_vars) are not in the model")
+    isempty(logical_vars) ||
+        warn("Variables $(logical_vars) are not stochastic variables, they will be ignored")
+    blanket = markov_blanket(m.g, var_group)
+    blanket_with_vars = union(blanket, var_group)
+    no_transformation_param_length = 0
+    dynamic_transformation_param_length = 0
+    for vn in m.sorted_nodes
+        if vn in blanket_with_vars && !is_logical(m.g[vn]) && vn ∈ m.parameters
+            dist = eval(module_under, m.g[vn], m.varinfo)
+            no_transformation_param_length += length(dist)
+            if bijector(dist) == identity
+                dynamic_transformation_param_length += length(dist)
+            else
+                dynamic_transformation_param_length += length(Bijectors.transformed(dist))
             end
         end
-        isempty(non_vars) || error("Variables $(non_vars) are not in the model")
-        isempty(logical_vars) || warn(
-            "Variables $(logical_vars) are not stochastic variables, they will be ignored",
-        )
-        blanket = markov_blanket(m.g, var_group)
-        blanket_with_vars = union(blanket, var_group)
-        params = [vn for vn in blanket_with_vars if vn in m.parameters]
-        param_length = isempty(params) ? 0 : sum(_length(vn) for vn in params)
-        return new(param_length, blanket_with_vars, m)
     end
+    return MarkovBlanketCoveredBUGSModel(
+        (no_transformation_param_length, dynamic_transformation_param_length),
+        blanket_with_vars,
+        m,
+    )
 end
 
 """
