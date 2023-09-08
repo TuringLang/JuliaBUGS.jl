@@ -98,9 +98,9 @@ Bijectors.logabsdet(::LogisticBijector, x::Real) = log(logistic(x)) + log(1 - lo
 
 struct CExpExpBijector <: Bijectors.Bijector end
 
-Bijectors.transform(::CExpExp, x::Real) = icloglog(x)
-Bijectors.transform(::Inverse{CExpExp}, x::Real) = cloglog(x)
-Bijectors.logabsdet(::CExpExp, x::Real) = -log(cloglog(-x))
+Bijectors.transform(::CExpExpBijector, x::Real) = icloglog(x)
+Bijectors.transform(::Inverse{CExpExpBijector}, x::Real) = cloglog(x)
+Bijectors.logabsdet(::CExpExpBijector, x::Real) = -log(cloglog(-x))
 
 struct ExpBijector <: Bijectors.Bijector end
 
@@ -110,13 +110,13 @@ Bijectors.logabsdet(::ExpBijector, x::Real) = x
 
 struct PhiBijector <: Bijectors.Bijector end
 
-Bijectors.transform(::Phi, x::Real) = phi(x)
-Bijectors.transform(::Inverse{Phi}, x::Real) = probit(x)
-Bijectors.logabsdet(::Phi, x::Real) = -0.5 * (x^2 + log(2π))
+Bijectors.transform(::PhiBijector, x::Real) = phi(x)
+Bijectors.transform(::Inverse{PhiBijector}, x::Real) = probit(x)
+Bijectors.logabsdet(::PhiBijector, x::Real) = -0.5 * (x^2 + log(2π))
 
 link_function_to_bijector_mapping = Dict(
     :logit => LogisticBijector(),
-    :cloglog => CExpExp(),
+    :cloglog => CExpExpBijector(),
     :log => ExpBijector(),
-    :probit => Phi(),
+    :probit => PhiBijector(),
 )
