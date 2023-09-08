@@ -204,7 +204,7 @@ end
 """
     markov_blanket(g::BUGSModel, v)
 
-Find the Markov blanket of `v` in `g`. `v` can be a single `VarName` or a vector of `VarName`.
+Find the Markov blanket of variable(s) `v` in graph `g`. `v` can be a single `VarName` or a vector/tuple of `VarName`.
 The Markov Blanket of a variable is the set of variables that shield the variable from the rest of the
 network. Effectively, the Markov blanket of a variable is the set of its parents, its children, and
 its children's other parents (reference: https://en.wikipedia.org/wiki/Markov_blanket).
@@ -213,7 +213,7 @@ In the case of vector, the Markov Blanket is the union of the Markov Blankets of
 minus the variables themselves (reference: Liu, X.-Q., & Liu, X.-S. (2018). Markov Blanket and Markov 
 Boundary of Multiple Variables. Journal of Machine Learning Research, 19(43), 1–50.)
 """
-function markov_blanket(g, v::VarName)
+function markov_blanket(g::BUGSGraph, v::VarName)
     parents = stochastic_inneighbors(g, v)
     children = stochastic_outneighbors(g, v)
     co_parents = VarName[]
@@ -224,7 +224,8 @@ function markov_blanket(g, v::VarName)
     return [x for x in blanket if x != v]
 end
 
-function markov_blanket(g, v::Vector{VarName})
+markov_blanket(g::BUGSGraph, v::NTuple{N, VarName}) where N = markov_blanket(g, collect(v))
+function markov_blanket(g::BUGSGraph, v::Vector{VarName})
     blanket = VarName[]
     for vn in v
         blanket = vcat(blanket, markov_blanket(g, vn))

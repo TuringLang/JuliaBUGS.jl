@@ -129,6 +129,7 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits; if_transform
     @assert (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) ==
         no_transformation_param_length "$(isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) $no_transformation_param_length"
     return BUGSModel(
+        if_transform,
         (no_transformation_param_length, dynamic_transformation_param_length),
         var_lengths,
         vi,
@@ -226,8 +227,9 @@ function MarkovBlanketCoveredBUGSModel(
     no_transformation_param_length = 0
     dynamic_transformation_param_length = 0
     for vn in m.sorted_nodes
-        if vn in sorted_blanket_with_vars && !is_logical(m.g[vn]) && vn ∈ m.parameters
-            dist = eval(module_under, m.g[vn], m.varinfo)
+        if vn in sorted_blanket_with_vars && !(m.g[vn].node_type == JuliaBUGS.Logical) && vn ∈ m.parameters
+            @unpack node_function_expr, node_args = m.g[vn]
+            dist = _eval(node_function_expr.args[2], Dict(getsym(arg) => m.varinfo[arg] for arg in node_args))
             no_transformation_param_length += length(dist)
             if bijector(dist) == identity
                 dynamic_transformation_param_length += length(dist)
@@ -259,6 +261,10 @@ function BUGSModel(m::MarkovBlanketCoveredBUGSModel; if_transform=m.if_transform
         m.g,
         m.base_sorted_nodes,
     )
+end
+
+function settrans(model::Union{BUGSModel, MarkovBlanketCoveredBUGSModel}, bool::Bool)
+    return @set model.if_transform = bool
 end
 
 """
@@ -352,7 +358,7 @@ function AbstractPPL.evaluate!!(
     if_transform = model.if_transform
     param_length = if_transform ? model.param_length[2] : model.param_length[1]
     @assert length(flattened_values) == param_length
-    @unpack varinfo, parameters, g, sorted_nodes = model
+    @unpack var_lengths, varinfo, parameters, g, sorted_nodes = model
     vi = deepcopy(varinfo)
     current_idx = 1
     logp = 0.0
@@ -368,7 +374,7 @@ function AbstractPPL.evaluate!!(
             dist = _eval(expr, args)
             if vn in parameters
                 if if_transform
-                    l = param_lengths[vn][2]
+                    l = var_lengths[vn][2]
                     value_transformed = flattened_values[current_idx:(current_idx + l - 1)]
                     current_idx += l
                     # TODO: this use `DynamicPPL.reconstruct`, which needs attention when decoupling from DynamicPPL
@@ -378,7 +384,7 @@ function AbstractPPL.evaluate!!(
                     logp += logpdf(dist, value) + logjac
                     vi = setindex!!(vi, value, vn)
                 else
-                    l = param_lengths[vn][1]
+                    l = var_lengths[vn][1]
                     value = DynamicPPL.reconstruct(
                         dist, flattened_values[current_idx:(current_idx + l - 1)]
                     )

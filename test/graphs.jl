@@ -43,9 +43,8 @@ c = @varname c
 
 mb_model = MarkovBlanketCoveredBUGSModel(model, c)
 # tests for MarkovBlanketCoveredBUGSModel constructor
-@test mb_model.param_length == 4
-@test Set(Symbol.(mb_model.blanket)) == Set([:l, :a, :b, :f, :c])
-@test mb_model.model == model
+@test mb_model.param_length[1] == 4
+@test Set(Symbol.(mb_model.sorted_nodes)) == Set([:l, :a, :b, :f, :c])
 
 mb_logp = begin
     logp = 0
@@ -56,9 +55,9 @@ mb_logp = begin
     logp
 end
 
-@test mb_logp == evaluate!!(mb_model, DefaultContext()).logp
+@test mb_logp == evaluate!!(mb_model, DefaultContext())[2]
 # order: b, l, c, a
-@test mb_logp == evaluate!!(mb_model, LogDensityContext(), [2.0, -2.0, 3.0, 1.0]).logp
+@test mb_logp == evaluate!!(mb_model, LogDensityContext(), [2.0, -2.0, 3.0, 1.0])[2]
 
 # test LogDensityContext
 @test begin
@@ -71,7 +70,7 @@ end
     logp += logpdf(dnorm(2.0, 1.0), 4.0) # d, where g = 2.0
     logp += logpdf(dnorm(4.0, 4.0), 5.0) # e, where h = 4.0
     logp
-end ≈ evaluate!!(model, LogDensityContext(), [4.0, 2.0, -2.0, 3.0, 1.0, 5.0, 4.0]).logp atol =
+end ≈ evaluate!!(model, LogDensityContext(), [4.0, 2.0, -2.0, 3.0, 1.0, 5.0, 4.0])[2] atol =
     1e-8
 
 # AuxiliaryNodeInfo
