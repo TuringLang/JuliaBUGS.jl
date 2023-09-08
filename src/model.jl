@@ -27,7 +27,7 @@ The `BUGSModel` object is used for inference and represents the output of compil
 """
 struct BUGSModel <: AbstractBUGSModel
     if_transform::Bool
-    param_length::Tuple{Int, Int}
+    param_length::Tuple{Int,Int}
     var_lengths::Dict{VarName,Tuple{Int,Int}}
     varinfo::SimpleVarInfo
     parameters::Vector{VarName}
@@ -60,14 +60,13 @@ struct UninitializedVariableError <: Exception
     msg::String
 end
 
-function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits; if_transform::Bool = true)
+function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits; if_transform::Bool=true)
     vs = initialize_var_store(data, vars, array_sizes)
     vi = SimpleVarInfo(vs)
     parameters = VarName[]
     no_transformation_param_length = 0
     dynamic_transformation_param_length = 0
-    var_lengths = Dict{VarName,Tuple{Int,Int}}() #= need to store the lengths of variables, 
-    because length(::TransformedDistribution) produces problems with autodiff =#
+    var_lengths = Dict{VarName,Tuple{Int,Int}}()
     for vn in sorted_nodes
         @assert !(g[vn] isa AuxiliaryNodeInfo) "Auxiliary nodes should not be in the graph, but $(g[vn]) is."
 
@@ -188,11 +187,11 @@ struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
     # `sorted_nodes` is used for iterating over the nodes in the model
     # `param_length` is used for specifying the length of the parameters vector 
     if_transform::Bool
-    param_length::Tuple{Int, Int}
+    param_length::Tuple{Int,Int}
     sorted_nodes::Vector{VarName}
 
     # these are fields of the original `BUGSModel`
-    base_param_length::Tuple{Int, Int}
+    base_param_length::Tuple{Int,Int}
     var_lengths::Dict{VarName,Tuple{Int,Int}}
     varinfo::SimpleVarInfo
     parameters::Vector{VarName}
@@ -201,7 +200,9 @@ struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
 end
 
 function MarkovBlanketCoveredBUGSModel(
-    m::BUGSModel, var_group::Union{VarName,Vector{VarName}}; if_transform::Bool = m.if_transform
+    m::BUGSModel,
+    var_group::Union{VarName,Vector{VarName}};
+    if_transform::Bool=m.if_transform,
 )
     var_group = var_group isa VarName ? [var_group] : var_group
     non_vars = VarName[]
@@ -227,9 +228,14 @@ function MarkovBlanketCoveredBUGSModel(
     no_transformation_param_length = 0
     dynamic_transformation_param_length = 0
     for vn in m.sorted_nodes
-        if vn in sorted_blanket_with_vars && !(m.g[vn].node_type == JuliaBUGS.Logical) && vn ∈ m.parameters
+        if vn in sorted_blanket_with_vars &&
+            !(m.g[vn].node_type == JuliaBUGS.Logical) &&
+            vn ∈ m.parameters
             @unpack node_function_expr, node_args = m.g[vn]
-            dist = _eval(node_function_expr.args[2], Dict(getsym(arg) => m.varinfo[arg] for arg in node_args))
+            dist = _eval(
+                node_function_expr.args[2],
+                Dict(getsym(arg) => m.varinfo[arg] for arg in node_args),
+            )
             no_transformation_param_length += length(dist)
             if bijector(dist) == identity
                 dynamic_transformation_param_length += length(dist)
@@ -263,7 +269,7 @@ function BUGSModel(m::MarkovBlanketCoveredBUGSModel; if_transform=m.if_transform
     )
 end
 
-function settrans(model::Union{BUGSModel, MarkovBlanketCoveredBUGSModel}, bool::Bool)
+function settrans(model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel}, bool::Bool)
     return @set model.if_transform = bool
 end
 
@@ -318,10 +324,12 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
     return @set vi.logp = logp
 end
 
-function AbstractPPL.evaluate!!(model::Union{BUGSModel, MarkovBlanketCoveredBUGSModel})
-    AbstractPPL.evaluate!!(model, DefaultContext())
+function AbstractPPL.evaluate!!(model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel})
+    return AbstractPPL.evaluate!!(model, DefaultContext())
 end
-function AbstractPPL.evaluate!!(model::Union{BUGSModel, MarkovBlanketCoveredBUGSModel}, ::DefaultContext)
+function AbstractPPL.evaluate!!(
+    model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel}, ::DefaultContext
+)
     @unpack varinfo, g, sorted_nodes = model
     vi = deepcopy(varinfo)
     logp = 0.0
@@ -353,7 +361,9 @@ function AbstractPPL.evaluate!!(model::Union{BUGSModel, MarkovBlanketCoveredBUGS
 end
 
 function AbstractPPL.evaluate!!(
-    model::Union{BUGSModel, MarkovBlanketCoveredBUGSModel}, ::LogDensityContext, flattened_values::AbstractVector
+    model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel},
+    ::LogDensityContext,
+    flattened_values::AbstractVector,
 )
     if_transform = model.if_transform
     param_length = if_transform ? model.param_length[2] : model.param_length[1]
