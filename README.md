@@ -36,9 +36,9 @@ Let $p_i$ be the probability of germination on the $i$-th plate. Then, the model
 
 $$
 \begin{aligned}
-r_i &\sim \text{Binomial}(p_i, n_i) \\
-\text{logit}(p_i) &\sim \alpha_0 + \alpha_1 x_{1 i} + \alpha_2 x_{2i} + \alpha_{12} x_{1i} x_{2i} + b_{i} \\
-b_i &\sim \text{Normal}(0, \tau)
+b_i &\sim \text{Normal}(0, \tau) \\
+\text{logit}(p_i) &= \alpha_0 + \alpha_1 x_{1 i} + \alpha_2 x_{2i} + \alpha_{12} x_{1i} x_{2i} + b_{i} \\
+r_i &\sim \text{Binomial}(p_i, n_i)
 \end{aligned}
 $$
 
