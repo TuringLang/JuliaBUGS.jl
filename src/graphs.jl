@@ -224,7 +224,7 @@ function markov_blanket(g, v::VarName)
     return [x for x in blanket if x != v]
 end
 
-function markov_blanket(g, v)
+function markov_blanket(g, v::Vector{VarName})
     blanket = VarName[]
     for vn in v
         blanket = vcat(blanket, markov_blanket(g, vn))

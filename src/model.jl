@@ -3,8 +3,6 @@
 # instead of https://github.com/TuringLang/AbstractMCMC.jl/blob/d7c549fe41a80c1f164423c7ac458425535f624b/src/logdensityproblems.jl#L90
 abstract type AbstractBUGSModel end
 
-
-
 """
     BUGSModel
 
@@ -27,7 +25,8 @@ The `BUGSModel` object is used for inference and represents the output of compil
 - `sorted_nodes::Vector{VarName}`: A vector containing the names of all the variables in the model, sorted in topological order.
 
 """
-struct BUGSModel <: AbstractBUGSModel
+mutable struct BUGSModel <: AbstractBUGSModel
+    if_transform::Bool
     param_length::Tuple{Int, Int}
     var_lengths::Dict{VarName,Tuple{Int,Int}}
     varinfo::SimpleVarInfo
@@ -61,7 +60,7 @@ struct UninitializedVariableError <: Exception
     msg::String
 end
 
-function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
+function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits; if_transform::Bool = true)
     vs = initialize_var_store(data, vars, array_sizes)
     vi = SimpleVarInfo(vs)
     parameters = VarName[]
@@ -186,14 +185,24 @@ The model object for a BUGS model with Markov blanket covered.
 The `blanket` field is a vector of `VarName` that contains the Markov blanket of the variables and 
 the variables themselves.
 """
-struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
+mutable struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
+    # `sorted_nodes` is used for iterating over the nodes in the model
+    # `param_length` is used for specifying the length of the parameters vector 
+    if_transform::Bool
     param_length::Tuple{Int, Int}
-    blanket::Vector{VarName}
-    model::BUGSModel
+    sorted_nodes::Vector{VarName}
+
+    # these are fields of the original `BUGSModel`
+    base_param_length::Tuple{Int, Int}
+    var_lengths::Dict{VarName,Tuple{Int,Int}}
+    varinfo::SimpleVarInfo
+    parameters::Vector{VarName}
+    g::BUGSGraph
+    base_sorted_nodes::Vector{VarName}
 end
 
 function MarkovBlanketCoveredBUGSModel(
-    m::BUGSModel, var_group::Union{VarName,Vector{VarName}}
+    m::BUGSModel, var_group::Union{VarName,Vector{VarName}}; if_transform::Bool = m.if_transform
 )
     var_group = var_group isa VarName ? [var_group] : var_group
     non_vars = VarName[]
@@ -210,10 +219,16 @@ function MarkovBlanketCoveredBUGSModel(
         warn("Variables $(logical_vars) are not stochastic variables, they will be ignored")
     blanket = markov_blanket(m.g, var_group)
     blanket_with_vars = union(blanket, var_group)
+    sorted_blanket_with_vars = VarName[]
+    for vn in m.sorted_nodes
+        if vn in blanket_with_vars
+            push!(sorted_blanket_with_vars, vn)
+        end
+    end
     no_transformation_param_length = 0
     dynamic_transformation_param_length = 0
     for vn in m.sorted_nodes
-        if vn in blanket_with_vars && !is_logical(m.g[vn]) && vn ∈ m.parameters
+        if vn in sorted_blanket_with_vars && !is_logical(m.g[vn]) && vn ∈ m.parameters
             dist = eval(module_under, m.g[vn], m.varinfo)
             no_transformation_param_length += length(dist)
             if bijector(dist) == identity
@@ -224,9 +239,27 @@ function MarkovBlanketCoveredBUGSModel(
         end
     end
     return MarkovBlanketCoveredBUGSModel(
+        if_transform,
         (no_transformation_param_length, dynamic_transformation_param_length),
-        blanket_with_vars,
-        m,
+        sorted_blanket_with_vars,
+        m.param_length,
+        m.var_lengths,
+        m.varinfo,
+        m.parameters,
+        m.g,
+        m.sorted_nodes,
+    )
+end
+
+function BUGSModel(m::MarkovBlanketCoveredBUGSModel; if_transform=m.if_transform)
+    return BUGSModel(
+        if_transform,
+        m.base_param_length,
+        m.var_lengths,
+        m.varinfo,
+        m.parameters,
+        m.g,
+        m.base_sorted_nodes,
     )
 end
 
