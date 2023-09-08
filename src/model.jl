@@ -25,7 +25,7 @@ The `BUGSModel` object is used for inference and represents the output of compil
 - `sorted_nodes::Vector{VarName}`: A vector containing the names of all the variables in the model, sorted in topological order.
 
 """
-mutable struct BUGSModel <: AbstractBUGSModel
+struct BUGSModel <: AbstractBUGSModel
     if_transform::Bool
     param_length::Tuple{Int, Int}
     var_lengths::Dict{VarName,Tuple{Int,Int}}
@@ -182,10 +182,8 @@ end
     MarkovBlanketCoveredBUGSModel
 
 The model object for a BUGS model with Markov blanket covered.
-The `blanket` field is a vector of `VarName` that contains the Markov blanket of the variables and 
-the variables themselves.
 """
-mutable struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
+struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
     # `sorted_nodes` is used for iterating over the nodes in the model
     # `param_length` is used for specifying the length of the parameters vector 
     if_transform::Bool
@@ -291,7 +289,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
     return evaluate!!(model, SamplingContext(rng))
 end
 function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
+    @unpack varinfo, g, sorted_nodes = model
     vi = deepcopy(varinfo)
     logp = 0.0
     for vn in sorted_nodes
@@ -314,9 +312,11 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
     return @set vi.logp = logp
 end
 
-AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultContext())
-function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
+function AbstractPPL.evaluate!!(model::Union{BUGSModel, MarkovBlanketCoveredBUGSModel})
+    AbstractPPL.evaluate!!(model, DefaultContext())
+end
+function AbstractPPL.evaluate!!(model::Union{BUGSModel, MarkovBlanketCoveredBUGSModel}, ::DefaultContext)
+    @unpack varinfo, g, sorted_nodes = model
     vi = deepcopy(varinfo)
     logp = 0.0
     for vn in sorted_nodes
@@ -330,7 +330,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
         else
             dist = _eval(expr, args)
             value = vi[vn]
-            if DynamicPPL.transformation(vi) isa DynamicPPL.DynamicTransformation
+            if model.if_transform
                 # although the values stored in `vi` are in their original space, 
                 # when `DynamicTransformation`, we behave as accepting a vector of 
                 # parameters in the transformed space
@@ -343,14 +343,16 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
             end
         end
     end
-    return @set vi.logp = logp
+    return vi, logp
 end
 
 function AbstractPPL.evaluate!!(
-    model::BUGSModel, ::LogDensityContext, flattened_values::AbstractVector
+    model::Union{BUGSModel, MarkovBlanketCoveredBUGSModel}, ::LogDensityContext, flattened_values::AbstractVector
 )
-    @assert length(flattened_values) == model.param_length
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
+    if_transform = model.if_transform
+    param_length = if_transform ? model.param_length[2] : model.param_length[1]
+    @assert length(flattened_values) == param_length
+    @unpack varinfo, parameters, g, sorted_nodes = model
     vi = deepcopy(varinfo)
     current_idx = 1
     logp = 0.0
@@ -364,9 +366,9 @@ function AbstractPPL.evaluate!!(
             vi = setindex!!(vi, value, vn)
         else
             dist = _eval(expr, args)
-            if vn in parameters # the value of parameter variables are stored in flattened_values
-                l = length(dist)
-                if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
+            if vn in parameters
+                if if_transform
+                    l = param_lengths[vn][2]
                     value_transformed = flattened_values[current_idx:(current_idx + l - 1)]
                     current_idx += l
                     # TODO: this use `DynamicPPL.reconstruct`, which needs attention when decoupling from DynamicPPL
@@ -376,6 +378,7 @@ function AbstractPPL.evaluate!!(
                     logp += logpdf(dist, value) + logjac
                     vi = setindex!!(vi, value, vn)
                 else
+                    l = param_lengths[vn][1]
                     value = DynamicPPL.reconstruct(
                         dist, flattened_values[current_idx:(current_idx + l - 1)]
                     )
@@ -388,91 +391,5 @@ function AbstractPPL.evaluate!!(
             end
         end
     end
-    return @set vi.logp = logp
-end
-
-function AbstractPPL.evaluate!!(model::MarkovBlanketCoveredBUGSModel, ::DefaultContext)
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model.model
-    vi = deepcopy(varinfo)
-    logp = 0.0
-    for vn in sorted_nodes
-        if !(vn in model.blanket)
-            continue
-        end
-
-        ni = g[vn]
-        @unpack node_type, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
-            value = _eval(expr, args)
-            vi = setindex!!(vi, value, vn)
-        else
-            dist = _eval(expr, args)
-            value = vi[vn]
-            if DynamicPPL.transformation(vi) isa DynamicPPL.DynamicTransformation
-                # although the values stored in `vi` are in their original space, 
-                # when `DynamicTransformation`, we behave as accepting a vector of 
-                # parameters in the transformed space
-                value_transformed = transform(bijector(dist), value)
-                logp +=
-                    logpdf(dist, value) +
-                    logabsdetjac(Bijectors.inverse(bijector(dist)), value_transformed)
-            else
-                logp += logpdf(dist, value)
-            end
-        end
-    end
-    return @set vi.logp = logp
-end
-
-function AbstractPPL.evaluate!!(
-    model::MarkovBlanketCoveredBUGSModel,
-    ::LogDensityContext,
-    flattened_values::AbstractVector,
-)
-    @assert length(flattened_values) == model.param_length
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model.model
-    vi = deepcopy(varinfo)
-    current_idx = 1
-    logp = 0.0
-    for vn in sorted_nodes
-        if !(vn in model.blanket)
-            continue
-        end
-
-        ni = g[vn]
-        @unpack node_type, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
-            value = _eval(expr, args)
-            vi = setindex!!(vi, value, vn)
-        else
-            dist = _eval(expr, args)
-            if vn in parameters # the value of parameter variables are stored in flattened_values
-                l = length(dist)
-                if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
-                    value_transformed = flattened_values[current_idx:(current_idx + l - 1)]
-                    current_idx += l
-                    # TODO: this use `DynamicPPL.reconstruct`, which needs attention when decoupling from DynamicPPL
-                    value, logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
-                        Bijectors.inverse(bijector(dist)), dist, value_transformed
-                    )
-                    logp += logpdf(dist, value) + logjac
-                    vi = setindex!!(vi, value, vn)
-                else
-                    value = DynamicPPL.reconstruct(
-                        dist, flattened_values[current_idx:(current_idx + l - 1)]
-                    )
-                    current_idx += l
-                    logp += logpdf(dist, value)
-                    vi = setindex!!(vi, value, vn)
-                end
-            else
-                logp += logpdf(dist, vi[vn])
-            end
-        end
-    end
-    return @set vi.logp = logp
+    return vi, logp
 end
