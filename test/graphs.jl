@@ -1,17 +1,3 @@
-using JuliaBUGS
-using JuliaBUGS:
-    BUGSGraph,
-    stochastic_neighbors,
-    stochastic_inneighbors,
-    stochastic_outneighbors,
-    markov_blanket
-using JuliaBUGS:
-    MarkovBlanketCoveredBUGSModel, evaluate!!, DefaultContext, LogDensityContext
-using JuliaBUGS.BUGSPrimitives
-using Graphs, MetaGraphsNext
-using Distributions
-using Test
-
 test_model = @bugs begin
     a ~ dnorm(f, c)
     f = b - 1
@@ -53,7 +39,6 @@ l = @varname l
 @test Set(Symbol.(markov_blanket(g, (a, l)))) == Set([:f, :b, :d, :e, :c, :h, :g, :i])
 
 c = @varname c
-markov_blanket(model.g, c)
 @test Set(Symbol.(markov_blanket(model.g, c))) == Set([:l, :a, :b, :f])
 
 mb_model = MarkovBlanketCoveredBUGSModel(model, c)
@@ -62,14 +47,18 @@ mb_model = MarkovBlanketCoveredBUGSModel(model, c)
 @test Set(Symbol.(mb_model.blanket)) == Set([:l, :a, :b, :f, :c])
 @test mb_model.model == model
 
-@test begin
+mb_logp = begin
     logp = 0
     logp += logpdf(dnorm(1.0, 3.0), 1.0) # a
     logp += logpdf(dnorm(0.0, 1.0), 2.0) # b
     logp += logpdf(dnorm(0.0, 1.0), -2.0) # l
     logp += logpdf(dnorm(-2.0, 1.0), 3.0) # c
     logp
-end == evaluate!!(mb_model, DefaultContext()).logp
+end
+
+@test mb_logp == evaluate!!(mb_model, DefaultContext()).logp
+# order: b, l, c, a
+@test mb_logp == evaluate!!(mb_model, LogDensityContext(), [2.0, -2.0, 3.0, 1.0]).logp
 
 # test LogDensityContext
 @test begin

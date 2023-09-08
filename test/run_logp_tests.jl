@@ -17,31 +17,6 @@ function load_dictionary(example_name, data_or_init, replace_period=true)
     return d
 end
 
-# reloading `DynamicPPL.tilde_assume` so that: 
-# in JuliaBUGS, `varinfo` always stores the values in their original space, and all downstream computation
-# uses these values
-# in DynamicPPL, `tilde_assume` returns and later bounds the variable to its transformed value. 
-# We overwrite this behavior only for testing purposes. And it should be cautious that the behavior can change.
-import DynamicPPL: tilde_assume
-function DynamicPPL.tilde_assume(
-    ::DynamicPPL.IsLeaf, context::DynamicPPL.DefaultContext, right, vn, vi
-)
-    r = vi[vn, right]
-    return vi[vn], Bijectors.logpdf_with_trans(right, r, istrans(vi, vn)), vi
-end
-
-function get_vi_logp(model::DynamicPPL.Model, varinfo, if_transform)
-    ret_val, vi = DynamicPPL.evaluate!!(
-        model, DynamicPPL.settrans!!(varinfo, if_transform), DynamicPPL.DefaultContext()
-    )
-    return vi, getlogp(vi)
-end
-
-function get_vi_logp(model::JuliaBUGS.BUGSModel, if_transform)
-    vi = JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(model, if_transform))
-    return vi, getlogp(vi)
-end
-
 function params_in_dppl_model(dppl_model)
     return keys(
         DynamicPPL.evaluate!!(

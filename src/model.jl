@@ -62,7 +62,7 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
         @assert !(g[vn] isa AuxiliaryNodeInfo) "Auxiliary nodes should not be in the graph, but $(g[vn]) is."
 
         ni = g[vn]
-        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
+        @unpack node_type, node_function_expr, node_args = ni
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
@@ -211,7 +211,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
     logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
-        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
+        @unpack node_type, node_function_expr, node_args = ni
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
@@ -219,18 +219,10 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
             vi = setindex!!(vi, value, vn)
         else
             dist = _eval(expr, args)
-            if link_function_expr != :identity
-                dist = transformed(dist, bijector_of_link_function(link_function_expr))
-            end
+            # under `SamplingContext`, `transformation` is ignored
+            # we sample and score both in the original variable space
             value = rand(ctx.rng, dist)
-            if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
-                value_transformed, logabsdetjac = with_logabsdet_jacobian(
-                    DynamicPPL.inverse(bijector(dist)), val
-                )
-                logp += logpdf(dist, value_transformed) + logabsdetjac
-            else
-                logp += logpdf(dist, value)
-            end
+            logp += logpdf(dist, value)
             vi = setindex!!(vi, value, vn)
         end
     end
@@ -244,22 +236,26 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
     logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
-        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
-        node_type == JuliaBUGS.Logical && continue
+        @unpack node_type, node_function_expr, node_args = ni
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
         expr = node_function_expr.args[2]
-        dist = _eval(expr, args)
-        if link_function_expr != :identity
-            dist = transformed(dist, bijector_of_link_function(link_function_expr))
-        end
-        value = vi[vn]
-        if DynamicPPL.transformation(vi) isa DynamicPPL.DynamicTransformation
-            value_transformed, logabsdetjac = with_logabsdet_jacobian(
-                Bijectors.inverse(bijector(dist)), value
-            )
-            logp += logpdf(dist, value_transformed) + logabsdetjac
+        if node_type == JuliaBUGS.Logical
+            value = _eval(expr, args)
+            vi = setindex!!(vi, value, vn)
         else
-            logp += logpdf(dist, value)
+            dist = _eval(expr, args)
+            value = vi[vn]
+            if DynamicPPL.transformation(vi) isa DynamicPPL.DynamicTransformation
+                # although the values stored in `vi` are in their original space, 
+                # when `DynamicTransformation`, we behave as accepting a vector of 
+                # parameters in the transformed space
+                value_transformed = transform(bijector(dist), value)
+                logp +=
+                    logpdf(dist, value) +
+                    logabsdetjac(Bijectors.inverse(bijector(dist)), value_transformed)
+            else
+                logp += logpdf(dist, value)
+            end
         end
     end
     return @set vi.logp = logp
@@ -275,7 +271,7 @@ function AbstractPPL.evaluate!!(
     logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
-        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
+        @unpack node_type, node_function_expr, node_args = ni
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
@@ -283,28 +279,25 @@ function AbstractPPL.evaluate!!(
             vi = setindex!!(vi, value, vn)
         else
             dist = _eval(expr, args)
-            if link_function_expr != :identity
-                dist = transformed(dist, bijector_of_link_function(link_function_expr))
-            end
             if vn in parameters # the value of parameter variables are stored in flattened_values
-                l = _length(vn)
-                value_transformed = if l == 1
-                    flattened_values[current_idx]
-                else
-                    flattened_values[current_idx:(current_idx + l - 1)]
-                end
-                current_idx += l
-
-                value = Bijectors.invlink(dist, value_transformed)
+                l = length(dist)
                 if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
-                    value_transformed, logabsdetjac = with_logabsdet_jacobian(
-                        Bijectors.inverse(bijector(dist)), value
+                    value_transformed = flattened_values[current_idx:(current_idx + l - 1)]
+                    current_idx += l
+                    # TODO: this use `DynamicPPL.reconstruct`, which needs attention when decoupling from DynamicPPL
+                    value, logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
+                        Bijectors.inverse(bijector(dist)), dist, value_transformed
                     )
-                    logp += logpdf(dist, value_transformed) + logabsdetjac
+                    logp += logpdf(dist, value) + logjac
+                    vi = setindex!!(vi, value, vn)
                 else
+                    value = DynamicPPL.reconstruct(
+                        dist, flattened_values[current_idx:(current_idx + l - 1)]
+                    )
+                    current_idx += l
                     logp += logpdf(dist, value)
+                    vi = setindex!!(vi, value, vn)
                 end
-                vi = setindex!!(vi, value, vn)
             else
                 logp += logpdf(dist, vi[vn])
             end
@@ -318,25 +311,31 @@ function AbstractPPL.evaluate!!(model::MarkovBlanketCoveredBUGSModel, ::DefaultC
     vi = deepcopy(varinfo)
     logp = 0.0
     for vn in sorted_nodes
-        vn in model.blanket || continue
+        if !(vn in model.blanket)
+            continue
+        end
 
         ni = g[vn]
-        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
-        node_type == JuliaBUGS.Logical && continue
+        @unpack node_type, node_function_expr, node_args = ni
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
         expr = node_function_expr.args[2]
-        dist = _eval(expr, args)
-        if link_function_expr != :identity
-            dist = transformed(dist, bijector_of_link_function(link_function_expr))
-        end
-        value = vi[vn]
-        if DynamicPPL.transformation(vi) isa DynamicPPL.DynamicTransformation
-            value_transformed, logabsdetjac = with_logabsdet_jacobian(
-                Bijectors.inverse(bijector(dist)), value
-            )
-            logp += logpdf(dist, value_transformed) + logabsdetjac
+        if node_type == JuliaBUGS.Logical
+            value = _eval(expr, args)
+            vi = setindex!!(vi, value, vn)
         else
-            logp += logpdf(dist, value)
+            dist = _eval(expr, args)
+            value = vi[vn]
+            if DynamicPPL.transformation(vi) isa DynamicPPL.DynamicTransformation
+                # although the values stored in `vi` are in their original space, 
+                # when `DynamicTransformation`, we behave as accepting a vector of 
+                # parameters in the transformed space
+                value_transformed = transform(bijector(dist), value)
+                logp +=
+                    logpdf(dist, value) +
+                    logabsdetjac(Bijectors.inverse(bijector(dist)), value_transformed)
+            else
+                logp += logpdf(dist, value)
+            end
         end
     end
     return @set vi.logp = logp
@@ -353,10 +352,12 @@ function AbstractPPL.evaluate!!(
     current_idx = 1
     logp = 0.0
     for vn in sorted_nodes
-        vn in model.blanket || continue
+        if !(vn in model.blanket)
+            continue
+        end
 
         ni = g[vn]
-        @unpack node_type, link_function_expr, node_function_expr, node_args = ni
+        @unpack node_type, node_function_expr, node_args = ni
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
@@ -364,28 +365,25 @@ function AbstractPPL.evaluate!!(
             vi = setindex!!(vi, value, vn)
         else
             dist = _eval(expr, args)
-            if link_function_expr != :identity
-                dist = transformed(dist, bijector_of_link_function(link_function_expr))
-            end
             if vn in parameters # the value of parameter variables are stored in flattened_values
-                l = _length(vn)
-                value_transformed = if l == 1
-                    flattened_values[current_idx]
-                else
-                    flattened_values[current_idx:(current_idx + l - 1)]
-                end
-                current_idx += l
-
-                value = Bijectors.invlink(dist, value_transformed)
+                l = length(dist)
                 if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
-                    value_transformed, logabsdetjac = with_logabsdet_jacobian(
-                        Bijectors.inverse(bijector(dist)), value
+                    value_transformed = flattened_values[current_idx:(current_idx + l - 1)]
+                    current_idx += l
+                    # TODO: this use `DynamicPPL.reconstruct`, which needs attention when decoupling from DynamicPPL
+                    value, logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
+                        Bijectors.inverse(bijector(dist)), dist, value_transformed
                     )
-                    logp += logpdf(dist, value_transformed) + logabsdetjac
+                    logp += logpdf(dist, value) + logjac
+                    vi = setindex!!(vi, value, vn)
                 else
+                    value = DynamicPPL.reconstruct(
+                        dist, flattened_values[current_idx:(current_idx + l - 1)]
+                    )
+                    current_idx += l
                     logp += logpdf(dist, value)
+                    vi = setindex!!(vi, value, vn)
                 end
-                vi = setindex!!(vi, value, vn)
             else
                 logp += logpdf(dist, vi[vn])
             end

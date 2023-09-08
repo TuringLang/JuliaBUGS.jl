@@ -465,13 +465,12 @@ struct NodeFunctions{VT} <: CompilerPass
     array_sizes::Dict
     array_bitmap::Dict
 
-    link_functions::Dict
     node_args::Dict
     node_functions::Dict
     dependencies::Dict
 end
 function NodeFunctions(vars, array_sizes, array_bitmap)
-    return NodeFunctions(vars, array_sizes, array_bitmap, Dict(), Dict(), Dict(), Dict())
+    return NodeFunctions(vars, array_sizes, array_bitmap, Dict(), Dict(), Dict())
 end
 
 """
@@ -707,6 +706,13 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
     link_function = Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[1] : :identity
+    # disallow link functions in stochastic assignments
+    if link_function != :identity
+        error(
+            "Link functions $link_function in stochastic assignment expression $expr are not permited.",
+        )
+    end
+
     lhs_var = find_variables_on_lhs(
         Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
     )
@@ -798,10 +804,10 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
         end
     end
 
-    pass.link_functions[lhs_var] = link_function
     pass.node_args[lhs_var] = node_args
     pass.node_functions[lhs_var] = node_function
-    return pass.dependencies[lhs_var] = dependencies
+    pass.dependencies[lhs_var] = dependencies
+    return nothing
 end
 
 function post_process(pass::NodeFunctions, expr, env, vargs...)
@@ -811,10 +817,6 @@ function post_process(pass::NodeFunctions, expr, env, vargs...)
         end
     end
     return pass.vars,
-    pass.array_sizes,
-    pass.array_bitmap,
-    pass.link_functions,
-    pass.node_args,
-    pass.node_functions,
+    pass.array_sizes, pass.array_bitmap, pass.node_args, pass.node_functions,
     pass.dependencies
 end

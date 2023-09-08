@@ -24,7 +24,6 @@ and functions associated with a node within the BUGS model's dependency graph.
 # Fields
 
 - `node_type::VariableTypes`: Specifies whether the node is a stochastic or logical variable.
-- `link_function_expr::Union{Expr,Symbol}`: The link function expression.
 - `node_function_expr::Expr`: The node function expression.
 - `node_args::Vector{VarName}`: A vector containing the names of the variables that are 
     arguments to the node function.
@@ -32,23 +31,21 @@ and functions associated with a node within the BUGS model's dependency graph.
 """
 struct ConcreteNodeInfo <: NodeInfo
     node_type::VariableTypes
-    link_function_expr::Union{Expr,Symbol}
     node_function_expr::Expr
     node_args::Vector{VarName}
 end
 
-function ConcreteNodeInfo(var::Var, vars, link_functions, node_functions, node_args)
+function ConcreteNodeInfo(var::Var, vars, node_functions, node_args)
     return ConcreteNodeInfo(
         vars[var],
-        link_functions[var],
         node_functions[var],
         map(v -> AbstractPPL.VarName{v.name}(AbstractPPL.IdentityLens()), node_args[var]),
     )
 end
 
-function NodeInfo(var::Var, vars, link_functions, node_functions, node_args)
+function NodeInfo(var::Var, vars, node_functions, node_args)
     if var in keys(vars)
-        return ConcreteNodeInfo(var, vars, link_functions, node_functions, node_args)
+        return ConcreteNodeInfo(var, vars, node_functions, node_args)
     else
         return AuxiliaryNodeInfo()
     end
@@ -65,7 +62,7 @@ const BUGSGraph = MetaGraph{
     Int64,SimpleDiGraph{Int64},VarName,NodeInfo,Nothing,Nothing,Nothing,Float64
 }
 
-function BUGSGraph(vars, link_functions, node_args, node_functions, dependencies)
+function BUGSGraph(vars, node_args, node_functions, dependencies)
     g = MetaGraph(
         SimpleDiGraph{Int64}();
         weight_function=nothing,
@@ -74,17 +71,13 @@ function BUGSGraph(vars, link_functions, node_args, node_functions, dependencies
     )
     for l in keys(vars) # l for LHS variable
         l_vn = to_varname(l)
-        check_and_add_vertex!(
-            g, l_vn, NodeInfo(l, vars, link_functions, node_functions, node_args)
-        )
+        check_and_add_vertex!(g, l_vn, NodeInfo(l, vars, node_functions, node_args))
         # The use of AuxiliaryNodeInfo is also to save computation, becasue otherwise, 
         # every time we introduce a new node, we need to check `subsumes` or by all the existing nodes.
         scalarize_then_add_edge!(g, l; lhs_or_rhs=:lhs)
         for r in dependencies[l]
             r_vn = to_varname(r)
-            check_and_add_vertex!(
-                g, r_vn, NodeInfo(r, vars, link_functions, node_functions, node_args)
-            )
+            check_and_add_vertex!(g, r_vn, NodeInfo(r, vars, node_functions, node_args))
             add_edge!(g, r_vn, l_vn)
             scalarize_then_add_edge!(g, r; lhs_or_rhs=:rhs)
         end
