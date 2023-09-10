@@ -45,9 +45,9 @@ bugs_logp = JuliaBUGS.evaluate!!(JuliaBUGS.settrans(bugs_model, true), DefaultCo
 bugs_logp_logp_ctx = evaluate!!(
     JuliaBUGS.settrans(bugs_model, true), LogDensityContext(), test_θ_transformed
 )[2]
-@test bugs_logp ==
-    bugs_logp_logp_ctx ==
-    LogDensityProblems.logdensity(JuliaBUGS.settrans(bugs_model, true), test_θ_transformed) rtol =
-    1E-6
+@test bugs_logp == bugs_logp_logp_ctx
+@test bugs_logp == LogDensityProblems.logdensity(
+    JuliaBUGS.settrans(bugs_model, true), test_θ_transformed
+)
 dppl_logp = LogDensityProblems.logdensity(t_p, test_θ_transformed)
 @test bugs_logp ≈ dppl_logp rtol = 1E-6
