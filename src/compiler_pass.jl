@@ -516,7 +516,7 @@ evaluate_and_track_dependencies(var::UnitRange, env) = var, Set(), Set()
 function evaluate_and_track_dependencies(var::Symbol, env)
     value = haskey(env, var) ? env[var] : var
     @assert !ismissing(value) "Scalar variables in data can't be missing, but $var given as missing"
-    @assert value isa Union{Real, Symbol} "Array indexing in BUGS must be explicit. However, `$var` is accessed as a scalar."
+    @assert value isa Union{Real,Symbol} "Array indexing in BUGS must be explicit. However, `$var` is accessed as a scalar."
     return value, Set(), Set()
 end
 function evaluate_and_track_dependencies(var::Expr, env)
@@ -628,7 +628,7 @@ end
 
 _replace_constants_in_expr(x::Number, env) = x
 function _replace_constants_in_expr(x::Symbol, env)
-    if haskey(env, x) 
+    if haskey(env, x)
         if env[x] isa Number # only plug in scalar variables
             return env[x]
         else # if it's an array, raise error because array indexing should be explicit
@@ -649,7 +649,11 @@ function _replace_constants_in_expr(x::Expr, env)
             try
                 x.args[i] = _replace_constants_in_expr(x.args[i], env)
             catch e
-                rethrow(ErrorException("Array indexing in BUGS must be explicit. However, `$(e.msg)` is accessed as a scalar."))
+                rethrow(
+                    ErrorException(
+                        "Array indexing in BUGS must be explicit. However, `$(e.msg)` is accessed as a scalar.",
+                    ),
+                )
             end
         end
     end

@@ -27,8 +27,11 @@ The `BUGSModel` object is used for inference and represents the output of compil
 """
 struct BUGSModel <: AbstractBUGSModel
     if_transform::Bool
-    param_length::Tuple{Int,Int}
-    var_lengths::Dict{VarName,Tuple{Int,Int}}
+    untransformed_param_length::Int
+    transformed_param_length::Int
+    # TODO: the following two dictionaries are likely to be very similar, optimize this
+    untransformed_var_lengths::Dict{VarName,Int}
+    transformed_var_lengths::Dict{VarName,Int}
     varinfo::SimpleVarInfo
     parameters::Vector{VarName}
     g::BUGSGraph
@@ -64,9 +67,10 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits; if_transform
     vs = initialize_var_store(data, vars, array_sizes)
     vi = SimpleVarInfo(vs)
     parameters = VarName[]
-    no_transformation_param_length = 0
-    dynamic_transformation_param_length = 0
-    var_lengths = Dict{VarName,Tuple{Int,Int}}()
+    untransformed_param_length = 0
+    transformed_param_length = 0
+    untransformed_var_lengths = Dict{VarName,Int}()
+    transformed_var_lengths = Dict{VarName,Int}()
     for vn in sorted_nodes
         @assert !(g[vn] isa AuxiliaryNodeInfo) "Auxiliary nodes should not be in the graph, but $(g[vn]) is."
 
@@ -97,13 +101,16 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits; if_transform
                 )
             end
             value = evaluate(vn, data) # `evaluate(::VarName, env)` is defined in `src/utils.jl`
-            if isnothing(value) # not observed
+            if value isa Nothing # observed
+                vi = setindex!!(vi, value, vn)
+            else # not observed
+                isnothing(value) # not observed
                 push!(parameters, vn)
                 this_param_length = length(dist)
-                no_transformation_param_length += this_param_length
+                untransformed_param_length += this_param_length
 
                 @assert length(dist) == _length(vn) begin
-                    "length of distribution $dist: $(length(dist)) does not match length of variable $vn: $(_length(vn)), " *
+                    "The dimensionality of distribution $dist: $(length(dist)) does not match length of variable $vn: $(_length(vn)), " *
                     "please note that if the distribution is a multivariate distribution, " *
                     "the left hand side variable should use explicit indexing, e.g. x[1:2] ~ dmnorm(...)."
                 end
@@ -112,25 +119,26 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits; if_transform
                 else
                     this_param_transformed_length = length(Bijectors.transformed(dist))
                 end
-                var_lengths[vn] = (this_param_length, this_param_transformed_length)
-                dynamic_transformation_param_length += this_param_transformed_length
+                untransformed_var_lengths[vn] = this_param_length
+                transformed_var_lengths[vn] = this_param_transformed_length
+                transformed_param_length += this_param_transformed_length
                 value = evaluate(vn, inits) # use inits to initialize the value if available
-                if !isnothing(value)
-                    vi = setindex!!(vi, value, vn)
-                else
+                if value isa Nothing # not initialized
                     vi = setindex!!(vi, rand(dist), vn)
+                else
+                    vi = setindex!!(vi, value, vn)
                 end
-            else # observed
-                vi = setindex!!(vi, value, vn)
             end
         end
     end
     @assert (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) ==
-        no_transformation_param_length "$(isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) $no_transformation_param_length"
+        untransformed_param_length "$(isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) $untransformed_param_length"
     return BUGSModel(
         if_transform,
-        (no_transformation_param_length, dynamic_transformation_param_length),
-        var_lengths,
+        untransformed_param_length,
+        transformed_param_length,
+        untransformed_var_lengths,
+        transformed_var_lengths,
         vi,
         parameters,
         g,
@@ -183,12 +191,15 @@ struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
     # `sorted_nodes` is used for iterating over the nodes in the model
     # `param_length` is used for specifying the length of the parameters vector 
     if_transform::Bool
-    param_length::Tuple{Int,Int}
+    untransformed_param_length::Int
+    transformed_param_length::Int
     sorted_nodes::Vector{VarName}
 
     # these are fields of the original `BUGSModel`
-    base_param_length::Tuple{Int,Int}
-    var_lengths::Dict{VarName,Tuple{Int,Int}}
+    base_untransformed_param_length::Int
+    base_transformed_param_length::Int
+    untransformed_var_lengths::Dict{VarName,Int}
+    transformed_var_lengths::Dict{VarName,Int}
     varinfo::SimpleVarInfo
     parameters::Vector{VarName}
     g::BUGSGraph
@@ -221,8 +232,8 @@ function MarkovBlanketCoveredBUGSModel(
             push!(sorted_blanket_with_vars, vn)
         end
     end
-    no_transformation_param_length = 0
-    dynamic_transformation_param_length = 0
+    untransformed_param_length = 0
+    transformed_param_length = 0
     for vn in m.sorted_nodes
         if vn in sorted_blanket_with_vars &&
             !(m.g[vn].node_type == JuliaBUGS.Logical) &&
@@ -232,20 +243,22 @@ function MarkovBlanketCoveredBUGSModel(
                 node_function_expr.args[2],
                 Dict(getsym(arg) => m.varinfo[arg] for arg in node_args),
             )
-            no_transformation_param_length += length(dist)
+            untransformed_param_length += length(dist)
             if bijector(dist) == identity
-                dynamic_transformation_param_length += length(dist)
+                transformed_param_length += length(dist)
             else
-                dynamic_transformation_param_length += length(Bijectors.transformed(dist))
+                transformed_param_length += length(Bijectors.transformed(dist))
             end
         end
     end
     return MarkovBlanketCoveredBUGSModel(
         if_transform,
-        (no_transformation_param_length, dynamic_transformation_param_length),
+        untransformed_param_length, 
+        transformed_param_length,
         sorted_blanket_with_vars,
         m.param_length,
-        m.var_lengths,
+        m.untransformed_var_lengths,
+        m.transformed_var_lengths,
         m.varinfo,
         m.parameters,
         m.g,
@@ -256,12 +269,14 @@ end
 function BUGSModel(m::MarkovBlanketCoveredBUGSModel; if_transform=m.if_transform)
     return BUGSModel(
         if_transform,
-        m.base_param_length,
-        m.var_lengths,
+        m.base_untransformed_param_length,
+        m.base_transformed_param_length,
+        m.untransformed_var_lengths,
+        m.transformed_var_lengths,
         m.varinfo,
         m.parameters,
         m.g,
-        m.base_sorted_nodes,
+        m.sorted_nodes,
     )
 end
 

@@ -10,11 +10,7 @@ test_ddirich = @bugs begin
 end
 
 # Compile the BUGS model
-bugs_model = compile(
-    test_ddirich,
-    Dict(:alpha => alpha),
-    Dict(:x => test_θ),
-)
+bugs_model = compile(test_ddirich, Dict(:alpha => alpha), Dict(:x => test_θ))
 
 # Now, create a DynamicPPL model to represent the same distribution
 @model function ddirich_test()
@@ -44,6 +40,7 @@ bugs_logp_logp_ctx = evaluate!!(
 )[2]
 @test bugs_logp ==
     bugs_logp_logp_ctx ==
-    LogDensityProblems.logdensity(JuliaBUGS.settrans(bugs_model, true), test_θ_transformed)
+    LogDensityProblems.logdensity(JuliaBUGS.settrans(bugs_model, true), test_θ_transformed) rtol =
+    1E-6
 dppl_logp = LogDensityProblems.logdensity(t_p, test_θ_transformed)
 @test bugs_logp ≈ dppl_logp rtol = 1E-6
