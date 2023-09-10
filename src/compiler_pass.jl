@@ -505,6 +505,10 @@ julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), Dict(:x =
 
 julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), Dict(:x => [1 2 missing; 4 5 6]))
 (:(getindex(Union{Missing, Int64}[1 2 missing; 4 5 6], a, b)), Set(Any[:a, :b, (:x, (1, 3))]), Set(Any[:a, :b, (:x, ())]))
+
+julia> evaluate_and_track_dependencies(:x, Dict(:x => [1 2])) # array variables must be explicitly indexed
+ERROR: AssertionError: Array indexing in BUGS must be explicit. However, `x` is accessed as a scalar.
+[...]
 ```
 """
 evaluate_and_track_dependencies(var::Number, env) = var, Set(), Set()
@@ -512,6 +516,7 @@ evaluate_and_track_dependencies(var::UnitRange, env) = var, Set(), Set()
 function evaluate_and_track_dependencies(var::Symbol, env)
     value = haskey(env, var) ? env[var] : var
     @assert !ismissing(value) "Scalar variables in data can't be missing, but $var given as missing"
+    @assert value isa Union{Real, Symbol} "Array indexing in BUGS must be explicit. However, `$var` is accessed as a scalar."
     return value, Set(), Set()
 end
 function evaluate_and_track_dependencies(var::Expr, env)
@@ -622,17 +627,30 @@ function replace_constants_in_expr(x, env)
 end
 
 _replace_constants_in_expr(x::Number, env) = x
-_replace_constants_in_expr(x::Symbol, env) = get(env, x, x)
-function _replace_constants_in_expr(x, env)
+function _replace_constants_in_expr(x::Symbol, env)
+    if haskey(env, x) 
+        if env[x] isa Number # only plug in scalar variables
+            return env[x]
+        else # if it's an array, raise error because array indexing should be explicit
+            error("$x")
+        end
+    end
+    return x
+end
+function _replace_constants_in_expr(x::Expr, env)
     if Meta.isexpr(x, :ref) && all(x -> x isa Number, x.args[2:end])
         if haskey(env, x.args[1])
             val = env[x.args[1]][try_cast_to_int.(x.args[2:end])...]
-            x = ismissing(val) ? x : val
+            return ismissing(val) ? x : val
         end
-    elseif !isa(x, Symbol) && !isa(x, Number)
-        x = deepcopy(x)
+    else # don't try to eval the function, but try to simplify
+        x = deepcopy(x) # because we are mutating the args
         for i in 2:length(x.args)
-            x.args[i] = _replace_constants_in_expr(x.args[i], env)
+            try
+                x.args[i] = _replace_constants_in_expr(x.args[i], env)
+            catch e
+                rethrow(ErrorException("Array indexing in BUGS must be explicit. However, `$(e.msg)` is accessed as a scalar."))
+            end
         end
     end
     return x

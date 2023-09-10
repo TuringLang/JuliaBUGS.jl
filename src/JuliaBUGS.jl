@@ -4,7 +4,6 @@ using AbstractPPL
 using BangBang
 using Bijectors
 using Distributions
-using DynamicPPL
 using Graphs
 using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
@@ -13,10 +12,11 @@ using Random
 using Setfield
 using UnPack
 
+using DynamicPPL: DynamicPPL, SimpleVarInfo
+
 import Base: ==, hash, Symbol, size
 import Distributions: truncated
 import AbstractPPL: AbstractContext, evaluate!!
-import DynamicPPL: settrans!!
 
 export @bugs
 export compile

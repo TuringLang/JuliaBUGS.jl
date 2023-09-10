@@ -163,10 +163,6 @@ function initialize_var_store(data, vars, array_sizes)
     return var_store
 end
 
-function DynamicPPL.settrans!!(m::BUGSModel, if_trans::Bool)
-    return @set m.varinfo = DynamicPPL.settrans!!(m.varinfo, if_trans)
-end
-
 function get_params_varinfo(m::BUGSModel)
     return get_params_varinfo(m, m.varinfo)
 end

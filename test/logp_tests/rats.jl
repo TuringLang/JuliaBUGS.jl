@@ -54,7 +54,7 @@ vi = bugs_model.varinfo
 end
 dppl_model = rats(Y, x, xbar, N, T)
 
-bugs_model = DynamicPPL.settrans!!(bugs_model, false)
+bugs_model = JuliaBUGS.settrans(bugs_model, false)
 bugs_logp = JuliaBUGS.evaluate!!(bugs_model, DefaultContext())[2]
 params_vi = JuliaBUGS.get_params_varinfo(bugs_model, vi)
 # test if JuliaBUGS and DynamicPPL agree on parameters in the model
