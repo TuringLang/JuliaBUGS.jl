@@ -253,7 +253,7 @@ function MarkovBlanketCoveredBUGSModel(
     end
     return MarkovBlanketCoveredBUGSModel(
         if_transform,
-        untransformed_param_length, 
+        untransformed_param_length,
         transformed_param_length,
         sorted_blanket_with_vars,
         m.param_length,
