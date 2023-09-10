@@ -4,7 +4,11 @@ function LogDensityProblems.logdensity(model::AbstractBUGSModel, x::AbstractArra
 end
 
 function LogDensityProblems.dimension(model::AbstractBUGSModel)
-    return if_transform ? model.transformed_param_length : model.untransformed_param_length
+    return if model.if_transform
+        model.transformed_param_length
+    else
+        model.untransformed_param_length
+    end
 end
 
 function LogDensityProblems.capabilities(::AbstractBUGSModel)

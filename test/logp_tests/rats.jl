@@ -76,5 +76,5 @@ dppl_logp =
 bugs_logp = JuliaBUGS.evaluate!!(JuliaBUGS.settrans(bugs_model, true), DefaultContext())[2]
 @test bugs_logp ≈ dppl_logp rtol = 1E-6
 
-@test bugs_model.param_length[1] ==
+@test bugs_model.untransformed_param_length ==
     LogDensityProblems.dimension(DynamicPPL.LogDensityFunction(dppl_model))
