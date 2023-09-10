@@ -101,10 +101,7 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits; if_transform
                 )
             end
             value = evaluate(vn, data) # `evaluate(::VarName, env)` is defined in `src/utils.jl`
-            if value isa Nothing # observed
-                vi = setindex!!(vi, value, vn)
-            else # not observed
-                isnothing(value) # not observed
+            if value isa Nothing # not observed
                 push!(parameters, vn)
                 this_param_length = length(dist)
                 untransformed_param_length += this_param_length
@@ -128,6 +125,8 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits; if_transform
                 else
                     vi = setindex!!(vi, value, vn)
                 end
+            else
+                vi = setindex!!(vi, value, vn)
             end
         end
     end
@@ -256,7 +255,8 @@ function MarkovBlanketCoveredBUGSModel(
         untransformed_param_length,
         transformed_param_length,
         sorted_blanket_with_vars,
-        m.param_length,
+        m.untransformed_param_length,
+        m.transformed_param_length,
         m.untransformed_var_lengths,
         m.transformed_var_lengths,
         m.varinfo,
