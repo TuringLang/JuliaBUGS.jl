@@ -377,9 +377,12 @@ function AbstractPPL.evaluate!!(
     flattened_values::AbstractVector,
 )
     if_transform = model.if_transform
-    param_length = if_transform ? model.param_length[2] : model.param_length[1]
+    param_length =
+        if_transform ? model.transformed_param_length : model.untransformed_param_length
+    var_lengths =
+        if_transform ? model.transformed_var_lengths : model.untransformed_var_lengths
     @assert length(flattened_values) == param_length
-    @unpack var_lengths, varinfo, parameters, g, sorted_nodes = model
+    @unpack varinfo, parameters, g, sorted_nodes = model
     vi = deepcopy(varinfo)
     current_idx = 1
     logp = 0.0
@@ -395,7 +398,7 @@ function AbstractPPL.evaluate!!(
             dist = _eval(expr, args)
             if vn in parameters
                 if if_transform
-                    l = var_lengths[vn][2]
+                    l = var_lengths[vn]
                     value_transformed = flattened_values[current_idx:(current_idx + l - 1)]
                     current_idx += l
                     # TODO: this use `DynamicPPL.reconstruct`, which needs attention when decoupling from DynamicPPL
@@ -405,7 +408,7 @@ function AbstractPPL.evaluate!!(
                     logp += logpdf(dist, value) + logjac
                     vi = setindex!!(vi, value, vn)
                 else
-                    l = var_lengths[vn][1]
+                    l = var_lengths[vn]
                     value = DynamicPPL.reconstruct(
                         dist, flattened_values[current_idx:(current_idx + l - 1)]
                     )
