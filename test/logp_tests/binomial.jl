@@ -11,8 +11,7 @@ end
 
 dppl_model = dppl_gamma_model()
 
-bugs_logp =
-    JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(bugs_model, false), DefaultContext()).logp
+bugs_logp = JuliaBUGS.evaluate!!(JuliaBUGS.settrans(bugs_model, false), DefaultContext())[2]
 params_vi = JuliaBUGS.get_params_varinfo(bugs_model, vi)
 # test if JuliaBUGS and DynamicPPL agree on parameters in the model
 @test params_in_dppl_model(dppl_model) == keys(params_vi)
@@ -26,8 +25,7 @@ t_p = DynamicPPL.LogDensityFunction(
 
 @test bugs_logp ≈ LogDensityProblems.logdensity(p, [10.0]) rtol = 1E-6
 
-bugs_logp =
-    JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(bugs_model, true), DefaultContext()).logp
+bugs_logp = JuliaBUGS.evaluate!!(JuliaBUGS.settrans(bugs_model, true), DefaultContext())[2]
 @test bugs_logp ≈
     LogDensityProblems.logdensity(t_p, [transform(bijector(dbin(0.1, 10)), 10.0)]) rtol =
     1E-6

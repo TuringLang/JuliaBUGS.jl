@@ -401,7 +401,7 @@ end
 """
     dmt(μ::Vector, T::Matrix, k)
 
-Return a [Multivariate T](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.MvTDist) 
+Return a [Multivariate T](https://juliastats.org/Distributions.jl/latest/matrix/#Distributions.MatrixTDist) 
 distribution object with mean vector `μ`, precision matrix `T`, and `k` degrees of freedom.
 
 The mathematical form of the PDF for a Multivariate T distribution in the BUGS family of softwares is given by:
@@ -418,17 +418,25 @@ end
 """
     dwish(R::Matrix, k)
 
-Return a [Wishart](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.Wishart) 
+Return a [Wishart](https://juliastats.org/Distributions.jl/latest/matrix/#Distributions.Wishart) 
 distribution object with `k` degrees of freedom and scale matrix `R^(-1)`.
 
 The mathematical form of the PDF for a Wishart distribution in the BUGS family of softwares is given by:
 
 ```math
-p(X|R,k) = |X|^{(k-p-1)/2} e^{-1/2 tr(RX)} / (2^{kp/2} |R|^{k/2} Γ_p(k/2))
+p(X|R,k) = |X|^{(k-p-1)/2} e^{-(1/2) tr(RX)} / (2^{kp/2} |R|^{k/2} Γ_p(k/2))
+```
+where `p` is the dimension of `X`, and `p` should be less or equal to `k`. 
+
+This is the definition as in `The BUGS Book` (Lunn, D. J., Jackson, C., Best, N., 
+Thomas, A., & Spiegelhalter, D. (2013). The BUGS Book: A Practical Introduction to Bayesian 
+Analysis. CRC Press.), which is different from OpenBUGS' definition of the pdf of the Wishart distribution:
+```math
+|R|^{k/2} |x|^{(k-p-1)/2} \\exp\\left(-\\frac{1}{2} \\text{Tr}(Rx)\\right)
 ```
 """
 function dwish(R::Matrix, k)
-    return Wishart(k, inv(R))
+    return Wishart(k, PDMat(inv(R), cholesky(R)))
 end
 
 """

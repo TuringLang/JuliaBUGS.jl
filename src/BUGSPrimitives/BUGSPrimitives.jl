@@ -3,6 +3,7 @@ module BUGSPrimitives
 using Distributions
 using LinearAlgebra
 using LogExpFunctions
+using PDMats
 using Random
 using SpecialFunctions
 using Statistics

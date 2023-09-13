@@ -39,8 +39,7 @@ end
 @unpack Dogs, Trials, Y = data
 dppl_model = dogs(Dogs, Trials, Y, 1 .- Y)
 
-bugs_logp =
-    JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(bugs_model, false), DefaultContext()).logp
+bugs_logp = JuliaBUGS.evaluate!!(JuliaBUGS.settrans(bugs_model, false), DefaultContext())[2]
 
 dppl_logp =
     DynamicPPL.evaluate!!(
@@ -49,8 +48,7 @@ dppl_logp =
 @test bugs_logp ≈ -1243.188922 rtol = 1E-6 # reference value from ProbPALA
 @test bugs_logp ≈ dppl_logp rtol = 1E-6
 
-bugs_logp =
-    JuliaBUGS.evaluate!!(DynamicPPL.settrans!!(bugs_model, true), DefaultContext()).logp
+bugs_logp = JuliaBUGS.evaluate!!(JuliaBUGS.settrans(bugs_model, true), DefaultContext())[2]
 dppl_logp =
     DynamicPPL.evaluate!!(
         dppl_model,

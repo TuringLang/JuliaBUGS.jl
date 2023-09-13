@@ -11,7 +11,11 @@ The `BUGSModel` object is used for inference and represents the output of compil
 
 # Fields
 
-- `param_length::Int`: The length of the parameters vector, defining the number of parameters in the model.
+- `param_length::Int`: The length of the parameters vector, defining the number of parameters in the model, store a tuple of integers,
+    where the first integer is the length of the parameters vector in the original space, and the second integer is the length of the 
+    parameters vector in the transformed space.
+- `var_lengths::Dict{VarName,Tuple{Int,Int}}`: A dictionary that maps the names of the variables in the model to the corresponding
+    lengths of the variables in the original space and the transformed space.
 - `varinfo::SimpleVarInfo`: An instance of 
     [`DynamicPPL.SimpleVarInfo`](https://turinglang.org/DynamicPPL.jl/dev/api/#DynamicPPL.SimpleVarInfo), 
     specifically a dictionary that maps both data and value of variables in the model to the corresponding values.
@@ -22,7 +26,12 @@ The `BUGSModel` object is used for inference and represents the output of compil
 
 """
 struct BUGSModel <: AbstractBUGSModel
-    param_length::Int
+    transformed::Bool
+    untransformed_param_length::Int
+    transformed_param_length::Int
+    # TODO: the following two dictionaries are likely to be very similar, optimize this
+    untransformed_var_lengths::Dict{VarName,Int}
+    transformed_var_lengths::Dict{VarName,Int}
     varinfo::SimpleVarInfo
     parameters::Vector{VarName}
     g::BUGSGraph
@@ -54,10 +63,16 @@ struct UninitializedVariableError <: Exception
     msg::String
 end
 
-function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
+function BUGSModel(
+    g, sorted_nodes, vars, array_sizes, data, inits; is_transformed::Bool=true
+)
     vs = initialize_var_store(data, vars, array_sizes)
     vi = SimpleVarInfo(vs)
     parameters = VarName[]
+    untransformed_param_length = 0
+    transformed_param_length = 0
+    untransformed_var_lengths = Dict{VarName,Int}()
+    transformed_var_lengths = Dict{VarName,Int}()
     for vn in sorted_nodes
         @assert !(g[vn] isa AuxiliaryNodeInfo) "Auxiliary nodes should not be in the graph, but $(g[vn]) is."
 
@@ -87,18 +102,49 @@ function BUGSModel(g, sorted_nodes, vars, array_sizes, data, inits)
                     ),
                 )
             end
-            value = evaluate(vn, data)
-            isnothing(value) && push!(parameters, vn)
-            isnothing(value) && (value = evaluate(vn, inits))
-            if !isnothing(value)
-                vi = setindex!!(vi, value, vn)
+            value = evaluate(vn, data) # `evaluate(::VarName, env)` is defined in `src/utils.jl`
+            if value isa Nothing # not observed
+                push!(parameters, vn)
+                this_param_length = length(dist)
+                untransformed_param_length += this_param_length
+
+                @assert length(dist) == _length(vn) begin
+                    "The dimensionality of distribution $dist: $(length(dist)) does not match length of variable $vn: $(_length(vn)), " *
+                    "please note that if the distribution is a multivariate distribution, " *
+                    "the left hand side variable should use explicit indexing, e.g. x[1:2] ~ dmnorm(...)."
+                end
+                if bijector(dist) == identity
+                    this_param_transformed_length = this_param_length
+                else
+                    this_param_transformed_length = length(Bijectors.transformed(dist))
+                end
+                untransformed_var_lengths[vn] = this_param_length
+                transformed_var_lengths[vn] = this_param_transformed_length
+                transformed_param_length += this_param_transformed_length
+                value = evaluate(vn, inits) # use inits to initialize the value if available
+                if value isa Nothing # not initialized
+                    vi = setindex!!(vi, rand(dist), vn)
+                else
+                    vi = setindex!!(vi, value, vn)
+                end
             else
-                vi = setindex!!(vi, rand(dist), vn)
+                vi = setindex!!(vi, value, vn)
             end
         end
     end
-    l = isempty(parameters) ? 0 : sum(_length(x) for x in parameters)
-    return BUGSModel(l, vi, parameters, g, sorted_nodes)
+    @assert (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) ==
+        untransformed_param_length "$(isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) $untransformed_param_length"
+    return BUGSModel(
+        is_transformed,
+        untransformed_param_length,
+        transformed_param_length,
+        untransformed_var_lengths,
+        transformed_var_lengths,
+        vi,
+        parameters,
+        g,
+        sorted_nodes,
+    )
 end
 
 function initialize_var_store(data, vars, array_sizes)
@@ -126,10 +172,6 @@ function initialize_var_store(data, vars, array_sizes)
     return var_store
 end
 
-function DynamicPPL.settrans!!(m::BUGSModel, if_trans::Bool)
-    return @set m.varinfo = DynamicPPL.settrans!!(m.varinfo, if_trans)
-end
-
 function get_params_varinfo(m::BUGSModel)
     return get_params_varinfo(m, m.varinfo)
 end
@@ -145,37 +187,103 @@ end
     MarkovBlanketCoveredBUGSModel
 
 The model object for a BUGS model with Markov blanket covered.
-The `blanket` field is a vector of `VarName` that contains the Markov blanket of the variables and 
-the variables themselves.
 """
 struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
-    param_length::Int
-    blanket::Vector{VarName}
-    model::BUGSModel
+    # `sorted_nodes` is used for iterating over the nodes in the model
+    # `param_length` is used for specifying the length of the parameters vector 
+    transformed::Bool
+    mb_untransformed_param_length::Int
+    mb_transformed_param_length::Int
+    mb_sorted_nodes::Vector{VarName}
 
-    function MarkovBlanketCoveredBUGSModel(
-        m::BUGSModel, var_group::Union{VarName,Vector{VarName}}
-    )
-        var_group = var_group isa VarName ? [var_group] : var_group
-        non_vars = VarName[]
-        logical_vars = VarName[]
-        for var in var_group
-            if var ∉ labels(m.g)
-                push!(non_vars, var)
-            elseif m.g[var].node_type == Logical
-                push!(logical_vars, var)
+    # these are fields of the original `BUGSModel`
+    untransformed_param_length::Int
+    transformed_param_length::Int
+    untransformed_var_lengths::Dict{VarName,Int}
+    transformed_var_lengths::Dict{VarName,Int}
+    varinfo::SimpleVarInfo
+    parameters::Vector{VarName}
+    g::BUGSGraph
+    sorted_nodes::Vector{VarName}
+end
+
+function MarkovBlanketCoveredBUGSModel(
+    m::BUGSModel,
+    var_group::Union{VarName,Vector{VarName}};
+    is_transformed::Bool=m.transformed,
+)
+    var_group = var_group isa VarName ? [var_group] : var_group
+    non_vars = VarName[]
+    logical_vars = VarName[]
+    for var in var_group
+        if var ∉ labels(m.g)
+            push!(non_vars, var)
+        elseif m.g[var].node_type == Logical
+            push!(logical_vars, var)
+        end
+    end
+    isempty(non_vars) || error("Variables $(non_vars) are not in the model")
+    isempty(logical_vars) ||
+        warn("Variables $(logical_vars) are not stochastic variables, they will be ignored")
+    blanket = markov_blanket(m.g, var_group)
+    blanket_with_vars = union(blanket, var_group)
+    sorted_blanket_with_vars = VarName[]
+    for vn in m.sorted_nodes
+        if vn in blanket_with_vars
+            push!(sorted_blanket_with_vars, vn)
+        end
+    end
+    untransformed_param_length = 0
+    transformed_param_length = 0
+    for vn in m.sorted_nodes
+        if vn in sorted_blanket_with_vars &&
+            !(m.g[vn].node_type == JuliaBUGS.Logical) &&
+            vn ∈ m.parameters
+            @unpack node_function_expr, node_args = m.g[vn]
+            dist = _eval(
+                node_function_expr.args[2],
+                Dict(getsym(arg) => m.varinfo[arg] for arg in node_args),
+            )
+            untransformed_param_length += length(dist)
+            if bijector(dist) == identity
+                transformed_param_length += length(dist)
+            else
+                transformed_param_length += length(Bijectors.transformed(dist))
             end
         end
-        isempty(non_vars) || error("Variables $(non_vars) are not in the model")
-        isempty(logical_vars) || warn(
-            "Variables $(logical_vars) are not stochastic variables, they will be ignored",
-        )
-        blanket = markov_blanket(m.g, var_group)
-        blanket_with_vars = union(blanket, var_group)
-        params = [vn for vn in blanket_with_vars if vn in m.parameters]
-        param_length = isempty(params) ? 0 : sum(_length(vn) for vn in params)
-        return new(param_length, blanket_with_vars, m)
     end
+    return MarkovBlanketCoveredBUGSModel(
+        is_transformed,
+        untransformed_param_length,
+        transformed_param_length,
+        sorted_blanket_with_vars,
+        m.untransformed_param_length,
+        m.transformed_param_length,
+        m.untransformed_var_lengths,
+        m.transformed_var_lengths,
+        m.varinfo,
+        m.parameters,
+        m.g,
+        m.sorted_nodes,
+    )
+end
+
+function BUGSModel(m::MarkovBlanketCoveredBUGSModel; is_transformed=m.transformed)
+    return BUGSModel(
+        is_transformed,
+        m.untransformed_param_length,
+        m.transformed_param_length,
+        m.untransformed_var_lengths,
+        m.transformed_var_lengths,
+        m.varinfo,
+        m.parameters,
+        m.g,
+        m.sorted_nodes,
+    )
+end
+
+function settrans(model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel}, bool::Bool)
+    return @set model.transformed = bool
 end
 
 """
@@ -206,7 +314,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
     return evaluate!!(model, SamplingContext(rng))
 end
 function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
+    @unpack varinfo, g, sorted_nodes = model
     vi = deepcopy(varinfo)
     logp = 0.0
     for vn in sorted_nodes
@@ -229,92 +337,18 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
     return @set vi.logp = logp
 end
 
-AbstractPPL.evaluate!!(model::BUGSModel) = AbstractPPL.evaluate!!(model, DefaultContext())
-function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
-    vi = deepcopy(varinfo)
-    logp = 0.0
-    for vn in sorted_nodes
-        ni = g[vn]
-        @unpack node_type, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
-            value = _eval(expr, args)
-            vi = setindex!!(vi, value, vn)
-        else
-            dist = _eval(expr, args)
-            value = vi[vn]
-            if DynamicPPL.transformation(vi) isa DynamicPPL.DynamicTransformation
-                # although the values stored in `vi` are in their original space, 
-                # when `DynamicTransformation`, we behave as accepting a vector of 
-                # parameters in the transformed space
-                value_transformed = transform(bijector(dist), value)
-                logp +=
-                    logpdf(dist, value) +
-                    logabsdetjac(Bijectors.inverse(bijector(dist)), value_transformed)
-            else
-                logp += logpdf(dist, value)
-            end
-        end
-    end
-    return @set vi.logp = logp
+function AbstractPPL.evaluate!!(model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel})
+    return AbstractPPL.evaluate!!(model, DefaultContext())
 end
-
 function AbstractPPL.evaluate!!(
-    model::BUGSModel, ::LogDensityContext, flattened_values::AbstractVector
+    model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel}, ::DefaultContext
 )
-    @assert length(flattened_values) == model.param_length
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
-    vi = deepcopy(varinfo)
-    current_idx = 1
+    sorted_nodes =
+        model isa MarkovBlanketCoveredBUGSModel ? model.mb_sorted_nodes : model.sorted_nodes
+    g = model.g
+    vi = deepcopy(model.varinfo)
     logp = 0.0
     for vn in sorted_nodes
-        ni = g[vn]
-        @unpack node_type, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
-            value = _eval(expr, args)
-            vi = setindex!!(vi, value, vn)
-        else
-            dist = _eval(expr, args)
-            if vn in parameters # the value of parameter variables are stored in flattened_values
-                l = length(dist)
-                if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
-                    value_transformed = flattened_values[current_idx:(current_idx + l - 1)]
-                    current_idx += l
-                    # TODO: this use `DynamicPPL.reconstruct`, which needs attention when decoupling from DynamicPPL
-                    value, logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
-                        Bijectors.inverse(bijector(dist)), dist, value_transformed
-                    )
-                    logp += logpdf(dist, value) + logjac
-                    vi = setindex!!(vi, value, vn)
-                else
-                    value = DynamicPPL.reconstruct(
-                        dist, flattened_values[current_idx:(current_idx + l - 1)]
-                    )
-                    current_idx += l
-                    logp += logpdf(dist, value)
-                    vi = setindex!!(vi, value, vn)
-                end
-            else
-                logp += logpdf(dist, vi[vn])
-            end
-        end
-    end
-    return @set vi.logp = logp
-end
-
-function AbstractPPL.evaluate!!(model::MarkovBlanketCoveredBUGSModel, ::DefaultContext)
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model.model
-    vi = deepcopy(varinfo)
-    logp = 0.0
-    for vn in sorted_nodes
-        if !(vn in model.blanket)
-            continue
-        end
-
         ni = g[vn]
         @unpack node_type, node_function_expr, node_args = ni
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
@@ -325,7 +359,7 @@ function AbstractPPL.evaluate!!(model::MarkovBlanketCoveredBUGSModel, ::DefaultC
         else
             dist = _eval(expr, args)
             value = vi[vn]
-            if DynamicPPL.transformation(vi) isa DynamicPPL.DynamicTransformation
+            if model.transformed
                 # although the values stored in `vi` are in their original space, 
                 # when `DynamicTransformation`, we behave as accepting a vector of 
                 # parameters in the transformed space
@@ -338,24 +372,37 @@ function AbstractPPL.evaluate!!(model::MarkovBlanketCoveredBUGSModel, ::DefaultC
             end
         end
     end
-    return @set vi.logp = logp
+    return vi, logp
 end
 
 function AbstractPPL.evaluate!!(
-    model::MarkovBlanketCoveredBUGSModel,
+    model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel},
     ::LogDensityContext,
     flattened_values::AbstractVector,
 )
-    @assert length(flattened_values) == model.param_length
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model.model
-    vi = deepcopy(varinfo)
+    param_length = if model isa MarkovBlanketCoveredBUGSModel
+        if model.transformed
+            model.mb_transformed_param_length
+        else
+            model.mb_untransformed_param_length
+        end
+    else
+        if model.transformed
+            model.transformed_param_length
+        else
+            model.untransformed_param_length
+        end
+    end
+    var_lengths =
+        model.transformed ? model.transformed_var_lengths : model.untransformed_var_lengths
+    sorted_nodes =
+        model isa MarkovBlanketCoveredBUGSModel ? model.mb_sorted_nodes : model.sorted_nodes
+    @assert length(flattened_values) == param_length
+    g = model.g
+    vi = deepcopy(model.varinfo)
     current_idx = 1
     logp = 0.0
     for vn in sorted_nodes
-        if !(vn in model.blanket)
-            continue
-        end
-
         ni = g[vn]
         @unpack node_type, node_function_expr, node_args = ni
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
@@ -365,9 +412,9 @@ function AbstractPPL.evaluate!!(
             vi = setindex!!(vi, value, vn)
         else
             dist = _eval(expr, args)
-            if vn in parameters # the value of parameter variables are stored in flattened_values
-                l = length(dist)
-                if DynamicPPL.transformation(vi) == DynamicPPL.DynamicTransformation()
+            if vn in model.parameters
+                if model.transformed
+                    l = var_lengths[vn]
                     value_transformed = flattened_values[current_idx:(current_idx + l - 1)]
                     current_idx += l
                     # TODO: this use `DynamicPPL.reconstruct`, which needs attention when decoupling from DynamicPPL
@@ -377,6 +424,7 @@ function AbstractPPL.evaluate!!(
                     logp += logpdf(dist, value) + logjac
                     vi = setindex!!(vi, value, vn)
                 else
+                    l = var_lengths[vn]
                     value = DynamicPPL.reconstruct(
                         dist, flattened_values[current_idx:(current_idx + l - 1)]
                     )
@@ -389,5 +437,5 @@ function AbstractPPL.evaluate!!(
             end
         end
     end
-    return @set vi.logp = logp
+    return vi, logp
 end
