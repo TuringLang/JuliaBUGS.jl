@@ -192,19 +192,19 @@ struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
     # `sorted_nodes` is used for iterating over the nodes in the model
     # `param_length` is used for specifying the length of the parameters vector 
     transformed::Bool
-    untransformed_param_length::Int
-    transformed_param_length::Int
-    sorted_nodes::Vector{VarName}
+    mb_untransformed_param_length::Int
+    mb_transformed_param_length::Int
+    mb_sorted_nodes::Vector{VarName}
 
     # these are fields of the original `BUGSModel`
-    base_untransformed_param_length::Int
-    base_transformed_param_length::Int
+    untransformed_param_length::Int
+    transformed_param_length::Int
     untransformed_var_lengths::Dict{VarName,Int}
     transformed_var_lengths::Dict{VarName,Int}
     varinfo::SimpleVarInfo
     parameters::Vector{VarName}
     g::BUGSGraph
-    base_sorted_nodes::Vector{VarName}
+    sorted_nodes::Vector{VarName}
 end
 
 function MarkovBlanketCoveredBUGSModel(
@@ -271,8 +271,8 @@ end
 function BUGSModel(m::MarkovBlanketCoveredBUGSModel; is_transformed=m.transformed)
     return BUGSModel(
         is_transformed,
-        m.base_untransformed_param_length,
-        m.base_transformed_param_length,
+        m.untransformed_param_length,
+        m.transformed_param_length,
         m.untransformed_var_lengths,
         m.transformed_var_lengths,
         m.varinfo,
@@ -343,8 +343,10 @@ end
 function AbstractPPL.evaluate!!(
     model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel}, ::DefaultContext
 )
-    @unpack varinfo, g, sorted_nodes = model
-    vi = deepcopy(varinfo)
+    sorted_nodes =
+        model isa MarkovBlanketCoveredBUGSModel ? model.mb_sorted_nodes : model.sorted_nodes
+    g = model.g
+    vi = deepcopy(model.varinfo)
     logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
@@ -378,14 +380,26 @@ function AbstractPPL.evaluate!!(
     ::LogDensityContext,
     flattened_values::AbstractVector,
 )
-    is_transformed = model.transformed
-    param_length =
-        is_transformed ? model.transformed_param_length : model.untransformed_param_length
+    param_length = if model isa MarkovBlanketCoveredBUGSModel
+        if model.transformed
+            model.mb_transformed_param_length
+        else
+            model.mb_untransformed_param_length
+        end
+    else
+        if model.transformed
+            model.transformed_param_length
+        else
+            model.untransformed_param_length
+        end
+    end
     var_lengths =
-        is_transformed ? model.transformed_var_lengths : model.untransformed_var_lengths
+        model.transformed ? model.transformed_var_lengths : model.untransformed_var_lengths
+    sorted_nodes =
+        model isa MarkovBlanketCoveredBUGSModel ? model.mb_sorted_nodes : model.sorted_nodes
     @assert length(flattened_values) == param_length
-    @unpack varinfo, parameters, g, sorted_nodes = model
-    vi = deepcopy(varinfo)
+    g = model.g
+    vi = deepcopy(model.varinfo)
     current_idx = 1
     logp = 0.0
     for vn in sorted_nodes
@@ -398,8 +412,8 @@ function AbstractPPL.evaluate!!(
             vi = setindex!!(vi, value, vn)
         else
             dist = _eval(expr, args)
-            if vn in parameters
-                if is_transformed
+            if vn in model.parameters
+                if model.transformed
                     l = var_lengths[vn]
                     value_transformed = flattened_values[current_idx:(current_idx + l - 1)]
                     current_idx += l

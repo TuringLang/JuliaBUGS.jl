@@ -43,8 +43,8 @@ c = @varname c
 
 mb_model = MarkovBlanketCoveredBUGSModel(model, c)
 # tests for MarkovBlanketCoveredBUGSModel constructor
-@test mb_model.untransformed_param_length == 4
-@test Set(Symbol.(mb_model.sorted_nodes)) == Set([:l, :a, :b, :f, :c])
+@test mb_model.mb_untransformed_param_length == 4
+@test Set(Symbol.(mb_model.mb_sorted_nodes)) == Set([:l, :a, :b, :f, :c])
 
 mb_logp = begin
     logp = 0
