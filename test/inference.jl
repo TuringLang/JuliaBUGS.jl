@@ -1,3 +1,17 @@
+# ReverseDiff
+
+# tape compilation for trans-dim bijectors
+# `birats` contains Dirichlet distribution 
+
+model_def = JuliaBUGS.BUGSExamples.birats.model_def;
+data = JuliaBUGS.BUGSExamples.birats.data;
+inits = JuliaBUGS.BUGSExamples.birats.inits[1];
+model = compile(model_def, data, inits);
+ad_model = ADgradient(:ReverseDiff, model; compile=Val(false));
+D = LogDensityProblems.dimension(model); initial_θ = rand(D)
+LogDensityProblems.logdensity_and_gradient(ad_model, initial_θ)
+# if no error is thrown, then the test passes
+
 # AdvancedHMC
 
 # test generation of parameter names
