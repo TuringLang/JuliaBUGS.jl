@@ -671,7 +671,7 @@ julia> concretize_colon_indexing(:(f(x[1, :])), Dict(:x => (3, 4)), Dict(:x => [
 :(f(x[1, 1:4]))
 ```
 """
-function concretize_colon_indexing(expr::Expr, array_sizes, data)
+function concretize_colon_indexing(expr, array_sizes, data)
     return MacroTools.postwalk(expr) do sub_expr
         if MacroTools.@capture(sub_expr, x_[idx__])
             for i in 1:length(idx)
@@ -746,8 +746,8 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
     rhs = evaluate(rhs_expr, env)
 
     if rhs isa Symbol
-        @assert lhs isa Union{Scalar,ArrayElement}
-        node_function = :identity
+        @assert lhs_var isa Union{Scalar,ArrayElement}
+        node_function = MacroTools.@q(x -> x) # TODO: find a form that is more clear
         node_args = [Var(rhs)]
         dependencies = [Var(rhs)]
     elseif Meta.isexpr(rhs, :ref) &&
