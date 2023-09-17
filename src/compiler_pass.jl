@@ -351,21 +351,35 @@ function assignment!(pass::CollectVariables, expr::Expr, env)
     v = find_variables_on_lhs(
         Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
     )
-    !isa(v, Scalar) && check_idxs(v.name, v.indices, env)
-    is_resolved(evaluate(v, env)) &&
-        Meta.isexpr(expr, :(=)) &&
+    if !isa(v, Scalar)
+        check_idxs(v.name, v.indices, env)
+    end
+    if is_resolved(evaluate(v, env)) && Meta.isexpr(expr, :(=))
         error("$v is data, can't be assigned to.")
+    end
 
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
-    haskey(pass.vars, v) && var_type == pass.vars[v] && error("Repeated assignment to $v.")
+    if haskey(pass.vars, v) && var_type == pass.vars[v]
+        error("Repeated assignment to $v.")
+    end
+
     if var_type == Logical
         rhs = evaluate(rhs_expr, env)
         is_resolved(rhs) && (pass.transformed_variables[v] = rhs)
         haskey(pass.vars, v) &&
             !is_resolved(rhs) &&
-            error("$v is assigned to by both logical and stochastic assignments, 
-            only allowed when the variable is a transformation of data.")
+            error(
+                "$v is assigned to by both logical and stochastic assignments, " *
+                "this is only allowed when the variable is a transformation of data.",
+            )
         haskey(pass.vars, v) && (var_type = Stochastic)
+    else
+        if haskey(pass.vars, v) && !haskey(pass.transformed_variables, v)
+            error(
+                "$v is assigned to by both logical and stochastic assignments, " *
+                "this is only allowed when the variable is a transformation of data.",
+            )
+        end
     end
     return pass.vars[v] = var_type
 end
@@ -747,7 +761,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
 
     if rhs isa Symbol
         @assert lhs_var isa Union{Scalar,ArrayElement}
-        node_function = MacroTools.@q(x -> x) # TODO: find a form that is more clear
+        node_function = MacroTools.@q ($(rhs)) -> $(rhs)
         node_args = [Var(rhs)]
         dependencies = [Var(rhs)]
     elseif Meta.isexpr(rhs, :ref) &&
