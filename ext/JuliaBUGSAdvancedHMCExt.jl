@@ -9,7 +9,7 @@ using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.UnPack
-using JuliaBUGS.DynamicPPL: settrans!!
+using JuliaBUGS.DynamicPPL
 using AbstractMCMC
 using MCMCChains: Chains
 using AdvancedHMC
@@ -23,21 +23,21 @@ function AbstractMCMC.bundle_samples(
     chain_type::Type{Chains};
     discard_initial=0,
     thinning=1,
-    model::AbstractBUGSModel=logdensitymodel.logdensity.ℓ,
+    model::JuliaBUGS.BUGSModel=logdensitymodel.logdensity.ℓ, # MarkovBlanketCoveredBUGSModel not supported yet
     kwargs...,
 )
-    @unpack param_length, varinfo, parameters, g, sorted_nodes = model
-
+    # return ts
     # Turn all the transitions into a vector-of-vectors.
     t = ts[1]
-    tstat = merge((; lp=t.z.ℓπ.value), stat(t))
+    tstat = merge((; lp=t.z.ℓπ.value), AdvancedHMC.stat(t))
     tstat_names = collect(keys(tstat))
 
     samples = [t.z.θ for t in ts]
-    generated_vars = filter(l_var -> l_var in find_generated_vars(g), model.sorted_nodes)
-    model = settrans!!(model, true)
-    generate_quantities = [
-        evaluate!!(model, LogDensityContext(), samples[i])[generated_vars] for
+    generated_vars = filter(
+        l_var -> l_var in find_generated_vars(model.g), model.sorted_nodes
+    )
+    generate_quantities = Vector{Float64}[
+        first(evaluate!!(model, LogDensityContext(), samples[i]))[generated_vars] for
         i in eachindex(ts)
     ]
     vals = [
@@ -49,11 +49,34 @@ function AbstractMCMC.bundle_samples(
         ) for i in eachindex(ts)
     ]
 
-    param_names = JuliaBUGS.param_names(model)
+    # getting a SimpleVarInfo of which keys are only the parameters
+    param_vi = JuliaBUGS.get_params_varinfo(
+        model, first(JuliaBUGS.evaluate!!(model, JuliaBUGS.LogDensityContext(), samples[1]))
+    )
+    param_name_leaves = vcat(
+        [
+            collect(DynamicPPL.varname_leaves(vn, param_vi.values[vn])) for
+            vn in model.parameters
+        ]...,
+    )
+    generated_varname_leaves = vcat(
+        [
+            collect(DynamicPPL.varname_leaves(vn, generate_quantities[1][i])) for
+            (i, vn) in enumerate(generated_vars)
+        ]...,
+    )
+    @assert length(vals[1]) ==
+        length(param_name_leaves) +
+            length(generated_varname_leaves) +
+            length(tstat_names)
+
     return Chains(
         vals,
-        vcat(param_names, Symbol.(generated_vars), tstat_names),
-        (parameters=vcat(param_names, Symbol.(generated_vars)), internals=tstat_names);
+        vcat(Symbol.(param_name_leaves), Symbol.(generated_varname_leaves), tstat_names),
+        (
+            parameters=vcat(Symbol.(param_name_leaves), Symbol.(generated_varname_leaves)),
+            internals=tstat_names,
+        );
         start=discard_initial + 1,
         thin=thinning,
     )
