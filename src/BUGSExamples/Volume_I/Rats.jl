@@ -81,4 +81,9 @@ rats = (
             var"beta.tau"=0.1,
         ),
     ],
+    reference_results=(
+        alpha0=(mean=106.6, std=3.66),
+        var"beta.c"=(mean=6.186, std=0.1086),
+        sigma=(mean=6.093, std=0.4643),
+    ),
 )
