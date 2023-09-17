@@ -4,9 +4,6 @@ This example is taken from section 6 of *Gelfand et al. (1990)*, and concerns 30
 weights were measured weekly for five weeks. Part of the data is shown below, where $Y_{ij}$ is the
 weight of the $i^{th}$ rat measured at age $x_j$.
 
-
-
-
 <center>
 
 $$\text{Weights } Y_{ij} \text{ of rat } i \text{ on day } x_j$$
@@ -44,5 +41,3 @@ be independent).
 
 $ a_c $, $ \tau_a $, $ b_c $, $ \tau_b $, $ \tau_c $ are given independent "noninformative" priors. Interest particularly focuses on
 the intercept at zero time (birth), denoted $ a_0 = a_c - b_c \cdot \bar{x} $.
-
-

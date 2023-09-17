@@ -38,4 +38,11 @@ sigma <- 1 / sqrt(tau)
             b=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ),
     ],
+    reference_results=(
+        alpha0=(mean=-0.5499, std=0.1965),
+        alpha1=(mean=0.08902, std=0.3124),
+        alpha12=(mean=-0.841, std=0.4372),
+        alpha2=(mean=1.356, std=0.2772),
+        sigma=(mean=0.2922, std=0.1467),
+    ),
 )

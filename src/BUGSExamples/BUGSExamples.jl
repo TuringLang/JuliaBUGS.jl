@@ -52,4 +52,12 @@ const VOLUME_I = (
 
 const VOLUME_II = (birats=birats, eyes=eyes)
 
+function has_ground_truth(m::Symbol)
+    if m in union(keys(VOLUME_I), keys(VOLUME_II))
+        return haskey(getfield(BUGSExamples, m), :reference_results)
+    else
+        return false
+    end
+end
+
 end
