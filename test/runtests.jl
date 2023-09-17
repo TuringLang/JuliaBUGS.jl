@@ -32,10 +32,13 @@ using JuliaBUGS.BUGSPrimitives: mean
 using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
 using MCMCChains
+using Random
 using ReverseDiff
 using Setfield
 using Test
 using UnPack
+
+Random.seed!(12345)
 
 @testset "Function Unit Tests" begin
     DocMeta.setdocmeta!(

@@ -73,4 +73,7 @@ sigma <- sqrt(1 / tau) # normal errors
         (beta0=10, beta=[0, 0, 0], tau=0.1, phi=0.1),
         (beta0=1.0, beta=[1.0, 1.0, 1.0], tau=1.0, phi=1.0),
     ],
+    reference_results=(
+        b0=(mean=-39.64, std=12.63), var"outlier[21]"=(mean=0.3324, std=0.4711)
+    ),
 )

@@ -46,4 +46,10 @@ equiv <- step(theta - 0.8) - step(theta - 1.2)
         sign=[1, -1],
     ),
     inits=[(mu=0, phi=0, pi=0, tau1=1, tau2=1), (mu=10, phi=10, pi=10, tau1=0.1, tau2=0.1)],
+    reference_results=(
+        equiv=(mean=0.998, std=0.04468),
+        mu=(mean=1.436, std=0.05751),
+        phi=(mean=-0.008613, std=0.05187),
+        sigma1=(mean=0.1102, std=0.03268),
+    ),
 )
