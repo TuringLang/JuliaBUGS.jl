@@ -116,8 +116,12 @@ julia> evaluate(Var(:x, (1:2, )), Dict(:x => [1, missing]))
 ```
 """
 function evaluate(v::Var, env)
-    haskey(env, v.name) || return v
-    v isa Scalar && return env[v.name]
+    if !haskey(env, v.name)
+        return v isa Scalar ? v : scalarize(v)
+    end
+    if v isa Scalar
+        return env[v.name]
+    end
     if v isa ArrayElement
         value = env[v.name][v.indices...]
         return ismissing(value) ? v : value

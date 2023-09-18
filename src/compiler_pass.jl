@@ -779,7 +779,10 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
             dependencies = [rhs_var]
         else
             # rhs is not evaluated into a concrete value, then at least some elements of the rhs array are not data
-            non_data_vars = filter(x -> x isa Var, evaluate(rhs, env))
+            non_data_vars = filter(x -> x isa Var, evaluate(rhs_var, env))
+            # for now: evaluate(rhs_var, env) will produce scalarized `Var`s, so dependencies
+            # may contain `Auxiliary Nodes`, this should be okay, but maybe we should keep things uniform
+            # by keep `dependencies` only variables in the model, not auxiliary nodes
             for v in non_data_vars
                 @assert pass.array_bitmap[v.name][v.indices...] "Variable $v is not defined."
             end
