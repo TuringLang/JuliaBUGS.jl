@@ -68,8 +68,8 @@ end
     include("parser.jl")
 end
 
-@testset "Compiler Passes" begin
-    # TODO: test output of compiler passes, particularly the array size deduction, nested indexing
+@testset "Compilation" begin
+    include("compile.jl")
 end
 
 @testset "Compile $m" for m in [
