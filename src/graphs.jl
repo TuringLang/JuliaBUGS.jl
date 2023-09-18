@@ -31,7 +31,7 @@ and functions associated with a node within the BUGS model's dependency graph.
 """
 struct ConcreteNodeInfo <: NodeInfo
     node_type::VariableTypes
-    node_function_expr::Union{Expr,Symbol}
+    node_function_expr::Expr
     node_args::Vector
 end
 
