@@ -32,7 +32,7 @@ and functions associated with a node within the BUGS model's dependency graph.
 struct ConcreteNodeInfo <: NodeInfo
     node_type::VariableTypes
     node_function_expr::Expr
-    node_args::Vector{VarName}
+    node_args::Vector
 end
 
 function ConcreteNodeInfo(var::Var, vars, node_functions, node_args)

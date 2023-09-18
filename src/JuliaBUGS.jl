@@ -211,7 +211,7 @@ julia> JuliaBUGS.f(1)
 macro register_primitive(func::Symbol)
     return quote
         @eval JuliaBUGS begin
-            $func_name = Main.$func
+            $func = Main.$func
         end
     end
 end

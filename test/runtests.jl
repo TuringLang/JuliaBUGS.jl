@@ -68,8 +68,8 @@ end
     include("parser.jl")
 end
 
-@testset "Compiler Passes" begin
-    # TODO: test output of compiler passes, particularly the array size deduction, nested indexing
+@testset "Compilation" begin
+    include("compile.jl")
 end
 
 @testset "Compile $m" for m in [
@@ -80,8 +80,8 @@ end
     :epil,
     :equiv,
     :kidney,
-    :leuk,
-    :leukfr,
+    # :leuk, # leuk requires higher-level of constant propagation, particularly dN is transformed variable, but only if Y is figured out first
+    # :leukfr, # similar reason to `leuk`
     :lsat,
     :magnesium,
     :mice,

@@ -351,21 +351,35 @@ function assignment!(pass::CollectVariables, expr::Expr, env)
     v = find_variables_on_lhs(
         Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
     )
-    !isa(v, Scalar) && check_idxs(v.name, v.indices, env)
-    is_resolved(evaluate(v, env)) &&
-        Meta.isexpr(expr, :(=)) &&
+    if !isa(v, Scalar)
+        check_idxs(v.name, v.indices, env)
+    end
+    if is_resolved(evaluate(v, env)) && Meta.isexpr(expr, :(=))
         error("$v is data, can't be assigned to.")
+    end
 
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
-    haskey(pass.vars, v) && var_type == pass.vars[v] && error("Repeated assignment to $v.")
+    if haskey(pass.vars, v) && var_type == pass.vars[v]
+        error("Repeated assignment to $v.")
+    end
+
     if var_type == Logical
         rhs = evaluate(rhs_expr, env)
         is_resolved(rhs) && (pass.transformed_variables[v] = rhs)
         haskey(pass.vars, v) &&
             !is_resolved(rhs) &&
-            error("$v is assigned to by both logical and stochastic assignments, 
-            only allowed when the variable is a transformation of data.")
+            error(
+                "$v is assigned to by both logical and stochastic assignments, " *
+                "this is only allowed when the variable is a transformation of data.",
+            )
         haskey(pass.vars, v) && (var_type = Stochastic)
+    else
+        if haskey(pass.vars, v) && !haskey(pass.transformed_variables, v)
+            error(
+                "$v is assigned to by both logical and stochastic assignments, " *
+                "this is only allowed when the variable is a transformation of data.",
+            )
+        end
     end
     return pass.vars[v] = var_type
 end
@@ -671,7 +685,7 @@ julia> concretize_colon_indexing(:(f(x[1, :])), Dict(:x => (3, 4)), Dict(:x => [
 :(f(x[1, 1:4]))
 ```
 """
-function concretize_colon_indexing(expr::Expr, array_sizes, data)
+function concretize_colon_indexing(expr, array_sizes, data)
     return MacroTools.postwalk(expr) do sub_expr
         if MacroTools.@capture(sub_expr, x_[idx__])
             for i in 1:length(idx)
@@ -746,8 +760,8 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
     rhs = evaluate(rhs_expr, env)
 
     if rhs isa Symbol
-        @assert lhs isa Union{Scalar,ArrayElement}
-        node_function = :identity
+        @assert lhs_var isa Union{Scalar,ArrayElement}
+        node_function = MacroTools.@q ($(rhs)) -> $(rhs)
         node_args = [Var(rhs)]
         dependencies = [Var(rhs)]
     elseif Meta.isexpr(rhs, :ref) &&
@@ -765,7 +779,10 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
             dependencies = [rhs_var]
         else
             # rhs is not evaluated into a concrete value, then at least some elements of the rhs array are not data
-            non_data_vars = filter(x -> x isa Var, evaluate(rhs, env))
+            non_data_vars = filter(x -> x isa Var, evaluate(rhs_var, env))
+            # for now: evaluate(rhs_var, env) will produce scalarized `Var`s, so dependencies
+            # may contain `Auxiliary Nodes`, this should be okay, but maybe we should keep things uniform
+            # by keep `dependencies` only variables in the model, not auxiliary nodes
             for v in non_data_vars
                 @assert pass.array_bitmap[v.name][v.indices...] "Variable $v is not defined."
             end

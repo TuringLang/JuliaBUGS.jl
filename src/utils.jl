@@ -17,6 +17,9 @@ function _eval(expr::Symbol, env)
         return env[expr]
     end
 end
+function _eval(expr::AbstractRange, env)
+    return expr
+end
 function _eval(expr::Expr, env)
     if Meta.isexpr(expr, :call)
         f = expr.args[1]

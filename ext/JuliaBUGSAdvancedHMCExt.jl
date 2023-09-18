@@ -26,45 +26,49 @@ function AbstractMCMC.bundle_samples(
     model::JuliaBUGS.BUGSModel=logdensitymodel.logdensity.ℓ, # MarkovBlanketCoveredBUGSModel not supported yet
     kwargs...,
 )
-    # return ts
-    # Turn all the transitions into a vector-of-vectors.
-    t = ts[1]
-    tstat = merge((; lp=t.z.ℓπ.value), AdvancedHMC.stat(t))
+    tstat = merge((; lp=ts[1].z.ℓπ.value), AdvancedHMC.stat(ts[1]))
     tstat_names = collect(keys(tstat))
 
     samples = [t.z.θ for t in ts]
-    generated_vars = filter(
-        l_var -> l_var in find_generated_vars(model.g), model.sorted_nodes
+
+    param_vars = model.parameters
+
+    generated_vars = find_generated_vars(model.g)
+    generated_vars = [v for v in model.sorted_nodes if v in generated_vars] # keep the order
+
+    param_vals = []
+    generated_quantities = []
+    for i in eachindex(ts)
+        vi = first(evaluate!!(model, LogDensityContext(), samples[i]))
+        push!(param_vals, vi[param_vars])
+        push!(generated_quantities, vi[generated_vars])
+    end
+
+    param_name_leaves = vcat(
+        [
+            collect(DynamicPPL.varname_leaves(vn, param_vals[1][i])) for
+            (i, vn) in enumerate(param_vars)
+        ]...,
     )
-    generate_quantities = Vector{Float64}[
-        first(evaluate!!(model, LogDensityContext(), samples[i]))[generated_vars] for
-        i in eachindex(ts)
-    ]
+    generated_varname_leaves = vcat(
+        [
+            collect(DynamicPPL.varname_leaves(vn, generated_quantities[1][i])) for
+            (i, vn) in enumerate(generated_vars)
+        ]...,
+    )
+
+    # some of the values may be arrays
+    flattened_param_vals = [vcat(p...) for p in param_vals]
+    flattened_generated_quantities = [vcat(gq...) for gq in generated_quantities]
     vals = [
         vcat(
-            ts[i].z.θ,
-            generate_quantities[i],
+            flattened_param_vals[i],
+            flattened_generated_quantities[i],
             ts[i].z.ℓπ.value,
             collect(values(AdvancedHMC.stat(ts[i]))),
         ) for i in eachindex(ts)
     ]
 
-    # getting a SimpleVarInfo of which keys are only the parameters
-    param_vi = JuliaBUGS.get_params_varinfo(
-        model, first(JuliaBUGS.evaluate!!(model, JuliaBUGS.LogDensityContext(), samples[1]))
-    )
-    param_name_leaves = vcat(
-        [
-            collect(DynamicPPL.varname_leaves(vn, param_vi.values[vn])) for
-            vn in model.parameters
-        ]...,
-    )
-    generated_varname_leaves = vcat(
-        [
-            collect(DynamicPPL.varname_leaves(vn, generate_quantities[1][i])) for
-            (i, vn) in enumerate(generated_vars)
-        ]...,
-    )
     @assert length(vals[1]) ==
         length(param_name_leaves) +
             length(generated_varname_leaves) +
