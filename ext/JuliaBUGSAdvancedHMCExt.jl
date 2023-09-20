@@ -40,8 +40,8 @@ function AbstractMCMC.bundle_samples(
     generated_quantities = []
     for i in eachindex(ts)
         vi = first(evaluate!!(model, LogDensityContext(), samples[i]))
-        push!(param_vals, vi[param_vars])
-        push!(generated_quantities, vi[generated_vars])
+        push!(param_vals, [vi[param_var] for param_var in param_vars])
+        push!(generated_quantities, [vi[generated_var] for generated_var in generated_vars])
     end
 
     param_name_leaves = vcat(
@@ -61,11 +61,14 @@ function AbstractMCMC.bundle_samples(
     flattened_param_vals = [vcat(p...) for p in param_vals]
     flattened_generated_quantities = [vcat(gq...) for gq in generated_quantities]
     vals = [
-        vcat(
-            flattened_param_vals[i],
-            flattened_generated_quantities[i],
-            ts[i].z.ℓπ.value,
-            collect(values(AdvancedHMC.stat(ts[i]))),
+        convert(
+            Vector{Real},
+            vcat(
+                flattened_param_vals[i],
+                flattened_generated_quantities[i],
+                ts[i].z.ℓπ.value,
+                collect(values(AdvancedHMC.stat(ts[i]))),
+            ),
         ) for i in eachindex(ts)
     ]
 

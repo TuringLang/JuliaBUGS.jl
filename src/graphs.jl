@@ -35,6 +35,17 @@ struct ConcreteNodeInfo <: NodeInfo
     node_args::Vector
 end
 
+function Base.show(io::IO, n::ConcreteNodeInfo)
+    if n isa ConcreteNodeInfo
+        print(io, "ConcreteNodeInfo(\n",
+            "\tNode Type: ", n.node_type, "\n",
+            "\tNode Function Expression: ", n.node_function_expr, "\n",
+            "\tNode Arguments: ", n.node_args, "\n",
+            ")"
+        )
+    end
+end
+
 function ConcreteNodeInfo(var::Var, vars, node_functions, node_args)
     return ConcreteNodeInfo(
         vars[var],
