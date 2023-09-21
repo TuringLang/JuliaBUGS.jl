@@ -25,9 +25,7 @@ function GraphPlot.gplot(g::JuliaBUGS.BUGSGraph, parameters; kwargs...)
     nodelabel = get(kwargs, :nodelabel, map(x -> String(Symbol(x)), labels(g)))
     nodefillc = get(kwargs, :nodefillc, String.(colors))
 
-    return gplot(
-        g.graph; nodelabel=nodelabel, nodefillc=nodefillc, kwargs...
-    )
+    return gplot(g.graph; nodelabel=nodelabel, nodefillc=nodefillc, kwargs...)
 end
 
 end

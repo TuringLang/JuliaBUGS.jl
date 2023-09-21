@@ -28,7 +28,7 @@ function TikzGraphs.plot(g::JuliaBUGS.BUGSGraph, parameters; kwargs...)
         node_style=node_style,
         node_styles=node_styles,
         edge_style=edge_style,
-        kwargs...
+        kwargs...,
     )
 end
 
