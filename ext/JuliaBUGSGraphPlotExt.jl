@@ -4,10 +4,11 @@ using GraphPlot
 using JuliaBUGS
 using JuliaBUGS.MetaGraphsNext
 
-function GraphPlot.gplot(m::JuliaBUGS.BUGSModel)
-    return GraphPlot.gplot(m.g, m.parameters)
+function GraphPlot.gplot(m::JuliaBUGS.BUGSModel; kwargs...)
+    return GraphPlot.gplot(m.g, m.parameters; kwargs...)
 end
-function GraphPlot.gplot(g::JuliaBUGS.BUGSGraph, parameters)
+
+function GraphPlot.gplot(g::JuliaBUGS.BUGSGraph, parameters; kwargs...)
     colors = []
     for node in labels(g)
         if g[node].node_type == JuliaBUGS.Stochastic
@@ -21,9 +22,10 @@ function GraphPlot.gplot(g::JuliaBUGS.BUGSGraph, parameters)
         end
     end
 
-    return gplot(
-        g.graph; nodelabel=map(x -> String(Symbol(x)), labels(g)), nodefillc=String.(colors)
-    )
+    nodelabel = get(kwargs, :nodelabel, map(x -> String(Symbol(x)), labels(g)))
+    nodefillc = get(kwargs, :nodefillc, String.(colors))
+
+    return gplot(g.graph; nodelabel=nodelabel, nodefillc=nodefillc, kwargs...)
 end
 
 end
