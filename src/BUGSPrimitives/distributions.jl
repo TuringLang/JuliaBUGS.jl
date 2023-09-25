@@ -386,7 +386,7 @@ end
     dmnorm(μ::AbstractVector, T::AbstractMatrix)
 
 Return a [Multivariate Normal](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.MvNormal) 
-distribution object with mean vector `μ` and precision matrix `inv(T)`.
+distribution object with mean vector `μ` and covariance matrix `inv(T)`.
 
 The mathematical form of the PDF for a Multivariate Normal distribution in the BUGS family of softwares is given by:
 
@@ -419,7 +419,7 @@ end
     dwish(R::AbstractMatrix, k)
 
 This function returns a [Wishart](https://juliastats.org/Distributions.jl/latest/matrix/#Distributions.Wishart) 
-distribution object. The distribution is characterized by `k` degrees of freedom and the inverse of the scale matrix `R`.
+distribution object. The distribution is characterized by `k` degrees of freedom and the scale matrix `inv(R)`.
 
 The probability density function (PDF) for a Wishart distribution, as defined in the BUGS software suite, is:
 
@@ -443,7 +443,6 @@ function dwish(R::AbstractMatrix, k)
             ),
         )
     end
-    
     return Wishart(k, inv(PDMat(R)))
 end
 
