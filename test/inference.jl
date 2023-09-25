@@ -75,4 +75,38 @@ end
                 ref_inference_results[var].std rtol = 0.2
         end
     end
+
+    @testset "Inference results on examples: m" for m in [:birats]
+        data = JuliaBUGS.BUGSExamples.VOLUME_II[m].data
+        inits = JuliaBUGS.BUGSExamples.VOLUME_II[m].inits[1]
+        model = JuliaBUGS.compile(
+            JuliaBUGS.BUGSExamples.VOLUME_II[m].model_def, data, inits
+        )
+
+        ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
+
+        n_samples, n_adapts = 3000, 1000
+
+        D = LogDensityProblems.dimension(model)
+        initial_θ = rand(D)
+
+        samples_and_stats = AbstractMCMC.sample(
+            ad_model,
+            NUTS(0.6),
+            n_samples;
+            chain_type=Chains,
+            n_adapts=n_adapts,
+            init_params=initial_θ,
+            discard_initial=n_adapts,
+        )
+
+        @assert JuliaBUGS.BUGSExamples.has_ground_truth(m) "No reference inference results for $m"
+        ref_inference_results = JuliaBUGS.BUGSExamples.VOLUME_II[m].reference_results
+        @testset "$m: $var" for var in keys(ref_inference_results)
+            @test summarize(samples_and_stats)[var].nt.mean[1] ≈
+                ref_inference_results[var].mean rtol = 0.2
+            @test summarize(samples_and_stats)[var].nt.std[1] ≈
+                ref_inference_results[var].std rtol = 0.2
+        end
+    end
 end
