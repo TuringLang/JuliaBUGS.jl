@@ -137,3 +137,30 @@ birats = (
         ),
     ],
 )
+
+# https://github.com/stan-dev/example-models/tree/master/bugs_examples/vol2/birats
+birats_alt = (
+    model_def=(@bugs begin
+        for n in 1:N
+            beta[n, 1:2] ~ MvNormal(mu_beta[:], Sigma_beta[:, :])
+            for t in 1:T
+                y[n, t] ~ Normal(beta[n, 1] + beta[n, 2] * x[t], sqrt(sigmasq_y))
+            end
+        end
+        sigmasq_y ~ InverseGamma(0.001, 0.001)
+        mu_beta[1] ~ Normal(0, 100)
+        mu_beta[2] ~ Normal(0, 100)
+        Sigma_beta[1:2, 1:2] ~ InverseWishart(2, Omega[:, :])
+    end),
+    data=let d = birats.data
+        (N=d.N, T=d.T, y=d.Y, x=d.x, Omega=[0.005 0; 0 5])
+    end,
+    inits=[
+        let i = birats.inits[1]
+            (sigmasq_y=1, mu_beta=[0, 0], Sigma_beta=[1 0; 0 1], beta=i.beta)
+        end,
+        let i = birats.inits[2]
+            (sigmasq_y=0.1, mu_beta=[10, 10], Sigma_beta=[3 0; 0 3], beta=i.beta)
+        end,
+    ],
+)

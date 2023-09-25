@@ -282,6 +282,12 @@ function BUGSModel(m::MarkovBlanketCoveredBUGSModel; is_transformed=m.transforme
     )
 end
 
+# TODO: For now, only the parameters varinfo is returned; in the future, can also return the generated quantities varinfo
+function (model::BUGSModel)()
+    vi, logp = evaluate!!(model, SamplingContext())
+    return get_params_varinfo(model, vi)
+end
+
 function settrans(model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel}, bool::Bool)
     return @set model.transformed = bool
 end
@@ -334,7 +340,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
             vi = setindex!!(vi, value, vn)
         end
     end
-    return @set vi.logp = logp
+    return vi, logp
 end
 
 function AbstractPPL.evaluate!!(model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel})

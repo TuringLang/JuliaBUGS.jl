@@ -44,22 +44,22 @@ function AbstractMCMC.bundle_samples(
         push!(generated_quantities, [vi[generated_var] for generated_var in generated_vars])
     end
 
-    param_name_leaves = vcat(
+    param_name_leaves = collect(Iterators.flatten(
         [
             collect(DynamicPPL.varname_leaves(vn, param_vals[1][i])) for
             (i, vn) in enumerate(param_vars)
-        ]...,
-    )
-    generated_varname_leaves = vcat(
+        ],
+    ))
+    generated_varname_leaves = collect(Iterators.flatten(
         [
             collect(DynamicPPL.varname_leaves(vn, generated_quantities[1][i])) for
             (i, vn) in enumerate(generated_vars)
-        ]...,
-    )
+        ],
+    ))
 
     # some of the values may be arrays
-    flattened_param_vals = [vcat(p...) for p in param_vals]
-    flattened_generated_quantities = [vcat(gq...) for gq in generated_quantities]
+    flattened_param_vals = [collect(Iterators.flatten(p)) for p in param_vals]
+    flattened_generated_quantities = [collect(Iterators.flatten(gq)) for gq in generated_quantities]
     vals = [
         convert(
             Vector{Real},

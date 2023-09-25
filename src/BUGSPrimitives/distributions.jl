@@ -383,10 +383,10 @@ function dbeta(a, b)
 end
 
 """
-    dmnorm(μ::Vector, T::Matrix)
+    dmnorm(μ::AbstractVector, T::AbstractMatrix)
 
 Return a [Multivariate Normal](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.MvNormal) 
-distribution object with mean vector `μ` and precision matrix `T`.
+distribution object with mean vector `μ` and precision matrix `inv(T)`.
 
 The mathematical form of the PDF for a Multivariate Normal distribution in the BUGS family of softwares is given by:
 
@@ -394,14 +394,14 @@ The mathematical form of the PDF for a Multivariate Normal distribution in the B
 p(x|μ,T) = (2π)^{-k/2} |T|^{1/2} e^{-1/2 (x-μ)' T (x-μ)}
 ```
 """
-function dmnorm(μ::Vector, T::Matrix)
-    return MvNormal(μ, T)
+function dmnorm(μ::AbstractVector, T::AbstractMatrix)
+    return MvNormal(μ, inv(PDMat(T)))
 end
 
 """
-    dmt(μ::Vector, T::Matrix, k)
+    dmt(μ::AbstractVector, T::AbstractMatrix, k)
 
-Return a [Multivariate T](https://juliastats.org/Distributions.jl/latest/matrix/#Distributions.MatrixTDist) 
+Return a [Multivariate T](https://juliastats.org/Distributions.jl/latest/matrix/#Distributions.AbstractMatrixTDist) 
 distribution object with mean vector `μ`, precision matrix `T`, and `k` degrees of freedom.
 
 The mathematical form of the PDF for a Multivariate T distribution in the BUGS family of softwares is given by:
@@ -411,36 +411,44 @@ p(x|k,μ,Σ) = \\frac{\\Gamma((k+p)/2)}{\\Gamma(k/2) (k\\pi)^{p/2} |Σ|^{1/2}} \
 ```
 where x is the random variable, k is the degrees of freedom, μ is the mean vector, Σ is the scale matrix, and p is the dimension of x.
 """
-function dmt(μ::Vector, T::Matrix, k)
+function dmt(μ::AbstractVector, T::AbstractMatrix, k)
     return MvTDist(k, μ, T)
 end
 
 """
-    dwish(R::Matrix, k)
+    dwish(R::AbstractMatrix, k)
 
-Return a [Wishart](https://juliastats.org/Distributions.jl/latest/matrix/#Distributions.Wishart) 
-distribution object with `k` degrees of freedom and scale matrix `R^(-1)`.
+This function returns a [Wishart](https://juliastats.org/Distributions.jl/latest/matrix/#Distributions.Wishart) 
+distribution object. The distribution is characterized by `k` degrees of freedom and the inverse of the scale matrix `R`.
 
-The mathematical form of the PDF for a Wishart distribution in the BUGS family of softwares is given by:
+The probability density function (PDF) for a Wishart distribution, as defined in the BUGS software suite, is:
 
 ```math
-p(X|R,k) = |X|^{(k-p-1)/2} e^{-(1/2) tr(RX)} / (2^{kp/2} |R|^{k/2} Γ_p(k/2))
+p(X|R,k) = |R|^{k/2} |X|^{(k-p-1)/2} e^{-(1/2) tr(RX)} / (2^{kp/2} Γ_p(k/2))
 ```
-where `p` is the dimension of `X`, and `p` should be less or equal to `k`. 
+In this equation, `p` represents the dimension of `X`, and it should be less than or equal to `k`. 
 
-This is the definition as in `The BUGS Book` (Lunn, D. J., Jackson, C., Best, N., 
+This definition is based on `The BUGS Book` (Lunn, D. J., Jackson, C., Best, N., 
 Thomas, A., & Spiegelhalter, D. (2013). The BUGS Book: A Practical Introduction to Bayesian 
-Analysis. CRC Press.), which is different from OpenBUGS' definition of the pdf of the Wishart distribution:
+Analysis. CRC Press.). It's worth noting that this definition differs from the one used in OpenBUGS for the PDF of the Wishart distribution:
 ```math
 |R|^{k/2} |x|^{(k-p-1)/2} \\exp\\left(-\\frac{1}{2} \\text{Tr}(Rx)\\right)
 ```
 """
-function dwish(R::Matrix, k)
-    return Wishart(k, PDMat(inv(R), cholesky(R)))
+function dwish(R::AbstractMatrix, k)
+    if k < size(R, 1)
+        throw(
+            ArgumentError(
+                "The degrees of freedom must be greater than or equal to the dimension of the scale matrix.",
+            ),
+        )
+    end
+    
+    return Wishart(k, inv(PDMat(R)))
 end
 
 """
-    ddirich(θ::Vector)
+    ddirich(θ::AbstractVector)
 
 Return a [Dirichlet](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.Dirichlet) 
 distribution object with parameters `θ`.
@@ -453,7 +461,7 @@ p(x|θ) = \\frac{Γ(\\sum θ)}{∏ Γ(θ)} ∏ x_i^{θ_i - 1}
 
 where `x` is a vector of random variables, each element `x_i` of which is between 0 and 1, and the elements of `x` sum up to 1. `θ` is a vector of parameters, each `θ_i` of which is greater than 0.
 """
-function ddirich(θ::Vector)
+function ddirich(θ::AbstractVector)
     return Dirichlet(θ)
 end
 
@@ -606,7 +614,7 @@ function dhyper(n1, n2, m1, ψ)
 end
 
 """
-    dmulti(θ::Vector, n)
+    dmulti(θ::AbstractVector, n)
 
 Return a [Multinomial](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.Multinomial) 
 distribution object with number of trials `n` and success probabilities `θ`.
@@ -619,6 +627,6 @@ P(x|n,θ) = \\frac{n!}{∏_{r} x_{r}!} ∏_{r} θ_{r}^{x_{r}}
 
 where `x` is a vector of length `R` representing the count of successes in each of `R` categories, `n` is the total number of trials, and `θ` is a vector of length `R` representing the probability of success in each of `R` categories. The symbol `∏` denotes the product over all categories.
 """
-function dmulti(θ::Vector, n)
+function dmulti(θ::AbstractVector, n)
     return Multinomial(n, θ)
 end
