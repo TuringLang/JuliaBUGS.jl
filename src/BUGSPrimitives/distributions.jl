@@ -311,7 +311,7 @@ This function only valid when ``μ = 0`` or ``τ = 1``,
 ```math
 p(x|n, m, μ, τ) = \\frac{\\Gamma\\left(\\frac{n+m}{2}\\right)}{\\Gamma\\left(\\frac{n}{2}\\right) \\Gamma\\left(\\frac{m}{2}\\right)} \\left(\\frac{n}{m}\\right)^{\\frac{n}{2}} \\sqrt{τ} \\left(\\sqrt{τ}(x - μ)\\right)^{\\frac{n}{2}-1} \\left(1 + \\frac{n \\sqrt{τ}(x-μ)}{m}\\right)^{-\\frac{n+m}{2}}
 ```
-where ``1 + n sqrt(τ)(x - μ) / m`` must be greater than zero.
+where ``1 + n \\sqrt{τ} (x - μ) / m`` must be greater than zero.
 """
 function df(n::Real, m::Real, μ::Real=0, τ::Real=1)
     if μ ≠ 0 || τ ≠ 1
