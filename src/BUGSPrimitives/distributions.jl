@@ -9,7 +9,7 @@ p(x|μ,τ) = \\sqrt{\\frac{τ}{2π}} e^{-τ \\frac{(x-μ)^2}{2}}
 ```
 """
 function dnorm(μ, τ)
-    if τ <= 0
+    if τ < 0
         throw(DomainError((μ, τ), "Requires τ > 0"))
     end
     σ² = 1 / τ # variance
