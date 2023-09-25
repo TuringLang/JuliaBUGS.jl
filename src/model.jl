@@ -282,7 +282,7 @@ function BUGSModel(m::MarkovBlanketCoveredBUGSModel; is_transformed=m.transforme
     )
 end
 
-# TODO: For now, only the parameters varinfo is returned; in the future, can also return the generated quantities varinfo
+# TODO: For now, only the parameters varinfo is returned; in the future, can also return the generated quantities
 function (model::BUGSModel)()
     vi, logp = evaluate!!(model, SamplingContext())
     return get_params_varinfo(model, vi)
