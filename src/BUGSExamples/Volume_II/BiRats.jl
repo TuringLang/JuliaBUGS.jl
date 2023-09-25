@@ -136,6 +136,11 @@ birats = (
             R=[3 0; 0 3],
         ),
     ],
+    reference_results=(
+        var"mu.beta[1:2][1]"=(mean=106.6, std=2.361),
+        var"mu.beta[1:2][2]"=(mean=6.185, std=0.1063),
+        sigma=(mean=6.149, std=0.4789),
+    ),
 )
 
 # https://github.com/stan-dev/example-models/tree/master/bugs_examples/vol2/birats
