@@ -590,7 +590,11 @@ function bugsast_expression(expr, position=LineNumberNode(1, nothing))
     if expr isa Union{Symbol,Number}
         return expr
     elseif Meta.isexpr(expr, :ref)
-        return Expr(:ref, bugsast_index.(expr.args, (position,))...)
+        if length(expr.args) == 1 # only the variable name
+            error("Empty indexing is not allowed in Julia-syntax, use `:` instead")
+        else # if user input e.g. `y[, ]`, the Julia parser will complain and error
+            return Expr(:ref, bugsast_index.(expr.args, (position,))...)
+        end
     elseif Meta.isexpr(expr, :call)
         if expr.args[1] == :getindex
             return Expr(:ref, bugsast_index.(expr.args[2:end], (position,))...)
