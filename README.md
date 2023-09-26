@@ -253,5 +253,71 @@ Quantiles
 
 This is consistent with the result in the [OpenBUGS seeds example](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html).
 
+## Parallel and Distributed Sampling with `AbstractMCMC`
+`AbstractMCMC` and `AdvancedHMC` support both parallel and distributed sampling.
+
+### Parallel Sampling
+To perform multi-threaded sampling of multiple chains, start the Julia session with the `-t <n_threads>` argument.
+The model compilation code remains the same, and we can sample multiple chains in parallel as follows:
+
+```julia
+n_chains = 4
+samples_and_stats = AbstractMCMC.sample(
+    ad_model,
+    AdvancedHMC.NUTS(0.65),
+    AbstractMCMC.MCMCThreads(),
+    n_samples,
+    n_chains;
+    chain_type = Chains,
+    n_adapts = n_adapts,
+    init_params = [initial_θ for _ = 1:n_chains],
+    discard_initial = n_adapts,
+)
+```
+
+In this case, we pass two additional arguments to `AbstractMCMC.sample`:
+- `AbstractMCMC.MCMCThreads()`: the sampler type, and
+- `n_chains`: the number of chains to sample.
+
+### Distributed Sampling
+To perform distributed sampling of multiple chains, start the Julia session with the `-p <n_processes>` argument.
+
+In distributed mode, ensure that all functions and modules are available on all processes.
+Use `@everywhere` to make the functions and modules available on all processes.
+
+For example:
+
+```julia
+@everywhere begin
+    using JuliaBUGS, LogDensityProblems, LogDensityProblemsAD, AbstractMCMC, AdvancedHMC, MCMCChains, ReverseDiff # also other packages one may need
+
+    # Define the functions to use
+    # Use `@register_primitive` to register the functions to use in the model
+
+    # Distributed can handle data dependencies in some cases, for more detail, see https://docs.julialang.org/en/v1/manual/distributed-computing/
+
+end
+
+n_chains = nprocs() - 1 # use all the processes except the master process
+samples_and_stats = AbstractMCMC.sample(
+    ad_model,
+    AdvancedHMC.NUTS(0.65),
+    AbstractMCMC.MCMCDistributed(),
+    n_samples,
+    n_chains;
+    chain_type = Chains,
+    n_adapts = n_adapts,
+    init_params = [initial_θ for _ = 1:n_chains], # each chain has its own initial parameters
+    discard_initial = n_adapts,
+    progress = false, # Base.TTY creating problems in distributed setting
+)
+```
+
+In this case, we pass two additional arguments to `AbstractMCMC.sample`:
+- `AbstractMCMC.MCMCDistributed()`: the sampler type, and
+- `n_chains`: the number of chains to sample.
+Note that the `init_params` argument is now a vector of initial parameters for each chain. 
+Sometimes the progress logger can cause problems in distributed setting, so we can disable it by setting `progress = false`.
+
 ## More Examples
 We have transcribed all the examples from the first volume of the BUGS Examples ([original](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/JuliaBUGS.jl/tree/master/src/BUGSExamples/Volume_I)). All programs and data are included, and can be compiled using the steps described in the tutorial above.
