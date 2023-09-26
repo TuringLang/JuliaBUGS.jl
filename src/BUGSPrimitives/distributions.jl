@@ -35,10 +35,11 @@ end
 """
     TDistShiftedScaled(ν, μ, σ)
 
-Student's t-distribution with `ν` degrees of freedom, location `μ`, and scale `σ`. 
+Student's t-distribution with ``ν`` degrees of freedom, location ``μ``, and scale ``σ``. 
 
-This struct allows for a shift (determined by `μ`) and a scale (determined by `σ`) of the standard 
-Student's t-distribution provided by the Distributions package. 
+This struct allows for a shift (determined by ``μ``) and a scale (determined by ``σ``) of the standard 
+Student's t-distribution provided by the [Distributions.jl](https://github.com/JuliaStats/Distributions.jl) 
+package. 
 
 Only `pdf` and `logpdf` are implemented for this distribution.
 
@@ -63,13 +64,12 @@ end
 
 Student's t-distribution object with ``ν`` degrees of freedom, location ``μ``, and scale ``σ = \\frac{1}{\\sqrt{τ}}``.
 
-If ``μ`` is 0 and ``σ`` is 1, the function returns an instance of [TDist](https://juliastats.org/Distributions.jl/stable/univariate/#Distributions.TDist). 
+If ``μ = 0`` and ``σ = 1``, the function returns an instance of [TDist](https://juliastats.org/Distributions.jl/stable/univariate/#Distributions.TDist). 
 Otherwise, it returns an instance of [`TDistShiftedScaled`](@ref).
 
 ```math
 p(x|ν,μ,σ) = \\frac{Γ((ν+1)/2)}{Γ(ν/2) \\sqrt{νπσ}}
 \\left(1+\\frac{1}{ν}\\left(\\frac{x-μ}{σ}\\right)^2\\right)^{-\\frac{ν+1}{2}}
-```end
 ```
 """
 function dt(μ, τ, ν)
@@ -85,7 +85,7 @@ end
     ddexp(μ, τ)
 
 Return an instance of [Laplace (Double Exponential)](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Laplace) 
-with location `μ` and scale ``1 / \\sqrt{τ}``.
+with location ``μ`` and scale ``\\frac{1}{\\sqrt{τ}}``.
 
 ```math
 p(x|μ,τ) = \\frac{\\sqrt{τ}}{2} e^{-\\sqrt{τ} |x-μ|}
@@ -99,10 +99,13 @@ end
 """
     dflat()
 
-A distribution type representing a flat (uniform) prior over the real line. This is not a valid
-probability distribution, but can be used to represent a non-informative prior in Bayesian statistics.
-The `cdf`, `logcdf`, `quantile`, `cquantile`, and `rand` methods are not implemented
-for this distribution, as they don't have meaningful definitions in the context of a flat prior.
+Returns an instance of [`Flat`](@ref) or [`TruncatedFlat`](@ref) if truncated.
+
+`Flat` represents a flat (uniform) prior over the real line, which is an improper distribution. And 
+`TruncatedFlat` represents a truncated version of the `Flat` distribution.
+
+Only `pdf`, `logpdf`, `minimum`, and `maximum` are implemented for these Distributions.
+
 When use in a model, the parameters always need to be initialized.
 """
 dflat() = Flat()
@@ -143,7 +146,7 @@ Distributions.logpdf(d::RightTruncatedFlat, x::Real) = x <= d.b ? 0.0 : -Inf
 """
     TruncatedFlat
 
-Truncated version of the `flat` distribution.
+Truncated version of the [`Flat`](@ref) distribution.
 """
 struct TruncatedFlat <: ContinuousUnivariateDistribution
     a::Real
@@ -176,7 +179,7 @@ end
     dexp(λ)
 
 Returns an instance of [Exponential](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Exponential) 
-with rate ``1 / λ``.
+with rate ``\\frac{1}{λ}``.
 
 ```math
 p(x|λ) = λ e^{-λ x}
@@ -190,7 +193,7 @@ end
     dgamma(a, b)
 
 Returns an instance of [Gamma](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Gamma) 
-with shape ``a`` and scale ``1 / b``.
+with shape ``a`` and scale ``\\frac{1}{b}``.
 
 ```math
 p(x|a,b) = \\frac{b^a}{Γ(a)} x^{a-1} e^{-bx}
@@ -219,7 +222,7 @@ end
     dweib(a, b)
 
 Returns an instance of [Weibull](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Weibull) 
-distribution object with shape parameter ``a`` and scale parameter ``1 / b``.
+distribution object with shape parameter ``a`` and scale parameter ``\\frac{1}{b}``.
 
 The Weibull distribution is a common model for event times. The hazard or instantaneous risk of the event 
 is ``abx^{a-1}``. For ``a < 1`` the hazard decreases with ``x``; for ``a > 1`` it increases. 
@@ -253,8 +256,6 @@ end
 Returns an instance of [Pareto](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Pareto) 
 with scale parameter ``b`` and shape parameter ``a``.
 
-The Pareto distribution, also known as the "80-20 rule", states that for many events, roughly 80% of the effects come from 20% of the causes.
-
 ```math
 p(x|a,b) = \\frac{a b^a}{x^{a+1}}
 ```
@@ -273,7 +274,7 @@ with location ``μ``, scale ``σ``, and shape ``η``.
 p(x|μ,σ,η) = \\frac{1}{σ} \\left(1 + η \\frac{x - μ}{σ}\\right)^{-\\frac{1}{η} - 1} e^{-\\left(1 + η \\frac{x - μ}{σ}\\right)^{-\\frac{1}{η}}}
 ```
 
-where ``1 + η ((x - μ)/σ)`` must be greater than zero.
+where ``\\frac{η(x - μ)}{σ} > -1``.
 """
 function dgev(μ, σ, η)
     if 1 + η * (σ / μ) ≤ 0
@@ -311,7 +312,7 @@ This function only valid when ``μ = 0`` or ``τ = 1``,
 ```math
 p(x|n, m, μ, τ) = \\frac{\\Gamma\\left(\\frac{n+m}{2}\\right)}{\\Gamma\\left(\\frac{n}{2}\\right) \\Gamma\\left(\\frac{m}{2}\\right)} \\left(\\frac{n}{m}\\right)^{\\frac{n}{2}} \\sqrt{τ} \\left(\\sqrt{τ}(x - μ)\\right)^{\\frac{n}{2}-1} \\left(1 + \\frac{n \\sqrt{τ}(x-μ)}{m}\\right)^{-\\frac{n+m}{2}}
 ```
-where ``1 + n \\sqrt{τ} (x - μ) / m`` must be greater than zero.
+where ``\\frac{n \\sqrt{τ} (x - μ)}{m} > -1``.
 """
 function df(n::Real, m::Real, μ::Real=0, τ::Real=1)
     if μ ≠ 0 || τ ≠ 1
@@ -521,7 +522,7 @@ Returns an instance of [Beta Binomial](https://juliastats.org/Distributions.jl/l
 with number of trials `n` and shape parameters `a` and `b`.
 
 ```math
-P(x|a, b, n) = \\binom{n}{x} \\binom{a + b - 1}{a + x - 1} / \\binom{a + b + n - 1}{n}
+P(x|a, b, n) = \\frac{\\binom{n}{x} \\binom{a + b - 1}{a + x - 1}}{\\binom{a + b + n - 1}{n}}
 ```
 """
 function dbetabin(a, b, n)
