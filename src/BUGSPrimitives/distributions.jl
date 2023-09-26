@@ -62,10 +62,8 @@ end
 """
     dt(μ, τ, ν)
 
-Student's t-distribution object with ``ν`` degrees of freedom, location ``μ``, and scale ``σ = \\frac{1}{\\sqrt{τ}}``.
-
-If ``μ = 0`` and ``σ = 1``, the function returns an instance of [TDist](https://juliastats.org/Distributions.jl/stable/univariate/#Distributions.TDist). 
-Otherwise, it returns an instance of [`TDistShiftedScaled`](@ref).
+If ``μ = 0`` and ``σ = 1``, the function returns an instance of [TDist](https://juliastats.org/Distributions.jl/stable/univariate/#Distributions.TDist) 
+with ``ν`` degrees of freedom, location ``μ``, and scale ``σ = \\frac{1}{\\sqrt{τ}}``. Otherwise, it returns an instance of [`TDistShiftedScaled`](@ref).
 
 ```math
 p(x|ν,μ,σ) = \\frac{Γ((ν+1)/2)}{Γ(ν/2) \\sqrt{νπσ}}
@@ -307,7 +305,7 @@ end
 
 Returns an instance of [F-distribution](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.FDist) 
 object with ``n`` and ``m`` degrees of freedom, location ``μ``, and scale ``τ``.
-This function only valid when ``μ = 0`` or ``τ = 1``,
+This function is only valid when ``μ = 0`` and ``τ = 1``,
 
 ```math
 p(x|n, m, μ, τ) = \\frac{\\Gamma\\left(\\frac{n+m}{2}\\right)}{\\Gamma\\left(\\frac{n}{2}\\right) \\Gamma\\left(\\frac{m}{2}\\right)} \\left(\\frac{n}{m}\\right)^{\\frac{n}{2}} \\sqrt{τ} \\left(\\sqrt{τ}(x - μ)\\right)^{\\frac{n}{2}-1} \\left(1 + \\frac{n \\sqrt{τ}(x-μ)}{m}\\right)^{-\\frac{n+m}{2}}
@@ -349,7 +347,7 @@ end
 """
     dbeta(a, b)
 
-Return an instance of [Beta](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Beta) 
+Returns an instance of [Beta](https://juliastats.org/Distributions.jl/latest/univariate/#Distributions.Beta) 
 with shape parameters ``a`` and ``b``.
 
 ```math
@@ -363,7 +361,7 @@ end
 """
     dmnorm(μ::AbstractVector, T::AbstractMatrix)
 
-Return an instance of [Multivariate Normal](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.MvNormal) 
+Returns an instance of [Multivariate Normal](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.MvNormal) 
 with mean vector `μ` and covariance matrix ``T^{-1}``.
 
 ```math
@@ -378,7 +376,7 @@ end
 """
     dmt(μ::AbstractVector, T::AbstractMatrix, k)
 
-Return an instance of [Multivariate T](https://github.com/JuliaStats/Distributions.jl/blob/master/src/multivariate/mvtdist.jl) 
+Returns an instance of [Multivariate T](https://github.com/JuliaStats/Distributions.jl/blob/master/src/multivariate/mvtdist.jl) 
 with mean vector ``μ``, scale matrix ``T^{-1}``, and ``k`` degrees of freedom.
 
 ```math
