@@ -7,6 +7,7 @@ JuliaBUGS.BUGSPrimitives.exp
 JuliaBUGS.BUGSPrimitives.inprod
 JuliaBUGS.BUGSPrimitives.inverse
 JuliaBUGS.BUGSPrimitives.log
+JuliaBUGS.BUGSPrimitives.logistic
 JuliaBUGS.BUGSPrimitives.logdet
 JuliaBUGS.BUGSPrimitives.logfact
 JuliaBUGS.BUGSPrimitives.loggam
