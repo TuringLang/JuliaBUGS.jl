@@ -117,3 +117,7 @@ end
 @testset "Markov Blanket" begin
     include("graphs.jl")
 end
+
+@testset "Inference" begin
+    include("inference.jl")
+end
