@@ -187,7 +187,7 @@ function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
         for param in m.parameters
             d[param] = vi[param]
         end
-        return SimpleVarInfo(d, vi.logp, vi.transformation)
+        return SimpleVarInfo(d, vi.logp, m.transformed)
     else
         d = Dict{VarName,Any}()
         g = m.g
@@ -202,7 +202,7 @@ function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
                 d[vn] = linked_val
             end
         end
-        return SimpleVarInfo(d, vi.logp, vi.transformation)
+        return SimpleVarInfo(d, vi.logp, m.transformed)
     end
 end
 
