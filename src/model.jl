@@ -187,7 +187,7 @@ function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
         for param in m.parameters
             d[param] = vi[param]
         end
-        return SimpleVarInfo(d, vi.logp, m.transformed)
+        return SimpleVarInfo(d, vi.logp, DynamicPPL.NoTransformation())
     else
         d = Dict{VarName,Any}()
         g = m.g
@@ -202,7 +202,7 @@ function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
                 d[vn] = linked_val
             end
         end
-        return SimpleVarInfo(d, vi.logp, m.transformed)
+        return SimpleVarInfo(d, vi.logp, DynamicPPL.DynamicTransformation())
     end
 end
 
@@ -218,28 +218,12 @@ function getparams(m::BUGSModel)
     return getparams(m, m.varinfo)
 end
 function getparams(m::BUGSModel, vi::SimpleVarInfo)
-    if !m.transformed
-        return vcat([isa(vi[p], Real) ? vi[p] : vec(vi[p]) for p in m.parameters]...)
-    else # otherwise, we need to talk through the graph and transform the values to unconstrained space
-        vs = Any[]
-        g = m.g
-        for vn in m.sorted_nodes
-            ni = g[vn]
-            @unpack node_type, node_function_expr, node_args = ni
-            args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-            expr = node_function_expr.args[2]
-            if vn in m.parameters
-                dist = _eval(expr, args)
-                linked_val = DynamicPPL.link(dist, vi[vn])
-                if linked_val isa AbstractArray
-                    push!(vs, vec(linked_val))
-                else
-                    push!(vs, linked_val)
-                end
-            end
-        end
-        return vcat(vs...)
-    end
+    params_vi = get_params_varinfo(m, vi)
+    return vcat(
+        [
+            isa(params_vi[p], Real) ? params_vi[p] : vec(params_vi[p]) for p in m.parameters
+        ]...,
+    )
 end
 
 """
