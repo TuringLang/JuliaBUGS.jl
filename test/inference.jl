@@ -21,8 +21,7 @@ end
     inits = JuliaBUGS.BUGSExamples.birats.inits[1]
     model = compile(model_def, data, inits)
     ad_model = ADgradient(:ReverseDiff, model; compile=Val(false))
-    D = LogDensityProblems.dimension(model)
-    initial_θ = rand(D)
+    initial_θ = JuliaBUGS.getparams(model)
     LogDensityProblems.logdensity_and_gradient(ad_model, initial_θ)
 end
 

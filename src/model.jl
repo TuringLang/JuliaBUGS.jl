@@ -207,7 +207,8 @@ function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
 end
 
 # TODO: add this function to `ADgradient` with `ReverseDiff` when compiled
-# see https://github.com/TuringLang/Turing.jl/pull/2097  
+# see https://github.com/TuringLang/Turing.jl/pull/2097
+# TODO: a static allocated version is possible because we know the size, but not worth the complexity now
 """
     getparams(m::BUGSModel[, vi::SimpleVarInfo])
 
