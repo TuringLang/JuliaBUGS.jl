@@ -88,13 +88,13 @@ end
 This pass collects all the possible variables appear on the LHS of both logical and stochastic assignments. 
 """
 struct CollectVariables <: CompilerPass
-    vars::Dict{Var,VariableTypes}
+    vars::Set{Var}
     transformed_variables::Dict{Var,Union{Number,Array{<:Number}}}
 end
 
 function CollectVariables()
     return CollectVariables(
-        Dict{Var,VariableTypes}(), Dict{Var,Union{Number,Array{<:Number}}}()
+        Set{Var}(), Dict{Var,Union{Number,Array{<:Number}}}()
     )
 end
 
@@ -346,7 +346,7 @@ end
 @inline is_resolved(x) = x isa Number || x isa Array{<:Number}
 
 function assignment!(pass::CollectVariables, expr::Expr, env)
-    lhs_expr, rhs_expr = expr.args[1:2]
+    lhs_expr, _ = expr.args[1:2]
 
     v = find_variables_on_lhs(
         Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
@@ -358,9 +358,141 @@ function assignment!(pass::CollectVariables, expr::Expr, env)
         error("$v is data, can't be assigned to.")
     end
 
+    return push!(pass.vars, v)
+end
+
+function post_process(pass::CollectVariables, expr, env)
+    scalars = Set([v.name for v in pass.vars if isa(v, Scalar)])
+
+    array_elements = Dict([v.name => [] for v in pass.vars if v.indices != ()])
+    for v in pass.vars
+        !isa(v, Scalar) && push!(array_elements[v.name], v)
+    end
+
+    # sizes of non-data arrays
+    array_sizes = Dict{Symbol,Vector{Int}}()
+    for (k, v) in array_elements
+        k in keys(env) && continue # skip data arrays
+        numdims = length(v[1].indices)
+        @assert all(x -> length(x.indices) == numdims, v) "$k dimension mismatch."
+        array_size = Vector(undef, numdims)
+        for i in 1:numdims
+            array_size[i] = maximum(
+                x -> isa(x.indices[i], Number) ? x.indices[i] : x.indices[i].stop, v
+            )
+        end
+        array_sizes[k] = array_size
+    end
+
+    return scalars, array_sizes
+end
+
+mutable struct ConstantPropagation <: CompilerPass
+    new_value_added::Bool
+    transformed_variables
+end
+
+function ConstantPropagation(scalar::Set, variable_array_sizes::Dict)
+    transformed_variables = Dict()
+
+    for s in scalar
+        transformed_variables[s] = missing
+    end
+
+    for (k, v) in variable_array_sizes
+        transformed_variables[k] = Array{Union{Missing, Real}}(missing, v...)
+    end
+
+    return ConstantPropagation(false, transformed_variables)
+end
+
+function should_skip_eval(expr)
+    contain_external_function = false
+    MacroTools.postwalk(expr) do sub_expr
+        if MacroTools.@capture(sub_expr, f_(args__))
+            if f ∉ [:+, :-, :*, :/, :^] && !(f in BUGSPrimitives.BUGS_FUNCTIONS)
+                contain_external_function = true
+            end
+        end
+        return sub_expr
+    end
+    return contain_external_function
+end
+
+function has_value(transformed_variables, v::Var)
+    if v isa Scalar
+        return !ismissing(transformed_variables[v.name])
+    elseif v isa ArrayElement
+        return !ismissing(transformed_variables[v.name][v.indices...])
+    else
+        return all(x->!ismissing(x), transformed_variables[v.name][v.indices...])
+    end
+end
+
+function assignment!(pass::ConstantPropagation, expr::Expr, env)
+    if Meta.isexpr(expr, :(=)) && !should_skip_eval(expr.args[2])
+        lhs = find_variables_on_lhs(expr.args[1], env)
+
+        if has_value(pass.transformed_variables, lhs)
+            return nothing
+        end
+
+        # TODO: do better
+        rhs = evaluate(expr.args[2], merge_collections(env, pass.transformed_variables))
+        if is_resolved(rhs)
+            if !pass.new_value_added
+                pass.new_value_added = true
+            end
+            if lhs isa Scalar
+                pass.transformed_variables[lhs.name] = rhs
+            else
+                pass.transformed_variables[lhs.name][lhs.indices...] = rhs
+            end
+        end
+    end
+end
+
+function post_process(pass::ConstantPropagation, expr, env)
+    return pass.new_value_added, pass.transformed_variables
+end
+
+struct PostChecking <: CompilerPass
+    definition_bit_map::Dict{Symbol, BitArray}
+    logical_or_stochastic::Dict{Symbol, BitArray}
+    function PostChecking(data, transformed_variables::Dict)
+        definition_bit_map = Dict()
+        logical_or_stochastic = Dict()
+        
+        for (k, v) in merge_collections(data, transformed_variables)
+            if v isa Number
+                logical_or_stochastic[k] = Logical
+            else
+                logical_or_stochastic[k] = fill(Logical, size(v)...)
+                definition_bit_map[k] = fill(false, size(v)...)
+            end
+        end
+
+        new(definition_bit_map, logical_or_stochastic)
+    end
+end
+
+# TODO: work this out
+function assignment!(pass::PostChecking, expr::Expr, env)
+    lhs = find_variables_on_lhs(expr.args[1], env)
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
-    if haskey(pass.vars, v) && var_type == pass.vars[v]
-        error("Repeated assignment to $v.")
+    for v in scalarize(lhs)
+        # if any(pass.definition_bit_map[lhs.name][lhs.indices...])
+        if pass.definition_bit_map[lhs.name][lhs.indices...]
+            if var_type == pass.logical_or_stochastic[lhs.name][lhs.indices...]
+                error("Repeated assignment to $v.")
+            else 
+                # TODO check transformed variables 
+                # do we need sorting now?
+                error("Repeated assignment to $v.")
+            end
+        end
+        pass.definition_bit_map[v.name][v.indices...] = true
+        pass.logical_or_stochastic[v.name][v.indices...] = var_type
     end
 
     if var_type == Logical
@@ -384,90 +516,11 @@ function assignment!(pass::CollectVariables, expr::Expr, env)
     return pass.vars[v] = var_type
 end
 
-function post_process(pass::CollectVariables, expr, env)
-    array_elements = Dict([v.name => [] for v in keys(pass.vars) if v.indices != ()])
-    for v in keys(pass.vars)
-        !isa(v, Scalar) && push!(array_elements[v.name], v)
-    end
-
-    array_sizes = Dict{Symbol,Vector{Int}}()
-    for (k, v) in array_elements
-        k in keys(env) && continue # skip data arrays
-        numdims = length(v[1].indices)
-        @assert all(x -> length(x.indices) == numdims, v) "$k dimension mismatch."
-        array_size = Vector(undef, numdims)
-        for i in 1:numdims
-            array_size[i] = maximum(
-                x -> isa(x.indices[i], Number) ? x.indices[i] : x.indices[i].stop, v
-            )
-        end
-        array_sizes[k] = array_size
-    end
-
-    transformed_variables = Dict()
-    for tv in keys(pass.transformed_variables)
-        if tv isa Scalar
-            transformed_variables[tv.name] = pass.transformed_variables[tv]
-        else
-            if !haskey(transformed_variables, tv.name)
-                tvs = fill(missing, array_sizes[tv.name]...)
-                transformed_variables[tv.name] = convert(Array{Union{Missing,Number}}, tvs)
-            end
-            transformed_variables[tv.name][tv.indices...] = pass.transformed_variables[tv]
-        end
-    end
-    for (k, v) in transformed_variables
-        if v isa Array && !any(ismissing, v)
-            transformed_variables[k] = convert(Array{Number}, v)
-        end
-    end
-
-    # scalar is already checked in `assignment!`
-    logical_bitmap = Dict([k => falses(v...) for (k, v) in array_sizes])
-    stochastic_bitmap = deepcopy(logical_bitmap)
-    for (k, v) in pass.vars
-        k isa Scalar && continue
-        k.name in keys(env) && continue # skip data arrays
-        bitmap = v == Logical ? logical_bitmap : stochastic_bitmap
-        for v_ in scalarize(k)
-            if bitmap[v_.name][v_.indices...]
-                error("Repeated assignment to $v_.")
-            else
-                bitmap[v_.name][v_.indices...] = true
-            end
-        end
-    end
-
-    # corner case: x[1:2] = something, x[3] = something, x[1:3] ~ dmnorm()
-    overlap = Dict()
-    for k in keys(logical_bitmap)
-        overlap[k] = logical_bitmap[k] .& stochastic_bitmap[k]
-    end
-
-    for (k, v) in overlap
-        if any(v)
-            idxs = findall(v)
-            for i in idxs
-                !haskey(transformed_variables, k) &&
-                    error("Logical and stochastic variables overlap on $k[$i].")
-                transformed_variables[k][i...] != missing && continue
-                error("Logical and stochastic variables overlap on $k[$(i...)].")
-            end
-        end
-    end
-
-    # used to check if a variable is defined on the lhs
-    array_bitmap = Dict()
-    for k in keys(logical_bitmap)
-        array_bitmap[k] = logical_bitmap[k] .| stochastic_bitmap[k]
-    end
-
-    # it is possible that a logical variable is constant and never appear one the LHS of ~
-    # this variable's value is captured by `transformed_variables`
-    # we still include it in `vars` for now
-
-    return pass.vars, array_sizes, transformed_variables, array_bitmap
+function post_process(pass::PostChecking, expr, env)
+        
 end
+
+==#
 
 """
     NodeFunctions
