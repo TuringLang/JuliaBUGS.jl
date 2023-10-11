@@ -9,24 +9,27 @@ using DynamicPPL: getlogp, settrans!!
 using Graphs, MetaGraphsNext
 using JuliaBUGS
 using JuliaBUGS:
-    CollectVariables,
-    program!,
-    Var,
-    Stochastic,
-    Logical,
-    evaluate!!,
-    DefaultContext,
     BUGSGraph,
-    stochastic_neighbors,
+    CollectVariables,
+    ConcreteNodeInfo,
+    ConstantPropagation,
+    DefaultContext,
+    evaluate!!,
+    get_params_varinfo,
+    Logical,
+    LogDensityContext,
+    MarkovBlanketCoveredBUGSModel,
+    merge_collections,
+    NodeFunctions,
+    PostChecking,
+    program!,
+    SimpleVarInfo,
+    Stochastic,
     stochastic_inneighbors,
+    stochastic_neighbors,
     stochastic_outneighbors,
     markov_blanket,
-    MarkovBlanketCoveredBUGSModel,
-    evaluate!!,
-    LogDensityContext,
-    ConcreteNodeInfo,
-    SimpleVarInfo,
-    get_params_varinfo
+    Var
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.BUGSPrimitives: mean
 using LogDensityProblems, LogDensityProblemsAD
