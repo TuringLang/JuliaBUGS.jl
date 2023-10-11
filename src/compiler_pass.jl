@@ -77,9 +77,12 @@ Arguments:
 """
 function post_process(pass::CompilerPass, expr, env, vargs...) end
 
-@enum VariableTypes::Bool begin
+@enum VariableTypes begin
     Logical
     Stochastic
+    Transformed
+    Transformed_Stochastic
+    Unspecified
 end
 
 """
@@ -435,7 +438,6 @@ function assignment!(pass::ConstantPropagation, expr::Expr, env)
             return nothing
         end
 
-        # TODO: do better
         rhs = evaluate(expr.args[2], merge_collections(env, pass.transformed_variables))
         if is_resolved(rhs)
             if !pass.new_value_added
@@ -456,74 +458,119 @@ end
 
 struct PostChecking <: CompilerPass
     transformed_variables
-    definition_bit_map::Dict{}
-    logical_or_stochastic::Dict{}
-    function PostChecking(data, transformed_variables::Dict)
-        definition_bit_map = Dict()
-        logical_or_stochastic = Dict()
+    is_data::Dict
+    definition_bit_map::Dict
+    logical_or_stochastic::Dict
+end
 
-        for (k, v) in merge_collections(data, transformed_variables)
-            if v isa Number
-                logical_or_stochastic[k] = -1
-            else
-                logical_or_stochastic[k] = fill(-1, size(v)...)
-                definition_bit_map[k] = fill(false, size(v)...)
-            end
+function PostChecking(data, transformed_variables::Dict)
+    is_data = Dict() # used to identify transformed variables
+    definition_bit_map = Dict() # used to identify repeated assignment
+    logical_or_stochastic = Dict() # used to identify logical or stochastic assignment
+
+    all_vars = merge_collections(data, transformed_variables)
+
+    for k in keys(all_vars)
+        v = all_vars[k]
+        if ismissing(v) # scalar that is not data
+            is_data[k] = false
+            definition_bit_map[k] = false
+            logical_or_stochastic[k] = Unspecified
+        elseif v isa Number # scalar that is data
+            is_data[k] = true
+            definition_bit_map[k] = false
+            logical_or_stochastic[k] = Unspecified
+        else
+            is_data[k] = .!ismissing.(v)
+            logical_or_stochastic[k] = fill(Unspecified, size(v)...)
+            definition_bit_map[k] = fill(false, size(v)...)
         end
-
-        return new(transformed_variables, definition_bit_map, logical_or_stochastic)
     end
+
+    return PostChecking(
+        transformed_variables, is_data, definition_bit_map, logical_or_stochastic
+    )
 end
 
 function assignment!(pass::PostChecking, expr::Expr, env)
+    @inline set_value!(d::Dict, value, v::Scalar) = d[v.name] = value
+    @inline set_value!(d::Dict, value, v::Var) = d[v.name][v.indices...] = value
+    @inline get_value(d::Dict, v::Scalar) = d[v.name]
+    @inline get_value(d::Dict, v::Var) = d[v.name][v.indices...]
+
     lhs = find_variables_on_lhs(expr.args[1], env)
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
-    if lhs isa Scalar
-        v = lhs.name
-        if pass.definition_bit_map[v]
-            if pass.logical_or_stochastic[v] == var_type
-                error("Repeated assignment to $v.")
-            elseif ismissing(pass.transformed_variables[v])
+    for v in scalarize(lhs)
+        if get_value(pass.definition_bit_map, v) # if this variable has already been seen
+            if get_value(pass.logical_or_stochastic, v) == var_type
+                error("Repeated assignment to $v.") # produce error even when two assignment is the same
+            elseif get_value(pass.logical_or_stochastic, v) == Transformed_Stochastic
+                error("Multiple repeated assignment to $v.")
+            elseif get_value(pass.is_data, v)
+                set_value!(pass.logical_or_stochastic, Transformed_Stochastic, v)
+            else
                 error(
                     "$v is assigned to by both logical and stochastic assignments, " *
                     "this is only allowed when the variable is a transformation of data.",
                 )
-            else
-                if pass.logical_or_stochastic[v] == Logical
-                    pass.logical_or_stochastic[v] == Stochastic
-                end
             end
         else
-            pass.definition_bit_map[v] = true
-            pass.logical_or_stochastic[v] = var_type
-        end
-    elseif any(pass.definition_bit_map[lhs.name][lhs.indices...])
-        for v in scalarize(lhs)
-            if pass.definition_bit_map[v.name][v.indices...]
-                if pass.logical_or_stochastic[v.name][v.indices...] == var_type
-                    error("Repeated assignment to $v.")
-                elseif ismissing(pass.transformed_variables[v.name][v.indices...])
-                    error(
-                        "$v is assigned to by both logical and stochastic assignments, " *
-                        "this is only allowed when the variable is a transformation of data.",
-                    )
-                else
-                    if pass.logical_or_stochastic[v.name][v.indices...] == Logical
-                        pass.logical_or_stochastic[v.name][v.indices...] == Stochastic
-                    end
-                end
-            else
-                pass.definition_bit_map[v.name] = true
-                pass.logical_or_stochastic[v.name] = var_type
+            set_value!(pass.definition_bit_map, true, v)
+            if get_value(pass.is_data, v) && var_type == Logical
+                var_type = Transformed
             end
+            set_value!(pass.logical_or_stochastic, var_type, v)
         end
     end
 end
-# refactor by add getindex, setindex! for Dict with Var
+
+function clean_up_transformed_variables(transformed_variables)
+    cleaned_transformed_variables = Dict()
+    for k in keys(transformed_variables)
+        v = transformed_variables[k]
+        if ismissing(v)
+            continue
+        elseif v isa Number
+            cleaned_transformed_variables[k] = v
+        elseif all(ismissing, v)
+            continue
+        elseif all(!ismissing, v)
+            cleaned_transformed_variables[k] = identity.(v)
+        else
+            cleaned_transformed_variables[k] = v
+        end
+    end
+    return cleaned_transformed_variables
+end
 
 function post_process(pass::PostChecking, expr, env)
-    return pass.definition_bit_map, pass.logical_or_stochastic
+    vars = Dict{Var,VariableTypes}()
+    for k in keys(pass.logical_or_stochastic)
+        v = pass.logical_or_stochastic[k]
+        if v isa VariableTypes
+            if v != Transformed
+                if v == Transformed_Stochastic
+                    v = Stochastic
+                end
+                vars[Var(k)] = v
+            end
+        else
+            for i in CartesianIndices(v)
+                if v[i] != Transformed
+                    if v[i] == Transformed_Stochastic
+                        vars[Var(k, Tuple(i))] = Stochastic
+                    else
+                        vars[Var(k, Tuple(i))] = v[i]
+                    end
+                end
+            end
+        end
+    end
+
+    return vars,
+    pass.definition_bit_map,
+    clean_up_transformed_variables(pass.transformed_variables)
 end
 
 """
@@ -907,7 +954,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
 end
 
 function post_process(pass::NodeFunctions, expr, env, vargs...)
-    for (var, var_type) in pass.vars
+    for (var, var_type) in pass.vars # remove transformed variables
         if var_type != Stochastic && evaluate(var, env) isa Union{Number,Array{<:Number}}
             delete!(pass.vars, var)
         end
