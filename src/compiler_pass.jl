@@ -407,6 +407,7 @@ function ConstantPropagation(scalar::Set, variable_array_sizes::Dict)
     return ConstantPropagation(false, transformed_variables)
 end
 
+# won't try to evaluate the RHS if the function is not recognized
 function should_skip_eval(expr)
     contain_external_function = false
     MacroTools.postwalk(expr) do sub_expr
@@ -545,31 +546,7 @@ function clean_up_transformed_variables(transformed_variables)
 end
 
 function post_process(pass::PostChecking, expr, env)
-    vars = Dict{Var,VariableTypes}()
-    for k in keys(pass.logical_or_stochastic)
-        v = pass.logical_or_stochastic[k]
-        if v isa VariableTypes
-            if v != Transformed
-                if v == Transformed_Stochastic
-                    v = Stochastic
-                end
-                vars[Var(k)] = v
-            end
-        else
-            for i in CartesianIndices(v)
-                if v[i] != Transformed
-                    if v[i] == Transformed_Stochastic
-                        vars[Var(k, Tuple(i))] = Stochastic
-                    else
-                        vars[Var(k, Tuple(i))] = v[i]
-                    end
-                end
-            end
-        end
-    end
-
-    return vars,
-    pass.definition_bit_map,
+    return pass.definition_bit_map,
     clean_up_transformed_variables(pass.transformed_variables)
 end
 
@@ -578,17 +555,17 @@ end
 
 A pass that analyze node functions of variables and their dependencies.
 """
-struct NodeFunctions{VT} <: CompilerPass
-    vars::VT
+struct NodeFunctions <: CompilerPass
     array_sizes::Dict
     array_bitmap::Dict
 
+    vars::Dict
     node_args::Dict
     node_functions::Dict
     dependencies::Dict
 end
-function NodeFunctions(vars, array_sizes, array_bitmap)
-    return NodeFunctions(vars, array_sizes, array_bitmap, Dict(), Dict(), Dict())
+function NodeFunctions(array_sizes, array_bitmap)
+    return NodeFunctions(array_sizes, array_bitmap, Dict(), Dict(), Dict(), Dict())
 end
 
 """
@@ -859,7 +836,8 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
     var_type == Logical &&
         evaluate(lhs_var, env) isa Union{Number,Array{<:Number}} &&
         return nothing
-
+    
+    pass.vars[lhs_var] = var_type
     rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes, env)
     rhs = evaluate(rhs_expr, env)
 
@@ -954,11 +932,6 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
 end
 
 function post_process(pass::NodeFunctions, expr, env, vargs...)
-    for (var, var_type) in pass.vars # remove transformed variables
-        if var_type != Stochastic && evaluate(var, env) isa Union{Number,Array{<:Number}}
-            delete!(pass.vars, var)
-        end
-    end
     return pass.vars,
     pass.array_sizes, pass.array_bitmap, pass.node_args, pass.node_functions,
     pass.dependencies

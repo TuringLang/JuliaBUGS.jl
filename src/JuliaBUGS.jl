@@ -161,12 +161,12 @@ function compile(model_def::Expr, data, inits)
             ConstantPropagation(false, transformed_variables), model_def, data
         )
     end
-    vars, array_bitmap, transformed_variables = program!(
+    array_bitmap, transformed_variables = program!(
         PostChecking(data, transformed_variables), model_def, data
     )
     merged_data = merge_collections(deepcopy(data), transformed_variables)
     vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = program!(
-        NodeFunctions(vars, array_sizes, array_bitmap), model_def, merged_data
+        NodeFunctions(array_sizes, array_bitmap), model_def, merged_data
     )
     g = BUGSGraph(vars, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))

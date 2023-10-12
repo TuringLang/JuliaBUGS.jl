@@ -60,4 +60,9 @@ function has_ground_truth(m::Symbol)
     end
 end
 
+# row-major reshape, not robust, use with caution
+function rreshape(v::Vector, dim)
+    return permutedims(reshape(v, reverse(dim)), length(dim):-1:1)
+end   
+
 end

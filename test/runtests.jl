@@ -83,8 +83,8 @@ end
     :epil,
     :equiv,
     :kidney,
-    # :leuk, # leuk requires higher-level of constant propagation, particularly dN is transformed variable, but only if Y is figured out first
-    # :leukfr, # similar reason to `leuk`
+    :leuk,
+    :leukfr,
     :lsat,
     :magnesium,
     :mice,
