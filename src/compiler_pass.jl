@@ -836,7 +836,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
     var_type == Logical &&
         evaluate(lhs_var, env) isa Union{Number,Array{<:Number}} &&
         return nothing
-    
+
     pass.vars[lhs_var] = var_type
     rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes, env)
     rhs = evaluate(rhs_expr, env)

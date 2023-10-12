@@ -25,9 +25,7 @@
     @test has_new_val == false
 end
 
-@testset "Test compiler passes with $m" for m in [
-    :leuk, :leukfr
-]
+@testset "Test compiler passes with $m" for m in [:leuk, :leukfr]
     model_def = JuliaBUGS.BUGSExamples.VOLUME_I[m].model_def
     data = JuliaBUGS.BUGSExamples.VOLUME_I[m].data
     inits = JuliaBUGS.BUGSExamples.VOLUME_I[m].inits[1]
