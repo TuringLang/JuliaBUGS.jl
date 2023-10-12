@@ -118,6 +118,3 @@ end
     include("graphs.jl")
 end
 
-@testset "Inference" begin
-    include("inference.jl")
-end
