@@ -100,6 +100,10 @@ end
     model = compile(model_def, data, inits)
 end
 
+@testset "Utils" begin
+    include("utils.jl")
+end
+
 @testset "Log Probability Test" begin
     include("run_logp_tests.jl")
     @testset "Single stochastic variable test" begin

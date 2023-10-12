@@ -49,8 +49,6 @@ dppl_logp =
 bugs_logp = JuliaBUGS.evaluate!!(JuliaBUGS.settrans(bugs_model, true), DefaultContext())[2]
 dppl_logp =
     DynamicPPL.evaluate!!(
-        dppl_model,
-        DynamicPPL.link!!(get_params_varinfo(bugs_model), dppl_model),
-        DynamicPPL.DefaultContext(),
+        dppl_model, get_params_varinfo(bugs_model), DynamicPPL.DefaultContext()
     )[2].logp
 @test bugs_logp ≈ dppl_logp rtol = 1E-6

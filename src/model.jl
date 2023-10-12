@@ -172,15 +172,59 @@ function initialize_var_store(data, vars, array_sizes)
     return var_store
 end
 
+"""
+    get_params_varinfo(m::BUGSModel[, vi::SimpleVarInfo])
+
+Returns a `SimpleVarInfo` object containing only the parameter values of the model.
+If `vi` is provided, it will be used; otherwise, `m.varinfo` will be used.
+"""
 function get_params_varinfo(m::BUGSModel)
     return get_params_varinfo(m, m.varinfo)
 end
 function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
-    d = Dict{VarName,Any}()
-    for param in m.parameters
-        d[param] = vi[param]
+    if !m.transformed
+        d = Dict{VarName,Any}()
+        for param in m.parameters
+            d[param] = vi[param]
+        end
+        return SimpleVarInfo(d, vi.logp, DynamicPPL.NoTransformation())
+    else
+        d = Dict{VarName,Any}()
+        g = m.g
+        for vn in m.sorted_nodes
+            ni = g[vn]
+            @unpack node_type, node_function_expr, node_args = ni
+            args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+            expr = node_function_expr.args[2]
+            if vn in m.parameters
+                dist = _eval(expr, args)
+                linked_val = DynamicPPL.link(dist, vi[vn])
+                d[vn] = linked_val
+            end
+        end
+        return SimpleVarInfo(d, vi.logp, DynamicPPL.DynamicTransformation())
     end
-    return SimpleVarInfo(d, vi.logp, vi.transformation)
+end
+
+# TODO: add this function to `ADgradient` with `ReverseDiff` when compiled
+# see https://github.com/TuringLang/Turing.jl/pull/2097
+# TODO: a static allocated version is possible because we know the size, but not worth the complexity now
+"""
+    getparams(m::BUGSModel[, vi::SimpleVarInfo])
+
+Return the values of the parameters in the model as a vector, the values are flattened 
+in the order of `m.parameters` (also the topological order).
+"""
+function getparams(m::BUGSModel)
+    return getparams(m, m.varinfo)
+end
+function getparams(m::BUGSModel, vi::SimpleVarInfo)
+    params_vi = get_params_varinfo(m, vi)
+    return vcat(
+        [
+            isa(params_vi[p], Real) ? params_vi[p] : vec(params_vi[p]) for p in m.parameters
+        ]...,
+    )
 end
 
 """
@@ -359,7 +403,7 @@ function AbstractPPL.evaluate!!(
         @unpack node_type, node_function_expr, node_args = ni
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
         expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
+        if node_type == JuliaBUGS.Logical # be conservative -- always propagate values of logical nodes
             value = _eval(expr, args)
             vi = setindex!!(vi, value, vn)
         else
