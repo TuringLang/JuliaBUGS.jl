@@ -9,24 +9,27 @@ using DynamicPPL: getlogp, settrans!!
 using Graphs, MetaGraphsNext
 using JuliaBUGS
 using JuliaBUGS:
-    CollectVariables,
-    program!,
-    Var,
-    Stochastic,
-    Logical,
-    evaluate!!,
-    DefaultContext,
     BUGSGraph,
-    stochastic_neighbors,
+    CollectVariables,
+    ConcreteNodeInfo,
+    ConstantPropagation,
+    DefaultContext,
+    evaluate!!,
+    get_params_varinfo,
+    Logical,
+    LogDensityContext,
+    MarkovBlanketCoveredBUGSModel,
+    merge_collections,
+    NodeFunctions,
+    PostChecking,
+    program!,
+    SimpleVarInfo,
+    Stochastic,
     stochastic_inneighbors,
+    stochastic_neighbors,
     stochastic_outneighbors,
     markov_blanket,
-    MarkovBlanketCoveredBUGSModel,
-    evaluate!!,
-    LogDensityContext,
-    ConcreteNodeInfo,
-    SimpleVarInfo,
-    get_params_varinfo
+    Var
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.BUGSPrimitives: mean
 using LogDensityProblems, LogDensityProblemsAD
@@ -80,8 +83,8 @@ end
     :epil,
     :equiv,
     :kidney,
-    # :leuk, # leuk requires higher-level of constant propagation, particularly dN is transformed variable, but only if Y is figured out first
-    # :leukfr, # similar reason to `leuk`
+    :leuk,
+    :leukfr,
     :lsat,
     :magnesium,
     :mice,
