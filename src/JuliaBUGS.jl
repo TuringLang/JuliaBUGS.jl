@@ -146,11 +146,12 @@ Compile a BUGS model into a log density problem.
 - `model_def::Expr`: The BUGS model definition.
 - `data::NamedTuple` or `AbstractDict`: The data to be used in the model. If none is passed, the data will be assumed to be empty.
 - `initializations::NamedTuple` or `AbstractDict`: The initial values for the model parameters. If none is passed, the parameters will be assumed to be initialized to zero.
+- `is_transformed::Bool=true`: If true, the model parameters during inference will be transformed to the unconstrained space. 
 
 # Returns
 - A [`BUGSModel`](@ref) object representing the compiled model.
 """
-function compile(model_def::Expr, data, inits)
+function compile(model_def::Expr, data, inits; is_transformed=true)
     check_input.((data, inits))
     scalars, array_sizes = program!(CollectVariables(), model_def, data)
     has_new_val, transformed_variables = program!(
@@ -170,7 +171,15 @@ function compile(model_def::Expr, data, inits)
     )
     g = BUGSGraph(vars, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
-    return BUGSModel(g, sorted_nodes, vars, array_sizes, merged_data, inits)
+    return BUGSModel(
+        g,
+        sorted_nodes,
+        vars,
+        array_sizes,
+        merged_data,
+        inits;
+        is_transformed=is_transformed,
+    )
 end
 
 """
