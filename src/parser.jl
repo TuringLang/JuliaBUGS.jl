@@ -592,6 +592,8 @@ function bugsast_expression(expr, position=LineNumberNode(1, nothing))
     elseif Meta.isexpr(expr, :ref)
         if length(expr.args) == 1 # only the variable name
             error("Empty indexing is not allowed in Julia-syntax, use `:` instead")
+        elseif Meta.isexpr(expr.args[1], :ref)
+            error("BUGS array are tensors instead of vector of vectors, use `a[i, j]` instead of `a[i][j]`")
         else # if user input e.g. `y[, ]`, the Julia parser will complain and error
             return Expr(:ref, bugsast_index.(expr.args, (position,))...)
         end
