@@ -1,6 +1,6 @@
 name = "JuliaBUGS"
 uuid = "ba9fb4c0-828e-4473-b6a1-cd2560fee5bf"
-version = "0.2.3"
+version = "0.2.4"
 
 [deps]
 AbstractPPL = "7a57a42e-76ec-4ea3-a279-07e840d6d9cf"
@@ -28,6 +28,7 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 [weakdeps]
 AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
 AdvancedHMC = "0bf59076-c3b1-5ca4-86bd-e02cd72cde3d"
+AdvancedMH = "5b7e9947-ddc0-4b3f-9b55-0d8042f74170"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
 GraphPlot = "a2cc645c-3eea-5389-862e-a155d0052231"
@@ -36,8 +37,10 @@ TikzGraphs = "b4f28e30-c73f-5eaf-a395-8a9db949a742"
 
 [extensions]
 JuliaBUGSAdvancedHMCExt = ["AbstractMCMC", "AdvancedHMC", "MCMCChains"]
+JuliaBUGSAdvancedMHExt = ["AbstractMCMC", "AdvancedMH", "MCMCChains"]
 JuliaBUGSGraphMakieExt = ["GraphMakie", "GLMakie"]
 JuliaBUGSGraphPlotExt = ["GraphPlot"]
+JuliaBUGSMCMCChainsExt = ["AbstractMCMC", "MCMCChains"]
 JuliaBUGSTikzGraphsExt = ["TikzGraphs"]
 
 [compat]
@@ -45,7 +48,7 @@ AbstractPPL = "0.6"
 BangBang = "0.3"
 Bijectors = "0.13"
 Distributions = "0.23.8, 0.24, 0.25"
-Documenter = "0.27"
+Documenter = "0.27, 1"
 DynamicPPL = "0.22, 0.23"
 Graphs = "1.4.1"
 InverseFunctions = "0.1"
@@ -54,20 +57,21 @@ LogDensityProblems = "2"
 LogDensityProblemsAD = "1.6"
 LogExpFunctions = "0.3"
 MacroTools = "0.5.6"
-MetaGraphsNext = "0.5"
+MetaGraphsNext = "0.5, 0.6"
 PDMats = "0.10, 0.11"
 Setfield = "0.7.1, 0.8, 1"
 SpecialFunctions = "2"
 UnPack = "1"
-julia = "1.8, 1.9"
+julia = ">=1.9"
 
 [extras]
 AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
 AdvancedHMC = "0bf59076-c3b1-5ca4-86bd-e02cd72cde3d"
+AdvancedMH = "5b7e9947-ddc0-4b3f-9b55-0d8042f74170"
 LogDensityProblemsAD = "996a588d-648d-4e1f-a8f0-a84b347e47b1"
 MCMCChains = "c7f686f2-ff18-58e9-bc7b-31028e88f75d"
 ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["AbstractMCMC", "AdvancedHMC", "MCMCChains", "LogDensityProblemsAD", "ReverseDiff", "Test"]
+test = ["AbstractMCMC", "AdvancedHMC", "AdvancedMH", "MCMCChains", "LogDensityProblemsAD", "ReverseDiff", "Test"]

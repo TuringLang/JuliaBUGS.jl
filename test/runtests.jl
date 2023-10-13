@@ -1,6 +1,7 @@
 using AbstractPPL
 using AbstractMCMC
 using AdvancedHMC
+using AdvancedMH
 using Bijectors
 using Distributions
 using Documenter
@@ -32,6 +33,7 @@ using JuliaBUGS:
     Var
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.BUGSPrimitives: mean
+using LinearAlgebra
 using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
 using MCMCChains
@@ -124,3 +126,5 @@ end
 @testset "Markov Blanket" begin
     include("graphs.jl")
 end
+
+include("ext/mcmchains.jl")
