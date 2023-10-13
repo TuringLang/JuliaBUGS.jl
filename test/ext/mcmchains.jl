@@ -43,7 +43,6 @@
         discard_initial=n_adapts,
     )
     @test hmc_chain.name_map[:parameters] == [
-        # parameters
         :sigma
         :beta
         :alpha
@@ -70,6 +69,7 @@
     @test means[:sigma].nt.mean[1] ≈ 0.9 atol = 0.2
     @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.2
 
+    n_samples, n_adapts = 20000, 5000
     mh_chain = AbstractMCMC.sample(
         model,
         RWMH(MvNormal(zeros(D), I)),
@@ -80,7 +80,6 @@
         discard_initial=n_adapts,
     )
     @test mh_chain.name_map[:parameters] == [
-        # parameters
         :sigma
         :beta
         :alpha
