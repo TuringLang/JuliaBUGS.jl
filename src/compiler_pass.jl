@@ -77,9 +77,12 @@ Arguments:
 """
 function post_process(pass::CompilerPass, expr, env, vargs...) end
 
-@enum VariableTypes::Bool begin
+@enum VariableTypes begin
     Logical
     Stochastic
+    Transformed
+    Transformed_Stochastic
+    Unspecified
 end
 
 """
@@ -88,14 +91,12 @@ end
 This pass collects all the possible variables appear on the LHS of both logical and stochastic assignments. 
 """
 struct CollectVariables <: CompilerPass
-    vars::Dict{Var,VariableTypes}
+    vars::Set{Var}
     transformed_variables::Dict{Var,Union{Number,Array{<:Number}}}
 end
 
 function CollectVariables()
-    return CollectVariables(
-        Dict{Var,VariableTypes}(), Dict{Var,Union{Number,Array{<:Number}}}()
-    )
+    return CollectVariables(Set{Var}(), Dict{Var,Union{Number,Array{<:Number}}}())
 end
 
 """
@@ -346,7 +347,7 @@ end
 @inline is_resolved(x) = x isa Number || x isa Array{<:Number}
 
 function assignment!(pass::CollectVariables, expr::Expr, env)
-    lhs_expr, rhs_expr = expr.args[1:2]
+    lhs_expr, _ = expr.args[1:2]
 
     v = find_variables_on_lhs(
         Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
@@ -358,38 +359,18 @@ function assignment!(pass::CollectVariables, expr::Expr, env)
         error("$v is data, can't be assigned to.")
     end
 
-    var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
-    if haskey(pass.vars, v) && var_type == pass.vars[v]
-        error("Repeated assignment to $v.")
-    end
-
-    if var_type == Logical
-        rhs = evaluate(rhs_expr, env)
-        is_resolved(rhs) && (pass.transformed_variables[v] = rhs)
-        haskey(pass.vars, v) &&
-            !is_resolved(rhs) &&
-            error(
-                "$v is assigned to by both logical and stochastic assignments, " *
-                "this is only allowed when the variable is a transformation of data.",
-            )
-        haskey(pass.vars, v) && (var_type = Stochastic)
-    else
-        if haskey(pass.vars, v) && !haskey(pass.transformed_variables, v)
-            error(
-                "$v is assigned to by both logical and stochastic assignments, " *
-                "this is only allowed when the variable is a transformation of data.",
-            )
-        end
-    end
-    return pass.vars[v] = var_type
+    return push!(pass.vars, v)
 end
 
 function post_process(pass::CollectVariables, expr, env)
-    array_elements = Dict([v.name => [] for v in keys(pass.vars) if v.indices != ()])
-    for v in keys(pass.vars)
+    scalars = Set([v.name for v in pass.vars if isa(v, Scalar)])
+
+    array_elements = Dict([v.name => [] for v in pass.vars if v.indices != ()])
+    for v in pass.vars
         !isa(v, Scalar) && push!(array_elements[v.name], v)
     end
 
+    # sizes of non-data arrays
     array_sizes = Dict{Symbol,Vector{Int}}()
     for (k, v) in array_elements
         k in keys(env) && continue # skip data arrays
@@ -404,69 +385,169 @@ function post_process(pass::CollectVariables, expr, env)
         array_sizes[k] = array_size
     end
 
+    return scalars, array_sizes
+end
+
+mutable struct ConstantPropagation <: CompilerPass
+    new_value_added::Bool
+    transformed_variables
+end
+
+function ConstantPropagation(scalar::Set, variable_array_sizes::Dict)
     transformed_variables = Dict()
-    for tv in keys(pass.transformed_variables)
-        if tv isa Scalar
-            transformed_variables[tv.name] = pass.transformed_variables[tv]
-        else
-            if !haskey(transformed_variables, tv.name)
-                tvs = fill(missing, array_sizes[tv.name]...)
-                transformed_variables[tv.name] = convert(Array{Union{Missing,Number}}, tvs)
-            end
-            transformed_variables[tv.name][tv.indices...] = pass.transformed_variables[tv]
-        end
-    end
-    for (k, v) in transformed_variables
-        if v isa Array && !any(ismissing, v)
-            transformed_variables[k] = convert(Array{Number}, v)
-        end
+
+    for s in scalar
+        transformed_variables[s] = missing
     end
 
-    # scalar is already checked in `assignment!`
-    logical_bitmap = Dict([k => falses(v...) for (k, v) in array_sizes])
-    stochastic_bitmap = deepcopy(logical_bitmap)
-    for (k, v) in pass.vars
-        k isa Scalar && continue
-        k.name in keys(env) && continue # skip data arrays
-        bitmap = v == Logical ? logical_bitmap : stochastic_bitmap
-        for v_ in scalarize(k)
-            if bitmap[v_.name][v_.indices...]
-                error("Repeated assignment to $v_.")
+    for (k, v) in variable_array_sizes
+        transformed_variables[k] = Array{Union{Missing,Real}}(missing, v...)
+    end
+
+    return ConstantPropagation(false, transformed_variables)
+end
+
+# won't try to evaluate the RHS if the function is not recognized
+function should_skip_eval(expr)
+    contain_external_function = false
+    MacroTools.postwalk(expr) do sub_expr
+        if MacroTools.@capture(sub_expr, f_(args__))
+            if f ∉ [:+, :-, :*, :/, :^] && !(f in BUGSPrimitives.BUGS_FUNCTIONS)
+                contain_external_function = true
+            end
+        end
+        return sub_expr
+    end
+    return contain_external_function
+end
+
+function has_value(transformed_variables, v::Var)
+    if v isa Scalar
+        return !ismissing(transformed_variables[v.name])
+    elseif v isa ArrayElement
+        return !ismissing(transformed_variables[v.name][v.indices...])
+    else
+        return all(x -> !ismissing(x), transformed_variables[v.name][v.indices...])
+    end
+end
+
+function assignment!(pass::ConstantPropagation, expr::Expr, env)
+    if Meta.isexpr(expr, :(=)) && !should_skip_eval(expr.args[2])
+        lhs = find_variables_on_lhs(expr.args[1], env)
+
+        if has_value(pass.transformed_variables, lhs)
+            return nothing
+        end
+
+        rhs = evaluate(expr.args[2], merge_collections(env, pass.transformed_variables))
+        if is_resolved(rhs)
+            if !pass.new_value_added
+                pass.new_value_added = true
+            end
+            if lhs isa Scalar
+                pass.transformed_variables[lhs.name] = rhs
             else
-                bitmap[v_.name][v_.indices...] = true
+                pass.transformed_variables[lhs.name][lhs.indices...] = rhs
             end
         end
     end
+end
 
-    # corner case: x[1:2] = something, x[3] = something, x[1:3] ~ dmnorm()
-    overlap = Dict()
-    for k in keys(logical_bitmap)
-        overlap[k] = logical_bitmap[k] .& stochastic_bitmap[k]
-    end
+function post_process(pass::ConstantPropagation, expr, env)
+    return pass.new_value_added, pass.transformed_variables
+end
 
-    for (k, v) in overlap
-        if any(v)
-            idxs = findall(v)
-            for i in idxs
-                !haskey(transformed_variables, k) &&
-                    error("Logical and stochastic variables overlap on $k[$i].")
-                transformed_variables[k][i...] != missing && continue
-                error("Logical and stochastic variables overlap on $k[$(i...)].")
-            end
+struct PostChecking <: CompilerPass
+    transformed_variables
+    is_data::Dict
+    definition_bit_map::Dict
+    logical_or_stochastic::Dict
+end
+
+function PostChecking(data, transformed_variables::Dict)
+    is_data = Dict() # used to identify transformed variables
+    definition_bit_map = Dict() # used to identify repeated assignment
+    logical_or_stochastic = Dict() # used to identify logical or stochastic assignment
+
+    all_vars = merge_collections(data, transformed_variables)
+
+    for k in keys(all_vars)
+        v = all_vars[k]
+        if ismissing(v) # scalar that is not data
+            is_data[k] = false
+            definition_bit_map[k] = false
+            logical_or_stochastic[k] = Unspecified
+        elseif v isa Number # scalar that is data
+            is_data[k] = true
+            definition_bit_map[k] = false
+            logical_or_stochastic[k] = Unspecified
+        else
+            is_data[k] = .!ismissing.(v)
+            logical_or_stochastic[k] = fill(Unspecified, size(v)...)
+            definition_bit_map[k] = fill(false, size(v)...)
         end
     end
 
-    # used to check if a variable is defined on the lhs
-    array_bitmap = Dict()
-    for k in keys(logical_bitmap)
-        array_bitmap[k] = logical_bitmap[k] .| stochastic_bitmap[k]
+    return PostChecking(
+        transformed_variables, is_data, definition_bit_map, logical_or_stochastic
+    )
+end
+
+function assignment!(pass::PostChecking, expr::Expr, env)
+    @inline set_value!(d::Dict, value, v::Scalar) = d[v.name] = value
+    @inline set_value!(d::Dict, value, v::Var) = d[v.name][v.indices...] = value
+    @inline get_value(d::Dict, v::Scalar) = d[v.name]
+    @inline get_value(d::Dict, v::Var) = d[v.name][v.indices...]
+
+    lhs = find_variables_on_lhs(expr.args[1], env)
+    var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
+
+    for v in scalarize(lhs)
+        if get_value(pass.definition_bit_map, v) # if this variable has already been seen
+            if get_value(pass.logical_or_stochastic, v) == var_type
+                error("Repeated assignment to $v.") # produce error even when two assignment is the same
+            elseif get_value(pass.logical_or_stochastic, v) == Transformed_Stochastic
+                error("Multiple repeated assignment to $v.")
+            elseif get_value(pass.is_data, v)
+                set_value!(pass.logical_or_stochastic, Transformed_Stochastic, v)
+            else
+                error(
+                    "$v is assigned to by both logical and stochastic assignments, " *
+                    "this is only allowed when the variable is a transformation of data.",
+                )
+            end
+        else
+            set_value!(pass.definition_bit_map, true, v)
+            if get_value(pass.is_data, v) && var_type == Logical
+                var_type = Transformed
+            end
+            set_value!(pass.logical_or_stochastic, var_type, v)
+        end
     end
+end
 
-    # it is possible that a logical variable is constant and never appear one the LHS of ~
-    # this variable's value is captured by `transformed_variables`
-    # we still include it in `vars` for now
+function clean_up_transformed_variables(transformed_variables)
+    cleaned_transformed_variables = Dict()
+    for k in keys(transformed_variables)
+        v = transformed_variables[k]
+        if ismissing(v)
+            continue
+        elseif v isa Number
+            cleaned_transformed_variables[k] = v
+        elseif all(ismissing, v)
+            continue
+        elseif all(!ismissing, v)
+            cleaned_transformed_variables[k] = identity.(v)
+        else
+            cleaned_transformed_variables[k] = v
+        end
+    end
+    return cleaned_transformed_variables
+end
 
-    return pass.vars, array_sizes, transformed_variables, array_bitmap
+function post_process(pass::PostChecking, expr, env)
+    return pass.definition_bit_map,
+    clean_up_transformed_variables(pass.transformed_variables)
 end
 
 """
@@ -474,17 +555,17 @@ end
 
 A pass that analyze node functions of variables and their dependencies.
 """
-struct NodeFunctions{VT} <: CompilerPass
-    vars::VT
+struct NodeFunctions <: CompilerPass
     array_sizes::Dict
     array_bitmap::Dict
 
+    vars::Dict
     node_args::Dict
     node_functions::Dict
     dependencies::Dict
 end
-function NodeFunctions(vars, array_sizes, array_bitmap)
-    return NodeFunctions(vars, array_sizes, array_bitmap, Dict(), Dict(), Dict())
+function NodeFunctions(array_sizes, array_bitmap)
+    return NodeFunctions(array_sizes, array_bitmap, Dict(), Dict(), Dict(), Dict())
 end
 
 """
@@ -756,6 +837,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
         evaluate(lhs_var, env) isa Union{Number,Array{<:Number}} &&
         return nothing
 
+    pass.vars[lhs_var] = var_type
     rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes, env)
     rhs = evaluate(rhs_expr, env)
 
@@ -850,11 +932,6 @@ function assignment!(pass::NodeFunctions, expr::Expr, env)
 end
 
 function post_process(pass::NodeFunctions, expr, env, vargs...)
-    for (var, var_type) in pass.vars
-        if var_type != Stochastic && evaluate(var, env) isa Union{Number,Array{<:Number}}
-            delete!(pass.vars, var)
-        end
-    end
     return pass.vars,
     pass.array_sizes, pass.array_bitmap, pass.node_args, pass.node_functions,
     pass.dependencies

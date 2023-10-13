@@ -1,14 +1,15 @@
 # ReverseDiff
 
 @testset "trans-dim bijectors tape compilation" begin
-    # `birats` contains Dirichlet distribution 
+    # `birats` contains Wishart distribution 
     model_def = JuliaBUGS.BUGSExamples.birats.model_def
     data = JuliaBUGS.BUGSExamples.birats.data
     inits = JuliaBUGS.BUGSExamples.birats.inits[1]
     model = compile(model_def, data, inits)
     ad_model = ADgradient(:ReverseDiff, model; compile=Val(false))
-    D = LogDensityProblems.dimension(model)
-    initial_θ = rand(D)
+    # random initialization sometimes fails because some parameters are supposed to be from
+    # PD matrix
+    initial_θ = JuliaBUGS.getparams(model)
     LogDensityProblems.logdensity_and_gradient(ad_model, initial_θ)
 end
 

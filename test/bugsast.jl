@@ -1,5 +1,9 @@
 # more examples can be found here: https://www.mrc-bsu.cam.ac.uk/software/bugs/
 
+# b[1][1] should error because arrays in BUGS are tensors
+# @test_throws(ErrorException,  
+@test_throws ErrorException JuliaBUGS.bugsast(:(b[1][1] ~ dnorm(0, 1)))
+
 # bugsast
 regression = @bugs begin
     for i in 1:N

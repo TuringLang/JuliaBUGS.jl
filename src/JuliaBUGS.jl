@@ -57,7 +57,11 @@ end
 """
     merge_collections(c1::Union{Dict, NamedTuple}, c2::Union{Dict, NamedTuple}, output_NamedTuple::Bool=true) -> Union{Dict, NamedTuple}
 
-Merge two collections, `c1` and `c2`, which can be either dictionaries or named tuples, into a single collection (dictionary or named tuple). The function assumes that the values in the input collections are either `Number` or `Array` with matching sizes. If a key exists in both `c1` and `c2`, the merged collection will contain the non-missing values from `c1` and `c2`. If a key exists only in one of the collections, the resulting collection will contain the key-value pair from the respective collection.
+Merge two collections, `c1` and `c2`, which can be either dictionaries or named tuples, into a single collection 
+(dictionary or named tuple). The function assumes that the values in the input collections are either `Number` or 
+`Array` with matching sizes. If a key exists in both `c1` and `c2`, the merged collection will contain the non-missing 
+values from `c1` and `c2`. If a key exists only in one of the collections, the resulting collection will contain the 
+key-value pair from the respective collection.
 
 # Arguments
 - `c1::Union{Dict, NamedTuple}`: The first collection to merge.
@@ -142,22 +146,40 @@ Compile a BUGS model into a log density problem.
 - `model_def::Expr`: The BUGS model definition.
 - `data::NamedTuple` or `AbstractDict`: The data to be used in the model. If none is passed, the data will be assumed to be empty.
 - `initializations::NamedTuple` or `AbstractDict`: The initial values for the model parameters. If none is passed, the parameters will be assumed to be initialized to zero.
+- `is_transformed::Bool=true`: If true, the model parameters during inference will be transformed to the unconstrained space. 
 
 # Returns
 - A [`BUGSModel`](@ref) object representing the compiled model.
 """
-function compile(model_def::Expr, data, inits)
+function compile(model_def::Expr, data, inits; is_transformed=true)
     check_input.((data, inits))
-    vars, array_sizes, transformed_variables, array_bitmap = program!(
-        CollectVariables(), model_def, data
+    scalars, array_sizes = program!(CollectVariables(), model_def, data)
+    has_new_val, transformed_variables = program!(
+        ConstantPropagation(scalars, array_sizes), model_def, data
+    )
+    while has_new_val
+        has_new_val, transformed_variables = program!(
+            ConstantPropagation(false, transformed_variables), model_def, data
+        )
+    end
+    array_bitmap, transformed_variables = program!(
+        PostChecking(data, transformed_variables), model_def, data
     )
     merged_data = merge_collections(deepcopy(data), transformed_variables)
     vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = program!(
-        NodeFunctions(vars, array_sizes, array_bitmap), model_def, merged_data
+        NodeFunctions(array_sizes, array_bitmap), model_def, merged_data
     )
     g = BUGSGraph(vars, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
-    return BUGSModel(g, sorted_nodes, vars, array_sizes, merged_data, inits)
+    return BUGSModel(
+        g,
+        sorted_nodes,
+        vars,
+        array_sizes,
+        merged_data,
+        inits;
+        is_transformed=is_transformed,
+    )
 end
 
 """
