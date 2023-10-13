@@ -90,7 +90,7 @@ function JuliaBUGS.gen_chains(
     flattened_generated_quantities = [
         collect(Iterators.flatten(gq)) for gq in generated_quantities
     ]
-    
+
     vals = [
         convert(
             Vector{Real},
