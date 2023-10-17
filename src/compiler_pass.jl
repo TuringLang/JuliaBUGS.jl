@@ -92,11 +92,10 @@ This pass collects all the possible variables appear on the LHS of both logical 
 """
 struct CollectVariables <: CompilerPass
     vars::Set{Var}
-    transformed_variables::Dict{Var,Union{Number,Array{<:Number}}}
 end
 
 function CollectVariables()
-    return CollectVariables(Set{Var}(), Dict{Var,Union{Number,Array{<:Number}}}())
+    return CollectVariables(Set{Var}())
 end
 
 """
@@ -459,15 +458,15 @@ end
 
 struct PostChecking <: CompilerPass
     transformed_variables
-    is_data::Dict
-    definition_bit_map::Dict
-    logical_or_stochastic::Dict
+    is_data::Dict # used to identify if a variable is a data (including transformed variable)
+    definition_bit_map::Dict # used to identify repeated assignment
+    logical_or_stochastic::Dict # used to identify logical or stochastic assignment
 end
 
 function PostChecking(data, transformed_variables::Dict)
-    is_data = Dict() # used to identify transformed variables
-    definition_bit_map = Dict() # used to identify repeated assignment
-    logical_or_stochastic = Dict() # used to identify logical or stochastic assignment
+    is_data = Dict()
+    definition_bit_map = Dict()
+    logical_or_stochastic = Dict()
 
     all_vars = merge_collections(data, transformed_variables)
 
