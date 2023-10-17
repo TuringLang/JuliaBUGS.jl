@@ -458,7 +458,7 @@ end
 
 struct PostChecking <: CompilerPass
     transformed_variables
-    is_data::Dict # used to identify transformed variables
+    is_data::Dict # used to identify if a variable is a data (including transformed variable)
     definition_bit_map::Dict # used to identify repeated assignment
     logical_or_stochastic::Dict # used to identify logical or stochastic assignment
 end
