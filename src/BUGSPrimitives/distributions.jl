@@ -370,7 +370,7 @@ p(x|μ,T) = (2π)^{-k/2} |T|^{1/2} e^{-1/2 (x-μ)' T (x-μ)}
 where ``k`` is the dimension of `x`.
 """
 function dmnorm(μ::AbstractVector, T::AbstractMatrix)
-    return MvNormal(μ, inv(PDMat(T)))
+    return MvNormal(μ, _inv(PDMat(T)))
 end
 
 """
@@ -385,7 +385,7 @@ p(x|k,μ,Σ) = \\frac{\\Gamma((k+d)/2)}{\\Gamma(k/2) (k\\pi)^{p/2} |Σ|^{1/2}} \
 where ``p`` is the dimension of ``x``.
 """
 function dmt(μ::AbstractVector, T::AbstractMatrix, k)
-    return MvTDist(k, μ, inv(PDMat(T)))
+    return MvTDist(k, μ, _inv(PDMat(T)))
 end
 
 """
@@ -407,7 +407,7 @@ function dwish(R::AbstractMatrix, k)
             ),
         )
     end
-    return Wishart(k, inv(PDMat(R)))
+    return Wishart(k, _inv(PDMat(R)))
 end
 
 """
