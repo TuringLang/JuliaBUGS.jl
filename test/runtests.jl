@@ -68,6 +68,8 @@ Random.seed!(12345)
     Documenter.doctest(JuliaBUGS; manual=false)
 end
 
+include("bugs_primitives.jl")
+
 @testset "Parser" begin
     include("bugsast.jl")
     include("parser.jl")

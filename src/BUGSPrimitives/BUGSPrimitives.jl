@@ -1,5 +1,6 @@
 module BUGSPrimitives
 
+using Bijectors
 using Distributions
 using LinearAlgebra
 using LogExpFunctions
@@ -16,6 +17,17 @@ include("distributions.jl")
 
 InverseFunctions.inverse(::typeof(phi)) = probit
 InverseFunctions.inverse(::typeof(probit)) = phi
+
+"""
+    _inv(m::AbstractMatrix)
+
+Matrix inverse using `cholesky_lower` to avoid issue with ReverseDiff.
+"""
+function _inv(m::AbstractMatrix)
+    L = Bijectors.cholesky_lower(m)
+    inv_L = inv(L)
+    return inv_L' * inv_L
+end
 
 const BUGS_FUNCTIONS = [
     :cloglog,
