@@ -1,9 +1,9 @@
 using Test
-using JuliaBUGS:
+using JuliaBUGS.BUGSParser:
     ProcessState,
     process_toplevel!,
-    to_julia_program,
     process_trivia!,
+    peek,
     peek_raw,
     process_variable!,
     process_expression!,
@@ -12,7 +12,7 @@ using JuliaBUGS:
     process_range!,
     process_indexing!,
     process_tilde_rhs!
-using JuliaBUGS: peek, to_julia_program
+using JuliaBUGS: to_julia_program
 using JuliaSyntax: @K_str
 using JuliaSyntax
 JuliaSyntax.enable_in_core!()
@@ -156,7 +156,7 @@ end
     # and the fact that it's designed for Julia, not BUGS
     # one such corner case: `<---2` will not be tokenized to `<--` and `-2`, but `InvalidOperator` and `-2` 
     # test error handling of special errors
-    @test_throws ErrorException JuliaBUGS.ProcessState("<---2")
+    @test_throws ErrorException JuliaBUGS.BUGSParser.ProcessState("<---2")
 end
 
 function parse_bugs(prog)
