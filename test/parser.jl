@@ -1,5 +1,5 @@
 using Test
-using JuliaBUGS.BUGSParser:
+using JuliaBUGS.Parser:
     ProcessState,
     process_toplevel!,
     process_trivia!,
@@ -156,7 +156,7 @@ end
     # and the fact that it's designed for Julia, not BUGS
     # one such corner case: `<---2` will not be tokenized to `<--` and `-2`, but `InvalidOperator` and `-2` 
     # test error handling of special errors
-    @test_throws ErrorException JuliaBUGS.BUGSParser.ProcessState("<---2")
+    @test_throws ErrorException JuliaBUGS.Parser.ProcessState("<---2")
 end
 
 function parse_bugs(prog)

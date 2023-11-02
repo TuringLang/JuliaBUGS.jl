@@ -27,8 +27,8 @@ export @varname
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
 
-include("parser/BUGSParser.jl")
-using .BUGSParser
+include("parser/Parser.jl")
+using .Parser
 
 include("utils.jl")
 include("variable_types.jl")

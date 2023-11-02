@@ -1,4 +1,4 @@
-module BUGSParser
+module Parser
 
 using MacroTools
 using JuliaSyntax
