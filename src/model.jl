@@ -227,112 +227,13 @@ function getparams(m::BUGSModel, vi::SimpleVarInfo)
     )
 end
 
-"""
-    MarkovBlanketCoveredBUGSModel
-
-The model object for a BUGS model with Markov blanket covered.
-"""
-struct MarkovBlanketCoveredBUGSModel <: AbstractBUGSModel
-    # `sorted_nodes` is used for iterating over the nodes in the model
-    # `param_length` is used for specifying the length of the parameters vector 
-    transformed::Bool
-    mb_untransformed_param_length::Int
-    mb_transformed_param_length::Int
-    mb_sorted_nodes::Vector{VarName}
-
-    # these are fields of the original `BUGSModel`
-    untransformed_param_length::Int
-    transformed_param_length::Int
-    untransformed_var_lengths::Dict{VarName,Int}
-    transformed_var_lengths::Dict{VarName,Int}
-    varinfo::SimpleVarInfo
-    parameters::Vector{VarName}
-    g::BUGSGraph
-    sorted_nodes::Vector{VarName}
-end
-
-function MarkovBlanketCoveredBUGSModel(
-    m::BUGSModel,
-    var_group::Union{VarName,Vector{VarName}};
-    is_transformed::Bool=m.transformed,
-)
-    var_group = var_group isa VarName ? [var_group] : var_group
-    non_vars = VarName[]
-    logical_vars = VarName[]
-    for var in var_group
-        if var ∉ labels(m.g)
-            push!(non_vars, var)
-        elseif m.g[var].node_type == Logical
-            push!(logical_vars, var)
-        end
-    end
-    isempty(non_vars) || error("Variables $(non_vars) are not in the model")
-    isempty(logical_vars) ||
-        warn("Variables $(logical_vars) are not stochastic variables, they will be ignored")
-    blanket = markov_blanket(m.g, var_group)
-    blanket_with_vars = union(blanket, var_group)
-    sorted_blanket_with_vars = VarName[]
-    for vn in m.sorted_nodes
-        if vn in blanket_with_vars
-            push!(sorted_blanket_with_vars, vn)
-        end
-    end
-    untransformed_param_length = 0
-    transformed_param_length = 0
-    for vn in m.sorted_nodes
-        if vn in sorted_blanket_with_vars &&
-            !(m.g[vn].node_type == JuliaBUGS.Logical) &&
-            vn ∈ m.parameters
-            @unpack node_function_expr, node_args = m.g[vn]
-            dist = _eval(
-                node_function_expr.args[2],
-                Dict(getsym(arg) => m.varinfo[arg] for arg in node_args),
-            )
-            untransformed_param_length += length(dist)
-            if bijector(dist) == identity
-                transformed_param_length += length(dist)
-            else
-                transformed_param_length += length(Bijectors.transformed(dist))
-            end
-        end
-    end
-    return MarkovBlanketCoveredBUGSModel(
-        is_transformed,
-        untransformed_param_length,
-        transformed_param_length,
-        sorted_blanket_with_vars,
-        m.untransformed_param_length,
-        m.transformed_param_length,
-        m.untransformed_var_lengths,
-        m.transformed_var_lengths,
-        m.varinfo,
-        m.parameters,
-        m.g,
-        m.sorted_nodes,
-    )
-end
-
-function BUGSModel(m::MarkovBlanketCoveredBUGSModel; is_transformed=m.transformed)
-    return BUGSModel(
-        is_transformed,
-        m.untransformed_param_length,
-        m.transformed_param_length,
-        m.untransformed_var_lengths,
-        m.transformed_var_lengths,
-        m.varinfo,
-        m.parameters,
-        m.g,
-        m.sorted_nodes,
-    )
-end
-
 # TODO: For now, only the parameters varinfo is returned; in the future, can also return the generated quantities
 function (model::BUGSModel)()
     vi, logp = evaluate!!(model, SamplingContext())
     return get_params_varinfo(model, vi)
 end
 
-function settrans(model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel}, bool::Bool)
+function settrans(model::BUGSModel, bool::Bool=!(model.transformed))
     return @set model.transformed = bool
 end
 
@@ -387,14 +288,11 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
     return vi, logp
 end
 
-function AbstractPPL.evaluate!!(model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel})
+function AbstractPPL.evaluate!!(model::BUGSModel)
     return AbstractPPL.evaluate!!(model, DefaultContext())
 end
-function AbstractPPL.evaluate!!(
-    model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel}, ::DefaultContext
-)
-    sorted_nodes =
-        model isa MarkovBlanketCoveredBUGSModel ? model.mb_sorted_nodes : model.sorted_nodes
+function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
+    sorted_nodes = model.sorted_nodes
     g = model.g
     vi = deepcopy(model.varinfo)
     logp = 0.0
@@ -426,27 +324,16 @@ function AbstractPPL.evaluate!!(
 end
 
 function AbstractPPL.evaluate!!(
-    model::Union{BUGSModel,MarkovBlanketCoveredBUGSModel},
-    ::LogDensityContext,
-    flattened_values::AbstractVector,
+    model::BUGSModel, ::LogDensityContext, flattened_values::AbstractVector
 )
-    param_length = if model isa MarkovBlanketCoveredBUGSModel
-        if model.transformed
-            model.mb_transformed_param_length
-        else
-            model.mb_untransformed_param_length
-        end
+    param_length = if model.transformed
+        model.transformed_param_length
     else
-        if model.transformed
-            model.transformed_param_length
-        else
-            model.untransformed_param_length
-        end
+        model.untransformed_param_length
     end
     var_lengths =
         model.transformed ? model.transformed_var_lengths : model.untransformed_var_lengths
-    sorted_nodes =
-        model isa MarkovBlanketCoveredBUGSModel ? model.mb_sorted_nodes : model.sorted_nodes
+    sorted_nodes = model.sorted_nodes
     @assert length(flattened_values) == param_length
     g = model.g
     vi = deepcopy(model.varinfo)

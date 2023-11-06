@@ -11,14 +11,6 @@ function LogDensityProblems.dimension(model::BUGSModel)
     end
 end
 
-function LogDensityProblems.dimension(model::MarkovBlanketCoveredBUGSModel)
-    return if model.transformed
-        model.mb_transformed_param_length
-    else
-        model.mb_untransformed_param_length
-    end
-end
-
 function LogDensityProblems.capabilities(::AbstractBUGSModel)
     return LogDensityProblems.LogDensityOrder{0}()
 end
