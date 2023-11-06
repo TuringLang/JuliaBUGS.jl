@@ -19,7 +19,7 @@ using JuliaBUGS:
     get_params_varinfo,
     Logical,
     LogDensityContext,
-    MarkovBlanketCoveredBUGSModel,
+    MarkovBlanketBUGSModel,
     merge_collections,
     NodeFunctions,
     PostChecking,
