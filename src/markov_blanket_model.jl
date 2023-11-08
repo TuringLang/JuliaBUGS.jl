@@ -1,4 +1,5 @@
 struct MarkovBlanketBUGSModel <: AbstractBUGSModel
+    varinfo # parent_model.varinfo serves as prototype instead of concrete state, we'll save the varinfo in gibbs state, and this is to be passed to LogDensityProblems 
     target_vars::Vector{VarName}
     members::Vector{VarName}
     sorted_nodes::Vector{VarName}
@@ -37,18 +38,12 @@ function AbstractPPL.evaluate!!(
     model::MarkovBlanketBUGSModel, ::LogDensityContext, flattened_values::AbstractVector
 )
     transformed = model.parent_model.transformed
-    length_dict = if transformed
-        model.parent_model.transformed_var_lengths
-    else
-        model.parent_model.untransformed_var_lengths
-    end
-    param_length = sum(length_dict[v] for v in model.target_vars)
-
     var_lengths = if transformed
         model.parent_model.transformed_var_lengths
     else
         model.parent_model.untransformed_var_lengths
     end
+    param_length = sum(var_lengths[v] for v in model.target_vars)
     sorted_nodes = model.sorted_nodes
     @assert length(flattened_values) == param_length
     g = model.parent_model.g
@@ -70,7 +65,6 @@ function AbstractPPL.evaluate!!(
                     l = var_lengths[vn]
                     value_transformed = flattened_values[current_idx:(current_idx + l - 1)]
                     current_idx += l
-                    # TODO: this use `DynamicPPL.reconstruct`, which needs attention when decoupling from DynamicPPL
                     value, logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
                         Bijectors.inverse(bijector(dist)), dist, value_transformed
                     )
