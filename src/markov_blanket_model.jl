@@ -6,7 +6,9 @@ struct MarkovBlanketBUGSModel <: AbstractBUGSModel
     parent_model::BUGSModel
 end
 
-function MarkovBlanketBUGSModel(m::BUGSModel, var_group::Union{VarName,Vector{VarName}}, varinfo=m.varinfo)
+function MarkovBlanketBUGSModel(
+    m::BUGSModel, var_group::Union{VarName,Vector{VarName}}, varinfo=m.varinfo
+)
     var_group = var_group isa VarName ? [var_group] : var_group
 
     # check inputs

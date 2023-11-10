@@ -35,6 +35,7 @@ include("graphs.jl")
 include("model.jl")
 include("markov_blanket_model.jl")
 include("logdensityproblems.jl")
+include("gibbs.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 

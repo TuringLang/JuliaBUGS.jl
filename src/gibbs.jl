@@ -5,7 +5,7 @@ end
 
 struct MHFromPrior end
 
-struct SimpleSamplerState 
+struct SimpleSamplerState
     varinfo
 end
 
@@ -28,8 +28,10 @@ function gibbs_steps(model, vi, rng, g)
             transformed_proposal = [transformed_proposal]
         end
         vi, logp = evaluate!!(mb_model, LogDensityContext(), transformed_original)
-        vi_proposed, logp_proposed = evaluate!!(mb_model, LogDensityContext(), transformed_proposal)
-        
+        vi_proposed, logp_proposed = evaluate!!(
+            mb_model, LogDensityContext(), transformed_proposal
+        )
+
         # MH step
         logr = logp_proposed - logp
         if logr > log(rand(rng))
@@ -44,13 +46,13 @@ function AbstractMCMC.step(
     rng::Random.AbstractRNG,
     model::AbstractMCMC.LogDensityModel{BUGSModel},
     sampler::WithinGibbs{MHFromPrior};
-    kwargs...
+    kwargs...,
 )
     @info "initial step"
     vi = deepcopy(model.logdensity.varinfo)
     g = model.logdensity.g
     vi = gibbs_steps(model.logdensity, vi, rng, g)
-    
+
     return getparams(model.logdensity, vi), SimpleSamplerState(varinfo)
 end
 
@@ -59,7 +61,7 @@ function AbstractMCMC.step(
     model::AbstractMCMC.LogDensityModel{BUGSModel},
     sampler::WithinGibbs{MHFromPrior},
     state::SimpleSamplerState;
-    kwargs...
+    kwargs...,
 )
     vi = state.varinfo
     g = model.logdensity.g
