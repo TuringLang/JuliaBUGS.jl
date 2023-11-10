@@ -31,7 +31,7 @@ ERROR: The arrays in key 'a' have different non-missing values at the same posit
 """
 function merge_collections(c1::NamedTuple, c2::NamedTuple)::NamedTuple
     keys_union = union(keys(c1), keys(c2))
-    merged = NamedTuple{Tuple(keys_union)}()
+    merged = NamedTuple()
 
     for key in keys_union
         if haskey(c1, key) && haskey(c2, key)

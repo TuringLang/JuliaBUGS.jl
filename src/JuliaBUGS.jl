@@ -81,7 +81,7 @@ function compile(
     array_bitmap, transformed_variables = program!(
         PostChecking(data, transformed_variables), model_def, data
     )
-    merged_data = merge_collections(deepcopy(data), transformed_variables, false)
+    merged_data = merge_collections(deepcopy(data), NamedTuple(transformed_variables))
     vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = program!(
         NodeFunctions(array_sizes, array_bitmap), model_def, merged_data
     )

@@ -19,14 +19,14 @@ Arguments:
 function program!(pass::CompilerPass, expr::Expr, env::NamedTuple, vargs...)
     for ex in expr.args
         if Meta.isexpr(ex, [:(=), :(~)])
-            assignment!(pass, ex, env, vargs...)
+            assignment!(pass, ex, env)
         elseif Meta.isexpr(ex, :for)
-            for_loop!(pass, ex, env, vargs...)
+            for_loop!(pass, ex, env)
         else
             error()
         end
     end
-    return post_process(pass, expr, env, vargs...)
+    return post_process(pass, expr, env)
 end
 
 """
@@ -34,7 +34,7 @@ end
 
 Processes a for-loop from a traversed AST.
 """
-function for_loop!(pass::CompilerPass, expr::Expr, env::NamedTuple, vargs...)
+function for_loop!(pass::CompilerPass, expr::Expr, env::NamedTuple)
     loop_var = expr.args[1].args[1]
     lb, ub = expr.args[1].args[2].args
     body = expr.args[2]
@@ -43,9 +43,9 @@ function for_loop!(pass::CompilerPass, expr::Expr, env::NamedTuple, vargs...)
     for i in lb:ub
         for ex in body.args
             if Meta.isexpr(ex, [:(=), :(~)])
-                assignment!(pass, ex, merge(env, Dict(loop_var => i)), vargs...)
+                assignment!(pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))))
             elseif Meta.isexpr(ex, :for)
-                for_loop!(pass, ex, merge(env, Dict(loop_var => i)), vargs...)
+                for_loop!(pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))))
             else
                 error()
             end
@@ -54,7 +54,7 @@ function for_loop!(pass::CompilerPass, expr::Expr, env::NamedTuple, vargs...)
 end
 
 """
-    assignment!(pass::CompilerPass, expr::Expr, env, vargs...)
+    assignment!(pass::CompilerPass, expr::Expr, env::NamedTuple)
 
 Performs an assignment operation on a traversed AST. Should be implemented for every concrete subtype of CompilerPass.
 
@@ -63,10 +63,10 @@ Arguments:
 - expr: An Expr object representing the assignment operation.
 - env: A Dict object representing the environment.
 """
-function assignment!(::CompilerPass, expr::Expr, env::NamedTuple, vargs...) end
+function assignment! end
 
 """
-    post_process(pass::CompilerPass, expr, env, vargs...)
+    post_process(pass::CompilerPass, expr::Expr, env::NamedTuple)
 
 Performs any post-processing necessary after traversing the AST. Should be implemented for every concrete subtype of CompilerPass.
 
@@ -75,7 +75,7 @@ Arguments:
 - expr: An Expr object representing the traversed AST.
 - env: A Dict object representing the environment.
 """
-function post_process(pass::CompilerPass, expr::Expr, env::NamedTuple, vargs...) end
+function post_process end
 
 @enum VariableTypes begin
     Logical
@@ -113,7 +113,7 @@ x[1, 2:3]
 ```
 """
 find_variables_on_lhs(e::Symbol, env) = Var(e)
-function find_variables_on_lhs(expr::Expr, env)
+function find_variables_on_lhs(expr::Expr, env::NamedTuple)
     @assert Meta.isexpr(expr, :ref)
     idxs = map(x -> evaluate(x, env), expr.args[2:end])
     return Var(expr.args[1], Tuple(idxs))
@@ -438,7 +438,7 @@ function assignment!(pass::ConstantPropagation, expr::Expr, env)
             return nothing
         end
 
-        rhs = evaluate(expr.args[2], merge_collections(env, pass.transformed_variables))
+        rhs = evaluate(expr.args[2], merge_collections(env, NamedTuple(pass.transformed_variables)))
         if is_resolved(rhs)
             if !pass.new_value_added
                 pass.new_value_added = true
@@ -468,7 +468,7 @@ function PostChecking(data, transformed_variables::Dict)
     definition_bit_map = Dict()
     logical_or_stochastic = Dict()
 
-    all_vars = merge_collections(data, transformed_variables)
+    all_vars = merge_collections(data, NamedTuple(transformed_variables))
 
     for k in keys(all_vars)
         v = all_vars[k]
@@ -930,7 +930,7 @@ function assignment!(pass::NodeFunctions, expr::Expr, env::NamedTuple)
     return nothing
 end
 
-function post_process(pass::NodeFunctions, expr, env, vargs...)
+function post_process(pass::NodeFunctions, expr, env)
     return pass.vars,
     pass.array_sizes, pass.array_bitmap, pass.node_args, pass.node_functions,
     pass.dependencies
