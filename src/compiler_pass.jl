@@ -105,10 +105,10 @@ Find all the variables on the LHS of an assignment. The variables can be either 
 
 # Examples
 ```jldoctest
-julia> find_variables_on_lhs(:(x[1, 2]), Dict())
+julia> find_variables_on_lhs(:(x[1, 2]), (;))
 x[1, 2]
 
-julia> find_variables_on_lhs(:(x[1, 2:3]), Dict())
+julia> find_variables_on_lhs(:(x[1, 2:3]), (;))
 x[1, 2:3]
 ```
 """
@@ -281,7 +281,7 @@ julia> evaluate(:(x[1]), Dict(:x => [1, 2, 3])) # array indexing is evaluated if
 julia> evaluate(:(x[1] + 1), Dict(:x => [1, 2, 3]))
 2
 
-julia> evaluate(:(x[1:2]), Dict()) |> Meta.show_sexpr # ranges are evaluated
+julia> evaluate(:(x[1:2]), (;)) |> Meta.show_sexpr # ranges are evaluated
 (:ref, :x, 1:2)
 
 julia> evaluate(:(x[1:2]), Dict(:x => [1, 2, 3])) # ranges are evaluated
@@ -292,13 +292,13 @@ julia> evaluate(:(x[1:2]), Dict(:x => [1, 2, 3])) # ranges are evaluated
 julia> evaluate(:(x[1:3]), Dict(:x => [1, 2, missing])) # when evaluate an array, if any element is missing, original expr is returned
 :(x[1:3])
 
-julia> evaluate(:(x[y[1] + 1] + 1), Dict()) # if a ref expr can't be evaluated, it's returned as is
+julia> evaluate(:(x[y[1] + 1] + 1), (;)) # if a ref expr can't be evaluated, it's returned as is
 :(x[y[1] + 1] + 1)
 
 julia> evaluate(:(sum(x[:])), Dict(:x => [1, 2, 3])) # function calls are evaluated if possible
 6
 
-julia> evaluate(:(f(1)), Dict()) # if a function call can't be evaluated, it's returned as is
+julia> evaluate(:(f(1)), (;)) # if a function call can't be evaluated, it's returned as is
 :(f(1))
 """
 evaluate(var::Number, env) = var
