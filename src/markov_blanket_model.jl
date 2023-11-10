@@ -6,7 +6,7 @@ struct MarkovBlanketBUGSModel <: AbstractBUGSModel
     parent_model::BUGSModel
 end
 
-function MarkovBlanketBUGSModel(m::BUGSModel, var_group::Union{VarName,Vector{VarName}})
+function MarkovBlanketBUGSModel(m::BUGSModel, var_group::Union{VarName,Vector{VarName}}, varinfo=m.varinfo)
     var_group = var_group isa VarName ? [var_group] : var_group
 
     # check inputs
@@ -31,8 +31,10 @@ function MarkovBlanketBUGSModel(m::BUGSModel, var_group::Union{VarName,Vector{Va
             push!(sorted_blanket_with_vars, vn)
         end
     end
-    return MarkovBlanketBUGSModel(var_group, blanket, sorted_blanket_with_vars, m)
+    return MarkovBlanketBUGSModel(varinfo, var_group, blanket, sorted_blanket_with_vars, m)
 end
+
+# need a function that compute the logp of the target_vars
 
 function AbstractPPL.evaluate!!(
     model::MarkovBlanketBUGSModel, ::LogDensityContext, flattened_values::AbstractVector
