@@ -21,7 +21,9 @@ struct ArrayVar{N} <: Var
 end
 
 Var(name::Symbol) = Scalar(name, ())
-function Var(name::Symbol, indices::Tuple{Vararg{Union{Int, Float64, UnitRange, Colon}, N}}) where N
+function Var(
+    name::Symbol, indices::Tuple{Vararg{Union{Int,Float64,UnitRange,Colon},N}}
+) where {N}
     indices = map(indices) do i
         if i isa AbstractFloat
             isinteger(i) && return Int(i)

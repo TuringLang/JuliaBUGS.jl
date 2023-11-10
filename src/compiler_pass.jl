@@ -438,7 +438,9 @@ function assignment!(pass::ConstantPropagation, expr::Expr, env)
             return nothing
         end
 
-        rhs = evaluate(expr.args[2], merge_collections(env, NamedTuple(pass.transformed_variables)))
+        rhs = evaluate(
+            expr.args[2], merge_collections(env, NamedTuple(pass.transformed_variables))
+        )
         if is_resolved(rhs)
             if !pass.new_value_added
                 pass.new_value_added = true

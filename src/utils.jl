@@ -53,8 +53,8 @@ function merge_collections(c1::NamedTuple, c2::NamedTuple)::NamedTuple
                         v1
                     else
                         error(
-                        "The arrays in key '$key' have different non-missing values at the same positions.",
-                    )
+                            "The arrays in key '$key' have different non-missing values at the same positions.",
+                        )
                     end for (v1, v2) in zip(val1, val2)
                 ]
             else
