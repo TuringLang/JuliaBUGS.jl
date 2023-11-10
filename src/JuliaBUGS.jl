@@ -39,39 +39,36 @@ include("logdensityproblems.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 
-function check_input(input::Union{NamedTuple,AbstractDict})
-    for k in keys(input)
-        @assert k isa Symbol "Variable name $k must be a Symbol"
+VAR_BIND_TYPE = Union{Real,AbstractArray{<:Real},AbstractArray{Union{<:Real,Missing}}}
 
-        v = input[k]
-        if v isa Number
-            continue
-        elseif v isa AbstractArray
-            for i in v
-                @assert i isa Number || ismissing(i)
-            end
-        else
-            error("Input $k is not a number or an array of numbers")
-        end
+function check_input(input::NamedTuple)
+    for (k, v) in pairs(input)
+        @assert v isa VAR_BIND_TYPE "Input $(k) has invalid type $(typeof(v)); expected Real, AbstractArray{<:Real}, or AbstractArray{Union{<:Real,Missing}}"
     end
 end
 
 """
-    compile(model_def[, data, initializations])
+    compile(model_def[, data::NamedTuple, initializations::NamedTuple])
 
 Compile a BUGS model into a log density problem.
 
 # Arguments
 - `model_def::Expr`: The BUGS model definition.
-- `data::NamedTuple` or `AbstractDict`: The data to be used in the model. If none is passed, the data will be assumed to be empty.
-- `initializations::NamedTuple` or `AbstractDict`: The initial values for the model parameters. If none is passed, the parameters will be assumed to be initialized to zero.
+- `data::NamedTuple`: The data to be used in the model. If none is passed, the data will be assumed to be empty.
+- `initializations::NamedTuple`: The initial values for the model parameters. If none is passed, the parameters will be assumed to be initialized to zero.
 - `is_transformed::Bool=true`: If true, the model parameters during inference will be transformed to the unconstrained space. 
 
 # Returns
 - A [`BUGSModel`](@ref) object representing the compiled model.
 """
-function compile(model_def::Expr, data, inits; is_transformed=true)
-    check_input.((data, inits))
+function compile(
+    model_def::Expr,
+    data::NamedTuple=NamedTuple(),
+    inits::NamedTuple=NamedTuple();
+    is_transformed::Bool=true,
+)
+    check_input(data)
+    check_input(inits)
     scalars, array_sizes = program!(CollectVariables(), model_def, data)
     has_new_val, transformed_variables = program!(
         ConstantPropagation(scalars, array_sizes), model_def, data
@@ -84,7 +81,7 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
     array_bitmap, transformed_variables = program!(
         PostChecking(data, transformed_variables), model_def, data
     )
-    merged_data = merge_collections(deepcopy(data), transformed_variables)
+    merged_data = merge_collections(deepcopy(data), transformed_variables, false)
     vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = program!(
         NodeFunctions(array_sizes, array_bitmap), model_def, merged_data
     )

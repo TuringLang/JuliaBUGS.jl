@@ -1,84 +1,75 @@
 """
-    merge_collections(c1::Union{Dict, NamedTuple}, c2::Union{Dict, NamedTuple}, output_NamedTuple::Bool=true) -> Union{Dict, NamedTuple}
+    merge_collections(c1::NamedTuple, c2::NamedTuple) -> NamedTuple
 
-Merge two collections, `c1` and `c2`, which can be either dictionaries or named tuples, into a single collection 
-(dictionary or named tuple). The function assumes that the values in the input collections are either `Number` or 
-`Array` with matching sizes. If a key exists in both `c1` and `c2`, the merged collection will contain the non-missing 
-values from `c1` and `c2`. If a key exists only in one of the collections, the resulting collection will contain the 
-key-value pair from the respective collection.
+Merge two NamedTuples, `c1` and `c2`, into a single NamedTuple. The function assumes that the values in the input 
+NamedTuples are either `Number` or `Array` with matching sizes. If a key exists in both `c1` and `c2`, the merged 
+NamedTuple will contain the non-missing values from `c1` and `c2`. If a key exists only in one of the NamedTuples, 
+the resulting NamedTuple will contain the key-value pair from the respective NamedTuple.
 
 # Arguments
-- `c1::Union{Dict, NamedTuple}`: The first collection to merge.
-- `c2::Union{Dict, NamedTuple}`: The second collection to merge.
-- `output_NamedTuple::Bool=true`: Determines the type of the output collection. If true, the function outputs a NamedTuple. If false, it outputs a Dict.
+- `c1::NamedTuple`: The first NamedTuple to merge.
+- `c2::NamedTuple`: The second NamedTuple to merge.
 
 # Returns
-- `merged::Union{Dict, NamedTuple}`: A new collection containing the merged key-value pairs from `c1` and `c2`.
+- `merged::NamedTuple`: A new NamedTuple containing the merged key-value pairs from `c1` and `c2`.
 
 # Example
 ```jldoctest
-julia> d1 = Dict(:a => [1, 2, missing], :b => 42);
+julia> nt1 = (a = [1, 2, missing], b = 42);
 
-julia> d2 = Dict(:a => [missing, 2, 4], :c => -1);
+julia> nt2 = (a = [missing, 2, 4], c = -1);
 
-julia> d3 = Dict(:a => [missing, 3, 4], :c => -1); # value collision
+julia> nt3 = (a = [missing, 3, 4], c = -1); # value collision
 
-julia> merge_collections(d1, d2, false)
-Dict{Symbol, Any} with 3 entries:
-  :a => [1, 2, 4]
-  :b => 42
-  :c => -1
+julia> merge_collections(nt1, nt2)
+(a = [1, 2, 4], b = 42, c = -1)
 
-julia> merge_collections(d1, d3, false)
+julia> merge_collections(nt1, nt3)
 ERROR: The arrays in key 'a' have different non-missing values at the same positions.
 [...]
 ```
 """
-function merge_collections(d1, d2, output_NamedTuple=true)
-    merged_dict = Dict{Symbol,Any}()
+function merge_collections(c1::NamedTuple, c2::NamedTuple)::NamedTuple
+    keys_union = union(keys(c1), keys(c2))
+    merged = NamedTuple{Tuple(keys_union)}()
 
-    for key in Base.union(keys(d1), keys(d2))
-        in_both_dicts = haskey(d1, key) && haskey(d2, key)
-        values_match_type =
-            in_both_dicts && (
-                (
-                    isa(d1[key], Array) &&
-                    isa(d2[key], Array) &&
-                    size(d1[key]) == size(d2[key])
-                ) || (isa(d1[key], Number) && isa(d2[key], Number) && d1[key] == d2[key])
-            )
-
-        if values_match_type
-            if isa(d1[key], Array)
-                # Check if any position has different non-missing values in the two arrays.
-                if !all(
-                    i -> (
-                        ismissing(d1[key][i]) ||
-                        ismissing(d2[key][i]) ||
-                        d1[key][i] == d2[key][i]
-                    ),
-                    1:length(d1[key]),
-                )
-                    error(
-                        "The arrays in key '$(key)' have different non-missing values at the same positions.",
-                    )
+    for key in keys_union
+        if haskey(c1, key) && haskey(c2, key)
+            val1 = c1[key]
+            val2 = c2[key]
+            if isa(val1, Number) && isa(val2, Number)
+                merged_value =
+                    val1 == val2 ? val1 : error("The values for '$key' are different.")
+            elseif isa(val1, AbstractArray) && isa(val2, AbstractArray)
+                if size(val1) != size(val2)
+                    error("The arrays for key '$key' have different sizes.")
                 end
-                merged_value = coalesce.(d1[key], d2[key])
+                merged_value = [
+                    if ismissing(v1)
+                        v2
+                    elseif ismissing(v2)
+                        v1
+                    elseif v1 == v2
+                        v1
+                    else
+                        error(
+                        "The arrays in key '$key' have different non-missing values at the same positions.",
+                    )
+                    end for (v1, v2) in zip(val1, val2)
+                ]
             else
-                merged_value = d1[key]
+                error(
+                    "Values for key '$key' must be both numbers or both arrays with matching sizes.",
+                )
             end
-
-            merged_dict[key] = merged_value
+            merged = merge(merged, NamedTuple{(key,)}((merged_value,)))
         else
-            merged_dict[key] = haskey(d1, key) ? d1[key] : d2[key]
+            merged_value = haskey(c1, key) ? c1[key] : c2[key]
+            merged = merge(merged, NamedTuple{(key,)}((merged_value,)))
         end
     end
 
-    if output_NamedTuple
-        return NamedTuple{Tuple(keys(merged_dict))}(values(merged_dict))
-    else
-        return merged_dict
-    end
+    return merged
 end
 
 """

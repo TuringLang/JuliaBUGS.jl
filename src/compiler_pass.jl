@@ -16,7 +16,7 @@ Arguments:
 - expr: An Expr object representing the AST to be traversed.
 - env: A Dict object representing the environment.
 """
-function program!(pass::CompilerPass, expr::Expr, env, vargs...)
+function program!(pass::CompilerPass, expr::Expr, env::NamedTuple, vargs...)
     for ex in expr.args
         if Meta.isexpr(ex, [:(=), :(~)])
             assignment!(pass, ex, env, vargs...)
@@ -34,7 +34,7 @@ end
 
 Processes a for-loop from a traversed AST.
 """
-function for_loop!(pass::CompilerPass, expr, env, vargs...)
+function for_loop!(pass::CompilerPass, expr::Expr, env::NamedTuple, vargs...)
     loop_var = expr.args[1].args[1]
     lb, ub = expr.args[1].args[2].args
     body = expr.args[2]
@@ -63,7 +63,7 @@ Arguments:
 - expr: An Expr object representing the assignment operation.
 - env: A Dict object representing the environment.
 """
-function assignment!(::CompilerPass, expr::Expr, env, vargs...) end
+function assignment!(::CompilerPass, expr::Expr, env::NamedTuple, vargs...) end
 
 """
     post_process(pass::CompilerPass, expr, env, vargs...)
@@ -75,7 +75,7 @@ Arguments:
 - expr: An Expr object representing the traversed AST.
 - env: A Dict object representing the environment.
 """
-function post_process(pass::CompilerPass, expr, env, vargs...) end
+function post_process(pass::CompilerPass, expr::Expr, env::NamedTuple, vargs...) end
 
 @enum VariableTypes begin
     Logical
@@ -492,7 +492,7 @@ function PostChecking(data, transformed_variables::Dict)
     )
 end
 
-function assignment!(pass::PostChecking, expr::Expr, env)
+function assignment!(pass::PostChecking, expr::Expr, env::NamedTuple)
     @inline set_value!(d::Dict, value, v::Scalar) = d[v.name] = value
     @inline set_value!(d::Dict, value, v::Var) = d[v.name][v.indices...] = value
     @inline get_value(d::Dict, v::Scalar) = d[v.name]
@@ -544,7 +544,7 @@ function clean_up_transformed_variables(transformed_variables)
     return cleaned_transformed_variables
 end
 
-function post_process(pass::PostChecking, expr, env)
+function post_process(pass::PostChecking, expr::Expr, env::NamedTuple)
     return pass.definition_bit_map,
     clean_up_transformed_variables(pass.transformed_variables)
 end
@@ -817,7 +817,7 @@ try_cast_to_int(x::Integer) = x
 try_cast_to_int(x::Real) = Int(x) # will error if !isinteger(x)
 try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
-function assignment!(pass::NodeFunctions, expr::Expr, env)
+function assignment!(pass::NodeFunctions, expr::Expr, env::NamedTuple)
     lhs_expr, rhs_expr = expr.args[1:2]
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
