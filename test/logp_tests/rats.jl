@@ -1,6 +1,6 @@
 # prepare data
-data = load_dictionary(:rats, :data, true)
-inits = load_dictionary(:rats, :init, true)
+data = NamedTuple(load_dictionary(:rats, :data, true))
+inits = NamedTuple(load_dictionary(:rats, :init, true))
 
 @unpack N, T, x, xbar, Y = data
 

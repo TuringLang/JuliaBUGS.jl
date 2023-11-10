@@ -57,6 +57,10 @@ function merge_collections(c1::NamedTuple, c2::NamedTuple)::NamedTuple
                         )
                     end for (v1, v2) in zip(val1, val2)
                 ]
+            elseif ismissing(val1) && val2 isa Number
+                merged_value = val2
+            elseif val1 isa Number && ismissing(val2)
+                merged_value = val1
             else
                 error(
                     "Values for key '$key' must be both numbers or both arrays with matching sizes.",

@@ -27,7 +27,7 @@ inits = Dict(
     :l => -2.0,
 )
 
-model = compile(test_model, NamedTuple(), inits)
+model = compile(test_model, NamedTuple(), NamedTuple(inits))
 g = model.g
 
 a = @varname a
@@ -85,8 +85,8 @@ end
 
 model = compile(
     test_model,
-    Dict(:R => [200 0; 0 0.2], :sigma => [1.0E-6 0; 0 1.0E-6]),
-    Dict(:x => [1.0, 2.0], :z => zeros(2, 2)),
+    NamedTuple(Dict(:R => [200 0; 0 0.2], :sigma => [1.0E-6 0; 0 1.0E-6])),
+    NamedTuple(Dict(:x => [1.0, 2.0], :z => zeros(2, 2))),
 )
 
 # z[1,1], x[1], x[2] are auxiliary nodes created, and removed at the end

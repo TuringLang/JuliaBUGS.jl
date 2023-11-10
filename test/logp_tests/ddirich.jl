@@ -10,7 +10,7 @@ test_ddirich = @bugs begin
 end
 
 # Compile the BUGS model
-bugs_model = compile(test_ddirich, Dict(:alpha => alpha), Dict(:x => test_θ))
+bugs_model = compile(test_ddirich, NamedTuple(Dict(:alpha => alpha)), NamedTuple(Dict(:x => test_θ)))
 
 # Now, create a DynamicPPL model to represent the same distribution
 @model function ddirich_test()

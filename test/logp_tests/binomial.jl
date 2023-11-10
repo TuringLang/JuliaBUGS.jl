@@ -2,7 +2,7 @@ model_def = @bugs begin
     a ~ dbin(0.1, 10)
 end
 
-bugs_model = compile(model_def, Dict(), Dict(:a => 10))
+bugs_model = compile(model_def, (;), (; a=10))
 vi = bugs_model.varinfo
 
 @model function dppl_gamma_model()
