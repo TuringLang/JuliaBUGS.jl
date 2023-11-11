@@ -39,7 +39,7 @@ include("logdensityproblems.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 
-VAR_BIND_TYPE = Union{Real, AbstractArray{<:Real}, AbstractArray{<:Union{Real, Missing}}}
+VAR_BIND_TYPE = Union{Real,AbstractArray{<:Real},AbstractArray{<:Union{Real,Missing}}}
 
 function check_input(input::NamedTuple)
     for (k, v) in pairs(input)

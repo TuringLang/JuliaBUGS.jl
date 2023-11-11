@@ -6,7 +6,7 @@ test_lkj = @bugs begin
     x[1:10, 1:10] ~ LKJ(10, 0.5)
 end
 
-bugs_model = compile(test_lkj, (;), (; x = test_θ))
+bugs_model = compile(test_lkj, (;), (; x=test_θ))
 vi = bugs_model.varinfo
 
 # test param length given trans-dim bijectors

@@ -15,7 +15,9 @@ end
 # Compile the BUGS model
 bugs_model = compile(
     test_dwish,
-    NamedTuple(Dict(:degrees_of_freedom => degrees_of_freedom, :scale_matrix => scale_matrix)),
+    NamedTuple(
+        Dict(:degrees_of_freedom => degrees_of_freedom, :scale_matrix => scale_matrix)
+    ),
     NamedTuple(Dict(:x => test_θ)),
 )
 
