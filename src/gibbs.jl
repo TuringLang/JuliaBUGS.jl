@@ -9,7 +9,6 @@ struct MHState
     markov_blanket_cache
     sorted_nodes_cache
 end
-# TODO: need to cache the markov blankets to avoid recomputing them
 
 ensure_vector(x) = x isa Union{Number,VarName} ? [x] : x
 
