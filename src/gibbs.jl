@@ -11,7 +11,7 @@ struct MHState
 end
 # TODO: need to cache the markov blankets to avoid recomputing them
 
-ensure_vector(x) = x isa Union{Number, VarName} ? [x] : x
+ensure_vector(x) = x isa Union{Number,VarName} ? [x] : x
 
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
@@ -21,8 +21,8 @@ function AbstractMCMC.step(
     kwargs...,
 )
     vi = deepcopy(model.varinfo)
-    markov_blanket_cache = Dict{Any, Any}()
-    sorted_nodes_cache = Dict{Any, Any}()
+    markov_blanket_cache = Dict{Any,Any}()
+    sorted_nodes_cache = Dict{Any,Any}()
     for v in model.parameters
         mb_model = JuliaBUGS.MarkovBlanketBUGSModel(model, v)
         markov_blanket_cache[v] = ensure_vector(mb_model.members)
@@ -45,7 +45,8 @@ function AbstractMCMC.step(
 )
     vi = state.varinfo
     vi = gibbs_steps(rng, model, sampler, state)
-    return getparams(model, vi), MHState(vi, state.markov_blanket_cache, state.sorted_nodes_cache)
+    return getparams(model, vi),
+    MHState(vi, state.markov_blanket_cache, state.sorted_nodes_cache)
 end
 
 function gibbs_steps(
@@ -65,7 +66,13 @@ function gibbs_steps(
         transformed_original = ensure_vector(Bijectors.link(dist, vi[v]))
         transformed_proposal = ensure_vector(Bijectors.link(dist, rand(rng, dist)))
 
-        mb_model = JuliaBUGS.MarkovBlanketBUGSModel(vi, ensure_vector(v), state.markov_blanket_cache[v], state.sorted_nodes_cache[v], model)
+        mb_model = JuliaBUGS.MarkovBlanketBUGSModel(
+            vi,
+            ensure_vector(v),
+            state.markov_blanket_cache[v],
+            state.sorted_nodes_cache[v],
+            model,
+        )
         _, logp = evaluate!!(mb_model, LogDensityContext(), transformed_original)
         vi_proposed, logp_proposed = evaluate!!(
             mb_model, LogDensityContext(), transformed_proposal
@@ -89,11 +96,6 @@ function AbstractMCMC.bundle_samples(
     kwargs...,
 ) where {T}
     return JuliaBUGS.gen_chains(
-        logdensitymodel,
-        ts,
-        [],
-        [];
-        discard_initial=discard_initial,
-        kwargs...,
+        logdensitymodel, ts, [], []; discard_initial=discard_initial, kwargs...
     )
 end
