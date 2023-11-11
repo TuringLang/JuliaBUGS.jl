@@ -1,5 +1,6 @@
 module JuliaBUGS
 
+using AbstractMCMC
 using AbstractPPL
 using BangBang
 using Bijectors

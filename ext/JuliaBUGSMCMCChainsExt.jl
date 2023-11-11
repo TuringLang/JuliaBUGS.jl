@@ -91,14 +91,25 @@ function JuliaBUGS.gen_chains(
         collect(Iterators.flatten(gq)) for gq in generated_quantities
     ]
 
-    vals = [
-        convert(
-            Vector{Real},
-            vcat(
-                flattened_param_vals[i], flattened_generated_quantities[i], stats_values[i]
-            ),
-        ) for i in axes(samples)[1]
-    ]
+    if !isempty(stats_values)
+        vals = [
+            convert(
+                Vector{Real},
+                vcat(
+                    flattened_param_vals[i], flattened_generated_quantities[i], stats_values[i]
+                ),
+            ) for i in axes(samples)[1]
+        ]
+    else
+        vals = [
+            convert(
+                Vector{Real},
+                vcat(
+                    flattened_param_vals[i], flattened_generated_quantities[i]
+                ),
+            ) for i in axes(samples)[1]
+        ]
+    end
 
     @assert length(vals[1]) ==
         length(param_name_leaves) +

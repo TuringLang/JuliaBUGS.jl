@@ -3,6 +3,7 @@ uuid = "ba9fb4c0-828e-4473-b6a1-cd2560fee5bf"
 version = "0.2.5"
 
 [deps]
+AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
 AbstractPPL = "7a57a42e-76ec-4ea3-a279-07e840d6d9cf"
 BangBang = "198e06fe-97b7-11e9-32a5-e1d131e6ad66"
 Bijectors = "76274a88-744f-5084-9051-94815aaf08c4"
@@ -26,7 +27,6 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
 [weakdeps]
-AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
 AdvancedHMC = "0bf59076-c3b1-5ca4-86bd-e02cd72cde3d"
 AdvancedMH = "5b7e9947-ddc0-4b3f-9b55-0d8042f74170"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
@@ -36,11 +36,11 @@ MCMCChains = "c7f686f2-ff18-58e9-bc7b-31028e88f75d"
 TikzGraphs = "b4f28e30-c73f-5eaf-a395-8a9db949a742"
 
 [extensions]
-JuliaBUGSAdvancedHMCExt = ["AbstractMCMC", "AdvancedHMC", "MCMCChains"]
-JuliaBUGSAdvancedMHExt = ["AbstractMCMC", "AdvancedMH", "MCMCChains"]
+JuliaBUGSAdvancedHMCExt = ["AdvancedHMC", "MCMCChains"]
+JuliaBUGSAdvancedMHExt = ["AdvancedMH", "MCMCChains"]
 JuliaBUGSGraphMakieExt = ["GraphMakie", "GLMakie"]
 JuliaBUGSGraphPlotExt = ["GraphPlot"]
-JuliaBUGSMCMCChainsExt = ["AbstractMCMC", "MCMCChains"]
+JuliaBUGSMCMCChainsExt = ["MCMCChains"]
 JuliaBUGSTikzGraphsExt = ["TikzGraphs"]
 
 [compat]
