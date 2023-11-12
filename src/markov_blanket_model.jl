@@ -51,13 +51,13 @@ function AbstractPPL.evaluate!!(
     sorted_nodes = model.sorted_nodes
     @assert length(flattened_values) == param_length
     g = model.parent_model.g
-    vi = deepcopy(model.parent_model.varinfo)
+    vi = deepcopy(model.varinfo)
     current_idx = 1
     logp = 0.0
     for vn in sorted_nodes
         ni = g[vn]
         @unpack node_type, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+        args = (; map(arg -> getsym(arg) => vi[arg], node_args)...)
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
             value = _eval(expr, args)
@@ -65,24 +65,22 @@ function AbstractPPL.evaluate!!(
         else
             dist = _eval(expr, args)
             if vn in model.target_vars
+                l = var_lengths[vn]
                 if transformed
-                    l = var_lengths[vn]
-                    value_transformed = flattened_values[current_idx:(current_idx + l - 1)]
-                    current_idx += l
                     value, logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
-                        Bijectors.inverse(bijector(dist)), dist, value_transformed
+                        Bijectors.inverse(bijector(dist)),
+                        dist,
+                        flattened_values[current_idx:(current_idx + l - 1)],
                     )
-                    logp += logpdf(dist, value) + logjac
-                    vi = setindex!!(vi, value, vn)
                 else
-                    l = var_lengths[vn]
                     value = DynamicPPL.reconstruct(
                         dist, flattened_values[current_idx:(current_idx + l - 1)]
                     )
-                    current_idx += l
-                    logp += logpdf(dist, value)
-                    vi = setindex!!(vi, value, vn)
+                    logjac = 0.0
                 end
+                current_idx += l
+                logp += logpdf(dist, value) + logjac
+                vi = setindex!!(vi, value, vn)
             else
                 logp += logpdf(dist, vi[vn])
             end

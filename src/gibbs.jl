@@ -27,7 +27,6 @@ function AbstractMCMC.step(
         markov_blanket_cache[v] = ensure_vector(mb_model.members)
         sorted_nodes_cache[v] = ensure_vector(mb_model.sorted_nodes)
     end
-
     init_state = MHState(vi, markov_blanket_cache, sorted_nodes_cache)
 
     vi = gibbs_steps(rng, model, sampler, init_state)
@@ -42,7 +41,6 @@ function AbstractMCMC.step(
     model=l_model.logdensity,
     kwargs...,
 )
-    vi = state.varinfo
     vi = gibbs_steps(rng, model, sampler, state)
     return getparams(model, vi),
     MHState(vi, state.markov_blanket_cache, state.sorted_nodes_cache)
@@ -55,11 +53,10 @@ function gibbs_steps(
     state,
     var_iterator=model.parameters,
 )
-    g = model.g
     vi = state.varinfo
     for v in var_iterator
-        ni = g[v]
-        args = Dict(getsym(arg) => vi[arg] for arg in ni.node_args)
+        ni = model.g[v]
+        args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
         dist = _eval(ni.node_function_expr.args[2], args)
 
         transformed_original = ensure_vector(Bijectors.link(dist, vi[v]))
@@ -72,11 +69,10 @@ function gibbs_steps(
             state.sorted_nodes_cache[v],
             model,
         )
-        _, logp = evaluate!!(mb_model, LogDensityContext(), transformed_original)
         vi_proposed, logp_proposed = evaluate!!(
             mb_model, LogDensityContext(), transformed_proposal
         )
-
+        vi, logp = evaluate!!(mb_model, LogDensityContext(), transformed_original)
         logr = logp_proposed - logp
         if logr > log(rand(rng))
             vi = vi_proposed
