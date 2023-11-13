@@ -1,5 +1,5 @@
 struct WithinGibbs{S} <: AbstractMCMC.AbstractSampler
-    sampler_map::S # map from a group of variables to the sampler
+    sampler_map::S
 end
 
 struct MHFromPrior end
@@ -27,9 +27,6 @@ function AbstractMCMC.step(
         markov_blanket_cache[v] = ensure_vector(mb_model.members)
         sorted_nodes_cache[v] = ensure_vector(mb_model.sorted_nodes)
     end
-    init_state = MHState(vi, markov_blanket_cache, sorted_nodes_cache)
-
-    vi = gibbs_steps(rng, model, sampler, init_state)
     return getparams(model, vi), MHState(vi, markov_blanket_cache, sorted_nodes_cache)
 end
 

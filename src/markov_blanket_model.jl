@@ -36,8 +36,6 @@ function MarkovBlanketBUGSModel(
     return MarkovBlanketBUGSModel(varinfo, var_group, blanket, sorted_blanket_with_vars, m)
 end
 
-# need a function that compute the logp of the target_vars
-
 function AbstractPPL.evaluate!!(
     model::MarkovBlanketBUGSModel, ::LogDensityContext, flattened_values::AbstractVector
 )

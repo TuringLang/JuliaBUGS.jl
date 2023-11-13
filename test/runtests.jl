@@ -129,4 +129,6 @@ end
     include("graphs.jl")
 end
 
+include("gibbs.jl")
+
 include("ext/mcmchains.jl")
