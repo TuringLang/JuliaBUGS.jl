@@ -4,7 +4,7 @@ using AbstractMCMC
 using AdvancedHMC
 using AdvancedHMC: Transition, stat
 using JuliaBUGS
-using JuliaBUGS: 
+using JuliaBUGS:
     AbstractBUGSModel,
     BUGSModel,
     WithinGibbs,
