@@ -2,7 +2,7 @@
 
 # b[1][1] should error because arrays in BUGS are tensors
 # @test_throws(ErrorException,  
-@test_throws ErrorException JuliaBUGS.bugsast(:(b[1][1] ~ dnorm(0, 1)))
+@test_throws ErrorException JuliaBUGS.Parser.bugsast(:(b[1][1] ~ dnorm(0, 1)))
 
 # bugsast
 regression = @bugs begin

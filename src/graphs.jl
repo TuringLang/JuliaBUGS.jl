@@ -81,7 +81,7 @@ const BUGSGraph = MetaGraph{
     Int64,SimpleDiGraph{Int64},VarName,NodeInfo,Nothing,Nothing,Nothing,Float64
 }
 
-function BUGSGraph(vars, node_args, node_functions, dependencies)
+function create_BUGSGraph(vars, node_args, node_functions, dependencies)
     g = MetaGraph(
         SimpleDiGraph{Int64}();
         weight_function=nothing,
