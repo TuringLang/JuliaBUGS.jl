@@ -220,21 +220,67 @@ end
 # see https://github.com/TuringLang/Turing.jl/pull/2097
 # TODO: a static allocated version is possible because we know the size, but not worth the complexity now
 """
-    getparams(m::BUGSModel[, vi::SimpleVarInfo])
+    getparams(m::BUGSModel[, vi::SimpleVarInfo], transformed::Bool=false)
 
 Return the values of the parameters in the model as a vector, the values are flattened 
-in the order of `m.parameters` (also the topological order).
+in the order of `m.parameters` (also the topological order). If `transformed` is true,
+the parameters are returned in their transformed space.
 """
-function getparams(m::BUGSModel)
-    return getparams(m, m.varinfo)
+function getparams(m::BUGSModel; transformed::Bool=false)
+    return getparams(m, m.varinfo; transformed=transformed)
 end
-function getparams(m::BUGSModel, vi::SimpleVarInfo)
-    params_vi = get_params_varinfo(m, vi)
-    return vcat(
-        [
-            isa(params_vi[p], Real) ? params_vi[p] : vec(params_vi[p]) for p in m.parameters
-        ]...,
-    )
+function getparams(m::BUGSModel, vi::SimpleVarInfo; transformed::Bool=false)
+    if !transformed
+        params_vi = get_params_varinfo(m, vi)
+        return vcat(
+            [
+                isa(params_vi[p], Real) ? params_vi[p] : vec(params_vi[p]) for
+                p in m.parameters
+            ]...,
+        )
+    else
+        transformed_param_vals = Vector{Float64}(undef, m.transformed_param_length)
+        pos = 1
+        for v in m.parameters
+            ni = m.g[v]
+            args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
+            dist = _eval(ni.node_function_expr.args[2], args)
+
+            link_vals = Bijectors.link(dist, vi[v])
+            len = m.transformed_var_lengths[v]
+            transformed_param_vals[pos:(pos + len - 1)] .= link_vals
+            pos += len
+        end
+        return transformed_param_vals
+    end
+end
+
+# only set the parameter values, the values of logical nodes are not updated
+function setparams!!(
+    m::BUGSModel, flattened_values::AbstractVector; transformed::Bool=false
+)
+    pos = 1
+    vi = m.varinfo
+    for v in m.parameters
+        ni = m.g[v]
+        args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
+        dist = _eval(ni.node_function_expr.args[2], args)
+
+        len = if transformed
+            m.transformed_var_lengths[v]
+        else
+            m.untransformed_var_lengths[v]
+        end
+        if transformed
+            link_vals = flattened_values[pos:(pos + len - 1)]
+            sample_val = DynamicPPL.invlink_and_reconstruct(dist, link_vals)
+        else
+            sample_val = flattened_values[pos:(pos + len - 1)]
+        end
+        vi = DynamicPPL.setindex!!(vi, sample_val, v)
+        pos += len
+    end
+    return vi
 end
 
 # TODO: For now, a varinfo contains all model parameters is returned; alternatively, can return the generated quantities

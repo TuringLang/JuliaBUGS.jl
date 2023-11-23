@@ -41,11 +41,11 @@ function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::AdvancedMH.MHSampler
 )
     vi = cond_model.varinfo
-    transformed_original = Real[]
+    transformed_original = Float64[]
     for v in cond_model.parameters
-        ni = model.g[v]
+        ni = cond_model.g[v]
         args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
-        dist = _eval(ni.node_function_expr.args[2], args)
+        dist = JuliaBUGS._eval(ni.node_function_expr.args[2], args)
 
         transformed_original = vcat(transformed_original, Bijectors.link(dist, vi[v]))
     end
@@ -59,18 +59,7 @@ function JuliaBUGS.gibbs_internal(
         initial_params=transformed_original,
     )
 
-    pos = 1
-    for v in cond_model.parameters
-        ni = model.g[v]
-        args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
-        dist = _eval(ni.node_function_expr.args[2], args)
-
-        sample_val = DynamicPPL.invlink_and_reconstruct(
-            dist, t.params[pos:(pos + length(dist) - 1)]
-        )
-        vi = DynamicPPL.setindex!!(vi, sample_val, v)
-    end
-    return vi
+    return JuliaBUGS.setparams!!(cond_model, t.params; transformed=true)
 end
 
 end

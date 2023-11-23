@@ -55,14 +55,7 @@ function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::HMC
 )
     vi = cond_model.varinfo
-    transformed_original = Float64[]
-    for v in cond_model.parameters
-        ni = cond_model.g[v]
-        args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
-        dist = _eval(ni.node_function_expr.args[2], args)
-
-        transformed_original = vcat(transformed_original, Bijectors.link(dist, vi[v]))
-    end
+    transformed_original = JuliaBUGS.getparams(cond_model; transformed=true)
 
     ad_cond_model = LogDensityProblemsAD.ADgradient(:ReverseDiff, cond_model)
     t, s = AbstractMCMC.step(
@@ -73,18 +66,7 @@ function JuliaBUGS.gibbs_internal(
         initial_params=transformed_original, # for more advanced usage, probably save the state or transition
     )
 
-    pos = 1
-    for v in cond_model.parameters
-        ni = cond_model.g[v]
-        args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
-        dist = _eval(ni.node_function_expr.args[2], args)
-
-        sample_val = DynamicPPL.invlink_and_reconstruct(
-            dist, t.z.θ[pos:(pos + length(dist) - 1)]
-        )
-        vi = DynamicPPL.setindex!!(vi, sample_val, v)
-    end
-    return vi
+    return JuliaBUGS.setparams!!(cond_model, t.z.θ; transformed=true)
 end
 
 end

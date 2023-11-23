@@ -38,15 +38,26 @@ using JuliaBUGS: WithinGibbs, MHFromPrior
     p_s, st_init = AbstractMCMC.step(
         Random.default_rng(),
         AbstractMCMC.LogDensityModel(model),
-        WithinGibbs(MHFromPrior()),
+        WithinGibbs(model, MHFromPrior()),
     )
 
     # following step
     p_s, st = AbstractMCMC.step(
         Random.default_rng(),
         AbstractMCMC.LogDensityModel(model),
-        WithinGibbs(Dict(model.parameters => MHFromPrior())),
+        WithinGibbs(model, MHFromPrior()),
         st_init,
+    )
+
+    # following step with sampler_map
+    sampler_map = Dict(
+        [@varname(alpha), @varname(beta)] => HMC(0.1, 10), [@varname(sigma)] => RWMH(1)
+    )
+    p_s, st = AbstractMCMC.step(
+        Random.default_rng(),
+        AbstractMCMC.LogDensityModel(model),
+        WithinGibbs(sampler_map),
+        st,
     )
 
     sample_size = 10000

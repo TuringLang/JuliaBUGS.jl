@@ -64,20 +64,10 @@ function gibbs_internal end
 function gibbs_internal(
     rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::MHFromPrior
 )
-    transformed_original = Real[]
-    transformed_proposal = Real[]
-    for v in cond_model.parameters
-        ni = cond_model.g[v]
-        args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
-        dist = _eval(ni.node_function_expr.args[2], args)
-
-        transformed_original = vcat(
-            transformed_original, Bijectors.link(dist, cond_model.varinfo[v])
-        )
-        transformed_proposal = vcat(
-            transformed_proposal, Bijectors.link(dist, rand(rng, size(dist)...))
-        )
-    end
+    transformed_original = getparams(cond_model, cond_model.varinfo; transformed=true)
+    transformed_proposal = getparams(
+        cond_model, evaluate!!(cond_model, SamplingContext())[1]; transformed=true
+    )
 
     vi_proposed, logp_proposed = evaluate!!(
         cond_model, LogDensityContext(), transformed_proposal
