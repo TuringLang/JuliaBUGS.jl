@@ -34,7 +34,6 @@ include("variable_types.jl")
 include("compiler_pass.jl")
 include("graphs.jl")
 include("model.jl")
-include("markov_blanket_model.jl")
 include("logdensityproblems.jl")
 include("gibbs.jl")
 

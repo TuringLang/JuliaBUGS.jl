@@ -19,7 +19,6 @@ using JuliaBUGS:
     get_params_varinfo,
     Logical,
     LogDensityContext,
-    MarkovBlanketBUGSModel,
     merge_collections,
     NodeFunctions,
     PostChecking,

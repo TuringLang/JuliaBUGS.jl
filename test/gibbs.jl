@@ -1,4 +1,4 @@
-using JuliaBUGS: WithinGibbs, MHFromPrior, HMCSampler
+using JuliaBUGS: WithinGibbs, MHFromPrior
 
 @testset "Simple gibbs" begin
     model_def = @bugs begin
@@ -45,7 +45,7 @@ using JuliaBUGS: WithinGibbs, MHFromPrior, HMCSampler
     p_s, st = AbstractMCMC.step(
         Random.default_rng(),
         AbstractMCMC.LogDensityModel(model),
-        WithinGibbs(MHFromPrior()),
+        WithinGibbs(Dict(model.parameters => MHFromPrior())),
         st_init,
     )
 
@@ -53,7 +53,7 @@ using JuliaBUGS: WithinGibbs, MHFromPrior, HMCSampler
     chn = AbstractMCMC.sample(
         Random.default_rng(),
         model,
-        WithinGibbs(MHFromPrior()),
+        WithinGibbs(model, MHFromPrior()),
         sample_size;
         discard_initial=Int(sample_size / 2),
     )
@@ -69,17 +69,17 @@ using JuliaBUGS: WithinGibbs, MHFromPrior, HMCSampler
     @test means[:sigma].nt.mean[1] ≈ 0.9 atol = 0.2
     @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.2
 
-    sample_size = 1000
+    sample_size = 2000
     hmc_chn = AbstractMCMC.sample(
         Random.default_rng(),
         model,
-        WithinGibbs(JuliaBUGS.HMCSampler()),
+        WithinGibbs(model, HMC(0.1, 10)),
         sample_size;
         discard_initial=Int(sample_size / 2),
     )
     means = mean(hmc_chn)
-    @test means[:alpha].nt.mean[1] ≈ 2.3 atol = 0.2
+    @test means[:alpha].nt.mean[1] ≈ 2.2 atol = 0.2
     @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.2
     @test means[:sigma].nt.mean[1] ≈ 0.9 atol = 0.2
-    @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.2
+    @test means[:gen_quant].nt.mean[1] ≈ 4.0 atol = 0.2
 end

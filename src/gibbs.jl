@@ -1,19 +1,19 @@
-struct WithinGibbs{S} <: AbstractMCMC.AbstractSampler
-    sampler_map::S
+struct WithinGibbs <: AbstractMCMC.AbstractSampler
+    sampler_map::Dict{<:Any,<:AbstractMCMC.AbstractSampler}
 end
 
-struct MHFromPrior end
-
-struct HMCSampler
-    # m::Dict{Union{VarName,Vector{VarName}},HMC}
+function WithinGibbs(model, s::AbstractMCMC.AbstractSampler)
+    return WithinGibbs(Dict([v => s for v in model.parameters]))
 end
+
+struct MHFromPrior <: AbstractMCMC.AbstractSampler end
 
 abstract type AbstractGibbsState end
 
 struct GibbsState <: AbstractGibbsState
-    varinfo
-    markov_blanket_cache
-    sorted_nodes_cache
+    varinfo::SimpleVarInfo
+    conditioning_schedule::Dict
+    sorted_nodes_cache::Dict
 end
 
 ensure_vector(x) = x isa Union{Number,VarName} ? [x] : x
@@ -21,67 +21,71 @@ ensure_vector(x) = x isa Union{Number,VarName} ? [x] : x
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
     l_model::AbstractMCMC.LogDensityModel{BUGSModel},
-    sampler::WithinGibbs{T};
+    sampler::WithinGibbs;
     model=l_model.logdensity,
     kwargs...,
-) where {T}
+)
     vi = deepcopy(model.varinfo)
-    markov_blanket_cache = Dict{Any,Any}()
     sorted_nodes_cache = Dict{Any,Any}()
-    for v in model.parameters
-        mb_model = JuliaBUGS.MarkovBlanketBUGSModel(model, v)
-        markov_blanket_cache[v] = ensure_vector(mb_model.members)
-        sorted_nodes_cache[v] = ensure_vector(mb_model.sorted_nodes)
+
+    conditioning_schedule = Dict()
+    for vs in keys(sampler.sampler_map)
+        vs_complement = setdiff(model.parameters, ensure_vector(vs))
+        conditioning_schedule[vs_complement] = sampler.sampler_map[vs]
     end
-    return getparams(model, vi), GibbsState(vi, markov_blanket_cache, sorted_nodes_cache)
+
+    for vs in keys(conditioning_schedule)
+        cond_model = AbstractPPL.condition(model, vs)
+        sorted_nodes_cache[vs] = ensure_vector(cond_model.sorted_nodes)
+    end
+
+    return getparams(model, vi), GibbsState(vi, conditioning_schedule, sorted_nodes_cache)
 end
 
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
     l_model::AbstractMCMC.LogDensityModel{BUGSModel},
-    sampler::WithinGibbs{T},
+    sampler::WithinGibbs,
     state::AbstractGibbsState;
     model=l_model.logdensity,
     kwargs...,
-) where {T}
-    vi = gibbs_steps(rng, model, sampler, state)
-    return getparams(model, vi),
-    GibbsState(vi, state.markov_blanket_cache, state.sorted_nodes_cache)
-end
-
-function gibbs_steps end
-
-function gibbs_steps(
-    rng::Random.AbstractRNG,
-    model::BUGSModel,
-    ::WithinGibbs{MHFromPrior},
-    state,
-    var_iterator=model.parameters,
 )
     vi = state.varinfo
-    for v in var_iterator
-        ni = model.g[v]
+    for vs in keys(state.conditioning_schedule)
+        cond_model = AbstractPPL.condition(model, vs, vi, state.sorted_nodes_cache[vs])
+        vi = gibbs_internal(rng, cond_model, state.conditioning_schedule[vs])
+    end
+    return getparams(model, vi),
+    GibbsState(vi, state.conditioning_schedule, state.sorted_nodes_cache)
+end
+
+function gibbs_internal end
+
+function gibbs_internal(
+    rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::MHFromPrior
+)
+    transformed_original = Real[]
+    transformed_proposal = Real[]
+    for v in cond_model.parameters
+        ni = cond_model.g[v]
         args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
         dist = _eval(ni.node_function_expr.args[2], args)
 
-        transformed_original = ensure_vector(Bijectors.link(dist, vi[v]))
-        transformed_proposal = ensure_vector(Bijectors.link(dist, rand(rng, dist)))
+        transformed_original = vcat(
+            transformed_original, Bijectors.link(dist, cond_model.varinfo[v])
+        )
+        transformed_proposal = vcat(
+            transformed_proposal, Bijectors.link(dist, rand(rng, size(dist)...))
+        )
+    end
 
-        mb_model = JuliaBUGS.MarkovBlanketBUGSModel(
-            vi,
-            ensure_vector(v),
-            state.markov_blanket_cache[v],
-            state.sorted_nodes_cache[v],
-            model,
-        )
-        vi_proposed, logp_proposed = evaluate!!(
-            mb_model, LogDensityContext(), transformed_proposal
-        )
-        vi, logp = evaluate!!(mb_model, LogDensityContext(), transformed_original)
-        logr = logp_proposed - logp
-        if logr > log(rand(rng))
-            vi = vi_proposed
-        end
+    vi_proposed, logp_proposed = evaluate!!(
+        cond_model, LogDensityContext(), transformed_proposal
+    )
+    vi, logp = evaluate!!(cond_model, LogDensityContext(), transformed_original)
+
+    if logp_proposed - logp > log(rand(rng))
+        vi = vi_proposed
     end
     return vi
 end
@@ -89,12 +93,12 @@ end
 function AbstractMCMC.bundle_samples(
     ts,
     logdensitymodel::AbstractMCMC.LogDensityModel{JuliaBUGS.BUGSModel},
-    sampler::WithinGibbs{ST},
+    sampler::WithinGibbs,
     state,
     ::Type{T};
     discard_initial=0,
     kwargs...,
-) where {ST,T}
+) where {T}
     return JuliaBUGS.gen_chains(
         logdensitymodel, ts, [], []; discard_initial=discard_initial, kwargs...
     )

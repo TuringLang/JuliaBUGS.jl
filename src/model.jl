@@ -27,15 +27,18 @@ The `BUGSModel` object is used for inference and represents the output of compil
 """
 struct BUGSModel <: AbstractBUGSModel
     transformed::Bool
+
     untransformed_param_length::Int
     transformed_param_length::Int
-    # TODO: the following two dictionaries are likely to be very similar, optimize this
     untransformed_var_lengths::Dict{VarName,Int}
-    transformed_var_lengths::Dict{VarName,Int}
+    transformed_var_lengths::Dict{VarName,Int} # TODO: store this as a delta from `untransformed_var_lengths`?
+
     varinfo::SimpleVarInfo
     parameters::Vector{VarName}
+    sorted_nodes::Vector{VarName} # sorted_nodes contains all the variables we're going to visit, in conditioned model, this is the markov blanket
+
     g::BUGSGraph
-    sorted_nodes::Vector{VarName}
+    base_model::Union{BUGSModel,Nothing} # if not Nothing, then the model is a conditioned model; otherwise, it's the model returned by `compile`
 end
 
 """
@@ -64,7 +67,13 @@ struct UninitializedVariableError <: Exception
 end
 
 function BUGSModel(
-    g, sorted_nodes, vars, array_sizes, data, inits; is_transformed::Bool=true
+    g::BUGSGraph,
+    sorted_nodes::Vector{<:VarName},
+    vars,
+    array_sizes,
+    data,
+    inits;
+    is_transformed::Bool=true,
 )
     vs = initialize_var_store(data, vars, array_sizes)
     vi = SimpleVarInfo(vs)
@@ -142,8 +151,9 @@ function BUGSModel(
         transformed_var_lengths,
         vi,
         parameters,
-        g,
         sorted_nodes,
+        g,
+        nothing,
     )
 end
 
@@ -227,7 +237,7 @@ function getparams(m::BUGSModel, vi::SimpleVarInfo)
     )
 end
 
-# TODO: For now, only the parameters varinfo is returned; in the future, can also return the generated quantities
+# TODO: For now, a varinfo contains all model parameters is returned; alternatively, can return the generated quantities
 function (model::BUGSModel)()
     vi, logp = evaluate!!(model, SamplingContext())
     return get_params_varinfo(model, vi)
@@ -235,6 +245,90 @@ end
 
 function settrans(model::BUGSModel, bool::Bool=!(model.transformed))
     return @set model.transformed = bool
+end
+
+function AbstractPPL.condition(
+    model::BUGSModel,
+    d::Dict{<:VarName,<:Any},
+    sorted_nodes=Nothing, # support cached sorted Markov blanket nodes
+)
+    return AbstractPPL.condition(
+        model, collect(keys(d)), update_varinfo(model.varinfo, d); sorted_nodes=sorted_nodes
+    )
+end
+
+function AbstractPPL.condition(
+    model::BUGSModel,
+    var_group::Vector{<:VarName},
+    varinfo=model.varinfo,
+    sorted_nodes=Nothing,
+)
+    check_var_group(var_group, model)
+    base_model = model.base_model isa Nothing ? model : model.base_model
+    new_parameters = setdiff(model.parameters, var_group)
+
+    sorted_blanket_with_vars = if sorted_nodes isa Nothing
+        sorted_nodes
+    else
+        filter(
+            vn -> vn in union(markov_blanket(model.g, new_parameters), new_parameters),
+            model.sorted_nodes,
+        )
+    end
+
+    return BUGSModel(
+        model.transformed,
+        sum(model.untransformed_var_lengths[v] for v in new_parameters),
+        sum(model.transformed_var_lengths[v] for v in new_parameters),
+        model.untransformed_var_lengths,
+        model.transformed_var_lengths,
+        varinfo,
+        new_parameters,
+        sorted_blanket_with_vars,
+        model.g,
+        base_model,
+    )
+end
+
+function AbstractPPL.decondition(model::BUGSModel, var_group::Vector{<:VarName})
+    check_var_group(var_group, model)
+    base_model = model.base_model isa Nothing ? model : model.base_model
+
+    new_parameters = union(model.parameters, var_group)
+
+    @show new_parameters markov_blanket(model.g, new_parameters)
+    sorted_blanket_with_vars = filter(
+        vn -> vn in union(markov_blanket(model.g, new_parameters)), base_model.sorted_nodes
+    )
+    return BUGSModel(
+        model.transformed,
+        sum(model.untransformed_var_lengths[v] for v in new_parameters),
+        sum(model.transformed_var_lengths[v] for v in new_parameters),
+        model.untransformed_var_lengths,
+        model.transformed_var_lengths,
+        model.varinfo,
+        new_parameters,
+        sorted_blanket_with_vars,
+        model.g,
+        base_model,
+    )
+end
+
+function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
+    non_vars = filter(var -> var ∉ labels(model.g), var_group)
+    logical_vars = filter(var -> model.g[var].node_type == Logical, var_group)
+    isempty(non_vars) || error("Variables $(non_vars) are not in the model")
+    return isempty(logical_vars) || error(
+        "Variables $(logical_vars) are not stochastic variables, conditioning on them is not supported",
+    )
+end
+
+function update_varinfo(varinfo::SimpleVarInfo, d::Dict{VarName,<:Any})
+    new_varinfo = deepcopy(varinfo)
+    for (p, value) in d
+        setindex!!(new_varinfo, value, p)
+    end
+    return new_varinfo
 end
 
 """
@@ -278,9 +372,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
             vi = setindex!!(vi, value, vn)
         else
             dist = _eval(expr, args)
-            # under `SamplingContext`, `transformation` is ignored
-            # we sample and score both in the original variable space
-            value = rand(ctx.rng, dist)
+            value = rand(ctx.rng, dist) # just sample from the prior
             logp += logpdf(dist, value)
             vi = setindex!!(vi, value, vn)
         end
@@ -326,15 +418,17 @@ end
 function AbstractPPL.evaluate!!(
     model::BUGSModel, ::LogDensityContext, flattened_values::AbstractVector
 )
-    param_length = if model.transformed
-        model.transformed_param_length
-    else
-        model.untransformed_param_length
-    end
+    @assert length(flattened_values) == (
+        if model.transformed
+            model.transformed_param_length
+        else
+            model.untransformed_param_length
+        end
+    )
+
     var_lengths =
         model.transformed ? model.transformed_var_lengths : model.untransformed_var_lengths
     sorted_nodes = model.sorted_nodes
-    @assert length(flattened_values) == param_length
     g = model.g
     vi = deepcopy(model.varinfo)
     current_idx = 1
@@ -342,7 +436,7 @@ function AbstractPPL.evaluate!!(
     for vn in sorted_nodes
         ni = g[vn]
         @unpack node_type, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
+        args = (; map(arg -> getsym(arg) => vi[arg], node_args)...)
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
             value = _eval(expr, args)
@@ -350,25 +444,22 @@ function AbstractPPL.evaluate!!(
         else
             dist = _eval(expr, args)
             if vn in model.parameters
+                l = var_lengths[vn]
                 if model.transformed
-                    l = var_lengths[vn]
-                    value_transformed = flattened_values[current_idx:(current_idx + l - 1)]
-                    current_idx += l
-                    # TODO: this use `DynamicPPL.reconstruct`, which needs attention when decoupling from DynamicPPL
                     value, logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
-                        Bijectors.inverse(bijector(dist)), dist, value_transformed
+                        Bijectors.inverse(bijector(dist)),
+                        dist,
+                        flattened_values[current_idx:(current_idx + l - 1)],
                     )
-                    logp += logpdf(dist, value) + logjac
-                    vi = setindex!!(vi, value, vn)
                 else
-                    l = var_lengths[vn]
                     value = DynamicPPL.reconstruct(
                         dist, flattened_values[current_idx:(current_idx + l - 1)]
                     )
-                    current_idx += l
-                    logp += logpdf(dist, value)
-                    vi = setindex!!(vi, value, vn)
+                    logjac = 0.0
                 end
+                current_idx += l
+                logp += logpdf(dist, value) + logjac
+                vi = setindex!!(vi, value, vn)
             else
                 logp += logpdf(dist, vi[vn])
             end
