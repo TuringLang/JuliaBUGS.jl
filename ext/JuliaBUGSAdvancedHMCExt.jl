@@ -1,28 +1,25 @@
 module JuliaBUGSAdvancedHMCExt
 
-# The main purpose of this extension is to add `generated_quantities` to the final chains.
-# So directly calling the AdvancedHMCMCMCChainsExt is not feasible.
-
+using AbstractMCMC
+using AdvancedHMC
+using AdvancedHMC: Transition, stat
 using JuliaBUGS
-using JuliaBUGS:
+using JuliaBUGS: 
     AbstractBUGSModel,
+    BUGSModel,
+    WithinGibbs,
     find_generated_vars,
     LogDensityContext,
     evaluate!!,
-    _eval,
-    BUGSModel,
-    WithinGibbs
-import JuliaBUGS: gibbs_internal
+    _eval
 using JuliaBUGS.BUGSPrimitives
+using JuliaBUGS.DynamicPPL
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
-using JuliaBUGS.DynamicPPL
 using JuliaBUGS.Bijectors
 using JuliaBUGS.Random
-using AbstractMCMC
 using MCMCChains: Chains
-using AdvancedHMC
-using AdvancedHMC: Transition, stat
+import JuliaBUGS: gibbs_internal
 
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:Transition},

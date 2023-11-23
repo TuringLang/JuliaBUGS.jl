@@ -1,17 +1,18 @@
 module JuliaBUGSAdvancedMHExt
 
-using JuliaBUGS
-using JuliaBUGS: BUGSModel, find_generated_vars, LogDensityContext, evaluate!!
-import JuliaBUGS: gibbs_internal
-using JuliaBUGS.BUGSPrimitives
-using JuliaBUGS.LogDensityProblems
-using JuliaBUGS.LogDensityProblemsAD
-using JuliaBUGS.UnPack
-using JuliaBUGS.DynamicPPL
-using JuliaBUGS: Random, Bijectors
 using AbstractMCMC
 using AdvancedMH
+using JuliaBUGS
+using JuliaBUGS: BUGSModel, find_generated_vars, LogDensityContext, evaluate!!
+using JuliaBUGS.BUGSPrimitives
+using JuliaBUGS.DynamicPPL
+using JuliaBUGS.LogDensityProblems
+using JuliaBUGS.LogDensityProblemsAD
+using JuliaBUGS.Random
+using JuliaBUGS.Bijectors
+using JuliaBUGS.UnPack
 using MCMCChains: Chains
+import JuliaBUGS: gibbs_internal
 
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:AdvancedMH.AbstractTransition},
