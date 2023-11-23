@@ -54,18 +54,15 @@ end
 function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::HMC
 )
-    vi = cond_model.varinfo
-    transformed_original = JuliaBUGS.getparams(cond_model; transformed=true)
-
-    ad_cond_model = LogDensityProblemsAD.ADgradient(:ReverseDiff, cond_model)
     t, s = AbstractMCMC.step(
         rng,
-        AbstractMCMC.LogDensityModel(ad_cond_model),
+        AbstractMCMC.LogDensityModel(
+            LogDensityProblemsAD.ADgradient(:ReverseDiff, cond_model)
+        ),
         sampler;
         n_adapts=0,
-        initial_params=transformed_original, # for more advanced usage, probably save the state or transition
+        initial_params=JuliaBUGS.getparams(cond_model; transformed=true), # for more advanced usage, probably save the state or transition
     )
-
     return JuliaBUGS.setparams!!(cond_model, t.z.θ; transformed=true)
 end
 

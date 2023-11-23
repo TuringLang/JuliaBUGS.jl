@@ -40,25 +40,15 @@ end
 function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::AdvancedMH.MHSampler
 )
-    vi = cond_model.varinfo
-    transformed_original = Float64[]
-    for v in cond_model.parameters
-        ni = cond_model.g[v]
-        args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
-        dist = JuliaBUGS._eval(ni.node_function_expr.args[2], args)
-
-        transformed_original = vcat(transformed_original, Bijectors.link(dist, vi[v]))
-    end
-
-    ad_cond_model = LogDensityProblemsAD.ADgradient(:ReverseDiff, cond_model)
     t, s = AbstractMCMC.step(
         rng,
-        AbstractMCMC.LogDensityModel(ad_cond_model),
+        AbstractMCMC.LogDensityModel(
+            LogDensityProblemsAD.ADgradient(:ReverseDiff, cond_model)
+        ),
         sampler;
         n_adapts=0,
-        initial_params=transformed_original,
+        initial_params=JuliaBUGS.getparams(cond_model; transformed=true),
     )
-
     return JuliaBUGS.setparams!!(cond_model, t.params; transformed=true)
 end
 
