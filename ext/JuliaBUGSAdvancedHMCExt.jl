@@ -52,9 +52,7 @@ function AbstractMCMC.bundle_samples(
 end
 
 function JuliaBUGS.gibbs_internal(
-    rng::Random.AbstractRNG,
-    cond_model::BUGSModel,
-    sampler::HMC,
+    rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::HMC
 )
     vi = cond_model.varinfo
     transformed_original = Float64[]
@@ -81,7 +79,9 @@ function JuliaBUGS.gibbs_internal(
         args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
         dist = _eval(ni.node_function_expr.args[2], args)
 
-        sample_val = DynamicPPL.invlink_and_reconstruct(dist, t.z.θ[pos:(pos + length(dist) - 1)])
+        sample_val = DynamicPPL.invlink_and_reconstruct(
+            dist, t.z.θ[pos:(pos + length(dist) - 1)]
+        )
         vi = DynamicPPL.setindex!!(vi, sample_val, v)
     end
     return vi
