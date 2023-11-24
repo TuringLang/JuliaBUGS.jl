@@ -1,7 +1,4 @@
-using JuliaBUGS: WithinGibbs, MHFromPrior
-
 @testset "Simple gibbs" begin
-    Random.seed!(12345)
     model_def = @bugs begin
         # Likelihood
         for i in 1:N
@@ -63,7 +60,7 @@ using JuliaBUGS: WithinGibbs, MHFromPrior
 
     sample_size = 10000
     chn = AbstractMCMC.sample(
-        Random.default_rng(),
+        srng,
         model,
         WithinGibbs(model, MHFromPrior()),
         sample_size;
@@ -83,7 +80,7 @@ using JuliaBUGS: WithinGibbs, MHFromPrior
 
     sample_size = 2000
     hmc_chn = AbstractMCMC.sample(
-        Random.default_rng(),
+        srng,
         model,
         WithinGibbs(model, HMC(0.1, 10)),
         sample_size;

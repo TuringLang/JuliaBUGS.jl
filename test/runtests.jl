@@ -20,6 +20,7 @@ using JuliaBUGS:
     Logical,
     LogDensityContext,
     merge_collections,
+    MHFromPrior,
     NodeFunctions,
     PostChecking,
     program!,
@@ -29,7 +30,8 @@ using JuliaBUGS:
     stochastic_neighbors,
     stochastic_outneighbors,
     markov_blanket,
-    Var
+    Var,
+    WithinGibbs
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.BUGSPrimitives: mean
 using LinearAlgebra
@@ -39,10 +41,11 @@ using MCMCChains
 using Random
 using ReverseDiff
 using Setfield
+using StableRNGs
 using Test
 using UnPack
 
-Random.seed!(12345)
+srng = StableRNG(123)
 
 @testset "Function Unit Tests" begin
     DocMeta.setdocmeta!(
