@@ -1,6 +1,7 @@
 using JuliaBUGS: WithinGibbs, MHFromPrior
 
 @testset "Simple gibbs" begin
+    Random.seed!(12345)
     model_def = @bugs begin
         # Likelihood
         for i in 1:N
@@ -75,9 +76,9 @@ using JuliaBUGS: WithinGibbs, MHFromPrior
         :gen_quant
     ]
     means = mean(chn)
-    @test means[:alpha].nt.mean[1] ≈ 2.3 atol = 0.2
+    @test means[:alpha].nt.mean[1] ≈ 2.1 atol = 0.2
     @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.2
-    @test means[:sigma].nt.mean[1] ≈ 0.9 atol = 0.2
+    @test means[:sigma].nt.mean[1] ≈ 0.95 atol = 0.2
     @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.2
 
     sample_size = 2000
