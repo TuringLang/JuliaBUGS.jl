@@ -31,13 +31,11 @@ model = compile(test_model, NamedTuple(), inits)
 
 # test for `getparams`
 # transformed
-@test LogDensityProblems.logdensity(model, JuliaBUGS.getparams(model; transformed=true)) == evaluate!!(
-    model, JuliaBUGS.DefaultContext()
-)[2]
+@test LogDensityProblems.logdensity(model, JuliaBUGS.getparams(model; transformed=true)) ==
+    evaluate!!(model, JuliaBUGS.DefaultContext())[2]
 # untransformed
-@test LogDensityProblems.logdensity(model, JuliaBUGS.getparams(model; transformed=false)) == evaluate!!(
-    JuliaBUGS.settrans(model), JuliaBUGS.DefaultContext()
-)[2]
+@test LogDensityProblems.logdensity(model, JuliaBUGS.getparams(model; transformed=false)) ==
+    evaluate!!(JuliaBUGS.settrans(model), JuliaBUGS.DefaultContext())[2]
 
 g = model.g
 
