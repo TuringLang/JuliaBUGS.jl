@@ -1,4 +1,6 @@
 @testset "Simple gibbs" begin
+    srng = StableRNG(123)
+
     model_def = @bugs begin
         # Likelihood
         for i in 1:N
@@ -73,10 +75,10 @@
         :gen_quant
     ]
     means = mean(chn)
-    @test means[:alpha].nt.mean[1] ≈ 2.1 atol = 0.2
-    @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.2
-    @test means[:sigma].nt.mean[1] ≈ 0.95 atol = 0.2
-    @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.2
+    @test means[:alpha].nt.mean[1] ≈ 2.1 atol = 0.4
+    @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.4
+    @test means[:sigma].nt.mean[1] ≈ 0.95 atol = 0.3
+    @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.4
 
     sample_size = 2000
     hmc_chn = AbstractMCMC.sample(

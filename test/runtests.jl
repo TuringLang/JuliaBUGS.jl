@@ -45,8 +45,6 @@ using StableRNGs
 using Test
 using UnPack
 
-srng = StableRNG(123)
-
 @testset "Function Unit Tests" begin
     DocMeta.setdocmeta!(
         JuliaBUGS,
