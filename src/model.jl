@@ -11,18 +11,20 @@ The `BUGSModel` object is used for inference and represents the output of compil
 
 # Fields
 
-- `param_length::Int`: The length of the parameters vector, defining the number of parameters in the model, store a tuple of integers,
-    where the first integer is the length of the parameters vector in the original space, and the second integer is the length of the 
-    parameters vector in the transformed space.
-- `var_lengths::Dict{VarName,Tuple{Int,Int}}`: A dictionary that maps the names of the variables in the model to the corresponding
-    lengths of the variables in the original space and the transformed space.
+- `transformed::Bool`: Indicates whether the model parameters are in the transformed space.
+- `untransformed_param_length::Int`: The length of the parameters vector in the original space.
+- `transformed_param_length::Int`: The length of the parameters vector in the transformed space.
+- `untransformed_var_lengths::Dict{VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the original space.
+- `transformed_var_lengths::Dict{VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the transformed space.
 - `varinfo::SimpleVarInfo`: An instance of 
     [`DynamicPPL.SimpleVarInfo`](https://turinglang.org/DynamicPPL.jl/dev/api/#DynamicPPL.SimpleVarInfo), 
-    specifically a dictionary that maps both data and value of variables in the model to the corresponding values.
-- `parameters::Vector{VarName}`: A vector containing the names of the parameters in the model. These parameters are defined to be 
-    stochastic variables that are not observed.
-- `g::BUGSGraph`: An instance of [`BUGSGraph`](@ref), representing the dependency graph of the model.
+    which is a dictionary-like data structure that maps both data and values of variables in the model to the corresponding values.
+- `parameters::Vector{VarName}`: A vector containing the names of the parameters in the model, defined as 
+    stochastic variables that are not observed. This vector should be consistent with `sorted_nodes`.
 - `sorted_nodes::Vector{VarName}`: A vector containing the names of all the variables in the model, sorted in topological order.
+    In the case of a conditioned model, `sorted_nodes` include all the variables in `parameters` and the variables in the Markov blanket of `parameters`.
+- `g::BUGSGraph`: An instance of [`BUGSGraph`](@ref), representing the dependency graph of the model.
+- `base_model::Union{BUGSModel,Nothing}`: If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`.
 
 """
 struct BUGSModel <: AbstractBUGSModel
@@ -35,10 +37,10 @@ struct BUGSModel <: AbstractBUGSModel
 
     varinfo::SimpleVarInfo
     parameters::Vector{VarName}
-    sorted_nodes::Vector{VarName} # sorted_nodes contains all the variables we're going to visit, in conditioned model, this is the markov blanket
+    sorted_nodes::Vector{VarName}
 
     g::BUGSGraph
-    base_model::Union{BUGSModel,Nothing} # if not Nothing, then the model is a conditioned model; otherwise, it's the model returned by `compile`
+    base_model::Union{BUGSModel,Nothing}
 end
 
 """
@@ -216,28 +218,31 @@ function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
     end
 end
 
-# TODO: add this function to `ADgradient` with `ReverseDiff` when compiled
-# see https://github.com/TuringLang/Turing.jl/pull/2097
-# TODO: a static allocated version is possible because we know the size, but not worth the complexity now
 """
-    getparams(m::BUGSModel[, vi::SimpleVarInfo], transformed::Bool=false)
+    getparams(m::BUGSModel[, vi::SimpleVarInfo]; transformed::Bool=false)
 
-Return the values of the parameters in the model as a vector, the values are flattened 
-in the order of `m.parameters` (also the topological order). If `transformed` is true,
-the parameters are returned in their transformed space.
+Extract the parameter values from the model as a flattened vector, ordered topologically.
+If `transformed` is set to true, the parameters are provided in the transformed space.
 """
 function getparams(m::BUGSModel; transformed::Bool=false)
     return getparams(m, m.varinfo; transformed=transformed)
 end
 function getparams(m::BUGSModel, vi::SimpleVarInfo; transformed::Bool=false)
     if !transformed
-        params_vi = get_params_varinfo(m, vi)
-        return vcat(
-            [
-                isa(params_vi[p], Real) ? params_vi[p] : vec(params_vi[p]) for
-                p in m.parameters
-            ]...,
-        )
+        param_vals = Vector{Float64}(undef, m.untransformed_param_length)
+        pos = 1
+        for p in m.parameters
+            val = vi[p]
+            len = m.untransformed_var_lengths[p]
+            if isa(val, Real)
+                param_vals[pos] = val
+                pos += 1
+            else
+                param_vals[pos:(pos + len - 1)] .= vec(val)
+                pos += len
+            end
+        end
+        return param_vals
     else
         transformed_param_vals = Vector{Float64}(undef, m.transformed_param_length)
         pos = 1
@@ -255,7 +260,23 @@ function getparams(m::BUGSModel, vi::SimpleVarInfo; transformed::Bool=false)
     end
 end
 
-# only set the parameter values, the values of logical nodes are not updated
+"""
+    setparams!!(m::BUGSModel, flattened_values::AbstractVector; transformed::Bool=false)
+
+Update the parameter values of a `BUGSModel` with new values provided in a flattened vector.
+
+Only the parameter values are updated, the values of logical variables are kept unchanged.
+
+This function adopt the bangbang convention, i.e. it modifies the model in place when possible.
+
+# Arguments
+- `m::BUGSModel`: The model to update.
+- `flattened_values::AbstractVector`: A vector containing the new parameter values in a flattened form.
+- `transformed::Bool=false`: Indicates whether the values in `flattened_values` are in the transformed space.
+
+# Returns
+`SimpleVarInfo`: The updated `varinfo` with the new parameter values set.
+"""
 function setparams!!(
     m::BUGSModel, flattened_values::AbstractVector; transformed::Bool=false
 )
@@ -341,8 +362,8 @@ function AbstractPPL.decondition(model::BUGSModel, var_group::Vector{<:VarName})
     base_model = model.base_model isa Nothing ? model : model.base_model
 
     new_parameters = union(model.parameters, var_group)
+    new_parameters = [v for v in model.sorted_nodes if v in new_parameters] # keep the order
 
-    @show new_parameters markov_blanket(model.g, new_parameters)
     sorted_blanket_with_vars = filter(
         vn -> vn in union(markov_blanket(model.g, new_parameters)), base_model.sorted_nodes
     )
