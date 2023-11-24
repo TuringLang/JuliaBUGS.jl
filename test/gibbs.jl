@@ -1,6 +1,4 @@
 @testset "Simple gibbs" begin
-    srng = StableRNG(123)
-
     model_def = @bugs begin
         # Likelihood
         for i in 1:N
@@ -62,9 +60,14 @@
 
     sample_size = 10000
     chn = AbstractMCMC.sample(
-        srng,
+        Random.default_rng(),
         model,
-        WithinGibbs(model, MHFromPrior()),
+        WithinGibbs(
+            Dict(
+                [@varname(alpha), @varname(beta)] => MHFromPrior(),
+                [@varname(sigma)] => HMC(0.1, 10),
+            ),
+        ),
         sample_size;
         discard_initial=Int(sample_size / 2),
     )
@@ -82,7 +85,7 @@
 
     sample_size = 2000
     hmc_chn = AbstractMCMC.sample(
-        srng,
+        Random.default_rng(),
         model,
         WithinGibbs(model, HMC(0.1, 10)),
         sample_size;

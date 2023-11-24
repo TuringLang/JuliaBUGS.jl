@@ -41,7 +41,6 @@ using MCMCChains
 using Random
 using ReverseDiff
 using Setfield
-using StableRNGs
 using Test
 using UnPack
 

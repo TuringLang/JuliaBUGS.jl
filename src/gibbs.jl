@@ -39,7 +39,8 @@ function AbstractMCMC.step(
         sorted_nodes_cache[vs] = ensure_vector(cond_model.sorted_nodes)
     end
 
-    return getparams(model, vi), GibbsState(vi, conditioning_schedule, sorted_nodes_cache)
+    return getparams(model, vi; transformed=model.transformed),
+    GibbsState(vi, conditioning_schedule, sorted_nodes_cache)
 end
 
 function AbstractMCMC.step(
@@ -55,7 +56,7 @@ function AbstractMCMC.step(
         cond_model = AbstractPPL.condition(model, vs, vi, state.sorted_nodes_cache[vs])
         vi = gibbs_internal(rng, cond_model, state.conditioning_schedule[vs])
     end
-    return getparams(model, vi),
+    return getparams(model, vi; transformed=model.transformed),
     GibbsState(vi, state.conditioning_schedule, state.sorted_nodes_cache)
 end
 
