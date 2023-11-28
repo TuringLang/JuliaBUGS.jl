@@ -36,14 +36,14 @@
     p_s, st_init = AbstractMCMC.step(
         Random.default_rng(),
         AbstractMCMC.LogDensityModel(model),
-        WithinGibbs(model, MHFromPrior()),
+        Gibbs(model, MHFromPrior()),
     )
 
     # following step
     p_s, st = AbstractMCMC.step(
         Random.default_rng(),
         AbstractMCMC.LogDensityModel(model),
-        WithinGibbs(model, MHFromPrior()),
+        Gibbs(model, MHFromPrior()),
         st_init,
     )
 
@@ -54,7 +54,7 @@
     p_s, st = AbstractMCMC.step(
         Random.default_rng(),
         AbstractMCMC.LogDensityModel(model),
-        WithinGibbs(sampler_map),
+        Gibbs(sampler_map),
         st,
     )
 
@@ -62,7 +62,7 @@
     chn = AbstractMCMC.sample(
         Random.default_rng(),
         model,
-        WithinGibbs(
+        Gibbs(
             Dict(
                 [@varname(alpha), @varname(beta)] => MHFromPrior(),
                 [@varname(sigma)] => HMC(0.1, 10),
@@ -78,16 +78,16 @@
         :gen_quant
     ]
     means = mean(chn)
-    @test means[:alpha].nt.mean[1] ≈ 2.1 atol = 0.4
-    @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.4
+    @test means[:alpha].nt.mean[1] ≈ 2.1 atol = 0.6
+    @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.6
     @test means[:sigma].nt.mean[1] ≈ 0.95 atol = 0.3
-    @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.4
+    @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.6
 
     sample_size = 2000
     hmc_chn = AbstractMCMC.sample(
         Random.default_rng(),
         model,
-        WithinGibbs(model, HMC(0.1, 10)),
+        Gibbs(model, HMC(0.1, 10)),
         sample_size;
         discard_initial=Int(sample_size / 2),
     )

@@ -40,6 +40,8 @@ struct BUGSModel <: AbstractBUGSModel
     sorted_nodes::Vector{VarName}
 
     g::BUGSGraph
+
+    " The base model if the model is a conditioned model; otherwise, `nothing`. "
     base_model::Union{BUGSModel,Nothing}
 end
 

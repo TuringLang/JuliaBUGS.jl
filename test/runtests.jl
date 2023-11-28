@@ -31,7 +31,7 @@ using JuliaBUGS:
     stochastic_outneighbors,
     markov_blanket,
     Var,
-    WithinGibbs
+    Gibbs
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.BUGSPrimitives: mean
 using LinearAlgebra

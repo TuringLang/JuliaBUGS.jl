@@ -1,9 +1,9 @@
-struct WithinGibbs <: AbstractMCMC.AbstractSampler
+struct Gibbs <: AbstractMCMC.AbstractSampler
     sampler_map::Dict{<:Any,<:AbstractMCMC.AbstractSampler}
 end
 
-function WithinGibbs(model, s::AbstractMCMC.AbstractSampler)
-    return WithinGibbs(Dict([v => s for v in model.parameters]))
+function Gibbs(model, s::AbstractMCMC.AbstractSampler)
+    return Gibbs(Dict([v => s for v in model.parameters]))
 end
 
 struct MHFromPrior <: AbstractMCMC.AbstractSampler end
@@ -21,7 +21,7 @@ ensure_vector(x) = x isa Union{Number,VarName} ? [x] : x
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
     l_model::AbstractMCMC.LogDensityModel{BUGSModel},
-    sampler::WithinGibbs;
+    sampler::Gibbs;
     model=l_model.logdensity,
     kwargs...,
 )
@@ -46,7 +46,7 @@ end
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
     l_model::AbstractMCMC.LogDensityModel{BUGSModel},
-    sampler::WithinGibbs,
+    sampler::Gibbs,
     state::AbstractGibbsState;
     model=l_model.logdensity,
     kwargs...,
@@ -84,7 +84,7 @@ end
 function AbstractMCMC.bundle_samples(
     ts,
     logdensitymodel::AbstractMCMC.LogDensityModel{JuliaBUGS.BUGSModel},
-    sampler::WithinGibbs,
+    sampler::Gibbs,
     state,
     ::Type{T};
     discard_initial=0,

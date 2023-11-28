@@ -7,7 +7,7 @@ using JuliaBUGS
 using JuliaBUGS:
     AbstractBUGSModel,
     BUGSModel,
-    WithinGibbs,
+    Gibbs,
     find_generated_vars,
     LogDensityContext,
     evaluate!!,
