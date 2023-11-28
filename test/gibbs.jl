@@ -52,10 +52,7 @@
         [@varname(alpha), @varname(beta)] => HMC(0.1, 10), [@varname(sigma)] => RWMH(1)
     )
     p_s, st = AbstractMCMC.step(
-        Random.default_rng(),
-        AbstractMCMC.LogDensityModel(model),
-        Gibbs(sampler_map),
-        st,
+        Random.default_rng(), AbstractMCMC.LogDensityModel(model), Gibbs(sampler_map), st
     )
 
     sample_size = 10000

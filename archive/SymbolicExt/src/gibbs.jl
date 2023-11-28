@@ -22,9 +22,9 @@ end
 
 abstract type GibbsSampler <: AbstractMCMC.AbstractSampler end
 
-abstract type MHGibbs <: GibbsSampler end
+abstract type MHWithinGibbs <: GibbsSampler end
 
-struct ProposeFromPrior <: MHGibbs end
+struct ProposeFromPrior <: MHWithinGibbs end
 
 function AbstractMCMC.step(
     rng::Random.AbstractRNG, model::GraphModel, sampler::GibbsSampler; kwargs...
