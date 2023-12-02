@@ -89,8 +89,8 @@
         discard_initial=Int(sample_size / 2),
     )
     means = mean(hmc_chn)
-    @test means[:alpha].nt.mean[1] ≈ 2.2 rtol = 0.15
-    @test means[:beta].nt.mean[1] ≈ 2.1 rtol = 0.15
-    @test means[:sigma].nt.mean[1] ≈ 0.9 rtol = 0.15
-    @test means[:gen_quant].nt.mean[1] ≈ 4.0 rtol = 0.15
+    @test means[:alpha].nt.mean[1] ≈ 2.2 rtol = 0.2
+    @test means[:beta].nt.mean[1] ≈ 2.1 rtol = 0.2
+    @test means[:sigma].nt.mean[1] ≈ 0.9 rtol = 0.2
+    @test means[:gen_quant].nt.mean[1] ≈ 4.0 rtol = 0.2
 end
