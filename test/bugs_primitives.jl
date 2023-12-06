@@ -11,7 +11,6 @@
 end
 
 @testset "Example model with dwish and dmnorm" begin
-    # 
     model_def = @bugs begin
         A[1:2, 1:2] ~ dwish(B[:, :], 2)
         C[1:2] ~ dmnorm(mu[:], A[:, :])

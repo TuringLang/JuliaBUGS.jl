@@ -1,5 +1,6 @@
 module JuliaBUGS
 
+using AbstractMCMC
 using AbstractPPL
 using BangBang
 using Bijectors
@@ -36,6 +37,7 @@ include("compiler_pass.jl")
 include("graphs.jl")
 include("model.jl")
 include("logdensityproblems.jl")
+include("gibbs.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 
@@ -85,7 +87,7 @@ function compile(
     vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = program!(
         NodeFunctions(array_sizes, array_bitmap), model_def, merged_data
     )
-    g = BUGSGraph(vars, node_args, node_functions, dependencies)
+    g = create_BUGSGraph(vars, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
     return BUGSModel(
         g,

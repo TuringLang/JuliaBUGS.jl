@@ -28,6 +28,7 @@ inits = Dict(
 )
 
 model = compile(test_model, NamedTuple(), NamedTuple(inits))
+
 g = model.g
 
 a = @varname a
@@ -41,23 +42,27 @@ l = @varname l
 c = @varname c
 @test Set(Symbol.(markov_blanket(model.g, c))) == Set([:l, :a, :b, :f])
 
-mb_model = MarkovBlanketCoveredBUGSModel(model, c)
-# tests for MarkovBlanketCoveredBUGSModel constructor
-@test mb_model.mb_untransformed_param_length == 4
-@test Set(Symbol.(mb_model.mb_sorted_nodes)) == Set([:l, :a, :b, :f, :c])
+cond_model = AbstractPPL.condition(model, setdiff(model.parameters, [c]))
+# tests for MarkovBlanketBUGSModel constructor
+@test cond_model.parameters == [c]
+@test Set(Symbol.(cond_model.sorted_nodes)) == Set([:l, :a, :b, :f, :c])
 
+decond_model = AbstractPPL.decondition(cond_model, [a, l])
+@test Set(Symbol.(decond_model.parameters)) == Set([:a, :c, :l])
+@test Set(Symbol.(decond_model.sorted_nodes)) == Set([:i, :b, :f, :g, :h, :e, :d])
+
+c_value = 4.0
 mb_logp = begin
     logp = 0
-    logp += logpdf(dnorm(1.0, 3.0), 1.0) # a
+    logp += logpdf(dnorm(1.0, c_value), 1.0) # a
     logp += logpdf(dnorm(0.0, 1.0), 2.0) # b
     logp += logpdf(dnorm(0.0, 1.0), -2.0) # l
-    logp += logpdf(dnorm(-2.0, 1.0), 3.0) # c
+    logp += logpdf(dnorm(-2.0, 1.0), c_value) # c
     logp
 end
 
-@test mb_logp == evaluate!!(mb_model, DefaultContext())[2]
 # order: b, l, c, a
-@test mb_logp == evaluate!!(mb_model, LogDensityContext(), [2.0, -2.0, 3.0, 1.0])[2]
+@test mb_logp ≈ evaluate!!(cond_model, LogDensityContext(), [c_value])[2] rtol = 1e-8
 
 # test LogDensityContext
 @test begin

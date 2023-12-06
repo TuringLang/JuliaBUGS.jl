@@ -19,8 +19,8 @@ using JuliaBUGS:
     get_params_varinfo,
     Logical,
     LogDensityContext,
-    MarkovBlanketCoveredBUGSModel,
     merge_collections,
+    MHFromPrior,
     NodeFunctions,
     PostChecking,
     program!,
@@ -30,7 +30,8 @@ using JuliaBUGS:
     stochastic_neighbors,
     stochastic_outneighbors,
     markov_blanket,
-    Var
+    Var,
+    Gibbs
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.BUGSPrimitives: mean
 using LinearAlgebra
@@ -42,8 +43,6 @@ using ReverseDiff
 using Setfield
 using Test
 using UnPack
-
-Random.seed!(12345)
 
 @testset "Function Unit Tests" begin
     DocMeta.setdocmeta!(
@@ -128,5 +127,7 @@ end
 @testset "Markov Blanket" begin
     include("graphs.jl")
 end
+
+include("gibbs.jl")
 
 include("ext/mcmchains.jl")

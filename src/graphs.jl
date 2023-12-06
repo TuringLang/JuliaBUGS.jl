@@ -81,7 +81,7 @@ const BUGSGraph = MetaGraph{
     Int64,SimpleDiGraph{Int64},VarName,NodeInfo,Nothing,Nothing,Nothing,Float64
 }
 
-function BUGSGraph(vars, node_args, node_functions, dependencies)
+function create_BUGSGraph(vars, node_args, node_functions, dependencies)
     g = MetaGraph(
         SimpleDiGraph{Int64}();
         weight_function=nothing,
@@ -231,22 +231,29 @@ its children's other parents (reference: https://en.wikipedia.org/wiki/Markov_bl
 In the case of vector, the Markov Blanket is the union of the Markov Blankets of each variable 
 minus the variables themselves (reference: Liu, X.-Q., & Liu, X.-S. (2018). Markov Blanket and Markov 
 Boundary of Multiple Variables. Journal of Machine Learning Research, 19(43), 1–50.)
+
+In the case of M-H acceptance ratio evaluation, only the logps of the children are needed, because the logp of the parents
+and co-parents are not changed (their values are still needed to compute the distributions). 
 """
-function markov_blanket(g::BUGSGraph, v::VarName)
-    parents = stochastic_inneighbors(g, v)
-    children = stochastic_outneighbors(g, v)
-    co_parents = VarName[]
-    for p in children
-        co_parents = vcat(co_parents, stochastic_inneighbors(g, p))
+function markov_blanket(g::BUGSGraph, v::VarName; children_only=false)
+    if !children_only
+        parents = stochastic_inneighbors(g, v)
+        children = stochastic_outneighbors(g, v)
+        co_parents = VarName[]
+        for p in children
+            co_parents = vcat(co_parents, stochastic_inneighbors(g, p))
+        end
+        blanket = unique(vcat(parents, children, co_parents...))
+        return [x for x in blanket if x != v]
+    else
+        return stochastic_outneighbors(g, v)
     end
-    blanket = unique(vcat(parents, children, co_parents...))
-    return [x for x in blanket if x != v]
 end
 
-function markov_blanket(g::BUGSGraph, v)
+function markov_blanket(g::BUGSGraph, v; children_only=false)
     blanket = VarName[]
     for vn in v
-        blanket = vcat(blanket, markov_blanket(g, vn))
+        blanket = vcat(blanket, markov_blanket(g, vn; children_only=children_only))
     end
     return [x for x in unique(blanket) if x ∉ v]
 end

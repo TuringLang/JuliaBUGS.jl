@@ -95,7 +95,9 @@ function JuliaBUGS.gen_chains(
         convert(
             Vector{Real},
             vcat(
-                flattened_param_vals[i], flattened_generated_quantities[i], stats_values[i]
+                flattened_param_vals[i],
+                flattened_generated_quantities[i],
+                isempty(stats_values) ? [] : stats_values[i],
             ),
         ) for i in axes(samples)[1]
     ]
