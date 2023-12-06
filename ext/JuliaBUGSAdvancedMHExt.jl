@@ -1,15 +1,18 @@
 module JuliaBUGSAdvancedMHExt
 
-using JuliaBUGS
-using JuliaBUGS: AbstractBUGSModel, find_generated_vars, LogDensityContext, evaluate!!
-using JuliaBUGS.BUGSPrimitives
-using JuliaBUGS.LogDensityProblems
-using JuliaBUGS.LogDensityProblemsAD
-using JuliaBUGS.UnPack
-using JuliaBUGS.DynamicPPL
 using AbstractMCMC
 using AdvancedMH
+using JuliaBUGS
+using JuliaBUGS: BUGSModel, find_generated_vars, LogDensityContext, evaluate!!
+using JuliaBUGS.BUGSPrimitives
+using JuliaBUGS.DynamicPPL
+using JuliaBUGS.LogDensityProblems
+using JuliaBUGS.LogDensityProblemsAD
+using JuliaBUGS.Random
+using JuliaBUGS.Bijectors
+using JuliaBUGS.UnPack
 using MCMCChains: Chains
+import JuliaBUGS: gibbs_internal
 
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:AdvancedMH.AbstractTransition},
@@ -33,6 +36,21 @@ function AbstractMCMC.bundle_samples(
         thinning=thinning,
         kwargs...,
     )
+end
+
+function JuliaBUGS.gibbs_internal(
+    rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::AdvancedMH.MHSampler
+)
+    t, s = AbstractMCMC.step(
+        rng,
+        AbstractMCMC.LogDensityModel(
+            LogDensityProblemsAD.ADgradient(:ReverseDiff, cond_model)
+        ),
+        sampler;
+        n_adapts=0,
+        initial_params=JuliaBUGS.getparams(cond_model; transformed=true),
+    )
+    return JuliaBUGS.setparams!!(cond_model, t.params; transformed=true)
 end
 
 end

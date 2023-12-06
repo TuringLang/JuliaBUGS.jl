@@ -1,5 +1,6 @@
 module JuliaBUGS
 
+using AbstractMCMC
 using AbstractPPL
 using BangBang
 using Bijectors
@@ -36,6 +37,7 @@ include("compiler_pass.jl")
 include("graphs.jl")
 include("model.jl")
 include("logdensityproblems.jl")
+include("gibbs.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 

@@ -1,18 +1,25 @@
 module JuliaBUGSAdvancedHMCExt
 
-# The main purpose of this extension is to add `generated_quantities` to the final chains.
-# So directly calling the AdvancedHMCMCMCChainsExt is not feasible.
-
-using JuliaBUGS
-using JuliaBUGS: AbstractBUGSModel, find_generated_vars, LogDensityContext, evaluate!!
-using JuliaBUGS.BUGSPrimitives
-using JuliaBUGS.LogDensityProblems
-using JuliaBUGS.LogDensityProblemsAD
-using JuliaBUGS.DynamicPPL
 using AbstractMCMC
-using MCMCChains: Chains
 using AdvancedHMC
 using AdvancedHMC: Transition, stat
+using JuliaBUGS
+using JuliaBUGS:
+    AbstractBUGSModel,
+    BUGSModel,
+    Gibbs,
+    find_generated_vars,
+    LogDensityContext,
+    evaluate!!,
+    _eval
+using JuliaBUGS.BUGSPrimitives
+using JuliaBUGS.DynamicPPL
+using JuliaBUGS.LogDensityProblems
+using JuliaBUGS.LogDensityProblemsAD
+using JuliaBUGS.Bijectors
+using JuliaBUGS.Random
+using MCMCChains: Chains
+import JuliaBUGS: gibbs_internal
 
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:Transition},
@@ -39,6 +46,21 @@ function AbstractMCMC.bundle_samples(
         thinning=thinning,
         kwargs...,
     )
+end
+
+function JuliaBUGS.gibbs_internal(
+    rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::HMC
+)
+    t, s = AbstractMCMC.step(
+        rng,
+        AbstractMCMC.LogDensityModel(
+            LogDensityProblemsAD.ADgradient(:ReverseDiff, cond_model)
+        ),
+        sampler;
+        n_adapts=0,
+        initial_params=JuliaBUGS.getparams(cond_model; transformed=true), # for more advanced usage, probably save the state or transition
+    )
+    return JuliaBUGS.setparams!!(cond_model, t.z.θ; transformed=true)
 end
 
 end
