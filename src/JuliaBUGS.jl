@@ -57,7 +57,7 @@ Compile a BUGS model into a log density problem.
 # Arguments
 - `model_def::Expr`: The BUGS model definition.
 - `data::NamedTuple`: The data to be used in the model. If none is passed, the data will be assumed to be empty.
-- `initializations::NamedTuple`: The initial values for the model parameters. If none is passed, the parameters will be assumed to be initialized to zero.
+- `initializations::NamedTuple`: The initial values for the model parameters. If none is passed, the parameters will be sampled from prior.
 - `is_transformed::Bool=true`: If true, the model parameters during inference will be transformed to the unconstrained space. 
 
 # Returns
