@@ -274,12 +274,12 @@ function sort(v::AbstractVector)
 end
 
 """
-    _step(x)
+    step(x)
 
 Return 1 if ``x`` is greater than 0, and 0 otherwise.
 """
-function _step(x)
-    return ifelse(x > 0, 1, 0)
+function step(x::Union{Int, Float64})
+    return ifelse(x > 0, 1.0, 0.0)
 end
 
 """
