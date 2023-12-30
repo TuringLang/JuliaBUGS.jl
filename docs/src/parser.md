@@ -30,29 +30,3 @@ The parser will throw an error if it encounters a program that does not adhere t
 The current error recovery is ad hoc and primarily rudimentary. If the program is correct, it will produce the correct result. If the program is syntactically or semantically incorrect, the token stream will not be pushed forward, resulting in failure.
 
 The failure detection mechanism checks if two errors occur with the same "current token". If they do, the parser stops and reports the error. This ensures that the parser won't incorrectly parse a flawed program.
-
-## Syntax Checking and Post-Processing
-
-### Transformations on Julia ASTs
-
-These transformations maintain core forms that translate from BUGS to Julia, aiming to produce code as close to executable as possible. Special forms are simplified for pattern matching.
-
-- **Transformation of Tilde Statements**: Tilde (`~`) statements are uniquely parsed in Julia.
-    - Example: `dc[i] ~ dunif(0, 20)` becomes `(:~, (:ref, :dc, :i), (:call, :dunif, 0, 20))`.
-- **Handling of Logical Assignments with Link Functions**: The automatically created block on the right-hand side is removed in logical assignments.
-    - Example: `logit(p) <- x` becomes `(:(=), (:call, :logit, :x), :y)`.
-- **Conversion of Censoring and Truncation Annotations**: These annotations are converted into `:censored` and `:truncated` forms.
-    - Example: `dnorm(x, μ) C (, 10)` becomes `(:censored, (:call, :dnorm, :x, :μ), :nothing, 100)`.
-- **Automatic Filling of Empty Ranges**: Empty ranges are filled with slices.
-    - Example: `x[,]` becomes `(:ref, :x, :(:), :(:))`.
-- **Normalization of Forms with Lowered Representation**: Forms with both a `:call` representation and their own lowered form are normalized to the latter.
-    - Currently, this includes `getindex` to `:ref`, and `:` to `:(:)`.
-- **Complete Removal of `LineNumberNode`s**.
-- **Preservation of Interpolations and Quasi-Quotations**.
-
-### Post-Processing of Julia ASTs
-
-- **Replacement of `step` function with `_step`**: As `step` has a different meaning in BUGS.
-- **Replacement of Link Function Calls on the LHS with the Corresponding Inverse Link Function on the RHS**.
-    - Example: `(:(=), (:call, :logit, :x), :y)` becomes `(:(=), :x, (:call, :logistic, :y))`.
-- **Transformation of `cumulative`, `density`, and `deviance` functions**: These functions are transformed into corresponding function calls that align with the context of the distribution they evaluate.
