@@ -88,7 +88,19 @@ function expect_and_discard!(ps::ProcessState, expected::String)
     end
 end
 
+function giveup!(ps)
+    throw(JuliaSyntax.ParseError(JuliaSyntax.SourceFile(ps.text), ps.diagnostics, :none))
+end
+
 function add_diagnostic!(ps, msg::String)
+    return add_diagnostic!(
+        ps,
+        first(ps.token_vec[ps.current_index].range),
+        last(ps.token_vec[ps.current_index].range),
+        msg,
+    )
+end
+function add_diagnostic!(ps, low, high, msg::String)
     # check if the current token is EOF
     if ps.current_index > length(ps.token_vec)
         diagnostic = JuliaSyntax.Diagnostic(0, 0, :error, msg)
@@ -96,15 +108,22 @@ function add_diagnostic!(ps, msg::String)
         push!(ps.diagnostics, diagnostic)
         return nothing
     end
-    low = first(ps.token_vec[ps.current_index].range)
-    high = last(ps.token_vec[ps.current_index].range)
     diagnostic = JuliaSyntax.Diagnostic(low, high, :error, msg)
 
-    if any((x -> x.first_byte == low).(ps.diagnostics))
-        io = IOBuffer()
-        JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
-        println(String(take!(io)))
-        error("Encounter duplicated error, aborting.")
+    line, _ = JuliaSyntax.source_location(
+        JuliaSyntax.SourceFile(ps.text), JuliaSyntax.first_byte(diagnostic)
+    )
+    for d in ps.diagnostics
+        line_, _ = JuliaSyntax.source_location(
+            JuliaSyntax.SourceFile(ps.text), d.first_byte
+        )
+        if line == line_
+            # https://github.com/JuliaLang/JuliaSyntax.jl/blob/a6f2d1580f7bbad11822033e8c83e607aa31f100/src/parser_api.jl#L18
+            # this only show the first parse error for now
+            # even we print all the errors, current detection of errors will only allow one error per line
+            # JuliaSyntax.show_diagnostics(stdout, ps.diagnostics, ps.text)
+            giveup!(ps)
+        end
     end
     return push!(ps.diagnostics, diagnostic)
 end
@@ -158,6 +177,16 @@ function look_back(ps::ProcessState, n=1)
     return kind(ps.julia_token_vec[end - n + 1])
 end
 
+function last_non_trivia(ps)
+    # returns either a String or a Token
+    return last(
+        filter(
+            x -> x isa String || !(kind(x) in KSet"Whitespace Comment NewlineWs"),
+            ps.julia_token_vec,
+        ),
+    )
+end
+
 function process_trivia!(ps::ProcessState, skip_newline=true)
     trivia_tokens = KSet"Whitespace Comment"
     skip_newline && (trivia_tokens = (trivia_tokens ∪ KSet"NewlineWs"))
@@ -176,14 +205,14 @@ function process_toplevel!(ps::ProcessState)
             "Parsing finished without get to the end of the program. $(peek_raw(ps)) is not expected to lead an statement.",
         )
     end
-    expect!(ps, "}", "end")
+    expect!(ps, "}", " end") # add extra white space before `end` in case of "model{}" become "beginend"
     return process_trivia!(ps)
 end
 
 function process_toplevel_no_enclosure!(ps::ProcessState)
-    push!(ps.julia_token_vec, "begin \n")
+    push!(ps.julia_token_vec, "begin ") # no newline for line number consistency
     process_statements!(ps)
-    push!(ps.julia_token_vec, "\n end")
+    push!(ps.julia_token_vec, " end")
     return process_trivia!(ps)
 end
 
@@ -243,15 +272,30 @@ function process_assignment!(ps::ProcessState)
     end
 
     process_expression!(ps)
-    return process_trivia!(ps)
+    process_trivia!(ps)
+    return nothing # return to `process_statements!`
 end
 
 function process_lhs!(ps::ProcessState)
-    if peek_raw(ps) ∈ ("logit", "cloglog", "log", "probit") && peek(ps, 2) != K"." # link functions 
+    if peek_raw(ps) ∈ ("logit", "cloglog", "log", "probit") && peek(ps, 2) != K"." # link functions
         consume!(ps) # consume the link function
         expect!(ps, "(")
-        process_variable!(ps) # link functions can only take one argument
-        process_trivia!(ps)
+        current_index = ps.current_index
+        current_loc = first(ps.token_vec[ps.current_index].range)
+        process_call_args!(ps)
+        if any(
+            x -> untokenize(x, ps.text) == ",",
+            ps.token_vec[current_index:(ps.current_index - 1)],
+        )
+            add_diagnostic!(
+                ps,
+                current_loc,
+                last(ps.token_vec[ps.current_index].range) - 1,
+                "Link function should be unary function, but got more than one arguments",
+            )
+            giveup!(ps)
+        end
+        # ideally, link function should be desugared here, but "<-" is complicated to handle (see "process_assignment!"), so we do it in Julia ASTs
         expect!(ps, ")")
     elseif any(Base.Fix1(startswith, peek_raw(ps)).(["logit", "cloglog", "log", "probit"]))
         # missing left parentheses if right parentheses is present
@@ -262,9 +306,31 @@ function process_lhs!(ps::ProcessState)
             process_variable!(ps)
         end
     else
+        current_loc = first(ps.token_vec[ps.current_index].range)
         process_variable!(ps)
+        if peek(ps) == K"(" # un-supported link function
+            link_function = last_non_trivia(ps)
+            if !(link_function isa String)
+                link_function = untokenize(link_function, ps.text)
+            end
+            add_diagnostic!(
+                ps,
+                current_loc,
+                last(ps.token_vec[ps.current_index].range) - 1,
+                "Link function `$(link_function)` is not supported",
+            )
+            giveup!(ps) # if the link function is not recognized, just throw the error
+
+            # the following code will allow arbitrary link functions with arbitrary number of arguments
+            # expect!(ps, "(")
+            # current_loc = first(ps.token_vec[ps.current_index].range)
+            # process_call_args!(ps)
+            # add_diagnostic!(ps, current_loc, last(ps.token_vec[ps.current_index].range) - 1, "Link function should be unary function, but got more than one arguments")
+            # expect!(ps, ")")
+        end
     end
-    return process_trivia!(ps)
+    process_trivia!(ps)
+    return nothing # return to `process_assignment!`
 end
 
 function process_for!(ps)
@@ -283,7 +349,8 @@ function process_for!(ps)
 
     expect_and_discard!(ps, "{")
     process_statements!(ps)
-    return expect!(ps, "}", " end") # add extra white space in case of "}}"
+    expect!(ps, "}", " end") # add extra white space in case of "}}"
+    return nothing # return to `process_statements!`
 end
 
 function process_range!(ps)
@@ -374,11 +441,12 @@ function process_tilde_rhs!(ps::ProcessState)
     expect!(ps, "(")
     process_call_args!(ps)
     expect!(ps, ")")
-    process_trivia!(ps, false) # allow whitespace 
+    process_trivia!(ps, false) # allow whitespace
     if peek_raw(ps) in ["T", "C"]
+        t_or_c = peek_raw(ps)
         discard!(ps) # discard the "T" or "C"
         expect_and_discard!(ps, "(")
-        push!(julia_token_vec, peek_raw(ps) == "C" ? " censored(" : " truncated(")
+        push!(julia_token_vec, t_or_c == "C" ? " censored(" : " truncated(")
         push!(julia_token_vec, buffer..., ", ")
         ps.julia_token_vec = julia_token_vec
         if peek_next_non_trivia(ps) == K","
@@ -422,7 +490,6 @@ function process_variable!(ps::ProcessState, allow_indexing=true)
     if peek(ps, 2) == K"."
         if peek(ps, 3) != K"Identifier"
             add_diagnostic!(ps, "Variable names can't end with '.'.")
-
             return nothing
         end
         variable_name_buffer = String[]
@@ -492,7 +559,21 @@ end
 function process_call_args!(ps)
     process_trivia!(ps)
     while peek(ps) != "," && peek(ps) != "EndMarker"
-        process_expression!(ps, KSet", ) EndMarker")
+        process_expression!(ps, KSet", ) EndMarker ;")
+
+        # if ";" there will not be trivia
+        if ps.julia_token_vec[end] isa Token && kind(ps.julia_token_vec[end]) == K";"
+            token_range = ps.julia_token_vec[end].range
+            add_diagnostic!(
+                ps,
+                first(token_range),
+                last(token_range),
+                "Calling function with keyword arguments is not supported.",
+            )
+            giveup!(ps)
+        end
+
+        process_trivia!(ps)
         if peek(ps) == K")"
             break
         end
