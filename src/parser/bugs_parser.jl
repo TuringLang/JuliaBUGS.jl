@@ -225,7 +225,8 @@ function process_statements!(ps::ProcessState)
     while peek(ps) ∈ KSet"for Identifier" || peek(ps) ∈ JULIA_RESERVED_WORDS_W_O_FOR
         if peek(ps) == K"for"
             process_for!(ps)
-        else # peek(ps) == K"Identifier"
+        else
+            # we can desugar the link function here
             process_assignment!(ps)
         end
         process_trivia!(ps)
@@ -310,9 +311,8 @@ function process_lhs!(ps::ProcessState)
             giveup!(ps)
         end
         
-        # legal syntax, then consume the variable
+        # then we know it's a valid link function syntax
         process_variable!(ps)
-        # ideally, link function should be desugared here, but "<-" is complicated to handle (see "process_assignment!"), so we do it in Julia ASTs
         expect!(ps, ")")
     elseif any(Base.Fix1(startswith, peek_raw(ps)).(["logit", "cloglog", "log", "probit"]))
         # missing left parentheses if right parentheses is present
@@ -394,7 +394,7 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
     while true
         if peek(ps) ∈ KSet"Integer Float"
             # `-2` will be tokenized to token `-2`, which means the current design allow "- -2"
-            # Julia handles this well and in a intuitive way; may not be native to BUGS, but
+            # the tokenizer handles this well and in a intuitive way; may not be native to BUGS, but
             # it's a unambiguous syntax, so we allow it
             consume!(ps)
         elseif peek(ps) == K"Identifier"
