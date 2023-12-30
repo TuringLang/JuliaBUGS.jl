@@ -286,25 +286,38 @@ function process_lhs!(ps::ProcessState)
         expect!(ps, "(")
         current_index = ps.current_index
         current_loc = first(ps.token_vec[ps.current_index].range)
-        process_call_args!(ps)
-        if any(
-            x -> untokenize(x, ps.text) == ",",
-            ps.token_vec[current_index:(ps.current_index - 1)],
-        )
+
+        # test if there is more than one argument
+        ps_sim = simulate(process_variable!, ps)
+        ps_sim = simulate(process_trivia!, ps_sim)
+        if peek_next_non_trivia(ps_sim) == K","
+            ps_sim = simulate(process_call_args!, ps)
             add_diagnostic!(
                 ps,
                 current_loc,
-                last(ps.token_vec[ps.current_index].range) - 1,
-                "Link function should be unary function, but got more than one arguments",
+                last(ps_sim.token_vec[ps_sim.current_index].range) - 1,
+                "Link function should be unary function, but got more than one arguments.",
+            )
+            giveup!(ps)
+        elseif peek_next_non_trivia(ps) != K")"
+            ps_sim = simulate(process_call_args!, ps)
+            add_diagnostic!(
+                ps,
+                current_loc,
+                last(ps_sim.token_vec[ps_sim.current_index].range) - 1,
+                "Link function argument should not be an expression.",
             )
             giveup!(ps)
         end
+        
+        # legal syntax, then consume the variable
+        process_variable!(ps)
         # ideally, link function should be desugared here, but "<-" is complicated to handle (see "process_assignment!"), so we do it in Julia ASTs
         expect!(ps, ")")
     elseif any(Base.Fix1(startswith, peek_raw(ps)).(["logit", "cloglog", "log", "probit"]))
         # missing left parentheses if right parentheses is present
-        ps_copy = simulate(process_variable!, ps)
-        if peek(ps_copy) == K")"
+        ps_sim = simulate(process_variable!, ps)
+        if peek(ps_sim) == K")"
             add_diagnostic!(ps, "Missing left parentheses")
         else # then it's just a variable name start with one of "logit", "cloglog", "log", "probit"
             process_variable!(ps)
