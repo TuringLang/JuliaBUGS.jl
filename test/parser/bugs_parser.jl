@@ -1,3 +1,227 @@
+# parse program from string
+# second arg is translate variable name, third arg is `model` enclosure
+_kidney_transplants = @bugs("""
+model{
+for (i in 1:N) {
+    Score[i] ~ dcat(p[i,])
+    p[i,1] <- 1 - Q[i,1]
+
+    for (r in 2:5) {
+        p[i,r] <- Q[i,r-1] - Q[i,r]
+    }
+
+    p[i,6] <- Q[i,5]
+
+    for (r in 1:5) {
+        logit(Q[i,r]) <- b.apd*lAPD[i] - c[r]
+    }
+}
+
+for (i in 1:5) {
+    dc[i] ~ dunif(0, 20)
+}
+
+c[1] <- dc[1]
+
+for (i in 2:5) {
+    c[i] <- c[i-1] + dc[i]
+}
+
+b.apd ~ dnorm(0, 1.0E-03)
+or.apd <- exp(b.apd)
+}
+""")
+
+@bugs("""
+model{
+    logit(p + 1) <- logit.p + 1
+    # logit(p[1], 1) <- logit.p[1] + 1
+}""")
+
+@bugs"""
+model{
+    for (i in 1:N) {
+        y[i] ~ dnorm(mu[i], tau)
+        mu[i] <- alpha + beta*(x[i] - mean(x[]))
+    }
+
+    alpha[x[1:2]] ~ dflat()
+    beta ~ dflat()
+    tau <- 1/sigma2
+    log(sigma2) <- 2*log.sigma
+    log.sigma ~ dflat()
+}
+"""
+
+growth_curve = @bugs(
+    """
+for (i in 1:5) {
+    y[i] ~ dnorm(mu[i], tau)
+    mu[i] <- alpha + beta*(x[i] - mean(x[]))
+}
+
+alpha ~ dflat()
+beta ~ dflat()
+tau <- 1/sigma2
+log(sigma2) <- 2*log.sigma
+log.sigma ~ dflat()
+""",
+    true,
+    true
+)
+
+jaws = @bugs(
+    """
+for (i in 1:20) { Y[i, 1:4] ~ dmnorm(mu[], Sigma.inv[,]) }
+for (j in 1:4) { mu[j] <- alpha + beta*x[j] }
+alpha ~ dnorm(0, 0.0001)
+beta ~ dnorm(0, 0.0001)
+Sigma.inv[1:4, 1:4] ~ dwish(R[,], 4)
+Sigma[1:4, 1:4] <- inverse(Sigma.inv[,])
+""",
+    true,
+    true
+)
+
+truncation = @bugs(
+    """a ~ dwish(R[,], 4) C (0, 1)
+a ~ dwish(R[,], 4) C (,1)
+a ~ dwish(R[,], 4) C (0,)
+a ~ dwish(R[,], 4) T (0, 1)
+""",
+    true,
+    true
+)
+
+#############
+parse_bugs(
+        """
+    model
+    {
+    
+    solution[1:ngrid, 1:ndim] <- ode.solution(init[1:ndim], tgrid[1:ngrid], D(C[1:ndim], t),
+    origin, tol)
+
+
+    alpha <- exp(log.alpha)
+    beta <- exp(log.beta)
+    gamma <- exp(log.gamma)
+    delta <- exp(log.delta)
+    log.alpha ~ dnorm(0.0, 0.0001)
+    log.beta ~ dnorm(0.0, 0.0001)
+    log.gamma ~ dnorm(0.0, 0.0001)
+    log.delta ~ dnorm(0.0, 0.0001)
+
+    # D.d(C[1], t) <- C[1] * (alpha - beta * C[2])
+    # D(C[2], t) <- -C[2] * (gamma - delta * C[1])
+
+    logit(p[1]) <- logit.p[1]
+
+    for (i in 1:ngrid)
+    {
+    sol_x[i] <- solution[i, 1]
+    obs_x[i] ~ dnorm(sol_x[i], tau.x)
+    sol_y[i] <- solution[i, 2]
+    obs_y[i] ~ dnorm(sol_y[i], tau.y)
+    }
+
+    y = x + 1+ f(x)
+        
+    tau.x ~ dgamma(a, b)
+    tau.y ~ dgamma(a, b)
+    }
+"""
+    )
+
+ex = @bugs"""
+model
+{
+   for (i in 1 : ns){
+      nbiops[i] <- sum(biopsies[i, ])
+      true[i] ~ dcat(p[])
+      biopsies[i, 1 : 4] ~ dmulti(error[true[i], ], nbiops[i])
+   }
+   error[2,1 : 2] ~ ddirich(prior[1 : 2])
+   error[3,1 : 3] ~ ddirich(prior[1 : 3])
+   error[4,1 : 4] ~ ddirich(prior[1 : 4])
+   p[1 : 4] ~ ddirich(prior[]); # prior for p
+}
+"""
+
+@run JuliaBUGS.Parser.to_julia_program(
+    """
+model
+{
+   for (i in 1 : ns){
+      nbiops[i] <- sum(biopsies[i, ])
+      true[i] ~ dcat(p[])
+      biopsies[i, 1 : 4] ~ dmulti(error[true[i], ], nbiops[i])
+   }
+   error[2,1 : 2] ~ ddirich(prior[1 : 2])
+   error[3,1 : 3] ~ ddirich(prior[1 : 3])
+   error[4,1 : 4] ~ ddirich(prior[1 : 4])
+   p[1 : 4] ~ ddirich(prior[]); # prior for p
+}
+"""
+)
+
+ex = JuliaBUGS.@bugs(
+    """
+model
+{
+
+solution[1:ngrid, 1:ndim] <- ode.solution(init[1:ndim], tgrid[1:ngrid], D(C[1:ndim], t),
+origin, tol)
+
+
+alpha <- exp(log.alpha)
+beta <- exp(log.beta)
+gamma <- exp(log.gamma)
+delta <- exp(log.delta)
+log.alpha ~ dnorm(0.0, 0.0001)
+log.beta ~ dnorm(0.0, 0.0001)
+log.gamma ~ dnorm(0.0, 0.0001)
+log.delta ~ dnorm(0.0, 0.0001)
+
+# D.d(C[1], t) <- C[1] * (alpha - beta * C[2])
+# D(C[2], t) <- -C[2] * (gamma - delta * C[1])
+
+logit(p[1]) <- logit.p[1]
+
+logit(p[1], m) <- logit.p[1]
+
+for (i in 1:ngrid)
+{
+sol_x[i] <- solution[i, 1]
+obs_x[i] ~ dnorm(sol_x[i], tau.x)
+sol_y[i] <- solution[i, 2]
+obs_y[i] ~ dnorm(sol_y[i], tau.y)
+}
+
+y = x + 1+ f(x)
+    
+tau.x ~ dgamma(a, b)
+tau.y ~ dgamma(a, b)
+}
+"""
+)
+
+#     # Error @ line 15:6
+
+#     D(C[1], t) <- C[1] * (alpha - beta * C[2])
+# #    ╙ ── Expecting ~, <-, =
+# # Error @ line 15:11
+
+#     D(C[1], t) <- C[1] * (alpha - beta * C[2])
+# #         ╙ ── Expecting operator none of + - * / ^, but got ,
+# ERROR: Encounter duplicated error, aborting.
+
+# ! this is no good
+
+###########
+
+
+
 using Test
 using JuliaBUGS.Parser:
     ProcessState,
