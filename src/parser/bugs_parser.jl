@@ -12,7 +12,7 @@ function ProcessState(text::String, replace_period=true, allow_eq=true)
     token_vec = filter(x -> kind(x) != K"error", tokenize(text)) # generic "error" is disregarded
     disallowed_words = Token[]
     for t in token_vec
-        if kind(t) ∉ WHITELIST
+        if kind(t) ∉ WHITELIST && kind(t) ∉ JULIA_RESERVED_WORDS_W_O_FOR
             push!(disallowed_words, t)
         end
     end
@@ -33,8 +33,11 @@ function ProcessState(text::String, replace_period=true, allow_eq=true)
     return ProcessState(token_vec, 1, text, Any[], Diagnostic[], replace_period, allow_eq)
 end
 
-# Julia's reserved words are not allowed to be used as variable names
 WHITELIST = KSet"Whitespace Comment NewlineWs EndMarker for in , { } ( ) [ ] : ; ~ < - <-- = + - * / ^ . Identifier Integer Float TOMBSTONE error"
+JULIA_RESERVED_WORDS = KSet"baremodule begin break catch const continue do else elseif end export false finally for function global if import let local macro module quote return struct true try using where while"
+# Julia reserved words are parsed to special tokens, to allow using these as variable names, we need to wrap them
+# in `var"..."` to avoid syntax error in the generated Julia program
+JULIA_RESERVED_WORDS_W_O_FOR = KSet"baremodule begin break catch const continue do else elseif end export false finally function global if import let local macro module quote return struct true try using where while"
 
 function ProcessState(ps::ProcessState)
     return ProcessState(
@@ -49,6 +52,7 @@ function ProcessState(ps::ProcessState)
 end
 
 function consume!(ps::ProcessState, substitute=nothing)
+    @assert peek(ps) ∉ JULIA_RESERVED_WORDS_W_O_FOR "Julia reserved words should be wrapped in `var\"...\"` to avoid syntax error."
     if isnothing(substitute)
         push!(ps.julia_token_vec, ps.token_vec[ps.current_index])
     else
@@ -218,7 +222,7 @@ end
 
 function process_statements!(ps::ProcessState)
     process_trivia!(ps)
-    while peek(ps) ∈ KSet"for Identifier"
+    while peek(ps) ∈ KSet"for Identifier" || peek(ps) ∈ JULIA_RESERVED_WORDS_W_O_FOR
         if peek(ps) == K"for"
             process_for!(ps)
         else # peek(ps) == K"Identifier"
@@ -394,6 +398,21 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
                     expect!(ps, ")")
                 end
             end
+        elseif peek(ps) ∈ JULIA_RESERVED_WORDS_W_O_FOR
+            if peek(ps, 2) == K"("
+                push!(ps.julia_token_vec, "var\"$(peek_raw(ps))\"") # wrap in `var"..."` to avoid syntax error
+                discard!(ps) # consume the function name
+                consume!(ps) # consume the "("
+                process_call_args!(ps)
+                expect!(ps, ")")
+            else
+                process_variable!(ps) # "a.b(args)" falls into this case
+                if peek(ps) == K"("
+                    consume!(ps) # consume the "("
+                    process_call_args!(ps)
+                    expect!(ps, ")")
+                end
+            end
         elseif peek(ps) == K"(" # maybe function call args or just a parenthesized expression
             consume!(ps)
             process_expression!(ps, KSet")")
@@ -482,7 +501,12 @@ function process_variable!(ps::ProcessState, allow_indexing=true)
 
     # if a simple variable, just consume it and return
     if peek(ps, 2) ∉ KSet". ["
-        consume!(ps)
+        if peek(ps) ∈ JULIA_RESERVED_WORDS_W_O_FOR
+            push!(ps.julia_token_vec, "var\"$(peek_raw(ps))\"") # wrap in `var"..."` to avoid syntax error
+            discard!(ps) # discard the variable name
+        else
+            consume!(ps)
+        end
         return nothing
     end
 
@@ -493,8 +517,12 @@ function process_variable!(ps::ProcessState, allow_indexing=true)
             return nothing
         end
         variable_name_buffer = String[]
-        while peek(ps) == K"Identifier"
-            push!(variable_name_buffer, peek_raw(ps))
+        while peek(ps) == K"Identifier" || peek(ps) ∈ JULIA_RESERVED_WORDS_W_O_FOR
+            if peek(ps) ∈ JULIA_RESERVED_WORDS_W_O_FOR
+                push!(variable_name_buffer, "var\"$(peek_raw(ps))\"") # wrap in `var"..."` to avoid syntax error
+            else
+                push!(variable_name_buffer, peek_raw(ps))
+            end
             discard!(ps)
             if peek(ps) != K"."
                 break
@@ -516,8 +544,13 @@ function process_variable!(ps::ProcessState, allow_indexing=true)
             )
             process_trivia!(ps)
         end
-    else
-        consume!(ps)
+    else # cases like `a[i]` then first consume the variable name
+        if peek(ps) ∈ JULIA_RESERVED_WORDS_W_O_FOR
+            push!(ps.julia_token_vec, "var\"$(peek_raw(ps))\"") # wrap in `var"..."` to avoid syntax error
+            discard!(ps) # discard the variable name
+        else
+            consume!(ps)
+        end
     end
 
     if allow_indexing
