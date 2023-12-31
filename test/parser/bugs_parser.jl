@@ -1,42 +1,62 @@
 # parse program from string
 # second arg is translate variable name, third arg is `model` enclosure
-_kidney_transplants = @bugs("""
+
+prog_1 = """
 model{
-for (i in 1:N) {
-    Score[i] ~ dcat(p[i,])
-    p[i,1] <- 1 - Q[i,1]
+   for (i in 1:N) {
+      Score[i] ~ dcat(p[i,])
+      p[i,1] <- 1 - Q[i,1]
 
-    for (r in 2:5) {
-        p[i,r] <- Q[i,r-1] - Q[i,r]
-    }
+      for (r in 2:5) {
+         p[i,r] <- Q[i,r-1] - Q[i,r]
+      }
 
-    p[i,6] <- Q[i,5]
+      p[i,6] <- Q[i,5]
 
-    for (r in 1:5) {
-        logit(Q[i,r]) <- b.apd*lAPD[i] - c[r]
-    }
+      for (r in 1:5) {
+         logit(Q[i,r]) <- b.apd*lAPD[i] - c[r]
+      }
+   }
+
+   for (i in 1:5) {
+      dc[i] ~ dunif(0, 20)
+   }
+
+   c[1] <- dc[1]
+
+   for (i in 2:5) {
+      c[i] <- c[i-1] + dc[i]
+   }
+
+   b.apd ~ dnorm (0, 1.0E-03)
+   or.apd <- exp(b.apd)
 }
+"""
+JuliaBUGS.Parser.to_julia_program(prog_1)
 
-for (i in 1:5) {
-    dc[i] ~ dunif(0, 20)
-}
+# some fail cases
+# expression as lhs
+to_julia_program("logit(p + 1) <- logit.p + 1", true, true)
+to_julia_program(" p + 1 <- logit.p + 1", true, true)
 
-c[1] <- dc[1]
+tokenize("p + 1 <- logit.p + 1")[1].range
 
-for (i in 2:5) {
-    c[i] <- c[i-1] + dc[i]
-}
+to_julia_program("# logit(p[1], 1) <- logit.p[1] + 1", true, true)
 
-b.apd ~ dnorm(0, 1.0E-03)
-or.apd <- exp(b.apd)
-}
-""")
+using JuliaBUGS.Parser: to_julia_program
 
-@bugs("""
-model{
-    logit(p + 1) <- logit.p + 1
-    # logit(p[1], 1) <- logit.p[1] + 1
-}""")
+to_julia_program("""
+b.apd ~ dnorm (0, 1.0E-03)
+""") # TODO: need to handle missing `model` error message
+
+to_julia_program("""
+b.apd ~ dnorm (0, 1.0E-03)
+""", true, true) # TODO: need to handle missing `model` error message
+
+to_julia_program("""
+b.apd = f (0, 1.0E-03)
+""", true, true) # TODO: need to handle missing `model` error message
+
 
 @bugs"""
 model{

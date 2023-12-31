@@ -1,48 +1,47 @@
 mutable struct ProcessState
-    token_vec::Vector{Token}
+    token_vec::Vector{Token} # the tokens of the original BUGS code
     current_index::Int
+    last_error_token_index::Int # stores the index of the last token that was reported as an error. This is used to ensure that the parsing process is progressing.
     text::String
-    julia_token_vec::Vector{Any}
+    julia_token_vec::Vector{Any} # Elements can be either String or Token
     diagnostics::Vector{Diagnostic}
     replace_period::Bool
-    allow_eq::Bool
+    allow_eq::Bool # allow "=" as assignment sign in original BUGS code
 end
 
 function ProcessState(text::String, replace_period=true, allow_eq=true)
-    token_vec = filter(x -> kind(x) != K"error", tokenize(text)) # generic "error" is disregarded
-    disallowed_words = Token[]
-    for t in token_vec
-        if kind(t) ∉ WHITELIST && kind(t) ∉ JULIA_RESERVED_WORDS_W_O_FOR
-            push!(disallowed_words, t)
-        end
-    end
+    # the tokenizer will actually parsing the program string according to Julia syntax, then return the tokens
+    # which means that if the program doesn't follow Julia syntax, the token stream will contain "error" tokens
+    # so we remove these "error" tokens here
+    token_vec = filter(x -> kind(x) != K"error", tokenize(text))
+    disallowed_words = [
+        t for
+        t in token_vec if kind(t) ∉ WHITELIST && kind(t) ∉ JULIA_RESERVED_WORDS_W_O_FOR
+    ]
     if !isempty(disallowed_words)
-        diagnostics = Diagnostic[]
-        for w in disallowed_words
-            if JuliaSyntax.is_error(w) || kind(w) == K"ErrorInvalidOperator"
-                error = "Error occurs, error kind is $(string(kind(w))), characters are $(untokenize(w, text))"
-            else
-                error = "Disallowed word '$(untokenize(w, text))'"
-            end
-            push!(diagnostics, Diagnostic(w.range.start, w.range.stop, :error, error))
-        end
-        io = IOBuffer()
-        JuliaSyntax.show_diagnostics(io, diagnostics, text)
-        error("Errors occurs while tokenizing: \n $(String(take!(io)))")
+        diagnostics = [
+            Diagnostic(
+                w.range.start, w.range.stop, :error, "Unexpected token $(string(kind(w)))"
+            ) for w in disallowed_words
+        ]
+        throw(JuliaSyntax.ParseError(JuliaSyntax.SourceFile(text), diagnostics, :none))
     end
-    return ProcessState(token_vec, 1, text, Any[], Diagnostic[], replace_period, allow_eq)
+    return ProcessState(
+        token_vec, 1, 1, text, Any[], Diagnostic[], replace_period, allow_eq
+    )
 end
 
 WHITELIST = KSet"Whitespace Comment NewlineWs EndMarker for in , { } ( ) [ ] : ; ~ < - <-- = + - * / ^ . Identifier Integer Float TOMBSTONE error"
-JULIA_RESERVED_WORDS = KSet"baremodule begin break catch const continue do else elseif end export false finally for function global if import let local macro module quote return struct true try using where while"
 # Julia reserved words are parsed to special tokens, to allow using these as variable names, we need to wrap them
 # in `var"..."` to avoid syntax error in the generated Julia program
+# full list of possible tokens are here: https://github.com/JuliaLang/JuliaSyntax.jl/blob/main/src/kinds.jl
 JULIA_RESERVED_WORDS_W_O_FOR = KSet"baremodule begin break catch const continue do else elseif end export false finally function global if import let local macro module quote return struct true try using where while"
 
 function ProcessState(ps::ProcessState)
     return ProcessState(
         ps.token_vec,
         ps.current_index,
+        ps.last_error_token_index,
         ps.text,
         deepcopy(ps.julia_token_vec),
         deepcopy(ps.diagnostics),
@@ -58,11 +57,13 @@ function consume!(ps::ProcessState, substitute=nothing)
     else
         push!(ps.julia_token_vec, substitute)
     end
-    return ps.current_index += 1
+    ps.current_index += 1
+    return nothing
 end
 
 function discard!(ps::ProcessState)
-    return ps.current_index += 1
+    ps.current_index += 1
+    return nothing
 end
 
 function expect!(ps::ProcessState, expected::String, substitute=nothing)
@@ -93,6 +94,9 @@ function expect_and_discard!(ps::ProcessState, expected::String)
 end
 
 function giveup!(ps)
+    # https://github.com/JuliaLang/JuliaSyntax.jl/blob/a6f2d1580f7bbad11822033e8c83e607aa31f100/src/parser_api.jl#L18
+    # this only show the first parse error for now
+    # even we print all the errors, current detection of errors will only allow one error per line
     throw(JuliaSyntax.ParseError(JuliaSyntax.SourceFile(ps.text), ps.diagnostics, :none))
 end
 
@@ -114,22 +118,13 @@ function add_diagnostic!(ps, low, high, msg::String)
     end
     diagnostic = JuliaSyntax.Diagnostic(low, high, :error, msg)
 
-    line, _ = JuliaSyntax.source_location(
-        JuliaSyntax.SourceFile(ps.text), JuliaSyntax.first_byte(diagnostic)
-    )
-    for d in ps.diagnostics
-        line_, _ = JuliaSyntax.source_location(
-            JuliaSyntax.SourceFile(ps.text), d.first_byte
-        )
-        if line == line_
-            # https://github.com/JuliaLang/JuliaSyntax.jl/blob/a6f2d1580f7bbad11822033e8c83e607aa31f100/src/parser_api.jl#L18
-            # this only show the first parse error for now
-            # even we print all the errors, current detection of errors will only allow one error per line
-            # JuliaSyntax.show_diagnostics(stdout, ps.diagnostics, ps.text)
-            giveup!(ps)
-        end
+    if ps.current_index == ps.last_error_token_index
+        giveup!(ps)
+    else
+        ps.last_error_token_index = ps.current_index
     end
-    return push!(ps.diagnostics, diagnostic)
+    push!(ps.diagnostics, diagnostic)
+    return nothing
 end
 
 function peek(ps::ProcessState, n=1)
@@ -269,6 +264,7 @@ function process_assignment!(ps::ProcessState)
         push!(ps.julia_token_vec, "-")
         process_identifier_led_expression!(ps)
     else
+        # TODO: handle the case when the LHS is an expression
         allowed_assignment_signs = ["~", "<-"]
         if ps.allow_eq
             push!(allowed_assignment_signs, "=")
@@ -285,12 +281,10 @@ function process_lhs!(ps::ProcessState)
     if peek_raw(ps) ∈ ("logit", "cloglog", "log", "probit") && peek(ps, 2) != K"." # link functions
         consume!(ps) # consume the link function
         expect!(ps, "(")
-        current_index = ps.current_index
         current_loc = first(ps.token_vec[ps.current_index].range)
 
         # test if there is more than one argument
         ps_sim = simulate(process_variable!, ps)
-        ps_sim = simulate(process_trivia!, ps_sim)
         if peek_next_non_trivia(ps_sim) == K","
             ps_sim = simulate(process_call_args!, ps)
             add_diagnostic!(
@@ -300,7 +294,7 @@ function process_lhs!(ps::ProcessState)
                 "Link function should be unary function, but got more than one arguments.",
             )
             giveup!(ps)
-        elseif peek_next_non_trivia(ps) != K")"
+        elseif peek_next_non_trivia(ps_sim) != K")"
             ps_sim = simulate(process_call_args!, ps)
             add_diagnostic!(
                 ps,
@@ -310,11 +304,11 @@ function process_lhs!(ps::ProcessState)
             )
             giveup!(ps)
         end
-        
+
         # then we know it's a valid link function syntax
         process_variable!(ps)
         expect!(ps, ")")
-    elseif any(Base.Fix1(startswith, peek_raw(ps)).(["logit", "cloglog", "log", "probit"]))
+    elseif any(Base.Fix1(startswith, peek_raw(ps)).(["logit", "cloglog", "log", "probit"])) # R-style variable names like `logit.x`
         # missing left parentheses if right parentheses is present
         ps_sim = simulate(process_variable!, ps)
         if peek(ps_sim) == K")"
@@ -324,7 +318,9 @@ function process_lhs!(ps::ProcessState)
         end
     else
         current_loc = first(ps.token_vec[ps.current_index].range)
-        process_variable!(ps)
+        ps_copy = ProcessState(ps)
+        process_variable!(ps) # might be the LHS variable or link functions that are not supported
+        process_expression!(ps_copy, KSet"~ < <-- =") # might be an expression, so terminate at the assignment sign
         if peek(ps) == K"(" # un-supported link function
             link_function = last_non_trivia(ps)
             if !(link_function isa String)
@@ -337,13 +333,14 @@ function process_lhs!(ps::ProcessState)
                 "Link function `$(link_function)` is not supported",
             )
             giveup!(ps) # if the link function is not recognized, just throw the error
-
-            # the following code will allow arbitrary link functions with arbitrary number of arguments
-            # expect!(ps, "(")
-            # current_loc = first(ps.token_vec[ps.current_index].range)
-            # process_call_args!(ps)
-            # add_diagnostic!(ps, current_loc, last(ps.token_vec[ps.current_index].range) - 1, "Link function should be unary function, but got more than one arguments")
-            # expect!(ps, ")")
+        elseif peek_next_non_trivia(ps) != peek_next_non_trivia(ps_copy) # LHS is an expression
+            add_diagnostic!(
+                ps,
+                current_loc,
+                last(ps_copy.token_vec[ps_copy.current_index].range) - 1,
+                "LHS should be a variable, but got an expression.",
+            )
+            giveup!(ps)
         end
     end
     process_trivia!(ps)
@@ -409,6 +406,11 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
                     consume!(ps) # consume the "("
                     process_call_args!(ps)
                     expect!(ps, ")")
+                elseif peek_next_non_trivia(ps) == K"(" # blank space between function name and "("
+                    add_diagnostic!(
+                        ps, "Whitespace is not allowed between function name and \"(\"."
+                    )
+                    giveup!(ps)
                 end
             end
         elseif peek(ps) ∈ JULIA_RESERVED_WORDS_W_O_FOR
@@ -457,7 +459,7 @@ function process_identifier_led_expression!(ps, terminators=KSet"; NewlineWs End
             process_statements!(ps)
         else
             add_diagnostic!(
-                ps, "Expecting operator none of + - * / ^, but got $(peek_raw(ps))"
+                ps, "Expecting operator one of + - * / ^, but got $(peek_raw(ps))"
             )
         end
         process_trivia!(ps)
@@ -470,6 +472,9 @@ function process_tilde_rhs!(ps::ProcessState)
     ps.julia_token_vec = buffer
     process_trivia!(ps)
     process_variable!(ps)
+    if peek_next_non_trivia(ps) == K"(" && peek(ps) != K"("
+        add_diagnostic!(ps, "Whitespace is not allowed between variable name and \"(\".")
+    end
     expect!(ps, "(")
     process_call_args!(ps)
     expect!(ps, ")")
