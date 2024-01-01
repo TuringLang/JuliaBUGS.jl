@@ -123,7 +123,7 @@ macro bugs(prog::String, replace_period=true, no_enclosure=false)
             end
             return Expr(:call, :(=), lhs, Expr(:call, inv_f, rhs.args...))
         elseif @capture(sub_expr, f_(lhs_) ~ rhs_)
-            error("Not supported")
+            error("Link functions on the LHS of a `~` is not supported: $sub_expr")
         else
             return sub_expr
         end

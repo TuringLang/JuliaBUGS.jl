@@ -1,247 +1,3 @@
-# parse program from string
-# second arg is translate variable name, third arg is `model` enclosure
-
-prog_1 = """
-model{
-   for (i in 1:N) {
-      Score[i] ~ dcat(p[i,])
-      p[i,1] <- 1 - Q[i,1]
-
-      for (r in 2:5) {
-         p[i,r] <- Q[i,r-1] - Q[i,r]
-      }
-
-      p[i,6] <- Q[i,5]
-
-      for (r in 1:5) {
-         logit(Q[i,r]) <- b.apd*lAPD[i] - c[r]
-      }
-   }
-
-   for (i in 1:5) {
-      dc[i] ~ dunif(0, 20)
-   }
-
-   c[1] <- dc[1]
-
-   for (i in 2:5) {
-      c[i] <- c[i-1] + dc[i]
-   }
-
-   b.apd ~ dnorm (0, 1.0E-03)
-   or.apd <- exp(b.apd)
-}
-"""
-JuliaBUGS.Parser.to_julia_program(prog_1)
-
-# some fail cases
-# expression as lhs
-to_julia_program("logit(p + 1) <- logit.p + 1", true, true)
-to_julia_program(" p + 1 <- logit.p + 1", true, true)
-
-tokenize("p + 1 <- logit.p + 1")[1].range
-
-to_julia_program("# logit(p[1], 1) <- logit.p[1] + 1", true, true)
-
-using JuliaBUGS.Parser: to_julia_program
-
-to_julia_program("""
-b.apd ~ dnorm (0, 1.0E-03)
-""") # TODO: need to handle missing `model` error message
-
-to_julia_program("""
-b.apd ~ dnorm (0, 1.0E-03)
-""", true, true) # TODO: need to handle missing `model` error message
-
-to_julia_program("""
-b.apd = f (0, 1.0E-03)
-""", true, true) # TODO: need to handle missing `model` error message
-
-
-@bugs"""
-model{
-    for (i in 1:N) {
-        y[i] ~ dnorm(mu[i], tau)
-        mu[i] <- alpha + beta*(x[i] - mean(x[]))
-    }
-
-    alpha[x[1:2]] ~ dflat()
-    beta ~ dflat()
-    tau <- 1/sigma2
-    log(sigma2) <- 2*log.sigma
-    log.sigma ~ dflat()
-}
-"""
-
-growth_curve = @bugs(
-    """
-for (i in 1:5) {
-    y[i] ~ dnorm(mu[i], tau)
-    mu[i] <- alpha + beta*(x[i] - mean(x[]))
-}
-
-alpha ~ dflat()
-beta ~ dflat()
-tau <- 1/sigma2
-log(sigma2) <- 2*log.sigma
-log.sigma ~ dflat()
-""",
-    true,
-    true
-)
-
-jaws = @bugs(
-    """
-for (i in 1:20) { Y[i, 1:4] ~ dmnorm(mu[], Sigma.inv[,]) }
-for (j in 1:4) { mu[j] <- alpha + beta*x[j] }
-alpha ~ dnorm(0, 0.0001)
-beta ~ dnorm(0, 0.0001)
-Sigma.inv[1:4, 1:4] ~ dwish(R[,], 4)
-Sigma[1:4, 1:4] <- inverse(Sigma.inv[,])
-""",
-    true,
-    true
-)
-
-truncation = @bugs(
-    """a ~ dwish(R[,], 4) C (0, 1)
-a ~ dwish(R[,], 4) C (,1)
-a ~ dwish(R[,], 4) C (0,)
-a ~ dwish(R[,], 4) T (0, 1)
-""",
-    true,
-    true
-)
-
-#############
-parse_bugs(
-        """
-    model
-    {
-    
-    solution[1:ngrid, 1:ndim] <- ode.solution(init[1:ndim], tgrid[1:ngrid], D(C[1:ndim], t),
-    origin, tol)
-
-
-    alpha <- exp(log.alpha)
-    beta <- exp(log.beta)
-    gamma <- exp(log.gamma)
-    delta <- exp(log.delta)
-    log.alpha ~ dnorm(0.0, 0.0001)
-    log.beta ~ dnorm(0.0, 0.0001)
-    log.gamma ~ dnorm(0.0, 0.0001)
-    log.delta ~ dnorm(0.0, 0.0001)
-
-    # D.d(C[1], t) <- C[1] * (alpha - beta * C[2])
-    # D(C[2], t) <- -C[2] * (gamma - delta * C[1])
-
-    logit(p[1]) <- logit.p[1]
-
-    for (i in 1:ngrid)
-    {
-    sol_x[i] <- solution[i, 1]
-    obs_x[i] ~ dnorm(sol_x[i], tau.x)
-    sol_y[i] <- solution[i, 2]
-    obs_y[i] ~ dnorm(sol_y[i], tau.y)
-    }
-
-    y = x + 1+ f(x)
-        
-    tau.x ~ dgamma(a, b)
-    tau.y ~ dgamma(a, b)
-    }
-"""
-    )
-
-ex = @bugs"""
-model
-{
-   for (i in 1 : ns){
-      nbiops[i] <- sum(biopsies[i, ])
-      true[i] ~ dcat(p[])
-      biopsies[i, 1 : 4] ~ dmulti(error[true[i], ], nbiops[i])
-   }
-   error[2,1 : 2] ~ ddirich(prior[1 : 2])
-   error[3,1 : 3] ~ ddirich(prior[1 : 3])
-   error[4,1 : 4] ~ ddirich(prior[1 : 4])
-   p[1 : 4] ~ ddirich(prior[]); # prior for p
-}
-"""
-
-@run JuliaBUGS.Parser.to_julia_program(
-    """
-model
-{
-   for (i in 1 : ns){
-      nbiops[i] <- sum(biopsies[i, ])
-      true[i] ~ dcat(p[])
-      biopsies[i, 1 : 4] ~ dmulti(error[true[i], ], nbiops[i])
-   }
-   error[2,1 : 2] ~ ddirich(prior[1 : 2])
-   error[3,1 : 3] ~ ddirich(prior[1 : 3])
-   error[4,1 : 4] ~ ddirich(prior[1 : 4])
-   p[1 : 4] ~ ddirich(prior[]); # prior for p
-}
-"""
-)
-
-ex = JuliaBUGS.@bugs(
-    """
-model
-{
-
-solution[1:ngrid, 1:ndim] <- ode.solution(init[1:ndim], tgrid[1:ngrid], D(C[1:ndim], t),
-origin, tol)
-
-
-alpha <- exp(log.alpha)
-beta <- exp(log.beta)
-gamma <- exp(log.gamma)
-delta <- exp(log.delta)
-log.alpha ~ dnorm(0.0, 0.0001)
-log.beta ~ dnorm(0.0, 0.0001)
-log.gamma ~ dnorm(0.0, 0.0001)
-log.delta ~ dnorm(0.0, 0.0001)
-
-# D.d(C[1], t) <- C[1] * (alpha - beta * C[2])
-# D(C[2], t) <- -C[2] * (gamma - delta * C[1])
-
-logit(p[1]) <- logit.p[1]
-
-logit(p[1], m) <- logit.p[1]
-
-for (i in 1:ngrid)
-{
-sol_x[i] <- solution[i, 1]
-obs_x[i] ~ dnorm(sol_x[i], tau.x)
-sol_y[i] <- solution[i, 2]
-obs_y[i] ~ dnorm(sol_y[i], tau.y)
-}
-
-y = x + 1+ f(x)
-    
-tau.x ~ dgamma(a, b)
-tau.y ~ dgamma(a, b)
-}
-"""
-)
-
-#     # Error @ line 15:6
-
-#     D(C[1], t) <- C[1] * (alpha - beta * C[2])
-# #    ╙ ── Expecting ~, <-, =
-# # Error @ line 15:11
-
-#     D(C[1], t) <- C[1] * (alpha - beta * C[2])
-# #         ╙ ── Expecting operator none of + - * / ^, but got ,
-# ERROR: Encounter duplicated error, aborting.
-
-# ! this is no good
-
-###########
-
-
-
 using Test
 using JuliaBUGS.Parser:
     ProcessState,
@@ -257,9 +13,15 @@ using JuliaBUGS.Parser:
     process_indexing!,
     process_tilde_rhs!
 using JuliaBUGS: to_julia_program
-using JuliaSyntax: @K_str
+using JuliaSyntax: @K_str, ParseError
 using JuliaSyntax
 JuliaSyntax.enable_in_core!()
+
+function parse_bugs(prog)
+    return MacroTools.postwalk(
+        MacroTools.rmlines, Meta.parse(to_julia_program(prog, true, false))
+    )
+end
 
 @testset "UnitTests" begin
     @testset "process_toplevel!" begin
@@ -400,11 +162,80 @@ end
     # and the fact that it's designed for Julia, not BUGS
     # one such corner case: `<---2` will not be tokenized to `<--` and `-2`, but `InvalidOperator` and `-2` 
     # test error handling of special errors
-    @test_throws ErrorException JuliaBUGS.Parser.ProcessState("<---2")
+    @test_throws ParseError JuliaBUGS.Parser.ProcessState("<---2")
 end
 
-function parse_bugs(prog)
-    return Meta.parse(to_julia_program(prog, true, false))
+@testset "Fail Cases" begin
+    # unknown link functions
+    @test_throws ParseError to_julia_program("f(p[1]) <- logit.p[1]", true, true)
+
+    # expression as lhs
+    @test_throws ParseError to_julia_program("logit(p + 1) <- logit.p + 1", true, true)
+    @test_throws ParseError to_julia_program("p + 1 <- logit.p + 1", true, true)
+    @test_throws ParseError to_julia_program("logit(p[1], 1) <- logit.p[1] + 1", true, true)
+
+    # white space between function name and parenthesis
+    @test_throws ParseError to_julia_program("b.apd ~ dnorm (0, 1.0E-03)", true, true)
+    @test_throws ParseError to_julia_program("y = f (x, z)", true, true)
+end
+
+@testset "Multiple Elements of Language" begin
+    parse_bugs("""
+    model{
+        alpha[x[1:2]] ~ dflat() # nested indexing
+        log(sigma2) <- 2*log.sigma # link function
+        log.sigma ~ dflat() # variable starts with one of the link function names
+    }
+    """)
+
+    # elements of language like implicit indexing, same line for loop, etc.
+    (@bugs("""
+       model {
+          for (i in 1:20) { Y[i, 1:4] ~ dmnorm(mu[], Sigma.inv[,]) }
+          for (j in 1:4) { mu[j] <- alpha + beta*x[j] }
+          alpha ~ dnorm(0, 0.0001)
+          beta ~ dnorm(0, 0.0001)
+          Sigma.inv[1:4, 1:4] ~ dwish(R[,], 4)
+          Sigma[1:4, 1:4] <- inverse(Sigma.inv[,])
+       }
+       """)) == MacroTools.@q begin
+        for i in 1:20
+            Y[i, 1:4] ~ dmnorm(mu[:], Sigma_inv[:, :])
+        end
+        for j in 1:4
+            mu[j] = alpha + beta * x[j]
+        end
+        alpha ~ dnorm(0, 0.0001)
+        beta ~ dnorm(0, 0.0001)
+        Sigma_inv[1:4, 1:4] ~ dwish(R[:, :], 4)
+        Sigma[1:4, 1:4] = inverse(Sigma_inv[:, :])
+    end
+
+    truncation = @bugs(
+        """
+       a ~ dwish(R[,], 4) C (0, 1)
+       a ~ dwish(R[,], 4) C (,1)
+       a ~ dwish(R[,], 4) C (0,)
+       a ~ dwish(R[,], 4) T (0, 1)
+    """,
+        true,
+        true
+    )
+
+    # one statement across multiple lines
+    Meta.parse(
+        to_julia_program(
+            """
+        model {
+           solution[1:ngrid, 1:ndim] <- ode.solution(init[1:ndim], tgrid[1:ngrid], D(C[1:ndim], t),
+           origin, tol)
+        }
+        """,
+        ),
+    )
+
+    # RHS special case - lead by a minus sign
+    to_julia_program("y <- -x + 1+ f(x)", true, true)
 end
 
 @testset "Parse BUGS Example Programs" begin
@@ -1175,21 +1006,20 @@ end
     """)
 
     # Biopsies -- empty indices and `true` variable name 
-    # ! this should fail, because `true` and `error` is a reserved word
-    @test_throws ErrorException parse_bugs("""
-    model
-    {
-       for (i in 1 : ns){
-          nbiops[i] <- sum(biopsies[i, ])
-          true[i] ~ dcat(p[])
-          biopsies[i, 1 : 4] ~ dmulti(error[true[i], ], nbiops[i])
-       }
-       error[2,1 : 2] ~ ddirich(prior[1 : 2])
-       error[3,1 : 3] ~ ddirich(prior[1 : 3])
-       error[4,1 : 4] ~ ddirich(prior[1 : 4])
-       p[1 : 4] ~ ddirich(prior[]); # prior for p
-    }
-    """)
+    parse_bugs("""
+     model
+     {
+        for (i in 1 : ns){
+           nbiops[i] <- sum(biopsies[i, ])
+           true[i] ~ dcat(p[])
+           biopsies[i, 1 : 4] ~ dmulti(error[true[i], ], nbiops[i])
+        }
+        error[2,1 : 2] ~ ddirich(prior[1 : 2])
+        error[3,1 : 3] ~ ddirich(prior[1 : 3])
+        error[4,1 : 4] ~ ddirich(prior[1 : 4])
+        p[1 : 4] ~ ddirich(prior[]); # prior for p
+     }
+     """)
 
     # eyes
     parse_bugs("""
@@ -2447,7 +2277,7 @@ end
 
     # Lotka-Volterra
     # ! currently error, `D` function is not defined, probably won't impelment 
-    @test_throws ErrorException parse_bugs(
+    @test_throws ParseError parse_bugs(
         """
     model
     {

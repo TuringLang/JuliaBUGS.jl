@@ -119,11 +119,12 @@ function add_diagnostic!(ps, low, high, msg::String)
     diagnostic = JuliaSyntax.Diagnostic(low, high, :error, msg)
 
     if ps.current_index == ps.last_error_token_index
+        push!(ps.diagnostics, diagnostic)
         giveup!(ps)
-    else
-        ps.last_error_token_index = ps.current_index
     end
+
     push!(ps.diagnostics, diagnostic)
+    ps.last_error_token_index = ps.current_index
     return nothing
 end
 
@@ -332,7 +333,11 @@ function process_lhs!(ps::ProcessState)
                 last(ps.token_vec[ps.current_index].range) - 1,
                 "Link function `$(link_function)` is not supported",
             )
-            giveup!(ps) # if the link function is not recognized, just throw the error
+
+            # recovery, ideally we should also detect if the args are expressions, or if there are more than one args
+            # but for now we just consume the args and the right parentheses
+            process_call_args!(ps)
+            expect!(ps, ")")
         elseif peek_next_non_trivia(ps) != peek_next_non_trivia(ps_copy) # LHS is an expression
             add_diagnostic!(
                 ps,
