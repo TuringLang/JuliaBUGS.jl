@@ -13,9 +13,8 @@ using JuliaBUGS.Parser:
     process_indexing!,
     process_tilde_rhs!
 using JuliaBUGS: to_julia_program
-using JuliaSyntax: @K_str, ParseError
 using JuliaSyntax
-JuliaSyntax.enable_in_core!()
+using JuliaSyntax: @K_str, ParseError
 
 function parse_bugs(prog)
     return MacroTools.postwalk(

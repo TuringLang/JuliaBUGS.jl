@@ -96,11 +96,12 @@ function BUGSModel(
         if node_type == JuliaBUGS.Logical
             value = try
                 _eval(expr, args)
-            catch _
+            catch e
                 rethrow(
-                    UninitializedVariableError(
-                        "Encounter error when evaluating the RHS of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) directly first if not yet.",
-                    ),
+                    # UninitializedVariableError(
+                    #     "Encounter error when evaluating the RHS of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) directly first if not yet.",
+                    # ),
+                    e
                 )
             end
             @assert value isa Union{Real,Array{<:Real}} "$value is not a number or array"

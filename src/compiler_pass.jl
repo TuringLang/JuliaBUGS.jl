@@ -18,7 +18,9 @@ Arguments:
 """
 function program!(pass::CompilerPass, expr::Expr, env, vargs...)
     for ex in expr.args
-        if Meta.isexpr(ex, [:(=), :(~)])
+        if Meta.isexpr(ex, :(=))
+            assignment!(pass, ex, env, vargs...)
+        elseif MacroTools.@capture(ex, lhs_ ~ rhs_)
             assignment!(pass, ex, env, vargs...)
         elseif Meta.isexpr(ex, :for)
             for_loop!(pass, ex, env, vargs...)
@@ -35,14 +37,14 @@ end
 Processes a for-loop from a traversed AST.
 """
 function for_loop!(pass::CompilerPass, expr, env, vargs...)
-    loop_var = expr.args[1].args[1]
-    lb, ub = expr.args[1].args[2].args
-    body = expr.args[2]
+    MacroTools.@capture(expr, for loop_var_ in lb_:ub_ body_ end)
     lb, ub = evaluate(lb, env), evaluate(ub, env)
     @assert all(isinteger.((lb, ub))) "Only integer ranges are supported"
     for i in lb:ub
         for ex in body.args
-            if Meta.isexpr(ex, [:(=), :(~)])
+            if Meta.isexpr(ex, :(=))
+                assignment!(pass, ex, merge(env, Dict(loop_var => i)), vargs...)
+            elseif MacroTools.@capture(ex, lhs_ ~ rhs_)
                 assignment!(pass, ex, merge(env, Dict(loop_var => i)), vargs...)
             elseif Meta.isexpr(ex, :for)
                 for_loop!(pass, ex, merge(env, Dict(loop_var => i)), vargs...)
@@ -346,7 +348,7 @@ end
 @inline is_resolved(x) = x isa Number || x isa Array{<:Number}
 
 function assignment!(pass::CollectVariables, expr::Expr, env)
-    lhs_expr, _ = expr.args[1:2]
+    @capture(expr, lhs_expr_ ~ rhs_) || @capture(expr, lhs_expr_ = rhs_)
 
     v = find_variables_on_lhs(
         Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
@@ -498,7 +500,8 @@ function assignment!(pass::PostChecking, expr::Expr, env)
     @inline get_value(d::Dict, v::Scalar) = d[v.name]
     @inline get_value(d::Dict, v::Var) = d[v.name][v.indices...]
 
-    lhs = find_variables_on_lhs(expr.args[1], env)
+    @capture(expr, lhs_expr_ ~ rhs_) || @capture(expr, lhs_expr_ = rhs_)
+    lhs = find_variables_on_lhs(lhs_expr, env)
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
     for v in scalarize(lhs)
@@ -818,16 +821,8 @@ try_cast_to_int(x::Real) = Int(x) # will error if !isinteger(x)
 try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
 function assignment!(pass::NodeFunctions, expr::Expr, env)
-    lhs_expr, rhs_expr = expr.args[1:2]
+    @capture(expr, lhs_expr_ ~ rhs_expr_) || @capture(expr, lhs_expr_ = rhs_expr_)
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
-
-    link_function = Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[1] : :identity
-    # disallow link functions in stochastic assignments
-    if link_function != :identity
-        error(
-            "Link functions $link_function in stochastic assignment expression $expr are not permited.",
-        )
-    end
 
     lhs_var = find_variables_on_lhs(
         Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env

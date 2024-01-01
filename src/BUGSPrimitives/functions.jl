@@ -278,7 +278,7 @@ end
 
 Return 1 if ``x`` is greater than 0, and 0 otherwise.
 """
-function step(x::Union{Int, Float64})
+function step(x::Real)
     return ifelse(x > 0, 1.0, 0.0)
 end
 

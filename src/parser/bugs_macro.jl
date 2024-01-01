@@ -121,7 +121,8 @@ macro bugs(prog::String, replace_period=true, no_enclosure=false)
             else
                 error("Not supported")
             end
-            return Expr(:call, :(=), lhs, Expr(:call, inv_f, rhs.args...))
+            # The 'rhs' will be parsed into a :block Expr, as the link function syntax is interpreted as a function definition.
+            return :($lhs = $inv_f($(rhs.args...)))
         elseif @capture(sub_expr, f_(lhs_) ~ rhs_)
             error("Link functions on the LHS of a `~` is not supported: $sub_expr")
         else
