@@ -37,7 +37,12 @@ end
 Processes a for-loop from a traversed AST.
 """
 function for_loop!(pass::CompilerPass, expr, env, vargs...)
-    MacroTools.@capture(expr, for loop_var_ in lb_:ub_ body_ end)
+    MacroTools.@capture(
+        expr,
+        for loop_var_ in lb_:ub_
+            body_
+        end
+    )
     lb, ub = evaluate(lb, env), evaluate(ub, env)
     @assert all(isinteger.((lb, ub))) "Only integer ranges are supported"
     for i in lb:ub
