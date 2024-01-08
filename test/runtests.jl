@@ -72,6 +72,7 @@ include("bugs_primitives.jl")
 @testset "Parser" begin
     include("parser/bugs_macro.jl")
     include("parser/bugs_parser.jl")
+    include("parser/winbugs_examples.jl")
 end
 
 @testset "Compilation" begin
