@@ -197,7 +197,7 @@ end
 
 function process_toplevel!(ps::ProcessState)
     expect_and_discard!(ps, "model")
-    expect!(ps, "{", "begin")
+    expect!(ps, "{", "begin ") # add extra white space before `begin` in case of "model{x...}" become "beginx ...end"
     process_statements!(ps)
     if peek(ps) != K"}"
         add_diagnostic!(

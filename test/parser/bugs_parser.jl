@@ -1,17 +1,3 @@
-using Test
-using JuliaBUGS.Parser:
-    ProcessState,
-    process_toplevel!,
-    process_trivia!,
-    peek,
-    peek_raw,
-    process_variable!,
-    process_expression!,
-    process_assignment!,
-    process_for!,
-    process_range!,
-    process_indexing!,
-    process_tilde_rhs!
 using JuliaBUGS: to_julia_program
 using JuliaSyntax
 using JuliaSyntax: @K_str, ParseError
@@ -22,7 +8,21 @@ function parse_bugs(prog)
     )
 end
 
-@testset "UnitTests" begin
+@testset "Unit tests of process_*" begin
+    using JuliaBUGS.Parser:
+        ProcessState,
+        process_toplevel!,
+        process_trivia!,
+        peek,
+        peek_raw,
+        process_variable!,
+        process_expression!,
+        process_assignment!,
+        process_for!,
+        process_range!,
+        process_indexing!,
+        process_tilde_rhs!
+
     @testset "process_toplevel!" begin
         # Test 1: Enclosure
         ps = ProcessState("model { }")
@@ -156,60 +156,32 @@ end
     end
 end
 
-@testset "Tokenizer Corner Cases" begin
+@testset "Tokenizer corner cases" begin
     # tokenize errors are generally corner cases that are side effects of the tokenizer
     # and the fact that it's designed for Julia, not BUGS
     # one such corner case: `<---2` will not be tokenized to `<--` and `-2`, but `InvalidOperator` and `-2` 
-    # test error handling of special errors
+
+    # BUGS doesn't have a `<--` operator, but this is left as a reminder
     @test_throws ParseError JuliaBUGS.Parser.ProcessState("<---2")
 end
 
-@testset "Fail Cases" begin
-    # unknown link functions
-    @test_throws ParseError to_julia_program("f(p[1]) <- logit.p[1]", true, true)
+@testset "Basic program statements" begin
+    parse_bugs("""
+       	model{
+   alpha ~ dnorm(0, 0.0001) # basic statement
+   alpha[x[1:2]] ~ dflat() # nested indexing
+   log(sigma2) <- 2*log.sigma # link function
+   log.sigma ~ dflat() # variable starts with one of the link function names
 
-    # expression as lhs
-    @test_throws ParseError to_julia_program("logit(p + 1) <- logit.p + 1", true, true)
-    @test_throws ParseError to_julia_program("p + 1 <- logit.p + 1", true, true)
-    @test_throws ParseError to_julia_program("logit(p[1], 1) <- logit.p[1] + 1", true, true)
-
-    # white space between function name and parenthesis
-    @test_throws ParseError to_julia_program("b.apd ~ dnorm (0, 1.0E-03)", true, true)
-    @test_throws ParseError to_julia_program("y = f (x, z)", true, true)
+   for (i in 1:20) { Y[i, 1:4] ~ dmnorm(mu[], Sigma.inv[,]) } # implicit indexing
+   for (j in 1:4) { mu[j] <- alpha + beta*x[j] 
+   		sigma ~ dgamma(0.001, 0.001) # multi-line for loop
+   	}
+       	}
+       """)
 end
 
-@testset "Multiple Elements of Language" begin
-    parse_bugs("""
-    model{
-        alpha[x[1:2]] ~ dflat() # nested indexing
-        log(sigma2) <- 2*log.sigma # link function
-        log.sigma ~ dflat() # variable starts with one of the link function names
-    }
-    """)
-
-    # elements of language like implicit indexing, same line for loop, etc.
-    (@bugs("""
-       model {
-          for (i in 1:20) { Y[i, 1:4] ~ dmnorm(mu[], Sigma.inv[,]) }
-          for (j in 1:4) { mu[j] <- alpha + beta*x[j] }
-          alpha ~ dnorm(0, 0.0001)
-          beta ~ dnorm(0, 0.0001)
-          Sigma.inv[1:4, 1:4] ~ dwish(R[,], 4)
-          Sigma[1:4, 1:4] <- inverse(Sigma.inv[,])
-       }
-       """)) == MacroTools.@q begin
-        for i in 1:20
-            Y[i, 1:4] ~ dmnorm(mu[:], Sigma_inv[:, :])
-        end
-        for j in 1:4
-            mu[j] = alpha + beta * x[j]
-        end
-        alpha ~ dnorm(0, 0.0001)
-        beta ~ dnorm(0, 0.0001)
-        Sigma_inv[1:4, 1:4] ~ dwish(R[:, :], 4)
-        Sigma[1:4, 1:4] = inverse(Sigma_inv[:, :])
-    end
-
+@testset "Truncation and Censoring" begin
     truncation = @bugs(
         """
        a ~ dwish(R[,], 4) C (0, 1)
@@ -220,8 +192,9 @@ end
         true,
         true
     )
+end
 
-    # one statement across multiple lines
+@testset "One statement across multiple lines" begin
     Meta.parse(
         to_julia_program(
             """
@@ -232,7 +205,25 @@ end
         """,
         ),
     )
+end
 
-    # RHS special case - lead by a minus sign
+@testset "RHS lead by a minus sign" begin
     to_julia_program("y <- -x + 1+ f(x)", true, true)
+end
+
+@testset "Fail cases" begin
+    # unknown link functions
+    @test_throws ParseError to_julia_program("f(p[1]) <- logit.p[1]", true, true)
+
+    # link function on the LHS of a stochastic assignment
+    @test_throws ErrorException (@bugs("logit(p[1]) ~ dnorm(0, 1)", true, true))
+
+    # expression as lhs
+    @test_throws ParseError to_julia_program("logit(p + 1) <- logit.p + 1", true, true)
+    @test_throws ParseError to_julia_program("p + 1 <- logit.p + 1", true, true)
+    @test_throws ParseError to_julia_program("logit(p[1], 1) <- logit.p[1] + 1", true, true)
+
+    # white space between function name and parenthesis
+    @test_throws ParseError to_julia_program("b.apd ~ dnorm (0, 1.0E-03)", true, true)
+    @test_throws ParseError to_julia_program("y = f (x, z)", true, true)
 end

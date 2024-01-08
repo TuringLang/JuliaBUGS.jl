@@ -1,123 +1,97 @@
-# Basic cases:
+# Only possible modify `@bugs` macro makes to the expressions
+@test (@bugs begin
+    a ~ f(x[])
+end) == MacroTools.@q begin
+    a ~ f(x[:])
+end
 
-LHS = [
-    :(x), # scalar
-    :(x[1]), # tensor
-    :(x[1, 2]), # 2d tensor
+@testset "Implicit indexing on LHS" begin
+    @test_throws ErrorException JuliaBUGS.Parser.bugs_top(
+        :(
+            begin
+                x[] ~ dmnorm(a[1:2], Σ[1:2, 1:2])
+            end
+        ), LineNumberNode(1)
+    )
+end
 
-    :(x[b]), # tensor with index expression
-    :(x[a[1]]),
-    :(x[a[1], b[2]]),
-    :(x[a[1] + 1]),
-    :(x[1 + a[1]]),
+@testset "Indexing with expression" begin
+    @bugs begin
+        x[a[1] + 1, b] ~ dnorm(c[f(b[2])], 1)
+    end
+end
 
-    :(x[a[1]:b[2]]), # tensor with range expression
+@testset "Indexing with ranges" begin
+    @bugs begin
+        x[a[1]:b[2], c[3]:d[4]] = f(a[1]:b[2], c[3]:d[4])
+    end
 
-    :(x[a[1]:b[2], c[3]:d[4]]), # tensor with range expression
-    :(x[f(a[1])]),
-    :(x[f(a[1] + 1) + 1 : b[2]]) 
-]
+    @bugs begin
+        x[(f(a[1] + 1) + 1):b[2]] ~ dnorm(0, 1)
+    end
+end
 
-RHS = [
-    1,
-    :a,
-    :(a + 1),
+@testset "Expressions on the RHS" begin
+    @bugs begin
+        a ~ dnorm(x[1] + 1, 1)
+    end
 
-    x[y[1]],
+    @bugs begin
+        a ~ dnorm(f(x[a[1]], 1), 1)
+    end
 
-    :(dnorm(0, 1e-4)),
-    :(dnorm(0, 1)),
-    :(dnorm(x[1], 1)),
-    :(dnorm(x[1] + 1, 1)),
-    :(dnorm(f(x[a[1]], 1), 1)),
+    @bugs begin
+        a = f(g(x[a[1] + 1] + h(y, 2, x[1])))
+    end
+end
 
-    :(f(g(x[1]))),
-    :(f(g(x[1] + 1))),
-    :(f(g(x[a[1]]))),
-    :(f(g(x[a[1] + 1] + h(y, 2, x[1])))),
-]
-
-FOR = [
-    :(for i in 1:N
-        x[i] ~ dnorm(0, 1)
-    end),
-    :(for i in 1:N
-        Y[i] ~ dnorm(μ[i], τ)
-        μ[i] = α + β * (x[i] - x̄)
-    end)
-]
-
-
-@bugs(
-    begin
-        x ~ dnorm(0, 1)
-        x[1] ~ dnorm(0, 1)
-        x[1, 2] ~ dnorm(0, 1)
-
-        x = 1
-        x[1] = 1
-        x[1, 2] = 1
-
-        x[a[1]] ~ dnorm(0, 1)
-        x[a[1], b[2]] ~ dnorm(0, 1)
-
-        x[a[1] + 1] ~ dnorm(0, 1)
-        x[1 + a[1]] ~ dnorm(0, 1)
-
-        for i in 1:10
-            x[i] ~ dnorm(0, 1)
+@testset "For loop" begin
+    @bugs begin
+        for i in 1:N
+            Y[i] ~ dnorm(μ[i], τ)
+            μ[i] = α + β * (x[i] - x̄)
         end
     end
-) == MacroTools.@q begin
-    x ~ dnorm(0, 1)
-    x[1] ~ dnorm(0, 1)
-    x[1, 2] ~ dnorm(0, 1)
-    x = 1
-    x[1] = 1
-    x[1, 2] = 1
-    x[a[1]] ~ dnorm(0, 1)
-    x[a[1], b[2]] ~ dnorm(0, 1)
-    x[a[1] + 1] ~ dnorm(0, 1)
-    x[1 + a[1]] ~ dnorm(0, 1)
-    for i in 1:10
+
+    # expression as loop bound
+    @bugs for i in 1:(N + 1)
+        x[i] ~ dnorm(0, 1)
+    end
+
+    # tensor as loop bound
+    @bugs for i in 1:a[1]
         x[i] ~ dnorm(0, 1)
     end
 end
 
-# single line
-(@bugs (x[1] = 1; y[1] ~ dnorm(0, 1))) == MacroTools.@q begin
-    x[1] = 1
-    y[1] ~ dnorm(0, 1)
+@testset "Multiple statements on the same line" begin
+    @test (@bugs (x[1] = 1; y[1] ~ dnorm(0, 1))) == MacroTools.@q begin
+        x[1] = 1
+        y[1] ~ dnorm(0, 1)
+    end
 end
 
-# for loops
-# loop bound is expression
-(@bugs for i in 1:(N + 1)
-    x[i] ~ dnorm(0, 1)
-end) == MacroTools.@q for i in 1:(N + 1)
-    x[i] ~ dnorm(0, 1)
+@testset "Disallowed syntax" begin
+    # link function
+    @test_throws ErrorException JuliaBUGS.Parser.bugs_top(
+        :(
+            begin
+                log(x) = a + 1
+            end
+        ), LineNumberNode(1)
+    )
+
+    # link function in stochastic assignment
+    @test_throws ErrorException JuliaBUGS.Parser.bugs_top(
+        :(
+            begin
+                log(x) ~ dnorm(0, 1)
+            end
+        ), LineNumberNode(1)
+    )
+
+    # nested indexing
+    @test_throws ErrorException JuliaBUGS.Parser.bugs_top(
+        :(x[1] = y[1][1]), LineNumberNode(1)
+    )
 end
-
-# loop bound is tensor
-(@bugs for i in 1:a[1]
-    x[i] ~ dnorm(0, 1)
-end) == MacroTools.@q for i in 1:a[1]
-    x[i] ~ dnorm(0, 1)
-end
-
-# loop bound is tensor/scalar mixed expression
-(@bugs for i in 1:(a[1] + b + 1)
-    x[i] ~ dnorm(0, 1)
-end) == MacroTools.@q for i in 1:(a[1] + b + 1)
-    x[i] ~ dnorm(0, 1)
-end
-
-# Failure cases    
-# loop variable is not scalar
-(@bugs for 1 in 1:N
-    x[i] ~ dnorm(0, 1)
-end)
-
-# nested indexing
-@test_throws ErrorException JuliaBUGS.Parser.bugs_top(:(x[1] = y[1][1]), LineNumberNode(1))
-

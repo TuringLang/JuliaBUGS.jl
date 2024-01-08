@@ -24,25 +24,50 @@ end
 
 function bugs_statement(@nospecialize(expr), line_num)
     if Meta.isexpr(expr, :(=))
-        check_lhs(expr.args[1], line_num)
+        check_lhs(expr.args[1], :(=), line_num)
         return Expr(:(=), expr.args[1], bugs_expression(expr.args[2], line_num))
     elseif MacroTools.@capture(expr, lhs_ ~ rhs_)
-        check_lhs(lhs, line_num)
+        check_lhs(lhs, :(~), line_num)
         return Expr(:call, :(~), lhs, bugs_expression(rhs, line_num))
     elseif Meta.isexpr(expr, :for)
         return bugs_for(expr, line_num)
+    else
+        error("Invalid statement at $line_num: $(expr). Please note that `<-` is not supported, use `=` instead.")
     end
 end
 
-check_lhs(expr::Symbol, line_num) = nothing # no effect
-function check_lhs(@nospecialize(expr), line_num)
+function check_lhs(expr::Symbol, assignment_sign, line_num)
+    return nothing # no effect
+end
+function check_lhs(@nospecialize(expr), assignment_sign, line_num)
     if Meta.isexpr(expr, :call)
         if length(expr.args) == 2
-            error(LINK_FUNCTION_ERROR_MSG)
+            f = expr.args[1]
+            inv_f = if f == :log
+                :exp
+            elseif f == :logit
+                :logistic
+            elseif f == :cloglog
+                :cexpexp
+            elseif f == :probit
+                :phi
+            else
+                error("$(String(expr.args[1])) is not a recognized link function, error at $line_num: $(expr)")
+            end
+
+            if assignment_sign === :(=)
+                error("Link function syntax is only supported with the original BUGS input as string, please rewrite the statement by calling the inverse function `$(String(inv_f))` on the RHS, error at $line_num: $(expr)")
+            else
+                error("Link function syntax is not allowed in stochastic assignments, error at $line_num: $(expr)")
+            end
         else
-            error("Invalid LHS at $line_num: $(expr)")
+            error("LHS can only be a scalar or a tensor, error at $line_num: $(expr)")
         end
     elseif Meta.isexpr(expr, :ref)
+        if length(expr.args) == 1 # e.g. `x[]`
+            error("Implicit indexing in not supported on the LHS, error at $line_num: $(expr)")
+        end
+
         return Base.Fix2(bugs_expression, line_num).(expr.args)
     else
         error("Invalid LHS at $line_num: $(expr)")
@@ -66,24 +91,24 @@ function bugs_for(@nospecialize(expr), line_num)
     end
 end
 
-function bugs_expression(@nospecialize(expr), line_num)
+function bugs_expression(expr, line_num)
     if expr isa Union{Int,Float64,Symbol}
         return expr
     elseif Meta.isexpr(expr, :ref)
-        # special cases
         if length(expr.args) == 1 # e.g. `x[]`
             return Expr(:ref, expr.args[1], :(:)) # fill in the colon indexing
-        elseif Meta.isexpr(expr.args[1], :ref)
+        end
+
+        if Meta.isexpr(expr.args[1], :ref) # e.g. `x[1][1]`
             error(
-                "BUGS arrays are tensors and do not support nested indexing. Use tensor-style indexing such as `a[i, j]` instead of nested indexing like `a[i][j]` at line $line_num.",
+                "BUGS arrays are tensors and do not support nested indexing. Use tensor-style indexing such as `a[i, j]` instead of nested indexing like `a[i][j]`, error at $line_num: $(expr).",
             )
         end
 
         return Expr(:ref, Base.Fix2(bugs_expression, line_num).(expr.args)...)
     elseif Meta.isexpr(expr, :call)
-        # range with step is not supported
-        if expr.args[1] == :(:) && length(expr.args) == 4
-            error("Range with step is not supported at $line_num: $(expr)")
+        if @capture(expr, l_:s_:u_) # range with step is not supported
+            error("Range with step is not supported, error at $line_num: $(expr)")
         end
 
         return Expr(:call, Base.Fix2(bugs_expression, line_num).(expr.args)...)
@@ -108,6 +133,7 @@ macro bugs(prog::String, replace_period=true, no_enclosure=false)
     julia_program = to_julia_program(prog, replace_period, no_enclosure)
     expr = Base.Expr(JuliaSyntax.parsestmt(SyntaxNode, julia_program))
     expr = MacroTools.postwalk(MacroTools.rmlines, expr)
+    error_container = []
     expr = MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, f_(lhs_) = rhs_) # only transform logical assignments
             inv_f = if f == :log
@@ -119,15 +145,19 @@ macro bugs(prog::String, replace_period=true, no_enclosure=false)
             elseif f == :probit
                 :phi
             else
-                error("Not supported")
+                error("$(String(f)) is not a recognized link function, at statement $(sub_expr)")
             end
             # The 'rhs' will be parsed into a :block Expr, as the link function syntax is interpreted as a function definition.
             return :($lhs = $inv_f($(rhs.args...)))
         elseif @capture(sub_expr, f_(lhs_) ~ rhs_)
-            error("Link functions on the LHS of a `~` is not supported: $sub_expr")
+            error_msg = ("Link functions on the LHS of a `~` is not supported at: $(sub_expr)")
+            push!(error_container, :(error($error_msg)))
         else
             return sub_expr
         end
+    end
+    if !isempty(error_container) # otherwise error throw in macro will be a LoadError
+        return error_container[1]
     end
     return Meta.quot(expr)
 end
