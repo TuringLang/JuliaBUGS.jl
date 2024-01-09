@@ -155,9 +155,11 @@ macro bugs(prog::String, replace_period=true, no_enclosure=false)
             elseif f == :probit
                 :phi
             else
-                error(
-                    "$(String(f)) is not a recognized link function, at statement $(sub_expr)",
+                error_msg = (
+                    "$(String(f)) is not a recognized link function, at statement $(sub_expr)"
                 )
+                push!(error_container, :(error($error_msg)))
+                return sub_expr
             end
             # The 'rhs' will be parsed into a :block Expr, as the link function syntax is interpreted as a function definition.
             return :($lhs = $inv_f($(rhs.args...)))
@@ -168,8 +170,8 @@ macro bugs(prog::String, replace_period=true, no_enclosure=false)
             return sub_expr
         end
     end
-    if !isempty(error_container) # otherwise error throw in macro will be a LoadError
-        return error_container[1]
+    if !isempty(error_container) # otherwise errors thrown in macro will be LoadError
+        return :(throw(ErrorException(join($error_container, "\n"))))
     end
     return Meta.quot(expr)
 end
