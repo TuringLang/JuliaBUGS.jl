@@ -79,34 +79,32 @@ end
     include("compile.jl")
 end
 
-@testset "Compile WinBUGS Vol I examples" begin
-    for m in [
-        :blockers,
-        :bones,
-        :dogs,
-        :dyes,
-        :epil,
-        :equiv,
-        :kidney,
-        :leuk,
-        :leukfr,
-        :lsat,
-        :magnesium,
-        :mice,
-        :oxford,
-        :pumps,
-        :rats,
-        :salm,
-        :seeds,
-        :stacks,
-        :surgical_simple,
-        :surgical_realistic,
-    ]
-        model_def = JuliaBUGS.BUGSExamples.VOLUME_I[m].model_def
-        data = JuliaBUGS.BUGSExamples.VOLUME_I[m].data
-        inits = JuliaBUGS.BUGSExamples.VOLUME_I[m].inits[1]
-        model = compile(model_def, data, inits)
-    end
+@testset "Compile WinBUGS Vol I examples: $m" for m in [
+    :blockers,
+    :bones,
+    :dogs,
+    :dyes,
+    :epil,
+    :equiv,
+    :kidney,
+    :leuk,
+    :leukfr,
+    :lsat,
+    :magnesium,
+    :mice,
+    :oxford,
+    :pumps,
+    :rats,
+    :salm,
+    :seeds,
+    :stacks,
+    :surgical_simple,
+    :surgical_realistic,
+]
+    model_def = JuliaBUGS.BUGSExamples.VOLUME_I[m].model_def
+    data = JuliaBUGS.BUGSExamples.VOLUME_I[m].data
+    inits = JuliaBUGS.BUGSExamples.VOLUME_I[m].inits[1]
+    model = compile(model_def, data, inits)
 end
 
 @testset "Utils" begin
@@ -127,7 +125,7 @@ end
     end
 end
 
-@testset "Markov Blanket" begin
+@testset "Graph data structure" begin
     include("graphs.jl")
 end
 

@@ -80,7 +80,7 @@ function BUGSModel(
     is_transformed::Bool=true,
 )
     vs = initialize_var_store(data, vars, array_sizes)
-    vi = SimpleVarInfo(vs)
+    vi = SimpleVarInfo(vs, 0.0)
     parameters = VarName[]
     untransformed_param_length = 0
     transformed_param_length = 0

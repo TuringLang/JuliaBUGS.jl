@@ -51,7 +51,7 @@ const BUGS_FUNCTIONS = [
     :ranked,
     :sd,
     :softplus,
-    :_step,
+    :step,
     :arcsin,
     :arcsinh,
     :arccos,
