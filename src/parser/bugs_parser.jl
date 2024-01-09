@@ -248,14 +248,14 @@ function process_assignment!(ps::ProcessState)
     elseif peek(ps) == K"<" &&
         peek(ps, 2) ∈ KSet"Integer Float" &&
         startswith(peek_raw(ps, 2), "-") # special case: `a <-1` is tokenized as `a`, `<`, and `-1`
-        t = ps.token_vec[ps.current_index]
+        t = ps.token_vec[ps.current_index + 1]
         low = t.range.start
         high = t.range.stop
         replaced_tokens = [
-            Token(JuliaSyntax.SyntaxHead(K"-", JuliaSyntax.EMPTY_FLAGS), low:(low + 1)),
+            Token(JuliaSyntax.SyntaxHead(K"-", JuliaSyntax.EMPTY_FLAGS), low:low),
             Token(t.head, (low + 1):high),
         ]
-        splice!(ps.token_vec, ps.current_index, replaced_tokens)
+        splice!(ps.token_vec, ps.current_index + 1, replaced_tokens)
         discard!(ps) # discard the "<"
         discard!(ps) # discard the "-"
         push!(ps.julia_token_vec, "=")
@@ -355,7 +355,7 @@ end
 function process_for!(ps)
     consume!(ps) # consume the "for"
 
-    expect_and_discard!(ps, "(")
+    expect!(ps, "(", " ")
     if peek(ps) == K"Identifier"
         push!(ps.julia_token_vec, " ") # add white space between "for" and the loop variable
     end
@@ -364,9 +364,9 @@ function process_for!(ps)
     expect!(ps, "in")
 
     process_range!(ps)
-    expect_and_discard!(ps, ")")
+    expect!(ps, ")", " ")
 
-    expect_and_discard!(ps, "{")
+    expect!(ps, "{", " ")
     process_statements!(ps)
     expect!(ps, "}", " end") # add extra white space in case of "}}"
     return nothing # return to `process_statements!`
