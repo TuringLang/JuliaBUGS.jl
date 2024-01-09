@@ -67,7 +67,8 @@
     end
 
     @testset "Multiple statements on the same line" begin
-        @test (@bugs (x[1] = 1; y[1] ~ dnorm(0, 1))) == MacroTools.@q begin
+        ex = @bugs (x[1] = 1; y[1] ~ dnorm(0, 1))
+        @test ex == MacroTools.@q begin
             x[1] = 1
             y[1] ~ dnorm(0, 1)
         end
