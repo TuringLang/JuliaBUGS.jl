@@ -32,7 +32,9 @@ function bugs_statement(@nospecialize(expr), line_num)
     elseif Meta.isexpr(expr, :for)
         return bugs_for(expr, line_num)
     else
-        error("Invalid statement at $line_num: $(expr). Please note that `<-` is not supported, use `=` instead.")
+        error(
+            "Invalid statement at $line_num: $(expr). Please note that `<-` is not supported, use `=` instead.",
+        )
     end
 end
 
@@ -52,20 +54,28 @@ function check_lhs(@nospecialize(expr), assignment_sign, line_num)
             elseif f == :probit
                 :phi
             else
-                error("$(String(expr.args[1])) is not a recognized link function, error at $line_num: $(expr)")
+                error(
+                    "$(String(expr.args[1])) is not a recognized link function, error at $line_num: $(expr)",
+                )
             end
 
             if assignment_sign === :(=)
-                error("Link function syntax is only supported with the original BUGS input as string, please rewrite the statement by calling the inverse function `$(String(inv_f))` on the RHS, error at $line_num: $(expr)")
+                error(
+                    "Link function syntax is only supported with the original BUGS input as string, please rewrite the statement by calling the inverse function `$(String(inv_f))` on the RHS, error at $line_num: $(expr)",
+                )
             else
-                error("Link function syntax is not allowed in stochastic assignments, error at $line_num: $(expr)")
+                error(
+                    "Link function syntax is not allowed in stochastic assignments, error at $line_num: $(expr)",
+                )
             end
         else
             error("LHS can only be a scalar or a tensor, error at $line_num: $(expr)")
         end
     elseif Meta.isexpr(expr, :ref)
         if length(expr.args) == 1 # e.g. `x[]`
-            error("Implicit indexing in not supported on the LHS, error at $line_num: $(expr)")
+            error(
+                "Implicit indexing in not supported on the LHS, error at $line_num: $(expr)"
+            )
         end
 
         return Base.Fix2(bugs_expression, line_num).(expr.args)
@@ -145,7 +155,9 @@ macro bugs(prog::String, replace_period=true, no_enclosure=false)
             elseif f == :probit
                 :phi
             else
-                error("$(String(f)) is not a recognized link function, at statement $(sub_expr)")
+                error(
+                    "$(String(f)) is not a recognized link function, at statement $(sub_expr)",
+                )
             end
             # The 'rhs' will be parsed into a :block Expr, as the link function syntax is interpreted as a function definition.
             return :($lhs = $inv_f($(rhs.args...)))

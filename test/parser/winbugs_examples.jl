@@ -2064,7 +2064,6 @@
        for(t in 1:T) { day[t] <- t }   
           }
     """)
-
 end
 
 @testset "Unsopported examples" begin
