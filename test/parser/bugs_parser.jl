@@ -3,9 +3,10 @@ using JuliaSyntax
 using JuliaSyntax: @K_str, ParseError
 
 function parse_bugs(prog, replace_period=true, no_enclosure=false)
-    return MacroTools.postwalk(
-        MacroTools.rmlines, Meta.parse(to_julia_program(prog, replace_period, no_enclosure))
-    )
+    julia_program = to_julia_program(prog, replace_period, no_enclosure)
+    expr = Base.Expr(JuliaSyntax.parsestmt(SyntaxNode, julia_program))
+    expr = MacroTools.postwalk(MacroTools.rmlines, expr)
+    return expr
 end
 
 @testset "BUGS Parser for String macro" begin
