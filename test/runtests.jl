@@ -75,9 +75,7 @@ include("bugs_primitives.jl")
     include("parser/winbugs_examples.jl")
 end
 
-@testset "Compilation" begin
-    include("compile.jl")
-end
+include("compile.jl")
 
 @testset "Compile WinBUGS Vol I examples: $m" for m in [
     :blockers,
