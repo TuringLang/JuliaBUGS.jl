@@ -26,7 +26,7 @@ JuliaBUGS.BUGSPrimitives.round
 JuliaBUGS.BUGSPrimitives.sd
 JuliaBUGS.BUGSPrimitives.softplus
 JuliaBUGS.BUGSPrimitives.sort
-JuliaBUGS.BUGSPrimitives.step
+JuliaBUGS.BUGSPrimitives._step
 JuliaBUGS.BUGSPrimitives.sum
 JuliaBUGS.BUGSPrimitives.trunc
 JuliaBUGS.BUGSPrimitives.sin

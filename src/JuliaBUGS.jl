@@ -27,7 +27,6 @@ export @varname
 # user defined functions and distributions are not supported yet
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
-using .BUGSPrimitives: step
 
 include("parser/Parser.jl")
 using .Parser

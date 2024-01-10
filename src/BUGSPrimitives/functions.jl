@@ -274,11 +274,11 @@ function sort(v::AbstractVector)
 end
 
 """
-    step(x)
+    _step(x)
 
 Return 1 if ``x`` is greater than 0, and 0 otherwise.
 """
-function step(x::Real)
+function _step(x::Real)
     return ifelse(x > 0, 1.0, 0.0)
 end
 
