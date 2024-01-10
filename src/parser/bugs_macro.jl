@@ -186,7 +186,6 @@ function bugs_expression(expr, line_num)
         if @capture(expr, l_:s_:u_) # range with step is not supported
             error("Range with step is not supported, error at $line_num: $(expr)")
         end
-        
         # special case: `step` is renamed to `_step` to avoid conflict with `Base.step`
         if @capture(expr, step(args__))
             expr.args[1] = :_step
