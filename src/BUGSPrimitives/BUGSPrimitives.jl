@@ -60,7 +60,7 @@ const BUGS_FUNCTIONS = [
     :arctanh,
 ]
 
-const BUGS_DISTRIBUTIOND = [
+const BUGS_DISTRIBUTIONS = [
     :dnorm,
     :dlogis,
     :dt,

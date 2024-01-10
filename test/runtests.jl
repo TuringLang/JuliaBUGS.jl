@@ -70,15 +70,14 @@ end
 include("bugs_primitives.jl")
 
 @testset "Parser" begin
-    include("bugsast.jl")
-    include("parser.jl")
+    include("parser/bugs_macro.jl")
+    include("parser/bugs_parser.jl")
+    include("parser/winbugs_examples.jl")
 end
 
-@testset "Compilation" begin
-    include("compile.jl")
-end
+include("compile.jl")
 
-@testset "Compile $m" for m in [
+@testset "Compile WinBUGS Vol I examples: $m" for m in [
     :blockers,
     :bones,
     :dogs,
@@ -124,7 +123,7 @@ end
     end
 end
 
-@testset "Markov Blanket" begin
+@testset "Graph data structure" begin
     include("graphs.jl")
 end
 

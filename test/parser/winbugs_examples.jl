@@ -1,169 +1,8 @@
-using Test
-using JuliaBUGS.Parser:
-    ProcessState,
-    process_toplevel!,
-    process_trivia!,
-    peek,
-    peek_raw,
-    process_variable!,
-    process_expression!,
-    process_assignment!,
-    process_for!,
-    process_range!,
-    process_indexing!,
-    process_tilde_rhs!
-using JuliaBUGS: to_julia_program
-using JuliaSyntax: @K_str
-using JuliaSyntax
-JuliaSyntax.enable_in_core!()
-
-@testset "UnitTests" begin
-    @testset "process_toplevel!" begin
-        # Test 1: Enclosure
-        ps = ProcessState("model { }")
-        process_toplevel!(ps)
-        @test peek(ps) == K"EndMarker"
-        @test isempty(ps.diagnostics)
-    end
-
-    @testset "process_indexing!" begin
-        # Test 1
-        ps = ProcessState("[1, 2, 3]")
-        process_indexing!(ps)
-        @test to_julia_program(ps) == "[1, 2, 3]"
-        @test peek(ps) == K"EndMarker"
-        @test isempty(ps.diagnostics)
-    end
-
-    @testset "process_variable!" begin
-        # Test 1: Trivial variable trailing with whitespace
-        ps = ProcessState("a ")
-        process_variable!(ps)
-        @test to_julia_program(ps) == "a"
-        @test peek(ps) == K"Whitespace"
-        @test isempty(ps.diagnostics)
-
-        # Test 2: R-style variable
-        ps = ProcessState("a.b.c")
-        process_variable!(ps)
-        @test to_julia_program(ps) == "a_b_c"
-        @test peek(ps) == K"EndMarker"
-        @test isempty(ps.diagnostics)
-
-        # Test 3: Variable with indexing
-        ps = ProcessState("a.b.c[1, 2, 3]", false, true)
-        process_variable!(ps)
-        @test to_julia_program(ps) == "var\"a.b.c\"[1, 2, 3]"
-        @test peek(ps) == K"EndMarker"
-        @test isempty(ps.diagnostics)
-    end
-
-    @testset "process_expression!" begin
-        # Test 1
-        ps = ProcessState("a + b")
-        process_expression!(ps)
-        @test to_julia_program(ps) == "a + b"
-        @test peek(ps) == K"EndMarker"
-        @test isempty(ps.diagnostics)
-    end
-
-    @testset "process_indexing!" begin
-        # Test 1: implicit indexing
-        ps = ProcessState("[, 3]")
-        process_indexing!(ps)
-        @test to_julia_program(ps) == "[:, 3]"
-        @test peek(ps) == K"EndMarker"
-        @test isempty(ps.diagnostics)
-    end
-
-    @testset "process_tilde_rhs!(ps)" begin
-        # Test 1: Truncated and Censoring expression
-        ps = ProcessState("dflat()T(-1000, a[2])")
-        process_tilde_rhs!(ps)
-        @test to_julia_program(ps) == " truncated(dflat(), -1000, a[2])"
-        @test peek(ps) == K"EndMarker"
-        @test isempty(ps.diagnostics)
-    end
-
-    @testset "process_assignment!" begin
-        # Test 1: Trivial assignment
-        ps = ProcessState("a <- 1")
-        process_assignment!(ps)
-        @test to_julia_program(ps) == "a = 1"
-        @test peek(ps) == K"EndMarker"
-        @test isempty(ps.diagnostics)
-
-        # Test 2: Assignment with indexing
-        ps = ProcessState("a.b.c[1, 2, 3] <- 1")
-        process_assignment!(ps)
-        @test to_julia_program(ps) == "a_b_c[1, 2, 3] = 1"
-        @test peek(ps) == K"EndMarker"
-        @test isempty(ps.diagnostics)
-
-        # Test 3
-        ps = ProcessState("x = 1+12")
-        process_assignment!(ps)
-        @test to_julia_program(ps) == "x = 1+12"
-        @test peek(ps) == K"EndMarker"
-        @test isempty(ps.diagnostics)
-
-        # Test 4: Tilde assignment
-        ps = ProcessState("alpha[i] ~ dnorm(alpha.c, alpha.tau)")
-        process_assignment!(ps)
-        @test to_julia_program(ps) == "alpha[i] ~ dnorm(alpha_c, alpha_tau)"
-        @test peek(ps) == K"EndMarker"
-        @test isempty(ps.diagnostics)
-    end
-
-    @testset "process_for!" begin
-        # Test 1
-        ps = ProcessState("for (i in 1:10) { a[i] <- 1 }")
-        process_for!(ps)
-        @test to_julia_program(ps) == "for  i in 1:10  a[i] = 1  end"
-        @test peek(ps) == K"EndMarker"
-        @test isempty(ps.diagnostics)
-    end
-
-    @testset "test_process_trivia!" begin
-        # Test 1: Processing whitespace
-        ps = ProcessState("   model")
-        process_trivia!(ps)
-        @test ps.current_index == 2
-        @test peek_raw(ps) == "model"
-
-        # Test 2: Processing comments
-        ps = ProcessState("# This is a comment\nmodel")
-        process_trivia!(ps)
-        @test ps.current_index == 3
-        @test peek_raw(ps) == "model"
-
-        # Test 3: Not processing newline when skip_newline is false
-        ps = ProcessState("\nmodel")
-        process_trivia!(ps, false)
-        @test ps.current_index == 1
-        @test peek_raw(ps) == "\n"
-
-        # Test 4: Processing newline when skip_newline is true
-        ps = ProcessState("\nmodel")
-        process_trivia!(ps, true)
-        @test ps.current_index == 2
-        @test peek_raw(ps) == "model"
-    end
-end
-
-@testset "Tokenizer Corner Cases" begin
-    # tokenize errors are generally corner cases that are side effects of the tokenizer
-    # and the fact that it's designed for Julia, not BUGS
-    # one such corner case: `<---2` will not be tokenized to `<--` and `-2`, but `InvalidOperator` and `-2` 
-    # test error handling of special errors
-    @test_throws ErrorException JuliaBUGS.Parser.ProcessState("<---2")
-end
-
-function parse_bugs(prog)
-    return Meta.parse(to_julia_program(prog, true, false))
-end
-
+# here are almost all the examples from the first three volume of BUGS examples
+# we keep them as basic regression tests for the parser
 @testset "Parse BUGS Example Programs" begin
+
+    # rats
     parse_bugs("""model
 {
     for( i in 1 : N ) {
@@ -184,6 +23,7 @@ end
 }
 """)
 
+    # oxford
     parse_bugs("""
     model
        {
@@ -206,6 +46,7 @@ end
        }
     """)
 
+    # inhalers
     parse_bugs("""
   model
   {
@@ -931,21 +772,20 @@ end
     """)
 
     # Biopsies -- empty indices and `true` variable name 
-    # ! this should fail, because `true` and `error` is a reserved word
-    @test_throws ErrorException parse_bugs("""
-    model
-    {
-       for (i in 1 : ns){
-          nbiops[i] <- sum(biopsies[i, ])
-          true[i] ~ dcat(p[])
-          biopsies[i, 1 : 4] ~ dmulti(error[true[i], ], nbiops[i])
-       }
-       error[2,1 : 2] ~ ddirich(prior[1 : 2])
-       error[3,1 : 3] ~ ddirich(prior[1 : 3])
-       error[4,1 : 4] ~ ddirich(prior[1 : 4])
-       p[1 : 4] ~ ddirich(prior[]); # prior for p
-    }
-    """)
+    parse_bugs("""
+     model
+     {
+        for (i in 1 : ns){
+           nbiops[i] <- sum(biopsies[i, ])
+           true[i] ~ dcat(p[])
+           biopsies[i, 1 : 4] ~ dmulti(error[true[i], ], nbiops[i])
+        }
+        error[2,1 : 2] ~ ddirich(prior[1 : 2])
+        error[3,1 : 3] ~ ddirich(prior[1 : 3])
+        error[4,1 : 4] ~ ddirich(prior[1 : 4])
+        p[1 : 4] ~ ddirich(prior[]); # prior for p
+     }
+     """)
 
     # eyes
     parse_bugs("""
@@ -2201,9 +2041,35 @@ end
        }
     """)
 
+    # Pollution
+    parse_bugs("""
+    model {
+
+    #likelihood
+       for(t in 1:T) {
+          y[t] ~ dnorm(mu[t], tau.err)
+          mu[t] <- beta + theta[t]
+       }
+                theta[1:T] ~ rand.walk(tau)
+                #theta[1:T] ~ stoch.trend(tau)
+    beta ~ dflat()
+             # other priors
+       tau.err ~ dgamma(0.01, 0.01)      # measurement error precision
+       sigma.err <- 1 / sqrt(tau.err)
+       sigma2.err <- 1/tau.err
+       tau ~ dgamma(0.01, 0.01)            # random walk precision
+       sigma <- 1 / sqrt(tau)
+       sigma2 <- 1/tau
+             # include this variable to use in time series (model fit) plot
+       for(t in 1:T) { day[t] <- t }   
+          }
+    """)
+end
+
+@testset "Unsopported examples" begin
     # Lotka-Volterra
     # ! currently error, `D` function is not defined, probably won't impelment 
-    @test_throws ErrorException parse_bugs(
+    @test_throws ParseError parse_bugs(
         """
     model
     {
@@ -2239,30 +2105,6 @@ end
     # Five compartments
     # Change points
     # ! similarly, `D` function is not defined
-
-    # Pollution
-    parse_bugs("""
-    model {
-
-    #likelihood
-       for(t in 1:T) {
-          y[t] ~ dnorm(mu[t], tau.err)
-          mu[t] <- beta + theta[t]
-       }
-                theta[1:T] ~ rand.walk(tau)
-                #theta[1:T] ~ stoch.trend(tau)
-    beta ~ dflat()
-             # other priors
-       tau.err ~ dgamma(0.01, 0.01)      # measurement error precision
-       sigma.err <- 1 / sqrt(tau.err)
-       sigma2.err <- 1/tau.err
-       tau ~ dgamma(0.01, 0.01)            # random walk precision
-       sigma <- 1 / sqrt(tau)
-       sigma2 <- 1/tau
-             # include this variable to use in time series (model fit) plot
-       for(t in 1:T) { day[t] <- t }   
-          }
-    """)
 
     # Functionals
     # ! `F` is not defined
