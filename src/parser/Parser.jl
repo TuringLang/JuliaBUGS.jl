@@ -30,11 +30,7 @@ function to_julia_program(prog::String, replace_period=true, no_enclosure=false)
     else
         process_toplevel!(ps)
     end
-    if !isempty(ps.diagnostics)
-        io = IOBuffer()
-        JuliaSyntax.show_diagnostics(io, ps.diagnostics, ps.text)
-        error("Errors in the program: \n $(String(take!(io)))")
-    end
+    isempty(ps.diagnostics) || giveup!(ps)
     return to_julia_program(ps.julia_token_vec, ps.text)
 end
 

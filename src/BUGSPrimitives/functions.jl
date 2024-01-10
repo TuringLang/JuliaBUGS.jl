@@ -279,7 +279,7 @@ end
 Return 1 if ``x`` is greater than 0, and 0 otherwise.
 """
 function _step(x)
-    return ifelse(x > 0, 1, 0)
+    return ifelse(x > 0, 1.0, 0.0)
 end
 
 """
