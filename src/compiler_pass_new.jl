@@ -113,14 +113,6 @@ function Statement(@nospecialize(expr))
     sign = :(=)
     @capture(expr, lhs_ = rhs_) || @capture(expr, lhs_ ~ rhs_) && (sign = :(~))
     @assert sign ∈ (:~, :(=))
-    MacroTools.postwalk(lhs) do sub_expr
-        if @capture(sub_expr, x_[indices__])
-            if any(Base.Fix1(===, :(:)), indices)
-                error("Colon indexing is not allowed in the LHS of an assignment.")
-            end
-        end
-        return sub_expr
-    end
     return Statement{sign}(lhs, rhs)
 end
 
@@ -152,15 +144,6 @@ function ForStatement(@nospecialize(expr))
     sign = :(=)
     @capture(expr, lhs_ = rhs_) || @capture(expr, lhs_ ~ rhs_) && (sign = :(~))
     @assert sign ∈ (:~, :(=))
-    # TODO: this check should be done in `@bugs`
-    MacroTools.postwalk(lhs) do sub_expr
-        if @capture(sub_expr, x_[indices__])
-            if any(Base.Fix1(===, :(:)), indices)
-                error("Colon indexing is not allowed in the LHS of an assignment.")
-            end
-        end
-        return sub_expr
-    end
     loop_vars_lens = grab_loop_var_as_lens(expr, loop_vars)
     return ForStatement{sign}(nested_levels, loop_vars, loop_vars_lens, bounds, lhs, rhs)
 end

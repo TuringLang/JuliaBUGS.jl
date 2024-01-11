@@ -97,5 +97,10 @@
         @test_throws ErrorException JuliaBUGS.Parser.bugs_top(
             :(x[1] = y[1][1]), LineNumberNode(1)
         )
+
+        # Colon indexing on the LHS
+        @test_throws ErrorException JuliaBUGS.Parser.bugs_top(
+            :(x[:] = f(y[1:3])), LineNumberNode(1)
+        )
     end
 end

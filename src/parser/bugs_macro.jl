@@ -144,6 +144,15 @@ function check_lhs(@nospecialize(expr), assignment_sign, line_num)
             )
         end
 
+        MacroTools.postwalk(expr) do sub_expr
+            if @capture(sub_expr, x_[indices__])
+                if any(Base.Fix1(===, :(:)), indices)
+                    error("Colon indexing is not allowed in the LHS of an assignment.")
+                end
+            end
+            return sub_expr
+        end
+
         return Base.Fix2(bugs_expression, line_num).(expr.args)
     else
         error("Invalid LHS at $line_num: $(expr)")
