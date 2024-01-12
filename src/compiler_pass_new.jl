@@ -1,28 +1,22 @@
 using JuliaBUGS, MacroTools
 using JuliaBUGS: Var, Scalar, ArrayElement, ArrayVar, to_varname
-using JuliaBUGS: evaluate, check_idxs, find_variables_on_lhs, is_resolved, should_skip_eval
+using JuliaBUGS: check_idxs, find_variables_on_lhs, is_resolved, should_skip_eval
+using JuliaBUGS.BUGSPrimitives
 using BangBang
 using DynamicPPL
+using MacroTools
 using MetaGraphsNext, Graphs
 using Setfield
 
-is_resolved(::T) where {T} = T <: Union{Number,Colon,UnitRange,Array{<:Number}}
-
-# TODO: this `evaluate` function can be compiled if env is NamedTuple(we can actually create an env also include the type of the values)
-# also find a way to include the function names in the type
-# use lowered to check if compiled
 function evaluate(
     env,
     expr;
     module_name=Main,
-    allow_internal_functions=false,
-    internal_functions=JuliaBUGS.BUGSPrimitives.BUGS_FUNCTIONS,
     arithmetic_functions=(:*, :+, :-, :/, :^),
-    allowed_functions=if allow_internal_functions
-        arithmetic_functions ∪ internal_functions
-    else
-        arithmetic_functions
-    end,
+    allowed_functions=[],
+    all_allowed_functions=union(
+        arithmetic_functions, JuliaBUGS.BUGSPrimitives.BUGS_FUNCTIONS
+    ),
 )
     if expr isa Float64 # for ease of indexing
         return isinteger(expr) ? Int(expr) : expr
@@ -38,11 +32,13 @@ function evaluate(
         expr = copy(expr)
         if Meta.isexpr(expr, :ref)
             @assert all(Base.Fix1(!==, :(:)), expr.args[2:end])
-            expr = Expr(:ref, expr.args[1], map(Base.Fix1(evaluate, env), expr.args[2:end])...)
-            if !haskey(env, expr.args[1]) || any(Base.Fix1(isa, Expr), expr.args[2:end])
+            expr = Expr(
+                :ref, expr.args[1], map(Base.Fix1(evaluate, env), expr.args[2:end])...
+            )
+            if !haskey(env, expr.args[1]) || any(Base.Fix2(isa, Expr), expr.args[2:end])
                 return expr
             end
-            @assert all(Base.Fix1(isa, Union{Int,UnitRange{Int}}), expr.args[2:end])
+            @assert all(Base.Fix2(isa, Union{Int,UnitRange{Int}}), expr.args[2:end])
             value = getindex(env[expr.args[1]], expr.args[2:end]...)
             if ismissing(value) || any(ismissing, value)
                 return expr
@@ -50,12 +46,21 @@ function evaluate(
                 return value
             end
         elseif Meta.isexpr(expr, :call)
-            expr = Expr(:call, expr.args[1], map(Base.Fix1(evaluate, env), expr.args[2:end])...)
-            if expr.args[1] == :(:)
-                return (:)(expr.args[2:end]...)
-            elseif expr.args[1] ∈ allowed_functions
-                return (getfield(module_name, expr.args[1]))(expr.args[2:end]...)
+            expr = Expr(
+                :call, expr.args[1], map(Base.Fix1(evaluate, env), expr.args[2:end])...
+            )
+            if all(Base.Fix2(isa, Union{Real,Array{Real}}), expr.args[2:end])
+                if expr.args[1] == :(:)
+                    return (:)(expr.args[2:end]...)
+                elseif expr.args[1] ∈ all_allowed_functions
+                    return (getfield(module_name, expr.args[1]))(expr.args[2:end]...)
+                end
             else
+                if expr.args[1] == :(+)
+                    number_terms = filter(Base.Fix2(isa, Number), expr.args[2:end])
+                    expr_terms = filter(!Base.Fix2(isa, Number), expr.args[2:end])
+                    return Expr(:call, :+, sum(number_terms), expr_terms...)
+                end
                 return expr
             end
         else
@@ -68,7 +73,6 @@ end
 
 # loop fission makes performance not obvious to programmers: 
 # if we do source to source transformation for logp computation, we can add argument so that loops are not touched in the transformed code
-
 function separate_statements(@nospecialize(expr))
     assignments = filter(!Base.Fix2(Meta.isexpr, :for), expr.args)
     fissioned_loops = loop_fission_helper(expr.args)
@@ -103,23 +107,60 @@ function loop_fission_helper(exprs)
     return loops
 end
 
+function get_vars_and_funs_in_expr(expr)
+    if expr isa Number
+        return [], []
+    elseif expr isa Symbol
+        return [expr], []
+    elseif expr isa Expr
+        vars = Set{Symbol}()
+        funs = Set{Symbol}()
+        MacroTools.prewalk(expr) do sub_expr
+            if @capture(sub_expr, f_(args__))
+                push!(funs, f)
+                for arg in args
+                    if arg isa Symbol
+                        push!(vars, arg)
+                    end
+                end
+            elseif @capture(sub_expr, v_[idxs__])
+                push!(vars, v)
+                for idx in idxs
+                    if idx isa Symbol
+                        push!(vars, idx)
+                    end
+                end
+            end
+            sub_expr
+        end
+        return collect(vars), collect(setdiff(funs, (:*, :+, :-, :/, :^, :(:))))
+    else
+        error("Argument type $(typeof(expr)) is not supported.")
+    end
+end
+
 # E is either = or ~
 mutable struct Statement{E}
     lhs
     rhs
+    rhs_vars
+    rhs_funs
 end
 
 function Statement(@nospecialize(expr))
     sign = :(=)
     @capture(expr, lhs_ = rhs_) || @capture(expr, lhs_ ~ rhs_) && (sign = :(~))
     @assert sign ∈ (:~, :(=))
-    return Statement{sign}(lhs, rhs)
+    rhs_vars, rhs_funs = get_vars_and_funs_in_expr(rhs)
+    return Statement{sign}(lhs, rhs, rhs_vars, rhs_funs)
 end
 
 mutable struct ForStatement{E}
     nested_levels::Int
-    loop_vars::Vector{Symbol}
-    loop_vars_lens::Vector{Dict{Symbol,Vector{<:Lens}}}
+    loop_vars
+    rhs_loop_vars_lens
+    rhs_vars
+    rhs_funs
     bounds
     lhs
     rhs
@@ -129,7 +170,7 @@ function ForStatement(@nospecialize(expr))
     nested_levels = 0
     loop_vars = []
     bounds = []
-    while Meta.isexpr(expr, :for)
+    while Meta.isexpr(expr, :for) # unpack nested loops
         @capture(
             expr,
             for loop_var_ in l_:h_
@@ -141,25 +182,96 @@ function ForStatement(@nospecialize(expr))
         nested_levels += 1
         expr = body[1]
     end
+
     sign = :(=)
     @capture(expr, lhs_ = rhs_) || @capture(expr, lhs_ ~ rhs_) && (sign = :(~))
     @assert sign ∈ (:~, :(=))
-    loop_vars_lens = grab_loop_var_as_lens(expr, loop_vars)
-    return ForStatement{sign}(nested_levels, loop_vars, loop_vars_lens, bounds, lhs, rhs)
+    @assert Meta.isexpr(lhs, :ref)
+    rhs_loop_vars_lens = get_loop_var_lenses(rhs, loop_vars)
+    rhs_vars, rhs_funs = get_vars_and_funs_in_expr(rhs)
+    return ForStatement{sign}(
+        nested_levels,
+        loop_vars,
+        rhs_loop_vars_lens,
+        setdiff(rhs_vars, loop_vars),
+        rhs_funs,
+        bounds,
+        lhs,
+        rhs,
+    )
+end
+
+# a variable is uniquely identified by expression id and loop var bindings
+function get_loop_var_lenses(expr, loop_vars)
+    lenses_map = Dict()
+    for loop_var in loop_vars
+        lenses = get_lens(expr, loop_var, Setfield.IdentityLens())
+        lenses_map[loop_var] = lenses
+    end
+    return lenses_map
+end
+
+function get_lens(expr, target_expr, parent_lens)
+    if expr isa Union{Symbol,Number} # didn't find
+        return []
+    end
+
+    lenses = [] # possible multiple occurrences
+    if expr.head == target_expr
+        push!(lenses, parent_lens ∘ (@lens _.head))
+    end
+    for (i, arg) in enumerate(expr.args)
+        if arg == target_expr
+            push!(lenses, parent_lens ∘ (@lens _.args[i]))
+        else
+            child_lenses = get_lens(arg, target_expr, parent_lens ∘ (@lens _.args[i]))
+            for lens in child_lenses
+                push!(lenses, lens)
+            end
+        end
+    end
+    return lenses
 end
 
 function evaluate_loop_bounds!(for_statement::ForStatement, data)
     for (i, bound) in enumerate(for_statement.bounds)
-        bound = evaluate(bound, data)
+        bound = evaluate(data, bound)
         @assert bound isa UnitRange
         for_statement.bounds[i] = bound
     end
+    return for_statement
 end
 
+# lhs are usually not deep, storing lenses might be overkill, so just dynamically plug in the values
+function plug_in_loopvar(for_statement::ForStatement, ::Val{:lhs}, values)
+    @assert length(values) == length(for_statement.loop_vars)
+    replace_dict = Dict(collect(zip(for_statement.loop_vars, values)))
+    return MacroTools.postwalk(for_statement.lhs) do sub_expr
+        if MacroTools.@capture(sub_expr, loopvar_Symbol) # only match symbols
+            if haskey(replace_dict, loopvar)
+                return replace_dict[loopvar]
+            end
+        end
+        sub_expr
+    end
+end
+
+function plug_in_loopvar(for_statement::ForStatement, ::Val{:rhs}, values)
+    @assert length(values) == length(for_statement.loop_vars)
+    expr = for_statement.rhs
+    for (loop_var, value) in zip(for_statement.loop_vars, values)
+        for lens in for_statement.rhs_loop_vars_lens[loop_var]
+            expr = set(expr, lens, value)
+        end
+    end
+    return expr
+end
+
+# TODO: can just evaluate the rhs to a function at the creation of CompileState
 struct CompileState
     data
+    merged_data_and_transformed
     initializations
-    transformed_variables
 
     logical_statements::Vector{Statement{:(=)}}
     stochastic_statements::Vector{Statement{:(~)}}
@@ -198,8 +310,8 @@ function CompileState(expr, data, initializations)
 
     return CompileState(
         data,
+        data == NamedTuple() ? Dict() : Dict(pairs(data)), # merged_data_and_transformed is the same as data at the beginning
         initializations,
-        Dict(),
         logical_statements,
         stochastic_statements,
         logical_for_statements,
@@ -212,80 +324,69 @@ end
 is_logical(::Union{Statement{T},ForStatement{T}}) where {T} = T == :(=)
 
 function determine_array_sizes!(state::CompileState)
-    data = state.data
     # only look at the LHS
-    for (k, v) in pairs(data) # size of data arrays are known, initializations is treated after compilation
+    for (k, v) in pairs(state.data) # size of data arrays are known, initializations is treated after compilation
         if v isa Array
             state.array_sizes[k] = size(v)
         end
     end
 
+    env = state.data
+
+    function determine_array_sizes_inner(lhs)
+        @capture(lhs, lhs_var_[indices__])
+        @assert all(Base.Fix2(isa, Union{Int,UnitRange{Int}}), indices)
+        if haskey(env, lhs_var)
+            @assert length(last.(indices)) == ndims(env[lhs_var]) &&
+                all(last.(indices) .<= size(env[lhs_var]))
+            return nothing
+        end
+        if haskey(state.array_sizes, lhs_var)
+            state.array_sizes[lhs_var] = max.(state.array_sizes[lhs_var], last.(indices)) # check ndims implicitly
+        else
+            state.array_sizes[lhs_var] = [last.(indices)...]
+        end
+    end
+
     for statement in vcat(state.logical_statements, state.stochastic_statements)
-        lhs = find_variables_on_lhs(statement.lhs, data)
-        if is_resolved(evaluate(lhs, data)) && is_logical(statement)
+        lhs = evaluate(env, statement.lhs)
+        if is_logical(statement) && lhs isa Union{Real,Array{<:Real}}
             error("$lhs is specified at data, thus can't be assigned to.")
         end
-        if lhs isa Scalar
+        if lhs isa Symbol
             push!(state.scalars, lhs)
         else
-            check_idxs(lhs.name, lhs.indices, data)
-            if haskey(data, lhs.name)
-                @assert length(data[lhs.name]) == length(last.(lhs.indices)) &&
-                    all(last.(v.indices) .<= size(data[v.name]))
-                continue
-            end
-            if haskey(state.array_sizes, lhs.name)
-                state.array_sizes[lhs.name] =
-                    max.(state.array_sizes[lhs.name], last.(lhs.indices)) # check ndims implicitly
-            else
-                state.array_sizes[lhs.name] = [last.(lhs.indices)...]
-            end
+            determine_array_sizes_inner(lhs)
         end
     end
 
     for for_statement in vcat(state.logical_for_statements, state.stochastic_for_statements)
         for indices in Iterators.product(for_statement.bounds...)
-            lhs = for_statement.lhs
-            for (loop_var, value) in zip(for_statement.loop_vars, indices)
-                for lens in for_statement.loop_vars_lens[loop_var]
-                    lhs = set(lhs, lens, value)
-                end
+            lhs = evaluate(env, plug_in_loopvar(for_statement, Val(:lhs), indices))
+            if is_logical(for_statement) && lhs isa Union{Real,Array{<:Real}}
+                error("$lhs is specified at data, thus can't be assigned to.")
             end
-            lhs = find_variables_on_lhs(lhs, data)
             if lhs isa Scalar
                 error("Scalar definition inside a loop is not supported.")
             else
-                check_idxs(lhs.name, lhs.indices, data)
-                if haskey(data, lhs.name)
-                    @assert ndims(data[lhs.name]) == length(last.(lhs.indices)) &&
-                        all(last.(lhs.indices) .<= size(data[lhs.name]))
-                    continue
-                end
-                if haskey(state.array_sizes, lhs.name)
-                    state.array_sizes[lhs.name] =
-                        max.(state.array_sizes[lhs.name], last.(lhs.indices)) # check ndims implicitly
-                else
-                    state.array_sizes[lhs.name] = [last.(lhs.indices)...]
-                end
+                determine_array_sizes_inner(lhs)
             end
         end
     end
-    concretize_colon_indexing!(state)
-end
 
-function concretize_colon_indexing!(state::CompileState)
+    # concretize the colon indexing now we know the sizes
     for collection in (
         state.logical_statements,
         state.stochastic_statements,
         state.logical_for_statements,
         state.stochastic_for_statements,
     )
-        for statement in collection # TODO: verify that this actually mutate the statement
+        for statement in collection
             statement.rhs = MacroTools.postwalk(statement.rhs) do sub_expr
-                if MacroTools.@capture(sub_expr, x_[indices__])
-                    return :(x[$(
+                if MacroTools.@capture(sub_expr, v_[indices__])
+                    return :($(v)[$(
                         [
-                            idx == :(:) ? :(1:($(state.array_sizes[x][i]))) : idx for
+                            idx == :(:) ? :(1:($(state.array_sizes[v][i]))) : idx for
                             (i, idx) in enumerate(indices)
                         ]...
                     )])
@@ -296,124 +397,107 @@ function concretize_colon_indexing!(state::CompileState)
     end
 end
 
-# a variable is uniquely identified by expression id and loop var bindings
-function grab_loop_var_as_lens(expr, loop_vars)
-    lenses_map = Dict()
-    for loop_var in loop_vars
-        lenses = find_lens(expr, loop_var, Setfield.IdentityLens())
-        @assert !isempty(lenses)
-        lenses_map[loop_var] = lenses
-    end
-    return lenses_map
+FUNCTION_TO_ATTEMPT_EVAL = copy(JuliaBUGS.BUGSPrimitives.BUGS_FUNCTIONS) # can also add user defined functions
+
+function is_union_of_missing(T)
+    return T <: Union{Missing}
 end
 
-function find_lens(expr, target_expr, parent_lens)
-    if expr isa Union{Symbol,Number} # didn't find
-        return []
-    end
-
-    lenses = [] # possible multiple occurrences
-    if expr.head == target_expr
-        push!(lenses, parent_lens ∘ (@lens _.head))
-    end
-    for (i, arg) in enumerate(expr.args)
-        if arg == target_expr
-            push!(lenses, parent_lens ∘ (@lens _.args[i]))
-        else
-            child_lenses = find_lens(arg, target_expr, parent_lens ∘ (@lens _.args[i]))
-            for lens in child_lenses
-                push!(lenses, lens)
-            end
-        end
-    end
-    return lenses
-end
-
-function compute_transformed_variables!(state::CompileState)
-    data = state.data
+# TODO: test multi-dim function and missing values in data
+function compute_transformed!(state::CompileState)
     new_value_added = true
-
+    env = state.merged_data_and_transformed
     while new_value_added
         new_value_added = false
+
         for statement in state.logical_statements
-            if should_skip_eval(statement.rhs)
+            if !all(Base.Fix2(∈, FUNCTION_TO_ATTEMPT_EVAL), statement.rhs_funs) ||
+                !all(Base.Fix2(∈, keys(env)), statement.rhs_vars)
                 continue
             end
 
-            lhs = find_variables_on_lhs(statement.lhs, data)
+            lhs = evaluate(data, statement.lhs)
 
-            if haskey(state.transformed_variables, lhs.name)
-                if lhs isa Scalar ||
-                    !ismissing(state.transformed_variables[lhs.name][lhs.indices...])
+            if lhs isa Symbol
+                if evaluate(env, lhs) isa Real
                     continue
-                else
-                    local_env = merge(copy(Dict(pairs(data))), state.transformed_variables)
-                    value = evaluate(statement.rhs, local_env)
-                    if is_resolved(value)
-                        state.transformed_variables[lhs.name][lhs.indices...] = value
-                        new_value_added = true
-                    end
+                end
+                rhs = evaluate(env, statement.rhs)
+                if rhs isa Real
+                    state.merged_data_and_transformed[lhs] = rhs
+                    new_value_added = true
                 end
             else
-                local_env = merge(copy(Dict(pairs(data))), state.transformed_variables)
-                value = evaluate(statement.rhs, local_env)
-                if is_resolved(value)
-                    if lhs isa Scalar
-                        state.transformed_variables[lhs.name] = value
-                    else
-                        state.transformed_variables[lhs.name] = fill(
-                            missing, state.array_sizes[lhs.name]...
+                if evaluate(env, lhs) isa Union{Real,Array{<:Real}}
+                    continue
+                end
+                value = evaluate(
+                    env, statement.rhs; allowed_functions=FUNCTION_TO_ATTEMPT_EVAL
+                )
+                if value isa Union{Real,Array{<:Real}}
+                    @capture(lhs, lhs_var_[indices__])
+                    if !haskey(env, lhs_var)
+                        state.merged_data_and_transformed[lhs_var] = Array{
+                            Union{Missing,Float64}
+                        }(
+                            missing, state.array_sizes[lhs_var]...
                         )
-                        state.transformed_variables[lhs.name] = setindex!!(
-                            state.transformed_variables[lhs.name], value, lhs.indices...
-                        )
+                    elseif haskey(env, lhs_var) &&
+                        lhs_var ∉ setdiff(
+                        keys(state.merged_data_and_transformed), keys(state.data)
+                    )
+                        state.merged_data_and_transformed[lhs_var] = copy(env[lhs_var])
                     end
+                    setindex!!(
+                        state.merged_data_and_transformed[lhs_var], value, indices...
+                    )
                     new_value_added = true
                 end
             end
         end
 
         for for_statement in state.logical_for_statements
+            if !all(Base.Fix2(∈, FUNCTION_TO_ATTEMPT_EVAL), for_statement.rhs_funs) ||
+                !all(Base.Fix2(∈, keys(env)), for_statement.rhs_vars)
+                continue
+            end
+
             for indices in Iterators.product(for_statement.bounds...)
-                local_env = merge(copy(Dict(pairs(data))), state.transformed_variables)
-                for (loop_var, bounds) in zip(for_statement.loop_vars, indices)
-                    local_env[loop_var] = bounds
+                lhs = evaluate(data, plug_in_loopvar(for_statement, Val(:lhs), indices))
+                if evaluate(env, lhs) isa Union{Real,Array{<:Real}}
+                    continue
                 end
-                lhs = find_variables_on_lhs(for_statement.lhs, local_env)
-                if haskey(state.transformed_variables, lhs.name)
-                    if !ismissing(state.transformed_variables[lhs.name][lhs.indices...])
-                        continue
-                    else
-                        value = evaluate(for_statement.rhs, local_env)
-                        if is_resolved(value)
-                            setindex!!(
-                                state.transformed_variables[lhs.name], value, lhs.indices...
-                            )
-                            new_value_added = true
-                        end
+                value = evaluate(
+                    env,
+                    plug_in_loopvar(for_statement, Val(:rhs), indices);
+                    allowed_functions=FUNCTION_TO_ATTEMPT_EVAL,
+                ) # evaluate the rhs
+                if value isa Union{Real,Array{<:Real}}
+                    @capture(lhs, lhs_var_[indices__])
+                    if !haskey(env, lhs_var)
+                        state.merged_data_and_transformed[lhs_var] = Array{
+                            Union{Missing,Float64}
+                        }(
+                            missing, state.array_sizes[lhs_var]...
+                        )
+                    elseif haskey(env, lhs_var) &&
+                        lhs_var ∉ setdiff(
+                        keys(state.merged_data_and_transformed), keys(state.data)
+                    )
+                        state.merged_data_and_transformed[lhs_var] = copy(env[lhs_var])
                     end
-                else
-                    value = evaluate(for_statement.rhs, local_env)
-                    if is_resolved(value)
-                        if lhs isa Scalar
-                            state.transformed_variables[lhs.name] = value
-                        else
-                            state.transformed_variables[lhs.name] = fill(
-                                missing, state.array_sizes[lhs.name]...
-                            )
-                            state.transformed_variables[lhs.name] = setindex!!(
-                                state.transformed_variables[lhs.name], value, lhs.indices...
-                            )
-                        end
-                    end
+                    setindex!!(
+                        state.merged_data_and_transformed[lhs_var], value, indices...
+                    )
+                    new_value_added = true
                 end
             end
         end
     end
 
-    for (k, v) in pairs(state.transformed_variables)
-        if v isa Array
-            state.transformed_variables[k] = identity.(v)
+    for (k, v) in pairs(state.merged_data_and_transformed)
+        if eltype(v) <: Union{Missing,<:Real}
+            state.merged_data_and_transformed[k] = identity.(v)
         end
     end
 end
@@ -453,7 +537,7 @@ function check_multiple_assignments(state::CompileState)
                 for_statement = all_statements[statement_id]
                 covered_indices = []
                 for indices in Iterators.product(for_statement.bounds...)
-                    local_env = merge(copy(Dict(pairs(data))), state.transformed_variables)
+                    local_env = merge(copy(Dict(pairs(data))), state.transformed)
                     for (loop_var, bounds) in zip(for_statement.loop_vars, indices)
                         local_env[loop_var] = bounds
                     end
@@ -470,8 +554,8 @@ function check_multiple_assignments(state::CompileState)
                     for idx in Iterators.product(indices...)
                         if bit_array[idx...]
                             # special case: transformed variable as observation
-                            if haskey(state.transformed_variables, lhs_var) &&
-                                !ismissing(state.transformed_variables[lhs_var][idx...]) &&
+                            if haskey(state.transformed, lhs_var) &&
+                                !ismissing(state.transformed[lhs_var][idx...]) &&
                                 !is_logical(all_statements[statement_ids[statement_id]])
                                 continue
                             end
@@ -485,8 +569,8 @@ function check_multiple_assignments(state::CompileState)
                     idx = indices
                     if bit_array[idx...]
                         # special case: transformed variable as observation
-                        if haskey(state.transformed_variables, lhs_var) &&
-                            !ismissing(state.transformed_variables[lhs_var][idx...]) &&
+                        if haskey(state.transformed, lhs_var) &&
+                            !ismissing(state.transformed[lhs_var][idx...]) &&
                             !is_logical(all_statements[statement_ids[statement_id]])
                             continue
                         end
@@ -501,134 +585,38 @@ function check_multiple_assignments(state::CompileState)
     end
 end
 
-struct NodeInfo
-    is_logical
-    expression_id
-    loop_var_bindings
+struct NodeInfo end
+
+function build_graph(state::CompileState)
+    return g = MetaGraph(DiGraph(), VarName, NodeInfo)
 end
 
-# function build_graph(state::CompileState)
-#     g = MetaGraph(DiGraph(), VarName, NodeInfo)
-
-#     env = merge(copy(Dict(pairs(state.data))), state.transformed_variables)
-
-#     for statement in state.logical_statements
-#         lhs = find_variables_on_lhs(statement.lhs, env)
-#         if is_resolved(evaluate(lhs, transformed_variables)) # meaning we already evaluated it
-#             continue
-#         end
-#         statement.rhs = concretize_colon_indexing(statement.rhs, state.array_sizes, env)
-
-#         rhs = evaluate(statement.rhs, env)
-
-#         if rhs isa Symbol || ()
-#             @assert lhs isa Union{Scalar,ArrayElement}
-#             rhs = Var(rhs)
-
-#         elseif Meta.isexpr(rhs, :ref) &&
-#             all(x -> x isa Union{Number,UnitRange}, rhs.args[2:end])
-#             rhs_var = Var(rhs.args[1], Tuple(rhs.args[2:end]))
-#             rhs_array_var = create_array_var(rhs_var.name, pass.array_sizes, env)
-#             size(rhs_var) == size(lhs_var) ||
-#                 error("Size mismatch between lhs and rhs at expression $expr")
-#             if lhs_var isa ArrayElement
-#                 @assert pass.array_bitmap[rhs_var.name][rhs_var.indices...] "Variable $rhs_var is not defined."
-#                 node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
-#                     $(rhs_var.name)[$(rhs_var.indices...)]
-#                 node_args = [rhs_array_var]
-#                 dependencies = [rhs_var]
-#             else
-#                 # rhs is not evaluated into a concrete value, then at least some elements of the rhs array are not data
-#                 non_data_vars = filter(x -> x isa Var, evaluate(rhs_var, env))
-#                 # for now: evaluate(rhs_var, env) will produce scalarized `Var`s, so dependencies
-#                 # may contain `Auxiliary Nodes`, this should be okay, but maybe we should keep things uniform
-#                 # by keep `dependencies` only variables in the model, not auxiliary nodes
-#                 for v in non_data_vars
-#                     @assert pass.array_bitmap[v.name][v.indices...] "Variable $v is not defined."
-#                 end
-#                 node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
-#                     $(rhs_var.name)[$(rhs_var.indices...)]
-#                 node_args = [rhs_array_var]
-#                 dependencies = non_data_vars
-#             end
-#         else
-#             rhs_expr = replace_constants_in_expr(rhs_expr, env)
-#             evaled_rhs, dependencies, node_args = evaluate_and_track_dependencies(rhs_expr, env)
-
-#             # TODO: since we are not evaluating the node function expressions anymore, we don't have to store the expression like anonymous functions 
-#             # rhs can be evaluated into a concrete value here, because including transformed variables in the data
-#             # is effectively constant propagation
-#             if is_resolved(evaled_rhs)
-#                 node_function = Expr(:(->), Expr(:tuple), Expr(:block, evaled_rhs))
-#                 node_args = []
-#                 # we can also directly save the evaled variable to `env` and later convert to var_store
-#                 # issue is that we need to do this in steps, const propagation need to a separate pass
-#                 # otherwise the variable in previous expressions will not be evaluated to the concrete value
-#             else
-#                 dependencies, node_args = map(
-#                     x -> map(x) do x_elem
-#                         if x_elem isa Symbol
-#                             return Var(x_elem)
-#                         elseif x_elem isa Tuple && last(x_elem) == ()
-#                             return create_array_var(first(x_elem), pass.array_sizes, env)
-#                         else
-#                             return Var(first(x_elem), last(x_elem))
-#                         end
-#                     end,
-#                     map(collect, (dependencies, node_args)),
-#                 )
-
-#                 rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
-#                     if @capture(sub_expr, arr_[idxs__])
-#                         new_idxs = [
-#                             idx isa Integer ? idx : :(JuliaBUGS.try_cast_to_int($(idx))) for
-#                             idx in idxs
-#                         ]
-#                         return Expr(:ref, arr, new_idxs...)
-#                     end
-#                     return sub_expr
-#                 end
-
-#                 args = convert(Array{Any}, deepcopy(node_args))
-#                 for (i, arg) in enumerate(args)
-#                     if arg isa ArrayVar
-#                         args[i] = Expr(:(::), arg.name, :Array)
-#                     elseif arg isa Scalar
-#                         args[i] = arg.name
-#                     else
-#                         error("Unexpected argument type: $arg")
-#                     end
-#                 end
-#                 node_function = Expr(:(->), Expr(:tuple, args...), rhs_expr)
-#             end
-#         end
-
-# end
-
 ##
-using JuliaBUGS: program!, CollectVariables, ConstantPropagation
+
+using JuliaBUGS: program!, CollectVariables, ConstantPropagation, PostChecking
 
 model_def, data, inits =
     Base.Fix1(getfield, JuliaBUGS.BUGSExamples.leuk).([:model_def, :data, :inits]);
 inits = first(inits);
 
+##
 scalars, array_sizes = program!(CollectVariables(), model_def, data)
-
-has_new_val, transformed_variables = program!(
+has_new_val, transformed = program!(
     ConstantPropagation(scalars, array_sizes), model_def, data
 )
 while has_new_val
-    has_new_val, transformed_variables = program!(
-        ConstantPropagation(false, transformed_variables), model_def, data
+    has_new_val, transformed = program!(
+        ConstantPropagation(false, transformed), model_def, data
     )
 end
+array_bitmap, transformed = program!(PostChecking(data, transformed), model_def, data)
 
-transformed_variables
+##
+state = CompileState(model_def, data, inits)
+determine_array_sizes!(state)
+compute_transformed!(state)
 
-state = CompileState(model_def)
-determine_array_sizes!(state, data)
-compute_transformed_variables!(state, data)
-
+##
 model_def = @bugs begin
     for i in 1:3
         x[i] = y[i]
@@ -637,13 +625,9 @@ model_def = @bugs begin
     for i in 1:10
         x[i] ~ Normal(0, 1)
     end
+
+    z = sum(x[:])
 end
 
 state = CompileState(model_def, (y=[1, 2, 3],), NamedTuple())
-
 state = CompileState(model_def, (;), NamedTuple())
-
-determine_array_sizes!(state)
-compute_transformed_variables!(state)
-
-check_multiple_assignments(state)
