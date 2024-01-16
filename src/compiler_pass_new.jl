@@ -6,17 +6,31 @@ using Missings
 using RuntimeGeneratedFunctions
 using Setfield
 
+module RHSEval
+using JuliaBUGS.BUGSPrimitives
+using RuntimeGeneratedFunctions
+RuntimeGeneratedFunctions.init(@__MODULE__)
+end
+
+function prepare_fun_expr(statement::Union{Statement{:(=)},ForStatement{:(=)}})
+    fun_expr = MacroTools.@q function $(repr(statement.lhs))($(statement.loop_vars...))
+        $(statement.rhs)
+    end
+    return fun_expr
+end
+
+# f = @RuntimeGeneratedFunction(RHSEval, prepare_fun_expr(statement))
+
 function simplify_lhs(::NamedTuple{names, Ts}, lhs::Symbol) where {names, Ts}
     return lhs
 end
 function simplify_lhs(value_map::NamedTuple{names, Ts}, lhs::Expr) where {names, Ts}
     @assert Meta.isexpr(lhs, :ref)
     @capture(lhs, var_[indices__])
-    indices = map(Base.Fix1(simplify_lhs_eval, value_map), indices)
+    indices = map(Int ∘ Base.Fix1(simplify_lhs_eval, value_map), indices)
     return :($(var)[$(indices...)])
 end
 
-# simplify_lhs_eval guarantees to return a Int or throw error 
 function simplify_lhs_eval(::NamedTuple{names, Ts}, expr::Int) where {names, Ts}
     return expr
 end
@@ -32,12 +46,12 @@ function simplify_lhs_eval(value_map::NamedTuple{names, Ts}, expr::Expr) where {
         args = map(Base.Fix1(simplify_lhs_eval, value_map), args)
         if f == :+
             return sum(args)
+        elseif f == :*
+            return prod(args)
         else
             @assert length(args) == 2
             if f == :-
                 return args[1] - args[2]
-            elseif f == :*
-                return args[1] * args[2]
             elseif f == :/
                 return args[1] / args[2]
             else # :(:)
@@ -51,11 +65,14 @@ function simplify_lhs_eval(value_map::NamedTuple{names, Ts}, expr::Expr) where {
     end
 end
 
-function is_data_or_transformed_lhs(value_map::NamedTuple{names, Ts}, lhs::Symbol) where {names, Ts}
-    return lhs in names && value_map[lhs] isa Real
+function check_if_partially_specified_as_data(value_map, simplified_lhs)
+    is_data_or_transformed_lhs(value_map, simplified_lhs)
+    return nothing
 end
-function is_data_or_transformed_lhs(value_map::NamedTuple{names, Ts}, lhs::Expr) where {names, Ts}
-    simplified_lhs = simplify_lhs(value_map, lhs)
+function is_data_or_transformed_lhs(value_map::NamedTuple{names, Ts}, simplified_lhs::Symbol) where {names, Ts}
+    return simplified_lhs in names
+end
+function is_data_or_transformed_lhs(value_map::NamedTuple{names, Ts}, simplified_lhs::Expr) where {names, Ts}
     @capture(simplified_lhs, var_[indices__])
     if var ∉ names
         return false
@@ -67,32 +84,26 @@ function is_data_or_transformed_lhs(value_map::NamedTuple{names, Ts}, lhs::Expr)
             values = view(value_map[var], indices...)
             # all the values must be all or none missing
             T = typeof(values[1])
-            if T == Missing
-                @assert all(ismissing, values)
-            else
-                @assert all(Base.Fix2(isa, T), values)
+            if !all(Base.Fix2(isa, T), values)
+                error("$(simplified_lhs) is partially specified at data, thus can't be assigned to.")
             end
             return T != Missing
         end
     end
 end
 
-# if simplify, then only return Expr, Symbol, or Real
 function evaluate(
-    env::NamedTuple{names, Ts},
+    env,
     expr;
-    module_name=Main,
-    return_missing=false,
-    arithmetic_functions=(:+, :-, :*, :/),
+    m=Main,
     allowed_functions=[],
-    all_allowed_functions=union(arithmetic_functions, allowed_functions),
 )
     if expr isa Float64 # for ease of indexing
         return isinteger(expr) ? Int(expr) : expr
     elseif expr isa Union{Int,UnitRange}
         return expr
     elseif expr isa Symbol
-        if expr in names
+        if haskey(env, expr)
             return env[expr]
         elseif Base.isidentifier(expr)
             return expr
@@ -107,87 +118,71 @@ function evaluate(
         if Meta.isexpr(expr, :ref)
             @capture(expr, var_[indices__])
 
-            indices = map(indices) do index
-                evaled_index = evaluate(env, index; simplify_only=true)
-                if evaled_index isa Union{Symbol, <:Real, UnitRange{Int}}
-                    return evaled_index
-                else
-                    throw(ArgumentError("Index $evaled_index is not supported."))
+            evaluated_indices = [evaluate(env, index; m=m, allowed_functions=allowed_functions) for index in indices]
+
+            for (i, index) in enumerate(evaluated_indices)
+                if !(index isa Int) && !(index isa UnitRange) && !(index isa Expr)
+                    throw(ArgumentError("Can't index with $(indices[i])."))
                 end
             end
 
-            indices = [evaluate(env, index) for index in indices]
-            if var ∉ names
-                return :($(var)[$(indices...)])
+            if var ∉ keys(env)
+                return :($(var)[$(evaluated_indices...)])
             end
             
-            if any(Base.Fix2(isa, Expr), expr.args[2:end]) # some indices are not evaluated
-                return expr
+            if any(Base.Fix2(isa, Expr), evaluated_indices) # some indices are not evaluated
+                return Expr(:ref, var, evaluated_indices...)
             end
 
-            expr = Expr(
-                :ref, expr.args[1], indices...
-            )
-            @assert all(Base.Fix2(isa, Union{Int,UnitRange{Int}}), expr.args[2:end])
-            value = getindex(env[expr.args[1]], expr.args[2:end]...) # TODO: maybe view?
+            value = if all(Base.Fix2(isa, Int), evaluated_indices)
+                env[var][evaluated_indices...]
+            else
+                view(env[var], evaluated_indices...)
+            end
 
             if value isa Real
                 return value
-            elseif value isa Array
-                if eltype <: Real
+            elseif eltype(value) <: Real
                     return value
-                if all(Base.Fix2(isa, Real), value) # eltype is Union{Missing,Float64}, but all values are non-missing
-                    return value
-                elseif all(ismissing, value)
-                    return expr
-                else
-                    if return_missing
-                        return value
-                    else
-                        return expr
-                    end
-                end
+            elseif all(Base.Fix2(isa, Real), value) # eltype is Union{Missing,Float64}, but all values are non-missing
+                return value
             else
-                error("`getindex` returns $(typeof(value)) which is not supported.")
+                return expr
             end
         elseif Meta.isexpr(expr, :call)
-            expr = Expr(
-                :call, expr.args[1], map(Base.Fix1(evaluate, env), expr.args[2:end])...
-            )
-            if all(Base.Fix2(isa, Union{Real,Array{Real}}), expr.args[2:end])
-                if expr.args[1] == :(:)
-                    return (:)(Int.(expr.args[2:end])...)
-                elseif expr.args[1] ∈ all_allowed_functions
-                    evaluate_result = (getfield(module_name, expr.args[1]))(
-                        expr.args[2:end]...
-                    )
-                    if evaluate_result isa Real
-                        return evaluate_result
-                    elseif evaluate_result isa Array
-                        if eltype <: Real
-                            return evaluate_result
-                        if all(Base.Fix2(isa, Real), evaluate_result) # eltype is Union{Missing,Float64}, but all values are non-missing
-                            return evaluate_result
-                        elseif all(ismissing, evaluate_result)
-                            return expr
-                        else
-                            if return_missing
-                                return evaluate_result
-                            else
-                                return expr
-                            end
-                        end
-                    else
-                        return evaluate_result # evaluated to non-numeric, e.g. a distribution
-                    end
-                end
-            else
-                if expr.args[1] == :(+)
-                    number_terms = filter(Base.Fix2(isa, Number), expr.args[2:end])
-                    expr_terms = filter(!Base.Fix2(isa, Number), expr.args[2:end])
+            @capture(expr, f_(args__))
+            evaluated_args = map(x -> evaluate(env, x; m=m, allowed_functions=allowed_functions), args)
+
+            if any(Base.Fix2(isa, Expr), evaluated_args)
+                returned_args = [evaluated_arg isa AbstractArray ? arg : evaluated_arg for (arg, evaluated_arg) in zip(args, evaluated_args)]
+
+                if f == :(+) # simplify addition
+                    number_terms = filter(Base.Fix2(isa, Number), returned_args)
+                    expr_terms = filter(!Base.Fix2(isa, Number), returned_args)
                     return Expr(:call, :+, sum(number_terms), expr_terms...)
                 end
-                return expr
+
+                return Expr(:call, f, returned_args...)
+            end
+
+            # then all args are evaluated
+            if f == :(+)
+                return sum(evaluated_args)
+            elseif f == :(*)
+                return prod(evaluated_args)
+            elseif f in (:-, :/, :(:))
+                @assert length(evaluated_args) == 2
+                if f == :-
+                    return evaluated_args[1] - evaluated_args[2]
+                elseif f == :/
+                    return evaluated_args[1] / evaluated_args[2]
+                else
+                    return UnitRange(Int(evaluated_args[1]), Int(evaluated_args[2]))
+                end
+            elseif f in allowed_functions
+                return (getfield(m, f))(evaluated_args...)
+            else
+                throw(ErrorException("Function $f is not supported."))
             end
         else
             error("Expression type $(expr.args[1]) is not supported.")
@@ -414,7 +409,6 @@ function plug_in_loopvar(for_statement::ForStatement, ::Val{:rhs}, values)
     return expr
 end
 
-# TODO: can just evaluate the rhs to a function at the creation of CompileState
 struct CompileState
     data
     merged_data_and_transformed
@@ -454,6 +448,10 @@ function CompileState(expr, data, initializations)
         end
     end
 
+    for (k, v) in pairs(data)
+        Base.eval(RHSEval, :($k = $v))
+    end
+
     return CompileState(
         data,
         data == NamedTuple() ? Dict() : Dict(pairs(data)), # merged_data_and_transformed is the same as data at the beginning
@@ -479,7 +477,6 @@ function determine_array_sizes!(state::CompileState)
     for statement in state.logical_statements
         determine_array_sizes_logical!(state, statement.lhs)
     end
-
     for for_statement in state.logical_for_statements
         for indices in Iterators.product(for_statement.bounds...)
             determine_array_sizes_logical!(
@@ -487,12 +484,10 @@ function determine_array_sizes!(state::CompileState)
             )
         end
     end
-
     for statement in state.stochastic_statements
         determine_array_sizes_stochastic!(state, statement.lhs)
     end
-
-    for for_statement in vcat(state.logical_for_statements, state.stochastic_for_statements)
+    for for_statement in state.stochastic_for_statements
         for indices in Iterators.product(for_statement.bounds...)
             determine_array_sizes_stochastic!(
                 state, plug_in_loopvar(for_statement, Val(:lhs), indices)
@@ -524,126 +519,103 @@ function determine_array_sizes!(state::CompileState)
 end
 
 function determine_array_sizes_logical!(state::CompileState, lhs)
-    evaluated_lhs = evaluate(state.data, lhs; return_missing=true)
-    if ismissing(evaluated_lhs)
-        if lhs isa Symbol
-            error("The data shouldn't contain scalar missing values.")
-        else
-            determine_array_sizes_inner!(
-                state,
-                Expr(
-                    :ref,
-                    lhs.args[1],
-                    map(Base.Fix1(evaluate, state.data), lhs.args[2:end])...,
-                ),
-            )
-        end
-    elseif evaluated_lhs isa Symbol
-        return nothing # no need to determine array sizes for scalars
-    elseif evaluated_lhs isa Array
-        if eltype(evaluated_lhs) <: Real || all(!ismissing, evaluated_lhs) # eltype can be Union{Missing,Float64} even if all values are non-missing
-            error("$(lhs) is specified at data, thus can't be assigned to.")
-        elseif all(ismissing, evaluated_lhs) # this is fine, but we need to get the Expr of the LHS
-            determine_array_sizes_inner!(
-                state,
-                Expr(
-                    :ref,
-                    lhs.args[1],
-                    map(Base.Fix1(evaluate, state.data), lhs.args[2:end])...,
-                ),
-            )
-        else # some missing values, the others are data
-            error("$(lhs) is specified at data, thus can't be assigned to.")
-        end
-    elseif evaluated_lhs isa Expr
-        determine_array_sizes_inner!(state, evaluated_lhs)
-    else
-        error("Don't know how to handle $(lhs).")
+    simplified_lhs = simplify_lhs(state.data, lhs)
+    if is_data_or_transformed_lhs(state.data, simplified_lhs)
+        throw(ErrorException("$(lhs) is specified at data, thus can't be assigned to."))
     end
+    if simplified_lhs isa Symbol # scalar, no need to determine array sizes
+        return nothing
+    end
+    determine_array_sizes_inner!(state, simplified_lhs)
+    return nothing
 end
 
 function determine_array_sizes_stochastic!(state::CompileState, lhs)
+    simplified_lhs = simplify_lhs(state.data, lhs)
     if lhs isa Symbol # if it's a scalar
         return nothing
     end
-    evaluated_lhs = evaluate(state.data, lhs; return_missing=true)
-    if ismissing(evaluated_lhs) || evaluated_lhs isa Real # random variables: unobserved or observed
-        return nothing # because `evaluate` didn't error, it's fine
-    elseif evaluated_lhs isa Array
-        if eltype(evaluated_lhs) <: Real ||
-            all(!ismissing, evaluated_lhs) ||
-            all(ismissing, evaluated_lhs)
-            return nothing # because `evaluate` didn't error, it's fine
-        else # mixed missing and non-missing
-            error("Unobserved values can't be mixed with observed values at $(lhs).")
-        end
-    elseif evaluated_lhs isa Expr
-        determine_array_sizes_inner(state, evaluated_lhs)
-    else
-        error("Don't know how to handle $(lhs).")
-    end
+    check_if_partially_specified_as_data(state.data, simplified_lhs)
+    determine_array_sizes_inner!(state, simplified_lhs)
+    return nothing
 end
 
-function determine_array_sizes_inner!(state::CompileState, lhs::Expr)
-    if @capture(lhs, lhs_var_[indices__])
-        @assert all(Base.Fix2(isa, Union{Int,UnitRange{Int}}), indices) "Some indices can't be decided at compile time."
-        if haskey(state.data, lhs_var)
-            @assert length(last.(indices)) == ndims(state.data[lhs_var]) &&
-                all(last.(indices) .<= size(state.data[lhs_var]))
-            return nothing
+function determine_array_sizes_inner!(state::CompileState, simplify_lhs::Expr)
+    @capture(simplify_lhs, lhs_var_[indices__])
+    if haskey(state.data, lhs_var)
+        # check if the variable is consistent with data
+        if length(last.(indices)) == length(state.array_sizes[lhs_var])
+            throw(ErrorException("$(simplified_lhs)'s number of dimensions doesn't match the data."))
+        elseif all(last.(indices) .<= state.array_sizes[lhs_var])
+            throw(ErrorException("$(simplified_lhs)'s indices are out of bounds."))
         end
-        if haskey(state.array_sizes, lhs_var)
-            state.array_sizes[lhs_var] = max.(state.array_sizes[lhs_var], last.(indices)) # check ndims implicitly
-        else
-            state.array_sizes[lhs_var] = [last.(indices)...]
-        end
-    else
-        error("LHS $lhs should be a :ref expression.")
+        return nothing
     end
+    state.array_sizes[lhs_var] = max.(get!(state.array_sizes, lhs_var, [last(indices[1])]), last.(indices))
+    return nothing
 end
 
 FUNCTION_TO_ATTEMPT_EVAL = copy(JuliaBUGS.BUGSPrimitives.BUGS_FUNCTIONS) # can also add user defined functions
 
 function compute_transformed!(state::CompileState)
     new_value_added = true
+    evaluated_logical_statements = []
+    evaluated_logical_for_statements = []
+    evaluated_logical_for_statement_indices = Dict{Int, BitArray}()
     while new_value_added
         new_value_added = false
 
-        for statement in state.logical_statements
-            if can_skip(state.merged_data_and_transformed, statement)
+        for (i, statement) in enumerate(state.logical_statements)
+            if i in evaluated_logical_statements
                 continue
             end
-            # because `determine_array_sizes!` has done the checks, we can assume that `evaluate(data, statement.lhs)` returns a Symbol or Expr
-            lhs = evaluate(state.data, statement.lhs)
 
-            if lhs isa Symbol
-                if evaluate(state.merged_data_and_transformed, lhs) isa Real
+            if can_skip(state.merged_data_and_transformed, statement)
+                push!(evaluated_logical_statements, i)
+                continue
+            end
+
+            if statement.lhs isa Symbol
+                rhs = evaluate(state.merged_data_and_transformed, statement.rhs; allowed_functions=FUNCTION_TO_ATTEMPT_EVAL)
+                if rhs isa Missing
                     continue
                 end
-                rhs = evaluate(state.merged_data_and_transformed, statement.rhs)
-                if rhs isa Real
-                    state.merged_data_and_transformed[lhs] = rhs
-                    new_value_added = true
-                end
-            elseif lhs isa Expr
+                state.merged_data_and_transformed[statement.lhs] = rhs
+                push!(evaluated_logical_statements, i)
+                new_value_added = true
+            else # Expr
                 new_value_added = compute_transformed_inner!(state, lhs, statement.rhs)
-            else
-                error("Don't know how to handle $(lhs).")
             end
         end
 
-        for for_statement in state.logical_for_statements
+        for (i, for_statement) in enumerate(state.logical_for_statements)
+            if i in evaluated_logical_for_statements
+                continue
+            end
+
+            if i in keys(evaluated_logical_for_statement_indices)
+                if all(evaluated_logical_for_statement_indices[i])
+                    push!(evaluated_logical_for_statements, i)
+                    continue
+                end
+            end
+
             if can_skip(state.merged_data_and_transformed, for_statement)
                 continue
             end
 
+            evaluated_indices_array = get!(evaluated_logical_for_statement_indices, i, falses(state.array_sizes[for_statement.lhs.args[1]]...))
             for indices in Iterators.product(for_statement.bounds...)
-                new_value_added =
+                new_value_added_local = 
                     compute_transformed_inner!(
                         state,
                         plug_in_loopvar(for_statement, Val(:lhs), indices),
                         plug_in_loopvar(for_statement, Val(:rhs), indices),
-                    ) || new_value_added
+                    ) 
+                if new_value_added_local
+                    evaluated_indices_array[indices...] = true
+                end
+                new_value_added = new_value_added_local || new_value_added
             end
         end
     end
@@ -655,154 +627,155 @@ function can_skip(env, stmt::Union{Statement{:(=)},ForStatement{:(=)}})
 end
 
 function compute_transformed_inner!(state, lhs::Expr, rhs)
-    evaluated_lhs = evaluate(state.merged_data_and_transformed, lhs) # this time evaluate lhs in `merged_data_and_transformed` 
-    # instead of data to check if it's already evaluated
-
-    if evaluated_lhs isa Real
+    simplified_lhs = simplify_lhs(state.data, lhs)
+    
+    if is_data_or_transformed_lhs(NamedTuple(pairs(state.merged_data_and_transformed)), simplified_lhs)
         return false
-    elseif evaluated_lhs isa Array
-        if eltype(evaluated_lhs) <: Real || all(Base.Fix2(isa, Real), evaluated_lhs)
-            return false
-        end
     end
 
-    @assert evaluated_lhs isa Expr
-    # then the statement has not been evaluated
     value = evaluate(
         state.merged_data_and_transformed, rhs; allowed_functions=FUNCTION_TO_ATTEMPT_EVAL
     )
-    if value isa Union{Real,Array{<:Real}} || all(Base.Fix2(isa, Real), value)
-        if @capture(lhs, lhs_var_[indices__])
-            if !haskey(state.merged_data_and_transformed, lhs_var)
-                state.merged_data_and_transformed[lhs_var] = Array{Union{Missing,Float64}}(
-                    missing, state.array_sizes[lhs_var]...
-                )
-                # special case: data array contains missing values, then we need to make a copy before mutating
-            elseif lhs_var ∈ keys(state.data) &&
-                state.merged_data_and_transformed[lhs_var] === state.data[lhs_var] # haven't been copied
+
+    if value isa Expr
+        return false
+    elseif value isa Real || eltype(value) <: Real || all(Base.Fix2(isa, Real), value)
+        @capture(simplified_lhs, lhs_var_[indices__])
+
+        if !haskey(state.merged_data_and_transformed, lhs_var)
+            state.merged_data_and_transformed[lhs_var] = Array{Union{Missing,Float64}}(
+                missing, state.array_sizes[lhs_var]...
+            )
+        end
+
+        # special case: data array contains missing values, then we need to make a copy before mutating
+        if lhs_var ∈ keys(state.data)
+            if state.merged_data_and_transformed[lhs_var] === state.data[lhs_var] # haven't been copied
                 state.merged_data_and_transformed[lhs_var] = copy(state.data[lhs_var])
             end
-            setindex!!(state.merged_data_and_transformed[lhs_var], value, indices...)
-            return true
-        else
-            error("LHS $lhs should be a :ref expression.")
         end
-    else
+
+        setindex!!(state.merged_data_and_transformed[lhs_var], value, indices...)
+
+        return true
+    else # catch other possible types by evaluating other functions
         return false
     end
 end
 
-function check_multiple_assignments(state::CompileState)
-    all_statements = vcat(
-        state.logical_statements,
-        state.logical_for_statements,
-        state.stochastic_statements,
-        state.stochastic_for_statements,
-    ) # logical before stochastic
 
-    # TODO: should we check repeated assignment before or after transformation?
-    # if multiple logical assignment, can cause confusion and repeated writing to same location
-    # first test scalars
-    scalars_seen = Set{Symbol}()
-    for statement in state.logical_statements
-        if statement.lhs isa Symbol
-            if statement.lhs ∈ scalars_seen
-                error("Multiple assignments to $(statement.lhs) is not allowed.")
-            else
-                push!(scalars_seen, statement.lhs)
-            end
-        end
-    end
-    for statement in vcat(state.logical_statements, state.stochastic_statements)
-        if statement.lhs isa Symbol
-            if !haskey(state.array_sizes, statement.lhs)
-                continue
-            end
-            if is_logical(statement)
-                error("Multiple assignments to $(statement.lhs) is not allowed.")
-            else
-                error("Multiple assignments to $(statement.lhs) is not allowed.")
-            end
-        end
-    end
 
-    lhs_vars = [statement.lhs isa Symbol ? statement.lhs : statement.lhs.args[1] for statement in all_statements]
-    binned_statement_id_by_lhs_var = Dict()
-    for (i, lhs_var) in enumerate(lhs_vars)
-        push!(get!(binned_statement_id_by_lhs_var, lhs_var, []), i)
-    end
+# function check_multiple_assignments(state::CompileState)
+#     all_statements = vcat(
+#         state.logical_statements,
+#         state.logical_for_statements,
+#         state.stochastic_statements,
+#         state.stochastic_for_statements,
+#     ) # logical before stochastic
 
-    for (lhs_var, statement_ids) in pairs(binned_statement_id_by_lhs_var)
-        if !haskey(state.array_sizes, lhs_var) # scalar
-            if length(statement_ids) == 1
-                continue
-            elseif length(statement_ids) == 2
-                if is_logical(all_statements[statement_ids[1]]) && !is_logical(all_statements[statement_ids[2]])
-                    evaluated_lhs = evaluate(state.merged_data_and_transformed, all_statements[statement_ids[1]].lhs)
-                    if evaluated_lhs isa Real || all(Base.Fix2(isa, Real), evaluated_lhs) # transformed variable as observation
-                        continue
-                    end
-                    error("Multiple assignments to $lhs_var is not allowed.")
-                end
-            else
-                error("Multiple assignments to $lhs_var is not allowed.")
-            end
-        end
-        bit_array = falses(state.array_sizes[lhs_var]...)
-        for statement_id in statement_ids
-            stmt = all_statements[statement_id] # stmt can be either Statement or ForStatement
-            if stmt
-            indices_covered_by_statement = if all_statements[statement_id] isa Statement
-                statement = all_statements[statement_id]
-                [find_variables_on_lhs(statement.lhs, data).indices] # wrap in a vector for consistency
-            else # ForStatement
-                for_statement = all_statements[statement_id]
-                covered_indices = []
-                for indices in Iterators.product(for_statement.bounds...)
-                    lhs = evaluate(env, plug_in_loopvar(for_statement, Val(:lhs), indices))
+#     # TODO: should we check repeated assignment before or after transformation?
+#     # if multiple logical assignment, can cause confusion and repeated writing to same location
+#     # first test scalars
+#     scalars_seen = Set{Symbol}()
+#     for statement in state.logical_statements
+#         if statement.lhs isa Symbol
+#             if statement.lhs ∈ scalars_seen
+#                 error("Multiple assignments to $(statement.lhs) is not allowed.")
+#             else
+#                 push!(scalars_seen, statement.lhs)
+#             end
+#         end
+#     end
+#     for statement in vcat(state.logical_statements, state.stochastic_statements)
+#         if statement.lhs isa Symbol
+#             if !haskey(state.array_sizes, statement.lhs)
+#                 continue
+#             end
+#             if is_logical(statement)
+#                 error("Multiple assignments to $(statement.lhs) is not allowed.")
+#             else
+#                 error("Multiple assignments to $(statement.lhs) is not allowed.")
+#             end
+#         end
+#     end
 
-                    push!(
-                        covered_indices,
-                        find_variables_on_lhs(for_statement.lhs, local_env).indices,
-                    )
-                end
-                covered_indices
-            end
-            for indices in indices_covered_by_statement # indices_covered_by_statement is a vector of vectors
-                if any(Base.Fix2(isa, AbstractRange), indices)
-                    for idx in Iterators.product(indices...)
-                        if bit_array[idx...]
-                            # special case: transformed variable as observation
-                            if haskey(state.transformed, lhs_var) &&
-                                !ismissing(state.transformed[lhs_var][idx...]) &&
-                                !is_logical(all_statements[statement_ids[statement_id]])
-                                continue
-                            end
-                            error(
-                                "Multiple assignments to $lhs_var at the same position is not allowed.",
-                            )
-                        end
-                        bit_array[idx...] = true
-                    end
-                else # no UnitRange involved
-                    idx = indices
-                    if bit_array[idx...]
-                        # special case: transformed variable as observation
-                        if haskey(state.transformed, lhs_var) &&
-                            !ismissing(state.transformed[lhs_var][idx...]) &&
-                            !is_logical(all_statements[statement_ids[statement_id]])
-                            continue
-                        end
-                        error(
-                            "Multiple assignments to $lhs_var at the same position is not allowed.",
-                        )
-                    end
-                    bit_array[idx...] = true
-                end
-            end
-        end
-    end
-end
+#     lhs_vars = [statement.lhs isa Symbol ? statement.lhs : statement.lhs.args[1] for statement in all_statements]
+#     binned_statement_id_by_lhs_var = Dict()
+#     for (i, lhs_var) in enumerate(lhs_vars)
+#         push!(get!(binned_statement_id_by_lhs_var, lhs_var, []), i)
+#     end
+
+#     for (lhs_var, statement_ids) in pairs(binned_statement_id_by_lhs_var)
+#         if !haskey(state.array_sizes, lhs_var) # scalar
+#             if length(statement_ids) == 1
+#                 continue
+#             elseif length(statement_ids) == 2
+#                 if is_logical(all_statements[statement_ids[1]]) && !is_logical(all_statements[statement_ids[2]])
+#                     evaluated_lhs = evaluate(state.merged_data_and_transformed, all_statements[statement_ids[1]].lhs)
+#                     if evaluated_lhs isa Real || all(Base.Fix2(isa, Real), evaluated_lhs) # transformed variable as observation
+#                         continue
+#                     end
+#                     error("Multiple assignments to $lhs_var is not allowed.")
+#                 end
+#             else
+#                 error("Multiple assignments to $lhs_var is not allowed.")
+#             end
+#         end
+#         bit_array = falses(state.array_sizes[lhs_var]...)
+#         for statement_id in statement_ids
+#             stmt = all_statements[statement_id] # stmt can be either Statement or ForStatement
+#             if stmt
+#             indices_covered_by_statement = if all_statements[statement_id] isa Statement
+#                 statement = all_statements[statement_id]
+#                 [find_variables_on_lhs(statement.lhs, data).indices] # wrap in a vector for consistency
+#             else # ForStatement
+#                 for_statement = all_statements[statement_id]
+#                 covered_indices = []
+#                 for indices in Iterators.product(for_statement.bounds...)
+#                     lhs = evaluate(env, plug_in_loopvar(for_statement, Val(:lhs), indices))
+
+#                     push!(
+#                         covered_indices,
+#                         find_variables_on_lhs(for_statement.lhs, local_env).indices,
+#                     )
+#                 end
+#                 covered_indices
+#             end
+#             for indices in indices_covered_by_statement # indices_covered_by_statement is a vector of vectors
+#                 if any(Base.Fix2(isa, AbstractRange), indices)
+#                     for idx in Iterators.product(indices...)
+#                         if bit_array[idx...]
+#                             # special case: transformed variable as observation
+#                             if haskey(state.transformed, lhs_var) &&
+#                                 !ismissing(state.transformed[lhs_var][idx...]) &&
+#                                 !is_logical(all_statements[statement_ids[statement_id]])
+#                                 continue
+#                             end
+#                             error(
+#                                 "Multiple assignments to $lhs_var at the same position is not allowed.",
+#                             )
+#                         end
+#                         bit_array[idx...] = true
+#                     end
+#                 else # no UnitRange involved
+#                     idx = indices
+#                     if bit_array[idx...]
+#                         # special case: transformed variable as observation
+#                         if haskey(state.transformed, lhs_var) &&
+#                             !ismissing(state.transformed[lhs_var][idx...]) &&
+#                             !is_logical(all_statements[statement_ids[statement_id]])
+#                             continue
+#                         end
+#                         error(
+#                             "Multiple assignments to $lhs_var at the same position is not allowed.",
+#                         )
+#                     end
+#                     bit_array[idx...] = true
+#                 end
+#             end
+#         end
+#     end
+# end
 
 # struct NodeInfo end
 
