@@ -5,21 +5,14 @@ using MacroTools
 using Missings
 using RuntimeGeneratedFunctions
 using Setfield
+using Graphs, MetaGraphsNext
 
-# module RHSEval
-# using JuliaBUGS.BUGSPrimitives
-# using RuntimeGeneratedFunctions
-# RuntimeGeneratedFunctions.init(@__MODULE__)
-# end
-
-# function prepare_fun_expr(statement::Union{Statement{:(=)},ForStatement{:(=)}})
-#     fun_expr = MacroTools.@q function $(repr(statement.lhs))($(statement.loop_vars...))
-#         return $(statement.rhs)
-#     end
-#     return fun_expr
-# end
-
-# f = @RuntimeGeneratedFunction(RHSEval, prepare_fun_expr(statement))
+RuntimeGeneratedFunctions.init(@__MODULE__)
+module RHSEval
+using JuliaBUGS.BUGSPrimitives
+using RuntimeGeneratedFunctions
+RuntimeGeneratedFunctions.init(@__MODULE__)
+end
 
 function simplify_lhs(::NamedTuple{names,Ts}, lhs::Symbol) where {names,Ts}
     return lhs
@@ -27,24 +20,37 @@ end
 function simplify_lhs(value_map::NamedTuple{names,Ts}, lhs::Expr) where {names,Ts}
     @assert Meta.isexpr(lhs, :ref)
     @capture(lhs, var_[indices__])
-    indices = map(Base.Fix1(simplify_lhs_eval, value_map), indices)
+    indices = map(Base.Fix1(simple_arithmetic_eval, value_map), indices)
     indices = map(index -> index isa UnitRange ? index : Int(index), indices)
     return :($(var)[$(indices...)])
 end
 
-function simplify_lhs_eval(::NamedTuple{names,Ts}, expr::Int) where {names,Ts}
+# simple_arithmetic_eval is used to evaluate the indices of an array or loop bounds
+# the return value is either a UnitRange or an Int
+function simple_arithmetic_eval(::NamedTuple{names,Ts}, expr::Int) where {names,Ts}
     return expr
 end
-function simplify_lhs_eval(value_map::NamedTuple{names,Ts}, expr::Symbol) where {names,Ts}
+function simple_arithmetic_eval(
+    value_map::NamedTuple{names,Ts}, expr::Symbol
+) where {names,Ts}
     if expr ∉ names
         throw(ArgumentError("Don't know the value of $expr."))
     end
-    return value_map[expr]
+    return Int(value_map[expr])
 end
-function simplify_lhs_eval(value_map::NamedTuple{names,Ts}, expr::Expr) where {names,Ts}
+function simple_arithmetic_eval(
+    value_map::NamedTuple{names,Ts}, expr::Expr
+) where {names,Ts}
     @assert Meta.isexpr(expr, (:call, :ref))
     if @capture(expr, f_(args__))
-        args = map(Base.Fix1(simplify_lhs_eval, value_map), args)
+        args = map(Base.Fix1(simple_arithmetic_eval, value_map), args)
+        map(args) do arg
+            if arg isa UnitRange
+                error("Don't know how to do arithmetic between UnitRange and Intger.")
+            else
+                return Int(arg)
+            end
+        end
         if f == :+
             return sum(args)
         elseif f == :*
@@ -54,157 +60,50 @@ function simplify_lhs_eval(value_map::NamedTuple{names,Ts}, expr::Expr) where {n
             if f == :-
                 return args[1] - args[2]
             elseif f == :/
-                return args[1] / args[2]
+                return Int(args[1] / args[2])
             else # :(:)
                 return UnitRange(Int(args[1]), Int(args[2]))
             end
         end
     else # :ref
         @capture(expr, var_[indices__])
-        indices = map(index -> Int(simplify_lhs_eval(value_map, index)), indices) # delay casting until indexing
-        return Int(getindex(value_map[var], indices...))
+        evaluated_indices = map(index -> simple_arithmetic_eval(value_map, index), indices)
+        return Int(getindex(value_map[var], evaluated_indices...))
     end
 end
 
-function check_if_partially_specified_as_data(value_map, simplified_lhs)
-    is_data_or_transformed_lhs(value_map, simplified_lhs)
-    return nothing
-end
-function is_data_or_transformed_lhs(
-    value_map::NamedTuple{names,Ts}, simplified_lhs::Symbol
+function check_if_partially_specified_as_data(
+    value_map::NamedTuple{names,Ts}, simplified_lhs
 ) where {names,Ts}
-    return simplified_lhs in names
-end
-function is_data_or_transformed_lhs(
-    value_map::NamedTuple{names,Ts}, simplified_lhs::Expr
-) where {names,Ts}
-    @capture(simplified_lhs, var_[indices__])
-    if var ∉ names
-        return false
+    if simplified_lhs isa Symbol
+        return simplified_lhs in names
     else
-        if eltype(value_map[var]) <: Real
-            return true
+        @assert simplified_lhs isa Expr
+        @capture(simplified_lhs, var_[indices__])
+        if var ∉ names
+            return false
         else
-            @assert eltype(value_map[var]) <: Union{Missing,<:Real}
-            values = view(value_map[var], indices...)
-            # all the values must be all or none missing
-            T = typeof(values[1])
-            if !all(Base.Fix2(isa, T), values)
-                error(
-                    "$(simplified_lhs) is partially specified at data, thus can't be assigned to.",
-                )
-            end
-            return T != Missing
-        end
-    end
-end
-
-function evaluate(env, expr; m=Main, allowed_functions=[])
-    if expr isa Float64 # for ease of indexing
-        return isinteger(expr) ? Int(expr) : expr
-    elseif expr isa Union{Int,UnitRange}
-        return expr
-    elseif expr isa Symbol
-        if haskey(env, expr)
-            return env[expr]
-        elseif Base.isidentifier(expr)
-            return expr
-        else
-            if expr == :(:)
-                throw(ArgumentError("Colon indexing is not supported with `evaluate`."))
+            if eltype(value_map[var]) <: Real
+                return true
             else
-                throw(ArgumentError("Unknown symbol $expr."))
+                @assert eltype(value_map[var]) <: Union{Missing,<:Real}
+                values = view(value_map[var], indices...)
+                # all the values must be all or none missing
+                T = typeof(values[1])
+                if !all(Base.Fix2(isa, T), values)
+                    error(
+                        "$(simplified_lhs) is partially specified at data, thus can't be assigned to.",
+                    )
+                end
+                return T != Missing
             end
         end
-    elseif expr isa Expr
-        if Meta.isexpr(expr, :ref)
-            @capture(expr, var_[indices__])
-
-            evaluated_indices = [
-                evaluate(env, index; m=m, allowed_functions=allowed_functions) for
-                index in indices
-            ]
-
-            for (i, index) in enumerate(evaluated_indices)
-                if !(index isa Int) && !(index isa UnitRange) && !(index isa Expr)
-                    throw(ArgumentError("Can't index with $(indices[i])."))
-                end
-            end
-
-            if var ∉ keys(env)
-                return :($(var)[$(evaluated_indices...)])
-            end
-
-            if any(Base.Fix2(isa, Expr), evaluated_indices) # some indices are not evaluated
-                return Expr(:ref, var, evaluated_indices...)
-            end
-
-            value = if all(Base.Fix2(isa, Int), evaluated_indices)
-                env[var][evaluated_indices...]
-            else
-                view(env[var], evaluated_indices...)
-            end
-
-            if value isa Real
-                return value
-            elseif eltype(value) <: Real
-                return value
-            elseif all(Base.Fix2(isa, Real), value) # eltype is Union{Missing,Float64}, but all values are non-missing
-                return value
-            else
-                return expr
-            end
-        elseif Meta.isexpr(expr, :call)
-            @capture(expr, f_(args__))
-            evaluated_args = map(
-                x -> evaluate(env, x; m=m, allowed_functions=allowed_functions), args
-            )
-
-            if any(Base.Fix2(isa, Expr), evaluated_args)
-                returned_args = [
-                    evaluated_arg isa AbstractArray ? arg : evaluated_arg for
-                    (arg, evaluated_arg) in zip(args, evaluated_args)
-                ]
-
-                if f == :(+) # simplify addition
-                    number_terms = filter(Base.Fix2(isa, Number), returned_args)
-                    expr_terms = filter(!Base.Fix2(isa, Number), returned_args)
-                    return Expr(:call, :+, sum(number_terms), expr_terms...)
-                end
-
-                return Expr(:call, f, returned_args...)
-            end
-
-            # then all args are evaluated
-            if f == :(+)
-                return sum(evaluated_args)
-            elseif f == :(*)
-                return prod(evaluated_args)
-            elseif f in (:-, :/, :(:))
-                @assert length(evaluated_args) == 2
-                if f == :-
-                    return evaluated_args[1] - evaluated_args[2]
-                elseif f == :/
-                    return evaluated_args[1] / evaluated_args[2]
-                else
-                    return UnitRange(Int(evaluated_args[1]), Int(evaluated_args[2]))
-                end
-            elseif f in allowed_functions
-                return (getfield(m, f))(evaluated_args...)
-            else
-                throw(ErrorException("Function $f is not supported."))
-            end
-        else
-            error("Expression type $(expr.args[1]) is not supported.")
-        end
-    else
-        error("Argument type $(typeof(expr)) is not supported.")
     end
 end
 
 # loop fission makes performance not obvious to programmers: 
 # if we do source to source transformation for logp computation, we can add argument so that loops are not touched in the transformed code
-function separate_statements(@nospecialize(expr))
+function separate_statements(expr::Expr)
     assignments = filter(!Base.Fix2(Meta.isexpr, :for), expr.args)
     fissioned_loops = loop_fission_helper(expr.args)
     return assignments, fissioned_loops
@@ -287,24 +186,42 @@ function check_lhs(expr::Expr)
     return expr
 end
 
+# for now, assume module captures the values
+function to_function(m::Module, lhs, rhs)
+    fun_expr = MacroTools.@q function $(repr(lhs))()
+        return $(rhs)
+    end
+    return @RuntimeGeneratedFunction(m, fun_expr)
+end
+
+function to_function(m::Module, lhs, rhs, loop_vars)
+    fun_expr = MacroTools.@q function $(repr(lhs))($(loop_vars...))
+        return $(rhs)
+    end
+    return @RuntimeGeneratedFunction(m, fun_expr)
+end
+
 # E is either = or ~
 mutable struct Statement{E}
     lhs
     rhs
     rhs_vars
     rhs_funs
+    rhs_function
 end
 
-function Statement(@nospecialize(expr))
+function Statement(expr::Expr)
     sign = :(=)
     @capture(expr, lhs_ = rhs_) || @capture(expr, lhs_ ~ rhs_) && (sign = :(~))
     rhs_vars, rhs_funs = get_vars_and_funs_in_expr(rhs)
 
     if lhs isa Symbol
-        return Statement{sign}(lhs, rhs, rhs_vars, rhs_funs)
+        return Statement{sign}(lhs, rhs, rhs_vars, rhs_funs, to_function(RHSEval, lhs, rhs))
     end
 
-    return Statement{sign}(check_lhs(lhs), rhs, rhs_vars, rhs_funs)
+    return Statement{sign}(
+        check_lhs(lhs), rhs, rhs_vars, rhs_funs, to_function(RHSEval, lhs, rhs)
+    )
 end
 
 function Base.show(io::IO, statement::Statement{E}) where {E}
@@ -316,17 +233,16 @@ function Base.show(io::IO, statement::Statement{E}) where {E}
 end
 
 mutable struct ForStatement{E}
-    nested_levels::Int
     loop_vars
-    rhs_loop_vars_lens
     rhs_vars
     rhs_funs
     bounds
     lhs
     rhs
+    rhs_function
 end
 
-function ForStatement(@nospecialize(expr))
+function ForStatement(expr::Expr)
     loop_vars = []
     bounds = []
     nested_levels = 0
@@ -339,7 +255,6 @@ function ForStatement(@nospecialize(expr))
         )
         push!(loop_vars, loop_var)
         push!(bounds, :(($l):($h)))
-        nested_levels += 1
         expr = body[1]
     end
 
@@ -349,17 +264,15 @@ function ForStatement(@nospecialize(expr))
     @assert Meta.isexpr(lhs, :ref)
 
     rhs_vars, rhs_funs = get_vars_and_funs_in_expr(rhs)
-    rhs_loop_vars_lens = get_loop_var_lenses(rhs, loop_vars)
 
     return ForStatement{sign}(
-        nested_levels,
         loop_vars,
-        rhs_loop_vars_lens,
         setdiff(rhs_vars, loop_vars),
         rhs_funs,
         bounds,
         check_lhs(lhs),
         rhs,
+        to_function(RHSEval, lhs, rhs, loop_vars),
     )
 end
 
@@ -371,41 +284,9 @@ function Base.show(io::IO, for_statement::ForStatement{E}) where {E}
     end
 end
 
-# a variable is uniquely identified by expression id and loop var bindings
-function get_loop_var_lenses(expr, loop_vars)
-    lenses_map = Dict()
-    for loop_var in loop_vars
-        lenses = get_lens(expr, loop_var, Setfield.IdentityLens())
-        lenses_map[loop_var] = lenses
-    end
-    return lenses_map
-end
-
-function get_lens(expr, target_expr, parent_lens)
-    if expr isa Union{Symbol,Number} # didn't find
-        return []
-    end
-
-    lenses = [] # possible multiple occurrences
-    if expr.head == target_expr
-        push!(lenses, parent_lens ∘ (@lens _.head))
-    end
-    for (i, arg) in enumerate(expr.args)
-        if arg == target_expr
-            push!(lenses, parent_lens ∘ (@lens _.args[i]))
-        else
-            child_lenses = get_lens(arg, target_expr, parent_lens ∘ (@lens _.args[i]))
-            for lens in child_lenses
-                push!(lenses, lens)
-            end
-        end
-    end
-    return lenses
-end
-
 function evaluate_loop_bounds!(for_statement::ForStatement, data)
     for (i, bound) in enumerate(for_statement.bounds)
-        bound = evaluate(data, bound)
+        bound = simple_arithmetic_eval(data, bound)
         @assert bound isa UnitRange
         for_statement.bounds[i] = bound
     end
@@ -426,20 +307,9 @@ function plug_in_loopvar(for_statement::ForStatement, ::Val{:lhs}, values)
     end
 end
 
-function plug_in_loopvar(for_statement::ForStatement, ::Val{:rhs}, values)
-    @assert length(values) == length(for_statement.loop_vars)
-    expr = for_statement.rhs
-    for (loop_var, value) in zip(for_statement.loop_vars, values)
-        for lens in for_statement.rhs_loop_vars_lens[loop_var]
-            expr = set(expr, lens, value)
-        end
-    end
-    return expr
-end
-
 struct CompileState
     data
-    merged_data_and_transformed
+    variables_tracked_in_eval_module
     initializations
 
     logical_statements::Vector{Statement{:(=)}}
@@ -482,7 +352,7 @@ function CompileState(expr, data, initializations)
 
     return CompileState(
         data,
-        data == NamedTuple() ? Dict() : Dict(pairs(data)), # merged_data_and_transformed is the same as data at the beginning
+        Set(keys(data)),
         initializations,
         logical_statements,
         stochastic_statements,
@@ -547,7 +417,7 @@ end
 
 function determine_array_sizes_logical!(state::CompileState, lhs)
     simplified_lhs = simplify_lhs(state.data, lhs)
-    if is_data_or_transformed_lhs(state.data, simplified_lhs)
+    if check_if_partially_specified_as_data(state.data, simplified_lhs)
         throw(ErrorException("$(lhs) is specified at data, thus can't be assigned to."))
     end
     if simplified_lhs isa Symbol # scalar, no need to determine array sizes
@@ -559,7 +429,7 @@ end
 
 function determine_array_sizes_stochastic!(state::CompileState, lhs)
     simplified_lhs = simplify_lhs(state.data, lhs)
-    if lhs isa Symbol # if it's a scalar
+    if lhs isa Symbol
         return nothing
     end
     check_if_partially_specified_as_data(state.data, simplified_lhs)
@@ -570,7 +440,7 @@ end
 function determine_array_sizes_inner!(state::CompileState, simplified_lhs::Expr)
     @capture(simplified_lhs, lhs_var_[indices__])
     if haskey(state.data, lhs_var)
-        # check if the variable is consistent with data
+        # check if the number of dimensions and sizes are consistent with data
         if length(last.(indices)) != length(state.array_sizes[lhs_var])
             @show length(last.(indices)) length(state.array_sizes[lhs_var])
             throw(
@@ -588,8 +458,8 @@ function determine_array_sizes_inner!(state::CompileState, simplified_lhs::Expr)
     return nothing
 end
 
-# doesn't check repeated assignments across logical and stochastic statements
 function check_multiple_assignments(state::CompileState)
+    # check repeated assignment to scalar variables across all pairs of statements
     for statement_collection in (state.logical_statements, state.stochastic_statements)
         for (i, statement) in enumerate(statement_collection)
             if !(statement.lhs isa Symbol)
@@ -643,6 +513,10 @@ function check_multiple_assignments(state::CompileState)
             end
         end
     end
+
+    # cases where a logical statement and a stochastic statement assign to the same array location is not checked
+    # because it might be a valid case when the variable under inspection is a transformed variable
+    # this check will be done after `compute_transformed!`
 end
 
 function check_multiple_assignments_inner(state, lhs, definition_map)
@@ -677,27 +551,25 @@ function compute_transformed!(state::CompileState)
                 continue
             end
 
-            if can_skip(state.merged_data_and_transformed, statement)
+            if !all(Base.Fix2(∈, FUNCTION_TO_ATTEMPT_EVAL), statement.rhs_funs)
                 push!(evaluated_logical_statements, i)
                 continue
             end
 
+            if !all(Base.Fix2(∈, state.variables_tracked_in_eval_module), statement.rhs_vars)
+                continue
+            end
+
             if statement.lhs isa Symbol
-                rhs = evaluate(
-                    state.merged_data_and_transformed,
-                    statement.rhs;
-                    allowed_functions=FUNCTION_TO_ATTEMPT_EVAL,
-                )
+                rhs = statement.rhs_function()
                 if rhs isa Missing
                     continue
                 end
-                state.merged_data_and_transformed[statement.lhs] = rhs
+                Base.eval(RHSEval, :($(statement.lhs) = $(rhs)))
                 push!(evaluated_logical_statements, i)
                 new_value_added = true
             else # Expr
-                new_value_added = compute_transformed_inner!(
-                    state, statement.lhs, statement.rhs
-                )
+                new_value_added = compute_transformed_inner!(state, statement)
                 if new_value_added
                     push!(evaluated_logical_statements, i)
                 end
@@ -716,7 +588,12 @@ function compute_transformed!(state::CompileState)
                 end
             end
 
-            if can_skip(state.merged_data_and_transformed, for_statement)
+            if !all(Base.Fix2(∈, FUNCTION_TO_ATTEMPT_EVAL), for_statement.rhs_funs)
+                push!(evaluated_logical_for_statements, i)
+                continue
+            end
+
+            if !all(Base.Fix2(∈, state.variables_tracked_in_eval_module), for_statement.rhs_vars)
                 continue
             end
 
@@ -727,9 +604,7 @@ function compute_transformed!(state::CompileState)
             )
             for indices in Iterators.product(for_statement.bounds...)
                 new_value_added_local = compute_transformed_inner!(
-                    state,
-                    plug_in_loopvar(for_statement, Val(:lhs), indices),
-                    plug_in_loopvar(for_statement, Val(:rhs), indices),
+                    state, for_statement, indices
                 )
                 if new_value_added_local
                     evaluated_indices_array[indices...] = true
@@ -738,59 +613,54 @@ function compute_transformed!(state::CompileState)
             end
         end
     end
+    # check if a logical statement and a stochastic statement assign to the same array location
+    # TODO
 end
 
-function can_skip(env, stmt::Union{Statement{:(=)},ForStatement{:(=)}})
-    return !all(Base.Fix2(∈, FUNCTION_TO_ATTEMPT_EVAL), stmt.rhs_funs) ||
-           !all(Base.Fix2(∈, keys(env)), stmt.rhs_vars)
+function compute_transformed_inner!(state, statement)
+    simplified_lhs = simplify_lhs(state.data, statement.lhs)
+
+    # TODO: check if we already computed the value; need to take care of the case where the value is missing and return false
+
+    value = statement.rhs_function()
+    return store_values!(state, simplified_lhs, value)
 end
 
-function compute_transformed_inner!(state, lhs::Expr, rhs)
-    simplified_lhs = simplify_lhs(state.data, lhs)
-
-    if is_data_or_transformed_lhs(
-        NamedTuple(pairs(state.merged_data_and_transformed)), simplified_lhs
-    )
-        return false
-    end
-
-    value = evaluate(
-        state.merged_data_and_transformed, rhs; allowed_functions=FUNCTION_TO_ATTEMPT_EVAL
+function compute_transformed_inner!(state, for_statement, indices)
+    simplified_lhs = simplify_lhs(
+        state.data, plug_in_loopvar(for_statement, Val(:lhs), indices)
     )
 
+    # TODO: check if we already computed the value; need to take care of the case where the value is missing and return false
+    value = for_statement.rhs_function(indices...)
+    return store_values!(state, simplified_lhs, value)
+end
+
+function store_values!(state, simplified_lhs, value)
     if value isa Expr
         return false
     elseif value isa Real || eltype(value) <: Real || all(Base.Fix2(isa, Real), value)
         @capture(simplified_lhs, lhs_var_[indices__])
-
-        if !haskey(state.merged_data_and_transformed, lhs_var)
-            state.merged_data_and_transformed[lhs_var] = Array{Union{Missing,Int}}( # use Int by default, setindex!! will convert to Float64 if needed
-                missing,
-                state.array_sizes[lhs_var]...,
+        if lhs_var ∉ state.variables_tracked_in_eval_module
+            push!(state.variables_tracked_in_eval_module, lhs_var)
+            Base.eval(
+                RHSEval, :($lhs_var = $(fill(missing, state.array_sizes[lhs_var]...)))
             )
         end
 
         # special case: data array contains missing values, then we need to make a copy before mutating
         if lhs_var ∈ keys(state.data)
-            if state.merged_data_and_transformed[lhs_var] === state.data[lhs_var] # haven't been copied
-                state.merged_data_and_transformed[lhs_var] = copy(state.data[lhs_var])
+            if getfield(RHSEval, lhs_var) === state.data[lhs_var] # haven't been copied
+                Base.eval(RHSEval, :($lhs_var = $(copy(state.data[lhs_var]))))
             end
         end
 
-        # TODO: need to make sure this is mutating
-        BangBang.@set!! state.merged_data_and_transformed[lhs_var][indices...] = value
-
+        setproperty!(RHSEval, lhs_var, setindex!!(getfield(RHSEval, lhs_var), value, indices...))
         return true
     else # catch other possible types by evaluating other functions
         return false
     end
 end
-
-# struct NodeInfo end
-
-# function build_graph(state::CompileState)
-#     return g = MetaGraph(DiGraph(), VarName, NodeInfo)
-# end
 
 ##
 using JuliaBUGS: program!, CollectVariables, ConstantPropagation, PostChecking
@@ -850,8 +720,6 @@ end
 state = CompileState(model_def, (y=[1, 2, 3],), NamedTuple())
 state = CompileState(model_def, (;), NamedTuple())
 
-# TODO: test autodiff with RuntimeGeneratedFunction with module with global variable
-
 model_def = @bugs begin
     x[1:3] = y[1:3]
     x[1] = 2
@@ -867,3 +735,154 @@ state = CompileState(model_def, (y=[1, 2, 3],), NamedTuple())
 
 determine_array_sizes!(state)
 check_multiple_assignments(state)
+
+#################################### not used
+function numeric_evaluate(env, expr; m::Module=Main, allowed_functions=[])
+    if expr isa Float64 # for ease of indexing
+        return isinteger(expr) ? Int(expr) : expr
+    elseif expr isa Union{Int,UnitRange}
+        return expr
+    elseif expr isa Symbol
+        if haskey(env, expr)
+            return env[expr]
+        elseif Base.isidentifier(expr)
+            return expr
+        else
+            if expr == :(:)
+                throw(
+                    ArgumentError(
+                        "Colon indexing is not supported with `evaluate`, all colon indexing should be made concrete.",
+                    ),
+                )
+            else
+                throw(ArgumentError("Unknown symbol $expr."))
+            end
+        end
+    elseif expr isa Expr
+        if Meta.isexpr(expr, :ref)
+            @capture(expr, var_[indices__])
+
+            evaluated_indices = [
+                evaluate(env, index; m=m, allowed_functions=allowed_functions) for
+                index in indices
+            ]
+
+            for (i, index) in enumerate(evaluated_indices)
+                if !(index isa Int) && !(index isa UnitRange) && !(index isa Expr)
+                    throw(ArgumentError("Can't index with $(indices[i])."))
+                end
+            end
+
+            if var ∉ keys(env)
+                return :($(var)[$(evaluated_indices...)])
+            end
+
+            if any(Base.Fix2(isa, Expr), evaluated_indices) # some indices are not evaluated
+                return Expr(:ref, var, evaluated_indices...)
+            end
+
+            value = if all(Base.Fix2(isa, Int), evaluated_indices)
+                env[var][evaluated_indices...] # if all indices are Int, then the value is a scalar, just return the value
+            else
+                view(env[var], evaluated_indices...) # otherwise, return a view of the array
+            end
+
+            if value isa Real
+                return value
+            elseif eltype(value) <: Real
+                return value
+            elseif all(Base.Fix2(isa, Real), value) # eltype is Union{Missing,Float64}, but all values are non-missing
+                return value
+            else
+                return expr
+            end
+        elseif Meta.isexpr(expr, :call)
+            @capture(expr, f_(args__))
+            evaluated_args = map(
+                x -> evaluate(env, x; m=m, allowed_functions=allowed_functions), args
+            )
+
+            if !all(Base.Fix2(isa, Union{<:Real,UnitRange}), evaluated_args)
+                returned_args = [
+                    evaluated_arg isa Union{<:Real,UnitRange} ? evaluated_arg : arg for
+                    (arg, evaluated_arg) in zip(args, evaluated_args)
+                ]
+
+                if f == :(+) # simplify addition
+                    number_terms = filter(Base.Fix2(isa, Number), returned_args)
+                    expr_terms = filter(!Base.Fix2(isa, Number), returned_args)
+                    return Expr(:call, :+, sum(number_terms), expr_terms...)
+                end
+
+                return Expr(:call, f, returned_args...)
+            end
+
+            # then all args are evaluated
+            if f == :(+)
+                return sum(evaluated_args)
+            elseif f == :(*)
+                return prod(evaluated_args)
+            elseif f in (:-, :/, :(:))
+                @assert length(evaluated_args) == 2
+                if f == :-
+                    return evaluated_args[1] - evaluated_args[2]
+                elseif f == :/
+                    return evaluated_args[1] / evaluated_args[2]
+                else
+                    return UnitRange(Int(evaluated_args[1]), Int(evaluated_args[2]))
+                end
+            elseif f in allowed_functions
+                return (getfield(m, f))(evaluated_args...)
+            else
+                throw(ErrorException("Function $f is not supported."))
+            end
+        else
+            error("Expression type $(expr.args[1]) is not supported.")
+        end
+    else
+        error("Argument type $(typeof(expr)) is not supported.")
+    end
+end
+
+# a variable is uniquely identified by expression id and loop var bindings
+function get_loop_var_lenses(expr, loop_vars)
+    lenses_map = Dict()
+    for loop_var in loop_vars
+        lenses = get_lens(expr, loop_var, Setfield.IdentityLens())
+        lenses_map[loop_var] = lenses
+    end
+    return lenses_map
+end
+
+function get_lens(expr, target_expr, parent_lens)
+    if expr isa Union{Symbol,Number} # didn't find
+        return []
+    end
+
+    lenses = [] # possible multiple occurrences
+    if expr.head == target_expr
+        push!(lenses, parent_lens ∘ (@lens _.head))
+    end
+    for (i, arg) in enumerate(expr.args)
+        if arg == target_expr
+            push!(lenses, parent_lens ∘ (@lens _.args[i]))
+        else
+            child_lenses = get_lens(arg, target_expr, parent_lens ∘ (@lens _.args[i]))
+            for lens in child_lenses
+                push!(lenses, lens)
+            end
+        end
+    end
+    return lenses
+end
+
+function plug_in_loopvar(for_statement::ForStatement, ::Val{:rhs}, values)
+    @assert length(values) == length(for_statement.loop_vars)
+    expr = for_statement.rhs
+    for (loop_var, value) in zip(for_statement.loop_vars, values)
+        for lens in for_statement.rhs_loop_vars_lens[loop_var]
+            expr = set(expr, lens, value)
+        end
+    end
+    return expr
+end
