@@ -6,8 +6,8 @@ using Missings
 using RuntimeGeneratedFunctions
 using Setfield
 using Graphs, MetaGraphsNext
-
 RuntimeGeneratedFunctions.init(@__MODULE__)
+
 module RHSEval
 using JuliaBUGS.BUGSPrimitives
 using RuntimeGeneratedFunctions
@@ -662,189 +662,8 @@ function store_values!(state, simplified_lhs, value)
     end
 end
 
-##
-using JuliaBUGS: program!, CollectVariables, ConstantPropagation, PostChecking
-
-##
-m = :leuk
-model_def = JuliaBUGS.BUGSExamples.leuk.model_def
-data = JuliaBUGS.BUGSExamples.leuk.data
-inits = JuliaBUGS.BUGSExamples.leuk.inits[1]
-
-##
-scalars, array_sizes = program!(CollectVariables(), model_def, data)
-has_new_val, transformed = program!(
-    ConstantPropagation(scalars, array_sizes), model_def, data
-)
-while has_new_val
-    has_new_val, transformed = program!(
-        ConstantPropagation(false, transformed), model_def, data
-    )
-end
-array_bitmap, transformed = program!(PostChecking(data, transformed), model_def, data)
-
-##
-state = CompileState(model_def, data, inits)
-determine_array_sizes!(state)
-compute_transformed!(state)
-
-##
-
-model_def = @bugs begin
-    x[1:3] = y[1:3]
-    x[5] = x[4]
-    z[1:2] = x[5:6]
-end
-
-state = CompileState(
-    model_def, (y=[1, 2, 3], x=[missing, missing, missing, 1, missing, 2]), NamedTuple()
-)
-
-determine_array_sizes!(state)
-compute_transformed!(state)
-
-@assert state.merged_data_and_transformed[:x] == [1, 2, 3, 1, 1, 2]
-
-model_def = @bugs begin
-    for i in 1:3
-        x[i] = y[i]
-    end
-
-    for i in 1:10
-        x[i] ~ Normal(0, 1)
-    end
-
-    z = sum(x[:])
-end
-
-state = CompileState(model_def, (y=[1, 2, 3],), NamedTuple())
-state = CompileState(model_def, (;), NamedTuple())
-
-model_def = @bugs begin
-    x[1:3] = y[1:3]
-    x[1] = 2
-end
-
-model_def = @bugs begin
-    for i in 2:3
-        x[(i - 1):(i + 1)] = y[1:3]
-    end
-end
-
-state = CompileState(model_def, (y=[1, 2, 3],), NamedTuple())
-
-determine_array_sizes!(state)
-check_multiple_assignments(state)
-
-#################################### not used
-function numeric_evaluate(env, expr; m::Module=Main, allowed_functions=[])
-    if expr isa Float64 # for ease of indexing
-        return isinteger(expr) ? Int(expr) : expr
-    elseif expr isa Union{Int,UnitRange}
-        return expr
-    elseif expr isa Symbol
-        if haskey(env, expr)
-            return env[expr]
-        elseif Base.isidentifier(expr)
-            return expr
-        else
-            if expr == :(:)
-                throw(
-                    ArgumentError(
-                        "Colon indexing is not supported with `evaluate`, all colon indexing should be made concrete.",
-                    ),
-                )
-            else
-                throw(ArgumentError("Unknown symbol $expr."))
-            end
-        end
-    elseif expr isa Expr
-        if Meta.isexpr(expr, :ref)
-            @capture(expr, var_[indices__])
-
-            evaluated_indices = [
-                evaluate(env, index; m=m, allowed_functions=allowed_functions) for
-                index in indices
-            ]
-
-            for (i, index) in enumerate(evaluated_indices)
-                if !(index isa Int) && !(index isa UnitRange) && !(index isa Expr)
-                    throw(ArgumentError("Can't index with $(indices[i])."))
-                end
-            end
-
-            if var ∉ keys(env)
-                return :($(var)[$(evaluated_indices...)])
-            end
-
-            if any(Base.Fix2(isa, Expr), evaluated_indices) # some indices are not evaluated
-                return Expr(:ref, var, evaluated_indices...)
-            end
-
-            value = if all(Base.Fix2(isa, Int), evaluated_indices)
-                env[var][evaluated_indices...] # if all indices are Int, then the value is a scalar, just return the value
-            else
-                view(env[var], evaluated_indices...) # otherwise, return a view of the array
-            end
-
-            if value isa Real
-                return value
-            elseif eltype(value) <: Real
-                return value
-            elseif all(Base.Fix2(isa, Real), value) # eltype is Union{Missing,Float64}, but all values are non-missing
-                return value
-            else
-                return expr
-            end
-        elseif Meta.isexpr(expr, :call)
-            @capture(expr, f_(args__))
-            evaluated_args = map(
-                x -> evaluate(env, x; m=m, allowed_functions=allowed_functions), args
-            )
-
-            if !all(Base.Fix2(isa, Union{<:Real,UnitRange}), evaluated_args)
-                returned_args = [
-                    evaluated_arg isa Union{<:Real,UnitRange} ? evaluated_arg : arg for
-                    (arg, evaluated_arg) in zip(args, evaluated_args)
-                ]
-
-                if f == :(+) # simplify addition
-                    number_terms = filter(Base.Fix2(isa, Number), returned_args)
-                    expr_terms = filter(!Base.Fix2(isa, Number), returned_args)
-                    return Expr(:call, :+, sum(number_terms), expr_terms...)
-                end
-
-                return Expr(:call, f, returned_args...)
-            end
-
-            # then all args are evaluated
-            if f == :(+)
-                return sum(evaluated_args)
-            elseif f == :(*)
-                return prod(evaluated_args)
-            elseif f in (:-, :/, :(:))
-                @assert length(evaluated_args) == 2
-                if f == :-
-                    return evaluated_args[1] - evaluated_args[2]
-                elseif f == :/
-                    return evaluated_args[1] / evaluated_args[2]
-                else
-                    return UnitRange(Int(evaluated_args[1]), Int(evaluated_args[2]))
-                end
-            elseif f in allowed_functions
-                return (getfield(m, f))(evaluated_args...)
-            else
-                throw(ErrorException("Function $f is not supported."))
-            end
-        else
-            error("Expression type $(expr.args[1]) is not supported.")
-        end
-    else
-        error("Argument type $(typeof(expr)) is not supported.")
-    end
-end
-
-# a variable is uniquely identified by expression id and loop var bindings
+## Utils, not currently used
+# returns a vector of lenses, which allow to set the value of the loop variable without expression traversal
 function get_loop_var_lenses(expr, loop_vars)
     lenses_map = Dict()
     for loop_var in loop_vars
@@ -876,13 +695,15 @@ function get_lens(expr, target_expr, parent_lens)
     return lenses
 end
 
-function plug_in_loopvar(for_statement::ForStatement, ::Val{:rhs}, values)
-    @assert length(values) == length(for_statement.loop_vars)
-    expr = for_statement.rhs
-    for (loop_var, value) in zip(for_statement.loop_vars, values)
-        for lens in for_statement.rhs_loop_vars_lens[loop_var]
+function plug_in_loopvar(expr, lenses, loop_vars, values)
+    @assert length(values) == length(loop_vars)
+    for (loop_var, value) in zip(loop_vars, values)
+        for lens in lenses[loop_var]
             expr = set(expr, lens, value)
         end
     end
     return expr
 end
+
+lenses = get_loop_var_lenses(:(x[i] * j + y[i, j]), [:i, :j])
+plug_in_loopvar(:(x[i] * j + y[i, j]), lenses, [:i, :j], (2, 2)) == :(x[2] * 2 + y[2, 2])
