@@ -39,6 +39,8 @@ include("model.jl")
 include("logdensityproblems.jl")
 include("gibbs.jl")
 
+include("backend/Backend.jl")
+
 include("BUGSExamples/BUGSExamples.jl")
 
 function check_input(input::Union{NamedTuple,AbstractDict})

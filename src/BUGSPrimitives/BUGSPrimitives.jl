@@ -12,6 +12,9 @@ using InverseFunctions: InverseFunctions
 
 using Statistics: mean
 
+using RuntimeGeneratedFunctions
+RuntimeGeneratedFunctions.init(BUGSPrimitives)
+
 include("functions.jl")
 include("distributions.jl")
 

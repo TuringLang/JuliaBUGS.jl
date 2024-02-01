@@ -153,6 +153,19 @@ function check_lhs(@nospecialize(expr), assignment_sign, line_num)
             return sub_expr
         end
 
+        MacroTools.prewalk(expr) do sub_expr
+            if @capture(sub_expr, f_(args__))
+                if f ∉ (:+, :-, :*, :/, :(:))
+                    throw(ErrorException("Function $f is not supported."))
+                end
+            elseif @capture(sub_expr, fp_Float64)
+                throw(
+                    ArgumentError("Floating point numbers like $fp are not allowed on the LHS.")
+                )
+            end
+            sub_expr
+        end
+
         return Base.Fix2(bugs_expression, line_num).(expr.args)
     else
         error("Invalid LHS at $line_num: $(expr)")
