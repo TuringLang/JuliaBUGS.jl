@@ -1,6 +1,7 @@
 using JuliaBUGS: JuliaBUGS, Backend
 using JuliaBUGS.BUGSExamples: leuk
 using JuliaBUGS.Backend: determine_array_sizes!, concretize_colon_indexing!
+using JuliaBUGS.Backend: build_eval_function
 using MacroTools
 using Test
 
@@ -9,6 +10,8 @@ model_def = leuk.model_def
 data = leuk.data
 
 state = Backend.CompileState(model_def, data)
+
+f = JuliaBUGS.Backend.build_eval_function(state, state.logical_for_statements[1])
 
 determine_array_sizes!(state)
 @testset "determine_array_sizes!" begin

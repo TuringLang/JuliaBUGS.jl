@@ -13,8 +13,24 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 include("./utils.jl")
 include("./statement_types.jl")
 
+function create_eval_module(data)
+    m = Module(gensym(), true, true)
+    Base.eval(m, :(import Core: eval; eval(expr) = Base.eval(@__MODULE__, expr)))
+    @eval m begin
+        using JuliaBUGS.BUGSPrimitives
+        using RuntimeGeneratedFunctions
+        RuntimeGeneratedFunctions.init(@__MODULE__)
+    end
+    for (k, v) in pairs(data)
+        @eval m $k = $v
+    end
+    return m
+end
+
 struct CompileState
     data # the original data, used for reconstructing
+
+    eval_module::Module
     variables_tracked_in_eval_module
 
     logical_statements::Vector{Statement{:(=)}}
@@ -22,21 +38,22 @@ struct CompileState
     logical_for_statements::Vector{ForStatement{:(=)}}
     stochastic_for_statements::Vector{ForStatement{:(~)}}
 
+    # logical statements that are fully evaluated for transformed variables
+    excluded_logical_statements
+    excluded_logical_for_statements
+
     array_sizes
 end
 
 function CompileState(expr, data)
-    assignments = filter(expr.args) do arg
-        !Meta.isexpr(arg, :for)
-    end
-
-    fissioned_loops = loop_fission(expr.args)
-
     logical_statements = Statement{:(=)}[]
     stochastic_statements = Statement{:(~)}[]
     logical_for_statements = ForStatement{:(=)}[]
     stochastic_for_statements = ForStatement{:(~)}[]
 
+    assignments = filter(expr.args) do arg
+        !Meta.isexpr(arg, :for)
+    end
     for assignment in assignments
         statement = Statement(assignment, data)
         if is_logical(statement)
@@ -46,7 +63,7 @@ function CompileState(expr, data)
         end
     end
 
-    for loop in fissioned_loops
+    for loop in loop_fission(expr.args)
         for_statement = ForStatement(loop, data)
         if is_logical(for_statement)
             push!(logical_for_statements, for_statement)
@@ -57,15 +74,20 @@ function CompileState(expr, data)
 
     return CompileState(
         data,
+        create_eval_module(data),
         Set(keys(data)),
         logical_statements,
         stochastic_statements,
         logical_for_statements,
         stochastic_for_statements,
+        [],
+        [],
         Dict(),
     )
 end
 
 include("./determine_array_sizes.jl")
+include("./check_multiple_assignments.jl")
+include("./compute_transformed.jl")
 
 end # module
