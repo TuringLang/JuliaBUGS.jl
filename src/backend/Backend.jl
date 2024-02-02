@@ -31,7 +31,7 @@ struct CompileState
     data # the original data, used for reconstructing
 
     eval_module::Module
-    variables_tracked_in_eval_module
+    variables_tracked_in_eval_module::Set{Symbol} # data variables and transformed variables
 
     logical_statements::Vector{Statement{:(=)}}
     stochastic_statements::Vector{Statement{:(~)}}
