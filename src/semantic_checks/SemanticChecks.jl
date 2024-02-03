@@ -1,4 +1,4 @@
-module Backend
+module SemanticChecks
 
 using JuliaBUGS
 using JuliaBUGS.BUGSPrimitives
