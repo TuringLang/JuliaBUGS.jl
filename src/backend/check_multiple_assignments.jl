@@ -1,5 +1,5 @@
 # why do we need to check for multiple assignments before computing transformed variables?
-# because without checking, multiple expressions can assign to the same variable, and checking this before every `setindex!!` is inefficient
+# because without checking, multiple expressions can assign to the same variable, and checking this before every `setindex` is inefficient
 
 function check_multiple_assignments_pre_transform(state::CompileState)
     # assigning to the same array location or scalar variable more than once is generally not allowed
@@ -37,31 +37,32 @@ function check_multiple_assignments_pre_transform(state::CompileState)
         ),
         (state.logical_definition_bitmap, state.stochastic_definition_bitmap),
     )
-        for statement in statement_collection
-            if statement.lhs isa Symbol # scalar, no need to check
+        for stmt in statement_collection
+            if stmt.lhs isa Symbol # scalar, no need to check
                 continue
             end
 
-            @capture(statement.lhs, lhs_var_[indices__])
+            @capture(stmt.lhs, lhs_var_[indices__])
             # initialize the bitmap if it doesn't exist
-            if !haskey(definition_bitmap, lhs_var) && !haskey(state.data, lhs_var) ||
-                (Missing <: eltype(state.data[lhs_var])) # `data` can contain missing arrays
-                definition_bitmap[lhs_var] = falses(v...)
+            if !haskey(definition_bitmap, lhs_var)
+                if !haskey(state.data, lhs_var) || (Missing <: eltype(state.data[lhs_var])) # `data` can contain missing arrays
+                    definition_bitmap[lhs_var] = falses(state.array_sizes[lhs_var]...)
+                end
             end
 
             if lhs_var ∉ keys(definition_bitmap) # meaning lhs_var is a data variable that doesn't contain missing
                 continue
             end
 
-            if statement isa Statement
-                check_multiple_assignments_inner!(state, statement.lhs, definition_bitmap)
+            if stmt isa Statement
+                check_multiple_assignments_inner!(state, stmt.lhs, definition_bitmap)
             else
-                for indices in Iterators.product(statement.bounds...)
+                for indices in Iterators.product(stmt.bounds...)
                     check_multiple_assignments_inner!(
                         state,
-                        statement.lhs,
+                        stmt.lhs,
                         definition_bitmap,
-                        NamedTuple{statement.loop_vars}(Tuple(indices)),
+                        NamedTuple{stmt.loop_vars}(Tuple(indices)),
                     )
                 end
             end
@@ -84,10 +85,12 @@ function check_multiple_assignments_inner!(
             ),
         )
     end
-    return setindex!!(definition_bitmap[lhs_var], trues(length.(indices)...), indices...)
+    bitmap = definition_bitmap[lhs_var]
+    setindex!(bitmap, trues((length(bitmap)...)), indices...)
+    return nothing
 end
 
-function check_multiple_assignments_post_transform(state::CompileState)
+function check_multiple_assignments_post_transform!(state::CompileState)
     # check scalar clashes
     for (l_stmt, s_stmt) in
         Iterators.product(state.logical_statements, state.stochastic_statements)
@@ -104,21 +107,32 @@ function check_multiple_assignments_post_transform(state::CompileState)
     end
 
     potential_clash_vars = intersect(
-        keys(state.logical_definition_bitmap),
-        keys(state.stochastic_definition_bitmap),
+        keys(state.logical_definition_bitmap), keys(state.stochastic_definition_bitmap)
     ) # only care about variables that are defined in both logical and stochastic statements
 
     for var in potential_clash_vars
-        if any(state.logical_definition_bitmap[var] .& state.stochastic_definition_bitmap[var])
-            clash_indices = findall(state.logical_definition_bitmap[var] .& state.stochastic_definition_bitmap[var])
-            arr = getfield(state.eval_module, var)
-            if any(arr[clash_indices] .== missing)
-                throw(
-                    ErrorException(
-                        "Both logical and stochastic statements are assigning to $(var) at indices $(join(clash_indices, ", ")).",
-                    ),
-                )
+        if any(
+            state.logical_definition_bitmap[var] .& state.stochastic_definition_bitmap[var]
+        )
+            clash_indices = findall(
+                state.logical_definition_bitmap[var] .&
+                state.stochastic_definition_bitmap[var],
+            )
+            err = ErrorException(
+                "Both logical and stochastic statements are assigning to $(var) at indices $(join(clash_indices, ", ")).",
+            )
+            if var ∉ state.variables_tracked_in_eval_module
+                throw(err)
+            else
+                arr = getfield(state.eval_module, var)
+                if any(ismissing, arr[clash_indices])
+                    throw(err)
+                end
             end
         end
     end
+
+    # clean up the bitmaps
+    empty!(state.logical_definition_bitmap)
+    return empty!(state.stochastic_definition_bitmap)
 end

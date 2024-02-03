@@ -43,7 +43,7 @@ end
 
 # simple_arithmetic_eval is used to evaluate the indices of an array or loop bounds
 # the return value is either a UnitRange or an Int
-function simple_arithmetic_eval(::NamedTuple{names,Ts}, expr::Int) where {names,Ts}
+function simple_arithmetic_eval(::NamedTuple{names,Ts}, expr::Union{Int,UnitRange{Int}}) where {names,Ts}
     return expr
 end
 function simple_arithmetic_eval(

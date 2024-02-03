@@ -43,8 +43,8 @@ end
 
 function compute_transformed!(state::CompileState)
     new_value_added = true
-    statements_to_skip = state.excluded_logical_statements
-    for_statements_to_skip = state.excluded_logical_for_statements
+    statements_to_skip = Set()
+    for_statements_to_skip = Set()
     evaluated_logical_for_statement_indices = Dict{Int,BitArray}() # map from for_statement id (index from the vector) to a bit array indexed by the indices of the for_statement
     functions = Dict()
     while new_value_added
@@ -70,11 +70,13 @@ function compute_transformed!(state::CompileState)
 
             simplified_lhs = simplify_lhs(state.data, statement.lhs)
 
-            rhs_value = if statement.rhs isa Number
-                statement.rhs
-            elseif statement.rhs isa Symbol && statement.rhs ∈ state.variables_tracked_in_eval_module
-                getproperty(state.eval_module, statement.rhs)
-                if !rhs_value isa Real
+            rhs_value = nothing
+            if statement.rhs isa Number
+                rhs_value = statement.rhs
+            elseif statement.rhs isa Symbol &&
+                statement.rhs ∈ state.variables_tracked_in_eval_module
+                rhs_value = getproperty(state.eval_module, statement.rhs)
+                if !(rhs_value isa Real)
                     throw(
                         ArgumentError(
                             "In BUGS, explicit indexing is required. To access the value of $(statement.rhs), use $(statement.rhs[:]).",
@@ -87,37 +89,31 @@ function compute_transformed!(state::CompileState)
                 else
                     build_eval_function(state, statement)
                 end
+                value = nothing
                 try
                     value = call(state.eval_module, f)
-                catch _ # can't evaluate, so just move on
+                catch _
+                end # can't evaluate, so just move on
+                if value === nothing
                     functions[statement] = f
                     continue
                 end
                 # check if the value contains missing
-                if ismissing(x) || any(value) do x
-                    return ismissing(x)
-                end
+                if ismissing(value) || any(ismissing, value)
                     continue
                 end
-                value
+                rhs_value = value
             end
 
             store_values!(state, simplified_lhs, rhs_value)
             push!(statements_to_skip, i)
+            push!(state.excluded_logical_statements, i)
             new_value_added = true
         end
 
         for (i, for_statement) in enumerate(state.logical_for_statements)
             if i in for_statements_to_skip
                 continue
-            end
-
-            if i in keys(evaluated_logical_for_statement_indices)
-                if all(evaluated_logical_for_statement_indices[i])
-                    push!(for_statements_to_skip, i)
-                    delete!(evaluated_logical_for_statement_indices, i)
-                    continue
-                end
             end
 
             if any(for_statement.rhs_funs) do fun
@@ -138,19 +134,73 @@ function compute_transformed!(state::CompileState)
                 i,
                 falses(state.array_sizes[for_statement.lhs.args[1]]...),
             )
+
             for indices in Iterators.product(for_statement.bounds...)
-                new_value_added_local = compute_transformed_inner!(
-                    state, for_statement, indices
-                )
-                if new_value_added_local
-                    evaluated_indices_array[indices...] = true
+                if evaluated_indices_array[indices...]
+                    continue
                 end
-                new_value_added = new_value_added_local || new_value_added
+
+                simplified_lhs = simplify_lhs(
+                    merge(state.data, NamedTuple{for_statement.loop_vars}(Tuple(indices))),
+                    for_statement.lhs,
+                )
+
+                rhs_value = nothing
+                if for_statement.rhs isa Number
+                    rhs_value = for_statement.rhs
+                elseif for_statement.rhs isa Symbol &&
+                    for_statement.rhs ∈ state.variables_tracked_in_eval_module
+                    rhs_value = getproperty(state.eval_module, for_statement.rhs)
+                    if !(rhs_value isa Real)
+                        throw(
+                            ArgumentError(
+                                "In BUGS, explicit indexing is required. To access the value of $(statement.rhs), use $(statement.rhs[:]).",
+                            ),
+                        )
+                    end
+                else
+                    f = if for_statement in keys(functions)
+                        functions[for_statement]
+                    else
+                        build_eval_function(state, for_statement)
+                    end
+                    value = nothing
+                    try
+                        value = call(state.eval_module, f, indices...)
+                    catch _
+                    end # can't evaluate, so just move on
+                    if value === nothing
+                        functions[for_statement] = f
+                        continue
+                    end
+                    rhs_value = value
+                end
+
+                store_values!(state, simplified_lhs, rhs_value)
+                evaluated_indices_array[indices...] = true
+                new_value_added = true
+            end
+
+            if i in keys(evaluated_logical_for_statement_indices) &&
+                all(evaluated_logical_for_statement_indices[i])
+                push!(for_statements_to_skip, i)
+                push!(state.excluded_logical_for_statements, i)
+                delete!(evaluated_logical_for_statement_indices, i)
             end
         end
     end
-    # check if a logical statement and a stochastic statement assign to the same array location
-    # TODO
+
+    # convert Array{Union{Missing, T}} to Array{T} if all the values are not missing
+    # TODO: this can be expensive
+    for var in state.variables_tracked_in_eval_module
+        arr = getproperty(state.eval_module, var)
+        if !(arr isa AbstractArray) || !(Missing <: eltype(arr))
+            continue
+        end
+        if all(!ismissing, arr)
+            setproperty!(state.eval_module, var, Missings.disallowmissing(arr))
+        end
+    end
 end
 
 function store_values!(
@@ -163,7 +213,7 @@ function store_values!(
             ),
         )
     end
-    push!(state.variables_tracked_in_eval_module, lhs_var)
+    push!(state.variables_tracked_in_eval_module, simplified_lhs)
     state.eval_module.eval(:($(simplified_lhs) = $(value)))
     return nothing
 end
@@ -171,12 +221,11 @@ function store_values!(state::CompileState, simplified_lhs::Expr, value::Union{I
     @capture(simplified_lhs, lhs_var_[indices__])
     if lhs_var ∉ state.variables_tracked_in_eval_module
         push!(state.variables_tracked_in_eval_module, lhs_var)
-        state.eval_module.eval(
-            :($lhs_var = $(fill(missing, state.array_sizes[lhs_var]...)))
-        )
+        arr = fill(missing, state.array_sizes[lhs_var]...)
+        setproperty!(state.eval_module, lhs_var, arr)
     end
     push!(state.variables_tracked_in_eval_module, lhs_var)
-    array = getfield(state.eval_module, lhs_var)
+    array = getproperty(state.eval_module, lhs_var)
     setproperty!(state.eval_module, lhs_var, setindex!!(array, value, indices...))
     return nothing
 end
@@ -184,13 +233,13 @@ function store_values!(state::CompileState, simplified_lhs::Expr, value::Abstrac
     @capture(simplified_lhs, lhs_var_[indices__])
     if lhs_var ∉ state.variables_tracked_in_eval_module
         push!(state.variables_tracked_in_eval_module, lhs_var)
-        state.eval_module.eval(
-            :($lhs_var = $(fill(missing, state.array_sizes[lhs_var]...)))
-        )
+        arr = fill(missing, state.array_sizes[lhs_var]...)
+        setproperty!(state.eval_module, lhs_var, arr)
     elseif lhs_var ∈ keys(state.data) # `variables_tracked_in_eval_module` is a superset of `keys(data)` 
         # special case: data array contains missing values, then we need to make a copy before mutating
-        if getfield(RHSEval, lhs_var) === state.data[lhs_var] # haven't been copied
-            state.eval_module.eval(:($lhs_var = $(copy(state.data[lhs_var]))))
+        if getproperty(state.eval_module, lhs_var) === state.data[lhs_var] # haven't been copied
+            arr = copy(state.data[lhs_var])
+            setproperty!(state.eval_module, lhs_var, arr)
         end
     end
     array = getfield(state.eval_module, lhs_var)

@@ -55,10 +55,19 @@ function CompileState(expr, data)
         stochastic_statements,
         logical_for_statements,
         stochastic_for_statements,
-        [],
-        [],
+        Set(),
+        Set(),
         Dict(),
         Dict(),
         Dict(),
+    )
+end
+
+function get_data_and_transformed_variables(state::CompileState)
+    t = Tuple(state.variables_tracked_in_eval_module)
+    return NamedTuple{t}(
+        map(t) do var
+            getproperty(state.eval_module, var)
+        end,
     )
 end

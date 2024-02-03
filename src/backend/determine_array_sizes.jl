@@ -103,7 +103,7 @@ function concretize_colon_indexing!(state::CompileState)
                 if MacroTools.@capture(sub_expr, v_[indices__])
                     return :($(v)[$(
                         [
-                            idx == :(:) ? :(1:($(array_sizes[v][i]))) : idx for
+                            idx == :(:) ? :(1:($(state.array_sizes[v][i]))) : idx for
                             (i, idx) in enumerate(indices)
                         ]...
                     )])
