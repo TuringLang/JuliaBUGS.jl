@@ -7,7 +7,7 @@ function determine_array_sizes!(state::CompileState)
 
     for collection in (state.logical_statements, state.stochastic_statements)
         for statement in collection
-            simplified_lhs = simplify_lhs(state.data, statement.lhs)
+            simplified_lhs = statement.lhs
             if check_if_partially_specified_as_data(state.data, simplified_lhs)
                 if is_logical(for_statement)
                     error(

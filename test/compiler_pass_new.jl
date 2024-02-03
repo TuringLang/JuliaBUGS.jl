@@ -53,7 +53,7 @@ end
 end
 
 @testset "check_multiple_assignments" begin
-    @test 1
+    # test 1
     model_def = @bugs begin
         for i in 1:3
             x[i] = y[i]

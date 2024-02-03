@@ -68,7 +68,7 @@ function compute_transformed!(state::CompileState)
                 continue
             end
 
-            simplified_lhs = simplify_lhs(state.data, statement.lhs)
+            simplified_lhs = statement.lhs # already simplified at construction time
 
             rhs_value = nothing
             if statement.rhs isa Number

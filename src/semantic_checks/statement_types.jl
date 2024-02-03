@@ -9,9 +9,6 @@ function Statement(expr::Expr, data)
     sign = :(=)
     @capture(expr, lhs_ = rhs_) || @capture(expr, lhs_ ~ rhs_) && (sign = :(~))
     rhs_vars, rhs_funs = get_vars_and_funs_in_expr(rhs)
-
-    lhs = simplify_lhs(data, lhs)
-
     return Statement{sign}(
         rhs_vars, rhs_funs, simplify_lhs(data, lhs), rhs
     )

@@ -73,7 +73,11 @@ end
 function check_multiple_assignments_inner!(
     state, lhs, definition_bitmap, index_value_map=(;)
 )
-    simplified_lhs = simplify_lhs(merge(state.data, index_value_map), lhs)
+    simplified_lhs = if index_value_map === NamedTuple()
+        lhs
+    else
+        simplify_lhs(merge(state.data, index_value_map), lhs)
+    end
     @capture(simplified_lhs, lhs_var_[indices__])
     if_defined = definition_bitmap[lhs_var][indices...]
     if any(if_defined .== true)
@@ -86,8 +90,13 @@ function check_multiple_assignments_inner!(
         )
     end
     bitmap = definition_bitmap[lhs_var]
-    setindex!(bitmap, trues((length(bitmap)...)), indices...)
-    return nothing
+    if any(indices) do index
+        index isa UnitRange
+    end
+        setindex!(bitmap, trues((length(bitmap)...)), indices...)
+    else
+        setindex!(bitmap, true, indices...)
+    end
 end
 
 function check_multiple_assignments_post_transform!(state::CompileState)
