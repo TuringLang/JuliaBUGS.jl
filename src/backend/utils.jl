@@ -90,6 +90,20 @@ function simple_arithmetic_eval(
     end
 end
 
+function create_eval_module(data)
+    m = Module(gensym(), true, true)
+    Base.eval(m, :(import Core: eval; eval(expr) = Base.eval(@__MODULE__, expr)))
+    @eval m begin
+        using JuliaBUGS.BUGSPrimitives
+        using RuntimeGeneratedFunctions
+        RuntimeGeneratedFunctions.init(@__MODULE__)
+    end
+    for (k, v) in pairs(data)
+        @eval m $k = $v
+    end
+    return m
+end
+
 # returns a vector of lenses, which allow to set the value of the loop variable without expression traversal
 function get_loop_var_lenses(expr, loop_vars)
     lenses_map = Dict()
