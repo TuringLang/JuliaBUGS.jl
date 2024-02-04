@@ -39,7 +39,7 @@ include("model.jl")
 include("logdensityproblems.jl")
 include("gibbs.jl")
 
-include("SemanticChecks/SemanticChecks.jl")
+include("semantic_analysis/SemanticAnalysis.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 

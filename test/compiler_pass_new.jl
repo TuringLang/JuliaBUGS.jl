@@ -1,14 +1,14 @@
 using JuliaBUGS: @bugs
-using JuliaBUGS: JuliaBUGS, SemanticChecks
+using JuliaBUGS: JuliaBUGS, SemanticAnalysis
 using JuliaBUGS.BUGSExamples: leuk
-using JuliaBUGS.SemanticChecks: CompileState
-using JuliaBUGS.SemanticChecks:
+using JuliaBUGS.SemanticAnalysis: CompileState
+using JuliaBUGS.SemanticAnalysis:
     determine_array_sizes!,
     concretize_colon_indexing!,
     compute_transformed!,
     check_multiple_assignments_pre_transform,
     check_multiple_assignments_post_transform!
-using JuliaBUGS.SemanticChecks: build_eval_function
+using JuliaBUGS.SemanticAnalysis: build_eval_function
 using MacroTools
 using Test
 
@@ -17,10 +17,10 @@ using Test
     model_def = leuk.model_def
     data = leuk.data
 
-    state = SemanticChecks.CompileState(model_def, data)
+    state = SemanticAnalysis.CompileState(model_def, data)
 
-    f = JuliaBUGS.SemanticChecks.build_eval_function(state, state.logical_for_statements[1])
-    SemanticChecks.call(state.eval_module, f, 1, 1)
+    f = JuliaBUGS.SemanticAnalysis.build_eval_function(state, state.logical_for_statements[1])
+    SemanticAnalysis.call(state.eval_module, f, 1, 1)
 
     determine_array_sizes!(state)
     array_sizes = state.array_sizes
@@ -45,7 +45,7 @@ end
         end
         z ~ dist(x[:], Y[:])
     end
-    state = SemanticChecks.CompileState(test_expr, (; Y=[1, 2, 3],))
+    state = SemanticAnalysis.CompileState(test_expr, (; Y=[1, 2, 3],))
     determine_array_sizes!(state)
     concretize_colon_indexing!(state)
     @test state.logical_for_statements[1].rhs == :(sum(Y[1:3]))
@@ -100,7 +100,7 @@ end
         model_def = leuk.model_def
         data = leuk.data
 
-        state = SemanticChecks.CompileState(model_def, data)
+        state = SemanticAnalysis.CompileState(model_def, data)
         determine_array_sizes!(state)
         concretize_colon_indexing!(state)
         compute_transformed!(state)
@@ -121,7 +121,7 @@ end
             JuliaBUGS.PostChecking(data, transformed), model_def, data
         )
 
-        D = SemanticChecks.get_data_and_transformed_variables(state)
+        D = SemanticAnalysis.get_data_and_transformed_variables(state)
         @test D[Symbol("dL0.star")] == transformed[Symbol("dL0.star")]
         @test D[:dN] == transformed[:dN]
         @test D[:mu] == transformed[:mu]
@@ -142,7 +142,7 @@ end
         determine_array_sizes!(state)
         concretize_colon_indexing!(state)
         compute_transformed!(state)
-        D = SemanticChecks.get_data_and_transformed_variables(state)
+        D = SemanticAnalysis.get_data_and_transformed_variables(state)
         @test D[:x] == [1, 2, 3, 1, 1, 2]
     end
 end

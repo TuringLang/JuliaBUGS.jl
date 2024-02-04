@@ -76,8 +76,10 @@ function simple_arithmetic_eval(
                 return args[1] - args[2]
             elseif f == :/
                 return Int(args[1] / args[2])
-            else # :(:)
+            elseif f == :(:)
                 return UnitRange(Int(args[1]), Int(args[2]))
+            else
+                error("Don't know how to evaluate function $(string(f)).")
             end
         end
     elseif @capture(expr, var_[indices__])

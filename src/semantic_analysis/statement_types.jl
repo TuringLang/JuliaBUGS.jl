@@ -9,9 +9,7 @@ function Statement(expr::Expr, data)
     sign = :(=)
     @capture(expr, lhs_ = rhs_) || @capture(expr, lhs_ ~ rhs_) && (sign = :(~))
     rhs_vars, rhs_funs = get_vars_and_funs_in_expr(rhs)
-    return Statement{sign}(
-        rhs_vars, rhs_funs, simplify_lhs(data, lhs), rhs
-    )
+    return Statement{sign}(rhs_vars, rhs_funs, simplify_lhs(data, lhs), rhs)
 end
 
 function Base.show(io::IO, statement::Statement{ET}) where {ET}
@@ -48,11 +46,58 @@ function ForStatement(expr::Expr, data)
 
     sign = :(=)
     @capture(expr, lhs_ = rhs_) || @capture(expr, lhs_ ~ rhs_) && (sign = :(~))
-    
+
     if !Meta.isexpr(lhs, :ref)
         error("LHS of a statement in for-loops can not be a scalar, but get $lhs.")
     end
-    
+
+    # plugin the constants in the LHS expression 
+    for (i, arg) in enumerate(lhs.args)
+        expr = MacroTools.postwalk(arg) do sub_expr
+            if @capture(sub_expr, x_[idxs__])
+                if x in keys(data) && all(idxs) do idx
+                    idx isa Int
+                end
+                    value = data[x][idxs...]
+                    return ismissing(value) ? sub_expr : value
+                end
+            elseif sub_expr isa Symbol && sub_expr in keys(data)
+                value = data[sub_expr]
+                if value isa Int
+                    return value
+                end
+            end
+            sub_expr
+        end
+        lhs.args[i] = MacroTools.postwalk(expr) do sub_expr
+            if @capture(sub_expr, f_(args__))
+                if f ∈ (:(+), :(*))
+                    constant_idxs = findall(args) do arg
+                        arg isa Int
+                    end
+                    s = if f === :(+)
+                        sum(args[constant_idxs])
+                    else
+                        prod(args[constant_idxs])
+                    end
+                    args = filter(args) do arg
+                        !(arg isa Int)
+                    end
+                    if isempty(args)
+                        return s
+                    end
+                    push!(args, s)
+                    return Expr(:call, f, args...)
+                elseif f === :(-) && all(args) do arg
+                    arg isa Int
+                end
+                    return args[1] - args[2]
+                end
+            end
+            sub_expr
+        end
+    end
+
     rhs_vars, rhs_funs = get_vars_and_funs_in_expr(rhs)
 
     bounds = map(bounds) do bound_expr
@@ -78,12 +123,13 @@ function Base.show(io::IO, for_statement::ForStatement{ET}) where {ET}
     else
         MacroTools.@q($(for_statement.lhs) ~ $(for_statement.rhs))
     end
-    for (loop_var, bound) in reverse(collect(zip(for_statement.loop_vars, for_statement.bounds)))
+    for (loop_var, bound) in
+        reverse(collect(zip(for_statement.loop_vars, for_statement.bounds)))
         expr = MacroTools.@q for $loop_var in $bound
-                $expr
-            end
+            $expr
+        end
     end
-    print(io, expr)
+    return print(io, expr)
 end
 
 is_logical(::Union{Statement{T},ForStatement{T}}) where {T} = T == :(=)
