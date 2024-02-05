@@ -5,9 +5,9 @@ using JuliaBUGS.BUGSPrimitives
 using BangBang
 using MacroTools
 using Missings
+using Setfield # TODO: move to Accessors
+
 using RuntimeGeneratedFunctions
-using Setfield
-using Graphs, MetaGraphsNext
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 include("./utils.jl")

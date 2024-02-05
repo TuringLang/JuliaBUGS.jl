@@ -143,7 +143,7 @@ end
     end
 end
 
-##
+## for special_cases
 model_def = leuk.model_def
 data = leuk.data
 state = SemanticAnalysis.CompileState(model_def, data)
@@ -164,3 +164,29 @@ end
 st = ForStatement(expr, data)
 
 range_covered(st)
+
+## for graph_lib
+using JuliaBUGS.GraphLib: build_coarse_dep_graph
+model_def = leuk.model_def
+    data = leuk.data
+    state = SemanticAnalysis.CompileState(model_def, data)
+
+g = build_coarse_dep_graph(state)
+
+labels(g)
+
+for v in labels(g)
+    for e in inneighbor_labels(g, v)
+        println("$(e) <- $(v)")
+    end
+end
+
+for e in edge_labels(g)
+    println(e[1], " -> ", e[2], "\n", getindex(g, e...), "\n")
+end
+
+Graphs.is_cyclic(g.graph)
+
+using Plots, GraphRecipes
+
+graphplot(g.graph; names=collect(labels(g)), curves=false, markershape=:circle, markersize=0.1, fontsize=8)

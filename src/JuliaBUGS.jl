@@ -13,6 +13,7 @@ using Random
 using Setfield
 using UnPack
 
+# TODO: after the refactor, we don't need SimpleVarInfo anymore
 using DynamicPPL: DynamicPPL, SimpleVarInfo
 
 import Base: ==, hash, Symbol, size
@@ -40,6 +41,7 @@ include("logdensityproblems.jl")
 include("gibbs.jl")
 
 include("semantic_analysis/SemanticAnalysis.jl")
+include("graph_lib/GraphLib.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 
