@@ -71,3 +71,27 @@ function get_data_and_transformed_variables(state::CompileState)
         end,
     )
 end
+
+# some iterators
+function all_statements(state::CompileState)
+    return Iterators.flatten((
+        state.logical_statements,
+        state.stochastic_statements,
+        state.logical_for_statements,
+        state.stochastic_for_statements,
+    ),)
+end
+function all_logical_statements(state::CompileState)
+    return Iterators.flatten((state.logical_statements, state.logical_for_statements))
+end
+function all_stochastic_statements(state::CompileState)
+    return Iterators.flatten((state.stochastic_statements, state.stochastic_for_statements))
+end
+function all_for_statements(state::CompileState)
+    return Iterators.flatten((
+        state.logical_for_statements, state.stochastic_for_statements
+    ))
+end
+function not_for_statements(state::CompileState)
+    return Iterators.flatten((state.logical_statements, state.stochastic_statements))
+end

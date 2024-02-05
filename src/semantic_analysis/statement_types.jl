@@ -51,47 +51,22 @@ function ForStatement(expr::Expr, data)
         error("LHS of a statement in for-loops can not be a scalar, but get $lhs.")
     end
 
-    # plugin the constants in the LHS expression 
-    for (i, arg) in enumerate(lhs.args)
-        expr = MacroTools.postwalk(arg) do sub_expr
-            if @capture(sub_expr, x_[idxs__])
-                if x in keys(data) && all(idxs) do idx
-                    idx isa Int
-                end
-                    value = data[x][idxs...]
-                    return ismissing(value) ? sub_expr : value
-                end
-            elseif sub_expr isa Symbol && sub_expr in keys(data)
-                value = data[sub_expr]
-                if value isa Int
-                    return value
-                end
-            end
-            sub_expr
-        end
-        lhs.args[i] = MacroTools.postwalk(expr) do sub_expr
-            if @capture(sub_expr, f_(args__))
-                if f ∈ (:(+), :(*))
-                    constant_idxs = findall(args) do arg
-                        arg isa Int
-                    end
-                    s = if f === :(+)
-                        sum(args[constant_idxs])
-                    else
-                        prod(args[constant_idxs])
-                    end
-                    args = filter(args) do arg
-                        !(arg isa Int)
-                    end
-                    if isempty(args)
-                        return s
-                    end
-                    push!(args, s)
-                    return Expr(:call, f, args...)
-                elseif f === :(-) && all(args) do arg
-                    arg isa Int
-                end
-                    return args[1] - args[2]
+    # plugin the constants in the LHS expression and simplify
+    lhs.args = map(lhs.args) do arg
+        MacroTools.postwalk(arg) do sub_expr
+            if @capture(sub_expr, x_[idxs__]) && x in keys(data) && all(isa.(idxs, (Int,)))
+                value = data[x][idxs...]
+                sub_expr = ismissing(value) ? sub_expr : value
+            elseif sub_expr isa Symbol && haskey(data, sub_expr) && data[sub_expr] isa Int
+                sub_expr = data[sub_expr]
+            elseif @capture(sub_expr, f_(args__)) && f ∈ (:(+), :(*), :(-)) # postwalk will first visit the children and plug in the constants
+                if f === :(-) && all(arg -> arg isa Int, args)
+                        return args[1] - args[2]
+                else
+                    constant_vals = [arg for arg in args if arg isa Int]
+                    s = f === :(+) ? sum(constant_vals) : prod(constant_vals)
+                    args = filter(arg -> !isa(arg, Int), args)
+                    return isempty(args) ? s : Expr(:call, f, append!(args, s)...)
                 end
             end
             sub_expr
@@ -102,7 +77,12 @@ function ForStatement(expr::Expr, data)
 
     bounds = map(bounds) do bound_expr
         bound = simple_arithmetic_eval(data, bound_expr)
-        @assert bound isa UnitRange
+        if !isa(bound, UnitRange{Int})
+            error("The bound of a for-loop must be a range, but get $bound_expr.")
+        end
+        if bound.stop < bound.start
+            error("The loop bounds should be from small to large, but get $bound_expr.")
+        end 
         return bound
     end
 

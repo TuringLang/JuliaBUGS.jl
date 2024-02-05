@@ -16,11 +16,7 @@ using Test
 @testset "determine_array_sizes!" begin
     model_def = leuk.model_def
     data = leuk.data
-
     state = SemanticAnalysis.CompileState(model_def, data)
-
-    f = JuliaBUGS.SemanticAnalysis.build_eval_function(state, state.logical_for_statements[1])
-    SemanticAnalysis.call(state.eval_module, f, 1, 1)
 
     determine_array_sizes!(state)
     array_sizes = state.array_sizes
@@ -105,29 +101,29 @@ end
         concretize_colon_indexing!(state)
         compute_transformed!(state)
 
-        # TODO: use older version of `JuliaBUGS.program!` to test this, remove in the future
-        scalars, array_sizes = JuliaBUGS.program!(
-            JuliaBUGS.CollectVariables(), model_def, data
-        )
-        has_new_val, transformed = JuliaBUGS.program!(
-            JuliaBUGS.ConstantPropagation(scalars, array_sizes), model_def, data
-        )
-        while has_new_val
-            has_new_val, transformed = JuliaBUGS.program!(
-                JuliaBUGS.ConstantPropagation(false, transformed), model_def, data
-            )
+        # hand prepared transformed variables
+        var"L0.star" = Vector{Float64}(undef, 17)
+        dN = Array{Float64}(undef, 42, 17)
+        mu = Vector{Float64}(undef, 17)
+        Y = Array{Float64}(undef, 42, 17)
+        c = Array{Float64}(undef, 42)
+        r = Array{Float64}(undef, 42)
+        for i in 1:17
+            var"L0.star"[i] = 0.1 * (data.t[i + 1] - data.t[i])
+            mu[i] = var"L0.star"[i] * 0.001
         end
-        array_bitmap, transformed = JuliaBUGS.program!(
-            JuliaBUGS.PostChecking(data, transformed), model_def, data
-        )
+        for i in 1:42, j in 1:17
+            Y[i, j] = JuliaBUGS.BUGSPrimitives._step(data.var"obs.t"[i] - data.t[j] + data.eps)
+            dN[i, j] = Y[i,j] * JuliaBUGS.BUGSPrimitives._step(data.t[j+1] - data.var"obs.t"[i] - data.eps) * data.fail[i]
+        end
 
         D = SemanticAnalysis.get_data_and_transformed_variables(state)
-        @test D[Symbol("dL0.star")] == transformed[Symbol("dL0.star")]
-        @test D[:dN] == transformed[:dN]
-        @test D[:mu] == transformed[:mu]
-        @test D[:Y] == transformed[:Y]
-        @test D[:c] == transformed[:c]
-        @test D[:r] == transformed[:r]
+        @test D[Symbol("dL0.star")] == var"L0.star"
+        @test D[:dN] == dN
+        @test D[:mu] == mu
+        @test D[:Y] == Y
+        @test D[:c] == 0.001
+        @test D[:r] == 0.1
     end
 
     @testset "artificial example" begin
@@ -146,3 +142,25 @@ end
         @test D[:x] == [1, 2, 3, 1, 1, 2]
     end
 end
+
+##
+model_def = leuk.model_def
+data = leuk.data
+state = SemanticAnalysis.CompileState(model_def, data)
+st = state.logical_for_statements[1]
+
+using JuliaBUGS.SemanticAnalysis: range_covered, is_special, unpack_expr, determine_array_sizes_easy!, ForStatement
+
+range_covered(st)
+
+unpack_expr(st.lhs, st.loop_vars)
+
+expr = MacroTools.@q for i in 1:10
+    for j in 1:3
+        y[i+1, j-1] = 2
+    end
+end
+
+st = ForStatement(expr, data)
+
+range_covered(st)
