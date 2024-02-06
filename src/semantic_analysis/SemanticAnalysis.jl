@@ -17,6 +17,6 @@ include("./determine_array_sizes.jl")
 include("./check_multiple_assignments.jl")
 include("./compute_transformed.jl")
 
-include("./special_case.jl")
+# include("./special_case.jl")
 
 end # module

@@ -144,49 +144,10 @@ end
 end
 
 ## for special_cases
+using JuliaBUGS.SemanticAnalysis: range_covered, is_special, unpack_expr, determine_array_sizes_easy!
+
 model_def = leuk.model_def
 data = leuk.data
 state = SemanticAnalysis.CompileState(model_def, data)
 st = state.logical_for_statements[1]
-
-using JuliaBUGS.SemanticAnalysis: range_covered, is_special, unpack_expr, determine_array_sizes_easy!, ForStatement
-
-range_covered(st)
-
 unpack_expr(st.lhs, st.loop_vars)
-
-expr = MacroTools.@q for i in 1:10
-    for j in 1:3
-        y[i+1, j-1] = 2
-    end
-end
-
-st = ForStatement(expr, data)
-
-range_covered(st)
-
-## for graph_lib
-using JuliaBUGS.GraphLib: build_coarse_dep_graph
-model_def = leuk.model_def
-    data = leuk.data
-    state = SemanticAnalysis.CompileState(model_def, data)
-
-g = build_coarse_dep_graph(state)
-
-labels(g)
-
-for v in labels(g)
-    for e in inneighbor_labels(g, v)
-        println("$(e) <- $(v)")
-    end
-end
-
-for e in edge_labels(g)
-    println(e[1], " -> ", e[2], "\n", getindex(g, e...), "\n")
-end
-
-Graphs.is_cyclic(g.graph)
-
-using Plots, GraphRecipes
-
-graphplot(g.graph; names=collect(labels(g)), curves=false, markershape=:circle, markersize=0.1, fontsize=8)

@@ -3,20 +3,30 @@ using JuliaBUGS: SemanticAnalysis, GraphLib
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.BUGSExamples: leuk, eyes
 using JuliaBUGS.SemanticAnalysis:
-all_statements,
+    all_statements,
     CompileState,
     determine_array_sizes!,
     concretize_colon_indexing!,
     check_multiple_assignments_pre_transform,
     compute_transformed!
-using JuliaBUGS.GraphLib: build_dependencies_eval_function, build_dep_graph
+using JuliaBUGS.GraphLib:
+    build_dependencies_eval_function, build_coarse_dep_graph, build_dep_graph
 using MacroTools
 using Test
 using Graphs, MetaGraphsNext
 
 using RuntimeGeneratedFunctions
 RuntimeGeneratedFunctions.init(@__MODULE__)
-##
+
+@testset "build_coarse_dep_graph" begin
+    ## for graph_lib
+    model_def = leuk.model_def
+    data = leuk.data
+    state = SemanticAnalysis.CompileState(model_def, data)
+
+    g = build_coarse_dep_graph(state)
+end
+
 @testset "build_dependencies_eval_function" begin
     # test 1
     model_def = leuk.model_def
@@ -49,20 +59,21 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
     @test deps == Any[(:T, 3), (:lambda, 1:2)]
 end
 
-model_def = leuk.model_def
-data = leuk.data
-state = CompileState(model_def, data)
-determine_array_sizes!(state)
-concretize_colon_indexing!(state)
-check_multiple_assignments_pre_transform(state)
-compute_transformed!(state)
+@testset "build_dep_graph" begin
+    model_def = leuk.model_def
+    data = leuk.data
+    state = CompileState(model_def, data)
+    determine_array_sizes!(state)
+    concretize_colon_indexing!(state)
+    check_multiple_assignments_pre_transform(state)
+    compute_transformed!(state)
 
-g = build_dep_graph(state)
+    g = build_dep_graph(state)
 
-labels(g) |> collect
+    @test !haskey(g, (:Y, 2, 3)) # transformed variables are not in the graph
 
-collect(edge_labels(g))
+    @test collect(inneighbor_labels(g, (Symbol("S.placebo"), 2))) ==
+        [:beta, (:dL0, 1), (:dL0, 2)]
 
-outneighbor_labels(g, (:Y, 2, 3)) |> collect
-
-inneighbor_labels(g, (Symbol("S.placebo"), 2)) |> collect
+    @test collect(inneighbor_labels(g, (:Idt, 2, 3))) == [:beta, (:dL0, 3)]
+end

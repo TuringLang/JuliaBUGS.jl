@@ -26,7 +26,7 @@ function is_special_case(state::CompileState)
 end
 
 function range_covered(for_statement::ForStatement)
-    return v, ranges
+    
 end
 
 function determine_array_sizes_easy!(state::CompileState)

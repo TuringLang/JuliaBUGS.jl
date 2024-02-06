@@ -27,9 +27,11 @@ function build_dependencies_eval_function(
 )
     expr = SemanticAnalysis.build_eval_function(state, stmt; return_expr=true)
 
+    #! format: off
     @capture(expr, function F_(Args__)
         body_
     end)
+    #! format: on
 
     ex = MacroTools.postwalk(body) do sub_expr
         if MacroTools.@capture(sub_expr, v_[indices__])
@@ -100,15 +102,17 @@ end
 # need to decide if the variable is observed 
 function build_dep_graph(state::CompileState)
     add_all_variables(state)
-    g = MetaGraph(DiGraph(); label_type=Union{Symbol,Tuple{Symbol,Vararg{Int}}}, vertex_data_type=Int)
+    g = MetaGraph(
+        DiGraph(); label_type=Union{Symbol,Tuple{Symbol,Vararg{Int}}}, vertex_data_type=Int
+    )
     array_vars = collect(keys(state.array_sizes))
     for (i, stmt) in enumerate(all_statements(state))
         if stmt isa Statement
             lhs_label = stmt.lhs isa Symbol ? stmt.lhs : Tuple(stmt.lhs.args...)
 
             lhs_val = get_value(state, lhs_label)
-            if is_logical(stmt) 
-                if lhs_val isa AbstractArray 
+            if is_logical(stmt)
+                if lhs_val isa AbstractArray
                     if all(!ismissing, lhs_val)
                         continue
                     end
@@ -173,8 +177,8 @@ function build_dep_graph(state::CompileState)
                 lhs_label = Tuple(simplified_lhs.args)
 
                 lhs_val = get_value(state, lhs_label)
-                if is_logical(stmt) 
-                    if lhs_val isa AbstractArray 
+                if is_logical(stmt)
+                    if lhs_val isa AbstractArray
                         if all(!ismissing, lhs_val)
                             continue
                         end
@@ -218,10 +222,10 @@ function build_dep_graph(state::CompileState)
 end
 
 function get_value(state::CompileState, var_label::Symbol)
-    getproperty(state.eval_module, var_label)
+    return getproperty(state.eval_module, var_label)
 end
 function get_value(state::CompileState, var_label::Tuple{Symbol,Vararg{Int}})
-    getproperty(state.eval_module, var_label[1])[var_label[2:end]...] 
+    return getproperty(state.eval_module, var_label[1])[var_label[2:end]...]
 end
 
 function add_edge_fail!(g, from, to)
