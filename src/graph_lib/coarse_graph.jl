@@ -1,3 +1,7 @@
+# coarse graph only contains the variables, including both scalar and array variables, the elements are not represented
+# when this graph doesn't contain any cycle, then the fine-grain dependency graph is acyclic, because the coarse graph can be obtained by node contraction
+# if the coarse graph is acyclic: if we want to compute the logjoint, we can just arrange the nodes in topological order and compute the logjoint in that order
+# in the Gibbs case, we can also treat all the elements of the array variables to be in the markov blanket, which gives a conservative MB, but not necessarily the minimal one
 function build_coarse_dep_graph(state::CompileState)
     g = MetaGraph(DiGraph(); label_type=Any, edge_data_type=Any)
 
@@ -24,7 +28,9 @@ function build_coarse_dep_graph(state::CompileState)
         ts[first(l)] = get(ts, first(l), Any[l])
     end
 
-    g_new = MetaGraph(DiGraph(); label_type=Symbol, edge_data_type=Union{Statement, ForStatement})
+    g_new = MetaGraph(
+        DiGraph(); label_type=Symbol, edge_data_type=Union{Statement,ForStatement}
+    )
 
     # merge all the vertices with the same sym for label
     for (symbol, labels_list) in ts

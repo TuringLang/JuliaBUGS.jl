@@ -1,16 +1,16 @@
 FUNCTION_TO_ATTEMPT_EVAL = JuliaBUGS.BUGSPrimitives.BUGS_FUNCTIONS
 
-function build_eval_function(state::CompileState, statement::Statement)
-    return build_eval_function_inner(state, statement)
+function build_eval_function(state::CompileState, statement::Statement; return_expr = false)
+    return build_eval_function_inner(state, statement; return_expr = return_expr)
 end
-function build_eval_function(state::CompileState, for_statement::ForStatement)
+function build_eval_function(state::CompileState, for_statement::ForStatement; return_expr = false)
     loop_var_as_args = Any[]
     for loop_var in for_statement.loop_vars
         push!(loop_var_as_args, MacroTools.combinearg(loop_var, :Int, false, nothing))
     end
-    return build_eval_function_inner(state, for_statement, loop_var_as_args)
+    return build_eval_function_inner(state, for_statement, loop_var_as_args; return_expr = return_expr)
 end
-function build_eval_function_inner(state::CompileState, statement, args=Any[])
+function build_eval_function_inner(state::CompileState, statement, args=Any[]; return_expr = false)
     for var_sym in statement.rhs_vars
         var, type = if var_sym ∈ state.variables_tracked_in_eval_module
             var = getproperty(state.eval_module, var_sym)
@@ -28,6 +28,9 @@ function build_eval_function_inner(state::CompileState, statement, args=Any[])
         :whereparams => (),
     )
     def_expr = MacroTools.combinedef(def_dict)
+    if return_expr
+        return def_expr
+    end
     return @RuntimeGeneratedFunction(state.eval_module, def_expr)
 end
 

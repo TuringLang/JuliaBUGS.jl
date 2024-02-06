@@ -95,3 +95,19 @@ end
 function not_for_statements(state::CompileState)
     return Iterators.flatten((state.logical_statements, state.stochastic_statements))
 end
+
+function get_statement(state::CompileState, id::Int)
+    logical_len = length(state.logical_statements)
+    stochastic_len = length(state.stochastic_statements)
+    logical_for_len = length(state.logical_for_statements)
+
+    if id <= logical_len
+        return state.logical_statements[id]
+    elseif id <= logical_len + stochastic_len
+        return state.stochastic_statements[id - logical_len]
+    elseif id <= logical_len + stochastic_len + logical_for_len
+        return state.logical_for_statements[id - logical_len - stochastic_len]
+    else
+        return state.stochastic_for_statements[id - logical_len - stochastic_len - logical_for_len]
+    end
+end
