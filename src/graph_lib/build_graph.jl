@@ -100,7 +100,7 @@ end
 # need to decide if the variable is observed 
 function build_dep_graph(state::CompileState)
     add_all_variables(state)
-    g = MetaGraph(DiGraph(); label_type=Any, vertex_data_type=Any)
+    g = MetaGraph(DiGraph(); label_type=Union{Symbol,Tuple{Symbol,Vararg{Int}}}, vertex_data_type=Int)
     array_vars = collect(keys(state.array_sizes))
     for (i, stmt) in enumerate(all_statements(state))
         if stmt isa Statement
@@ -229,5 +229,3 @@ function add_edge_fail!(g, from, to)
         error("edge can't be add from $from to $to")
     end
 end
-
-# data and transformed variables are still in the graph, they can be removed
