@@ -34,6 +34,7 @@ function build_eval_function_inner(state::CompileState, statement, args=Any[]; r
     return @RuntimeGeneratedFunction(state.eval_module, def_expr)
 end
 
+# `call` assume that number of `loop_var_values` is the same as the number of loop variables in `f`
 function call(
     m::Module, f::RuntimeGeneratedFunction{argnames,VTs}, loop_var_values...
 ) where {argnames,VTs}

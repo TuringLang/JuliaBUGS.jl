@@ -1,10 +1,35 @@
+FUNCTION_TO_ATTEMPT_EVAL = JuliaBUGS.BUGSPrimitives.BUGS_FUNCTIONS # TODO: some of the BUGS functions may be too expensive too
 
+function add_all_variables(state::CompileState)
+    for k in keys(state.array_sizes)
+        if k ∉ state.variables_tracked_in_eval_module
+            @eval state.eval_module $k = $(fill(missing, state.array_sizes[k]...))
+        end
+    end
+    scalars = Set()
+    for stmt in all_statements(state)
+        for rhs_var in stmt.rhs_vars
+            if rhs_var ∉ keys(state.array_sizes)
+                push!(scalars, rhs_var)
+            end
+        end
+    end
+    for scalar in scalars
+        if scalar ∉ state.variables_tracked_in_eval_module
+            @eval state.eval_module $scalar = missing
+        end
+    end
+end
 
 # similar to non-standard interpretation, instead of evaluating the function, we just return the dependencies
-function gen_func(state, stmt)
+function build_dependencies_eval_function(
+    state::CompileState, stmt::Union{<:Statement,<:ForStatement}; return_expr=false
+)
     expr = SemanticAnalysis.build_eval_function(state, stmt; return_expr=true)
 
-    @capture(expr, function F_(Args__) body_ end)
+    @capture(expr, function F_(Args__)
+        body_
+    end)
 
     ex = MacroTools.postwalk(body) do sub_expr
         if MacroTools.@capture(sub_expr, v_[indices__])
@@ -20,8 +45,12 @@ function gen_func(state, stmt)
                     push!(deps, ($(Meta.quot(v)), $(_indices_name)...))
                     missing
                 else
-                    push!(deps, ($(Meta.quot(v)), $(_indices_name)...))
-                    ($v)[$(_indices_name)...]
+                    val = $v[$(_indices_name)...]
+                    if ismissing(val) || any(ismissing, val)
+                        push!(deps, ($(Meta.quot(v)), $(_indices_name)...))
+                    end
+                    # TODO: can val be array of missings?
+                    val
                 end
             end
             return _e
@@ -36,35 +65,135 @@ function gen_func(state, stmt)
                 push!(_new_args, fresh_var_name)
                 push!(_stmts, _e)
             end
-            return Expr(:block, _stmts..., Expr(:call, f, _new_args...))
+            if f in FUNCTION_TO_ATTEMPT_EVAL ∪ (:(+), :(-), :(*), :(\), :(:), :(^))
+                return Expr(
+                    :block,
+                    _stmts...,
+                    MacroTools.@q(
+                        if (any(ismissing, [$(_new_args...)]))
+                            missing
+                        else
+                            $f($(_new_args...))
+                        end
+                    )
+                )
+            else
+                return Expr(:block, _stmts..., :missing) # if we don't recognize the function, we don't evaluate it
+            end
         end
         sub_expr
     end
 
-    return MacroTools.@q function $(F)($(Args...)) 
+    ret_ex = MacroTools.@q function $(F)($(Args...))
         deps = Any[]
         $ex
         return deps
+    end
+
+    if return_expr
+        return ret_ex
+    else
+        return @RuntimeGeneratedFunction(ret_ex)
     end
 end
 
 # need to decide if the variable is observed 
 function build_dep_graph(state::CompileState)
-    values_map = SemanticAnalysis.get_data_and_transformed_variables(state)
-    for k in keys(state.array_sizes)
-        if k ∉ keys(values_map)
-            state.array_sizes[k] = fill(missing, state.array_sizes[k]...)
+    add_all_variables(state)
+    g = MetaGraph(DiGraph(); label_type=Any, vertex_data_type=Any)
+    array_vars = collect(keys(state.array_sizes))
+    for (i, stmt) in enumerate(all_statements(state))
+        if stmt isa Statement
+            lhs_label = stmt.lhs isa Symbol ? stmt.lhs : Tuple(stmt.lhs.args...)
+            g[lhs_label] = i
+
+            rhs_scalars = [rhs_var for rhs_var in stmt.rhs_vars if rhs_var ∉ array_vars]
+            _rhs_array_vars = [
+                rhs_var for rhs_var in stmt.rhs_vars if rhs_var in array_vars
+            ]
+            rhs_array_vars = if isempty(_rhs_array_vars) || stmt.rhs isa Union{Symbol,Real}
+                []
+            else
+                f = build_dependencies_eval_function(state, stmt)
+                call(state.eval_module, f)
+            end
+
+            for rhs_var in rhs_scalars
+                if !haskey(g, rhs_var)
+                    g[rhs_var] = 0
+                end
+                add_edge_fail!(g, rhs_var, lhs_label)
+            end
+            for rhs_var in rhs_array_vars
+                for i in Iterators.product(rhs_var[2:end])
+                    rhs_var_label = (rhs_var, i...)
+                    if !haskey(g, rhs_var_label)
+                        g[rhs_var_label] = 0
+                    end
+                    add_edge_fail!(g, rhs_var_label, lhs_label)
+                end
+            end
+        else # stmt isa ForStatement
+            rhs_scalars = [rhs_var for rhs_var in stmt.rhs_vars if rhs_var ∉ array_vars]
+
+            for rhs_var in rhs_scalars
+                if !haskey(g, rhs_var)
+                    g[rhs_var] = 0
+                end
+            end
+
+            f = if stmt.rhs isa Union{Symbol,Real}
+                nothing # not used
+            else
+                build_dependencies_eval_function(state, stmt)
+            end
+
+            _rhs_array_vars = [
+                rhs_var for rhs_var in stmt.rhs_vars if rhs_var in array_vars
+            ]
+
+            for indices in Iterators.product(stmt.bounds...)
+                simplified_lhs = simplify_lhs(
+                    merge(state.data, NamedTuple{stmt.loop_vars}(Tuple(indices))), stmt.lhs
+                )
+
+                lhs_label = Tuple(simplified_lhs.args)
+                g[lhs_label] = i
+
+                rhs_array_vars =
+                    if isempty(_rhs_array_vars) || stmt.rhs isa Union{Symbol,Real}
+                        []
+                    else
+                        call(state.eval_module, f, indices...)
+                    end
+
+                for rhs_var in rhs_scalars
+                    add_edge_fail!(g, rhs_var, lhs_label)
+                end
+
+                for rhs_var in rhs_array_vars
+                    is = [i isa Int ? UnitRange(i, i) : i for i in rhs_var[2:end]]
+
+                    for i in Iterators.product(is...)
+                        rhs_var_label = (rhs_var[1], i...)
+                        if !haskey(g, rhs_var_label)
+                            g[rhs_var_label] = 0
+                        end
+
+                        add_edge_fail!(g, rhs_var_label, lhs_label)
+                    end
+                end
+            end
         end
     end
 
-    g = MetaGraph(DiGraph(); label_type=NTuple, vertex_data_type=Any)
-    # statement_id also index into vector of node functions
+    return g
+end
 
-    for (i, stmt) in enumerate(not_for_statements(state))
-        if stmt.lhs isa Symbol
-            add_vertex!(g, (stmt.lhs, nothing))
-        else
-            add_vertex!(g, (stmt.lhs.args...))
-        end
+function add_edge_fail!(g, from, to)
+    if !add_edge!(g, from, to)
+        error("edge can't be add from $from to $to")
     end
 end
+
+# data and transformed variables are still in the graph, they can be removed

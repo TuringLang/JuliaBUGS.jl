@@ -1,14 +1,14 @@
 using JuliaBUGS: @bugs
 using JuliaBUGS: JuliaBUGS, SemanticAnalysis
-using JuliaBUGS.BUGSExamples: leuk
+using JuliaBUGS.BUGSExamples: leuk, eyes
 using JuliaBUGS.SemanticAnalysis: CompileState
 using JuliaBUGS.SemanticAnalysis:
     determine_array_sizes!,
     concretize_colon_indexing!,
     compute_transformed!,
     check_multiple_assignments_pre_transform,
-    check_multiple_assignments_post_transform!
-using JuliaBUGS.SemanticAnalysis: build_eval_function
+    check_multiple_assignments_post_transform!,
+    build_eval_function
 using MacroTools
 using Test
 
