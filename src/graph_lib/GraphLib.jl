@@ -3,7 +3,7 @@ module GraphLib
 using JuliaBUGS: JuliaBUGS, SemanticAnalysis
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.SemanticAnalysis:
-    CompileState, Statement, ForStatement, all_statements, call, simplify_lhs
+    CompileState, Statement, ForStatement, all_statements, call, simplify_lhs, is_logical
 using MacroTools
 using Graphs, MetaGraphsNext
 

@@ -105,6 +105,19 @@ function build_dep_graph(state::CompileState)
     for (i, stmt) in enumerate(all_statements(state))
         if stmt isa Statement
             lhs_label = stmt.lhs isa Symbol ? stmt.lhs : Tuple(stmt.lhs.args...)
+
+            lhs_val = get_value(state, lhs_label)
+            if is_logical(stmt) 
+                if lhs_val isa AbstractArray 
+                    if all(!ismissing, lhs_val)
+                        continue
+                    end
+                else
+                    if !ismissing(lhs_val)
+                        continue
+                    end
+                end
+            end
             g[lhs_label] = i
 
             rhs_scalars = [rhs_var for rhs_var in stmt.rhs_vars if rhs_var ∉ array_vars]
@@ -158,6 +171,20 @@ function build_dep_graph(state::CompileState)
                 )
 
                 lhs_label = Tuple(simplified_lhs.args)
+
+                lhs_val = get_value(state, lhs_label)
+                if is_logical(stmt) 
+                    if lhs_val isa AbstractArray 
+                        if all(!ismissing, lhs_val)
+                            continue
+                        end
+                    else
+                        if !ismissing(lhs_val)
+                            continue
+                        end
+                    end
+                end
+
                 g[lhs_label] = i
 
                 rhs_array_vars =
@@ -188,6 +215,13 @@ function build_dep_graph(state::CompileState)
     end
 
     return g
+end
+
+function get_value(state::CompileState, var_label::Symbol)
+    getproperty(state.eval_module, var_label)
+end
+function get_value(state::CompileState, var_label::Tuple{Symbol,Vararg{Int}})
+    getproperty(state.eval_module, var_label[1])[var_label[2:end]...] 
 end
 
 function add_edge_fail!(g, from, to)
