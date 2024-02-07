@@ -1,9 +1,10 @@
 FUNCTION_TO_ATTEMPT_EVAL = JuliaBUGS.BUGSPrimitives.BUGS_FUNCTIONS # TODO: some of the BUGS functions may be too expensive too
 
-function add_all_variables(state::CompileState)
+# initialize the variables that are not data or transformed variables as missing
+function initialize_variables(state::CompileState)
     for k in keys(state.array_sizes)
         if k ∉ state.variables_tracked_in_eval_module
-            @eval state.eval_module $k = $(fill(missing, state.array_sizes[k]...))
+            setproperty!(state.eval_module, k, fill(missing, state.array_sizes[k]...))
         end
     end
     scalars = Set()
@@ -16,7 +17,7 @@ function add_all_variables(state::CompileState)
     end
     for scalar in scalars
         if scalar ∉ state.variables_tracked_in_eval_module
-            @eval state.eval_module $scalar = missing
+            setproperty!(state.eval_module, scalar, missing)
         end
     end
 end
@@ -101,7 +102,7 @@ end
 
 # need to decide if the variable is observed 
 function build_dep_graph(state::CompileState)
-    add_all_variables(state)
+    initialize_variables(state)
     g = MetaGraph(
         DiGraph(); label_type=Union{Symbol,Tuple{Symbol,Vararg{Int}}}, vertex_data_type=Int
     )
@@ -217,6 +218,14 @@ function build_dep_graph(state::CompileState)
             end
         end
     end
+
+    # TODO: why does this fail?
+    # # if a variable data is 0, then it is a data variable and we don't need to track it
+    # for vertex_label in labels(g)
+    #     if g[vertex_label] == 0
+    #         delete!(g, vertex_label)
+    #     end
+    # end
 
     return g
 end

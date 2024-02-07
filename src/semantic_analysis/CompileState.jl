@@ -20,7 +20,7 @@ struct CompileState
     stochastic_definition_bitmap
 end
 
-function CompileState(expr, data)
+function CompileState(expr::Expr, data)
     logical_statements = Statement{:(=)}[]
     stochastic_statements = Statement{:(~)}[]
     logical_for_statements = ForStatement{:(=)}[]

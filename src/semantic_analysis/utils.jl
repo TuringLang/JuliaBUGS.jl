@@ -101,7 +101,7 @@ function create_eval_module(data)
         RuntimeGeneratedFunctions.init(@__MODULE__)
     end
     for (k, v) in pairs(data)
-        @eval m $k = $v
+        setproperty!(m, k, v)
     end
     return m
 end

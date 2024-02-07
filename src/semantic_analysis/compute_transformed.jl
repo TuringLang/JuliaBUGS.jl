@@ -218,7 +218,7 @@ function store_values!(
         )
     end
     push!(state.variables_tracked_in_eval_module, simplified_lhs)
-    state.eval_module.eval(:($(simplified_lhs) = $(value)))
+    setproperty!(state.eval_module, simplified_lhs, value)
     return nothing
 end
 function store_values!(state::CompileState, simplified_lhs::Expr, value::Union{Int,Float64})

@@ -128,13 +128,16 @@ function check_multiple_assignments_post_transform!(state::CompileState)
                 state.stochastic_definition_bitmap[var],
             )
             err = ErrorException(
-                "Both logical and stochastic statements are assigning to $(var) at indices $(join(clash_indices, ", ")).",
+                "Both logical and stochastic statements are assigning to $(var) at indices $(join(map(Tuple, clash_indices), ", ")).",
             )
             if var ∉ state.variables_tracked_in_eval_module
                 throw(err)
             else
-                arr = getfield(state.eval_module, var)
-                if any(ismissing, arr[clash_indices])
+                arr = getproperty(state.eval_module, var)
+                # if any of the clashed indices are not missing, then throw
+                if any(clash_indices) do index
+                    ismissing(arr[index])
+                end
                     throw(err)
                 end
             end
@@ -143,5 +146,6 @@ function check_multiple_assignments_post_transform!(state::CompileState)
 
     # clean up the bitmaps
     empty!(state.logical_definition_bitmap)
-    return empty!(state.stochastic_definition_bitmap)
+    empty!(state.stochastic_definition_bitmap)
+    return nothing
 end
