@@ -1,61 +1,44 @@
-using StaticArrays: StaticArrays
-using MacroTools: prewalk, @capture, @q, postwalk
-
-include("utils.jl")
-include("extract_array_ndims.jl")
-
-function gen_func(expr::Expr)
-    #! format: off
+function gen_deter_arr_sizes_func(expr::Expr)
     return @q function __determine_array_sizes(
-        data::NamedTuple{names,types}
-    ) where {names,types}
-        $(gen_func_body(expr)...)
-        return array_sizes
+        data::NamedTuple{$__DATA_KEYS__,$__DATA_VALUE_TYPES__}
+    ) where {$__DATA_KEYS__,$__DATA_VALUE_TYPES__}
+        $(gen_deter_arr_sizes_func_setup(expr)...)
+        $(gen_deter_arr_sizes_func_main_body!(expr, Any[])...)
+        return NamedTuple{keys(array_sizes)}(Tuple.(values(array_sizes)))
     end
-    #! format: on
 end
 
-function gen_func_body(expr::Expr)
-    args = []
-    push!(args, gen_unpack(expr))
-    push!(args, gen_array_sizes_init(expr)...)
-    push!(args, gen_main_body(expr)...)
-    return args
-end
-
-function gen_unpack(expr::Expr)
+function gen_deter_arr_sizes_func_setup(expr::Expr)
     vars_to_unpack = extract_variables_used_in_bounds_and_indices(expr)
-    return Expr(:(=), Expr(:tuple, Expr(:parameters, vars_to_unpack...)), :data)
-end
-
-function gen_array_sizes_init(expr::Expr)
     array_ndims = extract_array_ndims(expr)
-    names, args = Symbol[], Any[]
-    for (var, dim) in pairs(array_ndims)
-        if dim == 0
-            continue
-        end
-        push!(names, var)
-        push!(args, @q(_MVec{$dim}($(fill(1, dim)))))
-    end
+    arr_vars = [var for (var, dim) in pairs(array_ndims) if dim != 0]
+    arr_sizes_init = [
+        @q(_MVec{$dim}($(fill(1, dim)))) for dim in values(array_ndims) if dim != 0
+    ]
     return [
-        @q(array_var_names = $(Tuple(names))),
+        @q(
+            map($(vars_to_unpack)) do x
+                if x ∉ $__DATA_KEYS__
+                    error(
+                        "Variable `$x` is used in loop bounds or for indexing, but not provided by data.",
+                    )
+                end
+            end
+        ),
+        Expr(:(=), Expr(:tuple, Expr(:parameters, vars_to_unpack...)), :data),
+        @q(__array_var_names = $(Tuple(arr_vars))),
         @q(array_sizes = let _MVec = JuliaBUGS.StaticArrays.MVector
-            NamedTuple{array_var_names}(($(args...),))
+            NamedTuple{__array_var_names}(($(arr_sizes_init...),))
         end),
         @q(
-            for v in intersect(array_var_names, names)
+            for v in intersect(__array_var_names, $__DATA_KEYS__)
                 array_sizes[v] .= size(data[v])
             end
         )
     ]
 end
 
-function gen_main_body(expr::Expr)
-    return gen_main_body_block!(expr, Any[])
-end
-
-function gen_main_body_block!(expr::Expr, args::Vector{Any})
+function gen_deter_arr_sizes_func_main_body!(expr::Expr, args::Vector{Any})
     for stmt in expr.args
         if @capture(stmt, lhs_ = rhs_)
             if lhs isa Symbol
@@ -92,20 +75,22 @@ function gen_main_body_block!(expr::Expr, args::Vector{Any})
         )
             push!(args, @q(
                 for $loop_var in ($lower):($upper)
-                    $(gen_main_body_block!(body, Any[])...)
+                    $(gen_deter_arr_sizes_func_main_body!(body, Any[])...)
                 end
             ))
+        else
+            push!(args, stmt) # TODO: return the original statement for debugging
         end
     end
     return args
 end
 
 function determine_array_sizes_logical!(
-    data::NamedTuple{data_names,data_types},
-    array_sizes::NamedTuple{names,types},
+    data::NamedTuple{data_keys,data_value_types},
+    array_sizes::NamedTuple{array_vars,array_var_types},
     var::Symbol,
     indices::Vararg{Union{Missing,Float64,Int},N},
-) where {data_names,data_types,names,types,N}
+) where {data_keys,data_value_types,array_vars,array_var_types,N}
     if isempty(indices)
         if is_specified_by_data(data, var)
             throw(
@@ -125,11 +110,11 @@ function determine_array_sizes_logical!(
 end
 
 function determine_array_sizes_stochastic!(
-    data::NamedTuple{data_names,data_types},
-    array_sizes::NamedTuple{names,types},
+    data::NamedTuple{data_keys,data_value_types},
+    array_sizes::NamedTuple{array_vars,array_var_types},
     var::Symbol,
     indices::Vararg{Union{Missing,Float64,Int},N},
-) where {data_names,data_types,names,types,N}
+) where {data_keys,data_value_types,array_vars,array_var_types,N}
     if if_partially_specified_as_data(data, var, indices...)
         throw(
             ArgumentError(
@@ -141,16 +126,16 @@ function determine_array_sizes_stochastic!(
 end
 
 @inline function is_specified_by_data(
-    ::NamedTuple{names,types}, var::Symbol
-) where {names,types}
-    return var in names
+    data::NamedTuple{data_keys,data_value_types}, var::Symbol
+) where {data_keys,data_value_types}
+    return var in data_keys
 end
 @inline function is_specified_by_data(
-    data::NamedTuple{names,types},
+    data::NamedTuple{data_keys,data_value_types},
     var::Symbol,
     indices::Vararg{Union{Missing,Float64,Int},N},
-) where {names,types,N}
-    if var ∉ names
+) where {data_keys,data_value_types,N}
+    if var ∉ data_keys
         return false
     else
         values = data[var][indices...]
@@ -169,11 +154,11 @@ end
 end
 
 @inline function if_partially_specified_as_data(
-    data::NamedTuple{names,types},
+    data::NamedTuple{data_keys,data_value_types},
     var::Symbol,
     indices::Vararg{Union{Missing,Float64,Int},N},
-) where {names,types,N}
-    if var ∉ names
+) where {data_keys,data_value_types,N}
+    if var ∉ data_keys
         return false
     else
         values = data[var][indices...]

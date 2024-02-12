@@ -43,6 +43,8 @@ include("gibbs.jl")
 include("semantic_analysis/SemanticAnalysis.jl")
 include("graph_lib/GraphLib.jl")
 
+include("metaprogramming/new_macro.jl")
+
 include("BUGSExamples/BUGSExamples.jl")
 
 function check_input(input::Union{NamedTuple,AbstractDict})

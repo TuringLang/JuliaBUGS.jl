@@ -70,7 +70,7 @@ end
 
 function bugs_top(@nospecialize(expr), __source__)
     if Meta.isexpr(expr, :block)
-        return Expr(:block, bugs_block_body(expr, __source__)...)
+        return Expr(:block, bugs_block_body(expr, __source__; allow_scalar_lhs=true)...)
     elseif Meta.isexpr(expr, (:(=), :for)) || MacroTools.@capture(expr, lhs_ ~ rhs_)
         return bugs_statement(expr, __source__)
     else
@@ -78,21 +78,27 @@ function bugs_top(@nospecialize(expr), __source__)
     end
 end
 
-function bugs_block_body(@nospecialize(expr), __source__)
+function bugs_block_body(@nospecialize(expr), __source__; allow_scalar_lhs=false)
     if !(expr.args[1] isa LineNumberNode) # if the model is given using parentheses, the first line is not a LineNumberNode
         expr.args = [__source__, expr.args...]
     end
     return [
-        bugs_statement(stmt, line_num) for (line_num, stmt) in
+        bugs_statement(stmt, line_num; allow_scalar_lhs=allow_scalar_lhs) for (line_num, stmt) in
         Iterators.take(Iterators.partition(expr.args, 2), length(expr.args) ÷ 2) # the last line is the LineNumberNode for `end`
     ]
 end
 
-function bugs_statement(@nospecialize(expr), line_num)
+function bugs_statement(@nospecialize(expr), line_num; allow_scalar_lhs=false)
     if Meta.isexpr(expr, :(=))
+        if !allow_scalar_lhs && expr.args[1] isa Symbol
+            error("Declaring scalar variable on the LHS is incorrect in for-loops, as it leads to assigning to the same variable multiple times.\n Error at $line_num: $(expr)")
+        end
         check_lhs(expr.args[1], :(=), line_num)
         return Expr(:(=), expr.args[1], bugs_expression(expr.args[2], line_num))
     elseif MacroTools.@capture(expr, lhs_ ~ rhs_)
+        if !allow_scalar_lhs && lhs isa Symbol
+            error("Scalar LHS is incorrect in for loops, as it leads to assigning to the same variable multiple times, at $line_num: $(expr)")
+        end
         check_lhs(lhs, :(~), line_num)
         return Expr(:call, :(~), lhs, bugs_expression(rhs, line_num))
     elseif Meta.isexpr(expr, :for)
