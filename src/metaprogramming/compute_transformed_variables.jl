@@ -8,14 +8,12 @@ function gen_compute_transformed_func(expr::Expr)
         data::NamedTuple{data_keys,data_value_types},
         array_sizes::NamedTuple{array_vars,array_var_types},
     ) where {data_keys,data_value_types,array_vars,array_var_types}
-        env = Dict{
-            Symbol,
-            Union{Array{<:Union{Int,Float64,Missing}},Missing,Int,Float64},
-        }()
+        env = Dict{Symbol,Union{Array{<:Union{Int,Float64,Missing}},Missing,Int,Float64}}()
         for var in $all_vars
             if var in data_keys
                 # TODO: use `data_value_types`
-                if getfield(data, var) isa Union{Int,Float64} || eltype(getfield(data, var)) <: Union{Int,Float64}
+                if getfield(data, var) isa Union{Int,Float64} ||
+                    eltype(getfield(data, var)) <: Union{Int,Float64}
                     env[var] = getfield(data, var)
                 else
                     env[var] = copy(getfield(data, var))
@@ -28,7 +26,7 @@ function gen_compute_transformed_func(expr::Expr)
                 )
             end
         end
-        $(gen_unpack_expr(all_vars)...)
+        $([@q($v = env[$(Meta.quot(v))]) for v in all_vars]...)
         added_new_val = true
         while added_new_val
             added_new_val = false
@@ -41,10 +39,6 @@ function gen_compute_transformed_func(expr::Expr)
         end
         return env
     end
-end
-
-@inline function gen_unpack_expr(all_vars)
-    return [@q($v = env[$(Meta.quot(v))]) for v in all_vars]
 end
 
 function gen_compute_transformed_func_body!(expr::Expr, args::Vector{Any})
@@ -90,7 +84,7 @@ function _try_compute(expr::Expr)
     else
         @capture(lhs, v_[indices__])
         @q(env[$(Meta.quot(v))][$(indices...)])
-    end 
+    end
 
     rhs = MacroTools.postwalk(rhs) do sub_expr
         if @capture(sub_expr, f_(a__))
@@ -117,6 +111,27 @@ function _try_compute(expr::Expr)
                 $lhs = value
                 added_new_val = true
                 $lhs_var = env[$(Meta.quot(lhs_var))]
+            end
+        end
+    end
+end
+
+function check_potential_conflict(
+    env::Dict{Symbol,Union{Array{<:Union{Int,Float64,Missing}},Missing,Int,Float64}},
+    potential_conflicted_scalars::Vector{Symbol},
+    potential_conflicted_arrays::NamedTuple{names,types},
+) where {names,types}
+    for s in potential_conflicted_scalars
+        if env[s] isa Missing
+            error("$s is assigned to by both logical and stochastic variables.")
+        end
+    end
+
+    for (s, a) in pairs(potential_conflicted_arrays)
+        is = findall(a)
+        for i in is
+            if env[s][i] isa Missing
+                error("$s is assigned to by both logical and stochastic variables.")
             end
         end
     end

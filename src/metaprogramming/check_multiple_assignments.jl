@@ -36,7 +36,7 @@ function gen_check_multiple_assignments_func(expr::Expr)
         )
         $(gen_check_multiple_assignments_func_main_body!(expr, Any[])...)
 
-        bitmaps = Vector{BitArray}[$(gen_bitmap_ands(overlap_arrays)...)]
+        bitmaps = [$(gen_bitmap_ands(overlap_arrays)...)]
 
         return $overlap_scalars,
         NamedTuple{Tuple($overlap_arrays)}(
