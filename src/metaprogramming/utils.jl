@@ -117,6 +117,10 @@ function extract_array_ndims_expr(
     return merge(array_ndims, variables)
 end
 
+function extract_all_vars(expr::Expr)
+    return Tuple(keys(extract_array_ndims(expr)))
+end
+
 """
     extract_variables_used_in_bounds_and_indices(expr::Expr)
 

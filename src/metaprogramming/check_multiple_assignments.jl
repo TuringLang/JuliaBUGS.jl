@@ -56,12 +56,12 @@ end
 end
 
 function generate_analysis_function_statement_deterministic(
-    ::CheckMultipleAssignments, ::Symbol, rhs::__RHS_UNION_TYPE__, statement_counter::Int
+    ::CheckMultipleAssignments, ::Symbol, rhs::__RHS_UNION_TYPE__
 )
     return nothing
 end
 function generate_analysis_function_statement_deterministic(
-    ::CheckMultipleAssignments, lhs::Expr, rhs::__RHS_UNION_TYPE__, statement_counter::Int
+    ::CheckMultipleAssignments, lhs::Expr, rhs::__RHS_UNION_TYPE__
 )
     return @q(
         JuliaBUGS.set!($__logical_assign_tracker__.$(lhs.args[1]), $(lhs.args[2:end]...))
@@ -69,12 +69,12 @@ function generate_analysis_function_statement_deterministic(
 end
 
 function generate_analysis_function_statement_stochastic(
-    ::CheckMultipleAssignments, ::Symbol, rhs::__RHS_UNION_TYPE__, statement_counter::Int
+    ::CheckMultipleAssignments, ::Symbol, rhs::__RHS_UNION_TYPE__
 )
     return nothing
 end
 function generate_analysis_function_statement_stochastic(
-    ::CheckMultipleAssignments, lhs::Expr, rhs::__RHS_UNION_TYPE__, statement_counter::Int
+    ::CheckMultipleAssignments, lhs::Expr, rhs::__RHS_UNION_TYPE__
 )
     return @q(
         JuliaBUGS.set!($__stochastic_assign_tracker__.$(lhs.args[1]), $(lhs.args[2:end]...))

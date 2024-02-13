@@ -24,24 +24,16 @@ function generate_analysis_function(::Analysis, expr::Expr) end
 function generate_analysis_function_statement_deterministic end
 function generate_analysis_function_statement_stochastic end
 
-# add statement counter to the argument
-function generate_analysis_function_mainbody!(
-    analysis::Analysis, model_def::Expr, statement_counter::Ref{Int}=Ref(0)
-)
+function generate_analysis_function_mainbody!(analysis::Analysis, model_def::Expr)
     args = Expr[]
     for statement in model_def.args
         if @capture(statement, lhs_ = rhs_)
-            statement_counter[] += 1
-            arg = generate_analysis_function_statement_deterministic(
-                analysis, lhs, rhs, statement_counter[]
-            )
+            arg = generate_analysis_function_statement_deterministic(analysis, lhs, rhs)
             if arg !== nothing
                 push!(args, arg)
             end
         elseif @capture(statement, lhs_ ~ rhs_)
-            arg = generate_analysis_function_statement_stochastic(
-                analysis, lhs, rhs, statement_counter[]
-            )
+            arg = generate_analysis_function_statement_stochastic(analysis, lhs, rhs)
             if arg !== nothing
                 push!(args, arg)
             end
@@ -51,18 +43,11 @@ function generate_analysis_function_mainbody!(
                 body_
             end
         )
-            push!(
-                args,
-                @q(
-                    for $loop_var in ($lower):($upper)
-                        $(
-                            generate_analysis_function_mainbody!(
-                                analysis, body, statement_counter
-                            )...
-                        )
-                    end
-                )
-            )
+            push!(args, @q(
+                for $loop_var in ($lower):($upper)
+                    $(generate_analysis_function_mainbody!(analysis, body)...)
+                end
+            ))
         else
             push!(args, statement) # Debugging: don't change other type of statements
         end
@@ -75,4 +60,3 @@ include("determine_array_sizes.jl")
 include("check_multiple_assignments.jl")
 include("compute_transformed.jl")
 include("count_free_vars.jl")
-include("refine_loops.jl")

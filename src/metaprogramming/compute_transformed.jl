@@ -53,13 +53,13 @@ function generate_analysis_function(analysis::ComputeTransformed, expr::Expr)
 end
 
 function generate_analysis_function_statement_deterministic(
-    ::ComputeTransformed, lhs::Union{Symbol,Expr}, rhs::__RHS_UNION_TYPE__, statement_counter::Int
+    ::ComputeTransformed, lhs::Union{Symbol,Expr}, rhs::__RHS_UNION_TYPE__
 )
     return @q(JuliaBUGS.@try_compute($lhs = $rhs))
 end
 
 function generate_analysis_function_statement_stochastic(
-    ::ComputeTransformed, lhs::Union{Symbol,Expr}, rhs::__RHS_UNION_TYPE__, statement_counter::Int
+    ::ComputeTransformed, lhs::Union{Symbol,Expr}, rhs::__RHS_UNION_TYPE__
 )
     return nothing
 end
@@ -145,4 +145,21 @@ function check_conflicts(
             )
         end
     end
+end
+
+function concretize_eval_env_value_types(
+    eval_env::NamedTuple{variable_names,variable_types}
+) where {variable_names,variable_types}
+    return NamedTuple{variable_names}(
+        Tuple([
+            if type === Missing ||
+                type <: Union{Int,Float64} ||
+                eltype(type) === Missing ||
+                eltype(type) <: Union{Int,Float64}
+                value
+            else # Missing <: eltype(type)
+                map(identity, value)
+            end for (value, type) in zip(values(eval_env), variable_types.parameters)
+        ]),
+    )
 end

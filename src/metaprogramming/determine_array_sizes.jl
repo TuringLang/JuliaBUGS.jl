@@ -35,14 +35,14 @@ function generate_analysis_function(analysis::DetermineArraySizes, expr::Expr)
 end
 
 function generate_analysis_function_statement_deterministic(
-    ::DetermineArraySizes, lhs::Symbol, rhs::__RHS_UNION_TYPE__, statement_counter::Int
+    ::DetermineArraySizes, lhs::Symbol, rhs::__RHS_UNION_TYPE__
 )
     return @q(
         JuliaBUGS.determine_array_sizes_logical!(data, $__array_sizes__, $(Meta.quot(lhs)))
     )
 end
 function generate_analysis_function_statement_deterministic(
-    ::DetermineArraySizes, lhs::Expr, rhs::__RHS_UNION_TYPE__, statement_counter::Int
+    ::DetermineArraySizes, lhs::Expr, rhs::__RHS_UNION_TYPE__
 )
     return @q(
         JuliaBUGS.determine_array_sizes_logical!(
@@ -52,12 +52,12 @@ function generate_analysis_function_statement_deterministic(
 end
 
 function generate_analysis_function_statement_stochastic(
-    ::DetermineArraySizes, lhs::Symbol, rhs::__RHS_UNION_TYPE__, statement_counter::Int
+    ::DetermineArraySizes, lhs::Symbol, rhs::__RHS_UNION_TYPE__
 )::Nothing
     return nothing
 end
 function generate_analysis_function_statement_stochastic(
-    ::DetermineArraySizes, lhs::Expr, rhs::__RHS_UNION_TYPE__, statement_counter::Int
+    ::DetermineArraySizes, lhs::Expr, rhs::__RHS_UNION_TYPE__
 )
     return @q(
         JuliaBUGS.determine_array_sizes_stochastic!(
