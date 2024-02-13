@@ -53,13 +53,13 @@ function generate_analysis_function(analysis::ComputeTransformed, expr::Expr)
 end
 
 function generate_analysis_function_statement_deterministic(
-    ::ComputeTransformed, lhs::Union{Symbol,Expr}, rhs::__RHS_UNION_TYPE__
+    ::ComputeTransformed, lhs::Union{Symbol,Expr}, rhs::__RHS_UNION_TYPE__, statement_counter::Int
 )
     return @q(JuliaBUGS.@try_compute($lhs = $rhs))
 end
 
 function generate_analysis_function_statement_stochastic(
-    ::ComputeTransformed, lhs::Union{Symbol,Expr}, rhs::__RHS_UNION_TYPE__
+    ::ComputeTransformed, lhs::Union{Symbol,Expr}, rhs::__RHS_UNION_TYPE__, statement_counter::Int
 )
     return nothing
 end

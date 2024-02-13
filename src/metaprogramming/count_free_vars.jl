@@ -20,7 +20,7 @@ end
 const __lhs_val__ = gensym(:lhs_val)
 
 function generate_analysis_function_statement_deterministic(
-    ::CountFreeVars, lhs::Symbol, rhs::__RHS_UNION_TYPE__
+    ::CountFreeVars, lhs::Symbol, rhs::__RHS_UNION_TYPE__, statement_counter::Int
 )
     @q(
         if ismissing($lhs)
@@ -30,7 +30,7 @@ function generate_analysis_function_statement_deterministic(
 end
 
 function generate_analysis_function_statement_deterministic(
-    ::CountFreeVars, lhs::Expr, rhs::__RHS_UNION_TYPE__
+    ::CountFreeVars, lhs::Expr, rhs::__RHS_UNION_TYPE__, statement_counter::Int
 )
     @q begin
         $__lhs_val__ = $lhs
@@ -44,7 +44,7 @@ function generate_analysis_function_statement_deterministic(
 end
 
 function generate_analysis_function_statement_stochastic(
-    ::CountFreeVars, lhs::Symbol, rhs::__RHS_UNION_TYPE__
+    ::CountFreeVars, lhs::Symbol, rhs::__RHS_UNION_TYPE__, statement_counter::Int
 )
     @q(
         if ismissing($lhs)
@@ -54,7 +54,7 @@ function generate_analysis_function_statement_stochastic(
 end
 
 function generate_analysis_function_statement_stochastic(
-    ::CountFreeVars, lhs::Expr, rhs::__RHS_UNION_TYPE__
+    ::CountFreeVars, lhs::Expr, rhs::__RHS_UNION_TYPE__, statement_counter::Int
 )
     @q begin
         $__lhs_val__ = $lhs
