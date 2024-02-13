@@ -1,32 +1,41 @@
 function gen_compute_transformed_func(expr::Expr)
-    _all_vars = extract_array_ndims(expr)
-    all_vars = Tuple(keys(_all_vars))
-    scalars = keys(filter(x -> last(x) == 0, pairs(_all_vars)))
-    array_vars = setdiff(keys(_all_vars), scalars)
+    all_vars = Tuple(keys(extract_array_ndims(expr)))
+    scalars = Tuple(keys(filter(x -> last(x) == 0, pairs(extract_array_ndims(expr)))))
+    array_vars = setdiff(all_vars, scalars)
+    vars_in_bounds_and_indices = extract_variables_used_in_bounds_and_indices(expr)
+    vars_in_program = setdiff(all_vars, vars_in_bounds_and_indices)
 
     return @q function __compute_transformed(
         data::NamedTuple{data_keys,data_value_types},
         array_sizes::NamedTuple{array_vars,array_var_types},
     ) where {data_keys,data_value_types,array_vars,array_var_types}
-        env = Dict{Symbol,Union{Array{<:Union{Int,Float64,Missing}},Missing,Int,Float64}}()
-        for var in $all_vars
-            if var in data_keys
-                # TODO: use `data_value_types`
-                if getfield(data, var) isa Union{Int,Float64} ||
-                    eltype(getfield(data, var)) <: Union{Int,Float64}
-                    env[var] = getfield(data, var)
-                else
-                    env[var] = copy(getfield(data, var))
-                end
-            elseif var in $scalars
-                env[var] = missing
+        $(Expr(:(=), Expr(:tuple, Expr(:parameters, vars_in_bounds_and_indices...)), :data))
+
+        _T = Union{Int,Float,Missing}
+        env = Dict{Symbol,Union{Array{_T},_T}}()
+
+        for (n, t) in zip(data_keys, data_value_types)
+            if n in vars_in_bounds_and_indices
+                continue
+            elseif t isa Union{Int,Float64}
+                env[n] = getfield(data, n)
             else
-                env[var] = Array{Union{Int,Float64,Missing}}(
-                    missing, getfield(array_sizes, var)...
-                )
+                if eltype(t) <: Union{Int,Float64}
+                    env[n] = getfield(data, n)
+                else
+                    env[n] = copy(getfield(data, n))
+                end
             end
         end
-        $([@q($v = env[$(Meta.quot(v))]) for v in all_vars]...)
+
+        for n in array_vars
+            env[n] = Array{_T}(missing, array_sizes[n]...)
+        end
+
+        for s in setdiff($vars_in_program, array_vars)
+            env[s] = missing
+        end
+
         added_new_val = true
         while added_new_val
             added_new_val = false
@@ -37,6 +46,7 @@ function gen_compute_transformed_func(expr::Expr)
                 env[k] = map(identity, v)
             end
         end
+  
         return env
     end
 end
@@ -59,7 +69,7 @@ function gen_compute_transformed_func_body!(expr::Expr, args::Vector{Any})
                 end
             ))
         else
-            push!(args, stmt) # TODO: return the original statement for debugging
+            push!(args, stmt)
         end
     end
     return args
@@ -74,9 +84,10 @@ function _try_compute(expr::Expr)
     lhs, rhs = expr.args
 
     lhs_var = if lhs isa Symbol
-        lhs
+        @q(env[$(Meta.quot(lhs))])
     else
-        lhs.args[1]
+        var = lhs.args[1]
+        @q(env[$(Meta.quot(var))])
     end
 
     lhs = if lhs isa Symbol
@@ -87,12 +98,29 @@ function _try_compute(expr::Expr)
     end
 
     rhs = MacroTools.postwalk(rhs) do sub_expr
-        if @capture(sub_expr, f_(a__))
-            if f in JuliaBUGS.BUGSPrimitives.BUGS_FUNCTIONS
-                return @q(JuliaBUGS.BUGSPrimitives.$f($(a...)))
+        if @capture(sub_expr, f_(args__))
+            f = if f in JuliaBUGS.BUGSPrimitives.BUGS_FUNCTIONS
+                @q(JuliaBUGS.BUGSPrimitives.$f)
+            else
+                f
             end
+
+            for (i, arg) in enumerate(args)
+                if arg isa Symbol
+                    args[i] = @q(env[$(Meta.quot(arg))])
+                end
+            end
+            return @q($f($(args...)))
+        elseif @capture(sub_expr, v_[indices__])
+            for (i, index) in enumerate(indices)
+                if index isa Symbol
+                    indices[i] = @q(env[$(Meta.quot(index))])
+                end
+            end
+            @q(env[$(Meta.quot(v))][$(indices...)])
+        else
+            return sub_expr
         end
-        return sub_expr
     end
 
     return @q begin

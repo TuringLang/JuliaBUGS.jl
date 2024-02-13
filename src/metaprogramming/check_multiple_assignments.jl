@@ -1,107 +1,80 @@
-function gen_check_multiple_assignments_func(expr::Expr)
+struct CheckMultipleAssignments <: Analysis end
+
+const __logical_arrays__ = gensym(:logical_arrays)
+const __stochastic_arrays__ = gensym(:stochastic_arrays)
+
+const __logical_assign_tracker__ = gensym(:logical_assign_tracker)
+const __stochastic_assign_tracker__ = gensym(:stochastic_assign_tracker)
+
+function generate_analysis_function(analysis::CheckMultipleAssignments, expr::Expr)
     logical_scalars, stochastic_scalars, logical_arrays, stochastic_arrays = extract_variables_assigned_to(
         expr
     )
     overlap_scalars = intersect(logical_scalars, stochastic_scalars)
     overlap_arrays = intersect(logical_arrays, stochastic_arrays)
     vars_to_unpack = extract_variables_used_in_bounds_and_indices(expr)
+
     return @q function __check_multiple_assignments(
-        data::NamedTuple{data_keys,data_value_types},
-        array_sizes::NamedTuple{array_vars,array_var_types},
-    ) where {data_keys,data_value_types,array_vars,array_var_types}
-        $(
-            [
-                Expr(:(=), Expr(:tuple, Expr(:parameters, vars_to_unpack...)), :data),
-                (@q begin
-                    __logical_arrays = $(logical_arrays)
-                    __stochastic_arrays = $(stochastic_arrays)
-                end).args...,
-                @q(
-                    __logical_assign_tracker = NamedTuple{__logical_arrays}(
-                        Tuple([
-                            JuliaBUGS.AssignmentTracker(var, array_sizes[var]) for
-                            var in __logical_arrays
-                        ]),
-                    )
-                ),
-                @q(
-                    __stochastic_assign_tracker = NamedTuple{__stochastic_arrays}(
-                        Tuple([
-                            JuliaBUGS.AssignmentTracker(var, array_sizes[var]) for
-                            var in __stochastic_arrays
-                        ]),
-                    )
-                )
-            ]...
+        $__data__::NamedTuple{$__DATA_KEYS__,$__DATA_VALUE_TYPES__},
+        $__array_sizes__::NamedTuple{$__ARRAY_VARS__},
+    ) where {$__DATA_KEYS__,$__DATA_VALUE_TYPES__,$__ARRAY_VARS__}
+        $(Expr(:(=), Expr(:tuple, Expr(:parameters, vars_to_unpack...)), __data__))
+
+        $__logical_arrays__ = $(logical_arrays)
+        $__stochastic_arrays__ = $(stochastic_arrays)
+
+        $__logical_assign_tracker__ = NamedTuple{$__logical_arrays__}(
+            Tuple([
+                JuliaBUGS.AssignmentTracker(var, $__array_sizes__[var]) for
+                var in $__logical_arrays__
+            ]),
         )
-        $(gen_check_multiple_assignments_func_main_body!(expr, Any[])...)
+        $__stochastic_assign_tracker__ = NamedTuple{__stochastic_arrays__}(
+            Tuple([
+                JuliaBUGS.AssignmentTracker(var, $__array_sizes__[var]) for
+                var in $__stochastic_arrays__
+            ]),
+        )
+
+        $(generate_analysis_function_mainbody!(analysis, expr)...)
 
         bitmaps = [$(gen_bitmap_ands(overlap_arrays)...)]
-
-        return $overlap_scalars,
-        NamedTuple{Tuple($overlap_arrays)}(
-            Tuple(bitmaps),
-        )
+        return $overlap_scalars, NamedTuple{Tuple($overlap_arrays)}(Tuple(bitmaps))
     end
 end
 
 @inline function gen_bitmap_ands(overlap_arrays::Vector{Symbol})
     return [
-        @q(__logical_assign_tracker.$var.bitmap .& __stochastic_assign_tracker.$var.bitmap) for
-        var in overlap_arrays
+        @q($__logical_assign_tracker__.$var.bitmap .& $__stochastic_assign_tracker__.$var.bitmap)
+        for var in overlap_arrays
     ]
 end
 
-function gen_check_multiple_assignments_func_main_body!(expr::Expr, args::Vector{Any})
-    for stmt in expr.args
-        if @capture(stmt, lhs_ = rhs_)
-            if lhs isa Symbol
-                continue
-            else
-                push!(
-                    args,
-                    :(JuliaBUGS.set!(
-                        __logical_assign_tracker.$(lhs.args[1]), $(lhs.args[2:end]...)
-                    )),
-                )
-            end
-        elseif @capture(stmt, lhs_ ~ rhs_)
-            if lhs isa Symbol
-                continue
-            else
-                push!(
-                    args,
-                    :(JuliaBUGS.set!(
-                        __stochastic_assign_tracker.$(lhs.args[1]), $(lhs.args[2:end]...)
-                    )),
-                )
-            end
-        elseif @capture(
-            stmt,
-            for loop_var_ in lower_:upper_
-                body_
-            end
-        )
-            push!(
-                args,
-                @q(
-                    for $loop_var in ($lower):($upper)
-                        $(gen_check_multiple_assignments_func_main_body!(body, Any[])...)
-                    end
-                )
-            )
-        else
-            push!(args, stmt) # TODO: return the original statement for debugging
-        end
-    end
-    return args
+function generate_analysis_function_statement_deterministic(
+    ::CheckMultipleAssignments, ::Symbol, rhs::__RHS_UNION_TYPE__
+)
+    return nothing
+end
+function generate_analysis_function_statement_deterministic(
+    ::CheckMultipleAssignments, lhs::Expr, rhs::__RHS_UNION_TYPE__
+)
+    return @q(
+        JuliaBUGS.set!($__logical_assign_tracker__.$(lhs.args[1]), $(lhs.args[2:end]...))
+    )
 end
 
-# the LHS if assign to a array that's in data, if the type of the data array is concrete, then can skip
-
-# also store the data:
-# if the eltype of data array is concrete, then nothing happens
-# if Missing is in eltype, then need to check, for now, store a bit array for the whole array
+function generate_analysis_function_statement_stochastic(
+    ::CheckMultipleAssignments, ::Symbol, rhs::__RHS_UNION_TYPE__
+)
+    return nothing
+end
+function generate_analysis_function_statement_stochastic(
+    ::CheckMultipleAssignments, lhs::Expr, rhs::__RHS_UNION_TYPE__
+)
+    return @q(
+        JuliaBUGS.set!($__stochastic_assign_tracker__.$(lhs.args[1]), $(lhs.args[2:end]...))
+    )
+end
 
 struct AssignmentTracker{name,N}
     bitmap::BitArray{N}

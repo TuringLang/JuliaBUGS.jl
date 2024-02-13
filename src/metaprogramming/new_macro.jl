@@ -1,18 +1,59 @@
 using StaticArrays: StaticArrays
-using MacroTools: prewalk, postwalk, @q
+using MacroTools: prewalk, postwalk, @q, @qq
 
 const __DATA_KEYS__ = gensym(:KEYS)
 const __DATA_VALUE_TYPES__ = gensym(:VALUE_TYPES)
 
+const __ARRAY_VARS__ = gensym(:ARRAY_VARS)
+
+const __data__ = gensym(:data)
+const __array_var_names__ = gensym(:array_var_names)
+const __array_sizes__ = gensym(:array_sizes)
+
+const __RHS_UNION_TYPE__ = Union{Int,Float64,Symbol,Expr}
+
+abstract type Analysis end
+
+function generate_analysis_function end
+function generate_analysis_function_setup end
+function generate_analysis_function_body end
+function generate_analysis_function_warpup end
+
+function generate_analysis_function_statement_deterministic end
+function generate_analysis_function_statement_stochastic end
+
+function generate_analysis_function_mainbody!(analysis::Analysis, model_def::Expr)
+    args = Expr[]
+    for statement in model_def.args
+        if @capture(statement, lhs_ = rhs_)
+            arg = generate_analysis_function_statement_deterministic(analysis, lhs, rhs)
+            if arg !== nothing
+                push!(args, arg)
+            end
+        elseif @capture(statement, lhs_ ~ rhs_)
+            arg = generate_analysis_function_statement_stochastic(analysis, lhs, rhs)
+            if arg !== nothing
+                push!(args, arg)
+            end
+        elseif @capture(
+            statement,
+            for loop_var_ in lower_:upper_
+                body_
+            end
+        )
+            push!(args, @q(
+                for $loop_var in ($lower):($upper)
+                    $(generate_analysis_function_mainbody!(analysis, body)...)
+                end
+            ))
+        else
+            push!(args, statement) # Debugging: don't change other type of statements
+        end
+    end
+    return args
+end
+
 include("utils.jl")
 include("determine_array_sizes.jl")
 include("check_multiple_assignments.jl")
-include("compute_transformed_variables.jl")
-
-macro _bugs(expr::Expr)
-    # TODO: LineNumberNodes
-    expr = MacroTools.postwalk(MacroTools.rmlines, expr)
-    gen_expr = Expr(:block, )
-    push!(gen_expr.args, gen_deter_arr_sizes_func(expr))
-    return esc(gen_expr)
-end
+include("compute_transformed.jl")
