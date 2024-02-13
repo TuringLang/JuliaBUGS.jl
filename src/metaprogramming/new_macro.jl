@@ -19,10 +19,7 @@ const __REAL_WITH_MISSING__ = Union{Int,Float64,Missing}
 
 abstract type Analysis end
 
-function generate_analysis_function end
-function generate_analysis_function_setup end
-function generate_analysis_function_body end
-function generate_analysis_function_warpup end
+function generate_analysis_function(::Analysis, expr::Expr) end
 
 function generate_analysis_function_statement_deterministic end
 function generate_analysis_function_statement_stochastic end
@@ -62,3 +59,5 @@ include("utils.jl")
 include("determine_array_sizes.jl")
 include("check_multiple_assignments.jl")
 include("compute_transformed.jl")
+include("count_free_vars.jl")
+include("refine_loops.jl")

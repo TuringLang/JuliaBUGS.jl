@@ -6,6 +6,9 @@ const __stochastic_arrays__ = gensym(:stochastic_arrays)
 const __logical_assign_tracker__ = gensym(:logical_assign_tracker)
 const __stochastic_assign_tracker__ = gensym(:stochastic_assign_tracker)
 
+const __bitmaps__ = gensym(:bitmaps)
+const __totoal_num_of_free_vars__ = gensym(:totoal_num_of_free_vars)
+
 function generate_analysis_function(analysis::CheckMultipleAssignments, expr::Expr)
     logical_scalars, stochastic_scalars, logical_arrays, stochastic_arrays = extract_variables_assigned_to(
         expr
@@ -37,16 +40,18 @@ function generate_analysis_function(analysis::CheckMultipleAssignments, expr::Ex
         )
 
         $(generate_analysis_function_mainbody!(analysis, expr)...)
-
-        bitmaps = [$(gen_bitmap_ands(overlap_arrays)...)]
-        return $overlap_scalars, NamedTuple{Tuple($overlap_arrays)}(Tuple(bitmaps))
+        
+        $__bitmaps__ = [$(gen_bitmap_ands(overlap_arrays)...)]
+        return $overlap_scalars, NamedTuple{Tuple($overlap_arrays)}(Tuple($__bitmaps__))
     end
 end
 
 @inline function gen_bitmap_ands(overlap_arrays::Vector{Symbol})
     return [
-        @q($__logical_assign_tracker__.$var.bitmap .& $__stochastic_assign_tracker__.$var.bitmap)
-        for var in overlap_arrays
+        @q(
+            $__logical_assign_tracker__.$var.bitmap .&
+                $__stochastic_assign_tracker__.$var.bitmap
+        ) for var in overlap_arrays
     ]
 end
 

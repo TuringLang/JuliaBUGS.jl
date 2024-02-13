@@ -2,7 +2,7 @@ using JuliaBUGS
 using JuliaBUGS.BUGSExamples: rats, leuk
 using JuliaBUGS: generate_analysis_function
 
-using JuliaBUGS: DetermineArraySizes, CheckMultipleAssignments, ComputeTransformed
+using JuliaBUGS: DetermineArraySizes, CheckMultipleAssignments, ComputeTransformed, CountFreeVars
 
 model_def = deepcopy(leuk.model_def)
 data = leuk.data;
@@ -24,4 +24,6 @@ eval_env = __compute_transformed!(eval_env)
 
 JuliaBUGS.check_conflicts(eval_env, potential_conflict...)
 
-
+f_expr = generate_analysis_function(CountFreeVars(), model_def)
+eval(f_expr)
+num_deterministic_vars, num_stochastic_vars = __count_free_vars(eval_env)
