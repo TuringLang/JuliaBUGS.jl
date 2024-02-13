@@ -10,7 +10,12 @@ const __data__ = gensym(:data)
 const __array_var_names__ = gensym(:array_var_names)
 const __array_sizes__ = gensym(:array_sizes)
 
+const __evaluate_env__ = gensym(:evaluate_env)
+
+const __ALL_VARS__ = gensym(:ALL_VARS)
+
 const __RHS_UNION_TYPE__ = Union{Int,Float64,Symbol,Expr}
+const __REAL_WITH_MISSING__ = Union{Int,Float64,Missing}
 
 abstract type Analysis end
 

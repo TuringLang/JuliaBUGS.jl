@@ -1,63 +1,69 @@
 struct DetermineArraySizes <: Analysis end
 
 function generate_analysis_function(analysis::DetermineArraySizes, expr::Expr)
-    return @q function __determine_array_sizes(
-        data::NamedTuple{$__DATA_KEYS__,$__DATA_VALUE_TYPES__}
-    ) where {$__DATA_KEYS__,$__DATA_VALUE_TYPES__}
-        $(generate_analysis_function_setup(analysis, expr)...)
-        $(generate_analysis_function_mainbody!(analysis, expr)...)
-        return NamedTuple{keys($__array_sizes__)}(Tuple.(values($__array_sizes__)))
-    end
-end
-
-function generate_analysis_function_setup(::DetermineArraySizes, expr::Expr)
     vars_to_unpack = extract_variables_used_in_bounds_and_indices(expr)
     array_ndims = extract_array_ndims(expr)
     arr_vars = [var for (var, dim) in pairs(array_ndims) if dim != 0]
     arr_sizes_init = [
         @q(_MVec{$dim}($(fill(1, dim)))) for dim in values(array_ndims) if dim != 0
     ]
-    return [
-        @q(
-            map($(vars_to_unpack)) do x
-                if x ∉ $__DATA_KEYS__
-                    error(
-                        "Variable `$x` is used in loop bounds or for indexing, but not provided by data.",
-                    )
-                end
+
+    return @q function __determine_array_sizes(
+        $__data__::NamedTuple{$__DATA_KEYS__,$__DATA_VALUE_TYPES__}
+    ) where {$__DATA_KEYS__,$__DATA_VALUE_TYPES__}
+        map($(vars_to_unpack)) do x
+            if x ∉ $__DATA_KEYS__
+                error(
+                    "Variable `$x` is used in loop bounds or for indexing, but not provided by data.",
+                )
             end
-        ),
-        Expr(:(=), Expr(:tuple, Expr(:parameters, vars_to_unpack...)), :data),
-        @q($__array_var_names__ = $(Tuple(arr_vars))),
-        @q($__array_sizes__ = let _MVec = JuliaBUGS.StaticArrays.MVector
+        end
+
+        $(Expr(:(=), Expr(:tuple, Expr(:parameters, vars_to_unpack...)), __data__))
+        $__array_var_names__ = $(Tuple(arr_vars))
+        $__array_sizes__ = let _MVec = JuliaBUGS.StaticArrays.MVector
             NamedTuple{$__array_var_names__}(($(arr_sizes_init...),))
-        end),
-        @q(
-            for v in intersect($__array_var_names__, $__DATA_KEYS__)
-                $__array_sizes__[v] .= size(data[v])
-            end
+        end
+
+        for v in intersect($__array_var_names__, $__DATA_KEYS__)
+            $__array_sizes__[v] .= size(data[v])
+        end
+
+        $(generate_analysis_function_mainbody!(analysis, expr)...)
+        return $(Tuple(keys(array_ndims))), NamedTuple{keys($__array_sizes__)}(Tuple.(values($__array_sizes__)))
+    end
+end
+
+function generate_analysis_function_statement_deterministic(
+    ::DetermineArraySizes, lhs::Symbol, rhs::__RHS_UNION_TYPE__
+)
+    return @q(
+        JuliaBUGS.determine_array_sizes_logical!(data, $__array_sizes__, $(Meta.quot(lhs)))
+    )
+end
+function generate_analysis_function_statement_deterministic(
+    ::DetermineArraySizes, lhs::Expr, rhs::__RHS_UNION_TYPE__
+)
+    return @q(
+        JuliaBUGS.determine_array_sizes_logical!(
+            data, $__array_sizes__, $(Meta.quot(lhs.args[1])), $(lhs.args[2:end]...)
         )
-    ]
+    )
 end
 
-function generate_analysis_function_statement_deterministic(::DetermineArraySizes, lhs::Symbol, rhs::__RHS_UNION_TYPE__)
-    return @q(JuliaBUGS.determine_array_sizes_logical!(
-        data, $__array_sizes__, $(Meta.quot(lhs))
-    ))
-end
-function generate_analysis_function_statement_deterministic(::DetermineArraySizes, lhs::Expr, rhs::__RHS_UNION_TYPE__)
-    return @q(JuliaBUGS.determine_array_sizes_logical!(
-        data, $__array_sizes__, $(Meta.quot(lhs.args[1])), $(lhs.args[2:end]...)
-    ))
-end
-
-function generate_analysis_function_statement_stochastic(::DetermineArraySizes, lhs::Symbol, rhs::__RHS_UNION_TYPE__)::Nothing
+function generate_analysis_function_statement_stochastic(
+    ::DetermineArraySizes, lhs::Symbol, rhs::__RHS_UNION_TYPE__
+)::Nothing
     return nothing
 end
-function generate_analysis_function_statement_stochastic(::DetermineArraySizes, lhs::Expr, rhs::__RHS_UNION_TYPE__)
-    return @q(JuliaBUGS.determine_array_sizes_stochastic!(
-        data, $__array_sizes__, $(Meta.quot(lhs.args[1])), $(lhs.args[2:end]...)
-    ))
+function generate_analysis_function_statement_stochastic(
+    ::DetermineArraySizes, lhs::Expr, rhs::__RHS_UNION_TYPE__
+)
+    return @q(
+        JuliaBUGS.determine_array_sizes_stochastic!(
+            data, $__array_sizes__, $(Meta.quot(lhs.args[1])), $(lhs.args[2:end]...)
+        )
+    )
 end
 
 function determine_array_sizes_logical!(
@@ -93,7 +99,7 @@ function determine_array_sizes_stochastic!(
     if if_partially_specified_as_data(data, var, indices...)
         throw(
             ArgumentError(
-                "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved."
+                "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved.",
             ),
         )
     end

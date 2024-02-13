@@ -29,7 +29,7 @@ function generate_analysis_function(analysis::CheckMultipleAssignments, expr::Ex
                 var in $__logical_arrays__
             ]),
         )
-        $__stochastic_assign_tracker__ = NamedTuple{__stochastic_arrays__}(
+        $__stochastic_assign_tracker__ = NamedTuple{$__stochastic_arrays__}(
             Tuple([
                 JuliaBUGS.AssignmentTracker(var, $__array_sizes__[var]) for
                 var in $__stochastic_arrays__
