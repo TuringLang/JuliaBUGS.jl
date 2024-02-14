@@ -16,7 +16,7 @@ function generate_analysis_function(::Analysis, expr::Expr) end
 function generate_analysis_function_statement_deterministic end
 function generate_analysis_function_statement_stochastic end
 
-function generate_analysis_function_mainbody!(analysis::Analysis, model_def::Expr)
+function generate_analysis_function_mainbody(analysis::Analysis, model_def::Expr)
     args = Expr[]
     for statement in model_def.args
         if @capture(statement, lhs_ = rhs_)
@@ -37,7 +37,7 @@ function generate_analysis_function_mainbody!(analysis::Analysis, model_def::Exp
         )
             push!(args, @q(
                 for $loop_var in ($lower):($upper)
-                    $(generate_analysis_function_mainbody!(analysis, body)...)
+                    $(generate_analysis_function_mainbody(analysis, body)...)
                 end
             ))
         else

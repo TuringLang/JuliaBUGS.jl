@@ -14,12 +14,13 @@ function generate_analysis_function(analysis::CountFreeVars, expr::Expr)
         ))
         $__num_free_deterministic_vars__ = 0
         $__num_free_stochastic_vars__ = 0
-        $(generate_analysis_function_mainbody!(analysis, expr)...)
+        $(generate_analysis_function_mainbody(analysis, expr)...)
         return ($__num_free_deterministic_vars__, $__num_free_stochastic_vars__)
     end
 end
 
 const __lhs_val__ = gensym(:lhs_val)
+const __rhs_val__ = gensym(:rhs_val)
 
 function generate_analysis_function_statement_deterministic(
     ::CountFreeVars, lhs::Symbol, rhs::__RHS_UNION_TYPE__)

@@ -39,7 +39,7 @@ function generate_analysis_function(analysis::CheckMultipleAssignments, expr::Ex
             ]),
         )
 
-        $(generate_analysis_function_mainbody!(analysis, expr)...)
+        $(generate_analysis_function_mainbody(analysis, expr)...)
         
         $__bitmaps__ = [$(gen_bitmap_ands(overlap_arrays)...)]
         return $overlap_scalars, NamedTuple{Tuple($overlap_arrays)}(Tuple($__bitmaps__))

@@ -45,7 +45,7 @@ function generate_analysis_function(analysis::ComputeTransformed, expr::Expr)
         $__added_new_val__ = true
         while $__added_new_val__
             $__added_new_val__ = false
-            $(generate_analysis_function_mainbody!(analysis, expr)...)
+            $(generate_analysis_function_mainbody(analysis, expr)...)
         end
 
         return NamedTuple{$(Tuple(all_vars))}($(Expr(:tuple, all_vars...)))
@@ -73,6 +73,7 @@ function _try_compute(expr::Expr)
     lhs, rhs = expr.args
 
     lhs_val = gensym(:lhs_val)
+    rhs_val = gensym(:rhs_val)
     ret_expr = @q begin
         $lhs_val = $lhs
         if $lhs_val isa Union{Int,Float64} ||
@@ -101,9 +102,7 @@ function _try_compute(expr::Expr)
                             end
                             return sub_expr
                         end
-                        rhs_val = gensym(:rhs_val)
                         @q begin
-                            $rhs_val = missing
                             $rhs_val = try
                                 $rhs
                             catch

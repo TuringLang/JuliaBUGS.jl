@@ -1,5 +1,5 @@
 function remove_scalar_transformed_variable_exprs(
-    expr::Expr, eval_env::NamedTuple{all_names}
+    expr::Expr, ::NamedTuple{all_names}
 ) where {all_names}
     args = Expr[]
     for statement in expr.args
@@ -13,11 +13,14 @@ function remove_scalar_transformed_variable_exprs(
     return Expr(:block, args...)
 end
 
-function remove_array_transformed_variables_exprs(
+function remove_array_transformed_variables_exprs(expr::Expr, eval_env::NamedTuple)
+    return Expr(:block, remove_array_transformed_variables_exprs_block(expr, eval_env)...)
+end
+
+function remove_array_transformed_variables_exprs_block(
     expr::Expr, eval_env::NamedTuple{all_names,types}
 ) where {all_names,types}
-    ret_expr = Expr(:block)
-    args = ret_expr.args
+    args = Expr[]
     for statement in expr.args
         if @capture(statement, lhs_ = rhs_)
             if lhs isa Symbol
@@ -37,11 +40,11 @@ function remove_array_transformed_variables_exprs(
                 body_
             end
         )
-            new_body = remove_array_transformed_variables_exprs(body, eval_env)
-            if !isempty(new_body.args)
+            _args = remove_array_transformed_variables_exprs_block(body, eval_env)
+            if !isempty(_args)
                 push!(args, @q(
                     for $loop_var in ($lower):($upper)
-                        $(new_body.args...)
+                        $(_args...)
                     end
                 ))
             end
@@ -49,7 +52,7 @@ function remove_array_transformed_variables_exprs(
             push!(args, statement)
         end
     end
-    return ret_expr
+    return args
 end
 
 struct LoopIteration <: Analysis end
@@ -174,12 +177,18 @@ function loop_iter_generate_analysis_function_mainbody!(
     return args
 end
 
+function transform_expr_with_hot_map(simplified_model_def::Expr, ::Nothing)
+    return simplified_model_def
+end
 function transform_expr_with_hot_map(
     simplified_model_def::Expr,
     hot_map::Vector{<:BitArray},
     loop_vars::Tuple{Vararg{Symbol}}=(),
     statement_counter::Ref{Int}=Ref(0),
 )
+    if isempty(hot_map)
+        return simplified_model_def
+    end
     args = Expr[]
     for statement in simplified_model_def.args
         if @capture(statement, lhs_ = rhs_)
@@ -207,9 +216,10 @@ function transform_expr_with_hot_map(
                 body_
             end
         )
-            new_args = transform_expr_with_hot_map(
-                body, hot_map, (loop_vars..., loop_var), statement_counter
-            ).args
+            new_args =
+                transform_expr_with_hot_map(
+                    body, hot_map, (loop_vars..., loop_var), statement_counter
+                ).args
             if !isempty(new_args)
                 push!(args, @q(
                     for $loop_var in ($lower):($upper)

@@ -29,7 +29,7 @@ function generate_analysis_function(analysis::DetermineArraySizes, expr::Expr)
             $__array_sizes__[v] .= size(data[v])
         end
 
-        $(generate_analysis_function_mainbody!(analysis, expr)...)
+        $(generate_analysis_function_mainbody(analysis, expr)...)
         return $(Tuple(keys(array_ndims))), NamedTuple{keys($__array_sizes__)}(Tuple.(values($__array_sizes__)))
     end
 end
