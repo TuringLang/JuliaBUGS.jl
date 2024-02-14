@@ -13,7 +13,7 @@ function generate_analysis_function(analysis::CheckMultipleAssignments, expr::Ex
     logical_scalars, stochastic_scalars, logical_arrays, stochastic_arrays = extract_variables_assigned_to(
         expr
     )
-    overlap_scalars = intersect(logical_scalars, stochastic_scalars)
+    overlap_scalars = Tuple(intersect(logical_scalars, stochastic_scalars))
     overlap_arrays = intersect(logical_arrays, stochastic_arrays)
     vars_to_unpack = extract_variables_used_in_bounds_and_indices(expr)
 

@@ -35,7 +35,7 @@ struct ComputeTransformed <: Analysis end
 const __added_new_val__ = gensym(:added_new_val)
 
 function generate_analysis_function(analysis::ComputeTransformed, expr::Expr)
-    all_vars = Tuple(keys(extract_array_ndims(expr)))
+    all_vars = extract_all_vars(expr)
 
     return @q function __compute_transformed!(
         $__evaluate_env__::NamedTuple{$__ALL_VARS__}
@@ -127,7 +127,7 @@ end
 
 function check_conflicts(
     eval_env::NamedTuple{variable_names},
-    conflicted_scalars::Vector{Symbol},
+    conflicted_scalars::Tuple{Vararg{Symbol}},
     conflicted_arrays::NamedTuple{array_names,array_types},
 ) where {variable_names,array_names,array_types}
     for scalar in conflicted_scalars

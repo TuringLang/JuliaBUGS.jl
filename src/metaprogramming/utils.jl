@@ -117,6 +117,16 @@ function extract_array_ndims_expr(
     return merge(array_ndims, variables)
 end
 
+"""
+    extract_all_vars(expr::Expr)
+
+Extract all the variable names used in the program.
+# Example:
+```jldoctest
+julia> extract_all_vars(BUGSExamples.leuk.model_def)
+(:N, :T, :Y, Symbol("obs.t"), :eps, :t, :dN, :fail, :Idt, :Z, :beta, :dL0, :mu, :c, Symbol("dL0.star"), Symbol("S.treat"), Symbol("S.placebo"), :r)
+```
+"""
 function extract_all_vars(expr::Expr)
     return Tuple(keys(extract_array_ndims(expr)))
 end
