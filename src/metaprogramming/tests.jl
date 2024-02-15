@@ -3,6 +3,7 @@ using JuliaBUGS.BUGSExamples: rats, leuk
 using JuliaBUGS: generate_analysis_function
 
 using MacroTools, BangBang, Distributions
+using JuliaBUGS.BUGSPrimitives
 
 using JuliaBUGS:
     DetermineArraySizes,
@@ -10,7 +11,8 @@ using JuliaBUGS:
     ComputeTransformed,
     CountFreeVars,
     LoopIteration,
-    DetectLoops
+    DetectLoops,
+    BuildGraph
 
 model_def = deepcopy(leuk.model_def)
 data = leuk.data;
@@ -52,6 +54,16 @@ hot_map = __decide_deterministic_loop_iterations_hot_maps(eval_env)
 
 simplified_model_def = JuliaBUGS.transform_expr_with_hot_map(simplified_model_def, hot_map)
 
-f_expr = JuliaBUGS.generate_analysis_function(DetectLoops(), simplified_model_def, eval_env, num_deterministic_vars, num_stochastic_vars)
+f_expr = JuliaBUGS.generate_analysis_function(
+    DetectLoops(),
+    simplified_model_def,
+    eval_env,
+    num_deterministic_vars,
+    num_stochastic_vars,
+)
 eval(f_expr)
 results = __detect_loops(eval_env)
+
+f_expr = JuliaBUGS.generate_analysis_function(BuildGraph(), simplified_model_def, eval_env)
+eval(f_expr)
+g = __build_graph(eval_env)
