@@ -86,143 +86,16 @@ end
 
 include("loop_iterations.jl")
 
-function count_num_vertices(model_def::Expr, bitmap::Vector{<:BitArray}, statement_counter::Ref{Int}=Ref(0))
-    num_vertices = 0
-    for statement in model_def.args
-        if @capture(statement, lhs_ = rhs_)
-            statement_counter[] += 1
-            num_vertices += sum(bitmap[statement_counter[]])
-        elseif @capture(statement, lhs_ ~ rhs_)
-            statement_counter[] += 1
-            num_vertices += length(bitmap[statement_counter[]])
-        elseif @capture(
-            statement,
-            for loop_var_ in loop_bounds_
-                body_
-            end
-        )
-            num_vertices += count_num_vertices(body, bitmap, statement_counter)
-        else
-            nothing
-        end
-    end
-    return num_vertices
-end
-
-function initialize_statement_id_maps(eval_env::NamedTuple{var_names}) where {var_names}
-    stmt_ids_arr = []
-    for k in var_names
+function initialize_vertex_id_map(eval_env::NamedTuple{var_names}) where {var_names}
+    vertex_id_map = Array{Union{Ref{Int},Array{Int}}}(undef, length(var_names))
+    for (i, k) in enumerate(var_names)
         if eval_env[k] isa AbstractArray
-            # push!(stmt_ids_arr, zeros(UInt32, size(eval_env[k])...))
-            push!(stmt_ids_arr, zeros(Int, size(eval_env[k])...))
-
+            vertex_id_map[i] = zeros(Int, size(eval_env[k])...)
         else
-            push!(stmt_ids_arr, 0)
+            vertex_id_map[i] = Ref(0)
         end
     end
-    return NamedTuple{var_names}(Tuple(stmt_ids_arr))
-end
-
-const __LOOP_ITER_BITMAP__ = gensym(:loop_iter_bitmap)
-
-function specialize_model_def(model_def::Expr, bitmaps::Vector{<:BitArray})
-    return Expr(:block, transform_expr_with_bitmaps(model_def, bitmaps, (), Ref(0))...)
-end
-
-function transform_expr_with_bitmaps(
-    model_def::Expr,
-    bitmaps::Vector{<:BitArray},
-    loop_vars::Tuple{Vararg{Symbol}},
-    statement_counter::Ref{Int},
-)
-    args = Expr[]
-    for statement in model_def.args
-        if @capture(statement, lhs_ = rhs_)
-            statement_counter[] += 1
-            if lhs isa Symbol
-                if only(bitmaps[statement_counter[]])
-                    push!(args, statement)
-                end
-            else
-                @capture(lhs, v_[is__])
-                if all(bitmaps[statement_counter[]])
-                    push!(args, statement)
-                elseif !any(bitmaps[statement_counter[]])
-                    nothing
-                else
-                    push!(args, @q if $__LOOP_ITER_BITMAP__[$(loop_vars...)]
-                        $lhs = $rhs
-                    end)
-                end
-            end
-        elseif @capture(statement, lhs_ ~ rhs_)
-            statement_counter[] += 1
-            if lhs isa Symbol
-                if only(bitmaps[statement_counter[]])
-                    push!(args, statement)
-                else
-                    push!(args, @q($lhs ≃ $rhs))
-                end
-            else
-                @capture(lhs, v_[i__])
-                if all(bitmaps[statement_counter[]])
-                    push!(args, statement)
-                elseif !any(bitmaps[statement_counter[]])
-                    push!(args, @q($lhs ≃ $rhs))
-                else
-                    push!(args, @q if $__LOOP_ITER_BITMAP__[$(loop_vars...)]
-                        $lhs ~ $rhs
-                    else
-                        $lhs ≃ $rhs
-                    end)
-                end
-            end
-        elseif @capture(
-            statement,
-            for loop_var_ in loop_bounds_
-                body_
-            end
-        )
-            loop_body = transform_expr_with_bitmaps(
-                body, bitmaps, (loop_vars..., loop_var), statement_counter
-            )
-            if !isempty(loop_body)
-                push!(args, @q(
-                    for $loop_var in $loop_bounds
-                        $(loop_body...)
-                    end
-                ))
-            end
-        else
-            push!(args, statement)
-        end
-    end
-    return args
+    return NamedTuple{var_names}(Tuple(vertex_id_map))
 end
 
 include("build_graph.jl")
-
-# function generate_function_body(analysis::Analysis, model_def::Expr, __source__::LineNumberNode)
-#     args = Expr[]
-#     for statement in model_def.args
-#         if @capture(statement, lhs_ = rhs_)
-
-#         elseif @capture(statement, lhs_ ~ rhs_)
-
-#         elseif @capture(
-#             statement,
-#             for loop_var_ in lower_:upper_
-#                 body_
-#             end
-#         )
-#             push!(args, @q(
-#                 for $loop_var in ($lower):($upper)
-#                     $(generate_function_body(analysis, body, __source__)...)
-#                 end
-#             ))
-#         else
-#             push!(args, statement)
-#         end
-#     end
-#     return args
-# end

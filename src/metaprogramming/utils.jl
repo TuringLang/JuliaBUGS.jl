@@ -278,3 +278,43 @@ function extract_statement_loop_bounds!(
     end
     return stmt_loop_bounds
 end
+
+function loop_fission(expr::Expr)
+    ret_ex = Expr(:block)
+    for statement in expr.args
+        if !Meta.isexpr(statement, :for)
+            push!(ret_ex.args, statement)
+        else
+            push!(ret_ex.args, loop_fission_for_loops(statement)...)
+        end
+    end
+    return ret_ex
+end
+
+function loop_fission_for_loops(sub_expr::Expr)
+    loops = []
+
+    MacroTools.@capture(
+        sub_expr,
+        for loop_var_ in l_:h_
+            body__
+        end
+    )
+
+    for ex in body
+        inner_loops = if Meta.isexpr(ex, :for)
+            loop_fission_for_loops(ex)
+        else
+            [ex]
+        end
+        for inner_l in inner_loops
+            push!(loops, MacroTools.@q(
+                for $loop_var in ($l):($h)
+                    $inner_l
+                end
+            ))
+        end
+    end
+
+    return loops
+end
