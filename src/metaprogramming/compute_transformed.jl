@@ -93,7 +93,7 @@ function _try_compute(expr::Expr)
                                 $lhs = $rhs_val
                                 $__added_new_val__ = true
                             elseif !ismissing($rhs_val) && all(!ismissing, $rhs_val)
-                                $lhs .= $rhs_val
+                                @inbounds $lhs .= $rhs_val
                                 $__added_new_val__ = true
                             end
                         end
