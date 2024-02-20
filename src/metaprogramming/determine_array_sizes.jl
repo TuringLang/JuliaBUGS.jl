@@ -1,77 +1,121 @@
 struct DetermineArraySizes <: Analysis end
 
-function generate_analysis_function(analysis::DetermineArraySizes, expr::Expr)
-    vars_to_unpack = extract_variables_used_in_bounds_and_indices(expr)
-    array_ndims = extract_array_ndims(expr)
-    arr_vars = [var for (var, dim) in pairs(array_ndims) if dim != 0]
-    arr_sizes_init = [
+const __variables_in_data__ = gensym(:variables_in_data)
+const __data__ = gensym(:data)
+
+const __array_sizes__ = gensym(:array_sizes)
+const __array_var_names__ = gensym(:array_var_names)
+
+function generate_function_expr(
+    analysis::DetermineArraySizes, expr::Expr, __source__::LineNumberNode
+)
+    variables_in_bounds_and_lhs_indices = extract_variables_in_bounds_and_lhs_indices(expr)
+    array_ndims = extract_variable_names_and_numdims(expr)
+    array_variables = [var for (var, ndims) in pairs(array_ndims) if ndims != 0]
+
+    array_sizes_init_exprs = [
         @q(_MVec{$dim}($(fill(1, dim)))) for dim in values(array_ndims) if dim != 0
     ]
 
     return @q function __determine_array_sizes(
-        $__data__::NamedTuple{$__DATA_KEYS__,$__DATA_VALUE_TYPES__}
-    ) where {$__DATA_KEYS__,$__DATA_VALUE_TYPES__}
-        map($(vars_to_unpack)) do x
-            if x ∉ $__DATA_KEYS__
+        $__data__::NamedTuple{$__variables_in_data__}
+    ) where {$__variables_in_data__}
+        map($(variables_in_bounds_and_lhs_indices)) do x
+            if x ∉ $__variables_in_data__
                 error(
                     "Variable `$x` is used in loop bounds or for indexing, but not provided by data.",
                 )
             end
         end
 
-        $(Expr(:(=), Expr(:tuple, Expr(:parameters, vars_to_unpack...)), __data__))
-        $__array_var_names__ = $(Tuple(arr_vars))
+        $(Expr(
+            :(=),
+            Expr(:tuple, Expr(:parameters, variables_in_bounds_and_lhs_indices...)),
+            __data__,
+        ))
+        $__array_var_names__ = $(Tuple(array_variables))
         $__array_sizes__ = let _MVec = JuliaBUGS.StaticArrays.MVector
-            NamedTuple{$__array_var_names__}(($(arr_sizes_init...),))
+            NamedTuple{$__array_var_names__}(($(array_sizes_init_exprs...),))
         end
 
-        for v in intersect($__array_var_names__, $__DATA_KEYS__)
+        for v in intersect($__array_var_names__, $__variables_in_data__)
             $__array_sizes__[v] .= size(data[v])
         end
 
-        $(generate_analysis_function_mainbody(analysis, expr)...)
-        return $(Tuple(keys(array_ndims))), NamedTuple{keys($__array_sizes__)}(Tuple.(values($__array_sizes__)))
+        $(generate_function_body(analysis, expr, __source__)...)
+        return $(Tuple(keys(array_ndims))),
+        NamedTuple{keys($__array_sizes__)}(Tuple.(values($__array_sizes__)))
     end
 end
 
-function generate_analysis_function_statement_deterministic(
-    ::DetermineArraySizes, lhs::Symbol, rhs::__RHS_UNION_TYPE__
+function generate_function_body(
+    analysis::DetermineArraySizes, model_def::Expr, __source__::LineNumberNode
 )
-    return @q(
-        JuliaBUGS.determine_array_sizes_logical!(data, $__array_sizes__, $(Meta.quot(lhs)))
-    )
-end
-function generate_analysis_function_statement_deterministic(
-    ::DetermineArraySizes, lhs::Expr, rhs::__RHS_UNION_TYPE__
-)
-    return @q(
-        JuliaBUGS.determine_array_sizes_logical!(
-            data, $__array_sizes__, $(Meta.quot(lhs.args[1])), $(lhs.args[2:end]...)
+    args = Any[]
+    for statement in model_def.args
+        if @capture(statement, lhs_ = rhs_)
+            push!(
+                args,
+                if lhs isa Symbol
+                    @qq(
+                        JuliaBUGS.determine_array_sizes_deterministic!(
+                            data, $__array_sizes__, $(Meta.quot(lhs))
+                        )
+                    )
+                else
+                    @qq(
+                        JuliaBUGS.determine_array_sizes_deterministic!(
+                            data,
+                            $__array_sizes__,
+                            $(Meta.quot(lhs.args[1])),
+                            $(lhs.args[2:end]...),
+                        )
+                    )
+                end,
+            )
+        elseif @capture(statement, lhs_ ~ rhs_)
+            push!(
+                args,
+                if lhs isa Symbol
+                    nothing
+                else
+                    @qq(
+                        JuliaBUGS.determine_array_sizes_stochastic!(
+                            data,
+                            $__array_sizes__,
+                            $(Meta.quot(lhs.args[1])),
+                            $(lhs.args[2:end]...),
+                        )
+                    )
+                end,
+            )
+        elseif @capture(
+            statement,
+            for loop_var_ in lower_:upper_
+                body_
+            end
         )
-    )
+            push!(
+                args,
+                @q(
+                    for $loop_var in ($lower):($upper)
+                        $(generate_function_body(analysis, body, __source__)...)
+                    end
+                )
+            )
+        else
+            push!(args, statement) # Debugging: don't change other type of statements
+        end
+    end
+    return args
 end
 
-function generate_analysis_function_statement_stochastic(
-    ::DetermineArraySizes, lhs::Symbol, rhs::__RHS_UNION_TYPE__
-)::Nothing
-    return nothing
-end
-function generate_analysis_function_statement_stochastic(
-    ::DetermineArraySizes, lhs::Expr, rhs::__RHS_UNION_TYPE__
-)
-    return @q(
-        JuliaBUGS.determine_array_sizes_stochastic!(
-            data, $__array_sizes__, $(Meta.quot(lhs.args[1])), $(lhs.args[2:end]...)
-        )
-    )
-end
-
-function determine_array_sizes_logical!(
-    data::NamedTuple{data_keys,data_value_types},
-    array_sizes::NamedTuple{array_vars,array_var_types},
+function determine_array_sizes_deterministic!(
+    data::NamedTuple,
+    array_sizes::NamedTuple,
     var::Symbol,
-    indices::Vararg{Union{Missing,Float64,Int},N},
-) where {data_keys,data_value_types,array_vars,array_var_types,N}
+    indices::Vararg{__REAL_WITH_MISSING__},
+)
     if isempty(indices)
         if is_specified_by_data(data, var)
             throw(
@@ -91,12 +135,12 @@ function determine_array_sizes_logical!(
 end
 
 function determine_array_sizes_stochastic!(
-    data::NamedTuple{data_keys,data_value_types},
-    array_sizes::NamedTuple{array_vars,array_var_types},
+    data::NamedTuple,
+    array_sizes::NamedTuple,
     var::Symbol,
-    indices::Vararg{Union{Missing,Float64,Int},N},
-) where {data_keys,data_value_types,array_vars,array_var_types,N}
-    if if_partially_specified_as_data(data, var, indices...)
+    indices::Vararg{Union{Missing,Float64,Int}},
+)
+    if is_partially_specified_as_data(data, var, indices...)
         throw(
             ArgumentError(
                 "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved.",
@@ -107,48 +151,50 @@ function determine_array_sizes_stochastic!(
 end
 
 @inline function is_specified_by_data(
-    data::NamedTuple{data_keys,data_value_types}, var::Symbol
-) where {data_keys,data_value_types}
-    return var in data_keys
+    ::NamedTuple{data_keys}, var::Symbol
+) where {data_keys}
+    if var ∉ data_keys
+        return false
+    else
+        if data[var] isa AbstractArray
+            throw(ArgumentError("In BUGS, implicit indexing on the LHS is not allowed."))
+        end
+    end
 end
 @inline function is_specified_by_data(
-    data::NamedTuple{data_keys,data_value_types},
-    var::Symbol,
-    indices::Vararg{Union{Missing,Float64,Int},N},
-) where {data_keys,data_value_types,N}
+    data::NamedTuple{data_keys}, var::Symbol, indices::Vararg{Union{Missing,Float64,Int}}
+) where {data_keys}
     if var ∉ data_keys
         return false
     else
         values = data[var][indices...]
-        if values isa Missing
-            return false
-        elseif values <: Real
-            return true
-        elseif eltype(values) === Missing
-            return false
-        elseif eltype(values) <: Real
-            return true
+        if values isa AbstractArray
+            if eltype(values) === Missing
+                return false
+            elseif eltype(values) <: __REAL__
+                return true
+            else
+                return any(!ismissing, values)
+            end
         else
-            return any(!ismissing, values)
+            if values isa Missing
+                return false
+            elseif values <: __REAL__
+                return true
+            else
+                error("Unexpected type: $(typeof(values))")
+            end
         end
     end
 end
 
-@inline function if_partially_specified_as_data(
-    data::NamedTuple{data_keys,data_value_types},
-    var::Symbol,
-    indices::Vararg{Union{Missing,Float64,Int},N},
-) where {data_keys,data_value_types,N}
+@inline function is_partially_specified_as_data(
+    data::NamedTuple{data_keys}, var::Symbol, indices::Vararg{Union{Missing,Float64,Int}}
+) where {data_keys}
     if var ∉ data_keys
         return false
     else
         values = data[var][indices...]
-        if isa(values, Missing) || isa(values, Real)
-            return false
-        elseif eltype(values) <: Real || eltype(values) === Missing
-            return false
-        else
-            return any(ismissing, values) && any(!ismissing, values)
-        end
+        return values isa AbstractArray && any(ismissing, values) && any(!ismissing, values) 
     end
 end

@@ -43,7 +43,7 @@ include("gibbs.jl")
 include("semantic_analysis/SemanticAnalysis.jl")
 include("graph_lib/GraphLib.jl")
 
-include("metaprogramming/new_macro.jl")
+include("metaprogramming/macro.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 

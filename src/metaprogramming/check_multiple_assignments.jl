@@ -1,27 +1,32 @@
 struct CheckMultipleAssignments <: Analysis end
 
-const __logical_arrays__ = gensym(:logical_arrays)
-const __stochastic_arrays__ = gensym(:stochastic_arrays)
-
 const __logical_assign_tracker__ = gensym(:logical_assign_tracker)
 const __stochastic_assign_tracker__ = gensym(:stochastic_assign_tracker)
 
-const __bitmaps__ = gensym(:bitmaps)
-const __totoal_num_of_free_vars__ = gensym(:totoal_num_of_free_vars)
-
-function generate_analysis_function(analysis::CheckMultipleAssignments, expr::Expr)
+function generate_function_expr(
+    analysis::CheckMultipleAssignments, expr::Expr, __source__::LineNumberNode
+)
     logical_scalars, stochastic_scalars, logical_arrays, stochastic_arrays = extract_variables_assigned_to(
         expr
     )
+
+    # repeating assignments within deterministic and stochastic scalars are checked `extract_variables_assigned_to``
     overlap_scalars = Tuple(intersect(logical_scalars, stochastic_scalars))
     overlap_arrays = intersect(logical_arrays, stochastic_arrays)
-    vars_to_unpack = extract_variables_used_in_bounds_and_indices(expr)
+    variables_in_bounds_and_lhs_indices = extract_variables_in_bounds_and_lhs_indices(expr)
+
+    __logical_arrays__ = gensym(:logical_arrays)
+    __stochastic_arrays__ = gensym(:stochastic_arrays)
+    __bitmaps__ = gensym(:bitmaps)
 
     return @q function __check_multiple_assignments(
-        $__data__::NamedTuple{$__DATA_KEYS__,$__DATA_VALUE_TYPES__},
-        $__array_sizes__::NamedTuple{$__ARRAY_VARS__},
-    ) where {$__DATA_KEYS__,$__DATA_VALUE_TYPES__,$__ARRAY_VARS__}
-        $(Expr(:(=), Expr(:tuple, Expr(:parameters, vars_to_unpack...)), __data__))
+        $__data__::NamedTuple, $__array_sizes__::NamedTuple
+    )
+        $(Expr(
+            :(=),
+            Expr(:tuple, Expr(:parameters, variables_in_bounds_and_lhs_indices...)),
+            __data__,
+        ))
 
         $__logical_arrays__ = $(logical_arrays)
         $__stochastic_arrays__ = $(stochastic_arrays)
@@ -39,8 +44,8 @@ function generate_analysis_function(analysis::CheckMultipleAssignments, expr::Ex
             ]),
         )
 
-        $(generate_analysis_function_mainbody(analysis, expr)...)
-        
+        $(generate_function_body(analysis, expr, __source__)...)
+
         $__bitmaps__ = [$(gen_bitmap_ands(overlap_arrays)...)]
         return $overlap_scalars, NamedTuple{Tuple($overlap_arrays)}(Tuple($__bitmaps__))
     end
@@ -55,65 +60,76 @@ end
     ]
 end
 
-function generate_analysis_function_statement_deterministic(
-    ::CheckMultipleAssignments, ::Symbol, rhs::__RHS_UNION_TYPE__
+function generate_function_body(
+    analysis::CheckMultipleAssignments, model_def::Expr, __source__::LineNumberNode
 )
-    return nothing
-end
-function generate_analysis_function_statement_deterministic(
-    ::CheckMultipleAssignments, lhs::Expr, rhs::__RHS_UNION_TYPE__
-)
-    return @q(
-        JuliaBUGS.set!($__logical_assign_tracker__.$(lhs.args[1]), $(lhs.args[2:end]...))
-    )
+    args = Any[]
+    for statement in model_def.args
+        if @capture(statement, lhs_ = rhs_)
+            push!(
+                args,
+                if lhs isa Symbol
+                    nothing
+                else
+                    @qq(
+                        JuliaBUGS.set!(
+                            $__logical_assign_tracker__.$(lhs.args[1]),
+                            $(lhs.args[2:end]...),
+                        )
+                    )
+                end,
+            )
+
+        elseif @capture(statement, lhs_ ~ rhs_)
+            push!(
+                args,
+                if lhs isa Symbol
+                    nothing
+                else
+                    @qq(
+                        JuliaBUGS.set!(
+                            $__stochastic_assign_tracker__.$(lhs.args[1]),
+                            $(lhs.args[2:end]...),
+                        )
+                    )
+                end,
+            )
+        elseif @capture(
+            statement,
+            for loop_var_ in lower_:upper_
+                body_
+            end
+        )
+            push!(args, @q(
+                for $loop_var in ($lower):($upper)
+                    $(generate_function_body(analysis, body, __source__)...)
+                end
+            ))
+        else
+            push!(args, statement)
+        end
+    end
+    return args
 end
 
-function generate_analysis_function_statement_stochastic(
-    ::CheckMultipleAssignments, ::Symbol, rhs::__RHS_UNION_TYPE__
-)
-    return nothing
-end
-function generate_analysis_function_statement_stochastic(
-    ::CheckMultipleAssignments, lhs::Expr, rhs::__RHS_UNION_TYPE__
-)
-    return @q(
-        JuliaBUGS.set!($__stochastic_assign_tracker__.$(lhs.args[1]), $(lhs.args[2:end]...))
-    )
+struct AssignmentTracker{name}
+    bitmap::BitArray
 end
 
-struct AssignmentTracker{name,N}
-    bitmap::BitArray{N}
-end
-
-function AssignmentTracker(name, array_size::NTuple{N,Int}) where {N}
-    bitmap = falses(array_size)
-    return AssignmentTracker{name,N}(bitmap)
+function AssignmentTracker(name::Symbol, array_size::Tuple{Vararg{Int}})
+    return AssignmentTracker{name}(falses(array_size))
 end
 
 function set!(
-    track_assigned::AssignmentTracker{name,N}, indices::Vararg{Int}
-) where {name,N}
-    if track_assigned.bitmap[indices...]
-        throw(ArgumentError("$name already assigned"))
+    track_assigned::AssignmentTracker{name}, indices::Vararg{Union{Int,UnitRange{Int}}}
+) where {name}
+    if any(track_assigned.bitmap[indices...])
+        indices = Tuple(findall(track_assigned.bitmap[indices...]))
+        throw(ArgumentError("$name already assigned at indices $indices"))
     end
-    track_assigned.bitmap[indices...] = true
-    return nothing
-end
-
-function set!(
-    track_assigned::AssignmentTracker{name,N}, indices::Vararg{Union{Int,UnitRange{Int}}}
-) where {name,N}
-    if track_assigned.bitmap[indices...]
-        throw(ArgumentError("$name already assigned"))
+    if eltype(indices) == Int
+        track_assigned.bitmap[indices...] = true
+    else
+        track_assigned.bitmap[indices...] .= true
     end
-    track_assigned.bitmap[indices...] .= true
-    return nothing
-end
-
-function initialized_assign_tracker(
-    vars::Tuple{Vararg{Symbol}}, array_sizes::NamedTuple{array_vars,array_types}
-) where {array_vars,array_types}
-    return NamedTuple{Tuple(vars)}(
-        Tuple([AssignmentTracker(var, array_sizes[var]) for var in vars])
-    )
 end
