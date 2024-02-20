@@ -47,7 +47,6 @@ function determine_array_sizes_inner!(state::CompileState, simplified_lhs::Expr)
     if haskey(state.data, lhs_var)
         # check if the number of dimensions and sizes are consistent with data
         if length(last.(indices)) != length(state.array_sizes[lhs_var])
-            @show length(last.(indices)) length(state.array_sizes[lhs_var])
             throw(
                 ErrorException(
                     "$(simplified_lhs)'s number of dimensions doesn't match the data."
