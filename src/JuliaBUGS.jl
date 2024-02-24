@@ -41,19 +41,15 @@ include("gibbs.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 
-function check_input(input::Union{NamedTuple,AbstractDict})
-    for k in keys(input)
-        @assert k isa Symbol "Variable name $k must be a Symbol"
-
+function check_input(input::NamedTuple{data_vars}) where {data_vars}
+    for k in data_vars
         v = input[k]
-        if v isa Number
+        if v isa Union{Int,Float64}
             continue
-        elseif v isa AbstractArray
-            for i in v
-                @assert i isa Number || ismissing(i)
-            end
+        elseif v isa AbstractArray && eltype(v) <: Union{Int,Float64,Missing}
+            continue
         else
-            error("Input $k is not a number or an array of numbers")
+            error("Only support Int, Float64, and Missing for data input. Got $v")
         end
     end
 end
@@ -156,7 +152,17 @@ Compile a BUGS model into a log density problem.
 - A [`BUGSModel`](@ref) object representing the compiled model.
 """
 function compile(model_def::Expr, data, inits; is_transformed=true)
-    check_input.((data, inits))
+    if !(data isa NamedTuple)
+        data = NamedTuple{Tuple(keys(data))}(values(data))
+    end
+
+    if !(inits isa NamedTuple)
+        inits = NamedTuple{Tuple(keys(inits))}(values(inits))
+    end
+
+    check_input(data)
+    check_input(inits)
+
     scalars, array_sizes = program!(CollectVariables(), model_def, data)
     has_new_val, transformed_variables = program!(
         ConstantPropagation(scalars, array_sizes), model_def, data
