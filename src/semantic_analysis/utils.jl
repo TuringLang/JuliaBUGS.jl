@@ -30,20 +30,17 @@ function simplify_lhs(::NamedTuple{names,Ts}, lhs::Symbol) where {names,Ts}
     return lhs
 end
 function simplify_lhs(value_map::NamedTuple{names,Ts}, lhs::Expr) where {names,Ts}
-    if @capture(lhs, var_[indices__])
-        indices = map(Base.Fix1(simple_arithmetic_eval, value_map), indices)
-        indices = map(index -> index isa UnitRange ? index : Int(index), indices)
-        return :($(var)[$(indices...)])
-    else
-        error(
-            "LHS of a statement can only be a symbol or an indexing expression, but get $lhs.",
-        )
-    end
+    var, indices... = lhs.args
+    indices = map(Base.Fix1(simple_arithmetic_eval, value_map), indices)
+    indices = map(index -> index isa UnitRange ? index : Int(index), indices)
+    return :($(var)[$(indices...)])
 end
 
 # simple_arithmetic_eval is used to evaluate the indices of an array or loop bounds
 # the return value is either a UnitRange or an Int
-function simple_arithmetic_eval(::NamedTuple{names,Ts}, expr::Union{Int,UnitRange{Int}}) where {names,Ts}
+function simple_arithmetic_eval(
+    ::NamedTuple{names,Ts}, expr::Union{Int,UnitRange{Int}}
+) where {names,Ts}
     return expr
 end
 function simple_arithmetic_eval(

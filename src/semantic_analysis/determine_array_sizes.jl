@@ -43,7 +43,8 @@ function determine_array_sizes!(state::CompileState)
 end
 
 function determine_array_sizes_inner!(state::CompileState, simplified_lhs::Expr)
-    @capture(simplified_lhs, lhs_var_[indices__])
+    lhs_var, indices... = simplified_lhs.args
+    indices = convert(Array{Union{Int,UnitRange{Int}}}, indices)
     if haskey(state.data, lhs_var)
         # check if the number of dimensions and sizes are consistent with data
         if length(last.(indices)) != length(state.array_sizes[lhs_var])
@@ -57,8 +58,13 @@ function determine_array_sizes_inner!(state::CompileState, simplified_lhs::Expr)
         end
         return nothing
     end
-    state.array_sizes[lhs_var] =
-        max.(get!(state.array_sizes, lhs_var, [last(indices[1])]), last.(indices))
+    max_indices = map(i -> i isa Int ? i : last(i), indices)
+    if haskey(state.array_sizes, lhs_var)
+        current_size = state.array_sizes[lhs_var]
+        state.array_sizes[lhs_var] = max.(current_size, max_indices)
+    else
+        state.array_sizes[lhs_var] = max_indices
+    end
     return nothing
 end
 
@@ -68,7 +74,7 @@ function check_if_partially_specified_as_data(
     if simplified_lhs isa Symbol
         return simplified_lhs in names
     else
-        @capture(simplified_lhs, var_[indices__])
+        var, indices... = simplified_lhs.args
         if var ∉ names # if not captured successfully, this will error because `var` is not defined
             return false
         else
@@ -97,8 +103,8 @@ function concretize_colon_indexing!(state::CompileState)
         state.logical_for_statements,
         state.stochastic_for_statements,
     )
-    for (i, statement) in enumerate(collection)
-        new_rhs = MacroTools.postwalk(statement.rhs) do sub_expr
+        for (i, statement) in enumerate(collection)
+            new_rhs = MacroTools.postwalk(statement.rhs) do sub_expr
                 if MacroTools.@capture(sub_expr, v_[indices__])
                     return :($(v)[$(
                         [
@@ -109,19 +115,21 @@ function concretize_colon_indexing!(state::CompileState)
                 end
                 sub_expr
             end
-        T = typeof(statement)
-        if T <: Statement
-            collection[i] = T(statement.rhs_vars, statement.rhs_funs, statement.lhs, new_rhs)
-        else
-            collection[i] = T(
-                statement.loop_vars,
-                statement.rhs_vars,
-                statement.rhs_funs,
-                statement.bounds,
-                statement.lhs,
-                new_rhs,
-            )
+            T = typeof(statement)
+            if T <: Statement
+                collection[i] = T(
+                    statement.rhs_vars, statement.rhs_funs, statement.lhs, new_rhs
+                )
+            else
+                collection[i] = T(
+                    statement.loop_vars,
+                    statement.rhs_vars,
+                    statement.rhs_funs,
+                    statement.bounds,
+                    statement.lhs,
+                    new_rhs,
+                )
+            end
         end
-    end
     end
 end

@@ -39,7 +39,10 @@ function generate_function_expr(
         end
 
         for v in intersect($__array_var_names__, $__variables_in_data__)
-            $__array_sizes__[v] .= size(data[v])
+            _size = size(data[v])
+            for i in eachindex($__array_sizes__[v])
+                $__array_sizes__[v][i] = _size[i]
+            end
         end
 
         $(generate_function_body(analysis, expr, __source__)...)
@@ -130,7 +133,9 @@ function determine_array_sizes_deterministic!(
                 ),
             )
         end
-        array_sizes[var] .= max.(array_sizes[var], indices)
+        for i in eachindex(array_sizes[var])
+            array_sizes[var][i] = max(array_sizes[var][i], indices[i])
+        end
     end
 end
 
@@ -147,7 +152,9 @@ function determine_array_sizes_stochastic!(
             ),
         )
     end
-    return array_sizes[var] .= max.(array_sizes[var], indices)
+    for i in eachindex(array_sizes[var])
+        array_sizes[var][i] = max(array_sizes[var][i], indices[i])
+    end
 end
 
 @inline function is_specified_by_data(
