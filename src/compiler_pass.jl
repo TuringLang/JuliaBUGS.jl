@@ -122,11 +122,10 @@ find_variables_on_lhs(e::Symbol, env) = Var(e)
 function find_variables_on_lhs(expr::Expr, env)
     @assert Meta.isexpr(expr, :ref)
     v, indices... = expr.args
-    indices = convert(Vector{Union{Int,Float64,Symbol,Expr}}, indices)
     for (i, index) in enumerate(indices)
         indices[i] = evaluate(index, env)
     end
-    return Var(expr.args[1], Tuple{Vararg{Union{Int,UnitRange{Int}}}}(indices))
+    return Var(v, Tuple(indices))
 end
 
 """
