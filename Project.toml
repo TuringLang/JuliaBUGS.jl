@@ -45,7 +45,7 @@ JuliaBUGSTikzGraphsExt = ["TikzGraphs"]
 
 [compat]
 AbstractMCMC = "5"
-AbstractPPL = "0.6"
+AbstractPPL = "0.6, 0.7"
 BangBang = "0.3"
 Bijectors = "0.13"
 Distributions = "0.23.8, 0.24, 0.25"
