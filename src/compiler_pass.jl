@@ -37,22 +37,21 @@ end
 Processes a for-loop from a traversed AST.
 """
 function for_loop!(pass::CompilerPass, expr, env, vargs...)
-    MacroTools.@capture(
-        expr,
-        for loop_var_ in lb_:ub_
-            body_
-        end
-    )
-    lb, ub = evaluate(lb, env), evaluate(ub, env)
-    @assert all(isinteger.((lb, ub))) "Only integer ranges are supported"
+    loop_var = expr.args[1].args[1]
+    lb, ub = expr.args[1].args[2].args[2:end]
+    body = expr.args[2]
+
+    loop_var = Symbol(loop_var)
+    lb = Int(evaluate(lb, env))
+    ub = Int(evaluate(ub, env))
     for i in lb:ub
         for ex in body.args
             if Meta.isexpr(ex, :(=))
-                assignment!(pass, ex, merge(env, Dict(loop_var => i)), vargs...)
-            elseif MacroTools.@capture(ex, lhs_ ~ rhs_)
-                assignment!(pass, ex, merge(env, Dict(loop_var => i)), vargs...)
+                assignment!(pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...)
+            elseif ex.head == :call && ex.args[1] == :(~)
+                assignment!(pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...)
             elseif Meta.isexpr(ex, :for)
-                for_loop!(pass, ex, merge(env, Dict(loop_var => i)), vargs...)
+                for_loop!(pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...)
             else
                 error()
             end
@@ -122,8 +121,12 @@ x[1, 2:3]
 find_variables_on_lhs(e::Symbol, env) = Var(e)
 function find_variables_on_lhs(expr::Expr, env)
     @assert Meta.isexpr(expr, :ref)
-    idxs = map(x -> evaluate(x, env), expr.args[2:end])
-    return Var(expr.args[1], Tuple(idxs))
+    v, indices... = expr.args
+    indices = convert(Vector{Union{Int,Float64,Symbol,Expr}}, indices)
+    for (i, index) in enumerate(indices)
+        indices[i] = evaluate(index, env)
+    end
+    return Var(expr.args[1], Tuple{Vararg{Union{Int,UnitRange{Int}}}}(indices))
 end
 
 """
@@ -313,8 +316,16 @@ evaluate(var::UnitRange, env) = var
 evaluate(::Colon, env) = Colon()
 function evaluate(var::Symbol, env)
     var == :(:) && return Colon()
-    value = haskey(env, var) ? env[var] : var
-    return ismissing(value) ? var : value
+    if haskey(env, var)
+        value = env[var]
+        if value === missing
+            return var
+        else
+            return value
+        end
+    else
+        return var
+    end
 end
 function evaluate(var::Expr, env)
     if Meta.isexpr(var, :ref)
@@ -350,10 +361,19 @@ function evaluate(var::Expr, env)
     end
 end
 
-@inline is_resolved(x) = x isa Number || x isa Array{<:Number}
+is_resolved(::Missing) = false
+is_resolved(::Union{Int,Float64}) = true
+is_resolved(::Array{<:Union{Int,Float64}}) = true
+is_resolved(::Array{Missing}) = false
+is_resolved(::Union{Symbol,Expr}) = false
+is_resolved(::Any) = false
 
 function assignment!(pass::CollectVariables, expr::Expr, env)
-    @capture(expr, lhs_expr_ ~ rhs_) || @capture(expr, lhs_expr_ = rhs_)
+    if Meta.isexpr(expr, :(=))
+        lhs_expr = expr.args[1]
+    else # Expr(:call, :(~), ...)
+        lhs_expr = expr.args[2]
+    end
 
     v = find_variables_on_lhs(
         Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
