@@ -114,7 +114,7 @@ function merge_with_coalescence(
                     end
                     coalesced_array[i] = coalesce(val_pair[1], val_pair[2])
                 end
-                coalesced_values[i] = coalesced_array
+                coalesced_values[i] = map(identity, coalesced_array)
             end
         elseif k ∈ V1
             coalesced_values[i] = u[k]
