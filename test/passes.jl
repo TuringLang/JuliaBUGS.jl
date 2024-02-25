@@ -52,7 +52,7 @@ end
     vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = program!(
         NodeFunctions(array_sizes, array_bitmap),
         model_def,
-        merge_collections(data, transformed_variables),
+        merge_with_coalescence(data, transformed_variables),
     )
 
     compile(model_def, data, inits)

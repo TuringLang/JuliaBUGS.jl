@@ -464,7 +464,7 @@ function assignment!(pass::ConstantPropagation, expr::Expr, env)
             return nothing
         end
 
-        rhs = evaluate(expr.args[2], merge_collections(env, pass.transformed_variables))
+        rhs = evaluate(expr.args[2], merge_with_coalescence(env, pass.transformed_variables))
         if is_resolved(rhs)
             if !pass.new_value_added
                 pass.new_value_added = true
@@ -494,7 +494,7 @@ function PostChecking(data, transformed_variables::Dict)
     definition_bit_map = Dict()
     logical_or_stochastic = Dict()
 
-    all_vars = merge_collections(data, transformed_variables)
+    all_vars = merge_with_coalescence(data, transformed_variables)
 
     for k in keys(all_vars)
         v = all_vars[k]
