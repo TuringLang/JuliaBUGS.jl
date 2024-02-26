@@ -41,39 +41,28 @@ include("gibbs.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 
-function check_input(input::Union{NamedTuple,AbstractDict})
-    for k in keys(input)
-        @assert k isa Symbol "Variable name $k must be a Symbol"
-
-        v = input[k]
-        if v isa Number
-            continue
-        elseif v isa AbstractArray
-            for i in v
-                @assert i isa Number || ismissing(i)
+@inline function check_input(::NamedTuple{Vs,T}) where {Vs,T}
+    for VT in T.parameters
+        if VT <: AbstractArray
+            if !(eltype(VT) <: Union{Int,Float64,Missing})
+                error(
+                    "Data input supports only Int, Float64, or Missing types within arrays. Received: $VT",
+                )
             end
-        else
-            error("Input $k is not a number or an array of numbers")
+        elseif VT ∉ (Int, Float64)
+            error("Scalar inputs must be of type Int or Float64. Received: $VT")
         end
     end
 end
 
 """
-    merge_collections(c1::Union{Dict, NamedTuple}, c2::Union{Dict, NamedTuple}, output_NamedTuple::Bool=true) -> Union{Dict, NamedTuple}
+    merge_with_coalescence(c1::Union{Dict, NamedTuple}, c2::Union{Dict, NamedTuple}, output_NamedTuple::Bool=true)
 
 Merge two collections, `c1` and `c2`, which can be either dictionaries or named tuples, into a single collection 
 (dictionary or named tuple). The function assumes that the values in the input collections are either `Number` or 
 `Array` with matching sizes. If a key exists in both `c1` and `c2`, the merged collection will contain the non-missing 
 values from `c1` and `c2`. If a key exists only in one of the collections, the resulting collection will contain the 
 key-value pair from the respective collection.
-
-# Arguments
-- `c1::Union{Dict, NamedTuple}`: The first collection to merge.
-- `c2::Union{Dict, NamedTuple}`: The second collection to merge.
-- `output_NamedTuple::Bool=true`: Determines the type of the output collection. If true, the function outputs a NamedTuple. If false, it outputs a Dict.
-
-# Returns
-- `merged::Union{Dict, NamedTuple}`: A new collection containing the merged key-value pairs from `c1` and `c2`.
 
 # Example
 ```jldoctest
@@ -83,18 +72,18 @@ julia> d2 = Dict(:a => [missing, 2, 4], :c => -1);
 
 julia> d3 = Dict(:a => [missing, 3, 4], :c => -1); # value collision
 
-julia> merge_collections(d1, d2, false)
+julia> merge_with_coalescence(d1, d2, false)
 Dict{Symbol, Any} with 3 entries:
   :a => [1, 2, 4]
   :b => 42
   :c => -1
 
-julia> merge_collections(d1, d3, false)
+julia> merge_with_coalescence(d1, d3, false)
 ERROR: The arrays in key 'a' have different non-missing values at the same positions.
 [...]
 ```
 """
-function merge_collections(d1, d2, output_NamedTuple=true)
+function merge_with_coalescence(d1, d2, output_NamedTuple=true)
     merged_dict = Dict{Symbol,Any}()
 
     for key in Base.union(keys(d1), keys(d2))
@@ -142,6 +131,77 @@ function merge_collections(d1, d2, output_NamedTuple=true)
 end
 
 """
+    merge_with_coalescence(u::NamedTuple, v::NamedTuple)
+
+Merge two `NamedTuple`s, coalescing concrete and missing values, and raise an error if there is a value difference between the two `NamedTuple`s.
+
+# Example
+```jldoctest
+julia> nt1 = (a = [1, 2, missing], b = 42);
+
+julia> nt2 = (a = [missing, 2, 4], c = -1);
+
+julia> nt3 = (a = [missing, 3, 4], c = -1); # value collision in array
+
+julia> nt4 = (a = [1, 2, missing], b = 0); # value collision
+
+julia> merge_with_coalescence(nt1, nt2)
+(a = [1, 2, 4], b = 42, c = -1)
+
+julia> merge_with_coalescence(nt1, nt3)
+ERROR: The arrays in key 'a' have different non-missing values at the same positions.
+[...]
+
+julia> merge_with_coalescence(nt1, nt4)
+ERROR: The value for key 'b' is different in the two dictionaries.
+[...]
+```
+"""
+function merge_with_coalescence(
+    u::NamedTuple{V1,T1}, v::NamedTuple{V2,T2}
+) where {V1,V2,T1,T2}
+    unioned_keys = Base.union(keys(u), keys(v))
+    intersected_keys = Base.intersect(keys(u), keys(v))
+
+    coalesced_values = Vector{Union{Int,Float64,AbstractArray}}(undef, length(unioned_keys))
+    for (i, k) in enumerate(unioned_keys)
+        if k in intersected_keys
+            if typeof(u[k]) ∈ (Int, Float64)
+                if u[k] === v[k]
+                    coalesced_values[i] = u[k]
+                else
+                    error("The value for key '$(k)' is different in the two dictionaries.")
+                end
+            else # array
+                if size(u[k]) != size(v[k])
+                    error(
+                        "The size of the array for key '$(k)' is different in the two dictionaries.",
+                    )
+                end
+                coalesced_array = similar(u[k], Union{eltype(u[k]),eltype(v[k])})
+                for (i, val_pair) in enumerate(zip(u[k], v[k]))
+                    if val_pair[1] isa Union{Int,Float64} &&
+                        val_pair[2] isa Union{Int,Float64} &&
+                        val_pair[1] != val_pair[2]
+                        error(
+                            "The arrays in key '$(k)' have different non-missing values at the same positions.",
+                        )
+                    end
+                    coalesced_array[i] = coalesce(val_pair[1], val_pair[2])
+                end
+                coalesced_values[i] = map(identity, coalesced_array)
+            end
+        elseif k ∈ V1
+            coalesced_values[i] = u[k]
+        else
+            coalesced_values[i] = v[k]
+        end
+    end
+
+    return NamedTuple{Tuple(unioned_keys)}(Tuple(coalesced_values))
+end
+
+"""
     compile(model_def[, data, initializations])
 
 Compile a BUGS model into a log density problem.
@@ -156,7 +216,17 @@ Compile a BUGS model into a log density problem.
 - A [`BUGSModel`](@ref) object representing the compiled model.
 """
 function compile(model_def::Expr, data, inits; is_transformed=true)
-    check_input.((data, inits))
+    if !(data isa NamedTuple)
+        data = NamedTuple{Tuple(keys(data))}(values(data))
+    end
+
+    if !(inits isa NamedTuple)
+        inits = NamedTuple{Tuple(keys(inits))}(values(inits))
+    end
+
+    check_input(data)
+    check_input(inits)
+
     scalars, array_sizes = program!(CollectVariables(), model_def, data)
     has_new_val, transformed_variables = program!(
         ConstantPropagation(scalars, array_sizes), model_def, data
@@ -169,7 +239,7 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
     array_bitmap, transformed_variables = program!(
         PostChecking(data, transformed_variables), model_def, data
     )
-    merged_data = merge_collections(deepcopy(data), transformed_variables)
+    merged_data = merge_with_coalescence(deepcopy(data), transformed_variables)
     vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = program!(
         NodeFunctions(array_sizes, array_bitmap), model_def, merged_data
     )
