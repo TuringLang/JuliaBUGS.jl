@@ -9,6 +9,7 @@ makedocs(;
     sitename="JuliaBUGS.jl",
     pages=[
         "Introduction" => "index.md",
+        "Example" => "example.md",
         "API" => [
             "General" => "api.md",
             "Functions" => "functions.md",
