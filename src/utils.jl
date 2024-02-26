@@ -1,4 +1,32 @@
 """
+    decompose_for_expr(expr::Expr)
+
+Decompose a for-loop expression into its components. The function returns four items: the 
+loop variable, the lower bound, the upper bound, and the body of the loop.
+
+# Examples:
+```jldoctest
+julia> ex = (MacroTools.@q for i in 1:3
+    expr1
+    expr2
+end);
+
+julia> decompose_for_expr(ex)
+(:i, 1, 3, quote
+    expr1
+    expr2
+end)
+```
+"""
+@inline function decompose_for_expr(expr::Expr)
+    @inbounds loop_var::Symbol = expr.args[1].args[1]
+    @inbounds lb::Union{Int,Float64,Symbol,Expr} = expr.args[1].args[2].args[2]
+    @inbounds ub::Union{Int,Float64,Symbol,Expr} = expr.args[1].args[2].args[3]
+    @inbounds body::Expr = expr.args[2]
+    return loop_var, lb, ub, body
+end
+
+"""
     _eval(expr, env)
 
 `_eval` mimics `Base.eval`, but uses precompiled functions. This is possible because the expressions we want to 

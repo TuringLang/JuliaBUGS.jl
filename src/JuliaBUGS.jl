@@ -227,20 +227,20 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
     check_input(data)
     check_input(inits)
 
-    scalars, array_sizes = program!(CollectVariables(), model_def, data)
-    has_new_val, transformed_variables = program!(
+    scalars, array_sizes = analyze_program(CollectVariables(), model_def, data)
+    has_new_val, transformed_variables = analyze_program(
         ConstantPropagation(scalars, array_sizes), model_def, data
     )
     while has_new_val
-        has_new_val, transformed_variables = program!(
+        has_new_val, transformed_variables = analyze_program(
             ConstantPropagation(false, transformed_variables), model_def, data
         )
     end
-    array_bitmap, transformed_variables = program!(
+    array_bitmap, transformed_variables = analyze_program(
         PostChecking(data, transformed_variables), model_def, data
     )
     merged_data = merge_with_coalescence(deepcopy(data), transformed_variables)
-    vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = program!(
+    vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = analyze_program(
         NodeFunctions(array_sizes, array_bitmap), model_def, merged_data
     )
     g = create_BUGSGraph(vars, node_args, node_functions, dependencies)

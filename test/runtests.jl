@@ -23,7 +23,7 @@ using JuliaBUGS:
     MHFromPrior,
     NodeFunctions,
     PostChecking,
-    program!,
+    analyze_program,
     SimpleVarInfo,
     Stochastic,
     stochastic_inneighbors,
