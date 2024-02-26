@@ -23,11 +23,17 @@ function analyze_for_loop(pass::CompilerPass, expr, env, vargs...)
     for i in lb:ub
         for ex in body.args
             if Meta.isexpr(ex, :(=))
-                analyze_assignment(pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...)
+                analyze_assignment(
+                    pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...
+                )
             elseif Meta.isexpr(ex, :call) && ex.args[1] == :(~)
-                analyze_assignment(pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...)
+                analyze_assignment(
+                    pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...
+                )
             elseif Meta.isexpr(ex, :for)
-                analyze_for_loop(pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...)
+                analyze_for_loop(
+                    pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...
+                )
             else
                 error("Unsupported expression in for loop body: $ex")
             end
