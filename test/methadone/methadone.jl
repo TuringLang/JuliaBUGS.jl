@@ -87,10 +87,10 @@ end
 ##
 @time model = compile(model_def, data, inits);
 
-@time vars, array_sizes, transformed_variables, array_bitmap = JuliaBUGS.program!(
+@time vars, array_sizes, transformed_variables, array_bitmap = JuliaBUGS.analyze_program(
     JuliaBUGS.CollectVariables(), model_def, data
 );
 
-vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = JuliaBUGS.program!(
+vars, array_sizes, array_bitmap, link_functions, node_args, node_functions, dependencies = JuliaBUGS.analyze_program(
     JuliaBUGS.NodeFunctions(vars, array_sizes, array_bitmap), model_def, data
 );

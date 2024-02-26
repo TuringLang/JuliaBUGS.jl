@@ -1,87 +1,47 @@
-"""
-    CompilerPass
-
-Abstract supertype for all compiler passes. Concrete subtypes should store data needed and artifacts.
-"""
 abstract type CompilerPass end
 
-"""
-    program!(pass::CompilerPass, expr::Expr, env, vargs...)
-
-The entry point for a compiler pass, which traverses the AST and performs specific actions like assignment and for-loop processing.
-This function should be implemented for every concrete subtype of CompilerPass.
-
-Arguments:
-- pass: Instance of a concrete CompilerPass subtype.
-- expr: An Expr object representing the AST to be traversed.
-- env: A Dict object representing the environment.
-"""
-function program!(pass::CompilerPass, expr::Expr, env, vargs...)
+function analyze_program(pass::CompilerPass, expr::Expr, env, vargs...)
     for ex in expr.args
         if Meta.isexpr(ex, :(=))
-            assignment!(pass, ex, env, vargs...)
-        elseif MacroTools.@capture(ex, lhs_ ~ rhs_)
-            assignment!(pass, ex, env, vargs...)
+            analyze_assignment(pass, ex, env, vargs...)
+        elseif Meta.isexpr(ex, :call) && ex.args[1] == :(~)
+            analyze_assignment(pass, ex, env, vargs...)
         elseif Meta.isexpr(ex, :for)
-            for_loop!(pass, ex, env, vargs...)
+            analyze_for_loop(pass, ex, env, vargs...)
         else
-            error()
+            error("Unsupported expression in top level: $ex")
         end
     end
     return post_process(pass, expr, env, vargs...)
 end
 
-"""
-    for_loop!(pass::CompilerPass, expr, env, vargs...)
-
-Processes a for-loop from a traversed AST.
-"""
-function for_loop!(pass::CompilerPass, expr, env, vargs...)
-    loop_var = expr.args[1].args[1]
-    lb, ub = expr.args[1].args[2].args[2:end]
-    body = expr.args[2]
-
-    loop_var = Symbol(loop_var)
+function analyze_for_loop(pass::CompilerPass, expr, env, vargs...)
+    loop_var, lb, ub, body = decompose_for_expr(expr)
     lb = Int(evaluate(lb, env))
     ub = Int(evaluate(ub, env))
+
     for i in lb:ub
         for ex in body.args
             if Meta.isexpr(ex, :(=))
-                assignment!(pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...)
-            elseif ex.head == :call && ex.args[1] == :(~)
-                assignment!(pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...)
+                analyze_assignment(
+                    pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...
+                )
+            elseif Meta.isexpr(ex, :call) && ex.args[1] == :(~)
+                analyze_assignment(
+                    pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...
+                )
             elseif Meta.isexpr(ex, :for)
-                for_loop!(pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...)
+                analyze_for_loop(
+                    pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...
+                )
             else
-                error()
+                error("Unsupported expression in for loop body: $ex")
             end
         end
     end
 end
 
-"""
-    assignment!(pass::CompilerPass, expr::Expr, env, vargs...)
-
-Performs an assignment operation on a traversed AST. Should be implemented for every concrete subtype of CompilerPass.
-
-Arguments:
-- pass: Instance of a concrete CompilerPass subtype.
-- expr: An Expr object representing the assignment operation.
-- env: A Dict object representing the environment.
-"""
-function assignment!(::CompilerPass, expr::Expr, env, vargs...) end
-
-"""
-    post_process(pass::CompilerPass, expr, env, vargs...)
-
-Performs any post-processing necessary after traversing the AST. Should be implemented for every concrete subtype of CompilerPass.
-
-Arguments:
-- pass: Instance of a concrete CompilerPass subtype.
-- expr: An Expr object representing the traversed AST.
-- env: A Dict object representing the environment.
-"""
-function post_process(pass::CompilerPass, expr, env, vargs...) end
+function analyze_assignment end
 
 @enum VariableTypes begin
     Logical
@@ -367,7 +327,7 @@ is_resolved(::Array{Missing}) = false
 is_resolved(::Union{Symbol,Expr}) = false
 is_resolved(::Any) = false
 
-function assignment!(pass::CollectVariables, expr::Expr, env)
+function analyze_assignment(pass::CollectVariables, expr::Expr, env)
     if Meta.isexpr(expr, :(=))
         lhs_expr = expr.args[1]
     else # Expr(:call, :(~), ...)
@@ -456,7 +416,7 @@ function has_value(transformed_variables, v::Var)
     end
 end
 
-function assignment!(pass::ConstantPropagation, expr::Expr, env)
+function analyze_assignment(pass::ConstantPropagation, expr::Expr, env)
     if Meta.isexpr(expr, :(=)) && !should_skip_eval(expr.args[2])
         lhs = find_variables_on_lhs(expr.args[1], env)
 
@@ -520,7 +480,7 @@ function PostChecking(data, transformed_variables::Dict)
     )
 end
 
-function assignment!(pass::PostChecking, expr::Expr, env)
+function analyze_assignment(pass::PostChecking, expr::Expr, env)
     @inline set_value!(d::Dict, value, v::Scalar) = d[v.name] = value
     @inline set_value!(d::Dict, value, v::Var) = d[v.name][v.indices...] = value
     @inline get_value(d::Dict, v::Scalar) = d[v.name]
@@ -846,7 +806,7 @@ try_cast_to_int(x::Integer) = x
 try_cast_to_int(x::Real) = Int(x) # will error if !isinteger(x)
 try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
-function assignment!(pass::NodeFunctions, expr::Expr, env)
+function analyze_assignment(pass::NodeFunctions, expr::Expr, env)
     @capture(expr, lhs_expr_ ~ rhs_expr_) || @capture(expr, lhs_expr_ = rhs_expr_)
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 

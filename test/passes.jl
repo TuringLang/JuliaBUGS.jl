@@ -6,20 +6,20 @@
     end
     data = (b=1, e=[1, 2])
 
-    scalars, array_sizes = program!(CollectVariables(), model_def, data)
-    has_new_val, transformed_variables = program!(
+    scalars, array_sizes = analyze_program(CollectVariables(), model_def, data)
+    has_new_val, transformed_variables = analyze_program(
         ConstantPropagation(scalars, array_sizes), model_def, data
     )
     @test has_new_val == true
     @test transformed_variables[:a] == 2
 
-    has_new_val, transformed_variables = program!(
+    has_new_val, transformed_variables = analyze_program(
         ConstantPropagation(false, transformed_variables), model_def, data
     )
     @test has_new_val == true
     @test transformed_variables[:c] == 6
 
-    has_new_val, transformed_variables = program!(
+    has_new_val, transformed_variables = analyze_program(
         ConstantPropagation(false, transformed_variables), model_def, data
     )
     @test has_new_val == false
@@ -30,26 +30,26 @@ end
     data = JuliaBUGS.BUGSExamples.VOLUME_I[m].data
     inits = JuliaBUGS.BUGSExamples.VOLUME_I[m].inits[1]
 
-    scalars, array_sizes = program!(CollectVariables(), model_def, data)
+    scalars, array_sizes = analyze_program(CollectVariables(), model_def, data)
 
-    has_new_val, transformed_variables = program!(
+    has_new_val, transformed_variables = analyze_program(
         ConstantPropagation(scalars, array_sizes), model_def, data
     )
     @test has_new_val == true
     @test all(!ismissing, transformed_variables[:Y])
 
-    has_new_val, transformed_variables = program!(
+    has_new_val, transformed_variables = analyze_program(
         ConstantPropagation(false, transformed_variables), model_def, data
     )
 
     @test has_new_val == true
     @test all(!ismissing, transformed_variables[:dN])
 
-    array_bitmap, transformed_variables = program!(
+    array_bitmap, transformed_variables = analyze_program(
         PostChecking(data, transformed_variables), model_def, data
     )
 
-    vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = program!(
+    vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = analyze_program(
         NodeFunctions(array_sizes, array_bitmap),
         model_def,
         merge_with_coalescence(data, transformed_variables),
