@@ -23,4 +23,4 @@ makedocs(;
     ],
 )
 
-deploydocs(; repo="github.com/TuringLang/JuliaBUGS.jl.git")
+deploydocs(; repo="github.com/TuringLang/JuliaBUGS.jl.git", push_preview=true)
