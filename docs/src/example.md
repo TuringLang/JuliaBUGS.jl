@@ -1,6 +1,5 @@
 # Example: Logistic Regression with Random Effects
 
-## Example: Logistic Regression with Random Effects
 We will use the [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) model for demonstration. 
 This example concerns the proportion of seeds that germinated on each of 21 plates. Here, we transform the data into a `NamedTuple`:
 
@@ -106,32 +105,6 @@ model{
 
 By default, `@bugs` will translate R-style variable names like `a.b.c` to `a_b_c`, user can pass `false` as the second argument to disable this. 
 We still encourage users to write new programs using the Julia-native syntax, because of better debuggability and perks like syntax highlighting. 
-
-### Using Self-defined Functions and Distributions
-Users can register their own functions and distributions with macros. However, note that any functions used must be _pure_ mathematical functions, i.e., side-effect free.
-
-```julia
-julia> # Should be restricted to pure functions that do simple operations
-@register_primitive function f(x)
-    return x + 1
-end
-
-julia> JuliaBUGS.f(2)
-3
-```
-
-Users can also `introduce` a function into `JuliaBUGS`, by 
-
-```julia
-julia> f(x) = x + 1
-
-julia> @register_primitive(f)
-
-julia> JuliaBUGS.f(1)
-2
-```
-
-After registering the function or distributions, they can be used just like any other functions or distributions provided by BUGS.
 
 ## Compilation
 
