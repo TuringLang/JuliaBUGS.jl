@@ -1,47 +1,43 @@
 abstract type CompilerPass end
 
-function analyze_program(pass::CompilerPass, expr::Expr, env, vargs...)
-    for ex in expr.args
-        if Meta.isexpr(ex, :(=))
-            analyze_assignment(pass, ex, env, vargs...)
-        elseif Meta.isexpr(ex, :call) && ex.args[1] == :(~)
-            analyze_assignment(pass, ex, env, vargs...)
-        elseif Meta.isexpr(ex, :for)
-            analyze_for_loop(pass, ex, env, vargs...)
+@inline is_deterministic(expr::Expr) = Meta.isexpr(expr, :(=))
+@inline is_stochastic(expr::Expr) = Meta.isexpr(expr, :call) && expr.args[1] == :(~)
+
+function analyze_program(pass::CompilerPass, expr::Expr, env::NamedTuple)
+    for statement in expr.args
+        if is_deterministic(statement) || is_stochastic(statement)
+            analyze_assignment(pass, statement, env)
+        elseif Meta.isexpr(statement, :for)
+            analyze_for_loop(pass, statement, env)
         else
-            error("Unsupported expression in top level: $ex")
+            error("Unsupported expression in top level: $statement")
         end
     end
-    return post_process(pass, expr, env, vargs...)
+    return post_process(pass, expr, env)
 end
 
-function analyze_for_loop(pass::CompilerPass, expr, env, vargs...)
+function analyze_for_loop(pass::CompilerPass, expr::Expr, env::NamedTuple)
     loop_var, lb, ub, body = decompose_for_expr(expr)
     lb = Int(evaluate(lb, env))
     ub = Int(evaluate(ub, env))
 
     for i in lb:ub
-        for ex in body.args
-            if Meta.isexpr(ex, :(=))
-                analyze_assignment(
-                    pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...
-                )
-            elseif Meta.isexpr(ex, :call) && ex.args[1] == :(~)
-                analyze_assignment(
-                    pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...
-                )
-            elseif Meta.isexpr(ex, :for)
-                analyze_for_loop(
-                    pass, ex, merge(env, NamedTuple{(loop_var,)}((i,))), vargs...
-                )
+        for statement in body.args
+            env = merge(env, NamedTuple{(loop_var,)}((i,)))
+            if is_deterministic(statement) || is_stochastic(statement)
+                analyze_assignment(pass, statement, env)
+            elseif Meta.isexpr(statement, :for)
+                analyze_for_loop(pass, statement, env)
             else
-                error("Unsupported expression in for loop body: $ex")
+                error("Unsupported expression in for loop body: $statement")
             end
         end
     end
 end
 
 function analyze_assignment end
+
+function post_process end
 
 @enum VariableTypes begin
     Logical
@@ -327,7 +323,7 @@ is_resolved(::Array{Missing}) = false
 is_resolved(::Union{Symbol,Expr}) = false
 is_resolved(::Any) = false
 
-function analyze_assignment(pass::CollectVariables, expr::Expr, env)
+function analyze_assignment(pass::CollectVariables, expr::Expr, env::NamedTuple)
     if Meta.isexpr(expr, :(=))
         lhs_expr = expr.args[1]
     else # Expr(:call, :(~), ...)
@@ -416,7 +412,7 @@ function has_value(transformed_variables, v::Var)
     end
 end
 
-function analyze_assignment(pass::ConstantPropagation, expr::Expr, env)
+function analyze_assignment(pass::ConstantPropagation, expr::Expr, env::NamedTuple)
     if Meta.isexpr(expr, :(=)) && !should_skip_eval(expr.args[2])
         lhs = find_variables_on_lhs(expr.args[1], env)
 
@@ -480,7 +476,7 @@ function PostChecking(data, transformed_variables::Dict)
     )
 end
 
-function analyze_assignment(pass::PostChecking, expr::Expr, env)
+function analyze_assignment(pass::PostChecking, expr::Expr, env::NamedTuple)
     @inline set_value!(d::Dict, value, v::Scalar) = d[v.name] = value
     @inline set_value!(d::Dict, value, v::Var) = d[v.name][v.indices...] = value
     @inline get_value(d::Dict, v::Scalar) = d[v.name]
@@ -806,7 +802,7 @@ try_cast_to_int(x::Integer) = x
 try_cast_to_int(x::Real) = Int(x) # will error if !isinteger(x)
 try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
-function analyze_assignment(pass::NodeFunctions, expr::Expr, env)
+function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
     @capture(expr, lhs_expr_ ~ rhs_expr_) || @capture(expr, lhs_expr_ = rhs_expr_)
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
