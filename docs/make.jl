@@ -9,10 +9,12 @@ makedocs(;
     sitename="JuliaBUGS.jl",
     pages=[
         "Introduction" => "index.md",
+        "Example" => "example.md",
         "API" => [
             "General" => "api.md",
             "Functions" => "functions.md",
             "Distributions" => "distributions.md",
+            "User-defined Functions and Distributions" => "user_defined_functions.md",
         ],
         "Plotting" => "graph_plotting.md",
         "R Interface" => "R_interface.md",
@@ -22,4 +24,4 @@ makedocs(;
     ],
 )
 
-deploydocs(; repo="github.com/TuringLang/JuliaBUGS.jl.git")
+deploydocs(; repo="github.com/TuringLang/JuliaBUGS.jl.git", push_preview=true)

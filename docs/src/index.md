@@ -4,7 +4,7 @@ The package aims to support modelling and inference for probabilistic programs w
 
 This project is still in its early stage, with many key components needing to be completed. 
 
-Please refer to the [Github project page](https://github.com/TuringLang/SymbolicPPL.jl) for usage information and a complete example.
+Please refer to the [example](https://turinglang.org/JuliaBUGS.jl/stable/example/) for usage information and a complete example.
 
 ## What is BUGS?
 
