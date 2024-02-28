@@ -56,6 +56,10 @@ BenchmarkTools.Trial: 5 samples with 1 evaluation.
  Memory estimate: 338.48 MiB, allocs estimate: 5955349.
 =#
 
+using BenchmarkTools
+@benchmark determine_array_sizes!(state)
+@profview determine_array_sizes!(state)
+
 @benchmark begin
     state = CompileState(model_def, data)
     determine_array_sizes!(state)

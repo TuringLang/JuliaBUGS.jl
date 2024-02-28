@@ -24,6 +24,9 @@ f_expr = generate_function_expr(DetermineArraySizes(), model_def, LineNumberNode
 eval(f_expr)
 all_vars, array_sizes = __determine_array_sizes(data)
 
+@benchmark __determine_array_sizes(data)
+@profview __determine_array_sizes(data)
+
 f_expr = generate_function_expr(CheckMultipleAssignments(), model_def, LineNumberNode(0))
 eval(f_expr)
 potential_conflict = __check_multiple_assignments(data, array_sizes)
@@ -35,6 +38,8 @@ f_expr = JuliaBUGS.generate_function_expr(
 )
 eval(f_expr)
 eval_env = __compute_transformed!(eval_env)
+
+@benchmark __compute_transformed!(eval_env)
 
 JuliaBUGS.check_conflicts(eval_env, potential_conflict...)
 

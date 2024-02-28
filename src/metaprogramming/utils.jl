@@ -62,11 +62,37 @@ end
 """
     extract_variable_names_and_numdims(expr::Expr)
    
-Extract all the array variable names and number of dimensions.
+Extract all the array variable names and number of dimensions. Inconsistent number of dimensions
+will raise an error.
 
 # Example:
 ```jldoctest
-julia> extract_variable_names_and_numdims(BUGSExamples.leuk.model_def)
+julia> extract_variable_names_and_numdims(
+    @bugs begin
+        for i in 1:N
+            for j in 1:T
+                Y[i, j] = _step((var"obs.t"[i] - t[j]) + eps)
+                dN[i, j] = Y[i, j] * _step((t[j + 1] - var"obs.t"[i]) - eps) * fail[i]
+            end
+        end
+        for j in 1:T
+            for i in 1:N
+                dN[i, j] ~ dpois(Idt[i, j])
+                Idt[i, j] = Y[i, j] * exp(beta * Z[i]) * dL0[j]
+            end
+            dL0[j] ~ dgamma(mu[j], c)
+            mu[j] = var"dL0.star"[j] * c
+            var"S.treat"[j] = pow(exp(-(sum(dL0[1:j]))), exp(beta * -0.5))
+            var"S.placebo"[j] = pow(exp(-(sum(dL0[1:j]))), exp(beta * 0.5))
+        end
+        c = 0.001
+        r = 0.1
+        for j in 1:T
+            var"dL0.star"[j] = r * (t[j + 1] - t[j])
+        end
+        beta ~ dnorm(0.0, 1.0e-6)
+    end
+)
 (N = 0, T = 0, Y = 2, var"obs.t" = 1, eps = 0, t = 1, dN = 2, fail = 1, Idt = 2, Z = 1, beta = 0, dL0 = 1, mu = 1, c = 0, var"dL0.star" = 1, var"S.treat" = 1, var"S.placebo" = 1, r = 0)
 ```
 """
@@ -127,7 +153,32 @@ end
 Extract all the variable names used in the program.
 # Example:
 ```jldoctest
-julia> extract_variable_names(BUGSExamples.leuk.model_def)
+julia> extract_variable_names(
+    @bugs begin
+        for i in 1:N
+            for j in 1:T
+                Y[i, j] = _step((var"obs.t"[i] - t[j]) + eps)
+                dN[i, j] = Y[i, j] * _step((t[j + 1] - var"obs.t"[i]) - eps) * fail[i]
+            end
+        end
+        for j in 1:T
+            for i in 1:N
+                dN[i, j] ~ dpois(Idt[i, j])
+                Idt[i, j] = Y[i, j] * exp(beta * Z[i]) * dL0[j]
+            end
+            dL0[j] ~ dgamma(mu[j], c)
+            mu[j] = var"dL0.star"[j] * c
+            var"S.treat"[j] = pow(exp(-(sum(dL0[1:j]))), exp(beta * -0.5))
+            var"S.placebo"[j] = pow(exp(-(sum(dL0[1:j]))), exp(beta * 0.5))
+        end
+        c = 0.001
+        r = 0.1
+        for j in 1:T
+            var"dL0.star"[j] = r * (t[j + 1] - t[j])
+        end
+        beta ~ dnorm(0.0, 1.0e-6)
+    end
+)
 (:N, :T, :Y, Symbol("obs.t"), :eps, :t, :dN, :fail, :Idt, :Z, :beta, :dL0, :mu, :c, Symbol("dL0.star"), Symbol("S.treat"), Symbol("S.placebo"), :r)
 ```
 """
@@ -142,7 +193,32 @@ Extract all the variable names used in the bounds and indices of the arrays in t
 
 # Example:
 ```jldoctest
-julia> JuliaBUGS.extract_variables_in_bounds_and_lhs_indices(BUGSExamples.leuk.model_def)
+julia> JuliaBUGS.extract_variables_in_bounds_and_lhs_indices(
+    @bugs begin
+        for i in 1:N
+            for j in 1:T
+                Y[i, j] = _step((var"obs.t"[i] - t[j]) + eps)
+                dN[i, j] = Y[i, j] * _step((t[j + 1] - var"obs.t"[i]) - eps) * fail[i]
+            end
+        end
+        for j in 1:T
+            for i in 1:N
+                dN[i, j] ~ dpois(Idt[i, j])
+                Idt[i, j] = Y[i, j] * exp(beta * Z[i]) * dL0[j]
+            end
+            dL0[j] ~ dgamma(mu[j], c)
+            mu[j] = var"dL0.star"[j] * c
+            var"S.treat"[j] = pow(exp(-(sum(dL0[1:j]))), exp(beta * -0.5))
+            var"S.placebo"[j] = pow(exp(-(sum(dL0[1:j]))), exp(beta * 0.5))
+        end
+        c = 0.001
+        r = 0.1
+        for j in 1:T
+            var"dL0.star"[j] = r * (t[j + 1] - t[j])
+        end
+        beta ~ dnorm(0.0, 1.0e-6)
+    end
+)
 (:N, :T)
 ```
 """
@@ -198,7 +274,32 @@ Extract all the variables assigned to in the program.
 
 # Example:
 ```jldoctest
-julia> JuliaBUGS.extract_variables_assigned_to(BUGSExamples.leuk.model_def)
+julia> JuliaBUGS.extract_variables_assigned_to(
+    @bugs begin
+        for i in 1:N
+            for j in 1:T
+                Y[i, j] = _step((var"obs.t"[i] - t[j]) + eps)
+                dN[i, j] = Y[i, j] * _step((t[j + 1] - var"obs.t"[i]) - eps) * fail[i]
+            end
+        end
+        for j in 1:T
+            for i in 1:N
+                dN[i, j] ~ dpois(Idt[i, j])
+                Idt[i, j] = Y[i, j] * exp(beta * Z[i]) * dL0[j]
+            end
+            dL0[j] ~ dgamma(mu[j], c)
+            mu[j] = var"dL0.star"[j] * c
+            var"S.treat"[j] = pow(exp(-(sum(dL0[1:j]))), exp(beta * -0.5))
+            var"S.placebo"[j] = pow(exp(-(sum(dL0[1:j]))), exp(beta * 0.5))
+        end
+        c = 0.001
+        r = 0.1
+        for j in 1:T
+            var"dL0.star"[j] = r * (t[j + 1] - t[j])
+        end
+        beta ~ dnorm(0.0, 1.0e-6)
+    end
+)
 ((:c, :r), (:beta,), (Symbol("dL0.star"), :dN, :mu, Symbol("S.treat"), Symbol("S.placebo"), :Y, :Idt), (:dN, :dL0))
 ```
 """
