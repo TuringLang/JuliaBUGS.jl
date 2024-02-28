@@ -15,7 +15,7 @@ end
         A[1:2, 1:2] ~ dwish(B[:, :], 2)
         C[1:2] ~ dmnorm(mu[:], A[:, :])
     end
-    model = compile(model_def, (mu=[0, 0], B=[1 0; 0 1]), (A = [1 0; 0 1],))
+    model = compile(model_def, (mu=[0, 0], B=[1 0; 0 1]), (A=[1 0; 0 1],))
 
     ad_model = ADgradient(:ReverseDiff, model)
     theta = [

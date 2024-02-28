@@ -74,7 +74,6 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
             push!(num_dims, num_dim)
         end
     end
-    
     data_scalars = Tuple(data_scalars)
     scalars = Tuple(scalars)
     arrays = Tuple(arrays)
@@ -240,7 +239,9 @@ is_resolved(::Any) = false
     end
 end
 @inline function is_specified_by_data(
-    data::NamedTuple{data_keys}, var::Symbol, indices::Vararg{Union{Missing,Float64,Int,UnitRange{Int}}}
+    data::NamedTuple{data_keys},
+    var::Symbol,
+    indices::Vararg{Union{Missing,Float64,Int,UnitRange{Int}}},
 ) where {data_keys}
     if var ∉ data_keys
         return false
@@ -267,7 +268,9 @@ end
 end
 
 @inline function is_partially_specified_as_data(
-    data::NamedTuple{data_keys}, var::Symbol, indices::Vararg{Union{Missing,Float64,Int,UnitRange{Int}}}
+    data::NamedTuple{data_keys},
+    var::Symbol,
+    indices::Vararg{Union{Missing,Float64,Int,UnitRange{Int}}},
 ) where {data_keys}
     if var ∉ data_keys
         return false
