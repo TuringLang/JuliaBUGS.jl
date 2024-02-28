@@ -54,20 +54,20 @@ This pass collects all the possible variables appear on the LHS of both logical 
 """
 struct CollectVariables{data_arrays,arrays} <: CompilerPass
     data_scalars::Tuple{Vararg{Symbol}}
-    non_data_scalars::Tuple{Vararg{Symbol}}
+    scalars::Tuple{Vararg{Symbol}}
     data_array_sizes::NamedTuple{data_arrays}
     array_sizes::NamedTuple{arrays}
 end
 
 function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {data_vars}
-    data_scalars, non_data_scalars, arrays, num_dims = Symbol[], Symbol[], Symbol[], Int[]
+    data_scalars, scalars, arrays, num_dims = Symbol[], Symbol[], Symbol[], Int[]
     # `extract_variable_names_and_numdims` will check if inconsistent variables' ndims
     for (name, num_dim) in pairs(extract_variable_names_and_numdims(model_def))
         if num_dim == 0
             if name in data_vars
                 push!(data_scalars, name)
             else
-                push!(non_data_scalars, name)
+                push!(scalars, name)
             end
         else
             push!(arrays, name)
@@ -76,7 +76,7 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
     end
     
     data_scalars = Tuple(data_scalars)
-    non_data_scalars = Tuple(non_data_scalars)
+    scalars = Tuple(scalars)
     arrays = Tuple(arrays)
     num_dims = Tuple(num_dims)
 
@@ -108,7 +108,7 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
 
     return CollectVariables(
         data_scalars,
-        non_data_scalars,
+        scalars,
         NamedTuple{Tuple(data_arrays)}(Tuple(data_array_sizes)),
         NamedTuple{Tuple(non_data_arrays)}(Tuple(non_data_array_sizes)),
     )
@@ -249,7 +249,7 @@ end
         if values isa AbstractArray
             if eltype(values) === Missing
                 return false
-            elseif eltype(values) <: __REAL__
+            elseif eltype(values) <: Union{Int,Float64}
                 return true
             else
                 return any(!ismissing, values)
@@ -257,7 +257,7 @@ end
         else
             if values isa Missing
                 return false
-            elseif values <: __REAL__
+            elseif values <: Union{Int,Float64}
                 return true
             else
                 error("Unexpected type: $(typeof(values))")
@@ -347,7 +347,7 @@ function analyze_assignment(
 end
 
 function post_process(pass::CollectVariables, expr::Expr, env::NamedTuple)
-    return Set{Symbol}(pass.non_data_scalars), Dict(pairs(pass.array_sizes))
+    return Set{Symbol}(pass.scalars), Dict(pairs(pass.array_sizes))
 end
 
 mutable struct ConstantPropagation <: CompilerPass
