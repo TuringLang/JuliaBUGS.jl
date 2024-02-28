@@ -82,8 +82,7 @@
     # @test means[:sigma].nt.mean[1] ≈ 0.95 rtol = 0.2
     # @test means[:gen_quant].nt.mean[1] ≈ 4.2 rtol = 0.2
 
-    # sample_size = 2000
-    sample_size = 10
+    sample_size = 2000
     hmc_chn = AbstractMCMC.sample(
         Random.default_rng(),
         model,
@@ -91,9 +90,9 @@
         sample_size;
         discard_initial=Int(sample_size / 2),
     )
-    # means = mean(hmc_chn)
-    # @test means[:alpha].nt.mean[1] ≈ 2.2 rtol = 0.2
-    # @test means[:beta].nt.mean[1] ≈ 2.1 rtol = 0.2
-    # @test means[:sigma].nt.mean[1] ≈ 0.9 rtol = 0.2
-    # @test means[:gen_quant].nt.mean[1] ≈ 4.0 rtol = 0.2
+    means = mean(hmc_chn)
+    @test means[:alpha].nt.mean[1] ≈ 2.2 rtol = 0.2
+    @test means[:beta].nt.mean[1] ≈ 2.1 rtol = 0.2
+    @test means[:sigma].nt.mean[1] ≈ 0.9 rtol = 0.2
+    @test means[:gen_quant].nt.mean[1] ≈ 4.0 rtol = 0.2
 end
