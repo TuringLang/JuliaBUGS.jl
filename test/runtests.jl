@@ -44,6 +44,8 @@ using Setfield
 using Test
 using UnPack
 
+AbstractMCMC.setprogress!(false)
+
 @testset "Function Unit Tests" begin
     DocMeta.setdocmeta!(
         JuliaBUGS,
