@@ -62,7 +62,8 @@ using UnPack
             scalarize,
             concretize_colon_indexing,
             extract_variable_names_and_numdims,
-            extract_variables_in_bounds_and_lhs_indices);
+            extract_variables_in_bounds_and_lhs_indices,
+            simple_arithmetic_eval);
         recursive=true,
     )
     Documenter.doctest(JuliaBUGS; manual=false)

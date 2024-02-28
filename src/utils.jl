@@ -266,7 +266,25 @@ function simplify_lhs(data::NamedTuple, lhs::Expr)
     end
 end
 
-function simple_arithmetic_eval(::NamedTuple, expr::Union{Int,UnitRange{Int}})
+"""
+    simple_arithmetic_eval(data, expr)
+
+This function evaluates expressions that consist solely of arithmetic operations and indexing. It 
+is specifically designed for scenarios such as calculating array indices or determining loop boundaries.
+
+# Example:
+```jldoctest
+julia> simple_arithmetic_eval((a = 1, b = [1, 2]), 1)
+1
+
+julia> simple_arithmetic_eval((a = 1, b = [1, 2]), :a)
+1
+
+julia> simple_arithmetic_eval((a = 1, b = [1, 2]), :(a + b[1]))
+2
+```
+"""
+function simple_arithmetic_eval(data::NamedTuple, expr::Union{Int,UnitRange{Int}})
     return expr
 end
 function simple_arithmetic_eval(data::NamedTuple{names,Ts}, expr::Symbol) where {names,Ts}
@@ -276,13 +294,14 @@ function simple_arithmetic_eval(data::NamedTuple{names,Ts}, expr::Symbol) where 
     return Int(data[expr])
 end
 function simple_arithmetic_eval(data::NamedTuple, expr::Expr)
-    if @capture(expr, f_(args__))
-        args = map(Base.Fix1(simple_arithmetic_eval, data), args)
-        map(args) do arg
-            if arg isa UnitRange
-                error("Don't know how to do arithmetic between UnitRange and Intger.")
+    if Meta.isexpr(expr, :call)
+        f, args... = expr.args
+        for i in eachindex(args)
+            value = simple_arithmetic_eval(data, args[i])
+            if value isa UnitRange
+                error("Don't know how to do arithmetic between UnitRange and Integer.")
             else
-                return Int(arg)
+                args[i] = Int(value)
             end
         end
         if f == :+
@@ -301,11 +320,12 @@ function simple_arithmetic_eval(data::NamedTuple, expr::Expr)
                 error("Don't know how to evaluate function $(string(f)).")
             end
         end
-    elseif @capture(expr, var_[indices__])
-        evaluated_indices = map(indices) do index
-            simple_arithmetic_eval(data, index)
+    elseif Meta.isexpr(expr, :ref)
+        var, indices... = expr.args
+        for i in eachindex(indices)
+            indices[i] = simple_arithmetic_eval(data, indices[i])
         end
-        return Int(data[var][evaluated_indices...])
+        return Int(data[var][indices...])
     else
         error("Don't know how to evaluate $expr.")
     end
