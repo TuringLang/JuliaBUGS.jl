@@ -11,6 +11,7 @@ using MacroTools
 using MetaGraphsNext
 using Random
 using Setfield
+using StaticArrays
 using UnPack
 
 using DynamicPPL: DynamicPPL, SimpleVarInfo
@@ -227,7 +228,7 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
     check_input(data)
     check_input(inits)
 
-    scalars, array_sizes = analyze_program(CollectVariables(), model_def, data)
+    scalars, array_sizes = analyze_program(CollectVariables(model_def, data), model_def, data)
     has_new_val, transformed_variables = analyze_program(
         ConstantPropagation(scalars, array_sizes), model_def, data
     )

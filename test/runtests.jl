@@ -49,6 +49,9 @@ using UnPack
         JuliaBUGS,
         :DocTestSetup,
         :(using JuliaBUGS:
+            JuliaBUGS,
+            BUGSExamples,
+            @bugs,
             Var,
             create_array_var,
             replace_constants_in_expr,
@@ -58,10 +61,8 @@ using UnPack
             merge_with_coalescence,
             scalarize,
             concretize_colon_indexing,
-            check_unresolved_indices,
-            check_out_of_bounds,
-            check_implicit_indexing,
-            check_partial_missing_values);
+            extract_variable_names_and_numdims,
+            extract_variables_in_bounds_and_lhs_indices);
         recursive=true,
     )
     Documenter.doctest(JuliaBUGS; manual=false)
