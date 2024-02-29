@@ -52,12 +52,65 @@ end
 
 This pass collects all the possible variables appear on the LHS of both logical and stochastic assignments. 
 """
-struct CollectVariables <: CompilerPass
-    vars::Set{Var}
+struct CollectVariables{data_arrays,arrays} <: CompilerPass
+    data_scalars::Tuple{Vararg{Symbol}}
+    scalars::Tuple{Vararg{Symbol}}
+    data_array_sizes::NamedTuple{data_arrays}
+    array_sizes::NamedTuple{arrays}
 end
 
-function CollectVariables()
-    return CollectVariables(Set{Var}())
+function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {data_vars}
+    data_scalars, scalars, arrays, num_dims = Symbol[], Symbol[], Symbol[], Int[]
+    # `extract_variable_names_and_numdims` will check if inconsistent variables' ndims
+    for (name, num_dim) in pairs(extract_variable_names_and_numdims(model_def))
+        if num_dim == 0
+            if name in data_vars
+                push!(data_scalars, name)
+            else
+                push!(scalars, name)
+            end
+        else
+            push!(arrays, name)
+            push!(num_dims, num_dim)
+        end
+    end
+    data_scalars = Tuple(data_scalars)
+    scalars = Tuple(scalars)
+    arrays = Tuple(arrays)
+    num_dims = Tuple(num_dims)
+
+    for var in extract_variables_in_bounds_and_lhs_indices(model_def)
+        if var ∉ keys(data)
+            error(
+                "Variable $var is used in loop bounds or indices but not defined in the data.",
+            )
+        end
+    end
+
+    data_arrays = Symbol[]
+    data_array_sizes = SVector[]
+    for k in keys(data)
+        if data[k] isa AbstractArray
+            push!(data_arrays, k)
+            push!(data_array_sizes, SVector(size(data[k])))
+        end
+    end
+
+    non_data_arrays = Symbol[]
+    non_data_array_sizes = MVector[]
+    for (var, num_dim) in zip(arrays, num_dims)
+        if var ∉ data_vars
+            push!(non_data_arrays, var)
+            push!(non_data_array_sizes, MVector{num_dim}(fill(1, num_dim)))
+        end
+    end
+
+    return CollectVariables(
+        data_scalars,
+        scalars,
+        NamedTuple{Tuple(data_arrays)}(Tuple(data_array_sizes)),
+        NamedTuple{Tuple(non_data_arrays)}(Tuple(non_data_array_sizes)),
+    )
 end
 
 """
@@ -82,155 +135,6 @@ function find_variables_on_lhs(expr::Expr, env)
         indices[i] = evaluate(index, env)
     end
     return Var(v, Tuple(indices))
-end
-
-"""
-    check_unresolved_indices(idxs)
-
-Check if indices contain unresolved values and raise an error if found.
-
-# Arguments
-- `idxs`: Indices to check.
-
-# Example
-```jldoctest
-julia> check_unresolved_indices([1, 2, 3])
-
-julia> check_unresolved_indices((1, 2, :(f(x))))
-ERROR: Some indices on the lhs can't be fully resolved. Argument at position 3: f(x).
-[...]
-```
-"""
-function check_unresolved_indices(idxs)
-    unresolved_indices = findall(x -> !isa(x, Union{Number,UnitRange,Colon}), idxs)
-    if isempty(unresolved_indices)
-        return nothing
-    end
-    msg = "Some indices on the lhs can't be fully resolved. "
-    for i in unresolved_indices
-        msg *= "Argument at position $i: $(idxs[i]). "
-    end
-    return error(msg)
-end
-
-"""
-    check_out_of_bounds(v_name::Symbol, idxs, env)
-
-Check if the variable `v_name`'s indices are out of bounds in the given environment `env`.
-
-# Arguments
-- `v_name::Symbol`: Variable name.
-- `idxs`: Indices to check.
-- `env`: Current environment variables.
-
-# Example
-```jldoctest
-julia> env = Dict(:A => rand(3, 3));
-
-julia> check_out_of_bounds(:A, (1, 2), env)
-
-julia> check_out_of_bounds(:A, (4, 3), env)
-ERROR: AssertionError: Index out of bound.
-[...]
-```
-"""
-function check_out_of_bounds(v_name::Symbol, idxs, env)
-    if !(v_name in keys(env))
-        return nothing
-    end
-    array_dim_length = length(idxs)
-    @assert isequal(array_dim_length, ndims(env[v_name])) "Dimension mismatch."
-    for i in 1:array_dim_length
-        if idxs[i] isa Number
-            @assert idxs[i] <= size(env[v_name], i) "Index out of bound."
-        elseif idxs[i] isa UnitRange
-            @assert idxs[i].stop <= size(env[v_name], i) "Index out of bound."
-        end
-    end
-end
-
-"""
-    check_implicit_indexing(v_name::Symbol, idxs, env)
-
-Check if the variable `v_name`'s indices use implicit indexing with colons, and raise an error if not supported.
-
-# Arguments
-- `v_name::Symbol`: Variable name.
-- `idxs`: Indices to check.
-- `env`: Current environment variables.
-
-# Example
-```jldoctest
-julia> env = Dict(:B => rand(2, 2));
-
-julia> check_implicit_indexing(:B, (Colon(), 1), env)
-
-julia> check_implicit_indexing(:C, (Colon(), 1), env)
-ERROR: Implicit indexing with colon is only supported when the array is a data array.
-[...]
-```
-"""
-function check_implicit_indexing(v_name::Symbol, idxs, env)
-    colon_idxs = findall(x -> x == Colon(), idxs)
-    if isempty(colon_idxs)
-        return nothing
-    end
-    if !haskey(env, v_name)
-        error(
-            "Implicit indexing with colon is only supported when the array is a data array."
-        )
-    end
-end
-
-"""
-    check_partial_missing_values(v_name::Symbol, idxs, env)
-
-Check if the variable `v_name`'s indices have partial missing values and raise an error if found.
-
-# Arguments
-- `v_name::Symbol`: Variable name.
-- `idxs`: Indices to check.
-- `env`: Current environment variables.
-
-# Example
-```jldoctest
-julia> env = Dict(:D => [1, missing, 2]);
-
-julia> check_partial_missing_values(:D, (1:3, ), env)
-ERROR: Some elements of D[1:3] are missing, some are not.
-[...]
-```
-"""
-function check_partial_missing_values(v_name::Symbol, idxs, env)
-    if !(v_name in keys(env))
-        return nothing
-    end
-    if any(x -> x isa Union{UnitRange,Colon}, idxs)
-        vs = env[v_name][idxs...]
-        if !all(ismissing, vs) && !all(!ismissing, vs)
-            error("Some elements of $v_name[$(idxs...)] are missing, some are not.")
-        end
-    end
-end
-
-"""
-    check_idxs(v_name::Symbol, idxs, env)
-
-Check the validity of the indices `idxs` for the variable `v_name` in the environment `env`.
-
-This function checks for unresolved indices, out-of-bounds indices, unsupported implicit indexing, and partial missing values.
-
-# Arguments
-- `v_name::Symbol`: Variable name.
-- `idxs`: Indices to check.
-- `env`: Current environment variables.
-```
-"""
-function check_idxs(v_name::Symbol, idxs, env)
-    check_unresolved_indices(idxs)
-    check_out_of_bounds(v_name, idxs, env)
-    check_implicit_indexing(v_name, idxs, env)
-    return check_partial_missing_values(v_name, idxs, env)
 end
 
 """
@@ -323,50 +227,130 @@ is_resolved(::Array{Missing}) = false
 is_resolved(::Union{Symbol,Expr}) = false
 is_resolved(::Any) = false
 
-function analyze_assignment(pass::CollectVariables, expr::Expr, env::NamedTuple)
+@inline function is_specified_by_data(
+    ::NamedTuple{data_keys}, var::Symbol
+) where {data_keys}
+    if var ∉ data_keys
+        return false
+    else
+        if data[var] isa AbstractArray
+            throw(ArgumentError("In BUGS, implicit indexing on the LHS is not allowed."))
+        end
+    end
+end
+@inline function is_specified_by_data(
+    data::NamedTuple{data_keys},
+    var::Symbol,
+    indices::Vararg{Union{Missing,Float64,Int,UnitRange{Int}}},
+) where {data_keys}
+    if var ∉ data_keys
+        return false
+    else
+        values = data[var][indices...]
+        if values isa AbstractArray
+            if eltype(values) === Missing
+                return false
+            elseif eltype(values) <: Union{Int,Float64}
+                return true
+            else
+                return any(!ismissing, values)
+            end
+        else
+            if values isa Missing
+                return false
+            elseif values <: Union{Int,Float64}
+                return true
+            else
+                error("Unexpected type: $(typeof(values))")
+            end
+        end
+    end
+end
+
+@inline function is_partially_specified_as_data(
+    data::NamedTuple{data_keys},
+    var::Symbol,
+    indices::Vararg{Union{Missing,Float64,Int,UnitRange{Int}}},
+) where {data_keys}
+    if var ∉ data_keys
+        return false
+    else
+        values = data[var][indices...]
+        return values isa AbstractArray && any(ismissing, values) && any(!ismissing, values)
+    end
+end
+
+function analyze_assignment(
+    pass::CollectVariables{data_arrays,arrays}, expr::Expr, env::NamedTuple{data_vars}
+) where {data_arrays,arrays,data_vars}
     if Meta.isexpr(expr, :(=))
         lhs_expr = expr.args[1]
     else # Expr(:call, :(~), ...)
         lhs_expr = expr.args[2]
     end
 
-    v = find_variables_on_lhs(
-        Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
-    )
-    if !isa(v, Scalar)
-        check_idxs(v.name, v.indices, env)
+    v = simplify_lhs(env, lhs_expr)
+    if Meta.isexpr(expr, :(=))
+        if v isa Symbol
+            if is_specified_by_data(env, v)
+                throw(
+                    ArgumentError("Variable $v is specified by data, can't be assigned to.")
+                )
+            end
+        else
+            var, indices... = v
+            if is_specified_by_data(env, var, indices...)
+                throw(
+                    ArgumentError(
+                        "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved.",
+                    ),
+                )
+            end
+            if var in data_vars
+                if !Base.checkbounds(Bool, env[var], indices...)
+                    error(
+                        "Statement $expr is trying to assign to a data variable $var with indices $indices that are out of bounds.",
+                    )
+                end
+            else
+                for i in eachindex(pass.array_sizes[var])
+                    pass.array_sizes[var][i] = max(
+                        pass.array_sizes[var][i], last(indices[i])
+                    )
+                end
+            end
+        end
+    else
+        if v isa Symbol
+            return nothing
+        else
+            var, indices... = v
+            if is_partially_specified_as_data(env, var, indices...)
+                throw(
+                    ArgumentError(
+                        "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved.",
+                    ),
+                )
+            end
+            if var in data_vars
+                if !Base.checkbounds(Bool, env[var], indices...)
+                    error(
+                        "Statement $expr is trying to assign to a data variable $var with indices $indices that are out of bounds.",
+                    )
+                end
+            else
+                for i in eachindex(pass.array_sizes[var])
+                    pass.array_sizes[var][i] = max(
+                        pass.array_sizes[var][i], last(indices[i])
+                    )
+                end
+            end
+        end
     end
-    if is_resolved(evaluate(v, env)) && Meta.isexpr(expr, :(=))
-        error("$v is data, can't be assigned to.")
-    end
-
-    return push!(pass.vars, v)
 end
 
-function post_process(pass::CollectVariables, expr, env)
-    scalars = Set([v.name for v in pass.vars if isa(v, Scalar)])
-
-    array_elements = Dict([v.name => [] for v in pass.vars if v.indices != ()])
-    for v in pass.vars
-        !isa(v, Scalar) && push!(array_elements[v.name], v)
-    end
-
-    # sizes of non-data arrays
-    array_sizes = Dict{Symbol,Vector{Int}}()
-    for (k, v) in array_elements
-        k in keys(env) && continue # skip data arrays
-        numdims = length(v[1].indices)
-        @assert all(x -> length(x.indices) == numdims, v) "$k dimension mismatch."
-        array_size = Vector(undef, numdims)
-        for i in 1:numdims
-            array_size[i] = maximum(
-                x -> isa(x.indices[i], Number) ? x.indices[i] : x.indices[i].stop, v
-            )
-        end
-        array_sizes[k] = array_size
-    end
-
-    return scalars, array_sizes
+function post_process(pass::CollectVariables, expr::Expr, env::NamedTuple)
+    return Set{Symbol}(pass.scalars), Dict(pairs(pass.array_sizes))
 end
 
 mutable struct ConstantPropagation <: CompilerPass
