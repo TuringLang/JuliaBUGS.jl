@@ -353,12 +353,12 @@ function post_process(pass::CollectVariables, expr::Expr, env::NamedTuple)
     return Set{Symbol}(pass.scalars), Dict(pairs(pass.array_sizes))
 end
 
-mutable struct ConstantPropagation <: CompilerPass
+mutable struct DataTransformation <: CompilerPass
     new_value_added::Bool
     transformed_variables
 end
 
-function ConstantPropagation(scalar::Set, variable_array_sizes::Dict)
+function DataTransformation(scalar::Set, variable_array_sizes::Dict)
     transformed_variables = Dict()
 
     for s in scalar
@@ -369,21 +369,7 @@ function ConstantPropagation(scalar::Set, variable_array_sizes::Dict)
         transformed_variables[k] = Array{Union{Missing,Real}}(missing, v...)
     end
 
-    return ConstantPropagation(false, transformed_variables)
-end
-
-# won't try to evaluate the RHS if the function is not recognized
-function should_skip_eval(expr)
-    contain_external_function = false
-    MacroTools.postwalk(expr) do sub_expr
-        if MacroTools.@capture(sub_expr, f_(args__))
-            if f ∉ [:+, :-, :*, :/, :^] && !(f in BUGSPrimitives.BUGS_FUNCTIONS)
-                contain_external_function = true
-            end
-        end
-        return sub_expr
-    end
-    return contain_external_function
+    return DataTransformation(false, transformed_variables)
 end
 
 function has_value(transformed_variables, v::Var)
@@ -396,8 +382,8 @@ function has_value(transformed_variables, v::Var)
     end
 end
 
-function analyze_assignment(pass::ConstantPropagation, expr::Expr, env::NamedTuple)
-    if Meta.isexpr(expr, :(=)) && !should_skip_eval(expr.args[2])
+function analyze_assignment(pass::DataTransformation, expr::Expr, env::NamedTuple)
+    if Meta.isexpr(expr, :(=))
         lhs = find_variables_on_lhs(expr.args[1], env)
 
         if has_value(pass.transformed_variables, lhs)
@@ -420,7 +406,7 @@ function analyze_assignment(pass::ConstantPropagation, expr::Expr, env::NamedTup
     end
 end
 
-function post_process(pass::ConstantPropagation, expr, env)
+function post_process(pass::DataTransformation, expr, env)
     return pass.new_value_added, pass.transformed_variables
 end
 
