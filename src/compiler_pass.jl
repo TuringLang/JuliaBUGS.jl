@@ -372,8 +372,22 @@ function DataTransformation(scalar::Set, variable_array_sizes::Dict)
     return DataTransformation(false, transformed_variables)
 end
 
+# won't try to evaluate the RHS if the function is not recognized
+function should_skip_eval(expr)
+    contain_external_function = false
+    MacroTools.postwalk(expr) do sub_expr
+        if MacroTools.@capture(sub_expr, f_(args__))
+            if f ∉ [:+, :-, :*, :/, :^] && !(f in BUGSPrimitives.BUGS_FUNCTIONS)
+                contain_external_function = true
+            end
+        end
+        return sub_expr
+    end
+    return contain_external_function
+end
+
 function has_value(transformed_variables, v::Var)
-    if v isa Scalar
+    if v isa Scalar && !should_skip_eval(expr.args[2])
         return !ismissing(transformed_variables[v.name])
     elseif v isa ArrayElement
         return !ismissing(transformed_variables[v.name][v.indices...])
