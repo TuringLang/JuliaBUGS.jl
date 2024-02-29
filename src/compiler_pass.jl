@@ -387,7 +387,7 @@ function should_skip_eval(expr)
 end
 
 function has_value(transformed_variables, v::Var)
-    if v isa Scalar && !should_skip_eval(expr.args[2])
+    if v isa Scalar
         return !ismissing(transformed_variables[v.name])
     elseif v isa ArrayElement
         return !ismissing(transformed_variables[v.name][v.indices...])
@@ -397,7 +397,7 @@ function has_value(transformed_variables, v::Var)
 end
 
 function analyze_assignment(pass::DataTransformation, expr::Expr, env::NamedTuple)
-    if Meta.isexpr(expr, :(=))
+    if Meta.isexpr(expr, :(=)) && !should_skip_eval(expr.args[2])
         lhs = find_variables_on_lhs(expr.args[1], env)
 
         if has_value(pass.transformed_variables, lhs)
