@@ -50,7 +50,11 @@ end
 """
     CollectVariables
 
-This pass collects all the possible variables appear on the LHS of both logical and stochastic assignments. 
+This analysis pass instantiates all possible left-hand sides for both deterministic and stochastic 
+assignments. Checks include: (1) In a deterministic statement, the left-hand side cannot be 
+specified by data; (2) In a stochastic statement, for a multivariate random variable, it cannot be 
+partially observed. This pass also returns the sizes of the arrays in the model, determined by the 
+largest indices.
 """
 struct CollectVariables{data_arrays,arrays} <: CompilerPass
     data_scalars::Tuple{Vararg{Symbol}}
@@ -353,6 +357,13 @@ function post_process(pass::CollectVariables, expr::Expr, env::NamedTuple)
     return Set{Symbol}(pass.scalars), Dict(pairs(pass.array_sizes))
 end
 
+"""
+    DataTransformation
+
+Statements with a right-hand side that can be fully evaluated using the data are processed 
+in this analysis pass, which computes these values. This achieves a similar outcome to 
+Stan's `transformed parameters` block, but without requiring explicit specificity.
+"""
 mutable struct DataTransformation <: CompilerPass
     new_value_added::Bool
     transformed_variables
