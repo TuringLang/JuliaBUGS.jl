@@ -363,6 +363,15 @@ end
 Statements with a right-hand side that can be fully evaluated using the data are processed 
 in this analysis pass, which computes these values. This achieves a similar outcome to 
 Stan's `transformed parameters` block, but without requiring explicit specificity.
+
+Conceptually, this is akin to `constant propagation` in compiler optimization, as both 
+strategies aim to accelerate the optimized program by minimizing the number of operations.
+
+It is crucial to highlight that computing data transformations plays a significant role 
+in ensuring the compiler's correctness. BUGS prohibits the repetition of the same variable 
+(be it a scalar or an array element) on the LHS more than once. The sole exception exists 
+when the variable is computable within this pass, in which case it is regarded equivalently 
+to data.
 """
 mutable struct DataTransformation <: CompilerPass
     new_value_added::Bool
