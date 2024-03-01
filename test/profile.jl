@@ -59,3 +59,8 @@ function benchmark_compile(model_def::Expr, data::NamedTuple)
     results = run(suite; verbose=false)
     return results
 end
+
+for n in keys(BUGSExamples.VOLUME_I)
+    benchmark_compile(n)
+    println("\n\n")
+end

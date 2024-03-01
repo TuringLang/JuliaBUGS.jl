@@ -134,3 +134,5 @@ end
 include("gibbs.jl")
 
 include("ext/mcmchains.jl")
+
+include("profile.jl")
