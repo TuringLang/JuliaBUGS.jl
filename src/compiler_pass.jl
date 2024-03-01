@@ -50,7 +50,11 @@ end
 """
     CollectVariables
 
-This pass collects all the possible variables appear on the LHS of both logical and stochastic assignments. 
+This analysis pass instantiates all possible left-hand sides for both deterministic and stochastic 
+assignments. Checks include: (1) In a deterministic statement, the left-hand side cannot be 
+specified by data; (2) In a stochastic statement, for a multivariate random variable, it cannot be 
+partially observed. This pass also returns the sizes of the arrays in the model, determined by the 
+largest indices.
 """
 struct CollectVariables{data_arrays,arrays} <: CompilerPass
     data_scalars::Tuple{Vararg{Symbol}}
@@ -353,12 +357,28 @@ function post_process(pass::CollectVariables, expr::Expr, env::NamedTuple)
     return Set{Symbol}(pass.scalars), Dict(pairs(pass.array_sizes))
 end
 
-mutable struct ConstantPropagation <: CompilerPass
+"""
+    DataTransformation
+
+Statements with a right-hand side that can be fully evaluated using the data are processed 
+in this analysis pass, which computes these values. This achieves a similar outcome to 
+Stan's `transformed parameters` block, but without requiring explicit specificity.
+
+Conceptually, this is akin to `constant propagation` in compiler optimization, as both 
+strategies aim to accelerate the optimized program by minimizing the number of operations.
+
+It is crucial to highlight that computing data transformations plays a significant role 
+in ensuring the compiler's correctness. BUGS prohibits the repetition of the same variable 
+(be it a scalar or an array element) on the LHS more than once. The sole exception exists 
+when the variable is computable within this pass, in which case it is regarded equivalently 
+to data.
+"""
+mutable struct DataTransformation <: CompilerPass
     new_value_added::Bool
     transformed_variables
 end
 
-function ConstantPropagation(scalar::Set, variable_array_sizes::Dict)
+function DataTransformation(scalar::Set, variable_array_sizes::Dict)
     transformed_variables = Dict()
 
     for s in scalar
@@ -369,7 +389,7 @@ function ConstantPropagation(scalar::Set, variable_array_sizes::Dict)
         transformed_variables[k] = Array{Union{Missing,Real}}(missing, v...)
     end
 
-    return ConstantPropagation(false, transformed_variables)
+    return DataTransformation(false, transformed_variables)
 end
 
 # won't try to evaluate the RHS if the function is not recognized
@@ -396,7 +416,7 @@ function has_value(transformed_variables, v::Var)
     end
 end
 
-function analyze_assignment(pass::ConstantPropagation, expr::Expr, env::NamedTuple)
+function analyze_assignment(pass::DataTransformation, expr::Expr, env::NamedTuple)
     if Meta.isexpr(expr, :(=)) && !should_skip_eval(expr.args[2])
         lhs = find_variables_on_lhs(expr.args[1], env)
 
@@ -420,7 +440,7 @@ function analyze_assignment(pass::ConstantPropagation, expr::Expr, env::NamedTup
     end
 end
 
-function post_process(pass::ConstantPropagation, expr, env)
+function post_process(pass::DataTransformation, expr, env)
     return pass.new_value_added, pass.transformed_variables
 end
 

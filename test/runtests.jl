@@ -13,7 +13,7 @@ using JuliaBUGS:
     BUGSGraph,
     CollectVariables,
     ConcreteNodeInfo,
-    ConstantPropagation,
+    DataTransformation,
     DefaultContext,
     evaluate!!,
     get_params_varinfo,
