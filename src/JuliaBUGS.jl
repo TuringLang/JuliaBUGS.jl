@@ -202,6 +202,24 @@ function merge_with_coalescence(
     return NamedTuple{Tuple(unioned_keys)}(Tuple(coalesced_values))
 end
 
+function compute_data_transformation(scalar, array_sizes, model_def, data)
+    transformed_variables = Dict{Symbol,Any}()
+    for s in scalar
+        transformed_variables[s] = missing
+    end
+    for (k, v) in array_sizes
+        transformed_variables[k] = Array{Union{Missing,Int,Float64}}(missing, v...)
+    end
+
+    has_new_val = true
+    while has_new_val
+        has_new_val, transformed_variables = analyze_program(
+            DataTransformation(false, transformed_variables), model_def, data
+        )
+    end
+    return transformed_variables
+end
+
 """
     compile(model_def[, data, initializations])
 
@@ -231,14 +249,9 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
     scalars, array_sizes = analyze_program(
         CollectVariables(model_def, data), model_def, data
     )
-    has_new_val, transformed_variables = analyze_program(
-        DataTransformation(scalars, array_sizes), model_def, data
+    transformed_variables = compute_data_transformation(
+        scalars, array_sizes, model_def, data
     )
-    while has_new_val
-        has_new_val, transformed_variables = analyze_program(
-            DataTransformation(false, transformed_variables), model_def, data
-        )
-    end
     array_bitmap, transformed_variables = analyze_program(
         PostChecking(data, transformed_variables), model_def, data
     )
