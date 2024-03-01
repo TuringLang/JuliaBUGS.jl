@@ -14,32 +14,12 @@ using JuliaBUGS:
 function benchmark_compile(name::Symbol)
     model_def = BUGSExamples.VOLUME_I[name].model_def
     data = BUGSExamples.VOLUME_I[name].data
-    results = benchmark_compile(model_def, data)
-    println("Benchmarking: $name")
-    for (t, b) in results["analysis_passes"]
-        println("\n\n")
-        println(t, "\n")
-        show(stdout, "text/plain", b)
-    end
-end
 
-function benchmark_compile(model_def::Expr, data::NamedTuple)
-    suite = BenchmarkGroup()
-
-    suite["analysis_passes"] = BenchmarkGroup([
-        "CollectVariables", "DataTransformation", "NodeFunctions"
-    ])
     scalars, array_sizes = analyze_program(
-        CollectVariables(model_def, data), model_def, data
-    )
-    suite["analysis_passes"]["CollectVariables"] = @benchmarkable analyze_program(
         CollectVariables(model_def, data), model_def, data
     )
 
     transformed_variables = compute_data_transformation(
-        scalars, array_sizes, model_def, data
-    )
-    suite["analysis_passes"]["DataTransformation"] = @benchmarkable compute_data_transformation(
         scalars, array_sizes, model_def, data
     )
 
@@ -51,6 +31,35 @@ function benchmark_compile(model_def::Expr, data::NamedTuple)
     vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = analyze_program(
         NodeFunctions(array_sizes, array_bitmap), model_def, merged_data
     )
+
+    results = benchmark_compile(
+        model_def, data, scalars, array_sizes, array_bitmap, merged_data
+    )
+    println("Benchmarking: $name")
+    for (t, b) in results["analysis_passes"]
+        println("\n\n")
+        println(t, "\n")
+        show(stdout, "text/plain", b)
+    end
+end
+
+function benchmark_compile(
+    model_def::Expr, data::NamedTuple, scalars, array_sizes, array_bitmap, merged_data
+)
+    suite = BenchmarkGroup()
+
+    suite["analysis_passes"] = BenchmarkGroup([
+        "CollectVariables", "DataTransformation", "NodeFunctions"
+    ])
+
+    suite["analysis_passes"]["CollectVariables"] = @benchmarkable analyze_program(
+        CollectVariables(model_def, data), model_def, data
+    )
+
+    suite["analysis_passes"]["DataTransformation"] = @benchmarkable compute_data_transformation(
+        scalars, array_sizes, model_def, data
+    )
+
     suite["analysis_passes"]["NodeFunctions"] = @benchmarkable analyze_program(
         NodeFunctions(array_sizes, array_bitmap), model_def, merged_data
     )
