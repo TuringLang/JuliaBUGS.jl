@@ -1,4 +1,4 @@
-name: Profile Julia Code
+name: Benchmarking
 
 on:
     push:
