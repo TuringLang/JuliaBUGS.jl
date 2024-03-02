@@ -14,6 +14,7 @@ using JuliaBUGS:
 suite = BenchmarkGroup()
 
 for name in keys(BUGSExamples.VOLUME_I)
+    @info "Adding benchmark for $name"
     model_def = BUGSExamples.VOLUME_I[name].model_def
     data = BUGSExamples.VOLUME_I[name].data
 
@@ -36,32 +37,28 @@ for name in keys(BUGSExamples.VOLUME_I)
 
     _suite = BenchmarkGroup()
 
-    suite[string(name)] = _suite
-
-    _suite["analysis_passes"] = BenchmarkGroup([
-        "CollectVariables", "DataTransformation", "NodeFunctions"
-    ])
-
-    _suite["analysis_passes"]["CollectVariables"] = @benchmarkable analyze_program(
-        CollectVariables(model_def, data), model_def, data
+    _suite["CollectVariables"] = @benchmarkable analyze_program(
+        CollectVariables($model_def, $data), $model_def, $data
     )
 
-    _suite["analysis_passes"]["DataTransformation"] = @benchmarkable compute_data_transformation(
-        scalars, array_sizes, model_def, data
+    _suite["DataTransformation"] = @benchmarkable compute_data_transformation(
+        $scalars, $array_sizes, $model_def, $data
     )
 
-    _suite["analysis_passes"]["NodeFunctions"] = @benchmarkable analyze_program(
-        NodeFunctions(array_sizes, array_bitmap), model_def, merged_data
+    _suite["NodeFunctions"] = @benchmarkable analyze_program(
+        NodeFunctions($array_sizes, $array_bitmap), $model_def, $merged_data
     )
 
     tune!(_suite)
+    suite[string(name)] = _suite
 end
 
-results = run(suite; verbose=false)
+results = run(suite; verbose=true)
 
 for (name, example_suite) in results
+    println("\n")
     println(name)
-    for (subname, trial) in example_suite["analysis_passes"]
-        println(subname, " ", trial)
-    end
+    println("CollectVariables", example_suite["CollectVariables"])
+    println("DataTransformation", example_suite["DataTransformation"])
+    println("NodeFunctions", example_suite["NodeFunctions"])
 end

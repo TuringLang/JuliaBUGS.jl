@@ -135,4 +135,6 @@ AbstractMCMC.setprogress!(false)
 
 # include("ext/mcmchains.jl")
 
-include("profile.jl")
+if get(ENV, "RUN_MODE", "test") == "profile"
+    include("profile.jl")
+end
