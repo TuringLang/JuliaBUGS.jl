@@ -451,7 +451,7 @@ struct PostChecking <: CompilerPass
     logical_or_stochastic::Dict # used to identify logical or stochastic assignment
 end
 
-function PostChecking(data, transformed_variables::Dict)
+function PostChecking(data::NamedTuple, transformed_variables::Dict)
     is_data = Dict()
     definition_bit_map = Dict()
     logical_or_stochastic = Dict()
