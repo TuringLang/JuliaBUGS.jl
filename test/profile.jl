@@ -131,35 +131,39 @@ function print_pure_text_table(result_dict)
     end
 end
 
-function print_markdown_table_to_file(result_dict, filename)
-    open(filename, "w") do file
-        # Define the table header
+function print_markdown_table_to_file(result_dict, filename=nothing)
+    output_target = filename !== nothing ? open(filename, "w") : stdout
+
+    try
         println(
-            file,
+            output_target,
             "| Example Name | Category | Median Time | Minimum Time | Maximum Time | Memory Usage |",
         )
         println(
-            file,
+            output_target,
             "|--------------|----------|-------------|--------------|--------------|--------------|",
         )
 
-        # Iterate through each example and its benchmarks to populate the table rows
         for (name, benchmarks) in result_dict
             first_category = true
             for (category, results) in benchmarks
                 if first_category
                     println(
-                        file,
+                        output_target,
                         "| $(name) | $(category) | $(results["median"]) | $(results["minimum"]) | $(results["maximum"]) | $(results["memory"]) |",
                     )
                     first_category = false
                 else
                     println(
-                        file,
+                        output_target,
                         "|  | $(category) | $(results["median"]) | $(results["minimum"]) | $(results["maximum"]) | $(results["memory"]) |",
                     )
                 end
             end
+        end
+    finally
+        if filename !== nothing
+            close(output_target)
         end
     end
 end
