@@ -375,7 +375,7 @@ to data.
 """
 mutable struct DataTransformation <: CompilerPass
     new_value_added::Bool
-    transformed_variables
+    const transformed_variables
 end
 
 function DataTransformation(scalar::Set, variable_array_sizes::Dict)
