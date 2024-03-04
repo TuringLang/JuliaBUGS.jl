@@ -4,4 +4,4 @@
 
 A modern implementation of the BUGS probabilistic programming language in Julia. 
 
-For a working example, you can follow this [link](https://turinglang.org/JuliaBUGS.jl/dev/example).
+For a working example, follow this [link](https://turinglang.org/JuliaBUGS.jl/stable/example).
