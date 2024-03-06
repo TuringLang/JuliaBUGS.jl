@@ -3,12 +3,15 @@ Most of the [functions](https://www.multibugs.org/documentation/latest/Functions
 `JuliaBUGS` directly utilizes functions from the Julia Standard Library when they share the same names and functionalities. For functions not available in the Julia Standard Library and other popular libraries, we have developed equivalents within `JuliaBUGS.BUGSPrimitives`.
 
 ## Function defined in Julia Standard Library
+
+!!! `JuliaBUGS` does not allow keyword arguments syntax.
+
 ```@docs
 abs
 exp(x::Real)
 log(x::Number)
 sqrt(x::Real)
-trunc(x::Real)
+trunc(x)
 min(x::Real, y::Real)
 max(x::Real, y::Real)
 sum(x::AbstractArray)
