@@ -49,7 +49,7 @@ function extract_variable_names_and_numdims(expr::Expr, excluded::Tuple{Vararg{S
         elseif @capture(sub_expr, v_[idxs__])
             variables[v] = length(idxs)
             for idx in idxs
-                if idx isa Symbol && !(idx in excluded)
+                if idx isa Symbol && idx !== :(:) && !(idx in excluded)
                     variables[idx] = 0
                 end
             end

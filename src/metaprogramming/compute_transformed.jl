@@ -88,12 +88,13 @@ function _try_compute(expr::Expr)
                             $rhs_val = try
                                 $rhs
                             catch
+                                missing
                             end
                             if $rhs_val isa Union{Int,Float64}
                                 $lhs = $rhs_val
                                 $__added_new_val__ = true
                             elseif !ismissing($rhs_val) && all(!ismissing, $rhs_val)
-                                @inbounds $lhs .= $rhs_val
+                                $lhs .= $rhs_val
                                 $__added_new_val__ = true
                             end
                         end

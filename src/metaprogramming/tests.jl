@@ -1,6 +1,8 @@
 using JuliaBUGS
-using JuliaBUGS.BUGSExamples: rats, leuk
+using JuliaBUGS.BUGSExamples: rats, leuk, inhalers
 using JuliaBUGS: generate_function_expr
+
+using BenchmarkTools
 
 using MacroTools, BangBang, Distributions
 using JuliaBUGS.BUGSPrimitives
@@ -18,6 +20,9 @@ using Graphs
 
 model_def = deepcopy(leuk.model_def)
 data = leuk.data;
+
+model_def = deepcopy(inhalers.model_def)
+data = inhalers.data
 
 ##
 f_expr = generate_function_expr(DetermineArraySizes(), model_def, LineNumberNode(0))
@@ -40,6 +45,12 @@ eval(f_expr)
 eval_env = __compute_transformed!(eval_env)
 
 @benchmark __compute_transformed!(eval_env)
+using PProf, Profile
+Profile.clear()
+@profile __compute_transformed!(eval_env)
+PProf.pprof()
+
+# TODO: why dcat? we are just eval the RHS of logical assignments
 
 JuliaBUGS.check_conflicts(eval_env, potential_conflict...)
 
