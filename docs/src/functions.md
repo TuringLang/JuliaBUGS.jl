@@ -5,18 +5,18 @@ Most of the [functions](https://www.multibugs.org/documentation/latest/Functions
 ## Function defined in Julia Standard Library
 ```@docs
 abs
-exp
-log
-sqrt
-trunc
-min
-max
-sum
-sort
-sin
-cos
-tan
-JuliaBUGS.BUGSPrimitives.mean
+exp(x::Real)
+log(x::Number)
+sqrt(x::Real)
+trunc(x::Real)
+min(x::Real, y::Real)
+max(x::Real, y::Real)
+sum(x::AbstractArray)
+sort(x::AbstractArray)
+sin(x::Real)
+cos(x::Real)
+tan(x::Real)
+JuliaBUGS.BUGSPrimitives.mean(x::AbstractArray)
 ```
 
 ## Function defined in [`LogExpFunctions`](https://github.com/JuliaStats/LogExpFunctions.jl)
