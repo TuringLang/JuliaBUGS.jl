@@ -154,7 +154,7 @@ end
 """
     arcsin(x)
 
-Return the arcsine of ``x``.
+See [`asin`](@ref Base.Math.asin).
 """
 function arcsin(x)
     return asin(x)
@@ -163,7 +163,7 @@ end
 """
     arcsinh(x)
 
-Return the inverse hyperbolic sine of ``x``.
+See [`asinh`](@ref Base.Math.asinh).
 """
 function arcsinh(x)
     return asinh(x)
@@ -172,7 +172,7 @@ end
 """
     arccos(x)
 
-Return the arccosine of ``x``.
+See [`acos`](@ref Base.Math.acos).
 """
 function arccos(x)
     return Base.Math.acos(x)
@@ -181,7 +181,7 @@ end
 """
     arccosh(x)
 
-Return the inverse hyperbolic cosine of ``x``.
+See [`acosh`](@ref Base.Math.acosh).
 """
 function arccosh(x)
     return acosh(x)
@@ -190,7 +190,7 @@ end
 """
     arctan(x)
 
-Return the arctangent of ``x``.
+See [`atan`](@ref Base.Math.atan).
 """
 function arctan(x)
     return atan(x)
@@ -199,7 +199,7 @@ end
 """
     arctanh(x)
 
-See [`atanh`](@ref).
+See [`atanh`](@ref Base.Math.atanh).
 """
 function arctanh(x)
     return atanh(x)
