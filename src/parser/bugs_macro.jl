@@ -192,6 +192,10 @@ function bugs_expression(expr, line_num)
         end
 
         return Expr(:call, Base.Fix2(bugs_expression, line_num).(expr.args)...)
+    elseif Meta.isexpr(expr, :parameters)
+        error(
+            "Keyword argument syntax is not supported in BUGS, error at $line_num: $(expr)"
+        )
     else
         error("Invalid expression at $line_num: `$expr`")
     end
