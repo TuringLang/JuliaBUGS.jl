@@ -29,36 +29,49 @@ function _inv(m::AbstractMatrix)
     return inv_L' * inv_L
 end
 
-const BUGS_FUNCTIONS = [
+const BUGS_FUNCTIONS = (
+    :abs,
     :cloglog,
     :cexpexp,
     :equals,
+    :exp,
     :icloglog,
     :ilogit,
     :inprod,
     :inverse,
+    :log,
     :logdet,
     :logfact,
     :loggam,
     :logit,
     :logistic,
     :mexp,
+    :max,
     :mean,
+    :min,
     :phi,
     :probit,
     :pow,
+    :sqrt,
     :rank,
     :ranked,
+    :round,
     :sd,
     :softplus,
+    :sort,
     :_step,
+    :sum,
+    :trunc,
+    :sin,
+    :cos,
+    :tan,
     :arcsin,
     :arcsinh,
     :arccos,
     :arccosh,
     :arctan,
     :arctanh,
-]
+)
 
 const BUGS_DISTRIBUTIONS = [
     :dnorm,
@@ -162,4 +175,5 @@ export dnorm,
     LeftTruncatedFlat,
     RightTruncatedFlat,
     TruncatedFlat
+
 end
