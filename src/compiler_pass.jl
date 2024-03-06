@@ -142,85 +142,98 @@ function find_variables_on_lhs(expr::Expr, env)
 end
 
 """
-    evaluate(var, env)
+    evaluate(expr, env)
 
-Evaluate `var` in the environment `env`.
+Evaluate `expr` in the environment `env`.
 
 # Examples
 ```jldoctest
-julia> evaluate(:(x[1]), Dict(:x => [1, 2, 3])) # array indexing is evaluated if possible
+julia> evaluate(:(x[1]), (x = [1, 2, 3],)) # array indexing is evaluated if possible
 1
 
-julia> evaluate(:(x[1] + 1), Dict(:x => [1, 2, 3]))
+julia> evaluate(:(x[1] + 1), (x = [1, 2, 3],))
 2
 
-julia> evaluate(:(x[1:2]), Dict()) |> Meta.show_sexpr # ranges are evaluated
+julia> evaluate(:(x[1:2]), NamedTuple()) |> Meta.show_sexpr # ranges are evaluated
 (:ref, :x, 1:2)
 
-julia> evaluate(:(x[1:2]), Dict(:x => [1, 2, 3])) # ranges are evaluated
+julia> evaluate(:(x[1:2]), (x = [1, 2, 3],))
 2-element Vector{Int64}:
  1
  2
 
-julia> evaluate(:(x[1:3]), Dict(:x => [1, 2, missing])) # when evaluate an array, if any element is missing, original expr is returned
+julia> evaluate(:(x[1:3]), (x = [1, 2, missing],)) # when evaluate an array, if any element is missing, original expr is returned
 :(x[1:3])
 
-julia> evaluate(:(x[y[1] + 1] + 1), Dict()) # if a ref expr can't be evaluated, it's returned as is
+julia> evaluate(:(x[y[1] + 1] + 1), NamedTuple()) # if a ref expr can't be evaluated, it's returned as is
 :(x[y[1] + 1] + 1)
 
-julia> evaluate(:(sum(x[:])), Dict(:x => [1, 2, 3])) # function calls are evaluated if possible
+julia> evaluate(:(sum(x[:])), (x = [1, 2, 3],)) # function calls are evaluated if possible
 6
 
-julia> evaluate(:(f(1)), Dict()) # if a function call can't be evaluated, it's returned as is
+julia> evaluate(:(f(1)), NamedTuple()) # if a function call can't be evaluated, it's returned as is
 :(f(1))
 """
-evaluate(var::Number, env) = var
-evaluate(var::UnitRange, env) = var
-evaluate(::Colon, env) = Colon()
-function evaluate(var::Symbol, env)
-    var == :(:) && return Colon()
-    if haskey(env, var)
-        value = env[var]
-        if value === missing
-            return var
+evaluate(expr::Number, env) = expr
+evaluate(expr::UnitRange, env) = expr
+evaluate(expr::Colon, env) = expr
+function evaluate(expr::Symbol, env::NamedTuple{variable_names}) where {variable_names}
+    if expr == :(:)
+        return Colon()
+    elseif Base.isidentifier(expr)
+        if expr in variable_names
+            return env[expr] === missing ? expr : env[expr]
         else
-            return value
+            return expr
         end
     else
-        return var
+        error("Encounter non-identifier: $expr")
     end
 end
-function evaluate(var::Expr, env)
-    if Meta.isexpr(var, :ref)
-        idxs = (ex -> evaluate(ex, env)).(var.args[2:end])
-        !isa(idxs, Array) && (idxs = [idxs])
-        if all(x -> x isa Number, idxs) && haskey(env, var.args[1])
-            for i in eachindex(idxs)
-                if !isa(idxs[i], Integer) && !isinteger(idxs[i])
-                    error("Array indices must be integers or UnitRanges.")
+function evaluate(expr::Expr, env::NamedTuple{variable_names}) where {variable_names}
+    if Meta.isexpr(expr, :ref)
+        var, indices... = expr.args
+        all_resolved = true
+        for i in eachindex(indices)
+            indices[i] = evaluate(indices[i], env)
+            if indices[i] isa Float64
+                indices[i] = Int(indices[i])
+            end
+            all_resolved = all_resolved && indices[i] isa Union{Int,UnitRange{Int},Colon}
+        end
+        if var in variable_names
+            if all_resolved
+                value = env[var][indices...]
+                if is_resolved(value)
+                    return value
+                else
+                    return Expr(:ref, var, indices...)
                 end
             end
-            value = env[var.args[1]][Int.(idxs)...]
-            return ismissing(value) ? Expr(var.head, var.args[1], idxs...) : value
-        elseif all(x -> x isa Union{Number,UnitRange,Colon,Array}, idxs) &&
-            haskey(env, var.args[1])
-            value = getindex(env[var.args[1]], idxs...) # can use `view` here
-            !any(ismissing, value) && return value
-        end
-        return Expr(var.head, var.args[1], idxs...)
-    elseif var.args[1] ∈ BUGSPrimitives.BUGS_FUNCTIONS ||
-        var.args[1] ∈ (:+, :-, :*, :/, :^, :(:)) # function call
-        # elseif isdefined(JuliaBUGS, var.args[1])
-        f = var.args[1]
-        args = map(ex -> evaluate(ex, env), var.args[2:end])
-        if all(is_resolved, args)
-            return getfield(JuliaBUGS, f)(args...)
         else
-            return Expr(var.head, f, args...)
+            return Expr(:ref, var, indices...)
         end
-    else # don't try to eval the function, but try to simplify
-        args = map(ex -> evaluate(ex, env), var.args[2:end])
-        return Expr(var.head, var.args[1], args...)
+    elseif Meta.isexpr(expr, :call)
+        f, args... = expr.args
+        all_resolved = true
+        for i in eachindex(args)
+            args[i] = evaluate(args[i], env)
+            all_resolved = all_resolved && is_resolved(args[i])
+        end
+        if all_resolved
+            if f === :(:)
+                return UnitRange(Int(args[1]), Int(args[2]))
+            elseif f ∈ BUGSPrimitives.BUGS_FUNCTIONS ∪ (:+, :-, :*, :/, :^)
+                _f = getfield(BUGSPrimitives, f)
+                return _f(args...)
+            else
+                return Expr(:call, f, args...)
+            end
+        else
+            return Expr(:call, f, args...)
+        end
+    else
+        error("Unsupported expression: $var")
     end
 end
 

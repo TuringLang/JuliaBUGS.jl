@@ -3,9 +3,7 @@
 
 Absolute value of `x`.
 """
-function abs(x)
-    return Base.abs(x)
-end
+abs
 
 """
     cloglog(x)
@@ -47,9 +45,7 @@ end
 
 Exponential of ``x``.
 """
-function exp(x)
-    return Base.Math.exp(x)
-end
+exp
 
 """
     icloglog(x)
@@ -92,9 +88,7 @@ end
 
 Natural logarithm of ``x``.
 """
-function log(x)
-    return Base.Math.log(x)
-end
+log
 
 """
     logdet(::AbstractMatrix)
@@ -163,9 +157,7 @@ end
 
 Return the maximum value of the input arguments.
 """
-function max(args...)
-    return Base.max(args...)
-end
+max
 
 """
     mean(v::AbstractVector)
@@ -179,9 +171,7 @@ mean
 
 Return the minimum value of the input arguments.
 """
-function min(args...)
-    return Base.min(args...)
-end
+min
 
 """
     phi(x)
@@ -215,9 +205,7 @@ end
 
 Return the square root of ``x``.
 """
-function sqrt(x)
-    return Base.Math.sqrt(x)
-end
+sqrt
 
 """
     rank(v::AbstractVector, i::Integer)
@@ -242,9 +230,7 @@ end
 
 Round ``x`` to the nearest Integereger.
 """
-function round(x)
-    return Base.Math.round(x)
-end
+round
 
 """
     sd(v::AbstractVector)
@@ -269,9 +255,7 @@ end
 
 Return a sorted copy of the input vector `v`.
 """
-function sort(v::AbstractVector)
-    return Base.sort(v)
-end
+sort
 
 """
     _step(x)
@@ -287,27 +271,21 @@ end
 
 Return the sum of the input arguments.
 """
-function sum(args...)
-    return Base.sum(args...)
-end
+sum
 
 """
     trunc(x)
 
 Return the Integereger part of ``x``.
 """
-function trunc(x)
-    return Base.Math.trunc(x)
-end
+trunc
 
 """
     sin(x)
 
 Return the sine of ``x``.
 """
-function sin(x)
-    return Base.Math.sin(x)
-end
+sin
 
 """
     arcsin(x)
@@ -332,9 +310,7 @@ end
 
 Return the cosine of ``x``.
 """
-function cos(x)
-    return Base.Math.cos(x)
-end
+cos
 
 """
     arccos(x)
@@ -359,9 +335,7 @@ end
 
 Return the tangent of ``x``.
 """
-function tan(x)
-    return Base.Math.tan(x)
-end
+tan
 
 """
     arctan(x)
