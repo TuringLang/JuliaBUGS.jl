@@ -124,10 +124,10 @@ Find all the variables on the LHS of an assignment. The variables can be either 
 
 # Examples
 ```jldoctest
-julia> find_variables_on_lhs(:(x[1, 2]), Dict())
+julia> find_variables_on_lhs(:(x[1, 2]), NamedTuple())
 x[1, 2]
 
-julia> find_variables_on_lhs(:(x[1, 2:3]), Dict())
+julia> find_variables_on_lhs(:(x[1, 2:3]), NamedTuple())
 x[1, 2:3]
 ```
 """
@@ -180,14 +180,12 @@ evaluate(expr::Colon, env) = expr
 function evaluate(expr::Symbol, env::NamedTuple{variable_names}) where {variable_names}
     if expr == :(:)
         return Colon()
-    elseif Base.isidentifier(expr)
+    else
         if expr in variable_names
             return env[expr] === missing ? expr : env[expr]
         else
             return expr
         end
-    else
-        error("Encounter non-identifier: $expr")
     end
 end
 function evaluate(expr::Expr, env::NamedTuple{variable_names}) where {variable_names}
