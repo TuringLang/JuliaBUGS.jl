@@ -1,22 +1,16 @@
 module BUGSPrimitives
 
 using Bijectors
-using Distributions
+using Distributions: cdf, quantile, Normal
 using LinearAlgebra
-using LogExpFunctions
+using LogExpFunctions: cloglog, cexpexp, logit, logistic
 using PDMats
 using Random
 using SpecialFunctions
-using Statistics
-using InverseFunctions: InverseFunctions
-
-using Statistics: mean
+using Statistics: mean, std
 
 include("functions.jl")
 include("distributions.jl")
-
-InverseFunctions.inverse(::typeof(phi)) = probit
-InverseFunctions.inverse(::typeof(probit)) = phi
 
 """
     _inv(m::AbstractMatrix)
