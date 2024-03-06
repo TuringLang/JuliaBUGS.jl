@@ -20,6 +20,12 @@ sort(x::AbstractArray)
 sin(x::Real)
 cos(x::Real)
 tan(x::Real)
+asin(x::Real)
+acos(x::Real)
+atan(x::Real)
+asinh(x::Real)
+acosh(x::Real)
+atanh(x::Real)
 JuliaBUGS.BUGSPrimitives.mean(x::AbstractArray)
 ```
 
