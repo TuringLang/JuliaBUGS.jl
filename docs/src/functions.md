@@ -4,11 +4,8 @@ Most of the [functions](https://www.multibugs.org/documentation/latest/Functions
 
 ## Function defined in Julia Standard Library
 
-!!! warning
-    `JuliaBUGS` does not allow keyword arguments syntax
-
 ```@docs
-abs
+abs(x::Real)
 exp(x::Real)
 log(x::Number)
 sqrt(x::Real)
@@ -17,6 +14,8 @@ min(x::Real, y::Real)
 max(x::Real, y::Real)
 sum(x::AbstractArray)
 sort(x::AbstractArray)
+!!! warning
+    `JuliaBUGS` does not allow keyword arguments syntax
 sin(x::Real)
 cos(x::Real)
 tan(x::Real)
