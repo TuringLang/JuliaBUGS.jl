@@ -5,7 +5,7 @@ Most of the [functions](https://www.multibugs.org/documentation/latest/Functions
 ## Function defined in Julia Standard Library
 
 !!! warning "No keyword arguments syntax in BUGS"
-    Please note that some functions listed may accept additional arguments (e.g. `trunc`) and/or keyword arguments (e.g. `sum`, `sort`). However, `JuliaBUGS` is designed to only support function arguments of type `Real` or `AbstractArray{Real}`. Furthermore, `JuliaBUGS` does not accommodate the use of keyword argument syntax; thus, the default values for any optional or keyword arguments will be automatically applied.
+    Please note that some functions listed may accept additional arguments (e.g. `trunc`) and/or keyword arguments (e.g. `sum`, `sort`, `mean`). However, at the moment `JuliaBUGS` only supports function arguments of type `Real` or `AbstractArray{Real}`. Furthermore, `JuliaBUGS` does not accommodate the use of keyword argument syntax. Thus, the default values for any optional or keyword arguments will be automatically applied.
 
 ```@docs
 abs
