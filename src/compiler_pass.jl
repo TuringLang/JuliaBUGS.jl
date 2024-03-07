@@ -249,7 +249,7 @@ is_resolved(::Any) = false
         return false
     else
         if data[var] isa AbstractArray
-            throw(ArgumentError("In BUGS, implicit indexing on the LHS is not allowed."))
+            error("In BUGS, implicit indexing on the LHS is not allowed.")
         end
     end
 end
@@ -295,71 +295,58 @@ end
     end
 end
 
-function analyze_assignment(
-    pass::CollectVariables{data_arrays,arrays}, expr::Expr, env::NamedTuple{data_vars}
-) where {data_arrays,arrays,data_vars}
-    if Meta.isexpr(expr, :(=))
-        lhs_expr = expr.args[1]
-    else # Expr(:call, :(~), ...)
-        lhs_expr = expr.args[2]
-    end
-
+function analyze_assignment(pass::CollectVariables, expr::Expr, env::NamedTuple)
+    lhs_expr = Meta.isexpr(expr, :(=)) ? expr.args[1] : expr.args[2]
     v = simplify_lhs(env, lhs_expr)
+
+    if v isa Symbol
+        handle_symbol_lhs(pass, expr, v, env)
+    else
+        handle_ref_lhs(pass, expr, v, env)
+    end
+end
+
+function handle_symbol_lhs(::CollectVariables, expr::Expr, v::Symbol, env::NamedTuple)
+    if Meta.isexpr(expr, :(=)) && is_specified_by_data(env, v)
+        error("Variable $v is specified by data, can't be assigned to.")
+    end
+end
+
+function handle_ref_lhs(pass::CollectVariables, expr::Expr, v::Tuple, env::NamedTuple)
+    var, indices... = v
     if Meta.isexpr(expr, :(=))
-        if v isa Symbol
-            if is_specified_by_data(env, v)
-                throw(
-                    ArgumentError("Variable $v is specified by data, can't be assigned to.")
-                )
-            end
-        else
-            var, indices... = v
-            if is_specified_by_data(env, var, indices...)
-                throw(
-                    ArgumentError(
-                        "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved.",
-                    ),
-                )
-            end
-            if var in data_vars
-                if !Base.checkbounds(Bool, env[var], indices...)
-                    error(
-                        "Statement $expr is trying to assign to a data variable $var with indices $indices that are out of bounds.",
-                    )
-                end
-            else
-                for i in eachindex(pass.array_sizes[var])
-                    pass.array_sizes[var][i] = max(
-                        pass.array_sizes[var][i], last(indices[i])
-                    )
-                end
-            end
+        if is_specified_by_data(env, var, indices...)
+            error(
+                "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved.",
+            )
+        end
+        update_array_sizes_for_assignment(pass, expr, var, env, indices...)
+    else
+        if is_partially_specified_as_data(env, var, indices...)
+            error(
+                "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved.",
+            )
+        end
+        update_array_sizes_for_assignment(pass, expr, var, env, indices...)
+    end
+end
+
+function update_array_sizes_for_assignment(
+    pass::CollectVariables,
+    expr::Expr,
+    var::Symbol,
+    env::NamedTuple{data_vars},
+    indices::Vararg{Union{Int,UnitRange{Int}}},
+) where {data_vars}
+    if var in data_vars
+        if !Base.checkbounds(Bool, env[var], indices...)
+            error(
+                "Statement $expr is trying to assign to a data variable $var with indices $indices that are out of bounds.",
+            )
         end
     else
-        if v isa Symbol
-            return nothing
-        else
-            var, indices... = v
-            if is_partially_specified_as_data(env, var, indices...)
-                throw(
-                    ArgumentError(
-                        "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved.",
-                    ),
-                )
-            end
-            if var in data_vars
-                if !Base.checkbounds(Bool, env[var], indices...)
-                    error(
-                        "Statement $expr is trying to assign to a data variable $var with indices $indices that are out of bounds.",
-                    )
-                end
-            else
-                for i in eachindex(pass.array_sizes[var])
-                    pass.array_sizes[var][i] = max(
-                        pass.array_sizes[var][i], last(indices[i])
-                    )
-                end
-            end
+        for i in eachindex(pass.array_sizes[var])
+            pass.array_sizes[var][i] = max(pass.array_sizes[var][i], last(indices[i]))
         end
     end
 end
