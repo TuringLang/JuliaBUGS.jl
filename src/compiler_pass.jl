@@ -385,20 +385,6 @@ function DataTransformation(scalar::Set, variable_array_sizes::Dict)
     return DataTransformation(false, transformed_variables)
 end
 
-# won't try to evaluate the RHS if the function is not recognized
-function should_skip_eval(expr)
-    contain_external_function = false
-    MacroTools.postwalk(expr) do sub_expr
-        if MacroTools.@capture(sub_expr, f_(args__))
-            if f ∉ [:+, :-, :*, :/, :^] && !(f in BUGSPrimitives.BUGS_FUNCTIONS)
-                contain_external_function = true
-            end
-        end
-        return sub_expr
-    end
-    return contain_external_function
-end
-
 function has_value(transformed_variables, v::Var)
     if v isa Scalar
         return !ismissing(transformed_variables[v.name])
@@ -410,7 +396,7 @@ function has_value(transformed_variables, v::Var)
 end
 
 function analyze_assignment(pass::DataTransformation, expr::Expr, env::NamedTuple)
-    if Meta.isexpr(expr, :(=)) && !should_skip_eval(expr.args[2])
+    if Meta.isexpr(expr, :(=))
         lhs = find_variables_on_lhs(expr.args[1], env)
 
         if has_value(pass.transformed_variables, lhs)
