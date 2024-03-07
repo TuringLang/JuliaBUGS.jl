@@ -1,22 +1,16 @@
 module BUGSPrimitives
 
 using Bijectors
-using Distributions
+using Distributions: cdf, quantile, Normal
 using LinearAlgebra
-using LogExpFunctions
+using LogExpFunctions: cloglog, cexpexp, logit, logistic
 using PDMats
 using Random
 using SpecialFunctions
-using Statistics
-using InverseFunctions: InverseFunctions
-
-using Statistics: mean
+using Statistics: mean, std
 
 include("functions.jl")
 include("distributions.jl")
-
-InverseFunctions.inverse(::typeof(phi)) = probit
-InverseFunctions.inverse(::typeof(probit)) = phi
 
 """
     _inv(m::AbstractMatrix)
@@ -31,8 +25,21 @@ end
 
 const BUGS_FUNCTIONS = (
     :abs,
-    :cloglog,
+    :acos,
+    :acosh,
+    :arccos,
+    :arccosh,
+    :asin,
+    :asinh,
+    :arcsin,
+    :arcsinh,
+    :atan,
+    :atanh,
+    :arctan,
+    :arctanh,
     :cexpexp,
+    :cloglog,
+    :cos,
     :equals,
     :exp,
     :icloglog,
@@ -45,32 +52,25 @@ const BUGS_FUNCTIONS = (
     :loggam,
     :logit,
     :logistic,
-    :mexp,
     :max,
     :mean,
     :min,
+    :mexp,
     :phi,
-    :probit,
     :pow,
-    :sqrt,
+    :probit,
     :rank,
     :ranked,
     :round,
     :sd,
+    :sin,
     :softplus,
     :sort,
-    :_step,
+    :sqrt,
     :sum,
-    :trunc,
-    :sin,
-    :cos,
+    :_step,
     :tan,
-    :arcsin,
-    :arcsinh,
-    :arccos,
-    :arccosh,
-    :arctan,
-    :arctanh,
+    :trunc,
 )
 
 const BUGS_DISTRIBUTIONS = [

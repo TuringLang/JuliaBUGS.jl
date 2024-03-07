@@ -1,37 +1,4 @@
 """
-    abs(x)
-
-Absolute value of `x`.
-"""
-abs
-
-"""
-    cloglog(x)
-
-Complementary log-log function of `x`. Can be used as link function.
-
-```math
-\\log{(-\\log{(1 - x)})}
-```
-"""
-function cloglog(x)
-    return LogExpFunctions.cloglog(x)
-end
-
-"""
-    cexpexp(x)
-
-Complementary exponential of the complementary exponential of `x`.
-
-```math
-1 - \\exp{(-\\exp{(x)})}
-```
-"""
-function cexpexp(x)
-    return LogExpFunctions.cexpexp(x)
-end
-
-"""
     equals(x, y)
 
 Returns 1 if ``x`` is equal to ``y``, 0 otherwise.
@@ -39,13 +6,6 @@ Returns 1 if ``x`` is equal to ``y``, 0 otherwise.
 function equals(x, y)
     return x == y ? 1 : 0
 end
-
-"""
-    exp(x)
-
-Exponential of ``x``.
-"""
-exp
 
 """
     icloglog(x)
@@ -84,18 +44,11 @@ function inverse(m::AbstractMatrix)
 end
 
 """
-    log(x)
-
-Natural logarithm of ``x``.
-"""
-log
-
-"""
     logdet(::AbstractMatrix)
 
 Logarithm of the determinant of matrix ``\\mathbf{v}``.
 """
-function logdet(v::AbstractMatrix)
+function logdet(v)
     return LinearAlgebra.logdet(v)
 end
 
@@ -118,32 +71,6 @@ function loggam(x)
 end
 
 """
-    logit(x)
-
-Logit function of ``x``. 
-    
-```math
-\\log{(\\frac{x}{1 - x})}
-```
-"""
-function logit(x)
-    return LogExpFunctions.logit(x)
-end
-
-"""
-    logistic(x)
-
-Logistic function of ``x``.
-    
-```math
-\\frac{1}{1 + \\exp{(-x)}}
-```
-"""
-function logistic(x)
-    return LogExpFunctions.logistic(x)
-end
-
-"""
     mexp(x::AbstractMatrix)
 
 Matrix exponential of ``\\mathbf{x}``.
@@ -153,33 +80,12 @@ function mexp(x::AbstractMatrix)
 end
 
 """
-    max(args...)
-
-Return the maximum value of the input arguments.
-"""
-max
-
-"""
-    mean(v::AbstractVector)
-
-Return the mean of the input vector ``\\mathbf{v}``.
-"""
-mean
-
-"""
-    min(args...)
-
-Return the minimum value of the input arguments.
-"""
-min
-
-"""
     phi(x)
 
 Cumulative distribution function (CDF) of the standard normal distribution evaluated at ``x``.
 """
 function phi(x)
-    return Distributions.cdf(Distributions.Normal(0, 1), x)
+    return cdf(Normal(), x)
 end
 
 """
@@ -188,7 +94,7 @@ end
 Inverse of [`phi`](@ref).
 """
 function probit(e)
-    return quantile(Normal(0, 1), e)
+    return quantile(Normal(), e)
 end
 
 """
@@ -199,13 +105,6 @@ Return ``a`` raised to the power of ``b``.
 function pow(a, b)
     return a^b
 end
-
-"""
-    sqrt(x)
-
-Return the square root of ``x``.
-"""
-sqrt
 
 """
     rank(v::AbstractVector, i::Integer)
@@ -226,19 +125,12 @@ function ranked(v::AbstractVector, i::Integer)
 end
 
 """
-    round(x)
-
-Round ``x`` to the nearest Integereger.
-"""
-round
-
-"""
     sd(v::AbstractVector)
 
 Return the standard deviation of the input vector ``\\mathbf{v}``.
 """
 function sd(v::AbstractVector)
-    return Statistics.std(v)
+    return std(v)
 end
 
 """
@@ -251,13 +143,6 @@ function softplus(x)
 end
 
 """
-    sort(v::AbstractVector)
-
-Return a sorted copy of the input vector `v`.
-"""
-sort
-
-"""
     _step(x)
 
 Return 1 if ``x`` is greater than 0, and 0 otherwise.
@@ -267,55 +152,27 @@ function _step(x)
 end
 
 """
-    sum(args...)
-
-Return the sum of the input arguments.
-"""
-sum
-
-"""
-    trunc(x)
-
-Return the Integereger part of ``x``.
-"""
-trunc
-
-"""
-    sin(x)
-
-Return the sine of ``x``.
-"""
-sin
-
-"""
     arcsin(x)
 
-Return the arcsine of ``x``.
+See [`asin`](@ref Base.Math.asin).
 """
 function arcsin(x)
-    return Base.Math.asin(x)
+    return asin(x)
 end
 
 """
     arcsinh(x)
 
-Return the inverse hyperbolic sine of ``x``.
+See [`asinh`](@ref Base.Math.asinh).
 """
 function arcsinh(x)
-    return Base.Math.asinh(x)
+    return asinh(x)
 end
-
-"""
-    cos(x)
-
-Return the cosine of ``x``.
-"""
-cos
 
 """
     arccos(x)
 
-Return the arccosine of ``x``.
+See [`acos`](@ref Base.Math.acos).
 """
 function arccos(x)
     return Base.Math.acos(x)
@@ -324,33 +181,26 @@ end
 """
     arccosh(x)
 
-Return the inverse hyperbolic cosine of ``x``.
+See [`acosh`](@ref Base.Math.acosh).
 """
 function arccosh(x)
-    return Base.Math.acosh(x)
+    return acosh(x)
 end
-
-"""
-    tan(x)
-
-Return the tangent of ``x``.
-"""
-tan
 
 """
     arctan(x)
 
-Return the arctangent of ``x``.
+See [`atan`](@ref Base.Math.atan).
 """
 function arctan(x)
-    return Base.Math.atan(x)
+    return atan(x)
 end
 
 """
     arctanh(x)
 
-Return the inverse hyperbolic tangent of ``x``.
+See [`atanh`](@ref Base.Math.atanh).
 """
 function arctanh(x)
-    return Base.Math.atanh(x)
+    return atanh(x)
 end
