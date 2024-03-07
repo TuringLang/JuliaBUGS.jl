@@ -243,13 +243,15 @@ is_resolved(::Union{Symbol,Expr}) = false
 is_resolved(::Any) = false
 
 @inline function is_specified_by_data(
-    ::NamedTuple{data_keys}, var::Symbol
+    data::NamedTuple{data_keys}, var::Symbol
 ) where {data_keys}
     if var ∉ data_keys
         return false
     else
         if data[var] isa AbstractArray
-            throw(ArgumentError("In BUGS, implicit indexing on the LHS is not allowed."))
+            error("In BUGS, implicit indexing on the LHS is not allowed.")
+        else
+            return true
         end
     end
 end
@@ -273,7 +275,7 @@ end
         else
             if values isa Missing
                 return false
-            elseif values <: Union{Int,Float64}
+            elseif values isa Union{Int,Float64}
                 return true
             else
                 error("Unexpected type: $(typeof(values))")
@@ -295,71 +297,52 @@ end
     end
 end
 
-function analyze_assignment(
-    pass::CollectVariables{data_arrays,arrays}, expr::Expr, env::NamedTuple{data_vars}
-) where {data_arrays,arrays,data_vars}
-    if Meta.isexpr(expr, :(=))
-        lhs_expr = expr.args[1]
-    else # Expr(:call, :(~), ...)
-        lhs_expr = expr.args[2]
-    end
-
+function analyze_assignment(pass::CollectVariables, expr::Expr, env::NamedTuple)
+    lhs_expr = Meta.isexpr(expr, :(=)) ? expr.args[1] : expr.args[2]
     v = simplify_lhs(env, lhs_expr)
-    if Meta.isexpr(expr, :(=))
-        if v isa Symbol
-            if is_specified_by_data(env, v)
-                throw(
-                    ArgumentError("Variable $v is specified by data, can't be assigned to.")
-                )
-            end
-        else
-            var, indices... = v
-            if is_specified_by_data(env, var, indices...)
-                throw(
-                    ArgumentError(
-                        "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved.",
-                    ),
-                )
-            end
-            if var in data_vars
-                if !Base.checkbounds(Bool, env[var], indices...)
-                    error(
-                        "Statement $expr is trying to assign to a data variable $var with indices $indices that are out of bounds.",
-                    )
-                end
-            else
-                for i in eachindex(pass.array_sizes[var])
-                    pass.array_sizes[var][i] = max(
-                        pass.array_sizes[var][i], last(indices[i])
-                    )
-                end
-            end
-        end
+
+    if v isa Symbol
+        handle_symbol_lhs(pass, expr, v, env)
     else
-        if v isa Symbol
-            return nothing
-        else
-            var, indices... = v
-            if is_partially_specified_as_data(env, var, indices...)
-                throw(
-                    ArgumentError(
-                        "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved.",
-                    ),
-                )
-            end
-            if var in data_vars
-                if !Base.checkbounds(Bool, env[var], indices...)
-                    error(
-                        "Statement $expr is trying to assign to a data variable $var with indices $indices that are out of bounds.",
-                    )
-                end
-            else
-                for i in eachindex(pass.array_sizes[var])
-                    pass.array_sizes[var][i] = max(
-                        pass.array_sizes[var][i], last(indices[i])
-                    )
-                end
-            end
+        handle_ref_lhs(pass, expr, v, env)
+    end
+end
+
+function handle_symbol_lhs(::CollectVariables, expr::Expr, v::Symbol, env::NamedTuple)
+    if Meta.isexpr(expr, :(=)) && is_specified_by_data(env, v)
+        error("Variable $v is specified by data, can't be assigned to.")
+    end
+end
+
+function handle_ref_lhs(pass::CollectVariables, expr::Expr, v::Tuple, env::NamedTuple)
+    var, indices... = v
+    if Meta.isexpr(expr, :(=))
+        if is_specified_by_data(env, var, indices...)
+            error(
+                "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved.",
+            )
+        end
+        update_array_sizes_for_assignment(pass, var, env, indices...)
+    else
+        if is_partially_specified_as_data(env, var, indices...)
+            error(
+                "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved.",
+            )
+        end
+        update_array_sizes_for_assignment(pass, var, env, indices...)
+    end
+end
+
+function update_array_sizes_for_assignment(
+    pass::CollectVariables,
+    var::Symbol,
+    ::NamedTuple{data_vars},
+    indices::Vararg{Union{Int,UnitRange{Int}}},
+) where {data_vars}
+    # `is_specified_by_data` checks if the index is inbound
+    if var ∉ data_vars
+        for i in eachindex(pass.array_sizes[var])
+            pass.array_sizes[var][i] = max(pass.array_sizes[var][i], last(indices[i]))
         end
     end
 end

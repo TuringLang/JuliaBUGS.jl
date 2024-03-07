@@ -116,6 +116,8 @@ else
         include("utils.jl")
     end
 
+    include("passes.jl")
+
     @testset "Log Probability Test" begin
         include("run_logp_tests.jl")
         @testset "Single stochastic variable test" begin
