@@ -1,6 +1,6 @@
 using JuliaBUGS: analyze_program, CollectVariables, DataTransformation
 using JuliaBUGS: is_resolved
-using JuliaBUGS: is_specified_by_data
+using JuliaBUGS: is_specified_by_data, is_partially_specified_as_data
 
 @testset "CollectVariables Error Cases" begin
     # assign to data
@@ -40,15 +40,27 @@ using JuliaBUGS: is_specified_by_data
 end
 
 @testset "is_specified_by_data" begin
-    data = (a=[1, 2, 3], b=2, c=[1, 2, missing], d=[missing, missing])
-    @test is_specified_by_data(data, :b)
+    data = (a=2, b=[1,2,3], c=[1, 2, missing], d=[missing, missing, missing])
+
+    # a is data
+    @test is_specified_by_data(data, :a)
+    # c is Array, but no indices
     @test_throws ErrorException is_specified_by_data(data, :c)
+    # index doesn't contain UnitRange
+    @test is_specified_by_data(data, :b, 1)
     @test !is_specified_by_data(data, :d, 1)
+    @test is_specified_by_data(data, :c, 1)
     @test !is_specified_by_data(data, :c, 3)
-    @test !is_specified_by_data(data, :a, 1)
+    # index contains UnitRange
+    @test is_specified_by_data(data, :b, 1:2)
+    @test is_specified_by_data(data, :c, 1:2)
     @test is_specified_by_data(data, :c, 2:3)
     @test !is_specified_by_data(data, :d, 1:2)
-    @test is_specified_by_data(data, :a, 1:2)
+    
+    @test !is_partially_specified_as_data(data, :c, 1:2)
+    @test is_partially_specified_as_data(data, :c, 2:3)
+    @test !is_partially_specified_as_data(data, :b, 1:2)
+    @test !is_partially_specified_as_data(data, :d, 1:2)
 end
 
 @testset "Constant propagation" begin

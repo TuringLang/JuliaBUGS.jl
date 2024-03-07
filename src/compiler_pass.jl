@@ -329,15 +329,14 @@ function handle_ref_lhs(pass::CollectVariables, expr::Expr, v::Tuple, env::Named
                 "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved.",
             )
         end
-        update_array_sizes_for_assignment(pass, expr, var, env, indices...)
+        update_array_sizes_for_assignment(pass, var, env, indices...)
     end
 end
 
 function update_array_sizes_for_assignment(
     pass::CollectVariables,
-    expr::Expr,
     var::Symbol,
-    env::NamedTuple{data_vars},
+    ::NamedTuple{data_vars},
     indices::Vararg{Union{Int,UnitRange{Int}}},
 ) where {data_vars}
     # `is_specified_by_data` checks if the index is inbound
