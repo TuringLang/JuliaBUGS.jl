@@ -40,7 +40,7 @@ using JuliaBUGS: is_specified_by_data, is_partially_specified_as_data
 end
 
 @testset "is_specified_by_data" begin
-    data = (a=2, b=[1,2,3], c=[1, 2, missing], d=[missing, missing, missing])
+    data = (a=2, b=[1, 2, 3], c=[1, 2, missing], d=[missing, missing, missing])
 
     # a is data
     @test is_specified_by_data(data, :a)
@@ -56,7 +56,7 @@ end
     @test is_specified_by_data(data, :c, 1:2)
     @test is_specified_by_data(data, :c, 2:3)
     @test !is_specified_by_data(data, :d, 1:2)
-    
+
     @test !is_partially_specified_as_data(data, :c, 1:2)
     @test is_partially_specified_as_data(data, :c, 2:3)
     @test !is_partially_specified_as_data(data, :b, 1:2)
