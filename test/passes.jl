@@ -1,3 +1,48 @@
+using JuliaBUGS: analyze_program, CollectVariables
+using JuliaBUGS: is_resolved
+using JuliaBUGS: is_specified_by_data
+
+@testset "CollectVariables Error Cases" begin
+    # assign to data
+    model_def = @bugs begin
+        b = a
+    end
+    data = (b = [1, 2],)
+    @test_throws ErrorException analyze_program(CollectVariables(model_def, data), model_def, data)
+
+    model_def = @bugs begin
+        x[1:3] = y[1:3]
+    end
+    data = (x = [1, missing, missing], y = [1, 2, 3])
+    @test_throws ErrorException analyze_program(CollectVariables(model_def, data), model_def, data)
+
+    # partially specified as data
+    model_def = @bugs begin
+        x[1:3] ~ dmnorm(y[1:3], E[:,:])
+    end
+    data = (x = [1, missing, missing], y = [1, 2, 3], E = [1 0 0; 0 1 0; 0 0 1])
+    @test_throws ErrorException analyze_program(CollectVariables(model_def, data), model_def, data)
+
+    # check access data array out-of-bound
+    model_def = @bugs begin
+        x[4] = 2
+    end
+    data = (x = [1, 2, 3],)
+    @test_throws BoundsError analyze_program(CollectVariables(model_def, data), model_def, data)
+end
+
+@testset "is_specified_by_data" begin
+    data = (a = [1, 2, 3], b = 2, c = [1, 2, missing], d = [missing, missing])
+    @test is_specified_by_data(data, :b)
+    @test_throws ErrorException is_specified_by_data(data, :c)
+    @test !is_specified_by_data(data, :d, 1)
+    @test !is_specified_by_data(data, :c, 3)
+    @test !is_specified_by_data(data, :a, 1)
+    @test is_specified_by_data(data, :c, 2:3)
+    @test !is_specified_by_data(data, :d, 1:2)
+    @test is_specified_by_data(data, :a, 1:2)
+end
+
 @testset "Constant propagation" begin
     model_def = @bugs begin
         a = b + 1

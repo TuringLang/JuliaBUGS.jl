@@ -243,13 +243,15 @@ is_resolved(::Union{Symbol,Expr}) = false
 is_resolved(::Any) = false
 
 @inline function is_specified_by_data(
-    ::NamedTuple{data_keys}, var::Symbol
+    data::NamedTuple{data_keys}, var::Symbol
 ) where {data_keys}
     if var ∉ data_keys
         return false
     else
         if data[var] isa AbstractArray
             error("In BUGS, implicit indexing on the LHS is not allowed.")
+        else
+            return true
         end
     end
 end
@@ -273,7 +275,7 @@ end
         else
             if values isa Missing
                 return false
-            elseif values <: Union{Int,Float64}
+            elseif values isa Union{Int,Float64}
                 return true
             else
                 error("Unexpected type: $(typeof(values))")
@@ -338,16 +340,9 @@ function update_array_sizes_for_assignment(
     env::NamedTuple{data_vars},
     indices::Vararg{Union{Int,UnitRange{Int}}},
 ) where {data_vars}
-    if var in data_vars
-        if !Base.checkbounds(Bool, env[var], indices...)
-            error(
-                "Statement $expr is trying to assign to a data variable $var with indices $indices that are out of bounds.",
-            )
-        end
-    else
-        for i in eachindex(pass.array_sizes[var])
-            pass.array_sizes[var][i] = max(pass.array_sizes[var][i], last(indices[i]))
-        end
+    # `is_specified_by_data` checks if the index is in bound 
+    for i in eachindex(pass.array_sizes[var])
+        pass.array_sizes[var][i] = max(pass.array_sizes[var][i], last(indices[i]))
     end
 end
 
