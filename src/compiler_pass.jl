@@ -322,7 +322,7 @@ function handle_ref_lhs(pass::CollectVariables, expr::Expr, v::Tuple, env::Named
                 "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved.",
             )
         end
-        update_array_sizes_for_assignment(pass, expr, var, env, indices...)
+        update_array_sizes_for_assignment(pass, var, env, indices...)
     else
         if is_partially_specified_as_data(env, var, indices...)
             error(
