@@ -340,9 +340,11 @@ function update_array_sizes_for_assignment(
     env::NamedTuple{data_vars},
     indices::Vararg{Union{Int,UnitRange{Int}}},
 ) where {data_vars}
-    # `is_specified_by_data` checks if the index is in bound 
-    for i in eachindex(pass.array_sizes[var])
-        pass.array_sizes[var][i] = max(pass.array_sizes[var][i], last(indices[i]))
+    # `is_specified_by_data` checks if the index is inbound
+    if var ∉ data_vars
+        for i in eachindex(pass.array_sizes[var])
+            pass.array_sizes[var][i] = max(pass.array_sizes[var][i], last(indices[i]))
+        end
     end
 end
 
