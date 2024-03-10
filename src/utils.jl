@@ -335,16 +335,16 @@ function simple_arithmetic_eval(data::NamedTuple, expr::Expr)
 end
 
 """
-    _eval(expr, env)
+    _eval(expr, env, dist_store)
 
 `_eval` mimics `Base.eval`, but uses precompiled functions. This is possible because the expressions we want to 
 evaluate only have two kinds of expressions: function calls and indexing.
 `env` is a data structure mapping symbols in `expr` to values, values can be arrays or scalars.
 """
-function _eval(expr::Number, env)
+function _eval(expr::Number, env, dist_store)
     return expr
 end
-function _eval(expr::Symbol, env)
+function _eval(expr::Symbol, env, dist_store)
     if expr == :nothing
         return nothing
     elseif expr == :(:)
@@ -353,28 +353,54 @@ function _eval(expr::Symbol, env)
         return env[expr]
     end
 end
-function _eval(expr::AbstractRange, env)
+function _eval(expr::AbstractRange, env, dist_store)
     return expr
 end
-function _eval(expr::Expr, env)
-    if Meta.isexpr(expr, :call)
+function _eval(expr::Expr, env, dist_store)
+    if Meta.isexpr(expr, :call) 
         f = expr.args[1]
-        args = [_eval(arg, env) for arg in expr.args[2:end]]
-        if f isa Expr # `JuliaBUGS.some_function` like
-            f = f.args[2].value
+        if f === :cumulative || f === :density
+            if length(expr.args) != 3
+                error("density function should have 3 arguments, but get $(length(expr.args)).")
+            end
+            rv1, rv2 = expr.args[2:3]
+            dist = if Meta.isexpr(rv1, :ref)
+                var, indices... = rv1.args
+                for i in eachindex(indices)
+                    indices[i] = _eval(indices[i], env, dist_store)
+                end
+                vn = AbstractPPL.VarName{var}(AbstractPPL.Setfield.IndexLens(Tuple(indices)))
+                AbstractPPL.Setfield.get(dist_store, vn)
+            elseif rv1 isa Symbol
+                vn = AbstractPPL.VarName{rv1}()
+                AbstractPPL.Setfield.get(dist_store, vn)
+            else
+                error("the first argument of density function should be a variable, but got $(rv1).")
+            end
+            rv2 = _eval(rv2, env, dist_store)
+            if f === :cumulative
+                return cdf(dist, rv2)
+            else
+                return pdf(dist, rv2)
+            end
+        else
+            args = [_eval(arg, env, dist_store) for arg in expr.args[2:end]]
+            if f isa Expr # `JuliaBUGS.some_function` like
+                f = f.args[2].value
+            end
+            return getfield(JuliaBUGS, f)(args...) # assume all functions used are available under `JuliaBUGS`
         end
-        return getfield(JuliaBUGS, f)(args...) # assume all functions used are available under `JuliaBUGS`
     elseif Meta.isexpr(expr, :ref)
-        array = _eval(expr.args[1], env)
-        indices = [_eval(arg, env) for arg in expr.args[2:end]]
+        array = _eval(expr.args[1], env, dist_store)
+        indices = [_eval(arg, env, dist_store) for arg in expr.args[2:end]]
         return array[indices...]
     elseif Meta.isexpr(expr, :block)
-        return _eval(expr.args[end], env)
+        return _eval(expr.args[end], env, dist_store)
     else
         error("Unknown expression type: $expr")
     end
 end
-function _eval(expr, env)
+function _eval(expr, env, dist_store)
     return error("Unknown expression type: $expr of type $(typeof(expr))")
 end
 
