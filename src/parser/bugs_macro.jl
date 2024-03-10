@@ -1,71 +1,59 @@
-# handle `cumulative`, `density` and `deviance` functions
-# these are incorrect implementations, as it can only handle the case where the first argument is exactly the same as the LHS of the stochastic assignment
-# but can't handle cases like `cumulative(y[1], x)` where `y[i]` is defined in loops
-# other than that, `density` and `deviance` also require that the variable in place of first argument is observed
-# TODO: fix this
-function cumulative(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, lhs_ = cumulative(s1_, s2_))
-            dist = find_tilde_rhs(expr, s1)
-            sub_expr.args[2].args[1] = :cdf
-            sub_expr.args[2].args[2] = dist
-            return sub_expr
-        else
-            return sub_expr
-        end
-    end
-end
+"""
+    @bugs(program::Expr)
+    @bugs(program::String; replace_period::Bool=true, no_enclosure::Bool=false)
 
-function density(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, lhs_ = density(s1_, s2_))
-            dist = find_tilde_rhs(expr, s1)
-            sub_expr.args[2].args[1] = :pdf
-            sub_expr.args[2].args[2] = dist
-            return sub_expr
-        else
-            return sub_expr
-        end
-    end
-end
+Constructs a Julia Abstract Syntax Tree (AST) representation of a BUGS program. This macro supports two forms of input: a Julia expression or a string containing the BUGS program code. 
 
-function deviance(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, lhs_ = deviance(s1_, s2_))
-            dist = find_tilde_rhs(expr, s1)
-            sub_expr.args[2].args[1] = :logpdf
-            sub_expr.args[2].args[2] = dist
-            sub_expr.args[2] = Expr(:call, :*, -2, sub_expr.args[2])
-            return sub_expr
-        else
-            return sub_expr
-        end
-    end
-end
+- When provided with a string, the macro parses it as a BUGS program, with optional arguments to control parsing behavior.
+- When given an expression, it performs syntactic checks to ensure compatibility with BUGS syntax.
 
-function find_tilde_rhs(expr::Expr, target::Union{Expr,Symbol})
-    dist = nothing
-    MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, lhs_ ~ rhs_)
-            if lhs == target
-                isnothing(dist) || error("Exist two assignments to the same variable.")
-                dist = rhs
+## Arguments for String Input
+For the string input variant, the following optional arguments are available:
+- `replace_period::Bool`: When set to `true`, all periods (`.`) in the BUGS code are replaced. This is enabled by default.
+- `no_enclosure::Bool`: When `true`, the parser does not require the BUGS program to be enclosed within `model{ ... }` brackets. By default, this is set to `false`.
+
+"""
+macro bugs(prog::String, replace_period::Bool=true, no_enclosure::Bool=false)
+    julia_program = to_julia_program(prog, replace_period, no_enclosure)
+    expr = Base.Expr(JuliaSyntax.parsestmt(SyntaxNode, julia_program))
+    expr = MacroTools.postwalk(MacroTools.rmlines, expr)
+    error_container = []
+    expr = MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, f_(lhs_) = rhs_) # only transform logical assignments
+            inv_f = if f == :log
+                :exp
+            elseif f == :logit
+                :logistic
+            elseif f == :cloglog
+                :cexpexp
+            elseif f == :probit
+                :phi
+            else
+                error_msg = (
+                    "$(String(f)) is not a recognized link function, at statement $(sub_expr)"
+                )
+                push!(error_container, :(error($error_msg)))
+                return sub_expr
             end
+            # The 'rhs' will be parsed into a :block Expr, as the link function syntax is interpreted as a function definition.
+            return :($lhs = $inv_f($(rhs.args...)))
+        elseif @capture(sub_expr, f_(lhs_) ~ rhs_)
+            error_msg = ("Link functions on the LHS of a `~` is not supported at: $(sub_expr)")
+            push!(error_container, :(error($error_msg)))
+        elseif @capture(sub_expr, step(args__))
+            return :(_step($(args...)))
+        else
+            return sub_expr
         end
-        return sub_expr
     end
-    isnothing(dist) && error(
-        "Error handling cumulative expression: can't find a stochastic assignment for $target.",
-    )
-    return dist
+    if !isempty(error_container) # otherwise errors thrown in macro will be LoadError
+        return :(throw(ErrorException(join($error_container, "\n"))))
+    end
+    return Meta.quot(handle_special_functions(expr))
 end
 
-function handle_special_functions(expr::Expr)
-    return cumulative(density(deviance(expr)))
-end
-
-macro bugs(expr)
-    return Meta.quot(handle_special_functions(bugs_top(expr, __source__)))
+macro bugs(expr::Expr)
+    return Meta.quot(bugs_top(expr, __source__))
 end
 
 function bugs_top(@nospecialize(expr), __source__)
@@ -199,55 +187,4 @@ function bugs_expression(expr, line_num)
     else
         error("Invalid expression at $line_num: `$expr`")
     end
-end
-
-"""
-    @bugs(prog::String, replace_period=true, no_enclosure=false)
-
-Produce similar output as [`@bugs`](@ref), but takes a string as input.  This is useful for 
-parsing original BUGS programs.
-
-# Arguments
-- `prog::String`: The BUGS program code as a string.
-- `replace_period::Bool`: If true, periods in the BUGS code will be replaced (default `true`).
-- `no_enclosure::Bool`: If true, the parser will not expect the program to be wrapped between `model{ }` (default `false`).
-
-"""
-macro bugs(prog::String, replace_period=true, no_enclosure=false)
-    julia_program = to_julia_program(prog, replace_period, no_enclosure)
-    expr = Base.Expr(JuliaSyntax.parsestmt(SyntaxNode, julia_program))
-    expr = MacroTools.postwalk(MacroTools.rmlines, expr)
-    error_container = []
-    expr = MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, f_(lhs_) = rhs_) # only transform logical assignments
-            inv_f = if f == :log
-                :exp
-            elseif f == :logit
-                :logistic
-            elseif f == :cloglog
-                :cexpexp
-            elseif f == :probit
-                :phi
-            else
-                error_msg = (
-                    "$(String(f)) is not a recognized link function, at statement $(sub_expr)"
-                )
-                push!(error_container, :(error($error_msg)))
-                return sub_expr
-            end
-            # The 'rhs' will be parsed into a :block Expr, as the link function syntax is interpreted as a function definition.
-            return :($lhs = $inv_f($(rhs.args...)))
-        elseif @capture(sub_expr, f_(lhs_) ~ rhs_)
-            error_msg = ("Link functions on the LHS of a `~` is not supported at: $(sub_expr)")
-            push!(error_container, :(error($error_msg)))
-        elseif @capture(sub_expr, step(args__))
-            return :(_step($(args...)))
-        else
-            return sub_expr
-        end
-    end
-    if !isempty(error_container) # otherwise errors thrown in macro will be LoadError
-        return :(throw(ErrorException(join($error_container, "\n"))))
-    end
-    return Meta.quot(handle_special_functions(expr))
 end
