@@ -631,7 +631,37 @@ function evaluate_and_track_dependencies(var::Expr, env)
         push!(args, (var.args[1], ()))
         push!(deps, (var.args[1], ()))
         return Expr(var.head, var.args[1], idxs...), deps, args
-    else # function call
+    elseif Meta.isexpr(var, :call) && var.args[1] === :cumulative ||
+        var.args[1] === :density
+        arg1, arg2 = var.args[2:3]
+        arg1 = if arg1 isa Symbol
+            push!(deps, arg1)
+            push!(args, arg1)
+            arg1
+        elseif Meta.isexpr(arg1, :ref)
+            v, indices... = arg1.args
+            for i in eachindex(indices)
+                e, d, a = evaluate_and_track_dependencies(indices[i], env)
+                union!(deps, d)
+                union!(args, a)
+                indices[i] = e
+            end
+            if any(!is_resolved, indices)
+                error(
+                    "For now, the indices of the first argument to `cumulative` and `density` must be resolved, got $indices",
+                )
+            end
+            push!(deps, (v, Tuple(indices)))
+            # no need to add to arg, as the value doesn't matter
+            Expr(:ref, v, indices...)
+        else
+            error("First argument to `cumulative` and `density` must be variable, got $(arg1)")
+        end
+        e, d, a = evaluate_and_track_dependencies(arg2, env)
+        union!(deps, d)
+        union!(args, a)
+        return Expr(:call, var.args[1], arg1, e), deps, args
+    else
         fun_args = []
         for i in 2:length(var.args)
             e, d, a = evaluate_and_track_dependencies(var.args[i], env)
@@ -706,6 +736,32 @@ function _replace_constants_in_expr(x::Expr, env)
             val = env[x.args[1]][try_cast_to_int.(x.args[2:end])...]
             return ismissing(val) ? x : val
         end
+    elseif Meta.isexpr(x, :call) && x.args[1] === :cumulative || x.args[1] === :density
+        if length(x.args) != 3
+            error(
+                "`cumulative` and `density` takes two arguments, got $(length(x.args) - 1)"
+            )
+        end
+        if x.args[2] isa Symbol
+            return Expr(
+                :call, x.args[1], x.args[2], _replace_constants_in_expr(x.args[3], env)
+            )
+        elseif Meta.isexpr(x.args[2], :ref)
+            v, indices... = x.args[2].args
+            for i in eachindex(indices)
+                indices[i] = _replace_constants_in_expr(indices[i], env)
+            end
+            return Expr(
+                :call,
+                x.args[1],
+                Expr(:ref, v, indices...),
+                _replace_constants_in_expr(x.args[3], env),
+            )
+        else
+            error(
+                "First argument to `cumulative` and `density` must be variable, got $(x.args[2])",
+            )
+        end
     else # don't try to eval the function, but try to simplify
         x = deepcopy(x) # because we are mutating the args
         for i in 2:length(x.args)
@@ -721,36 +777,6 @@ function _replace_constants_in_expr(x::Expr, env)
         end
     end
     return x
-end
-
-"""
-    concretize_colon_indexing(expr, array_sizes, data)
-
-Replace all `Colon()`s in `expr` with the corresponding array size, using either the `array_sizes` or the `data` dictionaries.
-
-# Examples
-```jldoctest
-julia> concretize_colon_indexing(:(f(x[1, :])), Dict(:x => (3, 4)), Dict(:x => [1 2 3 4; 5 6 7 8; 9 10 11 12]))
-:(f(x[1, 1:4]))
-```
-"""
-function concretize_colon_indexing(expr, array_sizes, data)
-    return MacroTools.postwalk(expr) do sub_expr
-        if MacroTools.@capture(sub_expr, x_[idx__])
-            for i in 1:length(idx)
-                if idx[i] == :(:)
-                    if haskey(array_sizes, x)
-                        idx[i] = Expr(:call, :(:), 1, array_sizes[x][i])
-                    else
-                        @assert haskey(data, x)
-                        idx[i] = Expr(:call, :(:), 1, size(data[x])[i])
-                    end
-                end
-            end
-            return Expr(:ref, x, idx...)
-        end
-        return sub_expr
-    end
 end
 
 """
@@ -787,7 +813,7 @@ try_cast_to_int(x::Real) = Int(x) # will error if !isinteger(x)
 try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
 function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
-    @capture(expr, lhs_expr_ ~ rhs_expr_) || @capture(expr, lhs_expr_ = rhs_expr_)
+    lhs_expr, rhs_expr = Meta.isexpr(expr, :(=)) ? expr.args : expr.args[2:end]
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
     lhs_var = find_variables_on_lhs(
@@ -798,7 +824,6 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
         return nothing
 
     pass.vars[lhs_var] = var_type
-    rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes, env)
     rhs = evaluate(rhs_expr, env)
 
     if rhs isa Symbol
@@ -847,21 +872,35 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
             # issue is that we need to do this in steps, const propagation need to a separate pass
             # otherwise the variable in previous expressions will not be evaluated to the concrete value
         else
-            dependencies, node_args = map(
-                x -> map(x) do x_elem
-                    if x_elem isa Symbol
-                        return Var(x_elem)
-                    elseif x_elem isa Tuple && last(x_elem) == ()
-                        return create_array_var(first(x_elem), pass.array_sizes, env)
-                    else
-                        return Var(first(x_elem), last(x_elem))
-                    end
-                end,
-                map(collect, (dependencies, node_args)),
-            )
+            dependencies = collect(dependencies)
+            for i in eachindex(dependencies)
+                if dependencies[i] isa Symbol
+                    dependencies[i] = Var(dependencies[i])
+                elseif dependencies[i] isa Tuple && last(dependencies[i]) == ()
+                    dependencies[i] = create_array_var(
+                        first(dependencies[i]), pass.array_sizes, env
+                    )
+                else
+                    dependencies[i] = Var(first(dependencies[i]), last(dependencies[i]))
+                end
+            end
+
+            node_args = collect(node_args)
+            for i in eachindex(node_args)
+                if node_args[i] isa Symbol
+                    node_args[i] = Var(node_args[i])
+                elseif node_args[i] isa Tuple && last(node_args[i]) == ()
+                    node_args[i] = create_array_var(
+                        first(node_args[i]), pass.array_sizes, env
+                    )
+                else
+                    node_args[i] = Var(first(node_args[i]), last(node_args[i]))
+                end
+            end
 
             rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
-                if @capture(sub_expr, arr_[idxs__])
+                if Meta.isexpr(sub_expr, :ref)
+                    arr, idxs... = sub_expr.args
                     new_idxs = [
                         idx isa Integer ? idx : :(JuliaBUGS.try_cast_to_int($(idx))) for
                         idx in idxs

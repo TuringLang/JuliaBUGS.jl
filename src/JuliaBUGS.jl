@@ -256,6 +256,7 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
         PostChecking(data, transformed_variables), model_def, data
     )
     merged_data = merge_with_coalescence(deepcopy(data), transformed_variables)
+    model_def = concretize_colon_indexing(model_def, array_sizes, merged_data)
     vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = analyze_program(
         NodeFunctions(array_sizes, array_bitmap), model_def, merged_data
     )

@@ -1,4 +1,33 @@
 """
+    concretize_colon_indexing(expr, array_sizes, data)
+
+Replace all `Colon()`s in `expr` with the corresponding array size, using either the `array_sizes` or the `data` dictionaries.
+
+# Examples
+```jldoctest
+julia> concretize_colon_indexing(:(f(x[1, :])), Dict(:x => (3, 4)), Dict(:x => [1 2 3 4; 5 6 7 8; 9 10 11 12]))
+:(f(x[1, 1:4]))
+```
+"""
+function concretize_colon_indexing(expr, array_sizes, data)
+    return MacroTools.postwalk(expr) do sub_expr
+        if MacroTools.@capture(sub_expr, x_[idx__])
+            for i in 1:length(idx)
+                if idx[i] == :(:)
+                    if haskey(array_sizes, x)
+                        idx[i] = Expr(:call, :(:), 1, array_sizes[x][i])
+                    else
+                        idx[i] = Expr(:call, :(:), 1, size(data[x])[i])
+                    end
+                end
+            end
+            return Expr(:ref, x, idx...)
+        end
+        return sub_expr
+    end
+end
+
+"""
     decompose_for_expr(expr::Expr)
 
 Decompose a for-loop expression into its components. The function returns four items: the 
@@ -357,11 +386,13 @@ function _eval(expr::AbstractRange, env, dist_store)
     return expr
 end
 function _eval(expr::Expr, env, dist_store)
-    if Meta.isexpr(expr, :call) 
+    if Meta.isexpr(expr, :call)
         f = expr.args[1]
         if f === :cumulative || f === :density
             if length(expr.args) != 3
-                error("density function should have 3 arguments, but get $(length(expr.args)).")
+                error(
+                    "density function should have 3 arguments, but get $(length(expr.args)).",
+                )
             end
             rv1, rv2 = expr.args[2:3]
             dist = if Meta.isexpr(rv1, :ref)
@@ -369,13 +400,17 @@ function _eval(expr::Expr, env, dist_store)
                 for i in eachindex(indices)
                     indices[i] = _eval(indices[i], env, dist_store)
                 end
-                vn = AbstractPPL.VarName{var}(AbstractPPL.Setfield.IndexLens(Tuple(indices)))
+                vn = AbstractPPL.VarName{var}(
+                    AbstractPPL.Setfield.IndexLens(Tuple(indices))
+                )
                 AbstractPPL.Setfield.get(dist_store, vn)
             elseif rv1 isa Symbol
                 vn = AbstractPPL.VarName{rv1}()
                 AbstractPPL.Setfield.get(dist_store, vn)
             else
-                error("the first argument of density function should be a variable, but got $(rv1).")
+                error(
+                    "the first argument of density function should be a variable, but got $(rv1).",
+                )
             end
             rv2 = _eval(rv2, env, dist_store)
             if f === :cumulative
