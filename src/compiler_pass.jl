@@ -762,6 +762,8 @@ function _replace_constants_in_expr(x::Expr, env)
                 "First argument to `cumulative` and `density` must be variable, got $(x.args[2])",
             )
         end
+    elseif Meta.isexpr(x, :call) && x.args[1] === :deviance
+        @warn("deviance function is not supported in JuliaBUGS.")
     else # don't try to eval the function, but try to simplify
         x = deepcopy(x) # because we are mutating the args
         for i in 2:length(x.args)
