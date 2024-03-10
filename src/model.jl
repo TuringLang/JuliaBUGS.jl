@@ -217,7 +217,7 @@ function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
             args = Dict(getsym(arg) => vi[arg] for arg in node_args)
             expr = node_function_expr.args[2]
             if vn in m.parameters
-                dist = _eval(expr, args, model.distributions)
+                dist = _eval(expr, args, m.distributions)
                 linked_val = DynamicPPL.link(dist, vi[vn])
                 d[vn] = linked_val
             end
@@ -257,7 +257,7 @@ function getparams(m::BUGSModel, vi::SimpleVarInfo; transformed::Bool=false)
         for v in m.parameters
             ni = m.g[v]
             args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
-            dist = _eval(ni.node_function_expr.args[2], args, model.distributions)
+            dist = _eval(ni.node_function_expr.args[2], args, m.distributions)
 
             link_vals = Bijectors.link(dist, vi[v])
             len = m.transformed_var_lengths[v]
@@ -293,7 +293,7 @@ function setparams!!(
     for v in m.parameters
         ni = m.g[v]
         args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
-        dist = _eval(ni.node_function_expr.args[2], args, model.distributions)
+        dist = _eval(ni.node_function_expr.args[2], args, m.distributions)
 
         len = if transformed
             m.transformed_var_lengths[v]
