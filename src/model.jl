@@ -192,10 +192,6 @@ function initialize_var_store(data, vars, array_sizes)
     return var_store
 end
 
-function get_distribution(model::BUGSModel, vn::VarName)
-    return AbstractPPL.Setfield.get(model.distributions, vn)
-end
-
 """
     get_params_varinfo(m::BUGSModel[, vi::SimpleVarInfo])
 
@@ -221,7 +217,7 @@ function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
             args = Dict(getsym(arg) => vi[arg] for arg in node_args)
             expr = node_function_expr.args[2]
             if vn in m.parameters
-                dist = _eval(expr, args, dist_store)
+                dist = _eval(expr, args, model.distributions)
                 linked_val = DynamicPPL.link(dist, vi[vn])
                 d[vn] = linked_val
             end
@@ -261,7 +257,7 @@ function getparams(m::BUGSModel, vi::SimpleVarInfo; transformed::Bool=false)
         for v in m.parameters
             ni = m.g[v]
             args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
-            dist = _eval(ni.node_function_expr.args[2], args, dist_store)
+            dist = _eval(ni.node_function_expr.args[2], args, model.distributions)
 
             link_vals = Bijectors.link(dist, vi[v])
             len = m.transformed_var_lengths[v]
@@ -297,7 +293,7 @@ function setparams!!(
     for v in m.parameters
         ni = m.g[v]
         args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
-        dist = _eval(ni.node_function_expr.args[2], args, dist_store)
+        dist = _eval(ni.node_function_expr.args[2], args, model.distributions)
 
         len = if transformed
             m.transformed_var_lengths[v]
@@ -447,10 +443,10 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
-            value = _eval(expr, args, dist_store)
+            value = _eval(expr, args, model.distributions)
             vi = setindex!!(vi, value, vn)
         else
-            dist = _eval(expr, args, dist_store)
+            dist = _eval(expr, args, model.distributions)
             value = rand(ctx.rng, dist) # just sample from the prior
             logp += logpdf(dist, value)
             vi = setindex!!(vi, value, vn)
@@ -473,10 +469,10 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
         args = Dict(getsym(arg) => vi[arg] for arg in node_args)
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical # be conservative -- always propagate values of logical nodes
-            value = _eval(expr, args, dist_store)
+            value = _eval(expr, args, model.distributions)
             vi = setindex!!(vi, value, vn)
         else
-            dist = _eval(expr, args, dist_store)
+            dist = _eval(expr, args, model.distributions)
             value = vi[vn]
             if model.transformed
                 # although the values stored in `vi` are in their original space, 
@@ -518,10 +514,10 @@ function AbstractPPL.evaluate!!(
         args = (; map(arg -> getsym(arg) => vi[arg], node_args)...)
         expr = node_function_expr.args[2]
         if node_type == JuliaBUGS.Logical
-            value = _eval(expr, args, dist_store)
+            value = _eval(expr, args, model.distributions)
             vi = setindex!!(vi, value, vn)
         else
-            dist = _eval(expr, args, dist_store)
+            dist = _eval(expr, args, model.distributions)
             if vn in model.parameters
                 l = var_lengths[vn]
                 if model.transformed
