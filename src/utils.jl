@@ -403,10 +403,10 @@ function _eval(expr::Expr, env, dist_store)
                 vn = AbstractPPL.VarName{var}(
                     AbstractPPL.Setfield.IndexLens(Tuple(indices))
                 )
-                AbstractPPL.Setfield.get(dist_store, vn)
+                dist_store[vn]
             elseif rv1 isa Symbol
                 vn = AbstractPPL.VarName{rv1}()
-                AbstractPPL.Setfield.get(dist_store, vn)
+                dist_store[vn]
             else
                 error(
                     "the first argument of density function should be a variable, but got $(rv1).",

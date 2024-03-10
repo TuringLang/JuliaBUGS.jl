@@ -36,7 +36,7 @@ struct BUGSModel <: AbstractBUGSModel
     transformed_var_lengths::Dict{VarName,Int}
 
     varinfo::SimpleVarInfo
-    distributions::NamedTuple
+    distributions::Dict{VarName,Distribution}
     parameters::Vector{VarName}
     sorted_nodes::Vector{VarName}
 
@@ -82,7 +82,7 @@ function BUGSModel(
 )
     vs = initialize_var_store(data, vars, array_sizes)
     vi = SimpleVarInfo(vs, 0.0)
-    dist_store = initialize_distribution_store(vs)
+    dist_store = Dict{VarName,Distribution}()
     parameters = VarName[]
     untransformed_param_length = 0
     transformed_param_length = 0
@@ -119,7 +119,7 @@ function BUGSModel(
                     ),
                 )
             end
-            dist_store = AbstractPPL.Setfield.set(dist_store, vn, dist)
+            dist_store[vn] = dist 
             value = evaluate(vn, data) # `evaluate(::VarName, env)` is defined in `src/utils.jl`
             if value isa Nothing # not observed
                 push!(parameters, vn)
@@ -190,18 +190,6 @@ function initialize_var_store(data, vars, array_sizes)
         end
     end
     return var_store
-end
-
-function initialize_distribution_store(var_store::Dict)
-    dist_store = Dict{Symbol,Any}()
-    for (k, v) in var_store
-        if v isa AbstractArray
-            dist_store[AbstractPPL.getsym(k)] = Array{Distribution}(undef, size(v)...)
-        else
-            dist_store[AbstractPPL.getsym(k)] = nothing
-        end
-    end
-    return NamedTuple(dist_store)
 end
 
 function get_distribution(model::BUGSModel, vn::VarName)
