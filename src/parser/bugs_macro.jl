@@ -49,7 +49,7 @@ macro bugs(prog::String, replace_period::Bool=true, no_enclosure::Bool=false)
     if !isempty(error_container) # otherwise errors thrown in macro will be LoadError
         return :(throw(ErrorException(join($error_container, "\n"))))
     end
-    return Meta.quot(handle_special_functions(expr))
+    return Meta.quot(expr)
 end
 
 macro bugs(expr::Expr)
