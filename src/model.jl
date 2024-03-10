@@ -119,7 +119,7 @@ function BUGSModel(
                     ),
                 )
             end
-            dist_store[vn] = dist 
+            dist_store[vn] = dist
             value = evaluate(vn, data) # `evaluate(::VarName, env)` is defined in `src/utils.jl`
             if value isa Nothing # not observed
                 push!(parameters, vn)
