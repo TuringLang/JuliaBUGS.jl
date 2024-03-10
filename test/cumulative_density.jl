@@ -11,8 +11,8 @@
 
     model = compile(model_def, data, inits)
 
-    @test model.distributions.a == Normal(0, 1)
-    @test model.distributions.c[1] == Normal(0, 1)
+    @test model.distributions[@varname(a)] == Normal(0, 1)
+    @test model.distributions[@varname(c[1])] == Normal(0, 1)
 
     @test model.varinfo[@varname(b)] == cdf(Normal(0, 1), 2)
     @test model.varinfo[@varname(d[1])] == cdf(Normal(0, 1), 2)
@@ -31,8 +31,8 @@ end
 
     model = compile(model_def, data, inits)
 
-    @test model.distributions.a == Normal(0, 1)
-    @test model.distributions.c[1] == Normal(0, 1)
+    @test model.distributions[@varname(a)] == Normal(0, 1)
+    @test model.distributions[@varname(c[1])] == Normal(0, 1)
 
     @test model.varinfo[@varname(b)] == pdf(Normal(0, 1), 2)
     @test model.varinfo[@varname(d[1])] == pdf(Normal(0, 1), 2)
