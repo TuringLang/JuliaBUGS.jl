@@ -355,7 +355,6 @@ function extract_variables_assigned_to(
     return logical_scalars, stochastic_scalars, logical_arrays, stochastic_arrays
 end
 
-
 """
     simple_arithmetic_eval(data, expr)
 
