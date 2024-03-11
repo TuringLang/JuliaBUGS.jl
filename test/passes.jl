@@ -1,5 +1,5 @@
 using JuliaBUGS:
-    analyze_program, CollectVariables, DataTransformation, CheckRepeatedAssignment
+    analyze_program, CollectVariables, DataTransformation, CheckRepeatedAssignments
 using JuliaBUGS: is_resolved
 using JuliaBUGS: is_specified_by_data, is_partially_specified_as_data
 
@@ -98,7 +98,7 @@ end
     @test has_new_val == false
 end
 
-@testset "CheckRepeatedAssignment" begin
+@testset "CheckRepeatedAssignments" begin
     @testset "with Leuk" begin
         model_def = JuliaBUGS.BUGSExamples.leuk.model_def
         data = JuliaBUGS.BUGSExamples.leuk.data
@@ -108,7 +108,7 @@ end
             CollectVariables(model_def, data), model_def, data
         )
 
-        pass = CheckRepeatedAssignment(model_def, data, array_sizes)
+        pass = CheckRepeatedAssignments(model_def, data, array_sizes)
         repeat_scalars, suspect_arrays = analyze_program(pass, model_def, data)
 
         @test isempty(repeat_scalars)
@@ -126,7 +126,7 @@ end
             CollectVariables(model_def, data), model_def, data
         )
         @test_throws ErrorException analyze_program(
-            CheckRepeatedAssignment(model_def, data, array_sizes), model_def, data
+            CheckRepeatedAssignments(model_def, data, array_sizes), model_def, data
         )
 
         model_def = @bugs begin
@@ -137,7 +137,7 @@ end
             CollectVariables(model_def, data), model_def, data
         )
         @test_throws ErrorException analyze_program(
-            CheckRepeatedAssignment(model_def, data, array_sizes), model_def, data
+            CheckRepeatedAssignments(model_def, data, array_sizes), model_def, data
         )
 
         model_def = @bugs begin
@@ -148,7 +148,7 @@ end
             CollectVariables(model_def, data), model_def, data
         )
         @test_throws ErrorException analyze_program(
-            CheckRepeatedAssignment(model_def, data, array_sizes), model_def, data
+            CheckRepeatedAssignments(model_def, data, array_sizes), model_def, data
         )
 
         model_def = @bugs begin
@@ -161,7 +161,7 @@ end
             CollectVariables(model_def, data), model_def, data
         )
         @test_throws ErrorException analyze_program(
-            CheckRepeatedAssignment(model_def, data, array_sizes), model_def, data
+            CheckRepeatedAssignments(model_def, data, array_sizes), model_def, data
         )
 
         model_def = @bugs begin
@@ -173,7 +173,7 @@ end
             CollectVariables(model_def, data), model_def, data
         )
         @test_throws ErrorException analyze_program(
-            CheckRepeatedAssignment(model_def, data, array_sizes), model_def, data
+            CheckRepeatedAssignments(model_def, data, array_sizes), model_def, data
         )
     end
 end

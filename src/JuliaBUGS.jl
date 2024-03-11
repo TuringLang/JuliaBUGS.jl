@@ -250,7 +250,7 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
         CollectVariables(model_def, data), model_def, data
     )
     conflicted_scalars, conflicted_arrays = analyze_program(
-        CheckRepeatedAssignment(model_def, data, array_sizes), model_def, data
+        CheckRepeatedAssignments(model_def, data, array_sizes), model_def, data
     )
 
     transformed_variables = compute_data_transformation(

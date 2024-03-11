@@ -352,7 +352,7 @@ function post_process(pass::CollectVariables, expr::Expr, env::NamedTuple)
 end
 
 """
-    CheckRepeatedAssignment
+    CheckRepeatedAssignments
 
 BUGS generally forbids the same variable (scalar or array location) to appear more than once. The only exception
 is when a variable appear exactly twice: one for logical assignment and one for stochastic assignment, and the variable
@@ -365,7 +365,7 @@ In this pass, we check the following cases:
 
 The exceptional case will be checked after `DataTransformation` pass.
 """
-struct CheckRepeatedAssignment <: CompilerPass
+struct CheckRepeatedAssignments <: CompilerPass
     overlap_scalars::Tuple{Vararg{Symbol}} # TODO: `Tuple{Vararg{Symbol}}` is not concrete type, improve this in the future
     overlap_arrays::Tuple{Vararg{Symbol}}
 
@@ -373,7 +373,7 @@ struct CheckRepeatedAssignment <: CompilerPass
     stochastic_assignment_trackers::NamedTuple
 end
 
-function CheckRepeatedAssignment(
+function CheckRepeatedAssignments(
     model_def::Expr, data::NamedTuple{data_vars}, array_sizes
 ) where {data_vars}
     # repeating assignments within deterministic and stochastic arrays are checked `extract_variables_assigned_to`
@@ -404,7 +404,7 @@ function CheckRepeatedAssignment(
     logical_assignment_trackers = NamedTuple(logical_assignment_trackers)
     stochastic_assignment_trackers = NamedTuple(stochastic_assignment_trackers)
 
-    return CheckRepeatedAssignment(
+    return CheckRepeatedAssignments(
         overlap_scalars,
         Tuple(overlap_arrays),
         logical_assignment_trackers,
@@ -412,7 +412,7 @@ function CheckRepeatedAssignment(
     )
 end
 
-function analyze_assignment(pass::CheckRepeatedAssignment, expr::Expr, env::NamedTuple)
+function analyze_assignment(pass::CheckRepeatedAssignments, expr::Expr, env::NamedTuple)
     lhs_expr = Meta.isexpr(expr, :(=)) ? expr.args[1] : expr.args[2]
     lhs = simplify_lhs(env, lhs_expr)
     assignment_tracker = if is_deterministic(expr)
@@ -441,7 +441,7 @@ function set_assignment_tracker!(
     end
 end
 
-function post_process(pass::CheckRepeatedAssignment, expr, env)
+function post_process(pass::CheckRepeatedAssignments, expr, env)
     suspect_arrays = Dict{Symbol,BitArray}()
     for v in pass.overlap_arrays
         if any(
