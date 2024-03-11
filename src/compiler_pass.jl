@@ -759,11 +759,10 @@ function _replace_constants_in_expr(x::Expr, env)
             "`deviance` function is not supported in JuliaBUGS, `deviance` will be treated as a general function."
         )
     else # don't try to eval the function, but try to simplify
-        f, args... = x.args
-        for i in eachindex(args)
-            args[i] = _replace_constants_in_expr(args[i], env)
+        x = deepcopy(x) # because we are mutating the args
+        for i in 2:length(x.args)
+            x.args[i] = _replace_constants_in_expr(x.args[i], env)
         end
-        x = Expr(:call, f, args...)
     end
     return x
 end
