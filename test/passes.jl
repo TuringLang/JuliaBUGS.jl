@@ -1,4 +1,5 @@
-using JuliaBUGS: analyze_program, CollectVariables, DataTransformation
+using JuliaBUGS:
+    analyze_program, CollectVariables, DataTransformation, CheckRepeatedAssignment
 using JuliaBUGS: is_resolved
 using JuliaBUGS: is_specified_by_data, is_partially_specified_as_data
 
@@ -95,4 +96,84 @@ end
         DataTransformation(false, transformed_variables), model_def, data
     )
     @test has_new_val == false
+end
+
+@testset "CheckRepeatedAssignment" begin
+    @testset "with Leuk" begin
+        model_def = JuliaBUGS.BUGSExamples.leuk.model_def
+        data = JuliaBUGS.BUGSExamples.leuk.data
+        inits = JuliaBUGS.BUGSExamples.leuk.inits
+
+        scalars, array_sizes = analyze_program(
+            CollectVariables(model_def, data), model_def, data
+        )
+
+        pass = CheckRepeatedAssignment(model_def, data, array_sizes)
+        repeat_scalars, suspect_arrays = analyze_program(pass, model_def, data)
+
+        @test isempty(repeat_scalars)
+        @test collect(keys(suspect_arrays)) == [:dN]
+    end
+
+    @testset "error cases" begin
+        data = (;)
+
+        model_def = @bugs begin
+            a = 1
+            a = 2
+        end
+        scalars, array_sizes = analyze_program(
+            CollectVariables(model_def, data), model_def, data
+        )
+        @test_throws ErrorException analyze_program(
+            CheckRepeatedAssignment(model_def, data, array_sizes), model_def, data
+        )
+
+        model_def = @bugs begin
+            a ~ Normal(0, 1)
+            a ~ Normal(0, 2)
+        end
+        scalars, array_sizes = analyze_program(
+            CollectVariables(model_def, data), model_def, data
+        )
+        @test_throws ErrorException analyze_program(
+            CheckRepeatedAssignment(model_def, data, array_sizes), model_def, data
+        )
+
+        model_def = @bugs begin
+            x[1] = 1
+            x[1] = 2
+        end
+        scalars, array_sizes = analyze_program(
+            CollectVariables(model_def, data), model_def, data
+        )
+        @test_throws ErrorException analyze_program(
+            CheckRepeatedAssignment(model_def, data, array_sizes), model_def, data
+        )
+
+        model_def = @bugs begin
+            x[1] = 1
+            for i in 1:2
+                x[i:(i + 1)] = i
+            end
+        end
+        scalars, array_sizes = analyze_program(
+            CollectVariables(model_def, data), model_def, data
+        )
+        @test_throws ErrorException analyze_program(
+            CheckRepeatedAssignment(model_def, data, array_sizes), model_def, data
+        )
+
+        model_def = @bugs begin
+            x[1] ~ Normal(0, 1)
+            x[1:2] ~ MvNormal(a[:], b[:, :])
+        end
+        data = (a=[1, 2], b=[1 0; 0 1])
+        scalars, array_sizes = analyze_program(
+            CollectVariables(model_def, data), model_def, data
+        )
+        @test_throws ErrorException analyze_program(
+            CheckRepeatedAssignment(model_def, data, array_sizes), model_def, data
+        )
+    end
 end
