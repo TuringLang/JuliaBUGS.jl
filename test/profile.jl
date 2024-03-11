@@ -43,7 +43,7 @@ for name in keys(BUGSExamples.VOLUME_I)
     )
 
     _suite["NodeFunctions"] = @benchmarkable analyze_program(
-        NodeFunctions($array_sizes, $array_bitmap), $model_def, $merged_data
+        NodeFunctions($array_sizes), $model_def, $merged_data
     )
 
     tune!(_suite)
