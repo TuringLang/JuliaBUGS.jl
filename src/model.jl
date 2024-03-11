@@ -99,7 +99,6 @@ function BUGSModel(
             value = try
                 _eval(expr, args, dist_store)
             catch e
-                @info args expr node_args
                 rethrow(
                     # UninitializedVariableError(
                     #     "Encounter error when evaluating the RHS of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) directly first if not yet.",
