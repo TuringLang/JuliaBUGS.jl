@@ -136,15 +136,18 @@ function bugs_expression(expr, line_num)
 end
 
 """
-    @bugs(prog::String, replace_period=true, no_enclosure=false)
+    @bugs(program::Expr)
+    @bugs(program::String; replace_period::Bool=true, no_enclosure::Bool=false)
 
-Produce similar output as [`@bugs`](@ref), but takes a string as input.  This is useful for 
-parsing original BUGS programs.
+Constructs a Julia Abstract Syntax Tree (AST) representation of a BUGS program. This macro supports two forms of input: a Julia expression or a string containing the BUGS program code. 
 
-# Arguments
-- `prog::String`: The BUGS program code as a string.
-- `replace_period::Bool`: If true, periods in the BUGS code will be replaced (default `true`).
-- `no_enclosure::Bool`: If true, the parser will not expect the program to be wrapped between `model{ }` (default `false`).
+- When provided with a string, the macro parses it as a BUGS program, with optional arguments to control parsing behavior.
+- When given an expression, it performs syntactic checks to ensure compatibility with BUGS syntax.
+
+## Arguments for String Input
+For the string input variant, the following optional arguments are available:
+- `replace_period::Bool`: When set to `true`, all periods (`.`) in the BUGS code are replaced. This is enabled by default.
+- `no_enclosure::Bool`: When `true`, the parser does not require the BUGS program to be enclosed within `model{ ... }` brackets. By default, this is set to `false`.
 
 """
 macro bugs(prog::String, replace_period=true, no_enclosure=false)
