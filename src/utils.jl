@@ -40,7 +40,7 @@ end
 
 function concretize_eval_env(eval_env::NamedTuple)
     cleaned_eval_env = Dict{Symbol,Any}()
-    for (k,v) in pairs(eval_env)
+    for (k, v) in pairs(eval_env)
         if v isa Union{Int,Float64}
             cleaned_eval_env[k] = v
         elseif v isa Ref
