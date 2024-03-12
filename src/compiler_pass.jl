@@ -807,6 +807,7 @@ function concretize_colon_indexing(expr, array_sizes, data)
                     if haskey(array_sizes, x)
                         idx[i] = Expr(:call, :(:), 1, array_sizes[x][i])
                     else
+@assert haskey(data, x)
                         idx[i] = Expr(:call, :(:), 1, size(data[x])[i])
                     end
                 end
@@ -851,7 +852,7 @@ try_cast_to_int(x::Real) = Int(x) # will error if !isinteger(x)
 try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
 function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
-    lhs_expr, rhs_expr = Meta.isexpr(expr, :(=)) ? expr.args : expr.args[2:end]
+    @capture(expr, lhs_expr_ ~ rhs_expr_) || @capture(expr, lhs_expr_ = rhs_expr_)
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
     lhs_var = find_variables_on_lhs(
@@ -862,6 +863,7 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
         return nothing
 
     pass.vars[lhs_var] = var_type
+rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes, env)
     rhs = evaluate(rhs_expr, env)
 
     if rhs isa Symbol
@@ -910,35 +912,21 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
             # issue is that we need to do this in steps, const propagation need to a separate pass
             # otherwise the variable in previous expressions will not be evaluated to the concrete value
         else
-            dependencies = collect(dependencies)
-            for i in eachindex(dependencies)
-                if dependencies[i] isa Symbol
-                    dependencies[i] = Var(dependencies[i])
-                elseif dependencies[i] isa Tuple && last(dependencies[i]) == ()
-                    dependencies[i] = create_array_var(
-                        first(dependencies[i]), pass.array_sizes, env
-                    )
+            dependencies, node_args = map(
+                x -> map(x) do x_elem
+                if x_elem isa Symbol
+                    return Var(x_elem)
+                elseif x_elem isa Tuple && last(x_elem) == ()
+                    return create_array_var(first(x_elem), pass.array_sizes, env)
                 else
-                    dependencies[i] = Var(first(dependencies[i]), last(dependencies[i]))
+                    return Var(first(x_elem), last(x_elem))
                 end
-            end
-
-            node_args = collect(node_args)
-            for i in eachindex(node_args)
-                if node_args[i] isa Symbol
-                    node_args[i] = Var(node_args[i])
-                elseif node_args[i] isa Tuple && last(node_args[i]) == ()
-                    node_args[i] = create_array_var(
-                        first(node_args[i]), pass.array_sizes, env
-                    )
-                else
-                    node_args[i] = Var(first(node_args[i]), last(node_args[i]))
-                end
-            end
+            end,
+                map(collect, (dependencies, node_args)),
+            )
 
             rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
-                if Meta.isexpr(sub_expr, :ref)
-                    arr, idxs... = sub_expr.args
+                if @capture(sub_expr, arr_[idxs__])
                     new_idxs = [
                         idx isa Integer ? idx : :(JuliaBUGS.try_cast_to_int($(idx))) for
                         idx in idxs

@@ -235,19 +235,11 @@ Compile a BUGS model into a log density problem.
 - A [`BUGSModel`](@ref) object representing the compiled model.
 """
 function compile(model_def::Expr, data, inits; is_transformed=true)
-    if !(data isa NamedTuple) && !(data isa Dict{Symbol,<:Any})
-        error(
-            "Data must be a NamedTuple or a Dict{Symbol,<:Any}. Received: $(typeof(data))"
-        )
-    elseif data isa Dict{Symbol,<:Any}
+    if !(data isa NamedTuple)
         data = NamedTuple{Tuple(keys(data))}(values(data))
     end
 
-    if !(inits isa NamedTuple) && !(inits isa Dict{Symbol,<:Any})
-        error(
-            "Initializations must be a NamedTuple or a Dict{Symbol,<:Any}. Received: $(typeof(inits))",
-        )
-    elseif inits isa Dict{Symbol,<:Any}
+    if !(inits isa NamedTuple)
         inits = NamedTuple{Tuple(keys(inits))}(values(inits))
     end
 
@@ -264,8 +256,7 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
         PostChecking(data, transformed_variables), model_def, data
     )
     merged_data = merge_with_coalescence(deepcopy(data), transformed_variables)
-    model_def = concretize_colon_indexing(model_def, array_sizes, merged_data)
-    vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = analyze_program(
+        vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = analyze_program(
         NodeFunctions(array_sizes, array_bitmap), model_def, merged_data
     )
     g = create_BUGSGraph(vars, node_args, node_functions, dependencies)

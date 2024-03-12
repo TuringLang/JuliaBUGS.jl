@@ -1,5 +1,5 @@
-# AbstractBUGSModel can't subtype AbstractProbabilisticProgram (which subtype AbstractMCMC.AbstractModel)
-# because it will be dispatched to https://github.com/TuringLang/AbstractMCMC.jl/blob/d7c549fe41a80c1f164423c7ac458425535f624b/src/sample.jl#L81
+# AbstractBUGSModel can't be a subtype of AbstractProbabilisticProgram (<: AbstractMCMC.AbstractModel)
+# because it will then dispatched to https://github.com/TuringLang/AbstractMCMC.jl/blob/d7c549fe41a80c1f164423c7ac458425535f624b/src/sample.jl#L81
 # instead of https://github.com/TuringLang/AbstractMCMC.jl/blob/d7c549fe41a80c1f164423c7ac458425535f624b/src/logdensityproblems.jl#L90
 abstract type AbstractBUGSModel end
 
@@ -33,7 +33,7 @@ struct BUGSModel <: AbstractBUGSModel
     untransformed_param_length::Int
     transformed_param_length::Int
     untransformed_var_lengths::Dict{VarName,Int}
-    transformed_var_lengths::Dict{VarName,Int}
+    transformed_var_lengths::Dict{VarName,Int} # TODO: store this as a delta from `untransformed_var_lengths`?
 
     varinfo::SimpleVarInfo
     distributions::Dict{VarName,Distribution}
@@ -341,7 +341,7 @@ function AbstractPPL.condition(
     base_model = model.base_model isa Nothing ? model : model.base_model
     new_parameters = setdiff(model.parameters, var_group)
 
-    sorted_blanket_with_vars = if !(sorted_nodes isa Nothing)
+    sorted_blanket_with_vars = if sorted_nodes isa Nothing
         sorted_nodes
     else
         filter(

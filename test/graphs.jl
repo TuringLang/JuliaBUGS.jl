@@ -12,17 +12,19 @@ test_model = @bugs begin
 end
 
 # construct a SimpleVarInfo
-inits = (
-    a=1.0,
-    b=2.0,
-    c=3.0,
-    d=4.0,
-    e=5.0,
-    # f=1.0,
-    # g=2.0,
-    # h=4.0,
-    i=4.0,
-    l=-2.0,
+inits = Dict(
+    :a => 1.0,
+    :b => 2.0,
+    :c => 3.0,
+    :d => 4.0,
+    :e => 5.0,
+    
+    # :f => 1.0,
+    # :g => 2.0,
+    # :h => 4.0,
+    
+    :i => 4.0,
+    :l => -2.0,
 )
 
 model = compile(test_model, NamedTuple(), inits)
