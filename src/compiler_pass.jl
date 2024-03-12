@@ -631,56 +631,62 @@ function evaluate_and_track_dependencies(var::Expr, env)
         push!(args, (var.args[1], ()))
         push!(deps, (var.args[1], ()))
         return Expr(var.head, var.args[1], idxs...), deps, args
-    elseif Meta.isexpr(var, :call) && var.args[1] === :cumulative ||
-        var.args[1] === :density
-        arg1, arg2 = var.args[2:3]
-        arg1 = if arg1 isa Symbol
-            push!(deps, arg1)
-            # no need to add to arg, as the value doesn't matter
-            arg1
-        elseif Meta.isexpr(arg1, :ref)
-            v, indices... = arg1.args
-            for i in eachindex(indices)
-                e, d, a = evaluate_and_track_dependencies(indices[i], env)
-                union!(deps, d)
-                union!(args, a)
-                indices[i] = e
-            end
-            if any(!is_resolved, indices)
+    elseif Meta.isexpr(var, :call)
+        if var.args[1] === :cumulative || var.args[1] === :density
+            arg1, arg2 = var.args[2:3]
+            arg1 = if arg1 isa Symbol
+                push!(deps, arg1)
+                # no need to add to arg, as the value doesn't matter
+                arg1
+            elseif Meta.isexpr(arg1, :ref)
+                v, indices... = arg1.args
+                for i in eachindex(indices)
+                    e, d, a = evaluate_and_track_dependencies(indices[i], env)
+                    union!(deps, d)
+                    union!(args, a)
+                    indices[i] = e
+                end
+                if any(!is_resolved, indices)
+                    error(
+                        "For now, the indices of the first argument to `cumulative` and `density` must be resolved, got $indices",
+                    )
+                end
+                push!(deps, (v, Tuple(indices)))
+                # no need to add to arg, as the value doesn't matter
+                Expr(:ref, v, indices...)
+            else
                 error(
-                    "For now, the indices of the first argument to `cumulative` and `density` must be resolved, got $indices",
+                    "First argument to `cumulative` and `density` must be variable, got $(arg1)",
                 )
             end
-            push!(deps, (v, Tuple(indices)))
-            # no need to add to arg, as the value doesn't matter
-            Expr(:ref, v, indices...)
-        else
-            error("First argument to `cumulative` and `density` must be variable, got $(arg1)")
-        end
-        e, d, a = evaluate_and_track_dependencies(arg2, env)
-        union!(deps, d)
-        union!(args, a)
-        return Expr(:call, var.args[1], arg1, e), deps, args
-    else
-        fun_args = []
-        for i in 2:length(var.args)
-            e, d, a = evaluate_and_track_dependencies(var.args[i], env)
-            push!(fun_args, e)
+            e, d, a = evaluate_and_track_dependencies(arg2, env)
             union!(deps, d)
             union!(args, a)
-        end
-
-        for a in fun_args
-            a isa Symbol && a != :nothing && a != :(:) && (push!(deps, a); push!(args, a))
-        end
-
-        if (
-            var.args[1] ∈ BUGSPrimitives.BUGS_FUNCTIONS ||
-            var.args[1] ∈ (:+, :-, :*, :/, :^, :(:))
-        ) && all(is_resolved, args)
-            return getfield(JuliaBUGS, var.args[1])(fun_args...), deps, args
+            return Expr(:call, var.args[1], arg1, e), deps, args
         else
-            return Expr(var.head, var.args[1], fun_args...), deps, args
+            fun_args = []
+            for i in 2:length(var.args)
+                e, d, a = evaluate_and_track_dependencies(var.args[i], env)
+                push!(fun_args, e)
+                union!(deps, d)
+                union!(args, a)
+            end
+
+            for a in fun_args
+                a isa Symbol &&
+                    a != :nothing &&
+                    a != :(:) &&
+                    (push!(deps, a); push!(args, a))
+            end
+
+            if (
+                var.args[1] ∈ BUGSPrimitives.BUGS_FUNCTIONS ||
+                var.args[1] ∈ (:+, :-, :*, :/, :^, :(:))
+            ) && all(is_resolved, args)
+                return getfield(JuliaBUGS, var.args[1])(fun_args...), deps, args
+            else
+                return Expr(var.head, var.args[1], fun_args...), deps, args
+            end
         end
     end
 end
