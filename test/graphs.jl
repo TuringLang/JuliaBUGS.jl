@@ -18,11 +18,11 @@ inits = Dict(
     :c => 3.0,
     :d => 4.0,
     :e => 5.0,
-    
+
     # :f => 1.0,
     # :g => 2.0,
     # :h => 4.0,
-    
+
     :i => 4.0,
     :l => -2.0,
 )
@@ -90,8 +90,8 @@ end
 
 model = compile(
     test_model,
-    (R=[200 0; 0 0.2], sigma=[1.0E-6 0; 0 1.0E-6]),
-    (x=[1.0, 2.0], z=zeros(2, 2)),
+    Dict(:R => [200 0; 0 0.2], :sigma => [1.0E-6 0; 0 1.0E-6]),
+    Dict(:x => [1.0, 2.0], :z => zeros(2, 2)),
 )
 
 # z[1,1], x[1], x[2] are auxiliary nodes created, and removed at the end
