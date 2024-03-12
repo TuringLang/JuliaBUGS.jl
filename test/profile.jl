@@ -25,8 +25,8 @@ for name in keys(BUGSExamples.VOLUME_I)
         scalars, array_sizes, model_def, data
     )
 
-    transformed_variables = JuliaBUGS.clean_up_transformed_variables(transformed_variables)
     merged_data = JuliaBUGS.merge_with_coalescence(deepcopy(data), transformed_variables)
+    merged_data = JuliaBUGS.concretize_eval_env_value_types(merged_data)
 
     vars, array_sizes, node_args, node_functions, dependencies = analyze_program(
         NodeFunctions(array_sizes), model_def, merged_data
