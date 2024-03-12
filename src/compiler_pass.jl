@@ -18,8 +18,8 @@ end
 
 function analyze_for_loop(pass::CompilerPass, expr::Expr, env::NamedTuple)
     loop_var, lb, ub, body = decompose_for_expr(expr)
-    lb = Int(evaluate(lb, env))
-    ub = Int(evaluate(ub, env))
+    lb = Int(simple_arithmetic_eval(env, lb))
+    ub = Int(simple_arithmetic_eval(env, ub))
 
     for i in lb:ub
         for statement in body.args
@@ -58,20 +58,29 @@ largest indices.
 """
 struct CollectVariables{data_arrays,arrays} <: CompilerPass
     data_scalars::Tuple{Vararg{Symbol}}
-    scalars::Tuple{Vararg{Symbol}}
+    non_data_scalars::Tuple{Vararg{Symbol}}
     data_array_sizes::NamedTuple{data_arrays}
-    array_sizes::NamedTuple{arrays}
+    non_data_array_sizes::NamedTuple{arrays}
 end
 
 function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {data_vars}
-    data_scalars, scalars, arrays, num_dims = Symbol[], Symbol[], Symbol[], Int[]
+    for var in extract_variables_in_bounds_and_lhs_indices(model_def)
+        if var ∉ data_vars
+            error(
+                "Variable $var is used in loop bounds or indices but not defined in the data.",
+            )
+        end
+    end
+
+    data_scalars, non_data_scalars = Symbol[], Symbol[]
+    arrays, num_dims = Symbol[], Int[]
     # `extract_variable_names_and_numdims` will check if inconsistent variables' ndims
     for (name, num_dim) in pairs(extract_variable_names_and_numdims(model_def))
         if num_dim == 0
             if name in data_vars
                 push!(data_scalars, name)
             else
-                push!(scalars, name)
+                push!(non_data_scalars, name)
             end
         else
             push!(arrays, name)
@@ -79,21 +88,11 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
         end
     end
     data_scalars = Tuple(data_scalars)
-    scalars = Tuple(scalars)
-    arrays = Tuple(arrays)
-    num_dims = Tuple(num_dims)
-
-    for var in extract_variables_in_bounds_and_lhs_indices(model_def)
-        if var ∉ keys(data)
-            error(
-                "Variable $var is used in loop bounds or indices but not defined in the data.",
-            )
-        end
-    end
+    non_data_scalars = Tuple(non_data_scalars)
 
     data_arrays = Symbol[]
     data_array_sizes = SVector[]
-    for k in keys(data)
+    for k in data_vars
         if data[k] isa AbstractArray
             push!(data_arrays, k)
             push!(data_array_sizes, SVector(size(data[k])))
@@ -111,7 +110,7 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
 
     return CollectVariables(
         data_scalars,
-        scalars,
+        non_data_scalars,
         NamedTuple{Tuple(data_arrays)}(Tuple(data_array_sizes)),
         NamedTuple{Tuple(non_data_arrays)}(Tuple(non_data_array_sizes)),
     )
@@ -182,7 +181,15 @@ function evaluate(expr::Symbol, env::NamedTuple{variable_names}) where {variable
         return Colon()
     else
         if expr in variable_names
-            return env[expr] === missing ? expr : env[expr]
+            value = env[expr]
+            if value isa Ref
+                value = value[]
+            end
+            if value === missing
+                return expr
+            else
+                return value
+            end
         else
             return expr
         end
@@ -341,14 +348,14 @@ function update_array_sizes_for_assignment(
 ) where {data_vars}
     # `is_specified_by_data` checks if the index is inbound
     if var ∉ data_vars
-        for i in eachindex(pass.array_sizes[var])
-            pass.array_sizes[var][i] = max(pass.array_sizes[var][i], last(indices[i]))
+        for i in eachindex(pass.non_data_array_sizes[var])
+            pass.non_data_array_sizes[var][i] = max(pass.non_data_array_sizes[var][i], last(indices[i]))
         end
     end
 end
 
 function post_process(pass::CollectVariables, expr::Expr, env::NamedTuple)
-    return Set{Symbol}(pass.scalars), Dict(pairs(pass.array_sizes))
+    return pass.non_data_scalars, pass.non_data_array_sizes
 end
 
 """
@@ -469,78 +476,50 @@ to data.
 """
 mutable struct DataTransformation <: CompilerPass
     new_value_added::Bool
-    const transformed_variables
-end
-
-function DataTransformation(scalar::Set, variable_array_sizes::Dict)
-    transformed_variables = Dict()
-
-    for s in scalar
-        transformed_variables[s] = missing
-    end
-
-    for (k, v) in variable_array_sizes
-        transformed_variables[k] = Array{Union{Missing,Real}}(missing, v...)
-    end
-
-    return DataTransformation(false, transformed_variables)
-end
-
-function has_value(transformed_variables, v::Var)
-    if v isa Scalar
-        return !ismissing(transformed_variables[v.name])
-    elseif v isa ArrayElement
-        return !ismissing(transformed_variables[v.name][v.indices...])
-    else
-        return all(x -> !ismissing(x), transformed_variables[v.name][v.indices...])
-    end
 end
 
 function analyze_assignment(pass::DataTransformation, expr::Expr, env::NamedTuple)
-    if Meta.isexpr(expr, :(=))
-        lhs = find_variables_on_lhs(expr.args[1], env)
+    if Meta.isexpr(expr, :call) # expr.args[1] === :(~)
+        return nothing
+    end
+    
+    lhs_expr, rhs_expr = expr.args[1], expr.args[2]
+    lhs = simplify_lhs(env, lhs_expr)
 
-        if has_value(pass.transformed_variables, lhs)
-            return nothing
+    lhs_value = if lhs isa Symbol
+        value = env[lhs]
+        if value isa Ref
+            value = value[]
         end
+        value
+    else
+        var, indices... = lhs
+        env[var][indices...]
+    end
 
-        rhs = evaluate(
-            expr.args[2], merge_with_coalescence(env, pass.transformed_variables)
-        )
-        if is_resolved(rhs)
-            if !pass.new_value_added
-                pass.new_value_added = true
-            end
-            if lhs isa Scalar
-                pass.transformed_variables[lhs.name] = rhs
+    # check if the value already exists
+    if is_resolved(lhs_value)
+        return nothing
+    end
+
+    rhs = evaluate(rhs_expr, env)
+    if is_resolved(rhs)
+        pass.new_value_added = true
+        if lhs isa Symbol
+            env[lhs][] = rhs
+        else
+            var, indices... = lhs
+            if any(x -> x isa UnitRange, indices)
+                env[var][indices...] .= rhs
             else
-                pass.transformed_variables[lhs.name][lhs.indices...] = rhs
+                env[var][indices...] = rhs
             end
         end
     end
 end
 
 function post_process(pass::DataTransformation, expr, env)
-    return pass.new_value_added, pass.transformed_variables
-end
-
-function clean_up_transformed_variables(transformed_variables)
-    cleaned_transformed_variables = Dict{Symbol,Any}()
-    for k in keys(transformed_variables)
-        v = transformed_variables[k]
-        if ismissing(v)
-            continue
-        elseif v isa Number
-            cleaned_transformed_variables[k] = v
-        elseif all(ismissing, v)
-            continue
-        elseif all(!ismissing, v)
-            cleaned_transformed_variables[k] = identity.(v)
-        else
-            cleaned_transformed_variables[k] = v
-        end
-    end
-    return NamedTuple(cleaned_transformed_variables)
+    return pass.new_value_added
 end
 
 """

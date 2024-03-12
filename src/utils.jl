@@ -1,3 +1,63 @@
+function create_eval_env(
+    non_data_scalars::Tuple{Vararg{Symbol}},
+    non_data_array_sizes::NamedTuple{non_data_array_vars,ArraySizes},
+    data::NamedTuple{data_vars},
+) where {data_vars,non_data_array_vars}
+    data_copy = Dict{Symbol,Any}()
+    for (k, v) in pairs(data)
+        if v isa Union{Int,Float64}
+            data_copy[k] = v
+        elseif v === missing
+            error("Missing value for scalar found in data.")
+        elseif eltype(v) <: Union{Int,Float64}
+            data_copy[k] = v
+        elseif eltype(v) === Missing
+            data_copy[k] = similar(v, Union{Missing,Int,Float64})
+        else
+            data_copy[k] = copy(data[k])
+        end
+    end
+    data_copy = NamedTuple(data_copy)
+
+    init_scalars = Tuple([
+        Ref{Union{Missing,Int,Float64}}(missing) for i in eachindex(non_data_scalars)
+    ])
+    init_arrays = Tuple([
+        Array{Union{Int,Float64,Missing}}(missing, array_sizes[non_data_array_vars[i]]...)
+        for i in eachindex(non_data_array_vars)
+    ])
+
+    eval_env = merge(
+        data_copy,
+        NamedTuple{non_data_scalars}(init_scalars),
+        NamedTuple{non_data_array_vars}(init_arrays),
+    )
+
+    return eval_env
+end
+
+function clean_up_eval_env(eval_env::NamedTuple)
+    cleaned_eval_env = Dict{Symbol,Any}()
+    for (k,v) in pairs(eval_env)
+        if v isa Union{Int,Float64}
+            cleaned_eval_env[k] = v
+        elseif v isa Ref
+            if v[] !== missing
+                cleaned_eval_env[k] = v[]
+            end
+        elseif v isa AbstractArray
+            if Missing <: eltype(v)
+                cleaned_eval_env[k] = map(identity, v)
+            else
+                cleaned_eval_env[k] = v
+            end
+        else
+            error("Don't know how to handle $k's value: $v.")
+        end
+    end
+    return NamedTuple(cleaned_eval_env)
+end
+
 """
     decompose_for_expr(expr::Expr)
 
