@@ -236,13 +236,17 @@ Compile a BUGS model into a log density problem.
 """
 function compile(model_def::Expr, data, inits; is_transformed=true)
     if !(data isa NamedTuple) && !(data isa Dict{Symbol,<:Any})
-        error("Data must be a NamedTuple or a Dict{Symbol,<:Any}. Received: $(typeof(data))")
+        error(
+            "Data must be a NamedTuple or a Dict{Symbol,<:Any}. Received: $(typeof(data))"
+        )
     elseif data isa Dict{Symbol,<:Any}
         data = NamedTuple{Tuple(keys(data))}(values(data))
     end
 
     if !(inits isa NamedTuple) && !(inits isa Dict{Symbol,<:Any})
-        error("Initializations must be a NamedTuple or a Dict{Symbol,<:Any}. Received: $(typeof(inits))")
+        error(
+            "Initializations must be a NamedTuple or a Dict{Symbol,<:Any}. Received: $(typeof(inits))",
+        )
     elseif inits isa Dict{Symbol,<:Any}
         inits = NamedTuple{Tuple(keys(inits))}(values(inits))
     end
