@@ -270,7 +270,6 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
     scalars, array_sizes = analyze_program(
         CollectVariables(model_def, data), model_def, data
     )
-    
     conflicted_scalars, conflicted_arrays = analyze_program(
         CheckRepeatedAssignments(model_def, data, array_sizes), model_def, data
     )
