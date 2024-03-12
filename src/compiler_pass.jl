@@ -39,12 +39,9 @@ function analyze_assignment end
 
 function post_process end
 
-@enum VariableTypes begin
+@enum VariableTypes::Bool begin
     Logical
     Stochastic
-    Transformed
-    Transformed_Stochastic
-    Unspecified
 end
 
 """
@@ -556,99 +553,85 @@ Array elements and array variables are represented by tuples in the returned val
 
 # Examples
 ```jldoctest
-julia> evaluate_and_track_dependencies(:(x[a]), Dict())
-(:(x[a]), Set(Any[:a, (:x, ())]), Set(Any[:a, (:x, ())]))
+julia> evaluate_and_track_dependencies(:(x[a]), (x=[missing, missing], a = Ref(missing)))
+(missing, (:a, (:x, 1:2)), (:x, :a))
 
-julia> evaluate_and_track_dependencies(:(x[a]), Dict(:a => 1))
-(:(x[1]), Set(Any[(:x, (1,))]), Set(Any[(:x, ())]))
+julia> evaluate_and_track_dependencies(:(x[a]), (x=[missing, missing], a = 1))
+(missing, ((:x, 1),), (:x, :a))
 
-julia> evaluate_and_track_dependencies(:(x[y[1]+1]+a+1), Dict())
-(:(x[y[1] + 1] + a + 1), Set(Any[:a, (:x, ()), (:y, (1,))]), Set(Any[:a, (:x, ()), (:y, ())]))
+julia> evaluate_and_track_dependencies(:(x[y[1]+1]+a+1), (x=[missing, missing], y = [missing, missing], a = Ref(missing)))
+(missing, ((:y, 1), (:x, 1:2), :a), (:x, :y, :a))
 
-julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), Dict(:x => [1 2 3; 4 5 6]))
-(:(getindex([1 2 3; 4 5 6], a, b)), Set(Any[:a, :b]), Set(Any[:a, :b, (:x, ())]))
+julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), (x = [1 2 3; 4 5 6], a = Ref(missing), b = Ref(missing)))
+(missing, (:a, :b), (:x, :a, :b))
 
-julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), Dict(:x => [1 2 missing; 4 5 6]))
-(:(getindex(Union{Missing, Int64}[1 2 missing; 4 5 6], a, b)), Set(Any[:a, :b, (:x, (1, 3))]), Set(Any[:a, :b, (:x, ())]))
-
-julia> evaluate_and_track_dependencies(:x, Dict(:x => [1 2])) # array variables must be explicitly indexed
-ERROR: AssertionError: Array indexing in BUGS must be explicit. However, `x` is accessed as a scalar.
-[...]
+julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), (x = [1 2 missing; 4 5 6], a = Ref(missing), b = Ref(missing)))
+(missing, ((:x, 1:2, 1:3), :a, :b), (:x, :a, :b))
 ```
 """
-evaluate_and_track_dependencies(var::Number, env) = var, Set(), Set()
-evaluate_and_track_dependencies(var::UnitRange, env) = var, Set(), Set()
+evaluate_and_track_dependencies(var::Union{Int,Float64}, env) = var, (), ()
+evaluate_and_track_dependencies(var::UnitRange, env) = var, (), ()
 function evaluate_and_track_dependencies(var::Symbol, env)
-    value = env[var]
-    if value isa Ref # must be missing after concretization
-        return var, Set(), Set()
+    if env[var] isa Ref && env[var][] === missing
+        return var, (var,), (var,)
     else
-        return value, Set(), Set()
+        return env[var], (), (var,)
     end
 end
 function evaluate_and_track_dependencies(var::Expr, env)
-    deps, args = Set(), Set()
+    dependencies, node_func_args = [], []
     if Meta.isexpr(var, :ref)
-        idxs = []
-        for i in 2:length(var.args)
-            e, d, a = evaluate_and_track_dependencies(var.args[i], env)
-            push!(idxs, e)
-            union!(deps, d)
-            union!(args, a)
+        v, indices... = var.args
+        push!(node_func_args, v)
+        for i in eachindex(indices)
+            ret = evaluate_and_track_dependencies(indices[i], env)
+            index = ret[1]
+            indices[i] = index isa Float64 ? Int(index) : index
+            dependencies = union!(dependencies, ret[2])
+            node_func_args = union!(node_func_args, ret[3])
         end
 
-        if all(x -> x isa Number, idxs)
-            if haskey(env, var.args[1]) # data, the constant is plugged in
-                value = getindex(env[var.args[1]], idxs...)
-                if ismissing(value) # var is a variable
-                    push!(deps, (var.args[1], Tuple(idxs)))
-                    push!(args, (var.args[1], ()))
-                    value = Expr(var.head, var.args[1], idxs...)
-                end
-                return value, deps, args
-            else # then it's a variable
-                push!(deps, (var.args[1], Tuple(idxs))) # add the variable for fine-grain dependency
-                push!(args, (var.args[1], ())) # add the corresponding array variable for node function arguments
-                return Expr(var.head, var.args[1], idxs...), deps, args
-            end
-        elseif all(x -> x isa Union{Number,UnitRange}, idxs)
-            if haskey(env, var.args[1])
-                value = getindex(env[var.args[1]], idxs...)
-                if any(ismissing, value)
-                    missing_idxs = findall(ismissing, value)
-                    for idx in missing_idxs
-                        push!(deps, (var.args[1], Tuple(idx)))
-                    end
-                end
-                push!(args, (var.args[1], ()))
-                return value, deps, args
-            else
-                push!(deps, (var.args[1], Tuple(idxs)))
-                push!(args, (var.args[1], ()))
-                return Expr(var.head, var.args[1], idxs...), deps, args
-            end
+        value = nothing
+        if all(indices) do i
+            i isa Int || i isa UnitRange{Int}
         end
-
-        for i in idxs # if an index is a Symbol, then it's a variable
-            i isa Symbol && i != :nothing && i != :(:) && (push!(deps, i); push!(args, i))
+            value = env[v][indices...]
+            if !is_resolved(value)
+                # TODO: what if value is partially missing?
+                push!(dependencies, (v, indices...))
+            end
+        else
+            push!(
+                dependencies,
+                (
+                    v,
+                    [
+                        is_resolved(index) ? index : 1:size(env[v])[i] for
+                        (i, index) in enumerate(indices)
+                    ]...,
+                ),
+            )
         end
-        push!(args, (var.args[1], ()))
-        push!(deps, (var.args[1], ()))
-        return Expr(var.head, var.args[1], idxs...), deps, args
+        return missing, Tuple(dependencies), Tuple(node_func_args)
     elseif Meta.isexpr(var, :call)
-        if var.args[1] === :cumulative || var.args[1] === :density
-            arg1, arg2 = var.args[2:3]
-            arg1 = if arg1 isa Symbol
-                push!(deps, arg1)
-                # no need to add to arg, as the value doesn't matter
-                arg1
+        f, args... = var.args
+        value = nothing
+        if f === :cumulative || f === :density
+            if length(x.args) != 3
+                error(
+                    "`cumulative` and `density` are special functions in BUGS and takes two arguments, got $(length(x.args) - 1)",
+                )
+            end
+            arg1, arg2 = args
+            if arg1 isa Symbol
+                push!(dependencies, arg1)
             elseif Meta.isexpr(arg1, :ref)
                 v, indices... = arg1.args
                 for i in eachindex(indices)
-                    e, d, a = evaluate_and_track_dependencies(indices[i], env)
-                    union!(deps, d)
-                    union!(args, a)
-                    indices[i] = e
+                    ret = evaluate_and_track_dependencies(indices[i], env)
+                    union!(dependencies, ret[2])
+                    union!(node_func_args, ret[3])
+                    indices[i] = ret[1]
                 end
                 if any(!is_resolved, indices)
                     error(
@@ -656,139 +639,38 @@ function evaluate_and_track_dependencies(var::Expr, env)
                     )
                 end
                 push!(deps, (v, Tuple(indices)))
-                # no need to add to arg, as the value doesn't matter
-                Expr(:ref, v, indices...)
             else
                 error(
                     "First argument to `cumulative` and `density` must be variable, got $(arg1)",
                 )
             end
-            e, d, a = evaluate_and_track_dependencies(arg2, env)
-            union!(deps, d)
-            union!(args, a)
-            return Expr(:call, var.args[1], arg1, e), deps, args
-        else
-            fun_args = []
-            for i in 2:length(var.args)
-                e, d, a = evaluate_and_track_dependencies(var.args[i], env)
-                push!(fun_args, e)
-                union!(deps, d)
-                union!(args, a)
-            end
 
-            for a in fun_args
-                a isa Symbol &&
-                    a != :nothing &&
-                    a != :(:) &&
-                    (push!(deps, a); push!(args, a))
-            end
-
-            if (
-                var.args[1] ∈ BUGSPrimitives.BUGS_FUNCTIONS ||
-                var.args[1] ∈ (:+, :-, :*, :/, :^, :(:))
-            ) && all(is_resolved, args)
-                return getfield(JuliaBUGS, var.args[1])(fun_args...), deps, args
-            else
-                return Expr(var.head, var.args[1], fun_args...), deps, args
-            end
-        end
-    else
-        error("Unexpected expression type: $var")
-    end
-end
-
-"""
-    replace_constants_in_expr(x, env)
-
-Replace the constants in the expression `x` with their actual values from the environment `env` if the values are concrete.
-
-# Examples
-```jldoctest
-julia> env = Dict(:a => 1, :b => 2, :c => 3);
-
-julia> replace_constants_in_expr(:(a * b + c), env)
-:(1 * 2 + 3)
-
-julia> replace_constants_in_expr(:(a + b * sin(c)), env) # won't try to evaluate function calls
-:(1 + 2 * sin(3))
-
-julia> replace_constants_in_expr(:(x[a]), Dict(:x => [10, 20, 30], :a => 2)) # indexing into arrays are done if possible
-20
-
-julia> replace_constants_in_expr(:(x[a] + b), Dict(:x => [10, 20, 30], :a => 2, :b => 5))
-:(20 + 5)
-
-julia> replace_constants_in_expr(:(x[1] + y[1]), Dict(:x => [10, 20, 30], :y => [40, 50, 60]))
-:(10 + 40)
-```
-"""
-function replace_constants_in_expr(x, env)
-    result = _replace_constants_in_expr(x, env)
-    while result != x
-        x = result
-        result = _replace_constants_in_expr(x, env)
-    end
-    return x
-end
-
-_replace_constants_in_expr(x::Number, env) = x
-function _replace_constants_in_expr(x::Symbol, env)
-    if haskey(env, x) && env[x] isa Number
-        return env[x]
-    end
-    return x
-end
-function _replace_constants_in_expr(x::Expr, env)
-    if Meta.isexpr(x, :ref)
-        v, indices... = x.args
-        if haskey(env, v) && all(x -> x isa Union{Int,Float64}, indices)
-            val = env[v][map(Int, indices)...]
-            return ismissing(val) ? x : val
-        else
-            for i in eachindex(indices)
-                indices[i] = _replace_constants_in_expr(indices[i], env)
-            end
-            return Expr(:ref, v, indices...)
-        end
-    elseif Meta.isexpr(x, :call)
-        if x.args[1] === :cumulative || x.args[1] === :density
-            if length(x.args) != 3
-                error(
-                    "`cumulative` and `density` are special functions in BUGS and takes two arguments, got $(length(x.args) - 1)",
-                )
-            end
-            f, arg1, arg2 = x.args
-            if arg1 isa Symbol
-                return Expr(:call, f, arg1, _replace_constants_in_expr(arg2, env))
-            elseif Meta.isexpr(arg1, :ref)
-                v, indices... = arg1.args
-                for i in eachindex(indices)
-                    indices[i] = _replace_constants_in_expr(indices[i], env)
-                end
-                return Expr(
-                    :call,
-                    f,
-                    Expr(:ref, v, indices...),
-                    _replace_constants_in_expr(arg2, env),
-                )
-            else
-                error(
-                    "First argument to `cumulative` and `density` must be variable, got $(x.args[2])",
-                )
-            end
-        elseif x.args[1] === :deviance
+            ret = evaluate_and_track_dependencies(arg2, env)
+            union!(dependencies, ret[2])
+            union!(node_func_args, ret[3])
+            return missing, Tuple(dependencies), Tuple(node_func_args)
+        elseif f === :deviance
             @warn(
                 "`deviance` function is not supported in JuliaBUGS, `deviance` will be treated as a general function."
             )
         else
-            x = deepcopy(x) # because we are mutating the args
-            for i in 2:length(x.args)
-                x.args[i] = _replace_constants_in_expr(x.args[i], env)
+            for i in eachindex(args)
+                ret = evaluate_and_track_dependencies(args[i], env)
+                args[i] = ret[1]
+                union!(dependencies, ret[2])
+                union!(node_func_args, ret[3])
             end
-            return x
+
+            value = nothing
+            if all(is_resolved, args) &&
+                f ∈ BUGSPrimitives.BUGS_FUNCTIONS ∪ (:+, :-, :*, :/, :^, :(:))
+                return getfield(JuliaBUGS, f)(args...), Tuple(dependencies), Tuple(node_func_args)
+            else
+                return missing, Tuple(dependencies), Tuple(node_func_args)
+            end
         end
     else
-        error("Unexpected expression type: $x")
+        error("Unexpected expression type: $var")
     end
 end
 
@@ -815,7 +697,6 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
             return nothing
         end
     end
-
 
     lhs_var = if lhs_var isa Symbol
         Var(lhs_var)
@@ -872,7 +753,10 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
                     if x_elem isa Symbol
                         return Var(x_elem)
                     elseif x_elem isa Tuple && last(x_elem) == ()
-                        return Var(first(x_elem), Tuple([1:s for s in size(env[first(x_elem)])]))
+                        return Var(
+                            first(x_elem),
+                            Tuple([1:s for s in size(env[first(x_elem)])]),
+                        )
                     else
                         return Var(first(x_elem), last(x_elem))
                     end

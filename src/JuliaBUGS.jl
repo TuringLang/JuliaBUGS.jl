@@ -43,10 +43,12 @@ include("gibbs.jl")
 include("BUGSExamples/BUGSExamples.jl")
 
 function check_input(input::NamedTuple)
-    for (k,v) in pairs(input)
+    for (k, v) in pairs(input)
         if v isa AbstractArray
             if !(eltype(v) <: Union{Int,Float64,Missing})
-                error("For array input, only Int, Float64, or Missing types are supported. Received: $(typeof(v)).")
+                error(
+                    "For array input, only Int, Float64, or Missing types are supported. Received: $(typeof(v)).",
+                )
             end
         elseif v === missing
             error("Scalars cannot be missing. Received: $k")
@@ -64,12 +66,14 @@ function check_input(input::Dict{KT,VT}) where {KT,VT}
         if eltype(ks) === Symbol
             return check_input(NamedTuple(ks, vs))
         else
-            error("When the input isa Dict, the keys must be of type Symbol. Received: $(typeof(ks)).")
+            error(
+                "When the input isa Dict, the keys must be of type Symbol. Received: $(typeof(ks)).",
+            )
         end
     end
 end
 function check_input(input)
-    error("Input must be of type NamedTuple or Dict. Received: $(typeof(input)).")
+    return error("Input must be of type NamedTuple or Dict. Received: $(typeof(input)).")
 end
 
 function compute_data_transformation(
@@ -121,6 +125,19 @@ Compile a BUGS model into a log density problem.
 function compile(model_def::Expr, data, inits; is_transformed=true)
     data, inits = check_input(data), check_input(inits)
 
+    eval_env = semantic_analysis(model_def, data)
+
+    model_def = concretize_colon_indexing(model_def, eval_env)
+    vars, node_args, node_functions, dependencies = analyze_program(
+        NodeFunctions(), model_def, eval_env
+    )
+
+    g = create_BUGSGraph(vars, node_args, node_functions, dependencies)
+    sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
+    return BUGSModel(g, sorted_nodes, eval_env, inits; is_transformed=is_transformed)
+end
+
+function semantic_analysis(model_def::Expr, data)
     non_data_scalars, non_data_array_sizes = analyze_program(
         CollectVariables(model_def, data), model_def, data
     )
@@ -131,21 +148,7 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
         non_data_scalars, non_data_array_sizes, model_def, data
     )
     finish_checking_repeated_assignments(conflicted_scalars, conflicted_arrays, eval_env)
-
-    model_def = concretize_colon_indexing(model_def, eval_env)
-    vars, node_args, node_functions, dependencies = analyze_program(
-        NodeFunctions(), model_def, eval_env
-    )
-
-    g = create_BUGSGraph(vars, node_args, node_functions, dependencies)
-    sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
-    return BUGSModel(
-        g,
-        sorted_nodes,
-        eval_env,
-        inits;
-        is_transformed=is_transformed,
-    )
+    return eval_env
 end
 
 """
