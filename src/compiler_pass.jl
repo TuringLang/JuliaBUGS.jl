@@ -525,7 +525,7 @@ function post_process(pass::DataTransformation, expr, env)
 end
 
 function clean_up_transformed_variables(transformed_variables)
-    cleaned_transformed_variables = Dict()
+    cleaned_transformed_variables = Dict{Symbol,Any}()
     for k in keys(transformed_variables)
         v = transformed_variables[k]
         if ismissing(v)
@@ -540,7 +540,7 @@ function clean_up_transformed_variables(transformed_variables)
             cleaned_transformed_variables[k] = v
         end
     end
-    return cleaned_transformed_variables
+    return NamedTuple(cleaned_transformed_variables)
 end
 
 """
