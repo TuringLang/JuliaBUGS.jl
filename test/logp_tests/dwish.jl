@@ -15,8 +15,8 @@ end
 # Compile the BUGS model
 bugs_model = compile(
     test_dwish,
-    Dict(:degrees_of_freedom => degrees_of_freedom, :scale_matrix => scale_matrix),
-    Dict(:x => test_θ),
+    (degrees_of_freedom=degrees_of_freedom, scale_matrix=scale_matrix),
+    (x = test_θ),
 )
 
 # Now, create a DynamicPPL model to represent the same distribution
