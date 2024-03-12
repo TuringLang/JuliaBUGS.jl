@@ -735,10 +735,16 @@ function _replace_constants_in_expr(x::Symbol, env)
     return x
 end
 function _replace_constants_in_expr(x::Expr, env)
-    if Meta.isexpr(x, :ref) && all(x -> x isa Number, x.args[2:end])
-        if haskey(env, x.args[1])
-            val = env[x.args[1]][try_cast_to_int.(x.args[2:end])...]
+    if Meta.isexpr(x, :ref)
+        v, indices... = x.args
+        if  haskey(env, v) && all(x -> x isa Union{Int,Float64}, indices)
+            val = env[v][map(Int, indices)...]
             return ismissing(val) ? x : val
+        else
+            for i in eachindex(indices)
+                indices[i] = _replace_constants_in_expr(indices[i], env)
+            end
+            return Expr(:ref, v, indices...)
         end
     elseif Meta.isexpr(x, :call)
         if x.args[1] === :cumulative || x.args[1] === :density
@@ -775,11 +781,11 @@ function _replace_constants_in_expr(x::Expr, env)
             for i in 2:length(x.args)
                 x.args[i] = _replace_constants_in_expr(x.args[i], env)
             end
+            return x
         end
     else
         error("Unexpected expression type: $x")
     end
-    return x
 end
 
 """
