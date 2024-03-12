@@ -807,7 +807,7 @@ function concretize_colon_indexing(expr, array_sizes, data)
                     if haskey(array_sizes, x)
                         idx[i] = Expr(:call, :(:), 1, array_sizes[x][i])
                     else
-@assert haskey(data, x)
+                        @assert haskey(data, x)
                         idx[i] = Expr(:call, :(:), 1, size(data[x])[i])
                     end
                 end
@@ -863,7 +863,7 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
         return nothing
 
     pass.vars[lhs_var] = var_type
-rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes, env)
+    rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes, env)
     rhs = evaluate(rhs_expr, env)
 
     if rhs isa Symbol
@@ -914,14 +914,14 @@ rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes, env)
         else
             dependencies, node_args = map(
                 x -> map(x) do x_elem
-                if x_elem isa Symbol
-                    return Var(x_elem)
-                elseif x_elem isa Tuple && last(x_elem) == ()
-                    return create_array_var(first(x_elem), pass.array_sizes, env)
-                else
-                    return Var(first(x_elem), last(x_elem))
-                end
-            end,
+                    if x_elem isa Symbol
+                        return Var(x_elem)
+                    elseif x_elem isa Tuple && last(x_elem) == ()
+                        return create_array_var(first(x_elem), pass.array_sizes, env)
+                    else
+                        return Var(first(x_elem), last(x_elem))
+                    end
+                end,
                 map(collect, (dependencies, node_args)),
             )
 
