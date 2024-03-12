@@ -64,7 +64,7 @@ function compute_data_transformation(
     while has_new_val
         has_new_val = analyze_program(DataTransformation(false), model_def, eval_env)
     end
-    return clean_up_eval_env(eval_env)
+    return concretize_eval_env(eval_env)
 end
 
 function finish_checking_repeated_assignments(
@@ -127,8 +127,9 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
 
     finish_checking_repeated_assignments(conflicted_scalars, conflicted_arrays, eval_env)
 
+    model_def = concretize_colon_indexing(model_def, array_sizes, merged_data)
     vars, non_data_array_sizes, node_args, node_functions, dependencies = analyze_program(
-        NodeFunctions(non_data_array_sizes), model_def, eval_env
+        NodeFunctions(array_sizes), model_def, merged_data
     )
     g = create_BUGSGraph(vars, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))

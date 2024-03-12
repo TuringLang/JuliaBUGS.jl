@@ -528,14 +528,13 @@ end
 A pass that analyze node functions of variables and their dependencies.
 """
 struct NodeFunctions <: CompilerPass
-    array_sizes::Dict
     vars::Dict
     node_args::Dict
     node_functions::Dict
     dependencies::Dict
 end
-function NodeFunctions(array_sizes)
-    return NodeFunctions(array_sizes, Dict(), Dict(), Dict(), Dict())
+function NodeFunctions()
+    return NodeFunctions(Dict(), Dict(), Dict(), Dict())
 end
 
 """
@@ -790,71 +789,12 @@ function _replace_constants_in_expr(x::Expr, env)
     end
 end
 
-"""
-    concretize_colon_indexing(expr, array_sizes, data)
-
-Replace all `Colon()`s in `expr` with the corresponding array size, using either the `array_sizes` or the `data` dictionaries.
-
-# Examples
-```jldoctest
-julia> concretize_colon_indexing(:(f(x[1, :])), Dict(:x => (3, 4)), Dict(:x => [1 2 3 4; 5 6 7 8; 9 10 11 12]))
-:(f(x[1, 1:4]))
-```
-"""
-function concretize_colon_indexing(expr, array_sizes, data)
-    return MacroTools.postwalk(expr) do sub_expr
-        if MacroTools.@capture(sub_expr, x_[idx__])
-            for i in 1:length(idx)
-                if idx[i] == :(:)
-                    if haskey(array_sizes, x)
-                        idx[i] = Expr(:call, :(:), 1, array_sizes[x][i])
-                    else
-                        @assert haskey(data, x)
-                        idx[i] = Expr(:call, :(:), 1, size(data[x])[i])
-                    end
-                end
-            end
-            return Expr(:ref, x, idx...)
-        end
-        return sub_expr
-    end
-end
-
-"""
-    create_array_var(n, array_sizes, env)
-
-Create an array variable with the name `n` and indices based on the sizes specified in `array_sizes` or `env`.
-
-# Examples
-```jldoctest
-julia> array_sizes = Dict(:x => (2, 3));
-
-julia> env = Dict(:y => [1 2; 3 4]);
-
-julia> create_array_var(:x, array_sizes, env)
-x[1:2, 1:3]
-
-julia> create_array_var(:y, array_sizes, env)
-y[1:2, 1:2]
-```
-"""
-function create_array_var(n, array_sizes, env)
-    if haskey(env, n)
-        indices = Tuple([1:i for i in size(env[n])])
-    elseif haskey(array_sizes, n)
-        indices = Tuple([1:i for i in array_sizes[n]])
-    else
-        error("Array size information not found for variable $n")
-    end
-    return Var(n, indices)
-end
-
 try_cast_to_int(x::Integer) = x
 try_cast_to_int(x::Real) = Int(x) # will error if !isinteger(x)
 try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
 function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
-    @capture(expr, lhs_expr_ ~ rhs_expr_) || @capture(expr, lhs_expr_ = rhs_expr_)
+    lhs_expr, rhs_expr = Meta.isexpr(expr, :(=)) ? expr.args[1:2] : expr.args[2:3]
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
     lhs_var = find_variables_on_lhs(
@@ -865,7 +805,6 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
         return nothing
 
     pass.vars[lhs_var] = var_type
-    rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes, env)
     rhs = evaluate(rhs_expr, env)
 
     if rhs isa Symbol
@@ -877,7 +816,7 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
         all(x -> x isa Union{Number,UnitRange}, rhs.args[2:end])
         @assert var_type == Logical # if rhs is a variable, then the expression must be logical
         rhs_var = Var(rhs.args[1], Tuple(rhs.args[2:end]))
-        rhs_array_var = create_array_var(rhs_var.name, pass.array_sizes, env)
+        rhs_array_var = Var(rhs_var.name, size(env[rhs_var.name]))
         size(rhs_var) == size(lhs_var) ||
             error("Size mismatch between lhs and rhs at expression $expr")
         if lhs_var isa ArrayElement
@@ -915,7 +854,7 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
                     if x_elem isa Symbol
                         return Var(x_elem)
                     elseif x_elem isa Tuple && last(x_elem) == ()
-                        return create_array_var(first(x_elem), pass.array_sizes, env)
+                        return Var(first(x_elem), size(env[first(x_elem)]))
                     else
                         return Var(first(x_elem), last(x_elem))
                     end
@@ -924,7 +863,8 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
             )
 
             rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
-                if @capture(sub_expr, arr_[idxs__])
+                if Meta.isexpr(sub_expr, :ref)
+                    arr, idxs... = sub_expr.args
                     new_idxs = [
                         idx isa Integer ? idx : :(JuliaBUGS.try_cast_to_int($(idx))) for
                         idx in idxs
