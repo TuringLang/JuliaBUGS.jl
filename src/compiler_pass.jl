@@ -579,10 +579,12 @@ ERROR: AssertionError: Array indexing in BUGS must be explicit. However, `x` is 
 evaluate_and_track_dependencies(var::Number, env) = var, Set(), Set()
 evaluate_and_track_dependencies(var::UnitRange, env) = var, Set(), Set()
 function evaluate_and_track_dependencies(var::Symbol, env)
-    value = haskey(env, var) ? env[var] : var
-    @assert !ismissing(value) "Scalar variables in data can't be missing, but $var given as missing"
-    @assert value isa Union{Real,Symbol} "Array indexing in BUGS must be explicit. However, `$var` is accessed as a scalar."
-    return value, Set(), Set()
+    value = env[var]
+    if value isa Ref # must be missing after concretization
+        return var, Set(), Set()
+    else
+        return value, Set(), Set()
+    end
 end
 function evaluate_and_track_dependencies(var::Expr, env)
     deps, args = Set(), Set()
@@ -796,28 +798,43 @@ try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
 function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
     lhs_expr, rhs_expr = Meta.isexpr(expr, :(=)) ? expr.args[1:2] : expr.args[2:3]
-    var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
-    lhs_var = find_variables_on_lhs(
-        Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
-    )
-    var_type == Logical &&
-        evaluate(lhs_var, env) isa Union{Number,Array{<:Number}} &&
-        return nothing
+    lhs_var = simplify_lhs(env, lhs_expr)
+    if Meta.isexpr(expr, :(=))
+        lhs_value = if lhs_var isa Symbol
+            value = env[lhs_var]
+            if value isa Ref
+                value = value[]
+            end
+            value
+        else
+            var, indices... = lhs_var
+            env[var][indices...]
+        end
+        if is_resolved(lhs_value)
+            return nothing
+        end
+    end
 
-    pass.vars[lhs_var] = var_type
+
+    lhs_var = if lhs_var isa Symbol
+        Var(lhs_var)
+    else
+        v, indices... = lhs_var
+        Var(v, Tuple(indices))
+    end
+
+    pass.vars[lhs_var] = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
     rhs = evaluate(rhs_expr, env)
 
     if rhs isa Symbol
-        @assert lhs_var isa Union{Scalar,ArrayElement}
         node_function = MacroTools.@q ($(rhs)) -> $(rhs)
         node_args = [Var(rhs)]
         dependencies = [Var(rhs)]
     elseif Meta.isexpr(rhs, :ref) &&
         all(x -> x isa Union{Number,UnitRange}, rhs.args[2:end])
-        @assert var_type == Logical # if rhs is a variable, then the expression must be logical
         rhs_var = Var(rhs.args[1], Tuple(rhs.args[2:end]))
-        rhs_array_var = Var(rhs_var.name, size(env[rhs_var.name]))
+        rhs_array_var = Var(rhs_var.name, Tuple([1:s for s in size(env[rhs_var.name])]))
         size(rhs_var) == size(lhs_var) ||
             error("Size mismatch between lhs and rhs at expression $expr")
         if lhs_var isa ArrayElement
@@ -855,7 +872,7 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
                     if x_elem isa Symbol
                         return Var(x_elem)
                     elseif x_elem isa Tuple && last(x_elem) == ()
-                        return Var(first(x_elem), size(env[first(x_elem)]))
+                        return Var(first(x_elem), Tuple([1:s for s in size(env[first(x_elem)])]))
                     else
                         return Var(first(x_elem), last(x_elem))
                     end
@@ -895,8 +912,6 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
     return nothing
 end
 
-function post_process(pass::NodeFunctions, expr, env, vargs...)
-    return pass.vars,
-    pass.array_sizes, pass.node_args, pass.node_functions,
-    pass.dependencies
+function post_process(pass::NodeFunctions, expr, env)
+    return pass.vars, pass.node_args, pass.node_functions, pass.dependencies
 end

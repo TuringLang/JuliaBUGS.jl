@@ -74,13 +74,11 @@ end
 function BUGSModel(
     g::BUGSGraph,
     sorted_nodes::Vector{<:VarName},
-    vars,
-    array_sizes,
-    data,
+    eval_env,
     inits;
     is_transformed::Bool=true,
 )
-    vs = initialize_var_store(data, vars, array_sizes)
+    vs = initialize_var_store(eval_env)
     vi = SimpleVarInfo(vs, 0.0)
     dist_store = Dict{VarName,Distribution}()
     parameters = VarName[]
@@ -89,8 +87,6 @@ function BUGSModel(
     untransformed_var_lengths = Dict{VarName,Int}()
     transformed_var_lengths = Dict{VarName,Int}()
     for vn in sorted_nodes
-        @assert !(g[vn] isa AuxiliaryNodeInfo) "Auxiliary nodes should not be in the graph, but $(g[vn]) is."
-
         ni = g[vn]
         @unpack node_type, node_function_expr, node_args = ni
         args = Dict(getsym(arg) => vi[arg] for arg in node_args) # TODO: get rid of this
@@ -119,7 +115,7 @@ function BUGSModel(
                 )
             end
             dist_store[vn] = dist
-            value = evaluate(vn, data) # `evaluate(::VarName, env)` is defined in `src/utils.jl`
+            value = evaluate(vn, eval_env) # `evaluate(::VarName, env)` is defined in `src/utils.jl`
             if value isa Nothing # not observed
                 push!(parameters, vn)
                 this_param_length = length(dist)
@@ -149,8 +145,9 @@ function BUGSModel(
             end
         end
     end
-    @assert (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) ==
-        untransformed_param_length "$(isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) $untransformed_param_length"
+    if (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) != untransformed_param_length 
+        error("$(isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) $untransformed_param_length")
+    end
     return BUGSModel(
         is_transformed,
         untransformed_param_length,
@@ -166,29 +163,24 @@ function BUGSModel(
     )
 end
 
-function initialize_var_store(data, vars, array_sizes)
-    var_store = Dict{VarName,Any}()
-    array_vn(k::Symbol) = AbstractPPL.VarName{Symbol(k)}(AbstractPPL.IdentityLens())
-    for k in keys(data)
-        v = data[k]
-        vn = array_vn(k)
-        var_store[vn] = v
-    end
-    for k in keys(array_sizes)
-        v = array_sizes[k]
-        vn = array_vn(k)
-        if !haskey(var_store, vn)
-            # var_store[vn] = zeros(v...)
-            var_store[vn] = Array{Float64}(undef, v...)
+function initialize_var_store(eval_env::NamedTuple)
+    var_store = Dict{Symbol,Any}()
+    for (k, v) in pairs(eval_env)
+        if v isa AbstractArray
+            if eltype(v) === Missing
+                var_store[k] = Array{Int}(undef, size(v)...)
+            elseif Missing <: eltype(v)
+                var_store[k] = copy(v)
+            else
+                var_store[k] = v
+            end
+        elseif v isa Ref
+            var_store[k] = v[]
+        else
+            var_store[k] = v
         end
     end
-    for v in keys(vars)
-        if v isa Scalar
-            vn = to_varname(v)
-            var_store[vn] = 0.0
-        end
-    end
-    return var_store
+    return NamedTuple(var_store)
 end
 
 """

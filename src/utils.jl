@@ -2,7 +2,7 @@
 # for non-data scalar variables, we use `Ref` to mutate the value
 function create_eval_env(
     non_data_scalars::Tuple{Vararg{Symbol}},
-    non_data_array_sizes::NamedTuple{non_data_array_vars,ArraySizes},
+    non_data_array_sizes::NamedTuple{non_data_array_vars},
     data::NamedTuple{data_vars},
 ) where {data_vars,non_data_array_vars}
     data_copy = Dict{Symbol,Any}()
@@ -25,39 +25,41 @@ function create_eval_env(
         Ref{Union{Missing,Int,Float64}}(missing) for i in eachindex(non_data_scalars)
     ])
     init_arrays = Tuple([
-        Array{Union{Int,Float64,Missing}}(missing, array_sizes[non_data_array_vars[i]]...)
+        Array{Union{Int,Float64,Missing}}(missing, non_data_array_sizes[non_data_array_vars[i]]...)
         for i in eachindex(non_data_array_vars)
     ])
 
     eval_env = merge(
-        data_copy,
         NamedTuple{non_data_scalars}(init_scalars),
         NamedTuple{non_data_array_vars}(init_arrays),
+        data_copy
     )
 
     return eval_env
 end
 
 function concretize_eval_env(eval_env::NamedTuple)
-    cleaned_eval_env = Dict{Symbol,Any}()
+    concretized_eval_env = Dict{Symbol,Any}()
     for (k, v) in pairs(eval_env)
         if v isa Union{Int,Float64}
-            cleaned_eval_env[k] = v
+            concretized_eval_env[k] = v
         elseif v isa Ref
-            if v[] !== missing
-                cleaned_eval_env[k] = v[]
+            if v[] === missing
+                concretized_eval_env[k] = v
+            else
+                concretized_eval_env[k] = v[]
             end
         elseif v isa AbstractArray
             if Missing <: eltype(v)
-                cleaned_eval_env[k] = map(identity, v)
+                concretized_eval_env[k] = map(identity, v)
             else
-                cleaned_eval_env[k] = v
+                concretized_eval_env[k] = v
             end
         else
             error("Don't know how to handle $k's value: $v.")
         end
     end
-    return NamedTuple(cleaned_eval_env)
+    return NamedTuple(concretized_eval_env)
 end
 
 """
@@ -430,20 +432,16 @@ julia> concretize_colon_indexing(:(f(x[1, :])), Dict(:x => (3, 4)), Dict(:x => [
 :(f(x[1, 1:4]))
 ```
 """
-function concretize_colon_indexing(expr, array_sizes, data)
+function concretize_colon_indexing(expr, eval_env::NamedTuple)
     return MacroTools.postwalk(expr) do sub_expr
-        if MacroTools.@capture(sub_expr, x_[idx__])
-            for i in 1:length(idx)
-                if idx[i] == :(:)
-                    if haskey(array_sizes, x)
-                        idx[i] = Expr(:call, :(:), 1, array_sizes[x][i])
-                    else
-                        @assert haskey(data, x)
-                        idx[i] = Expr(:call, :(:), 1, size(data[x])[i])
-                    end
+        if Meta.isexpr(sub_expr, :ref) 
+            v, indices... = sub_expr.args
+            for i in eachindex(indices)
+                if indices[i] == :(:)
+                    idx[i] = Expr(:call, :(:), 1, size(eval_env[v])[i])
                 end
             end
-            return Expr(:ref, x, idx...)
+            return Expr(:ref, v, indices...)
         end
         return sub_expr
     end
@@ -607,7 +605,15 @@ function evaluate(vn::VarName, env)
         ret = get(env[sym], getlens(vn))
     catch _
     end
-    return ismissing(ret) ? nothing : ret
+    if ret isa Ref
+        if ret[] === missing
+            return nothing
+        else
+            return ret[]
+        end
+    else
+        return ret
+    end
 end
 
 """
