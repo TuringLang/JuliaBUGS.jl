@@ -367,6 +367,8 @@ The exceptional case will be checked after `DataTransformation` pass.
 """
 struct CheckRepeatedAssignments <: CompilerPass
     overlap_scalars::Tuple{Vararg{Symbol}} # TODO: `Tuple{Vararg{Symbol}}` is not concrete type, improve this in the future
+    overlap_arrays::Tuple{Vararg{Symbol}}
+
     logical_assignment_trackers::NamedTuple
     stochastic_assignment_trackers::NamedTuple
 end
@@ -380,6 +382,7 @@ function CheckRepeatedAssignments(
     )
 
     overlap_scalars = Tuple(intersect(logical_scalars, stochastic_scalars))
+    overlap_arrays = intersect(logical_arrays, stochastic_arrays)
 
     logical_assignment_trackers = Dict{Symbol,BitArray}()
     stochastic_assignment_trackers = Dict{Symbol,BitArray}()
@@ -398,11 +401,14 @@ function CheckRepeatedAssignments(
         stochastic_assignment_trackers[v] = falses(array_size...)
     end
 
+    logical_assignment_trackers = NamedTuple(logical_assignment_trackers)
+    stochastic_assignment_trackers = NamedTuple(stochastic_assignment_trackers)
+
     return CheckRepeatedAssignments(
         overlap_scalars,
         Tuple(overlap_arrays),
-        NamedTuple(logical_assignment_trackers),
-        NamedTuple(stochastic_assignment_trackers),
+        logical_assignment_trackers,
+        stochastic_assignment_trackers,
     )
 end
 
@@ -437,7 +443,6 @@ end
 
 function post_process(pass::CheckRepeatedAssignments, expr, env)
     suspect_arrays = Dict{Symbol,BitArray}()
-    array_bitmap = Dict{Symbol,BitArray}()
     for v in pass.overlap_arrays
         if any(
             pass.logical_assignment_trackers[v] .& pass.stochastic_assignment_trackers[v]
@@ -549,15 +554,13 @@ A pass that analyze node functions of variables and their dependencies.
 """
 struct NodeFunctions <: CompilerPass
     array_sizes::Dict
-    array_bitmap::Dict
-
     vars::Dict
     node_args::Dict
     node_functions::Dict
     dependencies::Dict
 end
-function NodeFunctions(array_sizes, array_bitmap)
-    return NodeFunctions(array_sizes, array_bitmap, Dict(), Dict(), Dict(), Dict())
+function NodeFunctions(array_sizes)
+    return NodeFunctions(array_sizes, Dict(), Dict(), Dict(), Dict())
 end
 
 """
@@ -903,7 +906,6 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
         size(rhs_var) == size(lhs_var) ||
             error("Size mismatch between lhs and rhs at expression $expr")
         if lhs_var isa ArrayElement
-            @assert pass.array_bitmap[rhs_var.name][rhs_var.indices...] "Variable $rhs_var is not defined."
             node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
                 $(rhs_var.name)[$(rhs_var.indices...)]
             node_args = [rhs_array_var]
@@ -914,9 +916,6 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
             # for now: evaluate(rhs_var, env) will produce scalarized `Var`s, so dependencies
             # may contain `Auxiliary Nodes`, this should be okay, but maybe we should keep things uniform
             # by keep `dependencies` only variables in the model, not auxiliary nodes
-            for v in non_data_vars
-                @assert pass.array_bitmap[v.name][v.indices...] "Variable $v is not defined."
-            end
             node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
                 $(rhs_var.name)[$(rhs_var.indices...)]
             node_args = [rhs_array_var]
@@ -982,6 +981,6 @@ end
 
 function post_process(pass::NodeFunctions, expr, env, vargs...)
     return pass.vars,
-    pass.array_sizes, pass.array_bitmap, pass.node_args, pass.node_functions,
+    pass.array_sizes, pass.node_args, pass.node_functions,
     pass.dependencies
 end
