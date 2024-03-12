@@ -220,7 +220,9 @@ function compute_data_transformation(scalar, array_sizes, model_def, data)
     return transformed_variables
 end
 
-function finish_checking_repeated_assignments(conflicted_scalars, conflicted_arrays, merged_data)
+function finish_checking_repeated_assignments(
+    conflicted_scalars, conflicted_arrays, merged_data
+)
     # finish up repeated assignment check now we have transformed data
     for scalar in conflicted_scalars
         if merged_data[scalar] isa Missing
