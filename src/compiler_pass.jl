@@ -436,7 +436,9 @@ end
 
 function post_process(pass::CheckRepeatedAssignments, expr, env)
     suspect_arrays = Dict{Symbol,BitArray}()
-    overlap_arrays = intersect(keys(pass.logical_assignment_trackers), keys(pass.stochastic_assignment_trackers))
+    overlap_arrays = intersect(
+        keys(pass.logical_assignment_trackers), keys(pass.stochastic_assignment_trackers)
+    )
     for v in overlap_arrays
         if any(
             pass.logical_assignment_trackers[v] .& pass.stochastic_assignment_trackers[v]
