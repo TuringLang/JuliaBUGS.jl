@@ -220,6 +220,25 @@ function compute_data_transformation(scalar, array_sizes, model_def, data)
     return transformed_variables
 end
 
+function finish_checking_repeated_assignments(conflicted_scalars, conflicted_arrays, merged_data)
+    # finish up repeated assignment check now we have transformed data
+    for scalar in conflicted_scalars
+        if merged_data[scalar] isa Missing
+            error("$scalar is assigned by both logical and stochastic variables.")
+        end
+    end
+
+    for (array_name, conflict_array) in pairs(conflicted_arrays)
+        missing_values = ismissing.(merged_data[array_name])
+        conflicts = conflict_array .& missing_values
+        if any(conflicts)
+            error(
+                "$(array_name)[$(join(Tuple.(findall(conflicts)), ", "))] is assigned by both logical and stochastic variables.",
+            )
+        end
+    end
+end
+
 """
     compile(model_def[, data, initializations])
 
@@ -249,6 +268,7 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
     scalars, array_sizes = analyze_program(
         CollectVariables(model_def, data), model_def, data
     )
+    
     conflicted_scalars, conflicted_arrays = analyze_program(
         CheckRepeatedAssignments(model_def, data, array_sizes), model_def, data
     )
@@ -256,26 +276,11 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
     transformed_variables = compute_data_transformation(
         scalars, array_sizes, model_def, data
     )
-    transformed_variables = clean_up_transformed_variables(transformed_variables)
 
     merged_data = merge_with_coalescence(deepcopy(data), transformed_variables)
+    merged_data = concretize_eval_env_value_types(merged_data)
 
-    # finish up repeated assignment check now we have transformed data
-    for scalar in conflicted_scalars
-        if merged_data[scalar] isa Missing
-            error("$scalar is assigned by both logical and stochastic variables.")
-        end
-    end
-
-    for (array_name, conflict_array) in pairs(conflicted_arrays)
-        missing_values = ismissing.(merged_data[array_name])
-        conflicts = conflict_array .& missing_values
-        if any(conflicts)
-            error(
-                "$(array_name)[$(join(Tuple.(findall(conflicts)), ", "))] is assigned by both logical and stochastic variables.",
-            )
-        end
-    end
+    finish_checking_repeated_assignments(conflicted_scalars, conflicted_arrays, merged_data)
 
     vars, array_sizes, node_args, node_functions, dependencies = analyze_program(
         NodeFunctions(array_sizes), model_def, merged_data
