@@ -1,71 +1,5 @@
-# handle `cumulative`, `density` and `deviance` functions
-# these are incorrect implementations, as it can only handle the case where the first argument is exactly the same as the LHS of the stochastic assignment
-# but can't handle cases like `cumulative(y[1], x)` where `y[i]` is defined in loops
-# other than that, `density` and `deviance` also require that the variable in place of first argument is observed
-# TODO: fix this
-function cumulative(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, lhs_ = cumulative(s1_, s2_))
-            dist = find_tilde_rhs(expr, s1)
-            sub_expr.args[2].args[1] = :cdf
-            sub_expr.args[2].args[2] = dist
-            return sub_expr
-        else
-            return sub_expr
-        end
-    end
-end
-
-function density(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, lhs_ = density(s1_, s2_))
-            dist = find_tilde_rhs(expr, s1)
-            sub_expr.args[2].args[1] = :pdf
-            sub_expr.args[2].args[2] = dist
-            return sub_expr
-        else
-            return sub_expr
-        end
-    end
-end
-
-function deviance(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, lhs_ = deviance(s1_, s2_))
-            dist = find_tilde_rhs(expr, s1)
-            sub_expr.args[2].args[1] = :logpdf
-            sub_expr.args[2].args[2] = dist
-            sub_expr.args[2] = Expr(:call, :*, -2, sub_expr.args[2])
-            return sub_expr
-        else
-            return sub_expr
-        end
-    end
-end
-
-function find_tilde_rhs(expr::Expr, target::Union{Expr,Symbol})
-    dist = nothing
-    MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, lhs_ ~ rhs_)
-            if lhs == target
-                isnothing(dist) || error("Exist two assignments to the same variable.")
-                dist = rhs
-            end
-        end
-        return sub_expr
-    end
-    isnothing(dist) && error(
-        "Error handling cumulative expression: can't find a stochastic assignment for $target.",
-    )
-    return dist
-end
-
-function handle_special_functions(expr::Expr)
-    return cumulative(density(deviance(expr)))
-end
-
-macro bugs(expr)
-    return Meta.quot(handle_special_functions(bugs_top(expr, __source__)))
+macro bugs(expr::Expr)
+    return Meta.quot(bugs_top(expr, __source__))
 end
 
 function bugs_top(@nospecialize(expr), __source__)
@@ -252,5 +186,5 @@ macro bugs(prog::String, replace_period=true, no_enclosure=false)
     if !isempty(error_container) # otherwise errors thrown in macro will be LoadError
         return :(throw(ErrorException(join($error_container, "\n"))))
     end
-    return Meta.quot(handle_special_functions(expr))
+    return Meta.quot(expr)
 end

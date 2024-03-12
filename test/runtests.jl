@@ -84,6 +84,8 @@ else
 
     include("compile.jl")
 
+    include("cumulative_density.jl")
+
     @testset "Compile WinBUGS Vol I examples: $m" for m in [
         :blockers,
         :bones,
