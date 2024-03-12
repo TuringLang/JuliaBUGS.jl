@@ -658,27 +658,65 @@ function evaluate_and_track_dependencies(var::Expr, env)
         push!(args, (var.args[1], ()))
         push!(deps, (var.args[1], ()))
         return Expr(var.head, var.args[1], idxs...), deps, args
-    else # function call
-        fun_args = []
-        for i in 2:length(var.args)
-            e, d, a = evaluate_and_track_dependencies(var.args[i], env)
-            push!(fun_args, e)
+    elseif Meta.isexpr(var, :call)
+        if var.args[1] === :cumulative || var.args[1] === :density
+            arg1, arg2 = var.args[2:3]
+            arg1 = if arg1 isa Symbol
+                push!(deps, arg1)
+                # no need to add to arg, as the value doesn't matter
+                arg1
+            elseif Meta.isexpr(arg1, :ref)
+                v, indices... = arg1.args
+                for i in eachindex(indices)
+                    e, d, a = evaluate_and_track_dependencies(indices[i], env)
+                    union!(deps, d)
+                    union!(args, a)
+                    indices[i] = e
+                end
+                if any(!is_resolved, indices)
+                    error(
+                        "For now, the indices of the first argument to `cumulative` and `density` must be resolved, got $indices",
+                    )
+                end
+                push!(deps, (v, Tuple(indices)))
+                # no need to add to arg, as the value doesn't matter
+                Expr(:ref, v, indices...)
+            else
+                error(
+                    "First argument to `cumulative` and `density` must be variable, got $(arg1)",
+                )
+            end
+            e, d, a = evaluate_and_track_dependencies(arg2, env)
             union!(deps, d)
             union!(args, a)
-        end
-
-        for a in fun_args
-            a isa Symbol && a != :nothing && a != :(:) && (push!(deps, a); push!(args, a))
-        end
-
-        if (
-            var.args[1] ∈ BUGSPrimitives.BUGS_FUNCTIONS ||
-            var.args[1] ∈ (:+, :-, :*, :/, :^, :(:))
-        ) && all(is_resolved, args)
-            return getfield(JuliaBUGS, var.args[1])(fun_args...), deps, args
+            return Expr(:call, var.args[1], arg1, e), deps, args
         else
-            return Expr(var.head, var.args[1], fun_args...), deps, args
+            fun_args = []
+            for i in 2:length(var.args)
+                e, d, a = evaluate_and_track_dependencies(var.args[i], env)
+                push!(fun_args, e)
+                union!(deps, d)
+                union!(args, a)
+            end
+
+            for a in fun_args
+                a isa Symbol &&
+                    a != :nothing &&
+                    a != :(:) &&
+                    (push!(deps, a); push!(args, a))
+            end
+
+            if (
+                var.args[1] ∈ BUGSPrimitives.BUGS_FUNCTIONS ||
+                var.args[1] ∈ (:+, :-, :*, :/, :^, :(:))
+            ) && all(is_resolved, args)
+                return getfield(JuliaBUGS, var.args[1])(fun_args...), deps, args
+            else
+                return Expr(var.head, var.args[1], fun_args...), deps, args
+            end
         end
+    else
+        error("Unexpected expression type: $var")
     end
 end
 
@@ -718,36 +756,63 @@ end
 
 _replace_constants_in_expr(x::Number, env) = x
 function _replace_constants_in_expr(x::Symbol, env)
-    if haskey(env, x)
-        if env[x] isa Number # only plug in scalar variables
-            return env[x]
-        else # if it's an array, raise error because array indexing should be explicit
-            error("$x")
-        end
+    if haskey(env, x) && env[x] isa Number
+        return env[x]
     end
     return x
 end
 function _replace_constants_in_expr(x::Expr, env)
-    if Meta.isexpr(x, :ref) && all(x -> x isa Number, x.args[2:end])
-        if haskey(env, x.args[1])
-            val = env[x.args[1]][try_cast_to_int.(x.args[2:end])...]
+    if Meta.isexpr(x, :ref)
+        v, indices... = x.args
+        if haskey(env, v) && all(x -> x isa Union{Int,Float64}, indices)
+            val = env[v][map(Int, indices)...]
             return ismissing(val) ? x : val
+        else
+            for i in eachindex(indices)
+                indices[i] = _replace_constants_in_expr(indices[i], env)
+            end
+            return Expr(:ref, v, indices...)
         end
-    else # don't try to eval the function, but try to simplify
-        x = deepcopy(x) # because we are mutating the args
-        for i in 2:length(x.args)
-            try
-                x.args[i] = _replace_constants_in_expr(x.args[i], env)
-            catch e
-                rethrow(
-                    ErrorException(
-                        "Array indexing in BUGS must be explicit. However, `$(e.msg)` is accessed as a scalar.",
-                    ),
+    elseif Meta.isexpr(x, :call)
+        if x.args[1] === :cumulative || x.args[1] === :density
+            if length(x.args) != 3
+                error(
+                    "`cumulative` and `density` are special functions in BUGS and takes two arguments, got $(length(x.args) - 1)",
                 )
             end
+            f, arg1, arg2 = x.args
+            if arg1 isa Symbol
+                return Expr(:call, f, arg1, _replace_constants_in_expr(arg2, env))
+            elseif Meta.isexpr(arg1, :ref)
+                v, indices... = arg1.args
+                for i in eachindex(indices)
+                    indices[i] = _replace_constants_in_expr(indices[i], env)
+                end
+                return Expr(
+                    :call,
+                    f,
+                    Expr(:ref, v, indices...),
+                    _replace_constants_in_expr(arg2, env),
+                )
+            else
+                error(
+                    "First argument to `cumulative` and `density` must be variable, got $(x.args[2])",
+                )
+            end
+        elseif x.args[1] === :deviance
+            @warn(
+                "`deviance` function is not supported in JuliaBUGS, `deviance` will be treated as a general function."
+            )
+        else
+            x = deepcopy(x) # because we are mutating the args
+            for i in 2:length(x.args)
+                x.args[i] = _replace_constants_in_expr(x.args[i], env)
+            end
+            return x
         end
+    else
+        error("Unexpected expression type: $x")
     end
-    return x
 end
 
 """

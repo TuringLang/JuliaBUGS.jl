@@ -1,71 +1,5 @@
-# handle `cumulative`, `density` and `deviance` functions
-# these are incorrect implementations, as it can only handle the case where the first argument is exactly the same as the LHS of the stochastic assignment
-# but can't handle cases like `cumulative(y[1], x)` where `y[i]` is defined in loops
-# other than that, `density` and `deviance` also require that the variable in place of first argument is observed
-# TODO: fix this
-function cumulative(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, lhs_ = cumulative(s1_, s2_))
-            dist = find_tilde_rhs(expr, s1)
-            sub_expr.args[2].args[1] = :cdf
-            sub_expr.args[2].args[2] = dist
-            return sub_expr
-        else
-            return sub_expr
-        end
-    end
-end
-
-function density(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, lhs_ = density(s1_, s2_))
-            dist = find_tilde_rhs(expr, s1)
-            sub_expr.args[2].args[1] = :pdf
-            sub_expr.args[2].args[2] = dist
-            return sub_expr
-        else
-            return sub_expr
-        end
-    end
-end
-
-function deviance(expr::Expr)
-    return MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, lhs_ = deviance(s1_, s2_))
-            dist = find_tilde_rhs(expr, s1)
-            sub_expr.args[2].args[1] = :logpdf
-            sub_expr.args[2].args[2] = dist
-            sub_expr.args[2] = Expr(:call, :*, -2, sub_expr.args[2])
-            return sub_expr
-        else
-            return sub_expr
-        end
-    end
-end
-
-function find_tilde_rhs(expr::Expr, target::Union{Expr,Symbol})
-    dist = nothing
-    MacroTools.postwalk(expr) do sub_expr
-        if @capture(sub_expr, lhs_ ~ rhs_)
-            if lhs == target
-                isnothing(dist) || error("Exist two assignments to the same variable.")
-                dist = rhs
-            end
-        end
-        return sub_expr
-    end
-    isnothing(dist) && error(
-        "Error handling cumulative expression: can't find a stochastic assignment for $target.",
-    )
-    return dist
-end
-
-function handle_special_functions(expr::Expr)
-    return cumulative(density(deviance(expr)))
-end
-
-macro bugs(expr)
-    return Meta.quot(handle_special_functions(bugs_top(expr, __source__)))
+macro bugs(expr::Expr)
+    return Meta.quot(bugs_top(expr, __source__))
 end
 
 function bugs_top(@nospecialize(expr), __source__)
@@ -202,15 +136,18 @@ function bugs_expression(expr, line_num)
 end
 
 """
-    @bugs(prog::String, replace_period=true, no_enclosure=false)
+    @bugs(program::Expr)
+    @bugs(program::String; replace_period::Bool=true, no_enclosure::Bool=false)
 
-Produce similar output as [`@bugs`](@ref), but takes a string as input.  This is useful for 
-parsing original BUGS programs.
+Constructs a Julia Abstract Syntax Tree (AST) representation of a BUGS program. This macro supports two forms of input: a Julia expression or a string containing the BUGS program code. 
 
-# Arguments
-- `prog::String`: The BUGS program code as a string.
-- `replace_period::Bool`: If true, periods in the BUGS code will be replaced (default `true`).
-- `no_enclosure::Bool`: If true, the parser will not expect the program to be wrapped between `model{ }` (default `false`).
+- When provided with a string, the macro parses it as a BUGS program, with optional arguments to control parsing behavior.
+- When given an expression, it performs syntactic checks to ensure compatibility with BUGS syntax.
+
+## Arguments for String Input
+For the string input variant, the following optional arguments are available:
+- `replace_period::Bool`: When set to `true`, all periods (`.`) in the BUGS code are replaced. This is enabled by default.
+- `no_enclosure::Bool`: When `true`, the parser does not require the BUGS program to be enclosed within `model{ ... }` brackets. By default, this is set to `false`.
 
 """
 macro bugs(prog::String, replace_period=true, no_enclosure=false)
@@ -249,5 +186,5 @@ macro bugs(prog::String, replace_period=true, no_enclosure=false)
     if !isempty(error_container) # otherwise errors thrown in macro will be LoadError
         return :(throw(ErrorException(join($error_container, "\n"))))
     end
-    return Meta.quot(handle_special_functions(expr))
+    return Meta.quot(expr)
 end
