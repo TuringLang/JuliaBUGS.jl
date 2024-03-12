@@ -845,7 +845,7 @@ try_cast_to_int(x::Real) = Int(x) # will error if !isinteger(x)
 try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
 function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
-    @capture(expr, lhs_expr_ ~ rhs_expr_) || @capture(expr, lhs_expr_ = rhs_expr_)
+    lhs_expr, rhs_expr = Meta.isexpr(expr, :(=)) ? expr.args[1:2] : expr.args[2:3]
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
     lhs_var = find_variables_on_lhs(
@@ -914,7 +914,8 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
             )
 
             rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
-                if @capture(sub_expr, arr_[idxs__])
+                if Meta.isexpr(sub_expr, :ref)
+                    arr, idxs... = sub_expr.args
                     new_idxs = [
                         idx isa Integer ? idx : :(JuliaBUGS.try_cast_to_int($(idx))) for
                         idx in idxs
