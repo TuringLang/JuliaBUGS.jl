@@ -341,7 +341,7 @@ function AbstractPPL.condition(
     base_model = model.base_model isa Nothing ? model : model.base_model
     new_parameters = setdiff(model.parameters, var_group)
 
-    sorted_blanket_with_vars = if sorted_nodes isa Nothing
+    sorted_blanket_with_vars = if !(sorted_nodes isa Nothing)
         sorted_nodes
     else
         filter(

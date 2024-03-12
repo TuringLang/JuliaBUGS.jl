@@ -732,37 +732,44 @@ function _replace_constants_in_expr(x::Expr, env)
             val = env[x.args[1]][try_cast_to_int.(x.args[2:end])...]
             return ismissing(val) ? x : val
         end
-    elseif Meta.isexpr(x, :call) && x.args[1] === :cumulative || x.args[1] === :density
-        if length(x.args) != 3
-            error(
-                "`cumulative` and `density` are special functions in BUGS and takes two arguments, got $(length(x.args) - 1)",
-            )
-        end
-        f, arg1, arg2 = x.args
-        if arg1 isa Symbol
-            return Expr(:call, f, arg1, _replace_constants_in_expr(arg2, env))
-        elseif Meta.isexpr(arg1, :ref)
-            v, indices... = arg1.args
-            for i in eachindex(indices)
-                indices[i] = _replace_constants_in_expr(indices[i], env)
+    elseif Meta.isexpr(x, :call)
+        if x.args[1] === :cumulative || x.args[1] === :density
+            if length(x.args) != 3
+                error(
+                    "`cumulative` and `density` are special functions in BUGS and takes two arguments, got $(length(x.args) - 1)",
+                )
             end
-            return Expr(
-                :call, f, Expr(:ref, v, indices...), _replace_constants_in_expr(arg2, env)
+            f, arg1, arg2 = x.args
+            if arg1 isa Symbol
+                return Expr(:call, f, arg1, _replace_constants_in_expr(arg2, env))
+            elseif Meta.isexpr(arg1, :ref)
+                v, indices... = arg1.args
+                for i in eachindex(indices)
+                    indices[i] = _replace_constants_in_expr(indices[i], env)
+                end
+                return Expr(
+                    :call,
+                    f,
+                    Expr(:ref, v, indices...),
+                    _replace_constants_in_expr(arg2, env),
+                )
+            else
+                error(
+                    "First argument to `cumulative` and `density` must be variable, got $(x.args[2])",
+                )
+            end
+        elseif x.args[1] === :deviance
+            @warn(
+                "`deviance` function is not supported in JuliaBUGS, `deviance` will be treated as a general function."
             )
         else
-            error(
-                "First argument to `cumulative` and `density` must be variable, got $(x.args[2])",
-            )
+            x = deepcopy(x) # because we are mutating the args
+            for i in 2:length(x.args)
+                x.args[i] = _replace_constants_in_expr(x.args[i], env)
+            end
         end
-    elseif Meta.isexpr(x, :call) && x.args[1] === :deviance
-        @warn(
-            "`deviance` function is not supported in JuliaBUGS, `deviance` will be treated as a general function."
-        )
-    else # don't try to eval the function, but try to simplify
-        x = deepcopy(x) # because we are mutating the args
-        for i in 2:length(x.args)
-            x.args[i] = _replace_constants_in_expr(x.args[i], env)
-        end
+    else
+        error("Unexpected expression type: $x")
     end
     return x
 end
