@@ -688,6 +688,8 @@ function evaluate_and_track_dependencies(var::Expr, env)
                 return Expr(var.head, var.args[1], fun_args...), deps, args
             end
         end
+    else
+        error("Unexpected expression type: $var")
     end
 end
 
