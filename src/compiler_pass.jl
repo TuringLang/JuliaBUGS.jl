@@ -484,7 +484,6 @@ function analyze_assignment(pass::DataTransformation, expr::Expr, env::NamedTupl
     if Meta.isexpr(expr, :call) # expr.args[1] === :(~)
         return nothing
     end
-    
     lhs_expr, rhs_expr = expr.args[1], expr.args[2]
     lhs = simplify_lhs(env, lhs_expr)
 
