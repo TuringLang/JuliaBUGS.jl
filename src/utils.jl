@@ -358,6 +358,36 @@ function extract_variables_assigned_to(
 end
 
 """
+    concretize_colon_indexing(expr, array_sizes, data)
+
+Replace all `Colon()`s in `expr` with the corresponding array size, using either the `array_sizes` or the `data` dictionaries.
+
+# Examples
+```jldoctest
+julia> concretize_colon_indexing(:(f(x[1, :])), Dict(:x => (3, 4)), Dict(:x => [1 2 3 4; 5 6 7 8; 9 10 11 12]))
+:(f(x[1, 1:4]))
+```
+"""
+function concretize_colon_indexing(expr, array_sizes, data)
+    return MacroTools.postwalk(expr) do sub_expr
+        if MacroTools.@capture(sub_expr, x_[idx__])
+            for i in 1:length(idx)
+                if idx[i] == :(:)
+                    if haskey(array_sizes, x)
+                        idx[i] = Expr(:call, :(:), 1, array_sizes[x][i])
+                    else
+                        @assert haskey(data, x)
+                        idx[i] = Expr(:call, :(:), 1, size(data[x])[i])
+                    end
+                end
+            end
+            return Expr(:ref, x, idx...)
+        end
+        return sub_expr
+    end
+end
+
+"""
     simple_arithmetic_eval(data, expr)
 
 This function evaluates expressions that consist solely of arithmetic operations and indexing. It 

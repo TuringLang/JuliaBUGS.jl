@@ -283,6 +283,7 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
 
     finish_checking_repeated_assignments(conflicted_scalars, conflicted_arrays, merged_data)
 
+    model_def = concretize_colon_indexing(model_def, array_sizes, merged_data)
     vars, array_sizes, node_args, node_functions, dependencies = analyze_program(
         NodeFunctions(array_sizes), model_def, merged_data
     )

@@ -812,36 +812,6 @@ function _replace_constants_in_expr(x::Expr, env)
 end
 
 """
-    concretize_colon_indexing(expr, array_sizes, data)
-
-Replace all `Colon()`s in `expr` with the corresponding array size, using either the `array_sizes` or the `data` dictionaries.
-
-# Examples
-```jldoctest
-julia> concretize_colon_indexing(:(f(x[1, :])), Dict(:x => (3, 4)), Dict(:x => [1 2 3 4; 5 6 7 8; 9 10 11 12]))
-:(f(x[1, 1:4]))
-```
-"""
-function concretize_colon_indexing(expr, array_sizes, data)
-    return MacroTools.postwalk(expr) do sub_expr
-        if MacroTools.@capture(sub_expr, x_[idx__])
-            for i in 1:length(idx)
-                if idx[i] == :(:)
-                    if haskey(array_sizes, x)
-                        idx[i] = Expr(:call, :(:), 1, array_sizes[x][i])
-                    else
-                        @assert haskey(data, x)
-                        idx[i] = Expr(:call, :(:), 1, size(data[x])[i])
-                    end
-                end
-            end
-            return Expr(:ref, x, idx...)
-        end
-        return sub_expr
-    end
-end
-
-"""
     create_array_var(n, array_sizes, env)
 
 Create an array variable with the name `n` and indices based on the sizes specified in `array_sizes` or `env`.
@@ -875,7 +845,7 @@ try_cast_to_int(x::Real) = Int(x) # will error if !isinteger(x)
 try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
 function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
-    @capture(expr, lhs_expr_ ~ rhs_expr_) || @capture(expr, lhs_expr_ = rhs_expr_)
+    lhs_expr, rhs_expr = Meta.isexpr(expr, :(=)) ? expr.args[1:2] : expr.args[2:3]
     var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
 
     lhs_var = find_variables_on_lhs(
@@ -886,7 +856,6 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
         return nothing
 
     pass.vars[lhs_var] = var_type
-    rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes, env)
     rhs = evaluate(rhs_expr, env)
 
     if rhs isa Symbol
@@ -945,7 +914,8 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
             )
 
             rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
-                if @capture(sub_expr, arr_[idxs__])
+                if Meta.isexpr(sub_expr, :ref)
+                    arr, idxs... = sub_expr.args
                     new_idxs = [
                         idx isa Integer ? idx : :(JuliaBUGS.try_cast_to_int($(idx))) for
                         idx in idxs
