@@ -16,7 +16,7 @@ end
 bugs_model = compile(
     test_dwish,
     (degrees_of_freedom=degrees_of_freedom, scale_matrix=scale_matrix),
-    (x = test_θ),
+    (x=test_θ,),
 )
 
 # Now, create a DynamicPPL model to represent the same distribution
