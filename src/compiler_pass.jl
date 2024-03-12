@@ -367,8 +367,6 @@ The exceptional case will be checked after `DataTransformation` pass.
 """
 struct CheckRepeatedAssignments <: CompilerPass
     overlap_scalars::Tuple{Vararg{Symbol}} # TODO: `Tuple{Vararg{Symbol}}` is not concrete type, improve this in the future
-    overlap_arrays::Tuple{Vararg{Symbol}}
-
     logical_assignment_trackers::NamedTuple
     stochastic_assignment_trackers::NamedTuple
 end
@@ -382,7 +380,6 @@ function CheckRepeatedAssignments(
     )
 
     overlap_scalars = Tuple(intersect(logical_scalars, stochastic_scalars))
-    overlap_arrays = intersect(logical_arrays, stochastic_arrays)
 
     logical_assignment_trackers = Dict{Symbol,BitArray}()
     stochastic_assignment_trackers = Dict{Symbol,BitArray}()
@@ -401,14 +398,10 @@ function CheckRepeatedAssignments(
         stochastic_assignment_trackers[v] = falses(array_size...)
     end
 
-    logical_assignment_trackers = NamedTuple(logical_assignment_trackers)
-    stochastic_assignment_trackers = NamedTuple(stochastic_assignment_trackers)
-
     return CheckRepeatedAssignments(
         overlap_scalars,
-        Tuple(overlap_arrays),
-        logical_assignment_trackers,
-        stochastic_assignment_trackers,
+        NamedTuple(logical_assignment_trackers),
+        NamedTuple(stochastic_assignment_trackers),
     )
 end
 

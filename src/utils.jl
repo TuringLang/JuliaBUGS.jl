@@ -272,7 +272,9 @@ end
 """
     extract_variables_assigned_to(expr::Expr)
 
-Extract all the variables assigned to in the program.
+Returns four tuples contains the Symbol of the variable assigned to in the program.
+The first tuple contains the logical scalar variables, the second tuple contains the stochastic scalar variables,
+the third tuple contains the logical array variables, and the fourth tuple contains the stochastic array variables.
 
 # Example:
 ```jldoctest
