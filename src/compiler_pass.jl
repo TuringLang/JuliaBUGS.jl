@@ -352,6 +352,106 @@ function post_process(pass::CollectVariables, expr::Expr, env::NamedTuple)
 end
 
 """
+    CheckRepeatedAssignments
+
+BUGS generally forbids the same variable (scalar or array location) to appear more than once. The only exception
+is when a variable appear exactly twice: one for logical assignment and one for stochastic assignment, and the variable
+must be a transformed data.
+
+In this pass, we check the following cases:
+- A variable appear on the LHS of multiple logical assignments
+- A variable appear on the LHS of multiple stochastic assignments
+- Scalars appear on the LHS of both logical and stochastic assignments
+
+The exceptional case will be checked after `DataTransformation` pass.
+"""
+struct CheckRepeatedAssignments <: CompilerPass
+    overlap_scalars::Tuple{Vararg{Symbol}} # TODO: `Tuple{Vararg{Symbol}}` is not concrete type, improve this in the future
+    logical_assignment_trackers::NamedTuple
+    stochastic_assignment_trackers::NamedTuple
+end
+
+function CheckRepeatedAssignments(
+    model_def::Expr, data::NamedTuple{data_vars}, array_sizes
+) where {data_vars}
+    # repeating assignments within deterministic and stochastic arrays are checked `extract_variables_assigned_to`
+    logical_scalars, stochastic_scalars, logical_arrays, stochastic_arrays = extract_variables_assigned_to(
+        model_def
+    )
+
+    overlap_scalars = Tuple(intersect(logical_scalars, stochastic_scalars))
+
+    logical_assignment_trackers = Dict{Symbol,BitArray}()
+    stochastic_assignment_trackers = Dict{Symbol,BitArray}()
+
+    for v in logical_arrays
+        # `v` can't be in data
+        logical_assignment_trackers[v] = falses(array_sizes[v]...)
+    end
+
+    for v in stochastic_arrays
+        array_size = if v in data_vars
+            size(data[v])
+        else
+            array_sizes[v]
+        end
+        stochastic_assignment_trackers[v] = falses(array_size...)
+    end
+
+    return CheckRepeatedAssignments(
+        overlap_scalars,
+        NamedTuple(logical_assignment_trackers),
+        NamedTuple(stochastic_assignment_trackers),
+    )
+end
+
+function analyze_assignment(pass::CheckRepeatedAssignments, expr::Expr, env::NamedTuple)
+    lhs_expr = Meta.isexpr(expr, :(=)) ? expr.args[1] : expr.args[2]
+    lhs = simplify_lhs(env, lhs_expr)
+    assignment_tracker = if is_deterministic(expr)
+        pass.logical_assignment_trackers
+    else
+        pass.stochastic_assignment_trackers
+    end
+
+    if !(lhs isa Symbol)
+        v, indices... = lhs
+        set_assignment_tracker!(assignment_tracker, v, indices...)
+    end
+end
+
+function set_assignment_tracker!(
+    assignment_tracker::NamedTuple, v::Symbol, indices::Vararg{Union{Int,UnitRange{Int}}}
+)
+    if any(assignment_tracker[v][indices...])
+        indices = Tuple(findall(assignment_tracker[v][indices...]))
+        error("$v already assigned at indices $indices")
+    end
+    if eltype(indices) == Int
+        assignment_tracker[v][indices...] = true
+    else
+        assignment_tracker[v][indices...] .= true
+    end
+end
+
+function post_process(pass::CheckRepeatedAssignments, expr, env)
+    suspect_arrays = Dict{Symbol,BitArray}()
+    overlap_arrays = intersect(
+        keys(pass.logical_assignment_trackers), keys(pass.stochastic_assignment_trackers)
+    )
+    for v in overlap_arrays
+        if any(
+            pass.logical_assignment_trackers[v] .& pass.stochastic_assignment_trackers[v]
+        )
+            suspect_arrays[v] =
+                pass.logical_assignment_trackers[v] .&
+                pass.stochastic_assignment_trackers[v]
+        end
+    end
+    return pass.overlap_scalars, suspect_arrays
+end
+
+"""
     DataTransformation
 
 Statements with a right-hand side that can be fully evaluated using the data are processed 
@@ -424,78 +524,8 @@ function post_process(pass::DataTransformation, expr, env)
     return pass.new_value_added, pass.transformed_variables
 end
 
-struct PostChecking <: CompilerPass
-    transformed_variables
-    is_data::Dict # used to identify if a variable is a data (including transformed variable)
-    definition_bit_map::Dict # used to identify repeated assignment
-    logical_or_stochastic::Dict # used to identify logical or stochastic assignment
-end
-
-function PostChecking(data::NamedTuple, transformed_variables::Dict)
-    is_data = Dict()
-    definition_bit_map = Dict()
-    logical_or_stochastic = Dict()
-
-    all_vars = merge_with_coalescence(data, transformed_variables)
-
-    for k in keys(all_vars)
-        v = all_vars[k]
-        if ismissing(v) # scalar that is not data
-            is_data[k] = false
-            definition_bit_map[k] = false
-            logical_or_stochastic[k] = Unspecified
-        elseif v isa Number # scalar that is data
-            is_data[k] = true
-            definition_bit_map[k] = false
-            logical_or_stochastic[k] = Unspecified
-        else
-            is_data[k] = .!ismissing.(v)
-            logical_or_stochastic[k] = fill(Unspecified, size(v)...)
-            definition_bit_map[k] = fill(false, size(v)...)
-        end
-    end
-
-    return PostChecking(
-        transformed_variables, is_data, definition_bit_map, logical_or_stochastic
-    )
-end
-
-function analyze_assignment(pass::PostChecking, expr::Expr, env::NamedTuple)
-    @inline set_value!(d::Dict, value, v::Scalar) = d[v.name] = value
-    @inline set_value!(d::Dict, value, v::Var) = d[v.name][v.indices...] = value
-    @inline get_value(d::Dict, v::Scalar) = d[v.name]
-    @inline get_value(d::Dict, v::Var) = d[v.name][v.indices...]
-
-    @capture(expr, lhs_expr_ ~ rhs_) || @capture(expr, lhs_expr_ = rhs_)
-    lhs = find_variables_on_lhs(lhs_expr, env)
-    var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
-
-    for v in scalarize(lhs)
-        if get_value(pass.definition_bit_map, v) # if this variable has already been seen
-            if get_value(pass.logical_or_stochastic, v) == var_type
-                error("Repeated assignment to $v.") # produce error even when two assignment is the same
-            elseif get_value(pass.logical_or_stochastic, v) == Transformed_Stochastic
-                error("Multiple repeated assignment to $v.")
-            elseif get_value(pass.is_data, v)
-                set_value!(pass.logical_or_stochastic, Transformed_Stochastic, v)
-            else
-                error(
-                    "$v is assigned to by both logical and stochastic assignments, " *
-                    "this is only allowed when the variable is a transformation of data.",
-                )
-            end
-        else
-            set_value!(pass.definition_bit_map, true, v)
-            if get_value(pass.is_data, v) && var_type == Logical
-                var_type = Transformed
-            end
-            set_value!(pass.logical_or_stochastic, var_type, v)
-        end
-    end
-end
-
 function clean_up_transformed_variables(transformed_variables)
-    cleaned_transformed_variables = Dict()
+    cleaned_transformed_variables = Dict{Symbol,Any}()
     for k in keys(transformed_variables)
         v = transformed_variables[k]
         if ismissing(v)
@@ -510,12 +540,7 @@ function clean_up_transformed_variables(transformed_variables)
             cleaned_transformed_variables[k] = v
         end
     end
-    return cleaned_transformed_variables
-end
-
-function post_process(pass::PostChecking, expr, env)
-    return pass.definition_bit_map,
-    clean_up_transformed_variables(pass.transformed_variables)
+    return NamedTuple(cleaned_transformed_variables)
 end
 
 """
@@ -525,15 +550,13 @@ A pass that analyze node functions of variables and their dependencies.
 """
 struct NodeFunctions <: CompilerPass
     array_sizes::Dict
-    array_bitmap::Dict
-
     vars::Dict
     node_args::Dict
     node_functions::Dict
     dependencies::Dict
 end
-function NodeFunctions(array_sizes, array_bitmap)
-    return NodeFunctions(array_sizes, array_bitmap, Dict(), Dict(), Dict(), Dict())
+function NodeFunctions(array_sizes)
+    return NodeFunctions(array_sizes, Dict(), Dict(), Dict(), Dict())
 end
 
 """
@@ -879,7 +902,6 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
         size(rhs_var) == size(lhs_var) ||
             error("Size mismatch between lhs and rhs at expression $expr")
         if lhs_var isa ArrayElement
-            @assert pass.array_bitmap[rhs_var.name][rhs_var.indices...] "Variable $rhs_var is not defined."
             node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
                 $(rhs_var.name)[$(rhs_var.indices...)]
             node_args = [rhs_array_var]
@@ -890,9 +912,6 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
             # for now: evaluate(rhs_var, env) will produce scalarized `Var`s, so dependencies
             # may contain `Auxiliary Nodes`, this should be okay, but maybe we should keep things uniform
             # by keep `dependencies` only variables in the model, not auxiliary nodes
-            for v in non_data_vars
-                @assert pass.array_bitmap[v.name][v.indices...] "Variable $v is not defined."
-            end
             node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
                 $(rhs_var.name)[$(rhs_var.indices...)]
             node_args = [rhs_array_var]
@@ -958,6 +977,6 @@ end
 
 function post_process(pass::NodeFunctions, expr, env, vargs...)
     return pass.vars,
-    pass.array_sizes, pass.array_bitmap, pass.node_args, pass.node_functions,
+    pass.array_sizes, pass.node_args, pass.node_functions,
     pass.dependencies
 end

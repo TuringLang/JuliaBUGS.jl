@@ -270,6 +270,94 @@ function simplify_lhs(data::NamedTuple, lhs::Expr)
 end
 
 """
+    extract_variables_assigned_to(expr::Expr)
+
+Returns four tuples contains the Symbol of the variable assigned to in the program.
+The first tuple contains the logical scalar variables, the second tuple contains the stochastic scalar variables,
+the third tuple contains the logical array variables, and the fourth tuple contains the stochastic array variables.
+
+# Example:
+```jldoctest
+JuliaBUGS.extract_variables_assigned_to(
+    @bugs begin
+        for i in 1:N
+            for j in 1:T
+                Y[i, j] = _step((var"obs.t"[i] - t[j]) + eps)
+                dN[i, j] = Y[i, j] * _step((t[j + 1] - var"obs.t"[i]) - eps) * fail[i]
+            end
+        end
+        for j in 1:T
+            for i in 1:N
+                dN[i, j] ~ dpois(Idt[i, j])
+                Idt[i, j] = Y[i, j] * exp(beta * Z[i]) * dL0[j]
+            end
+            dL0[j] ~ dgamma(mu[j], c)
+            mu[j] = var"dL0.star"[j] * c
+            var"S.treat"[j] = pow(exp(-(sum(dL0[1:j]))), exp(beta * -0.5))
+            var"S.placebo"[j] = pow(exp(-(sum(dL0[1:j]))), exp(beta * 0.5))
+        end
+        c = 0.001
+        r = 0.1
+        for j in 1:T
+            var"dL0.star"[j] = r * (t[j + 1] - t[j])
+        end
+        beta ~ dnorm(0.0, 1.0e-6)
+    end
+)
+
+# output
+
+((:c, :r), (:beta,), (Symbol("dL0.star"), :dN, :mu, Symbol("S.treat"), Symbol("S.placebo"), :Y, :Idt), (:dN, :dL0))
+```
+"""
+function extract_variables_assigned_to(expr::Expr)
+    return Tuple.(
+        extract_variables_assigned_to(
+            expr, Symbol[], Symbol[], Set{Symbol}(), Set{Symbol}()
+        )
+    )
+end
+function extract_variables_assigned_to(
+    expr::Expr,
+    logical_scalars::Vector{Symbol},
+    stochastic_scalars::Vector{Symbol},
+    logical_arrays::Set{Symbol},
+    stochastic_arrays::Set{Symbol},
+)
+    for stmt in expr.args
+        if @capture(stmt, (lhs_ = rhs_))
+            if lhs isa Symbol
+                if lhs in logical_scalars
+                    error("Logical scalar variable $lhs is assigned to more than once")
+                end
+                push!(logical_scalars, lhs)
+            else
+                push!(logical_arrays, lhs.args[1])
+            end
+        elseif @capture(stmt, (lhs_ ~ rhs_))
+            if lhs isa Symbol
+                if lhs in stochastic_scalars
+                    error("Stochastic scalar variable $lhs is assigned to more than once")
+                end
+                push!(stochastic_scalars, lhs)
+            else
+                push!(stochastic_arrays, lhs.args[1])
+            end
+        elseif @capture(
+            stmt,
+            for loop_var_ in lower_:upper_
+                body_
+            end
+        )
+            extract_variables_assigned_to(
+                body, logical_scalars, stochastic_scalars, logical_arrays, stochastic_arrays
+            )
+        end
+    end
+    return logical_scalars, stochastic_scalars, logical_arrays, stochastic_arrays
+end
+
+"""
     simple_arithmetic_eval(data, expr)
 
 This function evaluates expressions that consist solely of arithmetic operations and indexing. It 

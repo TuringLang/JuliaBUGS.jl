@@ -6,7 +6,6 @@ using JuliaBUGS:
     analyze_program,
     CollectVariables,
     DataTransformation,
-    PostChecking,
     NodeFunctions,
     merge_with_coalescence,
     compute_data_transformation
@@ -26,14 +25,8 @@ for name in keys(BUGSExamples.VOLUME_I)
         scalars, array_sizes, model_def, data
     )
 
-    array_bitmap, transformed_variables = analyze_program(
-        PostChecking(data, transformed_variables), model_def, data
-    )
-    merged_data = merge_with_coalescence(deepcopy(data), transformed_variables)
-
-    vars, array_sizes, array_bitmap, node_args, node_functions, dependencies = analyze_program(
-        NodeFunctions(array_sizes, array_bitmap), model_def, merged_data
-    )
+    merged_data = JuliaBUGS.merge_with_coalescence(deepcopy(data), transformed_variables)
+    merged_data = JuliaBUGS.clean_up_transformed_variables(merged_data)
 
     _suite = BenchmarkGroup()
 
@@ -46,7 +39,7 @@ for name in keys(BUGSExamples.VOLUME_I)
     )
 
     _suite["NodeFunctions"] = @benchmarkable analyze_program(
-        NodeFunctions($array_sizes, $array_bitmap), $model_def, $merged_data
+        NodeFunctions($array_sizes), $model_def, $merged_data
     )
 
     tune!(_suite)
