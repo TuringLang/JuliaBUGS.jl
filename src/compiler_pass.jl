@@ -349,7 +349,9 @@ function update_array_sizes_for_assignment(
     # `is_specified_by_data` checks if the index is inbound
     if var ∉ data_vars
         for i in eachindex(pass.non_data_array_sizes[var])
-            pass.non_data_array_sizes[var][i] = max(pass.non_data_array_sizes[var][i], last(indices[i]))
+            pass.non_data_array_sizes[var][i] = max(
+                pass.non_data_array_sizes[var][i], last(indices[i])
+            )
         end
     end
 end
