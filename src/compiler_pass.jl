@@ -524,21 +524,23 @@ function post_process(pass::DataTransformation, expr, env)
     return pass.new_value_added, pass.transformed_variables
 end
 
-function concretize_eval_env_value_types(
-    eval_env::NamedTuple{variable_names,variable_types}
-) where {variable_names,variable_types}
-    return NamedTuple{variable_names}(
-        Tuple([
-            if type === Missing ||
-                type <: Union{Int,Float64} ||
-                eltype(type) === Missing ||
-                eltype(type) <: Union{Int,Float64}
-                value
-            else # Missing <: eltype(type)
-                map(identity, value)
-            end for (value, type) in zip(values(eval_env), variable_types.parameters)
-        ]),
-    )
+function clean_up_transformed_variables(transformed_variables)
+    cleaned_transformed_variables = Dict()
+    for k in keys(transformed_variables)
+        v = transformed_variables[k]
+        if ismissing(v)
+            continue
+        elseif v isa Number
+            cleaned_transformed_variables[k] = v
+        elseif all(ismissing, v)
+            continue
+        elseif all(!ismissing, v)
+            cleaned_transformed_variables[k] = identity.(v)
+        else
+            cleaned_transformed_variables[k] = v
+        end
+    end
+    return cleaned_transformed_variables
 end
 
 """

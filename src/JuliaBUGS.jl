@@ -279,7 +279,7 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
     )
 
     merged_data = merge_with_coalescence(deepcopy(data), transformed_variables)
-    merged_data = concretize_eval_env_value_types(merged_data)
+    merged_data = clean_up_transformed_variables(merged_data)
 
     finish_checking_repeated_assignments(conflicted_scalars, conflicted_arrays, merged_data)
 
