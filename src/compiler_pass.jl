@@ -737,7 +737,7 @@ end
 function _replace_constants_in_expr(x::Expr, env)
     if Meta.isexpr(x, :ref)
         v, indices... = x.args
-        if  haskey(env, v) && all(x -> x isa Union{Int,Float64}, indices)
+        if haskey(env, v) && all(x -> x isa Union{Int,Float64}, indices)
             val = env[v][map(Int, indices)...]
             return ismissing(val) ? x : val
         else
