@@ -812,36 +812,6 @@ function _replace_constants_in_expr(x::Expr, env)
 end
 
 """
-    concretize_colon_indexing(expr, array_sizes, data)
-
-Replace all `Colon()`s in `expr` with the corresponding array size, using either the `array_sizes` or the `data` dictionaries.
-
-# Examples
-```jldoctest
-julia> concretize_colon_indexing(:(f(x[1, :])), Dict(:x => (3, 4)), Dict(:x => [1 2 3 4; 5 6 7 8; 9 10 11 12]))
-:(f(x[1, 1:4]))
-```
-"""
-function concretize_colon_indexing(expr, array_sizes, data)
-    return MacroTools.postwalk(expr) do sub_expr
-        if MacroTools.@capture(sub_expr, x_[idx__])
-            for i in 1:length(idx)
-                if idx[i] == :(:)
-                    if haskey(array_sizes, x)
-                        idx[i] = Expr(:call, :(:), 1, array_sizes[x][i])
-                    else
-                        @assert haskey(data, x)
-                        idx[i] = Expr(:call, :(:), 1, size(data[x])[i])
-                    end
-                end
-            end
-            return Expr(:ref, x, idx...)
-        end
-        return sub_expr
-    end
-end
-
-"""
     create_array_var(n, array_sizes, env)
 
 Create an array variable with the name `n` and indices based on the sizes specified in `array_sizes` or `env`.
@@ -886,7 +856,6 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
         return nothing
 
     pass.vars[lhs_var] = var_type
-    rhs_expr = concretize_colon_indexing(rhs_expr, pass.array_sizes, env)
     rhs = evaluate(rhs_expr, env)
 
     if rhs isa Symbol
