@@ -25,14 +25,15 @@ function create_eval_env(
         Ref{Union{Missing,Int,Float64}}(missing) for i in eachindex(non_data_scalars)
     ])
     init_arrays = Tuple([
-        Array{Union{Int,Float64,Missing}}(missing, non_data_array_sizes[non_data_array_vars[i]]...)
-        for i in eachindex(non_data_array_vars)
+        Array{Union{Int,Float64,Missing}}(
+            missing, non_data_array_sizes[non_data_array_vars[i]]...
+        ) for i in eachindex(non_data_array_vars)
     ])
 
     eval_env = merge(
         NamedTuple{non_data_scalars}(init_scalars),
         NamedTuple{non_data_array_vars}(init_arrays),
-        data_copy
+        data_copy,
     )
 
     return eval_env
@@ -434,7 +435,7 @@ julia> concretize_colon_indexing(:(f(x[1, :])), Dict(:x => (3, 4)), Dict(:x => [
 """
 function concretize_colon_indexing(expr, eval_env::NamedTuple)
     return MacroTools.postwalk(expr) do sub_expr
-        if Meta.isexpr(sub_expr, :ref) 
+        if Meta.isexpr(sub_expr, :ref)
             v, indices... = sub_expr.args
             for i in eachindex(indices)
                 if indices[i] == :(:)
