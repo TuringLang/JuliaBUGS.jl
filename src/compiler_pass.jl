@@ -114,30 +114,6 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
 end
 
 """
-    find_variables_on_lhs(expr, env)
-
-Find all the variables on the LHS of an assignment. The variables can be either symbols or array indexing.
-
-# Examples
-```jldoctest
-julia> find_variables_on_lhs(:(x[1, 2]), NamedTuple())
-x[1, 2]
-
-julia> find_variables_on_lhs(:(x[1, 2:3]), NamedTuple())
-x[1, 2:3]
-```
-"""
-find_variables_on_lhs(e::Symbol, env) = Var(e)
-function find_variables_on_lhs(expr::Expr, env)
-    @assert Meta.isexpr(expr, :ref)
-    v, indices... = expr.args
-    for (i, index) in enumerate(indices)
-        indices[i] = evaluate(index, env)
-    end
-    return Var(v, Tuple(indices))
-end
-
-"""
     evaluate(expr, env)
 
 Evaluate `expr` in the environment `env`.
@@ -664,7 +640,9 @@ function evaluate_and_track_dependencies(var::Expr, env)
             value = nothing
             if all(is_resolved, args) &&
                 f ∈ BUGSPrimitives.BUGS_FUNCTIONS ∪ (:+, :-, :*, :/, :^, :(:))
-                return getfield(JuliaBUGS, f)(args...), Tuple(dependencies), Tuple(node_func_args)
+                return getfield(JuliaBUGS, f)(args...),
+                Tuple(dependencies),
+                Tuple(node_func_args)
             else
                 return missing, Tuple(dependencies), Tuple(node_func_args)
             end

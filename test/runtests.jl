@@ -59,7 +59,6 @@ else
                 create_array_var,
                 replace_constants_in_expr,
                 evaluate_and_track_dependencies,
-                find_variables_on_lhs,
                 evaluate,
                 scalarize,
                 concretize_colon_indexing,
