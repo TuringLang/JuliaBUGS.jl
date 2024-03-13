@@ -506,6 +506,7 @@ struct NodeFunctions <: CompilerPass
     node_args::Dict
     node_functions::Dict
     dependencies::Dict
+    scalar_values::Dict # a Dict of namedtuples, mainly used to deal with loop vars, but can't really distinguish, so store all the values
 end
 function NodeFunctions()
     return NodeFunctions(Dict(), Dict(), Dict(), Dict())
@@ -538,8 +539,14 @@ julia> evaluate_and_track_dependencies(:(x[a]), (x=[missing, missing], a = 1))
 julia> evaluate_and_track_dependencies(:(x[y[1]+1]+a+1), (x=[missing, missing], y = [missing, missing], a = Ref(missing)))
 (missing, ((:y, 1), (:x, 1:2), :a), (:x, :y, :a))
 
-julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), (x = [1 2 3; 4 5 6], a = Ref(missing), b = Ref(missing)))
+julia> evaluate_and_track_dependencies(:(x[a, b]), (x = [1 2 3; 4 5 6], a = Ref(missing), b = Ref(missing)))
+(missing, (:a, :b, (:x, 1:2, 1:3)), (:x, :a, :b))
+
+julia> evaluate_and_track_dependencies(:((x[1:2, 1:3], a, b)), (x = [1 2 3; 4 5 6], a = Ref(missing), b = Ref(missing)))
 (missing, (:a, :b), (:x, :a, :b))
+
+julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], 1, 1)), (x = [1 2 3; 4 5 6], a = Ref(missing), b = Ref(missing)))
+(1, (), (:x,))
 
 julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), (x = [1 2 missing; 4 5 6], a = Ref(missing), b = Ref(missing)))
 (missing, ((:x, 1:2, 1:3), :a, :b), (:x, :a, :b))
@@ -572,7 +579,9 @@ function evaluate_and_track_dependencies(var::Expr, env)
             i isa Int || i isa UnitRange{Int}
         end
             value = env[v][indices...]
-            if !is_resolved(value)
+            if is_resolved(value)
+                return value, Tuple(dependencies), Tuple(node_func_args)
+            else
                 # TODO: what if value is partially missing?
                 push!(dependencies, (v, indices...))
             end
@@ -639,7 +648,7 @@ function evaluate_and_track_dependencies(var::Expr, env)
 
             value = nothing
             if all(is_resolved, args) &&
-                f ∈ BUGSPrimitives.BUGS_FUNCTIONS ∪ (:+, :-, :*, :/, :^, :(:))
+                f ∈ BUGSPrimitives.BUGS_FUNCTIONS ∪ (:+, :-, :*, :/, :^, :(:), :getindex)
                 return getfield(JuliaBUGS, f)(args...),
                 Tuple(dependencies),
                 Tuple(node_func_args)
@@ -652,23 +661,19 @@ function evaluate_and_track_dependencies(var::Expr, env)
     end
 end
 
-try_cast_to_int(x::Integer) = x
-try_cast_to_int(x::Real) = Int(x) # will error if !isinteger(x)
-try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
-
 function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
     lhs_expr, rhs_expr = Meta.isexpr(expr, :(=)) ? expr.args[1:2] : expr.args[2:3]
 
-    lhs_var = simplify_lhs(env, lhs_expr)
+    lhs = simplify_lhs(env, lhs_expr)
     if Meta.isexpr(expr, :(=))
-        lhs_value = if lhs_var isa Symbol
-            value = env[lhs_var]
+        lhs_value = if lhs isa Symbol
+            value = env[lhs]
             if value isa Ref
                 value = value[]
             end
             value
         else
-            var, indices... = lhs_var
+            var, indices... = lhs
             env[var][indices...]
         end
         if is_resolved(lhs_value)
@@ -676,14 +681,14 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
         end
     end
 
-    lhs_var = if lhs_var isa Symbol
-        Var(lhs_var)
+    lhs = if lhs isa Symbol
+        Var(lhs)
     else
-        v, indices... = lhs_var
+        v, indices... = lhs
         Var(v, Tuple(indices))
     end
 
-    pass.vars[lhs_var] = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
+    pass.vars[lhs] = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
     rhs = evaluate(rhs_expr, env)
 
     if rhs isa Symbol
@@ -692,85 +697,74 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
         dependencies = [Var(rhs)]
     elseif Meta.isexpr(rhs, :ref) &&
         all(x -> x isa Union{Number,UnitRange}, rhs.args[2:end])
-        rhs_var = Var(rhs.args[1], Tuple(rhs.args[2:end]))
-        rhs_array_var = Var(rhs_var.name, Tuple([1:s for s in size(env[rhs_var.name])]))
-        size(rhs_var) == size(lhs_var) ||
+        v, indices... = rhs.args
+        rhs_var = Var(v, Tuple(indices))
+        rhs_array_var = Var(v, Tuple([1:s for s in size(env[v])]))
+
+        if size(rhs_var) != size(lhs)
             error("Size mismatch between lhs and rhs at expression $expr")
-        if lhs_var isa ArrayElement
-            node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
-                $(rhs_var.name)[$(rhs_var.indices...)]
-            node_args = [rhs_array_var]
-            dependencies = [rhs_var]
+        end
+
+        node_function = MacroTools.@q ($(v)::Array) -> $(v)[$(indices...)]
+        node_args = [rhs_array_var]
+        dependencies = if lhs isa ArrayElement
+            [rhs_var]
         else
             # rhs is not evaluated into a concrete value, then at least some elements of the rhs array are not data
-            non_data_vars = filter(x -> x isa Var, evaluate(rhs_var, env))
+            filter(x -> x isa Var, evaluate(rhs_var, env))
             # for now: evaluate(rhs_var, env) will produce scalarized `Var`s, so dependencies
             # may contain `Auxiliary Nodes`, this should be okay, but maybe we should keep things uniform
             # by keep `dependencies` only variables in the model, not auxiliary nodes
-            node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
-                $(rhs_var.name)[$(rhs_var.indices...)]
-            node_args = [rhs_array_var]
-            dependencies = non_data_vars
         end
     else
-        rhs_expr = replace_constants_in_expr(rhs_expr, env)
-        evaled_rhs, dependencies, node_args = evaluate_and_track_dependencies(rhs_expr, env)
+        _, dependencies, node_args = evaluate_and_track_dependencies(rhs_expr, env)
 
-        # TODO: since we are not evaluating the node function expressions anymore, we don't have to store the expression like anonymous functions 
-        # rhs can be evaluated into a concrete value here, because including transformed variables in the data
-        # is effectively constant propagation
-        if is_resolved(evaled_rhs)
-            node_function = Expr(:(->), Expr(:tuple), Expr(:block, evaled_rhs))
-            node_args = []
-            # we can also directly save the evaled variable to `env` and later convert to var_store
-            # issue is that we need to do this in steps, const propagation need to a separate pass
-            # otherwise the variable in previous expressions will not be evaluated to the concrete value
-        else
-            dependencies, node_args = map(
-                x -> map(x) do x_elem
-                    if x_elem isa Symbol
-                        return Var(x_elem)
-                    elseif x_elem isa Tuple && last(x_elem) == ()
-                        return Var(
-                            first(x_elem),
-                            Tuple([1:s for s in size(env[first(x_elem)])]),
-                        )
-                    else
-                        return Var(first(x_elem), last(x_elem))
-                    end
-                end,
-                map(collect, (dependencies, node_args)),
-            )
-
-            rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
-                if Meta.isexpr(sub_expr, :ref)
-                    arr, idxs... = sub_expr.args
-                    new_idxs = [
-                        idx isa Integer ? idx : :(JuliaBUGS.try_cast_to_int($(idx))) for
-                        idx in idxs
-                    ]
-                    return Expr(:ref, arr, new_idxs...)
-                end
-                return sub_expr
+        node_args = collect(Any, node_args)
+        for (i, arg) in enumerate(node_args)
+            if arg isa Symbol
+                node_args[i] = Var(arg)
+            else
+                node_args[i] = Var(arg, Tuple([1:s for s in size(env[arg])]))
             end
-
-            args = convert(Array{Any}, deepcopy(node_args))
-            for (i, arg) in enumerate(args)
-                if arg isa ArrayVar
-                    args[i] = Expr(:(::), arg.name, :Array)
-                elseif arg isa Scalar
-                    args[i] = arg.name
-                else
-                    error("Unexpected argument type: $arg")
-                end
-            end
-            node_function = Expr(:(->), Expr(:tuple, args...), rhs_expr)
         end
+
+        dependencies = collect(Any, dependencies)
+        for (i, dep) in enumerate(dependencies)
+            if dep isa Symbol
+                dependencies[i] = Var(dep)
+            else
+                dependencies[i] = Var(dep[1], Tuple(dep[2:end]))
+            end
+        end
+
+        arg_exprs = []
+        for arg in node_args
+            v = arg.name
+            value = env[v]
+            if value isa Int
+                push!(arg_exprs, Expr(:(::), v, :Int))
+            elseif value isa Float64
+                push!(arg_exprs, Expr(:(::), v, :Float64))
+            elseif value isa Ref
+                push!(arg_exprs, Expr(:(::), v, :(Union{Int,Float64})))
+            elseif value isa AbstractArray
+                if eltype(value) === Int
+                    push!(arg_exprs, Expr(:(::), v, :{Array{Int}}))
+                elseif eltype(value) === Float64
+                    push!(arg_exprs, Expr(:(::), v, :{Array{Float64,1}}))
+                else
+                    push!(arg_exprs, Expr(:(::), v, :{Array{Union{Int,Float64,Missing}}}))
+                end
+            else
+                error("Unexpected argument type: $(typeof(value))")
+            end
+        end
+        node_function = Expr(:(->), Expr(:tuple, arg_exprs...), rhs_expr)
     end
 
-    pass.node_args[lhs_var] = node_args
-    pass.node_functions[lhs_var] = node_function
-    pass.dependencies[lhs_var] = dependencies
+    pass.node_args[lhs] = node_args
+    pass.node_functions[lhs] = node_function
+    pass.dependencies[lhs] = dependencies
     return nothing
 end
 

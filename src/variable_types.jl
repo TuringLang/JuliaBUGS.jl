@@ -109,23 +109,25 @@ represent a multi-dimensional array, the return value is always scalarized, even
 
 # Examples
 ```jldoctest
-julia> evaluate(Var(:x, (1:2, )), Dict(:x => [1, missing]))
+julia> evaluate(Var(:x, (1:2, )), (x = [1, missing],))
 2-element Vector{Any}:
  1
   x[2]
 ```
 """
-function evaluate(v::Var, env)
-    if !haskey(env, v.name)
-        return v isa Scalar ? v : scalarize(v)
-    end
-    if v isa Scalar
-        return env[v.name]
-    end
-    if v isa ArrayElement
+function evaluate(v::Var, env)  
+    if v isa Scalar || v isa ArrayElement
         value = env[v.name][v.indices...]
-        return ismissing(value) ? v : value
+        if value isa Ref
+            value = value[]
+        end
+        if value === missing
+            return v
+        else
+            return value
+        end
+    else
+        value = map(x -> evaluate(x, env), scalarize(v))
+        return reshape(value, size(v))
     end
-    value = map(x -> evaluate(x, env), scalarize(v))
-    return reshape(value, size(v))
 end
