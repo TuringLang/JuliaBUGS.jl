@@ -3,7 +3,6 @@ using BenchmarkTools
 using JuliaBUGS
 using JuliaBUGS:
     BUGSExamples,
-    analyze_program,
     CollectVariables,
     DataTransformation,
     NodeFunctions,

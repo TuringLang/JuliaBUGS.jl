@@ -1,5 +1,5 @@
 using JuliaBUGS:
-    analyze_program, CollectVariables, DataTransformation, CheckRepeatedAssignments
+    CollectVariables, DataTransformation, CheckRepeatedAssignments
 using JuliaBUGS: is_resolved
 using JuliaBUGS: is_specified_by_data, is_partially_specified_as_data
 
@@ -97,7 +97,7 @@ end
         scalars, array_sizes = JuliaBUGS.determine_array_sizes(model_def, data)
 
         pass = CheckRepeatedAssignments(model_def, data, array_sizes)
-        repeat_scalars, suspect_arrays = analyze_program(pass, model_def, data)
+        repeat_scalars, suspect_arrays = JuliaBUGS.analyze_block(pass, model_def, data)
 
         @test isempty(repeat_scalars)
         @test collect(keys(suspect_arrays)) == [:dN]
