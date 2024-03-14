@@ -3,18 +3,6 @@ abstract type CompilerPass end
 @inline is_deterministic(expr::Expr) = Meta.isexpr(expr, :(=))
 @inline is_stochastic(expr::Expr) = Meta.isexpr(expr, :call) && expr.args[1] == :(~)
 
-function concretize_loop_bounds(model_def::Expr, data::NamedTuple)
-    return MacroTools.postwalk(model_def) do sub_expr
-        if Meta.isexpr(sub_expr, :for)
-            loop_var, lb, ub, body = decompose_for_expr(sub_expr)
-            lb, ub = Int(simple_arithmetic_eval(data, lb)),
-            Int(simple_arithmetic_eval(data, ub))
-            return Expr(:for, Expr(:(=), loop_var, Expr(:call, :(:), lb, ub)), body)
-        end
-        return sub_expr
-    end
-end
-
 function analyze_block(pass::CompilerPass, expr::Expr, loop_vars::NamedTuple=NamedTuple())
     if !Meta.isexpr(expr, :block)
         error("The top level expression must be a block.")
@@ -24,7 +12,12 @@ function analyze_block(pass::CompilerPass, expr::Expr, loop_vars::NamedTuple=Nam
             analyze_statement(pass, statement, loop_vars)
         elseif Meta.isexpr(statement, :for)
             loop_var, lb, ub, body = decompose_for_expr(statement)
-            analyze_block(pass, body, merge(loop_vars, (loop_var => lb:ub,)))
+            env = merge(pass.env, loop_vars)
+            lb = Int(simple_arithmetic_eval(env, lb))
+            ub = Int(simple_arithmetic_eval(env, ub))
+            for loop_var_value in lb:ub
+                analyze_block(pass, body, merge(loop_vars, (loop_var => loop_var_value,)))
+            end
         else
             error("Unsupported expression in top level: $statement")
         end
@@ -46,7 +39,7 @@ partially observed. This pass also returns the sizes of the arrays in the model,
 largest indices.
 """
 struct CollectVariables{data_vars} <: CompilerPass
-    data::NamedTuple{data_vars}
+    env::NamedTuple{data_vars}
     data_scalars::Tuple{Vararg{Symbol}}
     scalars::Tuple{Vararg{Symbol}}
     data_array_sizes::NamedTuple
@@ -290,14 +283,12 @@ end
 
 function analyze_statement(pass::CollectVariables, expr::Expr, loop_vars::NamedTuple)
     lhs_expr = is_deterministic(expr) ? expr.args[1] : expr.args[2]
-    for loop_var_values in Iterators.product(values(loop_vars)...)
-        env = merge(pass.data, NamedTuple{Tuple(keys(loop_vars))}(loop_var_values))
-        v = simplify_lhs(env, lhs_expr)
-        if v isa Symbol
-            handle_symbol_lhs(pass, expr, v, env)
-        else
-            handle_ref_lhs(pass, expr, v, env)
-        end
+    env = merge(pass.env, loop_vars)
+    v = simplify_lhs(env, lhs_expr)
+    if v isa Symbol
+        handle_symbol_lhs(pass, expr, v, env)
+    else
+        handle_ref_lhs(pass, expr, v, env)
     end
 end
 
@@ -359,7 +350,7 @@ In this pass, we check the following cases:
 The exceptional case will be checked after `DataTransformation` pass.
 """
 struct CheckRepeatedAssignments <: CompilerPass
-    data::NamedTuple
+    env::NamedTuple
     overlap_scalars::Tuple{Vararg{Symbol}}
     logical_assignment_trackers::NamedTuple
     stochastic_assignment_trackers::NamedTuple
@@ -409,13 +400,12 @@ function analyze_statement(
     else
         pass.stochastic_assignment_trackers
     end
-    for loop_var_values in Iterators.product(values(loop_vars)...)
-        env = merge(pass.data, NamedTuple{Tuple(keys(loop_vars))}(loop_var_values))
-        lhs = simplify_lhs(env, lhs_expr)
-        if !(lhs isa Symbol)
-            v, indices... = lhs
-            set_assignment_tracker!(assignment_tracker, v, indices...)
-        end
+
+    env = merge(pass.env, loop_vars)
+    lhs = simplify_lhs(env, lhs_expr)
+    if !(lhs isa Symbol)
+        v, indices... = lhs
+        set_assignment_tracker!(assignment_tracker, v, indices...)
     end
 end
 
@@ -484,26 +474,24 @@ end
 
 function analyze_statement(pass::DataTransformation, expr::Expr, loop_vars::NamedTuple)
     if is_deterministic(expr)
-        for loop_var_values in Iterators.product(values(loop_vars)...)
-            env = merge(pass.env, NamedTuple{Tuple(keys(loop_vars))}(loop_var_values))
-            lhs = find_variables_on_lhs(expr.args[1], env)
+        env = merge(pass.env, loop_vars)
+        lhs = find_variables_on_lhs(expr.args[1], env)
 
-            if has_value(pass.transformed_variables, lhs)
-                return nothing
+        if has_value(pass.transformed_variables, lhs)
+            return nothing
+        end
+
+        rhs = evaluate(
+            expr.args[2], merge_with_coalescence(env, pass.transformed_variables)
+        )
+        if is_resolved(rhs)
+            if !pass.new_value_added
+                pass.new_value_added = true
             end
-
-            rhs = evaluate(
-                expr.args[2], merge_with_coalescence(env, pass.transformed_variables)
-            )
-            if is_resolved(rhs)
-                if !pass.new_value_added
-                    pass.new_value_added = true
-                end
-                if lhs isa Scalar
-                    pass.transformed_variables[lhs.name] = rhs
-                else
-                    pass.transformed_variables[lhs.name][lhs.indices...] = rhs
-                end
+            if lhs isa Scalar
+                pass.transformed_variables[lhs.name] = rhs
+            else
+                pass.transformed_variables[lhs.name][lhs.indices...] = rhs
             end
         end
     end
@@ -835,117 +823,113 @@ try_cast_to_int(x::Real) = Int(x) # will error if !isinteger(x)
 try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
 function analyze_statement(pass::NodeFunctions, expr::Expr, loop_vars::NamedTuple)
-    for loop_var_values in Iterators.product(values(loop_vars)...)
-        env = merge(pass.env, NamedTuple{Tuple(keys(loop_vars))}(loop_var_values))
+    env = merge(pass.env, loop_vars)
 
-        if is_deterministic(expr)
-            lhs_expr, rhs_expr = expr.args[1:2]
-            var_type = Logical
+    if is_deterministic(expr)
+        lhs_expr, rhs_expr = expr.args[1:2]
+        var_type = Logical
+    else
+        lhs_expr, rhs_expr = expr.args[2:3]
+        var_type = Stochastic
+    end
+
+    lhs_var = find_variables_on_lhs(
+        Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
+    )
+    var_type == Logical &&
+        evaluate(lhs_var, env) isa Union{Number,Array{<:Number}} &&
+        return nothing
+
+    pass.vars[lhs_var] = var_type
+    rhs = evaluate(rhs_expr, env)
+
+    if rhs isa Symbol
+        @assert lhs_var isa Union{Scalar,ArrayElement}
+        node_function = MacroTools.@q ($(rhs)) -> $(rhs)
+        node_args = [Var(rhs)]
+        dependencies = [Var(rhs)]
+    elseif Meta.isexpr(rhs, :ref) &&
+        all(x -> x isa Union{Number,UnitRange}, rhs.args[2:end])
+        @assert var_type == Logical # if rhs is a variable, then the expression must be logical
+        rhs_var = Var(rhs.args[1], Tuple(rhs.args[2:end]))
+        rhs_array_var = create_array_var(rhs_var.name, pass.array_sizes, env)
+        size(rhs_var) == size(lhs_var) ||
+            error("Size mismatch between lhs and rhs at expression $expr")
+        if lhs_var isa ArrayElement
+            node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
+                $(rhs_var.name)[$(rhs_var.indices...)]
+            node_args = [rhs_array_var]
+            dependencies = [rhs_var]
         else
-            lhs_expr, rhs_expr = expr.args[2:3]
-            var_type = Stochastic
+            # rhs is not evaluated into a concrete value, then at least some elements of the rhs array are not data
+            non_data_vars = filter(x -> x isa Var, evaluate(rhs_var, env))
+            # for now: evaluate(rhs_var, env) will produce scalarized `Var`s, so dependencies
+            # may contain `Auxiliary Nodes`, this should be okay, but maybe we should keep things uniform
+            # by keep `dependencies` only variables in the model, not auxiliary nodes
+            node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
+                $(rhs_var.name)[$(rhs_var.indices...)]
+            node_args = [rhs_array_var]
+            dependencies = non_data_vars
         end
+    else
+        rhs_expr = replace_constants_in_expr(rhs_expr, env)
+        evaled_rhs, dependencies, node_args = evaluate_and_track_dependencies(rhs_expr, env)
 
-        lhs_var = find_variables_on_lhs(
-            Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
-        )
-        var_type == Logical &&
-            evaluate(lhs_var, env) isa Union{Number,Array{<:Number}} &&
-            return nothing
-
-        pass.vars[lhs_var] = var_type
-        rhs = evaluate(rhs_expr, env)
-
-        if rhs isa Symbol
-            @assert lhs_var isa Union{Scalar,ArrayElement}
-            node_function = MacroTools.@q ($(rhs)) -> $(rhs)
-            node_args = [Var(rhs)]
-            dependencies = [Var(rhs)]
-        elseif Meta.isexpr(rhs, :ref) &&
-            all(x -> x isa Union{Number,UnitRange}, rhs.args[2:end])
-            @assert var_type == Logical # if rhs is a variable, then the expression must be logical
-            rhs_var = Var(rhs.args[1], Tuple(rhs.args[2:end]))
-            rhs_array_var = create_array_var(rhs_var.name, pass.array_sizes, env)
-            size(rhs_var) == size(lhs_var) ||
-                error("Size mismatch between lhs and rhs at expression $expr")
-            if lhs_var isa ArrayElement
-                node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
-                    $(rhs_var.name)[$(rhs_var.indices...)]
-                node_args = [rhs_array_var]
-                dependencies = [rhs_var]
-            else
-                # rhs is not evaluated into a concrete value, then at least some elements of the rhs array are not data
-                non_data_vars = filter(x -> x isa Var, evaluate(rhs_var, env))
-                # for now: evaluate(rhs_var, env) will produce scalarized `Var`s, so dependencies
-                # may contain `Auxiliary Nodes`, this should be okay, but maybe we should keep things uniform
-                # by keep `dependencies` only variables in the model, not auxiliary nodes
-                node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
-                    $(rhs_var.name)[$(rhs_var.indices...)]
-                node_args = [rhs_array_var]
-                dependencies = non_data_vars
-            end
+        # TODO: since we are not evaluating the node function expressions anymore, we don't have to store the expression like anonymous functions 
+        # rhs can be evaluated into a concrete value here, because including transformed variables in the data
+        # is effectively constant propagation
+        if is_resolved(evaled_rhs)
+            node_function = Expr(:(->), Expr(:tuple), Expr(:block, evaled_rhs))
+            node_args = []
+            # we can also directly save the evaled variable to `env` and later convert to var_store
+            # issue is that we need to do this in steps, const propagation need to a separate pass
+            # otherwise the variable in previous expressions will not be evaluated to the concrete value
         else
-            rhs_expr = replace_constants_in_expr(rhs_expr, env)
-            evaled_rhs, dependencies, node_args = evaluate_and_track_dependencies(
-                rhs_expr, env
+            dependencies, node_args = map(
+                x -> map(x) do x_elem
+                    if x_elem isa Symbol
+                        return Var(x_elem)
+                    elseif x_elem isa Tuple && last(x_elem) == ()
+                        return create_array_var(first(x_elem), pass.array_sizes, env)
+                    else
+                        return Var(first(x_elem), last(x_elem))
+                    end
+                end,
+                map(collect, (dependencies, node_args)),
             )
 
-            # TODO: since we are not evaluating the node function expressions anymore, we don't have to store the expression like anonymous functions 
-            # rhs can be evaluated into a concrete value here, because including transformed variables in the data
-            # is effectively constant propagation
-            if is_resolved(evaled_rhs)
-                node_function = Expr(:(->), Expr(:tuple), Expr(:block, evaled_rhs))
-                node_args = []
-                # we can also directly save the evaled variable to `env` and later convert to var_store
-                # issue is that we need to do this in steps, const propagation need to a separate pass
-                # otherwise the variable in previous expressions will not be evaluated to the concrete value
-            else
-                dependencies, node_args = map(
-                    x -> map(x) do x_elem
-                        if x_elem isa Symbol
-                            return Var(x_elem)
-                        elseif x_elem isa Tuple && last(x_elem) == ()
-                            return create_array_var(first(x_elem), pass.array_sizes, env)
+            rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
+                if Meta.isexpr(sub_expr, :ref)
+                    arr, idxs... = sub_expr.args
+                    new_idxs = [
+                        if idx isa Integer
+                            idx
                         else
-                            return Var(first(x_elem), last(x_elem))
-                        end
-                    end,
-                    map(collect, (dependencies, node_args)),
-                )
-
-                rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
-                    if Meta.isexpr(sub_expr, :ref)
-                        arr, idxs... = sub_expr.args
-                        new_idxs = [
-                            if idx isa Integer
-                                idx
-                            else
-                                :(JuliaBUGS.try_cast_to_int($(idx)))
-                            end for idx in idxs
-                        ]
-                        return Expr(:ref, arr, new_idxs...)
-                    end
-                    return sub_expr
+                            :(JuliaBUGS.try_cast_to_int($(idx)))
+                        end for idx in idxs
+                    ]
+                    return Expr(:ref, arr, new_idxs...)
                 end
-
-                args = convert(Array{Any}, deepcopy(node_args))
-                for (i, arg) in enumerate(args)
-                    if arg isa ArrayVar
-                        args[i] = Expr(:(::), arg.name, :Array)
-                    elseif arg isa Scalar
-                        args[i] = arg.name
-                    else
-                        error("Unexpected argument type: $arg")
-                    end
-                end
-                node_function = Expr(:(->), Expr(:tuple, args...), rhs_expr)
+                return sub_expr
             end
-        end
 
-        pass.node_args[lhs_var] = node_args
-        pass.node_functions[lhs_var] = node_function
-        pass.dependencies[lhs_var] = dependencies
+            args = convert(Array{Any}, deepcopy(node_args))
+            for (i, arg) in enumerate(args)
+                if arg isa ArrayVar
+                    args[i] = Expr(:(::), arg.name, :Array)
+                elseif arg isa Scalar
+                    args[i] = arg.name
+                else
+                    error("Unexpected argument type: $arg")
+                end
+            end
+            node_function = Expr(:(->), Expr(:tuple, args...), rhs_expr)
+        end
     end
+
+    pass.node_args[lhs_var] = node_args
+    pass.node_functions[lhs_var] = node_function
+    return pass.dependencies[lhs_var] = dependencies
 end
 
 function post_process(pass::NodeFunctions)
