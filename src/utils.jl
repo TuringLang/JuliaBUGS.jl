@@ -419,7 +419,7 @@ Replace all `Colon()`s in `expr` with the corresponding array size.
 
 # Examples
 ```jldoctest
-julia> concretize_colon_indexing(:(f(x[1, :])), Dict(:x => (3, 4)), Dict(:x => [1 2 3 4; 5 6 7 8; 9 10 11 12]))
+julia> concretize_colon_indexing(:(f(x[1, :])), (x = [1 2 3 4; 5 6 7 8; 9 10 11 12],))
 :(f(x[1, 1:4]))
 ```
 """
@@ -429,7 +429,7 @@ function concretize_colon_indexing(expr, eval_env::NamedTuple)
             v, indices... = sub_expr.args
             for i in eachindex(indices)
                 if indices[i] == :(:)
-                    idx[i] = Expr(:call, :(:), 1, size(eval_env[v])[i])
+                    indices[i] = Expr(:call, :(:), 1, size(eval_env[v])[i])
                 end
             end
             return Expr(:ref, v, indices...)

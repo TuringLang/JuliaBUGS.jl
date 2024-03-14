@@ -117,7 +117,7 @@ end
 Evaluate `expr` in the environment `env`.
 
 # Examples
-```jldoctest
+```jldoctest; setup=:(using JuliaBUGS: evaluate)
 julia> evaluate(:(x[1]), (x = [1, 2, 3],)) # array indexing is evaluated if possible
 1
 
@@ -531,7 +531,7 @@ julia> evaluate_and_track_dependencies(:(x[y[1]+1]+a+1), (x=[missing, missing], 
 julia> evaluate_and_track_dependencies(:(x[a, b]), (x = [1 2 3; 4 5 6], a = missing, b = missing))
 (missing, (:a, :b, (:x, 1:2, 1:3)), (:x, :a, :b))
 
-julia> evaluate_and_track_dependencies(:((x[1:2, 1:3], a, b)), (x = [1 2 3; 4 5 6], a = missing, b = missing))
+julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), (x = [1 2 3; 4 5 6], a = missing, b = missing))
 (missing, (:a, :b), (:x, :a, :b))
 
 julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], 1, 1)), (x = [1 2 3; 4 5 6], a = missing, b = missing))
@@ -749,10 +749,6 @@ function create_array_var(n, env)
     return Var(n, Tuple([1:i for i in size(env[n])]))
 end
 
-try_cast_to_int(x::Integer) = x
-try_cast_to_int(x::Real) = Int(x) # will error if !isinteger(x)
-try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
-
 function analyze_statement(pass::NodeFunctions, expr::Expr, loop_vars::NamedTuple)
     env = merge(pass.env, loop_vars)
 
@@ -831,21 +827,6 @@ function analyze_statement(pass::NodeFunctions, expr::Expr, loop_vars::NamedTupl
                 end,
                 map(collect, (dependencies, node_args)),
             )
-
-            rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
-                if Meta.isexpr(sub_expr, :ref)
-                    arr, idxs... = sub_expr.args
-                    new_idxs = [
-                        if idx isa Integer
-                            idx
-                        else
-                            :(JuliaBUGS.try_cast_to_int($(idx)))
-                        end for idx in idxs
-                    ]
-                    return Expr(:ref, arr, new_idxs...)
-                end
-                return sub_expr
-            end
 
             args = convert(Array{Any}, deepcopy(node_args))
             for (i, arg) in enumerate(args)

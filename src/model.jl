@@ -116,8 +116,8 @@ function BUGSModel(
                 )
             end
             dist_store[vn] = dist
-            value = evaluate(vn, eval_env) # `evaluate(::VarName, env)` is defined in `src/utils.jl`
-            if value isa Nothing # not observed
+            value = AbstractPPL.get(eval_env, vn)
+            if !is_resolved(value) # not observed
                 push!(parameters, vn)
                 this_param_length = length(dist)
                 untransformed_param_length += this_param_length
@@ -135,8 +135,12 @@ function BUGSModel(
                 untransformed_var_lengths[vn] = this_param_length
                 transformed_var_lengths[vn] = this_param_transformed_length
                 transformed_param_length += this_param_transformed_length
-                value = evaluate(vn, inits) # use inits to initialize the value if available
-                if value isa Nothing # not initialized
+                value = try
+                    AbstractPPL.get(inits, vn)
+                catch _
+                    missing
+                end
+                if !is_resolved(value) # not initialized
                     vi = setindex!!(vi, rand(dist), vn)
                 else
                     vi = setindex!!(vi, value, vn)
