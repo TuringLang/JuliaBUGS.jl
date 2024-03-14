@@ -59,10 +59,13 @@ function check_input(input::NamedTuple)
     return input
 end
 function check_input(input::Dict{KT,VT}) where {KT,VT}
+    if isempty(input)
+        return NamedTuple()
+    end
     if KT === Symbol
         return check_input(NamedTuple(input))
     else
-        ks = map(identity, keys(input))
+        ks = map(identity, collect(keys(input)))
         if eltype(ks) === Symbol
             return check_input(NamedTuple(ks, vs))
         else

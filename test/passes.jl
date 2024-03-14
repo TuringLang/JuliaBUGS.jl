@@ -121,7 +121,7 @@ end
         end
         scalars, array_sizes = JuliaBUGS.determine_array_sizes(model_def, data)
         @test_throws ErrorException JuliaBUGS.check_repeated_assignments(
-            CheckRepeatedAssignments(model_def, data, array_sizes), model_def, data
+            model_def, data, array_sizes
         )
 
         model_def = @bugs begin
@@ -130,7 +130,7 @@ end
         end
         scalars, array_sizes = JuliaBUGS.determine_array_sizes(model_def, data)
         @test_throws ErrorException JuliaBUGS.check_repeated_assignments(
-            CheckRepeatedAssignments(model_def, data, array_sizes), model_def, data
+            model_def, data, array_sizes
         )
 
         model_def = @bugs begin
@@ -141,7 +141,7 @@ end
         end
         scalars, array_sizes = JuliaBUGS.determine_array_sizes(model_def, data)
         @test_throws ErrorException JuliaBUGS.check_repeated_assignments(
-            CheckRepeatedAssignments(model_def, data, array_sizes), model_def, data
+            model_def, data, array_sizes
         )
 
         model_def = @bugs begin
@@ -151,7 +151,7 @@ end
         data = (a=[1, 2], b=[1 0; 0 1])
         scalars, array_sizes = JuliaBUGS.determine_array_sizes(model_def, data)
         @test_throws ErrorException JuliaBUGS.check_repeated_assignments(
-            CheckRepeatedAssignments(model_def, data, array_sizes), model_def, data
+            model_def, data, array_sizes
         )
     end
 end
