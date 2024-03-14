@@ -22,7 +22,6 @@ using JuliaBUGS:
     merge_with_coalescence,
     MHFromPrior,
     NodeFunctions,
-    analyze_program,
     SimpleVarInfo,
     Stochastic,
     stochastic_inneighbors,

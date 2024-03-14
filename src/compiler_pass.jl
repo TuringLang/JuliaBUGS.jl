@@ -3,48 +3,30 @@ abstract type CompilerPass end
 @inline is_deterministic(expr::Expr) = Meta.isexpr(expr, :(=))
 @inline is_stochastic(expr::Expr) = Meta.isexpr(expr, :call) && expr.args[1] == :(~)
 
-function analyze_program(pass::CompilerPass, expr::Expr, env::NamedTuple)
+function analyze_block(pass::CompilerPass, expr::Expr, loop_vars::NamedTuple=NamedTuple())
+    if !Meta.isexpr(expr, :block)
+        error("The top level expression must be a block.")
+    end
     for statement in expr.args
         if is_deterministic(statement) || is_stochastic(statement)
-            analyze_assignment(pass, statement, env)
+            analyze_statement(pass, statement, loop_vars)
         elseif Meta.isexpr(statement, :for)
-            analyze_for_loop(pass, statement, env)
+            loop_var, lb, ub, body = decompose_for_expr(statement)
+            env = merge(pass.env, loop_vars)
+            lb = Int(simple_arithmetic_eval(env, lb))
+            ub = Int(simple_arithmetic_eval(env, ub))
+            for loop_var_value in lb:ub
+                analyze_block(pass, body, merge(loop_vars, (loop_var => loop_var_value,)))
+            end
         else
             error("Unsupported expression in top level: $statement")
         end
     end
-    return post_process(pass, expr, env)
 end
 
-function analyze_for_loop(pass::CompilerPass, expr::Expr, env::NamedTuple)
-    loop_var, lb, ub, body = decompose_for_expr(expr)
-    lb = Int(evaluate(lb, env))
-    ub = Int(evaluate(ub, env))
-
-    for i in lb:ub
-        for statement in body.args
-            env = merge(env, NamedTuple{(loop_var,)}((i,)))
-            if is_deterministic(statement) || is_stochastic(statement)
-                analyze_assignment(pass, statement, env)
-            elseif Meta.isexpr(statement, :for)
-                analyze_for_loop(pass, statement, env)
-            else
-                error("Unsupported expression in for loop body: $statement")
-            end
-        end
-    end
-end
-
-function analyze_assignment end
-
-function post_process end
-
-@enum VariableTypes begin
+@enum VariableTypes::Bool begin
     Logical
     Stochastic
-    Transformed
-    Transformed_Stochastic
-    Unspecified
 end
 
 """
@@ -56,11 +38,12 @@ specified by data; (2) In a stochastic statement, for a multivariate random vari
 partially observed. This pass also returns the sizes of the arrays in the model, determined by the 
 largest indices.
 """
-struct CollectVariables{data_arrays,arrays} <: CompilerPass
+struct CollectVariables{data_vars} <: CompilerPass
+    env::NamedTuple{data_vars}
     data_scalars::Tuple{Vararg{Symbol}}
     scalars::Tuple{Vararg{Symbol}}
-    data_array_sizes::NamedTuple{data_arrays}
-    array_sizes::NamedTuple{arrays}
+    data_array_sizes::NamedTuple
+    array_sizes::NamedTuple
 end
 
 function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {data_vars}
@@ -109,7 +92,8 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
         end
     end
 
-    return CollectVariables(
+    return CollectVariables{data_vars}(
+        data,
         data_scalars,
         scalars,
         NamedTuple{Tuple(data_arrays)}(Tuple(data_array_sizes)),
@@ -297,10 +281,10 @@ end
     end
 end
 
-function analyze_assignment(pass::CollectVariables, expr::Expr, env::NamedTuple)
-    lhs_expr = Meta.isexpr(expr, :(=)) ? expr.args[1] : expr.args[2]
+function analyze_statement(pass::CollectVariables, expr::Expr, loop_vars::NamedTuple)
+    lhs_expr = is_deterministic(expr) ? expr.args[1] : expr.args[2]
+    env = merge(pass.env, loop_vars)
     v = simplify_lhs(env, lhs_expr)
-
     if v isa Symbol
         handle_symbol_lhs(pass, expr, v, env)
     else
@@ -347,7 +331,7 @@ function update_array_sizes_for_assignment(
     end
 end
 
-function post_process(pass::CollectVariables, expr::Expr, env::NamedTuple)
+function post_process(pass::CollectVariables)
     return Set{Symbol}(pass.scalars), Dict(pairs(pass.array_sizes))
 end
 
@@ -366,7 +350,8 @@ In this pass, we check the following cases:
 The exceptional case will be checked after `DataTransformation` pass.
 """
 struct CheckRepeatedAssignments <: CompilerPass
-    overlap_scalars::Tuple{Vararg{Symbol}} # TODO: `Tuple{Vararg{Symbol}}` is not concrete type, improve this in the future
+    env::NamedTuple
+    overlap_scalars::Tuple{Vararg{Symbol}}
     logical_assignment_trackers::NamedTuple
     stochastic_assignment_trackers::NamedTuple
 end
@@ -399,21 +384,25 @@ function CheckRepeatedAssignments(
     end
 
     return CheckRepeatedAssignments(
+        data,
         overlap_scalars,
         NamedTuple(logical_assignment_trackers),
         NamedTuple(stochastic_assignment_trackers),
     )
 end
 
-function analyze_assignment(pass::CheckRepeatedAssignments, expr::Expr, env::NamedTuple)
-    lhs_expr = Meta.isexpr(expr, :(=)) ? expr.args[1] : expr.args[2]
-    lhs = simplify_lhs(env, lhs_expr)
+function analyze_statement(
+    pass::CheckRepeatedAssignments, expr::Expr, loop_vars::NamedTuple
+)
+    lhs_expr = is_deterministic(expr) ? expr.args[1] : expr.args[2]
     assignment_tracker = if is_deterministic(expr)
         pass.logical_assignment_trackers
     else
         pass.stochastic_assignment_trackers
     end
 
+    env = merge(pass.env, loop_vars)
+    lhs = simplify_lhs(env, lhs_expr)
     if !(lhs isa Symbol)
         v, indices... = lhs
         set_assignment_tracker!(assignment_tracker, v, indices...)
@@ -434,7 +423,7 @@ function set_assignment_tracker!(
     end
 end
 
-function post_process(pass::CheckRepeatedAssignments, expr, env)
+function post_process(pass::CheckRepeatedAssignments)
     suspect_arrays = Dict{Symbol,BitArray}()
     overlap_arrays = intersect(
         keys(pass.logical_assignment_trackers), keys(pass.stochastic_assignment_trackers)
@@ -468,22 +457,9 @@ when the variable is computable within this pass, in which case it is regarded e
 to data.
 """
 mutable struct DataTransformation <: CompilerPass
+    env::NamedTuple
     new_value_added::Bool
     const transformed_variables
-end
-
-function DataTransformation(scalar::Set, variable_array_sizes::Dict)
-    transformed_variables = Dict()
-
-    for s in scalar
-        transformed_variables[s] = missing
-    end
-
-    for (k, v) in variable_array_sizes
-        transformed_variables[k] = Array{Union{Missing,Real}}(missing, v...)
-    end
-
-    return DataTransformation(false, transformed_variables)
 end
 
 function has_value(transformed_variables, v::Var)
@@ -496,8 +472,9 @@ function has_value(transformed_variables, v::Var)
     end
 end
 
-function analyze_assignment(pass::DataTransformation, expr::Expr, env::NamedTuple)
-    if Meta.isexpr(expr, :(=))
+function analyze_statement(pass::DataTransformation, expr::Expr, loop_vars::NamedTuple)
+    if is_deterministic(expr)
+        env = merge(pass.env, loop_vars)
         lhs = find_variables_on_lhs(expr.args[1], env)
 
         if has_value(pass.transformed_variables, lhs)
@@ -520,7 +497,7 @@ function analyze_assignment(pass::DataTransformation, expr::Expr, env::NamedTupl
     end
 end
 
-function post_process(pass::DataTransformation, expr, env)
+function post_process(pass::DataTransformation)
     return pass.new_value_added, pass.transformed_variables
 end
 
@@ -549,14 +526,15 @@ end
 A pass that analyze node functions of variables and their dependencies.
 """
 struct NodeFunctions <: CompilerPass
+    env::NamedTuple
     array_sizes::Dict
     vars::Dict
     node_args::Dict
     node_functions::Dict
     dependencies::Dict
 end
-function NodeFunctions(array_sizes)
-    return NodeFunctions(array_sizes, Dict(), Dict(), Dict(), Dict())
+function NodeFunctions(array_sizes, env)
+    return NodeFunctions(env, array_sizes, Dict(), Dict(), Dict(), Dict())
 end
 
 """
@@ -844,9 +822,16 @@ try_cast_to_int(x::Integer) = x
 try_cast_to_int(x::Real) = Int(x) # will error if !isinteger(x)
 try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
-function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
-    lhs_expr, rhs_expr = Meta.isexpr(expr, :(=)) ? expr.args[1:2] : expr.args[2:3]
-    var_type = Meta.isexpr(expr, :(=)) ? Logical : Stochastic
+function analyze_statement(pass::NodeFunctions, expr::Expr, loop_vars::NamedTuple)
+    env = merge(pass.env, loop_vars)
+
+    if is_deterministic(expr)
+        lhs_expr, rhs_expr = expr.args[1:2]
+        var_type = Logical
+    else
+        lhs_expr, rhs_expr = expr.args[2:3]
+        var_type = Stochastic
+    end
 
     lhs_var = find_variables_on_lhs(
         Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
@@ -917,8 +902,11 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
                 if Meta.isexpr(sub_expr, :ref)
                     arr, idxs... = sub_expr.args
                     new_idxs = [
-                        idx isa Integer ? idx : :(JuliaBUGS.try_cast_to_int($(idx))) for
-                        idx in idxs
+                        if idx isa Integer
+                            idx
+                        else
+                            :(JuliaBUGS.try_cast_to_int($(idx)))
+                        end for idx in idxs
                     ]
                     return Expr(:ref, arr, new_idxs...)
                 end
@@ -941,11 +929,10 @@ function analyze_assignment(pass::NodeFunctions, expr::Expr, env::NamedTuple)
 
     pass.node_args[lhs_var] = node_args
     pass.node_functions[lhs_var] = node_function
-    pass.dependencies[lhs_var] = dependencies
-    return nothing
+    return pass.dependencies[lhs_var] = dependencies
 end
 
-function post_process(pass::NodeFunctions, expr, env, vargs...)
+function post_process(pass::NodeFunctions)
     return pass.vars,
     pass.array_sizes, pass.node_args, pass.node_functions,
     pass.dependencies
