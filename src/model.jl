@@ -74,14 +74,11 @@ end
 function BUGSModel(
     g::BUGSGraph,
     sorted_nodes::Vector{<:VarName},
-    vars,
-    array_sizes,
-    data,
+    eval_env::NamedTuple,
     inits;
     is_transformed::Bool=true,
 )
-    vs = initialize_var_store(data, vars, array_sizes)
-    vi = SimpleVarInfo(vs, 0.0)
+    vi = SimpleVarInfo(eval_env, 0.0)
     dist_store = Dict{VarName,Distribution}()
     parameters = VarName[]
     untransformed_param_length = 0
@@ -119,7 +116,7 @@ function BUGSModel(
                 )
             end
             dist_store[vn] = dist
-            value = evaluate(vn, data) # `evaluate(::VarName, env)` is defined in `src/utils.jl`
+            value = evaluate(vn, eval_env) # `evaluate(::VarName, env)` is defined in `src/utils.jl`
             if value isa Nothing # not observed
                 push!(parameters, vn)
                 this_param_length = length(dist)
@@ -164,31 +161,6 @@ function BUGSModel(
         g,
         nothing,
     )
-end
-
-function initialize_var_store(data, vars, array_sizes)
-    var_store = Dict{VarName,Any}()
-    array_vn(k::Symbol) = AbstractPPL.VarName{Symbol(k)}(AbstractPPL.IdentityLens())
-    for k in keys(data)
-        v = data[k]
-        vn = array_vn(k)
-        var_store[vn] = v
-    end
-    for k in keys(array_sizes)
-        v = array_sizes[k]
-        vn = array_vn(k)
-        if !haskey(var_store, vn)
-            # var_store[vn] = zeros(v...)
-            var_store[vn] = Array{Float64}(undef, v...)
-        end
-    end
-    for v in keys(vars)
-        if v isa Scalar
-            vn = to_varname(v)
-            var_store[vn] = 0.0
-        end
-    end
-    return var_store
 end
 
 """
