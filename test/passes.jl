@@ -95,8 +95,9 @@ end
 
         scalars, array_sizes = JuliaBUGS.determine_array_sizes(model_def, data)
 
-        pass = CheckRepeatedAssignments(model_def, data, array_sizes)
-        repeat_scalars, suspect_arrays = JuliaBUGS.analyze_block(pass, model_def, data)
+        pass = JuliaBUGS.CheckRepeatedAssignments(model_def, data, array_sizes)
+        JuliaBUGS.analyze_block(pass, model_def)
+        repeat_scalars, suspect_arrays = JuliaBUGS.post_process(pass)
 
         @test isempty(repeat_scalars)
         @test collect(keys(suspect_arrays)) == [:dN]
