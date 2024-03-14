@@ -300,6 +300,7 @@ Compile a BUGS model into a log density problem.
 function compile(model_def::Expr, data, inits; is_transformed=true)
     data, inits = check_input(data), check_input(inits)
 
+    model_def = concretize_loop_bounds(model_def, data)
     scalars, array_sizes = determine_array_sizes(model_def, data)
 
     conflicted_scalars, conflicted_arrays = check_repeated_assignments(

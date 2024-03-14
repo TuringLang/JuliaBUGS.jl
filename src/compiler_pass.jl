@@ -7,7 +7,8 @@ function concretize_loop_bounds(model_def::Expr, data::NamedTuple)
     return MacroTools.postwalk(model_def) do sub_expr
         if Meta.isexpr(sub_expr, :for)
             loop_var, lb, ub, body = decompose_for_expr(sub_expr)
-            lb, ub = Int(evaluate(lb, data)), Int(evaluate(ub, data))
+            lb, ub = Int(simple_arithmetic_eval(data, lb)),
+            Int(simple_arithmetic_eval(data, ub))
             return Expr(:for, Expr(:(=), loop_var, Expr(:call, :(:), lb, ub)), body)
         end
         return sub_expr
