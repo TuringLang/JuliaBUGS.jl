@@ -1,6 +1,6 @@
 using Documenter
 using JuliaBUGS
-using JuliaBUGS: @bugs, compile, BUGSModel, BUGSGraph, ConcreteNodeInfo
+using JuliaBUGS: @bugs, compile, BUGSModel, MetaGraph, ConcreteNodeInfo
 using MetaGraphsNext
 using JuliaBUGS.BUGSPrimitives
 using DynamicPPL: SimpleVarInfo

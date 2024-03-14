@@ -8,7 +8,7 @@ using JuliaBUGS.MetaGraphsNext
 function GraphMakie.graphplot(m::JuliaBUGS.BUGSModel; kwargs...)
     return graphplot(m.g, m.parameters; kwargs...)
 end
-function GraphMakie.graphplot(g::JuliaBUGS.BUGSGraph, parameters; kwargs...)
+function GraphMakie.graphplot(g::JuliaBUGS.MetaGraph, parameters; kwargs...)
     colors = []
     for node in labels(g)
         if g[node].node_type == JuliaBUGS.Stochastic

@@ -11,11 +11,11 @@ struct Trace <: AbstractPPL.AbstractModelTrace
 end
 
 struct GraphModel <: AbstractPPL.AbstractProbabilisticProgram
-    g::BUGSGraph
+    g::MetaGraph
     sorted_nodes::Vector{Symbol}
 end
 
-function GraphModel(g::BUGSGraph)
+function GraphModel(g::MetaGraph)
     sorted_nodes = (x -> label_for(g, x)).(topological_sort_by_dfs(g))
     return GraphModel(g, sorted_nodes)
 end

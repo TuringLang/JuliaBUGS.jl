@@ -23,7 +23,7 @@ The `BUGSModel` object is used for inference and represents the output of compil
     stochastic variables that are not observed. This vector should be consistent with `sorted_nodes`.
 - `sorted_nodes::Vector{VarName}`: A vector containing the names of all the variables in the model, sorted in topological order.
     In the case of a conditioned model, `sorted_nodes` include all the variables in `parameters` and the variables in the Markov blanket of `parameters`.
-- `g::BUGSGraph`: An instance of [`BUGSGraph`](@ref), representing the dependency graph of the model.
+- `g::MetaGraph`: An instance of [`MetaGraph`](@ref), representing the dependency graph of the model.
 - `base_model::Union{BUGSModel,Nothing}`: If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`.
 
 """
@@ -40,7 +40,7 @@ struct BUGSModel <: AbstractBUGSModel
     parameters::Vector{VarName}
     sorted_nodes::Vector{VarName}
 
-    g::BUGSGraph
+    g::MetaGraph
 
     " The base model if the model is a conditioned model; otherwise, `nothing`. "
     base_model::Union{BUGSModel,Nothing}
@@ -72,7 +72,7 @@ struct UninitializedVariableError <: Exception
 end
 
 function BUGSModel(
-    g::BUGSGraph,
+    g::MetaGraph,
     sorted_nodes::Vector{<:VarName},
     eval_env,
     inits;
@@ -88,10 +88,10 @@ function BUGSModel(
     transformed_var_lengths = Dict{VarName,Int}()
     for vn in sorted_nodes
         ni = g[vn]
-        @unpack node_type, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args) # TODO: get rid of this
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
+        (;is_stochastic, is_observed, node_function_expr, node_args, loop_vars) = ni
+        expr = node_function_expr.args[2].args[1].args[1]
+        args = merge(vi.values, loop_vars)
+        if !is_stochastic
             value = try
                 _eval(expr, args, dist_store)
             catch e
@@ -115,8 +115,7 @@ function BUGSModel(
                 )
             end
             dist_store[vn] = dist
-            value = evaluate(vn, eval_env) # `evaluate(::VarName, env)` is defined in `src/utils.jl`
-            if value isa Nothing # not observed
+            if !is_observed
                 push!(parameters, vn)
                 this_param_length = length(dist)
                 untransformed_param_length += this_param_length
@@ -145,8 +144,11 @@ function BUGSModel(
             end
         end
     end
-    if (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) != untransformed_param_length 
-        error("$(isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) $untransformed_param_length")
+    if (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) !=
+        untransformed_param_length
+        error(
+            "$(isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) $untransformed_param_length",
+        )
     end
     return BUGSModel(
         is_transformed,

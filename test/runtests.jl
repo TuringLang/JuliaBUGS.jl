@@ -10,7 +10,7 @@ using DynamicPPL: getlogp, settrans!!
 using Graphs, MetaGraphsNext
 using JuliaBUGS
 using JuliaBUGS:
-    BUGSGraph,
+    MetaGraph,
     CollectVariables,
     ConcreteNodeInfo,
     DataTransformation,

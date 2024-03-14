@@ -1,5 +1,5 @@
 
-function todppl(g::BUGSGraph, print_turing_program=true)
+function todppl(g::MetaGraph, print_turing_program=true)
     expr = []
     args = Dict()
     sorted_nodes = (x -> label_for(g, x)).(topological_sort_by_dfs(g))
@@ -31,7 +31,7 @@ function todppl(g::BUGSGraph, print_turing_program=true)
     return model
 end
 
-function gen_variation_partition(g::BUGSGraph)
+function gen_variation_partition(g::MetaGraph)
     dist_types = dry_run(g)[1]
     dt = Dict{Any,Any}()
     for k in keys(dist_types)

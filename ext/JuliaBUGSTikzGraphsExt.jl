@@ -8,7 +8,7 @@ function TikzGraphs.plot(m::JuliaBUGS.BUGSModel; kwargs...)
     return TikzGraphs.plot(m.g, m.parameters; kwargs...)
 end
 
-function TikzGraphs.plot(g::JuliaBUGS.BUGSGraph, parameters; kwargs...)
+function TikzGraphs.plot(g::JuliaBUGS.MetaGraph, parameters; kwargs...)
     color_dict = Dict{Int,String}()
     for (i, node) in enumerate(labels(g))
         if node in parameters

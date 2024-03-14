@@ -1,185 +1,225 @@
-abstract type NodeInfo end
-
-"""
-    AuxiliaryNodeInfo
-
-Indicate the node is created by the compiler and not in the original BUGS model. These nodes
-are only used to determine dependencies.
-
-E.g., x[1:2] ~ dmnorm(...); y = x[1] + 1
-In this case, x[1] is an auxiliary node because it doesn't appear on the LHS of any expression.
-But we must still introduce it to determine the dependency between `y` and `x[1:2]`.
-
-In the current implementation, `AuxiliaryNodeInfo` is only used when constructing the graph,
-and will all be removed right before returning the graph. 
-"""
-struct AuxiliaryNodeInfo <: NodeInfo end
-
-"""
-    ConcreteNodeInfo
-
-Defines the information stored in each node of the BUGS graph, encapsulating the essential characteristics 
-and functions associated with a node within the BUGS model's dependency graph.
-
-# Fields
-
-- `node_type::VariableTypes`: Specifies whether the node is a stochastic or logical variable.
-- `node_function_expr::Expr`: The node function expression.
-- `node_args::Vector{VarName}`: A vector containing the names of the variables that are 
-    arguments to the node function.
-
-"""
-struct ConcreteNodeInfo <: NodeInfo
-    node_type::VariableTypes
+struct VertexInfo
+    is_stochastic::Bool
+    is_observed::Bool
     node_function_expr::Expr
     node_args::Vector
+    loop_vars::NamedTuple
 end
 
-function Base.show(io::IO, n::ConcreteNodeInfo)
-    if n isa ConcreteNodeInfo
-        print(
-            io,
-            "ConcreteNodeInfo(\n",
-            "\tNode Type: ",
-            n.node_type,
-            "\n",
-            "\tNode Function Expression: ",
-            n.node_function_expr,
-            "\n",
-            "\tNode Arguments: ",
-            n.node_args,
-            "\n",
-            ")",
-        )
-    end
+abstract type GraphBuildingStage end
+
+struct AddVertices <: GraphBuildingStage
+    g::MetaGraph
+    vertex_id_tracker::Dict
 end
 
-function ConcreteNodeInfo(var::Var, vars, node_functions, node_args)
-    return ConcreteNodeInfo(
-        vars[var],
-        node_functions[var],
-        map(v -> AbstractPPL.VarName{v.name}(AbstractPPL.IdentityLens()), node_args[var]),
-    )
-end
-
-function NodeInfo(var::Var, vars, node_functions, node_args)
-    if var in keys(vars)
-        return ConcreteNodeInfo(var, vars, node_functions, node_args)
-    else
-        return AuxiliaryNodeInfo()
-    end
-end
-
-"""
-    BUGSGraph
-
-The `BUGSGraph` object represents the graph structure for a BUGS model. It is a type alias for
-[`MetaGraphsNext.MetaGraph`](https://juliagraphs.org/MetaGraphsNext.jl/dev/api/#MetaGraphsNext.MetaGraph)
-with node type specified to [`ConcreteNodeInfo`](@ref).
-"""
-const BUGSGraph = MetaGraph{
-    Int64,SimpleDiGraph{Int64},VarName,NodeInfo,Nothing,Nothing,Nothing,Float64
-}
-
-function create_BUGSGraph(vars, node_args, node_functions, dependencies)
-    g = MetaGraph(
-        SimpleDiGraph{Int64}();
-        weight_function=nothing,
-        label_type=VarName,
-        vertex_data_type=NodeInfo,
-    )
-    for l in keys(vars) # l for LHS variable
-        l_vn = to_varname(l)
-        check_and_add_vertex!(g, l_vn, NodeInfo(l, vars, node_functions, node_args))
-        # The use of AuxiliaryNodeInfo is also to save computation, becasue otherwise, 
-        # every time we introduce a new node, we need to check `subsumes` or by all the existing nodes.
-        scalarize_then_add_edge!(g, l; lhs_or_rhs=:lhs)
-        for r in dependencies[l]
-            r_vn = to_varname(r)
-            check_and_add_vertex!(g, r_vn, NodeInfo(r, vars, node_functions, node_args))
-            add_edge!(g, r_vn, l_vn)
-            scalarize_then_add_edge!(g, r; lhs_or_rhs=:rhs)
-        end
-    end
-    check_undeclared_variables(g, vars)
-    remove_auxiliary_nodes!(g)
-    return g
-end
-
-"""
-    check_undeclared_variables
-
-Check for undeclared variables within the model definition
-"""
-function check_undeclared_variables(g::BUGSGraph, vars)
-    undeclared_vars = VarName[]
-    for v in labels(g)
-        if g[v] isa AuxiliaryNodeInfo
-            children = outneighbor_labels(g, v)
-            parents = inneighbor_labels(g, v)
-            if isempty(parents) || isempty(children)
-                if !any(
-                    AbstractPPL.subsumes(u, v) || AbstractPPL.subsumes(v, u) for # corner case x[1:1] and x[1], e.g. Leuk
-                    u in to_varname.(keys(vars))
-                )
-                    push!(undeclared_vars, v)
-                end
-            end
-        end
-    end
-    if !isempty(undeclared_vars)
-        error("Undeclared variables: $(string.(Symbol.(undeclared_vars)))")
-    end
-end
-
-function remove_auxiliary_nodes!(g::BUGSGraph)
-    for v in collect(labels(g))
-        if g[v] isa AuxiliaryNodeInfo
-            # fix dependencies
-            children = outneighbor_labels(g, v)
-            parents = inneighbor_labels(g, v)
-            for c in children
-                for p in parents
-                    @assert !any(x -> x isa AuxiliaryNodeInfo, (g[c], g[p])) "Auxiliary nodes should not have neighbors that are also auxiliary nodes, but at least one of $(g[c]) and $(g[p]) are."
-                    add_edge!(g, p, c)
-                end
-            end
-            delete!(g, v)
-        end
-    end
-end
-
-function check_and_add_vertex!(g::BUGSGraph, v::VarName, data::NodeInfo)
-    if haskey(g, v)
-        data isa AuxiliaryNodeInfo && return nothing
-        if g[v] isa AuxiliaryNodeInfo
-            set_data!(g, v, data)
-        end
-    else
-        add_vertex!(g, v, data)
-    end
-end
-
-function scalarize_then_add_edge!(g::BUGSGraph, v::Var; lhs_or_rhs=:lhs)
-    scalarized_v = vcat(scalarize(v)...)
-    length(scalarized_v) == 1 && return nothing
-    v = to_varname(v)
-    for v_elem in map(to_varname, scalarized_v)
-        add_vertex!(g, v_elem, AuxiliaryNodeInfo()) # may fail, in that case, the existing node may be concrete, so we don't need to add it
-        if lhs_or_rhs == :lhs # if an edge exist between v and scalaized elements, don't add again
-            !Graphs.has_edge(g, code_for(g, v_elem), code_for(g, v)) &&
-                add_edge!(g, v, v_elem)
-        elseif lhs_or_rhs == :rhs
-            !Graphs.has_edge(g, code_for(g, v), code_for(g, v_elem)) &&
-                add_edge!(g, v_elem, v)
+function AddVertices(eval_env::NamedTuple)
+    g = MetaGraph(DiGraph(); label_type=VarName, vertex_data_type=VertexInfo)
+    vertex_id_tracker = Dict{Symbol,Any}()
+    for (k, v) in pairs(eval_env)
+        if v isa AbstractArray
+            vertex_id_tracker[k] = zeros(Int, size(v))
         else
-            error("Unknown argument $lhs_or_rhs")
+            vertex_id_tracker[k] = 0
+        end
+    end
+    return AddVertices(g, vertex_id_tracker)
+end
+
+struct AddEdges <: GraphBuildingStage
+    g::MetaGraph
+    vertex_id_tracker::Dict
+end
+
+function build_graph(model_def::Expr, eval_env::NamedTuple)
+    stage = AddVertices(eval_env)
+    build_graph(stage, model_def, eval_env, NamedTuple())
+    stage = AddEdges(stage.g, stage.vertex_id_tracker)
+    build_graph(stage, model_def, eval_env, NamedTuple())
+    return stage.g
+end
+
+function build_graph(
+    stage::GraphBuildingStage, expr::Expr, eval_env::NamedTuple, loop_vars::NamedTuple
+)
+    for statement in expr.args
+        if Meta.isexpr(statement, :(=)) ||
+            (Meta.isexpr(statement, :call) && statement.args[1] == :(~))
+            build_graph_statement(stage, statement, eval_env, loop_vars)
+        elseif Meta.isexpr(statement, :for)
+            loop_var, lb, ub, body = decompose_for_expr(statement)
+            lb, ub = Int(simple_arithmetic_eval(eval_env, lb)),
+            Int(simple_arithmetic_eval(eval_env, ub))
+            build_graph(stage, body, eval_env, merge(loop_vars, (loop_var => lb:ub,)))
+        else
+            error("Unknown statement type: $statement")
+        end
+    end
+end
+
+function build_graph_statement(
+    stage::AddVertices, expr::Expr, eval_env::NamedTuple, loop_vars::NamedTuple
+)
+    lhs_expr, rhs_expr = Meta.isexpr(expr, :(=)) ? expr.args[1:2] : expr.args[2:3]
+    node_function_expr, args = make_function_expr(
+        rhs_expr, eval_env, Tuple(keys(loop_vars))
+    )
+    for loop_var_values in Iterators.product(values(loop_vars)...)
+        loop_var_bindings = NamedTuple{Tuple(keys(loop_vars))}(loop_var_values)
+        env = merge(eval_env, loop_var_bindings)
+        lhs = simplify_lhs(env, lhs_expr)
+        is_stochastic = false
+        is_observed = false
+        if Meta.isexpr(expr, :(=))
+            lhs_value = if lhs isa Symbol
+                value = env[lhs]
+                if value isa Ref
+                    value = value[]
+                end
+                value
+            else
+                var, indices... = lhs
+                env[var][indices...]
+            end
+            if is_resolved(lhs_value)
+                return nothing
+            end
+        else
+            is_stochastic = true
+            lhs_value = if lhs isa Symbol
+                value = env[lhs]
+                if value isa Ref
+                    value = value[]
+                end
+                value
+            else
+                var, indices... = lhs
+                env[var][indices...]
+            end
+            if is_observed
+                is_observed = true
+            end
+        end
+
+        vn = if lhs isa Symbol
+            AbstractPPL.VarName{lhs}(AbstractPPL.IdentityLens())
+        else
+            v, indices... = lhs
+            AbstractPPL.VarName{v}(AbstractPPL.IndexLens(indices))
+        end
+        add_vertex!(
+            stage.g,
+            vn,
+            VertexInfo(
+                is_stochastic, is_observed, node_function_expr, args, loop_var_bindings
+            ),
+        )
+        if lhs isa Symbol
+            stage.vertex_id_tracker[lhs] = code_for(stage.g, vn)
+        else
+            v, indices... = lhs
+            if any(indices) do i
+                i isa UnitRange
+            end
+                stage.vertex_id_tracker[v][indices...] .= code_for(stage.g, vn)
+            else
+                stage.vertex_id_tracker[v][indices...] = code_for(stage.g, vn)
+            end
+        end
+    end
+end
+
+function make_function_expr(
+    expr::Expr, env::NamedTuple{vars}, loop_vars::Tuple{Vararg{Symbol}}
+) where {vars}
+    var_with_numdims = extract_variable_names_and_numdims(expr)
+    args = setdiff(keys(var_with_numdims), loop_vars)
+    arg_exprs = []
+    for v in args
+        if v âˆˆ vars
+            value = env[v]
+            if value isa Int
+                push!(arg_exprs, Expr(:(::), v, :Int))
+            elseif value isa Float64
+                push!(arg_exprs, Expr(:(::), v, :Float64))
+            elseif value isa Ref
+                push!(arg_exprs, Expr(:(::), v, :(Union{Int,Float64})))
+            elseif value isa AbstractArray
+                if eltype(value) === Int
+                    push!(arg_exprs, Expr(:(::), v, :{Array{Int}}))
+                elseif eltype(value) === Float64
+                    push!(arg_exprs, Expr(:(::), v, :{Array{Float64,1}}))
+                else
+                    push!(arg_exprs, Expr(:(::), v, :{Array{Union{Int,Float64,Missing}}}))
+                end
+            else
+                error("Unexpected argument type: $(typeof(value))")
+            end
+        else # loop vars
+            push!(arg_exprs, Expr(:(::), v, :Int))
+        end
+    end
+
+    return (MacroTools.@q function ($(arg_exprs...))
+        return $(expr)
+    end), args
+end
+
+function build_graph_statement(
+    stage::AddEdges, expr::Expr, eval_env::NamedTuple, loop_vars::NamedTuple
+)
+    lhs_expr, rhs_expr = Meta.isexpr(expr, :(=)) ? expr.args[1:2] : expr.args[2:3]
+    for loop_var_values in Iterators.product(values(loop_vars)...)
+        loop_var_bindings = NamedTuple{Tuple(keys(loop_vars))}(loop_var_values)
+        env = merge(eval_env, loop_var_bindings)
+        lhs = simplify_lhs(env, lhs_expr)
+        if Meta.isexpr(expr, :(=))
+            lhs_value = if lhs isa Symbol
+                value = env[lhs]
+                if value isa Ref
+                    value = value[]
+                end
+                value
+            else
+                var, indices... = lhs
+                env[var][indices...]
+            end
+            if is_resolved(lhs_value)
+                return nothing
+            end
+        end
+        value, dependencies, _ = evaluate_and_track_dependencies(rhs_expr, env)
+
+        lhs_vn = if lhs isa Symbol
+            AbstractPPL.VarName{lhs}(AbstractPPL.IdentityLens())
+        else
+            v, indices... = lhs
+            AbstractPPL.VarName{v}(AbstractPPL.IndexLens(indices))
+        end
+
+        for var in dependencies
+            vertex_code = if var isa Symbol
+                stage.vertex_id_tracker[var]
+            else
+                v, indices... = var
+                stage.vertex_id_tracker[v][indices...]
+            end
+
+            vertex_code = filter(
+                x -> x != 0, vertex_code isa Vector ? vertex_code : [vertex_code]
+            )
+            vertex_labels = map(x -> label_for(stage.g, x), vertex_code)
+            for r in vertex_labels
+                if r != lhs_vn
+                    add_edge!(stage.g, r, lhs_vn)
+                end
+            end
         end
     end
 end
 
 """
-    find_generated_vars(g::BUGSGraph)
+    find_generated_vars(g::MetaGraph)
 
 Return all the logical variables without stochastic descendants. The values of these variables 
 do not affect sampling process. These variables are called "generated quantities" traditionally.
@@ -235,7 +275,7 @@ Boundary of Multiple Variables. Journal of Machine Learning Research, 19(43), 1â
 In the case of M-H acceptance ratio evaluation, only the logps of the children are needed, because the logp of the parents
 and co-parents are not changed (their values are still needed to compute the distributions). 
 """
-function markov_blanket(g::BUGSGraph, v::VarName; children_only=false)
+function markov_blanket(g::MetaGraph, v::VarName; children_only=false)
     if !children_only
         parents = stochastic_inneighbors(g, v)
         children = stochastic_outneighbors(g, v)
@@ -250,7 +290,7 @@ function markov_blanket(g::BUGSGraph, v::VarName; children_only=false)
     end
 end
 
-function markov_blanket(g::BUGSGraph, v; children_only=false)
+function markov_blanket(g::MetaGraph, v; children_only=false)
     blanket = VarName[]
     for vn in v
         blanket = vcat(blanket, markov_blanket(g, vn; children_only=children_only))
@@ -259,13 +299,13 @@ function markov_blanket(g::BUGSGraph, v; children_only=false)
 end
 
 """
-    stochastic_neighbors(g::BUGSGraph, c::VarName, f)
+    stochastic_neighbors(g::MetaGraph, c::VarName, f)
    
 Internal function to find all the stochastic neighbors (parents or children), returns a vector of
 `VarName` containing the stochastic neighbors and the logical variables along the paths.
 """
 function stochastic_neighbors(
-    g::BUGSGraph,
+    g::MetaGraph,
     v::VarName,
     f::Union{
         typeof(MetaGraphsNext.inneighbor_labels),typeof(MetaGraphsNext.outneighbor_labels)
@@ -296,7 +336,7 @@ function stochastic_neighbors(
 end
 
 """
-    stochastic_inneighbors(g::BUGSGraph, v::VarName)
+    stochastic_inneighbors(g::MetaGraph, v::VarName)
 
 Find all the stochastic inneighbors (parents) of `v`.
 """
@@ -305,7 +345,7 @@ function stochastic_inneighbors(g, v)
 end
 
 """
-    stochastic_outneighbors(g::BUGSGraph, v::VarName)
+    stochastic_outneighbors(g::MetaGraph, v::VarName)
 
 Find all the stochastic outneighbors (children) of `v`.
 """

@@ -126,13 +126,9 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
     data, inits = check_input(data), check_input(inits)
 
     eval_env = semantic_analysis(model_def, data)
-
     model_def = concretize_colon_indexing(model_def, eval_env)
-    vars, node_args, node_functions, dependencies = analyze_program(
-        NodeFunctions(), model_def, eval_env
-    )
 
-    g = create_BUGSGraph(vars, node_args, node_functions, dependencies)
+    g = build_graph(model_def, eval_env)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
     return BUGSModel(g, sorted_nodes, eval_env, inits; is_transformed=is_transformed)
 end

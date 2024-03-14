@@ -5,5 +5,5 @@
 compile
 BUGSModel
 ConcreteNodeInfo
-BUGSGraph
+MetaGraph
 ```

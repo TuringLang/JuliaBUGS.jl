@@ -8,7 +8,7 @@ function GraphPlot.gplot(m::JuliaBUGS.BUGSModel; kwargs...)
     return GraphPlot.gplot(m.g, m.parameters; kwargs...)
 end
 
-function GraphPlot.gplot(g::JuliaBUGS.BUGSGraph, parameters; kwargs...)
+function GraphPlot.gplot(g::JuliaBUGS.MetaGraph, parameters; kwargs...)
     colors = []
     for node in labels(g)
         if g[node].node_type == JuliaBUGS.Stochastic

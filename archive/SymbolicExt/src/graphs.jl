@@ -1,7 +1,7 @@
 """
     VertexInfo
 
-Holds information for a node in a BUGSGraph. 
+Holds information for a node in a MetaGraph. 
 """
 struct VertexInfo
     variable_name::Symbol
@@ -17,11 +17,11 @@ struct VertexInfo
 end
 
 """
-    BUGSGraph
+    MetaGraph
 
-BUGSGraph is synonymous with MetaGraphNext.MetaDiGraph with [`VertexInfo`](@ref) vertex type.
+MetaGraph is synonymous with MetaGraphNext.MetaDiGraph with [`VertexInfo`](@ref) vertex type.
 """
-const BUGSGraph = MetaGraph{<:Any,Symbol,<:SimpleDiGraph,<:VertexInfo}
+const MetaGraph = MetaGraph{<:Any,Symbol,<:SimpleDiGraph,<:VertexInfo}
 
 function tograph(pre_graph::Dict)
     g = MetaGraph(DiGraph(); Label=Symbol, VertexData=VertexInfo)
@@ -53,7 +53,7 @@ end
 Return a Distribution.jl distribution.
 """
 function getdistribution(
-    g::BUGSGraph, node::Symbol, value::Dict{Symbol,Any}, delta=Dict{Symbol,Any}()
+    g::MetaGraph, node::Symbol, value::Dict{Symbol,Any}, delta=Dict{Symbol,Any}()
 )::Distributions.Distribution
     args = []
     for p in g[node].sorted_inputs
@@ -92,8 +92,8 @@ end
 
 Return the distribution types and values of the random variables via ancestral sampling.
 """
-dry_run(g::BUGSGraph) = dry_run(g, (x -> label_for(g, x)).(topological_sort_by_dfs(g)))
-function dry_run(g::BUGSGraph, sorted_nodes::Vector{Symbol})
+dry_run(g::MetaGraph) = dry_run(g, (x -> label_for(g, x)).(topological_sort_by_dfs(g)))
+function dry_run(g::MetaGraph, sorted_nodes::Vector{Symbol})
     value = Dict{Symbol,Any}()
     dist_types = Dict{Any,Any}()
     for node in sorted_nodes

@@ -533,8 +533,12 @@ function _eval(expr::Symbol, env, dist_store)
         return nothing
     elseif expr == :(:)
         return Colon()
-    else # intentional strict, all corner cases should be handled above
-        return env[expr]
+    else
+        value = env[expr]
+        if value isa Ref
+            value = value[]
+        end
+        return value
     end
 end
 function _eval(expr::AbstractRange, env, dist_store)
