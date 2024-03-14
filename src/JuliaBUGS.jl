@@ -42,18 +42,38 @@ include("gibbs.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 
-@inline function check_input(::NamedTuple{Vs,T}) where {Vs,T}
-    for VT in T.parameters
-        if VT <: AbstractArray
-            if !(eltype(VT) <: Union{Int,Float64,Missing})
+function check_input(input::NamedTuple)
+    for (k, v) in pairs(input)
+        if v isa AbstractArray
+            if !(eltype(v) <: Union{Int,Float64,Missing})
                 error(
-                    "Data input supports only Int, Float64, or Missing types within arrays. Received: $VT",
+                    "For array input, only Int, Float64, or Missing types are supported. Received: $(typeof(v)).",
                 )
             end
-        elseif VT ∉ (Int, Float64)
-            error("Scalar inputs must be of type Int or Float64. Received: $VT")
+        elseif v === missing
+            error("Scalars cannot be missing. Received: $k")
+        elseif !(v isa Union{Int,Float64})
+            error("Scalars must be of type Int or Float64. Received: $k")
         end
     end
+    return input
+end
+function check_input(input::Dict{KT,VT}) where {KT,VT}
+    if KT === Symbol
+        return check_input(NamedTuple(input))
+    else
+        ks = map(identity, keys(input))
+        if eltype(ks) === Symbol
+            return check_input(NamedTuple(ks, vs))
+        else
+            error(
+                "When the input isa Dict, the keys must be of type Symbol. Received: $(typeof(ks)).",
+            )
+        end
+    end
+end
+function check_input(input)
+    return error("Input must be of type NamedTuple or Dict. Received: $(typeof(input)).")
 end
 
 """
@@ -202,9 +222,9 @@ function merge_with_coalescence(
     return NamedTuple{Tuple(unioned_keys)}(Tuple(coalesced_values))
 end
 
-function compute_data_transformation(scalar, array_sizes, model_def, data)
+function compute_data_transformation(scalars, array_sizes, model_def, data)
     transformed_variables = Dict{Symbol,Any}()
-    for s in scalar
+    for s in scalars
         transformed_variables[s] = missing
     end
     for (k, v) in array_sizes
@@ -213,9 +233,9 @@ function compute_data_transformation(scalar, array_sizes, model_def, data)
 
     has_new_val = true
     while has_new_val
-        has_new_val, transformed_variables = analyze_program(
-            DataTransformation(false, transformed_variables), model_def, data
-        )
+        pass = DataTransformation(data, false, transformed_variables)
+        analyze_block(pass, model_def)
+        has_new_val, transformed_variables = post_process(pass)
     end
     return transformed_variables
 end
@@ -241,6 +261,28 @@ function finish_checking_repeated_assignments(
     end
 end
 
+function determine_array_sizes(model_def, data)
+    model_def = concretize_loop_bounds(model_def, data)
+    pass = CollectVariables(model_def, data)
+    analyze_block(pass, model_def)
+    scalars, array_sizes = post_process(pass)
+    return scalars, array_sizes
+end
+
+function check_repeated_assignments(model_def, data, array_sizes)
+    pass = CheckRepeatedAssignments(model_def, data, array_sizes)
+    analyze_block(pass, model_def)
+    conflicted_scalars, conflicted_arrays = post_process(pass)
+    return conflicted_scalars, conflicted_arrays
+end
+
+function compute_node_functions(model_def, merged_data, array_sizes)
+    pass = NodeFunctions(array_sizes, merged_data)
+    analyze_block(pass, model_def)
+    vars, array_sizes, node_args, node_functions, dependencies = post_process(pass)
+    return vars, array_sizes, node_args, node_functions, dependencies
+end
+
 """
     compile(model_def[, data, initializations])
 
@@ -256,22 +298,12 @@ Compile a BUGS model into a log density problem.
 - A [`BUGSModel`](@ref) object representing the compiled model.
 """
 function compile(model_def::Expr, data, inits; is_transformed=true)
-    if !(data isa NamedTuple)
-        data = NamedTuple{Tuple(keys(data))}(values(data))
-    end
+    data, inits = check_input(data), check_input(inits)
 
-    if !(inits isa NamedTuple)
-        inits = NamedTuple{Tuple(keys(inits))}(values(inits))
-    end
+    scalars, array_sizes = determine_array_sizes(model_def, data)
 
-    check_input(data)
-    check_input(inits)
-
-    scalars, array_sizes = analyze_program(
-        CollectVariables(model_def, data), model_def, data
-    )
-    conflicted_scalars, conflicted_arrays = analyze_program(
-        CheckRepeatedAssignments(model_def, data, array_sizes), model_def, data
+    conflicted_scalars, conflicted_arrays = check_repeated_assignments(
+        model_def, data, array_sizes
     )
 
     transformed_variables = compute_data_transformation(
@@ -284,9 +316,11 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
     finish_checking_repeated_assignments(conflicted_scalars, conflicted_arrays, merged_data)
 
     model_def = concretize_colon_indexing(model_def, array_sizes, merged_data)
-    vars, array_sizes, node_args, node_functions, dependencies = analyze_program(
-        NodeFunctions(array_sizes), model_def, merged_data
+
+    vars, array_sizes, node_args, node_functions, dependencies = compute_node_functions(
+        model_def, merged_data, array_sizes
     )
+
     g = create_BUGSGraph(vars, node_args, node_functions, dependencies)
     sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
     return BUGSModel(

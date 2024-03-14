@@ -17,9 +17,7 @@ for name in keys(BUGSExamples.VOLUME_I)
     model_def = BUGSExamples.VOLUME_I[name].model_def
     data = BUGSExamples.VOLUME_I[name].data
 
-    scalars, array_sizes = analyze_program(
-        CollectVariables(model_def, data), model_def, data
-    )
+    scalars, array_sizes = JuliaBUGS.determine_array_sizes(model_def, data)
 
     transformed_variables = compute_data_transformation(
         scalars, array_sizes, model_def, data
@@ -30,16 +28,16 @@ for name in keys(BUGSExamples.VOLUME_I)
 
     _suite = BenchmarkGroup()
 
-    _suite["CollectVariables"] = @benchmarkable analyze_program(
-        CollectVariables($model_def, $data), $model_def, $data
+    _suite["CollectVariables"] = @benchmarkable JuliaBUGS.determine_array_sizes(
+        $model_def, $data
     )
 
     _suite["DataTransformation"] = @benchmarkable compute_data_transformation(
         $scalars, $array_sizes, $model_def, $data
     )
 
-    _suite["NodeFunctions"] = @benchmarkable analyze_program(
-        NodeFunctions($array_sizes), $model_def, $merged_data
+    _suite["NodeFunctions"] = @benchmarkable JuliaBUGS.compute_node_functions(
+        $model_def, $merged_data, $array_sizes
     )
 
     tune!(_suite)
