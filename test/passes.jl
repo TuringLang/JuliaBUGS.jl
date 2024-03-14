@@ -1,5 +1,4 @@
-using JuliaBUGS:
-    CollectVariables, DataTransformation, CheckRepeatedAssignments
+using JuliaBUGS: CollectVariables, DataTransformation, CheckRepeatedAssignments
 using JuliaBUGS: is_resolved
 using JuliaBUGS: is_specified_by_data, is_partially_specified_as_data
 
