@@ -111,7 +111,9 @@ end
             a = 2
         end
         scalars, array_sizes = JuliaBUGS.determine_array_sizes(model_def, data)
-        @test_throws ErrorException JuliaBUGS.check_repeated_assignments(model_def, data, array_sizes)
+        @test_throws ErrorException JuliaBUGS.check_repeated_assignments(
+            model_def, data, array_sizes
+        )
 
         model_def = @bugs begin
             a ~ Normal(0, 1)
