@@ -32,6 +32,7 @@ for name in keys(BUGSExamples.VOLUME_I)
         $model_def, $eval_env
     )
 
+    model_def = JuliaBUGS.concretize_colon_indexing(model_def, eval_env)
     vars, node_args, node_functions, dependencies = JuliaBUGS.compute_node_functions(
         model_def, eval_env
     )
