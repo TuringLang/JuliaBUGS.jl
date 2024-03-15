@@ -1,12 +1,7 @@
 using BenchmarkTools
 
 using JuliaBUGS
-using JuliaBUGS:
-    BUGSExamples,
-    CollectVariables,
-    DataTransformation,
-    NodeFunctions,
-    compute_data_transformation
+using JuliaBUGS: BUGSExamples
 
 suite = BenchmarkGroup()
 
@@ -19,7 +14,7 @@ for name in keys(BUGSExamples.VOLUME_I)
         model_def, data
     )
 
-    eval_env = compute_data_transformation(
+    eval_env = JuliaBUGS.compute_data_transformation(
         non_data_scalars, non_data_array_sizes, model_def, data
     )
 
@@ -29,12 +24,21 @@ for name in keys(BUGSExamples.VOLUME_I)
         $model_def, $data
     )
 
-    _suite["DataTransformation"] = @benchmarkable compute_data_transformation(
+    _suite["DataTransformation"] = @benchmarkable JuliaBUGS.compute_data_transformation(
         $non_data_scalars, $non_data_array_sizes, $model_def, $data
     )
 
-    _suite["NodeFunctions"] = @benchmarkable JuliaBUGS.compute_node_functions(
+    _suite["NodeFunction"] = @benchmarkable JuliaBUGS.compute_node_functions(
         $model_def, $eval_env
+    )
+
+    _suite["GraphCreation"] = @benchmarkable JuliaBUGS.create_BUGSGraph(
+        $vars, $node_args, $node_functions, $dependencies
+    ) setup = (
+        vars,
+        node_args,
+        node_functions,
+        dependencies=JuliaBUGS.compute_node_functions(model_def, eval_env),
     )
 
     tune!(_suite)
@@ -47,7 +51,7 @@ function create_result_dict(results)
     result_dict = Dict{String,Dict{String,Dict{String,String}}}()
     for (name, example_suite) in results
         _d = Dict{String,Dict{String,String}}()
-        for k in ("CollectVariables", "DataTransformation", "NodeFunctions")
+        for k in ("CollectVariables", "DataTransformation", "NodeFunction", "GraphCreation")
             __d = Dict{String,String}()
             med = median(example_suite[k])
             min = minimum(example_suite[k])

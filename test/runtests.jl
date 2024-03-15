@@ -58,7 +58,6 @@ else
                 create_array_var,
                 replace_constants_in_expr,
                 evaluate_and_track_dependencies,
-                evaluate,
                 scalarize,
                 concretize_colon_indexing,
                 extract_variable_names_and_numdims,
