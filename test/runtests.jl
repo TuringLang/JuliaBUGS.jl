@@ -6,28 +6,20 @@ using Bijectors
 using Distributions
 using Documenter
 using DynamicPPL
-using DynamicPPL: getlogp, settrans!!
+using DynamicPPL: getlogp, settrans!!, SimpleVarInfo
 using Graphs, MetaGraphsNext
 using JuliaBUGS
 using JuliaBUGS:
     BUGSGraph,
-    CollectVariables,
-    ConcreteNodeInfo,
-    DataTransformation,
     DefaultContext,
     evaluate!!,
     get_params_varinfo,
-    Logical,
     LogDensityContext,
     MHFromPrior,
-    NodeFunctions,
-    SimpleVarInfo,
-    Stochastic,
     stochastic_inneighbors,
     stochastic_neighbors,
     stochastic_outneighbors,
     markov_blanket,
-    Var,
     Gibbs
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.BUGSPrimitives: mean
@@ -54,12 +46,8 @@ else
                 JuliaBUGS,
                 BUGSExamples,
                 @bugs,
-                Var,
-                create_array_var,
-                replace_constants_in_expr,
                 evaluate_and_track_dependencies,
                 evaluate,
-                scalarize,
                 concretize_colon_indexing,
                 extract_variable_names_and_numdims,
                 extract_variables_in_bounds_and_lhs_indices,

@@ -1,7 +1,8 @@
-struct NodeInfo
+struct NodeInfo{F}
     is_stochastic::Bool
     is_observed::Bool
     node_function_expr::Expr
+    node_function::F
     node_args::Tuple{Vararg{Symbol}}
     loop_vars::NamedTuple
 end
@@ -10,12 +11,9 @@ end
     BUGSGraph
 
 The `BUGSGraph` object represents the graph structure for a BUGS model. It is a type alias for
-[`MetaGraphsNext.MetaGraph`](https://juliagraphs.org/MetaGraphsNext.jl/dev/api/#MetaGraphsNext.MetaGraph)
-with node type specified to [`ConcreteNodeInfo`](@ref).
+`MetaGraphsNext.MetaGraph`.
 """
-const BUGSGraph = MetaGraph{
-    Int64,SimpleDiGraph{Int64},VarName,NodeInfo,Nothing,Nothing,Nothing,Float64
-}
+const BUGSGraph = MetaGraph
 
 """
     find_generated_vars(g::BUGSGraph)

@@ -31,7 +31,7 @@ vi = bugs_model.varinfo
     return sigma
 end
 
-@unpack rt, nt, rc, nc, Num = data
+(; rt, nt, rc, nc, Num) = data
 dppl_model = blockers(rc, rt, nc, nt, Num)
 
 bugs_logp = JuliaBUGS.evaluate!!(JuliaBUGS.settrans(bugs_model, false), DefaultContext())[2]

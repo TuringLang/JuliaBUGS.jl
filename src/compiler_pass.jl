@@ -613,45 +613,35 @@ function evaluate_and_track_dependencies(var::Expr, env)
     end
 end
 
-mutable struct AddVertices <: CompilerPass
-    const env::NamedTuple
-    const g::MetaGraph
-    vertex_id_tracker::NamedTuple
-    const func_args::Dict{Union{Expr,Symbol},Tuple{Vararg{Symbol}}}
-end
-
-function AddVertices(model_def::Expr, eval_env::NamedTuple)
-    g = MetaGraph(DiGraph(); label_type=VarName, vertex_data_type=NodeInfo)
-    vertex_id_tracker = Dict{Symbol,Any}()
-    for (k, v) in pairs(eval_env)
-        if v isa AbstractArray
-            vertex_id_tracker[k] = zeros(Int, size(v))
-        else
-            vertex_id_tracker[k] = 0
-        end
-    end
-
-    func_args = Dict{Union{Symbol,Expr},Tuple{Vararg{Symbol}}}()
-    MacroTools.postwalk(model_def) do sub_expr
-        if sub_expr isa Expr
-            if is_deterministic(sub_expr) || is_stochastic(sub_expr)
-                lhs, rhs = if is_deterministic(sub_expr)
-                    sub_expr.args[1:2]
-                else
-                    sub_expr.args[2:3]
-                end
-                rhs_vars = Tuple(keys(extract_variable_names_and_numdims(rhs, ())))
-                func_args[lhs] = rhs_vars # may contain loop_vars
+function build_node_functions(
+    expr::Expr,
+    eval_env::NamedTuple,
+    f_dict::Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}},
+    loop_vars,
+)
+    for statement in expr.args
+        if is_deterministic(statement) || is_stochastic(statement)
+            rhs = if is_deterministic(statement)
+                statement.args[2]
+            else
+                statement.args[3]
             end
+            rhs_vars = Tuple(keys(extract_variable_names_and_numdims(rhs, ())))
+            args = Tuple(setdiff(rhs_vars, (loop_vars)))
+            node_func_expr = make_function_expr(rhs, args, eval_env)
+            f_dict[statement] = (args, node_func_expr, eval(node_func_expr))
+        elseif Meta.isexpr(statement, :for)
+            loop_var, _, _, body = decompose_for_expr(statement)
+            build_node_functions(body, eval_env, f_dict, (loop_var, loop_vars...))
+        else
+            error("Unknown statement type: $statement")
         end
-        return sub_expr
     end
-
-    return AddVertices(eval_env, g, NamedTuple(vertex_id_tracker), func_args)
+    return f_dict
 end
 
 function make_function_expr(
-    expr::Expr, args::Tuple{Vararg{Symbol}}, env::NamedTuple{vars}
+    expr, args::Tuple{Vararg{Symbol}}, env::NamedTuple{vars}
 ) where {vars}
     arg_exprs = []
     for v in args
@@ -668,7 +658,8 @@ function make_function_expr(
                 if T === Union{}
                     T = Float64
                 end
-                push!(arg_exprs, Expr(:(::), v, :({Array{$T}})))
+                # TODO: this assume input is Array, which may not be true
+                push!(arg_exprs, Expr(:(::), v, :(Array{$T})))
             else
                 error("Unexpected argument type: $(typeof(value))")
             end
@@ -677,7 +668,34 @@ function make_function_expr(
         end
     end
 
-    return MacroTools.@q ($(arg_exprs...)) -> $(expr)
+    return MacroTools.@q function ($(arg_exprs...))
+        return $(expr)
+    end
+end
+
+mutable struct AddVertices <: CompilerPass
+    const env::NamedTuple
+    const g::MetaGraph
+    vertex_id_tracker::NamedTuple
+    const f_dict::Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}
+end
+
+function AddVertices(model_def::Expr, eval_env::NamedTuple)
+    g = MetaGraph(DiGraph(); label_type=VarName, vertex_data_type=NodeInfo)
+    vertex_id_tracker = Dict{Symbol,Any}()
+    for (k, v) in pairs(eval_env)
+        if v isa AbstractArray
+            vertex_id_tracker[k] = zeros(Int, size(v))
+        else
+            vertex_id_tracker[k] = 0
+        end
+    end
+
+    f_dict = build_node_functions(
+        model_def, eval_env, Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}(), ()
+    )
+
+    return AddVertices(eval_env, g, NamedTuple(vertex_id_tracker), f_dict)
 end
 
 function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
@@ -703,8 +721,8 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
         end
     end
 
-    args = Tuple(setdiff(pass.func_args[lhs_expr], Tuple(keys(loop_vars))))
-    node_function_expr = make_function_expr(rhs_expr, args, env)
+    args, node_function_expr, node_function = pass.f_dict[expr]
+
     vn = if lhs isa Symbol
         AbstractPPL.VarName{lhs}(AbstractPPL.IdentityLens())
     else
@@ -714,7 +732,9 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
     add_vertex!(
         pass.g,
         vn,
-        NodeInfo(is_stochastic, is_observed, node_function_expr, args, loop_vars),
+        NodeInfo(
+            is_stochastic, is_observed, node_function_expr, node_function, args, loop_vars
+        ),
     )
     if lhs isa Symbol
         pass.vertex_id_tracker = BangBang.setproperty!!(
@@ -769,7 +789,7 @@ function analyze_statement(pass::AddEdges, expr::Expr, loop_vars::NamedTuple)
             pass.vertex_id_tracker[v][indices...]
         end
 
-        vertex_code = filter(!iszero, vertex_code isa Vector ? vertex_code : [vertex_code])
+        vertex_code = filter(!iszero, vertex_code isa AbstractArray ? vertex_code : [vertex_code])
         vertex_labels = map(x -> label_for(pass.g, x), vertex_code)
         for r in vertex_labels
             if r != lhs_vn

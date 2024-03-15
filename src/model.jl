@@ -33,7 +33,7 @@ struct BUGSModel <: AbstractBUGSModel
     untransformed_param_length::Int
     transformed_param_length::Int
     untransformed_var_lengths::Dict{VarName,Int}
-    transformed_var_lengths::Dict{VarName,Int} # TODO: store this as a delta from `untransformed_var_lengths`?
+    transformed_var_lengths::Dict{VarName,Int}
 
     varinfo::SimpleVarInfo
     distributions::Dict{VarName,Distribution}
@@ -67,17 +67,12 @@ Return the names of the generated variables in the model.
 """
 generated_variables(m::BUGSModel) = find_generated_vars(m.g)
 
-struct UninitializedVariableError <: Exception
-    msg::String
-end
-
 function BUGSModel(
-    g::BUGSGraph,
-    sorted_nodes::Vector{<:VarName},
-    eval_env::NamedTuple,
-    inits;
-    is_transformed::Bool=true,
+    g::BUGSGraph, eval_env::NamedTuple, inits::NamedTuple; is_transformed::Bool=true
 )
+    sorted_nodes = map(topological_sort(g)) do node
+        label_for(g, node)
+    end
     vs = initialize_var_store(eval_env)
     vi = SimpleVarInfo(vs, 0.0)
     dist_store = Dict{VarName,Distribution}()
@@ -87,46 +82,28 @@ function BUGSModel(
     untransformed_var_lengths = Dict{VarName,Int}()
     transformed_var_lengths = Dict{VarName,Int}()
     for vn in sorted_nodes
-        @assert !(g[vn] isa AuxiliaryNodeInfo) "Auxiliary nodes should not be in the graph, but $(g[vn]) is."
-
-        ni = g[vn]
-        @unpack node_type, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args) # TODO: get rid of this
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
-            value = try
-                _eval(expr, args, dist_store)
-            catch e
-                rethrow(
-                    # UninitializedVariableError(
-                    #     "Encounter error when evaluating the RHS of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) directly first if not yet.",
-                    # ),
-                    e,
-                )
-            end
+        (; is_stochastic, is_observed, node_function_expr, node_args, loop_vars) = g[vn]
+        args = merge(
+            NamedTuple{node_args}(Tuple([vi[@varname($arg)] for arg in node_args])),
+            loop_vars,
+        )
+        expr = node_function_expr.args[2].args[1].args[1]
+        if !is_stochastic
+            value = _eval(expr, args, dist_store)
             vi = setindex!!(vi, value, vn)
         else
-            dist = try
-                _eval(expr, args, dist_store)
-            catch _
-                rethrow(
-                    UninitializedVariableError(
-                        "Encounter support error when evaluating the distribution of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) first if not yet.",
-                    ),
-                )
-            end
+            dist = _eval(expr, args, dist_store)
             dist_store[vn] = dist
-            value = AbstractPPL.get(eval_env, vn)
-            if !is_resolved(value) # not observed
+            value = try
+                AbstractPPL.get(inits, vn)
+            catch _
+                missing
+            end
+            if !is_observed
                 push!(parameters, vn)
                 this_param_length = length(dist)
                 untransformed_param_length += this_param_length
 
-                @assert length(dist) == _length(vn) begin
-                    "The dimensionality of distribution $dist: $(length(dist)) does not match length of variable $vn: $(_length(vn)), " *
-                    "please note that if the distribution is a multivariate distribution, " *
-                    "the left hand side variable should use explicit indexing, e.g. x[1:2] ~ dmnorm(...)."
-                end
                 if bijector(dist) == identity
                     this_param_transformed_length = this_param_length
                 else
@@ -135,11 +112,6 @@ function BUGSModel(
                 untransformed_var_lengths[vn] = this_param_length
                 transformed_var_lengths[vn] = this_param_transformed_length
                 transformed_param_length += this_param_transformed_length
-                value = try
-                    AbstractPPL.get(inits, vn)
-                catch _
-                    missing
-                end
                 if !is_resolved(value) # not initialized
                     vi = setindex!!(vi, rand(dist), vn)
                 else
@@ -150,8 +122,6 @@ function BUGSModel(
             end
         end
     end
-    @assert (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) ==
-        untransformed_param_length "$(isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) $untransformed_param_length"
     return BUGSModel(
         is_transformed,
         untransformed_param_length,
@@ -202,10 +172,12 @@ function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
         d = Dict{VarName,Any}()
         g = m.g
         for vn in m.sorted_nodes
-            ni = g[vn]
-            @unpack node_type, node_function_expr, node_args = ni
-            args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-            expr = node_function_expr.args[2]
+            (; is_stochastic, is_observed, node_function_expr, node_args, loop_vars) = g[vn]
+            args = merge(
+                NamedTuple{node_args}(Tuple([vi[@varname($arg)] for arg in node_args])),
+                loop_vars,
+            )
+            expr = node_function_expr.args[2].args[1].args[1]
             if vn in m.parameters
                 dist = _eval(expr, args, m.distributions)
                 linked_val = DynamicPPL.link(dist, vi[vn])
@@ -426,15 +398,17 @@ function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
     return evaluate!!(model, SamplingContext(rng))
 end
 function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
-    @unpack varinfo, g, sorted_nodes = model
+    (; varinfo, g, sorted_nodes) = model
     vi = deepcopy(varinfo)
     logp = 0.0
     for vn in sorted_nodes
-        ni = g[vn]
-        @unpack node_type, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
+        (; is_stochastic, is_observed, node_function_expr, node_args, loop_vars) = g[vn]
+        args = merge(
+            NamedTuple{node_args}(Tuple([vi[@varname($arg)] for arg in node_args])),
+            loop_vars,
+        )
+        expr = node_function_expr.args[2].args[1].args[1]
+        if !is_stochastic
             value = _eval(expr, args, model.distributions)
             vi = setindex!!(vi, value, vn)
         else
@@ -456,11 +430,13 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
     vi = deepcopy(model.varinfo)
     logp = 0.0
     for vn in sorted_nodes
-        ni = g[vn]
-        @unpack node_type, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical # be conservative -- always propagate values of logical nodes
+        (; is_stochastic, is_observed, node_function_expr, node_args, loop_vars) = g[vn]
+        args = merge(
+            NamedTuple{node_args}(Tuple([vi[@varname($arg)] for arg in node_args])),
+            loop_vars,
+        )
+        expr = node_function_expr.args[2].args[1].args[1]
+        if !is_stochastic # be conservative -- always propagate values of logical nodes
             value = _eval(expr, args, model.distributions)
             vi = setindex!!(vi, value, vn)
         else
@@ -501,11 +477,13 @@ function AbstractPPL.evaluate!!(
     current_idx = 1
     logp = 0.0
     for vn in sorted_nodes
-        ni = g[vn]
-        @unpack node_type, node_function_expr, node_args = ni
-        args = (; map(arg -> getsym(arg) => vi[arg], node_args)...)
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
+        (; is_stochastic, is_observed, node_function_expr, node_args, loop_vars) = g[vn]
+        args = merge(
+            NamedTuple{node_args}(Tuple([vi[@varname($arg)] for arg in node_args])),
+            loop_vars,
+        )
+        expr = node_function_expr.args[2].args[1].args[1]
+        if !is_stochastic
             value = _eval(expr, args, model.distributions)
             vi = setindex!!(vi, value, vn)
         else

@@ -109,11 +109,19 @@ using MetaGraphsNext
 g = compile(model_def, data, inits[1])
 @run compile(model_def, data, inits[1])
 
+eval_env = JuliaBUGS.semantic_analysis(model_def, data)
+model_def = JuliaBUGS.concretize_colon_indexing(model_def, eval_env)
+
+f_dict = JuliaBUGS.build_node_functions(model_def, eval_env, Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}(), ())
+
 es = collect(edge_labels(g))
 collect(labels(g))
 
+JuliaBUGS.BUGSModel(g, eval_env, inits[1])
+
 d = Serialization.deserialize("/home/sunxd/JuliaBUGS.jl.worktrees/sunxd/profile_graph_creation/temp")
 
+collect(values(f_dict))[1][3]()
 
 for k in es
     if k ∉ d

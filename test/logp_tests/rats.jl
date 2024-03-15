@@ -2,7 +2,7 @@
 data = load_dictionary(:rats, :data, true)
 inits = load_dictionary(:rats, :init, true)
 
-@unpack N, T, x, xbar, Y = data
+(; N, T, x, xbar, Y) = data
 
 # prepare models
 model_def = @bugs begin

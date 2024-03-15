@@ -33,7 +33,7 @@ include("parser/Parser.jl")
 using .Parser
 
 include("utils.jl")
-include("variable_types.jl")
+# include("variable_types.jl")
 include("graphs.jl")
 include("compiler_pass.jl")
 include("model.jl")
@@ -168,8 +168,7 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
     eval_env = semantic_analysis(model_def, data)
     model_def = concretize_colon_indexing(model_def, eval_env)
     g = create_graph(model_def, eval_env)
-    # sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
-    # return BUGSModel(g, sorted_nodes, eval_env, inits; is_transformed=is_transformed)
+    return BUGSModel(g, eval_env, inits; is_transformed=is_transformed)
 end
 
 """

@@ -36,7 +36,7 @@ vi = bugs_model.varinfo
     return A, B
 end
 
-@unpack Dogs, Trials, Y = data
+(; Dogs, Trials, Y) = data
 dppl_model = dogs(Dogs, Trials, Y, 1 .- Y)
 
 bugs_logp = JuliaBUGS.evaluate!!(JuliaBUGS.settrans(bugs_model, false), DefaultContext())[2]

@@ -33,7 +33,7 @@ vi = bugs_model.varinfo
     end
 end
 
-@unpack grade, nChild, nInd, ncat, gamma, delta = data
+(; grade, nChild, nInd, ncat, gamma, delta) = data
 dppl_model = bones(grade, nChild, nInd, ncat, gamma, delta)
 
 bugs_logp = JuliaBUGS.evaluate!!(JuliaBUGS.settrans(bugs_model, false), DefaultContext())[2]
