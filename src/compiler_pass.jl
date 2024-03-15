@@ -472,7 +472,7 @@ function analyze_statement(pass::DataTransformation, expr::Expr, loop_vars::Name
             else
                 var, indices... = lhs
                 if any(x -> x isa UnitRange, indices)
-                    pass.env[var][indices...] .= rhs
+                                        pass.env[var][indices...] .= rhs
                 else
                     pass.env[var][indices...] = rhs
                 end
@@ -591,9 +591,9 @@ function evaluate_and_track_dependencies(var::Expr, env)
         f, args... = var.args
         value = nothing
         if f === :cumulative || f === :density
-            if length(x.args) != 3
+            if length(args) != 2
                 error(
-                    "`cumulative` and `density` are special functions in BUGS and takes two arguments, got $(length(x.args) - 1)",
+                    "`cumulative` and `density` are special functions in BUGS and takes two arguments, got $(length(args))",
                 )
             end
             arg1, arg2 = args
@@ -612,7 +612,7 @@ function evaluate_and_track_dependencies(var::Expr, env)
                         "For now, the indices of the first argument to `cumulative` and `density` must be resolved, got $indices",
                     )
                 end
-                push!(deps, (v, Tuple(indices)))
+                push!(dependencies, (v, indices...))
             else
                 error(
                     "First argument to `cumulative` and `density` must be variable, got $(arg1)",
@@ -760,15 +760,15 @@ function analyze_statement(pass::NodeFunctions, expr::Expr, loop_vars::NamedTupl
         var_type = Stochastic
     end
 
-    lhs_var = simplify_lhs(env, lhs_expr)
-    lhs_var = if lhs_var isa Symbol
-        Var(lhs_var)
+    simplified_lhs = simplify_lhs(env, lhs_expr)
+    lhs_var = if simplified_lhs isa Symbol
+        Var(simplified_lhs)
     else
-        v, indices... = lhs_var
+        v, indices... = simplified_lhs
         Var(v, Tuple(indices))
     end
     var_type == Logical &&
-        evaluate(lhs_var, env) isa Union{Number,Array{<:Number}} &&
+        evaluate(lhs_expr, env) isa Union{Number,Array{<:Number}} &&
         return nothing
 
     pass.vars[lhs_var] = var_type
@@ -816,20 +816,27 @@ function analyze_statement(pass::NodeFunctions, expr::Expr, loop_vars::NamedTupl
             # issue is that we need to do this in steps, const propagation need to a separate pass
             # otherwise the variable in previous expressions will not be evaluated to the concrete value
         else
-            dependencies, node_args = map(
-                x -> map(x) do x_elem
-                    if x_elem isa Symbol
-                        return Var(x_elem)
-                    elseif x_elem isa Tuple
-                        v, indices... = x_elem
-                        return Var(v, Tuple(indices))
-                    end
-                end,
-                map(collect, (dependencies, node_args)),
-            )
+            node_args = collect(Any, node_args)
+            for i in eachindex(node_args)
+                if env[node_args[i]] isa AbstractArray
+                    node_args[i] = create_array_var(node_args[i], env)
+                else
+                    node_args[i] = Var(node_args[i])
+                end
+            end
 
-            args = convert(Array{Any}, deepcopy(node_args))
-            for (i, arg) in enumerate(args)
+            dependencies = collect(Any, dependencies)
+            for i in eachindex(dependencies)
+                if dependencies[i] isa Symbol
+                    dependencies[i] = Var(dependencies[i])
+                else
+                    v, indices... = dependencies[i]
+                    dependencies[i] = Var(v, Tuple(indices))
+                end
+            end
+
+            args = similar(node_args, Any)
+            for (i, arg) in enumerate(node_args)
                 if arg isa ArrayVar
                     args[i] = Expr(:(::), arg.name, :Array)
                 elseif arg isa Scalar
