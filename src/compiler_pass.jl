@@ -528,7 +528,7 @@ julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), (x = [1 2
 evaluate_and_track_dependencies(var::Union{Int,Float64}, env) = var, (), ()
 evaluate_and_track_dependencies(var::UnitRange, env) = var, (), ()
 function evaluate_and_track_dependencies(var::Symbol, env)
-    if var === :nothing
+    if var ∈ (:nothing, :missing, :(:))
         return var, (), ()
     end
     if env[var] === missing
