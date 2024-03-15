@@ -1,7 +1,7 @@
 abstract type CompilerPass end
 
-@inline is_deterministic(expr::Expr) = Meta.isexpr(expr, :(=))
-@inline is_stochastic(expr::Expr) = Meta.isexpr(expr, :call) && expr.args[1] == :(~)
+is_deterministic(expr::Expr) = Meta.isexpr(expr, :(=))
+is_stochastic(expr::Expr) = Meta.isexpr(expr, :call) && expr.args[1] == :(~)
 
 function analyze_block(pass::CompilerPass, expr::Expr, loop_vars::NamedTuple=NamedTuple())
     if !Meta.isexpr(expr, :block)
@@ -41,12 +41,22 @@ largest indices.
 struct CollectVariables{data_vars} <: CompilerPass
     env::NamedTuple{data_vars}
     data_scalars::Tuple{Vararg{Symbol}}
-    scalars::Tuple{Vararg{Symbol}}
+    non_data_scalars::Tuple{Vararg{Symbol}}
     data_array_sizes::NamedTuple
-    array_sizes::NamedTuple
+    non_data_array_sizes::NamedTuple
 end
 
 function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {data_vars}
+    for var in extract_variables_in_bounds_and_lhs_indices(model_def)
+        if var ∉ data_vars
+            error(
+                "Variable $var is used in loop bounds or indices but not defined in the data.",
+            )
+        end
+    end
+
+    data_scalars, non_data_scalars = Symbol[], Symbol[]
+    arrays, num_dims = Symbol[], Int[]
     data_scalars, scalars, arrays, num_dims = Symbol[], Symbol[], Symbol[], Int[]
     # `extract_variable_names_and_numdims` will check if inconsistent variables' ndims
     for (name, num_dim) in pairs(extract_variable_names_and_numdims(model_def))
@@ -54,29 +64,17 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
             if name in data_vars
                 push!(data_scalars, name)
             else
-                push!(scalars, name)
+                push!(non_data_scalars, name)
             end
         else
             push!(arrays, name)
             push!(num_dims, num_dim)
         end
     end
-    data_scalars = Tuple(data_scalars)
-    scalars = Tuple(scalars)
-    arrays = Tuple(arrays)
-    num_dims = Tuple(num_dims)
-
-    for var in extract_variables_in_bounds_and_lhs_indices(model_def)
-        if var ∉ keys(data)
-            error(
-                "Variable $var is used in loop bounds or indices but not defined in the data.",
-            )
-        end
-    end
 
     data_arrays = Symbol[]
     data_array_sizes = SVector[]
-    for k in keys(data)
+    for k in data_vars
         if data[k] isa AbstractArray
             push!(data_arrays, k)
             push!(data_array_sizes, SVector(size(data[k])))
@@ -94,35 +92,11 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
 
     return CollectVariables{data_vars}(
         data,
-        data_scalars,
-        scalars,
+        Tuple(data_scalars),
+        Tuple(non_data_scalars),
         NamedTuple{Tuple(data_arrays)}(Tuple(data_array_sizes)),
         NamedTuple{Tuple(non_data_arrays)}(Tuple(non_data_array_sizes)),
     )
-end
-
-"""
-    find_variables_on_lhs(expr, env)
-
-Find all the variables on the LHS of an assignment. The variables can be either symbols or array indexing.
-
-# Examples
-```jldoctest
-julia> find_variables_on_lhs(:(x[1, 2]), NamedTuple())
-x[1, 2]
-
-julia> find_variables_on_lhs(:(x[1, 2:3]), NamedTuple())
-x[1, 2:3]
-```
-"""
-find_variables_on_lhs(e::Symbol, env) = Var(e)
-function find_variables_on_lhs(expr::Expr, env)
-    @assert Meta.isexpr(expr, :ref)
-    v, indices... = expr.args
-    for (i, index) in enumerate(indices)
-        indices[i] = evaluate(index, env)
-    end
-    return Var(v, Tuple(indices))
 end
 
 """
@@ -131,7 +105,7 @@ end
 Evaluate `expr` in the environment `env`.
 
 # Examples
-```jldoctest
+```jldoctest; setup=:(using JuliaBUGS: evaluate)
 julia> evaluate(:(x[1]), (x = [1, 2, 3],)) # array indexing is evaluated if possible
 1
 
@@ -226,9 +200,7 @@ is_resolved(::Array{Missing}) = false
 is_resolved(::Union{Symbol,Expr}) = false
 is_resolved(::Any) = false
 
-@inline function is_specified_by_data(
-    data::NamedTuple{data_keys}, var::Symbol
-) where {data_keys}
+function is_specified_by_data(data::NamedTuple{data_keys}, var::Symbol) where {data_keys}
     if var ∉ data_keys
         return false
     else
@@ -239,7 +211,7 @@ is_resolved(::Any) = false
         end
     end
 end
-@inline function is_specified_by_data(
+function is_specified_by_data(
     data::NamedTuple{data_keys},
     var::Symbol,
     indices::Vararg{Union{Missing,Float64,Int,UnitRange{Int}}},
@@ -268,7 +240,7 @@ end
     end
 end
 
-@inline function is_partially_specified_as_data(
+function is_partially_specified_as_data(
     data::NamedTuple{data_keys},
     var::Symbol,
     indices::Vararg{Union{Missing,Float64,Int,UnitRange{Int}}},
@@ -325,14 +297,16 @@ function update_array_sizes_for_assignment(
 ) where {data_vars}
     # `is_specified_by_data` checks if the index is inbound
     if var ∉ data_vars
-        for i in eachindex(pass.array_sizes[var])
-            pass.array_sizes[var][i] = max(pass.array_sizes[var][i], last(indices[i]))
+        for i in eachindex(pass.non_data_array_sizes[var])
+            pass.non_data_array_sizes[var][i] = max(
+                pass.non_data_array_sizes[var][i], last(indices[i])
+            )
         end
     end
 end
 
 function post_process(pass::CollectVariables)
-    return Set{Symbol}(pass.scalars), Dict(pairs(pass.array_sizes))
+    return pass.non_data_scalars, pass.non_data_array_sizes
 end
 
 """
@@ -357,7 +331,7 @@ struct CheckRepeatedAssignments <: CompilerPass
 end
 
 function CheckRepeatedAssignments(
-    model_def::Expr, data::NamedTuple{data_vars}, array_sizes
+    model_def::Expr, data::NamedTuple{data_vars}, non_data_array_sizes
 ) where {data_vars}
     # repeating assignments within deterministic and stochastic arrays are checked `extract_variables_assigned_to`
     logical_scalars, stochastic_scalars, logical_arrays, stochastic_arrays = extract_variables_assigned_to(
@@ -371,14 +345,14 @@ function CheckRepeatedAssignments(
 
     for v in logical_arrays
         # `v` can't be in data
-        logical_assignment_trackers[v] = falses(array_sizes[v]...)
+        logical_assignment_trackers[v] = falses(non_data_array_sizes[v]...)
     end
 
     for v in stochastic_arrays
         array_size = if v in data_vars
             size(data[v])
         else
-            array_sizes[v]
+            non_data_array_sizes[v]
         end
         stochastic_assignment_trackers[v] = falses(array_size...)
     end
@@ -459,65 +433,40 @@ to data.
 mutable struct DataTransformation <: CompilerPass
     env::NamedTuple
     new_value_added::Bool
-    const transformed_variables
-end
-
-function has_value(transformed_variables, v::Var)
-    if v isa Scalar
-        return !ismissing(transformed_variables[v.name])
-    elseif v isa ArrayElement
-        return !ismissing(transformed_variables[v.name][v.indices...])
-    else
-        return all(x -> !ismissing(x), transformed_variables[v.name][v.indices...])
-    end
 end
 
 function analyze_statement(pass::DataTransformation, expr::Expr, loop_vars::NamedTuple)
     if is_deterministic(expr)
+        lhs_expr, rhs_expr = expr.args[1], expr.args[2]
         env = merge(pass.env, loop_vars)
-        lhs = find_variables_on_lhs(expr.args[1], env)
+        lhs = simplify_lhs(env, lhs_expr)
 
-        if has_value(pass.transformed_variables, lhs)
+        lhs_value = if lhs isa Symbol
+            env[lhs]
+        else
+            var, indices... = lhs
+            env[var][indices...]
+        end
+        # check if the value already exists
+        if is_resolved(lhs_value)
             return nothing
         end
 
-        rhs = evaluate(
-            expr.args[2], merge_with_coalescence(env, pass.transformed_variables)
-        )
+        rhs = evaluate(rhs_expr, env)
         if is_resolved(rhs)
-            if !pass.new_value_added
-                pass.new_value_added = true
-            end
-            if lhs isa Scalar
-                pass.transformed_variables[lhs.name] = rhs
+            pass.new_value_added = true
+            pass_env = pass.env
+            if lhs isa Symbol
+                pass.env = BangBang.setproperty!!(pass_env, lhs, rhs)
             else
-                pass.transformed_variables[lhs.name][lhs.indices...] = rhs
+                var, indices... = lhs
+                pass_env = pass.env
+                pass.env = BangBang.setproperty!!(
+                    pass_env, var, BangBang.setindex!!(pass_env[var], rhs, indices...)
+                )
             end
         end
     end
-end
-
-function post_process(pass::DataTransformation)
-    return pass.new_value_added, pass.transformed_variables
-end
-
-function clean_up_transformed_variables(transformed_variables)
-    cleaned_transformed_variables = Dict{Symbol,Any}()
-    for k in keys(transformed_variables)
-        v = transformed_variables[k]
-        if ismissing(v)
-            continue
-        elseif v isa Number
-            cleaned_transformed_variables[k] = v
-        elseif all(ismissing, v)
-            continue
-        elseif all(!ismissing, v)
-            cleaned_transformed_variables[k] = identity.(v)
-        else
-            cleaned_transformed_variables[k] = v
-        end
-    end
-    return NamedTuple(cleaned_transformed_variables)
 end
 
 """
@@ -527,14 +476,13 @@ A pass that analyze node functions of variables and their dependencies.
 """
 struct NodeFunctions <: CompilerPass
     env::NamedTuple
-    array_sizes::Dict
     vars::Dict
     node_args::Dict
     node_functions::Dict
     dependencies::Dict
 end
-function NodeFunctions(array_sizes, env)
-    return NodeFunctions(env, array_sizes, Dict(), Dict(), Dict(), Dict())
+function NodeFunctions(eval_env)
+    return NodeFunctions(eval_env, Dict(), Dict(), Dict(), Dict())
 end
 
 """
@@ -555,138 +503,133 @@ Array elements and array variables are represented by tuples in the returned val
 
 # Examples
 ```jldoctest
-julia> evaluate_and_track_dependencies(:(x[a]), Dict())
-(:(x[a]), Set(Any[:a, (:x, ())]), Set(Any[:a, (:x, ())]))
+julia> evaluate_and_track_dependencies(:(x[a]), (x=[missing, missing], a = missing))
+(missing, (:a, (:x, 1:2)), (:x, :a))
 
-julia> evaluate_and_track_dependencies(:(x[a]), Dict(:a => 1))
-(:(x[1]), Set(Any[(:x, (1,))]), Set(Any[(:x, ())]))
+julia> evaluate_and_track_dependencies(:(x[a]), (x=[missing, missing], a = 1))
+(missing, ((:x, 1),), (:x, :a))
 
-julia> evaluate_and_track_dependencies(:(x[y[1]+1]+a+1), Dict())
-(:(x[y[1] + 1] + a + 1), Set(Any[:a, (:x, ()), (:y, (1,))]), Set(Any[:a, (:x, ()), (:y, ())]))
+julia> evaluate_and_track_dependencies(:(x[y[1]+1]+a+1), (x=[missing, missing], y = [missing, missing], a = missing))
+(missing, ((:y, 1), (:x, 1:2), :a), (:x, :y, :a))
 
-julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), Dict(:x => [1 2 3; 4 5 6]))
-(:(getindex([1 2 3; 4 5 6], a, b)), Set(Any[:a, :b]), Set(Any[:a, :b, (:x, ())]))
+julia> evaluate_and_track_dependencies(:(x[a, b]), (x = [1 2 3; 4 5 6], a = missing, b = missing))
+(missing, (:a, :b, (:x, 1:2, 1:3)), (:x, :a, :b))
 
-julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), Dict(:x => [1 2 missing; 4 5 6]))
-(:(getindex(Union{Missing, Int64}[1 2 missing; 4 5 6], a, b)), Set(Any[:a, :b, (:x, (1, 3))]), Set(Any[:a, :b, (:x, ())]))
+julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), (x = [1 2 3; 4 5 6], a = missing, b = missing))
+(missing, (:a, :b), (:x, :a, :b))
 
-julia> evaluate_and_track_dependencies(:x, Dict(:x => [1 2])) # array variables must be explicitly indexed
-ERROR: AssertionError: Array indexing in BUGS must be explicit. However, `x` is accessed as a scalar.
-[...]
+julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], 1, 1)), (x = [1 2 3; 4 5 6], a = missing, b = missing))
+(1, (), (:x,))
+
+julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), (x = [1 2 missing; 4 5 6], a = missing, b = missing))
+(missing, ((:x, 1:2, 1:3), :a, :b), (:x, :a, :b))
 ```
 """
-evaluate_and_track_dependencies(var::Number, env) = var, Set(), Set()
-evaluate_and_track_dependencies(var::UnitRange, env) = var, Set(), Set()
+evaluate_and_track_dependencies(var::Union{Int,Float64}, env) = var, (), ()
+evaluate_and_track_dependencies(var::UnitRange, env) = var, (), ()
 function evaluate_and_track_dependencies(var::Symbol, env)
-    value = haskey(env, var) ? env[var] : var
-    @assert !ismissing(value) "Scalar variables in data can't be missing, but $var given as missing"
-    @assert value isa Union{Real,Symbol} "Array indexing in BUGS must be explicit. However, `$var` is accessed as a scalar."
-    return value, Set(), Set()
+    if var ∈ (:nothing, :missing, :(:))
+        return var, (), ()
+    end
+    if env[var] === missing
+        return var, (var,), (var,)
+    else
+        return env[var], (), (var,)
+    end
 end
 function evaluate_and_track_dependencies(var::Expr, env)
-    deps, args = Set(), Set()
+    dependencies, node_func_args = [], []
     if Meta.isexpr(var, :ref)
-        idxs = []
-        for i in 2:length(var.args)
-            e, d, a = evaluate_and_track_dependencies(var.args[i], env)
-            push!(idxs, e)
-            union!(deps, d)
-            union!(args, a)
+        v, indices... = var.args
+        push!(node_func_args, v)
+        for i in eachindex(indices)
+            ret = evaluate_and_track_dependencies(indices[i], env)
+            index = ret[1]
+            indices[i] = index isa Float64 ? Int(index) : index
+            dependencies = union!(dependencies, ret[2])
+            node_func_args = union!(node_func_args, ret[3])
         end
 
-        if all(x -> x isa Number, idxs)
-            if haskey(env, var.args[1]) # data, the constant is plugged in
-                value = getindex(env[var.args[1]], idxs...)
-                if ismissing(value) # var is a variable
-                    push!(deps, (var.args[1], Tuple(idxs)))
-                    push!(args, (var.args[1], ()))
-                    value = Expr(var.head, var.args[1], idxs...)
-                end
-                return value, deps, args
-            else # then it's a variable
-                push!(deps, (var.args[1], Tuple(idxs))) # add the variable for fine-grain dependency
-                push!(args, (var.args[1], ())) # add the corresponding array variable for node function arguments
-                return Expr(var.head, var.args[1], idxs...), deps, args
-            end
-        elseif all(x -> x isa Union{Number,UnitRange}, idxs)
-            if haskey(env, var.args[1])
-                value = getindex(env[var.args[1]], idxs...)
-                if any(ismissing, value)
-                    missing_idxs = findall(ismissing, value)
-                    for idx in missing_idxs
-                        push!(deps, (var.args[1], Tuple(idx)))
-                    end
-                end
-                push!(args, (var.args[1], ()))
-                return value, deps, args
+        value = nothing
+        if all(indices) do i
+            i isa Int || i isa UnitRange{Int}
+        end
+            value = env[v][indices...]
+            if is_resolved(value)
+                return value, Tuple(dependencies), Tuple(node_func_args)
             else
-                push!(deps, (var.args[1], Tuple(idxs)))
-                push!(args, (var.args[1], ()))
-                return Expr(var.head, var.args[1], idxs...), deps, args
+                # TODO: what if value is partially missing?
+                push!(dependencies, (v, indices...))
             end
+        else
+            push!(
+                dependencies,
+                (
+                    v,
+                    [
+                        is_resolved(index) ? index : 1:size(env[v])[i] for
+                        (i, index) in enumerate(indices)
+                    ]...,
+                ),
+            )
         end
-
-        for i in idxs # if an index is a Symbol, then it's a variable
-            i isa Symbol && i != :nothing && i != :(:) && (push!(deps, i); push!(args, i))
-        end
-        push!(args, (var.args[1], ()))
-        push!(deps, (var.args[1], ()))
-        return Expr(var.head, var.args[1], idxs...), deps, args
+        return missing, Tuple(dependencies), Tuple(node_func_args)
     elseif Meta.isexpr(var, :call)
-        if var.args[1] === :cumulative || var.args[1] === :density
-            arg1, arg2 = var.args[2:3]
-            arg1 = if arg1 isa Symbol
-                push!(deps, arg1)
-                # no need to add to arg, as the value doesn't matter
-                arg1
+        f, args... = var.args
+        value = nothing
+        if f === :cumulative || f === :density
+            if length(args) != 2
+                error(
+                    "`cumulative` and `density` are special functions in BUGS and takes two arguments, got $(length(args))",
+                )
+            end
+            arg1, arg2 = args
+            if arg1 isa Symbol
+                push!(dependencies, arg1)
             elseif Meta.isexpr(arg1, :ref)
                 v, indices... = arg1.args
                 for i in eachindex(indices)
-                    e, d, a = evaluate_and_track_dependencies(indices[i], env)
-                    union!(deps, d)
-                    union!(args, a)
-                    indices[i] = e
+                    ret = evaluate_and_track_dependencies(indices[i], env)
+                    union!(dependencies, ret[2])
+                    union!(node_func_args, ret[3])
+                    indices[i] = ret[1]
                 end
                 if any(!is_resolved, indices)
                     error(
                         "For now, the indices of the first argument to `cumulative` and `density` must be resolved, got $indices",
                     )
                 end
-                push!(deps, (v, Tuple(indices)))
-                # no need to add to arg, as the value doesn't matter
-                Expr(:ref, v, indices...)
+                push!(dependencies, (v, indices...))
             else
                 error(
                     "First argument to `cumulative` and `density` must be variable, got $(arg1)",
                 )
             end
-            e, d, a = evaluate_and_track_dependencies(arg2, env)
-            union!(deps, d)
-            union!(args, a)
-            return Expr(:call, var.args[1], arg1, e), deps, args
+
+            ret = evaluate_and_track_dependencies(arg2, env)
+            union!(dependencies, ret[2])
+            union!(node_func_args, ret[3])
+            return missing, Tuple(dependencies), Tuple(node_func_args)
+        elseif f === :deviance
+            @warn(
+                "`deviance` function is not supported in JuliaBUGS, `deviance` will be treated as a general function."
+            )
         else
-            fun_args = []
-            for i in 2:length(var.args)
-                e, d, a = evaluate_and_track_dependencies(var.args[i], env)
-                push!(fun_args, e)
-                union!(deps, d)
-                union!(args, a)
+            for i in eachindex(args)
+                ret = evaluate_and_track_dependencies(args[i], env)
+                args[i] = ret[1]
+                union!(dependencies, ret[2])
+                union!(node_func_args, ret[3])
             end
 
-            for a in fun_args
-                a isa Symbol &&
-                    a != :nothing &&
-                    a != :(:) &&
-                    (push!(deps, a); push!(args, a))
-            end
-
-            if (
-                var.args[1] ∈ BUGSPrimitives.BUGS_FUNCTIONS ||
-                var.args[1] ∈ (:+, :-, :*, :/, :^, :(:))
-            ) && all(is_resolved, args)
-                return getfield(JuliaBUGS, var.args[1])(fun_args...), deps, args
+            value = nothing
+            if all(is_resolved, args) &&
+                f ∈ BUGSPrimitives.BUGS_FUNCTIONS ∪ (:+, :-, :*, :/, :^, :(:), :getindex)
+                return getfield(JuliaBUGS, f)(args...),
+                Tuple(dependencies),
+                Tuple(node_func_args)
             else
-                return Expr(var.head, var.args[1], fun_args...), deps, args
+                return missing, Tuple(dependencies), Tuple(node_func_args)
             end
         end
     else
@@ -789,38 +732,9 @@ function _replace_constants_in_expr(x::Expr, env)
     end
 end
 
-"""
-    create_array_var(n, array_sizes, env)
-
-Create an array variable with the name `n` and indices based on the sizes specified in `array_sizes` or `env`.
-
-# Examples
-```jldoctest
-julia> array_sizes = Dict(:x => (2, 3));
-
-julia> env = Dict(:y => [1 2; 3 4]);
-
-julia> create_array_var(:x, array_sizes, env)
-x[1:2, 1:3]
-
-julia> create_array_var(:y, array_sizes, env)
-y[1:2, 1:2]
-```
-"""
-function create_array_var(n, array_sizes, env)
-    if haskey(env, n)
-        indices = Tuple([1:i for i in size(env[n])])
-    elseif haskey(array_sizes, n)
-        indices = Tuple([1:i for i in array_sizes[n]])
-    else
-        error("Array size information not found for variable $n")
-    end
-    return Var(n, indices)
+function create_array_var(n, env)
+    return Var(n, Tuple([1:i for i in size(env[n])]))
 end
-
-try_cast_to_int(x::Integer) = x
-try_cast_to_int(x::Real) = Int(x) # will error if !isinteger(x)
-try_cast_to_int(x) = x # catch other types, e.g. UnitRange, Colon
 
 function analyze_statement(pass::NodeFunctions, expr::Expr, loop_vars::NamedTuple)
     env = merge(pass.env, loop_vars)
@@ -833,11 +747,15 @@ function analyze_statement(pass::NodeFunctions, expr::Expr, loop_vars::NamedTupl
         var_type = Stochastic
     end
 
-    lhs_var = find_variables_on_lhs(
-        Meta.isexpr(lhs_expr, :call) ? lhs_expr.args[2] : lhs_expr, env
-    )
+    simplified_lhs = simplify_lhs(env, lhs_expr)
+    lhs_var = if simplified_lhs isa Symbol
+        Var(simplified_lhs)
+    else
+        v, indices... = simplified_lhs
+        Var(v, Tuple(indices))
+    end
     var_type == Logical &&
-        evaluate(lhs_var, env) isa Union{Number,Array{<:Number}} &&
+        evaluate(lhs_expr, env) isa Union{Number,Array{<:Number}} &&
         return nothing
 
     pass.vars[lhs_var] = var_type
@@ -852,7 +770,7 @@ function analyze_statement(pass::NodeFunctions, expr::Expr, loop_vars::NamedTupl
         all(x -> x isa Union{Number,UnitRange}, rhs.args[2:end])
         @assert var_type == Logical # if rhs is a variable, then the expression must be logical
         rhs_var = Var(rhs.args[1], Tuple(rhs.args[2:end]))
-        rhs_array_var = create_array_var(rhs_var.name, pass.array_sizes, env)
+        rhs_array_var = create_array_var(rhs_var.name, env)
         size(rhs_var) == size(lhs_var) ||
             error("Size mismatch between lhs and rhs at expression $expr")
         if lhs_var isa ArrayElement
@@ -885,36 +803,27 @@ function analyze_statement(pass::NodeFunctions, expr::Expr, loop_vars::NamedTupl
             # issue is that we need to do this in steps, const propagation need to a separate pass
             # otherwise the variable in previous expressions will not be evaluated to the concrete value
         else
-            dependencies, node_args = map(
-                x -> map(x) do x_elem
-                    if x_elem isa Symbol
-                        return Var(x_elem)
-                    elseif x_elem isa Tuple && last(x_elem) == ()
-                        return create_array_var(first(x_elem), pass.array_sizes, env)
-                    else
-                        return Var(first(x_elem), last(x_elem))
-                    end
-                end,
-                map(collect, (dependencies, node_args)),
-            )
-
-            rhs_expr = MacroTools.postwalk(rhs_expr) do sub_expr
-                if Meta.isexpr(sub_expr, :ref)
-                    arr, idxs... = sub_expr.args
-                    new_idxs = [
-                        if idx isa Integer
-                            idx
-                        else
-                            :(JuliaBUGS.try_cast_to_int($(idx)))
-                        end for idx in idxs
-                    ]
-                    return Expr(:ref, arr, new_idxs...)
+            node_args = collect(Any, node_args)
+            for i in eachindex(node_args)
+                if env[node_args[i]] isa AbstractArray
+                    node_args[i] = create_array_var(node_args[i], env)
+                else
+                    node_args[i] = Var(node_args[i])
                 end
-                return sub_expr
             end
 
-            args = convert(Array{Any}, deepcopy(node_args))
-            for (i, arg) in enumerate(args)
+            dependencies = collect(Any, dependencies)
+            for i in eachindex(dependencies)
+                if dependencies[i] isa Symbol
+                    dependencies[i] = Var(dependencies[i])
+                else
+                    v, indices... = dependencies[i]
+                    dependencies[i] = Var(v, Tuple(indices))
+                end
+            end
+
+            args = similar(node_args, Any)
+            for (i, arg) in enumerate(node_args)
                 if arg isa ArrayVar
                     args[i] = Expr(:(::), arg.name, :Array)
                 elseif arg isa Scalar
@@ -933,7 +842,5 @@ function analyze_statement(pass::NodeFunctions, expr::Expr, loop_vars::NamedTupl
 end
 
 function post_process(pass::NodeFunctions)
-    return pass.vars,
-    pass.array_sizes, pass.node_args, pass.node_functions,
-    pass.dependencies
+    return pass.vars, pass.node_args, pass.node_functions, pass.dependencies
 end

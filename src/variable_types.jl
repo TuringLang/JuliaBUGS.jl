@@ -129,3 +129,32 @@ function evaluate(v::Var, env)
     value = map(x -> evaluate(x, env), scalarize(v))
     return reshape(value, size(v))
 end
+"""
+    evaluate(v::Var, env)
+
+Evaluate `v` in the environment `env`. If `v` is a scalar, return the value of `v` in `env`. If `v` is an array, 
+return an array of the same size as `v` with the values of `v` in `env` and `Var`s for the missing values. If `v` 
+represent a multi-dimensional array, the return value is always scalarized, even when no array elements are data.
+
+# Examples
+```jldoctest
+julia> evaluate(Var(:x, (1:2, )), Dict(:x => [1, missing]))
+2-element Vector{Any}:
+ 1
+  x[2]
+```
+"""
+function evaluate(v::Var, env)
+    if !haskey(env, v.name)
+        return v isa Scalar ? v : scalarize(v)
+    end
+    if v isa Scalar
+        return env[v.name]
+    end
+    if v isa ArrayElement
+        value = env[v.name][v.indices...]
+        return ismissing(value) ? v : value
+    end
+    value = map(x -> evaluate(x, env), scalarize(v))
+    return reshape(value, size(v))
+end

@@ -1,3 +1,49 @@
+function create_eval_env(
+    non_data_scalars::Tuple{Vararg{Symbol}},
+    non_data_array_sizes::NamedTuple{non_data_array_vars},
+    data::NamedTuple{data_vars},
+) where {data_vars,non_data_array_vars}
+    eval_env = Dict{Symbol,Any}()
+    for k in data_vars
+        v = data[k]
+        if v isa AbstractArray
+            if Base.nonmissingtype(eltype(v)) === eltype(v)
+                eval_env[k] = v
+            elseif eltype(v) === Missing
+                eval_env[k] = fill(missing, size(v)...)
+            else
+                eval_env[k] = copy(data[k])
+            end
+        else
+            eval_env[k] = v
+        end
+    end
+
+    for s in non_data_scalars
+        eval_env[s] = missing
+    end
+
+    for a in non_data_array_vars
+        eval_env[a] = fill(missing, non_data_array_sizes[a]...)
+    end
+
+    return NamedTuple(eval_env)
+end
+
+function concretize_eval_env(eval_env::NamedTuple)
+    for k in keys(eval_env)
+        v = eval_env[k]
+        if v isa AbstractArray
+            try
+                disallowmissing_v = convert(AbstractArray{nonmissingtype(eltype(v))}, v)
+                eval_env = BangBang.setproperty!!(eval_env, k, disallowmissing_v)
+            catch _
+            end
+        end
+    end
+    return eval_env
+end
+
 """
     decompose_for_expr(expr::Expr)
 
@@ -59,7 +105,7 @@ function extract_variable_names_and_numdims(expr::Expr, excluded::Tuple{Vararg{S
         end
         if @capture(sub_expr, f_(args__))
             for arg in args
-                if arg isa Symbol && !(arg in excluded)
+                if arg isa Symbol && arg ∉ (:nothing, :missing) && !(arg in excluded)
                     variables[arg] = 0
                 end
             end
@@ -358,30 +404,26 @@ function extract_variables_assigned_to(
 end
 
 """
-    concretize_colon_indexing(expr, array_sizes, data)
+    concretize_colon_indexing(expr, eval_env::NamedTuple)
 
-Replace all `Colon()`s in `expr` with the corresponding array size, using either the `array_sizes` or the `data` dictionaries.
+Replace all `Colon()`s in `expr` with the corresponding array size.
 
 # Examples
 ```jldoctest
-julia> concretize_colon_indexing(:(f(x[1, :])), Dict(:x => (3, 4)), Dict(:x => [1 2 3 4; 5 6 7 8; 9 10 11 12]))
+julia> concretize_colon_indexing(:(f(x[1, :])), (x = [1 2 3 4; 5 6 7 8; 9 10 11 12],))
 :(f(x[1, 1:4]))
 ```
 """
-function concretize_colon_indexing(expr, array_sizes, data)
+function concretize_colon_indexing(expr, eval_env::NamedTuple)
     return MacroTools.postwalk(expr) do sub_expr
-        if MacroTools.@capture(sub_expr, x_[idx__])
-            for i in 1:length(idx)
-                if idx[i] == :(:)
-                    if haskey(array_sizes, x)
-                        idx[i] = Expr(:call, :(:), 1, array_sizes[x][i])
-                    else
-                        @assert haskey(data, x)
-                        idx[i] = Expr(:call, :(:), 1, size(data[x])[i])
-                    end
+        if Meta.isexpr(sub_expr, :ref)
+            v, indices... = sub_expr.args
+            for i in eachindex(indices)
+                if indices[i] == :(:)
+                    indices[i] = Expr(:call, :(:), 1, size(eval_env[v])[i])
                 end
             end
-            return Expr(:ref, x, idx...)
+            return Expr(:ref, v, indices...)
         end
         return sub_expr
     end

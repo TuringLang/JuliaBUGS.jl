@@ -74,13 +74,11 @@ end
 function BUGSModel(
     g::BUGSGraph,
     sorted_nodes::Vector{<:VarName},
-    vars,
-    array_sizes,
-    data,
+    eval_env::NamedTuple,
     inits;
     is_transformed::Bool=true,
 )
-    vs = initialize_var_store(data, vars, array_sizes)
+    vs = initialize_var_store(eval_env)
     vi = SimpleVarInfo(vs, 0.0)
     dist_store = Dict{VarName,Distribution}()
     parameters = VarName[]
@@ -106,7 +104,6 @@ function BUGSModel(
                     e,
                 )
             end
-            @assert value isa Union{Real,Array{<:Real}} "$value is not a number or array"
             vi = setindex!!(vi, value, vn)
         else
             dist = try
@@ -119,8 +116,8 @@ function BUGSModel(
                 )
             end
             dist_store[vn] = dist
-            value = evaluate(vn, data) # `evaluate(::VarName, env)` is defined in `src/utils.jl`
-            if value isa Nothing # not observed
+            value = AbstractPPL.get(eval_env, vn)
+            if !is_resolved(value) # not observed
                 push!(parameters, vn)
                 this_param_length = length(dist)
                 untransformed_param_length += this_param_length
@@ -138,8 +135,12 @@ function BUGSModel(
                 untransformed_var_lengths[vn] = this_param_length
                 transformed_var_lengths[vn] = this_param_transformed_length
                 transformed_param_length += this_param_transformed_length
-                value = evaluate(vn, inits) # use inits to initialize the value if available
-                if value isa Nothing # not initialized
+                value = try
+                    AbstractPPL.get(inits, vn)
+                catch _
+                    missing
+                end
+                if !is_resolved(value) # not initialized
                     vi = setindex!!(vi, rand(dist), vn)
                 else
                     vi = setindex!!(vi, value, vn)
@@ -166,29 +167,19 @@ function BUGSModel(
     )
 end
 
-function initialize_var_store(data, vars, array_sizes)
-    var_store = Dict{VarName,Any}()
-    array_vn(k::Symbol) = AbstractPPL.VarName{Symbol(k)}(AbstractPPL.IdentityLens())
-    for k in keys(data)
-        v = data[k]
-        vn = array_vn(k)
-        var_store[vn] = v
-    end
-    for k in keys(array_sizes)
-        v = array_sizes[k]
-        vn = array_vn(k)
-        if !haskey(var_store, vn)
-            # var_store[vn] = zeros(v...)
-            var_store[vn] = Array{Float64}(undef, v...)
+function initialize_var_store(eval_env::NamedTuple)
+    var_store = Dict{Symbol,Any}()
+    for k in keys(eval_env)
+        v = eval_env[k]
+        if v === missing
+            var_store[k] = 0.0
+        elseif v isa AbstractArray && Missing <: eltype(v)
+            var_store[k] = map(x -> x === missing ? 0.0 : x, v)
+        else
+            var_store[k] = v
         end
     end
-    for v in keys(vars)
-        if v isa Scalar
-            vn = to_varname(v)
-            var_store[vn] = 0.0
-        end
-    end
-    return var_store
+    return NamedTuple(var_store)
 end
 
 """

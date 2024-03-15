@@ -6,7 +6,6 @@ using JuliaBUGS:
     CollectVariables,
     DataTransformation,
     NodeFunctions,
-    merge_with_coalescence,
     compute_data_transformation
 
 suite = BenchmarkGroup()
@@ -16,14 +15,13 @@ for name in keys(BUGSExamples.VOLUME_I)
     model_def = BUGSExamples.VOLUME_I[name].model_def
     data = BUGSExamples.VOLUME_I[name].data
 
-    scalars, array_sizes = JuliaBUGS.determine_array_sizes(model_def, data)
-
-    transformed_variables = compute_data_transformation(
-        scalars, array_sizes, model_def, data
+    non_data_scalars, non_data_array_sizes = JuliaBUGS.determine_array_sizes(
+        model_def, data
     )
 
-    merged_data = JuliaBUGS.merge_with_coalescence(deepcopy(data), transformed_variables)
-    merged_data = JuliaBUGS.clean_up_transformed_variables(merged_data)
+    eval_env = compute_data_transformation(
+        non_data_scalars, non_data_array_sizes, model_def, data
+    )
 
     _suite = BenchmarkGroup()
 
@@ -32,11 +30,11 @@ for name in keys(BUGSExamples.VOLUME_I)
     )
 
     _suite["DataTransformation"] = @benchmarkable compute_data_transformation(
-        $scalars, $array_sizes, $model_def, $data
+        $non_data_scalars, $non_data_array_sizes, $model_def, $data
     )
 
     _suite["NodeFunctions"] = @benchmarkable JuliaBUGS.compute_node_functions(
-        $model_def, $merged_data, $array_sizes
+        $model_def, $eval_env
     )
 
     tune!(_suite)
