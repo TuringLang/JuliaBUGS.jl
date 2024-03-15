@@ -481,10 +481,6 @@ function analyze_statement(pass::DataTransformation, expr::Expr, loop_vars::Name
     end
 end
 
-function post_process(pass::DataTransformation)
-    return pass.new_value_added
-end
-
 """
     NodeFunctions
 
