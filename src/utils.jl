@@ -5,16 +5,16 @@ function create_eval_env(
 ) where {data_vars,non_data_array_vars}
     data_copy = Dict{Symbol,Any}()
     for (k, v) in pairs(data)
-        if v isa Union{Int,Float64}
-            data_copy[k] = v
-        elseif v === missing
-            error("Missing value for scalar found in data.")
-        elseif eltype(v) <: Union{Int,Float64}
-            data_copy[k] = v
-        elseif eltype(v) === Missing
-            data_copy[k] = similar(v, Union{Missing,Int,Float64})
+        if v isa AbstractArray
+            if Base.nonmissingtype(eltype(v)) === eltype(v)
+                data_copy[k] = v
+            elseif eltype(v) === Missing
+                data_copy[k] = similar(v, Union{Missing,Int,Float64})
+            else
+                data_copy[k] = copy(data[k])
+            end
         else
-            data_copy[k] = copy(data[k])
+            data_copy[k] = v
         end
     end
     data_copy = NamedTuple(data_copy)

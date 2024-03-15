@@ -472,7 +472,7 @@ function analyze_statement(pass::DataTransformation, expr::Expr, loop_vars::Name
             else
                 var, indices... = lhs
                 if any(x -> x isa UnitRange, indices)
-                                        pass.env[var][indices...] .= rhs
+                    pass.env[var][indices...] .= rhs
                 else
                     pass.env[var][indices...] = rhs
                 end
