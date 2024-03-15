@@ -97,3 +97,30 @@ model = compile(
 # z[1,1], x[1], x[2] are auxiliary nodes created, and removed at the end
 @test Set(Symbol.(labels(model.g))) ==
     Set([Symbol("mu[1]"), Symbol("x[1:2]"), Symbol("z[1:2,1:2]"), Symbol("mu[2]"), :y])
+
+
+
+using JuliaBUGS
+using MetaGraphsNext
+
+(;model_def, data, inits) = JuliaBUGS.BUGSExamples.leuk;
+(;model_def, data, inits) = JuliaBUGS.BUGSExamples.rats;
+
+g = compile(model_def, data, inits[1])
+@run compile(model_def, data, inits[1])
+
+es = collect(edge_labels(g))
+collect(labels(g))
+
+d = Serialization.deserialize("/home/sunxd/JuliaBUGS.jl.worktrees/sunxd/profile_graph_creation/temp")
+
+
+for k in es
+    if k ∉ d
+        println(k)
+    end
+end
+
+d[1]
+
+d[1] in es
