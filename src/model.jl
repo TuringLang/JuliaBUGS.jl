@@ -281,7 +281,7 @@ function (model::BUGSModel)()
 end
 
 function settrans(model::BUGSModel, bool::Bool=!(model.transformed))
-    return @set model.transformed = bool
+    return BangBang.setproperties!!(model, :transformed, bool)
 end
 
 function AbstractPPL.condition(

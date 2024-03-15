@@ -10,9 +10,7 @@ using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
 using MetaGraphsNext
 using Random
-using Setfield
 using StaticArrays
-using UnPack
 
 using DynamicPPL: DynamicPPL, SimpleVarInfo
 

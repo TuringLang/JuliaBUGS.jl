@@ -29,9 +29,7 @@ using MacroTools
 using MCMCChains
 using Random
 using ReverseDiff
-using Setfield
 using Test
-using UnPack
 
 AbstractMCMC.setprogress!(false)
 
