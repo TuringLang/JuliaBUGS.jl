@@ -78,7 +78,8 @@ function BUGSModel(
     inits;
     is_transformed::Bool=true,
 )
-    vi = SimpleVarInfo(eval_env, 0.0)
+    vs = initialize_var_store(eval_env)
+    vi = SimpleVarInfo(vs, 0.0)
     dist_store = Dict{VarName,Distribution}()
     parameters = VarName[]
     untransformed_param_length = 0
@@ -103,7 +104,6 @@ function BUGSModel(
                     e,
                 )
             end
-            @assert value isa Union{Real,Array{<:Real}} "$value is not a number or array"
             vi = setindex!!(vi, value, vn)
         else
             dist = try
@@ -165,6 +165,21 @@ function BUGSModel(
         g,
         nothing,
     )
+end
+
+function initialize_var_store(eval_env::NamedTuple)
+    var_store = Dict{Symbol,Any}()
+    for k in keys(eval_env)
+        v = eval_env[k]
+        if v === missing
+            var_store[k] = 0.0
+        elseif v isa AbstractArray && Missing <: eltype(v)
+            var_store[k] = map(x -> x === missing ? 0.0 : x, v)
+        else
+            var_store[k] = v
+        end
+    end
+    return NamedTuple(var_store)
 end
 
 """

@@ -3,54 +3,45 @@ function create_eval_env(
     non_data_array_sizes::NamedTuple{non_data_array_vars},
     data::NamedTuple{data_vars},
 ) where {data_vars,non_data_array_vars}
-    data_copy = Dict{Symbol,Any}()
-    for (k, v) in pairs(data)
+    eval_env = Dict{Symbol,Any}()
+    for k in data_vars
+        v = data[k]
         if v isa AbstractArray
             if Base.nonmissingtype(eltype(v)) === eltype(v)
-                data_copy[k] = v
+                eval_env[k] = v
             elseif eltype(v) === Missing
-                data_copy[k] = similar(v, Union{Missing,Int,Float64})
+                eval_env[k] = fill(missing, size(v)...)
             else
-                data_copy[k] = copy(data[k])
+                eval_env[k] = copy(data[k])
             end
         else
-            data_copy[k] = v
+            eval_env[k] = v
         end
     end
-    data_copy = NamedTuple(data_copy)
 
-    init_scalars = Tuple([missing for i in eachindex(non_data_scalars)])
-    init_arrays = Tuple([
-        Array{Union{Int,Float64,Missing}}(
-            missing, non_data_array_sizes[non_data_array_vars[i]]...
-        ) for i in eachindex(non_data_array_vars)
-    ])
+    for s in non_data_scalars
+        eval_env[s] = missing
+    end
 
-    eval_env = merge(
-        NamedTuple{non_data_scalars}(init_scalars),
-        NamedTuple{non_data_array_vars}(init_arrays),
-        data_copy,
-    )
+    for a in non_data_array_vars
+        eval_env[a] = fill(missing, non_data_array_sizes[a]...)
+    end
 
-    return eval_env
+    return NamedTuple(eval_env)
 end
 
 function concretize_eval_env(eval_env::NamedTuple)
-    concretized_eval_env = Dict{Symbol,Any}()
-    for (k, v) in pairs(eval_env)
-        if v isa Union{Int,Float64} || v === missing
-            concretized_eval_env[k] = v
-        elseif v isa AbstractArray
-            concretized_eval_env[k] = try
-                convert(AbstractArray{nonmissingtype(eltype(v))}, v)
+    for k in keys(eval_env)
+        v = eval_env[k]
+        if v isa AbstractArray
+            try
+                disallowmissing_v = convert(AbstractArray{nonmissingtype(eltype(v))}, v)
+                eval_env = BangBang.setproperty!!(eval_env, k, disallowmissing_v)
             catch _
-                v
             end
-        else
-            error("Don't know how to handle $k's value: $v.")
         end
     end
-    return NamedTuple(concretized_eval_env)
+    return eval_env
 end
 
 """
@@ -114,7 +105,7 @@ function extract_variable_names_and_numdims(expr::Expr, excluded::Tuple{Vararg{S
         end
         if @capture(sub_expr, f_(args__))
             for arg in args
-                if arg isa Symbol && !(arg in excluded)
+                if arg isa Symbol && arg ∉ (:nothing, :missing) && !(arg in excluded)
                     variables[arg] = 0
                 end
             end

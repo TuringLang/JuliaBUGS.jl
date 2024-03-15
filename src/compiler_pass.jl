@@ -71,18 +71,6 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
             push!(num_dims, num_dim)
         end
     end
-    data_scalars = Tuple(data_scalars)
-    non_data_scalars = Tuple(non_data_scalars)
-    arrays = Tuple(arrays)
-    num_dims = Tuple(num_dims)
-
-    for var in extract_variables_in_bounds_and_lhs_indices(model_def)
-        if var ∉ keys(data)
-            error(
-                "Variable $var is used in loop bounds or indices but not defined in the data.",
-            )
-        end
-    end
 
     data_arrays = Symbol[]
     data_array_sizes = SVector[]
@@ -104,8 +92,8 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
 
     return CollectVariables{data_vars}(
         data,
-        data_scalars,
-        non_data_scalars,
+        Tuple(data_scalars),
+        Tuple(non_data_scalars),
         NamedTuple{Tuple(data_arrays)}(Tuple(data_array_sizes)),
         NamedTuple{Tuple(non_data_arrays)}(Tuple(non_data_array_sizes)),
     )
@@ -467,15 +455,15 @@ function analyze_statement(pass::DataTransformation, expr::Expr, loop_vars::Name
         rhs = evaluate(rhs_expr, env)
         if is_resolved(rhs)
             pass.new_value_added = true
+            pass_env = pass.env
             if lhs isa Symbol
-                pass.env = BangBang.setproperty!!(pass.env, lhs, rhs)
+                pass.env = BangBang.setproperty!!(pass_env, lhs, rhs)
             else
                 var, indices... = lhs
-                if any(x -> x isa UnitRange, indices)
-                    pass.env[var][indices...] .= rhs
-                else
-                    pass.env[var][indices...] = rhs
-                end
+                pass_env = pass.env
+                pass.env = BangBang.setproperty!!(
+                    pass_env, var, BangBang.setindex!!(pass_env[var], rhs, indices...)
+                )
             end
         end
     end
@@ -540,6 +528,9 @@ julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), (x = [1 2
 evaluate_and_track_dependencies(var::Union{Int,Float64}, env) = var, (), ()
 evaluate_and_track_dependencies(var::UnitRange, env) = var, (), ()
 function evaluate_and_track_dependencies(var::Symbol, env)
+    if var === :nothing
+        return var, (), ()
+    end
     if env[var] === missing
         return var, (var,), (var,)
     else

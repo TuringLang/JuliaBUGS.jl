@@ -104,7 +104,7 @@ function compute_data_transformation(
         analyze_block(pass, model_def)
         has_new_val = pass.new_value_added
     end
-    return concretize_eval_env(eval_env)
+    return concretize_eval_env(pass.env)
 end
 
 function finish_checking_repeated_assignments(
@@ -117,7 +117,7 @@ function finish_checking_repeated_assignments(
     end
 
     for (array_name, conflict_array) in pairs(conflicted_arrays)
-        missing_values = ismissing.(merged_data[array_name])
+        missing_values = ismissing.(eval_env[array_name])
         conflicts = conflict_array .& missing_values
         if any(conflicts)
             error(

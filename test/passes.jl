@@ -63,28 +63,28 @@ end
     end
     data = (b=1, e=[1, 2])
 
-    scalars, array_sizes = JuliaBUGS.determine_array_sizes(model_def, data)
-
-    transformed_variables = Dict{Symbol,Any}(
-        :a => missing, :c => missing, :d => Union{Int,Missing}[missing,]
+    non_data_scalars, non_data_array_sizes = JuliaBUGS.determine_array_sizes(
+        model_def, data
     )
 
-    pass = DataTransformation(data, false, transformed_variables)
-    JuliaBUGS.analyze_block(pass, model_def)
-    has_new_val, transformed_variables = JuliaBUGS.post_process(pass)
-    @test has_new_val == true
-    @test transformed_variables[:a] == 2
+    eval_env = JuliaBUGS.create_eval_env(non_data_scalars, non_data_array_sizes, data)
 
-    pass = DataTransformation(data, false, transformed_variables)
+    pass = DataTransformation(eval_env, false)
     JuliaBUGS.analyze_block(pass, model_def)
-    has_new_val, transformed_variables = JuliaBUGS.post_process(pass)
-    @test has_new_val == true
-    @test transformed_variables[:c] == 6
+    (; new_value_added, env) = pass
+    @test new_value_added == true
+    @test env[:a] == 2
 
-    pass = DataTransformation(data, false, transformed_variables)
+    pass = DataTransformation(env, false)
     JuliaBUGS.analyze_block(pass, model_def)
-    has_new_val, transformed_variables = JuliaBUGS.post_process(pass)
-    @test has_new_val == false
+    (; new_value_added, env) = pass
+    @test new_value_added == true
+    @test env[:c] == 6
+
+    pass = DataTransformation(env, false)
+    JuliaBUGS.analyze_block(pass, model_def)
+    (; new_value_added, env) = pass
+    @test new_value_added == false
 end
 
 @testset "CheckRepeatedAssignments" begin
