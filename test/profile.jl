@@ -32,13 +32,11 @@ for name in keys(BUGSExamples.VOLUME_I)
         $model_def, $eval_env
     )
 
+    vars, node_args, node_functions, dependencies = JuliaBUGS.compute_node_functions(
+        model_def, eval_env
+    )
     _suite["GraphCreation"] = @benchmarkable JuliaBUGS.create_BUGSGraph(
         $vars, $node_args, $node_functions, $dependencies
-    ) setup = (
-        vars,
-        node_args,
-        node_functions,
-        dependencies=JuliaBUGS.compute_node_functions(model_def, eval_env),
     )
 
     tune!(_suite)
