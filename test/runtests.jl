@@ -22,7 +22,7 @@ using JuliaBUGS:
     MHFromPrior,
     NodeFunctions,
     SimpleVarInfo,
-    Stochastic, 
+    Stochastic,
     stochastic_inneighbors,
     stochastic_neighbors,
     stochastic_outneighbors,
