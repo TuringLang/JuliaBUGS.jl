@@ -31,7 +31,6 @@ include("parser/Parser.jl")
 using .Parser
 
 include("utils.jl")
-# include("variable_types.jl")
 include("graphs.jl")
 include("compiler_pass.jl")
 include("model.jl")
