@@ -28,16 +28,9 @@ for name in keys(BUGSExamples.VOLUME_I)
         $non_data_scalars, $non_data_array_sizes, $model_def, $data
     )
 
-    _suite["NodeFunction"] = @benchmarkable JuliaBUGS.compute_node_functions(
-        $model_def, $eval_env
-    )
-
     model_def = JuliaBUGS.concretize_colon_indexing(model_def, eval_env)
-    vars, node_args, node_functions, dependencies = JuliaBUGS.compute_node_functions(
-        model_def, eval_env
-    )
-    _suite["GraphCreation"] = @benchmarkable JuliaBUGS.create_BUGSGraph(
-        $vars, $node_args, $node_functions, $dependencies
+    _suite["GraphCreation"] = @benchmarkable JuliaBUGS.create_graph(
+        $model_def, $eval_env
     )
 
     tune!(_suite)
@@ -50,7 +43,7 @@ function create_result_dict(results)
     result_dict = Dict{String,Dict{String,Dict{String,String}}}()
     for (name, example_suite) in results
         _d = Dict{String,Dict{String,String}}()
-        for k in ("CollectVariables", "DataTransformation", "NodeFunction", "GraphCreation")
+        for k in ("CollectVariables", "DataTransformation", "GraphCreation")
             __d = Dict{String,String}()
             med = median(example_suite[k])
             min = minimum(example_suite[k])
