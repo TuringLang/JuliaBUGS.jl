@@ -658,8 +658,8 @@ function make_function_expr(
                 if T === Union{}
                     T = Float64
                 end
-                # TODO: this assume input is Array, which may not be true
-                push!(arg_exprs, Expr(:(::), v, :(Array{$T})))
+                # TODO: maybe can narrow to `Array`
+                push!(arg_exprs, Expr(:(::), v, :(AbstractArray{$T})))
             else
                 error("Unexpected argument type: $(typeof(value))")
             end
@@ -699,7 +699,7 @@ function AddVertices(model_def::Expr, eval_env::NamedTuple)
 end
 
 function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
-    lhs_expr, rhs_expr = is_deterministic(expr) ? expr.args[1:2] : expr.args[2:3]
+    lhs_expr = is_deterministic(expr) ? expr.args[1] : expr.args[2]
     env = merge(pass.env, loop_vars)
     lhs = simplify_lhs(env, lhs_expr)
     is_stochastic = false

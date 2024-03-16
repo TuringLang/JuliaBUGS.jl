@@ -89,36 +89,34 @@ function BUGSModel(
         )
         expr = node_function_expr.args[2].args[1].args[1]
         if !is_stochastic
-            value = _eval(expr, args, dist_store)
-            vi = setindex!!(vi, value, vn)
+            initialization = _eval(expr, args, dist_store)
+            vi = setindex!!(vi, initialization, vn)
         else
             dist = _eval(expr, args, dist_store)
             dist_store[vn] = dist
-            value = try
+            initialization = try
                 AbstractPPL.get(inits, vn)
             catch _
                 missing
             end
+            # TODO: this will cause partially initialized value to be redrawn
+            if !is_resolved(initialization)
+                initialization = rand(dist)
+            end
             if !is_observed
                 push!(parameters, vn)
-                this_param_length = length(dist)
-                untransformed_param_length += this_param_length
+                untransformed_var_lengths[vn] = length(dist)
+                transformed_var_lengths[vn] = if bijector(dist) == identity
+                    untransformed_var_lengths[vn]
+                else
+                    length(Bijectors.transformed(dist))
+                end
+                untransformed_param_length += untransformed_var_lengths[vn]
+                transformed_param_length += transformed_var_lengths[vn]
 
-                if bijector(dist) == identity
-                    this_param_transformed_length = this_param_length
-                else
-                    this_param_transformed_length = length(Bijectors.transformed(dist))
-                end
-                untransformed_var_lengths[vn] = this_param_length
-                transformed_var_lengths[vn] = this_param_transformed_length
-                transformed_param_length += this_param_transformed_length
-                if !is_resolved(value) # not initialized
-                    vi = setindex!!(vi, rand(dist), vn)
-                else
-                    vi = setindex!!(vi, value, vn)
-                end
+                vi = setindex!!(vi, initialization, vn)
             else
-                vi = setindex!!(vi, value, vn)
+                vi = setindex!!(vi, initialization, vn)
             end
         end
     end

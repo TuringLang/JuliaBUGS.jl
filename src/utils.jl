@@ -559,6 +559,14 @@ function _eval(expr::Expr, env, dist_store)
     elseif Meta.isexpr(expr, :ref)
         array = _eval(expr.args[1], env, dist_store)
         indices = [_eval(arg, env, dist_store) for arg in expr.args[2:end]]
+        # TODO: should just ban implicit type casting
+        indices = map(indices) do index
+            if index isa Float64
+                Int(index)
+            else
+                index
+            end
+        end
         return array[indices...]
     elseif Meta.isexpr(expr, :block)
         return _eval(expr.args[end], env, dist_store)
