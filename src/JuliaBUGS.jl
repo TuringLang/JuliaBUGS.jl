@@ -127,7 +127,6 @@ end
 function create_graph(model_def, eval_env)
     pass = AddVertices(model_def, eval_env)
     analyze_block(pass, model_def)
-    
     pass = AddEdges(pass.env, pass.g, pass.vertex_id_tracker)
     analyze_block(pass, model_def)
 
