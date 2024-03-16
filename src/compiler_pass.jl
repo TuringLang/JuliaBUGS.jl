@@ -640,9 +640,7 @@ function build_node_functions(
     return f_dict
 end
 
-function make_function_expr(
-    expr, env::NamedTuple{vars}
-) where {vars}
+function make_function_expr(expr, env::NamedTuple{vars}) where {vars}
     args = Tuple(keys(extract_variable_names_and_numdims(expr, ())))
     arg_exprs = Expr[]
     for v in args
