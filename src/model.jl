@@ -1,7 +1,10 @@
-# AbstractBUGSModel can't be a subtype of AbstractProbabilisticProgram (<: AbstractMCMC.AbstractModel)
+# AbstractBUGSModel subtype `AbstractPPL.AbstractProbabilisticProgram` (which subtypes `AbstractMCMC.AbstractModel`)
 # because it will then dispatched to https://github.com/TuringLang/AbstractMCMC.jl/blob/d7c549fe41a80c1f164423c7ac458425535f624b/src/sample.jl#L81
 # instead of https://github.com/TuringLang/AbstractMCMC.jl/blob/d7c549fe41a80c1f164423c7ac458425535f624b/src/logdensityproblems.jl#L90
 abstract type AbstractBUGSModel end
+
+# TODO: currently the evaluated `node_function` is not used, two issues need to fixed before getting rid of `bugs_eval`:
+# `cumulative`/`density` requires special treatment in `bugs_eval`; implicit casting of Float64 in indices
 
 """
     BUGSModel
@@ -33,7 +36,7 @@ struct BUGSModel <: AbstractBUGSModel
     untransformed_param_length::Int
     transformed_param_length::Int
     untransformed_var_lengths::Dict{VarName,Int}
-    transformed_var_lengths::Dict{VarName,Int} # TODO: store this as a delta from `untransformed_var_lengths`?
+    transformed_var_lengths::Dict{VarName,Int}
 
     varinfo::SimpleVarInfo
     distributions::Dict{VarName,Distribution}
@@ -67,91 +70,97 @@ Return the names of the generated variables in the model.
 """
 generated_variables(m::BUGSModel) = find_generated_vars(m.g)
 
-struct UninitializedVariableError <: Exception
-    msg::String
+function prepare_arg_values(
+    args::Tuple{Vararg{Symbol}}, vi::SimpleVarInfo, loop_vars::NamedTuple{lvars}
+) where {lvars}
+    return NamedTuple{args}(Tuple(
+        map(args) do arg
+            if arg in lvars
+                loop_vars[arg]
+            else
+                vi[@varname($arg)]
+            end
+        end,
+    ))
 end
 
 function BUGSModel(
-    g::BUGSGraph,
-    sorted_nodes::Vector{<:VarName},
-    eval_env::NamedTuple,
-    inits;
-    is_transformed::Bool=true,
+    g::BUGSGraph, eval_env::NamedTuple, inits::NamedTuple; is_transformed::Bool=true
 )
-    vs = initialize_var_store(eval_env)
-    vi = SimpleVarInfo(vs, 0.0)
-    dist_store = Dict{VarName,Distribution}()
-    parameters = VarName[]
-    untransformed_param_length = 0
-    transformed_param_length = 0
-    untransformed_var_lengths = Dict{VarName,Int}()
-    transformed_var_lengths = Dict{VarName,Int}()
-    for vn in sorted_nodes
-        @assert !(g[vn] isa AuxiliaryNodeInfo) "Auxiliary nodes should not be in the graph, but $(g[vn]) is."
+    sorted_nodes = map(topological_sort(g)) do node
+        label_for(g, node)
+    end
+    vi = SimpleVarInfo(
+        NamedTuple{keys(eval_env)}(
+            map(
+                k -> begin
+                    v = eval_env[k]
+                    if v === missing
+                        0.0
+                    elseif v isa AbstractArray
+                        if eltype(v) === Missing
+                            zeros(size(v)...)
+                        elseif Missing <: eltype(v)
+                            coalesce.(v, zero(nonmissingtype(eltype(v))))
+                        else
+                            v
+                        end
+                    else
+                        v
+                    end
+                end,
+                keys(eval_env),
+            ),
+        ),
+        0.0,
+    )
 
-        ni = g[vn]
-        @unpack node_type, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args) # TODO: get rid of this
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
-            value = try
-                _eval(expr, args, dist_store)
-            catch e
-                rethrow(
-                    # UninitializedVariableError(
-                    #     "Encounter error when evaluating the RHS of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) directly first if not yet.",
-                    # ),
-                    e,
-                )
-            end
+    distributions = Dict{VarName,Distribution}()
+    parameters = VarName[]
+    untransformed_param_length, transformed_param_length = 0, 0
+    untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
+    Dict{VarName,Int}()
+
+    for vn in sorted_nodes
+        (; is_stochastic, is_observed, node_function_expr, node_function, node_args, loop_vars) = g[vn]
+        args = prepare_arg_values(node_args, vi, loop_vars)
+        expr = node_function_expr.args[2].args[1].args[1]
+        if !is_stochastic
+            value = bugs_eval(expr, args, distributions)
+            # value = Base.invokelatest(node_function; arg_values...)
             vi = setindex!!(vi, value, vn)
         else
-            dist = try
-                _eval(expr, args, dist_store)
-            catch _
-                rethrow(
-                    UninitializedVariableError(
-                        "Encounter support error when evaluating the distribution of $vn. Try to initialize variables $(join(collect(keys(args)), ", ")) first if not yet.",
-                    ),
-                )
-            end
-            dist_store[vn] = dist
-            value = AbstractPPL.get(eval_env, vn)
-            if !is_resolved(value) # not observed
-                push!(parameters, vn)
-                this_param_length = length(dist)
-                untransformed_param_length += this_param_length
+            dist = bugs_eval(expr, args, distributions)
+            # dist = Base.invokelatest(node_function; arg_values...)
+            distributions[vn] = dist
 
-                @assert length(dist) == _length(vn) begin
-                    "The dimensionality of distribution $dist: $(length(dist)) does not match length of variable $vn: $(_length(vn)), " *
-                    "please note that if the distribution is a multivariate distribution, " *
-                    "the left hand side variable should use explicit indexing, e.g. x[1:2] ~ dmnorm(...)."
-                end
-                if bijector(dist) == identity
-                    this_param_transformed_length = this_param_length
-                else
-                    this_param_transformed_length = length(Bijectors.transformed(dist))
-                end
-                untransformed_var_lengths[vn] = this_param_length
-                transformed_var_lengths[vn] = this_param_transformed_length
-                transformed_param_length += this_param_transformed_length
-                value = try
-                    AbstractPPL.get(inits, vn)
-                catch _
-                    missing
-                end
-                if !is_resolved(value) # not initialized
-                    vi = setindex!!(vi, rand(dist), vn)
-                else
-                    vi = setindex!!(vi, value, vn)
-                end
-            else
-                vi = setindex!!(vi, value, vn)
+            if is_observed
+                continue
             end
+
+            push!(parameters, vn)
+            untransformed_var_lengths[vn] = length(dist)
+            # not all distributions are defined for `Bijectors.transformed`
+            transformed_var_lengths[vn] = if bijector(dist) == identity
+                untransformed_var_lengths[vn]
+            else
+                length(Bijectors.transformed(dist))
+            end
+            untransformed_param_length += untransformed_var_lengths[vn]
+            transformed_param_length += transformed_var_lengths[vn]
+
+            initialization = try
+                AbstractPPL.get(inits, vn)
+            catch _
+                missing
+            end
+            # TODO: this will cause partially initialized value to be redrawn
+            if !is_resolved(initialization)
+                initialization = rand(dist)
+            end
+            vi = setindex!!(vi, initialization, vn)
         end
     end
-    @assert (isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) ==
-        untransformed_param_length "$(isempty(parameters) ? 0 : sum(_length(x) for x in parameters)) $untransformed_param_length"
     return BUGSModel(
         is_transformed,
         untransformed_param_length,
@@ -159,7 +168,7 @@ function BUGSModel(
         untransformed_var_lengths,
         transformed_var_lengths,
         vi,
-        dist_store,
+        distributions,
         parameters,
         sorted_nodes,
         g,
@@ -167,49 +176,34 @@ function BUGSModel(
     )
 end
 
-function initialize_var_store(eval_env::NamedTuple)
-    var_store = Dict{Symbol,Any}()
-    for k in keys(eval_env)
-        v = eval_env[k]
-        if v === missing
-            var_store[k] = 0.0
-        elseif v isa AbstractArray && Missing <: eltype(v)
-            var_store[k] = map(x -> x === missing ? 0.0 : x, v)
-        else
-            var_store[k] = v
-        end
-    end
-    return NamedTuple(var_store)
-end
-
 """
-    get_params_varinfo(m::BUGSModel[, vi::SimpleVarInfo])
+    get_params_varinfo(model::BUGSModel[, vi::SimpleVarInfo])
 
 Returns a `SimpleVarInfo` object containing only the parameter values of the model.
-If `vi` is provided, it will be used; otherwise, `m.varinfo` will be used.
+If `vi` is provided, it will be used; otherwise, `model.varinfo` will be used.
 """
-function get_params_varinfo(m::BUGSModel)
-    return get_params_varinfo(m, m.varinfo)
+function get_params_varinfo(model::BUGSModel)
+    return get_params_varinfo(model, model.varinfo)
 end
-function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
-    if !m.transformed
+function get_params_varinfo(model::BUGSModel, vi::SimpleVarInfo)
+    if !model.transformed
         d = Dict{VarName,Any}()
-        for param in m.parameters
+        for param in model.parameters
             d[param] = vi[param]
         end
         return SimpleVarInfo(d, vi.logp, DynamicPPL.NoTransformation())
     else
         d = Dict{VarName,Any}()
-        g = m.g
-        for vn in m.sorted_nodes
-            ni = g[vn]
-            @unpack node_type, node_function_expr, node_args = ni
-            args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-            expr = node_function_expr.args[2]
-            if vn in m.parameters
-                dist = _eval(expr, args, m.distributions)
-                linked_val = DynamicPPL.link(dist, vi[vn])
-                d[vn] = linked_val
+        g = model.g
+        for v in model.sorted_nodes
+            (; is_stochastic, node_function_expr, node_function, node_args, loop_vars) = g[v]
+            if v in model.parameters
+                args = prepare_arg_values(node_args, vi, loop_vars)
+                expr = node_function_expr.args[2].args[1].args[1]
+                dist = bugs_eval(expr, args, model.distributions)
+                # dist = node_function(; args...)
+                linked_val = DynamicPPL.link(dist, vi[v])
+                d[v] = linked_val
             end
         end
         return SimpleVarInfo(d, vi.logp, DynamicPPL.DynamicTransformation())
@@ -217,55 +211,56 @@ function get_params_varinfo(m::BUGSModel, vi::SimpleVarInfo)
 end
 
 """
-    getparams(m::BUGSModel[, vi::SimpleVarInfo]; transformed::Bool=false)
+    getparams(model::BUGSModel[, vi::SimpleVarInfo]; transformed::Bool=false)
 
 Extract the parameter values from the model as a flattened vector, ordered topologically.
 If `transformed` is set to true, the parameters are provided in the transformed space.
 """
-function getparams(m::BUGSModel; transformed::Bool=false)
-    return getparams(m, m.varinfo; transformed=transformed)
+function getparams(model::BUGSModel; transformed::Bool=false)
+    return getparams(model, model.varinfo; transformed=transformed)
 end
-function getparams(m::BUGSModel, vi::SimpleVarInfo; transformed::Bool=false)
-    if !transformed
-        param_vals = Vector{Float64}(undef, m.untransformed_param_length)
-        pos = 1
-        for p in m.parameters
-            val = vi[p]
-            len = m.untransformed_var_lengths[p]
-            if isa(val, Real)
-                param_vals[pos] = val
-                pos += 1
-            else
+function getparams(model::BUGSModel, vi::SimpleVarInfo; transformed::Bool=false)
+    param_vals = Vector{Float64}(
+        undef,
+        transformed ? model.transformed_param_length : model.untransformed_param_length,
+    )
+    pos = 1
+    for v in model.parameters
+        if !transformed
+            val = vi[v]
+            len = model.untransformed_var_lengths[v]
+            if val isa AbstractArray
                 param_vals[pos:(pos + len - 1)] .= vec(val)
-                pos += len
+            else
+                param_vals[pos] = val
+            end
+        else
+            (; node_function_expr, node_args, loop_vars) = model.g[v]
+            args = prepare_arg_values(node_args, vi, loop_vars)
+            expr = node_function_expr.args[2].args[1].args[1]
+            dist = bugs_eval(expr, args, model.distributions)
+            # dist = node_function(; args...)
+            linked_val = Bijectors.link(dist, vi[v])
+            len = model.transformed_var_lengths[v]
+            if linked_val isa AbstractArray
+                param_vals[pos:(pos + len - 1)] .= vec(linked_val)
+            else
+                param_vals[pos] = linked_val
             end
         end
-        return param_vals
-    else
-        transformed_param_vals = Vector{Float64}(undef, m.transformed_param_length)
-        pos = 1
-        for v in m.parameters
-            ni = m.g[v]
-            args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
-            dist = _eval(ni.node_function_expr.args[2], args, m.distributions)
-
-            link_vals = Bijectors.link(dist, vi[v])
-            len = m.transformed_var_lengths[v]
-            transformed_param_vals[pos:(pos + len - 1)] .= link_vals
-            pos += len
-        end
-        return transformed_param_vals
+        pos += len
     end
+    return param_vals
 end
 
 """
-    setparams!!(m::BUGSModel, flattened_values::AbstractVector; transformed::Bool=false)
+    setparams!!(model::BUGSModel, flattened_values::AbstractVector; transformed::Bool=false)
 
 Update the parameter values of a `BUGSModel` with new values provided in a flattened vector.
 
 Only the parameter values are updated, the values of logical variables are kept unchanged.
 
-This function adopt the bangbang convention, i.e. it modifies the model in place when possible.
+This function adopts the `BangBang` convention, i.e. it modifies the model in place when possible.
 
 # Arguments
 - `m::BUGSModel`: The model to update.
@@ -276,23 +271,24 @@ This function adopt the bangbang convention, i.e. it modifies the model in place
 `SimpleVarInfo`: The updated `varinfo` with the new parameter values set.
 """
 function setparams!!(
-    m::BUGSModel, flattened_values::AbstractVector; transformed::Bool=false
+    model::BUGSModel, flattened_values::AbstractVector; transformed::Bool=false
 )
     pos = 1
-    vi = m.varinfo
-    for v in m.parameters
-        ni = m.g[v]
-        args = (; (getsym(arg) => vi[arg] for arg in ni.node_args)...)
-        dist = _eval(ni.node_function_expr.args[2], args, m.distributions)
+    vi = model.varinfo
+    for v in model.parameters
+        (; node_function_expr, node_args, loop_vars) = model.g[v]
+        args = prepare_arg_values(node_args, vi, loop_vars)
+        expr = node_function_expr.args[2].args[1].args[1]
+        dist = bugs_eval(expr, args, model.distributions)
 
         len = if transformed
-            m.transformed_var_lengths[v]
+            model.transformed_var_lengths[v]
         else
-            m.untransformed_var_lengths[v]
+            model.untransformed_var_lengths[v]
         end
         if transformed
-            link_vals = flattened_values[pos:(pos + len - 1)]
-            sample_val = DynamicPPL.invlink_and_reconstruct(dist, link_vals)
+            linked_vals = flattened_values[pos:(pos + len - 1)]
+            sample_val = DynamicPPL.invlink_and_reconstruct(dist, linked_vals)
         else
             sample_val = flattened_values[pos:(pos + len - 1)]
         end
@@ -302,14 +298,13 @@ function setparams!!(
     return vi
 end
 
-# TODO: For now, a varinfo contains all model parameters is returned; alternatively, can return the generated quantities
 function (model::BUGSModel)()
-    vi, logp = evaluate!!(model, SamplingContext())
+    vi, _ = evaluate!!(model, SamplingContext())
     return get_params_varinfo(model, vi)
 end
 
 function settrans(model::BUGSModel, bool::Bool=!(model.transformed))
-    return @set model.transformed = bool
+    return BangBang.setproperty!!(model, :transformed, bool)
 end
 
 function AbstractPPL.condition(
@@ -383,7 +378,7 @@ end
 
 function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
     non_vars = filter(var -> var ∉ labels(model.g), var_group)
-    logical_vars = filter(var -> model.g[var].node_type == Logical, var_group)
+    logical_vars = filter(var -> !model.g[var].is_stochastic, var_group)
     isempty(non_vars) || error("Variables $(non_vars) are not in the model")
     return isempty(logical_vars) || error(
         "Variables $(logical_vars) are not stochastic variables, conditioning on them is not supported",
@@ -426,19 +421,18 @@ function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
     return evaluate!!(model, SamplingContext(rng))
 end
 function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
-    @unpack varinfo, g, sorted_nodes = model
+    (; varinfo, g, sorted_nodes) = model
     vi = deepcopy(varinfo)
     logp = 0.0
     for vn in sorted_nodes
-        ni = g[vn]
-        @unpack node_type, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
-            value = _eval(expr, args, model.distributions)
+        (; is_stochastic, node_function_expr, node_args, loop_vars) = g[vn]
+        args = prepare_arg_values(node_args, vi, loop_vars)
+        expr = node_function_expr.args[2].args[1].args[1]
+        if !is_stochastic
+            value = bugs_eval(expr, args, model.distributions)
             vi = setindex!!(vi, value, vn)
         else
-            dist = _eval(expr, args, model.distributions)
+            dist = bugs_eval(expr, args, model.distributions)
             value = rand(ctx.rng, dist) # just sample from the prior
             logp += logpdf(dist, value)
             vi = setindex!!(vi, value, vn)
@@ -451,20 +445,18 @@ function AbstractPPL.evaluate!!(model::BUGSModel)
     return AbstractPPL.evaluate!!(model, DefaultContext())
 end
 function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
-    sorted_nodes = model.sorted_nodes
-    g = model.g
-    vi = deepcopy(model.varinfo)
+    (; sorted_nodes, g, varinfo) = model
+    vi = deepcopy(varinfo)
     logp = 0.0
     for vn in sorted_nodes
-        ni = g[vn]
-        @unpack node_type, node_function_expr, node_args = ni
-        args = Dict(getsym(arg) => vi[arg] for arg in node_args)
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical # be conservative -- always propagate values of logical nodes
-            value = _eval(expr, args, model.distributions)
+        (; is_stochastic, node_function_expr, node_args, loop_vars) = g[vn]
+        args = prepare_arg_values(node_args, vi, loop_vars)
+        expr = node_function_expr.args[2].args[1].args[1]
+        if !is_stochastic
+            value = bugs_eval(expr, args, model.distributions)
             vi = setindex!!(vi, value, vn)
         else
-            dist = _eval(expr, args, model.distributions)
+            dist = bugs_eval(expr, args, model.distributions)
             value = vi[vn]
             if model.transformed
                 # although the values stored in `vi` are in their original space, 
@@ -485,31 +477,38 @@ end
 function AbstractPPL.evaluate!!(
     model::BUGSModel, ::LogDensityContext, flattened_values::AbstractVector
 )
-    @assert length(flattened_values) == (
-        if model.transformed
-            model.transformed_param_length
-        else
-            model.untransformed_param_length
-        end
-    )
+    param_lengths = if model.transformed
+        model.transformed_param_length
+    else
+        model.untransformed_param_length
+    end
 
-    var_lengths =
-        model.transformed ? model.transformed_var_lengths : model.untransformed_var_lengths
+    if length(flattened_values) != param_lengths
+        error(
+            "The length of `flattened_values` does not match the length of the parameters in the model",
+        )
+    end
+
+    var_lengths = if model.transformed
+        model.transformed_var_lengths
+    else
+        model.untransformed_var_lengths
+    end
+
     sorted_nodes = model.sorted_nodes
     g = model.g
     vi = deepcopy(model.varinfo)
     current_idx = 1
     logp = 0.0
     for vn in sorted_nodes
-        ni = g[vn]
-        @unpack node_type, node_function_expr, node_args = ni
-        args = (; map(arg -> getsym(arg) => vi[arg], node_args)...)
-        expr = node_function_expr.args[2]
-        if node_type == JuliaBUGS.Logical
-            value = _eval(expr, args, model.distributions)
+        (; is_stochastic, node_function_expr, node_args, loop_vars) = g[vn]
+        args = prepare_arg_values(node_args, vi, loop_vars)
+        expr = node_function_expr.args[2].args[1].args[1]
+        if !is_stochastic
+            value = bugs_eval(expr, args, model.distributions)
             vi = setindex!!(vi, value, vn)
         else
-            dist = _eval(expr, args, model.distributions)
+            dist = bugs_eval(expr, args, model.distributions)
             if vn in model.parameters
                 l = var_lengths[vn]
                 if model.transformed

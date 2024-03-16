@@ -470,22 +470,6 @@ function analyze_statement(pass::DataTransformation, expr::Expr, loop_vars::Name
 end
 
 """
-    NodeFunctions
-
-A pass that analyze node functions of variables and their dependencies.
-"""
-struct NodeFunctions <: CompilerPass
-    env::NamedTuple
-    vars::Dict
-    node_args::Dict
-    node_functions::Dict
-    dependencies::Dict
-end
-function NodeFunctions(eval_env)
-    return NodeFunctions(eval_env, Dict(), Dict(), Dict(), Dict())
-end
-
-"""
     evaluate_and_track_dependencies(var, env)
 
 Evaluate `var` in the environment `env` while tracking its dependencies and node function arguments.
@@ -504,50 +488,48 @@ Array elements and array variables are represented by tuples in the returned val
 # Examples
 ```jldoctest
 julia> evaluate_and_track_dependencies(:(x[a]), (x=[missing, missing], a = missing))
-(missing, (:a, (:x, 1:2)), (:x, :a))
+(missing, (:a, (:x, 1:2)))
 
 julia> evaluate_and_track_dependencies(:(x[a]), (x=[missing, missing], a = 1))
-(missing, ((:x, 1),), (:x, :a))
+(missing, ((:x, 1),))
 
 julia> evaluate_and_track_dependencies(:(x[y[1]+1]+a+1), (x=[missing, missing], y = [missing, missing], a = missing))
-(missing, ((:y, 1), (:x, 1:2), :a), (:x, :y, :a))
+(missing, ((:y, 1), (:x, 1:2), :a))
 
 julia> evaluate_and_track_dependencies(:(x[a, b]), (x = [1 2 3; 4 5 6], a = missing, b = missing))
-(missing, (:a, :b, (:x, 1:2, 1:3)), (:x, :a, :b))
+(missing, (:a, :b, (:x, 1:2, 1:3)))
 
 julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), (x = [1 2 3; 4 5 6], a = missing, b = missing))
-(missing, (:a, :b), (:x, :a, :b))
+(missing, (:a, :b))
 
 julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], 1, 1)), (x = [1 2 3; 4 5 6], a = missing, b = missing))
-(1, (), (:x,))
+(1, ())
 
 julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), (x = [1 2 missing; 4 5 6], a = missing, b = missing))
-(missing, ((:x, 1:2, 1:3), :a, :b), (:x, :a, :b))
+(missing, ((:x, 1:2, 1:3), :a, :b))
 ```
 """
-evaluate_and_track_dependencies(var::Union{Int,Float64}, env) = var, (), ()
-evaluate_and_track_dependencies(var::UnitRange, env) = var, (), ()
+evaluate_and_track_dependencies(var::Union{Int,Float64}, env) = var, ()
+evaluate_and_track_dependencies(var::UnitRange, env) = var, ()
 function evaluate_and_track_dependencies(var::Symbol, env)
     if var ∈ (:nothing, :missing, :(:))
-        return var, (), ()
+        return var, ()
     end
     if env[var] === missing
-        return var, (var,), (var,)
+        return var, (var,)
     else
-        return env[var], (), (var,)
+        return env[var], ()
     end
 end
 function evaluate_and_track_dependencies(var::Expr, env)
-    dependencies, node_func_args = [], []
+    dependencies = []
     if Meta.isexpr(var, :ref)
         v, indices... = var.args
-        push!(node_func_args, v)
         for i in eachindex(indices)
             ret = evaluate_and_track_dependencies(indices[i], env)
             index = ret[1]
             indices[i] = index isa Float64 ? Int(index) : index
             dependencies = union!(dependencies, ret[2])
-            node_func_args = union!(node_func_args, ret[3])
         end
 
         value = nothing
@@ -556,9 +538,8 @@ function evaluate_and_track_dependencies(var::Expr, env)
         end
             value = env[v][indices...]
             if is_resolved(value)
-                return value, Tuple(dependencies), Tuple(node_func_args)
+                return value, Tuple(dependencies)
             else
-                # TODO: what if value is partially missing?
                 push!(dependencies, (v, indices...))
             end
         else
@@ -573,7 +554,7 @@ function evaluate_and_track_dependencies(var::Expr, env)
                 ),
             )
         end
-        return missing, Tuple(dependencies), Tuple(node_func_args)
+        return missing, Tuple(dependencies)
     elseif Meta.isexpr(var, :call)
         f, args... = var.args
         value = nothing
@@ -591,7 +572,6 @@ function evaluate_and_track_dependencies(var::Expr, env)
                 for i in eachindex(indices)
                     ret = evaluate_and_track_dependencies(indices[i], env)
                     union!(dependencies, ret[2])
-                    union!(node_func_args, ret[3])
                     indices[i] = ret[1]
                 end
                 if any(!is_resolved, indices)
@@ -608,8 +588,7 @@ function evaluate_and_track_dependencies(var::Expr, env)
 
             ret = evaluate_and_track_dependencies(arg2, env)
             union!(dependencies, ret[2])
-            union!(node_func_args, ret[3])
-            return missing, Tuple(dependencies), Tuple(node_func_args)
+            return missing, Tuple(dependencies)
         elseif f === :deviance
             @warn(
                 "`deviance` function is not supported in JuliaBUGS, `deviance` will be treated as a general function."
@@ -619,17 +598,14 @@ function evaluate_and_track_dependencies(var::Expr, env)
                 ret = evaluate_and_track_dependencies(args[i], env)
                 args[i] = ret[1]
                 union!(dependencies, ret[2])
-                union!(node_func_args, ret[3])
             end
 
             value = nothing
             if all(is_resolved, args) &&
                 f ∈ BUGSPrimitives.BUGS_FUNCTIONS ∪ (:+, :-, :*, :/, :^, :(:), :getindex)
-                return getfield(JuliaBUGS, f)(args...),
-                Tuple(dependencies),
-                Tuple(node_func_args)
+                return getfield(JuliaBUGS, f)(args...), Tuple(dependencies)
             else
-                return missing, Tuple(dependencies), Tuple(node_func_args)
+                return missing, Tuple(dependencies)
             end
         end
     else
@@ -637,210 +613,188 @@ function evaluate_and_track_dependencies(var::Expr, env)
     end
 end
 
-"""
-    replace_constants_in_expr(x, env)
-
-Replace the constants in the expression `x` with their actual values from the environment `env` if the values are concrete.
-
-# Examples
-```jldoctest
-julia> env = Dict(:a => 1, :b => 2, :c => 3);
-
-julia> replace_constants_in_expr(:(a * b + c), env)
-:(1 * 2 + 3)
-
-julia> replace_constants_in_expr(:(a + b * sin(c)), env) # won't try to evaluate function calls
-:(1 + 2 * sin(3))
-
-julia> replace_constants_in_expr(:(x[a]), Dict(:x => [10, 20, 30], :a => 2)) # indexing into arrays are done if possible
-20
-
-julia> replace_constants_in_expr(:(x[a] + b), Dict(:x => [10, 20, 30], :a => 2, :b => 5))
-:(20 + 5)
-
-julia> replace_constants_in_expr(:(x[1] + y[1]), Dict(:x => [10, 20, 30], :y => [40, 50, 60]))
-:(10 + 40)
-```
-"""
-function replace_constants_in_expr(x, env)
-    result = _replace_constants_in_expr(x, env)
-    while result != x
-        x = result
-        result = _replace_constants_in_expr(x, env)
-    end
-    return x
-end
-
-_replace_constants_in_expr(x::Number, env) = x
-function _replace_constants_in_expr(x::Symbol, env)
-    if haskey(env, x) && env[x] isa Number
-        return env[x]
-    end
-    return x
-end
-function _replace_constants_in_expr(x::Expr, env)
-    if Meta.isexpr(x, :ref)
-        v, indices... = x.args
-        if haskey(env, v) && all(x -> x isa Union{Int,Float64}, indices)
-            val = env[v][map(Int, indices)...]
-            return ismissing(val) ? x : val
-        else
-            for i in eachindex(indices)
-                indices[i] = _replace_constants_in_expr(indices[i], env)
-            end
-            return Expr(:ref, v, indices...)
-        end
-    elseif Meta.isexpr(x, :call)
-        if x.args[1] === :cumulative || x.args[1] === :density
-            if length(x.args) != 3
-                error(
-                    "`cumulative` and `density` are special functions in BUGS and takes two arguments, got $(length(x.args) - 1)",
-                )
-            end
-            f, arg1, arg2 = x.args
-            if arg1 isa Symbol
-                return Expr(:call, f, arg1, _replace_constants_in_expr(arg2, env))
-            elseif Meta.isexpr(arg1, :ref)
-                v, indices... = arg1.args
-                for i in eachindex(indices)
-                    indices[i] = _replace_constants_in_expr(indices[i], env)
-                end
-                return Expr(
-                    :call,
-                    f,
-                    Expr(:ref, v, indices...),
-                    _replace_constants_in_expr(arg2, env),
-                )
+function build_node_functions(
+    expr::Expr,
+    eval_env::NamedTuple,
+    f_dict::Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}},
+    loop_vars::Tuple{Vararg{Symbol}},
+)
+    for statement in expr.args
+        if is_deterministic(statement) || is_stochastic(statement)
+            rhs = if is_deterministic(statement)
+                statement.args[2]
             else
-                error(
-                    "First argument to `cumulative` and `density` must be variable, got $(x.args[2])",
-                )
+                statement.args[3]
             end
-        elseif x.args[1] === :deviance
-            @warn(
-                "`deviance` function is not supported in JuliaBUGS, `deviance` will be treated as a general function."
-            )
+            args, node_func_expr = make_function_expr(rhs, eval_env)
+            # node_func = eval(node_func_expr)
+            node_func = nothing
+            f_dict[statement] = (args, node_func_expr, node_func)
+        elseif Meta.isexpr(statement, :for)
+            loop_var, _, _, body = decompose_for_expr(statement)
+            build_node_functions(body, eval_env, f_dict, (loop_var, loop_vars...))
         else
-            x = deepcopy(x) # because we are mutating the args
-            for i in 2:length(x.args)
-                x.args[i] = _replace_constants_in_expr(x.args[i], env)
-            end
-            return x
+            error("Unknown statement type: $statement")
         end
-    else
-        error("Unexpected expression type: $x")
+    end
+    return f_dict
+end
+
+function make_function_expr(expr, env::NamedTuple{vars}) where {vars}
+    args = Tuple(keys(extract_variable_names_and_numdims(expr, ())))
+    arg_exprs = Expr[]
+    for v in args
+        if v ∈ vars
+            value = env[v]
+            if value isa Int
+                push!(arg_exprs, Expr(:(::), v, :Int))
+            elseif value isa Float64
+                push!(arg_exprs, Expr(:(::), v, :Float64))
+            elseif value isa Missing
+                push!(arg_exprs, Expr(:(::), v, :(Union{Int,Float64})))
+            elseif value isa AbstractArray
+                T = nonmissingtype(eltype(value))
+                if T === Union{}
+                    T = Float64
+                end
+                push!(arg_exprs, Expr(:(::), v, :(AbstractArray{$T})))
+            else
+                error("Unexpected argument type: $(typeof(value))")
+            end
+        else # loop variable
+            push!(arg_exprs, Expr(:(::), v, :Int))
+        end
+    end
+
+    return args, MacroTools.@q function (; $(arg_exprs...))
+        return $(expr)
     end
 end
 
-function create_array_var(n, env)
-    return Var(n, Tuple([1:i for i in size(env[n])]))
+mutable struct AddVertices <: CompilerPass
+    const env::NamedTuple
+    const g::MetaGraph
+    vertex_id_tracker::NamedTuple
+    const f_dict::Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}
 end
 
-function analyze_statement(pass::NodeFunctions, expr::Expr, loop_vars::NamedTuple)
+function AddVertices(model_def::Expr, eval_env::NamedTuple)
+    g = MetaGraph(DiGraph(); label_type=VarName, vertex_data_type=NodeInfo)
+    vertex_id_tracker = Dict{Symbol,Any}()
+    for (k, v) in pairs(eval_env)
+        if v isa AbstractArray
+            vertex_id_tracker[k] = zeros(Int, size(v))
+        else
+            vertex_id_tracker[k] = 0
+        end
+    end
+
+    f_dict = build_node_functions(
+        model_def, eval_env, Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}(), ()
+    )
+
+    return AddVertices(eval_env, g, NamedTuple(vertex_id_tracker), f_dict)
+end
+
+function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
+    lhs_expr = is_deterministic(expr) ? expr.args[1] : expr.args[2]
     env = merge(pass.env, loop_vars)
-
-    if is_deterministic(expr)
-        lhs_expr, rhs_expr = expr.args[1:2]
-        var_type = Logical
+    lhs = simplify_lhs(env, lhs_expr)
+    is_stochastic = false
+    is_observed = false
+    lhs_value = if lhs isa Symbol
+        env[lhs]
     else
-        lhs_expr, rhs_expr = expr.args[2:3]
-        var_type = Stochastic
+        var, indices... = lhs
+        env[var][indices...]
     end
-
-    simplified_lhs = simplify_lhs(env, lhs_expr)
-    lhs_var = if simplified_lhs isa Symbol
-        Var(simplified_lhs)
-    else
-        v, indices... = simplified_lhs
-        Var(v, Tuple(indices))
-    end
-    var_type == Logical &&
-        evaluate(lhs_expr, env) isa Union{Number,Array{<:Number}} &&
-        return nothing
-
-    pass.vars[lhs_var] = var_type
-    rhs = evaluate(rhs_expr, env)
-
-    if rhs isa Symbol
-        @assert lhs_var isa Union{Scalar,ArrayElement}
-        node_function = MacroTools.@q ($(rhs)) -> $(rhs)
-        node_args = [Var(rhs)]
-        dependencies = [Var(rhs)]
-    elseif Meta.isexpr(rhs, :ref) &&
-        all(x -> x isa Union{Number,UnitRange}, rhs.args[2:end])
-        @assert var_type == Logical # if rhs is a variable, then the expression must be logical
-        rhs_var = Var(rhs.args[1], Tuple(rhs.args[2:end]))
-        rhs_array_var = create_array_var(rhs_var.name, env)
-        size(rhs_var) == size(lhs_var) ||
-            error("Size mismatch between lhs and rhs at expression $expr")
-        if lhs_var isa ArrayElement
-            node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
-                $(rhs_var.name)[$(rhs_var.indices...)]
-            node_args = [rhs_array_var]
-            dependencies = [rhs_var]
-        else
-            # rhs is not evaluated into a concrete value, then at least some elements of the rhs array are not data
-            non_data_vars = filter(x -> x isa Var, evaluate(rhs_var, env))
-            # for now: evaluate(rhs_var, env) will produce scalarized `Var`s, so dependencies
-            # may contain `Auxiliary Nodes`, this should be okay, but maybe we should keep things uniform
-            # by keep `dependencies` only variables in the model, not auxiliary nodes
-            node_function = MacroTools.@q ($(rhs_var.name)::Array) ->
-                $(rhs_var.name)[$(rhs_var.indices...)]
-            node_args = [rhs_array_var]
-            dependencies = non_data_vars
+    if Meta.isexpr(expr, :(=))
+        if is_resolved(lhs_value)
+            return nothing
         end
     else
-        rhs_expr = replace_constants_in_expr(rhs_expr, env)
-        evaled_rhs, dependencies, node_args = evaluate_and_track_dependencies(rhs_expr, env)
-
-        # TODO: since we are not evaluating the node function expressions anymore, we don't have to store the expression like anonymous functions 
-        # rhs can be evaluated into a concrete value here, because including transformed variables in the data
-        # is effectively constant propagation
-        if is_resolved(evaled_rhs)
-            node_function = Expr(:(->), Expr(:tuple), Expr(:block, evaled_rhs))
-            node_args = []
-            # we can also directly save the evaled variable to `env` and later convert to var_store
-            # issue is that we need to do this in steps, const propagation need to a separate pass
-            # otherwise the variable in previous expressions will not be evaluated to the concrete value
-        else
-            node_args = collect(Any, node_args)
-            for i in eachindex(node_args)
-                if env[node_args[i]] isa AbstractArray
-                    node_args[i] = create_array_var(node_args[i], env)
-                else
-                    node_args[i] = Var(node_args[i])
-                end
-            end
-
-            dependencies = collect(Any, dependencies)
-            for i in eachindex(dependencies)
-                if dependencies[i] isa Symbol
-                    dependencies[i] = Var(dependencies[i])
-                else
-                    v, indices... = dependencies[i]
-                    dependencies[i] = Var(v, Tuple(indices))
-                end
-            end
-
-            args = similar(node_args, Any)
-            for (i, arg) in enumerate(node_args)
-                if arg isa ArrayVar
-                    args[i] = Expr(:(::), arg.name, :Array)
-                elseif arg isa Scalar
-                    args[i] = arg.name
-                else
-                    error("Unexpected argument type: $arg")
-                end
-            end
-            node_function = Expr(:(->), Expr(:tuple, args...), rhs_expr)
+        is_stochastic = true
+        if is_resolved(lhs_value)
+            is_observed = true
         end
     end
 
-    pass.node_args[lhs_var] = node_args
-    pass.node_functions[lhs_var] = node_function
-    return pass.dependencies[lhs_var] = dependencies
+    args, node_function_expr, node_function = pass.f_dict[expr]
+
+    vn = if lhs isa Symbol
+        AbstractPPL.VarName{lhs}(AbstractPPL.IdentityLens())
+    else
+        v, indices... = lhs
+        AbstractPPL.VarName{v}(AbstractPPL.IndexLens(indices))
+    end
+    add_vertex!(
+        pass.g,
+        vn,
+        NodeInfo(
+            is_stochastic, is_observed, node_function_expr, node_function, args, loop_vars
+        ),
+    )
+    if lhs isa Symbol
+        pass.vertex_id_tracker = BangBang.setproperty!!(
+            pass.vertex_id_tracker, lhs, code_for(pass.g, vn)
+        )
+    else
+        v, indices... = lhs
+        if any(indices) do i
+            i isa UnitRange
+        end
+            pass.vertex_id_tracker[v][indices...] .= code_for(pass.g, vn)
+        else
+            pass.vertex_id_tracker[v][indices...] = code_for(pass.g, vn)
+        end
+    end
 end
 
-function post_process(pass::NodeFunctions)
-    return pass.vars, pass.node_args, pass.node_functions, pass.dependencies
+struct AddEdges <: CompilerPass
+    env::NamedTuple
+    g::MetaGraph
+    vertex_id_tracker::NamedTuple
+end
+
+function analyze_statement(pass::AddEdges, expr::Expr, loop_vars::NamedTuple)
+    lhs_expr, rhs_expr = is_deterministic(expr) ? expr.args[1:2] : expr.args[2:3]
+    env = merge(pass.env, loop_vars)
+    lhs = simplify_lhs(env, lhs_expr)
+    lhs_value = if lhs isa Symbol
+        env[lhs]
+    else
+        var, indices... = lhs
+        env[var][indices...]
+    end
+    if Meta.isexpr(expr, :(=)) && is_resolved(lhs_value)
+        return nothing
+    end
+
+    _, dependencies = evaluate_and_track_dependencies(rhs_expr, env)
+
+    lhs_vn = if lhs isa Symbol
+        @varname($lhs)
+    else
+        v, indices... = lhs
+        AbstractPPL.VarName{v}(AbstractPPL.IndexLens(indices))
+    end
+
+    for var in dependencies
+        vertex_code = if var isa Symbol
+            pass.vertex_id_tracker[var]
+        else
+            v, indices... = var
+            pass.vertex_id_tracker[v][indices...]
+        end
+
+        vertex_code = filter(
+            !iszero, vertex_code isa AbstractArray ? vertex_code : [vertex_code]
+        )
+        vertex_labels = map(x -> label_for(pass.g, x), vertex_code)
+        for r in vertex_labels
+            if r != lhs_vn
+                add_edge!(pass.g, r, lhs_vn)
+            end
+        end
+    end
 end

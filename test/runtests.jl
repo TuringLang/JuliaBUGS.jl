@@ -6,28 +6,20 @@ using Bijectors
 using Distributions
 using Documenter
 using DynamicPPL
-using DynamicPPL: getlogp, settrans!!
+using DynamicPPL: getlogp, settrans!!, SimpleVarInfo
 using Graphs, MetaGraphsNext
 using JuliaBUGS
 using JuliaBUGS:
     BUGSGraph,
-    CollectVariables,
-    ConcreteNodeInfo,
-    DataTransformation,
     DefaultContext,
     evaluate!!,
     get_params_varinfo,
-    Logical,
     LogDensityContext,
     MHFromPrior,
-    NodeFunctions,
-    SimpleVarInfo,
-    Stochastic,
     stochastic_inneighbors,
     stochastic_neighbors,
     stochastic_outneighbors,
     markov_blanket,
-    Var,
     Gibbs
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.BUGSPrimitives: mean
@@ -37,9 +29,7 @@ using MacroTools
 using MCMCChains
 using Random
 using ReverseDiff
-using Setfield
 using Test
-using UnPack
 
 AbstractMCMC.setprogress!(false)
 
@@ -54,11 +44,8 @@ else
                 JuliaBUGS,
                 BUGSExamples,
                 @bugs,
-                Var,
-                create_array_var,
-                replace_constants_in_expr,
                 evaluate_and_track_dependencies,
-                scalarize,
+                evaluate,
                 concretize_colon_indexing,
                 extract_variable_names_and_numdims,
                 extract_variables_in_bounds_and_lhs_indices,
@@ -115,7 +102,6 @@ else
     include("passes.jl")
 
     @testset "Log Probability Test" begin
-        include("run_logp_tests.jl")
         @testset "Single stochastic variable test" begin
             @testset "test for $s" for s in [:binomial, :gamma, :lkj, :dwish, :ddirich]
                 include("logp_tests/$s.jl")

@@ -1,6 +1,6 @@
-bugs_model_def = JuliaBUGS.BUGSExamples.VOLUME_I[:blockers].model_def
-data = JuliaBUGS.BUGSExamples.VOLUME_I[:blockers].data
-inits = JuliaBUGS.BUGSExamples.VOLUME_I[:blockers].inits[1]
+bugs_model_def = JuliaBUGS.BUGSExamples.blockers.model_def
+data = JuliaBUGS.BUGSExamples.blockers.data
+inits = JuliaBUGS.BUGSExamples.blockers.inits[1]
 
 bugs_model = compile(bugs_model_def, data, inits)
 vi = bugs_model.varinfo
@@ -31,13 +31,17 @@ vi = bugs_model.varinfo
     return sigma
 end
 
-@unpack rt, nt, rc, nc, Num = data
+(; rt, nt, rc, nc, Num) = data
 dppl_model = blockers(rc, rt, nc, nt, Num)
 
 bugs_logp = JuliaBUGS.evaluate!!(JuliaBUGS.settrans(bugs_model, false), DefaultContext())[2]
 params_vi = JuliaBUGS.get_params_varinfo(bugs_model, vi)
 # test if JuliaBUGS and DynamicPPL agree on parameters in the model
-@test params_in_dppl_model(dppl_model) == keys(params_vi)
+@test keys(
+    DynamicPPL.evaluate!!(
+        dppl_model, SimpleVarInfo(Dict{VarName,Any}()), DynamicPPL.SamplingContext()
+    )[2],
+) == keys(params_vi)
 
 dppl_logp =
     DynamicPPL.evaluate!!(

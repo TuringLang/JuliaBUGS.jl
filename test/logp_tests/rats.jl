@@ -1,64 +1,49 @@
-# prepare data
-data = load_dictionary(:rats, :data, true)
-inits = load_dictionary(:rats, :init, true)
+model_def = JuliaBUGS.BUGSExamples.rats.model_def
+data = JuliaBUGS.BUGSExamples.rats.data
+inits = JuliaBUGS.BUGSExamples.rats.inits[1]
 
-@unpack N, T, x, xbar, Y = data
-
-# prepare models
-model_def = @bugs begin
-    for i in 1:N
-        for j in 1:T
-            Y[i, j] ~ dnorm(mu[i, j], tau_c)
-            mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)
-        end
-        alpha[i] ~ dnorm(alpha_c, alpha_tau)
-        beta[i] ~ dnorm(beta_c, beta_tau)
-    end
-    tau_c ~ dgamma(0.001, 0.001)
-    sigma = 1 / sqrt(tau_c)
-    alpha_c ~ dnorm(0.0, 1.0E-6)
-    alpha_tau ~ dgamma(0.001, 0.001)
-    beta_c ~ dnorm(0.0, 1.0E-6)
-    beta_tau ~ dgamma(0.001, 0.001)
-    alpha0 = alpha_c - xbar * beta_c
-end
 bugs_model = compile(model_def, data, inits);
 vi = bugs_model.varinfo
 
 @model function rats(Y, x, xbar, N, T)
-    tau_c ~ dgamma(0.001, 0.001)
-    sigma = 1 / sqrt(tau_c)
+    var"tau.c" ~ dgamma(0.001, 0.001)
+    sigma = 1 / sqrt(var"tau.c")
 
-    alpha_c ~ dnorm(0.0, 1.0E-6)
-    alpha_tau ~ dgamma(0.001, 0.001)
+    var"alpha.c" ~ dnorm(0.0, 1.0E-6)
+    var"alpha.tau" ~ dgamma(0.001, 0.001)
 
-    beta_c ~ dnorm(0.0, 1.0E-6)
-    beta_tau ~ dgamma(0.001, 0.001)
+    var"beta.c" ~ dnorm(0.0, 1.0E-6)
+    var"beta.tau" ~ dgamma(0.001, 0.001)
 
-    alpha0 = alpha_c - xbar * beta_c
+    alpha0 = var"alpha.c" - xbar * var"beta.c"
 
     alpha = Vector{Real}(undef, N)
     beta = Vector{Real}(undef, N)
 
     for i in 1:N
-        alpha[i] ~ dnorm(alpha_c, alpha_tau)
-        beta[i] ~ dnorm(beta_c, beta_tau)
+        alpha[i] ~ dnorm(var"alpha.c", var"alpha.tau")
+        beta[i] ~ dnorm(var"beta.c", var"beta.tau")
 
         for j in 1:T
             mu = alpha[i] + beta[i] * (x[j] - xbar)
-            Y[i, j] ~ dnorm(mu, tau_c)
+            Y[i, j] ~ dnorm(mu, var"tau.c")
         end
     end
 
     return sigma, alpha0
 end
+(; N, T, x, xbar, Y) = data
 dppl_model = rats(Y, x, xbar, N, T)
 
 bugs_model = JuliaBUGS.settrans(bugs_model, false)
 bugs_logp = JuliaBUGS.evaluate!!(bugs_model, DefaultContext())[2]
 params_vi = JuliaBUGS.get_params_varinfo(bugs_model, vi)
 # test if JuliaBUGS and DynamicPPL agree on parameters in the model
-@test params_in_dppl_model(dppl_model) == keys(params_vi)
+@test keys(
+    DynamicPPL.evaluate!!(
+        dppl_model, SimpleVarInfo(Dict{VarName,Any}()), DynamicPPL.SamplingContext()
+    )[2],
+) == keys(params_vi)
 
 dppl_logp =
     DynamicPPL.evaluate!!(

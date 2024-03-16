@@ -10,7 +10,6 @@ using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.Random
 using JuliaBUGS.Bijectors
-using JuliaBUGS.UnPack
 using MCMCChains: Chains
 import JuliaBUGS: gibbs_internal
 

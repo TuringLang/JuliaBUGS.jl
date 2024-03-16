@@ -10,9 +10,7 @@ using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
 using MetaGraphsNext
 using Random
-using Setfield
 using StaticArrays
-using UnPack
 
 using DynamicPPL: DynamicPPL, SimpleVarInfo
 
@@ -33,9 +31,8 @@ include("parser/Parser.jl")
 using .Parser
 
 include("utils.jl")
-include("variable_types.jl")
-include("compiler_pass.jl")
 include("graphs.jl")
+include("compiler_pass.jl")
 include("model.jl")
 include("logdensityproblems.jl")
 include("gibbs.jl")
@@ -127,11 +124,13 @@ function finish_checking_repeated_assignments(
     end
 end
 
-function compute_node_functions(model_def, eval_env)
-    pass = NodeFunctions(eval_env)
+function create_graph(model_def, eval_env)
+    pass = AddVertices(model_def, eval_env)
     analyze_block(pass, model_def)
-    vars, node_args, node_functions, dependencies = post_process(pass)
-    return vars, node_args, node_functions, dependencies
+    pass = AddEdges(pass.env, pass.g, pass.vertex_id_tracker)
+    analyze_block(pass, model_def)
+
+    return pass.g
 end
 
 function semantic_analysis(model_def, data)
@@ -164,12 +163,8 @@ function compile(model_def::Expr, data, inits; is_transformed=true)
     data, inits = check_input(data), check_input(inits)
     eval_env = semantic_analysis(model_def, data)
     model_def = concretize_colon_indexing(model_def, eval_env)
-    vars, node_args, node_functions, dependencies = compute_node_functions(
-        model_def, eval_env
-    )
-    g = create_BUGSGraph(vars, node_args, node_functions, dependencies)
-    sorted_nodes = map(Base.Fix1(label_for, g), topological_sort(g))
-    return BUGSModel(g, sorted_nodes, eval_env, inits; is_transformed=is_transformed)
+    g = create_graph(model_def, eval_env)
+    return BUGSModel(g, eval_env, inits; is_transformed=is_transformed)
 end
 
 """
