@@ -108,7 +108,7 @@ return an array of the same size as `v` with the values of `v` in `env` and `Var
 represent a multi-dimensional array, the return value is always scalarized, even when no array elements are data.
 
 # Examples
-```jldoctest
+```jldoctest; setup=:(using JuliaBUGS: evaluate)
 julia> evaluate(Var(:x, (1:2, )), Dict(:x => [1, missing]))
 2-element Vector{Any}:
  1
