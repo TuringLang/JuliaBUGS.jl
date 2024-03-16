@@ -627,7 +627,8 @@ function build_node_functions(
                 statement.args[3]
             end
             args, node_func_expr = make_function_expr(rhs, eval_env)
-            node_func = eval(node_func_expr)
+            # node_func = eval(node_func_expr)
+            node_func = nothing
             f_dict[statement] = (args, node_func_expr, node_func)
         elseif Meta.isexpr(statement, :for)
             loop_var, _, _, body = decompose_for_expr(statement)
