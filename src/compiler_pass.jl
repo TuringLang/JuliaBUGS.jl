@@ -617,7 +617,7 @@ function build_node_functions(
     expr::Expr,
     eval_env::NamedTuple,
     f_dict::Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}},
-    loop_vars,
+    loop_vars::Tuple{Vararg{Symbol}},
 )
     for statement in expr.args
         if is_deterministic(statement) || is_stochastic(statement)
@@ -626,10 +626,9 @@ function build_node_functions(
             else
                 statement.args[3]
             end
-            rhs_vars = Tuple(keys(extract_variable_names_and_numdims(rhs, ())))
-            args = Tuple(setdiff(rhs_vars, (loop_vars)))
-            node_func_expr = make_function_expr(rhs, args, eval_env)
-            f_dict[statement] = (args, node_func_expr, eval(node_func_expr))
+            args, node_func_expr = make_function_expr(rhs, eval_env)
+            node_func = eval(node_func_expr)
+            f_dict[statement] = (args, node_func_expr, node_func)
         elseif Meta.isexpr(statement, :for)
             loop_var, _, _, body = decompose_for_expr(statement)
             build_node_functions(body, eval_env, f_dict, (loop_var, loop_vars...))
@@ -641,9 +640,10 @@ function build_node_functions(
 end
 
 function make_function_expr(
-    expr, args::Tuple{Vararg{Symbol}}, env::NamedTuple{vars}
+    expr, env::NamedTuple{vars}
 ) where {vars}
-    arg_exprs = []
+    args = Tuple(keys(extract_variable_names_and_numdims(expr, ())))
+    arg_exprs = Expr[]
     for v in args
         if v ∈ vars
             value = env[v]
@@ -651,24 +651,23 @@ function make_function_expr(
                 push!(arg_exprs, Expr(:(::), v, :Int))
             elseif value isa Float64
                 push!(arg_exprs, Expr(:(::), v, :Float64))
-            elseif value isa Missing # missing will be initialized to 0.0
-                push!(arg_exprs, Expr(:(::), v, :(Float64)))
+            elseif value isa Missing
+                push!(arg_exprs, Expr(:(::), v, :(Union{Int,Float64})))
             elseif value isa AbstractArray
                 T = nonmissingtype(eltype(value))
                 if T === Union{}
                     T = Float64
                 end
-                # TODO: maybe can narrow to `Array`
                 push!(arg_exprs, Expr(:(::), v, :(AbstractArray{$T})))
             else
                 error("Unexpected argument type: $(typeof(value))")
             end
-        else # loop vars
+        else # loop variable
             push!(arg_exprs, Expr(:(::), v, :Int))
         end
     end
 
-    return MacroTools.@q function ($(arg_exprs...))
+    return args, MacroTools.@q function (;$(arg_exprs...))
         return $(expr)
     end
 end
@@ -789,7 +788,9 @@ function analyze_statement(pass::AddEdges, expr::Expr, loop_vars::NamedTuple)
             pass.vertex_id_tracker[v][indices...]
         end
 
-        vertex_code = filter(!iszero, vertex_code isa AbstractArray ? vertex_code : [vertex_code])
+        vertex_code = filter(
+            !iszero, vertex_code isa AbstractArray ? vertex_code : [vertex_code]
+        )
         vertex_labels = map(x -> label_for(pass.g, x), vertex_code)
         for r in vertex_labels
             if r != lhs_vn
