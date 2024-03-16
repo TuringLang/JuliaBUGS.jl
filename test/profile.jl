@@ -29,9 +29,7 @@ for name in keys(BUGSExamples.VOLUME_I)
     )
 
     model_def = JuliaBUGS.concretize_colon_indexing(model_def, eval_env)
-    _suite["GraphCreation"] = @benchmarkable JuliaBUGS.create_graph(
-        $model_def, $eval_env
-    )
+    _suite["GraphCreation"] = @benchmarkable JuliaBUGS.create_graph($model_def, $eval_env)
 
     tune!(_suite)
     suite[string(name)] = _suite
