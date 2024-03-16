@@ -123,7 +123,6 @@ function BUGSModel(
 
     for vn in sorted_nodes
         (; is_stochastic, is_observed, node_function_expr, node_function, node_args, loop_vars) = g[vn]
-        arg_values = prepare_arg_values(node_args, vi, loop_vars)
         args = prepare_arg_values(node_args, vi, loop_vars)
         expr = node_function_expr.args[2].args[1].args[1]
         if !is_stochastic
@@ -134,13 +133,17 @@ function BUGSModel(
             dist = bugs_eval(expr, args, distributions)
             # dist = Base.invokelatest(node_function; arg_values...)
             distributions[vn] = dist
-            if !is_observed
-                push!(parameters, vn)
-                untransformed_var_lengths[vn] = length(dist)
-                transformed_var_lengths[vn] = length(Bijectors.transformed(dist))
-                untransformed_param_length += untransformed_var_lengths[vn]
-                transformed_param_length += transformed_var_lengths[vn]
+            
+            if is_observed
+                continue
             end
+            
+            push!(parameters, vn)
+            untransformed_var_lengths[vn] = length(dist)
+            transformed_var_lengths[vn] = length(Bijectors.transformed(dist))
+            untransformed_param_length += untransformed_var_lengths[vn]
+            transformed_param_length += transformed_var_lengths[vn]
+            
             initialization = try
                 AbstractPPL.get(inits, vn)
             catch _
