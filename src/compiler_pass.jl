@@ -668,7 +668,7 @@ function make_function_expr(
         end
     end
 
-    return args, MacroTools.@q function (;$(arg_exprs...))
+    return args, MacroTools.@q function (; $(arg_exprs...))
         return $(expr)
     end
 end
