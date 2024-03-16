@@ -27,10 +27,14 @@
 
     model = compile(model_def, data, (;))
     # use NamedTuple for SimpleVarinfo
-    model = @set model.varinfo = begin
-        vi = model.varinfo
-        SimpleVarInfo(DynamicPPL.values_as(vi, NamedTuple), vi.logp, vi.transformation)
-    end
+    model = JuliaBUGS.BangBang.setproperty!!(
+        model,
+        :varinfo,
+        begin
+            vi = model.varinfo
+            SimpleVarInfo(DynamicPPL.values_as(vi, NamedTuple), vi.logp, vi.transformation)
+        end,
+    )
 
     # single step
     p_s, st_init = AbstractMCMC.step(

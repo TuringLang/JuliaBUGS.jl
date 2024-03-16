@@ -102,15 +102,6 @@ else
     include("passes.jl")
 
     @testset "Log Probability Test" begin
-        function params_in_dppl_model(dppl_model)
-            return keys(
-                DynamicPPL.evaluate!!(
-                    dppl_model,
-                    SimpleVarInfo(Dict{VarName,Any}()),
-                    DynamicPPL.SamplingContext(),
-                )[2],
-            )
-        end
         @testset "Single stochastic variable test" begin
             @testset "test for $s" for s in [:binomial, :gamma, :lkj, :dwish, :ddirich]
                 include("logp_tests/$s.jl")

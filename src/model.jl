@@ -133,17 +133,22 @@ function BUGSModel(
             dist = bugs_eval(expr, args, distributions)
             # dist = Base.invokelatest(node_function; arg_values...)
             distributions[vn] = dist
-            
+
             if is_observed
                 continue
             end
-            
+
             push!(parameters, vn)
             untransformed_var_lengths[vn] = length(dist)
-            transformed_var_lengths[vn] = length(Bijectors.transformed(dist))
+            # not all distributions are defined for `Bijectors.transformed`
+            transformed_var_lengths[vn] = if bijector(dist) == identity
+                untransformed_var_lengths[vn]
+            else
+                length(Bijectors.transformed(dist))
+            end
             untransformed_param_length += untransformed_var_lengths[vn]
             transformed_param_length += transformed_var_lengths[vn]
-            
+
             initialization = try
                 AbstractPPL.get(inits, vn)
             catch _
@@ -373,7 +378,7 @@ end
 
 function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
     non_vars = filter(var -> var ∉ labels(model.g), var_group)
-    logical_vars = filter(var -> model.g[var].node_type == Logical, var_group)
+    logical_vars = filter(var -> !model.g[var].is_stochastic, var_group)
     isempty(non_vars) || error("Variables $(non_vars) are not in the model")
     return isempty(logical_vars) || error(
         "Variables $(logical_vars) are not stochastic variables, conditioning on them is not supported",

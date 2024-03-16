@@ -31,7 +31,7 @@ function find_generated_vars(g)
 
     generated_vars = VarName[]
     for n in graph_roots
-        if g[n].node_type == Logical
+        if !g[n].is_stochastic
             push!(generated_vars, n) # graph roots that are Logical nodes are generated variables
             find_generated_vars_recursive_helper(g, n, generated_vars)
         end
@@ -111,18 +111,10 @@ function stochastic_neighbors(
     stochastic_neighbors_vec = VarName[]
     logical_en_route = VarName[] # logical variables
     for u in f(g, v)
-        if g[u] isa ConcreteNodeInfo
-            if g[u].node_type == Stochastic
-                push!(stochastic_neighbors_vec, u)
-            else
-                push!(logical_en_route, u)
-                ns = stochastic_neighbors(g, u, f)
-                for n in ns
-                    push!(stochastic_neighbors_vec, n)
-                end
-            end
+        if g[u].is_stochastic
+            push!(stochastic_neighbors_vec, u)
         else
-            # auxiliary nodes are not counted as logical nodes
+            push!(logical_en_route, u)
             ns = stochastic_neighbors(g, u, f)
             for n in ns
                 push!(stochastic_neighbors_vec, n)

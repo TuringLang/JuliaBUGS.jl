@@ -39,7 +39,11 @@ dppl_model = bones(grade, nChild, nInd, ncat, gamma, delta)
 bugs_logp = JuliaBUGS.evaluate!!(JuliaBUGS.settrans(bugs_model, false), DefaultContext())[2]
 params_vi = JuliaBUGS.get_params_varinfo(bugs_model, vi)
 # test if JuliaBUGS and DynamicPPL agree on parameters in the model
-@test params_in_dppl_model(dppl_model) == keys(params_vi)
+@test keys(
+    DynamicPPL.evaluate!!(
+        dppl_model, SimpleVarInfo(Dict{VarName,Any}()), DynamicPPL.SamplingContext()
+    )[2],
+) == keys(params_vi)
 
 dppl_logp =
     DynamicPPL.evaluate!!(
