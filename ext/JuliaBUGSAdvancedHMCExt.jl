@@ -11,7 +11,7 @@ using JuliaBUGS:
     find_generated_vars,
     LogDensityContext,
     evaluate!!,
-    _eval
+    bugs_eval
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.DynamicPPL
 using JuliaBUGS.LogDensityProblems
