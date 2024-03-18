@@ -23,7 +23,6 @@ export compile
 
 export @varname
 
-# user defined functions and distributions are not supported yet
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
 
