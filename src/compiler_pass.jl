@@ -613,6 +613,42 @@ function evaluate_and_track_dependencies(var::Expr, env)
     end
 end
 
+"""
+    AddVertices
+
+This pass will add a vertex for every instance of LHS in the model. 
+
+The node functions are the same for all the nodes whose corresponding LHS are originated from the same statement. 
+The values of loop variables at the time LHS is evaluated will be saved. 
+
+`vertex_id_tracker` tracks the vertex ID of each variable in the model. This is used to efficiently decide target 
+vertices in pass `AddEdges`.
+"""
+mutable struct AddVertices <: CompilerPass
+    const env::NamedTuple
+    const g::MetaGraph
+    vertex_id_tracker::NamedTuple
+    const f_dict::Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}
+end
+
+function AddVertices(model_def::Expr, eval_env::NamedTuple)
+    g = MetaGraph(DiGraph(); label_type=VarName, vertex_data_type=NodeInfo)
+    vertex_id_tracker = Dict{Symbol,Any}()
+    for (k, v) in pairs(eval_env)
+        if v isa AbstractArray
+            vertex_id_tracker[k] = zeros(Int, size(v))
+        else
+            vertex_id_tracker[k] = 0
+        end
+    end
+
+    f_dict = build_node_functions(
+        model_def, eval_env, Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}(), ()
+    )
+
+    return AddVertices(eval_env, g, NamedTuple(vertex_id_tracker), f_dict)
+end
+
 function build_node_functions(
     expr::Expr,
     eval_env::NamedTuple,
@@ -671,31 +707,6 @@ function make_function_expr(expr, env::NamedTuple{vars}) where {vars}
     end
 end
 
-mutable struct AddVertices <: CompilerPass
-    const env::NamedTuple
-    const g::MetaGraph
-    vertex_id_tracker::NamedTuple
-    const f_dict::Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}
-end
-
-function AddVertices(model_def::Expr, eval_env::NamedTuple)
-    g = MetaGraph(DiGraph(); label_type=VarName, vertex_data_type=NodeInfo)
-    vertex_id_tracker = Dict{Symbol,Any}()
-    for (k, v) in pairs(eval_env)
-        if v isa AbstractArray
-            vertex_id_tracker[k] = zeros(Int, size(v))
-        else
-            vertex_id_tracker[k] = 0
-        end
-    end
-
-    f_dict = build_node_functions(
-        model_def, eval_env, Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}(), ()
-    )
-
-    return AddVertices(eval_env, g, NamedTuple(vertex_id_tracker), f_dict)
-end
-
 function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
     lhs_expr = is_deterministic(expr) ? expr.args[1] : expr.args[2]
     env = merge(pass.env, loop_vars)
@@ -750,6 +761,11 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
     end
 end
 
+"""
+    AddEdges
+
+This pass will add edges to the graph constructed in pass `AddVertices`. 
+"""
 struct AddEdges <: CompilerPass
     env::NamedTuple
     g::MetaGraph

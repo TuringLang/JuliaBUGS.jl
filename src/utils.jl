@@ -1,3 +1,13 @@
+"""
+    create_eval_env(non_data_scalars, non_data_array_sizes, data)
+
+Constructs an `NamedTuple` containing all the variables defined or used in the program. 
+
+Arrays given by data will only be copied if they contain `missing` values. This copy behavior ensures 
+that the evaluation environment is a self-contained snapshot, avoiding unintended side effects on the input data.
+
+Variables not given by data will be assigned `missing` values.
+"""
 function create_eval_env(
     non_data_scalars::Tuple{Vararg{Symbol}},
     non_data_array_sizes::NamedTuple{non_data_array_vars},
@@ -30,6 +40,20 @@ function create_eval_env(
     return NamedTuple(eval_env)
 end
 
+"""
+    concretize_eval_env(eval_env::NamedTuple)
+
+For arrays in `eval_env`, if its `eltype` is `Union{Missing, T}` where `T` is a concrete type, then 
+it tries to convert the array to `AbstractArray{T}`. If the conversion is not possible, it leaves 
+the array unchanged.
+
+# Examples
+```jldoctest; setup = :(using JuliaBUGS: concretize_eval_env)
+julia> concretize_eval_env((a = Union{Missing,Int}[1, 2, 3],))
+(a = [1, 2, 3],)
+
+```
+"""
 function concretize_eval_env(eval_env::NamedTuple)
     for k in keys(eval_env)
         v = eval_env[k]
@@ -578,69 +602,3 @@ end
 function bugs_eval(expr, env, dist_store)
     return error("Unknown expression type: $expr of type $(typeof(expr))")
 end
-
-"""
-    evaluate(vn::VarName, env)
-
-Retrieve the value of a possible variable identified by `vn` from `env`, return `nothing` if not found.
-"""
-function evaluate(vn::VarName, env)
-    sym = getsym(vn)
-    ret = nothing
-    try
-        ret = get(env[sym], getlens(vn))
-    catch _
-    end
-    return ismissing(ret) ? nothing : ret
-end
-
-# Resolves: setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
-# Alternatively, can overload BangBang.possible(
-#     ::typeof(BangBang._setindex!), ::C, ::T, ::Vararg
-# )
-# to allow mutation, but the current solution seems create less possible problems, albeit less efficient.
-function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
-    T = promote_type(eltype(xs), eltype(v))
-    ys = similar(xs, T)
-    if eltype(xs) !== Union{}
-        copy!(ys, xs)
-    end
-    ys[I...] = v
-    return ys
-end
-
-# defines some default bijectors for link functions
-# these are currently not in use, because we transform the expression by calling inverse functions 
-# on the RHS (in the case of logical assignment) or disallow the use of link functions (in the case of
-# stochastic assignments)
-
-struct LogisticBijector <: Bijectors.Bijector end
-
-Bijectors.transform(::LogisticBijector, x::Real) = logistic(x)
-Bijectors.transform(::Inverse{LogisticBijector}, x::Real) = logit(x)
-Bijectors.logabsdet(::LogisticBijector, x::Real) = log(logistic(x)) + log(1 - logistic(x))
-
-struct CExpExpBijector <: Bijectors.Bijector end
-
-Bijectors.transform(::CExpExpBijector, x::Real) = icloglog(x)
-Bijectors.transform(::Inverse{CExpExpBijector}, x::Real) = cloglog(x)
-Bijectors.logabsdet(::CExpExpBijector, x::Real) = -log(cloglog(-x))
-
-struct ExpBijector <: Bijectors.Bijector end
-
-Bijectors.transform(::ExpBijector, x::Real) = exp(x)
-Bijectors.transform(::Inverse{ExpBijector}, x::Real) = log(x)
-Bijectors.logabsdet(::ExpBijector, x::Real) = x
-
-struct PhiBijector <: Bijectors.Bijector end
-
-Bijectors.transform(::PhiBijector, x::Real) = phi(x)
-Bijectors.transform(::Inverse{PhiBijector}, x::Real) = probit(x)
-Bijectors.logabsdet(::PhiBijector, x::Real) = -0.5 * (x^2 + log(2π))
-
-link_function_to_bijector_mapping = Dict(
-    :logit => LogisticBijector(),
-    :cloglog => CExpExpBijector(),
-    :log => ExpBijector(),
-    :probit => PhiBijector(),
-)
