@@ -603,6 +603,7 @@ function bugs_eval(expr, env, dist_store)
     return error("Unknown expression type: $expr of type $(typeof(expr))")
 end
 
+# TODO: can't remove even with the `possible` fix in DynamicPPL, still seems to have eltype inference issue causing AD errors
 # Resolves: setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
 # Alternatively, can overload BangBang.possible(
 #     ::typeof(BangBang._setindex!), ::C, ::T, ::Vararg
