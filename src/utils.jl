@@ -602,3 +602,18 @@ end
 function bugs_eval(expr, env, dist_store)
     return error("Unknown expression type: $expr of type $(typeof(expr))")
 end
+
+# Resolves: setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
+# Alternatively, can overload BangBang.possible(
+#     ::typeof(BangBang._setindex!), ::C, ::T, ::Vararg
+# )
+# to allow mutation, but the current solution seems create less possible problems, albeit less efficient.
+function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
+    T = promote_type(eltype(xs), eltype(v))
+    ys = similar(xs, T)
+    if eltype(xs) !== Union{}
+        copy!(ys, xs)
+    end
+    ys[I...] = v
+    return ys
+end
