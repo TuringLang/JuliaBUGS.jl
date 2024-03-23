@@ -1,3 +1,3 @@
 ```@docs
-rats
+JuliaBUGS.BUGSExamples.rats
 ```
