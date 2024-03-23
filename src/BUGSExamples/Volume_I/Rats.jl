@@ -1,28 +1,61 @@
 # https://chjackson.github.io/openbugsdoc/Examples/Rats.html
 
+"""
+    Rats
+
+This example is taken from section 6 of *Gelfand et al. (1990)*, and concerns 30 young rats whose
+weights were measured weekly for five weeks. Part of the data is shown below, where ``Y_{ij}`` is the
+weight of the ``i^{th}`` rat measured at age ``x_j``.
+
+# Table: Weights ``Y_{ij}`` of rat ``i`` on day ``x_j``
+
+| Rat   | `x_j=8` | `x_j=15` | `x_j=22` | `x_j=29` | `x_j=36` |
+|-------|---------|----------|----------|----------|----------|
+| Rat 1 |     151 |      199 |      246 |      283 |      320 |
+| Rat 2 |     145 |      199 |      249 |      293 |      354 |
+| ...   |     ... |      ... |      ... |      ... |      ... |
+| Rat 30|     153 |      200 |      244 |      286 |      324 |
+
+A plot of the 30 growth curves suggests some evidence of downward curvature.
+
+The model is essentially a random effects linear growth curve
+
+```math
+Y_{ij} \\sim Normal(a_i + b_i (x_j - \\bar{x}), tau_c)
+a_i \\sim Normal(a_c, tau_a)
+b_i \\sim Normal(b_c, tau_b)
+```
+
+where `\bar{x} = 22`, and `τ` represents the precision (`1/variance`) of a normal distribution. We note the
+absence of a parameter representing correlation between `a_i` and `b_i` unlike in *Gelfand et al. (1990)*.
+However, see the *Birats* example in Volume 2 which does explicitly model the covariance
+between `a_i` and `b_i`. For now, we standardize the `x_j`'s around their mean to reduce dependence
+between `a_i` and `b_i` in their likelihood: in fact, for the full balanced data, complete independence is
+achieved. (Note that, in general, prior independence does not force the posterior distributions to
+be independent).
+
+`a_c`, `τ_a`, `b_c`, `τ_b`, `τ_c` are given independent "noninformative" priors. Interest particularly focuses on
+the intercept at zero time (birth), denoted `a_0 = a_c - b_c · \bar{x}`.
+"""
 rats = (
     name="Rats",
-    model_def=@bugs(
-        """
-    for( i in 1 : N ) {
-        for( j in 1 : T ) {
-        Y[i , j] ~ dnorm(mu[i , j],tau.c)
-        mu[i , j] <- alpha[i] + beta[i] * (x[j] - xbar)
-        }
-        alpha[i] ~ dnorm(alpha.c,alpha.tau)
-        beta[i] ~ dnorm(beta.c,beta.tau)
-    }
-    tau.c ~ dgamma(0.001,0.001)
-    sigma <- 1 / sqrt(tau.c)
-    alpha.c ~ dnorm(0.0,1.0E-6)   
-    alpha.tau ~ dgamma(0.001,0.001)
-    beta.c ~ dnorm(0.0,1.0E-6)
-    beta.tau ~ dgamma(0.001,0.001)
-    alpha0 <- alpha.c - xbar * beta.c
-""",
-        false,
-        true
-    ),
+    model_def=@bugs(begin
+        for  i in 1 : N    
+            for  j in 1 : T    
+            Y[i , j] ~ dnorm(mu[i , j],var"tau.c")
+            mu[i , j] = alpha[i] + beta[i] * (x[j] - xbar)
+             end
+            alpha[i] ~ dnorm(var"alpha.c",var"alpha.tau")
+            beta[i] ~ dnorm(var"beta.c",var"beta.tau")
+         end
+        var"tau.c" ~ dgamma(0.001,0.001)
+        sigma = 1 / sqrt(var"tau.c")
+        var"alpha.c" ~ dnorm(0.0,1.0E-6)   
+        var"alpha.tau" ~ dgamma(0.001,0.001)
+        var"beta.c" ~ dnorm(0.0,1.0E-6)
+        var"beta.tau" ~ dgamma(0.001,0.001)
+        alpha0 = var"alpha.c" - xbar * var"beta.c"
+    end),
     data=(
         x=[8.0, 15.0, 22.0, 29.0, 36.0],
         xbar=22,

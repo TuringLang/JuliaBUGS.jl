@@ -21,6 +21,7 @@ makedocs(;
         "Pitfalls" => "pitfalls.md",
         "For Developers" =>
             ["Parser" => "parser.md", "Notes on BUGS Implementations" => "BUGS_notes.md"],
+        "Examples" => "BUGSExamples.md"
     ],
 )
 
