@@ -276,4 +276,4 @@ Note that the `init_params` argument is now a vector of initial parameters for e
 Sometimes the progress logger can cause problems in distributed setting, so we can disable it by setting `progress = false`.
 
 ## More Examples
-We have transcribed all the examples from the first volume of the BUGS Examples ([original](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/JuliaBUGS.jl/tree/master/src/BUGSExamples/Volume_I)). All programs and data are included, and can be compiled using the steps described in the tutorial above.
+We have transcribed all the examples from the first volume of the BUGS Examples ([original](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/JuliaBUGS.jl/tree/master/src/BUGSExamples/VOLUME_1)). All programs and data are included, and can be compiled using the steps described in the tutorial above.

@@ -52,10 +52,10 @@ elseif test_group == "analysis_passes"
     include("passes.jl")
 elseif test_group == "compile_BUGS_examples"
     @testset "BUGS examples volume 1" begin
-        @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_I)
-            model_def = JuliaBUGS.BUGSExamples.VOLUME_I[m].model_def
-            data = JuliaBUGS.BUGSExamples.VOLUME_I[m].data
-            inits = JuliaBUGS.BUGSExamples.VOLUME_I[m].inits[1]
+        @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
+            model_def = JuliaBUGS.BUGSExamples.VOLUME_1[m].model_def
+            data = JuliaBUGS.BUGSExamples.VOLUME_1[m].data
+            inits = JuliaBUGS.BUGSExamples.VOLUME_1[m].inits[1]
             model = compile(model_def, data, inits)
         end
     end

@@ -1,6 +1,6 @@
-bugs_model_def = JuliaBUGS.BUGSExamples.VOLUME_I[:bones].model_def
-data = JuliaBUGS.BUGSExamples.VOLUME_I[:bones].data
-inits = JuliaBUGS.BUGSExamples.VOLUME_I[:bones].inits[1]
+bugs_model_def = JuliaBUGS.BUGSExamples.VOLUME_1[:bones].model_def
+data = JuliaBUGS.BUGSExamples.VOLUME_1[:bones].data
+inits = JuliaBUGS.BUGSExamples.VOLUME_1[:bones].inits[1]
 
 bugs_model = compile(bugs_model_def, data, inits)
 vi = bugs_model.varinfo
