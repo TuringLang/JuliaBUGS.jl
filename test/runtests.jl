@@ -32,78 +32,45 @@ using Test
 
 AbstractMCMC.setprogress!(false)
 
-if get(ENV, "RUN_MODE", "test") == "profile"
+const test_group = get(ENV, "TEST_GROUP", "")
+
+if test_group == "profile"
     include("profile.jl")
-else
-    @testset "Function Unit Tests" begin
+elseif test_group == "unit"
+    @testset "doctests" begin
         DocMeta.setdocmeta!(JuliaBUGS, :DocTestSetup, :(using JuliaBUGS); recursive=true)
         Documenter.doctest(JuliaBUGS; manual=false)
     end
-
-    include("bugs_primitives.jl")
-
+    include("utils.jl")
+elseif test_group == "parser"
     @testset "Parser" begin
         include("parser/bugs_macro.jl")
         include("parser/bugs_parser.jl")
         include("parser/winbugs_examples.jl")
     end
-
-    include("compile.jl")
-
-    include("cumulative_density.jl")
-
-    @testset "Compile WinBUGS Vol I examples: $m" for m in [
-        :blockers,
-        :bones,
-        :dogs,
-        :dyes,
-        :epil,
-        :equiv,
-        :kidney,
-        :leuk,
-        :leukfr,
-        :lsat,
-        :magnesium,
-        :mice,
-        :oxford,
-        :pumps,
-        :rats,
-        :salm,
-        :seeds,
-        :stacks,
-        :surgical_simple,
-        :surgical_realistic,
-    ]
-        model_def = JuliaBUGS.BUGSExamples.VOLUME_I[m].model_def
-        data = JuliaBUGS.BUGSExamples.VOLUME_I[m].data
-        inits = JuliaBUGS.BUGSExamples.VOLUME_I[m].inits[1]
-        model = compile(model_def, data, inits)
-    end
-
-    @testset "Utils" begin
-        include("utils.jl")
-    end
-
+elseif test_group == "analysis_passes"
     include("passes.jl")
-
-    @testset "Log Probability Test" begin
-        @testset "Single stochastic variable test" begin
-            @testset "test for $s" for s in [:binomial, :gamma, :lkj, :dwish, :ddirich]
-                include("logp_tests/$s.jl")
-            end
-        end
-        @testset "BUGS examples" begin
-            @testset "test for $s" for s in [:blockers, :bones, :dogs, :rats]
-                include("logp_tests/$s.jl")
-            end
+elseif test_group == "compile_BUGS_examples"
+    @testset "BUGS examples volume 1" begin
+        @testset "$m"  for m in keys(JuliaBUGS.BUGSExamples.VOLUME_I)
+            model_def = JuliaBUGS.BUGSExamples.VOLUME_I[m].model_def
+            data = JuliaBUGS.BUGSExamples.VOLUME_I[m].data
+            inits = JuliaBUGS.BUGSExamples.VOLUME_I[m].inits[1]
+            model = compile(model_def, data, inits)
         end
     end
-
-    @testset "Graph data structure" begin
-        include("graphs.jl")
+elseif test_group == "corner_cases"
+    @testset "Some corner cases" begin
+        include("bugs_primitives.jl")
+        include("compile.jl")
+        include("cumulative_density.jl")     
     end
-
+elseif test_group == "graph"
+    include("graphs.jl")
+elseif test_group == "gibbs"
     include("gibbs.jl")
-
+elseif test_group == "mcmchains"
     include("ext/mcmchains.jl")
+else
+    # nothing
 end
