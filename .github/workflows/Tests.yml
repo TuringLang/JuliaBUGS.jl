@@ -24,27 +24,30 @@ jobs:
             os: ubuntu-latest
             arch: x64
             coverage: true
+    env:
+      CACHE_NAME: julia-${{ matrix.version }}-${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: actions/cache@v4
+      - name: Cache Julia packages and artifacts
+        uses: actions/cache@v4
         with:
-          path: ~/.julia/artifacts
-          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('**/Project.toml') }}
+          path: |
+            ~/.julia
+            ~/.julia/artifacts
+          key: ${{ runner.os }}-${{ env.CACHE_NAME }}-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
           restore-keys: |
-            ${{ runner.os }}-test-${{ env.cache-name }}-
-            ${{ runner.os }}-test-
-            ${{ runner.os }}-
-        env:
-          cache-name: cache-artifacts
+            ${{ runner.os }}-${{ env.CACHE_NAME }}-
+            ${{ runner.os }}-julia-${{ matrix.version }}-
+            ${{ runner.os }}-julia-
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1
         if: matrix.coverage
-      - uses: codecov/codecov-action@v1
+      - uses: codecov/codecov-action@v4
         if: matrix.coverage
         with:
           file: lcov.info
