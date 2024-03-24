@@ -9,7 +9,7 @@ on:
 
 jobs:
   test:
-    name: Julia ${{ matrix.version }} on ${{ matrix.os }} (${{ matrix.arch }})
+    name: Julia ${{ matrix.version }} on ${{ matrix.os }} (${{ matrix.arch }}) ${{ matrix.test_group }}
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.version == 'nightly' }}
     strategy:
