@@ -63,7 +63,7 @@ elseif test_group == "corner_cases"
     @testset "Some corner cases" begin
         include("bugs_primitives.jl")
         include("compile.jl")
-        include("cumulative_density.jl")     
+        include("cumulative_density.jl")
     end
 elseif test_group == "graph"
     include("graphs.jl")
