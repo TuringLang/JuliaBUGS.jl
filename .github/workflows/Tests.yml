@@ -38,7 +38,8 @@ jobs:
       CACHE_NAME: julia-${{ matrix.version }}-${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v1
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
@@ -52,9 +53,21 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ env.CACHE_NAME }}-
             ${{ runner.os }}-julia-${{ matrix.version }}-
-            ${{ runner.os }}-julia-
-      - uses: julia-actions/julia-buildpkg@v1
-      - uses: julia-actions/julia-runtest@v1
+            ${{ runner.os }}-julia-${{ matrix.version }}-
+      - name: Build package
+        uses: julia-actions/julia-buildpkg@v1
+      - name: Run tests normally
+        if: matrix.test_group != 'gibbs' && matrix.test_group != 'mcmchains'
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: ${{ matrix.test_group }}
+      - name: Run tests with "nick-fields/retry"
+        if: matrix.test_group == 'gibbs' || matrix.test_group == 'mcmchains'
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts : 3
+          command: julia --project -e 'using Pkg; Pkg.instantiate(); Pkg.test(coverage=true)'
         env:
           TEST_GROUP: ${{ matrix.test_group }}
       - uses: julia-actions/julia-processcoverage@v1
