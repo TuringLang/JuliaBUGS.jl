@@ -5,8 +5,7 @@ using AdvancedMH
 using Bijectors
 using Distributions
 using Documenter
-using DynamicPPL
-using DynamicPPL: getlogp, settrans!!, SimpleVarInfo
+using DynamicPPL: DynamicPPL, getlogp, settrans!!, SimpleVarInfo
 using Graphs, MetaGraphsNext
 using JuliaBUGS
 using JuliaBUGS:
@@ -37,21 +36,7 @@ if get(ENV, "RUN_MODE", "test") == "profile"
     include("profile.jl")
 else
     @testset "Function Unit Tests" begin
-        DocMeta.setdocmeta!(
-            JuliaBUGS,
-            :DocTestSetup,
-            :(using JuliaBUGS:
-                JuliaBUGS,
-                BUGSExamples,
-                @bugs,
-                evaluate_and_track_dependencies,
-                evaluate,
-                concretize_colon_indexing,
-                extract_variable_names_and_numdims,
-                extract_variables_in_bounds_and_lhs_indices,
-                simple_arithmetic_eval);
-            recursive=true,
-        )
+        DocMeta.setdocmeta!(JuliaBUGS, :DocTestSetup, :(using JuliaBUGS); recursive=true)
         Documenter.doctest(JuliaBUGS; manual=false)
     end
 

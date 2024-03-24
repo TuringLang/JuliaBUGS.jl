@@ -88,7 +88,7 @@ end
 Extract all the array variable names and number of dimensions from a given simple expression. 
 
 # Examples:
-```jldoctest
+```jldoctest; setup = :(using JuliaBUGS: extract_variable_names_and_numdims)
 julia> extract_variable_names_and_numdims(:((a + b) * c), ())
 (a = 0, b = 0, c = 0)
 
@@ -154,7 +154,7 @@ will raise an error.
 
 # Example:
 ```jldoctest
-extract_variable_names_and_numdims(
+JuliaBUGS.extract_variable_names_and_numdims(
     @bugs begin
         for i in 1:N
             for j in 1:T
@@ -434,7 +434,7 @@ Replace all `Colon()`s in `expr` with the corresponding array size.
 
 # Examples
 ```jldoctest
-julia> concretize_colon_indexing(:(f(x[1, :])), (x = [1 2 3 4; 5 6 7 8; 9 10 11 12],))
+julia> JuliaBUGS.concretize_colon_indexing(:(f(x[1, :])), (x = [1 2 3 4; 5 6 7 8; 9 10 11 12],))
 :(f(x[1, 1:4]))
 ```
 """
@@ -460,7 +460,7 @@ This function evaluates expressions that consist solely of arithmetic operations
 is specifically designed for scenarios such as calculating array indices or determining loop boundaries.
 
 # Example:
-```jldoctest
+```jldoctest; setup = :(using JuliaBUGS: simple_arithmetic_eval)
 julia> simple_arithmetic_eval((a = 1, b = [1, 2]), 1)
 1
 
