@@ -32,7 +32,7 @@ using Test
 
 AbstractMCMC.setprogress!(false)
 
-const test_group = get(ENV, "TEST_GROUP", "")
+const test_group = get(ENV, "TEST_GROUP", "run_all")
 
 if test_group == "profile"
     include("profile.jl")
@@ -71,6 +71,33 @@ elseif test_group == "gibbs"
     include("gibbs.jl")
 elseif test_group == "mcmchains"
     include("ext/mcmchains.jl")
-else
-    # nothing
+else # run all
+    include("profile.jl")
+    @testset "doctests" begin
+        DocMeta.setdocmeta!(JuliaBUGS, :DocTestSetup, :(using JuliaBUGS); recursive=true)
+        Documenter.doctest(JuliaBUGS; manual=false)
+    end
+    include("utils.jl")
+    @testset "Parser" begin
+        include("parser/bugs_macro.jl")
+        include("parser/bugs_parser.jl")
+        include("parser/winbugs_examples.jl")
+    end
+    include("passes.jl")
+    @testset "BUGS examples volume 1" begin
+        @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
+            model_def = JuliaBUGS.BUGSExamples.VOLUME_1[m].model_def
+            data = JuliaBUGS.BUGSExamples.VOLUME_1[m].data
+            inits = JuliaBUGS.BUGSExamples.VOLUME_1[m].inits[1]
+            model = compile(model_def, data, inits)
+        end
+    end
+    @testset "Some corner cases" begin
+        include("bugs_primitives.jl")
+        include("compile.jl")
+        include("cumulative_density.jl")
+    end
+    include("graphs.jl")
+    include("gibbs.jl")
+    include("ext/mcmchains.jl")
 end
