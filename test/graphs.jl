@@ -78,8 +78,9 @@ end
     logp += logpdf(dnorm(2.0, 1.0), 4.0) # d, where g = 2.0
     logp += logpdf(dnorm(4.0, 4.0), 5.0) # e, where h = 4.0
     logp
-end ≈ evaluate!!(model, LogDensityContext(), [-2.0, 4.0, 3.0, 2.0, 1.0, 4.0, 5.0])[2] atol =
-    1e-8
+end ≈ evaluate!!(
+    model, JuliaBUGS.LogDensityContext(), [-2.0, 4.0, 3.0, 2.0, 1.0, 4.0, 5.0]
+)[2] atol = 1e-8
 
 # AuxiliaryNodeInfo
 test_model = @bugs begin
