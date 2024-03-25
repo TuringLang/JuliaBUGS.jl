@@ -65,7 +65,7 @@ mb_logp = begin
 end
 
 # order: b, l, c, a
-@test mb_logp ≈ evaluate!!(cond_model, LogDensityContext(), [c_value])[2] rtol = 1e-8
+@test mb_logp ≈ evaluate!!(cond_model, JuliaBUGS.LogDensityContext(), [c_value])[2] rtol = 1e-8
 
 # test LogDensityContext
 @test begin
