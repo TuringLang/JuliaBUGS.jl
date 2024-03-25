@@ -32,7 +32,7 @@ const Tests = (
     "all"
 )
 
-const test_group = get(ENV, TEST_GROUP, "all")
+const test_group = get(ENV, :TEST_GROUP, "all")
 if test_group ∉ Tests
     error("Unknown test group: $test_group")
 end
