@@ -48,11 +48,11 @@ jobs:
             ${{ runner.os }}-julia-${{ matrix.version }}-
       - uses: julia-actions/julia-buildpkg@v1
       - name: Running elementary tests
-        run: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true, test_args=["--elementary"]);"
+        run: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true, test_args=[\"--elementary\"]);"
       - name: Running compilation tests
-        run: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true, test_args=["--compilation"]);"
+        run: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true, test_args=[\"--compilation\"]);"
       - name: Profile compiler passes
-        run: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true, test_args=["--profile"]);"
+        run: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true, test_args=[\"--profile\"]);"
       - name: Running `gibbs` tests
         uses: nick-fields/retry@v3
         with:
