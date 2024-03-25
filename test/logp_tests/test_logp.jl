@@ -1,6 +1,6 @@
 using JuliaBUGS:
     BUGSGraph, DefaultContext, evaluate!!, get_params_varinfo, LogDensityContext
-using DynamicPPL: DynamicPPL, getlogp, settrans!!, SimpleVarInfo
+using DynamicPPL: DynamicPPL, getlogp, settrans!!, SimpleVarInfo, @model
 
 @testset "Log joint probability" begin
     @testset "Single distribution models" begin
