@@ -15,7 +15,7 @@ on:
 
 jobs:
   test:
-    name: Julia ${{ matrix.version }} on ${{ matrix.os }} (${{ matrix.arch }}) ${{ matrix.test_group }}
+    name: Julia ${{ matrix.version }} on ${{ matrix.os }} (${{ matrix.arch }})
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.version == 'nightly' }}
     strategy:
@@ -24,17 +24,6 @@ jobs:
         version: ['1', '1.9', 'nightly']
         os: [ubuntu-latest, macOS-latest, windows-latest]
         arch: [x64]
-        test_group:
-          - 'profile'
-          - 'unit'
-          - 'parser'
-          - 'analysis_passes'
-          - 'compile_BUGS_examples'
-          - 'corner_cases'
-          - 'graph'
-          - 'gibbs'
-          - 'mcmchains'
-        # specific config for codecov
         include:
           - version: '1'
             os: ubuntu-latest
@@ -43,7 +32,8 @@ jobs:
     env:
       CACHE_NAME: julia-${{ matrix.version }}-${{ matrix.arch }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Set up Julia
         uses: julia-actions/setup-julia@v1
         with:
@@ -59,23 +49,48 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ env.CACHE_NAME }}-
             ${{ runner.os }}-julia-${{ matrix.version }}-
-            ${{ runner.os }}-julia-${{ matrix.version }}-
       - name: Build package
         uses: julia-actions/julia-buildpkg@v1
-      - name: Run tests normally
-        if: matrix.test_group != 'gibbs' && matrix.test_group != 'mcmchains'
+      - name: Running `unit` tests
         uses: julia-actions/julia-runtest@v1
         env:
-          TEST_GROUP: ${{ matrix.test_group }}
-      - name: Run tests with "nick-fields/retry"
-        if: matrix.test_group == 'gibbs' || matrix.test_group == 'mcmchains'
+          TEST_GROUP: unit
+      - name: Running `parser` tests
+        uses: julia-actions/julia-runtest@v1
+        env: 
+          TEST_GROUP: parser
+      - name: Running `analysis_passes` tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: analysis_passes
+      - name: Running `compile_BUGS_examples` tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: compile_BUGS_examples
+      - name: Running `corner_cases` tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: corner_cases
+      - name: Running `graph` tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: graph
+      - name: Running `gibbs` tests
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 10
-          max_attempts : 3
+          max_attempts: 3
           command: julia --project -e 'using Pkg; Pkg.instantiate(); Pkg.test(coverage=true)'
         env:
-          TEST_GROUP: ${{ matrix.test_group }}
+          TEST_GROUP: gibbs
+      - name: Running `mcmchains` tests
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: julia --project -e 'using Pkg; Pkg.instantiate(); Pkg.test(coverage=true)'
+        env:
+          TEST_GROUP: mcmchains
       - uses: julia-actions/julia-processcoverage@v1
         if: matrix.coverage
       - uses: codecov/codecov-action@v4
