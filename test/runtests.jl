@@ -44,39 +44,44 @@ end
 
 @info "Running tests for groups: $(ARGS)"
 
-if "profile" in ARGS
-    include("profile.jl")
-elseif "unit" in ARGS
+if "--elementary" in ARGS
     @testset "Unit Tests" begin
         Documenter.doctest(JuliaBUGS; manual=false)
         include("utils.jl")
     end
-elseif "parser" in ARGS
     include("parser/test_parser.jl")
-elseif "analysis_passes" in ARGS
     include("passes.jl")
-elseif "compile_BUGS_examples" in ARGS
+    include("graphs.jl")
+end
+
+if "--compilation" in ARGS
     @testset "BUGS examples volume 1" begin
         @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
             m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
             model = compile(m.model_def, m.data, m.inits[1])
         end
     end
-elseif "corner_cases" in ARGS
     @testset "Some corner cases" begin
         include("bugs_primitives.jl")
         include("compile.jl")
         include("cumulative_density.jl")
     end
-elseif "graph" in ARGS
-    include("graphs.jl")
-elseif "logp" in ARGS
     include("logp_tests/test_logp.jl")
-elseif "gibbs" in ARGS
+end
+
+if "--profile" in ARGS
+    include("profile.jl")
+end
+
+if "--gibbs" in ARGS
     include("gibbs.jl")
-elseif "mcmchains" in ARGS
+end
+
+if "--mcmchains" in ARGS
     include("ext/mcmchains.jl")
-else # run all
+end
+
+if isempty(ARGS) # run all
     @testset "Unit Tests" begin
         Documenter.doctest(JuliaBUGS; manual=false)
         include("utils.jl")
