@@ -1,3 +1,6 @@
+using JuliaBUGS:
+    stochastic_inneighbors, stochastic_neighbors, stochastic_outneighbors, markov_blanket
+
 test_model = @bugs begin
     a ~ dnorm(f, c)
     f = b - 1

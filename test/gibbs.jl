@@ -1,3 +1,6 @@
+using JuliaBUGS: MHFromPrior, Gibbs
+using DynamicPPL: DynamicPPL
+
 @testset "Simple gibbs" begin
     model_def = @bugs begin
         # Likelihood
@@ -32,7 +35,9 @@
         :varinfo,
         begin
             vi = model.varinfo
-            SimpleVarInfo(DynamicPPL.values_as(vi, NamedTuple), vi.logp, vi.transformation)
+            DynamicPPL.SimpleVarInfo(
+                DynamicPPL.values_as(vi, NamedTuple), vi.logp, vi.transformation
+            )
         end,
     )
 

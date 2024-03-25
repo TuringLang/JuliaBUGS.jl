@@ -32,15 +32,12 @@ jobs:
     env:
       CACHE_NAME: julia-${{ matrix.version }}-${{ matrix.arch }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Julia
-        uses: julia-actions/setup-julia@v1
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - name: Cache Julia packages and artifacts
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.julia
@@ -49,48 +46,23 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ env.CACHE_NAME }}-
             ${{ runner.os }}-julia-${{ matrix.version }}-
-      - name: Build package
-        uses: julia-actions/julia-buildpkg@v1
-      - name: Running `unit` tests
-        uses: julia-actions/julia-runtest@v1
-        env:
-          TEST_GROUP: unit
-      - name: Running `parser` tests
-        uses: julia-actions/julia-runtest@v1
-        env: 
-          TEST_GROUP: parser
-      - name: Running `analysis_passes` tests
-        uses: julia-actions/julia-runtest@v1
-        env:
-          TEST_GROUP: analysis_passes
-      - name: Running `compile_BUGS_examples` tests
-        uses: julia-actions/julia-runtest@v1
-        env:
-          TEST_GROUP: compile_BUGS_examples
-      - name: Running `corner_cases` tests
-        uses: julia-actions/julia-runtest@v1
-        env:
-          TEST_GROUP: corner_cases
-      - name: Running `graph` tests
-        uses: julia-actions/julia-runtest@v1
-        env:
-          TEST_GROUP: graph
+      - uses: julia-actions/julia-buildpkg@v1
+      - name: Running elementary tests
+        run: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true, test_args=[\"unit\", \"parser\", \"analysis_passes\", \"graph\"]);"
+      - name: Running compilation tests
+        run: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true, test_args=[\"compile_BUGS_examples\", \"corner_cases\", \"logp\"]);"
       - name: Running `gibbs` tests
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 10
           max_attempts: 3
-          command: julia --project -e 'using Pkg; Pkg.instantiate(); Pkg.test(coverage=true)'
-        env:
-          TEST_GROUP: gibbs
+          command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true, test_args=[\"gibbs\"]);"
       - name: Running `mcmchains` tests
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 10
           max_attempts: 3
-          command: julia --project -e 'using Pkg; Pkg.instantiate(); Pkg.test(coverage=true)'
-        env:
-          TEST_GROUP: mcmchains
+          command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true, test_args=[\"mcmchains\"]);"
       - uses: julia-actions/julia-processcoverage@v1
         if: matrix.coverage
       - uses: codecov/codecov-action@v4
