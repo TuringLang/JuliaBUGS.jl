@@ -24,16 +24,11 @@ using ReverseDiff
 AbstractMCMC.setprogress!(false)
 
 const Tests = (
-    "profile",
-    "unit",
-    "parser",
-    "analysis_passes",
-    "compile_BUGS_examples",
-    "corner_cases",
-    "graph",
-    "logp",
-    "gibbs",
-    "mcmchains",
+    "--elementary",
+    "--compilation",
+    "--profile",
+    "--gibbs",
+    "--mcmchains",
 )
 
 for arg in ARGS
