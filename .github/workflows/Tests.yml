@@ -48,23 +48,33 @@ jobs:
             ${{ runner.os }}-julia-${{ matrix.version }}-
       - uses: julia-actions/julia-buildpkg@v1
       - name: Running elementary tests
-        run: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true, test_args=[\"--elementary\"]);"
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: "elementary"
       - name: Running compilation tests
-        run: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true, test_args=[\"--compilation\"]);"
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: "compilation"
       - name: Profile compiler passes
-        run: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true, test_args=[\"--profile\"]);"
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: "profile"
       - name: Running `gibbs` tests
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 10
           max_attempts: 3
-          command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true, test_args=["--gibbs"]);"
+          command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true);"
+        env:
+          TEST_GROUP: "gibbs"
       - name: Running `mcmchains` tests
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 10
           max_attempts: 3
-          command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true, test_args=["--mcmchains"]);"
+          command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true);"
+        env:
+          TEST_GROUP: "mcmchains"
       - uses: julia-actions/julia-processcoverage@v1
         if: matrix.coverage
       - uses: codecov/codecov-action@v4

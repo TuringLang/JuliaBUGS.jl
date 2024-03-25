@@ -24,22 +24,22 @@ using ReverseDiff
 AbstractMCMC.setprogress!(false)
 
 const Tests = (
-    "--elementary",
-    "--compilation",
-    "--profile",
-    "--gibbs",
-    "--mcmchains",
+    "elementary",
+    "compilation",
+    "profile",
+    "gibbs",
+    "mcmchains",
+    "all"
 )
 
-for arg in ARGS
-    if arg ∉ Tests
-        error("Unknown test group: $arg")
-    end
+const test_group = get(ENV, TEST_GROUP, "all")
+if test_group ∉ Tests
+    error("Unknown test group: $test_group")
 end
 
-@info "Running tests for groups: $(ARGS)"
+@info "Running tests for groups: $test_group"
 
-if "--elementary" in ARGS
+if test_group == "elementary" || test_group == "all"
     @testset "Unit Tests" begin
         Documenter.doctest(JuliaBUGS; manual=false)
         include("utils.jl")
@@ -49,7 +49,7 @@ if "--elementary" in ARGS
     include("graphs.jl")
 end
 
-if "--compilation" in ARGS
+if test_group == "compilation" || test_group == "all"
     @testset "BUGS examples volume 1" begin
         @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
             m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
@@ -64,38 +64,14 @@ if "--compilation" in ARGS
     include("logp_tests/test_logp.jl")
 end
 
-if "--profile" in ARGS
+if test_group == "profile" || test_group == "all"
     include("profile.jl")
 end
 
-if "--gibbs" in ARGS
+if test_group == "gibbs" || test_group == "all"
     include("gibbs.jl")
 end
 
-if "--mcmchains" in ARGS
-    include("ext/mcmchains.jl")
-end
-
-if isempty(ARGS) # run all
-    @testset "Unit Tests" begin
-        Documenter.doctest(JuliaBUGS; manual=false)
-        include("utils.jl")
-    end
-    include("parser/test_parser.jl")
-    include("passes.jl")
-    @testset "BUGS examples volume 1" begin
-        @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
-            m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
-            model = compile(m.model_def, m.data, m.inits[1])
-        end
-    end
-    @testset "Some corner cases" begin
-        include("bugs_primitives.jl")
-        include("compile.jl")
-        include("cumulative_density.jl")
-    end
-    include("graphs.jl")
-    include("logp_tests/test_logp.jl")
-    include("gibbs.jl")
+if test_group == "mcmchains" || test_group == "all"
     include("ext/mcmchains.jl")
 end
