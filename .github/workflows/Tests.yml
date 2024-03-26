@@ -56,7 +56,7 @@ jobs:
         env:
           TEST_GROUP: "compilation"
       - name: Profile compiler passes
-        uses: julia-actions/julia-runtest@v1
+        run: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(;coverage=true);" >> $GITHUB_STEP_SUMMARY
         env:
           TEST_GROUP: "profile"
       - name: Running `gibbs` tests
