@@ -22,9 +22,9 @@ end
 # Tests for `getparams`, using `Rats` model
 @testset "`getparams` with Rats" begin
     m = :rats
-    data = JuliaBUGS.BUGSExamples.VOLUME_I[m].data
-    inits = JuliaBUGS.BUGSExamples.VOLUME_I[m].inits[1]
-    model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_I[m].model_def, data, inits)
+    data = JuliaBUGS.BUGSExamples.VOLUME_1[m].data
+    inits = JuliaBUGS.BUGSExamples.VOLUME_1[m].inits[1]
+    model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_1[m].model_def, data, inits)
 
     # transformed
     @test LogDensityProblems.logdensity(

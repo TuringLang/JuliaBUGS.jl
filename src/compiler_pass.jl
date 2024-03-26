@@ -486,7 +486,7 @@ The function returns three values:
 Array elements and array variables are represented by tuples in the returned value. All `Colon` indexing is assumed to be concretized.
 
 # Examples
-```jldoctest
+```jldoctest; setup = :(using JuliaBUGS: evaluate_and_track_dependencies)
 julia> evaluate_and_track_dependencies(:(x[a]), (x=[missing, missing], a = missing))
 (missing, (:a, (:x, 1:2)))
 

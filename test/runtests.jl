@@ -1,124 +1,70 @@
+using JuliaBUGS
+using JuliaBUGS.BUGSPrimitives
+using Documenter
+using Test
+using JuliaBUGS.BUGSPrimitives: mean
+DocMeta.setdocmeta!(JuliaBUGS, :DocTestSetup, :(using JuliaBUGS); recursive=true)
+
 using AbstractPPL
 using AbstractMCMC
 using AdvancedHMC
 using AdvancedMH
 using Bijectors
 using Distributions
-using Documenter
-using DynamicPPL
-using DynamicPPL: getlogp, settrans!!, SimpleVarInfo
-using Graphs, MetaGraphsNext
-using JuliaBUGS
-using JuliaBUGS:
-    BUGSGraph,
-    DefaultContext,
-    evaluate!!,
-    get_params_varinfo,
-    LogDensityContext,
-    MHFromPrior,
-    stochastic_inneighbors,
-    stochastic_neighbors,
-    stochastic_outneighbors,
-    markov_blanket,
-    Gibbs
-using JuliaBUGS.BUGSPrimitives
-using JuliaBUGS.BUGSPrimitives: mean
+using Graphs
+using MetaGraphsNext
 using LinearAlgebra
-using LogDensityProblems, LogDensityProblemsAD
+using LogDensityProblems
+using LogDensityProblemsAD
 using MacroTools
 using MCMCChains
 using Random
 using ReverseDiff
-using Test
 
 AbstractMCMC.setprogress!(false)
 
-if get(ENV, "RUN_MODE", "test") == "profile"
-    include("profile.jl")
-else
-    @testset "Function Unit Tests" begin
-        DocMeta.setdocmeta!(
-            JuliaBUGS,
-            :DocTestSetup,
-            :(using JuliaBUGS:
-                JuliaBUGS,
-                BUGSExamples,
-                @bugs,
-                evaluate_and_track_dependencies,
-                evaluate,
-                concretize_colon_indexing,
-                extract_variable_names_and_numdims,
-                extract_variables_in_bounds_and_lhs_indices,
-                simple_arithmetic_eval);
-            recursive=true,
-        )
+const Tests = ("elementary", "compilation", "profile", "gibbs", "mcmchains", "all")
+
+const test_group = get(ENV, "TEST_GROUP", "all")
+if test_group ∉ Tests
+    error("Unknown test group: $test_group")
+end
+
+@info "Running tests for groups: $test_group"
+
+if test_group == "elementary" || test_group == "all"
+    @testset "Unit Tests" begin
         Documenter.doctest(JuliaBUGS; manual=false)
-    end
-
-    include("bugs_primitives.jl")
-
-    @testset "Parser" begin
-        include("parser/bugs_macro.jl")
-        include("parser/bugs_parser.jl")
-        include("parser/winbugs_examples.jl")
-    end
-
-    include("compile.jl")
-
-    include("cumulative_density.jl")
-
-    @testset "Compile WinBUGS Vol I examples: $m" for m in [
-        :blockers,
-        :bones,
-        :dogs,
-        :dyes,
-        :epil,
-        :equiv,
-        :kidney,
-        :leuk,
-        :leukfr,
-        :lsat,
-        :magnesium,
-        :mice,
-        :oxford,
-        :pumps,
-        :rats,
-        :salm,
-        :seeds,
-        :stacks,
-        :surgical_simple,
-        :surgical_realistic,
-    ]
-        model_def = JuliaBUGS.BUGSExamples.VOLUME_I[m].model_def
-        data = JuliaBUGS.BUGSExamples.VOLUME_I[m].data
-        inits = JuliaBUGS.BUGSExamples.VOLUME_I[m].inits[1]
-        model = compile(model_def, data, inits)
-    end
-
-    @testset "Utils" begin
         include("utils.jl")
     end
-
+    include("parser/test_parser.jl")
     include("passes.jl")
+    include("graphs.jl")
+end
 
-    @testset "Log Probability Test" begin
-        @testset "Single stochastic variable test" begin
-            @testset "test for $s" for s in [:binomial, :gamma, :lkj, :dwish, :ddirich]
-                include("logp_tests/$s.jl")
-            end
-        end
-        @testset "BUGS examples" begin
-            @testset "test for $s" for s in [:blockers, :bones, :dogs, :rats]
-                include("logp_tests/$s.jl")
-            end
+if test_group == "compilation" || test_group == "all"
+    @testset "BUGS examples volume 1" begin
+        @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
+            m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
+            model = compile(m.model_def, m.data, m.inits[1])
         end
     end
-
-    @testset "Graph data structure" begin
-        include("graphs.jl")
+    @testset "Some corner cases" begin
+        include("bugs_primitives.jl")
+        include("compile.jl")
+        include("cumulative_density.jl")
     end
+    include("logp_tests/test_logp.jl")
+end
 
+if test_group == "profile" || test_group == "all"
+    include("profile.jl")
+end
+
+if test_group == "gibbs" || test_group == "all"
     include("gibbs.jl")
+end
 
+if test_group == "mcmchains" || test_group == "all"
     include("ext/mcmchains.jl")
 end

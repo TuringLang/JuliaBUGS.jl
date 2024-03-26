@@ -1,55 +1,81 @@
-name: CI
+name: Tests
 
 on:
   push:
-    branches:
-      - master
+    branches: ["master"]
+    paths:
+      - 'src/**/*'
+      - 'test/**/*'
   pull_request:
+    paths:
+      - 'src/**/*'
+      - 'test/**/*'
+
+  workflow_dispatch:
 
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }}
+    name: Julia ${{ matrix.version }} on ${{ matrix.os }} (${{ matrix.arch }})
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.version == 'nightly' }}
     strategy:
       fail-fast: false
       matrix:
-        version:
-          - '1'
-          - '1.9'
-          - 'nightly'
-        os:
-          - ubuntu-latest
-          - macOS-latest
-          - windows-latest
-        arch:
-          - x64
+        version: ['1', '1.9', 'nightly']
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+        arch: [x64]
         include:
           - version: '1'
             os: ubuntu-latest
             arch: x64
             coverage: true
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: actions/cache@v1
-        env:
-          cache-name: cache-artifacts
+      - uses: actions/cache@v4
         with:
-          path: ~/.julia/artifacts
-          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('**/Project.toml') }}
+          path: |
+            ~/.julia
+            ~/.julia/artifacts
+          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
           restore-keys: |
-            ${{ runner.os }}-test-${{ env.cache-name }}-
-            ${{ runner.os }}-test-
-            ${{ runner.os }}-
+            ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-
+            ${{ runner.os }}-julia-${{ matrix.version }}-
       - uses: julia-actions/julia-buildpkg@v1
-      - uses: julia-actions/julia-runtest@v1
+      - name: Running elementary tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: "elementary"
+      - name: Running compilation tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: "compilation"
+      - name: Profile compiler passes
+        run: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(;coverage=true);" >> $GITHUB_STEP_SUMMARY
+        env:
+          TEST_GROUP: "profile"
+      - name: Running `gibbs` tests
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true);"
+        env:
+          TEST_GROUP: "gibbs"
+      - name: Running `mcmchains` tests
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true);"
+        env:
+          TEST_GROUP: "mcmchains"
       - uses: julia-actions/julia-processcoverage@v1
         if: matrix.coverage
-      - uses: codecov/codecov-action@v1
+      - uses: codecov/codecov-action@v4
         if: matrix.coverage
         with:
           file: lcov.info
