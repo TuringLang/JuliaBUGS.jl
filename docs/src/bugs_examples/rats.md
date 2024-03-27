@@ -36,5 +36,5 @@ For now, we standardize the $x_j$'s around their mean to reduce dependence betwe
 (Note that, in general, prior independence does not force the posterior distributions to
 be independent).
 
-$ a_c $, $ \tau_a $, $ b_c $, $ \tau_b $, $ \tau_c $ are given independent "noninformative" priors. Interest particularly focuses on
-the intercept at zero time (birth), denoted $ a_0 = a_c - b_c \cdot \bar{x} $.
+$a_c$, $\tau_a$, $b_c$, $\tau_b$, $\tau_c$ are given independent "noninformative" priors. Interest particularly focuses on
+the intercept at zero time (birth), denoted $a_0 = a_c - b_c \cdot \bar{x}$.
