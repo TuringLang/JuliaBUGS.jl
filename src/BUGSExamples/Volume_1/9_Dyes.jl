@@ -1,4 +1,4 @@
-name = "Dyes"
+name = "Dyes: variance components model"
 
 model_def = @bugs begin
     for i in 1:batches

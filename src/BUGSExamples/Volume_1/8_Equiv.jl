@@ -1,4 +1,4 @@
-name = "Equiv"
+name = "Equiv: bioequivalence in a cross-over trial"
 
 model_def = @bugs begin
     for k in 1:P

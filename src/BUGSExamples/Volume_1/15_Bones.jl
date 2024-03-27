@@ -1,4 +1,4 @@
-name = "Bones"
+name = "Bones: latent trait model for multiple ordered categorical responses"
 
 model_def = @bugs begin
     for i in 1:nChild

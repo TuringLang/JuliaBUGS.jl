@@ -1,39 +1,47 @@
-name = "Epilepsy"
+name = "Epilepsy: repeated measures on Poisson counts"
 
 model_def = @bugs begin
     for j in 1:N
         for k in 1:T
-            mu[j, k] = exp(a0 + var"alpha.Base" * (var"log.Base4"[j] - var"log.Base4.bar") +
-                           var"alpha.Trt" * (Trt[j] - var"Trt.bar") +
-                           var"alpha.BT" * (BT[j] - var"BT.bar") +
-                           var"alpha.Age" * (var"log.Age"[j] - var"log.Age.bar") +
-                           var"alpha.V4" * (V4[k] - var"V4.bar") + b1[j] + b[j, k])
+            mu[j, k] = exp(
+                a0 + var"alpha.Base" * (var"log.Base4"[j] - var"log.Base4.bar") +
+                var"alpha.Trt" * (Trt[j] - var"Trt.bar") +
+                var"alpha.BT" * (BT[j] - var"BT.bar") +
+                var"alpha.Age" * (var"log.Age"[j] - var"log.Age.bar") +
+                var"alpha.V4" * (V4[k] - var"V4.bar") + b1[j] + b[j, k]
+            )
             y[j, k] ~ dpois(mu[j, k])
-            b[j, k] ~ dnorm(0.0, var"tau.b")
+            b[j, k] ~ dnorm(0.0, var"tau.b")       # subject*visit random effects
         end
-        b1[j] ~ dnorm(0.0, var"tau.b1")
-        BT[j] = Trt[j] * var"log.Base4"[j]
+        b1[j] ~ dnorm(0.0, var"tau.b1")        # subject random effects
+        BT[j] = Trt[j] * var"log.Base4"[j]    # interaction
         var"log.Base4"[j] = log(Base[j] / 4)
         var"log.Age"[j] = log(Age[j])
     end
+
+    # covariate means:
     var"log.Age.bar" = mean(var"log.Age"[:])
     var"Trt.bar" = mean(Trt[:])
     var"BT.bar" = mean(BT[:])
     var"log.Base4.bar" = mean(var"log.Base4"[:])
     var"V4.bar" = mean(V4[:])
-    a0 ~ dnorm(0.0, 0.0001)
-    var"alpha.Base" ~ dnorm(0.0, 0.0001)
-    var"alpha.Trt" ~ dnorm(0.0, 0.0001)
-    var"alpha.BT" ~ dnorm(0.0, 0.0001)
-    var"alpha.Age" ~ dnorm(0.0, 0.0001)
-    var"alpha.V4" ~ dnorm(0.0, 0.0001)
-    var"tau.b1" ~ dgamma(0.001, 0.001)
+
+    # priors:
+    a0 ~ dnorm(0.0, 1.0E-4)
+    var"alpha.Base" ~ dnorm(0.0, 1.0E-4)
+    var"alpha.Trt" ~ dnorm(0.0, 1.0E-4)
+    var"alpha.BT" ~ dnorm(0.0, 1.0E-4)
+    var"alpha.Age" ~ dnorm(0.0, 1.0E-4)
+    var"alpha.V4" ~ dnorm(0.0, 1.0E-4)
+    var"tau.b1" ~ dgamma(1.0E-3, 1.0E-3)
     var"sigma.b1" = 1.0 / sqrt(var"tau.b1")
-    var"tau.b" ~ dgamma(0.001, 0.001)
+    var"tau.b" ~ dgamma(1.0E-3, 1.0E-3)
     var"sigma.b" = 1.0 / sqrt(var"tau.b")
-    alpha0 = ((((a0 - var"alpha.Base" * var"log.Base4.bar") -
-                var"alpha.Trt" * var"Trt.bar") - var"alpha.BT" * var"BT.bar") -
-              var"alpha.Age" * var"log.Age.bar") - var"alpha.V4" * var"V4.bar"
+
+    # re-calculate intercept on original scale: 
+    alpha0 = a0 - var"alpha.Base" * var"log.Base4.bar" - var"alpha.Trt" * var"Trt.bar" -
+             var"alpha.BT" * var"BT.bar" - var"alpha.Age" * var"log.Age.bar" -
+             var"alpha.V4" * var"V4.bar"
 end
 
 data = (

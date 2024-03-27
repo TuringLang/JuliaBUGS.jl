@@ -1,4 +1,4 @@
-name = "Blockers"
+name = "Blockers: random effects meta-analysis of clinical trials"
 
 model_def = @bugs begin
     for i in 1:Num
