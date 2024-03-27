@@ -1,6 +1,6 @@
-model_def = JuliaBUGS.BUGSExamples.rats.model_def
-data = JuliaBUGS.BUGSExamples.rats.data
-inits = JuliaBUGS.BUGSExamples.rats.inits[1]
+model_def = JuliaBUGS.BUGSExamples.VOLUME_1.rats.model_def
+data = JuliaBUGS.BUGSExamples.VOLUME_1.rats.data
+inits = JuliaBUGS.BUGSExamples.VOLUME_1.rats.inits
 
 bugs_model = compile(model_def, data, inits);
 vi = bugs_model.varinfo

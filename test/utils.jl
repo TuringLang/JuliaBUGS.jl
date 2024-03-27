@@ -23,7 +23,7 @@ end
 @testset "`getparams` with Rats" begin
     m = :rats
     data = JuliaBUGS.BUGSExamples.VOLUME_1[m].data
-    inits = JuliaBUGS.BUGSExamples.VOLUME_1[m].inits[1]
+    inits = JuliaBUGS.BUGSExamples.VOLUME_1[m].inits
     model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_1[m].model_def, data, inits)
 
     # transformed

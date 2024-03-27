@@ -43,7 +43,6 @@ alligators = (
                 for k in 1:K  # loop around foods
                     X[i, j, k] ~ dpois(mu[i, j, k])
                     mu[i, j, k] = expr(lambda[i, j] + alpha[k] + beta[i, k] + gamma[j, k])
-                    cumulative_X[i, j, k] = cumulative(X[i, j, k], X[i, j, k])
                 end
             end
         end

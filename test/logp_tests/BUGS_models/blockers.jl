@@ -1,6 +1,6 @@
-bugs_model_def = JuliaBUGS.BUGSExamples.blockers.model_def
-data = JuliaBUGS.BUGSExamples.blockers.data
-inits = JuliaBUGS.BUGSExamples.blockers.inits[1]
+bugs_model_def = JuliaBUGS.BUGSExamples.VOLUME_1.blockers.model_def
+data = JuliaBUGS.BUGSExamples.VOLUME_1.blockers.data
+inits = JuliaBUGS.BUGSExamples.VOLUME_1.blockers.inits
 
 bugs_model = compile(bugs_model_def, data, inits)
 vi = bugs_model.varinfo

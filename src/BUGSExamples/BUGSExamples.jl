@@ -2,67 +2,78 @@ module BUGSExamples
 
 using JuliaBUGS: @bugs
 
-include("Volume_1/Blocker.jl")
-include("Volume_1/Bones.jl")
-include("Volume_1/Dogs.jl")
-include("Volume_1/Dyes.jl")
-include("Volume_1/Epil.jl")
-include("Volume_1/Equiv.jl")
-include("Volume_1/Inhalers.jl")
-include("Volume_1/Kidney.jl")
-include("Volume_1/Leuk.jl")
-include("Volume_1/LeukFr.jl")
-include("Volume_1/LSAT.jl")
-include("Volume_1/Magnesium.jl")
-include("Volume_1/Mice.jl")
-include("Volume_1/Oxford.jl")
-include("Volume_1/Pumps.jl")
-include("Volume_1/Rats.jl")
-include("Volume_1/Salm.jl")
-include("Volume_1/Seeds.jl")
-include("Volume_1/Stacks.jl")
-include("Volume_1/Surgical.jl")
+struct Example
+    name::String
+    model_def::Expr
+    original_syntax_program::String
+    data::NamedTuple
+    inits::NamedTuple
+    inits_alternative::NamedTuple
+    reference_results::Union{NamedTuple, Nothing}
+end
 
-include("Volume_2/BiRats.jl")
-include("Volume_2/Eyes.jl")
+function load_example_volume(volume_num::Int)
+    if volume_num == 1
+        include("./Volume_1/01_Rats.jl")
+        include("./Volume_1/02_Pumps.jl")
+        include("./Volume_1/03_Dogs.jl")
+        include("./Volume_1/04_Seeds.jl")
+        include("./Volume_1/05_Surgical.jl")
+        include("./Volume_1/06_Magnesium.jl")
+        include("./Volume_1/07_Salm.jl")
+        include("./Volume_1/08_Equiv.jl")
+        include("./Volume_1/09_Dyes.jl")
+        include("./Volume_1/10_Stacks.jl")
+        include("./Volume_1/11_Epil.jl")
+        include("./Volume_1/12_Blocker.jl")
+        include("./Volume_1/13_Oxford.jl")
+        include("./Volume_1/14_LSAT.jl")
+        include("./Volume_1/15_Bones.jl")
+        #include("./Volume_1/16_Inhalers.jl")
+        include("./Volume_1/17_Mice.jl")
+        include("./Volume_1/18_Kidney.jl")
+        include("./Volume_1/19_Leuk.jl")
+        include("./Volume_1/20_LeukFr.jl")
 
-const VOLUME_1 = (
-    blockers=blockers,
-    bones=bones,
-    dogs=dogs,
-    dyes=dyes,
-    epil=epil,
-    equiv=equiv,
-    # inhalers=inhalers,
-    kidney=kidney,
-    leuk=leuk,
-    leukfr=leukfr,
-    lsat=lsat,
-    magnesium=magnesium,
-    mice=mice,
-    oxford=oxford,
-    pumps=pumps,
-    rats=rats,
-    salm=salm,
-    seeds=seeds,
-    stacks=stacks,
-    surgical_simple=surgical_simple,
-    surgical_realistic=surgical_realistic,
-)
-
-const VOLUME_2 = (birats=birats, eyes=eyes)
-
-function has_ground_truth(m::Symbol)
-    if m in union(keys(VOLUME_1), keys(VOLUME_2))
-        return haskey(getfield(BUGSExamples, m), :reference_results)
+        vol_1 = (
+            rats = rats,
+            pumps = pumps,
+            dogs = dogs,
+            seeds = seeds,
+            surgical_simple = surgical_simple,
+            surgical_realistic = surgical_realistic,
+            magnesium = magnesium,
+            salm = salm,
+            equiv = equiv,
+            dyes = dyes,
+            stacks = stacks,
+            epil = epil,
+            blockers = blockers,
+            oxford = oxford,
+            lsat = lsat,
+            bones = bones,
+            #inhalers = inhalers, # chain graph is not supported
+            mice = mice,
+            kidney = kidney,
+            leuk = leuk,
+            leukfr = leukfr
+        )
+        return vol_1
+    elseif volume_num == 2
+        include("Volume_2/BiRats.jl")
+        include("Volume_2/Eyes.jl")
+        vol_2 = (
+            birats = birats,
+            eyes = eyes
+        )
+        return vol_2
     else
-        return false
+        @warn("Volume number $volume_num not supported yet.")
+        return nothing
     end
 end
 
-# row-major reshape, not robust, use with caution
-function rreshape(v::Vector, dim)
-    return permutedims(reshape(v, reverse(dim)), length(dim):-1:1)
-end   
+const VOLUME_1 = load_example_volume(1)
+const VOLUME_2 = load_example_volume(2)
 
 end

@@ -3,6 +3,4 @@
 ```@docs
 @bugs
 compile
-BUGSModel
-BUGSGraph
 ```

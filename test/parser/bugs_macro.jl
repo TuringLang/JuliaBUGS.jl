@@ -99,3 +99,11 @@
         )
     end
 end
+
+@testset "equality test between two bugs macro" begin
+    @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
+        example = JuliaBUGS.BUGSExamples.VOLUME_1[m]
+        @test JuliaBUGS.Parser._bugs_string_input(example.original_syntax_program, false) ==
+            example.model_def
+    end
+end

@@ -1,6 +1,6 @@
 # Example: Logistic Regression with Random Effects
 
-We will use the [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) model for demonstration. 
+We will use the [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) for demonstration.
 This example concerns the proportion of seeds that germinated on each of 21 plates. Here, we transform the data into a `NamedTuple`:
 
 ```julia
@@ -13,20 +13,21 @@ data = (
 )
 ```
 
-where `r[i]` is the number of germinated seeds and `n[i]` is the total number of the seeds on the $i$-th plate. 
+where `r[i]` is the number of germinated seeds and `n[i]` is the total number of the seeds on the $i$-th plate.
 Let $p_i$ be the probability of germination on the $i$-th plate. Then, the model is defined by:
 
-$$
+```math
 \begin{aligned}
 b_i &\sim \text{Normal}(0, \tau) \\
 \text{logit}(p_i) &= \alpha_0 + \alpha_1 x_{1 i} + \alpha_2 x_{2i} + \alpha_{12} x_{1i} x_{2i} + b_{i} \\
 r_i &\sim \text{Binomial}(p_i, n_i)
 \end{aligned}
-$$
+```
 
 where $x_{1i}$ and $x_{2i}$ are the seed type and root extract of the $i$-th plate.  
 The original BUGS program for the model is:
-```R
+
+```S
 model
 {
     for( i in 1 : N ) {
@@ -47,18 +48,24 @@ model
 ## Modeling Language
 
 ### Writing a Model in BUGS
-BUGS language syntax: [BNF definition](https://github.com/TuringLang/JuliaBUGS.jl/blob/master/archive/parser_attempts/BNF.txt)
 
-Language References:  
- - [MultiBUGS](https://www.multibugs.org/documentation/latest/)
- - [OpenBUGS](https://chjackson.github.io/openbugsdoc/Manuals/ModelSpecification.html)
+Language References:
+
+- [MultiBUGS](https://www.multibugs.org/documentation/latest/)
+- [OpenBUGS](https://chjackson.github.io/openbugsdoc/Manuals/ModelSpecification.html)
 
 Implementations in C++ and R:
+
 - [JAGS](https://sourceforge.net/p/mcmc-jags/code-0/ci/default/tree/) and its [user manual](https://people.stat.sc.edu/hansont/stat740/jags_user_manual.pdf)
 - [Nimble](https://r-nimble.org/)
 
+Language Syntax:
+
+- [BNF](https://github.com/TuringLang/JuliaBUGS.jl/blob/master/archive/parser_attempts/BNF.txt)
+
 ### Writing a Model in Julia
-We provide a macro solution which allows users to write down model definitions using Julia:
+
+We provide a [macro](https://docs.julialang.org/en/v1/manual/metaprogramming/#man-macros) which allows users to write down model definitions using Julia:
 
 ```julia
 model_def = @bugs begin
@@ -75,13 +82,14 @@ model_def = @bugs begin
     sigma = 1 / sqrt(tau)
 end
 ```
+
 BUGS syntax carries over almost one-to-one to Julia, with minor exceptions.
-In general, when basic Julia syntax and BUGS syntax conflict, it is necessary to use Julia syntax. 
-For example, curly braces are replaced with `begin ... end` blocks, and `for` loops do not require parentheses.
-In addition, Julia uses `f(x) = ...` as a shorthand for function definition, so BUGS' link function syntax can be confusing and ambiguous. 
-Thus, instead of calling the link function, we call the inverse link function from the RHS.
+Modifications required are minor: curly braces are replaced with `begin ... end` blocks, and `for` loops do not require parentheses.
+In addition, Julia uses `f(x) = ...` as a shorthand for function definition, so BUGS' link function syntax is disallowed.
+Instead, user can call the inverse function of the link functions on the RHS expressions.
 
 ### Support for Legacy BUGS Programs
+
 The `@bugs` macro also works with original (R-like) BUGS syntax:
 
 ```julia
@@ -100,22 +108,24 @@ model{
     tau ~ dgamma(0.001,0.001)
     sigma <- 1 / sqrt(tau)
 }
-""", true)
+""", true, true)
 ```
 
-By default, `@bugs` will translate R-style variable names like `a.b.c` to `a_b_c`, user can pass `false` as the second argument to disable this. 
-We still encourage users to write new programs using the Julia-native syntax, because of better debuggability and perks like syntax highlighting. 
+By default, `@bugs` will translate R-style variable names like `a.b.c` to `a_b_c`, user can pass `false` as the second argument to disable this.
+User can also pass `true` as the third argument if `model { }` enclosure is not present in the BUGS program.
+We still encourage users to write new programs using the Julia-native syntax, because of better debuggability and perks like syntax highlighting.
 
 ## Compilation
 
-For now, the `compile` function will create a `BUGSModel`, which implements [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
+`compile` function will create a `BUGSModel`, which implements [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
 
 ```julia
 compile(model_def::Expr, data, initializations),
 ```
 
-The function `compile` takes three arguments: 
-- the output of `@bugs`, 
+The function `compile` takes three arguments:
+
+- the output of `@bugs`,
 - the data, and
 - the initializations of parameters.
 
@@ -124,6 +134,7 @@ initializations = Dict(:alpha => 1, :beta => 1)
 ```
 
 then we can compile the model with the data and initializations,
+
 ```julia
 model = compile(model_def, data, initializations)
 ```
@@ -136,14 +147,14 @@ using LogDensityProblemsAD, ReverseDiff
 
 ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 ```
-Here `ad_model` will also implement all the interfaces of `LogDensityProblems.jl`. 
-`LogDensityProblemsAD.jl` will automatically add the interface function `logdensity_and_gradient` to the model, which will return the log density and gradient of the model.  
-And `ad_model` can be used in the same way as `model` in the example below.
 
+Here `ad_model` will also implement all the interfaces of [`LogDensityProblems.jl`](https://www.tamaspapp.eu/LogDensityProblems.jl/dev/).
+`LogDensityProblemsAD.jl` will automatically add the interface function [`logdensity_and_gradient`](https://www.tamaspapp.eu/LogDensityProblems.jl/dev/#LogDensityProblems.logdensity_and_gradient) to the model, which will return the log density and gradient of the model.  
+And `ad_model` can be used in the same way as `model` in the example below.
 
 ## Inference
 
-For a differentiable model, we can use [`AdvancedHMC.jl`](https://github.com/TuringLang/AdvancedHMC.jl) to perform inference. 
+For a differentiable model, we can use [`AdvancedHMC.jl`](https://github.com/TuringLang/AdvancedHMC.jl) to perform inference.
 For instance,
 
 ```julia
@@ -166,7 +177,7 @@ samples_and_stats = AbstractMCMC.sample(
 
 This will return the MCMC Chain,
 
-```
+```plaintext
 Chains MCMC chain (2000×40×1 Array{Real, 3}):
 
 Iterations        = 1001:1:3000
@@ -210,9 +221,11 @@ Quantiles
 This is consistent with the result in the [OpenBUGS seeds example](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html).
 
 ## Parallel and Distributed Sampling with `AbstractMCMC`
+
 `AbstractMCMC` and `AdvancedHMC` support both parallel and distributed sampling.
 
 ### Parallel Sampling
+
 To perform multi-threaded sampling of multiple chains, start the Julia session with the `-t <n_threads>` argument.
 The model compilation code remains the same, and we can sample multiple chains in parallel as follows:
 
@@ -232,10 +245,12 @@ samples_and_stats = AbstractMCMC.sample(
 ```
 
 In this case, we pass two additional arguments to `AbstractMCMC.sample`:
+
 - `AbstractMCMC.MCMCThreads()`: the sampler type, and
 - `n_chains`: the number of chains to sample.
 
 ### Distributed Sampling
+
 To perform distributed sampling of multiple chains, start the Julia session with the `-p <n_processes>` argument.
 
 In distributed mode, ensure that all functions and modules are available on all processes.
@@ -270,10 +285,12 @@ samples_and_stats = AbstractMCMC.sample(
 ```
 
 In this case, we pass two additional arguments to `AbstractMCMC.sample`:
+
 - `AbstractMCMC.MCMCDistributed()`: the sampler type, and
 - `n_chains`: the number of chains to sample.
-Note that the `init_params` argument is now a vector of initial parameters for each chain. 
+Note that the `init_params` argument is now a vector of initial parameters for each chain.
 Sometimes the progress logger can cause problems in distributed setting, so we can disable it by setting `progress = false`.
 
 ## More Examples
+
 We have transcribed all the examples from the first volume of the BUGS Examples ([original](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/JuliaBUGS.jl/tree/master/src/BUGSExamples/VOLUME_1)). All programs and data are included, and can be compiled using the steps described in the tutorial above.

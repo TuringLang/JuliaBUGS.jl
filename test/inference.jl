@@ -4,7 +4,7 @@
     # `birats` contains Wishart distribution 
     model_def = JuliaBUGS.BUGSExamples.birats.model_def
     data = JuliaBUGS.BUGSExamples.birats.data
-    inits = JuliaBUGS.BUGSExamples.birats.inits[1]
+    inits = JuliaBUGS.BUGSExamples.birats.inits
     model = compile(model_def, data, inits)
     ad_model = ADgradient(:ReverseDiff, model; compile=Val(false))
     # random initialization sometimes fails because some parameters are supposed to be from
@@ -47,7 +47,7 @@ end
 
     @testset "Inference results on examples: $m" for m in [:seeds, :rats, :equiv, :stacks]
         data = JuliaBUGS.BUGSExamples.VOLUME_1[m].data
-        inits = JuliaBUGS.BUGSExamples.VOLUME_1[m].inits[1]
+        inits = JuliaBUGS.BUGSExamples.VOLUME_1[m].inits
         model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_1[m].model_def, data, inits)
 
         ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
@@ -67,7 +67,6 @@ end
             discard_initial=n_adapts,
         )
 
-        @assert JuliaBUGS.BUGSExamples.has_ground_truth(m) "No reference inference results for $m"
         ref_inference_results = JuliaBUGS.BUGSExamples.VOLUME_1[m].reference_results
         @testset "$m: $var" for var in keys(ref_inference_results)
             @test summarize(samples_and_stats)[var].nt.mean[1] ≈
@@ -79,7 +78,7 @@ end
 
     @testset "Inference results on examples: m" for m in [:birats]
         data = JuliaBUGS.BUGSExamples.VOLUME_2[m].data
-        inits = JuliaBUGS.BUGSExamples.VOLUME_2[m].inits[1]
+        inits = JuliaBUGS.BUGSExamples.VOLUME_2[m].inits
         model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_2[m].model_def, data, inits)
 
         ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
@@ -99,7 +98,6 @@ end
             discard_initial=n_adapts,
         )
 
-        @assert JuliaBUGS.BUGSExamples.has_ground_truth(m) "No reference inference results for $m"
         ref_inference_results = JuliaBUGS.BUGSExamples.VOLUME_2[m].reference_results
         @testset "$m: $var" for var in keys(ref_inference_results)
             @test summarize(samples_and_stats)[var].nt.mean[1] ≈

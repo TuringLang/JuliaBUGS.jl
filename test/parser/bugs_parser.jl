@@ -256,7 +256,9 @@ end
         @test_throws ParseError to_julia_program("f(p[1]) <- logit.p[1]", true, true)
 
         # link function on the LHS of a stochastic assignment
-        @test_throws ErrorException (@bugs("logit(p[1]) ~ dnorm(0, 1)", true, true))
+        @test_throws ErrorException JuliaBUGS.Parser._bugs_string_input(
+            "logit(p[1]) ~ dnorm(0, 1)", true, true
+        )
 
         # expression as lhs
         @test_throws ParseError to_julia_program("logit(p + 1) <- logit.p + 1", true, true)
