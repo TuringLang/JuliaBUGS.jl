@@ -52,7 +52,6 @@ if test_group == "compilation" || test_group == "all"
     @testset "Some corner cases" begin
         include("bugs_primitives.jl")
         include("compile.jl")
-        include("cumulative_density.jl")
     end
     include("logp_tests/test_logp.jl")
 end

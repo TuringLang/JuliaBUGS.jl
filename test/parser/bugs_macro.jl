@@ -1,4 +1,4 @@
-@testset "@bugs macro with Julia AST" begin
+@testset "bugs macro with Julia AST" begin
     @testset "Single index with empty brackets" begin
         @test (@bugs begin
             a ~ f(x[])
@@ -105,5 +105,45 @@ end
         example = JuliaBUGS.BUGSExamples.VOLUME_1[m]
         @test JuliaBUGS.Parser._bugs_string_input(example.original_syntax_program, false) ==
             example.model_def
+    end
+end
+
+@testset "warn deviance, cumulative, and density" begin
+    model_1 = MacroTools.@q begin
+        a ~ dnorm(0, 1)
+        b = density(a, 1)
+    end
+
+    @test_logs (
+        :warn,
+        """`cumulative` and `density` functions are not supported in JuliaBUGS (aligned with MultiBUGS). These functions will be treated as user-defined functions. 
+ Users can use `cdf` and `pdf` function from `Distributions.jl` to achieve the same functionality.""",
+    ) begin
+        JuliaBUGS.Parser.warn_cumulative_density_deviance(model_1)
+    end
+
+    model_2 = MacroTools.@q begin
+        a ~ dnorm(0, 1)
+        b = cumulative(a, 1)
+    end
+
+    @test_logs (
+        :warn,
+        """`cumulative` and `density` functions are not supported in JuliaBUGS (aligned with MultiBUGS). These functions will be treated as user-defined functions. 
+ Users can use `cdf` and `pdf` function from `Distributions.jl` to achieve the same functionality.""",
+    ) begin
+        JuliaBUGS.Parser.warn_cumulative_density_deviance(model_2)
+    end
+
+    model_3 = MacroTools.@q begin
+        a ~ dnorm(0, 1)
+        b = deviance(a, 1)
+    end
+
+    @test_logs (
+        :warn,
+        """`deviance` function is not supported in JuliaBUGS. It will be treated as a user-defined function.""",
+    ) begin
+        JuliaBUGS.Parser.warn_cumulative_density_deviance(model_3)
     end
 end

@@ -558,55 +558,18 @@ function evaluate_and_track_dependencies(var::Expr, env)
     elseif Meta.isexpr(var, :call)
         f, args... = var.args
         value = nothing
-        if f === :cumulative || f === :density
-            if length(args) != 2
-                error(
-                    "`cumulative` and `density` are special functions in BUGS and takes two arguments, got $(length(args))",
-                )
-            end
-            arg1, arg2 = args
-            if arg1 isa Symbol
-                push!(dependencies, arg1)
-            elseif Meta.isexpr(arg1, :ref)
-                v, indices... = arg1.args
-                for i in eachindex(indices)
-                    ret = evaluate_and_track_dependencies(indices[i], env)
-                    union!(dependencies, ret[2])
-                    indices[i] = ret[1]
-                end
-                if any(!is_resolved, indices)
-                    error(
-                        "For now, the indices of the first argument to `cumulative` and `density` must be resolved, got $indices",
-                    )
-                end
-                push!(dependencies, (v, indices...))
-            else
-                error(
-                    "First argument to `cumulative` and `density` must be variable, got $(arg1)",
-                )
-            end
-
-            ret = evaluate_and_track_dependencies(arg2, env)
+        for i in eachindex(args)
+            ret = evaluate_and_track_dependencies(args[i], env)
+            args[i] = ret[1]
             union!(dependencies, ret[2])
-            return missing, Tuple(dependencies)
-        elseif f === :deviance
-            @warn(
-                "`deviance` function is not supported in JuliaBUGS, `deviance` will be treated as a general function."
-            )
-        else
-            for i in eachindex(args)
-                ret = evaluate_and_track_dependencies(args[i], env)
-                args[i] = ret[1]
-                union!(dependencies, ret[2])
-            end
+        end
 
-            value = nothing
-            if all(is_resolved, args) &&
-                f ∈ BUGSPrimitives.BUGS_FUNCTIONS ∪ (:+, :-, :*, :/, :^, :(:), :getindex)
-                return getfield(JuliaBUGS, f)(args...), Tuple(dependencies)
-            else
-                return missing, Tuple(dependencies)
-            end
+        value = nothing
+        if all(is_resolved, args) &&
+            f ∈ BUGSPrimitives.BUGS_FUNCTIONS ∪ (:+, :-, :*, :/, :^, :(:), :getindex)
+            return getfield(JuliaBUGS, f)(args...), Tuple(dependencies)
+        else
+            return missing, Tuple(dependencies)
         end
     else
         error("Unexpected expression type: $var")

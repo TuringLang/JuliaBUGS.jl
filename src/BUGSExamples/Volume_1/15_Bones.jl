@@ -24,7 +24,6 @@ model {
     for (i in 1 : nChild) {
         theta[i] ~ dnorm(0.0, 0.001)
         for (j in 1 : nInd) {
-            # Cumulative probability of > grade k given theta
             for (k in 1: ncat[j] - 1) {
                 logit(Q[i, j, k]) <- delta[j] * (theta[i] - gamma[j, k])
             }

@@ -1,10 +1,18 @@
 function warn_cumulative_density_deviance(expr::Expr)
+    cumulative_density_warned = false
+    deviance_warned = false
     MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, (density(arg1_, args2_)) | (cumulative(arg1_, args2_)))
-            @warn """`cumulative` and `density` functions are not supported in JuliaBUGS (aligned with MultiBUGS). These functions will be treated as user-defined functions. 
-            Users can use `cdf` and `pdf` function from `Distributions.jl` to achieve the same functionality."""
+            if !cumulative_density_warned
+                @warn """`cumulative` and `density` functions are not supported in JuliaBUGS (aligned with MultiBUGS). These functions will be treated as user-defined functions. 
+                Users can use `cdf` and `pdf` function from `Distributions.jl` to achieve the same functionality."""
+                cumulative_density_warned = true
+            end
         elseif @capture(sub_expr, deviance(arg1_, args2_))
-            @warn """`deviance` function is not supported in JuliaBUGS. It will be treated as a user-defined function."""
+            if !deviance_warned
+                @warn """`deviance` function is not supported in JuliaBUGS. It will be treated as a user-defined function."""
+                deviance_warned = true
+            end
         end
         return sub_expr
     end
