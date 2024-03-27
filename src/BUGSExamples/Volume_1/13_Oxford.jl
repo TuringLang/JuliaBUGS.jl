@@ -12,8 +12,6 @@ for (i in 1 : K) {
     logPsi[i] <- alpha + beta1 * year[i] + beta2 * (year[i] * year[i] - 22) + b[i]
     b[i] ~ dnorm(0, tau)
     mu[i] ~ dnorm(0.0, 1.0E-6)
-    cumulative.r0[i] <- cumulative(r0[i], r0[i])
-    cumulative.r1[i] <- cumulative(r1[i], r1[i])
 }
 alpha ~ dnorm(0.0, 1.0E-6)
 beta1 ~ dnorm(0.0, 1.0E-6)

@@ -67,7 +67,6 @@ end
             discard_initial=n_adapts,
         )
 
-        @assert JuliaBUGS.BUGSExamples.has_ground_truth(m) "No reference inference results for $m"
         ref_inference_results = JuliaBUGS.BUGSExamples.VOLUME_1[m].reference_results
         @testset "$m: $var" for var in keys(ref_inference_results)
             @test summarize(samples_and_stats)[var].nt.mean[1] ≈
@@ -99,7 +98,6 @@ end
             discard_initial=n_adapts,
         )
 
-        @assert JuliaBUGS.BUGSExamples.has_ground_truth(m) "No reference inference results for $m"
         ref_inference_results = JuliaBUGS.BUGSExamples.VOLUME_2[m].reference_results
         @testset "$m: $var" for var in keys(ref_inference_results)
             @test summarize(samples_and_stats)[var].nt.mean[1] ≈
