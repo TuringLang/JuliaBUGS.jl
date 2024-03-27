@@ -8,7 +8,7 @@ model_def_simplistic = @bugs begin
     end
 end
 
-orignal_simplistic = """
+original_simplistic = """
 model {
     for( i in 1 : N ) {
         p[i] ~ dbeta(1.0, 1.0)
