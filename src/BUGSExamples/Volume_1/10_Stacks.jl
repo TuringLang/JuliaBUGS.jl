@@ -108,4 +108,5 @@ reference_results = (
     b0 = (mean = -39.64, std = 12.63), var"outlier[21]" = (mean = 0.3324, std = 0.4711)
 )
 
-stacks = Example(name, model_def, data, inits, inits_alternative, reference_results)
+stacks = Example(
+    name, model_def, original, data, inits, inits_alternative, reference_results)

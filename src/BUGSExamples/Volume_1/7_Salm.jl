@@ -49,4 +49,4 @@ inits_alternative = (alpha = 1.0, beta = 1.0, gamma = 0.01, tau = 1.0)
 
 reference_results = nothing
 
-salm = Example(name, model_def, data, inits, inits_alternative, reference_results)
+salm = Example(name, model_def, original, data, inits, inits_alternative, reference_results)
