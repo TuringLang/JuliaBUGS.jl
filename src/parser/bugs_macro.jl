@@ -150,7 +150,13 @@ For the string input variant, the following optional arguments are available:
 - `no_enclosure::Bool`: When `true`, the parser does not require the BUGS program to be enclosed within `model{ ... }` brackets. By default, this is set to `false`.
 
 """
-macro bugs(prog::String, replace_period=true, no_enclosure=false)
+macro bugs(prog::String, replace_period::Bool=true, no_enclosure::Bool=false)
+    return Meta.quot(_bugs_string_input(prog, replace_period, no_enclosure))
+end
+
+function _bugs_string_input(
+    prog::String, replace_period::Bool=true, no_enclosure::Bool=false
+)
     julia_program = to_julia_program(prog, replace_period, no_enclosure)
     expr = Base.Expr(JuliaSyntax.parsestmt(SyntaxNode, julia_program))
     expr = MacroTools.postwalk(MacroTools.rmlines, expr)
@@ -186,5 +192,5 @@ macro bugs(prog::String, replace_period=true, no_enclosure=false)
     if !isempty(error_container) # otherwise errors thrown in macro will be LoadError
         return :(throw(ErrorException(join($error_container, "\n"))))
     end
-    return Meta.quot(expr)
+    return expr
 end
