@@ -11,9 +11,8 @@ struct Example
     reference_results::Union{NamedTuple, Nothing}
 end
 
-function load_examples(volume_num::Int)
-    example_set = NamedTuple()
-    if volume_num == 1 || volume_num == 0
+function load_example_volume(volume_num::Int)
+    if volume_num == 1
         include("Volume_1/Blocker.jl")
         include("Volume_1/Bones.jl")
         include("Volume_1/Dogs.jl")
@@ -34,42 +33,42 @@ function load_examples(volume_num::Int)
         include("Volume_1/Seeds.jl")
         include("Volume_1/Stacks.jl")
         include("Volume_1/Surgical.jl")
-        example_set = merge(example_set,
-            (
-                blockers = blockers,
-                bones = bones,
-                dogs = dogs,
-                dyes = dyes,
-                epil = epil,
-                equiv = equiv,
-                # inhalers=inhalers, # use Chain graph, not supported
-                kidney = kidney,
-                leuk = leuk,
-                leukfr = leukfr,
-                lsat = lsat,
-                magnesium = magnesium,
-                mice = mice,
-                oxford = oxford,
-                pumps = pumps,
-                rats = rats,
-                salm = salm,
-                seeds = seeds,
-                stacks = stacks,
-                surgical_simple = surgical_simple,
-                surgical_realistic = surgical_realistic
-            ))
-    end
-
-    if volume_num == 2 || volume_num == 0
+        vol_1 = (
+            blockers = blockers,
+            bones = bones,
+            dogs = dogs,
+            dyes = dyes,
+            epil = epil,
+            equiv = equiv,
+            # inhalers=inhalers, # use Chain graph, not supported
+            kidney = kidney,
+            leuk = leuk,
+            leukfr = leukfr,
+            lsat = lsat,
+            magnesium = magnesium,
+            mice = mice,
+            oxford = oxford,
+            pumps = pumps,
+            rats = rats,
+            salm = salm,
+            seeds = seeds,
+            stacks = stacks,
+            surgical_simple = surgical_simple,
+            surgical_realistic = surgical_realistic
+        )
+        return vol_1
+    elseif volume_num == 2
         include("Volume_2/BiRats.jl")
         include("Volume_2/Eyes.jl")
-        example_set = merge(example_set, (
+        vol_2 = (
             birats = birats,
             eyes = eyes
-        ))
+        )
+        return vol_2
+    else
+        @warn("Volume number $volume_num not supported yet.")
+        return nothing
     end
-
-    return example_set
 end
 
 const VOLUME_1 = load_examples(1)
