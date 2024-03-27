@@ -16,7 +16,7 @@ data = (
     N = 10
 )
 
-inits = (alpha = 1, beta = 1),
+inits = (alpha = 1, beta = 1)
 inits_alternative = (alpha = 10, beta = 10)
 
 reference_results = nothing

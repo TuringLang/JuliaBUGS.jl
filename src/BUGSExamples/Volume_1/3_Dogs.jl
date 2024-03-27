@@ -60,4 +60,4 @@ inits_alternative = (alpha = -2, beta = -2)
 
 reference_results = nothing
 
-Example(name, model_def, data, inits, inits_alternative, reference_results)
+dogs = Example(name, model_def, data, inits, inits_alternative, reference_results)

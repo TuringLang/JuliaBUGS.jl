@@ -13,7 +13,7 @@ model_def = @bugs begin
             rtx[j, k] = rt[k]
             rcx[j, k] ~ dbin(pc[j, k], nc[k])
             rcx[j, k] = rc[k]
-            logit(pt[j, k]) = theta[j, k] + phi[j, k]
+            pt[j, k] = logistic(theta[j, k] + phi[j, k])
             phi[j, k] = logit(pc[j, k])
             pc[j, k] ~ dunif(0, 1)
         end

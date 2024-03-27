@@ -19,7 +19,7 @@ model_def = @bugs begin
     # Rasch model
     for j in 1:N
         for k in 1:T
-            logit(p[j, k]) = beta * theta[j] - alpha[k]
+            p[j, k] = logistic(beta * theta[j] - alpha[k])
             r[j, k] ~ dbern(p[j, k])
         end
         theta[j] ~ dnorm(0, 1)
