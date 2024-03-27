@@ -46,7 +46,7 @@ if test_group == "compilation" || test_group == "all"
     @testset "BUGS examples volume 1" begin
         @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
             m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
-            model = compile(m.model_def, m.data, m.inits[1])
+            model = compile(m.model_def, m.data, m.inits)
         end
     end
     @testset "Some corner cases" begin
