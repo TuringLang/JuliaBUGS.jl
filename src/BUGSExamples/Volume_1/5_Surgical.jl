@@ -15,7 +15,8 @@ data = (
 )
 
 inits_simplistic = (p = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],)
-inits_alternative_simplistic = (p = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],)
+inits_alternative_simplistic = (p = [
+    0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],)
 
 # more realistic model
 model_def_realistic = @bugs begin
@@ -30,14 +31,17 @@ model_def_realistic = @bugs begin
     tau ~ dgamma(0.001, 0.001)
 end
 
-inits_realistic = (b = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], tau = 1, mu = 0)
+inits_realistic = (
+    b = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], tau = 1, mu = 0)
 inits_alternative_realistic = (
     b = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], tau = 0.1, mu = 1.0)
 
 reference_results = nothing
 
 surgical_simple = Example(
-    name, model_def_simplistic, data, inits_simplistic, inits_alternative_simplistic, reference_results)
+    name, model_def_simplistic, data, inits_simplistic,
+    inits_alternative_simplistic, reference_results)
 
 surgical_realistic = Example(
-    name, model_def_realistic, data, inits_realistic, inits_alternative_realistic, reference_results)
+    name, model_def_realistic, data, inits_realistic,
+    inits_alternative_realistic, reference_results)

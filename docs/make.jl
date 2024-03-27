@@ -20,9 +20,7 @@ makedocs(;
         "Pitfalls" => "pitfalls.md",
         "For Developers" =>
             ["Parser" => "parser.md", "Notes on BUGS Implementations" => "BUGS_notes.md"],
-        "BUGS Examples" => [
-            "Rats" => "bugs_examples/rats.md"
-        ]
+        "BUGS Examples" => ["Rats" => "bugs_examples/rats.md"],
     ],
 )
 
