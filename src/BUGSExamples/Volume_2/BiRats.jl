@@ -161,7 +161,7 @@ birats_alt = (
         (N=d.N, T=d.T, y=d.Y, x=d.x, Omega=[0.005 0; 0 5])
     end,
     inits=[
-        let i = birats.inits
+        let i = birats.inits[1]
             (sigmasq_y=1, mu_beta=[0, 0], Sigma_beta=[1 0; 0 1], beta=i.beta)
         end,
         let i = birats.inits[2]
