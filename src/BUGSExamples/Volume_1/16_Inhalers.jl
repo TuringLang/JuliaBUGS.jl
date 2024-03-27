@@ -34,8 +34,7 @@ model_def = @bugs begin
     for i in 1:N
         for t in 1:T
             for j in 1:Ncut
-                # Cumulative probability of worse response than j
-                logit(Q[i, t, j]) = -(a[j] + mu[group[i], t] + b[i])
+                Q[i, t, j] = logistic(-(a[j] + mu[group[i], t] + b[i]))
             end
 
             # Probability of response = j
@@ -46,7 +45,6 @@ model_def = @bugs begin
             p[i, t, (Ncut + 1)] = Q[i, t, Ncut]
 
             response[i, t] ~ dcat(p[i, t, :])
-            var"cumulative.response"[i, t] = cumulative(response[i, t], response[i, t])
         end
         # Subject (random) effects
         b[i] ~ dnorm(0.0, tau)

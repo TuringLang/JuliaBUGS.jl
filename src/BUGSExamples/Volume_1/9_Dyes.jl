@@ -5,7 +5,6 @@ model_def = @bugs begin
         mu[i] ~ dnorm(theta, var"tau.btw")
         for j in 1:samples
             y[i, j] ~ dnorm(mu[i], var"tau.with")
-            var"cumulative.y"[i, j] = cumulative(y[i, j], y[i, j])
         end
     end
     var"sigma2.with" = 1 / var"tau.with"
