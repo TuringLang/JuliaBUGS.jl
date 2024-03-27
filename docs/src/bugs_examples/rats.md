@@ -3,16 +3,12 @@
 This example is taken from section 6 of *Gelfand et al. (1990)*, and concerns 30 young rats whose weights were measured weekly for five weeks.
 Part of the data is shown below, where $Y_{ij}$ is the weight of the $i^{th}$ rat measured at age $x_j$.
 
-<center>
-
 | Rat   | $$x_j=8$$ | $$x_j=15$$ | $$x_j=22$$ | $$x_j=29$$ | $$x_j=36$$ |
 |-------|-----------|------------|------------|------------|------------|
 | Rat 1 |       151 |        199 |        246 |        283 |        320 |
 | Rat 2 |       145 |        199 |        249 |        293 |        354 |
 | ...   |       ... |        ... |        ... |        ... |        ... |
 | Rat 30|       153 |        200 |        244 |        286 |        324 |
-
-</center>
 
 A plot of the 30 growth curves suggests some evidence of downward curvature.
 
