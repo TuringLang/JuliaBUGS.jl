@@ -1,4 +1,4 @@
-name = "Dogs"
+name = "Dogs: loglinear model for binary data"
 
 model_def = @bugs begin
     for i in 1:Dogs
