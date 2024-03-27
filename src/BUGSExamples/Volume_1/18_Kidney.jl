@@ -25,6 +25,32 @@ model_def = @bugs begin
     sigma = 1 / sqrt(tau) # s.d. of random effects
 end
 
+original = """
+model {
+    for (i in 1 : N) {
+        for (j in 1 : M) {
+            # Survival times bounded below by censoring times:
+            t[i,j] ~ dweib(r, mu[i,j])C(t.cen[i, j], );
+            log(mu[i,j ]) <- alpha + beta.age * age[i, j] + beta.sex *sex[i] + beta.dis[disease[i]] + b[i];
+        }
+        # Random effects:
+        b[i] ~ dnorm(0.0, tau)
+    }
+    
+    # Priors:
+    alpha ~ dnorm(0.0, 0.0001);
+    beta.age ~ dnorm(0.0, 0.0001);
+    beta.sex ~ dnorm(0.0, 0.0001);
+    # beta.dis[1] <- 0; # corner-point constraint
+    for(k in 2 : 4) {
+        beta.dis[k] ~ dnorm(0.0, 0.0001);
+    }
+    tau ~ dgamma(1.0E-3, 1.0E-3);
+    r ~ dgamma(1.0, 1.0E-3);
+    sigma <- 1 / sqrt(tau); # s.d. of random effects
+}
+"""
+
 data = (
     N = 38,
     M = 2,
@@ -168,4 +194,5 @@ inits_alternative = (
 
 reference_results = nothing
 
-kidney = Example(name, model_def, data, inits, inits_alternative, reference_results)
+kidney = Example(
+    name, model_def, original, data, inits, inits_alternative, reference_results)

@@ -5,6 +5,7 @@ using JuliaBUGS: @bugs
 struct Example
     name::String
     model_def::Expr
+    original_syntax_program::String
     data::NamedTuple
     inits::NamedTuple
     inits_alternative::NamedTuple

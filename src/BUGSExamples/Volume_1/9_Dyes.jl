@@ -14,6 +14,22 @@ model_def = @bugs begin
     theta ~ dnorm(0.0, 1.0e-10)
 end
 
+original = """
+model {
+    for(i in 1 : batches) {
+        mu[i] ~ dnorm(theta, tau.btw)
+        for(j in 1 : samples) {
+            y[i , j] ~ dnorm(mu[i], tau.with)
+        }
+    }   
+    sigma2.with <- 1 / tau.with
+    sigma2.btw <- 1 / tau.btw
+    tau.with ~ dgamma(0.001, 0.001)
+    tau.btw ~ dgamma(0.001, 0.001)
+    theta ~ dnorm(0.0, 1.0E-10)
+}
+"""
+
 data = (
     batches = 6,
     samples = 5,
@@ -38,4 +54,4 @@ inits_alternative = (
 
 reference_results = nothing
 
-dyes = Example(name, model_def, data, inits, inits_alternative, reference_results)
+dyes = Example(name, model_def, original, data, inits, inits_alternative, reference_results)

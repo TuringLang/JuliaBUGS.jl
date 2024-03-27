@@ -1,9 +1,10 @@
 # Leuk: Cox regression
 
 ## Description
-Several authors have discussed Bayesian inference for censored survival data where the integrated baseline hazard function is to be estimated non-parametrically, including Kalbfleisch (1978), Kalbfleisch and Prentice (1980), Clayton (1991), and Clayton (1994). 
-Clayton (1994) formulates the Cox model using counting process notation introduced by Andersen and Gill (1982) and discusses estimation of the baseline hazard and regression parameters using MCMC methods. 
-Although this approach may seem somewhat contrived, it lays the groundwork for extensions to random effect (frailty) models, time-dependent covariates, smoothed hazards, multiple events, and more. 
+
+Several authors have discussed Bayesian inference for censored survival data where the integrated baseline hazard function is to be estimated non-parametrically, including Kalbfleisch (1978), Kalbfleisch and Prentice (1980), Clayton (1991), and Clayton (1994).
+Clayton (1994) formulates the Cox model using counting process notation introduced by Andersen and Gill (1982) and discusses estimation of the baseline hazard and regression parameters using MCMC methods.
+Although this approach may seem somewhat contrived, it lays the groundwork for extensions to random effect (frailty) models, time-dependent covariates, smoothed hazards, multiple events, and more.
 Below is how to implement this formulation of the Cox model in BUGS.
 
 For subjects $i = 1,...,n$, we observe processes $N_i(t)$ which count the number of failures up to time $t$. The corresponding intensity process $I_i(t)$ is given by
@@ -30,11 +31,11 @@ $$dN_i(t) \sim \text{Poisson}(I_i(t)dt)$$
 
 $$I_i(t)dt = Y_i(t) \exp(\beta z_i) d\Lambda_0(t)$$
 
-where \(d\Lambda_0(t) = \Lambda_0(t)dt\) is the increment or jump in the integrated baseline hazard function occurring during the time interval \([t, t+dt)\). Since the conjugate prior for the Poisson mean is the gamma distribution, it would be convenient if \(\Lambda_0()\) were a process in which the increments \(d\Lambda_0(t)\) are distributed according to gamma distributions. We assume the conjugate independent increments prior suggested by Kalbfleisch (1978), namely   
+where \(d\Lambda_0(t) = \Lambda_0(t)dt\) is the increment or jump in the integrated baseline hazard function occurring during the time interval \([t, t+dt)\). Since the conjugate prior for the Poisson mean is the gamma distribution, it would be convenient if \(\Lambda_0()\) were a process in which the increments \(d\Lambda_0(t)\) are distributed according to gamma distributions. We assume the conjugate independent increments prior suggested by Kalbfleisch (1978), namely
 
 $$d\Lambda_0(t) \sim \text{Gamma}(c \cdot d\Lambda^*_0(t), c)$$
 
-Here, $d\Lambda^*_0(t)$ can be thought of as a prior guess at the unknown hazard function, with $c$ representing the degree of confidence in this guess. Small values of $c$ correspond to weak prior beliefs. In the example below, we set $d\Lambda^*_0(t) = r \cdot dt$ where $r$ is a guess at the failure rate per unit time, and $dt$ is the size of the time interval.    
+Here, $d\Lambda^*_0(t)$ can be thought of as a prior guess at the unknown hazard function, with $c$ representing the degree of confidence in this guess. Small values of $c$ correspond to weak prior beliefs. In the example below, we set $d\Lambda^*_0(t) = r \cdot dt$ where $r$ is a guess at the failure rate per unit time, and $dt$ is the size of the time interval.
 
 The above formulation is appropriate when genuine prior information exists concerning the underlying hazard function. Alternatively, if we wish to reproduce a Cox analysis but with, say, additional hierarchical structure, we may use the Multinomial-Poisson trick described in the BUGS manual. This is equivalent to assuming independent increments in the cumulative `non-informative` priors. This formulation is also shown below.
 
@@ -42,20 +43,20 @@ The fixed effect regression coefficients \(b\) are assigned a vague prior
 
 $$b \sim \text{Normal}(0.0, 0.000001)$$
 
-## BUGS code for the `Leuk` example:
+## BUGS code for the `Leuk` example
 
-```bugs
+```S
 model
 {
     # Set up data
     for(i in 1:N) {
-    for(j in 1:T) {
-        # risk set = 1 if obs.t >= t
-        Y[i,j] <- step(obs.t[i] - t[j] + eps)
-        # counting process jump = 1 if obs.t in [ t[j], t[j+1] )
-        # i.e. if t[j] <= obs.t < t[j+1]
-        dN[i, j] <- Y[i, j] * step(t[j + 1] - obs.t[i] - eps) * fail[i]
-    }
+        for(j in 1:T) {
+            # risk set = 1 if obs.t >= t
+            Y[i,j] <- step(obs.t[i] - t[j] + eps)
+            # counting process jump = 1 if obs.t in [ t[j], t[j+1] )
+            # i.e. if t[j] <= obs.t < t[j+1]
+            dN[i, j] <- Y[i, j] * step(t[j + 1] - obs.t[i] - eps) * fail[i]
+        }
     }
     # Model
     for(j in 1:T) {

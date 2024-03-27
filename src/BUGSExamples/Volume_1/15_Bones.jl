@@ -19,6 +19,30 @@ model_def = @bugs begin
     end
 end
 
+original = """
+model {
+    for (i in 1 : nChild) {
+        theta[i] ~ dnorm(0.0, 0.001)
+        for (j in 1 : nInd) {
+            # Cumulative probability of > grade k given theta
+            for (k in 1: ncat[j] - 1) {
+                logit(Q[i, j, k]) <- delta[j] * (theta[i] - gamma[j, k])
+            }
+        }
+    
+        # Probability of observing grade k given theta
+        for (j in 1 : nInd) {
+            p[i, j, 1] <- 1 - Q[i, j, 1]
+            for (k in 2 : ncat[j] - 1) {
+                p[i, j, k] <- Q[i, j, k - 1] - Q[i, j, k]
+            }
+            p[i, j, ncat[j]] <- Q[i, j, ncat[j] - 1]
+            grade[i, j] ~ dcat(p[i, j, 1 : ncat[j]])
+        }
+    }
+}
+"""
+
 data = (
     nChild = 13,
     nInd = 34,
@@ -109,4 +133,5 @@ inits_alternative = (
 
 reference_results = nothing
 
-bones = Example(name, model_def, data, inits, inits_alternative, reference_results)
+bones = Example(
+    name, model_def, original, data, inits, inits_alternative, reference_results)

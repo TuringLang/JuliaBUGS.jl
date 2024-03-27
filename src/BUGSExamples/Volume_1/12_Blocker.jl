@@ -15,6 +15,23 @@ model_def = @bugs begin
     sigma = 1 / sqrt(tau)
 end
 
+original = """
+model {
+    for( i in 1 : Num ) {
+        rc[i] ~ dbin(pc[i], nc[i])
+        rt[i] ~ dbin(pt[i], nt[i])
+        logit(pc[i]) <- mu[i]
+        logit(pt[i]) <- mu[i] + delta[i]
+        mu[i] ~ dnorm(0.0,1.0E-5)
+        delta[i] ~ dnorm(d, tau)
+    }
+    d ~ dnorm(0.0,1.0E-6)
+    tau ~ dgamma(0.001,0.001)
+    delta.new ~ dnorm(d, tau)
+    sigma <- 1 / sqrt(tau)
+}
+"""
+
 data = (
     rt = [3, 7, 5, 102, 28, 4, 98, 60, 25, 138, 64,
         45, 9, 57, 25, 33, 28, 8, 6, 32, 27, 22],
@@ -44,4 +61,5 @@ inits_alternative = (
 
 reference_results = nothing
 
-blockers = Example(name, model_def, data, inits, inits_alternative, reference_results)
+blockers = Example(
+    name, model_def, original, data, inits, inits_alternative, reference_results)

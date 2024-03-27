@@ -44,6 +44,42 @@ model_def = @bugs begin
              var"alpha.V4" * var"V4.bar"
 end
 
+original = """
+model {
+    for(j in 1 : N) {
+        for(k in 1 : T) {
+            log(mu[j, k]) <- a0 + alpha.Base * (log.Base4[j] - log.Base4.bar) + alpha.Trt * (Trt[j] - Trt.bar) + alpha.BT * (BT[j] - BT.bar) + alpha.Age * (log.Age[j] - log.Age.bar) + alpha.V4 * (V4[k] - V4.bar) + b1[j] + b[j, k]
+            y[j, k] ~ dpois(mu[j, k])
+            b[j, k] ~ dnorm(0.0, tau.b) # subject*visit random effects
+        }
+        b1[j] ~ dnorm(0.0, tau.b1) # subject random effects
+        BT[j] <- Trt[j] * log.Base4[j] # interaction
+        log.Base4[j] <- log(Base[j] / 4) 
+        log.Age[j] <- log(Age[j])
+    }
+    
+    # covariate means:
+    log.Age.bar <- mean(log.Age[])
+    Trt.bar <- mean(Trt[])
+    BT.bar <- mean(BT[])
+    log.Base4.bar <- mean(log.Base4[])
+    V4.bar <- mean(V4[])
+    
+    # priors:
+    a0 ~ dnorm(0.0,1.0E-4)       
+    alpha.Base ~ dnorm(0.0,1.0E-4)
+    alpha.Trt ~ dnorm(0.0,1.0E-4)
+    alpha.BT ~ dnorm(0.0,1.0E-4)
+    alpha.Age ~ dnorm(0.0,1.0E-4)
+    alpha.V4 ~ dnorm(0.0,1.0E-4)
+    tau.b1 ~ dgamma(1.0E-3,1.0E-3); sigma.b1 <- 1.0 / sqrt(tau.b1)
+    tau.b ~ dgamma(1.0E-3,1.0E-3); sigma.b <- 1.0/ sqrt(tau.b)      
+    
+    # re-calculate intercept on original scale:
+    alpha0 <- a0 - alpha.Base * log.Base4.bar - alpha.Trt * Trt.bar- alpha.BT * BT.bar - alpha.Age * log.Age.bar - alpha.V4 * V4.bar
+}
+"""
+
 data = (
     N = 59,
     T = 4,
@@ -141,4 +177,4 @@ inits_alternative = (
 
 reference_results = nothing
 
-epil = Example(name, model_def, data, inits, inits_alternative, reference_results)
+epil = Example(name, model_def, original, data, inits, inits_alternative, reference_results)

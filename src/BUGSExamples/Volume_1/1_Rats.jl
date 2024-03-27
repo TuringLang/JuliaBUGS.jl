@@ -18,6 +18,26 @@ model_def = @bugs begin
     alpha0 = var"alpha.c" - xbar * var"beta.c"
 end
 
+original = """
+model{
+    for(i in 1:N) {
+        for(j in 1:T) {
+            Y[i, j] ~ dnorm(mu[i, j], tau.c)
+            mu[i, j] <- alpha[i] + beta[i] * (x[j] - xbar)
+        }
+        alpha[i] ~ dnorm(alpha.c, alpha.tau)
+        beta[i] ~ dnorm(beta.c, beta.tau)
+    }
+    tau.c ~ dgamma(0.001, 0.001)
+    sigma <- 1 / sqrt(tau.c)
+    alpha.c ~ dnorm(0.0, 1.0E-6)
+    alpha.tau ~ dgamma(0.001, 0.001)
+    beta.c ~ dnorm(0.0, 1.0E-6)
+    beta.tau ~ dgamma(0.001, 0.001)
+    alpha0 <- alpha.c - xbar * beta.c
+}
+"""
+
 data = (
     x = [8.0, 15.0, 22.0, 29.0, 36.0],
     xbar = 22,
@@ -56,8 +76,8 @@ data = (
 )
 
 inits = (
-    alpha = ones(Integer, 30) .* 250,
-    beta = ones(Integer, 30) .* 6,
+    alpha = fill(250, 30),
+    beta = fill(6, 30),
     var"alpha.c" = 150,
     var"beta.c" = 10,
     var"tau.c" = 1,
@@ -65,8 +85,8 @@ inits = (
     var"beta.tau" = 1
 )
 inits_alternative = (
-    alpha = ones(Integer, 30) .* 25,
-    beta = ones(Integer, 30) .* 0.6,
+    alpha = fill(25, 30),
+    beta = fill(0.6, 30),
     var"alpha.c" = 15,
     var"beta.c" = 1,
     var"tau.c" = 0.1,
@@ -80,4 +100,4 @@ reference_results = (
     sigma = (mean = 6.093, std = 0.4643)
 )
 
-rats = Example(name, model_def, data, inits, inits_alternative, reference_results)
+rats = Example(name, model_def, original, data, inits, inits_alternative, reference_results)

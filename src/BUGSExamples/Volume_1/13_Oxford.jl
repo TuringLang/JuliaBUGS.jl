@@ -17,6 +17,25 @@ model_def = @bugs begin
     sigma = 1 / sqrt(tau)
 end
 
+original = """
+model {
+    for (i in 1 : K) {
+        r0[i] ~ dbin(p0[i], n0[i])
+        r1[i] ~ dbin(p1[i], n1[i])
+        logit(p0[i]) <- mu[i]
+        logit(p1[i]) <- mu[i] + logPsi[i]
+        logPsi[i] <- alpha + beta1 * year[i] + beta2 * (year[i] * year[i] - 22) + b[i]
+        b[i] ~ dnorm(0, tau)
+        mu[i] ~ dnorm(0.0, 1.0E-6)
+    }
+    alpha ~ dnorm(0.0, 1.0E-6)
+    beta1 ~ dnorm(0.0, 1.0E-6)
+    beta2 ~ dnorm(0.0, 1.0E-6)
+    tau ~ dgamma(1.0E-3, 1.0E-3)
+    sigma <- 1 / sqrt(tau)
+}
+"""
+
 data = (
     r1 = [3, 5, 2, 7, 7, 2, 5, 3, 5, 11, 6, 6, 11, 4, 4, 2, 8, 8, 6, 5, 15, 4, 9, 9, 4,
         12, 8, 8, 6, 8, 12, 4, 7, 16, 12, 9, 4, 7, 8, 11, 5, 12, 8, 17, 9, 3, 2, 7, 6,
@@ -68,4 +87,5 @@ inits_alternative = (
 
 reference_results = nothing
 
-oxford = Example(name, model_def, data, inits, inits_alternative, reference_results)
+oxford = Example(
+    name, model_def, original, data, inits, inits_alternative, reference_results)
