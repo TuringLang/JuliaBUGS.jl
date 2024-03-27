@@ -27,7 +27,8 @@ model {
         beta[i] ~ dnorm(0.0, 0.001)
         median[i] <- pow(log(2) * exp(-beta[i]), 1/r)
     }
-    r ~ dexp(0.001)
+    # r ~ dexp(0.001)
+    r ~ dunif(0.1, 10)
     veh.control <- beta[2] - beta[1]
     test.sub <- beta[3] - beta[1]
     pos.control <- beta[4] - beta[1]
