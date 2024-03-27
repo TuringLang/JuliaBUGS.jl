@@ -160,7 +160,6 @@ function _bugs_string_input(
     julia_program = to_julia_program(prog, replace_period, no_enclosure)
     expr = Base.Expr(JuliaSyntax.parsestmt(SyntaxNode, julia_program))
     expr = MacroTools.postwalk(MacroTools.rmlines, expr)
-    error_container = []
     expr = MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, f_(lhs_) = rhs_) # only transform logical assignments
             inv_f = if f == :log
@@ -172,25 +171,20 @@ function _bugs_string_input(
             elseif f == :probit
                 :phi
             else
-                error_msg = (
-                    "$(String(f)) is not a recognized link function, at statement $(sub_expr)"
+                error(
+                    "$(String(f)) is not a recognized link function, at statement $(sub_expr)",
                 )
-                push!(error_container, :(error($error_msg)))
                 return sub_expr
             end
             # The 'rhs' will be parsed into a :block Expr, as the link function syntax is interpreted as a function definition.
             return :($lhs = $inv_f($(rhs.args...)))
         elseif @capture(sub_expr, f_(lhs_) ~ rhs_)
-            error_msg = ("Link functions on the LHS of a `~` is not supported at: $(sub_expr)")
-            push!(error_container, :(error($error_msg)))
+            error("Link functions on the LHS of a `~` is not supported at: $(sub_expr)")
         elseif @capture(sub_expr, step(args__))
             return :(_step($(args...)))
         else
             return sub_expr
         end
-    end
-    if !isempty(error_container) # otherwise errors thrown in macro will be LoadError
-        return :(throw(ErrorException(join($error_container, "\n"))))
     end
     return expr
 end
