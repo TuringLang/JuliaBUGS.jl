@@ -42,13 +42,13 @@ will need to be rewritten to:
 end
 ```
 
-## Use `:` for Slicing when using `@bugs`
+## Use `:` for slicing when using Julia Syntax
 
 In the original BUGS language, slicing is performed using syntax like `x[, ]`, which selects all elements from both the first and second dimensions.
 
 The `@bugs` macro will automatically insert a `:` when given `x[]`, however, Julia parser will throw an error if it encounters `x[, ]`, so when using the @bugs macro in JuliaBUGS, users must explicitly use the `Colon (:)` operator for slicing. For example, to select all elements from both dimensions of an array x, you would write `x[:, :]`.
 
-## Link function syntax
+## Link functions
 
 BUGS supports four link functions: `log`, `logit`, `cloglog`, and `probit`. These functions are used to support Generalized Linear Models and, in some cases, to transform random variables with constrained support to the real line.
 
