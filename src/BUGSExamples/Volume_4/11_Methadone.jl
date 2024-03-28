@@ -48,7 +48,7 @@ model_def = @bugs begin
     sd_region ~ dunif(0, 10)
 end
 
-data_dict = JSON.parsefile("/home/sunxd/JuliaBUGS.jl/src/BUGSExamples/Volume_4/methadone/methadone_data.json")
+data_dict = JSON.parsefile(joinpath(readdir(), "methadone_data.json"))
 data = NamedTuple{Tuple([Symbol(key) for key in keys(data_dict)])}(Tuple([map(identity, val) for val in values(data_dict)]))
 
 inits = (
