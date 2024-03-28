@@ -4,7 +4,7 @@
 abstract type AbstractBUGSModel end
 
 # TODO: currently the evaluated `node_function` is not used, two issues need to fixed before getting rid of `bugs_eval`:
-# `cumulative`/`density` requires special treatment in `bugs_eval`; implicit casting of Float64 in indices
+# implicit casting of Float64 in indices
 
 """
     BUGSModel
@@ -39,7 +39,6 @@ struct BUGSModel <: AbstractBUGSModel
     transformed_var_lengths::Dict{VarName,Int}
 
     varinfo::SimpleVarInfo
-    distributions::Dict{VarName,Distribution}
     parameters::Vector{VarName}
     sorted_nodes::Vector{VarName}
 
@@ -115,7 +114,6 @@ function BUGSModel(
         0.0,
     )
 
-    distributions = Dict{VarName,Distribution}()
     parameters = VarName[]
     untransformed_param_length, transformed_param_length = 0, 0
     untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
@@ -126,13 +124,12 @@ function BUGSModel(
         args = prepare_arg_values(node_args, vi, loop_vars)
         expr = node_function_expr.args[2].args[1].args[1]
         if !is_stochastic
-            value = bugs_eval(expr, args, distributions)
+            value = bugs_eval(expr, args)
             # value = Base.invokelatest(node_function; arg_values...)
             vi = setindex!!(vi, value, vn)
         else
-            dist = bugs_eval(expr, args, distributions)
+            dist = bugs_eval(expr, args)
             # dist = Base.invokelatest(node_function; arg_values...)
-            distributions[vn] = dist
 
             if is_observed
                 continue
@@ -168,7 +165,6 @@ function BUGSModel(
         untransformed_var_lengths,
         transformed_var_lengths,
         vi,
-        distributions,
         parameters,
         sorted_nodes,
         g,
@@ -200,7 +196,7 @@ function get_params_varinfo(model::BUGSModel, vi::SimpleVarInfo)
             if v in model.parameters
                 args = prepare_arg_values(node_args, vi, loop_vars)
                 expr = node_function_expr.args[2].args[1].args[1]
-                dist = bugs_eval(expr, args, model.distributions)
+                dist = bugs_eval(expr, args)
                 # dist = node_function(; args...)
                 linked_val = DynamicPPL.link(dist, vi[v])
                 d[v] = linked_val
@@ -238,7 +234,7 @@ function getparams(model::BUGSModel, vi::SimpleVarInfo; transformed::Bool=false)
             (; node_function_expr, node_args, loop_vars) = model.g[v]
             args = prepare_arg_values(node_args, vi, loop_vars)
             expr = node_function_expr.args[2].args[1].args[1]
-            dist = bugs_eval(expr, args, model.distributions)
+            dist = bugs_eval(expr, args)
             # dist = node_function(; args...)
             linked_val = Bijectors.link(dist, vi[v])
             len = model.transformed_var_lengths[v]
@@ -279,7 +275,7 @@ function setparams!!(
         (; node_function_expr, node_args, loop_vars) = model.g[v]
         args = prepare_arg_values(node_args, vi, loop_vars)
         expr = node_function_expr.args[2].args[1].args[1]
-        dist = bugs_eval(expr, args, model.distributions)
+        dist = bugs_eval(expr, args)
 
         len = if transformed
             model.transformed_var_lengths[v]
@@ -343,7 +339,6 @@ function AbstractPPL.condition(
         model.untransformed_var_lengths,
         model.transformed_var_lengths,
         varinfo,
-        model.distributions,
         new_parameters,
         sorted_blanket_with_vars,
         model.g,
@@ -368,7 +363,6 @@ function AbstractPPL.decondition(model::BUGSModel, var_group::Vector{<:VarName})
         model.untransformed_var_lengths,
         model.transformed_var_lengths,
         model.varinfo,
-        model.distributions,
         new_parameters,
         sorted_blanket_with_vars,
         model.g,
@@ -429,10 +423,10 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
         args = prepare_arg_values(node_args, vi, loop_vars)
         expr = node_function_expr.args[2].args[1].args[1]
         if !is_stochastic
-            value = bugs_eval(expr, args, model.distributions)
+            value = bugs_eval(expr, args)
             vi = setindex!!(vi, value, vn)
         else
-            dist = bugs_eval(expr, args, model.distributions)
+            dist = bugs_eval(expr, args)
             value = rand(ctx.rng, dist) # just sample from the prior
             logp += logpdf(dist, value)
             vi = setindex!!(vi, value, vn)
@@ -453,10 +447,10 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
         args = prepare_arg_values(node_args, vi, loop_vars)
         expr = node_function_expr.args[2].args[1].args[1]
         if !is_stochastic
-            value = bugs_eval(expr, args, model.distributions)
+            value = bugs_eval(expr, args)
             vi = setindex!!(vi, value, vn)
         else
-            dist = bugs_eval(expr, args, model.distributions)
+            dist = bugs_eval(expr, args)
             value = vi[vn]
             if model.transformed
                 # although the values stored in `vi` are in their original space, 
@@ -505,10 +499,10 @@ function AbstractPPL.evaluate!!(
         args = prepare_arg_values(node_args, vi, loop_vars)
         expr = node_function_expr.args[2].args[1].args[1]
         if !is_stochastic
-            value = bugs_eval(expr, args, model.distributions)
+            value = bugs_eval(expr, args)
             vi = setindex!!(vi, value, vn)
         else
-            dist = bugs_eval(expr, args, model.distributions)
+            dist = bugs_eval(expr, args)
             if vn in model.parameters
                 l = var_lengths[vn]
                 if model.transformed

@@ -519,17 +519,16 @@ function simple_arithmetic_eval(data::NamedTuple, expr::Expr)
 end
 
 """
-    bugs_eval(expr, env, dist_store)
+    bugs_eval(expr, env)
 
 `bugs_eval` mimics `Base.eval`'s behavior: it traverse the Expr, for function call, it will use `getfield(JuliaBUGS, f)` to get the function.
 `bugs_eval` assumes that the Expr only has two kinds of expressions: function calls and indexing.
 `env` is a data structure mapping symbols in `expr` to values, values can be arrays or scalars.
-`dist_store` is a data structure storing runtime `Distribution` objects associated with random variables.
 """
-function bugs_eval(expr::Number, env, dist_store)
+function bugs_eval(expr::Number, env)
     return expr
 end
-function bugs_eval(expr::Symbol, env, dist_store)
+function bugs_eval(expr::Symbol, env)
     if expr == :nothing
         return nothing
     elseif expr == :(:)
@@ -538,52 +537,20 @@ function bugs_eval(expr::Symbol, env, dist_store)
         return env[expr]
     end
 end
-function bugs_eval(expr::AbstractRange, env, dist_store)
+function bugs_eval(expr::AbstractRange, env)
     return expr
 end
-function bugs_eval(expr::Expr, env, dist_store)
+function bugs_eval(expr::Expr, env)
     if Meta.isexpr(expr, :call)
         f = expr.args[1]
-        if f === :cumulative || f === :density
-            if length(expr.args) != 3
-                error(
-                    "density function should have 3 arguments, but get $(length(expr.args)).",
-                )
-            end
-            rv1, rv2 = expr.args[2:3]
-            dist = if Meta.isexpr(rv1, :ref)
-                var, indices... = rv1.args
-                for i in eachindex(indices)
-                    indices[i] = bugs_eval(indices[i], env, dist_store)
-                end
-                vn = AbstractPPL.VarName{var}(
-                    AbstractPPL.Setfield.IndexLens(Tuple(indices))
-                )
-                dist_store[vn]
-            elseif rv1 isa Symbol
-                vn = AbstractPPL.VarName{rv1}()
-                dist_store[vn]
-            else
-                error(
-                    "the first argument of density function should be a variable, but got $(rv1).",
-                )
-            end
-            rv2 = bugs_eval(rv2, env, dist_store)
-            if f === :cumulative
-                return cdf(dist, rv2)
-            else
-                return pdf(dist, rv2)
-            end
-        else
-            args = [bugs_eval(arg, env, dist_store) for arg in expr.args[2:end]]
-            if f isa Expr # `JuliaBUGS.some_function` like
-                f = f.args[2].value
-            end
-            return getfield(JuliaBUGS, f)(args...) # assume all functions used are available under `JuliaBUGS`
+        args = [bugs_eval(arg, env) for arg in expr.args[2:end]]
+        if f isa Expr # `JuliaBUGS.some_function` like
+            f = f.args[2].value
         end
+        return getfield(JuliaBUGS, f)(args...) # assume all functions used are available under `JuliaBUGS`
     elseif Meta.isexpr(expr, :ref)
-        array = bugs_eval(expr.args[1], env, dist_store)
-        indices = [bugs_eval(arg, env, dist_store) for arg in expr.args[2:end]]
+        array = bugs_eval(expr.args[1], env)
+        indices = [bugs_eval(arg, env) for arg in expr.args[2:end]]
         # TODO: should just ban implicit type casting
         indices = map(indices) do index
             if index isa Float64
@@ -594,12 +561,12 @@ function bugs_eval(expr::Expr, env, dist_store)
         end
         return array[indices...]
     elseif Meta.isexpr(expr, :block)
-        return bugs_eval(expr.args[end], env, dist_store)
+        return bugs_eval(expr.args[end], env)
     else
         error("Unknown expression type: $expr")
     end
 end
-function bugs_eval(expr, env, dist_store)
+function bugs_eval(expr, env)
     return error("Unknown expression type: $expr of type $(typeof(expr))")
 end
 

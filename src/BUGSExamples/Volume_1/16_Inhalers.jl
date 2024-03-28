@@ -107,7 +107,6 @@ model {
     for (i in 1 : N) {
         for (t in 1 : T) {
             for (j in 1 : Ncut) {
-                # Cumulative probability of worse response than j
                 logit(Q[i, t, j]) <- -(a[j] + mu[group[i], t] + b[i])
             }
             

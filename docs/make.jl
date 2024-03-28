@@ -8,6 +8,7 @@ makedocs(;
     sitename="JuliaBUGS.jl",
     pages=[
         "Introduction" => "index.md",
+        "Differences from Other BUGS Implementations" => "differences.md",
         "Example" => "example.md",
         "API" => [
             "General" => "api.md",
