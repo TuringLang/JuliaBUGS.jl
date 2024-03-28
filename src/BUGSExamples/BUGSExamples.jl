@@ -1,6 +1,7 @@
 module BUGSExamples
 
 using JuliaBUGS: @bugs
+using JSON
 
 struct Example
     name::String

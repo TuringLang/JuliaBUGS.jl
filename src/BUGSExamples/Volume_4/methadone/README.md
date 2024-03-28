@@ -1,1 +1,0 @@
-`Methadone` is an example of a large model. Currently, `JuliaBUGS` is not able to handle it. 
