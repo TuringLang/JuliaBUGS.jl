@@ -53,11 +53,13 @@ jobs:
         uses: julia-actions/julia-runtest@v1
         env:
           TEST_GROUP: "compilation"
-      - name: Run profile
-        id: profile
+      - name: Run profile (macOS/Linux)
+        if: runner.os != 'Windows'
+        id: profile_unix
         run: |
           output=$(julia --color=yes --project=. -e 'import Pkg; Pkg.instantiate(); Pkg.test(;coverage=true);')
           echo "output=$output" >> $GITHUB_STEP_SUMMARY
+        shell: bash
         env:
           TEST_GROUP: "profile"
       - name: Running `gibbs` tests
