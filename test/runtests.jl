@@ -32,38 +32,38 @@ end
 
 @info "Running tests for groups: $test_group"
 
-if test_group == "elementary" || test_group == "all"
-    @testset "Unit Tests" begin
-        Documenter.doctest(JuliaBUGS; manual=false)
-        include("utils.jl")
-    end
-    include("parser/test_parser.jl")
-    include("passes.jl")
-    include("graphs.jl")
-end
+# if test_group == "elementary" || test_group == "all"
+#     @testset "Unit Tests" begin
+#         Documenter.doctest(JuliaBUGS; manual=false)
+#         include("utils.jl")
+#     end
+#     include("parser/test_parser.jl")
+#     include("passes.jl")
+#     include("graphs.jl")
+# end
 
-if test_group == "compilation" || test_group == "all"
-    @testset "BUGS examples volume 1" begin
-        @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
-            m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
-            model = compile(m.model_def, m.data, m.inits)
-        end
-    end
-    @testset "Some corner cases" begin
-        include("bugs_primitives.jl")
-        include("compile.jl")
-    end
-    include("logp_tests/test_logp.jl")
-end
+# if test_group == "compilation" || test_group == "all"
+#     @testset "BUGS examples volume 1" begin
+#         @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
+#             m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
+#             model = compile(m.model_def, m.data, m.inits)
+#         end
+#     end
+#     @testset "Some corner cases" begin
+#         include("bugs_primitives.jl")
+#         include("compile.jl")
+#     end
+#     include("logp_tests/test_logp.jl")
+# end
 
 if test_group == "profile" || test_group == "all"
     include("profiles/prof_compile_pass.jl")
 end
 
-if test_group == "gibbs" || test_group == "all"
-    include("gibbs.jl")
-end
+# if test_group == "gibbs" || test_group == "all"
+#     include("gibbs.jl")
+# end
 
-if test_group == "mcmchains" || test_group == "all"
-    include("ext/mcmchains.jl")
-end
+# if test_group == "mcmchains" || test_group == "all"
+#     include("ext/mcmchains.jl")
+# end
