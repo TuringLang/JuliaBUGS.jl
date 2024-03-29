@@ -57,7 +57,7 @@ if test_group == "compilation" || test_group == "all"
 end
 
 if test_group == "profile" || test_group == "all"
-    include("profile.jl")
+    include("profiles/prof_compile_pass.jl")
 end
 
 if test_group == "gibbs" || test_group == "all"

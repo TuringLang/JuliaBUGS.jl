@@ -53,10 +53,11 @@ jobs:
         uses: julia-actions/julia-runtest@v1
         env:
           TEST_GROUP: "compilation"
-      - name: Profile compiler passes
+      - name: Run profile
+        id: profile
         run: |
-          output=$(julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(;coverage=true);")
-          echo "$output" >> $GITHUB_STEP_SUMMARY
+          output=$(julia --color=yes --project=. -e 'import Pkg; Pkg.instantiate(); Pkg.test(;coverage=true);')
+          echo "output=$output" >> $GITHUB_STEP_SUMMARY
         env:
           TEST_GROUP: "profile"
       - name: Running `gibbs` tests

@@ -35,7 +35,7 @@ for name in keys(BUGSExamples.VOLUME_1)
     suite[string(name)] = _suite
 end
 
-results = run(suite; verbose=true)
+results = run(suite; verbose=false)
 
 function create_result_dict(results)
     result_dict = Dict{String,Dict{String,Dict{String,String}}}()
