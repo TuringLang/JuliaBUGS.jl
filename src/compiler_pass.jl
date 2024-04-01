@@ -769,7 +769,7 @@ function analyze_statement(pass::AddEdges, expr::Expr, loop_vars::NamedTuple)
         vertex_code = filter(
             !iszero, vertex_code isa AbstractArray ? vertex_code : [vertex_code]
         )
-        vertex_labels = map(x -> label_for(pass.g, x), vertex_code)
+        vertex_labels = [label_for(pass.g, code) for code in vertex_code]
         for r in vertex_labels
             if r != lhs_vn
                 add_edge!(pass.g, r, lhs_vn)
