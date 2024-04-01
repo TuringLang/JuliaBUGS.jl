@@ -54,7 +54,7 @@ jobs:
         env:
           TEST_GROUP: "compilation"
       - name: Run profile (macOS/Linux)
-        if: runner.os == 'Ubuntu' && matrix.version == '1'
+        if: runner.os == 'ubuntu-latest' && matrix.version == '1'
         run: |
           output=$(julia --color=yes --project=. -e 'import Pkg; Pkg.instantiate(); Pkg.test(;coverage=true);')
           echo "output=$output" >> $GITHUB_STEP_SUMMARY
