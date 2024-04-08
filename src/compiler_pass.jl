@@ -626,8 +626,8 @@ function build_node_functions(
                 statement.args[3]
             end
             args, node_func_expr = make_function_expr(rhs, eval_env)
-            # node_func = eval(node_func_expr)
-            node_func = nothing
+            node_func = eval(node_func_expr)
+            # node_func = nothing
             f_dict[statement] = (args, node_func_expr, node_func)
         elseif Meta.isexpr(statement, :for)
             loop_var, _, _, body = decompose_for_expr(statement)
@@ -656,13 +656,30 @@ function make_function_expr(expr, env::NamedTuple{vars}) where {vars}
                 if T === Union{}
                     T = Float64
                 end
-                push!(arg_exprs, Expr(:(::), v, :(AbstractArray{$T})))
+                push!(arg_exprs, Expr(:(::), v, :(Array{$T})))
             else
                 error("Unexpected argument type: $(typeof(value))")
             end
         else # loop variable
             push!(arg_exprs, Expr(:(::), v, :Int))
         end
+    end
+
+    expr = MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, v_[indices__])
+            new_indices = similar(indices)
+            for i in eachindex(indices)
+                if indices[i] isa Int # special case: already an Int
+                    new_indices = indices[i]
+                elseif indices[i] isa Symbol || Meta.isexpr(indices[i], :ref) # cast to Int if it's a variable
+                    new_indices[i] = :(Int($(indices[i]))) # issue: Range{Int} is not a subtype of Int
+                else # if a function, then don't cast
+                    new_indices = indices[i]
+                end
+            end
+            return :($v[$(new_indices...)])
+        end
+        return sub_expr
     end
 
     return args, MacroTools.@q function (; $(arg_exprs...))
