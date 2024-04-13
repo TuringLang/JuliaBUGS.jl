@@ -15,19 +15,19 @@ for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
 
     sub_suite = BenchmarkGroup()
 
-    sub_suite["non-AD model logdensity"] = @benchmarkable LogDensityProblems.logdensity(
+    sub_suite["logdensity"] = @benchmarkable LogDensityProblems.logdensity(
         $model, $θ
     )
-    sub_suite["AD model logdensity"] = @benchmarkable LogDensityProblems.logdensity(
+    sub_suite["AD logdensity"] = @benchmarkable LogDensityProblems.logdensity(
         $ad_model, $θ
     )
-    sub_suite["AD model logdensity with gradient"] = @benchmarkable LogDensityProblems.logdensity_and_gradient(
+    sub_suite["AD logdensity_and_gradient"] = @benchmarkable LogDensityProblems.logdensity_and_gradient(
         $ad_model, $θ
     )
-    sub_suite["AD model compiled logdensity"] = @benchmarkable LogDensityProblems.logdensity(
+    sub_suite["AD compiled logdensity"] = @benchmarkable LogDensityProblems.logdensity(
         $ad_model_compiled, $θ
     )
-    sub_suite["AD model compiled logdensity with gradient"] = @benchmarkable LogDensityProblems.logdensity_and_gradient(
+    sub_suite["AD compiled logdensity_and_gradient"] = @benchmarkable LogDensityProblems.logdensity_and_gradient(
         $ad_model_compiled, $θ
     )
 

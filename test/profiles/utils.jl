@@ -19,12 +19,12 @@ function create_result_dict(results)
 end
 
 function print_markdown_table(result_dict)
-    # Print the header
+    category_padding = maximum(length.(keys(result_dict))) + 5
     println(
         "| ",
         rpad("Example Name", 30),
         " | ",
-        lpad("Category", 20),
+        lpad("Category", category_padding),
         " | ",
         lpad("Median Time", 20),
         " | ",
@@ -35,12 +35,22 @@ function print_markdown_table(result_dict)
         lpad("Memory Usage", 20),
         " |",
     )
-    # Print the separator for the header
     println(
-        "|", "-"^32, "|", "-"^22, "|", "-"^22, "|", "-"^22, "|", "-"^22, "|", "-"^22, "|"
+        "|",
+        "-"^32,
+        "|",
+        "-"^(category_padding + 2),
+        "|",
+        "-"^22,
+        "|",
+        "-"^22,
+        "|",
+        "-"^22,
+        "|",
+        "-"^22,
+        "|",
     )
 
-    # Iterate through each example and its benchmarks
     for (name, benchmarks) in result_dict
         first_category = true
         for (category, results) in benchmarks
@@ -49,7 +59,7 @@ function print_markdown_table(result_dict)
                     "| ",
                     rpad(name, 30),
                     " | ",
-                    lpad(category, 20),
+                    lpad(category, category_padding),
                     " | ",
                     lpad(results["median"], 20),
                     " | ",
@@ -66,7 +76,7 @@ function print_markdown_table(result_dict)
                     "| ",
                     rpad("", 30),
                     " | ",
-                    lpad(category, 20),
+                    lpad(category, category_padding),
                     " | ",
                     lpad(results["median"], 20),
                     " | ",
@@ -79,21 +89,5 @@ function print_markdown_table(result_dict)
                 )
             end
         end
-        # Optionally, you can add a separator after each category group
-        println(
-            "|",
-            "-"^32,
-            "|",
-            "-"^22,
-            "|",
-            "-"^22,
-            "|",
-            "-"^22,
-            "|",
-            "-"^22,
-            "|",
-            "-"^22,
-            "|",
-        )
     end
 end
