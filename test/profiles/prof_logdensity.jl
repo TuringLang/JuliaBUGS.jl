@@ -15,12 +15,8 @@ for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
 
     sub_suite = BenchmarkGroup()
 
-    sub_suite["logdensity"] = @benchmarkable LogDensityProblems.logdensity(
-        $model, $θ
-    )
-    sub_suite["AD logdensity"] = @benchmarkable LogDensityProblems.logdensity(
-        $ad_model, $θ
-    )
+    sub_suite["logdensity"] = @benchmarkable LogDensityProblems.logdensity($model, $θ)
+    sub_suite["AD logdensity"] = @benchmarkable LogDensityProblems.logdensity($ad_model, $θ)
     sub_suite["AD logdensity_and_gradient"] = @benchmarkable LogDensityProblems.logdensity_and_gradient(
         $ad_model, $θ
     )
