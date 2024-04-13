@@ -672,12 +672,12 @@ function make_function_expr(expr, env::NamedTuple{vars}) where {vars}
                 if indices[i] isa Int # special case: already an Int
                     new_indices = indices[i]
                 elseif indices[i] isa Symbol || Meta.isexpr(indices[i], :ref) # cast to Int if it's a variable
-                    new_indices[i] = :(Int($(indices[i]))) # issue: Range{Int} is not a subtype of Int
-                else # if a function, then don't cast
+                    new_indices[i] = Expr(:call, :Int, indices[i])
+                else # function and range are not casted
                     new_indices = indices[i]
                 end
             end
-            return :($v[$(new_indices...)])
+            return Expr(:ref, v, new_indices...)
         end
         return sub_expr
     end
