@@ -56,8 +56,7 @@ jobs:
       - name: Run profile (Only on ubuntu-latest and Julia version 1)
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
         run: |
-          julia --color=yes --project=. -e 'import Pkg; Pkg.instantiate(); Pkg.test(;coverage=true);' | tee output.log
-          cat output.log >> $GITHUB_STEP_SUMMARY
+          julia --color=yes --project=. -e 'import Pkg; Pkg.instantiate(); Pkg.test(;coverage=true);'
         shell: bash
         env:
           TEST_GROUP: "profile"
