@@ -37,4 +37,4 @@ end
 
 results = run(suite; verbose=false)
 result_dict = create_result_dict(results)
-print_pure_text_table(result_dict)
+print_markdown_table(result_dict)
