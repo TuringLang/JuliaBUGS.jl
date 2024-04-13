@@ -19,57 +19,55 @@ function create_result_dict(results)
 end
 
 function print_pure_text_table(result_dict)
-    # Define the table header
     println(
-        rpad("Example Name", 25),
+        rpad("Example Name", 30),
         "|",
         lpad("Category", 20),
         "|",
-        lpad("Median Time", 15),
+        lpad("Median Time", 20),
         "|",
-        lpad("Minimum Time", 15),
+        lpad("Minimum Time", 20),
         "|",
-        lpad("Maximum Time", 15),
+        lpad("Maximum Time", 20),
         "|",
-        lpad("Memory Usage", 15),
+        lpad("Memory Usage", 20),
     )
-    println("-"^105)  # Adjust the number based on the total length of the header
+    println("-"^130)
 
-    # Iterate through each example and its benchmarks to populate the table rows
     for (name, benchmarks) in result_dict
         first_category = true
         for (category, results) in benchmarks
             if first_category
                 println(
-                    rpad(name, 25),
+                    rpad(name, 30),
                     "|",
                     lpad(category, 20),
                     "|",
-                    lpad(results["median"], 15),
+                    lpad(results["median"], 20),
                     "|",
-                    lpad(results["minimum"], 15),
+                    lpad(results["minimum"], 20),
                     "|",
-                    lpad(results["maximum"], 15),
+                    lpad(results["maximum"], 20),
                     "|",
-                    lpad(results["memory"], 15),
+                    lpad(results["memory"], 20),
                 )
                 first_category = false
             else
                 println(
-                    rpad("", 25),
+                    rpad("", 30),
                     "|",
                     lpad(category, 20),
                     "|",
-                    lpad(results["median"], 15),
+                    lpad(results["median"], 20),
                     "|",
-                    lpad(results["minimum"], 15),
+                    lpad(results["minimum"], 20),
                     "|",
-                    lpad(results["maximum"], 15),
+                    lpad(results["maximum"], 20),
                     "|",
-                    lpad(results["memory"], 15),
+                    lpad(results["memory"], 20),
                 )
             end
         end
-        println("-"^105)  # Adjust the number based on the total length of the header
+        println("-"^130)
     end
 end

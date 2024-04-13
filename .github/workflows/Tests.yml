@@ -53,7 +53,7 @@ jobs:
         uses: julia-actions/julia-runtest@v1
         env:
           TEST_GROUP: "compilation"
-      - name: Run profile (macOS/Linux)
+      - name: Run profile (Only on ubuntu-latest and Julia version 1)
         if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
         run: |
           output=$(julia --color=yes --project=. -e 'import Pkg; Pkg.instantiate(); Pkg.test(;coverage=true);')
