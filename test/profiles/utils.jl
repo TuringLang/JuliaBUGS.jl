@@ -91,5 +91,4 @@ function print_markdown_table(result_dict)
             end
         end
     end
-    print("\n\n")
 end
