@@ -19,6 +19,7 @@ function create_result_dict(results)
 end
 
 function print_markdown_table(result_dict)
+    print("\n\n")
     category_padding = maximum(length.(keys(result_dict))) + 5
     println(
         "| ",
@@ -90,4 +91,5 @@ function print_markdown_table(result_dict)
             end
         end
     end
+    print("\n\n")
 end
