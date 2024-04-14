@@ -667,14 +667,14 @@ function make_function_expr(expr, env::NamedTuple{vars}) where {vars}
 
     expr = MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, v_[indices__])
-            new_indices = similar(indices)
+            new_indices = Any[]
             for i in eachindex(indices)
                 if indices[i] isa Int # special case: already an Int
-                    new_indices = indices[i]
+                    push!(new_indices, indices[i])
                 elseif indices[i] isa Symbol || Meta.isexpr(indices[i], :ref) # cast to Int if it's a variable
-                    new_indices[i] = Expr(:call, :Int, indices[i])
+                    push!(new_indices, Expr(:call, :Int, indices[i]))
                 else # function and range are not casted
-                    new_indices = indices[i]
+                    push!(new_indices, indices[i])
                 end
             end
             return Expr(:ref, v, new_indices...)
