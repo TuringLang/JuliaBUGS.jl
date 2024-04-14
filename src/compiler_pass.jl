@@ -645,8 +645,8 @@ function make_function_expr(expr, env::NamedTuple{vars}) where {vars}
     for v in args
         if v ∈ vars
             value = env[v]
-            if value isa Int
-                push!(arg_exprs, Expr(:(::), v, :Int))
+            if value isa Int # eval_env arrays are initialized with Int, but they might be converted to Float64 during execution
+                push!(arg_exprs, Expr(:(::), v, :(Union{Int,Float64})))
             elseif value isa Float64
                 push!(arg_exprs, Expr(:(::), v, :Float64))
             elseif value isa Missing
