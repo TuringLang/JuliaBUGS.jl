@@ -1,7 +1,7 @@
 name = "LSAT: item response"
 
 model_def = @bugs begin
-    # Calculate individual (binary) responses to each test from multinomial data
+    # Calculate individual (binary) responses to each test from Multinomial data
     for j in 1:culm[1]
         for k in 1:T
             r[j, k] = response[1, k]
@@ -30,7 +30,7 @@ model_def = @bugs begin
         alpha[k] ~ dnorm(0, 0.0001)
         a[k] = alpha[k] - mean(alpha[:])
     end
-    beta ~ truncated(dflat(), 0, nothing)
+    beta ~ dunif(0, 1000)
 end
 
 original = """
@@ -63,7 +63,7 @@ model {
         alpha[k] ~ dnorm(0, 0.0001)
         a[k] <- alpha[k] - mean(alpha[])
     }
-    beta ~ dflat()T(0, )
+    beta ~ dunif(0, 1000)
 }
 """
 

@@ -53,8 +53,11 @@ jobs:
         uses: julia-actions/julia-runtest@v1
         env:
           TEST_GROUP: "compilation"
-      - name: Profile compiler passes
-        run: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(;coverage=true);" >> $GITHUB_STEP_SUMMARY
+      - name: Run profile (Only on ubuntu-latest and Julia version 1)
+        if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
+        run: |
+          julia --color=yes --project=. -e 'import Pkg; Pkg.instantiate(); Pkg.test(;coverage=true);'
+        shell: bash
         env:
           TEST_GROUP: "profile"
       - name: Running `gibbs` tests
