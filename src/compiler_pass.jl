@@ -654,9 +654,12 @@ function make_function_expr(expr, env::NamedTuple{vars}) where {vars}
             elseif value isa AbstractArray
                 T = nonmissingtype(eltype(value))
                 if T === Union{}
-                    T = Float64
+                    push!(arg_exprs, Expr(:(::), v, :(Array{Float64})))
+                elseif T === Int
+                    push!(arg_exprs, Expr(:(::), v, :(Union{Array{Int},Array{Float64}})))
+                else
+                    push!(arg_exprs, Expr(:(::), v, :(Array{$T})))
                 end
-                push!(arg_exprs, Expr(:(::), v, :(Array{$T})))
             else
                 error("Unexpected argument type: $(typeof(value))")
             end
