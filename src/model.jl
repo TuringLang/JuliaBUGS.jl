@@ -6,65 +6,49 @@ abstract type AbstractBUGSModel end
 """
     BUGSModel
 
-The `BUGSModel` object is used for inference and represents the output of compilation. It fully implements the
+The `BUGSModel` object is used for inference and represents the output of compilation. It implements the
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
-
-# Fields
-
-- `transformed::Bool`: Indicates whether the model parameters are in the transformed space.
-- `untransformed_param_length::Int`: The length of the parameters vector in the original space.
-- `transformed_param_length::Int`: The length of the parameters vector in the transformed space.
-- `untransformed_var_lengths::Dict{VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the original space.
-- `transformed_var_lengths::Dict{VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the transformed space.
-- `varinfo::SimpleVarInfo`: An instance of 
-    [`DynamicPPL.SimpleVarInfo`](https://turinglang.org/DynamicPPL.jl/dev/api/#DynamicPPL.SimpleVarInfo), 
-    which is a dictionary-like data structure that maps both data and values of variables in the model to the corresponding values.
-- `parameters::Vector{VarName}`: A vector containing the names of the parameters in the model, defined as 
-    stochastic variables that are not observed. This vector should be consistent with `sorted_nodes`.
-- `sorted_nodes::Vector{VarName}`: A vector containing the names of all the variables in the model, sorted in topological order.
-    In the case of a conditioned model, `sorted_nodes` include all the variables in `parameters` and the variables in the Markov blanket of `parameters`.
-- `g::BUGSGraph`: An instance of [`BUGSGraph`](@ref), representing the dependency graph of the model.
-- `base_model::Union{BUGSModel,Nothing}`: If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`.
-
 """
 struct BUGSModel <: AbstractBUGSModel
+    " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
 
+    " The length of the parameters vector in the original space. "
     untransformed_param_length::Int
+    " The length of the parameters vector in the transformed space. "
     transformed_param_length::Int
+    " A dictionary mapping the names of the variables to their lengths in the original space. "
     untransformed_var_lengths::Dict{VarName,Int}
+    " A dictionary mapping the names of the variables to their lengths in the transformed space. "
     transformed_var_lengths::Dict{VarName,Int}
 
+    " An instance of `DynamicPPL.SimpleVarInfo`, which is a dictionary-like data structure that maps both data and values of variables in the model to the corresponding values. "
     varinfo::SimpleVarInfo
+    " A vector containing the names of the parameters in the model, defined as stochastic variables that are not observed. This vector should be consistent with `sorted_nodes`. "
     parameters::Vector{VarName}
+    " A vector containing the names of all the variables in the model, sorted in topological order. In the case of a conditioned model, `sorted_nodes` include all the variables in `parameters` and the variables in the Markov blanket of `parameters`. "
     sorted_nodes::Vector{VarName}
 
+    " An instance of `BUGSGraph`, representing the dependency graph of the model. "
     g::BUGSGraph
 
-    " The base model if the model is a conditioned model; otherwise, `nothing`. "
+    " If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`. "
     base_model::Union{BUGSModel,Nothing}
 end
 
 """
-    param_names(m::BUGSModel)
+    parameters(m::BUGSModel)
 
-Return the names of the parameters in the model.
+Return a vector of `VarName` containing the names of the parameters in the model.
 """
-param_names(m::BUGSModel) = m.parameters
-
-"""
-    all_variables(m::BUGSModel)
-
-Return the names of all the variables in the model.
-"""
-all_variables(m::BUGSModel) = labels(m.g)
+parameters(m::BUGSModel) = m.parameters
 
 """
-    generated_variables(m::BUGSModel)
+    variables(m::BUGSModel)
 
-Return the names of the generated variables in the model.
+Return a vector of `VarName` containing the names of all the variables in the model.
 """
-generated_variables(m::BUGSModel) = find_generated_vars(m.g)
+variables(m::BUGSModel) = collect(labels(m.g))
 
 function prepare_arg_values(
     args::Tuple{Vararg{Symbol}}, vi::SimpleVarInfo, loop_vars::NamedTuple{lvars}
@@ -83,29 +67,23 @@ end
 function BUGSModel(
     g::BUGSGraph, eval_env::NamedTuple, inits::NamedTuple; is_transformed::Bool=true
 )
-    sorted_nodes = map(topological_sort(g)) do node
-        label_for(g, node)
-    end
+    sorted_nodes = [label_for(g, node) for node in topological_sort(g)]
     vi = SimpleVarInfo(
         NamedTuple{keys(eval_env)}(
             map(
-                k -> begin
-                    v = eval_env[k]
+                v -> begin
                     if v === missing
-                        0.0
+                        return 0.0
                     elseif v isa AbstractArray
                         if eltype(v) === Missing
-                            zeros(size(v)...)
+                            return zeros(size(v)...)
                         elseif Missing <: eltype(v)
-                            coalesce.(v, zero(nonmissingtype(eltype(v))))
-                        else
-                            v
+                            return coalesce.(v, zero(nonmissingtype(eltype(v))))
                         end
-                    else
-                        v
                     end
+                    return v
                 end,
-                keys(eval_env),
+                values(eval_env),
             ),
         ),
         0.0,
@@ -164,6 +142,12 @@ function BUGSModel(
         g,
         nothing,
     )
+end
+
+function initialize!(model::BUGSModel, rng::Random.AbstractRNG)
+    vi, _ = evaluate!!(model, SamplingContext(rng))
+    model.varinfo = vi
+    return model
 end
 
 """
