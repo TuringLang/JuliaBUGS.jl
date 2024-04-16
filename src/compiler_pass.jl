@@ -627,7 +627,6 @@ function build_node_functions(
             end
             args, node_func_expr = make_function_expr(rhs, eval_env)
             node_func = eval(node_func_expr)
-            # node_func = nothing
             f_dict[statement] = (args, node_func_expr, node_func)
         elseif Meta.isexpr(statement, :for)
             loop_var, _, _, body = decompose_for_expr(statement)
@@ -645,25 +644,6 @@ function make_function_expr(expr, env::NamedTuple{vars}) where {vars}
     for v in args
         if v ∈ vars
             value = env[v]
-            # if the types restrictions are made too tight, AD will error
-            # if value isa Int # eval_env arrays are initialized with Int, but they might be converted to Float64 during execution
-            #     push!(arg_exprs, Expr(:(::), v, :(Union{Int,Float64})))
-            # elseif value isa Float64
-            #     push!(arg_exprs, Expr(:(::), v, :Float64))
-            # elseif value isa Missing
-            #     push!(arg_exprs, Expr(:(::), v, :(Union{Int,Float64})))
-            # elseif value isa AbstractArray
-            #     T = nonmissingtype(eltype(value))
-            #     if T === Union{}
-            #         push!(arg_exprs, Expr(:(::), v, :(Array{Float64})))
-            #     elseif T === Int
-            #         push!(arg_exprs, Expr(:(::), v, :(Union{Array{Int},Array{Float64}})))
-            #     else
-            #         push!(arg_exprs, Expr(:(::), v, :(Array{$T})))
-            #     end
-            # else
-            #     error("Unexpected argument type: $(typeof(value))")
-            # end
             if value isa Int || value isa Float64 || value isa Missing
                 push!(arg_exprs, Expr(:(::), v, :Real))
             elseif value isa AbstractArray
