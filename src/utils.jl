@@ -518,58 +518,6 @@ function simple_arithmetic_eval(data::NamedTuple, expr::Expr)
     end
 end
 
-"""
-    bugs_eval(expr, env)
-
-`bugs_eval` mimics `Base.eval`'s behavior: it traverse the Expr, for function call, it will use `getfield(JuliaBUGS, f)` to get the function.
-`bugs_eval` assumes that the Expr only has two kinds of expressions: function calls and indexing.
-`env` is a data structure mapping symbols in `expr` to values, values can be arrays or scalars.
-"""
-function bugs_eval(expr::Number, env)
-    return expr
-end
-function bugs_eval(expr::Symbol, env)
-    if expr == :nothing
-        return nothing
-    elseif expr == :(:)
-        return Colon()
-    else # intentional strict, all corner cases should be handled above
-        return env[expr]
-    end
-end
-function bugs_eval(expr::AbstractRange, env)
-    return expr
-end
-function bugs_eval(expr::Expr, env)
-    if Meta.isexpr(expr, :call)
-        f = expr.args[1]
-        args = [bugs_eval(arg, env) for arg in expr.args[2:end]]
-        if f isa Expr # `JuliaBUGS.some_function` like
-            f = f.args[2].value
-        end
-        return getfield(JuliaBUGS, f)(args...) # assume all functions used are available under `JuliaBUGS`
-    elseif Meta.isexpr(expr, :ref)
-        array = bugs_eval(expr.args[1], env)
-        indices = [bugs_eval(arg, env) for arg in expr.args[2:end]]
-        # TODO: should just ban implicit type casting
-        indices = map(indices) do index
-            if index isa Float64
-                Int(index)
-            else
-                index
-            end
-        end
-        return array[indices...]
-    elseif Meta.isexpr(expr, :block)
-        return bugs_eval(expr.args[end], env)
-    else
-        error("Unknown expression type: $expr")
-    end
-end
-function bugs_eval(expr, env)
-    return error("Unknown expression type: $expr of type $(typeof(expr))")
-end
-
 # TODO: can't remove even with the `possible` fix in DynamicPPL, still seems to have eltype inference issue causing AD errors
 # Resolves: setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
 # Alternatively, can overload BangBang.possible(
