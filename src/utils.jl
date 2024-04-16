@@ -518,6 +518,7 @@ function simple_arithmetic_eval(data::NamedTuple, expr::Expr)
     end
 end
 
+# `bugs_eval` is not currently used, it is kept for reference
 """
     bugs_eval(expr, env)
 

@@ -10,8 +10,7 @@ using JuliaBUGS:
     Gibbs,
     find_generated_vars,
     LogDensityContext,
-    evaluate!!,
-    bugs_eval
+    evaluate!!
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.DynamicPPL
 using JuliaBUGS.LogDensityProblems
