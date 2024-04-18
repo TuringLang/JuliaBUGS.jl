@@ -1,4 +1,4 @@
-# AbstractBUGSModel subtype `AbstractPPL.AbstractProbabilisticProgram` (which subtypes `AbstractMCMC.AbstractModel`)
+# AbstractBUGSModel cannot subtype `AbstractPPL.AbstractProbabilisticProgram` (which subtypes `AbstractMCMC.AbstractModel`)
 # because it will then dispatched to https://github.com/TuringLang/AbstractMCMC.jl/blob/d7c549fe41a80c1f164423c7ac458425535f624b/src/sample.jl#L81
 # instead of https://github.com/TuringLang/AbstractMCMC.jl/blob/d7c549fe41a80c1f164423c7ac458425535f624b/src/logdensityproblems.jl#L90
 abstract type AbstractBUGSModel end
@@ -64,9 +64,7 @@ function prepare_arg_values(
     ))
 end
 
-function BUGSModel(
-    g::BUGSGraph, eval_env::NamedTuple, inits::NamedTuple; is_transformed::Bool=true
-)
+function BUGSModel(g::BUGSGraph, eval_env::NamedTuple; is_transformed::Bool=true)
     sorted_nodes = [label_for(g, node) for node in topological_sort(g)]
     vi = SimpleVarInfo(
         NamedTuple{keys(eval_env)}(
@@ -100,14 +98,10 @@ function BUGSModel(
         if !is_stochastic
             value = Base.invokelatest(node_function; args...)
             vi = setindex!!(vi, value, vn)
-        else
+        elseif !is_observed
+            push!(parameters, vn)
             dist = Base.invokelatest(node_function; args...)
 
-            if is_observed
-                continue
-            end
-
-            push!(parameters, vn)
             untransformed_var_lengths[vn] = length(dist)
             # not all distributions are defined for `Bijectors.transformed`
             transformed_var_lengths[vn] = if bijector(dist) == identity
@@ -118,16 +112,7 @@ function BUGSModel(
             untransformed_param_length += untransformed_var_lengths[vn]
             transformed_param_length += transformed_var_lengths[vn]
 
-            initialization = try
-                AbstractPPL.get(inits, vn)
-            catch _
-                missing
-            end
-            # TODO: this will cause partially initialized value to be redrawn
-            if !is_resolved(initialization)
-                initialization = rand(dist)
-            end
-            vi = setindex!!(vi, initialization, vn)
+            vi = setindex!!(vi, rand(dist), vn)
         end
     end
     return BUGSModel(
@@ -144,10 +129,31 @@ function BUGSModel(
     )
 end
 
-function initialize!(model::BUGSModel, rng::Random.AbstractRNG)
-    vi, _ = evaluate!!(model, SamplingContext(rng))
-    model.varinfo = vi
+function initialize!(model::BUGSModel, inits::NamedTuple)
+    check_input(inits)
+    for vn in sorted_nodes
+        (; is_stochastic, is_observed, node_function, node_args, loop_vars) = g[vn]
+        args = prepare_arg_values(node_args, vi, loop_vars)
+        if !is_stochastic
+            value = Base.invokelatest(node_function; args...)
+            vi = setindex!!(vi, value, vn)
+        elseif !is_observed
+            initialization = try
+                AbstractPPL.get(inits, vn)
+            catch _
+                missing
+            end
+            if !ismissing(initialization)
+                vi = setindex!!(vi, initialization, vn)
+            end
+        end
+    end
     return model
+end
+
+function unflatten(model::BUGSModel, flattened_values::AbstractVector)
+    vi, logp = AbstractPPL.evaluate!!(model, LogDensityContext(), flattened_values)
+    return DynamicPPL.setlogp!!(vi, logp)
 end
 
 """

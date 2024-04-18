@@ -145,7 +145,7 @@ function semantic_analysis(model_def, data)
 end
 
 """
-    compile(model_def[, data, initializations])
+    compile(model_def, data[, initializations])
 
 Compile a BUGS model into a log density problem.
 
@@ -158,13 +158,20 @@ Compile a BUGS model into a log density problem.
 # Returns
 - A [`BUGSModel`](@ref) object representing the compiled model.
 """
-function compile(model_def::Expr, data, inits; is_transformed=true)
+function compile(model_def::Expr, data, inits=NamedTuple(); is_transformed=true)
     data, inits = check_input(data), check_input(inits)
     eval_env = semantic_analysis(model_def, data)
     model_def = concretize_colon_indexing(model_def, eval_env)
     g = create_graph(model_def, eval_env)
     return BUGSModel(g, eval_env, inits; is_transformed=is_transformed)
 end
+
+"""
+    initialize!(model::BUGSModel, inits::NamedTuple)
+
+Initialize the model with the given initial values.
+"""
+initialize!
 
 """
     @register_primitive(expr)
