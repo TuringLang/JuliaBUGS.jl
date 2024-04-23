@@ -69,7 +69,12 @@ end
 
 Create a `BUGSModel` from a `BUGSGraph` and an `NamedTuple` representing the evaluation environment.
 """
-function BUGSModel(g::BUGSGraph, eval_env::NamedTuple; is_transformed::Bool=true)
+function BUGSModel(
+    g::BUGSGraph,
+    eval_env::NamedTuple,
+    inits::NamedTuple=NamedTuple();
+    is_transformed::Bool=true,
+)
     sorted_nodes = [label_for(g, node) for node in topological_sort(g)]
     vi = SimpleVarInfo(
         NamedTuple{keys(eval_env)}(
@@ -117,7 +122,16 @@ function BUGSModel(g::BUGSGraph, eval_env::NamedTuple; is_transformed::Bool=true
             untransformed_param_length += untransformed_var_lengths[vn]
             transformed_param_length += transformed_var_lengths[vn]
 
-            vi = setindex!!(vi, rand(dist), vn)
+            initialization = try
+                AbstractPPL.get(inits, vn)
+            catch _
+                missing
+            end
+            if !ismissing(initialization)
+                vi = setindex!!(vi, initialization, vn)
+            else
+                vi = setindex!!(vi, rand(dist), vn)
+            end
         end
     end
     return BUGSModel(
