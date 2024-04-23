@@ -128,7 +128,6 @@ function create_graph(model_def, eval_env)
     analyze_block(pass, model_def)
     pass = AddEdges(pass.env, pass.g, pass.vertex_id_tracker)
     analyze_block(pass, model_def)
-
     return pass.g
 end
 
@@ -145,25 +144,16 @@ function semantic_analysis(model_def, data)
 end
 
 """
-    compile(model_def, data[, initializations])
+    compile(model_def, data)
 
-Compile a BUGS model into a log density problem.
-
-# Arguments
-- `model_def::Expr`: The BUGS model definition.
-- `data::NamedTuple` or `AbstractDict`: The data to be used in the model. If none is passed, the data will be assumed to be empty.
-- `initializations::NamedTuple` or `AbstractDict`: The initial values for the model parameters. If none is passed, the parameters will be assumed to be initialized to zero.
-- `is_transformed::Bool=true`: If true, the model parameters during inference will be transformed to the unconstrained space. 
-
-# Returns
-- A [`BUGSModel`](@ref) object representing the compiled model.
+Produce a `BUGSGraph` and an `NamedTuple` representing the evaluation environment from a BUGS program and data.
 """
-function compile(model_def::Expr, data, inits=NamedTuple(); is_transformed=true)
-    data, inits = check_input(data), check_input(inits)
+function compile(model_def::Expr, data)
+    data = check_input(data)
     eval_env = semantic_analysis(model_def, data)
     model_def = concretize_colon_indexing(model_def, eval_env)
     g = create_graph(model_def, eval_env)
-    return BUGSModel(g, eval_env, inits; is_transformed=is_transformed)
+    return g, eval_env
 end
 
 """

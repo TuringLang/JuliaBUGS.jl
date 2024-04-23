@@ -64,6 +64,11 @@ function prepare_arg_values(
     ))
 end
 
+"""
+    BUGSModel(g::BUGSGraph, eval_env::NamedTuple; is_transformed::Bool=true)
+
+Create a `BUGSModel` from a `BUGSGraph` and an `NamedTuple` representing the evaluation environment.
+"""
 function BUGSModel(g::BUGSGraph, eval_env::NamedTuple; is_transformed::Bool=true)
     sorted_nodes = [label_for(g, node) for node in topological_sort(g)]
     vi = SimpleVarInfo(
