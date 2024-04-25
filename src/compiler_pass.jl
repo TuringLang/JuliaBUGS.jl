@@ -3,7 +3,12 @@ abstract type CompilerPass end
 is_deterministic(expr::Expr) = Meta.isexpr(expr, :(=))
 is_stochastic(expr::Expr) = Meta.isexpr(expr, :call) && expr.args[1] == :(~)
 
-function analyze_block(pass::CompilerPass, expr::Expr, loop_vars::NamedTuple=NamedTuple(); warn_loop_bounds=false)
+function analyze_block(
+    pass::CompilerPass,
+    expr::Expr,
+    loop_vars::NamedTuple=NamedTuple();
+    warn_loop_bounds=false,
+)
     if !Meta.isexpr(expr, :block)
         error("The top level expression must be a block.")
     end
@@ -21,7 +26,9 @@ function analyze_block(pass::CompilerPass, expr::Expr, loop_vars::NamedTuple=Nam
                 end
             else
                 for loop_var_value in lb:ub
-                    analyze_block(pass, body, merge(loop_vars, (loop_var => loop_var_value,)))
+                    analyze_block(
+                        pass, body, merge(loop_vars, (loop_var => loop_var_value,))
+                    )
                 end
             end
         else
