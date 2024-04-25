@@ -707,7 +707,7 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
         AbstractPPL.VarName{lhs}(identity)
     else
         v, indices... = lhs
-        AbstractPPL.VarName{v}(identity)
+        AbstractPPL.VarName{v}(AbstractPPL.IndexLens(indices))
     end
     add_vertex!(
         pass.g,
