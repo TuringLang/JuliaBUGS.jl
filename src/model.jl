@@ -57,7 +57,7 @@ param_names(m::BUGSModel) = m.parameters
 
 Return the names of all the variables in the model.
 """
-all_variables(m::BUGSModel) = labels(m.g)
+all_variables(m::BUGSModel) = collect(labels(m.g))
 
 """
     generated_variables(m::BUGSModel)
