@@ -44,12 +44,12 @@ JuliaBUGSTikzGraphsExt = ["TikzGraphs"]
 
 [compat]
 AbstractMCMC = "5"
-AbstractPPL = "0.6, 0.7"
-BangBang = "0.3"
+AbstractPPL = "0.8"
+BangBang = "0.4.1"
 Bijectors = "0.13"
 Distributions = "0.23.8, 0.24, 0.25"
 Documenter = "0.27, 1"
-DynamicPPL = "0.22, 0.23, 0.24, 0.25"
+DynamicPPL = "0.25"
 Graphs = "1"
 JSON = "0.21"
 JuliaSyntax = "0.4"
