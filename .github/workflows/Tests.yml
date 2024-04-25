@@ -3,13 +3,7 @@ name: Tests
 on:
   push:
     branches: ["master"]
-    paths:
-      - 'src/**/*'
-      - 'test/**/*'
   pull_request:
-    paths:
-      - 'src/**/*'
-      - 'test/**/*'
 
   workflow_dispatch:
 
