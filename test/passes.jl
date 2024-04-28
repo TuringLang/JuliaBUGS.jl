@@ -163,7 +163,9 @@ end
         end
     end
     data = (;)
-    @test_warn "In BUGS, if the lower bound of for loop is greater than the upper bound, the loop will be skipped." compile(model_def, data, (;))
+    @test_warn "In BUGS, if the lower bound of for loop is greater than the upper bound, the loop will be skipped." compile(
+        model_def, data, (;)
+    )
     model = compile(model_def, data, (;))
     @test length(JuliaBUGS.all_variables(model)) == 0
 end
