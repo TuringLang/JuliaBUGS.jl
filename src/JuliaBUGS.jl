@@ -148,12 +148,32 @@ end
 
 Produce a `BUGSGraph` and an `NamedTuple` representing the evaluation environment from a BUGS program and data.
 """
-function compile(model_def::Expr, data)
+function compile(model_def::Expr, data::NamedTuple)
     data = check_input(data)
     eval_env = semantic_analysis(model_def, data)
     model_def = concretize_colon_indexing(model_def, eval_env)
     g = create_graph(model_def, eval_env)
-    return g, eval_env
+    svi = SimpleVarInfo(
+        NamedTuple{keys(eval_env)}(
+            map(
+                v -> begin
+                    if v === missing
+                        return 0.0
+                    elseif v isa AbstractArray
+                        if eltype(v) === Missing
+                            return zeros(size(v)...)
+                        elseif Missing <: eltype(v)
+                            return coalesce.(v, zero(nonmissingtype(eltype(v))))
+                        end
+                    end
+                    return v
+                end,
+                values(eval_env),
+            ),
+        ),
+        0.0,
+    )
+    return g, svi
 end
 
 """
