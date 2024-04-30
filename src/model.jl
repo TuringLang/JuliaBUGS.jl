@@ -148,8 +148,8 @@ function BUGSModel(
     )
 end
 
-function initialize!(model::BUGSModel, inits::NamedTuple)
-    check_input(inits)
+function initialize!(model::BUGSModel, initial_params::NamedTuple)
+    check_input(initial_params)
     for vn in sorted_nodes
         (; is_stochastic, is_observed, node_function, node_args, loop_vars) = g[vn]
         args = prepare_arg_values(node_args, vi, loop_vars)
@@ -158,7 +158,7 @@ function initialize!(model::BUGSModel, inits::NamedTuple)
             vi = setindex!!(vi, value, vn)
         elseif !is_observed
             initialization = try
-                AbstractPPL.get(inits, vn)
+                AbstractPPL.get(initial_params, vn)
             catch _
                 missing
             end
@@ -168,11 +168,6 @@ function initialize!(model::BUGSModel, inits::NamedTuple)
         end
     end
     return model
-end
-
-function unflatten(model::BUGSModel, flattened_values::AbstractVector)
-    vi, logp = AbstractPPL.evaluate!!(model, LogDensityContext(), flattened_values)
-    return DynamicPPL.setlogp!!(vi, logp)
 end
 
 """
