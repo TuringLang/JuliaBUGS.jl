@@ -170,6 +170,22 @@ function initialize!(model::BUGSModel, initial_params::NamedTuple)
     return model
 end
 
+function initialize!(model::BUGSModel, initial_params::AbstractVector)
+    vi, logp = AbstractPPL.evaluate!!(model, LogDensityContext(), initial_params)
+    return BUGSModel(
+        model.transformed,
+        model.untransformed_param_length,
+        model.transformed_param_length,
+        model.untransformed_var_lengths,
+        model.transformed_var_lengths,
+        DynamicPPL.setlogp!!(vi, logp),
+        model.parameters,
+        model.sorted_nodes,
+        model.g,
+        model.base_model,
+    )
+end
+
 """
     get_params_varinfo(model::BUGSModel[, vi::SimpleVarInfo])
 
