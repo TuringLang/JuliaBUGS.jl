@@ -132,7 +132,7 @@ OrderedDict{Symbol, Any} with 1 entry:
   :a_b => 1.0
 ```
 
-### Transform Dta read from R to Julia convention
+### Transform Data read from R to Julia convention
 If you want to load data using the R interface, but the data source is in the same layout as BUGS, you can process the data in Julia, for instance
 ```julia-repl
 # define a row-major reshape function, because Julia's `reshape` is column-major

@@ -70,23 +70,13 @@ inits_alternative = (
     mu = [3.0, 1.0, -1.0], tau = [2, 2, 2], tauC = 2)
 
 reference_results = (
-    var"mu[1]" = (mean = 5.257, sd = 0.1252, mc_error = 0.002462,
-        quantile_2_5 = 5.013, quantile_97_5 = 5.501, n_eff = 5001, Rhat = 20000),
-    var"mu[2]" = (mean = 2.198, sd = 0.1171, mc_error = 0.00461, quantile_2_5 = 1.975,
-        quantile_97_5 = 2.421, n_eff = 5001, Rhat = 20000),
-    var"mu[3]" = (mean = -5.874, sd = 0.09403, mc_error = 0.004655, quantile_2_5 = -6.058,
-        quantile_97_5 = -5.701, n_eff = 5001, Rhat = 20000),
-    var"sigma[1]" = (
-        mean = 0.2369, sd = 0.1258, mc_error = 0.00241, quantile_2_5 = 0.09734,
-        quantile_97_5 = 0.5436, n_eff = 5001, Rhat = 20000),
-    var"sigma[2]" = (
-        mean = 0.1346, sd = 0.1166, mc_error = 0.003597, quantile_2_5 = 0.02544,
-        quantile_97_5 = 0.4308, n_eff = 5001, Rhat = 20000),
-    var"sigma[3]" = (
-        mean = 0.1014, sd = 0.08572, mc_error = 0.003506, quantile_2_5 = 0.02441,
-        quantile_97_5 = 0.3247, n_eff = 5001, Rhat = 20000),
-    var"sigma.C" = (mean = 7.972, sd = 1.188, mc_error = 0.02552, quantile_2_5 = 6.035,
-        quantile_97_5 = 10.68, n_eff = 5001, Rhat = 20000)
+    var"mu[1]" = (mean = 5.257, std = 0.1252),
+    var"mu[2]" = (mean = 2.198, std = 0.1171),
+    var"mu[3]" = (mean = -5.874, std = 0.09403),
+    var"sigma[1]" = (mean = 0.2369, std = 0.1258),
+    var"sigma[2]" = (mean = 0.2636, std = 0.1282),
+    var"sigma[3]" = (mean = 0.2302, std = 0.1073),
+    var"sigma.C" = (mean = 7.972, std = 1.188)
 )
 
 orange_trees = Example(

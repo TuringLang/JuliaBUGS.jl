@@ -1,6 +1,6 @@
 module BUGSExamples
 
-using JuliaBUGS: @bugs
+using JuliaBUGS: JuliaBUGS, @bugs
 using JSON
 
 struct Example

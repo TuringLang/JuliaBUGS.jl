@@ -81,20 +81,13 @@ inits_alternative = (
     tauC = 2)
 
 reference_results = (
-    var"mu[1]" = (mean = 5.266, median = 5.267, sd = 0.1363, mc_error = 0.003134,
-        quantile_2_5 = 4.994, quantile_97_5 = 5.528, n_eff = 5001, Rhat = 20000),
-    var"mu[2]" = (mean = 2.196, median = 2.191, sd = 0.1629, mc_error = 0.004996,
-        quantile_2_5 = 1.88, quantile_97_5 = 2.529, n_eff = 5001, Rhat = 20000),
-    var"mu[3]" = (mean = -5.885, median = -5.884, sd = 0.1421, mc_error = 0.005479,
-        quantile_2_5 = -6.174, quantile_97_5 = -5.61, n_eff = 5001, Rhat = 20000),
-    var"sigma[1]" = (mean = 0.2587, median = 0.2325, sd = 0.1145, mc_error = 0.002074,
-        quantile_2_5 = 0.1282, quantile_97_5 = 0.5377, n_eff = 5001, Rhat = 20000),
-    var"sigma[2]" = (mean = 0.2636, median = 0.2339, sd = 0.1282, mc_error = 0.002831,
-        quantile_2_5 = 0.1175, quantile_97_5 = 0.5932, n_eff = 5001, Rhat = 20000),
-    var"sigma[3]" = (mean = 0.2302, median = 0.2052, sd = 0.1073, mc_error = 0.002713,
-        quantile_2_5 = 0.1094, quantile_97_5 = 0.5018, n_eff = 5001, Rhat = 20000),
-    var"sigmaC" = (mean = 7.902, median = 7.762, sd = 1.207, mc_error = 0.02906,
-        quantile_2_5 = 5.947, quantile_97_5 = 10.66, n_eff = 5001, Rhat = 20000)
+    var"mu[1]" = (mean = 5.266, std = 0.1363),
+    var"mu[2]" = (mean = 2.196, std = 0.1629),
+    var"mu[3]" = (mean = -5.885, std = 0.1421),
+    var"sigma[1]" = (mean = 0.2587, std = 0.1145),
+    var"sigma[2]" = (mean = 0.2636, std = 0.1282),
+    var"sigma[3]" = (mean = 0.2302, std = 0.1073),
+    var"sigmaC" = (mean = 7.902, std = 1.207)
 )
 
 orange_trees_multivariate = Example(
