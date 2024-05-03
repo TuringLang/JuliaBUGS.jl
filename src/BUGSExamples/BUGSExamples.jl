@@ -61,8 +61,11 @@ function load_example_volume(volume_num::Int)
         )
         return vol_1
     elseif volume_num == 2
-        include("Volume_2/BiRats.jl")
-        include("Volume_2/Eyes.jl")
+        include("Volume_2/01_Dugongs.jl")
+        include("Volume_2/02_Orange_trees.jl")
+        include("Volume_2/03_Multivariate_Orange_trees.jl")
+        include("Volume_2/05_Eyes.jl")
+        include("Volume_2/10_BiRats.jl")
         vol_2 = (
             birats = birats,
             eyes = eyes
