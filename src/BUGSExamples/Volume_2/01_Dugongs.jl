@@ -48,4 +48,5 @@ reference_results = (
     sigma = (mean = 0.09917, std = 0.01503)
 )
 
-dugong = Example(name, model_def, original, data, inits, inits_alternative, reference_results)
+dugong = Example(
+    name, model_def, original, data, inits, inits_alternative, reference_results)
