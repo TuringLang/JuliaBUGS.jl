@@ -97,5 +97,5 @@ reference_results = (
         quantile_2_5 = 5.947, quantile_97_5 = 10.66, n_eff = 5001, Rhat = 20000)
 )
 
-orange_tree_multivariate = Example(
+orange_trees_multivariate = Example(
     name, model_def, original, data, inits, inits_alternative, reference_results)

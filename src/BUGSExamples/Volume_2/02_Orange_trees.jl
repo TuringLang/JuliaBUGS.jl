@@ -14,7 +14,7 @@ model_def = @bugs begin
         end
     end
     tauC ~ dgamma(1.0E-3, 1.0E-3)
-    sigma.C < -1 / sqrt(tauC)
+    var"sigma.C" = 1 / sqrt(tauC)
     for k in 1:3
         mu[k] ~ dnorm(0, 1.0E-4)
         tau[k] ~ dgamma(1.0E-3, 1.0E-3)
@@ -89,5 +89,5 @@ reference_results = (
         quantile_97_5 = 10.68, n_eff = 5001, Rhat = 20000)
 )
 
-orange_tree = Example(
+orange_trees = Example(
     name, model_def, original, data, inits, inits_alternative, reference_results)

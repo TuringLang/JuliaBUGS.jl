@@ -3,14 +3,14 @@ name = "Dugongs: nonlinear growth curve"
 model_def = @bugs begin
     for i in 1:N
         Y[i] ~ dnorm(mu[i], tau)
-        mu[i] < -alpha - beta * pow(gamma, x[i])
+        mu[i] = alpha - beta * pow(gamma, x[i])
     end
     alpha ~ dunif(0, 100)
     beta ~ dunif(0, 100)
     gamma ~ dunif(0.5, 1.0)
     tau ~ dgamma(0.001, 0.001)
-    sigma < -1 / sqrt(tau)
-    U3 < -logit(gamma)
+    sigma = 1 / sqrt(tau)
+    U3 = logit(gamma)
 end
 
 original = """
@@ -48,5 +48,5 @@ reference_results = (
     sigma = (mean = 0.09917, std = 0.01503)
 )
 
-dugong = Example(
+dugongs = Example(
     name, model_def, original, data, inits, inits_alternative, reference_results)

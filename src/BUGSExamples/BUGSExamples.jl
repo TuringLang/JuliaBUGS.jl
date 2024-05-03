@@ -67,6 +67,9 @@ function load_example_volume(volume_num::Int)
         include("Volume_2/05_Eyes.jl")
         include("Volume_2/10_BiRats.jl")
         vol_2 = (
+            dugongs = dugongs,
+            orange_trees = orange_trees,
+            orange_trees_multivariate = orange_trees_multivariate,
             birats = birats,
             eyes = eyes
         )
