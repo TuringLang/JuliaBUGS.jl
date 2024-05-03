@@ -89,4 +89,5 @@ reference_results = (
         quantile_97_5 = 10.68, n_eff = 5001, Rhat = 20000)
 )
 
-orange_tree = Example(name, model_def, original, data, inits, inits_alternative, reference_results)
+orange_tree = Example(
+    name, model_def, original, data, inits, inits_alternative, reference_results)
