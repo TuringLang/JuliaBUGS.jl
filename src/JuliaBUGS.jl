@@ -77,7 +77,7 @@ end
 
 function determine_array_sizes(model_def, data)
     pass = CollectVariables(model_def, data)
-    analyze_block(pass, model_def)
+    analyze_block(pass, model_def; warn_loop_bounds=true)
     non_data_scalars, non_data_array_sizes = post_process(pass)
     return non_data_scalars, non_data_array_sizes
 end
