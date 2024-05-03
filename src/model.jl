@@ -71,32 +71,11 @@ Create a `BUGSModel` from a `BUGSGraph` and an `NamedTuple` representing the eva
 """
 function BUGSModel(
     g::BUGSGraph,
-    eval_env::NamedTuple,
-    inits::NamedTuple=NamedTuple();
+    vi::SimpleVarInfo,
+    initial_params::NamedTuple=NamedTuple();
     is_transformed::Bool=true,
 )
     sorted_nodes = [label_for(g, node) for node in topological_sort(g)]
-    vi = SimpleVarInfo(
-        NamedTuple{keys(eval_env)}(
-            map(
-                v -> begin
-                    if v === missing
-                        return 0.0
-                    elseif v isa AbstractArray
-                        if eltype(v) === Missing
-                            return zeros(size(v)...)
-                        elseif Missing <: eltype(v)
-                            return coalesce.(v, zero(nonmissingtype(eltype(v))))
-                        end
-                    end
-                    return v
-                end,
-                values(eval_env),
-            ),
-        ),
-        0.0,
-    )
-
     parameters = VarName[]
     untransformed_param_length, transformed_param_length = 0, 0
     untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
@@ -123,7 +102,7 @@ function BUGSModel(
             transformed_param_length += transformed_var_lengths[vn]
 
             initialization = try
-                AbstractPPL.get(inits, vn)
+                AbstractPPL.get(initial_params, vn)
             catch _
                 missing
             end
