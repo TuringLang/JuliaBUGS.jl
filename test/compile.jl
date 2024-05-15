@@ -24,7 +24,7 @@
 end
 
 @testset "initialize!" begin
-    (; model_def, data, inits ) = JuliaBUGS.BUGSExamples.rats
+    (; model_def, data, inits) = JuliaBUGS.BUGSExamples.rats
     model = compile(model_def, data)
     model_init_1 = initialize!(model, inits)
 
