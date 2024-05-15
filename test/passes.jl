@@ -167,5 +167,5 @@ end
         model_def, data, (;)
     )
     model = compile(model_def, data, (;))
-    @test length(JuliaBUGS.all_variables(model)) == 0
+    @test length(JuliaBUGS.parameters(model)) == 0
 end
