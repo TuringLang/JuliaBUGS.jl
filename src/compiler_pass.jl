@@ -3,7 +3,12 @@ abstract type CompilerPass end
 is_deterministic(expr::Expr) = Meta.isexpr(expr, :(=))
 is_stochastic(expr::Expr) = Meta.isexpr(expr, :call) && expr.args[1] == :(~)
 
-function analyze_block(pass::CompilerPass, expr::Expr, loop_vars::NamedTuple=NamedTuple())
+function analyze_block(
+    pass::CompilerPass,
+    expr::Expr,
+    loop_vars::NamedTuple=NamedTuple();
+    warn_loop_bounds=false,
+)
     if !Meta.isexpr(expr, :block)
         error("The top level expression must be a block.")
     end
@@ -15,8 +20,16 @@ function analyze_block(pass::CompilerPass, expr::Expr, loop_vars::NamedTuple=Nam
             env = merge(pass.env, loop_vars)
             lb = Int(simple_arithmetic_eval(env, lb))
             ub = Int(simple_arithmetic_eval(env, ub))
-            for loop_var_value in lb:ub
-                analyze_block(pass, body, merge(loop_vars, (loop_var => loop_var_value,)))
+            if lb > ub
+                if warn_loop_bounds
+                    @warn "In BUGS, if the lower bound of for loop is greater than the upper bound, the loop will be skipped."
+                end
+            else
+                for loop_var_value in lb:ub
+                    analyze_block(
+                        pass, body, merge(loop_vars, (loop_var => loop_var_value,))
+                    )
+                end
             end
         else
             error("Unsupported expression in top level: $statement")
@@ -275,7 +288,7 @@ function handle_ref_lhs(pass::CollectVariables, expr::Expr, v::Tuple, env::Named
     if Meta.isexpr(expr, :(=))
         if is_specified_by_data(env, var, indices...)
             error(
-                "$var[$(join(indices, ", "))] partially observed, not allowed, rewrite so that the variables are either all observed or all unobserved.",
+                "$var[$(join(indices, ", "))] is (are) specified by data, can't be assigned to.",
             )
         end
         update_array_sizes_for_assignment(pass, var, env, indices...)
@@ -704,7 +717,7 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
     args, node_function_expr, node_function = pass.f_dict[expr]
 
     vn = if lhs isa Symbol
-        AbstractPPL.VarName{lhs}(AbstractPPL.IdentityLens())
+        AbstractPPL.VarName{lhs}(identity)
     else
         v, indices... = lhs
         AbstractPPL.VarName{v}(AbstractPPL.IndexLens(indices))
