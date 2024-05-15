@@ -19,7 +19,7 @@ import Distributions: truncated
 import AbstractPPL: AbstractContext, evaluate!!
 
 export @bugs
-export compile
+export compile, initialize!
 
 export @varname
 
@@ -144,11 +144,12 @@ function semantic_analysis(model_def, data)
 end
 
 """
-    compile(model_def, data)
+    compile(model_def, data[, initial_params])
 
-Produce a `BUGSGraph` and an `NamedTuple` representing the evaluation environment from a BUGS program and data.
+Compile the model and data into a [`BUGSModel`](@ref). Optionally, initial values can be provided. 
+If initial values are not provided, the model will be initialized with values sampled from the prior distributions. 
 """
-function compile(model_def::Expr, data::NamedTuple)
+function compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple=NamedTuple())
     data = check_input(data)
     eval_env = semantic_analysis(model_def, data)
     model_def = concretize_colon_indexing(model_def, eval_env)
@@ -173,15 +174,8 @@ function compile(model_def::Expr, data::NamedTuple)
         ),
         0.0,
     )
-    return g, svi
+    return BUGSModel(g, svi, initial_params)
 end
-
-"""
-    initialize!(model::BUGSModel, inits::NamedTuple)
-
-Initialize the model with the given initial values.
-"""
-initialize!
 
 """
     @register_primitive(expr)

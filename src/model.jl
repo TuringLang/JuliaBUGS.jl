@@ -64,11 +64,6 @@ function prepare_arg_values(
     ))
 end
 
-"""
-    BUGSModel(g::BUGSGraph, eval_env::NamedTuple; is_transformed::Bool=true)
-
-Create a `BUGSModel` from a `BUGSGraph` and an `NamedTuple` representing the evaluation environment.
-"""
 function BUGSModel(
     g::BUGSGraph,
     vi::SimpleVarInfo,
@@ -109,7 +104,14 @@ function BUGSModel(
             if !ismissing(initialization)
                 vi = setindex!!(vi, initialization, vn)
             else
-                vi = setindex!!(vi, rand(dist), vn)
+                init_value = try
+                    rand(dist)
+                catch e
+                    error(
+                        "Failed to sample from the prior distribution of $vn, consider providing initialization values for $vn or it's parents: $(collect(MetaGraphsNext.inneighbor_labels(g, vn))...).",
+                    )
+                end
+                vi = setindex!!(vi, init_value, vn)
             end
         end
     end
@@ -127,14 +129,19 @@ function BUGSModel(
     )
 end
 
+"""
+    initialize!(model::BUGSModel, initial_params::NamedTuple)
+
+Initialize the model with a NamedTuple of initial values, the values are expected to be in the original space.
+"""
 function initialize!(model::BUGSModel, initial_params::NamedTuple)
     check_input(initial_params)
-    for vn in sorted_nodes
-        (; is_stochastic, is_observed, node_function, node_args, loop_vars) = g[vn]
-        args = prepare_arg_values(node_args, vi, loop_vars)
+    for vn in model.sorted_nodes
+        (; is_stochastic, is_observed, node_function, node_args, loop_vars) = model.g[vn]
+        args = prepare_arg_values(node_args, model.varinfo, loop_vars)
         if !is_stochastic
             value = Base.invokelatest(node_function; args...)
-            vi = setindex!!(vi, value, vn)
+            BangBang.@set!! model.varinfo = setindex!!(model.varinfo, value, vn)
         elseif !is_observed
             initialization = try
                 AbstractPPL.get(initial_params, vn)
@@ -142,13 +149,22 @@ function initialize!(model::BUGSModel, initial_params::NamedTuple)
                 missing
             end
             if !ismissing(initialization)
-                vi = setindex!!(vi, initialization, vn)
+                BangBang.@set!! model.varinfo = setindex!!(
+                    model.varinfo, initialization, vn
+                )
+            else
+                BangBang.@set!! model.varinfo = setindex!!(model.varinfo, rand(dist), vn)
             end
         end
     end
     return model
 end
 
+"""
+    initialize!(model::BUGSModel, initial_params::AbstractVector)
+
+Initialize the model with a vector of initial values, the values can be in transformed space if `model.transformed` is set to true.
+"""
 function initialize!(model::BUGSModel, initial_params::AbstractVector)
     vi, logp = AbstractPPL.evaluate!!(model, LogDensityContext(), initial_params)
     return BUGSModel(
