@@ -26,8 +26,8 @@ inits = (
     # g = 2.0,
     # h = 4.0,
 
-    i = 4.0,
-    l = -2.0,
+    i=4.0,
+    l=-2.0,
 )
 
 model = compile(test_model, NamedTuple(), inits)
