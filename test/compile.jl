@@ -32,6 +32,6 @@ end
     @test model_init_1.varinfo[@varname(var"alpha.c")] == 150
 
     model_init_2 = initialize!(model, fill(0.1, 65))
-    @test model_init_2.varinfo[@varname(alpha[1])]  == 0.1
+    @test model_init_2.varinfo[@varname(alpha[1])] == 0.1
     @test model_init_2.varinfo[@varname(var"alpha.c")] == 0.1
 end
