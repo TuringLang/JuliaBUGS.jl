@@ -1,4 +1,4 @@
-# AbstractBUGSModel subtype `AbstractPPL.AbstractProbabilisticProgram` (which subtypes `AbstractMCMC.AbstractModel`)
+# AbstractBUGSModel cannot subtype `AbstractPPL.AbstractProbabilisticProgram` (which subtypes `AbstractMCMC.AbstractModel`)
 # because it will then dispatched to https://github.com/TuringLang/AbstractMCMC.jl/blob/d7c549fe41a80c1f164423c7ac458425535f624b/src/sample.jl#L81
 # instead of https://github.com/TuringLang/AbstractMCMC.jl/blob/d7c549fe41a80c1f164423c7ac458425535f624b/src/logdensityproblems.jl#L90
 abstract type AbstractBUGSModel end
@@ -6,65 +6,49 @@ abstract type AbstractBUGSModel end
 """
     BUGSModel
 
-The `BUGSModel` object is used for inference and represents the output of compilation. It fully implements the
+The `BUGSModel` object is used for inference and represents the output of compilation. It implements the
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
-
-# Fields
-
-- `transformed::Bool`: Indicates whether the model parameters are in the transformed space.
-- `untransformed_param_length::Int`: The length of the parameters vector in the original space.
-- `transformed_param_length::Int`: The length of the parameters vector in the transformed space.
-- `untransformed_var_lengths::Dict{VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the original space.
-- `transformed_var_lengths::Dict{VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the transformed space.
-- `varinfo::SimpleVarInfo`: An instance of 
-    [`DynamicPPL.SimpleVarInfo`](https://turinglang.org/DynamicPPL.jl/dev/api/#DynamicPPL.SimpleVarInfo), 
-    which is a dictionary-like data structure that maps both data and values of variables in the model to the corresponding values.
-- `parameters::Vector{VarName}`: A vector containing the names of the parameters in the model, defined as 
-    stochastic variables that are not observed. This vector should be consistent with `sorted_nodes`.
-- `sorted_nodes::Vector{VarName}`: A vector containing the names of all the variables in the model, sorted in topological order.
-    In the case of a conditioned model, `sorted_nodes` include all the variables in `parameters` and the variables in the Markov blanket of `parameters`.
-- `g::BUGSGraph`: An instance of [`BUGSGraph`](@ref), representing the dependency graph of the model.
-- `base_model::Union{BUGSModel,Nothing}`: If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`.
-
 """
 struct BUGSModel <: AbstractBUGSModel
+    " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
 
+    " The length of the parameters vector in the original space. "
     untransformed_param_length::Int
+    " The length of the parameters vector in the transformed space. "
     transformed_param_length::Int
+    " A dictionary mapping the names of the variables to their lengths in the original space. "
     untransformed_var_lengths::Dict{VarName,Int}
+    " A dictionary mapping the names of the variables to their lengths in the transformed space. "
     transformed_var_lengths::Dict{VarName,Int}
 
+    " An instance of `DynamicPPL.SimpleVarInfo`, which is a dictionary-like data structure that maps both data and values of variables in the model to the corresponding values. "
     varinfo::SimpleVarInfo
+    " A vector containing the names of the parameters in the model, defined as stochastic variables that are not observed. This vector should be consistent with `sorted_nodes`. "
     parameters::Vector{VarName}
+    " A vector containing the names of all the variables in the model, sorted in topological order. In the case of a conditioned model, `sorted_nodes` include all the variables in `parameters` and the variables in the Markov blanket of `parameters`. "
     sorted_nodes::Vector{VarName}
 
+    " An instance of `BUGSGraph`, representing the dependency graph of the model. "
     g::BUGSGraph
 
-    " The base model if the model is a conditioned model; otherwise, `nothing`. "
+    " If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`. "
     base_model::Union{BUGSModel,Nothing}
 end
 
 """
-    param_names(m::BUGSModel)
+    parameters(m::BUGSModel)
 
-Return the names of the parameters in the model.
+Return a vector of `VarName` containing the names of the parameters in the model.
 """
-param_names(m::BUGSModel) = m.parameters
-
-"""
-    all_variables(m::BUGSModel)
-
-Return the names of all the variables in the model.
-"""
-all_variables(m::BUGSModel) = collect(labels(m.g))
+parameters(m::BUGSModel) = m.parameters
 
 """
-    generated_variables(m::BUGSModel)
+    variables(m::BUGSModel)
 
-Return the names of the generated variables in the model.
+Return a vector of `VarName` containing the names of all the variables in the model.
 """
-generated_variables(m::BUGSModel) = find_generated_vars(m.g)
+variables(m::BUGSModel) = collect(labels(m.g))
 
 function prepare_arg_values(
     args::Tuple{Vararg{Symbol}}, vi::SimpleVarInfo, loop_vars::NamedTuple{lvars}
@@ -81,36 +65,12 @@ function prepare_arg_values(
 end
 
 function BUGSModel(
-    g::BUGSGraph, eval_env::NamedTuple, inits::NamedTuple; is_transformed::Bool=true
+    g::BUGSGraph,
+    vi::SimpleVarInfo,
+    initial_params::NamedTuple=NamedTuple();
+    is_transformed::Bool=true,
 )
-    sorted_nodes = map(topological_sort(g)) do node
-        label_for(g, node)
-    end
-    vi = SimpleVarInfo(
-        NamedTuple{keys(eval_env)}(
-            map(
-                k -> begin
-                    v = eval_env[k]
-                    if v === missing
-                        0.0
-                    elseif v isa AbstractArray
-                        if eltype(v) === Missing
-                            zeros(size(v)...)
-                        elseif Missing <: eltype(v)
-                            coalesce.(v, zero(nonmissingtype(eltype(v))))
-                        else
-                            v
-                        end
-                    else
-                        v
-                    end
-                end,
-                keys(eval_env),
-            ),
-        ),
-        0.0,
-    )
-
+    sorted_nodes = [label_for(g, node) for node in topological_sort(g)]
     parameters = VarName[]
     untransformed_param_length, transformed_param_length = 0, 0
     untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
@@ -122,14 +82,10 @@ function BUGSModel(
         if !is_stochastic
             value = Base.invokelatest(node_function; args...)
             vi = setindex!!(vi, value, vn)
-        else
+        elseif !is_observed
+            push!(parameters, vn)
             dist = Base.invokelatest(node_function; args...)
 
-            if is_observed
-                continue
-            end
-
-            push!(parameters, vn)
             untransformed_var_lengths[vn] = length(dist)
             # not all distributions are defined for `Bijectors.transformed`
             transformed_var_lengths[vn] = if bijector(dist) == identity
@@ -141,15 +97,22 @@ function BUGSModel(
             transformed_param_length += transformed_var_lengths[vn]
 
             initialization = try
-                AbstractPPL.get(inits, vn)
+                AbstractPPL.get(initial_params, vn)
             catch _
                 missing
             end
-            # TODO: this will cause partially initialized value to be redrawn
-            if !is_resolved(initialization)
-                initialization = rand(dist)
+            if !ismissing(initialization)
+                vi = setindex!!(vi, initialization, vn)
+            else
+                init_value = try
+                    rand(dist)
+                catch e
+                    error(
+                        "Failed to sample from the prior distribution of $vn, consider providing initialization values for $vn or it's parents: $(collect(MetaGraphsNext.inneighbor_labels(g, vn))...).",
+                    )
+                end
+                vi = setindex!!(vi, init_value, vn)
             end
-            vi = setindex!!(vi, initialization, vn)
         end
     end
     return BUGSModel(
@@ -163,6 +126,58 @@ function BUGSModel(
         sorted_nodes,
         g,
         nothing,
+    )
+end
+
+"""
+    initialize!(model::BUGSModel, initial_params::NamedTuple)
+
+Initialize the model with a NamedTuple of initial values, the values are expected to be in the original space.
+"""
+function initialize!(model::BUGSModel, initial_params::NamedTuple)
+    check_input(initial_params)
+    for vn in model.sorted_nodes
+        (; is_stochastic, is_observed, node_function, node_args, loop_vars) = model.g[vn]
+        args = prepare_arg_values(node_args, model.varinfo, loop_vars)
+        if !is_stochastic
+            value = Base.invokelatest(node_function; args...)
+            BangBang.@set!! model.varinfo = setindex!!(model.varinfo, value, vn)
+        elseif !is_observed
+            initialization = try
+                AbstractPPL.get(initial_params, vn)
+            catch _
+                missing
+            end
+            if !ismissing(initialization)
+                BangBang.@set!! model.varinfo = setindex!!(
+                    model.varinfo, initialization, vn
+                )
+            else
+                BangBang.@set!! model.varinfo = setindex!!(model.varinfo, rand(dist), vn)
+            end
+        end
+    end
+    return model
+end
+
+"""
+    initialize!(model::BUGSModel, initial_params::AbstractVector)
+
+Initialize the model with a vector of initial values, the values can be in transformed space if `model.transformed` is set to true.
+"""
+function initialize!(model::BUGSModel, initial_params::AbstractVector)
+    vi, logp = AbstractPPL.evaluate!!(model, LogDensityContext(), initial_params)
+    return BUGSModel(
+        model.transformed,
+        model.untransformed_param_length,
+        model.transformed_param_length,
+        model.untransformed_var_lengths,
+        model.transformed_var_lengths,
+        DynamicPPL.setlogp!!(vi, logp),
+        model.parameters,
+        model.sorted_nodes,
+        model.g,
+        model.base_model,
     )
 end
 
