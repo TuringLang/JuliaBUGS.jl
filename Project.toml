@@ -1,6 +1,6 @@
 name = "JuliaBUGS"
 uuid = "ba9fb4c0-828e-4473-b6a1-cd2560fee5bf"
-version = "0.5.3"
+version = "0.6.0"
 
 [deps]
 AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
@@ -44,24 +44,31 @@ JuliaBUGSTikzGraphsExt = ["TikzGraphs"]
 
 [compat]
 AbstractMCMC = "5"
-AbstractPPL = "0.6, 0.7"
-BangBang = "0.3"
+AbstractPPL = "0.8.4"
+AdvancedMH = "0.8"
+AdvancedHMC = "0.6"
+BangBang = "0.4.1"
 Bijectors = "0.13"
 Distributions = "0.23.8, 0.24, 0.25"
 Documenter = "0.27, 1"
-DynamicPPL = "0.22, 0.23, 0.24"
+DynamicPPL = "0.25, 0.26, 0.27"
+GLMakie = "0.10"
+GraphMakie = "0.5"
+GraphPlot = "0.6"
 Graphs = "1"
 JSON = "0.21"
 JuliaSyntax = "0.4"
 LogDensityProblems = "2"
 LogDensityProblemsAD = "1"
 LogExpFunctions = "0.3"
+MCMCChains = "6"
 MacroTools = "0.5"
 MetaGraphsNext = "0.6, 0.7"
 PDMats = "0.10, 0.11"
 SpecialFunctions = "2"
 StaticArrays = "1.9"
 Statistics = "1.9"
+TikzGraphs = "1"
 julia = "1.9"
 
 [extras]
