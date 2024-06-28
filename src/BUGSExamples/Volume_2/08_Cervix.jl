@@ -440,8 +440,8 @@ data = (N = 2044,
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
 
-inits = (beta0C = 0, beta = 0, q = 0.5, phi = [0.5, 0.5; 0.5, 0.5])
-inits_alternative = (beta0C = 1.0, beta = 1.0, q = 0.75, phi = [0.15, 0.15; 0.15, 0.15])
+inits = (beta0C = 0, beta = 0, q = 0.5, phi = [0.5 0.5; 0.5 0.5])
+inits_alternative = (beta0C = 1.0, beta = 1.0, q = 0.75, phi = [0.15 0.15; 0.15 0.15])
 
 reference_results = (
     var"beta" = (mean = 0.6156, std = 0.3406),
@@ -455,4 +455,4 @@ reference_results = (
     var"q" = (mean = 0.4915, std = 0.04115)
 )
 
-cervix = Example(name, model_def, data, inits, inits_alternative, reference_results)
+cervix = Example(name, model_def, original, data, inits, inits_alternative, reference_results)

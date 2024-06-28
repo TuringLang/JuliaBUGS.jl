@@ -3,12 +3,11 @@ name = "Schools: ranking schoolexamination results using multivariate hierarcica
 model_def = @bugs begin
     for p in 1:N
         Y[p] ~ dnorm(mu[p], tau[p])
-        mu[p] = alpha[school[p], 1] + alpha[school[p], 2] * LRT[p]
-        +alpha[school[p], 3] * VR[p, 1] + beta[1] * LRT2[p]
-        +beta[2] * VR[p, 2] + beta[3] * Gender[p]
-        +beta[4] * var"School.gender"[p, 1] + beta[5] * var"School.gender"[p, 2]
-        +beta[6] * var"School.denom"[p, 1] + beta[7] * var"School.denom"[p, 2]
-        +beta[8] * var"School.denom"[p, 3]
+        mu[p] = alpha[school[p], 1] + alpha[school[p], 2] * LRT[p] +
+                alpha[school[p], 3] * VR[p, 1] + beta[1] * LRT2[p] + beta[2] * VR[p, 2] +
+                beta[3] * Gender[p] + beta[4] * var"School.gender"[p, 1] +
+                beta[5] * var"School.gender"[p, 2] + beta[6] * var"School.denom"[p, 1] +
+                beta[7] * var"School.denom"[p, 2] + beta[8] * var"School.denom"[p, 3]
         tau[p] = exp(theta + phi * LRT[p])
         sigma2[p] = 1 / tau[p]
         LRT2[p] = LRT[p] * LRT[p]
@@ -72,8 +71,8 @@ model
 """
 
 data = (N = 1978, M = 38, mn = [0, 0, 0],
-    prec = [0.0001, 0, 0; 0, 0.0001, 0; 0, 0, 0.0001],
-    R = [0.1, 0.005, 0.005; 0.005, 0.1, 0.005; 0.005, 0.005, 0.1],
+    prec = [0.0001 0 0; 0 0.0001 0; 0 0 0.0001],
+    R = [0.1 0.005 0.005; 0.005 0.1 0.005; 0.005 0.005 0.1],
     school = [
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
@@ -1494,7 +1493,7 @@ data = (N = 1978, M = 38, mn = [0, 0, 0],
 )
 
 inits = (theta = 0, phi = 0.01, gamma = [0, 0, 0], beta = [0, 0, 0, 0, 0, 0, 0, 0],
-    T = [10, -3, -3; -3, 135, -65; -3, -65, 135],
+    T = [10 -3 -3; -3 135 -65; -3 -65 135],
     alpha = [0 0 0
              0 0 0
              0 0 0
@@ -1535,7 +1534,7 @@ inits = (theta = 0, phi = 0.01, gamma = [0, 0, 0], beta = [0, 0, 0, 0, 0, 0, 0, 
              0 0 0])
 inits_alternative = (theta = 0.1, phi = 0, gamma = [1.0, 1.0, 1.0],
     beta = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
-    T = [10, -3, -3; -3, 135, -65; -3, -65, 135],
+    T = [10 -3 -3; -3 135 -65; -3 -65 135],
     alpha = [0 0 0
              0 0 0
              0 0 0

@@ -189,4 +189,4 @@ reference_results = (
     var"g[2,5]" = (mean = -0.1898, std = 0.235)
 )
 
-alligators = Example(name, model_def, data, inits, inits_alternative, reference_results)
+alligators = Example(name, model_def, original, data, inits, inits_alternative, reference_results)

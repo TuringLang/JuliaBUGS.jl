@@ -3,8 +3,8 @@ name = "Biopsies: discrete variable latent class model"
 mdoel_def = @bugs begin
     for i in 1:ns
         nbiops[i] = sum(biopsies[i, :])
-        true[i] ~ dcat(p[:])
-        biopsies[i, 1:4] ~ dmulti(error[true[i], :], nbiops[i])
+        var"true"[i] ~ dcat(p[:])
+        biopsies[i, 1:4] ~ dmulti(error[var"true"[i], :], nbiops[i])
     end
     error[2, 1:2] ~ ddirich(prior[1:2])
     error[3, 1:3] ~ ddirich(prior[1:3])
@@ -218,4 +218,4 @@ reference_results = (
     var"p[4]" = (mean = 0.1471, std = 0.02971)
 )
 
-biopsies = Example(name, model, data, inits, reference_results, inits_alternative)
+biopsies = Example(name, model_def, original, data, inits, inits_alternative, reference_results)

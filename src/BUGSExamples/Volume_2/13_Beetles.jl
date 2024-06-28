@@ -3,14 +3,14 @@ name = "Beetles: choice of link function"
 model_def = @bugs begin
     for i in 1:N
         r[i] ~ dbin(p[i], n[i])
-        p[i] = logistic(alpha.star + beta * (x[i] - mean(x[:])))
+        p[i] = logistic(var"alpha.star" + beta * (x[i] - mean(x[:])))
         # p[i] = phi(alpha.star + beta * (x[i] - mean(x[:])))
         # p[i] = cexpexp(alpha.star + beta * (x[i] - mean(x[:])))
         rhat[i] = n[i] * p[i]
     end
-    alpha = alpha.star - beta * mean(x[:])
+    alpha = var"alpha.star" - beta * mean(x[:])
     beta ~ dnorm(0.0, 0.001)
-    alpha.star ~ dnorm(0.0, 0.001)
+    var"alpha.star" ~ dnorm(0.0, 0.001)
 end
 
 original = """
@@ -32,8 +32,8 @@ data = (x = [1.6907, 1.7242, 1.7552, 1.7842, 1.8113, 1.8369, 1.8610, 1.8839],
     n = [59, 60, 62, 56, 63, 59, 62, 60],
     r = [6, 13, 18, 28, 52, 53, 61, 60], N = 8)
 
-inits = (alpha.star = 0, beta = 0)
-inits_alternative = (alpha.star = 1, beta = 1)
+inits = (var"alpha.star" = 0, beta = 0)
+inits_alternative = (var"alpha.star" = 1, beta = 1)
 
 # logit/logistic
 reference_results = (

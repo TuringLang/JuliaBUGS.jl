@@ -23,13 +23,13 @@ model_def = @bugs begin
     for k in 1:K
         beta[k] ~ dnorm(betamean[k], betaprec[k])
         logRR[k] = beta[k] - beta[5]
-        tau.like[k] = Nneighs[k] * beta[k] * (beta[k] - betamean[k])
+        var"tau.like"[k] = Nneighs[k] * beta[k] * (beta[k] - betamean[k])
     end
     alpha[1] = 0.0
     for j in 2:Nage
         alpha[j] ~ dnorm(0, 1.0E-6)
     end
-    d = 0.0001 + sum(tau.like[:]) / 2
+    d = 0.0001 + sum(var"tau.like"[:]) / 2
     r = 0.0001 + K / 2
     tau ~ dgamma(r, d)
     sigma = 1 / sqrt(tau)
@@ -123,4 +123,4 @@ reference_results = (
     var"sigma" = (mean = 0.05195, std = 0.03977)
 )
 
-ice = Example(name, model_def, data, inits, inits_alternative, reference_results)
+ice = Example(name, model_def, original, data, inits, inits_alternative, reference_results)

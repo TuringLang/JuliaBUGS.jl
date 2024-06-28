@@ -29,7 +29,7 @@ model
 }
 """
 
-list(M = 4, N = 20,
+data = (M = 4, N = 20,
     Y =
     [47.8 48.8 49.0 49.7
      46.4 47.3 47.7 48.4
@@ -60,4 +60,9 @@ list(M = 4, N = 20,
 inits = (beta0 = 40, beta1 = 1)
 inits_alternative = (beta0 = 10, beta1 = 10)
 
-jaws = Example(name, model_def, original, list, inits, inits_alternative)
+reference_results = (
+    beta0 = (mean = 33.52, std = 33.57), beta1 = (mean = 1.889, std = 1.882),
+    var"mu[1]" = (mean = 48.63, std = 48.64), var"mu[2]" = (mean = 49.58, std = 49.58),
+    var"mu[3]" = (mean = 50.52, std = 50.52), var"mu[4]" = (mean = 51.48, std = 51.48))
+
+jaws = Example(name, model_def, original, data, inits, inits_alternative, reference_results)

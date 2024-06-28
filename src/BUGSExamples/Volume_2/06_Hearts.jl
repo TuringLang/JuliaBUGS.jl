@@ -10,7 +10,7 @@ model_def = @bugs begin
     end
     P[1] = p
     P[2] = 0
-    logit(p) = alpha
+    p = logistic(alpha)
     alpha ~ dnorm(0, 1.0E-4)
     beta = exp(alpha)
     theta = logistic(delta)
