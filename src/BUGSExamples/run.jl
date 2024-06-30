@@ -10,7 +10,7 @@ using LogDensityProblemsAD, ReverseDiff, Random, AbstractMCMC, AbstractPPL, Adva
 (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1.pumps
 (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1.dogs
 
-(; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_2.orange_trees_multivariate
+(; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_2.endo
 
 model = compile(model_def, data, inits)
 ad_model = ADgradient(:ReverseDiff, model; compile = Val(true))
@@ -18,9 +18,9 @@ n_samples, n_adapts = 4000, 1000
 initial_θ = rand(LogDensityProblems.dimension(model))
 samples_and_stats = AbstractMCMC.sample(
     ad_model,
-    # NUTS(0.8),
+    NUTS(0.8),
     # NUTS(0.2),
-    HMC(0.2, 30),
+    # HMC(0.02, 50),
     n_samples;
     chain_type = Chains,
     n_adapts = n_adapts,
@@ -30,6 +30,8 @@ samples_and_stats = AbstractMCMC.sample(
 
 # rats: ✓
 samples_and_stats[[:alpha0, Symbol("beta.c"), :sigma]]
+
+samples_and_stats[[:sigmaC]]
 
 # pumps: ✓
 samples_and_stats

@@ -1,6 +1,6 @@
 name = "Biopsies: discrete variable latent class model"
 
-mdoel_def = @bugs begin
+model_def = @bugs begin
     for i in 1:ns
         nbiops[i] = sum(biopsies[i, :])
         var"true"[i] ~ dcat(p[:])

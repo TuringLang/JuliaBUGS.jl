@@ -1,25 +1,41 @@
 | Example Name | HMC | Comments |
-|--------------|---------------------------|---------------------------|
+|--------------|-----|----------|
 | Rats | Yes | |
 | Pumps | Yes | |
 | Dogs | No | |
 | Seeds | Yes | |
 | Surgical(Simple) | Yes | |
-| Surgical(Complex) | Yes | The results are correct, although the values returned are of `b`s, not `p`s. |
-| Magnesium | Looks correct, but with small deviations | 4000 samples and 1000 adaptations take about 36 seconds on M2 |
-| Salm | Yes | 4000 samples and 1000 adaptations take about 27 seconds on M2, feels kind of slow for what it is |
+| Surgical(Complex) | Yes | Returns `b` values instead of `p` values |
+| Magnesium | Yes | Minor deviations. 4000 samples, 1000 adaptations: ~36s on M2 |
+| Salm | Yes | 4000 samples, 1000 adaptations: ~27s on M2. Seems slow |
 | Equiv | Yes | |
-| Dyes | No -- need to tune the hyperparameters, low ESS | |
+| Dyes | No | Needs hyperparameter tuning. Low ESS |
 | Stacks | Yes | |
 | Epil | No | |
 | Blocker | Yes | |
 | Oxford | Yes | |
-| LSAT | Not really, multiBUGS has some comments on this one | |
-| Bones | Not really, categorical distribution | |
-| Mice | Not really, r looks correct, the rests have correct signs, but values look wrong | |
+| LSAT | No | MultiBUGS has additional comments |
+| Bones | No | Issues with categorical distribution |
+| Mice | Partial | `r` correct, others have correct signs but wrong values |
 | Kidney | Yes | |
 | Leuk | Yes | |
 | Leukfr | Yes | |
-| ----------------- | ----------------- | ----------------- |
 | Dugongs | Yes | |
-| Orange | Not really | |
+| Orange | No | |
+| MvOrange | No | Possible numerical issues or funnel effects |
+| Biopsies | Error | Type conversion issue between Int and Float for HMC. Needs testing with MH. Error creating ADGradient |
+| Eyes | Error | Same issue as Biopsies |
+| Hearts | Error | Same issue as Eyes |
+| Air | Yes | |
+| Cervix | Error | Same issue as Eyes and Hearts |
+| Jaws | Error | Numerical issue with PSD matrix |
+| Birats | Runs | NUTS takes too long to complete |
+| Schools | Runs | Large example. Runs but not fully tested |
+| Ice | Partial | Issues with beta[1], betamean, etc. |
+| Beetles | Yes | |
+| Alligators | Yes | |
+| Endo | Yes | |
+| Stagnant | N/A | Demonstration of failed convergence |
+| Asia | No | Issues with many categorical variables |
+| Pigs | No | Issues with many categorical variables |
+| Simulated data | N/A | Demonstration, not for inference testing |

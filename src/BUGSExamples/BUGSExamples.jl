@@ -86,6 +86,8 @@ function load_example_volume(volume_num::Int)
             orange_trees_multivariate = orange_trees_multivariate,
             biopsies = biopsies,
             eyes = eyes,
+            hearts = hearts,
+            air = air,
             cervix = cervix,
             jaws = jaws,
             birats = birats,
