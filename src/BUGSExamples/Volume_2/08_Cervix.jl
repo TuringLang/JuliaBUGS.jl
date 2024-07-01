@@ -455,4 +455,5 @@ reference_results = (
     var"q" = (mean = 0.4915, std = 0.04115)
 )
 
-cervix = Example(name, model_def, original, data, inits, inits_alternative, reference_results)
+cervix = Example(
+    name, model_def, original, data, inits, inits_alternative, reference_results)
