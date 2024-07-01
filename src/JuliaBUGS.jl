@@ -25,6 +25,7 @@ export @varname
 
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
+using .BUGSPrimitives: inverse # Bijectors.jl also exports `inverse`
 
 include("parser/Parser.jl")
 using .Parser

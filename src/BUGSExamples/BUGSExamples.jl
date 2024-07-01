@@ -1,6 +1,6 @@
 module BUGSExamples
 
-using JuliaBUGS: @bugs
+using JuliaBUGS: JuliaBUGS, @bugs
 using JSON
 
 struct Example
@@ -13,6 +13,7 @@ struct Example
     reference_results::Union{NamedTuple, Nothing}
 end
 
+#! format: off
 function load_example_volume(volume_num::Int)
     if volume_num == 1
         include("./Volume_1/01_Rats.jl")
@@ -61,11 +62,45 @@ function load_example_volume(volume_num::Int)
         )
         return vol_1
     elseif volume_num == 2
-        include("Volume_2/BiRats.jl")
-        include("Volume_2/Eyes.jl")
+        include("Volume_2/01_Dugongs.jl")
+        include("Volume_2/02_Orange_trees.jl")
+        include("Volume_2/03_Multivariate_Orange_trees.jl")
+        include("Volume_2/04_Biopsies.jl")
+        include("Volume_2/05_Eyes.jl")
+        include("Volume_2/06_Hearts.jl")
+        include("Volume_2/07_Air.jl")
+        include("Volume_2/08_Cervix.jl")
+        include("Volume_2/09_Jaws.jl")
+        include("Volume_2/10_BiRats.jl")
+        include("Volume_2/11_Schools.jl")
+        include("Volume_2/12_Ice.jl")
+        include("Volume_2/13_Beetles.jl")
+        include("Volume_2/14_Alligators.jl")
+        include("Volume_2/15_Endo.jl")
+        # include("Volume_2/16_Stagnant.jl")
+        # include("Volume_2/17_Asia.jl")
+        # include("Volume_2/18_Pigs.jl")
+        # include("Volume_2/19_Simulating_data.jl")
         vol_2 = (
+            dugongs = dugongs,
+            orange_trees = orange_trees,
+            orange_trees_multivariate = orange_trees_multivariate,
+            biopsies = biopsies,
+            eyes = eyes,
+            hearts = hearts,
+            air = air,
+            cervix = cervix,
+            jaws = jaws,
             birats = birats,
-            eyes = eyes
+            schools = schools,
+            ice = ice,
+            beetles = beetles,
+            alligators = alligators,
+            endo = endo,
+            # stagnant = stagnant,
+            # asia = asia,
+            # pigs = pigs,
+            # simulating_data = simulating_data
         )
         return vol_2
     else
@@ -73,6 +108,7 @@ function load_example_volume(volume_num::Int)
         return nothing
     end
 end
+#! format: on
 
 const VOLUME_1 = load_example_volume(1)
 const VOLUME_2 = load_example_volume(2)
