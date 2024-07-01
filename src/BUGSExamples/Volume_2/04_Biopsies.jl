@@ -218,4 +218,5 @@ reference_results = (
     var"p[4]" = (mean = 0.1471, std = 0.02971)
 )
 
-biopsies = Example(name, model_def, original, data, inits, inits_alternative, reference_results)
+biopsies = Example(
+    name, model_def, original, data, inits, inits_alternative, reference_results)
