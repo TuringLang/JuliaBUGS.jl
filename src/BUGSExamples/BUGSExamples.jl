@@ -13,6 +13,7 @@ struct Example
     reference_results::Union{NamedTuple, Nothing}
 end
 
+#! format: off
 function load_example_volume(volume_num::Int)
     if volume_num == 1
         include("./Volume_1/01_Rats.jl")
@@ -107,6 +108,7 @@ function load_example_volume(volume_num::Int)
         return nothing
     end
 end
+#! format: on
 
 const VOLUME_1 = load_example_volume(1)
 const VOLUME_2 = load_example_volume(2)
