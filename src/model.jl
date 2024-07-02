@@ -153,7 +153,9 @@ function initialize!(model::BUGSModel, initial_params::NamedTuple)
                     model.varinfo, initialization, vn
                 )
             else
-                BangBang.@set!! model.varinfo = setindex!!(model.varinfo, rand(dist), vn)
+                BangBang.@set!! model.varinfo = setindex!!(
+                    model.varinfo, rand(Base.invokelatest(node_function; args...)), vn
+                )
             end
         end
     end

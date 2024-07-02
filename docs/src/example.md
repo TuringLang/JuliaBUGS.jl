@@ -115,28 +115,50 @@ By default, `@bugs` will translate R-style variable names like `a.b.c` to `a_b_c
 User can also pass `true` as the third argument if `model { }` enclosure is not present in the BUGS program.
 We still encourage users to write new programs using the Julia-native syntax, because of better debuggability and perks like syntax highlighting.
 
-## Compilation
+## Basic Workflow
 
-`compile` function will create a `BUGSModel`, which implements [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
+### Compilation
 
-```julia
-compile(model_def::Expr, data, initializations),
-```
-
-The function `compile` takes three arguments:
-
-- the output of `@bugs`,
-- the data, and
-- the initializations of parameters.
+Model definition and data are the two necessary inputs for compilation, with optional initializations. The compile function creates a BUGSModel that implements the [LogDensityProblems.jl](https://github.com/tpapp/LogDensityProblems.jl) interface.
 
 ```julia
-initializations = Dict(:alpha => 1, :beta => 1)
+compile(model_def::Expr, data::NamedTuple)
 ```
 
-then we can compile the model with the data and initializations,
+And with initializations:
+
+```julia
+compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
+```
+
+Using the model definition and data we defined earlier, we can compile the model:
+
+```julia
+model = compile(model_def, data)
+```
+
+Parameter values will be sampled from the prior distributions in the original space.
+
+We can provide initializations:
+
+```julia
+initializations = (alpha = 1, beta = 1)
+```
 
 ```julia
 model = compile(model_def, data, initializations)
+```
+
+We can also initialize parameters after compilation:
+
+```julia
+initialize!(model, initializations)
+```
+
+`initialize!` also accepts a flat vector. In this case, the vector should have the same length as the number of parameters, but values can be in transformed space:
+
+```julia
+initialize!(model, rand(26))
 ```
 
 `LogDensityProblemsAD.jl` defined some extensions that support automatic differentiation packages.
@@ -152,7 +174,7 @@ Here `ad_model` will also implement all the interfaces of [`LogDensityProblems.j
 `LogDensityProblemsAD.jl` will automatically add the interface function [`logdensity_and_gradient`](https://www.tamaspapp.eu/LogDensityProblems.jl/dev/#LogDensityProblems.logdensity_and_gradient) to the model, which will return the log density and gradient of the model.  
 And `ad_model` can be used in the same way as `model` in the example below.
 
-## Inference
+### Inference
 
 For a differentiable model, we can use [`AdvancedHMC.jl`](https://github.com/TuringLang/AdvancedHMC.jl) to perform inference.
 For instance,
