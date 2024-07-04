@@ -44,7 +44,11 @@ function Base.show(io::IO, m::BUGSModel)
             "\n",
         )
     else
-        println(io, "BUGSModel (untransformed, with dimension $(m.untransformed_param_length)):", "\n")
+        println(
+            io,
+            "BUGSModel (untransformed, with dimension $(m.untransformed_param_length)):",
+            "\n",
+        )
     end
     println(io, "  Parameters of the model:")
     println(io, "    ", join(m.parameters, ", "), "\n")
