@@ -193,7 +193,7 @@ initialize!(model, rand(26))
 `LogDensityProblemsAD.jl` defined some extensions that support automatic differentiation packages.
 For example, with `ReverseDiff.jl`
 
-```@example abc
+```julia
 using LogDensityProblemsAD, ReverseDiff
 
 ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
@@ -227,22 +227,6 @@ samples_and_stats = AbstractMCMC.sample(
 ```
 
 This will return the MCMC Chain,
-
-```@example abc
-using AdvancedHMC, AbstractMCMC, LogDensityProblems, MCMCChains # hide
-n_samples, n_adapts = 2000, 1000 # hide
-D = LogDensityProblems.dimension(model); initial_θ = rand(D) # hide
-samples_and_stats = AbstractMCMC.sample(
-                        ad_model,
-                        NUTS(0.8),
-                        n_samples;
-                        chain_type = Chains,
-                        n_adapts = n_adapts,
-                        init_params = initial_θ,
-                        discard_initial = n_adapts
-                    ) # hide
-show(samples_and_stats) # hide
-```
 
 ```plaintext
 Chains MCMC chain (2000×40×1 Array{Real, 3}):
