@@ -3,7 +3,7 @@
 We will use the [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) for demonstration.
 This example concerns the proportion of seeds that germinated on each of 21 plates. Here, we transform the data into a `NamedTuple`:
 
-```julia
+```jldoctest example_context
 data = (
     r = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3],
     n = [39, 62, 81, 51, 39, 6, 74, 72, 51, 79, 13, 16, 30, 28, 45, 4, 12, 41, 30, 51, 7],
@@ -11,6 +11,10 @@ data = (
     x2 = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1],
     N = 21,
 )
+
+# output
+
+(r = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46  …  8, 10, 8, 23, 0, 3, 22, 15, 32, 3], n = [39, 62, 81, 51, 39, 6, 74, 72, 51, 79  …  16, 30, 28, 45, 4, 12, 41, 30, 51, 7], x1 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0  …  1, 1, 1, 1, 1, 1, 1, 1, 1, 1], x2 = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1  …  0, 0, 0, 0, 0, 1, 1, 1, 1, 1], N = 21)
 ```
 
 where `r[i]` is the number of germinated seeds and `n[i]` is the total number of the seeds on the $i$-th plate.
@@ -67,7 +71,9 @@ Language Syntax:
 
 We provide a [macro](https://docs.julialang.org/en/v1/manual/metaprogramming/#man-macros) which allows users to write down model definitions using Julia:
 
-```julia
+```jldoctest example_context
+using JuliaBUGS
+
 model_def = @bugs begin
     for i in 1:N
         r[i] ~ dbin(p[i], n[i])
@@ -78,6 +84,22 @@ model_def = @bugs begin
     alpha1 ~ dnorm(0.0, 1.0E-6)
     alpha2 ~ dnorm(0.0, 1.0E-6)
     alpha12 ~ dnorm(0.0, 1.0E-6)
+    tau ~ dgamma(0.001, 0.001)
+    sigma = 1 / sqrt(tau)
+end
+
+# output
+
+quote
+    for i = 1:N
+        r[i] ~ dbin(p[i], n[i])
+        b[i] ~ dnorm(0.0, tau)
+        p[i] = logistic(alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] + b[i])
+    end
+    alpha0 ~ dnorm(0.0, 1.0e-6)
+    alpha1 ~ dnorm(0.0, 1.0e-6)
+    alpha2 ~ dnorm(0.0, 1.0e-6)
+    alpha12 ~ dnorm(0.0, 1.0e-6)
     tau ~ dgamma(0.001, 0.001)
     sigma = 1 / sqrt(tau)
 end
