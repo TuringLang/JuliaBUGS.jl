@@ -1,6 +1,6 @@
 # Example: Logistic Regression with Random Effects
 
-```@setup 1
+```@setup abc
 using JuliaBUGS
 
 data = (
@@ -161,8 +161,9 @@ compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
 
 Using the model definition and data we defined earlier, we can compile the model:
 
-```@example 1
-model = compile(model_def, data)
+```@example abc
+compile(model_def, data)
+model = compile(model_def, data) # hide
 ```
 
 Parameter values will be sampled from the prior distributions in the original space.
