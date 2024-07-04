@@ -1,6 +1,6 @@
 # Example: Logistic Regression with Random Effects
 
-```@setup example
+```@setup 1
 using JuliaBUGS
 
 data = (
@@ -161,7 +161,7 @@ compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
 
 Using the model definition and data we defined earlier, we can compile the model:
 
-```@example example
+```@example 1
 model = compile(model_def, data)
 ```
 
@@ -173,19 +173,19 @@ We can provide initializations:
 initializations = (alpha = 1, beta = 1)
 ```
 
-```@example example
+```@example 1
 model = compile(model_def, data, initializations)
 ```
 
 We can also initialize parameters after compilation:
 
-```@example example
+```@example 1
 initialize!(model, initializations)
 ```
 
 `initialize!` also accepts a flat vector. In this case, the vector should have the same length as the number of parameters, but values can be in transformed space:
 
-```@example example
+```@example 1
 initialize!(model, rand(26))
 ```
 
