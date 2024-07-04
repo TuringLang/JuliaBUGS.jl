@@ -163,7 +163,7 @@ Using the model definition and data we defined earlier, we can compile the model
 
 ```@example abc
 model = compile(model_def, data)
-print(model) # hide
+show(model) # hide
 ```
 
 Parameter values will be sampled from the prior distributions in the original space.
