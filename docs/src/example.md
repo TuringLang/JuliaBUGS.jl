@@ -71,7 +71,7 @@ Language Syntax:
 
 We provide a [macro](https://docs.julialang.org/en/v1/manual/metaprogramming/#man-macros) which allows users to write down model definitions using Julia:
 
-```jldoctest example_context; output = true
+```jldoctest example_context; output = false
 using JuliaBUGS
 
 model_def = @bugs begin
