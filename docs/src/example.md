@@ -193,7 +193,7 @@ initialize!(model, rand(26))
 `LogDensityProblemsAD.jl` defined some extensions that support automatic differentiation packages.
 For example, with `ReverseDiff.jl`
 
-```julia
+```@example abc
 using LogDensityProblemsAD, ReverseDiff
 
 ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
@@ -208,7 +208,7 @@ And `ad_model` can be used in the same way as `model` in the example below.
 For a differentiable model, we can use [`AdvancedHMC.jl`](https://github.com/TuringLang/AdvancedHMC.jl) to perform inference.
 For instance,
 
-```julia
+```@example abc
 using AdvancedHMC, AbstractMCMC, LogDensityProblems, MCMCChains
 
 n_samples, n_adapts = 2000, 1000
@@ -224,6 +224,8 @@ samples_and_stats = AbstractMCMC.sample(
                         init_params = initial_θ,
                         discard_initial = n_adapts
                     )
+
+show(samples_and_stats) # hide
 ```
 
 This will return the MCMC Chain,

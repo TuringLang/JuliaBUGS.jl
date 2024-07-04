@@ -36,6 +36,18 @@ struct BUGSModel <: AbstractBUGSModel
     base_model::Union{BUGSModel,Nothing}
 end
 
+function Base.show(io::IO, m::BUGSModel)
+    if m.transformed
+        println(io, "BUGSModel (transformed, with dimension $(m.transformed_param_length)):", "\n")
+    else
+        println(io, "BUGSModel (untransformed, with dimension $(m.untransformed_param_length)):", "\n")
+    end
+    println(io, "  Parameters of the model:")
+    println(io, "    ", join(m.parameters, ", "), "\n")
+    println(io, "  Values:")
+    println(io, "$(m.varinfo.values)")
+end
+
 """
     parameters(m::BUGSModel)
 
