@@ -38,7 +38,11 @@ end
 
 function Base.show(io::IO, m::BUGSModel)
     if m.transformed
-        println(io, "BUGSModel (transformed, with dimension $(m.transformed_param_length)):", "\n")
+        println(
+            io,
+            "BUGSModel (transformed, with dimension $(m.transformed_param_length)):",
+            "\n",
+        )
     else
         println(io, "BUGSModel (untransformed, with dimension $(m.untransformed_param_length)):", "\n")
     end
