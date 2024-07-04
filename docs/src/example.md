@@ -1,9 +1,37 @@
 # Example: Logistic Regression with Random Effects
 
+```@setup example
+using JuliaBUGS
+
+data = (
+    r = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3],
+    n = [39, 62, 81, 51, 39, 6, 74, 72, 51, 79, 13, 16, 30, 28, 45, 4, 12, 41, 30, 51, 7],
+    x1 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    x2 = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1],
+    N = 21,
+)
+
+model_def = @bugs begin
+    for i in 1:N
+        r[i] ~ dbin(p[i], n[i])
+        b[i] ~ dnorm(0.0, tau)
+        p[i] = logistic(alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] + b[i])
+    end
+    alpha0 ~ dnorm(0.0, 1.0E-6)
+    alpha1 ~ dnorm(0.0, 1.0E-6)
+    alpha2 ~ dnorm(0.0, 1.0E-6)
+    alpha12 ~ dnorm(0.0, 1.0E-6)
+    tau ~ dgamma(0.001, 0.001)
+    sigma = 1 / sqrt(tau)
+end
+
+initializations = (alpha = 1, beta = 1)
+```
+
 We will use the [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) for demonstration.
 This example concerns the proportion of seeds that germinated on each of 21 plates. Here, we transform the data into a `NamedTuple`:
 
-```jldoctest; output = false
+```julia
 data = (
     r = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3],
     n = [39, 62, 81, 51, 39, 6, 74, 72, 51, 79, 13, 16, 30, 28, 45, 4, 12, 41, 30, 51, 7],
@@ -67,9 +95,7 @@ Language Syntax:
 
 We provide a [macro](https://docs.julialang.org/en/v1/manual/metaprogramming/#man-macros) which allows users to write down model definitions using Julia:
 
-```jldoctest; output = false
-using JuliaBUGS
-
+```julia
 model_def = @bugs begin
     for i in 1:N
         r[i] ~ dbin(p[i], n[i])
@@ -135,7 +161,7 @@ compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
 
 Using the model definition and data we defined earlier, we can compile the model:
 
-```julia
+```@example
 model = compile(model_def, data)
 ```
 
@@ -147,19 +173,19 @@ We can provide initializations:
 initializations = (alpha = 1, beta = 1)
 ```
 
-```julia
+```@example
 model = compile(model_def, data, initializations)
 ```
 
 We can also initialize parameters after compilation:
 
-```julia
+```@example
 initialize!(model, initializations)
 ```
 
 `initialize!` also accepts a flat vector. In this case, the vector should have the same length as the number of parameters, but values can be in transformed space:
 
-```julia
+```@example
 initialize!(model, rand(26))
 ```
 
