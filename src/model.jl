@@ -45,7 +45,7 @@ function Base.show(io::IO, m::BUGSModel)
     println(io, "  Parameters of the model:")
     println(io, "    ", join(m.parameters, ", "), "\n")
     println(io, "  Values:")
-    println(io, "$(m.varinfo.values)")
+    return println(io, "$(m.varinfo.values)")
 end
 
 """
