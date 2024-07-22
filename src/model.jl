@@ -142,7 +142,6 @@ function BUGSModel(
         parameters,
         sorted_nodes,
         g,
-        nothing,
     )
 end
 
