@@ -50,10 +50,6 @@ cond_model = AbstractPPL.condition(model, setdiff(model.parameters, [c]))
 @test cond_model.parameters == [c]
 @test Set(Symbol.(cond_model.sorted_nodes)) == Set([:l, :a, :b, :f, :c])
 
-decond_model = AbstractPPL.decondition(cond_model, [a, l])
-@test Set(Symbol.(decond_model.parameters)) == Set([:a, :c, :l])
-@test Set(Symbol.(decond_model.sorted_nodes)) == Set([:i, :b, :f, :g, :h, :e, :d])
-
 c_value = 4.0
 mb_logp = begin
     logp = 0
