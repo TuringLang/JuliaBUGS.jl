@@ -31,9 +31,6 @@ struct BUGSModel <: AbstractBUGSModel
 
     " An instance of `BUGSGraph`, representing the dependency graph of the model. "
     g::BUGSGraph
-
-    " If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`. "
-    base_model::Union{BUGSModel,Nothing}
 end
 
 function Base.show(io::IO, m::BUGSModel)
@@ -199,7 +196,6 @@ function initialize!(model::BUGSModel, initial_params::AbstractVector)
         model.parameters,
         model.sorted_nodes,
         model.g,
-        model.base_model,
     )
 end
 
@@ -346,7 +342,6 @@ function AbstractPPL.condition(
     sorted_nodes=Nothing,
 )
     check_var_group(var_group, model)
-    base_model = model.base_model isa Nothing ? model : model.base_model
     new_parameters = setdiff(model.parameters, var_group)
 
     sorted_blanket_with_vars = if sorted_nodes isa Nothing
@@ -368,31 +363,6 @@ function AbstractPPL.condition(
         new_parameters,
         sorted_blanket_with_vars,
         model.g,
-        base_model,
-    )
-end
-
-function AbstractPPL.decondition(model::BUGSModel, var_group::Vector{<:VarName})
-    check_var_group(var_group, model)
-    base_model = model.base_model isa Nothing ? model : model.base_model
-
-    new_parameters = union(model.parameters, var_group)
-    new_parameters = [v for v in model.sorted_nodes if v in new_parameters] # keep the order
-
-    sorted_blanket_with_vars = filter(
-        vn -> vn in union(markov_blanket(model.g, new_parameters)), base_model.sorted_nodes
-    )
-    return BUGSModel(
-        model.transformed,
-        sum(model.untransformed_var_lengths[v] for v in new_parameters),
-        sum(model.transformed_var_lengths[v] for v in new_parameters),
-        model.untransformed_var_lengths,
-        model.transformed_var_lengths,
-        model.varinfo,
-        new_parameters,
-        sorted_blanket_with_vars,
-        model.g,
-        base_model,
     )
 end
 
