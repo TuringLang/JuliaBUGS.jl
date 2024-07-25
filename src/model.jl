@@ -9,7 +9,7 @@ abstract type AbstractBUGSModel end
 The `BUGSModel` object is used for inference and represents the output of compilation. It implements the
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
 """
-struct BUGSModel <: AbstractBUGSModel
+struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing}} <: AbstractBUGSModel
     " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
 
@@ -33,7 +33,7 @@ struct BUGSModel <: AbstractBUGSModel
     g::BUGSGraph
 
     " If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`. "
-    base_model::Union{BUGSModel,Nothing}
+    base_model::base_model_T
 end
 
 """
