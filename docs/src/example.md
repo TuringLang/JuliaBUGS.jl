@@ -1,5 +1,33 @@
 # Example: Logistic Regression with Random Effects
 
+```@setup abc
+using JuliaBUGS
+
+data = (
+    r = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3],
+    n = [39, 62, 81, 51, 39, 6, 74, 72, 51, 79, 13, 16, 30, 28, 45, 4, 12, 41, 30, 51, 7],
+    x1 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    x2 = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1],
+    N = 21,
+)
+
+model_def = @bugs begin
+    for i in 1:N
+        r[i] ~ dbin(p[i], n[i])
+        b[i] ~ dnorm(0.0, tau)
+        p[i] = logistic(alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] + b[i])
+    end
+    alpha0 ~ dnorm(0.0, 1.0E-6)
+    alpha1 ~ dnorm(0.0, 1.0E-6)
+    alpha2 ~ dnorm(0.0, 1.0E-6)
+    alpha12 ~ dnorm(0.0, 1.0E-6)
+    tau ~ dgamma(0.001, 0.001)
+    sigma = 1 / sqrt(tau)
+end
+
+initializations = (alpha = 1, beta = 1)
+```
+
 We will use the [Seeds](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html) for demonstration.
 This example concerns the proportion of seeds that germinated on each of 21 plates. Here, we transform the data into a `NamedTuple`:
 
@@ -115,28 +143,51 @@ By default, `@bugs` will translate R-style variable names like `a.b.c` to `a_b_c
 User can also pass `true` as the third argument if `model { }` enclosure is not present in the BUGS program.
 We still encourage users to write new programs using the Julia-native syntax, because of better debuggability and perks like syntax highlighting.
 
-## Compilation
+## Basic Workflow
 
-`compile` function will create a `BUGSModel`, which implements [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
+### Compilation
+
+Model definition and data are the two necessary inputs for compilation, with optional initializations. The compile function creates a BUGSModel that implements the [LogDensityProblems.jl](https://github.com/tpapp/LogDensityProblems.jl) interface.
 
 ```julia
-compile(model_def::Expr, data, initializations),
+compile(model_def::Expr, data::NamedTuple)
 ```
 
-The function `compile` takes three arguments:
-
-- the output of `@bugs`,
-- the data, and
-- the initializations of parameters.
+And with initializations:
 
 ```julia
-initializations = Dict(:alpha => 1, :beta => 1)
+compile(model_def::Expr, data::NamedTuple, initializations::NamedTuple)
 ```
 
-then we can compile the model with the data and initializations,
+Using the model definition and data we defined earlier, we can compile the model:
+
+```@example abc
+model = compile(model_def, data)
+show(model) # hide
+```
+
+Parameter values will be sampled from the prior distributions in the original space.
+
+We can provide initializations:
 
 ```julia
-model = compile(model_def, data, initializations)
+initializations = (alpha = 1, beta = 1)
+```
+
+```@example abc
+compile(model_def, data, initializations)
+```
+
+We can also initialize parameters after compilation:
+
+```@example abc
+initialize!(model, initializations)
+```
+
+`initialize!` also accepts a flat vector. In this case, the vector should have the same length as the number of parameters, but values can be in transformed space:
+
+```@example abc
+initialize!(model, rand(26))
 ```
 
 `LogDensityProblemsAD.jl` defined some extensions that support automatic differentiation packages.
@@ -152,7 +203,7 @@ Here `ad_model` will also implement all the interfaces of [`LogDensityProblems.j
 `LogDensityProblemsAD.jl` will automatically add the interface function [`logdensity_and_gradient`](https://www.tamaspapp.eu/LogDensityProblems.jl/dev/#LogDensityProblems.logdensity_and_gradient) to the model, which will return the log density and gradient of the model.  
 And `ad_model` can be used in the same way as `model` in the example below.
 
-## Inference
+### Inference
 
 For a differentiable model, we can use [`AdvancedHMC.jl`](https://github.com/TuringLang/AdvancedHMC.jl) to perform inference.
 For instance,

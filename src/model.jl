@@ -36,6 +36,26 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing}} <: AbstractBU
     base_model::base_model_T
 end
 
+function Base.show(io::IO, m::BUGSModel)
+    if m.transformed
+        println(
+            io,
+            "BUGSModel (transformed, with dimension $(m.transformed_param_length)):",
+            "\n",
+        )
+    else
+        println(
+            io,
+            "BUGSModel (untransformed, with dimension $(m.untransformed_param_length)):",
+            "\n",
+        )
+    end
+    println(io, "  Parameters of the model:")
+    println(io, "    ", join(m.parameters, ", "), "\n")
+    println(io, "  Values:")
+    return println(io, "$(m.varinfo.values)")
+end
+
 """
     parameters(m::BUGSModel)
 
@@ -153,7 +173,9 @@ function initialize!(model::BUGSModel, initial_params::NamedTuple)
                     model.varinfo, initialization, vn
                 )
             else
-                BangBang.@set!! model.varinfo = setindex!!(model.varinfo, rand(dist), vn)
+                BangBang.@set!! model.varinfo = setindex!!(
+                    model.varinfo, rand(Base.invokelatest(node_function; args...)), vn
+                )
             end
         end
     end

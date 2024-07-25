@@ -1,17 +1,20 @@
 # Integrating R in Julia
 
-Julia offers a seamless interface to the [`R` language](https://www.r-project.org/about.html). 
+Julia offers a seamless interface to the [`R` language](https://www.r-project.org/about.html).
 
 - The [`RCall.jl`](https://github.com/JuliaInterop/RCall.jl) package enables interaction with R functions in Julia.
 - The [`RData.jl`](https://github.com/JuliaData/RData.jl) package allows interfacing with R data in Julia.
 
 ## Reading BUGS `data` and `init` from R like lists
+>
 > **Warning**: The data layout in BUGS assumes that the data is stored in row-major order, while R uses column-major order. This discrepancy can lead to issues. [`Stan`](https://mc-stan.org/) developers have transformed the data and initializations of example BUGS models for R, which can be found [here](https://github.com/stan-dev/example-models/tree/master/bugs_examples).
 
 ### Reading the `list` data structure from R
-The data for `Rats` is available [here](https://chjackson.github.io/openbugsdoc/Examples/Ratsdata.html). 
+
+The data for `Rats` is available [here](https://chjackson.github.io/openbugsdoc/Examples/Ratsdata.html).
 
 In Julia, we can read this data into a Julia dictionary using the `RCall.jl` package.
+
 ```julia-repl
 julia> using RCall
 
@@ -105,6 +108,7 @@ $Y
 alternatively, `reval(s::String)` will produce the same result in this case.
 
 If the data is stores in a file, user can use function (may require customizing the function to fit specific needs)
+
 ```julia
 function read_rlist_to_dictionary(filepath::String)
     r_data = open(filepath) do f
@@ -114,7 +118,9 @@ function read_rlist_to_dictionary(filepath::String)
     return rcopy(r_data)
 end
 ```
+
 , and save the result to a Julia variable and access the data as a Julia dictionary
+
 ```julia-repl
 julia> rcopy(data)
 OrderedDict{Symbol, Any} with 5 entries:
@@ -126,6 +132,7 @@ OrderedDict{Symbol, Any} with 5 entries:
 ```
 
 It is worth noting that `rcopy` will automatically convert data names contains `.` to `_` in Julia. E.g.
+
 ```julia
 julia> rcopy(R"list(a.b = 1)")
 OrderedDict{Symbol, Any} with 1 entry:
@@ -133,7 +140,9 @@ OrderedDict{Symbol, Any} with 1 entry:
 ```
 
 ### Transform Data read from R to Julia convention
+
 If you want to load data using the R interface, but the data source is in the same layout as BUGS, you can process the data in Julia, for instance
+
 ```julia-repl
 # define a row-major reshape function, because Julia's `reshape` is column-major
 julia> function rreshape(v::Vector, dim)
