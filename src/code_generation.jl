@@ -38,12 +38,57 @@ function generate_expr(model::BUGSModel)
                     ),
                 )
             else
-                
+                # this is kind of the difficult part:
+                # the counter approach is hard to code this way
+                # we should just do an unflatten
+
+                # next issue is about logabsdetjac
             end
         end
     end
 
     return expr
+end
+
+# I think this will be limited by the dictionary accesses
+# of course, another issue is allocation, will be an issue when dimension is high
+function unflatten(model::BUGSModel, params::Vector{Float64})
+    unflattened_params = Vector{Vector{Float64}}()
+    var_lengths = if model.transformed
+        model.transformed_var_lengths
+    else
+        model.untransformed_var_lengths
+    end
+    index = 1
+    for vn in model.parameters
+        push!(unflattened_params, params[index:index+var_lengths[vn]-1])
+        index += var_lengths[vn]
+    end
+
+    return unflattened_params
+end
+
+function compute_dims_vec(model::BUGSModel)
+    dims = Int[]
+    var_lengths = if model.transformed
+        model.transformed_var_lengths
+    else
+        model.untransformed_var_lengths
+    end
+    for vn in model.parameters
+        push!(dims, var_lengths[vn])
+    end
+    return dims
+end
+dims = compute_dims_vec(model)
+function unflatten_w_dims(dims::Vector{Int}, params::Vector{Float64})
+    unflattened_params = Vector{Vector{Float64}}()
+    index = 1
+    for dim in dims
+        push!(unflattened_params, params[index:index+dim-1])
+        index += dim
+    end
+    return unflattened_params
 end
 
 function generate_function_call_expr(vn, node_function, node_args, loop_vars)
