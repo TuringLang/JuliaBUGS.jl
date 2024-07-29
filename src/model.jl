@@ -90,7 +90,7 @@ function BUGSModel(
     initial_params::NamedTuple=NamedTuple();
     is_transformed::Bool=true,
 )
-    sorted_nodes = [label_for(g, node) for node in topological_sort(g)]
+    sorted_nodes = VarName[label_for(g, node) for node in topological_sort(g)]
     parameters = VarName[]
     untransformed_param_length, transformed_param_length = 0, 0
     untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
