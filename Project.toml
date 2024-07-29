@@ -69,7 +69,6 @@ PDMats = "0.10, 0.11"
 SpecialFunctions = "2"
 StaticArrays = "1.9"
 Statistics = "1.9"
-Tapir = "0.2.28"
 TikzGraphs = "1"
 julia = "1.9"
 
