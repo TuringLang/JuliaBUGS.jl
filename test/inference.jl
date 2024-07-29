@@ -13,6 +13,31 @@
     LogDensityProblems.logdensity_and_gradient(ad_model, initial_θ)
 end
 
+if VERSION >= v"1.10" && VERSION < v"1.11"
+    @testset "Tapir.jl integration" begin
+        using Pkg
+        Pkg.add("Tapir")
+        using ADTypes, Tapir
+        @testset "example: $ex" for ex in (:rats, :salm, :equiv, :blocker, :leuk)
+            (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1[ex]
+            model = compile(model_def, data, inits)
+            ad_model_tapir = ADgradient(AutoTapir(), model)
+            ad_model_reversediff = ADgradient(AutoReverseDiff(), model)
+            params = rand(LogDensityProblems.dimension(model))
+            tapir_result = LogDensityProblems.logdensity_and_gradient(
+                ad_model_tapir, params
+            )
+            reversediff_result = LogDensityProblems.logdensity_and_gradient(
+                ad_model_reversediff, params
+            )
+            (logp_tapir, grads_tapir) = tapir_result
+            (logp_reversediff, grads_reversediff) = reversediff_result
+            @test logp_tapir == logp_reversediff
+            @test all(grads_tapir .≈ grads_reversediff)
+        end
+    end
+end
+
 # AdvancedHMC
 
 @testset "AdvancedHMC" begin

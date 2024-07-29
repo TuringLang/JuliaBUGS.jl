@@ -10,7 +10,7 @@ using AbstractMCMC
 using MCMCChains: Chains
 
 function JuliaBUGS.gen_chains(
-    model::AbstractMCMC.LogDensityModel{JuliaBUGS.BUGSModel},
+    model::AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel},
     samples,
     stats_names,
     stats_values;

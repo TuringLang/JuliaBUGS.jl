@@ -20,7 +20,7 @@ ensure_vector(x) = x isa Union{Number,VarName} ? [x] : x
 
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
-    l_model::AbstractMCMC.LogDensityModel{BUGSModel},
+    l_model::AbstractMCMC.LogDensityModel{<:BUGSModel},
     sampler::Gibbs;
     model=l_model.logdensity,
     kwargs...,
@@ -45,7 +45,7 @@ end
 
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
-    l_model::AbstractMCMC.LogDensityModel{BUGSModel},
+    l_model::AbstractMCMC.LogDensityModel{<:BUGSModel},
     sampler::Gibbs,
     state::AbstractGibbsState;
     model=l_model.logdensity,
@@ -83,7 +83,7 @@ end
 
 function AbstractMCMC.bundle_samples(
     ts,
-    logdensitymodel::AbstractMCMC.LogDensityModel{JuliaBUGS.BUGSModel},
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel},
     sampler::Gibbs,
     state,
     ::Type{T};
