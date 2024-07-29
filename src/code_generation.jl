@@ -6,113 +6,147 @@ Generate a Julia function that takes a NamedTuple represent the env and vector o
 function generate_expr(model::BUGSModel)
     expr = Expr(:block)
 
-    (; sorted_nodes,) = model
-
-    for vn in sorted_nodes
+    push!(expr.args, :(logp = 0.0))
+    push!(
+        expr.args,
+        Expr(
+            :(=),
+            Expr(:tuple, Expr(:parameters, collect(keys(model.varinfo.values))...)),
+            :value_nt,
+        ),
+    )
+    var_lengths = if model.transformed
+        model.transformed_var_lengths
+    else
+        model.untransformed_var_lengths
+    end
+    current_idx = 1
+    for vn in model.sorted_nodes
+        vn_expr = Meta.parse(string(Symbol(vn)))
         (; is_stochastic, is_observed, node_function_expr, node_function, node_args, loop_vars) = model.g[vn]
         if !is_stochastic
             push!(
                 expr.args,
-                generate_function_call_expr(vn, node_function, node_args, loop_vars),
+                Expr(
+                    :(=),
+                    vn_expr,
+                    generate_function_call_expr(
+                        vn_expr, node_function, node_args, loop_vars
+                    ),
+                ),
             )
         else
             if is_observed
                 push!(
                     expr.args,
                     Expr(
-                        :call,
                         :(=),
+                        :logp,
                         Expr(
                             :call,
                             :+,
-                            logp,
+                            :logp,
                             Expr(
                                 :call,
-                                logpdf,
+                                :logpdf,
                                 generate_function_call_expr(
-                                    vn, node_function, node_args, loop_vars
+                                    vn_expr, node_function, node_args, loop_vars
                                 ),
+                                vn_expr,
                             ),
-                            Meta.parse(string(Symbol(vn))),
                         ),
                     ),
                 )
             else
-                # this is kind of the difficult part:
-                # the counter approach is hard to code this way
-                # we should just do an unflatten
-
-                # next issue is about logabsdetjac
+                push!(
+                    expr.args,
+                    Expr(
+                        :(=),
+                        :dist,
+                        generate_function_call_expr(
+                            vn_expr, node_function, node_args, loop_vars
+                        ),
+                    ),
+                )
+                l = var_lengths[vn]
+                if model.transformed
+                    push!(
+                        expr.args,
+                        :(
+                            val_and_logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
+                                Bijectors.inverse(bijector(dist)),
+                                dist,
+                                params[($current_idx):($current_idx + $l - 1)],
+                            )
+                        ),
+                    )
+                    push!(expr.args, :($vn_expr = val_and_logjac[1]))
+                    push!(
+                        expr.args,
+                        :(logp = logp + logpdf(dist, $vn_expr) + val_and_logjac[2]),
+                    )
+                else
+                    push!(
+                        expr.args,
+                        :(
+                            $vn_expr = DynamicPPL.reconstruct(
+                                dist, params[($current_idx):($current_idx + $l - 1)]
+                            )
+                        ),
+                    )
+                    push!(expr.args, :(logp = logp + logpdf(dist, $vn_expr)))
+                end
+                current_idx += l
             end
         end
     end
 
-    return expr
+    push!(expr.args, :(return logp))
+
+    return Expr(:function, Expr(:tuple, :value_nt, :params), expr)
 end
 
-# I think this will be limited by the dictionary accesses
-# of course, another issue is allocation, will be an issue when dimension is high
-function unflatten(model::BUGSModel, params::Vector{Float64})
-    unflattened_params = Vector{Vector{Float64}}()
-    var_lengths = if model.transformed
-        model.transformed_var_lengths
-    else
-        model.untransformed_var_lengths
-    end
-    index = 1
-    for vn in model.parameters
-        push!(unflattened_params, params[index:index+var_lengths[vn]-1])
-        index += var_lengths[vn]
-    end
-
-    return unflattened_params
-end
-
-function compute_dims_vec(model::BUGSModel)
-    dims = Int[]
-    var_lengths = if model.transformed
-        model.transformed_var_lengths
-    else
-        model.untransformed_var_lengths
-    end
-    for vn in model.parameters
-        push!(dims, var_lengths[vn])
-    end
-    return dims
-end
-dims = compute_dims_vec(model)
-function unflatten_w_dims(dims::Vector{Int}, params::Vector{Float64})
-    unflattened_params = Vector{Vector{Float64}}()
-    index = 1
-    for dim in dims
-        push!(unflattened_params, params[index:index+dim-1])
-        index += dim
-    end
-    return unflattened_params
-end
-
-function generate_function_call_expr(vn, node_function, node_args, loop_vars)
-    vn_expr = Meta.parse(string(Symbol(vn)))
+# `node_function` here is a function
+function generate_function_call_expr(vn_expr, node_function, node_args, loop_vars)
     return Expr(
-        :(=),
-        vn_expr,
-        Expr(
-            :call,
-            node_function,
+        :call,
+        node_function,
+        [
             Expr(
-                :paraemters,
-                [
-                    Expr(
-                        :kw,
-                        node_arg,
-                        if node_arg in keys(loop_vars)
-                            loop_vars[node_arg]
-                        else
-                            node_arg
-                        end,
-                    ) for node_arg in node_args
-                ],
-            ),
-        ),
+                :kw,
+                node_arg,
+                if node_arg in keys(loop_vars)
+                    loop_vars[node_arg]
+                else
+                    node_arg
+                end,
+            ) for node_arg in node_args
+        ]...,
     )
 end
+
+## test
+
+using JuliaBUGS
+using JuliaBUGS: BUGSModel
+
+model_def = @bugs begin
+    x ~ dnorm(0, 1)
+    y ~ dnorm(x, 1)
+    z = x + y
+    w ~ dnorm(z, 1)
+end
+
+model = compile(model_def, (; x=1.0,))
+
+f_ex = generate_expr(model)
+f = eval(f_ex)
+
+params = rand(2)
+f(model.varinfo.values, params)
+using LogDensityProblems
+LogDensityProblems.logdensity(model, params)
+
+using BenchmarkTools
+@benchmark f(model.varinfo.values, params)
+@benchmark LogDensityProblems.logdensity(model, params)
