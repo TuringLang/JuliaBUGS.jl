@@ -16,7 +16,7 @@ import JuliaBUGS: gibbs_internal
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:AdvancedMH.AbstractTransition},
     logdensitymodel::Union{
-        AbstractMCMC.LogDensityModel{JuliaBUGS.BUGSModel},
+        AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel},
         AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
     },
     sampler::AdvancedMH.MHSampler,
