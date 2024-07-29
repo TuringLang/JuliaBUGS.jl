@@ -13,6 +13,16 @@
     LogDensityProblems.logdensity_and_gradient(ad_model, initial_θ)
 end
 
+@testset "Tapir.jl integration" begin
+    using ADTypes, Tapir
+    (; model_def, data, inits) = JuliaBUGS.BUGSExamples.rats
+    model = compile(model_def, data, inits)
+    ad_model = ADgradient(AutoTapir(), model)
+    LogDensityProblems.logdensity_and_gradient(
+        ad_model, rand(LogDensityProblems.dimension(model))
+    )
+end
+
 # AdvancedHMC
 
 @testset "AdvancedHMC" begin
