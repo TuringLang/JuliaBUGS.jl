@@ -641,9 +641,7 @@ function generate_expr(model::BUGSModel)
                 Expr(
                     :(=),
                     vn_expr,
-                    generate_function_call_expr(
-                        node_function, node_args, loop_vars
-                    ),
+                    generate_function_call_expr(node_function, node_args, loop_vars),
                 ),
             )
         else
@@ -676,9 +674,7 @@ function generate_expr(model::BUGSModel)
                     Expr(
                         :(=),
                         _dist,
-                        generate_function_call_expr(
-                            node_function, node_args, loop_vars
-                        ),
+                        generate_function_call_expr(node_function, node_args, loop_vars),
                     ),
                 )
                 l = var_lengths[vn]
@@ -687,7 +683,9 @@ function generate_expr(model::BUGSModel)
                         expr.args,
                         :(
                             $_val_and_logjac = JuliaBUGS.DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
-                                JuliaBUGS.Bijectors.inverse(JuliaBUGS.Bijectors.bijector($_dist)),
+                                JuliaBUGS.Bijectors.inverse(
+                                    JuliaBUGS.Bijectors.bijector($_dist)
+                                ),
                                 $_dist,
                                 $_params[($current_idx):($current_idx + $l - 1)],
                             )
@@ -696,7 +694,12 @@ function generate_expr(model::BUGSModel)
                     push!(expr.args, :($vn_expr = $_val_and_logjac[1]))
                     push!(
                         expr.args,
-                        :($_logp = $_logp + JuliaBUGS.Distributions.logpdf($_dist, $vn_expr) + $_val_and_logjac[2]),
+                        :(
+                            $_logp =
+                                $_logp +
+                                JuliaBUGS.Distributions.logpdf($_dist, $vn_expr) +
+                                $_val_and_logjac[2]
+                        ),
                     )
                 else
                     push!(
@@ -746,7 +749,7 @@ function get_vn_expr(vn::VarName)
     if occursin(".", vn_string)
         # if a array index, only wrap the array name
         if occursin("[", vn_string)
-            array_name, index = split(vn_string, "[", limit=2)
+            array_name, index = split(vn_string, "["; limit=2)
             vn_string = "var\"$(array_name)\"[$(index)"
         else
             vn_string = "var\"$vn_string\""
