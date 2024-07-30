@@ -9,7 +9,7 @@ abstract type AbstractBUGSModel end
 The `BUGSModel` object is used for inference and represents the output of compilation. It implements the
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
 """
-struct BUGSModel <: AbstractBUGSModel
+struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing}} <: AbstractBUGSModel
     " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
 
@@ -18,22 +18,22 @@ struct BUGSModel <: AbstractBUGSModel
     " The length of the parameters vector in the transformed space. "
     transformed_param_length::Int
     " A dictionary mapping the names of the variables to their lengths in the original space. "
-    untransformed_var_lengths::Dict{VarName,Int}
+    untransformed_var_lengths::Dict{<:VarName,Int}
     " A dictionary mapping the names of the variables to their lengths in the transformed space. "
-    transformed_var_lengths::Dict{VarName,Int}
+    transformed_var_lengths::Dict{<:VarName,Int}
 
     " An instance of `DynamicPPL.SimpleVarInfo`, which is a dictionary-like data structure that maps both data and values of variables in the model to the corresponding values. "
     varinfo::SimpleVarInfo
     " A vector containing the names of the parameters in the model, defined as stochastic variables that are not observed. This vector should be consistent with `sorted_nodes`. "
-    parameters::Vector{VarName}
+    parameters::Vector{<:VarName}
     " A vector containing the names of all the variables in the model, sorted in topological order. In the case of a conditioned model, `sorted_nodes` include all the variables in `parameters` and the variables in the Markov blanket of `parameters`. "
-    sorted_nodes::Vector{VarName}
+    sorted_nodes::Vector{<:VarName}
 
     " An instance of `BUGSGraph`, representing the dependency graph of the model. "
     g::BUGSGraph
 
     " If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`. "
-    base_model::Union{BUGSModel,Nothing}
+    base_model::base_model_T
 end
 
 function Base.show(io::IO, m::BUGSModel)
@@ -90,7 +90,7 @@ function BUGSModel(
     initial_params::NamedTuple=NamedTuple();
     is_transformed::Bool=true,
 )
-    sorted_nodes = [label_for(g, node) for node in topological_sort(g)]
+    sorted_nodes = VarName[label_for(g, node) for node in topological_sort(g)]
     parameters = VarName[]
     untransformed_param_length, transformed_param_length = 0, 0
     untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
