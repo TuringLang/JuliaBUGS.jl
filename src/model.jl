@@ -676,9 +676,7 @@ function generate_expr(model::BUGSModel)
                     Expr(
                         :(=),
                         _dist,
-                        generate_function_call_expr(
-                            node_function, node_args, loop_vars
-                        ),
+                        generate_function_call_expr(node_function, node_args, loop_vars),
                     ),
                 )
                 l = var_lengths[vn]
