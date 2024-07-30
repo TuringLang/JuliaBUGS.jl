@@ -30,7 +30,7 @@
     end
 
     @testset "example: $ex" for ex in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
-        if ex == :lsat # skip for now
+        if ex == :lsat # skip for now -- too large to 
             continue
         end
         @info ex

@@ -588,16 +588,16 @@ julia> generate_expr(model)
       var"##logp#256" = 0.0
       (; w, y, u, eye, x) = var"##value_nt#260"
       var"##dist#257" = (JuliaBUGS.var"#165#167"())(x = x)
-      var"##val_and_logjac#258" = JuliaBUGS.DynamicPPL.with_logabsdet_jacobian_and_reconstruct(Bijectors.inverse(bijector(var"##dist#257")), var"##dist#257", var"##params#261"[1:(1 + 1) - 1])
+      var"##val_and_logjac#258" = JuliaBUGS.DynamicPPL.with_logabsdet_jacobian_and_reconstruct(JuliaBUGS.Bijectors.inverse(bijector(var"##dist#257")), var"##dist#257", var"##params#261"[1:(1 + 1) - 1])
       u[1] = var"##val_and_logjac#258"[1]
       var"##logp#256" = var"##logp#256" + logpdf(var"##dist#257", u[1]) + var"##val_and_logjac#258"[2]
       var"##dist#257" = (JuliaBUGS.var"#162#164"())(x = x)
-      var"##val_and_logjac#258" = JuliaBUGS.DynamicPPL.with_logabsdet_jacobian_and_reconstruct(Bijectors.inverse(bijector(var"##dist#257")), var"##dist#257", var"##params#261"[2:(2 + 1) - 1])
+      var"##val_and_logjac#258" = JuliaBUGS.DynamicPPL.with_logabsdet_jacobian_and_reconstruct(JuliaBUGS.Bijectors.inverse(bijector(var"##dist#257")), var"##dist#257", var"##params#261"[2:(2 + 1) - 1])
       y = var"##val_and_logjac#258"[1]
       var"##logp#256" = var"##logp#256" + logpdf(var"##dist#257", y) + var"##val_and_logjac#258"[2]
       w = (JuliaBUGS.var"#168#170"())(y = y, u = u)
       var"##dist#257" = (JuliaBUGS.var"#171#173"())(w = w)
-      var"##val_and_logjac#258" = JuliaBUGS.DynamicPPL.with_logabsdet_jacobian_and_reconstruct(Bijectors.inverse(bijector(var"##dist#257")), var"##dist#257", var"##params#261"[3:(3 + 1) - 1])
+      var"##val_and_logjac#258" = JuliaBUGS.DynamicPPL.with_logabsdet_jacobian_and_reconstruct(JuliaBUGS.Bijectors.inverse(bijector(var"##dist#257")), var"##dist#257", var"##params#261"[3:(3 + 1) - 1])
       u[2] = var"##val_and_logjac#258"[1]
       var"##logp#256" = var"##logp#256" + logpdf(var"##dist#257", u[2]) + var"##val_and_logjac#258"[2]
       var"##logp#256" = var"##logp#256" + logpdf((JuliaBUGS.var"#159#161"())(eye = eye), x[1:2])
@@ -687,7 +687,7 @@ function generate_expr(model::BUGSModel)
                         expr.args,
                         :(
                             $_val_and_logjac = JuliaBUGS.DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
-                                Bijectors.inverse(bijector($_dist)),
+                                JuliaBUGS.Bijectors.inverse(bijector($_dist)),
                                 $_dist,
                                 $_params[($current_idx):($current_idx + $l - 1)],
                             )
