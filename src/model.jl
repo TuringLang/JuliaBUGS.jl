@@ -746,7 +746,7 @@ function get_vn_expr(vn::VarName)
     if occursin(".", vn_string)
         # if a array index, only wrap the array name
         if occursin("[", vn_string)
-            array_name, index = split(vn_string, "[", limit=2)
+            array_name, index = split(vn_string, "["; limit=2)
             vn_string = "var\"$(array_name)\"[$(index)"
         else
             vn_string = "var\"$vn_string\""
