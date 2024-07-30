@@ -40,6 +40,7 @@ if test_group == "elementary" || test_group == "all"
     include("parser/test_parser.jl")
     include("passes.jl")
     include("graphs.jl")
+    include("model.jl")
 end
 
 if test_group == "compilation" || test_group == "all"

@@ -9,7 +9,7 @@ abstract type AbstractBUGSModel end
 The `BUGSModel` object is used for inference and represents the output of compilation. It implements the
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
 """
-struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing}} <: AbstractBUGSModel
+struct BUGSModel <: AbstractBUGSModel
     " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
 
@@ -18,22 +18,22 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing}} <: AbstractBU
     " The length of the parameters vector in the transformed space. "
     transformed_param_length::Int
     " A dictionary mapping the names of the variables to their lengths in the original space. "
-    untransformed_var_lengths::Dict{<:VarName,Int}
+    untransformed_var_lengths::Dict{VarName,Int}
     " A dictionary mapping the names of the variables to their lengths in the transformed space. "
-    transformed_var_lengths::Dict{<:VarName,Int}
+    transformed_var_lengths::Dict{VarName,Int}
 
     " An instance of `DynamicPPL.SimpleVarInfo`, which is a dictionary-like data structure that maps both data and values of variables in the model to the corresponding values. "
     varinfo::SimpleVarInfo
     " A vector containing the names of the parameters in the model, defined as stochastic variables that are not observed. This vector should be consistent with `sorted_nodes`. "
-    parameters::Vector{<:VarName}
+    parameters::Vector{VarName}
     " A vector containing the names of all the variables in the model, sorted in topological order. In the case of a conditioned model, `sorted_nodes` include all the variables in `parameters` and the variables in the Markov blanket of `parameters`. "
-    sorted_nodes::Vector{<:VarName}
+    sorted_nodes::Vector{VarName}
 
     " An instance of `BUGSGraph`, representing the dependency graph of the model. "
     g::BUGSGraph
 
     " If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`. "
-    base_model::base_model_T
+    base_model::Union{BUGSModel,Nothing}
 end
 
 function Base.show(io::IO, m::BUGSModel)
@@ -90,7 +90,7 @@ function BUGSModel(
     initial_params::NamedTuple=NamedTuple();
     is_transformed::Bool=true,
 )
-    sorted_nodes = VarName[label_for(g, node) for node in topological_sort(g)]
+    sorted_nodes = [label_for(g, node) for node in topological_sort(g)]
     parameters = VarName[]
     untransformed_param_length, transformed_param_length = 0, 0
     untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
@@ -588,16 +588,16 @@ julia> generate_expr(model)
       var"##logp#256" = 0.0
       (; w, y, u, eye, x) = var"##value_nt#260"
       var"##dist#257" = (JuliaBUGS.var"#165#167"())(x = x)
-      var"##val_and_logjac#258" = JuliaBUGS.DynamicPPL.with_logabsdet_jacobian_and_reconstruct(JuliaBUGS.Bijectors.inverse(bijector(var"##dist#257")), var"##dist#257", var"##params#261"[1:(1 + 1) - 1])
+      var"##val_and_logjac#258" = JuliaBUGS.DynamicPPL.with_logabsdet_jacobian_and_reconstruct(JuliaBUGS.Bijectors.inverse(JuliaBUGS.Bijectors.bijector(var"##dist#257")), var"##dist#257", var"##params#261"[1:(1 + 1) - 1])
       u[1] = var"##val_and_logjac#258"[1]
       var"##logp#256" = var"##logp#256" + logpdf(var"##dist#257", u[1]) + var"##val_and_logjac#258"[2]
       var"##dist#257" = (JuliaBUGS.var"#162#164"())(x = x)
-      var"##val_and_logjac#258" = JuliaBUGS.DynamicPPL.with_logabsdet_jacobian_and_reconstruct(JuliaBUGS.Bijectors.inverse(bijector(var"##dist#257")), var"##dist#257", var"##params#261"[2:(2 + 1) - 1])
+      var"##val_and_logjac#258" = JuliaBUGS.DynamicPPL.with_logabsdet_jacobian_and_reconstruct(JuliaBUGS.Bijectors.inverse(JuliaBUGS.Bijectors.bijector(var"##dist#257")), var"##dist#257", var"##params#261"[2:(2 + 1) - 1])
       y = var"##val_and_logjac#258"[1]
       var"##logp#256" = var"##logp#256" + logpdf(var"##dist#257", y) + var"##val_and_logjac#258"[2]
       w = (JuliaBUGS.var"#168#170"())(y = y, u = u)
       var"##dist#257" = (JuliaBUGS.var"#171#173"())(w = w)
-      var"##val_and_logjac#258" = JuliaBUGS.DynamicPPL.with_logabsdet_jacobian_and_reconstruct(JuliaBUGS.Bijectors.inverse(bijector(var"##dist#257")), var"##dist#257", var"##params#261"[3:(3 + 1) - 1])
+      var"##val_and_logjac#258" = JuliaBUGS.DynamicPPL.with_logabsdet_jacobian_and_reconstruct(JuliaBUGS.Bijectors.inverse(JuliaBUGS.Bijectors.bijector(var"##dist#257")), var"##dist#257", var"##params#261"[3:(3 + 1) - 1])
       u[2] = var"##val_and_logjac#258"[1]
       var"##logp#256" = var"##logp#256" + logpdf(var"##dist#257", u[2]) + var"##val_and_logjac#258"[2]
       var"##logp#256" = var"##logp#256" + logpdf((JuliaBUGS.var"#159#161"())(eye = eye), x[1:2])
@@ -641,7 +641,9 @@ function generate_expr(model::BUGSModel)
                 Expr(
                     :(=),
                     vn_expr,
-                    generate_function_call_expr(node_function, node_args, loop_vars),
+                    generate_function_call_expr(
+                        node_function, node_args, loop_vars
+                    ),
                 ),
             )
         else
@@ -658,7 +660,7 @@ function generate_expr(model::BUGSModel)
                             _logp,
                             Expr(
                                 :call,
-                                :logpdf,
+                                :(JuliaBUGS.Distributions.logpdf),
                                 generate_function_call_expr(
                                     node_function, node_args, loop_vars
                                 ),
@@ -674,7 +676,9 @@ function generate_expr(model::BUGSModel)
                     Expr(
                         :(=),
                         _dist,
-                        generate_function_call_expr(node_function, node_args, loop_vars),
+                        generate_function_call_expr(
+                            node_function, node_args, loop_vars
+                        ),
                     ),
                 )
                 l = var_lengths[vn]
@@ -683,7 +687,7 @@ function generate_expr(model::BUGSModel)
                         expr.args,
                         :(
                             $_val_and_logjac = JuliaBUGS.DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
-                                JuliaBUGS.Bijectors.inverse(bijector($_dist)),
+                                JuliaBUGS.Bijectors.inverse(JuliaBUGS.Bijectors.bijector($_dist)),
                                 $_dist,
                                 $_params[($current_idx):($current_idx + $l - 1)],
                             )
@@ -692,7 +696,7 @@ function generate_expr(model::BUGSModel)
                     push!(expr.args, :($vn_expr = $_val_and_logjac[1]))
                     push!(
                         expr.args,
-                        :($_logp = $_logp + logpdf($_dist, $vn_expr) + $_val_and_logjac[2]),
+                        :($_logp = $_logp + JuliaBUGS.Distributions.logpdf($_dist, $vn_expr) + $_val_and_logjac[2]),
                     )
                 else
                     push!(
@@ -742,7 +746,7 @@ function get_vn_expr(vn::VarName)
     if occursin(".", vn_string)
         # if a array index, only wrap the array name
         if occursin("[", vn_string)
-            array_name, index = split(vn_string, "["; limit=2)
+            array_name, index = split(vn_string, "[", limit=2)
             vn_string = "var\"$(array_name)\"[$(index)"
         else
             vn_string = "var\"$vn_string\""
