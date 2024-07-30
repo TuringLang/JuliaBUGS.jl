@@ -641,9 +641,7 @@ function generate_expr(model::BUGSModel)
                 Expr(
                     :(=),
                     vn_expr,
-                    generate_function_call_expr(
-                        node_function, node_args, loop_vars
-                    ),
+                    generate_function_call_expr(node_function, node_args, loop_vars),
                 ),
             )
         else
