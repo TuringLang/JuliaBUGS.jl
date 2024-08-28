@@ -487,7 +487,7 @@ end
 
 Evaluate `var` in the environment `env` while tracking its dependencies and node function arguments.
 
-This function aims to extract two related but nuanced pieces of information:
+This function aims to extract two related but nuancedly different pieces of information:
     1. Fine-grained dependency information, which is used to construct the dependency graph.
     2. Variables used for node function arguments, which only care about the variable names and types (number or array), not the index.
     
