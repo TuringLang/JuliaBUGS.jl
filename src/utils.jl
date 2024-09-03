@@ -9,6 +9,7 @@ export create_eval_env,
     extract_variables_in_bounds_and_lhs_indices,
     extract_variables_assigned_to,
     concretize_colon_indexing,
+    simplify_lhs,
     simple_arithmetic_eval
 
 """

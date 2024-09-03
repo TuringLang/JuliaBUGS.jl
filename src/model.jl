@@ -111,7 +111,7 @@ function BUGSModel(
 
             untransformed_var_lengths[vn] = length(dist)
             # not all distributions are defined for `Bijectors.transformed`
-            transformed_var_lengths[vn] = if bijector(dist) == identity
+            transformed_var_lengths[vn] = if Bijectors.bijector(dist) == identity
                 untransformed_var_lengths[vn]
             else
                 length(Bijectors.transformed(dist))
@@ -144,7 +144,7 @@ function BUGSModel(
         transformed_param_length,
         untransformed_var_lengths,
         transformed_var_lengths,
-        env,
+        vi,
         parameters,
         sorted_nodes,
         g,
@@ -483,12 +483,12 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
                 # although the values stored in `vi` are in their original space, 
                 # when `DynamicTransformation`, we behave as accepting a vector of 
                 # parameters in the transformed space
-                value_transformed = transform(bijector(dist), value)
+                value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
                 logp +=
-                    logpdf(dist, value) +
-                    logabsdetjac(Bijectors.inverse(bijector(dist)), value_transformed)
+                    Distributions.logpdf(dist, value) +
+                    Bijectors.logabsdetjac(Bijectors.inverse(Bijectors.bijector(dist)), value_transformed)
             else
-                logp += logpdf(dist, value)
+                logp += Distributions.logpdf(dist, value)
             end
         end
     end
@@ -533,7 +533,7 @@ function AbstractPPL.evaluate!!(
                 l = var_lengths[vn]
                 if model.transformed
                     value, logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
-                        Bijectors.inverse(bijector(dist)),
+                        Bijectors.inverse(Bijectors.bijector(dist)),
                         dist,
                         flattened_values[current_idx:(current_idx + l - 1)],
                     )

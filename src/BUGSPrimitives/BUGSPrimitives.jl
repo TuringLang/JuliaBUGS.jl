@@ -1,7 +1,7 @@
 module BUGSPrimitives
 
 using Bijectors: Bijectors
-using Distributions: Distributions
+using Distributions
 using LinearAlgebra
 using LogExpFunctions: cloglog, cexpexp, logit, logistic
 using PDMats
