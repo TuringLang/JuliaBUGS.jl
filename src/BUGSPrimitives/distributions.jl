@@ -46,7 +46,7 @@ Only `pdf` and `logpdf` are implemented for this distribution.
 # See Also
 [TDist](https://juliastats.org/Distributions.jl/stable/univariate/#Distributions.TDist)
 """
-struct TDistShiftedScaled <: ContinuousUnivariateDistribution
+struct TDistShiftedScaled <: Distributions.ContinuousUnivariateDistribution
     ν::Real
     μ::Real
     σ::Real
@@ -113,7 +113,7 @@ dflat() = Flat()
 
 The flat distribution mimicking the behavior of the `dflat` distribution in the BUGS family of softwares.
 """
-struct Flat <: ContinuousUnivariateDistribution end
+struct Flat <: Distributions.ContinuousUnivariateDistribution end
 
 Distributions.minimum(::Flat) = -Inf
 Distributions.maximum(::Flat) = Inf
@@ -121,7 +121,7 @@ Distributions.maximum(::Flat) = Inf
 Distributions.pdf(::Flat, x::Real) = 1.0
 Distributions.logpdf(::Flat, x::Real) = 0.0
 
-struct LeftTruncatedFlat <: ContinuousUnivariateDistribution
+struct LeftTruncatedFlat <: Distributions.ContinuousUnivariateDistribution
     a::Real
 end
 
@@ -131,7 +131,7 @@ Distributions.maximum(::LeftTruncatedFlat) = Inf
 Distributions.pdf(d::LeftTruncatedFlat, x::Real) = x >= d.a ? 1.0 : 0.0
 Distributions.logpdf(d::LeftTruncatedFlat, x::Real) = x >= d.a ? 0.0 : -Inf
 
-struct RightTruncatedFlat <: ContinuousUnivariateDistribution
+struct RightTruncatedFlat <: Distributions.ContinuousUnivariateDistribution
     b::Real
 end
 
@@ -146,7 +146,7 @@ Distributions.logpdf(d::RightTruncatedFlat, x::Real) = x <= d.b ? 0.0 : -Inf
 
 Truncated version of the [`Flat`](@ref) distribution.
 """
-struct TruncatedFlat <: ContinuousUnivariateDistribution
+struct TruncatedFlat <: Distributions.ContinuousUnivariateDistribution
     a::Real
     b::Real
 

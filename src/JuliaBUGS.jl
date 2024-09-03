@@ -3,16 +3,14 @@ module JuliaBUGS
 using AbstractMCMC
 using AbstractPPL
 using BangBang
-using Bijectors
+using Bijectors: Bijectors
 using Distributions
-using Graphs
+using DynamicPPL: DynamicPPL
+using Graphs, MetaGraphsNext
 using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
-using MetaGraphsNext
 using Random
 using StaticArrays
-
-using DynamicPPL: DynamicPPL, SimpleVarInfo
 
 import Base: ==, hash, Symbol, size
 import Distributions: truncated
@@ -25,12 +23,13 @@ export @varname
 
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
-using .BUGSPrimitives: inverse # Bijectors.jl also exports `inverse`
 
 include("parser/Parser.jl")
 using .Parser
 
 include("utils.jl")
+using .CompilerUtils
+
 include("graphs.jl")
 include("compiler_pass.jl")
 include("model.jl")
@@ -155,7 +154,7 @@ function compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple=N
     eval_env = semantic_analysis(model_def, data)
     model_def = concretize_colon_indexing(model_def, eval_env)
     g = create_graph(model_def, eval_env)
-    svi = SimpleVarInfo(
+    vi = DynamicPPL.SimpleVarInfo(
         NamedTuple{keys(eval_env)}(
             map(
                 v -> begin
@@ -175,7 +174,7 @@ function compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple=N
         ),
         0.0,
     )
-    return BUGSModel(g, svi, initial_params)
+    return BUGSModel(g, vi, initial_params)
 end
 
 """
