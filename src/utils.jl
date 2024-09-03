@@ -549,5 +549,7 @@ end
 
 # this will prefer to mutate `nt` in-place
 function BangBang.setindex!!(nt::NamedTuple, value, vn::VarName{sym}) where {sym}
-    return Accessors.set(nt, BangBang.prefermutation(PropertyLens{sym}() ⨟ getoptic(vn)), value)
+    return Accessors.set(
+        nt, BangBang.prefermutation(PropertyLens{sym}() ⨟ getoptic(vn)), value
+    )
 end
