@@ -1,3 +1,18 @@
+module CompilerUtils
+
+using BangBang
+using MacroTools
+
+export create_eval_env,
+    concretize_eval_env,
+    decompose_for_expr,
+    extract_variable_names_and_numdims,
+    extract_variables_in_bounds_and_lhs_indices,
+    extract_variables_assigned_to,
+    concretize_colon_indexing,
+    simplify_lhs,
+    simple_arithmetic_eval
+
 """
     create_eval_env(non_data_scalars, non_data_array_sizes, data)
 
@@ -59,7 +74,9 @@ function concretize_eval_env(eval_env::NamedTuple)
         v = eval_env[k]
         if v isa AbstractArray
             try
-                disallowmissing_v = convert(AbstractArray{nonmissingtype(eltype(v))}, v)
+                disallowmissing_v = convert(
+                    AbstractArray{Base.nonmissingtype(eltype(v))}, v
+                )
                 eval_env = BangBang.setproperty!!(eval_env, k, disallowmissing_v)
             catch _
             end
@@ -518,6 +535,8 @@ function simple_arithmetic_eval(data::NamedTuple, expr::Expr)
     end
 end
 
+end # module
+
 # TODO: can't remove even with the `possible` fix in DynamicPPL, still seems to have eltype inference issue causing AD errors
 # Resolves: setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
 # Alternatively, can overload BangBang.possible(
@@ -532,4 +551,11 @@ function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
     end
     ys[I...] = v
     return ys
+end
+
+# this will prefer to mutate `nt` in-place
+function BangBang.setindex!!(nt::NamedTuple, value, vn::VarName{sym}) where {sym}
+    return Accessors.set(
+        nt, BangBang.prefermutation(PropertyLens{sym}() ⨟ getoptic(vn)), value
+    )
 end

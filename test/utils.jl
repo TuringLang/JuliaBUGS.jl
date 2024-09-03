@@ -1,3 +1,5 @@
+using JuliaBUGS: CompilerUtils
+
 @testset "Decompose for loop" begin
     ex = MacroTools.@q for i in 1:3
         x[i] = i

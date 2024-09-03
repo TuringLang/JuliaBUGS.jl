@@ -13,26 +13,29 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing}} <: AbstractBU
     " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
 
-    " The length of the parameters vector in the original space. "
+    "The length of the parameters vector in the original (constrained) space."
     untransformed_param_length::Int
-    " The length of the parameters vector in the transformed space. "
+    "The length of the parameters vector in the transformed (unconstrained) space."
     transformed_param_length::Int
-    " A dictionary mapping the names of the variables to their lengths in the original space. "
+    "A dictionary mapping the names of the variables to their lengths in the original (constrained) space."
     untransformed_var_lengths::Dict{<:VarName,Int}
-    " A dictionary mapping the names of the variables to their lengths in the transformed space. "
+    "A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space."
     transformed_var_lengths::Dict{<:VarName,Int}
 
-    " An instance of `DynamicPPL.SimpleVarInfo`, which is a dictionary-like data structure that maps both data and values of variables in the model to the corresponding values. "
-    varinfo::SimpleVarInfo
-    " A vector containing the names of the parameters in the model, defined as stochastic variables that are not observed. This vector should be consistent with `sorted_nodes`. "
+    "A `DynamicPPL.SimpleVarInfo` object containing the values of the variables in the model.
+    Note that the usage of `SimpleVarInfo` in JuliaBUGS is different from that of DynamicPPL:
+    In JuliaBUGS, `varinfo` contains all the values (DynamicPPL only contains values of model parameters), 
+    and all the values in `varinfo` are always in the constrained space."
+    varinfo::DynamicPPL.SimpleVarInfo
+    "A vector containing the names of the model parameters (unobserved stochastic variables)."
     parameters::Vector{<:VarName}
-    " A vector containing the names of all the variables in the model, sorted in topological order. In the case of a conditioned model, `sorted_nodes` include all the variables in `parameters` and the variables in the Markov blanket of `parameters`. "
+    "A vector containing the names of all the variables in the model, sorted in topological order."
     sorted_nodes::Vector{<:VarName}
 
-    " An instance of `BUGSGraph`, representing the dependency graph of the model. "
+    "An instance of `BUGSGraph`, representing the dependency graph of the model."
     g::BUGSGraph
 
-    " If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`. "
+    "If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`."
     base_model::base_model_T
 end
 
@@ -50,16 +53,16 @@ function Base.show(io::IO, m::BUGSModel)
             "\n",
         )
     end
-    println(io, "  Parameters of the model:")
+    println(io, "  Model parameters:")
     println(io, "    ", join(m.parameters, ", "), "\n")
-    println(io, "  Values:")
+    println(io, "  Variable values:")
     return println(io, "$(m.varinfo.values)")
 end
 
 """
     parameters(m::BUGSModel)
 
-Return a vector of `VarName` containing the names of the parameters in the model.
+Return a vector of `VarName` containing the names of the model parameters (unobserved stochastic variables).
 """
 parameters(m::BUGSModel) = m.parameters
 
@@ -71,7 +74,7 @@ Return a vector of `VarName` containing the names of all the variables in the mo
 variables(m::BUGSModel) = collect(labels(m.g))
 
 function prepare_arg_values(
-    args::Tuple{Vararg{Symbol}}, vi::SimpleVarInfo, loop_vars::NamedTuple{lvars}
+    args::Tuple{Vararg{Symbol}}, vi::DynamicPPL.SimpleVarInfo, loop_vars::NamedTuple{lvars}
 ) where {lvars}
     return NamedTuple{args}(Tuple(
         map(args) do arg
@@ -86,7 +89,7 @@ end
 
 function BUGSModel(
     g::BUGSGraph,
-    vi::SimpleVarInfo,
+    vi::DynamicPPL.SimpleVarInfo,
     initial_params::NamedTuple=NamedTuple();
     is_transformed::Bool=true,
 )
@@ -101,14 +104,14 @@ function BUGSModel(
         args = prepare_arg_values(node_args, vi, loop_vars)
         if !is_stochastic
             value = Base.invokelatest(node_function; args...)
-            vi = setindex!!(vi, value, vn)
+            vi = DynamicPPL.BangBang.setindex!!(vi, value, vn)
         elseif !is_observed
             push!(parameters, vn)
             dist = Base.invokelatest(node_function; args...)
 
             untransformed_var_lengths[vn] = length(dist)
             # not all distributions are defined for `Bijectors.transformed`
-            transformed_var_lengths[vn] = if bijector(dist) == identity
+            transformed_var_lengths[vn] = if Bijectors.bijector(dist) == identity
                 untransformed_var_lengths[vn]
             else
                 length(Bijectors.transformed(dist))
@@ -122,7 +125,7 @@ function BUGSModel(
                 missing
             end
             if !ismissing(initialization)
-                vi = setindex!!(vi, initialization, vn)
+                vi = DynamicPPL.BangBang.setindex!!(vi, initialization, vn)
             else
                 init_value = try
                     rand(dist)
@@ -131,7 +134,7 @@ function BUGSModel(
                         "Failed to sample from the prior distribution of $vn, consider providing initialization values for $vn or it's parents: $(collect(MetaGraphsNext.inneighbor_labels(g, vn))...).",
                     )
                 end
-                vi = setindex!!(vi, init_value, vn)
+                vi = DynamicPPL.BangBang.setindex!!(vi, init_value, vn)
             end
         end
     end
@@ -204,21 +207,21 @@ function initialize!(model::BUGSModel, initial_params::AbstractVector)
 end
 
 """
-    get_params_varinfo(model::BUGSModel[, vi::SimpleVarInfo])
+    get_params_varinfo(model::BUGSModel[, vi::DynamicPPL.SimpleVarInfo])
 
-Returns a `SimpleVarInfo` object containing only the parameter values of the model.
+Returns a `DynamicPPL.SimpleVarInfo` object containing only the parameter values of the model.
 If `vi` is provided, it will be used; otherwise, `model.varinfo` will be used.
 """
 function get_params_varinfo(model::BUGSModel)
     return get_params_varinfo(model, model.varinfo)
 end
-function get_params_varinfo(model::BUGSModel, vi::SimpleVarInfo)
+function get_params_varinfo(model::BUGSModel, vi::DynamicPPL.SimpleVarInfo)
     if !model.transformed
         d = Dict{VarName,Any}()
         for param in model.parameters
             d[param] = vi[param]
         end
-        return SimpleVarInfo(d, vi.logp, DynamicPPL.NoTransformation())
+        return DynamicPPL.SimpleVarInfo(d, vi.logp, DynamicPPL.NoTransformation())
     else
         d = Dict{VarName,Any}()
         g = model.g
@@ -231,12 +234,12 @@ function get_params_varinfo(model::BUGSModel, vi::SimpleVarInfo)
                 d[v] = linked_val
             end
         end
-        return SimpleVarInfo(d, vi.logp, DynamicPPL.DynamicTransformation())
+        return DynamicPPL.SimpleVarInfo(d, vi.logp, DynamicPPL.DynamicTransformation())
     end
 end
 
 """
-    getparams(model::BUGSModel[, vi::SimpleVarInfo]; transformed::Bool=false)
+    getparams(model::BUGSModel[, vi::DynamicPPL.SimpleVarInfo]; transformed::Bool=false)
 
 Extract the parameter values from the model as a flattened vector, ordered topologically.
 If `transformed` is set to true, the parameters are provided in the transformed space.
@@ -244,7 +247,7 @@ If `transformed` is set to true, the parameters are provided in the transformed 
 function getparams(model::BUGSModel; transformed::Bool=false)
     return getparams(model, model.varinfo; transformed=transformed)
 end
-function getparams(model::BUGSModel, vi::SimpleVarInfo; transformed::Bool=false)
+function getparams(model::BUGSModel, vi::DynamicPPL.SimpleVarInfo; transformed::Bool=false)
     param_vals = Vector{Float64}(
         undef,
         transformed ? model.transformed_param_length : model.untransformed_param_length,
@@ -291,7 +294,7 @@ This function adopts the `BangBang` convention, i.e. it modifies the model in pl
 - `transformed::Bool=false`: Indicates whether the values in `flattened_values` are in the transformed space.
 
 # Returns
-`SimpleVarInfo`: The updated `varinfo` with the new parameter values set.
+`DynamicPPL.SimpleVarInfo`: The updated `varinfo` with the new parameter values set.
 """
 function setparams!!(
     model::BUGSModel, flattened_values::AbstractVector; transformed::Bool=false
@@ -342,7 +345,7 @@ end
 function AbstractPPL.condition(
     model::BUGSModel,
     var_group::Vector{<:VarName},
-    varinfo=model.varinfo,
+    varinfo::DynamicPPL.SimpleVarInfo=model.varinfo,
     sorted_nodes=Nothing,
 )
     check_var_group(var_group, model)
@@ -405,7 +408,7 @@ function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
     )
 end
 
-function update_varinfo(varinfo::SimpleVarInfo, d::Dict{VarName,<:Any})
+function update_varinfo(varinfo::DynamicPPL.SimpleVarInfo, d::Dict{VarName,<:Any})
     new_varinfo = deepcopy(varinfo)
     for (p, value) in d
         setindex!!(new_varinfo, value, p)
@@ -480,12 +483,13 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
                 # although the values stored in `vi` are in their original space, 
                 # when `DynamicTransformation`, we behave as accepting a vector of 
                 # parameters in the transformed space
-                value_transformed = transform(bijector(dist), value)
+                value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
                 logp +=
-                    logpdf(dist, value) +
-                    logabsdetjac(Bijectors.inverse(bijector(dist)), value_transformed)
+                    Distributions.logpdf(dist, value) + Bijectors.logabsdetjac(
+                        Bijectors.inverse(Bijectors.bijector(dist)), value_transformed
+                    )
             else
-                logp += logpdf(dist, value)
+                logp += Distributions.logpdf(dist, value)
             end
         end
     end
@@ -530,7 +534,7 @@ function AbstractPPL.evaluate!!(
                 l = var_lengths[vn]
                 if model.transformed
                     value, logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
-                        Bijectors.inverse(bijector(dist)),
+                        Bijectors.inverse(Bijectors.bijector(dist)),
                         dist,
                         flattened_values[current_idx:(current_idx + l - 1)],
                     )
