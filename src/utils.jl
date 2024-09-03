@@ -74,7 +74,9 @@ function concretize_eval_env(eval_env::NamedTuple)
         v = eval_env[k]
         if v isa AbstractArray
             try
-                disallowmissing_v = convert(AbstractArray{Base.nonmissingtype(eltype(v))}, v)
+                disallowmissing_v = convert(
+                    AbstractArray{Base.nonmissingtype(eltype(v))}, v
+                )
                 eval_env = BangBang.setproperty!!(eval_env, k, disallowmissing_v)
             catch _
             end
