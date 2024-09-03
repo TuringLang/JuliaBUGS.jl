@@ -485,8 +485,9 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
                 # parameters in the transformed space
                 value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
                 logp +=
-                    Distributions.logpdf(dist, value) +
-                    Bijectors.logabsdetjac(Bijectors.inverse(Bijectors.bijector(dist)), value_transformed)
+                    Distributions.logpdf(dist, value) + Bijectors.logabsdetjac(
+                        Bijectors.inverse(Bijectors.bijector(dist)), value_transformed
+                    )
             else
                 logp += Distributions.logpdf(dist, value)
             end
