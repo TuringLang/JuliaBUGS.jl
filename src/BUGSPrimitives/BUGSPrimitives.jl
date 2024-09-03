@@ -1,6 +1,6 @@
 module BUGSPrimitives
 
-using Bijectors
+using Bijectors: Bijectors
 using Distributions: cdf, quantile, Normal
 using LinearAlgebra
 using LogExpFunctions: cloglog, cexpexp, logit, logistic

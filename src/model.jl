@@ -13,26 +13,29 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing}} <: AbstractBU
     " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
 
-    " The length of the parameters vector in the original space. "
+    "The length of the parameters vector in the original (constrained) space."
     untransformed_param_length::Int
-    " The length of the parameters vector in the transformed space. "
+    "The length of the parameters vector in the transformed (unconstrained) space."
     transformed_param_length::Int
-    " A dictionary mapping the names of the variables to their lengths in the original space. "
+    "A dictionary mapping the names of the variables to their lengths in the original (constrained) space."
     untransformed_var_lengths::Dict{<:VarName,Int}
-    " A dictionary mapping the names of the variables to their lengths in the transformed space. "
+    "A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space."
     transformed_var_lengths::Dict{<:VarName,Int}
 
-    " An instance of `DynamicPPL.SimpleVarInfo`, which is a dictionary-like data structure that maps both data and values of variables in the model to the corresponding values. "
-    varinfo::SimpleVarInfo
-    " A vector containing the names of the parameters in the model, defined as stochastic variables that are not observed. This vector should be consistent with `sorted_nodes`. "
+    "A `DynamicPPL.SimpleVarInfo` object containing the values of the variables in the model.
+    Note that the usage of `SimpleVarInfo` in JuliaBUGS is different from that of DynamicPPL:
+    In JuliaBUGS, `varinfo` contains all the values (DynamicPPL only contains values of model parameters), 
+    and all the values in `varinfo` are always in the constrained space."
+    varinfo::DynamicPPL.SimpleVarInfo
+    "A vector containing the names of the model parameters (unobserved stochastic variables)."
     parameters::Vector{<:VarName}
-    " A vector containing the names of all the variables in the model, sorted in topological order. In the case of a conditioned model, `sorted_nodes` include all the variables in `parameters` and the variables in the Markov blanket of `parameters`. "
+    "A vector containing the names of all the variables in the model, sorted in topological order."
     sorted_nodes::Vector{<:VarName}
 
-    " An instance of `BUGSGraph`, representing the dependency graph of the model. "
+    "An instance of `BUGSGraph`, representing the dependency graph of the model."
     g::BUGSGraph
 
-    " If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`. "
+    "If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`."
     base_model::base_model_T
 end
 
@@ -50,16 +53,16 @@ function Base.show(io::IO, m::BUGSModel)
             "\n",
         )
     end
-    println(io, "  Parameters of the model:")
+    println(io, "  Model parameters:")
     println(io, "    ", join(m.parameters, ", "), "\n")
-    println(io, "  Values:")
-    return println(io, "$(m.varinfo.values)")
+    println(io, "  Variable values:")
+    return println(io, "$(m.env)")
 end
 
 """
     parameters(m::BUGSModel)
 
-Return a vector of `VarName` containing the names of the parameters in the model.
+Return a vector of `VarName` containing the names of the model parameters (unobserved stochastic variables).
 """
 parameters(m::BUGSModel) = m.parameters
 
@@ -101,7 +104,7 @@ function BUGSModel(
         args = prepare_arg_values(node_args, vi, loop_vars)
         if !is_stochastic
             value = Base.invokelatest(node_function; args...)
-            vi = setindex!!(vi, value, vn)
+            vi = DynamicPPL.BangBang.setindex!!(vi, value, vn)
         elseif !is_observed
             push!(parameters, vn)
             dist = Base.invokelatest(node_function; args...)
@@ -122,7 +125,7 @@ function BUGSModel(
                 missing
             end
             if !ismissing(initialization)
-                vi = setindex!!(vi, initialization, vn)
+                vi = DynamicPPL.BangBang.setindex!!(vi, initialization, vn)
             else
                 init_value = try
                     rand(dist)
@@ -131,7 +134,7 @@ function BUGSModel(
                         "Failed to sample from the prior distribution of $vn, consider providing initialization values for $vn or it's parents: $(collect(MetaGraphsNext.inneighbor_labels(g, vn))...).",
                     )
                 end
-                vi = setindex!!(vi, init_value, vn)
+                vi = DynamicPPL.BangBang.setindex!!(vi, init_value, vn)
             end
         end
     end
@@ -141,7 +144,7 @@ function BUGSModel(
         transformed_param_length,
         untransformed_var_lengths,
         transformed_var_lengths,
-        vi,
+        env,
         parameters,
         sorted_nodes,
         g,
