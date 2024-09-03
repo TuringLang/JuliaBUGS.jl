@@ -74,7 +74,7 @@ Return a vector of `VarName` containing the names of all the variables in the mo
 variables(m::BUGSModel) = collect(labels(m.g))
 
 function prepare_arg_values(
-    args::Tuple{Vararg{Symbol}}, vi::SimpleVarInfo, loop_vars::NamedTuple{lvars}
+    args::Tuple{Vararg{Symbol}}, vi::DynamicPPL.SimpleVarInfo, loop_vars::NamedTuple{lvars}
 ) where {lvars}
     return NamedTuple{args}(Tuple(
         map(args) do arg
@@ -89,7 +89,7 @@ end
 
 function BUGSModel(
     g::BUGSGraph,
-    vi::SimpleVarInfo,
+    vi::DynamicPPL.SimpleVarInfo,
     initial_params::NamedTuple=NamedTuple();
     is_transformed::Bool=true,
 )
@@ -207,21 +207,21 @@ function initialize!(model::BUGSModel, initial_params::AbstractVector)
 end
 
 """
-    get_params_varinfo(model::BUGSModel[, vi::SimpleVarInfo])
+    get_params_varinfo(model::BUGSModel[, vi::DynamicPPL.SimpleVarInfo])
 
-Returns a `SimpleVarInfo` object containing only the parameter values of the model.
+Returns a `DynamicPPL.SimpleVarInfo` object containing only the parameter values of the model.
 If `vi` is provided, it will be used; otherwise, `model.varinfo` will be used.
 """
 function get_params_varinfo(model::BUGSModel)
     return get_params_varinfo(model, model.varinfo)
 end
-function get_params_varinfo(model::BUGSModel, vi::SimpleVarInfo)
+function get_params_varinfo(model::BUGSModel, vi::DynamicPPL.SimpleVarInfo)
     if !model.transformed
         d = Dict{VarName,Any}()
         for param in model.parameters
             d[param] = vi[param]
         end
-        return SimpleVarInfo(d, vi.logp, DynamicPPL.NoTransformation())
+        return DynamicPPL.SimpleVarInfo(d, vi.logp, DynamicPPL.NoTransformation())
     else
         d = Dict{VarName,Any}()
         g = model.g
@@ -234,12 +234,12 @@ function get_params_varinfo(model::BUGSModel, vi::SimpleVarInfo)
                 d[v] = linked_val
             end
         end
-        return SimpleVarInfo(d, vi.logp, DynamicPPL.DynamicTransformation())
+        return DynamicPPL.SimpleVarInfo(d, vi.logp, DynamicPPL.DynamicTransformation())
     end
 end
 
 """
-    getparams(model::BUGSModel[, vi::SimpleVarInfo]; transformed::Bool=false)
+    getparams(model::BUGSModel[, vi::DynamicPPL.SimpleVarInfo]; transformed::Bool=false)
 
 Extract the parameter values from the model as a flattened vector, ordered topologically.
 If `transformed` is set to true, the parameters are provided in the transformed space.
@@ -247,7 +247,7 @@ If `transformed` is set to true, the parameters are provided in the transformed 
 function getparams(model::BUGSModel; transformed::Bool=false)
     return getparams(model, model.varinfo; transformed=transformed)
 end
-function getparams(model::BUGSModel, vi::SimpleVarInfo; transformed::Bool=false)
+function getparams(model::BUGSModel, vi::DynamicPPL.SimpleVarInfo; transformed::Bool=false)
     param_vals = Vector{Float64}(
         undef,
         transformed ? model.transformed_param_length : model.untransformed_param_length,
@@ -294,7 +294,7 @@ This function adopts the `BangBang` convention, i.e. it modifies the model in pl
 - `transformed::Bool=false`: Indicates whether the values in `flattened_values` are in the transformed space.
 
 # Returns
-`SimpleVarInfo`: The updated `varinfo` with the new parameter values set.
+`DynamicPPL.SimpleVarInfo`: The updated `varinfo` with the new parameter values set.
 """
 function setparams!!(
     model::BUGSModel, flattened_values::AbstractVector; transformed::Bool=false
@@ -345,7 +345,7 @@ end
 function AbstractPPL.condition(
     model::BUGSModel,
     var_group::Vector{<:VarName},
-    varinfo=model.varinfo,
+    varinfo::DynamicPPL.SimpleVarInfo=model.varinfo,
     sorted_nodes=Nothing,
 )
     check_var_group(var_group, model)
@@ -408,7 +408,7 @@ function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
     )
 end
 
-function update_varinfo(varinfo::SimpleVarInfo, d::Dict{VarName,<:Any})
+function update_varinfo(varinfo::DynamicPPL.SimpleVarInfo, d::Dict{VarName,<:Any})
     new_varinfo = deepcopy(varinfo)
     for (p, value) in d
         setindex!!(new_varinfo, value, p)

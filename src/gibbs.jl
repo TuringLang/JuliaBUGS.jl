@@ -11,7 +11,7 @@ struct MHFromPrior <: AbstractMCMC.AbstractSampler end
 abstract type AbstractGibbsState end
 
 struct GibbsState <: AbstractGibbsState
-    varinfo::SimpleVarInfo
+    varinfo::DynamicPPL.SimpleVarInfo
     conditioning_schedule::Dict
     sorted_nodes_cache::Dict
 end

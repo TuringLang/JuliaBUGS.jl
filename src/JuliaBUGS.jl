@@ -154,7 +154,7 @@ function compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple=N
     eval_env = semantic_analysis(model_def, data)
     model_def = concretize_colon_indexing(model_def, eval_env)
     g = create_graph(model_def, eval_env)
-    vi = SimpleVarInfo(
+    vi = DynamicPPL.SimpleVarInfo(
         NamedTuple{keys(eval_env)}(
             map(
                 v -> begin
