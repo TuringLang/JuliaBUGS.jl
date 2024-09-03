@@ -85,7 +85,7 @@ end
 Cumulative distribution function (CDF) of the standard normal distribution evaluated at ``x``.
 """
 function phi(x)
-    return cdf(Normal(), x)
+    return Distributions.cdf(Distributions.Normal(), x)
 end
 
 """
@@ -94,7 +94,7 @@ end
 Inverse of [`phi`](@ref).
 """
 function probit(e)
-    return quantile(Normal(), e)
+    return Distributions.quantile(Normal(), e)
 end
 
 """

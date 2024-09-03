@@ -1,5 +1,7 @@
 module CompilerUtils
 
+using MacroTools
+
 export create_eval_env,
     concretize_eval_env,
     decompose_for_expr,
