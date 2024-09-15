@@ -46,7 +46,7 @@ using GraphPlot
 gplot(model)
 ```
 
-![GraphPlot](../assets/graphplot.svg)
+![GraphPlot](https://raw.githubusercontent.com/TuringLang/JuliaBUGS.jl/master/docs/assets/graphplot.svg)
 
 ## [`GraphMakie.jl`](https://github.com/MakieOrg/GraphMakie.jl)
 
@@ -55,4 +55,4 @@ using GLMakie, GraphMakie
 graphplot(model)
 ```
 
-![GraphMakie](../assets/makie.png)
+![GraphMakie](https://raw.githubusercontent.com/TuringLang/JuliaBUGS.jl/master/docs/assets/makie.png)
