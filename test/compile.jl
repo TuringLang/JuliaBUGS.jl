@@ -44,7 +44,6 @@ end
         end
         @test_throws ErrorException compile(model_def, (;))
     end
-    
     @testset "undeclared array variable" begin
         model_def = @bugs begin
             x[1] ~ dnorm(0, 1)
