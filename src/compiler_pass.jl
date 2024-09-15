@@ -7,7 +7,7 @@ function analyze_block(
     pass::CompilerPass,
     expr::Expr,
     loop_vars::NamedTuple=NamedTuple();
-    warn_loop_bounds=false,
+    warn_loop_bounds::Ref{Bool}=Ref(false),
 )
     if !Meta.isexpr(expr, :block)
         error("The top level expression must be a block.")
@@ -21,13 +21,17 @@ function analyze_block(
             lb = Int(simple_arithmetic_eval(env, lb))
             ub = Int(simple_arithmetic_eval(env, ub))
             if lb > ub
-                if warn_loop_bounds
+                if warn_loop_bounds[]
                     @warn "In BUGS, if the lower bound of for loop is greater than the upper bound, the loop will be skipped."
+                    warn_loop_bounds[] = false
                 end
             else
                 for loop_var_value in lb:ub
                     analyze_block(
-                        pass, body, merge(loop_vars, (loop_var => loop_var_value,))
+                        pass,
+                        body,
+                        merge(loop_vars, (loop_var => loop_var_value,));
+                        warn_loop_bounds=warn_loop_bounds,
                     )
                 end
             end
@@ -99,9 +103,11 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
     for (var, num_dim) in zip(arrays, num_dims)
         if var ∉ data_vars
             push!(non_data_arrays, var)
-            push!(non_data_array_sizes, MVector{num_dim}(fill(1, num_dim)))
+            push!(non_data_array_sizes, MVector{num_dim}(fill(0, num_dim)))
         end
     end
+
+    error_on_undeclared_variables(model_def, non_data_scalars, non_data_arrays)
 
     return CollectVariables{data_vars}(
         data,
@@ -110,6 +116,28 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
         NamedTuple{Tuple(data_arrays)}(Tuple(data_array_sizes)),
         NamedTuple{Tuple(non_data_arrays)}(Tuple(non_data_array_sizes)),
     )
+end
+
+function error_on_undeclared_variables(model_def::Expr, non_data_scalars, non_data_arrays)
+    logical_scalars, stochastic_scalars, logical_arrays, stochastic_arrays = extract_variables_assigned_to(
+        model_def
+    )
+
+    for scalar in non_data_scalars
+        if !(scalar in union(logical_scalars, stochastic_scalars))
+            error(
+                "Scalar variable $scalar is used in the model, but it is not defined in the model or data.",
+            )
+        end
+    end
+
+    for array in non_data_arrays
+        if !(array in union(logical_arrays, stochastic_arrays))
+            error(
+                "Array variable $array is used in the model, but it is not defined in the model or data.",
+            )
+        end
+    end
 end
 
 """
@@ -546,9 +574,12 @@ function evaluate_and_track_dependencies(var::Expr, env)
         end
 
         value = nothing
-        if all(indices) do i
-            i isa Int || i isa UnitRange{Int}
-        end
+        if all(i -> i isa Int || i isa UnitRange{Int}, indices)
+            if any(indices .> size(env[v]))
+                error(
+                    "$v[$(join(indices, ", "))] is used in the model, but it is not defined in the model or data.",
+                )
+            end
             value = env[v][indices...]
             if is_resolved(value)
                 return value, Tuple(dependencies)
