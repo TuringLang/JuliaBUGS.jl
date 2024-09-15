@@ -575,7 +575,7 @@ function evaluate_and_track_dependencies(var::Expr, env)
 
         value = nothing
         if all(i -> i isa Int || i isa UnitRange{Int}, indices)
-            if any(indices .> size(env[v]))
+            if any(last.(indices) .> size(env[v]))
                 error(
                     "$v[$(join(indices, ", "))] is used in the model, but it is not defined in the model or data.",
                 )
