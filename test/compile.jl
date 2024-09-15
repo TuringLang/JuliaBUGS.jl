@@ -19,10 +19,12 @@
     end
 
     @testset "assign array variable to another array variable" begin
-        model = compile((@bugs begin
-            b[1:2] ~ dmnorm(μ[:], σ[:, :])
-            a[1:2] = b[:]
-        end), (; μ=[0, 1], σ=[1 0; 0 1]), (;))
+        model = compile(
+            (@bugs begin
+                b[1:2] ~ dmnorm(μ[:], σ[:, :])
+                a[1:2] = b[:]
+            end), (; μ=[0, 1], σ=[1 0; 0 1]), (;)
+        )
     end
 end
 
