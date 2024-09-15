@@ -24,8 +24,10 @@ function GraphMakie.graphplot(g::JuliaBUGS.BUGSGraph, parameters; kwargs...)
     end
     ilabels = get(kwargs, :ilabels, map(x -> String(Symbol(x)), labels(g)))
     node_color = get(kwargs, :node_color, colors)
-    
-    return graphplot(g.graph; ilabels=ilabels, node_color=node_color, arrow_shift=:end, kwargs...)
+
+    return graphplot(
+        g.graph; ilabels=ilabels, node_color=node_color, arrow_shift=:end, kwargs...
+    )
 end
 
 end
