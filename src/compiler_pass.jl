@@ -822,15 +822,20 @@ function analyze_statement(pass::AddEdges, expr::Expr, loop_vars::NamedTuple)
             [_vertex_code]
         else
             v, indices... = var
-            _vertex_code = pass.vertex_id_tracker[v][indices...]
             for idx in Iterators.product(indices...)
-                if iszero(_vertex_code[idx...]) && ismissing(pass.env[v][idx...])
+                if iszero(pass.vertex_id_tracker[v][indices...][idx...]) &&
+                    ismissing(pass.env[v][idx...])
                     error(
                         "Variable $v[$(join(indices, ", "))] is referenced, but not defined, at $expr.",
                     )
                 end
             end
-            filter!(!iszero, _vertex_code)
+            _vertex_code = pass.vertex_id_tracker[v][indices...]
+            if _vertex_code isa AbstractArray
+                filter!(!iszero, _vertex_code)
+            else
+                iszero(_vertex_code) ? [] : [_vertex_code]
+            end
         end
         vertex_labels = [label_for(pass.g, code) for code in vertex_codes]
         for r in vertex_labels
