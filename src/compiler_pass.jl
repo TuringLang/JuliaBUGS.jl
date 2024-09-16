@@ -837,7 +837,7 @@ function analyze_statement(pass::AddEdges, expr::Expr, loop_vars::NamedTuple)
                 iszero(_vertex_code) ? [] : [_vertex_code]
             end
         end
-        vertex_labels = [label_for(pass.g, code) for code in vertex_codes]
+        vertex_labels = [label_for(pass.g, code) for code in vertex_code]
         for r in vertex_labels
             if r != lhs_vn
                 add_edge!(pass.g, r, lhs_vn)
