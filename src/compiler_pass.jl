@@ -200,6 +200,11 @@ function evaluate(expr::Expr, env::NamedTuple{variable_names}) where {variable_n
         end
         if var in variable_names
             if all_resolved
+                if any(last(indices) .> size(env[var]))
+                    error(
+                        "Variable $var[$(join(indices, ", "))] is used in the model, but it or its elements are not defined in the model or data.",
+                    )
+                end
                 value = env[var][indices...]
                 if is_resolved(value)
                     return value
@@ -577,7 +582,7 @@ function evaluate_and_track_dependencies(var::Expr, env)
         if all(i -> i isa Int || i isa UnitRange{Int}, indices)
             if any(last.(indices) .> size(env[v]))
                 error(
-                    "$v[$(join(indices, ", "))] is used in the model, but it is not defined in the model or data.",
+                    "$v[$(join(indices, ", "))] is used in the model, but it or its elements are not defined in the model or data.",
                 )
             end
             value = env[v][indices...]
@@ -766,9 +771,7 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
         )
     else
         v, indices... = lhs
-        if any(indices) do i
-            i isa UnitRange
-        end
+        if any(i -> i isa UnitRange, indices)
             pass.vertex_id_tracker[v][indices...] .= code_for(pass.g, vn)
         else
             pass.vertex_id_tracker[v][indices...] = code_for(pass.g, vn)
@@ -812,16 +815,24 @@ function analyze_statement(pass::AddEdges, expr::Expr, loop_vars::NamedTuple)
 
     for var in dependencies
         vertex_code = if var isa Symbol
-            pass.vertex_id_tracker[var]
+            _vertex_code = pass.vertex_id_tracker[var]
+            if _vertex_code isa AbstractArray
+                error("$(var) is an array, but referenced as a scalar at $expr")
+            end
+            [_vertex_code]
         else
             v, indices... = var
-            pass.vertex_id_tracker[v][indices...]
+            _vertex_code = pass.vertex_id_tracker[v][indices...]
+            for idx in Iterators.product(indices...)
+                if iszero(_vertex_code[idx...]) && ismissing(pass.env[v][idx...])
+                    error(
+                        "Variable $v[$(join(indices, ", "))] is referenced, but not defined, at $expr.",
+                    )
+                end
+            end
+            filter!(!iszero, _vertex_code)
         end
-
-        vertex_code = filter(
-            !iszero, vertex_code isa AbstractArray ? vertex_code : [vertex_code]
-        )
-        vertex_labels = [label_for(pass.g, code) for code in vertex_code]
+        vertex_labels = [label_for(pass.g, code) for code in vertex_codes]
         for r in vertex_labels
             if r != lhs_vn
                 add_edge!(pass.g, r, lhs_vn)

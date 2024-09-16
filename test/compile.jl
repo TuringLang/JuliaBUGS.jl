@@ -47,9 +47,21 @@ end
     @testset "undeclared array variable" begin
         model_def = @bugs begin
             x[1] ~ dnorm(0, 1)
-            y ~ dnorm(x[1], x[2])
+            y ~ dnorm(0, x[2])
         end
         @test_throws ErrorException compile(model_def, (;))
+
+        model_def = @bugs begin
+            x[2] ~ dnorm(0, 1)
+            y ~ dnorm(x[1], 0)
+        end
+        @test_throws ErrorException compile(model_def, (;))
+
+        model = @bugs begin
+            x = sum(y[1:2])
+            y[1] ~ dnorm(0, 1)
+        end
+        @test_throws ErrorException compile(model, (;))
     end
 end
 
