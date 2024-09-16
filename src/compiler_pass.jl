@@ -823,8 +823,7 @@ function analyze_statement(pass::AddEdges, expr::Expr, loop_vars::NamedTuple)
         else
             v, indices... = var
             for idx in Iterators.product(indices...)
-                if iszero(pass.vertex_id_tracker[v][idx...]) &&
-                    ismissing(pass.env[v][idx...])
+                if iszero(pass.vertex_id_tracker[v][idx...]) && ismissing(pass.env[v][idx...])
                     error(
                         "Variable $v[$(join(indices, ", "))] is referenced, but not defined, at $expr.",
                     )
