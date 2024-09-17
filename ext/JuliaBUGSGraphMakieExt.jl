@@ -1,6 +1,7 @@
 module JuliaBUGSGraphMakieExt
 
 using GLMakie
+using GLMakie.ColorTypes: RGBA
 using GraphMakie
 using JuliaBUGS
 using JuliaBUGS.MetaGraphsNext
@@ -11,19 +12,22 @@ end
 function GraphMakie.graphplot(g::JuliaBUGS.BUGSGraph, parameters; kwargs...)
     colors = []
     for node in labels(g)
-        if g[node].node_type == JuliaBUGS.Stochastic
-            if node in parameters
-                push!(colors, :green)
+        if g[node].is_stochastic
+            if g[node].is_observed
+                push!(colors, RGBA(0.5, 0.5, 0.5, 1.0))
             else
-                push!(colors, :yellow)
+                push!(colors, RGBA(1, 1, 1, 1))
             end
         else
-            push!(colors, :red)
+            push!(colors, RGBA(0.8, 0.9, 1.0, 1.0))
         end
     end
     ilabels = get(kwargs, :ilabels, map(x -> String(Symbol(x)), labels(g)))
     node_color = get(kwargs, :node_color, colors)
-    return graphplot(g.graph; ilabels=ilabels, node_color=node_color, kwargs...)
+
+    return graphplot(
+        g.graph; ilabels=ilabels, node_color=node_color, arrow_shift=:end, kwargs...
+    )
 end
 
 end
