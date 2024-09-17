@@ -7,7 +7,7 @@ function analyze_block(
     pass::CompilerPass,
     expr::Expr,
     loop_vars::NamedTuple=NamedTuple();
-    warn_loop_bounds=false,
+    warn_loop_bounds::Ref{Bool}=Ref(false),
 )
     if !Meta.isexpr(expr, :block)
         error("The top level expression must be a block.")
@@ -21,13 +21,17 @@ function analyze_block(
             lb = Int(simple_arithmetic_eval(env, lb))
             ub = Int(simple_arithmetic_eval(env, ub))
             if lb > ub
-                if warn_loop_bounds
+                if warn_loop_bounds[]
                     @warn "In BUGS, if the lower bound of for loop is greater than the upper bound, the loop will be skipped."
+                    warn_loop_bounds[] = false
                 end
             else
                 for loop_var_value in lb:ub
                     analyze_block(
-                        pass, body, merge(loop_vars, (loop_var => loop_var_value,))
+                        pass,
+                        body,
+                        merge(loop_vars, (loop_var => loop_var_value,));
+                        warn_loop_bounds=warn_loop_bounds,
                     )
                 end
             end
@@ -85,6 +89,14 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
         end
     end
 
+    for (var, num_dim) in zip(arrays, num_dims)
+        if var ∈ data_vars && num_dim != ndims(data[var])
+            error(
+                "Array variable $var has $num_dim dimensions in the model, but $(ndims(data[var])) dimensions in the data.",
+            )
+        end
+    end
+
     data_arrays = Symbol[]
     data_array_sizes = SVector[]
     for k in data_vars
@@ -99,9 +111,11 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
     for (var, num_dim) in zip(arrays, num_dims)
         if var ∉ data_vars
             push!(non_data_arrays, var)
-            push!(non_data_array_sizes, MVector{num_dim}(fill(1, num_dim)))
+            push!(non_data_array_sizes, MVector{num_dim}(fill(0, num_dim)))
         end
     end
+
+    error_on_undeclared_variables(model_def, non_data_scalars, non_data_arrays)
 
     return CollectVariables{data_vars}(
         data,
@@ -110,6 +124,28 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
         NamedTuple{Tuple(data_arrays)}(Tuple(data_array_sizes)),
         NamedTuple{Tuple(non_data_arrays)}(Tuple(non_data_array_sizes)),
     )
+end
+
+function error_on_undeclared_variables(model_def::Expr, non_data_scalars, non_data_arrays)
+    logical_scalars, stochastic_scalars, logical_arrays, stochastic_arrays = extract_variables_assigned_to(
+        model_def
+    )
+
+    for scalar in non_data_scalars
+        if !(scalar in union(logical_scalars, stochastic_scalars))
+            error(
+                "Scalar variable $scalar is used in the model, but it is not defined in the model or data.",
+            )
+        end
+    end
+
+    for array in non_data_arrays
+        if !(array in union(logical_arrays, stochastic_arrays))
+            error(
+                "Array variable $array is used in the model, but it is not defined in the model or data.",
+            )
+        end
+    end
 end
 
 """
@@ -172,6 +208,13 @@ function evaluate(expr::Expr, env::NamedTuple{variable_names}) where {variable_n
         end
         if var in variable_names
             if all_resolved
+                _indices = map(i -> i === Colon() ? 0 : last(i), indices) # if index is `:`, then we skip the check
+                if any(_indices .> size(env[var]))
+                    @show indices size(env[var])
+                    error(
+                        "Variable $var[$(join(indices, ", "))] is used in the model, but it or its elements are not defined in the model or data.",
+                    )
+                end
                 value = env[var][indices...]
                 if is_resolved(value)
                     return value
@@ -546,9 +589,12 @@ function evaluate_and_track_dependencies(var::Expr, env)
         end
 
         value = nothing
-        if all(indices) do i
-            i isa Int || i isa UnitRange{Int}
-        end
+        if all(i -> i isa Int || i isa UnitRange{Int}, indices)
+            if any(last.(indices) .> size(env[v]))
+                error(
+                    "$v[$(join(indices, ", "))] is used in the model, but it or its elements are not defined in the model or data.",
+                )
+            end
             value = env[v][indices...]
             if is_resolved(value)
                 return value, Tuple(dependencies)
@@ -735,9 +781,7 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
         )
     else
         v, indices... = lhs
-        if any(indices) do i
-            i isa UnitRange
-        end
+        if any(i -> i isa UnitRange, indices)
             pass.vertex_id_tracker[v][indices...] .= code_for(pass.g, vn)
         else
             pass.vertex_id_tracker[v][indices...] = code_for(pass.g, vn)
@@ -781,15 +825,27 @@ function analyze_statement(pass::AddEdges, expr::Expr, loop_vars::NamedTuple)
 
     for var in dependencies
         vertex_code = if var isa Symbol
-            pass.vertex_id_tracker[var]
+            _vertex_code = pass.vertex_id_tracker[var]
+            if _vertex_code isa AbstractArray
+                error("$(var) is an array, but referenced as a scalar at $expr")
+            end
+            [_vertex_code]
         else
             v, indices... = var
-            pass.vertex_id_tracker[v][indices...]
+            for idx in Iterators.product(indices...)
+                if iszero(pass.vertex_id_tracker[v][idx...]) && ismissing(pass.env[v][idx...])
+                    error(
+                        "Variable $v[$(join(indices, ", "))] is referenced, but not defined, at $expr.",
+                    )
+                end
+            end
+            _vertex_code = pass.vertex_id_tracker[v][indices...]
+            if _vertex_code isa AbstractArray
+                filter(!iszero, _vertex_code)
+            else
+                iszero(_vertex_code) ? [] : [_vertex_code]
+            end
         end
-
-        vertex_code = filter(
-            !iszero, vertex_code isa AbstractArray ? vertex_code : [vertex_code]
-        )
         vertex_labels = [label_for(pass.g, code) for code in vertex_code]
         for r in vertex_labels
             if r != lhs_vn
