@@ -1,12 +1,13 @@
 @testset "compile corner cases" begin
     @testset "test variables exist on the left hand side of the both kinds of assignment" begin
-        @testset "not transformed variable, so error"
-        ex = @bugs begin
-            a ~ Normal(0, 1)
-            b = a
-            b ~ Normal(0, 1)
+        @testset "not transformed variable, so error" begin
+            ex = @bugs begin
+                a ~ Normal(0, 1)
+                b = a
+                b ~ Normal(0, 1)
+            end
+            @test_throws ErrorException compile(ex, (;), (;))
         end
-        @test_throws ErrorException compile(ex, (;), (;))
 
         @testset "transformed variable, so no error" begin
             ex = @bugs begin
