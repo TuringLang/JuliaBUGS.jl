@@ -89,6 +89,12 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
         end
     end
 
+    for (var, num_dim) in zip(arrays, num_dims)
+        if var ∈ data_vars && num_dim != ndims(data[var])
+            error("Array variable $var has $num_dim dimensions in the model, but $(ndims(data[var])) dimensions in the data.")
+        end
+    end
+
     data_arrays = Symbol[]
     data_array_sizes = SVector[]
     for k in data_vars
@@ -200,7 +206,9 @@ function evaluate(expr::Expr, env::NamedTuple{variable_names}) where {variable_n
         end
         if var in variable_names
             if all_resolved
-                if any(last(indices) .> size(env[var]))
+                _indices = map(i -> i === Colon() ? 0 : last(i), indices) # if index is `:`, then we skip the check
+                if any(_indices .> size(env[var]))
+                    @show indices size(env[var])
                     error(
                         "Variable $var[$(join(indices, ", "))] is used in the model, but it or its elements are not defined in the model or data.",
                     )
