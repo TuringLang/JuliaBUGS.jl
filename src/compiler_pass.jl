@@ -91,7 +91,9 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
 
     for (var, num_dim) in zip(arrays, num_dims)
         if var ∈ data_vars && num_dim != ndims(data[var])
-            error("Array variable $var has $num_dim dimensions in the model, but $(ndims(data[var])) dimensions in the data.")
+            error(
+                "Array variable $var has $num_dim dimensions in the model, but $(ndims(data[var])) dimensions in the data.",
+            )
         end
     end
 
