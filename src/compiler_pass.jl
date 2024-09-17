@@ -841,7 +841,7 @@ function analyze_statement(pass::AddEdges, expr::Expr, loop_vars::NamedTuple)
             end
             _vertex_code = pass.vertex_id_tracker[v][indices...]
             if _vertex_code isa AbstractArray
-                filter!(!iszero, _vertex_code)
+                filter(!iszero, _vertex_code)
             else
                 iszero(_vertex_code) ? [] : [_vertex_code]
             end
