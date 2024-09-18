@@ -2,7 +2,22 @@ using RCall
 using JuliaBUGS
 using Chairmarks
 
-models_vol1 = [:rats, :pumps, :seeds, :salm, :equiv, :dyes, :epil, :blocker, :oxford, :lsat, :bones, :mice, :kidney, :leuk]
+models_vol1 = [
+    :rats,
+    :pumps,
+    :seeds,
+    :salm,
+    :equiv,
+    :dyes,
+    :epil,
+    :blocker,
+    :oxford,
+    :lsat,
+    :bones,
+    :mice,
+    :kidney,
+    :leuk,
+]
 
 # Load Nimble library in R
 R"library(nimble)"
@@ -30,4 +45,6 @@ jbugs_model = compile(model_def, data, inits)
 # Benchmark calculations
 @be reval("classicModel\$calculate()")
 @be reval("compiledModel\$calculate()")
-@be LogDensityProblems.logdensity(jbugs_model, rand(LogDensityProblems.dimension(jbugs_model)))
+@be LogDensityProblems.logdensity(
+    jbugs_model, rand(LogDensityProblems.dimension(jbugs_model))
+)
