@@ -1,20 +1,16 @@
 model {
-    for (i in 1 : nChild) {
-        theta[i] ~ dnorm(0.0, 0.001)
-        for (j in 1 : nInd) {
-            for (k in 1: ncat[j] - 1) {
-                logit(Q[i, j, k]) <- delta[j] * (theta[i] - gamma[j, k])
-            }
-        }
-    
-        # Probability of observing grade k given theta
-        for (j in 1 : nInd) {
-            p[i, j, 1] <- 1 - Q[i, j, 1]
-            for (k in 2 : ncat[j] - 1) {
-                p[i, j, k] <- Q[i, j, k - 1] - Q[i, j, k]
-            }
-            p[i, j, ncat[j]] <- Q[i, j, ncat[j] - 1]
-            grade[i, j] ~ dcat(p[i, j, 1 : ncat[j]])
-        }
+    for (i in 1 : K) {
+        r0[i] ~ dbin(p0[i], n0[i])
+        r1[i] ~ dbin(p1[i], n1[i])
+        logit(p0[i]) <- mu[i]
+        logit(p1[i]) <- mu[i] + logPsi[i]
+        logPsi[i] <- alpha + beta1 * year[i] + beta2 * (year[i] * year[i] - 22) + b[i]
+        b[i] ~ dnorm(0, tau)
+        mu[i] ~ dnorm(0.0, 1.0E-6)
     }
+    alpha ~ dnorm(0.0, 1.0E-6)
+    beta1 ~ dnorm(0.0, 1.0E-6)
+    beta2 ~ dnorm(0.0, 1.0E-6)
+    tau ~ dgamma(1.0E-3, 1.0E-3)
+    sigma <- 1 / sqrt(tau)
 }
