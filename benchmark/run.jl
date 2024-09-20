@@ -1,5 +1,6 @@
 using Serialization
 using DataFrames
+using MetaGraphsNext
 
 open("benchmark_results.bin", "w") do io
     serialize(
@@ -46,8 +47,25 @@ nimble_median_time_result_micro = OrderedDict(
     model in keys(juliabugs_median_time_result)
 )
 
+model_parameters_count = OrderedDict()
+model_data_count = OrderedDict()
+for model_name in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
+    (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1[model_name]
+    model = compile(model_def, data, inits)
+    model_parameters_count[model_name] = length(model.parameters)
+    data_count = 0
+    for l in labels(model.g)
+        if model.g[l].is_observed
+            data_count += 1
+        end
+    end
+    model_data_count[model_name] = data_count
+end
+
 results_df = DataFrame(;
     Model=String[],
+    Parameters=Int[],
+    Data=Int[],
     Stan_Time=Union{Float64,Missing}[],
     JuliaBUGS_Time=Union{Float64,Missing}[],
     Nimble_Time=Union{Float64,Missing}[],
@@ -57,7 +75,7 @@ for model in keys(juliabugs_median_time_result_micro)
     stan_time = get(stan_median_time_result_micro, model, missing)
     juliabugs_time = juliabugs_median_time_result_micro[model]
     nimble_time = get(nimble_median_time_result_micro, model, missing)
-    push!(results_df, (string(model), stan_time, juliabugs_time, nimble_time))
+    push!(results_df, (string(model), model_parameters_count[model], model_data_count[model], stan_time, juliabugs_time, nimble_time))
 end
 
 using PrettyTables
