@@ -75,7 +75,17 @@ for model in keys(juliabugs_median_time_result_micro)
     stan_time = get(stan_median_time_result_micro, model, missing)
     juliabugs_time = juliabugs_median_time_result_micro[model]
     nimble_time = get(nimble_median_time_result_micro, model, missing)
-    push!(results_df, (string(model), model_parameters_count[model], model_data_count[model], stan_time, juliabugs_time, nimble_time))
+    push!(
+        results_df,
+        (
+            string(model),
+            model_parameters_count[model],
+            model_data_count[model],
+            stan_time,
+            juliabugs_time,
+            nimble_time,
+        ),
+    )
 end
 
 using PrettyTables
