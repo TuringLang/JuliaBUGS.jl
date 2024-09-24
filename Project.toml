@@ -41,16 +41,16 @@ JuliaBUGSGraphPlotExt = ["GraphPlot"]
 JuliaBUGSMCMCChainsExt = ["MCMCChains"]
 
 [compat]
+ADTypes = "1.6"
 AbstractMCMC = "5"
 AbstractPPL = "0.8.4"
-ADTypes = "1.6"
 AdvancedHMC = "0.6"
 AdvancedMH = "0.8"
 BangBang = "0.4.1"
 Bijectors = "0.13"
 Distributions = "0.23.8, 0.24, 0.25"
 Documenter = "0.27, 1"
-DynamicPPL = "0.25, 0.26, 0.27, 0.28"
+DynamicPPL = "0.25, 0.26, 0.27, 0.28, 0.29"
 GLMakie = "0.10"
 GraphMakie = "0.5"
 GraphPlot = "0.6"
