@@ -5,10 +5,9 @@ JuliaBUGS is a graph-based probabilistic programming framework inspired by the B
 Key features of JuliaBUGS include:
 
 - Compatibility with existing BUGS programs
-- Extensibility through user-defined functions and distributions
+- Extensibility through user-defined functions and distributions; programmable inference
 - Seamless integration with Julia's high-performance numerical and scientific computing libraries
-- Built-in automatic differentiation and Hamiltonian Monte Carlo capabilities
-- Flexible, programmable inference
+- Automatic differentiation and sampling using Hamiltonian Monte Carlo
 
 It's important to note that while BUGS traditionally refers to either the software system, the language, or the inference algorithm, JuliaBUGS is a pure Julia implementation of the BUGS language, not a wrapper for the BUGS system.
 
