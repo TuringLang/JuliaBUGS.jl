@@ -7,7 +7,7 @@ using DynamicPPL: SimpleVarInfo
 makedocs(;
     sitename="JuliaBUGS.jl",
     pages=[
-        "Introduction" => "index.md",
+        "Home" => "index.md",
         "Differences from Other BUGS Implementations" => "differences.md",
         "Example" => "example.md",
         "API" => [
