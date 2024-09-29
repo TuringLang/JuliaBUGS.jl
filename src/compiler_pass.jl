@@ -512,7 +512,8 @@ function analyze_statement(pass::DataTransformation, expr::Expr, loop_vars)
         rhs = evaluate(rhs_expr, env)
         if is_resolved(rhs)
             if !pass.already_warned[]
-                displayed_lhs = lhs isa Symbol ? lhs : String(lhs[1]) * "[$(join(lhs[2:end], ", "))]"
+                displayed_lhs =
+                    lhs isa Symbol ? lhs : String(lhs[1]) * "[$(join(lhs[2:end], ", "))]"
                 @warn """
                 Variables that can be directly computed from data are considered 'transformed data' in BUGS.
                 These variables won't appear in the probabilistic graph.
