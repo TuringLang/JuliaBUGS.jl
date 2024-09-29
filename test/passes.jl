@@ -69,19 +69,19 @@ end
 
     eval_env = JuliaBUGS.create_eval_env(non_data_scalars, non_data_array_sizes, data)
 
-    pass = DataTransformation(eval_env, false)
+    pass = DataTransformation(eval_env, false, Ref(false))
     JuliaBUGS.analyze_block(pass, model_def)
     (; new_value_added, env) = pass
     @test new_value_added == true
     @test env[:a] == 2
 
-    pass = DataTransformation(env, false)
+    pass = DataTransformation(env, false, Ref(true))
     JuliaBUGS.analyze_block(pass, model_def)
     (; new_value_added, env) = pass
     @test new_value_added == true
     @test env[:c] == 6
 
-    pass = DataTransformation(env, false)
+    pass = DataTransformation(env, false, Ref(true))
     JuliaBUGS.analyze_block(pass, model_def)
     (; new_value_added, env) = pass
     @test new_value_added == false
