@@ -3,6 +3,5 @@
 ```@docs
 @bugs
 compile
-BUGSModel
 initialize!
 ```
