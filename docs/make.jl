@@ -14,7 +14,7 @@ makedocs(;
             "General" => "api.md",
             "Functions" => "functions.md",
             "Distributions" => "distributions.md",
-            "Defining New Function and Distributions" => "user_defined_functions.md",
+            "User-Defined Functions and Distributions" => "user_defined_functions.md",
         ],
         "Plotting" => "graph_plotting.md",
         "R Interface" => "R_interface.md",
