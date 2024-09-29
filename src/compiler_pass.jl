@@ -489,9 +489,10 @@ to data.
 mutable struct DataTransformation <: CompilerPass
     env::NamedTuple
     new_value_added::Bool
+    already_warned::Ref{Bool}
 end
 
-function analyze_statement(pass::DataTransformation, expr::Expr, loop_vars::NamedTuple)
+function analyze_statement(pass::DataTransformation, expr::Expr, loop_vars)
     if is_deterministic(expr)
         lhs_expr, rhs_expr = expr.args[1], expr.args[2]
         env = merge(pass.env, loop_vars)
@@ -510,6 +511,17 @@ function analyze_statement(pass::DataTransformation, expr::Expr, loop_vars::Name
 
         rhs = evaluate(rhs_expr, env)
         if is_resolved(rhs)
+            if !pass.already_warned[]
+                displayed_lhs = lhs isa Symbol ? lhs : String(lhs[1]) * "[$(join(lhs[2:end], ", "))]"
+                @warn """
+                Variables that can be directly computed from data are considered 'transformed data' in BUGS.
+                These variables won't appear in the probabilistic graph.
+                In this model, '$(displayed_lhs)' is one such variable.
+                There may be others, but this warning is only shown once.
+                If you're not working with existing BUGS programs, consider pre-computing these variables in Julia for efficiency.
+                """
+                pass.already_warned[] = true
+            end
             pass.new_value_added = true
             pass_env = pass.env
             if lhs isa Symbol

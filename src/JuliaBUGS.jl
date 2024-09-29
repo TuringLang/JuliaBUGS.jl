@@ -94,7 +94,7 @@ function compute_data_transformation(
 )
     eval_env = create_eval_env(non_data_scalars, non_data_array_sizes, data)
     has_new_val = true
-    pass = DataTransformation(eval_env, false)
+    pass = DataTransformation(eval_env, false, Ref(false))
     while has_new_val
         pass.new_value_added = false
         analyze_block(pass, model_def)
