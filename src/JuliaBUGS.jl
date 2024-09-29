@@ -146,8 +146,8 @@ end
 """
     compile(model_def, data[, initial_params])
 
-Compile the model and data into a [`BUGSModel`](@ref). Optionally, initial values can be provided. 
-If initial values are not provided, the model will be initialized with values sampled from the prior distributions. 
+Compile the model with model definition and data. Optionally, initializations can be provided. 
+If initializations are not provided, values will be sampled from the prior distributions. 
 """
 function compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple=NamedTuple())
     data = check_input(data)
