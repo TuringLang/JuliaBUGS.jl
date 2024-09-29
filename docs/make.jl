@@ -8,17 +8,17 @@ makedocs(;
     sitename="JuliaBUGS.jl",
     pages=[
         "Home" => "index.md",
-        "Differences from Other BUGS Implementations" => "differences.md",
         "Example" => "example.md",
+        "Differences from Other BUGS Implementations" => "differences.md",
+        "Pitfalls" => "pitfalls.md",
         "API" => [
-            "General" => "api.md",
-            "Functions" => "functions.md",
-            "Distributions" => "distributions.md",
-            "User-Defined Functions and Distributions" => "user_defined_functions.md",
+            "General" => "api/general.md",
+            "Functions" => "api/functions.md",
+            "Distributions" => "api/distributions.md",
+            "User-Defined Functions and Distributions" => "api/user_defined_functions.md",
         ],
         "Plotting" => "graph_plotting.md",
         "R Interface" => "R_interface.md",
-        "Pitfalls" => "pitfalls.md",
         "For Developers" =>
             ["Parser" => "parser.md", "Notes on BUGS Implementations" => "BUGS_notes.md"],
     ],

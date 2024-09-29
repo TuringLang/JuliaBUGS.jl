@@ -1,8 +1,41 @@
 # Differences From Other BUGS Implementations
 
 There exist many implementations of BUGS, notably [`WinBUGS`](https://www.mrc-bsu.cam.ac.uk/software/), [`OpenBUGS`](https://chjackson.github.io/openbugsdoc/Manuals/ModelSpecification.html), [`MultiBUGS`](https://www.multibugs.org/documentation/latest/), [`JAGS`](https://mcmc-jags.sourceforge.io/), and [`nimble`](https://r-nimble.org/).
+
 This section aims to outline some differences between JuliaBUGS and other BUGS implementations.
 This comparison is not exhaustive, and we welcome any further discussion and reports on the matter.
+
+## Use of generaic function in distribution functions
+
+In `WinBUGS`, `OpenBUGS`, and `MultiBUGS`, the arguments to distribution functions are typically restricted to variables or constants, not general expressions. JuliaBUGS, however, allows for more flexibility in these arguments.
+
+For example, the following expressions are allowed in all BUGS implementations, including JuliaBUGS (assuming `y = [1, 2, 3]`):
+
+```S
+model {
+ x ~ dnorm(y[y[2]], 1)
+}
+
+model {
+  x ~ dnorm(y[y[2]+1], 1)
+}
+```
+
+However, JuliaBUGS allows more flexibility in these arguments. The following expressions, which are not allowed in traditional BUGS implementations, are permitted in JuliaBUGS:
+
+```S
+model {
+ x ~ dnorm(y[1] + 1, 1)
+}
+
+model {
+ x ~ dnorm(sum(y[1:2]), 1)
+}
+
+model {
+ x ~ dnorm(y[sum(y[1:2])], 1)
+}
+```
 
 ## `cumulative`, `density`, and `deviance` Functions
 
