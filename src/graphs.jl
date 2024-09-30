@@ -10,51 +10,52 @@ end
 """
     BUGSGraph
 
-The `BUGSGraph` object represents the graph structure for a BUGS model. It is a type alias for
-`MetaGraphsNext.MetaGraph`.
+The `BUGSGraph` object represents the graph structure for a BUGS model.
 """
-const BUGSGraph = MetaGraph
+const BUGSGraph = MetaGraph{
+    Int,Graphs.SimpleDiGraph{Int},<:VarName,<:NodeInfo,Nothing,Nothing,<:Any,Float64
+}
 
-"""
-    find_generated_vars(g::BUGSGraph)
+is_model_parameter(g::BUGSGraph, v::VarName) = g[v].is_stochastic && !g[v].is_observed
+is_observation(g::BUGSGraph, v::VarName) = g[v].is_stochastic && g[v].is_observed
+is_deterministic(g::BUGSGraph, v::VarName) = !g[v].is_stochastic
 
-Return all the logical variables without stochastic descendants. The values of these variables 
-do not affect sampling process. These variables are called "generated quantities" traditionally.
-"""
-function find_generated_vars(g)
-    graph_roots = VarName[] # root nodes of the graph
+function find_generated_quantities_variables(
+    g::MetaGraph{Int,<:SimpleDiGraph,Label,VertexData}
+) where {Label,VertexData}
+    generated_quantities_variables = Set{Label}()
+    can_reach_observations = Dict{Label,Bool}()
+
     for n in labels(g)
-        if isempty(outneighbor_labels(g, n))
-            push!(graph_roots, n)
+        if !is_observation(g, n)
+            if !dfs_can_reach_observations(g, n, can_reach_observations)
+                push!(generated_quantities_variables, n)
+            end
         end
     end
-
-    generated_vars = VarName[]
-    for n in graph_roots
-        if !g[n].is_stochastic
-            push!(generated_vars, n) # graph roots that are Logical nodes are generated variables
-            find_generated_vars_recursive_helper(g, n, generated_vars)
-        end
-    end
-    return generated_vars
+    return generated_quantities_variables
 end
 
-function find_generated_vars_recursive_helper(g, n, generated_vars)
-    if n in generated_vars # already visited
-        return nothing
+function dfs_can_reach_observations(g, n, can_reach_observations)
+    if haskey(can_reach_observations, n)
+        return can_reach_observations[n]
     end
-    for p in inneighbor_labels(g, n) # parents
-        if p in generated_vars # already visited
-            continue
-        end
-        if g[p].node_type == Stochastic
-            continue
-        end # p is a Logical Node
-        if !any(x -> g[x].node_type == Stochastic, outneighbor_labels(g, p)) # if the node has stochastic children, it is not a root
-            push!(generated_vars, p)
-        end
-        find_generated_vars_recursive_helper(g, p, generated_vars)
+
+    if is_observation(g, n)
+        can_reach_observations[n] = true
+        return true
     end
+
+    can_reach = false
+    for child in MetaGraphsNext.outneighbor_labels(g, n)
+        if dfs_can_reach_observations(g, child, can_reach_observations)
+            can_reach = true
+            break
+        end
+    end
+
+    can_reach_observations[n] = can_reach
+    return can_reach
 end
 
 """

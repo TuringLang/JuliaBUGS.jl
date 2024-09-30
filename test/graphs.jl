@@ -1,5 +1,59 @@
 using JuliaBUGS:
-    stochastic_inneighbors, stochastic_neighbors, stochastic_outneighbors, markov_blanket
+    stochastic_inneighbors, stochastic_neighbors, stochastic_outneighbors, markov_blanket, find_generated_quantities_variables
+
+@testset "find_generated_quantities_variables" begin
+    struct TestNode
+        id::Int
+    end
+
+    JuliaBUGS.is_model_parameter(g::MetaGraph{Int,<:SimpleDiGraph,Int,TestNode}, v::Int) =
+        g[v].id == 1
+    JuliaBUGS.is_observation(g::MetaGraph{Int,<:SimpleDiGraph,Int,TestNode}, v::Int) =
+        g[v].id == 2
+    JuliaBUGS.is_deterministic(g::MetaGraph{Int,<:SimpleDiGraph,Int,TestNode}, v::Int) =
+        g[v].id == 3
+
+    function generate_random_dag(num_nodes::Int, p::Float64=0.3)
+        graph = SimpleGraph(num_nodes)
+        for i in 1:num_nodes
+            for j in 1:num_nodes
+                if i != j && rand() < p
+                    add_edge!(graph, i, j)
+                end
+            end
+        end
+
+        graph = Graphs.random_orientation_dag(graph) # ensure the random graph is a DAG
+        vertices_description = [i => TestNode(rand(1:3)) for i in 1:nv(graph)]
+        edges_description = [Tuple(e) => nothing for e in Graphs.edges(graph)]
+        return MetaGraph(graph, vertices_description, edges_description)
+    end
+
+    # `transitiveclosure` has time complexity O(|E|⋅|V|), not fit for large graphs
+    # but easy to implement and understand, here we use it for reference
+    function find_generated_quantities_variables_with_transitive_closure(
+        g::MetaGraph{Int,<:SimpleDiGraph,Label,VertexData}
+    ) where {Label,VertexData}
+        _transitive_closure = Graphs.transitiveclosure(g.graph)
+        generated_quantities_variables = Set{Label}()
+        for v_id in vertices(g.graph)
+            if !JuliaBUGS.is_observation(g, v_id)
+                if all(
+                    !Base.Fix1(JuliaBUGS.is_observation, g), outneighbors(_transitive_closure, v_id)
+                )
+                    push!(generated_quantities_variables, MetaGraphsNext.label_for(g, v_id))
+                end
+            end
+        end
+
+        return generated_quantities_variables
+    end
+
+    @testset "random DAG with $num_nodes nodes and $p probability of edge" for num_nodes in [10, 20, 100, 500, 1000], p in [0.1, 0.3, 0.5]
+        g = generate_random_dag(num_nodes, p)
+        @test find_generated_quantities_variables(g) == find_generated_quantities_variables_with_transitive_closure(g)
+    end
+end
 
 test_model = @bugs begin
     a ~ dnorm(f, c)
