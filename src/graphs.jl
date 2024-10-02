@@ -20,6 +20,14 @@ is_model_parameter(g::BUGSGraph, v::VarName) = g[v].is_stochastic && !g[v].is_ob
 is_observation(g::BUGSGraph, v::VarName) = g[v].is_stochastic && g[v].is_observed
 is_deterministic(g::BUGSGraph, v::VarName) = !g[v].is_stochastic
 
+"""
+    find_generated_quantities_variables(g::BUGSGraph)
+
+Find all the generated quantities variables in the graph.
+
+Generated quantities variables are variables that do not affect the sampling process. 
+They are variables that do not have any descendant variables that are observed.
+"""
 function find_generated_quantities_variables(
     g::MetaGraph{Int,<:SimpleDiGraph,Label,VertexData}
 ) where {Label,VertexData}
@@ -59,39 +67,36 @@ function dfs_can_reach_observations(g, n, can_reach_observations)
 end
 
 """
-    markov_blanket(g::BUGSModel, v)
+    markov_blanket(g::BUGSGraph, v)
 
 Find the Markov blanket of variable(s) `v` in graph `g`. `v` can be a single `VarName` or a vector/tuple of `VarName`.
+
 The Markov Blanket of a variable is the set of variables that shield the variable from the rest of the
-network. Effectively, the Markov blanket of a variable is the set of its parents, its children, and
+network. Effectively, the Markov blanket of a variable is the set of its parents, its children, and 
 its children's other parents (reference: https://en.wikipedia.org/wiki/Markov_blanket).
 
-In the case of vector, the Markov Blanket is the union of the Markov Blankets of each variable 
-minus the variables themselves (reference: Liu, X.-Q., & Liu, X.-S. (2018). Markov Blanket and Markov 
-Boundary of Multiple Variables. Journal of Machine Learning Research, 19(43), 1–50.)
+In the case of a vector of variables, the Markov Blanket is the union of the Markov Blankets of each variable 
+minus the variables themselves[1].
 
-In the case of M-H acceptance ratio evaluation, only the logps of the children are needed, because the logp of the parents
-and co-parents are not changed (their values are still needed to compute the distributions). 
+[1] Liu, X.-Q., & Liu, X.-S. (2018). Markov Blanket and Markov 
+Boundary of Multiple Variables. Journal of Machine Learning Research, 19(43), 1–50.
 """
-function markov_blanket(g::BUGSGraph, v::VarName; children_only=false)
-    if !children_only
-        parents = stochastic_inneighbors(g, v)
-        children = stochastic_outneighbors(g, v)
-        co_parents = VarName[]
-        for p in children
-            co_parents = vcat(co_parents, stochastic_inneighbors(g, p))
-        end
-        blanket = unique(vcat(parents, children, co_parents...))
-        return [x for x in blanket if x != v]
-    else
-        return stochastic_outneighbors(g, v)
+function markov_blanket(g::BUGSGraph, v::VarName)
+    parents = stochastic_inneighbors(g, v)
+    children = stochastic_outneighbors(g, v)
+    co_parents = VarName[]
+    for p in children
+        co_parents = vcat(co_parents, stochastic_inneighbors(g, p))
     end
+    blanket = unique(vcat(parents, children, co_parents...))
+    return [x for x in blanket if x != v]
 end
 
-function markov_blanket(g::BUGSGraph, v; children_only=false)
+function markov_blanket(g::BUGSGraph, v)
+    # TODO: use reduce
     blanket = VarName[]
     for vn in v
-        blanket = vcat(blanket, markov_blanket(g, vn; children_only=children_only))
+        blanket = vcat(blanket, markov_blanket(g, vn))
     end
     return [x for x in unique(blanket) if x ∉ v]
 end

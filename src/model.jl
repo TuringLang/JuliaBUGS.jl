@@ -131,7 +131,11 @@ function BUGSModel(
                     rand(dist)
                 catch e
                     error(
-                        "Failed to sample from the prior distribution of $vn, consider providing initialization values for $vn or it's parents: $(collect(MetaGraphsNext.inneighbor_labels(g, vn))...).",
+                        """
+                        Failed to sample from the prior distribution of $vn, consider providing 
+                        initialization values for $vn or it's parents: 
+                        $(collect(MetaGraphsNext.inneighbor_labels(g, vn))...).
+                        """,
                     )
                 end
                 vi = DynamicPPL.BangBang.setindex!!(vi, init_value, vn)
@@ -188,7 +192,8 @@ end
 """
     initialize!(model::BUGSModel, initial_params::AbstractVector)
 
-Initialize the model with a vector of initial values, the values can be in transformed space if `model.transformed` is set to true.
+Initialize the model with a vector of initial values, the values can be in transformed 
+space if `model.transformed` is set to true.
 """
 function initialize!(model::BUGSModel, initial_params::AbstractVector)
     vi, logp = AbstractPPL.evaluate!!(model, LogDensityContext(), initial_params)
@@ -352,6 +357,10 @@ function AbstractPPL.condition(
     base_model = model.base_model isa Nothing ? model : model.base_model
     new_parameters = setdiff(model.parameters, var_group)
 
+    # TODO: maybe use instead of Markov blanket, children might be enough and more efficient  
+    # When evaluating the Metropolis-Hastings acceptance ratio, only the log probabilities of the children are needed. 
+    # This is because the log probabilities of the parents and co-parents are not changed by the proposal. 
+    # However, the values of the parents and co-parents are still needed to compute the distributions of the children.
     sorted_blanket_with_vars = if sorted_nodes isa Nothing
         sorted_nodes
     else
