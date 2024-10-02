@@ -41,9 +41,9 @@ JuliaBUGSGraphPlotExt = ["GraphPlot"]
 JuliaBUGSMCMCChainsExt = ["MCMCChains"]
 
 [compat]
-AbstractMCMC = "5"
-AbstractPPL = "0.8.4"
 ADTypes = "1.6"
+AbstractMCMC = "5"
+AbstractPPL = "0.8.4, 0.9"
 AdvancedHMC = "0.6"
 AdvancedMH = "0.8"
 BangBang = "0.4.1"
