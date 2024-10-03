@@ -1,12 +1,12 @@
+using Pkg
+Pkg.develop(path=joinpath(@__DIR__, ".."))
+
 using JuliaBUGS, ADTypes, ReverseDiff, MetaGraphsNext
 using BridgeStan, StanLogDensityProblems
 
 using LogDensityProblems, LogDensityProblemsAD
 using Chairmarks
 using OrderedCollections
-
-using Pkg
-Pkg.develop(; path=joinpath(@__DIR__, ".."))
 
 ## JuliaBUGS
 
