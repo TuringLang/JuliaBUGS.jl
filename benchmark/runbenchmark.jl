@@ -1,6 +1,104 @@
-using Serialization
+using JuliaBUGS, ADTypes, ReverseDiff, MetaGraphsNext
+using BridgeStan, StanLogDensityProblems
+
+using LogDensityProblems, LogDensityProblemsAD
+using Chairmarks
+using OrderedCollections
+
+## JuliaBUGS
+
+juliabugs_result = OrderedDict()
+for model_name in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
+    (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1[model_name]
+    model = compile(model_def, data, inits)
+    ad_model = ADgradient(AutoReverseDiff(true), model)
+
+    juliabugs_theta = rand(LogDensityProblems.dimension(model))
+    juliabugs_result[model_name] = Chairmarks.@be LogDensityProblems.logdensity_and_gradient(
+        $ad_model, $juliabugs_theta
+    )
+end
+
+## Stan
+
+const STAN_BUGS_EXAMPLES_FOLDER = joinpath(
+    dirname(@__FILE__), "stan-example-models/bugs_examples/"
+)
+
+const MODEL_VOL1_STAN = OrderedDict(
+    :rats => (:rats, :rats),
+    :pumps => (:pump, :pump),
+    :dogs => (:dogs, :dogs),
+    :seeds => (:seeds, :seeds),
+    :surgical_realistic => (:surgical, :surgical),
+    :magnesium => (:magnesium, :magnesium),
+    :salm => (:salm, :salm),
+    :equiv => (:equiv, :equiv),
+    :dyes => (:dyes, :dyes),
+    :stacks => (:stacks, :stacks_d_normal_ridge),
+    :epil => (:epil, :epil),
+    :blockers => (:blocker, :blocker),
+    :oxford => (:oxford, :oxford),
+    :lsat => (:lsat, :lsat),
+    :bones => (:bones, :bones),
+    :mice => (:mice, :mice),
+    :kidney => (:kidney, :kidney),
+    :leuk => (:leuk, :leuk),
+    :leukfr => (:leukfr, :leukfr),
+)
+
+function create_stan_logdensityproblem(volume, folder_name, file_name_prefix)
+    stan_code_path = joinpath(
+        STAN_BUGS_EXAMPLES_FOLDER,
+        "vol$volume",
+        String(folder_name),
+        "$(file_name_prefix).stan",
+    )
+    stan_data_path = joinpath(
+        STAN_BUGS_EXAMPLES_FOLDER,
+        "vol$volume",
+        String(folder_name),
+        "$(file_name_prefix).data.json",
+    )
+    stan_model = BridgeStan.StanModel(stan_code_path, stan_data_path)
+    return StanLogDensityProblems.StanProblem(stan_model)
+end
+
+function benchmark_stan_model(stan_logdensityproblem)
+    stan_dim = LogDensityProblems.dimension(stan_logdensityproblem)
+    stan_theta = rand(stan_dim)
+    return Chairmarks.@be LogDensityProblems.logdensity_and_gradient(
+        $stan_logdensityproblem, stan_theta
+    )
+end
+
+function run_stan_benchmark(volume, model_name, model_path_dict)
+    folder_name, file_name_prefix = model_path_dict[model_name]
+    stan_logdensityproblem = create_stan_logdensityproblem(
+        volume, folder_name, file_name_prefix
+    )
+    try
+        return benchmark_stan_model(stan_logdensityproblem)
+    catch e
+        println("Model $model_name produces error: $e")
+        return missing
+    end
+end
+
+function run_all_stan_benchmarks(volume, model_path_dict)
+    return OrderedDict(
+        model_name => run_stan_benchmark(volume, model_name, model_path_dict) for
+        model_name in keys(model_path_dict)
+    )
+end
+
+stan_result = run_all_stan_benchmarks(1, MODEL_VOL1_STAN)
+stan_result = Dict(k => v for (k, v) in stan_result if !ismissing(v))
+
+## create result table
+
 using DataFrames
-using MetaGraphsNext
+using PrettyTables
 
 function extract_median_time(result)
     return OrderedDict(
@@ -9,26 +107,14 @@ function extract_median_time(result)
     )
 end
 
-juliabugs_result = result["juliabugs_result"]
-stan_result = result["stan_result"]
-nimble_result = result["nimble_result"]
-
 stan_median_time_result = extract_median_time(stan_result)
 juliabugs_median_time_result = extract_median_time(juliabugs_result)
-nimble_median_time_result = OrderedDict(
-    model_name => gr_median_time_in_um * 1e-6 for
-    (model_name, (nll_median_time, gr_median_time_in_um)) in nimble_result
-)
 
 juliabugs_median_time_result_micro = OrderedDict(
     model => time * 1e6 for (model, time) in juliabugs_median_time_result
 )
 stan_median_time_result_micro = OrderedDict(
     model => get(stan_median_time_result, model, 0.0) * 1e6 for
-    model in keys(juliabugs_median_time_result)
-)
-nimble_median_time_result_micro = OrderedDict(
-    model => get(nimble_median_time_result, model, 0.0) * 1e6 for
     model in keys(juliabugs_median_time_result)
 )
 
@@ -53,13 +139,11 @@ results_df = DataFrame(;
     Data=Int[],
     Stan_Time=Union{Float64,Missing}[],
     JuliaBUGS_Time=Union{Float64,Missing}[],
-    Nimble_Time=Union{Float64,Missing}[],
 )
 
 for model in keys(juliabugs_median_time_result_micro)
     stan_time = get(stan_median_time_result_micro, model, missing)
     juliabugs_time = juliabugs_median_time_result_micro[model]
-    nimble_time = get(nimble_median_time_result_micro, model, missing)
     push!(
         results_df,
         (
@@ -68,11 +152,8 @@ for model in keys(juliabugs_median_time_result_micro)
             model_data_count[model],
             stan_time,
             juliabugs_time,
-            nimble_time,
         ),
     )
 end
-
-using PrettyTables
 
 pretty_table(results_df; backend=Val(:markdown))

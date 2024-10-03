@@ -149,6 +149,16 @@ for model_name in keys(MODEL_VOL1_NIMBLE)
     nimble_result[model_name] = run_benchmark()
 end
 
+nimble_median_time_result = OrderedDict(
+    model_name => gr_median_time_in_um * 1e-6 for
+    (model_name, (nll_median_time, gr_median_time_in_um)) in nimble_result
+)
+
+nimble_median_time_result_micro = OrderedDict(
+    model => get(nimble_median_time_result, model, 0.0) * 1e6 for
+    model in keys(juliabugs_median_time_result)
+)
+
 ## Not in use anymore
 
 # some models can't be directly supported by nimble, because they require size information
