@@ -63,16 +63,16 @@ logLikelihood_nf <- nimbleFunction(
 
 # map the name used in JuliaBUGS.BUGSExamples to the name used in nimble
 MODEL_VOL1_NIMBLE = (
-    rats = :rats,
-    pumps = :pump,
-    seeds = :seeds,
-    salm = :salm,
-    equiv = :equiv,
-    dyes = :dyes,
-    epil = :epil,
-    blockers = :blocker,
-    oxford = :oxford, # give nans
-    lsat = :lsat,
+    rats=:rats,
+    pumps=:pump,
+    seeds=:seeds,
+    salm=:salm,
+    equiv=:equiv,
+    dyes=:dyes,
+    epil=:epil,
+    blockers=:blocker,
+    oxford=:oxford, # give nans
+    lsat=:lsat,
     # bones = :bones, # discrete parameters
     # mice = :mice, # not working, discrete parameters
     # kidney = :kidney, # same reason as mice
