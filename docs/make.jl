@@ -7,18 +7,18 @@ using DynamicPPL: SimpleVarInfo
 makedocs(;
     sitename="JuliaBUGS.jl",
     pages=[
-        "Introduction" => "index.md",
-        "Differences from Other BUGS Implementations" => "differences.md",
+        "Home" => "index.md",
         "Example" => "example.md",
         "API" => [
-            "General" => "api.md",
-            "Functions" => "functions.md",
-            "Distributions" => "distributions.md",
-            "Defining New Function and Distributions" => "user_defined_functions.md",
+            "General" => "api/api.md",
+            "Functions" => "api/functions.md",
+            "Distributions" => "api/distributions.md",
+            "User-Defined Functions and Distributions" => "api/user_defined_functions.md",
         ],
+        "Differences from Other BUGS Implementations" => "differences.md",
+        "Pitfalls" => "pitfalls.md",
         "Plotting" => "graph_plotting.md",
         "R Interface" => "R_interface.md",
-        "Pitfalls" => "pitfalls.md",
         "For Developers" =>
             ["Parser" => "parser.md", "Notes on BUGS Implementations" => "BUGS_notes.md"],
     ],
