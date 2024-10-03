@@ -22,10 +22,12 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing}} <: AbstractBU
     "A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space."
     transformed_var_lengths::Dict{<:VarName,Int}
 
-    "A `DynamicPPL.SimpleVarInfo` object containing the values of the variables in the model.
+    """
+    A `DynamicPPL.SimpleVarInfo` object containing the values of the variables in the model.
     Note that the usage of `SimpleVarInfo` in JuliaBUGS is different from that of DynamicPPL:
     In JuliaBUGS, `varinfo` contains all the values (DynamicPPL only contains values of model parameters), 
-    and all the values in `varinfo` are always in the constrained space."
+    and all the values in `varinfo` are always in the constrained space.
+    """
     varinfo::DynamicPPL.SimpleVarInfo
     "A vector containing the names of the model parameters (unobserved stochastic variables)."
     parameters::Vector{<:VarName}
