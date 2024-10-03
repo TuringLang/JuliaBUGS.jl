@@ -5,8 +5,6 @@ using LogDensityProblems, LogDensityProblemsAD
 using Chairmarks
 using OrderedCollections
 
-io = IOBuffer()
-
 ## JuliaBUGS
 
 juliabugs_result = OrderedDict()
@@ -101,9 +99,7 @@ function run_all_stan_benchmarks(volume, model_path_dict)
     )
 end
 
-redirect_stdout(; stdout=io) do
-    stan_result = run_all_stan_benchmarks(1, MODEL_VOL1_STAN)
-end
+stan_result = run_all_stan_benchmarks(1, MODEL_VOL1_STAN)
 stan_result = Dict(k => v for (k, v) in stan_result if !ismissing(v))
 
 ## create result table
