@@ -6,7 +6,7 @@ using Chairmarks
 using OrderedCollections
 
 using Pkg
-Pkg.develop(path=joinpath(@__DIR__, ".."))
+Pkg.develop(; path=joinpath(@__DIR__, ".."))
 
 ## JuliaBUGS
 
