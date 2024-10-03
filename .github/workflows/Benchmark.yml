@@ -1,0 +1,35 @@
+name: Benchmark
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  run-benchmark:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Julia
+      uses: julia-actions/setup-julia@v1
+      with:
+        version: '1.8' # Specify the Julia version you need
+
+    - name: Run benchmarks
+      run: |
+        julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
+        julia --project=benchmark benchmark/run_benchmarks.jl > benchmark_results.txt
+
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v2
+      with:
+        name: benchmark-results
+        path: benchmark_results.txt
+
+    - name: Post results to PR
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        path: benchmark_results.txt

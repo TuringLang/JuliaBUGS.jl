@@ -14,9 +14,12 @@ for model_name in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
     ad_model = ADgradient(AutoReverseDiff(true), model)
 
     juliabugs_theta = rand(LogDensityProblems.dimension(model))
-    juliabugs_result[model_name] = Chairmarks.@be LogDensityProblems.logdensity_and_gradient(
+    density_time = Chairmarks.@be LogDensityProblems.logdensity($ad_model, $juliabugs_theta)
+    density_and_gradient_time = Chairmarks.@be LogDensityProblems.logdensity_and_gradient(
         $ad_model, $juliabugs_theta
     )
+
+    juliabugs_result[model_name] = (density_time, density_and_gradient_time)
 end
 
 ## Stan
@@ -67,9 +70,13 @@ end
 function benchmark_stan_model(stan_logdensityproblem)
     stan_dim = LogDensityProblems.dimension(stan_logdensityproblem)
     stan_theta = rand(stan_dim)
-    return Chairmarks.@be LogDensityProblems.logdensity_and_gradient(
-        $stan_logdensityproblem, stan_theta
+    density_time = Chairmarks.@be LogDensityProblems.logdensity(
+        $stan_logdensityproblem, $stan_theta
     )
+    density_and_gradient_time = Chairmarks.@be LogDensityProblems.logdensity_and_gradient(
+        $stan_logdensityproblem, $stan_theta
+    )
+    return (density_time, density_and_gradient_time)
 end
 
 function run_stan_benchmark(volume, model_name, model_path_dict)
@@ -102,8 +109,10 @@ using PrettyTables
 
 function extract_median_time(result)
     return OrderedDict(
-        model_name => Chairmarks.median(benchmark_result).time for
-        (model_name, benchmark_result) in result
+        model_name => (
+            Chairmarks.median(density_time).time,
+            Chairmarks.median(density_and_gradient_time).time,
+        ) for (model_name, (density_time, density_and_gradient_time)) in result
     )
 end
 
@@ -111,11 +120,11 @@ stan_median_time_result = extract_median_time(stan_result)
 juliabugs_median_time_result = extract_median_time(juliabugs_result)
 
 juliabugs_median_time_result_micro = OrderedDict(
-    model => time * 1e6 for (model, time) in juliabugs_median_time_result
+    model => (time[1] * 1e6, time[2] * 1e6) for
+    (model, time) in juliabugs_median_time_result
 )
 stan_median_time_result_micro = OrderedDict(
-    model => get(stan_median_time_result, model, 0.0) * 1e6 for
-    model in keys(juliabugs_median_time_result)
+    model => (time[1] * 1e6, time[2] * 1e6) for (model, time) in stan_median_time_result
 )
 
 model_parameters_count = OrderedDict()
@@ -137,11 +146,16 @@ results_df = DataFrame(;
     Model=String[],
     Parameters=Int[],
     Data=Int[],
-    Stan_Time=Union{Float64,Missing}[],
-    JuliaBUGS_Time=Union{Float64,Missing}[],
+    Stan_Density_Time=Union{Float64,String}[],
+    Stan_Density_Gradient_Time=Union{Float64,String}[],
+    JuliaBUGS_Density_Time=Union{Float64,String}[],
+    JuliaBUGS_Density_Gradient_Time=Union{Float64,String}[],
 )
 
 for model in keys(juliabugs_median_time_result_micro)
+    if model == :surgical_simple
+        continue
+    end
     stan_time = get(stan_median_time_result_micro, model, missing)
     juliabugs_time = juliabugs_median_time_result_micro[model]
     push!(
@@ -150,10 +164,28 @@ for model in keys(juliabugs_median_time_result_micro)
             string(model),
             model_parameters_count[model],
             model_data_count[model],
-            stan_time,
-            juliabugs_time,
+            coalesce(ismissing(stan_time) ? missing : stan_time[1], "NA"),
+            coalesce(ismissing(stan_time) ? missing : stan_time[2], "NA"),
+            juliabugs_time[1],
+            juliabugs_time[2],
         ),
     )
 end
 
-pretty_table(results_df; backend=Val(:markdown))
+function print_custom_table(df; backend=Val(:markdown))
+    headers = [
+        "Model",
+        "Parameter Count",
+        "Data Count",
+        "Stan Density Time (µs)",
+        "Stan Density Gradient Time (µs)",
+        "JuliaBUGS Density Time with Graph Walk (µs)",
+        "JuliaBUGS Density Gradient Time with ReverseDiff.jl(compiled tape) (µs)",
+    ]
+
+    data = [df[!, col] for col in names(df)]
+    table_data = hcat(data...)
+    return pretty_table(table_data; header=headers, backend=backend)
+end
+
+print_custom_table(results_df; backend=Val(:markdown))
