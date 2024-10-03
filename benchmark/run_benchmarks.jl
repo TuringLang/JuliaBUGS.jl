@@ -5,6 +5,9 @@ using LogDensityProblems, LogDensityProblemsAD
 using Chairmarks
 using OrderedCollections
 
+using Pkg
+Pkg.develop(path=joinpath(@__DIR__, ".."))
+
 ## JuliaBUGS
 
 juliabugs_result = OrderedDict()
