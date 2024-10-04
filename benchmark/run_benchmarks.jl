@@ -1,5 +1,5 @@
 using Pkg
-Pkg.develop(path=joinpath(@__DIR__, ".."))
+Pkg.develop(; path=joinpath(@__DIR__, ".."))
 
 using JuliaBUGS, ADTypes, ReverseDiff, MetaGraphsNext
 using BridgeStan, StanLogDensityProblems
