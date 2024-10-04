@@ -1,5 +1,9 @@
 using JuliaBUGS:
-    stochastic_inneighbors, stochastic_neighbors, stochastic_outneighbors, markov_blanket, find_generated_quantities_variables
+    stochastic_inneighbors,
+    stochastic_neighbors,
+    stochastic_outneighbors,
+    markov_blanket,
+    find_generated_quantities_variables
 
 @testset "find_generated_quantities_variables" begin
     struct TestNode
