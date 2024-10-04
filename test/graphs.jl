@@ -51,7 +51,8 @@ using JuliaBUGS:
 
     @testset "random DAG with $num_nodes nodes and $p probability of edge" for num_nodes in [10, 20, 100, 500, 1000], p in [0.1, 0.3, 0.5]
         g = generate_random_dag(num_nodes, p)
-        @test find_generated_quantities_variables(g) == find_generated_quantities_variables_with_transitive_closure(g)
+        @test find_generated_quantities_variables(g) ==
+            find_generated_quantities_variables_with_transitive_closure(g)
     end
 end
 
