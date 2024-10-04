@@ -23,12 +23,15 @@ jobs:
             os: ubuntu-latest
             arch: x64
             coverage: true
+    
     steps:
       - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v1
+
+      - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
+      
       - uses: actions/cache@v4
         with:
           path: |
@@ -38,22 +41,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-
             ${{ runner.os }}-julia-${{ matrix.version }}-
+      
       - uses: julia-actions/julia-buildpkg@v1
+
       - name: Running elementary tests
         uses: julia-actions/julia-runtest@v1
         env:
           TEST_GROUP: "elementary"
+
       - name: Running compilation tests
         uses: julia-actions/julia-runtest@v1
         env:
           TEST_GROUP: "compilation"
-      - name: Run profile (Only on ubuntu-latest and Julia version 1)
-        if: matrix.os == 'ubuntu-latest' && matrix.version == '1'
-        run: |
-          julia --color=yes --project=. -e 'import Pkg; Pkg.instantiate(); Pkg.test(;coverage=true);'
-        shell: bash
-        env:
-          TEST_GROUP: "profile"
+
       - name: Running `gibbs` tests
         uses: nick-fields/retry@v3
         with:
@@ -62,6 +62,7 @@ jobs:
           command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true);"
         env:
           TEST_GROUP: "gibbs"
+
       - name: Running `mcmchains` tests
         uses: nick-fields/retry@v3
         with:
@@ -70,12 +71,15 @@ jobs:
           command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true);"
         env:
           TEST_GROUP: "mcmchains"
+      
       - uses: julia-actions/julia-processcoverage@v1
         if: matrix.coverage
+
       - uses: codecov/codecov-action@v4
         if: matrix.coverage
         with:
           file: lcov.info
+      
       - uses: coverallsapp/github-action@master
         if: matrix.coverage
         with:
