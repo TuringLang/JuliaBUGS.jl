@@ -1,0 +1,3 @@
+[submodule "benchmark/stan-example-models"]
+	path = benchmark/stan-example-models
+	url = https://github.com/stan-dev/example-models.git

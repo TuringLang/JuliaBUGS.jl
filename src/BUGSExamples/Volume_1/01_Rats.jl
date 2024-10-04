@@ -76,8 +76,8 @@ data = (
 )
 
 inits = (
-    alpha = fill(250, 30),
-    beta = fill(6, 30),
+    alpha = fill(250.0, 30),
+    beta = fill(6.0, 30),
     var"alpha.c" = 150,
     var"beta.c" = 10,
     var"tau.c" = 1,
@@ -85,7 +85,7 @@ inits = (
     var"beta.tau" = 1
 )
 inits_alternative = (
-    alpha = fill(25, 30),
+    alpha = fill(25.0, 30),
     beta = fill(0.6, 30),
     var"alpha.c" = 15,
     var"beta.c" = 1,
