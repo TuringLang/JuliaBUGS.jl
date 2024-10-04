@@ -92,12 +92,21 @@ function markov_blanket(g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, v::L) where {L,V
     co_parents, logical_along_path_co_parents = Set{L}(), Set{L}()
 
     for child in children
-        co_parents_child, logical_along_path_co_parents_child = stochastic_inneighbors(g, child)
+        co_parents_child, logical_along_path_co_parents_child = stochastic_inneighbors(
+            g, child
+        )
         union!(co_parents, co_parents_child)
         union!(logical_along_path_co_parents, logical_along_path_co_parents_child)
     end
 
-    blanket = union!(parents, children, co_parents, logical_along_path_parents, logical_along_path_children, logical_along_path_co_parents)
+    blanket = union!(
+        parents,
+        children,
+        co_parents,
+        logical_along_path_parents,
+        logical_along_path_children,
+        logical_along_path_co_parents,
+    )
     delete!(blanket, v)
     return blanket
 end
@@ -113,7 +122,11 @@ function dfs_find_stochastic_boundary_and_variables_along_the_path(
     g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, v::L, f::F
 ) where {L,VD,F}
     if !is_stochastic(g, v)
-        throw(ArgumentError("Variable $v is not stochastic, this function is for stochastic variables only."))
+        throw(
+            ArgumentError(
+                "Variable $v is not stochastic, this function is for stochastic variables only.",
+            ),
+        )
     end
 
     stochastic_neighbors = Set{L}()
@@ -127,7 +140,7 @@ function dfs_find_stochastic_boundary_and_variables_along_the_path(
         if current in visited
             continue
         end
-        
+
         if is_deterministic(g, current)
             push!(deterministic_variables_along_path, current)
         end
@@ -150,9 +163,13 @@ function dfs_find_stochastic_boundary_and_variables_along_the_path(
 end
 
 function stochastic_inneighbors(g, v)
-    return dfs_find_stochastic_boundary_and_variables_along_the_path(g, v, MetaGraphsNext.inneighbor_labels)
+    return dfs_find_stochastic_boundary_and_variables_along_the_path(
+        g, v, MetaGraphsNext.inneighbor_labels
+    )
 end
 
 function stochastic_outneighbors(g, v)
-    return dfs_find_stochastic_boundary_and_variables_along_the_path(g, v, MetaGraphsNext.outneighbor_labels)
+    return dfs_find_stochastic_boundary_and_variables_along_the_path(
+        g, v, MetaGraphsNext.outneighbor_labels
+    )
 end
