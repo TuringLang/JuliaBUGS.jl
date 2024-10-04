@@ -43,7 +43,8 @@ using JuliaBUGS:
         for v_id in vertices(g.graph)
             if !JuliaBUGS.is_observation(g, v_id)
                 if all(
-                    !Base.Fix1(JuliaBUGS.is_observation, g), outneighbors(_transitive_closure, v_id)
+                    !Base.Fix1(JuliaBUGS.is_observation, g),
+                    outneighbors(_transitive_closure, v_id),
                 )
                     push!(generated_quantities_variables, MetaGraphsNext.label_for(g, v_id))
                 end
