@@ -1,6 +1,6 @@
 # R Interface
 
-There is great support of interoperability between Julia and R.
+Interoperation between Julia and R is very solid and simple to use.
 
 Here are some very useful packages:
 
