@@ -7,19 +7,14 @@ struct NodeInfo{F}
     loop_vars::NamedTuple
 end
 
-"""
-    BUGSGraph
-
-The `BUGSGraph` object represents the graph structure for a BUGS model.
-"""
 const BUGSGraph = MetaGraph{
     Int,Graphs.SimpleDiGraph{Int},<:VarName,<:NodeInfo,Nothing,Nothing,<:Any,Float64
 }
 
+is_stochastic(g::BUGSGraph, v::VarName) = g[v].is_stochastic
 is_model_parameter(g::BUGSGraph, v::VarName) = g[v].is_stochastic && !g[v].is_observed
 is_observation(g::BUGSGraph, v::VarName) = g[v].is_stochastic && g[v].is_observed
 is_deterministic(g::BUGSGraph, v::VarName) = !g[v].is_stochastic
-is_stochastic(g::BUGSGraph, v::VarName) = g[v].is_stochastic
 
 """
     find_generated_quantities_variables(g::BUGSGraph)
@@ -87,25 +82,32 @@ function markov_blanket(g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, v::L) where {L,V
         throw(ArgumentError("Variable $v is logical, so it has no Markov blanket."))
     end
 
-    parents, logical_along_path_parents = stochastic_inneighbors(g, v)
-    children, logical_along_path_children = stochastic_outneighbors(g, v)
-    co_parents, logical_along_path_co_parents = Set{L}(), Set{L}()
+    parents, deterministic_variables_en_route_parents = dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
+        g, v, MetaGraphsNext.inneighbor_labels
+    )
+    children, deterministic_variables_en_route_children = dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
+        g, v, MetaGraphsNext.outneighbor_labels
+    )
 
+    co_parents, deterministic_variables_en_route_co_parents = Set{L}(), Set{L}()
     for child in children
-        co_parents_child, logical_along_path_co_parents_child = stochastic_inneighbors(
+        co_parents_child, deterministic_variables_en_route_co_parents_child = stochastic_inneighbors(
             g, child
         )
         union!(co_parents, co_parents_child)
-        union!(logical_along_path_co_parents, logical_along_path_co_parents_child)
+        union!(
+            deterministic_variables_en_route_co_parents,
+            deterministic_variables_en_route_co_parents_child,
+        )
     end
 
     blanket = union!(
         parents,
         children,
         co_parents,
-        logical_along_path_parents,
-        logical_along_path_children,
-        logical_along_path_co_parents,
+        deterministic_variables_en_route_parents,
+        deterministic_variables_en_route_children,
+        deterministic_variables_en_route_co_parents,
     )
     delete!(blanket, v)
     return blanket
@@ -118,58 +120,35 @@ function markov_blanket(
     return setdiff(blanket, Set(v))
 end
 
-function dfs_find_stochastic_boundary_and_variables_along_the_path(
-    g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, v::L, f::F
+function dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
+    g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, v::L, neighbor_func::F
 ) where {L,VD,F}
-    if !is_stochastic(g, v)
-        throw(
-            ArgumentError(
-                "Variable $v is not stochastic, this function is for stochastic variables only.",
-            ),
-        )
-    end
-
     stochastic_neighbors = Set{L}()
-    deterministic_variables_along_path = Set{L}()
+    deterministic_variables_en_route = Set{L}()
     stack = [v]
     visited = Set{L}()
 
     while !isempty(stack)
         current = pop!(stack)
-
-        if current in visited
-            continue
-        end
+        current in visited && continue
 
         if is_deterministic(g, current)
-            push!(deterministic_variables_along_path, current)
+            push!(deterministic_variables_en_route, current)
         end
 
         push!(visited, current)
-        neighbors = f(g, current)
 
-        for u in neighbors
-            if !(u in visited)
-                if is_stochastic(g, u)
-                    push!(stochastic_neighbors, u)
+        for neighbor in neighbor_func(g, current)
+            if !(neighbor in visited)
+                if is_stochastic(g, neighbor)
+                    push!(stochastic_neighbors, neighbor)
+                    # and stop (not pushing to stack)
                 else
-                    push!(stack, u)
+                    push!(stack, neighbor)
                 end
             end
         end
     end
 
-    return stochastic_neighbors, deterministic_variables_along_path
-end
-
-function stochastic_inneighbors(g, v)
-    return dfs_find_stochastic_boundary_and_variables_along_the_path(
-        g, v, MetaGraphsNext.inneighbor_labels
-    )
-end
-
-function stochastic_outneighbors(g, v)
-    return dfs_find_stochastic_boundary_and_variables_along_the_path(
-        g, v, MetaGraphsNext.outneighbor_labels
-    )
+    return stochastic_neighbors, deterministic_variables_en_route
 end

@@ -88,7 +88,8 @@ end
 @testset "markov_blanket" begin
     using .GraphsTest
 
-    """ Mermaid graph for visualizing the test graph
+    """ Mermaid code for visualizing the test graph
+    ```mermaid
     graph TD
         1((1: Parameter)) --> 2((2: Deterministic))
         1 --> 3((3: Parameter))
@@ -107,6 +108,7 @@ end
         class 1,3,8 parameter;
         class 2,4,6 deterministic;
         class 5,7 observation;
+    ```
     """
 
     g = MetaGraph(SimpleDiGraph(); label_type=Int, vertex_data_type=TestNode)
