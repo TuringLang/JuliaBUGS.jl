@@ -1,11 +1,8 @@
 using Graphs, MetaGraphsNext
 using JuliaBUGS
 using JuliaBUGS:
-    dfs_stochastic_neighbors,
-    stochastic_inneighbors,
-    stochastic_outneighbors,
     markov_blanket,
-    find_generated_quantities_variables
+    dfs_find_stochastic_boundary_and_deterministic_variables_en_route
 
 module GraphsTest
 using JuliaBUGS: JuliaBUGS
@@ -133,18 +130,26 @@ end
     add_edge!(g, 7, 8)
 
     # Test single node Markov blanket
-    @test stochastic_outneighbors(g, 1) == (Set([3, 8]), Set([4, 6, 2]))
-    @test stochastic_inneighbors(g, 1) == (Set(), Set())
-    @test markov_blanket(g, 1) == Set(collect(2:8)) # should contains all the nodes
+    @test dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
+        g, 1, MetaGraphsNext.outneighbor_labels
+    ) == (Set([3, 8]), Set([4, 6, 2]))
+    @test dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
+        g, 1, MetaGraphsNext.inneighbor_labels
+    ) == (Set(), Set())
+    @test markov_blanket(g, 1) == Set(collect(1:8)) # should contains all the nodes
 
-    @test stochastic_outneighbors(g, 5) == (Set([7, 8]), Set([6]))
-    @test stochastic_inneighbors(g, 5) == (Set([3]), Set())
-    @test markov_blanket(g, 5) == Set([1, 2, 3, 4, 7, 8, 6])
+    @test dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
+        g, 5, MetaGraphsNext.outneighbor_labels
+    ) == (Set([7, 8]), Set([6]))
+    @test dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
+        g, 5, MetaGraphsNext.inneighbor_labels
+    ) == (Set([3]), Set())
+    @test markov_blanket(g, 5) == Set([1, 2, 3, 4, 5, 6, 7, 8])
 
-    @test markov_blanket(g, 3) == Set([1, 5])
-    @test markov_blanket(g, 7) == Set([1, 2, 4, 5, 6, 8])
-    @test markov_blanket(g, 8) == Set([1, 2, 4, 5, 6, 7])
+    @test markov_blanket(g, 3) == Set([1, 3, 5])
+    @test markov_blanket(g, 7) == Set([1, 2, 4, 5, 6, 7, 8])
+    @test markov_blanket(g, 8) == Set([1, 2, 4, 5, 6, 7, 8])
 
-    @test markov_blanket(g, [1, 3]) == Set([2, 4, 5, 6, 7, 8])
-    @test markov_blanket(g, (3, 7)) == Set([1, 2, 4, 5, 6, 8])
+    @test markov_blanket(g, [1, 3]) == Set([1, 2, 3, 4, 5, 6, 7, 8])
+    @test markov_blanket(g, (3, 7)) == Set([1, 2, 3, 4, 5, 6, 7, 8])
 end

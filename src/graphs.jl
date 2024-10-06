@@ -63,7 +63,7 @@ function dfs_can_reach_observations(g, n, can_reach_observations)
 end
 
 """
-    markov_blanket(g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, v::L) where {L,VD}
+    markov_blanket(g::BUGSGraph, v)
 
 Find the Markov blanket of variable(s) `v` in graph `g`. `v` can be a single `VarName` or a vector/tuple of `VarName`.
 
@@ -73,6 +73,9 @@ its children's other parents (reference: https://en.wikipedia.org/wiki/Markov_bl
 
 In the case of a vector of variables, the Markov Blanket is the union of the Markov Blankets of each variable 
 minus the variables themselves[1].
+
+This function returns a `Set` of `VarName`s, containing the Markov blanket of the variable(s) `v` in graph `g`, deterministic
+variables that are on the path from `v` to their Markov blankets, and the variables `v` itself(themselves).
 
 [1] Liu, X.-Q., & Liu, X.-S. (2018). Markov Blanket and Markov 
 Boundary of Multiple Variables. Journal of Machine Learning Research, 19(43), 1–50.
@@ -91,8 +94,8 @@ function markov_blanket(g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, v::L) where {L,V
 
     co_parents, deterministic_variables_en_route_co_parents = Set{L}(), Set{L}()
     for child in children
-        co_parents_child, deterministic_variables_en_route_co_parents_child = stochastic_inneighbors(
-            g, child
+        co_parents_child, deterministic_variables_en_route_co_parents_child = dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
+            g, child, MetaGraphsNext.inneighbor_labels
         )
         union!(co_parents, co_parents_child)
         union!(
@@ -109,15 +112,14 @@ function markov_blanket(g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, v::L) where {L,V
         deterministic_variables_en_route_children,
         deterministic_variables_en_route_co_parents,
     )
-    delete!(blanket, v)
+    push!(blanket, v)
     return blanket
 end
 
 function markov_blanket(
     g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, v::Union{Vector{L},NTuple{N,<:L}}
 ) where {L,VD,N}
-    blanket = reduce((acc, vn) -> union!(acc, markov_blanket(g, vn)), v; init=Set{L}())
-    return setdiff(blanket, Set(v))
+    return reduce((acc, vn) -> union!(acc, markov_blanket(g, vn)), v; init=Set{L}())
 end
 
 function dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
