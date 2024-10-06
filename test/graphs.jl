@@ -1,8 +1,7 @@
 using Graphs, MetaGraphsNext
 using JuliaBUGS
 using JuliaBUGS:
-    markov_blanket,
-    dfs_find_stochastic_boundary_and_deterministic_variables_en_route
+    markov_blanket, dfs_find_stochastic_boundary_and_deterministic_variables_en_route
 
 module GraphsTest
 using JuliaBUGS: JuliaBUGS
