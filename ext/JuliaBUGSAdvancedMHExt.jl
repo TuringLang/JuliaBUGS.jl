@@ -5,7 +5,6 @@ using AdvancedMH
 using JuliaBUGS
 using JuliaBUGS: BUGSModel, find_generated_vars, LogDensityContext, evaluate!!
 using JuliaBUGS.BUGSPrimitives
-using JuliaBUGS.DynamicPPL
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.Random
@@ -40,16 +39,17 @@ end
 function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::AdvancedMH.MHSampler
 )
+    logdensitymodel = AbstractMCMC.LogDensityModel(
+        LogDensityProblemsAD.ADgradient(:ReverseDiff, cond_model)
+    )
     t, s = AbstractMCMC.step(
         rng,
-        AbstractMCMC.LogDensityModel(
-            LogDensityProblemsAD.ADgradient(:ReverseDiff, cond_model)
-        ),
+        logdensitymodel,
         sampler;
         n_adapts=0,
-        initial_params=JuliaBUGS.getparams(cond_model; transformed=true),
+        initial_params=JuliaBUGS.getparams(cond_model),
     )
-    return JuliaBUGS.setparams!!(cond_model, t.params; transformed=true)
+    return JuliaBUGS.initialize!(cond_model, t.params)
 end
 
 end

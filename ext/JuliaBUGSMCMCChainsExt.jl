@@ -5,7 +5,7 @@ using JuliaBUGS: AbstractBUGSModel, find_generated_vars, LogDensityContext, eval
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
-using JuliaBUGS.DynamicPPL
+using DynamicPPL
 using AbstractMCMC
 using MCMCChains: Chains
 

@@ -10,8 +10,8 @@ struct MHFromPrior <: AbstractMCMC.AbstractSampler end
 
 abstract type AbstractGibbsState end
 
-struct GibbsState <: AbstractGibbsState
-    varinfo::DynamicPPL.SimpleVarInfo
+struct GibbsState{NT<:NamedTuple} <: AbstractGibbsState
+    values::NT
     conditioning_schedule::Dict
     sorted_nodes_cache::Dict
 end
@@ -25,7 +25,7 @@ function AbstractMCMC.step(
     model=l_model.logdensity,
     kwargs...,
 )
-    vi = deepcopy(model.varinfo)
+    values = deepcopy(model.evaluation_env)
     sorted_nodes_cache = Dict{Any,Any}()
 
     conditioning_schedule = Dict()
@@ -39,8 +39,8 @@ function AbstractMCMC.step(
         sorted_nodes_cache[vs] = ensure_vector(cond_model.sorted_nodes)
     end
 
-    return getparams(model, vi; transformed=model.transformed),
-    GibbsState(vi, conditioning_schedule, sorted_nodes_cache)
+    transition = JuliaBUGS.getparams(model)
+    return transition, GibbsState(values, conditioning_schedule, sorted_nodes_cache)
 end
 
 function AbstractMCMC.step(
@@ -51,34 +51,29 @@ function AbstractMCMC.step(
     model=l_model.logdensity,
     kwargs...,
 )
-    vi = state.varinfo
+    values = state.values
     for vs in keys(state.conditioning_schedule)
-        cond_model = AbstractPPL.condition(model, vs, vi, state.sorted_nodes_cache[vs])
-        vi = gibbs_internal(rng, cond_model, state.conditioning_schedule[vs])
+        cond_model = AbstractPPL.condition(model, vs, values, state.sorted_nodes_cache[vs])
+        values = gibbs_internal(rng, cond_model, state.conditioning_schedule[vs])
     end
-    return getparams(model, vi; transformed=model.transformed),
-    GibbsState(vi, state.conditioning_schedule, state.sorted_nodes_cache)
+    return values, GibbsState(values, state.conditioning_schedule, state.sorted_nodes_cache)
 end
 
 function gibbs_internal end
 
-function gibbs_internal(
-    rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::MHFromPrior
-)
-    transformed_original = getparams(cond_model, cond_model.varinfo; transformed=true)
-    transformed_proposal = getparams(
-        cond_model, evaluate!!(cond_model, SamplingContext())[1]; transformed=true
-    )
+function gibbs_internal(rng::Random.AbstractRNG, cond_model::BUGSModel, ::MHFromPrior)
+    transformed_original = JuliaBUGS.getparams(cond_model)
+    transformed_proposal = JuliaBUGS.getparams(cond_model)
 
-    vi_proposed, logp_proposed = evaluate!!(
+    values_proposed, logp_proposed = evaluate!!(
         cond_model, LogDensityContext(), transformed_proposal
     )
-    vi, logp = evaluate!!(cond_model, LogDensityContext(), transformed_original)
+    values, logp = evaluate!!(cond_model, LogDensityContext(), transformed_original)
 
     if logp_proposed - logp > log(rand(rng))
-        vi = vi_proposed
+        values = values_proposed
     end
-    return vi
+    return values
 end
 
 function AbstractMCMC.bundle_samples(

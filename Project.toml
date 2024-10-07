@@ -39,7 +39,7 @@ JuliaBUGSAdvancedMHExt = ["AdvancedMH", "MCMCChains"]
 JuliaBUGSDynamicPPLExt = ["DynamicPPL"]
 JuliaBUGSGraphMakieExt = ["GraphMakie", "GLMakie"]
 JuliaBUGSGraphPlotExt = ["GraphPlot"]
-JuliaBUGSMCMCChainsExt = ["MCMCChains"]
+JuliaBUGSMCMCChainsExt = ["DynamicPPL", "MCMCChains"]
 
 [compat]
 ADTypes = "1.6"
