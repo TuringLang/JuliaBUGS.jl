@@ -156,22 +156,22 @@ function compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple=N
     model_def = concretize_colon_indexing(model_def, eval_env)
     g = create_graph(model_def, eval_env)
     nonmissing_eval_env = NamedTuple{keys(eval_env)}(
-            map(
-                v -> begin
-                    if v === missing
-                        return 0.0
-                    elseif v isa AbstractArray
-                        if eltype(v) === Missing
-                            return zeros(size(v)...)
-                        elseif Missing <: eltype(v)
-                            return coalesce.(v, zero(nonmissingtype(eltype(v))))
-                        end
+        map(
+            v -> begin
+                if v === missing
+                    return 0.0
+                elseif v isa AbstractArray
+                    if eltype(v) === Missing
+                        return zeros(size(v)...)
+                    elseif Missing <: eltype(v)
+                        return coalesce.(v, zero(nonmissingtype(eltype(v))))
                     end
-                    return v
-                end,
-                values(eval_env),
-            ),
-        )
+                end
+                return v
+            end,
+            values(eval_env),
+        ),
+    )
     return BUGSModel(g, nonmissing_eval_env, initial_params)
 end
 
