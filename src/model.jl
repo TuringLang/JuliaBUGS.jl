@@ -166,7 +166,7 @@ function BUGSModel(
         parameters,
         sorted_nodes,
         model.g,
-        model.base_model,
+        isnothing(model.base_model) ? model : model.base_model,
     )
 end
 
@@ -213,21 +213,8 @@ end
 Initialize the model with a vector of initial values, the values can be in transformed space if `model.transformed` is set to true.
 """
 function initialize!(model::BUGSModel, initial_params::AbstractVector)
-    evaluation_env, logp = AbstractPPL.evaluate!!(
-        model, LogDensityContext(), initial_params
-    )
-    return BUGSModel(
-        model.transformed,
-        model.untransformed_param_length,
-        model.transformed_param_length,
-        model.untransformed_var_lengths,
-        model.transformed_var_lengths,
-        evaluation_env,
-        model.parameters,
-        model.sorted_nodes,
-        model.g,
-        isnothing(model.base_model) ? model : model.base_model,
-    )
+    evaluation_env, _ = AbstractPPL.evaluate!!(model, LogDensityContext(), initial_params)
+    return BangBang.setproperty!!(model, :evaluation_env, evaluation_env)
 end
 
 """
@@ -306,7 +293,6 @@ function AbstractPPL.condition(
     sorted_nodes=Nothing,
 )
     check_var_group(var_group, model)
-    base_model = model.base_model isa Nothing ? model : model.base_model
     new_parameters = setdiff(model.parameters, var_group)
 
     sorted_blanket_with_vars = if sorted_nodes isa Nothing
@@ -318,24 +304,29 @@ function AbstractPPL.condition(
         )
     end
 
-    return BUGSModel(
-        model, new_parameters, sorted_blanket_with_vars, model.g, evaluation_env
-    )
+    return BUGSModel(model, new_parameters, sorted_blanket_with_vars, evaluation_env)
 end
 
 function AbstractPPL.decondition(model::BUGSModel, var_group::Vector{<:VarName})
     check_var_group(var_group, model)
     base_model = model.base_model isa Nothing ? model : model.base_model
 
-    new_parameters = union(model.parameters, var_group)
-    new_parameters = [v for v in model.sorted_nodes if v in new_parameters] # keep the order
+    new_parameters = [
+        v for v in base_model.sorted_nodes if v in union(model.parameters, var_group)
+    ] # keep the order
 
+    markov_blanket_with_vars = union(
+        markov_blanket(base_model.g, new_parameters), new_parameters
+    )
     sorted_blanket_with_vars = filter(
-        vn -> vn in union(markov_blanket(model.g, new_parameters)), base_model.sorted_nodes
+        vn -> vn in markov_blanket_with_vars, base_model.sorted_nodes
     )
-    return BUGSModel(
-        model, new_parameters, sorted_blanket_with_vars, model.g, model.evaluation_env
+
+    new_model = BUGSModel(
+        model, new_parameters, sorted_blanket_with_vars, base_model.evaluation_env
     )
+    evaluate_env, _ = evaluate!!(new_model, DefaultContext())
+    return BangBang.setproperty!!(new_model, :evaluation_env, evaluate_env)
 end
 
 function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
@@ -458,6 +449,7 @@ function AbstractPPL.evaluate!!(
             value = node_function(; args...)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         else
+            @show args
             dist = node_function(; args...)
             if vn in model.parameters
                 l = var_lengths[vn]
@@ -467,6 +459,7 @@ function AbstractPPL.evaluate!!(
                     reconstructed_value = reconstruct(
                         b_inv, dist, flattened_values[current_idx:(current_idx + l - 1)]
                     )
+                    @show reconstructed_value
                     value, logjac = Bijectors.with_logabsdet_jacobian(
                         b_inv, reconstructed_value
                     )

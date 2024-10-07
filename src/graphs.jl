@@ -87,7 +87,7 @@ function markov_blanket(g::BUGSGraph, v::VarName; children_only=false)
     end
 end
 
-function markov_blanket(g::BUGSGraph, v; children_only=false)
+function markov_blanket(g::BUGSGraph, v::Vector{<:VarName}; children_only=false)
     blanket = VarName[]
     for vn in v
         blanket = vcat(blanket, markov_blanket(g, vn; children_only=children_only))

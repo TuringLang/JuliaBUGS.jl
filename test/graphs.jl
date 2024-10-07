@@ -39,7 +39,7 @@ l = @varname l
 @test Set(Symbol.(stochastic_outneighbors(g, a))) == Set([:d, :e, :h, :g])
 
 @test Set(Symbol.(markov_blanket(g, a))) == Set([:f, :b, :d, :e, :c, :h, :g, :i])
-@test Set(Symbol.(markov_blanket(g, (a, l)))) == Set([:f, :b, :d, :e, :c, :h, :g, :i])
+@test Set(Symbol.(markov_blanket(g, [a, l]))) == Set([:f, :b, :d, :e, :c, :h, :g, :i])
 
 c = @varname c
 @test Set(Symbol.(markov_blanket(model.g, c))) == Set([:l, :a, :b, :f])
@@ -51,7 +51,7 @@ cond_model = AbstractPPL.condition(model, setdiff(model.parameters, [c]))
 
 decond_model = AbstractPPL.decondition(cond_model, [a, l])
 @test Set(Symbol.(decond_model.parameters)) == Set([:a, :c, :l])
-@test Set(Symbol.(decond_model.sorted_nodes)) == Set([:i, :b, :f, :g, :h, :e, :d])
+@test Set(Symbol.(decond_model.sorted_nodes)) == Set([:l, :b, :f, :a, :d, :e, :c, :h, :g, :i])
 
 c_value = 4.0
 mb_logp = begin
