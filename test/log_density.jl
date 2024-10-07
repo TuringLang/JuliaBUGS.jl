@@ -1,7 +1,3 @@
-using JuliaBUGS:
-    BUGSGraph, DefaultContext, evaluate!!, get_params_varinfo, LogDensityContext
-using DynamicPPL: DynamicPPL, getlogp, settrans!!, SimpleVarInfo, @model
-
 # TODO: make this available in JuliaBUGS
 function _logjoint(model::JuliaBUGS.BUGSModel)
     return JuliaBUGS.evaluate!!(model, JuliaBUGS.DefaultContext())[2]
