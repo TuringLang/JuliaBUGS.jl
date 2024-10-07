@@ -54,7 +54,7 @@ function JuliaBUGS.gibbs_internal(
         n_adapts=0,
         initial_params=JuliaBUGS.getparams(cond_model),
     )
-    return JuliaBUGS.setparams!!(cond_model, t.z.θ; transformed=true)
+    return JuliaBUGS.initialize!(cond_model, t.z.θ)
 end
 
 end
