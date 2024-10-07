@@ -26,10 +26,12 @@ end
             @test _logjoint(untransformed_model) ≈ reference_logp_untransformed rtol = 1E-6
             @test _logjoint(transformed_model) ≈ reference_logp_transformed rtol = 1E-6
 
-            @test LogDensityProblems.logdensity(transformed_model, JuliaBUGS.getparams(transformed_model)) ≈
-                reference_logp_transformed rtol = 1E-6
-            @test LogDensityProblems.logdensity(untransformed_model, JuliaBUGS.getparams(untransformed_model)) ≈
-                reference_logp_untransformed rtol = 1E-6
+            @test LogDensityProblems.logdensity(
+                transformed_model, JuliaBUGS.getparams(transformed_model)
+            ) ≈ reference_logp_transformed rtol = 1E-6
+            @test LogDensityProblems.logdensity(
+                untransformed_model, JuliaBUGS.getparams(untransformed_model)
+            ) ≈ reference_logp_untransformed rtol = 1E-6
         end
 
         @testset "dgamma (Gamma)" begin
@@ -52,10 +54,12 @@ end
             @test _logjoint(untransformed_model) ≈ reference_logp_untransformed rtol = 1E-6
             @test _logjoint(transformed_model) ≈ reference_logp_transformed rtol = 1E-6
 
-            @test LogDensityProblems.logdensity(transformed_model, JuliaBUGS.getparams(transformed_model)) ≈
-                reference_logp_transformed rtol = 1E-6
-            @test LogDensityProblems.logdensity(untransformed_model, JuliaBUGS.getparams(untransformed_model)) ≈
-                reference_logp_untransformed rtol = 1E-6
+            @test LogDensityProblems.logdensity(
+                transformed_model, JuliaBUGS.getparams(transformed_model)
+            ) ≈ reference_logp_transformed rtol = 1E-6
+            @test LogDensityProblems.logdensity(
+                untransformed_model, JuliaBUGS.getparams(untransformed_model)
+            ) ≈ reference_logp_untransformed rtol = 1E-6
         end
 
         @testset "ddirich (Dirichlet)" begin
@@ -80,10 +84,12 @@ end
             @test _logjoint(untransformed_model) ≈ reference_logp_untransformed rtol = 1E-6
             @test _logjoint(transformed_model) ≈ reference_logp_transformed rtol = 1E-6
 
-            @test LogDensityProblems.logdensity(transformed_model, JuliaBUGS.getparams(transformed_model)) ≈
-                reference_logp_transformed rtol = 1E-6
-            @test LogDensityProblems.logdensity(untransformed_model, JuliaBUGS.getparams(untransformed_model)) ≈
-                reference_logp_untransformed rtol = 1E-6
+            @test LogDensityProblems.logdensity(
+                transformed_model, JuliaBUGS.getparams(transformed_model)
+            ) ≈ reference_logp_transformed rtol = 1E-6
+            @test LogDensityProblems.logdensity(
+                untransformed_model, JuliaBUGS.getparams(untransformed_model)
+            ) ≈ reference_logp_untransformed rtol = 1E-6
         end
 
         @testset "dwish (Wishart)" begin
@@ -115,10 +121,12 @@ end
             @test _logjoint(untransformed_model) ≈ reference_logp_untransformed rtol = 1E-6
             @test _logjoint(transformed_model) ≈ reference_logp_transformed rtol = 1E-6
 
-            @test LogDensityProblems.logdensity(transformed_model, JuliaBUGS.getparams(transformed_model)) ≈
-                reference_logp_transformed rtol = 1E-6
-            @test LogDensityProblems.logdensity(untransformed_model, JuliaBUGS.getparams(untransformed_model)) ≈
-                reference_logp_untransformed rtol = 1E-6
+            @test LogDensityProblems.logdensity(
+                transformed_model, JuliaBUGS.getparams(transformed_model)
+            ) ≈ reference_logp_transformed rtol = 1E-6
+            @test LogDensityProblems.logdensity(
+                untransformed_model, JuliaBUGS.getparams(untransformed_model)
+            ) ≈ reference_logp_untransformed rtol = 1E-6
         end
 
         @testset "lkj (LKJ)" begin
@@ -144,10 +152,12 @@ end
             @test _logjoint(untransformed_model) ≈ reference_logp_untransformed rtol = 1E-6
             @test _logjoint(transformed_model) ≈ reference_logp_transformed rtol = 1E-6
 
-            @test LogDensityProblems.logdensity(transformed_model, JuliaBUGS.getparams(transformed_model)) ≈
-                reference_logp_transformed rtol = 1E-6
-            @test LogDensityProblems.logdensity(untransformed_model, JuliaBUGS.getparams(untransformed_model)) ≈
-                reference_logp_untransformed rtol = 1E-6
+            @test LogDensityProblems.logdensity(
+                transformed_model, JuliaBUGS.getparams(transformed_model)
+            ) ≈ reference_logp_transformed rtol = 1E-6
+            @test LogDensityProblems.logdensity(
+                untransformed_model, JuliaBUGS.getparams(untransformed_model)
+            ) ≈ reference_logp_untransformed rtol = 1E-6
         end
     end
 end
@@ -160,10 +170,12 @@ end
         @test _logjoint(untransformed_model) ≈ -174029.38703951868 rtol = 1E-6
         @test _logjoint(transformed_model) ≈ -174029.38703951868 rtol = 1E-6
 
-        @test LogDensityProblems.logdensity(transformed_model, JuliaBUGS.getparams(transformed_model)) ≈
-            -174029.38703951868 rtol = 1E-6
-        @test LogDensityProblems.logdensity(untransformed_model, JuliaBUGS.getparams(untransformed_model)) ≈
-            -174029.38703951868 rtol = 1E-6
+        @test LogDensityProblems.logdensity(
+            transformed_model, JuliaBUGS.getparams(transformed_model)
+        ) ≈ -174029.38703951868 rtol = 1E-6
+        @test LogDensityProblems.logdensity(
+            untransformed_model, JuliaBUGS.getparams(untransformed_model)
+        ) ≈ -174029.38703951868 rtol = 1E-6
     end
 
     @testset "blockers" begin
@@ -173,10 +185,12 @@ end
         @test _logjoint(untransformed_model) ≈ -8418.416388326123 rtol = 1E-6
         @test _logjoint(transformed_model) ≈ -8418.416388326123 rtol = 1E-6
 
-        @test LogDensityProblems.logdensity(transformed_model, JuliaBUGS.getparams(transformed_model)) ≈
-            -8418.416388326123 rtol = 1E-6
-        @test LogDensityProblems.logdensity(untransformed_model, JuliaBUGS.getparams(untransformed_model)) ≈
-            -8418.416388326123 rtol = 1E-6
+        @test LogDensityProblems.logdensity(
+            transformed_model, JuliaBUGS.getparams(transformed_model)
+        ) ≈ -8418.416388326123 rtol = 1E-6
+        @test LogDensityProblems.logdensity(
+            untransformed_model, JuliaBUGS.getparams(untransformed_model)
+        ) ≈ -8418.416388326123 rtol = 1E-6
     end
 
     @testset "bones" begin
@@ -186,10 +200,12 @@ end
         @test _logjoint(untransformed_model) ≈ -161.6492002285034 rtol = 1E-6
         @test _logjoint(transformed_model) ≈ -161.6492002285034 rtol = 1E-6
 
-        @test LogDensityProblems.logdensity(transformed_model, JuliaBUGS.getparams(transformed_model)) ≈
-            -161.6492002285034 rtol = 1E-6
-        @test LogDensityProblems.logdensity(untransformed_model, JuliaBUGS.getparams(untransformed_model)) ≈
-            -161.6492002285034 rtol = 1E-6
+        @test LogDensityProblems.logdensity(
+            transformed_model, JuliaBUGS.getparams(transformed_model)
+        ) ≈ -161.6492002285034 rtol = 1E-6
+        @test LogDensityProblems.logdensity(
+            untransformed_model, JuliaBUGS.getparams(untransformed_model)
+        ) ≈ -161.6492002285034 rtol = 1E-6
     end
 
     @testset "dogs" begin
@@ -199,10 +215,12 @@ end
         @test _logjoint(untransformed_model) ≈ -1243.188922285352 rtol = 1E-6
         @test _logjoint(transformed_model) ≈ -1243.3996613167667 rtol = 1E-6
 
-        @test LogDensityProblems.logdensity(transformed_model, JuliaBUGS.getparams(transformed_model)) ≈
-            -1243.3996613167667 rtol = 1E-6
-        @test LogDensityProblems.logdensity(untransformed_model, JuliaBUGS.getparams(untransformed_model)) ≈
-            -1243.188922285352 rtol = 1E-6
+        @test LogDensityProblems.logdensity(
+            transformed_model, JuliaBUGS.getparams(transformed_model)
+        ) ≈ -1243.3996613167667 rtol = 1E-6
+        @test LogDensityProblems.logdensity(
+            untransformed_model, JuliaBUGS.getparams(untransformed_model)
+        ) ≈ -1243.188922285352 rtol = 1E-6
     end
 end
 

@@ -465,9 +465,7 @@ function AbstractPPL.evaluate!!(
                     b = Bijectors.bijector(dist)
                     b_inv = Bijectors.inverse(b)
                     reconstructed_value = reconstruct(
-                        b_inv,
-                        dist,
-                        flattened_values[current_idx:(current_idx + l - 1)],
+                        b_inv, dist, flattened_values[current_idx:(current_idx + l - 1)]
                     )
                     value, logjac = Bijectors.with_logabsdet_jacobian(
                         b_inv, reconstructed_value

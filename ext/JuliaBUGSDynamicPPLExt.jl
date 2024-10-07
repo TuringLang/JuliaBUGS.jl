@@ -10,8 +10,8 @@ Returns a `DynamicPPL.SimpleVarInfo` object containing only the parameter values
 If `evaluation_env` is provided, it will be used; otherwise, `model.evaluation_env` will be used.
 """
 function get_params_varinfo(
-    model::JuliaBUGS.BUGSModel, evaluation_env::NT = model.evaluation_env
-) where {NT <: NamedTuple}
+    model::JuliaBUGS.BUGSModel, evaluation_env::NT=model.evaluation_env
+) where {NT<:NamedTuple}
     d = OrderedDict{VarName,Any}()
     for v in model.parameters
         if !model.transformed
