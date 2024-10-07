@@ -1,5 +1,4 @@
 using JuliaBUGS: MHFromPrior, Gibbs
-using DynamicPPL: DynamicPPL
 
 @testset "Simple gibbs" begin
     model_def = @bugs begin
@@ -29,17 +28,6 @@ using DynamicPPL: DynamicPPL
     )
 
     model = compile(model_def, data, (;))
-    # use NamedTuple for SimpleVarinfo
-    model = JuliaBUGS.BangBang.setproperty!!(
-        model,
-        :varinfo,
-        begin
-            vi = model.varinfo
-            DynamicPPL.SimpleVarInfo(
-                DynamicPPL.values_as(vi, NamedTuple), vi.logp, vi.transformation
-            )
-        end,
-    )
 
     # single step
     p_s, st_init = AbstractMCMC.step(

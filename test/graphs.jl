@@ -14,7 +14,6 @@ test_model = @bugs begin
     l ~ dnorm(0, 1)
 end
 
-# construct a SimpleVarInfo
 inits = (
     a=1.0,
     b=2.0,
