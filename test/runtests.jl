@@ -53,7 +53,7 @@ if test_group == "compilation" || test_group == "all"
         include("bugs_primitives.jl")
         include("compile.jl")
     end
-    include("test_logp.jl")
+    include("log_density.jl")
 end
 
 if test_group == "gibbs" || test_group == "all"
