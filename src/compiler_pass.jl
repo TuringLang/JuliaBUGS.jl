@@ -210,7 +210,6 @@ function evaluate(expr::Expr, env::NamedTuple{variable_names}) where {variable_n
             if all_resolved
                 _indices = map(i -> i === Colon() ? 0 : last(i), indices) # if index is `:`, then we skip the check
                 if any(_indices .> size(env[var]))
-                    @show indices size(env[var])
                     error(
                         "Variable $var[$(join(indices, ", "))] is used in the model, but it or its elements are not defined in the model or data.",
                     )

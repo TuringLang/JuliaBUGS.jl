@@ -2,13 +2,15 @@ module JuliaBUGS
 
 using AbstractMCMC
 using AbstractPPL
+using Accessors
 using BangBang
 using Bijectors: Bijectors
 using Distributions
-using DynamicPPL: DynamicPPL
 using Graphs, MetaGraphsNext
+using LinearAlgebra
 using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
+using OrderedCollections: OrderedDict
 using Random
 using StaticArrays
 
@@ -154,27 +156,24 @@ function compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple=N
     eval_env = semantic_analysis(model_def, data)
     model_def = concretize_colon_indexing(model_def, eval_env)
     g = create_graph(model_def, eval_env)
-    vi = DynamicPPL.SimpleVarInfo(
-        NamedTuple{keys(eval_env)}(
-            map(
-                v -> begin
-                    if v === missing
-                        return 0.0
-                    elseif v isa AbstractArray
-                        if eltype(v) === Missing
-                            return zeros(size(v)...)
-                        elseif Missing <: eltype(v)
-                            return coalesce.(v, zero(nonmissingtype(eltype(v))))
-                        end
+    nonmissing_eval_env = NamedTuple{keys(eval_env)}(
+        map(
+            v -> begin
+                if v === missing
+                    return 0.0
+                elseif v isa AbstractArray
+                    if eltype(v) === Missing
+                        return zeros(size(v)...)
+                    elseif Missing <: eltype(v)
+                        return coalesce.(v, zero(nonmissingtype(eltype(v))))
                     end
-                    return v
-                end,
-                values(eval_env),
-            ),
+                end
+                return v
+            end,
+            values(eval_env),
         ),
-        0.0,
     )
-    return BUGSModel(g, vi, initial_params)
+    return BUGSModel(g, nonmissing_eval_env, initial_params)
 end
 
 """
