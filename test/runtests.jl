@@ -22,7 +22,7 @@ using ReverseDiff
 
 AbstractMCMC.setprogress!(false)
 
-const Tests = ("elementary", "compilation", "gibbs", "mcmchains", "all")
+const Tests = ("elementary", "compilation", "log_density", "gibbs", "mcmchains", "all")
 
 const test_group = get(ENV, "TEST_GROUP", "all")
 if test_group ∉ Tests
@@ -52,7 +52,10 @@ if test_group == "compilation" || test_group == "all"
         include("bugs_primitives.jl")
         include("compile.jl")
     end
-    include("logp_tests/test_logp.jl")
+end
+
+if test_group == "log_density" || test_group == "all"
+    include("log_density.jl")
 end
 
 if test_group == "gibbs" || test_group == "all"

@@ -9,7 +9,8 @@ abstract type AbstractBUGSModel end
 The `BUGSModel` object is used for inference and represents the output of compilation. It implements the
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
 """
-struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing}} <: AbstractBUGSModel
+struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple} <:
+       AbstractBUGSModel
     " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
 
@@ -22,13 +23,8 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing}} <: AbstractBU
     "A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space."
     transformed_var_lengths::Dict{<:VarName,Int}
 
-    """
-    A `DynamicPPL.SimpleVarInfo` object containing the values of the variables in the model.
-    Note that the usage of `SimpleVarInfo` in JuliaBUGS is different from that of DynamicPPL:
-    In JuliaBUGS, `varinfo` contains all the values (DynamicPPL only contains values of model parameters), 
-    and all the values in `varinfo` are always in the constrained space.
-    """
-    varinfo::DynamicPPL.SimpleVarInfo
+    "A `NamedTuple` containing the values of the variables in the model, all the values are in the constrained space."
+    evaluation_env::T
     "A vector containing the names of the model parameters (unobserved stochastic variables)."
     parameters::Vector{<:VarName}
     "A vector containing the names of all the variables in the model, sorted in topological order."
@@ -58,7 +54,7 @@ function Base.show(io::IO, m::BUGSModel)
     println(io, "  Model parameters:")
     println(io, "    ", join(m.parameters, ", "), "\n")
     println(io, "  Variable values:")
-    return println(io, "$(m.varinfo.values)")
+    return println(io, "$(m.evaluation_env)")
 end
 
 """
@@ -76,14 +72,14 @@ Return a vector of `VarName` containing the names of all the variables in the mo
 variables(m::BUGSModel) = collect(labels(m.g))
 
 function prepare_arg_values(
-    args::Tuple{Vararg{Symbol}}, vi::DynamicPPL.SimpleVarInfo, loop_vars::NamedTuple{lvars}
+    args::Tuple{Vararg{Symbol}}, evaluation_env::NamedTuple, loop_vars::NamedTuple{lvars}
 ) where {lvars}
     return NamedTuple{args}(Tuple(
         map(args) do arg
             if arg in lvars
                 loop_vars[arg]
             else
-                vi[@varname($arg)]
+                AbstractPPL.get(evaluation_env, @varname($arg))
             end
         end,
     ))
@@ -91,7 +87,7 @@ end
 
 function BUGSModel(
     g::BUGSGraph,
-    vi::DynamicPPL.SimpleVarInfo,
+    evaluation_env::NamedTuple,
     initial_params::NamedTuple=NamedTuple();
     is_transformed::Bool=true,
 )
@@ -103,10 +99,10 @@ function BUGSModel(
 
     for vn in sorted_nodes
         (; is_stochastic, is_observed, node_function, node_args, loop_vars) = g[vn]
-        args = prepare_arg_values(node_args, vi, loop_vars)
+        args = prepare_arg_values(node_args, evaluation_env, loop_vars)
         if !is_stochastic
             value = Base.invokelatest(node_function; args...)
-            vi = DynamicPPL.BangBang.setindex!!(vi, value, vn)
+            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         elseif !is_observed
             push!(parameters, vn)
             dist = Base.invokelatest(node_function; args...)
@@ -127,7 +123,7 @@ function BUGSModel(
                 missing
             end
             if !ismissing(initialization)
-                vi = DynamicPPL.BangBang.setindex!!(vi, initialization, vn)
+                evaluation_env = BangBang.setindex!!(evaluation_env, initialization, vn)
             else
                 init_value = try
                     rand(dist)
@@ -140,7 +136,7 @@ function BUGSModel(
                         """,
                     )
                 end
-                vi = DynamicPPL.BangBang.setindex!!(vi, init_value, vn)
+                evaluation_env = BangBang.setindex!!(evaluation_env, init_value, vn)
             end
         end
     end
@@ -150,11 +146,31 @@ function BUGSModel(
         transformed_param_length,
         untransformed_var_lengths,
         transformed_var_lengths,
-        vi,
+        evaluation_env,
         parameters,
         sorted_nodes,
         g,
         nothing,
+    )
+end
+
+function BUGSModel(
+    model::BUGSModel,
+    parameters::Vector{<:VarName},
+    sorted_nodes::Vector{<:VarName},
+    evaluation_env::NamedTuple=model.evaluation_env,
+)
+    return BUGSModel(
+        model.transformed,
+        sum(model.untransformed_var_lengths[v] for v in parameters),
+        sum(model.transformed_var_lengths[v] for v in parameters),
+        model.untransformed_var_lengths,
+        model.transformed_var_lengths,
+        evaluation_env,
+        parameters,
+        sorted_nodes,
+        model.g,
+        isnothing(model.base_model) ? model : model.base_model,
     )
 end
 
@@ -167,10 +183,12 @@ function initialize!(model::BUGSModel, initial_params::NamedTuple)
     check_input(initial_params)
     for vn in model.sorted_nodes
         (; is_stochastic, is_observed, node_function, node_args, loop_vars) = model.g[vn]
-        args = prepare_arg_values(node_args, model.varinfo, loop_vars)
+        args = prepare_arg_values(node_args, model.evaluation_env, loop_vars)
         if !is_stochastic
             value = Base.invokelatest(node_function; args...)
-            BangBang.@set!! model.varinfo = setindex!!(model.varinfo, value, vn)
+            BangBang.@set!! model.evaluation_env = setindex!!(
+                model.evaluation_env, value, vn
+            )
         elseif !is_observed
             initialization = try
                 AbstractPPL.get(initial_params, vn)
@@ -178,12 +196,14 @@ function initialize!(model::BUGSModel, initial_params::NamedTuple)
                 missing
             end
             if !ismissing(initialization)
-                BangBang.@set!! model.varinfo = setindex!!(
-                    model.varinfo, initialization, vn
+                BangBang.@set!! model.evaluation_env = setindex!!(
+                    model.evaluation_env, initialization, vn
                 )
             else
-                BangBang.@set!! model.varinfo = setindex!!(
-                    model.varinfo, rand(Base.invokelatest(node_function; args...)), vn
+                BangBang.@set!! model.evaluation_env = setindex!!(
+                    model.evaluation_env,
+                    rand(Base.invokelatest(node_function; args...)),
+                    vn,
                 )
             end
         end
@@ -198,71 +218,28 @@ Initialize the model with a vector of initial values, the values can be in trans
 space if `model.transformed` is set to true.
 """
 function initialize!(model::BUGSModel, initial_params::AbstractVector)
-    vi, logp = AbstractPPL.evaluate!!(model, LogDensityContext(), initial_params)
-    return BUGSModel(
-        model.transformed,
-        model.untransformed_param_length,
-        model.transformed_param_length,
-        model.untransformed_var_lengths,
-        model.transformed_var_lengths,
-        DynamicPPL.setlogp!!(vi, logp),
-        model.parameters,
-        model.sorted_nodes,
-        model.g,
-        model.base_model,
-    )
+    evaluation_env, _ = AbstractPPL.evaluate!!(model, LogDensityContext(), initial_params)
+    return BangBang.setproperty!!(model, :evaluation_env, evaluation_env)
 end
 
 """
-    get_params_varinfo(model::BUGSModel[, vi::DynamicPPL.SimpleVarInfo])
+    getparams(model::BUGSModel)
 
-Returns a `DynamicPPL.SimpleVarInfo` object containing only the parameter values of the model.
-If `vi` is provided, it will be used; otherwise, `model.varinfo` will be used.
+Extract the parameter values from the model as a flattened vector, in an order consistent with
+the what `LogDensityProblems.logdensity` expects.
 """
-function get_params_varinfo(model::BUGSModel)
-    return get_params_varinfo(model, model.varinfo)
-end
-function get_params_varinfo(model::BUGSModel, vi::DynamicPPL.SimpleVarInfo)
-    if !model.transformed
-        d = Dict{VarName,Any}()
-        for param in model.parameters
-            d[param] = vi[param]
-        end
-        return DynamicPPL.SimpleVarInfo(d, vi.logp, DynamicPPL.NoTransformation())
+function getparams(model::BUGSModel)
+    param_length = if model.transformed
+        model.transformed_param_length
     else
-        d = Dict{VarName,Any}()
-        g = model.g
-        for v in model.sorted_nodes
-            (; is_stochastic, node_function, node_args, loop_vars) = g[v]
-            if v in model.parameters
-                args = prepare_arg_values(node_args, vi, loop_vars)
-                dist = node_function(; args...)
-                linked_val = DynamicPPL.link(dist, vi[v])
-                d[v] = linked_val
-            end
-        end
-        return DynamicPPL.SimpleVarInfo(d, vi.logp, DynamicPPL.DynamicTransformation())
+        model.untransformed_param_length
     end
-end
 
-"""
-    getparams(model::BUGSModel[, vi::DynamicPPL.SimpleVarInfo]; transformed::Bool=false)
-
-Extract the parameter values from the model as a flattened vector, ordered topologically.
-If `transformed` is set to true, the parameters are provided in the transformed space.
-"""
-function getparams(model::BUGSModel; transformed::Bool=false)
-    return getparams(model, model.varinfo; transformed=transformed)
-end
-function getparams(model::BUGSModel, vi::DynamicPPL.SimpleVarInfo; transformed::Bool=false)
-    param_vals = Vector{Float64}(
-        undef,
-        transformed ? model.transformed_param_length : model.untransformed_param_length,
-    )
+    param_vals = Vector{Float64}(undef, param_length)
     pos = 1
     for v in model.parameters
-        if !transformed
-            val = vi[v]
+        if !model.transformed
+            val = AbstractPPL.get(model.evaluation_env, v)
             len = model.untransformed_var_lengths[v]
             if val isa AbstractArray
                 param_vals[pos:(pos + len - 1)] .= vec(val)
@@ -271,14 +248,16 @@ function getparams(model::BUGSModel, vi::DynamicPPL.SimpleVarInfo; transformed::
             end
         else
             (; node_function, node_args, loop_vars) = model.g[v]
-            args = prepare_arg_values(node_args, vi, loop_vars)
+            args = prepare_arg_values(node_args, model.evaluation_env, loop_vars)
             dist = node_function(; args...)
-            linked_val = Bijectors.link(dist, vi[v])
+            transformed_value = Bijectors.transform(
+                Bijectors.bijector(dist), AbstractPPL.get(model.evaluation_env, v)
+            )
             len = model.transformed_var_lengths[v]
-            if linked_val isa AbstractArray
-                param_vals[pos:(pos + len - 1)] .= vec(linked_val)
+            if transformed_value isa AbstractArray
+                param_vals[pos:(pos + len - 1)] .= vec(transformed_value)
             else
-                param_vals[pos] = linked_val
+                param_vals[pos] = transformed_value
             end
         end
         pos += len
@@ -287,54 +266,13 @@ function getparams(model::BUGSModel, vi::DynamicPPL.SimpleVarInfo; transformed::
 end
 
 """
-    setparams!!(model::BUGSModel, flattened_values::AbstractVector; transformed::Bool=false)
+    settrans(model::BUGSModel, bool::Bool=!(model.transformed))
 
-Update the parameter values of a `BUGSModel` with new values provided in a flattened vector.
+The `BUGSModel` contains information for evaluation in both transformed and untransformed spaces. The `transformed` field
+indicates the current "mode" of the model.
 
-Only the parameter values are updated, the values of logical variables are kept unchanged.
-
-This function adopts the `BangBang` convention, i.e. it modifies the model in place when possible.
-
-# Arguments
-- `m::BUGSModel`: The model to update.
-- `flattened_values::AbstractVector`: A vector containing the new parameter values in a flattened form.
-- `transformed::Bool=false`: Indicates whether the values in `flattened_values` are in the transformed space.
-
-# Returns
-`DynamicPPL.SimpleVarInfo`: The updated `varinfo` with the new parameter values set.
+This function enables switching the "mode" of the model.
 """
-function setparams!!(
-    model::BUGSModel, flattened_values::AbstractVector; transformed::Bool=false
-)
-    pos = 1
-    vi = model.varinfo
-    for v in model.parameters
-        (; node_function, node_args, loop_vars) = model.g[v]
-        args = prepare_arg_values(node_args, vi, loop_vars)
-        dist = node_function(; args...)
-
-        len = if transformed
-            model.transformed_var_lengths[v]
-        else
-            model.untransformed_var_lengths[v]
-        end
-        if transformed
-            linked_vals = flattened_values[pos:(pos + len - 1)]
-            sample_val = DynamicPPL.invlink_and_reconstruct(dist, linked_vals)
-        else
-            sample_val = flattened_values[pos:(pos + len - 1)]
-        end
-        vi = DynamicPPL.setindex!!(vi, sample_val, v)
-        pos += len
-    end
-    return vi
-end
-
-function (model::BUGSModel)()
-    vi, _ = evaluate!!(model, SamplingContext())
-    return get_params_varinfo(model, vi)
-end
-
 function settrans(model::BUGSModel, bool::Bool=!(model.transformed))
     return BangBang.setproperty!!(model, :transformed, bool)
 end
@@ -344,19 +282,22 @@ function AbstractPPL.condition(
     d::Dict{<:VarName,<:Any},
     sorted_nodes=Nothing, # support cached sorted Markov blanket nodes
 )
+    new_evaluation_env = deepcopy(model.evaluation_env)
+    for (p, value) in d
+        new_evaluation_env = setindex!!(new_evaluation_env, value, p)
+    end
     return AbstractPPL.condition(
-        model, collect(keys(d)), update_varinfo(model.varinfo, d); sorted_nodes=sorted_nodes
+        model, collect(keys(d)), new_evaluation_env; sorted_nodes=sorted_nodes
     )
 end
 
 function AbstractPPL.condition(
     model::BUGSModel,
     var_group::Vector{<:VarName},
-    varinfo::DynamicPPL.SimpleVarInfo=model.varinfo,
+    evaluation_env::NamedTuple=model.evaluation_env,
     sorted_nodes=Nothing,
 )
     check_var_group(var_group, model)
-    base_model = model.base_model isa Nothing ? model : model.base_model
     new_parameters = setdiff(model.parameters, var_group)
 
     # TODO: maybe use instead of Markov blanket, children might be enough and more efficient  
@@ -372,42 +313,29 @@ function AbstractPPL.condition(
         )
     end
 
-    return BUGSModel(
-        model.transformed,
-        sum(model.untransformed_var_lengths[v] for v in new_parameters),
-        sum(model.transformed_var_lengths[v] for v in new_parameters),
-        model.untransformed_var_lengths,
-        model.transformed_var_lengths,
-        varinfo,
-        new_parameters,
-        sorted_blanket_with_vars,
-        model.g,
-        base_model,
-    )
+    return BUGSModel(model, new_parameters, sorted_blanket_with_vars, evaluation_env)
 end
 
 function AbstractPPL.decondition(model::BUGSModel, var_group::Vector{<:VarName})
     check_var_group(var_group, model)
     base_model = model.base_model isa Nothing ? model : model.base_model
 
-    new_parameters = union(model.parameters, var_group)
-    new_parameters = [v for v in model.sorted_nodes if v in new_parameters] # keep the order
+    new_parameters = [
+        v for v in base_model.sorted_nodes if v in union(model.parameters, var_group)
+    ] # keep the order
 
+    markov_blanket_with_vars = union(
+        markov_blanket(base_model.g, new_parameters), new_parameters
+    )
     sorted_blanket_with_vars = filter(
-        vn -> vn in union(markov_blanket(model.g, new_parameters)), base_model.sorted_nodes
+        vn -> vn in markov_blanket_with_vars, base_model.sorted_nodes
     )
-    return BUGSModel(
-        model.transformed,
-        sum(model.untransformed_var_lengths[v] for v in new_parameters),
-        sum(model.transformed_var_lengths[v] for v in new_parameters),
-        model.untransformed_var_lengths,
-        model.transformed_var_lengths,
-        model.varinfo,
-        new_parameters,
-        sorted_blanket_with_vars,
-        model.g,
-        base_model,
+
+    new_model = BUGSModel(
+        model, new_parameters, sorted_blanket_with_vars, base_model.evaluation_env
     )
+    evaluate_env, _ = evaluate!!(new_model, DefaultContext())
+    return BangBang.setproperty!!(new_model, :evaluation_env, evaluate_env)
 end
 
 function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
@@ -417,14 +345,6 @@ function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
     return isempty(logical_vars) || error(
         "Variables $(logical_vars) are not stochastic variables, conditioning on them is not supported",
     )
-end
-
-function update_varinfo(varinfo::DynamicPPL.SimpleVarInfo, d::Dict{VarName,<:Any})
-    new_varinfo = deepcopy(varinfo)
-    for (p, value) in d
-        setindex!!(new_varinfo, value, p)
-    end
-    return new_varinfo
 end
 
 """
@@ -439,10 +359,9 @@ struct DefaultContext <: AbstractPPL.AbstractContext end
 
 Do an ancestral sampling of the model parameters. Also accumulate log joint density.
 """
-struct SamplingContext <: AbstractPPL.AbstractContext
-    rng::Random.AbstractRNG
+@kwdef struct SamplingContext{T<:Random.AbstractRNG} <: AbstractPPL.AbstractContext
+    rng::T = Random.default_rng()
 end
-SamplingContext() = SamplingContext(Random.default_rng())
 
 """
     LogDensityContext
@@ -455,45 +374,44 @@ function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
     return evaluate!!(model, SamplingContext(rng))
 end
 function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
-    (; varinfo, g, sorted_nodes) = model
-    vi = deepcopy(varinfo)
+    (; evaluation_env, g, sorted_nodes) = model
+    vi = deepcopy(evaluation_env)
     logp = 0.0
     for vn in sorted_nodes
         (; is_stochastic, node_function, node_args, loop_vars) = g[vn]
-        args = prepare_arg_values(node_args, vi, loop_vars)
+        args = prepare_arg_values(node_args, evaluation_env, loop_vars)
         if !is_stochastic
             value = node_function(; args...)
-            vi = setindex!!(vi, value, vn)
+            evaluation_env = setindex!!(evaluation_env, value, vn)
         else
             dist = node_function(; args...)
             value = rand(ctx.rng, dist) # just sample from the prior
             logp += logpdf(dist, value)
-            vi = setindex!!(vi, value, vn)
+            evaluation_env = setindex!!(evaluation_env, value, vn)
         end
     end
-    return vi, logp
+    return evaluation_env, logp
 end
 
 function AbstractPPL.evaluate!!(model::BUGSModel)
     return AbstractPPL.evaluate!!(model, DefaultContext())
 end
 function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
-    (; sorted_nodes, g, varinfo) = model
-    vi = deepcopy(varinfo)
+    (; sorted_nodes, g, evaluation_env) = model
+    vi = deepcopy(evaluation_env)
     logp = 0.0
     for vn in sorted_nodes
         (; is_stochastic, node_function, node_args, loop_vars) = g[vn]
-        args = prepare_arg_values(node_args, vi, loop_vars)
+        args = prepare_arg_values(node_args, evaluation_env, loop_vars)
         if !is_stochastic
             value = node_function(; args...)
-            vi = setindex!!(vi, value, vn)
+            evaluation_env = setindex!!(evaluation_env, value, vn)
         else
             dist = node_function(; args...)
-            value = vi[vn]
+            value = AbstractPPL.get(evaluation_env, vn)
             if model.transformed
-                # although the values stored in `vi` are in their original space, 
-                # when `DynamicTransformation`, we behave as accepting a vector of 
-                # parameters in the transformed space
+                # although the values stored in `evaluation_env` are in their original space, 
+                # here we behave as accepting a vector of parameters in the transformed space
                 value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
                 logp +=
                     Distributions.logpdf(dist, value) + Bijectors.logabsdetjac(
@@ -504,7 +422,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
             end
         end
     end
-    return vi, logp
+    return evaluation_env, logp
 end
 
 function AbstractPPL.evaluate!!(
@@ -530,38 +448,41 @@ function AbstractPPL.evaluate!!(
 
     sorted_nodes = model.sorted_nodes
     g = model.g
-    vi = deepcopy(model.varinfo)
+    evaluation_env = deepcopy(model.evaluation_env)
     current_idx = 1
     logp = 0.0
     for vn in sorted_nodes
         (; is_stochastic, node_function, node_args, loop_vars) = g[vn]
-        args = prepare_arg_values(node_args, vi, loop_vars)
+        args = prepare_arg_values(node_args, evaluation_env, loop_vars)
         if !is_stochastic
             value = node_function(; args...)
-            vi = setindex!!(vi, value, vn)
+            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         else
             dist = node_function(; args...)
             if vn in model.parameters
                 l = var_lengths[vn]
                 if model.transformed
-                    value, logjac = DynamicPPL.with_logabsdet_jacobian_and_reconstruct(
-                        Bijectors.inverse(Bijectors.bijector(dist)),
-                        dist,
-                        flattened_values[current_idx:(current_idx + l - 1)],
+                    b = Bijectors.bijector(dist)
+                    b_inv = Bijectors.inverse(b)
+                    reconstructed_value = reconstruct(
+                        b_inv, dist, flattened_values[current_idx:(current_idx + l - 1)]
+                    )
+                    value, logjac = Bijectors.with_logabsdet_jacobian(
+                        b_inv, reconstructed_value
                     )
                 else
-                    value = DynamicPPL.reconstruct(
+                    value = reconstruct(
                         dist, flattened_values[current_idx:(current_idx + l - 1)]
                     )
                     logjac = 0.0
                 end
                 current_idx += l
                 logp += logpdf(dist, value) + logjac
-                vi = setindex!!(vi, value, vn)
+                evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
             else
-                logp += logpdf(dist, vi[vn])
+                logp += logpdf(dist, AbstractPPL.get(evaluation_env, vn))
             end
         end
     end
-    return vi, logp
+    return evaluation_env, logp
 end

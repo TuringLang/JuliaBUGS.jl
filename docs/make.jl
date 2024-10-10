@@ -2,7 +2,6 @@ using Documenter
 using JuliaBUGS
 using MetaGraphsNext
 using JuliaBUGS.BUGSPrimitives
-using DynamicPPL: SimpleVarInfo
 
 makedocs(;
     sitename="JuliaBUGS.jl",

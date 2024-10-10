@@ -7,7 +7,7 @@ using JuliaBUGS
 using JuliaBUGS:
     AbstractBUGSModel, BUGSModel, Gibbs, find_generated_vars, LogDensityContext, evaluate!!
 using JuliaBUGS.BUGSPrimitives
-using JuliaBUGS.DynamicPPL
+using JuliaBUGS.BangBang
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.Bijectors
@@ -45,16 +45,22 @@ end
 function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::HMC
 )
+    logdensitymodel = AbstractMCMC.LogDensityModel(
+        LogDensityProblemsAD.ADgradient(:ReverseDiff, cond_model)
+    )
     t, s = AbstractMCMC.step(
         rng,
-        AbstractMCMC.LogDensityModel(
-            LogDensityProblemsAD.ADgradient(:ReverseDiff, cond_model)
-        ),
+        logdensitymodel,
         sampler;
         n_adapts=0,
-        initial_params=JuliaBUGS.getparams(cond_model; transformed=true), # for more advanced usage, probably save the state or transition
+        initial_params=JuliaBUGS.getparams(cond_model),
     )
-    return JuliaBUGS.setparams!!(cond_model, t.z.θ; transformed=true)
+    updated_model = initialize!(cond_model, t.z.θ)
+    return JuliaBUGS.getparams(
+        BangBang.setproperty!!(
+            updated_model.base_model, :evaluation_env, updated_model.evaluation_env
+        ),
+    )
 end
 
 end

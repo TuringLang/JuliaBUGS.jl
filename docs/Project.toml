@@ -1,6 +1,5 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-DynamicPPL = "366bfd00-2699-11ea-058f-f148b4cae6d8"
 MetaGraphsNext = "fa8bd995-216d-47f1-8a91-f3b68fbeb377"
 
 [compat]
