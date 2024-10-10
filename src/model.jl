@@ -449,7 +449,6 @@ function AbstractPPL.evaluate!!(
             value = node_function(; args...)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         else
-            @show args
             dist = node_function(; args...)
             if vn in model.parameters
                 l = var_lengths[vn]
@@ -459,7 +458,6 @@ function AbstractPPL.evaluate!!(
                     reconstructed_value = reconstruct(
                         b_inv, dist, flattened_values[current_idx:(current_idx + l - 1)]
                     )
-                    @show reconstructed_value
                     value, logjac = Bijectors.with_logabsdet_jacobian(
                         b_inv, reconstructed_value
                     )

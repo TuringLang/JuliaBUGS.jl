@@ -537,21 +537,21 @@ end
 
 end # module
 
-# # TODO: can't remove even with the `possible` fix in DynamicPPL, still seems to have eltype inference issue causing AD errors
-# # Resolves: setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
-# # Alternatively, can overload BangBang.possible(
-# #     ::typeof(BangBang._setindex!), ::C, ::T, ::Vararg
-# # )
-# # to allow mutation, but the current solution seems create less possible problems, albeit less efficient.
-# function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
-#     T = promote_type(eltype(xs), eltype(v))
-#     ys = similar(xs, T)
-#     if eltype(xs) !== Union{}
-#         copy!(ys, xs)
-#     end
-#     ys[I...] = v
-#     return ys
-# end
+# TODO: can't remove even with the `possible` fix in DynamicPPL, still seems to have eltype inference issue causing AD errors
+# Resolves: setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
+# Alternatively, can overload BangBang.possible(
+#     ::typeof(BangBang._setindex!), ::C, ::T, ::Vararg
+# )
+# to allow mutation, but the current solution seems create less possible problems, albeit less efficient.
+function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
+    T = promote_type(eltype(xs), eltype(v))
+    ys = similar(xs, T)
+    if eltype(xs) !== Union{}
+        copy!(ys, xs)
+    end
+    ys[I...] = v
+    return ys
+end
 
 function BangBang.setindex!!(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
     optic = BangBang.prefermutation(
