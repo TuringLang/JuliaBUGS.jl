@@ -69,8 +69,17 @@ function JuliaBUGS.gen_chains(
     generated_quantities = []
     for i in axes(samples)[1]
         evaluation_env = first(evaluate!!(model, LogDensityContext(), samples[i]))
-        push!(param_vals, [AbstractPPL.get(evaluation_env, param_var) for param_var in param_vars])
-        push!(generated_quantities, [AbstractPPL.get(evaluation_env, generated_var) for generated_var in generated_vars])
+        push!(
+            param_vals,
+            [AbstractPPL.get(evaluation_env, param_var) for param_var in param_vars],
+        )
+        push!(
+            generated_quantities,
+            [
+                AbstractPPL.get(evaluation_env, generated_var) for
+                generated_var in generated_vars
+            ],
+        )
     end
 
     param_name_leaves = collect(
