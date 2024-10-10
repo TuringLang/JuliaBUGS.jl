@@ -13,6 +13,7 @@ struct TestNode
     node_type::Int
 end
 
+# overload the functions for testing purposes
 function JuliaBUGS.is_model_parameter(
     g::MetaGraph{Int,<:SimpleDiGraph,Int,TestNode}, v::Int
 )

@@ -277,74 +277,74 @@ function settrans(model::BUGSModel, bool::Bool=!(model.transformed))
     return BangBang.setproperty!!(model, :transformed, bool)
 end
 
-function AbstractPPL.condition(
-    model::BUGSModel,
-    d::Dict{<:VarName,<:Any},
-    sorted_nodes=Nothing, # support cached sorted Markov blanket nodes
+"""
+    _create_conditioned_model_for_gibbs(model::BUGSModel, variables_to_update::Vector{<:VarName})
+
+Internal function to create a conditioned model for Gibbs sampling. This is different from conditioning, because conditioning
+only marks a model parameter as observation, while the function effectively creates a sub-model with only the variables in the
+Markov blanket of the variables that are being updated.
+
+Precondition: `variables_to_update` must be a subset of the model parameters.
+"""
+function _create_conditioned_model_for_gibbs(
+    model::BUGSModel, variables_to_update::Vector{<:VarName}
 )
-    new_evaluation_env = deepcopy(model.evaluation_env)
-    for (p, value) in d
-        new_evaluation_env = setindex!!(new_evaluation_env, value, p)
-    end
-    return AbstractPPL.condition(
-        model, collect(keys(d)), new_evaluation_env; sorted_nodes=sorted_nodes
-    )
+    markov_blanket = markov_blanket(model.g, variables_to_update)
+    return BUGSModel(model, variables_to_update, markov_blanket)
 end
 
 function AbstractPPL.condition(
-    model::BUGSModel,
-    var_group::Vector{<:VarName},
-    evaluation_env::NamedTuple=model.evaluation_env,
-    sorted_nodes=Nothing,
+    model::BUGSModel, variables_to_condition_on_and_values::Dict{<:VarName,<:Any}
 )
-    check_var_group(var_group, model)
-    new_parameters = setdiff(model.parameters, var_group)
-
-    # TODO: maybe use instead of Markov blanket, children might be enough and more efficient  
-    # When evaluating the Metropolis-Hastings acceptance ratio, only the log probabilities of the children are needed. 
-    # This is because the log probabilities of the parents and co-parents are not changed by the proposal. 
-    # However, the values of the parents and co-parents are still needed to compute the distributions of the children.
-    sorted_blanket_with_vars = if sorted_nodes isa Nothing
-        sorted_nodes
-    else
-        filter(
-            vn -> vn in union(markov_blanket(model.g, new_parameters), new_parameters),
-            model.sorted_nodes,
-        )
+    evaluation_env = model.evaluation_env
+    for (variable, value) in pairs(variables_to_condition_on_and_values)
+        evaluation_env = BangBang.setindex!!(evaluation_env, value, variable)
     end
-
-    return BUGSModel(model, new_parameters, sorted_blanket_with_vars, evaluation_env)
+    return AbstractPPL.condition(
+        model, collect(keys(variables_to_condition_on_and_values)), evaluation_env
+    )
+end
+function AbstractPPL.condition(
+    model::BUGSModel,
+    variables_to_condition_on::Vector{<:VarName},
+    evaluation_env::NamedTuple=model.evaluation_env,
+)
+    BangBang.@set!! model.evaluation_env = evaluation_env
+    for vn in variables_to_condition_on
+        if !model.g[vn].is_stochastic
+            throw(
+                ArgumentError(
+                    "$vn is not a stochastic variable, conditioning on it is not supported"
+                ),
+            )
+        elseif model.g[vn].is_observed
+            @warn "$vn is already an observed variable, conditioning on it won't have any effect"
+        else
+            BangBang.@set!! model.g[vn] = BangBang.setproperty!!(
+                model.g[vn], :is_observed, true
+            )
+        end
+    end
+    return model
 end
 
 function AbstractPPL.decondition(model::BUGSModel, var_group::Vector{<:VarName})
-    check_var_group(var_group, model)
-    base_model = model.base_model isa Nothing ? model : model.base_model
-
-    new_parameters = [
-        v for v in base_model.sorted_nodes if v in union(model.parameters, var_group)
-    ] # keep the order
-
-    markov_blanket_with_vars = union(
-        markov_blanket(base_model.g, new_parameters), new_parameters
-    )
-    sorted_blanket_with_vars = filter(
-        vn -> vn in markov_blanket_with_vars, base_model.sorted_nodes
-    )
-
-    new_model = BUGSModel(
-        model, new_parameters, sorted_blanket_with_vars, base_model.evaluation_env
-    )
-    evaluate_env, _ = evaluate!!(new_model, DefaultContext())
-    return BangBang.setproperty!!(new_model, :evaluation_env, evaluate_env)
-end
-
-function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
-    non_vars = filter(var -> var ∉ labels(model.g), var_group)
-    logical_vars = filter(var -> !model.g[var].is_stochastic, var_group)
-    isempty(non_vars) || error("Variables $(non_vars) are not in the model")
-    return isempty(logical_vars) || error(
-        "Variables $(logical_vars) are not stochastic variables, conditioning on them is not supported",
-    )
+    for vn in var_group
+        if !model.g[vn].is_stochastic
+            throw(
+                ArgumentError(
+                    "$vn is not a stochastic variable, deconditioning it is not supported"
+                ),
+            )
+        elseif !model.g[vn].is_observed
+            @warn "$vn is already treated as model parameter, deconditioning it won't have any effect"
+        else
+            BangBang.@set!! model.g[vn] = BangBang.setproperty!!(
+                model.g[vn], :is_observed, false
+            )
+        end
+    end
+    return model
 end
 
 """
