@@ -49,7 +49,12 @@ function JuliaBUGS.gibbs_internal(
         n_adapts=0,
         initial_params=JuliaBUGS.getparams(cond_model),
     )
-    return JuliaBUGS.initialize!(cond_model, t.params)
+    updated_model = initialize!(cond_model, t.params)
+    return JuliaBUGS.getparams(
+        BangBang.setproperty!!(
+            updated_model.base_model, :evaluation_env, updated_model.evaluation_env
+        ),
+    )
 end
 
 end

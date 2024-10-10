@@ -10,6 +10,7 @@ using Graphs, MetaGraphsNext
 using LinearAlgebra
 using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
+using OrderedCollections: OrderedDict
 using Random
 using StaticArrays
 

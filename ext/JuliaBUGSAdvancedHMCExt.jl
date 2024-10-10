@@ -7,6 +7,7 @@ using JuliaBUGS
 using JuliaBUGS:
     AbstractBUGSModel, BUGSModel, Gibbs, find_generated_vars, LogDensityContext, evaluate!!
 using JuliaBUGS.BUGSPrimitives
+using JuliaBUGS.BangBang
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.Bijectors
@@ -54,7 +55,12 @@ function JuliaBUGS.gibbs_internal(
         n_adapts=0,
         initial_params=JuliaBUGS.getparams(cond_model),
     )
-    return JuliaBUGS.initialize!(cond_model, t.z.θ)
+    updated_model = initialize!(cond_model, t.z.θ)
+    return JuliaBUGS.getparams(
+        BangBang.setproperty!!(
+            updated_model.base_model, :evaluation_env, updated_model.evaluation_env
+        ),
+    )
 end
 
 end

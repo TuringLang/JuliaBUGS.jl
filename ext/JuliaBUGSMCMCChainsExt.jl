@@ -2,6 +2,7 @@ module JuliaBUGSMCMCChainsExt
 
 using JuliaBUGS
 using JuliaBUGS: AbstractBUGSModel, find_generated_vars, LogDensityContext, evaluate!!
+using JuliaBUGS.AbstractPPL
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
@@ -67,9 +68,9 @@ function JuliaBUGS.gen_chains(
     param_vals = []
     generated_quantities = []
     for i in axes(samples)[1]
-        vi = first(evaluate!!(model, LogDensityContext(), samples[i]))
-        push!(param_vals, [vi[param_var] for param_var in param_vars])
-        push!(generated_quantities, [vi[generated_var] for generated_var in generated_vars])
+        evaluation_env = first(evaluate!!(model, LogDensityContext(), samples[i]))
+        push!(param_vals, [AbstractPPL.get(evaluation_env, param_var) for param_var in param_vars])
+        push!(generated_quantities, [AbstractPPL.get(evaluation_env, generated_var) for generated_var in generated_vars])
     end
 
     param_name_leaves = collect(

@@ -45,7 +45,7 @@ using JuliaBUGS: MHFromPrior, Gibbs
     )
 
     # following step with sampler_map
-    sampler_map = Dict(
+    sampler_map = OrderedDict(
         [@varname(alpha), @varname(beta)] => HMC(0.1, 10), [@varname(sigma)] => RWMH(1)
     )
     p_s, st = AbstractMCMC.step(
@@ -59,7 +59,7 @@ using JuliaBUGS: MHFromPrior, Gibbs
         Random.default_rng(),
         model,
         Gibbs(
-            Dict(
+            OrderedDict(
                 [@varname(alpha), @varname(beta)] => MHFromPrior(),
                 [@varname(sigma)] => HMC(0.1, 10),
             ),
