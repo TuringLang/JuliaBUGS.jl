@@ -375,7 +375,6 @@ function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
 end
 function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
     (; evaluation_env, g, sorted_nodes) = model
-    vi = deepcopy(evaluation_env)
     logp = 0.0
     for vn in sorted_nodes
         (; is_stochastic, node_function, node_args, loop_vars) = g[vn]
@@ -398,7 +397,6 @@ function AbstractPPL.evaluate!!(model::BUGSModel)
 end
 function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
     (; sorted_nodes, g, evaluation_env) = model
-    vi = deepcopy(evaluation_env)
     logp = 0.0
     for vn in sorted_nodes
         (; is_stochastic, node_function, node_args, loop_vars) = g[vn]
