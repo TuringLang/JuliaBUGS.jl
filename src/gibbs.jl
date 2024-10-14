@@ -6,12 +6,13 @@ function Gibbs(model::BUGSModel, s::AbstractMCMC.AbstractSampler)
     return Gibbs(OrderedDict([v => s for v in model.parameters]))
 end
 
-struct MHFromPrior <: AbstractMCMC.AbstractSampler end
-
 abstract type AbstractGibbsState end
 
+# do the most basic thinkings right now
+# - one `evaluation_env` throughout, 
+
 struct GibbsState{T,S,C} <: AbstractGibbsState
-    values::T
+    evaluation_env::T
     conditioning_schedule::S
     sorted_nodes_cache::C
 end
@@ -60,6 +61,8 @@ end
 
 function gibbs_internal end
 
+struct MHFromPrior <: AbstractMCMC.AbstractSampler end
+
 function gibbs_internal(rng::Random.AbstractRNG, cond_model::BUGSModel, ::MHFromPrior)
     transformed_original = JuliaBUGS.getparams(cond_model)
     values, logp = evaluate!!(cond_model, LogDensityContext(), transformed_original)
@@ -87,3 +90,4 @@ function AbstractMCMC.bundle_samples(
         logdensitymodel, ts, [], []; discard_initial=discard_initial, kwargs...
     )
 end
+

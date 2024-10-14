@@ -19,9 +19,9 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple}
     "The length of the parameters vector in the transformed (unconstrained) space."
     transformed_param_length::Int
     "A dictionary mapping the names of the variables to their lengths in the original (constrained) space."
-    untransformed_var_lengths::Dict{<:VarName,Int}
+    untransformed_var_lengths::OrderedDict{<:VarName,Int}
     "A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space."
-    transformed_var_lengths::Dict{<:VarName,Int}
+    transformed_var_lengths::OrderedDict{<:VarName,Int}
 
     "A `NamedTuple` containing the values of the variables in the model, all the values are in the constrained space."
     evaluation_env::T
@@ -94,8 +94,8 @@ function BUGSModel(
     sorted_nodes = VarName[label_for(g, node) for node in topological_sort(g)]
     parameters = VarName[]
     untransformed_param_length, transformed_param_length = 0, 0
-    untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
-    Dict{VarName,Int}()
+    untransformed_var_lengths, transformed_var_lengths = OrderedDict{VarName,Int}(),
+    OrderedDict{VarName,Int}()
 
     for vn in sorted_nodes
         (; is_stochastic, is_observed, node_function, node_args, loop_vars) = g[vn]
@@ -278,7 +278,7 @@ function settrans(model::BUGSModel, bool::Bool=!(model.transformed))
 end
 
 """
-    _create_conditioned_model_for_gibbs(model::BUGSModel, variables_to_update::Vector{<:VarName})
+    condition_on_complement(model::BUGSModel, variables_to_update::Vector{<:VarName})
 
 Internal function to create a conditioned model for Gibbs sampling. This is different from conditioning, because conditioning
 only marks a model parameter as observation, while the function effectively creates a sub-model with only the variables in the
@@ -286,11 +286,17 @@ Markov blanket of the variables that are being updated.
 
 Precondition: `variables_to_update` must be a subset of the model parameters.
 """
-function _create_conditioned_model_for_gibbs(
+function condition_on_complement(
     model::BUGSModel, variables_to_update::Vector{<:VarName}
 )
     markov_blanket = markov_blanket(model.g, variables_to_update)
-    return BUGSModel(model, variables_to_update, markov_blanket)
+    sub_model = create_sub_model(model, variables_to_update, markov_blanket)
+    random_variables_to_condition_on = 
+    return condition(sub_model, setdiff(variables_to_update))
+end
+
+function create_sub_model(model::BUGSModel, model_parameters_in_submodel::Vector{<:VarName}, all_variables_in_submodel::Vector{<:VarName})
+    return BUGSModel(model, model_parameters_in_submodel, all_variables_in_submodel)
 end
 
 function AbstractPPL.condition(
