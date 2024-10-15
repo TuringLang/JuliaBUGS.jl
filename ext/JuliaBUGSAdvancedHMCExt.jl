@@ -2,17 +2,13 @@ module JuliaBUGSAdvancedHMCExt
 
 using AbstractMCMC
 using AdvancedHMC
-using AdvancedHMC: Transition, stat
 using JuliaBUGS
-using JuliaBUGS:
-    AbstractBUGSModel, BUGSModel, Gibbs, find_generated_vars, LogDensityContext, evaluate!!
-using JuliaBUGS.BUGSPrimitives
-using JuliaBUGS.BangBang
-using JuliaBUGS.LogDensityProblems
-using JuliaBUGS.LogDensityProblemsAD
-using JuliaBUGS.Bijectors
-using JuliaBUGS.Random
 using MCMCChains: Chains
+
+using AdvancedHMC: Transition, stat
+using JuliaBUGS: AbstractBUGSModel, BUGSModel, Gibbs, find_generated_vars, LogDensityContext, evaluate!!
+using JuliaBUGS: BUGSPrimitives, BangBang, LogDensityProblems, LogDensityProblemsAD, Bijectors, Random
+
 import JuliaBUGS: gibbs_internal
 
 function AbstractMCMC.bundle_samples(
@@ -43,10 +39,10 @@ function AbstractMCMC.bundle_samples(
 end
 
 function JuliaBUGS.gibbs_internal(
-    rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::HMC
+    rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::HMC, adtype::ADTypes.AbstractADType
 )
     logdensitymodel = AbstractMCMC.LogDensityModel(
-        LogDensityProblemsAD.ADgradient(:ReverseDiff, cond_model)
+        LogDensityProblemsAD.ADgradient(adtype, cond_model)
     )
     t, s = AbstractMCMC.step(
         rng,

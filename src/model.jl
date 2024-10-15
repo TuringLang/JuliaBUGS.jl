@@ -155,7 +155,7 @@ function BUGSModel(
 end
 
 function BUGSModel(
-    model::BUGSModel,
+    model::BUGSModel;
     parameters::Vector{<:VarName},
     sorted_nodes::Vector{<:VarName},
     evaluation_env::NamedTuple=model.evaluation_env,
@@ -277,25 +277,11 @@ function settrans(model::BUGSModel, bool::Bool=!(model.transformed))
     return BangBang.setproperty!!(model, :transformed, bool)
 end
 
-"""
-    condition_on_complement(model::BUGSModel, variables_to_update::Vector{<:VarName})
-
-Internal function to create a conditioned model for Gibbs sampling. This is different from conditioning, because conditioning
-only marks a model parameter as observation, while the function effectively creates a sub-model with only the variables in the
-Markov blanket of the variables that are being updated.
-
-Precondition: `variables_to_update` must be a subset of the model parameters.
-"""
-function condition_on_complement(
-    model::BUGSModel, variables_to_update::Vector{<:VarName}
+function create_sub_model(
+    model::BUGSModel,
+    model_parameters_in_submodel::Vector{<:VarName},
+    all_variables_in_submodel::Vector{<:VarName},
 )
-    markov_blanket = markov_blanket(model.g, variables_to_update)
-    sub_model = create_sub_model(model, variables_to_update, markov_blanket)
-    random_variables_to_condition_on = 
-    return condition(sub_model, setdiff(variables_to_update))
-end
-
-function create_sub_model(model::BUGSModel, model_parameters_in_submodel::Vector{<:VarName}, all_variables_in_submodel::Vector{<:VarName})
     return BUGSModel(model, model_parameters_in_submodel, all_variables_in_submodel)
 end
 
@@ -387,12 +373,12 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
         args = prepare_arg_values(node_args, evaluation_env, loop_vars)
         if !is_stochastic
             value = node_function(; args...)
-            evaluation_env = setindex!!(evaluation_env, value, vn)
+            evaluation_env = setindex!!(evaluation_env, value, vn; prefer_mutation=false)
         else
             dist = node_function(; args...)
-            value = rand(ctx.rng, dist) # just sample from the prior
+            value = rand(ctx.rng, dist)
             logp += logpdf(dist, value)
-            evaluation_env = setindex!!(evaluation_env, value, vn)
+            evaluation_env = setindex!!(evaluation_env, value, vn; prefer_mutation=false)
         end
     end
     return evaluation_env, logp
