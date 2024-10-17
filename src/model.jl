@@ -19,9 +19,9 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple}
     "The length of the parameters vector in the transformed (unconstrained) space."
     transformed_param_length::Int
     "A dictionary mapping the names of the variables to their lengths in the original (constrained) space."
-    untransformed_var_lengths::Dict{<:VarName,Int}
+    untransformed_var_lengths::OrderedDict{<:VarName,Int}
     "A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space."
-    transformed_var_lengths::Dict{<:VarName,Int}
+    transformed_var_lengths::OrderedDict{<:VarName,Int}
 
     "A `NamedTuple` containing the values of the variables in the model, all the values are in the constrained space."
     evaluation_env::T
@@ -94,8 +94,8 @@ function BUGSModel(
     sorted_nodes = VarName[label_for(g, node) for node in topological_sort(g)]
     parameters = VarName[]
     untransformed_param_length, transformed_param_length = 0, 0
-    untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
-    Dict{VarName,Int}()
+    untransformed_var_lengths, transformed_var_lengths = OrderedDict{VarName,Int}(),
+    OrderedDict{VarName,Int}()
 
     for vn in sorted_nodes
         (; is_stochastic, is_observed, node_function, node_args, loop_vars) = g[vn]
@@ -129,7 +129,11 @@ function BUGSModel(
                     rand(dist)
                 catch e
                     error(
-                        "Failed to sample from the prior distribution of $vn, consider providing initialization values for $vn or it's parents: $(collect(MetaGraphsNext.inneighbor_labels(g, vn))...).",
+                        """
+                        Failed to sample from the prior distribution of $vn, consider providing 
+                        initialization values for $vn or it's parents: 
+                        $(collect(MetaGraphsNext.inneighbor_labels(g, vn))...).
+                        """,
                     )
                 end
                 evaluation_env = BangBang.setindex!!(evaluation_env, init_value, vn)
@@ -151,7 +155,7 @@ function BUGSModel(
 end
 
 function BUGSModel(
-    model::BUGSModel,
+    model::BUGSModel;
     parameters::Vector{<:VarName},
     sorted_nodes::Vector{<:VarName},
     evaluation_env::NamedTuple=model.evaluation_env,
@@ -210,7 +214,8 @@ end
 """
     initialize!(model::BUGSModel, initial_params::AbstractVector)
 
-Initialize the model with a vector of initial values, the values can be in transformed space if `model.transformed` is set to true.
+Initialize the model with a vector of initial values, the values can be in transformed 
+space if `model.transformed` is set to true.
 """
 function initialize!(model::BUGSModel, initial_params::AbstractVector)
     evaluation_env, _ = AbstractPPL.evaluate!!(model, LogDensityContext(), initial_params)
@@ -272,70 +277,66 @@ function settrans(model::BUGSModel, bool::Bool=!(model.transformed))
     return BangBang.setproperty!!(model, :transformed, bool)
 end
 
-function AbstractPPL.condition(
+function create_sub_model(
     model::BUGSModel,
-    d::Dict{<:VarName,<:Any},
-    sorted_nodes=Nothing, # support cached sorted Markov blanket nodes
+    model_parameters_in_submodel::Vector{<:VarName},
+    all_variables_in_submodel::Vector{<:VarName},
 )
-    new_evaluation_env = deepcopy(model.evaluation_env)
-    for (p, value) in d
-        new_evaluation_env = setindex!!(new_evaluation_env, value, p)
-    end
-    return AbstractPPL.condition(
-        model, collect(keys(d)), new_evaluation_env; sorted_nodes=sorted_nodes
-    )
+    return BUGSModel(model, model_parameters_in_submodel, all_variables_in_submodel)
 end
 
 function AbstractPPL.condition(
-    model::BUGSModel,
-    var_group::Vector{<:VarName},
-    evaluation_env::NamedTuple=model.evaluation_env,
-    sorted_nodes=Nothing,
+    model::BUGSModel, variables_to_condition_on_and_values::Dict{<:VarName,<:Any}
 )
-    check_var_group(var_group, model)
-    new_parameters = setdiff(model.parameters, var_group)
-
-    sorted_blanket_with_vars = if sorted_nodes isa Nothing
-        sorted_nodes
-    else
-        filter(
-            vn -> vn in union(markov_blanket(model.g, new_parameters), new_parameters),
-            model.sorted_nodes,
-        )
+    evaluation_env = model.evaluation_env
+    for (variable, value) in pairs(variables_to_condition_on_and_values)
+        evaluation_env = BangBang.setindex!!(evaluation_env, value, variable)
     end
-
-    return BUGSModel(model, new_parameters, sorted_blanket_with_vars, evaluation_env)
+    return AbstractPPL.condition(
+        model, collect(keys(variables_to_condition_on_and_values)), evaluation_env
+    )
+end
+function AbstractPPL.condition(
+    model::BUGSModel,
+    variables_to_condition_on::Vector{<:VarName},
+    evaluation_env::NamedTuple=model.evaluation_env,
+)
+    BangBang.setproperty!!(model, :evaluation_env, evaluation_env)
+    for vn in variables_to_condition_on
+        if !model.g[vn].is_stochastic
+            throw(
+                ArgumentError(
+                    "$vn is not a stochastic variable, conditioning on it is not supported"
+                ),
+            )
+        elseif model.g[vn].is_observed
+            @warn "$vn is already an observed variable, conditioning on it won't have any effect"
+        else
+            old_node_info = model.g[vn]
+            new_node_info = BangBang.setproperty!!(old_node_info, :is_observed, true)
+            model.g[vn] = new_node_info
+        end
+    end
+    return model
 end
 
 function AbstractPPL.decondition(model::BUGSModel, var_group::Vector{<:VarName})
-    check_var_group(var_group, model)
-    base_model = model.base_model isa Nothing ? model : model.base_model
-
-    new_parameters = [
-        v for v in base_model.sorted_nodes if v in union(model.parameters, var_group)
-    ] # keep the order
-
-    markov_blanket_with_vars = union(
-        markov_blanket(base_model.g, new_parameters), new_parameters
-    )
-    sorted_blanket_with_vars = filter(
-        vn -> vn in markov_blanket_with_vars, base_model.sorted_nodes
-    )
-
-    new_model = BUGSModel(
-        model, new_parameters, sorted_blanket_with_vars, base_model.evaluation_env
-    )
-    evaluate_env, _ = evaluate!!(new_model, DefaultContext())
-    return BangBang.setproperty!!(new_model, :evaluation_env, evaluate_env)
-end
-
-function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
-    non_vars = filter(var -> var ∉ labels(model.g), var_group)
-    logical_vars = filter(var -> !model.g[var].is_stochastic, var_group)
-    isempty(non_vars) || error("Variables $(non_vars) are not in the model")
-    return isempty(logical_vars) || error(
-        "Variables $(logical_vars) are not stochastic variables, conditioning on them is not supported",
-    )
+    for vn in var_group
+        if !model.g[vn].is_stochastic
+            throw(
+                ArgumentError(
+                    "$vn is not a stochastic variable, deconditioning it is not supported"
+                ),
+            )
+        elseif !model.g[vn].is_observed
+            @warn "$vn is already treated as model parameter, deconditioning it won't have any effect"
+        else
+            BangBang.@set!! model.g[vn] = BangBang.setproperty!!(
+                model.g[vn], :is_observed, false
+            )
+        end
+    end
+    return model
 end
 
 """
@@ -366,19 +367,18 @@ function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
 end
 function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
     (; evaluation_env, g, sorted_nodes) = model
-    vi = deepcopy(evaluation_env)
     logp = 0.0
     for vn in sorted_nodes
         (; is_stochastic, node_function, node_args, loop_vars) = g[vn]
         args = prepare_arg_values(node_args, evaluation_env, loop_vars)
         if !is_stochastic
             value = node_function(; args...)
-            evaluation_env = setindex!!(evaluation_env, value, vn)
+            evaluation_env = setindex!!(evaluation_env, value, vn; prefer_mutation=false)
         else
             dist = node_function(; args...)
-            value = rand(ctx.rng, dist) # just sample from the prior
+            value = rand(ctx.rng, dist)
             logp += logpdf(dist, value)
-            evaluation_env = setindex!!(evaluation_env, value, vn)
+            evaluation_env = setindex!!(evaluation_env, value, vn; prefer_mutation=false)
         end
     end
     return evaluation_env, logp
@@ -389,7 +389,6 @@ function AbstractPPL.evaluate!!(model::BUGSModel)
 end
 function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
     (; sorted_nodes, g, evaluation_env) = model
-    vi = deepcopy(evaluation_env)
     logp = 0.0
     for vn in sorted_nodes
         (; is_stochastic, node_function, node_args, loop_vars) = g[vn]

@@ -553,10 +553,14 @@ function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
     return ys
 end
 
-function BangBang.setindex!!(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
-    optic = BangBang.prefermutation(
+function BangBang.setindex!!(
+    nt::NamedTuple, val, vn::VarName{sym}; prefer_mutation::Bool=true
+) where {sym}
+    optic = if prefer_mutation
+        BangBang.prefermutation(AbstractPPL.getoptic(vn) ∘ Accessors.PropertyLens{sym}())
+    else
         AbstractPPL.getoptic(vn) ∘ Accessors.PropertyLens{sym}()
-    )
+    end
     return Accessors.set(nt, optic, val)
 end
 

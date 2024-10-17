@@ -3,14 +3,16 @@ module JuliaBUGSAdvancedMHExt
 using AbstractMCMC
 using AdvancedMH
 using JuliaBUGS
-using JuliaBUGS: BUGSModel, find_generated_vars, LogDensityContext, evaluate!!
-using JuliaBUGS.BUGSPrimitives
-using JuliaBUGS.LogDensityProblems
-using JuliaBUGS.LogDensityProblemsAD
-using JuliaBUGS.Random
-using JuliaBUGS.Bijectors
 using MCMCChains: Chains
-import JuliaBUGS: gibbs_internal
+
+using JuliaBUGS:
+    BUGSModel,
+    Accessors,
+    ADTypes,
+    LogDensityProblems,
+    LogDensityProblemsAD,
+    Random,
+    gibbs_internal
 
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:AdvancedMH.AbstractTransition},
@@ -37,24 +39,20 @@ function AbstractMCMC.bundle_samples(
 end
 
 function JuliaBUGS.gibbs_internal(
-    rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::AdvancedMH.MHSampler
+    rng::Random.AbstractRNG,
+    sub_model::BUGSModel,
+    sampler::AdvancedMH.MHSampler,
+    state,
+    adtype::ADTypes.AbstractADType,
 )
     logdensitymodel = AbstractMCMC.LogDensityModel(
-        LogDensityProblemsAD.ADgradient(:ReverseDiff, cond_model)
+        LogDensityProblemsAD.ADgradient(adtype, sub_model)
     )
-    t, s = AbstractMCMC.step(
-        rng,
-        logdensitymodel,
-        sampler;
-        n_adapts=0,
-        initial_params=JuliaBUGS.getparams(cond_model),
-    )
-    updated_model = initialize!(cond_model, t.params)
-    return JuliaBUGS.getparams(
-        BangBang.setproperty!!(
-            updated_model.base_model, :evaluation_env, updated_model.evaluation_env
-        ),
-    )
+
+    state = Accessors.@set state.lp = LogDensityProblems.logdensity(sub_model, state.params)
+
+    _, s = AbstractMCMC.step(rng, logdensitymodel, sampler, state)
+    return initialize!(sub_model.base_model, s.params).evaluation_env, s
 end
 
 end
