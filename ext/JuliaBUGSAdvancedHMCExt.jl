@@ -6,10 +6,15 @@ using JuliaBUGS
 using MCMCChains: Chains
 
 using AdvancedHMC: Transition, stat
-using JuliaBUGS: AbstractBUGSModel, BUGSModel, Gibbs, find_generated_vars, LogDensityContext, evaluate!!
-using JuliaBUGS: BUGSPrimitives, BangBang, LogDensityProblems, LogDensityProblemsAD, Bijectors, Random
-
-import JuliaBUGS: gibbs_internal
+using JuliaBUGS:
+    AbstractBUGSModel,
+    BUGSModel,
+    Gibbs,
+    find_generated_quantities_variables,
+    LogDensityContext,
+    evaluate!!
+using JuliaBUGS:
+    BUGSPrimitives, Accessors, ADTypes, BangBang, LogDensityProblems, LogDensityProblemsAD, Bijectors, Random
 
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:Transition},
@@ -39,24 +44,23 @@ function AbstractMCMC.bundle_samples(
 end
 
 function JuliaBUGS.gibbs_internal(
-    rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::HMC, adtype::ADTypes.AbstractADType
+    rng::Random.AbstractRNG,
+    sub_model::BUGSModel,
+    sampler::HMC,
+    state,
+    adtype::ADTypes.AbstractADType,
 )
     logdensitymodel = AbstractMCMC.LogDensityModel(
-        LogDensityProblemsAD.ADgradient(adtype, cond_model)
+        LogDensityProblemsAD.ADgradient(adtype, sub_model)
     )
-    t, s = AbstractMCMC.step(
-        rng,
-        logdensitymodel,
-        sampler;
-        n_adapts=0,
-        initial_params=JuliaBUGS.getparams(cond_model),
+
+    hamiltonian = AdvancedHMC.Hamiltonian(state.metric, sub_model)
+    state = Accessors.@set state.transition.z = AdvancedHMC.phasepoint(
+        hamiltonian, state.transition.z.θ, state.transition.z.r
     )
-    updated_model = initialize!(cond_model, t.z.θ)
-    return JuliaBUGS.getparams(
-        BangBang.setproperty!!(
-            updated_model.base_model, :evaluation_env, updated_model.evaluation_env
-        ),
-    )
+
+    _, s = AbstractMCMC.step(rng, logdensitymodel, sampler, state; n_adapts=0)
+    return initialize!(sub_model.base_model, s.transition.z.θ).evaluation_env, s
 end
 
 end

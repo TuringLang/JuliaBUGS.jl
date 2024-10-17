@@ -1,10 +1,14 @@
-struct Gibbs{N,S,ADT<:ADTypes.AbstractADType} <: AbstractMCMC.AbstractSampler
-    sampler_map::OrderedDict{N,S}
+struct Gibbs{ODT<:OrderedDict,ADT<:ADTypes.AbstractADType} <: AbstractMCMC.AbstractSampler
+    sampler_map::ODT
     adtype::ADT
 end
 
+function Gibbs(sampler_map::ODT) where {ODT<:OrderedDict}
+    return Gibbs(sampler_map, ADTypes.AutoReverseDiff(; compile=false))
+end
+
 function verify_sampler_map(model::BUGSModel, sampler_map::OrderedDict)
-    all_variables_in_keys = Set(Iterators.flatten(keys(sampler_map)))
+    all_variables_in_keys = Set(vcat(keys(sampler_map)...))
     model_parameters = Set(model.parameters)
 
     # Check for extra variables in sampler_map that are not in model parameters
@@ -47,21 +51,16 @@ end
 function _create_submodel_for_gibbs_sampling(
     model::BUGSModel, variables_to_update::Vector{<:VarName}
 )
-    markov_blanket = markov_blanket(model.g, variables_to_update)
-    mb_without_variables_to_update = setdiff(markov_blanket, variables_to_update)
-    random_variables_in_mb = filter(
-        Base.Fix1(is_stochastic, model.g), mb_without_variables_to_update
-    )
-    observed_random_variables_in_mb = filter(
-        Base.Fix1(is_observation, model.g), random_variables_in_mb
-    )
-    model_parameters_in_mb = setdiff(
-        random_variables_in_mb, observed_random_variables_in_mb
+    _markov_blanket = markov_blanket(model.g, variables_to_update)
+    mb_without_variables_to_update = setdiff(_markov_blanket, variables_to_update)
+    model_parameters_in_mb = filter(
+        v -> is_stochastic(model.g, v) && !is_observation(model.g, v),
+        mb_without_variables_to_update,
     )
     sub_model = BUGSModel(
-        model; parameters=variables_to_update, sorted_nodes=markov_blanket
+        model; parameters=variables_to_update, sorted_nodes=collect(_markov_blanket)
     )
-    return condition(sub_model, model_parameters_in_mb)
+    return condition(sub_model, collect(model_parameters_in_mb))
 end
 
 struct GibbsState{T,S,C}
@@ -70,6 +69,13 @@ struct GibbsState{T,S,C}
     sub_states::S
 end
 
+"""
+    gibbs_internal(rng, sub_model, sampler, state, adtype)
+
+Internal function to perform Gibbs sampling. This function should first update the 
+sampler state with the correct log density and then do a single step of the sampler.
+It should return the `evaluation_env` and the updated sampler state.
+"""
 function gibbs_internal end
 
 function AbstractMCMC.step(
@@ -84,15 +90,19 @@ function AbstractMCMC.step(
     submodel_cache = Vector{BUGSModel}(undef, length(sampler.sampler_map))
     sub_states = Any[]
     for (i, variable_group) in enumerate(keys(sampler.sampler_map))
+        local_sampler = sampler.sampler_map[variable_group]
         submodel = _create_submodel_for_gibbs_sampling(model, variable_group)
-        sublogdensitymodel = AbstractMCMC.LogDensityModel(
-            LogDensityProblemsAD.ADgradient(sampler.adtype, submodel)
-        )
-        _, s = AbstractMCMC.step(
-            rng, sublogdensitymodel, sampler.sampler_map[variable_group]
-        )
-        submodel_cache[i] = s
-        push!(sub_states, s)
+        if local_sampler isa MHFromPrior
+            evaluation_env, logp = evaluate!!(submodel, DefaultContext())
+            state = MHState(evaluation_env, logp)
+        else
+            sublogdensitymodel = AbstractMCMC.LogDensityModel(
+                LogDensityProblemsAD.ADgradient(sampler.adtype, submodel)
+            )
+            _, state = AbstractMCMC.step(rng, sublogdensitymodel, local_sampler)
+        end
+        submodel_cache[i] = submodel
+        push!(sub_states, state)
     end
 
     return getparams(model),
@@ -109,10 +119,16 @@ function AbstractMCMC.step(
 )
     evaluation_env = state.evaluation_env
     for (i, vs) in enumerate(keys(sampler.sampler_map))
-        sub_model = BangBang.setproperty!!(model, :evaluation_env, evaluation_env)
-        evaluation_env = gibbs_internal(rng, sub_model, sampler.sampler_map[vs])
+        sub_model = state.sub_model_cache[i]
+        sub_model = BangBang.setproperty!!(sub_model, :evaluation_env, evaluation_env)
+        evaluation_env, new_sub_state = gibbs_internal(
+            rng, sub_model, sampler.sampler_map[vs], state.sub_states[i], sampler.adtype
+        )
+        state.sub_states[i] = new_sub_state
     end
-    return getparams(model), GibbsState(evaluation_env, state.sub_model_cache)
+    model = BangBang.setproperty!!(model, :evaluation_env, evaluation_env)
+    return getparams(model),
+    GibbsState(evaluation_env, state.sub_model_cache, state.sub_states)
 end
 
 struct MHFromPrior <: AbstractMCMC.AbstractSampler end
@@ -134,9 +150,10 @@ function gibbs_internal(
 
     if logp_proposed - logp > log(rand(rng))
         evaluation_env = proposed_evaluation_env
+        logp = logp_proposed
     end
 
-    return MHState(evaluation_env, logp)
+    return evaluation_env, MHState(evaluation_env, logp)
 end
 
 function AbstractMCMC.bundle_samples(

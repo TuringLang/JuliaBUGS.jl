@@ -117,9 +117,9 @@ function markov_blanket(g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, v::L) where {L,V
 end
 
 function markov_blanket(
-    g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, v::Union{Vector{L},NTuple{N,<:L}}
-) where {L,VD,N}
-    return reduce((acc, vn) -> union!(acc, markov_blanket(g, vn)), v; init=Set{L}())
+    g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, vs::AbstractVector{<:L}
+) where {L,VD}
+    return reduce((acc, vn) -> union!(acc, markov_blanket(g, vn)), vs; init=Set{L}())
 end
 
 function dfs_find_stochastic_boundary_and_deterministic_variables_en_route(

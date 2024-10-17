@@ -301,7 +301,7 @@ function AbstractPPL.condition(
     variables_to_condition_on::Vector{<:VarName},
     evaluation_env::NamedTuple=model.evaluation_env,
 )
-    BangBang.@set!! model.evaluation_env = evaluation_env
+    BangBang.setproperty!!(model, :evaluation_env, evaluation_env)
     for vn in variables_to_condition_on
         if !model.g[vn].is_stochastic
             throw(
@@ -312,9 +312,9 @@ function AbstractPPL.condition(
         elseif model.g[vn].is_observed
             @warn "$vn is already an observed variable, conditioning on it won't have any effect"
         else
-            BangBang.@set!! model.g[vn] = BangBang.setproperty!!(
-                model.g[vn], :is_observed, true
-            )
+            old_node_info = model.g[vn]
+            new_node_info = BangBang.setproperty!!(old_node_info, :is_observed, true)
+            model.g[vn] = new_node_info
         end
     end
     return model

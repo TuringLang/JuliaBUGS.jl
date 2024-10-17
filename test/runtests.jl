@@ -9,6 +9,7 @@ using AbstractPPL
 using AbstractMCMC
 using AdvancedHMC
 using AdvancedMH
+using ADTypes
 using Bijectors
 using Distributions
 using Graphs, MetaGraphsNext
