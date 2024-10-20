@@ -3,6 +3,7 @@ module JuliaBUGSMCMCChainsExt
 using JuliaBUGS
 using JuliaBUGS:
     AbstractBUGSModel, find_generated_quantities_variables, LogDensityContext, evaluate!!
+using JuliaBUGS: AbstractMCMC
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.LogDensityProblems
@@ -10,6 +11,20 @@ using JuliaBUGS.LogDensityProblemsAD
 using DynamicPPL
 using AbstractMCMC
 using MCMCChains: Chains
+
+function AbstractMCMC.bundle_samples(
+    ts,
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel},
+    sampler::JuliaBUGS.Gibbs,
+    state,
+    ::Type{Chains};
+    discard_initial=0,
+    kwargs...,
+)
+    return JuliaBUGS.gen_chains(
+        logdensitymodel, ts, [], []; discard_initial=discard_initial, kwargs...
+    )
+end
 
 function JuliaBUGS.gen_chains(
     model::AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel},

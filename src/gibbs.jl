@@ -41,8 +41,9 @@ Internal function to create a conditioned model for Gibbs sampling. This is diff
 only marks a model parameter as observation, while the function effectively creates a sub-model with only the variables in the
 Markov blanket of the variables that are being updated.
 """
-_create_submodel_for_gibbs_sampling(model::BUGSModel, variables_to_update::VarName) =
-    _create_submodel_for_gibbs_sampling(model, [variables_to_update])
+function _create_submodel_for_gibbs_sampling(model::BUGSModel, variables_to_update::VarName)
+    return _create_submodel_for_gibbs_sampling(model, [variables_to_update])
+end
 function _create_submodel_for_gibbs_sampling(
     model::BUGSModel, variables_to_update::NTuple{N,<:VarName}
 ) where {N}
@@ -105,7 +106,7 @@ function AbstractMCMC.step(
         push!(sub_states, state)
     end
 
-    return getparams(model),
+    return getparams(settrans(model, false)),
     GibbsState(model.evaluation_env, submodel_cache, map(identity, sub_states))
 end
 
@@ -119,15 +120,16 @@ function AbstractMCMC.step(
 )
     evaluation_env = state.evaluation_env
     for (i, vs) in enumerate(keys(sampler.sampler_map))
-        sub_model = state.sub_model_cache[i]
-        sub_model = BangBang.setproperty!!(sub_model, :evaluation_env, evaluation_env)
+        sub_model = BangBang.setproperty!!(
+            state.sub_model_cache[i], :evaluation_env, evaluation_env
+        )
         evaluation_env, new_sub_state = gibbs_internal(
             rng, sub_model, sampler.sampler_map[vs], state.sub_states[i], sampler.adtype
         )
         state.sub_states[i] = new_sub_state
     end
     model = BangBang.setproperty!!(model, :evaluation_env, evaluation_env)
-    return getparams(model),
+    return getparams(settrans(model, false)),
     GibbsState(evaluation_env, state.sub_model_cache, state.sub_states)
 end
 
@@ -156,16 +158,3 @@ function gibbs_internal(
     return evaluation_env, MHState(evaluation_env, logp)
 end
 
-function AbstractMCMC.bundle_samples(
-    ts,
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel},
-    sampler::Gibbs,
-    state,
-    ::Type{T};
-    discard_initial=0,
-    kwargs...,
-) where {T}
-    return JuliaBUGS.gen_chains(
-        logdensitymodel, ts, [], []; discard_initial=discard_initial, kwargs...
-    )
-end

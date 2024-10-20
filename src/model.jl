@@ -181,34 +181,29 @@ Initialize the model with a NamedTuple of initial values, the values are expecte
 """
 function initialize!(model::BUGSModel, initial_params::NamedTuple)
     check_input(initial_params)
+    evaluation_env = model.evaluation_env
     for vn in model.sorted_nodes
-        (; is_stochastic, is_observed, node_function, node_args, loop_vars) = model.g[vn]
+        (; node_function, node_args, loop_vars) = model.g[vn]
         args = prepare_arg_values(node_args, model.evaluation_env, loop_vars)
-        if !is_stochastic
+        if is_deterministic(model.g, vn)
             value = Base.invokelatest(node_function; args...)
-            BangBang.@set!! model.evaluation_env = setindex!!(
-                model.evaluation_env, value, vn
-            )
-        elseif !is_observed
+            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+        elseif is_model_parameter(model.g, vn)
             initialization = try
                 AbstractPPL.get(initial_params, vn)
             catch _
                 missing
             end
             if !ismissing(initialization)
-                BangBang.@set!! model.evaluation_env = setindex!!(
-                    model.evaluation_env, initialization, vn
-                )
+                evaluation_env = BangBang.setindex!!(evaluation_env, initialization, vn)
             else
-                BangBang.@set!! model.evaluation_env = setindex!!(
-                    model.evaluation_env,
-                    rand(Base.invokelatest(node_function; args...)),
-                    vn,
+                evaluation_env = BangBang.setindex!!(
+                    evaluation_env, rand(Base.invokelatest(node_function; args...)), vn
                 )
             end
         end
     end
-    return model
+    return BangBang.setproperty!!(model, :evaluation_env, evaluation_env)
 end
 
 """
@@ -312,9 +307,9 @@ function AbstractPPL.condition(
         elseif model.g[vn].is_observed
             @warn "$vn is already an observed variable, conditioning on it won't have any effect"
         else
-            old_node_info = model.g[vn]
-            new_node_info = BangBang.setproperty!!(old_node_info, :is_observed, true)
-            model.g[vn] = new_node_info
+            new_g = copy(model.g)
+            new_g[vn] = BangBang.setproperty!!(model.g[vn], :is_observed, true)
+            model = BangBang.setproperty!!(model, :g, new_g)
         end
     end
     return model
@@ -331,9 +326,9 @@ function AbstractPPL.decondition(model::BUGSModel, var_group::Vector{<:VarName})
         elseif !model.g[vn].is_observed
             @warn "$vn is already treated as model parameter, deconditioning it won't have any effect"
         else
-            BangBang.@set!! model.g[vn] = BangBang.setproperty!!(
-                model.g[vn], :is_observed, false
-            )
+            new_g = copy(model.g)
+            new_g[vn] = BangBang.setproperty!!(model.g[vn], :is_observed, false)
+            model = BangBang.setproperty!!(model, :g, new_g)
         end
     end
     return model
@@ -366,19 +361,31 @@ function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
     return evaluate!!(model, SamplingContext(rng))
 end
 function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
-    (; evaluation_env, g, sorted_nodes) = model
+    evaluation_env = deepcopy(model.evaluation_env) # TODO: a lot of the arrays are not modified
     logp = 0.0
-    for vn in sorted_nodes
-        (; is_stochastic, node_function, node_args, loop_vars) = g[vn]
+    for vn in model.sorted_nodes
+        (; node_function, node_args, loop_vars) = model.g[vn]
         args = prepare_arg_values(node_args, evaluation_env, loop_vars)
-        if !is_stochastic
+        if !is_stochastic(model.g, vn)
             value = node_function(; args...)
-            evaluation_env = setindex!!(evaluation_env, value, vn; prefer_mutation=false)
+            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         else
             dist = node_function(; args...)
-            value = rand(ctx.rng, dist)
-            logp += logpdf(dist, value)
-            evaluation_env = setindex!!(evaluation_env, value, vn; prefer_mutation=false)
+            if is_observation(model.g, vn)
+                value = AbstractPPL.get(evaluation_env, vn)
+            else
+                value = rand(ctx.rng, dist)
+                evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+            end
+            if model.transformed
+                value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
+                logp +=
+                    Distributions.logpdf(dist, value) + Bijectors.logabsdetjac(
+                        Bijectors.inverse(Bijectors.bijector(dist)), value_transformed
+                    )
+            else
+                logp += Distributions.logpdf(dist, value)
+            end
         end
     end
     return evaluation_env, logp

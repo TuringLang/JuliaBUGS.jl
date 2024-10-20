@@ -1,6 +1,51 @@
-using JuliaBUGS: MHFromPrior, Gibbs
+using JuliaBUGS: MHFromPrior, Gibbs, OrderedDict
 
-@testset "Simple gibbs" begin
+model_def = @bugs begin
+    μ ~ Normal(0, 4)
+    σ ~ Gamma(1, 1)
+    for i in 1:100
+        y[i] ~ Normal(μ, σ)
+    end
+end
+
+μ_true = 2
+σ_true = 4
+
+y = rand(Normal(μ_true, σ_true), 100)
+
+model = compile(model_def, (;y=y))
+model = initialize!(model, (μ=4.0, σ=6.0))
+
+splr_map = OrderedDict(@varname(μ) => MHFromPrior(), @varname(σ) => MHFromPrior())
+splr = Gibbs(splr_map)
+
+p_s, st_init = AbstractMCMC.step(
+    Random.default_rng(),
+    AbstractMCMC.LogDensityModel(model),
+    splr,
+)
+
+p_s, st = AbstractMCMC.step(
+    Random.default_rng(),
+    AbstractMCMC.LogDensityModel(model),
+    splr,
+    st_init,
+)
+
+chn = AbstractMCMC.sample(
+    Random.default_rng(),
+    model,
+    splr,
+    1000
+)
+
+σ_samples = [v[1] for v in chn[300:end]]
+μ_samples = [v[2] for v in chn[300:end]]
+
+@test mean(μ_samples) ≈ μ_true rtol = 0.2
+@test mean(σ_samples) ≈ σ_true rtol = 0.2
+
+# @testset "Simple gibbs" begin
     model_def = @bugs begin
         # Likelihood
         for i in 1:N
@@ -29,11 +74,19 @@ using JuliaBUGS: MHFromPrior, Gibbs
 
     model = compile(model_def, data, (;))
 
+    sampler = Gibbs(
+        OrderedDict(
+            @varname(alpha) => MHFromPrior(),
+            @varname(beta) => MHFromPrior(),
+            @varname(sigma) => MHFromPrior(),
+        ),
+    )
+
     # single step
     p_s, st_init = AbstractMCMC.step(
         Random.default_rng(),
         AbstractMCMC.LogDensityModel(model),
-        Gibbs(model, MHFromPrior()),
+        sampler,
     )
 
     # following step
