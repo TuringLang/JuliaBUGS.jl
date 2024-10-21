@@ -157,4 +157,3 @@ function gibbs_internal(
 
     return evaluation_env, MHState(evaluation_env, logp)
 end
-
