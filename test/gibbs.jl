@@ -1,5 +1,4 @@
 using JuliaBUGS: MHFromPrior, Gibbs
-using DynamicPPL: DynamicPPL
 
 @testset "Simple gibbs" begin
     model_def = @bugs begin
@@ -29,17 +28,6 @@ using DynamicPPL: DynamicPPL
     )
 
     model = compile(model_def, data, (;))
-    # use NamedTuple for SimpleVarinfo
-    model = JuliaBUGS.BangBang.setproperty!!(
-        model,
-        :varinfo,
-        begin
-            vi = model.varinfo
-            DynamicPPL.SimpleVarInfo(
-                DynamicPPL.values_as(vi, NamedTuple), vi.logp, vi.transformation
-            )
-        end,
-    )
 
     # single step
     p_s, st_init = AbstractMCMC.step(
@@ -57,7 +45,7 @@ using DynamicPPL: DynamicPPL
     )
 
     # following step with sampler_map
-    sampler_map = Dict(
+    sampler_map = OrderedDict(
         [@varname(alpha), @varname(beta)] => HMC(0.1, 10), [@varname(sigma)] => RWMH(1)
     )
     p_s, st = AbstractMCMC.step(
@@ -71,7 +59,7 @@ using DynamicPPL: DynamicPPL
         Random.default_rng(),
         model,
         Gibbs(
-            Dict(
+            OrderedDict(
                 [@varname(alpha), @varname(beta)] => MHFromPrior(),
                 [@varname(sigma)] => HMC(0.1, 10),
             ),

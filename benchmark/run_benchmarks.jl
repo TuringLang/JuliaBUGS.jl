@@ -28,7 +28,7 @@ end
 ## Stan
 
 const STAN_BUGS_EXAMPLES_FOLDER = joinpath(
-    dirname(@__FILE__), "stan-example-models/bugs_examples/"
+    dirname(@__FILE__), "stan/bugs_examples/"
 )
 
 const MODEL_VOL1_STAN = OrderedDict(
