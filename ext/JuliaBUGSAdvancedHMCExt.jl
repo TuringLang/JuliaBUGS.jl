@@ -3,7 +3,8 @@ module JuliaBUGSAdvancedHMCExt
 using AbstractMCMC: AbstractMCMC
 using AdvancedHMC: AdvancedHMC
 using MCMCChains: MCMCChains
-using JuliaBUGS: JuliaBUGS, Accessors, ADTypes, LogDensityProblems, LogDensityProblemsAD, Random
+using JuliaBUGS:
+    JuliaBUGS, Accessors, ADTypes, LogDensityProblems, LogDensityProblemsAD, Random
 
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:AdvancedHMC.Transition},
