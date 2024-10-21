@@ -1,37 +1,30 @@
 module JuliaBUGSAdvancedMHExt
 
-using AbstractMCMC
-using AdvancedMH
-using JuliaBUGS
-using MCMCChains: Chains
-
-using JuliaBUGS:
-    BUGSModel,
-    Accessors,
-    ADTypes,
-    LogDensityProblems,
-    LogDensityProblemsAD,
-    Random,
-    gibbs_internal
+using AbstractMCMC: AbstractMCMC
+using AdvancedMH: AdvancedMH
+using MCMCChains: MCMCChains
+using JuliaBUGS: JuliaBUGS
+using JuliaBUGS: Accessors, ADTypes, LogDensityProblems, LogDensityProblemsAD, Random
 
 function AbstractMCMC.bundle_samples(
-    ts::Vector{<:AdvancedMH.AbstractTransition},
-    logdensitymodel::Union{
-        AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel},
-        AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
-    },
-    sampler::AdvancedMH.MHSampler,
+    ts::Vector{<:AdvancedMH.Transition},
+    logdensitymodel,
+    sampler,
     state,
-    chain_type::Type{Chains};
+    chain_type::Type{MCMCChains.Chains};
     discard_initial=0,
     thinning=1,
     kwargs...,
 )
+    params = [t.params for t in ts]
+    stats_names = [:lp]
+    stats_values = [t.lp for t in ts]
+
     return JuliaBUGS.gen_chains(
         logdensitymodel,
-        [t.params for t in ts],
-        [:lp],
-        [t.lp for t in ts];
+        params,
+        stats_names,
+        stats_values;
         discard_initial=discard_initial,
         thinning=thinning,
         kwargs...,
@@ -40,19 +33,18 @@ end
 
 function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG,
-    sub_model::BUGSModel,
+    sub_model::JuliaBUGS.BUGSModel,
     sampler::AdvancedMH.MHSampler,
-    state,
+    state::AdvancedMH.Transition,
     adtype::ADTypes.AbstractADType,
 )
+    state = Accessors.@set state.lp = LogDensityProblems.logdensity(sub_model, state.params)
+
     logdensitymodel = AbstractMCMC.LogDensityModel(
         LogDensityProblemsAD.ADgradient(adtype, sub_model)
     )
-
-    state = Accessors.@set state.lp = LogDensityProblems.logdensity(sub_model, state.params)
-
     _, s = AbstractMCMC.step(rng, logdensitymodel, sampler, state)
-    return initialize!(sub_model.base_model, s.params).evaluation_env, s
+    return JuliaBUGS.initialize!(sub_model, s.params).evaluation_env, s
 end
 
 end

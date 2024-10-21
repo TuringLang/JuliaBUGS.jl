@@ -106,7 +106,7 @@ function AbstractMCMC.step(
         push!(sub_states, state)
     end
 
-    return getparams(settrans(model, false)),
+    return getparams(model),
     GibbsState(model.evaluation_env, submodel_cache, map(identity, sub_states))
 end
 
@@ -129,7 +129,7 @@ function AbstractMCMC.step(
         state.sub_states[i] = new_sub_state
     end
     model = BangBang.setproperty!!(model, :evaluation_env, evaluation_env)
-    return getparams(settrans(model, false)),
+    return getparams(model),
     GibbsState(evaluation_env, state.sub_model_cache, state.sub_states)
 end
 

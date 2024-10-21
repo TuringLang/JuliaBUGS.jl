@@ -127,7 +127,7 @@ function dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
 ) where {L,VD,F}
     stochastic_neighbors = Set{L}()
     deterministic_variables_en_route = Set{L}()
-    stack = [v]
+    stack = VarName[v]
     visited = Set{L}()
 
     while !isempty(stack)
