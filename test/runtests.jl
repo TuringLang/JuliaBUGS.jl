@@ -11,7 +11,6 @@ using AdvancedHMC
 using AdvancedMH
 using Bijectors
 using Distributions
-using DynamicPPL # TODO: for `gen_chains` function only, to be removed
 using Graphs
 using MetaGraphsNext
 using LinearAlgebra
