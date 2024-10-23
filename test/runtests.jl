@@ -16,6 +16,7 @@ using MetaGraphsNext
 using LinearAlgebra
 using LogDensityProblems
 using LogDensityProblemsAD
+using OrderedCollections
 using MacroTools
 using MCMCChains
 using Random
