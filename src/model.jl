@@ -71,6 +71,11 @@ Return a vector of `VarName` containing the names of all the variables in the mo
 """
 variables(m::BUGSModel) = collect(labels(m.g))
 
+is_stochastic(g::BUGSGraph, v::VarName) = g[v].is_stochastic
+is_model_parameter(g::BUGSGraph, v::VarName) = g[v].is_stochastic && !g[v].is_observed
+is_observation(g::BUGSGraph, v::VarName) = g[v].is_stochastic && g[v].is_observed
+is_deterministic(g::BUGSGraph, v::VarName) = !g[v].is_stochastic
+
 @generated function prepare_arg_values(
     ::Val{args}, evaluation_env::NamedTuple, loop_vars::NamedTuple{lvars}
 ) where {args, lvars}
@@ -99,7 +104,7 @@ function BUGSModel(
 
     for vn in sorted_nodes
         (; is_stochastic, is_observed, node_function, node_args, loop_vars) = g[vn]
-        args = prepare_arg_values(node_args, evaluation_env, loop_vars)
+        args = prepare_arg_values(Val(node_args), evaluation_env, loop_vars)
         if !is_stochastic
             value = Base.invokelatest(node_function; args...)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
@@ -179,7 +184,7 @@ function initialize!(model::BUGSModel, initial_params::NamedTuple)
     check_input(initial_params)
     for vn in model.sorted_nodes
         (; is_stochastic, is_observed, node_function, node_args, loop_vars) = model.g[vn]
-        args = prepare_arg_values(node_args, model.evaluation_env, loop_vars)
+        args = prepare_arg_values(Val(node_args), model.evaluation_env, loop_vars)
         if !is_stochastic
             value = Base.invokelatest(node_function; args...)
             BangBang.@set!! model.evaluation_env = setindex!!(
@@ -243,7 +248,7 @@ function getparams(model::BUGSModel)
             end
         else
             (; node_function, node_args, loop_vars) = model.g[v]
-            args = prepare_arg_values(node_args, model.evaluation_env, loop_vars)
+            args = prepare_arg_values(Val(node_args), model.evaluation_env, loop_vars)
             dist = node_function(; args...)
             transformed_value = Bijectors.transform(
                 Bijectors.bijector(dist), AbstractPPL.get(model.evaluation_env, v)
@@ -267,7 +272,7 @@ function getparams_as_ordereddict(model::BUGSModel)
             d[v] = AbstractPPL.get(model.evaluation_env, v)
         else
             (; node_function, node_args, loop_vars) = model.g[v]
-            args = prepare_arg_values(node_args, model.evaluation_env, loop_vars)
+            args = prepare_arg_values(Val(node_args), model.evaluation_env, loop_vars)
             dist = node_function(; args...)
             d[v] = Bijectors.transform(
                 Bijectors.bijector(dist), AbstractPPL.get(model.evaluation_env, v)
@@ -387,7 +392,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
     logp = 0.0
     for vn in sorted_nodes
         (; is_stochastic, node_function, node_args, loop_vars) = g[vn]
-        args = prepare_arg_values(node_args, evaluation_env, loop_vars)
+        args = prepare_arg_values(Val(node_args), evaluation_env, loop_vars)
         if !is_stochastic
             value = node_function(; args...)
             evaluation_env = setindex!!(evaluation_env, value, vn)
@@ -410,7 +415,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
     logp = 0.0
     for vn in sorted_nodes
         (; is_stochastic, node_function, node_args, loop_vars) = g[vn]
-        args = prepare_arg_values(node_args, evaluation_env, loop_vars)
+        args = prepare_arg_values(Val(node_args), evaluation_env, loop_vars)
         if !is_stochastic
             value = node_function(; args...)
             evaluation_env = setindex!!(evaluation_env, value, vn)
