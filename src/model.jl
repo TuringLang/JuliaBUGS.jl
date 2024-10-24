@@ -78,7 +78,7 @@ is_deterministic(g::BUGSGraph, v::VarName) = !g[v].is_stochastic
 
 @generated function prepare_arg_values(
     ::Val{args}, evaluation_env::NamedTuple, loop_vars::NamedTuple{lvars}
-) where {args, lvars}
+) where {args,lvars}
     fields = []
     for arg in args
         if arg in lvars
