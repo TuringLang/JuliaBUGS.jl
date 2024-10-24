@@ -71,18 +71,18 @@ Return a vector of `VarName` containing the names of all the variables in the mo
 """
 variables(m::BUGSModel) = collect(labels(m.g))
 
-function prepare_arg_values(
-    args::Tuple{Vararg{Symbol}}, evaluation_env::NamedTuple, loop_vars::NamedTuple{lvars}
-) where {lvars}
-    return NamedTuple{args}(Tuple(
-        map(args) do arg
-            if arg in lvars
-                loop_vars[arg]
-            else
-                AbstractPPL.get(evaluation_env, @varname($arg))
-            end
-        end,
-    ))
+@generated function prepare_arg_values(
+    ::Val{args}, evaluation_env::NamedTuple, loop_vars::NamedTuple{lvars}
+) where {args, lvars}
+    fields = []
+    for arg in args
+        if arg in lvars
+            push!(fields, :(loop_vars[$(QuoteNode(arg))]))
+        else
+            push!(fields, :(evaluation_env[$(QuoteNode(arg))]))
+        end
+    end
+    return :(NamedTuple{$(args)}(($(fields...),)))
 end
 
 function BUGSModel(
@@ -460,14 +460,14 @@ function AbstractPPL.evaluate!!(
     current_idx = 1
     logp = 0.0
     for vn in sorted_nodes
-        (; is_stochastic, node_function, node_args, loop_vars) = g[vn]
-        args = prepare_arg_values(node_args, evaluation_env, loop_vars)
+        (; is_stochastic, is_observed, node_function, node_args, loop_vars) = g[vn]
+        args = prepare_arg_values(Val(node_args), evaluation_env, loop_vars)
         if !is_stochastic
             value = node_function(; args...)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         else
             dist = node_function(; args...)
-            if vn in model.parameters
+            if is_stochastic && !is_observed
                 l = var_lengths[vn]
                 if model.transformed
                     b = Bijectors.bijector(dist)
