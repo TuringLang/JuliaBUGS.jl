@@ -260,6 +260,23 @@ function getparams(model::BUGSModel)
     return param_vals
 end
 
+function getparams_as_ordereddict(model::BUGSModel)
+    d = OrderedDict{VarName,Any}()
+    for v in model.parameters
+        if !model.transformed
+            d[v] = AbstractPPL.get(model.evaluation_env, v)
+        else
+            (; node_function, node_args, loop_vars) = model.g[v]
+            args = prepare_arg_values(node_args, model.evaluation_env, loop_vars)
+            dist = node_function(; args...)
+            d[v] = Bijectors.transform(
+                Bijectors.bijector(dist), AbstractPPL.get(model.evaluation_env, v)
+            )
+        end
+    end
+    return d
+end
+
 """
     settrans(model::BUGSModel, bool::Bool=!(model.transformed))
 
