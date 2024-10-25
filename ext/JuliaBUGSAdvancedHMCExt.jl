@@ -5,7 +5,7 @@ using AdvancedHMC
 using AdvancedHMC: Transition, stat
 using JuliaBUGS
 using JuliaBUGS:
-    AbstractBUGSModel, BUGSModel, Gibbs, find_generated_vars, LogDensityContext, evaluate!!
+    AbstractBUGSModel, BUGSModel, Gibbs, find_generated_vars, evaluate!!
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.BangBang
 using JuliaBUGS.LogDensityProblems

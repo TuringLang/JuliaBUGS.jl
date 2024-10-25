@@ -1,7 +1,7 @@
 module JuliaBUGSMCMCChainsExt
 
 using JuliaBUGS
-using JuliaBUGS: AbstractBUGSModel, find_generated_vars, LogDensityContext, evaluate!!
+using JuliaBUGS: AbstractBUGSModel, find_generated_vars, evaluate!!
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.LogDensityProblems
