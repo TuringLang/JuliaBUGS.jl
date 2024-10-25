@@ -451,27 +451,13 @@ end
 function AbstractPPL.evaluate!!(
     model::BUGSModel, ::LogDensityContext, flattened_values::AbstractVector
 )
-    param_lengths = if model.transformed
-        model.transformed_param_length
-    else
-        model.untransformed_param_length
-    end
-
-    if length(flattened_values) != param_lengths
-        error(
-            "The length of `flattened_values` does not match the length of the parameters in the model",
-        )
-    end
-
     var_lengths = if model.transformed
         model.transformed_var_lengths
     else
         model.untransformed_var_lengths
     end
 
-    sorted_nodes = model.sorted_nodes
-    g = model.g
-    evaluation_env = deepcopy(model.evaluation_env)
+    (; g, evaluation_env, sorted_nodes) = model
     current_idx = 1
     logp = 0.0
     for vn in sorted_nodes
@@ -488,14 +474,14 @@ function AbstractPPL.evaluate!!(
                     b = Bijectors.bijector(dist)
                     b_inv = Bijectors.inverse(b)
                     reconstructed_value = reconstruct(
-                        b_inv, dist, flattened_values[current_idx:(current_idx + l - 1)]
+                        b_inv, dist, view(flattened_values, current_idx:(current_idx + l - 1))
                     )
                     value, logjac = Bijectors.with_logabsdet_jacobian(
                         b_inv, reconstructed_value
                     )
                 else
                     value = reconstruct(
-                        dist, flattened_values[current_idx:(current_idx + l - 1)]
+                        dist, view(flattened_values, current_idx:(current_idx + l - 1))
                     )
                     logjac = 0.0
                 end
