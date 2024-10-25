@@ -71,11 +71,6 @@ Return a vector of `VarName` containing the names of all the variables in the mo
 """
 variables(m::BUGSModel) = collect(labels(m.g))
 
-is_stochastic(g::BUGSGraph, v::VarName) = g[v].is_stochastic
-is_model_parameter(g::BUGSGraph, v::VarName) = g[v].is_stochastic && !g[v].is_observed
-is_observation(g::BUGSGraph, v::VarName) = g[v].is_stochastic && g[v].is_observed
-is_deterministic(g::BUGSGraph, v::VarName) = !g[v].is_stochastic
-
 @generated function prepare_arg_values(
     ::Val{args}, evaluation_env::NamedTuple, loop_vars::NamedTuple{lvars}
 ) where {args,lvars}
@@ -326,7 +321,22 @@ function AbstractPPL.condition(
         )
     end
 
-    return BUGSModel(model, new_parameters, sorted_blanket_with_vars, evaluation_env)
+    g = copy(model.g)
+    for vn in sorted_blanket_with_vars
+        if vn in new_parameters
+            continue
+        end
+        ni = g[vn]
+        if ni.is_stochastic && !ni.is_observed
+            ni = @set ni.is_observed = true
+            @info "setting $vn to observed"
+            @info ni.is_stochastic, ni.is_observed
+            g[vn] = ni
+        end
+    end
+
+    new_model = BUGSModel(model, new_parameters, sorted_blanket_with_vars, evaluation_env)
+    return BangBang.setproperty!!(new_model, :g, g)
 end
 
 function AbstractPPL.decondition(model::BUGSModel, var_group::Vector{<:VarName})
@@ -472,7 +482,7 @@ function AbstractPPL.evaluate!!(
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         else
             dist = node_function(; args...)
-            if is_stochastic && !is_observed
+            if !is_observed
                 l = var_lengths[vn]
                 if model.transformed
                     b = Bijectors.bijector(dist)

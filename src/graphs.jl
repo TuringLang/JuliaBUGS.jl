@@ -7,13 +7,9 @@ struct NodeInfo{F}
     loop_vars::NamedTuple
 end
 
-"""
-    BUGSGraph
-
-The `BUGSGraph` object represents the graph structure for a BUGS model. It is a type alias for
-`MetaGraphsNext.MetaGraph`.
-"""
-const BUGSGraph = MetaGraph
+const BUGSGraph = MetaGraph{
+    Int,Graphs.SimpleDiGraph{Int},<:VarName,<:NodeInfo,Nothing,Nothing,<:Any,Float64
+}
 
 """
     find_generated_vars(g::BUGSGraph)
