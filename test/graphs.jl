@@ -66,10 +66,8 @@ mb_logp = begin
 end
 
 # order: b, l, c, a
-@test mb_logp ≈ evaluate!!(cond_model, JuliaBUGS.LogDensityContext(), [c_value])[2] rtol =
-    1e-8
+@test mb_logp ≈ evaluate!!(cond_model, [c_value])[2] rtol = 1e-8
 
-# test LogDensityContext
 @test begin
     logp = 0
     logp += logpdf(dnorm(1.0, 3.0), 1.0) # a, where f = 1.0
@@ -80,9 +78,7 @@ end
     logp += logpdf(dnorm(2.0, 1.0), 4.0) # d, where g = 2.0
     logp += logpdf(dnorm(4.0, 4.0), 5.0) # e, where h = 4.0
     logp
-end ≈ evaluate!!(
-    model, JuliaBUGS.LogDensityContext(), [-2.0, 4.0, 3.0, 2.0, 1.0, 4.0, 5.0]
-)[2] atol = 1e-8
+end ≈ evaluate!!(model, [-2.0, 4.0, 3.0, 2.0, 1.0, 4.0, 5.0])[2] atol = 1e-8
 
 # AuxiliaryNodeInfo
 test_model = @bugs begin

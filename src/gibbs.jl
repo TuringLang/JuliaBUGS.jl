@@ -62,8 +62,8 @@ function gibbs_internal end
 
 function gibbs_internal(rng::Random.AbstractRNG, cond_model::BUGSModel, ::MHFromPrior)
     transformed_original = JuliaBUGS.getparams(cond_model)
-    values, logp = evaluate!!(cond_model, LogDensityContext(), transformed_original)
-    values_proposed, logp_proposed = evaluate!!(cond_model, SamplingContext())
+    values, logp = evaluate!!(cond_model, transformed_original)
+    values_proposed, logp_proposed = evaluate!!(rng, cond_model)
 
     if logp_proposed - logp > log(rand(rng))
         values = values_proposed

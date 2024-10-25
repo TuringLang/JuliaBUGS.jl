@@ -3,7 +3,7 @@ module JuliaBUGSAdvancedMHExt
 using AbstractMCMC
 using AdvancedMH
 using JuliaBUGS
-using JuliaBUGS: BUGSModel, find_generated_vars, LogDensityContext, evaluate!!
+using JuliaBUGS: BUGSModel, find_generated_vars, evaluate!!
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD

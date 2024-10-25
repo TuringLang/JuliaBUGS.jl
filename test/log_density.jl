@@ -1,6 +1,6 @@
 # TODO: make this available in JuliaBUGS
 function _logjoint(model::JuliaBUGS.BUGSModel)
-    return JuliaBUGS.evaluate!!(model, JuliaBUGS.DefaultContext())[2]
+    return JuliaBUGS.evaluate!!(model)[2]
 end
 
 @testset "Log density" begin
