@@ -1,5 +1,5 @@
 function LogDensityProblems.logdensity(model::AbstractBUGSModel, x::AbstractArray)
-    _, logp = evaluate!!(model, LogDensityContext(), x)
+    _, logp = evaluate!!(model, x)
     return logp
 end
 

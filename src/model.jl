@@ -213,7 +213,7 @@ end
 Initialize the model with a vector of initial values, the values can be in transformed space if `model.transformed` is set to true.
 """
 function initialize!(model::BUGSModel, initial_params::AbstractVector)
-    evaluation_env, _ = AbstractPPL.evaluate!!(model, LogDensityContext(), initial_params)
+    evaluation_env, _ = AbstractPPL.evaluate!!(model, initial_params)
     return BangBang.setproperty!!(model, :evaluation_env, evaluation_env)
 end
 
@@ -260,18 +260,23 @@ function getparams(model::BUGSModel)
     return param_vals
 end
 
-function getparams_as_ordereddict(model::BUGSModel)
-    d = OrderedDict{VarName,Any}()
+"""
+    getparams(T::Type{<:AbstractDict}, model::BUGSModel)
+
+Extract the parameter values from the model into a dictionary of type T.
+If model.transformed is true, returns parameters in transformed space.
+"""
+function getparams(T::Type{<:AbstractDict}, model::BUGSModel)
+    d = T()
     for v in model.parameters
+        value = AbstractPPL.get(model.evaluation_env, v)
         if !model.transformed
-            d[v] = AbstractPPL.get(model.evaluation_env, v)
+            d[v] = value
         else
             (; node_function, node_args, loop_vars) = model.g[v]
             args = prepare_arg_values(Val(node_args), model.evaluation_env, loop_vars)
             dist = node_function(; args...)
-            d[v] = Bijectors.transform(
-                Bijectors.bijector(dist), AbstractPPL.get(model.evaluation_env, v)
-            )
+            d[v] = Bijectors.transform(Bijectors.bijector(dist), value)
         end
     end
     return d
@@ -355,7 +360,7 @@ function AbstractPPL.decondition(model::BUGSModel, var_group::Vector{<:VarName})
     new_model = BUGSModel(
         model, new_parameters, sorted_blanket_with_vars, base_model.evaluation_env
     )
-    evaluate_env, _ = evaluate!!(new_model, DefaultContext())
+    evaluate_env, _ = evaluate!!(new_model)
     return BangBang.setproperty!!(new_model, :evaluation_env, evaluate_env)
 end
 
@@ -368,33 +373,7 @@ function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
     )
 end
 
-"""
-    DefaultContext
-
-Use values in varinfo to compute the log joint density.
-"""
-struct DefaultContext <: AbstractPPL.AbstractContext end
-
-"""
-    SamplingContext
-
-Do an ancestral sampling of the model parameters. Also accumulate log joint density.
-"""
-@kwdef struct SamplingContext{T<:Random.AbstractRNG} <: AbstractPPL.AbstractContext
-    rng::T = Random.default_rng()
-end
-
-"""
-    LogDensityContext
-
-Use the given values to compute the log joint density.
-"""
-struct LogDensityContext <: AbstractPPL.AbstractContext end
-
-function AbstractPPL.evaluate!!(model::BUGSModel, rng::Random.AbstractRNG)
-    return evaluate!!(model, SamplingContext(rng))
-end
-function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
+function AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel)
     (; evaluation_env, g, sorted_nodes) = model
     vi = deepcopy(evaluation_env)
     logp = 0.0
@@ -406,7 +385,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
             dist = node_function(; args...)
-            value = rand(ctx.rng, dist) # just sample from the prior
+            value = rand(rng, dist) # just sample from the prior
             logp += logpdf(dist, value)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         end
@@ -415,11 +394,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ctx::SamplingContext)
 end
 
 function AbstractPPL.evaluate!!(model::BUGSModel)
-    return AbstractPPL.evaluate!!(model, DefaultContext())
-end
-function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
     (; sorted_nodes, g, evaluation_env) = model
-    vi = deepcopy(evaluation_env)
     logp = 0.0
     for vn in sorted_nodes
         (; is_stochastic, node_function, node_args, loop_vars) = g[vn]
@@ -446,9 +421,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, ::DefaultContext)
     return evaluation_env, logp
 end
 
-function AbstractPPL.evaluate!!(
-    model::BUGSModel, ::LogDensityContext, flattened_values::AbstractVector
-)
+function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVector)
     var_lengths = if model.transformed
         model.transformed_var_lengths
     else
