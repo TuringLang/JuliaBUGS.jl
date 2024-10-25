@@ -329,8 +329,6 @@ function AbstractPPL.condition(
         ni = g[vn]
         if ni.is_stochastic && !ni.is_observed
             ni = @set ni.is_observed = true
-            @info "setting $vn to observed"
-            @info ni.is_stochastic, ni.is_observed
             g[vn] = ni
         end
     end
@@ -457,10 +455,11 @@ function AbstractPPL.evaluate!!(
         model.untransformed_var_lengths
     end
 
-    (; g, evaluation_env, sorted_nodes) = model
+    g = model.g
+    evaluation_env = deepcopy(model.evaluation_env)
     current_idx = 1
     logp = 0.0
-    for vn in sorted_nodes
+    for vn in model.sorted_nodes
         (; is_stochastic, is_observed, node_function, node_args, loop_vars) = g[vn]
         args = prepare_arg_values(Val(node_args), evaluation_env, loop_vars)
         if !is_stochastic
