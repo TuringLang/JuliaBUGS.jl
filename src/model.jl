@@ -47,8 +47,9 @@ end
 The `BUGSModel` object is used for inference and represents the output of compilation. It implements the
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
 """
-struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple} <:
-       AbstractBUGSModel
+struct BUGSModel{
+    base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,TNF,TNA,TV
+} <: AbstractBUGSModel
     " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
 
@@ -66,7 +67,7 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple}
     "A vector containing the names of the model parameters (unobserved stochastic variables)."
     parameters::Vector{<:VarName}
     "An `EvalCache` object containing pre-computed values of the nodes in the model. For each topological order, this needs to be recomputed."
-    eval_cache::EvalCache
+    eval_cache::EvalCache{TNF,TNA,TV}
 
     "An instance of `BUGSGraph`, representing the dependency graph of the model."
     g::BUGSGraph
