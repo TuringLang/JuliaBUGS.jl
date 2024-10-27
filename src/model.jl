@@ -4,6 +4,44 @@
 abstract type AbstractBUGSModel end
 
 """
+    EvalCache{TNF,TNA,TV}
+
+Pre-compute the values of the nodes in the model to avoid lookups from MetaGraph.
+"""
+struct EvalCache{TNF,TNA,TV}
+    sorted_nodes::Vector{<:VarName}
+    is_stochastic_vals::Vector{Bool}
+    is_observed_vals::Vector{Bool}
+    node_function_vals::TNF
+    node_args_vals::TNA
+    loop_vars_vals::TV
+end
+
+function EvalCache(sorted_nodes::Vector{<:VarName}, g::BUGSGraph)
+    is_stochastic_vals = Array{Bool}(undef, length(sorted_nodes))
+    is_observed_vals = Array{Bool}(undef, length(sorted_nodes))
+    node_function_vals = []
+    node_args_vals = []
+    loop_vars_vals = []
+    for (i, vn) in enumerate(sorted_nodes)
+        (; is_stochastic, is_observed, node_function, node_args, loop_vars) = g[vn]
+        is_stochastic_vals[i] = is_stochastic
+        is_observed_vals[i] = is_observed
+        push!(node_function_vals, node_function)
+        push!(node_args_vals, Val(node_args))
+        push!(loop_vars_vals, loop_vars)
+    end
+    return EvalCache(
+        sorted_nodes,
+        is_stochastic_vals,
+        is_observed_vals,
+        node_function_vals,
+        node_args_vals,
+        loop_vars_vals,
+    )
+end
+
+"""
     BUGSModel
 
 The `BUGSModel` object is used for inference and represents the output of compilation. It implements the
@@ -27,8 +65,8 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple}
     evaluation_env::T
     "A vector containing the names of the model parameters (unobserved stochastic variables)."
     parameters::Vector{<:VarName}
-    "A vector containing the names of all the variables in the model, sorted in topological order."
-    sorted_nodes::Vector{<:VarName}
+    "An `EvalCache` object containing pre-computed values of the nodes in the model. For each topological order, this needs to be recomputed."
+    eval_cache::EvalCache
 
     "An instance of `BUGSGraph`, representing the dependency graph of the model."
     g::BUGSGraph
@@ -144,7 +182,7 @@ function BUGSModel(
         transformed_var_lengths,
         evaluation_env,
         parameters,
-        sorted_nodes,
+        EvalCache(sorted_nodes, g),
         g,
         nothing,
     )
@@ -152,6 +190,7 @@ end
 
 function BUGSModel(
     model::BUGSModel,
+    g::BUGSGraph,
     parameters::Vector{<:VarName},
     sorted_nodes::Vector{<:VarName},
     evaluation_env::NamedTuple=model.evaluation_env,
@@ -164,8 +203,8 @@ function BUGSModel(
         model.transformed_var_lengths,
         evaluation_env,
         parameters,
-        sorted_nodes,
-        model.g,
+        EvalCache(sorted_nodes, g),
+        g,
         isnothing(model.base_model) ? model : model.base_model,
     )
 end
@@ -177,9 +216,13 @@ Initialize the model with a NamedTuple of initial values, the values are expecte
 """
 function initialize!(model::BUGSModel, initial_params::NamedTuple)
     check_input(initial_params)
-    for vn in model.sorted_nodes
-        (; is_stochastic, is_observed, node_function, node_args, loop_vars) = model.g[vn]
-        args = prepare_arg_values(Val(node_args), model.evaluation_env, loop_vars)
+    for (i, vn) in enumerate(model.eval_cache.sorted_nodes)
+        is_stochastic = model.eval_cache.is_stochastic_vals[i]
+        is_observed = model.eval_cache.is_observed_vals[i]
+        node_function = model.eval_cache.node_function_vals[i]
+        node_args = model.eval_cache.node_args_vals[i]
+        loop_vars = model.eval_cache.loop_vars_vals[i]
+        args = prepare_arg_values(node_args, model.evaluation_env, loop_vars)
         if !is_stochastic
             value = Base.invokelatest(node_function; args...)
             BangBang.@set!! model.evaluation_env = setindex!!(
@@ -318,11 +361,11 @@ function AbstractPPL.condition(
     new_parameters = setdiff(model.parameters, var_group)
 
     sorted_blanket_with_vars = if sorted_nodes isa Nothing
-        sorted_nodes
+        model.eval_cache.sorted_nodes
     else
         filter(
             vn -> vn in union(markov_blanket(model.g, new_parameters), new_parameters),
-            model.sorted_nodes,
+            model.eval_cache.sorted_nodes,
         )
     end
 
@@ -338,7 +381,7 @@ function AbstractPPL.condition(
         end
     end
 
-    new_model = BUGSModel(model, new_parameters, sorted_blanket_with_vars, evaluation_env)
+    new_model = BUGSModel(model, g, new_parameters, sorted_blanket_with_vars, evaluation_env)
     return BangBang.setproperty!!(new_model, :g, g)
 end
 
@@ -347,18 +390,19 @@ function AbstractPPL.decondition(model::BUGSModel, var_group::Vector{<:VarName})
     base_model = model.base_model isa Nothing ? model : model.base_model
 
     new_parameters = [
-        v for v in base_model.sorted_nodes if v in union(model.parameters, var_group)
+        v for
+        v in base_model.eval_cache.sorted_nodes if v in union(model.parameters, var_group)
     ] # keep the order
 
     markov_blanket_with_vars = union(
         markov_blanket(base_model.g, new_parameters), new_parameters
     )
     sorted_blanket_with_vars = filter(
-        vn -> vn in markov_blanket_with_vars, base_model.sorted_nodes
+        vn -> vn in markov_blanket_with_vars, base_model.eval_cache.sorted_nodes
     )
 
     new_model = BUGSModel(
-        model, new_parameters, sorted_blanket_with_vars, base_model.evaluation_env
+        model, model.g, new_parameters, sorted_blanket_with_vars, base_model.evaluation_env
     )
     evaluate_env, _ = evaluate!!(new_model)
     return BangBang.setproperty!!(new_model, :evaluation_env, evaluate_env)
@@ -374,12 +418,15 @@ function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
 end
 
 function AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel)
-    (; evaluation_env, g, sorted_nodes) = model
+    (; evaluation_env, g) = model
     vi = deepcopy(evaluation_env)
     logp = 0.0
-    for vn in sorted_nodes
-        (; is_stochastic, node_function, node_args, loop_vars) = g[vn]
-        args = prepare_arg_values(Val(node_args), evaluation_env, loop_vars)
+    for (i, vn) in enumerate(model.eval_cache.sorted_nodes)
+        is_stochastic = model.eval_cache.is_stochastic_vals[i]
+        node_function = model.eval_cache.node_function_vals[i]
+        node_args = model.eval_cache.node_args_vals[i]
+        loop_vars = model.eval_cache.loop_vars_vals[i]
+        args = prepare_arg_values(node_args, evaluation_env, loop_vars)
         if !is_stochastic
             value = node_function(; args...)
             evaluation_env = setindex!!(evaluation_env, value, vn)
@@ -394,11 +441,14 @@ function AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel)
 end
 
 function AbstractPPL.evaluate!!(model::BUGSModel)
-    (; sorted_nodes, g, evaluation_env) = model
     logp = 0.0
-    for vn in sorted_nodes
-        (; is_stochastic, node_function, node_args, loop_vars) = g[vn]
-        args = prepare_arg_values(Val(node_args), evaluation_env, loop_vars)
+    evaluation_env = deepcopy(model.evaluation_env)
+    for (i, vn) in enumerate(model.eval_cache.sorted_nodes)
+        is_stochastic = model.eval_cache.is_stochastic_vals[i]
+        node_function = model.eval_cache.node_function_vals[i]
+        node_args = model.eval_cache.node_args_vals[i]
+        loop_vars = model.eval_cache.loop_vars_vals[i]
+        args = prepare_arg_values(node_args, evaluation_env, loop_vars)
         if !is_stochastic
             value = node_function(; args...)
             evaluation_env = setindex!!(evaluation_env, value, vn)
@@ -428,13 +478,16 @@ function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVect
         model.untransformed_var_lengths
     end
 
-    g = model.g
     evaluation_env = deepcopy(model.evaluation_env)
     current_idx = 1
     logp = 0.0
-    for vn in model.sorted_nodes
-        (; is_stochastic, is_observed, node_function, node_args, loop_vars) = g[vn]
-        args = prepare_arg_values(Val(node_args), evaluation_env, loop_vars)
+    for (i, vn) in enumerate(model.eval_cache.sorted_nodes)
+        is_stochastic = model.eval_cache.is_stochastic_vals[i]
+        is_observed = model.eval_cache.is_observed_vals[i]
+        node_function = model.eval_cache.node_function_vals[i]
+        node_args = model.eval_cache.node_args_vals[i]
+        loop_vars = model.eval_cache.loop_vars_vals[i]
+        args = prepare_arg_values(node_args, evaluation_env, loop_vars)
         if !is_stochastic
             value = node_function(; args...)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)

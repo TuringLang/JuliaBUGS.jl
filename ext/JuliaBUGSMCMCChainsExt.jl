@@ -84,7 +84,7 @@ function JuliaBUGS.gen_chains(
     g = model.g
 
     generated_vars = find_generated_vars(g)
-    generated_vars = [v for v in model.sorted_nodes if v in generated_vars] # keep the order
+    generated_vars = [v for v in model.eval_cache.sorted_nodes if v in generated_vars] # keep the order
 
     param_vals = []
     generated_quantities = []
