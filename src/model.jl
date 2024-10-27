@@ -381,7 +381,9 @@ function AbstractPPL.condition(
         end
     end
 
-    new_model = BUGSModel(model, g, new_parameters, sorted_blanket_with_vars, evaluation_env)
+    new_model = BUGSModel(
+        model, g, new_parameters, sorted_blanket_with_vars, evaluation_env
+    )
     return BangBang.setproperty!!(new_model, :g, g)
 end
 
