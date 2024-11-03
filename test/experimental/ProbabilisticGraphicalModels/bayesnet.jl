@@ -97,10 +97,8 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     end
 
     @testset "Simple ancestral sampling" begin
-        
     end
 
     @testset "Bayes Ball" begin
-        
     end
 end

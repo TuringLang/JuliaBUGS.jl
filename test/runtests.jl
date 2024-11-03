@@ -24,7 +24,9 @@ using ReverseDiff
 
 AbstractMCMC.setprogress!(false)
 
-const Tests = ("elementary", "compilation", "log_density", "gibbs", "mcmchains", "experimental", "all")
+const Tests = (
+    "elementary", "compilation", "log_density", "gibbs", "mcmchains", "experimental", "all"
+)
 
 const test_group = get(ENV, "TEST_GROUP", "all")
 if test_group ∉ Tests
