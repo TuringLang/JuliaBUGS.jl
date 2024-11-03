@@ -46,7 +46,6 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
 
     @testset "conditioning and deconditioning" begin
         bn = BayesianNetwork{Symbol}()
-        
         # Add some vertices
         add_stochastic_vertex!(bn, :A, Normal(0, 1), false)
         add_stochastic_vertex!(bn, :B, Normal(0, 1), false)
