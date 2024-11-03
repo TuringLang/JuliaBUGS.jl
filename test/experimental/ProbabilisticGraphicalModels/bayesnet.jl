@@ -2,7 +2,12 @@ using Test
 using Distributions
 using Graphs
 using JuliaBUGS.ProbabilisticGraphicalModels:
-    BayesianNetwork, add_stochastic_vertex!, add_deterministic_vertex!, add_edge!, condition, decondition
+    BayesianNetwork,
+    add_stochastic_vertex!,
+    add_deterministic_vertex!,
+    add_edge!,
+    condition,
+    decondition
 
 @testset "BayesianNetwork" begin
     @testset "Adding vertices" begin
