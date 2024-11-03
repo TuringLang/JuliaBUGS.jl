@@ -96,8 +96,7 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         @test bn_cond2.values[:B] == 2.0
     end
 
-    @testset "Simple ancestral sampling" begin
-    end
+    @testset "Simple ancestral sampling" begin end
 
     @testset "Bayes Ball" begin
     end
