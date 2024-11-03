@@ -24,7 +24,9 @@ using ReverseDiff
 
 AbstractMCMC.setprogress!(false)
 
-const Tests = ("elementary", "compilation", "log_density", "gibbs", "mcmchains", "all")
+const Tests = (
+    "elementary", "compilation", "log_density", "gibbs", "mcmchains", "experimental", "all"
+)
 
 const test_group = get(ENV, "TEST_GROUP", "all")
 if test_group ∉ Tests
@@ -66,4 +68,8 @@ end
 
 if test_group == "mcmchains" || test_group == "all"
     include("ext/mcmchains.jl")
+end
+
+if test_group == "experimental" || test_group == "all"
+    include("experimental/ProbabilisticGraphicalModels/bayesnet.jl")
 end
