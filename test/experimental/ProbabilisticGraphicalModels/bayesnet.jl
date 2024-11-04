@@ -107,7 +107,6 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         add_edge!(bn, :B, :C)
         
         samples = ancestral_sampling(bn)
-        
         @test haskey(samples, :A)
         @test haskey(samples, :B)
         @test haskey(samples, :C)
