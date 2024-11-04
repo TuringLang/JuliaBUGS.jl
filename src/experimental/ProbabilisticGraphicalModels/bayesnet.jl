@@ -4,7 +4,7 @@
 A structure representing a Bayesian Network.
 """
 struct BayesianNetwork{V,T,F}
-    graph::SimpleGraph{T}
+    graph::SimpleDiGraph{T}
     "names of the variables in the network"
     names::Vector{V}
     "mapping from variable names to ids"
@@ -25,7 +25,7 @@ end
 
 function BayesianNetwork{V}() where {V}
     return BayesianNetwork(
-        SimpleGraph{Int}(), # by default, vertex ids are integers
+        SimpleDiGraph{Int}(), # by default, vertex ids are integers
         V[],
         Dict{V,Int}(),
         Dict{V,Any}(),
@@ -167,10 +167,9 @@ Ancestral sampling works by:
 """
 function ancestral_sampling(bn::BayesianNetwork{V}) where {V}
     ordered_vertices = Graphs.topological_sort(bn.graph)
-
+    println(ordered_vertices)
     samples = Dict{V,Any}()
 
-    # TODO: Implement sampling logic
 
     return samples
 end

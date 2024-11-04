@@ -7,8 +7,8 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     add_deterministic_vertex!,
     add_edge!,
     condition,
-    decondition
-
+    decondition,
+    ancestral_sampling
 @testset "BayesianNetwork" begin
     @testset "Adding vertices" begin
         bn = BayesianNetwork{Symbol}()
@@ -96,7 +96,36 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         @test bn_cond2.values[:B] == 2.0
     end
 
-    @testset "Simple ancestral sampling" begin end
+    @testset "Simple ancestral sampling" begin
+        # Create a Bayesian network
+        bn = BayesianNetwork{Symbol}()
+    
+        # Add stochastic vertices with their distributions
+        add_stochastic_vertex!(bn, :A, Normal(0, 1), false)  # Stochastic variable A
+        add_stochastic_vertex!(bn, :B, Normal(0, 1), false)  # Stochastic variable B
+        add_stochastic_vertex!(bn, :C, Normal(0, 1), false)  # Stochastic variable C
+    
+        # Add edges to define relationships
+        add_edge!(bn, :A, :B)  # A -> B
+        add_edge!(bn, :A, :C)  # A -> C
+    
+        # Perform ancestral sampling
+        samples = ancestral_sampling(bn)
+    
+        # Debugging: Print samples to see its contents
+        println("Samples: ", samples)
+    
+        # Check if all sampled variables are present
+        @test haskey(samples, :A)
+        @test haskey(samples, :B)
+        @test haskey(samples, :C)
+    
+        # Check if the values are numerical since we are sampling from Normal distributions
+        @test isa(samples[:A], Number)
+        @test isa(samples[:B], Number)
+        @test isa(samples[:C], Number)
+    end
+    
 
     @testset "Bayes Ball" begin end
 end
