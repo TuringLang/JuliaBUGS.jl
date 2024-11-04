@@ -105,7 +105,6 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         add_deterministic_vertex!(bn, :C, (a, b) -> a + b)
         add_edge!(bn, :A, :C)
         add_edge!(bn, :B, :C)
-        
         samples = ancestral_sampling(bn)
         @test haskey(samples, :A)
         @test haskey(samples, :B)
@@ -114,7 +113,6 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         @test samples[:B] isa Number
         @test samples[:C] ≈ samples[:A] + samples[:B]
     end
-    
 
     @testset "Bayes Ball" begin end
 end
