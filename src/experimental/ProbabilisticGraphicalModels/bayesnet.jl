@@ -175,7 +175,6 @@ function ancestral_sampling(bn::BayesianNetwork{V}) where {V}
             samples[vertex_name] = bn.values[vertex_name]
             continue
         end
-        
         if bn.is_stochastic[vertex_id]
             dist_idx = findfirst(id -> id == vertex_id, bn.stochastic_ids)
             samples[vertex_name] = rand(bn.distributions[dist_idx])
