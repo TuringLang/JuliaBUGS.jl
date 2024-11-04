@@ -98,7 +98,6 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
 
     @testset "Simple ancestral sampling" begin
         bn = BayesianNetwork{Symbol}()
-        
         # Add stochastic vertices
         add_stochastic_vertex!(bn, :A, Normal(0, 1), false)
         add_stochastic_vertex!(bn, :B, Normal(1, 2), false)
