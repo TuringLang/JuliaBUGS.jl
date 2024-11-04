@@ -171,7 +171,6 @@ function ancestral_sampling(bn::BayesianNetwork{V}) where {V}
 
     for vertex_id in ordered_vertices
         vertex_name = bn.names[vertex_id]
-        
         if bn.is_observed[vertex_id]
             samples[vertex_name] = bn.values[vertex_name]
             continue
