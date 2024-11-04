@@ -101,7 +101,6 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         # Add stochastic vertices
         add_stochastic_vertex!(bn, :A, Normal(0, 1), false)
         add_stochastic_vertex!(bn, :B, Normal(1, 2), false)
-        
         # Add deterministic vertex C = A + B
         add_deterministic_vertex!(bn, :C, (a, b) -> a + b)
         add_edge!(bn, :A, :C)
