@@ -166,10 +166,28 @@ Ancestral sampling works by:
 2. Sampling from each node in order, using the already-sampled parent values for conditional distributions
 """
 function ancestral_sampling(bn::BayesianNetwork{V}) where {V}
-    ordered_vertices = Graphs.topological_sort(bn.graph)
-    println(ordered_vertices)
+    ordered_vertices = Graphs.topological_sort_by_dfs(bn.graph)
     samples = Dict{V,Any}()
 
+    for vertex_id in ordered_vertices
+        vertex_name = bn.names[vertex_id]
+        
+        if bn.is_observed[vertex_id]
+            samples[vertex_name] = bn.values[vertex_name]
+            continue
+        end
+        
+        if bn.is_stochastic[vertex_id]
+            dist_idx = findfirst(id -> id == vertex_id, bn.stochastic_ids)
+            samples[vertex_name] = rand(bn.distributions[dist_idx])
+        else
+            # deterministic node
+            parent_ids = Graphs.inneighbors(bn.graph, vertex_id)
+            parent_values = [samples[bn.names[pid]] for pid in parent_ids]
+            func_idx = findfirst(id -> id == vertex_id, bn.deterministic_ids)
+            samples[vertex_name] = bn.deterministic_functions[func_idx](parent_values...)
+        end
+    end
 
     return samples
 end
