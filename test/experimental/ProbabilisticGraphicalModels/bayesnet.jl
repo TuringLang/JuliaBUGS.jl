@@ -116,51 +116,43 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
 
     @testset "Complex ancestral sampling" begin
         bn = BayesianNetwork{Symbol}()
-        
         add_stochastic_vertex!(bn, :μ, Normal(0, 2), false)
         add_stochastic_vertex!(bn, :σ, LogNormal(0, 0.5), false)
         add_stochastic_vertex!(bn, :X, Normal(0, 1), false)
         add_stochastic_vertex!(bn, :Y, Normal(0, 1), false)
-        
         add_deterministic_vertex!(bn, :X_scaled, (μ, σ, x) -> x * σ + μ)
         add_deterministic_vertex!(bn, :Y_scaled, (μ, σ, y) -> y * σ + μ)
         add_deterministic_vertex!(bn, :Sum, (x, y) -> x + y)
         add_deterministic_vertex!(bn, :Product, (x, y) -> x * y)
         add_deterministic_vertex!(bn, :N, () -> 2.0)
         add_deterministic_vertex!(bn, :Mean, (s, n) -> s / n)
-        
         add_edge!(bn, :μ, :X_scaled)
         add_edge!(bn, :σ, :X_scaled)
         add_edge!(bn, :X, :X_scaled)
-        
         add_edge!(bn, :μ, :Y_scaled)
         add_edge!(bn, :σ, :Y_scaled)
         add_edge!(bn, :Y, :Y_scaled)
-        
         add_edge!(bn, :X_scaled, :Sum)
         add_edge!(bn, :Y_scaled, :Sum)
-        
         add_edge!(bn, :X_scaled, :Product)
         add_edge!(bn, :Y_scaled, :Product)
-        
         add_edge!(bn, :Sum, :Mean)
         add_edge!(bn, :N, :Mean)
-        
         samples = ancestral_sampling(bn)
-        
-        @test all(haskey(samples, k) for k in [:μ, :σ, :X, :Y, :X_scaled, :Y_scaled, :Sum, :Product, :Mean, :N])
-        
+
+        @test all(
+            haskey(samples, k) for
+            k in [:μ, :σ, :X, :Y, :X_scaled, :Y_scaled, :Sum, :Product, :Mean, :N]
+        )
+
         @test all(samples[k] isa Number for k in keys(samples))
-        
         @test samples[:X_scaled] ≈ samples[:X] * samples[:σ] + samples[:μ]
         @test samples[:Y_scaled] ≈ samples[:Y] * samples[:σ] + samples[:μ]
         @test samples[:Sum] ≈ samples[:X_scaled] + samples[:Y_scaled]
         @test samples[:Product] ≈ samples[:X_scaled] * samples[:Y_scaled]
         @test samples[:Mean] ≈ samples[:Sum] / samples[:N]
         @test samples[:N] ≈ 2.0
-        
         @test samples[:σ] > 0
-        
         # Multiple samples test
         n_samples = 1000
         means = zeros(n_samples)
@@ -168,8 +160,8 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
             samples = ancestral_sampling(bn)
             means[i] = samples[:Mean]
         end
-        
-        @test mean(means) ≈ 0 atol=0.5
+
+        @test mean(means) ≈ 0 atol = 0.5
         @test std(means) > 0
     end
 
