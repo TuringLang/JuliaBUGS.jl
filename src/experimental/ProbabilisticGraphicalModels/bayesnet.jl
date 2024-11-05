@@ -199,11 +199,12 @@ If Z is provided, the conditioning information in `bn` will be ignored.
 function is_conditionally_independent end
 
 function is_conditionally_independent(bn::BayesianNetwork{V}, X::V, Y::V) where {V}
-    # TODO: Implement
+    Z = bn.names[findall(bn.is_observed)]
+    return is_conditionally_independent(bn, X, Y, Z)
 end
 
 function is_conditionally_independent(
     bn::BayesianNetwork{V}, X::V, Y::V, Z::Vector{V}
 ) where {V}
-    # TODO: Implement
+    
 end
