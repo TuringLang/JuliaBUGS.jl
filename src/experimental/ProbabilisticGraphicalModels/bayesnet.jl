@@ -211,35 +211,35 @@ function is_conditionally_independent(
     x_id = bn.names_to_ids[X]
     y_id = bn.names_to_ids[Y]
     z_ids = Set([bn.names_to_ids[z] for z in Z])
-    
+
     # Track visited nodes and their states
     n_vertices = nv(bn.graph)
     visited = falses(n_vertices)
-    
+
     # Queue entries are (node_id, from_parent)
-    queue = Tuple{Int, Bool}[]
-    
+    queue = Tuple{Int,Bool}[]
+
     # Start from X
     push!(queue, (x_id, true))   # As if coming from parent
     push!(queue, (x_id, false))  # As if coming from child
-    
+
     while !isempty(queue)
         current_id, from_parent = popfirst!(queue)
-        
+
         if visited[current_id]
             continue
         end
         visited[current_id] = true
-        
+
         # If we reached Y, path is active
         if current_id == y_id
             return false
         end
-        
+
         is_conditioned = current_id in z_ids
         parents = inneighbors(bn.graph, current_id)
         children = outneighbors(bn.graph, current_id)
-        
+
         # Case 1: Node is not conditioned
         if !is_conditioned
             # Can go to children if coming from parent or at start node
@@ -248,7 +248,7 @@ function is_conditionally_independent(
                     push!(queue, (child, true))
                 end
             end
-            
+
             # Can go to parents if coming from child or at start node
             if !from_parent || current_id == x_id
                 for parent in parents
@@ -256,7 +256,7 @@ function is_conditionally_independent(
                 end
             end
         end
-        
+
         # Case 2: Node is conditioned or has conditioned descendants
         if is_conditioned || has_conditioned_descendant(bn, current_id, z_ids)
             # If this is a collider or descendant of collider
@@ -268,29 +268,29 @@ function is_conditionally_independent(
             end
         end
     end
-    
+
     return true
 end
 
 function has_conditioned_descendant(bn::BayesianNetwork, node_id::Int, z_ids::Set{Int})
     visited = falses(nv(bn.graph))
     queue = Int[node_id]
-    
+
     while !isempty(queue)
         current = popfirst!(queue)
-        
+
         if visited[current]
             continue
         end
         visited[current] = true
-        
+
         if current in z_ids
             return true
         end
-        
+
         # Add all unvisited children
         append!(queue, filter(c -> !visited[c], outneighbors(bn.graph, current)))
     end
-    
+
     return false
 end
