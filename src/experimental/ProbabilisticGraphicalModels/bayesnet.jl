@@ -199,12 +199,94 @@ If Z is provided, the conditioning information in `bn` will be ignored.
 function is_conditionally_independent end
 
 function is_conditionally_independent(bn::BayesianNetwork{V}, X::V, Y::V) where {V}
-    Z = bn.names[findall(bn.is_observed)]
+    # Use currently observed variables as Z
+    Z = V[v for (v, is_obs) in zip(bn.names, bn.is_observed) if is_obs]
     return is_conditionally_independent(bn, X, Y, Z)
 end
 
 function is_conditionally_independent(
     bn::BayesianNetwork{V}, X::V, Y::V, Z::Vector{V}
 ) where {V}
+    # Get vertex IDs
+    x_id = bn.names_to_ids[X]
+    y_id = bn.names_to_ids[Y]
+    z_ids = Set([bn.names_to_ids[z] for z in Z])
     
+    # Track visited nodes and their states
+    n_vertices = nv(bn.graph)
+    visited = falses(n_vertices)
+    
+    # Queue entries are (node_id, from_parent)
+    queue = Tuple{Int, Bool}[]
+    
+    # Start from X, can go both up and down initially
+    push!(queue, (x_id, true))  # As if coming from a parent
+    
+    while !isempty(queue)
+        current_id, from_parent = popfirst!(queue)
+        
+        if visited[current_id]
+            continue
+        end
+        visited[current_id] = true
+        
+        # If we reached Y, path is active
+        if current_id == y_id
+            return false
+        end
+        
+        is_conditioned = current_id in z_ids
+        
+        # Get neighbors
+        parents = inneighbors(bn.graph, current_id)
+        children = outneighbors(bn.graph, current_id)
+        
+        # Rule 1: If coming from parent and not conditioned, can go to children
+        if from_parent && !is_conditioned
+            append!(queue, [(child, true) for child in children])
+        end
+        
+        # Rule 2: If coming from child and not conditioned, can go to parents
+        if !from_parent && !is_conditioned
+            append!(queue, [(parent, false) for parent in parents])
+        end
+        
+        # Rule 3: If at a collider (or descendant of collider) and it's conditioned, 
+        # can go up to parents
+        if !from_parent && (is_conditioned || has_conditioned_descendant(bn, current_id, z_ids))
+            if length(parents) > 1  # Is a collider
+                append!(queue, [(parent, false) for parent in parents])
+            end
+        end
+    end
+    
+    return true
+end
+
+function has_conditioned_descendant(bn::BayesianNetwork, node_id::Int, z_ids::Set{Int})
+    visited = falses(nv(bn.graph))
+    queue = Int[node_id]
+    
+    while !isempty(queue)
+        current = popfirst!(queue)
+        
+        if visited[current]
+            continue
+        end
+        visited[current] = true
+        
+        # Check if current node is conditioned
+        if current in z_ids
+            return true
+        end
+        
+        # Add all unvisited children to queue
+        for child in outneighbors(bn.graph, current)
+            if !visited[child]
+                push!(queue, child)
+            end
+        end
+    end
+    
+    return false
 end

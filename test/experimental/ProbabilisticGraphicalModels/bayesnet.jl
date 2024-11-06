@@ -8,7 +8,8 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     add_edge!,
     condition,
     decondition,
-    ancestral_sampling
+    ancestral_sampling,
+    is_conditionally_independent
 @testset "BayesianNetwork" begin
     @testset "Adding vertices" begin
         bn = BayesianNetwork{Symbol}()
@@ -165,5 +166,96 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         @test std(means) > 0
     end
 
-    @testset "Bayes Ball" begin end
+    @testset "Bayes Ball" begin
+        @testset "Chain Structure (A → B → C)" begin
+            bn = BayesianNetwork{Symbol}()
+            
+            add_stochastic_vertex!(bn, :A, Normal(), false)
+            add_stochastic_vertex!(bn, :B, Normal(), false)
+            add_stochastic_vertex!(bn, :C, Normal(), false)
+            
+            add_edge!(bn, :A, :B)
+            add_edge!(bn, :B, :C)
+            
+            @test is_conditionally_independent(bn, :A, :C, [:B])
+            @test !is_conditionally_independent(bn, :A, :C, Symbol[])
+        end
+
+        @testset "Fork Structure (A ← B → C)" begin
+            bn = BayesianNetwork{Symbol}()
+            
+            add_stochastic_vertex!(bn, :A, Normal(), false)
+            add_stochastic_vertex!(bn, :B, Normal(), false)
+            add_stochastic_vertex!(bn, :C, Normal(), false)
+            
+            add_edge!(bn, :B, :A)
+            add_edge!(bn, :B, :C)
+            
+            @test is_conditionally_independent(bn, :A, :C, [:B])
+            @test !is_conditionally_independent(bn, :A, :C, Symbol[])
+        end
+
+        @testset "Collider Structure (A → B ← C)" begin
+            bn = BayesianNetwork{Symbol}()
+            
+            add_stochastic_vertex!(bn, :A, Normal(), false)
+            add_stochastic_vertex!(bn, :B, Normal(), false)
+            add_stochastic_vertex!(bn, :C, Normal(), false)
+            
+            add_edge!(bn, :A, :B)
+            add_edge!(bn, :C, :B)
+            
+            @test is_conditionally_independent(bn, :A, :C, Symbol[])
+            @test !is_conditionally_independent(bn, :A, :C, [:B])
+        end
+
+        @testset "Complex Structure" begin
+            bn = BayesianNetwork{Symbol}()
+            
+            for v in [:A, :B, :C, :D, :E]
+                add_stochastic_vertex!(bn, v, Normal(), false)
+            end
+            
+            # Create structure:
+            #     A → B → D
+            #         ↓   ↑
+            #         C → E
+            add_edge!(bn, :A, :B)
+            add_edge!(bn, :B, :C)
+            add_edge!(bn, :B, :D)
+            add_edge!(bn, :C, :E)
+            add_edge!(bn, :E, :D)
+            
+            @test is_conditionally_independent(bn, :A, :E, [:B, :C])
+            @test !is_conditionally_independent(bn, :A, :E, [:B])
+            @test !is_conditionally_independent(bn, :A, :E, Symbol[])
+        end
+
+        @testset "Using Observed Variables" begin
+            bn = BayesianNetwork{Symbol}()
+            
+            add_stochastic_vertex!(bn, :A, Normal(), false)
+            add_stochastic_vertex!(bn, :B, Normal(), true)  # B is observed
+            add_stochastic_vertex!(bn, :C, Normal(), false)
+            
+            add_edge!(bn, :A, :B)
+            add_edge!(bn, :B, :C)
+            
+            @test is_conditionally_independent(bn, :A, :C)
+            
+            bn_decond = decondition(bn)
+            @test !is_conditionally_independent(bn_decond, :A, :C)
+        end
+
+        @testset "Error Handling" begin
+            bn = BayesianNetwork{Symbol}()
+            
+            add_stochastic_vertex!(bn, :A, Normal(), false)
+            add_stochastic_vertex!(bn, :B, Normal(), false)
+            
+            @test_throws KeyError is_conditionally_independent(bn, :A, :NonExistent)
+            @test_throws KeyError is_conditionally_independent(bn, :NonExistent, :B)
+            @test_throws KeyError is_conditionally_independent(bn, :A, :B, [:NonExistent])
+        end
+    end
 end
