@@ -219,8 +219,9 @@ function is_conditionally_independent(
     # Queue entries are (node_id, from_parent)
     queue = Tuple{Int, Bool}[]
     
-    # Start from X, can go both up and down initially
-    push!(queue, (x_id, true))  # As if coming from a parent
+    # Start from X
+    push!(queue, (x_id, true))   # As if coming from parent
+    push!(queue, (x_id, false))  # As if coming from child
     
     while !isempty(queue)
         current_id, from_parent = popfirst!(queue)
@@ -236,26 +237,34 @@ function is_conditionally_independent(
         end
         
         is_conditioned = current_id in z_ids
-        
-        # Get neighbors
         parents = inneighbors(bn.graph, current_id)
         children = outneighbors(bn.graph, current_id)
         
-        # Rule 1: If coming from parent and not conditioned, can go to children
-        if from_parent && !is_conditioned
-            append!(queue, [(child, true) for child in children])
+        # Case 1: Node is not conditioned
+        if !is_conditioned
+            # Can go to children if coming from parent or at start node
+            if from_parent || current_id == x_id
+                for child in children
+                    push!(queue, (child, true))
+                end
+            end
+            
+            # Can go to parents if coming from child or at start node
+            if !from_parent || current_id == x_id
+                for parent in parents
+                    push!(queue, (parent, false))
+                end
+            end
         end
         
-        # Rule 2: If coming from child and not conditioned, can go to parents
-        if !from_parent && !is_conditioned
-            append!(queue, [(parent, false) for parent in parents])
-        end
-        
-        # Rule 3: If at a collider (or descendant of collider) and it's conditioned, 
-        # can go up to parents
-        if !from_parent && (is_conditioned || has_conditioned_descendant(bn, current_id, z_ids))
-            if length(parents) > 1  # Is a collider
-                append!(queue, [(parent, false) for parent in parents])
+        # Case 2: Node is conditioned or has conditioned descendants
+        if is_conditioned || has_conditioned_descendant(bn, current_id, z_ids)
+            # If this is a collider or descendant of collider
+            if length(parents) > 1 || !isempty(children)
+                # Can go to parents regardless of direction
+                for parent in parents
+                    push!(queue, (parent, false))
+                end
             end
         end
     end
@@ -275,17 +284,12 @@ function has_conditioned_descendant(bn::BayesianNetwork, node_id::Int, z_ids::Se
         end
         visited[current] = true
         
-        # Check if current node is conditioned
         if current in z_ids
             return true
         end
         
-        # Add all unvisited children to queue
-        for child in outneighbors(bn.graph, current)
-            if !visited[child]
-                push!(queue, child)
-            end
-        end
+        # Add all unvisited children
+        append!(queue, filter(c -> !visited[c], outneighbors(bn.graph, current)))
     end
     
     return false
