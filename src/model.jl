@@ -387,7 +387,8 @@ function AbstractPPL.decondition(model::BUGSModel, var_group::Vector{<:VarName})
         markov_blanket(base_model.g, new_parameters), new_parameters
     )
     sorted_blanket_with_vars = filter(
-        vn -> vn in markov_blanket_with_vars, base_model.flattened_graph_node_data.sorted_nodes
+        vn -> vn in markov_blanket_with_vars,
+        base_model.flattened_graph_node_data.sorted_nodes,
     )
 
     new_model = BUGSModel(
