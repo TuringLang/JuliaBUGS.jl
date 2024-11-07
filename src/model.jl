@@ -18,7 +18,9 @@ end
 
 function FlattenedGraphNodeData(
     g::BUGSGraph,
-    sorted_nodes::Vector{<:VarName}=[label_for(g, node) for node in topological_sort(g)],
+    sorted_nodes::Vector{<:VarName}=VarName[
+        label_for(g, node) for node in topological_sort(g)
+    ],
 )
     is_stochastic_vals = Array{Bool}(undef, length(sorted_nodes))
     is_observed_vals = Array{Bool}(undef, length(sorted_nodes))
@@ -35,8 +37,8 @@ function FlattenedGraphNodeData(
         sorted_nodes,
         is_stochastic_vals,
         is_observed_vals,
-        node_function_vals,
-        loop_vars_vals,
+        map(identity, node_function_vals),
+        map(identity, loop_vars_vals),
     )
 end
 
@@ -120,13 +122,12 @@ function BUGSModel(
     untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
     Dict{VarName,Int}()
 
-    for (vn, is_stochastic, is_observed, node_function, loop_vars) in zip(
-        flattened_graph_node_data.sorted_nodes,
-        flattened_graph_node_data.is_stochastic_vals,
-        flattened_graph_node_data.is_observed_vals,
-        flattened_graph_node_data.node_function_vals,
-        flattened_graph_node_data.loop_vars_vals,
-    )
+    for (i, vn) in enumerate(flattened_graph_node_data.sorted_nodes)
+        is_stochastic = flattened_graph_node_data.is_stochastic_vals[i]
+        is_observed = flattened_graph_node_data.is_observed_vals[i]
+        node_function = flattened_graph_node_data.node_function_vals[i]
+        loop_vars = flattened_graph_node_data.loop_vars_vals[i]
+
         if !is_stochastic
             value = Base.invokelatest(node_function, evaluation_env, loop_vars)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
@@ -205,13 +206,11 @@ Initialize the model with a NamedTuple of initial values, the values are expecte
 """
 function initialize!(model::BUGSModel, initial_params::NamedTuple)
     check_input(initial_params)
-    for (vn, is_stochastic, is_observed, node_function, loop_vars) in zip(
-        model.flattened_graph_node_data.sorted_nodes,
-        model.flattened_graph_node_data.is_stochastic_vals,
-        model.flattened_graph_node_data.is_observed_vals,
-        model.flattened_graph_node_data.node_function_vals,
-        model.flattened_graph_node_data.loop_vars_vals,
-    )
+    for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
+        is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
+        is_observed = model.flattened_graph_node_data.is_observed_vals[i]
+        node_function = model.flattened_graph_node_data.node_function_vals[i]
+        loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
         if !is_stochastic
             value = Base.invokelatest(node_function, model.evaluation_env, loop_vars)
             BangBang.@set!! model.evaluation_env = setindex!!(
@@ -411,12 +410,10 @@ function AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel)
     (; evaluation_env, g) = model
     vi = deepcopy(evaluation_env)
     logp = 0.0
-    for (vn, is_stochastic, node_function, loop_vars) in zip(
-        model.flattened_graph_node_data.sorted_nodes,
-        model.flattened_graph_node_data.is_stochastic_vals,
-        model.flattened_graph_node_data.node_function_vals,
-        model.flattened_graph_node_data.loop_vars_vals,
-    )
+    for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
+        is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
+        node_function = model.flattened_graph_node_data.node_function_vals[i]
+        loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
         if !is_stochastic
             value = node_function(model.evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
@@ -433,12 +430,10 @@ end
 function AbstractPPL.evaluate!!(model::BUGSModel)
     logp = 0.0
     evaluation_env = deepcopy(model.evaluation_env)
-    for (vn, is_stochastic, node_function, loop_vars) in zip(
-        model.flattened_graph_node_data.sorted_nodes,
-        model.flattened_graph_node_data.is_stochastic_vals,
-        model.flattened_graph_node_data.node_function_vals,
-        model.flattened_graph_node_data.loop_vars_vals,
-    )
+    for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
+        is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
+        node_function = model.flattened_graph_node_data.node_function_vals[i]
+        loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
         if !is_stochastic
             value = node_function(model.evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
@@ -471,13 +466,11 @@ function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVect
     evaluation_env = deepcopy(model.evaluation_env)
     current_idx = 1
     logp = 0.0
-    for (vn, is_stochastic, is_observed, node_function, loop_vars) in zip(
-        model.flattened_graph_node_data.sorted_nodes,
-        model.flattened_graph_node_data.is_stochastic_vals,
-        model.flattened_graph_node_data.is_observed_vals,
-        model.flattened_graph_node_data.node_function_vals,
-        model.flattened_graph_node_data.loop_vars_vals,
-    )
+    for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
+        is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
+        is_observed = model.flattened_graph_node_data.is_observed_vals[i]
+        node_function = model.flattened_graph_node_data.node_function_vals[i]
+        loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
         if !is_stochastic
             value = node_function(evaluation_env, loop_vars)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
