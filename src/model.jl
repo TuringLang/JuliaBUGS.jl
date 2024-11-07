@@ -379,8 +379,8 @@ function AbstractPPL.decondition(model::BUGSModel, var_group::Vector{<:VarName})
     base_model = model.base_model isa Nothing ? model : model.base_model
 
     new_parameters = [
-        v for
-        v in base_model.flattened_graph_node_data.sorted_nodes if v in union(model.parameters, var_group)
+        v for v in base_model.flattened_graph_node_data.sorted_nodes if
+        v in union(model.parameters, var_group)
     ] # keep the order
 
     markov_blanket_with_vars = union(
