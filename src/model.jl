@@ -76,39 +76,39 @@ struct BUGSModel{
     base_model::base_model_T
 end
 
-function Base.show(io::IO, m::BUGSModel)
-    if m.transformed
+function Base.show(io::IO, model::BUGSModel)
+    if model.transformed
         println(
             io,
-            "BUGSModel (transformed, with dimension $(m.transformed_param_length)):",
+            "BUGSModel (transformed, with dimension $(model.transformed_param_length)):",
             "\n",
         )
     else
         println(
             io,
-            "BUGSModel (untransformed, with dimension $(m.untransformed_param_length)):",
+            "BUGSModel (untransformed, with dimension $(model.untransformed_param_length)):",
             "\n",
         )
     end
     println(io, "  Model parameters:")
-    println(io, "    ", join(m.parameters, ", "), "\n")
+    println(io, "    ", join(model.parameters, ", "), "\n")
     println(io, "  Variable values:")
-    return println(io, "$(m.evaluation_env)")
+    return println(io, "$(model.evaluation_env)")
 end
 
 """
-    parameters(m::BUGSModel)
+    parameters(model::BUGSModel)
 
 Return a vector of `VarName` containing the names of the model parameters (unobserved stochastic variables).
 """
-parameters(m::BUGSModel) = m.parameters
+parameters(model::BUGSModel) = model.parameters
 
 """
-    variables(m::BUGSModel)
+    variables(model::BUGSModel)
 
 Return a vector of `VarName` containing the names of all the variables in the model.
 """
-variables(m::BUGSModel) = collect(labels(m.g))
+variables(model::BUGSModel) = collect(labels(model.g))
 
 @generated function prepare_arg_values(
     ::Val{args}, evaluation_env::NamedTuple, loop_vars::NamedTuple{lvars}

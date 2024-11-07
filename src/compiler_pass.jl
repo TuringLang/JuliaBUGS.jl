@@ -691,12 +691,12 @@ function build_node_functions(
 )
     for statement in expr.args
         if is_deterministic(statement) || is_stochastic(statement)
-            rhs = if is_deterministic(statement)
-                statement.args[2]
+            lhs, rhs = if is_deterministic(statement)
+                statement.args[1], statement.args[2]
             else
-                statement.args[3]
+                statement.args[2], statement.args[3]
             end
-            args, node_func_expr = make_function_expr(rhs, eval_env)
+            args, node_func_expr = make_function_expr(lhs, rhs, eval_env)
             node_func = eval(node_func_expr)
             f_dict[statement] = (args, node_func_expr, node_func)
         elseif Meta.isexpr(statement, :for)
@@ -709,8 +709,10 @@ function build_node_functions(
     return f_dict
 end
 
-function make_function_expr(expr, env::NamedTuple{vars}) where {vars}
-    args = Tuple(keys(extract_variable_names_and_numdims(expr, ())))
+function make_function_expr(
+    lhs, rhs, env::NamedTuple{vars}; use_lhs_as_func_name=false
+) where {vars}
+    args = Tuple(keys(extract_variable_names_and_numdims(rhs, ())))
     arg_exprs = Expr[]
     for v in args
         if v ∈ vars
@@ -727,7 +729,7 @@ function make_function_expr(expr, env::NamedTuple{vars}) where {vars}
         end
     end
 
-    expr = MacroTools.postwalk(expr) do sub_expr
+    expr = MacroTools.postwalk(rhs) do sub_expr
         if @capture(sub_expr, v_[indices__])
             new_indices = Any[]
             for i in eachindex(indices)
@@ -744,8 +746,20 @@ function make_function_expr(expr, env::NamedTuple{vars}) where {vars}
         return sub_expr
     end
 
-    return args, MacroTools.@q function (; $(arg_exprs...))
-        return $(expr)
+    if use_lhs_as_func_name
+        func_name = if lhs isa Symbol
+            lhs
+        else
+            Symbol("__", String(lhs.args[1]), "_", join(lhs.args[2:end], "_"), "__")
+        end
+
+        return args, MacroTools.@q function $func_name(; $(arg_exprs...))
+            return $(expr)
+        end
+    else
+        return return args, MacroTools.@q function (; $(arg_exprs...))
+            return $(expr)
+        end
     end
 end
 
