@@ -110,20 +110,6 @@ Return a vector of `VarName` containing the names of all the variables in the mo
 """
 variables(model::BUGSModel) = collect(labels(model.g))
 
-@generated function prepare_arg_values(
-    ::Val{args}, evaluation_env::NamedTuple, loop_vars::NamedTuple{lvars}
-) where {args,lvars}
-    fields = []
-    for arg in args
-        if arg in lvars
-            push!(fields, :(loop_vars[$(QuoteNode(arg))]))
-        else
-            push!(fields, :(evaluation_env[$(QuoteNode(arg))]))
-        end
-    end
-    return :(NamedTuple{$(args)}(($(fields...),)))
-end
-
 function BUGSModel(
     g::BUGSGraph,
     evaluation_env::NamedTuple,
@@ -137,14 +123,13 @@ function BUGSModel(
     Dict{VarName,Int}()
 
     for vn in sorted_nodes
-        (; is_stochastic, is_observed, node_function, node_args, loop_vars) = g[vn]
-        args = prepare_arg_values(Val(node_args), evaluation_env, loop_vars)
+        (; is_stochastic, is_observed, node_function, loop_vars) = g[vn]
         if !is_stochastic
-            value = Base.invokelatest(node_function; args...)
+            value = Base.invokelatest(node_function, evaluation_env, loop_vars)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         elseif !is_observed
             push!(parameters, vn)
-            dist = Base.invokelatest(node_function; args...)
+            dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
 
             untransformed_var_lengths[vn] = length(dist)
             # not all distributions are defined for `Bijectors.transformed`
@@ -221,11 +206,9 @@ function initialize!(model::BUGSModel, initial_params::NamedTuple)
         is_stochastic = model.eval_cache.is_stochastic_vals[i]
         is_observed = model.eval_cache.is_observed_vals[i]
         node_function = model.eval_cache.node_function_vals[i]
-        node_args = model.eval_cache.node_args_vals[i]
         loop_vars = model.eval_cache.loop_vars_vals[i]
-        args = prepare_arg_values(node_args, model.evaluation_env, loop_vars)
         if !is_stochastic
-            value = Base.invokelatest(node_function; args...)
+            value = Base.invokelatest(node_function, model.evaluation_env, loop_vars)
             BangBang.@set!! model.evaluation_env = setindex!!(
                 model.evaluation_env, value, vn
             )
@@ -242,7 +225,7 @@ function initialize!(model::BUGSModel, initial_params::NamedTuple)
             else
                 BangBang.@set!! model.evaluation_env = setindex!!(
                     model.evaluation_env,
-                    rand(Base.invokelatest(node_function; args...)),
+                    rand(Base.invokelatest(node_function, model.evaluation_env, loop_vars)),
                     vn,
                 )
             end
@@ -286,9 +269,8 @@ function getparams(model::BUGSModel)
                 param_vals[pos] = val
             end
         else
-            (; node_function, node_args, loop_vars) = model.g[v]
-            args = prepare_arg_values(Val(node_args), model.evaluation_env, loop_vars)
-            dist = node_function(; args...)
+            (; node_function, loop_vars) = model.g[v]
+            dist = node_function(model.evaluation_env, loop_vars)
             transformed_value = Bijectors.transform(
                 Bijectors.bijector(dist), AbstractPPL.get(model.evaluation_env, v)
             )
@@ -317,9 +299,8 @@ function getparams(T::Type{<:AbstractDict}, model::BUGSModel)
         if !model.transformed
             d[v] = value
         else
-            (; node_function, node_args, loop_vars) = model.g[v]
-            args = prepare_arg_values(Val(node_args), model.evaluation_env, loop_vars)
-            dist = node_function(; args...)
+            (; node_function, loop_vars) = model.g[v]
+            dist = node_function(model.evaluation_env, loop_vars)
             d[v] = Bijectors.transform(Bijectors.bijector(dist), value)
         end
     end
@@ -427,14 +408,12 @@ function AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel)
     for (i, vn) in enumerate(model.eval_cache.sorted_nodes)
         is_stochastic = model.eval_cache.is_stochastic_vals[i]
         node_function = model.eval_cache.node_function_vals[i]
-        node_args = model.eval_cache.node_args_vals[i]
         loop_vars = model.eval_cache.loop_vars_vals[i]
-        args = prepare_arg_values(node_args, evaluation_env, loop_vars)
         if !is_stochastic
-            value = node_function(; args...)
+            value = node_function(model.evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
-            dist = node_function(; args...)
+            dist = node_function(model.evaluation_env, loop_vars)
             value = rand(rng, dist) # just sample from the prior
             logp += logpdf(dist, value)
             evaluation_env = setindex!!(evaluation_env, value, vn)
@@ -449,14 +428,12 @@ function AbstractPPL.evaluate!!(model::BUGSModel)
     for (i, vn) in enumerate(model.eval_cache.sorted_nodes)
         is_stochastic = model.eval_cache.is_stochastic_vals[i]
         node_function = model.eval_cache.node_function_vals[i]
-        node_args = model.eval_cache.node_args_vals[i]
         loop_vars = model.eval_cache.loop_vars_vals[i]
-        args = prepare_arg_values(node_args, evaluation_env, loop_vars)
         if !is_stochastic
-            value = node_function(; args...)
+            value = node_function(model.evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
-            dist = node_function(; args...)
+            dist = node_function(model.evaluation_env, loop_vars)
             value = AbstractPPL.get(evaluation_env, vn)
             if model.transformed
                 # although the values stored in `evaluation_env` are in their original space, 
@@ -488,14 +465,12 @@ function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVect
         is_stochastic = model.eval_cache.is_stochastic_vals[i]
         is_observed = model.eval_cache.is_observed_vals[i]
         node_function = model.eval_cache.node_function_vals[i]
-        node_args = model.eval_cache.node_args_vals[i]
         loop_vars = model.eval_cache.loop_vars_vals[i]
-        args = prepare_arg_values(node_args, evaluation_env, loop_vars)
         if !is_stochastic
-            value = node_function(; args...)
+            value = node_function(evaluation_env, loop_vars)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         else
-            dist = node_function(; args...)
+            dist = node_function(evaluation_env, loop_vars)
             if !is_observed
                 l = var_lengths[vn]
                 if model.transformed

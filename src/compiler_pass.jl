@@ -709,27 +709,55 @@ function build_node_functions(
     return f_dict
 end
 
+"""
+    make_function_expr(lhs, rhs, env::NamedTuple{vars}; use_lhs_as_func_name=false)
+
+Generate a function expression for the given right-hand side expression `rhs`. The generated function will take
+a `NamedTuple` as its argument, which contains the values of the variables used in `rhs`.
+
+# Examples
+```jldoctest; setup = :(using JuliaBUGS: make_function_expr)
+julia> make_function_expr(:(x[a, b]), :(x[a, b] + 1), (x = [1 2 3; 4 5 6], a = missing, b = missing))
+((:a, :b, :x), :(function (evaluation_env, loop_vars)
+      (; a, b, x) = evaluation_env
+      (;) = loop_vars
+      return x[Int(a), Int(b)] + 1
+  end))
+
+julia> make_function_expr(:(x[a, b]), :(x[a, b] + 1), (;x = [1 2 3; 4 5 6]))
+((:a, :b, :x), :(function (evaluation_env, loop_vars)
+      (; x) = evaluation_env
+      (; a, b) = loop_vars
+      return x[Int(a), Int(b)] + 1
+  end))
+```
+"""
 function make_function_expr(
     lhs, rhs, env::NamedTuple{vars}; use_lhs_as_func_name=false
 ) where {vars}
     args = Tuple(keys(extract_variable_names_and_numdims(rhs, ())))
-    arg_exprs = Expr[]
-    for v in args
-        if v ∈ vars
-            value = env[v]
-            if value isa Int || value isa Float64 || value isa Missing
-                push!(arg_exprs, Expr(:(::), v, :Real))
-            elseif value isa AbstractArray
-                push!(arg_exprs, Expr(:(::), v, :(Array{<:Real})))
-            else
-                error("Unexpected argument type: $(typeof(value))")
-            end
-        else # loop variable
-            push!(arg_exprs, Expr(:(::), v, :Int))
-        end
-    end
+    loop_vars = Tuple([v for v in args if v ∉ vars])
+    variables = setdiff(args, loop_vars)
+    # arg_exprs = Expr[]
+    # for v in args
+    #     if v ∈ vars
+    #         value = env[v]
+    #         if value isa Int || value isa Float64 || value isa Missing
+    #             push!(arg_exprs, Expr(:(::), v, :Real))
+    #         elseif value isa AbstractArray
+    #             push!(arg_exprs, Expr(:(::), v, :(Array{<:Real})))
+    #         else
+    #             error("Unexpected argument type: $(typeof(value))")
+    #         end
+    #     else # loop variable
+    #         push!(arg_exprs, Expr(:(::), v, :Int))
+    #     end
+    # end
 
-    expr = MacroTools.postwalk(rhs) do sub_expr
+    unpacking_expr = :((; $(variables...),) = evaluation_env)
+    unpacking_loop_vars_expr = :((; $(loop_vars...),) = loop_vars)
+
+    func_body = MacroTools.postwalk(rhs) do sub_expr
         if @capture(sub_expr, v_[indices__])
             new_indices = Any[]
             for i in eachindex(indices)
@@ -746,20 +774,26 @@ function make_function_expr(
         return sub_expr
     end
 
-    if use_lhs_as_func_name
-        func_name = if lhs isa Symbol
-            lhs
-        else
-            Symbol("__", String(lhs.args[1]), "_", join(lhs.args[2:end], "_"), "__")
-        end
+    # if use_lhs_as_func_name
+    #     func_name = if lhs isa Symbol
+    #         lhs
+    #     else
+    #         Symbol("__", String(lhs.args[1]), "_", join(lhs.args[2:end], "_"), "__")
+    #     end
 
-        return args, MacroTools.@q function $func_name($(arg_exprs...))
-            return $(expr)
-        end
-    else
-        return args, MacroTools.@q function ($(arg_exprs...))
-            return $(expr)
-        end
+    #     return args, MacroTools.@q function $func_name($(arg_exprs...))
+    #         return $(func_body)
+    #     end
+    # else
+    #     return args, MacroTools.@q function ($(arg_exprs...))
+    #         return $(func_body)
+    #     end
+    # end
+
+    return args, MacroTools.@q function (evaluation_env, loop_vars)
+        $(unpacking_expr)
+        $(unpacking_loop_vars_expr)
+        return $(func_body)
     end
 end
 
