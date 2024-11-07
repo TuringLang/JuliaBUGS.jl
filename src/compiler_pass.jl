@@ -753,11 +753,11 @@ function make_function_expr(
             Symbol("__", String(lhs.args[1]), "_", join(lhs.args[2:end], "_"), "__")
         end
 
-        return args, MacroTools.@q function $func_name(; $(arg_exprs...))
+        return args, MacroTools.@q function $func_name($(arg_exprs...))
             return $(expr)
         end
     else
-        return return args, MacroTools.@q function (; $(arg_exprs...))
+        return args, MacroTools.@q function ($(arg_exprs...))
             return $(expr)
         end
     end
