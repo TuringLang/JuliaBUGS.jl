@@ -32,7 +32,8 @@ function AbstractMCMC.step(
         conditioned_model = AbstractPPL.condition(
             model, variable_to_condition_on, model.evaluation_env
         )
-        cached_eval_caches[variable_to_condition_on] = conditioned_model.eval_cache
+        cached_eval_caches[variable_to_condition_on] =
+            conditioned_model.flattened_graph_node_data
     end
     param_values = JuliaBUGS.getparams(model)
     return param_values, GibbsState(param_values, conditioning_schedule, cached_eval_caches)
