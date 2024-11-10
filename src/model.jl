@@ -24,7 +24,7 @@ function FlattenedGraphNodeData(
 )
     is_stochastic_vals = Array{Bool}(undef, length(sorted_nodes))
     is_observed_vals = Array{Bool}(undef, length(sorted_nodes))
-    node_function_with_effect_vals = Array{Function}(undef, length(sorted_nodes))
+    node_function_with_effect_vals = Array{Any}(undef, length(sorted_nodes))
     loop_vars_vals = Array{NamedTuple}(undef, length(sorted_nodes))
     for (i, vn) in enumerate(sorted_nodes)
         (; is_stochastic, is_observed, node_function_with_effect, loop_vars) = g[vn]
@@ -495,9 +495,7 @@ function AbstractPPL.evaluate!!(
         is_observed = model.flattened_graph_node_data.is_observed_vals[i]
         loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
         if !is_stochastic
-            _, evaluation_env = node_function(
-                evaluation_env, loop_vars, vn,
-            )
+            _, evaluation_env = node_function(evaluation_env, loop_vars, vn)
         else
             if !is_observed
                 _logp, evaluation_env = node_function(
