@@ -658,11 +658,11 @@ The values of loop variables at the time LHS is evaluated will be saved.
 `vertex_id_tracker` tracks the vertex ID of each variable in the model. This is used to efficiently decide target 
 vertices in pass `AddEdges`.
 """
-mutable struct AddVertices <: CompilerPass
+mutable struct AddVertices{TF} <: CompilerPass
     const env::NamedTuple
     const g::MetaGraph
     vertex_id_tracker::NamedTuple
-    const f_dict::Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}
+    const f_dict::Dict{Expr,TF}
 end
 
 function AddVertices(model_def::Expr, eval_env::NamedTuple)
@@ -677,7 +677,17 @@ function AddVertices(model_def::Expr, eval_env::NamedTuple)
     end
 
     f_dict = build_node_functions(
-        model_def, eval_env, Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}(), ()
+        model_def, eval_env, Dict{
+            Expr, # key type: the statement
+            # value type:
+            Tuple{
+                Tuple{Vararg{Symbol}}, # args
+                Expr, # node_func_expr
+                Any, # node_func
+                Expr, # node_function_with_effect
+                Any, # node_func_with_logp
+            },
+        }(), ()
     )
 
     return AddVertices(eval_env, g, NamedTuple(vertex_id_tracker), f_dict)
@@ -685,10 +695,10 @@ end
 
 function build_node_functions(
     expr::Expr,
-    eval_env::NamedTuple,
-    f_dict::Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}},
+    eval_env::NamedTuple{vars},
+    f_dict::Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any,Expr,Any}},
     loop_vars::Tuple{Vararg{Symbol}},
-)
+) where {vars}
     for statement in expr.args
         if is_deterministic(statement) || is_stochastic(statement)
             lhs, rhs = if is_deterministic(statement)
@@ -696,9 +706,18 @@ function build_node_functions(
             else
                 statement.args[2], statement.args[3]
             end
-            args, node_func_expr = make_function_expr(lhs, rhs, eval_env)
+            args, node_func_expr, node_function_with_effect_expr = make_function_expr(
+                rhs, eval_env, is_stochastic(statement)
+            )
             node_func = eval(node_func_expr)
-            f_dict[statement] = (args, node_func_expr, node_func)
+            node_func_with_effect = eval(node_function_with_effect_expr)
+            f_dict[statement] = (
+                args,
+                node_func_expr,
+                node_func,
+                node_function_with_effect_expr,
+                node_func_with_effect,
+            )
         elseif Meta.isexpr(statement, :for)
             loop_var, _, _, body = decompose_for_expr(statement)
             build_node_functions(body, eval_env, f_dict, (loop_var, loop_vars...))
@@ -710,54 +729,166 @@ function build_node_functions(
 end
 
 """
-    make_function_expr(lhs, rhs, env::NamedTuple{vars}; use_lhs_as_func_name=false)
+    make_function_expr(lhs, rhs, eval_env::NamedTuple{vars}; use_lhs_as_func_name=false)
 
 Generate a function expression for the given right-hand side expression `rhs`. The generated function will take
 a `NamedTuple` as its argument, which contains the values of the variables used in `rhs`.
 
 # Examples
 ```jldoctest; setup = :(using JuliaBUGS: make_function_expr)
-julia> make_function_expr(:(x[a, b]), :(x[a, b] + 1), (x = [1 2 3; 4 5 6], a = missing, b = missing))
-((:a, :b, :x), :(function (evaluation_env, loop_vars)
-      (; a, b, x) = evaluation_env
-      (;) = loop_vars
+julia> make_function_expr(:(x[a, b] + 1), (x = [1 2 3; 4 5 6], a = missing, b = missing), false)
+((:a, :b, :x), :(function (__evaluation_env__::NamedTuple{__vars__}, __loop_vars__::NamedTuple{__loop_vars_names__}) where {__vars__, __loop_vars_names__}
+      (; a, b, x) = __evaluation_env__
+      (;) = __loop_vars__
       return x[Int(a), Int(b)] + 1
+  end), :(function (__evaluation_env__::NamedTuple{__vars__}, __loop_vars__::NamedTuple{__loop_vars_names__}, __vn__::AbstractPPL.VarName) where {__vars__, __loop_vars_names__}
+      (; a, b, x) = __evaluation_env__
+      (;) = __loop_vars__
+      __value__ = x[a, b] + 1
+      __evaluation_env__ = BangBang.setindex!!(__evaluation_env__, __value__, __vn__)
+      return __evaluation_env__::NamedTuple{__vars__}
   end))
 
-julia> make_function_expr(:(x[a, b]), :(x[a, b] + 1), (;x = [1 2 3; 4 5 6]))
-((:a, :b, :x), :(function (evaluation_env, loop_vars)
-      (; x) = evaluation_env
-      (; a, b) = loop_vars
-      return x[Int(a), Int(b)] + 1
+julia> make_function_expr(:(Normal(x[a, b], 1)), (;x = [1 2 3; 4 5 6]), true)
+((:a, :b, :x), :(function (__evaluation_env__::NamedTuple{__vars__}, __loop_vars__::NamedTuple{__loop_vars_names__}) where {__vars__, __loop_vars_names__}
+      (; x) = __evaluation_env__
+      (; a, b) = __loop_vars__
+      return Normal(x[Int(a), Int(b)], 1)
+  end), :(function (__evaluation_env__::NamedTuple{__vars__}, __loop_vars__::NamedTuple{__loop_vars_names__}, __vn__::AbstractPPL.VarName, __is_transformed__::Bool, __is_observed__::Bool, __params__::AbstractVector{<:Real}) where {__vars__, __loop_vars_names__}
+      (; x) = __evaluation_env__
+      (; a, b) = __loop_vars__
+      __dist__ = Normal(x[Int(a), Int(b)], 1)
+      if !__is_observed__
+          if __is_transformed__
+              __b__ = Bijectors.bijector(__dist__)
+              __b_inv__ = Bijectors.inverse(__b__)
+              __reconstructed_value__ = JuliaBUGS.reconstruct(__b_inv__, __dist__, __params__)
+              (__value__, __logjac__) = Bijectors.with_logabsdet_jacobian(__b_inv__, __reconstructed_value__)
+          else
+              (__value__, __logjac__) = (JuliaBUGS.reconstruct(__dist__, __params__), 0.0)
+          end
+          __evaluation_env__ = BangBang.setindex!!(__evaluation_env__, __value__, __vn__)
+          __logp__ = Distributions.logpdf(__dist__, __value__) + __logjac__
+      else
+          __logp__ = Distributions.logpdf(__dist__, AbstractPPL.get(__evaluation_env__, __vn__))
+      end
+      return (__logp__::Float64, __evaluation_env__::NamedTuple{__vars__})
   end))
 ```
 """
-function make_function_expr(
-    lhs, rhs, env::NamedTuple{vars}; use_lhs_as_func_name=false
-) where {vars}
+function make_function_expr(rhs, ::NamedTuple{vars}, is_stochastic::Bool) where {vars}
+    # Extract variable names and determine which are loop variables vs model variables
     args = Tuple(keys(extract_variable_names_and_numdims(rhs, ())))
     loop_vars = Tuple([v for v in args if v ∉ vars])
     variables = setdiff(args, loop_vars)
-    # arg_exprs = Expr[]
-    # for v in args
-    #     if v ∈ vars
-    #         value = env[v]
-    #         if value isa Int || value isa Float64 || value isa Missing
-    #             push!(arg_exprs, Expr(:(::), v, :Real))
-    #         elseif value isa AbstractArray
-    #             push!(arg_exprs, Expr(:(::), v, :(Array{<:Real})))
-    #         else
-    #             error("Unexpected argument type: $(typeof(value))")
-    #         end
-    #     else # loop variable
-    #         push!(arg_exprs, Expr(:(::), v, :Int))
-    #     end
-    # end
 
-    unpacking_expr = :((; $(variables...),) = evaluation_env)
-    unpacking_loop_vars_expr = :((; $(loop_vars...),) = loop_vars)
+    # Create expressions to unpack variables from environment and loop vars
+    unpacking_expr = :((; $(variables...),) = __evaluation_env__)
+    unpacking_loop_vars_expr = :((; $(loop_vars...),) = __loop_vars__)
 
-    func_body = MacroTools.postwalk(rhs) do sub_expr
+    # Create base node function that just evaluates RHS
+    node_function_expr = create_base_node_function(
+        unpacking_expr, unpacking_loop_vars_expr, rhs
+    )
+
+    if is_stochastic
+        # For stochastic nodes, create function that handles transformed/untransformed spaces
+        return create_stochastic_node_functions(
+            args, node_function_expr, unpacking_expr, unpacking_loop_vars_expr, rhs
+        )
+    else
+        # For deterministic nodes, create simple function that updates environment
+        return create_deterministic_node_functions(
+            args, node_function_expr, unpacking_expr, unpacking_loop_vars_expr, rhs
+        )
+    end
+end
+
+function create_base_node_function(unpacking_expr, unpacking_loop_vars_expr, rhs)
+    MacroTools.@q function (
+        __evaluation_env__::NamedTuple{__vars__},
+        __loop_vars__::NamedTuple{__loop_vars_names__},
+    ) where {__vars__,__loop_vars_names__}
+        $(unpacking_expr)
+        $(unpacking_loop_vars_expr)
+        return $(_cast_indices(rhs))
+    end
+end
+
+function create_stochastic_node_functions(
+    args, node_function_expr, unpacking_expr, unpacking_loop_vars_expr, rhs
+)
+    # Expression to compute distribution
+    computation_expr = :(__dist__ = $(_cast_indices(rhs)))
+
+    # Expression for handling transformed spaces
+    logp_computation_expr = MacroTools.@q begin
+        if __is_transformed__
+            __b__ = Bijectors.bijector(__dist__)
+            __b_inv__ = Bijectors.inverse(__b__)
+            __reconstructed_value__ = JuliaBUGS.reconstruct(__b_inv__, __dist__, __params__)
+            __value__, __logjac__ = Bijectors.with_logabsdet_jacobian(
+                __b_inv__, __reconstructed_value__
+            )
+        else
+            __value__, __logjac__ = JuliaBUGS.reconstruct(__dist__, __params__), 0.0
+        end
+    end
+
+    # Create function that handles both observed and unobserved cases
+    node_function_with_effect = MacroTools.@q function (
+        __evaluation_env__::NamedTuple{__vars__},
+        __loop_vars__::NamedTuple{__loop_vars_names__},
+        __vn__::AbstractPPL.VarName,
+        __is_transformed__::Bool,
+        __is_observed__::Bool,
+        __params__::AbstractVector{<:Real},
+    ) where {__vars__,__loop_vars_names__}
+        $(unpacking_expr)
+        $(unpacking_loop_vars_expr)
+        $(computation_expr)
+        if !__is_observed__
+            $(logp_computation_expr.args...)
+            __evaluation_env__ = BangBang.setindex!!(__evaluation_env__, __value__, __vn__)
+            __logp__ = Distributions.logpdf(__dist__, __value__) + __logjac__
+        else
+            __logp__ = Distributions.logpdf(
+                __dist__, AbstractPPL.get(__evaluation_env__, __vn__)
+            )
+        end
+        return __logp__::Float64, __evaluation_env__::NamedTuple{__vars__}
+    end
+
+    return args, node_function_expr, node_function_with_effect
+end
+
+function create_deterministic_node_functions(
+    args, node_function_expr, unpacking_expr, unpacking_loop_vars_expr, rhs
+)
+    computation_expr = Expr(:(=), :__value__, rhs)
+
+    node_function_with_effect = MacroTools.@q function (
+        __evaluation_env__::NamedTuple{__vars__},
+        __loop_vars__::NamedTuple{__loop_vars_names__},
+        __vn__::AbstractPPL.VarName,
+    ) where {__vars__,__loop_vars_names__}
+        $(unpacking_expr)
+        $(unpacking_loop_vars_expr)
+        $(computation_expr)
+        __evaluation_env__ = BangBang.setindex!!(__evaluation_env__, __value__, __vn__)
+        return 0.0, __evaluation_env__::NamedTuple{__vars__}
+    end
+
+    return args, node_function_expr, node_function_with_effect
+end
+
+"""
+    _cast_indices(expr::Expr)
+
+Cast all indices to `Int` if they are variables. This is to be compatible with BUGS' numerical type system.
+"""
+function _cast_indices(expr::Expr)
+    return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, v_[indices__])
             new_indices = Any[]
             for i in eachindex(indices)
@@ -772,28 +903,6 @@ function make_function_expr(
             return Expr(:ref, v, new_indices...)
         end
         return sub_expr
-    end
-
-    # if use_lhs_as_func_name
-    #     func_name = if lhs isa Symbol
-    #         lhs
-    #     else
-    #         Symbol("__", String(lhs.args[1]), "_", join(lhs.args[2:end], "_"), "__")
-    #     end
-
-    #     return args, MacroTools.@q function $func_name($(arg_exprs...))
-    #         return $(func_body)
-    #     end
-    # else
-    #     return args, MacroTools.@q function ($(arg_exprs...))
-    #         return $(func_body)
-    #     end
-    # end
-
-    return args, MacroTools.@q function (evaluation_env, loop_vars)
-        $(unpacking_expr)
-        $(unpacking_loop_vars_expr)
-        return $(func_body)
     end
 end
 
@@ -820,7 +929,7 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
         end
     end
 
-    args, node_function_expr, node_function = pass.f_dict[expr]
+    args, node_function_expr, node_function, node_function_with_effect_expr, node_function_with_effect = pass.f_dict[expr]
 
     vn = if lhs isa Symbol
         AbstractPPL.VarName{lhs}(identity)
@@ -832,7 +941,14 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
         pass.g,
         vn,
         NodeInfo(
-            is_stochastic, is_observed, node_function_expr, node_function, args, loop_vars
+            is_stochastic,
+            is_observed,
+            node_function_expr,
+            node_function,
+            node_function_with_effect_expr,
+            node_function_with_effect,
+            args,
+            loop_vars,
         ),
     )
     if lhs isa Symbol

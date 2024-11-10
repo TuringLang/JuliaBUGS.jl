@@ -8,12 +8,11 @@ with mean ``μ`` and standard deviation ``\\frac{1}{√τ}``.
 p(x|μ,τ) = \\sqrt{\\frac{τ}{2π}} e^{-τ \\frac{(x-μ)^2}{2}}
 ```
 """
-function dnorm(μ, τ)
-    if τ < 0
+function dnorm(μ, τ)::Normal
+    if τ <= 0
         throw(DomainError((μ, τ), "Requires τ > 0"))
     end
-    σ² = 1 / τ # variance
-    σ = √σ² # standard deviation
+    σ = inv(√τ) # standard deviation
     return Normal(μ, σ)
 end
 
@@ -27,9 +26,8 @@ with location parameter ``μ`` and scale parameter ``\\frac{1}{√τ}``.
 p(x|μ,τ) = \\frac{\\sqrt{τ} e^{-\\sqrt{τ}(x-μ)}}{(1+e^{-\\sqrt{τ}(x-μ)})^2}
 ```
 """
-function dlogis(μ, τ)
-    s = 1 / √τ
-    return Logistic(μ, s)
+function dlogis(μ, τ)::Logistic
+    return Logistic(μ, inv(√τ))
 end
 
 """
@@ -70,9 +68,9 @@ p(x|ν,μ,σ) = \\frac{Γ((ν+1)/2)}{Γ(ν/2) \\sqrt{νπσ}}
 \\left(1+\\frac{1}{ν}\\left(\\frac{x-μ}{σ}\\right)^2\\right)^{-\\frac{ν+1}{2}}
 ```
 """
-function dt(μ, τ, ν)
-    σ = sqrt(1 / τ)
-    if μ == 0 && σ == 1
+function dt(μ::Real, τ::Real, ν::Real)
+    σ = inv(√τ)
+    if iszero(μ) && isone(σ)
         return TDist(ν)
     else
         return TDistShiftedScaled(ν, μ, σ)
@@ -89,9 +87,9 @@ with location ``μ`` and scale ``\\frac{1}{\\sqrt{τ}}``.
 p(x|μ,τ) = \\frac{\\sqrt{τ}}{2} e^{-\\sqrt{τ} |x-μ|}
 ```
 """
-function ddexp(μ, τ)
-    b = 1 / √τ
-    return Laplace(μ, b)
+function ddexp(μ::Real, τ::Real)
+    b = one(τ) / sqrt(τ)
+    return Laplace(convert(typeof(b), μ), b)
 end
 
 """

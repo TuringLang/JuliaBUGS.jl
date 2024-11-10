@@ -8,12 +8,12 @@ abstract type AbstractBUGSModel end
 
 Pre-compute the values of the nodes in the model to avoid lookups from MetaGraph.
 """
-struct FlattenedGraphNodeData{TNF,TV}
+struct FlattenedGraphNodeData{TF}
     sorted_nodes::Vector{<:VarName}
     is_stochastic_vals::Vector{Bool}
     is_observed_vals::Vector{Bool}
-    node_function_vals::TNF
-    loop_vars_vals::TV
+    node_function_with_effect_vals::Vector{TF}
+    loop_vars_vals::Vector{NamedTuple}
 end
 
 function FlattenedGraphNodeData(
@@ -24,21 +24,21 @@ function FlattenedGraphNodeData(
 )
     is_stochastic_vals = Array{Bool}(undef, length(sorted_nodes))
     is_observed_vals = Array{Bool}(undef, length(sorted_nodes))
-    node_function_vals = Array{Any}(undef, length(sorted_nodes))
-    loop_vars_vals = Array{Any}(undef, length(sorted_nodes))
+    node_function_with_effect_vals = Array{Function}(undef, length(sorted_nodes))
+    loop_vars_vals = Array{NamedTuple}(undef, length(sorted_nodes))
     for (i, vn) in enumerate(sorted_nodes)
-        (; is_stochastic, is_observed, node_function, loop_vars) = g[vn]
+        (; is_stochastic, is_observed, node_function_with_effect, loop_vars) = g[vn]
         is_stochastic_vals[i] = is_stochastic
         is_observed_vals[i] = is_observed
-        node_function_vals[i] = node_function
+        node_function_with_effect_vals[i] = node_function_with_effect
         loop_vars_vals[i] = loop_vars
     end
     return FlattenedGraphNodeData(
         sorted_nodes,
         is_stochastic_vals,
         is_observed_vals,
-        map(identity, node_function_vals),
-        map(identity, loop_vars_vals),
+        node_function_with_effect_vals,
+        loop_vars_vals,
     )
 end
 
@@ -48,8 +48,7 @@ end
 The `BUGSModel` object is used for inference and represents the output of compilation. It implements the
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
 """
-struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,TNF,TV} <:
-       AbstractBUGSModel
+struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T,TF} <: AbstractBUGSModel
     " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
 
@@ -63,11 +62,11 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,
     transformed_var_lengths::Dict{<:VarName,Int}
 
     "A `NamedTuple` containing the values of the variables in the model, all the values are in the constrained space."
-    evaluation_env::T
+    evaluation_env::NamedTuple{T}
     "A vector containing the names of the model parameters (unobserved stochastic variables)."
     parameters::Vector{<:VarName}
     "An `FlattenedGraphNodeData` object containing pre-computed values of the nodes in the model. For each topological order, this needs to be recomputed."
-    flattened_graph_node_data::FlattenedGraphNodeData{TNF,TV}
+    flattened_graph_node_data::FlattenedGraphNodeData{TF}
 
     "An instance of `BUGSGraph`, representing the dependency graph of the model."
     g::BUGSGraph
@@ -77,23 +76,47 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,
 end
 
 function Base.show(io::IO, model::BUGSModel)
-    if model.transformed
-        println(
-            io,
-            "BUGSModel (transformed, with dimension $(model.transformed_param_length)):",
-            "\n",
-        )
+    # Print model type and dimension
+    space_type =
+        model.transformed ? "transformed (unconstrained)" : "original (constrained)"
+    dim = if model.transformed
+        model.transformed_param_length
     else
-        println(
-            io,
-            "BUGSModel (untransformed, with dimension $(model.untransformed_param_length)):",
-            "\n",
-        )
+        model.untransformed_param_length
     end
-    println(io, "  Model parameters:")
-    println(io, "    ", join(model.parameters, ", "), "\n")
-    println(io, "  Variable values:")
-    return println(io, "$(model.evaluation_env)")
+    printstyled(io, "BUGSModel"; bold=true, color=:blue)
+    println(io, " (parameters are in ", space_type, " space, with dimension ", dim, "):\n")
+
+    # Group and print parameters
+    printstyled(io, "  Model parameters:\n"; bold=true, color=:yellow)
+    grouped_params = Dict{Symbol,Vector{VarName}}()
+    for param in model.parameters
+        sym = AbstractPPL.getsym(param)
+        push!(get!(grouped_params, sym, VarName[]), param)
+    end
+    for (sym, params) in grouped_params
+        param_str = length(params) == 1 ? string(params[1]) : "$(join(params, ", "))"
+        print(io, "    ")
+        printstyled(io, param_str; color=:cyan)
+        println(io)
+    end
+    println(io)
+
+    # Print variable info
+    printstyled(io, "  Variable sizes and types:\n"; bold=true, color=:yellow)
+    for (name, value) in pairs(model.evaluation_env)
+        type_str = if isa(value, Number)
+            "type = $(typeof(value))"
+        else
+            "size = $(size(value)), type = $(typeof(value))"
+        end
+        print(io, "    ")
+        printstyled(io, name; color=:cyan)
+        print(io, ": ")
+        printstyled(io, type_str; color=:green)
+        println(io)
+    end
+    return nothing
 end
 
 """
@@ -112,21 +135,18 @@ variables(model::BUGSModel) = collect(labels(model.g))
 
 function BUGSModel(
     g::BUGSGraph,
-    evaluation_env::NamedTuple,
+    evaluation_env::NamedTuple{vars},
     initial_params::NamedTuple=NamedTuple();
     is_transformed::Bool=true,
-)
+) where {vars}
     flattened_graph_node_data = FlattenedGraphNodeData(g)
     parameters = VarName[]
     untransformed_param_length, transformed_param_length = 0, 0
     untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
     Dict{VarName,Int}()
 
-    for (i, vn) in enumerate(flattened_graph_node_data.sorted_nodes)
-        is_stochastic = flattened_graph_node_data.is_stochastic_vals[i]
-        is_observed = flattened_graph_node_data.is_observed_vals[i]
-        node_function = flattened_graph_node_data.node_function_vals[i]
-        loop_vars = flattened_graph_node_data.loop_vars_vals[i]
+    for vn in flattened_graph_node_data.sorted_nodes
+        (; is_stochastic, is_observed, node_function, loop_vars) = g[vn]
 
         if !is_stochastic
             value = Base.invokelatest(node_function, evaluation_env, loop_vars)
@@ -432,13 +452,14 @@ function AbstractPPL.evaluate!!(model::BUGSModel)
     evaluation_env = deepcopy(model.evaluation_env)
     for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
         is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
-        node_function = model.flattened_graph_node_data.node_function_vals[i]
+        deterministic_node_function = model.flattened_graph_node_data.deterministic_node_function[i]
+        stochastic_node_function = model.flattened_graph_node_data.stochastic_node_function[i]
         loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
         if !is_stochastic
-            value = node_function(model.evaluation_env, loop_vars)
+            value = deterministic_node_function(model.evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
-            dist = node_function(model.evaluation_env, loop_vars)
+            dist = stochastic_node_function(model.evaluation_env, loop_vars)
             value = AbstractPPL.get(evaluation_env, vn)
             if model.transformed
                 # although the values stored in `evaluation_env` are in their original space, 
@@ -456,7 +477,9 @@ function AbstractPPL.evaluate!!(model::BUGSModel)
     return evaluation_env, logp
 end
 
-function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVector)
+function AbstractPPL.evaluate!!(
+    model::BUGSModel{base_model_T,evaluation_env_T}, flattened_values::AbstractVector
+) where {base_model_T,evaluation_env_T}
     var_lengths = if model.transformed
         model.transformed_var_lengths
     else
@@ -468,38 +491,35 @@ function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVect
     logp = 0.0
     for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
         is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
+        node_function = model.flattened_graph_node_data.node_function_with_effect_vals[i]
         is_observed = model.flattened_graph_node_data.is_observed_vals[i]
-        node_function = model.flattened_graph_node_data.node_function_vals[i]
         loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
         if !is_stochastic
-            value = node_function(evaluation_env, loop_vars)
-            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+            _, evaluation_env = node_function(
+                evaluation_env, loop_vars, vn,
+            )
         else
-            dist = node_function(evaluation_env, loop_vars)
             if !is_observed
-                l = var_lengths[vn]
-                if model.transformed
-                    b = Bijectors.bijector(dist)
-                    b_inv = Bijectors.inverse(b)
-                    reconstructed_value = reconstruct(
-                        b_inv,
-                        dist,
-                        view(flattened_values, current_idx:(current_idx + l - 1)),
-                    )
-                    value, logjac = Bijectors.with_logabsdet_jacobian(
-                        b_inv, reconstructed_value
-                    )
-                else
-                    value = reconstruct(
-                        dist, view(flattened_values, current_idx:(current_idx + l - 1))
-                    )
-                    logjac = 0.0
-                end
-                current_idx += l
-                logp += logpdf(dist, value) + logjac
-                evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+                _logp, evaluation_env = node_function(
+                    evaluation_env,
+                    loop_vars,
+                    vn,
+                    model.transformed,
+                    is_observed,
+                    view(flattened_values, current_idx:(current_idx + var_lengths[vn] - 1)),
+                )
+                logp += _logp
+                current_idx += var_lengths[vn]
             else
-                logp += logpdf(dist, AbstractPPL.get(evaluation_env, vn))
+                _logp, _ = node_function(
+                    evaluation_env,
+                    loop_vars,
+                    vn,
+                    model.transformed,
+                    is_observed,
+                    Float64[], # not used
+                )
+                logp += _logp
             end
         end
     end
