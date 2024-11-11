@@ -883,11 +883,11 @@ function create_deterministic_node_functions(
 end
 
 """
-    _cast_indices(expr::Expr)
+    _cast_indices(expr)
 
 Cast all indices to `Int` if they are variables. This is to be compatible with BUGS' numerical type system.
 """
-function _cast_indices(expr::Expr)
+function _cast_indices(expr)
     return MacroTools.postwalk(expr) do sub_expr
         if @capture(sub_expr, v_[indices__])
             new_indices = Any[]
