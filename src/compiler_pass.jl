@@ -856,7 +856,7 @@ function create_stochastic_node_functions(
                 __dist__, AbstractPPL.get(__evaluation_env__, __vn__)
             )
         end
-        return __logp__::Float64, __evaluation_env__::NamedTuple{__vars__}
+        return __logp__, __evaluation_env__
     end
 
     return args, node_function_expr, node_function_with_effect
@@ -876,7 +876,7 @@ function create_deterministic_node_functions(
         $(unpacking_loop_vars_expr)
         $(computation_expr)
         __evaluation_env__ = BangBang.setindex!!(__evaluation_env__, __value__, __vn__)
-        return 0.0, __evaluation_env__::NamedTuple{__vars__}
+        return 0.0, __evaluation_env__
     end
 
     return args, node_function_expr, node_function_with_effect
