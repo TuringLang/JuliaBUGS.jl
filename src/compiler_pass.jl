@@ -733,47 +733,6 @@ end
 
 Generate a function expression for the given right-hand side expression `rhs`. The generated function will take
 a `NamedTuple` as its argument, which contains the values of the variables used in `rhs`.
-
-# Examples
-```jldoctest; setup = :(using JuliaBUGS: make_function_expr)
-julia> make_function_expr(:(x[a, b] + 1), (x = [1 2 3; 4 5 6], a = missing, b = missing), false)
-((:a, :b, :x), :(function (__evaluation_env__::NamedTuple{__vars__}, __loop_vars__::NamedTuple{__loop_vars_names__}) where {__vars__, __loop_vars_names__}
-      (; a, b, x) = __evaluation_env__
-      (;) = __loop_vars__
-      return x[Int(a), Int(b)] + 1
-  end), :(function (__evaluation_env__::NamedTuple{__vars__}, __loop_vars__::NamedTuple{__loop_vars_names__}, __vn__::AbstractPPL.VarName) where {__vars__, __loop_vars_names__}
-      (; a, b, x) = __evaluation_env__
-      (;) = __loop_vars__
-      __value__ = x[a, b] + 1
-      __evaluation_env__ = BangBang.setindex!!(__evaluation_env__, __value__, __vn__)
-      return __evaluation_env__::NamedTuple{__vars__}
-  end))
-
-julia> make_function_expr(:(Normal(x[a, b], 1)), (;x = [1 2 3; 4 5 6]), true)
-((:a, :b, :x), :(function (__evaluation_env__::NamedTuple{__vars__}, __loop_vars__::NamedTuple{__loop_vars_names__}) where {__vars__, __loop_vars_names__}
-      (; x) = __evaluation_env__
-      (; a, b) = __loop_vars__
-      return Normal(x[Int(a), Int(b)], 1)
-  end), :(function (__evaluation_env__::NamedTuple{__vars__}, __loop_vars__::NamedTuple{__loop_vars_names__}, __vn__::AbstractPPL.VarName, __is_transformed__::Bool, __is_observed__::Bool, __params__::AbstractVector{<:Real}) where {__vars__, __loop_vars_names__}
-      (; x) = __evaluation_env__
-      (; a, b) = __loop_vars__
-      __dist__ = Normal(x[Int(a), Int(b)], 1)
-      if !__is_observed__
-          if __is_transformed__
-              __b__ = Bijectors.bijector(__dist__)
-              __b_inv__ = Bijectors.inverse(__b__)
-              __reconstructed_value__ = JuliaBUGS.reconstruct(__b_inv__, __dist__, __params__)
-              (__value__, __logjac__) = Bijectors.with_logabsdet_jacobian(__b_inv__, __reconstructed_value__)
-          else
-              (__value__, __logjac__) = (JuliaBUGS.reconstruct(__dist__, __params__), 0.0)
-          end
-          __evaluation_env__ = BangBang.setindex!!(__evaluation_env__, __value__, __vn__)
-          __logp__ = Distributions.logpdf(__dist__, __value__) + __logjac__
-      else
-          __logp__ = Distributions.logpdf(__dist__, AbstractPPL.get(__evaluation_env__, __vn__))
-      end
-      return (__logp__::Float64, __evaluation_env__::NamedTuple{__vars__})
-  end))
 ```
 """
 function make_function_expr(rhs, ::NamedTuple{vars}, is_stochastic::Bool) where {vars}
@@ -865,18 +824,21 @@ end
 function create_deterministic_node_functions(
     args, node_function_expr, unpacking_expr, unpacking_loop_vars_expr, rhs
 )
-    computation_expr = Expr(:(=), :__value__, rhs)
+    computation_expr = :(__value__ = $(_cast_indices(rhs)))
 
     node_function_with_effect = MacroTools.@q function (
         __evaluation_env__::NamedTuple{__vars__},
         __loop_vars__::NamedTuple{__loop_vars_names__},
         __vn__::AbstractPPL.VarName,
-    ) where {__vars__,__loop_vars_names__}
+        ::Bool,
+        ::Bool,
+        ::AbstractVector{__T__},
+    ) where {__vars__,__loop_vars_names__,__T__}
         $(unpacking_expr)
         $(unpacking_loop_vars_expr)
         $(computation_expr)
         __evaluation_env__ = BangBang.setindex!!(__evaluation_env__, __value__, __vn__)
-        return 0.0, __evaluation_env__
+        return zero(__T__), __evaluation_env__
     end
 
     return args, node_function_expr, node_function_with_effect
@@ -937,6 +899,38 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
         v, indices... = lhs
         AbstractPPL.VarName{v}(AbstractPPL.IndexLens(indices))
     end
+
+    _env = NamedTuple{keys(pass.env)}(
+        map(
+            v -> begin
+                if v === missing
+                    return 0.0
+                elseif v isa AbstractArray
+                    if eltype(v) === Missing
+                        return zeros(size(v)...)
+                    elseif Missing <: eltype(v)
+                        return coalesce.(v, zero(nonmissingtype(eltype(v))))
+                    end
+                end
+                return v
+            end,
+            values(pass.env),
+        ),
+    )
+
+    ir_code = Base.code_ircode_by_type(
+        Tuple{
+            typeof(node_function_with_effect),
+            typeof(_env),
+            typeof(loop_vars),
+            typeof(vn),
+            Bool,
+            Bool,
+            Vector{Float64},
+        },
+    )
+    node_function_with_effect_mc = MistyClosure(ir_code[1][1])
+
     add_vertex!(
         pass.g,
         vn,
@@ -946,7 +940,7 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
             node_function_expr,
             node_function,
             node_function_with_effect_expr,
-            node_function_with_effect,
+            node_function_with_effect_mc,
             args,
             loop_vars,
         ),

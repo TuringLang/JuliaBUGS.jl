@@ -6,18 +6,18 @@ using Accessors
 using BangBang
 using Bijectors: Bijectors
 using Distributions
-using FunctionWrappers
 using Graphs, MetaGraphsNext
 using LinearAlgebra
 using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
+using MistyClosures
 using OrderedCollections: OrderedDict
 using Random
 using StaticArrays
 
 import Base: ==, hash, Symbol, size
 import Distributions: truncated
-import AbstractPPL: AbstractContext, evaluate!!
+import AbstractPPL: condition, decondition, evaluate!!
 
 export @bugs
 export compile, initialize!

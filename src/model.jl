@@ -37,7 +37,7 @@ function FlattenedGraphNodeData(
         sorted_nodes,
         is_stochastic_vals,
         is_observed_vals,
-        node_function_with_effect_vals,
+        identity.(node_function_with_effect_vals),
         loop_vars_vals,
     )
 end
@@ -343,7 +343,7 @@ function settrans(model::BUGSModel, bool::Bool=!(model.transformed))
     return BangBang.setproperty!!(model, :transformed, bool)
 end
 
-function AbstractPPL.condition(
+function condition(
     model::BUGSModel,
     d::Dict{<:VarName,<:Any},
     sorted_nodes=Nothing, # support cached sorted Markov blanket nodes
@@ -352,15 +352,13 @@ function AbstractPPL.condition(
     for (p, value) in d
         new_evaluation_env = setindex!!(new_evaluation_env, value, p)
     end
-    return AbstractPPL.condition(
-        model, collect(keys(d)), new_evaluation_env; sorted_nodes=sorted_nodes
-    )
+    return condition(model, collect(keys(d)), new_evaluation_env; sorted_nodes=sorted_nodes)
 end
 
-function AbstractPPL.condition(
+function condition(
     model::BUGSModel,
     var_group::Vector{<:VarName},
-    evaluation_env::NamedTuple=model.evaluation_env,
+    evaluation_env::NamedTuple=model.evaluation_env;
     sorted_nodes=Nothing,
 )
     check_var_group(var_group, model)
@@ -393,7 +391,7 @@ function AbstractPPL.condition(
     return BangBang.setproperty!!(new_model, :g, g)
 end
 
-function AbstractPPL.decondition(model::BUGSModel, var_group::Vector{<:VarName})
+function decondition(model::BUGSModel, var_group::Vector{<:VarName})
     check_var_group(var_group, model)
     base_model = model.base_model isa Nothing ? model : model.base_model
 
@@ -426,7 +424,7 @@ function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
     )
 end
 
-function AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel)
+function evaluate!!(rng::Random.AbstractRNG, model::BUGSModel)
     (; evaluation_env, g) = model
     vi = deepcopy(evaluation_env)
     logp = 0.0
@@ -447,7 +445,7 @@ function AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel)
     return evaluation_env, logp
 end
 
-function AbstractPPL.evaluate!!(model::BUGSModel)
+function evaluate!!(model::BUGSModel)
     logp = 0.0
     evaluation_env = deepcopy(model.evaluation_env)
     for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
@@ -477,7 +475,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel)
     return evaluation_env, logp
 end
 
-function AbstractPPL.evaluate!!(
+function evaluate!!(
     model::BUGSModel{base_model_T,evaluation_env_T}, flattened_values::AbstractVector
 ) where {base_model_T,evaluation_env_T}
     var_lengths = if model.transformed
@@ -495,7 +493,14 @@ function AbstractPPL.evaluate!!(
         is_observed = model.flattened_graph_node_data.is_observed_vals[i]
         loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
         if !is_stochastic
-            _, evaluation_env = node_function(evaluation_env, loop_vars, vn)
+            _, evaluation_env = node_function(
+                evaluation_env,
+                loop_vars,
+                vn,
+                model.transformed,
+                is_observed,
+                zeros(eltype(flattened_values), 1),
+            )
         else
             if !is_observed
                 _logp, evaluation_env = node_function(
@@ -504,7 +509,7 @@ function AbstractPPL.evaluate!!(
                     vn,
                     model.transformed,
                     is_observed,
-                    view(flattened_values, current_idx:(current_idx + var_lengths[vn] - 1)),
+                    flattened_values[current_idx:(current_idx + var_lengths[vn] - 1)],
                 )
                 logp += _logp
                 current_idx += var_lengths[vn]
