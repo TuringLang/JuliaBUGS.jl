@@ -16,7 +16,6 @@ using StaticArrays
 
 import Base: ==, hash, Symbol, size
 import Distributions: truncated
-import AbstractPPL: condition, decondition, evaluate!!
 
 export @bugs
 export compile, initialize!
