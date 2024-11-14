@@ -347,11 +347,7 @@ function settrans(model::BUGSModel, bool::Bool=!(model.transformed))
     return BangBang.setproperty!!(model, :transformed, bool)
 end
 
-function condition(
-    model::BUGSModel,
-    d::Dict{<:VarName,<:Any};
-    sorted_nodes=Nothing, # support cached sorted Markov blanket nodes
-)
+function condition(model::BUGSModel, d::Dict{<:VarName,<:Any})
     new_evaluation_env = deepcopy(model.evaluation_env)
     for (p, value) in d
         new_evaluation_env = setindex!!(new_evaluation_env, value, p)
@@ -362,8 +358,7 @@ end
 function condition(
     model::BUGSModel,
     var_group::Vector{<:VarName},
-    evaluation_env::NamedTuple=model.evaluation_env;
-    sorted_nodes=Nothing,
+    evaluation_env::NamedTuple=model.evaluation_env,
 )
     check_var_group(var_group, model)
     new_parameters = setdiff(model.parameters, var_group)

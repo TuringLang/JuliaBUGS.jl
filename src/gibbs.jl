@@ -50,9 +50,7 @@ function AbstractMCMC.step(
     param_values = state.values
     for vs in keys(state.conditioning_schedule)
         model = initialize!(model, param_values)
-        cond_model = AbstractPPL.condition(
-            model, vs, model.evaluation_env, state.cached_eval_caches[vs]
-        )
+        cond_model = condition(model, vs, model.evaluation_env)
         param_values = gibbs_internal(rng, cond_model, state.conditioning_schedule[vs])
     end
     return param_values,
