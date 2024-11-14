@@ -77,23 +77,47 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,
 end
 
 function Base.show(io::IO, model::BUGSModel)
-    if model.transformed
-        println(
-            io,
-            "BUGSModel (transformed, with dimension $(model.transformed_param_length)):",
-            "\n",
-        )
+    # Print model type and dimension
+    space_type =
+        model.transformed ? "transformed (unconstrained)" : "original (constrained)"
+    dim = if model.transformed
+        model.transformed_param_length
     else
-        println(
-            io,
-            "BUGSModel (untransformed, with dimension $(model.untransformed_param_length)):",
-            "\n",
-        )
+        model.untransformed_param_length
     end
-    println(io, "  Model parameters:")
-    println(io, "    ", join(model.parameters, ", "), "\n")
-    println(io, "  Variable values:")
-    return println(io, "$(model.evaluation_env)")
+    printstyled(io, "BUGSModel"; bold=true, color=:blue)
+    println(io, " (parameters are in ", space_type, " space, with dimension ", dim, "):\n")
+
+    # Group and print parameters
+    printstyled(io, "  Model parameters:\n"; bold=true, color=:yellow)
+    grouped_params = Dict{Symbol,Vector{VarName}}()
+    for param in model.parameters
+        sym = AbstractPPL.getsym(param)
+        push!(get!(grouped_params, sym, VarName[]), param)
+    end
+    for (sym, params) in grouped_params
+        param_str = length(params) == 1 ? string(params[1]) : "$(join(params, ", "))"
+        print(io, "    ")
+        printstyled(io, param_str; color=:cyan)
+        println(io)
+    end
+    println(io)
+
+    # Print variable info
+    printstyled(io, "  Variable sizes and types:\n"; bold=true, color=:yellow)
+    for (name, value) in pairs(model.evaluation_env)
+        type_str = if isa(value, Number)
+            "type = $(typeof(value))"
+        else
+            "size = $(size(value)), type = $(typeof(value))"
+        end
+        print(io, "    ")
+        printstyled(io, name; color=:cyan)
+        print(io, ": ")
+        printstyled(io, type_str; color=:green)
+        println(io)
+    end
+    return nothing
 end
 
 """
