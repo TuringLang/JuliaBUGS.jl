@@ -151,6 +151,11 @@ function bugs_expression(expr, line_num)
         error(
             "Keyword argument syntax is not supported in BUGS, error at $line_num: $(expr)"
         )
+    elseif Meta.isexpr(expr, :.)
+        # this is to support statements like `a ~ Distributions.Normal(0, 1)`
+        # this won't work for arbitrary modules, but only modules JuliaBUGS imports internally
+        # 
+        return expr
     else
         error("Invalid expression at $line_num: `$expr`")
     end
