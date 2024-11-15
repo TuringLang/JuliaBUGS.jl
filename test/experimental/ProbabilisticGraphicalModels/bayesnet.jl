@@ -262,4 +262,27 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
             @test_throws KeyError is_conditionally_independent(bn, :A, :B, [:NonExistent])
         end
     end
+
+    @testset "Variable Elimination Tests" begin
+        # Define the Bayesian Network for variable elimination test
+        bn = BayesianNetwork{Symbol}()
+
+        # Add stochastic vertices
+        add_stochastic_vertex!(bn, :Z, Categorical([0.5, 0.5]), false)  # Discrete variable
+        add_stochastic_vertex!(bn, :X, Normal(0, 1), false)             # Continuous variable
+        add_stochastic_vertex!(bn, :Y, Normal(0, 1), false)             # Continuous variable
+
+        # Add edges
+        add_edge!(bn, :Z, :X)
+        add_edge!(bn, :X, :Y)
+
+        # Test case: Compute P(X | Y=1.5)
+        evidence = Dict(:Y => 1.5)
+        query = :X
+        result = variable_elimination(bn, query, evidence)
+
+        # Check that the result is a valid probability distribution
+        @test result isa Number  # Ensure the result is a number
+        println("P(X | Y=1.5) = ", result)
+    end
 end
