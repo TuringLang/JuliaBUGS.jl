@@ -6,8 +6,7 @@ using Distributions
 
 include("bayesnet.jl")
 
-export 
-    BayesianNetwork,
+export BayesianNetwork,
     Factor,
     create_factor,
     multiply_factors,
