@@ -9,7 +9,8 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     condition,
     decondition,
     ancestral_sampling,
-    is_conditionally_independent
+    is_conditionally_independent,
+    variable_elimination
 @testset "BayesianNetwork" begin
     @testset "Adding vertices" begin
         bn = BayesianNetwork{Symbol}()
@@ -264,25 +265,49 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     end
 
     @testset "Variable Elimination Tests" begin
-        # Define the Bayesian Network for variable elimination test
-        bn = BayesianNetwork{Symbol}()
+        println("\nTesting Variable Elimination")
 
-        # Add stochastic vertices
-        add_stochastic_vertex!(bn, :Z, Categorical([0.5, 0.5]), false)  # Discrete variable
-        add_stochastic_vertex!(bn, :X, Normal(0, 1), false)             # Continuous variable
-        add_stochastic_vertex!(bn, :Y, Normal(0, 1), false)             # Continuous variable
-
-        # Add edges
-        add_edge!(bn, :Z, :X)
-        add_edge!(bn, :X, :Y)
-
-        # Test case: Compute P(X | Y=1.5)
-        evidence = Dict(:Y => 1.5)
-        query = :X
-        result = variable_elimination(bn, query, evidence)
-
-        # Check that the result is a valid probability distribution
-        @test result isa Number  # Ensure the result is a number
-        println("P(X | Y=1.5) = ", result)
+        @testset "Simple Chain Network (Z → X → Y)" begin
+            # Create a simple chain network: Z → X → Y
+            bn = BayesianNetwork{Symbol}()
+            
+            # Add vertices with specific distributions
+            println("Adding vertices...")
+            add_stochastic_vertex!(bn, :Z, Categorical([0.7, 0.3]), false)  # P(Z)
+            add_stochastic_vertex!(bn, :X, Normal(0, 1), false)             # P(X|Z)
+            add_stochastic_vertex!(bn, :Y, Normal(1, 2), false)             # P(Y|X)
+            
+            # Add edges
+            println("Adding edges...")
+            add_edge!(bn, :Z, :X)
+            add_edge!(bn, :X, :Y)
+            
+            # Test case 1: P(X | Y=1.5)
+            println("\nTest case 1: P(X | Y=1.5)")
+            evidence1 = Dict(:Y => 1.5)
+            query1 = :X
+            result1 = variable_elimination(bn, query1, evidence1)
+            @test result1 isa Number
+            @test result1 >= 0
+            println("P(X | Y=1.5) = ", result1)
+            
+            # Test case 2: P(X | Z=1)
+            println("\nTest case 2: P(X | Z=1)")
+            evidence2 = Dict(:Z => 1)
+            query2 = :X
+            result2 = variable_elimination(bn, query2, evidence2)
+            @test result2 isa Number
+            @test result2 >= 0
+            println("P(X | Z=1) = ", result2)
+            
+            # Test case 3: P(Y | Z=1)
+            println("\nTest case 3: P(Y | Z=1)")
+            evidence3 = Dict(:Z => 1)
+            query3 = :Y
+            result3 = variable_elimination(bn, query3, evidence3)
+            @test result3 isa Number
+            @test result3 >= 0
+            println("P(Y | Z=1) = ", result3)
+        end
     end
 end
