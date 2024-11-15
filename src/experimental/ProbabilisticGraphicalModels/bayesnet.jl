@@ -164,6 +164,14 @@ Perform ancestral sampling on a Bayesian network to generate one sample from the
 Ancestral sampling works by:
 1. Finding a topological ordering of the nodes
 2. Sampling from each node in order, using the already-sampled parent values for conditional distributions
+
+### Return Value
+The function returns a `Dict{V, Any}` where:
+- Each key is a variable name (of type `V`) in the Bayesian Network.
+- Each value is the sampled value for that variable, which can be of any type (`Any`).
+
+This dictionary represents a single sample from the joint distribution of the Bayesian Network, capturing the dependencies and conditional relationships defined in the network structure.
+
 """
 function ancestral_sampling(bn::BayesianNetwork{V}) where {V}
     ordered_vertices = Graphs.topological_sort_by_dfs(bn.graph)
