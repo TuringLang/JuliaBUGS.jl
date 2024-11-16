@@ -312,22 +312,22 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
 
     @testset "Variable Elimination Tests" begin
         println("\nTesting Variable Elimination")
-    
+
         @testset "Simple Chain Network (Z → X → Y)" begin
             # Create a simple chain network: Z → X → Y
             bn = BayesianNetwork{Symbol}()
-            
+
             # Add vertices with specific distributions
             println("Adding vertices...")
             add_stochastic_vertex!(bn, :Z, Categorical([0.7, 0.3]), false)  # P(Z)
             add_stochastic_vertex!(bn, :X, Normal(0, 1), false)             # P(X|Z)
             add_stochastic_vertex!(bn, :Y, Normal(1, 2), false)             # P(Y|X)
-            
+
             # Add edges
             println("Adding edges...")
             add_edge!(bn, :Z, :X)
             add_edge!(bn, :X, :Y)
-            
+
             # Test case 1: P(X | Y=1.5)
             println("\nTest case 1: P(X | Y=1.5)")
             evidence1 = Dict(:Y => 1.5)
@@ -336,7 +336,7 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
             @test result1 isa Number
             @test result1 >= 0
             println("P(X | Y=1.5) = ", result1)
-            
+
             # Test case 2: P(X | Z=1)
             println("\nTest case 2: P(X | Z=1)")
             evidence2 = Dict(:Z => 1)
@@ -345,7 +345,7 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
             @test result2 isa Number
             @test result2 >= 0
             println("P(X | Z=1) = ", result2)
-            
+
             # Test case 3: P(Y | Z=1)
             println("\nTest case 3: P(Y | Z=1)")
             evidence3 = Dict(:Z => 1)
@@ -355,24 +355,24 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
             @test result3 >= 0
             println("P(Y | Z=1) = ", result3)
         end
-    
+
         @testset "Mixed Network (Discrete and Continuous)" begin
             # Create a more complex network with both discrete and continuous variables
             bn = BayesianNetwork{Symbol}()
-            
+
             # Add vertices
             println("\nAdding vertices for mixed network...")
             add_stochastic_vertex!(bn, :A, Categorical([0.4, 0.6]), false)     # Discrete
             add_stochastic_vertex!(bn, :B, Normal(0, 1), false)                # Continuous
             add_stochastic_vertex!(bn, :C, Categorical([0.3, 0.7]), false)     # Discrete
             add_stochastic_vertex!(bn, :D, Normal(1, 2), false)                # Continuous
-            
+
             # Add edges: A → B → D ← C
             println("Adding edges...")
             add_edge!(bn, :A, :B)
             add_edge!(bn, :B, :D)
             add_edge!(bn, :C, :D)
-            
+
             # Test case 1: P(B | D=1.0)
             println("\nTest case 1: P(B | D=1.0)")
             evidence1 = Dict(:D => 1.0)
@@ -381,7 +381,7 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
             @test result1 isa Number
             @test result1 >= 0
             println("P(B | D=1.0) = ", result1)
-            
+
             # Test case 2: P(D | A=1, C=1)
             println("\nTest case 2: P(D | A=1, C=1)")
             evidence2 = Dict(:A => 1, :C => 1)
@@ -391,16 +391,16 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
             @test result2 >= 0
             println("P(D | A=1, C=1) = ", result2)
         end
-    
+
         @testset "Special Cases" begin
             bn = BayesianNetwork{Symbol}()
-            
+
             # Single node case
             add_stochastic_vertex!(bn, :X, Normal(0, 1), false)
             result = variable_elimination(bn, :X, Dict{Symbol,Any}())
             @test result isa Number
             @test result >= 0
-            
+
             # No evidence case
             add_stochastic_vertex!(bn, :Y, Normal(1, 2), false)
             add_edge!(bn, :X, :Y)
