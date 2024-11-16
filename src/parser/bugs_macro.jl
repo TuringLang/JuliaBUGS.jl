@@ -151,6 +151,8 @@ function bugs_expression(expr, line_num)
         error(
             "Keyword argument syntax is not supported in BUGS, error at $line_num: $(expr)"
         )
+    elseif Meta.isexpr(expr, :.)
+        return expr
     else
         error("Invalid expression at $line_num: `$expr`")
     end

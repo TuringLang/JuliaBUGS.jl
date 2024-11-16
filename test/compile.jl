@@ -87,3 +87,11 @@ end
         @test AbstractPPL.get(model_init_1.evaluation_env, @varname(beta)) == 1
     end
 end
+
+@testset "dot call" begin
+    model_def = @bugs begin
+        x[1:2] ~ Distributions.product_distribution(fill(Distributions.Normal(0, 1), 2))
+    end
+    model = compile(model_def, (;))
+    @test model.evaluation_env.x isa Vector{Float64}
+end
