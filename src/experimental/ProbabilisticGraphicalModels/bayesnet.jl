@@ -215,6 +215,11 @@ end
 function is_conditionally_independent(
     bn::BayesianNetwork{V}, X::V, Y::V, Z::Vector{V}
 ) where {V}
+    println("debugging: X: $X, Y: $Y, Z: $Z")
+    if X in Z || Y in Z
+        return true
+    end
+
     # Get vertex IDs
     x_id = bn.names_to_ids[X]
     y_id = bn.names_to_ids[Y]
