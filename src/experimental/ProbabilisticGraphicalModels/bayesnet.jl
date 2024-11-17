@@ -308,7 +308,6 @@ function has_conditioned_descendant(bn::BayesianNetwork, node_id::Int, z_ids::Se
     return false
 end
 
-# Add after the existing imports at the top
 using LinearAlgebra
 
 # Add these structs and methods before the variable_elimination function
