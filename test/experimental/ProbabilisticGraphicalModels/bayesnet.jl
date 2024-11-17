@@ -222,14 +222,11 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
             add_stochastic_vertex!(bn, :C, Normal(0, 1), false)
             add_edge!(bn, :A, :B)
             add_edge!(bn, :B, :C)
-        
             @testset "Corner Case: X or Y in Z" begin
                 # Test case where X is in Z
                 @test is_conditionally_independent(bn, :A, :C, [:A])  # A ⊥ C | A
-        
                 # Test case where Y is in Z
                 @test is_conditionally_independent(bn, :A, :C, [:C])  # A ⊥ C | C
-        
                 # Test case where both X and Y are in Z
                 @test is_conditionally_independent(bn, :A, :C, [:A, :C])  # A ⊥ C | A, C
             end
