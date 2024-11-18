@@ -91,4 +91,41 @@
     @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.2
     @test means[:sigma].nt.mean[1] ≈ 0.9 atol = 0.2
     @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.2
+
+    # test for more complicated varnames
+    model_def = @bugs begin
+        A[1, 1:3] ~ Dirichlet(ones(3))
+        A[2, 1:3] ~ Dirichlet(ones(3))
+        A[3, 1:3] ~ Dirichlet(ones(3))
+    
+        mu[1:3] ~ MvNormal(zeros(3), 10 * Diagonal(ones(3)))
+        sigma[1] ~ InverseGamma(2, 3)
+        sigma[2] ~ InverseGamma(2, 3)
+        sigma[3] ~ InverseGamma(2, 3)
+    end
+    model = compile(model_def, (;))
+    ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
+    hmc_chain = AbstractMCMC.sample(
+        ad_model,
+        NUTS(0.8),
+        10;
+        chain_type=Chains,
+    )
+    @test hmc_chain.name_map[:parameters] == [
+        Symbol("sigma[3]"),
+        Symbol("sigma[2]"),
+        Symbol("sigma[1]"),
+        Symbol("mu[1:3][1]"),
+        Symbol("mu[1:3][2]"),
+        Symbol("mu[1:3][3]"),
+        Symbol("A[3, 1:3][1]"),
+        Symbol("A[3, 1:3][2]"),
+        Symbol("A[3, 1:3][3]"),
+        Symbol("A[2, 1:3][1]"),
+        Symbol("A[2, 1:3][2]"),
+        Symbol("A[2, 1:3][3]"),
+        Symbol("A[1, 1:3][1]"),
+        Symbol("A[1, 1:3][2]"),
+        Symbol("A[1, 1:3][3]"),
+    ]
 end
