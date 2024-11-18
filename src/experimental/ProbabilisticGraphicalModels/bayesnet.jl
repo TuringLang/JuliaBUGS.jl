@@ -271,7 +271,7 @@ function is_conditionally_independent(
         end
 
         # Case 2: Node is conditioned or has conditioned descendants
-        if is_conditioned || has_conditioned_descendant(bn, current_id, z_ids)
+        if is_conditioned
             # If this is a collider or descendant of collider
             if length(parents) > 1 || !isempty(children)
                 # Can go to parents regardless of direction
@@ -283,29 +283,6 @@ function is_conditionally_independent(
     end
 
     return true
-end
-
-function has_conditioned_descendant(bn::BayesianNetwork, node_id::Int, z_ids::Set{Int})
-    visited = falses(nv(bn.graph))
-    queue = Int[node_id]
-
-    while !isempty(queue)
-        current = popfirst!(queue)
-
-        if visited[current]
-            continue
-        end
-        visited[current] = true
-
-        if current in z_ids
-            return true
-        end
-
-        # Add all unvisited children
-        append!(queue, filter(c -> !visited[c], outneighbors(bn.graph, current)))
-    end
-
-    return false
 end
 
 using LinearAlgebra
