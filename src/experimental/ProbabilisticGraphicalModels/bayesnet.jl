@@ -199,53 +199,82 @@ function ancestral_sampling(bn::BayesianNetwork{V}) where {V}
 end
 
 """
-    is_conditionally_independent(bn::BayesianNetwork, X::V, Y::V[, Z::Vector{V}]) where {V}
+    is_conditionally_independent(bn::BayesianNetwork, X::Vector{V}, Y::Vector{V}, Z::Vector{V}) where {V}
 
-Determines if two variables X and Y are conditionally independent given the conditioning information already known.
-If Z is provided, the conditioning information in `bn` will be ignored.
+Test whether sets of variables X and Y are conditionally independent given set Z in a Bayesian Network using the Bayes Ball algorithm.
+
+# Arguments
+- `bn::BayesianNetwork`: The Bayesian Network structure
+- `X::Vector{V}`: First set of variables to test for independence
+- `Y::Vector{V}`: Second set of variables to test for independence
+- `Z::Vector{V}`: Set of conditioning variables (can be empty)
+
+# Returns
+- `true`: if X and Y are conditionally independent given Z (X ⊥ Y | Z)
+- `false`: if X and Y are conditionally dependent given Z
+
+# Description
+The Bayes Ball algorithm determines conditional independence by checking if there exists an active path between 
+variables in X and Y given Z. The algorithm follows these rules:
+- In a chain (A → B → C): B blocks the path if conditioned
+- In a fork (A ← B → C): B blocks the path if conditioned
+- In a collider (A → B ← C): B opens the path if conditioned 
+# Examples
+```
 """
-function is_conditionally_independent end
-
-function is_conditionally_independent(bn::BayesianNetwork{V}, X::V, Y::V) where {V}
-    # Use currently observed variables as Z
-    Z = V[v for (v, is_obs) in zip(bn.names, bn.is_observed) if is_obs]
-    return is_conditionally_independent(bn, X, Y, Z)
-end
-
 function is_conditionally_independent(
-    bn::BayesianNetwork{V}, X::V, Y::V, Z::Vector{V}
+    bn::BayesianNetwork{V}, X::Vector{V}, Y::Vector{V}, Z::Vector{V}
 ) where {V}
-    println("debugging: X: $X, Y: $Y, Z: $Z")
-    if X in Z || Y in Z
+    isempty(X) && throw(ArgumentError("X cannot be empty"))
+    isempty(Y) && throw(ArgumentError("Y cannot be empty"))
+
+    x_ids = Set([bn.names_to_ids[x] for x in X])
+    y_ids = Set([bn.names_to_ids[y] for y in Y])
+    z_ids = Set([bn.names_to_ids[z] for z in Z])
+
+    # Check if any variable in X or Y is in Z
+    if !isempty(intersect(x_ids, z_ids)) || !isempty(intersect(y_ids, z_ids))
         return true
     end
 
-    # Get vertex IDs
-    x_id = bn.names_to_ids[X]
-    y_id = bn.names_to_ids[Y]
-    z_ids = Set([bn.names_to_ids[z] for z in Z])
+    # Add observed variables to conditioning set
+    for (id, is_obs) in enumerate(bn.is_observed)
+        if is_obs
+            push!(z_ids, id)
+        end
+    end
 
-    # Track visited nodes and their states
+    # Track visited nodes and their directions
     n_vertices = nv(bn.graph)
-    visited = falses(n_vertices)
+    visited_up = falses(n_vertices)   # Visited going up (from child to parent)
+    visited_down = falses(n_vertices) # Visited going down (from parent to child)
 
-    # Queue entries are (node_id, from_parent)
+    # Queue entries are (node_id, going_up)
     queue = Tuple{Int,Bool}[]
 
-    # Start from X
-    push!(queue, (x_id, true))   # As if coming from parent
-    push!(queue, (x_id, false))  # As if coming from child
+    # Start from all X nodes
+    for x_id in x_ids
+        push!(queue, (x_id, true))   # Try going up
+        push!(queue, (x_id, false))  # Try going down
+    end
 
     while !isempty(queue)
-        current_id, from_parent = popfirst!(queue)
+        current_id, going_up = popfirst!(queue)
 
-        if visited[current_id]
+        # Skip if we've visited this node in this direction
+        if (going_up && visited_up[current_id]) || (!going_up && visited_down[current_id])
             continue
         end
-        visited[current_id] = true
 
-        # If we reached Y, path is active
-        if current_id == y_id
+        # Mark as visited in current direction
+        if going_up
+            visited_up[current_id] = true
+        else
+            visited_down[current_id] = true
+        end
+
+        # If we reached a Y node, path is active
+        if current_id in y_ids
             return false
         end
 
@@ -253,34 +282,50 @@ function is_conditionally_independent(
         parents = inneighbors(bn.graph, current_id)
         children = outneighbors(bn.graph, current_id)
 
-        # Case 1: Node is not conditioned
-        if !is_conditioned
-            # Can go to children if coming from parent or at start node
-            if from_parent || current_id == x_id
-                for child in children
-                    push!(queue, (child, true))
-                end
-            end
-
-            # Can go to parents if coming from child or at start node
-            if !from_parent || current_id == x_id
-                for parent in parents
-                    push!(queue, (parent, false))
-                end
-            end
-        end
-
-        # Case 2: Node is conditioned or has conditioned descendants
         if is_conditioned
-            # If this is a collider or descendant of collider
-            if length(parents) > 1 || !isempty(children)
-                # Can go to parents regardless of direction
+            # If conditioned:
+            # - In a chain/fork: blocks the path
+            # - In a collider or descendant of collider: allows going up to parents
+            if length(parents) > 1 || !isempty(children)  # Is collider or has children
                 for parent in parents
-                    push!(queue, (parent, false))
+                    push!(queue, (parent, true))  # Can only go up to parents
+                end
+            end
+        else
+            # If not conditioned:
+            if going_up
+                # Going up: can visit parents
+                for parent in parents
+                    push!(queue, (parent, true))
+                end
+            else
+                # Going down: can visit children
+                for child in children
+                    push!(queue, (child, false))
+                end
+            end
+
+            # At starting nodes (X), we can go both up and down
+            if current_id in x_ids
+                if going_up
+                    for child in children
+                        push!(queue, (child, false))
+                    end
+                else
+                    for parent in parents
+                        push!(queue, (parent, true))
+                    end
                 end
             end
         end
     end
 
     return true
+end
+
+# Single variable version with Z
+function is_conditionally_independent(
+    bn::BayesianNetwork{V}, X::V, Y::V, Z::Vector{V}
+) where {V}
+    return is_conditionally_independent(bn, [X], [Y], Z)
 end

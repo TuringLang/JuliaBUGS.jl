@@ -7,10 +7,11 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     add_deterministic_vertex!,
     add_edge!,
     condition,
+    condition!,
     decondition,
     ancestral_sampling,
-    is_conditionally_independent,
-    variable_elimination
+    is_conditionally_independent
+
 @testset "BayesianNetwork" begin
     @testset "Adding vertices" begin
         bn = BayesianNetwork{Symbol}()
@@ -253,31 +254,56 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
             @test !is_conditionally_independent(bn, :A, :E, Symbol[])
         end
 
-        @testset "Using Observed Variables" begin
-            bn = BayesianNetwork{Symbol}()
-
-            add_stochastic_vertex!(bn, :A, Normal(), false)
-            add_stochastic_vertex!(bn, :B, Normal(), true)  # B is observed
-            add_stochastic_vertex!(bn, :C, Normal(), false)
-
-            add_edge!(bn, :A, :B)
-            add_edge!(bn, :B, :C)
-
-            @test is_conditionally_independent(bn, :A, :C)
-
-            bn_decond = decondition(bn)
-            @test !is_conditionally_independent(bn_decond, :A, :C)
-        end
-
         @testset "Error Handling" begin
             bn = BayesianNetwork{Symbol}()
 
             add_stochastic_vertex!(bn, :A, Normal(), false)
             add_stochastic_vertex!(bn, :B, Normal(), false)
-
-            @test_throws KeyError is_conditionally_independent(bn, :A, :NonExistent)
-            @test_throws KeyError is_conditionally_independent(bn, :NonExistent, :B)
             @test_throws KeyError is_conditionally_independent(bn, :A, :B, [:NonExistent])
         end
+    end
+
+    @testset "Conditional Independence (Single and Multiple Variables)" begin
+        bn = BayesianNetwork{Symbol}()
+
+        # Create a complex network
+        #     A → B → D
+        #     ↓   ↓   ↑
+        #     C → E → F
+        for v in [:A, :B, :C, :D, :E, :F]
+            add_stochastic_vertex!(bn, v, Normal(), false)
+        end
+
+        add_edge!(bn, :A, :B)
+        add_edge!(bn, :A, :C)
+        add_edge!(bn, :B, :D)
+        add_edge!(bn, :B, :E)
+        add_edge!(bn, :C, :E)
+        add_edge!(bn, :E, :F)
+        add_edge!(bn, :F, :D)
+
+        # Test single variable independence
+        @test is_conditionally_independent(bn, :A, :F, [:B, :C])
+        @test !is_conditionally_independent(bn, :A, :D, Symbol[])
+
+        # Test multiple variable independence
+        @test is_conditionally_independent(bn, [:A], [:F], [:B, :C])
+        @test is_conditionally_independent(bn, [:A, :B], [:F], [:C, :E])
+        @test !is_conditionally_independent(bn, [:A, :B], [:D, :F], Symbol[])
+
+        # Test when some variables ccdare in conditioning set
+        @test is_conditionally_independent(bn, [:A, :B], [:D, :F], [:A])
+        @test is_conditionally_independent(bn, [:A, :B], [:D, :F], [:F])
+
+        # Test error handling
+        @test_throws KeyError is_conditionally_independent(
+            bn, [:A, :NonExistent], [:F], [:B]
+        )
+        @test_throws KeyError is_conditionally_independent(
+            bn, [:A], [:F, :NonExistent], [:B]
+        )
+        @test_throws KeyError is_conditionally_independent(bn, [:A], [:F], [:NonExistent])
+        @test_throws ArgumentError is_conditionally_independent(bn, Symbol[], [:F], [:B])
+        @test_throws ArgumentError is_conditionally_independent(bn, [:A], Symbol[], [:B])
     end
 end
