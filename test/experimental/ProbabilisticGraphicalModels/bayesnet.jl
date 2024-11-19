@@ -184,7 +184,6 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         end
 
         @testset "Fork Structure (A ← B → C)" begin
-            println("\nTesting Fork Structure")
             bn = BayesianNetwork{Symbol}()
 
             add_stochastic_vertex!(bn, :A, Normal(), false)
@@ -194,11 +193,8 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
             add_edge!(bn, :B, :A)
             add_edge!(bn, :B, :C)
 
-            println("Graph structure:")
-            println("Edges: ", collect(edges(bn.graph)))
-
-            result = is_conditionally_independent(bn, :A, :C, Symbol[])
-            println("Result for A ⊥ C | ∅: $result")
+            @test !is_conditionally_independent(bn, :A, :C, Symbol[])
+            @test is_conditionally_independent(bn, :A, :C, [:B])
         end
 
         @testset "Collider Structure (A → B ← C)" begin
