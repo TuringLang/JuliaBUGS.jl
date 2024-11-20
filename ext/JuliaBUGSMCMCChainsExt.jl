@@ -6,6 +6,7 @@ using JuliaBUGS.AbstractPPL
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
+using JuliaBUGS: Accessors
 using AbstractMCMC
 using MCMCChains: Chains
 
