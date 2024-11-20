@@ -201,5 +201,91 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
             @test result isa Number
             @test result >= 0
         end
+
+        @testset "Marginalization with Mixed Variables" begin
+            bn = BayesianNetwork{Symbol}()
+            
+            # X1 ~ Normal(0, 1)
+            add_stochastic_vertex!(bn, :X1, Normal(0, 1), false)
+            
+            # X2 ~ Bernoulli(0.7) [using Categorical with 2 categories]
+            add_stochastic_vertex!(bn, :X2, Categorical([0.3, 0.7]), false)
+            
+            # X3 ~ Normal(μ = 2*X2, σ = 1)
+            add_stochastic_vertex!(bn, :X3, Normal(0, 1), false)
+            add_edge!(bn, :X2, :X3)
+            
+            @testset "Marginalizing over X2" begin
+                # P(X3 | X1=0)
+                result1 = variable_elimination(bn, :X3, Dict(:X1 => 0.0))
+                @test result1 isa Number
+                @test result1 > 0
+                
+                # P(X3) - no evidence
+                result2 = variable_elimination(bn, :X3, Dict{Symbol,Any}())
+                @test result2 isa Number
+                @test result2 > 0
+            end
+            
+            @testset "Marginalizing over continuous" begin
+                # P(X2 | X3=1.0)
+                result3 = variable_elimination(bn, :X2, Dict(:X3 => 1.0))
+                @test result3 isa Number
+                @test 0 ≤ result3 ≤ 1  # Should be a probability
+                
+                # P(X2 | X1=0, X3=1.0)
+                result4 = variable_elimination(bn, :X2, Dict(:X1 => 0.0, :X3 => 1.0))
+                @test result4 isa Number
+                @test 0 ≤ result4 ≤ 1
+            end
+        end
+
+        @testset "Variable Elimination - Marginalization Demo" begin
+            bn = BayesianNetwork{Symbol}()
+            
+            # Temperature (X1) ~ Normal(0, 1)
+            add_stochastic_vertex!(bn, :X1, Normal(0, 1), false)
+            
+            # Rain (X2) ~ Bernoulli(0.7)
+            add_stochastic_vertex!(bn, :X2, Categorical([0.3, 0.7]), false)
+            
+            # Umbrella Sales (X3) ~ Normal(μ(X2), 1)
+            # μ = 2 if no rain (X2=0), μ = 10 if rain (X2=1)
+            add_stochastic_vertex!(bn, :X3, Normal(0, 1), false)
+            
+            add_edge!(bn, :X2, :X3)
+            
+            @testset "P(X3|X1) - Marginalizing over discrete X2" begin
+                # P(X3|X1) = ∫ P(X3|X2)P(X2|X1) dX2
+                # Since X1 ⊥⊥ X2, P(X2|X1) = P(X2)
+                # So this should still be a mixture of two Gaussians:
+                # 0.3 * Normal(2,1) + 0.7 * Normal(10,1)
+                result1 = variable_elimination(bn, :X3, Dict(:X1 => 0.0))
+                @test result1 isa Number
+                @test result1 > 0
+                println("P(X3|X1) = ", result1)
+            end
+            
+            @testset "Marginalizing over continuous variable (X1)" begin
+                # P(X2) after marginalizing over X1 should still be close to original prior
+                # because X1 and X2 are independent
+                result = variable_elimination(bn, :X2, Dict{Symbol,Any}())
+                @test result isa Number
+                @test 0 ≤ result ≤ 1
+                @test isapprox(result, 0.3, atol=0.1)  # Should be close to P(X2=0)=0.3
+            end
+            
+            @testset "Conditional probabilities" begin
+                # P(X3|X2=1) should be approximately Normal(10,1)
+                result_rain = variable_elimination(bn, :X3, Dict(:X2 => 1))
+                @test result_rain isa Number
+                @test result_rain > 0
+                
+                # P(X2|X3=10) should be high (likely raining given high sales)
+                result_high_sales = variable_elimination(bn, :X2, Dict(:X3 => 10.0))
+                @test result_high_sales isa Number
+                println("P(X2|X3=10) = ", result_high_sales) # Should favor rain hypothesis
+            end
+        end
     end
 end

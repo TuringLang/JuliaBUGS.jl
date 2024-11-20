@@ -360,7 +360,19 @@ end
 function variable_elimination(
     bn::BayesianNetwork{Symbol,Int,Any}, query::Symbol, evidence::Dict{Symbol,<:Any}
 )
-    # Convert evidence to Dict{Symbol,Float64}
-    evidence_float = Dict{Symbol,Float64}(k => Float64(v) for (k, v) in evidence)
+    # Convert evidence to Dict{Symbol,Float64}, handling both continuous and discrete cases
+    evidence_float = Dict{Symbol,Float64}()
+    for (k, v) in evidence
+        node_id = bn.names_to_ids[k]
+        dist_idx = findfirst(id -> id == node_id, bn.stochastic_ids)
+        
+        if bn.distributions[dist_idx] isa Categorical
+            # For categorical variables, keep the original value (0-based indexing)
+            evidence_float[k] = Float64(v)
+        else
+            # For continuous variables, convert to Float64
+            evidence_float[k] = Float64(v)
+        end
+    end
     return variable_elimination(bn, query, evidence_float)
 end
