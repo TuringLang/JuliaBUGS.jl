@@ -3,6 +3,7 @@
 
 A structure representing a Bayesian Network.
 """
+
 struct BayesianNetwork{V,T,F}
     graph::SimpleDiGraph{T}
     "names of the variables in the network"
@@ -328,4 +329,102 @@ function is_conditionally_independent(
     bn::BayesianNetwork{V}, X::V, Y::V, Z::Vector{V}
 ) where {V}
     return is_conditionally_independent(bn, [X], [Y], Z)
+end
+
+function is_discrete_distribution(d::Distribution)
+    return d isa DiscreteDistribution
+end
+
+function get_support(d::DiscreteDistribution)
+    return support(d)
+end
+
+"""
+    marginal_distribution(bn::BayesianNetwork{V}, query_var::V) where {V}
+
+Compute the marginal distribution of a query variable using variable elimination.
+"""
+function marginal_distribution(bn::BayesianNetwork{V}, query_var::V) where {V}
+    # Get query variable id
+    query_id = bn.names_to_ids[query_var]
+    
+    # Get topological ordering
+    ordered_vertices = Graphs.topological_sort_by_dfs(bn.graph)
+    
+    # Start recursive elimination
+    return eliminate_variables(bn, ordered_vertices, query_id, Dict{V,Any}())
+end
+
+"""
+    eliminate_variables(bn, ordered_vertices, query_id, assignments)
+
+Helper function for variable elimination algorithm.
+"""
+function eliminate_variables(
+    bn::BayesianNetwork{V}, 
+    ordered_vertices::Vector{Int}, 
+    query_id::Int, 
+    assignments::Dict{V,Any}
+) where {V}
+    # Base case: reached the query variable
+    if isempty(ordered_vertices) || ordered_vertices[1] == query_id
+        dist_idx = findfirst(id -> id == query_id, bn.stochastic_ids)
+        return bn.distributions[dist_idx]
+    end
+    
+    current_id = ordered_vertices[1]
+    remaining_vertices = ordered_vertices[2:end]
+    current_name = bn.names[current_id]
+    
+    # If the current node is observed, use its value
+    if bn.is_observed[current_id]
+        assignments[current_name] = bn.values[current_name]
+        return eliminate_variables(bn, remaining_vertices, query_id, assignments)
+    end
+    
+    # Handle stochastic nodes
+    if bn.is_stochastic[current_id]
+        dist_idx = findfirst(id -> id == current_id, bn.stochastic_ids)
+        current_dist = bn.distributions[dist_idx]
+        
+        if is_discrete_distribution(current_dist)
+            # For discrete nodes, create mixture of distributions
+            support_values = get_support(current_dist)
+            components = Distribution[]
+            weights = Float64[]
+            
+            for value in support_values
+                # Create new assignment with current value
+                new_assignments = copy(assignments)
+                new_assignments[current_name] = value
+                
+                # Recursive call
+                component = eliminate_variables(bn, remaining_vertices, query_id, new_assignments)
+                push!(components, component)
+                push!(weights, pdf(current_dist, value))
+            end
+            
+            # Normalize weights
+            weights ./= sum(weights)
+            
+            # Return mixture distribution with explicit variate form
+            if all(c isa DiscreteUnivariateDistribution for c in components)
+                return MixtureModel{Discrete, Univariate}(components, weights)
+            elseif all(c isa ContinuousUnivariateDistribution for c in components)
+                return MixtureModel{Continuous, Univariate}(components, weights)
+            else
+                error("Mixed discrete and continuous distributions not supported")
+            end
+        else
+            # For continuous nodes, integrate (not implemented yet)
+            error("Continuous variable elimination not implemented yet")
+        end
+    else
+        # Handle deterministic nodes
+        func_idx = findfirst(id -> id == current_id, bn.deterministic_ids)
+        parent_ids = Graphs.inneighbors(bn.graph, current_id)
+        parent_values = [assignments[bn.names[pid]] for pid in parent_ids]
+        assignments[current_name] = bn.deterministic_functions[func_idx](parent_values...)
+        return eliminate_variables(bn, remaining_vertices, query_id, assignments)
+    end
 end
