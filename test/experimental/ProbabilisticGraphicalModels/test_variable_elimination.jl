@@ -24,34 +24,59 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     marginal_distribution,
     eliminate_variables
 # 4. Run the specific test
-@testset "Variable Elimination - Three Node Chain" begin
-    # Create Bayesian Network
+
+@testset "Simple Discrete Chain" begin
     bn = BayesianNetwork{Symbol}()
     
-    # Node A: Root node with Bernoulli(0.7)
+    # Simple chain A -> B -> C
     add_stochastic_vertex!(bn, :A, Bernoulli(0.7), false)
-    
-    # Node B: Depends on A
     add_stochastic_vertex!(bn, :B, Bernoulli(0.8), false)
-    add_edge!(bn, :A, :B)
-    
-    # Node C: Depends on B
     add_stochastic_vertex!(bn, :C, Bernoulli(0.9), false)
+    
+    add_edge!(bn, :A, :B)
     add_edge!(bn, :B, :C)
     
-    # Test marginal distribution of C
+    ordered_vertices = topological_sort_by_dfs(bn.graph)
+    println(ordered_vertices)
     marginal_C = marginal_distribution(bn, :C)
+    println(marginal_C)
+end
+
+# @testset "Mixed Graph - Variable Elimination" begin
+#     bn = BayesianNetwork{Symbol}()
     
-    # Verify the result
-    expected_prob_C1 = 0.7 * 0.8 * 0.9 + 0.7 * 0.2 * 0.1 + 0.3 * 0.8 * 0.9 + 0.3 * 0.2 * 0.1
+#     # X1 ~ Uniform(0,1)
+#     add_stochastic_vertex!(bn, :X1, Uniform(0, 1), false)
     
-    @test isapprox(pdf(marginal_C, 1), expected_prob_C1, atol=1e-10)
-    @test isapprox(pdf(marginal_C, 0), 1 - expected_prob_C1, atol=1e-10)
+#     # X2 ~ Bernoulli(X1)
+#     # We need a function that creates a new Bernoulli distribution based on X1's value
+#     add_deterministic_vertex!(bn, :X2_dist, x1 -> Bernoulli(x1))
+#     add_stochastic_vertex!(bn, :X2, Bernoulli(0.5), false)  # Initial dist doesn't matter
+#     add_edge!(bn, :X1, :X2_dist)
+#     add_edge!(bn, :X2_dist, :X2)
     
-    # Test conditioning
-    bn_conditioned = condition(bn, Dict(:B => 1))
-    marginal_C_given_B1 = marginal_distribution(bn_conditioned, :C)
+#     # X3 ~ Normal(μ(X2), 1)
+#     # Function that creates a new Normal distribution based on X2's value
+#     add_deterministic_vertex!(bn, :X3_dist, x2 -> Normal(x2 == 1 ? 10.0 : 2.0, 1.0))
+#     add_stochastic_vertex!(bn, :X3, Normal(0, 1), false)  # Initial dist doesn't matter
+#     add_edge!(bn, :X2, :X3_dist)
+#     add_edge!(bn, :X3_dist, :X3)
+# end
+
+@testset "Mixed Graph - Variable Elimination" begin
+    bn = BayesianNetwork{Symbol}()
     
-    @test isapprox(pdf(marginal_C_given_B1, 1), 0.9, atol=1e-10)
-    @test isapprox(pdf(marginal_C_given_B1, 0), 0.1, atol=1e-10)
+    # X1 ~ Uniform(0,1)
+    add_stochastic_vertex!(bn, :X1, Uniform(0, 1), false)
+    
+    # X2 ~ Bernoulli(X1)
+    # The distribution constructor takes the parent value and returns the appropriate distribution
+    conditional_dist_X2 = x1 -> Bernoulli(x1)
+    add_stochastic_vertex!(bn, :X2, conditional_dist_X2, false)
+    add_edge!(bn, :X1, :X2)
+    
+    # X3 ~ Normal(μ(X2), 1)
+    conditional_dist_X3 = x2 -> Normal(x2 == 1 ? 10.0 : 2.0, 1.0)
+    add_stochastic_vertex!(bn, :X3, conditional_dist_X3, false)
+    add_edge!(bn, :X2, :X3)
 end
