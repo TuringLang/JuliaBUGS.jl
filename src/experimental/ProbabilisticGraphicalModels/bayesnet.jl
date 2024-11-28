@@ -4,41 +4,33 @@
 A structure representing a Bayesian Network.
 """
 
-struct BayesianNetwork{V,T,F}
+# First, modify the BayesianNetwork struct definition
+struct BayesianNetwork{V,T}
     graph::SimpleDiGraph{T}
-    "names of the variables in the network"
     names::Vector{V}
-    "mapping from variable names to ids"
     names_to_ids::Dict{V,T}
-    "values of each variable in the network"
-    values::Dict{V,Any} # TODO: make it a NamedTuple for better performance in the future
-    "distributions of the stochastic variables"
-        # A distribution can be either:
-        # - A fixed distribution (like Uniform(0,1))
-        # - A function that takes parent values and returns a distribution
-    distributions::Vector{Union{Distribution,Function}}  
-    "deterministic functions of the deterministic variables"
-    deterministic_functions::Vector{F}
-    "ids of the stochastic variables"
-    stochastic_ids::Vector{T}
-    "ids of the deterministic variables"
-    deterministic_ids::Vector{T}
-    is_stochastic::BitVector
+    values::Dict{V,Any}
+    distributions::Vector{Union{Distribution,Function}}
     is_observed::BitVector
+    is_stochastic::BitVector
+    stochastic_ids::Vector{Int}
+    deterministic_ids::Vector{Int}
+    deterministic_functions::Vector{Function}
 end
 
+# Then, modify the constructor to match exactly
 function BayesianNetwork{V}() where {V}
-    return BayesianNetwork(
-        SimpleDiGraph{Int}(), # by default, vertex ids are integers
-        V[],
-        Dict{V,Int}(),
-        Dict{V,Any}(),
-        Distribution[],
-        Any[],
-        Int[],
-        Int[],
-        BitVector(),
-        BitVector(),
+    return BayesianNetwork{V,Int}(
+        SimpleDiGraph{Int}(),  # graph
+        V[],                   # names
+        Dict{V,Int}(),         # names_to_ids
+        Dict{V,Any}(),         # values
+        Union{Distribution,Function}[], # distributions
+        BitVector(),           # is_observed
+        BitVector(),           # is_stochastic
+        Int[],                 # stochastic_ids
+        Int[],                 # deterministic_ids
+        Function[]             # deterministic_functions - Added this
     )
 end
 
@@ -127,8 +119,10 @@ function add_stochastic_vertex!(
     id = nv(bn.graph)
     push!(bn.distributions, dist)
     push!(bn.is_observed, is_observed)
+    push!(bn.is_stochastic, true)
     push!(bn.names, name)
     bn.names_to_ids[name] = id
+    push!(bn.stochastic_ids, id)
     return id
 end
 
@@ -358,12 +352,25 @@ function marginal_distribution(bn::BayesianNetwork{V}, query_var::V) where {V}
     # Start recursive elimination
     return eliminate_variables(bn, ordered_vertices, query_id, Dict{V,Any}())
 end
+# Helper functions to evaluate distributions
+function evaluate_distribution(dist::Distribution, _)
+    return dist
+end
 
-"""
-    eliminate_variables(bn, ordered_vertices, query_id, assignments)
+function evaluate_distribution(dist_func::Function, parent_values)
+    # Skip evaluation if any parent value is nothing
+    if any(isnothing, parent_values)
+        return nothing
+    end
+    
+    # If there's only one parent value, pass it directly instead of splatting
+    if length(parent_values) == 1
+        return dist_func(parent_values[1])
+    else
+        return dist_func(parent_values...)
+    end
+end
 
-Helper function for variable elimination algorithm.
-"""
 function eliminate_variables(
     bn::BayesianNetwork{V}, 
     ordered_vertices::Vector{Int}, 
@@ -373,34 +380,54 @@ function eliminate_variables(
     # Base case: reached query variable
     if isempty(ordered_vertices) || ordered_vertices[1] == query_id
         dist_idx = findfirst(id -> id == query_id, bn.stochastic_ids)
-        return bn.distributions[dist_idx]
+        current_dist = bn.distributions[dist_idx]
+        
+        # Get parent values if it's a conditional distribution
+        parent_ids = Graphs.inneighbors(bn.graph, query_id)
+        parent_values = [get(assignments, bn.names[pid], nothing) for pid in parent_ids]
+        
+        result = evaluate_distribution(current_dist, parent_values)
+        return isnothing(result) ? current_dist : result
     end
     
     current_id = ordered_vertices[1]
     remaining_vertices = ordered_vertices[2:end]
     
-    # For current variable, create mixture over its values
-    components = Distribution[]
+    # First, get the type of distribution we'll be dealing with
+    dist_idx = findfirst(id -> id == query_id, bn.stochastic_ids)
+    current_dist = bn.distributions[dist_idx]
+    parent_ids = Graphs.inneighbors(bn.graph, query_id)
+    parent_values = [get(assignments, bn.names[pid], nothing) for pid in parent_ids]
+    test_dist = evaluate_distribution(current_dist, parent_values)
+    test_dist = isnothing(test_dist) ? current_dist : test_dist
+    
+    # Initialize components with the correct type
+    if test_dist isa ContinuousUnivariateDistribution
+        components = Vector{ContinuousUnivariateDistribution}()
+    else
+        components = Vector{DiscreteUnivariateDistribution}()
+    end
     weights = Float64[]
     
-    # Try both values (0 and 1) # TODO: generalize for other values
+    # Try both values (0 and 1)
     for value in [0, 1]
         new_assignments = copy(assignments)
         new_assignments[bn.names[current_id]] = value
         
-        # Get distribution for remaining variables
         component = eliminate_variables(bn, remaining_vertices, query_id, new_assignments)
-        println("Components so far: ", components)
-        println("Current component: ", component)
         push!(components, component)
         
         # Get weight from current node's distribution
         dist_idx = findfirst(id -> id == current_id, bn.stochastic_ids)
-        push!(weights, pdf(bn.distributions[dist_idx], value))
+        current_dist = bn.distributions[dist_idx]
+        parent_ids = Graphs.inneighbors(bn.graph, current_id)
+        parent_values = [get(assignments, bn.names[pid], nothing) for pid in parent_ids]
+        
+        dist = evaluate_distribution(current_dist, parent_values)
+        dist = isnothing(dist) ? current_dist : dist
+        push!(weights, pdf(dist, value))
     end
     
-    # Normalize weights
     weights ./= sum(weights)
-    
     return MixtureModel(components, weights)
 end
