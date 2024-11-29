@@ -4,10 +4,22 @@ on:
   pull_request:
     branches:
       - master
+  workflow_dispatch:
 
 jobs:
-  run-benchmark:
-    runs-on: ubuntu-latest
+  benchmark:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macOS-latest]
+        include:
+          - os: macOS-latest
+            arch: aarch64
+          - os: ubuntu-latest
+            arch: x64
+
+    name: Benchmark on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
 
     steps:
     - name: Checkout code
@@ -19,46 +31,45 @@ jobs:
       uses: julia-actions/setup-julia@v2
       with:
         version: '1'
-
-    - name: Run benchmarks on Ubuntu
-      run: |
-        julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
-        julia --project=benchmark benchmark/run_benchmarks.jl > benchmark_results.txt
-
-  run-benchmark-macos:
-    runs-on: macOS-latest
-
-    strategy:
-      matrix:
-        include:
-          - version: '1'
-            os: macOS-latest
-            arch: aarch64
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-
-    - name: Set up Julia
-      uses: julia-actions/setup-julia@v2
-      with:
-        version: ${{ matrix.version }}
         arch: ${{ matrix.arch }}
 
-    - name: Run benchmarks on macOS
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.julia
+          ~/.julia/artifacts
+        key: ${{ runner.os }}-julia-benchmark-${{ matrix.arch }}-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-julia-benchmark-${{ matrix.arch }}-
+          ${{ runner.os }}-julia-benchmark-
+
+    - name: Run benchmarks
       run: |
         julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
-        julia --project=benchmark benchmark/run_benchmarks.jl >> benchmark_results.txt
+        julia --project=benchmark benchmark/run_benchmarks.jl > benchmark_results_${{ matrix.os }}.txt
 
-    - name: Upload combined benchmark results
+    - name: Upload benchmark results
       uses: actions/upload-artifact@v4
       with:
-        name: benchmark-results
-        path: benchmark_results.txt
+        name: benchmark-results-${{ matrix.os }}
+        path: benchmark_results_${{ matrix.os }}.txt
+        retention-days: 7
+
+  post-results:
+    needs: benchmark
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - name: Download all benchmark results
+      uses: actions/download-artifact@v4
+
+    - name: Combine benchmark results
+      run: |
+        cat benchmark-results-*/benchmark_results_*.txt > combined_benchmark_results.txt
 
     - name: Post combined results to PR
       uses: marocchino/sticky-pull-request-comment@v2
       with:
-        path: benchmark_results.txt
+        path: combined_benchmark_results.txt
+        recreate: true
