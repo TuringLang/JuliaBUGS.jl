@@ -20,18 +20,45 @@ jobs:
       with:
         version: '1'
 
-    - name: Run benchmarks
+    - name: Run benchmarks on Ubuntu
       run: |
         julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
         julia --project=benchmark benchmark/run_benchmarks.jl > benchmark_results.txt
 
-    - name: Upload benchmark results
+  run-benchmark-macos:
+    runs-on: macOS-latest
+
+    strategy:
+      matrix:
+        include:
+          - version: '1'
+            os: macOS-latest
+            arch: aarch64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Set up Julia
+      uses: julia-actions/setup-julia@v2
+      with:
+        version: ${{ matrix.version }}
+        arch: ${{ matrix.arch }}
+
+    - name: Run benchmarks on macOS
+      run: |
+        julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
+        julia --project=benchmark benchmark/run_benchmarks.jl >> benchmark_results.txt
+
+    - name: Upload combined benchmark results
       uses: actions/upload-artifact@v4
       with:
         name: benchmark-results
         path: benchmark_results.txt
 
-    - name: Post results to PR
+    - name: Post combined results to PR
       uses: marocchino/sticky-pull-request-comment@v2
       with:
         path: benchmark_results.txt
