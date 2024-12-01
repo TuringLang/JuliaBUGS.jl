@@ -66,7 +66,14 @@ jobs:
 
     - name: Combine benchmark results
       run: |
-        cat benchmark-results-*/benchmark_results_*.txt > combined_benchmark_results.txt
+        echo "Benchmark results on macOS (aarch64)" > combined_benchmark_results.txt
+        echo "" >> combined_benchmark_results.txt
+        cat benchmark-results-macOS-latest/benchmark_results_macOS-latest.txt >> combined_benchmark_results.txt
+        echo "" >> combined_benchmark_results.txt
+        echo "Benchmark results on Ubuntu (x64)" >> combined_benchmark_results.txt
+        echo "" >> combined_benchmark_results.txt
+        cat benchmark-results-ubuntu-latest/benchmark_results_ubuntu-latest.txt >> combined_benchmark_results.txt
+        echo "" >> combined_benchmark_results.txt
 
     - name: Post combined results to PR
       uses: marocchino/sticky-pull-request-comment@v2
