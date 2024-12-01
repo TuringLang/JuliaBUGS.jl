@@ -4,10 +4,22 @@ on:
   pull_request:
     branches:
       - master
+  workflow_dispatch:
 
 jobs:
-  run-benchmark:
-    runs-on: ubuntu-latest
+  benchmark:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macOS-latest]
+        include:
+          - os: macOS-latest
+            arch: aarch64
+          - os: ubuntu-latest
+            arch: x64
+
+    name: Benchmark on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
 
     steps:
     - name: Checkout code
@@ -19,19 +31,52 @@ jobs:
       uses: julia-actions/setup-julia@v2
       with:
         version: '1'
+        arch: ${{ matrix.arch }}
+
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.julia
+          ~/.julia/artifacts
+        key: ${{ runner.os }}-julia-benchmark-${{ matrix.arch }}-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-julia-benchmark-${{ matrix.arch }}-
+          ${{ runner.os }}-julia-benchmark-
 
     - name: Run benchmarks
       run: |
         julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
-        julia --project=benchmark benchmark/run_benchmarks.jl > benchmark_results.txt
+        julia --project=benchmark benchmark/run_benchmarks.jl > benchmark_results_${{ matrix.os }}.txt
 
     - name: Upload benchmark results
       uses: actions/upload-artifact@v4
       with:
-        name: benchmark-results
-        path: benchmark_results.txt
+        name: benchmark-results-${{ matrix.os }}
+        path: benchmark_results_${{ matrix.os }}.txt
+        retention-days: 7
 
-    - name: Post results to PR
+  post-results:
+    needs: benchmark
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - name: Download all benchmark results
+      uses: actions/download-artifact@v4
+
+    - name: Combine benchmark results
+      run: |
+        echo "Benchmark results on macOS (aarch64)" > combined_benchmark_results.txt
+        echo "" >> combined_benchmark_results.txt
+        cat benchmark-results-macOS-latest/benchmark_results_macOS-latest.txt >> combined_benchmark_results.txt
+        echo "" >> combined_benchmark_results.txt
+        echo "Benchmark results on Ubuntu (x64)" >> combined_benchmark_results.txt
+        echo "" >> combined_benchmark_results.txt
+        cat benchmark-results-ubuntu-latest/benchmark_results_ubuntu-latest.txt >> combined_benchmark_results.txt
+        echo "" >> combined_benchmark_results.txt
+
+    - name: Post combined results to PR
       uses: marocchino/sticky-pull-request-comment@v2
       with:
-        path: benchmark_results.txt
+        path: combined_benchmark_results.txt
+        recreate: true
