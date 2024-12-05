@@ -60,6 +60,7 @@ end
 
 if test_group == "log_density" || test_group == "all"
     include("log_density.jl")
+    include("model.jl")
 end
 
 if test_group == "gibbs" || test_group == "all"
