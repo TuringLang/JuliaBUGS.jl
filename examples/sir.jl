@@ -20,7 +20,7 @@ function SIR!(
     β, γ = p
     du[1] = dS = -β * I * S / N
     du[2] = dI = β * I * S / N - γ * I
-    du[3] = dR = γ * I
+    return du[3] = dR = γ * I
 end
 
 JuliaBUGS.@register_primitive function solve_ode(u0, p)
@@ -47,7 +47,7 @@ sir_bugs_model = @bugs begin
 
     predicted[1:14] = solve_ode(u0[:], p[:])
 
-    for i = 1:14
+    for i in 1:14
         I_data[i] ~ NegativeBinomial2(predicted[i] + 1e-5, ϕ)
     end
 
@@ -57,7 +57,9 @@ sir_bugs_model = @bugs begin
     infected[1:14] = predicted[:]
 end
 
-data = (I_data=[3, 8, 26, 76, 225, 298, 258, 233, 189, 128, 68, 29, 14, 4], u0=[762.0, 1.0, 0.0])
+data = (
+    I_data=[3, 8, 26, 76, 225, 298, 258, 233, 189, 128, 68, 29, 14, 4], u0=[762.0, 1.0, 0.0]
+)
 inits = (β=2, γ=0.5, ϕ⁻¹=0.2)
 model = compile(sir_bugs_model, data, inits)
 
@@ -107,12 +109,11 @@ samples_and_stats = AbstractMCMC.sample(
     n_chains;
     chain_type=Chains,
     n_adapts=n_adapts,
-    init_params=[initial_θ for _ = 1:n_chains],
+    init_params=[initial_θ for _ in 1:n_chains],
     discard_initial=n_adapts,
 )
 
 ######
-
 
 # Demo 1: classic examples: rats -- details covered in the slides
 rats_model = JuliaBUGS.BUGSExamples.rats.model_def;
@@ -171,7 +172,7 @@ end
 
         du[1] = dS = -β * I * S / N
         du[2] = dI = β * I * S / N - γ * I
-        du[3] = dR = γ * I
+        return du[3] = dR = γ * I
     end
 
     JuliaBUGS.@register_primitive function NegativeBinomial2(μ, ϕ)
@@ -198,9 +199,7 @@ samples_and_stats = AbstractMCMC.sample(
     n_chains;
     chain_type=Chains,
     n_adapts=n_adapts,
-    init_params=[initial_θ for _ = 1:4],
+    init_params=[initial_θ for _ in 1:4],
     discard_initial=n_adapts,
     progress=false, # Base.TTY creating problems in distributed setting
 )
-
-

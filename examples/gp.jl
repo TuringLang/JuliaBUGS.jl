@@ -15,13 +15,7 @@ register(
 fname = joinpath(datadep"putting", "golf.dat")
 df = CSV.read(fname, DataFrame; delim=' ', ignorerepeated=true)
 
-data = (
-    d=df.distance,
-    n=df.n,
-    y=df.y,
-    jitter=1e-6,
-    N=length(df.distance),
-)
+data = (d=df.distance, n=df.n, y=df.y, jitter=1e-6, N=length(df.distance))
 
 using AbstractGPs, LogExpFunctions
 

@@ -49,7 +49,7 @@ function vector_to_parameters(ps_new::AbstractVector, ps::NamedTuple)
     @assert length(ps_new) == Lux.parameterlength(ps)
     i = 1
     function get_ps(x)
-        z = reshape(view(ps_new, i:(i+length(x)-1)), size(x))
+        z = reshape(view(ps_new, i:(i + length(x) - 1)), size(x))
         i += length(x)
         return z
     end
@@ -91,4 +91,6 @@ ad_model = ADgradient(AutoMooncake(; config=Mooncake.Config()), model)
 ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 
 # sampling is slow
-samples_and_stats = AbstractMCMC.sample(ad_model, NUTS(0.65), 3000; chain_type=Chains, n_adapts=1000, discard_initial=1000)
+samples_and_stats = AbstractMCMC.sample(
+    ad_model, NUTS(0.65), 3000; chain_type=Chains, n_adapts=1000, discard_initial=1000
+)
