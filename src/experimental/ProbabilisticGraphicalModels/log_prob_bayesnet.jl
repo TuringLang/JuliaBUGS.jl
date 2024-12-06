@@ -40,27 +40,52 @@ end
 function create_log_posterior(net::BayesNet{T}, observations::Dict{Symbol,Float64}) where T
     function find_discrete_nodes_to_marginalize(known_values::Dict{Symbol,Float64})
         nodes_to_marginalize = Symbol[]
-        for (node, dist) in net.nodes
-            if !haskey(known_values, node)
+        nodes_processed = Set{Symbol}()
+        
+        # Keep processing until no new nodes are added
+        while true
+            nodes_added = false
+            
+            for (node, dist) in net.nodes
+                # Skip if we've already processed this node or if it's observed
+                if node in nodes_processed || haskey(known_values, node)
+                    continue
+                end
+                
                 parents = get(net.edges, node, Symbol[])
+                # Check if all parents are either known or will be marginalized
                 if all(p -> haskey(known_values, p) || p in nodes_to_marginalize, parents)
                     # Get parent values that are known
                     parent_values = [known_values[p] for p in parents if haskey(known_values, p)]
+                    
                     # Handle the case where dist is a function or a distribution
                     node_dist = if isempty(parents)
                         dist  # Direct distribution
-                    elseif length(parent_values) == length(parents)
-                        dist(parent_values...)  # All parents known
                     else
-                        continue  # Skip if we don't have all required parents
+                        # Create dummy values for marginalized parents
+                        dummy_values = zeros(length(parents))
+                        dist(dummy_values...)
                     end
                     
                     if node_dist isa DiscreteDistribution
                         push!(nodes_to_marginalize, node)
+                        nodes_added = true
                     end
                 end
+                push!(nodes_processed, node)
+            end
+            
+            # If no new nodes were added, we're done
+            if !nodes_added
+                break
             end
         end
+        
+        # Sort nodes in topological order
+        all_nodes = collect(keys(net.nodes))
+        sort!(nodes_to_marginalize, by=n -> findfirst(==(n), all_nodes))
+        
+        println("Found nodes to marginalize: ", nodes_to_marginalize)  # Debug print
         return nodes_to_marginalize
     end
 
@@ -283,4 +308,5 @@ evaluate_model(model_5_nodes, Dict(:X5 => 2.0), X1_values,
 # Case 3: Observe all variables (no marginalization)
 evaluate_model(model_5_nodes, Dict(:X2 => 1.0, :X3 => 1.0, :X4 => 1.0, :X5 => 2.0), X1_values,
     "5-Node Model (all observed)")
+
 
