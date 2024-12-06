@@ -20,26 +20,29 @@ function create_log_posterior(net::BayesNet{T}, observations::Dict{Symbol,Float6
     function log_posterior(values::Dict{Symbol,Float64})
         log_p = 0.0
         
+        # Create a combined dict of all known values
+        known_values = merge(values, observations)
+        
         # Evaluate each node given its parents
         for (node, dist) in net.nodes
             if haskey(observations, node)
                 # Observed node
                 parents = get(net.edges, node, Symbol[])
-                if !isempty(parents) && !all(p -> haskey(values, p), parents)
+                if !isempty(parents) && !all(p -> haskey(known_values, p), parents)
                     # Skip if we don't have all parent values
                     continue
                 end
-                parent_values = [values[p] for p in parents]
+                parent_values = [known_values[p] for p in parents]
                 node_dist = parents == [] ? dist : dist(parent_values...)
                 log_p += logpdf(node_dist, observations[node])
             elseif !haskey(values, node)
                 # Marginalize over unobserved intermediate variables
                 parents = get(net.edges, node, Symbol[])
-                if !isempty(parents) && !all(p -> haskey(values, p), parents)
+                if !isempty(parents) && !all(p -> haskey(known_values, p), parents)
                     # Skip if we don't have all parent values
                     continue
                 end
-                parent_values = [values[p] for p in parents]
+                parent_values = [known_values[p] for p in parents]
                 node_dist = parents == [] ? dist : dist(parent_values...)
                 
                 if node_dist isa DiscreteDistribution
@@ -51,9 +54,11 @@ function create_log_posterior(net::BayesNet{T}, observations::Dict{Symbol,Float6
                         for child in child_nodes
                             if haskey(observations, child)
                                 child_parents = net.edges[child]
-                                child_values = Dict(p => (p == node ? val : values[p]) 
-                                                 for p in child_parents)
-                                child_dist = net.nodes[child]([child_values[p] for p in child_parents]...)
+                                # Create temporary values dict with current marginalization value
+                                temp_values = copy(known_values)
+                                temp_values[node] = val
+                                child_parent_values = [temp_values[p] for p in child_parents]
+                                child_dist = net.nodes[child](child_parent_values...)
                                 p_node *= pdf(child_dist, observations[child])
                             end
                         end
@@ -143,14 +148,10 @@ model_4_nodes = create_bayes_net(
 # Test cases for 4-node model
 X1_values = -2.0:0.5:2.0
 
-# Case 1: Observe only X4, marginalize over X2 and X3
-evaluate_model(model_4_nodes, Dict(:X4 => 1.0), X1_values, 
-    "4-Node Model (X4 = 1.0, marginalizing X2, X3)")
-
-# Case 2: Observe X3 and X4, marginalize over X2
+# Case 1: Observe X3 and X4, marginalize over X2 only
 evaluate_model(model_4_nodes, Dict(:X3 => 1.0, :X4 => 1.0), X1_values, 
     "4-Node Model (X3 = 1.0, X4 = 1.0, marginalizing X2)")
 
-# Case 3: Observe all downstream variables
+# Case 2: Observe all downstream variables
 evaluate_model(model_4_nodes, Dict(:X2 => 1.0, :X3 => 1.0, :X4 => 1.0), X1_values, 
     "4-Node Model (X2 = 1, X3 = 1.0, X4 = 1.0)")
