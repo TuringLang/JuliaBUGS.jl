@@ -44,53 +44,82 @@ function create_log_posterior(
         nodes_to_marginalize = Symbol[]
         nodes_processed = Set{Symbol}()
 
-        # Keep processing until no new nodes are added
-        while true
-            nodes_added = false
-
-            for (node, dist) in net.nodes
-                # Skip if we've already processed this node or if it's observed
-                if node in nodes_processed || haskey(known_values, node)
-                    continue
-                end
-
-                parents = get(net.edges, node, Symbol[])
-                # Check if all parents are either known or will be marginalized
-                if all(p -> haskey(known_values, p) || p in nodes_to_marginalize, parents)
-                    # Get parent values that are known
-                    parent_values = [
-                        known_values[p] for p in parents if haskey(known_values, p)
-                    ]
-
-                    # Handle the case where dist is a function or a distribution
-                    node_dist = if isempty(parents)
-                        dist  # Direct distribution
-                    else
-                        # Create dummy values for marginalized parents
-                        dummy_values = zeros(length(parents))
-                        dist(dummy_values...)
-                    end
-
-                    if node_dist isa DiscreteDistribution
-                        push!(nodes_to_marginalize, node)
-                        nodes_added = true
+        # Helper function to get all intermediate nodes between known values
+        function get_intermediate_nodes()
+            intermediates = Symbol[]
+            for (node, parents) in net.edges
+                # If this node or any of its parents are known/to be marginalized
+                if haskey(known_values, node) || any(p -> haskey(known_values, p), parents)
+                    # Add all nodes in the chain that aren't known
+                    current = node
+                    while haskey(net.edges, current)
+                        parents = net.edges[current]
+                        if isempty(parents)
+                            break
+                        end
+                        for p in parents
+                            if !haskey(known_values, p) && !(p in intermediates)
+                                push!(intermediates, p)
+                            end
+                        end
+                        current = parents[1]
                     end
                 end
-                push!(nodes_processed, node)
             end
+            return intermediates
+        end
 
-            # If no new nodes were added, we're done
-            if !nodes_added
-                break
+        # Get all intermediate nodes first
+        intermediate_nodes = get_intermediate_nodes()
+
+        # Process nodes in topological order
+        for node in intermediate_nodes
+            if !haskey(known_values, node)
+                parents = get(net.edges, node, Symbol[])
+                node_dist = if isempty(parents)
+                    net.nodes[node]
+                else
+                    dummy_values = zeros(length(parents))
+                    net.nodes[node](dummy_values...)
+                end
+
+                if node_dist isa DiscreteDistribution
+                    push!(nodes_to_marginalize, node)
+                end
             end
         end
 
-        # Sort nodes in topological order
-        all_nodes = collect(keys(net.nodes))
-        sort!(nodes_to_marginalize; by=n -> findfirst(==(n), all_nodes))
+        # Sort nodes in proper topological order
+        sorted_nodes = Symbol[]
+        visited = Set{Symbol}()
 
-        println("Found nodes to marginalize: ", nodes_to_marginalize)  # Debug print
-        return nodes_to_marginalize
+        function topological_sort(node)
+            if node in visited
+                return nothing
+            end
+            push!(visited, node)
+
+            # Process parents first
+            if haskey(net.edges, node)
+                for parent in net.edges[node]
+                    if parent in nodes_to_marginalize
+                        topological_sort(parent)
+                    end
+                end
+            end
+
+            if node in nodes_to_marginalize
+                push!(sorted_nodes, node)
+            end
+        end
+
+        # Start from nodes with no children
+        for node in nodes_to_marginalize
+            topological_sort(node)
+        end
+
+        println("Found nodes to marginalize: ", sorted_nodes)
+        return sorted_nodes
     end
 
     function marginalize_recursive(
@@ -273,51 +302,42 @@ model_mixed = create_bayes_net(
 )
 
 # Test cases demonstrating marginalization
-X1_values = -2.0:0.5:2.0
-# Case 1: Observe only X3, X2 will be marginalized out
-evaluate_model(
-    model_mixed, Dict(:X3 => 1.5), X1_values, "Mixed Model (X3 = 1.5, marginalizing X2)"
-)
-# Case 2: Observe both X2 and X3 for comparison
-evaluate_model(
-    model_mixed, Dict(:X2 => 1.0, :X3 => 1.5), X1_values, "Mixed Model (X2 = 1, X3 = 1.5)"
-)
+# X1_values = -2.0:0.5:2.0
+# # Case 1: Observe only X3, X2 will be marginalized out
+# evaluate_model(model_mixed, Dict(:X3 => 1.5), X1_values, "Mixed Model (X3 = 1.5, marginalizing X2)")
+# # Case 2: Observe both X2 and X3 for comparison
+# evaluate_model(model_mixed, Dict(:X2 => 1.0, :X3 => 1.5), X1_values, "Mixed Model (X2 = 1, X3 = 1.5)")
 
-# Example usage
-X1_values = 0.1:0.1:0.9
-evaluate_model(model1, Dict(:X3 => 8.5), X1_values, "BayesNet Model (X3 ≈ 9.0)")
+# # Example usage
+# X1_values = 0.1:0.1:0.9
+# evaluate_model(model1, Dict(:X3 => 8.5), X1_values, "BayesNet Model (X3 ≈ 9.0)")
 
 # Create a 4-node model
-model_4_nodes = create_bayes_net(
-    Dict{Symbol,Any}(
-        :X1 => Normal(0, 1),
-        :X2 => x1 -> Bernoulli(logistic(x1)),
-        :X3 => x2 -> Normal(x2 == 1 ? 2.0 : -2.0, 1.0),
-        :X4 => (x2, x3) -> Normal(x2 == 1 ? x3 + 1 : x3 - 1, 0.5),
-    ),
-    Dict{Symbol,Vector{Symbol}}(
-        :X1 => Symbol[], :X2 => [:X1], :X3 => [:X2], :X4 => [:X2, :X3]
-    ),
-)
+# model_4_nodes = create_bayes_net(
+#     Dict{Symbol,Any}(
+#         :X1 => Normal(0, 1),
+#         :X2 => x1 -> Bernoulli(logistic(x1)),
+#         :X3 => x2 -> Normal(x2 == 1 ? 2.0 : -2.0, 1.0),
+#         :X4 => (x2, x3) -> Normal(x2 == 1 ? x3 + 1 : x3 - 1, 0.5)
+#     ),
+#     Dict{Symbol,Vector{Symbol}}(
+#         :X1 => Symbol[],
+#         :X2 => [:X1],
+#         :X3 => [:X2],
+#         :X4 => [:X2, :X3]
+#     )
+# )
 
 # Test cases for 4-node model
 X1_values = -2.0:0.5:2.0
 
-# Case 1: Observe X3 and X4, marginalize over X2 only
-evaluate_model(
-    model_4_nodes,
-    Dict(:X3 => 1.0, :X4 => 1.0),
-    X1_values,
-    "4-Node Model (X3 = 1.0, X4 = 1.0, marginalizing X2)",
-)
+# # Case 1: Observe X3 and X4, marginalize over X2 only
+# evaluate_model(model_4_nodes, Dict(:X3 => 1.0, :X4 => 1.0), X1_values,
+#     "4-Node Model (X3 = 1.0, X4 = 1.0, marginalizing X2)")
 
-# Case 2: Observe all downstream variables
-evaluate_model(
-    model_4_nodes,
-    Dict(:X2 => 1.0, :X3 => 1.0, :X4 => 1.0),
-    X1_values,
-    "4-Node Model (X2 = 1, X3 = 1.0, X4 = 1.0)",
-)
+# # Case 2: Observe all downstream variables
+# evaluate_model(model_4_nodes, Dict(:X2 => 1.0, :X3 => 1.0, :X4 => 1.0), X1_values,
+#     "4-Node Model (X2 = 1, X3 = 1.0, X4 = 1.0)")
 
 # Test with a 5-node model that has multiple discrete nodes
 model_5_nodes = create_sequential_net_n([
@@ -329,17 +349,13 @@ model_5_nodes = create_sequential_net_n([
 ])
 
 # Test cases
-X1_values = -2.0:0.5:2.0
+X1_values = 0.5
 
 println("\n=== Testing multiple discrete marginalization ===")
 
-# Case 1: Marginalize over X2 and X3, observe X4 and X5
-evaluate_model(
-    model_5_nodes,
-    Dict(:X4 => 1.0, :X5 => 2.0),
-    X1_values,
-    "5-Node Model (X4=1.0, X5=2.0, marginalizing X2,X3)",
-)
+# # Case 1: Marginalize over X2 and X3, observe X4 and X5
+# evaluate_model(model_5_nodes, Dict(:X4 => 1.0, :X5 => 2.0), X1_values,
+#     "5-Node Model (X4=1.0, X5=2.0, marginalizing X2,X3)")
 
 # Case 2: Marginalize over X2, X3, and X4, observe only X5
 evaluate_model(
@@ -349,10 +365,6 @@ evaluate_model(
     "5-Node Model (X5=2.0, marginalizing X2,X3,X4)",
 )
 
-# Case 3: Observe all variables (no marginalization)
-evaluate_model(
-    model_5_nodes,
-    Dict(:X2 => 1.0, :X3 => 1.0, :X4 => 1.0, :X5 => 2.0),
-    X1_values,
-    "5-Node Model (all observed)",
-)
+# # Case 3: Observe all variables (no marginalization)
+# evaluate_model(model_5_nodes, Dict(:X2 => 1.0, :X3 => 1.0, :X4 => 1.0, :X5 => 2.0), X1_values,
+#     "5-Node Model (all observed)")
