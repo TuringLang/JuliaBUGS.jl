@@ -430,19 +430,25 @@ function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
     )
 end
 
-function AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel)
+function AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel; sample_all=true)
     logp = 0.0
     evaluation_env = deepcopy(model.evaluation_env)
     for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
         is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
+        is_observed = model.flattened_graph_node_data.is_observed_vals[i]
         node_function = model.flattened_graph_node_data.node_function_vals[i]
         loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
+        if_sample = sample_all || !is_observed # also sample if not observed, only sample conditioned variables if sample_all is true
         if !is_stochastic
             value = node_function(model.evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
             dist = node_function(model.evaluation_env, loop_vars)
-            value = rand(rng, dist) # just sample from the prior
+            if if_sample
+                value = rand(rng, dist) # just sample from the prior
+            else
+                value = AbstractPPL.get(evaluation_env, vn)
+            end
             if model.transformed
                 # see below for why we need to transform the value
                 value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
