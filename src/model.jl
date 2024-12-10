@@ -440,10 +440,10 @@ function AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel; sampl
         loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
         if_sample = sample_all || !is_observed # also sample if not observed, only sample conditioned variables if sample_all is true
         if !is_stochastic
-            value = node_function(model.evaluation_env, loop_vars)
+            value = node_function(evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
-            dist = node_function(model.evaluation_env, loop_vars)
+            dist = node_function(evaluation_env, loop_vars)
             if if_sample
                 value = rand(rng, dist) # just sample from the prior
             else
@@ -473,10 +473,10 @@ function AbstractPPL.evaluate!!(model::BUGSModel)
         node_function = model.flattened_graph_node_data.node_function_vals[i]
         loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
         if !is_stochastic
-            value = node_function(model.evaluation_env, loop_vars)
+            value = node_function(evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
-            dist = node_function(model.evaluation_env, loop_vars)
+            dist = node_function(evaluation_env, loop_vars)
             value = AbstractPPL.get(evaluation_env, vn)
             if model.transformed
                 # although the values stored in `evaluation_env` are in their original space, 
