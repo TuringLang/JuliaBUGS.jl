@@ -1,3 +1,15 @@
+@testset "serialization" begin
+    (; model_def, data) = JuliaBUGS.BUGSExamples.rats
+    model = compile(model_def, data)
+    serialize("m.jls", model)
+    deserialized = deserialize("m.jls")
+    @testset "test values are correctly restored" begin
+        for vn in MetaGraphsNext.labels(model.g)
+            @test isequal(get(model.evaluation_env, vn), get(deserialized.evaluation_env, vn))
+        end
+    end
+end
+
 @testset "controlling sampling behavior for conditioned variables" begin
     model_def = @bugs begin
         x ~ Normal(0, 1)

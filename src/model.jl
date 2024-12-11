@@ -48,8 +48,9 @@ end
 The `BUGSModel` object is used for inference and represents the output of compilation. It implements the
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
 """
-struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,TNF,TV} <:
-       AbstractBUGSModel
+struct BUGSModel{
+    base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,TNF,TV,data_T
+} <: AbstractBUGSModel
     " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
 
@@ -74,6 +75,10 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,
 
     "If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`."
     base_model::base_model_T
+
+    # for serialization, save the original model definition and data
+    model_def::Expr
+    data::data_T
 end
 
 function Base.show(io::IO, model::BUGSModel)
@@ -137,7 +142,9 @@ variables(model::BUGSModel) = collect(labels(model.g))
 function BUGSModel(
     g::BUGSGraph,
     evaluation_env::NamedTuple,
-    initial_params::NamedTuple=NamedTuple();
+    model_def::Expr,
+    data::NamedTuple,
+    initial_params::NamedTuple=NamedTuple(),
     is_transformed::Bool=true,
 )
     flattened_graph_node_data = FlattenedGraphNodeData(g)
@@ -199,6 +206,8 @@ function BUGSModel(
         flattened_graph_node_data,
         g,
         nothing,
+        model_def,
+        data,
     )
 end
 
@@ -220,7 +229,28 @@ function BUGSModel(
         FlattenedGraphNodeData(g, sorted_nodes),
         g,
         isnothing(model.base_model) ? model : model.base_model,
+        model.model_def,
+        model.data,
     )
+end
+
+function Serialization.serialize(s::Serialization.AbstractSerializer, model::BUGSModel)
+    Serialization.writetag(s.io, Serialization.OBJECT_TAG)
+
+    Serialization.serialize(s, typeof(model))
+    Serialization.serialize(s, model.model_def)
+    Serialization.serialize(s, model.data)
+    Serialization.serialize(s, model.evaluation_env)
+    return nothing
+end
+
+function Serialization.deserialize(s::Serialization.AbstractSerializer, ::Type{<:BUGSModel})
+    model_def = Serialization.deserialize(s)
+    data = Serialization.deserialize(s)
+    evaluation_env = Serialization.deserialize(s)
+    # use evaluation_env as initialization to restore the values
+    model = compile(model_def, data, evaluation_env)
+    return model
 end
 
 """
