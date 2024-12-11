@@ -21,6 +21,7 @@ using MacroTools
 using MCMCChains
 using Random
 using ReverseDiff
+using Serialization
 
 AbstractMCMC.setprogress!(false)
 
