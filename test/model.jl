@@ -5,7 +5,9 @@
     deserialized = deserialize("m.jls")
     @testset "test values are correctly restored" begin
         for vn in MetaGraphsNext.labels(model.g)
-            @test isequal(get(model.evaluation_env, vn), get(deserialized.evaluation_env, vn))
+            @test isequal(
+                get(model.evaluation_env, vn), get(deserialized.evaluation_env, vn)
+            )
         end
     end
 end
