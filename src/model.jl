@@ -245,9 +245,9 @@ function Serialization.serialize(s::Serialization.AbstractSerializer, model::BUG
 end
 
 function Serialization.deserialize(s::Serialization.AbstractSerializer, ::Type{<:BUGSModel})
-    transformed    = Serialization.deserialize(s)
-    model_def      = Serialization.deserialize(s)
-    data           = Serialization.deserialize(s)
+    transformed = Serialization.deserialize(s)
+    model_def = Serialization.deserialize(s)
+    data = Serialization.deserialize(s)
     evaluation_env = Serialization.deserialize(s)
     # use evaluation_env as initialization to restore the values
     model = compile(model_def, data, evaluation_env)
