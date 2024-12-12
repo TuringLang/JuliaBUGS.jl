@@ -236,8 +236,8 @@ end
 
 function Serialization.serialize(s::Serialization.AbstractSerializer, model::BUGSModel)
     Serialization.writetag(s.io, Serialization.OBJECT_TAG)
-
     Serialization.serialize(s, typeof(model))
+    Serialization.serialize(s, model.transformed)
     Serialization.serialize(s, model.model_def)
     Serialization.serialize(s, model.data)
     Serialization.serialize(s, model.evaluation_env)
@@ -248,9 +248,10 @@ function Serialization.deserialize(s::Serialization.AbstractSerializer, ::Type{<
     model_def = Serialization.deserialize(s)
     data = Serialization.deserialize(s)
     evaluation_env = Serialization.deserialize(s)
+    transformed = Serialization.deserialize(s)
     # use evaluation_env as initialization to restore the values
     model = compile(model_def, data, evaluation_env)
-    return model
+    return settrans(model, transformed)
 end
 
 """
