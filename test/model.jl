@@ -59,6 +59,7 @@ end
     true_prop = 0.25 # = E[p_prod] = 0.5^2
     rng = MersenneTwister(123)
 
+    model = compile(unid_model_def, data)
     eval_env, logp = JuliaBUGS.evaluate!!(rng, model)
     @test eval_env.p_prod == eval_env.p[1] * eval_env.p[2]
 end
