@@ -49,6 +49,11 @@ jobs:
         env:
           TEST_GROUP: "compilation"
 
+      - name: Running `log_density` tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: "log_density"
+
       - name: Running `gibbs` tests
         uses: nick-fields/retry@v3
         with:
