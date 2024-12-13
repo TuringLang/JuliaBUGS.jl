@@ -23,7 +23,7 @@
         )
         @test Set(model.parameters) == Set(deserialized.parameters)
         # skip testing g
-        @test model.model_def === deserialized.model_def
+        @test model.model_def == deserialized.model_def
     end
 end
 
