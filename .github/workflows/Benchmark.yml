@@ -6,6 +6,11 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+  repository-projects: write
+
 jobs:
   benchmark:
     strategy:
@@ -59,6 +64,8 @@ jobs:
     needs: benchmark
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
 
     steps:
     - name: Download all benchmark results
