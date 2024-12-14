@@ -31,7 +31,7 @@ end
 Inner product of ``a`` and ``b``.
 """
 function inprod(a, b)
-    return LinearAlgebra.dot(a,b)
+    return LinearAlgebra.dot(a, b)
 end
 
 """
