@@ -36,7 +36,8 @@ data = (asia = 2,
 )
 
 inits = (smoking = 1, tuberculosis = 1, var"lung.cancer" = 1, bronchitis = 1, xray = 1)
-inits_alternative = (smoking = 2, tuberculosis = 2, var"lung.cancer" = 2, bronchitis = 2, xray = 2)
+inits_alternative = (
+    smoking = 2, tuberculosis = 2, var"lung.cancer" = 2, bronchitis = 2, xray = 2)
 
 reference_results = (
     bronchitis = (mean = 1.811, std = 0.3918),
