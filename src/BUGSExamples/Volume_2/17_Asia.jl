@@ -29,12 +29,10 @@ data = (asia = 2,
     var"p.smoking" = [0.50, 0.50],
     var"p.lung.cancer" = [0.99 0.01; 0.90 0.10],  # Column-major order
     var"p.xray" = [0.95 0.05; 0.02 0.98],         # Column-major order
-    var"p.dyspnoea" = reshape([
-        0.9 0.1
-        0.2 0.8
-        0.3 0.7
-        0.1 0.9
-    ], (2, 2, 2))
+    var"p.dyspnoea" = reshape([0.9 0.1
+                               0.2 0.8
+                               0.3 0.7
+                               0.1 0.9], (2, 2, 2))
 )
 
 inits = (smoking = 1, tuberculosis = 1, var"lung.cancer" = 1, bronchitis = 1, xray = 1)
