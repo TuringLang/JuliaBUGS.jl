@@ -51,4 +51,5 @@ reference_results = (
     x_change = (mean = 0.02597, std = 0.03245)
 )
 
-stagnant = Example(name, model_def, original, data, inits, inits_alternative, reference_results)
+stagnant = Example(
+    name, model_def, original, data, inits, inits_alternative, reference_results)
