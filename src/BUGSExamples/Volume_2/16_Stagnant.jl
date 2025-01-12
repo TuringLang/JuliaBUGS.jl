@@ -1,6 +1,6 @@
 name = "Stagnant: a changepoint problem and an illustration of how NOT to do MCMC!)"
 
-model_def = @bugs begin 
+model_def = @bugs begin
     for i in 1:N
         Y[i] ~ dnorm(mu[i], tau)
         mu[i] = alpha + beta[J[i]] * (x[i] - var"x.change")
