@@ -521,10 +521,13 @@ function test_branching_bn(branching_bn)
     # to force the code to sum over X1, X2, X3, X4.
     println(">>> Branching BN: Observing X5=4.2, no other nodes => big discrete sum <<<")
     println("Naive approach ...")
-    @time naive_lp = log_post_naive(Dict())  # time macro to see performance
+
+    @time naive_lp = log_post_naive(Dict{Symbol,Float64}()) # time macro to see performance
 
     println("DP approach ...")
-    @time dp_lp = log_post_dp(Dict())
+
+    @time dp_lp    = log_post_dp(Dict{Symbol,Float64}())
+
 
     println("Naive log posterior = $naive_lp, DP log posterior = $dp_lp\n")
 end
