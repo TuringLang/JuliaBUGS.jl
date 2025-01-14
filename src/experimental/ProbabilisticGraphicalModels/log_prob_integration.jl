@@ -44,8 +44,8 @@ function add_stochastic_vertex!(
     bn::BayesianNetwork{V,T},
     name::V,
     dist::Any,
-    node_type::Symbol = :continuous;  # e.g. :discrete or :continuous
-    is_observed::Bool = false
+    node_type::Symbol=:continuous;  # e.g. :discrete or :continuous
+    is_observed::Bool=false,
 )::T where {V,T}
     Graphs.add_vertex!(bn.graph) || return 0
     id = nv(bn.graph)
@@ -74,7 +74,7 @@ end
 
 function add_edge!(bn::BayesianNetwork{V,T}, from::V, to::V)::Bool where {T,V}
     from_id = bn.names_to_ids[from]
-    to_id   = bn.names_to_ids[to]
+    to_id = bn.names_to_ids[to]
     return Graphs.add_edge!(bn.graph, from_id, to_id)
 end
 
@@ -88,22 +88,22 @@ function create_5node_network()
     bn = BayesianNetwork{Symbol}()
 
     # X1 ~ Normal(0,1) => continuous
-    add_stochastic_vertex!(bn, :X1, Normal(0,1), :continuous)
+    add_stochastic_vertex!(bn, :X1, Normal(0, 1), :continuous)
 
     # X2 ~ Bernoulli(logistic(X1)) => discrete
-    add_stochastic_vertex!(bn, :X2, (x1)->Bernoulli(logistic(x1)), :discrete)
+    add_stochastic_vertex!(bn, :X2, (x1) -> Bernoulli(logistic(x1)), :discrete)
     add_edge!(bn, :X1, :X2)
 
     # X3 ~ Bernoulli(x2==1 ? 0.7 : 0.3) => discrete
-    add_stochastic_vertex!(bn, :X3, (x2)->Bernoulli(x2==1 ? 0.7 : 0.3), :discrete)
+    add_stochastic_vertex!(bn, :X3, (x2) -> Bernoulli(x2 == 1 ? 0.7 : 0.3), :discrete)
     add_edge!(bn, :X2, :X3)
 
     # X4 ~ Bernoulli(x3==1 ? 0.8 : 0.2) => discrete
-    add_stochastic_vertex!(bn, :X4, (x3)->Bernoulli(x3==1 ? 0.8 : 0.2), :discrete)
+    add_stochastic_vertex!(bn, :X4, (x3) -> Bernoulli(x3 == 1 ? 0.8 : 0.2), :discrete)
     add_edge!(bn, :X3, :X4)
 
     # X5 ~ Normal(x4==1 ? 3.0 : -3.0, 1.0) => continuous
-    add_stochastic_vertex!(bn, :X5, (x4)->Normal(x4==1 ? 3.0 : -3.0, 1.0), :continuous)
+    add_stochastic_vertex!(bn, :X5, (x4) -> Normal(x4 == 1 ? 3.0 : -3.0, 1.0), :continuous)
     add_edge!(bn, :X4, :X5)
 
     return bn
@@ -124,12 +124,13 @@ function parent_values(bn::BayesianNetwork, node_id::Int)
     for pid in pids
         varname = bn.names[pid]
         if !haskey(bn.values, varname)
-            error("Missing value for parent $varname of node id=$node_id")
+            error("Missing value for parent $varname of node id=$node_id. Observed: $(bn.is_observed[pid])")
         end
         push!(vals, bn.values[varname])
     end
     return vals
 end
+
 
 function get_distribution(bn::BayesianNetwork, node_id::Int)::Distribution
     stored = bn.distributions[node_id]
@@ -163,7 +164,7 @@ function compute_full_logpdf(bn::BayesianNetwork)
                 end
             end
             dist = get_distribution(bn, sid)
-            val  = bn.values[varname]
+            val = bn.values[varname]
             lpdf = logpdf(dist, val)
             if isinf(lpdf)
                 return -Inf
@@ -186,20 +187,19 @@ Naive recursion:
 Enumerate all discrete node values for unobserved discrete nodes.
 """
 function sum_discrete_configurations(
-    bn::BayesianNetwork,
-    discrete_ids::Vector{Int},
-    idx::Int
+    bn::BayesianNetwork, discrete_ids::Vector{Int}, idx::Int
 )::Float64
     if idx > length(discrete_ids)
-        return exp( compute_full_logpdf(bn) )
+        return exp(compute_full_logpdf(bn))
     else
         node_id = discrete_ids[idx]
         dist = get_distribution(bn, node_id)
         total_prob = 0.0
         for val in support(dist)
-            bn.values[ bn.names[node_id] ] = val
+            bn.values[bn.names[node_id]] = val
             # multiply by pdf(dist, val)
-            total_prob += sum_discrete_configurations(bn, discrete_ids, idx+1) * pdf(dist, val)
+            total_prob +=
+                sum_discrete_configurations(bn, discrete_ids, idx + 1) * pdf(dist, val)
         end
         delete!(bn.values, bn.names[node_id])
         return total_prob
@@ -218,40 +218,48 @@ function sum_discrete_configurations_dp(
     bn::BayesianNetwork,
     discrete_ids::Vector{Int},
     idx::Int,
-    memo::Dict{Any,Float64},
-    assigned_vals::Vector{Any}
+    memo::Dict{Any, Float64},
+    assigned_vals::Tuple{Vararg{Any}},
 )::Float64
-    # If we've assigned up to idx-1, the key is (idx, assigned_vals)
-    # Make a stable copy of assigned_vals for the memo key.
-    # assigned_vals only includes the discrete nodes *so far* in order.
-    key = (idx, deepcopy(assigned_vals))
+    # Create a key using the immutable tuple `assigned_vals`
 
+    key = (idx, deepcopy(assigned_vals))
+    println("Generated key: $key")
     if haskey(memo, key)
+        println("Cache hit for key $key")
         return memo[key]
+    else
+        println("Key $key not in memo")
     end
 
+
     if idx > length(discrete_ids)
-        # base case => compute the logpdf
-        result = exp( compute_full_logpdf(bn) )
+        # Base case: Compute the logpdf
+        result = exp(compute_full_logpdf(bn))
         memo[key] = result
+        println("Base case: LogPDF result = $result for key $key")
         return result
     else
         node_id = discrete_ids[idx]
         dist = get_distribution(bn, node_id)
         total_prob = 0.0
-        # for each possible value in support, assign + recurse
+        # Iterate over all possible values in the support of the distribution
         for val in support(dist)
-            bn.values[ bn.names[node_id] ] = val
-            assigned_vals[idx] = val  # record partial assignment
+            # Create a new tuple with the current value appended
+            new_assigned_vals = (assigned_vals..., val)
+            bn.values[bn.names[node_id]] = val
+            println("Assigning value $val to node $(bn.names[node_id])")
             total_prob += sum_discrete_configurations_dp(
-                bn, discrete_ids, idx+1, memo, assigned_vals
+                bn, discrete_ids, idx + 1, memo, new_assigned_vals
             ) * pdf(dist, val)
         end
         delete!(bn.values, bn.names[node_id])
         memo[key] = total_prob
+        println("Memoized result for key $key: $total_prob")
         return total_prob
     end
 end
+
 
 ###############################################################################
 # 7) create_log_posterior with DP option
@@ -261,51 +269,32 @@ end
 Creates a log_posterior function that merges unobserved values + sums out
 unobserved discrete nodes. If use_dp=true, we use the DP approach; else naive.
 """
-function create_log_posterior(bn::BayesianNetwork; use_dp::Bool=false)
-    function log_posterior(unobserved_values::Dict{Symbol,Float64})
-        # Save old BN state
-        old_values = copy(bn.values)
-        try
-            # Merge unobserved
-            for (k, v) in unobserved_values
-                bn.values[k] = v
-            end
 
-            # Identify unobserved discrete IDs
-            unobs_discrete_ids = Int[]
-            for sid in bn.stochastic_ids
-                if !bn.is_observed[sid]
-                    varname = bn.names[sid]
-                    if !haskey(bn.values, varname) && is_discrete_node(bn, sid)
-                        push!(unobs_discrete_ids, sid)
-                    end
-                end
-            end
+function create_log_posterior(bn::BayesianNetwork; obs::Dict=Dict(), use_dp::Bool=false)
+    # Logic to incorporate `obs` into the posterior computation
+    println("Observations provided: $obs")
 
-            if isempty(unobs_discrete_ids)
-                # no discrete marginalization => direct logpdf
-                return compute_full_logpdf(bn)
-            else
-                # sum out discrete configurations
-                if use_dp
-                    # DP approach
-                    memo = Dict{Any,Float64}()
-                    assigned_vals = Vector{Any}(undef, length(unobs_discrete_ids))
-                    for i in 1:length(unobs_discrete_ids)
-                        assigned_vals[i] = nothing
-                    end
-                    prob_sum = sum_discrete_configurations_dp(
-                        bn, unobs_discrete_ids, 1, memo, assigned_vals
-                    )
-                    return log(prob_sum)
-                else
-                    # naive recursion
-                    prob_sum = sum_discrete_configurations(bn, unobs_discrete_ids, 1)
-                    return log(prob_sum)
-                end
+    function log_posterior(bn::BayesianNetwork; obs::Dict=Dict(), use_dp::Bool=false)
+        println("Computing log posterior. Observations: $obs, use_dp=$use_dp")
+        
+        # Apply observations
+        for (k, v) in obs
+            id = bn.names_to_ids[k]
+            bn.values[k] = v
+            bn.is_observed[id] = true
+        end
+    
+        # Return a callable function for posterior computation
+        if use_dp
+            return (unobserved_values::Dict{Symbol, Float64}) -> begin
+                # Add logic to handle unobserved values if needed
+                sum_discrete_configurations_dp(bn, bn.stochastic_ids, 1, Dict(), Tuple())
             end
-        finally
-            bn.values = old_values
+        else
+            return (unobserved_values::Dict{Symbol, Float64}) -> begin
+                # Add naive computation logic here
+                error("Naive approach not implemented yet.")
+            end
         end
     end
     return log_posterior
@@ -315,18 +304,19 @@ end
 # 8) Evaluate function
 ###############################################################################
 
-function evaluate_model(bn::BayesianNetwork;
+function evaluate_model(
+    bn::BayesianNetwork;
     obs::Dict{Symbol,Float64}=Dict(),
     X1_values=0.0:0.5:1.5,
     description="",
-    use_dp::Bool=false
+    use_dp::Bool=false,
 )
     println("\n=== $description ===")
     println("Observations: $obs")
     println("use_dp = $use_dp")
 
     old_values = copy(bn.values)
-    old_obs    = copy(bn.is_observed)
+    old_obs = copy(bn.is_observed)
     try
         # Condition on obs
         for (k, v) in obs
@@ -336,7 +326,9 @@ function evaluate_model(bn::BayesianNetwork;
         end
 
         # create log posterior
-        log_post = create_log_posterior(bn; use_dp=use_dp)
+        log_post = create_log_posterior(bn; obs=obs, use_dp=use_dp)
+        
+
 
         # evaluate over X1
         results = [(x1, log_post(Dict(:X1 => x1))) for x1 in X1_values]
@@ -368,40 +360,39 @@ println("\n=== Running test cases on the 5-node chain ===")
 
 # 1) Observing X4=1, X5=2 => marginalizing X2,X3
 evaluate_model(
-    model_5_nodes,
-    obs=Dict(:X4=>1.0, :X5=>2.0),
+    model_5_nodes;
+    obs=Dict(:X4 => 1.0, :X5 => 2.0),
     X1_values=X1_values,
     description="5-Node Model (X4=1.0, X5=2.0, marginalizing X2,X3) [DP=FALSE]",
-    use_dp=false
+    use_dp=false,
 )
 
 # same scenario but use_dp=true
 evaluate_model(
-    model_5_nodes,
-    obs=Dict(:X4=>1.0, :X5=>2.0),
+    model_5_nodes;
+    obs=Dict(:X4 => 1.0, :X5 => 2.0),
     X1_values=X1_values,
     description="5-Node Model (X4=1.0, X5=2.0, marginalizing X2,X3) [DP=TRUE]",
-    use_dp=true
+    use_dp=true,
 )
 
 # 2) Observing only X5=2.0 => marginalize X2,X3,X4
 evaluate_model(
-    model_5_nodes,
-    obs=Dict(:X5=>2.0),
+    model_5_nodes;
+    obs=Dict(:X5 => 2.0),
     X1_values=X1_values,
     description="5-Node Model (X5=2.0, marginalizing X2,X3,X4) [DP=TRUE]",
-    use_dp=true
+    use_dp=true,
 )
 
 # 3) Observing X2=1, X3=1, X4=1, X5=2 => only X1 is unknown
 evaluate_model(
-    model_5_nodes,
-    obs=Dict(:X2=>1.0, :X3=>1.0, :X4=>1.0, :X5=>2.0),
+    model_5_nodes;
+    obs=Dict(:X2 => 1.0, :X3 => 1.0, :X4 => 1.0, :X5 => 2.0),
     X1_values=X1_values,
     description="5-Node Model (all observed except X1) [DP=TRUE]",
-    use_dp=true
+    use_dp=true,
 )
-
 
 ###############################################################################
 # 10) More Complex/Branching Example to Show DP Gains
@@ -425,79 +416,45 @@ We'll artificially inflate the support of X2, X3, X4 to highlight DP benefits.
 function create_branching_network()
     bn = BayesianNetwork{Symbol}()
 
-    # Let's say X1 is discrete with bigger support (like 0..2)
-    # Could be continuous, but discrete might emphasize the DP.
-    x1_dist = Categorical([0.3, 0.4, 0.3])  # values in {1,2,3}, for example
-    add_stochastic_vertex!(bn, :X1, x1_dist, :discrete)
+    # X1 ~ Normal(0, 1)
+    add_stochastic_vertex!(bn, :X1, Normal(0, 1), :continuous)
 
-    # X2 depends on X1 => let each X1 value define different distribution
-    # e.g. X2 in {0,1,2} with varied probabilities
-    function x2_distfn(x1)
-        # x1 might be 1,2,3 => define some random param
-        if x1 == 1
-            return Categorical([0.5, 0.3, 0.2])
-        elseif x1 == 2
-            return Categorical([0.2, 0.5, 0.3])
-        else # x1==3
-            return Categorical([0.1, 0.2, 0.7])
-        end
-    end
-    add_stochastic_vertex!(bn, :X2, x2_distfn, :discrete)
+    # X2 ~ Bernoulli(logistic(X1))
+    add_stochastic_vertex!(bn, :X2, (x1) -> Bernoulli(logistic(x1)), :discrete)
     add_edge!(bn, :X1, :X2)
 
-    # X3 depends on X1 => similarly
-    function x3_distfn(x1)
-        if x1 == 1
-            return Categorical([0.4, 0.6])  # 2 possible states
-        elseif x1 == 2
-            return Categorical([0.7, 0.3])
-        else # x1==3
-            return Categorical([0.3, 0.7])
-        end
-    end
-    add_stochastic_vertex!(bn, :X3, x3_distfn, :discrete)
+    # X3 ~ Bernoulli(logistic(X1))
+    add_stochastic_vertex!(bn, :X3, (x1) -> Bernoulli(logistic(x1)), :discrete)
     add_edge!(bn, :X1, :X3)
 
-    # X4 depends on X2, X3 => let's define a function with multi dimension
-    # Suppose X2 in {0,1,2}, X3 in {0,1}, so X4 in {0,1,2} again
-    function x4_distfn(x2, x3)
-        # just a made-up table
-        # x2=0, x3=0 => [0.2, 0.5, 0.3], etc.
-        # We'll do a big if-else block or indexing
-        if x2 == 0 && x3 == 0
-            return Categorical([0.2, 0.5, 0.3])
-        elseif x2 == 0 && x3 == 1
-            return Categorical([0.1, 0.2, 0.7])
-        elseif x2 == 1 && x3 == 0
-            return Categorical([0.5, 0.3, 0.2])
-        elseif x2 == 1 && x3 == 1
-            return Categorical([0.3, 0.4, 0.3])
-        elseif x2 == 2 && x3 == 0
-            return Categorical([0.25, 0.25, 0.5])
-        else # x2==2 && x3==1
-            return Categorical([0.2, 0.2, 0.6])
-        end
-    end
-    add_stochastic_vertex!(bn, :X4, x4_distfn, :discrete)
-    add_edge!(bn, :X2, :X4)
-    add_edge!(bn, :X3, :X4)
+    # X4 ~ Bernoulli(logistic(X1))
+    add_stochastic_vertex!(bn, :X4, (x1) -> Bernoulli(logistic(x1)), :discrete)
+    add_edge!(bn, :X1, :X4)
 
-    # X5 depends on X4 => continuous
-    # e.g. if X4=2 => Normal(5,1), else if X4=1 => Normal(0,1), else X4=0 => Normal(-3,2)
-    function x5_distfn(x4)
-        if x4 == 0
-            return Normal(-3,2)
-        elseif x4 == 1
-            return Normal(0,1)
-        else
-            return Normal(5,1)
-        end
-    end
-    add_stochastic_vertex!(bn, :X5, x5_distfn, :continuous)
+    # X5 ~ Normal(mean(X2, X3, X4), 1)
+    add_stochastic_vertex!(
+        bn,
+        :X5,
+        (x2, x3, x4) -> Normal(mean([x2, x3, x4]), 1),
+        :continuous
+    )
+    add_edge!(bn, :X2, :X5)
+    add_edge!(bn, :X3, :X5)
     add_edge!(bn, :X4, :X5)
 
     return bn
 end
+
+# Create the network
+bn = create_branching_network()
+
+# Evaluate with observations and DP
+evaluate_model(
+    bn;
+    obs=Dict(:X1 => 0.5, :X5 => 1.0),
+    description="Branching BN (X1=0.5, X5=1.0, marginalizing X2, X3, X4)",
+    use_dp=true
+)
 
 # Let's build & run a test to show how DP helps when enumerating
 println("\n=== More Complex/Branching BN test to demonstrate DP gains ===")
@@ -515,7 +472,7 @@ function test_branching_bn(branching_bn)
     # We'll define a dummy "X1_values" since X1 is discrete; let's pass an empty set
     # because we only want the log posterior (not scanning over X1 in a grid).
     log_post_naive = create_log_posterior(branching_bn; use_dp=false)
-    log_post_dp    = create_log_posterior(branching_bn; use_dp=true)
+    log_post_dp = create_log_posterior(branching_bn; use_dp=true)
 
     # Just call each function once with no extra unobserved_values
     # to force the code to sum over X1, X2, X3, X4.
@@ -526,12 +483,122 @@ function test_branching_bn(branching_bn)
 
     println("DP approach ...")
 
-    @time dp_lp    = log_post_dp(Dict{Symbol,Float64}())
+    @time dp_lp = log_post_dp(Dict{Symbol,Float64}())
 
-
-    println("Naive log posterior = $naive_lp, DP log posterior = $dp_lp\n")
+    return println("Naive log posterior = $naive_lp, DP log posterior = $dp_lp\n")
 end
 
 test_branching_bn(branching_bn)
 
 println("\nDone.")
+
+
+
+###############################################################################
+# Helper functions (add_vertex, edges, etc.)
+###############################################################################
+# All your original functions (add_stochastic_vertex!, add_edge!, etc.) are here.
+# I've omitted their full listing for brevity as they remain unchanged.
+
+###############################################################################
+# Analysis Functions
+###############################################################################
+
+function ensure_parent_values!(bn::BayesianNetwork)
+    for sid in bn.stochastic_ids
+        # Get parent IDs and values
+        for pid in parent_ids(bn, sid)
+            varname = bn.names[pid]
+            if !haskey(bn.values, varname)
+                # Assign a default value if missing
+                dist = get_distribution(bn, pid)
+                bn.values[varname] = mean(dist)  # Use the mean as a sensible default
+                println("Assigned default value to $varname: $(bn.values[varname])")
+            end
+        end
+    end
+end
+
+function analyze_runtime(bn::BayesianNetwork, obs::Dict{Symbol,Float64}, use_dp::Bool)
+    ensure_parent_values!(bn)  # Ensure all parent values are initialized
+    log_post = create_log_posterior(bn, use_dp=use_dp)
+
+    @time begin
+        result = log_post(obs)
+        println("Log posterior (use_dp=$use_dp): $result")
+    end
+end
+
+
+function analyze_memoization(bn::BayesianNetwork, obs::Dict{Symbol,Float64})
+    println("\nAnalyzing memoization effectiveness")
+    memo = Dict{Any,Float64}()
+    assigned_vals = Vector{Any}(undef, length(bn.stochastic_ids))
+    fill!(assigned_vals, nothing)
+
+    log_post_dp = create_log_posterior(bn, use_dp=true)
+    log_post_dp(obs)
+
+    println("Total unique subproblems stored in memo table: $(length(memo))")
+end
+
+###############################################################################
+# 5-node Example
+###############################################################################
+
+model_5_nodes = create_5node_network()
+X1_values = 0.0:0.5:1.5
+
+println("=== Runtime Analysis: 5-Node Chain ===")
+obs_5node = Dict(:X4 => 1.0, :X5 => 2.0)
+
+println("Naive recursion:")
+analyze_runtime(model_5_nodes, obs_5node, false)
+
+println("\nDynamic Programming:")
+analyze_runtime(model_5_nodes, obs_5node, true)
+
+println("\n=== Memoization Analysis: 5-Node Chain ===")
+analyze_memoization(model_5_nodes, obs_5node)
+
+###############################################################################
+# Branching Example
+###############################################################################
+
+branching_bn = create_branching_network()
+obs_branching = Dict(:X5 => 4.2)
+id5 = branching_bn.names_to_ids[:X5]
+branching_bn.values[:X5] = 4.2
+branching_bn.is_observed[id5] = true
+
+println("\n=== Runtime Analysis: Branching Network ===")
+
+println("Naive recursion:")
+analyze_runtime(branching_bn, obs_branching, false)
+
+println("\nDynamic Programming:")
+analyze_runtime(branching_bn, obs_branching, true)
+
+println("\n=== Memoization Analysis: Branching Network ===")
+analyze_memoization(branching_bn, obs_branching)
+
+###############################################################################
+# Scalability Experiment
+###############################################################################
+
+function scalability_experiment()
+    println("\n=== Scalability Experiment ===")
+    for num_nodes in 5:5:20
+        println("\nNetwork with $num_nodes nodes:")
+        bn = create_5node_network()  # Replace with a generator for larger networks
+        obs = Dict(:X4 => 1.0, :X5 => 2.0)  # Keep observations consistent
+
+        println("Naive recursion:")
+        @btime analyze_runtime(bn, obs, false)
+
+        println("Dynamic Programming:")
+        @btime analyze_runtime(bn, obs, true)
+    end
+end
+
+# scalability_experiment()
