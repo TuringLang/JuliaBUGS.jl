@@ -8,11 +8,12 @@ abstract type AbstractBUGSModel end
 
 Pre-compute the values of the nodes in the model to avoid lookups from MetaGraph.
 """
-struct FlattenedGraphNodeData{TNF,TV}
+struct FlattenedGraphNodeData{TNF,TNF2,TV}
     sorted_nodes::Vector{<:VarName}
     is_stochastic_vals::Vector{Bool}
     is_observed_vals::Vector{Bool}
     node_function_vals::TNF
+    node_function_with_effect_vals::TNF2
     loop_vars_vals::TV
 end
 
@@ -25,12 +26,14 @@ function FlattenedGraphNodeData(
     is_stochastic_vals = Array{Bool}(undef, length(sorted_nodes))
     is_observed_vals = Array{Bool}(undef, length(sorted_nodes))
     node_function_vals = Array{Any}(undef, length(sorted_nodes))
+    node_function_with_effect_vals = Array{Any}(undef, length(sorted_nodes))
     loop_vars_vals = Array{Any}(undef, length(sorted_nodes))
     for (i, vn) in enumerate(sorted_nodes)
-        (; is_stochastic, is_observed, node_function, loop_vars) = g[vn]
+        (; is_stochastic, is_observed, node_function, node_function_with_effect, loop_vars) = g[vn]
         is_stochastic_vals[i] = is_stochastic
         is_observed_vals[i] = is_observed
         node_function_vals[i] = node_function
+        node_function_with_effect_vals[i] = node_function_with_effect
         loop_vars_vals[i] = loop_vars
     end
     return FlattenedGraphNodeData(
@@ -38,6 +41,7 @@ function FlattenedGraphNodeData(
         is_stochastic_vals,
         is_observed_vals,
         map(identity, node_function_vals),
+        map(identity, node_function_with_effect_vals),
         map(identity, loop_vars_vals),
     )
 end
@@ -596,4 +600,58 @@ function _tempered_evaluate!!(
         loglikelihood=loglikelihood,
         tempered_logjoint=logprior + temperature * loglikelihood,
     )
+end
+
+function _new_eval(
+    model::BUGSModel{base_model_T,evaluation_env_T}, flattened_values::AbstractVector
+) where {base_model_T,evaluation_env_T}
+    var_lengths = if model.transformed
+        model.transformed_var_lengths
+    else
+        model.untransformed_var_lengths
+    end
+
+    evaluation_env = deepcopy(model.evaluation_env)
+    current_idx = 1
+    logp = 0.0
+    for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
+        is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
+        node_function_with_effect = model.flattened_graph_node_data.node_function_with_effect_vals[i]
+        is_observed = model.flattened_graph_node_data.is_observed_vals[i]
+        loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
+        if !is_stochastic
+            _, evaluation_env = node_function_with_effect(
+                evaluation_env,
+                loop_vars,
+                vn,
+                model.transformed,
+                is_observed,
+                zeros(eltype(flattened_values), 1),
+            )
+        else
+            if !is_observed
+                _logp, evaluation_env = node_function_with_effect(
+                    evaluation_env,
+                    loop_vars,
+                    vn,
+                    model.transformed,
+                    is_observed,
+                    flattened_values[current_idx:(current_idx + var_lengths[vn] - 1)],
+                )
+                logp += _logp
+                current_idx += var_lengths[vn]
+            else
+                _logp, _ = node_function_with_effect(
+                    evaluation_env,
+                    loop_vars,
+                    vn,
+                    model.transformed,
+                    is_observed,
+                    Float64[], # not used
+                )
+                logp += _logp
+            end
+        end
+    end
+    return evaluation_env, logp
 end
