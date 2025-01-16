@@ -14,6 +14,7 @@ struct FlattenedGraphNodeData{TNF,TNF2,TV}
     is_observed_vals::Vector{Bool}
     node_function_vals::TNF
     node_function_with_effect_vals::TNF2
+    node_function_with_effect_function_wrapper_vals::Vector{FunctionWrappers.FunctionWrapper}
     loop_vars_vals::TV
 end
 
@@ -27,6 +28,7 @@ function FlattenedGraphNodeData(
     is_observed_vals = Array{Bool}(undef, length(sorted_nodes))
     node_function_vals = Array{Any}(undef, length(sorted_nodes))
     node_function_with_effect_vals = Array{Any}(undef, length(sorted_nodes))
+    node_function_with_effect_function_wrapper_vals = Array{FunctionWrappers.FunctionWrapper}(undef, length(sorted_nodes))
     loop_vars_vals = Array{Any}(undef, length(sorted_nodes))
     for (i, vn) in enumerate(sorted_nodes)
         (; is_stochastic, is_observed, node_function, node_function_with_effect, loop_vars) = g[vn]
@@ -42,6 +44,7 @@ function FlattenedGraphNodeData(
         is_observed_vals,
         map(identity, node_function_vals),
         map(identity, node_function_with_effect_vals),
+        node_function_with_effect_function_wrapper_vals,
         map(identity, loop_vars_vals),
     )
 end
@@ -199,7 +202,7 @@ function BUGSModel(
             end
         end
     end
-    return BUGSModel(
+    model = BUGSModel(
         is_transformed,
         untransformed_param_length,
         transformed_param_length,
@@ -213,6 +216,28 @@ function BUGSModel(
         model_def,
         data,
     )
+
+    return _turn_cache_into_function_wrapper(model)
+end
+
+function _turn_cache_into_function_wrapper(model)
+    for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
+        input_type = Tuple{
+            typeof(model.evaluation_env),
+            typeof(model.flattened_graph_node_data.loop_vars_vals[i]),
+            typeof(vn),
+            Bool,
+            Bool,
+            Vector{Float64},
+        }
+        output_type = Tuple{Float64,typeof(model.evaluation_env)}
+        model.flattened_graph_node_data.node_function_with_effect_function_wrapper_vals[i] = FunctionWrappers.FunctionWrapper{
+            output_type,input_type
+        }(
+            model.flattened_graph_node_data.node_function_with_effect_vals[i]
+        )
+    end
+    return model
 end
 
 function BUGSModel(
@@ -642,6 +667,60 @@ function _new_eval(
                 current_idx += var_lengths[vn]
             else
                 _logp, _ = node_function_with_effect(
+                    evaluation_env,
+                    loop_vars,
+                    vn,
+                    model.transformed,
+                    is_observed,
+                    Float64[], # not used
+                )
+                logp += _logp
+            end
+        end
+    end
+    return evaluation_env, logp
+end
+
+function _new_eval_with_function_wrapper(
+    model::BUGSModel{base_model_T,evaluation_env_T}, flattened_values::AbstractVector
+) where {base_model_T,evaluation_env_T}
+    var_lengths = if model.transformed
+        model.transformed_var_lengths
+    else
+        model.untransformed_var_lengths
+    end
+
+    evaluation_env = deepcopy(model.evaluation_env)
+    current_idx = 1
+    logp = 0.0
+    for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
+        is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
+        node_function_with_effect_fw = model.flattened_graph_node_data.node_function_with_effect_function_wrapper_vals[i]
+        is_observed = model.flattened_graph_node_data.is_observed_vals[i]
+        loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
+        if !is_stochastic
+            _, evaluation_env = node_function_with_effect_fw(
+                evaluation_env,
+                loop_vars,
+                vn,
+                model.transformed,
+                is_observed,
+                zeros(eltype(flattened_values), 1),
+            )
+        else
+            if !is_observed
+                _logp, evaluation_env = node_function_with_effect_fw(
+                    evaluation_env,
+                    loop_vars,
+                    vn,
+                    model.transformed,
+                    is_observed,
+                    flattened_values[current_idx:(current_idx + var_lengths[vn] - 1)],
+                )
+                logp += _logp
+                current_idx += var_lengths[vn]
+            else
+                _logp, _ = node_function_with_effect_fw(
                     evaluation_env,
                     loop_vars,
                     vn,
