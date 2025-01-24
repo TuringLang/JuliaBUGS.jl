@@ -1,0 +1,31 @@
+---
+title: "Performance Investigation of JuliaBUGS"
+subtitle: "A Deep Dive into Log Density Evaluation"
+author: "Xianda Sun"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    highlight-style: github
+execute:
+  echo: true
+  warning: false
+jupyter: julia-1.9
+
+---
+
+# Overview
+
+This document details the investigation and improvement of JuliaBUGS' log density evaluation performance. The investigation:
+
+1. Establishes baseline performance with a hand-written implementation
+2. Analyzes current performance bottlenecks
+3. Explores solutions using `FunctionWrappers.jl`
+
+Each chapter represents a step in this investigation, with code examples and benchmarks to illustrate the findings.
+
+:::{.callout-note}
+All benchmarks were run on the `rats` model from Volume 1 of BUGS examples.
+:::
+

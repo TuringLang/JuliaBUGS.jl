@@ -1,0 +1,20 @@
+project:
+  type: book
+  output-dir: _book
+
+book:
+  title: "Performance Investigation of JuliaBUGS"
+  author: "Xianda Sun"
+  chapters:
+    - index.qmd
+    - chapters/0_front.qmd
+    - chapters/1_ideal_and_current_performances.qmd
+    - chapters/2_introducing_FunctionWrappers.qmd
+  appendices:
+    - cutting_room_floor.qmd
+
+format:
+  html:
+    theme: cosmo
+    code-fold: false
+    highlight-style: github 

@@ -1,0 +1,28 @@
+---
+title: "Setup and Introduction"
+---
+
+# Investigation and Improvement of JuliaBUGS' Log Density Evaluation
+
+The task is to improve the performance of JuliaBUGS' log density evaluation. 
+
+```{julia}
+#| label: setup
+#| echo: true
+
+using AbstractPPL
+using BangBang
+using BenchmarkTools
+using Bijectors
+using Distributions
+using FunctionWrappers
+using JuliaBUGS
+using LogDensityProblems
+using Profile, PProf
+
+(; model_def, data, inits) = JuliaBUGS.BUGSExamples.rats
+model = compile(model_def, data, inits)
+rand_params = rand(65)
+inits_params = JuliaBUGS.getparams(model)
+evaluation_env = deepcopy(model.evaluation_env)
+```
