@@ -1,4 +1,4 @@
-struct NodeInfo{F, F2}
+struct NodeInfo{F,F2}
     is_stochastic::Bool
     is_observed::Bool
     node_function_expr::Expr
