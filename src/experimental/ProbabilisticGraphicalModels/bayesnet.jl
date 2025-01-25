@@ -38,6 +38,68 @@ function BayesianNetwork{V}() where {V}
     )
 end
 
+
+"""
+    translate_BUGSGraph_to_BayesianNetwork(g::BUGSGraph) -> BayesianNetwork
+
+Translate a BUGSGraph to a BayesianNetwork struct.
+
+# Arguments
+- `g::BUGSGraph`: The BUGSGraph to be translated.
+
+# Returns
+- `BayesianNetwork`: The translated BayesianNetwork struct.
+"""
+function translate_BUGSGraph_to_BayesianNetwork(g::BUGSGraph)
+    # Extract nodes and edges
+    nodes = labels(g)
+    edges = collect(edges(g))
+
+    # Map variable names to IDs
+    names_to_ids = Dict{VarName, Int}()
+    names = Vector{VarName}(undef, length(nodes))
+    for (i, node) in enumerate(nodes)
+        names_to_ids[node] = i
+        names[i] = node
+    end
+
+    # Initialize distributions and functions
+    distributions = Vector{Distribution}(undef, length(nodes))
+    deterministic_functions = Vector{Any}(undef, length(nodes))
+    is_stochastic = falses(length(nodes))
+    is_observed = falses(length(nodes))
+
+    # Populate distributions and functions
+    for (i, node) in enumerate(nodes)
+        node_info = g[node]
+        if node_info.is_stochastic
+            distributions[i] = node_info.distribution
+            is_stochastic[i] = true
+        else
+            deterministic_functions[i] = node_info.deterministic_function
+        end
+        is_observed[i] = node_info.is_observed
+    end
+
+    # Identify stochastic and deterministic variable IDs
+    stochastic_ids = findall(is_stochastic)
+    deterministic_ids = findall(!is_stochastic)
+
+    # Create the BayesianNetwork struct
+    return BayesianNetwork(
+        SimpleDiGraph(edges),
+        names,
+        names_to_ids,
+        Dict{VarName, Any}(),  # Initialize values as an empty dictionary
+        distributions,
+        deterministic_functions,
+        stochastic_ids,
+        deterministic_ids,
+        is_stochastic,
+        is_observed
+    )
+end
+
 """
     condition(bn::BayesianNetwork{V}, values::Dict{V,Any}) where {V}
 
