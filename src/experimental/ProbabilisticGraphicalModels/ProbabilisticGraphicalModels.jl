@@ -15,5 +15,4 @@ export BayesianNetwork,
     decondition!,
     ancestral_sampling,
     is_conditionally_independent
-
 end
