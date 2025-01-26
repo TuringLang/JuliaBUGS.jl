@@ -1,15 +1,36 @@
----
-title: "Baseline Performance"
----
+# Investigation and Improvement of JuliaBUGS' Log Density Evaluation
+
+The task is to improve the performance of JuliaBUGS' log density evaluation. 
+
+Some common code to run
+
+```julia
+using AbstractPPL
+using BangBang
+using BenchmarkTools
+using Bijectors
+using Distributions
+using FunctionWrappers
+using JuliaBUGS
+using LogDensityProblems
+using MetaGraphsNext
+using Profile, PProf
+using JuliaBUGS: dnorm, dgamma
+
+(; model_def, data, inits) = JuliaBUGS.BUGSExamples.rats
+model = compile(model_def, data, inits)
+rand_params = rand(65)
+inits_params = JuliaBUGS.getparams(model)
+evaluation_env = deepcopy(model.evaluation_env)
+```
+
+> We will use `rats` examples through out.
 
 ## Ideal performance: with hand-written log density
 
 First, let's establish a baseline with a manually optimized implementation:
 
-```{julia}
-#| label: rats-logdensity
-#| code-fold: true
-
+```julia
 using AbstractPPL: IndexLens
 using BangBang, Bijectors
 using JuliaBUGS.BUGSPrimitives: dgamma, dnorm
@@ -90,41 +111,30 @@ end
 
 Let's benchmark this implementation with both random and initial parameters:
 
-```{julia}
-#| label: benchmark-ideal
-#| output: asis
-
+```julia
 println("With random parameters:")
 display(@benchmark rats_logdensity($evaluation_env, $rand_params))
 println("\nWith initial parameters:")
 display(@benchmark rats_logdensity($evaluation_env, $inits_params))
 ```
 
-:::{.callout-note}
 With initial parameters, we see slightly better performance. This might be due to the more structured nature of `inits_params` compared to `rand_params`.
-:::
 
 ## Current performance of JuliaBUGS: with `evaluate!!`
 
 Now let's look at the current performance in JuliaBUGS:
 
-```{julia}
-#| label: benchmark-current
-
+```julia
 @benchmark JuliaBUGS.evaluate!!($model, $rand_params)
 ```
 
-:::{.callout-important}
 The current implementation is significantly slower than the hand-written version. Let's investigate why.
-:::
 
 ### Profiling and trying to understand the source of performance issue
 
 Let's profile the code to identify bottlenecks:
 
-```{julia}
-#| label: profiling
-#| eval: false
+```julia
 
 # @profview here comes with VSCode Julia extension
 @profview for _ in 1:1000 # one iteration is too short to see the performance issue
@@ -136,14 +146,10 @@ end
 
 The red bars in the profiling results indicate type instability issues. Let's examine the type inference:
 
-```{julia}
-#| label: type-inference
-#| eval: false
-
+```julia
 @code_warntype JuliaBUGS._tempered_evaluate!!(model, rand_params, 1.0)
 ```
 
-:::{.callout-warning}
 ## Key Type Instability Issues
 
 1. `node_function` is stored as a generic `Function` in a `Vector{Function}` and retrieved by index

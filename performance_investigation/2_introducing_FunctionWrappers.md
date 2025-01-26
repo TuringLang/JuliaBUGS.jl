@@ -1,8 +1,4 @@
----
-title: "Using FunctionWrappers for Type Stability"
----
-
-## Attempts: use `FunctionWrapper` to make node functions type stable
+# Attempts: use `FunctionWrapper` to make node functions type stable
 
 Following the previous investigation, it seems that the source of type instability is that `node_function` is retrieved from `Vector{Function}` and is not type stable.
 And following the same reasoning, it's straightforward that as long as we store node functions in a vector, it can't be type stable.
@@ -10,14 +6,10 @@ And following the same reasoning, it's straightforward that as long as we store 
 `FunctionWrapper` is created to make storing `Function`s in structs type stable.
 It is a reasonable first thing to try.
 
-:::{.callout-note}
 ## Rats Model Definition
 For reference, here's the `rats` model definition:
 
-```{julia}
-#| label: rats-model
-#| echo: true
-
+```julia
 quote
     for i = 1:N
         for j = 1:T
@@ -36,14 +28,10 @@ quote
     alpha0 = var"alpha.c" - xbar * var"beta.c"
 end
 ```
-:::
 
 The node functions in the master branch look like:
 
-```{julia}
-#| label: node-functions
-#| echo: true
-
+```julia
 # beta.tau
 # model.g[@varname(var"beta.tau")].node_function_expr
 :(function (__evaluation_env__::NamedTuple{__vars__}, __loop_vars__::NamedTuple{__loop_vars_names__}) where {__vars__, __loop_vars_names__}
@@ -51,7 +39,9 @@ The node functions in the master branch look like:
     (;) = __loop_vars__
     return dgamma(0.001, 0.001)
 end)
+```
 
+```julia
 # mu[30, 5]
 # model.g[@varname(mu[30, 5])].node_function_expr
 :(function (__evaluation_env__::NamedTuple{__vars__}, __loop_vars__::NamedTuple{__loop_vars_names__}) where {__vars__, __loop_vars_names__}
@@ -59,7 +49,9 @@ end)
       (; j, i) = __loop_vars__
       return alpha[i] + beta[i] * (x[j] - xbar)
   end)
+```
 
+```julia
 # Y[30, 5]
 # model.g[@varname(Y[30, 5])].node_function_expr
 :(function (__evaluation_env__::NamedTuple{__vars__}, __loop_vars__::NamedTuple{__loop_vars_names__}) where {__vars__, __loop_vars_names__}
@@ -71,34 +63,26 @@ end)
 
 Are these functions type stable?
 
-```{julia}
-#| label: type-stability-check
-
+```julia
 vn = @varname(var"beta.tau")
-vn = @varname(mu[30, 5])
-vn = @varname(Y[30, 5])
+# vn = @varname(mu[30, 5])
+# vn = @varname(Y[30, 5])
 nf = model.g[vn].node_function
 loop_vars = model.g[vn].loop_vars
 @code_warntype nf(model.evaluation_env, loop_vars)
 ```
 
-:::{.callout-note}
 The answer is yes, these individual functions are type stable.
-:::
 
 Let's benchmark to get a sense of performance:
 
-```{julia}
-#| label: benchmark-node-function
-
+```julia
 @benchmark nf(evaluation_env, loop_vars)
 ```
 
 Now let's try to wrap them in `FunctionWrapper`s:
 
-```{julia}
-#| label: function-wrapper
-
+```julia
 function _create_function_wrapper_from_type_stable_function(f, input_types::Tuple)
     Ret = only(Base.return_types(f, input_types))
     if Ret === Any
@@ -109,25 +93,19 @@ function _create_function_wrapper_from_type_stable_function(f, input_types::Tupl
 end
 ```
 
-```{julia}
-#| label: test-wrapper
-
+```julia
 nf_fw = _create_function_wrapper_from_type_stable_function(nf, (typeof(model.evaluation_env), typeof(loop_vars)))
 nf_fw(model.evaluation_env, loop_vars) == nf(model.evaluation_env, loop_vars)
 ```
 
 With function wrappers, let's try to make computation on **one** node type stable.
 
-:::{.callout-note}
 To simplify, we assume we are always working with `transformed` model.
-:::
 
 For a deterministic node, the computation is:
 
-```{julia}
-#| label: deterministic-node
-
-function _eval_deterministic(node_function, evaluation_env, loop_vars, vn)
+```julia
+@inline function _eval_deterministic(node_function, evaluation_env, loop_vars, vn)
     value = (node_function)(evaluation_env, loop_vars)
     return BangBang.setindex!!(evaluation_env, value, vn)
 end
@@ -135,9 +113,7 @@ end
 
 Let's test it:
 
-```{julia}
-#| label: test-deterministic
-
+```julia
 # mu[30, 5]
 nf = model.g[@varname(mu[30, 5])].node_function
 loop_vars = model.g[@varname(mu[30, 5])].loop_vars
@@ -149,9 +125,7 @@ _eval_deterministic(nf_fw, evaluation_env, loop_vars, @varname(mu[30, 5]))
 
 For a data node, the computation is:
 
-```{julia}
-#| label: data-node
-
+```julia
 function _eval_data(node_function, evaluation_env, loop_vars, vn)
     dist = (node_function)(evaluation_env, loop_vars)
     value = AbstractPPL.get(evaluation_env, vn)
@@ -161,9 +135,7 @@ end
 
 Let's test it:
 
-```{julia}
-#| label: test-data
-
+```julia
 # Y[30, 5]
 nf = model.g[@varname(Y[30, 5])].node_function
 loop_vars = model.g[@varname(Y[30, 5])].loop_vars
@@ -175,9 +147,7 @@ _eval_data(nf_fw, evaluation_env, loop_vars, @varname(Y[30, 5]))
 
 Last, for a model parameter, the computation is:
 
-```{julia}
-#| label: model-param
-
+```julia
 function _eval_model_param(node_function, evaluation_env, loop_vars, vn, start_idx, end_idx, flattened_values)
     dist = (node_function)(evaluation_env, loop_vars)
     b = Bijectors.bijector(dist)
@@ -191,9 +161,7 @@ end
 
 Let's test it:
 
-```{julia}
-#| label: test-model-param
-
+```julia
 # beta.tau
 nf = model.g[@varname(var"beta.tau")].node_function
 loop_vars = model.g[@varname(var"beta.tau")].loop_vars
@@ -203,7 +171,6 @@ _eval_model_param(nf_fw, evaluation_env, loop_vars, @varname(var"beta.tau"), 1, 
 @code_warntype _eval_model_param(nf_fw, evaluation_env, loop_vars, @varname(beta.tau), 1, 1, rand_params)
 ```
 
-:::{.callout-note}
 ## Performance Analysis
 
 There are 367 nodes in the graph:
