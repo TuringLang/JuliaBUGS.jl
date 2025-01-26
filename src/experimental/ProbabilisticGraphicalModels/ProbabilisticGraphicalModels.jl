@@ -15,6 +15,7 @@ export BayesianNetwork,
     decondition,
     decondition!,
     ancestral_sampling,
-    is_conditionally_independent
+    is_conditionally_independent,
+    translate_BUGSGraph_to_BayesianNetwork
 
 end

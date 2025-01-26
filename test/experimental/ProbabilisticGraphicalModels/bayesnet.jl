@@ -10,9 +10,80 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     condition!,
     decondition,
     ancestral_sampling,
-    is_conditionally_independent
+    is_conditionally_independent ,
+    translate_BUGSGraph_to_BayesianNetwork
 
 @testset "BayesianNetwork" begin
+    @testset "Translating BUGSGraph to BayesianNetwork" begin
+        # Define the test model using JuliaBUGS
+        test_model = @bugs begin
+            a ~ dnorm(f, c)
+            f = b - 1
+            b ~ dnorm(0, 1)
+            c ~ dnorm(l, 1)
+            g = a * 2
+            d ~ dnorm(g, 1)
+            h = g + 2
+            e ~ dnorm(h, i)
+            i ~ dnorm(0, 1)
+            l ~ dnorm(0, 1)
+        end
+
+        inits = (
+            a=1.0,
+            b=2.0,
+            c=3.0,
+            d=4.0,
+            e=5.0,
+            i=4.0,
+            l=-2.0,
+        )
+
+        model = compile(test_model, NamedTuple(), inits)
+
+        g = model.g
+
+        # Translate the BUGSGraph to a BayesianNetwork
+        bn = translate_BUGSGraph_to_BayesianNetwork(g)
+
+        # Verify the translation
+        @test length(bn.names) == 9
+        @test bn.names_to_ids[:a] == 1
+        @test bn.names_to_ids[:b] == 2
+        @test bn.names_to_ids[:c] == 3
+        @test bn.names_to_ids[:d] == 4
+        @test bn.names_to_ids[:e] == 5
+        @test bn.names_to_ids[:f] == 6
+        @test bn.names_to_ids[:g] == 7
+        @test bn.names_to_ids[:h] == 8
+        @test bn.names_to_ids[:i] == 9
+        @test bn.names_to_ids[:l] == 10
+
+        @test bn.is_stochastic[bn.names_to_ids[:a]] == true
+        @test bn.is_stochastic[bn.names_to_ids[:b]] == true
+        @test bn.is_stochastic[bn.names_to_ids[:c]] == true
+        @test bn.is_stochastic[bn.names_to_ids[:d]] == true
+        @test bn.is_stochastic[bn.names_to_ids[:e]] == true
+        @test bn.is_stochastic[bn.names_to_ids[:i]] == true
+        @test bn.is_stochastic[bn.names_to_ids[:l]] == true
+
+        @test bn.is_stochastic[bn.names_to_ids[:f]] == false
+        @test bn.is_stochastic[bn.names_to_ids[:g]] == false
+        @test bn.is_stochastic[bn.names_to_ids[:h]] == false
+
+        @test bn.distributions[bn.names_to_ids[:a]] isa Distribution
+        @test bn.distributions[bn.names_to_ids[:b]] isa Distribution
+        @test bn.distributions[bn.names_to_ids[:c]] isa Distribution
+        @test bn.distributions[bn.names_to_ids[:d]] isa Distribution
+        @test bn.distributions[bn.names_to_ids[:e]] isa Distribution
+        @test bn.distributions[bn.names_to_ids[:i]] isa Distribution
+        @test bn.distributions[bn.names_to_ids[:l]] isa Distribution
+
+        @test bn.deterministic_functions[bn.names_to_ids[:f]] isa Function
+        @test bn.deterministic_functions[bn.names_to_ids[:g]] isa Function
+        @test bn.deterministic_functions[bn.names_to_ids[:h]] isa Function
+    end
+    
     @testset "Adding vertices" begin
         bn = BayesianNetwork{Symbol}()
 
