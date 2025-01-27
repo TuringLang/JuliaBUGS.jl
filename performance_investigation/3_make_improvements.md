@@ -26,6 +26,8 @@ So we could just push these all into the node function.
 
 The plan is, then:
 
+For a data node,
+
 ```julia
 # before:
 # model.g[@varname(Y[30, 5])].node_function_expr
@@ -56,7 +58,7 @@ Y_30_5(evaluation_env, loop_vars, vn_indices, flattened_values, 0, 0)
 @benchmark Y_30_5($(evaluation_env), $(loop_vars), $(vn_indices), $(flattened_values), 0, 0)
 ```
 
-and
+For a model parameter node,
 
 ```julia
 # before:
@@ -79,6 +81,29 @@ function beta_tau(evaluation_env, loop_vars::NTuple{2, Int}, vn_indices::NTuple{
     vn = VarName{Symbol("beta.tau")}(identity)
     evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
     return evaluation_env, logprior
+end
+```
+
+For a deterministic node,
+
+```julia
+# before:
+# model.g[@varname(mu[30, 5])].node_function_expr
+:(function (__evaluation_env__::NamedTuple{__vars__}, __loop_vars__::NamedTuple{__loop_vars_names__}) where {__vars__, __loop_vars_names__}
+    (; alpha, beta, xbar, x) = __evaluation_env__
+    (; j, i) = __loop_vars__
+    return alpha[i] + beta[i] * (x[j] - xbar)
+end)
+
+# after:
+function mu_30_5(evaluation_env, loop_vars::NTuple{2, Int}, vn_indices::NTuple{2, Int}, flattened_values::AbstractVector{Float64}, start_idx::Int, end_idx::Int)
+    (; alpha, beta, xbar, x) = evaluation_env
+    i = loop_vars[1]
+    j = loop_vars[2]
+    value = alpha[i] + beta[i] * (x[j] - xbar)
+    vn = VarName{:mu}(AbstractPPL.IndexLens(vn_indices[1:2]))
+    evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+    return evaluation_env, 0.0
 end
 ```
 
@@ -151,8 +176,8 @@ _gen_loop_var_unpack_expr(:((;i) = loop_vars))
 ```
 
 ```julia
-function _capture_return_stmt(expr, if_stochastic)
-    if if_stochastic
+function _capture_return_stmt(expr, is_stochastic)
+    if is_stochastic
         return Expr(:(=), :__dist__, expr)
     else
         return Expr(:(=), :__value__, expr)
@@ -192,7 +217,8 @@ println(_gen_varname_creation(@varname(var"beta.tau")))
 function _deterministic_stmt_type_specific_computation(vn)
     ret_exprs = Expr[]
     push!(ret_exprs, _gen_varname_creation(vn))
-    push!(ret_exprs, :(return BangBang.setindex!!(__evaluation_env__, __value__, __vn__), 0.0))
+    push!(ret_exprs, :(__evaluation_env__ = BangBang.setindex!!(__evaluation_env__, __value__, __vn__)))
+    push!(ret_exprs, :(return __evaluation_env__, 0.0))
     return ret_exprs
 end
 
@@ -228,10 +254,6 @@ function _stmt_type_specific_computation(is_stochastic, is_observed, vn)
         return _deterministic_stmt_type_specific_computation(vn)
     end
 end
-```
-
-```julia
-_stmt_type_specific_computation(true, true, @varname(Y[30, 5]))
 ```
 
 ```julia
@@ -284,6 +306,10 @@ end
 ```julia
 y_30_5_expr = create_new_node_function(model.g[@varname(Y[30, 5])].node_function_expr, max_indices_length, max_loop_vars_length, @varname(Y[30, 5]), (;i = 30, j = 5), true, true, Dict(), evaluation_env)
 y_30_5_func = eval(y_30_5_expr)
+loop_vars = (30, 5)
+vn_indices = (30, 5)
+flattened_values = rand_params
+y_30_5_func(evaluation_env, loop_vars, vn_indices, flattened_values, 0, 0)
 @benchmark $y_30_5_func($(evaluation_env), $(loop_vars), $(vn_indices), $(flattened_values), 0, 0)
 ```
 
@@ -298,6 +324,7 @@ loop_vars = (0, 0)
 vn_indices = (0, 0)
 flattened_values = rand_params
 beta_tau_func = eval(beta_tau_expr)
+beta_tau_func(evaluation_env, loop_vars, vn_indices, flattened_values, 1, 1)
 @benchmark $beta_tau_func($(evaluation_env), $(loop_vars), $(vn_indices), $(flattened_values), 1, 1)
 ```
 
@@ -307,6 +334,7 @@ mu_30_5_func = eval(mu_30_5_expr)
 loop_vars = (30, 5)
 vn_indices = (30, 5)
 flattened_values = rand_params
+mu_30_5_func(evaluation_env, loop_vars, vn_indices, flattened_values, 0, 0)
 @benchmark $mu_30_5_func($(evaluation_env), $(loop_vars), $(vn_indices), $(flattened_values), 0, 0)
 ```
 
@@ -350,6 +378,8 @@ for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
     end
     eval_vn_indices_vals[i] = Tuple(vn_indices)
 end
+
+eval_vn_indices_vals
 ```
 
 Then `start_idx` and `end_idx`,
@@ -376,9 +406,7 @@ for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
         eval_end_idx_vals[i] = 0
     end
 end
-```
 
-```julia
 eval_start_idx_vals
 eval_end_idx_vals
 ```
@@ -408,29 +436,13 @@ end
 ```
 
 ```julia
-i = 11
+i = 2
 vn = model.flattened_graph_node_data.sorted_nodes[i]
-@info vn
 f = new_node_functions[i]
 f_expr = new_node_function_exprs[i]
 f(evaluation_env, eval_loop_var_vals[i], eval_vn_indices_vals[i], flattened_values, eval_start_idx_vals[i], eval_end_idx_vals[i])
-```
-
-```julia
-@benchmark $f($(evaluation_env), $(eval_loop_var_vals[i]), $(eval_vn_indices_vals[i]), $(flattened_values), $(eval_start_idx_vals[i]), $(eval_end_idx_vals[i]))
-```
-
-```julia
-i = 11
 f_fw = new_node_functions_fws[i]
 f_fw(evaluation_env, eval_loop_var_vals[i], eval_vn_indices_vals[i], flattened_values, eval_start_idx_vals[i], eval_end_idx_vals[i])
-```
-
-```julia
-@code_warntype f_fw(evaluation_env, eval_loop_var_vals[i], eval_vn_indices_vals[i], flattened_values, eval_start_idx_vals[i], eval_end_idx_vals[i])
-```
-
-```julia
 @benchmark $f_fw($(evaluation_env), $(eval_loop_var_vals[i]), $(eval_vn_indices_vals[i]), $(flattened_values), $(eval_start_idx_vals[i]), $(eval_end_idx_vals[i]))
 ```
 
@@ -438,7 +450,9 @@ f_fw(evaluation_env, eval_loop_var_vals[i], eval_vn_indices_vals[i], flattened_v
 function _new_eval(evaluation_env, new_node_functions_fws, eval_loop_var_vals, eval_vn_indices_vals, flattened_values, eval_start_idx_vals, eval_end_idx_vals)
     logp = 0.0
     @inbounds for i in eachindex(new_node_functions_fws)
+        vn = model.flattened_graph_node_data.sorted_nodes[i]
         evaluation_env, logp_i = new_node_functions_fws[i](evaluation_env, eval_loop_var_vals[i], eval_vn_indices_vals[i], flattened_values, eval_start_idx_vals[i], eval_end_idx_vals[i])
+        @info vn, logp_i
         logp += logp_i
     end
     return logp
