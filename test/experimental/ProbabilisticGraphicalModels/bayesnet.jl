@@ -1,6 +1,7 @@
 using Test
 using Distributions
 using Graphs
+using JuliaBUGS: compile, @bugs, BUGSGraph, VarName
 using JuliaBUGS.ProbabilisticGraphicalModels:
     BayesianNetwork,
     add_stochastic_vertex!,
@@ -10,8 +11,9 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     condition!,
     decondition,
     ancestral_sampling,
-    is_conditionally_independent ,
-    translate_BUGSGraph_to_BayesianNetwork
+    is_conditionally_independent,
+    translate_BUGSGraph_to_BayesianNetwork,
+    something
 
 @testset "BayesianNetwork" begin
     @testset "Translating BUGSGraph to BayesianNetwork" begin

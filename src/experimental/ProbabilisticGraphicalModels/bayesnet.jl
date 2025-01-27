@@ -1,3 +1,5 @@
+using JuliaBUGS: BUGSGraph, VarName
+
 """
     BayesianNetwork
 
@@ -38,7 +40,11 @@ function BayesianNetwork{V}() where {V}
     )
 end
 
+function something()
+    println("something")
+end
 
+println("Loading bayesnet.jl")
 """
     translate_BUGSGraph_to_BayesianNetwork(g::BUGSGraph) -> BayesianNetwork
 
@@ -50,14 +56,14 @@ Translate a BUGSGraph to a BayesianNetwork struct.
 # Returns
 - `BayesianNetwork`: The translated BayesianNetwork struct.
 """
-function translate_BUGSGraph_to_BayesianNetwork(g::BUGSGraph)
+function translate_BUGSGraph_to_BayesianNetwork(g::BUGSGraph{V}) where {V}
     # Extract nodes and edges
     nodes = labels(g)
     edges = collect(edges(g))
 
     # Map variable names to IDs
-    names_to_ids = Dict{VarName, Int}()
-    names = Vector{VarName}(undef, length(nodes))
+    names_to_ids = Dict{V, Int}()
+    names = Vector{V}(undef, length(nodes))
     for (i, node) in enumerate(nodes)
         names_to_ids[node] = i
         names[i] = node
@@ -82,15 +88,15 @@ function translate_BUGSGraph_to_BayesianNetwork(g::BUGSGraph)
     end
 
     # Identify stochastic and deterministic variable IDs
-    stochastic_ids = findall(is_stochastic)
-    deterministic_ids = findall(!is_stochastic)
-
+    stochastic_ids = findall(x -> x, is_stochastic)            # Finds indices where is_stochastic is true
+    deterministic_ids = findall(x -> !x, is_stochastic)        # Finds indices where is_stochastic is false    
+    println("translate_BUGSGraph_to_BayesianNetwork defined successfully")
     # Create the BayesianNetwork struct
     return BayesianNetwork(
         SimpleDiGraph(edges),
         names,
         names_to_ids,
-        Dict{VarName, Any}(),  # Initialize values as an empty dictionary
+        Dict{V, Any}(),  # Initialize values as an empty dictionary
         distributions,
         deterministic_functions,
         stochastic_ids,
