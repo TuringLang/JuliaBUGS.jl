@@ -9,7 +9,7 @@ using JuliaBUGS: CompilerUtils
     end
 
     loop_var, lb, ub, body = JuliaBUGS.decompose_for_expr(ex)
-    
+
     @test loop_var == :i
     @test lb == 1
     @test ub == 3
