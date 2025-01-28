@@ -4,17 +4,15 @@ using BangBang
 using Graphs
 using Distributions
 
-include("bayesnet.jl")
+include("bayesian_network.jl")
+include("conditioning.jl")
+include("functions.jl")
 
 export BayesianNetwork,
-    add_stochastic_vertex!,
-    add_deterministic_vertex!,
-    add_edge!,
     condition,
     condition!,
     decondition,
     decondition!,
     ancestral_sampling,
     is_conditionally_independent
-
 end
