@@ -705,7 +705,7 @@ function performance_comparison_long_chain(num_states::Int)
 end
 
 # Collect data for different Markov chain lengths
-chain_lengths = [1, 3, 5, 7, 9, 10]
+chain_lengths = [5]
 times_no_dp = Float64[]
 times_with_dp = Float64[]
 
