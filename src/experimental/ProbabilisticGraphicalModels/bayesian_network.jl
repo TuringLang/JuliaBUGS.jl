@@ -48,8 +48,8 @@ function add_stochastic_vertex!(
     bn::BayesianNetwork{V,T},
     name::V,
     dist::Any,
-    node_type::Symbol=:continuous;  # default if not specified
     is_observed::Bool=false,
+    node_type::Symbol=:continuous,  # default if not specified
 )::T where {V,T}
     Graphs.add_vertex!(bn.graph) || return 0
     id = nv(bn.graph)
