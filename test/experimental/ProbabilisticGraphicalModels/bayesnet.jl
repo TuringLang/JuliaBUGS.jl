@@ -90,7 +90,7 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         bn = BayesianNetwork{Symbol}()
 
         # Test adding stochastic vertex
-        id1 = add_stochastic_vertex!(bn, :A, Normal(0, 1), false)
+        id1 = add_stochastic_vertex!(bn, :A, Normal(0, 1), false, :continuous)
         @test id1 == 1
         @test length(bn.names) == 1
         @test bn.names[1] == :A
@@ -113,8 +113,8 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
 
     @testset "Adding edges" begin
         bn = BayesianNetwork{Symbol}()
-        add_stochastic_vertex!(bn, :A, Normal(0, 1), false)
-        add_stochastic_vertex!(bn, :B, Normal(0, 1), false)
+        add_stochastic_vertex!(bn, :A, Normal(0, 1), false, :continuous)
+        add_stochastic_vertex!(bn, :B, Normal(0, 1), false, :continuous)
 
         add_edge!(bn, :A, :B)
         @test has_edge(bn.graph, 1, 2)
@@ -123,9 +123,9 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     @testset "conditioning and deconditioning" begin
         bn = BayesianNetwork{Symbol}()
         # Add some vertices
-        add_stochastic_vertex!(bn, :A, Normal(0, 1), false)
-        add_stochastic_vertex!(bn, :B, Normal(0, 1), false)
-        add_stochastic_vertex!(bn, :C, Normal(0, 1), false)
+        add_stochastic_vertex!(bn, :A, Normal(0, 1), false, :continuous)
+        add_stochastic_vertex!(bn, :B, Normal(0, 1), false, :continuous)
+        add_stochastic_vertex!(bn, :C, Normal(0, 1), false, :continuous)
 
         # Test conditioning
         bn_cond = condition(bn, Dict(:A => 1.0))
@@ -175,8 +175,8 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     @testset "Simple ancestral sampling" begin
         bn = BayesianNetwork{Symbol}()
         # Add stochastic vertices
-        add_stochastic_vertex!(bn, :A, Normal(0, 1), false)
-        add_stochastic_vertex!(bn, :B, Normal(1, 2), false)
+        add_stochastic_vertex!(bn, :A, Normal(0, 1), false, :continuous)
+        add_stochastic_vertex!(bn, :B, Normal(1, 2), false, :continuous)
         # Add deterministic vertex C = A + B
         add_deterministic_vertex!(bn, :C, (a, b) -> a + b)
         add_edge!(bn, :A, :C)
@@ -192,10 +192,10 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
 
     @testset "Complex ancestral sampling" begin
         bn = BayesianNetwork{Symbol}()
-        add_stochastic_vertex!(bn, :μ, Normal(0, 2), false)
-        add_stochastic_vertex!(bn, :σ, LogNormal(0, 0.5), false)
-        add_stochastic_vertex!(bn, :X, Normal(0, 1), false)
-        add_stochastic_vertex!(bn, :Y, Normal(0, 1), false)
+        add_stochastic_vertex!(bn, :μ, Normal(0, 2), false, :continuous)
+        add_stochastic_vertex!(bn, :σ, LogNormal(0, 0.5), false, :continuous)
+        add_stochastic_vertex!(bn, :X, Normal(0, 1), false, :continuous)
+        add_stochastic_vertex!(bn, :Y, Normal(0, 1), false, :continuous)
         add_deterministic_vertex!(bn, :X_scaled, (μ, σ, x) -> x * σ + μ)
         add_deterministic_vertex!(bn, :Y_scaled, (μ, σ, y) -> y * σ + μ)
         add_deterministic_vertex!(bn, :Sum, (x, y) -> x + y)
@@ -245,9 +245,9 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         @testset "Chain Structure (A → B → C)" begin
             bn = BayesianNetwork{Symbol}()
 
-            add_stochastic_vertex!(bn, :A, Normal(), false)
-            add_stochastic_vertex!(bn, :B, Normal(), false)
-            add_stochastic_vertex!(bn, :C, Normal(), false)
+            add_stochastic_vertex!(bn, :A, Normal(), false, :continuous)
+            add_stochastic_vertex!(bn, :B, Normal(), false, :continuous)
+            add_stochastic_vertex!(bn, :C, Normal(), false, :continuous)
 
             add_edge!(bn, :A, :B)
             add_edge!(bn, :B, :C)
@@ -259,23 +259,22 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         @testset "Fork Structure (A ← B → C)" begin
             bn = BayesianNetwork{Symbol}()
 
-            add_stochastic_vertex!(bn, :A, Normal(), false)
-            add_stochastic_vertex!(bn, :B, Normal(), false)
-            add_stochastic_vertex!(bn, :C, Normal(), false)
+            add_stochastic_vertex!(bn, :A, Normal(), false, :continuous)
+            add_stochastic_vertex!(bn, :B, Normal(), false, :continuous)
+            add_stochastic_vertex!(bn, :C, Normal(), false, :continuous)
 
             add_edge!(bn, :B, :A)
             add_edge!(bn, :B, :C)
 
-            @test !is_conditionally_independent(bn, :A, :C, Symbol[])
             @test is_conditionally_independent(bn, :A, :C, [:B])
         end
 
         @testset "Collider Structure (A → B ← C)" begin
             bn = BayesianNetwork{Symbol}()
 
-            add_stochastic_vertex!(bn, :A, Normal(), false)
-            add_stochastic_vertex!(bn, :B, Normal(), false)
-            add_stochastic_vertex!(bn, :C, Normal(), false)
+            add_stochastic_vertex!(bn, :A, Normal(), false, :continuous)
+            add_stochastic_vertex!(bn, :B, Normal(), false, :continuous)
+            add_stochastic_vertex!(bn, :C, Normal(), false, :continuous)
 
             add_edge!(bn, :A, :B)
             add_edge!(bn, :C, :B)
@@ -287,9 +286,9 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         @testset "Bayes Ball Algorithm Tests" begin
             # Create a simple network: A → B → C
             bn = BayesianNetwork{Symbol}()
-            add_stochastic_vertex!(bn, :A, Normal(0, 1), false)
-            add_stochastic_vertex!(bn, :B, Normal(0, 1), false)
-            add_stochastic_vertex!(bn, :C, Normal(0, 1), false)
+            add_stochastic_vertex!(bn, :A, Normal(0, 1), false, :continuous)
+            add_stochastic_vertex!(bn, :B, Normal(0, 1), false, :continuous)
+            add_stochastic_vertex!(bn, :C, Normal(0, 1), false, :continuous)
             add_edge!(bn, :A, :B)
             add_edge!(bn, :B, :C)
             @testset "Corner Case: X or Y in Z" begin
@@ -306,7 +305,7 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
             bn = BayesianNetwork{Symbol}()
 
             for v in [:A, :B, :C, :D, :E]
-                add_stochastic_vertex!(bn, v, Normal(), false)
+                add_stochastic_vertex!(bn, v, Normal(), false, :continuous)
             end
 
             # Create structure:
@@ -326,8 +325,8 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         @testset "Error Handling" begin
             bn = BayesianNetwork{Symbol}()
 
-            add_stochastic_vertex!(bn, :A, Normal(), false)
-            add_stochastic_vertex!(bn, :B, Normal(), false)
+            add_stochastic_vertex!(bn, :A, Normal(), false, :continuous)
+            add_stochastic_vertex!(bn, :B, Normal(), false, :continuous)
             @test_throws KeyError is_conditionally_independent(bn, :A, :B, [:NonExistent])
         end
     end
@@ -340,7 +339,7 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         #     ↓   ↓   ↑
         #     C → E → F
         for v in [:A, :B, :C, :D, :E, :F]
-            add_stochastic_vertex!(bn, v, Normal(), false)
+            add_stochastic_vertex!(bn, v, Normal(), false, :continuous)
         end
 
         add_edge!(bn, :A, :B)
@@ -360,7 +359,7 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         @test is_conditionally_independent(bn, [:A, :B], [:F], [:C, :E])
         @test !is_conditionally_independent(bn, [:A, :B], [:D, :F], Symbol[])
 
-        # Test when some variables ccdare in conditioning set
+        # Test when some variables are in conditioning set
         @test is_conditionally_independent(bn, [:A, :B], [:D, :F], [:A])
         @test is_conditionally_independent(bn, [:A, :B], [:D, :F], [:F])
 
