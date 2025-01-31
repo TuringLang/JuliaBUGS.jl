@@ -41,6 +41,8 @@ function BayesianNetwork{V}() where {V}
 end
 
 """
+    add_stochastic_vertex!(bn::BayesianNetwork{V,T}, name::V, dist::Any, node_type::Symbol; is_observed::Bool=false) where {V,T}
+
 Add a stochastic vertex with name `name`, a distribution object/function `dist`,
 and a declared node_type (`:discrete` or `:continuous`).
 """
@@ -64,6 +66,8 @@ function add_stochastic_vertex!(
 end
 
 """
+    add_deterministic_vertex!(bn::BayesianNetwork{V,T}, name::V, f::F) where {T,V,F}
+
 Add a deterministic vertex.
 """
 function add_deterministic_vertex!(bn::BayesianNetwork{V,T}, name::V, f::F)::T where {T,V,F}
@@ -80,6 +84,8 @@ function add_deterministic_vertex!(bn::BayesianNetwork{V,T}, name::V, f::F)::T w
 end
 
 """
+    add_edge!(bn::BayesianNetwork{V,T}, from::V, to::V) where {T,V}
+
 Add a directed edge from `from` -> `to`.
 """
 function add_edge!(bn::BayesianNetwork{V,T}, from::V, to::V)::Bool where {T,V}
