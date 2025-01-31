@@ -8,7 +8,7 @@ struct NodeInfo{F}
 end
 
 const BUGSGraph = MetaGraph{
-    Int,Graphs.SimpleDiGraph{Int},<:VarName,<:NodeInfo,Nothing,Nothing,<:Any,Float64
+    Int, Graphs.SimpleDiGraph{Int}, <:VarName, <:NodeInfo, Nothing, Nothing, <:Any, Float64
 }
 
 """

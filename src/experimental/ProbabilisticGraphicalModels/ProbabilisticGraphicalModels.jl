@@ -3,6 +3,8 @@ module ProbabilisticGraphicalModels
 using BangBang
 using Graphs
 using Distributions
+using JuliaBUGS
+using JuliaBUGS: BUGSGraph, VarName
 
 include("bayesian_network.jl")
 include("conditioning.jl")
