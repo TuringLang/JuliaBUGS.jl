@@ -1,10 +1,8 @@
-struct NodeInfo{F,F2}
+struct NodeInfo{F}
     is_stochastic::Bool
     is_observed::Bool
     node_function_expr::Expr
     node_function::F
-    node_function_with_effect_expr::Expr
-    node_function_with_effect::F2
     node_args::Tuple{Vararg{Symbol}}
     loop_vars::NamedTuple
 end

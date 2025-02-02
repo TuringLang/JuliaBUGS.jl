@@ -6,7 +6,6 @@ using Accessors
 using BangBang
 using Bijectors: Bijectors
 using Distributions
-using FunctionWrappers
 using Graphs, MetaGraphsNext
 using LinearAlgebra
 using LogDensityProblems, LogDensityProblemsAD
