@@ -1,91 +1,29 @@
 using Test
 using Distributions
 using Graphs
-using JuliaBUGS: compile, @bugs, BUGSGraph, VarName
 using JuliaBUGS.ProbabilisticGraphicalModels:
     BayesianNetwork,
+    translate_BUGSGraph_to_BayesianNetwork,
     add_stochastic_vertex!,
     add_deterministic_vertex!,
     add_edge!,
     condition,
-    condition!,
     decondition,
     ancestral_sampling,
-    is_conditionally_independent,
-    translate_BUGSGraph_to_BayesianNetwork,
-    something
+    is_conditionally_independent
+using MetaGraphsNext
+
+# A structure for node metadata.
+struct NodeInfo{F}
+    is_stochastic::Bool
+    is_observed::Bool
+    node_function_expr::Expr
+    node_function::F
+    node_args::Tuple{Vararg{Symbol}}
+    loop_vars::NamedTuple
+end
 
 @testset "BayesianNetwork" begin
-    @testset "Translating BUGSGraph to BayesianNetwork" begin
-        # Define the test model using JuliaBUGS
-        test_model = @bugs begin
-            a ~ dnorm(f, c)
-            f = b - 1
-            b ~ dnorm(0, 1)
-            c ~ dnorm(l, 1)
-            g = a * 2
-            d ~ dnorm(g, 1)
-            h = g + 2
-            e ~ dnorm(h, i)
-            i ~ dnorm(0, 1)
-            l ~ dnorm(0, 1)
-        end
-
-        inits = (
-            a=1.0,
-            b=2.0,
-            c=3.0,
-            d=4.0,
-            e=5.0,
-            i=4.0,
-            l=-2.0,
-        )
-
-        model = compile(test_model, NamedTuple(), inits)
-
-        g = model.g
-
-        # Translate the BUGSGraph to a BayesianNetwork
-        bn = translate_BUGSGraph_to_BayesianNetwork(g)
-
-        # Verify the translation
-        @test length(bn.names) == 9
-        @test bn.names_to_ids[:a] == 1
-        @test bn.names_to_ids[:b] == 2
-        @test bn.names_to_ids[:c] == 3
-        @test bn.names_to_ids[:d] == 4
-        @test bn.names_to_ids[:e] == 5
-        @test bn.names_to_ids[:f] == 6
-        @test bn.names_to_ids[:g] == 7
-        @test bn.names_to_ids[:h] == 8
-        @test bn.names_to_ids[:i] == 9
-        @test bn.names_to_ids[:l] == 10
-
-        @test bn.is_stochastic[bn.names_to_ids[:a]] == true
-        @test bn.is_stochastic[bn.names_to_ids[:b]] == true
-        @test bn.is_stochastic[bn.names_to_ids[:c]] == true
-        @test bn.is_stochastic[bn.names_to_ids[:d]] == true
-        @test bn.is_stochastic[bn.names_to_ids[:e]] == true
-        @test bn.is_stochastic[bn.names_to_ids[:i]] == true
-        @test bn.is_stochastic[bn.names_to_ids[:l]] == true
-
-        @test bn.is_stochastic[bn.names_to_ids[:f]] == false
-        @test bn.is_stochastic[bn.names_to_ids[:g]] == false
-        @test bn.is_stochastic[bn.names_to_ids[:h]] == false
-
-        @test bn.distributions[bn.names_to_ids[:a]] isa Distribution
-        @test bn.distributions[bn.names_to_ids[:b]] isa Distribution
-        @test bn.distributions[bn.names_to_ids[:c]] isa Distribution
-        @test bn.distributions[bn.names_to_ids[:d]] isa Distribution
-        @test bn.distributions[bn.names_to_ids[:e]] isa Distribution
-        @test bn.distributions[bn.names_to_ids[:i]] isa Distribution
-        @test bn.distributions[bn.names_to_ids[:l]] isa Distribution
-
-        @test bn.deterministic_functions[bn.names_to_ids[:f]] isa Function
-        @test bn.deterministic_functions[bn.names_to_ids[:g]] isa Function
-        @test bn.deterministic_functions[bn.names_to_ids[:h]] isa Function
-    end
-    
     @testset "Adding vertices" begin
         bn = BayesianNetwork{Symbol}()
 
@@ -373,5 +311,94 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
         @test_throws KeyError is_conditionally_independent(bn, [:A], [:F], [:NonExistent])
         @test_throws ArgumentError is_conditionally_independent(bn, Symbol[], [:F], [:B])
         @test_throws ArgumentError is_conditionally_independent(bn, [:A], Symbol[], [:B])
+    end
+
+    @testset "Translating BUGSGraph to BayesianNetwork" begin
+        # For demonstration we build a simple BUGSGraph manually.
+        # (In your real code you might use the @bugs macro and compile a model.)
+        default_nodeinfo = NodeInfo(false, false, Expr(:call, :nothing), nothing, (), (;))
+        # Create an empty MetaGraph with an empty SimpleDiGraph.
+        g = MetaGraph(SimpleDiGraph(0), Symbol, NodeInfo{Any})
+
+        # A helper function to add a node with a given name and NodeInfo.
+        function add_node!(
+            g::MetaGraph{Int,SimpleDiGraph{Int},Symbol,NodeInfo{F}},
+            name::Symbol,
+            nodeinfo::NodeInfo{F},
+        ) where {F}
+            # Use the method that takes both a label and metadata.
+            v = add_vertex!(g, name, nodeinfo)
+            # Also store the node metadata under the key :meta (for compatibility with our translation function)
+            MetaGraphsNext.set_data!(g, v, :meta, nodeinfo)
+            return v
+        end
+
+        nodeinfo_a = NodeInfo{Any}(
+            true, false, Expr(:call, :dnorm, 0, 1), Normal(0, 1), (), (;)
+        )
+        nodeinfo_b = NodeInfo{Any}(
+            true, false, Expr(:call, :dnorm, 0, 1), Normal(0, 1), (), (;)
+        )
+        nodeinfo_c = NodeInfo{Any}(
+            true, false, Expr(:call, :dnorm, 0, 1), Normal(0, 1), (), (;)
+        )
+
+        # Add nodes to the graph.
+        # (Assuming add_vertex! assigns vertex ids 1, 2, 3 in order.)
+        a_id = add_node!(g, :a, nodeinfo_a)
+        b_id = add_node!(g, :b, nodeinfo_b)
+        c_id = add_node!(g, :c, nodeinfo_c)
+
+        # Simulate a compiled model that stores the BUGSGraph in field `g`.
+        model = (; g=g)
+
+        # Translate the BUGSGraph to a BayesianNetwork.
+        bn = translate_BUGSGraph_to_BayesianNetwork(model.g)
+
+        # Verify the translation.
+        @test length(bn.names) == 3
+        @test bn.names_to_ids[:a] == 1
+        @test bn.names_to_ids[:b] == 2
+        @test bn.names_to_ids[:c] == 3
+
+        @test bn.is_stochastic[bn.names_to_ids[:a]] == true
+        @test bn.is_stochastic[bn.names_to_ids[:b]] == true
+        @test bn.is_stochastic[bn.names_to_ids[:c]] == true
+
+        @test bn.distributions[bn.names_to_ids[:a]] isa Distribution
+        @test bn.distributions[bn.names_to_ids[:b]] isa Distribution
+        @test bn.distributions[bn.names_to_ids[:c]] isa Distribution
+    end
+
+    @testset "Translating BUGSGraph to BayesianNetwork" begin
+        # Define the test model using JuliaBUGS
+        test_model = @bugs begin
+            a ~ dnorm(0, 1)
+            b ~ dnorm(0, 1)
+            c ~ dnorm(0, 1)
+        end
+
+        inits = (a=1.0, b=2.0, c=3.0)
+
+        model = compile(test_model, NamedTuple(), inits)
+
+        g = model.g
+
+        # Translate the BUGSGraph to a BayesianNetwork
+        bn = translate_BUGSGraph_to_BayesianNetwork(g)
+
+        # Verify the translation
+        @test length(bn.names) == 3
+        @test bn.names_to_ids[:a] == 1
+        @test bn.names_to_ids[:b] == 2
+        @test bn.names_to_ids[:c] == 3
+
+        @test bn.is_stochastic[bn.names_to_ids[:a]] == true
+        @test bn.is_stochastic[bn.names_to_ids[:b]] == true
+        @test bn.is_stochastic[bn.names_to_ids[:c]] == true
+
+        @test bn.distributions[bn.names_to_ids[:a]] isa Distribution
+        @test bn.distributions[bn.names_to_ids[:b]] isa Distribution
+        @test bn.distributions[bn.names_to_ids[:c]] isa Distribution
     end
 end

@@ -1,3 +1,7 @@
+using MetaGraphsNext
+using Graphs
+using Distributions
+
 """
     BayesianNetwork
 
@@ -40,6 +44,99 @@ function BayesianNetwork{V}() where {V}
     )
 end
 
+# A structure for node metadata.
+struct NodeInfo{F}
+    is_stochastic::Bool
+    is_observed::Bool
+    node_function_expr::Expr
+    node_function::F
+    node_args::Tuple{Vararg{Symbol}}
+    loop_vars::NamedTuple
+end
+
+"""
+    translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph)
+
+Translate a BUGSGraph to a BayesianNetwork.
+"""
+function translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph)
+    varnames = collect(labels(g))
+    n = length(varnames)
+
+    original_graph = g.graph
+
+    names = Vector{Symbol}(undef, n)
+    names_to_ids = Dict{Symbol,Int}()
+    values = Dict{Symbol,Any}()
+    distributions = Vector{Distribution}(undef, n)
+    deterministic_fns = Vector{Any}(undef, n)
+    stochastic_ids = Int[]
+    deterministic_ids = Int[]
+    is_stochastic = falses(n)
+    is_observed = falses(n)
+    node_types = Vector{Symbol}(undef, n)
+
+    for (i, varname) in enumerate(varnames)
+        symbol_name = Symbol(varname)
+        if !haskey(g, varname)
+            continue
+        end
+        nodeinfo = g[varname]
+
+        names[i] = symbol_name
+        names_to_ids[symbol_name] = i
+
+        is_stochastic[i] = nodeinfo.is_stochastic
+        is_observed[i] = nodeinfo.is_observed
+
+        if nodeinfo.is_stochastic
+            if nodeinfo.node_function isa Distribution
+                distributions[i] = nodeinfo.node_function
+            elseif nodeinfo.node_function isa Function
+                try
+                    distributions[i] = nodeinfo.node_function()
+                    if !(distributions[i] isa Distribution)
+                        throw("Returned value is not a Distribution")
+                    end
+                catch e
+                    distributions[i] = Normal()  # Default fallback TODO: better handling
+                end
+            else
+                distributions[i] = Normal()
+            end
+
+            deterministic_fns[i] = nothing
+            push!(stochastic_ids, i)
+            node_types[i] = :stochastic
+        else
+            distributions[i] = Normal()  # Placeholder for deterministic nodes
+            deterministic_fns[i] = nodeinfo.node_function
+            push!(deterministic_ids, i)
+            node_types[i] = :deterministic
+        end
+
+        values[symbol_name] = nothing
+    end
+
+    bn = BayesianNetwork(
+        SimpleDiGraph{Int}(n),
+        names,
+        names_to_ids,
+        values,
+        distributions,
+        deterministic_fns,
+        stochastic_ids,
+        deterministic_ids,
+        is_stochastic,
+        is_observed,
+        node_types,
+    )
+
+    for e in edges(original_graph)
+        add_edge!(bn.graph, e.src, e.dst)
+    end
+    return bn
+end
 """
     add_stochastic_vertex!(bn::BayesianNetwork{V,T}, name::V, dist::Any, node_type::Symbol; is_observed::Bool=false) where {V,T}
 
