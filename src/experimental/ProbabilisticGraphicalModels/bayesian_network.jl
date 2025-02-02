@@ -74,19 +74,19 @@ function translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph; init=Dict{Symbol,A
     original_graph = g.graph
 
     # Preallocate arrays/dictionaries.
-    names             = Vector{Symbol}(undef, n)
-    names_to_ids      = Dict{Symbol, Int}()
-    values            = Dict{Symbol, Any}()
-    distributions     = Vector{Distribution}(undef, n)
+    names = Vector{Symbol}(undef, n)
+    names_to_ids = Dict{Symbol,Int}()
+    values = Dict{Symbol,Any}()
+    distributions = Vector{Distribution}(undef, n)
     deterministic_fns = Vector{Any}(undef, n)
-    stochastic_ids    = Int[]
+    stochastic_ids = Int[]
     deterministic_ids = Int[]
-    is_stochastic     = falses(n)
-    is_observed       = falses(n)
-    node_types        = Vector{Symbol}(undef, n)
+    is_stochastic = falses(n)
+    is_observed = falses(n)
+    node_types = Vector{Symbol}(undef, n)
 
     # Cache for deterministic function expressions.
-    cache = Dict{String, Any}()
+    cache = Dict{String,Any}()
 
     for (i, varname) in enumerate(varnames)
         let symbol_name = Symbol(varname)
@@ -100,7 +100,7 @@ function translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph; init=Dict{Symbol,A
             values[symbol_name] = get(init, symbol_name, nothing)
 
             is_stochastic[i] = nodeinfo.is_stochastic
-            is_observed[i]   = nodeinfo.is_observed
+            is_observed[i] = nodeinfo.is_observed
 
             if nodeinfo.is_stochastic
                 if nodeinfo.node_function isa Distribution
@@ -108,7 +108,8 @@ function translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph; init=Dict{Symbol,A
                     println("nodeinfo.node_function is a Distribution")
                     println(distributions[i])
                 elseif nodeinfo.node_function isa Function
-                    if nodeinfo.node_function_expr.head == :call && nodeinfo.node_function_expr.args[1] == :dnorm
+                    if nodeinfo.node_function_expr.head == :call &&
+                        nodeinfo.node_function_expr.args[1] == :dnorm
                         # Evaluate the literal parameters.
                         μ = eval(nodeinfo.node_function_expr.args[2])
                         σ = eval(nodeinfo.node_function_expr.args[3])
@@ -163,7 +164,7 @@ function translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph; init=Dict{Symbol,A
         deterministic_ids,
         is_stochastic,
         is_observed,
-        node_types
+        node_types,
     )
 
     # Add edges using the BayesianNetwork's mapping.

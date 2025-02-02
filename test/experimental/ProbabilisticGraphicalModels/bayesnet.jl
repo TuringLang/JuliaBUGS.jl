@@ -378,30 +378,30 @@ end
             b ~ dnorm(0, 1)
             c ~ dnorm(0, 1)
         end
-    
+
         inits = (a=1.0, b=2.0, c=3.0)
-    
+
         model = compile(test_model, NamedTuple(), inits)
-    
+
         g = model.g
-    
+
         # Translate the BUGSGraph to a BayesianNetwork
         bn = translate_BUGSGraph_to_BayesianNetwork(g)
-    
+
         # Verify the translation
         @test length(bn.names) == 3
         @test bn.names_to_ids[:a] == 1
         @test bn.names_to_ids[:b] == 2
         @test bn.names_to_ids[:c] == 3
-    
+
         @test bn.is_stochastic[bn.names_to_ids[:a]] == true
         @test bn.is_stochastic[bn.names_to_ids[:b]] == true
         @test bn.is_stochastic[bn.names_to_ids[:c]] == true
-    
+
         @test bn.distributions[bn.names_to_ids[:a]] isa Normal
         @test bn.distributions[bn.names_to_ids[:b]] isa Normal
         @test bn.distributions[bn.names_to_ids[:c]] isa Normal
-    
+
         @test bn.distributions[bn.names_to_ids[:a]] == Normal(0, 1)
         @test bn.distributions[bn.names_to_ids[:b]] == Normal(0, 1)
         @test bn.distributions[bn.names_to_ids[:c]] == Normal(0, 1)
@@ -414,11 +414,7 @@ end
             c = a + b
         end
 
-        complex_inits = (
-            a=1.0,
-            b=2.0,
-            c=3.0,
-        )
+        complex_inits = (a=1.0, b=2.0, c=3.0)
 
         complex_compiled_model = compile(complex_model, NamedTuple(), complex_inits)
 
