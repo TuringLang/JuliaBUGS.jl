@@ -12,6 +12,7 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     ancestral_sampling,
     is_conditionally_independent
 using MetaGraphsNext
+using JuliaBUGS: @bugs, compile
 
 # A structure for node metadata.
 struct NodeInfo{F}
@@ -377,28 +378,67 @@ end
             b ~ dnorm(0, 1)
             c ~ dnorm(0, 1)
         end
-
+    
         inits = (a=1.0, b=2.0, c=3.0)
-
+    
         model = compile(test_model, NamedTuple(), inits)
-
+    
         g = model.g
-
+    
         # Translate the BUGSGraph to a BayesianNetwork
         bn = translate_BUGSGraph_to_BayesianNetwork(g)
-
+    
         # Verify the translation
         @test length(bn.names) == 3
         @test bn.names_to_ids[:a] == 1
         @test bn.names_to_ids[:b] == 2
         @test bn.names_to_ids[:c] == 3
-
+    
         @test bn.is_stochastic[bn.names_to_ids[:a]] == true
         @test bn.is_stochastic[bn.names_to_ids[:b]] == true
         @test bn.is_stochastic[bn.names_to_ids[:c]] == true
+    
+        @test bn.distributions[bn.names_to_ids[:a]] isa Normal
+        @test bn.distributions[bn.names_to_ids[:b]] isa Normal
+        @test bn.distributions[bn.names_to_ids[:c]] isa Normal
+    
+        @test bn.distributions[bn.names_to_ids[:a]] == Normal(0, 1)
+        @test bn.distributions[bn.names_to_ids[:b]] == Normal(0, 1)
+        @test bn.distributions[bn.names_to_ids[:c]] == Normal(0, 1)
+    end
+    @testset "Translating Complex BUGSGraph to BayesianNetwork" begin
+        # Define a more complex test model using JuliaBUGS
+        complex_model = @bugs begin
+            a ~ dnorm(0, 1)
+            b ~ dnorm(1, 1)
+            c = a + b
+        end
 
-        @test bn.distributions[bn.names_to_ids[:a]] isa Distribution
-        @test bn.distributions[bn.names_to_ids[:b]] isa Distribution
-        @test bn.distributions[bn.names_to_ids[:c]] isa Distribution
+        complex_inits = (
+            a=1.0,
+            b=2.0,
+            c=3.0,
+        )
+
+        complex_compiled_model = compile(complex_model, NamedTuple(), complex_inits)
+
+        complex_g = complex_compiled_model.g
+
+        # Translate the complex BUGSGraph to a BayesianNetwork
+        complex_bn = translate_BUGSGraph_to_BayesianNetwork(complex_g)
+
+        # Verify the translation
+        @test length(complex_bn.names) == 3
+        @test complex_bn.names_to_ids[:a] == 1
+        @test complex_bn.names_to_ids[:b] == 2
+        @test complex_bn.names_to_ids[:c] == 3
+
+        @test complex_bn.is_stochastic[complex_bn.names_to_ids[:a]] == true
+        @test complex_bn.is_stochastic[complex_bn.names_to_ids[:b]] == true
+        @test complex_bn.is_stochastic[complex_bn.names_to_ids[:c]] == false
+
+        @test complex_bn.distributions[complex_bn.names_to_ids[:a]] isa Normal
+        @test complex_bn.distributions[complex_bn.names_to_ids[:b]] isa Normal
+        @test complex_bn.deterministic_functions[complex_bn.names_to_ids[:c]] isa Function
     end
 end

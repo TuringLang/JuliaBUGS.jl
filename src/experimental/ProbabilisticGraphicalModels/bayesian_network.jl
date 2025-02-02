@@ -55,70 +55,104 @@ struct NodeInfo{F}
 end
 
 """
-    translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph)
+    translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph; init=Dict{Symbol,Any}())
 
-Translate a BUGSGraph to a BayesianNetwork.
+Translates a BUGSGraph (with node metadata stored in NodeInfo) into a BayesianNetwork.
+For stochastic nodes, if the node function is a function and its expression is a call to dnorm,
+the parameters are extracted (using `eval`) so that, for example, a node defined as
+`b ~ dnorm(1, 1)` yields `Normal(1, 1)`.
+For deterministic nodes, an anonymous function is constructed from the stored expression and node arguments.
+A cache ensures that identical expressions yield the same function object.
+
+The optional keyword argument `init` is a dictionary mapping variable symbols (e.g. :a) to their initial values.
+If not provided, it defaults to an empty dictionary.
 """
-function translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph)
+function translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph; init=Dict{Symbol,Any}())
+    # Retrieve variable labels (stored as VarNames) from g.
     varnames = collect(labels(g))
     n = length(varnames)
-
     original_graph = g.graph
 
-    names = Vector{Symbol}(undef, n)
-    names_to_ids = Dict{Symbol,Int}()
-    values = Dict{Symbol,Any}()
-    distributions = Vector{Distribution}(undef, n)
+    # Preallocate arrays/dictionaries.
+    names             = Vector{Symbol}(undef, n)
+    names_to_ids      = Dict{Symbol, Int}()
+    values            = Dict{Symbol, Any}()
+    distributions     = Vector{Distribution}(undef, n)
     deterministic_fns = Vector{Any}(undef, n)
-    stochastic_ids = Int[]
+    stochastic_ids    = Int[]
     deterministic_ids = Int[]
-    is_stochastic = falses(n)
-    is_observed = falses(n)
-    node_types = Vector{Symbol}(undef, n)
+    is_stochastic     = falses(n)
+    is_observed       = falses(n)
+    node_types        = Vector{Symbol}(undef, n)
+
+    # Cache for deterministic function expressions.
+    cache = Dict{String, Any}()
 
     for (i, varname) in enumerate(varnames)
-        symbol_name = Symbol(varname)
-        if !haskey(g, varname)
-            continue
-        end
-        nodeinfo = g[varname]
-
-        names[i] = symbol_name
-        names_to_ids[symbol_name] = i
-
-        is_stochastic[i] = nodeinfo.is_stochastic
-        is_observed[i] = nodeinfo.is_observed
-
-        if nodeinfo.is_stochastic
-            if nodeinfo.node_function isa Distribution
-                distributions[i] = nodeinfo.node_function
-            elseif nodeinfo.node_function isa Function
-                try
-                    distributions[i] = nodeinfo.node_function()
-                    if !(distributions[i] isa Distribution)
-                        throw("Returned value is not a Distribution")
-                    end
-                catch e
-                    distributions[i] = Normal()  # Default fallback TODO: better handling
-                end
-            else
-                distributions[i] = Normal()
+        let symbol_name = Symbol(varname)
+            if !haskey(g, varname)
+                continue
             end
+            local nodeinfo = g[varname]
 
-            deterministic_fns[i] = nothing
-            push!(stochastic_ids, i)
-            node_types[i] = :stochastic
-        else
-            distributions[i] = Normal()  # Placeholder for deterministic nodes
-            deterministic_fns[i] = nodeinfo.node_function
-            push!(deterministic_ids, i)
-            node_types[i] = :deterministic
+            names[i] = symbol_name
+            names_to_ids[symbol_name] = i
+            values[symbol_name] = get(init, symbol_name, nothing)
+
+            is_stochastic[i] = nodeinfo.is_stochastic
+            is_observed[i]   = nodeinfo.is_observed
+
+            if nodeinfo.is_stochastic
+                if nodeinfo.node_function isa Distribution
+                    distributions[i] = nodeinfo.node_function
+                    println("nodeinfo.node_function is a Distribution")
+                    println(distributions[i])
+                elseif nodeinfo.node_function isa Function
+                    if nodeinfo.node_function_expr.head == :call && nodeinfo.node_function_expr.args[1] == :dnorm
+                        # Evaluate the literal parameters.
+                        μ = eval(nodeinfo.node_function_expr.args[2])
+                        σ = eval(nodeinfo.node_function_expr.args[3])
+
+                        distributions[i] = Normal(μ, σ)
+                    else
+                        try
+                            distributions[i] = nodeinfo.node_function()
+                            if !(distributions[i] isa Distribution)
+                                throw("Returned value is not a Distribution")
+                            end
+                        catch
+                            distributions[i] = Normal()
+                        end
+                    end
+                else
+                    distributions[i] = Normal()
+                end
+                deterministic_fns[i] = nothing
+                push!(stochastic_ids, i)
+                node_types[i] = :stochastic
+            else
+                distributions[i] = Normal()  # Placeholder for deterministic nodes.
+                if length(nodeinfo.node_function_expr.args) >= 2
+                    local body_expr = nodeinfo.node_function_expr.args[2]
+                else
+                    error("Deterministic node expression is malformed.")
+                end
+                # Construct an anonymous function, e.g., (a, b) -> a + b, using node_args.
+                local fn_expr = Expr(:->, Expr(:tuple, nodeinfo.node_args...), body_expr)
+                local s = string(fn_expr)
+                if haskey(cache, s)
+                    deterministic_fns[i] = cache[s]
+                else
+                    deterministic_fns[i] = eval(fn_expr)
+                    cache[s] = deterministic_fns[i]
+                end
+                push!(deterministic_ids, i)
+                node_types[i] = :deterministic
+            end
         end
-
-        values[symbol_name] = nothing
     end
 
-    bn = BayesianNetwork(
+    local bn = BayesianNetwork(
         SimpleDiGraph{Int}(n),
         names,
         names_to_ids,
@@ -129,14 +163,21 @@ function translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph)
         deterministic_ids,
         is_stochastic,
         is_observed,
-        node_types,
+        node_types
     )
 
+    # Add edges using the BayesianNetwork's mapping.
     for e in edges(original_graph)
-        add_edge!(bn.graph, e.src, e.dst)
+        let src_name = bn.names[e.src]
+            let dst_name = bn.names[e.dst]
+                add_edge!(bn, src_name, dst_name)
+            end
+        end
     end
+
     return bn
 end
+
 """
     add_stochastic_vertex!(bn::BayesianNetwork{V,T}, name::V, dist::Any, node_type::Symbol; is_observed::Bool=false) where {V,T}
 
