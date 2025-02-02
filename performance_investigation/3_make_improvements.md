@@ -452,7 +452,6 @@ function _new_eval(evaluation_env, new_node_functions_fws, eval_loop_var_vals, e
     @inbounds for i in eachindex(new_node_functions_fws)
         vn = model.flattened_graph_node_data.sorted_nodes[i]
         evaluation_env, logp_i = new_node_functions_fws[i](evaluation_env, eval_loop_var_vals[i], eval_vn_indices_vals[i], flattened_values, eval_start_idx_vals[i], eval_end_idx_vals[i])
-        @info vn, logp_i
         logp += logp_i
     end
     return logp
@@ -485,3 +484,7 @@ BenchmarkTools.Trial: 10000 samples with 1 evaluation per sample.
 
  Memory estimate: 120.42 KiB, allocs estimate: 1468.
 ```
+
+## TODOs
+* Verify that the types are indeed stable for the wrapped functions
+* investigate why benchmarking a FunctionWrapper directly is slower than benchmarking the wrapped function (overheads)
