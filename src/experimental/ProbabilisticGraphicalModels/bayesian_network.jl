@@ -44,16 +44,6 @@ function BayesianNetwork{V}() where {V}
     )
 end
 
-# A structure for node metadata.
-struct NodeInfo{F}
-    is_stochastic::Bool
-    is_observed::Bool
-    node_function_expr::Expr
-    node_function::F
-    node_args::Tuple{Vararg{Symbol}}
-    loop_vars::NamedTuple
-end
-
 """
     translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph; init=Dict{Symbol,Any}())
 
@@ -89,11 +79,11 @@ function translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph; init=Dict{Symbol,A
     cache = Dict{String,Any}()
 
     for (i, varname) in enumerate(varnames)
-        let symbol_name = Symbol(varname)
+        let symbol_name = Symbol(varname) #dont need let
             if !haskey(g, varname)
                 continue
             end
-            local nodeinfo = g[varname]
+            local nodeinfo = g[varname] # dont need local
 
             names[i] = symbol_name
             names_to_ids[symbol_name] = i
