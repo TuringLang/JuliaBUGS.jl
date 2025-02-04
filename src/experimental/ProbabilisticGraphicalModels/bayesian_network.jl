@@ -72,10 +72,6 @@ function translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph)
         nodeinfo = g[varname]
         names[i] = symbol_name
         names_to_ids[symbol_name] = i
-        println(symbol_name)
-        println(typeof(symbol_name))
-        println(names_to_ids[symbol_name])
-        println(typeof(names_to_ids[symbol_name]))
         is_stochastic[i] = nodeinfo.is_stochastic
         is_observed[i] = nodeinfo.is_observed
 
