@@ -12,17 +12,7 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     ancestral_sampling,
     is_conditionally_independent
 using MetaGraphsNext
-using JuliaBUGS: @bugs, compile
-
-# A structure for node metadata.
-struct NodeInfo{F}
-    is_stochastic::Bool
-    is_observed::Bool
-    node_function_expr::Expr
-    node_function::F
-    node_args::Tuple{Vararg{Symbol}}
-    loop_vars::NamedTuple
-end
+using JuliaBUGS: @bugs, compile, NodeInfo, VarName
 
 @testset "BayesianNetwork" begin
     @testset "Adding vertices" begin
@@ -315,63 +305,6 @@ end
     end
 
     @testset "Translating BUGSGraph to BayesianNetwork" begin
-        # For demonstration we build a simple BUGSGraph manually.
-        # (In your real code you might use the @bugs macro and compile a model.)
-        default_nodeinfo = NodeInfo(false, false, Expr(:call, :nothing), nothing, (), (;))
-        # Create an empty MetaGraph with an empty SimpleDiGraph.
-        g = MetaGraph(SimpleDiGraph(0), Symbol, NodeInfo{Any})
-
-        # A helper function to add a node with a given name and NodeInfo.
-        function add_node!(
-            g::MetaGraph{Int,SimpleDiGraph{Int},Symbol,NodeInfo{F}},
-            name::Symbol,
-            nodeinfo::NodeInfo{F},
-        ) where {F}
-            # Use the method that takes both a label and metadata.
-            v = add_vertex!(g, name, nodeinfo)
-            # Also store the node metadata under the key :meta (for compatibility with our translation function)
-            MetaGraphsNext.set_data!(g, v, :meta, nodeinfo)
-            return v
-        end
-
-        nodeinfo_a = NodeInfo{Any}(
-            true, false, Expr(:call, :dnorm, 0, 1), Normal(0, 1), (), (;)
-        )
-        nodeinfo_b = NodeInfo{Any}(
-            true, false, Expr(:call, :dnorm, 0, 1), Normal(0, 1), (), (;)
-        )
-        nodeinfo_c = NodeInfo{Any}(
-            true, false, Expr(:call, :dnorm, 0, 1), Normal(0, 1), (), (;)
-        )
-
-        # Add nodes to the graph.
-        # (Assuming add_vertex! assigns vertex ids 1, 2, 3 in order.)
-        a_id = add_node!(g, :a, nodeinfo_a)
-        b_id = add_node!(g, :b, nodeinfo_b)
-        c_id = add_node!(g, :c, nodeinfo_c)
-
-        # Simulate a compiled model that stores the BUGSGraph in field `g`.
-        model = (; g=g)
-
-        # Translate the BUGSGraph to a BayesianNetwork.
-        bn = translate_BUGSGraph_to_BayesianNetwork(model.g)
-
-        # Verify the translation.
-        @test length(bn.names) == 3
-        @test bn.names_to_ids[:a] == 1
-        @test bn.names_to_ids[:b] == 2
-        @test bn.names_to_ids[:c] == 3
-
-        @test bn.is_stochastic[bn.names_to_ids[:a]] == true
-        @test bn.is_stochastic[bn.names_to_ids[:b]] == true
-        @test bn.is_stochastic[bn.names_to_ids[:c]] == true
-
-        @test bn.distributions[bn.names_to_ids[:a]] isa Distribution
-        @test bn.distributions[bn.names_to_ids[:b]] isa Distribution
-        @test bn.distributions[bn.names_to_ids[:c]] isa Distribution
-    end
-
-    @testset "Translating BUGSGraph to BayesianNetwork" begin
         # Define the test model using JuliaBUGS
         test_model = @bugs begin
             a ~ dnorm(0, 1)
@@ -390,21 +323,17 @@ end
 
         # Verify the translation
         @test length(bn.names) == 3
-        @test bn.names_to_ids[:a] == 1
-        @test bn.names_to_ids[:b] == 2
-        @test bn.names_to_ids[:c] == 3
+        @test bn.names_to_ids[VarName(:a)] == 1
+        @test bn.names_to_ids[VarName(:b)] == 2
+        @test bn.names_to_ids[VarName(:c)] == 3
 
-        @test bn.is_stochastic[bn.names_to_ids[:a]] == true
-        @test bn.is_stochastic[bn.names_to_ids[:b]] == true
-        @test bn.is_stochastic[bn.names_to_ids[:c]] == true
+        @test bn.is_stochastic[bn.names_to_ids[VarName(:a)]] == true
+        @test bn.is_stochastic[bn.names_to_ids[VarName(:b)]] == true
+        @test bn.is_stochastic[bn.names_to_ids[VarName(:c)]] == true
 
-        @test bn.distributions[bn.names_to_ids[:a]] isa Normal
-        @test bn.distributions[bn.names_to_ids[:b]] isa Normal
-        @test bn.distributions[bn.names_to_ids[:c]] isa Normal
-
-        @test bn.distributions[bn.names_to_ids[:a]] == Normal(0, 1)
-        @test bn.distributions[bn.names_to_ids[:b]] == Normal(0, 1)
-        @test bn.distributions[bn.names_to_ids[:c]] == Normal(0, 1)
+        @test bn.distributions[bn.names_to_ids[VarName(:a)]] isa Normal
+        @test bn.distributions[bn.names_to_ids[VarName(:b)]] isa Normal
+        @test bn.distributions[bn.names_to_ids[VarName(:c)]] isa Normal
     end
     @testset "Translating Complex BUGSGraph to BayesianNetwork" begin
         # Define a more complex test model using JuliaBUGS
@@ -425,16 +354,17 @@ end
 
         # Verify the translation
         @test length(complex_bn.names) == 3
-        @test complex_bn.names_to_ids[:a] == 1
-        @test complex_bn.names_to_ids[:b] == 2
-        @test complex_bn.names_to_ids[:c] == 3
+        @test complex_bn.names_to_ids[VarName(:a)] == 1
+        @test complex_bn.names_to_ids[VarName(:b)] == 2
+        @test complex_bn.names_to_ids[VarName(:c)] == 3
 
-        @test complex_bn.is_stochastic[complex_bn.names_to_ids[:a]] == true
-        @test complex_bn.is_stochastic[complex_bn.names_to_ids[:b]] == true
-        @test complex_bn.is_stochastic[complex_bn.names_to_ids[:c]] == false
+        @test complex_bn.is_stochastic[complex_bn.names_to_ids[VarName(:a)]] == true
+        @test complex_bn.is_stochastic[complex_bn.names_to_ids[VarName(:b)]] == true
+        @test complex_bn.is_stochastic[complex_bn.names_to_ids[VarName(:c)]] == false
 
-        @test complex_bn.distributions[complex_bn.names_to_ids[:a]] isa Normal
-        @test complex_bn.distributions[complex_bn.names_to_ids[:b]] isa Normal
-        @test complex_bn.deterministic_functions[complex_bn.names_to_ids[:c]] isa Function
+        @test complex_bn.distributions[complex_bn.names_to_ids[VarName(:a)]] isa Normal
+        @test complex_bn.distributions[complex_bn.names_to_ids[VarName(:b)]] isa Normal
+        @test complex_bn.deterministic_functions[complex_bn.names_to_ids[VarName(:c)]] isa
+            Function
     end
 end
