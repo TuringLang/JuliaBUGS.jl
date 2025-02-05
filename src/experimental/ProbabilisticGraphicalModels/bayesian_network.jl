@@ -1,7 +1,3 @@
-using MetaGraphsNext
-using Graphs
-using Distributions
-
 """
     BayesianNetwork
 
