@@ -72,11 +72,9 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph)
 
         if nodeinfo.is_stochastic
             distributions[i] = nodeinfo.node_function((), ())
-            deterministic_fns[i] = nothing
             push!(stochastic_ids, i)
             node_types[i] = :stochastic
         else
-            distributions[i] = Normal() #TODO: Change it to nothing/undef after the definition changes
             deterministic_fns[i] = nodeinfo.node_function
             push!(deterministic_ids, i)
             node_types[i] = :deterministic

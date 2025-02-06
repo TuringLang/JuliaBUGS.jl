@@ -303,7 +303,6 @@ using JuliaBUGS: @bugs, compile, NodeInfo, VarName
         @test_throws ArgumentError is_conditionally_independent(bn, Symbol[], [:F], [:B])
         @test_throws ArgumentError is_conditionally_independent(bn, [:A], Symbol[], [:B])
     end
-
     @testset "Translating BUGSGraph to BayesianNetwork" begin
         # Define the test model using JuliaBUGS
         test_model = @bugs begin
