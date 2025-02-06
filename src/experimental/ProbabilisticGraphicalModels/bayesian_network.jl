@@ -64,10 +64,9 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph)
     node_types = Vector{Symbol}(undef, n)
 
     for (i, varname) in enumerate(varnames)
-        symbol_name = varname
         nodeinfo = g[varname]
-        names[i] = symbol_name
-        names_to_ids[symbol_name] = i
+        names[i] = varname
+        names_to_ids[varname] = i
         is_stochastic[i] = nodeinfo.is_stochastic
         is_observed[i] = nodeinfo.is_observed
 
@@ -77,7 +76,7 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph)
             push!(stochastic_ids, i)
             node_types[i] = :stochastic
         else
-            distributions[i] = Normal()  # Placeholder for deterministic nodes. TODO: Is there a better way?
+            distributions[i] = Normal() #TODO: Change it to nothing/undef after the definition changes
             deterministic_fns[i] = nodeinfo.node_function
             push!(deterministic_ids, i)
             node_types[i] = :deterministic

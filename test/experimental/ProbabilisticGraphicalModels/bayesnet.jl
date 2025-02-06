@@ -368,3 +368,4 @@ using JuliaBUGS: @bugs, compile, NodeInfo, VarName
             Function
     end
 end
+    
