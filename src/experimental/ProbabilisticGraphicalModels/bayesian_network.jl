@@ -12,7 +12,7 @@ struct BayesianNetwork{V,T,F}
     "values of each variable in the network"
     values::Dict{V,Any} # TODO: make it a NamedTuple for better performance in the future
     "distributions of the stochastic variables"
-    distributions::Vector{Distribution}
+    distributions::Vector{F}
     "deterministic functions of the deterministic variables"
     deterministic_functions::Vector{F}
     "ids of the stochastic variables"
@@ -30,7 +30,7 @@ function BayesianNetwork{V}() where {V}
         V[],
         Dict{V,Int}(),
         Dict{V,Any}(),
-        Distribution[],
+        Any[],
         Any[],
         Int[],
         Int[],
@@ -55,8 +55,8 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph)
     names = Vector{VarName}(undef, n)
     names_to_ids = Dict{VarName,Int}()
     values = Dict{VarName,Any}()
-    distributions = Vector{Distribution}(undef, n)
-    deterministic_fns = Vector{Any}(undef, n)
+    distributions = Vector{Function}(undef, n)
+    deterministic_fns = Vector{Function}(undef, n)
     stochastic_ids = Int[]
     deterministic_ids = Int[]
     is_stochastic = falses(n)
@@ -71,7 +71,7 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph)
         is_observed[i] = nodeinfo.is_observed
 
         if nodeinfo.is_stochastic
-            distributions[i] = nodeinfo.node_function((), ())
+            distributions[i] = nodeinfo.node_function
             push!(stochastic_ids, i)
             node_types[i] = :stochastic
         else

@@ -11,7 +11,7 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     decondition,
     ancestral_sampling,
     is_conditionally_independent
-using MetaGraphsNext
+#using MetaGraphsNext
 using JuliaBUGS: @bugs, compile, NodeInfo, VarName
 
 @testset "BayesianNetwork" begin
@@ -330,9 +330,9 @@ using JuliaBUGS: @bugs, compile, NodeInfo, VarName
         @test bn.is_stochastic[bn.names_to_ids[VarName(:b)]] == true
         @test bn.is_stochastic[bn.names_to_ids[VarName(:c)]] == true
 
-        @test bn.distributions[bn.names_to_ids[VarName(:a)]] isa Normal
-        @test bn.distributions[bn.names_to_ids[VarName(:b)]] isa Normal
-        @test bn.distributions[bn.names_to_ids[VarName(:c)]] isa Normal
+        @test bn.distributions[bn.names_to_ids[VarName(:a)]] isa Function
+        @test bn.distributions[bn.names_to_ids[VarName(:b)]] isa Function
+        @test bn.distributions[bn.names_to_ids[VarName(:c)]] isa Function
     end
     @testset "Translating Complex BUGSGraph to BayesianNetwork" begin
         # Define a more complex test model using JuliaBUGS
@@ -361,8 +361,8 @@ using JuliaBUGS: @bugs, compile, NodeInfo, VarName
         @test complex_bn.is_stochastic[complex_bn.names_to_ids[VarName(:b)]] == true
         @test complex_bn.is_stochastic[complex_bn.names_to_ids[VarName(:c)]] == false
 
-        @test complex_bn.distributions[complex_bn.names_to_ids[VarName(:a)]] isa Normal
-        @test complex_bn.distributions[complex_bn.names_to_ids[VarName(:b)]] isa Normal
+        @test complex_bn.distributions[complex_bn.names_to_ids[VarName(:a)]] isa Function
+        @test complex_bn.distributions[complex_bn.names_to_ids[VarName(:b)]] isa Function
         @test complex_bn.deterministic_functions[complex_bn.names_to_ids[VarName(:c)]] isa
             Function
     end
