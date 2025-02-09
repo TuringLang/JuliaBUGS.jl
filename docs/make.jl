@@ -22,5 +22,3 @@ makedocs(;
             ["Parser" => "parser.md", "Notes on BUGS Implementations" => "BUGS_notes.md"],
     ],
 )
-
-deploydocs(; repo="github.com/TuringLang/JuliaBUGS.jl.git", push_preview=true)
