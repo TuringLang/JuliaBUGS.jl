@@ -45,7 +45,7 @@ end
 
 Translates a BUGSGraph (with node metadata stored in NodeInfo) into a BayesianNetwork.
 """
-function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph)
+function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluation_env)
     # Retrieve variable labels (stored as VarNames) from g.
     varnames = collect(labels(g))
     n = length(varnames)
@@ -66,6 +66,7 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph)
     for (i, varname) in enumerate(varnames)
         nodeinfo = g[varname]
         names[i] = varname
+        values[varname] = AbstractPPL.get(evaluation_env, varname)
         names_to_ids[varname] = i
         is_stochastic[i] = nodeinfo.is_stochastic
         is_observed[i] = nodeinfo.is_observed

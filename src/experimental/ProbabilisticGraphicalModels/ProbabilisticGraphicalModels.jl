@@ -6,6 +6,7 @@ using MetaGraphsNext
 using Distributions
 using JuliaBUGS
 using JuliaBUGS: BUGSGraph, VarName, NodeInfo
+using AbstractPPL
 
 include("bayesian_network.jl")
 include("conditioning.jl")
