@@ -349,7 +349,9 @@ using JuliaBUGS: @bugs, compile, NodeInfo, VarName
         complex_g = complex_compiled_model.g
 
         # Translate the complex BUGSGraph to a BayesianNetwork
-        complex_bn = translate_BUGSGraph_to_BayesianNetwork(complex_g, complex_compiled_model.evaluation_env)
+        complex_bn = translate_BUGSGraph_to_BayesianNetwork(
+            complex_g, complex_compiled_model.evaluation_env
+        )
 
         # Verify the translation
         @test length(complex_bn.names) == 3
