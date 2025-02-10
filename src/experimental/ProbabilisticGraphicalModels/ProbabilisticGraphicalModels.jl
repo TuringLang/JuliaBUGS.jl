@@ -7,6 +7,7 @@ using Distributions
 include("bayesian_network.jl")
 include("conditioning.jl")
 include("functions.jl")
+include("inference.jl")
 
 export BayesianNetwork,
     condition,
