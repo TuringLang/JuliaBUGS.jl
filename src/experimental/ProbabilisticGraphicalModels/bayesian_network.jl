@@ -3,7 +3,7 @@
 
 A structure representing a Bayesian Network.
 """
-struct BayesianNetwork{V,T,F}
+mutable struct BayesianNetwork{V,T,F}
     graph::SimpleDiGraph{T}
     "names of the variables in the network"
     names::Vector{V}
