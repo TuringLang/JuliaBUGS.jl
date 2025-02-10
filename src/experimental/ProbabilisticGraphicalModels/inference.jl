@@ -203,202 +203,202 @@ function compute_full_logpdf_topo(bn::BayesianNetwork)
     return logp
 end
 
-###############################################################################
-# 7) Evaluate the model for a set of observations & X1 values
-###############################################################################
-function evaluate_model(
-    bn::BayesianNetwork, obs::Dict{Symbol,Float64}, X1_values, description::AbstractString
-)
-    println("\n=== $description ===")
-    println("Observations: ", obs)
+# ###############################################################################
+# # 7) Evaluate the model for a set of observations & X1 values
+# ###############################################################################
+# function evaluate_model(
+#     bn::BayesianNetwork, obs::Dict{Symbol,Float64}, X1_values, description::AbstractString
+# )
+#     println("\n=== $description ===")
+#     println("Observations: ", obs)
 
-    old_values = copy(bn.values)
-    old_observed = copy(bn.is_observed)
-    try
-        for (k, v) in obs
-            id = bn.names_to_ids[k]
-            bn.values[k] = v
-            bn.is_observed[id] = true
-        end
+#     old_values = copy(bn.values)
+#     old_observed = copy(bn.is_observed)
+#     try
+#         for (k, v) in obs
+#             id = bn.names_to_ids[k]
+#             bn.values[k] = v
+#             bn.is_observed[id] = true
+#         end
 
-        log_post = create_log_posterior(bn)
-        results = [(x1, log_post(Dict(:X1 => Float64(x1)))) for x1 in X1_values]
+#         log_post = create_log_posterior(bn)
+#         results = [(x1, log_post(Dict(:X1 => Float64(x1)))) for x1 in X1_values]
 
-        max_lp = maximum(last.(results))
-        normalized_post = [(x1, exp(lp - max_lp)) for (x1, lp) in results]
+#         max_lp = maximum(last.(results))
+#         normalized_post = [(x1, exp(lp - max_lp)) for (x1, lp) in results]
 
-        for (x1, p) in normalized_post
-            println("  X1 = %.2f => normalized posterior = %.5f\n", x1, p)
-        end
-    finally
-        bn.values = old_values
-        bn.is_observed = old_observed
-    end
-end
+#         for (x1, p) in normalized_post
+#             println("  X1 = %.2f => normalized posterior = %.5f\n", x1, p)
+#         end
+#     finally
+#         bn.values = old_values
+#         bn.is_observed = old_observed
+#     end
+# end
 
-###############################################################################
-# 8) Simple Network & Test
-###############################################################################
+# ###############################################################################
+# # 8) Simple Network & Test
+# ###############################################################################
 
-function create_test_network()
-    bn = BayesianNetwork{Symbol}()
+# function create_test_network()
+#     bn = BayesianNetwork{Symbol}()
 
-    # X1 ~ Bernoulli(0.5)
-    println("DEBUG: Adding X1 => Bernoulli(0.5)")
-    add_stochastic_vertex!(bn, :X1, Bernoulli(0.5), false, :discrete)
+#     # X1 ~ Bernoulli(0.5)
+#     println("DEBUG: Adding X1 => Bernoulli(0.5)")
+#     add_stochastic_vertex!(bn, :X1, Bernoulli(0.5), false, :discrete)
 
-    # X2 ~ Bernoulli(X1)
-    println("DEBUG: Adding X2 => Bernoulli(X1)")
-    println(typeof((x1) -> Bernoulli(x1)))
-    add_stochastic_vertex!(bn, :X2, (x1) -> Bernoulli(x1), false, :discrete)
-    println("DEBUG: Adding edge X1 => X2")
-    add_edge!(bn, :X1, :X2)
+#     # X2 ~ Bernoulli(X1)
+#     println("DEBUG: Adding X2 => Bernoulli(X1)")
+#     println(typeof((x1) -> Bernoulli(x1)))
+#     add_stochastic_vertex!(bn, :X2, (x1) -> Bernoulli(x1), false, :discrete)
+#     println("DEBUG: Adding edge X1 => X2")
+#     add_edge!(bn, :X1, :X2)
 
-    return bn
-end
-###############################################################################
-#  More Test Cases for the 2-Node Network
-###############################################################################
+#     return bn
+# end
+# ###############################################################################
+# #  More Test Cases for the 2-Node Network
+# ###############################################################################
 
-"""
-Test Case 1:
-Compute P(X2 = 0) and verify it matches 0.5.
-Explanation:
-    - X2 = 0 occurs iff X1 = 0 (because X2 ~ Bernoulli(X1)).
-    - X1=0 => prob=0.5, so P(X2=0)=0.5.
-"""
-function test_X2_equals_0()
-    println("\n=== Testing P(X2 = 0) ===")
+# """
+# Test Case 1:
+# Compute P(X2 = 0) and verify it matches 0.5.
+# Explanation:
+#     - X2 = 0 occurs iff X1 = 0 (because X2 ~ Bernoulli(X1)).
+#     - X1=0 => prob=0.5, so P(X2=0)=0.5.
+# """
+# function test_X2_equals_0()
+#     println("\n=== Testing P(X2 = 0) ===")
 
-    # Create the Bayesian Network
-    bn = create_test_network()
+#     # Create the Bayesian Network
+#     bn = create_test_network()
 
-    # Mark X2=0.0 as observed
-    bn.values[:X2] = 0.0
-    bn.is_observed[bn.names_to_ids[:X2]] = true
+#     # Mark X2=0.0 as observed
+#     bn.values[:X2] = 0.0
+#     bn.is_observed[bn.names_to_ids[:X2]] = true
 
-    # Possible values of X1
-    X1_values = [0.0, 1.0]
+#     # Possible values of X1
+#     X1_values = [0.0, 1.0]
 
-    # Build the log-posterior function
-    log_post = create_log_posterior(bn)
+#     # Build the log-posterior function
+#     log_post = create_log_posterior(bn)
 
-    # Compute probabilities for each X1
-    results = [(x1, exp(log_post(Dict(:X1 => x1)))) for x1 in X1_values]
+#     # Compute probabilities for each X1
+#     results = [(x1, exp(log_post(Dict(:X1 => x1)))) for x1 in X1_values]
 
-    # Total probability of X2=0
-    total_prob = sum(last.(results))
+#     # Total probability of X2=0
+#     total_prob = sum(last.(results))
 
-    # Print results
-    println("Results for P(X2 = 0):")
-    for (x1, prob) in results
-        println("  X1 = $x1 => p = $prob")
-    end
-    println("Total P(X2 = 0): $total_prob")
+#     # Print results
+#     println("Results for P(X2 = 0):")
+#     for (x1, prob) in results
+#         println("  X1 = $x1 => p = $prob")
+#     end
+#     println("Total P(X2 = 0): $total_prob")
 
-    # Check if the result matches the expected value (0.5)
-    local expected_value = 0.5
-    @assert isapprox(total_prob, expected_value, atol=1e-6) "Test failed: Expected $expected_value, got $total_prob"
-    println("Test passed!")
-end
-
-
-"""
-Test Case 2:
-Compute the posterior distribution P(X1 | X2=1).
-We expect:
-    P(X1=1 | X2=1) = 1.0
-    P(X1=0 | X2=1) = 0.0
-Because if X2=1, that means X1 must have been 1.
-"""
-function test_X1_given_X2_1()
-    println("\n=== Testing P(X1 | X2 = 1) ===")
-
-    # Create the Bayesian Network
-    bn = create_test_network()
-
-    # Mark X2=1.0 as observed
-    bn.values[:X2] = 1.0
-    bn.is_observed[bn.names_to_ids[:X2]] = true
-
-    # Possible values of X1
-    X1_values = [0.0, 1.0]
-
-    # Build the log-posterior function
-    log_post = create_log_posterior(bn)
-
-    # Compute unnormalized posterior for each X1
-    # Then normalize manually to get P(X1 | X2=1).
-    unnormalized = Dict{Float64,Float64}()
-    for x1 in X1_values
-        lp = log_post(Dict(:X1 => x1))
-        unnormalized[x1] = exp(lp)
-    end
-
-    total = sum(values(unnormalized))
-    posterior = Dict(x1 => unnormalized[x1] / total for x1 in X1_values)
-
-    # Print results
-    println("Posterior distribution for X1 given X2=1:")
-    for (x1, p) in posterior
-        println("  P(X1=$x1 | X2=1) = $p")
-    end
-
-    # We expect P(X1=0|X2=1)=0, P(X1=1|X2=1)=1
-    @assert isapprox(posterior[0.0], 0.0, atol=1e-6) "Expected P(X1=0|X2=1) ~ 0.0, got $(posterior[0.0])"
-    @assert isapprox(posterior[1.0], 1.0, atol=1e-6) "Expected P(X1=1|X2=1) ~ 1.0, got $(posterior[1.0])"
-    println("Test passed!")
-end
+#     # Check if the result matches the expected value (0.5)
+#     local expected_value = 0.5
+#     @assert isapprox(total_prob, expected_value, atol=1e-6) "Test failed: Expected $expected_value, got $total_prob"
+#     println("Test passed!")
+# end
 
 
-"""
-Test Case 3:
-Compute the posterior distribution P(X1 | X2=0).
-We expect:
-    P(X1=0 | X2=0) = 1.0
-    P(X1=1 | X2=0) = 0.0
-Because if X2=0, that implies X1=0 for this Bernoulli(X1) setup.
-"""
-function test_X1_given_X2_0()
-    println("\n=== Testing P(X1 | X2 = 0) ===")
+# """
+# Test Case 2:
+# Compute the posterior distribution P(X1 | X2=1).
+# We expect:
+#     P(X1=1 | X2=1) = 1.0
+#     P(X1=0 | X2=1) = 0.0
+# Because if X2=1, that means X1 must have been 1.
+# """
+# function test_X1_given_X2_1()
+#     println("\n=== Testing P(X1 | X2 = 1) ===")
 
-    # Create the Bayesian Network
-    bn = create_test_network()
+#     # Create the Bayesian Network
+#     bn = create_test_network()
 
-    # Mark X2=0.0 as observed
-    bn.values[:X2] = 0.0
-    bn.is_observed[bn.names_to_ids[:X2]] = true
+#     # Mark X2=1.0 as observed
+#     bn.values[:X2] = 1.0
+#     bn.is_observed[bn.names_to_ids[:X2]] = true
 
-    # Possible values of X1
-    X1_values = [0.0, 1.0]
+#     # Possible values of X1
+#     X1_values = [0.0, 1.0]
 
-    # Build the log-posterior function
-    log_post = create_log_posterior(bn)
+#     # Build the log-posterior function
+#     log_post = create_log_posterior(bn)
 
-    # Compute unnormalized posterior for each X1
-    unnormalized = Dict{Float64,Float64}()
-    for x1 in X1_values
-        lp = log_post(Dict(:X1 => x1))
-        unnormalized[x1] = exp(lp)
-    end
+#     # Compute unnormalized posterior for each X1
+#     # Then normalize manually to get P(X1 | X2=1).
+#     unnormalized = Dict{Float64,Float64}()
+#     for x1 in X1_values
+#         lp = log_post(Dict(:X1 => x1))
+#         unnormalized[x1] = exp(lp)
+#     end
 
-    total = sum(values(unnormalized))
-    posterior = Dict(x1 => unnormalized[x1] / total for x1 in X1_values)
+#     total = sum(values(unnormalized))
+#     posterior = Dict(x1 => unnormalized[x1] / total for x1 in X1_values)
 
-    # Print results
-    println("Posterior distribution for X1 given X2=0:")
-    for (x1, p) in posterior
-        println("  P(X1=$x1 | X2=0) = $p")
-    end
+#     # Print results
+#     println("Posterior distribution for X1 given X2=1:")
+#     for (x1, p) in posterior
+#         println("  P(X1=$x1 | X2=1) = $p")
+#     end
 
-    # We expect P(X1=0|X2=0)=1, P(X1=1|X2=0)=0
-    @assert isapprox(posterior[0.0], 1.0, atol=1e-6) "Expected P(X1=0|X2=0) ~ 1.0, got $(posterior[0.0])"
-    @assert isapprox(posterior[1.0], 0.0, atol=1e-6) "Expected P(X1=1|X2=0) ~ 0.0, got $(posterior[1.0])"
-    println("Test passed!")
-end
-test_X2_equals_0()
-test_X1_given_X2_1()
-test_X1_given_X2_0()
+#     # We expect P(X1=0|X2=1)=0, P(X1=1|X2=1)=1
+#     @assert isapprox(posterior[0.0], 0.0, atol=1e-6) "Expected P(X1=0|X2=1) ~ 0.0, got $(posterior[0.0])"
+#     @assert isapprox(posterior[1.0], 1.0, atol=1e-6) "Expected P(X1=1|X2=1) ~ 1.0, got $(posterior[1.0])"
+#     println("Test passed!")
+# end
+
+
+# """
+# Test Case 3:
+# Compute the posterior distribution P(X1 | X2=0).
+# We expect:
+#     P(X1=0 | X2=0) = 1.0
+#     P(X1=1 | X2=0) = 0.0
+# Because if X2=0, that implies X1=0 for this Bernoulli(X1) setup.
+# """
+# function test_X1_given_X2_0()
+#     println("\n=== Testing P(X1 | X2 = 0) ===")
+
+#     # Create the Bayesian Network
+#     bn = create_test_network()
+
+#     # Mark X2=0.0 as observed
+#     bn.values[:X2] = 0.0
+#     bn.is_observed[bn.names_to_ids[:X2]] = true
+
+#     # Possible values of X1
+#     X1_values = [0.0, 1.0]
+
+#     # Build the log-posterior function
+#     log_post = create_log_posterior(bn)
+
+#     # Compute unnormalized posterior for each X1
+#     unnormalized = Dict{Float64,Float64}()
+#     for x1 in X1_values
+#         lp = log_post(Dict(:X1 => x1))
+#         unnormalized[x1] = exp(lp)
+#     end
+
+#     total = sum(values(unnormalized))
+#     posterior = Dict(x1 => unnormalized[x1] / total for x1 in X1_values)
+
+#     # Print results
+#     println("Posterior distribution for X1 given X2=0:")
+#     for (x1, p) in posterior
+#         println("  P(X1=$x1 | X2=0) = $p")
+#     end
+
+#     # We expect P(X1=0|X2=0)=1, P(X1=1|X2=0)=0
+#     @assert isapprox(posterior[0.0], 1.0, atol=1e-6) "Expected P(X1=0|X2=0) ~ 1.0, got $(posterior[0.0])"
+#     @assert isapprox(posterior[1.0], 0.0, atol=1e-6) "Expected P(X1=1|X2=0) ~ 0.0, got $(posterior[1.0])"
+#     println("Test passed!")
+# end
+# test_X2_equals_0()
+# test_X1_given_X2_1()
+# test_X1_given_X2_0()
 
 # logistic(x) = 1 / (1 + exp(-x))
 

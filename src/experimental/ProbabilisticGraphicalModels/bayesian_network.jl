@@ -3,7 +3,7 @@
 
 A structure representing a Bayesian Network.
 """
-mutable struct BayesianNetwork{V,T,F}
+struct BayesianNetwork{V,T,F}
     graph::SimpleDiGraph{T}
     "names of the variables in the network"
     names::Vector{V}
@@ -160,4 +160,25 @@ function add_edge!(bn::BayesianNetwork{V,T}, from::V, to::V)::Bool where {T,V}
     from_id = bn.names_to_ids[from]
     to_id = bn.names_to_ids[to]
     return Graphs.add_edge!(bn.graph, from_id, to_id)
+end
+
+function evaluate(bn::BayesianNetwork)
+    logp = 0.0
+    evaluation_env = deepcopy(bn.values)
+    for (i, varname) in enumerate(bn.names)
+        is_stochastic = bn.is_stochastic[i]
+        if is_stochastic
+            dist_fn = bn.distributions[i]
+            parent_vals = parent_values(bn, i)
+            dist = dist_fn(parent_vals...)
+            value = AbstractPPL.get(evaluation_env, varname)
+            logp += Distributions.logpdf(dist, value)
+        else
+        fn = bn.deterbministic_functions[i]
+            parent_vals = parent_values(bn, i)
+            value = fn(parent_vals...)
+            evaluation_env[varname] = value
+        end
+    end
+    return evaluation_env, logp
 end
