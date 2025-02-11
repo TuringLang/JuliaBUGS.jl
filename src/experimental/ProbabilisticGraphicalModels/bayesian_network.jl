@@ -82,7 +82,7 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
         end
     end
 
-    local bn = BayesianNetwork(
+    bn = BayesianNetwork(
         SimpleDiGraph{Int}(n),
         names,
         names_to_ids,
