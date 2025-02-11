@@ -163,22 +163,6 @@ function add_edge!(bn::BayesianNetwork{V,T}, from::V, to::V)::Bool where {T,V}
 end
 
 function evaluate(bn::BayesianNetwork)
-    logp = 0.0
-    evaluation_env = deepcopy(bn.values)
-    for (i, varname) in enumerate(bn.names)
-        is_stochastic = bn.is_stochastic[i]
-        if is_stochastic
-            dist_fn = bn.distributions[i]
-            parent_vals = parent_values(bn, i)
-            dist = dist_fn(parent_vals...)
-            value = AbstractPPL.get(evaluation_env, varname)
-            logp += Distributions.logpdf(dist, value)
-        else
-        fn = bn.deterbministic_functions[i]
-            parent_vals = parent_values(bn, i)
-            value = fn(parent_vals...)
-            evaluation_env[varname] = value
-        end
-    end
-    return evaluation_env, logp
+    log_posterior = create_log_posterior(bn)
+    return log_posterior
 end

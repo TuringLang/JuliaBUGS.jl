@@ -15,6 +15,23 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
 #using MetaGraphsNext
 using JuliaBUGS: @bugs, compile, NodeInfo, VarName
 
+function create_test_network()
+    bn = BayesianNetwork{Symbol}()
+
+    # X1 ~ Bernoulli(0.5)
+    println("DEBUG: Adding X1 => Bernoulli(0.5)")
+    add_stochastic_vertex!(bn, :X1, Bernoulli(0.5), false, :discrete)
+
+    # X2 ~ Bernoulli(X1)
+    println("DEBUG: Adding X2 => Bernoulli(X1)")
+    println(typeof((x1) -> Bernoulli(x1)))
+    add_stochastic_vertex!(bn, :X2, (x1) -> Bernoulli(x1), false, :discrete)
+    println("DEBUG: Adding edge X1 => X2")
+    add_edge!(bn, :X1, :X2)
+
+    return bn
+end
+
 @testset "BayesianNetwork" begin
     @testset "Adding vertices" begin
         bn = BayesianNetwork{Symbol}()
@@ -370,31 +387,113 @@ using JuliaBUGS: @bugs, compile, NodeInfo, VarName
             Function
     end
     @testset "Evaluate function" begin
-        bn = BayesianNetwork{Symbol}()
+        @testset "Test Case 1: Compute P(X2 = 0)" begin
+            println("\n=== Testing P(X2 = 0) ===")
 
-        # Add stochastic vertices
-        add_stochastic_vertex!(bn, :A, () -> Normal(0, 1), false, :continuous)
-        add_stochastic_vertex!(bn, :B, () -> Normal(1, 2), false, :continuous)
+            # Create the Bayesian Network
+            bn = create_test_network()
 
-        # Add deterministic vertex C = A + B
-        add_deterministic_vertex!(bn, :C, (a, b) -> a + b)
-        add_edge!(bn, :A, :C)
-        add_edge!(bn, :B, :C)
+            # Mark X2=0.0 as observed
+            bn.values[:X2] = 0.0
+            bn.is_observed[bn.names_to_ids[:X2]] = true
 
-        # Set values for the stochastic nodes
-        bn.values[:A] = 0.5
-        bn.values[:B] = 1.5
+            # Possible values of X1
+            X1_values = [0.0, 1.0]
 
-        # Evaluate the Bayesian Network
-        evaluation_env, logp = evaluate(bn)
+            # Build the log-posterior function
+            log_post = evaluate(bn)
 
-        # Verify the evaluation
-        @test haskey(evaluation_env, :A)
-        @test haskey(evaluation_env, :B)
-        @test haskey(evaluation_env, :C)
-        @test evaluation_env[:A] == 0.5
-        @test evaluation_env[:B] == 1.5
-        @test evaluation_env[:C] == 2.0
-        @test logp isa Float64
+            # Compute probabilities for each X1
+            results = [(x1, exp(log_post(Dict(:X1 => x1)))) for x1 in X1_values]
+
+            # Total probability of X2=0
+            total_prob = sum(last.(results))
+
+            # Print results
+            println("Results for P(X2 = 0):")
+            for (x1, prob) in results
+                println("  X1 = $x1 => p = $prob")
+            end
+            println("Total P(X2 = 0): $total_prob")
+
+            # Check if the result matches the expected value (0.5)
+            local expected_value = 0.5
+            @test isapprox(total_prob, expected_value, atol=1e-6)
+        end
+
+        @testset "Test Case 2: Compute the posterior distribution P(X1 | X2=1)" begin
+            println("\n=== Testing P(X1 | X2 = 1) ===")
+
+            # Create the Bayesian Network
+            bn = create_test_network()
+
+            # Mark X2=1.0 as observed
+            bn.values[:X2] = 1.0
+            bn.is_observed[bn.names_to_ids[:X2]] = true
+
+            # Possible values of X1
+            X1_values = [0.0, 1.0]
+
+            # Build the log-posterior function
+            log_post = evaluate(bn)
+
+            # Compute unnormalized posterior for each X1
+            # Then normalize manually to get P(X1 | X2=1).
+            unnormalized = Dict{Float64,Float64}()
+            for x1 in X1_values
+                lp = log_post(Dict(:X1 => x1))
+                unnormalized[x1] = exp(lp)
+            end
+
+            total = sum(values(unnormalized))
+            posterior = Dict(x1 => unnormalized[x1] / total for x1 in X1_values)
+
+            # Print results
+            println("Posterior distribution for X1 given X2=1:")
+            for (x1, p) in posterior
+                println("  P(X1=$x1 | X2=1) = $p")
+            end
+
+            # We expect P(X1=0|X2=1)=0, P(X1=1|X2=1)=1
+            @test isapprox(posterior[0.0], 0.0, atol=1e-6)
+            @test isapprox(posterior[1.0], 1.0, atol=1e-6)
+        end
+
+        @testset "Test Case 3: Compute the posterior distribution P(X1 | X2=0)" begin
+            println("\n=== Testing P(X1 | X2 = 0) ===")
+
+            # Create the Bayesian Network
+            bn = create_test_network()
+
+            # Mark X2=0.0 as observed
+            bn.values[:X2] = 0.0
+            bn.is_observed[bn.names_to_ids[:X2]] = true
+
+            # Possible values of X1
+            X1_values = [0.0, 1.0]
+
+            # Build the log-posterior function
+            log_post = evaluate(bn)
+
+            # Compute unnormalized posterior for each X1
+            unnormalized = Dict{Float64,Float64}()
+            for x1 in X1_values
+                lp = log_post(Dict(:X1 => x1))
+                unnormalized[x1] = exp(lp)
+            end
+
+            total = sum(values(unnormalized))
+            posterior = Dict(x1 => unnormalized[x1] / total for x1 in X1_values)
+
+            # Print results
+            println("Posterior distribution for X1 given X2=0:")
+            for (x1, p) in posterior
+                println("  P(X1=$x1 | X2=0) = $p")
+            end
+
+            # We expect P(X1=0|X2=0)=1, P(X1=1|X2=0)=0
+            @test isapprox(posterior[0.0], 1.0, atol=1e-6)
+            @test isapprox(posterior[1.0], 0.0, atol=1e-6)
+        end
     end
 end
