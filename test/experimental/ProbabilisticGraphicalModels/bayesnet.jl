@@ -32,6 +32,38 @@ function create_test_network()
     return bn
 end
 
+function create_test_network_2()
+    bn = BayesianNetwork{Symbol}()
+
+    # Y1 ~ Normal(0, 1)
+    println("DEBUG: Adding Y1 => Normal(0, 1)")
+    add_stochastic_vertex!(bn, :Y1, Normal(0, 1), false, :continuous)
+
+    # Y2 ~ Normal(Y1, 1)
+    println("DEBUG: Adding Y2 => Normal(Y1, 1)")
+    add_stochastic_vertex!(bn, :Y2, (y1) -> Normal(y1, 1), false, :continuous)
+    println("DEBUG: Adding edge Y1 => Y2")
+    add_edge!(bn, :Y1, :Y2)
+
+    return bn
+end
+
+function create_test_network_3()
+    bn = BayesianNetwork{Symbol}()
+
+    # Z1 ~ Beta(2, 2)
+    println("DEBUG: Adding Z1 => Beta(2, 2)")
+    add_stochastic_vertex!(bn, :Z1, Beta(2, 2), false, :continuous)
+
+    # Z2 ~ Binomial(10, Z1)
+    println("DEBUG: Adding Z2 => Binomial(10, Z1)")
+    add_stochastic_vertex!(bn, :Z2, (z1) -> Binomial(10, z1), false, :discrete)
+    println("DEBUG: Adding edge Z1 => Z2")
+    add_edge!(bn, :Z1, :Z2)
+
+    return bn
+end
+
 @testset "BayesianNetwork" begin
     @testset "Adding vertices" begin
         bn = BayesianNetwork{Symbol}()
@@ -494,6 +526,78 @@ end
             # We expect P(X1=0|X2=0)=1, P(X1=1|X2=0)=0
             @test isapprox(posterior[0.0], 1.0, atol=1e-6)
             @test isapprox(posterior[1.0], 0.0, atol=1e-6)
+        end
+
+        @testset "Test Case 4: Compute P(Y2 = 0) for Test Network 2" begin
+            println("\n=== Testing P(Y2 = 0) ===")
+    
+            # Create the Bayesian Network
+            bn = create_test_network_2()
+    
+            # Mark Y2=0.0 as observed
+            bn.values[:Y2] = 0.0
+            bn.is_observed[bn.names_to_ids[:Y2]] = true
+    
+            # Possible values of Y1
+            Y1_values = [-1.0, 0.0, 1.0]
+    
+            # Build the log-posterior function
+            log_post = evaluate(bn)
+    
+            # Compute probabilities for each Y1
+            results = [(y1, exp(log_post(Dict(:Y1 => y1)))) for y1 in Y1_values]
+    
+            # Total probability of Y2=0
+            total_prob = sum(last.(results))
+    
+            # Print results
+            println("Results for P(Y2 = 0):")
+            for (y1, prob) in results
+                println("  Y1 = $y1 => p = $prob")
+            end
+            println("Total P(Y2 = 0): $total_prob")
+    
+            # Check if the result matches the expected value (approximately)
+            local expected_value = 0.28209479 # This is an approximate value
+            @test isapprox(total_prob, expected_value, atol=1e-2)
+        end
+    
+        @testset "Test Case 5: Compute the posterior distribution P(Z1 | Z2=5) for Test Network 3" begin
+            println("\n=== Testing P(Z1 | Z2 = 5) ===")
+    
+            # Create the Bayesian Network
+            bn = create_test_network_3()
+    
+            # Mark Z2=5 as observed
+            bn.values[:Z2] = 5
+            bn.is_observed[bn.names_to_ids[:Z2]] = true
+    
+            # Possible values of Z1
+            Z1_values = [0.1, 0.5, 0.9]
+    
+            # Build the log-posterior function
+            log_post = evaluate(bn)
+    
+            # Compute unnormalized posterior for each Z1
+            unnormalized = Dict{Float64,Float64}()
+            for z1 in Z1_values
+                lp = log_post(Dict(:Z1 => z1))
+                unnormalized[z1] = exp(lp)
+            end
+    
+            total = sum(values(unnormalized))
+            posterior = Dict(z1 => unnormalized[z1] / total for z1 in Z1_values)
+    
+            # Print results
+            println("Posterior distribution for Z1 given Z2=5:")
+            for (z1, p) in posterior
+                println("  P(Z1=$z1 | Z2=5) = $p")
+            end
+    
+            # We expect the posterior distribution to be approximately correct
+            @test isapprox(posterior[0.1], 0.0, atol=1e-2)
+            @test isapprox(posterior[0.5], 1.0, atol=1e-2)
+            @test isapprox(posterior[0.9], 0.0, atol=1e-2)
         end
     end
 end
