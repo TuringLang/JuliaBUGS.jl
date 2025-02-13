@@ -1,0 +1,189 @@
+# Attempts: use `FunctionWrapper` to make node functions type stable
+
+Following the previous investigation, it seems that the source of type instability is that `node_function` is retrieved from `Vector{Function}` and is not type stable.
+And following the same reasoning, it's straightforward that as long as we store node functions in a vector, it can't be type stable.
+
+`FunctionWrapper` is created to make storing `Function`s in structs type stable.
+It is a reasonable first thing to try.
+
+## Rats Model Definition
+For reference, here's the `rats` model definition:
+
+```julia
+quote
+    for i = 1:N
+        for j = 1:T
+            Y[i, j] ~ dnorm(mu[i, j], var"tau.c")
+            mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)
+        end
+        alpha[i] ~ dnorm(var"alpha.c", var"alpha.tau")
+        beta[i] ~ dnorm(var"beta.c", var"beta.tau")
+    end
+    var"tau.c" ~ dgamma(0.001, 0.001)
+    sigma = 1 / sqrt(var"tau.c")
+    var"alpha.c" ~ dnorm(0.0, 1.0e-6)
+    var"alpha.tau" ~ dgamma(0.001, 0.001)
+    var"beta.c" ~ dnorm(0.0, 1.0e-6)
+    var"beta.tau" ~ dgamma(0.001, 0.001)
+    alpha0 = var"alpha.c" - xbar * var"beta.c"
+end
+```
+
+The node functions in the master branch look like:
+
+```julia
+# beta.tau
+# model.g[@varname(var"beta.tau")].node_function_expr
+:(function (__evaluation_env__::NamedTuple{__vars__}, __loop_vars__::NamedTuple{__loop_vars_names__}) where {__vars__, __loop_vars_names__}
+    (;) = __evaluation_env__
+    (;) = __loop_vars__
+    return dgamma(0.001, 0.001)
+end)
+```
+
+```julia
+# mu[30, 5]
+# model.g[@varname(mu[30, 5])].node_function_expr
+:(function (__evaluation_env__::NamedTuple{__vars__}, __loop_vars__::NamedTuple{__loop_vars_names__}) where {__vars__, __loop_vars_names__}
+      (; alpha, beta, xbar, x) = __evaluation_env__
+      (; j, i) = __loop_vars__
+      return alpha[i] + beta[i] * (x[j] - xbar)
+  end)
+```
+
+```julia
+# Y[30, 5]
+# model.g[@varname(Y[30, 5])].node_function_expr
+:(function (__evaluation_env__::NamedTuple{__vars__}, __loop_vars__::NamedTuple{__loop_vars_names__}) where {__vars__, __loop_vars_names__}
+      (; mu, var"tau.c") = __evaluation_env__
+      (; j, i) = __loop_vars__
+      return dnorm(mu[i, j], var"tau.c")
+  end)
+```
+
+Are these functions type stable?
+
+```julia
+vn = @varname(var"beta.tau")
+# vn = @varname(mu[30, 5])
+# vn = @varname(Y[30, 5])
+nf = model.g[vn].node_function
+loop_vars = model.g[vn].loop_vars
+@code_warntype nf(model.evaluation_env, loop_vars)
+```
+
+The answer is yes, these individual functions are type stable.
+
+Let's benchmark to get a sense of performance:
+
+```julia
+@benchmark nf(evaluation_env, loop_vars)
+```
+
+Now let's try to wrap them in `FunctionWrapper`s:
+
+```julia
+function _create_function_wrapper_from_type_stable_function(f, input_types::Tuple)
+    Ret = only(Base.return_types(f, input_types))
+    if Ret === Any
+        @warn "FunctionWrapper creation failed, return type is Any"
+        return f
+    end
+    return FunctionWrappers.FunctionWrapper{Ret, Tuple{input_types...}}(f)
+end
+```
+
+```julia
+nf_fw = _create_function_wrapper_from_type_stable_function(nf, (typeof(model.evaluation_env), typeof(loop_vars)))
+nf_fw(model.evaluation_env, loop_vars) == nf(model.evaluation_env, loop_vars)
+```
+
+With function wrappers, let's try to make computation on **one** node type stable.
+
+To simplify, we assume we are always working with `transformed` model.
+
+For a deterministic node, the computation is:
+
+```julia
+@inline function _eval_deterministic(node_function, evaluation_env, loop_vars, vn)
+    value = (node_function)(evaluation_env, loop_vars)
+    return BangBang.setindex!!(evaluation_env, value, vn)
+end
+```
+
+Let's test it:
+
+```julia
+# mu[30, 5]
+nf = model.g[@varname(mu[30, 5])].node_function
+loop_vars = model.g[@varname(mu[30, 5])].loop_vars
+nf_fw = _create_function_wrapper_from_type_stable_function(nf, (typeof(model.evaluation_env), typeof(loop_vars)))
+_eval_deterministic(nf_fw, evaluation_env, loop_vars, @varname(mu[30, 5]))
+@benchmark _eval_deterministic($(nf_fw), $(evaluation_env), $(loop_vars), $(@varname(mu[30, 5])))
+@code_warntype _eval_deterministic(nf_fw, evaluation_env, loop_vars, @varname(mu[30, 5]))
+```
+
+For a data node, the computation is:
+
+```julia
+function _eval_data(node_function, evaluation_env, loop_vars, vn)
+    dist = (node_function)(evaluation_env, loop_vars)
+    value = AbstractPPL.get(evaluation_env, vn)
+    return logpdf(dist, value)
+end
+```
+
+Let's test it:
+
+```julia
+# Y[30, 5]
+nf = model.g[@varname(Y[30, 5])].node_function
+loop_vars = model.g[@varname(Y[30, 5])].loop_vars
+nf_fw = _create_function_wrapper_from_type_stable_function(nf, (typeof(evaluation_env), typeof(loop_vars)))
+_eval_data(nf_fw, evaluation_env, loop_vars, @varname(Y[30, 5]))
+@benchmark _eval_data($(nf_fw), $(evaluation_env), $(loop_vars), $(@varname(Y[30, 5])))
+@code_warntype _eval_data(nf_fw, evaluation_env, loop_vars, @varname(Y[30, 5]))
+```
+
+Last, for a model parameter, the computation is:
+
+```julia
+function _eval_model_param(node_function, evaluation_env, loop_vars, vn, start_idx, end_idx, flattened_values)
+    dist = (node_function)(evaluation_env, loop_vars)
+    b = Bijectors.bijector(dist)
+    b_inv = Bijectors.inverse(b)
+    reconstructed_value = JuliaBUGS.reconstruct(b_inv, dist, view(flattened_values, start_idx:end_idx))
+    value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
+    logprior = logpdf(dist, value) + logjac
+    return BangBang.setindex!!(evaluation_env, value, vn), logprior
+end
+```
+
+Let's test it:
+
+```julia
+# beta.tau
+nf = model.g[@varname(var"beta.tau")].node_function
+loop_vars = model.g[@varname(var"beta.tau")].loop_vars
+nf_fw = _create_function_wrapper_from_type_stable_function(nf, (typeof(model.evaluation_env), typeof(loop_vars)))
+_eval_model_param(nf_fw, evaluation_env, loop_vars, @varname(var"beta.tau"), 1, 1, rand_params)
+@benchmark _eval_model_param($(nf_fw), $(evaluation_env), $(loop_vars), $(@varname(var"beta.tau")), 1, 1, $(rand_params))
+@code_warntype _eval_model_param(nf_fw, evaluation_env, loop_vars, @varname(beta.tau), 1, 1, rand_params)
+```
+
+## Performance Analysis
+
+There are 367 nodes in the graph:
+- 65 model parameters
+- 152 deterministic nodes
+- 150 stochastic nodes
+
+Using the median numbers we just got, we can estimate a best case scenario:
+- 65 * 27.5 + 150 * 15.5 + 152 * 18 = 6848.5 ns = 6.8485 μs
+
+For context:
+- Stan's logdensity evaluation time is about 4ms
+- Our manually written version is ~0.8 μs
+
+This implementation is slower than the manually written version, probably because the compiler can't see the whole program at once. But it's still very good, especially compared to the version in current master branch.
+:::
