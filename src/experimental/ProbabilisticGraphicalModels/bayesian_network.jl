@@ -161,3 +161,35 @@ function add_edge!(bn::BayesianNetwork{V,T}, from::V, to::V)::Bool where {T,V}
     to_id = bn.names_to_ids[to]
     return Graphs.add_edge!(bn.graph, from_id, to_id)
 end
+
+function evaluate(bn::BayesianNetwork)
+    logp = 0.0
+    evaluation_env = deepcopy(bn.values)
+    stochastic_index = 1
+    deterministic_index = 1
+
+    for (i, varname) in enumerate(bn.names)
+        is_stochastic = bn.is_stochastic[i]
+        if is_stochastic
+            dist_fn = bn.distributions[stochastic_index]
+            parent_vals = parent_values(bn, i)
+            dist = dist_fn(parent_vals...)
+            value = get(evaluation_env, varname, nothing)
+            logp += Distributions.logpdf(dist, value)
+            stochastic_index += 1
+        else
+            fn = bn.deterministic_functions[deterministic_index]
+            parent_vals = parent_values(bn, i)
+            value = fn(parent_vals...)
+            evaluation_env = BangBang.setindex!!(evaluation_env, value, varname)
+            deterministic_index += 1
+        end
+    end
+    return evaluation_env, logp
+end
+
+function parent_values(bn::BayesianNetwork, i::Int)
+    parent_ids = inneighbors(bn.graph, i)
+    parent_vals = [bn.values[bn.names[parent_id]] for parent_id in parent_ids]
+    return parent_vals
+end

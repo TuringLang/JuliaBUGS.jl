@@ -10,7 +10,9 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     condition,
     decondition,
     ancestral_sampling,
-    is_conditionally_independent
+    is_conditionally_independent,
+    evaluate
+using BangBang
 #using MetaGraphsNext
 using JuliaBUGS: @bugs, compile, NodeInfo, VarName
 
@@ -367,5 +369,50 @@ using JuliaBUGS: @bugs, compile, NodeInfo, VarName
         @test complex_bn.distributions[complex_bn.names_to_ids[VarName(:b)]] isa Function
         @test complex_bn.deterministic_functions[complex_bn.names_to_ids[VarName(:c)]] isa
             Function
+    end
+
+    @testset "Evaluate function" begin
+        bn = BayesianNetwork{Symbol}()
+
+        # Add stochastic vertices
+        add_stochastic_vertex!(bn, :A, () -> Normal(0, 1), false, :continuous)
+        add_stochastic_vertex!(bn, :B, () -> Normal(1, 2), false, :continuous)
+
+        # Add deterministic vertex C = A + B
+        add_deterministic_vertex!(bn, :C, (a, b) -> a + b)
+        add_edge!(bn, :A, :C)
+        add_edge!(bn, :B, :C)
+
+        # Set values for the stochastic nodes
+        new_values = deepcopy(bn.values)
+        new_values = BangBang.setindex!!(new_values, 0.5, :A)
+        new_values = BangBang.setindex!!(new_values, 1.5, :B)
+
+        # Create a new BayesianNetwork instance with updated values
+        bn = BayesianNetwork(
+            bn.graph,
+            bn.names,
+            bn.names_to_ids,
+            new_values,
+            bn.distributions,
+            bn.deterministic_functions,
+            bn.stochastic_ids,
+            bn.deterministic_ids,
+            bn.is_stochastic,
+            bn.is_observed,
+            bn.node_types,
+        )
+
+        # Evaluate the Bayesian Network
+        evaluation_env, logp = evaluate(bn)
+
+        # Verify the evaluation
+        @test haskey(evaluation_env, :A)
+        @test haskey(evaluation_env, :B)
+        @test haskey(evaluation_env, :C)
+        @test evaluation_env[:A] == 0.5
+        @test evaluation_env[:B] == 1.5
+        @test evaluation_env[:C] == 2.0
+        @test logp isa Float64
     end
 end
