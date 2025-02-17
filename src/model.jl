@@ -48,8 +48,9 @@ end
 The `BUGSModel` object is used for inference and represents the output of compilation. It implements the
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
 """
-struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,TNF,TV} <:
-       AbstractBUGSModel
+struct BUGSModel{
+    base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,TNF,TV,data_T
+} <: AbstractBUGSModel
     " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
 
@@ -74,6 +75,10 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,
 
     "If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`."
     base_model::base_model_T
+
+    # for serialization, save the original model definition and data
+    model_def::Expr
+    data::data_T
 end
 
 function Base.show(io::IO, model::BUGSModel)
@@ -137,7 +142,9 @@ variables(model::BUGSModel) = collect(labels(model.g))
 function BUGSModel(
     g::BUGSGraph,
     evaluation_env::NamedTuple,
-    initial_params::NamedTuple=NamedTuple();
+    model_def::Expr,
+    data::NamedTuple,
+    initial_params::NamedTuple=NamedTuple(),
     is_transformed::Bool=true,
 )
     flattened_graph_node_data = FlattenedGraphNodeData(g)
@@ -199,6 +206,8 @@ function BUGSModel(
         flattened_graph_node_data,
         g,
         nothing,
+        model_def,
+        data,
     )
 end
 
@@ -220,7 +229,29 @@ function BUGSModel(
         FlattenedGraphNodeData(g, sorted_nodes),
         g,
         isnothing(model.base_model) ? model : model.base_model,
+        model.model_def,
+        model.data,
     )
+end
+
+function Serialization.serialize(s::Serialization.AbstractSerializer, model::BUGSModel)
+    Serialization.writetag(s.io, Serialization.OBJECT_TAG)
+    Serialization.serialize(s, typeof(model))
+    Serialization.serialize(s, model.transformed)
+    Serialization.serialize(s, model.model_def)
+    Serialization.serialize(s, model.data)
+    Serialization.serialize(s, model.evaluation_env)
+    return nothing
+end
+
+function Serialization.deserialize(s::Serialization.AbstractSerializer, ::Type{<:BUGSModel})
+    transformed = Serialization.deserialize(s)
+    model_def = Serialization.deserialize(s)
+    data = Serialization.deserialize(s)
+    evaluation_env = Serialization.deserialize(s)
+    # use evaluation_env as initialization to restore the values
+    model = compile(model_def, data, evaluation_env)
+    return settrans(model, transformed)
 end
 
 """
@@ -430,21 +461,35 @@ function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
     )
 end
 
-function AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel)
-    (; evaluation_env, g) = model
-    vi = deepcopy(evaluation_env)
+function AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel; sample_all=true)
     logp = 0.0
+    evaluation_env = deepcopy(model.evaluation_env)
     for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
         is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
+        is_observed = model.flattened_graph_node_data.is_observed_vals[i]
         node_function = model.flattened_graph_node_data.node_function_vals[i]
         loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
+        if_sample = sample_all || !is_observed # also sample if not observed, only sample conditioned variables if sample_all is true
         if !is_stochastic
-            value = node_function(model.evaluation_env, loop_vars)
+            value = node_function(evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
-            dist = node_function(model.evaluation_env, loop_vars)
-            value = rand(rng, dist) # just sample from the prior
-            logp += logpdf(dist, value)
+            dist = node_function(evaluation_env, loop_vars)
+            if if_sample
+                value = rand(rng, dist) # just sample from the prior
+            else
+                value = AbstractPPL.get(evaluation_env, vn)
+            end
+            if model.transformed
+                # see below for why we need to transform the value
+                value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
+                logp +=
+                    Distributions.logpdf(dist, value) + Bijectors.logabsdetjac(
+                        Bijectors.inverse(Bijectors.bijector(dist)), value_transformed
+                    )
+            else
+                logp += Distributions.logpdf(dist, value)
+            end
             evaluation_env = setindex!!(evaluation_env, value, vn)
         end
     end
@@ -459,14 +504,16 @@ function AbstractPPL.evaluate!!(model::BUGSModel)
         node_function = model.flattened_graph_node_data.node_function_vals[i]
         loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
         if !is_stochastic
-            value = node_function(model.evaluation_env, loop_vars)
+            value = node_function(evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
-            dist = node_function(model.evaluation_env, loop_vars)
+            dist = node_function(evaluation_env, loop_vars)
             value = AbstractPPL.get(evaluation_env, vn)
             if model.transformed
                 # although the values stored in `evaluation_env` are in their original space, 
                 # here we behave as accepting a vector of parameters in the transformed space
+                # this is so that we have consistent logp values between
+                # (1) set values in original space then evaluate (2) directly evaluate with the values in transformed space 
                 value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
                 logp +=
                     Distributions.logpdf(dist, value) + Bijectors.logabsdetjac(
@@ -481,6 +528,22 @@ function AbstractPPL.evaluate!!(model::BUGSModel)
 end
 
 function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVector)
+    evaluation_env, (logprior, loglikelihood, tempered_logjoint) = _tempered_evaluate!!(
+        model, flattened_values; temperature=1.0
+    )
+    return evaluation_env, tempered_logjoint
+end
+
+"""
+    _tempered_evaluate!!(model::BUGSModel, flattened_values::AbstractVector; temperature=1.0)
+
+Evaluating the model with the given model parameter values, returns updated evaluation environment 
+and a NamedTuple of logprior, loglikelihood and tempered logjoint (where tempered logjoint is the logjoint 
+whose loglikelihood component scaled by the given temperature).
+"""
+function _tempered_evaluate!!(
+    model::BUGSModel, flattened_values::AbstractVector; temperature=1.0
+)
     var_lengths = if model.transformed
         model.transformed_var_lengths
     else
@@ -489,7 +552,7 @@ function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVect
 
     evaluation_env = deepcopy(model.evaluation_env)
     current_idx = 1
-    logp = 0.0
+    logprior, loglikelihood = 0.0, 0.0
     for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
         is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
         is_observed = model.flattened_graph_node_data.is_observed_vals[i]
@@ -520,12 +583,17 @@ function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVect
                     logjac = 0.0
                 end
                 current_idx += l
-                logp += logpdf(dist, value) + logjac
+                logprior += logpdf(dist, value) + logjac
                 evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
             else
-                logp += logpdf(dist, AbstractPPL.get(evaluation_env, vn))
+                loglikelihood += logpdf(dist, AbstractPPL.get(evaluation_env, vn))
             end
         end
     end
-    return evaluation_env, logp
+    return evaluation_env,
+    (
+        logprior=logprior,
+        loglikelihood=loglikelihood,
+        tempered_logjoint=logprior + temperature * loglikelihood,
+    )
 end
