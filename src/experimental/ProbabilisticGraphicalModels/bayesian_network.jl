@@ -12,7 +12,7 @@ struct BayesianNetwork{V,T,F}
     "values of each variable in the network"
     values::Dict{V,Any} # TODO: make it a NamedTuple for better performance in the future
     "distributions of the stochastic variables"
-    distributions::Vector{Distribution}
+    distributions::Vector{F}
     "deterministic functions of the deterministic variables"
     deterministic_functions::Vector{F}
     "ids of the stochastic variables"
@@ -30,7 +30,7 @@ function BayesianNetwork{V}() where {V}
         V[],
         Dict{V,Int}(),
         Dict{V,Any}(),
-        Distribution[],
+        Any[],
         Any[],
         Int[],
         Int[],
@@ -38,6 +38,74 @@ function BayesianNetwork{V}() where {V}
         BitVector(),
         Symbol[],
     )
+end
+
+"""
+    translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph; init=Dict{Symbol,Any}())
+
+Translates a BUGSGraph (with node metadata stored in NodeInfo) into a BayesianNetwork.
+"""
+function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluation_env)
+    # Retrieve variable labels (stored as VarNames) from g.
+    varnames = collect(labels(g))
+    n = length(varnames)
+    original_graph = g.graph
+
+    # Preallocate arrays/dictionaries.
+    names = Vector{VarName}(undef, n)
+    names_to_ids = Dict{VarName,Int}()
+    values = Dict{VarName,Any}()
+    distributions = Vector{Function}(undef, n)
+    deterministic_fns = Vector{Function}(undef, n)
+    stochastic_ids = Int[]
+    deterministic_ids = Int[]
+    is_stochastic = falses(n)
+    is_observed = falses(n)
+    node_types = Vector{Symbol}(undef, n)
+
+    for (i, varname) in enumerate(varnames)
+        nodeinfo = g[varname]
+        names[i] = varname
+        values[varname] = AbstractPPL.get(evaluation_env, varname)
+        names_to_ids[varname] = i
+        is_stochastic[i] = nodeinfo.is_stochastic
+        is_observed[i] = nodeinfo.is_observed
+
+        if nodeinfo.is_stochastic
+            distributions[i] = nodeinfo.node_function
+            push!(stochastic_ids, i)
+            node_types[i] = :stochastic
+        else
+            deterministic_fns[i] = nodeinfo.node_function
+            push!(deterministic_ids, i)
+            node_types[i] = :deterministic
+        end
+    end
+
+    bn = BayesianNetwork(
+        SimpleDiGraph{Int}(n),
+        names,
+        names_to_ids,
+        values,
+        distributions,
+        deterministic_fns,
+        stochastic_ids,
+        deterministic_ids,
+        is_stochastic,
+        is_observed,
+        node_types,
+    )
+
+    # Add edges using the BayesianNetwork's mapping.
+    for e in edges(original_graph)
+        let src_name = bn.names[e.src]
+            let dst_name = bn.names[e.dst]
+                add_edge!(bn, src_name, dst_name)
+            end
+        end
+    end
+
+    return bn
 end
 
 """
