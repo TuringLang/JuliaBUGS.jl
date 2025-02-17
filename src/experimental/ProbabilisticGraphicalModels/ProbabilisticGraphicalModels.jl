@@ -7,8 +7,7 @@ using Distributions
 using JuliaBUGS
 using JuliaBUGS: BUGSGraph, VarName, NodeInfo
 using AbstractPPL
-using Bijectors:Bijectors
-
+using Bijectors: Bijectors
 
 include("bayesian_network.jl")
 include("conditioning.jl")

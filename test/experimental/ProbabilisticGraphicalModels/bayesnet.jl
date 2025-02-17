@@ -15,7 +15,7 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
 using BangBang
 #using MetaGraphsNext
 using JuliaBUGS: @bugs, compile, NodeInfo, VarName
-using Bijectors:Bijectors
+using Bijectors: Bijectors
 
 @testset "BayesianNetwork" begin
     @testset "Adding vertices" begin
