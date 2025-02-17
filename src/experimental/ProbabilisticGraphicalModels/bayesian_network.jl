@@ -175,7 +175,10 @@ function evaluate(bn::BayesianNetwork)
             parent_vals = parent_values(bn, i)
             dist = dist_fn(parent_vals...)
             value = get(evaluation_env, varname, nothing)
-            logp += Distributions.logpdf(dist, value)
+            # Assume always transformed
+            bijector = Bijectors.bijector(dist)
+            value_transformed = Bijectors.transform(bijector, value)
+            logp += Distributions.logpdf(dist, value) + Bijectors.logabsdetjac(Bijectors.inverse(bijector), value_transformed)
             stochastic_index += 1
         else
             fn = bn.deterministic_functions[deterministic_index]
