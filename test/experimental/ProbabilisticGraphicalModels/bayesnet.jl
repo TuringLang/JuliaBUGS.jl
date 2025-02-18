@@ -59,7 +59,7 @@ function create_test_network_3()
     println("DEBUG: Adding Z2 => Binomial(10, Z1)")
     add_stochastic_vertex!(bn, :Z2, (z1) -> Binomial(10, z1), false, :discrete)
     println("DEBUG: Adding edge Z1 => Z2")
-    add_edge!(bn, :Z1, :Z2)
+        add_edge!(bn, :Z1, :Z2)
 
     return bn
 end
@@ -474,6 +474,7 @@ end
             unnormalized = Dict{Float64,Float64}()
             for x1 in X1_values
                 lp = log_post(Dict(:X1 => x1))
+                println("VERIFYYYYYYYYY:  log_post(Dict(:X1 => $x1)) => $lp")
                 unnormalized[x1] = exp(lp)
             end
 
@@ -511,6 +512,7 @@ end
             unnormalized = Dict{Float64,Float64}()
             for x1 in X1_values
                 lp = log_post(Dict(:X1 => x1))
+                println("VERIFYYYYYYYYY:  log_post(Dict(:X1 => $x1)) => $lp")
                 unnormalized[x1] = exp(lp)
             end
 
@@ -577,11 +579,15 @@ end
 
             # Build the log-posterior function
             log_post = evaluate(bn)
-
+            println(typeof(log_post))
+            println(log_post)
             # Compute unnormalized posterior for each Z1
             unnormalized = Dict{Float64,Float64}()
             for z1 in Z1_values
                 lp = log_post(Dict(:Z1 => z1))
+                println(Dict(:Z1 => 0.1))
+                println(typeof())
+                println("VERIFYYYYYYYYY:  log_post(Dict(:Z1 => $z1)) => $lp")
                 unnormalized[z1] = exp(lp)
             end
 
