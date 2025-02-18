@@ -171,21 +171,16 @@ function evaluate(bn::BayesianNetwork)
     for (i, varname) in enumerate(bn.names)
         is_stochastic = bn.is_stochastic[i]
         if is_stochastic
-            # Get the distribution function for this stochastic variable.
             dist_fn = bn.distributions[stochastic_index]
             parent_vals = parent_values(bn, i)
-            # Create the distribution using the parent values.
             dist = dist_fn(parent_vals...)
-            # Get the current value from the evaluation environment.
+
             value = get(evaluation_env, varname, nothing)
-            # Apply transformation
             bijector = Bijectors.bijector(dist)
             value_transformed = Bijectors.transform(bijector, value)
 
-            # Compute logpdf and logabsdetjacobian
             logpdf_val = Distributions.logpdf(dist, value)
             logjac = Bijectors.logabsdetjac(Bijectors.inverse(bijector), value_transformed)
-
             logp += logpdf_val + logjac
 
             stochastic_index += 1
