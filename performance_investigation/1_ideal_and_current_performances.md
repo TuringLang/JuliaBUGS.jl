@@ -13,8 +13,9 @@ using Distributions
 using FunctionWrappers
 using JuliaBUGS
 using LogDensityProblems
-using MetaGraphsNext
-using Profile, PProf
+using MacroTools
+using Graphs, MetaGraphsNext
+using Profile
 using JuliaBUGS: dnorm, dgamma
 
 (; model_def, data, inits) = JuliaBUGS.BUGSExamples.rats

@@ -267,6 +267,12 @@ function create_new_node_function(node_function_expr, max_indices_length, max_lo
     
     fn_body = node_function_expr.args[2]
     _value_unpack_expr = fn_body.args[1]
+    _value_unpack_expr = MacroTools.postwalk(_value_unpack_expr) do expr
+        if expr == :evaluation_env
+            return :__evaluation_env__
+        end
+        return expr
+    end
     _loop_var_unpack_expr = fn_body.args[2]
     _old_return_stmt = fn_body.args[end]
     _compute_expr = _old_return_stmt.args[1]
@@ -310,6 +316,7 @@ loop_vars = (30, 5)
 vn_indices = (30, 5)
 flattened_values = rand_params
 y_30_5_func(evaluation_env, loop_vars, vn_indices, flattened_values, 0, 0)
+@code_warntype y_30_5_func(evaluation_env, loop_vars, vn_indices, flattened_values, 0, 0)
 @benchmark $y_30_5_func($(evaluation_env), $(loop_vars), $(vn_indices), $(flattened_values), 0, 0)
 ```
 
@@ -443,14 +450,16 @@ f_expr = new_node_function_exprs[i]
 f(evaluation_env, eval_loop_var_vals[i], eval_vn_indices_vals[i], flattened_values, eval_start_idx_vals[i], eval_end_idx_vals[i])
 f_fw = new_node_functions_fws[i]
 f_fw(evaluation_env, eval_loop_var_vals[i], eval_vn_indices_vals[i], flattened_values, eval_start_idx_vals[i], eval_end_idx_vals[i])
+@benchmark $f($(evaluation_env), $(eval_loop_var_vals[i]), $(eval_vn_indices_vals[i]), $(flattened_values), $(eval_start_idx_vals[i]), $(eval_end_idx_vals[i]))
 @benchmark $f_fw($(evaluation_env), $(eval_loop_var_vals[i]), $(eval_vn_indices_vals[i]), $(flattened_values), $(eval_start_idx_vals[i]), $(eval_end_idx_vals[i]))
 ```
+
+**`FunctionWrapper` version introduce allocation and is much slower, not sure the reason**
 
 ```julia
 function _new_eval(evaluation_env, new_node_functions_fws, eval_loop_var_vals, eval_vn_indices_vals, flattened_values, eval_start_idx_vals, eval_end_idx_vals)
     logp = 0.0
     @inbounds for i in eachindex(new_node_functions_fws)
-        vn = model.flattened_graph_node_data.sorted_nodes[i]
         evaluation_env, logp_i = new_node_functions_fws[i](evaluation_env, eval_loop_var_vals[i], eval_vn_indices_vals[i], flattened_values, eval_start_idx_vals[i], eval_end_idx_vals[i])
         logp += logp_i
     end
@@ -460,7 +469,7 @@ end
 _new_eval(evaluation_env, new_node_functions_fws, eval_loop_var_vals, eval_vn_indices_vals, inits_params, eval_start_idx_vals, eval_end_idx_vals)
 ```
 
-The result is wrong, fix it!
+The result is wrong, need to debug.
 
 ```julia
 @code_warntype _new_eval(evaluation_env, new_node_functions_fws, eval_loop_var_vals, eval_vn_indices_vals, inits_params, eval_start_idx_vals, eval_end_idx_vals)
@@ -486,5 +495,9 @@ BenchmarkTools.Trial: 10000 samples with 1 evaluation per sample.
 ```
 
 ## TODOs
+* the result seems to be wrong, debug
+* the benchmark shows that the execution is still not allocation free, see if we can make it that way
+  * Will mentioned that this might be `FunctionWrapper` issue, `MistyClosure` is much more reliable
 * Verify that the types are indeed stable for the wrapped functions
 * investigate why benchmarking a FunctionWrapper directly is slower than benchmarking the wrapped function (overheads)
+  * sometimes they are not allocation free

@@ -153,7 +153,6 @@ For `rats`, we obtain this graph
 flowchart TB
     8 --> 3
     7 --> 3
-    7 --> 4
     10 --> 4
     9 --> 11
     9 --> 4
@@ -290,6 +289,7 @@ The dependency graph for here is
 flowchart TD
     1 --> 2
     2 --> 3
+    3 --> 3
     2 --> 4
     3 --> 4
     4 --> 3
