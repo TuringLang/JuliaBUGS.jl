@@ -13,21 +13,23 @@ using JuliaBUGS:
     analyze_block
 import JuliaBUGS: analyze_statement
 
-function _assign_statement_ids(block_expr, id_map=IdDict{Expr,Int}(), next_id=1)
+function _assign_statement_ids(block_expr, id_map=IdDict{Expr,Int}(), next_id=Ref(1))
+    @assert Meta.isexpr(block_expr, :block)
     for statement in block_expr.args
         if Meta.isexpr(statement, (:(=), :call))
-            id_map[statement] = next_id
-            next_id += 1
+            id_map[statement] = next_id[]
+            next_id[] += 1
         elseif Meta.isexpr(statement, :for)
-            next_id, id_map = _assign_statement_ids(statement.args[2], id_map, next_id)
+            id_map = _assign_statement_ids(statement.args[2], id_map, next_id)
         end
     end
-    return next_id, id_map
+    return id_map
 end
 
 struct StatementIdAttributePass <: CompilerPass
-    statement_to_id::IdDict{Expr,Int}
-    varname_to_statement_id::Dict{VarName,Int}
+    g::JuliaBUGS.BUGSGraph
+    stmt_ids::IdDict{Expr,Int}
+    varname_to_stmt_id::Dict{VarName,Int}
     env::NamedTuple
 end
 
@@ -43,38 +45,53 @@ function analyze_statement(pass::StatementIdAttributePass, expr::Expr, loop_vari
         VarName{symbol}(IndexLens(indices))
     end
 
-    pass.varname_to_statement_id[varname] = pass.statement_to_id[expr]
+    if varname in labels(pass.g)
+        pass.varname_to_stmt_id[varname] = pass.stmt_ids[expr]
+    end
     return nothing
 end
 
-function _build_stmt_dep_graph(stmt_to_id, model, model_def)
-    stmt_dep_graph = Graphs.SimpleDiGraph(length(keys(stmt_to_id)))
-
-    pass = StatementIdAttributePass(stmt_to_id, Dict(), model.evaluation_env)
-    analyze_block(pass, model_def) # TODO: use `model.model_def` can error because of IdDict, there must be a deepcopy somewhere
-
-    # Build reverse lookup from statement ID to variable names
-    id_to_varnames = Dict{Int,Vector{VarName}}()
-    for (varname, stmt_id) in pass.varname_to_statement_id
-        if !haskey(id_to_varnames, stmt_id)
-            id_to_varnames[stmt_id] = [varname]
+function _build_stmt_ids_to_vns(pass)
+    stmt_ids_to_vns = Dict{Int,Vector{<:VarName}}()
+    for (varname, stmt_id) in pass.varname_to_stmt_id
+        if !haskey(stmt_ids_to_vns, stmt_id)
+            stmt_ids_to_vns[stmt_id] = [varname]
         else
-            push!(id_to_varnames[stmt_id], varname)
+            push!(stmt_ids_to_vns[stmt_id], varname)
         end
     end
+    return stmt_ids_to_vns
+end
 
-    # Add edges based on dependencies in model graph
-    for (stmt1, stmt2) in Iterators.product(1:length(stmt_to_id), 1:length(stmt_to_id))
-        for (vn1, vn2) in Iterators.product(id_to_varnames[stmt1], id_to_varnames[stmt2])
-            if vn2 in MetaGraphsNext.inneighbor_labels(model.g, vn1)
-                Graphs.add_edge!(stmt_dep_graph, stmt2, stmt1)
-            elseif vn1 in MetaGraphsNext.inneighbor_labels(model.g, vn2)
-                Graphs.add_edge!(stmt_dep_graph, stmt1, stmt2)
+function _depend_on(g, vns1, vns2)
+    for vn1 in vns1
+        for vn2 in vns2
+            if vn2 in MetaGraphsNext.inneighbor_labels(g, vn1)
+                return true
             end
         end
     end
+    return false
+end
 
-    return stmt_dep_graph, id_to_varnames
+function _build_stmt_dep_graph(stmt_to_id::IdDict{Expr,Int}, model)
+    n_stmts = length(keys(stmt_to_id))
+    stmt_dep_graph = Graphs.SimpleDiGraph(n_stmts)
+
+    pass = StatementIdAttributePass(model.g, stmt_to_id, Dict{VarName,Int}(), model.evaluation_env)
+    analyze_block(pass, model.model_def)
+    stmt_ids_to_vns = _build_stmt_ids_to_vns(pass)
+
+    for (stmt_id_1, stmt_id_2) in Iterators.product(1:n_stmts, 1:n_stmts)
+        if !haskey(stmt_ids_to_vns, stmt_id_1) || !haskey(stmt_ids_to_vns, stmt_id_2)
+            continue
+        end
+        if _depend_on(model.g, stmt_ids_to_vns[stmt_id_1], stmt_ids_to_vns[stmt_id_2])
+            Graphs.add_edge!(stmt_dep_graph, stmt_id_2, stmt_id_1)
+        end
+    end
+
+    return stmt_dep_graph, stmt_ids_to_vns
 end
 
 function _fission_loop(expr, stmt_ids, current_loop=(), fissioned_stmts=[])
@@ -106,18 +123,6 @@ function _sort_fissioned_stmts(stmt_dep_graph, fissioned_stmts, stmt_ids)
     return sorted_fissioned_stmts
 end
 
-function _gen_seq_version(fissioned_stmts)
-    args = []
-    for (loops, stmt) in fissioned_stmts
-        if loops == ()
-            push!(args, stmt)
-        else
-            push!(args, _gen_loop_expr(loops, stmt))
-        end
-    end
-    return Expr(:block, args...)
-end
-
 function _gen_loop_expr(loop_vars, stmt)
     loop_var, l, h = loop_vars[1]
     if length(loop_vars) == 1
@@ -131,34 +136,53 @@ function _gen_loop_expr(loop_vars, stmt)
     end
 end
 
-function _build_stmt_to_type(model, stmt_ids_to_vn, stmt_ids)
-    function var_type(model, vn)
-        if model.g[vn].is_stochastic
-            if model.g[vn].is_observed
-                return :observed
-            else
-                return :model_parameter
-            end
+function _fuse_fissioned_stmts(fissioned_stmts)
+    args = []
+    for (loops, stmt) in fissioned_stmts
+        if loops == ()
+            push!(args, stmt)
         else
-            return :deterministic
+            push!(args, _gen_loop_expr(loops, stmt))
         end
     end
+    return Expr(:block, args...)
+end
 
-    stmt_id_to_types = Dict()
-    for (k, vns) in stmt_ids_to_vn
-        vn_types = [var_type(model, vn) for vn in vns]
-        if !all(==(vn_types[1]), vn_types)
+function _var_type(model, vn)
+    all_vns = labels(model.g)
+    if !(vn in all_vns)
+        return :transformed_data
+    end
+    if model.g[vn].is_stochastic
+        if model.g[vn].is_observed
+            return :observed
+        else
+            return :model_parameter
+        end
+    else
+        return :deterministic
+    end
+end
+
+function _build_stmt_to_type(model, stmt_ids_to_vns, stmt_ids)
+    stmt_id_to_types = Dict{Int,Symbol}()
+    for (stmt_id, vns) in stmt_ids_to_vns
+        vn_types = unique([_var_type(model, vn) for vn in vns])
+        if length(vn_types) > 1
             error("Mixed variable types in statement: $(vn_types)")
         end
-        stmt_id_to_types[k] = vn_types[1]
+        stmt_id_to_types[stmt_id] = only(vn_types)
     end
 
-    stmt_to_type = IdDict()
-    for (k, v) in stmt_ids
-        stmt_to_type[k] = stmt_id_to_types[v]
+    stmt_to_types = IdDict{Expr,Symbol}()
+    for (stmt, stmt_id) in stmt_ids
+        if !haskey(stmt_id_to_types, stmt_id)
+            continue
+        end
+        stmt_to_types[stmt] = stmt_id_to_types[stmt_id]
     end
 
-    return stmt_to_type
+    return stmt_to_types
 end
 
 function _gen_function_expr(model_def, stmt_to_type, stmt_to_range, evaluation_env)
@@ -192,7 +216,9 @@ function _gen_logp_eval_code(model_def, stmt_to_type, stmt_to_range, loop_vars)
                 ),
             )
         elseif arg in collect(keys(stmt_to_type))
-            if stmt_to_type[arg] == :observed
+            if stmt_to_type[arg] == :transformed_data
+                continue
+            elseif stmt_to_type[arg] == :observed
                 push!(exs, _gen_observation_expr(arg))
             elseif stmt_to_type[arg] == :model_parameter
                 push!(exs, _gen_model_parameter_expr(arg, stmt_to_range, loop_vars).args...)
@@ -226,7 +252,9 @@ function _gen_deterministic_expr(expr)
     end
 end
 
-function _build_stmt_to_range(model, stmt_to_type, stmt_ids_to_vn, stmt_ids, sorted_stmt_ids)
+function _build_stmt_to_range(
+    model, stmt_to_types, stmt_ids_to_vns, stmt_ids, sorted_stmt_ids
+)
     var_lengths = model.transformed_var_lengths
     stmt_id_to_range = Dict{Int,Tuple{Int,Int}}()
     current_idx = 1
@@ -241,16 +269,19 @@ function _build_stmt_to_range(model, stmt_to_type, stmt_ids_to_vn, stmt_ids, sor
     stmt_to_range = IdDict{Expr,Tuple{Tuple{Int,Int},Int}}()
 
     for stmt_id in sorted_stmt_ids
-        vns = stmt_ids_to_vn[stmt_id]
+        if !haskey(stmt_ids_to_vns, stmt_id)
+            continue
+        end
+        vns = stmt_ids_to_vns[stmt_id]
         stmt = id_to_stmt[stmt_id]
-        if stmt_to_type[stmt] == :model_parameter
+        if stmt_to_types[stmt] == :model_parameter
             total_length = sum(var_lengths[vn] for vn in vns)
             stmt_id_to_range[stmt_id] = (current_idx, current_idx + total_length - 1)
             stmt_to_range[stmt] = (stmt_id_to_range[stmt_id], var_lengths[vns[1]])
             current_idx += total_length
         end
     end
-    return stmt_to_range, stmt_id_to_range
+    return stmt_to_range
 end
 
 function _gen_model_parameter_expr(expr, stmt_to_range, loop_vars)
@@ -314,21 +345,24 @@ end
 
 function generate_source(model)
     model_def = model.model_def
-    _, stmt_ids = _assign_statement_ids(model_def)
-    stmt_dep_graph, stmt_ids_to_vn = _build_stmt_dep_graph(stmt_ids, model, model_def)
+    stmt_ids = _assign_statement_ids(model_def)
+    stmt_dep_graph, stmt_ids_to_vn = _build_stmt_dep_graph(stmt_ids, model)
     if !isempty(Graphs.simplecycles(stmt_dep_graph))
         error("Dependency graph has cycles")
     end
     fissioned_stmts = _fission_loop(model_def, stmt_ids)
-    seq_model_def = _gen_seq_version(
-        _sort_fissioned_stmts(stmt_dep_graph, fissioned_stmts, stmt_ids)
-    )
+    sorted_fissioned_stmts = _sort_fissioned_stmts(stmt_dep_graph, fissioned_stmts, stmt_ids)
+    fused_stmts = _fuse_fissioned_stmts(sorted_fissioned_stmts)
     stmt_to_type = _build_stmt_to_type(model, stmt_ids_to_vn, stmt_ids)
-    stmt_to_range, stmt_id_to_range = _build_stmt_to_range(
-        model, stmt_to_type, stmt_ids_to_vn, stmt_ids, collect(topological_sort(stmt_dep_graph))
+    stmt_to_range = _build_stmt_to_range(
+        model,
+        stmt_to_type,
+        stmt_ids_to_vn,
+        stmt_ids,
+        collect(topological_sort(stmt_dep_graph)),
     )
     logp_eval_code = _gen_function_expr(
-        seq_model_def, stmt_to_type, stmt_to_range, model.evaluation_env
+        fused_stmts, stmt_to_type, stmt_to_range, model.evaluation_env
     )
     return logp_eval_code
 end
