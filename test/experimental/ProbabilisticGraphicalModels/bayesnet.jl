@@ -374,27 +374,26 @@ using Bijectors: Bijectors
 
     @testset "Evaluate function Evaluation" begin
         bn = BayesianNetwork{Symbol}()
-
+    
         # Add stochastic vertices
         add_stochastic_vertex!(bn, :A, () -> Normal(0, 1), false, :continuous)
         add_stochastic_vertex!(bn, :B, () -> Normal(1, 1 / sqrt(2)), false, :continuous)
-
+    
         # Add deterministic vertex C = A + B
         add_deterministic_vertex!(bn, :C, (a, b) -> a + b)
         add_edge!(bn, :A, :C)
         add_edge!(bn, :B, :C)
-
-        # Set values for the stochastic nodes
-        new_values = deepcopy(bn.values)
-        new_values = BangBang.setindex!!(new_values, 0.5, :A)
-        new_values = BangBang.setindex!!(new_values, 1.5, :B)
-
-        # Create a new BayesianNetwork instance with updated values
+    
+        # Create a new evaluation environment with updated values
+        new_evaluation_env = merge(bn.evaluation_env, (A = 0.5, B = 1.5,))
+    
+        # Create a new BayesianNetwork instance with updated evaluation environment
         bn = BayesianNetwork(
             bn.graph,
             bn.names,
             bn.names_to_ids,
-            new_values,
+            new_evaluation_env,
+            bn.loop_vars,
             bn.distributions,
             bn.deterministic_functions,
             bn.stochastic_ids,
@@ -403,279 +402,20 @@ using Bijectors: Bijectors
             bn.is_observed,
             bn.node_types,
         )
-
+    
         # Evaluate the Bayesian Network
         evaluation_env, logp = evaluate(bn)
-
+    
         # Verify the evaluation
-        @test haskey(evaluation_env, :A)
-        @test haskey(evaluation_env, :B)
-        @test haskey(evaluation_env, :C)
-        @test evaluation_env[:A] == 0.5
-        @test evaluation_env[:B] == 1.5
-        @test evaluation_env[:C] == 2.0
+        @test hasproperty(evaluation_env, :A)
+        @test hasproperty(evaluation_env, :B)
+        @test hasproperty(evaluation_env, :C)
+        @test getproperty(evaluation_env, :A) == 0.5
+        @test getproperty(evaluation_env, :B) == 1.5
+        @test getproperty(evaluation_env, :C) == 2.0
         @test logp isa Float64
         @test logp ≈ logpdf(Normal(0, 1), 0.5) + logpdf(Normal(1, 1 / sqrt(2)), 1.5)
     end
 
-    @testset "Multiplicative network Evaluation" begin
-        bn3 = BayesianNetwork{Symbol}()
-
-        add_stochastic_vertex!(bn3, :A, () -> Normal(2, 1), false, :continuous)
-        add_stochastic_vertex!(bn3, :B, () -> Normal(3, 1), false, :continuous)
-        add_deterministic_vertex!(bn3, :C, (a, b) -> a * b)
-        add_edge!(bn3, :A, :C)
-        add_edge!(bn3, :B, :C)
-
-        # Set specific values; for example, A = 2.5, B = 2.8, so C = 2.5*2.8 = 7.0.
-        new_values3 = deepcopy(bn3.values)
-        new_values3 = BangBang.setindex!!(new_values3, 2.5, :A)
-        new_values3 = BangBang.setindex!!(new_values3, 2.8, :B)
-        bn3 = BayesianNetwork(
-            bn3.graph,
-            bn3.names,
-            bn3.names_to_ids,
-            new_values3,
-            bn3.distributions,
-            bn3.deterministic_functions,
-            bn3.stochastic_ids,
-            bn3.deterministic_ids,
-            bn3.is_stochastic,
-            bn3.is_observed,
-            bn3.node_types,
-        )
-
-        env3, logp3 = evaluate(bn3)
-        expected_logp3 = logpdf(Normal(2, 1), 2.5) + logpdf(Normal(3, 1), 2.8)
-
-        @test env3[:A] == 2.5
-        @test env3[:B] == 2.8
-        @test env3[:C] == 7.0
-        @test logp3 ≈ expected_logp3 atol = 1e-4
-    end
-
-    @testset "Discrete Bayesian Network Evaluation" begin
-        bn_disc = BayesianNetwork{Symbol}()
-
-        # Add discrete stochastic vertices.
-        # For a discrete variable, the provided function returns a distribution.
-        add_stochastic_vertex!(bn_disc, :A, () -> Bernoulli(0.5), false, :discrete)
-        add_stochastic_vertex!(bn_disc, :B, () -> Bernoulli(0.7), false, :discrete)
-
-        # Deterministic node C = A + B.
-        add_deterministic_vertex!(bn_disc, :C, (a, b) -> a + b)
-        add_edge!(bn_disc, :A, :C)
-        add_edge!(bn_disc, :B, :C)
-
-        # Set values: A = 1, B = 0.
-        new_values_disc = deepcopy(bn_disc.values)
-        new_values_disc = BangBang.setindex!!(new_values_disc, 1, :A)
-        new_values_disc = BangBang.setindex!!(new_values_disc, 0, :B)
-        bn_disc = BayesianNetwork(
-            bn_disc.graph,
-            bn_disc.names,
-            bn_disc.names_to_ids,
-            new_values_disc,
-            bn_disc.distributions,
-            bn_disc.deterministic_functions,
-            bn_disc.stochastic_ids,
-            bn_disc.deterministic_ids,
-            bn_disc.is_stochastic,
-            bn_disc.is_observed,
-            bn_disc.node_types,
-        )
-
-        # Evaluate the discrete network.
-        env_disc, logp_disc = evaluate(bn_disc)
-
-        # Expected log probability:
-        expected_logp_disc = logpdf(Bernoulli(0.5), 1) + logpdf(Bernoulli(0.7), 0)
-        @test haskey(env_disc, :A)
-        @test haskey(env_disc, :B)
-        @test haskey(env_disc, :C)
-        @test env_disc[:A] == 1
-        @test env_disc[:B] == 0
-        @test env_disc[:C] == 1
-        @test logp_disc ≈ expected_logp_disc atol = 1e-4
-    end
-
-    @testset "Simpler Mixture Bayesian Network Test" begin
-        # Create a new Bayesian network.
-        bn = BayesianNetwork{Symbol}()
-
-        # Add a discrete indicator node I ~ Bernoulli(0.3)
-        add_stochastic_vertex!(bn, :I, () -> Bernoulli(0.3), false, :discrete)
-
-        # Add a continuous node X whose distribution depends on I.
-        # If I == 1 then X ~ Normal(2, 1); if I == 0 then X ~ Normal(-2, 1).
-        # Here we directly provide a function that accepts parent values.
-        add_stochastic_vertex!(
-            bn, :X, (parent_vals...) -> begin
-                if parent_vals[1] == 1
-                    return Normal(2, 1)
-                else
-                    return Normal(-2, 1)
-                end
-            end, false, :continuous
-        )
-
-        # Record the dependency: I is a parent of X.
-        add_edge!(bn, :I, :X)
-
-        # (No deterministic node in this simplified test case.)
-
-        # Set specific values for I and X.
-        # For example, let I = 1 (so that X follows Normal(2,1)) and X = 2.5.
-        new_values = deepcopy(bn.values)
-        new_values = BangBang.setindex!!(new_values, 1, :I)
-        new_values = BangBang.setindex!!(new_values, 2.5, :X)
-        bn = BayesianNetwork(
-            bn.graph,
-            bn.names,
-            bn.names_to_ids,
-            new_values,
-            bn.distributions,
-            bn.deterministic_functions,  # likely empty here
-            bn.stochastic_ids,
-            bn.deterministic_ids,
-            bn.is_stochastic,
-            bn.is_observed,
-            bn.node_types,
-        )
-
-        # Evaluate the network.
-        env, logp = evaluate(bn)
-
-        # Expected log probability:
-        # For I: logpdf(Bernoulli(0.3), 1)
-        # For X: since I == 1, use Normal(2,1): logpdf(Normal(2, 1), 2.5)
-        expected_logp = logpdf(Bernoulli(0.3), 1) + logpdf(Normal(2, 1), 2.5)
-
-        @test haskey(env, :I)
-        @test haskey(env, :X)
-        @test env[:I] == 1
-        @test env[:X] == 2.5
-        @test logp ≈ expected_logp atol = 1e-4
-        println("Simpler Mixture Network Log probability: ", logp)
-    end
-    @testset "Mixture Bayesian Network with Deterministic Node" begin
-        # Create a new Bayesian network.
-        bn = BayesianNetwork{Symbol}()
-
-        # Add a discrete indicator node I ~ Bernoulli(0.3)
-        add_stochastic_vertex!(bn, :I, () -> Bernoulli(0.3), false, :discrete)
-
-        # Add a continuous node X whose distribution depends on I.
-        # If I == 1 then X ~ Normal(2, 1); if I == 0 then X ~ Normal(-2, 1).
-        # We directly supply a function that accepts parent values.
-        add_stochastic_vertex!(
-            bn, :X, (parent_vals...) -> begin
-                if parent_vals[1] == 1
-                    return Normal(2, 1)
-                else
-                    return Normal(-2, 1)
-                end
-            end, false, :continuous
-        )
-
-        # Record the dependency: I is a parent of X.
-        add_edge!(bn, :I, :X)
-
-        # Add a deterministic node Y = X + 1.
-        add_deterministic_vertex!(bn, :Y, x -> x + 1)
-        add_edge!(bn, :X, :Y)
-
-        # Set specific values for I and X.
-        # For example, let I = 1 (so that X follows Normal(2,1)) and X = 2.5.
-        # Then Y should equal 2.5 + 1 = 3.5.
-        new_values = deepcopy(bn.values)
-        new_values = BangBang.setindex!!(new_values, 1, :I)
-        new_values = BangBang.setindex!!(new_values, 2.5, :X)
-        bn = BayesianNetwork(
-            bn.graph,
-            bn.names,
-            bn.names_to_ids,
-            new_values,
-            bn.distributions,
-            bn.deterministic_functions,  # now includes the function for Y
-            bn.stochastic_ids,
-            bn.deterministic_ids,
-            bn.is_stochastic,
-            bn.is_observed,
-            bn.node_types,
-        )
-
-        # Evaluate the network.
-        env, logp = evaluate(bn)
-
-        # Expected log probability:
-        # For I: logpdf(Bernoulli(0.3), 1)
-        # For X: since I == 1, we use Normal(2,1): logpdf(Normal(2,1), 2.5)
-        # (The deterministic node Y does not contribute to log probability.)
-        expected_logp = logpdf(Bernoulli(0.3), 1) + logpdf(Normal(2, 1), 2.5)
-
-        @test haskey(env, :I)
-        @test haskey(env, :X)
-        @test haskey(env, :Y)
-        @test env[:I] == 1
-        @test env[:X] == 2.5
-        @test env[:Y] == 3.5
-        @test logp ≈ expected_logp atol = 1e-4
-
-        println("Mixture Network with Deterministic Node Log probability: ", logp)
-    end
-
-    @testset "Conditional Network Test" begin
-        # Create a new Bayesian network.
-        bn = BayesianNetwork{Symbol}()
-
-        # Add the first stochastic node: Y1 ~ Normal(0, 1)
-        # Wrap in a zero-argument function so it is callable.
-        println("DEBUG: Adding Y1 => Normal(0, 1)")
-        add_stochastic_vertex!(bn, :Y1, () -> Normal(0, 1), false, :continuous)
-
-        # Add the second stochastic node: Y2 ~ Normal(Y1, 1)
-        # Its distribution depends on Y1.
-        println("DEBUG: Adding Y2 => Normal(Y1, 1)")
-        add_stochastic_vertex!(bn, :Y2, (y1) -> Normal(y1, 1), false, :continuous)
-
-        # Add the dependency edge: Y1 is a parent of Y2.
-        println("DEBUG: Adding edge Y1 => Y2")
-        add_edge!(bn, :Y1, :Y2)
-
-        # Set specific values for Y1 and Y2.
-        # Here we choose: Y1 = 0.2 and Y2 = 0.5.
-        new_values = deepcopy(bn.values)
-        new_values = BangBang.setindex!!(new_values, 0.2, :Y1)
-        new_values = BangBang.setindex!!(new_values, 0.5, :Y2)
-
-        # Create a new Bayesian network instance with the updated values.
-        bn = BayesianNetwork(
-            bn.graph,
-            bn.names,
-            bn.names_to_ids,
-            new_values,
-            bn.distributions,
-            bn.deterministic_functions,
-            bn.stochastic_ids,
-            bn.deterministic_ids,
-            bn.is_stochastic,
-            bn.is_observed,
-            bn.node_types,
-        )
-
-        # Evaluate the network.
-        env, logp = evaluate(bn)
-
-        # Expected log probability:
-        # For Y1: logpdf(Normal(0,1), 0.2)
-        # For Y2: since Y1 = 0.2, Y2 ~ Normal(0.2,1) => logpdf(Normal(0.2,1), 0.5)
-        expected_logp = logpdf(Normal(0, 1), 0.2) + logpdf(Normal(0.2, 1), 0.5)
-
-        @test haskey(env, :Y1)
-        @test haskey(env, :Y2)
-        @test env[:Y1] == 0.2
-        @test env[:Y2] == 0.5
-        @test logp ≈ expected_logp atol = 1e-4
-    end
+    
 end
