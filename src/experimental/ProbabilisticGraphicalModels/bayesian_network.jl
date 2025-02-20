@@ -55,8 +55,7 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
 
     # Preallocate arrays/dictionaries.
     names = Vector{VarName}(undef, n)
-    names_to_ids = Dict{VarName,Int}()
-    values = Dict{VarName,Any}()
+    names_to_ids = Dict{VarName, Int}()
     distributions = Vector{Function}(undef, n)
     deterministic_fns = Vector{Function}(undef, n)
     stochastic_ids = Int[]
@@ -68,7 +67,6 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
     for (i, varname) in enumerate(varnames)
         nodeinfo = g[varname]
         names[i] = varname
-        values[varname] = AbstractPPL.get(evaluation_env, varname)
         names_to_ids[varname] = i
         is_stochastic[i] = nodeinfo.is_stochastic
         is_observed[i] = nodeinfo.is_observed
@@ -88,7 +86,8 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
         SimpleDiGraph{Int}(n),
         names,
         names_to_ids,
-        values,
+        evaluation_env,
+        (;),   
         distributions,
         deterministic_fns,
         stochastic_ids,
