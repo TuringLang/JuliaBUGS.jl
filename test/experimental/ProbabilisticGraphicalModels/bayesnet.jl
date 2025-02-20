@@ -58,50 +58,50 @@ using Bijectors: Bijectors
         add_stochastic_vertex!(bn, :A, Normal(0, 1), false, :continuous)
         add_stochastic_vertex!(bn, :B, Normal(0, 1), false, :continuous)
         add_stochastic_vertex!(bn, :C, Normal(0, 1), false, :continuous)
-
+    
         # Test conditioning
         bn_cond = condition(bn, Dict(:A => 1.0))
         @test bn_cond.is_observed[1] == true
-        @test bn_cond.values[:A] == 1.0
+        @test bn_cond.evaluation_env[:A] == 1.0
         @test bn_cond.is_observed[2] == false
         @test bn_cond.is_observed[3] == false
-
+    
         # Ensure original bn is not mutated
         @test bn.is_observed[1] == false
-        @test !haskey(bn.values, :A)
-
+        @test !haskey(bn.evaluation_env, :A)
+    
         # Test conditioning multiple variables
         bn_cond2 = condition(bn_cond, Dict(:B => 2.0))
         @test bn_cond2.is_observed[1] == true
         @test bn_cond2.is_observed[2] == true
-        @test bn_cond2.values[:A] == 1.0
-        @test bn_cond2.values[:B] == 2.0
-
+        @test bn_cond2.evaluation_env[:A] == 1.0
+        @test bn_cond2.evaluation_env[:B] == 2.0
+    
         # Ensure bn_cond is not mutated
         @test bn_cond.is_observed[2] == false
-        @test !haskey(bn_cond.values, :B)
-
+        @test !haskey(bn_cond.evaluation_env, :B)
+    
         # Test deconditioning
         bn_decond = decondition(bn_cond2, [:A])
         @test bn_decond.is_observed[1] == false
         @test bn_decond.is_observed[2] == true
-        @test !haskey(bn_decond.values, :A)
-        @test bn_decond.values[:B] == 2.0
-
+        @test !haskey(bn_decond.evaluation_env, :A)
+        @test bn_decond.evaluation_env[:B] == 2.0
+    
         # Ensure bn_cond2 is not mutated
         @test bn_cond2.is_observed[1] == true
-        @test bn_cond2.values[:A] == 1.0
-
+        @test bn_cond2.evaluation_env[:A] == 1.0
+    
         # Test deconditioning all
         bn_decond_all = decondition(bn_cond2)
         @test all(.!bn_decond_all.is_observed)
-        @test all(values(bn_decond_all.values) .=== nothing)
-
+        @test isempty(bn_decond_all.evaluation_env)  # NamedTuple should now be empty
+    
         # Ensure bn_cond2 is still not mutated
         @test bn_cond2.is_observed[1] == true
         @test bn_cond2.is_observed[2] == true
-        @test bn_cond2.values[:A] == 1.0
-        @test bn_cond2.values[:B] == 2.0
+        @test bn_cond2.evaluation_env[:A] == 1.0
+        @test bn_cond2.evaluation_env[:B] == 2.0
     end
 
     @testset "Simple ancestral sampling" begin

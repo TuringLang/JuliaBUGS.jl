@@ -10,7 +10,8 @@ struct BayesianNetwork{V,T,F}
     "mapping from variable names to ids"
     names_to_ids::Dict{V,T}
     "values of each variable in the network"
-    values::Dict{V,Any} # TODO: make it a NamedTuple for better performance in the future
+    evaluation_env::NamedTuple
+    loop_vars::NamedTuple
     "distributions of the stochastic variables"
     distributions::Vector{F}
     "deterministic functions of the deterministic variables"
@@ -29,7 +30,8 @@ function BayesianNetwork{V}() where {V}
         SimpleDiGraph{Int}(), # by default, vertex ids are integers
         V[],
         Dict{V,Int}(),
-        Dict{V,Any}(),
+        (;),    # Empty NamedTuple for evaluation_env
+        (;),    # Empty NamedTuple for loop_vars
         Any[],
         Any[],
         Int[],
