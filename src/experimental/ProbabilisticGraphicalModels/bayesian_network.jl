@@ -55,7 +55,7 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
 
     # Preallocate arrays/dictionaries.
     names = Vector{VarName}(undef, n)
-    names_to_ids = Dict{VarName, Int}()
+    names_to_ids = Dict{VarName,Int}()
     loop_vars = NamedTuple()
     distributions = Vector{Function}(undef, n)
     deterministic_fns = Vector{Function}(undef, n)
@@ -89,7 +89,7 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
         names,
         names_to_ids,
         evaluation_env,
-        (;),   
+        (;),
         distributions,
         deterministic_fns,
         stochastic_ids,
@@ -167,35 +167,27 @@ end
 
 function evaluate(bn::BayesianNetwork)
     logp = 0.0
-    evaluation_env = bn.evaluation_env  # Start with the existing NamedTuple
-    stochastic_index = 1
-    deterministic_index = 1
+    evaluation_env = bn.evaluation_env
 
     for (i, varname) in enumerate(bn.names)
         is_stochastic = bn.is_stochastic[i]
         if is_stochastic
-            dist_fn = bn.distributions[stochastic_index]
-            parent_vals = parent_values(bn, evaluation_env, i)
-            dist = dist_fn(parent_vals...)
+            dist_fn = bn.distributions[i](evaluation_env, bn.loop_vars)
 
-            value = getproperty(evaluation_env, varname)
-            bijector = Bijectors.bijector(dist)
+            value = getproperty(evaluation_env, Symbol(varname))
+            bijector = Bijectors.bijector(dist_fn)
             value_transformed = Bijectors.transform(bijector, value)
 
-            logpdf_val = Distributions.logpdf(dist, value)
+            logpdf_val = Distributions.logpdf(dist_fn, value)
             logjac = Bijectors.logabsdetjac(Bijectors.inverse(bijector), value_transformed)
             logp += logpdf_val + logjac
 
-            stochastic_index += 1
         else
-            fn = bn.deterministic_functions[deterministic_index]
+            fn = bn.deterministic_functions[i](evaluation_env, bn.loop_vars)
             parent_vals = parent_values(bn, evaluation_env, i)
-            value = fn(parent_vals...)
 
             # Update NamedTuple in an immutable way
-            evaluation_env = merge(evaluation_env, NamedTuple{(varname,)}((value,)))
-
-            deterministic_index += 1
+            evaluation_env = merge(evaluation_env, NamedTuple{(Symbol(varname),)}((fn,)))
         end
     end
     return evaluation_env, logp
@@ -203,6 +195,8 @@ end
 
 function parent_values(bn::BayesianNetwork, evaluation_env::NamedTuple, i::Int)
     parent_ids = inneighbors(bn.graph, i)
-    parent_vals = [getproperty(evaluation_env, bn.names[parent_id]) for parent_id in parent_ids]
+    parent_vals = [
+        getproperty(evaluation_env, Symbol(bn.names[parent_id])) for parent_id in parent_ids
+    ]
     return parent_vals
 end

@@ -58,45 +58,45 @@ using Bijectors: Bijectors
         add_stochastic_vertex!(bn, :A, Normal(0, 1), false, :continuous)
         add_stochastic_vertex!(bn, :B, Normal(0, 1), false, :continuous)
         add_stochastic_vertex!(bn, :C, Normal(0, 1), false, :continuous)
-    
+
         # Test conditioning
         bn_cond = condition(bn, Dict(:A => 1.0))
         @test bn_cond.is_observed[1] == true
         @test bn_cond.evaluation_env[:A] == 1.0
         @test bn_cond.is_observed[2] == false
         @test bn_cond.is_observed[3] == false
-    
+
         # Ensure original bn is not mutated
         @test bn.is_observed[1] == false
         @test !haskey(bn.evaluation_env, :A)
-    
+
         # Test conditioning multiple variables
         bn_cond2 = condition(bn_cond, Dict(:B => 2.0))
         @test bn_cond2.is_observed[1] == true
         @test bn_cond2.is_observed[2] == true
         @test bn_cond2.evaluation_env[:A] == 1.0
         @test bn_cond2.evaluation_env[:B] == 2.0
-    
+
         # Ensure bn_cond is not mutated
         @test bn_cond.is_observed[2] == false
         @test !haskey(bn_cond.evaluation_env, :B)
-    
+
         # Test deconditioning
         bn_decond = decondition(bn_cond2, [:A])
         @test bn_decond.is_observed[1] == false
         @test bn_decond.is_observed[2] == true
         @test !haskey(bn_decond.evaluation_env, :A)
         @test bn_decond.evaluation_env[:B] == 2.0
-    
+
         # Ensure bn_cond2 is not mutated
         @test bn_cond2.is_observed[1] == true
         @test bn_cond2.evaluation_env[:A] == 1.0
-    
+
         # Test deconditioning all
         bn_decond_all = decondition(bn_cond2)
         @test all(.!bn_decond_all.is_observed)
         @test isempty(bn_decond_all.evaluation_env)  # NamedTuple should now be empty
-    
+
         # Ensure bn_cond2 is still not mutated
         @test bn_cond2.is_observed[1] == true
         @test bn_cond2.is_observed[2] == true
@@ -373,49 +373,62 @@ using Bijectors: Bijectors
     end
 
     @testset "Evaluate function Evaluation" begin
-        bn = BayesianNetwork{Symbol}()
-    
-        # Add stochastic vertices
-        add_stochastic_vertex!(bn, :A, () -> Normal(0, 1), false, :continuous)
-        add_stochastic_vertex!(bn, :B, () -> Normal(1, 1 / sqrt(2)), false, :continuous)
-    
-        # Add deterministic vertex C = A + B
-        add_deterministic_vertex!(bn, :C, (a, b) -> a + b)
-        add_edge!(bn, :A, :C)
-        add_edge!(bn, :B, :C)
-    
-        # Create a new evaluation environment with updated values
-        new_evaluation_env = merge(bn.evaluation_env, (A = 0.5, B = 1.5,))
-    
-        # Create a new BayesianNetwork instance with updated evaluation environment
-        bn = BayesianNetwork(
-            bn.graph,
-            bn.names,
-            bn.names_to_ids,
-            new_evaluation_env,
-            bn.loop_vars,
-            bn.distributions,
-            bn.deterministic_functions,
-            bn.stochastic_ids,
-            bn.deterministic_ids,
-            bn.is_stochastic,
-            bn.is_observed,
-            bn.node_types,
-        )
-    
-        # Evaluate the Bayesian Network
-        evaluation_env, logp = evaluate(bn)
-    
-        # Verify the evaluation
-        @test hasproperty(evaluation_env, :A)
-        @test hasproperty(evaluation_env, :B)
-        @test hasproperty(evaluation_env, :C)
-        @test getproperty(evaluation_env, :A) == 0.5
-        @test getproperty(evaluation_env, :B) == 1.5
-        @test getproperty(evaluation_env, :C) == 2.0
-        @test logp isa Float64
-        @test logp ≈ logpdf(Normal(0, 1), 0.5) + logpdf(Normal(1, 1 / sqrt(2)), 1.5)
-    end
+        test_model = @bugs begin
+            a ~ dnorm(0, 1)
+            b ~ dnorm(0, 1)
+            c ~ dnorm(0, 1)
+        end
 
-    
+        inits = (a=1.0, b=2.0, c=3.0)
+
+        model = compile(test_model, NamedTuple(), inits)
+
+        g = model.g
+
+        # Translate the BUGSGraph to a BayesianNetwork
+        bn = translate_BUGSGraph_to_BayesianNetwork(g, model.evaluation_env)
+
+        # Verify the translation
+        @test length(bn.names) == 3
+        @test bn.names_to_ids[VarName(:a)] == 1
+        @test bn.names_to_ids[VarName(:b)] == 2
+        @test bn.names_to_ids[VarName(:c)] == 3
+
+        @test bn.is_stochastic[bn.names_to_ids[VarName(:a)]] == true
+        @test bn.is_stochastic[bn.names_to_ids[VarName(:b)]] == true
+        @test bn.is_stochastic[bn.names_to_ids[VarName(:c)]] == true
+
+        @test bn.distributions[bn.names_to_ids[VarName(:a)]] isa Function
+        @test bn.distributions[bn.names_to_ids[VarName(:b)]] isa Function
+        @test bn.distributions[bn.names_to_ids[VarName(:c)]] isa Function
+    end
+    @testset "Translating Complex BUGSGraph to BayesianNetwork and Evaluate" begin
+        # Define a more complex test model using JuliaBUGS
+        complex_model = @bugs begin
+            a ~ dnorm(0, 1)
+            b ~ dnorm(1, 1)
+            c = a + b
+        end
+
+        complex_inits = (a=1.0, b=2.0, c=3.0)
+
+        complex_compiled_model = compile(complex_model, NamedTuple(), complex_inits)
+
+        complex_g = complex_compiled_model.g
+
+        # Translate the complex BUGSGraph to a BayesianNetwork
+        complex_bn = translate_BUGSGraph_to_BayesianNetwork(
+            complex_g, complex_compiled_model.evaluation_env
+        )
+
+        evaluation_env, logp = evaluate(complex_bn)
+
+        @test haskey(evaluation_env, :a)
+        @test haskey(evaluation_env, :b)
+        @test haskey(evaluation_env, :c)
+        @test evaluation_env[:c] ≈ evaluation_env[:a] + evaluation_env[:b]
+        @test logp ≈
+            logpdf(Normal(0, 1), evaluation_env[:a]) +
+              logpdf(Normal(1, 1), evaluation_env[:b])
+    end
 end
