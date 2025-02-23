@@ -8,7 +8,9 @@ function condition(
 ) where {V}
     is_observed = copy(bn.is_observed)
     evaluation_env = merge(bn.evaluation_env, NamedTuple(conditioning_variables_and_values))  # Merge into a NamedTuple
-    bn_new = BangBang.setproperties!!(bn; is_observed=is_observed, evaluation_env=evaluation_env)
+    bn_new = BangBang.setproperties!!(
+        bn; is_observed=is_observed, evaluation_env=evaluation_env
+    )
     return condition!(bn_new, conditioning_variables_and_values)
 end
 
@@ -33,7 +35,6 @@ function condition!(
         end
         new_evaluation_env = merge(new_evaluation_env, (name => value,))
     end
-    
     return BangBang.setproperties!!(bn; evaluation_env=new_evaluation_env)
 end
 
@@ -64,8 +65,12 @@ Remove conditioning from a subset of variables in the Bayesian Network.
 """
 function decondition(bn::BayesianNetwork{V}, variables::Vector{V}) where {V}
     is_observed = copy(bn.is_observed)
-    evaluation_env = NamedTuple(filter(kv -> kv.first ∉ variables, pairs(bn.evaluation_env)))  # Remove variables
-    bn_new = BangBang.setproperties!!(bn; is_observed=is_observed, evaluation_env=evaluation_env)
+    evaluation_env = NamedTuple(
+        filter(kv -> kv.first ∉ variables, pairs(bn.evaluation_env))
+    )  # Remove variables
+    bn_new = BangBang.setproperties!!(
+        bn; is_observed=is_observed, evaluation_env=evaluation_env
+    )
     return decondition!(bn_new, variables)
 end
 
@@ -75,12 +80,16 @@ end
 Mutating version of [`decondition`](@ref) for a subset of variables.
 """
 function decondition!(bn::BayesianNetwork{V}, deconditioning_variables::Vector{V}) where {V}
-    new_evaluation_env = NamedTuple(filter(kv -> kv.first ∉ deconditioning_variables, pairs(bn.evaluation_env)))  # Remove from NamedTuple
+    new_evaluation_env = NamedTuple(
+        filter(kv -> kv.first ∉ deconditioning_variables, pairs(bn.evaluation_env))
+    )  # Remove from NamedTuple
 
     for name in deconditioning_variables
         id = bn.names_to_ids[name]
         if !bn.is_stochastic[id]
-            throw(ArgumentError("Variable $name is not stochastic, cannot decondition on it"))
+            throw(
+                ArgumentError("Variable $name is not stochastic, cannot decondition on it")
+            )
         elseif !bn.is_observed[id]
             throw(ArgumentError("Variable $name is not observed, cannot decondition on it"))
         end
