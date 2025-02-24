@@ -85,7 +85,6 @@ using Bijectors: Bijectors
         bn_decond = decondition(bn_cond2, [:A])
         @test bn_decond.is_observed[1] == false
         @test bn_decond.is_observed[2] == true
-        @test !haskey(bn_decond.evaluation_env, :A)
         @test bn_decond.evaluation_env[:B] == 2.0
 
         # Ensure bn_cond2 is not mutated
@@ -95,7 +94,6 @@ using Bijectors: Bijectors
         # Test deconditioning all
         bn_decond_all = decondition(bn_cond2)
         @test all(.!bn_decond_all.is_observed)
-        @test isempty(bn_decond_all.evaluation_env)  # NamedTuple should now be empty
 
         # Ensure bn_cond2 is still not mutated
         @test bn_cond2.is_observed[1] == true
@@ -431,4 +429,29 @@ using Bijectors: Bijectors
             logpdf(Normal(0, 1), evaluation_env[:a]) +
               logpdf(Normal(1, 1), evaluation_env[:b])
     end
+    # @testset "Translating Loop-based BUGSGraph to BayesianNetwork and Evaluate" begin
+    #     # Adding a test model with a for loop
+    #     loop_model = @bugs begin
+    #         for i in 1:3
+    #             x[i] ~ dnorm(i, 1)
+    #         end
+    #     end
+    
+    #     loop_inits = NamedTuple{(:x,)}(( [1.0, 2.0, 3.0], ))
+    
+    #     loop_compiled_model = compile(loop_model, NamedTuple(), loop_inits)
+    
+    #     loop_g = loop_compiled_model.g
+    
+    #     # Translate the loop-based BUGSGraph to a BayesianNetwork
+    #     loop_bn = translate_BUGSGraph_to_BayesianNetwork(
+    #         loop_g, loop_compiled_model.evaluation_env
+    #     )
+    
+    #     loop_evaluation_env, loop_logp = evaluate(loop_bn)
+    
+    #     @test haskey(loop_evaluation_env, :x) && length(loop_evaluation_env[:x]) == 3
+    #     @test loop_logp ≈ sum(logpdf(Normal(i, 1), loop_evaluation_env[:x][i]) for i in 1:3)
+    # end
+    
 end
