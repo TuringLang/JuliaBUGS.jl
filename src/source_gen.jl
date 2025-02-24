@@ -1,43 +1,61 @@
-using JuliaBUGS
-using MacroTools
-using Graphs
-using MetaGraphsNext
-
-using JuliaBUGS:
-    is_deterministic,
-    simplify_lhs,
-    CompilerPass,
-    VarName,
-    IndexLens,
-    simple_arithmetic_eval,
-    analyze_block
-import JuliaBUGS: analyze_statement
-
-function _assign_statement_ids(block_expr, id_map=IdDict{Expr,Int}(), next_id=Ref(1))
+function _build_stmt_to_stmt_id(
+    block_expr, stmt_to_stmt_id=IdDict{Expr,Int}(), next_id=Ref(1)
+)
     @assert Meta.isexpr(block_expr, :block)
     for statement in block_expr.args
         if Meta.isexpr(statement, (:(=), :call))
-            id_map[statement] = next_id[]
+            stmt_to_stmt_id[statement] = next_id[]
             next_id[] += 1
         elseif Meta.isexpr(statement, :for)
-            id_map = _assign_statement_ids(statement.args[2], id_map, next_id)
+            stmt_to_stmt_id = _build_stmt_to_stmt_id(
+                statement.args[2], stmt_to_stmt_id, next_id
+            )
         end
     end
-    return id_map
+    return stmt_to_stmt_id
 end
 
-struct StatementIdAttributePass <: CompilerPass
-    g::JuliaBUGS.BUGSGraph
+# like deepcopy, but stop at :(=) and :call level (:call in :for don't matter)
+function _copy_model_def(model_def, new_model_def=Expr(:block))
+    @assert Meta.isexpr(model_def, :block)
+    for statement in model_def.args
+        if Meta.isexpr(statement, (:(=), :call))
+            push!(new_model_def.args, statement)
+        elseif Meta.isexpr(statement, :for)
+            # Recursively copy the inner block of the for-loop.
+            new_body = _copy_model_def(statement.args[2], Expr(:block))
+            new_for = Expr(:for, statement.args[1], new_body)
+            push!(new_model_def.args, new_for)
+        else
+            # For any other kind of expression, simply include it as is.
+            push!(new_model_def.args, statement)
+        end
+    end
+    return new_model_def
+end
+
+function _build_stmt_id_to_stmt(stmt_to_stmt_id::IdDict{Expr,Int})
+    stmt_id_to_stmt = IdDict{Int,Expr}()
+    for (stmt, stmt_id) in stmt_to_stmt_id
+        stmt_id_to_stmt[stmt_id] = stmt
+    end
+    return stmt_id_to_stmt
+end
+
+struct StatementIdAttributePass{ET} <: CompilerPass
+    all_variables_in_graph::Set{VarName}
     stmt_ids::IdDict{Expr,Int}
-    varname_to_stmt_id::Dict{VarName,Int}
-    env::NamedTuple
+    env::ET
+
+    var_to_stmt_id::Dict{VarName,Int}
 end
 
-function analyze_statement(pass::StatementIdAttributePass, expr::Expr, loop_variables)
+function analyze_statement(
+    pass::StatementIdAttributePass, expr::Expr, loop_variables::NamedTuple
+)
     lhs_expression = is_deterministic(expr) ? expr.args[1] : expr.args[2]
     merged_env = merge(pass.env, loop_variables)
     simplified_lhs = simplify_lhs(merged_env, lhs_expression)
-
     varname = if simplified_lhs isa Symbol
         VarName{simplified_lhs}()
     else
@@ -45,65 +63,75 @@ function analyze_statement(pass::StatementIdAttributePass, expr::Expr, loop_vari
         VarName{symbol}(IndexLens(indices))
     end
 
-    if varname in labels(pass.g)
-        pass.varname_to_stmt_id[varname] = pass.stmt_ids[expr]
+    if varname in pass.all_variables_in_graph
+        pass.var_to_stmt_id[varname] = pass.stmt_ids[expr]
     end
     return nothing
 end
 
-function _build_stmt_ids_to_vns(pass)
-    stmt_ids_to_vns = Dict{Int,Vector{<:VarName}}()
-    for (varname, stmt_id) in pass.varname_to_stmt_id
-        if !haskey(stmt_ids_to_vns, stmt_id)
-            stmt_ids_to_vns[stmt_id] = [varname]
-        else
-            push!(stmt_ids_to_vns[stmt_id], varname)
-        end
-    end
-    return stmt_ids_to_vns
-end
-
-function _depend_on(g, vns1, vns2)
-    for vn1 in vns1
-        for vn2 in vns2
-            if vn2 in MetaGraphsNext.inneighbor_labels(g, vn1)
-                return true
-            end
-        end
-    end
-    return false
-end
-
-function _build_stmt_dep_graph(stmt_to_id::IdDict{Expr,Int}, model)
-    n_stmts = length(keys(stmt_to_id))
-    stmt_dep_graph = Graphs.SimpleDiGraph(n_stmts)
-
-    pass = StatementIdAttributePass(model.g, stmt_to_id, Dict{VarName,Int}(), model.evaluation_env)
+function _build_var_to_stmt_id(model::BUGSModel, stmt_ids::IdDict{Expr,Int})
+    pass = StatementIdAttributePass(
+        Set(labels(model.g)), stmt_ids, model.evaluation_env, Dict{VarName,Int}()
+    )
     analyze_block(pass, model.model_def)
-    stmt_ids_to_vns = _build_stmt_ids_to_vns(pass)
-
-    for (stmt_id_1, stmt_id_2) in Iterators.product(1:n_stmts, 1:n_stmts)
-        if !haskey(stmt_ids_to_vns, stmt_id_1) || !haskey(stmt_ids_to_vns, stmt_id_2)
-            continue
-        end
-        if _depend_on(model.g, stmt_ids_to_vns[stmt_id_1], stmt_ids_to_vns[stmt_id_2])
-            Graphs.add_edge!(stmt_dep_graph, stmt_id_2, stmt_id_1)
-        end
-    end
-
-    return stmt_dep_graph, stmt_ids_to_vns
+    return pass.var_to_stmt_id
 end
 
-function _fission_loop(expr, stmt_ids, current_loop=(), fissioned_stmts=[])
+# coarse graph may contains nodes whose degree is 0, these are transformed data
+function _build_coarse_dep_graph(
+    model::BUGSModel, stmt_to_stmt_id::IdDict{Expr,Int}, var_to_stmt_id::Dict{VarName,Int}
+)
+    fine_graph = model.g
+    coarse_graph = Graphs.SimpleDiGraph(length(stmt_to_stmt_id))
+    for edge in Graphs.edges(fine_graph.graph)
+        src_varname = label_for(fine_graph, src(edge))
+        dst_varname = label_for(fine_graph, dst(edge))
+        src_stmt_id = var_to_stmt_id[src_varname]
+        dst_stmt_id = var_to_stmt_id[dst_varname]
+        add_edge!(coarse_graph, src_stmt_id, dst_stmt_id)
+    end
+    return coarse_graph
+end
+
+function _copy_and_remove_stmt_with_degree_0(
+    model_def, stmt_to_stmt_id, coarse_graph, new_model_def=Expr(:block)
+)
+    @assert Meta.isexpr(model_def, :block)
+    for statement in model_def.args
+        if Meta.isexpr(statement, (:(=), :call))
+            if degree(coarse_graph, stmt_to_stmt_id[statement]) != 0
+                push!(new_model_def.args, statement)
+            end
+        elseif Meta.isexpr(statement, :for)
+            # Recursively copy the inner block of the for-loop.
+            new_body = _copy_and_remove_stmt_with_degree_0(
+                statement.args[2], stmt_to_stmt_id, coarse_graph, Expr(:block)
+            )
+            new_for = Expr(:for, statement.args[1], new_body)
+            push!(new_model_def.args, new_for)
+        else
+            # For any other kind of expression, simply include it as is.
+            push!(new_model_def.args, statement)
+        end
+    end
+    return new_model_def
+end
+
+# represent loop variables as (loop_var, lower_bound, upper_bound)
+function _fully_fission_loop(
+    expr, stmt_to_stmt_id, evaluation_env, current_loop=(), fissioned_stmts=[]
+)
     for stmt in expr.args
-        if Meta.isexpr(stmt, (:(=), :call))
-            push!(fissioned_stmts, (current_loop, stmt))
+        if Meta.isexpr(stmt, (:(=), :call)) # :call is for ~
+            push!(fissioned_stmts, (current_loop, [stmt]))
         elseif Meta.isexpr(stmt, :for)
             MacroTools.@capture(stmt.args[1], loop_var_ = l_:h_)
-            l = JuliaBUGS.simple_arithmetic_eval(model.evaluation_env, l)
-            h = JuliaBUGS.simple_arithmetic_eval(model.evaluation_env, h)
-            _fission_loop(
-                stmt.args[2], stmt_ids, (current_loop..., (loop_var, l, h)), fissioned_stmts
+            _fully_fission_loop(
+                stmt.args[2],
+                stmt_to_stmt_id,
+                evaluation_env,
+                (current_loop..., (loop_var, l, h)),
+                fissioned_stmts,
             )
         end
     end
@@ -115,7 +143,7 @@ function _sort_fissioned_stmts(stmt_dep_graph, fissioned_stmts, stmt_ids)
     sorted_fissioned_stmts = []
     for stmt_id in sorted_stmts
         for (loops, stmt) in fissioned_stmts
-            if stmt_ids[stmt] == stmt_id
+            if stmt_ids[first(stmt)] == stmt_id
                 push!(sorted_fissioned_stmts, (loops, stmt))
             end
         end
@@ -123,7 +151,19 @@ function _sort_fissioned_stmts(stmt_dep_graph, fissioned_stmts, stmt_ids)
     return sorted_fissioned_stmts
 end
 
-function _gen_loop_expr(loop_vars, stmt)
+function _reconstruct_model_def_from_sorted_fissioned_stmts(sorted_fissioned_stmts)
+    args = []
+    for (loops, stmt) in sorted_fissioned_stmts
+        if loops == ()
+            push!(args, first(stmt))
+        else
+            push!(args, __gen_loop_expr(loops, first(stmt)))
+        end
+    end
+    return Expr(:block, args...)
+end
+
+function __gen_loop_expr(loop_vars, stmt)
     loop_var, l, h = loop_vars[1]
     if length(loop_vars) == 1
         return MacroTools.@q for $(loop_var) in ($(l)):($(h))
@@ -131,28 +171,50 @@ function _gen_loop_expr(loop_vars, stmt)
         end
     else
         return MacroTools.@q for $(loop_var) in ($(l)):($(h))
-            $(_gen_loop_expr(loop_vars[2:end], stmt))
+            $(__gen_loop_expr(loop_vars[2:end], stmt))
         end
     end
 end
 
-function _fuse_fissioned_stmts(fissioned_stmts)
-    args = []
-    for (loops, stmt) in fissioned_stmts
-        if loops == ()
-            push!(args, stmt)
+function can_reorder(coarse_graph::Graphs.SimpleDiGraph)
+    if Graphs.is_cyclic(coarse_graph)
+        return false
+    end
+    return true
+end
+
+function _lower_model_def_to_represent_observe_stmts(
+    reconstructed_model_def,
+    stmt_to_stmt_id,
+    stmt_types,
+    evaluation_env,
+    lowered_model_def=Expr(:block),
+)
+    for statement in reconstructed_model_def.args
+        if Meta.isexpr(statement, (:(=), :call))
+            if stmt_types[stmt_to_stmt_id[statement]] == :observed
+                MacroTools.@capture(statement, lhs_ ~ rhs_)
+                new_stmt = MacroTools.@q $(lhs) ≂ $(rhs)
+                push!(lowered_model_def.args, new_stmt)
+            else
+                push!(lowered_model_def.args, statement)
+            end
+        elseif Meta.isexpr(statement, :for)
+            # Recursively copy the inner block of the for-loop.
+            new_body = _lower_model_def_to_represent_observe_stmts(
+                statement.args[2], stmt_to_stmt_id, stmt_types, evaluation_env, Expr(:block)
+            )
+            new_for = Expr(:for, statement.args[1], new_body)
+            push!(lowered_model_def.args, new_for)
         else
-            push!(args, _gen_loop_expr(loops, stmt))
+            # For any other kind of expression, simply include it as is.
+            push!(lowered_model_def.args, statement)
         end
     end
-    return Expr(:block, args...)
+    return lowered_model_def
 end
 
-function _var_type(model, vn)
-    all_vns = labels(model.g)
-    if !(vn in all_vns)
-        return :transformed_data
-    end
+function __variable_type(model, vn)
     if model.g[vn].is_stochastic
         if model.g[vn].is_observed
             return :observed
@@ -164,205 +226,145 @@ function _var_type(model, vn)
     end
 end
 
-function _build_stmt_to_type(model, stmt_ids_to_vns, stmt_ids)
-    stmt_id_to_types = Dict{Int,Symbol}()
-    for (stmt_id, vns) in stmt_ids_to_vns
-        vn_types = unique([_var_type(model, vn) for vn in vns])
-        if length(vn_types) > 1
-            error("Mixed variable types in statement: $(vn_types)")
-        end
-        stmt_id_to_types[stmt_id] = only(vn_types)
-    end
+function _stmt_type(model, var_to_stmt_id, num_stmts)
+    stmt_types = fill(:unknown, num_stmts)
 
-    stmt_to_types = IdDict{Expr,Symbol}()
-    for (stmt, stmt_id) in stmt_ids
-        if !haskey(stmt_id_to_types, stmt_id)
-            continue
+    for (vn, stmt_id) in var_to_stmt_id
+        vt = __variable_type(model, vn)
+        if stmt_types[stmt_id] == :unknown
+            stmt_types[stmt_id] = vt
+        elseif stmt_types[stmt_id] != vt
+            error("Mixed variable types in statement: $(vn)")
         end
-        stmt_to_types[stmt] = stmt_id_to_types[stmt_id]
     end
-
-    return stmt_to_types
+    return stmt_types
 end
 
-function _gen_function_expr(model_def, stmt_to_type, stmt_to_range, evaluation_env)
-    return MacroTools.@q function __logp__(__evaluation_env__, __flattened_values__)
-        $(_gen_NT_unpack_expr(evaluation_env))
+## transform AST to log density computation code
+
+function _gen_log_density_computation_function_expr(model_def, evaluation_env)
+    return MacroTools.@q function __compute_log_density__(
+        __evaluation_env__, __flattened_values__
+    )
+        (; $(keys(evaluation_env)...)) = __evaluation_env__
         __logp__ = 0.0
-        $(_gen_logp_eval_code(model_def, stmt_to_type, stmt_to_range, ())...)
+        __current_idx__ = 1
+        $(__gen_logp_density_function_body_exprs(model_def.args, evaluation_env)...)
+
+        @assert __current_idx__ == length(__flattened_values__) + 1
         return __logp__
     end
 end
 
-function _gen_logp_eval_code(model_def, stmt_to_type, stmt_to_range, loop_vars)
-    exs = Expr[]
-    for arg in model_def.args
-        if Meta.isexpr(arg, :for)
-            loop_var = arg.args[1].args[1]
-            l = arg.args[1].args[2].args[2]
-            h = arg.args[1].args[2].args[3]
-            new_loop_vars = (loop_vars..., (loop_var, (l, h)))
-            push!(
-                exs,
-                Expr(
-                    :for,
-                    arg.args[1],
-                    Expr(
-                        :block,
-                        _gen_logp_eval_code(
-                            arg.args[2], stmt_to_type, stmt_to_range, new_loop_vars
-                        )...,
-                    ),
-                ),
-            )
-        elseif arg in collect(keys(stmt_to_type))
-            if stmt_to_type[arg] == :transformed_data
-                continue
-            elseif stmt_to_type[arg] == :observed
-                push!(exs, _gen_observation_expr(arg))
-            elseif stmt_to_type[arg] == :model_parameter
-                push!(exs, _gen_model_parameter_expr(arg, stmt_to_range, loop_vars).args...)
+function __gen_logp_density_function_body_exprs(stmts::Vector, evaluation_env, exprs=Expr[])
+    for stmt in stmts
+        if Meta.isexpr(stmt, :(=))
+            push!(exprs, __gen_deterministic_exprs(stmt))
+        elseif Meta.isexpr(stmt, :call)
+            if stmt.args[1] == :~
+                push!(exprs, __gen_model_parameter_exprs(stmt).args...)
             else
-                push!(exs, _gen_deterministic_expr(arg))
+                push!(exprs, __gen_observe_exprs(stmt))
+            end
+        else
+            @assert Meta.isexpr(stmt, :for)
+            new_body = __gen_logp_density_function_body_exprs(
+                stmt.args[2].args, evaluation_env
+            )
+            new_for = Expr(:for, stmt.args[1], Expr(:block, new_body...))
+            push!(exprs, new_for)
+        end
+    end
+    return exprs
+end
+
+function __gen_observe_exprs(stmt)
+    MacroTools.@capture(stmt, lhs_ ≂ rhs_)
+    return MacroTools.@q __logp__ += logpdf($(rhs), $(lhs))
+end
+
+function __gen_deterministic_exprs(stmt)
+    return stmt
+end
+
+function __gen_model_parameter_exprs(stmt)
+    MacroTools.@capture(stmt, lhs_ ~ rhs_)
+    return MacroTools.@q begin
+        __dist__ = $rhs
+        __b_inv__ = Bijectors.inverse(Bijectors.bijector(__dist__))
+        __transformed_length__ = length(Bijectors.transformed(__dist__))
+        __reconstructed_value__ = JuliaBUGS.reconstruct(
+            __b_inv__,
+            __dist__,
+            view(
+                __flattened_values__,
+                (__current_idx__):(__current_idx__ + __transformed_length__ - 1),
+            ),
+        )
+        __current_idx__ += __transformed_length__
+        (__value__, __logjac__) = Bijectors.with_logabsdet_jacobian(
+            __b_inv__, __reconstructed_value__
+        )
+        __logprior__ = Distributions.logpdf(__dist__, __value__) + __logjac__
+        __logp__ = __logp__ + __logprior__
+        $lhs = __value__
+    end
+end
+
+## Utilities
+
+function show_coarse_graph(
+    stmt_id_to_stmt::IdDict{Int,Expr}, coarse_graph::Graphs.SimpleDiGraph
+)
+    for edge in Graphs.edges(coarse_graph)
+        src_stmt = stmt_id_to_stmt[src(edge)]
+        dst_stmt = stmt_id_to_stmt[dst(edge)]
+        println("$src_stmt -> $dst_stmt")
+    end
+end
+
+function _only_keep_model_parameter_stmts(lowered_model_def, new_lowered_model_def=Expr(:block))
+    for statement in lowered_model_def.args
+        if Meta.isexpr(statement, (:(=), :call))
+            if statement.args[1] == :~
+                push!(new_lowered_model_def.args, statement)
+            end
+        else
+            @assert Meta.isexpr(statement, :for)
+            new_body = _only_keep_model_parameter_stmts(
+                statement.args[2], Expr(:block)
+            )
+            if length(new_body.args) > 0
+                new_for = Expr(:for, statement.args[1], new_body)
+                push!(new_lowered_model_def.args, new_for)
             end
         end
     end
-    return exs
+    return new_lowered_model_def
 end
 
-function _gen_NT_unpack_expr(evaluation_env)
-    lhs = :((; $(keys(evaluation_env)...)))
-    rhs = :__evaluation_env__
-    return MacroTools.@q $lhs = $rhs
+struct CollectSortedNodes{ET} <: CompilerPass
+    sorted_nodes::Vector{<:VarName}
+    env::ET
 end
 
-function _gen_observation_expr(expr)
-    if MacroTools.@capture(expr, lhs_ ~ rhs_)
-        return :(__logp__ += logpdf($rhs, $lhs))
-    else
-        error()
-    end
+function CollectSortedNodes(env::NamedTuple)
+    return CollectSortedNodes(VarName[], env)
 end
 
-function _gen_deterministic_expr(expr)
-    if MacroTools.@capture(expr, lhs_ = rhs_)
-        return expr
-    else
-        error()
-    end
-end
-
-function _build_stmt_to_range(
-    model, stmt_to_types, stmt_ids_to_vns, stmt_ids, sorted_stmt_ids
+function analyze_statement(
+    pass::CollectSortedNodes, expr::Expr, loop_variables::NamedTuple
 )
-    var_lengths = model.transformed_var_lengths
-    stmt_id_to_range = Dict{Int,Tuple{Int,Int}}()
-    current_idx = 1
-
-    # build reverse lookup from stmt_id to stmt
-    id_to_stmt = Dict{Int,Expr}()
-    for (stmt, stmt_id) in stmt_ids
-        id_to_stmt[stmt_id] = stmt
-    end
-
-    # the value is range and individual length
-    stmt_to_range = IdDict{Expr,Tuple{Tuple{Int,Int},Int}}()
-
-    for stmt_id in sorted_stmt_ids
-        if !haskey(stmt_ids_to_vns, stmt_id)
-            continue
-        end
-        vns = stmt_ids_to_vns[stmt_id]
-        stmt = id_to_stmt[stmt_id]
-        if stmt_to_types[stmt] == :model_parameter
-            total_length = sum(var_lengths[vn] for vn in vns)
-            stmt_id_to_range[stmt_id] = (current_idx, current_idx + total_length - 1)
-            stmt_to_range[stmt] = (stmt_id_to_range[stmt_id], var_lengths[vns[1]])
-            current_idx += total_length
-        end
-    end
-    return stmt_to_range
-end
-
-function _gen_model_parameter_expr(expr, stmt_to_range, loop_vars)
-    (start_idx, end_idx), param_length = stmt_to_range[expr]
-    end_idx = _gen_end_idx_expr(start_idx, loop_vars, param_length)
-    if end_idx isa Expr
-        if param_length == 1
-            start_idx = end_idx
-        else
-            start_idx = :($end_idx - $(param_length - 1))
-        end
-    elseif end_idx isa Int
-        start_idx = end_idx - param_length + 1
+    lhs_expression = is_deterministic(expr) ? expr.args[1] : expr.args[2]
+    merged_env = merge(pass.env, loop_variables)
+    simplified_lhs = simplify_lhs(merged_env, lhs_expression)
+    varname = if simplified_lhs isa Symbol
+        VarName{simplified_lhs}()
     else
-        error()
-    end
-    if MacroTools.@capture(expr, lhs_ ~ rhs_)
-        return MacroTools.@q begin
-            __dist__ = $rhs
-            __b__ = Bijectors.bijector(__dist__)
-            __b_inv__ = Bijectors.inverse(__b__)
-            __reconstructed_value__ = JuliaBUGS.reconstruct(
-                __b_inv__, __dist__, view(__flattened_values__, ($start_idx):($end_idx))
-            )
-            (__value__, __logjac__) = Bijectors.with_logabsdet_jacobian(
-                __b_inv__, __reconstructed_value__
-            )
-            __logprior__ = Distributions.logpdf(__dist__, __value__) + __logjac__
-            __logp__ = __logp__ + __logprior__
-            $lhs = __value__
-        end
-    else
-        error()
-    end
-end
-
-function _gen_end_idx_expr(start_idx, loop_vars, param_length)
-    if isempty(loop_vars)
-        return start_idx + param_length - 1
+        symbol, indices... = simplified_lhs
+        VarName{symbol}(IndexLens(indices))
     end
 
-    # Process loops in reverse order (inner to outer)
-    reversed_loops = reverse(loop_vars)
-    cumulative_product = 1  # Initial cumulative product as expression
-    terms = Expr[]
-    for (var, (l, h)) in reversed_loops
-        size_expr = :($h - $l + 1)
-        term = :(($var - $l) * $cumulative_product)
-        push!(terms, term)
-        cumulative_product = :($size_expr * $cumulative_product)
-    end
-
-    # Sum all terms and build final expression
-    offset = length(terms) == 1 ? terms[1] : Expr(:call, :+, terms...)
-    if param_length == 1
-        return :($start_idx + $offset)
-    else
-        return :($start_idx + ($offset + 1) * $param_length - 1)
-    end
-end
-
-function generate_source(model)
-    model_def = model.model_def
-    stmt_ids = _assign_statement_ids(model_def)
-    stmt_dep_graph, stmt_ids_to_vn = _build_stmt_dep_graph(stmt_ids, model)
-    if !isempty(Graphs.simplecycles(stmt_dep_graph))
-        error("Dependency graph has cycles")
-    end
-    fissioned_stmts = _fission_loop(model_def, stmt_ids)
-    sorted_fissioned_stmts = _sort_fissioned_stmts(stmt_dep_graph, fissioned_stmts, stmt_ids)
-    fused_stmts = _fuse_fissioned_stmts(sorted_fissioned_stmts)
-    stmt_to_type = _build_stmt_to_type(model, stmt_ids_to_vn, stmt_ids)
-    stmt_to_range = _build_stmt_to_range(
-        model,
-        stmt_to_type,
-        stmt_ids_to_vn,
-        stmt_ids,
-        collect(topological_sort(stmt_dep_graph)),
-    )
-    logp_eval_code = _gen_function_expr(
-        fused_stmts, stmt_to_type, stmt_to_range, model.evaluation_env
-    )
-    return logp_eval_code
+    push!(pass.sorted_nodes, varname)
+    return nothing
 end
