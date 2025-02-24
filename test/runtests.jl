@@ -10,6 +10,7 @@ using AbstractMCMC
 using AdvancedHMC
 using AdvancedMH
 using Bijectors
+using ChainRules
 using Distributions
 using Graphs
 using MetaGraphsNext
