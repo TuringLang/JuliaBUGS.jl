@@ -3,7 +3,7 @@ module BUGSExamples
 using JuliaBUGS: JuliaBUGS, @bugs
 using JSON
 
-struct Example{DNT<:NamedTuple, INT<:NamedTuple, INT2<:NamedTuple, RNT}
+struct Example{DNT <: NamedTuple, INT <: NamedTuple, INT2 <: NamedTuple, RNT}
     name::String
     model_def::Expr
     original_syntax_program::String
@@ -51,13 +51,12 @@ vol_1 = (
     oxford = oxford,
     lsat = lsat,
     bones = bones,
-    #inhalers = inhalers, # chain graph is not supported
     mice = mice,
     kidney = kidney,
     leuk = leuk,
     leukfr = leukfr
 )
-        
+
 include("Volume_2/01_Dugongs.jl")
 include("Volume_2/02_Orange_trees.jl")
 include("Volume_2/03_Multivariate_Orange_trees.jl")
@@ -92,11 +91,7 @@ vol_2 = (
     ice = ice,
     beetles = beetles,
     alligators = alligators,
-    endo = endo,
-    # stagnant = stagnant,
-    # asia = asia,
-    # pigs = pigs,
-    # simulating_data = simulating_data
+    endo = endo
 )
 
 const VOLUME_1 = vol_1
