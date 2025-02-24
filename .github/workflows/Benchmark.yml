@@ -6,6 +6,11 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+  repository-projects: write
+
 jobs:
   benchmark:
     strategy:
@@ -59,6 +64,9 @@ jobs:
     needs: benchmark
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+      contents: write
 
     steps:
     - name: Download all benchmark results
@@ -77,6 +85,7 @@ jobs:
 
     - name: Post combined results to PR
       uses: marocchino/sticky-pull-request-comment@v2
+      if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
       with:
         path: combined_benchmark_results.txt
         recreate: true

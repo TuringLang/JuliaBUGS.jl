@@ -10,6 +10,7 @@ using AbstractMCMC
 using AdvancedHMC
 using AdvancedMH
 using Bijectors
+using ChainRules
 using Distributions
 using Graphs
 using MetaGraphsNext
@@ -21,6 +22,7 @@ using MacroTools
 using MCMCChains
 using Random
 using ReverseDiff
+using Serialization
 
 AbstractMCMC.setprogress!(false)
 
@@ -60,6 +62,7 @@ end
 
 if test_group == "log_density" || test_group == "all"
     include("log_density.jl")
+    include("model.jl")
 end
 
 if test_group == "gibbs" || test_group == "all"
