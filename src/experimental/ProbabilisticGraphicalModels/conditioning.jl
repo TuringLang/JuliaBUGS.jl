@@ -65,9 +65,6 @@ Remove conditioning from a subset of variables in the Bayesian Network.
 """
 function decondition(bn::BayesianNetwork{V}, variables::Vector{V}) where {V}
     is_observed = copy(bn.is_observed)
-    evaluation_env = NamedTuple(
-        filter(kv -> kv.first ∉ variables, pairs(bn.evaluation_env))
-    )  # Remove variables
     bn_new = BangBang.setproperties!!(
         bn; is_observed=is_observed, evaluation_env=evaluation_env
     )
