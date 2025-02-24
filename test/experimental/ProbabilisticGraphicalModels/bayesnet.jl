@@ -429,29 +429,29 @@ using Bijectors: Bijectors
             logpdf(Normal(0, 1), evaluation_env[:a]) +
               logpdf(Normal(1, 1), evaluation_env[:b])
     end
-    # @testset "Translating Loop-based BUGSGraph to BayesianNetwork and Evaluate" begin
-    #     # Adding a test model with a for loop
-    #     loop_model = @bugs begin
-    #         for i in 1:3
-    #             x[i] ~ dnorm(i, 1)
-    #         end
-    #     end
+    @testset "Translating Loop-based BUGSGraph to BayesianNetwork and Evaluate" begin
+        # Adding a test model with a for loop
+        loop_model = @bugs begin
+            for i in 1:3
+                x[i] ~ dnorm(i, 1)
+            end
+        end
 
-    #     loop_inits = NamedTuple{(:x,)}(( [1.0, 2.0, 3.0], ))
+        loop_inits = NamedTuple{(:x,)}(( [1.0, 2.0, 3.0], ))
 
-    #     loop_compiled_model = compile(loop_model, NamedTuple(), loop_inits)
+        loop_compiled_model = compile(loop_model, NamedTuple(), loop_inits)
 
-    #     loop_g = loop_compiled_model.g
+        loop_g = loop_compiled_model.g
 
-    #     # Translate the loop-based BUGSGraph to a BayesianNetwork
-    #     loop_bn = translate_BUGSGraph_to_BayesianNetwork(
-    #         loop_g, loop_compiled_model.evaluation_env
-    #     )
+        # Translate the loop-based BUGSGraph to a BayesianNetwork
+        loop_bn = translate_BUGSGraph_to_BayesianNetwork(
+            loop_g, loop_compiled_model.evaluation_env
+        )
 
-    #     loop_evaluation_env, loop_logp = evaluate(loop_bn)
+        loop_evaluation_env, loop_logp = evaluate(loop_bn)
 
-    #     @test haskey(loop_evaluation_env, :x) && length(loop_evaluation_env[:x]) == 3
-    #     @test loop_logp ≈ sum(logpdf(Normal(i, 1), loop_evaluation_env[:x][i]) for i in 1:3)
-    # end
+        @test haskey(loop_evaluation_env, :x) && length(loop_evaluation_env[:x]) == 3
+        @test loop_logp ≈ sum(logpdf(Normal(i, 1), loop_evaluation_env[:x][i]) for i in 1:3)
+    end
 
 end
