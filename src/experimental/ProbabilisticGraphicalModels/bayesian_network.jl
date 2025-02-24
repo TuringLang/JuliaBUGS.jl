@@ -184,19 +184,10 @@ function evaluate(bn::BayesianNetwork)
 
         else
             fn = bn.deterministic_functions[i](evaluation_env, bn.loop_vars)
-            parent_vals = parent_values(bn, evaluation_env, i)
 
             # Update NamedTuple in an immutable way
             evaluation_env = merge(evaluation_env, NamedTuple{(Symbol(varname),)}((fn,)))
         end
     end
     return evaluation_env, logp
-end
-
-function parent_values(bn::BayesianNetwork, evaluation_env::NamedTuple, i::Int)
-    parent_ids = inneighbors(bn.graph, i)
-    parent_vals = [
-        getproperty(evaluation_env, Symbol(bn.names[parent_id])) for parent_id in parent_ids
-    ]
-    return parent_vals
 end
