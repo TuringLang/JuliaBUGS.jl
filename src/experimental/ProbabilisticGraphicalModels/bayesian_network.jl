@@ -174,7 +174,7 @@ function evaluate(bn::BayesianNetwork)
         if is_stochastic
             dist_fn = bn.distributions[i](evaluation_env, bn.loop_vars)
 
-            value = getproperty(evaluation_env, Symbol(varname))
+            value = AbstractPPL.get(evaluation_env, varname)
             bijector = Bijectors.bijector(dist_fn)
             value_transformed = Bijectors.transform(bijector, value)
 
