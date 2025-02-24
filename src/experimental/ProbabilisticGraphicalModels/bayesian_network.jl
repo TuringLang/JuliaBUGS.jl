@@ -168,7 +168,7 @@ end
 function evaluate(bn::BayesianNetwork)
     logp = 0.0
     evaluation_env = bn.evaluation_env
-    
+
     for (i, varname) in enumerate(bn.names)
         is_stochastic = bn.is_stochastic[i]
         if is_stochastic
