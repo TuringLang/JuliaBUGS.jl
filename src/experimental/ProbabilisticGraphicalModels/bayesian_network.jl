@@ -11,7 +11,7 @@ struct BayesianNetwork{V,T,F}
     names_to_ids::Dict{V,T}
     "values of each variable in the network"
     evaluation_env::NamedTuple
-    loop_vars::Dict{V, NamedTuple}
+    loop_vars::Dict{V,NamedTuple}
     "distributions of the stochastic variables"
     distributions::Vector{F}
     "deterministic functions of the deterministic variables"
@@ -31,7 +31,7 @@ function BayesianNetwork{V}() where {V}
         V[],
         Dict{V,Int}(),
         (;),    # Empty NamedTuple for evaluation_env
-        Dict{V, NamedTuple}(),   
+        Dict{V,NamedTuple}(),
         Any[],
         Any[],
         Int[],
@@ -56,7 +56,7 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
     # Preallocate arrays/dictionaries.
     names = Vector{VarName}(undef, n)
     names_to_ids = Dict{VarName,Int}()
-    loop_vars = Dict{VarName, NamedTuple}()
+    loop_vars = Dict{VarName,NamedTuple}()
     distributions = Vector{Function}(undef, n)
     deterministic_fns = Vector{Function}(undef, n)
     stochastic_ids = Int[]

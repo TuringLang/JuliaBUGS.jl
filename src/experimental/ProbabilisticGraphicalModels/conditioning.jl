@@ -7,10 +7,13 @@ function condition(
     bn::BayesianNetwork{V}, conditioning_variables_and_values::Dict{V,<:Any}
 ) where {V}
     is_observed = copy(bn.is_observed)
-    evaluation_env = merge(bn.evaluation_env, NamedTuple{Tuple(Symbol(k) for k in keys(conditioning_variables_and_values))}(
-    values(conditioning_variables_and_values)
-))
-  # Merge into a NamedTuple
+    evaluation_env = merge(
+        bn.evaluation_env,
+        NamedTuple{Tuple(Symbol(k) for k in keys(conditioning_variables_and_values))}(
+            values(conditioning_variables_and_values)
+        ),
+    )
+    # Merge into a NamedTuple
     bn_new = BangBang.setproperties!!(
         bn; is_observed=is_observed, evaluation_env=evaluation_env
     )
