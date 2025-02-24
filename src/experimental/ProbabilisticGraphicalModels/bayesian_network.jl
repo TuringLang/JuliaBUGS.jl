@@ -11,7 +11,7 @@ struct BayesianNetwork{V,T,F}
     names_to_ids::Dict{V,T}
     "values of each variable in the network"
     evaluation_env::NamedTuple
-    loop_vars::NamedTuple
+    loop_vars::Dict{V, NamedTuple}
     "distributions of the stochastic variables"
     distributions::Vector{F}
     "deterministic functions of the deterministic variables"
@@ -31,7 +31,7 @@ function BayesianNetwork{V}() where {V}
         V[],
         Dict{V,Int}(),
         (;),    # Empty NamedTuple for evaluation_env
-        (;),    # Empty NamedTuple for loop_vars
+        Dict{V, NamedTuple}(),   
         Any[],
         Any[],
         Int[],
@@ -56,7 +56,7 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
     # Preallocate arrays/dictionaries.
     names = Vector{VarName}(undef, n)
     names_to_ids = Dict{VarName,Int}()
-    loop_vars = NamedTuple()
+    loop_vars = Dict{VarName, NamedTuple}()
     distributions = Vector{Function}(undef, n)
     deterministic_fns = Vector{Function}(undef, n)
     stochastic_ids = Int[]
@@ -71,7 +71,7 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
         names_to_ids[varname] = i
         is_stochastic[i] = nodeinfo.is_stochastic
         is_observed[i] = nodeinfo.is_observed
-        loop_vars = merge(loop_vars, nodeinfo.loop_vars)
+        loop_vars[varname] = nodeinfo.loop_vars
 
         if nodeinfo.is_stochastic
             distributions[i] = nodeinfo.node_function
@@ -89,7 +89,7 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
         names,
         names_to_ids,
         evaluation_env,
-        (;),
+        loop_vars,
         distributions,
         deterministic_fns,
         stochastic_ids,
@@ -172,7 +172,7 @@ function evaluate(bn::BayesianNetwork)
     for (i, varname) in enumerate(bn.names)
         is_stochastic = bn.is_stochastic[i]
         if is_stochastic
-            dist_fn = bn.distributions[i](evaluation_env, bn.loop_vars)
+            dist_fn = bn.distributions[i](evaluation_env, bn.loop_vars[varname])
 
             value = AbstractPPL.get(evaluation_env, varname)
             bijector = Bijectors.bijector(dist_fn)
@@ -183,7 +183,7 @@ function evaluate(bn::BayesianNetwork)
             logp += logpdf_val + logjac
 
         else
-            fn = bn.deterministic_functions[i](evaluation_env, bn.loop_vars)
+            fn = bn.deterministic_functions[i](evaluation_env, bn.loop_vars[varname])
             evaluation_env = BangBang.setindex!!(evaluation_env, fn, varname)
         end
     end
