@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ['1', '1.9', 'nightly']
+        version: ['1', '1.10', 'nightly']
         os: [macOS-latest]
         arch: [aarch64]
 
@@ -71,6 +71,11 @@ jobs:
           command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true);"
         env:
           TEST_GROUP: "mcmchains"
+
+      - name: Running `experimental` tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: "experimental"
       
       - uses: julia-actions/julia-processcoverage@v1
         if: matrix.coverage
