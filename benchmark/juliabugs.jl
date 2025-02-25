@@ -1,4 +1,4 @@
-const juliabugs_examples = (
+const juliabugs_ad_examples = (
     :rats,
     :pumps,
     :dogs,
@@ -30,7 +30,41 @@ const juliabugs_examples = (
     :endo,
 )
 
-const ad_error_examples = (:biopsies, :eyes, :hearts, :cervix)
+const juliabugs_all_example = (
+    :rats,
+    :pumps,
+    :dogs,
+    :seeds,
+    :surgical_realistic,
+    :magnesium,
+    :salm,
+    :equiv,
+    :dyes,
+    :stacks,
+    :epil,
+    :blockers,
+    :oxford,
+    :lsat,
+    :bones,
+    :mice,
+    :kidney,
+    :leuk,
+    :leukfr,
+    :dugongs,
+    :orange_trees,
+    :orange_trees_multivariate,
+    :biopsies,
+    :eyes,
+    :hearts,
+    :air,
+    :cervix,
+    :jaws,
+    :birats,
+    :schools,
+    :beetles,
+    :alligators,
+    :endo,
+)
 
 function _create_JuliaBUGS_model(model_name::Symbol)
     (; model_def, data, inits) = getfield(JuliaBUGS.BUGSExamples, model_name)
@@ -48,4 +82,4 @@ function benchmark_JuliaBUGS_model(model::JuliaBUGS.BUGSModel)
     return BenchmarkResult(:juliabugs, dim, density_time, density_and_gradient_time)
 end
 
-# writing a _function_ to benchmark all models won't work because of world age issues
+# writing a _function_ to benchmark all models won't work because of worldage error

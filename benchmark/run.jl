@@ -6,7 +6,6 @@ include("benchmark.jl")
 
 ##
 stan_results = Benchmark.benchmark_Stan_models()
-Benchmark.extract_median_time(stan_results)
 
 ##
 
@@ -29,5 +28,5 @@ end
 
 ##
 
-Benchmark._print_results_table(stan_results)
-Benchmark._print_results_table(juliabugs_results)
+Benchmark._print_results_table(stan_results; backend=Val(:markdown))
+println(Benchmark._print_results_table(juliabugs_results))

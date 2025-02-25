@@ -58,9 +58,11 @@ function benchmark_Stan_model(model::StanLogDensityProblems.StanProblem)
     return BenchmarkResult(:stan, Int(dim), density_time, density_and_gradient_time)
 end
 
-function benchmark_Stan_models()
+function benchmark_Stan_models(
+    examples_to_benchmark::Vector{Symbol}=collect(keys(stan_models_path_info))
+)
     results = OrderedDict{Symbol,BenchmarkResult}()
-    for model_name in keys(stan_models_path_info)
+    for model_name in examples_to_benchmark
         @info "Benchmarking $model_name"
         model = _create_StanLogDensityProblem(model_name)
         results[model_name] = benchmark_Stan_model(model)
