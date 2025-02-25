@@ -2,15 +2,7 @@ include("benchmark.jl")
 using OrderedCollections
 
 examples_to_benchmark = [
-    :rats,
-    :pumps,
-    :bones,
-    :oxford,
-    :epil,
-    :lsat,
-    :schools,
-    :beetles,
-    :air,
+    :rats, :pumps, :bones, :oxford, :epil, :lsat, :schools, :beetles, :air
 ]
 
 stan_results = Benchmark.benchmark_Stan_models(examples_to_benchmark)
