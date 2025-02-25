@@ -8,8 +8,7 @@ examples_to_benchmark = [
 stan_results = Benchmark.benchmark_Stan_models(examples_to_benchmark)
 
 juliabugs_models = [
-    Benchmark._create_JuliaBUGS_model(model_name) for
-    model_name in examples_to_benchmark
+    Benchmark._create_JuliaBUGS_model(model_name) for model_name in examples_to_benchmark
 ]
 juliabugs_results = OrderedDict{Symbol,Benchmark.BenchmarkResult}()
 for (model_name, model) in zip(examples_to_benchmark, juliabugs_models)
