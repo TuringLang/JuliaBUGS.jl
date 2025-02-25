@@ -7,6 +7,7 @@ using Distributions
 using JuliaBUGS
 using JuliaBUGS: BUGSGraph, VarName, NodeInfo
 using AbstractPPL
+using Bijectors: Bijectors
 
 include("bayesian_network.jl")
 include("conditioning.jl")
@@ -22,5 +23,6 @@ export BayesianNetwork,
     add_deterministic_vertex!,
     add_stochastic_vertex!,
     add_vertex!,
-    translate_BUGSGraph_to_BayesianNetwork
+    translate_BUGSGraph_to_BayesianNetwork,
+    evaluate
 end
