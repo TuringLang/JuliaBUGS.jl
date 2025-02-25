@@ -437,7 +437,7 @@ using Bijectors: Bijectors
             end
         end
 
-        loop_inits = NamedTuple{(:x,)}(( [1.0, 2.0, 3.0], ))
+        loop_inits = NamedTuple{(:x,)}(([1.0, 2.0, 3.0],))
 
         loop_compiled_model = compile(loop_model, NamedTuple(), loop_inits)
 
@@ -453,5 +453,4 @@ using Bijectors: Bijectors
         @test haskey(loop_evaluation_env, :x) && length(loop_evaluation_env[:x]) == 3
         @test loop_logp ≈ sum(logpdf(Normal(i, 1), loop_evaluation_env[:x][i]) for i in 1:3)
     end
-
 end
