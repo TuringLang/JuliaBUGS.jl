@@ -4,7 +4,7 @@ model_def = @bugs begin
     # j indexes alternative prior distributions
     for j in 1:6
         mu[j] ~ dunif(-10, 10)
-        OR[j] = exp(mu[j])
+        odds.ratio[j] = exp(mu[j])
 
         # k indexes study number
         for k in 1:8
