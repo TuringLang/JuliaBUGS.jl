@@ -30,12 +30,7 @@ const juliabugs_examples = (
     :endo,
 )
 
-const ad_error_examples = (
-    :biopsies,
-    :eyes,
-    :hearts,
-    :cervix,
-)
+const ad_error_examples = (:biopsies, :eyes, :hearts, :cervix)
 
 function _create_JuliaBUGS_model(model_name::Symbol)
     (; model_def, data, inits) = getfield(JuliaBUGS.BUGSExamples, model_name)
