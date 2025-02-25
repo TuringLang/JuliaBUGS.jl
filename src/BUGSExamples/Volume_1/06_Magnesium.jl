@@ -61,7 +61,7 @@ model_def = @bugs begin
 
     # Prior 6: Half-Normal on tau.sqrd
     p0 = phi(0.75) / var"s0.sqrd"
-    var"tau.sqrd"[6] ~ truncated(dnorm(0, p0), 0, Inf)
+    var"tau.sqrd"[6] ~ truncated(dnorm(0, p0), 0, nothing)
     tau[6] = sqrt(var"tau.sqrd"[6])
     var"inv.tau.sqrd"[6] = 1 / var"tau.sqrd"[6]
 end
