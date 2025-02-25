@@ -161,3 +161,8 @@ function add_edge!(bn::BayesianNetwork{V,T}, from::V, to::V)::Bool where {T,V}
     to_id = bn.names_to_ids[to]
     return Graphs.add_edge!(bn.graph, from_id, to_id)
 end
+
+function evaluate(bn::BayesianNetwork)
+    log_posterior = create_log_posterior(bn)
+    return log_posterior
+end

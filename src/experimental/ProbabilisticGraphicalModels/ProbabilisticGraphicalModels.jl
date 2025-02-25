@@ -11,6 +11,7 @@ using AbstractPPL
 include("bayesian_network.jl")
 include("conditioning.jl")
 include("functions.jl")
+include("inference.jl")
 
 export BayesianNetwork,
     condition,
@@ -22,5 +23,6 @@ export BayesianNetwork,
     add_deterministic_vertex!,
     add_stochastic_vertex!,
     add_vertex!,
-    translate_BUGSGraph_to_BayesianNetwork
+    translate_BUGSGraph_to_BayesianNetwork,
+    evaluate
 end
