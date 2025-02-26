@@ -23,7 +23,7 @@ Condition the Bayesian Network on the values of some variables. Mutating version
 function condition!(
     bn::BayesianNetwork{V}, conditioning_variables_and_values::Dict{V,<:Any}
 ) where {V}
-    evaluation_env = bn.evaluation_env  
+    evaluation_env = bn.evaluation_env
 
     for (name, value) in conditioning_variables_and_values
         id = bn.names_to_ids[name]
@@ -34,10 +34,10 @@ function condition!(
         else
             bn.is_observed[id] = true
         end
-        
+
         evaluation_env = AbstractPPL.set(evaluation_env, name, value)
     end
-    
+
     return BangBang.setproperties!!(bn; evaluation_env=evaluation_env)
 end
 """
