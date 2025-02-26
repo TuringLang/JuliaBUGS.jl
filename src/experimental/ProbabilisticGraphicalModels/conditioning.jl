@@ -7,13 +7,8 @@ function condition(
     bn::BayesianNetwork{V}, conditioning_variables_and_values::Dict{V,<:Any}
 ) where {V}
     is_observed = copy(bn.is_observed)
-    evaluation_env = merge(
-        bn.evaluation_env,
-        NamedTuple{Tuple(Symbol(k) for k in keys(conditioning_variables_and_values))}(
-            values(conditioning_variables_and_values)
-        ),
-    )
-    # Merge into a NamedTuple
+    evaluation_env = bn.evaluation_env
+
     bn_new = BangBang.setproperties!!(
         bn; is_observed=is_observed, evaluation_env=evaluation_env
     )
@@ -28,7 +23,7 @@ Condition the Bayesian Network on the values of some variables. Mutating version
 function condition!(
     bn::BayesianNetwork{V}, conditioning_variables_and_values::Dict{V,<:Any}
 ) where {V}
-    new_evaluation_env = bn.evaluation_env  # Work with immutable NamedTuple
+    evaluation_env = bn.evaluation_env  
 
     for (name, value) in conditioning_variables_and_values
         id = bn.names_to_ids[name]
@@ -39,11 +34,12 @@ function condition!(
         else
             bn.is_observed[id] = true
         end
-        new_evaluation_env = merge(new_evaluation_env, (name => value,))
+        
+        evaluation_env = AbstractPPL.set(evaluation_env, name, value)
     end
-    return BangBang.setproperties!!(bn; evaluation_env=new_evaluation_env)
+    
+    return BangBang.setproperties!!(bn; evaluation_env=evaluation_env)
 end
-
 """
     decondition(bn::BayesianNetwork{V}) where {V}
 
