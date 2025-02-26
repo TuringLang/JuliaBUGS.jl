@@ -429,6 +429,7 @@ using Bijectors: Bijectors
             logpdf(Normal(0, 1), evaluation_env[:a]) +
               logpdf(Normal(1, 1), evaluation_env[:b])
     end
+   
     @testset "Translating Loop-based BUGSGraph to BayesianNetwork and Evaluate" begin
         # Adding a test model with a for loop
         loop_model = @bugs begin
