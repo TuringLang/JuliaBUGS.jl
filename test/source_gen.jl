@@ -49,9 +49,7 @@ function _create_bugsmdoel_with_consistent_sorted_nodes(
     sorted_nodes = pass.sorted_nodes
     sorted_parameters = [vn for vn in sorted_nodes if vn in model.parameters]
     new_flattened_graph_node_data = JuliaBUGS.FlattenedGraphNodeData(model.g, sorted_nodes)
-    new_model = BangBang.setproperty!!(
-        model, :parameters, sorted_parameters
-    )
+    new_model = BangBang.setproperty!!(model, :parameters, sorted_parameters)
     new_model = BangBang.setproperty!!(
         new_model, :flattened_graph_node_data, new_flattened_graph_node_data
     )
@@ -80,9 +78,7 @@ end
     model_with_consistent_sorted_nodes = _create_bugsmdoel_with_consistent_sorted_nodes(
         bugs_models[example_name], reconstructed_model_defs[example_name]
     )
-    result_with_old_model = JuliaBUGS.evaluate!!(
-        bugs_models[example_name]
-    )[2]
+    result_with_old_model = JuliaBUGS.evaluate!!(bugs_models[example_name])[2]
     params = JuliaBUGS.getparams(model_with_consistent_sorted_nodes)
     result_with_bugsmodel = JuliaBUGS.evaluate!!(
         model_with_consistent_sorted_nodes, params
