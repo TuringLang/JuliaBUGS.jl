@@ -66,7 +66,7 @@ model {
         # beta[j] ~ dnorm(0, phi) # coeffs exchangeable (ridge regression)
     }
     tau ~ dgamma(1.0E-3, 1.0E-3)
-    # phi ~ dgamma(1.0E-2,1.0E-2)
+    # phi ~ dgamma(1.0E-2, 1.0E-2)
     # standard deviation of error distribution
     sigma <- sqrt(1 / tau) # normal errors
     # sigma <- sqrt(2) / tau # double exponential errors
