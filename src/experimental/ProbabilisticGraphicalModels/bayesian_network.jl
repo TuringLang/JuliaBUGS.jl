@@ -10,7 +10,8 @@ struct BayesianNetwork{V,T,F}
     "mapping from variable names to ids"
     names_to_ids::Dict{V,T}
     "values of each variable in the network"
-    values::Dict{V,Any} # TODO: make it a NamedTuple for better performance in the future
+    evaluation_env::NamedTuple
+    loop_vars::Dict{V,NamedTuple}
     "distributions of the stochastic variables"
     distributions::Vector{F}
     "deterministic functions of the deterministic variables"
@@ -29,7 +30,8 @@ function BayesianNetwork{V}() where {V}
         SimpleDiGraph{Int}(), # by default, vertex ids are integers
         V[],
         Dict{V,Int}(),
-        Dict{V,Any}(),
+        (;),    # Empty NamedTuple for evaluation_env
+        Dict{V,NamedTuple}(),
         Any[],
         Any[],
         Int[],
@@ -54,7 +56,7 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
     # Preallocate arrays/dictionaries.
     names = Vector{VarName}(undef, n)
     names_to_ids = Dict{VarName,Int}()
-    values = Dict{VarName,Any}()
+    loop_vars = Dict{VarName,NamedTuple}()
     distributions = Vector{Function}(undef, n)
     deterministic_fns = Vector{Function}(undef, n)
     stochastic_ids = Int[]
@@ -66,10 +68,10 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
     for (i, varname) in enumerate(varnames)
         nodeinfo = g[varname]
         names[i] = varname
-        values[varname] = AbstractPPL.get(evaluation_env, varname)
         names_to_ids[varname] = i
         is_stochastic[i] = nodeinfo.is_stochastic
         is_observed[i] = nodeinfo.is_observed
+        loop_vars[varname] = nodeinfo.loop_vars
 
         if nodeinfo.is_stochastic
             distributions[i] = nodeinfo.node_function
@@ -86,7 +88,8 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
         SimpleDiGraph{Int}(n),
         names,
         names_to_ids,
-        values,
+        evaluation_env,
+        loop_vars,
         distributions,
         deterministic_fns,
         stochastic_ids,
@@ -160,4 +163,29 @@ function add_edge!(bn::BayesianNetwork{V,T}, from::V, to::V)::Bool where {T,V}
     from_id = bn.names_to_ids[from]
     to_id = bn.names_to_ids[to]
     return Graphs.add_edge!(bn.graph, from_id, to_id)
+end
+
+function evaluate(bn::BayesianNetwork)
+    logp = 0.0
+    evaluation_env = bn.evaluation_env
+
+    for (i, varname) in enumerate(bn.names)
+        is_stochastic = bn.is_stochastic[i]
+        if is_stochastic
+            dist_fn = bn.distributions[i](evaluation_env, bn.loop_vars[varname])
+
+            value = AbstractPPL.get(evaluation_env, varname)
+            bijector = Bijectors.bijector(dist_fn)
+            value_transformed = Bijectors.transform(bijector, value)
+
+            logpdf_val = Distributions.logpdf(dist_fn, value)
+            logjac = Bijectors.logabsdetjac(Bijectors.inverse(bijector), value_transformed)
+            logp += logpdf_val + logjac
+
+        else
+            fn = bn.deterministic_functions[i](evaluation_env, bn.loop_vars[varname])
+            evaluation_env = BangBang.setindex!!(evaluation_env, fn, varname)
+        end
+    end
+    return evaluation_env, logp
 end
