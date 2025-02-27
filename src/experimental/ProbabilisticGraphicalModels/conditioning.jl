@@ -35,7 +35,7 @@ function condition!(
             bn.is_observed[id] = true
         end
 
-        evaluation_env = AbstractPPL.set(evaluation_env, name, value)
+        evaluation_env = BangBang.setindex!!(evaluation_env, value, name)
     end
 
     return BangBang.setproperties!!(bn; evaluation_env=evaluation_env)
