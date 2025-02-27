@@ -253,4 +253,6 @@ function gen_chains end
 
 include("experimental/ProbabilisticGraphicalModels/ProbabilisticGraphicalModels.jl")
 
+include("source_gen.jl")
+
 end

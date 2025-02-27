@@ -773,6 +773,7 @@ function make_function_expr(
         end
         return sub_expr
     end
+    # func_body = rhs
 
     # if use_lhs_as_func_name
     #     func_name = if lhs isa Symbol
