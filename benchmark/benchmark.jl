@@ -5,14 +5,17 @@ Pkg.develop(; path=joinpath(@__DIR__, ".."))
 
 using JuliaBUGS
 using ADTypes
+using ChainRules
 using ReverseDiff
-using MetaGraphsNext
 using BridgeStan
+using DifferentiationInterface
 using StanLogDensityProblems
 using LogDensityProblems
 using LogDensityProblemsAD
 using Chairmarks
 using DataFrames
+using Mooncake
+using Enzyme
 using OrderedCollections
 using PrettyTables
 using Printf
@@ -63,6 +66,7 @@ end
 
 include("stan.jl")
 include("juliabugs.jl")
+include("juliabugs_source_gen.jl")
 
 function _create_results_dataframe(results::OrderedDict{Symbol,BenchmarkResult})
     df = DataFrame(;

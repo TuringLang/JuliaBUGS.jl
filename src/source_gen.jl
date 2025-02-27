@@ -43,7 +43,7 @@ function _build_stmt_id_to_stmt(stmt_to_stmt_id::IdDict{Expr,Int})
 end
 
 struct StatementIdAttributePass{ET} <: CompilerPass
-    all_variables_in_graph::Set{VarName}
+    all_variables_in_graph::Set{<:VarName}
     stmt_ids::IdDict{Expr,Int}
     env::ET
 
@@ -64,7 +64,14 @@ function analyze_statement(
     end
 
     if varname in pass.all_variables_in_graph
-        pass.var_to_stmt_id[varname] = pass.stmt_ids[expr]
+        if haskey(pass.var_to_stmt_id, varname)
+            if JuliaBUGS.is_stochastic(expr)
+                # could be transformed data, so the variable should be associated with the stochastic statement
+                pass.var_to_stmt_id[varname] = pass.stmt_ids[expr]
+            end
+        else
+            pass.var_to_stmt_id[varname] = pass.stmt_ids[expr]
+        end
     end
     return nothing
 end
@@ -240,6 +247,31 @@ function _stmt_type(model, var_to_stmt_id, num_stmts)
     return stmt_types
 end
 
+function _generate_lowered_model_def(model, evaluation_env)
+    stmt_to_stmt_id = _build_stmt_to_stmt_id(model.model_def)
+    stmt_id_to_stmt = _build_stmt_id_to_stmt(stmt_to_stmt_id)
+    var_to_stmt_id = _build_var_to_stmt_id(model, stmt_to_stmt_id)
+    coarse_graph = _build_coarse_dep_graph(model, stmt_to_stmt_id, var_to_stmt_id)
+    # show_coarse_graph(stmt_id_to_stmt, coarse_graph)
+    model_def_removed_transformed_data = _copy_and_remove_stmt_with_degree_0(
+        model.model_def, stmt_to_stmt_id, coarse_graph
+    )
+    fissioned_stmts = _fully_fission_loop(
+        model_def_removed_transformed_data, stmt_to_stmt_id, evaluation_env
+    )
+    sorted_fissioned_stmts = _sort_fissioned_stmts(
+        coarse_graph, fissioned_stmts, stmt_to_stmt_id
+    )
+    reconstructed_model_def = _reconstruct_model_def_from_sorted_fissioned_stmts(
+        sorted_fissioned_stmts
+    )
+    stmt_types = _stmt_type(model, var_to_stmt_id, length(stmt_to_stmt_id))
+    lowered_model_def = _lower_model_def_to_represent_observe_stmts(
+        reconstructed_model_def, stmt_to_stmt_id, stmt_types, evaluation_env
+    )
+    return lowered_model_def
+end
+
 ## transform AST to log density computation code
 
 function _gen_log_density_computation_function_expr(model_def, evaluation_env)
@@ -267,7 +299,7 @@ function __gen_logp_density_function_body_exprs(stmts::Vector, evaluation_env, e
                 push!(exprs, __gen_observe_exprs(stmt))
             end
         else
-            @assert Meta.isexpr(stmt, :for)
+            @assert Meta.isexpr(stmt, :for) "stmt: $stmt"
             new_body = __gen_logp_density_function_body_exprs(
                 stmt.args[2].args, evaluation_env
             )
@@ -323,26 +355,6 @@ function show_coarse_graph(
     end
 end
 
-function _only_keep_model_parameter_stmts(lowered_model_def, new_lowered_model_def=Expr(:block))
-    for statement in lowered_model_def.args
-        if Meta.isexpr(statement, (:(=), :call))
-            if statement.args[1] == :~
-                push!(new_lowered_model_def.args, statement)
-            end
-        else
-            @assert Meta.isexpr(statement, :for)
-            new_body = _only_keep_model_parameter_stmts(
-                statement.args[2], Expr(:block)
-            )
-            if length(new_body.args) > 0
-                new_for = Expr(:for, statement.args[1], new_body)
-                push!(new_lowered_model_def.args, new_for)
-            end
-        end
-    end
-    return new_lowered_model_def
-end
-
 struct CollectSortedNodes{ET} <: CompilerPass
     sorted_nodes::Vector{<:VarName}
     env::ET
@@ -352,9 +364,7 @@ function CollectSortedNodes(env::NamedTuple)
     return CollectSortedNodes(VarName[], env)
 end
 
-function analyze_statement(
-    pass::CollectSortedNodes, expr::Expr, loop_variables::NamedTuple
-)
+function analyze_statement(pass::CollectSortedNodes, expr::Expr, loop_variables::NamedTuple)
     lhs_expression = is_deterministic(expr) ? expr.args[1] : expr.args[2]
     merged_env = merge(pass.env, loop_variables)
     simplified_lhs = simplify_lhs(merged_env, lhs_expression)

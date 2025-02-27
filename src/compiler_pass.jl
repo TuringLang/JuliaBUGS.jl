@@ -757,23 +757,23 @@ function make_function_expr(
     unpacking_expr = :((; $(variables...),) = evaluation_env)
     unpacking_loop_vars_expr = :((; $(loop_vars...),) = loop_vars)
 
-    # func_body = MacroTools.postwalk(rhs) do sub_expr
-    #     if @capture(sub_expr, v_[indices__])
-    #         new_indices = Any[]
-    #         for i in eachindex(indices)
-    #             if indices[i] isa Int # special case: already an Int
-    #                 push!(new_indices, indices[i])
-    #             elseif indices[i] isa Symbol || Meta.isexpr(indices[i], :ref) # cast to Int if it's a variable
-    #                 push!(new_indices, Expr(:call, :Int, indices[i]))
-    #             else # function and range are not casted
-    #                 push!(new_indices, indices[i])
-    #             end
-    #         end
-    #         return Expr(:ref, v, new_indices...)
-    #     end
-    #     return sub_expr
-    # end
-    func_body = rhs
+    func_body = MacroTools.postwalk(rhs) do sub_expr
+        if @capture(sub_expr, v_[indices__])
+            new_indices = Any[]
+            for i in eachindex(indices)
+                if indices[i] isa Int # special case: already an Int
+                    push!(new_indices, indices[i])
+                elseif indices[i] isa Symbol || Meta.isexpr(indices[i], :ref) # cast to Int if it's a variable
+                    push!(new_indices, Expr(:call, :Int, indices[i]))
+                else # function and range are not casted
+                    push!(new_indices, indices[i])
+                end
+            end
+            return Expr(:ref, v, new_indices...)
+        end
+        return sub_expr
+    end
+    # func_body = rhs
 
     # if use_lhs_as_func_name
     #     func_name = if lhs isa Symbol

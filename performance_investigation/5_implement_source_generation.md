@@ -26,4 +26,6 @@ If the dependency graph doesn't contain loops. We can reorder the statements acc
 To reorder, we first need to perform complete loop fissions, because the dependency graph is a coarse grain graph whose node representing _all_ the computations associated with each statement. 
 If all vertices (variables) associated with a particular statement are all of the same type (deterministic, observations, or model parameters), then we can generate a log density computation function by program transformation.
 
+## Some corner cases to consider
+* skipping when lower bound is higher than upper bound?
 
