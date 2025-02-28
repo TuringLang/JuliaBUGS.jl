@@ -269,8 +269,45 @@ function _generate_lowered_model_def(model, evaluation_env)
     lowered_model_def = _lower_model_def_to_represent_observe_stmts(
         reconstructed_model_def, stmt_to_stmt_id, stmt_types, evaluation_env
     )
-    return lowered_model_def, reconstructed_model_def
+    return __cast_array_indices_to_Int(
+        __qualify_builtins_with_JuliaBUGS_namespace(lowered_model_def)
+    ),
+    reconstructed_model_def
 end
+
+function __cast_array_indices_to_Int(expr)
+    return MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, v_[indices__])
+            new_indices = Any[]
+            for index in indices
+                if index isa Int
+                    push!(new_indices, index)
+                elseif index isa Symbol || Meta.isexpr(index, :ref) # cast to Int if it's a variable
+                    push!(new_indices, Expr(:call, :Int, index))
+                else # function and range are not casted
+                    push!(new_indices, index)
+                end
+            end
+            return Expr(:ref, v, new_indices...)
+        end
+        return sub_expr
+    end
+end
+
+function __qualify_builtins_with_JuliaBUGS_namespace(expr)
+    function_names = (:phi,)
+    return MacroTools.postwalk(expr) do sub_expr
+        if @capture(sub_expr, func_(args__))
+            if func in function_names
+                return MacroTools.@q(JuliaBUGS.$func($(args...)))
+            end
+        end
+        return sub_expr
+    end
+end
+
+# TODO: make a function that compute the number of parameters in the model by ancestral sampling
+# TODO: can we make a special case for 
 
 ## transform AST to log density computation code
 

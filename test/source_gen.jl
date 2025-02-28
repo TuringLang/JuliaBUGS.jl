@@ -14,9 +14,9 @@ test_examples = [
     :dogs,
     :seeds,
     :surgical_realistic,
-    # :magnesium,
+    :magnesium,
     :salm,
-    # :equiv, # indexing with stochastic variable of type Float64
+    :equiv, # indexing with stochastic variable of type Float64
     :dyes,
     :stacks,
     :epil,
