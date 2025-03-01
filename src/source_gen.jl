@@ -84,6 +84,19 @@ function _build_var_to_stmt_id(model::BUGSModel, stmt_ids::IdDict{Expr,Int})
     return pass.var_to_stmt_id
 end
 
+function _build_stmt_id_to_var(var_to_stmt_id::Dict{VarName,Int})
+    stmt_id_to_var = Dict{Int,Vector{<:VarName}}()
+    for var in keys(var_to_stmt_id)
+        stmt_id = var_to_stmt_id[var]
+        if !haskey(stmt_id_to_var, stmt_id)
+            stmt_id_to_var[stmt_id] = [var]
+        else
+            push!(stmt_id_to_var[stmt_id], var)
+        end
+    end
+    return stmt_id_to_var
+end
+
 # coarse graph may contains nodes whose degree is 0, these are transformed data
 function _build_coarse_dep_graph(
     model::BUGSModel, stmt_to_stmt_id::IdDict{Expr,Int}, var_to_stmt_id::Dict{VarName,Int}
@@ -190,26 +203,46 @@ function can_reorder(coarse_graph::Graphs.SimpleDiGraph)
     return true
 end
 
+# add if statement in the lowered model def
 function _lower_model_def_to_represent_observe_stmts(
     reconstructed_model_def,
     stmt_to_stmt_id,
-    stmt_types,
+    var_types,
     evaluation_env,
     lowered_model_def=Expr(:block),
 )
     for statement in reconstructed_model_def.args
         if Meta.isexpr(statement, (:(=), :call))
-            if stmt_types[stmt_to_stmt_id[statement]] == :observed
-                MacroTools.@capture(statement, lhs_ ~ rhs_)
-                new_stmt = MacroTools.@q $(lhs) ≂ $(rhs)
-                push!(lowered_model_def.args, new_stmt)
+            stmt_id = stmt_to_stmt_id[statement]
+            observed_loop_vars, model_parameter_loop_vars, deterministic_loop_vars = var_types[stmt_id]
+
+            _contains_observed = !isempty(observed_loop_vars)
+            _contains_model_parameter = !isempty(model_parameter_loop_vars)
+
+            if _contains_observed
+                if _contains_model_parameter
+                    MacroTools.@capture(statement, lhs_ ~ rhs_)
+                    new_stmt = MacroTools.@q if condition_placeholder
+                        $(lhs) ~ $(rhs)
+                    else
+                        $(lhs) ≂ $(rhs)
+                    end
+                    new_stmt.args[1] = __generate_model_parameter_condition_expr(
+                        model_parameter_loop_vars
+                    )
+                    push!(lowered_model_def.args, new_stmt)
+                else
+                    MacroTools.@capture(statement, lhs_ ~ rhs_)
+                    new_stmt = MacroTools.@q $(lhs) ≂ $(rhs)
+                    push!(lowered_model_def.args, new_stmt)
+                end
             else
                 push!(lowered_model_def.args, statement)
             end
         elseif Meta.isexpr(statement, :for)
             # Recursively copy the inner block of the for-loop.
             new_body = _lower_model_def_to_represent_observe_stmts(
-                statement.args[2], stmt_to_stmt_id, stmt_types, evaluation_env, Expr(:block)
+                statement.args[2], stmt_to_stmt_id, var_types, evaluation_env, Expr(:block)
             )
             new_for = Expr(:for, statement.args[1], new_body)
             push!(lowered_model_def.args, new_for)
@@ -221,36 +254,43 @@ function _lower_model_def_to_represent_observe_stmts(
     return lowered_model_def
 end
 
-function __variable_type(model, vn)
-    if model.g[vn].is_stochastic
-        if model.g[vn].is_observed
-            return :observed
+function __generate_model_parameter_condition_expr(model_param_nt_vec)
+    guard_exprs = []
+    for nt in model_param_nt_vec
+        condition_parts = []
+        for (field, val) in pairs(nt)
+            push!(condition_parts, MacroTools.@q($(field) == $(val)))
+        end
+        if length(condition_parts) > 1
+            condition = Expr(:&&, condition_parts...)
+        elseif length(condition_parts) == 1
+            condition = condition_parts[1]
         else
-            return :model_parameter
+            continue
         end
+
+        push!(guard_exprs, condition)
+    end
+
+    if isempty(guard_exprs)
+        return false
+    elseif length(guard_exprs) == 1
+        return guard_exprs[1]
     else
-        return :deterministic
-    end
-end
-
-function _stmt_type(model, var_to_stmt_id, num_stmts)
-    stmt_types = fill(:unknown, num_stmts)
-
-    for (vn, stmt_id) in var_to_stmt_id
-        vt = __variable_type(model, vn)
-        if stmt_types[stmt_id] == :unknown
-            stmt_types[stmt_id] = vt
-        elseif stmt_types[stmt_id] != vt
-            error("Mixed variable types in statement: $(vn)")
+        # Need to nest the || expressions to match the expected AST structure
+        result = guard_exprs[end]
+        for i in (length(guard_exprs) - 1):-1:1
+            result = Expr(:||, guard_exprs[i], result)
         end
+        return result
     end
-    return stmt_types
 end
 
 function _generate_lowered_model_def(model, evaluation_env)
     stmt_to_stmt_id = _build_stmt_to_stmt_id(model.model_def)
     stmt_id_to_stmt = _build_stmt_id_to_stmt(stmt_to_stmt_id)
     var_to_stmt_id = _build_var_to_stmt_id(model, stmt_to_stmt_id)
+    stmt_id_to_var = _build_stmt_id_to_var(var_to_stmt_id)
     coarse_graph = _build_coarse_dep_graph(model, stmt_to_stmt_id, var_to_stmt_id)
     # show_coarse_graph(stmt_id_to_stmt, coarse_graph)
     model_def_removed_transformed_data = _copy_and_remove_stmt_with_degree_0(
@@ -265,9 +305,12 @@ function _generate_lowered_model_def(model, evaluation_env)
     reconstructed_model_def = _reconstruct_model_def_from_sorted_fissioned_stmts(
         sorted_fissioned_stmts
     )
-    stmt_types = _stmt_type(model, var_to_stmt_id, length(stmt_to_stmt_id))
+    induction_variable_values = _var_to_loop_vars(model, evaluation_env)
+    var_types = __determine_var_types(
+        model, stmt_id_to_var, stmt_id_to_stmt, induction_variable_values
+    )
     lowered_model_def = _lower_model_def_to_represent_observe_stmts(
-        reconstructed_model_def, stmt_to_stmt_id, stmt_types, evaluation_env
+        reconstructed_model_def, stmt_to_stmt_id, var_types, evaluation_env
     )
     return __cast_array_indices_to_Int(
         __qualify_builtins_with_JuliaBUGS_namespace(lowered_model_def)
@@ -306,8 +349,71 @@ function __qualify_builtins_with_JuliaBUGS_namespace(expr)
     end
 end
 
-# TODO: make a function that compute the number of parameters in the model by ancestral sampling
-# TODO: can we make a special case for 
+struct CollectLoopInductionVariableValues{ET} <: CompilerPass
+    env::ET
+    induction_variable_values::Dict{VarName,NamedTuple}
+end
+
+function CollectLoopInductionVariableValues(env::NamedTuple)
+    return CollectLoopInductionVariableValues(env, Dict{VarName,NamedTuple}())
+end
+
+function analyze_statement(
+    pass::CollectLoopInductionVariableValues, expr::Expr, loop_variables::NamedTuple
+)
+    lhs_expression = is_deterministic(expr) ? expr.args[1] : expr.args[2]
+    merged_env = merge(pass.env, loop_variables)
+    simplified_lhs = simplify_lhs(merged_env, lhs_expression)
+    varname = if simplified_lhs isa Symbol
+        VarName{simplified_lhs}()
+    else
+        symbol, indices... = simplified_lhs
+        VarName{symbol}(IndexLens(indices))
+    end
+    return pass.induction_variable_values[varname] = loop_variables
+end
+
+function _var_to_loop_vars(model, evaluation_env)
+    pass = CollectLoopInductionVariableValues(evaluation_env)
+    analyze_block(pass, model.model_def)
+    return pass.induction_variable_values
+end
+
+function __determine_var_types(
+    model, stmt_id_to_var, stmt_id_to_stmt, induction_variable_values
+)
+    # for each statement, have three list to collect the var of each type
+    var_types = [([], [], []) for _ in 1:length(stmt_id_to_stmt)]
+    for stmt_id in keys(stmt_id_to_stmt)
+        if !haskey(stmt_id_to_var, stmt_id)
+            continue
+        end
+        vars = stmt_id_to_var[stmt_id]
+        for var in vars
+            var_type = __variable_type(model, var)
+            if var_type == :observed
+                push!(var_types[stmt_id][1], induction_variable_values[var])
+            elseif var_type == :model_parameter
+                push!(var_types[stmt_id][2], induction_variable_values[var])
+            else
+                push!(var_types[stmt_id][3], induction_variable_values[var])
+            end
+        end
+    end
+    return var_types
+end
+
+function __variable_type(model, var)
+    if model.g[var].is_stochastic
+        if model.g[var].is_observed
+            return :observed
+        else
+            return :model_parameter
+        end
+    else
+        return :deterministic
+    end
+end
 
 ## transform AST to log density computation code
 
@@ -335,16 +441,55 @@ function __gen_logp_density_function_body_exprs(stmts::Vector, evaluation_env, e
             else
                 push!(exprs, __gen_observe_exprs(stmt))
             end
-        else
-            @assert Meta.isexpr(stmt, :for) "stmt: $stmt"
+        elseif Meta.isexpr(stmt, :for)
             new_body = __gen_logp_density_function_body_exprs(
                 stmt.args[2].args, evaluation_env
             )
             new_for = Expr(:for, stmt.args[1], Expr(:block, new_body...))
             push!(exprs, new_for)
+        elseif Meta.isexpr(stmt, :if)
+            new_if = _handle_if_expr(stmt, evaluation_env)
+            push!(exprs, new_if)
+        else
+            error("Unsupported statement: $stmt")
         end
     end
     return exprs
+end
+
+function _handle_if_expr(stmt, evaluation_env)
+    # stmt.args[1] = if-condition
+    # stmt.args[2] = block for condition == true
+    # stmt.args[3] = "else" branch which might itself be an :if (for elseif) or a block (for else)
+    cond_expr = stmt.args[1]
+    then_expr = stmt.args[2]
+    else_expr = length(stmt.args) == 3 ? stmt.args[3] : nothing
+
+    # Recursively lower the "then" block
+    new_then_body = __gen_logp_density_function_body_exprs(then_expr.args, evaluation_env)
+    new_then_block = Expr(:block, new_then_body...)
+
+    # Recursively handle the "else" side, which could be nested if/elseif
+    new_else_block = _handle_else_expr(else_expr, evaluation_env)
+
+    return Expr(:if, cond_expr, new_then_block, new_else_block)
+end
+
+function _handle_else_expr(expr, evaluation_env)
+    if expr === nothing
+        # no else branch at all
+        return nothing
+    elseif Meta.isexpr(expr, :if)
+        # means we have an 'elseif' situation
+        return _handle_if_expr(expr, evaluation_env)
+    elseif Meta.isexpr(expr, :block)
+        # just an else block with statements
+        new_else_body = __gen_logp_density_function_body_exprs(expr.args, evaluation_env)
+        return Expr(:block, new_else_body...)
+    else
+        # single-statement else (rare, but possible)
+        return expr
+    end
 end
 
 function __gen_observe_exprs(stmt)
@@ -360,8 +505,13 @@ function __gen_model_parameter_exprs(stmt)
     MacroTools.@capture(stmt, lhs_ ~ rhs_)
     return MacroTools.@q begin
         __dist__ = $rhs
-        __b_inv__ = Bijectors.inverse(Bijectors.bijector(__dist__))
-        __transformed_length__ = length(Bijectors.transformed(__dist__))
+        __b__ = Bijectors.bijector(__dist__)
+        __b_inv__ = Bijectors.inverse(__b__)
+        __transformed_length__ = if __b__ === identity
+            length(__dist__)
+        else
+            length(Bijectors.transformed(__dist__, __b__))
+        end
         __reconstructed_value__ = JuliaBUGS.reconstruct(
             __b_inv__,
             __dist__,

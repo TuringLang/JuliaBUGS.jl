@@ -3,7 +3,6 @@ using Bijectors
 using JuliaBUGS
 using JuliaBUGS: _generate_lowered_model_def, _gen_log_density_computation_function_expr
 using JuliaBUGS: CollectSortedNodes
-using JuliaBUGS: phi # 
 using JuliaBUGS.BUGSPrimitives
 using LogDensityProblems
 using OrderedCollections
@@ -16,16 +15,16 @@ test_examples = [
     :surgical_realistic,
     :magnesium,
     :salm,
-    :equiv, # indexing with stochastic variable of type Float64
+    :equiv,
     :dyes,
     :stacks,
     :epil,
     :blockers,
     :oxford,
     :lsat,
-    # :bones, # missings in data
-    # :mice, # missings in data
-    # :kidney, # missings in data
+    :bones, # missings in data
+    :mice, # missings in data
+    :kidney, # missings in data
     :leuk,
     :leukfr,
     :dugongs,
