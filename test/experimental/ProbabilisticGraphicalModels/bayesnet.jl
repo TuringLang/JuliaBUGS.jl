@@ -11,9 +11,10 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     decondition,
     ancestral_sampling,
     is_conditionally_independent,
-    evaluate
+    evaluate,
+    evaluate_with_values
 using BangBang
-#using MetaGraphsNext
+using JuliaBUGS
 using JuliaBUGS: @bugs, compile, NodeInfo, VarName
 using Bijectors: Bijectors
 
@@ -453,5 +454,75 @@ using Bijectors: Bijectors
 
         @test haskey(loop_evaluation_env, :x) && length(loop_evaluation_env[:x]) == 3
         @test loop_logp ≈ sum(logpdf(Normal(i, 1), loop_evaluation_env[:x][i]) for i in 1:3)
+    end
+
+    @testset "evaluate_with_values for BayesianNetwork" begin
+        @testset "Complex model with transformations" begin
+            # Define the model
+            model_def = @bugs begin
+                s[1] ~ InverseGamma(2, 3)
+                s[2] ~ InverseGamma(2, 3)
+                m[1] ~ Normal(0, sqrt(s[1]))
+                m[2] ~ Normal(0, sqrt(s[2]))
+                x[1:2] ~ MvNormal(m[1:2], Diagonal(s[1:2]))
+            end
+    
+            data = (; x=[1.0, 2.0])
+            model = compile(model_def, data)
+            
+            # Convert BUGSModel to BayesianNetwork
+            bn = translate_BUGSGraph_to_BayesianNetwork(model.g, model.evaluation_env)
+            
+            # Create test parameters
+            params = rand(4)
+            
+            # Get result from BUGSModel implementation for comparison
+            bugs_env, (bugs_logprior, bugs_loglikelihood, _) = JuliaBUGS._tempered_evaluate!!(
+                model, params; temperature=1.0
+            )
+            bugs_logjoint = bugs_logprior + bugs_loglikelihood
+            
+            # Get result from our BayesianNetwork implementation
+            bn_env, bn_logjoint = evaluate_with_values(bn, params, model)
+            
+            # Test if they match
+            @test bn_logjoint ≈ bugs_logjoint rtol = 1E-6
+        end
+    
+        @testset "Loop model with Normal distributions" begin
+            # Create model with a for loop
+            loop_model = @bugs begin
+                for i in 1:3
+                    x[i] ~ dnorm(i, 1)
+                end
+            end
+    
+            loop_inits = NamedTuple{(:x,)}(([1.0, 2.0, 3.0],))
+            loop_compiled_model = compile(loop_model, NamedTuple(), loop_inits)
+            
+            # Convert to BayesianNetwork
+            loop_bn = translate_BUGSGraph_to_BayesianNetwork(
+                loop_compiled_model.g, loop_compiled_model.evaluation_env
+            )
+            
+            # Create some parameters
+            params = rand(3)
+            
+            # Get result from BUGSModel implementation
+            bugs_env, (bugs_logprior, bugs_loglikelihood, _) = JuliaBUGS._tempered_evaluate!!(
+                loop_compiled_model, params; temperature=1.0
+            )
+            bugs_logjoint = bugs_logprior + bugs_loglikelihood
+            
+            # Get result from our BayesianNetwork implementation
+            bn_env, bn_logjoint = evaluate_with_values(loop_bn, params, loop_compiled_model)
+            
+            # Test if they match
+            @test bn_logjoint ≈ bugs_logjoint rtol = 1E-6
+            
+            # Also verify against manual calculation
+            manual_logjoint = sum(logpdf(Normal(i, 1), bn_env[:x][i]) for i in 1:3)
+            @test bn_logjoint ≈ manual_logjoint rtol = 1E-6
+        end
     end
 end

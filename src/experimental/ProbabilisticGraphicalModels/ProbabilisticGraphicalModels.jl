@@ -8,10 +8,12 @@ using JuliaBUGS
 using JuliaBUGS: BUGSGraph, VarName, NodeInfo
 using AbstractPPL
 using Bijectors: Bijectors
+using LinearAlgebra: Cholesky
 
 include("bayesian_network.jl")
 include("conditioning.jl")
 include("functions.jl")
+include("utils.jl")
 
 export BayesianNetwork,
     condition,
@@ -24,5 +26,6 @@ export BayesianNetwork,
     add_stochastic_vertex!,
     add_vertex!,
     translate_BUGSGraph_to_BayesianNetwork,
-    evaluate
+    evaluate,
+    evaluate_with_values
 end
