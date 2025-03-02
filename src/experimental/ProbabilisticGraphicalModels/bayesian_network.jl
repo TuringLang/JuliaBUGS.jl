@@ -199,7 +199,6 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
     current_idx = 1
     logprior, loglikelihood = 0.0, 0.0
 
-    # Process nodes in EXACTLY the same order as BUGSModel
     for vn in bugsmodel_node_order
         # Get the corresponding index in BayesianNetwork
         i = findfirst(name -> name == vn, bn.names)

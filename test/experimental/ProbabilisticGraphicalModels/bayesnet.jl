@@ -474,8 +474,7 @@ using AbstractPPL
             loop_bn = translate_BUGSGraph_to_BayesianNetwork(
                 loop_compiled_model.g, loop_compiled_model.evaluation_env
             )
-
-            # Create actual parameter values - THIS IS THE FIX
+            
             loop_params = rand(3)
 
             # Get result from our BayesianNetwork implementation
