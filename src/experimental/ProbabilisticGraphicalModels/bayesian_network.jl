@@ -193,40 +193,38 @@ end
 function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVector, model)
     # Use the exact same node ordering as BUGSModel
     bugsmodel_node_order = model.flattened_graph_node_data.sorted_nodes
-    
+
     var_lengths = model.transformed_var_lengths
     evaluation_env = deepcopy(model.evaluation_env)
     current_idx = 1
     logprior, loglikelihood = 0.0, 0.0
-    
+
     # Process nodes in EXACTLY the same order as BUGSModel
     for vn in bugsmodel_node_order
         # Get the corresponding index in BayesianNetwork
         i = findfirst(name -> name == vn, bn.names)
-        
+
         is_stochastic = bn.is_stochastic[i]
         is_observed = bn.is_observed[i]
-        
+
         if !is_stochastic
             value = bn.deterministic_functions[i](evaluation_env, bn.loop_vars[vn])
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         else
             dist = bn.distributions[i](evaluation_env, bn.loop_vars[vn])
-            
+
             if !is_observed
                 l = var_lengths[vn]
-                
+
                 b = Bijectors.bijector(dist)
                 b_inv = Bijectors.inverse(b)
                 reconstructed_value = reconstruct(
-                    b_inv,
-                    dist,
-                    view(parameter_values, current_idx:(current_idx + l - 1)),
+                    b_inv, dist, view(parameter_values, current_idx:(current_idx + l - 1))
                 )
                 value, logjac = Bijectors.with_logabsdet_jacobian(
                     b_inv, reconstructed_value
                 )
-                
+
                 current_idx += l
                 logprior += logpdf(dist, value) + logjac
                 evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
@@ -235,6 +233,6 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
             end
         end
     end
-    
+
     return evaluation_env, logprior + loglikelihood
 end
