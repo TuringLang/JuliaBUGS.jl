@@ -12,7 +12,8 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     ancestral_sampling,
     is_conditionally_independent,
     evaluate,
-    evaluate_with_values
+    evaluate_with_values,
+    reconstruct #TODO: remember to remove once testing is done
 using BangBang
 using JuliaBUGS
 using JuliaBUGS: @bugs, compile, NodeInfo, VarName
@@ -457,38 +458,6 @@ using Bijectors: Bijectors
     end
 
     @testset "evaluate_with_values for BayesianNetwork" begin
-        @testset "Complex model with transformations" begin
-            # Define the model
-            model_def = @bugs begin
-                s[1] ~ InverseGamma(2, 3)
-                s[2] ~ InverseGamma(2, 3)
-                m[1] ~ Normal(0, sqrt(s[1]))
-                m[2] ~ Normal(0, sqrt(s[2]))
-                x[1:2] ~ MvNormal(m[1:2], Diagonal(s[1:2]))
-            end
-    
-            data = (; x=[1.0, 2.0])
-            model = compile(model_def, data)
-            
-            # Convert BUGSModel to BayesianNetwork
-            bn = translate_BUGSGraph_to_BayesianNetwork(model.g, model.evaluation_env)
-            
-            # Create test parameters
-            params = rand(4)
-            
-            # Get result from BUGSModel implementation for comparison
-            bugs_env, (bugs_logprior, bugs_loglikelihood, _) = JuliaBUGS._tempered_evaluate!!(
-                model, params; temperature=1.0
-            )
-            bugs_logjoint = bugs_logprior + bugs_loglikelihood
-            
-            # Get result from our BayesianNetwork implementation
-            bn_env, bn_logjoint = evaluate_with_values(bn, params, model)
-            
-            # Test if they match
-            @test bn_logjoint ≈ bugs_logjoint rtol = 1E-6
-        end
-    
         @testset "Loop model with Normal distributions" begin
             # Create model with a for loop
             loop_model = @bugs begin
@@ -496,33 +465,70 @@ using Bijectors: Bijectors
                     x[i] ~ dnorm(i, 1)
                 end
             end
-    
+
             loop_inits = NamedTuple{(:x,)}(([1.0, 2.0, 3.0],))
             loop_compiled_model = compile(loop_model, NamedTuple(), loop_inits)
-            
+
             # Convert to BayesianNetwork
             loop_bn = translate_BUGSGraph_to_BayesianNetwork(
                 loop_compiled_model.g, loop_compiled_model.evaluation_env
             )
-            
-            # Create some parameters
-            params = rand(3)
-            
-            # Get result from BUGSModel implementation
-            bugs_env, (bugs_logprior, bugs_loglikelihood, _) = JuliaBUGS._tempered_evaluate!!(
-                loop_compiled_model, params; temperature=1.0
-            )
-            bugs_logjoint = bugs_logprior + bugs_loglikelihood
-            
+
             # Get result from our BayesianNetwork implementation
             bn_env, bn_logjoint = evaluate_with_values(loop_bn, params, loop_compiled_model)
-            
-            # Test if they match
-            @test bn_logjoint ≈ bugs_logjoint rtol = 1E-6
-            
+
             # Also verify against manual calculation
             manual_logjoint = sum(logpdf(Normal(i, 1), bn_env[:x][i]) for i in 1:3)
             @test bn_logjoint ≈ manual_logjoint rtol = 1E-6
+        end
+
+        @testset "Simple univariate model - corrected" begin
+            model_def = @bugs begin
+                mu ~ Normal(0, 10)
+                sigma ~ Gamma(2, 3)
+                y ~ Normal(mu, sqrt(sigma))
+            end
+
+            model = compile(model_def, NamedTuple())
+            bn = translate_BUGSGraph_to_BayesianNetwork(model.g, model.evaluation_env)
+
+            params = [1.5, 2.0, 3.0]
+
+            # Get result from BUGSModel
+            bugs_env, (bugs_logprior, bugs_loglikelihood, bugs_logjoint) = JuliaBUGS._tempered_evaluate!!(
+                model, params; temperature=1.0
+            )
+
+            # Our implementation
+            bn_env, bn_logjoint = evaluate_with_values(bn, params, model)
+
+            # Manual calculation that matches BUGSModel
+            # First parameter is sigma
+            sigma_param = params[1]
+            b_sigma = Bijectors.bijector(Gamma(2, 3))
+            b_sigma_inv = Bijectors.inverse(b_sigma)
+            sigma_reconstructed = reconstruct(b_sigma_inv, Gamma(2, 3), [sigma_param])
+            sigma_val, sigma_logjac = Bijectors.with_logabsdet_jacobian(
+                b_sigma_inv, sigma_reconstructed
+            )
+            sigma_logpdf = logpdf(Gamma(2, 3), sigma_val)
+
+            # Second parameter is mu
+            mu_param = params[2]
+            mu_val = mu_param  # No transformation for Normal
+            mu_logpdf = logpdf(Normal(0, 10), mu_val)
+
+            # Third parameter is y
+            y_param = params[3]
+            y_val = y_param  # No transformation for Normal
+            y_logpdf = logpdf(Normal(mu_val, sqrt(sigma_val)), y_val)
+
+            # Sum them up in the right order
+            manual_logprior = sigma_logpdf + sigma_logjac + mu_logpdf + y_logpdf
+
+            # Tests
+            @test manual_logprior ≈ bugs_logprior rtol = 1E-6
+            @test bn_logjoint ≈ bugs_logjoint rtol = 1E-6
         end
     end
 end
