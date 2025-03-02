@@ -18,6 +18,7 @@ using BangBang
 using JuliaBUGS
 using JuliaBUGS: @bugs, compile, NodeInfo, VarName
 using Bijectors: Bijectors
+using AbstractPPL
 
 @testset "BayesianNetwork" begin
     @testset "Adding vertices" begin
@@ -458,6 +459,7 @@ using Bijectors: Bijectors
     end
 
     @testset "evaluate_with_values for BayesianNetwork" begin
+
         @testset "Loop model with Normal distributions" begin
             # Create model with a for loop
             loop_model = @bugs begin
@@ -465,18 +467,21 @@ using Bijectors: Bijectors
                     x[i] ~ dnorm(i, 1)
                 end
             end
-
+        
             loop_inits = NamedTuple{(:x,)}(([1.0, 2.0, 3.0],))
             loop_compiled_model = compile(loop_model, NamedTuple(), loop_inits)
-
+            
             # Convert to BayesianNetwork
             loop_bn = translate_BUGSGraph_to_BayesianNetwork(
                 loop_compiled_model.g, loop_compiled_model.evaluation_env
             )
-
+            
+            # Create actual parameter values - THIS IS THE FIX
+            loop_params = rand(3)
+            
             # Get result from our BayesianNetwork implementation
-            bn_env, bn_logjoint = evaluate_with_values(loop_bn, params, loop_compiled_model)
-
+            bn_env, bn_logjoint = evaluate_with_values(loop_bn, loop_params, loop_compiled_model)
+            
             # Also verify against manual calculation
             manual_logjoint = sum(logpdf(Normal(i, 1), bn_env[:x][i]) for i in 1:3)
             @test bn_logjoint ≈ manual_logjoint rtol = 1E-6
@@ -528,6 +533,99 @@ using Bijectors: Bijectors
 
             # Tests
             @test manual_logprior ≈ bugs_logprior rtol = 1E-6
+            @test bn_logjoint ≈ bugs_logjoint rtol = 1E-6
+        end
+    end
+
+    @testset "BUGSModel vs BayesianNetwork Evaluation" begin
+        @testset "Simple univariate model comparison" begin
+            # Define model
+            model_def = @bugs begin
+                mu ~ Normal(0, 10)
+                sigma ~ Gamma(2, 3)
+                y ~ Normal(mu, sqrt(sigma))
+            end
+    
+            # Compile BUGSModel
+            bugs_model = compile(model_def, NamedTuple())
+            
+            # Convert to BayesianNetwork
+            bn = translate_BUGSGraph_to_BayesianNetwork(bugs_model.g, bugs_model.evaluation_env)
+            
+            # Evaluate original BUGSModel
+            bugs_env, bugs_logp = AbstractPPL.evaluate!!(bugs_model)
+            
+            # Evaluate BayesianNetwork
+            bn_env, bn_logp = evaluate(bn)
+            
+            # Compare results
+            @test bn_logp ≈ bugs_logp rtol = 1E-6
+            
+            # Check if all values match
+            for name in bugs_model.flattened_graph_node_data.sorted_nodes
+                @test AbstractPPL.get(bugs_env, name) ≈ AbstractPPL.get(bn_env, name) rtol = 1E-6
+            end
+        end
+        
+        @testset "Model with parameters comparison" begin
+            # Define model
+            model_def = @bugs begin
+                mu ~ Normal(0, 10)
+                sigma ~ Gamma(2, 3)
+                y ~ Normal(mu, sqrt(sigma))
+            end
+    
+            # Compile BUGSModel
+            bugs_model = compile(model_def, NamedTuple())
+            
+            # Convert to BayesianNetwork
+            bn = translate_BUGSGraph_to_BayesianNetwork(bugs_model.g, bugs_model.evaluation_env)
+            
+            # Create random parameters
+            params = rand(3)
+            
+            # Evaluate BUGSModel with parameters
+            bugs_env, (bugs_logprior, bugs_loglikelihood, bugs_logjoint) = 
+                JuliaBUGS._tempered_evaluate!!(bugs_model, params; temperature=1.0)
+            
+            # Evaluate BayesianNetwork with parameters
+            bn_env, bn_logjoint = evaluate_with_values(bn, params, bugs_model)
+            
+            # Compare results
+            @test bn_logjoint ≈ bugs_logjoint rtol = 1E-6
+            
+            # Check if all values match
+            for name in bugs_model.flattened_graph_node_data.sorted_nodes
+                @test AbstractPPL.get(bugs_env, name) ≈ AbstractPPL.get(bn_env, name) rtol = 1E-6
+            end
+        end
+        
+        @testset "Hierarchical model comparison" begin
+            # Define a hierarchical model
+            model_def = @bugs begin
+                alpha ~ Normal(0, 1)
+                beta ~ Normal(alpha, 1)
+                gamma ~ Normal(beta, 1)
+                x ~ Normal(gamma, 1)
+            end
+    
+            # Compile BUGSModel
+            bugs_model = compile(model_def, NamedTuple())
+            
+            # Convert to BayesianNetwork
+            bn = translate_BUGSGraph_to_BayesianNetwork(bugs_model.g, bugs_model.evaluation_env)
+            
+            # Create random parameters
+            params = rand(4)
+            
+            # Evaluate BUGSModel with parameters
+            bugs_env, (bugs_logprior, bugs_loglikelihood, bugs_logjoint) = 
+                JuliaBUGS._tempered_evaluate!!(bugs_model, params; temperature=1.0)
+            
+            # Evaluate BayesianNetwork with parameters
+            bn_env, bn_logjoint = evaluate_with_values(bn, params, bugs_model)
+            
+            # Compare results
             @test bn_logjoint ≈ bugs_logjoint rtol = 1E-6
         end
     end
