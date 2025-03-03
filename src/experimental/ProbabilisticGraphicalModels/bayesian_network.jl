@@ -191,17 +191,16 @@ function evaluate(bn::BayesianNetwork)
 end
 
 function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVector, model)
-    # Use the exact same node ordering as BUGSModel
-    bugsmodel_node_order = model.flattened_graph_node_data.sorted_nodes
+    bugsmodel_node_order = [bn.names[i] for i in topological_sort_by_dfs(bn.graph)]      
 
     var_lengths = model.transformed_var_lengths
-    evaluation_env = deepcopy(model.evaluation_env)
+    evaluation_env = bn.evaluation_env
     current_idx = 1
     logprior, loglikelihood = 0.0, 0.0
 
     for vn in bugsmodel_node_order
         # Get the corresponding index in BayesianNetwork
-        i = findfirst(name -> name == vn, bn.names)
+        i = bn.names_to_ids[vn]
 
         is_stochastic = bn.is_stochastic[i]
         is_observed = bn.is_observed[i]
@@ -217,7 +216,7 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
 
                 b = Bijectors.bijector(dist)
                 b_inv = Bijectors.inverse(b)
-                reconstructed_value = reconstruct(
+                reconstructed_value = JuliaBUGS.reconstruct(
                     b_inv, dist, view(parameter_values, current_idx:(current_idx + l - 1))
                 )
                 value, logjac = Bijectors.with_logabsdet_jacobian(

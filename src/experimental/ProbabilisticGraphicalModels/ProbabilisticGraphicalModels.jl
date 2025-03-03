@@ -13,7 +13,6 @@ using LinearAlgebra: Cholesky
 include("bayesian_network.jl")
 include("conditioning.jl")
 include("functions.jl")
-include("utils.jl")
 
 export BayesianNetwork,
     condition,
@@ -27,6 +26,5 @@ export BayesianNetwork,
     add_vertex!,
     translate_BUGSGraph_to_BayesianNetwork,
     evaluate,
-    evaluate_with_values,
-    reconstruct # TODO: remember to remove once testing is done
+    evaluate_with_values
 end

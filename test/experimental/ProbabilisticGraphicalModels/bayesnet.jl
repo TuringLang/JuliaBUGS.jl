@@ -12,8 +12,7 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     ancestral_sampling,
     is_conditionally_independent,
     evaluate,
-    evaluate_with_values,
-    reconstruct #TODO: remember to remove once testing is done
+    evaluate_with_values
 using BangBang
 using JuliaBUGS
 using JuliaBUGS: @bugs, compile, NodeInfo, VarName
@@ -474,7 +473,7 @@ using AbstractPPL
             loop_bn = translate_BUGSGraph_to_BayesianNetwork(
                 loop_compiled_model.g, loop_compiled_model.evaluation_env
             )
-            
+
             loop_params = rand(3)
 
             # Get result from our BayesianNetwork implementation
@@ -512,7 +511,7 @@ using AbstractPPL
             sigma_param = params[1]
             b_sigma = Bijectors.bijector(Gamma(2, 3))
             b_sigma_inv = Bijectors.inverse(b_sigma)
-            sigma_reconstructed = reconstruct(b_sigma_inv, Gamma(2, 3), [sigma_param])
+            sigma_reconstructed = JuliaBUGS.reconstruct(b_sigma_inv, Gamma(2, 3), [sigma_param])
             sigma_val, sigma_logjac = Bijectors.with_logabsdet_jacobian(
                 b_sigma_inv, sigma_reconstructed
             )
