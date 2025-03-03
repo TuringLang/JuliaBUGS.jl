@@ -477,7 +477,9 @@ using AbstractPPL
             loop_params = rand(3)
 
             # Get result from our BayesianNetwork implementation
-            bn_env, bn_logjoint = evaluate_with_values(loop_bn, loop_params)
+            bn_env, bn_logjoint = evaluate_with_values(
+                loop_bn, loop_params
+            )
 
             # Also verify against manual calculation
             manual_logjoint = sum(logpdf(Normal(i, 1), bn_env[:x][i]) for i in 1:3)
@@ -509,9 +511,7 @@ using AbstractPPL
             sigma_param = params[1]
             b_sigma = Bijectors.bijector(Gamma(2, 3))
             b_sigma_inv = Bijectors.inverse(b_sigma)
-            sigma_reconstructed = JuliaBUGS.reconstruct(
-                b_sigma_inv, Gamma(2, 3), [sigma_param]
-            )
+            sigma_reconstructed = JuliaBUGS.reconstruct(b_sigma_inv, Gamma(2, 3), [sigma_param])
             sigma_val, sigma_logjac = Bijectors.with_logabsdet_jacobian(
                 b_sigma_inv, sigma_reconstructed
             )
