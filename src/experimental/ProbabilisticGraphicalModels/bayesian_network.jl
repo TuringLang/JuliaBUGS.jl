@@ -193,7 +193,6 @@ end
 function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVector)
     # Use topological_sort_by_dfs to determine node evaluation order
     bugsmodel_node_order = [bn.names[i] for i in topological_sort_by_dfs(bn.graph)]
-    
     # Create a dictionary to store inferred transformed variable lengths
     var_lengths = Dict{eltype(bn.names),Int}()
 
@@ -214,16 +213,13 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
             if !is_observed
                 dist = bn.distributions[i](evaluation_env, bn.loop_vars[vn])
                 b = Bijectors.bijector(dist)
-                
                 if !haskey(var_lengths, vn)
                     var_value = AbstractPPL.get(evaluation_env, vn)
                     transformed_value = Bijectors.transform(b, var_value)
                     var_lengths[vn] = length(transformed_value)
                 end
-                
                 l = var_lengths[vn]
                 b_inv = Bijectors.inverse(b)
-                
                 reconstructed_value = JuliaBUGS.reconstruct(
                     b_inv, dist, view(parameter_values, current_idx:(current_idx + l - 1))
                 )

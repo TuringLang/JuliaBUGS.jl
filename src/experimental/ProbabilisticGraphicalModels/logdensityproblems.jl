@@ -4,7 +4,9 @@
 Compute the log density of the BayesianNetwork given parameters x.
 Requires the original BUGSModel to access transformed_var_lengths.
 """
-function LogDensityProblems.logdensity(bn::BayesianNetwork, x::AbstractArray, model::AbstractBUGSModel)
+function LogDensityProblems.logdensity(
+    bn::BayesianNetwork, x::AbstractArray, model::AbstractBUGSModel
+)
     _, logp = evaluate_with_values(bn, x, model)
     return logp
 end
