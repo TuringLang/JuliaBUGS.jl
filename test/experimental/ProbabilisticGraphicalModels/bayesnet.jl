@@ -478,7 +478,7 @@ using AbstractPPL
 
             # Get result from our BayesianNetwork implementation
             bn_env, bn_logjoint = evaluate_with_values(
-                loop_bn, loop_params, loop_compiled_model
+                loop_bn, loop_params
             )
 
             # Also verify against manual calculation
@@ -504,7 +504,7 @@ using AbstractPPL
             )
 
             # Our implementation
-            bn_env, bn_logjoint = evaluate_with_values(bn, params, model)
+            bn_env, bn_logjoint = evaluate_with_values(bn, params)
 
             # Manual calculation that matches BUGSModel
             # First parameter is sigma
@@ -594,7 +594,7 @@ using AbstractPPL
             )
 
             # Evaluate BayesianNetwork with parameters
-            bn_env, bn_logjoint = evaluate_with_values(bn, params, bugs_model)
+            bn_env, bn_logjoint = evaluate_with_values(bn, params)
 
             # Compare results
             @test bn_logjoint ≈ bugs_logjoint rtol = 1E-6
@@ -632,7 +632,7 @@ using AbstractPPL
             )
 
             # Evaluate BayesianNetwork with parameters
-            bn_env, bn_logjoint = evaluate_with_values(bn, params, bugs_model)
+            bn_env, bn_logjoint = evaluate_with_values(bn, params)
 
             # Compare results
             @test bn_logjoint ≈ bugs_logjoint rtol = 1E-6

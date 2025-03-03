@@ -190,16 +190,18 @@ function evaluate(bn::BayesianNetwork)
     return evaluation_env, logp
 end
 
-function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVector, model)
-    bugsmodel_node_order = [bn.names[i] for i in topological_sort_by_dfs(bn.graph)]      
+function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVector)
+    # Use topological_sort_by_dfs to determine node evaluation order
+    bugsmodel_node_order = [bn.names[i] for i in topological_sort_by_dfs(bn.graph)]
+    
+    # Create a dictionary to store inferred transformed variable lengths
+    var_lengths = Dict{eltype(bn.names),Int}()
 
-    var_lengths = model.transformed_var_lengths
-    evaluation_env = bn.evaluation_env
+    evaluation_env = deepcopy(bn.evaluation_env)
     current_idx = 1
     logprior, loglikelihood = 0.0, 0.0
 
     for vn in bugsmodel_node_order
-        # Get the corresponding index in BayesianNetwork
         i = bn.names_to_ids[vn]
 
         is_stochastic = bn.is_stochastic[i]
@@ -209,13 +211,19 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
             value = bn.deterministic_functions[i](evaluation_env, bn.loop_vars[vn])
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         else
-            dist = bn.distributions[i](evaluation_env, bn.loop_vars[vn])
-
             if !is_observed
-                l = var_lengths[vn]
-
+                dist = bn.distributions[i](evaluation_env, bn.loop_vars[vn])
                 b = Bijectors.bijector(dist)
+                
+                if !haskey(var_lengths, vn)
+                    var_value = AbstractPPL.get(evaluation_env, vn)
+                    transformed_value = Bijectors.transform(b, var_value)
+                    var_lengths[vn] = length(transformed_value)
+                end
+                
+                l = var_lengths[vn]
                 b_inv = Bijectors.inverse(b)
+                
                 reconstructed_value = JuliaBUGS.reconstruct(
                     b_inv, dist, view(parameter_values, current_idx:(current_idx + l - 1))
                 )
@@ -227,6 +235,7 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
                 logprior += logpdf(dist, value) + logjac
                 evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
             else
+                dist = bn.distributions[i](evaluation_env, bn.loop_vars[vn])
                 loglikelihood += logpdf(dist, AbstractPPL.get(evaluation_env, vn))
             end
         end
