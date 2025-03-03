@@ -16,19 +16,18 @@ Return the dimension of the parameter space of the BayesianNetwork.
 """
 function LogDensityProblems.dimension(bn::BayesianNetwork)
     evaluation_env = deepcopy(bn.evaluation_env)
-    
+
     # Get all unobserved stochastic variables that need parameters
     unobserved_stochastic_vars = [
-        bn.names[i] for i in bn.stochastic_ids 
-        if !bn.is_observed[i]
+        bn.names[i] for i in bn.stochastic_ids if !bn.is_observed[i]
     ]
-    
+
     # Calculate dimensions for each variable
     total_dim = 0
     for vn in unobserved_stochastic_vars
         i = bn.names_to_ids[vn]
         dist = bn.distributions[i](evaluation_env, bn.loop_vars[vn])
-        
+
         if transformed
             # Calculate transformed dimension
             b = Bijectors.bijector(dist)
@@ -41,7 +40,7 @@ function LogDensityProblems.dimension(bn::BayesianNetwork)
             total_dim += length(var_value)
         end
     end
-    
+
     return total_dim
 end
 
