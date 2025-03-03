@@ -191,10 +191,8 @@ function evaluate(bn::BayesianNetwork)
 end
 
 function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVector)
-    # Use topological_sort_by_dfs to determine node evaluation order
     bugsmodel_node_order = [bn.names[i] for i in topological_sort_by_dfs(bn.graph)]
     
-    # Create a dictionary to store inferred transformed variable lengths
     var_lengths = Dict{eltype(bn.names),Int}()
 
     evaluation_env = deepcopy(bn.evaluation_env)
