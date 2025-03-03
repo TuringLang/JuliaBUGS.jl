@@ -53,7 +53,9 @@ end
 
 Translates a BUGSGraph (with node metadata stored in NodeInfo) into a BayesianNetwork.
 """
-function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluation_env, model=nothing)
+function translate_BUGSGraph_to_BayesianNetwork(
+    g::JuliaBUGS.BUGSGraph, evaluation_env, model=nothing
+)
     # Retrieve variable labels (stored as VarNames) from g.
     varnames = collect(labels(g))
     n = length(varnames)
@@ -70,17 +72,15 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
     is_stochastic = falses(n)
     is_observed = falses(n)
     node_types = Vector{Symbol}(undef, n)
-    
     transformed_var_lengths = Dict{VarName,Int}()
     transformed_param_length = 0
-    
-    if model !== nothing 
+
+    if model !== nothing
         if isdefined(model, :transformed_var_lengths)
             for (k, v) in pairs(model.transformed_var_lengths)
                 transformed_var_lengths[k] = v
             end
         end
-        
         if isdefined(model, :transformed_param_length)
             transformed_param_length = model.transformed_param_length
         end
@@ -215,7 +215,6 @@ end
 
 function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVector)
     bugsmodel_node_order = [bn.names[i] for i in topological_sort_by_dfs(bn.graph)]
-    
     var_lengths = bn.transformed_var_lengths
 
     evaluation_env = deepcopy(bn.evaluation_env)
@@ -235,14 +234,12 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
             if !is_observed
                 dist = bn.distributions[i](evaluation_env, bn.loop_vars[vn])
                 b = Bijectors.bijector(dist)
-                
                 # If the variable is not in transformed_var_lengths, calculate it
                 if !haskey(var_lengths, vn)
                     var_value = AbstractPPL.get(evaluation_env, vn)
                     transformed_value = Bijectors.transform(b, var_value)
                     var_lengths[vn] = length(transformed_value)
                 end
-                
                 l = var_lengths[vn]
                 b_inv = Bijectors.inverse(b)
                 reconstructed_value = JuliaBUGS.reconstruct(
