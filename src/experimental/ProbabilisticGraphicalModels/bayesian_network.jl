@@ -192,7 +192,6 @@ end
 
 function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVector)
     bugsmodel_node_order = [bn.names[i] for i in topological_sort_by_dfs(bn.graph)]
-    
     var_lengths = Dict{eltype(bn.names),Int}()
 
     evaluation_env = deepcopy(bn.evaluation_env)
