@@ -458,36 +458,25 @@ function __gen_logp_density_function_body_exprs(stmts::Vector, evaluation_env, e
 end
 
 function _handle_if_expr(stmt, evaluation_env)
-    # stmt.args[1] = if-condition
-    # stmt.args[2] = block for condition == true
-    # stmt.args[3] = "else" branch which might itself be an :if (for elseif) or a block (for else)
     cond_expr = stmt.args[1]
     then_expr = stmt.args[2]
-    else_expr = length(stmt.args) == 3 ? stmt.args[3] : nothing
+    elseif_or_else_expr = length(stmt.args) == 3 ? stmt.args[3] : nothing
 
-    # Recursively lower the "then" block
     new_then_body = __gen_logp_density_function_body_exprs(then_expr.args, evaluation_env)
     new_then_block = Expr(:block, new_then_body...)
-
-    # Recursively handle the "else" side, which could be nested if/elseif
-    new_else_block = _handle_else_expr(else_expr, evaluation_env)
-
+    new_else_block = _handle_else_expr(elseif_or_else_expr, evaluation_env)
     return Expr(:if, cond_expr, new_then_block, new_else_block)
 end
 
 function _handle_else_expr(expr, evaluation_env)
-    if expr === nothing
-        # no else branch at all
+    if expr === nothing # no else clause 
         return nothing
-    elseif Meta.isexpr(expr, :if)
-        # means we have an 'elseif' situation
+    elseif Meta.isexpr(expr, :elseif)
         return _handle_if_expr(expr, evaluation_env)
-    elseif Meta.isexpr(expr, :block)
-        # just an else block with statements
+    elseif Meta.isexpr(expr, :block) # else
         new_else_body = __gen_logp_density_function_body_exprs(expr.args, evaluation_env)
         return Expr(:block, new_else_body...)
     else
-        # single-statement else (rare, but possible)
         return expr
     end
 end
