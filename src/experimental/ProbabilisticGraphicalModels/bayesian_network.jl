@@ -23,6 +23,10 @@ struct BayesianNetwork{V,T,F}
     is_stochastic::BitVector
     is_observed::BitVector
     node_types::Vector{Symbol}            # e.g. :discrete or :continuous
+    "transformed variable lengths for each variable"
+    transformed_var_lengths::Dict{V,Int}
+    "total length of transformed parameters"
+    transformed_param_length::Int
 end
 
 function BayesianNetwork{V}() where {V}
@@ -39,6 +43,8 @@ function BayesianNetwork{V}() where {V}
         BitVector(),
         BitVector(),
         Symbol[],
+        Dict{V,Int}(),  # Empty Dict for transformed_var_lengths
+        0,              # transformed_param_length
     )
 end
 
@@ -47,7 +53,9 @@ end
 
 Translates a BUGSGraph (with node metadata stored in NodeInfo) into a BayesianNetwork.
 """
-function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluation_env)
+function translate_BUGSGraph_to_BayesianNetwork(
+    g::JuliaBUGS.BUGSGraph, evaluation_env, model=nothing
+)
     # Retrieve variable labels (stored as VarNames) from g.
     varnames = collect(labels(g))
     n = length(varnames)
@@ -64,6 +72,19 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
     is_stochastic = falses(n)
     is_observed = falses(n)
     node_types = Vector{Symbol}(undef, n)
+    transformed_var_lengths = Dict{VarName,Int}()
+    transformed_param_length = 0
+
+    if model !== nothing
+        if isdefined(model, :transformed_var_lengths)
+            for (k, v) in pairs(model.transformed_var_lengths)
+                transformed_var_lengths[k] = v
+            end
+        end
+        if isdefined(model, :transformed_param_length)
+            transformed_param_length = model.transformed_param_length
+        end
+    end
 
     for (i, varname) in enumerate(varnames)
         nodeinfo = g[varname]
@@ -97,6 +118,8 @@ function translate_BUGSGraph_to_BayesianNetwork(g::JuliaBUGS.BUGSGraph, evaluati
         is_stochastic,
         is_observed,
         node_types,
+        transformed_var_lengths,
+        transformed_param_length,
     )
 
     # Add edges using the BayesianNetwork's mapping.
@@ -188,4 +211,53 @@ function evaluate(bn::BayesianNetwork)
         end
     end
     return evaluation_env, logp
+end
+
+function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVector)
+    bugsmodel_node_order = [bn.names[i] for i in topological_sort_by_dfs(bn.graph)]
+    var_lengths = bn.transformed_var_lengths
+
+    evaluation_env = deepcopy(bn.evaluation_env)
+    current_idx = 1
+    logprior, loglikelihood = 0.0, 0.0
+
+    for vn in bugsmodel_node_order
+        i = bn.names_to_ids[vn]
+
+        is_stochastic = bn.is_stochastic[i]
+        is_observed = bn.is_observed[i]
+
+        if !is_stochastic
+            value = bn.deterministic_functions[i](evaluation_env, bn.loop_vars[vn])
+            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+        else
+            if !is_observed
+                dist = bn.distributions[i](evaluation_env, bn.loop_vars[vn])
+                b = Bijectors.bijector(dist)
+                # If the variable is not in transformed_var_lengths, calculate it
+                if !haskey(var_lengths, vn)
+                    var_value = AbstractPPL.get(evaluation_env, vn)
+                    transformed_value = Bijectors.transform(b, var_value)
+                    var_lengths[vn] = length(transformed_value)
+                end
+                l = var_lengths[vn]
+                b_inv = Bijectors.inverse(b)
+                reconstructed_value = JuliaBUGS.reconstruct(
+                    b_inv, dist, view(parameter_values, current_idx:(current_idx + l - 1))
+                )
+                value, logjac = Bijectors.with_logabsdet_jacobian(
+                    b_inv, reconstructed_value
+                )
+
+                current_idx += l
+                logprior += logpdf(dist, value) + logjac
+                evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+            else
+                dist = bn.distributions[i](evaluation_env, bn.loop_vars[vn])
+                loglikelihood += logpdf(dist, AbstractPPL.get(evaluation_env, vn))
+            end
+        end
+    end
+
+    return evaluation_env, logprior + loglikelihood
 end
