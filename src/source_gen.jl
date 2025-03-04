@@ -76,11 +76,11 @@ function analyze_statement(
     return nothing
 end
 
-function _build_var_to_stmt_id(model::BUGSModel, stmt_ids::IdDict{Expr,Int})
+function _build_var_to_stmt_id(model_def::Expr, g::JuliaBUGS.BUGSGraph, evaluation_env::NamedTuple, stmt_ids::IdDict{Expr,Int})
     pass = StatementIdAttributePass(
-        Set(labels(model.g)), stmt_ids, model.evaluation_env, Dict{VarName,Int}()
+        Set(labels(g)), stmt_ids, evaluation_env, Dict{VarName,Int}()
     )
-    analyze_block(pass, model.model_def)
+    analyze_block(pass, model_def)
     return pass.var_to_stmt_id
 end
 
@@ -99,13 +99,12 @@ end
 
 # coarse graph may contains nodes whose degree is 0, these are transformed data
 function _build_coarse_dep_graph(
-    model::BUGSModel, stmt_to_stmt_id::IdDict{Expr,Int}, var_to_stmt_id::Dict{VarName,Int}
+    g::JuliaBUGS.BUGSGraph, stmt_to_stmt_id::IdDict{Expr,Int}, var_to_stmt_id::Dict{VarName,Int}
 )
-    fine_graph = model.g
     coarse_graph = Graphs.SimpleDiGraph(length(stmt_to_stmt_id))
-    for edge in Graphs.edges(fine_graph.graph)
-        src_varname = label_for(fine_graph, src(edge))
-        dst_varname = label_for(fine_graph, dst(edge))
+    for edge in Graphs.edges(g.graph)
+        src_varname = label_for(g, src(edge))
+        dst_varname = label_for(g, dst(edge))
         src_stmt_id = var_to_stmt_id[src_varname]
         dst_stmt_id = var_to_stmt_id[dst_varname]
         add_edge!(coarse_graph, src_stmt_id, dst_stmt_id)
@@ -286,15 +285,18 @@ function __generate_model_parameter_condition_expr(model_param_nt_vec)
     end
 end
 
-function _generate_lowered_model_def(model, evaluation_env)
-    stmt_to_stmt_id = _build_stmt_to_stmt_id(model.model_def)
+function _generate_lowered_model_def(model_def, g::JuliaBUGS.BUGSGraph, evaluation_env)
+    stmt_to_stmt_id = _build_stmt_to_stmt_id(model_def)
     stmt_id_to_stmt = _build_stmt_id_to_stmt(stmt_to_stmt_id)
-    var_to_stmt_id = _build_var_to_stmt_id(model, stmt_to_stmt_id)
+    var_to_stmt_id = _build_var_to_stmt_id(model_def, g, evaluation_env, stmt_to_stmt_id)
     stmt_id_to_var = _build_stmt_id_to_var(var_to_stmt_id)
-    coarse_graph = _build_coarse_dep_graph(model, stmt_to_stmt_id, var_to_stmt_id)
+    coarse_graph = _build_coarse_dep_graph(g, stmt_to_stmt_id, var_to_stmt_id)
+    if !can_reorder(coarse_graph)
+        error("The dependency graph of the model is cyclic, cannot reorder the statements.")
+    end
     # show_coarse_graph(stmt_id_to_stmt, coarse_graph)
     model_def_removed_transformed_data = _copy_and_remove_stmt_with_degree_0(
-        model.model_def, stmt_to_stmt_id, coarse_graph
+        model_def, stmt_to_stmt_id, coarse_graph
     )
     fissioned_stmts = _fully_fission_loop(
         model_def_removed_transformed_data, stmt_to_stmt_id, evaluation_env
@@ -305,9 +307,9 @@ function _generate_lowered_model_def(model, evaluation_env)
     reconstructed_model_def = _reconstruct_model_def_from_sorted_fissioned_stmts(
         sorted_fissioned_stmts
     )
-    induction_variable_values = _var_to_loop_vars(model, evaluation_env)
+    induction_variable_values = _var_to_loop_vars(model_def, evaluation_env)
     var_types = __determine_var_types(
-        model, stmt_id_to_var, stmt_id_to_stmt, induction_variable_values
+        g, stmt_id_to_var, stmt_id_to_stmt, induction_variable_values
     )
     lowered_model_def = _lower_model_def_to_represent_observe_stmts(
         reconstructed_model_def, stmt_to_stmt_id, var_types, evaluation_env
@@ -373,14 +375,14 @@ function analyze_statement(
     return pass.induction_variable_values[varname] = loop_variables
 end
 
-function _var_to_loop_vars(model, evaluation_env)
+function _var_to_loop_vars(model_def, evaluation_env)
     pass = CollectLoopInductionVariableValues(evaluation_env)
-    analyze_block(pass, model.model_def)
+    analyze_block(pass, model_def)
     return pass.induction_variable_values
 end
 
 function __determine_var_types(
-    model, stmt_id_to_var, stmt_id_to_stmt, induction_variable_values
+    g::JuliaBUGS.BUGSGraph, stmt_id_to_var, stmt_id_to_stmt, induction_variable_values
 )
     # for each statement, have three list to collect the var of each type
     var_types = [([], [], []) for _ in 1:length(stmt_id_to_stmt)]
@@ -390,7 +392,7 @@ function __determine_var_types(
         end
         vars = stmt_id_to_var[stmt_id]
         for var in vars
-            var_type = __variable_type(model, var)
+            var_type = __variable_type(g, var)
             if var_type == :observed
                 push!(var_types[stmt_id][1], induction_variable_values[var])
             elseif var_type == :model_parameter
@@ -403,9 +405,9 @@ function __determine_var_types(
     return var_types
 end
 
-function __variable_type(model, var)
-    if model.g[var].is_stochastic
-        if model.g[var].is_observed
+function __variable_type(g::JuliaBUGS.BUGSGraph, var)
+    if g[var].is_stochastic
+        if g[var].is_observed
             return :observed
         else
             return :model_parameter
