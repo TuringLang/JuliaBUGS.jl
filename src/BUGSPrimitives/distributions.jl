@@ -361,8 +361,8 @@ end
 """
     dmnorm(μ::AbstractVector, T::AbstractMatrix)
 
-Returns an instance of [Multivariate Normal](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.MvNormal) 
-with mean vector `μ` and covariance matrix ``T^{-1}``.
+Returns an instance of [Multivariate Normal in canonical form](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.MvNormalCanon) 
+with mean vector `μ` and precision matrix `T`.
 
 ```math
 p(x|μ,T) = (2π)^{-k/2} |T|^{1/2} e^{-1/2 (x-μ)' T (x-μ)}
@@ -370,7 +370,7 @@ p(x|μ,T) = (2π)^{-k/2} |T|^{1/2} e^{-1/2 (x-μ)' T (x-μ)}
 where ``k`` is the dimension of `x`.
 """
 function dmnorm(μ::AbstractVector, T::AbstractMatrix)
-    return MvNormal(μ, _inv(PDMat(T)))
+    return Distributions.MvNormalCanon(μ, PDMat(T))
 end
 
 """
