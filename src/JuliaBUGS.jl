@@ -38,6 +38,8 @@ include("model.jl")
 include("logdensityproblems.jl")
 include("gibbs.jl")
 
+include("source_gen.jl")
+
 include("BUGSExamples/BUGSExamples.jl")
 
 function check_input(input::NamedTuple)

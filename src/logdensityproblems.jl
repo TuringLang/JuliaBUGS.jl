@@ -1,6 +1,11 @@
 function LogDensityProblems.logdensity(model::AbstractBUGSModel, x::AbstractArray)
-    _, logp = evaluate!!(model, x)
-    return logp
+    if model.has_generated_log_density_function
+        @info "Using the generated log density function."
+        return model.log_density_computation_function(model.evaluation_env, x)
+    else
+        _, logp = evaluate!!(model, x)
+        return logp
+    end
 end
 
 function LogDensityProblems.dimension(model::BUGSModel)

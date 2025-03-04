@@ -49,7 +49,7 @@ The `BUGSModel` object is used for inference and represents the output of compil
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
 """
 struct BUGSModel{
-    base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,TNF,TV,data_T
+    base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,TNF,TV,data_T,F<:Function
 } <: AbstractBUGSModel
     " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
@@ -75,6 +75,9 @@ struct BUGSModel{
 
     "If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`."
     base_model::base_model_T
+
+    has_generated_log_density_function::Bool
+    log_density_computation_function::F
 
     # for serialization, save the original model definition and data
     model_def::Expr
@@ -195,6 +198,34 @@ function BUGSModel(
             end
         end
     end
+
+    # TODO: stop using try-catch
+    has_generated_log_density_function = false
+    lowered_model_def = nothing
+    reconstructed_model_def = nothing
+    try
+        lowered_model_def, reconstructed_model_def = _generate_lowered_model_def(
+            model_def, g, evaluation_env
+        )
+        has_generated_log_density_function = true
+    catch _
+        has_generated_log_density_function = false
+    end
+
+    if has_generated_log_density_function
+        log_density_computation_expr = _gen_log_density_computation_function_expr(
+            lowered_model_def, evaluation_env
+        )
+        log_density_computation_function = eval(log_density_computation_expr)
+        pass = CollectSortedNodes(evaluation_env)
+        JuliaBUGS.analyze_block(pass, reconstructed_model_def)
+        sorted_nodes = pass.sorted_nodes
+        parameters = [vn for vn in sorted_nodes if vn in parameters]
+        flattened_graph_node_data = FlattenedGraphNodeData(g, sorted_nodes)
+    else
+        log_density_computation_function = identity
+    end
+
     return BUGSModel(
         is_transformed,
         untransformed_param_length,
@@ -206,6 +237,8 @@ function BUGSModel(
         flattened_graph_node_data,
         g,
         nothing,
+        has_generated_log_density_function,
+        log_density_computation_function,
         model_def,
         data,
     )
