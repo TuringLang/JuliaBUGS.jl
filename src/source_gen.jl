@@ -76,7 +76,12 @@ function analyze_statement(
     return nothing
 end
 
-function _build_var_to_stmt_id(model_def::Expr, g::JuliaBUGS.BUGSGraph, evaluation_env::NamedTuple, stmt_ids::IdDict{Expr,Int})
+function _build_var_to_stmt_id(
+    model_def::Expr,
+    g::JuliaBUGS.BUGSGraph,
+    evaluation_env::NamedTuple,
+    stmt_ids::IdDict{Expr,Int},
+)
     pass = StatementIdAttributePass(
         Set(labels(g)), stmt_ids, evaluation_env, Dict{VarName,Int}()
     )
@@ -99,7 +104,9 @@ end
 
 # coarse graph may contains nodes whose degree is 0, these are transformed data
 function _build_coarse_dep_graph(
-    g::JuliaBUGS.BUGSGraph, stmt_to_stmt_id::IdDict{Expr,Int}, var_to_stmt_id::Dict{VarName,Int}
+    g::JuliaBUGS.BUGSGraph,
+    stmt_to_stmt_id::IdDict{Expr,Int},
+    var_to_stmt_id::Dict{VarName,Int},
 )
     coarse_graph = Graphs.SimpleDiGraph(length(stmt_to_stmt_id))
     for edge in Graphs.edges(g.graph)
