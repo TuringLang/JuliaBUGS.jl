@@ -358,6 +358,10 @@ function dbeta(a, b)
     return Beta(a, b)
 end
 
+# `Distributions.MvNormalCanon` provides this parameterization, but it errors on ReverseDiff (others, including 
+# ForwardDiff, Mooncake, etc. seems to be fine). The reason for error seems to be that `MvNormalCanon` uses 
+# `PDMat` and `PDMat` uses `PDMats.quad` which does `chol_upper` (https://github.com/JuliaStats/PDMats.jl/blob/5e7d88ec271df4bd12accc16eb56e7a9e14043fb/src/chol.jl#L49-L69)
+# and `ReverseDiff` errors when trying to set lower triangular part of the upper triangular matrix.
 """
     dmnorm(μ::AbstractVector, T::AbstractMatrix)
 
