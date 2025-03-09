@@ -72,13 +72,17 @@ function _create_JuliaBUGS_model(model_name::Symbol)
 end
 
 function benchmark_JuliaBUGS_model(model::JuliaBUGS.BUGSModel)
-    ad_model = ADgradient(AutoReverseDiff(true), model)
+    # ad_model = ADgradient(AutoReverseDiff(true), model)
+    p = Base.Fix1(LogDensityProblems.logdensity, model)
+    backend = AutoMooncake(; config=nothing)
     dim = LogDensityProblems.dimension(model)
     params_values = JuliaBUGS.getparams(model)
+    prep = prepare_gradient(p, backend, params_values)
     density_time = Chairmarks.@be LogDensityProblems.logdensity($ad_model, $params_values)
-    density_and_gradient_time = Chairmarks.@be LogDensityProblems.logdensity_and_gradient(
-        $ad_model, $params_values
-    )
+    # density_and_gradient_time = Chairmarks.@be LogDensityProblems.logdensity_and_gradient(
+    #     $ad_model, $params_values
+    # )
+    density_and_gradient_time = Chairmarks.@be gradient(p, $prep, $backend, $params_values)
     return BenchmarkResult(:juliabugs, dim, density_time, density_and_gradient_time)
 end
 

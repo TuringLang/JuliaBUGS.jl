@@ -6,6 +6,8 @@ Pkg.develop(; path=joinpath(@__DIR__, ".."))
 using JuliaBUGS
 using ADTypes
 using ReverseDiff
+using Mooncake
+using DifferentiationInterface
 using MetaGraphsNext
 using BridgeStan
 using StanLogDensityProblems

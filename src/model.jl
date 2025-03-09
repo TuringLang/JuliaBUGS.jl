@@ -214,7 +214,7 @@ function BUGSModel(
 
     if has_generated_log_density_function
         log_density_computation_expr = _gen_log_density_computation_function_expr(
-            lowered_model_def, evaluation_env
+            lowered_model_def, evaluation_env, gensym(:__compute_log_density__)
         )
         log_density_computation_function = eval(log_density_computation_expr)
         pass = CollectSortedNodes(evaluation_env)
@@ -262,6 +262,8 @@ function BUGSModel(
         FlattenedGraphNodeData(g, sorted_nodes),
         g,
         isnothing(model.base_model) ? model : model.base_model,
+        model.has_generated_log_density_function,
+        model.log_density_computation_function,
         model.model_def,
         model.data,
     )

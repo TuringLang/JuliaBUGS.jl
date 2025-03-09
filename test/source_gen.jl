@@ -7,6 +7,7 @@ using JuliaBUGS.BUGSPrimitives
 using LogDensityProblems
 using OrderedCollections
 
+# bones, mice, kidney have missings in data
 test_examples = [
     :rats,
     :pumps,
@@ -22,9 +23,9 @@ test_examples = [
     :blockers,
     :oxford,
     :lsat,
-    :bones, # missings in data
-    :mice, # missings in data
-    :kidney, # missings in data
+    :bones,
+    :mice,
+    :kidney,
     :leuk,
     :leukfr,
     :dugongs,
