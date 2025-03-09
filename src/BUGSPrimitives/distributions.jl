@@ -358,11 +358,15 @@ function dbeta(a, b)
     return Beta(a, b)
 end
 
+# `Distributions.MvNormalCanon` provides this parameterization, but it errors on ReverseDiff (others, including 
+# ForwardDiff, Mooncake, etc. seems to be fine). The reason for error seems to be that `MvNormalCanon` uses 
+# `PDMat` and `PDMat` uses `PDMats.quad` which does `chol_upper` (https://github.com/JuliaStats/PDMats.jl/blob/5e7d88ec271df4bd12accc16eb56e7a9e14043fb/src/chol.jl#L49-L69)
+# and `ReverseDiff` errors when trying to set lower triangular part of the upper triangular matrix.
 """
     dmnorm(μ::AbstractVector, T::AbstractMatrix)
 
-Returns an instance of [Multivariate Normal in canonical form](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.MvNormalCanon) 
-with mean vector `μ` and precision matrix `T`.
+Returns an instance of [Multivariate Normal](https://juliastats.org/Distributions.jl/latest/multivariate/#Distributions.MvNormal) 
+with mean vector `μ` and covariance matrix ``T^{-1}``.
 
 ```math
 p(x|μ,T) = (2π)^{-k/2} |T|^{1/2} e^{-1/2 (x-μ)' T (x-μ)}
@@ -370,7 +374,7 @@ p(x|μ,T) = (2π)^{-k/2} |T|^{1/2} e^{-1/2 (x-μ)' T (x-μ)}
 where ``k`` is the dimension of `x`.
 """
 function dmnorm(μ::AbstractVector, T::AbstractMatrix)
-    return Distributions.MvNormalCanon(μ, PDMat(T))
+    return MvNormal(μ, _inv(PDMat(T)))
 end
 
 """
