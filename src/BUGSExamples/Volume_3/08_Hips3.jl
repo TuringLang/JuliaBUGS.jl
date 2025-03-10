@@ -201,7 +201,8 @@ data = (
     rho = 0.04,                  # re-revision rate
     var"lambda.op" = 0.01,            # post-operative mortality rate
     # age-sex specific revision hazard:
-    logh0 = c(-6.119, -6.119, -6.119, -6.438, -6.438, -6.438, -6.377, -6.377, -6.377, -6.725, -6.725, -6.725), 
+    logh0 = c(-6.119, -6.119, -6.119, -6.438, -6.438, -6.438,
+        -6.377, -6.377, -6.377, -6.725, -6.725, -6.725),
     tau = 25,                       # inverse variance reflecting uncertainty about log revision hazard (= 1 / 0.2^2)
     C0 = 4052,                   # set-up costs of primary operation
     c = [0, 5290, 5290, 0, 0],   # additional costs associated with each state (zero except for revision states 2 and 3) 
