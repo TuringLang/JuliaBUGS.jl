@@ -18,17 +18,17 @@ model_def = @bugs begin
         mu[j] = -log(s)
     end
     # Define Precision Matrix
-    for j in 2:(s-1)
+    for j in 2:(s - 1)
         T[j, j] = tau * (1 + pow(rho, 2))
     end
     T[1, 1] = tau
     T[s, s] = tau
-    for j in 1:(s-1)
-        T[j, j+1] = -tau * rho
-        T[j+1, j] = T[j, j+1]
+    for j in 1:(s - 1)
+        T[j, j + 1] = -tau * rho
+        T[j + 1, j] = T[j, j + 1]
     end
-    for i in 1:(s-1)
-        for j in (2+i):s
+    for i in 1:(s - 1)
+        for j in (2 + i):s
             T[i, j] = 0
             T[j, i] = 0
         end
@@ -92,11 +92,13 @@ data = (
 )
 
 inits = (
-    gam = [-3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3]
+    gam = [
+    -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3]
 )
 
 inits_alternative = (
-    gam = [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
+    gam = [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,
+    -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
 )
 
 # Reference results would be added here when available
@@ -125,4 +127,4 @@ reference_results = (
 )
 
 pig_weights = Example(
-    name, model_def, original, data, inits, inits_alternative, reference_results) 
+    name, model_def, original, data, inits, inits_alternative, reference_results)
