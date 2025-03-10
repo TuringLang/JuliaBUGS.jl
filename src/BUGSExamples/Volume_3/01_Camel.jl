@@ -2,16 +2,16 @@ name = "Camel: Multivariate normal with structured missing data"
 
 model_def = @bugs begin
     for i in 1:N
-        Y[i, 1:2] ~ dmnorm(mu[:], tau[:,:])
+        Y[i, 1:2] ~ dmnorm(mu[:], tau[:, :])
     end
     mu[1] = 0
     mu[2] = 0
-    tau[1:2, 1:2] ~ dwish(R[:,:], 2)
+    tau[1:2, 1:2] ~ dwish(R[:, :], 2)
     R[1, 1] = 0.001
     R[1, 2] = 0
     R[2, 1] = 0
     R[2, 2] = 0.001
-    Sigma2[1:2, 1:2] = inverse(tau[:,:])
+    Sigma2[1:2, 1:2] = inverse(tau[:, :])
     rho = Sigma2[1, 2] / sqrt(Sigma2[1, 1] * Sigma2[2, 2])
 end
 
@@ -35,56 +35,50 @@ model
 
 data = (
     N = 12,
-    Y = [
-        1 1
-        1 -1
-        -1 1
-        -1 -1
-        2 missing
-        2 missing
-        -2 missing
-        -2 missing
-        missing 2
-        missing 2
-        missing -2
-        missing -2
-    ]
+    Y = [1 1
+         1 -1
+         -1 1
+         -1 -1
+         2 missing
+         2 missing
+         -2 missing
+         -2 missing
+         missing 2
+         missing 2
+         missing -2
+         missing -2]
 )
 
 inits = (
     tau = [0.1 0; 0 0.1],
-    Y = [
-        missing missing
-        missing missing
-        missing missing
-        missing missing
-        missing 1
-        missing 1
-        missing 1
-        missing 1
-        1 missing
-        1 missing
-        1 missing
-        1 missing
-    ]
+    Y = [missing missing
+         missing missing
+         missing missing
+         missing missing
+         missing 1
+         missing 1
+         missing 1
+         missing 1
+         1 missing
+         1 missing
+         1 missing
+         1 missing]
 )
 
 inits_alternative = (
     tau = [0.5 0; 0 0.5],
-    Y = [
-        missing missing
-        missing missing
-        missing missing
-        missing missing
-        missing 2
-        missing 2
-        missing 2
-        missing 2
-        3 missing
-        3 missing
-        3 missing
-        3 missing
-    ]
+    Y = [missing missing
+         missing missing
+         missing missing
+         missing missing
+         missing 2
+         missing 2
+         missing 2
+         missing 2
+         3 missing
+         3 missing
+         3 missing
+         3 missing]
 )
 
 reference_results = (
@@ -99,4 +93,5 @@ reference_results = (
     var"tau[2, 2]" = (mean = 0.8616, std = 0.5449)
 )
 
-camel = Example(name, model_def, original, data, inits, inits_alternative, reference_results)
+camel = Example(
+    name, model_def, original, data, inits, inits_alternative, reference_results)
