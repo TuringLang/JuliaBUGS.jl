@@ -261,3 +261,218 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
 
     return evaluation_env, logprior + loglikelihood
 end
+
+function evaluate_with_marginalization(bn::BayesianNetwork, parameter_values::AbstractVector)
+    # First, identify the discrete variables in the network
+    discrete_vars = []
+    for i in 1:length(bn.names)
+        if bn.is_stochastic[i] && bn.node_types[i] == :discrete && !bn.is_observed[i]
+            push!(discrete_vars, bn.names[i])
+        end
+    end
+    
+    # If no discrete variables, just use the standard evaluation
+    if isempty(discrete_vars)
+        return evaluate_with_values(bn, parameter_values)
+    end
+    
+    # Generate all possible combinations of discrete variable values
+    function generate_all_discrete_combinations(bn, discrete_vars)
+        # Start with an empty dictionary
+        combinations = [Dict{eltype(discrete_vars), Any}()]
+        
+        # For each discrete variable
+        for var in discrete_vars
+            var_id = bn.names_to_ids[var]
+            
+            # Get the distribution for this variable in the original environment
+            dist = bn.distributions[var_id](bn.evaluation_env, bn.loop_vars[var])
+            
+            # Get possible values for this variable
+            possible_values = enumerate_discrete_values(dist)
+            
+            # Create new combinations
+            new_combinations = []
+            for combo in combinations
+                for val in possible_values
+                    new_combo = copy(combo)
+                    new_combo[var] = val
+                    push!(new_combinations, new_combo)
+                end
+            end
+            
+            combinations = new_combinations
+        end
+        
+        return combinations
+    end
+    
+    # Calculate joint probability for a combination of discrete variables
+    function calculate_joint_probability(combo)
+        # Create a clean environment for calculation
+        temp_env = deepcopy(bn.evaluation_env)
+        
+        # First, identify any deterministic variables that affect distributions
+        # and evaluate them in topological order
+        sorted_ids = topological_sort_by_dfs(bn.graph)
+        
+        # Process all variables in topological order
+        joint_prob = 1.0
+        
+        for id in sorted_ids
+            var = bn.names[id]
+            
+            # If this is a discrete variable in our combo
+            if var in keys(combo)
+                value = combo[var]
+                var_id = bn.names_to_ids[var]
+                
+                # Get the distribution using the current environment
+                dist = bn.distributions[var_id](temp_env, bn.loop_vars[var])
+                
+                # Calculate probability of this value
+                if dist isa Bernoulli
+                    # For Bernoulli, P(X=0) = 1-p, P(X=1) = p
+                    if value == 0
+                        prob = 1.0 - dist.p
+                    else
+                        prob = dist.p
+                    end
+                elseif dist isa Categorical
+                    # For Categorical, P(X=k) = p[k]
+                    prob = dist.p[value]
+                else
+                    # For other distributions
+                    prob = pdf(dist, value)
+                end
+                
+                # Multiply by probability
+                joint_prob *= prob
+                
+                # Update environment with this value
+                temp_env = BangBang.setindex!!(temp_env, value, var)
+            elseif !bn.is_stochastic[id]
+                # If this is a deterministic variable, evaluate it
+                fn = bn.deterministic_functions[id](temp_env, bn.loop_vars[var])
+                temp_env = BangBang.setindex!!(temp_env, fn, var)
+            end
+        end
+        
+        return joint_prob
+    end
+    
+    # Calculate the likelihood of observed variables given discrete variables
+    function calculate_likelihood(combo)
+        # Create environment with discrete variables set
+        temp_env = deepcopy(bn.evaluation_env)
+        
+        # First set the discrete variables
+        for (var, value) in combo
+            temp_env = BangBang.setindex!!(temp_env, value, var)
+        end
+        
+        # Evaluate all deterministic nodes in topological order
+        sorted_ids = topological_sort_by_dfs(bn.graph)
+        for id in sorted_ids
+            if !bn.is_stochastic[id]
+                var = bn.names[id]
+                fn = bn.deterministic_functions[id](temp_env, bn.loop_vars[var])
+                temp_env = BangBang.setindex!!(temp_env, fn, var)
+            end
+        end
+        
+        # Calculate likelihood of observed variables
+        log_like = 0.0
+        
+        for i in 1:length(bn.names)
+            # Only consider observed stochastic variables that aren't in our discrete set
+            if bn.is_stochastic[i] && bn.is_observed[i] && !(bn.names[i] in keys(combo))
+                var = bn.names[i]
+                var_id = bn.names_to_ids[var]
+                
+                # Get distribution using updated environment
+                dist = bn.distributions[var_id](temp_env, bn.loop_vars[var])
+                
+                # Get observed value
+                value = AbstractPPL.get(bn.evaluation_env, var)
+                
+                # Add log probability
+                log_like += logpdf(dist, value)
+            end
+        end
+        
+        return exp(log_like), log_like
+    end
+    
+    # Calculate marginal probability
+    function calculate_marginal_probability()
+        # Get all possible combinations
+        all_combinations = generate_all_discrete_combinations(bn, discrete_vars)
+        
+        println("Number of discrete combinations: ", length(all_combinations))
+        
+        # Calculate probability for each combination
+        total_prob = 0.0
+        
+        for combo in all_combinations
+            # Calculate joint probability of discrete variables
+            prior = calculate_joint_probability(combo)
+            log_prior = log(prior)
+            
+            # Calculate likelihood of observed variables
+            likelihood, log_likelihood = calculate_likelihood(combo)
+            
+            # Combined probability
+            combo_prob = prior * likelihood
+            
+            # Debug output
+            println("Combo: ", combo)
+            println("  Prior: ", prior, " (", log_prior, ")")
+            println("  Likelihood: ", likelihood, " (", log_likelihood, ")")
+            println("  Combined: ", combo_prob, " (", log(combo_prob), ")")
+            
+            # Add to total
+            total_prob += combo_prob
+        end
+        
+        println("Total probability: ", total_prob)
+        return log(total_prob)
+    end
+    
+    # Calculate and return marginal probability
+    log_marginal = calculate_marginal_probability()
+    return bn.evaluation_env, log_marginal
+end
+"""
+    enumerate_discrete_values(dist)
+
+Return all possible values for a discrete distribution.
+"""
+function enumerate_discrete_values(dist::DiscreteUnivariateDistribution)
+    if dist isa Categorical
+        return 1:length(dist.p)
+    elseif dist isa Bernoulli
+        return [0, 1]
+    elseif dist isa Binomial
+        return 0:dist.n
+    elseif dist isa Poisson
+        # For Poisson, we need to truncate at some reasonable point
+        λ = dist.λ
+        # Use 3 standard deviations (sqrt(λ)) as a heuristic cutoff
+        max_value = ceil(Int, λ + 3 * sqrt(λ))
+        return 0:max_value
+    elseif dist isa DiscreteUniform
+        return dist.a:dist.b
+    else
+        # For other distributions, sample a reasonable set of values
+        # This is a fallback and might not be optimal
+        support_values = support(dist)
+        if support_values isa UnitRange
+            return support_values
+        else
+            # Sample some values and deduplicate
+            samples = rand(dist, 100)
+            return unique(samples)
+        end
+    end
+end
