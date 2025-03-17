@@ -27,5 +27,6 @@ export BayesianNetwork,
     translate_BUGSGraph_to_BayesianNetwork,
     evaluate,
     evaluate_with_values,
-    evaluate_with_marginalization
+    evaluate_with_marginalization,
+    evaluate_with_marginalization_dp_experimental
 end

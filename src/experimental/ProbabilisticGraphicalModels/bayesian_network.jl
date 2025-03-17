@@ -262,187 +262,6 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
     return evaluation_env, logprior + loglikelihood
 end
 
-function evaluate_with_marginalization(bn::BayesianNetwork, parameter_values::AbstractVector)
-    # First, identify the discrete variables in the network
-    discrete_vars = []
-    for i in 1:length(bn.names)
-        if bn.is_stochastic[i] && bn.node_types[i] == :discrete && !bn.is_observed[i]
-            push!(discrete_vars, bn.names[i])
-        end
-    end
-    
-    # If no discrete variables, just use the standard evaluation
-    if isempty(discrete_vars)
-        return evaluate_with_values(bn, parameter_values)
-    end
-    
-    # Generate all possible combinations of discrete variable values
-    function generate_all_discrete_combinations(bn, discrete_vars)
-        # Start with an empty dictionary
-        combinations = [Dict{eltype(discrete_vars), Any}()]
-        
-        # For each discrete variable
-        for var in discrete_vars
-            var_id = bn.names_to_ids[var]
-            
-            # Get the distribution for this variable in the original environment
-            dist = bn.distributions[var_id](bn.evaluation_env, bn.loop_vars[var])
-            
-            # Get possible values for this variable
-            possible_values = enumerate_discrete_values(dist)
-            
-            # Create new combinations
-            new_combinations = []
-            for combo in combinations
-                for val in possible_values
-                    new_combo = copy(combo)
-                    new_combo[var] = val
-                    push!(new_combinations, new_combo)
-                end
-            end
-            
-            combinations = new_combinations
-        end
-        
-        return combinations
-    end
-    
-    # Calculate joint probability for a combination of discrete variables
-    function calculate_joint_probability(combo)
-        # Create a clean environment for calculation
-        temp_env = deepcopy(bn.evaluation_env)
-        
-        # First, identify any deterministic variables that affect distributions
-        # and evaluate them in topological order
-        sorted_ids = topological_sort_by_dfs(bn.graph)
-        
-        # Process all variables in topological order
-        joint_prob = 1.0
-        
-        for id in sorted_ids
-            var = bn.names[id]
-            
-            # If this is a discrete variable in our combo
-            if var in keys(combo)
-                value = combo[var]
-                var_id = bn.names_to_ids[var]
-                
-                # Get the distribution using the current environment
-                dist = bn.distributions[var_id](temp_env, bn.loop_vars[var])
-                
-                # Calculate probability of this value
-                if dist isa Bernoulli
-                    # For Bernoulli, P(X=0) = 1-p, P(X=1) = p
-                    if value == 0
-                        prob = 1.0 - dist.p
-                    else
-                        prob = dist.p
-                    end
-                elseif dist isa Categorical
-                    # For Categorical, P(X=k) = p[k]
-                    prob = dist.p[value]
-                else
-                    # For other distributions
-                    prob = pdf(dist, value)
-                end
-                
-                # Multiply by probability
-                joint_prob *= prob
-                
-                # Update environment with this value
-                temp_env = BangBang.setindex!!(temp_env, value, var)
-            elseif !bn.is_stochastic[id]
-                # If this is a deterministic variable, evaluate it
-                fn = bn.deterministic_functions[id](temp_env, bn.loop_vars[var])
-                temp_env = BangBang.setindex!!(temp_env, fn, var)
-            end
-        end
-        
-        return joint_prob
-    end
-    
-    # Calculate the likelihood of observed variables given discrete variables
-    function calculate_likelihood(combo)
-        # Create environment with discrete variables set
-        temp_env = deepcopy(bn.evaluation_env)
-        
-        # First set the discrete variables
-        for (var, value) in combo
-            temp_env = BangBang.setindex!!(temp_env, value, var)
-        end
-        
-        # Evaluate all deterministic nodes in topological order
-        sorted_ids = topological_sort_by_dfs(bn.graph)
-        for id in sorted_ids
-            if !bn.is_stochastic[id]
-                var = bn.names[id]
-                fn = bn.deterministic_functions[id](temp_env, bn.loop_vars[var])
-                temp_env = BangBang.setindex!!(temp_env, fn, var)
-            end
-        end
-        
-        # Calculate likelihood of observed variables
-        log_like = 0.0
-        
-        for i in 1:length(bn.names)
-            # Only consider observed stochastic variables that aren't in our discrete set
-            if bn.is_stochastic[i] && bn.is_observed[i] && !(bn.names[i] in keys(combo))
-                var = bn.names[i]
-                var_id = bn.names_to_ids[var]
-                
-                # Get distribution using updated environment
-                dist = bn.distributions[var_id](temp_env, bn.loop_vars[var])
-                
-                # Get observed value
-                value = AbstractPPL.get(bn.evaluation_env, var)
-                
-                # Add log probability
-                log_like += logpdf(dist, value)
-            end
-        end
-        
-        return exp(log_like), log_like
-    end
-    
-    # Calculate marginal probability
-    function calculate_marginal_probability()
-        # Get all possible combinations
-        all_combinations = generate_all_discrete_combinations(bn, discrete_vars)
-        
-        println("Number of discrete combinations: ", length(all_combinations))
-        
-        # Calculate probability for each combination
-        total_prob = 0.0
-        
-        for combo in all_combinations
-            # Calculate joint probability of discrete variables
-            prior = calculate_joint_probability(combo)
-            log_prior = log(prior)
-            
-            # Calculate likelihood of observed variables
-            likelihood, log_likelihood = calculate_likelihood(combo)
-            
-            # Combined probability
-            combo_prob = prior * likelihood
-            
-            # Debug output
-            println("Combo: ", combo)
-            println("  Prior: ", prior, " (", log_prior, ")")
-            println("  Likelihood: ", likelihood, " (", log_likelihood, ")")
-            println("  Combined: ", combo_prob, " (", log(combo_prob), ")")
-            
-            # Add to total
-            total_prob += combo_prob
-        end
-        
-        println("Total probability: ", total_prob)
-        return log(total_prob)
-    end
-    
-    # Calculate and return marginal probability
-    log_marginal = calculate_marginal_probability()
-    return bn.evaluation_env, log_marginal
-end
 """
     enumerate_discrete_values(dist)
 
@@ -475,4 +294,256 @@ function enumerate_discrete_values(dist::DiscreteUnivariateDistribution)
             return unique(samples)
         end
     end
+end
+
+function evaluate_with_marginalization(bn::BayesianNetwork{V,T,F}, parameter_values::AbstractVector) where {V,T,F}
+    # Identify discrete variables
+    sorted_ids = topological_sort_by_dfs(bn.graph)
+    discrete_vars = V[]  # Use the parameterized type V
+    
+    for id in sorted_ids
+        if bn.is_stochastic[id] && bn.node_types[id] == :discrete && !bn.is_observed[id]
+            push!(discrete_vars, bn.names[id])
+        end
+    end
+    
+    # If no discrete variables, just use the standard evaluation
+    if isempty(discrete_vars)
+        return evaluate_with_values(bn, parameter_values)
+    end
+    
+    # Handle empty discrete_vars case for the Dict type
+    dict_key_type = isempty(discrete_vars) ? V : eltype(discrete_vars)
+    
+    # Recursive function to calculate probability for each configuration
+    function recursive_marginalize(assignments::Dict{<:Any, Any}, var_idx::Int)
+        # Base case: all discrete variables assigned
+        if var_idx > length(discrete_vars)
+            # Create environment with discrete variables set
+            temp_env = deepcopy(bn.evaluation_env)
+            
+            # Set the discrete variables
+            for (var, value) in assignments
+                temp_env = BangBang.setindex!!(temp_env, value, var)
+            end
+            
+            # Evaluate all deterministic nodes in topological order
+            for id in sorted_ids
+                if !bn.is_stochastic[id]
+                    var = bn.names[id]
+                    fn = bn.deterministic_functions[id](temp_env, bn.loop_vars[var])
+                    temp_env = BangBang.setindex!!(temp_env, fn, var)
+                end
+            end
+            
+            # Calculate joint probability of discrete variables
+            joint_prob = 1.0
+            for (var, value) in assignments
+                var_id = bn.names_to_ids[var]
+                dist = bn.distributions[var_id](temp_env, bn.loop_vars[var])
+                
+                # Calculate probability of this value
+                if dist isa Bernoulli
+                    prob = value == 0 ? 1.0 - dist.p : dist.p
+                elseif dist isa Categorical
+                    prob = dist.p[value]
+                else
+                    prob = pdf(dist, value)
+                end
+                
+                joint_prob *= prob
+            end
+            
+            # Calculate likelihood of observed variables
+            log_like = 0.0
+            for i in 1:length(bn.names)
+                if bn.is_stochastic[i] && bn.is_observed[i] && !(bn.names[i] in keys(assignments))
+                    var = bn.names[i]
+                    var_id = bn.names_to_ids[var]
+                    
+                    # Get distribution using updated environment
+                    dist = bn.distributions[var_id](temp_env, bn.loop_vars[var])
+                    
+                    # Get observed value
+                    value = AbstractPPL.get(bn.evaluation_env, var)
+                    
+                    # Add log probability
+                    log_like += logpdf(dist, value)
+                end
+            end
+            
+            # # Debug output
+            # println("Combo: ", assignments)
+            # println("  Prior: ", joint_prob, " (", log(joint_prob), ")")
+            # println("  Likelihood: ", exp(log_like), " (", log_like, ")")
+            # println("  Combined: ", joint_prob * exp(log_like), " (", log(joint_prob) + log_like, ")")
+            
+            # Return combined probability
+            return joint_prob * exp(log_like)
+        end
+        
+        # Get current discrete variable
+        current_var = discrete_vars[var_idx]
+        var_id = bn.names_to_ids[current_var]
+        
+        # Create temporary environment to get distribution
+        temp_env = deepcopy(bn.evaluation_env)
+        
+        # Set all previously assigned variables
+        for (var, value) in assignments
+            temp_env = BangBang.setindex!!(temp_env, value, var)
+        end
+        
+        # Get distribution for this variable
+        dist = bn.distributions[var_id](temp_env, bn.loop_vars[current_var])
+        
+        # Get possible values for this variable
+        possible_values = enumerate_discrete_values(dist)
+        
+        # Initialize total probability
+        total_prob = 0.0
+        
+        # Sum over all possible values
+        for val in possible_values
+            # Create new assignment dictionary
+            new_assignments = copy(assignments)
+            new_assignments[current_var] = val
+            
+            # Recursive call for next variable
+            prob = recursive_marginalize(new_assignments, var_idx + 1)
+            
+            # Add to total probability
+            total_prob += prob
+        end
+        
+        return total_prob
+    end
+    
+    # Start recursion with empty assignments - use Dict{Any,Any} for flexibility
+    total_prob = recursive_marginalize(Dict{Any,Any}(), 1)
+    
+    # println("Total probability: ", total_prob)
+    
+    return bn.evaluation_env, log(total_prob)
+end
+
+function evaluate_with_marginalization_dp_experimental(bn::BayesianNetwork, parameter_values::AbstractVector)
+    # Identify discrete variables in topological order
+    sorted_ids = topological_sort_by_dfs(bn.graph)
+    discrete_vars = []
+    
+    for id in sorted_ids
+        if bn.is_stochastic[id] && bn.node_types[id] == :discrete && !bn.is_observed[id]
+            push!(discrete_vars, bn.names[id])
+        end
+    end
+    
+    # If no discrete variables, just use the standard evaluation
+    if isempty(discrete_vars)
+        return evaluate_with_values(bn, parameter_values)
+    end
+    
+    # Memoization cache - key is variable index and current assignments
+    memo = Dict{Tuple{Int, String}, Float64}()
+    
+    # Recursive function with memoization
+    function recursive_marginalize(assignments::Dict{Any, Any}, var_idx::Int)
+        # Create a cache key: (variable index, serialized assignments)
+        # We serialize assignments to make it hashable
+        assignment_str = join(["$k:$v" for (k,v) in sort(collect(assignments), by=x->string(x[1]))], ",")
+        cache_key = (var_idx, assignment_str)
+        
+        # Check if result is already in cache
+        if haskey(memo, cache_key)
+            return memo[cache_key]
+        end
+        
+        # Base case: all discrete variables assigned
+        if var_idx > length(discrete_vars)
+            # [Same calculation logic as before]
+            temp_env = deepcopy(bn.evaluation_env)
+            
+            # Set the discrete variables
+            for (var, value) in assignments
+                temp_env = BangBang.setindex!!(temp_env, value, var)
+            end
+            
+            # Evaluate deterministic nodes
+            for id in sorted_ids
+                if !bn.is_stochastic[id]
+                    var = bn.names[id]
+                    fn = bn.deterministic_functions[id](temp_env, bn.loop_vars[var])
+                    temp_env = BangBang.setindex!!(temp_env, fn, var)
+                end
+            end
+            
+            # Calculate joint probability
+            joint_prob = 1.0
+            for (var, value) in assignments
+                var_id = bn.names_to_ids[var]
+                dist = bn.distributions[var_id](temp_env, bn.loop_vars[var])
+                
+                if dist isa Bernoulli
+                    prob = value == 0 ? 1.0 - dist.p : dist.p
+                elseif dist isa Categorical
+                    prob = dist.p[value]
+                else
+                    prob = pdf(dist, value)
+                end
+                
+                joint_prob *= prob
+            end
+            
+            # Calculate likelihood
+            log_like = 0.0
+            for i in 1:length(bn.names)
+                if bn.is_stochastic[i] && bn.is_observed[i] && !(bn.names[i] in keys(assignments))
+                    var = bn.names[i]
+                    var_id = bn.names_to_ids[var]
+                    dist = bn.distributions[var_id](temp_env, bn.loop_vars[var])
+                    value = AbstractPPL.get(bn.evaluation_env, var)
+                    log_like += logpdf(dist, value)
+                end
+            end
+            
+            result = joint_prob * exp(log_like)
+            
+            # Cache and return the result
+            memo[cache_key] = result
+            return result
+        end
+        
+        # Get current discrete variable
+        current_var = discrete_vars[var_idx]
+        var_id = bn.names_to_ids[current_var]
+        
+        # Create environment for distribution calculation
+        temp_env = deepcopy(bn.evaluation_env)
+        for (var, value) in assignments
+            temp_env = BangBang.setindex!!(temp_env, value, var)
+        end
+        
+        # Get distribution
+        dist = bn.distributions[var_id](temp_env, bn.loop_vars[current_var])
+        possible_values = enumerate_discrete_values(dist)
+        
+        # Sum over possible values
+        total_prob = 0.0
+        for val in possible_values
+            new_assignments = copy(assignments)
+            new_assignments[current_var] = val
+            prob = recursive_marginalize(new_assignments, var_idx + 1)
+            total_prob += prob
+        end
+        
+        # Cache and return result
+        memo[cache_key] = total_prob
+        return total_prob
+    end
+    
+    # Start recursion with empty assignments
+    total_prob = recursive_marginalize(Dict{Any, Any}(), 1)
+    
+    
+    return bn.evaluation_env, log(total_prob)
 end
