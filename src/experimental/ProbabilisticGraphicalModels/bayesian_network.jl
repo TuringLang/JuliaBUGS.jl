@@ -334,7 +334,6 @@ function evaluate_with_marginalization(
                 is_observed = bn.is_observed[i]
                 is_discrete = bn.node_types[i] == :discrete
 
-
                 if vn in keys(assignments)
                     continue
                 end
@@ -467,7 +466,7 @@ function evaluate_with_marginalization_dp_experimental(
 )
     bugsmodel_node_order = [bn.names[i] for i in topological_sort_by_dfs(bn.graph)]
     var_lengths = bn.transformed_var_lengths
-    
+
     # Identify discrete variables in topological order
     sorted_ids = topological_sort_by_dfs(bn.graph)
     discrete_vars = []
@@ -504,31 +503,31 @@ function evaluate_with_marginalization_dp_experimental(
         if var_idx > length(discrete_vars)
             # Create a local copy of parameter index
             local_idx = param_idx
-            
+
             # Create environment with discrete variables set
             temp_env = deepcopy(bn.evaluation_env)
-            
+
             # Set the discrete variables from assignments
             for (var, value) in assignments
                 temp_env = BangBang.setindex!!(temp_env, value, var)
             end
-            
+
             # Initialize logprior and loglikelihood
             logprior, loglikelihood = 0.0, 0.0
-            
+
             # Process all nodes in topological order
             for vn in bugsmodel_node_order
                 i = bn.names_to_ids[vn]
-                
+
                 is_stochastic = bn.is_stochastic[i]
                 is_observed = bn.is_observed[i]
                 is_discrete = bn.node_types[i] == :discrete
-                
+
                 # Skip variables that have already been assigned
                 if vn in keys(assignments)
                     continue
                 end
-                
+
                 if !is_stochastic
                     # Handle deterministic nodes
                     value = bn.deterministic_functions[i](temp_env, bn.loop_vars[vn])
@@ -536,31 +535,33 @@ function evaluate_with_marginalization_dp_experimental(
                 else
                     # Handle stochastic nodes
                     dist = bn.distributions[i](temp_env, bn.loop_vars[vn])
-                    
+
                     if !is_observed
                         if !is_discrete
                             # Handle continuous variables using parameter_values
                             b = Bijectors.bijector(dist)
-                            
+
                             # If the variable is not in transformed_var_lengths, calculate it
                             if !haskey(var_lengths, vn)
                                 var_value = AbstractPPL.get(temp_env, vn)
                                 transformed_value = Bijectors.transform(b, var_value)
                                 var_lengths[vn] = length(transformed_value)
                             end
-                            
+
                             l = var_lengths[vn]
                             b_inv = Bijectors.inverse(b)
-                            
+
                             # Use parameter_values for continuous variables
                             reconstructed_value = JuliaBUGS.reconstruct(
-                                b_inv, dist, view(parameter_values, local_idx:(local_idx + l - 1))
+                                b_inv,
+                                dist,
+                                view(parameter_values, local_idx:(local_idx + l - 1)),
                             )
-                            
+
                             value, logjac = Bijectors.with_logabsdet_jacobian(
                                 b_inv, reconstructed_value
                             )
-                            
+
                             local_idx += l
                             logprior += logpdf(dist, value) + logjac
                             temp_env = BangBang.setindex!!(temp_env, value, vn)
@@ -572,7 +573,7 @@ function evaluate_with_marginalization_dp_experimental(
                     end
                 end
             end
-            
+
             # Calculate discrete variable probabilities
             discrete_logprob = 0.0
             for (var, value) in assignments
@@ -580,13 +581,13 @@ function evaluate_with_marginalization_dp_experimental(
                 dist = bn.distributions[var_id](temp_env, bn.loop_vars[var])
                 discrete_logprob += logpdf(dist, value)
             end
-            
+
             # Total log probability
             total_logp = logprior + loglikelihood + discrete_logprob
-            
+
             # Return probability in non-log space
             result = exp(total_logp)
-            
+
             # Cache and return the result
             memo[cache_key] = result
             return result, local_idx
@@ -598,12 +599,12 @@ function evaluate_with_marginalization_dp_experimental(
 
         # Create temporary environment to get distribution
         temp_env = deepcopy(bn.evaluation_env)
-        
+
         # Set all previously assigned variables
         for (var, value) in assignments
             temp_env = BangBang.setindex!!(temp_env, value, var)
         end
-        
+
         # Update deterministic nodes that might affect the distribution
         for id in sorted_ids
             vn = bn.names[id]
@@ -611,7 +612,7 @@ function evaluate_with_marginalization_dp_experimental(
             if vn in keys(assignments) || vn == current_var
                 continue
             end
-            
+
             if !bn.is_stochastic[id]
                 value = bn.deterministic_functions[id](temp_env, bn.loop_vars[vn])
                 temp_env = BangBang.setindex!!(temp_env, value, vn)
@@ -625,16 +626,18 @@ function evaluate_with_marginalization_dp_experimental(
         # Sum over possible values
         total_prob = 0.0
         final_param_idx = param_idx  # Track final parameter index
-        
+
         for val in possible_values
             new_assignments = copy(assignments)
             new_assignments[current_var] = val
-            
+
             # Call recursive function, passing along param_idx
-            prob, next_param_idx = recursive_marginalize(new_assignments, var_idx + 1, param_idx)
-            
+            prob, next_param_idx = recursive_marginalize(
+                new_assignments, var_idx + 1, param_idx
+            )
+
             total_prob += prob
-            
+
             # Update final_param_idx for the first iteration only
             # This ensures we correctly advance the parameter index
             if val == possible_values[1]
