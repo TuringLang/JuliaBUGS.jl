@@ -371,13 +371,6 @@ function evaluate_with_marginalization(bn::BayesianNetwork{V,T,F}, parameter_val
                     log_like += logpdf(dist, value)
                 end
             end
-            
-            # # Debug output
-            # println("Combo: ", assignments)
-            # println("  Prior: ", joint_prob, " (", log(joint_prob), ")")
-            # println("  Likelihood: ", exp(log_like), " (", log_like, ")")
-            # println("  Combined: ", joint_prob * exp(log_like), " (", log(joint_prob) + log_like, ")")
-            
             # Return combined probability
             return joint_prob * exp(log_like)
         end
@@ -421,8 +414,6 @@ function evaluate_with_marginalization(bn::BayesianNetwork{V,T,F}, parameter_val
     
     # Start recursion with empty assignments - use Dict{Any,Any} for flexibility
     total_prob = recursive_marginalize(Dict{Any,Any}(), 1)
-    
-    # println("Total probability: ", total_prob)
     
     return bn.evaluation_env, log(total_prob)
 end
