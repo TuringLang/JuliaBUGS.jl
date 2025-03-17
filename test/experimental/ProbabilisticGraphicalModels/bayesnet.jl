@@ -1617,7 +1617,6 @@ using AbstractPPL
                     # z$i depends on z$(i-1)
                     p_z$i = p_0to1 * (1 - z$(i-1)) + p_1to1 * z$(i-1)
                     z$i ~ Bernoulli(p_z$i)
-                    
                     """
                 end
 
