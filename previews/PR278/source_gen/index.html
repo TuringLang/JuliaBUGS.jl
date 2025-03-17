@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Generating Julia Code From BUGS Models · JuliaBUGS.jl</title><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body>
+<!-- NAVBAR START -->
+<style>
+    html {
+        scroll-padding-top: calc(55px + 1rem);
+    }
+
+    /* Documenter css tweaks */
+    .docs-sidebar {
+        margin-top: 3.75rem;
+    }
+
+    #documenter {
+        margin-top: 3.75rem;
+    }
+
+    .docs-version-selector {
+        margin-bottom: 60px !important;
+    }
+
+    @media screen and (max-width: 1056px) {
+        .docs-version-selector {
+            margin-bottom: 60px !important;
+        }
+
+        .docs-sidebar {
+            margin-top: 0 !important;
+        }
+    }
+    /* Documenter css tweaks ends here */
+
+    :root {
+        --heading-color: white;
+        --item-color: rgb(165, 165, 165);
+        --primary-bg: #073c44;
+        --hover-color: #8faad2;
+    }
+
+    .ext-navigation {
+        position: fixed;
+        height: 3.75rem;
+        top: 0;
+        width: 100%;
+        background-color: var(--primary-bg);
+        z-index: 1000;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        display: flex;
+        align-items: center;
+        padding: 0 1.0625rem;
+        transition: transform 0.3s;
+    }
+
+    .ext-navbar-logo {
+        margin-left: 0.625rem;
+    }
+
+    .ext-nav-links {
+        display: flex;
+        align-items: center;
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+        flex-grow: 1;
+    }
+
+    .ext-nav-links li {
+        margin-left: 1rem !important;
+    }
+
+    .ext-nav-link {
+        color: white !important;
+        text-decoration: none;
+        font-size: 1.0625rem !important;
+        transition: color 0.2s ease;
+        cursor: pointer;
+    }
+
+    .ext-nav-link:hover,
+    .ext-navbar-item-single a:hover {
+        color: var(--hover-color) !important;
+    }
+
+    .ext-navbar-item-single a {
+        color: #fff !important;
+    }
+
+    .ext-menu-toggle {
+        display: none;
+        font-size: 1.5rem;
+        color: white;
+        cursor: pointer;
+    }
+
+    .ext-dropdown {
+        display: none;
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        grid-template-rows: auto auto auto;
+        padding: 1.875rem;
+        position: absolute;
+        width: 100%;
+        left: 0;
+        background-color: #083c44;
+        line-height: 1.875rem;
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+        transform: translateY(-0.625rem);
+    }
+
+    #library-handler::after {
+        content: "▼";
+        font-size: 0.6875rem;
+        margin-left: 0.3125rem;
+        transition: transform 0.3s ease-in-out;
+    }
+
+    #library-handler.open::after {
+        content: "▲";
+    }
+
+    .ext-dropdown.show {
+        display: grid;
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .ext-dropdown ul {
+        height: auto;
+        width: 12.5rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .ext-dropdown ul li {
+        text-align: left;
+    }
+
+    .navbar-sub-item {
+        list-style: none;
+    }
+
+    .ext-dropdown ul a li {
+        color: var(--item-color);
+        width: 15.625rem;
+        border-radius: 3px;
+        padding: 0.125rem 0.625rem;
+        transition: background-color 0.2s ease;
+    }
+
+    .ext-dropdown ul a li:hover {
+        background-color: rgba(107, 107, 107, 0.5);
+    }
+
+    .ext-dropdown-item-heading {
+        color: var(--heading-color);
+        text-align: center;
+    }
+
+    /* Responsive styling */
+    @media (max-width: 966px) {
+        .ext-dropdown {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .ext-nav-links {
+            display: none;
+            flex-direction: column;
+            width: 100%;
+            background-color: var(--primary-bg);
+            position: absolute;
+            top: 3.75rem;
+            left: 0;
+            padding: 0.625rem 0;
+            height: auto;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgb(141, 141, 141) grey;
+        }
+
+        .ext-nav-links.show {
+            display: flex;
+        }
+
+        .ext-nav-links li {
+            margin: 0.625rem 0;
+            text-align: center;
+        }
+
+        .ext-menu-toggle {
+            display: block;
+            margin-left: auto;
+        }
+
+        .ext-navigation.hide {
+            transform: translateY(-3.75rem);
+        }
+
+        .ext-dropdown {
+            place-content: center;
+            text-align: center;
+            grid-template-columns: 1fr;
+            line-height: 1.25rem;
+            padding: 0.625rem;
+        }
+
+        .ext-dropdown ul {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 0.3125rem;
+        }
+
+        .ext-dropdown ul li {
+            text-align: center;
+        }
+
+        .ext-dropdown ul a li {
+            width: 100%;
+        }
+
+        .ext-dropdown ul a li:hover {
+            background-color: var(--primary-bg);
+            color: #fff;
+        }
+
+        /* Modified scroll bar */
+        .ext-nav-links::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .ext-nav-links::-webkit-scrollbar-track {
+            box-shadow: inset 0 0 5px grey;
+        }
+
+        .ext-nav-links::-webkit-scrollbar-thumb {
+            background: rgb(141, 141, 141);
+            border-radius: 3px;
+        }
+
+        .ext-nav-links::-webkit-scrollbar-thumb:hover {
+            background: #9b9b9b;
+        }
+    }
+</style>
+<nav class="ext-navigation">
+    <a href="https://turinglang.org/">
+        <img src="https://turinglang.org/assets/images/turing-logo.svg" alt="Turing Logo" class="ext-navbar-logo" height="24px" width="40px">
+    </a>
+    <a style="color: white !important; font-size: 21.25px !important; margin-left: 10px;" href="https://turinglang.org/">Turing.jl</a>
+    <ul class="ext-nav-links">
+        <li>
+            <a class="ext-nav-link" href="https://turinglang.org/docs/tutorials/docs-00-getting-started/">Get Started</a>
+        </li>
+        <li>
+            <a class="ext-nav-link" href="https://turinglang.org/docs/tutorials/00-introduction/">Tutorials</a>
+        </li>
+        <li>
+            <p class="ext-nav-link" id="library-handler">Libraries</p>
+            <div class="ext-dropdown" id="ext-dropdown-items">
+                <ul>
+                    <li class="ext-dropdown-item-heading">Modelling Languages</li>
+                    <a href="https://turinglang.org/DynamicPPL.jl/">
+                        <li>DynamicPPL</li>
+                    </a>
+                    <a href="https://turinglang.org/JuliaBUGS.jl/">
+                        <li>JuliaBUGS</li>
+                    </a>
+                    <a href="https://turinglang.org/TuringGLM.jl/">
+                        <li>TuringGLM</li>
+                    </a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">MCMC</li>
+                    <a href="https://turinglang.org/AdvancedHMC.jl/">
+                        <li>AdvancedHMC</li>
+                    </a>
+                    <a href="https://turinglang.org/AbstractMCMC.jl/">
+                        <li>AbstractMCMC</li>
+                    </a>
+                    <a href="https://github.com/theogf/ThermodynamicIntegration.jl">
+                        <li>ThermodynamicIntegration</li>
+                    </a>
+                    <a href="https://turinglang.org/AdvancedPS.jl/">
+                        <li>AdvancedPS</li>
+                    </a>
+                    <a href="https://turinglang.org/SliceSampling.jl/">
+                        <li>SliceSampling</li>
+                    </a>
+                    <a href="https://turinglang.org/EllipticalSliceSampling.jl/">
+                        <li>EllipticalSliceSampling</li>
+                    </a>
+                    <a href="https://turinglang.org/NestedSamplers.jl/">
+                        <li>NestedSamplers</li>
+                    </a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">Diagnostics</li>
+                    <a href="https://turinglang.org/MCMCChains.jl/">
+                        <li>MCMCChains</li>
+                    </a>
+                    <a href="https://turinglang.org/MCMCDiagnosticTools.jl/">
+                        <li>MCMCDiagnosticTools</li>
+                    </a>
+                    <a href="https://turinglang.org/ParetoSmooth.jl/">
+                        <li>ParetoSmooth</li>
+                    </a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">Gaussian Processes</li>
+                    <a href="https://juliagaussianprocesses.github.io/AbstractGPs.jl/">
+                        <li>AbstractGPs</li>
+                    </a>
+                    <a href="https://juliagaussianprocesses.github.io/KernelFunctions.jl/">
+                        <li>KernelFunctions</li>
+                    </a>
+                    <a href="https://juliagaussianprocesses.github.io/ApproximateGPs.jl/">
+                        <li>ApproximateGPs</li>
+                    </a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading ext-navbar-item-single">
+                        <a href="https://turinglang.org/Bijectors.jl/">Bijectors</a>
+                    </li>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading ext-navbar-item-single">
+                        <a href="https://turinglang.org/TuringCallbacks.jl/">TuringCallbacks</a>
+                    </li>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading ext-navbar-item-single">
+                        <a href="https://turinglang.org/TuringBenchmarking.jl/">TuringBenchmarking</a>
+                    </li>
+                </ul>
+            </div>
+        </li>
+        <li>
+            <a class="ext-nav-link" href="https://turinglang.org/news/">News</a>
+        </li>
+        <li>
+            <a class="ext-nav-link" href="https://turinglang.org/team/">Team</a>
+        </li>
+    </ul>
+    <a href="https://x.com/TuringLang" style="margin-left: 15px; padding-top: 2px">
+        <svg fill="#ffffff" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="32px" height="32px" viewBox="-209.92 -209.92 931.84 931.84" xml:space="preserve" stroke="#ffffff">
+            <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
+            <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
+            <g id="SVGRepo_iconCarrier">
+                <g id="7935ec95c421cee6d86eb22ecd12f847">
+                    <path style="display: inline"
+                        d="M459.186,151.787c0.203,4.501,0.305,9.023,0.305,13.565 c0,138.542-105.461,298.285-298.274,298.285c-59.209,0-114.322-17.357-160.716-47.104c8.212,0.973,16.546,1.47,25.012,1.47 c49.121,0,94.318-16.759,130.209-44.884c-45.887-0.841-84.596-31.154-97.938-72.804c6.408,1.227,12.968,1.886,19.73,1.886 c9.55,0,18.816-1.287,27.617-3.68c-47.955-9.633-84.1-52.001-84.1-102.795c0-0.446,0-0.882,0.011-1.318 c14.133,7.847,30.294,12.562,47.488,13.109c-28.134-18.796-46.637-50.885-46.637-87.262c0-19.212,5.16-37.218,14.193-52.7 c51.707,63.426,128.941,105.156,216.072,109.536c-1.784-7.675-2.718-15.674-2.718-23.896c0-57.891,46.941-104.832,104.832-104.832 c30.173,0,57.404,12.734,76.525,33.102c23.887-4.694,46.313-13.423,66.569-25.438c-7.827,24.485-24.434,45.025-46.089,58.002 c21.209-2.535,41.426-8.171,60.222-16.505C497.448,118.542,479.666,137.004,459.186,151.787z">
+                    </path>
+                </g>
+            </g>
+        </svg>
+    </a>
+    <a href="https://github.com/TuringLang/Turing.jl">
+        <svg width="32px" height="32px" viewBox="-8.2 -8.2 36.40 36.40" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" fill="#000000">
+            <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
+            <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
+            <g id="SVGRepo_iconCarrier">
+                <title>github [#142]</title>
+                <desc>Created with Sketch.</desc>
+                <defs></defs>
+                <g id="Page-1" stroke-width="0.0002" fill="none" fill-rule="evenodd">
+                    <g id="Dribbble-Light-Preview" transform="translate(-140.000000, -7559.000000)" fill="#ffffff">
+                        <g id="icons" transform="translate(56.000000, 160.000000)">
+                            <path
+                                d="M94,7399 C99.523,7399 104,7403.59 104,7409.253 C104,7413.782 101.138,7417.624 97.167,7418.981 C96.66,7419.082 96.48,7418.762 96.48,7418.489 C96.48,7418.151 96.492,7417.047 96.492,7415.675 C96.492,7414.719 96.172,7414.095 95.813,7413.777 C98.04,7413.523 100.38,7412.656 100.38,7408.718 C100.38,7407.598 99.992,7406.684 99.35,7405.966 C99.454,7405.707 99.797,7404.664 99.252,7403.252 C99.252,7403.252 98.414,7402.977 96.505,7404.303 C95.706,7404.076 94.85,7403.962 94,7403.958 C93.15,7403.962 92.295,7404.076 91.497,7404.303 C89.586,7402.977 88.746,7403.252 88.746,7403.252 C88.203,7404.664 88.546,7405.707 88.649,7405.966 C88.01,7406.684 87.619,7407.598 87.619,7408.718 C87.619,7412.646 89.954,7413.526 92.175,7413.785 C91.889,7414.041 91.63,7414.493 91.54,7415.156 C90.97,7415.418 89.522,7415.871 88.63,7414.304 C88.63,7414.304 88.101,7413.319 87.097,7413.247 C87.097,7413.247 86.122,7413.234 87.029,7413.87 C87.029,7413.87 87.684,7414.185 88.139,7415.37 C88.139,7415.37 88.726,7417.2 91.508,7416.58 C91.513,7417.437 91.522,7418.245 91.522,7418.489 C91.522,7418.76 91.338,7419.077 90.839,7418.982 C86.865,7417.627 84,7413.783 84,7409.253 C84,7403.59 88.478,7399 94,7399"
+                                id="github-[#142]">
+                            </path>
+                        </g>
+                    </g>
+                </g>
+            </g>
+        </svg>
+    </a>
+    <span class="ext-menu-toggle">&#9776;</span>
+</nav>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const menuToggle = document.querySelector(".ext-menu-toggle");
+        const navLinks = document.querySelector(".ext-nav-links");
+        const nav = document.querySelector(".ext-navigation");
+        const navigationHandler = document.getElementById("library-handler");
+        const navigationItemsContainer =
+            document.getElementById("ext-dropdown-items");
+        let lastScrollY = window.scrollY;
+
+        function setAppropriateHeight() {
+            if (window.innerWidth <= 768) {
+                const viewportHeight = window.innerHeight;
+                const navHeight = nav.offsetHeight;
+                navLinks.style.maxHeight = `${viewportHeight - navHeight}px`;
+                navLinks.style.overflowY = "auto";
+            } else {
+                navLinks.style.maxHeight = "";
+                navLinks.style.overflowY = "";
+            }
+        }
+
+        // Toggle main menu for mobile
+        menuToggle.addEventListener("click", () => {
+            navLinks.classList.toggle("show");
+            if (navLinks.classList.contains("show")) {
+                setAppropriateHeight();
+                // Ensure the dropdown is hidden when menu is first opened
+                navigationItemsContainer.style.display = "none";
+                navigationItemsContainer.classList.remove("show");
+            }
+        });
+
+        // Close menus if clicked outside
+        document.addEventListener("click", (event) => {
+            if (
+                !navLinks.contains(event.target) &&
+                !menuToggle.contains(event.target)
+            ) {
+                navLinks.classList.remove("show");
+                navigationItemsContainer.classList.remove("show");
+                navigationHandler.classList.remove("open");
+            }
+        });
+
+        // Hide navigation bar on scroll down in mobile view
+        window.addEventListener("scroll", () => {
+            if (window.innerWidth <= 768) {
+                nav.classList.toggle("hide", window.scrollY > lastScrollY);
+                lastScrollY = window.scrollY;
+            }
+        });
+
+        // Library API script
+        navigationHandler.addEventListener("click", (event) => {
+            event.preventDefault(); // Prevent default action of the link
+            if (navigationItemsContainer.classList.contains("show")) {
+                navigationItemsContainer.classList.remove("show");
+                navigationHandler.classList.remove("open");
+                setTimeout(() => {
+                    navigationItemsContainer.style.display = "none";
+                }, 500); // Match the timeout to the CSS transition duration
+            } else {
+                navigationItemsContainer.style.display = "grid";
+                navigationHandler.classList.add("open");
+                setTimeout(() => {
+                    navigationItemsContainer.classList.add("show");
+                }, 10); // Delay to ensure the display change takes effect before adding class
+            }
+            setAppropriateHeight(); // Recalculate height when dropdown changes
+        });
+
+        // Handle window resize
+        window.addEventListener("resize", setAppropriateHeight);
+
+        // Initial setup
+        setAppropriateHeight();
+    });
+</script>
+<!-- NAVBAR END -->
+
+<div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">JuliaBUGS.jl</a></span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../example/">Example</a></li><li><span class="tocitem">API</span><ul><li><a class="tocitem" href="../api/api/">General</a></li><li><a class="tocitem" href="../api/functions/">Functions</a></li><li><a class="tocitem" href="../api/distributions/">Distributions</a></li><li><a class="tocitem" href="../api/user_defined_functions/">User-Defined Functions and Distributions</a></li></ul></li><li><a class="tocitem" href="../differences/">Differences from Other BUGS Implementations</a></li><li><a class="tocitem" href="../pitfalls/">Pitfalls</a></li><li><a class="tocitem" href="../graph_plotting/">Plotting</a></li><li><a class="tocitem" href="../R_interface/">R Interface</a></li><li><span class="tocitem">For Developers</span><ul><li><a class="tocitem" href="../parser/">Parser</a></li><li><a class="tocitem" href="../BUGS_notes/">Notes on BUGS Implementations</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Generating Julia Code From BUGS Models</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Generating Julia Code From BUGS Models</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/TuringLang/JuliaBUGS.jl/blob/main/docs/src/source_gen.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Generating-Julia-Code-From-BUGS-Models"><a class="docs-heading-anchor" href="#Generating-Julia-Code-From-BUGS-Models">Generating Julia Code From BUGS Models</a><a id="Generating-Julia-Code-From-BUGS-Models-1"></a><a class="docs-heading-anchor-permalink" href="#Generating-Julia-Code-From-BUGS-Models" title="Permalink"></a></h1><h2 id="Motivations"><a class="docs-heading-anchor" href="#Motivations">Motivations</a><a id="Motivations-1"></a><a class="docs-heading-anchor-permalink" href="#Motivations" title="Permalink"></a></h2><ul><li>difficult to make execute performant<ul><li>type system</li><li>fundamentally limited by ...</li><li>Difficult to use more advanced AD packages, they are optimized for to be used by Julia code</li></ul></li></ul><p>Modern compilers optimize programs by looking at the whole program.</p><h2 id="Example"><a class="docs-heading-anchor" href="#Example">Example</a><a id="Example-1"></a><a class="docs-heading-anchor-permalink" href="#Example" title="Permalink"></a></h2><p>Here, as a start, we will try to answer the question: when can we generate sequential programs by simply reorder the statements (this needs explanation).</p><p>To give a concrete example of the meaning of generating sequential program, with <code>Rats</code></p><pre><code class="language-julia hljs">begin
+    for i in 1:N
+        for j in 1:T
+            Y[i, j] ~ dnorm(mu[i, j], tau_c)              # (1)
+            mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)  # (2)
+        end
+        alpha[i] ~ dnorm(alpha_c, alpha_tau)               # (3)
+        beta[i] ~ dnorm(beta_c, beta_tau)                  # (4)
+    end
+    tau_c ~ dgamma(0.001, 0.001)                          # (5)
+    sigma = 1 / sqrt(tau_c)                                # (6)
+    alpha_c ~ dnorm(0.0, 1.0e-6)                           # (7)
+    alpha_tau ~ dgamma(0.001, 0.001)                       # (8)
+    beta_c ~ dnorm(0.0, 1.0e-6)                            # (9)
+    beta_tau ~ dgamma(0.001, 0.001)                        # (10)
+    alpha0 = alpha_c - xbar * beta_c                        # (11)
+end</code></pre><p>A sequential version would be </p><pre><code class="language-julia hljs">begin
+    tau_c ~ dgamma(0.001, 0.001)                           # (5)
+    sigma = 1 / sqrt(tau_c)                                # (6)
+    alpha_c ~ dnorm(0.0, 1.0e-6)                           # (7)
+    alpha_tau ~ dgamma(0.001, 0.001)                       # (8)
+    beta_c ~ dnorm(0.0, 1.0e-6)                            # (9)
+    beta_tau ~ dgamma(0.001, 0.001)                        # (10)
+    
+    for i in 1:N
+        alpha[i] ~ dnorm(alpha_c, alpha_tau)               # (3)
+        beta[i] ~ dnorm(beta_c, beta_tau)                  # (4)
+        
+        for j in 1:T
+            mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)  # (2)
+            Y[i, j] ~ dnorm(mu[i, j], tau_c)               # (1)
+        end
+    end
+    
+    alpha0 = alpha_c - xbar * beta_c                       # (11)
+end</code></pre><p>Another equally valid one is</p><pre><code class="language-julia hljs">begin
+    tau_c ~ dgamma(0.001, 0.001)                           # (5)
+    sigma = 1 / sqrt(tau_c)                                # (6)
+    alpha_c ~ dnorm(0.0, 1.0e-6)                           # (7)
+    alpha_tau ~ dgamma(0.001, 0.001)                       # (8)
+    beta_c ~ dnorm(0.0, 1.0e-6)                            # (9)
+    beta_tau ~ dgamma(0.001, 0.001)                        # (10)
+    
+    for i in 1:N
+        alpha[i] ~ dnorm(alpha_c, alpha_tau)               # (3)
+    end
+
+    for i in 1:N
+        beta[i] ~ dnorm(beta_c, beta_tau)                  # (4)
+    end
+
+    for i in 1:N
+        for j in 1:T
+            mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)  # (2)
+        end
+    end
+    
+    for i in 1:N
+        for j in 1:T    
+            Y[i, j] ~ dnorm(mu[i, j], tau_c)               # (1)
+        end
+    end
+    
+    alpha0 = alpha_c - xbar * beta_c                        # (11)
+end</code></pre><p>All these program has the same semantic for BUGS. (Given the same data, they all compile to the same model/graph).</p><p>The difference is, when interpreting <code>~</code> as sampling, the latter two can run sequentially without encountering use before write problem. I.e., sequential versions of BUGS program respect the dependencies and topological order of the variables in the graphical model.</p><p>To compute log density, we then need to further transform the sequential program. The transform can be understood in terms of statement-wise transformation.</p><blockquote><p>It should be noted that stochastic statements and deterministic statements are not created equal because of the way the program is executed.</p></blockquote><p>On a high level, the program defines a computation that takes values of model parameters, and returns the log density (log prior + log likelihood) of the model. This means that even if the stochastic statements are not sorted, we can still produce correct results, by: (1) first setting the values of the model parameters, (2) executing the deterministic statements to decide the values of variables, (3) go through all the stochastic statements, and compute the log density for each of them. So if we all we care about is the log density, we only need to sort the deterministic statements. However, if we want to able to do ancestral sampling (and simulation), we need to sort the stochastic statements. Although not sorting the stochastic statements does not make the problem simpler fundamentally, in some cases, sorting the stochastic statements might be hard, while sorting the deterministic statements is trivial.</p><p>At this stage, we will not talk about performance optimization here, all we care about now is the correctness.</p><p>A good way to understand the dependencies and whether we are able to reorder statements, we will use a dependency graph of statements. Here is a concrete example for when an edge exists:</p><pre><code class="language-julia hljs">for i in 1:N
+    for j in 1:T
+        Y[i, j] ~ dnorm(mu[i, j], tau_c)              # (1)
+        mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)  # (2)
+    end
+end</code></pre><p>upon loop unrolling, statement (1) will be unrolled into</p><pre><code class="language-julia hljs">Y[1, 1] ~ dnorm(mu[1, 1], tau_c)
+Y[2, 2] ~ dnorm(mu[2, 2], tau_c)
+...</code></pre><p>statement (2) will be unrolled into</p><pre><code class="nohighlight hljs">mu[1, 1] = alpha[1] + beta[1] * (x[1] - xbar)
+mu[2, 2] = alpha[2] + beta[2] * (x[2] - xbar)
+...</code></pre><p>we see that <code>mu[1, 1]</code> is used on the RHS in some statements unrolled out of statement (1).</p><p>Then the dependency graph contains edge (2) -&gt; (1).</p><p>Conceptually, the statement dependency graph is the graph obtained by merging vertices that are from the same statement. </p><p>Back to the small two-statements program piece. The edge <code>2 -&gt; 1</code> can be obtained by merging all the <code>Y</code> nodes and merging all the <code>mu</code> nodes. Because there are edges between <code>Y[i, j]</code> and <code>mu[i, j]</code>. There would an edge between statement <code>2 -&gt; 1</code>.</p><p>For <code>rats</code>, we obtain this graph</p><pre><code class="language-mermaid hljs">flowchart TB
+    8 --&gt; 3
+    7 --&gt; 3
+    10 --&gt; 4
+    9 --&gt; 11
+    9 --&gt; 4
+    4 --&gt; 11
+    3 --&gt; 2
+    4 --&gt; 2
+    2 --&gt; 1
+    5 --&gt; 1
+    5 --&gt; 6</code></pre><p>There is no cycle in the dependency graph.</p><p>Later soon we will see some cases where there exist cycle(s) exist in dependency graph.</p><p>But before, let&#39;s make the meaning of an edge in the dependency graph more clear.</p><p>Consider example</p><pre><code class="language-julia hljs">for i in 1:N
+    x[i] ~ normal(0, 1)     (1)
+    y[i] ~ normal(x[N], i)  (2) 
+end</code></pre><p>the dependency graph in this case is very simple</p><pre><code class="language-mermaid hljs">flowchart TB
+    1 --&gt; 2</code></pre><p>Question is, can we run the above code?</p><p>The answer is no, because each <code>y[i]</code> require <code>x[N]</code> to compute. And <code>x[N]</code> is computed at the end of the loop iteration.</p><p>In this case, we have to fission the loop, and the valid sequential program is</p><pre><code class="language-julia hljs">for i in 1:N
+    x[i] ~ normal(0, 1)     (1)
+end
+for i in 1:N    
+    y[i] ~ normal(x[N], i)  (2) 
+end</code></pre><p>The node represents &quot;all the computation results associated with a statement&quot;. The edge means to compute some result of the terminal statement, it requires some result of the source statement.</p><h2 id="Corner-cases"><a class="docs-heading-anchor" href="#Corner-cases">Corner cases</a><a id="Corner-cases-1"></a><a class="docs-heading-anchor-permalink" href="#Corner-cases" title="Permalink"></a></h2><h3 id="self-loop:-requires-change-of-loop-indexing"><a class="docs-heading-anchor" href="#self-loop:-requires-change-of-loop-indexing">self loop: requires change of loop indexing</a><a id="self-loop:-requires-change-of-loop-indexing-1"></a><a class="docs-heading-anchor-permalink" href="#self-loop:-requires-change-of-loop-indexing" title="Permalink"></a></h3><p>This is a rather contrived example.</p><pre><code class="language-julia hljs">x[1] ~ dnorm(0, 1)        # 1
+for 10:2
+    x[i] = x[i - 1] + 1    # 2
+end</code></pre><p>The issue is that <code>x[10]</code> depends on <code>x[9]</code> (<code>x[10] = x[9] + 1</code>), but if we execute the code as it is written, then when we want to compute <code>x[10]</code>, <code>x[9]</code> is not computed yet.</p><p>But this is valid BUGS code, because BUGS only care about relationship. </p><p>To make this code sequential, it needs to be transformed to </p><pre><code class="language-julia hljs">x[1] ~ dnorm(0, 1)        # 1
+for 2:10
+    x[i] = x[i - 1] + 1    # 2
+end</code></pre><p>i.e., simply change the order of iteration.</p><p>Note that the dependency graph has a self loop.</p><pre><code class="language-mermaid hljs">flowchart TB
+    1 --&gt; 2
+    2 --&gt; 2</code></pre><h3 id="Case-2:-requires-loop-fusion"><a class="docs-heading-anchor" href="#Case-2:-requires-loop-fusion">Case 2: requires loop fusion</a><a id="Case-2:-requires-loop-fusion-1"></a><a class="docs-heading-anchor-permalink" href="#Case-2:-requires-loop-fusion" title="Permalink"></a></h3><pre><code class="language-julia hljs">x[1] ~ dnorm(0, 1)  // 1
+  
+sumX[1] = x[1]  // 2
+for i in 2:N
+    sumX[i] = sumX[i-1] + x[i]  // 3
+end
+
+for i in 2:N
+    x[i] ~ dnorm(sumX[i-1], tau)  // 4
+end</code></pre><p>The issue here is that there is a dependency between <code>x[i]</code> and <code>x[i-1]</code> via <code>sumX[i-1]</code>. So we need to compute <code>x[i]</code> and <code>sumX[i-1]</code> (or <code>sumX[i]</code>) in the same loop iteration.</p><p>This may seem to be a an easy issue. But it can be made more complicated in case where indices are affine transformation of loop induction variables. </p><p>For instance,</p><pre><code class="language-julia hljs">sumX[1] = x[1]
+for i in 2:N
+    sumX[i] = sumX[i-1] + x[i]
+end
+
+# loop over even indices
+for i in 1:N/2
+    x[2*i] ~ dnorm(sumX[2*i-1], tau)
+end
+
+# loop over odd indices
+for i in 1:N/2
+    x[2*i + 1] ~ dgamma(sumX[2*i], tau)
+end</code></pre><p>then we would need to somehow merge the later two loops and the loop over <code>sumX</code>.</p><p>The dependency graph for here is </p><pre><code class="language-mermaid hljs">flowchart TD
+    1 --&gt; 2
+    2 --&gt; 3
+    3 --&gt; 3
+    2 --&gt; 4
+    3 --&gt; 4
+    4 --&gt; 3</code></pre><h3 id="loops-in-dependency-graph"><a class="docs-heading-anchor" href="#loops-in-dependency-graph">loops in dependency graph</a><a id="loops-in-dependency-graph-1"></a><a class="docs-heading-anchor-permalink" href="#loops-in-dependency-graph" title="Permalink"></a></h3><p>At this point, we start to see that loops in the dependency graph can be problematic.</p><p>A loop exist when we can&#39;t finish all the computation belong to the same statement before start carrying out the computation of another statement.</p><h3 id="Introduction-of-nested-indexing-complicates-things"><a class="docs-heading-anchor" href="#Introduction-of-nested-indexing-complicates-things">Introduction of nested indexing complicates things</a><a id="Introduction-of-nested-indexing-complicates-things-1"></a><a class="docs-heading-anchor-permalink" href="#Introduction-of-nested-indexing-complicates-things" title="Permalink"></a></h3><p>They don&#39;t change the nature of the problem (which is about dependency). But they can make the worst case really really bad.</p><p>Just consider</p><pre><code class="language-julia hljs">begin
+    z[2] = f(x[1])
+    y[2] = g(x[3])
+
+    for i in 1:3
+        x[i] = y[a[i]] + z[b[i]]
+    end
+end
+
+data = (a = [2, 3, 1], b = [3, 1, 2])</code></pre><p>this results in the following dependencies</p><pre><code class="language-julia hljs">x[1] &lt;- y[2], z[3]
+x[2] &lt;- y[3], z[1]
+x[3] &lt;- y[1], z[2]
+z[2] &lt;- x[1]
+y[2] &lt;- x[2]</code></pre><pre><code class="language-mermaid hljs">graph TD
+    y2 --&gt; x1
+    z3 --&gt; x1
+    z1 --&gt; x2
+    y3 --&gt; x2
+    y1 --&gt; x3
+    z2 --&gt; x3
+    x1 --&gt; z2
+    x2 --&gt; y2</code></pre><p>This represents a worst case where we probably can&#39;t do much better than fully unrolling.</p><hr/><p>trying to get a grander and unified story behind  </p><p>question: when can we switch the order of statements and be fine</p><h2 id="the-hard-work:-BUGS-examples,-how-many-of-them-we-can-trivially-reorder?"><a class="docs-heading-anchor" href="#the-hard-work:-BUGS-examples,-how-many-of-them-we-can-trivially-reorder?">the hard work: BUGS examples, how many of them we can trivially reorder?</a><a id="the-hard-work:-BUGS-examples,-how-many-of-them-we-can-trivially-reorder?-1"></a><a class="docs-heading-anchor-permalink" href="#the-hard-work:-BUGS-examples,-how-many-of-them-we-can-trivially-reorder?" title="Permalink"></a></h2><p>Why going beyond the trivial case is difficult? The indices might be misaligned Loop 1 (x) starts from 1, loop 2 (x) start from 2 But x[1] depends on y[1], so we need to single out x[1] Sometimes, off by 1(or N) If some indices are affine transformation, matching them can be really hard</p><h2 id="Next-step:-generating-Julia-function-that-computes-the-log-density"><a class="docs-heading-anchor" href="#Next-step:-generating-Julia-function-that-computes-the-log-density">Next step: generating Julia function that computes the log density</a><a id="Next-step:-generating-Julia-function-that-computes-the-log-density-1"></a><a class="docs-heading-anchor-permalink" href="#Next-step:-generating-Julia-function-that-computes-the-log-density" title="Permalink"></a></h2><p>The sequential-ized fissioned version of the model is:</p><pre><code class="language-julia hljs">quote
+    var&quot;beta.tau&quot; ~ dgamma(0.001, 0.001)
+    var&quot;beta.c&quot; ~ dnorm(0.0, 1.0e-6)
+    var&quot;alpha.tau&quot; ~ dgamma(0.001, 0.001)
+    var&quot;alpha.c&quot; ~ dnorm(0.0, 1.0e-6)
+    alpha0 = var&quot;alpha.c&quot; - xbar * var&quot;beta.c&quot;
+    var&quot;tau.c&quot; ~ dgamma(0.001, 0.001)
+    sigma = 1 / sqrt(var&quot;tau.c&quot;)
+    for i = 1:30
+        beta[i] ~ dnorm(var&quot;beta.c&quot;, var&quot;beta.tau&quot;)
+    end
+    for i = 1:30
+        alpha[i] ~ dnorm(var&quot;alpha.c&quot;, var&quot;alpha.tau&quot;)
+    end
+    for i = 1:30
+        for j = 1:5
+            mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)
+        end
+    end
+    for i = 1:30
+        for j = 1:5
+            Y[i, j] \eqsim dnorm(mu[i, j], var&quot;tau.c&quot;)
+        end
+    end
+end</code></pre><p>We introduce a new operator into the program <code>\eqsim</code> to indicate that the left hand side is an observation.</p><p>To compute the log-probability, the above AST is transformed into the following function:</p><pre><code class="language-julia hljs"></code></pre><p>Here we implement the dependency graph and source generation discussed in 4.</p><h2 id="Separate-the-source-generation-into-two-steps-for-clarity-and-reuse"><a class="docs-heading-anchor" href="#Separate-the-source-generation-into-two-steps-for-clarity-and-reuse">Separate the source generation into two steps for clarity and reuse</a><a id="Separate-the-source-generation-into-two-steps-for-clarity-and-reuse-1"></a><a class="docs-heading-anchor-permalink" href="#Separate-the-source-generation-into-two-steps-for-clarity-and-reuse" title="Permalink"></a></h2><h3 id="Lowering-BUGS-program-to-distinguish-observations-and-model-parameterss"><a class="docs-heading-anchor" href="#Lowering-BUGS-program-to-distinguish-observations-and-model-parameterss">Lowering BUGS program to distinguish <code>observation</code>s and <code>model parameters</code>s</a><a id="Lowering-BUGS-program-to-distinguish-observations-and-model-parameterss-1"></a><a class="docs-heading-anchor-permalink" href="#Lowering-BUGS-program-to-distinguish-observations-and-model-parameterss" title="Permalink"></a></h3><p>Because the code for observations and model parameters are different, it makes sense to introduce a new type of statements to distinguish between the two types. To this end, I decided that <code>≂</code>(<code>\eqsim</code>) is a good choice.</p><p>So the new syntax becomes something like</p><pre><code class="language-julia hljs">@bugs begin
+    a = b + 1 # deterministic
+    a ~ Normal() # model parameters
+    a ≂ Normal() # observations
+end</code></pre><h3 id="support-of-missing-data"><a class="docs-heading-anchor" href="#support-of-missing-data">support of missing data</a><a id="support-of-missing-data-1"></a><a class="docs-heading-anchor-permalink" href="#support-of-missing-data" title="Permalink"></a></h3><p>What are missing data? Mixed observation and model parameters. The solution is to introduce an if statement to qualify the two types of statements.</p><p>For instance,</p><pre><code class="language-julia hljs">@bugs begin
+    for i in 1:2
+        for j in 1:5
+            x[i, j] ~ Normal()
+        end
+    end
+end
+
+data = (x = [1 2 missing 4 5; 1 2 missing 4 5])</code></pre><p>generated code:</p><pre><code class="language-julia hljs">begin
+    for i in 1:2
+        for j in 1:5
+            if i == 1 &amp;&amp; j == 3 || i == 2 &amp;&amp; j == 3
+                x[i, j] ~ Normal()
+            else
+                x[i, j] ≂ Normal()
+            end
+        end
+    end
+end</code></pre><hr/><p>The interface design:</p><ul><li>automatic?<ul><li>fallback</li></ul></li><li>or make users specify which to use<ul><li>let&#39;s use generated function by default<ul><li>keep a flag? <code>set_eval_mode</code></li><li></li></ul></li></ul></li></ul></article><nav class="docs-footer"><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Monday 17 March 2025 10:15">Monday 17 March 2025</span>. Using Julia version 1.11.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
