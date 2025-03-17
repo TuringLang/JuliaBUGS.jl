@@ -1637,7 +1637,6 @@ using AbstractPPL
                     mu_y$i = mu_0 * (1 - z$i) + mu_1 * z$i
                     sigma_y$i = sigma_0 * (1 - z$i) + sigma_1 * z$i
                     y$i ~ Normal(mu_y$i, sigma_y$i)
-                    
                     """
                 end
 
