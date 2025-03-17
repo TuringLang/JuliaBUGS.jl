@@ -1282,4 +1282,141 @@ using AbstractPPL
         
         println("\nAll behavioral tests passed!")
     end
+    @testset "Proper Validation of evaluate_with_marginalization" begin
+        # Create a simple model with the structure:
+        # X1 (continuous) → X2 (discrete) → X3 (observed continuous)
+        
+        model_def = @bugs begin
+            # X1: Continuous uniform variable
+            x1 ~ Uniform(0, 1)
+            
+            # X2: Discrete variable that depends on X1
+            # The probability of X2=1 is equal to the value of X1
+            x2 ~ Bernoulli(x1)
+            
+            # X3: Continuous variable that depends on X2
+            # Mean depends on X2: μ = 2 if X2=0, μ = 10 if X2=1
+            mu_x2_0 = 2.0
+            mu_x2_1 = 10.0
+            mu = mu_x2_0 * (1 - x2) + mu_x2_1 * x2
+            
+            # Fixed standard deviation
+            sigma = 1.0
+            
+            # X3 follows Normal distribution
+            x3 ~ Normal(mu, sigma)
+        end
+        
+        # Compile the model
+        compiled_model = compile(model_def, NamedTuple())
+        
+        # Convert to BayesianNetwork
+        bn = translate_BUGSGraph_to_BayesianNetwork(
+            compiled_model.g, compiled_model.evaluation_env
+        )
+        
+        # Find variables by name
+        x1_var = nothing
+        x2_var = nothing
+        x3_var = nothing
+        
+        for var in bn.names
+            name = string(var)
+            if name == "x1"
+                x1_var = var
+            elseif name == "x2"
+                x2_var = var
+            elseif name == "x3"
+                x3_var = var
+            end
+        end
+        
+        @test x1_var !== nothing
+        @test x2_var !== nothing
+        @test x3_var !== nothing
+        
+        # Set node types: X2 is discrete
+        var_types = Dict(x2_var => :discrete)
+        bn = set_node_types(bn, var_types)
+        
+        # Function to manually condition the BN
+        function manual_condition(base_bn, var_vals)
+            # Make a copy of is_observed and then modify it
+            new_is_observed = copy(base_bn.is_observed)
+            
+            # Make a copy of the evaluation environment 
+            new_env = deepcopy(base_bn.evaluation_env)
+            
+            # Set the observed values and mark variables as observed
+            for (var, val) in var_vals
+                id = base_bn.names_to_ids[var]
+                new_is_observed[id] = true
+                
+                # Use AbstractPPL.set to update the environment
+                new_env = AbstractPPL.set(new_env, var, val)
+            end
+            
+            # Create a new BN with the updated information
+            return BayesianNetwork(
+                base_bn.graph,
+                base_bn.names,
+                base_bn.names_to_ids,
+                new_env,
+                base_bn.loop_vars,
+                base_bn.distributions,
+                base_bn.deterministic_functions,
+                base_bn.stochastic_ids,
+                base_bn.deterministic_ids,
+                base_bn.is_stochastic,
+                new_is_observed,
+                base_bn.node_types,
+                base_bn.transformed_var_lengths,
+                base_bn.transformed_param_length
+            )
+        end
+        
+        # Correct mathematical formula for marginalization
+        function correct_marginalization_calculation(x1_val, x3_val)
+            # Calculate prior probabilities for X2
+            p_x2_0 = 1 - x1_val  # P(X2=0|X1) = 1-X1
+            p_x2_1 = x1_val      # P(X2=1|X1) = X1
+            
+            # Calculate likelihoods for X3 given X2
+            # X3 ~ Normal(μ, 1.0) where μ = 2.0 if X2=0, μ = 10.0 if X2=1
+            likelihood_x2_0 = pdf(Normal(2.0, 1.0), x3_val)
+            likelihood_x2_1 = pdf(Normal(10.0, 1.0), x3_val)
+            
+            # Calculate joint probabilities
+            joint_x2_0 = p_x2_0 * likelihood_x2_0
+            joint_x2_1 = p_x2_1 * likelihood_x2_1
+            
+            # Calculate marginal probability by summing over X2
+            marginal = joint_x2_0 + joint_x2_1
+            
+            # Return log probability
+            return log(marginal)
+        end
+        
+        # Test cases
+        test_cases = [
+            (0.7, 8.5),  # X1=0.7, X3=8.5
+            (0.3, 3.0),  # X1=0.3, X3=3.0
+            (0.7, 3.0),  # X1=0.7, X3=3.0
+            (0.3, 8.5)   # X1=0.3, X3=8.5
+        ]
+        
+        for (i, (x1_val, x3_val)) in enumerate(test_cases)
+            # Create conditioned BN
+            bn_cond = manual_condition(bn, [(x1_var, x1_val), (x3_var, x3_val)])
+            
+            # Call the function under test
+            _, actual_logp = evaluate_with_marginalization(bn_cond, Float64[])
+            
+            # Calculate correct value
+            expected_logp = correct_marginalization_calculation(x1_val, x3_val)
+            
+            # Test with a reasonable tolerance
+            @test actual_logp ≈ expected_logp rtol=1e-6
+        end
+    end
 end
