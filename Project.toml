@@ -43,7 +43,6 @@ JuliaBUGSGraphPlotExt = "GraphPlot"
 JuliaBUGSMCMCChainsExt = "MCMCChains"
 
 [compat]
-ADTypes = "1.6"
 AbstractMCMC = "5"
 AbstractPPL = "0.8.4, 0.9, 0.10, 0.11"
 Accessors = "0.1"
@@ -79,7 +78,6 @@ Statistics = "1.10"
 julia = "1.10.8"
 
 [extras]
-ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
 AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
 AdvancedHMC = "0bf59076-c3b1-5ca4-86bd-e02cd72cde3d"
 AdvancedMH = "5b7e9947-ddc0-4b3f-9b55-0d8042f74170"
@@ -93,4 +91,16 @@ ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["AbstractMCMC", "ADTypes", "AdvancedHMC", "AdvancedMH", "ChainRules", "DifferentiationInterface", "Enzyme", "LogDensityProblemsAD", "MCMCChains", "Mooncake", "ReverseDiff", "Test"]
+test = [
+    "AbstractMCMC",
+    "AdvancedHMC",
+    "AdvancedMH",
+    "ChainRules",
+    "DifferentiationInterface",
+    "Enzyme",
+    "LogDensityProblemsAD",
+    "MCMCChains",
+    "Mooncake",
+    "ReverseDiff",
+    "Test"
+]
