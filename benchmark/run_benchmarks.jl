@@ -7,7 +7,9 @@ examples_to_benchmark = [
 stan_results = benchmark_Stan_models(examples_to_benchmark)
 
 juliabugs_models = [
-    _create_JuliaBUGS_model(model_name) for model_name in examples_to_benchmark
+    JuliaBUGS.set_evaluation_mode(
+        _create_JuliaBUGS_model(model_name), JuliaBUGS.UseGeneratedLogDensityFunction()
+    ) for model_name in examples_to_benchmark
 ]
 juliabugs_results = OrderedDict{Symbol,BenchmarkResult}()
 for (model_name, model) in zip(examples_to_benchmark, juliabugs_models)

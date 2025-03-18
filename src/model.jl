@@ -239,8 +239,8 @@ function BUGSModel(
         log_density_computation_function = identity
     end
 
-    evaluation_mode =
-        has_generated_log_density_function ? UseGeneratedLogDensityFunction() : UseGraph()
+    # evaluation_mode =
+    #     has_generated_log_density_function ? UseGeneratedLogDensityFunction() : UseGraph()
 
     return BUGSModel(
         is_transformed,
@@ -253,7 +253,7 @@ function BUGSModel(
         flattened_graph_node_data,
         g,
         nothing,
-        evaluation_mode,
+        UseGraph(),
         log_density_computation_function,
         model_def,
         data,

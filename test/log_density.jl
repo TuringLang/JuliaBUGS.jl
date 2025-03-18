@@ -15,13 +15,7 @@ end
                 a ~ dbin(0.1, 10)
             end
             transformed_model = compile(model_def, NamedTuple(), (a=test_θ,))
-            transformed_model = JuliaBUGS.set_evaluation_mode(
-                transformed_model, JuliaBUGS.UseGraph()
-            )
             untransformed_model = JuliaBUGS.settrans(transformed_model, false)
-            untransformed_model = JuliaBUGS.set_evaluation_mode(
-                untransformed_model, JuliaBUGS.UseGraph()
-            )
 
             reference_logp_untransformed = logpdf(dist, test_θ)
             reference_logp_transformed =
@@ -50,13 +44,7 @@ end
                 a ~ dgamma(0.001, 0.001)
             end
             transformed_model = compile(model_def, NamedTuple(), (a=test_θ,))
-            transformed_model = JuliaBUGS.set_evaluation_mode(
-                transformed_model, JuliaBUGS.UseGraph()
-            )
             untransformed_model = JuliaBUGS.settrans(transformed_model, false)
-            untransformed_model = JuliaBUGS.set_evaluation_mode(
-                untransformed_model, JuliaBUGS.UseGraph()
-            )
 
             reference_logp_untransformed = logpdf(dist, test_θ)
             reference_logp_transformed =
@@ -91,13 +79,7 @@ end
                 x[1:10] ~ ddirich(alpha[1:10])
             end
             transformed_model = compile(model_def, (alpha=alpha,), (x=test_θ,))
-            transformed_model = JuliaBUGS.set_evaluation_mode(
-                transformed_model, JuliaBUGS.UseGraph()
-            )
             untransformed_model = JuliaBUGS.settrans(transformed_model, false)
-            untransformed_model = JuliaBUGS.set_evaluation_mode(
-                untransformed_model, JuliaBUGS.UseGraph()
-            )
 
             @test _logjoint(untransformed_model) ≈ reference_logp_untransformed rtol = 1E-6
             @test _logjoint(transformed_model) ≈ reference_logp_transformed rtol = 1E-6
@@ -134,13 +116,7 @@ end
                 (degrees_of_freedom=degrees_of_freedom, scale_matrix=scale_matrix),
                 (x=test_θ,),
             )
-            transformed_model = JuliaBUGS.set_evaluation_mode(
-                transformed_model, JuliaBUGS.UseGraph()
-            )
             untransformed_model = JuliaBUGS.settrans(transformed_model, false)
-            untransformed_model = JuliaBUGS.set_evaluation_mode(
-                untransformed_model, JuliaBUGS.UseGraph()
-            )
 
             @test _logjoint(untransformed_model) ≈ reference_logp_untransformed rtol = 1E-6
             @test _logjoint(transformed_model) ≈ reference_logp_transformed rtol = 1E-6
@@ -168,13 +144,7 @@ end
                 x[1:10, 1:10] ~ LKJ(10, 0.5)
             end
             transformed_model = compile(model_def, NamedTuple(), (x=test_θ,))
-            transformed_model = JuliaBUGS.set_evaluation_mode(
-                transformed_model, JuliaBUGS.UseGraph()
-            )
             untransformed_model = JuliaBUGS.settrans(transformed_model, false)
-            untransformed_model = JuliaBUGS.set_evaluation_mode(
-                untransformed_model, JuliaBUGS.UseGraph()
-            )
 
             @test LogDensityProblems.dimension(untransformed_model) == 100
             @test LogDensityProblems.dimension(transformed_model) == 45
@@ -196,13 +166,7 @@ end
     @testset "rats" begin
         (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1.rats
         transformed_model = compile(model_def, data, inits)
-        transformed_model = JuliaBUGS.set_evaluation_mode(
-            transformed_model, JuliaBUGS.UseGraph()
-        )
         untransformed_model = JuliaBUGS.settrans(transformed_model, false)
-        untransformed_model = JuliaBUGS.set_evaluation_mode(
-            untransformed_model, JuliaBUGS.UseGraph()
-        )
         @test _logjoint(untransformed_model) ≈ -174029.38703951868 rtol = 1E-6
         @test _logjoint(transformed_model) ≈ -174029.38703951868 rtol = 1E-6
 
@@ -217,13 +181,8 @@ end
     @testset "blockers" begin
         (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1.blockers
         transformed_model = compile(model_def, data, inits)
-        transformed_model = JuliaBUGS.set_evaluation_mode(
-            transformed_model, JuliaBUGS.UseGraph()
-        )
         untransformed_model = JuliaBUGS.settrans(transformed_model, false)
-        untransformed_model = JuliaBUGS.set_evaluation_mode(
-            untransformed_model, JuliaBUGS.UseGraph()
-        )
+
         @test _logjoint(untransformed_model) ≈ -8418.416388326123 rtol = 1E-6
         @test _logjoint(transformed_model) ≈ -8418.416388326123 rtol = 1E-6
 
@@ -238,13 +197,8 @@ end
     @testset "bones" begin
         (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1.bones
         transformed_model = compile(model_def, data, inits)
-        transformed_model = JuliaBUGS.set_evaluation_mode(
-            transformed_model, JuliaBUGS.UseGraph()
-        )
         untransformed_model = JuliaBUGS.settrans(transformed_model, false)
-        untransformed_model = JuliaBUGS.set_evaluation_mode(
-            untransformed_model, JuliaBUGS.UseGraph()
-        )
+
         @test _logjoint(untransformed_model) ≈ -161.6492002285034 rtol = 1E-6
         @test _logjoint(transformed_model) ≈ -161.6492002285034 rtol = 1E-6
 
@@ -259,13 +213,8 @@ end
     @testset "dogs" begin
         (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1.dogs
         transformed_model = compile(model_def, data, inits)
-        transformed_model = JuliaBUGS.set_evaluation_mode(
-            transformed_model, JuliaBUGS.UseGraph()
-        )
         untransformed_model = JuliaBUGS.settrans(transformed_model, false)
-        untransformed_model = JuliaBUGS.set_evaluation_mode(
-            untransformed_model, JuliaBUGS.UseGraph()
-        )
+
         @test _logjoint(untransformed_model) ≈ -1243.188922285352 rtol = 1E-6
         @test _logjoint(transformed_model) ≈ -1243.3996613167667 rtol = 1E-6
 

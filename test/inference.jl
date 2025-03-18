@@ -6,7 +6,6 @@
     data = JuliaBUGS.BUGSExamples.birats.data
     inits = JuliaBUGS.BUGSExamples.birats.inits
     model = compile(model_def, data, inits)
-    model_eval_with_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
     ad_model = ADgradient(:ReverseDiff, model_eval_with_graph; compile=Val(false))
     # random initialization sometimes fails because some parameters are supposed to be from
     # PD matrix
@@ -28,8 +27,7 @@ end
             NamedTuple(),
         )
 
-        model_eval_with_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
-        ad_model = ADgradient(:ReverseDiff, model_eval_with_graph; compile=Val(true))
+        ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
         n_samples, n_adapts = 10, 0
         D = LogDensityProblems.dimension(model)
         initial_θ = rand(D)
@@ -51,8 +49,7 @@ end
         data = JuliaBUGS.BUGSExamples.VOLUME_1[m].data
         inits = JuliaBUGS.BUGSExamples.VOLUME_1[m].inits
         model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_1[m].model_def, data, inits)
-        model_eval_with_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
-        ad_model = ADgradient(:ReverseDiff, model_eval_with_graph; compile=Val(true))
+        ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 
         n_samples, n_adapts = 2000, 1000
 
@@ -82,8 +79,7 @@ end
         data = JuliaBUGS.BUGSExamples.VOLUME_2[m].data
         inits = JuliaBUGS.BUGSExamples.VOLUME_2[m].inits
         model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_2[m].model_def, data, inits)
-        model_eval_with_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
-        ad_model = ADgradient(:ReverseDiff, model_eval_with_graph; compile=Val(true))
+        ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 
         n_samples, n_adapts = 3000, 1000
 
