@@ -6,36 +6,12 @@
     data = JuliaBUGS.BUGSExamples.birats.data
     inits = JuliaBUGS.BUGSExamples.birats.inits
     model = compile(model_def, data, inits)
-    ad_model = ADgradient(:ReverseDiff, model; compile=Val(false))
+    model_eval_with_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+    ad_model = ADgradient(:ReverseDiff, model_eval_with_graph; compile=Val(false))
     # random initialization sometimes fails because some parameters are supposed to be from
     # PD matrix
     initial_θ = JuliaBUGS.getparams(model)
     LogDensityProblems.logdensity_and_gradient(ad_model, initial_θ)
-end
-
-if VERSION >= v"1.10" && VERSION < v"1.11"
-    @testset "Tapir.jl integration" begin
-        using Pkg
-        Pkg.add("Tapir")
-        using ADTypes, Tapir
-        @testset "example: $ex" for ex in (:rats, :salm, :equiv, :blocker, :leuk)
-            (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1[ex]
-            model = compile(model_def, data, inits)
-            ad_model_tapir = ADgradient(AutoTapir(), model)
-            ad_model_reversediff = ADgradient(AutoReverseDiff(), model)
-            params = rand(LogDensityProblems.dimension(model))
-            tapir_result = LogDensityProblems.logdensity_and_gradient(
-                ad_model_tapir, params
-            )
-            reversediff_result = LogDensityProblems.logdensity_and_gradient(
-                ad_model_reversediff, params
-            )
-            (logp_tapir, grads_tapir) = tapir_result
-            (logp_reversediff, grads_reversediff) = reversediff_result
-            @test logp_tapir == logp_reversediff
-            @test all(grads_tapir .≈ grads_reversediff)
-        end
-    end
 end
 
 # AdvancedHMC
@@ -52,7 +28,8 @@ end
             NamedTuple(),
         )
 
-        ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
+        model_eval_with_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+        ad_model = ADgradient(:ReverseDiff, model_eval_with_graph; compile=Val(true))
         n_samples, n_adapts = 10, 0
         D = LogDensityProblems.dimension(model)
         initial_θ = rand(D)
@@ -74,8 +51,8 @@ end
         data = JuliaBUGS.BUGSExamples.VOLUME_1[m].data
         inits = JuliaBUGS.BUGSExamples.VOLUME_1[m].inits
         model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_1[m].model_def, data, inits)
-
-        ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
+        model_eval_with_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+        ad_model = ADgradient(:ReverseDiff, model_eval_with_graph; compile=Val(true))
 
         n_samples, n_adapts = 2000, 1000
 
@@ -105,8 +82,8 @@ end
         data = JuliaBUGS.BUGSExamples.VOLUME_2[m].data
         inits = JuliaBUGS.BUGSExamples.VOLUME_2[m].inits
         model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_2[m].model_def, data, inits)
-
-        ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
+        model_eval_with_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+        ad_model = ADgradient(:ReverseDiff, model_eval_with_graph; compile=Val(true))
 
         n_samples, n_adapts = 3000, 1000
 

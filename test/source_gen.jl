@@ -65,7 +65,7 @@ for example_name in test_examples
     bugs_models[example_name] = model
     evaluation_envs[example_name] = evaluation_env
     lowered_model_def, reconstructed_model_def = _generate_lowered_model_def(
-        model, evaluation_env
+        model.model_def, model.g, evaluation_env
     )
     log_density_computation_expr = _gen_log_density_computation_function_expr(
         lowered_model_def, evaluation_env, gensym(example_name)

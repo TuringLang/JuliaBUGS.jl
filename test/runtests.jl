@@ -11,6 +11,7 @@ using AdvancedHMC
 using AdvancedMH
 using Bijectors
 using ChainRules
+using DifferentiationInterface
 using Distributions
 using Graphs
 using MetaGraphsNext
@@ -20,6 +21,7 @@ using LogDensityProblemsAD
 using OrderedCollections
 using MacroTools
 using MCMCChains
+using Mooncake: Mooncake
 using Random
 using ReverseDiff
 using Serialization

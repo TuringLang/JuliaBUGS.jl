@@ -102,13 +102,16 @@ function _build_stmt_id_to_var(var_to_stmt_id::Dict{VarName,Int})
     return stmt_id_to_var
 end
 
-# coarse graph may contains nodes whose degree is 0, these are transformed data
+# coarse graph may contains nodes whose degrees are 0, these are transformed data
 function _build_coarse_dep_graph(
     g::JuliaBUGS.BUGSGraph,
     stmt_to_stmt_id::IdDict{Expr,Int},
     var_to_stmt_id::Dict{VarName,Int},
 )
+    # there is a node in the coarse graph for each statement in the model
     coarse_graph = Graphs.SimpleDiGraph(length(stmt_to_stmt_id))
+
+    # this is the same as merging the nodes in the original graph
     for edge in Graphs.edges(g.graph)
         src_varname = label_for(g, src(edge))
         dst_varname = label_for(g, dst(edge))
@@ -119,15 +122,21 @@ function _build_coarse_dep_graph(
     return coarse_graph
 end
 
+# the purpose of removing nodes with degree 0 is to remove transformed data
 function _copy_and_remove_stmt_with_degree_0(
     model_def, stmt_to_stmt_id, coarse_graph, new_model_def=Expr(:block)
 )
     @assert Meta.isexpr(model_def, :block)
     for statement in model_def.args
-        if Meta.isexpr(statement, (:(=), :call))
+        if Meta.isexpr(statement, :(=))
+            # this is to remove transformed data statements
             if degree(coarse_graph, stmt_to_stmt_id[statement]) != 0
                 push!(new_model_def.args, statement)
             end
+        elseif Meta.isexpr(statement, (:(=), :call))
+            # even if a stochastic statement has degree 0, it should be included
+            # because it is part of the model
+            push!(new_model_def.args, statement)
         elseif Meta.isexpr(statement, :for)
             # Recursively copy the inner block of the for-loop.
             new_body = _copy_and_remove_stmt_with_degree_0(
@@ -559,7 +568,6 @@ function analyze_statement(pass::CollectSortedNodes, expr::Expr, loop_variables:
         symbol, indices... = simplified_lhs
         VarName{symbol}(IndexLens(indices))
     end
-
     push!(pass.sorted_nodes, varname)
     return nothing
 end

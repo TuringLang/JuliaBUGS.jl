@@ -42,6 +42,11 @@ function FlattenedGraphNodeData(
     )
 end
 
+abstract type EvaluationMode end
+
+struct UseGeneratedLogDensityFunction <: EvaluationMode end
+struct UseGraph <: EvaluationMode end
+
 """
     BUGSModel
 
@@ -49,7 +54,13 @@ The `BUGSModel` object is used for inference and represents the output of compil
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
 """
 struct BUGSModel{
-    base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,TNF,TV,data_T,F<:Function
+    EMT<:EvaluationMode,
+    base_model_T<:Union{<:AbstractBUGSModel,Nothing},
+    T<:NamedTuple,
+    TNF,
+    TV,
+    data_T,
+    F<:Function,
 } <: AbstractBUGSModel
     " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
@@ -76,7 +87,7 @@ struct BUGSModel{
     "If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`."
     base_model::base_model_T
 
-    has_generated_log_density_function::Bool
+    evaluation_mode::EMT
     log_density_computation_function::F
 
     # for serialization, save the original model definition and data
@@ -220,11 +231,16 @@ function BUGSModel(
         pass = CollectSortedNodes(evaluation_env)
         JuliaBUGS.analyze_block(pass, reconstructed_model_def)
         sorted_nodes = pass.sorted_nodes
-        parameters = [vn for vn in sorted_nodes if vn in parameters]
+        original_parameters_length = length(parameters)
+        parameters = VarName[vn for vn in sorted_nodes if vn in parameters]
+        @assert length(parameters) == original_parameters_length "there are less parameters in the generated log density function than in the original model"
         flattened_graph_node_data = FlattenedGraphNodeData(g, sorted_nodes)
     else
         log_density_computation_function = identity
     end
+
+    evaluation_mode =
+        has_generated_log_density_function ? UseGeneratedLogDensityFunction() : UseGraph()
 
     return BUGSModel(
         is_transformed,
@@ -237,7 +253,7 @@ function BUGSModel(
         flattened_graph_node_data,
         g,
         nothing,
-        has_generated_log_density_function,
+        evaluation_mode,
         log_density_computation_function,
         model_def,
         data,
@@ -262,7 +278,7 @@ function BUGSModel(
         FlattenedGraphNodeData(g, sorted_nodes),
         g,
         isnothing(model.base_model) ? model : model.base_model,
-        model.has_generated_log_density_function,
+        model.evaluation_mode,
         model.log_density_computation_function,
         model.model_def,
         model.data,
@@ -411,6 +427,10 @@ This function enables switching the "mode" of the model.
 """
 function settrans(model::BUGSModel, bool::Bool=!(model.transformed))
     return BangBang.setproperty!!(model, :transformed, bool)
+end
+
+function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
+    return BangBang.setproperty!!(model, :evaluation_mode, mode)
 end
 
 function AbstractPPL.condition(

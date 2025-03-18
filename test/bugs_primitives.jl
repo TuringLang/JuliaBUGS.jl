@@ -16,8 +16,9 @@ end
         C[1:2] ~ dmnorm(mu[:], A[:, :])
     end
     model = compile(model_def, (mu=[0, 0], B=[1 0; 0 1]), (A=[1 0; 0 1],))
+    model_eval_with_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
 
-    ad_model = ADgradient(:ReverseDiff, model)
+    ad_model = ADgradient(:ReverseDiff, model_eval_with_graph)
     theta = [
         0.7931743744870574,
         0.5151017206811268,

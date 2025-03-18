@@ -1,10 +1,12 @@
-function LogDensityProblems.logdensity(model::AbstractBUGSModel, x::AbstractArray)
-    if model.has_generated_log_density_function
-        return model.log_density_computation_function(model.evaluation_env, x)
-    else
-        _, logp = evaluate!!(model, x)
-        return logp
-    end
+function LogDensityProblems.logdensity(
+    model::BUGSModel{<:UseGeneratedLogDensityFunction}, x::AbstractArray
+)
+    return model.log_density_computation_function(model.evaluation_env, x)
+end
+
+function LogDensityProblems.logdensity(model::BUGSModel{<:UseGraph}, x::AbstractArray)
+    _, logp = JuliaBUGS.evaluate!!(model, x)
+    return logp
 end
 
 function LogDensityProblems.dimension(model::BUGSModel)

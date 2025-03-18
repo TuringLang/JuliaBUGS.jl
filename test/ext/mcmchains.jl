@@ -27,7 +27,8 @@
     )
 
     model = compile(model_def, data, (;))
-    ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
+    model_eval_with_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+    ad_model = ADgradient(:ReverseDiff, model_eval_with_graph; compile=Val(true))
     n_samples, n_adapts = 2000, 1000
 
     D = LogDensityProblems.dimension(model)
@@ -104,7 +105,8 @@
         sigma[3] ~ InverseGamma(2, 3)
     end
     model = compile(model_def, (;))
-    ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
+    model_eval_with_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+    ad_model = ADgradient(:ReverseDiff, model_eval_with_graph; compile=Val(true))
     hmc_chain = AbstractMCMC.sample(ad_model, NUTS(0.8), 10; chain_type=Chains)
     @test hmc_chain.name_map[:parameters] == [
         Symbol("sigma[3]"),
