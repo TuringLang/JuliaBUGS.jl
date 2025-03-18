@@ -72,8 +72,7 @@ function _create_JuliaBUGS_model(model_name::Symbol)
 end
 
 function benchmark_JuliaBUGS_model(model::JuliaBUGS.BUGSModel)
-    # p = Base.Fix1(LogDensityProblems.logdensity, model)
-    p = Base.Fix1(model.log_density_computation_function, model.evaluation_env)
+    p = Base.Fix1(LogDensityProblems.logdensity, model)
     backend = AutoMooncake(; config=nothing)
     dim = LogDensityProblems.dimension(model)
     params_values = JuliaBUGS.getparams(model)
