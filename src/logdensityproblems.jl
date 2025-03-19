@@ -1,5 +1,11 @@
-function LogDensityProblems.logdensity(model::AbstractBUGSModel, x::AbstractArray)
-    _, logp = evaluate!!(model, x)
+function LogDensityProblems.logdensity(
+    model::BUGSModel{<:UseGeneratedLogDensityFunction}, x::AbstractArray
+)
+    return model.log_density_computation_function(model.evaluation_env, x)
+end
+
+function LogDensityProblems.logdensity(model::BUGSModel{<:UseGraph}, x::AbstractArray)
+    _, logp = JuliaBUGS.evaluate!!(model, x)
     return logp
 end
 

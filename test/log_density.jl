@@ -182,6 +182,7 @@ end
         (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1.blockers
         transformed_model = compile(model_def, data, inits)
         untransformed_model = JuliaBUGS.settrans(transformed_model, false)
+
         @test _logjoint(untransformed_model) ≈ -8418.416388326123 rtol = 1E-6
         @test _logjoint(transformed_model) ≈ -8418.416388326123 rtol = 1E-6
 
@@ -197,6 +198,7 @@ end
         (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1.bones
         transformed_model = compile(model_def, data, inits)
         untransformed_model = JuliaBUGS.settrans(transformed_model, false)
+
         @test _logjoint(untransformed_model) ≈ -161.6492002285034 rtol = 1E-6
         @test _logjoint(transformed_model) ≈ -161.6492002285034 rtol = 1E-6
 
@@ -212,6 +214,7 @@ end
         (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1.dogs
         transformed_model = compile(model_def, data, inits)
         untransformed_model = JuliaBUGS.settrans(transformed_model, false)
+
         @test _logjoint(untransformed_model) ≈ -1243.188922285352 rtol = 1E-6
         @test _logjoint(transformed_model) ≈ -1243.3996613167667 rtol = 1E-6
 

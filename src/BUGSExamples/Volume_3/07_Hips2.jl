@@ -57,22 +57,22 @@ model_def = @bugs begin
         end
 
         # Marginal probability of being in each state at time 1
-        pi[k, 1, 1] = 1 - var"lambda.op"
-        pi[k, 1, 2] = 0
-        pi[k, 1, 3] = 0
-        pi[k, 1, 4] = 0
-        pi[k, 1, 5] = var"lambda.op"
+        var"pi"[k, 1, 1] = 1 - var"lambda.op"
+        var"pi"[k, 1, 2] = 0
+        var"pi"[k, 1, 3] = 0
+        var"pi"[k, 1, 4] = 0
+        var"pi"[k, 1, 5] = var"lambda.op"
 
         # state of each individual in strata k at time t=1
-        y[k, 1, :] ~ dmulti(pi[k, 1, :], 1)
+        y[k, 1, 1:S] ~ dmulti(var"pi"[k, 1, :], 1)
 
         # state of each individual in strata k at time t > 1
         for t in 2:N
             for s in 1:S
                 # sampling probabilities
-                pi[k, t, s] = inprod(y[k, t - 1, :], Lambda[k, t, :, s])
+                var"pi"[k, t, s] = inprod(y[k, t - 1, :], Lambda[k, t, :, s])
             end
-            y[k, t, :] ~ dmulti(pi[k, t, :], 1)
+            y[k, t, 1:S] ~ dmulti(var"pi"[k, t, :], 1)
         end
     end
 
@@ -207,6 +207,10 @@ data = (
               0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503]
 )
 
+inits = NamedTuple()
+
+inits_alternative = NamedTuple()
+
 reference_results = (
     var"BL[1]" = (mean = 14.46, std = 2.893),
     var"BL[2]" = (mean = 12.72, std = 3.326),
@@ -249,4 +253,5 @@ reference_results = (
     var"mean.C" = (mean = 4607.0, std = 479.8)
 )
 
-hips2 = Example(name, model_def, original, data, nothing, nothing, reference_results)
+hips2 = Example(
+    name, model_def, original, data, inits, inits_alternative, reference_results)
