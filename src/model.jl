@@ -431,7 +431,9 @@ end
 
 function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
     if model.log_density_computation_function === identity
-        @warn("The model does not support generated log density function, the evaluation mode is set to `UseGraph`.")
+        @warn(
+            "The model does not support generated log density function, the evaluation mode is set to `UseGraph`."
+        )
         mode = UseGraph()
     end
     return BangBang.setproperty!!(model, :evaluation_mode, mode)
