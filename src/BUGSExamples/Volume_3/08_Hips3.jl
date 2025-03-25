@@ -272,4 +272,5 @@ reference_results = (
     var"var.C" = (mean = 174500.0, std = 28450.0)
 )
 
-hips3 = Example(name, model_def, original, data, NamedTuple(), NamedTuple(), reference_results)
+hips3 = Example(
+    name, model_def, original, data, NamedTuple(), NamedTuple(), reference_results)
