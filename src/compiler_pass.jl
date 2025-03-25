@@ -67,7 +67,9 @@ function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {d
     for var in extract_variables_in_bounds_and_lhs_indices(model_def)
         if var ∉ data_vars
             if var === :(:)
-                error("BUGS language requires explicit range indexing on the LHS, e.g., use `[1:S]` instead of `:`.")
+                error(
+                    "BUGS language requires explicit range indexing on the LHS, e.g., use `[1:S]` instead of `:`.",
+                )
             else
                 error(
                     "Variable $var is used in loop bounds or indices but not defined in the data.",
