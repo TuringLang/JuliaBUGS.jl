@@ -231,4 +231,5 @@ data = (
 
 reference_results = NamedTuple()
 
-hips1 = Example(name, model_def, original, data, NamedTuple(), NamedTuple(), reference_results)
+hips1 = Example(
+    name, model_def, original, data, NamedTuple(), NamedTuple(), reference_results)
