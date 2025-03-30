@@ -297,7 +297,7 @@ function enumerate_discrete_values(dist::DiscreteUnivariateDistribution)
     end
 end
 
-function get_discrete_vars(bn::BayesianNetwork{V}) where V
+function get_discrete_vars(bn::BayesianNetwork{V}) where {V}
     discrete_vars = V[]
     for id in topological_sort_by_dfs(bn.graph)
         if bn.is_stochastic[id] && bn.node_types[id] == :discrete && !bn.is_observed[id]
@@ -309,16 +309,16 @@ end
 
 function prepare_environment(bn::BayesianNetwork, assignments::Dict{<:Any,Any})
     temp_env = deepcopy(bn.evaluation_env)
-    
     # Set all assigned variables
     for (var, value) in assignments
         temp_env = BangBang.setindex!!(temp_env, value, var)
     end
-    
     return temp_env
 end
 
-function update_deterministic_nodes(bn::BayesianNetwork, temp_env, assignments, current_var=nothing)
+function update_deterministic_nodes(
+    bn::BayesianNetwork, temp_env, assignments, current_var=nothing
+)
     for i in topological_sort_by_dfs(bn.graph)
         vn = bn.names[i]
         # Skip if already assigned or if it's the current variable
@@ -331,44 +331,29 @@ function update_deterministic_nodes(bn::BayesianNetwork, temp_env, assignments, 
             temp_env = BangBang.setindex!!(temp_env, value, vn)
         end
     end
-    
     return temp_env
 end
 
 function process_continuous_var(
-    bn::BayesianNetwork, 
-    vn, 
-    i, 
-    temp_env, 
-    parameter_values, 
-    local_idx, 
-    var_lengths
+    bn::BayesianNetwork, vn, i, temp_env, parameter_values, local_idx, var_lengths
 )
     dist = bn.distributions[i](temp_env, bn.loop_vars[vn])
     b = Bijectors.bijector(dist)
-    
     # If the variable is not in transformed_var_lengths, calculate it
     if !haskey(var_lengths, vn)
         var_value = AbstractPPL.get(temp_env, vn)
         transformed_value = Bijectors.transform(b, var_value)
         var_lengths[vn] = length(transformed_value)
     end
-    
     l = var_lengths[vn]
     b_inv = Bijectors.inverse(b)
-    
     # Use parameter_values for continuous variables
     reconstructed_value = JuliaBUGS.reconstruct(
-        b_inv,
-        dist,
-        view(parameter_values, local_idx:(local_idx + l - 1)),
+        b_inv, dist, view(parameter_values, local_idx:(local_idx + l - 1))
     )
-    
     value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
-    
     # Update environment
     temp_env = BangBang.setindex!!(temp_env, value, vn)
-    
     return temp_env, logpdf(dist, value) + logjac, local_idx + l
 end
 
@@ -409,20 +394,17 @@ function evaluate_with_marginalization(
     bn::BayesianNetwork{V,T,F}, parameter_values::AbstractVector
 ) where {V,T,F}
     # This function follows the exact same logical flow as the original but uses modular helpers
-    
     bugsmodel_node_order = [bn.names[i] for i in topological_sort_by_dfs(bn.graph)]
     var_lengths = bn.transformed_var_lengths
 
     # Find discrete variables for marginalization
     discrete_vars = get_discrete_vars(bn)
-    
     if isempty(discrete_vars)
         return evaluate_with_values(bn, parameter_values)
     end
 
     # The original code had this index initialized at the outer scope
     current_idx = 1
-    
     # This is the core of the marginalization - intentionally structured to match the original
     function recursive_marginalize(assignments::Dict{<:Any,Any}, var_idx::Int)
         if var_idx > length(discrete_vars)
@@ -558,6 +540,5 @@ function evaluate_with_marginalization(
 
     # Start recursion with empty assignments
     total_prob = recursive_marginalize(Dict{Any,Any}(), 1)
-    
     return bn.evaluation_env, log(total_prob)
 end
