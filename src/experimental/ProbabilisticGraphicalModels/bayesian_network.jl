@@ -261,3 +261,246 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
 
     return evaluation_env, logprior + loglikelihood
 end
+
+"""
+    enumerate_discrete_values(dist)
+
+Return all possible values for a discrete distribution.
+"""
+function enumerate_discrete_values(dist::DiscreteUnivariateDistribution)
+    if dist isa Categorical
+        return 1:length(dist.p)
+    elseif dist isa Bernoulli
+        return [0, 1]
+    elseif dist isa Binomial
+        return 0:(dist.n)
+    elseif dist isa Poisson
+        # For Poisson, we need to truncate at some reasonable point #TODO: We are currently not using this 
+        λ = dist.λ
+        # Use 3 standard deviations (sqrt(λ)) as a heuristic cutoff
+        max_value = ceil(Int, λ + 3 * sqrt(λ))
+        return 0:max_value
+    elseif dist isa DiscreteUniform
+        return (dist.a):(dist.b)
+    else
+        # For other distributions, sample a reasonable set of values
+        # This is a fallback and might not be optimal
+        support_values = support(dist)
+        if support_values isa UnitRange
+            return support_values
+        else
+            # Sample some values and deduplicate
+            samples = rand(dist, 100)
+            return unique(samples)
+        end
+    end
+end
+
+function get_discrete_vars(bn::BayesianNetwork{V}) where V
+    discrete_vars = V[]
+    for id in topological_sort_by_dfs(bn.graph)
+        if bn.is_stochastic[id] && bn.node_types[id] == :discrete && !bn.is_observed[id]
+            push!(discrete_vars, bn.names[id])
+        end
+    end
+    return discrete_vars
+end
+
+function prepare_environment(bn::BayesianNetwork, assignments::Dict{<:Any,Any})
+    temp_env = deepcopy(bn.evaluation_env)
+    
+    # Set all assigned variables
+    for (var, value) in assignments
+        temp_env = BangBang.setindex!!(temp_env, value, var)
+    end
+    
+    return temp_env
+end
+
+function update_deterministic_nodes(bn::BayesianNetwork, temp_env, assignments, current_var=nothing)
+    for i in topological_sort_by_dfs(bn.graph)
+        vn = bn.names[i]
+        # Skip if already assigned or if it's the current variable
+        if vn in keys(assignments) || vn == current_var
+            continue
+        end
+
+        if !bn.is_stochastic[i]
+            value = bn.deterministic_functions[i](temp_env, bn.loop_vars[vn])
+            temp_env = BangBang.setindex!!(temp_env, value, vn)
+        end
+    end
+    
+    return temp_env
+end
+
+function process_continuous_var(
+    bn::BayesianNetwork, 
+    vn, 
+    i, 
+    temp_env, 
+    parameter_values, 
+    local_idx, 
+    var_lengths
+)
+    dist = bn.distributions[i](temp_env, bn.loop_vars[vn])
+    b = Bijectors.bijector(dist)
+    
+    # If the variable is not in transformed_var_lengths, calculate it
+    if !haskey(var_lengths, vn)
+        var_value = AbstractPPL.get(temp_env, vn)
+        transformed_value = Bijectors.transform(b, var_value)
+        var_lengths[vn] = length(transformed_value)
+    end
+    
+    l = var_lengths[vn]
+    b_inv = Bijectors.inverse(b)
+    
+    # Use parameter_values for continuous variables
+    reconstructed_value = JuliaBUGS.reconstruct(
+        b_inv,
+        dist,
+        view(parameter_values, local_idx:(local_idx + l - 1)),
+    )
+    
+    value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
+    
+    # Update environment
+    temp_env = BangBang.setindex!!(temp_env, value, vn)
+    
+    return temp_env, logpdf(dist, value) + logjac, local_idx + l
+end
+
+function process_observed_var(bn::BayesianNetwork, vn, i, temp_env)
+    dist = bn.distributions[i](temp_env, bn.loop_vars[vn])
+    return logpdf(dist, AbstractPPL.get(temp_env, vn))
+end
+
+function calculate_discrete_logprob(bn::BayesianNetwork, assignments, temp_env)
+    discrete_logprob = 0.0
+    for (var, value) in assignments
+        var_id = bn.names_to_ids[var]
+        dist = bn.distributions[var_id](temp_env, bn.loop_vars[var])
+        discrete_logprob += logpdf(dist, value)
+    end
+    return discrete_logprob
+end
+
+function marginalize_recursive(
+    bn::BayesianNetwork{V}, 
+    discrete_vars, 
+    bugsmodel_node_order, 
+    parameter_values, 
+    var_lengths,
+    assignments::Dict{<:Any,Any}, 
+    var_idx::Int,
+    current_idx::Int
+) where V
+    if var_idx > length(discrete_vars)
+        local_idx = current_idx
+        
+        # Prepare environment with current assignments
+        temp_env = prepare_environment(bn, assignments)
+        
+        logprior, loglikelihood = 0.0, 0.0
+        
+        for vn in bugsmodel_node_order
+            i = bn.names_to_ids[vn]
+            
+            is_stochastic = bn.is_stochastic[i]
+            is_observed = bn.is_observed[i]
+            is_discrete = bn.node_types[i] == :discrete
+            
+            if vn in keys(assignments)
+                continue
+            end
+            
+            if !is_stochastic
+                # Handle deterministic nodes
+                value = bn.deterministic_functions[i](temp_env, bn.loop_vars[vn])
+                temp_env = BangBang.setindex!!(temp_env, value, vn)
+            else
+                # Handle stochastic nodes
+                if !is_observed
+                    if !is_discrete
+                        # Process continuous variables
+                        temp_env, log_prob, local_idx = process_continuous_var(
+                            bn, vn, i, temp_env, parameter_values, local_idx, var_lengths
+                        )
+                        logprior += log_prob
+                    end
+                    # Note: discrete variables handled by marginalization are skipped here
+                else
+                    # Handle observed variables
+                    loglikelihood += process_observed_var(bn, vn, i, temp_env)
+                end
+            end
+        end
+        
+        # Calculate joint probability of discrete variables
+        discrete_logprob = calculate_discrete_logprob(bn, assignments, temp_env)
+        
+        # Return combined probability
+        return exp(logprior + loglikelihood + discrete_logprob)
+    end
+    
+    # Get current discrete variable
+    current_var = discrete_vars[var_idx]
+    var_id = bn.names_to_ids[current_var]
+    
+    # Prepare environment
+    temp_env = prepare_environment(bn, assignments)
+    
+    # Update deterministic nodes that might affect the distribution
+    temp_env = update_deterministic_nodes(bn, temp_env, assignments, current_var)
+    
+    # Get distribution for this variable
+    dist = bn.distributions[var_id](temp_env, bn.loop_vars[current_var])
+    
+    # Get possible values for this variable
+    possible_values = enumerate_discrete_values(dist)
+    
+    # Initialize total probability
+    total_prob = 0.0
+    
+    # Sum over all possible values
+    for val in possible_values
+        # Create new assignment dictionary
+        new_assignments = copy(assignments)
+        new_assignments[current_var] = val
+        
+        # Recursive call for next variable
+        prob = marginalize_recursive(
+            bn, discrete_vars, bugsmodel_node_order, parameter_values, var_lengths,
+            new_assignments, var_idx + 1, current_idx
+        )
+        
+        # Add to total probability
+        total_prob += prob
+    end
+    
+    return total_prob
+end
+
+function evaluate_with_marginalization(
+    bn::BayesianNetwork{V,T,F}, parameter_values::AbstractVector
+) where {V,T,F}
+    bugsmodel_node_order = [bn.names[i] for i in topological_sort_by_dfs(bn.graph)]
+    var_lengths = bn.transformed_var_lengths
+    
+    # Get discrete variables that need marginalization
+    discrete_vars = get_discrete_vars(bn)
+    
+    if isempty(discrete_vars)
+        return evaluate_with_values(bn, parameter_values)
+    end
+    
+    # Start recursion with empty assignments
+    current_idx = 1
+    total_prob = marginalize_recursive(
+        bn, discrete_vars, bugsmodel_node_order, parameter_values, var_lengths,
+        Dict{Any,Any}(), 1, current_idx
+    )
+    
+    return bn.evaluation_env, log(total_prob)
+end
