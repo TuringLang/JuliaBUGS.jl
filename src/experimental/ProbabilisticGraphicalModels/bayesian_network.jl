@@ -372,24 +372,6 @@ function calculate_discrete_logprob(bn::BayesianNetwork, assignments, temp_env)
     return discrete_logprob
 end
 
-# This function is replaced by the in-place recursive_marginalize
-# function in evaluate_with_marginalization to match original implementation
-# structure. We're keeping this code commented for reference, but it's not used.
-#=
-function marginalize_recursive(
-    bn::BayesianNetwork{V}, 
-    discrete_vars, 
-    bugsmodel_node_order, 
-    parameter_values, 
-    var_lengths,
-    assignments::Dict{<:Any,Any}, 
-    var_idx::Int,
-    current_idx::Int
-) where V
-    # ... implementation has been moved to recursive_marginalize ...
-end
-=#
-
 function evaluate_with_marginalization(
     bn::BayesianNetwork{V,T,F}, parameter_values::AbstractVector
 ) where {V,T,F}
