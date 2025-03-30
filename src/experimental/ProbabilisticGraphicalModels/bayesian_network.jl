@@ -375,7 +375,6 @@ end
 function evaluate_with_marginalization(
     bn::BayesianNetwork{V,T,F}, parameter_values::AbstractVector
 ) where {V,T,F}
-    # This function follows the exact same logical flow as the original but uses modular helpers
     bugsmodel_node_order = [bn.names[i] for i in topological_sort_by_dfs(bn.graph)]
     var_lengths = bn.transformed_var_lengths
 
@@ -385,9 +384,7 @@ function evaluate_with_marginalization(
         return evaluate_with_values(bn, parameter_values)
     end
 
-    # The original code had this index initialized at the outer scope
     current_idx = 1
-    # This is the core of the marginalization - intentionally structured to match the original
     function recursive_marginalize(assignments::Dict{<:Any,Any}, var_idx::Int)
         if var_idx > length(discrete_vars)
             local_idx = current_idx
