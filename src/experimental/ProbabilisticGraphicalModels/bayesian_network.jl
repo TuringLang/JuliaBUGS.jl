@@ -379,18 +379,31 @@ end
 
 Recursively calculate marginalization over discrete variables.
 """
-function recursive_marginalize(bn::BayesianNetwork, assignments::Dict{<:Any,Any}, 
-                              var_idx::Int, discrete_vars::Vector, parameter_values::AbstractVector, 
-                              bugsmodel_node_order::Vector, var_lengths::Dict, current_idx::Int)
+function recursive_marginalize(
+    bn::BayesianNetwork,
+    assignments::Dict{<:Any,Any},
+    var_idx::Int,
+    discrete_vars::Vector,
+    parameter_values::AbstractVector,
+    bugsmodel_node_order::Vector,
+    var_lengths::Dict,
+    current_idx::Int,
+)
     if var_idx > length(discrete_vars)
         local_idx = current_idx
 
         # Prepare environment with assignments
         temp_env = prepare_environment(bn, assignments)
-        
+
         # Process all variables according to topological order
         logprior, loglikelihood, new_local_idx = process_variables_in_order(
-            bn, temp_env, assignments, bugsmodel_node_order, parameter_values, local_idx, var_lengths
+            bn,
+            temp_env,
+            assignments,
+            bugsmodel_node_order,
+            parameter_values,
+            local_idx,
+            var_lengths,
         )
 
         # Calculate discrete log probability
@@ -426,8 +439,16 @@ function recursive_marginalize(bn::BayesianNetwork, assignments::Dict{<:Any,Any}
         new_assignments[current_var] = val
 
         # Recursive call for next variable
-        prob = recursive_marginalize(bn, new_assignments, var_idx + 1, discrete_vars, 
-                                    parameter_values, bugsmodel_node_order, var_lengths, current_idx)
+        prob = recursive_marginalize(
+            bn,
+            new_assignments,
+            var_idx + 1,
+            discrete_vars,
+            parameter_values,
+            bugsmodel_node_order,
+            var_lengths,
+            current_idx,
+        )
 
         # Add to total probability
         total_prob += prob
@@ -442,8 +463,15 @@ end
 
 Process all variables according to topological sort order.
 """
-function process_variables_in_order(bn::BayesianNetwork, temp_env, assignments, 
-                                   bugsmodel_node_order, parameter_values, local_idx, var_lengths)
+function process_variables_in_order(
+    bn::BayesianNetwork,
+    temp_env,
+    assignments,
+    bugsmodel_node_order,
+    parameter_values,
+    local_idx,
+    var_lengths,
+)
     logprior, loglikelihood = 0.0, 0.0
 
     for vn in bugsmodel_node_order
@@ -502,8 +530,16 @@ function evaluate_with_marginalization(
 
     # Start recursion with empty assignments
     current_idx = 1
-    total_prob = recursive_marginalize(bn, Dict{Any,Any}(), 1, discrete_vars, 
-                                      parameter_values, bugsmodel_node_order, var_lengths, current_idx)
-    
+    total_prob = recursive_marginalize(
+        bn,
+        Dict{Any,Any}(),
+        1,
+        discrete_vars,
+        parameter_values,
+        bugsmodel_node_order,
+        var_lengths,
+        current_idx,
+    )
+
     return bn.evaluation_env, log(total_prob)
 end
