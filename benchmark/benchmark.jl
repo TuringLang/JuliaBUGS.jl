@@ -5,8 +5,6 @@ using JuliaBUGS
 
 using DifferentiationInterface
 using Mooncake: Mooncake
-using Enzyme: Enzyme
-using ReverseDiff: ReverseDiff
 
 using MetaGraphsNext
 using BridgeStan
