@@ -1,38 +1,24 @@
 # Generating Sequential Code from BUGS Program
 
-## Motivations
+## Transform BUGS Programs into Sequential Programs
 
-JuliaBUGS compiles a BUGS program into a directed probabilistic graphical model. 
-The graphical model is also a dependence graph between the variables in the model/program.
+JuliaBUGS compiles a BUGS program into a directed probabilistic graphical model. This graphical model also serves as a dependence graph between the variables in the model/program.
 
-With the dependence graph, execution of the probabilistic program can be carried out by visiting nodes (variables) in the graph following a topological order. 
-(Parallel computing opportunities are also exposed by exploiting the dependence relationship.)
+With the dependence graph, the execution of the probabilistic program can be carried out by visiting nodes (variables) in the graph following a topological order. (Parallel computing opportunities are also exposed by exploiting the dependence relationships.)
 
-The issue is that, given the semantics of BUGS program, every element of an array can be random variable, thus demands its own node in the graph.
-So naively convert the graph execution to sequential programs would amounts to fully unrolling all the loops, which is not feasible, particularly for AD tools.
+The challenge arises because, given the semantics of the BUGS language, every element of an array can be a random variable, thus demanding its own node in the graph. Consequently, naively converting the graph execution into sequential programs would amount to fully unrolling all loops, which is often infeasible, particularly for automatic differentiation (AD) tools.
 
-A good solution is then to transform the possibly out-of-sequential-order user-provided programs into correct sequential programs (correctness is defined as no read before write), using the dependence graph.
-Program transformation is a well-studied topic, and it has been recognized as a fundamentally challenging task  in terms of conceptual understanding, algorithms design, and practical implementation.
+A potential solution is to transform the user-provided program, which might be out of sequential order, into a correct sequential program. Correctness here is defined as ensuring no variable is read before it is written. 
 
-Traditionally, program transformation is formulated as transforming an program already in valid sequential order into a more performant version by considering the underlying hardware characteristics (memory, parallel architecture, etc.) 
-For BUGS, in contrast, the task is to transform a potentially out of sequential order program into a sequentially correct program.
+Program transformation is a well-studied topic. It is known to be very challenging in terms of conceptual understanding, algorithm design, and practical implementation.
 
-Traditional program transformation is often formulated as optimizing a performant metric under the constraint of respect all the existing dependence.
-These optimizations can be [fill in here]. The local optimizations are usually a bag of tricks and heuristics. While some others can be formulated using mathematical framework.
+Traditionally, program transformation optimizes sequentially valid programs for performance (speed, memory usage) based on hardware characteristics, while respecting data dependencies. 
 
-For JuliaBUGS, it is worth making clear that the target is not optimizing the generated program, but correctness with respect to the sequential execution order.
-In a way, this can be understood as find an ordering of the iteration vectors given the dependence (so a bit reverse of the traditional analysis).
-The problem is hard, because the parameters to be find are the dependence distance.
+For JuliaBUGS, it's crucial to clarify that the primary goal is not optimizing the generated program's performance but ensuring its correctness with respect to sequential execution order. The task is to transform a potentially out-of-sequential-order program into a sequentially correct one.
 
-We want to restrict ourselves and ask the question, how to use a minimal set of transformations to generate sequential programs from BUGS programs when they are out of order, if not, then directly use the program. Also provide clear feedback to user so they can rewrite the program.  
+We aim to restrict ourselves initially and ask: How can we use a minimal set of transformations, starting with just statement reordering, to generate correct sequential programs from BUGS programs that might specify operations out of order? If the original program is already sequentially correct, it should be used directly. Furthermore, we need to provide clear feedback to the user if a transformation is necessary or if the program structure inherently prevents a valid sequential ordering, guiding them on how to rewrite it.
 
-For a start, the set of possible transforms only contains the statement reordering transformation.
-
-Statement reordering transformation is a program transformation that changes the execution order of statements within a program without altering the statements themselves.
-
-## A Motivating Example
-
-Look at `Rats`
+Consider the `Rats` example:
 
 ```julia
 begin
@@ -54,8 +40,9 @@ begin
 end
 ```
 
-A sequential version would be 
+This program defines the same probabilistic model (has the same BUGS semantics) as the following two versions:
 
+Version 1 (Reordered Statements):
 ```julia
 begin
     tau_c ~ dgamma(0.001, 0.001)                           # (5)
@@ -79,8 +66,7 @@ begin
 end
 ```
 
-Another equally valid one is
-
+Version 2 (Reordered Statements + Loop Fission):
 ```julia
 begin
     tau_c ~ dgamma(0.001, 0.001)                           # (5)
@@ -114,15 +100,11 @@ begin
 end
 ```
 
-All these program has the same semantic for BUGS. (Given the same data, they all compile to the same model/graph).
+While all three programs define the same model, only the latter two can run sequentially (e.g., for sampling) without encountering a "read before write" error. These are called *sequential versions* because they respect data dependencies in order.
 
-The difference is, when interpreting `~` as sampling, the latter two can run sequentially without encountering use before write problem.
-I.e., sequential versions of BUGS program respect the dependencies and topological order of the variables in the graphical model.
+We use a *statement dependence graph* to analyze these dependencies. An edge exists from statement S_source to S_sink if S_sink uses a value defined by S_source.
 
-We will use a dependence graph of statements. (This is different from the dependence graph produced by JuliaBUGS, although the former can be obtained by merging vertices).
-
-Here is a concrete example for when an edge exists: (excerpt of the `Rats` program )
-
+Consider this excerpt from the original `Rats` program:
 ```julia
 for i in 1:N
     for j in 1:T
@@ -131,15 +113,9 @@ for i in 1:N
     end
 end
 ```
+Statement (2) defines `mu[i, j]`, which statement (1) uses. Thus, the dependence graph contains an edge (2) -> (1). This is a *flow dependence* (or Read-After-Write). (We will not consider Write-After-Read and Write-After-Write dependencies.)
 
-statement 2 defines `mu[1, 1], m[1, 2], ...` and these variables are used by statement 1 when doing computation for `Y[1, 1], Y[1, 2], ...`
-
-So the dependency graph contains edge (2) -> (1).
-
-To relate to the classic dependence analysis language, this is an example of true dependence (also named flow dependence, Read-After-Write dependence).
-
-For `rats`, we obtain this graph
-
+The full statement dependence graph for `Rats` is:
 ```mermaid
 flowchart TB
     8 --> 3
@@ -155,100 +131,56 @@ flowchart TB
     5 --> 6
 ```
 
-There is no cycle in the dependency graph.
+This graph is acyclic. But given this dependence graph, we can only produce Version 2 of the program by fissioning all the loops. The fissioning is conservative because given the dependence edges, we can only ensure the sequential order by finishing all the computation associated with a statement before moving on to the next one.
 
-Question is: is the dependence graph enough to rewrite the original `Rats` program into the first seqeuntial version of it?
-
-Consider example
-
+Consider this example:
 ```julia
 for i in 1:N
-    x[i] ~ normal(0, 1)     (1)
-    y[i] ~ normal(x[N], i)  (2) 
+    x[i] ~ normal(0, 1)     # (1)
+    y[i] ~ normal(x[N], i)  # (2) 
 end
 ```
+The dependence graph is just (1) -> (2), which is acyclic. However, this loop cannot run sequentially. Statement (2) at iteration `i` needs `x[N]`, but statement (1) defines `x[N]` only at iteration `N`. Any iteration `i < N` for statement (2) reads `x[N]` before it's written.
 
-the dependency graph in this case is very simple
-
-```mermaid
-flowchart TB
-    1 --> 2
-```
-
-Question is, can we run the above code?
-
-The answer is no, because each `y[i]` require `x[N]` to compute.
-And `x[N]` is computed at the end of the loop iteration.
-
-In this case, we have to fission the loop, and the valid sequential program is
-
+The valid sequential version requires *loop fission*:
 ```julia
 for i in 1:N
-    x[i] ~ normal(0, 1)     (1)
+    x[i] ~ normal(0, 1)     # (1)
 end
 for i in 1:N    
-    y[i] ~ normal(x[N], i)  (2) 
+    y[i] ~ normal(x[N], i)  # (2) 
 end
 ```
 
-So we can rewrite the `Rats` program to the second sequential version.
+But this not totally satisfactory, because ideally we would want to be able to tell if we don't have to fission all the loops like Version 1 of `Rats`.
 
-To be able to write to the second version, we would need another set of concepts: iteration space and dependence vector.
+This shows the statement dependence graph alone is not quite sufficient. We need to analyze dependencies within loops more precisely using iteration spaces and dependence vectors. This allows transformations like loop fission (used in Version 2 of `Rats`).
 
+**Iteration Space and Vectors**
 
-BUGS syntax coincides with the first condition, and we'll restrict the analysis to the second case.
-
-Iteration Vector and Iteration Space:
-
-We will shy away from giving formal definitions. But instead, use 
-
+Consider this loop:
 ```julia
 for i in 1:2
     for j in 1:3
-        x[i] ~ normal(0, j)     (1)
-        y[i] ~ normal(x[2], i)  (2) 
+        x[i] ~ normal(0, j)     # (1)
+        y[i] ~ normal(x[2], i)  # (2) 
     end
 end
 ```
 
-as an example.
+Each execution of the loop body corresponds to an *iteration vector* $\vec{k} = (i, j)$. The set of all possible iteration vectors is the *iteration space*, here $\{(i, j) | 1 \le i \le 2, 1 \le j \le 3\}$. Iterations execute sequentially in lexicographical order: (1,1), (1,2), (1,3), (2,1), (2,2), (2,3).
 
-statement 1 and 2 will see the same iteration vectors. And these vectors are `(1, 1), (1, 2), ...`. By restricting the ordering on the loop bounds, we can use lexicographical order to use as the total order of the iteration vectors. 
+**Dependence Vectors**
 
-The iteration space is the set of integer pairs defined by the cartesian product of the loop ranges, in this case `1:2 × 1:3`. Each point (i, j) in this 2D integer grid corresponds to one execution of statement S. But the iteration space can also be a triangle, and more general, polyhedral shaped grid.
+If a statement execution at iteration $\vec{i}$ (source) defines a value used by a statement execution at iteration $\vec{j}$ (sink), the *dependence vector* is $\vec{d} = \vec{j} - \vec{i}$. It represents the distance between dependent iterations. (Sometimes, we don't care about the number, so we can simply use the sign of the dependence vector.)
 
-We can think of each statement execution (at a specific iteration $\vec{i}$) as reading from some memory locations and writing to others. Dependence analysis tracks when different statement executions (at iterations $\vec{i}$ and $\vec{j}$) read or write the same memory location, potentially creating a dependence.
+For sequential execution to be valid, all dependence vectors $\vec{d}$ must be *lexicographically non-negative* ($\vec{d} \succeq \vec{0}$). This means either $\vec{d} = \vec{0}$ or the first non-zero element of $\vec{d}$ is positive.
 
-Suppose a statement S1 in iteration $\vec{i}$ has a dependence (flow, anti-, or output) with statement S2 in iteration $\vec{j}$. The dependence vector (or distance vector) $\vec{d}$ for this dependence instance is defined as:
-$$ \vec{d} = \vec{j} - \vec{i} = (j_1 - i_1, j_2 - i_2, \dots, j_d - i_d) $$ (sink - source)
+A lexicographically negative vector ($\vec{d} \prec \vec{0}$) indicates a violation. It means the sink iteration $\vec{j}$ executes *before* the source iteration $\vec{i}$ in sequential order, but $\vec{j}$ needs the value produced by $\vec{i}$.
 
-For instance, the dependence vector between `x[2]` and `y[1]` is `(-1, 0)` because `x[2]` is defined on the iteration with iteration vector (2, 1), and `y[1]` is defined on iteration with iteration vector (1, 1).
+**Dependence Vectors and Sequential Execution**
 
-When the first non-zero element of any dependence vector is negative, it means that there is a dependence violation. Let's prove this intuitively:
-
-In sequential execution, iterations are executed in lexicographical order of their iteration vectors. For example, in a nested loop, we execute (1,1), (1,2), ..., (1,n), (2,1), (2,2), and so on.
-
-Consider a dependence from iteration vector $\vec{i}$ to iteration vector $\vec{j}$, with dependence vector $\vec{d} = \vec{j} - \vec{i}$.
-
-If the first non-zero element of $\vec{d}$ is negative, it means that $\vec{j}$ comes lexicographically before $\vec{i}$ in the iteration space. In other words, the sink iteration $\vec{j}$ would execute before the source iteration $\vec{i}$ in sequential order.
-
-This creates a violation because:
-1. The source iteration $\vec{i}$ produces a value that the sink iteration $\vec{j}$ needs
-2. But $\vec{j}$ executes before $\vec{i}$ in sequential order
-3. Therefore, $\vec{j}$ would use a value that hasn't been produced yet
-
-For example, if we have a dependence vector $\vec{d} = (-1, 2)$, the sink iteration is one step backward in the outer loop compared to the source. This means the sink would execute before the source in sequential execution, creating an impossible situation where an iteration needs a value that will only be computed in the future.
-
-Such dependencies cannot be satisfied in the original sequential execution order, indicating a fundamental dependence violation.
-
-Come back to dependence graph and loops in it.
-We can't topologically sort the nodes when there are loops in it.
-Generally there are two kinds of loop, self loop and a cycle.
-
-Before we can generate sequential programs, we want to eliminate the cycles where the underlying program can be sequentially executable. As the cycle here is conservative.
-
-for instance
-
+Dependence vectors help analyze loops. Consider this invalid loop:
 ```julia
 x[6] ~ Normal() # (1)
 
@@ -256,9 +188,9 @@ for i in 1:5
     x[i] = x[i+1] + i # (2)  
 end
 ```
+Statement (2) computes `x[i]` using `x[i+1]`. The value `x[i+1]` is defined by statement (2) at iteration `i+1` (source). It is used by statement (2) at iteration `i` (sink). The dependence vector is $\vec{d} = \vec{j}_{sink} - \vec{i}_{source} = (i) - (i+1) = (-1)$. Since $\vec{d} \prec \vec{0}$, this loop violates sequential order. Computing `x[1]` requires `x[2]`, defined in a later iteration.
 
-would create a self cycle from 2 -> 2, and this program can't be sequentially executed, because computing `x[1]` need `x[2]` and `x[2]` are assigned at a later iteration.
-
+This loop is sequentially valid:
 ```julia
 x[1] ~ Normal() # (1)
 
@@ -267,88 +199,186 @@ for i in 2:5
 end
 ```
 
-is valid. 
+Statement (2) computes `x[i]` using `x[i-1]`. The value `x[i-1]` is defined by statement (2) at iteration `i-1` (source). It is used by statement (2) at iteration `i` (sink). The dependence vector is $\vec{d} = \vec{j}_{sink} - \vec{i}_{source} = (i) - (i-1) = (1)$. Since $\vec{d} \succ \vec{0}$, this loop respects sequential order.
 
-It is useful to introduce two more concepts into the picture to aid the following discussion: loop independent and loop carried dependence.
-The reason is that self loop is related to loop carried dependence and cycles are related to loop independent dependence.
+**Loop-Independent vs. Loop-Carried Dependencies**
 
-Loop-independent dependence is dependence with dependence vector with all zeros. 
-loop dependence that is not Loop-carried dependence that is not loop-independent dependence is. 
+Dependencies involving loops are classified by their dependence vector $\vec{d} = \vec{j} - \vec{i}$:
+- **Loop-Independent Dependence:** Occurs within the same iteration: $\vec{d} = \vec{0}$.
+- **Loop-Carried Dependence:** Occurs between different iterations: $\vec{d} \neq \vec{0}$.
 
-If all the dependence vectors are valid (the first non-zero element is positive)
-then we can allow the loops. 
-But we won't merge loops. 
+The `Rats` example before is an example of (hierarchical) regression models. Many of these models don't model time, and there is no loop in the dependence graph.
 
-If two statement form a loop and they are in different loops, loop fusion is then needed. But as it requires matching loop bounds and induction variables, we'll not consider transform them.
+But another very important class of models is state-space models where there are recursive structures and thus have loops in the dependence graph.
 
-### Case 2: requires loop fusion
-
+Consider this Hidden Markov Model (HMM) fragment:
 ```julia
-x[1] ~ dnorm(0, 1)  // 1
-  
-sumX[1] = x[1]  // 2
-for i in 2:N
-    sumX[i] = sumX[i-1] + x[i]  // 3
+# Main loop processing time steps 2 to T
+for i in 2:T
+    # State transition: s[i] depends on s[i-1]
+    s[i] ~ dcat(transition[s[i-1], 1:K])  # (S1)
+    
+    # Emission model: Y[i] depends on s[i]
+    Y[i] ~ dnorm(mu[s[i]], tau[s[i]])     # (S2)
 end
 
-for i in 2:N
-    x[i] ~ dnorm(sumX[i-1], tau)  // 4
+# Initial state at time 1
+s[1] ~ dcat(pi[1:K])                      # (S3) Prior for first state
+
+for k in 1:K
+    # Priors for parameters
+    mu[k] ~ dnorm(0, 0.01)                # (S4) Mean for state k
+    tau[k] ~ dgamma(0.01, 0.01)           # (S5) Precision for state k
+    transition[k, 1:K] ~ ddirch(alpha[1:K]) # (S6) Transition probabilities from state k
+    pi[1:K] ~ ddirch(alpha[1:K])          # (S7) Prior for initial state distribution
 end
 ```
-
-The issue here is that there is a dependency between `x[i]` and `x[i-1]` via `sumX[i-1]`.
-So we need to compute `x[i]` and `sumX[i-1]` (or `sumX[i]`) in the same loop iteration.
-
-This may seem to be a an easy issue.
-But it can be made more complicated in case where indices are affine transformation of loop induction variables. 
-
-For instance,
-
-```julia
-sumX[1] = x[1]
-for i in 2:N
-    sumX[i] = sumX[i-1] + x[i]
-end
-
-# loop over even indices
-for i in 1:N/2
-    x[2*i] ~ dnorm(sumX[2*i-1], tau)
-end
-
-# loop over odd indices
-for i in 1:N/2
-    x[2*i + 1] ~ dgamma(sumX[2*i], tau)
-end
-```
-
-then we would need to somehow merge the later two loops and the loop over `sumX`.
-
-The dependency graph for here is 
 
 ```mermaid
 flowchart TD
-    1 --> 2
-    2 --> 3
-    3 --> 3
-    2 --> 4
-    3 --> 4
-    4 --> 3
+    subgraph PriorsAndParameters
+        S4["(S4) mu[k] ~ dnorm"]
+        S5["(S5) tau[k] ~ dgamma"]
+        S6["(S6) transition[k, 1:K] ~ ddirch"]
+        S7["(S7) pi[1:K] ~ ddirch"]
+    end
+
+    subgraph InitialState
+        S3["(S3) s[1] ~ dcat(pi[1:K])"]
+    end
+
+    subgraph MainLoop [for i in 1:T]
+        S1["(S1) s[i] ~ dcat(transition[s[i-1], 1:K])"]
+        S2["(S2) Y[i] ~ dnorm(mu[s[i]], tau[s[i]])"]
+    end
+
+    S7 --> S3
+    S6 --> S1
+    S3 --> S1
+    S1 -- loop-carried --> S1
+    S4 --> S2
+    S5 --> S2
+    S1 --> S2
+
+    %% Note: alpha is assumed to be an input/hyperparameter
 ```
 
-### Introduction of nested indexing complicates things
+In this example, there is a self loop on `S1`. These represent the state transition.
+To see that we can actually sequentially execute the program, we can compute the dependence vectors.
 
-They don't change the nature of the problem (which is about dependency).
-But they can make the worst case really really bad.
+The computation of the dependence vectors is done in the following steps:
+When executing the for loop from `i = 2` to `i = T`, we need to compute the dependence vector. Let's examine the case when `i = 2`:
 
-Just consider
+- LHS: `s[2]` is defined at iteration `i=2`
+- RHS: `s[1]` is defined at iteration `i=1`
+- Dependence vector: $\vec{d} = \vec{j}_{sink} - \vec{i}_{source} = (2) - (1) = (1)$
+
+All subsequent iterations follow the same pattern and have the same dependence vector of $(1)$. Because all dependence vectors are lexicographically non-negative, the loop is sequentially valid.
+
+This requires storing the loop variable `i` for each variable, but we already computed this with JuliaBUGS compilation, so not much overhead is required. 
+
+It should be noted that this approach doesn't scale well for general Julia programs, but it works appropriately for BUGS since the compilation process already has a time complexity of $O(N)$ with respect to the number of variables.
+
+It is worth pause here and give a summary:
+    
+To transform a BUGS program into a sequentially valid program, we will only apply two simple transformations, loop fission and statement reordering. These transformations will not need to modify loop bounds, renaming variables, adding any control flow, or make any changes to specific statements.
+
+A program that can be transformed are determined by the following procedure:
+
+First a statement dependence graph is computed.
+
+If the statement dependence graph is acyclic, then we topologically sort the statements and fission all the loops to create a sequentially valid program.
+
+In case the statement dependence graph is not acyclic.
+If the statements that form a cycle are all from the same loop (potentially at different nested levels), then we compute the dependence vectors to determine if the loop is sequentially valid. 
+
+Otherwise, the program need to be rewritten.
+
+We don't attempt to apply further transformations to the program, because it is a hard problem. And to give a flavor of the difficulty of rewriting programs, let's consider the following example:
+
+```julia
+sumX[1] = x[1] # (S1)
+
+# Loop 1: for i in 2:N
+sumX[i] = sumX[i-1] + x[i] # (S2)
+# End Loop 1
+
+# Loop 2: for i in 1:N/2 (loop over even indices)
+x[2*i] ~ dnorm(sumX[2*i-1], tau) # (S3)
+# End Loop 2
+
+# Loop 3: for i in 1:N/2 (loop over odd indices)
+x[2*i + 1] ~ dgamma(sumX[2*i], tau) # (S4)
+# End Loop 3
+```
+
+the dependency graph is:
+
+```mermaid
+flowchart TD
+    S_input["(Input) x[1]"] --> S1["(S1) sumX[1] = x[1]"]
+
+    subgraph Loop1 [for i in 2:N]
+      S2["(S2) sumX[i] = sumX[i-1] + x[i]"]
+    end
+
+    subgraph Loop2 [for i in 1:N/2 - Even Indices]
+      S3["(S3) x[2*i] ~ dnorm(sumX[2*i-1], tau)"]
+    end
+
+    subgraph Loop3 [for i in 1:N/2 - Odd Indices]
+      S4["(S4) x[2*i + 1] ~ dgamma(sumX[2*i], tau)"]
+    end
+
+    S1 --> S2
+    S2 -- loop-carried --> S2
+
+    S1 --> S3
+    S2 -- inter-loop --> S3
+    S2 -- inter-loop --> S4
+
+    S3 -- inter-loop --> S2
+    S4 -- inter-loop --> S2
+    
+    S3 -- inter-loop --> S4
+```
+
+This code exhibits a complex web of dependencies:
+S2 (calculating sumX) depends on x values.
+S3 (defining even xs) depends on odd sumX values.
+S4 (defining odd xs) depends on even sumX values.
+Critically, S2 needs both even and odd x values (calculated in S3 and S4 respectively) to calculate the sumX values that S3 and S4 themselves depend on. 
+
+This creates a cyclical dependency across the three loops.
+To resolve this and make the code sequentially executable, a sophisticated transformation involving loop fusion and statement interleaving is required. All three loops need to be merged into a single loop structure that correctly orders the calculations within each logical iteration i (from 1 to N).
+
+A possible (conceptual) fused structure might look like this:
+
+```julia
+sumX[1] = x[1] 
+# Potentially handle x[2] separately depending on loop bounds/logic
+for i = 2 to N # Or a similar loop structure covering all indices
+   if i is even:
+       # Calculate x[i] (originally S3) - needs sumX[i-1]
+       x[i] ~ dnorm(sumX[i-1], tau)
+   else: # i is odd
+       # Calculate x[i] (originally S4) - needs sumX[i-1]
+       x[i] ~ dgamma(sumX[i-1], tau) 
+   
+   # Calculate sumX[i] (originally S2) - needs x[i] just calculated
+   sumX[i] = sumX[i-1] + x[i]
+end
+```
+
+Another example is where data is involved in computing the indices.
 
 ```julia
 begin
-    z[2] = f(x[1])
-    y[2] = g(x[3])
+    z[2] = f(x[1]) # (S1)
+    y[2] = g(x[3]) # (S2)
 
     for i in 1:3
-        x[i] = y[a[i]] + z[b[i]]
+        x[i] = y[a[i]] + z[b[i]] # (S3)
     end
 end
 
@@ -367,28 +397,27 @@ y[2] <- x[2]
 
 ```mermaid
 graph TD
-    y2 --> x1
-    z3 --> x1
-    z1 --> x2
-    y3 --> x2
-    y1 --> x3
-    z2 --> x3
-    x1 --> z2
-    x2 --> y2
+    S1["S1: z[2] = f(x[1])"] --> S3_1["S3: x[1] = y[a[1]] + z[b[1]]"]
+    S1 --> S3_3["S3: x[3] = y[a[3]] + z[b[3]]"]
+    
+    S2["S2: y[2] = g(x[3])"] --> S3_1
+    
+    S3_1 --> S1
+    S3_2["S3: x[2] = y[a[2]] + z[b[2]]"] --> S2
+    S3_3 --> S2
+    
+    subgraph "Loop dependencies"
+        S3_1 --> S3_2
+        S3_2 --> S3_3
+        S3_3 --> S3_1
+    end
 ```
 
-This represents a worst case where we probably can't do much better than fully unrolling.
+This represents a worst case where we can't do much better than fully unrolling.
 
----
+## Lowering BUGS programs into Julia programs that compute the log density
 
-trying to get a grander and unified story behind  
-
-question: when can we switch the order of statements and be fine
-
-
-## Next step: generating Julia function that computes the log density
-
-The sequential-ized fissioned version of the model is:
+The Version 2 of `Rats` program is:
 
 ```julia
 quote
@@ -418,31 +447,10 @@ quote
 end
 ```
 
-We introduce a new operator into the program `\eqsim` to indicate that the left hand side is an observation.
+We made a simple change to the program to prepare for lowering: we need to distinguish between observations and model parameters (because they correspond to different code). We introduce a new operator into the program `\eqsim` to indicate that the left hand side is an observation.
 
-## Separate the source generation into two steps for clarity and reuse
-
-### Lowering BUGS program to distinguish `observation`s and `model parameters`s
-
-Because the code for observations and model parameters are different, it makes sense to introduce a new type of statements to distinguish between the two types.
-To this end, I decided that `≂`(`\eqsim`) is a good choice.
-
-So the new syntax becomes something like
-```julia
-@bugs begin
-    a = b + 1 # deterministic
-    a ~ Normal() # model parameters
-    a ≂ Normal() # observations
-end
-```
-
-### support of missing data
-
-What are missing data?
-Mixed observation and model parameters.
-The solution is to introduce an if statement to qualify the two types of statements.
-
-For instance,
+BUGS supports mixing observations and model parameters for different elements of the same array variable.
+To support this, we introduce a guard to use conditional logic to decide what computation to do for different iteration of the same statement.
 
 ```julia
 @bugs begin
@@ -471,23 +479,3 @@ begin
     end
 end
 ```
-
----
-
-The interface design:
-* automatic?
-  * fallback
-* or make users specify which to use
-  * let's use generated function by default
-    * keep a flag? `set_eval_mode`
-
-
-> It should be noted that stochastic statements and deterministic statements are not created equal because of the way the program is executed.
-On a high level, the program defines a computation that takes values of model parameters, and returns the log density (log prior + log likelihood) of the model.
-This means that even if the stochastic statements are not sorted, we can still produce correct results, by:
-(1) first setting the values of the model parameters,
-(2) executing the deterministic statements to decide the values of variables,
-(3) go through all the stochastic statements, and compute the log density for each of them.
-So if we all we care about is the log density, we only need to sort the deterministic statements.
-However, if we want to able to do ancestral sampling (and simulation), we need to sort the stochastic statements.
-Although not sorting the stochastic statements does not make the problem simpler fundamentally, in some cases, sorting the stochastic statements might be hard, while sorting the deterministic statements is trivial.
