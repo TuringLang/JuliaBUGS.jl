@@ -96,5 +96,3 @@ end
 #     )
 #     return BenchmarkResult(:juliabugs_enzyme, dim, density_time, density_and_gradient_time)
 # end
-
-
