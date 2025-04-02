@@ -920,9 +920,7 @@ using AbstractPPL
 					Dict(vars["z"] => :discrete),
 					Dict(vars["obs"] => obs_value),
 					expected_logp;
-					params = [x_param],
-					rtol = 0.1,
-				)
+					params = [x_param])
 			end
 
 			@testset "4-state HMM with manual verification" begin
@@ -1015,7 +1013,6 @@ using AbstractPPL
 
 				# Call our recursive implementation
 				_, margin_logp = evaluate_with_marginalization(bn, params)
-				println("Recursive marginalization log probability: ", margin_logp)
 
 				# Manual calculation
 				# Model parameters
@@ -1073,21 +1070,217 @@ using AbstractPPL
 								states = [s1, s2, s3, s4]
 								seq_p = sequence_prob(states)
 								total_prob += seq_p
-								println("States: $states, Probability: $seq_p")
 							end
 						end
 					end
 				end
 
 				manual_logp = log(total_prob)
-				println("Manual calculation total: $total_prob, log: $manual_logp")
-
-				# Compare the results
-				println("Recursive: $margin_logp vs Manual: $manual_logp")
-
-				# Test with a reasonable tolerance
-				@test isapprox(margin_logp, manual_logp, rtol = 0.1)
+				@test isapprox(margin_logp, manual_logp, rtol = 1E-6)
 			end
+		end
+
+		@testset "A→C, A→B→D structure with marginalization" begin
+			# Create a model with the specified structure:
+			# A (Bernoulli) → C (Observed)
+			# ↓
+			# B (Bernoulli) → D (Observed)
+			model_def = @bugs begin
+				# A: First discrete variable (Bernoulli)
+				a ~ Bernoulli(0.4)  # Prior probability P(A=1) = 0.4
+
+				# B: Second discrete variable, depends on A
+				# P(B=1|A=0) = 0.2, P(B=1|A=1) = 0.8
+				p_b_given_a0 = 0.2
+				p_b_given_a1 = 0.8
+				p_b = p_b_given_a0 * (1 - a) + p_b_given_a1 * a
+				b ~ Bernoulli(p_b)
+
+				# C: Observed variable that depends on A
+				# Different normal distributions based on A's state
+				mu_c_a0 = 0.0
+				mu_c_a1 = 3.0
+				sigma_c = 1.0
+				mu_c = mu_c_a0 * (1 - a) + mu_c_a1 * a
+				c ~ Normal(mu_c, sigma_c)
+
+				# D: Observed variable that depends on B
+				# Different normal distributions based on B's state
+				mu_d_b0 = -1.0
+				mu_d_b1 = 2.0
+				sigma_d = 0.8
+				mu_d = mu_d_b0 * (1 - b) + mu_d_b1 * b
+				d ~ Normal(mu_d, sigma_d)
+			end
+
+			# Compile the model
+			compiled_model = compile(model_def, NamedTuple())
+
+			# Convert to BayesianNetwork
+			bn = translate_BUGSGraph_to_BayesianNetwork(
+				compiled_model.g, compiled_model.evaluation_env,
+			)
+
+			# Get variables
+			vars = Dict()
+			for var in bn.names
+				var_str = string(var)
+				vars[var_str] = var
+			end
+
+			# Set A and B as discrete variables
+			discrete_vars = Dict(
+				vars["a"] => :discrete,
+				vars["b"] => :discrete,
+			)
+
+			# Set observed values for C and D
+			c_value = 2.5
+			d_value = 1.8
+			observations = Dict(
+				vars["c"] => c_value,
+				vars["d"] => d_value,
+			)
+
+			# Manually calculate expected marginal likelihood
+			function calculate_marginal_likelihood()
+				# Model parameters
+				p_a1 = 0.4  # P(A=1)
+				p_a0 = 0.6  # P(A=0)
+
+				p_b1_given_a0 = 0.2  # P(B=1|A=0)
+				p_b0_given_a0 = 0.8  # P(B=0|A=0)
+				p_b1_given_a1 = 0.8  # P(B=1|A=1)
+				p_b0_given_a1 = 0.2  # P(B=0|A=1)
+
+				mu_c_a0 = 0.0
+				mu_c_a1 = 3.0
+				sigma_c = 1.0
+
+				mu_d_b0 = -1.0
+				mu_d_b1 = 2.0
+				sigma_d = 0.8
+
+				# Calculate likelihoods for each combination of A and B
+				# P(C|A)
+				p_c_given_a0 = pdf(Normal(mu_c_a0, sigma_c), c_value)
+				p_c_given_a1 = pdf(Normal(mu_c_a1, sigma_c), c_value)
+
+				# P(D|B)
+				p_d_given_b0 = pdf(Normal(mu_d_b0, sigma_d), d_value)
+				p_d_given_b1 = pdf(Normal(mu_d_b1, sigma_d), d_value)
+
+				# Calculate joint probabilities for all four combinations
+				# P(A=0,B=0,C,D) = P(A=0) * P(B=0|A=0) * P(C|A=0) * P(D|B=0)
+				p_a0_b0 = p_a0 * p_b0_given_a0 * p_c_given_a0 * p_d_given_b0
+
+				# P(A=0,B=1,C,D) = P(A=0) * P(B=1|A=0) * P(C|A=0) * P(D|B=1)
+				p_a0_b1 = p_a0 * p_b1_given_a0 * p_c_given_a0 * p_d_given_b1
+
+				# P(A=1,B=0,C,D) = P(A=1) * P(B=0|A=1) * P(C|A=1) * P(D|B=0)
+				p_a1_b0 = p_a1 * p_b0_given_a1 * p_c_given_a1 * p_d_given_b0
+
+				# P(A=1,B=1,C,D) = P(A=1) * P(B=1|A=1) * P(C|A=1) * P(D|B=1)
+				p_a1_b1 = p_a1 * p_b1_given_a1 * p_c_given_a1 * p_d_given_b1
+
+				# Marginal likelihood = sum of all combinations
+				marginal = p_a0_b0 + p_a0_b1 + p_a1_b0 + p_a1_b1
+
+				# Return log probability
+				return log(marginal)
+			end
+
+			# Calculate expected result
+			expected_logp = calculate_marginal_likelihood()
+
+			# Function to set node types
+			function set_node_types(bn, var_types)
+				new_node_types = copy(bn.node_types)
+
+				for (var, type) in var_types
+					id = bn.names_to_ids[var]
+					new_node_types[id] = type
+				end
+
+				return BayesianNetwork(
+					bn.graph,
+					bn.names,
+					bn.names_to_ids,
+					bn.evaluation_env,
+					bn.loop_vars,
+					bn.distributions,
+					bn.deterministic_functions,
+					bn.stochastic_ids,
+					bn.deterministic_ids,
+					bn.is_stochastic,
+					bn.is_observed,
+					new_node_types,
+					bn.transformed_var_lengths,
+					bn.transformed_param_length,
+				)
+			end
+
+			# Function to set observations
+			function set_observations(bn, observations)
+				new_is_observed = copy(bn.is_observed)
+				new_evaluation_env = deepcopy(bn.evaluation_env)
+
+				for (var, value) in observations
+					id = bn.names_to_ids[var]
+					new_is_observed[id] = true
+					new_evaluation_env = BangBang.setindex!!(new_evaluation_env, value, var)
+				end
+
+				return BayesianNetwork(
+					bn.graph,
+					bn.names,
+					bn.names_to_ids,
+					new_evaluation_env,
+					bn.loop_vars,
+					bn.distributions,
+					bn.deterministic_functions,
+					bn.stochastic_ids,
+					bn.deterministic_ids,
+					bn.is_stochastic,
+					new_is_observed,
+					bn.node_types,
+					bn.transformed_var_lengths,
+					bn.transformed_param_length,
+				)
+			end
+
+			# Set node types
+			bn = set_node_types(bn, discrete_vars)
+
+			# Set observations
+			bn = set_observations(bn, observations)
+
+			# Run marginalization
+			params = Float64[]  # No continuous parameters in this example
+			_, margin_logp = evaluate_with_marginalization(bn, params)
+
+			# Calculate expected probability for each state combination
+			p_a0 = 0.6
+			p_a1 = 0.4
+			p_b0_given_a0 = 0.8
+			p_b1_given_a0 = 0.2
+			p_b0_given_a1 = 0.2
+			p_b1_given_a1 = 0.8
+
+			p_c_given_a0 = pdf(Normal(0.0, 1.0), c_value)
+			p_c_given_a1 = pdf(Normal(3.0, 1.0), c_value)
+			p_d_given_b0 = pdf(Normal(-1.0, 0.8), d_value)
+			p_d_given_b1 = pdf(Normal(2.0, 0.8), d_value)
+
+			p_a0_b0 = p_a0 * p_b0_given_a0 * p_c_given_a0 * p_d_given_b0
+			p_a0_b1 = p_a0 * p_b1_given_a0 * p_c_given_a0 * p_d_given_b1
+			p_a1_b0 = p_a1 * p_b0_given_a1 * p_c_given_a1 * p_d_given_b0
+			p_a1_b1 = p_a1 * p_b1_given_a1 * p_c_given_a1 * p_d_given_b1
+
+			total_manual = p_a0_b0 + p_a0_b1 + p_a1_b0 + p_a1_b1
+			log_manual = log(total_manual)
+
+			@test isapprox(margin_logp, expected_logp, rtol = 1E-6)
 		end
 	end
 end
