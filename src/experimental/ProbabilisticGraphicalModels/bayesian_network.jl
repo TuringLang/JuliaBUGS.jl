@@ -324,7 +324,7 @@ function evaluate_with_marginalization(
         discrete_vars,
         bugsmodel_node_order,
         var_lengths,
-        current_idx
+        current_idx,
     )
 
     return bn.evaluation_env, log(total_prob)
@@ -338,58 +338,58 @@ function recursive_marginalize(
     discrete_vars::Vector{VarName},
     bugsmodel_node_order::Vector{<:VarName},
     var_lengths::Dict{VarName,Int},
-    current_idx::Int
+    current_idx::Int,
 ) where {T,F}
     # Base case: all discrete variables assigned
     if var_idx > length(discrete_vars)
         return compute_probability_with_assignments(
-            assignments, bn, parameter_values, 
-            bugsmodel_node_order, var_lengths, current_idx
+            assignments,
+            bn,
+            parameter_values,
+            bugsmodel_node_order,
+            var_lengths,
+            current_idx,
         )
     end
 
     # Get current discrete variable
     current_var = discrete_vars[var_idx]
-    
     # Create environment with current assignments
     temp_env = create_environment_with_assignments(bn, assignments)
-    
     # Update deterministic nodes that precede the current variable
     update_deterministic_nodes(bn, temp_env, assignments, current_var)
-    
     # Get distribution for this variable
     var_id = bn.names_to_ids[current_var]
     dist = bn.distributions[var_id](temp_env, bn.loop_vars[current_var])
-    
     # Get possible values for this variable
     possible_values = enumerate_discrete_values(dist)
-    
     # Sum over all possible values
     total_prob = 0.0
     for val in possible_values
         new_assignments = copy(assignments)
         new_assignments[current_var] = val # this is neccessary for a new recursion level
-        
         # Recursive call for next variable
         prob = recursive_marginalize(
-            new_assignments, var_idx + 1, bn, parameter_values,
-            discrete_vars, bugsmodel_node_order, var_lengths, current_idx
+            new_assignments,
+            var_idx + 1,
+            bn,
+            parameter_values,
+            discrete_vars,
+            bugsmodel_node_order,
+            var_lengths,
+            current_idx,
         )
-        
         total_prob += prob
     end
-    
     return total_prob
 end
 
 function create_environment_with_assignments(bn, assignments)
     temp_env = deepcopy(bn.evaluation_env)
-    
     # Set all previously assigned variables
     for (var, value) in assignments
         temp_env = BangBang.setindex!!(temp_env, value, var)
     end
-    
     return temp_env
 end
 
@@ -409,17 +409,14 @@ function update_deterministic_nodes(bn, temp_env, assignments, current_var)
 end
 
 function compute_probability_with_assignments(
-    assignments, bn, parameter_values, 
-    bugsmodel_node_order, var_lengths, current_idx
+    assignments, bn, parameter_values, bugsmodel_node_order, var_lengths, current_idx
 )
     local_idx = current_idx
     temp_env = create_environment_with_assignments(bn, assignments)
-    
     logprior, loglikelihood = 0.0, 0.0
 
     for vn in bugsmodel_node_order
         i = bn.names_to_ids[vn]
-        
         # Skip variables that are already assigned
         if vn in keys(assignments)
             continue
@@ -437,23 +434,18 @@ function compute_probability_with_assignments(
             # Handle continuous unobserved variables using parameter_values
             dist = bn.distributions[i](temp_env, bn.loop_vars[vn])
             b = Bijectors.bijector(dist)
-            
             # Ensure variable length is calculated
             if !haskey(var_lengths, vn)
                 var_value = AbstractPPL.get(temp_env, vn)
                 transformed_value = Bijectors.transform(b, var_value)
                 var_lengths[vn] = length(transformed_value)
             end
-            
             l = var_lengths[vn]
             b_inv = Bijectors.inverse(b)
-            
             # Use parameter_values for continuous variables
             param_slice = view(parameter_values, local_idx:(local_idx + l - 1))
             reconstructed_value = JuliaBUGS.reconstruct(b_inv, dist, param_slice)
-            
             value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
-            
             local_idx += l
             logprior += logpdf(dist, value) + logjac
             temp_env = BangBang.setindex!!(temp_env, value, vn)
