@@ -549,6 +549,31 @@ function show_coarse_graph(
     end
 end
 
+# first call `Graphs.simplecycles(coarse_graph)` to find the cycles in the coarse graph
+# then call this function to find the corresponding fine-grained edges
+function _find_corresponding_fine_grained_edges(
+    g::JuliaBUGS.BUGSGraph,
+    var_to_stmt_id::Dict{VarName,Int},
+    src_stmt_id::Int,
+    dst_stmt_id::Int,
+)
+    # Find all fine-grained edges that correspond to the coarse edge (src_stmt_id, dst_stmt_id)
+    fine_grained_edges = []
+
+    for edge in Graphs.edges(g.graph)
+        src_varname = MetaGraphsNext.label_for(g, src(edge))
+        dst_varname = MetaGraphsNext.label_for(g, dst(edge))
+
+        # Check if this fine-grained edge maps to the coarse edge we're looking for
+        if var_to_stmt_id[src_varname] == src_stmt_id &&
+            var_to_stmt_id[dst_varname] == dst_stmt_id
+            push!(fine_grained_edges, (src_varname, dst_varname))
+        end
+    end
+
+    return fine_grained_edges
+end
+
 struct CollectSortedNodes{ET} <: CompilerPass
     sorted_nodes::Vector{<:VarName}
     env::ET
