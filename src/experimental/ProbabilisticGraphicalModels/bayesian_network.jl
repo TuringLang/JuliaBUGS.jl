@@ -278,11 +278,46 @@ function enumerate_discrete_values(dist::DiscreteUnivariateDistribution)
 	elseif dist isa DiscreteUniform
 		return (dist.a):(dist.b)
 	else
-		# For unsupported distributions, throw a clear error message
 		error("Distribution type $(typeof(dist)) is not currently supported for discrete marginalization")
 	end
 end
-# The issue is in these helper functions - they need to handle type parameters correctly
+
+function evaluate_with_marginalization(
+    bn::BayesianNetwork{V, T, F}, parameter_values::AbstractVector,
+) where {V, T, F}
+    topo_sort = topological_sort_by_dfs(bn.graph)
+    bugsmodel_node_order = [bn.names[i] for i in topo_sort]
+    var_lengths = bn.transformed_var_lengths
+
+    # Find discrete variables using the pre-computed topological sort
+    discrete_vars = V[]
+    for id in topo_sort
+        if bn.is_stochastic[id] && bn.node_types[id] == :discrete && !bn.is_observed[id]
+            push!(discrete_vars, bn.names[id])
+        end
+    end
+
+    if isempty(discrete_vars)
+        return evaluate_with_values(bn, parameter_values)
+    end
+
+    current_idx = 1
+
+    # Start recursion with empty assignments and pass the topological sort
+    log_total_prob = recursive_marginalize_log(
+        Dict{V, Any}(),
+        1,
+        bn,
+        parameter_values,
+        discrete_vars,
+        bugsmodel_node_order,
+        var_lengths,
+        current_idx,
+        topo_sort, # Pass the pre-computed topological sort
+    )
+
+    return bn.evaluation_env, log_total_prob
+end
 
 function create_environment_with_assignments(bn::BayesianNetwork{V, T, F}, assignments) where {V, T, F}
     temp_env = deepcopy(bn.evaluation_env)
@@ -293,8 +328,15 @@ function create_environment_with_assignments(bn::BayesianNetwork{V, T, F}, assig
     return temp_env
 end
 
-function update_deterministic_nodes(bn::BayesianNetwork{V, T, F}, temp_env, assignments, current_var) where {V, T, F}
-    for i in topological_sort_by_dfs(bn.graph)
+function update_deterministic_nodes(
+    bn::BayesianNetwork{V, T, F}, 
+    temp_env, 
+    assignments, 
+    current_var, 
+    topo_sort
+) where {V, T, F}
+    # Use the pre-computed topological sort
+    for i in topo_sort
         vn = bn.names[i]
         # Skip if already assigned or if it's the current variable
         if vn in keys(assignments) || vn == current_var
@@ -318,6 +360,7 @@ function recursive_marginalize_log(
     bugsmodel_node_order::Vector{<:VarName},
     var_lengths::Dict{VarName, Int},
     current_idx::Int,
+    topo_sort, # Add pre-computed topological sort as parameter
 ) where {T, F}
     # Base case: all discrete variables assigned
     if var_idx > length(discrete_vars)
@@ -328,6 +371,7 @@ function recursive_marginalize_log(
             bugsmodel_node_order,
             var_lengths,
             current_idx,
+            topo_sort, # Pass topological sort
         )
     end
 
@@ -337,8 +381,8 @@ function recursive_marginalize_log(
     # Create environment with current assignments
     temp_env = create_environment_with_assignments(bn, assignments)
     
-    # Update deterministic nodes that precede the current variable
-    temp_env = update_deterministic_nodes(bn, temp_env, assignments, current_var)
+    # Update deterministic nodes using pre-computed topological sort
+    temp_env = update_deterministic_nodes(bn, temp_env, assignments, current_var, topo_sort)
     
     # Get distribution for this variable
     var_id = bn.names_to_ids[current_var]
@@ -354,7 +398,7 @@ function recursive_marginalize_log(
         new_assignments = copy(assignments)
         new_assignments[current_var] = val
         
-        # Recursive call for next variable
+        # Recursive call for next variable - pass the topological sort
         log_probs[i] = recursive_marginalize_log(
             new_assignments,
             var_idx + 1,
@@ -364,6 +408,7 @@ function recursive_marginalize_log(
             bugsmodel_node_order,
             var_lengths,
             current_idx,
+            topo_sort,
         )
     end
     
@@ -371,49 +416,20 @@ function recursive_marginalize_log(
     return LogExpFunctions.logsumexp(log_probs)
 end
 
-# The full evaluate_with_marginalization function incorporating the changes
-function evaluate_with_marginalization(
-    bn::BayesianNetwork{V, T, F}, parameter_values::AbstractVector,
-) where {V, T, F}
-    bugsmodel_node_order = [bn.names[i] for i in topological_sort_by_dfs(bn.graph)]
-    var_lengths = bn.transformed_var_lengths
-
-    discrete_vars = V[]
-    for id in topological_sort_by_dfs(bn.graph)
-        if bn.is_stochastic[id] && bn.node_types[id] == :discrete && !bn.is_observed[id]
-            push!(discrete_vars, bn.names[id])
-        end
-    end
-
-    if isempty(discrete_vars)
-        return evaluate_with_values(bn, parameter_values)
-    end
-
-    current_idx = 1
-
-    # Start recursion with empty assignments
-    log_total_prob = recursive_marginalize_log(
-        Dict{V, Any}(),  # Ensure we have the correct type for assignments
-        1,
-        bn,
-        parameter_values,
-        discrete_vars,
-        bugsmodel_node_order,
-        var_lengths,
-        current_idx,
-    )
-
-    return bn.evaluation_env, log_total_prob
-end
-
-# The compute_log_probability_with_assignments function also needs updating
 function compute_log_probability_with_assignments(
-    assignments, bn::BayesianNetwork{V,T,F}, parameter_values, bugsmodel_node_order, var_lengths, current_idx,
+    assignments, 
+    bn::BayesianNetwork{V,T,F}, 
+    parameter_values, 
+    bugsmodel_node_order, 
+    var_lengths, 
+    current_idx,
+    topo_sort, # Add pre-computed topological sort
 ) where {V,T,F}
     local_idx = current_idx
     temp_env = create_environment_with_assignments(bn, assignments)
     logprior, loglikelihood = 0.0, 0.0
 
+    # Using bugsmodel_node_order instead of recomputing
     for vn in bugsmodel_node_order
         i = bn.names_to_ids[vn]
         # Skip variables that are already assigned
