@@ -3,30 +3,30 @@
 
 A structure representing a Bayesian Network.
 """
-struct BayesianNetwork{V, T, F}
-	graph::SimpleDiGraph{T}
-	"names of the variables in the network"
-	names::Vector{V}
-	"mapping from variable names to ids"
-	names_to_ids::Dict{V, T}
-	"values of each variable in the network"
-	evaluation_env::NamedTuple
-	loop_vars::Dict{V, NamedTuple}
-	"distributions of the stochastic variables"
-	distributions::Vector{F}
-	"deterministic functions of the deterministic variables"
-	deterministic_functions::Vector{F}
-	"ids of the stochastic variables"
-	stochastic_ids::Vector{T}
-	"ids of the deterministic variables"
-	deterministic_ids::Vector{T}
-	is_stochastic::BitVector
-	is_observed::BitVector
-	node_types::Vector{Symbol}            # e.g. :discrete or :continuous
-	"transformed variable lengths for each variable"
-	transformed_var_lengths::Dict{V, Int}
-	"total length of transformed parameters"
-	transformed_param_length::Int
+struct BayesianNetwork{V,T,F}
+    graph::SimpleDiGraph{T}
+    "names of the variables in the network"
+    names::Vector{V}
+    "mapping from variable names to ids"
+    names_to_ids::Dict{V,T}
+    "values of each variable in the network"
+    evaluation_env::NamedTuple
+    loop_vars::Dict{V,NamedTuple}
+    "distributions of the stochastic variables"
+    distributions::Vector{F}
+    "deterministic functions of the deterministic variables"
+    deterministic_functions::Vector{F}
+    "ids of the stochastic variables"
+    stochastic_ids::Vector{T}
+    "ids of the deterministic variables"
+    deterministic_ids::Vector{T}
+    is_stochastic::BitVector
+    is_observed::BitVector
+    node_types::Vector{Symbol}            # e.g. :discrete or :continuous
+    "transformed variable lengths for each variable"
+    transformed_var_lengths::Dict{V,Int}
+    "total length of transformed parameters"
+    transformed_param_length::Int
 end
 
 function BayesianNetwork{V}() where {V}
