@@ -266,6 +266,7 @@ end
     enumerate_discrete_values(dist)
 
 Return all possible values for a discrete distribution.
+Currently supports Categorical, Bernoulli, Binomial, and DiscreteUniform distributions.
 """
 function enumerate_discrete_values(dist::DiscreteUnivariateDistribution)
     if dist isa Categorical
@@ -274,25 +275,11 @@ function enumerate_discrete_values(dist::DiscreteUnivariateDistribution)
         return [0, 1]
     elseif dist isa Binomial
         return 0:(dist.n)
-    elseif dist isa Poisson
-        # For Poisson, we need to truncate at some reasonable point #TODO: We are currently not using this 
-        λ = dist.λ
-        # Use 3 standard deviations (sqrt(λ)) as a heuristic cutoff
-        max_value = ceil(Int, λ + 3 * sqrt(λ))
-        return 0:max_value
     elseif dist isa DiscreteUniform
         return (dist.a):(dist.b)
     else
-        # For other distributions, sample a reasonable set of values
-        # This is a fallback and might not be optimal
-        support_values = support(dist)
-        if support_values isa UnitRange
-            return support_values
-        else
-            # Sample some values and deduplicate
-            samples = rand(dist, 100)
-            return unique(samples)
-        end
+        # For unsupported distributions, throw a clear error message
+        error("Distribution type $(typeof(dist)) is not currently supported for discrete marginalization")
     end
 end
 
