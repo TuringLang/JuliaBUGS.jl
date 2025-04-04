@@ -2,12 +2,12 @@ name = "Pig Weights: Histogram smoothing with structured precision matrix"
 
 model_def = @bugs begin
     y[1:s] ~ dmulti(th[1:s], n)
-    sum.g = sum(g[:])
+    var"sum.g" = sum(g[:])
     # smoothed frequencies
     for i in 1:s
         Sm[i] = n * th[i]
         g[i] = exp(gam[i])
-        th[i] = g[i] / sum.g
+        th[i] = g[i] / var"sum.g"
     end
     # prior on elements of AR Precision Matrix
     rho ~ dunif(0, 1)
@@ -93,12 +93,13 @@ data = (
 
 inits = (
     gam = [
-    -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3]
+    -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3
+],
 )
 
 inits_alternative = (
     gam = [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,
-    -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
+    -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0],
 )
 
 # Reference results would be added here when available

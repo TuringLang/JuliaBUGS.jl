@@ -27,7 +27,7 @@ model_def = @bugs begin
 
     # xf prediction from fitted distribution
     xf = xa * delta + xb * (1 - delta)
-    xa ~ dlnorm(mu, tau)[:, theta]
+    xa ~ truncated(dlnorm(mu, tau), nothing, theta)
     xb ~ dpar(alpha, theta)
 
     delta ~ dbern(r)

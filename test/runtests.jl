@@ -11,6 +11,7 @@ using AdvancedHMC
 using AdvancedMH
 using Bijectors
 using ChainRules
+using DifferentiationInterface
 using Distributions
 using Graphs
 using MetaGraphsNext
@@ -20,6 +21,7 @@ using LogDensityProblemsAD
 using OrderedCollections
 using MacroTools
 using MCMCChains
+using Mooncake: Mooncake
 using Random
 using ReverseDiff
 using Serialization
@@ -27,7 +29,14 @@ using Serialization
 AbstractMCMC.setprogress!(false)
 
 const Tests = (
-    "elementary", "compilation", "log_density", "gibbs", "mcmchains", "experimental", "all"
+    "elementary",
+    "compilation",
+    "log_density",
+    "gibbs",
+    "mcmchains",
+    "experimental",
+    "source_gen",
+    "all",
 )
 
 const test_group = get(ENV, "TEST_GROUP", "all")
@@ -75,4 +84,8 @@ end
 
 if test_group == "experimental" || test_group == "all"
     include("experimental/ProbabilisticGraphicalModels/bayesnet.jl")
+end
+
+if test_group == "source_gen" || test_group == "all"
+    include("source_gen.jl")
 end
