@@ -1,3 +1,7 @@
+# For more background and descriptions, see /docs/src/source_gen.md
+# the external facing function in this file is `_generate_lowered_model_def`, so start their first
+# the utils section have couple of helper functions that might be useful for debugging
+
 function _build_stmt_to_stmt_id(
     block_expr, stmt_to_stmt_id=IdDict{Expr,Int}(), next_id=Ref(1)
 )
