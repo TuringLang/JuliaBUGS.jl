@@ -164,17 +164,17 @@ end
 
 Add a deterministic vertex.
 """
-function add_deterministic_vertex!(bn::BayesianNetwork{V, T}, name::V, f::F)::T where {T, V, F}
-	Graphs.add_vertex!(bn.graph) || return 0
-	id = nv(bn.graph)
-	push!(bn.deterministic_functions, f)
-	push!(bn.is_stochastic, false)
-	push!(bn.is_observed, false)
-	push!(bn.names, name)
-	bn.names_to_ids[name] = id
-	push!(bn.deterministic_ids, id)
-	push!(bn.node_types, :deterministic)
-	return id
+function add_deterministic_vertex!(bn::BayesianNetwork{V,T}, name::V, f::F)::T where {T,V,F}
+    Graphs.add_vertex!(bn.graph) || return 0
+    id = nv(bn.graph)
+    push!(bn.deterministic_functions, f)
+    push!(bn.is_stochastic, false)
+    push!(bn.is_observed, false)
+    push!(bn.names, name)
+    bn.names_to_ids[name] = id
+    push!(bn.deterministic_ids, id)
+    push!(bn.node_types, :deterministic)
+    return id
 end
 
 """
@@ -182,10 +182,10 @@ end
 
 Add a directed edge from `from` -> `to`.
 """
-function add_edge!(bn::BayesianNetwork{V, T}, from::V, to::V)::Bool where {T, V}
-	from_id = bn.names_to_ids[from]
-	to_id = bn.names_to_ids[to]
-	return Graphs.add_edge!(bn.graph, from_id, to_id)
+function add_edge!(bn::BayesianNetwork{V,T}, from::V, to::V)::Bool where {T,V}
+    from_id = bn.names_to_ids[from]
+    to_id = bn.names_to_ids[to]
+    return Graphs.add_edge!(bn.graph, from_id, to_id)
 end
 
 function evaluate(bn::BayesianNetwork)
