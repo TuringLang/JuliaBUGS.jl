@@ -1188,62 +1188,6 @@ using AbstractPPL
             # Calculate expected result
             expected_logp = calculate_marginal_likelihood()
 
-            # Function to set node types
-            function set_node_types(bn, var_types)
-                new_node_types = copy(bn.node_types)
-
-                for (var, type) in var_types
-                    id = bn.names_to_ids[var]
-                    new_node_types[id] = type
-                end
-
-                return BayesianNetwork(
-                    bn.graph,
-                    bn.names,
-                    bn.names_to_ids,
-                    bn.evaluation_env,
-                    bn.loop_vars,
-                    bn.distributions,
-                    bn.deterministic_functions,
-                    bn.stochastic_ids,
-                    bn.deterministic_ids,
-                    bn.is_stochastic,
-                    bn.is_observed,
-                    new_node_types,
-                    bn.transformed_var_lengths,
-                    bn.transformed_param_length,
-                )
-            end
-
-            # Function to set observations
-            function set_observations(bn, observations)
-                new_is_observed = copy(bn.is_observed)
-                new_evaluation_env = deepcopy(bn.evaluation_env)
-
-                for (var, value) in observations
-                    id = bn.names_to_ids[var]
-                    new_is_observed[id] = true
-                    new_evaluation_env = BangBang.setindex!!(new_evaluation_env, value, var)
-                end
-
-                return BayesianNetwork(
-                    bn.graph,
-                    bn.names,
-                    bn.names_to_ids,
-                    new_evaluation_env,
-                    bn.loop_vars,
-                    bn.distributions,
-                    bn.deterministic_functions,
-                    bn.stochastic_ids,
-                    bn.deterministic_ids,
-                    bn.is_stochastic,
-                    new_is_observed,
-                    bn.node_types,
-                    bn.transformed_var_lengths,
-                    bn.transformed_param_length,
-                )
-            end
-
             # Set node types
             bn = set_node_types(bn, discrete_vars)
 
