@@ -56,82 +56,82 @@ Translates a BUGSGraph (with node metadata stored in NodeInfo) into a BayesianNe
 function translate_BUGSGraph_to_BayesianNetwork(
     g::JuliaBUGS.BUGSGraph, evaluation_env, model=nothing
 )
-	# Retrieve variable labels (stored as VarNames) from g.
-	varnames = collect(labels(g))
-	n = length(varnames)
-	original_graph = g.graph
+    # Retrieve variable labels (stored as VarNames) from g.
+    varnames = collect(labels(g))
+    n = length(varnames)
+    original_graph = g.graph
 
-	# Preallocate arrays/dictionaries.
-	names = Vector{VarName}(undef, n)
-	names_to_ids = Dict{VarName, Int}()
-	loop_vars = Dict{VarName, NamedTuple}()
-	distributions = Vector{Function}(undef, n)
-	deterministic_fns = Vector{Function}(undef, n)
-	stochastic_ids = Int[]
-	deterministic_ids = Int[]
-	is_stochastic = falses(n)
-	is_observed = falses(n)
-	node_types = Vector{Symbol}(undef, n)
-	transformed_var_lengths = Dict{VarName, Int}()
-	transformed_param_length = 0
+    # Preallocate arrays/dictionaries.
+    names = Vector{VarName}(undef, n)
+    names_to_ids = Dict{VarName,Int}()
+    loop_vars = Dict{VarName,NamedTuple}()
+    distributions = Vector{Function}(undef, n)
+    deterministic_fns = Vector{Function}(undef, n)
+    stochastic_ids = Int[]
+    deterministic_ids = Int[]
+    is_stochastic = falses(n)
+    is_observed = falses(n)
+    node_types = Vector{Symbol}(undef, n)
+    transformed_var_lengths = Dict{VarName,Int}()
+    transformed_param_length = 0
 
-	if model !== nothing
-		if isdefined(model, :transformed_var_lengths)
-			for (k, v) in pairs(model.transformed_var_lengths)
-				transformed_var_lengths[k] = v
-			end
-		end
-		if isdefined(model, :transformed_param_length)
-			transformed_param_length = model.transformed_param_length
-		end
-	end
+    if model !== nothing
+        if isdefined(model, :transformed_var_lengths)
+            for (k, v) in pairs(model.transformed_var_lengths)
+                transformed_var_lengths[k] = v
+            end
+        end
+        if isdefined(model, :transformed_param_length)
+            transformed_param_length = model.transformed_param_length
+        end
+    end
 
-	for (i, varname) in enumerate(varnames)
-		nodeinfo = g[varname]
-		names[i] = varname
-		names_to_ids[varname] = i
-		is_stochastic[i] = nodeinfo.is_stochastic
-		is_observed[i] = nodeinfo.is_observed
-		loop_vars[varname] = nodeinfo.loop_vars
+    for (i, varname) in enumerate(varnames)
+        nodeinfo = g[varname]
+        names[i] = varname
+        names_to_ids[varname] = i
+        is_stochastic[i] = nodeinfo.is_stochastic
+        is_observed[i] = nodeinfo.is_observed
+        loop_vars[varname] = nodeinfo.loop_vars
 
-		if nodeinfo.is_stochastic
-			distributions[i] = nodeinfo.node_function
-			push!(stochastic_ids, i)
-			node_types[i] = :stochastic
-		else
-			deterministic_fns[i] = nodeinfo.node_function
-			push!(deterministic_ids, i)
-			node_types[i] = :deterministic
-		end
-	end
+        if nodeinfo.is_stochastic
+            distributions[i] = nodeinfo.node_function
+            push!(stochastic_ids, i)
+            node_types[i] = :stochastic
+        else
+            deterministic_fns[i] = nodeinfo.node_function
+            push!(deterministic_ids, i)
+            node_types[i] = :deterministic
+        end
+    end
 
-	bn = BayesianNetwork(
-		SimpleDiGraph{Int}(n),
-		names,
-		names_to_ids,
-		evaluation_env,
-		loop_vars,
-		distributions,
-		deterministic_fns,
-		stochastic_ids,
-		deterministic_ids,
-		is_stochastic,
-		is_observed,
-		node_types,
-		transformed_var_lengths,
-		transformed_param_length,
-	)
+    bn = BayesianNetwork(
+        SimpleDiGraph{Int}(n),
+        names,
+        names_to_ids,
+        evaluation_env,
+        loop_vars,
+        distributions,
+        deterministic_fns,
+        stochastic_ids,
+        deterministic_ids,
+        is_stochastic,
+        is_observed,
+        node_types,
+        transformed_var_lengths,
+        transformed_param_length,
+    )
 
-	# Add edges using the BayesianNetwork's mapping.
-	for e in edges(original_graph)
-		let src_name = bn.names[e.src]
-			let dst_name = bn.names[e.dst]
-				add_edge!(bn, src_name, dst_name)
-			end
-		end
-	end
+    # Add edges using the BayesianNetwork's mapping.
+    for e in edges(original_graph)
+        let src_name = bn.names[e.src]
+            let dst_name = bn.names[e.dst]
+                add_edge!(bn, src_name, dst_name)
+            end
+        end
+    end
 
-	return bn
+    return bn
 end
 
 """
@@ -189,77 +189,77 @@ function add_edge!(bn::BayesianNetwork{V,T}, from::V, to::V)::Bool where {T,V}
 end
 
 function evaluate(bn::BayesianNetwork)
-	logp = 0.0
-	evaluation_env = bn.evaluation_env
+    logp = 0.0
+    evaluation_env = bn.evaluation_env
 
-	for (i, varname) in enumerate(bn.names)
-		is_stochastic = bn.is_stochastic[i]
-		if is_stochastic
-			dist_fn = bn.distributions[i](evaluation_env, bn.loop_vars[varname])
+    for (i, varname) in enumerate(bn.names)
+        is_stochastic = bn.is_stochastic[i]
+        if is_stochastic
+            dist_fn = bn.distributions[i](evaluation_env, bn.loop_vars[varname])
 
-			value = AbstractPPL.get(evaluation_env, varname)
-			bijector = Bijectors.bijector(dist_fn)
-			value_transformed = Bijectors.transform(bijector, value)
+            value = AbstractPPL.get(evaluation_env, varname)
+            bijector = Bijectors.bijector(dist_fn)
+            value_transformed = Bijectors.transform(bijector, value)
 
-			logpdf_val = Distributions.logpdf(dist_fn, value)
-			logjac = Bijectors.logabsdetjac(Bijectors.inverse(bijector), value_transformed)
-			logp += logpdf_val + logjac
+            logpdf_val = Distributions.logpdf(dist_fn, value)
+            logjac = Bijectors.logabsdetjac(Bijectors.inverse(bijector), value_transformed)
+            logp += logpdf_val + logjac
 
-		else
-			fn = bn.deterministic_functions[i](evaluation_env, bn.loop_vars[varname])
-			evaluation_env = BangBang.setindex!!(evaluation_env, fn, varname)
-		end
-	end
-	return evaluation_env, logp
+        else
+            fn = bn.deterministic_functions[i](evaluation_env, bn.loop_vars[varname])
+            evaluation_env = BangBang.setindex!!(evaluation_env, fn, varname)
+        end
+    end
+    return evaluation_env, logp
 end
 
 function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVector)
-	bugsmodel_node_order = [bn.names[i] for i in topological_sort_by_dfs(bn.graph)]
-	var_lengths = bn.transformed_var_lengths
+    bugsmodel_node_order = [bn.names[i] for i in topological_sort_by_dfs(bn.graph)]
+    var_lengths = bn.transformed_var_lengths
 
-	evaluation_env = deepcopy(bn.evaluation_env)
-	current_idx = 1
-	logprior, loglikelihood = 0.0, 0.0
+    evaluation_env = deepcopy(bn.evaluation_env)
+    current_idx = 1
+    logprior, loglikelihood = 0.0, 0.0
 
-	for vn in bugsmodel_node_order
-		i = bn.names_to_ids[vn]
+    for vn in bugsmodel_node_order
+        i = bn.names_to_ids[vn]
 
-		is_stochastic = bn.is_stochastic[i]
-		is_observed = bn.is_observed[i]
+        is_stochastic = bn.is_stochastic[i]
+        is_observed = bn.is_observed[i]
 
-		if !is_stochastic
-			value = bn.deterministic_functions[i](evaluation_env, bn.loop_vars[vn])
-			evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
-		else
-			if !is_observed
-				dist = bn.distributions[i](evaluation_env, bn.loop_vars[vn])
-				b = Bijectors.bijector(dist)
-				# If the variable is not in transformed_var_lengths, calculate it
-				if !haskey(var_lengths, vn)
-					var_value = AbstractPPL.get(evaluation_env, vn)
-					transformed_value = Bijectors.transform(b, var_value)
-					var_lengths[vn] = length(transformed_value)
-				end
-				l = var_lengths[vn]
-				b_inv = Bijectors.inverse(b)
-				reconstructed_value = JuliaBUGS.reconstruct(
-					b_inv, dist, view(parameter_values, current_idx:(current_idx+l-1)),
-				)
-				value, logjac = Bijectors.with_logabsdet_jacobian(
-					b_inv, reconstructed_value,
-				)
+        if !is_stochastic
+            value = bn.deterministic_functions[i](evaluation_env, bn.loop_vars[vn])
+            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+        else
+            if !is_observed
+                dist = bn.distributions[i](evaluation_env, bn.loop_vars[vn])
+                b = Bijectors.bijector(dist)
+                # If the variable is not in transformed_var_lengths, calculate it
+                if !haskey(var_lengths, vn)
+                    var_value = AbstractPPL.get(evaluation_env, vn)
+                    transformed_value = Bijectors.transform(b, var_value)
+                    var_lengths[vn] = length(transformed_value)
+                end
+                l = var_lengths[vn]
+                b_inv = Bijectors.inverse(b)
+                reconstructed_value = JuliaBUGS.reconstruct(
+                    b_inv, dist, view(parameter_values, current_idx:(current_idx + l - 1))
+                )
+                value, logjac = Bijectors.with_logabsdet_jacobian(
+                    b_inv, reconstructed_value
+                )
 
-				current_idx += l
-				logprior += logpdf(dist, value) + logjac
-				evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
-			else
-				dist = bn.distributions[i](evaluation_env, bn.loop_vars[vn])
-				loglikelihood += logpdf(dist, AbstractPPL.get(evaluation_env, vn))
-			end
-		end
-	end
+                current_idx += l
+                logprior += logpdf(dist, value) + logjac
+                evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+            else
+                dist = bn.distributions[i](evaluation_env, bn.loop_vars[vn])
+                loglikelihood += logpdf(dist, AbstractPPL.get(evaluation_env, vn))
+            end
+        end
+    end
 
-	return evaluation_env, logprior + loglikelihood
+    return evaluation_env, logprior + loglikelihood
 end
 
 """
@@ -269,22 +269,24 @@ Return all possible values for a discrete distribution.
 Currently supports Categorical, Bernoulli, Binomial, and DiscreteUniform distributions.
 """
 function enumerate_discrete_values(dist::DiscreteUnivariateDistribution)
-	if dist isa Categorical
-		return 1:length(dist.p)
-	elseif dist isa Bernoulli
-		return [0, 1]
-	elseif dist isa Binomial
-		return 0:(dist.n)
-	elseif dist isa DiscreteUniform
-		return (dist.a):(dist.b)
-	else
-		error("Distribution type $(typeof(dist)) is not currently supported for discrete marginalization")
-	end
+    if dist isa Categorical
+        return 1:length(dist.p)
+    elseif dist isa Bernoulli
+        return [0, 1]
+    elseif dist isa Binomial
+        return 0:(dist.n)
+    elseif dist isa DiscreteUniform
+        return (dist.a):(dist.b)
+    else
+        error(
+            "Distribution type $(typeof(dist)) is not currently supported for discrete marginalization",
+        )
+    end
 end
 
 function evaluate_with_marginalization(
-    bn::BayesianNetwork{V, T, F}, parameter_values::AbstractVector,
-) where {V, T, F}
+    bn::BayesianNetwork{V,T,F}, parameter_values::AbstractVector
+) where {V,T,F}
     topo_sort = topological_sort_by_dfs(bn.graph)
     bugsmodel_node_order = [bn.names[i] for i in topo_sort]
     var_lengths = bn.transformed_var_lengths
@@ -305,7 +307,7 @@ function evaluate_with_marginalization(
 
     # Start recursion with empty assignments and pass the topological sort
     log_total_prob = recursive_marginalize_log(
-        Dict{V, Any}(),
+        Dict{V,Any}(),
         1,
         bn,
         parameter_values,
@@ -319,7 +321,9 @@ function evaluate_with_marginalization(
     return bn.evaluation_env, log_total_prob
 end
 
-function create_environment_with_assignments(bn::BayesianNetwork{V, T, F}, assignments) where {V, T, F}
+function create_environment_with_assignments(
+    bn::BayesianNetwork{V,T,F}, assignments
+) where {V,T,F}
     temp_env = deepcopy(bn.evaluation_env)
     # Set all previously assigned variables
     for (var, value) in assignments
@@ -329,12 +333,8 @@ function create_environment_with_assignments(bn::BayesianNetwork{V, T, F}, assig
 end
 
 function update_deterministic_nodes(
-    bn::BayesianNetwork{V, T, F}, 
-    temp_env, 
-    assignments, 
-    current_var, 
-    topo_sort
-) where {V, T, F}
+    bn::BayesianNetwork{V,T,F}, temp_env, assignments, current_var, topo_sort
+) where {V,T,F}
     # Use the pre-computed topological sort
     for i in topo_sort
         vn = bn.names[i]
@@ -354,14 +354,14 @@ end
 function recursive_marginalize_log(
     assignments::Dict,
     var_idx::Int,
-    bn::BayesianNetwork{VarName, T, F},
+    bn::BayesianNetwork{VarName,T,F},
     parameter_values::AbstractVector,
     discrete_vars::Vector{VarName},
     bugsmodel_node_order::Vector{<:VarName},
-    var_lengths::Dict{VarName, Int},
+    var_lengths::Dict{VarName,Int},
     current_idx::Int,
     topo_sort, # Add pre-computed topological sort as parameter
-) where {T, F}
+) where {T,F}
     # Base case: all discrete variables assigned
     if var_idx > length(discrete_vars)
         return compute_log_probability_with_assignments(
@@ -377,27 +377,27 @@ function recursive_marginalize_log(
 
     # Get current discrete variable
     current_var = discrete_vars[var_idx]
-    
+
     # Create environment with current assignments
     temp_env = create_environment_with_assignments(bn, assignments)
-    
+
     # Update deterministic nodes using pre-computed topological sort
     temp_env = update_deterministic_nodes(bn, temp_env, assignments, current_var, topo_sort)
-    
+
     # Get distribution for this variable
     var_id = bn.names_to_ids[current_var]
     dist = bn.distributions[var_id](temp_env, bn.loop_vars[current_var])
-    
+
     # Get possible values for this variable
     possible_values = enumerate_discrete_values(dist)
-    
+
     # Collect log probabilities for all possible values
     log_probs = Vector{Float64}(undef, length(possible_values))
-    
+
     for (i, val) in enumerate(possible_values)
         new_assignments = copy(assignments)
         new_assignments[current_var] = val
-        
+
         # Recursive call for next variable - pass the topological sort
         log_probs[i] = recursive_marginalize_log(
             new_assignments,
@@ -411,17 +411,17 @@ function recursive_marginalize_log(
             topo_sort,
         )
     end
-    
+
     # Use logsumexp for numerical stability
     return LogExpFunctions.logsumexp(log_probs)
 end
 
 function compute_log_probability_with_assignments(
-    assignments, 
-    bn::BayesianNetwork{V,T,F}, 
-    parameter_values, 
-    bugsmodel_node_order, 
-    var_lengths, 
+    assignments,
+    bn::BayesianNetwork{V,T,F},
+    parameter_values,
+    bugsmodel_node_order,
+    var_lengths,
     current_idx,
     topo_sort, # Add pre-computed topological sort
 ) where {V,T,F}
@@ -458,7 +458,7 @@ function compute_log_probability_with_assignments(
             l = var_lengths[vn]
             b_inv = Bijectors.inverse(b)
             # Use parameter_values for continuous variables
-            param_slice = view(parameter_values, local_idx:(local_idx+l-1))
+            param_slice = view(parameter_values, local_idx:(local_idx + l - 1))
             reconstructed_value = JuliaBUGS.reconstruct(b_inv, dist, param_slice)
             value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
             local_idx += l
