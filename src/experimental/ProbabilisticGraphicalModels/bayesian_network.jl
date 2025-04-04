@@ -1,5 +1,5 @@
 """
-    BayesianNetwork
+	BayesianNetwork
 
 A structure representing a Bayesian Network.
 """
@@ -49,7 +49,7 @@ function BayesianNetwork{V}() where {V}
 end
 
 """
-    translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph; init=Dict{Symbol,Any}())
+	translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph; init=Dict{Symbol,Any}())
 
 Translates a BUGSGraph (with node metadata stored in NodeInfo) into a BayesianNetwork.
 """
@@ -135,7 +135,7 @@ function translate_BUGSGraph_to_BayesianNetwork(
 end
 
 """
-    add_stochastic_vertex!(bn::BayesianNetwork{V,T}, name::V, dist::Any, node_type::Symbol; is_observed::Bool=false) where {V,T}
+	add_stochastic_vertex!(bn::BayesianNetwork{V,T}, name::V, dist::Any, node_type::Symbol; is_observed::Bool=false) where {V,T}
 
 Add a stochastic vertex with name `name`, a distribution object/function `dist`,
 and a declared node_type (`:discrete` or `:continuous`).
@@ -160,7 +160,7 @@ function add_stochastic_vertex!(
 end
 
 """
-    add_deterministic_vertex!(bn::BayesianNetwork{V,T}, name::V, f::F) where {T,V,F}
+	add_deterministic_vertex!(bn::BayesianNetwork{V,T}, name::V, f::F) where {T,V,F}
 
 Add a deterministic vertex.
 """
@@ -178,7 +178,7 @@ function add_deterministic_vertex!(bn::BayesianNetwork{V,T}, name::V, f::F)::T w
 end
 
 """
-    add_edge!(bn::BayesianNetwork{V,T}, from::V, to::V) where {T,V}
+	add_edge!(bn::BayesianNetwork{V,T}, from::V, to::V) where {T,V}
 
 Add a directed edge from `from` -> `to`.
 """
@@ -260,4 +260,166 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
     end
 
     return evaluation_env, logprior + loglikelihood
+end
+
+function evaluate_with_marginalization(
+    bn::BayesianNetwork{V,T,F}, parameter_values::AbstractVector
+) where {V,T,F}
+    # Get topological ordering of nodes
+    sorted_node_ids = topological_sort_by_dfs(bn.graph)
+
+    # No discrete variables case - use standard evaluation
+    if !any(
+        i -> bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] == :discrete,
+        sorted_node_ids,
+    )
+        return evaluate_with_values(bn, parameter_values)
+    end
+
+    # Initialize environment once
+    env = deepcopy(bn.evaluation_env)
+
+    # Start recursive evaluation with the first node
+    logp, _ = _marginalize_recursive(
+        bn, env, sorted_node_ids, parameter_values, 1, bn.transformed_var_lengths
+    )
+
+    return env, logp
+end
+
+function _marginalize_recursive(
+    bn::BayesianNetwork{V,T,F},
+    env,
+    remaining_nodes,
+    parameter_values,
+    param_idx,
+    var_lengths,
+) where {V,T,F}
+    # Base case: no more nodes to process
+    if isempty(remaining_nodes)
+        return 0.0, param_idx
+    end
+
+    # Process current node
+    current_id = remaining_nodes[1]
+    current_name = bn.names[current_id]
+
+    # Check node type
+    is_stochastic = bn.is_stochastic[current_id]
+    is_observed = bn.is_observed[current_id]
+    is_discrete = bn.node_types[current_id] == :discrete
+
+    if !is_stochastic
+        # Deterministic node - compute value and continue
+        value = bn.deterministic_functions[current_id](env, bn.loop_vars[current_name])
+        env = BangBang.setindex!!(env, value, current_name)
+        return _marginalize_recursive(
+            bn, env, @view(remaining_nodes[2:end]), parameter_values, param_idx, var_lengths
+        )
+
+    elseif is_observed
+        # Observed node - add log probability and continue
+        dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
+        obs_logp = logpdf(dist, AbstractPPL.get(env, current_name))
+        remaining_logp, new_param_idx = _marginalize_recursive(
+            bn, env, @view(remaining_nodes[2:end]), parameter_values, param_idx, var_lengths
+        )
+        return obs_logp + remaining_logp, new_param_idx
+
+    elseif is_discrete
+        # Discrete unobserved node - marginalize over possible values
+        dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
+        possible_values = enumerate_discrete_values(dist)
+
+        # Collect log probabilities for all possible values
+        logp_branches = Vector{Float64}(undef, length(possible_values))
+
+        for (i, value) in enumerate(possible_values)
+            # Create a branch-specific environment
+            branch_env = BangBang.setindex!!(deepcopy(env), value, current_name)
+
+            # Compute log probability of this value
+            value_logp = logpdf(dist, value)
+
+            # Continue evaluation with this assignment
+            remaining_logp, new_param_idx = _marginalize_recursive(
+                bn,
+                branch_env,
+                @view(remaining_nodes[2:end]),
+                parameter_values,
+                param_idx,
+                var_lengths,
+            )
+
+            logp_branches[i] = value_logp + remaining_logp
+        end
+
+        # Marginalize using logsumexp for numerical stability
+        return LogExpFunctions.logsumexp(logp_branches), param_idx
+
+    else
+        # Continuous unobserved node - use parameter values
+        dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
+        b = Bijectors.bijector(dist)
+
+        # Ensure variable length is calculated if needed
+        l = if haskey(var_lengths, current_name)
+            var_lengths[current_name]
+        else
+            var_value = AbstractPPL.get(env, current_name)
+            transformed_value = Bijectors.transform(b, var_value)
+            var_lengths[current_name] = length(transformed_value)
+            var_lengths[current_name]
+        end
+
+        # Process the continuous variable
+        b_inv = Bijectors.inverse(b)
+        param_slice = view(parameter_values, param_idx:(param_idx + l - 1))
+        reconstructed_value = JuliaBUGS.reconstruct(b_inv, dist, param_slice)
+        value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
+
+        # Update environment and parameter index
+        env = BangBang.setindex!!(env, value, current_name)
+        new_param_idx = param_idx + l
+
+        # Compute log probability and continue
+        dist_logp = logpdf(dist, value) + logjac
+        remaining_logp, final_param_idx = _marginalize_recursive(
+            bn,
+            env,
+            @view(remaining_nodes[2:end]),
+            parameter_values,
+            new_param_idx,
+            var_lengths,
+        )
+
+        return dist_logp + remaining_logp, final_param_idx
+    end
+end
+
+"""
+    enumerate_discrete_values(dist)
+
+Return all possible values for a discrete distribution.
+Currently supports Categorical, Bernoulli, Binomial, and DiscreteUniform distributions.
+"""
+function enumerate_discrete_values(dist::DiscreteUnivariateDistribution)
+    if dist isa Categorical
+        return 1:length(dist.p)
+    elseif dist isa Bernoulli
+        return [0, 1]
+    elseif dist isa Binomial
+        # Handle special case where n is 0
+        if dist.n == 0
+            return 0:0
+        else
+            return 0:(dist.n)
+        end
+    elseif dist isa DiscreteUniform
+        return (dist.a):(dist.b)
+    else
+        error(
+            "Distribution type $(typeof(dist)) is not currently supported for discrete marginalization",
+        )
+    end
 end
