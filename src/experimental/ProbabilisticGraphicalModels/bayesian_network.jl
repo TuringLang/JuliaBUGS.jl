@@ -141,22 +141,22 @@ Add a stochastic vertex with name `name`, a distribution object/function `dist`,
 and a declared node_type (`:discrete` or `:continuous`).
 """
 function add_stochastic_vertex!(
-	bn::BayesianNetwork{V, T},
-	name::V,
-	dist::Any,
-	is_observed::Bool = false,
-	node_type::Symbol = :continuous,
-)::T where {V, T}
-	Graphs.add_vertex!(bn.graph) || return 0
-	id = nv(bn.graph)
-	push!(bn.distributions, dist)
-	push!(bn.is_stochastic, true)
-	push!(bn.is_observed, is_observed)
-	push!(bn.names, name)
-	bn.names_to_ids[name] = id
-	push!(bn.stochastic_ids, id)
-	push!(bn.node_types, node_type)
-	return id
+    bn::BayesianNetwork{V,T},
+    name::V,
+    dist::Any,
+    is_observed::Bool=false,
+    node_type::Symbol=:continuous,
+)::T where {V,T}
+    Graphs.add_vertex!(bn.graph) || return 0
+    id = nv(bn.graph)
+    push!(bn.distributions, dist)
+    push!(bn.is_stochastic, true)
+    push!(bn.is_observed, is_observed)
+    push!(bn.names, name)
+    bn.names_to_ids[name] = id
+    push!(bn.stochastic_ids, id)
+    push!(bn.node_types, node_type)
+    return id
 end
 
 """
