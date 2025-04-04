@@ -30,22 +30,22 @@ struct BayesianNetwork{V,T,F}
 end
 
 function BayesianNetwork{V}() where {V}
-	return BayesianNetwork(
-		SimpleDiGraph{Int}(), # by default, vertex ids are integers
-		V[],
-		Dict{V, Int}(),
-		(;),    # Empty NamedTuple for evaluation_env
-		Dict{V, NamedTuple}(),
-		Any[],
-		Any[],
-		Int[],
-		Int[],
-		BitVector(),
-		BitVector(),
-		Symbol[],
-		Dict{V, Int}(),  # Empty Dict for transformed_var_lengths
-		0,              # transformed_param_length
-	)
+    return BayesianNetwork(
+        SimpleDiGraph{Int}(), # by default, vertex ids are integers
+        V[],
+        Dict{V,Int}(),
+        (;),    # Empty NamedTuple for evaluation_env
+        Dict{V,NamedTuple}(),
+        Any[],
+        Any[],
+        Int[],
+        Int[],
+        BitVector(),
+        BitVector(),
+        Symbol[],
+        Dict{V,Int}(),  # Empty Dict for transformed_var_lengths
+        0,              # transformed_param_length
+    )
 end
 
 """
@@ -54,7 +54,7 @@ end
 Translates a BUGSGraph (with node metadata stored in NodeInfo) into a BayesianNetwork.
 """
 function translate_BUGSGraph_to_BayesianNetwork(
-	g::JuliaBUGS.BUGSGraph, evaluation_env, model = nothing,
+    g::JuliaBUGS.BUGSGraph, evaluation_env, model=nothing
 )
 	# Retrieve variable labels (stored as VarNames) from g.
 	varnames = collect(labels(g))
