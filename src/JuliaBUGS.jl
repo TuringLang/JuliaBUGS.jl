@@ -251,6 +251,8 @@ Only defined with `MCMCChains` extension.
 """
 function gen_chains end
 
+include("model_macro.jl")
+
 include("experimental/ProbabilisticGraphicalModels/ProbabilisticGraphicalModels.jl")
 
 end
