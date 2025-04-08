@@ -294,7 +294,9 @@ If the statements that form a cycle are all from the same loop (potentially at d
 
 Otherwise, the program need to be rewritten.
 
-We don't attempt to apply further transformations to the program, because it is a hard problem. And to give a flavor of the difficulty of rewriting programs, let's consider the following example:
+We don't attempt to apply further transformations to the program, because it is a hard problem. We will use the following example to show why program transformations can be a difficult task. We will not attempt to implement the transformation demonstrated here.
+
+Consider this model,
 
 ```julia
 sumX[1] = x[1] # (S1)
