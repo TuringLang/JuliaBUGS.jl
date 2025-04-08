@@ -172,7 +172,7 @@ Each execution of the loop body corresponds to an *iteration vector* $\vec{k} = 
 
 **Dependence Vectors**
 
-If a statement execution at iteration $\vec{i}$ (source) defines a value used by a statement execution at iteration $\vec{j}$ (sink), the *dependence vector* is $\vec{d} = \vec{j} - \vec{i}$. It represents the distance between dependent iterations. (Sometimes, we don't care about the number, so we can simply use the sign of the dependence vector.)
+If a statement execution at iteration $\vec{i}$ (source) defines a value used by a statement execution at iteration $\vec{j}$ (sink), the *dependence vector* is $\vec{d} = \vec{j} - \vec{i}$. It represents the distance between dependent iterations. (Sometimes, we don't care about the distance between define and use, so we can simply use the sign of the elements of the dependence vector to represent the dependence relation.)
 
 For sequential execution to be valid, all dependence vectors $\vec{d}$ must be *lexicographically non-negative* ($\vec{d} \succeq \vec{0}$). This means either $\vec{d} = \vec{0}$ or the first non-zero element of $\vec{d}$ is positive.
 
