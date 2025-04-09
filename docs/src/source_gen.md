@@ -372,7 +372,7 @@ for i = 2 to N # Or a similar loop structure covering all indices
 end
 ```
 
-Another example is where data is involved in computing the indices.
+Things can get even trickier when data are involved in computing the indices. For instance,
 
 ```julia
 begin
@@ -387,7 +387,7 @@ end
 data = (a = [2, 3, 1], b = [3, 1, 2])
 ```
 
-this results in the following dependencies
+this results in the following dependencies between model variables
 
 ```julia
 x[1] <- y[2], z[3]
@@ -397,22 +397,28 @@ z[2] <- x[1]
 y[2] <- x[2]
 ```
 
+with dependence graph
+
 ```mermaid
 graph TD
-    S1["S1: z[2] = f(x[1])"] --> S3_1["S3: x[1] = y[a[1]] + z[b[1]]"]
-    S1 --> S3_3["S3: x[3] = y[a[3]] + z[b[3]]"]
-    
-    S2["S2: y[2] = g(x[3])"] --> S3_1
-    
-    S3_1 --> S1
-    S3_2["S3: x[2] = y[a[2]] + z[b[2]]"] --> S2
-    S3_3 --> S2
-    
-    subgraph "Loop dependencies"
-        S3_1 --> S3_2
-        S3_2 --> S3_3
-        S3_3 --> S3_1
-    end
+    y2 --> x1
+    z3 --> x1
+    z1 --> x2
+    y3 --> x2
+    y1 --> x3
+    z2 --> x3
+    x1 --> z2
+    x2 --> y2
+```
+
+The statement dependence graph of this program, on the other hand is (obtained by merging all the `x` nodes)
+
+```mermaid
+graph TD
+    S3 --> S1
+    S3 --> S2
+    S1 --> S3
+    S2 --> S3
 ```
 
 This represents a worst case where we can't do much better than fully unrolling.
