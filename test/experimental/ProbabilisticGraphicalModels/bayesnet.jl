@@ -878,7 +878,7 @@ using AbstractPPL
                 # Compile and convert to BN
                 compiled_model = compile(model_def, NamedTuple())
                 bn = translate_BUGSGraph_to_BayesianNetwork(
-                    compiled_model.g, compiled_model.evaluation_env
+                    compiled_model.g, compiled_model.evaluation_env, compiled_model
                 )
 
                 # Get variables

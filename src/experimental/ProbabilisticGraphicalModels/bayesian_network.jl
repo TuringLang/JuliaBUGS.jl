@@ -77,9 +77,7 @@ function translate_BUGSGraph_to_BayesianNetwork(
 
     if model !== nothing
         if isdefined(model, :transformed_var_lengths)
-            for (k, v) in pairs(model.transformed_var_lengths)
-                transformed_var_lengths[k] = v
-            end
+            transformed_var_lengths = copy(model.transformed_var_lengths)
         end
         if isdefined(model, :transformed_param_length)
             transformed_param_length = model.transformed_param_length
@@ -268,20 +266,43 @@ function evaluate_with_marginalization(
     # Get topological ordering of nodes
     sorted_node_ids = topological_sort_by_dfs(bn.graph)
 
+    # Find continuous variables (all stochastic unobserved variables that are not discrete)
+    continuous_vars = [
+        bn.names[i] for i in sorted_node_ids if
+        bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] != :discrete
+    ]
+
+    # Calculate total parameter length needed
+    total_param_length = 0
+    for name in continuous_vars
+        if haskey(bn.transformed_var_lengths, name)
+            total_param_length += bn.transformed_var_lengths[name]
+        end
+    end
+
+    # Check if we have enough parameters
+    if total_param_length > length(parameter_values)
+        error(
+            "Not enough parameters provided. Expected $(total_param_length) but got $(length(parameter_values))",
+        )
+    end
+
     # No discrete variables case - use standard evaluation
-    if !any(
-        i -> bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] == :discrete,
-        sorted_node_ids,
-    )
+    discrete_vars = [
+        bn.names[i] for i in sorted_node_ids if
+        bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] == :discrete
+    ]
+
+    if isempty(discrete_vars)
         return evaluate_with_values(bn, parameter_values)
     end
 
     # Initialize environment once
     env = deepcopy(bn.evaluation_env)
-    
+
     # Initialize parameter index tracker
-    param_idx = Ref(1)  # Use Ref for mutable reference
-    
+    param_idx = Ref(1)
+
     # Start recursive evaluation with the first node
     logp = _marginalize_recursive(
         bn, env, sorted_node_ids, parameter_values, param_idx, bn.transformed_var_lengths
@@ -294,8 +315,8 @@ function _marginalize_recursive(
     bn::BayesianNetwork{V,T,F},
     env,
     remaining_nodes,
-    parameter_values,
-    param_idx::Ref{Int},  # Pass as a reference
+    parameter_values::AbstractVector,
+    param_idx::Ref{Int},
     var_lengths,
 ) where {V,T,F}
     # Base case: no more nodes to process
@@ -350,7 +371,7 @@ function _marginalize_recursive(
                 branch_env,
                 @view(remaining_nodes[2:end]),
                 parameter_values,
-                param_idx,
+                Ref(param_idx[]),  # Create a new Ref with the same value to avoid parameter index changes from different branches
                 var_lengths,
             )
 
@@ -367,34 +388,37 @@ function _marginalize_recursive(
 
         # Ensure variable length is in the dictionary
         if !haskey(var_lengths, current_name)
-            error("Missing transformed length for variable '$(current_name)'. All variables should have their transformed lengths pre-computed in JuliaBUGS.")
+            error(
+                "Missing transformed length for variable '$(current_name)'. All variables should have their transformed lengths pre-computed in JuliaBUGS.",
+            )
         end
-        
+
         l = var_lengths[current_name]
+        current_idx = param_idx[]
+
+        # Check if we have enough parameters left
+        if current_idx + l - 1 > length(parameter_values)
+            error(
+                "Not enough parameter values: trying to access index $(current_idx + l - 1) in a vector of length $(length(parameter_values))",
+            )
+        end
 
         # Process the continuous variable
         b_inv = Bijectors.inverse(b)
-        # Use param_idx.x to access the current value
-        current_idx = param_idx[]
         param_slice = view(parameter_values, current_idx:(current_idx + l - 1))
         reconstructed_value = JuliaBUGS.reconstruct(b_inv, dist, param_slice)
         value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
 
         # Update environment and parameter index
         env = BangBang.setindex!!(env, value, current_name)
-        
+
         # Update parameter index for the next variable
         param_idx[] = current_idx + l
 
         # Compute log probability and continue
         dist_logp = logpdf(dist, value) + logjac
         remaining_logp = _marginalize_recursive(
-            bn,
-            env,
-            @view(remaining_nodes[2:end]),
-            parameter_values,
-            param_idx,
-            var_lengths,
+            bn, env, @view(remaining_nodes[2:end]), parameter_values, param_idx, var_lengths
         )
 
         return dist_logp + remaining_logp
