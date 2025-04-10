@@ -280,13 +280,6 @@ function evaluate_with_marginalization(
         end
     end
 
-    # Check if we have enough parameters
-    if total_param_length > length(parameter_values)
-        error(
-            "Not enough parameters provided. Expected $(total_param_length) but got $(length(parameter_values))",
-        )
-    end
-
     # No discrete variables case - use standard evaluation
     discrete_vars = [
         bn.names[i] for i in sorted_node_ids if
@@ -300,12 +293,9 @@ function evaluate_with_marginalization(
     # Initialize environment once
     env = deepcopy(bn.evaluation_env)
 
-    # Initialize parameter index tracker
-    param_idx = Ref(1)
-
-    # Start recursive evaluation with the first node
+    # Start recursive evaluation with the first node, beginning at parameter index 1
     logp = _marginalize_recursive(
-        bn, env, sorted_node_ids, parameter_values, param_idx, bn.transformed_var_lengths
+        bn, env, sorted_node_ids, parameter_values, 1, bn.transformed_var_lengths
     )
 
     return env, logp
@@ -316,7 +306,7 @@ function _marginalize_recursive(
     env,
     remaining_nodes,
     parameter_values::AbstractVector,
-    param_idx::Ref{Int},
+    param_idx::Int,
     var_lengths,
 ) where {V,T,F}
     # Base case: no more nodes to process
@@ -366,12 +356,14 @@ function _marginalize_recursive(
             value_logp = logpdf(dist, value)
 
             # Continue evaluation with this assignment
+            # Important: We use the same param_idx for all branches since discrete variables
+            # don't consume parameters
             remaining_logp = _marginalize_recursive(
                 bn,
                 branch_env,
                 @view(remaining_nodes[2:end]),
                 parameter_values,
-                Ref(param_idx[]),  # Create a new Ref with the same value to avoid parameter index changes from different branches
+                param_idx,
                 var_lengths,
             )
 
@@ -394,31 +386,21 @@ function _marginalize_recursive(
         end
 
         l = var_lengths[current_name]
-        current_idx = param_idx[]
-
-        # Check if we have enough parameters left
-        if current_idx + l - 1 > length(parameter_values)
-            error(
-                "Not enough parameter values: trying to access index $(current_idx + l - 1) in a vector of length $(length(parameter_values))",
-            )
-        end
 
         # Process the continuous variable
         b_inv = Bijectors.inverse(b)
-        param_slice = view(parameter_values, current_idx:(current_idx + l - 1))
+        param_slice = view(parameter_values, param_idx:(param_idx + l - 1))
         reconstructed_value = JuliaBUGS.reconstruct(b_inv, dist, param_slice)
         value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
 
-        # Update environment and parameter index
+        # Update environment
         env = BangBang.setindex!!(env, value, current_name)
 
-        # Update parameter index for the next variable
-        param_idx[] = current_idx + l
-
-        # Compute log probability and continue
+        # Compute log probability and continue with updated parameter index
         dist_logp = logpdf(dist, value) + logjac
+        next_idx = param_idx + l
         remaining_logp = _marginalize_recursive(
-            bn, env, @view(remaining_nodes[2:end]), parameter_values, param_idx, var_lengths
+            bn, env, @view(remaining_nodes[2:end]), parameter_values, next_idx, var_lengths
         )
 
         return dist_logp + remaining_logp
