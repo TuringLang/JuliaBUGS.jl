@@ -424,6 +424,7 @@ function _marginalize_recursive(
         return dist_logp + remaining_logp
     end
 end
+
 """
     enumerate_discrete_values(dist)
 
