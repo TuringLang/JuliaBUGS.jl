@@ -278,10 +278,13 @@ function evaluate_with_marginalization(
 
     # Initialize environment once
     env = deepcopy(bn.evaluation_env)
-
+    
+    # Initialize parameter index tracker
+    param_idx = Ref(1)  # Use Ref for mutable reference
+    
     # Start recursive evaluation with the first node
-    logp, _ = _marginalize_recursive(
-        bn, env, sorted_node_ids, parameter_values, 1, bn.transformed_var_lengths
+    logp = _marginalize_recursive(
+        bn, env, sorted_node_ids, parameter_values, param_idx, bn.transformed_var_lengths
     )
 
     return env, logp
@@ -292,12 +295,12 @@ function _marginalize_recursive(
     env,
     remaining_nodes,
     parameter_values,
-    param_idx,
+    param_idx::Ref{Int},  # Pass as a reference
     var_lengths,
 ) where {V,T,F}
     # Base case: no more nodes to process
     if isempty(remaining_nodes)
-        return 0.0, param_idx
+        return 0.0
     end
 
     # Process current node
@@ -321,10 +324,10 @@ function _marginalize_recursive(
         # Observed node - add log probability and continue
         dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
         obs_logp = logpdf(dist, AbstractPPL.get(env, current_name))
-        remaining_logp, new_param_idx = _marginalize_recursive(
+        remaining_logp = _marginalize_recursive(
             bn, env, @view(remaining_nodes[2:end]), parameter_values, param_idx, var_lengths
         )
-        return obs_logp + remaining_logp, new_param_idx
+        return obs_logp + remaining_logp
 
     elseif is_discrete
         # Discrete unobserved node - marginalize over possible values
@@ -342,7 +345,7 @@ function _marginalize_recursive(
             value_logp = logpdf(dist, value)
 
             # Continue evaluation with this assignment
-            remaining_logp, new_param_idx = _marginalize_recursive(
+            remaining_logp = _marginalize_recursive(
                 bn,
                 branch_env,
                 @view(remaining_nodes[2:end]),
@@ -355,48 +358,48 @@ function _marginalize_recursive(
         end
 
         # Marginalize using logsumexp for numerical stability
-        return LogExpFunctions.logsumexp(logp_branches), param_idx
+        return LogExpFunctions.logsumexp(logp_branches)
 
     else
         # Continuous unobserved node - use parameter values
         dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
         b = Bijectors.bijector(dist)
 
-        # Ensure variable length is calculated if needed
-        l = if haskey(var_lengths, current_name)
-            var_lengths[current_name]
-        else
-            var_value = AbstractPPL.get(env, current_name)
-            transformed_value = Bijectors.transform(b, var_value)
-            var_lengths[current_name] = length(transformed_value)
-            var_lengths[current_name]
+        # Ensure variable length is in the dictionary
+        if !haskey(var_lengths, current_name)
+            error("Missing transformed length for variable '$(current_name)'. All variables should have their transformed lengths pre-computed in JuliaBUGS.")
         end
+        
+        l = var_lengths[current_name]
 
         # Process the continuous variable
         b_inv = Bijectors.inverse(b)
-        param_slice = view(parameter_values, param_idx:(param_idx + l - 1))
+        # Use param_idx.x to access the current value
+        current_idx = param_idx[]
+        param_slice = view(parameter_values, current_idx:(current_idx + l - 1))
         reconstructed_value = JuliaBUGS.reconstruct(b_inv, dist, param_slice)
         value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
 
         # Update environment and parameter index
         env = BangBang.setindex!!(env, value, current_name)
-        new_param_idx = param_idx + l
+        
+        # Update parameter index for the next variable
+        param_idx[] = current_idx + l
 
         # Compute log probability and continue
         dist_logp = logpdf(dist, value) + logjac
-        remaining_logp, final_param_idx = _marginalize_recursive(
+        remaining_logp = _marginalize_recursive(
             bn,
             env,
             @view(remaining_nodes[2:end]),
             parameter_values,
-            new_param_idx,
+            param_idx,
             var_lengths,
         )
 
-        return dist_logp + remaining_logp, final_param_idx
+        return dist_logp + remaining_logp
     end
 end
-
 """
     enumerate_discrete_values(dist)
 
