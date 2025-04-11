@@ -60,7 +60,7 @@ struct BUGSModel{
     TNF,
     TV,
     data_T,
-    F<:Function,
+    F<:Union{F,Nothing},
 } <: AbstractBUGSModel
     " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
@@ -88,7 +88,7 @@ struct BUGSModel{
     base_model::base_model_T
 
     evaluation_mode::EMT
-    log_density_computation_function::Union{F,Nothing}
+    log_density_computation_function::F
 
     # for serialization, save the original model definition and data
     model_def::Expr
