@@ -215,13 +215,6 @@ function __gen_loop_expr(loop_vars, stmt)
     end
 end
 
-function can_reorder(coarse_graph::Graphs.SimpleDiGraph)
-    if Graphs.is_cyclic(coarse_graph)
-        return false
-    end
-    return true
-end
-
 # add if statement in the lowered model def
 function _lower_model_def_to_represent_observe_stmts(
     reconstructed_model_def,
@@ -305,15 +298,36 @@ function __generate_model_parameter_condition_expr(model_param_nt_vec)
     end
 end
 
+function __check_for_reserved_names(model_def::Expr)
+    variable_names_and_numdims = JuliaBUGS.extract_variable_names_and_numdims(model_def)
+    variable_names = keys(variable_names_and_numdims)
+    bad_variable_names = filter(
+        variable_name ->
+            startswith(string(variable_name), "__") &&
+                endswith(string(variable_name), "__"),
+        variable_names,
+    )
+    if !isempty(bad_variable_names)
+        error(
+            "Variable names starting and ending with double underscores (like `__logp__`) are reserved for internal use. " *
+                "Found the following reserved variable names in your model:\n" *
+                "`$(join(bad_variable_names, "`, `"))`\n" *
+                "Please rename these variables to avoid conflicts with internal functionality."
+        )
+    end
+    return nothing
+end
+
 function _generate_lowered_model_def(
     model_def::Expr, g::JuliaBUGS.BUGSGraph, evaluation_env::NamedTuple
 )
+    __check_for_reserved_names(model_def)
     stmt_to_stmt_id = _build_stmt_to_stmt_id(model_def)
     stmt_id_to_stmt = _build_stmt_id_to_stmt(stmt_to_stmt_id)
     var_to_stmt_id = _build_var_to_stmt_id(model_def, g, evaluation_env, stmt_to_stmt_id)
     stmt_id_to_var = _build_stmt_id_to_var(var_to_stmt_id)
     coarse_graph = _build_coarse_dep_graph(g, stmt_to_stmt_id, var_to_stmt_id)
-    if !can_reorder(coarse_graph)
+    if Graphs.is_cyclic(coarse_graph)
         error("The dependency graph of the model is cyclic, cannot reorder the statements.")
     end
     # show_coarse_graph(stmt_id_to_stmt, coarse_graph)

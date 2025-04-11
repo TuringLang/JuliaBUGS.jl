@@ -89,3 +89,11 @@ end
     @test result_with_old_model ≈ result_with_bugsmodel
     @test result_with_log_density_computation_function ≈ result_with_bugsmodel
 end
+
+@testset "reserved variable names are rejected" begin
+    @test_throws ErrorException JuliaBUGS.__check_for_reserved_names(
+        @bugs begin
+            __logp__ ~ dnorm(0, 1)
+        end
+    )
+end
