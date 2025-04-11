@@ -75,7 +75,7 @@ function _generate_struct_definition(struct_name, struct_fields)
         end
     end
 
-    return quote
+    return MacroTools.@q begin
         Base.@kwdef struct $(esc(struct_name))
             $(map(f -> :($(esc(f)) = ParameterPlaceholder()), struct_fields)...)
         end
