@@ -12,7 +12,8 @@ using JuliaBUGS: @parameters, @model
         tau
     end
 
-    @macroexpand @model function seeds(
+    #! format: off
+    @model function seeds(
         (; r, b, alpha0, alpha1, alpha2, alpha12, tau)::Tp, x1, x2, N, n
     )
         for i in 1:N
@@ -27,10 +28,15 @@ using JuliaBUGS: @parameters, @model
         alpha2 ~ dnorm(0.0, 1.0E-6)
         alpha12 ~ dnorm(0.0, 1.0E-6)
         tau ~ dgamma(0.001, 0.001)
-        return sigma = 1 / sqrt(tau)
+        sigma = 1 / sqrt(tau)
     end
+    #! format: on
 
     data = JuliaBUGS.BUGSExamples.seeds.data
+
     m = seeds(Tp(), data.x1, data.x2, data.N, data.n)
+
+    Tp(m)
+
     @test m isa JuliaBUGS.BUGSModel
 end
