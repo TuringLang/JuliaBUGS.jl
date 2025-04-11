@@ -88,7 +88,7 @@ struct BUGSModel{
     base_model::base_model_T
 
     evaluation_mode::EMT
-    log_density_computation_function::F
+    log_density_computation_function::Union{F,Nothing}
 
     # for serialization, save the original model definition and data
     model_def::Expr
@@ -236,7 +236,7 @@ function BUGSModel(
         @assert length(parameters) == original_parameters_length "there are less parameters in the generated log density function than in the original model"
         flattened_graph_node_data = FlattenedGraphNodeData(g, sorted_nodes)
     else
-        log_density_computation_function = identity
+        log_density_computation_function = nothing
     end
 
     # evaluation_mode =

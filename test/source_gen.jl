@@ -41,7 +41,7 @@ function _create_model(model_name::Symbol)
     return model, evaluation_env
 end
 
-function _create_bugsmdoel_with_consistent_sorted_nodes(
+function _create_bugsmodel_with_consistent_sorted_nodes(
     model::JuliaBUGS.BUGSModel, reconstructed_model_def
 )
     pass = CollectSortedNodes(model.evaluation_env)
@@ -75,7 +75,7 @@ for example_name in test_examples
 end
 
 @testset "source_gen: $example_name" for example_name in test_examples
-    model_with_consistent_sorted_nodes = _create_bugsmdoel_with_consistent_sorted_nodes(
+    model_with_consistent_sorted_nodes = _create_bugsmodel_with_consistent_sorted_nodes(
         bugs_models[example_name], reconstructed_model_defs[example_name]
     )
     result_with_old_model = JuliaBUGS.evaluate!!(bugs_models[example_name])[2]
