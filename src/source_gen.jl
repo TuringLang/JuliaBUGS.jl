@@ -305,7 +305,9 @@ function __generate_model_parameter_condition_expr(model_param_nt_vec)
     end
 end
 
-function _generate_lowered_model_def(model_def::Expr, g::JuliaBUGS.BUGSGraph, evaluation_env::NamedTuple)
+function _generate_lowered_model_def(
+    model_def::Expr, g::JuliaBUGS.BUGSGraph, evaluation_env::NamedTuple
+)
     stmt_to_stmt_id = _build_stmt_to_stmt_id(model_def)
     stmt_id_to_stmt = _build_stmt_id_to_stmt(stmt_to_stmt_id)
     var_to_stmt_id = _build_var_to_stmt_id(model_def, g, evaluation_env, stmt_to_stmt_id)
