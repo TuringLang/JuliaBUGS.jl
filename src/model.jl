@@ -60,7 +60,7 @@ struct BUGSModel{
     TNF,
     TV,
     data_T,
-    F<:Union{F,Nothing},
+    F<:Union{Function,Nothing},
 } <: AbstractBUGSModel
     " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
