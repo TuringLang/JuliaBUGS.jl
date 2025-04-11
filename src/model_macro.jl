@@ -51,7 +51,7 @@ function _generate_struct_definition(struct_name, struct_fields)
         # Handle empty structs gracefully
         if isempty(fields)
             print(ioc, "  (no fields)")
-            return
+            return nothing
         end
 
         # Calculate maximum field name length for alignment
@@ -163,14 +163,14 @@ function _generate_model_definition(model_function_expr, __source__)
             function $(esc(param_type))(model::BUGSModel)
                 env = model.evaluation_env
                 field_names = fieldnames($(esc(param_type)))
-                kwargs = Dict{Symbol, Any}()
-                
+                kwargs = Dict{Symbol,Any}()
+
                 for field in field_names
                     if haskey(env, field)
                         kwargs[field] = env[field]
                     end
                 end
-                
+
                 return $(esc(param_type))(; kwargs...)
             end
             $func_expr
