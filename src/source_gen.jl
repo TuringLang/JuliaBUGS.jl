@@ -304,15 +304,15 @@ function __check_for_reserved_names(model_def::Expr)
     bad_variable_names = filter(
         variable_name ->
             startswith(string(variable_name), "__") &&
-                endswith(string(variable_name), "__"),
+            endswith(string(variable_name), "__"),
         variable_names,
     )
     if !isempty(bad_variable_names)
         error(
             "Variable names starting and ending with double underscores (like `__logp__`) are reserved for internal use. " *
-                "Found the following reserved variable names in your model:\n" *
-                "`$(join(bad_variable_names, "`, `"))`\n" *
-                "Please rename these variables to avoid conflicts with internal functionality."
+            "Found the following reserved variable names in your model:\n" *
+            "`$(join(bad_variable_names, "`, `"))`\n" *
+            "Please rename these variables to avoid conflicts with internal functionality.",
         )
     end
     return nothing
