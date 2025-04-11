@@ -1,5 +1,7 @@
 name = "Hips1: Closed form estimates for each strata"
 
+# there are no stochastic variables in this model
+
 model_def = @bugs begin
     for k in 1:K
         # Cost and benefit equations in closed form:
@@ -57,16 +59,16 @@ model_def = @bugs begin
         end
 
         # Marginal probability of being in each state at time 1
-        pi[k, 1, 1] = 1 - var"lambda.op"
-        pi[k, 1, 2] = 0
-        pi[k, 1, 3] = 0
-        pi[k, 1, 4] = 0
-        pi[k, 1, 5] = var"lambda.op"
+        var"pi"[k, 1, 1] = 1 - var"lambda.op"
+        var"pi"[k, 1, 2] = 0
+        var"pi"[k, 1, 3] = 0
+        var"pi"[k, 1, 4] = 0
+        var"pi"[k, 1, 5] = var"lambda.op"
 
         # Marginal probability of being in each state at time t>1
         for t in 2:N
             for s in 1:S
-                pi[k, t, s] = inprod(pi[k, t - 1, :], Lambda[k, t, :, s])
+                var"pi"[k, t, s] = inprod(var"pi"[k, t - 1, :], Lambda[k, t, :, s])
             end
         end
     end
@@ -96,7 +98,6 @@ end
 
 original = """
 model {
-
     for(k in 1 : K) {    # loop over strata
 
     # Cost and benefit equations in closed form:
@@ -228,46 +229,7 @@ data = (
               0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503 0.1503]
 )
 
-reference_results = (
-    var"BL[1]" = (mean = 14.46, std = 2.893),
-    var"BL[2]" = (mean = 12.72, std = 3.326),
-    var"BL[3]" = (mean = 10.34, std = 3.68),
-    var"BL[4]" = (mean = 7.74, std = 3.544),
-    var"BL[5]" = (mean = 5.38, std = 2.988),
-    var"BL[6]" = (mean = 4.093, std = 2.922),
-    var"BL[7]" = (mean = 15.13, std = 2.649),
-    var"BL[8]" = (mean = 13.72, std = 3.105),
-    var"BL[9]" = (mean = 11.69, std = 3.507),
-    var"BL[10]" = (mean = 9.117, std = 3.641),
-    var"BL[11]" = (mean = 6.453, std = 3.316),
-    var"BL[12]" = (mean = 4.988, std = 3.46),
-    var"BQ[1]" = (mean = 13.15, std = 2.632),
-    var"BQ[2]" = (mean = 11.6, std = 3.012),
-    var"BQ[3]" = (mean = 9.469, std = 3.338),
-    var"BQ[4]" = (mean = 7.16, std = 3.255),
-    var"BQ[5]" = (mean = 4.999, std = 2.757),
-    var"BQ[6]" = (mean = 3.805, std = 2.698),
-    var"BQ[7]" = (mean = 13.81, std = 2.426),
-    var"BQ[8]" = (mean = 12.55, std = 2.831),
-    var"BQ[9]" = (mean = 10.74, std = 3.197),
-    var"BQ[10]" = (mean = 8.445, std = 3.349),
-    var"BQ[11]" = (mean = 5.996, std = 3.057),
-    var"BQ[12]" = (mean = 4.642, std = 3.2),
-    var"C[1]" = (mean = 5788.0, std = 1908.0),
-    var"C[2]" = (mean = 5422.0, std = 1875.0),
-    var"C[3]" = (mean = 5001.0, std = 1705.0),
-    var"C[4]" = (mean = 4470.0, std = 1235.0),
-    var"C[5]" = (mean = 4251.0, std = 898.6),
-    var"C[6]" = (mean = 4192.0, std = 769.6),
-    var"C[7]" = (mean = 5623.0, std = 1795.0),
-    var"C[8]" = (mean = 5353.0, std = 1781.0),
-    var"C[9]" = (mean = 4986.0, std = 1615.0),
-    var"C[10]" = (mean = 4497.0, std = 1268.0),
-    var"C[11]" = (mean = 4292.0, std = 977.8),
-    var"C[12]" = (mean = 4207.0, std = 783.4),
-    var"mean.BL" = (mean = 8.692, std = 1.369),
-    var"mean.BQ" = (mean = 8.02, std = 1.258),
-    var"mean.C" = (mean = 4607.0, std = 479.8)
-)
+reference_results = NamedTuple()
 
-hips1 = Example(name, model_def, original, data, nothing, nothing, reference_results)
+hips1 = Example(
+    name, model_def, original, data, NamedTuple(), NamedTuple(), reference_results)
