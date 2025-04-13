@@ -81,14 +81,18 @@ function _generate_struct_definition(struct_name, struct_fields)
         end
 
         $(show_method_expr)
+
+        function $(esc(struct_name))(model::BUGSModel)
+            return getparams($(esc(struct_name)), model)
+        end
     end
 end
 
 macro model(model_function_expr)
-    return _generate_model_definition(model_function_expr, __source__)
+    return _generate_model_definition(model_function_expr, __source__, __module__)
 end
 
-function _generate_model_definition(model_function_expr, __source__)
+function _generate_model_definition(model_function_expr, __source__, __module__)
     MacroTools.@capture(
         #! format: off
         model_function_expr,
@@ -111,6 +115,29 @@ function _generate_model_definition(model_function_expr, __source__)
             "The first argument of the model function must be a destructuring assignment with a type annotation defined using `@parameters`.",
         ),
     ))
+
+    illegal_constant_variables = Any[]
+    constant_variables_symbols = map(constant_variables) do constant_variable
+        if constant_variable isa Symbol
+            return constant_variable
+        elseif MacroTools.@capture(
+            constant_variable, ((name_ = default_value_) | (name_::type_))
+        )
+            return name_
+        else
+            push!(illegal_constant_variables, constant_variable)
+        end
+    end
+    if !isempty(illegal_constant_variables)
+        formatted_vars = join(illegal_constant_variables, ", ", " and ")
+        return MacroTools.@q error(
+            string(
+                "The following arguments are not supported syntax for the model function currently: ",
+                $(QuoteNode(formatted_vars)),
+                "Please report this issue at https://github.com/TuringLang/JuliaBUGS.jl/issues",
+            ),
+        )
+    end
 
     vars_and_numdims = extract_variable_names_and_numdims(bugs_ast)
     vars_assigned_to = extract_variables_assigned_to(bugs_ast)
@@ -159,8 +186,7 @@ function _generate_model_definition(model_function_expr, __source__)
         return func_expr
     else
         return MacroTools.@q begin
-            # Create a constructor for the parameter type that uses values from the model's evaluation environment
-            function $(esc(param_type))(model::BUGSModel)
+            function JuliaBUGS.getparams($(esc(param_type)), model::BUGSModel)
                 env = model.evaluation_env
                 field_names = fieldnames($(esc(param_type)))
                 kwargs = Dict{Symbol,Any}()
