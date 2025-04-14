@@ -1,24 +1,33 @@
 # How to Specify and Create a `BUGSModel`
 
-It takes a BUGS program and the values of some variables to specify a BUGS model.
-Before we move on, it is instructional to explain and distinguish between different kinds of values one can give to the JuliaBUGS compiler.
-* constants: values used in loop bounds, variables used to resolve indices
-    * these values are required to specify the model, the former decides the size of the model (how many variables) and the latter is part of the process of determine the edges
-* independent variables (features, predictors, covariances): these are variables required for forward simulation of the model
-* observations: values of stochastic variables, these are not necessary to specify the model, but if there are provided, they will be data that the conditioned model is conditioned on. (exception is that, one can use stochastic variables to add to the log density, but this is not strictly generative modeling).
-* initialization: these are points for the MCMC to start, some models, for instance poorly specified models or model with wide priors might require carefully picked initialization values to run. 
+Creating a `BUGSModel` requires two key components: a BUGS program that defines the model structure and values for specific variables that parameterize the model.
+
+To understand how to specify a model properly, it is important to distinguish between the different types of values you can provide to the JuliaBUGS compiler:
+
+* **Constants**: Values used in loop bounds and index resolution
+  * These are essential for model specification as they determine the model's dimensionality (how many variables are created) and establish the dependency structure between variables
+  
+* **Independent variables** (also called features, predictors, or covariates): Non-stochastic inputs required for forward simulation of the model
+  * Examples include predictor variables in a regression model or time points in a time series model
+
+* **Observations**: Values for stochastic variables that you wish to condition on
+  * These are not necessary to specify the model structure, but when provided, they become the data that your model is conditioned on
+  * (Note: In some advanced cases, stochastic variables can contribute to the log density without being part of a strictly generative model)
+
+* **Initialization values**: Starting points for MCMC sampling
+  * While optional in many cases, some models (particularly those with weakly informative priors or complex structures) require carefully chosen initialization values for effective sampling
 
 ## Syntax from previous BUGS softwares and their R packages
 
-Previously, users ues BUGS language through the software interface. Which on a high level, comprised of following steps:
-1. write the model in a text file
-2. check the model (parsing)
-3. compile the model with the program text and data
-4. (optional) initialize the sampling process
+Traditionally, BUGS models were created through a software interface following these steps:
+1. Write the model in a text file
+2. Check the model syntax (parsing)
+3. Compile the model with program text and data
+4. Initialize the sampling process (optional)
 
-Because the R interface packages rely on the BUGS softwares, their interface, albeit in a pure text-based (R program) interface, closely mimic the software interfaces.
+R interface packages for BUGS maintained this workflow pattern through text-based interfaces that closely mirrored the original software.
 
-Until now, JuliaBUGS has inherent this interface. Partially because the interface is intuitive enough, and we want to provide users with previous BUGS experience a familiar interface. To be explicit, JuliaBUGS provided a `@bugs` macro that accepts model definitions as strings or within a `begin...end` block:
+JuliaBUGS initially adopted this familiar workflow to accommodate users with prior BUGS experience. Specifically, JuliaBUGS provides a `@bugs` macro that accepts model definitions either as strings or within a `begin...end` block:
 
 ```julia
 # Example using string macro
@@ -56,15 +65,13 @@ model {
 end
 ```
 
-In both cases, the macro returned a Julia AST representation of the model. The `compile` function then took this AST and user-provided values (as a `NamedTuple`) to create a `BUGSModel` instance.
+In both cases, the macro returns a Julia AST representation of the model. The `compile` function then takes this AST and user-provided values (as a `NamedTuple`) to create a `BUGSModel` instance.
 
-We still want to preserve this interface for users with previous BUGS experiences. But at the same time, we also want to provide an interface that's more idiomatic in Julia.
+While we maintain this interface for compatibility, we now also offer a more idiomatic Julia approach.
 
-## The interface
+## The Interface
 
-We take heavy inspiration from Turing.jl's model macro syntax.
-The `model` macro creates a "model creating function", which takes some input and returns a model upon which many operations are defined.
-The operations includes `AbstractMCMC.sample` and functions like `condition`.
+JuliaBUGS provides a Julian interface inspired by Turing.jl's model macro syntax. The `@model` macro creates a "model creating function" that returns a model object supporting operations like `AbstractMCMC.sample` (which samples MCMC chains) and `condition` (which modifies the model by incorporating observations).
 
 ### The `@model` Macro
 
@@ -84,18 +91,14 @@ JuliaBUGS.@model function model_definition((;r, b, alpha0, alpha1, alpha2, alpha
 end
 ```
 
-The `model` macro expects a specific function signature:
+The `@model` macro requires a specific function signature:
 
-The first argument **must** declare the model's stochastic parameters (variables defined using `~`) using destructuring assignment (e.g., `(; param1, param2)`).
-all stochastic parameters (assigned via `~`) are listed in the destructuring assignment of the first argument.
-We encourage users to provide a type annotation for the parameters (e.g., `(; r, b, ...)::Params`). 
-If you do, and if `Params` is defined using `@parameters` (see below), the macro automatically defines a constructor `MyParams(model::BUGSModel)`. This allows easy extraction of fitted parameter values from a `BUGSModel` object back into your structured type.
-It is also possible to use a `NamedTuple` type annotation or no annotation. 
-However, user would need to create the NamedTuple with `ParameterPlaceholder` or Array (possibly of `missing`s), instead of the automatically generated constructors (see below).  
+1. The first argument must declare stochastic parameters (variables defined with `~`) using destructuring assignment with the format `(; param1, param2, ...)`.
+2. We recommend providing a type annotation (e.g., `(; r, b, ...)::Params`). If `Params` is defined using `@parameters`, the macro automatically defines a constructor `Params(model::BUGSModel)` for extracting parameter values from the model.
+3. Alternatively, you can use a `NamedTuple` instead of a custom type. In this case, no type annotation is needed, but you would need to manually create a `NamedTuple` with `ParameterPlaceholder()` values or arrays of `missing` values for parameters that don't have observations.
+4. The remaining arguments must specify all constants and independent variables required by the model (variables used on the RHS but not on the LHS).
 
-The rest of the arguments need to give all the constants and independent variables required by the model logic (e.g., `x1, x2, N, n`). These are variables that used on RHS, but not appeared on the LHS, which are required to compile the model and sample from prior.
-
-Like mentioned before, The `@parameters` macro simplifies the creation of mutable structs intended to hold model parameters, designed to work seamlessly with `@model`.
+The `@parameters` macro simplifies creating structs to hold model parameters:
 
 ```julia
 JuliaBUGS.@parameters struct Params
@@ -109,11 +112,7 @@ JuliaBUGS.@parameters struct Params
 end
 ```
 
-The macro is simple -- it `Base.@kwdef` to allowing easy instantiation with keyword arguments. particularly, it creates a constructor that takes no argument. 
-In this case, all the field will be default to `JuliaBUGS.ParameterPlaceholder`.
-Alternatively, one can also use Arrays of `missing`s if the variable is not observation.
-The concrete types and sizes of placeholder parameters are determined during the `compile` step when the model function is called with constants.
-A cosntructor `Params(::BUGSModel)` is created.
+This macro applies `Base.@kwdef` to enable keyword initialization and creates a no-argument constructor. By default, fields are initialized to `JuliaBUGS.ParameterPlaceholder`. The concrete types and sizes of parameters are determined during compilation when the model function is called with constants. A constructor `Params(::BUGSModel)` is created for easy extraction of parameter values.
 
 ### Example
 
