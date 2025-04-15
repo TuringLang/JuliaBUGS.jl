@@ -32,6 +32,7 @@ using JuliaBUGS: @parameters, @model
     end
     #! format: on
 
+    # Try destructuring the random variables but forgetting to include one (tau).
     @test_throws ErrorException begin
         #! format: off
         @model function seeds(
@@ -54,6 +55,7 @@ using JuliaBUGS: @parameters, @model
         #! format: on
     end
 
+    # Try leaving out one constant variable.
     @test_throws ErrorException begin
         #! format: off
         @model function seeds(
