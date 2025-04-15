@@ -76,7 +76,7 @@ JuliaBUGS provides a Julian interface inspired by Turing.jl's model macro syntax
 ### The `@model` Macro
 
 ```julia
-JuliaBUGS.@model function model_definition((;r, b, alpha0, alpha1, alpha2, alpha12, tau)::Params, x1, x2, N, n)    
+JuliaBUGS.@model function model_definition((;r, b, alpha0, alpha1, alpha2, alpha12, tau)::SeedsParams, x1, x2, N, n)    
     for i in 1:N
         r[i] ~ dbin(p[i], n[i])
         b[i] ~ dnorm(0.0, tau)
@@ -94,14 +94,14 @@ end
 The `@model` macro requires a specific function signature:
 
 1. The first argument must declare stochastic parameters (variables defined with `~`) using destructuring assignment with the format `(; param1, param2, ...)`.
-2. We recommend providing a type annotation (e.g., `(; r, b, ...)::Params`). If `Params` is defined using `@parameters`, the macro automatically defines a constructor `Params(model::BUGSModel)` for extracting parameter values from the model.
+2. We recommend providing a type annotation (e.g., `(; r, b, ...)::SeedsParams`). If `SeedsParams` is defined using `@parameters`, the macro automatically defines a constructor `SeedsParams(model::BUGSModel)` for extracting parameter values from the model.
 3. Alternatively, you can use a `NamedTuple` instead of a custom type. In this case, no type annotation is needed, but you would need to manually create a `NamedTuple` with `ParameterPlaceholder()` values or arrays of `missing` values for parameters that don't have observations.
 4. The remaining arguments must specify all constants and independent variables required by the model (variables used on the RHS but not on the LHS).
 
 The `@parameters` macro simplifies creating structs to hold model parameters:
 
 ```julia
-JuliaBUGS.@parameters struct Params
+JuliaBUGS.@parameters struct SeedsParams
     r
     b
     alpha0
@@ -112,13 +112,13 @@ JuliaBUGS.@parameters struct Params
 end
 ```
 
-This macro applies `Base.@kwdef` to enable keyword initialization and creates a no-argument constructor. By default, fields are initialized to `JuliaBUGS.ParameterPlaceholder`. The concrete types and sizes of parameters are determined during compilation when the model function is called with constants. A constructor `Params(::BUGSModel)` is created for easy extraction of parameter values.
+This macro applies `Base.@kwdef` to enable keyword initialization and creates a no-argument constructor. By default, fields are initialized to `JuliaBUGS.ParameterPlaceholder`. The concrete types and sizes of parameters are determined during compilation when the model function is called with constants. A constructor `SeedsParams(::BUGSModel)` is created for easy extraction of parameter values.
 
 ### Example
 
 ```julia
 julia> @model function seeds(
-        (; r, b, alpha0, alpha1, alpha2, alpha12, tau)::Params, x1, x2, N, n
+        (; r, b, alpha0, alpha1, alpha2, alpha12, tau)::SeedsParams, x1, x2, N, n
     )
         for i in 1:N
             r[i] ~ dbin(p[i], n[i])
@@ -138,7 +138,7 @@ seeds (generic function with 1 method)
 
 julia> (; x1, x2, N, n) = JuliaBUGS.BUGSExamples.seeds.data; # extract data from existing BUGS example
 
-julia> @parameters struct Params
+julia> @parameters struct SeedsParams
         r
         b
         alpha0
@@ -148,7 +148,7 @@ julia> @parameters struct Params
         tau
     end
 
-julia> m = seeds(Params(), x1, x2, N, n)
+julia> m = seeds(SeedsParams(), x1, x2, N, n)
 BUGSModel (parameters are in transformed (unconstrained) space, with dimension 47):
 
   Model parameters:
@@ -175,8 +175,8 @@ BUGSModel (parameters are in transformed (unconstrained) space, with dimension 4
     x1: size = (21,), type = Vector{Int64}
     x2: size = (21,), type = Vector{Int64}
 
-julia> Params(m)
-Params:
+julia> SeedsParams(m)
+SeedsParams:
   r       = [0.0, 0.0, 0.0, 0.0, 39.0, 0.0, 0.0, 72.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 4.0, 12.0, 0.0, 0.0, 0.0, 0.0]
   b       = [-Inf, -Inf, -Inf, -Inf, Inf, -Inf, -Inf, Inf, -Inf, -Inf  …  -Inf, -Inf, -Inf, -Inf, Inf, Inf, -Inf, -Inf, -Inf, -Inf]
   alpha0  = -1423.52
