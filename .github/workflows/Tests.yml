@@ -12,15 +12,20 @@ jobs:
   test:
     name: Julia ${{ matrix.version }} on ${{ matrix.os }} (${{ matrix.arch }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.version == 'nightly' }}
+    continue-on-error: ${{ matrix.version == 'pre' }}
     strategy:
-      fail-fast: false
       matrix:
-        version: ['1', '1.10', 'nightly']
-        os: [ubuntu-latest, windows-latest]
-        arch: [x64]
+        version:
+          - '1'
+          - 'min'
+          - 'pre'
+        os:
+          - ubuntu-latest
+          - windows-latest
+        arch:
+          - x64
         include:
-          - version: '1'
+          - version: 'min'
             os: ubuntu-latest
             arch: x64
             coverage: true
@@ -59,6 +64,11 @@ jobs:
         uses: julia-actions/julia-runtest@v1
         env:
           TEST_GROUP: "log_density"
+
+      - name: Running `source_gen` tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: "source_gen"
 
       - name: Running `gibbs` tests
         uses: nick-fields/retry@v3

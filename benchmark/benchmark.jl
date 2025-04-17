@@ -1,11 +1,11 @@
-module Benchmark
-
 using Pkg
 Pkg.develop(; path=joinpath(@__DIR__, ".."))
 
 using JuliaBUGS
-using ADTypes
-using ReverseDiff
+
+using DifferentiationInterface
+using Mooncake: Mooncake
+
 using MetaGraphsNext
 using BridgeStan
 using StanLogDensityProblems
@@ -95,6 +95,4 @@ function _print_results_table(
         header=["Model", "Parameters", "Density Time (µs)", "Density+Gradient Time (µs)"],
         backend=backend,
     )
-end
-
 end
