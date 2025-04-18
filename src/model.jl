@@ -42,14 +42,26 @@ function FlattenedGraphNodeData(
     )
 end
 
+abstract type EvaluationMode end
+
+struct UseGeneratedLogDensityFunction <: EvaluationMode end
+struct UseGraph <: EvaluationMode end
+
 """
     BUGSModel
 
 The `BUGSModel` object is used for inference and represents the output of compilation. It implements the
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
 """
-struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,TNF,TV} <:
-       AbstractBUGSModel
+struct BUGSModel{
+    EMT<:EvaluationMode,
+    base_model_T<:Union{<:AbstractBUGSModel,Nothing},
+    T<:NamedTuple,
+    TNF,
+    TV,
+    data_T,
+    F<:Union{Function,Nothing},
+} <: AbstractBUGSModel
     " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
 
@@ -74,6 +86,13 @@ struct BUGSModel{base_model_T<:Union{<:AbstractBUGSModel,Nothing},T<:NamedTuple,
 
     "If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`."
     base_model::base_model_T
+
+    evaluation_mode::EMT
+    log_density_computation_function::F
+
+    # for serialization, save the original model definition and data
+    model_def::Expr
+    data::data_T
 end
 
 function Base.show(io::IO, model::BUGSModel)
@@ -137,7 +156,9 @@ variables(model::BUGSModel) = collect(labels(model.g))
 function BUGSModel(
     g::BUGSGraph,
     evaluation_env::NamedTuple,
-    initial_params::NamedTuple=NamedTuple();
+    model_def::Expr,
+    data::NamedTuple,
+    initial_params::NamedTuple=NamedTuple(),
     is_transformed::Bool=true,
 )
     flattened_graph_node_data = FlattenedGraphNodeData(g)
@@ -188,6 +209,39 @@ function BUGSModel(
             end
         end
     end
+
+    # TODO: stop using try-catch
+    has_generated_log_density_function = false
+    lowered_model_def = nothing
+    reconstructed_model_def = nothing
+    try
+        lowered_model_def, reconstructed_model_def = _generate_lowered_model_def(
+            model_def, g, evaluation_env
+        )
+        has_generated_log_density_function = true
+    catch _
+        has_generated_log_density_function = false
+    end
+
+    if has_generated_log_density_function
+        log_density_computation_expr = _gen_log_density_computation_function_expr(
+            lowered_model_def, evaluation_env, gensym(:__compute_log_density__)
+        )
+        log_density_computation_function = eval(log_density_computation_expr)
+        pass = CollectSortedNodes(evaluation_env)
+        JuliaBUGS.analyze_block(pass, reconstructed_model_def)
+        sorted_nodes = pass.sorted_nodes
+        original_parameters_length = length(parameters)
+        parameters = VarName[vn for vn in sorted_nodes if vn in parameters]
+        @assert length(parameters) == original_parameters_length "there are less parameters in the generated log density function than in the original model"
+        flattened_graph_node_data = FlattenedGraphNodeData(g, sorted_nodes)
+    else
+        log_density_computation_function = nothing
+    end
+
+    # evaluation_mode =
+    #     has_generated_log_density_function ? UseGeneratedLogDensityFunction() : UseGraph()
+
     return BUGSModel(
         is_transformed,
         untransformed_param_length,
@@ -199,6 +253,10 @@ function BUGSModel(
         flattened_graph_node_data,
         g,
         nothing,
+        UseGraph(),
+        log_density_computation_function,
+        model_def,
+        data,
     )
 end
 
@@ -220,7 +278,31 @@ function BUGSModel(
         FlattenedGraphNodeData(g, sorted_nodes),
         g,
         isnothing(model.base_model) ? model : model.base_model,
+        model.evaluation_mode,
+        model.log_density_computation_function,
+        model.model_def,
+        model.data,
     )
+end
+
+function Serialization.serialize(s::Serialization.AbstractSerializer, model::BUGSModel)
+    Serialization.writetag(s.io, Serialization.OBJECT_TAG)
+    Serialization.serialize(s, typeof(model))
+    Serialization.serialize(s, model.transformed)
+    Serialization.serialize(s, model.model_def)
+    Serialization.serialize(s, model.data)
+    Serialization.serialize(s, model.evaluation_env)
+    return nothing
+end
+
+function Serialization.deserialize(s::Serialization.AbstractSerializer, ::Type{<:BUGSModel})
+    transformed = Serialization.deserialize(s)
+    model_def = Serialization.deserialize(s)
+    data = Serialization.deserialize(s)
+    evaluation_env = Serialization.deserialize(s)
+    # use evaluation_env as initialization to restore the values
+    model = compile(model_def, data, evaluation_env)
+    return settrans(model, transformed)
 end
 
 """
@@ -347,6 +429,16 @@ function settrans(model::BUGSModel, bool::Bool=!(model.transformed))
     return BangBang.setproperty!!(model, :transformed, bool)
 end
 
+function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
+    if model.log_density_computation_function === identity
+        @warn(
+            "The model does not support generated log density function, the evaluation mode is set to `UseGraph`."
+        )
+        mode = UseGraph()
+    end
+    return BangBang.setproperty!!(model, :evaluation_mode, mode)
+end
+
 function AbstractPPL.condition(
     model::BUGSModel,
     d::Dict{<:VarName,<:Any},
@@ -430,19 +522,25 @@ function check_var_group(var_group::Vector{<:VarName}, model::BUGSModel)
     )
 end
 
-function AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel)
+function AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel; sample_all=true)
     logp = 0.0
     evaluation_env = deepcopy(model.evaluation_env)
     for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
         is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
+        is_observed = model.flattened_graph_node_data.is_observed_vals[i]
         node_function = model.flattened_graph_node_data.node_function_vals[i]
         loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
+        if_sample = sample_all || !is_observed # also sample if not observed, only sample conditioned variables if sample_all is true
         if !is_stochastic
-            value = node_function(model.evaluation_env, loop_vars)
+            value = node_function(evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
-            dist = node_function(model.evaluation_env, loop_vars)
-            value = rand(rng, dist) # just sample from the prior
+            dist = node_function(evaluation_env, loop_vars)
+            if if_sample
+                value = rand(rng, dist) # just sample from the prior
+            else
+                value = AbstractPPL.get(evaluation_env, vn)
+            end
             if model.transformed
                 # see below for why we need to transform the value
                 value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
@@ -467,10 +565,10 @@ function AbstractPPL.evaluate!!(model::BUGSModel)
         node_function = model.flattened_graph_node_data.node_function_vals[i]
         loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
         if !is_stochastic
-            value = node_function(model.evaluation_env, loop_vars)
+            value = node_function(evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
-            dist = node_function(model.evaluation_env, loop_vars)
+            dist = node_function(evaluation_env, loop_vars)
             value = AbstractPPL.get(evaluation_env, vn)
             if model.transformed
                 # although the values stored in `evaluation_env` are in their original space, 
@@ -491,53 +589,10 @@ function AbstractPPL.evaluate!!(model::BUGSModel)
 end
 
 function AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVector)
-    var_lengths = if model.transformed
-        model.transformed_var_lengths
-    else
-        model.untransformed_var_lengths
-    end
-
-    evaluation_env = deepcopy(model.evaluation_env)
-    current_idx = 1
-    logp = 0.0
-    for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
-        is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
-        is_observed = model.flattened_graph_node_data.is_observed_vals[i]
-        node_function = model.flattened_graph_node_data.node_function_vals[i]
-        loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
-        if !is_stochastic
-            value = node_function(evaluation_env, loop_vars)
-            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
-        else
-            dist = node_function(evaluation_env, loop_vars)
-            if !is_observed
-                l = var_lengths[vn]
-                if model.transformed
-                    b = Bijectors.bijector(dist)
-                    b_inv = Bijectors.inverse(b)
-                    reconstructed_value = reconstruct(
-                        b_inv,
-                        dist,
-                        view(flattened_values, current_idx:(current_idx + l - 1)),
-                    )
-                    value, logjac = Bijectors.with_logabsdet_jacobian(
-                        b_inv, reconstructed_value
-                    )
-                else
-                    value = reconstruct(
-                        dist, view(flattened_values, current_idx:(current_idx + l - 1))
-                    )
-                    logjac = 0.0
-                end
-                current_idx += l
-                logp += logpdf(dist, value) + logjac
-                evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
-            else
-                logp += logpdf(dist, AbstractPPL.get(evaluation_env, vn))
-            end
-        end
-    end
-    return evaluation_env, logp
+    evaluation_env, (logprior, loglikelihood, tempered_logjoint) = _tempered_evaluate!!(
+        model, flattened_values; temperature=1.0
+    )
+    return evaluation_env, tempered_logjoint
 end
 
 """

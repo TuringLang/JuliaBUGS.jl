@@ -89,7 +89,7 @@ Implementations in C++ and R:
 
 Language Syntax:
 
-- [BNF](https://github.com/TuringLang/JuliaBUGS.jl/blob/master/archive/parser_attempts/BNF.txt)
+- [BNF](https://github.com/TuringLang/JuliaBUGS.jl/blob/main/archive/parser_attempts/BNF.txt)
 
 ### Writing a Model in Julia
 
@@ -320,7 +320,7 @@ For example:
 
 end
 
-n_chains = nprocs() - 1 # use all the processes except the master process
+n_chains = nprocs() - 1 # use all the processes except the parent process
 samples_and_stats = AbstractMCMC.sample(
     ad_model,
     AdvancedHMC.NUTS(0.65),
@@ -344,4 +344,4 @@ Sometimes the progress logger can cause problems in distributed setting, so we c
 
 ## More Examples
 
-We have transcribed all the examples from the first volume of the BUGS Examples ([original](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/JuliaBUGS.jl/tree/master/src/BUGSExamples/VOLUME_1)). All programs and data are included, and can be compiled using the steps described in the tutorial above.
+We have transcribed all the examples from the first volume of the BUGS Examples ([original](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/JuliaBUGS.jl/tree/main/src/BUGSExamples/Volume_1)). All programs and data are included, and can be compiled using the steps described in the tutorial above.

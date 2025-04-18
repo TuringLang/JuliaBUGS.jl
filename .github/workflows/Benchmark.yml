@@ -3,8 +3,13 @@ name: Benchmark
 on:
   pull_request:
     branches:
-      - master
+      - main
   workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  repository-projects: write
 
 jobs:
   benchmark:
@@ -59,6 +64,9 @@ jobs:
     needs: benchmark
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+      contents: write
 
     steps:
     - name: Download all benchmark results
@@ -66,17 +74,19 @@ jobs:
 
     - name: Combine benchmark results
       run: |
-        echo "Benchmark results on macOS (aarch64)" > combined_benchmark_results.txt
+        echo "## Benchmark results on macOS (aarch64)" > combined_benchmark_results.txt
         echo "" >> combined_benchmark_results.txt
         cat benchmark-results-macOS-latest/benchmark_results_macOS-latest.txt >> combined_benchmark_results.txt
         echo "" >> combined_benchmark_results.txt
-        echo "Benchmark results on Ubuntu (x64)" >> combined_benchmark_results.txt
+        echo "---" >> combined_benchmark_results.txt
+        echo "## Benchmark results on Ubuntu (x64)" >> combined_benchmark_results.txt
         echo "" >> combined_benchmark_results.txt
         cat benchmark-results-ubuntu-latest/benchmark_results_ubuntu-latest.txt >> combined_benchmark_results.txt
         echo "" >> combined_benchmark_results.txt
 
     - name: Post combined results to PR
       uses: marocchino/sticky-pull-request-comment@v2
+      if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
       with:
         path: combined_benchmark_results.txt
         recreate: true

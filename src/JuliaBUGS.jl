@@ -12,6 +12,7 @@ using LogDensityProblems, LogDensityProblemsAD
 using MacroTools
 using OrderedCollections: OrderedDict
 using Random
+using Serialization: Serialization
 using StaticArrays
 
 import Base: ==, hash, Symbol, size
@@ -36,6 +37,8 @@ include("compiler_pass.jl")
 include("model.jl")
 include("logdensityproblems.jl")
 include("gibbs.jl")
+
+include("source_gen.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 
@@ -172,7 +175,7 @@ function compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple=N
             values(eval_env),
         ),
     )
-    return BUGSModel(g, nonmissing_eval_env, initial_params)
+    return BUGSModel(g, nonmissing_eval_env, model_def, data, initial_params)
 end
 
 """

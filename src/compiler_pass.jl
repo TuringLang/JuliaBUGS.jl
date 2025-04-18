@@ -66,9 +66,15 @@ end
 function CollectVariables(model_def::Expr, data::NamedTuple{data_vars}) where {data_vars}
     for var in extract_variables_in_bounds_and_lhs_indices(model_def)
         if var ∉ data_vars
-            error(
-                "Variable $var is used in loop bounds or indices but not defined in the data.",
-            )
+            if var === :(:)
+                error(
+                    "BUGS language requires explicit range indexing on the LHS, e.g., use `[1:S]` instead of `:`.",
+                )
+            else
+                error(
+                    "Variable $var is used in loop bounds or indices but not defined in the data.",
+                )
+            end
         end
     end
 
@@ -580,7 +586,7 @@ julia> evaluate_and_track_dependencies(:(getindex(x[1:2, 1:3], a, b)), (x = [1 2
 evaluate_and_track_dependencies(var::Union{Int,Float64}, env) = var, ()
 evaluate_and_track_dependencies(var::UnitRange, env) = var, ()
 function evaluate_and_track_dependencies(var::Symbol, env)
-    if var ∈ (:nothing, :missing, :(:))
+    if var ∈ (:nothing, :missing, :Inf, :(:))
         return var, ()
     end
     if env[var] === missing

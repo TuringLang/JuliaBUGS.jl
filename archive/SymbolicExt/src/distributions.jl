@@ -1,7 +1,7 @@
 
 # Support for distributions that are part of BUGS but not implemented in Distributions.jl.
 
-# Modified from https://github.com/TuringLang/Turing.jl/blob/master/src/stdlib/distributions.jl
+# Modified from https://github.com/TuringLang/Turing.jl/blob/main/src/stdlib/distributions.jl
 # Rename `Flat` to `DFlat` to avoid name conflict with Turing.jl
 """
     Flat

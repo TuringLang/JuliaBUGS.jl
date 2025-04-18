@@ -2,7 +2,8 @@ name: Tests
 
 on:
   push:
-    branches: ["master"]
+    branches:
+      - main
   pull_request:
 
   workflow_dispatch:
@@ -11,15 +12,20 @@ jobs:
   test:
     name: Julia ${{ matrix.version }} on ${{ matrix.os }} (${{ matrix.arch }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.version == 'nightly' }}
+    continue-on-error: ${{ matrix.version == 'pre' }}
     strategy:
-      fail-fast: false
       matrix:
-        version: ['1', '1.9', 'nightly']
-        os: [ubuntu-latest, windows-latest]
-        arch: [x64]
+        version:
+          - '1'
+          - 'min'
+          - 'pre'
+        os:
+          - ubuntu-latest
+          - windows-latest
+        arch:
+          - x64
         include:
-          - version: '1'
+          - version: 'min'
             os: ubuntu-latest
             arch: x64
             coverage: true
@@ -54,6 +60,16 @@ jobs:
         env:
           TEST_GROUP: "compilation"
 
+      - name: Running `log_density` tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: "log_density"
+
+      - name: Running `source_gen` tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: "source_gen"
+
       - name: Running `gibbs` tests
         uses: nick-fields/retry@v3
         with:
@@ -71,6 +87,11 @@ jobs:
           command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true);"
         env:
           TEST_GROUP: "mcmchains"
+
+      - name: Running `experimental` tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: "experimental"
       
       - uses: julia-actions/julia-processcoverage@v1
         if: matrix.coverage
