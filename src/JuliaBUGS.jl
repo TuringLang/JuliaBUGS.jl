@@ -187,41 +187,16 @@ function compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple=N
     )
     return BUGSModel(g, nonmissing_eval_env, model_def, data, initial_params)
 end
-
-"""
-    compile(model_str::String, data::NamedTuple[, initial_params::NamedTuple=NamedTuple()]; kwargs...)
-
-Compile a BUGS model defined by a string, along with provided data and optional initial parameter values.
-
-This method first parses the BUGS model string into a Julia expression using `JuliaBUGS.Parser.to_julia_program`
-and then calls the primary `compile` method.
-
-# Arguments
-- `model_str::String`: A string containing the BUGS model definition.
-- `data::NamedTuple`: A NamedTuple mapping variable names (as Symbols) to their corresponding data values.
-- `initial_params::NamedTuple=NamedTuple()`: Optional. A NamedTuple providing initial values for model parameters. If not provided, initial values might be sampled from prior distributions or determined by the inference algorithm.
-
-# Keyword Arguments
-- `replace_period::Bool=true`: If `true`, periods (`.`) in BUGS variable names are replaced with underscores (`_`) during parsing. If `false`, periods are retained, and variable names containing periods are wrapped in `var"..."` (e.g., `var"a.b"`). See [`JuliaBUGS.Parser.to_julia_program`](@ref) for details.
-- `no_enclosure::Bool=false`: If `true`, the parser does not require the model code to be enclosed within `model { ... }`. See [`JuliaBUGS.Parser.to_julia_program`](@ref) for details.
-
-# Returns
-- `BUGSModel`: A compiled model object ready for inference.
-
-# See Also
-- [`compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple)`](@ref): The primary compile method taking a Julia expression.
-- [`JuliaBUGS.Parser.to_julia_program`](@ref): The function used internally to parse the model string.
-"""
-function compile(
-    model_str::String,
-    data::NamedTuple,
-    initial_params::NamedTuple=NamedTuple();
-    replace_period::Bool=true,
-    no_enclosure::Bool=false,
-)
-    model_def = _bugs_string_input(model_str, replace_period, no_enclosure)
-    return compile(model_def, data, initial_params)
-end
+# function compile(
+#     model_str::String,
+#     data::NamedTuple,
+#     initial_params::NamedTuple=NamedTuple();
+#     replace_period::Bool=true,
+#     no_enclosure::Bool=false,
+# )
+#     model_def = _bugs_string_input(model_str, replace_period, no_enclosure)
+#     return compile(model_def, data, initial_params)
+# end
 
 """
     @register_primitive(expr)
