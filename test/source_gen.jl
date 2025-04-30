@@ -32,6 +32,7 @@ test_examples = [
     :air,
     :birats,
     :schools,
+    :cervix,
 ]
 
 function _create_model(model_name::Symbol)
@@ -87,4 +88,18 @@ end
             __logp__ ~ dnorm(0, 1)
         end
     )
+end
+
+@testset "mixed data transformation and deterministic assignments" begin
+    model_def = @bugs begin
+        for i in 1:5
+            y[i] ~ Normal(0, 1)
+        end
+        for i in 1:5
+            x[i] = y[i] + 1
+        end
+    end
+    data = (; y=[1, 2, missing, missing, 2])
+
+    model = compile(model_def, data)
 end

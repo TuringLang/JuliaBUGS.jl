@@ -457,6 +457,8 @@ end
 
 We made a simple change to the program to prepare for lowering: we need to distinguish between observations and model parameters (because they correspond to different code). We introduce a new operator into the program `\eqsim` to indicate that the left hand side is an observation.
 
+### Handling Mixed Observations and Parameters
+
 BUGS supports mixing observations and model parameters for different elements of the same array variable.
 To support this, we introduce a guard to use conditional logic to decide what computation to do for different iteration of the same statement.
 
@@ -487,3 +489,27 @@ begin
     end
 end
 ```
+
+### Handling Mixed Data Transformation and Deterministic Assignments
+
+For instance
+
+```julia
+for i in 1:5
+    x[i] = y[i] + 1
+end
+```
+
+if the data is
+
+```julia
+y = [1, 2, missing, missing, 2]
+```
+
+this is generally allowed in BUGS.
+
+`x[1], x[2], x[5]` can be computed at compile time, so these are "transformed data".
+`x[3], x[4]` need to be computed at evaluation time.
+And only `x[3]` and `x[4]` are in the compiled graph.
+
+For generated Julia program, if a statement can be eliminated because all the variables stemmed from this statement are "transformed data". While in the above case, where a statements corresponds to both transformed data and deterministic variables. It will be left in the generated program as is. In this case, there will be redundant computation.
