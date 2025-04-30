@@ -233,6 +233,7 @@ function BUGSModel(
         sorted_nodes = pass.sorted_nodes
         original_parameters_length = length(parameters)
         parameters = VarName[vn for vn in sorted_nodes if vn in parameters]
+        sorted_nodes = [vn for vn in sorted_nodes if vn in flattened_graph_node_data.sorted_nodes]
         @assert length(parameters) == original_parameters_length "there are less parameters in the generated log density function than in the original model"
         flattened_graph_node_data = FlattenedGraphNodeData(g, sorted_nodes)
     else
