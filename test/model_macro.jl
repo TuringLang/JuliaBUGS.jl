@@ -99,12 +99,12 @@ using JuliaBUGS: @parameters, @model
 
     params_nt_with_data = (
         r=data.r,
-        b=JuliaBUGS.PARAMETER_PLACEHOLDER,
-        alpha0=JuliaBUGS.PARAMETER_PLACEHOLDER,
-        alpha1=JuliaBUGS.PARAMETER_PLACEHOLDER,
-        alpha2=JuliaBUGS.PARAMETER_PLACEHOLDER,
-        alpha12=JuliaBUGS.PARAMETER_PLACEHOLDER,
-        tau=JuliaBUGS.PARAMETER_PLACEHOLDER,
+        b=JuliaBUGS.ParameterPlaceholder(),
+        alpha0=JuliaBUGS.ParameterPlaceholder(),
+        alpha1=JuliaBUGS.ParameterPlaceholder(),
+        alpha2=JuliaBUGS.ParameterPlaceholder(),
+        alpha12=JuliaBUGS.ParameterPlaceholder(),
+        tau=JuliaBUGS.ParameterPlaceholder(),
     )
     m = seeds(params_nt_with_data, data.x1, data.x2, data.N, data.n)
 end
