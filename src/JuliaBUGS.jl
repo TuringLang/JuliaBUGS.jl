@@ -153,6 +153,16 @@ end
 Compile the model with model definition and data. Optionally, initializations can be provided. 
 If initializations are not provided, values will be sampled from the prior distributions. 
 """
+function compile(
+    model_str::String,
+    data::NamedTuple,
+    initial_params::NamedTuple=NamedTuple();
+    replace_period::Bool=true,
+    no_enclosure::Bool=false,
+)
+    model_def = _bugs_string_input(model_str, replace_period, no_enclosure)
+    return compile(model_def, data, initial_params)
+end
 function compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple=NamedTuple())
     data = check_input(data)
     eval_env = semantic_analysis(model_def, data)
