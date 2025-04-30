@@ -7,13 +7,14 @@ using MacroTools
 # it captures multiple components into an array.
 
 struct ParameterPlaceholder end
-const PARAMETER_PLACEHOLDER = ParameterPlaceholder()
 
 macro parameters(struct_expr)
     if MacroTools.@capture(struct_expr, struct struct_name_
         struct_fields__
     end)
-        return _generate_struct_definition(struct_name, struct_fields)
+        return _generate_struct_definition(
+            struct_name, struct_fields, __source__, __module__
+        )
     else
         return :(throw(
             ArgumentError(
@@ -23,7 +24,7 @@ macro parameters(struct_expr)
     end
 end
 
-function _generate_struct_definition(struct_name, struct_fields)
+function _generate_struct_definition(struct_name, struct_fields, __source__, __module__)
     if !isa(struct_name, Symbol)
         return :(throw(
             ArgumentError(
@@ -76,9 +77,18 @@ function _generate_struct_definition(struct_name, struct_fields)
         end
     end
 
+    kw_assignments = map(f -> Expr(:kw, esc(f), :(ParameterPlaceholder())), struct_fields)
+    kwarg_constructor_expr = MacroTools.@q function $(esc(struct_name))(;
+        $(kw_assignments...)
+    )
+        return $(esc(struct_name))($(map(esc, struct_fields)...))
+    end
     return MacroTools.@q begin
-        Base.@kwdef struct $(esc(struct_name))
-            $(map(f -> :($(esc(f)) = JuliaBUGS.PARAMETER_PLACEHOLDER), struct_fields)...)
+        begin
+            struct $(esc(struct_name))
+                $(map(esc, struct_fields)...)
+            end
+            $(kwarg_constructor_expr)
         end
 
         $(show_method_expr)
