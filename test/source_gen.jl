@@ -7,7 +7,6 @@ using JuliaBUGS.BUGSPrimitives
 using LogDensityProblems
 using OrderedCollections
 
-# bones, mice, kidney have missings in data
 test_examples = [
     :rats,
     :pumps,
