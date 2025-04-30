@@ -87,25 +87,24 @@ using JuliaBUGS: @parameters, @model
     # with missing values
     N = data.N
     params_nt = (
-        r = fill(missing, N),
-        b = fill(missing, N),
-        alpha0 = missing,
-        alpha1 = missing,
-        alpha2 = missing,
-        alpha12 = missing,
-        tau = missing,
+        r=fill(missing, N),
+        b=fill(missing, N),
+        alpha0=missing,
+        alpha1=missing,
+        alpha2=missing,
+        alpha12=missing,
+        tau=missing,
     )
     m = seeds(params_nt, data.x1, data.x2, data.N, data.n)
 
     params_nt_with_data = (
-        r = data.r,
-        b = JuliaBUGS.PARAMETER_PLACEHOLDER,
-        alpha0 = JuliaBUGS.PARAMETER_PLACEHOLDER,
-        alpha1 = JuliaBUGS.PARAMETER_PLACEHOLDER,
-        alpha2 = JuliaBUGS.PARAMETER_PLACEHOLDER,
-        alpha12 = JuliaBUGS.PARAMETER_PLACEHOLDER,
-        tau = JuliaBUGS.PARAMETER_PLACEHOLDER,
+        r=data.r,
+        b=JuliaBUGS.PARAMETER_PLACEHOLDER,
+        alpha0=JuliaBUGS.PARAMETER_PLACEHOLDER,
+        alpha1=JuliaBUGS.PARAMETER_PLACEHOLDER,
+        alpha2=JuliaBUGS.PARAMETER_PLACEHOLDER,
+        alpha12=JuliaBUGS.PARAMETER_PLACEHOLDER,
+        tau=JuliaBUGS.PARAMETER_PLACEHOLDER,
     )
     m = seeds(params_nt_with_data, data.x1, data.x2, data.N, data.n)
-
 end
