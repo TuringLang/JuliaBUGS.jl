@@ -3,7 +3,7 @@
 const stan_models_path_info = (
     rats=(1, :rats, :rats),
     pumps=(1, :pump, :pump),
-    # dogs=(1, :dogs, :dogs),
+    dogs=(1, :dogs, :dogs),
     seeds=(1, :seeds, :seeds),
     surgical_realistic=(1, :surgical, :surgical),
     magnesium=(1, :magnesium, :magnesium),
@@ -26,6 +26,12 @@ const stan_models_path_info = (
     schools=(2, :schools, :schools),
     beetles=(2, :beetles, :beetles_logit),
     alligators=(2, :alli, :alli2),
+    endo=(2, :endo, :endo2),
+    stagnant=(2, :stagnant, :stagnant),
+    biopsies=(2, :biopsies, :biopsies),
+    eyes=(2, :eyes, :eyes),
+    hearts=(2, :hearts, :hearts),
+    cervix=(2, :cervix, :cervix2),
 )
 
 const stan_examples_folder = joinpath(@__DIR__, "stan/bugs_examples/")
