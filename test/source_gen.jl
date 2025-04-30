@@ -1,8 +1,6 @@
 using BangBang
 using Bijectors
 using JuliaBUGS
-using JuliaBUGS: _generate_lowered_model_def, _gen_log_density_computation_function_expr
-using JuliaBUGS: CollectSortedNodes
 using JuliaBUGS.BUGSPrimitives
 using LogDensityProblems
 using OrderedCollections
