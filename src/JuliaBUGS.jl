@@ -43,20 +43,30 @@ include("source_gen.jl")
 include("BUGSExamples/BUGSExamples.jl")
 
 function check_input(input::NamedTuple)
+    valid_pairs = Pair{Symbol,Any}[]
     for (k, v) in pairs(input)
-        if v isa AbstractArray
-            if !(eltype(v) <: Union{Int,Float64,Missing})
+        if v === missing
+            continue # Skip missing values
+        elseif v isa AbstractArray
+            # Allow arrays containing Int, Float64, or Missing
+            allowed_eltypes = Union{Int,Float64,Missing}
+            if !(eltype(v) <: allowed_eltypes)
                 error(
-                    "For array input, only Int, Float64, or Missing types are supported. Received: $(typeof(v)).",
+                    "For array input '$k', only elements of type $allowed_eltypes are supported. Received array with eltype: $(eltype(v)).",
                 )
             end
-        elseif v === missing
-            error("Scalars cannot be missing. Received: $k")
-        elseif !(v isa Union{Int,Float64})
-            error("Scalars must be of type Int or Float64. Received: $k")
+            push!(valid_pairs, k => v)
+        elseif v isa Union{Int,Float64}
+            # Allow scalar Int or Float64
+            push!(valid_pairs, k => v)
+        else
+            # Error for other scalar types
+            error(
+                "Scalar input '$k' must be of type Int or Float64. Received: $(typeof(v))."
+            )
         end
     end
-    return input
+    return NamedTuple(valid_pairs)
 end
 function check_input(input::Dict{KT,VT}) where {KT,VT}
     if isempty(input)
@@ -153,16 +163,6 @@ end
 Compile the model with model definition and data. Optionally, initializations can be provided. 
 If initializations are not provided, values will be sampled from the prior distributions. 
 """
-function compile(
-    model_str::String,
-    data::NamedTuple,
-    initial_params::NamedTuple=NamedTuple();
-    replace_period::Bool=true,
-    no_enclosure::Bool=false,
-)
-    model_def = _bugs_string_input(model_str, replace_period, no_enclosure)
-    return compile(model_def, data, initial_params)
-end
 function compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple=NamedTuple())
     data = check_input(data)
     eval_env = semantic_analysis(model_def, data)
@@ -186,6 +186,41 @@ function compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple=N
         ),
     )
     return BUGSModel(g, nonmissing_eval_env, model_def, data, initial_params)
+end
+
+"""
+    compile(model_str::String, data::NamedTuple[, initial_params::NamedTuple=NamedTuple()]; kwargs...)
+
+Compile a BUGS model defined by a string, along with provided data and optional initial parameter values.
+
+This method first parses the BUGS model string into a Julia expression using `JuliaBUGS.Parser.to_julia_program`
+and then calls the primary `compile` method.
+
+# Arguments
+- `model_str::String`: A string containing the BUGS model definition.
+- `data::NamedTuple`: A NamedTuple mapping variable names (as Symbols) to their corresponding data values.
+- `initial_params::NamedTuple=NamedTuple()`: Optional. A NamedTuple providing initial values for model parameters. If not provided, initial values might be sampled from prior distributions or determined by the inference algorithm.
+
+# Keyword Arguments
+- `replace_period::Bool=true`: If `true`, periods (`.`) in BUGS variable names are replaced with underscores (`_`) during parsing. If `false`, periods are retained, and variable names containing periods are wrapped in `var"..."` (e.g., `var"a.b"`). See [`JuliaBUGS.Parser.to_julia_program`](@ref) for details.
+- `no_enclosure::Bool=false`: If `true`, the parser does not require the model code to be enclosed within `model { ... }`. See [`JuliaBUGS.Parser.to_julia_program`](@ref) for details.
+
+# Returns
+- `BUGSModel`: A compiled model object ready for inference.
+
+# See Also
+- [`compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple)`](@ref): The primary compile method taking a Julia expression.
+- [`JuliaBUGS.Parser.to_julia_program`](@ref): The function used internally to parse the model string.
+"""
+function compile(
+    model_str::String,
+    data::NamedTuple,
+    initial_params::NamedTuple=NamedTuple();
+    replace_period::Bool=true,
+    no_enclosure::Bool=false,
+)
+    model_def = _bugs_string_input(model_str, replace_period, no_enclosure)
+    return compile(model_def, data, initial_params)
 end
 
 """

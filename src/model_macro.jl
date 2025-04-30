@@ -7,6 +7,7 @@ using MacroTools
 # it captures multiple components into an array.
 
 struct ParameterPlaceholder end
+const PARAMETER_PLACEHOLDER = ParameterPlaceholder()
 
 macro parameters(struct_expr)
     if MacroTools.@capture(struct_expr, struct struct_name_
@@ -77,7 +78,7 @@ function _generate_struct_definition(struct_name, struct_fields)
 
     return MacroTools.@q begin
         Base.@kwdef struct $(esc(struct_name))
-            $(map(f -> :($(esc(f)) = ParameterPlaceholder()), struct_fields)...)
+            $(map(f -> :($(esc(f)) = JuliaBUGS.PARAMETER_PLACEHOLDER), struct_fields)...)
         end
 
         $(show_method_expr)

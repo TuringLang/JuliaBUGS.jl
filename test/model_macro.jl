@@ -36,9 +36,10 @@ using JuliaBUGS: @parameters, @model
     @test_throws ErrorException begin
         #! format: off
         @model function seeds(
+            #                                       tau is missing
             (; r, b, alpha0, alpha1, alpha2, alpha12)::Tp, x1, x2, N, n
         )
-        for i in 1:N
+            for i in 1:N
                 r[i] ~ dbin(p[i], n[i])
                 b[i] ~ dnorm(0.0, tau)
                 p[i] = logistic(
@@ -59,9 +60,10 @@ using JuliaBUGS: @parameters, @model
     @test_throws ErrorException begin
         #! format: off
         @model function seeds(
+            #                                                  x1 is missing
             (; r, b, alpha0, alpha1, alpha2, alpha12, tau)::Tp, x2, N, n
         )
-        for i in 1:N
+            for i in 1:N
                 r[i] ~ dbin(p[i], n[i])
                 b[i] ~ dnorm(0.0, tau)
                 p[i] = logistic(
@@ -81,5 +83,29 @@ using JuliaBUGS: @parameters, @model
     data = JuliaBUGS.BUGSExamples.seeds.data
     m = seeds(Tp(), data.x1, data.x2, data.N, data.n)
 
-    @test m isa JuliaBUGS.BUGSModel
+    # use NamedTuple to pass parameters
+    # with missing values
+    N = data.N
+    params_nt = (
+        r = fill(missing, N),
+        b = fill(missing, N),
+        alpha0 = missing,
+        alpha1 = missing,
+        alpha2 = missing,
+        alpha12 = missing,
+        tau = missing,
+    )
+    m = seeds(params_nt, data.x1, data.x2, data.N, data.n)
+
+    params_nt_with_data = (
+        r = data.r,
+        b = JuliaBUGS.PARAMETER_PLACEHOLDER,
+        alpha0 = JuliaBUGS.PARAMETER_PLACEHOLDER,
+        alpha1 = JuliaBUGS.PARAMETER_PLACEHOLDER,
+        alpha2 = JuliaBUGS.PARAMETER_PLACEHOLDER,
+        alpha12 = JuliaBUGS.PARAMETER_PLACEHOLDER,
+        tau = JuliaBUGS.PARAMETER_PLACEHOLDER,
+    )
+    m = seeds(params_nt_with_data, data.x1, data.x2, data.N, data.n)
+
 end
