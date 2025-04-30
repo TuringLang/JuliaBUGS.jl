@@ -12,11 +12,11 @@ jobs:
   test:
     name: Julia ${{ matrix.version }} on ${{ matrix.os }} (${{ matrix.arch }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.version == 'nightly' }}
+    continue-on-error: ${{ matrix.version == 'pre' }}
     strategy:
       fail-fast: false
       matrix:
-        version: ['1', '1.10', 'nightly']
+        version: ['1', 'min', 'pre']
         os: [macOS-latest]
         arch: [aarch64]
 
@@ -55,6 +55,11 @@ jobs:
         env:
           TEST_GROUP: "log_density"
 
+      - name: Running `source_gen` tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: "source_gen"
+
       - name: Running `gibbs` tests
         uses: nick-fields/retry@v3
         with:
@@ -77,17 +82,4 @@ jobs:
         uses: julia-actions/julia-runtest@v1
         env:
           TEST_GROUP: "experimental"
-      
-      - uses: julia-actions/julia-processcoverage@v1
-        if: matrix.coverage
 
-      - uses: codecov/codecov-action@v4
-        if: matrix.coverage
-        with:
-          file: lcov.info
-      
-      - uses: coverallsapp/github-action@master
-        if: matrix.coverage
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path-to-lcov: lcov.info
