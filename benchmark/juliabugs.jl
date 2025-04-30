@@ -85,6 +85,20 @@ function benchmark_JuliaBUGS_model_with_Mooncake(model::JuliaBUGS.BUGSModel)
     return BenchmarkResult(:juliabugs, dim, density_time, density_and_gradient_time)
 end
 
+# function benchmark_JuliaBUGS_model_with_ReverseDiff(model::JuliaBUGS.BUGSModel)
+#     model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+#     ad_model = LogDensityProblemsAD.ADgradient(:ReverseDiff, model; compile=Val(true))
+#     dim = LogDensityProblems.dimension(model)
+#     params_values = JuliaBUGS.getparams(model)
+#     density_time = Chairmarks.@be LogDensityProblemsAD.logdensity($model, $params_values)
+#     density_and_gradient_time = Chairmarks.@be LogDensityProblemsAD.logdensity_and_gradient(
+#         $ad_model, $params_values
+#     )
+#     return BenchmarkResult(
+#         :juliabugs_reverse_diff, dim, density_time, density_and_gradient_time
+#     )
+# end
+
 # function benchmark_JuliaBUGS_model_with_Enzyme(model::JuliaBUGS.BUGSModel)
 #     f(params, model) = LogDensityProblems.logdensity(model, params)
 #     backend = AutoEnzyme()
