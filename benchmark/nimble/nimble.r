@@ -225,7 +225,7 @@ for (example in names(benchmark_results)) {
     result <- benchmark_results[[example]]
     
     if (!is.null(result$non_compiled_log_joint)) {
-        cat("Non-compiled log joint time (microseconds):\n")
+        cat("Non-compiled log joint time (milliseconds):\n")
         print(summary(result$non_compiled_log_joint))
     }
     
@@ -252,7 +252,7 @@ for (example in names(benchmark_results_vol2)) {
     result <- benchmark_results_vol2[[example]]
     
     if (!is.null(result$non_compiled_log_joint)) {
-        cat("Non-compiled log joint time (microseconds):\n")
+        cat("Non-compiled log joint time (milliseconds):\n")
         print(summary(result$non_compiled_log_joint))
     }
     
