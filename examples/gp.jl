@@ -55,12 +55,7 @@ JuliaBUGS.@register_primitive function y_distribution(n, f_latent)
 end
 
 model = gp_golf_putting(
-    (;
-        v = missing,
-        l = missing,
-        f_latent = fill(missing, data.N),
-        y = data.y,
-    ),
+    (; v=missing, l=missing, f_latent=fill(missing, data.N), y=data.y),
     data.N,      # number of observations
     data.n,       # Observed attempts
     data.d,      # Observed distances
@@ -88,21 +83,17 @@ gradient(f, prep, backend, x)
 
 bugsmooncake = BUGSMooncakeModel(model, prep)
 
-function LogDensityProblems.logdensity(
-    model::BUGSMooncakeModel,
-    x::AbstractVector,
-)
+function LogDensityProblems.logdensity(model::BUGSMooncakeModel, x::AbstractVector)
     return f(x)
 end
 function LogDensityProblems.logdensity_and_gradient(
-    model::BUGSMooncakeModel,
-    x::AbstractVector,
+    model::BUGSMooncakeModel, x::AbstractVector
 )
-    return DifferentiationInterface.value_and_gradient(f, model.prep, AutoMooncake(; config=nothing), x)
+    return DifferentiationInterface.value_and_gradient(
+        f, model.prep, AutoMooncake(; config=nothing), x
+    )
 end
-function LogDensityProblems.dimension(
-    model::BUGSMooncakeModel,
-)
+function LogDensityProblems.dimension(model::BUGSMooncakeModel)
     return LogDensityProblems.dimension(model.model)
 end
 function LogDensityProblems.capabilities(::BUGSMooncakeModel)

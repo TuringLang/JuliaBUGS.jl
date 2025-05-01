@@ -38,7 +38,7 @@ JuliaBUGS.@register_primitive function NegativeBinomial2(μ, ϕ)
     return NegativeBinomial(r, p)
 end
 
-@model function sir_model((;beta, gamma, phi_inv, I_data), u0)
+@model function sir_model((; beta, gamma, phi_inv, I_data), u0)
     beta ~ truncated(Normal(2, 1), 0, nothing)
     gamma ~ truncated(Normal(0.4, 0.5), 0, nothing)
     phi_inv ~ Exponential(1 / 5)
@@ -49,7 +49,7 @@ end
 
     predicted[1:14] = solve_ode(u0[:], p[:])
 
-    for i = 1:14
+    for i in 1:14
         I_data[i] ~ NegativeBinomial2(predicted[i] + 1e-5, phi)
     end
 
@@ -65,10 +65,10 @@ inits = (β=2, γ=0.5, ϕ⁻¹=0.2)
 
 model = sir_model(
     (;
-        beta = missing,
-        gamma = missing,
-        phi_inv = missing,
-        I_data = [3, 8, 26, 76, 225, 298, 258, 233, 189, 128, 68, 29, 14, 4]
+        beta=missing,
+        gamma=missing,
+        phi_inv=missing,
+        I_data=[3, 8, 26, 76, 225, 298, 258, 233, 189, 128, 68, 29, 14, 4],
     ),
     [762.0, 1.0, 0.0],
 )
