@@ -20,8 +20,10 @@ function SIR!(
     β, γ = p
     du[1] = dS = -β * I * S / N
     du[2] = dI = β * I * S / N - γ * I
-    return du[3] = dR = γ * I
+    du[3] = dR = γ * I
 end
+
+JuliaBUGS.@register_primitive DifferentialEquations
 
 JuliaBUGS.@register_primitive function solve_ode(u0, p)
     tspan = (0.0, 14.0)
@@ -36,24 +38,23 @@ JuliaBUGS.@register_primitive function NegativeBinomial2(μ, ϕ)
     return NegativeBinomial(r, p)
 end
 
-sir_bugs_model = @bugs begin
-    β ~ truncated(Normal(2, 1), 0, nothing)
-    γ ~ truncated(Normal(0.4, 0.5), 0, nothing)
-    ϕ⁻¹ ~ Exponential(1 / 5)
-    ϕ = inv(ϕ⁻¹)
+@model function sir_model((;beta, gamma, phi_inv, I_data), u0)
+    beta ~ truncated(Normal(2, 1), 0, nothing)
+    gamma ~ truncated(Normal(0.4, 0.5), 0, nothing)
+    phi_inv ~ Exponential(1 / 5)
+    phi = inv(phi_inv)
 
-    p[1] = β
-    p[2] = γ
+    p[1] = beta
+    p[2] = gamma
 
     predicted[1:14] = solve_ode(u0[:], p[:])
 
-    for i in 1:14
-        I_data[i] ~ NegativeBinomial2(predicted[i] + 1e-5, ϕ)
+    for i = 1:14
+        I_data[i] ~ NegativeBinomial2(predicted[i] + 1e-5, phi)
     end
 
-    # generated quantities
-    R0 = β / γ
-    recovery_time = 1 / γ
+    R0 = beta / gamma
+    recovery_time = 1 / gamma
     infected[1:14] = predicted[:]
 end
 
@@ -61,7 +62,16 @@ data = (
     I_data=[3, 8, 26, 76, 225, 298, 258, 233, 189, 128, 68, 29, 14, 4], u0=[762.0, 1.0, 0.0]
 )
 inits = (β=2, γ=0.5, ϕ⁻¹=0.2)
-model = compile(sir_bugs_model, data, inits)
+
+model = sir_model(
+    (;
+        beta = missing,
+        gamma = missing,
+        phi_inv = missing,
+        I_data = [3, 8, 26, 76, 225, 298, 258, 233, 189, 128, 68, 29, 14, 4]
+    ),
+    [762.0, 1.0, 0.0],
+)
 
 # use `ForwardDiff` this time
 ad_model = ADgradient(:ForwardDiff, model)
