@@ -1,8 +1,18 @@
 using JuliaBUGS
 
-using Lux, Mooncake, Functors, FillArrays, ADTypes, DifferentiationInterface
-
-using LinearAlgebra, Random
+using AbstractMCMC
+using ADTypes
+using AdvancedHMC
+using DifferentiationInterface
+using FillArrays
+using Functors
+using LinearAlgebra
+using LogDensityProblems
+using LogDensityProblemsAD
+using Lux
+using MCMCChains
+using Mooncake
+using Random
 
 ## data simulation
 
@@ -86,11 +96,14 @@ data = (nparameters=Lux.parameterlength(nn), xs=xs_hcat, ts=ts, N=length(ts), si
 
 model = compile(model_def, data)
 
-# ! issue with Mooncake: produce MWE
 ad_model = ADgradient(AutoMooncake(; config=Mooncake.Config()), model)
-ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 
-# sampling is slow
+# sampling is slow, so sample 10 of them to verify that this can work
 samples_and_stats = AbstractMCMC.sample(
-    ad_model, NUTS(0.65), 3000; chain_type=Chains, n_adapts=1000, discard_initial=1000
+    ad_model,
+    NUTS(0.65),
+    10;
+    chain_type=Chains,
+    # n_adapts=1000, 
+    # discard_initial=1000
 )
