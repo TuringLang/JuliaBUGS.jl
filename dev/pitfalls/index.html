@@ -35,6 +35,8 @@
         --item-color: rgb(165, 165, 165);
         --primary-bg: #073c44;
         --hover-color: #8faad2;
+        --deprecated-bg: #ff4d4d;
+        --deprecated-text: white;
     }
 
     .ext-navigation {
@@ -132,6 +134,8 @@
 
     .ext-dropdown ul li {
         text-align: left;
+        display: flex;
+        align-items: center;
     }
 
     .navbar-sub-item {
@@ -153,6 +157,16 @@
     .ext-dropdown-item-heading {
         color: var(--heading-color);
         text-align: center;
+    }
+
+    .deprecated-badge {
+        background-color: var(--deprecated-bg);
+        color: var(--deprecated-text);
+        font-size: 0.75rem;
+        padding: 0.125rem 0.375rem;
+        border-radius: 3px;
+        margin-left: 0.5rem;
+        line-height: 1;
     }
 
     /* Responsive styling */
@@ -212,6 +226,7 @@
 
         .ext-dropdown ul li {
             text-align: center;
+            /* justify-content: center; */
         }
 
         .ext-dropdown ul a li {
@@ -329,7 +344,8 @@
                 </ul>
                 <ul>
                     <li class="ext-dropdown-item-heading ext-navbar-item-single">
-                        <a href="https://turinglang.org/TuringBenchmarking.jl/">TuringBenchmarking</a>
+                        <a href="https://turinglang.org/Deprecated/TuringBenchmarking/">TuringBenchmarking</a>
+                        <span class="deprecated-badge">Deprecated</span>
                     </li>
                 </ul>
             </div>
@@ -458,7 +474,6 @@
 </script>
 <!-- NAVBAR END -->
 
-
 <div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">JuliaBUGS.jl</a></span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../example/">Example</a></li><li><span class="tocitem">API</span><ul><li><a class="tocitem" href="../api/api/">General</a></li><li><a class="tocitem" href="../api/functions/">Functions</a></li><li><a class="tocitem" href="../api/distributions/">Distributions</a></li><li><a class="tocitem" href="../api/user_defined_functions/">User-Defined Functions and Distributions</a></li></ul></li><li><a class="tocitem" href="../differences/">Differences from Other BUGS Implementations</a></li><li class="is-active"><a class="tocitem" href>Pitfalls</a><ul class="internal"><li><a class="tocitem" href="#Consequence-of-Observations-on-Model-Parameters"><span>Consequence of Observations on Model Parameters</span></a></li><li><a class="tocitem" href="#Ambiguity-Between-Constants-and-Observations"><span>Ambiguity Between Constants and Observations</span></a></li></ul></li><li><a class="tocitem" href="../graph_plotting/">Plotting</a></li><li><a class="tocitem" href="../R_interface/">R Interface</a></li><li><span class="tocitem">For Developers</span><ul><li><a class="tocitem" href="../parser/">Parser</a></li><li><a class="tocitem" href="../BUGS_notes/">Notes on BUGS Implementations</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Pitfalls</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Pitfalls</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/TuringLang/JuliaBUGS.jl/blob/main/docs/src/pitfalls.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Understanding-Pitfalls-in-Model-Definitions"><a class="docs-heading-anchor" href="#Understanding-Pitfalls-in-Model-Definitions">Understanding Pitfalls in Model Definitions</a><a id="Understanding-Pitfalls-in-Model-Definitions-1"></a><a class="docs-heading-anchor-permalink" href="#Understanding-Pitfalls-in-Model-Definitions" title="Permalink"></a></h1><h2 id="Consequence-of-Observations-on-Model-Parameters"><a class="docs-heading-anchor" href="#Consequence-of-Observations-on-Model-Parameters">Consequence of Observations on Model Parameters</a><a id="Consequence-of-Observations-on-Model-Parameters-1"></a><a class="docs-heading-anchor-permalink" href="#Consequence-of-Observations-on-Model-Parameters" title="Permalink"></a></h2><p>When providing observations for the parameters of a model, the dependencies may become disrupted. Consider the following example written in Julia:</p><pre><code class="language-julia hljs">model_def = @bugs begin
     a ~ Normal(0, 1)
     b ~ Normal(0, 1)
@@ -472,4 +487,4 @@ data = (a=1.0, b=2.0)</code></pre><p>In this scenario, the generated graph will 
     }
     p[1] &lt;- 0.5
     p[2] &lt;- 0.5
-}</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../differences/">« Differences from Other BUGS Implementations</a><a class="docs-footer-nextpage" href="../graph_plotting/">Plotting »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Friday 2 May 2025 12:30">Friday 2 May 2025</span>. Using Julia version 1.11.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+}</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../differences/">« Differences from Other BUGS Implementations</a><a class="docs-footer-nextpage" href="../graph_plotting/">Plotting »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Wednesday 7 May 2025 15:25">Wednesday 7 May 2025</span>. Using Julia version 1.11.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
