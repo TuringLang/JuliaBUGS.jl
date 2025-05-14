@@ -20,6 +20,29 @@ using JuliaBUGS: @bugs, compile, NodeInfo, VarName
 using Bijectors: Bijectors
 using AbstractPPL
 
+function marginalize_without_memo(bn, params)
+	sorted_node_ids = topological_sort_by_dfs(bn.graph)
+	env = deepcopy(bn.evaluation_env)
+
+	# Use the original function without memo
+	logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
+		bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths,
+	)
+	return env, logp
+end
+
+function marginalize_with_memo(bn, params)
+	sorted_node_ids = topological_sort_by_dfs(bn.graph)
+	env = deepcopy(bn.evaluation_env)
+	memo = Dict{Tuple{Int, Int, UInt64}, Float64}() # there is a difference between pass this and not passing this
+
+	# Use the enhanced function with memo
+	logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
+		bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths, memo,
+	)
+	return env, logp, length(memo)
+end
+
 @testset "BayesianNetwork" begin
 	@testset "Adding vertices" begin
 		bn = BayesianNetwork{Symbol}()
@@ -1224,29 +1247,7 @@ using AbstractPPL
 	end
 	@testset "Dynamic Programming in Marginalization" begin
 
-		# Helper functions needed for testing
-		function marginalize_without_memo(bn, params)
-			sorted_node_ids = topological_sort_by_dfs(bn.graph)
-			env = deepcopy(bn.evaluation_env)
 
-			# Use the original function without memo
-			logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
-				bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths,
-			)
-			return env, logp
-		end
-
-		function marginalize_with_memo(bn, params)
-			sorted_node_ids = topological_sort_by_dfs(bn.graph)
-			env = deepcopy(bn.evaluation_env)
-			memo = Dict{Tuple{Int, Int, UInt64}, Float64}() # there is a difference between pass this and not passing this
-
-			# Use the enhanced function with memo
-			logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
-				bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths, memo,
-			)
-			return env, logp, length(memo)
-		end
 		# Helper function to create graph without using compiler
 		function create_chain_bayesian_network(n_chain)
 			# Create initial network
@@ -1548,29 +1549,7 @@ using AbstractPPL
 		end
 	end
 
-	# Define helper functions needed for the tests
-	function marginalize_without_memo(bn, params)
-		sorted_node_ids = topological_sort_by_dfs(bn.graph)
-		env = deepcopy(bn.evaluation_env)
 
-		# Use the original function without memo
-		logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
-			bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths,
-		)
-		return env, logp
-	end
-
-	function marginalize_with_memo(bn, params)
-		sorted_node_ids = topological_sort_by_dfs(bn.graph)
-		env = deepcopy(bn.evaluation_env)
-		memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
-
-		# Use the enhanced function with memo
-		logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
-			bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths, memo,
-		)
-		return env, logp, length(memo)
-	end
 	@testset "Dynamic Programming Performance Analysis" begin
 		# Helper function to create evaluation environment and loop_vars
 		function init_network_variables(variables, init_values = nothing)
@@ -2136,29 +2115,5 @@ using AbstractPPL
 			# All memo sizes should be less than theoretical maximum states
 			@test all(memo_sizes .< 2 .* (2 .^ node_counts))
 		end
-	end
-
-	# Helper functions needed for testing
-	function marginalize_without_memo(bn, params)
-		sorted_node_ids = topological_sort_by_dfs(bn.graph)
-		env = deepcopy(bn.evaluation_env)
-
-		# Use the original function without memo
-		logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
-			bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths,
-		)
-		return env, logp
-	end
-
-	function marginalize_with_memo(bn, params)
-		sorted_node_ids = topological_sort_by_dfs(bn.graph)
-		env = deepcopy(bn.evaluation_env)
-		memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
-
-		# Use the enhanced function with memo
-		logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
-			bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths, memo,
-		)
-		return env, logp, length(memo)
 	end
 end
