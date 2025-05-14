@@ -1889,72 +1889,72 @@ using AbstractPPL
 		end
 
 		@testset "Chain Network Scaling - Updated Test" begin
-            # Let's modify the test to accurately check for the improved pattern
-            
-            # Test chain network performance for increasing lengths
-            chain_lengths = [3, 4, 5, 6, 7, 8]
-            
-            # Track performance metrics
-            standard_times = Float64[]
-            dp_times = Float64[]
-            memo_sizes = Int[]
-            speedups = Float64[]
-            state_counts = Int[]
-            
-            # Run the tests and collect data
-            for length in chain_lengths
-                bn = create_chain_network(length)
-                params = Float64[]
-                
-                # Count total possible states (2^n)
-                state_count = 2^length
-                push!(state_counts, state_count)
-                
-                # Run without memoization
-                standard_time = @elapsed _, _ = marginalize_without_memo(bn, params)
-                push!(standard_times, standard_time)
-                
-                # Run with memoization
-                dp_time = @elapsed _, _, memo_size = marginalize_with_memo(bn, params)
-                push!(dp_times, dp_time)
-                push!(memo_sizes, memo_size)
-                
-                # Calculate speedup
-                speedup = standard_time / dp_time
-                push!(speedups, speedup)
-                
-                # Print results
-                @info "Chain length $length" standard_time dp_time speedup memo_size state_count
-                
-                # Verify correctness (results should match)
-                _, logp1 = marginalize_without_memo(bn, params)
-                _, logp2, _ = marginalize_with_memo(bn, params)
-                @test isapprox(logp1, logp2, rtol = 1e-10)
-            end
-            
-            # Summarize results
-            @info "Chain Network Performance Summary" chain_lengths standard_times dp_times speedups memo_sizes state_counts
-            
-            # Check for the improved pattern in memo sizes
-            for i in 1:length(chain_lengths)
-                # The actual pattern is 2n + 1 where n is the chain length
-                expected_memo_size = 2 * chain_lengths[i] + 1
-                
-                # Test that our memo size matches this improved pattern
-                @test memo_sizes[i] == expected_memo_size
-                
-                # Also verify that this is much better than the old pattern
-                old_pattern_size = 2^(chain_lengths[i] + 1) - 1
-                @test memo_sizes[i] < old_pattern_size
-                
-                # Calculate the improvement factor
-                improvement_factor = old_pattern_size / memo_sizes[i]
-                @info "Chain length $(chain_lengths[i]) improvement" old_size=old_pattern_size new_size=memo_sizes[i] factor=improvement_factor
-            end
-            
-            # Additional insights
-            @info "Chain Speedup Analysis" chain_lengths speedups
-        end
+			# Let's modify the test to accurately check for the improved pattern
+
+			# Test chain network performance for increasing lengths
+			chain_lengths = [3, 4, 5, 6, 7, 8]
+
+			# Track performance metrics
+			standard_times = Float64[]
+			dp_times = Float64[]
+			memo_sizes = Int[]
+			speedups = Float64[]
+			state_counts = Int[]
+
+			# Run the tests and collect data
+			for length in chain_lengths
+				bn = create_chain_network(length)
+				params = Float64[]
+
+				# Count total possible states (2^n)
+				state_count = 2^length
+				push!(state_counts, state_count)
+
+				# Run without memoization
+				standard_time = @elapsed _, _ = marginalize_without_memo(bn, params)
+				push!(standard_times, standard_time)
+
+				# Run with memoization
+				dp_time = @elapsed _, _, memo_size = marginalize_with_memo(bn, params)
+				push!(dp_times, dp_time)
+				push!(memo_sizes, memo_size)
+
+				# Calculate speedup
+				speedup = standard_time / dp_time
+				push!(speedups, speedup)
+
+				# Print results
+				@info "Chain length $length" standard_time dp_time speedup memo_size state_count
+
+				# Verify correctness (results should match)
+				_, logp1 = marginalize_without_memo(bn, params)
+				_, logp2, _ = marginalize_with_memo(bn, params)
+				@test isapprox(logp1, logp2, rtol = 1e-10)
+			end
+
+			# Summarize results
+			@info "Chain Network Performance Summary" chain_lengths standard_times dp_times speedups memo_sizes state_counts
+
+			# Check for the improved pattern in memo sizes
+			for i in 1:length(chain_lengths)
+				# The actual pattern is 2n + 1 where n is the chain length
+				expected_memo_size = 2 * chain_lengths[i] + 1
+
+				# Test that our memo size matches this improved pattern
+				@test memo_sizes[i] == expected_memo_size
+
+				# Also verify that this is much better than the old pattern
+				old_pattern_size = 2^(chain_lengths[i] + 1) - 1
+				@test memo_sizes[i] < old_pattern_size
+
+				# Calculate the improvement factor
+				improvement_factor = old_pattern_size / memo_sizes[i]
+				@info "Chain length $(chain_lengths[i]) improvement" old_size = old_pattern_size new_size = memo_sizes[i] factor = improvement_factor
+			end
+
+			# Additional insights
+			@info "Chain Speedup Analysis" chain_lengths speedups
+		end
 
 		@testset "Tree Network Scaling" begin
 			# Test tree network performance for increasing depths
