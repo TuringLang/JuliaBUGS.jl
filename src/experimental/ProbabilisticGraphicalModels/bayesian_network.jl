@@ -260,6 +260,59 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
     return evaluation_env, logprior + loglikelihood
 end
 
+"""
+Extract only the parent values from the environment that are relevant for computing the given node.
+This is the key optimization that allows us to reuse computations across different paths.
+"""
+function _extract_parent_values(bn::BayesianNetwork, node_id::Int, env)
+    # Get the parents (incoming neighbors) of this node
+    parent_ids = inneighbors(bn.graph, node_id)
+    
+    # If no parents, just return an empty NamedTuple
+    if isempty(parent_ids)
+        return (;)
+    end
+    
+    # Build a dictionary of parent values
+    parent_values = Dict{Symbol,Any}()
+    for pid in parent_ids
+        parent_name = bn.names[pid]
+        
+        # Convert parent_name to Symbol - but don't access fields directly
+        # Just use string and Symbol conversion which works for any type
+        symbol_name = Symbol(string(parent_name))
+        
+        # Try to get value - note we use AbstractPPL.get which handles VarName properly
+        # even when the environment is a NamedTuple
+        try
+            value = AbstractPPL.get(env, parent_name)
+            parent_values[symbol_name] = value
+        catch e
+            # If we can't get the value, skip this parent
+            # This can happen if the environment doesn't contain all variables
+            if isa(e, KeyError) || isa(e, MethodError)
+                # This is expected, just skip this parent
+                continue
+            else
+                # Other errors should be propagated
+                rethrow(e)
+            end
+        end
+    end
+    
+    # Convert to NamedTuple for more efficient hashing
+    if isempty(parent_values)
+        return (;)
+    else
+        return NamedTuple{Tuple(keys(parent_values))}(values(parent_values))
+    end
+end
+
+"""
+Enhanced version of marginalize_recursive that uses a more efficient memoization approach.
+Only parent values that directly influence a node are included in the memoization key,
+which allows for better reuse of computations.
+"""
 function _marginalize_recursive(
     bn::BayesianNetwork{V,T,F},
     env,
@@ -268,25 +321,41 @@ function _marginalize_recursive(
     param_idx::Int,
     var_lengths,
     memo = Dict{Tuple{Int,Int,UInt64},Float64}(),
+    debug_stats = Dict{Symbol,Int}(),
 ) where {V,T,F}
+    # Update debug stats
+    debug_stats[:total_calls] = get(debug_stats, :total_calls, 0) + 1
+    
     # Base case: no more nodes to process
     if isempty(remaining_nodes)
         return 0.0
     end
 
-    # Create a memo key based on current node and parameter index
-    # We also include a hash of key environment values to detect different states
-    env_hash = hash(env)
-    memo_key = (first(remaining_nodes), param_idx, env_hash)
-    
-    # Check if we've already computed this subproblem
-    if haskey(memo, memo_key)
-        return memo[memo_key]
-    end
-
     # Process current node
     current_id = remaining_nodes[1]
     current_name = bn.names[current_id]
+    
+    # Extract only relevant parent values for this node's computation
+    parent_values = _extract_parent_values(bn, current_id, env)
+    parent_hash = hash(parent_values)
+    
+    # Create a more efficient memo key based on current node and relevant parent values
+    memo_key = (current_id, param_idx, parent_hash)
+    
+    # Check if we've already computed this subproblem
+    if haskey(memo, memo_key)
+        # Hit! We can reuse a previous calculation
+        debug_stats[:memo_hits] = get(debug_stats, :memo_hits, 0) + 1
+        if get(debug_stats, :debug_level, 0) > 1
+            println("Memo hit for node: $(current_name), parents hash: $(parent_hash)")
+        end
+        return memo[memo_key]
+    else
+        debug_stats[:memo_misses] = get(debug_stats, :memo_misses, 0) + 1
+        if get(debug_stats, :debug_level, 0) > 1
+            println("Memo miss for node: $(current_name), parents hash: $(parent_hash)")
+        end
+    end
 
     # Check node type
     is_stochastic = bn.is_stochastic[current_id]
@@ -299,15 +368,34 @@ function _marginalize_recursive(
         value = bn.deterministic_functions[current_id](env, bn.loop_vars[current_name])
         new_env = BangBang.setindex!!(env, value, current_name)
         result = _marginalize_recursive(
-            bn, new_env, @view(remaining_nodes[2:end]), parameter_values, param_idx, var_lengths, memo
+            bn, new_env, @view(remaining_nodes[2:end]), parameter_values, param_idx, var_lengths, memo, debug_stats
         )
 
     elseif is_observed
         # Observed node - add log probability and continue
         dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
-        obs_logp = logpdf(dist, AbstractPPL.get(env, current_name))
+        
+        # Safe logpdf calculation
+        obs_value = AbstractPPL.get(env, current_name)
+        obs_logp = try 
+            logpdf(dist, obs_value)
+        catch e
+            if get(debug_stats, :debug_level, 0) > 0
+                println("Warning: Error in logpdf for $(current_name): $e")
+            end
+            -Inf  # Treat as zero probability
+        end
+        
+        # Safety check for NaN values
+        if isnan(obs_logp)
+            if get(debug_stats, :debug_level, 0) > 0
+                println("Warning: NaN logpdf for $(current_name), treating as -Inf")
+            end
+            obs_logp = -Inf
+        end
+        
         remaining_logp = _marginalize_recursive(
-            bn, env, @view(remaining_nodes[2:end]), parameter_values, param_idx, var_lengths, memo
+            bn, env, @view(remaining_nodes[2:end]), parameter_values, param_idx, var_lengths, memo, debug_stats
         )
         result = obs_logp + remaining_logp
 
@@ -323,8 +411,22 @@ function _marginalize_recursive(
             # Create a branch-specific environment
             branch_env = BangBang.setindex!!(deepcopy(env), value, current_name)
 
-            # Compute log probability of this value
-            value_logp = logpdf(dist, value)
+            # Compute log probability of this value (with safety check)
+            value_logp = try
+                logpdf(dist, value)
+            catch e
+                if get(debug_stats, :debug_level, 0) > 0
+                    println("Warning: Error in logpdf for $(current_name)=$(value): $e")
+                end
+                -Inf
+            end
+            
+            if isnan(value_logp)
+                if get(debug_stats, :debug_level, 0) > 0
+                    println("Warning: NaN logpdf for $(current_name)=$(value), treating as -Inf")
+                end
+                value_logp = -Inf
+            end
 
             # Continue evaluation with this assignment
             remaining_logp = _marginalize_recursive(
@@ -334,7 +436,8 @@ function _marginalize_recursive(
                 parameter_values,
                 param_idx,
                 var_lengths,
-                memo
+                memo,
+                debug_stats
             )
 
             logp_branches[i] = value_logp + remaining_logp
@@ -356,21 +459,54 @@ function _marginalize_recursive(
         end
 
         l = var_lengths[current_name]
+        
+        # Check for parameter index out of bounds
+        if param_idx + l - 1 > length(parameter_values)
+            error(
+                "Parameter index out of bounds: needed $(param_idx + l - 1) elements, but parameter_values has only $(length(parameter_values)) elements."
+            )
+        end
 
         # Process the continuous variable
         b_inv = Bijectors.inverse(b)
         param_slice = view(parameter_values, param_idx:(param_idx + l - 1))
-        reconstructed_value = JuliaBUGS.reconstruct(b_inv, dist, param_slice)
-        value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
+        
+        reconstructed_value = try
+            JuliaBUGS.reconstruct(b_inv, dist, param_slice)
+        catch e
+            error("Error reconstructing value for $(current_name): $e")
+        end
+        
+        value, logjac = try
+            Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
+        catch e
+            error("Error computing Jacobian for $(current_name): $e")
+        end
 
         # Update environment
         new_env = BangBang.setindex!!(env, value, current_name)
 
         # Compute log probability and continue with updated parameter index
-        dist_logp = logpdf(dist, value) + logjac
+        dist_logp = try
+            logpdf_val = logpdf(dist, value)
+            if isnan(logpdf_val)
+                if get(debug_stats, :debug_level, 0) > 0
+                    println("Warning: NaN logpdf for $(current_name)=$(value), treating as -Inf")
+                end
+                -Inf + logjac  # Treat the probability as zero but keep jacobian
+            else
+                logpdf_val + logjac
+            end
+        catch e
+            if get(debug_stats, :debug_level, 0) > 0
+                println("Warning: Error in logpdf for $(current_name): $e")
+            end
+            -Inf + logjac  # Treat the probability as zero but keep jacobian
+        end
+        
         next_idx = param_idx + l
         remaining_logp = _marginalize_recursive(
-            bn, new_env, @view(remaining_nodes[2:end]), parameter_values, next_idx, var_lengths, memo
+            bn, new_env, @view(remaining_nodes[2:end]), parameter_values, next_idx, var_lengths, memo, debug_stats
         )
 
         result = dist_logp + remaining_logp
@@ -381,51 +517,105 @@ function _marginalize_recursive(
     return result
 end
 
-# Update evaluate_with_marginalization to initialize the memo dictionary
+# Main evaluation function with diagnostics
 function evaluate_with_marginalization(
-    bn::BayesianNetwork{V,T,F}, parameter_values::AbstractVector
+    bn::BayesianNetwork{V,T,F}, parameter_values::AbstractVector;
+    debug_level::Int = 0
 ) where {V,T,F}
+    # Initialize debug statistics
+    debug_stats = Dict{Symbol,Int}(
+        :total_calls => 0,
+        :memo_hits => 0,
+        :memo_misses => 0,
+        :debug_level => debug_level
+    )
+    
     # Get topological ordering of nodes
     sorted_node_ids = topological_sort_by_dfs(bn.graph)
 
-    # Find continuous variables (all stochastic unobserved variables that are not discrete)
+    # Find discrete and continuous variables
+    discrete_vars = [
+        bn.names[i] for i in sorted_node_ids if
+        bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] == :discrete
+    ]
+    
     continuous_vars = [
         bn.names[i] for i in sorted_node_ids if
         bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] != :discrete
     ]
 
-    # Calculate total parameter length needed
+    # Print some debug information if requested
+    if debug_level > 0
+        println("Network has $(length(discrete_vars)) discrete variables and $(length(continuous_vars)) continuous variables")
+        println("Discrete variables: $(join(string.(discrete_vars), ", "))")
+    end
+
+    # No discrete variables case - use standard evaluation
+    if isempty(discrete_vars)
+        if debug_level > 0
+            println("No discrete variables - using standard evaluation")
+        end
+        return evaluate_with_values(bn, parameter_values)
+    end
+
+    # Parameter validation for continuous variables
     total_param_length = 0
     for name in continuous_vars
         if haskey(bn.transformed_var_lengths, name)
             total_param_length += bn.transformed_var_lengths[name]
         end
     end
-
-    # No discrete variables case - use standard evaluation
-    discrete_vars = [
-        bn.names[i] for i in sorted_node_ids if
-        bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] == :discrete
-    ]
-
-    if isempty(discrete_vars)
-        return evaluate_with_values(bn, parameter_values)
+    
+    if !isempty(continuous_vars) && !isempty(parameter_values) && 
+       length(parameter_values) < total_param_length
+        error(
+            "Parameter vector too short: needed $(total_param_length) elements, but only $(length(parameter_values)) provided."
+        )
     end
 
     # Initialize environment once
     env = deepcopy(bn.evaluation_env)
     
-    # Initialize memoization dictionary
-    memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+    # Size hint for memo dictionary - for optimal performance
+    # We expect at most 2^|discrete_vars| * |nodes| entries
+    expected_entries = 2^length(discrete_vars) * length(bn.names)
+    memo = Dict{Tuple{Int,Int,UInt64},Float64}(; sizehint = expected_entries)
+    
+    if debug_level > 0
+        println("Starting marginalization with estimated memo size: $expected_entries")
+    end
 
     # Start recursive evaluation with the first node, beginning at parameter index 1
     logp = _marginalize_recursive(
-        bn, env, sorted_node_ids, parameter_values, 1, bn.transformed_var_lengths, memo
+        bn, env, sorted_node_ids, parameter_values, 1, bn.transformed_var_lengths, memo, debug_stats
     )
+    
+    # Print summary statistics
+    if debug_level > 0
+        hit_rate = debug_stats[:memo_hits] / (debug_stats[:memo_hits] + debug_stats[:memo_misses]) * 100
+        println("Marginalization complete:")
+        println("  Total recursive calls: $(debug_stats[:total_calls])")
+        println("  Memo hits: $(debug_stats[:memo_hits])")
+        println("  Memo misses: $(debug_stats[:memo_misses])")
+        println("  Memo hit rate: $(round(hit_rate, digits=2))%")
+        println("  Final memo size: $(length(memo))")
+        
+        # Print memo entry counts by node
+        if debug_level > 1
+            node_counts = Dict{V,Int}()
+            for (node_id, _, _) in keys(memo)
+                node_name = bn.names[node_id]
+                node_counts[node_name] = get(node_counts, node_name, 0) + 1
+            end
+            println("  Memo entries by node:")
+            for (name, count) in sort(collect(node_counts), by=x->x[2], rev=true)
+                println("    $name: $count")
+            end
+        end
+    end
 
     return env, logp
 end
-
 """
     enumerate_discrete_values(dist)
 
