@@ -260,54 +260,42 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
     return evaluation_env, logprior + loglikelihood
 end
 
-"""
-Extract only the parent values from the environment that are relevant for computing the given node.
-This is the key optimization that allows us to reuse computations across different paths.
-"""
 function _extract_parent_values(bn::BayesianNetwork, node_id::Int, env)
     # Get the parents (incoming neighbors) of this node
     parent_ids = inneighbors(bn.graph, node_id)
     
-    # If no parents, just return an empty NamedTuple
+    # Initialize dictionary allowing both Int and Symbol keys 
+    parent_values = Dict{Union{Int,Symbol}, Any}()
+    
+    # If no parents, just return the empty dictionary
     if isempty(parent_ids)
-        return (;)
+        # We still need to potentially add metadata
+        # No need for an early return
     end
     
-    # Build a dictionary of parent values
-    parent_values = Dict{Symbol,Any}()
+    # Add parent values to the dictionary
     for pid in parent_ids
         parent_name = bn.names[pid]
         
-        # Convert parent_name to Symbol - but don't access fields directly
-        # Just use string and Symbol conversion which works for any type
-        symbol_name = Symbol(string(parent_name))
-        
-        # Try to get value - note we use AbstractPPL.get which handles VarName properly
-        # even when the environment is a NamedTuple
         try
             value = AbstractPPL.get(env, parent_name)
-            parent_values[symbol_name] = value
+            parent_values[pid] = value
         catch e
-            # If we can't get the value, skip this parent
-            # This can happen if the environment doesn't contain all variables
             if isa(e, KeyError) || isa(e, MethodError)
-                # This is expected, just skip this parent
-                continue
+                parent_values[pid] = :__MISSING__
             else
-                # Other errors should be propagated
                 rethrow(e)
             end
         end
     end
     
-    # Convert to NamedTuple for more efficient hashing
-    if isempty(parent_values)
-        return (;)
-    else
-        return NamedTuple{Tuple(keys(parent_values))}(values(parent_values))
+    # Add observation state to metadata
+    if bn.is_stochastic[node_id] && bn.is_observed[node_id]
+        parent_values[:__OBSERVED__] = true
     end
+    
+    return parent_values
 end
-
 """
 Enhanced version of marginalize_recursive that uses a more efficient memoization approach.
 Only parent values that directly influence a node are included in the memoization key,
@@ -322,8 +310,8 @@ function _marginalize_recursive(
     var_lengths,
     memo = Dict{Tuple{Int,Int,UInt64},Float64}(),
     debug_stats = Dict{Symbol,Int}(),
+    use_full_env::Bool = false,  # Add this parameter
 ) where {V,T,F}
-    # Update debug stats
     debug_stats[:total_calls] = get(debug_stats, :total_calls, 0) + 1
     
     # Base case: no more nodes to process
@@ -335,26 +323,26 @@ function _marginalize_recursive(
     current_id = remaining_nodes[1]
     current_name = bn.names[current_id]
     
-    # Extract only relevant parent values for this node's computation
-    parent_values = _extract_parent_values(bn, current_id, env)
-    parent_hash = hash(parent_values)
-    
-    # Create a more efficient memo key based on current node and relevant parent values
-    memo_key = (current_id, param_idx, parent_hash)
+    # Create memo key based on use_full_env flag
+    local memo_key
+    if use_full_env
+        # Hash the entire environment for complete correctness
+        env_hash = hash(env)
+        memo_key = (current_id, param_idx, env_hash)
+    else
+        # Use the optimized parent-based approach
+        parent_values = _extract_parent_values(bn, current_id, env)
+        parent_hash = hash(parent_values)
+        memo_key = (current_id, param_idx, parent_hash)
+    end
     
     # Check if we've already computed this subproblem
     if haskey(memo, memo_key)
         # Hit! We can reuse a previous calculation
         debug_stats[:memo_hits] = get(debug_stats, :memo_hits, 0) + 1
-        if get(debug_stats, :debug_level, 0) > 1
-            println("Memo hit for node: $(current_name), parents hash: $(parent_hash)")
-        end
         return memo[memo_key]
     else
         debug_stats[:memo_misses] = get(debug_stats, :memo_misses, 0) + 1
-        if get(debug_stats, :debug_level, 0) > 1
-            println("Memo miss for node: $(current_name), parents hash: $(parent_hash)")
-        end
     end
 
     # Check node type
@@ -368,7 +356,7 @@ function _marginalize_recursive(
         value = bn.deterministic_functions[current_id](env, bn.loop_vars[current_name])
         new_env = BangBang.setindex!!(env, value, current_name)
         result = _marginalize_recursive(
-            bn, new_env, @view(remaining_nodes[2:end]), parameter_values, param_idx, var_lengths, memo, debug_stats
+            bn, new_env, @view(remaining_nodes[2:end]), parameter_values, param_idx, var_lengths, memo, debug_stats, use_full_env
         )
 
     elseif is_observed
@@ -395,7 +383,7 @@ function _marginalize_recursive(
         end
         
         remaining_logp = _marginalize_recursive(
-            bn, env, @view(remaining_nodes[2:end]), parameter_values, param_idx, var_lengths, memo, debug_stats
+            bn, env, @view(remaining_nodes[2:end]), parameter_values, param_idx, var_lengths, memo, debug_stats, use_full_env
         )
         result = obs_logp + remaining_logp
 
@@ -437,7 +425,8 @@ function _marginalize_recursive(
                 param_idx,
                 var_lengths,
                 memo,
-                debug_stats
+                debug_stats,
+                use_full_env
             )
 
             logp_branches[i] = value_logp + remaining_logp
@@ -506,7 +495,7 @@ function _marginalize_recursive(
         
         next_idx = param_idx + l
         remaining_logp = _marginalize_recursive(
-            bn, new_env, @view(remaining_nodes[2:end]), parameter_values, next_idx, var_lengths, memo, debug_stats
+            bn, new_env, @view(remaining_nodes[2:end]), parameter_values, next_idx, var_lengths, memo, debug_stats, use_full_env
         )
 
         result = dist_logp + remaining_logp
@@ -520,7 +509,7 @@ end
 # Main evaluation function with diagnostics
 function evaluate_with_marginalization(
     bn::BayesianNetwork{V,T,F}, parameter_values::AbstractVector;
-    debug_level::Int = 0
+    debug_level::Int = 0, use_full_env::Bool = false
 ) where {V,T,F}
     # Initialize debug statistics
     debug_stats = Dict{Symbol,Int}(
@@ -588,7 +577,7 @@ function evaluate_with_marginalization(
 
     # Start recursive evaluation with the first node, beginning at parameter index 1
     logp = _marginalize_recursive(
-        bn, env, sorted_node_ids, parameter_values, 1, bn.transformed_var_lengths, memo, debug_stats
+        bn, env, sorted_node_ids, parameter_values, 1, bn.transformed_var_lengths, memo, debug_stats, use_full_env
     )
     
     # Print summary statistics

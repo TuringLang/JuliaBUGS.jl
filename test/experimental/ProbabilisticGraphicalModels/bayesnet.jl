@@ -731,7 +731,7 @@ using AbstractPPL
 			bn = set_observations(bn, observations)
 
 			# Run marginalization
-			_, margin_logp = evaluate_with_marginalization(bn, params)
+			_, margin_logp = evaluate_with_marginalization(bn, params, use_full_env = true)
 
 			# Test against expected result
 			@test margin_logp ≈ expected_logp rtol = rtol
@@ -1013,7 +1013,7 @@ using AbstractPPL
 				params = Float64[]
 
 				# Call our recursive implementation
-				_, margin_logp = evaluate_with_marginalization(bn, params)
+				_, margin_logp = evaluate_with_marginalization(bn, params, use_full_env = true)
 
 				# Manual calculation
 				# Model parameters
@@ -1196,7 +1196,7 @@ using AbstractPPL
 
 			# Run marginalization
 			params = Float64[]  # No continuous parameters in this example
-			_, margin_logp = evaluate_with_marginalization(bn, params)
+			_, margin_logp = evaluate_with_marginalization(bn, params, use_full_env = true)
 
 			# Calculate expected probability for each state combination
 			p_a0 = 0.6
