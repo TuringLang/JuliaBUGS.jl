@@ -579,7 +579,8 @@ function evaluate_with_marginalization(
     # Size hint for memo dictionary - for optimal performance
     # We expect at most 2^|discrete_vars| * |nodes| entries
     expected_entries = 2^length(discrete_vars) * length(bn.names)
-    memo = Dict{Tuple{Int,Int,UInt64},Float64}(; sizehint = expected_entries)
+    memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+    sizehint!(memo, expected_entries)
     
     if debug_level > 0
         println("Starting marginalization with estimated memo size: $expected_entries")
