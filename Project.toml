@@ -99,5 +99,5 @@ test = [
     "MCMCChains",
     "Mooncake",
     "ReverseDiff",
-    "Test"
+    "Test",
 ]
