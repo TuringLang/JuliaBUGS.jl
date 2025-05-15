@@ -260,6 +260,10 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
 	return evaluation_env, logprior + loglikelihood
 end
 
+"""
+This function works in some cases, but not all. I have yet to discover why.
+    In some functions, we have to hash the whole environment to get the correct answer.
+"""
 function _extract_parent_values(bn::BayesianNetwork, node_id::Int, env)
 	# Get the parents (incoming neighbors) of this node
 	parent_ids = inneighbors(bn.graph, node_id)
@@ -300,6 +304,26 @@ end
 Enhanced version of marginalize_recursive that uses a more efficient memoization approach.
 Only parent values that directly influence a node are included in the memoization key,
 which allows for better reuse of computations.
+
+Currently, this function contains two kind of approaches to memoization:
+1. **Parent-based memoization**: 
+This is the default approach, where only the parent values of the current node are used to create the memo key. 
+This is efficient for most cases and allows for better reuse of computations.
+The memo_key is (current_id, param_idx, parent_hash).
+
+2. **Full environment memoization**: 
+This approach hashes the entire environment to create the memo key. 
+It is more accurate but less efficient, as it may lead to a larger number of unique keys. 
+This is useful for debugging or when the parent-based approach does not yield correct results.
+The memo_key is (current_id, param_idx, env_hash)
+
+Full environment memoization has a substantial speedup, but still not the best, 
+as we can save on memory, by hashing only the parent values. I am guessing some of the grandparents value also matters 
+
+For example, 
+Chain networks (n=8): Only 17 memo entries vs potentially 256 states
+Tree networks (depth=3): Only 14 memo entries vs potentially 128 states
+Grid networks (3×3): Only 17 memo entries vs potentially 512 states
 """
 function _marginalize_recursive(
 	bn::BayesianNetwork{V, T, F},
@@ -312,6 +336,7 @@ function _marginalize_recursive(
 	debug_stats = Dict{Symbol, Int}(),
 	use_full_env::Bool = false,  # Add this parameter
 ) where {V, T, F}
+    # This is for debugging can be removed later
 	debug_stats[:total_calls] = get(debug_stats, :total_calls, 0) + 1
 
 	# Base case: no more nodes to process
@@ -372,14 +397,6 @@ function _marginalize_recursive(
 				println("Warning: Error in logpdf for $(current_name): $e")
 			end
 			-Inf  # Treat as zero probability
-		end
-
-		# Safety check for NaN values
-		if isnan(obs_logp)
-			if get(debug_stats, :debug_level, 0) > 0
-				println("Warning: NaN logpdf for $(current_name), treating as -Inf")
-			end
-			obs_logp = -Inf
 		end
 
 		remaining_logp = _marginalize_recursive(
