@@ -348,7 +348,6 @@ function _marginalize_recursive(
     current_name = bn.names[current_id]
 
     # Create memo key based on use_full_env flag
-    local memo_key
     if use_full_env
         # Hash the entire environment for complete correctness
         env_hash = hash(env)
