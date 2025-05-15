@@ -21,26 +21,26 @@ using Bijectors: Bijectors
 using AbstractPPL
 
 function marginalize_without_memo(bn, params)
-	sorted_node_ids = topological_sort_by_dfs(bn.graph)
-	env = deepcopy(bn.evaluation_env)
+    sorted_node_ids = topological_sort_by_dfs(bn.graph)
+    env = deepcopy(bn.evaluation_env)
 
-	# Use the original function without memo
-	logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
-		bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths,
-	)
-	return env, logp
+    # Use the original function without memo
+    logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
+        bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths
+    )
+    return env, logp
 end
 
 function marginalize_with_memo(bn, params)
-	sorted_node_ids = topological_sort_by_dfs(bn.graph)
-	env = deepcopy(bn.evaluation_env)
-	memo = Dict{Tuple{Int, Int, UInt64}, Float64}() # there is a difference between pass this and not passing this
+    sorted_node_ids = topological_sort_by_dfs(bn.graph)
+    env = deepcopy(bn.evaluation_env)
+    memo = Dict{Tuple{Int,Int,UInt64},Float64}() # there is a difference between pass this and not passing this
 
-	# Use the enhanced function with memo
-	logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
-		bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths, memo,
-	)
-	return env, logp, length(memo)
+    # Use the enhanced function with memo
+    logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
+        bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths, memo
+    )
+    return env, logp, length(memo)
 end
 
 @testset "BayesianNetwork" begin
