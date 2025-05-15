@@ -333,11 +333,8 @@ function _marginalize_recursive(
     param_idx::Int,
     var_lengths,
     memo=Dict{Tuple{Int,Int,UInt64},Float64}(),
-    debug_stats=Dict{Symbol,Int}(),
-    use_full_env::Bool=false,  # Add this parameter
+    use_full_env::Bool=false,  # Keep this parameter
 ) where {V,T,F}
-    debug_stats[:total_calls] = get(debug_stats, :total_calls, 0) + 1
-
     # Base case: no more nodes to process
     if isempty(remaining_nodes)
         return 0.0
@@ -362,10 +359,7 @@ function _marginalize_recursive(
     # Check if we've already computed this subproblem
     if haskey(memo, memo_key)
         # Hit! We can reuse a previous calculation
-        debug_stats[:memo_hits] = get(debug_stats, :memo_hits, 0) + 1
         return memo[memo_key]
-    else
-        debug_stats[:memo_misses] = get(debug_stats, :memo_misses, 0) + 1
     end
 
     # Check node type
@@ -386,7 +380,6 @@ function _marginalize_recursive(
             param_idx,
             var_lengths,
             memo,
-            debug_stats,
             use_full_env,
         )
 
@@ -394,22 +387,12 @@ function _marginalize_recursive(
         # Observed node - add log probability and continue
         dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
 
-        # Safe logpdf calculation
+        # Safe logpdf calculation without try-catch
         obs_value = AbstractPPL.get(env, current_name)
-        obs_logp = try
-            logpdf(dist, obs_value)
-        catch e
-            if get(debug_stats, :debug_level, 0) > 0
-                println("Warning: Error in logpdf for $(current_name): $e")
-            end
-            -Inf  # Treat as zero probability
-        end
-
+        obs_logp = logpdf(dist, obs_value)
+        
         # Safety check for NaN values
         if isnan(obs_logp)
-            if get(debug_stats, :debug_level, 0) > 0
-                println("Warning: NaN logpdf for $(current_name), treating as -Inf")
-            end
             obs_logp = -Inf
         end
 
@@ -421,7 +404,6 @@ function _marginalize_recursive(
             param_idx,
             var_lengths,
             memo,
-            debug_stats,
             use_full_env,
         )
         result = obs_logp + remaining_logp
@@ -438,22 +420,10 @@ function _marginalize_recursive(
             # Create a branch-specific environment
             branch_env = BangBang.setindex!!(deepcopy(env), value, current_name)
 
-            # Compute log probability of this value (with safety check)
-            value_logp = try
-                logpdf(dist, value)
-            catch e
-                if get(debug_stats, :debug_level, 0) > 0
-                    println("Warning: Error in logpdf for $(current_name)=$(value): $e")
-                end
-                -Inf
-            end
+            # Compute log probability of this value (without try-catch)
+            value_logp = logpdf(dist, value)
 
             if isnan(value_logp)
-                if get(debug_stats, :debug_level, 0) > 0
-                    println(
-                        "Warning: NaN logpdf for $(current_name)=$(value), treating as -Inf"
-                    )
-                end
                 value_logp = -Inf
             end
 
@@ -466,7 +436,6 @@ function _marginalize_recursive(
                 param_idx,
                 var_lengths,
                 memo,
-                debug_stats,
                 use_full_env,
             )
 
@@ -501,39 +470,19 @@ function _marginalize_recursive(
         b_inv = Bijectors.inverse(b)
         param_slice = view(parameter_values, param_idx:(param_idx + l - 1))
 
-        reconstructed_value = try
-            JuliaBUGS.reconstruct(b_inv, dist, param_slice)
-        catch e
-            error("Error reconstructing value for $(current_name): $e")
-        end
-
-        value, logjac = try
-            Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
-        catch e
-            error("Error computing Jacobian for $(current_name): $e")
-        end
+        # Removed try-catch blocks
+        reconstructed_value = JuliaBUGS.reconstruct(b_inv, dist, param_slice)
+        value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
 
         # Update environment
         new_env = BangBang.setindex!!(env, value, current_name)
 
-        # Compute log probability and continue with updated parameter index
-        dist_logp = try
-            logpdf_val = logpdf(dist, value)
-            if isnan(logpdf_val)
-                if get(debug_stats, :debug_level, 0) > 0
-                    println(
-                        "Warning: NaN logpdf for $(current_name)=$(value), treating as -Inf",
-                    )
-                end
-                -Inf + logjac  # Treat the probability as zero but keep jacobian
-            else
-                logpdf_val + logjac
-            end
-        catch e
-            if get(debug_stats, :debug_level, 0) > 0
-                println("Warning: Error in logpdf for $(current_name): $e")
-            end
-            -Inf + logjac  # Treat the probability as zero but keep jacobian
+        # Compute log probability without try-catch
+        dist_logp = logpdf(dist, value)
+        if isnan(dist_logp)
+            dist_logp = -Inf + logjac  # Treat the probability as zero but keep jacobian
+        else
+            dist_logp += logjac
         end
 
         next_idx = param_idx + l
@@ -545,7 +494,6 @@ function _marginalize_recursive(
             next_idx,
             var_lengths,
             memo,
-            debug_stats,
             use_full_env,
         )
 
@@ -557,18 +505,12 @@ function _marginalize_recursive(
     return result
 end
 
-# Main evaluation function with diagnostics
+# Main evaluation function without diagnostics
 function evaluate_with_marginalization(
     bn::BayesianNetwork{V,T,F},
     parameter_values::AbstractVector;
-    debug_level::Int=0,
     use_full_env::Bool=false,
 ) where {V,T,F}
-    # Initialize debug statistics
-    debug_stats = Dict{Symbol,Int}(
-        :total_calls => 0, :memo_hits => 0, :memo_misses => 0, :debug_level => debug_level
-    )
-
     # Get topological ordering of nodes
     sorted_node_ids = topological_sort_by_dfs(bn.graph)
 
@@ -583,19 +525,8 @@ function evaluate_with_marginalization(
         bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] != :discrete
     ]
 
-    # Print some debug information if requested
-    if debug_level > 0
-        println(
-            "Network has $(length(discrete_vars)) discrete variables and $(length(continuous_vars)) continuous variables",
-        )
-        println("Discrete variables: $(join(string.(discrete_vars), ", "))")
-    end
-
     # No discrete variables case - use standard evaluation
     if isempty(discrete_vars)
-        if debug_level > 0
-            println("No discrete variables - using standard evaluation")
-        end
         return evaluate_with_values(bn, parameter_values)
     end
 
@@ -624,10 +555,6 @@ function evaluate_with_marginalization(
     memo = Dict{Tuple{Int,Int,UInt64},Float64}()
     sizehint!(memo, expected_entries)
 
-    if debug_level > 0
-        println("Starting marginalization with estimated memo size: $expected_entries")
-    end
-
     # Start recursive evaluation with the first node, beginning at parameter index 1
     logp = _marginalize_recursive(
         bn,
@@ -637,38 +564,12 @@ function evaluate_with_marginalization(
         1,
         bn.transformed_var_lengths,
         memo,
-        debug_stats,
         use_full_env,
     )
 
-    # Print summary statistics
-    if debug_level > 0
-        hit_rate =
-            debug_stats[:memo_hits] /
-            (debug_stats[:memo_hits] + debug_stats[:memo_misses]) * 100
-        println("Marginalization complete:")
-        println("  Total recursive calls: $(debug_stats[:total_calls])")
-        println("  Memo hits: $(debug_stats[:memo_hits])")
-        println("  Memo misses: $(debug_stats[:memo_misses])")
-        println("  Memo hit rate: $(round(hit_rate, digits=2))%")
-        println("  Final memo size: $(length(memo))")
-
-        # Print memo entry counts by node
-        if debug_level > 1
-            node_counts = Dict{V,Int}()
-            for (node_id, _, _) in keys(memo)
-                node_name = bn.names[node_id]
-                node_counts[node_name] = get(node_counts, node_name, 0) + 1
-            end
-            println("  Memo entries by node:")
-            for (name, count) in sort(collect(node_counts); by=x -> x[2], rev=true)
-                println("    $name: $count")
-            end
-        end
-    end
-
     return env, logp
 end
+
 """
 	enumerate_discrete_values(dist)
 
