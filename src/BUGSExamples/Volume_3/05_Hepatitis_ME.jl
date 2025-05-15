@@ -1,42 +1,55 @@
-name = "Hepatitis: a normal hierarchical model with measurement error (basic)"
+name = "Hepatitis: a normal hierarchical model with measurement error (with measurement error)"
 
-# Basic model without measurement error
+# Model with measurement error
 model_def = @bugs begin
+    var"tau.alpha" ~ dgamma(0.001, 0.001)
+    alpha0 ~ dnorm(0.0, 1.0e-6)
+    beta0 ~ dnorm(0.0, 1.0e-6)
+    var"tau.beta" ~ dgamma(0.001, 0.001)
     for i in 1:N
-        for j in 1:T
+        alpha[i] ~ dnorm(alpha0, var"tau.alpha")
+        beta[i] ~ dnorm(beta0, var"tau.beta")
+        y0[i] ~ dnorm(mu0[i], tau)
+        mu0[i] ~ dnorm(theta, psi)
+    end
+    for j in 1:T
+        for i in 1:N
             Y[i, j] ~ dnorm(mu[i, j], tau)
-            mu[i, j] = alpha[i] + beta[i] * (t[i, j] - 6.5) + gamma * (y0[i] - mean(y0[:]))
+            mu[i, j] = alpha[i] + beta[i] * (t[i, j] - 6.5) + gamma * (mu0[i] - mean(y0[:]))
         end
-        alpha[i] ~ dnorm(alpha0, tau_alpha)
-        beta[i] ~ dnorm(beta0, tau_beta)
     end
     tau ~ dgamma(0.001, 0.001)
     sigma = 1 / sqrt(tau)
-    alpha0 ~ dnorm(0.0, 1.0e-6)
-    tau_alpha ~ dgamma(0.001, 0.001)
-    beta0 ~ dnorm(0.0, 1.0e-6)
-    tau_beta ~ dgamma(0.001, 0.001)
     gamma ~ dnorm(0.0, 1.0e-6)
+    theta ~ dnorm(0.0, 1.0e-6)
+    psi ~ dgamma(0.001, 0.001)
 end
 
 original = """
 model
 {
-    for( i in 1 : N ) {
-        for( j in 1 : T ) {
-            Y[i , j] ~ dnorm(mu[i , j],tau)
-            mu[i , j] <- alpha[i] + beta[i] * (t[i,j] - 6.5) + gamma * (y0[i] - mean(y0[]))
-        }
-        alpha[i] ~ dnorm(alpha0,tau.alpha)
-        beta[i] ~ dnorm(beta0,tau.beta)
+    tau.alpha ~ dgamma(0.001, 0.001)
+    alpha0 ~ dnorm(0.0, 1.0E-6)
+    beta0 ~ dnorm(0.0, 1.0E-6)
+    tau.beta ~ dgamma(0.001, 0.001)
+    for(i in 1:N) {
+        alpha[i] ~ dnorm(alpha0, tau.alpha)
+        beta[i] ~ dnorm(beta0, tau.beta)
+        y0[i] ~ dnorm(mu0[i], tau)
+        mu0[i] ~ dnorm(theta, psi)
     }
-    tau ~ dgamma(0.001,0.001)
+    for(j in 1:T) {
+        for(i in 1:N) {
+            Y[i, j] ~ dnorm(mu[i, j], tau)
+            mu[i, j] <- alpha[i] + beta[i] * (t[i, j] - 6.5) + 
+                gamma * (mu0[i] - mean(y0[]))
+        }
+    }
+    tau ~ dgamma(0.001, 0.001)
     sigma <- 1 / sqrt(tau)
-    alpha0 ~ dnorm(0.0,1.0E-6) 
-    tau.alpha ~ dgamma(0.001,0.001)
-    beta0 ~ dnorm(0.0,1.0E-6)
-    tau.beta ~ dgamma(0.001,0.001)
-    gamma ~ dnorm(0.0,1.0E-6)
+    gamma ~ dnorm(0.0, 1.0E-6)
+    theta ~ dnorm(0.0, 1.0E-6)
+    psi ~ dgamma(0.001, 0.001)
 }
 """
 
@@ -295,31 +308,34 @@ data = (
     ]
 )
 
-# Initial values from the OpenBUGS documentation
 inits = (
     alpha0 = 4.0,
     beta0 = 0.0,
     gamma = 0.0,
-    tau_alpha = 1.0,
-    tau_beta = 1.0,
-    tau = 1.0
+    var"tau.alpha" = 1.0,
+    var"tau.beta" = 1.0,
+    tau = 1.0,
+    theta = 6.0,
+    psi = 1.0
 )
 
 inits_alternative = (
     alpha0 = 1.0,
     beta0 = 1.0,
-    gamma = 1.0,
-    tau_alpha = 0.1,
-    tau_beta = 1.0,
-    tau = 0.1
+    gamma = 0.0,
+    var"tau.alpha" = 0.1,
+    var"tau.beta" = 0.1,
+    tau = 0.1,
+    theta = 1.0,
+    psi = 1.0
 )
 
-reference_results = (
-    alpha0 = (mean = 6.138, std = 0.1501),
-    beta0 = (mean = -1.057, std = 0.1303),
-    gamma = (mean = 0.6716, std = 0.08469),
-    sigma = (mean = 1.002, std = 0.0549)
+reference_results_me = (
+    alpha0 = (mean = 6.153, std = 0.1669),
+    beta0 = (mean = -1.056, std = 0.1194),
+    gamma = (mean = 1.075, std = 0.2103),
+    sigma = (mean = 1.026, std = 0.06469)
 )
 
-hepatitis = Example(
+hepatitis_me = Example(
     name, model_def, original, data, inits, inits_alternative, reference_results)
