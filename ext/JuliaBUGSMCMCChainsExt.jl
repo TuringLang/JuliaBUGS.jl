@@ -1,37 +1,37 @@
 module JuliaBUGSMCMCChainsExt
 
-using JuliaBUGS
-using JuliaBUGS: AbstractBUGSModel, find_generated_vars, evaluate!!
-using JuliaBUGS.AbstractPPL
-using JuliaBUGS.BUGSPrimitives
-using JuliaBUGS.LogDensityProblems
-using JuliaBUGS.LogDensityProblemsAD
-using JuliaBUGS: Accessors
-using AbstractMCMC
+using AbstractMCMC: AbstractMCMC
 using MCMCChains: Chains
+using JuliaBUGS:
+    JuliaBUGS, AbstractPPL, BUGSPrimitives, LogDensityProblems, LogDensityProblemsAD
 
-function JuliaBUGS.gen_chains(
-    model::AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel},
-    samples,
-    stats_names,
-    stats_values;
+function AbstractMCMC.bundle_samples(
+    ts,
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel},
+    sampler::JuliaBUGS.Gibbs,
+    state,
+    ::Type{Chains};
     discard_initial=0,
-    thinning=1,
     kwargs...,
 )
     return JuliaBUGS.gen_chains(
-        model.logdensity,
-        samples,
-        stats_names,
-        stats_values;
-        discard_initial=discard_initial,
-        thinning=thinning,
-        kwargs...,
+        logdensitymodel, ts, [], []; discard_initial=discard_initial, kwargs...
     )
 end
 
+function get_bugsmodel(model::AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel})
+    return model.logdensity
+end
+
+function get_bugsmodel(
+    model::AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper}
+)
+    ad_wrapper = model.logdensity
+    return Base.parent(ad_wrapper)::JuliaBUGS.BUGSModel
+end
+
 function JuliaBUGS.gen_chains(
-    model::AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
+    model::AbstractMCMC.LogDensityModel,
     samples,
     stats_names,
     stats_values;
@@ -40,7 +40,7 @@ function JuliaBUGS.gen_chains(
     kwargs...,
 )
     return JuliaBUGS.gen_chains(
-        model.logdensity.ℓ,
+        get_bugsmodel(model),
         samples,
         stats_names,
         stats_values;
@@ -84,15 +84,15 @@ function JuliaBUGS.gen_chains(
     param_vars = model.parameters
     g = model.g
 
-    generated_vars = find_generated_vars(g)
-    generated_vars = [
-        v for v in model.flattened_graph_node_data.sorted_nodes if v in generated_vars
-    ] # keep the order
+    generated_vars = JuliaBUGS.find_generated_quantities_variables(g)
+    generated_vars = [v for v in model.sorted_nodes if v in generated_vars] # keep the order
 
     param_vals = []
     generated_quantities = []
     for i in axes(samples)[1]
-        evaluation_env = first(evaluate!!(model, samples[i]))
+        evaluation_env = first(
+            JuliaBUGS.evaluate!!(model, JuliaBUGS.LogDensityContext(), samples[i])
+        )
         push!(
             param_vals,
             [AbstractPPL.get(evaluation_env, param_var) for param_var in param_vars],
@@ -151,6 +151,30 @@ function JuliaBUGS.gen_chains(
         start=discard_initial + 1,
         thin=thinning,
     )
+end
+
+# utils: copied from DynamicPPL
+
+varname_leaves(vn::JuliaBUGS.VarName, ::Real) = [vn]
+function varname_leaves(vn::JuliaBUGS.VarName, val::AbstractArray{<:Union{Real,Missing}})
+    return (
+        JuliaBUGS.VarName(vn, Accessors.IndexLens(Tuple(I)) ∘ getoptic(vn)) for
+        I in CartesianIndices(val)
+    )
+end
+function varname_leaves(vn::JuliaBUGS.VarName, val::AbstractArray)
+    return Iterators.flatten(
+        varname_leaves(
+            JuliaBUGS.VarName(vn, Accessors.IndexLens(Tuple(I)) ∘ getoptic(vn)), val[I]
+        ) for I in CartesianIndices(val)
+    )
+end
+function varname_leaves(vn::JuliaBUGS.VarName, val::NamedTuple)
+    iter = Iterators.map(keys(val)) do sym
+        optic = Accessors.PropertyLens{sym}()
+        varname_leaves(JuliaBUGS.VarName(vn, optic ∘ getoptic(vn)), optic(val))
+    end
+    return Iterators.flatten(iter)
 end
 
 end

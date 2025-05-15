@@ -9,12 +9,12 @@ using AbstractPPL
 using AbstractMCMC
 using AdvancedHMC
 using AdvancedMH
+using ADTypes
 using Bijectors
 using ChainRules
 using DifferentiationInterface
 using Distributions
-using Graphs
-using MetaGraphsNext
+using Graphs, MetaGraphsNext
 using LinearAlgebra
 using LogDensityProblems
 using LogDensityProblemsAD
