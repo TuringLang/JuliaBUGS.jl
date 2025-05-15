@@ -24,40 +24,40 @@ model_def = @bugs begin
     end
 
     # Model 1
-    alpha ~ dnorm(mu.alpha[j], tau.alpha[j])
-    beta ~ dnorm(mu.beta[j], tau.beta[j])
+    alpha ~ dnorm(var"mu.alpha"[j], var"tau.alpha"[j])
+    beta ~ dnorm(var"mu.beta"[j], var"tau.beta"[j])
     tau[1] ~ dgamma(r1[j], l1[j])
     # estimation priors
-    mu.alpha[1] = 0
-    tau.alpha[1] = 1.0E-6
-    mu.beta[1] = 0
-    tau.beta[1] = 1.0E-4
+    var"mu.alpha"[1] = 0
+    var"tau.alpha"[1] = 1.0E-6
+    var"mu.beta"[1] = 0
+    var"tau.beta"[1] = 1.0E-4
     r1[1] = 0.0001
     l1[1] = 0.0001
     # pseudo-priors
-    mu.alpha[2] = 0
-    tau.alpha[2] = 256
-    mu.beta[2] = 1
-    tau.beta[2] = 256
+    var"mu.alpha"[2] = 0
+    var"tau.alpha"[2] = 256
+    var"mu.beta"[2] = 1
+    var"tau.beta"[2] = 256
     r1[2] = 30
     l1[2] = 4.5
 
     # Model 2
-    gamma ~ dnorm(mu.gamma[j], tau.gamma[j])
-    delta ~ dnorm(mu.delta[j], tau.delta[j])
+    gamma ~ dnorm(var"mu.gamma"[j], var"tau.gamma"[j])
+    delta ~ dnorm(var"mu.delta"[j], var"tau.delta"[j])
     tau[2] ~ dgamma(r2[j], l2[j])
     # pseudo-priors
-    mu.gamma[1] = 0
-    tau.gamma[1] = 400
-    mu.delta[1] = 1
-    tau.delta[1] = 400
+    var"mu.gamma"[1] = 0
+    var"tau.gamma"[1] = 400
+    var"mu.delta"[1] = 1
+    var"tau.delta"[1] = 400
     r2[1] = 46
     l2[1] = 4.5
     # estimation priors
-    mu.gamma[2] = 0
-    tau.gamma[2] = 1.0E-6
-    mu.delta[2] = 0
-    tau.delta[2] = 1.0E-4
+    var"mu.gamma"[2] = 0
+    var"tau.gamma"[2] = 1.0E-6
+    var"mu.delta"[2] = 0
+    var"tau.delta"[2] = 1.0E-4
     r2[2] = 0.0001
     l2[2] = 0.0001
 end

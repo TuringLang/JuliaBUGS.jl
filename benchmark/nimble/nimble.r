@@ -4,6 +4,8 @@ nimbleOptions(enableDerivs = TRUE)
 nimbleOptions(buildModelDerivs = TRUE)
 nimbleOptions(allowDynamicIndexing = TRUE)
 
+#! Last time this was run: nimble version 0.13.0
+
 # functions
 
 logLikelihood_nf <- nimbleFunction(
@@ -49,7 +51,7 @@ logLikelihood_nf <- nimbleFunction(
             return(transformer$transform(p))
             returnType(double(1))
         },
-        inverse = function(ptrans = double(1)) { # ... and its inverse.
+        inverseTransform = function(ptrans = double(1)) { # ... and its inverse.
             return(transformer$inverseTransform(ptrans))
             returnType(double(1))
         }
@@ -73,7 +75,7 @@ log_joint_nf <- nimbleFunction(
 MODEL_VOL1_NIMBLE <- c(
     "rats",
     "pumps",
-    # "dogs",
+    "dogs",
     "seeds",
     "surgical",
     "magnesium",
@@ -114,9 +116,11 @@ MODEL_VOL2_NIMBLE <- c(
 
 #
 
-process_example("leukfr", current_dir, "vol1")
-
-process_example("asia", current_dir, "vol2")
+# process_example("rats", current_dir, "vol1")
+# process_example("dogs", current_dir, "vol1")
+# process_example("equiv", current_dir, "vol1")
+# process_example("leukfr", current_dir, "vol1")
+# process_example("asia", current_dir, "vol2")
 
 #
 current_dir <- getwd()
@@ -221,23 +225,23 @@ for (example in names(benchmark_results)) {
     result <- benchmark_results[[example]]
     
     if (!is.null(result$non_compiled_log_joint)) {
-        cat("Non-compiled log joint time (microseconds):\n")
-        print(summary(result$non_compiled_log_joint)$table)
+        cat("Non-compiled log joint time (milliseconds):\n")
+        print(summary(result$non_compiled_log_joint))
     }
     
     if (!is.null(result$compiled_log_joint)) {
         cat("Compiled log joint time (microseconds):\n") 
-        print(summary(result$compiled_log_joint)$table)
+        print(summary(result$compiled_log_joint))
     }
     
     if (!is.null(result$nll)) {
         cat("Negative log likelihood time (microseconds):\n")
-        print(summary(result$nll)$table)
+        print(summary(result$nll))
     }
     
     if (!is.null(result$gr)) {
         cat("Gradient time (microseconds):\n")
-        print(summary(result$gr)$table)
+        print(summary(result$gr))
     }
 }
 
@@ -248,22 +252,22 @@ for (example in names(benchmark_results_vol2)) {
     result <- benchmark_results_vol2[[example]]
     
     if (!is.null(result$non_compiled_log_joint)) {
-        cat("Non-compiled log joint time (microseconds):\n")
-        print(summary(result$non_compiled_log_joint)$table)
+        cat("Non-compiled log joint time (milliseconds):\n")
+        print(summary(result$non_compiled_log_joint))
     }
     
     if (!is.null(result$compiled_log_joint)) {
         cat("Compiled log joint time (microseconds):\n")
-        print(summary(result$compiled_log_joint)$table)
+        print(summary(result$compiled_log_joint))
     }
     
     if (!is.null(result$nll)) {
         cat("Negative log likelihood time (microseconds):\n")
-        print(summary(result$nll)$table)
+        print(summary(result$nll))
     }
     
     if (!is.null(result$gr)) {
         cat("Gradient time (microseconds):\n")
-        print(summary(result$gr)$table)
+        print(summary(result$gr))
     }
 }
