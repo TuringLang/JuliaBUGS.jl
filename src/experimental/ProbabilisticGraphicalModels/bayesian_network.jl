@@ -390,7 +390,6 @@ function _marginalize_recursive(
         # Safe logpdf calculation without try-catch
         obs_value = AbstractPPL.get(env, current_name)
         obs_logp = logpdf(dist, obs_value)
-        
         # Safety check for NaN values
         if isnan(obs_logp)
             obs_logp = -Inf
@@ -507,9 +506,7 @@ end
 
 # Main evaluation function without diagnostics
 function evaluate_with_marginalization(
-    bn::BayesianNetwork{V,T,F},
-    parameter_values::AbstractVector;
-    use_full_env::Bool=false,
+    bn::BayesianNetwork{V,T,F}, parameter_values::AbstractVector; use_full_env::Bool=false
 ) where {V,T,F}
     # Get topological ordering of nodes
     sorted_node_ids = topological_sort_by_dfs(bn.graph)
