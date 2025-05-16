@@ -593,3 +593,570 @@ function enumerate_discrete_values(dist::DiscreteUnivariateDistribution)
         )
     end
 end
+
+"""
+    ThreadSafeMemo{K,V}
+    
+Thread-safe memoization for parallel recursive marginalization
+"""
+struct ThreadSafeMemo{K,V}
+    data::Dict{K,V}
+    lock::ReentrantLock
+    
+    ThreadSafeMemo{K,V}() where {K,V} = new(Dict{K,V}(), ReentrantLock())
+end
+
+function Base.haskey(memo::ThreadSafeMemo{K,V}, key::K) where {K,V}
+    lock(memo.lock) do
+        return haskey(memo.data, key)
+    end
+end
+
+function Base.getindex(memo::ThreadSafeMemo{K,V}, key::K) where {K,V}
+    lock(memo.lock) do
+        return memo.data[key]
+    end
+end
+
+function Base.setindex!(memo::ThreadSafeMemo{K,V}, value::V, key::K) where {K,V}
+    lock(memo.lock) do
+        memo.data[key] = value
+        return value
+    end
+end
+
+function Base.sizehint!(memo::ThreadSafeMemo{K,V}, n::Integer) where {K,V}
+    lock(memo.lock) do
+        sizehint!(memo.data, n)
+    end
+end
+
+"""
+    parallel_marginalize_discrete(bn, current_id, env, remaining_nodes, parameter_values, param_idx, var_lengths, memo, use_full_env)
+    
+Parallelizes summation over discrete variable values while maintaining exact inference.
+"""
+function parallel_marginalize_discrete(
+    bn::BayesianNetwork{V,T,F},
+    current_id::Int,
+    env,
+    remaining_nodes,
+    parameter_values::AbstractVector,
+    param_idx::Int,
+    var_lengths,
+    memo,
+    use_full_env::Bool
+) where {V,T,F}
+    current_name = bn.names[current_id]
+    dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
+    possible_values = enumerate_discrete_values(dist)
+    n_values = length(possible_values)
+    
+    # Pre-allocate result array
+    results = Vector{Float64}(undef, n_values)
+    
+    # Parallel processing of all possible values
+    Threads.@threads for i in 1:n_values
+        value = possible_values[i]
+        
+        # Create branch-specific environment (thread-safe deep copy)
+        branch_env = BangBang.setindex!!(deepcopy(env), value, current_name)
+        
+        # Compute log probability of this value
+        value_logp = logpdf(dist, value)
+        if isnan(value_logp)
+            value_logp = -Inf
+        end
+        
+        # Continue evaluation with this assignment
+        remaining_logp = _marginalize_recursive_parallel(
+            bn,
+            branch_env,
+            @view(remaining_nodes[2:end]),
+            parameter_values,
+            param_idx,
+            var_lengths,
+            memo,
+            use_full_env
+        )
+        
+        results[i] = value_logp + remaining_logp
+    end
+    
+    # Marginalize using logsumexp
+    return LogExpFunctions.logsumexp(results)
+end
+
+"""
+    _marginalize_recursive_parallel(bn, env, remaining_nodes, parameter_values, param_idx, var_lengths, memo, use_full_env)
+    
+Parallel version of _marginalize_recursive that uses thread-safe memoization and parallel processing for discrete variables.
+"""
+function _marginalize_recursive_parallel(
+    bn::BayesianNetwork{V,T,F},
+    env,
+    remaining_nodes,
+    parameter_values::AbstractVector,
+    param_idx::Int,
+    var_lengths,
+    memo,
+    use_full_env::Bool,
+    parallel_threshold::Int=4  # Only parallelize when there are enough values
+) where {V,T,F}
+    # Base case: no more nodes to process
+    if isempty(remaining_nodes)
+        return 0.0
+    end
+
+    # Process current node
+    current_id = remaining_nodes[1]
+    current_name = bn.names[current_id]
+
+    # Create memo key based on use_full_env flag
+    local memo_key
+    if use_full_env
+        env_hash = hash(env)
+        memo_key = (current_id, param_idx, env_hash)
+    else
+        parent_values = _extract_parent_values(bn, current_id, env)
+        parent_hash = hash(parent_values)
+        memo_key = (current_id, param_idx, parent_hash)
+    end
+
+    # Check memoization (thread-safe if using ThreadSafeMemo)
+    if haskey(memo, memo_key)
+        return memo[memo_key]
+    end
+
+    # Check node type
+    is_stochastic = bn.is_stochastic[current_id]
+    is_observed = bn.is_observed[current_id]
+    is_discrete = bn.node_types[current_id] == :discrete
+
+    local result
+    if !is_stochastic
+        # Deterministic node - compute value and continue
+        value = bn.deterministic_functions[current_id](env, bn.loop_vars[current_name])
+        new_env = BangBang.setindex!!(env, value, current_name)
+        result = _marginalize_recursive_parallel(
+            bn,
+            new_env,
+            @view(remaining_nodes[2:end]),
+            parameter_values,
+            param_idx,
+            var_lengths,
+            memo,
+            use_full_env,
+            parallel_threshold
+        )
+
+    elseif is_observed
+        # Observed node - add log probability and continue
+        dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
+        obs_value = AbstractPPL.get(env, current_name)
+        obs_logp = logpdf(dist, obs_value)
+        if isnan(obs_logp)
+            obs_logp = -Inf
+        end
+
+        remaining_logp = _marginalize_recursive_parallel(
+            bn,
+            env,
+            @view(remaining_nodes[2:end]),
+            parameter_values,
+            param_idx,
+            var_lengths,
+            memo,
+            use_full_env,
+            parallel_threshold
+        )
+        result = obs_logp + remaining_logp
+
+    elseif is_discrete
+        # Discrete unobserved node - marginalize over possible values
+        dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
+        possible_values = enumerate_discrete_values(dist)
+        
+        # Use parallel evaluation if there are enough values
+        if Threads.nthreads() > 1 && length(possible_values) >= parallel_threshold
+            result = parallel_marginalize_discrete(
+                bn, current_id, env, remaining_nodes,
+                parameter_values, param_idx, var_lengths, memo, use_full_env
+            )
+        else
+            # Sequential evaluation (original code)
+            logp_branches = Vector{Float64}(undef, length(possible_values))
+            for (i, value) in enumerate(possible_values)
+                branch_env = BangBang.setindex!!(deepcopy(env), value, current_name)
+                value_logp = logpdf(dist, value)
+                if isnan(value_logp)
+                    value_logp = -Inf
+                end
+                
+                remaining_logp = _marginalize_recursive_parallel(
+                    bn,
+                    branch_env,
+                    @view(remaining_nodes[2:end]),
+                    parameter_values,
+                    param_idx,
+                    var_lengths,
+                    memo,
+                    use_full_env,
+                    parallel_threshold
+                )
+                
+                logp_branches[i] = value_logp + remaining_logp
+            end
+            
+            result = LogExpFunctions.logsumexp(logp_branches)
+        end
+
+    else
+        # Continuous unobserved node - use parameter values (same as original)
+        dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
+        b = Bijectors.bijector(dist)
+        
+        if !haskey(var_lengths, current_name)
+            error("Missing transformed length for variable '$(current_name)'.")
+        end
+        
+        l = var_lengths[current_name]
+        
+        if param_idx + l - 1 > length(parameter_values)
+            error("Parameter index out of bounds: needed $(param_idx + l - 1) elements.")
+        end
+        
+        b_inv = Bijectors.inverse(b)
+        param_slice = view(parameter_values, param_idx:(param_idx + l - 1))
+        reconstructed_value = JuliaBUGS.reconstruct(b_inv, dist, param_slice)
+        value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
+        
+        new_env = BangBang.setindex!!(env, value, current_name)
+        
+        dist_logp = logpdf(dist, value)
+        if isnan(dist_logp)
+            dist_logp = -Inf + logjac
+        else
+            dist_logp += logjac
+        end
+        
+        next_idx = param_idx + l
+        remaining_logp = _marginalize_recursive_parallel(
+            bn,
+            new_env,
+            @view(remaining_nodes[2:end]),
+            parameter_values,
+            next_idx,
+            var_lengths,
+            memo,
+            use_full_env,
+            parallel_threshold
+        )
+        
+        result = dist_logp + remaining_logp
+    end
+
+    # Store result in memo (thread-safe operation if using ThreadSafeMemo)
+    memo[memo_key] = result
+    return result
+end
+
+"""
+    moralize(g::SimpleDiGraph)
+    
+Convert a directed graph to its moral graph (undirected with edges between parents).
+"""
+function moralize(g::SimpleDiGraph)
+    n = nv(g)
+    moral = SimpleGraph(n)
+    
+    # Add all edges as undirected
+    for e in edges(g)
+        # Use fully-qualified name
+        Graphs.add_edge!(moral, e.src, e.dst)
+    end
+    
+    # Add edges between parents
+    for v in vertices(g)
+        parents = inneighbors(g, v)
+        for i in 1:length(parents)
+            for j in (i+1):length(parents)
+                Graphs.add_edge!(moral, parents[i], parents[j])
+            end
+        end
+    end
+    
+    return moral
+end
+"""
+    extract_subnetwork(bn::BayesianNetwork, node_ids::Vector{Int})
+    
+Extract a subset of the Bayesian network containing only the specified nodes.
+"""
+function extract_subnetwork(bn::BayesianNetwork{V,T,F}, node_ids::Vector{Int}) where {V,T,F}
+    # Create subgraph
+    subgraph = SimpleDiGraph{T}(length(node_ids))
+    
+    # Create mapping from original to new IDs
+    orig_to_new = Dict{T,T}()
+    for (new_id, orig_id) in enumerate(node_ids)
+        orig_to_new[orig_id] = new_id
+    end
+    
+    # Create new lists for the subnetwork
+    names = [bn.names[i] for i in node_ids]
+    names_to_ids = Dict{V,T}()
+    for (i, name) in enumerate(names)
+        names_to_ids[name] = i
+    end
+    
+    stochastic_ids = T[]
+    deterministic_ids = T[]
+    is_stochastic = falses(length(node_ids))
+    is_observed = falses(length(node_ids))
+    node_types = Vector{Symbol}(undef, length(node_ids))
+    distributions = Vector{F}(undef, length(node_ids))
+    deterministic_functions = Vector{F}(undef, length(node_ids))
+    
+    # Copy node properties
+    for (new_id, orig_id) in enumerate(node_ids)
+        if bn.is_stochastic[orig_id]
+            push!(stochastic_ids, new_id)
+            distributions[new_id] = bn.distributions[orig_id]
+        else
+            push!(deterministic_ids, new_id)
+            deterministic_functions[new_id] = bn.deterministic_functions[orig_id]
+        end
+        
+        is_stochastic[new_id] = bn.is_stochastic[orig_id]
+        is_observed[new_id] = bn.is_observed[orig_id]
+        node_types[new_id] = bn.node_types[orig_id]
+    end
+    
+    # Copy edges within the subgraph
+    for orig_id in node_ids
+        for dest_id in outneighbors(bn.graph, orig_id)
+            if dest_id in node_ids
+                Graphs.add_edge!(subgraph, orig_to_new[orig_id], orig_to_new[dest_id])
+            end
+        end
+    end
+    
+    # Create subset of transformed_var_lengths
+    transformed_var_lengths = Dict{V,Int}()
+    for name in names
+        if haskey(bn.transformed_var_lengths, name)
+            transformed_var_lengths[name] = bn.transformed_var_lengths[name]
+        end
+    end
+    
+    # Create subset of loop_vars
+    loop_vars = Dict{V,NamedTuple}()
+    for name in names
+        if haskey(bn.loop_vars, name)
+            loop_vars[name] = bn.loop_vars[name]
+        end
+    end
+    
+    # Create subnetwork
+    return BayesianNetwork(
+        subgraph,
+        names,
+        names_to_ids,
+        bn.evaluation_env,  # Keep the full environment
+        loop_vars,
+        distributions,
+        deterministic_functions,
+        stochastic_ids,
+        deterministic_ids,
+        is_stochastic,
+        is_observed,
+        node_types,
+        transformed_var_lengths,
+        bn.transformed_param_length
+    )
+end
+
+"""
+    parallel_evaluate_components(bn::BayesianNetwork, parameter_values::AbstractVector)
+    
+Decompose the network into components and evaluate them in parallel.
+"""
+function parallel_evaluate_components(bn::BayesianNetwork, parameter_values::AbstractVector)
+    # Create moral graph for finding independent components
+    moral_graph = moralize(bn.graph)
+    components = connected_components(moral_graph)
+    
+    # Single component case - use standard evaluation
+    if length(components) <= 1
+        return evaluate_with_parallel_marginalization(bn, parameter_values)
+    end
+    
+    # Process components in parallel
+    component_results = Vector{Tuple}(undef, length(components))
+    
+    Threads.@threads for i in 1:length(components)
+        component = components[i]
+        # Extract subnetwork for this component
+        sub_bn = extract_subnetwork(bn, component)
+        
+        # Get parameter indices for this component
+        sub_vars = [sub_bn.names[j] for j in sub_bn.stochastic_ids 
+                   if !sub_bn.is_observed[j] && sub_bn.node_types[j] != :discrete]
+        
+        # Extract parameters for continuous variables in this component
+        sub_params = Float64[]
+        if !isempty(sub_vars)
+            param_idx = 1
+            for name in bn.names
+                if name in sub_vars && haskey(bn.transformed_var_lengths, name)
+                    l = bn.transformed_var_lengths[name]
+                    if param_idx + l - 1 <= length(parameter_values)
+                        append!(sub_params, parameter_values[param_idx:(param_idx + l - 1)])
+                    end
+                    param_idx += l
+                end
+            end
+        end
+        
+        # Evaluate component
+        sub_env, sub_logp = evaluate_with_parallel_marginalization(sub_bn, sub_params)
+        component_results[i] = (sub_env, sub_logp)
+    end
+    
+    # Combine results - WITHOUT MODIFYING bn
+    total_env = deepcopy(bn.evaluation_env)
+    total_logp = 0.0
+    
+    for (sub_env, sub_logp) in component_results
+        # Update variables in the environment
+        for name in keys(sub_env)
+            if name in propertynames(total_env)
+                total_env = BangBang.setindex!!(total_env, sub_env[name], name)
+            end
+        end
+        total_logp += sub_logp
+    end
+    
+    return total_env, total_logp
+end
+
+"""
+    evaluate_with_parallel_marginalization(
+        bn::BayesianNetwork, 
+        parameter_values::AbstractVector;
+        use_full_env::Bool=false,
+        parallel_threshold::Int=4,
+        thread_safe_memo::Bool=true
+    )
+    
+Evaluate the Bayesian network with parallel computation strategies while maintaining exact inference.
+"""
+function evaluate_with_parallel_marginalization(
+    bn::BayesianNetwork{V,T,F},
+    parameter_values::AbstractVector;
+    use_full_env::Bool=false,
+    parallel_threshold::Int=4,
+    thread_safe_memo::Bool=true
+) where {V,T,F}
+    # Get topological ordering of nodes
+    sorted_node_ids = topological_sort_by_dfs(bn.graph)
+
+    # Find discrete variables (same as in original function)
+    discrete_vars = [
+        bn.names[i] for i in sorted_node_ids if
+        bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] == :discrete
+    ]
+
+    # No discrete variables case - use standard evaluation
+    if isempty(discrete_vars)
+        return evaluate_with_values(bn, parameter_values)
+    end
+
+    # Initialize environment
+    env = deepcopy(bn.evaluation_env)
+
+    # Create appropriate memo type based on threading needs
+    if thread_safe_memo && Threads.nthreads() > 1
+        # Thread-safe memo for parallel execution
+        expected_entries = 2^length(discrete_vars) * length(bn.names)
+        memo = ThreadSafeMemo{Tuple{Int,Int,UInt64},Float64}()
+        sizehint!(memo, expected_entries)
+    else
+        # Standard dictionary for sequential execution
+        expected_entries = 2^length(discrete_vars) * length(bn.names)
+        memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        sizehint!(memo, expected_entries)
+    end
+
+    # Start recursive evaluation with parallel processing
+    logp = _marginalize_recursive_parallel(
+        bn,
+        env,
+        sorted_node_ids,
+        parameter_values,
+        1,
+        bn.transformed_var_lengths,
+        memo,
+        use_full_env,
+        parallel_threshold
+    )
+
+    return env, logp
+end
+
+"""
+    batch_evaluate(bn::BayesianNetwork, parameter_sets::Vector{<:AbstractVector})
+    
+Evaluates the model with multiple parameter sets in parallel.
+"""
+function batch_evaluate(
+    bn::BayesianNetwork, 
+    parameter_sets::Vector{<:AbstractVector}
+)
+    n_sets = length(parameter_sets)
+    results = Vector{Tuple}(undef, n_sets)
+    
+    Threads.@threads for i in 1:n_sets
+        results[i] = evaluate_with_optimal_parallelism(bn, parameter_sets[i])
+    end
+    
+    return results
+end
+
+"""
+    evaluate_with_optimal_parallelism(
+        bn::BayesianNetwork, 
+        parameter_values::AbstractVector;
+        decompose::Bool=true,
+        use_full_env::Bool=false
+    )
+    
+Automatically choose the best parallelization strategy based on network characteristics.
+"""
+function evaluate_with_optimal_parallelism(
+    bn::BayesianNetwork,
+    parameter_values::AbstractVector;
+    decompose::Bool=true,
+    use_full_env::Bool=false
+)
+    # Check for graph decomposition first if enabled
+    if decompose
+        # Try decomposing the graph into independent components
+        moral_graph = moralize(bn.graph)
+        components = connected_components(moral_graph)
+        
+        if length(components) > 1
+            # Network is decomposable - use component-based parallelism
+            return parallel_evaluate_components(bn, parameter_values)
+        end
+    end
+    
+    # Network is not decomposable or decomposition is disabled
+    # Use parallel marginalization instead
+    return evaluate_with_parallel_marginalization(
+        bn, 
+        parameter_values; 
+        use_full_env=use_full_env
+    )
+end
