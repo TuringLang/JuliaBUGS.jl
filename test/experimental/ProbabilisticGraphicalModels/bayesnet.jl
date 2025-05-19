@@ -13,19 +13,25 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
 	is_conditionally_independent,
 	evaluate,
 	evaluate_with_values,
-	evaluate_with_marginalization
+	evaluate_with_marginalization,
+    _marginalize_recursive,
+    evaluate_with_marginalization_legacy,
+    _marginalize_recursive_legacy
 using BangBang
 using JuliaBUGS
 using JuliaBUGS: @bugs, compile, NodeInfo, VarName
 using Bijectors: Bijectors
 using AbstractPPL
 
+using Printf
+using BenchmarkTools
+
 function marginalize_without_memo(bn, params)
     sorted_node_ids = topological_sort_by_dfs(bn.graph)
     env = deepcopy(bn.evaluation_env)
 
     # Use the original function without memo
-    logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
+    logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive_legacy(
         bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths
     )
     return env, logp
@@ -38,7 +44,7 @@ function marginalize_with_memo(bn, params)
 
     # Use the enhanced function with memo
     logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
-        bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths, memo
+        bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths, memo, :full_env
     )
     return env, logp, length(memo)
 end
@@ -1892,7 +1898,7 @@ end
             # Let's modify the test to accurately check for the improved pattern
 
             # Test chain network performance for increasing lengths
-            chain_lengths = [3, 4, 5, 6, 7, 8]
+            chain_lengths = [3, 4, 5, 6, 7, 8,9,10,11,12,13,14,15, 16,17, 18,19, 20, 21, 22,23, 24, 25, 26, 27, 28, 29, 30]
 
             # Track performance metrics
             standard_times = Float64[]
@@ -1955,11 +1961,13 @@ end
 
             # Additional insights
             @info "Chain Speedup Analysis" chain_lengths speedups
+            println(speedups)
         end
+
 
         @testset "Tree Network Scaling" begin
             # Test tree network performance for increasing depths
-            tree_depths = [2, 3, 4]  # A depth 4 tree has 15 nodes (2^4-1)
+            tree_depths = [2, 3, 4, 5, 6, 7, 8, 9, 10]  # A depth 4 tree has 15 nodes (2^4-1)
 
             # Track performance metrics
             standard_times = Float64[]
@@ -1977,10 +1985,14 @@ end
                 push!(node_counts, node_count)
 
                 # Run without memoization
+                println("Running without memoization")
+                println("Node count: $node_count")
                 standard_time = @elapsed _, _ = marginalize_without_memo(bn, params)
                 push!(standard_times, standard_time)
 
                 # Run with memoization
+                println("Running with memoization")
+                println("Node count: $node_count")
                 dp_time = @elapsed _, _, memo_size = marginalize_with_memo(bn, params)
                 push!(dp_times, dp_time)
                 push!(memo_sizes, memo_size)
@@ -2013,11 +2025,13 @@ end
             for i in 1:length(tree_depths)
                 @test memo_sizes[i] <= (node_counts[i] + 1) * 2^node_counts[i]
             end
+
+            println(speedups)
         end
 
         @testset "Grid Network Scaling" begin
             # Test grid networks with different sizes
-            grid_sizes = [(2, 2), (2, 3), (3, 3)]  # (width, height)
+            grid_sizes = [(2, 2), (2, 3), (3, 3), (3, 4), (4, 4), (4, 5), (5, 5)]  # (width, height)
 
             # Track performance metrics
             standard_times = Float64[]
@@ -2133,5 +2147,1249 @@ end
             # All memo sizes should be less than theoretical maximum states
             @test all(memo_sizes .< 2 .* (2 .^ node_counts))
         end
+    end
+end
+
+@testset "Caching Strategy Comparison" begin
+    # Store results for final analysis
+    all_results = []  # Add this line to collect all results
+    
+    function run_comparison_benchmark(bn, network_name)
+        params = Float64[]
+        
+        # Get baseline result for correctness checking
+        _, no_memo_logp = marginalize_without_memo(deepcopy(bn), params)
+        
+        # Create local copies for benchmarking
+        local_env = deepcopy(bn.evaluation_env)
+        local_graph = bn.graph
+        local_var_lengths = bn.transformed_var_lengths
+        
+        # Benchmark no memoization
+        b_no_memo = @benchmarkable marginalize_without_memo($(deepcopy(bn)), $params)
+        no_memo_result = run(b_no_memo, samples=5, seconds=1)
+        no_memo_time = median(no_memo_result).time / 1e9  # Convert to seconds
+        
+        # Benchmark parent-based memoization
+        b_parent = @benchmarkable begin
+            memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+            _marginalize_recursive(
+                $(deepcopy(bn)), 
+                $(deepcopy(local_env)), 
+                topological_sort_by_dfs($local_graph), 
+                $params, 1, $local_var_lengths, 
+                memo, :parent_based
+            )
+        end
+        parent_result = run(b_parent, samples=5, seconds=1)
+        parent_time = median(parent_result).time / 1e9
+        
+        # Get accurate memo size and correctness with a separate run
+        parent_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        parent_logp = _marginalize_recursive(
+            deepcopy(bn), deepcopy(bn.evaluation_env), 
+            topological_sort_by_dfs(bn.graph), params, 1, 
+            bn.transformed_var_lengths, parent_memo, :parent_based
+        )
+        
+        # Benchmark discrete-only memoization
+        b_discrete = @benchmarkable begin
+            memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+            _marginalize_recursive(
+                $(deepcopy(bn)), 
+                $(deepcopy(local_env)), 
+                topological_sort_by_dfs($local_graph), 
+                $params, 1, $local_var_lengths, 
+                memo, :discrete_only
+            )
+        end
+        discrete_result = run(b_discrete, samples=5, seconds=1)
+        discrete_time = median(discrete_result).time / 1e9
+        
+        # Get accurate memo size and correctness
+        discrete_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        discrete_logp = _marginalize_recursive(
+            deepcopy(bn), deepcopy(bn.evaluation_env),
+            topological_sort_by_dfs(bn.graph), params, 1,
+            bn.transformed_var_lengths, discrete_memo, :discrete_only
+        )
+        
+        # Benchmark full-env memoization
+        b_full_env = @benchmarkable begin
+            memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+            _marginalize_recursive(
+                $(deepcopy(bn)), 
+                $(deepcopy(local_env)), 
+                topological_sort_by_dfs($local_graph), 
+                $params, 1, $local_var_lengths, 
+                memo, :full_env
+            )
+        end
+        full_env_result = run(b_full_env, samples=5, seconds=1)
+        full_env_time = median(full_env_result).time / 1e9
+        
+        # Get accurate memo size and correctness
+        full_env_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        full_env_logp = _marginalize_recursive(
+            deepcopy(bn), deepcopy(bn.evaluation_env),
+            topological_sort_by_dfs(bn.graph), params, 1,
+            bn.transformed_var_lengths, full_env_memo, :full_env
+        )
+        
+        # Check correctness
+        parent_correct = isapprox(parent_logp, no_memo_logp, rtol=1e-10)
+        discrete_correct = isapprox(discrete_logp, no_memo_logp, rtol=1e-10)
+        full_env_correct = isapprox(full_env_logp, no_memo_logp, rtol=1e-10)
+        
+        # Count discrete variables
+        discrete_count = sum(bn.node_types .== :discrete)
+        
+        # For HMMs, theoretical states is more accurately n_states^seq_length
+        # But for other networks, use 2^discrete_count as a reasonable approximation
+        theoretical_states = contains(network_name, "HMM") ? 
+            parse(Int, match(r"states=(\d+)", network_name).captures[1])^
+            parse(Int, match(r"length=(\d+)", network_name).captures[1]) :
+            2^discrete_count
+        
+        # Add to global results array
+        push!(all_results, Dict(
+            :network => network_name,
+            :network_type => contains(network_name, "Chain") ? "Chain" : 
+                            contains(network_name, "Tree") ? "Tree" : 
+                            contains(network_name, "HMM") ? "HMM" : "Grid",
+            :no_memo_time => no_memo_time,
+            :parent_time => parent_time,
+            :discrete_time => discrete_time,
+            :full_env_time => full_env_time,
+            :parent_speedup => no_memo_time/parent_time,
+            :discrete_speedup => no_memo_time/discrete_time,
+            :full_env_speedup => no_memo_time/full_env_time,
+            :parent_memo_size => length(parent_memo),
+            :discrete_memo_size => length(discrete_memo),
+            :full_env_memo_size => length(full_env_memo),
+            :parent_correct => parent_correct,
+            :discrete_correct => discrete_correct,
+            :full_env_correct => full_env_correct,
+            :discrete_vars => discrete_count,
+            :theoretical_states => theoretical_states
+        ))
+        
+        # Log results
+        @info "$network_name Benchmark Results" begin
+            parent_time = parent_time
+            discrete_time = discrete_time
+            full_env_time = full_env_time
+            parent_speedup = no_memo_time/parent_time
+            discrete_speedup = no_memo_time/discrete_time
+            full_env_speedup = no_memo_time/full_env_time
+            parent_memo_size = length(parent_memo)
+            discrete_memo_size = length(discrete_memo)
+            full_env_memo_size = length(full_env_memo)
+            parent_correct = parent_correct
+            discrete_correct = discrete_correct
+            full_env_correct = full_env_correct
+        end
+        
+        # Return results in same format as original function
+        return (
+            no_memo_time = no_memo_time,
+            parent = (time=parent_time, size=length(parent_memo), correct=parent_correct),
+            discrete = (time=discrete_time, size=length(discrete_memo), correct=discrete_correct),
+            full_env = (time=full_env_time, size=length(full_env_memo), correct=full_env_correct)
+        )
+    end
+    
+    @testset "Chain Networks" begin
+        for length in [5, 20]
+            bn = create_chain_network(length)
+            results = run_comparison_benchmark(bn, "Chain ($length)")
+            
+            @test results.parent.correct  # Parent-based works for chains
+            @test results.discrete.correct
+            @test results.full_env.correct
+        end
+    end
+    
+    @testset "Tree Networks" begin
+        for depth in [3, 4]
+            bn = create_tree_network(depth)
+            results = run_comparison_benchmark(bn, "Tree (depth=$depth)")
+            
+            @test_broken results.parent.correct  # Parent-based fails for trees
+            @test results.discrete.correct       # Discrete-only should work
+            @test results.full_env.correct
+        end
+    end
+    
+    @testset "Grid Networks" begin
+        for (width, height) in [(2, 2), (3, 3)]
+            bn = create_grid_network(width, height)
+            results = run_comparison_benchmark(bn, "Grid ($(width)×$(height))")
+            
+            @test_broken results.parent.correct  # Parent-based fails for grids
+            @test results.discrete.correct       # Discrete-only should work
+            @test results.full_env.correct
+        end
+    end
+
+# ---------- CONSOLIDATED METRICS OUTPUT ----------
+println("\n=== MEMOIZATION PERFORMANCE BY NETWORK TYPE ===")
+println("Network Type | Strategy      | Avg Speedup | Avg Memo Size | Correct")
+println("-------------|---------------|-------------|---------------|--------")
+
+for network_type in ["Chain", "Tree", "Grid"]
+    type_results = filter(r -> r[:network_type] == network_type, all_results)
+    if isempty(type_results)
+        continue
+    end
+    
+    # Calculate averages
+    avg_parent_speedup = mean([r[:parent_speedup] for r in type_results])
+    avg_discrete_speedup = mean([r[:discrete_speedup] for r in type_results])
+    avg_full_env_speedup = mean([r[:full_env_speedup] for r in type_results])
+    
+    avg_parent_size = mean([r[:parent_memo_size] for r in type_results])
+    avg_discrete_size = mean([r[:discrete_memo_size] for r in type_results])
+    avg_full_env_size = mean([r[:full_env_memo_size] for r in type_results])
+    
+    parent_correct = all([r[:parent_correct] for r in type_results])
+    discrete_correct = all([r[:discrete_correct] for r in type_results])
+    full_env_correct = all([r[:full_env_correct] for r in type_results])
+    
+    # Print results
+    println(rpad(network_type, 12), " | Parent-based  | ", 
+            @sprintf("%11.2fx", avg_parent_speedup), " | ", 
+            @sprintf("%13.1f", avg_parent_size), " | ", 
+            parent_correct ? "✓" : "✗")
+    println(rpad(network_type, 12), " | Discrete-only | ", 
+            @sprintf("%11.2fx", avg_discrete_speedup), " | ", 
+            @sprintf("%13.1f", avg_discrete_size), " | ", 
+            discrete_correct ? "✓" : "✗")
+    println(rpad(network_type, 12), " | Full env      | ", 
+            @sprintf("%11.2fx", avg_full_env_speedup), " | ", 
+            @sprintf("%13.1f", avg_full_env_size), " | ", 
+            full_env_correct ? "✓" : "✗")
+end
+
+println("\n=== MEMORY EFFICIENCY METRICS ===")
+println("Network        | Parent-Based | Discrete-Only | Full Env  | Theoretical")
+println("---------------|--------------|--------------|-----------|------------")
+
+for r in all_results
+    network = r[:network]
+    parent_ratio = r[:parent_memo_size] / r[:theoretical_states] * 100
+    discrete_ratio = r[:discrete_memo_size] / r[:theoretical_states] * 100
+    full_env_ratio = r[:full_env_memo_size] / r[:theoretical_states] * 100
+    
+    println(rpad(network, 14), " | ", 
+            @sprintf("%11.1f%%", parent_ratio), " | ", 
+            @sprintf("%12.1f%%", discrete_ratio), " | ", 
+            @sprintf("%9.1f%%", full_env_ratio), " | ", 
+            @sprintf("%11d", r[:theoretical_states]))
+end
+
+println("\n=== OVERALL STRATEGY COMPARISON ===")
+println("Strategy      | Avg Speedup | Avg Memory Ratio | Correctness")
+println("--------------|-------------|-----------------|------------")
+
+avg_parent_speedup = mean([r[:parent_speedup] for r in all_results])
+avg_discrete_speedup = mean([r[:discrete_speedup] for r in all_results])
+avg_full_env_speedup = mean([r[:full_env_speedup] for r in all_results])
+
+avg_parent_ratio = mean([r[:parent_memo_size] / r[:theoretical_states] for r in all_results])
+avg_discrete_ratio = mean([r[:discrete_memo_size] / r[:theoretical_states] for r in all_results])
+avg_full_env_ratio = mean([r[:full_env_memo_size] / r[:theoretical_states] for r in all_results])
+
+parent_correct = all([r[:parent_correct] for r in all_results])
+discrete_correct = all([r[:discrete_correct] for r in all_results])
+full_env_correct = all([r[:full_env_correct] for r in all_results])
+
+println(rpad("Parent-based", 13), " | ", 
+        @sprintf("%11.1fx", avg_parent_speedup), " | ", 
+        @sprintf("%16.1f%%", avg_parent_ratio*100), " | ", 
+        parent_correct ? "Always correct" : "Sometimes fails")
+println(rpad("Discrete-only", 13), " | ", 
+        @sprintf("%11.1fx", avg_discrete_speedup), " | ", 
+        @sprintf("%16.1f%%", avg_discrete_ratio*100), " | ", 
+        discrete_correct ? "Always correct" : "Sometimes fails")
+println(rpad("Full env", 13), " | ", 
+        @sprintf("%11.1fx", avg_full_env_speedup), " | ", 
+        @sprintf("%16.1f%%", avg_full_env_ratio*100), " | ", 
+        full_env_correct ? "Always correct" : "Sometimes fails")
+
+end
+
+function create_hmm_network(n_states::Int, seq_length::Int)
+    bn = BayesianNetwork{VarName}()
+    
+    # Hidden states and observation variables
+    z_vars = [VarName(Symbol("z$t")) for t in 1:seq_length]
+    x_vars = [VarName(Symbol("x$t")) for t in 1:seq_length]
+    
+    # Initialize tracking variables
+    all_vars = Dict{Symbol,Any}()
+    loop_vars = Dict{VarName,NamedTuple}()
+    
+    # Initialize with default values
+    for t in 1:seq_length
+        all_vars[Symbol("z$t")] = 1      # Default to first state
+        all_vars[Symbol("x$t")] = 0.0    # Observation placeholder
+        loop_vars[z_vars[t]] = (;)
+        loop_vars[x_vars[t]] = (;)
+    end
+    
+    # Add first hidden state node
+    add_stochastic_vertex!(bn, z_vars[1], 
+        (_, _) -> Categorical(ones(n_states)/n_states), false, :discrete)
+    
+    # Add subsequent hidden state nodes with dependencies
+    for t in 2:seq_length
+        add_stochastic_vertex!(bn, z_vars[t],
+            (env, _) -> begin
+                # Previous state value
+                prev_state = AbstractPPL.get(env, z_vars[t-1])
+                # For simplicity using uniform transition probabilities
+                return Categorical(ones(n_states)/n_states)
+            end,
+            false, :discrete)
+        add_edge!(bn, z_vars[t-1], z_vars[t])
+    end
+    
+    # Add observation nodes
+    for t in 1:seq_length
+        add_stochastic_vertex!(bn, x_vars[t],
+            (env, _) -> begin
+                # Current state value
+                state = AbstractPPL.get(env, z_vars[t])
+                # Emission model: Normal distribution centered at state value
+                return Normal(Float64(state), 1.0)
+            end,
+            true, :continuous)
+        add_edge!(bn, z_vars[t], x_vars[t])
+    end
+    
+    # Create evaluation environment
+    eval_env = NamedTuple{Tuple(keys(all_vars))}(values(all_vars))
+    
+    # Return final network
+    BayesianNetwork(
+        bn.graph,
+        bn.names,
+        bn.names_to_ids,
+        eval_env,
+        loop_vars,
+        bn.distributions,
+        bn.deterministic_functions,
+        bn.stochastic_ids,
+        bn.deterministic_ids,
+        bn.is_stochastic,
+        bn.is_observed,
+        bn.node_types,
+        Dict{VarName,Int}(),  # Use VarName type for consistency
+        0
+    )
+end
+all_results = []  # Add this line to collect all results
+
+function create_hmm_network(n_states::Int, seq_length::Int)
+    bn = BayesianNetwork{VarName}()
+    
+    # Hidden states and observation variables
+    z_vars = [VarName(Symbol("z$t")) for t in 1:seq_length]
+    x_vars = [VarName(Symbol("x$t")) for t in 1:seq_length]
+    
+    # Initialize tracking variables
+    all_vars = Dict{Symbol,Any}()
+    loop_vars = Dict{VarName,NamedTuple}()
+    
+    # Initialize with default values
+    for t in 1:seq_length
+        all_vars[Symbol("z$t")] = 1      # Default to first state
+        all_vars[Symbol("x$t")] = 0.0    # Observation placeholder
+        loop_vars[z_vars[t]] = (;)
+        loop_vars[x_vars[t]] = (;)
+    end
+    
+    # Add first hidden state node
+    add_stochastic_vertex!(bn, z_vars[1], 
+        (_, _) -> Categorical(ones(n_states)/n_states), false, :discrete)
+    
+    # Add subsequent hidden state nodes with dependencies
+    for t in 2:seq_length
+        add_stochastic_vertex!(bn, z_vars[t],
+            (env, _) -> begin
+                # Previous state value
+                prev_state = AbstractPPL.get(env, z_vars[t-1])
+                # For simplicity using uniform transition probabilities
+                return Categorical(ones(n_states)/n_states)
+            end,
+            false, :discrete)
+        add_edge!(bn, z_vars[t-1], z_vars[t])
+    end
+    
+    # Add observation nodes
+    for t in 1:seq_length
+        add_stochastic_vertex!(bn, x_vars[t],
+            (env, _) -> begin
+                # Current state value
+                state = AbstractPPL.get(env, z_vars[t])
+                # Emission model: Normal distribution centered at state value
+                return Normal(Float64(state), 1.0)
+            end,
+            true, :continuous)
+        add_edge!(bn, z_vars[t], x_vars[t])
+    end
+    
+    # Create evaluation environment
+    eval_env = NamedTuple{Tuple(keys(all_vars))}(values(all_vars))
+    
+    # Return final network
+    BayesianNetwork(
+        bn.graph,
+        bn.names,
+        bn.names_to_ids,
+        eval_env,
+        loop_vars,
+        bn.distributions,
+        bn.deterministic_functions,
+        bn.stochastic_ids,
+        bn.deterministic_ids,
+        bn.is_stochastic,
+        bn.is_observed,
+        bn.node_types,
+        Dict{VarName,Int}(),  # Use VarName type for consistency
+        0
+    )
+end
+
+@testset "HMM Networks" begin
+    # Store results for final analysis
+ 
+    hmm_results = [] 
+    # Test different configurations of HMMs
+    hmm_configs = [(2, 4), (3, 3), (2, 5), (4, 2), (2, 20)]
+    
+    for (n_states, seq_length) in hmm_configs
+        # Create the HMM network
+        bn = create_hmm_network(n_states, seq_length)
+        network_name = "HMM (states=$n_states, length=$seq_length)"
+        
+        # Run the comparison test
+        results = run_comparison_benchmarktools(bn, network_name)
+        
+        # Use @test_broken for parent-based since it's known to fail for HMMs
+        @test_broken results.parent.correct
+        @test results.discrete.correct
+        @test results.full_env.correct
+        
+        # Store results for consolidated output
+        theoretical_states = n_states^seq_length
+        push!(hmm_results, Dict(
+            :network => network_name,
+            :n_states => n_states,
+            :seq_length => seq_length,
+            :no_memo_time => results.no_memo_time,
+            :parent_time => results.parent.time,
+            :discrete_time => results.discrete.time,
+            :full_env_time => results.full_env.time,
+            :parent_speedup => results.no_memo_time / results.parent.time,
+            :discrete_speedup => results.no_memo_time / results.discrete.time,
+            :full_env_speedup => results.no_memo_time / results.full_env.time,
+            :parent_size => results.parent.size,
+            :discrete_size => results.discrete.size,
+            :full_env_size => results.full_env.size,
+            :theoretical_states => theoretical_states,
+            :parent_correct => results.parent.correct,
+            :discrete_correct => results.discrete.correct,
+            :full_env_correct => results.full_env.correct
+        ))
+    end
+    
+    # ---------- CONSOLIDATED OUTPUT FOR HMM NETWORKS ----------
+    println("\n\n=== HMM NETWORKS MEMOIZATION PERFORMANCE ===")
+    println("Configuration    | Strategy      | Speedup | Memo Size | Memo/States Ratio")
+    println("-----------------|---------------|---------|-----------|----------------")
+    
+    for result in hmm_results
+        config = "$(result[:n_states])×$(result[:seq_length])"
+        
+        # Calculate ratios
+        parent_ratio = result[:parent_size] / result[:theoretical_states] * 100
+        discrete_ratio = result[:discrete_size] / result[:theoretical_states] * 100
+        full_env_ratio = result[:full_env_size] / result[:theoretical_states] * 100
+        
+        # Print results for each strategy
+        println(rpad("HMM $config", 16), " | Parent-based  | ", 
+                @sprintf("%7.2fx", result[:parent_speedup]), " | ", 
+                @sprintf("%9d", result[:parent_size]), " | ", 
+                @sprintf("%7.2f%%", parent_ratio), 
+                result[:parent_correct] ? " ✓" : " ✗")
+        println(rpad("HMM $config", 16), " | Discrete-only | ", 
+                @sprintf("%7.2fx", result[:discrete_speedup]), " | ", 
+                @sprintf("%9d", result[:discrete_size]), " | ", 
+                @sprintf("%7.2f%%", discrete_ratio),
+                result[:discrete_correct] ? " ✓" : " ✗")
+        println(rpad("HMM $config", 16), " | Full env      | ", 
+                @sprintf("%7.2fx", result[:full_env_speedup]), " | ", 
+                @sprintf("%9d", result[:full_env_size]), " | ", 
+                @sprintf("%7.2f%%", full_env_ratio),
+                result[:full_env_correct] ? " ✓" : " ✗")
+    end
+    
+    println("\n=== HMM NETWORKS AVERAGE PERFORMANCE ===")
+    println("Strategy      | Avg Speedup | Avg Memo/States | Correctness")
+    println("--------------|-------------|----------------|------------")
+    
+    # Calculate averages across all HMM tests
+    avg_parent_speedup = mean([r[:parent_speedup] for r in hmm_results])
+    avg_discrete_speedup = mean([r[:discrete_speedup] for r in hmm_results])
+    avg_full_env_speedup = mean([r[:full_env_speedup] for r in hmm_results])
+    
+    avg_parent_ratio = mean([r[:parent_size] / r[:theoretical_states] for r in hmm_results])
+    avg_discrete_ratio = mean([r[:discrete_size] / r[:theoretical_states] for r in hmm_results])
+    avg_full_env_ratio = mean([r[:full_env_size] / r[:theoretical_states] for r in hmm_results])
+    
+    parent_correct = all([r[:parent_correct] for r in hmm_results])
+    discrete_correct = all([r[:discrete_correct] for r in hmm_results])
+    full_env_correct = all([r[:full_env_correct] for r in hmm_results])
+    
+    println(rpad("Parent-based", 13), " | ", 
+            @sprintf("%11.2fx", avg_parent_speedup), " | ", 
+            @sprintf("%16.2f%%", avg_parent_ratio*100), " | ", 
+            parent_correct ? "Always correct" : "Never correct for HMMs")
+    println(rpad("Discrete-only", 13), " | ", 
+            @sprintf("%11.2fx", avg_discrete_speedup), " | ", 
+            @sprintf("%16.2f%%", avg_discrete_ratio*100), " | ", 
+            discrete_correct ? "Always correct" : "Sometimes fails")
+    println(rpad("Full env", 13), " | ", 
+            @sprintf("%11.2fx", avg_full_env_speedup), " | ", 
+            @sprintf("%16.2f%%", avg_full_env_ratio*100), " | ", 
+            full_env_correct ? "Always correct" : "Sometimes fails")
+    
+    println("\n=== HMM SCALING ANALYSIS ===")
+    println("States | Length | Theoretical States | Parent-based Memo | Discrete-only Memo | Full env Memo")
+    println("-------|--------|-------------------|------------------|-------------------|-------------")
+    
+    # Sort by complexity for better analysis
+    sort!(hmm_results, by = r -> r[:theoretical_states])
+    
+    for result in hmm_results
+        println(
+            @sprintf("%6d", result[:n_states]), " | ", 
+            @sprintf("%6d", result[:seq_length]), " | ", 
+            @sprintf("%18d", result[:theoretical_states]), " | ", 
+            @sprintf("%16d", result[:parent_size]), " | ", 
+            @sprintf("%17d", result[:discrete_size]), " | ", 
+            @sprintf("%13d", result[:full_env_size])
+        )
+    end
+    
+    # Print relationship with sequence length
+    println("\n=== HMM MEMO SIZE GROWTH WITH SEQUENCE LENGTH ===")
+    println("For binary state HMMs (2 states):")
+    binary_hmms = filter(r -> r[:n_states] == 2, hmm_results)
+    sort!(binary_hmms, by = r -> r[:seq_length])
+    
+    if length(binary_hmms) > 1
+        println("Sequence Length | Parent-based Memo | Discrete-only Memo | Full env Memo")
+        println("---------------|------------------|-------------------|-------------")
+        
+        for result in binary_hmms
+            println(
+                @sprintf("%15d", result[:seq_length]), " | ", 
+                @sprintf("%16d", result[:parent_size]), " | ", 
+                @sprintf("%17d", result[:discrete_size]), " | ", 
+                @sprintf("%13d", result[:full_env_size])
+            )
+        end
+    else
+        println("Insufficient binary HMM data points for growth analysis")
+    end
+end
+
+using BenchmarkTools
+function run_comparison_simple(bn, network_name)
+    params = Float64[]
+    
+    # Get the baseline result for correctness comparison
+    _, no_memo_logp = marginalize_without_memo(deepcopy(bn), params)
+    
+    # Benchmark the no-memo version
+    b1 = @benchmark marginalize_without_memo($(deepcopy(bn)), $params)
+    no_memo_time = median(b1).time / 1e9  # Convert to seconds
+    
+    # Parent-based memoization
+    parent_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+    parent_logp = 0.0
+    b2 = @benchmark begin
+        parent_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        parent_logp = _marginalize_recursive(
+            $(deepcopy(bn)), 
+            $(deepcopy(bn.evaluation_env)), 
+            topological_sort_by_dfs($(bn.graph)), 
+            $params, 1, $(bn.transformed_var_lengths), 
+            parent_memo, :parent_based
+        )
+    end
+    parent_time = median(b2).time / 1e9
+    
+    # Run once outside benchmark to get the actual memo and logp
+    parent_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+    parent_logp = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env), 
+        topological_sort_by_dfs(bn.graph), params, 1, 
+        bn.transformed_var_lengths, parent_memo, :parent_based
+    )
+    
+    # Discrete-only memoization - similar pattern
+    discrete_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+    b3 = @benchmark begin
+        discrete_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        discrete_logp = _marginalize_recursive(
+            $(deepcopy(bn)), 
+            $(deepcopy(bn.evaluation_env)), 
+            topological_sort_by_dfs($(bn.graph)), 
+            $params, 1, $(bn.transformed_var_lengths), 
+            discrete_memo, :discrete_only
+        )
+    end
+    discrete_time = median(b3).time / 1e9
+    
+    # Run once outside benchmark
+    discrete_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+    discrete_logp = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env),
+        topological_sort_by_dfs(bn.graph), params, 1,
+        bn.transformed_var_lengths, discrete_memo, :discrete_only
+    )
+    
+    # Full-env memoization
+    full_env_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+    b4 = @benchmark begin
+        full_env_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        full_env_logp = _marginalize_recursive(
+            $(deepcopy(bn)), 
+            $(deepcopy(bn.evaluation_env)), 
+            topological_sort_by_dfs($(bn.graph)), 
+            $params, 1, $(bn.transformed_var_lengths), 
+            full_env_memo, :full_env
+        )
+    end
+    full_env_time = median(b4).time / 1e9
+    
+    # Run once outside benchmark
+    full_env_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+    full_env_logp = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env),
+        topological_sort_by_dfs(bn.graph), params, 1,
+        bn.transformed_var_lengths, full_env_memo, :full_env
+    )
+    
+    # Calculate correctness
+    parent_correct = isapprox(parent_logp, no_memo_logp, rtol=1e-10)
+    discrete_correct = isapprox(discrete_logp, no_memo_logp, rtol=1e-10)
+    full_env_correct = isapprox(full_env_logp, no_memo_logp, rtol=1e-10)
+    
+    # Process and return results as before
+    discrete_count = sum(bn.node_types .== :discrete)
+    theoretical_states = discrete_count > 0 ? 2^discrete_count : 0
+    
+    @info "$network_name BenchmarkTools Results" begin
+        parent_time = parent_time
+        discrete_time = discrete_time
+        full_env_time = full_env_time
+        parent_speedup = no_memo_time/parent_time
+        discrete_speedup = no_memo_time/discrete_time
+        full_env_speedup = no_memo_time/full_env_time
+        parent_memo_size = length(parent_memo)
+        discrete_memo_size = length(discrete_memo)
+        full_env_memo_size = length(full_env_memo)
+        parent_correct = parent_correct
+        discrete_correct = discrete_correct
+        full_env_correct = full_env_correct
+    end
+    
+    return (
+        no_memo_time = no_memo_time,
+        parent = (time=parent_time, size=length(parent_memo), correct=parent_correct),
+        discrete = (time=discrete_time, size=length(discrete_memo), correct=discrete_correct),
+        full_env = (time=full_env_time, size=length(full_env_memo), correct=full_env_correct)
+    )
+end
+
+function run_comparison_benchmarktools(bn, network_name)
+    params = Float64[]
+    
+    # Get baseline result for correctness checking
+    _, no_memo_logp = marginalize_without_memo(deepcopy(bn), params)
+    
+    # Create local copies of needed values to ensure they're properly captured
+    local_env = deepcopy(bn.evaluation_env)
+    local_graph = bn.graph
+    local_var_lengths = bn.transformed_var_lengths
+    
+    # No memoization
+    b1 = @benchmarkable marginalize_without_memo($(deepcopy(bn)), $params)
+    
+    # Parent-based memoization
+    b2 = @benchmarkable begin
+        memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        _marginalize_recursive(
+            $(deepcopy(bn)), 
+            $(deepcopy(local_env)), 
+            topological_sort_by_dfs($local_graph), 
+            $params, 1, $local_var_lengths, 
+            memo, :parent_based
+        )
+    end
+    
+    # Discrete-only memoization
+    b3 = @benchmarkable begin
+        memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        _marginalize_recursive(
+            $(deepcopy(bn)), 
+            $(deepcopy(local_env)), 
+            topological_sort_by_dfs($local_graph), 
+            $params, 1, $local_var_lengths, 
+            memo, :discrete_only
+        )
+    end
+    
+    # Full-env memoization
+    b4 = @benchmarkable begin
+        memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        _marginalize_recursive(
+            $(deepcopy(bn)), 
+            $(deepcopy(local_env)), 
+            topological_sort_by_dfs($local_graph), 
+            $params, 1, $local_var_lengths, 
+            memo, :full_env
+        )
+    end
+    
+    # Run benchmarks
+    no_memo_result = run(b1, samples=10, seconds=1)
+    parent_result = run(b2, samples=10, seconds=1)
+    discrete_result = run(b3, samples=10, seconds=1)
+    full_env_result = run(b4, samples=10, seconds=1)
+    
+    # Extract timing results
+    no_memo_time = median(no_memo_result).time / 1e9  # Convert to seconds
+    parent_time = median(parent_result).time / 1e9
+    discrete_time = median(discrete_result).time / 1e9
+    full_env_time = median(full_env_result).time / 1e9
+    
+    # Run once outside benchmark to get actual memo sizes and check correctness
+    
+    # Parent-based
+    parent_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+    parent_logp = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env), 
+        topological_sort_by_dfs(bn.graph), params, 1, 
+        bn.transformed_var_lengths, parent_memo, :parent_based
+    )
+    
+    # Discrete-only
+    discrete_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+    discrete_logp = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env),
+        topological_sort_by_dfs(bn.graph), params, 1,
+        bn.transformed_var_lengths, discrete_memo, :discrete_only
+    )
+    
+    # Full-env
+    full_env_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+    full_env_logp = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env),
+        topological_sort_by_dfs(bn.graph), params, 1,
+        bn.transformed_var_lengths, full_env_memo, :full_env
+    )
+    
+    # Check correctness
+    parent_correct = isapprox(parent_logp, no_memo_logp, rtol=1e-10)
+    discrete_correct = isapprox(discrete_logp, no_memo_logp, rtol=1e-10)
+    full_env_correct = isapprox(full_env_logp, no_memo_logp, rtol=1e-10)
+    
+    # Count discrete variables
+    discrete_count = sum(bn.node_types .== :discrete)
+    theoretical_states = discrete_count > 0 ? 2^discrete_count : 0
+
+    push!(all_results, Dict(
+        :network => network_name,
+        :network_type => contains(network_name, "Chain") ? "Chain" : 
+                        contains(network_name, "Tree") ? "Tree" : 
+                        contains(network_name, "HMM") ? "HMM" : "Grid",
+        :no_memo_time => no_memo_time,
+        # Add the rest of the fields...
+    ))
+    
+    # Return results
+    return (
+        no_memo_time = no_memo_time,
+        parent = (time=parent_time, size=length(parent_memo), correct=parent_correct),
+        discrete = (time=discrete_time, size=length(discrete_memo), correct=discrete_correct),
+        full_env = (time=full_env_time, size=length(full_env_memo), correct=full_env_correct)
+    )
+end
+
+function run_comparison_benchmark(bn, network_name)
+    params = Float64[]
+    
+    # Get baseline result for correctness checking
+    _, no_memo_logp = marginalize_without_memo(deepcopy(bn), params)
+    
+    # Create local copies for benchmarking
+    local_env = deepcopy(bn.evaluation_env)
+    local_graph = bn.graph
+    local_var_lengths = bn.transformed_var_lengths
+    
+    # Benchmark no memoization
+    b_no_memo = @benchmarkable marginalize_without_memo($(deepcopy(bn)), $params)
+    no_memo_result = run(b_no_memo, samples=5, seconds=1)
+    no_memo_time = median(no_memo_result).time / 1e9  # Convert to seconds
+    
+    # Benchmark parent-based memoization
+    b_parent = @benchmarkable begin
+        memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        _marginalize_recursive(
+            $(deepcopy(bn)), 
+            $(deepcopy(local_env)), 
+            topological_sort_by_dfs($local_graph), 
+            $params, 1, $local_var_lengths, 
+            memo, :parent_based
+        )
+    end
+    parent_result = run(b_parent, samples=5, seconds=1)
+    parent_time = median(parent_result).time / 1e9
+    
+    # Get accurate memo size and correctness with a separate run
+    parent_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+    parent_logp = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env), 
+        topological_sort_by_dfs(bn.graph), params, 1, 
+        bn.transformed_var_lengths, parent_memo, :parent_based
+    )
+    
+    # Benchmark discrete-only memoization
+    b_discrete = @benchmarkable begin
+        memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        _marginalize_recursive(
+            $(deepcopy(bn)), 
+            $(deepcopy(local_env)), 
+            topological_sort_by_dfs($local_graph), 
+            $params, 1, $local_var_lengths, 
+            memo, :discrete_only
+        )
+    end
+    discrete_result = run(b_discrete, samples=5, seconds=1)
+    discrete_time = median(discrete_result).time / 1e9
+    
+    # Get accurate memo size and correctness
+    discrete_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+    discrete_logp = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env),
+        topological_sort_by_dfs(bn.graph), params, 1,
+        bn.transformed_var_lengths, discrete_memo, :discrete_only
+    )
+    
+    # Benchmark full-env memoization
+    b_full_env = @benchmarkable begin
+        memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        _marginalize_recursive(
+            $(deepcopy(bn)), 
+            $(deepcopy(local_env)), 
+            topological_sort_by_dfs($local_graph), 
+            $params, 1, $local_var_lengths, 
+            memo, :full_env
+        )
+    end
+    full_env_result = run(b_full_env, samples=5, seconds=1)
+    full_env_time = median(full_env_result).time / 1e9
+    
+    # Get accurate memo size and correctness
+    full_env_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+    full_env_logp = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env),
+        topological_sort_by_dfs(bn.graph), params, 1,
+        bn.transformed_var_lengths, full_env_memo, :full_env
+    )
+    
+    # Check correctness
+    parent_correct = isapprox(parent_logp, no_memo_logp, rtol=1e-10)
+    discrete_correct = isapprox(discrete_logp, no_memo_logp, rtol=1e-10)
+    full_env_correct = isapprox(full_env_logp, no_memo_logp, rtol=1e-10)
+    
+    # Count discrete variables
+    discrete_count = sum(bn.node_types .== :discrete)
+    
+    # For HMMs, theoretical states is more accurately n_states^seq_length
+    # But for other networks, use 2^discrete_count as a reasonable approximation
+    theoretical_states = if contains(network_name, "HMM")
+        # Try to extract states and length from name
+        states_match = match(r"states=(\d+)", network_name)
+        length_match = match(r"length=(\d+)", network_name)
+        
+        # Default to 2 states if not specified
+        states = states_match === nothing ? 2 : parse(Int, states_match.captures[1])
+        
+        # Length must be specified
+        if length_match === nothing
+            error("HMM network name must include length=X pattern")
+        end
+        
+        length = parse(Int, length_match.captures[1])
+        states^length
+    else
+        2^discrete_count
+    end
+    
+    # Add to global results array
+    push!(all_results, Dict(
+        :network => network_name,
+        :network_type => contains(network_name, "Chain") ? "Chain" : 
+                        contains(network_name, "Tree") ? "Tree" : 
+                        contains(network_name, "HMM") ? "HMM" : "Grid",
+        :no_memo_time => no_memo_time,
+        :parent_time => parent_time,
+        :discrete_time => discrete_time,
+        :full_env_time => full_env_time,
+        :parent_speedup => no_memo_time/parent_time,
+        :discrete_speedup => no_memo_time/discrete_time,
+        :full_env_speedup => no_memo_time/full_env_time,
+        :parent_memo_size => length(parent_memo),
+        :discrete_memo_size => length(discrete_memo),
+        :full_env_memo_size => length(full_env_memo),
+        :parent_correct => parent_correct,
+        :discrete_correct => discrete_correct,
+        :full_env_correct => full_env_correct,
+        :discrete_vars => discrete_count,
+        :theoretical_states => theoretical_states
+    ))
+    
+    # Log results
+    @info "$network_name Benchmark Results" begin
+        parent_time = parent_time
+        discrete_time = discrete_time
+        full_env_time = full_env_time
+        parent_speedup = no_memo_time/parent_time
+        discrete_speedup = no_memo_time/discrete_time
+        full_env_speedup = no_memo_time/full_env_time
+        parent_memo_size = length(parent_memo)
+        discrete_memo_size = length(discrete_memo)
+        full_env_memo_size = length(full_env_memo)
+        parent_correct = parent_correct
+        discrete_correct = discrete_correct
+        full_env_correct = full_env_correct
+    end
+    
+    # Return results in same format as original function
+    return (
+        no_memo_time = no_memo_time,
+        parent = (time=parent_time, size=length(parent_memo), correct=parent_correct),
+        discrete = (time=discrete_time, size=length(discrete_memo), correct=discrete_correct),
+        full_env = (time=full_env_time, size=length(full_env_memo), correct=full_env_correct)
+    )
+end
+
+using BenchmarkTools
+using Printf
+
+function benchmark_hmm_scaling()
+    println("\n=== HMM LENGTH SCALING TEST (BenchmarkTools) ===")
+    println("Sequence Length | Strategy      | Speedup | Memo Size | Memo/States")
+    println("---------------|---------------|---------|-----------|----------")
+    
+    # Test increasingly long sequences with binary states
+    for seq_len in [5, 10, 15, 20]
+        # Create network with 2 states
+        bn = create_hmm_network(2, seq_len)
+        theoretical_states = 2^seq_len
+        
+        # Create local copies for benchmarking
+        local_env = deepcopy(bn.evaluation_env)
+        local_graph = bn.graph
+        local_var_lengths = bn.transformed_var_lengths
+        params = Float64[]
+        
+        # Get baseline for correctness checking
+        _, baseline_logp = marginalize_without_memo(deepcopy(bn), params)
+        
+        # Benchmark no memoization
+        no_memo_bench = @benchmark marginalize_without_memo($(deepcopy(bn)), $params)
+        no_memo_time = median(no_memo_bench).time / 1e9  # Convert to seconds
+        
+        # Benchmark and collect data for each strategy
+        function benchmark_strategy(strategy_symbol)
+            # Define the benchmark
+            bench = @benchmarkable begin
+                memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+                _marginalize_recursive(
+                    $(deepcopy(bn)), 
+                    $(deepcopy(local_env)), 
+                    topological_sort_by_dfs($local_graph), 
+                    $params, 1, $local_var_lengths, 
+                    memo, $strategy_symbol
+                )
+            end
+            
+            # Set parameters and run
+            bench_result = run(BenchmarkTools.tune!(bench))
+            strategy_time = median(bench_result).time / 1e9
+            
+            # Run once more to get accurate memo size and verify correctness
+            memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+            strategy_logp = _marginalize_recursive(
+                deepcopy(bn), deepcopy(bn.evaluation_env),
+                topological_sort_by_dfs(bn.graph), params, 1,
+                bn.transformed_var_lengths, memo, strategy_symbol
+            )
+            
+            return (
+                time = strategy_time,
+                size = length(memo),
+                correct = isapprox(strategy_logp, baseline_logp, rtol=1e-10)
+            )
+        end
+        
+        # Run each strategy
+        parent_result = benchmark_strategy(:parent_based)
+        discrete_result = benchmark_strategy(:discrete_only)
+        full_env_result = benchmark_strategy(:full_env)
+        
+        # Calculate speedups
+        parent_speedup = no_memo_time / parent_result.time
+        discrete_speedup = no_memo_time / discrete_result.time
+        full_env_speedup = no_memo_time / full_env_result.time
+        
+        # Calculate ratios
+        parent_ratio = parent_result.size / theoretical_states * 100
+        discrete_ratio = discrete_result.size / theoretical_states * 100
+        full_env_ratio = full_env_result.size / theoretical_states * 100
+        
+        # Print results
+        print_strategy_result(seq_len, "Parent-based", parent_speedup, parent_result.size, 
+                             parent_ratio, parent_result.correct)
+        print_strategy_result(seq_len, "Discrete-only", discrete_speedup, discrete_result.size, 
+                             discrete_ratio, discrete_result.correct)
+        print_strategy_result(seq_len, "Full env", full_env_speedup, full_env_result.size, 
+                             full_env_ratio, full_env_result.correct)
+    end
+end
+
+# Helper function to print results in a consistent format
+function print_strategy_result(length, strategy, speedup, size, ratio, correct)
+    println(@sprintf("%-15d", length), "| ", rpad(strategy, 12), " | ", 
+            @sprintf("%7.2fx", speedup), " | ", 
+            @sprintf("%9d", size), " | ", 
+            @sprintf("%9.2f%%", ratio),
+            correct ? " ✓" : " ✗")
+end
+# Helper function to print results in a consistent format
+
+function run_all_scaling_tests()
+    # Start with HMM length scaling (most important)
+    println("\n======= MEMOIZATION STRATEGY SCALING TESTS =======")
+    
+    # Test HMM sequence length (key for showing crossover point)
+    test_hmm_length_scaling_simplified()
+    
+    # # Test HMM state count impact
+    # test_hmm_state_count()
+    
+    # # Test tree depth scaling
+    # test_tree_depth_scaling()
+    
+    # # Test grid size scaling
+    # test_grid_size_scaling()
+
+end
+run_all_scaling_tests()
+
+benchmark_hmm_scaling()
+
+using BenchmarkTools
+using Printf
+
+# Helper function to print results in a consistent format
+function print_strategy_result(config, strategy, speedup, size, ratio, correct)
+    println(rpad(config, 15), "| ", rpad(strategy, 12), " | ", 
+            @sprintf("%7.2fx", speedup), " | ", 
+            @sprintf("%9d", size), " | ", 
+            @sprintf("%9.2f%%", ratio),
+            correct ? " ✓" : " ✗")
+end
+
+
+function run_chain_scaling_test()
+    println("\n=== CHAIN LENGTH SCALING TEST ===")
+    println("Chain Length | Strategy      | Speedup | Memo Size | Memo/States Ratio")
+    println("------------|---------------|---------|-----------|------------------")
+    
+    for chain_length in [5, 8, 12, 16, 20, 24]
+        # Create the network
+        bn = create_chain_network(chain_length)
+        params = Float64[]
+        theoretical_states = 2^chain_length
+        
+        # Get baseline result
+        no_memo_time = @elapsed _, no_memo_logp = marginalize_without_memo(bn, params)
+        
+        # Parent-based
+        parent_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        parent_time = @elapsed parent_logp = _marginalize_recursive(
+            bn, deepcopy(bn.evaluation_env),
+            topological_sort_by_dfs(bn.graph), params, 1,
+            bn.transformed_var_lengths, parent_memo, :parent_based
+        )
+        
+        # Discrete-only
+        discrete_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        discrete_time = @elapsed discrete_logp = _marginalize_recursive(
+            bn, deepcopy(bn.evaluation_env),
+            topological_sort_by_dfs(bn.graph), params, 1,
+            bn.transformed_var_lengths, discrete_memo, :discrete_only
+        )
+        
+        # Full-env
+        full_env_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        full_env_time = @elapsed full_env_logp = _marginalize_recursive(
+            bn, deepcopy(bn.evaluation_env),
+            topological_sort_by_dfs(bn.graph), params, 1,
+            bn.transformed_var_lengths, full_env_memo, :full_env
+        )
+        
+        # Calculate speedups and ratios
+        parent_speedup = no_memo_time / parent_time
+        discrete_speedup = no_memo_time / discrete_time
+        full_env_speedup = no_memo_time / full_env_time
+        
+        parent_ratio = length(parent_memo) / theoretical_states * 100
+        discrete_ratio = length(discrete_memo) / theoretical_states * 100
+        full_env_ratio = length(full_env_memo) / theoretical_states * 100
+        
+        # Check correctness
+        parent_correct = isapprox(parent_logp, no_memo_logp, rtol=1e-10)
+        discrete_correct = isapprox(discrete_logp, no_memo_logp, rtol=1e-10)
+        full_env_correct = isapprox(full_env_logp, no_memo_logp, rtol=1e-10)
+        
+        # Print results for each strategy
+        println(@sprintf("%-12d", chain_length), " | Parent-based  | ", 
+                @sprintf("%7.2fx", parent_speedup), " | ", 
+                @sprintf("%9d", length(parent_memo)), " | ", 
+                @sprintf("%16.2f%%", parent_ratio),
+                parent_correct ? " ✓" : " ✗")
+        println(@sprintf("%-12d", chain_length), " | Discrete-only | ", 
+                @sprintf("%7.2fx", discrete_speedup), " | ", 
+                @sprintf("%9d", length(discrete_memo)), " | ", 
+                @sprintf("%16.2f%%", discrete_ratio),
+                discrete_correct ? " ✓" : " ✗")
+        println(@sprintf("%-12d", chain_length), " | Full env      | ", 
+                @sprintf("%7.2fx", full_env_speedup), " | ", 
+                @sprintf("%9d", length(full_env_memo)), " | ", 
+                @sprintf("%16.2f%%", full_env_ratio),
+                full_env_correct ? " ✓" : " ✗")
+    end
+end
+
+function run_robust_scaling_test()
+    println("\n=== CHAIN LENGTH SCALING TEST (ROBUST) ===")
+    println("Length | Strategy      | Time (ms) | Memo Size | Size/States")
+    println("-------|---------------|-----------|-----------|------------")
+    
+    for length in [5, 8, 12, 16, 20]
+        # Create the network
+        bn = create_chain_network(length)
+        params = Float64[]
+        theoretical_states = 2^length
+        
+        # Run no memoization
+        nomemo_fn = () -> marginalize_without_memo(deepcopy(bn), params)
+        nomemo_result = @benchmark $nomemo_fn()
+        nomemo_time_ms = median(nomemo_result).time / 1_000_000  # ns to ms
+        
+        # Set up parent-based test
+        parent_fn = () -> begin
+            memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+            _marginalize_recursive(
+                deepcopy(bn), deepcopy(bn.evaluation_env),
+                topological_sort_by_dfs(bn.graph), params, 1,
+                bn.transformed_var_lengths, memo, :parent_based
+            )
+        end
+        
+        # Set up discrete-only test
+        discrete_fn = () -> begin
+            memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+            _marginalize_recursive(
+                deepcopy(bn), deepcopy(bn.evaluation_env),
+                topological_sort_by_dfs(bn.graph), params, 1,
+                bn.transformed_var_lengths, memo, :discrete_only
+            )
+        end
+        
+        # Set up full-env test
+        fullenv_fn = () -> begin
+            memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+            _marginalize_recursive(
+                deepcopy(bn), deepcopy(bn.evaluation_env),
+                topological_sort_by_dfs(bn.graph), params, 1,
+                bn.transformed_var_lengths, memo, :full_env
+            )
+        end
+        
+        # Benchmark each strategy
+        parent_result = @benchmark $parent_fn()
+        discrete_result = @benchmark $discrete_fn()
+        fullenv_result = @benchmark $fullenv_fn()
+        
+        # Convert to milliseconds
+        parent_time_ms = median(parent_result).time / 1_000_000
+        discrete_time_ms = median(discrete_result).time / 1_000_000
+        fullenv_time_ms = median(fullenv_result).time / 1_000_000
+        
+        # Run once more to get memo sizes
+        parent_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        _marginalize_recursive(
+            deepcopy(bn), deepcopy(bn.evaluation_env),
+            topological_sort_by_dfs(bn.graph), params, 1,
+            bn.transformed_var_lengths, parent_memo, :parent_based
+        )
+        
+        discrete_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        _marginalize_recursive(
+            deepcopy(bn), deepcopy(bn.evaluation_env),
+            topological_sort_by_dfs(bn.graph), params, 1,
+            bn.transformed_var_lengths, discrete_memo, :discrete_only
+        )
+        
+        fullenv_memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        _marginalize_recursive(
+            deepcopy(bn), deepcopy(bn.evaluation_env),
+            topological_sort_by_dfs(bn.graph), params, 1,
+            bn.transformed_var_lengths, fullenv_memo, :full_env
+        )
+        
+        # Calculate ratios
+        parent_ratio = length(parent_memo) / theoretical_states * 100
+        discrete_ratio = length(discrete_memo) / theoretical_states * 100
+        fullenv_ratio = length(fullenv_memo) / theoretical_states * 100
+        
+        # Print results - showing absolute times instead of speedups
+        println(@sprintf("%-6d", length), " | No memo       | ", 
+                @sprintf("%9.3f", nomemo_time_ms), " | ", 
+                @sprintf("%9s", "-"), " | ", 
+                @sprintf("%10s", "-"))
+        println(@sprintf("%-6d", length), " | Parent-based  | ", 
+                @sprintf("%9.3f", parent_time_ms), " | ", 
+                @sprintf("%9d", length(parent_memo)), " | ", 
+                @sprintf("%9.2f%%", parent_ratio))
+        println(@sprintf("%-6d", length), " | Discrete-only | ", 
+                @sprintf("%9.3f", discrete_time_ms), " | ", 
+                @sprintf("%9d", length(discrete_memo)), " | ", 
+                @sprintf("%9.2f%%", discrete_ratio))
+        println(@sprintf("%-6d", length), " | Full env      | ", 
+                @sprintf("%9.3f", fullenv_time_ms), " | ", 
+                @sprintf("%9d", length(fullenv_memo)), " | ", 
+                @sprintf("%9.2f%%", fullenv_ratio))
     end
 end
