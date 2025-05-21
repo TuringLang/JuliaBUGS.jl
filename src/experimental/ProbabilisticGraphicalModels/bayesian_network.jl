@@ -319,6 +319,29 @@ function _extract_discrete_values(bn::BayesianNetwork, env)
     return discrete_values
 end
 
+function _precompute_minimal_cache_keys(bn)
+    sorted_node_ids = topological_sort_by_dfs(bn.graph)
+    minimal_keys = Dict{Int, Set{Int}}()
+    
+    for t in 1:length(sorted_node_ids)
+        current_node_id = sorted_node_ids[t]
+        future_nodes = sorted_node_ids[(t+1):end]
+        
+        # Collect parents of future nodes + current node's parents
+        future_parents = reduce(union!, 
+            [inneighbors(bn.graph, n) for n in future_nodes], 
+            init=Set(inneighbors(bn.graph, current_node_id))
+        )
+        
+        # Get visited nodes up to current position
+        visited = Set(sorted_node_ids[1:t])
+        
+        # Store by node ID
+        minimal_keys[current_node_id] = intersect(future_parents, visited)
+    end
+    
+    return minimal_keys
+end
 
 """
 Enhanced version of marginalize_recursive that uses a more efficient memoization approach.
@@ -353,8 +376,9 @@ function _marginalize_recursive(
     param_idx::Int,
     var_lengths,
     memo=Dict{Tuple{Int,Int,UInt64},Float64}(),
-    caching_strategy::Symbol=:parent_based,  # :parent_based, :full_env, or :discrete_only
-) where {V,T,F}
+    caching_strategy::Symbol=:full_env,  # :parent_based, :full_env, or :discrete_only
+    minimal_keys=nothing
+    ) where {V,T,F}
     # Base case: no more nodes to process
     if isempty(remaining_nodes)
         return 0.0
@@ -375,6 +399,18 @@ function _marginalize_recursive(
         discrete_values = _extract_discrete_values(bn, env)
         discrete_hash = hash(discrete_values)
         memo_key = (current_id, param_idx, discrete_hash)
+    elseif caching_strategy == :minimal_key
+        # Get relevant node IDs for current node
+        relevant_ids = minimal_keys[current_id]  # Now keyed by node ID
+        
+        # Extract values from environment
+        relevant_values = Dict(
+            bn.names[id] => AbstractPPL.get(env, bn.names[id]) 
+            for id in relevant_ids
+        )
+        
+        minimal_hash = hash(relevant_values)
+        memo_key = (current_id, param_idx, minimal_hash)
     else
         # Default: Use the parent-based approach
         parent_values = _extract_parent_values(bn, current_id, env)
@@ -406,6 +442,7 @@ function _marginalize_recursive(
             var_lengths,
             memo,
             caching_strategy,
+            minimal_keys
         )
 
     elseif is_observed
@@ -429,6 +466,7 @@ function _marginalize_recursive(
             var_lengths,
             memo,
             caching_strategy,
+            minimal_keys
         )
         result = obs_logp + remaining_logp
 
@@ -461,6 +499,7 @@ function _marginalize_recursive(
                 var_lengths,
                 memo,
                 caching_strategy,
+                minimal_keys
             )
 
             logp_branches[i] = value_logp + remaining_logp
@@ -519,6 +558,7 @@ function _marginalize_recursive(
             var_lengths,
             memo,
             caching_strategy,
+            minimal_keys
         )
 
         result = dist_logp + remaining_logp
@@ -529,11 +569,10 @@ function _marginalize_recursive(
     return result
 end
 
-# Main evaluation function without diagnostics
 function evaluate_with_marginalization(
     bn::BayesianNetwork{V,T,F}, 
     parameter_values::AbstractVector; 
-    caching_strategy::Symbol=:parent_based
+    caching_strategy::Symbol=:full_env  # Change default
 ) where {V,T,F}
     # Get topological ordering of nodes
     sorted_node_ids = topological_sort_by_dfs(bn.graph)
@@ -578,11 +617,16 @@ function evaluate_with_marginalization(
     expected_entries = 2^length(discrete_vars) * length(bn.names)
     memo = Dict{Tuple{Int,Int,UInt64},Float64}()
     sizehint!(memo, expected_entries)
-
+    if caching_strategy == :minimal_key
+        # Precompute minimal keys for memoization
+        minimal_keys = _precompute_minimal_cache_keys(bn)
+    else
+        minimal_keys = nothing
+    end
     # Start recursive evaluation with the first node, beginning at parameter index 1
     logp = _marginalize_recursive(
         bn, env, sorted_node_ids, parameter_values, 1, 
-        bn.transformed_var_lengths, memo, caching_strategy
+        bn.transformed_var_lengths, memo, caching_strategy, minimal_keys
     )
     return env, logp
 end
