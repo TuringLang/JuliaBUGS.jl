@@ -64,7 +64,7 @@ LinearAlgebra = "1.10"
 LogDensityProblems = "2"
 LogDensityProblemsAD = "1"
 LogExpFunctions = "0.3"
-MCMCChains = "6"
+MCMCChains = "6, 7"
 MacroTools = "0.5"
 MetaGraphsNext = "0.6, 0.7"
 Mooncake = "0.4"
@@ -89,15 +89,4 @@ ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = [
-    "AbstractMCMC",
-    "AdvancedHMC",
-    "AdvancedMH",
-    "ChainRules",
-    "DifferentiationInterface",
-    "LogDensityProblemsAD",
-    "MCMCChains",
-    "Mooncake",
-    "ReverseDiff",
-    "Test"
-]
+test = ["AbstractMCMC", "AdvancedHMC", "AdvancedMH", "ChainRules", "DifferentiationInterface", "LogDensityProblemsAD", "MCMCChains", "Mooncake", "ReverseDiff", "Test"]
