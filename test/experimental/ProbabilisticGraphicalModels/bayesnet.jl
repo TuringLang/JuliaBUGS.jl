@@ -1246,7 +1246,7 @@ using AbstractPPL
     function marginalize_with_memo(bn, params)
         sorted_node_ids = topological_sort_by_dfs(bn.graph)
         env = deepcopy(bn.evaluation_env)
-        memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        memo = Dict{Tuple{Int,Int,UInt64},Any}()
         minimal_keys = JuliaBUGS.ProbabilisticGraphicalModels._precompute_minimal_cache_keys(
             bn
         )
