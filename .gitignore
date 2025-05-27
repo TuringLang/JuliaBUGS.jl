@@ -32,3 +32,14 @@ Manifest.toml
 
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
+
+.claude/
+
+.cursor/
+.vscode/
+
+.DS_Store
+
+.env
+
+.env.local
