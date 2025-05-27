@@ -13,7 +13,11 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     is_conditionally_independent,
     evaluate,
     evaluate_with_values,
-    evaluate_with_marginalization
+    evaluate_with_marginalization,
+    _marginalize_recursive,
+    evaluate_with_marginalization_legacy,
+    _marginalize_recursive_legacy,
+    _precompute_minimal_cache_keys
 using BangBang
 using JuliaBUGS
 using JuliaBUGS: @bugs, compile, NodeInfo, VarName
@@ -731,7 +735,9 @@ using AbstractPPL
             bn = set_observations(bn, observations)
 
             # Run marginalization
-            _, margin_logp = evaluate_with_marginalization(bn, params)
+            _, margin_logp = evaluate_with_marginalization(
+                bn, params; caching_strategy=:minimal_key
+            )
 
             # Test against expected result
             @test margin_logp ≈ expected_logp rtol = rtol
@@ -766,7 +772,7 @@ using AbstractPPL
                 # Get variables
                 vars = get_variables_by_name(bn, ["z", "y"])
 
-                # Manual calculation for y=2.0
+                # Manual calculation for y=2.0  
                 y_value = 2.0
                 p_z0 = 0.7  # 1 - 0.3
                 p_z1 = 0.3
@@ -875,7 +881,7 @@ using AbstractPPL
                     obs ~ Normal(mu, sigma)
                 end
 
-                # Compile and convert to BN
+                # Compile and convert to BN                                                                                                                          
                 compiled_model = compile(model_def, NamedTuple())
                 bn = translate_BUGSGraph_to_BayesianNetwork(
                     compiled_model.g, compiled_model.evaluation_env, compiled_model
@@ -1013,7 +1019,9 @@ using AbstractPPL
                 params = Float64[]
 
                 # Call our recursive implementation
-                _, margin_logp = evaluate_with_marginalization(bn, params)
+                _, margin_logp = evaluate_with_marginalization(
+                    bn, params; caching_strategy=:minimal_key
+                )
 
                 # Manual calculation
                 # Model parameters
@@ -1196,7 +1204,9 @@ using AbstractPPL
 
             # Run marginalization
             params = Float64[]  # No continuous parameters in this example
-            _, margin_logp = evaluate_with_marginalization(bn, params)
+            _, margin_logp = evaluate_with_marginalization(
+                bn, params; caching_strategy=:minimal_key
+            )
 
             # Calculate expected probability for each state combination
             p_a0 = 0.6
@@ -1220,6 +1230,347 @@ using AbstractPPL
             log_manual = log(total_manual)
 
             @test isapprox(margin_logp, expected_logp, rtol=1E-6)
+        end
+    end
+    function marginalize_without_memo(bn, params)
+        sorted_node_ids = topological_sort_by_dfs(bn.graph)
+        env = deepcopy(bn.evaluation_env)
+
+        # Use the original function without memo
+        logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive_legacy(
+            bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths
+        )
+        return env, logp
+    end
+
+    function marginalize_with_memo(bn, params)
+        sorted_node_ids = topological_sort_by_dfs(bn.graph)
+        env = deepcopy(bn.evaluation_env)
+        memo = Dict{Tuple{Int,Int,UInt64},Float64}()
+        minimal_keys = JuliaBUGS.ProbabilisticGraphicalModels._precompute_minimal_cache_keys(
+            bn
+        )
+
+        # Use the enhanced function with memo
+        logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
+            bn,
+            env,
+            sorted_node_ids,
+            params,
+            1,
+            bn.transformed_var_lengths,
+            memo,
+            :minimal_key,
+            minimal_keys,
+        )
+        return env, logp, length(memo)
+    end
+
+    @testset "Dynamic Programming in Marginalization" begin
+
+        # Helper function to create graph without using compiler
+        function create_chain_bayesian_network(n_chain)
+            # Create initial network
+            bn = BayesianNetwork{VarName}()
+
+            # Initialize loop_vars to track as we build
+            loop_vars = Dict{VarName,NamedTuple}()
+
+            # Track variables to create full environment later
+            all_vars = Dict{Symbol,Any}()
+
+            # Add first node
+            first_var = VarName(Symbol("z[1]"))
+            add_stochastic_vertex!(
+                bn, first_var, (_, _) -> Bernoulli(0.5), false, :discrete
+            )
+            loop_vars[first_var] = (;)  # Empty named tuple
+            all_vars[Symbol("z[1]")] = 0  # Initialize with value 0
+
+            # Add subsequent nodes with dependencies
+            for i in 2:n_chain
+                var = VarName(Symbol("z[$i]"))
+                prev_var = VarName(Symbol("z[$(i-1)]"))
+
+                # Add node
+                add_stochastic_vertex!(
+                    bn,
+                    var,
+                    (env, _) -> begin
+                        prev_val = AbstractPPL.get(env, prev_var)
+                        p_stay = 0.7
+                        p_switch = 0.3
+                        p = p_switch * (1 - prev_val) + p_stay * prev_val
+                        return Bernoulli(p)
+                    end,
+                    false,
+                    :discrete,
+                )
+                loop_vars[var] = (;)  # Empty named tuple
+                all_vars[Symbol("z[$i]")] = 0  # Initialize with value 0
+
+                # Add dependency edge
+                add_edge!(bn, prev_var, var)
+            end
+
+            # Add observable at the end
+            y_var = VarName(:y)
+            last_var = VarName(Symbol("z[$n_chain]"))
+
+            add_stochastic_vertex!(
+                bn,
+                y_var,
+                (env, _) -> begin
+                    z_val = AbstractPPL.get(env, last_var)
+                    mu = z_val * 5.0
+                    return Normal(mu, 1.0)
+                end,
+                true,
+                :continuous,
+            )
+            loop_vars[y_var] = (;)  # Empty named tuple
+
+            # Add dependency edge
+            add_edge!(bn, last_var, y_var)
+
+            # Set observation value for y
+            all_vars[:y] = 4.2
+
+            # Create the evaluation environment
+            eval_env = NamedTuple{Tuple(keys(all_vars))}(values(all_vars))
+
+            # Create new bn with full evaluation environment
+            new_bn = BayesianNetwork(
+                bn.graph,
+                bn.names,
+                bn.names_to_ids,
+                eval_env,  # Full environment with all variables
+                loop_vars,
+                bn.distributions,
+                bn.deterministic_functions,
+                bn.stochastic_ids,
+                bn.deterministic_ids,
+                bn.is_stochastic,
+                bn.is_observed,
+                bn.node_types,
+                Dict{VarName,Int}(),  # empty transformed_var_lengths
+                0,  # zero transformed_param_length
+            )
+
+            return new_bn
+        end
+
+        @testset "Correctness with Deep Discrete Graph" begin
+            # Create a chain of discrete variables
+            n_chain = 5
+            bn = create_chain_bayesian_network(n_chain)
+
+            # No continuous parameters in this example
+            params = Float64[]
+
+            # Run both versions
+            _, logp1 = marginalize_without_memo(bn, params)
+            _, logp2, memo_size = marginalize_with_memo(bn, params)
+
+            # Verify results match
+            @test isapprox(logp1, logp2, rtol=1e-10)
+
+            # Make sure there was at least some memoization
+            @test memo_size > 0
+
+            # For a chain of length 5, we could have at most 2*2^n_chain states
+            # The factor of 2 accounts for the fact that each node can be visited 
+            # once per possible configuration of its ancestors
+            @test memo_size <= 2 * 2^n_chain
+        end
+
+        @testset "Correctness with Tricky Dependency Graph" begin
+            # Create a complex graph manually to ensure it's acyclic
+            # Start with an initial network
+            original_bn = BayesianNetwork{VarName}()
+
+            # Initialize loop_vars to track as we build
+            loop_vars = Dict{VarName,NamedTuple}()
+
+            # Track all variables to create full environment
+            all_vars = Dict{Symbol,Any}()
+
+            # Root nodes
+            x_var = VarName(:x)
+            y_var = VarName(:y)
+
+            # Add them to the network
+            add_stochastic_vertex!(
+                original_bn, x_var, (_, _) -> Bernoulli(0.3), false, :discrete
+            )
+            add_stochastic_vertex!(
+                original_bn, y_var, (_, _) -> Bernoulli(0.7), false, :discrete
+            )
+            loop_vars[x_var] = (;)
+            loop_vars[y_var] = (;)
+            all_vars[:x] = 0  # Initialize with value 0
+            all_vars[:y] = 0  # Initialize with value 0
+
+            # Variable with multiple parents
+            z_var = VarName(:z)
+            add_stochastic_vertex!(
+                original_bn,
+                z_var,
+                (env, _) -> begin
+                    x_val = AbstractPPL.get(env, x_var)
+                    y_val = AbstractPPL.get(env, y_var)
+                    p = 0.1 + 0.3 * x_val + 0.4 * y_val + 0.2 * x_val * y_val
+                    return Bernoulli(p)
+                end,
+                false,
+                :discrete,
+            )
+            loop_vars[z_var] = (;)
+            all_vars[:z] = 0  # Initialize with value 0
+
+            # Add dependency edges
+            add_edge!(original_bn, x_var, z_var)
+            add_edge!(original_bn, y_var, z_var)
+
+            # Another dependent variable
+            w_var = VarName(:w)
+            add_stochastic_vertex!(
+                original_bn,
+                w_var,
+                (env, _) -> begin
+                    z_val = AbstractPPL.get(env, z_var)
+                    p = 0.2 + 0.6 * z_val
+                    return Bernoulli(p)
+                end,
+                false,
+                :discrete,
+            )
+            loop_vars[w_var] = (;)
+            all_vars[:w] = 0  # Initialize with value 0
+
+            # Add dependency edge
+            add_edge!(original_bn, z_var, w_var)
+
+            # Observed variables
+            obs1_var = VarName(:obs1)
+            add_stochastic_vertex!(
+                original_bn,
+                obs1_var,
+                (env, _) -> begin
+                    x_val = AbstractPPL.get(env, x_var)
+                    y_val = AbstractPPL.get(env, y_var)
+                    mu = x_val * 2 + y_val * 3
+                    return Normal(mu, 1.0)
+                end,
+                true,
+                :continuous,
+            )
+            loop_vars[obs1_var] = (;)
+
+            obs2_var = VarName(:obs2)
+            add_stochastic_vertex!(
+                original_bn,
+                obs2_var,
+                (env, _) -> begin
+                    z_val = AbstractPPL.get(env, z_var)
+                    w_val = AbstractPPL.get(env, w_var)
+                    mu = z_val * 4 + w_val * 5
+                    return Normal(mu, 1.0)
+                end,
+                true,
+                :continuous,
+            )
+            loop_vars[obs2_var] = (;)
+
+            # Add dependency edges
+            add_edge!(original_bn, x_var, obs1_var)
+            add_edge!(original_bn, y_var, obs1_var)
+            add_edge!(original_bn, z_var, obs2_var)
+            add_edge!(original_bn, w_var, obs2_var)
+
+            # Set observations
+            obs1_val = 2.5
+            obs2_val = 3.7
+            all_vars[:obs1] = obs1_val
+            all_vars[:obs2] = obs2_val
+
+            # Create the evaluation environment
+            eval_env = NamedTuple{Tuple(keys(all_vars))}(values(all_vars))
+
+            # Create a new BayesianNetwork with all variables in the environment
+            bn = BayesianNetwork(
+                original_bn.graph,
+                original_bn.names,
+                original_bn.names_to_ids,
+                eval_env,
+                loop_vars,
+                original_bn.distributions,
+                original_bn.deterministic_functions,
+                original_bn.stochastic_ids,
+                original_bn.deterministic_ids,
+                original_bn.is_stochastic,
+                original_bn.is_observed,
+                original_bn.node_types,
+                Dict{VarName,Int}(),
+                0,
+            )
+
+            # Run with original function
+            env1, logp1 = marginalize_without_memo(bn, Float64[])
+
+            # Run with memoized function
+            env2, logp2, memo_size = marginalize_with_memo(bn, Float64[])
+
+            # Verify results match
+            @test isapprox(logp1, logp2, rtol=1e-10)
+
+            # Should have memoized results
+            @test memo_size > 0
+
+            # For a network with 4 binary variables, the theoretical worst case
+            # would be 4*2^4 = 64 states (if every node needs to be evaluated separately for
+            # every possible configuration of all variables). 
+            # Our memo design creates a new entry for each unique combination of node, parameter index, and environment hash
+            # So we expect the memo size to be below this upper bound but potentially more than 2^4
+            @test memo_size < 4 * 2^4
+
+            # Verify against a manual calculation of one specific path
+            # This ensures our DP approach handles complex dependencies correctly
+            function manual_calculate_specific_path(obs_values)
+                # Calculate probability for x=1, y=0, z=1, w=1
+                # P(x=1) = 0.3
+                p_x1 = 0.3
+
+                # P(y=0) = 0.3
+                p_y0 = 0.3
+
+                # P(z=1|x=1,y=0) = 0.1 + 0.3*1 + 0.4*0 + 0.2*1*0 = 0.4
+                p_z1_given_x1_y0 = 0.4
+
+                # P(w=1|z=1) = 0.2 + 0.6*1 = 0.8
+                p_w1_given_z1 = 0.8
+
+                # P(obs1|x=1,y=0) = Normal(1*2 + 0*3, 1.0) at obs_values[1]
+                p_obs1 = pdf(Normal(2.0, 1.0), obs_values[1])
+
+                # P(obs2|z=1,w=1) = Normal(1*4 + 1*5, 1.0) at obs_values[2]
+                p_obs2 = pdf(Normal(9.0, 1.0), obs_values[2])
+
+                # Joint probability of this specific path
+                joint_prob =
+                    p_x1 * p_y0 * p_z1_given_x1_y0 * p_w1_given_z1 * p_obs1 * p_obs2
+
+                return log(joint_prob)
+            end
+
+            # Extract observation values
+            obs_values = [obs1_val, obs2_val]
+
+            # Calculate log probability for a specific path
+            path_logp = manual_calculate_specific_path(obs_values)
+
+            # The full marginalized probability should be greater than this single path
+            @test logp2 > path_logp
         end
     end
 end
