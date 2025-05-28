@@ -1,6 +1,26 @@
 using JuliaBUGS:
     stochastic_inneighbors, stochastic_neighbors, stochastic_outneighbors, markov_blanket
 
+"""
+    l
+    │
+    ↓
+    c        b
+    │        │
+    ↓        ↓
+    a ←──── f
+    │
+    ↓
+    g
+    ↙   ↘
+    d       h
+            │
+            ↓
+            e
+            ↑
+            i
+"""
+
 test_model = @bugs begin
     a ~ dnorm(f, c)
     f = b - 1
@@ -81,6 +101,16 @@ end
     logp
 end ≈ evaluate!!(model, [-2.0, 4.0, 3.0, 2.0, 1.0, 4.0, 5.0])[2] atol = 1e-8
 
+"""
+mu[1]           mu[2]
+   ╲            ╱
+    ↘       ↙
+     x[1:2]             z[1:2,1:2]
+          ╲              ╱
+           ↘         ↙
+                 y
+"""
+
 # AuxiliaryNodeInfo
 test_model = @bugs begin
     x[1:2] ~ dmnorm(mu[:], sigma[:, :])
@@ -100,7 +130,6 @@ model = compile(
 # z[1,1], x[1], x[2] are auxiliary nodes created, and removed at the end
 @test Set(Symbol.(labels(model.g))) ==
     Set([Symbol("mu[1]"), Symbol("x[1:2]"), Symbol("z[1:2, 1:2]"), Symbol("mu[2]"), :y])
-
 
 @testset "test new function" begin
     
