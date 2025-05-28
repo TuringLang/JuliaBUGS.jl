@@ -1,1 +1,0 @@
-you can use graph specific test by something like `julia --project=./ -e 'using TestEnv; TestEnv.activate(); ENV["TEST_GROUP"] = "graphs"; include("test/runtests.jl")'`
