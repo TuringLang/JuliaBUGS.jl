@@ -9,9 +9,7 @@ function condition(
     for (p, value) in d
         new_evaluation_env = setindex!!(new_evaluation_env, value, p)
     end
-    return condition(
-        model, collect(keys(d)), new_evaluation_env; sorted_nodes=sorted_nodes
-    )
+    return condition(model, collect(keys(d)), new_evaluation_env; sorted_nodes=sorted_nodes)
 end
 
 function condition(
