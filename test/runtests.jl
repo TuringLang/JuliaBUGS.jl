@@ -28,70 +28,73 @@ using Serialization
 
 AbstractMCMC.setprogress!(false)
 
-const Tests = (
-    "elementary",
-    "graphs",
-    "compilation",
-    "log_density",
-    "gibbs",
-    "mcmchains",
-    "experimental",
-    "source_gen",
-    "all",
-)
+# ----------------------------------------------------------------------
+# Test group selection and execution
+# ----------------------------------------------------------------------
 
-const test_group = get(ENV, "TEST_GROUP", "all")
-if test_group ∉ Tests
-    error("Unknown test group: $test_group")
-end
-
-@info "Running tests for groups: $test_group"
-
-if test_group == "elementary" || test_group == "all"
+# Map each test‑group name to a zero‑argument function that runs that group.
+const TEST_GROUPS = Dict{String, Function}(
+    "unit" => () -> begin 
     @testset "Unit Tests" begin
         Documenter.doctest(JuliaBUGS; manual=false)
         include("utils.jl")
     end
-    include("parser/test_parser.jl")
-    include("passes.jl")
-    include("graphs.jl")
-    include("model_macro.jl")
-end
+end,
 
-if test_group == "graphs" || test_group == "all"
-    include("graphs.jl")
-end
+    "parser and macros" => () -> begin
+        include("parser/test_parser.jl")
+        include("passes.jl")
+        include("model_macro.jl")
+    end,
 
-if test_group == "compilation" || test_group == "all"
-    @testset "BUGS examples volume 1" begin
-        @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
-            m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
-            model = compile(m.model_def, m.data, m.inits)
+    "graphs" => () -> include("graphs.jl"),
+
+    "compilation" => () -> begin
+        @testset "BUGS examples volume 1" begin
+            @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
+                m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
+                model = compile(m.model_def, m.data, m.inits)
+            end
         end
+        @testset "Some corner cases" begin
+            include("bugs_primitives.jl")
+            include("compile.jl")
+        end
+    end,
+
+    "log_density" => () -> begin
+        include("log_density.jl")
+        include("model.jl")
+    end,
+
+    "gibbs" => () -> include("gibbs.jl"),
+
+    "mcmchains" => () -> include("ext/mcmchains.jl"),
+
+    "experimental" => () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
+
+    "source_gen" => () -> include("source_gen.jl")
+)
+
+raw_selection = get(ENV, "TEST_GROUP", "all")
+selected_groups = Set(split(raw_selection, ','))
+
+if "all" ∉ selected_groups
+    unknown = setdiff(selected_groups, keys(TEST_GROUPS))
+    if !isempty(unknown)
+        error("Unknown test group(s): $(join(collect(unknown), ", "))")
     end
-    @testset "Some corner cases" begin
-        include("bugs_primitives.jl")
-        include("compile.jl")
+end
+
+# Execute the requested tests.
+if "all" in selected_groups
+    @info "Running tests for ALL groups"
+    for fn in values(TEST_GROUPS)
+        fn()
     end
-end
-
-if test_group == "log_density" || test_group == "all"
-    include("log_density.jl")
-    include("model.jl")
-end
-
-if test_group == "gibbs" || test_group == "all"
-    include("gibbs.jl")
-end
-
-if test_group == "mcmchains" || test_group == "all"
-    include("ext/mcmchains.jl")
-end
-
-if test_group == "experimental" || test_group == "all"
-    include("experimental/ProbabilisticGraphicalModels/bayesnet.jl")
-end
-
-if test_group == "source_gen" || test_group == "all"
-    include("source_gen.jl")
+else
+    @info "Running tests for groups: $(join(collect(selected_groups), ", "))"
+    for g in selected_groups
+        TEST_GROUPS[g]()
+    end
 end

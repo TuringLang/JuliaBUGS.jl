@@ -131,34 +131,12 @@ model = compile(
 @test Set(Symbol.(labels(model.g))) ==
     Set([Symbol("mu[1]"), Symbol("x[1:2]"), Symbol("z[1:2, 1:2]"), Symbol("mu[2]"), :y])
 
-@testset "test new function" begin
-    """
-                           α◦
-                       │
-                       ▼
-                       β◦
-                      / \
-                     /   \
-                γ₁◦ ─┘   └─ γ₂◦
-                  │           \
-                  ▼            ▼
-                  m  ──▷  q    n ──▷  s ──▷  r◦
-                  │            │
-                  ▼            ▼
-                 θ₂◦          θ₁◦
-                  │            │
-                  ▼            ▼
-                y₂★          y₁★
-
-
-                ψ◦ ──▷  ϕ◦        (both stoch-GQ)
-    """
-
-    
-end
+## Tests for new functions below
 
 using JuliaBUGS:
-    _markov_blanket, dfs_find_stochastic_boundary_and_deterministic_variables_en_route
+    _markov_blanket,
+    dfs_find_stochastic_boundary_and_deterministic_variables_en_route,
+    find_generated_quantities_variables
 
 module GraphsTest
 using JuliaBUGS: JuliaBUGS
