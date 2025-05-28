@@ -214,7 +214,7 @@ variables that are on the path from `v` to their Markov blankets, and the variab
 [1] Liu, X.-Q., & Liu, X.-S. (2018). Markov Blanket and Markov 
 Boundary of Multiple Variables. Journal of Machine Learning Research, 19(43), 1–50.
 """
-function markov_blanket(g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, v::L) where {L,VD}
+function _markov_blanket(g::MetaGraph{Int,<:SimpleDiGraph,L,VD}, v::L) where {L,VD}
     if !is_stochastic(g, v)
         throw(ArgumentError("Variable $v is logical, so it has no Markov blanket."))
     end
@@ -261,7 +261,7 @@ function dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
 ) where {L,VD,F}
     stochastic_neighbors = Set{L}()
     deterministic_variables_en_route = Set{L}()
-    stack = VarName[v]
+    stack = L[v]
     visited = Set{L}()
 
     while !isempty(stack)
