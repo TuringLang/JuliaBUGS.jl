@@ -35,6 +35,8 @@ using .CompilerUtils
 include("graphs.jl")
 include("compiler_pass.jl")
 include("model/BUGSModel.jl")
+using .Model: AbstractBUGSModel, BUGSModel, initialize!
+
 include("logdensityproblems.jl")
 include("gibbs.jl")
 
