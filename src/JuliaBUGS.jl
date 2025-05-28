@@ -34,7 +34,7 @@ using .CompilerUtils
 
 include("graphs.jl")
 include("compiler_pass.jl")
-include("model.jl")
+include("model/BUGSModel.jl")
 include("logdensityproblems.jl")
 include("gibbs.jl")
 
