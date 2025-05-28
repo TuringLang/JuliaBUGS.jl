@@ -17,7 +17,10 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
 	_marginalize_recursive,
 	evaluate_with_marginalization_legacy,
 	_marginalize_recursive_legacy,
-	_precompute_minimal_cache_keys
+	_precompute_minimal_cache_keys,
+    min_degree_order,
+    min_fill_order,
+    moralize
 using BangBang
 using JuliaBUGS
 using JuliaBUGS: @bugs, compile, NodeInfo, VarName
@@ -42,7 +45,7 @@ end
 function marginalize_with_memo(bn, params)
 	sorted_node_ids = topological_sort_by_dfs(bn.graph)
 	env = deepcopy(bn.evaluation_env)
-	memo = Dict{Tuple{Int, Int, UInt64}, Float64}() # there is a difference between pass this and not passing this
+	memo = Dict{Tuple{Int, Int, UInt64}, Any}() # there is a difference between pass this and not passing this
 	minimal_keys = JuliaBUGS.ProbabilisticGraphicalModels._precompute_minimal_cache_keys(bn)
 
 	# Use the enhanced function with memo
@@ -2158,39 +2161,51 @@ end
 	end
 end
 
+using BenchmarkTools
+
 function run_all_strategies(bn, params)
-	# Warmup for JIT
-	marginalize_without_memo(bn, params)
-	evaluate_with_marginalization(bn, params; caching_strategy = :full_env)
-	evaluate_with_marginalization(bn, params; caching_strategy = :minimal_key)
-	# Naive
-	t_naive = @elapsed _, logp_naive = marginalize_without_memo(bn, params)
-	# Full env
-	t_full = @elapsed _, logp_full = evaluate_with_marginalization(bn, params; caching_strategy = :full_env)
-	# Minimal key
-	t_min = @elapsed _, logp_min = evaluate_with_marginalization(bn, params; caching_strategy = :minimal_key)
-	# Memo sizes
-	function get_memo_size(strategy)
-		memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
-		minimal_keys = strategy == :minimal_key ? _precompute_minimal_cache_keys(bn) : nothing
-		_ = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
-			bn, deepcopy(bn.evaluation_env), topological_sort_by_dfs(bn.graph), params, 1,
-			bn.transformed_var_lengths, memo, strategy, minimal_keys,
-		)
-		return length(memo)
-	end
-	memo_full = get_memo_size(:full_env)
-	memo_min = get_memo_size(:minimal_key)
-	# Check correctness
-	@test isapprox(logp_naive, logp_full, rtol = 1e-10)
-	@test isapprox(logp_naive, logp_min, rtol = 1e-10)
-	return (t_naive, t_full, t_min, memo_full, memo_min)
+    # Warmup for JIT
+    marginalize_without_memo(bn, params)
+    evaluate_with_marginalization(bn, params; caching_strategy = :full_env)
+    evaluate_with_marginalization(bn, params; caching_strategy = :minimal_key)
+
+    # Naive
+    t_naive = @belapsed marginalize_without_memo($bn, $params)
+    _, logp_naive = marginalize_without_memo(bn, params)
+
+    # Full env
+    t_full = @belapsed evaluate_with_marginalization($bn, $params; caching_strategy = :full_env)
+    _, logp_full = evaluate_with_marginalization(bn, params; caching_strategy = :full_env)
+
+    # Minimal key
+    t_min = @belapsed evaluate_with_marginalization($bn, $params; caching_strategy = :minimal_key)
+    _, logp_min = evaluate_with_marginalization(bn, params; caching_strategy = :minimal_key)
+
+    # Memo sizes
+    function get_memo_size(strategy)
+        memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+        minimal_keys = strategy == :minimal_key ? _precompute_minimal_cache_keys(bn) : nothing
+        _ = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
+            bn, deepcopy(bn.evaluation_env), topological_sort_by_dfs(bn.graph), params, 1,
+            bn.transformed_var_lengths, memo, strategy, minimal_keys,
+        )
+        return length(memo)
+    end
+
+    memo_full = get_memo_size(:full_env)
+    memo_min = get_memo_size(:minimal_key)
+
+    # Check correctness
+    @test isapprox(logp_naive, logp_full, rtol = 1e-10)
+    @test isapprox(logp_naive, logp_min, rtol = 1e-10)
+
+    return (t_naive, t_full, t_min, memo_full, memo_min)
 end
 
 function print_comprehensive_table(rows, header)
 	println(header)
 	println("| Network | Size | Naive (s) | FullEnv (s) | MinKey (s) | FullEnv Memo | MinKey Memo | FullEnv Speedup | MinKey Speedup |")
-	println("|---------|------|-----------|-------------|------------|--------------|-------------|-----------------|---------------|")
+	println("|---------|------|-----------|-------------|------------|--------------|-------------| -----------------|---------------|")
 	for row in rows
 		@printf("| %-7s | %-4d | %9.4e | %11.4e | %10.4e | %12d | %11d | %15.2fx | %13.2fx |\n",
 			row.network, row.size, row.t_naive, row.t_full, row.t_min, row.memo_full, row.memo_min,
@@ -2222,7 +2237,7 @@ end
 println("\n# Tree Network Memoization Times for Large Depths")
 println("| Depth | Nodes | MinKey Time (s) | Memo Size |")
 println("|-------|-------|-----------------|-----------|")
-for depth in [5, 6, 7]
+for depth in [5]
 	bn = create_tree_network(depth)
 	params = Float64[]
 	n_nodes = 2^depth - 1
@@ -3226,3 +3241,172 @@ function run_robust_scaling_test()
 			@sprintf("%9.2f%%", fullenv_ratio))
 	end
 end
+
+
+using BenchmarkTools
+
+function run_all_strategies(bn, params)
+    # Warmup for JIT
+    marginalize_without_memo(bn, params)
+    evaluate_with_marginalization(bn, params; caching_strategy = :full_env)
+    
+    # Test different elimination orders for minimal key
+    orders = [:topological, :min_degree, :min_fill]
+    order_results = Dict()
+    
+    for order in orders
+        # Warmup specific order
+        evaluate_with_marginalization(bn, params; caching_strategy = :minimal_key, elimination_order=order)
+        
+        # Time evaluation
+        t_min = @belapsed evaluate_with_marginalization($bn, $params; 
+            caching_strategy = :minimal_key, 
+            elimination_order = $order
+        )
+        
+        # Get memo size for this order
+        memo_min = get_memo_size(bn, :minimal_key, order)
+        
+        order_results[order] = (t_min, memo_min)
+    end
+
+    # Naive and FullEnv baselines
+    t_naive = @belapsed marginalize_without_memo($bn, $params)
+    _, logp_naive = marginalize_without_memo(bn, params)
+    
+    t_full = @belapsed evaluate_with_marginalization($bn, $params; caching_strategy = :full_env)
+    _, logp_full = evaluate_with_marginalization(bn, params; caching_strategy = :full_env)
+    
+    # Memo sizes
+    memo_full = get_memo_size(bn, :full_env, :topological)  # Full env doesn't use order
+
+    # Check correctness for all strategies
+    for order in orders
+        _, logp_min = evaluate_with_marginalization(bn, params; 
+            caching_strategy = :minimal_key,
+            elimination_order = order
+        )
+        print("Order $order: ")
+        @test isapprox(logp_naive, logp_min, rtol = 1e-10)
+    end
+
+    return (;
+        t_naive, t_full, memo_full,
+        orders = order_results
+    )
+end
+
+# Modified memo size function with order support
+function get_memo_size(bn, strategy, order)  # Added bn as first parameter
+    memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+    minimal_keys = strategy == :minimal_key ? _precompute_minimal_cache_keys(bn) : nothing
+    
+    # Get sorted nodes based on elimination order
+    sorted_node_ids = if order == :min_degree
+        print(typeof(bn.is_observed))
+        min_degree_order(bn.graph, bn.is_observed)
+    elseif order == :min_fill
+        min_fill_order(bn.graph, bn.is_observed)
+    else
+        topological_sort_by_dfs(bn.graph)
+    end
+
+    _ = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
+        bn, deepcopy(bn.evaluation_env), sorted_node_ids, Float64[], 1,
+        bn.transformed_var_lengths, memo, strategy, minimal_keys,
+    )
+    return length(memo)
+end
+
+function print_comprehensive_table(rows, header)
+    println(header)
+    println("| Network | Size | Naive (s) | FullEnv (s) | Topo (s) | MinDeg (s) | MinFill (s) | FullEnv Memo | Topo Memo | MinDeg Memo | MinFill Memo |")
+    println("|---------|------|-----------|-------------|----------|------------|-------------|--------------|-----------|-------------|--------------|")
+    for row in rows
+        @printf("| %-7s | %-4d | %9.2e | %11.2e | %8.2e | %10.2e | %11.2e | %12d | %9d | %11d | %12d |\n",
+            row.network, row.size, row.t_naive, row.t_full, 
+            row.orders[:topological][1], row.orders[:min_degree][1], row.orders[:min_fill][1],
+            row.memo_full, row.orders[:topological][2], row.orders[:min_degree][2], row.orders[:min_fill][2])
+    end
+end
+
+rows = []
+
+# Chain networks
+for n in [3]
+    bn = create_chain_network(n)
+    params = Float64[]
+    results = run_all_strategies(bn, params)
+    push!(rows, (;
+        network = "Chain", 
+        size = n,
+        results.t_naive,
+        results.t_full,
+        results.memo_full,
+        orders = results.orders
+    ))
+end
+
+# Tree networks
+for depth in [2]
+    bn = create_tree_network(depth)
+    params = Float64[]  
+    n_nodes = 2^depth - 1
+    results = run_all_strategies(bn, params)
+    push!(rows, (;
+        network = "Tree", 
+        size = n_nodes,
+        results.t_naive,
+        results.t_full,
+        results.memo_full,
+        orders = results.orders
+    ))
+end
+
+# Print results
+print_comprehensive_table(rows, "Elimination Order Comparison")
+# Test chain network A → B → C → D
+g = SimpleDiGraph(4)
+Graphs.add_edge!(g, 1, 2)
+Graphs.add_edge!(g, 2, 3)
+Graphs.add_edge!(g, 3, 4)
+
+order = min_degree_order(g)
+@test order == [1, 4, 2, 3]  # Expected order for minimal fill
+
+
+using Distributions
+
+function manual_logp()
+    total = 0.0
+    for z1 in [0, 1], z2 in [0, 1], z3 in [0, 1]
+        # Prior probabilities
+        p_z1 = 0.5
+        p_z2 = (z1 == 0 ? 0.7 : 0.3) * (z2 == 0 ? 0.7 : 0.3)
+        p_z3 = (z1 == 0 ? 0.7 : 0.3) * (z3 == 0 ? 0.7 : 0.3)
+        
+        # Observation likelihood
+        mu = 10 * (z2 + z3) / 2
+        p_y = pdf(Normal(mu, 1), 3.7)
+        
+        total += p_z1 * p_z2 * p_z3 * p_y
+    end
+    log(total)
+end
+
+expected_logp = manual_logp()  # ≈ -2.6297290406675473
+
+
+function test_tree_depth2()
+    # Create network
+    bn = create_tree_network(2)
+    
+    # Run marginalization
+    _, logp = marginalize_without_memo(bn, Float64[])
+    _, logp_memo = evaluate_with_marginalization(bn, Float64[], caching_strategy = :minimal_key, elimination_order = :topological)
+    
+    # Verify against manual calculation
+    @test isapprox(logp, expected_logp, rtol=1e-10)
+end
+
+println("Moralized edges: ", edges(moralize(bn.graph, bn.is_observed)))

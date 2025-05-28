@@ -412,7 +412,6 @@ function _marginalize_recursive(
 		minimal_hash = hash(relevant_values)
 		memo_key = (current_id, param_idx, minimal_hash)
 	else
-		# Default: Use the parent-based approach
 		parent_values = _extract_parent_values(bn, current_id, env)
 		parent_hash = hash(parent_values)
 		memo_key = (current_id, param_idx, parent_hash)
@@ -623,12 +622,69 @@ function evaluate_with_marginalization(
 	else
 		minimal_keys = nothing
 	end
+
+    println("Caching strategy: $caching_strategy")
 	# Start recursive evaluation with the first node, beginning at parameter index 1
 	logp = _marginalize_recursive(
 		bn, env, sorted_node_ids, parameter_values, 1,
 		bn.transformed_var_lengths, memo, caching_strategy, minimal_keys,
 	)
 	return env, logp
+end
+
+# Min-degree elimination order heuristic
+function min_degree_order(graph)
+    g = copy(graph)
+    order = Vector{Int}()
+    while !isempty(g)
+        # Find node with minimum degree
+        degrees = [outdegree(g, v) + indegree(g, v) for v in vertices(g)]
+        min_deg = argmin(degrees)
+        v = vertices(g)[min_deg]
+        
+        push!(order, v)
+        rem_vertex!(g, v)  # Remove node and its edges
+    end
+    return order
+end
+
+# Min-fill elimination order heuristic
+function min_fill_order(graph)
+    g = copy(graph)
+    order = Vector{Int}()
+    while !isempty(g)
+        # Calculate fill edges for each node
+        fill_counts = Dict{Int, Int}()
+        for v in vertices(g)
+            neighbors = all_neighbors(g, v)
+            # Potential new edges needed to connect neighbors
+            required_edges = 0
+            for i in 1:length(neighbors)
+                for j in i+1:length(neighbors)
+                    if !has_edge(g, neighbors[i], neighbors[j])
+                        required_edges += 1
+                    end
+                end
+            end
+            fill_counts[v] = required_edges
+        end
+        
+        # Select node with minimum fill
+        min_fill = argmin(values(fill_counts))
+        v = keys(fill_counts)[min_fill]
+        
+        # Connect all neighbors pairwise
+        neighbors = all_neighbors(g, v)
+        for i in 1:length(neighbors)
+            for j in i+1:length(neighbors)
+                add_edge!(g, neighbors[i], neighbors[j])
+            end
+        end
+        
+        push!(order, v)
+        rem_vertex!(g, v)
+    end
+    return order
 end
 
 """
