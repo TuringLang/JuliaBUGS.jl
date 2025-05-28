@@ -132,5 +132,27 @@ model = compile(
     Set([Symbol("mu[1]"), Symbol("x[1:2]"), Symbol("z[1:2, 1:2]"), Symbol("mu[2]"), :y])
 
 @testset "test new function" begin
+    """
+                           α◦
+                       │
+                       ▼
+                       β◦
+                      / \
+                     /   \
+                γ₁◦ ─┘   └─ γ₂◦
+                  │           \
+                  ▼            ▼
+                  m  ──▷  q    n ──▷  s ──▷  r◦
+                  │            │
+                  ▼            ▼
+                 θ₂◦          θ₁◦
+                  │            │
+                  ▼            ▼
+                y₂★          y₁★
+
+
+                ψ◦ ──▷  ϕ◦        (both stoch-GQ)
+    """
+
     
 end
