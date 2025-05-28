@@ -50,10 +50,20 @@ jobs:
       
       - uses: julia-actions/julia-buildpkg@v1
 
-      - name: Running elementary tests
+      - name: Running unit tests
         uses: julia-actions/julia-runtest@v1
         env:
-          TEST_GROUP: "elementary"
+          TEST_GROUP: "unit"
+
+      - name: Running parser and macros tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: "parser and macros"
+
+      - name: Running graphs tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: "graphs"
 
       - name: Running compilation tests
         uses: julia-actions/julia-runtest@v1
