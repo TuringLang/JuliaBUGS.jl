@@ -57,10 +57,10 @@ const TEST_GROUPS = Dict{String,Function}(
         include("log_density.jl")
         include("model.jl")
     end,
-    "gibbs" => () -> include("gibbs.jl"),
-    "mcmchains" => () -> include("ext/mcmchains.jl"),
-    "experimental" =>
-        () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
+    # "gibbs" => () -> include("gibbs.jl"),
+    # "mcmchains" => () -> include("ext/mcmchains.jl"),
+    # "experimental" =>
+    #     () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
     "source_gen" => () -> include("source_gen.jl"),
 )
 

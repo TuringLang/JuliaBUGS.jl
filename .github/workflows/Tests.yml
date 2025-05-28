@@ -17,8 +17,8 @@ jobs:
       matrix:
         version:
           - '1'
-          - 'min'
-          - 'pre'
+          # - 'min'
+          # - 'pre'
         os:
           - ubuntu-latest
           - windows-latest

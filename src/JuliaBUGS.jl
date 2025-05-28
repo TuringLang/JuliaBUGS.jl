@@ -35,7 +35,16 @@ using .CompilerUtils
 include("graphs.jl")
 include("compiler_pass.jl")
 include("model/BUGSModel.jl")
-using .Model: AbstractBUGSModel, BUGSModel, initialize!
+using .Model:
+    AbstractBUGSModel,
+    BUGSModel,
+    initialize!,
+    settrans,
+    getparams,
+    _tempered_evaluate!!,
+    set_evaluation_mode,
+    UseGraph,
+    UseGeneratedLogDensityFunction
 
 include("logdensityproblems.jl")
 include("gibbs.jl")

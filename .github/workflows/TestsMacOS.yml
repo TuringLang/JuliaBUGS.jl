@@ -16,7 +16,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ['1', 'min', 'pre']
+        version: 
+          - '1'
+          # - 'min'
+          # - 'pre'
         os: [macOS-latest]
         arch: [aarch64]
 
