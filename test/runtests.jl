@@ -28,22 +28,19 @@ using Serialization
 
 AbstractMCMC.setprogress!(false)
 
-const TEST_GROUPS = Dict{String, Function}(
-    "unit" => () -> begin 
-    @testset "Unit Tests" begin
-        Documenter.doctest(JuliaBUGS; manual=false)
-        include("utils.jl")
-    end
-end,
-
+const TEST_GROUPS = Dict{String,Function}(
+    "unit" => () -> begin
+        @testset "Unit Tests" begin
+            Documenter.doctest(JuliaBUGS; manual=false)
+            include("utils.jl")
+        end
+    end,
     "parser and macros" => () -> begin
         include("parser/test_parser.jl")
         include("passes.jl")
         include("model_macro.jl")
     end,
-
     "graphs" => () -> include("graphs.jl"),
-
     "compilation" => () -> begin
         @testset "BUGS examples volume 1" begin
             @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
@@ -56,19 +53,15 @@ end,
             include("compile.jl")
         end
     end,
-
     "log_density" => () -> begin
         include("log_density.jl")
         include("model.jl")
     end,
-
     "gibbs" => () -> include("gibbs.jl"),
-
     "mcmchains" => () -> include("ext/mcmchains.jl"),
-
-    "experimental" => () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
-
-    "source_gen" => () -> include("source_gen.jl")
+    "experimental" =>
+        () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
+    "source_gen" => () -> include("source_gen.jl"),
 )
 
 raw_selection = get(ENV, "TEST_GROUP", "all")
