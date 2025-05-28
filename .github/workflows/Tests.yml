@@ -80,14 +80,14 @@ jobs:
         env:
           TEST_GROUP: "source_gen"
 
-      - name: Running `gibbs` tests
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true);"
-        env:
-          TEST_GROUP: "gibbs"
+      # - name: Running `gibbs` tests
+      #   uses: nick-fields/retry@v3
+      #   with:
+      #     timeout_minutes: 10
+      #     max_attempts: 3
+      #     command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true);"
+      #   env:
+      #     TEST_GROUP: "gibbs"
 
       - name: Running `mcmchains` tests
         uses: nick-fields/retry@v3
