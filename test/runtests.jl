@@ -28,11 +28,6 @@ using Serialization
 
 AbstractMCMC.setprogress!(false)
 
-# ----------------------------------------------------------------------
-# Test group selection and execution
-# ----------------------------------------------------------------------
-
-# Map each test‑group name to a zero‑argument function that runs that group.
 const TEST_GROUPS = Dict{String, Function}(
     "unit" => () -> begin 
     @testset "Unit Tests" begin
