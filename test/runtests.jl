@@ -30,6 +30,7 @@ AbstractMCMC.setprogress!(false)
 
 const Tests = (
     "elementary",
+    "graphs",
     "compilation",
     "log_density",
     "gibbs",
@@ -55,6 +56,10 @@ if test_group == "elementary" || test_group == "all"
     include("passes.jl")
     include("graphs.jl")
     include("model_macro.jl")
+end
+
+if test_group == "graphs" || test_group == "all"
+    include("graphs.jl")
 end
 
 if test_group == "compilation" || test_group == "all"
