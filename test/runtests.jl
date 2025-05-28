@@ -59,7 +59,7 @@ const TEST_GROUPS = Dict{String,Function}(
     end,
     "gibbs" => () -> include("gibbs.jl"),
     "mcmchains" => () -> include("ext/mcmchains.jl"),
-    "experimental" =>
+    "experimental" => 
         () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
     "source_gen" => () -> include("source_gen.jl"),
 )
