@@ -3,6 +3,7 @@
     model = compile(model_def, data)
     serialize("m.jls", model)
     deserialized = deserialize("m.jls")
+    rm("m.jls", force=true)
     @testset "test values are correctly restored" begin
         for vn in MetaGraphsNext.labels(model.g)
             @test isequal(
