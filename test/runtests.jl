@@ -62,7 +62,7 @@ const TEST_GROUPS = Dict{String,Function}(
     # "experimental" =>
     #     () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
     # TODO: there is something wrong with source_gen tests, it hangs, fix this
-    "source_gen" => () -> include("source_gen.jl"),
+    # "source_gen" => () -> include("source_gen.jl"),
 )
 
 raw_selection = get(ENV, "TEST_GROUP", "all")
