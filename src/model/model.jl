@@ -289,7 +289,7 @@ function BUGSModel(
 end
 
 const AllowedArray{T} = AbstractArray{T} where {T<:Union{Int,Float64,Missing}}
-const AllowedValue = Union{Int, Float64, Missing, AllowedArray}
+const AllowedValue = Union{Int,Float64,Missing,AllowedArray}
 
 """
     initialize!(model::BUGSModel, initial_params::NamedTuple{<:Any, <:Tuple{Vararg{AllowedValue}}})
