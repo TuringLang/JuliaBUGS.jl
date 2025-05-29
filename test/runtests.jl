@@ -61,6 +61,7 @@ const TEST_GROUPS = Dict{String,Function}(
     # "mcmchains" => () -> include("ext/mcmchains.jl"),
     # "experimental" =>
     #     () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
+    # TODO: there is something wrong with source_gen tests, it hangs, fix this
     "source_gen" => () -> include("source_gen.jl"),
 )
 
