@@ -48,10 +48,76 @@ struct UseGeneratedLogDensityFunction <: EvaluationMode end
 struct UseGraph <: EvaluationMode end
 
 """
-    BUGSModel
+    BUGSModel{EMT, base_model_T, T, TNF, TV, data_T, F} <: AbstractBUGSModel
 
-The `BUGSModel` object is used for inference and represents the output of compilation. It implements the
-[`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
+The `BUGSModel` is the central structure for representing a BUGS model after
+compilation. It encapsulates all necessary information for inference, including
+the model's graph structure, variable values, parameter definitions, and
+evaluation strategy. This type implements the
+[`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl)
+interface, allowing it to be used with various MCMC samplers.
+
+The model can exist in two states regarding its parameters: original
+(constrained) space or transformed (unconstrained) space, which is typically
+required by HMC-like samplers.
+
+# Type Parameters
+- `EMT <: EvaluationMode`: Specifies the evaluation mode, e.g.,
+  `UseGeneratedLogDensityFunction` for a statically compiled log-density
+  function or `UseGraph` for graph-based evaluation.
+- `base_model_T <: Union{<:AbstractBUGSModel,Nothing}`: The type of the base
+  model. This is `Nothing` for a model directly from `compile`, or an
+  `AbstractBUGSModel` instance if the current model is derived (e.g., by
+  conditioning) from another.
+- `T <: NamedTuple`: The type of the `evaluation_env`, which stores the current
+  values of all variables in the model.
+- `TNF`: The type of the `node_function_vals` field within the
+  `FlattenedGraphNodeData`.
+- `TV`: The type of the `loop_vars_vals` field within the
+  `FlattenedGraphNodeData`.
+- `data_T`: The type of the `data` field, which stores the original data
+  provided to the model.
+- `F <: Union{Function,Nothing}`: The type of the
+  `log_density_computation_function`. This is a `Function` if a specialized
+  log-density computation function was generated, and `Nothing` otherwise.
+
+# Fields
+- `transformed::Bool`: Indicates whether the model parameters are currently
+  represented in the transformed (unconstrained) space (`true`) or the original
+  (constrained) space (`false`).
+- `untransformed_param_length::Int`: The total number of elements in the
+  parameter vector when in the original (constrained) space.
+- `transformed_param_length::Int`: The total number of elements in the parameter
+  vector when in the transformed (unconstrained) space.
+- `untransformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping each
+  parameter's `VarName` to its length in the original (constrained) space.
+- `transformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping each
+  parameter's `VarName` to its length in the transformed (unconstrained) space.
+- `evaluation_env::T`: A `NamedTuple` holding the current values of all
+  variables (stochastic and deterministic) in the model. Values are stored in
+  their original (constrained) space.
+- `parameters::Vector{<:VarName}`: A vector of `VarName`s representing the model
+  parameters (unobserved stochastic variables), ordered appropriately for
+  constructing parameter vectors.
+- `flattened_graph_node_data::FlattenedGraphNodeData{TNF,TV}`: Pre-computed
+  data associated with the model's graph nodes, such as their stochasticity,
+  observation status, and defining functions. This is optimized for quick
+  lookups during model evaluation and is specific to a topological sort of the
+  graph nodes.
+- `g::BUGSGraph`: An instance of `BUGSGraph` representing the dependency
+  structure of the model.
+- `base_model::base_model_T`: If this model is the result of an operation like
+  conditioning, `base_model` refers to the original model from which it was
+  derived. Otherwise, it is `Nothing`.
+- `evaluation_mode::EMT`: An instance of an `EvaluationMode` subtype,
+  determining how the log-density is computed.
+- `log_density_computation_function::F`: A pre-compiled function to compute the
+  log-density of the model, if available (i.e., if `evaluation_mode` is
+  `UseGeneratedLogDensityFunction`). Otherwise, `nothing`.
+- `model_def::Expr`: The original Julia `Expr` defining the BUGS model, stored
+  for serialization and introspection.
+- `data::data_T`: The original data `NamedTuple` provided during model
+  compilation, stored for serialization and potential re-evaluation.
 """
 struct BUGSModel{
     EMT<:EvaluationMode,
@@ -62,35 +128,18 @@ struct BUGSModel{
     data_T,
     F<:Union{Function,Nothing},
 } <: AbstractBUGSModel
-    " Indicates whether the model parameters are in the transformed space. "
     transformed::Bool
-
-    "The length of the parameters vector in the original (constrained) space."
     untransformed_param_length::Int
-    "The length of the parameters vector in the transformed (unconstrained) space."
     transformed_param_length::Int
-    "A dictionary mapping the names of the variables to their lengths in the original (constrained) space."
     untransformed_var_lengths::Dict{<:VarName,Int}
-    "A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space."
     transformed_var_lengths::Dict{<:VarName,Int}
-
-    "A `NamedTuple` containing the values of the variables in the model, all the values are in the constrained space."
     evaluation_env::T
-    "A vector containing the names of the model parameters (unobserved stochastic variables)."
     parameters::Vector{<:VarName}
-    "An `FlattenedGraphNodeData` object containing pre-computed values of the nodes in the model. For each topological order, this needs to be recomputed."
     flattened_graph_node_data::FlattenedGraphNodeData{TNF,TV}
-
-    "An instance of `BUGSGraph`, representing the dependency graph of the model."
     g::BUGSGraph
-
-    "If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`."
     base_model::base_model_T
-
     evaluation_mode::EMT
     log_density_computation_function::F
-
-    # for serialization, save the original model definition and data
     model_def::Expr
     data::data_T
 end
