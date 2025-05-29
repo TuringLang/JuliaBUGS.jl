@@ -16,4 +16,6 @@ include("evaluation.jl")
 include("model_operations.jl")
 include("serialization.jl")
 
+export parameters, variables, initialize!, getparams, settrans, set_evaluation_mode
+
 end # BUGSModel

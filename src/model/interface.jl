@@ -1,4 +1,3 @@
-
 """
     parameters(model::BUGSModel)
 
@@ -141,6 +140,31 @@ function settrans(model::BUGSModel, bool::Bool=(!(model.transformed)))
     return BangBang.setproperty!!(model, :transformed, bool)
 end
 
+
+"""
+    set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
+
+Set the evaluation mode for the `BUGSModel`.
+
+The evaluation mode determines how the log-density of the model is computed.
+Possible modes are:
+- `UseGeneratedLogDensityFunction()`: Uses a statically generated function for log-density computation. This is often faster but may not be available for all models. If the model does not support a generated log-density function (i.e., `model.log_density_computation_function === identity`), a warning is issued, and the mode defaults to `UseGraph()`.
+- `UseGraph()`: Computes the log-density by traversing the model's graph structure. This is always available but might be slower.
+
+# Arguments
+- `model::BUGSModel`: The BUGS model instance.
+- `mode::EvaluationMode`: The desired evaluation mode.
+
+# Returns
+- A new `BUGSModel` instance with the `evaluation_mode` field updated. If the original model is mutable, it might be modified in place.
+
+# Examples
+```julia
+# Assuming `model` is a compiled BUGSModel instance
+model_with_graph_eval = set_evaluation_mode(model, UseGraph())
+model_with_generated_eval = set_evaluation_mode(model, UseGeneratedLogDensityFunction())
+```
+"""
 function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
     if model.log_density_computation_function === identity
         @warn(

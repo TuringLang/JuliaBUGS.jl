@@ -33,14 +33,11 @@ using .Parser.CompilerUtils
 include("graphs.jl")
 include("compiler_pass.jl")
 include("model/BUGSModel.jl")
+using .Model
 using .Model:
     AbstractBUGSModel,
     BUGSModel,
-    initialize!,
-    settrans,
-    getparams,
     _tempered_evaluate!!,
-    set_evaluation_mode,
     UseGraph,
     UseGeneratedLogDensityFunction
 
