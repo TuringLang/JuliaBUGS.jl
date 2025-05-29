@@ -140,7 +140,6 @@ function settrans(model::BUGSModel, bool::Bool=(!(model.transformed)))
     return BangBang.setproperty!!(model, :transformed, bool)
 end
 
-
 """
     set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
 
