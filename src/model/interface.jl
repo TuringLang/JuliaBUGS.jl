@@ -137,7 +137,7 @@ indicates the current "mode" of the model.
 
 This function enables switching the "mode" of the model.
 """
-function settrans(model::BUGSModel, bool::Bool=!(model.transformed))
+function settrans(model::BUGSModel, bool::Bool=(!(model.transformed)))
     return BangBang.setproperty!!(model, :transformed, bool)
 end
 
