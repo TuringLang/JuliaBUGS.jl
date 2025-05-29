@@ -319,29 +319,32 @@ function _extract_discrete_values(bn::BayesianNetwork, env)
 	return discrete_values
 end
 
-function _precompute_minimal_cache_keys(bn)
-	sorted_node_ids = topological_sort_by_dfs(bn.graph)
-	minimal_keys = Dict{Int, Set{Int}}()
-
-	for t in 1:length(sorted_node_ids)
-		current_node_id = sorted_node_ids[t]
-		future_nodes = sorted_node_ids[(t+1):end]
-
-		# Collect parents of future nodes + current node's parents
-		future_parents = reduce(union!,
-			[inneighbors(bn.graph, n) for n in future_nodes],
-			init = Set(inneighbors(bn.graph, current_node_id)),
-		)
-
-		# Get visited nodes up to current position
-		visited = Set(sorted_node_ids[1:t])
-
-		# Store by node ID
-		minimal_keys[current_node_id] = intersect(future_parents, visited)
-	end
-
-	return minimal_keys
+function _precompute_minimal_cache_keys(bn, order::Vector{Int})
+    minimal_keys = Dict{Int, Set{Int}}()
+    n = length(order)
+    
+    for t in 1:n
+        current_node_id = order[t]
+        future_nodes = t < n ? order[t+1:end] : Int[]
+        
+        # Collect parents of future nodes + current node's parents
+        future_parents = Set{Int}()
+        union!(future_parents, inneighbors(bn.graph, current_node_id))
+        for n in future_nodes
+            union!(future_parents, inneighbors(bn.graph, n))
+        end
+        
+        # Get visited nodes up to current position
+        visited = Set(order[1:t])
+        
+        # Store by node ID
+        minimal_keys[current_node_id] = intersect(future_parents, visited)
+    end
+    
+    return minimal_keys
 end
+
+_precompute_minimal_cache_keys(bn) = _precompute_minimal_cache_keys(bn, topological_sort_by_dfs(bn.graph))
 
 """
 Enhanced version of marginalize_recursive that uses a more efficient memoization approach.
@@ -571,10 +574,12 @@ end
 function evaluate_with_marginalization(
 	bn::BayesianNetwork{V, T, F},
 	parameter_values::AbstractVector;
-	caching_strategy::Symbol = :full_env,  # Change default
+	caching_strategy::Symbol = :full_env,
+    order_heuristic::Symbol = :dfs,  # :dfs, :min_degree, or :min_fill
 ) where {V, T, F}
 	# Get topological ordering of nodes
-	sorted_node_ids = topological_sort_by_dfs(bn.graph)
+
+	sorted_node_ids = topological_sort_with_heuristic(bn, order_heuristic)
 
 	# Find discrete and continuous variables
 	discrete_vars = [
@@ -618,12 +623,11 @@ function evaluate_with_marginalization(
 	sizehint!(memo, expected_entries)
 	if caching_strategy == :minimal_key
 		# Precompute minimal keys for memoization
-		minimal_keys = _precompute_minimal_cache_keys(bn)
+		minimal_keys = _precompute_minimal_cache_keys(bn, sorted_node_ids)
 	else
 		minimal_keys = nothing
 	end
 
-    println("Caching strategy: $caching_strategy")
 	# Start recursive evaluation with the first node, beginning at parameter index 1
 	logp = _marginalize_recursive(
 		bn, env, sorted_node_ids, parameter_values, 1,
@@ -632,60 +636,6 @@ function evaluate_with_marginalization(
 	return env, logp
 end
 
-# Min-degree elimination order heuristic
-function min_degree_order(graph)
-    g = copy(graph)
-    order = Vector{Int}()
-    while !isempty(g)
-        # Find node with minimum degree
-        degrees = [outdegree(g, v) + indegree(g, v) for v in vertices(g)]
-        min_deg = argmin(degrees)
-        v = vertices(g)[min_deg]
-        
-        push!(order, v)
-        rem_vertex!(g, v)  # Remove node and its edges
-    end
-    return order
-end
-
-# Min-fill elimination order heuristic
-function min_fill_order(graph)
-    g = copy(graph)
-    order = Vector{Int}()
-    while !isempty(g)
-        # Calculate fill edges for each node
-        fill_counts = Dict{Int, Int}()
-        for v in vertices(g)
-            neighbors = all_neighbors(g, v)
-            # Potential new edges needed to connect neighbors
-            required_edges = 0
-            for i in 1:length(neighbors)
-                for j in i+1:length(neighbors)
-                    if !has_edge(g, neighbors[i], neighbors[j])
-                        required_edges += 1
-                    end
-                end
-            end
-            fill_counts[v] = required_edges
-        end
-        
-        # Select node with minimum fill
-        min_fill = argmin(values(fill_counts))
-        v = keys(fill_counts)[min_fill]
-        
-        # Connect all neighbors pairwise
-        neighbors = all_neighbors(g, v)
-        for i in 1:length(neighbors)
-            for j in i+1:length(neighbors)
-                add_edge!(g, neighbors[i], neighbors[j])
-            end
-        end
-        
-        push!(order, v)
-        rem_vertex!(g, v)
-    end
-    return order
-end
 
 """
 	enumerate_discrete_values(dist)
@@ -859,4 +809,144 @@ function _marginalize_recursive_legacy(
 
 		return dist_logp + remaining_logp
 	end
+end
+
+"""
+    moralize(g::SimpleDiGraph)
+
+Convert a directed graph to an undirected moral graph by:
+1. Adding undirected edges for all directed edges.
+2. Connecting all parents of each node (marrying parents).
+"""
+function moralize(g::SimpleDiGraph)
+    n = nv(g)
+    ug = SimpleGraph(n)
+    # Marry parents: for each node, connect all its parents
+    for v in 1:n
+        parents = inneighbors(g, v)
+        for i in 1:length(parents), j in i+1:length(parents)
+            u1, u2 = parents[i], parents[j]
+            if !has_edge(ug, u1, u2)
+                Graphs.add_edge!(ug, u1, u2)
+            end
+        end
+    end
+    # Add directed edges as undirected
+    for e in edges(g)
+        u, v = src(e), dst(e)
+        if !has_edge(ug, u, v)
+            Graphs.add_edge!(ug, u, v)
+        end
+    end
+    return ug
+end
+
+"""
+    topological_sort_with_heuristic(bn::BayesianNetwork, heuristic::Symbol)
+
+Generate a topological order using:
+- `:dfs` (depth-first search).
+- `:min_degree` (smallest active degree in moral graph).
+- `:min_fill` (fewest new edges when eliminated).
+"""
+function topological_sort_with_heuristic(bn::BayesianNetwork, heuristic::Symbol)
+    g = bn.graph
+    n = Graphs.nv(g)
+    
+    # Handle DFS case directly without extra computation
+    if heuristic == :dfs
+        return topological_sort_by_dfs(g)
+    end
+
+    # Proceed with other heuristics
+    in_degree = [Graphs.indegree(g, i) for i in 1:n]
+    available = Set{Int}(i for i in 1:n if in_degree[i] == 0)
+    order = Int[]
+    active = trues(n)
+    max_iter = n * 2
+    iter_count = 0
+
+    moral_g = moralize(g)
+    H = (heuristic == :min_fill) ? copy(moral_g) : nothing
+
+    while !isempty(available)
+        iter_count += 1
+        if iter_count > max_iter
+            error("Infinite loop detected in topological sort. Heuristic: $heuristic")
+        end
+
+        if heuristic == :min_degree
+            min_deg = typemax(Int)
+            min_node = -1
+            for n in available
+                deg = count(nb -> active[nb], Graphs.neighbors(moral_g, n))
+                if deg < min_deg
+                    min_deg = deg
+                    min_node = n
+                end
+            end
+            node = min_node
+        elseif heuristic == :min_fill
+            min_fill = typemax(Int)
+            min_node = -1
+            for n in available
+                fill = _compute_fill_in(H, n, active)
+                if fill < min_fill
+                    min_fill = fill
+                    min_node = n
+                end
+            end
+            node = min_node
+        else
+            error("Unknown heuristic: $heuristic")
+        end
+
+        node == -1 && break
+
+        push!(order, node)
+        delete!(available, node)
+        active[node] = false
+
+        for child in Graphs.outneighbors(g, node)
+            in_degree[child] -= 1
+            if in_degree[child] == 0
+                push!(available, child)
+            end
+        end
+
+        if heuristic == :min_fill
+            N_v = [nb for nb in Graphs.neighbors(H, node) if active[nb]]
+            for i in 1:length(N_v)
+                for j in (i+1):length(N_v)
+                    if !Graphs.has_edge(H, N_v[i], N_v[j])
+                        Graphs.add_edge!(H, N_v[i], N_v[j])
+                    end
+                end
+            end
+        end
+    end
+
+    if length(order) != n
+        @warn "Topological sort incomplete: only $(length(order)) of $n nodes processed"
+    end
+    
+    return order
+end
+# Helper: Compute fill-in for a node (number of missing edges among active neighbors)
+function _compute_fill_in(H, node, active)
+    N_v = [nb for nb in Graphs.neighbors(H, node) if active[nb]]
+    k = length(N_v)
+    total_possible = k * (k - 1) ÷ 2
+    
+    # Calculate existing edges using explicit loops
+    existing_edges = 0
+    for i in 1:k
+        for j in (i+1):k
+            if Graphs.has_edge(H, N_v[i], N_v[j])
+                existing_edges += 1
+            end
+        end
+    end
+    
+    return total_possible - existing_edges
 end

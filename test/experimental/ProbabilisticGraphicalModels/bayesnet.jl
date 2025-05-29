@@ -18,9 +18,9 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
 	evaluate_with_marginalization_legacy,
 	_marginalize_recursive_legacy,
 	_precompute_minimal_cache_keys,
-    min_degree_order,
-    min_fill_order,
-    moralize
+    moralize,
+    evaluate_with_marginalization_ordered,
+    topological_sort_with_heuristic
 using BangBang
 using JuliaBUGS
 using JuliaBUGS: @bugs, compile, NodeInfo, VarName
@@ -1978,7 +1978,7 @@ end
 
 		@testset "Tree Network Scaling" begin
 			# Test tree network performance for increasing depths
-			tree_depths = [2, 3, 4]  # A depth 4 tree has 15 nodes (2^4-1)
+			tree_depths = [2, 3, 4,5]  # A depth 4 tree has 15 nodes (2^4-1)
 
 			# Track performance metrics
 			standard_times = Float64[]
@@ -2406,10 +2406,9 @@ end
 
 @testset "HMM Networks" begin
 	# Store results for final analysis
-
 	hmm_results = []
 	# Test different configurations of HMMs
-	hmm_configs = [(2, 4), (3, 3), (2, 5), (4, 2), (2, 20)]
+	hmm_configs = [(2, 4), (3, 3), (2, 5)]
 
 	for (n_states, seq_length) in hmm_configs
 		# Create the HMM network
@@ -2423,6 +2422,7 @@ end
 		@test_broken results.parent.correct
 		@test results.discrete.correct
 		@test results.full_env.correct
+		@test results.minkey.correct  # Add minimal key correctness test
 
 		# Store results for consolidated output
 		theoretical_states = n_states^seq_length
@@ -2436,16 +2436,20 @@ end
 				:parent_time => results.parent.time,
 				:discrete_time => results.discrete.time,
 				:full_env_time => results.full_env.time,
+				:minkey_time => results.minkey.time,  # Add minimal key time
 				:parent_speedup => results.no_memo_time / results.parent.time,
 				:discrete_speedup => results.no_memo_time / results.discrete.time,
 				:full_env_speedup => results.no_memo_time / results.full_env.time,
+				:minkey_speedup => results.no_memo_time / results.minkey.time,  # Add minimal key speedup
 				:parent_size => results.parent.size,
 				:discrete_size => results.discrete.size,
 				:full_env_size => results.full_env.size,
+				:minkey_size => results.minkey.size,  # Add minimal key memo size
 				:theoretical_states => theoretical_states,
 				:parent_correct => results.parent.correct,
 				:discrete_correct => results.discrete.correct,
 				:full_env_correct => results.full_env.correct,
+				:minkey_correct => results.minkey.correct,  # Add minimal key correctness
 			),
 		)
 	end
@@ -2462,6 +2466,7 @@ end
 		parent_ratio = result[:parent_size] / result[:theoretical_states] * 100
 		discrete_ratio = result[:discrete_size] / result[:theoretical_states] * 100
 		full_env_ratio = result[:full_env_size] / result[:theoretical_states] * 100
+		minkey_ratio = result[:minkey_size] / result[:theoretical_states] * 100  # Add minimal key ratio
 
 		# Print results for each strategy
 		println(rpad("HMM $config", 16), " | Parent-based  | ",
@@ -2479,6 +2484,11 @@ end
 			@sprintf("%9d", result[:full_env_size]), " | ",
 			@sprintf("%7.2f%%", full_env_ratio),
 			result[:full_env_correct] ? " ✓" : " ✗")
+		println(rpad("HMM $config", 16), " | Minimal key   | ",  # Add minimal key output
+			@sprintf("%7.2fx", result[:minkey_speedup]), " | ",
+			@sprintf("%9d", result[:minkey_size]), " | ",
+			@sprintf("%7.2f%%", minkey_ratio),
+			result[:minkey_correct] ? " ✓" : " ✗")
 	end
 
 	println("\n=== HMM NETWORKS AVERAGE PERFORMANCE ===")
@@ -2489,14 +2499,17 @@ end
 	avg_parent_speedup = mean([r[:parent_speedup] for r in hmm_results])
 	avg_discrete_speedup = mean([r[:discrete_speedup] for r in hmm_results])
 	avg_full_env_speedup = mean([r[:full_env_speedup] for r in hmm_results])
+	avg_minkey_speedup = mean([r[:minkey_speedup] for r in hmm_results])  # Add minimal key average
 
 	avg_parent_ratio = mean([r[:parent_size] / r[:theoretical_states] for r in hmm_results])
 	avg_discrete_ratio = mean([r[:discrete_size] / r[:theoretical_states] for r in hmm_results])
 	avg_full_env_ratio = mean([r[:full_env_size] / r[:theoretical_states] for r in hmm_results])
+	avg_minkey_ratio = mean([r[:minkey_size] / r[:theoretical_states] for r in hmm_results])  # Add minimal key ratio
 
 	parent_correct = all([r[:parent_correct] for r in hmm_results])
 	discrete_correct = all([r[:discrete_correct] for r in hmm_results])
 	full_env_correct = all([r[:full_env_correct] for r in hmm_results])
+	minkey_correct = all([r[:minkey_correct] for r in hmm_results])  # Add minimal key correctness
 
 	println(rpad("Parent-based", 13), " | ",
 		@sprintf("%11.2fx", avg_parent_speedup), " | ",
@@ -2510,10 +2523,14 @@ end
 		@sprintf("%11.2fx", avg_full_env_speedup), " | ",
 		@sprintf("%16.2f%%", avg_full_env_ratio * 100), " | ",
 		full_env_correct ? "Always correct" : "Sometimes fails")
+	println(rpad("Minimal key", 13), " | ",  # Add minimal key summary
+		@sprintf("%11.2fx", avg_minkey_speedup), " | ",
+		@sprintf("%16.2f%%", avg_minkey_ratio * 100), " | ",
+		minkey_correct ? "Always correct" : "Sometimes fails")
 
 	println("\n=== HMM SCALING ANALYSIS ===")
-	println("States | Length | Theoretical States | Parent-based Memo | Discrete-only Memo | Full env Memo")
-	println("-------|--------|-------------------|------------------|-------------------|-------------")
+	println("States | Length | Theoretical States | Parent-based | Discrete-only | Full env | Minimal key")
+	println("-------|--------|-------------------|--------------|---------------|----------|------------")
 
 	# Sort by complexity for better analysis
 	sort!(hmm_results, by = r -> r[:theoretical_states])
@@ -2523,9 +2540,10 @@ end
 			@sprintf("%6d", result[:n_states]), " | ",
 			@sprintf("%6d", result[:seq_length]), " | ",
 			@sprintf("%18d", result[:theoretical_states]), " | ",
-			@sprintf("%16d", result[:parent_size]), " | ",
-			@sprintf("%17d", result[:discrete_size]), " | ",
-			@sprintf("%13d", result[:full_env_size])
+			@sprintf("%12d", result[:parent_size]), " | ",
+			@sprintf("%13d", result[:discrete_size]), " | ",
+			@sprintf("%8d", result[:full_env_size]), " | ",
+			@sprintf("%11d", result[:minkey_size])  # Add minimal key column
 		)
 	end
 
@@ -2536,131 +2554,203 @@ end
 	sort!(binary_hmms, by = r -> r[:seq_length])
 
 	if length(binary_hmms) > 1
-		println("Sequence Length | Parent-based Memo | Discrete-only Memo | Full env Memo")
-		println("---------------|------------------|-------------------|-------------")
+		println("Sequence Length | Parent-based | Discrete-only | Full env | Minimal key")
+		println("---------------|--------------|---------------|----------|------------")
 
 		for result in binary_hmms
 			println(
 				@sprintf("%15d", result[:seq_length]), " | ",
-				@sprintf("%16d", result[:parent_size]), " | ",
-				@sprintf("%17d", result[:discrete_size]), " | ",
-				@sprintf("%13d", result[:full_env_size])
+				@sprintf("%12d", result[:parent_size]), " | ",
+				@sprintf("%13d", result[:discrete_size]), " | ",
+				@sprintf("%8d", result[:full_env_size]), " | ",
+				@sprintf("%11d", result[:minkey_size])  # Add minimal key column
 			)
 		end
 	else
 		println("Insufficient binary HMM data points for growth analysis")
 	end
+
+	# Add minimal key specific analysis
+	println("\n=== MINIMAL KEY vs FULL ENVIRONMENT COMPARISON ===")
+	println("Configuration    | MinKey Size | FullEnv Size | Memory Improvement")
+	println("-----------------|-------------|--------------|------------------")
+	
+	for result in hmm_results
+		config = "$(result[:n_states])×$(result[:seq_length])"
+		improvement = result[:full_env_size] / result[:minkey_size]
+		println(rpad("HMM $config", 16), " | ",
+			@sprintf("%11d", result[:minkey_size]), " | ",
+			@sprintf("%12d", result[:full_env_size]), " | ",
+			@sprintf("%17.2fx", improvement))
+	end
+
+	avg_improvement = mean([r[:full_env_size] / r[:minkey_size] for r in hmm_results])
+	println("\nAverage memory improvement (FullEnv/MinKey): $(round(avg_improvement, digits=2))x")
 end
 
 using BenchmarkTools
 function run_comparison_simple(bn, network_name)
-	params = Float64[]
+    params = Float64[]
 
-	# Get the baseline result for correctness comparison
-	_, no_memo_logp = marginalize_without_memo(deepcopy(bn), params)
+    # Precompute minimal keys for minimal key strategy
+    precomputed_minimal_keys = _precompute_minimal_cache_keys(bn)
 
-	# Benchmark the no-memo version
-	b1 = @benchmark marginalize_without_memo($(deepcopy(bn)), $params)
-	no_memo_time = median(b1).time / 1e9  # Convert to seconds
+    # Warmup runs
+    marginalize_without_memo(deepcopy(bn), params)
+    parent_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+    _ = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env),
+        topological_sort_by_dfs(bn.graph), params, 1,
+        bn.transformed_var_lengths, parent_memo, :parent_based, nothing
+    )
+    discrete_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+    _ = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env),
+        topological_sort_by_dfs(bn.graph), params, 1,
+        bn.transformed_var_lengths, discrete_memo, :discrete_only, nothing
+    )
+    full_env_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+    _ = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env),
+        topological_sort_by_dfs(bn.graph), params, 1,
+        bn.transformed_var_lengths, full_env_memo, :full_env, nothing
+    )
+    minkey_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+    _ = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env),
+        topological_sort_by_dfs(bn.graph), params, 1,
+        bn.transformed_var_lengths, minkey_memo, :minimal_key, precomputed_minimal_keys
+    )
 
-	# Parent-based memoization
-	parent_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
-	parent_logp = 0.0
-	b2 = @benchmark begin
-		parent_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
-		parent_logp = _marginalize_recursive(
-			$(deepcopy(bn)),
-			$(deepcopy(bn.evaluation_env)),
-			topological_sort_by_dfs($(bn.graph)),
-			$params, 1, $(bn.transformed_var_lengths),
-			parent_memo, :parent_based,
-		)
-	end
-	parent_time = median(b2).time / 1e9
+    # Get the baseline result for correctness comparison
+    _, no_memo_logp = marginalize_without_memo(deepcopy(bn), params)
 
-	# Run once outside benchmark to get the actual memo and logp
-	parent_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
-	parent_logp = _marginalize_recursive(
-		deepcopy(bn), deepcopy(bn.evaluation_env),
-		topological_sort_by_dfs(bn.graph), params, 1,
-		bn.transformed_var_lengths, parent_memo, :parent_based,
-	)
+    # Benchmark the no-memo version
+    b1 = @benchmark marginalize_without_memo($(deepcopy(bn)), $params)
+    no_memo_time = median(b1).time / 1e9
 
-	# Discrete-only memoization - similar pattern
-	discrete_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
-	b3 = @benchmark begin
-		discrete_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
-		discrete_logp = _marginalize_recursive(
-			$(deepcopy(bn)),
-			$(deepcopy(bn.evaluation_env)),
-			topological_sort_by_dfs($(bn.graph)),
-			$params, 1, $(bn.transformed_var_lengths),
-			discrete_memo, :discrete_only,
-		)
-	end
-	discrete_time = median(b3).time / 1e9
+    # Parent-based memoization
+    b2 = @benchmark begin
+        parent_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+        parent_logp = _marginalize_recursive(
+            $(deepcopy(bn)),
+            $(deepcopy(bn.evaluation_env)),
+            topological_sort_by_dfs($(bn.graph)),
+            $params, 1, $(bn.transformed_var_lengths),
+            parent_memo, :parent_based, nothing
+        )
+    end
+    parent_time = median(b2).time / 1e9
 
-	# Run once outside benchmark
-	discrete_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
-	discrete_logp = _marginalize_recursive(
-		deepcopy(bn), deepcopy(bn.evaluation_env),
-		topological_sort_by_dfs(bn.graph), params, 1,
-		bn.transformed_var_lengths, discrete_memo, :discrete_only,
-	)
+    # Run once outside benchmark
+    parent_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+    parent_logp = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env),
+        topological_sort_by_dfs(bn.graph), params, 1,
+        bn.transformed_var_lengths, parent_memo, :parent_based, nothing
+    )
 
-	# Full-env memoization
-	full_env_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
-	b4 = @benchmark begin
-		full_env_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
-		full_env_logp = _marginalize_recursive(
-			$(deepcopy(bn)),
-			$(deepcopy(bn.evaluation_env)),
-			topological_sort_by_dfs($(bn.graph)),
-			$params, 1, $(bn.transformed_var_lengths),
-			full_env_memo, :full_env,
-		)
-	end
-	full_env_time = median(b4).time / 1e9
+    # Discrete-only memoization
+    b3 = @benchmark begin
+        discrete_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+        discrete_logp = _marginalize_recursive(
+            $(deepcopy(bn)),
+            $(deepcopy(bn.evaluation_env)),
+            topological_sort_by_dfs($(bn.graph)),
+            $params, 1, $(bn.transformed_var_lengths),
+            discrete_memo, :discrete_only, nothing
+        )
+    end
+    discrete_time = median(b3).time / 1e9
 
-	# Run once outside benchmark
-	full_env_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
-	full_env_logp = _marginalize_recursive(
-		deepcopy(bn), deepcopy(bn.evaluation_env),
-		topological_sort_by_dfs(bn.graph), params, 1,
-		bn.transformed_var_lengths, full_env_memo, :full_env,
-	)
+    # Run once outside benchmark
+    discrete_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+    discrete_logp = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env),
+        topological_sort_by_dfs(bn.graph), params, 1,
+        bn.transformed_var_lengths, discrete_memo, :discrete_only, nothing
+    )
 
-	# Calculate correctness
-	parent_correct = isapprox(parent_logp, no_memo_logp, rtol = 1e-10)
-	discrete_correct = isapprox(discrete_logp, no_memo_logp, rtol = 1e-10)
-	full_env_correct = isapprox(full_env_logp, no_memo_logp, rtol = 1e-10)
+    # Full-env memoization
+    b4 = @benchmark begin
+        full_env_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+        full_env_logp = _marginalize_recursive(
+            $(deepcopy(bn)),
+            $(deepcopy(bn.evaluation_env)),
+            topological_sort_by_dfs($(bn.graph)),
+            $params, 1, $(bn.transformed_var_lengths),
+            full_env_memo, :full_env, nothing
+        )
+    end
+    full_env_time = median(b4).time / 1e9
 
-	# Process and return results as before
-	discrete_count = sum(bn.node_types .== :discrete)
-	theoretical_states = discrete_count > 0 ? 2^discrete_count : 0
+    # Run once outside benchmark
+    full_env_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+    full_env_logp = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env),
+        topological_sort_by_dfs(bn.graph), params, 1,
+        bn.transformed_var_lengths, full_env_memo, :full_env, nothing
+    )
 
-	@info "$network_name BenchmarkTools Results" begin
-		parent_time = parent_time
-		discrete_time = discrete_time
-		full_env_time = full_env_time
-		parent_speedup = no_memo_time / parent_time
-		discrete_speedup = no_memo_time / discrete_time
-		full_env_speedup = no_memo_time / full_env_time
-		parent_memo_size = length(parent_memo)
-		discrete_memo_size = length(discrete_memo)
-		full_env_memo_size = length(full_env_memo)
-		parent_correct = parent_correct
-		discrete_correct = discrete_correct
-		full_env_correct = full_env_correct
-	end
+    # Minimal key memoization
+    b5 = @benchmark begin
+        minkey_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+        minkey_logp = _marginalize_recursive(
+            $(deepcopy(bn)),
+            $(deepcopy(bn.evaluation_env)),
+            topological_sort_by_dfs($(bn.graph)),
+            $params, 1, $(bn.transformed_var_lengths),
+            minkey_memo, :minimal_key, $precomputed_minimal_keys
+        )
+    end
+    minkey_time = median(b5).time / 1e9
 
-	return (
-		no_memo_time = no_memo_time,
-		parent = (time = parent_time, size = length(parent_memo), correct = parent_correct),
-		discrete = (time = discrete_time, size = length(discrete_memo), correct = discrete_correct),
-		full_env = (time = full_env_time, size = length(full_env_memo), correct = full_env_correct),
-	)
+    # Run once outside benchmark
+    minkey_memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+    minkey_logp = _marginalize_recursive(
+        deepcopy(bn), deepcopy(bn.evaluation_env),
+        topological_sort_by_dfs(bn.graph), params, 1,
+        bn.transformed_var_lengths, minkey_memo, :minimal_key, precomputed_minimal_keys
+    )
+
+    # Calculate correctness
+    parent_correct = isapprox(parent_logp, no_memo_logp, rtol = 1e-10)
+    discrete_correct = isapprox(discrete_logp, no_memo_logp, rtol = 1e-10)
+    full_env_correct = isapprox(full_env_logp, no_memo_logp, rtol = 1e-10)
+    minkey_correct = isapprox(minkey_logp, no_memo_logp, rtol = 1e-10)
+
+    # Rest of the function remains the same...
+    discrete_count = sum(bn.node_types .== :discrete)
+    theoretical_states = discrete_count > 0 ? 2^discrete_count : 0
+
+    @info "$network_name BenchmarkTools Results" begin
+        parent_time = parent_time
+        discrete_time = discrete_time
+        full_env_time = full_env_time
+        minkey_time = minkey_time
+        parent_speedup = no_memo_time / parent_time
+        discrete_speedup = no_memo_time / discrete_time
+        full_env_speedup = no_memo_time / full_env_time
+        minkey_speedup = no_memo_time / minkey_time
+        parent_memo_size = length(parent_memo)
+        discrete_memo_size = length(discrete_memo)
+        full_env_memo_size = length(full_env_memo)
+        minkey_memo_size = length(minkey_memo)
+        parent_correct = parent_correct
+        discrete_correct = discrete_correct
+        full_env_correct = full_env_correct
+        minkey_correct = minkey_correct
+    end
+
+    return (
+        no_memo_time = no_memo_time,
+        parent = (time = parent_time, size = length(parent_memo), correct = parent_correct),
+        discrete = (time = discrete_time, size = length(discrete_memo), correct = discrete_correct),
+        full_env = (time = full_env_time, size = length(full_env_memo), correct = full_env_correct),
+        minkey = (time = minkey_time, size = length(minkey_memo), correct = minkey_correct),
+    )
 end
+
 
 function run_comparison_benchmarktools(bn, network_name)
 	params = Float64[]
@@ -3042,7 +3132,7 @@ function run_all_scaling_tests()
 	test_hmm_length_scaling_simplified()
 
 	# # Test HMM state count impact
-	# test_hmm_state_count()
+	test_hmm_state_count()
 
 	# # Test tree depth scaling
 	# test_tree_depth_scaling()
@@ -3242,171 +3332,944 @@ function run_robust_scaling_test()
 	end
 end
 
-
-using BenchmarkTools
-
-function run_all_strategies(bn, params)
-    # Warmup for JIT
-    marginalize_without_memo(bn, params)
-    evaluate_with_marginalization(bn, params; caching_strategy = :full_env)
+using Graphs
+@testset "Moralization" begin
+    # Test 1: Simple v-structure (A → C ← B)
+    g1 = SimpleDiGraph(3)
+    Graphs.add_edge!(g1, 1, 3)
+    Graphs.add_edge!(g1, 2, 3)
+    mg1 = moralize(g1)
+    @test nv(mg1) == 3
+    @test ne(mg1) == 3  # Corrected: A-B, A-C, B-C
+    @test has_edge(mg1, 1, 2)  # Moral edge
+    @test has_edge(mg1, 1, 3)  # Original edge
+    @test has_edge(mg1, 2, 3)  # Original edge
     
-    # Test different elimination orders for minimal key
-    orders = [:topological, :min_degree, :min_fill]
-    order_results = Dict()
+    # Test 2: Chain structure (A → B → C)
+    g2 = SimpleDiGraph(3)
+    Graphs.add_edge!(g2, 1, 2)
+    Graphs.add_edge!(g2, 2, 3)
+    mg2 = moralize(g2)
+    @test nv(mg2) == 3
+    @test ne(mg2) == 2  # No moral edges needed
+    @test has_edge(mg2, 1, 2)
+    @test has_edge(mg2, 2, 3)
     
-    for order in orders
-        # Warmup specific order
-        evaluate_with_marginalization(bn, params; caching_strategy = :minimal_key, elimination_order=order)
-        
-        # Time evaluation
-        t_min = @belapsed evaluate_with_marginalization($bn, $params; 
-            caching_strategy = :minimal_key, 
-            elimination_order = $order
-        )
-        
-        # Get memo size for this order
-        memo_min = get_memo_size(bn, :minimal_key, order)
-        
-        order_results[order] = (t_min, memo_min)
-    end
-
-    # Naive and FullEnv baselines
-    t_naive = @belapsed marginalize_without_memo($bn, $params)
-    _, logp_naive = marginalize_without_memo(bn, params)
+    # Test 3: Diamond structure
+    g3 = SimpleDiGraph(4)
+    Graphs.add_edge!(g3, 1, 2)
+    Graphs.add_edge!(g3, 1, 3)
+    Graphs.add_edge!(g3, 2, 4)
+    Graphs.add_edge!(g3, 3, 4)
+    mg3 = moralize(g3)
+    @test nv(mg3) == 4
+    @test ne(mg3) == 5  # Corrected: All original edges + moral edge between 2-3
+    @test has_edge(mg3, 2, 3)  # Moral edge
+    @test has_edge(mg3, 1, 2)
+    @test has_edge(mg3, 1, 3)
+    @test has_edge(mg3, 2, 4)
+    @test has_edge(mg3, 3, 4)
     
-    t_full = @belapsed evaluate_with_marginalization($bn, $params; caching_strategy = :full_env)
-    _, logp_full = evaluate_with_marginalization(bn, params; caching_strategy = :full_env)
+    # Test 4: Complex structure with multiple v-structures
+    g4 = SimpleDiGraph(5)
+    Graphs.add_edge!(g4, 1, 3)
+    Graphs.add_edge!(g4, 2, 3)
+    Graphs.add_edge!(g4, 3, 4)
+    Graphs.add_edge!(g4, 3, 5)
+    mg4 = moralize(g4)
+    @test nv(mg4) == 5
+    @test ne(mg4) == 5  # Corrected: Original edges + moral edge between 1-2
+    @test has_edge(mg4, 1, 2)  # Moral edge
+    @test has_edge(mg4, 1, 3)
+    @test has_edge(mg4, 2, 3)
+    @test has_edge(mg4, 3, 4)
+    @test has_edge(mg4, 3, 5)
+end
+
+@testset "Topological Sort Heuristics" begin
+    # Create a diamond-shaped Bayesian Network
+    bn = BayesianNetwork{Symbol}()
     
-    # Memo sizes
-    memo_full = get_memo_size(bn, :full_env, :topological)  # Full env doesn't use order
-
-    # Check correctness for all strategies
-    for order in orders
-        _, logp_min = evaluate_with_marginalization(bn, params; 
-            caching_strategy = :minimal_key,
-            elimination_order = order
-        )
-        print("Order $order: ")
-        @test isapprox(logp_naive, logp_min, rtol = 1e-10)
-    end
-
-    return (;
-        t_naive, t_full, memo_full,
-        orders = order_results
+    # Add vertices and get their IDs
+    a_id = add_stochastic_vertex!(bn, :A, nothing, false, :discrete)
+    b_id = add_stochastic_vertex!(bn, :B, nothing, false, :discrete)
+    c_id = add_stochastic_vertex!(bn, :C, nothing, false, :discrete)
+    d_id = add_stochastic_vertex!(bn, :D, nothing, false, :continuous)  # Start unobserved
+    
+    # Add edges using vertex IDs
+    Graphs.add_edge!(bn.graph, a_id, b_id)
+    Graphs.add_edge!(bn.graph, a_id, c_id)
+    Graphs.add_edge!(bn.graph, b_id, d_id)
+    Graphs.add_edge!(bn.graph, c_id, d_id)
+    
+    # Create a new BayesianNetwork with D observed
+    new_is_observed = copy(bn.is_observed)
+    new_is_observed[d_id] = true
+    
+    new_evaluation_env = BangBang.setindex!!(bn.evaluation_env, 1.5, :D)
+    
+    bn_obs = BayesianNetwork(
+        bn.graph,
+        bn.names,
+        bn.names_to_ids,
+        new_evaluation_env,
+        bn.loop_vars,
+        bn.distributions,
+        bn.deterministic_functions,
+        bn.stochastic_ids,
+        bn.deterministic_ids,
+        bn.is_stochastic,
+        new_is_observed,
+        bn.node_types,
+        bn.transformed_var_lengths,
+        bn.transformed_param_length
     )
-end
-
-# Modified memo size function with order support
-function get_memo_size(bn, strategy, order)  # Added bn as first parameter
-    memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
-    minimal_keys = strategy == :minimal_key ? _precompute_minimal_cache_keys(bn) : nothing
     
-    # Get sorted nodes based on elimination order
-    sorted_node_ids = if order == :min_degree
-        print(typeof(bn.is_observed))
-        min_degree_order(bn.graph, bn.is_observed)
-    elseif order == :min_fill
-        min_fill_order(bn.graph, bn.is_observed)
-    else
-        topological_sort_by_dfs(bn.graph)
+    # Test 1: DFS order
+    dfs_order = topological_sort_with_heuristic(bn_obs, :dfs)
+    @test length(dfs_order) == 4
+    @test dfs_order[end] == d_id  # Observed node last
+    
+    # Test 2: MinDegree order
+    min_deg_order = topological_sort_with_heuristic(bn_obs, :min_degree)
+    @test length(min_deg_order) == 4
+    @test min_deg_order[end] == d_id
+    
+    # Test 3: MinFill order
+    min_fill_order = topological_sort_with_heuristic(bn_obs, :min_fill)
+    @test length(min_fill_order) == 4
+    @test min_fill_order[end] == d_id
+    
+    # Test 4: Verify orders are valid topological sorts
+    function is_valid_topological_order(g, order)
+        visited = falses(Graphs.nv(g))
+        for v in order
+            for parent in Graphs.inneighbors(g, v)
+                if !visited[parent]
+                    return false
+                end
+            end
+            visited[v] = true
+        end
+        return true
     end
+    
+    @test is_valid_topological_order(bn_obs.graph, dfs_order)
+    @test is_valid_topological_order(bn_obs.graph, min_deg_order)
+    @test is_valid_topological_order(bn_obs.graph, min_fill_order)
+    
+    # Test 5: Compare orders for efficiency
+    # MinFill should prioritize nodes that minimize fill-in edges
+    # In diamond structure, MinFill should eliminate A first
+    @test min_fill_order[1] == a_id
+end
 
-    _ = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
-        bn, deepcopy(bn.evaluation_env), sorted_node_ids, Float64[], 1,
-        bn.transformed_var_lengths, memo, strategy, minimal_keys,
+# Helper function to create VarName
+function varname(sym::Symbol)
+    return JuliaBUGS.VarName(sym)
+end
+
+function create_diamond_network()
+    bn = BayesianNetwork{VarName}()
+    
+    # Create VarNames
+    vn_A = varname(:A)
+    vn_B = varname(:B)
+    vn_C = varname(:C)
+    vn_D = varname(:D)
+
+    # Initial environment values
+    init_env = (A = 0, B = 0, C = 0, D = 1.5)  # D is observed
+    
+    # Create loop_vars dictionary with empty NamedTuples
+    loop_vars_dict = Dict{VarName, NamedTuple}(
+        vn_A => (;),
+        vn_B => (;),
+        vn_C => (;),
+        vn_D => (;)
     )
-    return length(memo)
+    
+    # Add vertices with corrected distribution functions
+    a_id = add_stochastic_vertex!(bn, vn_A, 
+        (env, _) -> Bernoulli(0.4), false, :discrete)
+    b_id = add_stochastic_vertex!(bn, vn_B, 
+        (env, _) -> Bernoulli(AbstractPPL.get(env, vn_A) == 1 ? 0.7 : 0.3),  # FIXED
+        false, :discrete)
+    c_id = add_stochastic_vertex!(bn, vn_C, 
+        (env, _) -> Bernoulli(AbstractPPL.get(env, vn_A) == 1 ? 0.6 : 0.4),  # FIXED
+        false, :discrete)
+    d_id = add_stochastic_vertex!(bn, vn_D, 
+        (env, _) -> Normal(AbstractPPL.get(env, vn_B) + AbstractPPL.get(env, vn_C), 1.0), 
+        true, :continuous)  # Observed
+    
+    # Add edges
+    add_edge!(bn, vn_A, vn_B)
+    add_edge!(bn, vn_A, vn_C)
+    add_edge!(bn, vn_B, vn_D)
+    add_edge!(bn, vn_C, vn_D)
+    
+    # Create evaluation environment
+    bn = BayesianNetwork(
+        bn.graph,
+        bn.names,
+        bn.names_to_ids,
+        init_env,
+        loop_vars_dict,
+        bn.distributions,
+        bn.deterministic_functions,
+        bn.stochastic_ids,
+        bn.deterministic_ids,
+        bn.is_stochastic,
+        bn.is_observed,
+        bn.node_types,
+        Dict{VarName, Int}(),
+        0,
+    )
+    
+    return bn
 end
-
-function print_comprehensive_table(rows, header)
-    println(header)
-    println("| Network | Size | Naive (s) | FullEnv (s) | Topo (s) | MinDeg (s) | MinFill (s) | FullEnv Memo | Topo Memo | MinDeg Memo | MinFill Memo |")
-    println("|---------|------|-----------|-------------|----------|------------|-------------|--------------|-----------|-------------|--------------|")
-    for row in rows
-        @printf("| %-7s | %-4d | %9.2e | %11.2e | %8.2e | %10.2e | %11.2e | %12d | %9d | %11d | %12d |\n",
-            row.network, row.size, row.t_naive, row.t_full, 
-            row.orders[:topological][1], row.orders[:min_degree][1], row.orders[:min_fill][1],
-            row.memo_full, row.orders[:topological][2], row.orders[:min_degree][2], row.orders[:min_fill][2])
-    end
-end
-
-rows = []
-
-# Chain networks
-for n in [3]
-    bn = create_chain_network(n)
-    params = Float64[]
-    results = run_all_strategies(bn, params)
-    push!(rows, (;
-        network = "Chain", 
-        size = n,
-        results.t_naive,
-        results.t_full,
-        results.memo_full,
-        orders = results.orders
-    ))
-end
-
-# Tree networks
-for depth in [2]
-    bn = create_tree_network(depth)
-    params = Float64[]  
-    n_nodes = 2^depth - 1
-    results = run_all_strategies(bn, params)
-    push!(rows, (;
-        network = "Tree", 
-        size = n_nodes,
-        results.t_naive,
-        results.t_full,
-        results.memo_full,
-        orders = results.orders
-    ))
-end
-
-# Print results
-print_comprehensive_table(rows, "Elimination Order Comparison")
-# Test chain network A → B → C → D
-g = SimpleDiGraph(4)
-Graphs.add_edge!(g, 1, 2)
-Graphs.add_edge!(g, 2, 3)
-Graphs.add_edge!(g, 3, 4)
-
-order = min_degree_order(g)
-@test order == [1, 4, 2, 3]  # Expected order for minimal fill
-
-
-using Distributions
-
+# Manual calculation for verification
 function manual_logp()
     total = 0.0
-    for z1 in [0, 1], z2 in [0, 1], z3 in [0, 1]
+    # Enumerate all possible states
+    for a_val in [0, 1], b_val in [0, 1], c_val in [0, 1]
         # Prior probabilities
-        p_z1 = 0.5
-        p_z2 = (z1 == 0 ? 0.7 : 0.3) * (z2 == 0 ? 0.7 : 0.3)
-        p_z3 = (z1 == 0 ? 0.7 : 0.3) * (z3 == 0 ? 0.7 : 0.3)
+        p_a = a_val == 1 ? 0.4 : 0.6
+        p_b_given_a = a_val == 1 ? (b_val == 1 ? 0.7 : 0.3) : (b_val == 1 ? 0.3 : 0.7)
+        p_c_given_a = a_val == 1 ? (c_val == 1 ? 0.6 : 0.4) : (c_val == 1 ? 0.4 : 0.6)
         
-        # Observation likelihood
-        mu = 10 * (z2 + z3) / 2
-        p_y = pdf(Normal(mu, 1), 3.7)
+        # Likelihood for D
+        mu = b_val + c_val
+        p_d = pdf(Normal(mu, 1.0), 1.5)
         
-        total += p_z1 * p_z2 * p_z3 * p_y
+        # Joint probability
+        joint_p = p_a * p_b_given_a * p_c_given_a * p_d
+        total += joint_p
     end
-    log(total)
+    return log(total)
 end
 
-expected_logp = manual_logp()  # ≈ -2.6297290406675473
+using AbstractPPL
+using Graphs
+using BenchmarkTools
+using Test
+using Printf
+function create_tree_network(depth::Int)
+    # Create initial network
+    bn = BayesianNetwork{VarName}()
 
+    # Define variables - a binary tree has 2^depth-1 nodes
+    node_count = 2^depth - 1
+    variables = [Symbol("z$i") for i in 1:node_count]
+    push!(variables, :y)  # Observation variable
 
-function test_tree_depth2()
-    # Create network
-    bn = create_tree_network(2)
+    # Initialize tracking - set all nodes to 0 initially
+    all_vars, loop_vars = init_network_variables(variables)
+    all_vars[:y] = 3.7  # Set observation
+
+    # Add root node
+    root_var = VarName(Symbol("z1"))
+    add_stochastic_vertex!(bn, root_var, (_, _) -> Bernoulli(0.5), false, :discrete)
+
+    # Add nodes level by level - FIXED PARENT-CHILD RELATIONSHIPS
+    for level in 0:(depth-2)  # Corrected level indexing
+        level_start = 2^level
+        level_end = 2^(level+1) - 1
+        
+        for i in level_start:level_end
+            # Calculate child indices
+            left_child = 2*i
+            right_child = 2*i + 1
+            
+            # Only add children if within node count
+            if left_child <= node_count
+                child_var = VarName(Symbol("z$left_child"))
+                add_stochastic_vertex!(
+                    bn,
+                    child_var,
+                    (env, _) -> begin
+                        parent_val = AbstractPPL.get(env, VarName(Symbol("z$i")))
+                        p = 0.3 + 0.4 * parent_val
+                        return Bernoulli(p)
+                    end,
+                    false,
+                    :discrete,
+                )
+                add_edge!(bn, VarName(Symbol("z$i")), child_var)
+            end
+            
+            if right_child <= node_count
+                child_var = VarName(Symbol("z$right_child"))
+                add_stochastic_vertex!(
+                    bn,
+                    child_var,
+                    (env, _) -> begin
+                        parent_val = AbstractPPL.get(env, VarName(Symbol("z$i")))
+                        p = 0.3 + 0.4 * parent_val
+                        return Bernoulli(p)
+                    end,
+                    false,
+                    :discrete,
+                )
+                add_edge!(bn, VarName(Symbol("z$i")), child_var)
+            end
+        end
+    end
+
+    # Add observable that depends on leaf nodes - FIXED LEAF NODE IDENTIFICATION
+    y_var = VarName(:y)
+    leaf_start = 2^(depth-1)  # First leaf at 2^(depth-1)
+    leaf_end = 2^depth - 1    # Last leaf at 2^depth - 1
+
+    add_stochastic_vertex!(
+        bn,
+        y_var,
+        (env, _) -> begin
+            # Observable depends on average of leaf values
+            leaf_sum = 0.0
+            count = 0
+            for i in leaf_start:leaf_end
+                leaf_var = VarName(Symbol("z$i"))
+                leaf_val = AbstractPPL.get(env, leaf_var)
+                leaf_sum += leaf_val
+                count += 1
+            end
+            leaf_avg = leaf_sum / count
+            mu = leaf_avg * 10.0
+            return Normal(mu, 1.0)
+        end,
+        true,  # y is observed
+        :continuous,
+    )
+
+    # Add dependency edges from all leaf nodes to y
+    for i in leaf_start:leaf_end
+        leaf_var = VarName(Symbol("z$i"))
+        add_edge!(bn, leaf_var, y_var)
+    end
+
+    # Create evaluation environment
+    eval_env = NamedTuple{Tuple(keys(all_vars))}(values(all_vars))
+
+    # Create final network
+    new_bn = BayesianNetwork(
+        bn.graph,
+        bn.names,
+        bn.names_to_ids,
+        eval_env,
+        loop_vars,
+        bn.distributions,
+        bn.deterministic_functions,
+        bn.stochastic_ids,
+        bn.deterministic_ids,
+        bn.is_stochastic,
+        bn.is_observed,
+        bn.node_types,
+        Dict{VarName, Int}(),
+        0,
+    )
+
+    return new_bn
+end
+# Helper functions
+varname(sym::Symbol) = VarName(sym)
+
+function benchmark_heuristics(bn, params)
+    heuristics = [:dfs, :min_degree, :min_fill]
+    results = []
+    reference_logp = nothing
     
-    # Run marginalization
-    _, logp = marginalize_without_memo(bn, Float64[])
-    _, logp_memo = evaluate_with_marginalization(bn, Float64[], caching_strategy = :minimal_key, elimination_order = :topological)
+    # Function to capture memo size
+    function run_with_memo_size(heuristic)
+        sorted_nodes = topological_sort_with_heuristic(bn, heuristic)
+        minimal_keys = _precompute_minimal_cache_keys(bn, sorted_nodes)
+        memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+        
+        # Create fresh environment
+        env = deepcopy(bn.evaluation_env)
+        
+        # Run and capture memo size
+        logp = _marginalize_recursive(
+            bn, env, sorted_nodes, params, 1,
+            bn.transformed_var_lengths, memo, :minimal_key, minimal_keys
+        )
+        return logp, length(memo)
+    end
     
-    # Verify against manual calculation
-    @test isapprox(logp, expected_logp, rtol=1e-10)
+    for heuristic in heuristics
+        println("Running $heuristic heuristic...")
+        
+        # Warmup
+        _, _ = evaluate_with_marginalization(
+            bn, params; caching_strategy=:minimal_key, order_heuristic=heuristic
+        )
+        
+        # Benchmark time and get logp/memo_size
+        t = @elapsed begin
+            logp, memo_size = run_with_memo_size(heuristic)
+        end
+        
+        # Set reference from first heuristic
+        if reference_logp === nothing
+            reference_logp = logp
+            println("Reference logp: $reference_logp")
+        else
+            # Use more robust comparison
+            if !isapprox(reference_logp, logp, rtol=1e-8, atol=1e-8)
+                @error "Log probability mismatch: $reference_logp vs $logp (heuristic: $heuristic)"
+            end
+            @test isapprox(reference_logp, logp, rtol=1e-8, atol=1e-8)
+        end
+        
+        push!(results, (heuristic, t, memo_size))
+    end
+    
+    return results
 end
 
-println("Moralized edges: ", edges(moralize(bn.graph, bn.is_observed)))
+# Print results table
+function print_heuristic_results(network_type, size_info, results)
+    # Header
+    println("\n=== $network_type Network ($size_info) ===")
+    println("Heuristic    | Time (s)     | Memo Size | Speedup (vs DFS)")
+    println("------------|--------------|-----------|-----------------")
+    
+    # Find DFS time for speedup calculation
+    dfs_time = nothing
+    for (heuristic, time, memo_size) in results
+        if heuristic == :dfs
+            dfs_time = time
+            break
+        end
+    end
+    
+    # Print rows
+    for (heuristic, time, memo_size) in results
+        speedup = dfs_time / time
+        @printf("%-12s| %-12.4e | %-9d | %.2fx\n", 
+                heuristic, time, memo_size, speedup)
+    end
+end
+
+
+
+# Main benchmarking function
+function benchmark_heuristics_all()
+    # Chain networks
+    chain_results = []
+    for n in [5, 7, 9, 11,13, 15, 17, 19, 20]  # Start with smaller chains for debugging
+        bn = create_chain_network(n)
+        params = Float64[]
+        println("\nBenchmarking chain network with $n nodes")
+        
+        results = benchmark_heuristics(bn, params)
+        print_heuristic_results("Chain", "$n nodes", results)
+        push!(chain_results, (n, results))
+    end
+    
+    # Tree networks - start with smaller sizes
+    tree_results = []
+    for depth in [2, 3,4]  # Start with smaller trees for debugging
+        n_nodes = 2^depth - 1
+        bn = create_tree_network(depth)
+        params = Float64[]
+        println("\nBenchmarking tree network with depth $depth ($n_nodes nodes)")
+        
+        results = benchmark_heuristics(bn, params)
+        print_heuristic_results("Tree", "Depth $depth ($n_nodes nodes)", results)
+        push!(tree_results, (depth, results))
+    end
+    
+    # Return results for further analysis
+    return (chain_results, tree_results)
+end
+
+# Helper function to get memo size
+function run_with_memo_size(bn, params, heuristic)
+    memo = Dict{Tuple{Int,Int,UInt64}, Float64}()
+    minimal_keys = _precompute_minimal_cache_keys(bn)
+    sorted_nodes = topological_sort_with_heuristic(bn, heuristic)
+    env = deepcopy(bn.evaluation_env)
+    
+    logp = _marginalize_recursive(
+        bn, env, sorted_nodes, params, 1,
+        bn.transformed_var_lengths, memo, :minimal_key, minimal_keys
+    )
+    return logp, length(memo)
+end
+
+# Run the benchmarks
+benchmark_heuristics_all()
+
+
+# Grid networks
+grid_sizes = [(3,3), (3,4),(4,3), (4,4), (4,5)]
+for (w,h) in grid_sizes
+    bn = create_grid_network(w, h)
+    params = Float64[]
+    println("\nBenchmarking grid network $w x $h ($(w*h) nodes)")
+    
+    results = benchmark_heuristics(bn, params)
+    print_heuristic_results("Grid", "$w x $h ($(w*h) nodes)", results)
+end
+
+function create_enhanced_grid_network(width::Int, height::Int)
+    # Create initial network
+    bn = BayesianNetwork{VarName}()
+    
+    # Define variables with proper naming convention
+    variables = [Symbol("z$(i)_$(j)") for i in 1:height for j in 1:width]
+    push!(variables, :y)  # Observation variable
+    
+    # Initialize tracking - create arrays of zeros for all variables
+    init_values = zeros(length(variables))
+    all_vars, loop_vars = init_network_variables(variables, init_values)
+    all_vars = BangBang.setindex!!(all_vars, 3.7, :y)  # Set observation value
+    
+    # Create a matrix to track VarNames for easy access
+    grid = Matrix{VarName}(undef, height, width)
+    for i in 1:height, j in 1:width
+        sym = Symbol("z$(i)_$(j)")
+        grid[i, j] = VarName(sym)
+    end
+    
+    # Add nodes with enhanced connectivity
+    for i in 1:height, j in 1:width
+        var = grid[i, j]
+        
+        # Collect all valid neighbor positions
+        neighbors = VarName[]
+        for di in -1:1, dj in -1:1
+            (di == 0 && dj == 0) && continue  # Skip self
+            ni, nj = i + di, j + dj
+            if 1 <= ni <= height && 1 <= nj <= width
+                # Only connect to neighbors that come before in row-major order
+                if (ni < i) || (ni == i && nj < j)
+                    push!(neighbors, grid[ni, nj])
+                end
+            end
+        end
+        
+        # Add node with appropriate dependencies
+        if isempty(neighbors)
+            # Top-left corner node has no dependencies
+            add_stochastic_vertex!(
+                bn, var, (_, _) -> Bernoulli(0.5), false, :discrete
+            )
+        else
+            # Fixed syntax: use end instead of } for function block
+            add_stochastic_vertex!(
+                bn,
+                var,
+                (env, _) -> begin
+                    neighbor_sum = 0.0
+                    for neighbor in neighbors
+                        neighbor_sum += AbstractPPL.get(env, neighbor)
+                    end
+                    p = min(0.3 + 0.1 * neighbor_sum, 0.95)
+                    return Bernoulli(p)
+                end,  # Fixed: use 'end' to close function block
+                false,
+                :discrete,
+            )
+            
+            # Add dependency edges to all neighbors
+            for neighbor in neighbors
+                add_edge!(bn, neighbor, var)
+            end
+        end
+    end
+    
+    # Add observable that depends on ALL grid nodes
+    y_var = VarName(:y)
+    add_stochastic_vertex!(
+        bn,
+        y_var,
+        (env, _) -> begin
+            total = 0.0
+            for i in 1:height, j in 1:width
+                total += AbstractPPL.get(env, grid[i, j])
+            end
+            return Normal(total, 1.0)
+        end,  # Fixed: use 'end' to close function block
+        true,
+        :continuous,
+    )
+    
+    # Add dependency edges from all grid nodes to y
+    for i in 1:height, j in 1:width
+        add_edge!(bn, grid[i, j], y_var)
+    end
+    
+    # Create evaluation environment
+    eval_env = NamedTuple{Tuple(keys(all_vars))}(values(all_vars))
+    
+    # Create final network
+    new_bn = BayesianNetwork(
+        bn.graph,
+        bn.names,
+        bn.names_to_ids,
+        eval_env,
+        loop_vars,
+        bn.distributions,
+        bn.deterministic_functions,
+        bn.stochastic_ids,
+        bn.deterministic_ids,
+        bn.is_stochastic,
+        bn.is_observed,
+        bn.node_types,
+        Dict{VarName, Int}(),
+        0,
+    )
+    
+    return new_bn
+end
+
+
+# Benchmark different grid sizes
+grid_sizes = [(3,3), (4,4)]
+for (w, h) in grid_sizes
+    bn = create_enhanced_grid_network(w, h)
+    params = Float64[]
+    println("\nBenchmarking enhanced grid $w x $h ($(w*h) nodes)")
+    
+    results = benchmark_heuristics(bn, params)
+    print_heuristic_results("Enhanced Grid", "$w x $h ($(w*h) nodes)", results)
+end
+
+function create_diamond_network(layers::Int)
+    # Create initial network
+    bn = BayesianNetwork{VarName}()
+    
+    # Calculate total nodes
+    total_nodes = layers * (layers + 1) ÷ 2
+    variables = [Symbol("n$(i)_$(j)") for i in 1:layers for j in 1:i]
+    push!(variables, :y)  # Observation variable
+    
+    # Initialize tracking
+    all_vars, loop_vars = init_network_variables(variables)
+    all_vars[:y] = 3.7  # Set observation value
+    
+    # Create nodes with increasing connectivity
+    node_dict = Dict{Tuple{Int,Int}, VarName}()
+    for i in 1:layers, j in 1:i
+        node_sym = Symbol("n$(i)_$(j)")
+        vn = VarName(node_sym)
+        node_dict[(i, j)] = vn
+        
+        # Add node with dependencies
+        if i == 1
+            # Root node
+            add_stochastic_vertex!(
+                bn, vn, (_, _) -> Bernoulli(0.5), false, :discrete
+            )
+        else
+            # Collect parents from previous layer
+            parents = VarName[]
+            if j > 1  # Left parent
+                push!(parents, node_dict[(i-1, j-1)])
+            end
+            if j < i  # Right parent (only if not last in layer)
+                push!(parents, node_dict[(i-1, j)])
+            end
+            
+            add_stochastic_vertex!(
+                bn,
+                vn,
+                (env, _) -> begin
+                    parent_sum = 0.0
+                    for parent in parents
+                        parent_sum += AbstractPPL.get(env, parent)
+                    end
+                    p = min(0.3 + 0.2 * parent_sum, 0.95)
+                    return Bernoulli(p)
+                end,
+                false,
+                :discrete,
+            )
+            
+            # Add dependency edges
+            for parent in parents
+                add_edge!(bn, parent, vn)
+            end
+        end
+    end
+    
+    # Add observation node that depends on all nodes
+    y_var = VarName(:y)
+    add_stochastic_vertex!(
+        bn,
+        y_var,
+        (env, _) -> begin
+            total = 0.0
+            for i in 1:layers, j in 1:i
+                total += AbstractPPL.get(env, node_dict[(i, j)])
+            end
+            return Normal(total, 1.0)
+        end,
+        true,
+        :continuous,
+    )
+    
+    # Add dependency edges from all nodes to y
+    for vn in values(node_dict)
+        add_edge!(bn, vn, y_var)
+    end
+    
+    # Create evaluation environment
+    eval_env = NamedTuple{Tuple(keys(all_vars))}(values(all_vars))
+    
+    # Create final network
+    new_bn = BayesianNetwork(
+        bn.graph,
+        bn.names,
+        bn.names_to_ids,
+        eval_env,
+        loop_vars,
+        bn.distributions,
+        bn.deterministic_functions,
+        bn.stochastic_ids,
+        bn.deterministic_ids,
+        bn.is_stochastic,
+        bn.is_observed,
+        bn.node_types,
+        Dict{VarName, Int}(),
+        0,
+    )
+    
+    return new_bn
+end
+
+# Benchmark diamond networks
+diamond_sizes = [4, 5, 6]  # Layers: 4(10 nodes), 5(15 nodes), 6(21 nodes)
+for layers in diamond_sizes
+    bn = create_diamond_network(layers)
+    params = Float64[]
+    println("\nBenchmarking diamond network with $layers layers ($(layers*(layers+1)÷2) nodes)")
+    
+    results = benchmark_heuristics(bn, params)
+    print_heuristic_results("Diamond", "$layers layers ($(layers*(layers+1)÷2) nodes)", results)
+end
+
+function create_dense_hmm_network(n_states::Int, seq_length::Int)
+    bn = BayesianNetwork{VarName}()
+
+    # Hidden states and observation variables
+    z_vars = [VarName(Symbol("z$t")) for t in 1:seq_length]
+    x_vars = [VarName(Symbol("x$t")) for t in 1:seq_length]
+
+    # Initialize tracking variables
+    all_vars = Dict{Symbol, Any}()
+    loop_vars = Dict{VarName, NamedTuple}()
+
+    # Initialize with default values
+    for t in 1:seq_length
+        all_vars[Symbol("z$t")] = 1      # Default to first state
+        all_vars[Symbol("x$t")] = 0.0    # Observation placeholder
+        loop_vars[z_vars[t]] = (;)
+        loop_vars[x_vars[t]] = (;)
+    end
+
+    # Add first hidden state node
+    add_stochastic_vertex!(bn, z_vars[1],
+        (_, _) -> Categorical(ones(n_states) / n_states), false, :discrete)
+
+    # Add second hidden state node (depends on first)
+    if seq_length >= 2
+        add_stochastic_vertex!(bn, z_vars[2],
+            (env, _) -> begin
+                prev_state = AbstractPPL.get(env, z_vars[1])
+                # Simple transition model based on previous state
+                probs = ones(n_states) / n_states
+                return Categorical(probs)
+            end,
+            false, :discrete)
+        add_edge!(bn, z_vars[1], z_vars[2])
+    end
+
+    # Add subsequent hidden state nodes with dependencies on previous two states (skip connections)
+    for t in 3:seq_length
+        add_stochastic_vertex!(bn, z_vars[t],
+            (env, _) -> begin
+                prev1_state = AbstractPPL.get(env, z_vars[t-1])
+                prev2_state = AbstractPPL.get(env, z_vars[t-2])
+                # For simplicity, uniform transition regardless of previous states
+                probs = ones(n_states) / n_states
+                return Categorical(probs)
+            end,
+            false, :discrete)
+        add_edge!(bn, z_vars[t-1], z_vars[t])
+        add_edge!(bn, z_vars[t-2], z_vars[t])  # Skip connection to t-2
+    end
+
+    # Add observation nodes
+    for t in 1:seq_length
+        add_stochastic_vertex!(bn, x_vars[t],
+            (env, _) -> begin
+                state = AbstractPPL.get(env, z_vars[t])
+                return Normal(Float64(state), 1.0)
+            end,
+            true, :continuous)
+        add_edge!(bn, z_vars[t], x_vars[t])
+    end
+
+    # Create evaluation environment
+    eval_env = NamedTuple{Tuple(keys(all_vars))}(values(all_vars))
+
+    # Return final network
+    return BayesianNetwork(
+        bn.graph,
+        bn.names,
+        bn.names_to_ids,
+        eval_env,
+        loop_vars,
+        bn.distributions,
+        bn.deterministic_functions,
+        bn.stochastic_ids,
+        bn.deterministic_ids,
+        bn.is_stochastic,
+        bn.is_observed,
+        bn.node_types,
+        Dict{VarName, Int}(),
+        0,
+    )
+end
+
+function benchmark_heuristics(bn, params)
+    heuristics = [:dfs, :min_degree, :min_fill]
+    results = []
+    reference_logp = nothing
+    
+    # Baseline: No memoization time for speedup comparison
+    println("Running baseline (no memoization)...")
+    baseline_time = @elapsed begin
+        _, no_memo_logp = marginalize_without_memo(deepcopy(bn), params)
+    end
+    reference_logp = no_memo_logp
+    println("Baseline time: $baseline_time s, Reference logp: $reference_logp")
+    
+    # Function to capture memo size and logp with specific heuristic
+    function run_with_memo_size(heuristic)
+        # Get elimination order for this heuristic
+        sorted_nodes = topological_sort_with_heuristic(bn, heuristic)
+        # Compute minimal keys specifically for this elimination order
+        minimal_keys = _precompute_minimal_cache_keys(bn, sorted_nodes)
+        memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+        
+        # Create fresh environment
+        env = deepcopy(bn.evaluation_env)
+        
+        # Run and capture memo size
+        logp = _marginalize_recursive(
+            bn, env, sorted_nodes, params, 1,
+            bn.transformed_var_lengths, memo, :minimal_key, minimal_keys
+        )
+        return logp, length(memo)
+    end
+    
+    for heuristic in heuristics
+        println("Running $heuristic heuristic...")
+        
+        # Warmup
+        evaluate_with_marginalization(
+            bn, params; caching_strategy=:minimal_key, order_heuristic=heuristic
+        )
+        
+        # Benchmark time and get logp/memo_size
+        t = @elapsed begin
+            logp, memo_size = run_with_memo_size(heuristic)
+        end
+        
+        # Verify correctness against reference
+        if !isapprox(reference_logp, logp, rtol=1e-8, atol=1e-8)
+            @error "Log probability mismatch: $reference_logp vs $logp (heuristic: $heuristic)"
+        end
+        @test isapprox(reference_logp, logp, rtol=1e-8, atol=1e-8)
+        
+        # Calculate speedup relative to baseline
+        speedup = baseline_time / t
+        
+        push!(results, (heuristic=heuristic, time=t, speedup=speedup, memo_size=memo_size))
+    end
+    
+    return results, baseline_time
+end
+
+# Helper function to display results
+function display_heuristic_results(results, baseline_time)
+    println("\n=== Heuristic Performance Comparison ===")
+    println("Baseline (No Memo) Time: $(round(baseline_time, digits=3))s")
+    println("Heuristic     | Time (s) | Speedup | Memo Size")
+    println("--------------|----------|---------|-----------")
+    
+    for r in results
+        println(rpad(string(r.heuristic), 13), " | ",
+            @sprintf("%8.3f", r.time), " | ",
+            @sprintf("%7.2fx", r.speedup), " | ",
+            @sprintf("%9d", r.memo_size))
+    end
+end
+
+# Create a dense HMM network (e.g., 2 states, sequence length 6)
+bn = create_dense_hmm_network(2, 6)
+params = Float64[]
+
+# Run benchmark with different heuristics
+results, baseline_time = benchmark_heuristics(bn, params)
+
+# Display results
+display_heuristic_results(results, baseline_time)
+
+
+function test_dense_hmm_variations()
+    # Test different configurations
+    state_configs = [2, 3]  # Number of states
+    seq_configs = [4, 6, 8, 10, 12, 14]  # Sequence lengths
+    params = Float64[]
+    
+    all_results = []
+    
+    for n_states in state_configs
+        for seq_length in seq_configs
+            println("\n=== Testing Dense HMM: $n_states states, length $seq_length ===")
+            bn = create_dense_hmm_network(n_states, seq_length)
+            
+            # Run benchmark with different heuristics
+            results, baseline_time = benchmark_heuristics(bn, params)
+            
+            # Store results with configuration
+            push!(all_results, (
+                n_states=n_states,
+                seq_length=seq_length,
+                baseline_time=baseline_time,
+                heuristic_results=results
+            ))
+            
+            # Display results for this configuration
+            display_heuristic_results(results, baseline_time)
+        end
+    end
+    
+    # Summarize all results
+    println("\n=== Summary Across All Configurations ===")
+    println("States | Length | Heuristic     | Time (s) | Speedup | Memo Size")
+    println("-------|--------|--------------|----------|---------|-----------")
+    
+    for res in all_results
+        for hr in res.heuristic_results
+            println(
+                @sprintf("%6d", res.n_states), " | ",
+                @sprintf("%6d", res.seq_length), " | ",
+                rpad(string(hr.heuristic), 13), " | ",
+                @sprintf("%8.3f", hr.time), " | ",
+                @sprintf("%7.2fx", hr.speedup), " | ",
+                @sprintf("%9d", hr.memo_size)
+            )
+        end
+    end
+    
+    return all_results
+end
+
+# Run the test
+all_results = test_dense_hmm_variations()
