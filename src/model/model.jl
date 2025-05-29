@@ -296,7 +296,9 @@ const AllowedValue = Union{Int,Float64,Missing,AllowedArray}
 
 Initialize the model with a NamedTuple of initial values, the values are expected to be in the original space.
 """
-function initialize!(model::BUGSModel, initial_params::NamedTuple{<:Any, <:Tuple{Vararg{AllowedValue}}})
+function initialize!(
+    model::BUGSModel, initial_params::NamedTuple{<:Any,<:Tuple{Vararg{AllowedValue}}}
+)
     for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
         is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
         is_observed = model.flattened_graph_node_data.is_observed_vals[i]
