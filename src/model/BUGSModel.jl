@@ -6,11 +6,9 @@ using BangBang
 using Bijectors
 using Graphs
 using LinearAlgebra
-using JuliaBUGS: BUGSGraph, markov_blanket, check_input
+using JuliaBUGS: BUGSGraph, markov_blanket
 using MetaGraphsNext
 using Random
-
-import JuliaBUGS: compile
 
 include("utils.jl")
 include("model.jl")

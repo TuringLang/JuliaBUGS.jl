@@ -288,13 +288,15 @@ function BUGSModel(
     )
 end
 
+const AllowedArray{T} = AbstractArray{T} where {T<:Union{Int,Float64,Missing}}
+const AllowedValue = Union{Int, Float64, Missing, AllowedArray}
+
 """
-    initialize!(model::BUGSModel, initial_params::NamedTuple)
+    initialize!(model::BUGSModel, initial_params::NamedTuple{<:Any, <:Tuple{Vararg{AllowedValue}}})
 
 Initialize the model with a NamedTuple of initial values, the values are expected to be in the original space.
 """
-function initialize!(model::BUGSModel, initial_params::NamedTuple)
-    check_input(initial_params)
+function initialize!(model::BUGSModel, initial_params::NamedTuple{<:Any, <:Tuple{Vararg{AllowedValue}}})
     for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
         is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
         is_observed = model.flattened_graph_node_data.is_observed_vals[i]

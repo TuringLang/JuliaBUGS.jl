@@ -28,9 +28,7 @@ using .BUGSPrimitives
 
 include("parser/Parser.jl")
 using .Parser
-
-include("utils.jl")
-using .CompilerUtils
+using .Parser.CompilerUtils
 
 include("graphs.jl")
 include("compiler_pass.jl")
@@ -41,6 +39,7 @@ using .Model:
     initialize!,
     settrans,
     getparams,
+    parameters,
     _tempered_evaluate!!,
     set_evaluation_mode,
     UseGraph,
