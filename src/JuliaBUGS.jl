@@ -39,7 +39,6 @@ using .Model:
     initialize!,
     settrans,
     getparams,
-    parameters,
     _tempered_evaluate!!,
     set_evaluation_mode,
     UseGraph,
