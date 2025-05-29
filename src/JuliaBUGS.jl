@@ -281,6 +281,8 @@ function gen_chains end
 
 include("model_macro.jl")
 
+include("serialization.jl")
+
 include("experimental/ProbabilisticGraphicalModels/ProbabilisticGraphicalModels.jl")
 
 end
