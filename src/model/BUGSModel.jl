@@ -12,6 +12,7 @@ using Random
 
 include("utils.jl")
 include("model.jl")
+include("interface.jl")
 include("evaluation.jl")
 include("model_operations.jl")
 include("serialization.jl")
