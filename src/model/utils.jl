@@ -74,3 +74,45 @@ reconstruct(d::Distribution, val::AbstractVector) = reconstruct(size(d), val)
 reconstruct(::Tuple{}, val::AbstractVector) = val[1]
 reconstruct(s::NTuple{1}, val::AbstractVector) = copy(val)
 reconstruct(s::NTuple{2}, val::AbstractVector) = reshape(copy(val), s)
+
+"""
+    _copy_evaluation_env(model::BUGSModel) -> NamedTuple
+
+Only copy the fields that will be mutated.
+
+Two kinds of variable will be mutated: deterministic ones and model parameters
+
+If an array without missing is provided in data, then it's guaranteed not be written.
+
+If a data array contains missing, it doesn't necessarily mean that it will be written,
+because the entry can simple be unused. But it's a good enough approach.
+
+Alternatively, we can figure out what to copy as part of the model creation process, determining
+what fields are written into and store this as a field.
+"""
+function _copy_evaluation_env(model::BUGSModel)
+    env = model.evaluation_env
+
+    # Convert list of parameter VarNames into a set of Symbols for cheap lookup.
+    param_syms = Set(AbstractPPL.getsym(p) for p in model.parameters)
+
+    names = propertynames(env)  # -> tuple of Symbols
+
+    new_values = map(names) do sym
+        val = env[sym]
+
+        if val isa AbstractArray
+            # Copy if the array corresponds to a *parameter* **or** can contain
+            # missing values.  Otherwise share the data buffer to save memory.
+            if (sym in param_syms) || (Missing <: eltype(val))
+                copy(val)
+            else
+                val
+            end
+        else
+            val  # scalars are immutable – sharing is safe
+        end
+    end
+
+    return NamedTuple{names}(new_values)
+end

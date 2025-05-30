@@ -20,6 +20,27 @@ program together with the machinery required to
 All higher‑level algorithms—HMC, SMC, Gibbs—build on top of these services.
 
 ---
+## 0. What’s in this folder?
+
+Below is a quick, file-by-file index you can keep open while browsing the
+source.  The ordering matches the typical inclusion chain in
+`BUGSModel.jl`.
+
+| File | Responsibility |
+|------|----------------|
+| `BUGSModel.jl` | *Module wrapper* that `include`s the other files and re-exports the public API (`parameters`, `initialize!`, …). |
+| `utils.jl` | Low-level helpers that do **not** touch global model state. Notably `reconstruct` (rebuild a value to match a distribution) and an overload of `BangBang._setindex` that avoids `Matrix{Any}` pitfalls. |
+| `model.jl` | Definition and constructor of the central immutable type `BUGSModel` plus `FlattenedGraphNodeData` and pretty printing. Also houses the code that tries to generate a specialised log-density function at compile time. |
+| `interface.jl` | “User-facing” helpers: `parameters`, `variables`, `initialize!`, `getparams`, `settrans`, `set_evaluation_mode` and type predicates.  Contains no graph-walking logic. |
+| `evaluation.jl` | All *graph-traversal* log-density / sampling routines.  `evaluate!!` has three dispatches (RNG, env-only, vector) that share the private worker `_tempered_evaluate!!`. |
+| `model_operations.jl` | Graph-consistent transformations of a model instance: `condition`, `decondition`, Markov-blanket trimming, as well as sanity checks for the requested variable sets. |
+
+Having these responsibilities cleanly separated allows you to reason about
+changes in isolation: e.g. modifying graph traversal only touches
+`evaluation.jl`, whereas adding a new public accessor belongs in
+`interface.jl`.
+
+---
 ## 2. Core Types
 
 | Type | Role | Key Fields |
@@ -38,6 +59,50 @@ Each `BUGSModel` therefore stores *two* sets of lengths:
 * `transformed_param_length`   and `transformed_var_lengths`
 
 The boolean flag `transformed` selects which set is currently active.
+
+### 2.2  `evaluation_env` – the single source of truth for runtime values
+
+`evaluation_env` is a `NamedTuple` that contains **every variable in the
+program graph—deterministic, stochastic, observed, unobserved**.  Its key
+properties are:
+
+* **Always original space.**  Every value stored here lives in the *constrained*
+  (a.k.a. *untransformed*) space that the model was written in.  When a sampler
+  works in unconstrained coordinates, those numbers are converted at the very
+  edge (see `getparams`, `initialize!(model, vector)`, and the unpacking logic
+  in `_tempered_evaluate!!`).  Inside the graph-walking loop we never have to
+  worry about transformations—`logpdf` calls see the distributions they were
+  defined for.
+
+* **Mutated in place during evaluation.**  Each call to `evaluate!!` starts
+  with a (deep or smart) copy of this tuple and then updates it while
+  traversing `sorted_nodes`.
+
+* **Publicly readable, but write through helpers.**  Users may inspect values
+  via `AbstractPPL.get(model.evaluation_env, vn)`; they should only mutate
+  through `initialize!` or dedicated setters to keep derived caches in sync.
+
+Future work will introduce an `EvaluationEnvironment` wrapper that supports
+*copy-on-write* semantics to avoid copying large immutable data blocks.
+
+---
+
+fields of `BUGSModel`: 
+results of compilation:
+* `g`
+
+fields for introspection and information:
+* `parameters`
+* (un)transformed_param_length
+* (un)transformed_var_lengths (this is used to implicitly make sure that the dimension of variable doesn't change, which limit the user defined distribution)
+
+* base_model: to do decondition
+
+fields for evaluation
+evaluation_env
+graph based
+* if transformed
+* flattened_graph_node_data: use vectors to accelerate access
 
 ---
 ## 3. Evaluation Pipeline
