@@ -11,9 +11,10 @@ using MetaGraphsNext
 using Random
 
 include("utils.jl")
-include("model.jl")
+include("bugsmodel.jl")
+include("interface.jl")
 include("evaluation.jl")
-include("condition.jl")
+include("abstractppl.jl")
 
 export parameters, variables, initialize!, getparams, settrans, set_evaluation_mode
 
