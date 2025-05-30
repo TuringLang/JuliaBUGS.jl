@@ -41,6 +41,8 @@ const TEST_GROUPS = Dict{String,Function}(
         include("model_macro.jl")
     end,
     "graphs" => () -> include("graphs.jl"),
+    "condition" => () -> include("model/abstractppl.jl"),
+    
     "compilation" => () -> begin
         @testset "BUGS examples volume 1" begin
             @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
