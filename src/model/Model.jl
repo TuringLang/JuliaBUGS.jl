@@ -12,7 +12,6 @@ using Random
 
 include("utils.jl")
 include("bugsmodel.jl")
-include("interface.jl")
 include("evaluation.jl")
 include("abstractppl.jl")
 
