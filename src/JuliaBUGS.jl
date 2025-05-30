@@ -32,7 +32,7 @@ using .Parser.CompilerUtils
 
 include("graphs.jl")
 include("compiler_pass.jl")
-include("model/BUGSModel.jl")
+include("model/Model.jl")
 using .Model
 using .Model:
     AbstractBUGSModel,
