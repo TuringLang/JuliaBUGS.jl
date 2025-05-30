@@ -347,228 +347,244 @@ end
 _precompute_minimal_cache_keys(bn) = _precompute_minimal_cache_keys(bn, topological_sort_by_dfs(bn.graph))
 
 """
-Enhanced version of marginalize_recursive that uses a more efficient memoization approach.
-Only parent values that directly influence a node are included in the memoization key,
-which allows for better reuse of computations.
+    _marginalize_recursive(bn, env, remaining_nodes, parameter_values, param_idx, 
+                          var_lengths, memo, caching_strategy, minimal_keys) -> Float64
 
-Currently, this function contains two kind of approaches to memoization:
-1. **Parent-based memoization**: 
-This is the default approach, where only the parent values of the current node are used to create the memo key. 
-This is efficient for most cases and allows for better reuse of computations.
-The memo_key is (current_id, param_idx, parent_hash).
+Recursively compute the log probability of a Bayesian network by marginalizing over discrete variables.
 
-2. **Full environment memoization**: 
-This approach hashes the entire environment to create the memo key. 
-It is more accurate but less efficient, as it may lead to a larger number of unique keys. 
-This is useful for debugging or when the parent-based approach does not yield correct results.
-The memo_key is (current_id, param_idx, env_hash)
+This function processes nodes in topological order, handling:
+- Deterministic nodes: Compute values directly
+- Observed nodes: Add their log probability
+- Discrete unobserved nodes: Marginalize by summing over all possible values
+- Continuous unobserved nodes: Use provided parameter values
 
-Full environment memoization has a substantial speedup, but still not the best, 
-as we can save on memory, by hashing only the parent values. I am guessing some of the grandparents value also matters 
-
-For example, 
-Chain networks (n=8): Only 17 memo entries vs potentially 256 states
-Tree networks (depth=3): Only 14 memo entries vs potentially 128 states
-Grid networks (3×3): Only 17 memo entries vs potentially 512 states
+Supports memoization to avoid redundant computations when the same subproblem is encountered
+with the same relevant environment state.
 """
+function evaluate_with_marginalization(
+    bn::BayesianNetwork{V,T,F},
+    parameter_values::AbstractVector;
+    caching_strategy::Symbol=:minimal_keys,
+) where {V,T,F}
+    sorted_node_ids = topological_sort_by_dfs(bn.graph)
+
+    discrete_vars = [
+        bn.names[i] for i in sorted_node_ids if
+        bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] == :discrete
+    ]
+
+    continuous_vars = [
+        bn.names[i] for i in sorted_node_ids if
+        bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] != :discrete
+    ]
+
+    total_param_length = 0
+    for name in continuous_vars
+        if haskey(bn.transformed_var_lengths, name)
+            total_param_length += bn.transformed_var_lengths[name]
+        end
+    end
+
+    # Parameter vector should contain exactly the continuous variables
+    expected_param_length = total_param_length
+    if length(parameter_values) != expected_param_length
+        error(
+            "Parameter vector length mismatch: expected $(expected_param_length) elements for continuous variables, but got $(length(parameter_values)) elements.",
+        )
+    end
+
+    env = deepcopy(bn.evaluation_env)
+
+    # Size hint for memo dictionary - for optimal performance
+    expected_entries = 2^length(discrete_vars) * length(bn.names)
+    
+    # Use Any type for memo values to handle both Float64 and AD types
+    memo = Dict{Tuple{Int,Int,UInt64},Any}()
+    sizehint!(memo, expected_entries)
+    
+    if caching_strategy == :minimal_key
+        minimal_keys = _precompute_minimal_cache_keys(bn)
+    else
+        minimal_keys = nothing
+    end
+    
+    logp = _marginalize_recursive(
+        bn,
+        env,
+        sorted_node_ids,
+        parameter_values,
+        1,
+        bn.transformed_var_lengths,
+        memo,
+        caching_strategy,
+        minimal_keys,
+    )
+    return env, logp
+end
+
 function _marginalize_recursive(
-	bn::BayesianNetwork{V, T, F},
-	env,
-	remaining_nodes,
-	parameter_values::AbstractVector,
-	param_idx::Int,
-	var_lengths,
-	memo = Dict{Tuple{Int, Int, UInt64}, Float64}(),
-	caching_strategy::Symbol = :full_env,  # :parent_based, :full_env, or :discrete_only
-	minimal_keys = nothing,
-) where {V, T, F}
-	# Base case: no more nodes to process
-	if isempty(remaining_nodes)
-		return 0.0
-	end
+    bn::BayesianNetwork{V,T,F},
+    env,
+    remaining_nodes,
+    parameter_values::AbstractVector,
+    param_idx::Int,
+    var_lengths,
+    memo::Dict{Tuple{Int,Int,UInt64},Any},  
+    caching_strategy::Symbol,
+    minimal_keys,
+) where {V,T,F}
+    # Base case: no more nodes to process
+    if isempty(remaining_nodes)
+        return zero(eltype(parameter_values))
+    end
 
-	# Process current node
-	current_id = remaining_nodes[1]
-	current_name = bn.names[current_id]
+    current_id = remaining_nodes[1]
+    current_name = bn.names[current_id]
 
-	# Create memo key based on caching strategy
-	local memo_key
-	if caching_strategy == :full_env
-		# Hash the entire environment for complete correctness
-		env_hash = hash(env)
-		memo_key = (current_id, param_idx, env_hash)
-	elseif caching_strategy == :discrete_only
-		# Only hash discrete variables
-		discrete_values = _extract_discrete_values(bn, env)
-		discrete_hash = hash(discrete_values)
-		memo_key = (current_id, param_idx, discrete_hash)
-	elseif caching_strategy == :minimal_key
-		# Get relevant node IDs for current node
-		relevant_ids = minimal_keys[current_id]  # Now keyed by node ID
+    # Create memo key - be careful with hashing when environment contains AD types
+    if caching_strategy == :minimal_key
+        relevant_ids = minimal_keys[current_id]
+        # Extract only the values for hashing, avoid AD types in hash computation
+        relevant_values = Dict(
+            bn.names[id] => _extract_value_for_hash(AbstractPPL.get(env, bn.names[id])) 
+            for id in relevant_ids
+        )
+        minimal_hash = hash(relevant_values)
+        memo_key = (current_id, param_idx, minimal_hash)
+    else
+        # Hash the environment safely
+        env_hash = _safe_hash_env(env)
+        memo_key = (current_id, param_idx, env_hash)
+    end
 
-		# Extract values from environment
-		relevant_values = Dict(
-			bn.names[id] => AbstractPPL.get(env, bn.names[id])
-			for id in relevant_ids
-		)
+    if haskey(memo, memo_key)
+        return memo[memo_key]
+    end
 
-		minimal_hash = hash(relevant_values)
-		memo_key = (current_id, param_idx, minimal_hash)
-	else
-		parent_values = _extract_parent_values(bn, current_id, env)
-		parent_hash = hash(parent_values)
-		memo_key = (current_id, param_idx, parent_hash)
-	end
+    is_stochastic = bn.is_stochastic[current_id]
+    is_observed = bn.is_observed[current_id]
+    is_discrete = bn.node_types[current_id] == :discrete
 
-	# Check if we've already computed this subproblem
-	if haskey(memo, memo_key)
-		return memo[memo_key]
-	end
+    if !is_stochastic
+        value = bn.deterministic_functions[current_id](env, bn.loop_vars[current_name])
+        new_env = BangBang.setindex!!(env, value, current_name)
+        result = _marginalize_recursive(
+            bn,
+            new_env,
+            @view(remaining_nodes[2:end]),
+            parameter_values,
+            param_idx,
+            var_lengths,
+            memo,
+            caching_strategy,
+            minimal_keys,
+        )
 
-	# Check node type
-	is_stochastic = bn.is_stochastic[current_id]
-	is_observed = bn.is_observed[current_id]
-	is_discrete = bn.node_types[current_id] == :discrete
+    elseif is_observed
+        dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
+        obs_value = AbstractPPL.get(env, current_name)
+        obs_logp = logpdf(dist, obs_value)
+        
+        # Handle NaN values with proper type
+        if isnan(obs_logp)
+            obs_logp = -1e20  # Use large negative number instead of -Inf
+        end
 
-	local result
-	if !is_stochastic
-		# Deterministic node - compute value and continue
-		value = bn.deterministic_functions[current_id](env, bn.loop_vars[current_name])
-		new_env = BangBang.setindex!!(env, value, current_name)
-		result = _marginalize_recursive(
-			bn,
-			new_env,
-			@view(remaining_nodes[2:end]),
-			parameter_values,
-			param_idx,
-			var_lengths,
-			memo,
-			caching_strategy,
-			minimal_keys,
-		)
+        remaining_logp = _marginalize_recursive(
+            bn,
+            env,
+            @view(remaining_nodes[2:end]),
+            parameter_values,
+            param_idx,
+            var_lengths,
+            memo,
+            caching_strategy,
+            minimal_keys,
+        )
+        result = obs_logp + remaining_logp
 
-	elseif is_observed
-		# Observed node - add log probability and continue
-		dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
+    elseif is_discrete
+        dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
+        possible_values = enumerate_discrete_values(dist)
 
-		# Safe logpdf calculation without try-catch
-		obs_value = AbstractPPL.get(env, current_name)
-		obs_logp = logpdf(dist, obs_value)
-		# Safety check for NaN values
-		if isnan(obs_logp)
-			obs_logp = -Inf
-		end
+        logp_branches = Vector{typeof(zero(eltype(parameter_values)))}(undef, length(possible_values))
 
-		remaining_logp = _marginalize_recursive(
-			bn,
-			env,
-			@view(remaining_nodes[2:end]),
-			parameter_values,
-			param_idx,
-			var_lengths,
-			memo,
-			caching_strategy,
-			minimal_keys,
-		)
-		result = obs_logp + remaining_logp
+        for (i, value) in enumerate(possible_values)
+            branch_env = BangBang.setindex!!(deepcopy(env), value, current_name)
 
-	elseif is_discrete
-		# Discrete unobserved node - marginalize over possible values
-		dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
-		possible_values = enumerate_discrete_values(dist)
+            value_logp = logpdf(dist, value)
+            if isnan(value_logp)
+                value_logp = -1e20  # Use large negative number instead of -Inf
+            end
 
-		# Collect log probabilities for all possible values
-		logp_branches = Vector{Float64}(undef, length(possible_values))
+            remaining_logp = _marginalize_recursive(
+                bn,
+                branch_env,
+                @view(remaining_nodes[2:end]),
+                parameter_values,
+                param_idx,
+                var_lengths,
+                memo,
+                caching_strategy,
+                minimal_keys,
+            )
 
-		for (i, value) in enumerate(possible_values)
-			# Create a branch-specific environment
-			branch_env = BangBang.setindex!!(deepcopy(env), value, current_name)
+            logp_branches[i] = value_logp + remaining_logp
+        end
 
-			# Compute log probability of this value (without try-catch)
-			value_logp = logpdf(dist, value)
+        result = LogExpFunctions.logsumexp(logp_branches)
 
-			if isnan(value_logp)
-				value_logp = -Inf
-			end
+    else
+        dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
+        b = Bijectors.bijector(dist)
 
-			# Continue evaluation with this assignment
-			remaining_logp = _marginalize_recursive(
-				bn,
-				branch_env,
-				@view(remaining_nodes[2:end]),
-				parameter_values,
-				param_idx,
-				var_lengths,
-				memo,
-				caching_strategy,
-				minimal_keys,
-			)
+        if !haskey(var_lengths, current_name)
+            error(
+                "Missing transformed length for variable '$(current_name)'. All variables should have their transformed lengths pre-computed in JuliaBUGS.",
+            )
+        end
 
-			logp_branches[i] = value_logp + remaining_logp
-		end
+        l = var_lengths[current_name]
 
-		# Marginalize using logsumexp for numerical stability
-		result = LogExpFunctions.logsumexp(logp_branches)
+        if param_idx + l - 1 > length(parameter_values)
+            error(
+                "Parameter index out of bounds: needed $(param_idx + l - 1) elements, but parameter_values has only $(length(parameter_values)) elements.",
+            )
+        end
 
-	else
-		# Continuous unobserved node - use parameter values
-		dist = bn.distributions[current_id](env, bn.loop_vars[current_name])
-		b = Bijectors.bijector(dist)
+        b_inv = Bijectors.inverse(b)
+        param_slice = view(parameter_values, param_idx:(param_idx + l - 1))
 
-		# Ensure variable length is in the dictionary
-		if !haskey(var_lengths, current_name)
-			error(
-				"Missing transformed length for variable '$(current_name)'. All variables should have their transformed lengths pre-computed in JuliaBUGS.",
-			)
-		end
+        reconstructed_value = JuliaBUGS.reconstruct(b_inv, dist, param_slice)
+        value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
 
-		l = var_lengths[current_name]
+        new_env = BangBang.setindex!!(env, value, current_name)
 
-		# Check for parameter index out of bounds
-		if param_idx + l - 1 > length(parameter_values)
-			error(
-				"Parameter index out of bounds: needed $(param_idx + l - 1) elements, but parameter_values has only $(length(parameter_values)) elements.",
-			)
-		end
+        dist_logp = logpdf(dist, value)
+        if isnan(dist_logp)
+            dist_logp = -1e20 + logjac  # Use large negative number instead of -Inf
+        else
+            dist_logp += logjac
+        end
 
-		# Process the continuous variable
-		b_inv = Bijectors.inverse(b)
-		param_slice = view(parameter_values, param_idx:(param_idx+l-1))
+        next_idx = param_idx + l
+        remaining_logp = _marginalize_recursive(
+            bn,
+            new_env,
+            @view(remaining_nodes[2:end]),
+            parameter_values,
+            next_idx,
+            var_lengths,
+            memo,
+            caching_strategy,
+            minimal_keys,
+        )
 
-		# Removed try-catch blocks
-		reconstructed_value = JuliaBUGS.reconstruct(b_inv, dist, param_slice)
-		value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
+        result = dist_logp + remaining_logp
+    end
 
-		# Update environment
-		new_env = BangBang.setindex!!(env, value, current_name)
-
-		# Compute log probability without try-catch
-		dist_logp = logpdf(dist, value)
-		if isnan(dist_logp)
-			dist_logp = -Inf + logjac  # Treat the probability as zero but keep jacobian
-		else
-			dist_logp += logjac
-		end
-
-		next_idx = param_idx + l
-		remaining_logp = _marginalize_recursive(
-			bn,
-			new_env,
-			@view(remaining_nodes[2:end]),
-			parameter_values,
-			next_idx,
-			var_lengths,
-			memo,
-			caching_strategy,
-			minimal_keys,
-		)
-
-		result = dist_logp + remaining_logp
-	end
-
-	# Store result in memo before returning
-	memo[memo_key] = result
-	return result
+    memo[memo_key] = result
+    return result
 end
 
 function evaluate_with_marginalization(
@@ -592,11 +608,6 @@ function evaluate_with_marginalization(
 		bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] != :discrete
 	]
 
-	# No discrete variables case - use standard evaluation
-	if isempty(discrete_vars)
-		return evaluate_with_values(bn, parameter_values)
-	end
-
 	# Parameter validation for continuous variables
 	total_param_length = 0
 	for name in continuous_vars
@@ -619,7 +630,7 @@ function evaluate_with_marginalization(
 	# Size hint for memo dictionary - for optimal performance
 	# We expect at most 2^|discrete_vars| * |nodes| entries
 	expected_entries = 2^length(discrete_vars) * length(bn.names)
-	memo = Dict{Tuple{Int, Int, UInt64}, Float64}()
+	memo = Dict{Tuple{Int, Int, UInt64}, Any}()
 	sizehint!(memo, expected_entries)
 	if caching_strategy == :minimal_key
 		# Precompute minimal keys for memoization
@@ -636,6 +647,26 @@ function evaluate_with_marginalization(
 	return env, logp
 end
 
+function _extract_value_for_hash(x)
+    # Handle ForwardDiff.Dual
+    if hasproperty(x, :value)
+        return x.value
+    # Handle ReverseDiff.TrackedReal
+    elseif isdefined(Main, :ReverseDiff) && x isa Main.ReverseDiff.TrackedReal
+        return Main.ReverseDiff.value(x)
+    else
+        return x
+    end
+end
+
+# Helper function to safely hash environment containing AD types
+function _safe_hash_env(env::NamedTuple)
+    # Extract just the values for hashing, stripping AD information
+    value_dict = Dict(
+        k => _extract_value_for_hash(v) for (k, v) in pairs(env)
+    )
+    return hash(value_dict)
+end
 
 """
 	enumerate_discrete_values(dist)
