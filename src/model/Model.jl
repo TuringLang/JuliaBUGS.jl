@@ -12,7 +12,6 @@ using Random
 
 include("utils.jl")
 include("model.jl")
-include("interface.jl")
 include("evaluation.jl")
 include("condition.jl")
 
