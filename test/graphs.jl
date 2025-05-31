@@ -64,7 +64,6 @@ l = @varname l
 c = @varname c
 @test Set(Symbol.(markov_blanket(model.g, c))) == Set([:l, :a, :b, :f])
 
-
 """
 mu[1]           mu[2]
    ╲            ╱
