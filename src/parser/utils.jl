@@ -63,7 +63,7 @@ it tries to convert the array to `AbstractArray{T}`. If the conversion is not po
 the array unchanged.
 
 # Examples
-```jldoctest; setup = :(using JuliaBUGS: concretize_eval_env)
+```jldoctest; setup = :(using JuliaBUGS.Parser.CompilerUtils: concretize_eval_env)
 julia> concretize_eval_env((a = Union{Missing,Int}[1, 2, 3],))
 (a = [1, 2, 3],)
 
@@ -105,7 +105,7 @@ end
 Extract all the array variable names and number of dimensions from a given simple expression. 
 
 # Examples:
-```jldoctest; setup = :(using JuliaBUGS: extract_variable_names_and_numdims)
+```jldoctest; setup = :(using JuliaBUGS.Parser.CompilerUtils: extract_variable_names_and_numdims)
 julia> extract_variable_names_and_numdims(:((a + b) * c), ())
 (a = 0, b = 0, c = 0)
 
@@ -170,8 +170,8 @@ Extract all the array variable names and number of dimensions. Inconsistent numb
 will raise an error.
 
 # Example:
-```jldoctest
-JuliaBUGS.extract_variable_names_and_numdims(
+```jldoctest; setup = :(using JuliaBUGS: @bugs; using JuliaBUGS.Parser.CompilerUtils: extract_variable_names_and_numdims)
+extract_variable_names_and_numdims(
     @bugs begin
         for i in 1:N
             for j in 1:T
@@ -260,8 +260,8 @@ end
 Extract all the variable names used in the bounds and indices of the arrays in the program.
 
 # Example:
-```jldoctest
-JuliaBUGS.extract_variables_in_bounds_and_lhs_indices(
+```jldoctest; setup = :(using JuliaBUGS: @bugs; using JuliaBUGS.Parser.CompilerUtils: extract_variables_in_bounds_and_lhs_indices)
+extract_variables_in_bounds_and_lhs_indices(
     @bugs begin
         for i in 1:N
             for j in 1:T
@@ -364,8 +364,8 @@ The first tuple contains the logical scalar variables, the second tuple contains
 the third tuple contains the logical array variables, and the fourth tuple contains the stochastic array variables.
 
 # Example:
-```jldoctest
-JuliaBUGS.extract_variables_assigned_to(
+```jldoctest; setup = :(using JuliaBUGS: @bugs; using JuliaBUGS.Parser.CompilerUtils: extract_variables_assigned_to)
+extract_variables_assigned_to(
     @bugs begin
         for i in 1:N
             for j in 1:T
@@ -450,8 +450,8 @@ end
 Replace all `Colon()`s in `expr` with the corresponding array size.
 
 # Examples
-```jldoctest
-julia> JuliaBUGS.concretize_colon_indexing(:(f(x[1, :])), (x = [1 2 3 4; 5 6 7 8; 9 10 11 12],))
+```jldoctest; setup = :(using JuliaBUGS.Parser.CompilerUtils: concretize_colon_indexing)
+julia> concretize_colon_indexing(:(f(x[1, :])), (x = [1 2 3 4; 5 6 7 8; 9 10 11 12],))
 :(f(x[1, 1:4]))
 ```
 """
@@ -477,7 +477,7 @@ This function evaluates expressions that consist solely of arithmetic operations
 is specifically designed for scenarios such as calculating array indices or determining loop boundaries.
 
 # Example:
-```jldoctest; setup = :(using JuliaBUGS: simple_arithmetic_eval)
+```jldoctest; setup = :(using JuliaBUGS.Parser.CompilerUtils: simple_arithmetic_eval)
 julia> simple_arithmetic_eval((a = 1, b = [1, 2]), 1)
 1
 

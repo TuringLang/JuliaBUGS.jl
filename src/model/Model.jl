@@ -17,4 +17,4 @@ include("abstractppl.jl")
 
 export parameters, variables, initialize!, getparams, settrans, set_evaluation_mode
 
-end # BUGSModel
+end # Model

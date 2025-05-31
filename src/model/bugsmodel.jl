@@ -95,6 +95,42 @@ struct BUGSModel{
     data::data_T
 end
 
+# Constructor that takes a BUGSModel and keyword arguments, inheriting unspecified fields
+function BUGSModel(
+    model::BUGSModel;
+    transformed::Bool=model.transformed,
+    untransformed_param_length::Int=model.untransformed_param_length,
+    transformed_param_length::Int=model.transformed_param_length,
+    untransformed_var_lengths::Dict{<:VarName,Int}=model.untransformed_var_lengths,
+    transformed_var_lengths::Dict{<:VarName,Int}=model.transformed_var_lengths,
+    evaluation_env::NamedTuple=model.evaluation_env,
+    parameters::Vector{<:VarName}=model.parameters,
+    flattened_graph_node_data::FlattenedGraphNodeData=model.flattened_graph_node_data,
+    g::BUGSGraph=model.g,
+    base_model::Union{<:AbstractBUGSModel,Nothing}=model.base_model,
+    evaluation_mode::EvaluationMode=model.evaluation_mode,
+    log_density_computation_function::Union{Function,Nothing}=model.log_density_computation_function,
+    model_def::Expr=model.model_def,
+    data=model.data,
+)
+    return BUGSModel(
+        transformed,
+        untransformed_param_length,
+        transformed_param_length,
+        untransformed_var_lengths,
+        transformed_var_lengths,
+        evaluation_env,
+        parameters,
+        flattened_graph_node_data,
+        g,
+        base_model,
+        evaluation_mode,
+        log_density_computation_function,
+        model_def,
+        data,
+    )
+end
+
 function Base.show(io::IO, model::BUGSModel)
     # Print model type and dimension
     space_type =
