@@ -171,5 +171,5 @@ end
         model_def, data, (;)
     )
     model = compile(model_def, data, (;))
-    @test length(model.parameters) == 0
+    @test length(model.graph_evaluation_data.sorted_parameters) == 0
 end
