@@ -311,7 +311,7 @@ julia> # Partial deconditioning with specified variables
        model_d1 = decondition(model_cond, [@varname(y)]);
 
 julia> parameters(model_d1)
-1-element Vector{AbstractPPL.VarName{:y, typeof(identity)}}:
+1-element Vector{AbstractPPL.VarName}:
  y
 
 julia> # Full restoration to base model (no arguments)
@@ -381,7 +381,7 @@ julia> # Decondition with subsumption
        );
 
 julia> parameters(model_arr_decon)
-3-element Vector{AbstractPPL.VarName{:v, Accessors.IndexLens{Tuple{Int64}}}}:
+3-element Vector{AbstractPPL.VarName}:
  v[3]
  v[2]
  v[1]
