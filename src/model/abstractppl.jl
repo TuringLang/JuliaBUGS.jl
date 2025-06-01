@@ -153,7 +153,9 @@ function condition(model::BUGSModel, conditioning_spec)
     new_evaluation_env = _update_evaluation_env(model.evaluation_env, var_values)
     new_graph = _mark_as_observed(model.g, vars_to_condition)
     new_graph_evaluation_data = GraphEvaluationData(new_graph)
-    new_parameters_unsorted = filter(vn -> vn ∉ vars_to_condition, model.graph_evaluation_data.sorted_parameters)
+    new_parameters_unsorted = filter(
+        vn -> vn ∉ vars_to_condition, model.graph_evaluation_data.sorted_parameters
+    )
     new_parameters = VarName[
         vn for
         vn in new_graph_evaluation_data.sorted_nodes if vn in new_parameters_unsorted
