@@ -157,8 +157,7 @@ function condition(model::BUGSModel, conditioning_spec)
         vn -> vn ∉ vars_to_condition, model.graph_evaluation_data.sorted_parameters
     )
     new_parameters = VarName[
-        vn for
-        vn in new_graph_evaluation_data.sorted_nodes if vn in new_parameters_unsorted
+        vn for vn in new_graph_evaluation_data.sorted_nodes if vn in new_parameters_unsorted
     ]
     new_untransformed_param_length = sum(
         model.untransformed_var_lengths[vn] for vn in new_parameters; init=0
