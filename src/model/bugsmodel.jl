@@ -52,6 +52,23 @@ struct UseGraph <: EvaluationMode end
 
 The `BUGSModel` object is used for inference and represents the output of compilation. It implements the
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
+
+# Fields
+
+- `model_def::Expr`: The original model definition (for serialization).
+- `data::data_T`: The data associated with the model (for serialization).
+- `g::BUGSGraph`: An instance of `BUGSGraph`, representing the dependency graph of the model.
+- `evaluation_env::T`: A `NamedTuple` containing the values of the variables in the model, all the values are in the constrained space.
+- `parameters::Vector{<:VarName}`: A vector containing the names of the model parameters (unobserved stochastic variables).
+- `transformed::Bool`: Indicates whether the model parameters are in the transformed space.
+- `evaluation_mode::EMT`: The mode for evaluating the log-density (either `UseGeneratedLogDensityFunction` or `UseGraph`).
+- `untransformed_param_length::Int`: The length of the parameters vector in the original (constrained) space.
+- `transformed_param_length::Int`: The length of the parameters vector in the transformed (unconstrained) space.
+- `untransformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the original (constrained) space.
+- `transformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space.
+- `flattened_graph_node_data::FlattenedGraphNodeData{TNF,TV}`: An `FlattenedGraphNodeData` object containing pre-computed values of the nodes in the model. For each topological order, this needs to be recomputed.
+- `log_density_computation_function::F`: The generated function for computing log-density (if available).
+- `base_model::base_model_T`: If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`.
 """
 struct BUGSModel{
     EMT<:EvaluationMode,
@@ -62,37 +79,28 @@ struct BUGSModel{
     data_T,
     F<:Union{Function,Nothing},
 } <: AbstractBUGSModel
-    " Indicates whether the model parameters are in the transformed space. "
-    transformed::Bool
-
-    "The length of the parameters vector in the original (constrained) space."
-    untransformed_param_length::Int
-    "The length of the parameters vector in the transformed (unconstrained) space."
-    transformed_param_length::Int
-    "A dictionary mapping the names of the variables to their lengths in the original (constrained) space."
-    untransformed_var_lengths::Dict{<:VarName,Int}
-    "A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space."
-    transformed_var_lengths::Dict{<:VarName,Int}
-
-    "A `NamedTuple` containing the values of the variables in the model, all the values are in the constrained space."
-    evaluation_env::T
-    "A vector containing the names of the model parameters (unobserved stochastic variables)."
-    parameters::Vector{<:VarName}
-    "An `FlattenedGraphNodeData` object containing pre-computed values of the nodes in the model. For each topological order, this needs to be recomputed."
-    flattened_graph_node_data::FlattenedGraphNodeData{TNF,TV}
-
-    "An instance of `BUGSGraph`, representing the dependency graph of the model."
-    g::BUGSGraph
-
-    "If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`."
-    base_model::base_model_T
-
-    evaluation_mode::EMT
-    log_density_computation_function::F
-
-    # for serialization, save the original model definition and data
     model_def::Expr
     data::data_T
+    
+    g::BUGSGraph
+    
+    evaluation_env::T
+
+    parameters::Vector{<:VarName}
+
+    transformed::Bool
+    evaluation_mode::EMT
+
+    untransformed_param_length::Int
+    transformed_param_length::Int
+    untransformed_var_lengths::Dict{<:VarName,Int}
+    transformed_var_lengths::Dict{<:VarName,Int}
+
+    flattened_graph_node_data::FlattenedGraphNodeData{TNF,TV}
+    
+    log_density_computation_function::F
+    
+    base_model::base_model_T
 end
 
 function Base.show(io::IO, model::BUGSModel)
@@ -232,20 +240,20 @@ function BUGSModel(
     #     has_generated_log_density_function ? UseGeneratedLogDensityFunction() : UseGraph()
 
     return BUGSModel(
+        model_def,
+        data,
+        g,
+        evaluation_env,
+        parameters,
         is_transformed,
+        UseGraph(),
         untransformed_param_length,
         transformed_param_length,
         untransformed_var_lengths,
         transformed_var_lengths,
-        evaluation_env,
-        parameters,
         flattened_graph_node_data,
-        g,
-        nothing,
-        UseGraph(),
         log_density_computation_function,
-        model_def,
-        data,
+        nothing,
     )
 end
 
@@ -257,20 +265,20 @@ function BUGSModel(
     evaluation_env::NamedTuple=model.evaluation_env,
 )
     return BUGSModel(
+        model.model_def,
+        model.data,
+        g,
+        evaluation_env,
+        parameters,
         model.transformed,
+        model.evaluation_mode,
         sum(model.untransformed_var_lengths[v] for v in parameters),
         sum(model.transformed_var_lengths[v] for v in parameters),
         model.untransformed_var_lengths,
         model.transformed_var_lengths,
-        evaluation_env,
-        parameters,
         FlattenedGraphNodeData(g, sorted_nodes),
-        g,
-        isnothing(model.base_model) ? model : model.base_model,
-        model.evaluation_mode,
         model.log_density_computation_function,
-        model.model_def,
-        model.data,
+        isnothing(model.base_model) ? model : model.base_model,
     )
 end
 
