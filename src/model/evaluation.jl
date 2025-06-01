@@ -1,22 +1,24 @@
 # Accumulator for log densities
 """
-    LogDensityAccumulator
+    LogDensityAccumulator{T}
 
 Mutable struct to accumulate log densities during model evaluation.
 
 # Fields
-- `logprior::Float64`: Log density of prior distributions
-- `loglikelihood::Float64`: Log density of likelihood (observed variables)
+- `logprior::T`: Log density of prior distributions
+- `loglikelihood::T`: Log density of likelihood (observed variables)
 """
-mutable struct LogDensityAccumulator
-    logprior::Float64
-    loglikelihood::Float64
+mutable struct LogDensityAccumulator{T}
+    logprior::T
+    loglikelihood::T
 end
 
 LogDensityAccumulator() = LogDensityAccumulator(0.0, 0.0)
+LogDensityAccumulator{T}() where {T} = LogDensityAccumulator(zero(T), zero(T))
 
-tempered_logjoint(acc::LogDensityAccumulator; temperature=1.0) = 
-    acc.logprior + temperature * acc.loglikelihood
+function tempered_logjoint(acc::LogDensityAccumulator; temperature=1.0)
+    return acc.logprior + temperature * acc.loglikelihood
+end
 
 # Abstract evaluator type
 """
@@ -45,7 +47,7 @@ Base type containing common fields for evaluators.
 """
 abstract type BaseEvaluator{TM<:TransformationMode} <: AbstractEvaluator end
 
-transformation_mode(::BaseEvaluator{TM}) where TM = TM()
+transformation_mode(::BaseEvaluator{TM}) where {TM} = TM()
 get_pointwise_dict(e::BaseEvaluator) = e.pointwise_logdensities
 
 # Concrete evaluator types
@@ -60,10 +62,12 @@ struct PriorSampler{TM<:TransformationMode} <: BaseEvaluator{TM}
     pointwise_logdensities::Union{Nothing,Dict{VarName,Float64}}
 end
 
-function PriorSampler(rng=Random.default_rng(); sample_all=true, transformed=false, track_pointwise=false)
+function PriorSampler(
+    rng=Random.default_rng(); sample_all=true, transformed=false, track_pointwise=false
+)
     tm = transformed ? Transformed() : Untransformed()
     pw = track_pointwise ? Dict{VarName,Float64}() : nothing
-    PriorSampler{typeof(tm)}(rng, sample_all, pw)
+    return PriorSampler{typeof(tm)}(rng, sample_all, pw)
 end
 
 """
@@ -79,7 +83,7 @@ end
 function VectorParameterEvaluator(values; transformed=false, track_pointwise=false)
     tm = transformed ? Transformed() : Untransformed()
     pw = track_pointwise ? Dict{VarName,Float64}() : nothing
-    VectorParameterEvaluator{typeof(tm)}(values, pw)
+    return VectorParameterEvaluator{typeof(tm)}(values, pw)
 end
 
 """
@@ -94,14 +98,19 @@ end
 function EnvironmentEvaluator(; transformed=false, track_pointwise=false)
     tm = transformed ? Transformed() : Untransformed()
     pw = track_pointwise ? Dict{VarName,Float64}() : nothing
-    EnvironmentEvaluator{typeof(tm)}(pw)
+    return EnvironmentEvaluator{typeof(tm)}(pw)
 end
 
+# Helper to unwrap AD values
+_unwrap_ad_value(x) = x
+_unwrap_ad_value(x::Real) = convert(Float64, x)
+
 # Helper to record pointwise log density
-function record_pointwise!(evaluator::AbstractEvaluator, vn::VarName, logp::Float64)
+function record_pointwise!(evaluator::AbstractEvaluator, vn::VarName, logp)
     pw_dict = get_pointwise_dict(evaluator)
     if pw_dict !== nothing
-        pw_dict[vn] = logp
+        # Use the value function for AD compatibility
+        pw_dict[vn] = _unwrap_ad_value(logp)
     end
 end
 
@@ -116,28 +125,36 @@ Returns:
 - `logdensities`: NamedTuple with log densities (and optionally pointwise densities)
 """
 function AbstractPPL.evaluate!!(
-    evaluator::AbstractEvaluator, 
-    model::BUGSModel; 
-    temperature=1.0
+    evaluator::AbstractEvaluator, model::BUGSModel; temperature=1.0
 )
     evaluation_env = deepcopy(model.evaluation_env)
-    acc = LogDensityAccumulator()
-    
+    # Initialize accumulator with appropriate type for AD
+    T = if evaluator isa VectorParameterEvaluator && length(evaluator.values) > 0
+        eltype(evaluator.values)
+    else
+        Float64
+    end
+    acc = LogDensityAccumulator{T}()
+
     # Get variable lengths for VectorParameterEvaluator
     var_lengths = if evaluator isa VectorParameterEvaluator
-        transformation_mode(evaluator) isa Transformed ? model.transformed_var_lengths : model.untransformed_var_lengths
+        if transformation_mode(evaluator) isa Transformed
+            model.transformed_var_lengths
+        else
+            model.untransformed_var_lengths
+        end
     else
         nothing
     end
-    
+
     current_idx = 1
-    
+
     for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
         is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
         is_observed = model.graph_evaluation_data.is_observed_vals[i]
         node_function = model.graph_evaluation_data.node_function_vals[i]
         loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
-        
+
         if !is_stochastic
             # Deterministic node
             value = node_function(evaluation_env, loop_vars)
@@ -145,42 +162,42 @@ function AbstractPPL.evaluate!!(
         else
             # Stochastic node
             dist = node_function(evaluation_env, loop_vars)
-            
+
             # Get value based on evaluator type
             value, logp = get_value_and_logdensity(
                 evaluator, dist, vn, evaluation_env, var_lengths, current_idx, is_observed
             )
-            
+
             # Update current_idx for VectorParameterEvaluator
             if evaluator isa VectorParameterEvaluator && !is_observed
                 current_idx += var_lengths[vn]
             end
-            
+
             # Accumulate log density
             if is_observed
-                acc.loglikelihood += logp * temperature
-                record_pointwise!(evaluator, vn, logp * temperature)
+                acc.loglikelihood += logp
+                record_pointwise!(evaluator, vn, logp)
             else
                 acc.logprior += logp
                 record_pointwise!(evaluator, vn, logp)
             end
-            
+
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         end
     end
-    
+
     # Build result
     result = (
         logprior=acc.logprior,
         loglikelihood=acc.loglikelihood,
         tempered_logjoint=tempered_logjoint(acc; temperature),
     )
-    
+
     pw_dict = get_pointwise_dict(evaluator)
     if pw_dict !== nothing
         result = merge(result, (pointwise_logdensities=pw_dict,))
     end
-    
+
     return evaluation_env, result
 end
 
@@ -192,17 +209,23 @@ function get_value_and_logdensity(
     if evaluator.sample_all || !is_observed
         # Sample from prior
         value = rand(evaluator.rng, dist)
-        logp = compute_logdensity(tm, dist, value)
+        logp = compute_logdensity(typeof(tm), dist, value)
     else
         # Use observed value
         value = AbstractPPL.get(evaluation_env, vn)
-        logp = compute_logdensity(tm, dist, value)
+        logp = compute_logdensity(typeof(tm), dist, value)
     end
     return value, logp
 end
 
 function get_value_and_logdensity(
-    evaluator::VectorParameterEvaluator, dist, vn, evaluation_env, var_lengths, current_idx, is_observed
+    evaluator::VectorParameterEvaluator,
+    dist,
+    vn,
+    evaluation_env,
+    var_lengths,
+    current_idx,
+    is_observed,
 )
     if is_observed
         # Use observed value from environment
@@ -212,16 +235,24 @@ function get_value_and_logdensity(
         # Get value from vector
         l = var_lengths[vn]
         param_slice = view(evaluator.values, current_idx:(current_idx + l - 1))
-        value, logp = extract_value_and_logdensity(transformation_mode(evaluator), dist, param_slice)
+        value, logp = extract_value_and_logdensity(
+            typeof(transformation_mode(evaluator)), dist, param_slice
+        )
     end
     return value, logp
 end
 
 function get_value_and_logdensity(
-    evaluator::EnvironmentEvaluator, dist, vn, evaluation_env, var_lengths, current_idx, is_observed
+    evaluator::EnvironmentEvaluator,
+    dist,
+    vn,
+    evaluation_env,
+    var_lengths,
+    current_idx,
+    is_observed,
 )
     value = AbstractPPL.get(evaluation_env, vn)
-    logp = compute_logdensity(transformation_mode(evaluator), dist, value)
+    logp = compute_logdensity(typeof(transformation_mode(evaluator)), dist, value)
     return value, logp
 end
 
