@@ -4,11 +4,19 @@
 abstract type AbstractBUGSModel end
 
 """
-    FlattenedGraphNodeData{TNF,TNA,TV}
+    GraphEvaluationData{TNF,TV}
 
-Pre-compute the values of the nodes in the model to avoid lookups from MetaGraph.
+Caches node information from the model graph to optimize evaluation performance.
+Stores pre-computed values to avoid repeated lookups from the MetaGraph during model evaluation.
+
+# Fields
+- `sorted_nodes::Vector{<:VarName}`: Variables in topological order for evaluation
+- `is_stochastic_vals::Vector{Bool}`: Whether each node represents a stochastic variable  
+- `is_observed_vals::Vector{Bool}`: Whether each node is observed (has data)
+- `node_function_vals::TNF`: Functions that define each node's computation
+- `loop_vars_vals::TV`: Loop variables associated with each node
 """
-struct FlattenedGraphNodeData{TNF,TV}
+struct GraphEvaluationData{TNF,TV}
     sorted_nodes::Vector{<:VarName}
     is_stochastic_vals::Vector{Bool}
     is_observed_vals::Vector{Bool}
@@ -16,7 +24,7 @@ struct FlattenedGraphNodeData{TNF,TV}
     loop_vars_vals::TV
 end
 
-function FlattenedGraphNodeData(
+function GraphEvaluationData(
     g::BUGSGraph,
     sorted_nodes::Vector{<:VarName}=VarName[
         label_for(g, node) for node in topological_sort(g)
@@ -33,7 +41,7 @@ function FlattenedGraphNodeData(
         node_function_vals[i] = node_function
         loop_vars_vals[i] = loop_vars
     end
-    return FlattenedGraphNodeData(
+    return GraphEvaluationData(
         sorted_nodes,
         is_stochastic_vals,
         is_observed_vals,
@@ -66,7 +74,7 @@ The `BUGSModel` object is used for inference and represents the output of compil
 - `transformed_param_length::Int`: The length of the parameters vector in the transformed (unconstrained) space.
 - `untransformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the original (constrained) space.
 - `transformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space.
-- `flattened_graph_node_data::FlattenedGraphNodeData{TNF,TV}`: An `FlattenedGraphNodeData` object containing pre-computed values of the nodes in the model. For each topological order, this needs to be recomputed.
+- `flattened_graph_node_data::GraphEvaluationData{TNF,TV}`: A `GraphEvaluationData` object containing pre-computed values of the nodes in the model. For each topological order, this needs to be recomputed.
 - `log_density_computation_function::F`: The generated function for computing log-density (if available).
 - `base_model::base_model_T`: If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`.
 """
@@ -96,7 +104,7 @@ struct BUGSModel{
     untransformed_var_lengths::Dict{<:VarName,Int}
     transformed_var_lengths::Dict{<:VarName,Int}
 
-    flattened_graph_node_data::FlattenedGraphNodeData{TNF,TV}
+    flattened_graph_node_data::GraphEvaluationData{TNF,TV}
     
     log_density_computation_function::F
     
@@ -155,7 +163,7 @@ function BUGSModel(
     initial_params::NamedTuple=NamedTuple(),
     is_transformed::Bool=true,
 )
-    flattened_graph_node_data = FlattenedGraphNodeData(g)
+    flattened_graph_node_data = GraphEvaluationData(g)
     parameters = VarName[]
     untransformed_param_length, transformed_param_length = 0, 0
     untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
@@ -231,7 +239,7 @@ function BUGSModel(
             vn for vn in sorted_nodes if vn in flattened_graph_node_data.sorted_nodes
         ]
         @assert length(parameters) == original_parameters_length "there are less parameters in the generated log density function than in the original model"
-        flattened_graph_node_data = FlattenedGraphNodeData(g, sorted_nodes)
+        flattened_graph_node_data = GraphEvaluationData(g, sorted_nodes)
     else
         log_density_computation_function = nothing
     end
@@ -276,7 +284,7 @@ function BUGSModel(
         sum(model.transformed_var_lengths[v] for v in parameters),
         model.untransformed_var_lengths,
         model.transformed_var_lengths,
-        FlattenedGraphNodeData(g, sorted_nodes),
+        GraphEvaluationData(g, sorted_nodes),
         model.log_density_computation_function,
         isnothing(model.base_model) ? model : model.base_model,
     )
