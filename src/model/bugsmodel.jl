@@ -15,6 +15,7 @@ Stores pre-computed values to avoid repeated lookups from the MetaGraph during m
 - `is_observed_vals::Vector{Bool}`: Whether each node is observed (has data)
 - `node_function_vals::TNF`: Functions that define each node's computation
 - `loop_vars_vals::TV`: Loop variables associated with each node
+- `sorted_parameters::Vector{<:VarName}`: Parameters (unobserved stochastic variables) in sorted order consistent with sorted_nodes
 """
 struct GraphEvaluationData{TNF,TV}
     sorted_nodes::Vector{<:VarName}
@@ -22,6 +23,7 @@ struct GraphEvaluationData{TNF,TV}
     is_observed_vals::Vector{Bool}
     node_function_vals::TNF
     loop_vars_vals::TV
+    sorted_parameters::Vector{<:VarName}
 end
 
 function GraphEvaluationData(
@@ -29,24 +31,37 @@ function GraphEvaluationData(
     sorted_nodes::Vector{<:VarName}=VarName[
         label_for(g, node) for node in topological_sort(g)
     ],
+    active_parameters::Union{Nothing,Vector{<:VarName}}=nothing,
 )
     is_stochastic_vals = Array{Bool}(undef, length(sorted_nodes))
     is_observed_vals = Array{Bool}(undef, length(sorted_nodes))
     node_function_vals = Array{Any}(undef, length(sorted_nodes))
     loop_vars_vals = Array{Any}(undef, length(sorted_nodes))
+    sorted_parameters = VarName[]
+
     for (i, vn) in enumerate(sorted_nodes)
         (; is_stochastic, is_observed, node_function, loop_vars) = g[vn]
         is_stochastic_vals[i] = is_stochastic
         is_observed_vals[i] = is_observed
         node_function_vals[i] = node_function
         loop_vars_vals[i] = loop_vars
+
+        # If it's a stochastic variable and not observed, it's a parameter
+        # If active_parameters is specified, only include those that are in the list
+        if is_stochastic && !is_observed
+            if active_parameters === nothing || vn in active_parameters
+                push!(sorted_parameters, vn)
+            end
+        end
     end
+
     return GraphEvaluationData(
         sorted_nodes,
         is_stochastic_vals,
         is_observed_vals,
         map(identity, node_function_vals),
         map(identity, loop_vars_vals),
+        sorted_parameters,
     )
 end
 
@@ -67,14 +82,13 @@ The `BUGSModel` object is used for inference and represents the output of compil
 - `data::data_T`: The data associated with the model (for serialization).
 - `g::BUGSGraph`: An instance of `BUGSGraph`, representing the dependency graph of the model.
 - `evaluation_env::T`: A `NamedTuple` containing the values of the variables in the model, all the values are in the constrained space.
-- `parameters::Vector{<:VarName}`: A vector containing the names of the model parameters (unobserved stochastic variables).
 - `transformed::Bool`: Indicates whether the model parameters are in the transformed space.
 - `evaluation_mode::EMT`: The mode for evaluating the log-density (either `UseGeneratedLogDensityFunction` or `UseGraph`).
 - `untransformed_param_length::Int`: The length of the parameters vector in the original (constrained) space.
 - `transformed_param_length::Int`: The length of the parameters vector in the transformed (unconstrained) space.
 - `untransformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the original (constrained) space.
 - `transformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space.
-- `flattened_graph_node_data::GraphEvaluationData{TNF,TV}`: A `GraphEvaluationData` object containing pre-computed values of the nodes in the model. For each topological order, this needs to be recomputed.
+- `graph_evaluation_data::GraphEvaluationData{TNF,TV}`: A `GraphEvaluationData` object containing pre-computed values of the nodes in the model. For each topological order, this needs to be recomputed.
 - `log_density_computation_function::F`: The generated function for computing log-density (if available).
 - `base_model::base_model_T`: If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`.
 """
@@ -89,12 +103,10 @@ struct BUGSModel{
 } <: AbstractBUGSModel
     model_def::Expr
     data::data_T
-    
-    g::BUGSGraph
-    
-    evaluation_env::T
 
-    parameters::Vector{<:VarName}
+    g::BUGSGraph
+
+    evaluation_env::T
 
     transformed::Bool
     evaluation_mode::EMT
@@ -104,10 +116,10 @@ struct BUGSModel{
     untransformed_var_lengths::Dict{<:VarName,Int}
     transformed_var_lengths::Dict{<:VarName,Int}
 
-    flattened_graph_node_data::GraphEvaluationData{TNF,TV}
-    
+    graph_evaluation_data::GraphEvaluationData{TNF,TV}
+
     log_density_computation_function::F
-    
+
     base_model::base_model_T
 end
 
@@ -163,23 +175,21 @@ function BUGSModel(
     initial_params::NamedTuple=NamedTuple(),
     is_transformed::Bool=true,
 )
-    flattened_graph_node_data = GraphEvaluationData(g)
-    parameters = VarName[]
+    graph_evaluation_data = GraphEvaluationData(g)
     untransformed_param_length, transformed_param_length = 0, 0
     untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
     Dict{VarName,Int}()
 
-    for (i, vn) in enumerate(flattened_graph_node_data.sorted_nodes)
-        is_stochastic = flattened_graph_node_data.is_stochastic_vals[i]
-        is_observed = flattened_graph_node_data.is_observed_vals[i]
-        node_function = flattened_graph_node_data.node_function_vals[i]
-        loop_vars = flattened_graph_node_data.loop_vars_vals[i]
+    for (i, vn) in enumerate(graph_evaluation_data.sorted_nodes)
+        is_stochastic = graph_evaluation_data.is_stochastic_vals[i]
+        is_observed = graph_evaluation_data.is_observed_vals[i]
+        node_function = graph_evaluation_data.node_function_vals[i]
+        loop_vars = graph_evaluation_data.loop_vars_vals[i]
 
         if !is_stochastic
             value = Base.invokelatest(node_function, evaluation_env, loop_vars)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         elseif !is_observed
-            push!(parameters, vn)
             dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
 
             untransformed_var_lengths[vn] = length(dist)
@@ -233,13 +243,15 @@ function BUGSModel(
         pass = CollectSortedNodes(evaluation_env)
         JuliaBUGS.analyze_block(pass, reconstructed_model_def)
         sorted_nodes = pass.sorted_nodes
-        original_parameters_length = length(parameters)
-        parameters = VarName[vn for vn in sorted_nodes if vn in parameters]
-        sorted_nodes = [
-            vn for vn in sorted_nodes if vn in flattened_graph_node_data.sorted_nodes
+        original_parameters_length = length(graph_evaluation_data.sorted_parameters)
+        new_parameters = VarName[
+            vn for vn in sorted_nodes if vn in graph_evaluation_data.sorted_parameters
         ]
-        @assert length(parameters) == original_parameters_length "there are less parameters in the generated log density function than in the original model"
-        flattened_graph_node_data = GraphEvaluationData(g, sorted_nodes)
+        sorted_nodes = [
+            vn for vn in sorted_nodes if vn in graph_evaluation_data.sorted_nodes
+        ]
+        @assert length(new_parameters) == original_parameters_length "there are less parameters in the generated log density function than in the original model"
+        graph_evaluation_data = GraphEvaluationData(g, sorted_nodes, new_parameters)
     else
         log_density_computation_function = nothing
     end
@@ -252,14 +264,13 @@ function BUGSModel(
         data,
         g,
         evaluation_env,
-        parameters,
         is_transformed,
         UseGraph(),
         untransformed_param_length,
         transformed_param_length,
         untransformed_var_lengths,
         transformed_var_lengths,
-        flattened_graph_node_data,
+        graph_evaluation_data,
         log_density_computation_function,
         nothing,
     )
@@ -272,19 +283,19 @@ function BUGSModel(
     sorted_nodes::Vector{<:VarName},
     evaluation_env::NamedTuple=model.evaluation_env,
 )
+    graph_eval_data = GraphEvaluationData(g, sorted_nodes, parameters)
     return BUGSModel(
         model.model_def,
         model.data,
         g,
         evaluation_env,
-        parameters,
         model.transformed,
         model.evaluation_mode,
-        sum(model.untransformed_var_lengths[v] for v in parameters),
-        sum(model.transformed_var_lengths[v] for v in parameters),
+        sum(model.untransformed_var_lengths[v] for v in graph_eval_data.sorted_parameters),
+        sum(model.transformed_var_lengths[v] for v in graph_eval_data.sorted_parameters),
         model.untransformed_var_lengths,
         model.transformed_var_lengths,
-        GraphEvaluationData(g, sorted_nodes),
+        graph_eval_data,
         model.log_density_computation_function,
         isnothing(model.base_model) ? model : model.base_model,
     )
@@ -297,7 +308,7 @@ end
 
 Return a vector of `VarName` containing the names of the model parameters (unobserved stochastic variables).
 """
-parameters(model::BUGSModel) = model.parameters
+parameters(model::BUGSModel) = model.graph_evaluation_data.sorted_parameters
 
 """
     variables(model::BUGSModel)
@@ -317,11 +328,11 @@ Initialize the model with a NamedTuple of initial values, the values are expecte
 function initialize!(
     model::BUGSModel, initial_params::NamedTuple{<:Any,<:Tuple{Vararg{AllowedValue}}}
 )
-    for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
-        is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
-        is_observed = model.flattened_graph_node_data.is_observed_vals[i]
-        node_function = model.flattened_graph_node_data.node_function_vals[i]
-        loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
+    for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
+        is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
+        is_observed = model.graph_evaluation_data.is_observed_vals[i]
+        node_function = model.graph_evaluation_data.node_function_vals[i]
+        loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
         if !is_stochastic
             value = Base.invokelatest(node_function, model.evaluation_env, loop_vars)
             BangBang.@set!! model.evaluation_env = setindex!!(
@@ -374,7 +385,7 @@ function getparams(model::BUGSModel)
 
     param_vals = Vector{Float64}(undef, param_length)
     pos = 1
-    for v in model.parameters
+    for v in model.graph_evaluation_data.sorted_parameters
         if !model.transformed
             val = AbstractPPL.get(model.evaluation_env, v)
             len = model.untransformed_var_lengths[v]
@@ -409,7 +420,7 @@ If model.transformed is true, returns parameters in transformed space.
 """
 function getparams(T::Type{<:AbstractDict}, model::BUGSModel)
     d = T()
-    for v in model.parameters
+    for v in model.graph_evaluation_data.sorted_parameters
         value = AbstractPPL.get(model.evaluation_env, v)
         if !model.transformed
             d[v] = value

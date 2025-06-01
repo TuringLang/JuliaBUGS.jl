@@ -19,14 +19,14 @@ function condition(
     sorted_nodes=Nothing,
 )
     check_var_group(var_group, model)
-    new_parameters = setdiff(model.parameters, var_group)
+    new_parameters = setdiff(model.graph_evaluation_data.sorted_parameters, var_group)
 
     sorted_blanket_with_vars = if sorted_nodes isa Nothing
-        model.flattened_graph_node_data.sorted_nodes
+        model.graph_evaluation_data.sorted_nodes
     else
         filter(
             vn -> vn in union(markov_blanket(model.g, new_parameters), new_parameters),
-            model.flattened_graph_node_data.sorted_nodes,
+            model.graph_evaluation_data.sorted_nodes,
         )
     end
 
@@ -53,16 +53,15 @@ function decondition(model::BUGSModel, var_group::Vector{<:VarName})
     base_model = model.base_model isa Nothing ? model : model.base_model
 
     new_parameters = [
-        v for v in base_model.flattened_graph_node_data.sorted_nodes if
-        v in union(model.parameters, var_group)
+        v for v in base_model.graph_evaluation_data.sorted_nodes if
+        v in union(model.graph_evaluation_data.sorted_parameters, var_group)
     ] # keep the order
 
     markov_blanket_with_vars = union(
         markov_blanket(base_model.g, new_parameters), new_parameters
     )
     sorted_blanket_with_vars = filter(
-        vn -> vn in markov_blanket_with_vars,
-        base_model.flattened_graph_node_data.sorted_nodes,
+        vn -> vn in markov_blanket_with_vars, base_model.graph_evaluation_data.sorted_nodes
     )
 
     new_model = BUGSModel(

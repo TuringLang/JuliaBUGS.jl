@@ -64,15 +64,18 @@ l = @varname l
 c = @varname c
 @test Set(Symbol.(markov_blanket(model.g, c))) == Set([:l, :a, :b, :f])
 
-cond_model = AbstractPPL.condition(model, setdiff(model.parameters, [c]))
+cond_model = AbstractPPL.condition(
+    model, setdiff(model.graph_evaluation_data.sorted_parameters, [c])
+)
 # tests for MarkovBlanketBUGSModel constructor
-@test cond_model.parameters == [c]
-@test Set(Symbol.(cond_model.flattened_graph_node_data.sorted_nodes)) ==
+@test cond_model.graph_evaluation_data.sorted_parameters == [c]
+@test Set(Symbol.(cond_model.graph_evaluation_data.sorted_nodes)) ==
     Set([:l, :a, :b, :f, :c])
 
 decond_model = AbstractPPL.decondition(cond_model, [a, l])
-@test Set(Symbol.(decond_model.parameters)) == Set([:a, :c, :l])
-@test Set(Symbol.(decond_model.flattened_graph_node_data.sorted_nodes)) ==
+@test Set(Symbol.(decond_model.graph_evaluation_data.sorted_parameters)) ==
+    Set([:a, :c, :l])
+@test Set(Symbol.(decond_model.graph_evaluation_data.sorted_nodes)) ==
     Set([:l, :b, :f, :a, :d, :e, :c, :h, :g, :i])
 
 c_value = 4.0
