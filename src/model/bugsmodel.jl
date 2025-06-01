@@ -132,8 +132,7 @@ function BUGSModel(
     untransformed_var_lengths::Dict{<:VarName,Int}=model.untransformed_var_lengths,
     transformed_var_lengths::Dict{<:VarName,Int}=model.transformed_var_lengths,
     evaluation_env::NamedTuple=model.evaluation_env,
-    parameters::Vector{<:VarName}=model.parameters,
-    flattened_graph_node_data::FlattenedGraphNodeData=model.flattened_graph_node_data,
+    graph_evaluation_data::GraphEvaluationData=model.graph_evaluation_data,
     g::BUGSGraph=model.g,
     base_model::Union{<:AbstractBUGSModel,Nothing}=model.base_model,
     evaluation_mode::EvaluationMode=model.evaluation_mode,
@@ -142,20 +141,19 @@ function BUGSModel(
     data=model.data,
 )
     return BUGSModel(
+        model_def,
+        data,
+        g,
+        evaluation_env,
         transformed,
+        evaluation_mode,
         untransformed_param_length,
         transformed_param_length,
         untransformed_var_lengths,
         transformed_var_lengths,
-        evaluation_env,
-        parameters,
-        flattened_graph_node_data,
-        g,
-        base_model,
-        evaluation_mode,
+        graph_evaluation_data,
         log_density_computation_function,
-        model_def,
-        data,
+        base_model,
     )
 end
 
