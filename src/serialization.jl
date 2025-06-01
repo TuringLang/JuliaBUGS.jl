@@ -1,7 +1,7 @@
 using Serialization
 
 function Serialization.serialize(s::Serialization.AbstractSerializer, model::BUGSModel)
-    if !isnothing(model.base_mode)
+    if !isnothing(model.base_model)
         throw(ArgumentError("Conditioned model can't be serialized."))
     end
     Serialization.writetag(s.io, Serialization.OBJECT_TAG)
