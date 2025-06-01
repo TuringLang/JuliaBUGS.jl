@@ -417,8 +417,7 @@ function decondition(model::BUGSModel, vars_to_decondition::Vector{<:VarName})
     # Need to maintain topological order
     new_parameters_unsorted = vcat(model.graph_evaluation_data.sorted_parameters, expanded_vars)
     new_parameters = [
-        vn for
-        vn in new_graph_evaluation_data.sorted_nodes if vn in new_parameters_unsorted
+        vn for vn in new_graph_evaluation_data.sorted_nodes if vn in new_parameters_unsorted
     ]
 
     # Recalculate parameter lengths
