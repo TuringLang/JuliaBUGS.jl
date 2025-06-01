@@ -11,19 +11,19 @@ Stores pre-computed values to avoid repeated lookups from the MetaGraph during m
 
 # Fields
 - `sorted_nodes::Vector{<:VarName}`: Variables in topological order for evaluation
+- `sorted_parameters::Vector{<:VarName}`: Parameters (unobserved stochastic variables) in sorted order consistent with sorted_nodes
 - `is_stochastic_vals::Vector{Bool}`: Whether each node represents a stochastic variable  
 - `is_observed_vals::Vector{Bool}`: Whether each node is observed (has data)
 - `node_function_vals::TNF`: Functions that define each node's computation
 - `loop_vars_vals::TV`: Loop variables associated with each node
-- `sorted_parameters::Vector{<:VarName}`: Parameters (unobserved stochastic variables) in sorted order consistent with sorted_nodes
 """
 struct GraphEvaluationData{TNF,TV}
     sorted_nodes::Vector{<:VarName}
+    sorted_parameters::Vector{<:VarName}
     is_stochastic_vals::Vector{Bool}
     is_observed_vals::Vector{Bool}
     node_function_vals::TNF
     loop_vars_vals::TV
-    sorted_parameters::Vector{<:VarName}
 end
 
 function GraphEvaluationData(
@@ -57,11 +57,11 @@ function GraphEvaluationData(
 
     return GraphEvaluationData(
         sorted_nodes,
+        sorted_parameters,
         is_stochastic_vals,
         is_observed_vals,
         map(identity, node_function_vals),
         map(identity, loop_vars_vals),
-        sorted_parameters,
     )
 end
 
@@ -88,7 +88,7 @@ The `BUGSModel` object is used for inference and represents the output of compil
 - `transformed_param_length::Int`: The length of the parameters vector in the transformed (unconstrained) space.
 - `untransformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the original (constrained) space.
 - `transformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space.
-- `graph_evaluation_data::GraphEvaluationData{TNF,TV}`: A `GraphEvaluationData` object containing pre-computed values of the nodes in the model. For each topological order, this needs to be recomputed.
+- `graph_evaluation_data::GraphEvaluationData{TNF,TV}`: A `GraphEvaluationData` object containing pre-computed values of the nodes in the model, with sorted_parameters as the second field for easy access.
 - `log_density_computation_function::F`: The generated function for computing log-density (if available).
 - `base_model::base_model_T`: If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`.
 """
@@ -138,7 +138,7 @@ function Base.show(io::IO, model::BUGSModel)
     # Group and print parameters
     printstyled(io, "  Model parameters:\n"; bold=true, color=:yellow)
     grouped_params = Dict{Symbol,Vector{VarName}}()
-    for param in model.parameters
+    for param in parameters(model)
         sym = AbstractPPL.getsym(param)
         push!(get!(grouped_params, sym, VarName[]), param)
     end
