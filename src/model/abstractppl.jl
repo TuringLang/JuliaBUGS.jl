@@ -132,15 +132,7 @@ function condition(model::BUGSModel, conditioning_spec)
                 for (orig_vn, val) in var_values
                     if AbstractPPL.subsumes(orig_vn, vn)
                         # Extract the appropriate value for indexed variables
-                        if val isa AbstractArray &&
-                            AbstractPPL.getoptic(vn) isa Accessors.IndexLens
-                            # Get the index from the variable name
-                            idx = AbstractPPL.getoptic(vn).indices
-                            expanded_var_values[vn] = val[idx...]
-                        else
-                            # For non-array values or non-indexed access, use the value directly
-                            expanded_var_values[vn] = val
-                        end
+                        expanded_var_values[vn] = AbstractPPL.getoptic(vn)(val)
                         break
                     end
                 end
@@ -153,11 +145,7 @@ function condition(model::BUGSModel, conditioning_spec)
     new_evaluation_env = _update_evaluation_env(model.evaluation_env, var_values)
     new_graph = _mark_as_observed(model.g, vars_to_condition)
     new_graph_evaluation_data = GraphEvaluationData(new_graph)
-    new_parameters_unsorted = filter(vn -> vn ∉ vars_to_condition, model.graph_evaluation_data.sorted_parameters)
-    new_parameters = VarName[
-        vn for
-        vn in new_graph_evaluation_data.sorted_nodes if vn in new_parameters_unsorted
-    ]
+    new_parameters = new_graph_evaluation_data.sorted_parameters
     new_untransformed_param_length = sum(
         model.untransformed_var_lengths[vn] for vn in new_parameters; init=0
     )
@@ -193,7 +181,7 @@ function _parse_conditioning_spec(spec::NamedTuple, model::BUGSModel)
     # Convert NamedTuple to Dict
     result = Dict{VarName,Any}()
     for (k, v) in pairs(spec)
-        result[@varname($k)] = v
+        result[VarName{k}()] = v
     end
     return result
 end
@@ -410,15 +398,9 @@ function decondition(model::BUGSModel, vars_to_decondition::Vector{<:VarName})
     new_graph = _mark_as_unobserved(model.g, expanded_vars)
 
     # Recreate graph evaluation data
+    # GraphEvaluationData will automatically identify parameters from the updated graph
     new_graph_evaluation_data = GraphEvaluationData(new_graph)
-
-    # Add deconditioned variables back to parameters
-    # Need to maintain topological order
-    new_parameters_unsorted = vcat(model.graph_evaluation_data.sorted_parameters, expanded_vars)
-    new_parameters = [
-        vn for
-        vn in new_graph_evaluation_data.sorted_nodes if vn in new_parameters_unsorted
-    ]
+    new_parameters = new_graph_evaluation_data.sorted_parameters
 
     # Recalculate parameter lengths
     new_untransformed_param_length = sum(
