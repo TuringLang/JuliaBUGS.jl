@@ -152,11 +152,11 @@ function condition(model::BUGSModel, conditioning_spec)
 
     new_evaluation_env = _update_evaluation_env(model.evaluation_env, var_values)
     new_graph = _mark_as_observed(model.g, vars_to_condition)
-    new_flattened_graph_node_data = FlattenedGraphNodeData(new_graph)
-    new_parameters_unsorted = filter(vn -> vn ∉ vars_to_condition, model.parameters)
+    new_graph_evaluation_data = GraphEvaluationData(new_graph)
+    new_parameters_unsorted = filter(vn -> vn ∉ vars_to_condition, model.graph_evaluation_data.sorted_parameters)
     new_parameters = VarName[
         vn for
-        vn in new_flattened_graph_node_data.sorted_nodes if vn in new_parameters_unsorted
+        vn in new_graph_evaluation_data.sorted_nodes if vn in new_parameters_unsorted
     ]
     new_untransformed_param_length = sum(
         model.untransformed_var_lengths[vn] for vn in new_parameters; init=0
@@ -169,8 +169,7 @@ function condition(model::BUGSModel, conditioning_spec)
         untransformed_param_length=new_untransformed_param_length,
         transformed_param_length=new_transformed_param_length,
         evaluation_env=new_evaluation_env,
-        parameters=new_parameters,
-        flattened_graph_node_data=new_flattened_graph_node_data,
+        graph_evaluation_data=new_graph_evaluation_data,
         g=new_graph,
         # Use flat design: base_model is either the original compiled model or nothing
         base_model=isnothing(model.base_model) ? model : model.base_model,
@@ -410,15 +409,15 @@ function decondition(model::BUGSModel, vars_to_decondition::Vector{<:VarName})
     # Create new graph with variables unmarked as observed
     new_graph = _mark_as_unobserved(model.g, expanded_vars)
 
-    # Recreate flattened graph node data
-    new_flattened_graph_node_data = FlattenedGraphNodeData(new_graph)
+    # Recreate graph evaluation data
+    new_graph_evaluation_data = GraphEvaluationData(new_graph)
 
     # Add deconditioned variables back to parameters
     # Need to maintain topological order
-    new_parameters_unsorted = vcat(model.parameters, expanded_vars)
+    new_parameters_unsorted = vcat(model.graph_evaluation_data.sorted_parameters, expanded_vars)
     new_parameters = [
         vn for
-        vn in new_flattened_graph_node_data.sorted_nodes if vn in new_parameters_unsorted
+        vn in new_graph_evaluation_data.sorted_nodes if vn in new_parameters_unsorted
     ]
 
     # Recalculate parameter lengths
@@ -433,8 +432,7 @@ function decondition(model::BUGSModel, vars_to_decondition::Vector{<:VarName})
         model;
         untransformed_param_length=new_untransformed_param_length,
         transformed_param_length=new_transformed_param_length,
-        parameters=new_parameters,
-        flattened_graph_node_data=new_flattened_graph_node_data,
+        graph_evaluation_data=new_graph_evaluation_data,
         g=new_graph,
     )
 end

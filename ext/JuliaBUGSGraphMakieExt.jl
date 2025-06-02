@@ -7,7 +7,7 @@ using JuliaBUGS
 using JuliaBUGS.MetaGraphsNext
 
 function GraphMakie.graphplot(m::JuliaBUGS.BUGSModel; kwargs...)
-    return graphplot(m.g, m.parameters; kwargs...)
+    return graphplot(m.g, m.graph_evaluation_data.sorted_parameters; kwargs...)
 end
 function GraphMakie.graphplot(g::JuliaBUGS.BUGSGraph, parameters; kwargs...)
     colors = []
