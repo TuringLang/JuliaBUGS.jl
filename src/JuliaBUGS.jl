@@ -41,7 +41,6 @@ using .Model:
     UseGraph,
     UseGeneratedLogDensityFunction
 
-include("logdensityproblems.jl")
 include("gibbs.jl")
 
 include("source_gen.jl")
