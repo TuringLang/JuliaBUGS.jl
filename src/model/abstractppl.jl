@@ -1,4 +1,4 @@
-import AbstractPPL: condition, decondition
+import AbstractPPL: condition, decondition, evaluate!!
 
 """
     condition(model::BUGSModel, conditioning_spec)
@@ -505,4 +505,65 @@ function _mark_as_unobserved(g::BUGSGraph, vars::Vector{<:VarName})
         end
     end
     return new_g
+end
+
+#######################
+# evaluate!! methods
+#######################
+
+"""
+    AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel; sample_all=true)
+
+Evaluate model using ancestral sampling from the given RNG.
+
+# Arguments
+- `rng`: Random number generator for sampling
+- `model`: The BUGSModel to evaluate
+- `sample_all`: If true, sample all variables; if false, only sample unobserved variables
+
+# Returns
+- `evaluation_env`: Updated evaluation environment
+- `logp`: Log joint density (uses model.transformed to determine if transformed space)
+"""
+function evaluate!!(rng::Random.AbstractRNG, model::BUGSModel; sample_all=true)
+    evaluation_env, log_densities = evaluate_with_rng!!(
+        rng, model; sample_all=sample_all, temperature=1.0, transformed=model.transformed
+    )
+    return evaluation_env, log_densities.tempered_logjoint
+end
+
+"""
+    AbstractPPL.evaluate!!(model::BUGSModel)
+
+Evaluate model using current values in the evaluation environment.
+
+# Returns
+- `evaluation_env`: Updated evaluation environment
+- `logp`: Log joint density (uses model.transformed to determine if transformed space)
+"""
+function evaluate!!(model::BUGSModel)
+    evaluation_env, log_densities = evaluate_with_env!!(
+        model; temperature=1.0, transformed=model.transformed
+    )
+    return evaluation_env, log_densities.tempered_logjoint
+end
+
+"""
+    AbstractPPL.evaluate!!(model::BUGSModel, flattened_values::AbstractVector)
+
+Evaluate model with the given parameter values.
+
+# Arguments
+- `model`: The BUGSModel to evaluate
+- `flattened_values`: Vector of parameter values (in transformed or untransformed space based on model.transformed)
+
+# Returns
+- `evaluation_env`: Updated evaluation environment
+- `logp`: Log joint density
+"""
+function evaluate!!(model::BUGSModel, flattened_values::AbstractVector)
+    evaluation_env, log_densities = evaluate_with_values!!(
+        model, flattened_values; temperature=1.0, transformed=model.transformed
+    )
+    return evaluation_env, log_densities.tempered_logjoint
 end

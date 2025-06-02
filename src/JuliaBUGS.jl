@@ -37,7 +37,7 @@ using .Model
 using .Model:
     AbstractBUGSModel,
     BUGSModel,
-    _tempered_evaluate!!,
+    evaluate_with_values!!,
     UseGraph,
     UseGeneratedLogDensityFunction
 

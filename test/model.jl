@@ -106,7 +106,7 @@ end
             )
         end
 
-        _, (logprior, loglikelihood, tempered_logjoint) = JuliaBUGS._tempered_evaluate!!(
+        _, (logprior, loglikelihood, tempered_logjoint) = JuliaBUGS.evaluate_with_values!!(
             model, params; temperature=2.0
         )
 
