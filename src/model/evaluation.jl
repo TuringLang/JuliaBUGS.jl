@@ -1,11 +1,11 @@
 function AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel; sample_all=true)
     logp = 0.0
     evaluation_env = deepcopy(model.evaluation_env)
-    for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
-        is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
-        is_observed = model.flattened_graph_node_data.is_observed_vals[i]
-        node_function = model.flattened_graph_node_data.node_function_vals[i]
-        loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
+    for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
+        is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
+        is_observed = model.graph_evaluation_data.is_observed_vals[i]
+        node_function = model.graph_evaluation_data.node_function_vals[i]
+        loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
         if_sample = sample_all || !is_observed # also sample if not observed, only sample conditioned variables if sample_all is true
         if !is_stochastic
             value = node_function(evaluation_env, loop_vars)
@@ -36,10 +36,10 @@ end
 function AbstractPPL.evaluate!!(model::BUGSModel)
     logp = 0.0
     evaluation_env = deepcopy(model.evaluation_env)
-    for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
-        is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
-        node_function = model.flattened_graph_node_data.node_function_vals[i]
-        loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
+    for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
+        is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
+        node_function = model.graph_evaluation_data.node_function_vals[i]
+        loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
         if !is_stochastic
             value = node_function(evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
@@ -90,11 +90,11 @@ function _tempered_evaluate!!(
     evaluation_env = deepcopy(model.evaluation_env)
     current_idx = 1
     logprior, loglikelihood = 0.0, 0.0
-    for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
-        is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
-        is_observed = model.flattened_graph_node_data.is_observed_vals[i]
-        node_function = model.flattened_graph_node_data.node_function_vals[i]
-        loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
+    for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
+        is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
+        is_observed = model.graph_evaluation_data.is_observed_vals[i]
+        node_function = model.graph_evaluation_data.node_function_vals[i]
+        loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
         if !is_stochastic
             value = node_function(evaluation_env, loop_vars)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)

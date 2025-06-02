@@ -401,7 +401,7 @@ function extract_variables_assigned_to(expr::Expr)
     return Tuple.(
         extract_variables_assigned_to(
             expr, Symbol[], Symbol[], Set{Symbol}(), Set{Symbol}()
-        )
+        ),
     )
 end
 function extract_variables_assigned_to(

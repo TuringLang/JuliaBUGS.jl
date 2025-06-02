@@ -22,7 +22,8 @@
             model.transformed_var_lengths[k] == deserialized.transformed_var_lengths[k] for
             k in keys(model.transformed_var_lengths)
         )
-        @test Set(model.parameters) == Set(deserialized.parameters)
+        @test Set(model.graph_evaluation_data.sorted_parameters) ==
+            Set(deserialized.graph_evaluation_data.sorted_parameters)
         # skip testing g
         @test model.model_def == deserialized.model_def
     end

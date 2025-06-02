@@ -4,37 +4,60 @@
 abstract type AbstractBUGSModel end
 
 """
-    FlattenedGraphNodeData{TNF,TNA,TV}
+    GraphEvaluationData{TNF,TV}
 
-Pre-compute the values of the nodes in the model to avoid lookups from MetaGraph.
+Caches node information from the model graph to optimize evaluation performance.
+Stores pre-computed values to avoid repeated lookups from the MetaGraph during model evaluation.
+
+# Fields
+- `sorted_nodes::Vector{<:VarName}`: Variables in topological order for evaluation
+- `sorted_parameters::Vector{<:VarName}`: Parameters (unobserved stochastic variables) in sorted order consistent with sorted_nodes
+- `is_stochastic_vals::Vector{Bool}`: Whether each node represents a stochastic variable  
+- `is_observed_vals::Vector{Bool}`: Whether each node is observed (has data)
+- `node_function_vals::TNF`: Functions that define each node's computation
+- `loop_vars_vals::TV`: Loop variables associated with each node
 """
-struct FlattenedGraphNodeData{TNF,TV}
+struct GraphEvaluationData{TNF,TV}
     sorted_nodes::Vector{<:VarName}
+    sorted_parameters::Vector{<:VarName}
     is_stochastic_vals::Vector{Bool}
     is_observed_vals::Vector{Bool}
     node_function_vals::TNF
     loop_vars_vals::TV
 end
 
-function FlattenedGraphNodeData(
+function GraphEvaluationData(
     g::BUGSGraph,
     sorted_nodes::Vector{<:VarName}=VarName[
         label_for(g, node) for node in topological_sort(g)
     ],
+    active_parameters::Union{Nothing,Vector{<:VarName}}=nothing,
 )
     is_stochastic_vals = Array{Bool}(undef, length(sorted_nodes))
     is_observed_vals = Array{Bool}(undef, length(sorted_nodes))
     node_function_vals = Array{Any}(undef, length(sorted_nodes))
     loop_vars_vals = Array{Any}(undef, length(sorted_nodes))
+    sorted_parameters = VarName[]
+
     for (i, vn) in enumerate(sorted_nodes)
         (; is_stochastic, is_observed, node_function, loop_vars) = g[vn]
         is_stochastic_vals[i] = is_stochastic
         is_observed_vals[i] = is_observed
         node_function_vals[i] = node_function
         loop_vars_vals[i] = loop_vars
+
+        # If it's a stochastic variable and not observed, it's a parameter
+        # If active_parameters is specified, only include those that are in the list
+        if is_stochastic && !is_observed
+            if active_parameters === nothing || vn in active_parameters
+                push!(sorted_parameters, vn)
+            end
+        end
     end
-    return FlattenedGraphNodeData(
+
+    return GraphEvaluationData(
         sorted_nodes,
+        sorted_parameters,
         is_stochastic_vals,
         is_observed_vals,
         map(identity, node_function_vals),
@@ -52,6 +75,22 @@ struct UseGraph <: EvaluationMode end
 
 The `BUGSModel` object is used for inference and represents the output of compilation. It implements the
 [`LogDensityProblems.jl`](https://github.com/tpapp/LogDensityProblems.jl) interface.
+
+# Fields
+
+- `model_def::Expr`: The original model definition (for serialization).
+- `data::data_T`: The data associated with the model (for serialization).
+- `g::BUGSGraph`: An instance of `BUGSGraph`, representing the dependency graph of the model.
+- `evaluation_env::T`: A `NamedTuple` containing the values of the variables in the model, all the values are in the constrained space.
+- `transformed::Bool`: Indicates whether the model parameters are in the transformed space.
+- `evaluation_mode::EMT`: The mode for evaluating the log-density (either `UseGeneratedLogDensityFunction` or `UseGraph`).
+- `untransformed_param_length::Int`: The length of the parameters vector in the original (constrained) space.
+- `transformed_param_length::Int`: The length of the parameters vector in the transformed (unconstrained) space.
+- `untransformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the original (constrained) space.
+- `transformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space.
+- `graph_evaluation_data::GraphEvaluationData{TNF,TV}`: A `GraphEvaluationData` object containing pre-computed values of the nodes in the model, with sorted_parameters as the second field for easy access.
+- `log_density_computation_function::F`: The generated function for computing log-density (if available).
+- `base_model::base_model_T`: If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`.
 """
 struct BUGSModel{
     EMT<:EvaluationMode,
@@ -62,37 +101,26 @@ struct BUGSModel{
     data_T,
     F<:Union{Function,Nothing},
 } <: AbstractBUGSModel
-    " Indicates whether the model parameters are in the transformed space. "
-    transformed::Bool
-
-    "The length of the parameters vector in the original (constrained) space."
-    untransformed_param_length::Int
-    "The length of the parameters vector in the transformed (unconstrained) space."
-    transformed_param_length::Int
-    "A dictionary mapping the names of the variables to their lengths in the original (constrained) space."
-    untransformed_var_lengths::Dict{<:VarName,Int}
-    "A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space."
-    transformed_var_lengths::Dict{<:VarName,Int}
-
-    "A `NamedTuple` containing the values of the variables in the model, all the values are in the constrained space."
-    evaluation_env::T
-    "A vector containing the names of the model parameters (unobserved stochastic variables)."
-    parameters::Vector{<:VarName}
-    "An `FlattenedGraphNodeData` object containing pre-computed values of the nodes in the model. For each topological order, this needs to be recomputed."
-    flattened_graph_node_data::FlattenedGraphNodeData{TNF,TV}
-
-    "An instance of `BUGSGraph`, representing the dependency graph of the model."
-    g::BUGSGraph
-
-    "If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`."
-    base_model::base_model_T
-
-    evaluation_mode::EMT
-    log_density_computation_function::F
-
-    # for serialization, save the original model definition and data
     model_def::Expr
     data::data_T
+
+    g::BUGSGraph
+
+    evaluation_env::T
+
+    transformed::Bool
+    evaluation_mode::EMT
+
+    untransformed_param_length::Int
+    transformed_param_length::Int
+    untransformed_var_lengths::Dict{<:VarName,Int}
+    transformed_var_lengths::Dict{<:VarName,Int}
+
+    graph_evaluation_data::GraphEvaluationData{TNF,TV}
+
+    log_density_computation_function::F
+
+    base_model::base_model_T
 end
 
 function Base.show(io::IO, model::BUGSModel)
@@ -110,7 +138,7 @@ function Base.show(io::IO, model::BUGSModel)
     # Group and print parameters
     printstyled(io, "  Model parameters:\n"; bold=true, color=:yellow)
     grouped_params = Dict{Symbol,Vector{VarName}}()
-    for param in model.parameters
+    for param in parameters(model)
         sym = AbstractPPL.getsym(param)
         push!(get!(grouped_params, sym, VarName[]), param)
     end
@@ -147,23 +175,21 @@ function BUGSModel(
     initial_params::NamedTuple=NamedTuple(),
     is_transformed::Bool=true,
 )
-    flattened_graph_node_data = FlattenedGraphNodeData(g)
-    parameters = VarName[]
+    graph_evaluation_data = GraphEvaluationData(g)
     untransformed_param_length, transformed_param_length = 0, 0
     untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
     Dict{VarName,Int}()
 
-    for (i, vn) in enumerate(flattened_graph_node_data.sorted_nodes)
-        is_stochastic = flattened_graph_node_data.is_stochastic_vals[i]
-        is_observed = flattened_graph_node_data.is_observed_vals[i]
-        node_function = flattened_graph_node_data.node_function_vals[i]
-        loop_vars = flattened_graph_node_data.loop_vars_vals[i]
+    for (i, vn) in enumerate(graph_evaluation_data.sorted_nodes)
+        is_stochastic = graph_evaluation_data.is_stochastic_vals[i]
+        is_observed = graph_evaluation_data.is_observed_vals[i]
+        node_function = graph_evaluation_data.node_function_vals[i]
+        loop_vars = graph_evaluation_data.loop_vars_vals[i]
 
         if !is_stochastic
             value = Base.invokelatest(node_function, evaluation_env, loop_vars)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         elseif !is_observed
-            push!(parameters, vn)
             dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
 
             untransformed_var_lengths[vn] = length(dist)
@@ -217,13 +243,15 @@ function BUGSModel(
         pass = CollectSortedNodes(evaluation_env)
         JuliaBUGS.analyze_block(pass, reconstructed_model_def)
         sorted_nodes = pass.sorted_nodes
-        original_parameters_length = length(parameters)
-        parameters = VarName[vn for vn in sorted_nodes if vn in parameters]
-        sorted_nodes = [
-            vn for vn in sorted_nodes if vn in flattened_graph_node_data.sorted_nodes
+        original_parameters_length = length(graph_evaluation_data.sorted_parameters)
+        new_parameters = VarName[
+            vn for vn in sorted_nodes if vn in graph_evaluation_data.sorted_parameters
         ]
-        @assert length(parameters) == original_parameters_length "there are less parameters in the generated log density function than in the original model"
-        flattened_graph_node_data = FlattenedGraphNodeData(g, sorted_nodes)
+        sorted_nodes = [
+            vn for vn in sorted_nodes if vn in graph_evaluation_data.sorted_nodes
+        ]
+        @assert length(new_parameters) == original_parameters_length "there are less parameters in the generated log density function than in the original model"
+        graph_evaluation_data = GraphEvaluationData(g, sorted_nodes, new_parameters)
     else
         log_density_computation_function = nothing
     end
@@ -232,20 +260,19 @@ function BUGSModel(
     #     has_generated_log_density_function ? UseGeneratedLogDensityFunction() : UseGraph()
 
     return BUGSModel(
+        model_def,
+        data,
+        g,
+        evaluation_env,
         is_transformed,
+        UseGraph(),
         untransformed_param_length,
         transformed_param_length,
         untransformed_var_lengths,
         transformed_var_lengths,
-        evaluation_env,
-        parameters,
-        flattened_graph_node_data,
-        g,
-        nothing,
-        UseGraph(),
+        graph_evaluation_data,
         log_density_computation_function,
-        model_def,
-        data,
+        nothing,
     )
 end
 
@@ -256,21 +283,21 @@ function BUGSModel(
     sorted_nodes::Vector{<:VarName},
     evaluation_env::NamedTuple=model.evaluation_env,
 )
+    graph_eval_data = GraphEvaluationData(g, sorted_nodes, parameters)
     return BUGSModel(
-        model.transformed,
-        sum(model.untransformed_var_lengths[v] for v in parameters),
-        sum(model.transformed_var_lengths[v] for v in parameters),
-        model.untransformed_var_lengths,
-        model.transformed_var_lengths,
-        evaluation_env,
-        parameters,
-        FlattenedGraphNodeData(g, sorted_nodes),
-        g,
-        isnothing(model.base_model) ? model : model.base_model,
-        model.evaluation_mode,
-        model.log_density_computation_function,
         model.model_def,
         model.data,
+        g,
+        evaluation_env,
+        model.transformed,
+        model.evaluation_mode,
+        sum(model.untransformed_var_lengths[v] for v in graph_eval_data.sorted_parameters),
+        sum(model.transformed_var_lengths[v] for v in graph_eval_data.sorted_parameters),
+        model.untransformed_var_lengths,
+        model.transformed_var_lengths,
+        graph_eval_data,
+        model.log_density_computation_function,
+        isnothing(model.base_model) ? model : model.base_model,
     )
 end
 
@@ -281,7 +308,7 @@ end
 
 Return a vector of `VarName` containing the names of the model parameters (unobserved stochastic variables).
 """
-parameters(model::BUGSModel) = model.parameters
+parameters(model::BUGSModel) = model.graph_evaluation_data.sorted_parameters
 
 """
     variables(model::BUGSModel)
@@ -301,11 +328,11 @@ Initialize the model with a NamedTuple of initial values, the values are expecte
 function initialize!(
     model::BUGSModel, initial_params::NamedTuple{<:Any,<:Tuple{Vararg{AllowedValue}}}
 )
-    for (i, vn) in enumerate(model.flattened_graph_node_data.sorted_nodes)
-        is_stochastic = model.flattened_graph_node_data.is_stochastic_vals[i]
-        is_observed = model.flattened_graph_node_data.is_observed_vals[i]
-        node_function = model.flattened_graph_node_data.node_function_vals[i]
-        loop_vars = model.flattened_graph_node_data.loop_vars_vals[i]
+    for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
+        is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
+        is_observed = model.graph_evaluation_data.is_observed_vals[i]
+        node_function = model.graph_evaluation_data.node_function_vals[i]
+        loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
         if !is_stochastic
             value = Base.invokelatest(node_function, model.evaluation_env, loop_vars)
             BangBang.@set!! model.evaluation_env = setindex!!(
@@ -358,7 +385,7 @@ function getparams(model::BUGSModel)
 
     param_vals = Vector{Float64}(undef, param_length)
     pos = 1
-    for v in model.parameters
+    for v in model.graph_evaluation_data.sorted_parameters
         if !model.transformed
             val = AbstractPPL.get(model.evaluation_env, v)
             len = model.untransformed_var_lengths[v]
@@ -393,7 +420,7 @@ If model.transformed is true, returns parameters in transformed space.
 """
 function getparams(T::Type{<:AbstractDict}, model::BUGSModel)
     d = T()
-    for v in model.parameters
+    for v in model.graph_evaluation_data.sorted_parameters
         value = AbstractPPL.get(model.evaluation_env, v)
         if !model.transformed
             d[v] = value

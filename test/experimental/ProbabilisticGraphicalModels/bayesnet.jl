@@ -564,7 +564,7 @@ using AbstractPPL
             @test bn_logp ≈ bugs_logp rtol = 1E-6
 
             # Check if all values match
-            for name in bugs_model.flattened_graph_node_data.sorted_nodes
+            for name in bugs_model.graph_evaluation_data.sorted_nodes
                 @test AbstractPPL.get(bugs_env, name) ≈ AbstractPPL.get(bn_env, name) rtol =
                     1E-6
             end
@@ -601,7 +601,7 @@ using AbstractPPL
             @test bn_logjoint ≈ bugs_logjoint rtol = 1E-6
 
             # Check if all values match
-            for name in bugs_model.flattened_graph_node_data.sorted_nodes
+            for name in bugs_model.graph_evaluation_data.sorted_nodes
                 @test AbstractPPL.get(bugs_env, name) ≈ AbstractPPL.get(bn_env, name) rtol =
                     1E-6
             end
