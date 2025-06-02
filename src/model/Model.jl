@@ -14,6 +14,7 @@ include("utils.jl")
 include("bugsmodel.jl")
 include("evaluation.jl")
 include("abstractppl.jl")
+include("logdensityproblems.jl")
 
 export parameters, variables, initialize!, getparams, settrans, set_evaluation_mode
 

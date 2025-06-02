@@ -1,3 +1,5 @@
+using LogDensityProblems
+
 function _eval_logdensity(model, ::Model.UseGeneratedLogDensityFunction, x)
     return model.log_density_computation_function(model.evaluation_env, x)
 end
