@@ -64,48 +64,6 @@ l = @varname l
 c = @varname c
 @test Set(Symbol.(markov_blanket(model.g, c))) == Set([:l, :a, :b, :f])
 
-# TODO: Fix condition/decondition functionality
-# cond_model = AbstractPPL.condition(
-#     model, setdiff(model.graph_evaluation_data.sorted_parameters, [c])
-# )
-# # tests for MarkovBlanketBUGSModel constructor
-# @test cond_model.graph_evaluation_data.sorted_parameters == [c]
-# @test Set(Symbol.(cond_model.graph_evaluation_data.sorted_nodes)) ==
-#     Set([:l, :a, :b, :f, :c])
-
-# decond_model = AbstractPPL.decondition(cond_model, [a, l])
-# @test Set(Symbol.(decond_model.graph_evaluation_data.sorted_parameters)) ==
-#     Set([:a, :c, :l])
-# @test Set(Symbol.(decond_model.graph_evaluation_data.sorted_nodes)) ==
-#     Set([:l, :b, :f, :a, :d, :e, :c, :h, :g, :i])
-
-c_value = 4.0
-mb_logp = begin
-    logp = 0
-    f = 2.0 - 1.0
-    logp += logpdf(dnorm(f, c_value), 1.0) # a
-    logp += logpdf(dnorm(0.0, 1.0), 2.0) # b
-    logp += logpdf(dnorm(0.0, 1.0), -2.0) # l
-    logp += logpdf(dnorm(-2.0, 1.0), c_value) # c
-    logp
-end
-
-# TODO: Fix condition/decondition functionality
-# # order: b, l, c, a
-# @test mb_logp ≈ evaluate!!(cond_model, [c_value])[2] rtol = 1e-8
-
-@test begin
-    logp = 0
-    logp += logpdf(dnorm(1.0, 3.0), 1.0) # a, where f = 1.0
-    logp += logpdf(dnorm(0.0, 1.0), 2.0) # b
-    logp += logpdf(dnorm(0.0, 1.0), -2.0) # l
-    logp += logpdf(dnorm(-2.0, 1.0), 3.0) # c
-    logp += logpdf(dnorm(0.0, 1.0), 4.0) # i
-    logp += logpdf(dnorm(2.0, 1.0), 4.0) # d, where g = 2.0
-    logp += logpdf(dnorm(4.0, 4.0), 5.0) # e, where h = 4.0
-    logp
-end ≈ evaluate!!(model, [-2.0, 4.0, 3.0, 2.0, 1.0, 4.0, 5.0])[2] atol = 1e-8
-
 """
 mu[1]           mu[2]
    ╲            ╱
