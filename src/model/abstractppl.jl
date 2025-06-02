@@ -28,7 +28,7 @@ New `BUGSModel` with:
 ```jldoctest condition
 julia> using JuliaBUGS: @bugs, compile, @varname, initialize!
 
-julia> using JuliaBUGS.Model: condition
+julia> using JuliaBUGS.Model: condition, parameters
 
 julia> using Test
 
@@ -49,7 +49,7 @@ julia> model_cond.evaluation_env.x[1:2]
  1.0
  2.0
 
-julia> model_cond.parameters
+julia> parameters(model_cond)
 2-element Vector{AbstractPPL.VarName}:
  x[3]
  y
@@ -66,7 +66,7 @@ julia> model_cond2.evaluation_env.x
  6.0
  7.0
 
-julia> model_cond2.parameters  # All x[i] removed, only y remains
+julia> parameters(model_cond2)  # All x[i] removed, only y remains
 1-element Vector{AbstractPPL.VarName}:
  y
 
@@ -86,7 +86,7 @@ julia> # NamedTuple syntax
 julia> model_cond3.evaluation_env.y
 10.0
 
-julia> model_cond3.parameters  # y removed, only x[i] remain
+julia> parameters(model_cond3)  # y removed, only x[i] remain
 3-element Vector{AbstractPPL.VarName}:
  x[3]
  x[2]
@@ -110,7 +110,7 @@ julia> model_cond4.evaluation_env.x[[1, 3]]
  1.0
  3.0
 
-julia> model_cond4.parameters
+julia> parameters(model_cond4)
 2-element Vector{AbstractPPL.VarName}:
  x[2]
  y
@@ -276,7 +276,7 @@ For base_model restoration (no args):
 ```jldoctest decondition
 julia> using JuliaBUGS: @bugs, compile, @varname
 
-julia> using JuliaBUGS.Model: condition, decondition
+julia> using JuliaBUGS.Model: condition, parameters, decondition
 
 julia> using Test
 
@@ -291,20 +291,20 @@ julia> model = compile(model_def, (; z = 2.5));
 julia> # Condition model
        model_cond = condition(model, (; x = 1.0, y = 1.5));
 
-julia> model_cond.parameters
+julia> parameters(model_cond)
 AbstractPPL.VarName[]
 
 julia> # Partial deconditioning with specified variables
        model_d1 = decondition(model_cond, [@varname(y)]);
 
-julia> model_d1.parameters
-1-element Vector{AbstractPPL.VarName{:y, typeof(identity)}}:
+julia> parameters(model_d1)
+1-element Vector{AbstractPPL.VarName}:
  y
 
 julia> # Full restoration to base model (no arguments)
        model_restored = decondition(model_cond);
 
-julia> model_restored.parameters == model.parameters
+julia> parameters(model_restored) == parameters(model)
 true
 
 julia> model_restored.evaluation_env.x  # Keeps conditioned values
@@ -336,7 +336,7 @@ julia> # Chain of conditioning
 julia> # With flat design, all conditioned models restore to original
        model_restored = decondition(m2);
 
-julia> model_restored.parameters == model.parameters  # Back to original
+julia> parameters(model_restored) == parameters(model)  # Back to original
 true
 
 julia> model_restored.evaluation_env.x  # But keeps the conditioned values
@@ -346,7 +346,7 @@ julia> model_restored.evaluation_env.y
 2.0
 
 julia> # m1 also restores to original model
-       decondition(m1).parameters == model.parameters
+       parameters(decondition(m1)) == parameters(model)
 true
 
 julia> # Subsumption example
@@ -367,8 +367,8 @@ julia> # Decondition with subsumption
            decondition(model_arr_cond, [@varname(v)])
        );
 
-julia> model_arr_decon.parameters
-3-element Vector{AbstractPPL.VarName{:v, Accessors.IndexLens{Tuple{Int64}}}}:
+julia> parameters(model_arr_decon)
+3-element Vector{AbstractPPL.VarName}:
  v[3]
  v[2]
  v[1]
