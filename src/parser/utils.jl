@@ -90,6 +90,35 @@ end
 
 Decompose a for-loop expression into its components. The function returns four items: the 
 loop variable, the lower bound, the upper bound, and the body of the loop.
+
+# Examples
+```jldoctest; setup = :(using JuliaBUGS.Parser.CompilerUtils: decompose_for_expr; using MacroTools)
+julia> ex = MacroTools.@q for i in 1:3
+           x[i] = i
+           for j in 1:3
+               y[i, j] = i + j
+           end
+       end;
+
+julia> loop_var, lb, ub, body = decompose_for_expr(ex);
+
+julia> loop_var
+:i
+
+julia> lb
+1
+
+julia> ub
+3
+
+julia> body == MacroTools.@q begin
+           x[i] = i
+           for j in 1:3
+               y[i, j] = i + j
+           end
+       end
+true
+```
 """
 @inline function decompose_for_expr(expr::Expr)
     loop_var::Symbol = expr.args[1].args[1]
