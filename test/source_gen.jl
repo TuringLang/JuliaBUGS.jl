@@ -32,7 +32,7 @@ test_examples = [
     :cervix,
 ]
 
-@testset "source_gen: $example_name" for example_name in test_examples
+@testset "Source Generation - $example_name" for example_name in test_examples
     (; model_def, data, inits) = getfield(JuliaBUGS.BUGSExamples, example_name)
     model = compile(model_def, data, inits)
     params = JuliaBUGS.getparams(model)
@@ -47,7 +47,7 @@ test_examples = [
     @test result_with_log_density_computation_function ≈ result_with_bugsmodel
 end
 
-@testset "reserved variable names are rejected" begin
+@testset "Reserved Variable Names Rejection" begin
     @test_throws ErrorException JuliaBUGS.__check_for_reserved_names(
         @bugs begin
             __logp__ ~ dnorm(0, 1)
@@ -55,7 +55,7 @@ end
     )
 end
 
-@testset "mixed data transformation and deterministic assignments" begin
+@testset "Mixed Data Transformation and Deterministic Assignments" begin
     model_def = @bugs begin
         for i in 1:5
             y[i] ~ Normal(0, 1)

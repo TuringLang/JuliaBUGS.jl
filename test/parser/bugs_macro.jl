@@ -1,5 +1,5 @@
-@testset "bugs macro with Julia AST" begin
-    @testset "Single index with empty brackets" begin
+@testset "BUGS Macro with Julia AST" begin
+    @testset "Single Index with Empty Brackets" begin
         @test (@bugs begin
             a ~ f(x[])
         end) == MacroTools.@q begin
@@ -7,7 +7,7 @@
         end
     end
 
-    @testset "Implicit indexing on LHS" begin
+    @testset "Implicit Indexing on LHS" begin
         @test_throws ErrorException JuliaBUGS.Parser.bugs_top(
             :(
                 begin
@@ -17,13 +17,13 @@
         )
     end
 
-    @testset "Indexing with expression" begin
+    @testset "Indexing with Expression" begin
         @bugs begin
             x[a[1] + 1, b] ~ dnorm(c[f(b[2])], 1)
         end
     end
 
-    @testset "Indexing with ranges" begin
+    @testset "Indexing with Ranges" begin
         @bugs begin
             x[a[1]:b[2], c[3]:d[4]] = f(a[1]:b[2], c[3]:d[4])
         end
@@ -67,7 +67,7 @@
     end
 
     @testset "Multiple statements on the same line" begin
-        ex = @bugs (x[1] = 1; y[1] ~ dnorm(0, 1))
+        ex = @bugs (x[1]=1; y[1] ~ dnorm(0, 1))
         @test ex == MacroTools.@q begin
             x[1] = 1
             y[1] ~ dnorm(0, 1)

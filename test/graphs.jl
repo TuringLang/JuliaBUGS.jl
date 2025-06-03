@@ -128,7 +128,7 @@ function JuliaBUGS.is_stochastic(g::MetaGraph{Int,<:SimpleDiGraph,Int,TestNode},
 end
 end # module GraphsTest
 
-@testset "find_generated_quantities_variables" begin
+@testset "Generated Quantities Variable Detection" begin
     using .GraphsTest
 
     function generate_random_dag(num_nodes::Int, p::Float64=0.3)
@@ -168,8 +168,7 @@ end # module GraphsTest
         return generated_quantities_variables
     end
 
-    @testset "random DAG with $num_nodes nodes and $p probability of edge" for num_nodes in
-                                                                               [
+    @testset "Random DAG - $num_nodes nodes, edge probability $p" for num_nodes in [
             10, 20, 100, 500, 1000
         ],
         p in [0.1, 0.3, 0.5]
@@ -180,7 +179,7 @@ end # module GraphsTest
     end
 end
 
-@testset "markov_blanket" begin
+@testset "Markov Blanket Computation" begin
     using .GraphsTest
 
     """ Mermaid code for visualizing the test graph

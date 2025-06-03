@@ -2,7 +2,14 @@ using JuliaBUGS: CollectVariables, DataTransformation, CheckRepeatedAssignments
 using JuliaBUGS: is_resolved
 using JuliaBUGS: is_specified_by_data, is_partially_specified_as_data
 
-@testset "CollectVariables Error Cases" begin
+@testset "Compilation of BUGS Examples (Volume 1)" begin
+    @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
+        m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
+        model = compile(m.model_def, m.data, m.inits)
+    end
+end
+
+@testset "Variable Collection - Error Cases" begin
     # assign to data
     model_def = @bugs begin
         b = a
@@ -31,7 +38,7 @@ using JuliaBUGS: is_specified_by_data, is_partially_specified_as_data
     @test_throws BoundsError JuliaBUGS.determine_array_sizes(model_def, data)
 end
 
-@testset "is_specified_by_data" begin
+@testset "Data Specification Checks" begin
     data = (a=2, b=[1, 2, 3], c=[1, 2, missing], d=[missing, missing, missing])
 
     # a is data
@@ -55,7 +62,7 @@ end
     @test !is_partially_specified_as_data(data, :d, 1:2)
 end
 
-@testset "Constant propagation" begin
+@testset "Constant Propagation in Data Transformation" begin
     model_def = @bugs begin
         a = b + 1
         c = d[1] + e[2]
@@ -87,8 +94,8 @@ end
     @test new_value_added == false
 end
 
-@testset "CheckRepeatedAssignments" begin
-    @testset "with Leuk" begin
+@testset "Repeated Assignment Detection" begin
+    @testset "Leuk Example - Repeated Assignment Check" begin
         model_def = JuliaBUGS.BUGSExamples.leuk.model_def
         data = JuliaBUGS.BUGSExamples.leuk.data
         inits = JuliaBUGS.BUGSExamples.leuk.inits
@@ -103,10 +110,10 @@ end
         @test collect(keys(suspect_arrays)) == [:dN]
     end
 
-    @testset "error cases" begin
+    @testset "Error Cases - Invalid Repeated Assignments" begin
         data = (;)
 
-        @testset "repeated scalar logical assignment" begin
+        @testset "Repeated Scalar Logical Assignment" begin
             model_def = @bugs begin
                 a = 1
                 a = 2
@@ -114,7 +121,7 @@ end
             @test_throws ErrorException JuliaBUGS.determine_array_sizes(model_def, data)
         end
 
-        @testset "repeated scalar stochastic assignment" begin
+        @testset "Repeated Scalar Stochastic Assignment" begin
             model_def = @bugs begin
                 a ~ Normal(0, 1)
                 a ~ Normal(0, 2)
@@ -122,7 +129,7 @@ end
             @test_throws ErrorException JuliaBUGS.determine_array_sizes(model_def, data)
         end
 
-        @testset "repeated array element assignment" begin
+        @testset "Repeated Array Element Assignment" begin
             model_def = @bugs begin
                 x[1] = 1
                 x[1] = 2
@@ -133,7 +140,7 @@ end
             )
         end
 
-        @testset "repeated array assignment with range" begin
+        @testset "Repeated Array Assignment with Range Indexing" begin
             model_def = @bugs begin
                 x[1] = 1
                 for i in 1:2
@@ -146,7 +153,7 @@ end
             )
         end
 
-        @testset "repeated array assignment with range" begin
+        @testset "Repeated Array Assignment with Range Indexing" begin
             model_def = @bugs begin
                 x[1] ~ Normal(0, 1)
                 x[1:2] ~ MvNormal(a[:], b[:, :])
@@ -160,7 +167,7 @@ end
     end
 end
 
-@testset "lower bound greater than upper bound" begin
+@testset "For Loop with Invalid Bounds (Lower > Upper)" begin
     model_def = @bugs begin
         for i in 2:1
             a[i] ~ dnorm(0, 1)
@@ -172,4 +179,102 @@ end
     )
     model = compile(model_def, data, (;))
     @test length(model.graph_evaluation_data.sorted_parameters) == 0
+end
+
+@testset "Compilation Edge Cases" begin
+    @testset "Variables with Both Logical and Stochastic Assignments" begin
+        @testset "Non-transformed Variable - Should Error" begin
+            ex = @bugs begin
+                a ~ Normal(0, 1)
+                b = a
+                b ~ Normal(0, 1)
+            end
+            @test_throws ErrorException compile(ex, (;), (;))
+        end
+
+        @testset "Transformed Variable - Should Succeed" begin
+            ex = @bugs begin
+                a ~ Normal(0, 1)
+                b = a
+                b ~ Normal(0, 1)
+            end
+            compile(ex, (; a=1), (;))
+        end
+    end
+
+    @testset "Array-to-Array Assignment" begin
+        model = compile(
+            (@bugs begin
+                b[1:2] ~ dmnorm(μ[:], σ[:, :])
+                a[1:2] = b[:]
+            end), (; μ=[0, 1], σ=[1 0; 0 1]), (;)
+        )
+    end
+end
+
+@testset "Undeclared Variable Error Detection" begin
+    @testset "Variable Name Used as Both Scalar and Array" begin
+        model_def = @bugs begin
+            x[1] ~ dnorm(0, 1)
+            y ~ dnorm(x, 1)
+        end
+        @test_throws ErrorException compile(model_def, (;))
+    end
+
+    @testset "Undeclared Scalar Variable" begin
+        model_def = @bugs begin
+            x[1] ~ dnorm(0, 1)
+            y ~ dnorm(x[1], z)
+        end
+        @test_throws ErrorException compile(model_def, (;))
+    end
+    @testset "Undeclared Array Variable" begin
+        model_def = @bugs begin
+            x[1] ~ dnorm(0, 1)
+            y ~ dnorm(0, x[2])
+        end
+        @test_throws ErrorException compile(model_def, (;))
+
+        model_def = @bugs begin
+            x[2] ~ dnorm(0, 1)
+            y ~ dnorm(x[1], 0)
+        end
+        @test_throws ErrorException compile(model_def, (;))
+
+        model = @bugs begin
+            x = sum(y[1:2])
+            y[1] ~ dnorm(0, 1)
+        end
+        @test_throws ErrorException compile(model, (;))
+    end
+end
+
+@testset "Model Initialization" begin
+    @testset "Rats Example Initialization" begin
+        (; model_def, data, inits) = JuliaBUGS.BUGSExamples.rats
+        model = compile(model_def, data)
+        model_init_1 = initialize!(model, inits)
+        @test AbstractPPL.get(model_init_1.evaluation_env, @varname(alpha[1])) == 250
+        @test AbstractPPL.get(model_init_1.evaluation_env, @varname(var"alpha.c")) == 150
+
+        model_init_2 = initialize!(model, fill(0.1, 65))
+        @test AbstractPPL.get(model_init_2.evaluation_env, @varname(alpha[1])) == 0.1
+        @test AbstractPPL.get(model_init_2.evaluation_env, @varname(var"alpha.c")) == 0.1
+    end
+
+    @testset "Pumps Example Initialization" begin
+        (; model_def, data, inits) = JuliaBUGS.BUGSExamples.pumps
+        model = compile(model_def, data)
+        model_init_1 = initialize!(model, inits)
+        @test AbstractPPL.get(model_init_1.evaluation_env, @varname(alpha)) == 1
+        @test AbstractPPL.get(model_init_1.evaluation_env, @varname(beta)) == 1
+    end
+end
+
+@testset "Dot Call Syntax Support" begin
+    model_def = @bugs begin
+        x[1:2] ~ Distributions.product_distribution(fill(Distributions.Normal(0, 1), 2))
+    end
+    model = compile(model_def, (;))
+    @test model.evaluation_env.x isa Vector{Float64}
 end

@@ -29,40 +29,19 @@ using Serialization
 AbstractMCMC.setprogress!(false)
 
 const TEST_GROUPS = Dict{String,Function}(
-    "unit" => () -> begin
-        @testset "Unit Tests" begin
-            Documenter.doctest(JuliaBUGS; manual=false)
-            include("utils.jl")
-        end
-    end,
-    "parser and macros" => () -> begin
-        include("parser/test_parser.jl")
-        include("passes.jl")
-        include("model_macro.jl")
-    end,
+    "doctest" => () -> Documenter.doctest(JuliaBUGS; manual=false),
+    "model_macro" => () -> include("model_macro.jl"),
+    "parser" => () -> include("parser/parser.jl"),
+    "compiler_pass" => () -> include("compiler_pass.jl"),
     "graphs" => () -> include("graphs.jl"),
-    "condition" => () -> include("model/abstractppl.jl"),
-    "compilation" => () -> begin
-        include("source_gen.jl")
-        @testset "BUGS examples volume 1" begin
-            @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
-                m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
-                model = compile(m.model_def, m.data, m.inits)
-            end
-        end
-        @testset "Some corner cases" begin
-            include("bugs_primitives.jl")
-            include("compile.jl")
-        end
-    end,
-    "log_density" => () -> begin
-        include("log_density.jl")
-        include("model.jl")
-    end,
+    "source_gen" => () -> include("source_gen.jl"),
+    "BUGSPrimitives" => () -> include("BUGSPrimitives/primitives.jl"),
+    "evaluation" => () -> include("model/evaluation.jl"),
+    "model" => () -> include("model/model.jl"),
+    "inference" => () -> include("ext/JuliaBUGSAdvancedHMCExt.jl"),
     # "gibbs" => () -> include("gibbs.jl"),
-    # "mcmchains" => () -> include("ext/mcmchains.jl"),
-    # "experimental" =>
-    #     () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
+    # "mcmchains" => () -> include("ext/JuliaBUGSMCMCChainsExt.jl"),
+    # "experimental" => () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
 )
 
 raw_selection = get(ENV, "TEST_GROUP", "all")
@@ -75,7 +54,6 @@ if "all" ∉ selected_groups
     end
 end
 
-# Execute the requested tests.
 if "all" in selected_groups
     @info "Running tests for ALL groups"
     for fn in values(TEST_GROUPS)

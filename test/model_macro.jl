@@ -1,7 +1,7 @@
 using JuliaBUGS
 using JuliaBUGS: @parameters, @model
 
-@testset "model macro" begin
+@testset "Model Macro (@model and @parameters)" begin
     @parameters struct Tp
         r
         b

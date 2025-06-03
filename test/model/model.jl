@@ -1,10 +1,10 @@
-@testset "serialization" begin
+@testset "Model Serialization" begin
     (; model_def, data) = JuliaBUGS.BUGSExamples.rats
     model = compile(model_def, data)
     serialize("m.jls", model)
     deserialized = deserialize("m.jls")
     rm("m.jls", force=true)
-    @testset "test values are correctly restored" begin
+    @testset "Value Restoration After Serialization" begin
         for vn in MetaGraphsNext.labels(model.g)
             @test isequal(
                 get(model.evaluation_env, vn), get(deserialized.evaluation_env, vn)
@@ -29,7 +29,7 @@
     end
 end
 
-@testset "controlling sampling behavior for conditioned variables" begin
+@testset "Conditioned Variables Sampling Control" begin
     model_def = @bugs begin
         x ~ Normal(0, 1)
         y ~ Normal(x, 1)
@@ -47,7 +47,7 @@ end
     @test eval_env.x != 1.0
 end
 
-@testset "`evaluate!!` is actually modifying returned `evaluation_env`" begin
+@testset "Evaluate!! Modifies Evaluation Environment" begin
     # unidentifiable coin-toss model
     unid_model_def = @bugs begin
         for i in 1:2
@@ -66,8 +66,8 @@ end
     @test eval_env.p_prod == eval_env.p[1] * eval_env.p[2]
 end
 
-@testset "logprior and loglikelihood" begin
-    @testset "Complex model with transformations" begin
+@testset "Log Prior and Log Likelihood Calculations" begin
+    @testset "Complex Model with Transformations" begin
         model_def = @bugs begin
             s[1] ~ InverseGamma(2, 3)
             s[2] ~ InverseGamma(2, 3)

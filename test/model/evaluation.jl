@@ -3,8 +3,8 @@ function _logjoint(model::JuliaBUGS.BUGSModel)
     return JuliaBUGS.evaluate!!(model)[2]
 end
 
-@testset "Log density" begin
-    @testset "Log density of distributions" begin
+@testset "Log Density Calculations" begin
+    @testset "Distribution Log Densities" begin
         @testset "dbin (Binomial)" begin
             dist = dbin(0.1, 10)
             b = Bijectors.bijector(dist)
@@ -162,8 +162,8 @@ end
     end
 end
 
-@testset "Log density of BUGS models" begin
-    @testset "rats" begin
+@testset "BUGS Model Log Densities" begin
+    @testset "Rats Model Log Density" begin
         (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1.rats
         transformed_model = compile(model_def, data, inits)
         untransformed_model = JuliaBUGS.settrans(transformed_model, false)
@@ -178,7 +178,7 @@ end
         ) ≈ -174029.38703951868 rtol = 1E-6
     end
 
-    @testset "blockers" begin
+    @testset "Blockers Model Log Density" begin
         (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1.blockers
         transformed_model = compile(model_def, data, inits)
         untransformed_model = JuliaBUGS.settrans(transformed_model, false)
@@ -194,7 +194,7 @@ end
         ) ≈ -8418.416388326123 rtol = 1E-6
     end
 
-    @testset "bones" begin
+    @testset "Bones Model Log Density" begin
         (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1.bones
         transformed_model = compile(model_def, data, inits)
         untransformed_model = JuliaBUGS.settrans(transformed_model, false)
@@ -210,7 +210,7 @@ end
         ) ≈ -161.6492002285034 rtol = 1E-6
     end
 
-    @testset "dogs" begin
+    @testset "Dogs Model Log Density" begin
         (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1.dogs
         transformed_model = compile(model_def, data, inits)
         untransformed_model = JuliaBUGS.settrans(transformed_model, false)
@@ -358,3 +358,18 @@ end
 
 # (; Dogs, Trials, Y) = data
 # model = dogs(Dogs, Trials, Y, 1 .- Y)
+
+# ReverseDiff tests
+
+@testset "Trans-dimensional Bijectors Tape Compilation" begin
+    # `birats` contains Wishart distribution 
+    model_def = JuliaBUGS.BUGSExamples.birats.model_def
+    data = JuliaBUGS.BUGSExamples.birats.data
+    inits = JuliaBUGS.BUGSExamples.birats.inits
+    model = compile(model_def, data, inits)
+    ad_model = ADgradient(:ReverseDiff, model_eval_with_graph; compile=Val(false))
+    # random initialization sometimes fails because some parameters are supposed to be from
+    # PD matrix
+    initial_θ = JuliaBUGS.getparams(model)
+    LogDensityProblems.logdensity_and_gradient(ad_model, initial_θ)
+end

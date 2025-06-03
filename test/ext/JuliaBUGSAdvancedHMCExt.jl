@@ -1,22 +1,7 @@
-# ReverseDiff
-
-@testset "trans-dim bijectors tape compilation" begin
-    # `birats` contains Wishart distribution 
-    model_def = JuliaBUGS.BUGSExamples.birats.model_def
-    data = JuliaBUGS.BUGSExamples.birats.data
-    inits = JuliaBUGS.BUGSExamples.birats.inits
-    model = compile(model_def, data, inits)
-    ad_model = ADgradient(:ReverseDiff, model_eval_with_graph; compile=Val(false))
-    # random initialization sometimes fails because some parameters are supposed to be from
-    # PD matrix
-    initial_θ = JuliaBUGS.getparams(model)
-    LogDensityProblems.logdensity_and_gradient(ad_model, initial_θ)
-end
-
 # AdvancedHMC
 
-@testset "AdvancedHMC" begin
-    @testset "Generation of parameter names" begin
+@testset "AdvancedHMC Integration" begin
+    @testset "Parameter Name Generation" begin
         model = compile(
             (@bugs begin
                 x[1:2] ~ dmnorm(mu[:], sigma[:, :])
@@ -45,7 +30,7 @@ end
             [Symbol("x[3]"), Symbol("x[1:2][1]"), Symbol("x[1:2][2]"), :y]
     end
 
-    @testset "Inference results on examples: $m" for m in [:seeds, :rats, :equiv, :stacks]
+    @testset "HMC Inference - $m Example" for m in [:seeds, :rats, :equiv, :stacks]
         data = JuliaBUGS.BUGSExamples.VOLUME_1[m].data
         inits = JuliaBUGS.BUGSExamples.VOLUME_1[m].inits
         model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_1[m].model_def, data, inits)
@@ -67,7 +52,7 @@ end
         )
 
         ref_inference_results = JuliaBUGS.BUGSExamples.VOLUME_1[m].reference_results
-        @testset "$m: $var" for var in keys(ref_inference_results)
+        @testset "$m - Parameter $var" for var in keys(ref_inference_results)
             @test summarize(samples_and_stats)[var].nt.mean[1] ≈
                 ref_inference_results[var].mean rtol = 0.2
             @test summarize(samples_and_stats)[var].nt.std[1] ≈
@@ -75,7 +60,7 @@ end
         end
     end
 
-    @testset "Inference results on examples: m" for m in [:birats]
+    @testset "HMC Inference - $m Example" for m in [:birats]
         data = JuliaBUGS.BUGSExamples.VOLUME_2[m].data
         inits = JuliaBUGS.BUGSExamples.VOLUME_2[m].inits
         model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_2[m].model_def, data, inits)
@@ -97,7 +82,7 @@ end
         )
 
         ref_inference_results = JuliaBUGS.BUGSExamples.VOLUME_2[m].reference_results
-        @testset "$m: $var" for var in keys(ref_inference_results)
+        @testset "$m - Parameter $var" for var in keys(ref_inference_results)
             @test summarize(samples_and_stats)[var].nt.mean[1] ≈
                 ref_inference_results[var].mean rtol = 0.2
             @test summarize(samples_and_stats)[var].nt.std[1] ≈
