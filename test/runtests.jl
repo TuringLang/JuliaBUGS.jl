@@ -43,7 +43,7 @@ const TEST_GROUPS = Dict{String,Function}(
     "graphs" => () -> include("graphs.jl"),
     "condition" => () -> include("model/abstractppl.jl"),
     "compilation" => () -> begin
-        include("source_gen.jl"),
+        include("source_gen.jl")
         @testset "BUGS examples volume 1" begin
             @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
                 m = JuliaBUGS.BUGSExamples.VOLUME_1[m]

@@ -259,14 +259,18 @@ function BUGSModel(
         log_density_computation_function = eval(log_density_computation_expr)
         pass = JuliaBUGS.CollectSortedNodes(evaluation_env)
         JuliaBUGS.analyze_block(pass, reconstructed_model_def)
-        sorted_nodes = pass.sorted_nodes
+
+        # Because CollectSortedNodes only looks at the LHS,
+        # pass.sorted_nodes can contain variables that are not in the graph.
+        # This is most likely caused by arrays that are only partially transformed data.
+        sorted_nodes = filter(pass.sorted_nodes) do node
+            node in graph_evaluation_data.sorted_nodes
+        end
+
         graph_evaluation_data = GraphEvaluationData(g, sorted_nodes)
     else
         log_density_computation_function = nothing
     end
-
-    evaluation_mode =
-        has_generated_log_density_function ? UseGeneratedLogDensityFunction() : UseGraph()
 
     return BUGSModel(
         model_def,
@@ -274,7 +278,7 @@ function BUGSModel(
         g,
         evaluation_env,
         is_transformed,
-        evaluation_mode,
+        UseGraph(),
         untransformed_param_length,
         transformed_param_length,
         untransformed_var_lengths,
@@ -451,6 +455,14 @@ indicates the current "mode" of the model.
 This function enables switching the "mode" of the model.
 """
 function settrans(model::BUGSModel, bool::Bool=(!(model.transformed)))
+    # Check if switching to untransformed mode while using generated log density function
+    if !bool && model.evaluation_mode isa UseGeneratedLogDensityFunction
+        error(
+            "Cannot set model to untransformed mode when using `UseGeneratedLogDensityFunction`. " *
+            "The generated log density function only supports transformed (unconstrained) parameters. " *
+            "Please use `set_evaluation_mode(model, UseGraph())` before switching to untransformed mode.",
+        )
+    end
     return BangBang.setproperty!!(model, :transformed, bool)
 end
 
@@ -484,6 +496,12 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
             "The model does not support generated log density function, the evaluation mode is set to `UseGraph`."
         )
         mode = UseGraph()
+    elseif !model.transformed && mode isa UseGeneratedLogDensityFunction
+        error(
+            "Cannot use `UseGeneratedLogDensityFunction` with untransformed model. " *
+            "The generated log density function expects parameters in transformed (unconstrained) space. " *
+            "Please use `settrans(model, true)` before switching to generated log density mode.",
+        )
     end
     return BangBang.setproperty!!(model, :evaluation_mode, mode)
 end
