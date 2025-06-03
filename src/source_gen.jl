@@ -304,7 +304,7 @@ function __check_for_reserved_names(model_def::Expr)
     bad_variable_names = filter(
         variable_name ->
             startswith(string(variable_name), "__") &&
-            endswith(string(variable_name), "__"),
+                endswith(string(variable_name), "__"),
         variable_names,
     )
     if !isempty(bad_variable_names)
@@ -328,7 +328,7 @@ function _generate_lowered_model_def(
     stmt_id_to_var = _build_stmt_id_to_var(var_to_stmt_id)
     coarse_graph = _build_coarse_dep_graph(g, stmt_to_stmt_id, var_to_stmt_id)
     if Graphs.is_cyclic(coarse_graph)
-        error("The dependency graph of the model is cyclic, cannot reorder the statements.")
+        return nothing, nothing
     end
     # show_coarse_graph(stmt_id_to_stmt, coarse_graph)
     model_def_removed_transformed_data = _copy_and_remove_stmt_with_degree_0(
@@ -539,7 +539,7 @@ function __gen_model_parameter_exprs(stmt)
         else
             length(Bijectors.transformed(__dist__, __b__))
         end
-        __reconstructed_value__ = JuliaBUGS.reconstruct(
+        __reconstructed_value__ = JuliaBUGS.Model.reconstruct(
             __b_inv__,
             __dist__,
             view(

@@ -236,62 +236,37 @@ function BUGSModel(
             untransformed_param_length += untransformed_var_lengths[vn]
             transformed_param_length += transformed_var_lengths[vn]
 
-            initialization = try
-                AbstractPPL.get(initial_params, vn)
-            catch _
-                missing
-            end
-            if !ismissing(initialization)
+            if haskey(initial_params, AbstractPPL.getsym(vn))
+                initialization = AbstractPPL.get(initial_params, vn)
                 evaluation_env = BangBang.setindex!!(evaluation_env, initialization, vn)
             else
-                init_value = try
-                    rand(dist)
-                catch e
-                    error(
-                        "Failed to sample from the prior distribution of $vn, consider providing initialization values for $vn or it's parents: $(collect(MetaGraphsNext.inneighbor_labels(g, vn))...).",
-                    )
-                end
+                init_value = rand(dist)
                 evaluation_env = BangBang.setindex!!(evaluation_env, init_value, vn)
             end
         end
     end
 
-    # TODO: stop using try-catch
-    has_generated_log_density_function = false
-    lowered_model_def = nothing
-    reconstructed_model_def = nothing
-    try
-        lowered_model_def, reconstructed_model_def = _generate_lowered_model_def(
-            model_def, g, evaluation_env
-        )
-        has_generated_log_density_function = true
-    catch _
-        has_generated_log_density_function = false
-    end
+    lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
+        model_def, g, evaluation_env
+    )
+    # if can't generate source, `_generate_lowered_model_def` will return a tuple of `nothing`
+    has_generated_log_density_function = !isnothing(lowered_model_def)
 
     if has_generated_log_density_function
-        log_density_computation_expr = _gen_log_density_computation_function_expr(
+        log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
             lowered_model_def, evaluation_env, gensym(:__compute_log_density__)
         )
         log_density_computation_function = eval(log_density_computation_expr)
-        pass = CollectSortedNodes(evaluation_env)
+        pass = JuliaBUGS.CollectSortedNodes(evaluation_env)
         JuliaBUGS.analyze_block(pass, reconstructed_model_def)
         sorted_nodes = pass.sorted_nodes
-        original_parameters_length = length(graph_evaluation_data.sorted_parameters)
-        new_parameters = VarName[
-            vn for vn in sorted_nodes if vn in graph_evaluation_data.sorted_parameters
-        ]
-        sorted_nodes = [
-            vn for vn in sorted_nodes if vn in graph_evaluation_data.sorted_nodes
-        ]
-        @assert length(new_parameters) == original_parameters_length "there are less parameters in the generated log density function than in the original model"
-        graph_evaluation_data = GraphEvaluationData(g, sorted_nodes, new_parameters)
+        graph_evaluation_data = GraphEvaluationData(g, sorted_nodes)
     else
         log_density_computation_function = nothing
     end
 
-    # evaluation_mode =
-    #     has_generated_log_density_function ? UseGeneratedLogDensityFunction() : UseGraph()
+    evaluation_mode =
+        has_generated_log_density_function ? UseGeneratedLogDensityFunction() : UseGraph()
 
     return BUGSModel(
         model_def,
@@ -299,7 +274,7 @@ function BUGSModel(
         g,
         evaluation_env,
         is_transformed,
-        UseGraph(),
+        evaluation_mode,
         untransformed_param_length,
         transformed_param_length,
         untransformed_var_lengths,
