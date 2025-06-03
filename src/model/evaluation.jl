@@ -81,10 +81,11 @@ function evaluate_with_rng!!(
 end
 
 """
-    evaluate_with_env!!(
-        model::BUGSModel; 
-        temperature=1.0, 
-        transformed=true
+    function evaluate_with_env!!(
+        model::BUGSModel,
+        evaluation_env=deepcopy(model.evaluation_env);
+        temperature=1.0,
+        transformed=true,
     )
 
 Evaluate model using current values in the evaluation environment.
@@ -98,10 +99,14 @@ Evaluate model using current values in the evaluation environment.
 - `evaluation_env`: Updated evaluation environment
 - `(logprior, loglikelihood, tempered_logjoint)`: NamedTuple of log densities
 """
-function evaluate_with_env!!(model::BUGSModel; temperature=1.0, transformed=true)
+function evaluate_with_env!!(
+    model::BUGSModel,
+    evaluation_env=deepcopy(model.evaluation_env);
+    temperature=1.0,
+    transformed=true,
+)
     logprior = 0.0
     loglikelihood = 0.0
-    evaluation_env = deepcopy(model.evaluation_env)
 
     for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
         is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
@@ -119,8 +124,7 @@ function evaluate_with_env!!(model::BUGSModel; temperature=1.0, transformed=true
             if transformed
                 # although the values stored in `evaluation_env` are in their original space, 
                 # here we behave as accepting a vector of parameters in the transformed space
-                # this is so that we have consistent logp values between
-                # (1) set values in original space then evaluate (2) directly evaluate with the values in transformed space 
+                # this is for consistency reasons
                 value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
                 logp =
                     Distributions.logpdf(dist, value) + Bijectors.logabsdetjac(
