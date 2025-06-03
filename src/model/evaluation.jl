@@ -21,23 +21,23 @@ Evaluate model using ancestral sampling from the given RNG.
 - `(logprior, loglikelihood, tempered_logjoint)`: NamedTuple of log densities
 """
 function evaluate_with_rng!!(
-    rng::Random.AbstractRNG, 
-    model::BUGSModel; 
-    sample_all=true, 
-    temperature=1.0, 
-    transformed=true
+    rng::Random.AbstractRNG,
+    model::BUGSModel;
+    sample_all=true,
+    temperature=1.0,
+    transformed=true,
 )
     logprior = 0.0
     loglikelihood = 0.0
     evaluation_env = deepcopy(model.evaluation_env)
-    
+
     for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
         is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
         is_observed = model.graph_evaluation_data.is_observed_vals[i]
         node_function = model.graph_evaluation_data.node_function_vals[i]
         loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
         if_sample = sample_all || !is_observed # also sample if not observed, only sample conditioned variables if sample_all is true
-        
+
         if !is_stochastic
             value = node_function(evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
@@ -48,33 +48,35 @@ function evaluate_with_rng!!(
             else
                 value = AbstractPPL.get(evaluation_env, vn)
             end
-            
+
             # Compute log density
             if transformed
                 # see below for why we need to transform the value
                 value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
-                logp = Distributions.logpdf(dist, value) + Bijectors.logabsdetjac(
-                    Bijectors.inverse(Bijectors.bijector(dist)), value_transformed
-                )
+                logp =
+                    Distributions.logpdf(dist, value) + Bijectors.logabsdetjac(
+                        Bijectors.inverse(Bijectors.bijector(dist)), value_transformed
+                    )
             else
                 logp = Distributions.logpdf(dist, value)
             end
-            
+
             # Accumulate to appropriate component
             if is_observed
                 loglikelihood += logp
             else
                 logprior += logp
             end
-            
+
             evaluation_env = setindex!!(evaluation_env, value, vn)
         end
     end
-    
-    return evaluation_env, (
+
+    return evaluation_env,
+    (
         logprior=logprior,
         loglikelihood=loglikelihood,
-        tempered_logjoint=logprior + temperature * loglikelihood
+        tempered_logjoint=logprior + temperature * loglikelihood,
     )
 end
 
@@ -96,41 +98,38 @@ Evaluate model using current values in the evaluation environment.
 - `evaluation_env`: Updated evaluation environment
 - `(logprior, loglikelihood, tempered_logjoint)`: NamedTuple of log densities
 """
-function evaluate_with_env!!(
-    model::BUGSModel; 
-    temperature=1.0, 
-    transformed=true
-)
+function evaluate_with_env!!(model::BUGSModel; temperature=1.0, transformed=true)
     logprior = 0.0
     loglikelihood = 0.0
     evaluation_env = deepcopy(model.evaluation_env)
-    
+
     for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
         is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
         is_observed = model.graph_evaluation_data.is_observed_vals[i]
         node_function = model.graph_evaluation_data.node_function_vals[i]
         loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
-        
+
         if !is_stochastic
             value = node_function(evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
             dist = node_function(evaluation_env, loop_vars)
             value = AbstractPPL.get(evaluation_env, vn)
-            
+
             if transformed
                 # although the values stored in `evaluation_env` are in their original space, 
                 # here we behave as accepting a vector of parameters in the transformed space
                 # this is so that we have consistent logp values between
                 # (1) set values in original space then evaluate (2) directly evaluate with the values in transformed space 
                 value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
-                logp = Distributions.logpdf(dist, value) + Bijectors.logabsdetjac(
-                    Bijectors.inverse(Bijectors.bijector(dist)), value_transformed
-                )
+                logp =
+                    Distributions.logpdf(dist, value) + Bijectors.logabsdetjac(
+                        Bijectors.inverse(Bijectors.bijector(dist)), value_transformed
+                    )
             else
                 logp = Distributions.logpdf(dist, value)
             end
-            
+
             # Accumulate to appropriate component
             if is_observed
                 loglikelihood += logp
@@ -139,11 +138,12 @@ function evaluate_with_env!!(
             end
         end
     end
-    
-    return evaluation_env, (
+
+    return evaluation_env,
+    (
         logprior=logprior,
         loglikelihood=loglikelihood,
-        tempered_logjoint=logprior + temperature * loglikelihood
+        tempered_logjoint=logprior + temperature * loglikelihood,
     )
 end
 
@@ -168,10 +168,7 @@ Evaluate model with the given parameter values.
 - `(logprior, loglikelihood, tempered_logjoint)`: NamedTuple of log densities
 """
 function evaluate_with_values!!(
-    model::BUGSModel, 
-    flattened_values::AbstractVector; 
-    temperature=1.0,
-    transformed=true
+    model::BUGSModel, flattened_values::AbstractVector; temperature=1.0, transformed=true
 )
     var_lengths = if transformed
         model.transformed_var_lengths
