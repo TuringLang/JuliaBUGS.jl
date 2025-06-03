@@ -236,62 +236,41 @@ function BUGSModel(
             untransformed_param_length += untransformed_var_lengths[vn]
             transformed_param_length += transformed_var_lengths[vn]
 
-            initialization = try
-                AbstractPPL.get(initial_params, vn)
-            catch _
-                missing
-            end
-            if !ismissing(initialization)
+            if haskey(initial_params, AbstractPPL.getsym(vn))
+                initialization = AbstractPPL.get(initial_params, vn)
                 evaluation_env = BangBang.setindex!!(evaluation_env, initialization, vn)
             else
-                init_value = try
-                    rand(dist)
-                catch e
-                    error(
-                        "Failed to sample from the prior distribution of $vn, consider providing initialization values for $vn or it's parents: $(collect(MetaGraphsNext.inneighbor_labels(g, vn))...).",
-                    )
-                end
+                init_value = rand(dist)
                 evaluation_env = BangBang.setindex!!(evaluation_env, init_value, vn)
             end
         end
     end
 
-    # TODO: stop using try-catch
-    has_generated_log_density_function = false
-    lowered_model_def = nothing
-    reconstructed_model_def = nothing
-    try
-        lowered_model_def, reconstructed_model_def = _generate_lowered_model_def(
-            model_def, g, evaluation_env
-        )
-        has_generated_log_density_function = true
-    catch _
-        has_generated_log_density_function = false
-    end
+    lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
+        model_def, g, evaluation_env
+    )
+    # if can't generate source, `_generate_lowered_model_def` will return a tuple of `nothing`
+    has_generated_log_density_function = !isnothing(lowered_model_def)
 
     if has_generated_log_density_function
-        log_density_computation_expr = _gen_log_density_computation_function_expr(
+        log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
             lowered_model_def, evaluation_env, gensym(:__compute_log_density__)
         )
         log_density_computation_function = eval(log_density_computation_expr)
-        pass = CollectSortedNodes(evaluation_env)
+        pass = JuliaBUGS.CollectSortedNodes(evaluation_env)
         JuliaBUGS.analyze_block(pass, reconstructed_model_def)
-        sorted_nodes = pass.sorted_nodes
-        original_parameters_length = length(graph_evaluation_data.sorted_parameters)
-        new_parameters = VarName[
-            vn for vn in sorted_nodes if vn in graph_evaluation_data.sorted_parameters
-        ]
-        sorted_nodes = [
-            vn for vn in sorted_nodes if vn in graph_evaluation_data.sorted_nodes
-        ]
-        @assert length(new_parameters) == original_parameters_length "there are less parameters in the generated log density function than in the original model"
-        graph_evaluation_data = GraphEvaluationData(g, sorted_nodes, new_parameters)
+
+        # Because CollectSortedNodes only looks at the LHS,
+        # pass.sorted_nodes can contain variables that are not in the graph.
+        # This is most likely caused by arrays that are only partially transformed data.
+        sorted_nodes = filter(pass.sorted_nodes) do node
+            node in graph_evaluation_data.sorted_nodes
+        end
+
+        graph_evaluation_data = GraphEvaluationData(g, sorted_nodes)
     else
         log_density_computation_function = nothing
     end
-
-    # evaluation_mode =
-    #     has_generated_log_density_function ? UseGeneratedLogDensityFunction() : UseGraph()
 
     return BUGSModel(
         model_def,
@@ -476,6 +455,14 @@ indicates the current "mode" of the model.
 This function enables switching the "mode" of the model.
 """
 function settrans(model::BUGSModel, bool::Bool=(!(model.transformed)))
+    # Check if switching to untransformed mode while using generated log density function
+    if !bool && model.evaluation_mode isa UseGeneratedLogDensityFunction
+        error(
+            "Cannot set model to untransformed mode when using `UseGeneratedLogDensityFunction`. " *
+            "The generated log density function only supports transformed (unconstrained) parameters. " *
+            "Please use `set_evaluation_mode(model, UseGraph())` before switching to untransformed mode.",
+        )
+    end
     return BangBang.setproperty!!(model, :transformed, bool)
 end
 
@@ -509,6 +496,12 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
             "The model does not support generated log density function, the evaluation mode is set to `UseGraph`."
         )
         mode = UseGraph()
+    elseif !model.transformed && mode isa UseGeneratedLogDensityFunction
+        error(
+            "Cannot use `UseGeneratedLogDensityFunction` with untransformed model. " *
+            "The generated log density function expects parameters in transformed (unconstrained) space. " *
+            "Please use `settrans(model, true)` before switching to generated log density mode.",
+        )
     end
     return BangBang.setproperty!!(model, :evaluation_mode, mode)
 end

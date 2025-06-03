@@ -6,7 +6,8 @@ using BangBang
 using Bijectors
 using Graphs
 using LinearAlgebra
-using JuliaBUGS: BUGSGraph, markov_blanket
+using JuliaBUGS: JuliaBUGS, BUGSGraph, markov_blanket
+using JuliaBUGS.BUGSPrimitives
 using MetaGraphsNext
 using Random
 
