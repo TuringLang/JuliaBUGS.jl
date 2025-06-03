@@ -87,7 +87,7 @@ function _build_var_to_stmt_id(
     stmt_ids::IdDict{Expr,Int},
 )
     pass = StatementIdAttributePass(
-        Set(labels(g)), stmt_ids, evaluation_env, Dict{VarName,Int}()
+        Set{VarName}(labels(g)), stmt_ids, evaluation_env, Dict{VarName,Int}()
     )
     analyze_block(pass, model_def)
     return pass.var_to_stmt_id
