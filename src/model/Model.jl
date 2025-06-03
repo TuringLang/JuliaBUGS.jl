@@ -7,7 +7,8 @@ using Bijectors
 using Distributions
 using Graphs
 using LinearAlgebra
-using JuliaBUGS: BUGSGraph, markov_blanket
+using JuliaBUGS: JuliaBUGS, BUGSGraph, markov_blanket
+using JuliaBUGS.BUGSPrimitives
 using MetaGraphsNext
 using Random
 

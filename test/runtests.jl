@@ -43,6 +43,7 @@ const TEST_GROUPS = Dict{String,Function}(
     "graphs" => () -> include("graphs.jl"),
     "condition" => () -> include("model/abstractppl.jl"),
     "compilation" => () -> begin
+        include("source_gen.jl")
         @testset "BUGS examples volume 1" begin
             @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
                 m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
@@ -62,8 +63,6 @@ const TEST_GROUPS = Dict{String,Function}(
     # "mcmchains" => () -> include("ext/mcmchains.jl"),
     # "experimental" =>
     #     () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
-    # TODO: there is something wrong with source_gen tests, it hangs, fix this
-    # "source_gen" => () -> include("source_gen.jl"),
 )
 
 raw_selection = get(ENV, "TEST_GROUP", "all")
