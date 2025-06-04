@@ -29,7 +29,9 @@
     @testset "Inference results on examples: $example" for example in [
         :seeds, :rats, :equiv, :stacks, :birats
     ]
-        (; model_def, data, inits) = Base.getfield(JuliaBUGS.BUGSExamples, example)
+        (; model_def, data, inits, reference_results) = Base.getfield(
+            JuliaBUGS.BUGSExamples, example
+        )
         model = JuliaBUGS.compile(model_def, data, inits)
         ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 
@@ -49,12 +51,11 @@
             discard_initial=n_adapts,
         )
 
-        ref_inference_results = JuliaBUGS.BUGSExamples.VOLUME_1[m].reference_results
-        @testset "$m: $var" for var in keys(ref_inference_results)
-            @test summarize(samples_and_stats)[var].nt.mean[1] ≈
-                ref_inference_results[var].mean rtol = 0.3
-            @test summarize(samples_and_stats)[var].nt.std[1] ≈
-                ref_inference_results[var].std rtol = 0.3
+        @testset "$example: $var" for var in keys(reference_results)
+            @test summarize(samples_and_stats)[var].nt.mean[1] ≈ reference_results[var].mean rtol =
+                0.3
+            @test summarize(samples_and_stats)[var].nt.std[1] ≈ reference_results[var].std rtol =
+                0.3
         end
     end
 end
