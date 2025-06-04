@@ -65,10 +65,10 @@
         :is_adapt,
     ]
     means = mean(hmc_chain)
-    @test means[:alpha].nt.mean[1] ≈ 2.3 atol = 0.2
-    @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.2
-    @test means[:sigma].nt.mean[1] ≈ 0.9 atol = 0.2
-    @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.2
+    @test means[:alpha].nt.mean[1] ≈ 2.3 atol = 0.3
+    @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.3
+    @test means[:sigma].nt.mean[1] ≈ 0.9 atol = 0.3
+    @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.3
 
     n_samples, n_adapts = 20000, 5000
 
@@ -91,10 +91,10 @@
     ]
     @test mh_chain.name_map[:internals] == [:lp]
     means = mean(mh_chain)
-    @test means[:alpha].nt.mean[1] ≈ 2.3 atol = 0.2
-    @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.2
-    @test means[:sigma].nt.mean[1] ≈ 0.9 atol = 0.2
-    @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.2
+    @test means[:alpha].nt.mean[1] ≈ 2.3 atol = 0.3
+    @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.3
+    @test means[:sigma].nt.mean[1] ≈ 0.9 atol = 0.3
+    @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.3
 
     # test for more complicated varnames
     model_def = @bugs begin

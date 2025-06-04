@@ -29,8 +29,8 @@
     @testset "Inference results on examples: $example" for example in [
         :seeds, :rats, :equiv, :stacks, :birats
     ]
-        (; model_def, data, inits) = Base.getfield(JuliaBUGS.BUGSExamples, m)
-        model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_1[m].model_def, data, inits)
+        (; model_def, data, inits) = Base.getfield(JuliaBUGS.BUGSExamples, example)
+        model = JuliaBUGS.compile(model_def, data, inits)
         ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 
         n_samples, n_adapts = 1000, 1000
