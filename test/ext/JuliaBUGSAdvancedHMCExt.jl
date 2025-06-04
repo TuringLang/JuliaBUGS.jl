@@ -38,7 +38,7 @@
                 )
                 ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 
-                n_samples, n_adapts = 500, 500
+                n_samples, n_adapts = 1000, 1000
 
                 D = LogDensityProblems.dimension(model)
                 initial_θ = rand(D)
@@ -88,7 +88,7 @@
                 )
                 ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 
-                n_samples, n_adapts = 500, 500
+                n_samples, n_adapts = 1000, 1000
                 D = LogDensityProblems.dimension(model)
                 initial_θ = rand(D)
 
