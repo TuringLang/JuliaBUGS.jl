@@ -152,6 +152,34 @@ function condition(model::BUGSModel, conditioning_spec)
     new_transformed_param_length = sum(
         model.transformed_var_lengths[vn] for vn in new_parameters; init=0
     )
+    # Generate new log density function for the conditioned model
+    lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
+        model.model_def, new_graph, new_evaluation_env
+    )
+    
+    new_log_density_computation_function = if !isnothing(lowered_model_def)
+        log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
+            lowered_model_def, new_evaluation_env, gensym(:__compute_log_density__)
+        )
+        new_log_density_computation_function = eval(log_density_computation_expr)
+        
+        # Collect sorted nodes from the reconstructed model def to ensure correct parameter ordering
+        pass = JuliaBUGS.CollectSortedNodes(new_evaluation_env)
+        JuliaBUGS.analyze_block(pass, reconstructed_model_def)
+        
+        # Filter to only include nodes that are in the graph
+        sorted_nodes = filter(pass.sorted_nodes) do node
+            node in new_graph_evaluation_data.sorted_nodes
+        end
+        
+        # Update graph evaluation data with the correct sorted nodes
+        new_graph_evaluation_data = GraphEvaluationData(new_graph, sorted_nodes)
+        
+        new_log_density_computation_function
+    else
+        nothing
+    end
+
     return BUGSModel(
         model;
         untransformed_param_length=new_untransformed_param_length,
@@ -159,6 +187,7 @@ function condition(model::BUGSModel, conditioning_spec)
         evaluation_env=new_evaluation_env,
         graph_evaluation_data=new_graph_evaluation_data,
         g=new_graph,
+        log_density_computation_function=new_log_density_computation_function,
         # Use flat design: base_model is either the original compiled model or nothing
         base_model=isnothing(model.base_model) ? model : model.base_model,
     )
@@ -410,12 +439,41 @@ function decondition(model::BUGSModel, vars_to_decondition::Vector{<:VarName})
         model.transformed_var_lengths[vn] for vn in new_parameters; init=0
     )
 
+    # Generate new log density function for the deconditioned model
+    lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
+        model.model_def, new_graph, model.evaluation_env
+    )
+    
+    new_log_density_computation_function = if !isnothing(lowered_model_def)
+        log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
+            lowered_model_def, model.evaluation_env, gensym(:__compute_log_density__)
+        )
+        new_log_density_computation_function = eval(log_density_computation_expr)
+        
+        # Collect sorted nodes from the reconstructed model def to ensure correct parameter ordering
+        pass = JuliaBUGS.CollectSortedNodes(model.evaluation_env)
+        JuliaBUGS.analyze_block(pass, reconstructed_model_def)
+        
+        # Filter to only include nodes that are in the graph
+        sorted_nodes = filter(pass.sorted_nodes) do node
+            node in new_graph_evaluation_data.sorted_nodes
+        end
+        
+        # Update graph evaluation data with the correct sorted nodes
+        new_graph_evaluation_data = GraphEvaluationData(new_graph, sorted_nodes)
+        
+        new_log_density_computation_function
+    else
+        nothing
+    end
+
     return BUGSModel(
         model;
         untransformed_param_length=new_untransformed_param_length,
         transformed_param_length=new_transformed_param_length,
         graph_evaluation_data=new_graph_evaluation_data,
         g=new_graph,
+        log_density_computation_function=new_log_density_computation_function,
     )
 end
 
