@@ -26,9 +26,10 @@
             [Symbol("x[3]"), Symbol("x[1:2][1]"), Symbol("x[1:2][2]"), :y]
     end
 
-    @testset "Inference results on examples: $m" for m in [:seeds, :rats, :equiv, :stacks]
-        data = JuliaBUGS.BUGSExamples.VOLUME_1[m].data
-        inits = JuliaBUGS.BUGSExamples.VOLUME_1[m].inits
+    @testset "Inference results on examples: $example" for example in [
+        :seeds, :rats, :equiv, :stacks, :birats
+    ]
+        (; model_def, data, inits) = Base.getfield(JuliaBUGS.BUGSExamples, m)
         model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_1[m].model_def, data, inits)
         ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 
