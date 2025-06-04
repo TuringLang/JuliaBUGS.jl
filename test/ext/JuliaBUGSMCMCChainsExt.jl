@@ -33,33 +33,16 @@
     D = LogDensityProblems.dimension(model)
     initial_θ = rand(D)
 
-    # Retry sampling up to 3 times for numerical stability
-    local hmc_chain
-    success = false
-    for attempt in 1:3
-        try
-            hmc_chain = AbstractMCMC.sample(
-                ad_model,
-                NUTS(0.8),
-                n_samples;
-                chain_type=Chains,
-                n_adapts=n_adapts,
-                init_params=initial_θ,
-                discard_initial=n_adapts,
-            )
-            success = true
-            break
-        catch e
-            if attempt == 3
-                rethrow(e)
-            end
-            @warn "HMC sampling attempt $attempt failed, retrying..." exception = e
-            # Reset random seed and reinitialize
-            Random.seed!(attempt * 456)
-            initial_θ = rand(D)
-        end
-    end
-    @test success
+    hmc_chain = AbstractMCMC.sample(
+        ad_model,
+        NUTS(0.8),
+        n_samples;
+        progress=false,
+        chain_type=Chains,
+        n_adapts=n_adapts,
+        init_params=initial_θ,
+        discard_initial=n_adapts,
+    )
     @test hmc_chain.name_map[:parameters] == [
         :sigma
         :beta
@@ -88,32 +71,18 @@
     @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.2
 
     n_samples, n_adapts = 20000, 5000
-    # Retry MH sampling up to 3 times for numerical stability  
-    local mh_chain
-    mh_success = false
-    for attempt in 1:3
-        try
-            mh_chain = AbstractMCMC.sample(
-                model,
-                RWMH(MvNormal(zeros(D), I)),
-                n_samples;
-                chain_type=Chains,
-                n_adapts=n_adapts,
-                init_params=initial_θ,
-                discard_initial=n_adapts,
-            )
-            mh_success = true
-            break
-        catch e
-            if attempt == 3
-                rethrow(e)
-            end
-            @warn "MH sampling attempt $attempt failed, retrying..." exception = e
-            # Reset random seed and reinitialize
-            Random.seed!(attempt * 789)
-            initial_θ = rand(D)
-        end
-    end
+
+    mh_chain = AbstractMCMC.sample(
+        model,
+        RWMH(MvNormal(zeros(D), I)),
+        n_samples;
+        progress=false,
+        chain_type=Chains,
+        n_adapts=n_adapts,
+        init_params=initial_θ,
+        discard_initial=n_adapts,
+    )
+
     @test mh_success
     @test mh_chain.name_map[:parameters] == [
         :sigma
@@ -141,7 +110,9 @@
     end
     model = compile(model_def, (;))
     ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
-    hmc_chain = AbstractMCMC.sample(ad_model, NUTS(0.8), 10; chain_type=Chains)
+    hmc_chain = AbstractMCMC.sample(
+        ad_model, NUTS(0.8), 10; progress=false, chain_type=Chains
+    )
     @test hmc_chain.name_map[:parameters] == [
         Symbol("sigma[3]"),
         Symbol("sigma[2]"),

@@ -24,8 +24,6 @@ using AdvancedMH
 using MCMCChains
 using ReverseDiff
 
-AbstractMCMC.setprogress!(false)
-
 const TEST_GROUPS = OrderedDict{String,Function}(
     "elementary" => () -> begin
         Documenter.doctest(JuliaBUGS; manual=false)
