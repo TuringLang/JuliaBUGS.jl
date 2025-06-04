@@ -8,7 +8,6 @@
         data = (mu=[0, 0], sigma=[1 0; 0 1])
         model = compile(model_def, data)
         ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
-        
         n_samples, n_adapts = 10, 0
         D = LogDensityProblems.dimension(model)
         initial_θ = rand(D)
