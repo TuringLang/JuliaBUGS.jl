@@ -36,7 +36,7 @@ function evaluate_with_rng!!(
         is_observed = model.graph_evaluation_data.is_observed_vals[i]
         node_function = model.graph_evaluation_data.node_function_vals[i]
         loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
-        if_sample = sample_all || !is_observed # also sample if not observed, only sample conditioned variables if sample_all is true
+        if_sample = sample_all || !is_observed
 
         if !is_stochastic
             value = node_function(evaluation_env, loop_vars)
@@ -44,14 +44,12 @@ function evaluate_with_rng!!(
         else
             dist = node_function(evaluation_env, loop_vars)
             if if_sample
-                value = rand(rng, dist) # just sample from the prior
+                value = rand(rng, dist)
             else
                 value = AbstractPPL.get(evaluation_env, vn)
             end
 
-            # Compute log density
             if transformed
-                # see below for why we need to transform the value
                 value_transformed = Bijectors.transform(Bijectors.bijector(dist), value)
                 logp =
                     Distributions.logpdf(dist, value) + Bijectors.logabsdetjac(
@@ -61,7 +59,6 @@ function evaluate_with_rng!!(
                 logp = Distributions.logpdf(dist, value)
             end
 
-            # Accumulate to appropriate component
             if is_observed
                 loglikelihood += logp
             else
@@ -134,7 +131,6 @@ function evaluate_with_env!!(
                 logp = Distributions.logpdf(dist, value)
             end
 
-            # Accumulate to appropriate component
             if is_observed
                 loglikelihood += logp
             else
