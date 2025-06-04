@@ -50,6 +50,8 @@ const TEST_GROUPS = OrderedDict{String,Function}(
         include("ext/JuliaBUGSAdvancedHMCExt.jl")
         include("ext/JuliaBUGSMCMCChainsExt.jl")
     end,
+    "inference_hmc" => () -> include("ext/JuliaBUGSAdvancedHMCExt.jl"),
+    "inference_chains" => () -> include("ext/JuliaBUGSMCMCChainsExt.jl"),
     # "gibbs" => () -> include("gibbs.jl"),
     "experimental" =>
         () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
