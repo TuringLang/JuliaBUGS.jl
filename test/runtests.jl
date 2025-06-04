@@ -1,68 +1,58 @@
-using JuliaBUGS
-using JuliaBUGS.BUGSPrimitives
-using Documenter
 using Test
-using JuliaBUGS.BUGSPrimitives: mean
-DocMeta.setdocmeta!(JuliaBUGS, :DocTestSetup, :(using JuliaBUGS); recursive=true)
 
 using AbstractPPL
-using AbstractMCMC
-using AdvancedHMC
-using AdvancedMH
 using Bijectors
-using ChainRules
-using DifferentiationInterface
+using ChainRules # needed for `Bijectors.cholesky_lower`
 using Distributions
+using Documenter
 using Graphs
-using MetaGraphsNext
+using JuliaBUGS
+using JuliaBUGS.BUGSPrimitives
+using JuliaBUGS.BUGSPrimitives: mean
 using LinearAlgebra
 using LogDensityProblems
 using LogDensityProblemsAD
-using OrderedCollections
 using MacroTools
-using MCMCChains
-using Mooncake: Mooncake
+using MetaGraphsNext
+using OrderedCollections
 using Random
-using ReverseDiff
 using Serialization
 
-AbstractMCMC.setprogress!(false)
+using AbstractMCMC
+using AdvancedHMC
+using AdvancedMH
+using MCMCChains
+using ReverseDiff
 
-const TEST_GROUPS = Dict{String,Function}(
-    "unit" => () -> begin
-        @testset "Unit Tests" begin
-            Documenter.doctest(JuliaBUGS; manual=false)
-            include("utils.jl")
-        end
+const TEST_GROUPS = OrderedDict{String,Function}(
+    "elementary" => () -> begin
+        Documenter.doctest(JuliaBUGS; manual=false)
+        include("BUGSPrimitives/distributions.jl")
+        include("BUGSPrimitives/functions.jl")
     end,
-    "parser and macros" => () -> begin
-        include("parser/test_parser.jl")
-        include("passes.jl")
+    "frontend" => () -> begin
+        include("parser/bugs_macro.jl")
+        include("parser/bugs_parser.jl")
+        include("compiler_pass.jl")
         include("model_macro.jl")
     end,
     "graphs" => () -> include("graphs.jl"),
-    "condition" => () -> include("model/abstractppl.jl"),
     "compilation" => () -> begin
+        include("model/bugsmodel.jl")
         include("source_gen.jl")
-        @testset "BUGS examples volume 1" begin
-            @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
-                m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
-                model = compile(m.model_def, m.data, m.inits)
-            end
-        end
-        @testset "Some corner cases" begin
-            include("bugs_primitives.jl")
-            include("compile.jl")
-        end
     end,
     "log_density" => () -> begin
-        include("log_density.jl")
-        include("model.jl")
+        include("model/evaluation.jl")
     end,
+    "inference" => () -> begin
+        include("ext/JuliaBUGSAdvancedHMCExt.jl")
+        include("ext/JuliaBUGSMCMCChainsExt.jl")
+    end,
+    "inference_hmc" => () -> include("ext/JuliaBUGSAdvancedHMCExt.jl"),
+    "inference_chains" => () -> include("ext/JuliaBUGSMCMCChainsExt.jl"),
     # "gibbs" => () -> include("gibbs.jl"),
-    # "mcmchains" => () -> include("ext/mcmchains.jl"),
-    # "experimental" =>
-    #     () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
+    "experimental" =>
+        () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
 )
 
 raw_selection = get(ENV, "TEST_GROUP", "all")
