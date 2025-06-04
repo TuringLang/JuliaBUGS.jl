@@ -36,7 +36,9 @@ const TEST_GROUPS = Dict{String,Function}(
         end
     end,
     "parser and macros" => () -> begin
-        include("parser/test_parser.jl")
+    include("bugs_macro.jl")
+    include("bugs_parser.jl")
+    include("winbugs_examples.jl")
         include("passes.jl")
         include("model_macro.jl")
     end,
