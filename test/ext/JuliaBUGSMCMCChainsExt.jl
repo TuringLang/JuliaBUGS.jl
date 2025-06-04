@@ -59,7 +59,7 @@
             initial_θ = rand(D)
         end
     end
-    @test success "Failed to obtain HMC samples after 3 attempts"
+    @test success
     @test hmc_chain.name_map[:parameters] == [
         :sigma
         :beta
@@ -114,7 +114,7 @@
             initial_θ = rand(D)
         end
     end
-    @test mh_success "Failed to obtain MH samples after 3 attempts"
+    @test mh_success
     @test mh_chain.name_map[:parameters] == [
         :sigma
         :beta

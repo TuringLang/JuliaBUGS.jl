@@ -64,7 +64,7 @@
             end
         end
 
-        @test success "Failed to obtain samples after 3 attempts for $m"
+        @test success
 
         ref_inference_results = JuliaBUGS.BUGSExamples.VOLUME_1[m].reference_results
         @testset "$m: $var" for var in keys(ref_inference_results)
@@ -113,7 +113,7 @@
             end
         end
 
-        @test success "Failed to obtain samples after 3 attempts for $m"
+        @test success
 
         ref_inference_results = JuliaBUGS.BUGSExamples.VOLUME_2[m].reference_results
         @testset "$m: $var" for var in keys(ref_inference_results)
