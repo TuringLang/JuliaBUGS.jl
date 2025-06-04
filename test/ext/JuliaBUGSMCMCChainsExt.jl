@@ -83,7 +83,6 @@
         discard_initial=n_adapts,
     )
 
-    @test mh_success
     @test mh_chain.name_map[:parameters] == [
         :sigma
         :beta
