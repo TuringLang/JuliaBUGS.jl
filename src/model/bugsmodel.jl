@@ -300,29 +300,29 @@ function BUGSModel(
     lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
         model.model_def, g, evaluation_env
     )
-    
+
     graph_eval_data = if !isnothing(lowered_model_def)
         log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
             lowered_model_def, evaluation_env, gensym(:__compute_log_density__)
         )
         new_log_density_computation_function = eval(log_density_computation_expr)
-        
+
         # Collect sorted nodes from the reconstructed model def to ensure correct parameter ordering
         pass = JuliaBUGS.CollectSortedNodes(evaluation_env)
         JuliaBUGS.analyze_block(pass, reconstructed_model_def)
-        
+
         # Filter to only include nodes that are in the graph
         new_sorted_nodes = filter(pass.sorted_nodes) do node
             node in sorted_nodes
         end
-        
+
         # Create graph evaluation data with the correct sorted nodes
         GraphEvaluationData(g, new_sorted_nodes, parameters)
     else
         new_log_density_computation_function = nothing
         GraphEvaluationData(g, sorted_nodes, parameters)
     end
-    
+
     return BUGSModel(
         model.model_def,
         model.data,
