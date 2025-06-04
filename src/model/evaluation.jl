@@ -1,3 +1,31 @@
+# Model Evaluation Functions
+#
+# This module provides three core evaluation functions for BUGSModel. The key design insight
+# is that parameter values can come from different sources, requiring different evaluation strategies:
+#
+# 1. **evaluate_with_rng!!** - Parameters sampled from distributions
+#    - Use case: Forward simulation, ancestral sampling
+#    - Parameter source: Random sampling using provided RNG
+#    - Example: Generating prior/posterior samples
+#
+# 2. **evaluate_with_env!!** - Parameters from current environment
+#    - Use case: Log density evaluation at current parameter values, stateful computations
+#    - Parameter source: Values already stored in model.evaluation_env (or custom env)
+#    - Example: Computing log density for MCMC acceptance, maintaining state across evaluations
+#
+# 3. **evaluate_with_values!!** - Parameters from provided vector
+#    - Use case: Optimization, gradient computation, external parameter sets
+#    - Parameter source: Flattened parameter vector (transformed or untransformed space)
+#    - Example: LogDensityProblems.jl interface, HMC sampling
+#
+# All functions return:
+# - Updated evaluation environment with computed values
+# - NamedTuple of log densities: (logprior, loglikelihood, tempered_logjoint)
+#
+# Common parameters:
+# - `temperature`: Likelihood tempering factor (tempered_logjoint = logprior + temperature * loglikelihood)
+# - `transformed`: Whether to work in transformed (unconstrained) parameter space
+
 """
     evaluate_with_rng!!(
         rng::Random.AbstractRNG, 
