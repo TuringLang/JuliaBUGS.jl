@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Fast tests run in parallel  
-  test-fast:
-    name: Fast Tests - Julia ${{ matrix.version }} on ${{ matrix.os }} (${{ matrix.arch }})
+  # Basic tests run in parallel  
+  test-basic:
+    name: ${{ matrix.test_group }} - Julia ${{ matrix.version }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.version == 'pre' }}
     strategy:
@@ -61,7 +61,7 @@ jobs:
 
   # Slow inference tests with retry logic
   test-inference:
-    name: Inference Tests - Julia ${{ matrix.version }} on ${{ matrix.os }} (${{ matrix.arch }})
+    name: ${{ matrix.test_group }} - Julia ${{ matrix.version }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     continue-on-error: false
     strategy:
