@@ -53,7 +53,7 @@
             if attempt == 3
                 rethrow(e)
             end
-            @warn "HMC sampling attempt $attempt failed, retrying..." exception=e
+            @warn "HMC sampling attempt $attempt failed, retrying..." exception = e
             # Reset random seed and reinitialize
             Random.seed!(attempt * 456)
             initial_θ = rand(D)
@@ -108,7 +108,7 @@
             if attempt == 3
                 rethrow(e)
             end
-            @warn "MH sampling attempt $attempt failed, retrying..." exception=e
+            @warn "MH sampling attempt $attempt failed, retrying..." exception = e
             # Reset random seed and reinitialize
             Random.seed!(attempt * 789)
             initial_θ = rand(D)

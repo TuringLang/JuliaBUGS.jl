@@ -33,7 +33,9 @@
             try
                 data = JuliaBUGS.BUGSExamples.VOLUME_1[m].data
                 inits = JuliaBUGS.BUGSExamples.VOLUME_1[m].inits
-                model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_1[m].model_def, data, inits)
+                model = JuliaBUGS.compile(
+                    JuliaBUGS.BUGSExamples.VOLUME_1[m].model_def, data, inits
+                )
                 ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 
                 n_samples, n_adapts = 500, 500
@@ -56,12 +58,12 @@
                 if attempt == 3
                     rethrow(e)
                 end
-                @warn "Sampling attempt $attempt failed for $m, retrying..." exception=e
+                @warn "Sampling attempt $attempt failed for $m, retrying..." exception = e
                 # Reset random seed for different initialization
                 Random.seed!(attempt * 42)
             end
         end
-        
+
         @test success "Failed to obtain samples after 3 attempts for $m"
 
         ref_inference_results = JuliaBUGS.BUGSExamples.VOLUME_1[m].reference_results
@@ -81,7 +83,9 @@
             try
                 data = JuliaBUGS.BUGSExamples.VOLUME_2[m].data
                 inits = JuliaBUGS.BUGSExamples.VOLUME_2[m].inits
-                model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_2[m].model_def, data, inits)
+                model = JuliaBUGS.compile(
+                    JuliaBUGS.BUGSExamples.VOLUME_2[m].model_def, data, inits
+                )
                 ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 
                 n_samples, n_adapts = 500, 500
@@ -103,12 +107,12 @@
                 if attempt == 3
                     rethrow(e)
                 end
-                @warn "Sampling attempt $attempt failed for $m, retrying..." exception=e
+                @warn "Sampling attempt $attempt failed for $m, retrying..." exception = e
                 # Reset random seed for different initialization
                 Random.seed!(attempt * 123)
             end
         end
-        
+
         @test success "Failed to obtain samples after 3 attempts for $m"
 
         ref_inference_results = JuliaBUGS.BUGSExamples.VOLUME_2[m].reference_results
