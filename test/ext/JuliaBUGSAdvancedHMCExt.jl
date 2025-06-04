@@ -61,7 +61,7 @@
         model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_2[m].model_def, data, inits)
         ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 
-        n_samples, n_adapts = 500, 500 
+        n_samples, n_adapts = 500, 500
         D = LogDensityProblems.dimension(model)
         initial_θ = rand(D)
 
