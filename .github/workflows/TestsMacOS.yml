@@ -1,16 +1,17 @@
 name: Tests
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  # push:
+  #   branches:
+  #     - main
+  # pull_request:
 
   workflow_dispatch:
 
 jobs:
-  test:
-    name: Julia ${{ matrix.version }} on ${{ matrix.os }} (${{ matrix.arch }})
+  # Basic tests run in parallel on macOS 
+  test-basic:
+    name: ${{ matrix.test_group }} - Julia ${{ matrix.version }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.version == 'pre' }}
     strategy:
@@ -22,6 +23,13 @@ jobs:
           # - 'pre'
         os: [macOS-latest]
         arch: [aarch64]
+        test_group:
+          - "elementary"
+          - "frontend"
+          - "graphs" 
+          - "compilation"
+          - "log_density"
+          - "experimental"
 
     steps:
       - uses: actions/checkout@v4
@@ -43,56 +51,48 @@ jobs:
       
       - uses: julia-actions/julia-buildpkg@v1
 
-      - name: Running unit tests
+      - name: Running ${{ matrix.test_group }} tests
         uses: julia-actions/julia-runtest@v1
         env:
-          TEST_GROUP: "unit"
+          TEST_GROUP: ${{ matrix.test_group }}
 
-      - name: Running parser and macros tests
+  # Slow inference tests with retry logic on macOS
+  test-inference:
+    name: ${{ matrix.test_group }} - Julia ${{ matrix.version }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: false
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1'
+        os: [macOS-latest]
+        arch: [aarch64]
+        test_group:
+          - "inference_hmc"
+          - "inference_chains"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+      
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.julia
+            ~/.julia/artifacts
+          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-
+            ${{ runner.os }}-julia-${{ matrix.version }}-
+      
+      - uses: julia-actions/julia-buildpkg@v1
+
+      - name: Running ${{ matrix.test_group }} tests
         uses: julia-actions/julia-runtest@v1
         env:
-          TEST_GROUP: "parser and macros"
-
-      - name: Running graphs tests
-        uses: julia-actions/julia-runtest@v1
-        env:
-          TEST_GROUP: "graphs"
-
-      - name: Running compilation tests
-        uses: julia-actions/julia-runtest@v1
-        env:
-          TEST_GROUP: "compilation"
-
-      - name: Running `log_density` tests
-        uses: julia-actions/julia-runtest@v1
-        env:
-          TEST_GROUP: "log_density"
-
-      # - name: Running `source_gen` tests
-      #   uses: julia-actions/julia-runtest@v1
-      #   env:
-      #     TEST_GROUP: "source_gen"
-
-      # - name: Running `gibbs` tests
-      #   uses: nick-fields/retry@v3
-      #   with:
-      #     timeout_minutes: 10
-      #     max_attempts: 3
-      #     command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true);"
-      #   env:
-      #     TEST_GROUP: "gibbs"
-
-      # - name: Running `mcmchains` tests
-      #   uses: nick-fields/retry@v3
-      #   with:
-      #     timeout_minutes: 10
-      #     max_attempts: 3
-      #     command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true);"
-      #   env:
-      #     TEST_GROUP: "mcmchains"
-
-      # - name: Running `experimental` tests
-      #   uses: julia-actions/julia-runtest@v1
-      #   env:
-      #     TEST_GROUP: "experimental"
-
+          TEST_GROUP: ${{ matrix.test_group }}

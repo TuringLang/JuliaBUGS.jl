@@ -1,0 +1,58 @@
+name: Coverage
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    name: Code Coverage - Julia ${{ matrix.version }} on ${{ matrix.os }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        version:
+          - '1'
+        os:
+          - ubuntu-latest
+        arch:
+          - x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+      
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.julia
+            ~/.julia/artifacts
+          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-
+            ${{ runner.os }}-julia-${{ matrix.version }}-
+      
+      - uses: julia-actions/julia-buildpkg@v1
+
+      - name: Running all tests with coverage
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: "all"
+
+      - uses: julia-actions/julia-processcoverage@v1
+
+      - uses: codecov/codecov-action@v4
+        with:
+          file: lcov.info
+          
+      - uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: lcov.info
