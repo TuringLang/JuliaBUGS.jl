@@ -1,3 +1,10 @@
+@testset "Compile Vol.1 BUGS Examples" begin
+    @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
+        m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
+        model = compile(m.model_def, m.data, m.inits)
+    end
+end
+
 @testset "initialize!" begin
     @testset "rats" begin
         (; model_def, data, inits) = JuliaBUGS.BUGSExamples.rats

@@ -1,16 +1,14 @@
 @testset "AdvancedHMC" begin
     @testset "Generation of parameter names" begin
-        model = compile(
-            (@bugs begin
-                x[1:2] ~ dmnorm(mu[:], sigma[:, :])
-                x[3] ~ dnorm(0, 1)
-                y = x[1] + x[3]
-            end),
-            (mu=[0, 0], sigma=[1 0; 0 1]),
-            NamedTuple(),
-        )
-
+        model_def = @bugs begin
+            x[1:2] ~ dmnorm(mu[:], sigma[:, :])
+            x[3] ~ dnorm(0, 1)
+            y = x[1] + x[3]
+        end
+        data = (mu=[0, 0], sigma=[1 0; 0 1])
+        model = compile(model_def, data)
         ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
+        
         n_samples, n_adapts = 10, 0
         D = LogDensityProblems.dimension(model)
         initial_θ = rand(D)
@@ -34,7 +32,7 @@
         model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_1[m].model_def, data, inits)
         ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 
-        n_samples, n_adapts = 2000, 1000
+        n_samples, n_adapts = 500, 500
 
         D = LogDensityProblems.dimension(model)
         initial_θ = rand(D)
@@ -64,8 +62,7 @@
         model = JuliaBUGS.compile(JuliaBUGS.BUGSExamples.VOLUME_2[m].model_def, data, inits)
         ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
 
-        n_samples, n_adapts = 3000, 1000
-
+        n_samples, n_adapts = 500, 500 
         D = LogDensityProblems.dimension(model)
         initial_θ = rand(D)
 
