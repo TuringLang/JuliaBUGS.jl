@@ -516,6 +516,8 @@ Evaluate model using ancestral sampling from the given RNG.
 - `rng`: Random number generator for sampling
 - `model`: The BUGSModel to evaluate
 - `sample_all`: If true, sample all variables; if false, only sample unobserved variables
+- `temperature`: Temperature for tempering the likelihood (default 1.0)
+- `transformed`: Whether to compute log density in transformed space (default model.transformed)
 
 # Returns
 - `evaluation_env`: Updated evaluation environment
