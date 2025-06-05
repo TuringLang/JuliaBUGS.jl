@@ -32,3 +32,5 @@ Manifest.toml
 
 .env
 .env.local
+
+*.local.*
