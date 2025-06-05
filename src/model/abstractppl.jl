@@ -1,4 +1,23 @@
+"""
+AbstractPPL interface implementation for JuliaBUGS models.
+
+This module provides:
+1. Conditioning API - condition/decondition variables in models
+2. Evaluation API - evaluate models with different parameter values
+
+Organization:
+- Public API functions (condition, decondition, evaluate!!)
+- Conditioning helpers (parsing, validation, variable expansion)
+- Graph modification helpers (marking observation status)
+- Model traversal helpers (base model access, parameter calculation)
+- Model creation helpers (regenerating log density functions)
+"""
+
 import AbstractPPL: condition, decondition, evaluate!!
+
+#######################
+# Conditioning API
+#######################
 
 """
     condition(model::BUGSModel, conditioning_spec)
@@ -117,57 +136,33 @@ julia> parameters(model_cond4)
 ```
 """
 function condition(model::BUGSModel, conditioning_spec)
+    # Parse and validate conditioning specification
     var_values = _parse_conditioning_spec(conditioning_spec, model)::Dict{<:VarName,<:Any}
     vars_to_condition = collect(keys(var_values))::Vector{<:VarName}
-    expanded_vars = _check_conditioning_validity(model, vars_to_condition)
-
-    # If vars were expanded, we need to update var_values to include values for subsumed variables
-    if length(expanded_vars) > length(vars_to_condition)
-        expanded_var_values = Dict{VarName,Any}()
-        for vn in expanded_vars
-            if haskey(var_values, vn)
-                expanded_var_values[vn] = var_values[vn]
-            else
-                # Find the original var that subsumes this one
-                for (orig_vn, val) in var_values
-                    if AbstractPPL.subsumes(orig_vn, vn)
-                        # Extract the appropriate value for indexed variables
-                        expanded_var_values[vn] = AbstractPPL.getoptic(vn)(val)
-                        break
-                    end
-                end
-            end
-        end
-        var_values = expanded_var_values
-        vars_to_condition = expanded_vars
-    end
-
-    new_evaluation_env = _update_evaluation_env(model.evaluation_env, var_values)
-    new_graph = _mark_as_observed(model.g, vars_to_condition)
-    new_graph_evaluation_data = GraphEvaluationData(new_graph)
-    new_parameters = new_graph_evaluation_data.sorted_parameters
-    new_untransformed_param_length, new_transformed_param_length = _calculate_param_lengths(
-        model, new_parameters
+    
+    # Expand and validate variables (handles subsumption)
+    expanded_vars, expanded_var_values = _prepare_conditioning_vars(
+        model, vars_to_condition, var_values
     )
-    # Generate new log density function and update graph evaluation data
-    new_log_density_computation_function, new_graph_evaluation_data = _regenerate_log_density_function(
-        model.model_def, new_graph, new_evaluation_env, new_graph_evaluation_data
-    )
-
-    return BUGSModel(
-        model;
-        untransformed_param_length=new_untransformed_param_length,
-        transformed_param_length=new_transformed_param_length,
-        evaluation_env=new_evaluation_env,
-        graph_evaluation_data=new_graph_evaluation_data,
-        g=new_graph,
-        log_density_computation_function=new_log_density_computation_function,
-        # Use flat design: base_model is either the original compiled model or nothing
-        base_model=isnothing(model.base_model) ? model : model.base_model,
+    
+    # Update evaluation environment with new values
+    new_evaluation_env = _update_evaluation_env(model.evaluation_env, expanded_var_values)
+    
+    # Mark variables as observed in the graph
+    new_graph = _mark_as_observed(model.g, expanded_vars)
+    
+    # Create updated model with conditioned variables
+    return _create_modified_model(
+        model, new_graph, new_evaluation_env;
+        base_model=isnothing(model.base_model) ? model : model.base_model
     )
 end
 
-# _parse_conditioning_spec should return Dict{::VarName, ::AllowedTypes}
+#######################
+# Conditioning Helpers
+#######################
+
+# Parse different types of conditioning specifications into a standard format
 function _parse_conditioning_spec(spec::Dict{<:VarName,<:Any}, model::BUGSModel)
     # Dict already has VarName keys, just return it
     return spec
@@ -189,16 +184,19 @@ function _parse_conditioning_spec(spec::NamedTuple, model::BUGSModel)
     return result
 end
 
-function _mark_as_observed(g::BUGSGraph, vars::Vector{<:VarName})
+# Generic function to mark variables' observation status
+function _mark_observation_status(g::BUGSGraph, vars::Vector{<:VarName}, observed::Bool)
     new_g = copy(g)
     for vn in vars
         node_info = new_g[vn]
-        if node_info.is_stochastic && !node_info.is_observed
-            new_g[vn] = BangBang.setproperty!!(node_info, :is_observed, true)
+        if node_info.is_stochastic && node_info.is_observed != observed
+            new_g[vn] = BangBang.setproperty!!(node_info, :is_observed, observed)
         end
     end
     return new_g
 end
+
+_mark_as_observed(g::BUGSGraph, vars::Vector{<:VarName}) = _mark_observation_status(g, vars, true)
 
 function _update_evaluation_env(env::NamedTuple, var_values::Dict{<:VarName,<:Any})
     new_env = env
@@ -208,27 +206,21 @@ function _update_evaluation_env(env::NamedTuple, var_values::Dict{<:VarName,<:An
     return new_env
 end
 
+# Validate and expand variables for conditioning
 function _check_conditioning_validity(model::BUGSModel, vars::Vector{<:VarName})
     expanded_vars = _expand_subsumed_vars(
         model, vars, "Conditioning on subsumed variables instead"
     )
-
-    # Check validity of all variables (original + expanded)
+    
+    _validate_stochastic_vars(model, expanded_vars, "conditioning")
+    
+    # Warn about already observed variables
     for vn in expanded_vars
-        node_info = model.g[vn]
-        if !node_info.is_stochastic
-            throw(
-                ArgumentError(
-                    "$vn is not a stochastic variable, conditioning on it is not supported"
-                ),
-            )
-        end
-
-        if node_info.is_observed
+        if model.g[vn].is_observed
             @warn "$vn is already observed, conditioning on it may not have the expected effect"
         end
     end
-
+    
     return expanded_vars
 end
 
@@ -372,38 +364,17 @@ function decondition(model::BUGSModel)
 end
 
 function decondition(model::BUGSModel, vars_to_decondition::Vector{<:VarName})
-    # Expand variables if they subsume others (similar to condition)
+    # Expand variables if they subsume others
     expanded_vars = _expand_vars_for_deconditioning(model, vars_to_decondition)
-
+    
     # Check validity of variables to decondition
     _check_deconditioning_validity(model, expanded_vars)
-
-    # Create new graph with variables unmarked as observed
+    
+    # Mark variables as unobserved in the graph
     new_graph = _mark_as_unobserved(model.g, expanded_vars)
-
-    # Recreate graph evaluation data
-    # GraphEvaluationData will automatically identify parameters from the updated graph
-    new_graph_evaluation_data = GraphEvaluationData(new_graph)
-    new_parameters = new_graph_evaluation_data.sorted_parameters
-
-    # Recalculate parameter lengths
-    new_untransformed_param_length, new_transformed_param_length = _calculate_param_lengths(
-        model, new_parameters
-    )
-
-    # Generate new log density function and update graph evaluation data
-    new_log_density_computation_function, new_graph_evaluation_data = _regenerate_log_density_function(
-        model.model_def, new_graph, model.evaluation_env, new_graph_evaluation_data
-    )
-
-    return BUGSModel(
-        model;
-        untransformed_param_length=new_untransformed_param_length,
-        transformed_param_length=new_transformed_param_length,
-        graph_evaluation_data=new_graph_evaluation_data,
-        g=new_graph,
-        log_density_computation_function=new_log_density_computation_function,
-    )
+    
+    # Create updated model with deconditioned variables
+    return _create_modified_model(model, new_graph, model.evaluation_env)
 end
 
 # Expand variables for deconditioning (handle subsumption)
@@ -419,31 +390,21 @@ function _expand_vars_for_deconditioning(model::BUGSModel, vars::Vector{<:VarNam
     )
 end
 
-# Utility function to check validity of deconditioning
+# Validate variables for deconditioning
 function _check_deconditioning_validity(model::BUGSModel, vars::Vector{<:VarName})
-    # Get the original data variables (those observed at compile time)
+    _validate_stochastic_vars(model, vars, "deconditioning")
+    
+    # Get original observed variables
     original_model = _get_base_model(model)
     original_observed = _get_observed_stochastic_vars(original_model)
-
+    
     for vn in vars
-        if vn ∉ labels(model.g)
-            throw(ArgumentError("Variable $vn does not exist in the model"))
-        end
-
         node_info = model.g[vn]
-
-        if !node_info.is_stochastic
-            throw(
-                ArgumentError(
-                    "$vn is not a stochastic variable, deconditioning is not supported"
-                ),
-            )
-        end
-
+        
         if !node_info.is_observed
             throw(ArgumentError("$vn is not currently observed, cannot decondition"))
         end
-
+        
         if vn in original_observed
             throw(
                 ArgumentError(
@@ -454,19 +415,30 @@ function _check_deconditioning_validity(model::BUGSModel, vars::Vector{<:VarName
     end
 end
 
-# Utility function to mark variables as unobserved
-function _mark_as_unobserved(g::BUGSGraph, vars::Vector{<:VarName})
-    new_g = copy(g)
+# Common validation for stochastic variables
+function _validate_stochastic_vars(model::BUGSModel, vars::Vector{<:VarName}, operation::String)
     for vn in vars
-        node_info = new_g[vn]
-        if node_info.is_stochastic && node_info.is_observed
-            new_g[vn] = BangBang.setproperty!!(node_info, :is_observed, false)
+        if vn ∉ labels(model.g)
+            throw(ArgumentError("Variable $vn does not exist in the model"))
+        end
+        
+        if !model.g[vn].is_stochastic
+            throw(
+                ArgumentError(
+                    "$vn is not a stochastic variable, $operation is not supported"
+                ),
+            )
         end
     end
-    return new_g
 end
 
-# Common helper function to get base model
+_mark_as_unobserved(g::BUGSGraph, vars::Vector{<:VarName}) = _mark_observation_status(g, vars, false)
+
+#######################
+# Model Traversal Helpers
+#######################
+
+# Get the base (original) model by traversing the chain
 function _get_base_model(model::BUGSModel)
     original_model = model
     while !isnothing(original_model.base_model)
@@ -496,7 +468,11 @@ function _calculate_param_lengths(model::BUGSModel, parameters::Vector{<:VarName
     return untransformed_length, transformed_length
 end
 
-# Common helper function to expand variables that subsume others
+#######################
+# Variable Expansion Helpers
+#######################
+
+# Expand variables that subsume others (e.g., x subsumes x[1], x[2], ...)
 function _expand_subsumed_vars(
     model::BUGSModel,
     vars::Vector{<:VarName},
@@ -528,6 +504,74 @@ function _expand_subsumed_vars(
     end
 
     return unique(expanded_vars)  # Remove duplicates
+end
+
+# Helper function to prepare conditioning variables (handles subsumption)
+function _prepare_conditioning_vars(
+    model::BUGSModel, vars::Vector{<:VarName}, var_values::Dict{<:VarName,<:Any}
+)
+    expanded_vars = _check_conditioning_validity(model, vars)
+    
+    # If vars were expanded due to subsumption, update var_values accordingly
+    if length(expanded_vars) > length(vars)
+        expanded_var_values = Dict{VarName,Any}()
+        for vn in expanded_vars
+            if haskey(var_values, vn)
+                expanded_var_values[vn] = var_values[vn]
+            else
+                # Find the original var that subsumes this one
+                for (orig_vn, val) in var_values
+                    if AbstractPPL.subsumes(orig_vn, vn)
+                        # Extract the appropriate value for indexed variables
+                        expanded_var_values[vn] = AbstractPPL.getoptic(vn)(val)
+                        break
+                    end
+                end
+            end
+        end
+        return expanded_vars, expanded_var_values
+    else
+        return expanded_vars, var_values
+    end
+end
+
+# Helper function to create a modified model with updated graph and environment
+function _create_modified_model(
+    model::BUGSModel,
+    new_graph::BUGSGraph,
+    new_evaluation_env::NamedTuple;
+    base_model=nothing
+)
+    # Create new graph evaluation data
+    new_graph_evaluation_data = GraphEvaluationData(new_graph)
+    new_parameters = new_graph_evaluation_data.sorted_parameters
+    
+    # Calculate new parameter lengths
+    new_untransformed_param_length, new_transformed_param_length = _calculate_param_lengths(
+        model, new_parameters
+    )
+    
+    # Generate new log density function and update graph evaluation data
+    new_log_density_computation_function, updated_graph_evaluation_data = _regenerate_log_density_function(
+        model.model_def, new_graph, new_evaluation_env, new_graph_evaluation_data
+    )
+    
+    # Create the new model with all updated fields
+    kwargs = Dict{Symbol,Any}(
+        :untransformed_param_length => new_untransformed_param_length,
+        :transformed_param_length => new_transformed_param_length,
+        :evaluation_env => new_evaluation_env,
+        :graph_evaluation_data => updated_graph_evaluation_data,
+        :g => new_graph,
+        :log_density_computation_function => new_log_density_computation_function,
+    )
+    
+    # Add base_model if provided
+    if !isnothing(base_model)
+        kwargs[:base_model] = base_model
+    end
+    
+    return BUGSModel(model; kwargs...)
 end
 
 # Common helper function to regenerate log density function
@@ -564,6 +608,11 @@ function _regenerate_log_density_function(
         return nothing, graph_evaluation_data
     end
 end
+
+#######################
+# Evaluation API
+#######################
+
 """
     AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel; sample_all=true)
 
