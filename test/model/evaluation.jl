@@ -5,6 +5,7 @@ end
 
 function verify_log_densities_structure(log_densities)
     @test isa(log_densities, NamedTuple)
+    @test length(log_densities) == 3
     @test haskey(log_densities, :logprior)
     @test haskey(log_densities, :loglikelihood)
     @test haskey(log_densities, :tempered_logjoint)
