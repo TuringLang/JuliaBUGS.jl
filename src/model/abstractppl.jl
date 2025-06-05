@@ -410,10 +410,12 @@ end
 function _expand_vars_for_deconditioning(model::BUGSModel, vars::Vector{<:VarName})
     # For deconditioning, we need to filter for observed stochastic variables
     filter_fn = label -> model.g[label].is_observed && model.g[label].is_stochastic
-    
+
     return _expand_subsumed_vars(
-        model, vars, "Deconditioning subsumed observed variables instead"; 
-        filter_fn=filter_fn
+        model,
+        vars,
+        "Deconditioning subsumed observed variables instead";
+        filter_fn=filter_fn,
     )
 end
 
@@ -490,18 +492,16 @@ function _calculate_param_lengths(model::BUGSModel, parameters::Vector{<:VarName
     untransformed_length = sum(
         model.untransformed_var_lengths[vn] for vn in parameters; init=0
     )
-    transformed_length = sum(
-        model.transformed_var_lengths[vn] for vn in parameters; init=0
-    )
+    transformed_length = sum(model.transformed_var_lengths[vn] for vn in parameters; init=0)
     return untransformed_length, transformed_length
 end
 
 # Common helper function to expand variables that subsume others
 function _expand_subsumed_vars(
-    model::BUGSModel, 
-    vars::Vector{<:VarName}, 
+    model::BUGSModel,
+    vars::Vector{<:VarName},
     warning_message::String;
-    filter_fn::Function = label -> true
+    filter_fn::Function=label -> true,
 )
     expanded_vars = VarName[]
 
@@ -509,8 +509,8 @@ function _expand_subsumed_vars(
         if vn ∉ labels(model.g)
             # Check if there are any variables in the model that are subsumed by vn
             subsumed_vars = [
-                label for label in labels(model.g) 
-                if AbstractPPL.subsumes(vn, label) && filter_fn(label)
+                label for label in labels(model.g) if
+                AbstractPPL.subsumes(vn, label) && filter_fn(label)
             ]
 
             if !isempty(subsumed_vars)
@@ -532,10 +532,10 @@ end
 
 # Common helper function to regenerate log density function
 function _regenerate_log_density_function(
-    model_def::Expr, 
-    graph::BUGSGraph, 
-    evaluation_env::NamedTuple, 
-    graph_evaluation_data::GraphEvaluationData
+    model_def::Expr,
+    graph::BUGSGraph,
+    evaluation_env::NamedTuple,
+    graph_evaluation_data::GraphEvaluationData,
 )
     lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
         model_def, graph, evaluation_env
