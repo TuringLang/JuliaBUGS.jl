@@ -88,9 +88,9 @@ julia> model_cond3.evaluation_env.y
 
 julia> parameters(model_cond3)  # y removed, only x[i] remain
 3-element Vector{AbstractPPL.VarName}:
- x[3]
- x[2]
  x[1]
+ x[2]
+ x[3]
 
 julia> # Error cases
        try
@@ -348,7 +348,7 @@ julia> # Error when no base_model
        catch e
            println(e)
        end
-ArgumentError("Model has no base_model. Use decondition(model, vars) to specify variables to decondition.")
+ArgumentError("This is a unconditioned model. Use decondition(model, vars) to specify variables to decondition.")
 
 julia> # Cannot decondition original data
        try
@@ -398,9 +398,9 @@ julia> # Decondition with subsumption
 
 julia> parameters(model_arr_decon)
 3-element Vector{AbstractPPL.VarName}:
- v[3]
- v[2]
  v[1]
+ v[2]
+ v[3]
 ```
 """
 function decondition(model::BUGSModel)
