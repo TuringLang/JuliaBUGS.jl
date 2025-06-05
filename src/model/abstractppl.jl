@@ -564,7 +564,6 @@ function _regenerate_log_density_function(
         return nothing, graph_evaluation_data
     end
 end
-
 """
     AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel; sample_all=true)
 
