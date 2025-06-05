@@ -225,7 +225,7 @@ using AbstractPPL: @varname
 
             # Cannot decondition without base_model
             @test_throws ArgumentError(
-                "Model has no base_model. Use decondition(model, vars) to specify variables to decondition.",
+                "This is a unconditioned model. Use decondition(model, vars) to specify variables to decondition.",
             ) decondition(model)
 
             # Cannot decondition originally observed data

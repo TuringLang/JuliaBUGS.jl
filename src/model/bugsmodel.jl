@@ -136,7 +136,7 @@ function BUGSModel(
     g::BUGSGraph=model.g,
     base_model::Union{<:AbstractBUGSModel,Nothing}=model.base_model,
     evaluation_mode::EvaluationMode=model.evaluation_mode,
-    log_density_computation_function::Union{Function,Nothing}=model.log_density_computation_function,
+    log_density_computation_function::Union{Function,Nothing}=nothing,
     model_def::Expr=model.model_def,
     data=model.data,
 )
@@ -286,57 +286,6 @@ function BUGSModel(
         graph_evaluation_data,
         log_density_computation_function,
         nothing,
-    )
-end
-
-function BUGSModel(
-    model::BUGSModel,
-    g::BUGSGraph,
-    parameters::Vector{<:VarName},
-    sorted_nodes::Vector{<:VarName},
-    evaluation_env::NamedTuple=model.evaluation_env,
-)
-    # Generate new log density function for the new graph structure
-    lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
-        model.model_def, g, evaluation_env
-    )
-
-    graph_eval_data = if !isnothing(lowered_model_def)
-        log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
-            lowered_model_def, evaluation_env, gensym(:__compute_log_density__)
-        )
-        new_log_density_computation_function = eval(log_density_computation_expr)
-
-        # Collect sorted nodes from the reconstructed model def to ensure correct parameter ordering
-        pass = JuliaBUGS.CollectSortedNodes(evaluation_env)
-        JuliaBUGS.analyze_block(pass, reconstructed_model_def)
-
-        # Filter to only include nodes that are in the graph
-        new_sorted_nodes = filter(pass.sorted_nodes) do node
-            node in sorted_nodes
-        end
-
-        # Create graph evaluation data with the correct sorted nodes
-        GraphEvaluationData(g, new_sorted_nodes, parameters)
-    else
-        new_log_density_computation_function = nothing
-        GraphEvaluationData(g, sorted_nodes, parameters)
-    end
-
-    return BUGSModel(
-        model.model_def,
-        model.data,
-        g,
-        evaluation_env,
-        model.transformed,
-        model.evaluation_mode,
-        sum(model.untransformed_var_lengths[v] for v in graph_eval_data.sorted_parameters),
-        sum(model.transformed_var_lengths[v] for v in graph_eval_data.sorted_parameters),
-        model.untransformed_var_lengths,
-        model.transformed_var_lengths,
-        graph_eval_data,
-        new_log_density_computation_function,
-        isnothing(model.base_model) ? model : model.base_model,
     )
 end
 
@@ -517,7 +466,7 @@ model_with_generated_eval = set_evaluation_mode(model, UseGeneratedLogDensityFun
 ```
 """
 function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
-    if model.log_density_computation_function === identity
+    if model.log_density_computation_function === Nothing
         @warn(
             "The model does not support generated log density function, the evaluation mode is set to `UseGraph`."
         )

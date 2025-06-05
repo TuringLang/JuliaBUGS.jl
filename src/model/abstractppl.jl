@@ -407,13 +407,12 @@ function decondition(model::BUGSModel)
     if isnothing(model.base_model)
         throw(
             ArgumentError(
-                "Model has no base_model. Use decondition(model, vars) to specify variables to decondition.",
+                "This is a unconditioned model. Use decondition(model, vars) to specify variables to decondition.",
             ),
         )
     end
 
-    # Return base model with current evaluation environment
-    return BUGSModel(model.base_model; evaluation_env=model.evaluation_env)
+    return BangBang.setproperty!!(model.base_model, :evaluation_env, model.evaluation_env)
 end
 
 function decondition(model::BUGSModel, vars_to_decondition::Vector{<:VarName})
