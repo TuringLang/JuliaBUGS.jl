@@ -139,22 +139,24 @@ function condition(model::BUGSModel, conditioning_spec)
     # Parse and validate conditioning specification
     var_values = _parse_conditioning_spec(conditioning_spec, model)::Dict{<:VarName,<:Any}
     vars_to_condition = collect(keys(var_values))::Vector{<:VarName}
-    
+
     # Expand and validate variables (handles subsumption)
     expanded_vars, expanded_var_values = _prepare_conditioning_vars(
         model, vars_to_condition, var_values
     )
-    
+
     # Update evaluation environment with new values
     new_evaluation_env = _update_evaluation_env(model.evaluation_env, expanded_var_values)
-    
+
     # Mark variables as observed in the graph
     new_graph = _mark_as_observed(model.g, expanded_vars)
-    
+
     # Create updated model with conditioned variables
     return _create_modified_model(
-        model, new_graph, new_evaluation_env;
-        base_model=isnothing(model.base_model) ? model : model.base_model
+        model,
+        new_graph,
+        new_evaluation_env;
+        base_model=isnothing(model.base_model) ? model : model.base_model,
     )
 end
 
@@ -196,7 +198,9 @@ function _mark_observation_status(g::BUGSGraph, vars::Vector{<:VarName}, observe
     return new_g
 end
 
-_mark_as_observed(g::BUGSGraph, vars::Vector{<:VarName}) = _mark_observation_status(g, vars, true)
+function _mark_as_observed(g::BUGSGraph, vars::Vector{<:VarName})
+    return _mark_observation_status(g, vars, true)
+end
 
 function _update_evaluation_env(env::NamedTuple, var_values::Dict{<:VarName,<:Any})
     new_env = env
@@ -211,16 +215,16 @@ function _check_conditioning_validity(model::BUGSModel, vars::Vector{<:VarName})
     expanded_vars = _expand_subsumed_vars(
         model, vars, "Conditioning on subsumed variables instead"
     )
-    
+
     _validate_stochastic_vars(model, expanded_vars, "conditioning")
-    
+
     # Warn about already observed variables
     for vn in expanded_vars
         if model.g[vn].is_observed
             @warn "$vn is already observed, conditioning on it may not have the expected effect"
         end
     end
-    
+
     return expanded_vars
 end
 
@@ -366,13 +370,13 @@ end
 function decondition(model::BUGSModel, vars_to_decondition::Vector{<:VarName})
     # Expand variables if they subsume others
     expanded_vars = _expand_vars_for_deconditioning(model, vars_to_decondition)
-    
+
     # Check validity of variables to decondition
     _check_deconditioning_validity(model, expanded_vars)
-    
+
     # Mark variables as unobserved in the graph
     new_graph = _mark_as_unobserved(model.g, expanded_vars)
-    
+
     # Create updated model with deconditioned variables
     return _create_modified_model(model, new_graph, model.evaluation_env)
 end
@@ -393,18 +397,18 @@ end
 # Validate variables for deconditioning
 function _check_deconditioning_validity(model::BUGSModel, vars::Vector{<:VarName})
     _validate_stochastic_vars(model, vars, "deconditioning")
-    
+
     # Get original observed variables
     original_model = _get_base_model(model)
     original_observed = _get_observed_stochastic_vars(original_model)
-    
+
     for vn in vars
         node_info = model.g[vn]
-        
+
         if !node_info.is_observed
             throw(ArgumentError("$vn is not currently observed, cannot decondition"))
         end
-        
+
         if vn in original_observed
             throw(
                 ArgumentError(
@@ -416,12 +420,14 @@ function _check_deconditioning_validity(model::BUGSModel, vars::Vector{<:VarName
 end
 
 # Common validation for stochastic variables
-function _validate_stochastic_vars(model::BUGSModel, vars::Vector{<:VarName}, operation::String)
+function _validate_stochastic_vars(
+    model::BUGSModel, vars::Vector{<:VarName}, operation::String
+)
     for vn in vars
         if vn ∉ labels(model.g)
             throw(ArgumentError("Variable $vn does not exist in the model"))
         end
-        
+
         if !model.g[vn].is_stochastic
             throw(
                 ArgumentError(
@@ -432,7 +438,9 @@ function _validate_stochastic_vars(model::BUGSModel, vars::Vector{<:VarName}, op
     end
 end
 
-_mark_as_unobserved(g::BUGSGraph, vars::Vector{<:VarName}) = _mark_observation_status(g, vars, false)
+function _mark_as_unobserved(g::BUGSGraph, vars::Vector{<:VarName})
+    return _mark_observation_status(g, vars, false)
+end
 
 #######################
 # Model Traversal Helpers
@@ -511,7 +519,7 @@ function _prepare_conditioning_vars(
     model::BUGSModel, vars::Vector{<:VarName}, var_values::Dict{<:VarName,<:Any}
 )
     expanded_vars = _check_conditioning_validity(model, vars)
-    
+
     # If vars were expanded due to subsumption, update var_values accordingly
     if length(expanded_vars) > length(vars)
         expanded_var_values = Dict{VarName,Any}()
@@ -540,22 +548,22 @@ function _create_modified_model(
     model::BUGSModel,
     new_graph::BUGSGraph,
     new_evaluation_env::NamedTuple;
-    base_model=nothing
+    base_model=nothing,
 )
     # Create new graph evaluation data
     new_graph_evaluation_data = GraphEvaluationData(new_graph)
     new_parameters = new_graph_evaluation_data.sorted_parameters
-    
+
     # Calculate new parameter lengths
     new_untransformed_param_length, new_transformed_param_length = _calculate_param_lengths(
         model, new_parameters
     )
-    
+
     # Generate new log density function and update graph evaluation data
     new_log_density_computation_function, updated_graph_evaluation_data = _regenerate_log_density_function(
         model.model_def, new_graph, new_evaluation_env, new_graph_evaluation_data
     )
-    
+
     # Create the new model with all updated fields
     kwargs = Dict{Symbol,Any}(
         :untransformed_param_length => new_untransformed_param_length,
@@ -565,12 +573,12 @@ function _create_modified_model(
         :g => new_graph,
         :log_density_computation_function => new_log_density_computation_function,
     )
-    
+
     # Add base_model if provided
     if !isnothing(base_model)
         kwargs[:base_model] = base_model
     end
-    
+
     return BUGSModel(model; kwargs...)
 end
 
