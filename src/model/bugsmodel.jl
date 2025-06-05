@@ -136,7 +136,7 @@ function BUGSModel(
     g::BUGSGraph=model.g,
     base_model::Union{<:AbstractBUGSModel,Nothing}=model.base_model,
     evaluation_mode::EvaluationMode=model.evaluation_mode,
-    log_density_computation_function::Union{Function,Nothing}=nothing,
+    log_density_computation_function::Union{Function,Nothing}=model.log_density_computation_function,
     model_def::Expr=model.model_def,
     data=model.data,
 )
@@ -466,7 +466,7 @@ model_with_generated_eval = set_evaluation_mode(model, UseGeneratedLogDensityFun
 ```
 """
 function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
-    if model.log_density_computation_function === Nothing
+    if isnothing(model.log_density_computation_function)
         @warn(
             "The model does not support generated log density function, the evaluation mode is set to `UseGraph`."
         )
