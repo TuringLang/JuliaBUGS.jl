@@ -498,7 +498,7 @@ using AbstractPPL
             params = [1.5, 2.0, 3.0]
 
             # Get result from BUGSModel
-            bugs_env, (bugs_logprior, bugs_loglikelihood, bugs_logjoint) = JuliaBUGS._tempered_evaluate!!(
+            bugs_env, (bugs_logprior, bugs_loglikelihood, bugs_logjoint) = JuliaBUGS.evaluate_with_values!!(
                 model, params; temperature=1.0
             )
 
@@ -590,7 +590,7 @@ using AbstractPPL
             params = rand(3)
 
             # Evaluate BUGSModel with parameters
-            bugs_env, (bugs_logprior, bugs_loglikelihood, bugs_logjoint) = JuliaBUGS._tempered_evaluate!!(
+            bugs_env, (bugs_logprior, bugs_loglikelihood, bugs_logjoint) = JuliaBUGS.evaluate_with_values!!(
                 bugs_model, params; temperature=1.0
             )
 
@@ -628,7 +628,7 @@ using AbstractPPL
             params = rand(4)
 
             # Evaluate BUGSModel with parameters
-            bugs_env, (bugs_logprior, bugs_loglikelihood, bugs_logjoint) = JuliaBUGS._tempered_evaluate!!(
+            bugs_env, (bugs_logprior, bugs_loglikelihood, bugs_logjoint) = JuliaBUGS.evaluate_with_values!!(
                 bugs_model, params; temperature=1.0
             )
 
