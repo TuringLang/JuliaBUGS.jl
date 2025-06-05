@@ -46,7 +46,7 @@ JuliaBUGSMCMCChainsExt = "MCMCChains"
 AbstractMCMC = "5"
 AbstractPPL = "0.8.4, 0.9, 0.10, 0.11"
 Accessors = "0.1"
-AdvancedHMC = "0.6, 0.7"
+AdvancedHMC = "0.6, 0.7, 0.8"
 AdvancedMH = "0.8"
 BangBang = "0.4.1"
 Bijectors = "0.13, 0.14, 0.15.5"
@@ -89,15 +89,4 @@ ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = [
-    "AbstractMCMC",
-    "AdvancedHMC",
-    "AdvancedMH",
-    "ChainRules",
-    "DifferentiationInterface",
-    "LogDensityProblemsAD",
-    "MCMCChains",
-    "Mooncake",
-    "ReverseDiff",
-    "Test"
-]
+test = ["AbstractMCMC", "AdvancedHMC", "AdvancedMH", "ChainRules", "DifferentiationInterface", "LogDensityProblemsAD", "MCMCChains", "Mooncake", "ReverseDiff", "Test"]
