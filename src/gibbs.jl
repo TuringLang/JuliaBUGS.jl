@@ -253,10 +253,3 @@ function AbstractMCMC.step(
         state.sub_states,
     )
 end
-
-# Default implementation for samplers without state
-function gibbs_internal(rng, cond_model, sampler, state=nothing)
-    # Most samplers will override this, but provide a fallback
-    evaluation_env = gibbs_internal(rng, cond_model, sampler)
-    return evaluation_env, nothing
-end

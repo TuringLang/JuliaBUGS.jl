@@ -11,7 +11,6 @@ using JuliaBUGS:
     expand_variables
 using AbstractMCMC
 using Random
-using Statistics
 using OrderedCollections: OrderedDict
 using MCMCChains: Chains
 
@@ -627,8 +626,8 @@ end
 
         # Use AdvancedMH samplers
         sampler_map = OrderedDict(
-            @varname(α) => WithGradient(RWMH(Normal(0, 0.1)), :ReverseDiff),
-            @varname(β) => WithGradient(RWMH(Normal(0, 0.1)), :ForwardDiff),
+            @varname(α) => RWMH(Normal(0, 0.1)),
+            @varname(β) => RWMH(Normal(0, 0.1)),
         )
         gibbs = Gibbs(model, sampler_map)
 
