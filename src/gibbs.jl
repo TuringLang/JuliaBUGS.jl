@@ -30,7 +30,7 @@ struct Gibbs{N,S} <: AbstractMCMC.AbstractSampler
     sampler_map::OrderedDict{N,S}
 
     function Gibbs{N,S}(sampler_map::OrderedDict{N,S}) where {N,S}
-        new{N,S}(sampler_map)
+        return new{N,S}(sampler_map)
     end
 end
 
