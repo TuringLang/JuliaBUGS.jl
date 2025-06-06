@@ -103,36 +103,6 @@ function AbstractMCMC.step(
     end
 end
 
-# Bundle samples for chain construction
-function AbstractMCMC.bundle_samples(
-    samples::Vector,  # Contains evaluation environments
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
-    sampler::MHFromPrior,
-    states::Vector,
-    ::Type{T};
-    kwargs...
-) where {T}
-    model = logdensitymodel.logdensity
-    
-    # Extract parameter values from evaluation environments
-    param_samples = Vector{Vector{Float64}}()
-    for env in samples
-        # Temporarily set the environment to extract parameters
-        model_with_env = BangBang.setproperty!!(model, :evaluation_env, env)
-        push!(param_samples, JuliaBUGS.getparams(model_with_env))
-    end
-    
-    # Extract log densities from states
-    logps = [state.logp for state in states]
-    
-    return JuliaBUGS.gen_chains(
-        logdensitymodel,
-        param_samples,
-        [:lp],
-        [[lp] for lp in logps];
-        kwargs...
-    )
-end
 
 # For use within Gibbs sampling
 """
