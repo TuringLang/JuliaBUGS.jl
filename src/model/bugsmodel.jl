@@ -289,31 +289,6 @@ function BUGSModel(
     )
 end
 
-function BUGSModel(
-    model::BUGSModel,
-    g::BUGSGraph,
-    parameters::Vector{<:VarName},
-    sorted_nodes::Vector{<:VarName},
-    evaluation_env::NamedTuple=model.evaluation_env,
-)
-    graph_eval_data = GraphEvaluationData(g, sorted_nodes, parameters)
-    return BUGSModel(
-        model.model_def,
-        model.data,
-        g,
-        evaluation_env,
-        model.transformed,
-        model.evaluation_mode,
-        sum(model.untransformed_var_lengths[v] for v in graph_eval_data.sorted_parameters),
-        sum(model.transformed_var_lengths[v] for v in graph_eval_data.sorted_parameters),
-        model.untransformed_var_lengths,
-        model.transformed_var_lengths,
-        graph_eval_data,
-        model.log_density_computation_function,
-        isnothing(model.base_model) ? model : model.base_model,
-    )
-end
-
 ## Model interface 
 
 """
@@ -491,7 +466,7 @@ model_with_generated_eval = set_evaluation_mode(model, UseGeneratedLogDensityFun
 ```
 """
 function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
-    if model.log_density_computation_function === identity
+    if isnothing(model.log_density_computation_function)
         @warn(
             "The model does not support generated log density function, the evaluation mode is set to `UseGraph`."
         )

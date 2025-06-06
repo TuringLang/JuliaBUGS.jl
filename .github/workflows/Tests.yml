@@ -32,6 +32,7 @@ jobs:
           - "graphs"
           - "compilation"
           - "log_density"
+          - "model_operations"
           - "experimental"
 
     steps:
