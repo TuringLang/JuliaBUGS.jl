@@ -256,13 +256,22 @@ function AbstractMCMC.step(
         )
 
         # gibbs_internal returns the updated evaluation_env and optional sampler state
-        sub_state = get(state.sub_states, variables_to_update, nothing)
-        evaluation_env, new_sub_state = gibbs_internal(
-            rng, cond_model, sampler.sampler_map[variables_to_update], sub_state
-        )
-        # Store the new sub-state if returned
-        if !isnothing(new_sub_state)
-            state.sub_states[variables_to_update] = new_sub_state
+        # For gradient-based samplers (HMC/NUTS), we don't preserve state across iterations
+        # because the adaptation information becomes stale when the conditional distribution changes
+        sub_sampler = sampler.sampler_map[variables_to_update]
+        if sub_sampler isa WithGradient
+            # Always pass nothing as state for gradient-based samplers
+            evaluation_env, _ = gibbs_internal(rng, cond_model, sub_sampler, nothing)
+        else
+            # For other samplers (like MHFromPrior), preserve state if beneficial
+            sub_state = get(state.sub_states, variables_to_update, nothing)
+            evaluation_env, new_sub_state = gibbs_internal(
+                rng, cond_model, sub_sampler, sub_state
+            )
+            # Store the new sub-state if returned
+            if !isnothing(new_sub_state)
+                state.sub_states[variables_to_update] = new_sub_state
+            end
         end
     end
     return evaluation_env,

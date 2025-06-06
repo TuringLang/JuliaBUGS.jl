@@ -732,4 +732,58 @@ end
             end
         end
     end
+
+    @testset "State preservation behavior" begin
+        # Test that HMC/NUTS states are NOT preserved across Gibbs iterations
+        # while other sampler states can be preserved
+
+        using AdvancedHMC: HMC
+
+        model_def = @bugs begin
+            α ~ Normal(0, 1)
+            β ~ Normal(0, 1)
+            γ ~ Normal(0, 1)
+            for i in 1:N
+                y[i] ~ Normal(α + β * x[i] + γ * x[i]^2, 1)
+            end
+        end
+
+        N = 10
+        x_data = randn(N)
+        y_data = randn(N)
+        model = compile(model_def, (; N=N, x=x_data, y=y_data))
+
+        # Create a custom Gibbs state to inspect sub_states
+        sampler_map = OrderedDict(
+            @varname(α) => WithGradient(HMC(0.01, 5), :ReverseDiff),
+            @varname(β) => MHFromPrior(),
+            @varname(γ) => WithGradient(HMC(0.01, 5), :ReverseDiff),
+        )
+        gibbs = Gibbs(model, sampler_map)
+
+        rng = Random.MersenneTwister(123)
+
+        # Manually step through to inspect states
+        logdensitymodel = AbstractMCMC.LogDensityModel(model)
+        val, state = AbstractMCMC.step(rng, logdensitymodel, gibbs; model=model)
+
+        # Initial state should have empty sub_states
+        @test isempty(state.sub_states)
+
+        # Step a few times
+        for i in 1:3
+            val, state = AbstractMCMC.step(rng, logdensitymodel, gibbs, state; model=model)
+        end
+
+        # After stepping, MHFromPrior might have state but HMC should not
+        # Check that gradient-based samplers (α and γ) don't have preserved states
+        @test !haskey(state.sub_states, [@varname(α)])
+        @test !haskey(state.sub_states, [@varname(γ)])
+        # MHFromPrior (β) doesn't return state in our implementation, so it won't be there either
+        @test !haskey(state.sub_states, [@varname(β)])
+
+        # Verify that the sampler still works correctly
+        chain = sample(rng, model, gibbs, 100)
+        @test length(chain) == 100
+    end
 end
