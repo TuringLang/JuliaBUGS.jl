@@ -80,9 +80,11 @@ reconstruct(s::NTuple{2}, val::AbstractVector) = reshape(copy(val), s)
 #######################
 
 """
-    get_mutable_symbols(graph_evaluation_data::GraphEvaluationData) -> Set{Symbol}
+    get_mutable_symbols(data) -> Set{Symbol}
 
 Identify all symbols in the evaluation environment that may be mutated during model evaluation.
+
+When called with a model, extracts the graph evaluation data first.
 
 This includes:
 - Model parameters (stochastic nodes that are not observations)
@@ -104,30 +106,26 @@ mutable_syms = get_mutable_symbols(model.graph_evaluation_data)
 # Returns: Set([:x, :y])
 ```
 """
-function get_mutable_symbols(graph_evaluation_data::GraphEvaluationData)
+function get_mutable_symbols(data)
+    # If data has graph_evaluation_data field, extract it
+    graph_data = hasproperty(data, :graph_evaluation_data) ? data.graph_evaluation_data : data
+    
     mutable_syms = Set{Symbol}()
     
     # Add symbols from model parameters (stochastic, non-observed nodes)
-    for vn in graph_evaluation_data.sorted_parameters
+    for vn in graph_data.sorted_parameters
         push!(mutable_syms, AbstractPPL.getsym(vn))
     end
     
     # Add symbols from deterministic (logical) nodes
-    for (i, vn) in enumerate(graph_evaluation_data.sorted_nodes)
-        if !graph_evaluation_data.is_stochastic_vals[i]
+    for (i, vn) in enumerate(graph_data.sorted_nodes)
+        if !graph_data.is_stochastic_vals[i]
             push!(mutable_syms, AbstractPPL.getsym(vn))
         end
     end
     
     return mutable_syms
 end
-
-"""
-    get_mutable_symbols(model::BUGSModel) -> Set{Symbol}
-
-Convenience function that extracts mutable symbols from a BUGSModel's graph evaluation data.
-"""
-get_mutable_symbols(model::BUGSModel) = get_mutable_symbols(model.graph_evaluation_data)
 
 """
     smart_copy_evaluation_env(env::NamedTuple, mutable_syms::Set{Symbol}) -> NamedTuple

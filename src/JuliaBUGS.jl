@@ -41,6 +41,7 @@ using .Model:
     UseGraph,
     UseGeneratedLogDensityFunction
 
+include("mh_from_prior.jl")
 include("gibbs.jl")
 
 include("source_gen.jl")
