@@ -28,14 +28,19 @@ using .BUGSPrimitives
 
 include("parser/Parser.jl")
 using .Parser
-
-include("utils.jl")
-using .CompilerUtils
+using .Parser.CompilerUtils
 
 include("graphs.jl")
 include("compiler_pass.jl")
-include("model.jl")
-include("logdensityproblems.jl")
+include("model/Model.jl")
+using .Model
+using .Model:
+    AbstractBUGSModel,
+    BUGSModel,
+    evaluate_with_values!!,
+    UseGraph,
+    UseGeneratedLogDensityFunction
+
 include("gibbs.jl")
 
 include("source_gen.jl")
@@ -274,6 +279,8 @@ Only defined with `MCMCChains` extension.
 function gen_chains end
 
 include("model_macro.jl")
+
+include("serialization.jl")
 
 include("experimental/ProbabilisticGraphicalModels/ProbabilisticGraphicalModels.jl")
 

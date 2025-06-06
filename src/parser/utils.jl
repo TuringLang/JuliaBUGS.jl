@@ -63,7 +63,7 @@ it tries to convert the array to `AbstractArray{T}`. If the conversion is not po
 the array unchanged.
 
 # Examples
-```jldoctest; setup = :(using JuliaBUGS: concretize_eval_env)
+```jldoctest; setup = :(using JuliaBUGS.Parser.CompilerUtils: concretize_eval_env)
 julia> concretize_eval_env((a = Union{Missing,Int}[1, 2, 3],))
 (a = [1, 2, 3],)
 
@@ -90,6 +90,35 @@ end
 
 Decompose a for-loop expression into its components. The function returns four items: the 
 loop variable, the lower bound, the upper bound, and the body of the loop.
+
+# Examples
+```jldoctest; setup = :(using JuliaBUGS.Parser.CompilerUtils: decompose_for_expr; using MacroTools)
+julia> ex = MacroTools.@q for i in 1:3
+           x[i] = i
+           for j in 1:3
+               y[i, j] = i + j
+           end
+       end;
+
+julia> loop_var, lb, ub, body = decompose_for_expr(ex);
+
+julia> loop_var
+:i
+
+julia> lb
+1
+
+julia> ub
+3
+
+julia> body == MacroTools.@q begin
+           x[i] = i
+           for j in 1:3
+               y[i, j] = i + j
+           end
+       end
+true
+```
 """
 @inline function decompose_for_expr(expr::Expr)
     loop_var::Symbol = expr.args[1].args[1]
@@ -105,7 +134,7 @@ end
 Extract all the array variable names and number of dimensions from a given simple expression. 
 
 # Examples:
-```jldoctest; setup = :(using JuliaBUGS: extract_variable_names_and_numdims)
+```jldoctest; setup = :(using JuliaBUGS.Parser.CompilerUtils: extract_variable_names_and_numdims)
 julia> extract_variable_names_and_numdims(:((a + b) * c), ())
 (a = 0, b = 0, c = 0)
 
@@ -170,8 +199,8 @@ Extract all the array variable names and number of dimensions. Inconsistent numb
 will raise an error.
 
 # Example:
-```jldoctest
-JuliaBUGS.extract_variable_names_and_numdims(
+```jldoctest; setup = :(using JuliaBUGS: @bugs; using JuliaBUGS.Parser.CompilerUtils: extract_variable_names_and_numdims)
+extract_variable_names_and_numdims(
     @bugs begin
         for i in 1:N
             for j in 1:T
@@ -260,8 +289,8 @@ end
 Extract all the variable names used in the bounds and indices of the arrays in the program.
 
 # Example:
-```jldoctest
-JuliaBUGS.extract_variables_in_bounds_and_lhs_indices(
+```jldoctest; setup = :(using JuliaBUGS: @bugs; using JuliaBUGS.Parser.CompilerUtils: extract_variables_in_bounds_and_lhs_indices)
+extract_variables_in_bounds_and_lhs_indices(
     @bugs begin
         for i in 1:N
             for j in 1:T
@@ -364,8 +393,8 @@ The first tuple contains the logical scalar variables, the second tuple contains
 the third tuple contains the logical array variables, and the fourth tuple contains the stochastic array variables.
 
 # Example:
-```jldoctest
-JuliaBUGS.extract_variables_assigned_to(
+```jldoctest; setup = :(using JuliaBUGS: @bugs; using JuliaBUGS.Parser.CompilerUtils: extract_variables_assigned_to)
+extract_variables_assigned_to(
     @bugs begin
         for i in 1:N
             for j in 1:T
@@ -401,7 +430,7 @@ function extract_variables_assigned_to(expr::Expr)
     return Tuple.(
         extract_variables_assigned_to(
             expr, Symbol[], Symbol[], Set{Symbol}(), Set{Symbol}()
-        )
+        ),
     )
 end
 function extract_variables_assigned_to(
@@ -450,8 +479,8 @@ end
 Replace all `Colon()`s in `expr` with the corresponding array size.
 
 # Examples
-```jldoctest
-julia> JuliaBUGS.concretize_colon_indexing(:(f(x[1, :])), (x = [1 2 3 4; 5 6 7 8; 9 10 11 12],))
+```jldoctest; setup = :(using JuliaBUGS.Parser.CompilerUtils: concretize_colon_indexing)
+julia> concretize_colon_indexing(:(f(x[1, :])), (x = [1 2 3 4; 5 6 7 8; 9 10 11 12],))
 :(f(x[1, 1:4]))
 ```
 """
@@ -477,7 +506,7 @@ This function evaluates expressions that consist solely of arithmetic operations
 is specifically designed for scenarios such as calculating array indices or determining loop boundaries.
 
 # Example:
-```jldoctest; setup = :(using JuliaBUGS: simple_arithmetic_eval)
+```jldoctest; setup = :(using JuliaBUGS.Parser.CompilerUtils: simple_arithmetic_eval)
 julia> simple_arithmetic_eval((a = 1, b = [1, 2]), 1)
 1
 
@@ -536,80 +565,3 @@ function simple_arithmetic_eval(data::NamedTuple, expr::Expr)
 end
 
 end # module
-
-# TODO: can't remove even with the `possible` fix in DynamicPPL, still seems to have eltype inference issue causing AD errors
-# Resolves: setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
-# Alternatively, can overload BangBang.possible(
-#     ::typeof(BangBang._setindex!), ::C, ::T, ::Vararg
-# )
-# to allow mutation, but the current solution seems create less possible problems, albeit less efficient.
-function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
-    T = promote_type(eltype(xs), eltype(v))
-    ys = similar(xs, T)
-    if eltype(xs) !== Union{}
-        copy!(ys, xs)
-    end
-    ys[I...] = v
-    return ys
-end
-
-function BangBang.setindex!!(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
-    optic = BangBang.prefermutation(
-        AbstractPPL.getoptic(vn) ∘ Accessors.PropertyLens{sym}()
-    )
-    return Accessors.set(nt, optic, val)
-end
-
-"""
-    reconstruct([f, ]dist, val)
-
-Reconstruct `val` so that it's compatible with `dist`.
-
-If `f` is also provided, the reconstruct value will be
-such that `f(reconstruct_val)` is compatible with `dist`.
-"""
-reconstruct(f, dist, val) = reconstruct(dist, val)
-
-# No-op versions.
-reconstruct(::UnivariateDistribution, val::Real) = val
-reconstruct(::MultivariateDistribution, val::AbstractVector{<:Real}) = copy(val)
-reconstruct(::MatrixDistribution, val::AbstractMatrix{<:Real}) = copy(val)
-function reconstruct(
-    ::Distribution{ArrayLikeVariate{N}}, val::AbstractArray{<:Real,N}
-) where {N}
-    return copy(val)
-end
-
-function reconstruct(dist::LKJCholesky, val::AbstractVector{<:Real})
-    return reconstruct(dist, Matrix(reshape(val, size(dist))))
-end
-reconstruct(dist::LKJCholesky, val::AbstractMatrix{<:Real}) = Cholesky(val, dist.uplo, 0)
-reconstruct(::LKJCholesky, val::Cholesky) = val
-
-# NOTE: Necessary to handle product distributions of `Dirichlet` and similar.
-function reconstruct(
-    ::Bijectors.Inverse{<:Bijectors.SimplexBijector}, dist, val::AbstractVector
-)
-    (d, ns...) = size(dist)
-    return reshape(val, d - 1, ns...)
-end
-function reconstruct(
-    ::Bijectors.Inverse{Bijectors.VecCorrBijector}, ::LKJ, val::AbstractVector
-)
-    return copy(val)
-end
-function reconstruct(
-    ::Bijectors.Inverse{Bijectors.VecCholeskyBijector}, ::LKJCholesky, val::AbstractVector
-)
-    return copy(val)
-end
-function reconstruct(
-    ::Bijectors.Inverse{Bijectors.PDVecBijector}, ::MatrixDistribution, val::AbstractVector
-)
-    return copy(val)
-end
-
-reconstruct(d::Distribution, val::AbstractVector) = reconstruct(size(d), val)
-reconstruct(::Tuple{}, val::AbstractVector) = val[1]
-reconstruct(s::NTuple{1}, val::AbstractVector) = copy(val)
-reconstruct(s::NTuple{2}, val::AbstractVector) = reshape(copy(val), s)

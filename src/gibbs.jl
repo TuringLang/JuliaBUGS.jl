@@ -3,7 +3,9 @@ struct Gibbs{N,S} <: AbstractMCMC.AbstractSampler
 end
 
 function Gibbs(model::BUGSModel, s::AbstractMCMC.AbstractSampler)
-    return Gibbs(OrderedDict([v => s for v in model.parameters]))
+    return Gibbs(
+        OrderedDict([v => s for v in model.graph_evaluation_data.sorted_parameters])
+    )
 end
 
 struct MHFromPrior <: AbstractMCMC.AbstractSampler end
@@ -27,13 +29,15 @@ function AbstractMCMC.step(
 ) where {N,S}
     cached_eval_caches, conditioning_schedule = OrderedDict(), OrderedDict()
     for variable_group in keys(sampler.sampler_map)
-        variable_to_condition_on = setdiff(model.parameters, ensure_vector(variable_group))
+        variable_to_condition_on = setdiff(
+            model.graph_evaluation_data.sorted_parameters, ensure_vector(variable_group)
+        )
         conditioning_schedule[variable_to_condition_on] = sampler.sampler_map[variable_group]
         conditioned_model = AbstractPPL.condition(
             model, variable_to_condition_on, model.evaluation_env
         )
         cached_eval_caches[variable_to_condition_on] =
-            conditioned_model.flattened_graph_node_data
+            conditioned_model.graph_evaluation_data
     end
     param_values = JuliaBUGS.getparams(model)
     return param_values, GibbsState(param_values, conditioning_schedule, cached_eval_caches)

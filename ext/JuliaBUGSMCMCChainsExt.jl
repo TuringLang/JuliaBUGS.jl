@@ -81,12 +81,12 @@ function JuliaBUGS.gen_chains(
     thinning=1,
     kwargs...,
 )
-    param_vars = model.parameters
+    param_vars = model.graph_evaluation_data.sorted_parameters
     g = model.g
 
     generated_vars = find_generated_vars(g)
     generated_vars = [
-        v for v in model.flattened_graph_node_data.sorted_nodes if v in generated_vars
+        v for v in model.graph_evaluation_data.sorted_nodes if v in generated_vars
     ] # keep the order
 
     param_vals = []
