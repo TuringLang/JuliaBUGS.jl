@@ -34,6 +34,27 @@ struct Gibbs{N,S} <: AbstractMCMC.AbstractSampler
     end
 end
 
+# Helper to ensure gradient-based samplers have explicit AD backend
+function ensure_explicit_ad_backend(sampler)
+    # If already wrapped, return as-is
+    if sampler isa WithGradient
+        return sampler
+    end
+
+    # Check if it's a gradient-based sampler by checking if module is loaded
+    # and sampler type name suggests it needs gradients
+    sampler_type = string(typeof(sampler))
+    if (occursin("HMC", sampler_type) || occursin("NUTS", sampler_type)) &&
+        occursin("AdvancedHMC", sampler_type)
+        # Wrap with default AD backend
+        # Note: Users should prefer explicit WithGradient(sampler, :ReverseDiff)
+        return WithGradient(sampler, :ReverseDiff)
+    else
+        # Return as-is for other samplers
+        return sampler
+    end
+end
+
 # Constructor with verification and variable expansion for convenience
 function Gibbs(model::BUGSModel, sampler_map::OrderedDict)
     verify_sampler_map(model, sampler_map)
@@ -42,7 +63,9 @@ function Gibbs(model::BUGSModel, sampler_map::OrderedDict)
     expanded_sampler_map = OrderedDict()
     for (variable_group, sampler) in sampler_map
         expanded_vars = expand_variables(ensure_vector(variable_group), model_parameters)
-        expanded_sampler_map[expanded_vars] = sampler
+        # Ensure gradient-based samplers have explicit AD backend
+        wrapped_sampler = ensure_explicit_ad_backend(sampler)
+        expanded_sampler_map[expanded_vars] = wrapped_sampler
     end
     return Gibbs{eltype(keys(expanded_sampler_map)),eltype(values(expanded_sampler_map))}(
         expanded_sampler_map
@@ -51,17 +74,18 @@ end
 
 # Simple constructor for using same sampler for all parameters
 function Gibbs(model::BUGSModel, s::AbstractMCMC.AbstractSampler)
+    # Ensure gradient-based samplers have explicit AD backend
+    wrapped_sampler = ensure_explicit_ad_backend(s)
     sampler_map = OrderedDict([
-        v => s for v in model.graph_evaluation_data.sorted_parameters
+        v => wrapped_sampler for v in model.graph_evaluation_data.sorted_parameters
     ])
     return Gibbs(model, sampler_map)
 end
 
 abstract type AbstractGibbsState end
 
-struct GibbsState{E<:NamedTuple,S,C,T} <: AbstractGibbsState
+struct GibbsState{E<:NamedTuple,C,T} <: AbstractGibbsState
     evaluation_env::E
-    conditioning_schedule::S
     cached_conditioned_models::C
     sub_states::T  # States from sub-samplers (HMC, NUTS, etc.)
 end
@@ -194,14 +218,12 @@ function AbstractMCMC.step(
     # Verify sampler map on first step
     verify_sampler_map(model, sampler.sampler_map)
 
-    cached_conditioned_models, conditioning_schedule = OrderedDict(), OrderedDict()
+    cached_conditioned_models = OrderedDict()
     model_parameters = model.graph_evaluation_data.sorted_parameters
 
     for variables_to_update in keys(sampler.sampler_map)
         # Variables to condition on are all parameters except those we're updating
         variables_to_condition_on = setdiff(model_parameters, variables_to_update)
-
-        conditioning_schedule[variables_to_update] = sampler.sampler_map[variables_to_update]
 
         # Create conditioned model
         conditioned_model = AbstractPPL.condition(model, variables_to_condition_on)
@@ -210,9 +232,7 @@ function AbstractMCMC.step(
     # Initialize sub_states as empty Dict
     sub_states = Dict{Any,Any}()
     return model.evaluation_env,
-    GibbsState(
-        model.evaluation_env, conditioning_schedule, cached_conditioned_models, sub_states
-    )
+    GibbsState(model.evaluation_env, cached_conditioned_models, sub_states)
 end
 
 function AbstractMCMC.step(
@@ -224,7 +244,7 @@ function AbstractMCMC.step(
     kwargs...,
 )
     evaluation_env = state.evaluation_env
-    for variables_to_update in keys(state.conditioning_schedule)
+    for variables_to_update in keys(state.cached_conditioned_models)
         # Update model with current evaluation environment
         model = BangBang.setproperty!!(model, :evaluation_env, evaluation_env)
 
@@ -238,7 +258,7 @@ function AbstractMCMC.step(
         # gibbs_internal returns the updated evaluation_env and optional sampler state
         sub_state = get(state.sub_states, variables_to_update, nothing)
         evaluation_env, new_sub_state = gibbs_internal(
-            rng, cond_model, state.conditioning_schedule[variables_to_update], sub_state
+            rng, cond_model, sampler.sampler_map[variables_to_update], sub_state
         )
         # Store the new sub-state if returned
         if !isnothing(new_sub_state)
@@ -246,10 +266,5 @@ function AbstractMCMC.step(
         end
     end
     return evaluation_env,
-    GibbsState(
-        evaluation_env,
-        state.conditioning_schedule,
-        state.cached_conditioned_models,
-        state.sub_states,
-    )
+    GibbsState(evaluation_env, state.cached_conditioned_models, state.sub_states)
 end

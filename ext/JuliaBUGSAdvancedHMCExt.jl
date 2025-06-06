@@ -15,33 +15,6 @@ using JuliaBUGS.Random
 using MCMCChains: Chains
 import JuliaBUGS: gibbs_internal
 
-function AbstractMCMC.bundle_samples(
-    ts::Vector{<:Transition},
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
-    sampler::AdvancedHMC.AbstractHMCSampler,
-    state,
-    chain_type::Type{Chains};
-    discard_initial=0,
-    thinning=1,
-    kwargs...,
-)
-    stats_names = collect(keys(merge((; lp=ts[1].z.ℓπ.value), AdvancedHMC.stat(ts[1]))))
-    stats_values = [
-        vcat([ts[i].z.ℓπ.value..., collect(values(AdvancedHMC.stat(ts[i])))...]) for
-        i in eachindex(ts)
-    ]
-
-    return JuliaBUGS.gen_chains(
-        logdensitymodel,
-        [t.z.θ for t in ts],
-        stats_names,
-        stats_values;
-        discard_initial=discard_initial,
-        thinning=thinning,
-        kwargs...,
-    )
-end
-
 # Handle WithGradient wrapper for HMC samplers
 function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG,
@@ -50,16 +23,6 @@ function JuliaBUGS.gibbs_internal(
     state=nothing,
 )
     return _gibbs_internal_hmc(rng, cond_model, wrapped.sampler, wrapped.ad_backend, state)
-end
-
-# Direct HMC/NUTS - default to ReverseDiff for backward compatibility
-function JuliaBUGS.gibbs_internal(
-    rng::Random.AbstractRNG,
-    cond_model::BUGSModel,
-    sampler::AdvancedHMC.AbstractHMCSampler,
-    state=nothing,
-)
-    return _gibbs_internal_hmc(rng, cond_model, sampler, :ReverseDiff, state)
 end
 
 # Common implementation
