@@ -297,12 +297,10 @@ end
 
             # When setting to UseGeneratedLogDensityFunction, it should automatically
             # fall back to UseGraph mode since no generated function is available
-            # Don't test the warning itself, just the behavior
-            @test_logs (:warn,) begin
-                model_attempt = set_evaluation_mode(
-                    model_no_gen_modified, UseGeneratedLogDensityFunction()
-                )
-            end
+            # Test both the warning and the behavior
+            model_attempt = @test_logs (:warn,) set_evaluation_mode(
+                model_no_gen_modified, UseGeneratedLogDensityFunction()
+            )
             @test model_attempt.evaluation_mode isa UseGraph
 
             # Verify that a normal model with generated function works as expected
