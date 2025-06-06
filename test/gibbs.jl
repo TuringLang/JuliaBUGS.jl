@@ -626,8 +626,7 @@ end
 
         # Use AdvancedMH samplers
         sampler_map = OrderedDict(
-            @varname(α) => RWMH(Normal(0, 0.1)),
-            @varname(β) => RWMH(Normal(0, 0.1)),
+            @varname(α) => RWMH(Normal(0, 0.1)), @varname(β) => RWMH(Normal(0, 0.1))
         )
         gibbs = Gibbs(model, sampler_map)
 
