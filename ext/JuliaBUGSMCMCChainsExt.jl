@@ -164,7 +164,7 @@ function AbstractMCMC.bundle_samples(
     kwargs...,
 )
     model = logdensitymodel.logdensity
-    
+
     # Extract parameter values from evaluation environments
     param_samples = Vector{Vector{Float64}}()
     for env in samples
@@ -172,7 +172,7 @@ function AbstractMCMC.bundle_samples(
         model_with_env = Accessors.@set model.evaluation_env = env
         push!(param_samples, JuliaBUGS.getparams(model_with_env))
     end
-    
+
     return JuliaBUGS.gen_chains(
         logdensitymodel, param_samples, [], []; discard_initial=discard_initial, kwargs...
     )
@@ -185,10 +185,10 @@ function AbstractMCMC.bundle_samples(
     sampler::JuliaBUGS.MHFromPrior,
     states::Vector,
     ::Type{Chains};
-    kwargs...
+    kwargs...,
 )
     model = logdensitymodel.logdensity
-    
+
     # Extract parameter values from evaluation environments
     param_samples = Vector{Vector{Float64}}()
     for env in samples
@@ -196,16 +196,12 @@ function AbstractMCMC.bundle_samples(
         model_with_env = Accessors.@set model.evaluation_env = env
         push!(param_samples, JuliaBUGS.getparams(model_with_env))
     end
-    
+
     # Extract log densities from states
     logps = [state.logp for state in states]
-    
+
     return JuliaBUGS.gen_chains(
-        logdensitymodel,
-        param_samples,
-        [:lp],
-        [[lp] for lp in logps];
-        kwargs...
+        logdensitymodel, param_samples, [:lp], [[lp] for lp in logps]; kwargs...
     )
 end
 

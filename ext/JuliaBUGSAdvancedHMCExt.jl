@@ -4,7 +4,8 @@ using AbstractMCMC
 using AdvancedHMC
 using AdvancedHMC: Transition, stat, HMC, NUTS
 using JuliaBUGS
-using JuliaBUGS: AbstractBUGSModel, BUGSModel, Gibbs, find_generated_vars, evaluate!!, initialize!
+using JuliaBUGS:
+    AbstractBUGSModel, BUGSModel, Gibbs, find_generated_vars, evaluate!!, initialize!
 using JuliaBUGS.BUGSPrimitives
 using JuliaBUGS.BangBang
 using JuliaBUGS.LogDensityProblems
@@ -43,14 +44,20 @@ end
 
 # Handle WithGradient wrapper for HMC samplers
 function JuliaBUGS.gibbs_internal(
-    rng::Random.AbstractRNG, cond_model::BUGSModel, wrapped::JuliaBUGS.WithGradient{<:AdvancedHMC.AbstractHMCSampler}, state=nothing
+    rng::Random.AbstractRNG,
+    cond_model::BUGSModel,
+    wrapped::JuliaBUGS.WithGradient{<:AdvancedHMC.AbstractHMCSampler},
+    state=nothing,
 )
     return _gibbs_internal_hmc(rng, cond_model, wrapped.sampler, wrapped.ad_backend, state)
 end
 
 # Direct HMC/NUTS - default to ReverseDiff for backward compatibility
 function JuliaBUGS.gibbs_internal(
-    rng::Random.AbstractRNG, cond_model::BUGSModel, sampler::AdvancedHMC.AbstractHMCSampler, state=nothing
+    rng::Random.AbstractRNG,
+    cond_model::BUGSModel,
+    sampler::AdvancedHMC.AbstractHMCSampler,
+    state=nothing,
 )
     return _gibbs_internal_hmc(rng, cond_model, sampler, :ReverseDiff, state)
 end
@@ -62,7 +69,7 @@ function _gibbs_internal_hmc(
     logdensitymodel = AbstractMCMC.LogDensityModel(
         LogDensityProblemsAD.ADgradient(ad_backend, cond_model)
     )
-    
+
     if isnothing(state)
         # Initial step
         t, s = AbstractMCMC.step(
@@ -74,15 +81,9 @@ function _gibbs_internal_hmc(
         )
     else
         # Subsequent step with existing state
-        t, s = AbstractMCMC.step(
-            rng,
-            logdensitymodel,
-            sampler,
-            state;
-            n_adapts=0,
-        )
+        t, s = AbstractMCMC.step(rng, logdensitymodel, sampler, state; n_adapts=0)
     end
-    
+
     updated_model = initialize!(cond_model, t.z.θ)
     # Return the evaluation_env and the new state
     return updated_model.evaluation_env, s
