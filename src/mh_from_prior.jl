@@ -53,10 +53,10 @@ function AbstractMCMC.step(
     logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
     sampler::MHFromPrior;
     initial_params=nothing,
-    kwargs...
+    kwargs...,
 )
     model = logdensitymodel.logdensity
-    
+
     # Initialize with provided params or sample from prior
     if isnothing(initial_params)
         # Sample from prior for unobserved variables only
@@ -66,7 +66,7 @@ function AbstractMCMC.step(
         model = initialize!(model, initial_params)
         evaluation_env, logp = evaluate!!(model)
     end
-    
+
     # Return evaluation environment directly (efficient with smart copying)
     return evaluation_env, MHFromPriorState(evaluation_env, logp)
 end
@@ -77,20 +77,22 @@ function AbstractMCMC.step(
     logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
     sampler::MHFromPrior,
     state::MHFromPriorState;
-    kwargs...
+    kwargs...,
 )
     model = logdensitymodel.logdensity
-    
+
     # Use smart copy for efficiency
-    current_env = Model.smart_copy_evaluation_env(state.evaluation_env, model.mutable_symbols)
+    current_env = Model.smart_copy_evaluation_env(
+        state.evaluation_env, model.mutable_symbols
+    )
     model = BangBang.setproperty!!(model, :evaluation_env, current_env)
-    
+
     # Current log density
     logp_current = state.logp
-    
+
     # Propose new values by sampling from prior (only unobserved variables)
     proposed_env, logp_proposed = evaluate!!(rng, model; sample_all=false)
-    
+
     # Metropolis-Hastings acceptance ratio
     # log(α) = log(p(proposed|data)) - log(p(current|data))
     #        = log_posterior(proposed) - log_posterior(current)
@@ -103,34 +105,35 @@ function AbstractMCMC.step(
     end
 end
 
-
 # For use within Gibbs sampling
 """
-    gibbs_internal(rng, cond_model, ::MHFromPrior)
+    gibbs_internal(rng, cond_model, ::MHFromPrior, state)
 
 Internal function for using MHFromPrior within Gibbs sampling.
-Returns parameter values in the format expected by Gibbs.
+Returns the updated evaluation environment and state (nothing for MHFromPrior).
 """
-function gibbs_internal(rng::Random.AbstractRNG, cond_model::BUGSModel, ::MHFromPrior)
+function gibbs_internal(
+    rng::Random.AbstractRNG, cond_model::BUGSModel, ::MHFromPrior, state=nothing
+)
     # Get current values and log density
     current_env = cond_model.evaluation_env
-    current_env_copy = Model.smart_copy_evaluation_env(current_env, cond_model.mutable_symbols)
-    model_with_current = BangBang.setproperty!!(cond_model, :evaluation_env, current_env_copy)
+    current_env_copy = Model.smart_copy_evaluation_env(
+        current_env, cond_model.mutable_symbols
+    )
+    model_with_current = BangBang.setproperty!!(
+        cond_model, :evaluation_env, current_env_copy
+    )
     _, logp_current = evaluate!!(model_with_current)
-    
+
     # Propose new values (only sampling unobserved variables)
     proposed_env, logp_proposed = evaluate!!(rng, cond_model; sample_all=false)
-    
+
     # Metropolis-Hastings acceptance
     if logp_proposed - logp_current > log(rand(rng))
-        # Accept proposal
-        return JuliaBUGS.getparams(
-            BangBang.setproperty!!(cond_model.base_model, :evaluation_env, proposed_env)
-        )
+        # Accept proposal - return the proposed evaluation environment
+        return proposed_env, nothing
     else
-        # Reject proposal
-        return JuliaBUGS.getparams(
-            BangBang.setproperty!!(cond_model.base_model, :evaluation_env, current_env)
-        )
+        # Reject proposal - return the current evaluation environment
+        return current_env, nothing
     end
 end

@@ -122,7 +122,7 @@ struct BUGSModel{
     log_density_computation_function::F
 
     mutable_symbols::Set{Symbol}
-    
+
     base_model::base_model_T
 end
 

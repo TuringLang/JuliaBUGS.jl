@@ -108,22 +108,23 @@ mutable_syms = get_mutable_symbols(model.graph_evaluation_data)
 """
 function get_mutable_symbols(data)
     # If data has graph_evaluation_data field, extract it
-    graph_data = hasproperty(data, :graph_evaluation_data) ? data.graph_evaluation_data : data
-    
+    graph_data =
+        hasproperty(data, :graph_evaluation_data) ? data.graph_evaluation_data : data
+
     mutable_syms = Set{Symbol}()
-    
+
     # Add symbols from model parameters (stochastic, non-observed nodes)
     for vn in graph_data.sorted_parameters
         push!(mutable_syms, AbstractPPL.getsym(vn))
     end
-    
+
     # Add symbols from deterministic (logical) nodes
     for (i, vn) in enumerate(graph_data.sorted_nodes)
         if !graph_data.is_stochastic_vals[i]
             push!(mutable_syms, AbstractPPL.getsym(vn))
         end
     end
-    
+
     return mutable_syms
 end
 
@@ -155,24 +156,24 @@ new_env = smart_copy_evaluation_env(env, mutable_syms)
 function smart_copy_evaluation_env(env::NamedTuple, mutable_syms::Set{Symbol})
     # Get all keys from the environment
     env_keys = keys(env)
-    
+
     # Determine which keys to copy vs share
     keys_to_copy = intersect(env_keys, mutable_syms)
     keys_to_share = setdiff(env_keys, mutable_syms)
-    
+
     # Build new environment
     new_values = Dict{Symbol,Any}()
-    
+
     # Deep copy mutable parts
     for k in keys_to_copy
         new_values[k] = deepcopy(env[k])
     end
-    
+
     # Share immutable parts (no copy)
     for k in keys_to_share
         new_values[k] = env[k]
     end
-    
+
     # Create and return new NamedTuple
     return NamedTuple(new_values)
 end

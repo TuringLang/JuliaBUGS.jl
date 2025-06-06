@@ -1,6 +1,34 @@
+"""
+    WithGradient(sampler, ad_backend=:ReverseDiff)
+
+Wrapper for gradient-based samplers (HMC, NUTS) that specifies which automatic
+differentiation backend to use.
+
+# Arguments
+- `sampler`: The base sampler (e.g., HMC, NUTS from AdvancedHMC)
+- `ad_backend`: AD backend to use (`:ReverseDiff`, `:ForwardDiff`, `:Zygote`, etc.)
+
+# Examples
+```julia
+# Explicit AD specification
+WithGradient(HMC(0.01, 10), :ForwardDiff)
+WithGradient(NUTS(0.65), :Zygote)
+
+# Default to ReverseDiff
+WithGradient(HMC(0.01, 10))
+```
+"""
+struct WithGradient{S<:AbstractMCMC.AbstractSampler,AD}
+    sampler::S
+    ad_backend::AD
+end
+
+# Default to ReverseDiff
+WithGradient(sampler) = WithGradient(sampler, :ReverseDiff)
+
 struct Gibbs{N,S} <: AbstractMCMC.AbstractSampler
     sampler_map::OrderedDict{N,S}
-    
+
     function Gibbs{N,S}(sampler_map::OrderedDict{N,S}) where {N,S}
         new{N,S}(sampler_map)
     end
@@ -16,21 +44,26 @@ function Gibbs(model::BUGSModel, sampler_map::OrderedDict)
         expanded_vars = expand_variables(ensure_vector(variable_group), model_parameters)
         expanded_sampler_map[expanded_vars] = sampler
     end
-    return Gibbs{eltype(keys(expanded_sampler_map)), eltype(values(expanded_sampler_map))}(expanded_sampler_map)
+    return Gibbs{eltype(keys(expanded_sampler_map)),eltype(values(expanded_sampler_map))}(
+        expanded_sampler_map
+    )
 end
 
 # Simple constructor for using same sampler for all parameters
 function Gibbs(model::BUGSModel, s::AbstractMCMC.AbstractSampler)
-    sampler_map = OrderedDict([v => s for v in model.graph_evaluation_data.sorted_parameters])
+    sampler_map = OrderedDict([
+        v => s for v in model.graph_evaluation_data.sorted_parameters
+    ])
     return Gibbs(model, sampler_map)
 end
 
 abstract type AbstractGibbsState end
 
-struct GibbsState{E<:NamedTuple,S,C} <: AbstractGibbsState
+struct GibbsState{E<:NamedTuple,S,C,T} <: AbstractGibbsState
     evaluation_env::E
     conditioning_schedule::S
     cached_conditioned_models::C
+    sub_states::T  # States from sub-samplers (HMC, NUTS, etc.)
 end
 
 ensure_vector(x) = x isa Union{Number,VarName} ? [x] : x
@@ -99,51 +132,55 @@ function verify_sampler_map(model::BUGSModel, sampler_map::OrderedDict)
     for variable_group in keys(sampler_map)
         append!(all_variables_in_keys, ensure_vector(variable_group))
     end
-    
+
     # Get model parameters
     model_parameters = model.graph_evaluation_data.sorted_parameters
-    
+
     # Track which model parameters are covered
     covered_parameters = Set{VarName}()
-    
+
     # For each variable in sampler map, find which model parameters it covers
     for var in all_variables_in_keys
         # Check if this variable exists in model parameters directly
         if var in model_parameters
             if var in covered_parameters
-                throw(ArgumentError(
-                    "Variable $var is covered multiple times in the sampler map"
-                ))
+                throw(
+                    ArgumentError(
+                        "Variable $var is covered multiple times in the sampler map"
+                    ),
+                )
             end
             push!(covered_parameters, var)
         else
             # Check for subsuming behavior
             subsumed = filter(p -> AbstractPPL.subsumes(var, p), model_parameters)
             if isempty(subsumed)
-                throw(ArgumentError(
-                    "Sampler map contains variable not in the model: $var"
-                ))
+                throw(ArgumentError("Sampler map contains variable not in the model: $var"))
             end
             # Add all subsumed parameters
             for p in subsumed
                 if p in covered_parameters
-                    throw(ArgumentError(
-                        "Variable $p is covered multiple times in the sampler map (subsumed by $var)"
-                    ))
+                    throw(
+                        ArgumentError(
+                            "Variable $p is covered multiple times in the sampler map (subsumed by $var)",
+                        ),
+                    )
                 end
                 push!(covered_parameters, p)
             end
         end
     end
-    
+
     # Check for missing variables
     missing_variables = setdiff(Set(model_parameters), covered_parameters)
     if !isempty(missing_variables)
-        throw(ArgumentError(
-            "Some model parameters are not covered by the sampler map: $(collect(missing_variables))"
-        ))
+        throw(
+            ArgumentError(
+                "Some model parameters are not covered by the sampler map: $(collect(missing_variables))",
+            ),
+        )
     end
-    
+
     return true
 end
 
@@ -156,10 +193,10 @@ function AbstractMCMC.step(
 ) where {N,S}
     # Verify sampler map on first step
     verify_sampler_map(model, sampler.sampler_map)
-    
+
     cached_conditioned_models, conditioning_schedule = OrderedDict(), OrderedDict()
     model_parameters = model.graph_evaluation_data.sorted_parameters
-    
+
     for variables_to_update in keys(sampler.sampler_map)
         # Variables to condition on are all parameters except those we're updating
         variables_to_condition_on = setdiff(model_parameters, variables_to_update)
@@ -167,12 +204,15 @@ function AbstractMCMC.step(
         conditioning_schedule[variables_to_update] = sampler.sampler_map[variables_to_update]
 
         # Create conditioned model
-        conditioned_model = AbstractPPL.condition(
-            model, variables_to_condition_on
-        )
+        conditioned_model = AbstractPPL.condition(model, variables_to_condition_on)
         cached_conditioned_models[variables_to_update] = conditioned_model
     end
-    return model.evaluation_env, GibbsState(model.evaluation_env, conditioning_schedule, cached_conditioned_models)
+    # Initialize sub_states as empty Dict
+    sub_states = Dict{Any,Any}()
+    return model.evaluation_env,
+    GibbsState(
+        model.evaluation_env, conditioning_schedule, cached_conditioned_models, sub_states
+    )
 end
 
 function AbstractMCMC.step(
@@ -187,23 +227,36 @@ function AbstractMCMC.step(
     for variables_to_update in keys(state.conditioning_schedule)
         # Update model with current evaluation environment
         model = BangBang.setproperty!!(model, :evaluation_env, evaluation_env)
-        
+
         # Retrieve cached conditioned model and update its evaluation environment
         cond_model = BangBang.setproperty!!(
             state.cached_conditioned_models[variables_to_update],
             :evaluation_env,
-            evaluation_env
+            evaluation_env,
         )
-        
-        # gibbs_internal now returns param_values, need to update evaluation_env
-        param_values = gibbs_internal(rng, cond_model, state.conditioning_schedule[variables_to_update])
-        
-        # Update evaluation_env by setting model with new param values
-        model_updated = initialize!(model, param_values)
-        evaluation_env = model_updated.evaluation_env
+
+        # gibbs_internal returns the updated evaluation_env and optional sampler state
+        sub_state = get(state.sub_states, variables_to_update, nothing)
+        evaluation_env, new_sub_state = gibbs_internal(
+            rng, cond_model, state.conditioning_schedule[variables_to_update], sub_state
+        )
+        # Store the new sub-state if returned
+        if !isnothing(new_sub_state)
+            state.sub_states[variables_to_update] = new_sub_state
+        end
     end
     return evaluation_env,
-    GibbsState(evaluation_env, state.conditioning_schedule, state.cached_conditioned_models)
+    GibbsState(
+        evaluation_env,
+        state.conditioning_schedule,
+        state.cached_conditioned_models,
+        state.sub_states,
+    )
 end
 
-function gibbs_internal end
+# Default implementation for samplers without state
+function gibbs_internal(rng, cond_model, sampler, state=nothing)
+    # Most samplers will override this, but provide a fallback
+    evaluation_env = gibbs_internal(rng, cond_model, sampler)
+    return evaluation_env, nothing
+end
