@@ -74,4 +74,66 @@ function _gibbs_internal_mh(
     return updated_model.evaluation_env, s
 end
 
+# Override bundle_samples for AdvancedMH transitions with BUGSModel
+# This calls JuliaBUGS.gen_chains which handles parameter name extraction
+function AbstractMCMC.bundle_samples(
+    ts::Vector{<:AdvancedMH.Transition},
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel},
+    sampler::AdvancedMH.MHSampler,
+    state,
+    chain_type::Type{Chains};
+    discard_initial=0,
+    thinning=1,
+    kwargs...,
+)
+    # Extract parameter vectors
+    param_samples = [t.params for t in ts]
+
+    # Extract log densities
+    stats_names = [:lp]
+    stats_values = [[t.lp] for t in ts]
+
+    # Use gen_chains which will extract parameter names from the BUGSModel
+    return JuliaBUGS.gen_chains(
+        logdensitymodel,
+        param_samples,
+        stats_names,
+        stats_values;
+        discard_initial=discard_initial,
+        thinning=thinning,
+        kwargs...,
+    )
+end
+
+# Override bundle_samples for AdvancedMH transitions with ADGradientWrapper
+# This calls JuliaBUGS.gen_chains which handles parameter name extraction
+function AbstractMCMC.bundle_samples(
+    ts::Vector{<:AdvancedMH.Transition},
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
+    sampler::AdvancedMH.MHSampler,
+    state,
+    chain_type::Type{Chains};
+    discard_initial=0,
+    thinning=1,
+    kwargs...,
+)
+    # Extract parameter vectors
+    param_samples = [t.params for t in ts]
+
+    # Extract log densities
+    stats_names = [:lp]
+    stats_values = [[t.lp] for t in ts]
+
+    # Use gen_chains which will extract parameter names from the underlying BUGSModel
+    return JuliaBUGS.gen_chains(
+        logdensitymodel,
+        param_samples,
+        stats_names,
+        stats_values;
+        discard_initial=discard_initial,
+        thinning=thinning,
+        kwargs...,
+    )
+end
+
 end
