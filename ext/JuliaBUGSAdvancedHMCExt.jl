@@ -66,7 +66,6 @@ function AbstractMCMC.bundle_samples(
 )
     # Extract parameter vectors
     param_samples = [t.z.θ for t in ts]
-    
     # Extract stats names and values
     stats_names = collect(keys(merge((; lp=ts[1].z.ℓπ.value), AdvancedHMC.stat(ts[1]))))
     stats_values = [
