@@ -3,6 +3,7 @@ module JuliaBUGS
 using AbstractMCMC
 using AbstractPPL
 using Accessors
+using ADTypes
 using BangBang
 using Bijectors: Bijectors
 using Distributions
@@ -41,6 +42,7 @@ using .Model:
     UseGraph,
     UseGeneratedLogDensityFunction
 
+include("mh_from_prior.jl")
 include("gibbs.jl")
 
 include("source_gen.jl")

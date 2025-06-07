@@ -39,8 +39,12 @@ function JuliaBUGS.gen_chains(
     thinning=1,
     kwargs...,
 )
+    # Extract the underlying BUGSModel from ADGradientWrapper
+    bugs_model = model.logdensity.ℓ
+
+    # Use the BUGSModel's gen_chains method directly
     return JuliaBUGS.gen_chains(
-        model.logdensity.ℓ,
+        bugs_model,
         samples,
         stats_names,
         stats_values;
@@ -150,6 +154,58 @@ function JuliaBUGS.gen_chains(
         );
         start=discard_initial + 1,
         thin=thinning,
+    )
+end
+
+# Bundle samples for Gibbs sampler
+function AbstractMCMC.bundle_samples(
+    samples::Vector,  # Contains evaluation environments
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel},
+    sampler::JuliaBUGS.Gibbs,
+    states,
+    ::Type{Chains};
+    discard_initial=0,
+    kwargs...,
+)
+    model = logdensitymodel.logdensity
+
+    # Extract parameter values from evaluation environments
+    param_samples = Vector{Vector{Float64}}()
+    for env in samples
+        # Temporarily set the environment to extract parameters
+        model_with_env = Accessors.@set model.evaluation_env = env
+        push!(param_samples, JuliaBUGS.getparams(model_with_env))
+    end
+
+    return JuliaBUGS.gen_chains(
+        logdensitymodel, param_samples, [], []; discard_initial=discard_initial, kwargs...
+    )
+end
+
+# Bundle samples for MHFromPrior sampler
+function AbstractMCMC.bundle_samples(
+    samples::Vector,  # Contains evaluation environments
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel},
+    sampler::JuliaBUGS.MHFromPrior,
+    states::Vector,
+    ::Type{Chains};
+    kwargs...,
+)
+    model = logdensitymodel.logdensity
+
+    # Extract parameter values from evaluation environments
+    param_samples = Vector{Vector{Float64}}()
+    for env in samples
+        # Temporarily set the environment to extract parameters
+        model_with_env = Accessors.@set model.evaluation_env = env
+        push!(param_samples, JuliaBUGS.getparams(model_with_env))
+    end
+
+    # Extract log densities from states
+    logps = [state.logp for state in states]
+
+    return JuliaBUGS.gen_chains(
+        logdensitymodel, param_samples, [:lp], [[lp] for lp in logps]; kwargs...
     )
 end
 

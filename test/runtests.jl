@@ -1,5 +1,6 @@
 using Test
 
+using ADTypes
 using AbstractPPL
 using Bijectors
 using ChainRules # needed for `Bijectors.cholesky_lower`
@@ -38,6 +39,7 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     end,
     "graphs" => () -> include("graphs.jl"),
     "compilation" => () -> begin
+        include("model/utils.jl")
         include("model/bugsmodel.jl")
         include("source_gen.jl")
     end,
@@ -48,12 +50,14 @@ const TEST_GROUPS = OrderedDict{String,Function}(
         include("model/evaluation.jl")
     end,
     "inference" => () -> begin
+        include("mh_from_prior.jl")
         include("ext/JuliaBUGSAdvancedHMCExt.jl")
         include("ext/JuliaBUGSMCMCChainsExt.jl")
     end,
     "inference_hmc" => () -> include("ext/JuliaBUGSAdvancedHMCExt.jl"),
     "inference_chains" => () -> include("ext/JuliaBUGSMCMCChainsExt.jl"),
-    # "gibbs" => () -> include("gibbs.jl"),
+    "inference_mh" => () -> include("mh_from_prior.jl"),
+    "gibbs" => () -> include("gibbs.jl"),
     "experimental" =>
         () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
 )

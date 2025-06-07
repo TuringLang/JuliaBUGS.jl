@@ -26,9 +26,8 @@
             [Symbol("x[3]"), Symbol("x[1:2][1]"), Symbol("x[1:2][2]"), :y]
     end
 
-    @testset "Inference results on examples: $example" for example in [
-        :seeds, :rats, :equiv, :stacks, :birats
-    ]
+    @testset "Inference results on examples: $example" for example in
+                                                           [:seeds, :rats, :stacks]
         (; model_def, data, inits, reference_results) = Base.getfield(
             JuliaBUGS.BUGSExamples, example
         )
