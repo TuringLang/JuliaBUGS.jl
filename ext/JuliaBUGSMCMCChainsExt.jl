@@ -39,8 +39,12 @@ function JuliaBUGS.gen_chains(
     thinning=1,
     kwargs...,
 )
+    # Extract the underlying BUGSModel from ADGradientWrapper
+    bugs_model = model.logdensity.ℓ
+    
+    # Use the BUGSModel's gen_chains method directly
     return JuliaBUGS.gen_chains(
-        model.logdensity.ℓ,
+        bugs_model,
         samples,
         stats_names,
         stats_values;
@@ -204,5 +208,6 @@ function AbstractMCMC.bundle_samples(
         logdensitymodel, param_samples, [:lp], [[lp] for lp in logps]; kwargs...
     )
 end
+
 
 end

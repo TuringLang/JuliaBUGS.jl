@@ -52,4 +52,38 @@ function _gibbs_internal_hmc(
     return updated_model.evaluation_env, s
 end
 
+# Override bundle_samples for AdvancedHMC transitions with ADGradientWrapper
+# This calls JuliaBUGS.gen_chains which handles parameter name extraction
+function AbstractMCMC.bundle_samples(
+    ts::Vector{<:Transition},
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
+    sampler::AdvancedHMC.AbstractHMCSampler,
+    state,
+    chain_type::Type{Chains};
+    discard_initial=0,
+    thinning=1,
+    kwargs...,
+)
+    # Extract parameter vectors
+    param_samples = [t.z.θ for t in ts]
+    
+    # Extract stats names and values
+    stats_names = collect(keys(merge((; lp=ts[1].z.ℓπ.value), AdvancedHMC.stat(ts[1]))))
+    stats_values = [
+        vcat(ts[i].z.ℓπ.value, collect(values(AdvancedHMC.stat(ts[i])))) for
+        i in eachindex(ts)
+    ]
+
+    # Use gen_chains which will extract parameter names from the underlying BUGSModel
+    return JuliaBUGS.gen_chains(
+        logdensitymodel,
+        param_samples,
+        stats_names,
+        stats_values;
+        discard_initial=discard_initial,
+        thinning=thinning,
+        kwargs...,
+    )
+end
+
 end
