@@ -209,5 +209,4 @@ function AbstractMCMC.bundle_samples(
     )
 end
 
-
 end
