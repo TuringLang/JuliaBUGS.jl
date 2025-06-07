@@ -1,5 +1,6 @@
 using Test
 
+using ADTypes
 using AbstractPPL
 using Bijectors
 using ChainRules # needed for `Bijectors.cholesky_lower`

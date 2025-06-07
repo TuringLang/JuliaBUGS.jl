@@ -13,7 +13,7 @@ using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.Bijectors
 using JuliaBUGS.Random
 using MCMCChains: Chains
-import JuliaBUGS: gibbs_internal
+import JuliaBUGS: gibbs_internal, update_sampler_state
 
 # Handle WithGradient wrapper for HMC samplers
 function JuliaBUGS.gibbs_internal(
@@ -50,6 +50,43 @@ function _gibbs_internal_hmc(
     updated_model = initialize!(cond_model, t.z.θ)
     # Return the evaluation_env and the new state
     return updated_model.evaluation_env, s
+end
+
+# Update HMC/NUTS state to reflect parameter changes from other samplers
+function JuliaBUGS.update_sampler_state(
+    model::BUGSModel,
+    sampler::JuliaBUGS.WithGradient{<:AdvancedHMC.AbstractHMCSampler},
+    state::AdvancedHMC.HMCState,
+)
+    # Get current parameters from the model
+    θ_new = JuliaBUGS.getparams(model)
+
+    # Create ADGradient wrapper for log density evaluation
+    logdensitymodel = LogDensityProblemsAD.ADgradient(sampler.ad_backend, model)
+
+    # Compute new log density and gradient at the updated position
+    ℓ = LogDensityProblems.logdensity(logdensitymodel, θ_new)
+    ∇ℓ = LogDensityProblems.logdensity_and_gradient(logdensitymodel, θ_new)[2]
+
+    # Create DualValue with log density and gradient
+    ℓπ = AdvancedHMC.DualValue(ℓ, ∇ℓ)
+
+    # Create new phase point with updated position and density
+    # Preserve momentum and kinetic energy from previous state
+    z_new = AdvancedHMC.PhasePoint(
+        θ_new,  # New position
+        state.transition.z.r,  # Keep existing momentum
+        ℓπ,  # New log density and gradient
+        state.transition.z.ℓκ,  # Keep existing kinetic energy
+    )
+
+    # Create new transition with updated phase point
+    new_transition = AdvancedHMC.Transition(z_new, state.transition.stat)
+
+    # Return updated state preserving adaptation info
+    return AdvancedHMC.HMCState(
+        state.i, new_transition, state.metric, state.κ, state.adaptor
+    )
 end
 
 # Override bundle_samples for AdvancedHMC transitions with ADGradientWrapper

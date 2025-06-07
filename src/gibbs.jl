@@ -1,30 +1,30 @@
 """
-    WithGradient(sampler, ad_backend=:ReverseDiff)
+    WithGradient(sampler, ad_backend=AutoReverseDiff())
 
 Wrapper for gradient-based samplers (HMC, NUTS) that specifies which automatic
 differentiation backend to use.
 
 # Arguments
 - `sampler`: The base sampler (e.g., HMC, NUTS from AdvancedHMC)
-- `ad_backend`: AD backend to use (`:ReverseDiff`, `:ForwardDiff`, `:Zygote`, etc.)
+- `ad_backend`: AD backend from ADTypes (e.g., `AutoReverseDiff()`, `AutoForwardDiff()`, `AutoMooncake()`)
 
 # Examples
 ```julia
 # Explicit AD specification
-WithGradient(HMC(0.01, 10), :ForwardDiff)
-WithGradient(NUTS(0.65), :Zygote)
+WithGradient(HMC(0.01, 10), AutoForwardDiff())
+WithGradient(NUTS(0.65), AutoMooncake())
 
 # Default to ReverseDiff
 WithGradient(HMC(0.01, 10))
 ```
 """
-struct WithGradient{S<:AbstractMCMC.AbstractSampler,AD}
+struct WithGradient{S<:AbstractMCMC.AbstractSampler,AD<:ADTypes.AbstractADType}
     sampler::S
     ad_backend::AD
 end
 
 # Default to ReverseDiff
-WithGradient(sampler) = WithGradient(sampler, :ReverseDiff)
+WithGradient(sampler) = WithGradient(sampler, ADTypes.AutoReverseDiff())
 
 struct Gibbs{N,S} <: AbstractMCMC.AbstractSampler
     sampler_map::OrderedDict{N,S}
@@ -32,6 +32,14 @@ struct Gibbs{N,S} <: AbstractMCMC.AbstractSampler
     function Gibbs{N,S}(sampler_map::OrderedDict{N,S}) where {N,S}
         return new{N,S}(sampler_map)
     end
+end
+
+# Generic fallback for update_sampler_state
+# Extensions will provide specialized implementations
+function update_sampler_state(model::BUGSModel, sampler, state)
+    # Default: return state unchanged
+    # Extensions should override this for their sampler types
+    return state
 end
 
 # Helper to ensure gradient-based samplers have explicit AD backend
@@ -47,8 +55,8 @@ function ensure_explicit_ad_backend(sampler)
     if (occursin("HMC", sampler_type) || occursin("NUTS", sampler_type)) &&
         occursin("AdvancedHMC", sampler_type)
         # Wrap with default AD backend
-        # Note: Users should prefer explicit WithGradient(sampler, :ReverseDiff)
-        return WithGradient(sampler, :ReverseDiff)
+        # Note: Users should prefer explicit WithGradient(sampler, AutoReverseDiff())
+        return WithGradient(sampler, ADTypes.AutoReverseDiff())
     else
         # Return as-is for other samplers
         return sampler
@@ -62,7 +70,9 @@ function Gibbs(model::BUGSModel, sampler_map::OrderedDict)
     model_parameters = model.graph_evaluation_data.sorted_parameters
     expanded_sampler_map = OrderedDict()
     for (variable_group, sampler) in sampler_map
-        expanded_vars = expand_variables(ensure_vector(variable_group), model_parameters)
+        variable_group_vec =
+            (variable_group isa VarName) ? [variable_group] : variable_group
+        expanded_vars = expand_variables(variable_group_vec, model_parameters)
         # Ensure gradient-based samplers have explicit AD backend
         wrapped_sampler = ensure_explicit_ad_backend(sampler)
         expanded_sampler_map[expanded_vars] = wrapped_sampler
@@ -89,8 +99,6 @@ struct GibbsState{E<:NamedTuple,C,T} <: AbstractGibbsState
     cached_conditioned_models::C
     sub_states::T  # States from sub-samplers (HMC, NUTS, etc.)
 end
-
-ensure_vector(x) = x isa Union{Number,VarName} ? [x] : x
 
 """
     expand_variables(vars::Vector{<:VarName}, model_parameters::Vector{<:VarName})
@@ -154,7 +162,9 @@ function verify_sampler_map(model::BUGSModel, sampler_map::OrderedDict)
     # Collect all variables from sampler map keys
     all_variables_in_keys = VarName[]
     for variable_group in keys(sampler_map)
-        append!(all_variables_in_keys, ensure_vector(variable_group))
+        variable_group_vec =
+            (variable_group isa VarName) ? [variable_group] : variable_group
+        append!(all_variables_in_keys, variable_group_vec)
     end
 
     # Get model parameters
@@ -256,22 +266,25 @@ function AbstractMCMC.step(
         )
 
         # gibbs_internal returns the updated evaluation_env and optional sampler state
-        # For gradient-based samplers (HMC/NUTS), we don't preserve state across iterations
-        # because the adaptation information becomes stale when the conditional distribution changes
         sub_sampler = sampler.sampler_map[variables_to_update]
-        if sub_sampler isa WithGradient
-            # Always pass nothing as state for gradient-based samplers
-            evaluation_env, _ = gibbs_internal(rng, cond_model, sub_sampler, nothing)
-        else
-            # For other samplers (like MHFromPrior), preserve state if beneficial
-            sub_state = get(state.sub_states, variables_to_update, nothing)
-            evaluation_env, new_sub_state = gibbs_internal(
-                rng, cond_model, sub_sampler, sub_state
-            )
-            # Store the new sub-state if returned
-            if !isnothing(new_sub_state)
-                state.sub_states[variables_to_update] = new_sub_state
-            end
+
+        # Get the sub-state for this sampler (if it exists)
+        sub_state = get(state.sub_states, variables_to_update, nothing)
+
+        # Update the state to reflect changes from other samplers
+        if !isnothing(sub_state)
+            # Update state for any sampler type to account for parameter changes
+            sub_state = update_sampler_state(cond_model, sub_sampler, sub_state)
+        end
+
+        # Take a step with the sampler
+        evaluation_env, new_sub_state = gibbs_internal(
+            rng, cond_model, sub_sampler, sub_state
+        )
+
+        # Store the new sub-state if returned
+        if !isnothing(new_sub_state)
+            state.sub_states[variables_to_update] = new_sub_state
         end
     end
     return evaluation_env,

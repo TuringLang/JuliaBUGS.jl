@@ -11,7 +11,7 @@ using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.Random
 using JuliaBUGS.Bijectors
 using MCMCChains: Chains
-import JuliaBUGS: gibbs_internal
+import JuliaBUGS: gibbs_internal, update_sampler_state
 
 # Direct MHSampler
 function JuliaBUGS.gibbs_internal(
@@ -32,7 +32,9 @@ function JuliaBUGS.gibbs_internal(
         t, s = AbstractMCMC.step(rng, logdensitymodel, sampler, state)
     end
 
-    updated_model = initialize!(cond_model, t.params)
+    # Ensure params is always a vector (BUGSModel expects vector input)
+    params = !isa(t.params, AbstractArray) ? [t.params] : t.params
+    updated_model = initialize!(cond_model, params)
     # Return the evaluation_env and the new state
     return updated_model.evaluation_env, s
 end
@@ -69,7 +71,9 @@ function _gibbs_internal_mh(
         t, s = AbstractMCMC.step(rng, logdensitymodel, sampler, state; n_adapts=0)
     end
 
-    updated_model = initialize!(cond_model, t.params)
+    # Ensure params is always a vector (BUGSModel expects vector input)
+    params = !isa(t.params, AbstractArray) ? [t.params] : t.params
+    updated_model = initialize!(cond_model, params)
     # Return the evaluation_env and the new state
     return updated_model.evaluation_env, s
 end
@@ -134,6 +138,31 @@ function AbstractMCMC.bundle_samples(
         thinning=thinning,
         kwargs...,
     )
+end
+
+# Update MH state to reflect parameter changes from other samplers
+function JuliaBUGS.update_sampler_state(
+    model::BUGSModel,
+    sampler::Union{AdvancedMH.MHSampler,JuliaBUGS.WithGradient{<:AdvancedMH.MHSampler}},
+    state::AdvancedMH.Transition,
+)
+    # Get current parameters from the model
+    θ_new = JuliaBUGS.getparams(model)
+
+    # Compute new log probability with updated parameters
+    lp_new = LogDensityProblems.logdensity(model, θ_new)
+
+    # Handle scalar parameters - some MH proposals expect scalars
+    # Check if the original state had scalar params
+    if !(state.params isa AbstractVector)
+        # Convert back to scalar if original was scalar and we have 1-element vector
+        if length(θ_new) == 1
+            θ_new = θ_new[1]
+        end
+    end
+
+    # Return new transition with updated parameters and log probability
+    return AdvancedMH.Transition(θ_new, lp_new, state.accepted)
 end
 
 end
