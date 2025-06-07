@@ -41,7 +41,7 @@ function JuliaBUGS.gen_chains(
 )
     # Extract the underlying BUGSModel from ADGradientWrapper
     bugs_model = model.logdensity.ℓ
-    
+
     # Use the BUGSModel's gen_chains method directly
     return JuliaBUGS.gen_chains(
         bugs_model,
