@@ -587,65 +587,65 @@ function _marginalize_recursive(
     return result
 end
 
-function evaluate_with_marginalization(
-	bn::BayesianNetwork{V, T, F},
-	parameter_values::AbstractVector;
-	caching_strategy::Symbol = :full_env,
-    order_heuristic::Symbol = :dfs,  # :dfs, :min_degree, or :min_fill
-) where {V, T, F}
-	# Get topological ordering of nodes
+# function evaluate_with_marginalization(
+# 	bn::BayesianNetwork{V, T, F},
+# 	parameter_values::AbstractVector;
+# 	caching_strategy::Symbol = :full_env,
+#     order_heuristic::Symbol = :dfs,  # :dfs, :min_degree, or :min_fill
+# ) where {V, T, F}
+# 	# Get topological ordering of nodes
 
-	sorted_node_ids = topological_sort_with_heuristic(bn, order_heuristic)
+# 	sorted_node_ids = topological_sort_with_heuristic(bn, order_heuristic)
 
-	# Find discrete and continuous variables
-	discrete_vars = [
-		bn.names[i] for i in sorted_node_ids if
-		bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] == :discrete
-	]
+# 	# Find discrete and continuous variables
+# 	discrete_vars = [
+# 		bn.names[i] for i in sorted_node_ids if
+# 		bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] == :discrete
+# 	]
 
-	continuous_vars = [
-		bn.names[i] for i in sorted_node_ids if
-		bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] != :discrete
-	]
+# 	continuous_vars = [
+# 		bn.names[i] for i in sorted_node_ids if
+# 		bn.is_stochastic[i] && !bn.is_observed[i] && bn.node_types[i] != :discrete
+# 	]
 
-	# Parameter validation for continuous variables
-	total_param_length = 0
-	for name in continuous_vars
-		if haskey(bn.transformed_var_lengths, name)
-			total_param_length += bn.transformed_var_lengths[name]
-		end
-	end
+# 	# Parameter validation for continuous variables
+# 	total_param_length = 0
+# 	for name in continuous_vars
+# 		if haskey(bn.transformed_var_lengths, name)
+# 			total_param_length += bn.transformed_var_lengths[name]
+# 		end
+# 	end
 
-	if !isempty(continuous_vars) &&
-	   !isempty(parameter_values) &&
-	   length(parameter_values) < total_param_length
-		error(
-			"Parameter vector too short: needed $(total_param_length) elements, but only $(length(parameter_values)) provided.",
-		)
-	end
+# 	if !isempty(continuous_vars) &&
+# 	   !isempty(parameter_values) &&
+# 	   length(parameter_values) < total_param_length
+# 		error(
+# 			"Parameter vector too short: needed $(total_param_length) elements, but only $(length(parameter_values)) provided.",
+# 		)
+# 	end
 
-	# Initialize environment once
-	env = deepcopy(bn.evaluation_env)
+# 	# Initialize environment once
+# 	env = deepcopy(bn.evaluation_env)
 
-	# Size hint for memo dictionary - for optimal performance
-	# We expect at most 2^|discrete_vars| * |nodes| entries
-	expected_entries = 2^length(discrete_vars) * length(bn.names)
-	memo = Dict{Tuple{Int, Int, UInt64}, Any}()
-	sizehint!(memo, expected_entries)
-	if caching_strategy == :minimal_key
-		# Precompute minimal keys for memoization
-		minimal_keys = _precompute_minimal_cache_keys(bn, sorted_node_ids)
-	else
-		minimal_keys = nothing
-	end
+# 	# Size hint for memo dictionary - for optimal performance
+# 	# We expect at most 2^|discrete_vars| * |nodes| entries
+# 	expected_entries = 2^length(discrete_vars) * length(bn.names)
+# 	memo = Dict{Tuple{Int, Int, UInt64}, Any}()
+# 	sizehint!(memo, expected_entries)
+# 	if caching_strategy == :minimal_key
+# 		# Precompute minimal keys for memoization
+# 		minimal_keys = _precompute_minimal_cache_keys(bn, sorted_node_ids)
+# 	else
+# 		minimal_keys = nothing
+# 	end
 
-	# Start recursive evaluation with the first node, beginning at parameter index 1
-	logp = _marginalize_recursive(
-		bn, env, sorted_node_ids, parameter_values, 1,
-		bn.transformed_var_lengths, memo, caching_strategy, minimal_keys,
-	)
-	return env, logp
-end
+# 	# Start recursive evaluation with the first node, beginning at parameter index 1
+# 	logp = _marginalize_recursive(
+# 		bn, env, sorted_node_ids, parameter_values, 1,
+# 		bn.transformed_var_lengths, memo, caching_strategy, minimal_keys,
+# 	)
+# 	return env, logp
+# end
 
 function _extract_value_for_hash(x)
     # Handle ForwardDiff.Dual
@@ -883,8 +883,7 @@ Generate a topological order using:
 function topological_sort_with_heuristic(bn::BayesianNetwork, heuristic::Symbol)
     g = bn.graph
     n = Graphs.nv(g)
-    
-    # Handle DFS case directly without extra computation
+
     if heuristic == :dfs
         return topological_sort_by_dfs(g)
     end
