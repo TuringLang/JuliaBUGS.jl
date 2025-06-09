@@ -6,6 +6,7 @@ Requires the original BUGSModel to access transformed_var_lengths.
 """
 
 function LogDensityProblems.logdensity(bn::BayesianNetwork, x::AbstractArray)
+    print("this is used for logdensity in BayesianNetwork.jl\n")
     _, logp = evaluate_with_marginalization(bn, x)
     return logp
 end
