@@ -644,10 +644,10 @@ end
         gibbs = Gibbs(model, sampler_map)
 
         rng = Random.MersenneTwister(999)
-        chain = sample(rng, model, gibbs, 500; chain_type=Chains)
+        chain = sample(rng, model, gibbs, 1000; chain_type=Chains)
 
         @test chain isa AbstractMCMC.AbstractChains
-        @test size(chain, 1) == 500
+        @test size(chain, 1) == 1000
         @test size(chain, 2) == 2  # α and β
 
         # Check bounds for α (should be in [0, 1])

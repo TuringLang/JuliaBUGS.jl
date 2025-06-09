@@ -1,32 +1,23 @@
 module JuliaBUGSMCMCChainsExt
 
-using JuliaBUGS
-using JuliaBUGS: AbstractBUGSModel, find_generated_vars, evaluate!!
-using JuliaBUGS.AbstractPPL
-using JuliaBUGS.BUGSPrimitives
-using JuliaBUGS.LogDensityProblems
-using JuliaBUGS.LogDensityProblemsAD
-using JuliaBUGS: Accessors
 using AbstractMCMC
+using JuliaBUGS
+using JuliaBUGS: BUGSModel, find_generated_vars, evaluate!!, getparams
+using JuliaBUGS.AbstractPPL
+using JuliaBUGS.Accessors
+using JuliaBUGS.LogDensityProblemsAD
 using MCMCChains: Chains
 
 function JuliaBUGS.gen_chains(
-    model::AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel},
+    model::AbstractMCMC.LogDensityModel{<:BUGSModel},
     samples,
     stats_names,
     stats_values;
-    discard_initial=0,
-    thinning=1,
     kwargs...,
 )
+    # Extract BUGSModel and delegate
     return JuliaBUGS.gen_chains(
-        model.logdensity,
-        samples,
-        stats_names,
-        stats_values;
-        discard_initial=discard_initial,
-        thinning=thinning,
-        kwargs...,
+        model.logdensity, samples, stats_names, stats_values; kwargs...
     )
 end
 
@@ -35,39 +26,32 @@ function JuliaBUGS.gen_chains(
     samples,
     stats_names,
     stats_values;
-    discard_initial=0,
-    thinning=1,
     kwargs...,
 )
-    # Extract the underlying BUGSModel from ADGradientWrapper
+    # Extract BUGSModel from ADGradient wrapper
     bugs_model = model.logdensity.ℓ
 
-    # Use the BUGSModel's gen_chains method directly
-    return JuliaBUGS.gen_chains(
-        bugs_model,
-        samples,
-        stats_names,
-        stats_values;
-        discard_initial=discard_initial,
-        thinning=thinning,
-        kwargs...,
-    )
+    return JuliaBUGS.gen_chains(bugs_model, samples, stats_names, stats_values; kwargs...)
 end
 
-# copied from DynamicPPL
+# Helper to flatten variable names for chain construction
+# Based on DynamicPPL's implementation
 varname_leaves(vn::VarName, ::Real) = [vn]
+
 function varname_leaves(vn::VarName, val::AbstractArray{<:Union{Real,Missing}})
     return (
         VarName(vn, Accessors.IndexLens(Tuple(I)) ∘ getoptic(vn)) for
         I in CartesianIndices(val)
     )
 end
+
 function varname_leaves(vn::VarName, val::AbstractArray)
     return Iterators.flatten(
         varname_leaves(VarName(vn, Accessors.IndexLens(Tuple(I)) ∘ getoptic(vn)), val[I])
         for I in CartesianIndices(val)
     )
 end
+
 function varname_leaves(vn::VarName, val::NamedTuple)
     iter = Iterators.map(keys(val)) do sym
         optic = Accessors.PropertyLens{sym}()
@@ -76,8 +60,23 @@ function varname_leaves(vn::VarName, val::NamedTuple)
     return Iterators.flatten(iter)
 end
 
+"""
+    gen_chains(
+        model::BUGSModel,
+        samples, stats_names, stats_values;
+        discard_initial=0, thinning=1, kwargs...
+    )
+
+Convert parameter samples to MCMCChains format with proper variable names.
+
+This function:
+1. Evaluates the model for each sample to get generated quantities
+2. Flattens array parameters into individual chain columns
+3. Combines parameters, generated quantities, and statistics
+4. Creates a properly formatted Chains object
+"""
 function JuliaBUGS.gen_chains(
-    model::JuliaBUGS.BUGSModel,
+    model::BUGSModel,
     samples,
     stats_names,
     stats_values;
@@ -86,13 +85,14 @@ function JuliaBUGS.gen_chains(
     kwargs...,
 )
     param_vars = model.graph_evaluation_data.sorted_parameters
-    g = model.g
 
-    generated_vars = find_generated_vars(g)
+    # Find and order generated quantities
+    generated_vars = find_generated_vars(model.g)
     generated_vars = [
         v for v in model.graph_evaluation_data.sorted_nodes if v in generated_vars
-    ] # keep the order
+    ]
 
+    # Evaluate model for each sample to get parameter values and generated quantities
     param_vals = []
     generated_quantities = []
     for i in axes(samples)[1]
@@ -110,6 +110,7 @@ function JuliaBUGS.gen_chains(
         )
     end
 
+    # Flatten variable names for array parameters
     param_name_leaves = collect(
         Iterators.flatten([
             collect(varname_leaves(vn, param_vals[1][i])) for
@@ -123,12 +124,13 @@ function JuliaBUGS.gen_chains(
         ],),
     )
 
-    # some of the values may be arrays
+    # Flatten values for array parameters
     flattened_param_vals = [collect(Iterators.flatten(p)) for p in param_vals]
     flattened_generated_quantities = [
         collect(Iterators.flatten(gq)) for gq in generated_quantities
     ]
 
+    # Combine all values: parameters, generated quantities, and statistics
     vals = [
         convert(
             Vector{Real},
@@ -140,11 +142,13 @@ function JuliaBUGS.gen_chains(
         ) for i in axes(samples)[1]
     ]
 
+    # Sanity check
     @assert length(vals[1]) ==
         length(param_name_leaves) +
             length(generated_varname_leaves) +
             length(stats_names)
 
+    # Create chains with proper sections
     return Chains(
         vals,
         vcat(Symbol.(param_name_leaves), Symbol.(generated_varname_leaves), stats_names),
@@ -157,10 +161,9 @@ function JuliaBUGS.gen_chains(
     )
 end
 
-# Bundle samples for Gibbs sampler
 function AbstractMCMC.bundle_samples(
     samples::Vector,  # Contains evaluation environments
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel},
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
     sampler::JuliaBUGS.Gibbs,
     states,
     ::Type{Chains};
@@ -169,23 +172,22 @@ function AbstractMCMC.bundle_samples(
 )
     model = logdensitymodel.logdensity
 
-    # Extract parameter values from evaluation environments
+    # Convert evaluation environments to parameter vectors
     param_samples = Vector{Vector{Float64}}()
     for env in samples
-        # Temporarily set the environment to extract parameters
         model_with_env = Accessors.@set model.evaluation_env = env
-        push!(param_samples, JuliaBUGS.getparams(model_with_env))
+        push!(param_samples, getparams(model_with_env))
     end
 
+    # No statistics for Gibbs sampler itself
     return JuliaBUGS.gen_chains(
         logdensitymodel, param_samples, [], []; discard_initial=discard_initial, kwargs...
     )
 end
 
-# Bundle samples for MHFromPrior sampler
 function AbstractMCMC.bundle_samples(
     samples::Vector,  # Contains evaluation environments
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:JuliaBUGS.BUGSModel},
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
     sampler::JuliaBUGS.MHFromPrior,
     states::Vector,
     ::Type{Chains};
@@ -193,17 +195,15 @@ function AbstractMCMC.bundle_samples(
 )
     model = logdensitymodel.logdensity
 
-    # Extract parameter values from evaluation environments
+    # Convert evaluation environments to parameter vectors
     param_samples = Vector{Vector{Float64}}()
     for env in samples
-        # Temporarily set the environment to extract parameters
         model_with_env = Accessors.@set model.evaluation_env = env
-        push!(param_samples, JuliaBUGS.getparams(model_with_env))
+        push!(param_samples, getparams(model_with_env))
     end
 
-    # Extract log densities from states
+    # Include log probabilities as statistics
     logps = [state.logp for state in states]
-
     return JuliaBUGS.gen_chains(
         logdensitymodel, param_samples, [:lp], [[lp] for lp in logps]; kwargs...
     )
