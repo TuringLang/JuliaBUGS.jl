@@ -90,6 +90,7 @@ The `BUGSModel` object is used for inference and represents the output of compil
 - `transformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space.
 - `graph_evaluation_data::GraphEvaluationData{TNF,TV}`: A `GraphEvaluationData` object containing pre-computed values of the nodes in the model, with sorted_parameters as the second field for easy access.
 - `log_density_computation_function::F`: The generated function for computing log-density (if available).
+- `mutable_symbols::Set{Symbol}`: Set of symbols in the evaluation environment that may be mutated during evaluation (parameters and deterministic nodes).
 - `base_model::base_model_T`: If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`.
 """
 struct BUGSModel{
@@ -120,6 +121,8 @@ struct BUGSModel{
 
     log_density_computation_function::F
 
+    mutable_symbols::Set{Symbol}
+
     base_model::base_model_T
 end
 
@@ -137,6 +140,7 @@ function BUGSModel(
     base_model::Union{<:AbstractBUGSModel,Nothing}=model.base_model,
     evaluation_mode::EvaluationMode=model.evaluation_mode,
     log_density_computation_function::Union{Function,Nothing}=model.log_density_computation_function,
+    mutable_symbols::Set{Symbol}=model.mutable_symbols,
     model_def::Expr=model.model_def,
     data=model.data,
 )
@@ -153,6 +157,7 @@ function BUGSModel(
         transformed_var_lengths,
         graph_evaluation_data,
         log_density_computation_function,
+        mutable_symbols,
         base_model,
     )
 end
@@ -272,6 +277,9 @@ function BUGSModel(
         log_density_computation_function = nothing
     end
 
+    # Compute mutable symbols from graph evaluation data
+    mutable_symbols = get_mutable_symbols(graph_evaluation_data)
+
     return BUGSModel(
         model_def,
         data,
@@ -285,6 +293,7 @@ function BUGSModel(
         transformed_var_lengths,
         graph_evaluation_data,
         log_density_computation_function,
+        mutable_symbols,
         nothing,
     )
 end

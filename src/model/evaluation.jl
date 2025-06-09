@@ -57,7 +57,7 @@ function evaluate_with_rng!!(
 )
     logprior = 0.0
     loglikelihood = 0.0
-    evaluation_env = deepcopy(model.evaluation_env)
+    evaluation_env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
 
     for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
         is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
@@ -108,7 +108,7 @@ end
 """
     function evaluate_with_env!!(
         model::BUGSModel,
-        evaluation_env=deepcopy(model.evaluation_env);
+        evaluation_env=smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols);
         temperature=1.0,
         transformed=true,
     )
@@ -126,7 +126,7 @@ Evaluate model using current values in the evaluation environment.
 """
 function evaluate_with_env!!(
     model::BUGSModel,
-    evaluation_env=deepcopy(model.evaluation_env);
+    evaluation_env=smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols);
     temperature=1.0,
     transformed=true,
 )
@@ -204,7 +204,7 @@ function evaluate_with_values!!(
         model.untransformed_var_lengths
     end
 
-    evaluation_env = deepcopy(model.evaluation_env)
+    evaluation_env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
     current_idx = 1
     logprior, loglikelihood = 0.0, 0.0
     for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)

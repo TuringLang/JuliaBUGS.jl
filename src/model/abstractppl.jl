@@ -564,6 +564,9 @@ function _create_modified_model(
         model.model_def, new_graph, new_evaluation_env, new_graph_evaluation_data
     )
 
+    # Recompute mutable symbols for the new graph
+    new_mutable_symbols = get_mutable_symbols(updated_graph_evaluation_data)
+
     # Create the new model with all updated fields
     kwargs = Dict{Symbol,Any}(
         :untransformed_param_length => new_untransformed_param_length,
@@ -572,6 +575,7 @@ function _create_modified_model(
         :graph_evaluation_data => updated_graph_evaluation_data,
         :g => new_graph,
         :log_density_computation_function => new_log_density_computation_function,
+        :mutable_symbols => new_mutable_symbols,
     )
 
     # Add base_model if provided
