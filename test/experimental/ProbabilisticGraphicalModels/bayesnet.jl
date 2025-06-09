@@ -18,9 +18,9 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
 	evaluate_with_marginalization_legacy,
 	_marginalize_recursive_legacy,
 	_precompute_minimal_cache_keys,
-    moralize,
-    evaluate_with_marginalization_ordered,
-    topological_sort_with_heuristic
+	moralize,
+	evaluate_with_marginalization_ordered,
+	topological_sort_with_heuristic
 using BangBang
 using JuliaBUGS
 using JuliaBUGS: @bugs, compile, NodeInfo, VarName
@@ -1870,7 +1870,7 @@ end
 		end
 
 		@testset "Chain Network Scaling Tests" begin
-			
+
 			# Expected memoization sizes based on your provided log output.
 			# The test will verify that the DP implementation produces exactly these cache sizes.
 			expected_memo_sizes = Dict(
@@ -1882,12 +1882,12 @@ end
 				7 => 15,
 				8 => 17,
 				9 => 19,
-				10 => 21
+				10 => 21,
 			)
 
 			# Define the chain lengths to be tested.
 			chain_lengths_to_test = [2, 3, 4, 5, 6, 7, 8, 9, 10]
-			
+
 			# Loop through each configuration and run the tests.
 			for len in chain_lengths_to_test
 				@testset "Chain Length: $len" begin
@@ -1902,8 +1902,8 @@ end
 
 					# --- Assertions ---
 					# 1. Test for correctness: The log probabilities should be nearly identical.
-					@test isapprox(logp_standard, logp_dp, rtol=1e-10)
-					
+					@test isapprox(logp_standard, logp_dp, rtol = 1e-10)
+
 					# 2. Test for memoization size: The cache size must match the expected value.
 					@test memo_size == expected_memo_sizes[len]
 				end
@@ -1911,16 +1911,16 @@ end
 		end
 
 		@testset "Tree Network Scaling Tests" begin
-			
+
 			# Expected memoization sizes for each tree depth, based on your log output.
 			expected_tree_memo_sizes = Dict(
 				2 => 11,
-				3 => 63
+				3 => 63,
 			)
 
 			# Define the tree depths to be tested.
 			tree_depths_to_test = [2, 3]
-			
+
 			for depth in tree_depths_to_test
 				@testset "Tree Depth: $depth" begin
 					# --- Setup ---
@@ -1933,8 +1933,8 @@ end
 
 					# --- Assertions ---
 					# 1. Test correctness: The log probabilities must match.
-					@test isapprox(logp_standard, logp_dp, rtol=1e-10)
-					
+					@test isapprox(logp_standard, logp_dp, rtol = 1e-10)
+
 					# 2. Test memoization size: The cache size must match the expected value.
 					@test memo_size == expected_tree_memo_sizes[depth]
 				end
@@ -1948,7 +1948,7 @@ end
 			expected_grid_memo_sizes = Dict(
 				(2, 2) => 13,
 				(2, 3) => 21,
-				(3, 3) => 53
+				(3, 3) => 53,
 			)
 
 			# Define the grid sizes to be tested.
@@ -1963,10 +1963,10 @@ end
 					# --- Execution ---
 					_, logp_standard = marginalize_without_memo(bn, params)
 					_, logp_dp, memo_size = marginalize_with_memo(bn, params)
-					
+
 					# --- Assertions ---
 					# 1. Test correctness: The log probabilities must match.
-					@test isapprox(logp_standard, logp_dp, rtol=1e-10)
+					@test isapprox(logp_standard, logp_dp, rtol = 1e-10)
 
 					# 2. Test memoization size: The cache size must match the expected value.
 					@test memo_size == expected_grid_memo_sizes[(width, height)]
@@ -1986,7 +1986,7 @@ end
 		@test has_edge(mg1, 1, 2)  # Moral edge
 		@test has_edge(mg1, 1, 3)  # Original edge
 		@test has_edge(mg1, 2, 3)  # Original edge
-		
+
 		# Test 2: Chain structure (A → B → C)
 		g2 = SimpleDiGraph(3)
 		Graphs.add_edge!(g2, 1, 2)
@@ -1996,7 +1996,7 @@ end
 		@test ne(mg2) == 2  # No moral edges needed
 		@test has_edge(mg2, 1, 2)
 		@test has_edge(mg2, 2, 3)
-		
+
 		# Test 3: Diamond structure
 		g3 = SimpleDiGraph(4)
 		Graphs.add_edge!(g3, 1, 2)
@@ -2011,7 +2011,7 @@ end
 		@test has_edge(mg3, 1, 3)
 		@test has_edge(mg3, 2, 4)
 		@test has_edge(mg3, 3, 4)
-		
+
 		# Test 4: Complex structure with multiple v-structures
 		g4 = SimpleDiGraph(5)
 		Graphs.add_edge!(g4, 1, 3)
@@ -2031,25 +2031,25 @@ end
 	@testset "Topological Sort Heuristics" begin
 		# Create a diamond-shaped Bayesian Network
 		bn = BayesianNetwork{Symbol}()
-		
+
 		# Add vertices and get their IDs
 		a_id = add_stochastic_vertex!(bn, :A, nothing, false, :discrete)
 		b_id = add_stochastic_vertex!(bn, :B, nothing, false, :discrete)
 		c_id = add_stochastic_vertex!(bn, :C, nothing, false, :discrete)
 		d_id = add_stochastic_vertex!(bn, :D, nothing, false, :continuous)  # Start unobserved
-		
+
 		# Add edges using vertex IDs
 		Graphs.add_edge!(bn.graph, a_id, b_id)
 		Graphs.add_edge!(bn.graph, a_id, c_id)
 		Graphs.add_edge!(bn.graph, b_id, d_id)
 		Graphs.add_edge!(bn.graph, c_id, d_id)
-		
+
 		# Create a new BayesianNetwork with D observed
 		new_is_observed = copy(bn.is_observed)
 		new_is_observed[d_id] = true
-		
+
 		new_evaluation_env = BangBang.setindex!!(bn.evaluation_env, 1.5, :D)
-		
+
 		bn_obs = BayesianNetwork(
 			bn.graph,
 			bn.names,
@@ -2064,24 +2064,24 @@ end
 			new_is_observed,
 			bn.node_types,
 			bn.transformed_var_lengths,
-			bn.transformed_param_length
+			bn.transformed_param_length,
 		)
-		
+
 		# Test 1: DFS order
 		dfs_order = topological_sort_with_heuristic(bn_obs, :dfs)
 		@test length(dfs_order) == 4
 		@test dfs_order[end] == d_id  # Observed node last
-		
+
 		# Test 2: MinDegree order
 		min_deg_order = topological_sort_with_heuristic(bn_obs, :min_degree)
 		@test length(min_deg_order) == 4
 		@test min_deg_order[end] == d_id
-		
+
 		# Test 3: MinFill order
 		min_fill_order = topological_sort_with_heuristic(bn_obs, :min_fill)
 		@test length(min_fill_order) == 4
 		@test min_fill_order[end] == d_id
-		
+
 		# Test 4: Verify orders are valid topological sorts
 		function is_valid_topological_order(g, order)
 			visited = falses(Graphs.nv(g))
@@ -2095,11 +2095,11 @@ end
 			end
 			return true
 		end
-		
+
 		@test is_valid_topological_order(bn_obs.graph, dfs_order)
 		@test is_valid_topological_order(bn_obs.graph, min_deg_order)
 		@test is_valid_topological_order(bn_obs.graph, min_fill_order)
-		
+
 		# Test 5: Compare orders for efficiency
 		# MinFill should prioritize nodes that minimize fill-in edges
 		# In diamond structure, MinFill should eliminate A first
@@ -2211,17 +2211,17 @@ end
 				@testset "Heuristic: $heuristic" begin
 					sorted_nodes_ids = topological_sort_with_heuristic(bn, heuristic)
 					minimal_keys_for_order = _precompute_minimal_cache_keys(bn, sorted_nodes_ids)
-					
+
 					memo = Dict{Tuple{Int, Int, UInt64}, Any}()
 					env = deepcopy(bn.evaluation_env)
 					logp = _marginalize_recursive(
 						bn, env, sorted_nodes_ids, params, 1,
-						bn.transformed_var_lengths, memo, :minimal_key, minimal_keys_for_order
+						bn.transformed_var_lengths, memo, :minimal_key, minimal_keys_for_order,
 					)
 					memo_size = length(memo)
 
 					# --- Assertions ---
-					@test logp ≈ reference_logp rtol=1e-8
+					@test logp ≈ reference_logp rtol = 1e-8
 					@test memo_size == expected_memos[heuristic]
 				end
 			end
@@ -2235,33 +2235,33 @@ end
 		# The failing test will tell you the correct value to put in.
 		test_configurations = [
 			(
-				n_states=3, 
-				seq_length=14, 
-				expected_memos=Dict(
+				n_states = 3,
+				seq_length = 14,
+				expected_memos = Dict(
 					:dfs        => 26224,
 					:min_degree => 226,
-					:min_fill   => 226  
-				)
+					:min_fill   => 226,
+				),
 			),
 			# --- Three New Test Configurations ---
 			(
-				n_states=2, 
-				seq_length=10, 
-				expected_memos=Dict(
+				n_states = 2,
+				seq_length = 10,
+				expected_memos = Dict(
 					:dfs        => 369, # <-- Run test to find correct value
 					:min_degree => 71,
-					:min_fill   => 71
-				)
+					:min_fill   => 71,
+				),
 			),
 			(
-				n_states=3, 
-				seq_length=8, 
-				expected_memos=Dict(
+				n_states = 3,
+				seq_length = 8,
+				expected_memos = Dict(
 					:dfs        => 952,
 					:min_degree => 118,
-					:min_fill   => 118
-				)
-			)
+					:min_fill   => 118,
+				),
+			),
 		]
 
 		# Loop through the configurations and run the test for each one
