@@ -1,29 +1,56 @@
-# Gradient-based Samplers with AD Backends
-#
-# For gradient-based samplers (HMC, NUTS), specify the AD backend using a tuple:
-# `(sampler, ad_backend)` where `ad_backend` is from ADTypes.
-#
-# Supported AD Backends:
-# - `AutoForwardDiff()` (default): Good for models with few parameters (<100)
-# - `AutoReverseDiff()`: Good for models with many parameters
-# - `AutoMooncake()`: Experimental, potentially faster for some models
-#
-# Examples:
-# ```julia
-# using ADTypes
-# 
-# # Explicit AD specification
-# sampler_map = OrderedDict(
-#     @varname(μ) => (HMC(0.01, 10), AutoForwardDiff()),
-#     @varname(σ) => (NUTS(0.65), AutoReverseDiff())
-# )
-# 
-# # For gradient-based samplers, always specify AD backend
-# sampler_map = OrderedDict(
-#     @varname(μ) => (HMC(0.01, 10), AutoForwardDiff()),
-#     @varname(σ) => (NUTS(0.65), AutoReverseDiff())
-# )
-# ```
+"""
+    WithGradient(sampler, ad_backend=AutoReverseDiff())
+
+Wrapper for gradient-based samplers (HMC, NUTS) that specifies which automatic
+differentiation backend to use.
+
+This wrapper allows users to explicitly choose the AD backend for gradient computations
+in samplers that require gradients. It's particularly useful when different AD backends
+have different performance characteristics for specific models.
+
+# Arguments
+- `sampler`: The base sampler (e.g., HMC, NUTS from AdvancedHMC)
+- `ad_backend`: AD backend from ADTypes (e.g., `AutoReverseDiff()`, `AutoForwardDiff()`, `AutoMooncake()`)
+
+# Supported AD Backends
+- `AutoReverseDiff()` (default): Good for models with many parameters
+- `AutoForwardDiff()`: Good for models with few parameters (<100)
+- `AutoMooncake()`: Experimental, potentially faster for some models. Note: When using `UseGeneratedLogDensityFunction()` evaluation mode, only `AutoMooncake()` is supported for AD
+
+# Examples
+```jldoctest
+julia> using JuliaBUGS: WithGradient, MHFromPrior
+
+julia> using ADTypes
+
+julia> # Explicit AD specification
+       WithGradient(MHFromPrior(), AutoForwardDiff())
+WithGradient{MHFromPrior, AutoForwardDiff{nothing, Nothing}}(MHFromPrior(), AutoForwardDiff())
+
+julia> # Default to ReverseDiff
+       WithGradient(MHFromPrior())
+WithGradient{MHFromPrior, AutoReverseDiff{false}}(MHFromPrior(), AutoReverseDiff())
+```
+
+For use with HMC/NUTS samplers (requires AdvancedHMC):
+```julia
+WithGradient(HMC(0.01, 10), AutoForwardDiff())
+WithGradient(NUTS(0.65), AutoMooncake())
+
+# Use in Gibbs sampling
+sampler_map = OrderedDict(
+    @varname(μ) => WithGradient(HMC(0.01, 10), AutoForwardDiff()),
+    @varname(σ) => WithGradient(NUTS(0.65), AutoReverseDiff())
+)
+```
+"""
+struct WithGradient{S<:AbstractMCMC.AbstractSampler,AD<:ADTypes.AbstractADType}
+    sampler::S
+    ad_backend::AD
+end
+
+# Default to ReverseDiff
+WithGradient(sampler) = WithGradient(sampler, ADTypes.AutoReverseDiff())
 
 """
     Gibbs{N,S} <: AbstractMCMC.AbstractSampler
@@ -43,14 +70,83 @@ continuous vs discrete, or different dimensionalities).
 - `sampler_map::OrderedDict{N,S}`: Maps variable groups to their respective samplers
 
 # See Also
-- [`IndependentMH`](@ref): A simple Metropolis-Hastings sampler
-- Gradient-based samplers: Use tuples `(sampler, ad_backend)` to specify AD backends
+- [`WithGradient`](@ref): For specifying AD backends for gradient-based samplers
+- [`MHFromPrior`](@ref): A simple Metropolis-Hastings sampler
 """
 struct Gibbs{N,S} <: AbstractMCMC.AbstractSampler
     sampler_map::OrderedDict{N,S}
 
     function Gibbs{N,S}(sampler_map::OrderedDict{N,S}) where {N,S}
         return new{N,S}(sampler_map)
+    end
+end
+
+"""
+    update_sampler_state(model::BUGSModel, sampler, state)
+
+Update the sampler state to reflect parameter changes from other samplers in Gibbs.
+
+When using Gibbs sampling, parameters updated by one sampler affect the log density
+and gradients used by other samplers. This function updates the sampler's internal
+state to reflect these changes.
+
+# Arguments
+- `model`: The current conditioned BUGSModel
+- `sampler`: The sampler whose state needs updating
+- `state`: The current state of the sampler
+
+# Returns
+- Updated sampler state
+
+# Implementation Notes
+This is a generic fallback that returns the state unchanged. Extensions should
+override this method for samplers that maintain internal state (e.g., HMC/NUTS
+with cached gradients).
+```
+"""
+function update_sampler_state(model::BUGSModel, sampler, state)
+    # Default: return state unchanged
+    # Extensions should override this for their sampler types
+    return state
+end
+
+"""
+    ensure_explicit_ad_backend(sampler)
+
+Ensure gradient-based samplers have an explicit AD backend specification.
+
+This internal helper function checks if a sampler requires gradients (HMC, NUTS)
+and wraps it with `WithGradient` if not already wrapped. This ensures all
+gradient-based samplers have an explicit AD backend, defaulting to ReverseDiff.
+
+# Arguments
+- `sampler`: Any AbstractMCMC sampler
+
+# Returns
+- The sampler wrapped in `WithGradient` if it's gradient-based and not already wrapped
+- The original sampler otherwise
+
+# Notes
+This function uses heuristics (type name matching) to detect gradient-based samplers.
+Users should prefer explicitly wrapping their samplers with `WithGradient` for clarity.
+"""
+function ensure_explicit_ad_backend(sampler)
+    # If already wrapped, return as-is
+    if sampler isa WithGradient
+        return sampler
+    end
+
+    # Check if it's a gradient-based sampler by checking if module is loaded
+    # and sampler type name suggests it needs gradients
+    sampler_type = string(typeof(sampler))
+    if (occursin("HMC", sampler_type) || occursin("NUTS", sampler_type)) &&
+        occursin("AdvancedHMC", sampler_type)
+        # Wrap with default AD backend
+        # Note: Users should prefer explicit WithGradient(sampler, AutoReverseDiff())
+        return WithGradient(sampler, ADTypes.AutoReverseDiff())
+    else
+        # Return as-is for other samplers
+        return sampler
     end
 end
 
@@ -76,27 +172,25 @@ Variables can be specified individually or as groups:
 
 # Examples
 ```julia
-using ADTypes: AutoReverseDiff, AutoForwardDiff
-
 # Different samplers for different parameters
 sampler_map = OrderedDict(
-    @varname(μ) => (HMC(0.01, 10), AutoReverseDiff()),
-    @varname(σ) => (NUTS(0.65), AutoReverseDiff()),
-    @varname(k) => IndependentMH()  # Good for discrete parameters
+    @varname(μ) => WithGradient(HMC(0.01, 10)),
+    @varname(σ) => WithGradient(NUTS(0.65)),
+    @varname(k) => MHFromPrior()  # Good for discrete parameters
 )
 gibbs = Gibbs(model, sampler_map)
 
 # Group parameters that should be updated together
 sampler_map = OrderedDict(
-    [@varname(α), @varname(β)] => (HMC(0.01, 10), AutoForwardDiff()),
-    @varname(σ) => (NUTS(0.65), AutoForwardDiff())  # Must specify AD backend
+    [@varname(α), @varname(β)] => WithGradient(HMC(0.01, 10)),
+    @varname(σ) => WithGradient(NUTS(0.65))
 )
 gibbs = Gibbs(model, sampler_map)
 
 # Array variables are automatically expanded
 sampler_map = OrderedDict(
-    @varname(x) => IndependentMH(),  # Updates all x[1], x[2], ..., x[n]
-    @varname(μ) => (HMC(0.01, 10), AutoForwardDiff())  # Must specify AD backend
+    @varname(x) => MHFromPrior(),  # Updates all x[1], x[2], ..., x[n]
+    @varname(μ) => WithGradient(HMC(0.01, 10))
 )
 gibbs = Gibbs(model, sampler_map)
 ```
@@ -113,7 +207,9 @@ function Gibbs(model::BUGSModel, sampler_map::OrderedDict)
         variable_group_vec =
             (variable_group isa VarName) ? [variable_group] : variable_group
         expanded_vars = expand_variables(variable_group_vec, model_parameters)
-        expanded_sampler_map[expanded_vars] = sampler
+        # Ensure gradient-based samplers have explicit AD backend
+        wrapped_sampler = ensure_explicit_ad_backend(sampler)
+        expanded_sampler_map[expanded_vars] = wrapped_sampler
     end
     return Gibbs{eltype(keys(expanded_sampler_map)),eltype(values(expanded_sampler_map))}(
         expanded_sampler_map
@@ -135,12 +231,11 @@ single-site Gibbs sampling.
 
 # Examples
 ```julia
-# Use IndependentMH for all parameters
-gibbs = Gibbs(model, IndependentMH())
+# Use MHFromPrior for all parameters
+gibbs = Gibbs(model, MHFromPrior())
 
 # Use HMC for all parameters (each updated individually)
-gibbs = Gibbs(model, (HMC(0.01, 10), AutoForwardDiff()))
-# Note: For gradient-based samplers, you must specify the AD backend
+gibbs = Gibbs(model, WithGradient(HMC(0.01, 10)))
 ```
 
 # Notes
@@ -148,9 +243,10 @@ For better performance with continuous parameters, consider grouping related
 parameters and using the OrderedDict constructor instead.
 """
 function Gibbs(model::BUGSModel, s::AbstractMCMC.AbstractSampler)
-    # Use the sampler as-is for all parameters
+    # Ensure gradient-based samplers have explicit AD backend
+    wrapped_sampler = ensure_explicit_ad_backend(s)
     sampler_map = OrderedDict([
-        v => s for v in model.graph_evaluation_data.sorted_parameters
+        v => wrapped_sampler for v in model.graph_evaluation_data.sorted_parameters
     ])
     return Gibbs(model, sampler_map)
 end
@@ -264,13 +360,13 @@ specifying just `x` in the sampler map will cover all of them.
 model = compile(...)
 # Case 1: Individual variables
 sampler_map = OrderedDict(
-    [@varname(α)] => IndependentMH(),
+    [@varname(α)] => MHFromPrior(),
     [@varname(β), @varname(γ)] => HMC(0.01, 10)
 )
 
 # Case 2: Subsuming - x covers x[1], x[2], etc.
 sampler_map = OrderedDict(
-    [@varname(x)] => IndependentMH(),  # Covers all x[i]
+    [@varname(x)] => MHFromPrior(),  # Covers all x[i]
     [@varname(β)] => HMC(0.01, 10)
 )
 verify_sampler_map(model, sampler_map)  # Throws if invalid
@@ -395,6 +491,46 @@ For each group:
 - `evaluation_env`: Updated values of all variables
 - `state`: Updated GibbsState with new values and sub-states
 """
+    # Verify sampler map on first step
+    verify_sampler_map(model, sampler.sampler_map)
+
+    cached_conditioned_models = OrderedDict()
+    model_parameters = model.graph_evaluation_data.sorted_parameters
+
+    for variables_to_update in keys(sampler.sampler_map)
+        # Variables to condition on are all parameters except those we're updating
+        variables_to_condition_on = setdiff(model_parameters, variables_to_update)
+
+        # Create conditioned model
+        conditioned_model = AbstractPPL.condition(model, variables_to_condition_on)
+        cached_conditioned_models[variables_to_update] = conditioned_model
+    end
+    # Initialize sub_states as empty Dict
+    sub_states = Dict{Any,Any}()
+    return model.evaluation_env,
+    GibbsState(model.evaluation_env, cached_conditioned_models, sub_states)
+end
+
+"""
+Perform one iteration of the Gibbs sampler.
+
+This function updates each parameter group sequentially using its assigned sampler.
+For each group:
+1. The conditioned model is updated with current values
+2. The sub-sampler state is updated if necessary (for stateful samplers)
+3. The sub-sampler takes a step to update the parameters
+4. The new state is stored for future iterations
+
+# Arguments
+- `rng`: Random number generator
+- `l_model`: Log density model wrapper
+- `sampler`: The Gibbs sampler
+- `state`: Current state containing values and cached models
+
+# Returns
+- `evaluation_env`: Updated values of all variables
+- `state`: Updated GibbsState with new values and sub-states
+"""
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
     l_model::AbstractMCMC.LogDensityModel{<:BUGSModel},
@@ -423,28 +559,12 @@ function AbstractMCMC.step(
 
         # Update the state to reflect changes from other samplers
         if !isnothing(sub_state)
-            # Get updated parameters from the conditioned model
-            θ_new = getparams(cond_model)
-
-            # Create appropriate log density model based on sampler type
-            if sub_sampler isa
-                Tuple{<:AbstractMCMC.AbstractSampler,<:ADTypes.AbstractADType}
-                # For gradient-based samplers, wrap with AD
-                _, ad_backend = sub_sampler
-                logdensitymodel = AbstractMCMC.LogDensityModel(
-                    LogDensityProblemsAD.ADgradient(ad_backend, cond_model)
-                )
-            else
-                # For non-gradient samplers, use model directly
-                logdensitymodel = AbstractMCMC.LogDensityModel(cond_model)
-            end
-
-            # Update state using AbstractMCMC interface
-            sub_state = AbstractMCMC.setparams!!(logdensitymodel, sub_state, θ_new)
+            # Update state for any sampler type to account for parameter changes
+            sub_state = update_sampler_state(cond_model, sub_sampler, sub_state)
         end
 
         # Take a step with the sampler
-        # gibbs_internal is implemented by each sampler type (IndependentMH, HMC extensions, etc.)
+        # gibbs_internal is implemented by each sampler type (MHFromPrior, HMC extensions, etc.)
         # It returns the updated evaluation_env and optional sampler state
         evaluation_env, new_sub_state = gibbs_internal(
             rng, cond_model, sub_sampler, sub_state

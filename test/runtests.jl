@@ -41,6 +41,7 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     "graphs" => () -> include("graphs.jl"),
     "compilation" => () -> begin
         include("model/utils.jl")
+        include("model/utils.jl")
         include("model/bugsmodel.jl")
         include("source_gen.jl")
     end,
@@ -52,6 +53,7 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     end,
     "inference" => () -> begin
         include("independent_mh.jl")
+        include("mh_from_prior.jl")
         include("ext/JuliaBUGSAdvancedHMCExt.jl")
         include("ext/JuliaBUGSMCMCChainsExt.jl")
     end,
@@ -62,6 +64,10 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     "parallel_sampling" => () -> include("parallel_sampling.jl"),
     "experimental" => () -> 1, # TODO: revive this
     # () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
+    "inference_mh" => () -> include("mh_from_prior.jl"),
+    "gibbs" => () -> include("gibbs.jl"),
+    "experimental" =>
+        () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
 )
 
 raw_selection = get(ENV, "TEST_GROUP", "all")
