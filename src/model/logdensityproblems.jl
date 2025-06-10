@@ -1,9 +1,11 @@
+using LogDensityProblems
+
 function _eval_logdensity(model, ::UseGeneratedLogDensityFunction, x)
     return model.log_density_computation_function(model.evaluation_env, x)
 end
 
 function _eval_logdensity(model, ::UseGraph, x)
-    _, logp = JuliaBUGS.evaluate!!(model, x)
+    _, logp = AbstractPPL.evaluate!!(model, x)
     return logp
 end
 

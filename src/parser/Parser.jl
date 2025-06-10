@@ -4,6 +4,7 @@ using MacroTools
 using JuliaSyntax
 using JuliaSyntax: @K_str, @KSet_str, tokenize, untokenize, Diagnostic, Token
 
+include("utils.jl")
 include("bugs_parser.jl")
 include("bugs_macro.jl")
 
