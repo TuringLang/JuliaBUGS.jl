@@ -18,6 +18,7 @@ using MetaGraphsNext
 using OrderedCollections
 using Random
 using Serialization
+using StableRNGs
 
 using AbstractMCMC
 using AdvancedHMC

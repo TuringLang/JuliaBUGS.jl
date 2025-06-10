@@ -165,7 +165,7 @@ using Statistics
         cond_model = condition(model, (; lambda=2.0))
 
         # Test gibbs_internal
-        rng = Random.MersenneTwister(222)
+        rng = StableRNG(222)
         param_values = gibbs_internal(rng, cond_model, MHFromPrior())
 
         @test param_values isa Vector{Float64}
