@@ -668,7 +668,7 @@ using StatsBase: mode
         )
         gibbs = Gibbs(model, sampler_map)
 
-        rng = StableRNG(999)
+        rng = StableRNG(1234)
         chain = sample(rng, model, gibbs, 1000; progress=false, chain_type=Chains)
 
         @test chain isa AbstractMCMC.AbstractChains
