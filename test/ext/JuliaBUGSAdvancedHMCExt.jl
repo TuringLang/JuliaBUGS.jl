@@ -12,6 +12,7 @@
         D = LogDensityProblems.dimension(model)
         initial_θ = rand(D)
         samples_and_stats = AbstractMCMC.sample(
+            StableRNG(1234),
             ad_model,
             NUTS(0.8),
             n_samples;
@@ -40,6 +41,7 @@
         initial_θ = JuliaBUGS.getparams(model)
 
         samples_and_stats = AbstractMCMC.sample(
+            StableRNG(1234),
             ad_model,
             NUTS(0.8),
             n_samples;
