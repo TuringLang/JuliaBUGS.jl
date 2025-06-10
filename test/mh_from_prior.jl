@@ -4,7 +4,7 @@ using JuliaBUGS: @bugs, compile, @varname, MHFromPrior, MHFromPriorState, gibbs_
 using JuliaBUGS.Model: condition
 using AbstractMCMC
 using Random
-using Statistics
+using JuliaBUGS.Statistics
 
 @testset "MHFromPrior" begin
     @testset "Standalone MHFromPrior targeting posterior" begin
