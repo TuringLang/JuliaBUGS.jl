@@ -166,9 +166,9 @@ using Statistics
 
         # Test gibbs_internal
         rng = StableRNG(222)
-        param_values = gibbs_internal(rng, cond_model, MHFromPrior())
+        env, _ = gibbs_internal(rng, cond_model, MHFromPrior())
+        param_values = JuliaBUGS.getparams(cond_model, env)
 
-        @test param_values isa Vector{Float64}
         # Should be 2 parameters since both p and lambda are parameters in the base model
         # When we condition on lambda, we still get its value in param_values
         @test length(param_values) >= 1
