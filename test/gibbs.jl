@@ -15,15 +15,8 @@ using Random
 using OrderedCollections: OrderedDict
 using MCMCChains: Chains
 using ReverseDiff
-
-# Simple mode function for discrete values
-function simple_mode(x)
-    counts = Dict{eltype(x),Int}()
-    for val in x
-        counts[val] = get(counts, val, 0) + 1
-    end
-    return argmax(counts)
-end
+using Statistics
+using StatsBase: mode
 
 @testset "Gibbs" begin
     @testset "verify_sampler_map" begin
@@ -431,7 +424,7 @@ end
 
             # Check that we recover reasonable values
             @test mean(chain[:μ] .+ chain[:k]) ≈ mean(y_data) atol = 0.2
-            @test simple_mode(Int.(vec(chain[:k].data))) == true_k  # Most frequent value should be true k
+            @test mode(Int.(vec(chain[:k].data))) == true_k  # Most frequent value should be true k
         end
 
         @testset "Conditioning correctness" begin
