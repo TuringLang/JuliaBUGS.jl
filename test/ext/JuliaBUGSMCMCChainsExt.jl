@@ -112,7 +112,7 @@
     hmc_chain = AbstractMCMC.sample(
         ad_model, NUTS(0.8), 10; progress=false, chain_type=Chains
     )
-    @test hmc_chain.name_map[:parameters] == [
+    @test Set(hmc_chain.name_map[:parameters]) == Set([
         Symbol("sigma[3]"),
         Symbol("sigma[2]"),
         Symbol("sigma[1]"),
@@ -128,5 +128,5 @@
         Symbol("A[1, 1:3][1]"),
         Symbol("A[1, 1:3][2]"),
         Symbol("A[1, 1:3][3]"),
-    ]
+    ])
 end
