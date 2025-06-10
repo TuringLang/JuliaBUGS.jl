@@ -85,10 +85,11 @@ ERROR: ArgumentError: elementwise_varnames does not support nested structures. G
 function elementwise_varnames end
 elementwise_varnames(vn::JuliaBUGS.VarName, ::Real) = [vn]
 function elementwise_varnames(
-    vn::JuliaBUGS.VarName, val::AbstractArray{<:Union{Real,Missing}}
-)
+    vn::JuliaBUGS.VarName{sym}, val::AbstractArray{<:Union{Real,Missing}}
+) where {sym}
+    current_optic = getoptic(vn)
     return (
-        VarName(vn, Accessors.IndexLens(Tuple(I)) ∘ getoptic(vn)) for
+        VarName{sym}(Accessors.IndexLens(Tuple(I)) ∘ current_optic) for
         I in CartesianIndices(val)
     )
 end
@@ -128,20 +129,29 @@ function JuliaBUGS.gen_chains(
     param_vars = model.graph_evaluation_data.sorted_parameters
 
     # Find and order generated quantities
+    # Exclude parameters to avoid double counting forward-sampled variables
     generated_vars = find_generated_quantities_variables(model.g)
+    param_set = Set(param_vars)
     generated_vars = [
-        v for v in model.graph_evaluation_data.sorted_nodes if v in generated_vars
+        v for v in model.graph_evaluation_data.sorted_nodes if
+        v in generated_vars && v ∉ param_set
     ]
 
     # Evaluate model for each sample to get parameter values and generated quantities
     param_vals = []
     generated_quantities = []
     for i in axes(samples)[1]
+        # Set parameters and evaluate the model
         evaluation_env = first(evaluate!!(model, samples[i]))
+
+        # Get parameter values from the evaluation environment
+        # (they were just set by evaluate!!, so they match samples[i])
         push!(
             param_vals,
             [AbstractPPL.get(evaluation_env, param_var) for param_var in param_vars],
         )
+
+        # Get generated quantities from the evaluation environment
         push!(
             generated_quantities,
             [
@@ -190,6 +200,8 @@ function JuliaBUGS.gen_chains(
             length(stats_names)
 
     # Create chains with proper sections
+    # Note: We include generated quantities in the parameters section for backward compatibility
+    # This allows tests and existing code to access all variables via standard MCMCChains methods
     return Chains(
         vals,
         vcat(Symbol.(param_name_leaves), Symbol.(generated_varname_leaves), stats_names),
