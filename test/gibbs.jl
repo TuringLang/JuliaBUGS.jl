@@ -545,7 +545,7 @@ using StatsBase: mode
                 )
                 gibbs1 = Gibbs(model, sampler_map1)
 
-                rng = Random.MersenneTwister(12345)
+                rng = StableRNG(1234)
                 chain1 = sample(rng, model, gibbs1, 2000; progress=false, chain_type=Chains)
 
                 @test chain1 isa AbstractMCMC.AbstractChains
