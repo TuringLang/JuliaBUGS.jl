@@ -26,7 +26,7 @@ using Statistics
 
         # Sample using MHFromPrior
         rng = Random.MersenneTwister(123)
-        chain = sample(rng, model, MHFromPrior(), 100000)
+        chain = sample(rng, model, MHFromPrior(), 100000; progress=false)
 
         # Extract samples
         p_samples = vec([nt.p for nt in chain[50000:end]])  # Extract first parameter (p)
@@ -70,7 +70,7 @@ using Statistics
 
         # Sample
         rng = Random.MersenneTwister(456)
-        chain = sample(rng, model, MHFromPrior(), 5000)
+        chain = sample(rng, model, MHFromPrior(), 5000; progress=false)
 
         # Check that k=3 is most frequent
         k_samples = vec([nt.k for nt in chain])  # Extract k parameter
@@ -94,7 +94,9 @@ using Statistics
         rng = Random.MersenneTwister(789)
         initial_params = [5.0]  # Far from posterior
 
-        chain = sample(rng, model, MHFromPrior(), 1000; initial_params=initial_params)
+        chain = sample(
+            rng, model, MHFromPrior(), 1000; progress=false, initial_params=initial_params
+        )
 
         # Should converge to near y=2.0 despite starting at 5.0
         theta_samples = vec([nt.theta for nt in chain[500:end]])  # Extract theta parameter

@@ -236,7 +236,7 @@ using StatsBase: mode
 
             # Test that sampling runs without error
             rng = Random.MersenneTwister(123)
-            chain = sample(rng, model, gibbs, 100; chain_type=Chains)
+            chain = sample(rng, model, gibbs, 100; progress=false, chain_type=Chains)
 
             @test chain isa AbstractMCMC.AbstractChains
             @test size(chain, 1) == 100  # Number of samples
@@ -619,7 +619,13 @@ using StatsBase: mode
 
             rng = Random.MersenneTwister(789)
             chain = sample(
-                rng, model_init, gibbs, 1000; chain_type=Chains, discard_initial=200
+                rng,
+                model_init,
+                gibbs,
+                1000;
+                progress=false,
+                chain_type=Chains,
+                discard_initial=200,
             )
 
             @test chain isa AbstractMCMC.AbstractChains
