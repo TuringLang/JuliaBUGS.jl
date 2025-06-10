@@ -11,9 +11,9 @@ using JuliaBUGS.Model:
     UseGraph
 
 @testset "Compile Vol.1 BUGS Examples" begin
-    @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
-        m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
-        model = compile(m.model_def, m.data, m.inits)
+    for model_name in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
+        (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1[model_name]
+        model = compile(model_def, data, inits)
     end
 end
 

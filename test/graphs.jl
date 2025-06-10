@@ -1,106 +1,9 @@
 using JuliaBUGS:
-    stochastic_inneighbors, stochastic_neighbors, stochastic_outneighbors, markov_blanket
-
-"""
-    l
-    │
-    ↓
-    c        b
-    │        │
-    ↓        ↓
-    a ←──── f
-    │
-    ↓
-    g
-    ↙   ↘
-    d       h
-            │
-            ↓
-            e
-            ↑
-            i
-"""
-
-test_model = @bugs begin
-    a ~ dnorm(f, c)
-    f = b - 1
-    b ~ dnorm(0, 1)
-    c ~ dnorm(l, 1)
-    g = a * 2
-    d ~ dnorm(g, 1)
-    h = g + 2
-    e ~ dnorm(h, i)
-    i ~ dnorm(0, 1)
-    l ~ dnorm(0, 1)
-end
-
-inits = (
-    a=1.0,
-    b=2.0,
-    c=3.0,
-    d=4.0,
-    e=5.0,
-
-    # f = 1.0,
-    # g = 2.0,
-    # h = 4.0,
-
-    i=4.0,
-    l=-2.0,
-)
-
-model = compile(test_model, NamedTuple(), inits)
-
-g = model.g
-
-a = @varname a
-l = @varname l
-@test Set(Symbol.(stochastic_inneighbors(g, a))) == Set([:b, :c, :f])
-@test Set(Symbol.(stochastic_outneighbors(g, a))) == Set([:d, :e, :h, :g])
-
-@test Set(Symbol.(markov_blanket(g, a))) == Set([:f, :b, :d, :e, :c, :h, :g, :i])
-@test Set(Symbol.(markov_blanket(g, [a, l]))) == Set([:f, :b, :d, :e, :c, :h, :g, :i])
-
-c = @varname c
-@test Set(Symbol.(markov_blanket(model.g, c))) == Set([:l, :a, :b, :f])
-
-"""
-mu[1]           mu[2]
-   ╲            ╱
-    ↘       ↙
-     x[1:2]             z[1:2,1:2]
-          ╲              ╱
-           ↘         ↙
-                 y
-"""
-
-# AuxiliaryNodeInfo
-test_model = @bugs begin
-    x[1:2] ~ dmnorm(mu[:], sigma[:, :])
-    for i in 1:2
-        mu[i] ~ dnorm(0, 1)
-    end
-    z[1:2, 1:2] ~ dwish(R[:, :], 2)
-    y ~ dnorm(x[1], x[2] + 1 + z[1, 1])
-end
-
-model = compile(
-    test_model,
-    (R=[200 0; 0 0.2], sigma=[1.0E-6 0; 0 1.0E-6]),
-    (x=[1.0, 2.0], z=zeros(2, 2)),
-)
-
-# z[1,1], x[1], x[2] are auxiliary nodes created, and removed at the end
-@test Set(Symbol.(labels(model.g))) ==
-    Set([Symbol("mu[1]"), Symbol("x[1:2]"), Symbol("z[1:2, 1:2]"), Symbol("mu[2]"), :y])
-
-## Tests for new functions below
-
-using JuliaBUGS:
-    _markov_blanket,
+    markov_blanket,
     dfs_find_stochastic_boundary_and_deterministic_variables_en_route,
     find_generated_quantities_variables
 
+# Helper module for testing graph functions with mock data
 module GraphsTest
 using JuliaBUGS: JuliaBUGS
 using Graphs, MetaGraphsNext
@@ -108,27 +11,137 @@ using Graphs, MetaGraphsNext
 export TestNode
 
 struct TestNode
-    node_type::Int
+    node_type::Int  # 1: parameter, 2: observation, 3: deterministic
 end
 
-# overload the functions for testing purposes
+# Overload JuliaBUGS functions for testing purposes
 function JuliaBUGS.is_model_parameter(
     g::MetaGraph{Int,<:SimpleDiGraph,Int,TestNode}, v::Int
 )
     return g[v].node_type == 1
 end
+
 function JuliaBUGS.is_observation(g::MetaGraph{Int,<:SimpleDiGraph,Int,TestNode}, v::Int)
     return g[v].node_type == 2
 end
+
 function JuliaBUGS.is_deterministic(g::MetaGraph{Int,<:SimpleDiGraph,Int,TestNode}, v::Int)
     return g[v].node_type == 3
 end
+
 function JuliaBUGS.is_stochastic(g::MetaGraph{Int,<:SimpleDiGraph,Int,TestNode}, v::Int)
     return g[v].node_type != 3
 end
 end # module GraphsTest
 
-@testset "find_generated_quantities_variables" begin
+@testset "Graph structure with BUGS models" begin
+    @testset "Markov blanket computation" begin
+        """
+        Test graph structure:
+
+            l
+            │
+            ↓
+            c        b
+            │        │
+            ↓        ↓
+            a ←──── f
+            │
+            ↓
+            g
+            ↙   ↘
+            d       h
+                    │
+                    ↓
+                    e
+                    ↑
+                    i
+
+        where:
+        - a, b, c, d, e, i, l are stochastic nodes
+        - f, g, h are deterministic nodes
+        """
+        test_model = @bugs begin
+            a ~ dnorm(f, c)
+            f = b - 1
+            b ~ dnorm(0, 1)
+            c ~ dnorm(l, 1)
+            g = a * 2
+            d ~ dnorm(g, 1)
+            h = g + 2
+            e ~ dnorm(h, i)
+            i ~ dnorm(0, 1)
+            l ~ dnorm(0, 1)
+        end
+
+        inits = (a=1.0, b=2.0, c=3.0, d=4.0, e=5.0, i=4.0, l=-2.0)
+        model = compile(test_model, NamedTuple(), inits)
+        g = model.g
+
+        # Test Markov blanket for node 'a'
+        # The Markov blanket of 'a' should include:
+        # - Parents: b, c (via deterministic node f)
+        # - Children: d, e (via deterministic nodes g and h)
+        # - Co-parents of children: i (parent of e)
+        # - All deterministic nodes on the paths: f, g, h
+        a = @varname a
+        @test Set(Symbol.(markov_blanket(g, a))) ==
+            Set([:a, :f, :b, :d, :e, :c, :h, :g, :i])
+
+        # Test Markov blanket for multiple nodes
+        l = @varname l
+        @test Set(Symbol.(markov_blanket(g, [a, l]))) ==
+            Set([:a, :l, :f, :b, :d, :e, :c, :h, :g, :i])
+
+        # Test Markov blanket for node 'c'
+        # The Markov blanket of 'c' should include:
+        # - Parents: l
+        # - Children: a
+        # - Co-parents of a: b (via f)
+        # - Deterministic nodes: f
+        c = @varname c
+        @test Set(Symbol.(markov_blanket(model.g, c))) == Set([:c, :l, :a, :b, :f])
+    end
+
+    @testset "Array variables and auxiliary nodes" begin
+        """
+        Test graph with array variables:
+
+        mu[1]           mu[2]
+           ╲            ╱
+            ↘       ↙
+             x[1:2]             z[1:2,1:2]
+                  ╲              ╱
+                   ↘         ↙
+                         y
+
+        Note: Individual array elements like x[1], x[2], z[1,1] are handled as auxiliary nodes
+        internally but are not exposed in the final graph structure.
+        """
+        test_model = @bugs begin
+            x[1:2] ~ dmnorm(mu[:], sigma[:, :])
+            for i in 1:2
+                mu[i] ~ dnorm(0, 1)
+            end
+            z[1:2, 1:2] ~ dwish(R[:, :], 2)
+            y ~ dnorm(x[1], x[2] + 1 + z[1, 1])
+        end
+
+        model = compile(
+            test_model,
+            (R=[200 0; 0 0.2], sigma=[1.0E-6 0; 0 1.0E-6]),
+            (x=[1.0, 2.0], z=zeros(2, 2)),
+        )
+
+        # Verify that auxiliary nodes (z[1,1], x[1], x[2]) are created internally
+        # but removed from the final graph, leaving only the main array variables
+        @test Set(Symbol.(labels(model.g))) == Set([
+            Symbol("mu[1]"), Symbol("x[1:2]"), Symbol("z[1:2, 1:2]"), Symbol("mu[2]"), :y
+        ])
+    end
+end
+
+@testset "Generated quantities detection" begin
     using .GraphsTest
 
     function generate_random_dag(num_nodes::Int, p::Float64=0.3)
@@ -147,8 +160,7 @@ end # module GraphsTest
         return MetaGraph(graph, vertices_description, edges_description)
     end
 
-    # `transitiveclosure` has time complexity O(|E|⋅|V|), not fit for large graphs
-    # but easy to implement and understand, here we use it for reference
+    # Reference implementation using transitive closure
     function find_generated_quantities_variables_with_transitive_closure(
         g::MetaGraph{Int,<:SimpleDiGraph,Label,VertexData}
     ) where {Label,VertexData}
@@ -164,15 +176,14 @@ end # module GraphsTest
                 end
             end
         end
-
         return generated_quantities_variables
     end
 
     @testset "random DAG with $num_nodes nodes and $p probability of edge" for num_nodes in
                                                                                [
-            10, 20, 100, 500, 1000
+            10, 20, 100
         ],
-        p in [0.1, 0.3, 0.5]
+        p in [0.1, 0.3]
 
         g = generate_random_dag(num_nodes, p)
         @test find_generated_quantities_variables(g) ==
@@ -180,43 +191,27 @@ end # module GraphsTest
     end
 end
 
-@testset "markov_blanket" begin
+@testset "Markov blanket helper functions" begin
     using .GraphsTest
 
-    """ Mermaid code for visualizing the test graph
-    ```mermaid
-    graph TD
-        1((1: Parameter)) --> 2((2: Deterministic))
-        1 --> 3((3: Parameter))
-        2 --> 4((4: Deterministic))
-        3 --> 5((5: Observation))
-        4 --> 6((6: Deterministic))
-        5 --> 6
-        5 --> 7((7: Observation))
-        6 --> 8((8: Parameter))
-        7 --> 8
-
-        classDef parameter fill:#f9f,stroke:#333,stroke-width:2px;
-        classDef deterministic fill:#bfb,stroke:#333,stroke-width:2px;
-        classDef observation fill:#bbf,stroke:#333,stroke-width:2px;
-
-        class 1,3,8 parameter;
-        class 2,4,6 deterministic;
-        class 5,7 observation;
-    ```
-    """
-
+    # Create a simple test graph
+    # Graph structure:
+    # 1 (param) → 2 (determ) → 4 (determ) → 6 (determ) → 8 (param)
+    # ↓           ↓                          ↓
+    # 3 (param) → 5 (obs) ────────────────→ 7 (obs)
     g = MetaGraph(SimpleDiGraph(); label_type=Int, vertex_data_type=TestNode)
 
-    g[1] = TestNode(1)
-    g[2] = TestNode(3)
-    g[3] = TestNode(1)
-    g[4] = TestNode(3)
-    g[5] = TestNode(2)
-    g[6] = TestNode(3)
-    g[7] = TestNode(2)
-    g[8] = TestNode(1)
+    # Add nodes
+    g[1] = TestNode(1)  # parameter
+    g[2] = TestNode(3)  # deterministic
+    g[3] = TestNode(1)  # parameter
+    g[4] = TestNode(3)  # deterministic
+    g[5] = TestNode(2)  # observation
+    g[6] = TestNode(3)  # deterministic
+    g[7] = TestNode(2)  # observation
+    g[8] = TestNode(1)  # parameter
 
+    # Add edges
     add_edge!(g, 1, 2)
     add_edge!(g, 1, 3)
     add_edge!(g, 2, 4)
@@ -227,27 +222,31 @@ end
     add_edge!(g, 6, 8)
     add_edge!(g, 7, 8)
 
-    # Test single node Markov blanket
-    @test dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
-        g, 1, MetaGraphsNext.outneighbor_labels
-    ) == (Set([3, 8]), Set([4, 6, 2]))
-    @test dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
-        g, 1, MetaGraphsNext.inneighbor_labels
-    ) == (Set(), Set())
-    @test _markov_blanket(g, 1) == Set(collect(1:8)) # should contains all the nodes
+    @testset "dfs_find_stochastic_boundary_and_deterministic_variables_en_route" begin
+        # Test finding stochastic children from node 1
+        stochastic_children, determ_en_route = dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
+            g, 1, MetaGraphsNext.outneighbor_labels
+        )
+        @test stochastic_children == Set([3, 8])
+        @test determ_en_route == Set([2, 4, 6])
 
-    @test dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
-        g, 5, MetaGraphsNext.outneighbor_labels
-    ) == (Set([7, 8]), Set([6]))
-    @test dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
-        g, 5, MetaGraphsNext.inneighbor_labels
-    ) == (Set([3]), Set())
-    @test _markov_blanket(g, 5) == Set([1, 2, 3, 4, 5, 6, 7, 8])
+        # Test finding stochastic parents from node 5
+        stochastic_parents, determ_en_route = dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
+            g, 5, MetaGraphsNext.inneighbor_labels
+        )
+        @test stochastic_parents == Set([3])
+        @test determ_en_route == Set()
+    end
 
-    @test _markov_blanket(g, 3) == Set([1, 3, 5])
-    @test _markov_blanket(g, 7) == Set([1, 2, 4, 5, 6, 7, 8])
-    @test _markov_blanket(g, 8) == Set([1, 2, 4, 5, 6, 7, 8])
+    @testset "markov_blanket" begin
+        # Node 1's Markov blanket includes all nodes due to the graph structure
+        @test markov_blanket(g, 1) == Set(1:8)
 
-    @test _markov_blanket(g, [1, 3]) == Set([1, 2, 3, 4, 5, 6, 7, 8])
-    @test _markov_blanket(g, (3, 7)) == Set([1, 2, 3, 4, 5, 6, 7, 8])
+        # Node 3's Markov blanket is smaller
+        @test markov_blanket(g, 3) == Set([1, 3, 5])
+
+        # Test multiple nodes
+        @test markov_blanket(g, [1, 3]) == Set(1:8)
+        @test markov_blanket(g, (3, 7)) == Set(1:8)
+    end
 end

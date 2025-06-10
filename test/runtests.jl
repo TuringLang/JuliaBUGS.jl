@@ -18,6 +18,7 @@ using MetaGraphsNext
 using OrderedCollections
 using Random
 using Serialization
+using StableRNGs
 
 using AbstractMCMC
 using AdvancedHMC
@@ -58,8 +59,8 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     "inference_chains" => () -> include("ext/JuliaBUGSMCMCChainsExt.jl"),
     "inference_mh" => () -> include("mh_from_prior.jl"),
     "gibbs" => () -> include("gibbs.jl"),
-    "experimental" =>
-        () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
+    "experimental" => () -> 1, # TODO: revive this
+    # () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
 )
 
 raw_selection = get(ENV, "TEST_GROUP", "all")

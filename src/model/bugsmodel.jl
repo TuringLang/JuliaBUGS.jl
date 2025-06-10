@@ -368,12 +368,40 @@ function initialize!(model::BUGSModel, initial_params::AbstractVector)
 end
 
 """
-    getparams(model::BUGSModel)
+    getparams([T::Type], model::BUGSModel, evaluation_env=model.evaluation_env)
 
-Extract the parameter values from the model as a flattened vector, in an order consistent with
-the what `LogDensityProblems.logdensity` expects.
+Extract parameter values from the model.
+
+# Arguments
+- `T::Type`: Optional output type. If not specified, returns a `Vector{Float64}`. 
+  If `T <: AbstractDict`, returns a dictionary with `VarName` keys and parameter values.
+- `model::BUGSModel`: The BUGS model from which to extract parameters.
+- `evaluation_env`: The evaluation environment to use for extracting parameter values. 
+  Defaults to `model.evaluation_env`.
+
+# Returns
+- If `T` is not specified: `Vector{Float64}` - A flattened vector containing all parameter 
+  values in the order consistent with `LogDensityProblems.logdensity`.
+- If `T <: AbstractDict`: A dictionary of type `T` with `VarName` keys and parameter values.
+
+# Notes
+- If `model.transformed` is true, returns parameters in the transformed (unconstrained) space.
+- If `model.transformed` is false, returns parameters in their original (constrained) space.
+
+# Examples
+```julia
+# Get parameters as a vector
+params_vec = getparams(model)
+
+# Get parameters as a dictionary
+params_dict = getparams(Dict, model)
+
+# Use a custom evaluation environment
+params_vec = getparams(model, custom_env)
+params_dict = getparams(Dict, model, custom_env)
+```
 """
-function getparams(model::BUGSModel)
+function getparams(model::BUGSModel, evaluation_env=model.evaluation_env)
     param_length = if model.transformed
         model.transformed_param_length
     else
@@ -384,7 +412,7 @@ function getparams(model::BUGSModel)
     pos = 1
     for v in model.graph_evaluation_data.sorted_parameters
         if !model.transformed
-            val = AbstractPPL.get(model.evaluation_env, v)
+            val = AbstractPPL.get(evaluation_env, v)
             len = model.untransformed_var_lengths[v]
             if val isa AbstractArray
                 param_vals[pos:(pos + len - 1)] .= vec(val)
@@ -393,9 +421,9 @@ function getparams(model::BUGSModel)
             end
         else
             (; node_function, loop_vars) = model.g[v]
-            dist = node_function(model.evaluation_env, loop_vars)
+            dist = node_function(evaluation_env, loop_vars)
             transformed_value = Bijectors.transform(
-                Bijectors.bijector(dist), AbstractPPL.get(model.evaluation_env, v)
+                Bijectors.bijector(dist), AbstractPPL.get(evaluation_env, v)
             )
             len = model.transformed_var_lengths[v]
             if transformed_value isa AbstractArray
@@ -409,21 +437,17 @@ function getparams(model::BUGSModel)
     return param_vals
 end
 
-"""
-    getparams(T::Type{<:AbstractDict}, model::BUGSModel)
-
-Extract the parameter values from the model into a dictionary of type T.
-If model.transformed is true, returns parameters in transformed space.
-"""
-function getparams(T::Type{<:AbstractDict}, model::BUGSModel)
+function getparams(
+    T::Type{<:AbstractDict}, model::BUGSModel, evaluation_env=model.evaluation_env
+)
     d = T()
     for v in model.graph_evaluation_data.sorted_parameters
-        value = AbstractPPL.get(model.evaluation_env, v)
+        value = AbstractPPL.get(evaluation_env, v)
         if !model.transformed
             d[v] = value
         else
             (; node_function, loop_vars) = model.g[v]
-            dist = node_function(model.evaluation_env, loop_vars)
+            dist = node_function(evaluation_env, loop_vars)
             d[v] = Bijectors.transform(Bijectors.bijector(dist), value)
         end
     end

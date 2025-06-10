@@ -2,7 +2,7 @@ module JuliaBUGSMCMCChainsExt
 
 using AbstractMCMC
 using JuliaBUGS
-using JuliaBUGS: BUGSModel, find_generated_vars, evaluate!!, getparams
+using JuliaBUGS: BUGSModel, find_generated_quantities_variables, evaluate!!, getparams
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.Accessors
 using JuliaBUGS.LogDensityProblemsAD
@@ -34,30 +34,72 @@ function JuliaBUGS.gen_chains(
     return JuliaBUGS.gen_chains(bugs_model, samples, stats_names, stats_values; kwargs...)
 end
 
-# Helper to flatten variable names for chain construction
-# Based on DynamicPPL's implementation
-varname_leaves(vn::VarName, ::Real) = [vn]
+"""
+    elementwise_varnames(vn::VarName, val)
 
-function varname_leaves(vn::VarName, val::AbstractArray{<:Union{Real,Missing}})
+Flatten a variable name into leaf variable names for flat structures only.
+
+This function creates individual `VarName`s for each element in arrays of scalars.
+It will throw an error for nested structures (arrays of arrays or NamedTuples).
+
+# Arguments
+- `vn::VarName`: The base variable name
+- `val`: The value (must be a scalar or flat array of scalars)
+
+# Returns
+An iterator of `VarName`s representing all leaf variables
+
+# Examples
+```jldoctest
+julia> using JuliaBUGS.AbstractPPL: VarName
+
+julia> vn = VarName(:x);
+
+julia> collect(elementwise_varnames(vn, 1.5))
+1-element Vector{VarName{:x, typeof(identity)}}:
+ x
+
+julia> collect(elementwise_varnames(vn, [1.0, 2.0, 3.0]))
+3-element Vector{VarName{:x, ComposedFunction{IndexLens{Tuple{Int64}}, typeof(identity)}}}:
+ x[1]
+ x[2]
+ x[3]
+
+julia> collect(elementwise_varnames(vn, [1.0 2.0; 3.0 4.0]))
+2×2 Matrix{VarName{:x, ComposedFunction{IndexLens{Tuple{Int64, Int64}}, typeof(identity)}}}:
+ x[1, 1]  x[1, 2]
+ x[2, 1]  x[2, 2]
+
+julia> elementwise_varnames(vn, [[1.0, 2.0], [3.0, 4.0]])
+ERROR: ArgumentError: elementwise_varnames does not support nested structures. Got type Vector{Vector{Float64}} for variable x
+[...]
+
+julia> elementwise_varnames(vn, (a=1.0, b=2.0))
+ERROR: ArgumentError: elementwise_varnames does not support nested structures. Got type @NamedTuple{a::Float64, b::Float64} for variable x
+[...]
+```
+
+# Throws
+- `ArgumentError`: If `val` contains nested structures
+"""
+function elementwise_varnames end
+elementwise_varnames(vn::JuliaBUGS.VarName, ::Real) = [vn]
+function elementwise_varnames(
+    vn::JuliaBUGS.VarName{sym}, val::AbstractArray{<:Union{Real,Missing}}
+) where {sym}
+    current_optic = getoptic(vn)
     return (
-        VarName(vn, Accessors.IndexLens(Tuple(I)) ∘ getoptic(vn)) for
+        VarName{sym}(Accessors.IndexLens(Tuple(I)) ∘ current_optic) for
         I in CartesianIndices(val)
     )
 end
-
-function varname_leaves(vn::VarName, val::AbstractArray)
-    return Iterators.flatten(
-        varname_leaves(VarName(vn, Accessors.IndexLens(Tuple(I)) ∘ getoptic(vn)), val[I])
-        for I in CartesianIndices(val)
+function elementwise_varnames(vn::JuliaBUGS.VarName, val)
+    throw(
+        ArgumentError(
+            "elementwise_varnames does not support nested structures. " *
+            "Got type $(typeof(val)) for variable $vn",
+        ),
     )
-end
-
-function varname_leaves(vn::VarName, val::NamedTuple)
-    iter = Iterators.map(keys(val)) do sym
-        optic = Accessors.PropertyLens{sym}()
-        varname_leaves(VarName(vn, optic ∘ getoptic(vn)), optic(val))
-    end
-    return Iterators.flatten(iter)
 end
 
 """
@@ -87,20 +129,29 @@ function JuliaBUGS.gen_chains(
     param_vars = model.graph_evaluation_data.sorted_parameters
 
     # Find and order generated quantities
-    generated_vars = find_generated_vars(model.g)
+    # Exclude parameters to avoid double counting forward-sampled variables
+    generated_vars = find_generated_quantities_variables(model.g)
+    param_set = Set(param_vars)
     generated_vars = [
-        v for v in model.graph_evaluation_data.sorted_nodes if v in generated_vars
+        v for v in model.graph_evaluation_data.sorted_nodes if
+        v in generated_vars && v ∉ param_set
     ]
 
     # Evaluate model for each sample to get parameter values and generated quantities
     param_vals = []
     generated_quantities = []
     for i in axes(samples)[1]
+        # Set parameters and evaluate the model
         evaluation_env = first(evaluate!!(model, samples[i]))
+
+        # Get parameter values from the evaluation environment
+        # (they were just set by evaluate!!, so they match samples[i])
         push!(
             param_vals,
             [AbstractPPL.get(evaluation_env, param_var) for param_var in param_vars],
         )
+
+        # Get generated quantities from the evaluation environment
         push!(
             generated_quantities,
             [
@@ -113,13 +164,13 @@ function JuliaBUGS.gen_chains(
     # Flatten variable names for array parameters
     param_name_leaves = collect(
         Iterators.flatten([
-            collect(varname_leaves(vn, param_vals[1][i])) for
+            collect(elementwise_varnames(vn, param_vals[1][i])) for
             (i, vn) in enumerate(param_vars)
         ],),
     )
     generated_varname_leaves = collect(
         Iterators.flatten([
-            collect(varname_leaves(vn, generated_quantities[1][i])) for
+            collect(elementwise_varnames(vn, generated_quantities[1][i])) for
             (i, vn) in enumerate(generated_vars)
         ],),
     )
@@ -149,6 +200,8 @@ function JuliaBUGS.gen_chains(
             length(stats_names)
 
     # Create chains with proper sections
+    # Note: We include generated quantities in the parameters section for backward compatibility
+    # This allows tests and existing code to access all variables via standard MCMCChains methods
     return Chains(
         vals,
         vcat(Symbol.(param_name_leaves), Symbol.(generated_varname_leaves), stats_names),
