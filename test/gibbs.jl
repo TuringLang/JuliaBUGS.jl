@@ -553,7 +553,7 @@ end
                 gibbs1 = Gibbs(model, sampler_map1)
 
                 rng = Random.MersenneTwister(12345)
-                chain1 = sample(rng, model, gibbs1, 2000; chain_type=Chains)
+                chain1 = sample(rng, model, gibbs1, 2000; progress=false, chain_type=Chains)
 
                 @test chain1 isa AbstractMCMC.AbstractChains
                 @test size(chain1, 1) == 2000
@@ -576,7 +576,7 @@ end
                 gibbs2 = Gibbs(model, sampler_map2)
 
                 rng = Random.MersenneTwister(456)
-                chain2 = sample(rng, model, gibbs2, 50; chain_type=Chains)
+                chain2 = sample(rng, model, gibbs2, 50; progress=false, chain_type=Chains)
 
                 @test chain2 isa AbstractMCMC.AbstractChains
                 @test size(chain2, 1) == 50
