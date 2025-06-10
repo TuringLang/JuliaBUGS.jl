@@ -269,7 +269,13 @@ end
             rng = Random.MersenneTwister(42)
             gibbs = Gibbs(model, MHFromPrior())
             chain = sample(
-                rng, model, gibbs, 50000; chain_type=Chains, discard_initial=10000
+                rng,
+                model,
+                gibbs,
+                50000;
+                progress=false,
+                chain_type=Chains,
+                discard_initial=10000,
             )
 
             # Extract μ samples
@@ -320,7 +326,13 @@ end
             rng = Random.MersenneTwister(42)
             gibbs = Gibbs(model, MHFromPrior())
             chain = sample(
-                rng, model, gibbs, 20000; chain_type=Chains, discard_initial=5000
+                rng,
+                model,
+                gibbs,
+                20000;
+                progress=false,
+                chain_type=Chains,
+                discard_initial=5000,
             )
 
             # Test convergence to approximate true parameters
@@ -352,7 +364,13 @@ end
             rng1 = Random.MersenneTwister(789)
             gibbs = Gibbs(model, MHFromPrior())
             chain_gibbs = sample(
-                rng1, model, gibbs, 5000; chain_type=Chains, discard_initial=1000
+                rng1,
+                model,
+                gibbs,
+                5000;
+                progress=false,
+                chain_type=Chains,
+                discard_initial=1000,
             )
 
             # Sample with HMC (would need AdvancedHMC)
@@ -401,7 +419,15 @@ end
             gibbs = Gibbs(model, sampler_map)
 
             rng = Random.MersenneTwister(999)
-            chain = sample(rng, model, gibbs, 3000; chain_type=Chains, discard_initial=500)
+            chain = sample(
+                rng,
+                model,
+                gibbs,
+                3000;
+                progress=false,
+                chain_type=Chains,
+                discard_initial=500,
+            )
 
             # Check that we recover reasonable values
             @test mean(chain[:μ] .+ chain[:k]) ≈ mean(y_data) atol = 0.2
@@ -644,7 +670,7 @@ end
         gibbs = Gibbs(model, sampler_map)
 
         rng = Random.MersenneTwister(999)
-        chain = sample(rng, model, gibbs, 1000; chain_type=Chains)
+        chain = sample(rng, model, gibbs, 1000; progress=false, chain_type=Chains)
 
         @test chain isa AbstractMCMC.AbstractChains
         @test size(chain, 1) == 1000
@@ -683,7 +709,7 @@ end
         gibbs = Gibbs(model, sampler_map)
 
         rng = Random.MersenneTwister(123)
-        chain = sample(rng, model, gibbs, 200; chain_type=Chains)
+        chain = sample(rng, model, gibbs, 200; progress=false, chain_type=Chains)
 
         @test chain isa AbstractMCMC.AbstractChains
         @test size(chain, 1) == 200
@@ -753,7 +779,13 @@ end
 
             rng = Random.MersenneTwister(789)
             chain = sample(
-                rng, model_init, gibbs, 5000; chain_type=Chains, discard_initial=2000
+                rng,
+                model_init,
+                gibbs,
+                5000;
+                progress=false,
+                chain_type=Chains,
+                discard_initial=2000,
             )
 
             # Check convergence to true parameters
@@ -825,7 +857,7 @@ end
         @test !haskey(state.sub_states, [@varname(β)])
 
         # Verify that the sampler still works correctly
-        chain = sample(rng, model, gibbs, 100)
+        chain = sample(rng, model, gibbs, 100; progress=false)
         @test length(chain) == 100
     end
 end
