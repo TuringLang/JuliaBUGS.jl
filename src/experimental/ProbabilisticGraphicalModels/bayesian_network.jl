@@ -260,65 +260,6 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
     return evaluation_env, logprior + loglikelihood
 end
 
-"""
-This function works in some cases, but not all. I have yet to discover why.
-	In some functions, we have to hash the whole environment to get the correct answer.
-"""
-function _extract_parent_values(bn::BayesianNetwork, node_id::Int, env)
-    # Get the parents (incoming neighbors) of this node
-    parent_ids = inneighbors(bn.graph, node_id)
-
-    # Initialize dictionary allowing both Int and Symbol keys 
-    parent_values = Dict{Union{Int,Symbol},Any}()
-
-    # If no parents, just return the empty dictionary
-    if isempty(parent_ids)
-        # We still need to potentially add metadata
-        # No need for an early return
-    end
-
-    # Add parent values to the dictionary
-    for pid in parent_ids
-        parent_name = bn.names[pid]
-
-        try
-            value = AbstractPPL.get(env, parent_name)
-            parent_values[pid] = value
-        catch e
-            if isa(e, KeyError) || isa(e, MethodError)
-                parent_values[pid] = :__MISSING__
-            else
-                rethrow(e)
-            end
-        end
-    end
-
-    # Add observation state to metadata
-    if bn.is_stochastic[node_id] && bn.is_observed[node_id]
-        parent_values[:__OBSERVED__] = true
-    end
-
-    return parent_values
-end
-
-# Extract only discrete variable values from the environment
-function _extract_discrete_values(bn::BayesianNetwork, env)
-    discrete_values = Dict{Union{Int,Symbol},Any}()
-
-    for i in 1:length(bn.names)
-        if bn.node_types[i] == :discrete
-            name = bn.names[i]
-            try
-                discrete_values[i] = AbstractPPL.get(env, name)
-            catch
-                discrete_values[i] = :__MISSING__
-            end
-        end
-    end
-
-    return discrete_values
-end
-
 function _precompute_minimal_cache_keys(bn, order::Vector{Int})
     minimal_keys = Dict{Int,Set{Int}}()
     n = length(order)
@@ -347,22 +288,6 @@ end
 function _precompute_minimal_cache_keys(bn)
     return _precompute_minimal_cache_keys(bn, topological_sort_by_dfs(bn.graph))
 end
-
-"""
-	_marginalize_recursive(bn, env, remaining_nodes, parameter_values, param_idx, 
-						  var_lengths, memo, caching_strategy, minimal_keys) -> Float64
-
-Recursively compute the log probability of a Bayesian network by marginalizing over discrete variables.
-
-This function processes nodes in topological order, handling:
-- Deterministic nodes: Compute values directly
-- Observed nodes: Add their log probability
-- Discrete unobserved nodes: Marginalize by summing over all possible values
-- Continuous unobserved nodes: Use provided parameter values
-
-Supports memoization to avoid redundant computations when the same subproblem is encountered
-with the same relevant environment state.
-"""
 
 function evaluate_with_marginalization(
     bn::BayesianNetwork{V,T,F},
@@ -443,6 +368,21 @@ function _extract_value_for_hash(x)
     end
 end
 
+"""
+	_marginalize_recursive(bn, env, remaining_nodes, parameter_values, param_idx, 
+						  var_lengths, memo, caching_strategy, minimal_keys) -> Float64
+
+Recursively compute the log probability of a Bayesian network by marginalizing over discrete variables.
+
+This function processes nodes in topological order, handling:
+- Deterministic nodes: Compute values directly
+- Observed nodes: Add their log probability
+- Discrete unobserved nodes: Marginalize by summing over all possible values
+- Continuous unobserved nodes: Use provided parameter values
+
+Supports memoization to avoid redundant computations when the same subproblem is encountered
+with the same relevant environment state.
+"""
 function _marginalize_recursive(
     bn::BayesianNetwork{V,T,F},
     env,

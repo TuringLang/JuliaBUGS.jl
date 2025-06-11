@@ -27,7 +27,5 @@ export BayesianNetwork,
     add_vertex!,
     translate_BUGSGraph_to_BayesianNetwork,
     evaluate,
-    evaluate_with_values,
-    min_degree_order,
-    min_fill_order
+    evaluate_with_values
 end
