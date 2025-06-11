@@ -24,14 +24,28 @@ using JuliaBUGS: @bugs, compile, NodeInfo, VarName
 using Bijectors: Bijectors
 using AbstractPPL
 
-function marginalize_without_memo(bn, params)
+function marginalize_with_full_env_baseline(bn, params)
+    # Use a simple DFS ordering, as the full environment key does not depend on ordering.
     sorted_node_ids = topological_sort_by_dfs(bn.graph)
     env = deepcopy(bn.evaluation_env)
 
-    # Use the original function without memo
-    logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive_legacy(
-        bn, env, sorted_node_ids, params, 1, bn.transformed_var_lengths
+    # 1. Initialize an empty memoization cache
+    memo = Dict{Tuple{Int,Int,UInt64},Any}()
+
+    # 2. Call the main recursive function with the :full_env caching strategy
+    logp = JuliaBUGS.ProbabilisticGraphicalModels._marginalize_recursive(
+        bn,
+        env,
+        sorted_node_ids,
+        params,
+        1,
+        bn.transformed_var_lengths,
+        memo,         # Pass the cache
+        :full_env,     # Specify the caching strategy
+        Dict(),  # Pass an empty minimal_keys dictionary
     )
+
+    # Return the log probability and the final memoization cache for analysis
     return env, logp
 end
 
@@ -1366,7 +1380,7 @@ end
             params = Float64[]
 
             # Measure performance
-            t1 = @elapsed _, logp1 = marginalize_without_memo(bn, params)
+            t1 = @elapsed _, logp1 = marginalize_with_full_env_baseline(bn, params)
             t2 = @elapsed _, logp2, memo_size = marginalize_with_memo(bn, params)
 
             # Verify results match
@@ -1507,7 +1521,7 @@ end
             )
 
             # Run with original function
-            env1, logp1 = marginalize_without_memo(bn, Float64[])
+            env1, logp1 = marginalize_with_full_env_baseline(bn, Float64[])
 
             # Run with memoized function
             env2, logp2, memo_size = marginalize_with_memo(bn, Float64[])
@@ -1905,7 +1919,7 @@ end
 
                     # --- Execution ---
                     # Run both versions of the algorithm to get their results.
-                    _, logp_standard = marginalize_without_memo(bn, params)
+                    _, logp_standard = marginalize_with_full_env_baseline(bn, params)
                     _, logp_dp, memo_size = marginalize_with_memo(bn, params)
 
                     # --- Assertions ---
@@ -1933,7 +1947,7 @@ end
                     params = Float64[]
 
                     # --- Execution ---
-                    _, logp_standard = marginalize_without_memo(bn, params)
+                    _, logp_standard = marginalize_with_full_env_baseline(bn, params)
                     _, logp_dp, memo_size = marginalize_with_memo(bn, params)
 
                     # --- Assertions ---
@@ -1961,7 +1975,7 @@ end
                     params = Float64[]
 
                     # --- Execution ---
-                    _, logp_standard = marginalize_without_memo(bn, params)
+                    _, logp_standard = marginalize_with_full_env_baseline(bn, params)
                     _, logp_dp, memo_size = marginalize_with_memo(bn, params)
 
                     # --- Assertions ---
