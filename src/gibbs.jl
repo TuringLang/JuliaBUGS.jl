@@ -18,15 +18,12 @@
 #     @varname(σ) => (NUTS(0.65), AutoReverseDiff())
 # )
 # 
-# # Or use plain sampler (defaults to AutoForwardDiff for HMC/NUTS)
+# # For gradient-based samplers, always specify AD backend
 # sampler_map = OrderedDict(
-#     @varname(μ) => HMC(0.01, 10),
-#     @varname(σ) => NUTS(0.65)
+#     @varname(μ) => (HMC(0.01, 10), AutoForwardDiff()),
+#     @varname(σ) => (NUTS(0.65), AutoReverseDiff())
 # )
 # ```
-# Helper function to create gradient-based sampler tuples
-# Not exported - users just use tuples directly
-with_ad(sampler, ad_backend=ADTypes.AutoForwardDiff()) = (sampler, ad_backend)
 
 """
     Gibbs{N,S} <: AbstractMCMC.AbstractSampler
@@ -54,46 +51,6 @@ struct Gibbs{N,S} <: AbstractMCMC.AbstractSampler
 
     function Gibbs{N,S}(sampler_map::OrderedDict{N,S}) where {N,S}
         return new{N,S}(sampler_map)
-    end
-end
-
-"""
-    ensure_explicit_ad_backend(sampler)
-
-Ensure gradient-based samplers have an explicit AD backend specification.
-
-This internal helper function checks if a sampler requires gradients (HMC, NUTS)
-and wraps it with a tuple `(sampler, ad_backend)` if not already wrapped. This ensures all
-gradient-based samplers have an explicit AD backend, defaulting to ForwardDiff.
-
-# Arguments
-- `sampler`: Any AbstractMCMC sampler
-
-# Returns
-- A tuple `(sampler, ad_backend)` if it's gradient-based and not already wrapped
-- The original sampler otherwise
-
-# Notes
-This function uses heuristics (type name matching) to detect gradient-based samplers.
-Users should prefer explicitly specifying tuples like `(HMC(0.01, 10), AutoForwardDiff())` for clarity.
-"""
-function ensure_explicit_ad_backend(sampler)
-    # If already a tuple with AD backend, return as-is
-    if sampler isa Tuple{<:AbstractMCMC.AbstractSampler,<:ADTypes.AbstractADType}
-        return sampler
-    end
-
-    # Check if it's a gradient-based sampler by checking if module is loaded
-    # and sampler type name suggests it needs gradients
-    sampler_type = string(typeof(sampler))
-    if (occursin("HMC", sampler_type) || occursin("NUTS", sampler_type)) &&
-        occursin("AdvancedHMC", sampler_type)
-        # Wrap with default AD backend
-        # Note: Users should prefer explicit (sampler, AutoForwardDiff())
-        return (sampler, ADTypes.AutoForwardDiff())
-    else
-        # Return as-is for other samplers
-        return sampler
     end
 end
 
@@ -132,14 +89,14 @@ gibbs = Gibbs(model, sampler_map)
 # Group parameters that should be updated together
 sampler_map = OrderedDict(
     [@varname(α), @varname(β)] => (HMC(0.01, 10), AutoForwardDiff()),
-    @varname(σ) => NUTS(0.65)  # Will use default AutoForwardDiff
+    @varname(σ) => (NUTS(0.65), AutoForwardDiff())  # Must specify AD backend
 )
 gibbs = Gibbs(model, sampler_map)
 
 # Array variables are automatically expanded
 sampler_map = OrderedDict(
     @varname(x) => IndependentMH(),  # Updates all x[1], x[2], ..., x[n]
-    @varname(μ) => HMC(0.01, 10)  # Will use default AutoForwardDiff
+    @varname(μ) => (HMC(0.01, 10), AutoForwardDiff())  # Must specify AD backend
 )
 gibbs = Gibbs(model, sampler_map)
 ```
@@ -156,9 +113,7 @@ function Gibbs(model::BUGSModel, sampler_map::OrderedDict)
         variable_group_vec =
             (variable_group isa VarName) ? [variable_group] : variable_group
         expanded_vars = expand_variables(variable_group_vec, model_parameters)
-        # Ensure gradient-based samplers have explicit AD backend
-        wrapped_sampler = ensure_explicit_ad_backend(sampler)
-        expanded_sampler_map[expanded_vars] = wrapped_sampler
+        expanded_sampler_map[expanded_vars] = sampler
     end
     return Gibbs{eltype(keys(expanded_sampler_map)),eltype(values(expanded_sampler_map))}(
         expanded_sampler_map
@@ -185,8 +140,7 @@ gibbs = Gibbs(model, IndependentMH())
 
 # Use HMC for all parameters (each updated individually)
 gibbs = Gibbs(model, (HMC(0.01, 10), AutoForwardDiff()))
-# Or let it default to AutoForwardDiff:
-gibbs = Gibbs(model, HMC(0.01, 10))
+# Note: For gradient-based samplers, you must specify the AD backend
 ```
 
 # Notes
@@ -194,10 +148,9 @@ For better performance with continuous parameters, consider grouping related
 parameters and using the OrderedDict constructor instead.
 """
 function Gibbs(model::BUGSModel, s::AbstractMCMC.AbstractSampler)
-    # Ensure gradient-based samplers have explicit AD backend
-    wrapped_sampler = ensure_explicit_ad_backend(s)
+    # Use the sampler as-is for all parameters
     sampler_map = OrderedDict([
-        v => wrapped_sampler for v in model.graph_evaluation_data.sorted_parameters
+        v => s for v in model.graph_evaluation_data.sorted_parameters
     ])
     return Gibbs(model, sampler_map)
 end

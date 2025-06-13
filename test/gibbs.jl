@@ -532,27 +532,28 @@ using StatsBase: mode
             y_data = randn(N) .+ 2.0
             model = compile(model_def, (; N=N, y=y_data))
 
-            @testset "Default ForwardDiff" begin
-                # Test both ways of specifying AD backends
-                sampler_map1 = OrderedDict(
-                    @varname(μ) => (NUTS(0.65), ADTypes.AutoReverseDiff()),
-                    @varname(σ) => NUTS(0.65),  # Default ForwardDiff
+            @testset "HMC/NUTS requires explicit AD backend" begin
+                # Test that using HMC/NUTS without AD backend throws an error
+                sampler_map_invalid = OrderedDict(
+                    @varname(μ) => HMC(0.01, 10),  # Missing AD backend
+                    @varname(σ) => IndependentMH(),
                 )
-                gibbs1 = Gibbs(model, sampler_map1)
+                gibbs_invalid = Gibbs(model, sampler_map_invalid)
 
-                rng = StableRNG(12345)
-                chain1 = sample(rng, model, gibbs1, 2000; progress=false, chain_type=Chains)
+                rng = Random.MersenneTwister(123)
+                @test_throws ErrorException sample(
+                    rng, model, gibbs_invalid, 10; progress=false, chain_type=Chains
+                )
 
-                @test chain1 isa AbstractMCMC.AbstractChains
-                @test size(chain1, 1) == 2000
-                @test size(chain1, 2) == 2  # μ and σ
-
-                # Check numerical correctness - should converge to data mean
-                μ_samples = vec(chain1[:μ].data)
-                σ_samples = vec(chain1[:σ].data)
-                data_mean = mean(y_data)
-                @test mean(μ_samples[:]) ≈ data_mean atol = 2.0
-                @test all(σ_samples .> 0)  # σ should be positive
+                # Also test with NUTS
+                sampler_map_nuts = OrderedDict(
+                    @varname(μ) => NUTS(0.65),  # Missing AD backend
+                    @varname(σ) => IndependentMH(),
+                )
+                gibbs_nuts = Gibbs(model, sampler_map_nuts)
+                @test_throws ErrorException sample(
+                    rng, model, gibbs_nuts, 10; progress=false, chain_type=Chains
+                )
             end
 
             @testset "Different AD backends" begin
