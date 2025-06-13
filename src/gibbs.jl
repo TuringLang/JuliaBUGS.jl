@@ -81,7 +81,6 @@ struct Gibbs{N,S} <: AbstractMCMC.AbstractSampler
     end
 end
 
-
 """
     ensure_explicit_ad_backend(sampler)
 
@@ -493,7 +492,7 @@ function AbstractMCMC.step(
         if !isnothing(sub_state)
             # Get updated parameters from the conditioned model
             θ_new = getparams(cond_model)
-            
+
             # Create appropriate log density model based on sampler type
             if sub_sampler isa WithGradient
                 # For gradient-based samplers, wrap with AD
@@ -504,7 +503,7 @@ function AbstractMCMC.step(
                 # For non-gradient samplers, use model directly
                 logdensitymodel = AbstractMCMC.LogDensityModel(cond_model)
             end
-            
+
             # Update state using AbstractMCMC interface
             sub_state = AbstractMCMC.setparams!!(logdensitymodel, sub_state, θ_new)
         end
