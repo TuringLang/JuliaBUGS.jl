@@ -51,13 +51,13 @@ const TEST_GROUPS = OrderedDict{String,Function}(
         include("model/evaluation.jl")
     end,
     "inference" => () -> begin
-        include("mh_from_prior.jl")
+        include("independent_mh.jl")
         include("ext/JuliaBUGSAdvancedHMCExt.jl")
         include("ext/JuliaBUGSMCMCChainsExt.jl")
     end,
     "inference_hmc" => () -> include("ext/JuliaBUGSAdvancedHMCExt.jl"),
     "inference_chains" => () -> include("ext/JuliaBUGSMCMCChainsExt.jl"),
-    "inference_mh" => () -> include("mh_from_prior.jl"),
+    "inference_mh" => () -> include("independent_mh.jl"),
     "gibbs" => () -> include("gibbs.jl"),
     "experimental" => () -> 1, # TODO: revive this
     # () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),

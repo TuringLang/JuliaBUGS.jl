@@ -241,7 +241,7 @@ end
 function AbstractMCMC.bundle_samples(
     samples::Vector,  # Contains evaluation environments
     logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
-    sampler::JuliaBUGS.MHFromPrior,
+    sampler::JuliaBUGS.IndependentMH,
     states::Vector,
     ::Type{Chains};
     kwargs...,

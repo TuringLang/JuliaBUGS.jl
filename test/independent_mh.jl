@@ -1,13 +1,13 @@
 using Test
 using JuliaBUGS
-using JuliaBUGS: @bugs, compile, @varname, MHFromPrior, MHFromPriorState, gibbs_internal
+using JuliaBUGS: @bugs, compile, @varname, IndependentMH, IndependentMHState, gibbs_internal
 using JuliaBUGS.Model: condition
 using AbstractMCMC
 using Random
 using Statistics
 
-@testset "MHFromPrior" begin
-    @testset "Standalone MHFromPrior targeting posterior" begin
+@testset "IndependentMH" begin
+    @testset "Standalone IndependentMH targeting posterior" begin
         # Create a simple model where we know the posterior
         # Model: p ~ Beta(2, 2), y[i] ~ Bernoulli(p)
         # With y = [1,1,1,0,0,0,0,0,0,0] (3 successes, 7 failures)
@@ -24,9 +24,9 @@ using Statistics
         y_data = [1, 1, 1, 0, 0, 0, 0, 0, 0, 0]  # 3 successes, 7 failures
         model = compile(model_def, (; N=10, y=y_data))
 
-        # Sample using MHFromPrior
+        # Sample using IndependentMH
         rng = Random.MersenneTwister(123)
-        chain = sample(rng, model, MHFromPrior(), 100000; progress=false)
+        chain = sample(rng, model, IndependentMH(), 100000; progress=false)
 
         # Extract samples
         p_samples = vec([nt.p for nt in chain[50000:end]])  # Extract first parameter (p)
@@ -46,7 +46,7 @@ using Statistics
         @test isapprox(posterior_var, expected_var, atol=0.01)
     end
 
-    @testset "MHFromPrior with discrete parameters" begin
+    @testset "IndependentMH with discrete parameters" begin
         # Model with discrete parameter
         model_def = @bugs begin
             # Discrete parameter with categorical prior
@@ -70,7 +70,7 @@ using Statistics
 
         # Sample
         rng = Random.MersenneTwister(456)
-        chain = sample(rng, model, MHFromPrior(), 5000; progress=false)
+        chain = sample(rng, model, IndependentMH(), 5000; progress=false)
 
         # Check that k=3 is most frequent
         k_samples = vec([nt.k for nt in chain])  # Extract k parameter
@@ -82,7 +82,7 @@ using Statistics
         @test k_counts[2] / length(k_samples) < 0.2
     end
 
-    @testset "MHFromPrior initial parameters" begin
+    @testset "IndependentMH initial parameters" begin
         model_def = @bugs begin
             theta ~ Normal(0, 1)
             y ~ Normal(theta, 0.1)
@@ -95,7 +95,7 @@ using Statistics
         initial_params = [5.0]  # Far from posterior
 
         chain = sample(
-            rng, model, MHFromPrior(), 1000; progress=false, initial_params=initial_params
+            rng, model, IndependentMH(), 1000; progress=false, initial_params=initial_params
         )
 
         # Should converge to near y=2.0 despite starting at 5.0
@@ -103,7 +103,7 @@ using Statistics
         @test isapprox(mean(theta_samples), 2.0, atol=0.1)
     end
 
-    @testset "MHFromPrior state consistency" begin
+    @testset "IndependentMH state consistency" begin
         model_def = @bugs begin
             mu ~ Normal(0, 10)
             sigma ~ truncated(Normal(1, 1), 0, Inf)
@@ -120,8 +120,8 @@ using Statistics
         logdensitymodel = AbstractMCMC.LogDensityModel(model)
 
         # Initial step
-        sample1, state1 = AbstractMCMC.step(rng, logdensitymodel, MHFromPrior())
-        @test state1 isa MHFromPriorState
+        sample1, state1 = AbstractMCMC.step(rng, logdensitymodel, IndependentMH())
+        @test state1 isa IndependentMHState
         @test haskey(state1.evaluation_env, :mu)
         @test haskey(state1.evaluation_env, :sigma)
         @test state1.logp isa Real
@@ -130,7 +130,7 @@ using Statistics
         @test sample1 == state1.evaluation_env
 
         # Subsequent step
-        sample2, state2 = AbstractMCMC.step(rng, logdensitymodel, MHFromPrior(), state1)
+        sample2, state2 = AbstractMCMC.step(rng, logdensitymodel, IndependentMH(), state1)
 
         # If proposal was rejected, state should be unchanged
         if sample2 == sample1
@@ -142,7 +142,7 @@ using Statistics
         end
     end
 
-    @testset "MHFromPrior within Gibbs" begin
+    @testset "IndependentMH within Gibbs" begin
         # This will be tested more thoroughly in gibbs.jl tests
         # Here we just verify the gibbs_internal function works
 
@@ -166,7 +166,7 @@ using Statistics
 
         # Test gibbs_internal
         rng = StableRNG(222)
-        env, _ = gibbs_internal(rng, cond_model, MHFromPrior())
+        env, _ = gibbs_internal(rng, cond_model, IndependentMH())
         param_values = JuliaBUGS.getparams(cond_model, env)
 
         # Should be 2 parameters since both p and lambda are parameters in the base model

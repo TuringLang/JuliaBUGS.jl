@@ -19,17 +19,17 @@ have different performance characteristics for specific models.
 
 # Examples
 ```jldoctest
-julia> using JuliaBUGS: WithGradient, MHFromPrior
+julia> using JuliaBUGS: WithGradient, IndependentMH
 
 julia> using ADTypes
 
 julia> # Explicit AD specification
-       WithGradient(MHFromPrior(), AutoForwardDiff())
-WithGradient{MHFromPrior, AutoForwardDiff{nothing, Nothing}}(MHFromPrior(), AutoForwardDiff())
+       WithGradient(IndependentMH(), AutoForwardDiff())
+WithGradient{IndependentMH, AutoForwardDiff{nothing, Nothing}}(IndependentMH(), AutoForwardDiff())
 
 julia> # Default to ReverseDiff
-       WithGradient(MHFromPrior())
-WithGradient{MHFromPrior, AutoReverseDiff{false}}(MHFromPrior(), AutoReverseDiff())
+       WithGradient(IndependentMH())
+WithGradient{IndependentMH, AutoReverseDiff{false}}(IndependentMH(), AutoReverseDiff())
 ```
 
 For use with HMC/NUTS samplers (requires AdvancedHMC):
@@ -71,7 +71,7 @@ continuous vs discrete, or different dimensionalities).
 
 # See Also
 - [`WithGradient`](@ref): For specifying AD backends for gradient-based samplers
-- [`MHFromPrior`](@ref): A simple Metropolis-Hastings sampler
+- [`IndependentMH`](@ref): A simple Metropolis-Hastings sampler
 """
 struct Gibbs{N,S} <: AbstractMCMC.AbstractSampler
     sampler_map::OrderedDict{N,S}
@@ -147,7 +147,7 @@ Variables can be specified individually or as groups:
 sampler_map = OrderedDict(
     @varname(μ) => WithGradient(HMC(0.01, 10)),
     @varname(σ) => WithGradient(NUTS(0.65)),
-    @varname(k) => MHFromPrior()  # Good for discrete parameters
+    @varname(k) => IndependentMH()  # Good for discrete parameters
 )
 gibbs = Gibbs(model, sampler_map)
 
@@ -160,7 +160,7 @@ gibbs = Gibbs(model, sampler_map)
 
 # Array variables are automatically expanded
 sampler_map = OrderedDict(
-    @varname(x) => MHFromPrior(),  # Updates all x[1], x[2], ..., x[n]
+    @varname(x) => IndependentMH(),  # Updates all x[1], x[2], ..., x[n]
     @varname(μ) => WithGradient(HMC(0.01, 10))
 )
 gibbs = Gibbs(model, sampler_map)
@@ -202,8 +202,8 @@ single-site Gibbs sampling.
 
 # Examples
 ```julia
-# Use MHFromPrior for all parameters
-gibbs = Gibbs(model, MHFromPrior())
+# Use IndependentMH for all parameters
+gibbs = Gibbs(model, IndependentMH())
 
 # Use HMC for all parameters (each updated individually)
 gibbs = Gibbs(model, WithGradient(HMC(0.01, 10)))
@@ -331,13 +331,13 @@ specifying just `x` in the sampler map will cover all of them.
 model = compile(...)
 # Case 1: Individual variables
 sampler_map = OrderedDict(
-    [@varname(α)] => MHFromPrior(),
+    [@varname(α)] => IndependentMH(),
     [@varname(β), @varname(γ)] => HMC(0.01, 10)
 )
 
 # Case 2: Subsuming - x covers x[1], x[2], etc.
 sampler_map = OrderedDict(
-    [@varname(x)] => MHFromPrior(),  # Covers all x[i]
+    [@varname(x)] => IndependentMH(),  # Covers all x[i]
     [@varname(β)] => HMC(0.01, 10)
 )
 verify_sampler_map(model, sampler_map)  # Throws if invalid
@@ -509,7 +509,7 @@ function AbstractMCMC.step(
         end
 
         # Take a step with the sampler
-        # gibbs_internal is implemented by each sampler type (MHFromPrior, HMC extensions, etc.)
+        # gibbs_internal is implemented by each sampler type (IndependentMH, HMC extensions, etc.)
         # It returns the updated evaluation_env and optional sampler state
         evaluation_env, new_sub_state = gibbs_internal(
             rng, cond_model, sub_sampler, sub_state
