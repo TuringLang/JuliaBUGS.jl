@@ -2,8 +2,9 @@ module JuliaBUGSAdvancedMHExt
 
 using AbstractMCMC
 using AdvancedMH
+using ADTypes
 using JuliaBUGS
-using JuliaBUGS: BUGSModel, WithGradient, getparams, initialize!
+using JuliaBUGS: BUGSModel, getparams, initialize!
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.Random
@@ -40,11 +41,12 @@ end
 function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG,
     cond_model::BUGSModel,
-    wrapped::WithGradient{<:AdvancedMH.MHSampler},
+    sampler_tuple::Tuple{<:AdvancedMH.MHSampler,<:ADTypes.AbstractADType},
     state=nothing,
 )
     # Extract sampler and AD backend for gradient-based MH proposals
-    return _gibbs_internal_mh(rng, cond_model, wrapped.sampler, wrapped.ad_backend, state)
+    sampler, ad_backend = sampler_tuple
+    return _gibbs_internal_mh(rng, cond_model, sampler, ad_backend, state)
 end
 
 function _gibbs_internal_mh(
@@ -126,6 +128,5 @@ function AbstractMCMC.bundle_samples(
         kwargs...,
     )
 end
-
 
 end
