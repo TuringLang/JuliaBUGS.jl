@@ -161,6 +161,117 @@ using JuliaBUGS
         @test string(of((of(Array, 2), of(Real)))) == "of((of(Array, 2), of(Real)))"
         @test string(of((x=of(Real), y=of(Array, 3)))) == "of((x=of(Real), y=of(Array, 3)))"
     end
+
+    @testset "Vector and Dict types" begin
+        # Vector construction
+        ofv1 = of(Vector, Float64, 5)
+        @test ofv1 isa JuliaBUGS.OfVector
+        @test ofv1.length == 5
+        @test ofv1.element_type == of(Float64)
+
+        ofv2 = of(Vector, of(Array, 2, 2))
+        @test ofv2 isa JuliaBUGS.OfVector
+        @test isnothing(ofv2.length)
+
+        # Dict construction
+        ofd1 = of(Dict, Symbol, Float64)
+        @test ofd1 isa JuliaBUGS.OfDict{Symbol}
+        @test isnothing(ofd1.keys)
+
+        ofd2 = of(Dict, String, of(Array, 3), ["a", "b", "c"])
+        @test ofd2 isa JuliaBUGS.OfDict{String}
+        @test ofd2.keys == ["a", "b", "c"]
+
+        # rand for Vector and Dict
+        v1 = rand(ofv1)
+        @test v1 isa Vector{Float64}
+        @test length(v1) == 5
+
+        d1 = rand(ofd2)
+        @test d1 isa Dict{String}
+        @test keys(d1) == Set(["a", "b", "c"])
+        @test all(v isa Array && length(v) == 3 for v in values(d1))
+
+        # zero for Vector and Dict
+        v0 = zero(ofv1)
+        @test v0 isa Vector{Float64}
+        @test length(v0) == 5
+        @test all(v0 .== 0.0)
+
+        d0 = zero(ofd2)
+        @test d0 isa Dict{String}
+        @test keys(d0) == Set(["a", "b", "c"])
+        @test all(v isa Array && all(v .== 0.0) for v in values(d0))
+    end
+
+    @testset "Pytree utilities" begin
+        # Test is_leaf
+        @test JuliaBUGS.is_leaf(of(Real))
+        @test JuliaBUGS.is_leaf(of(Array, 3, 4))
+        @test !JuliaBUGS.is_leaf(of((of(Real), of(Array, 2))))
+        @test !JuliaBUGS.is_leaf(of((x=of(Real), y=of(Array, 2))))
+        @test !JuliaBUGS.is_leaf(of(Vector, Float64))
+        @test !JuliaBUGS.is_leaf(of(Dict, Symbol, Float64))
+
+        # Test tree_leaves
+        simple = of(Real)
+        @test JuliaBUGS.tree_leaves(simple) == [simple]
+
+        tuple_type = of((of(Real), of(Array, 2, 3)))
+        leaves = JuliaBUGS.tree_leaves(tuple_type)
+        @test length(leaves) == 2
+        @test leaves[1] isa JuliaBUGS.OfReal
+        @test leaves[2] isa JuliaBUGS.OfArray
+
+        nested = of((
+            x=of(Array, 3),
+            y=of((of(Real, 0, 1), of(Array, Float64, 2, 2))),
+            z=of(Vector, of(Real), 5),
+        ))
+        leaves = JuliaBUGS.tree_leaves(nested)
+        @test length(leaves) == 4  # Array, Real, Array, Real (in Vector)
+
+        # Test tree_map
+        doubled = JuliaBUGS.tree_map(tuple_type) do leaf
+            if leaf isa JuliaBUGS.OfArray
+                return of(Array, leaf.element_type, (leaf.dims .* 2)...)
+            else
+                return leaf
+            end
+        end
+        @test doubled.types[2].dims == (4, 6)
+
+        # Test flatten/unflatten
+        complex_type = of((
+            a=of(Real, 0, 1),
+            b=of(Array, Float64, 3, 3),
+            c=of(Vector, of(Array, 2, 2), 4),
+            d=of(Dict, Symbol, of(Real), [:x, :y, :z]),
+        ))
+
+        leaves, structure = JuliaBUGS.flatten(complex_type)
+        @test length(leaves) == 4  # Real, Array, Array (in Vector), Real (in Dict)
+
+        reconstructed = JuliaBUGS.unflatten(leaves, structure)
+        @test reconstructed isa JuliaBUGS.OfNamedTuple{(:a, :b, :c, :d)}
+        @test reconstructed.types[1] isa JuliaBUGS.OfReal
+        @test reconstructed.types[2] isa JuliaBUGS.OfArray{Float64,2}
+        @test reconstructed.types[3] isa JuliaBUGS.OfVector
+        @test reconstructed.types[4] isa JuliaBUGS.OfDict{Symbol}
+
+        # Test tree_map_with_path
+        paths_and_types = Tuple{Any,DataType}[]
+        JuliaBUGS.tree_map_with_path(complex_type) do path, leaf
+            push!(paths_and_types, (path, typeof(leaf)))
+            return leaf
+        end
+
+        @test length(paths_and_types) == 4
+        @test paths_and_types[1] == ((:a,), JuliaBUGS.OfReal)
+        @test paths_and_types[2] == ((:b,), JuliaBUGS.OfArray{Float64,2})
+        @test paths_and_types[3] == ((:c, :element), JuliaBUGS.OfArray{Any,2})
+        @test paths_and_types[4] == ((:d, :value), JuliaBUGS.OfReal)
+    end
 end
 
 @testset "Integration with @model macro" begin
