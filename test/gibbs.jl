@@ -1,14 +1,7 @@
 using Test
 using JuliaBUGS
 using JuliaBUGS:
-    @bugs,
-    compile,
-    @varname,
-    Gibbs,
-    IndependentMH,
-    WithGradient,
-    verify_sampler_map,
-    expand_variables
+    @bugs, compile, @varname, Gibbs, IndependentMH, verify_sampler_map, expand_variables
 using ADTypes
 using AbstractMCMC
 using Random
@@ -526,7 +519,7 @@ using StatsBase: mode
         using AdvancedMH: RWMH, StaticMH
         using Distributions: Product, fill
 
-        @testset "WithGradient wrapper" begin
+        @testset "Gradient-based samplers with AD backends" begin
             model_def = @bugs begin
                 μ ~ Normal(0, 10)
                 σ ~ truncated(Normal(1, 1), 0, Inf)
@@ -539,34 +532,35 @@ using StatsBase: mode
             y_data = randn(N) .+ 2.0
             model = compile(model_def, (; N=N, y=y_data))
 
-            @testset "Default ReverseDiff" begin
-                # Test both ways of specifying ReverseDiff
-                sampler_map1 = OrderedDict(
-                    @varname(μ) => WithGradient(NUTS(0.65), ADTypes.AutoReverseDiff()),
-                    @varname(σ) => WithGradient(NUTS(0.65)),  # Default ReverseDiff
+            @testset "HMC/NUTS requires explicit AD backend" begin
+                # Test that using HMC/NUTS without AD backend throws an error
+                sampler_map_invalid = OrderedDict(
+                    @varname(μ) => HMC(0.01, 10),  # Missing AD backend
+                    @varname(σ) => IndependentMH(),
                 )
-                gibbs1 = Gibbs(model, sampler_map1)
+                gibbs_invalid = Gibbs(model, sampler_map_invalid)
 
-                rng = StableRNG(12345)
-                chain1 = sample(rng, model, gibbs1, 2000; progress=false, chain_type=Chains)
+                rng = Random.MersenneTwister(123)
+                @test_throws ErrorException sample(
+                    rng, model, gibbs_invalid, 10; progress=false, chain_type=Chains
+                )
 
-                @test chain1 isa AbstractMCMC.AbstractChains
-                @test size(chain1, 1) == 2000
-                @test size(chain1, 2) == 2  # μ and σ
-
-                # Check numerical correctness - should converge to data mean
-                μ_samples = vec(chain1[:μ].data)
-                σ_samples = vec(chain1[:σ].data)
-                data_mean = mean(y_data)
-                @test mean(μ_samples[:]) ≈ data_mean atol = 2.0
-                @test all(σ_samples .> 0)  # σ should be positive
+                # Also test with NUTS
+                sampler_map_nuts = OrderedDict(
+                    @varname(μ) => NUTS(0.65),  # Missing AD backend
+                    @varname(σ) => IndependentMH(),
+                )
+                gibbs_nuts = Gibbs(model, sampler_map_nuts)
+                @test_throws ErrorException sample(
+                    rng, model, gibbs_nuts, 10; progress=false, chain_type=Chains
+                )
             end
 
             @testset "Different AD backends" begin
                 # Test with ForwardDiff (should work for small models)
                 sampler_map2 = OrderedDict(
-                    @varname(μ) => WithGradient(HMC(0.01, 10), ADTypes.AutoForwardDiff()),
-                    @varname(σ) => WithGradient(NUTS(0.65), ADTypes.AutoReverseDiff()),
+                    @varname(μ) => (HMC(0.01, 10), ADTypes.AutoForwardDiff()),
+                    @varname(σ) => (NUTS(0.65), ADTypes.AutoReverseDiff()),
                 )
                 gibbs2 = Gibbs(model, sampler_map2)
 
@@ -609,8 +603,7 @@ using StatsBase: mode
 
             # Use HMC for continuous, IndependentMH for discrete
             sampler_map = OrderedDict(
-                [@varname(μ), @varname(log_σ)] =>
-                    WithGradient(HMC(0.1, 10), ADTypes.AutoReverseDiff()),  # Larger step size
+                [@varname(μ), @varname(log_σ)] => (HMC(0.1, 10), ADTypes.AutoReverseDiff()),  # Larger step size
                 @varname(k) => IndependentMH(),
             )
             gibbs = Gibbs(model, sampler_map)
@@ -764,8 +757,7 @@ using StatsBase: mode
 
         @testset "NUTS within Gibbs" begin
             sampler_map = OrderedDict(
-                [@varname(μ), @varname(τ)] =>
-                    WithGradient(NUTS(0.65), ADTypes.AutoReverseDiff()),
+                [@varname(μ), @varname(τ)] => (NUTS(0.65), ADTypes.AutoReverseDiff()),
                 @varname(θ) => IndependentMH(),  # Use MH for group means
             )
             gibbs = Gibbs(model, sampler_map)
@@ -826,9 +818,9 @@ using StatsBase: mode
 
         # Create a custom Gibbs state to inspect sub_states
         sampler_map = OrderedDict(
-            @varname(α) => WithGradient(HMC(0.01, 5), ADTypes.AutoReverseDiff()),
+            @varname(α) => (HMC(0.01, 5), ADTypes.AutoReverseDiff()),
             @varname(β) => IndependentMH(),
-            @varname(γ) => WithGradient(HMC(0.01, 5), ADTypes.AutoReverseDiff()),
+            @varname(γ) => (HMC(0.01, 5), ADTypes.AutoReverseDiff()),
         )
         gibbs = Gibbs(model, sampler_map)
 

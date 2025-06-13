@@ -1,56 +1,29 @@
-"""
-    WithGradient(sampler, ad_backend=AutoReverseDiff())
-
-Wrapper for gradient-based samplers (HMC, NUTS) that specifies which automatic
-differentiation backend to use.
-
-This wrapper allows users to explicitly choose the AD backend for gradient computations
-in samplers that require gradients. It's particularly useful when different AD backends
-have different performance characteristics for specific models.
-
-# Arguments
-- `sampler`: The base sampler (e.g., HMC, NUTS from AdvancedHMC)
-- `ad_backend`: AD backend from ADTypes (e.g., `AutoReverseDiff()`, `AutoForwardDiff()`, `AutoMooncake()`)
-
-# Supported AD Backends
-- `AutoReverseDiff()` (default): Good for models with many parameters
-- `AutoForwardDiff()`: Good for models with few parameters (<100)
-- `AutoMooncake()`: Experimental, potentially faster for some models. Note: When using `UseGeneratedLogDensityFunction()` evaluation mode, only `AutoMooncake()` is supported for AD
-
-# Examples
-```jldoctest
-julia> using JuliaBUGS: WithGradient, IndependentMH
-
-julia> using ADTypes
-
-julia> # Explicit AD specification
-       WithGradient(IndependentMH(), AutoForwardDiff())
-WithGradient{IndependentMH, AutoForwardDiff{nothing, Nothing}}(IndependentMH(), AutoForwardDiff())
-
-julia> # Default to ReverseDiff
-       WithGradient(IndependentMH())
-WithGradient{IndependentMH, AutoReverseDiff{false}}(IndependentMH(), AutoReverseDiff())
-```
-
-For use with HMC/NUTS samplers (requires AdvancedHMC):
-```julia
-WithGradient(HMC(0.01, 10), AutoForwardDiff())
-WithGradient(NUTS(0.65), AutoMooncake())
-
-# Use in Gibbs sampling
-sampler_map = OrderedDict(
-    @varname(μ) => WithGradient(HMC(0.01, 10), AutoForwardDiff()),
-    @varname(σ) => WithGradient(NUTS(0.65), AutoReverseDiff())
-)
-```
-"""
-struct WithGradient{S<:AbstractMCMC.AbstractSampler,AD<:ADTypes.AbstractADType}
-    sampler::S
-    ad_backend::AD
-end
-
-# Default to ReverseDiff
-WithGradient(sampler) = WithGradient(sampler, ADTypes.AutoReverseDiff())
+# Gradient-based Samplers with AD Backends
+#
+# For gradient-based samplers (HMC, NUTS), specify the AD backend using a tuple:
+# `(sampler, ad_backend)` where `ad_backend` is from ADTypes.
+#
+# Supported AD Backends:
+# - `AutoForwardDiff()` (default): Good for models with few parameters (<100)
+# - `AutoReverseDiff()`: Good for models with many parameters
+# - `AutoMooncake()`: Experimental, potentially faster for some models
+#
+# Examples:
+# ```julia
+# using ADTypes
+# 
+# # Explicit AD specification
+# sampler_map = OrderedDict(
+#     @varname(μ) => (HMC(0.01, 10), AutoForwardDiff()),
+#     @varname(σ) => (NUTS(0.65), AutoReverseDiff())
+# )
+# 
+# # For gradient-based samplers, always specify AD backend
+# sampler_map = OrderedDict(
+#     @varname(μ) => (HMC(0.01, 10), AutoForwardDiff()),
+#     @varname(σ) => (NUTS(0.65), AutoReverseDiff())
+# )
+# ```
 
 """
     Gibbs{N,S} <: AbstractMCMC.AbstractSampler
@@ -70,54 +43,14 @@ continuous vs discrete, or different dimensionalities).
 - `sampler_map::OrderedDict{N,S}`: Maps variable groups to their respective samplers
 
 # See Also
-- [`WithGradient`](@ref): For specifying AD backends for gradient-based samplers
 - [`IndependentMH`](@ref): A simple Metropolis-Hastings sampler
+- Gradient-based samplers: Use tuples `(sampler, ad_backend)` to specify AD backends
 """
 struct Gibbs{N,S} <: AbstractMCMC.AbstractSampler
     sampler_map::OrderedDict{N,S}
 
     function Gibbs{N,S}(sampler_map::OrderedDict{N,S}) where {N,S}
         return new{N,S}(sampler_map)
-    end
-end
-
-"""
-    ensure_explicit_ad_backend(sampler)
-
-Ensure gradient-based samplers have an explicit AD backend specification.
-
-This internal helper function checks if a sampler requires gradients (HMC, NUTS)
-and wraps it with `WithGradient` if not already wrapped. This ensures all
-gradient-based samplers have an explicit AD backend, defaulting to ReverseDiff.
-
-# Arguments
-- `sampler`: Any AbstractMCMC sampler
-
-# Returns
-- The sampler wrapped in `WithGradient` if it's gradient-based and not already wrapped
-- The original sampler otherwise
-
-# Notes
-This function uses heuristics (type name matching) to detect gradient-based samplers.
-Users should prefer explicitly wrapping their samplers with `WithGradient` for clarity.
-"""
-function ensure_explicit_ad_backend(sampler)
-    # If already wrapped, return as-is
-    if sampler isa WithGradient
-        return sampler
-    end
-
-    # Check if it's a gradient-based sampler by checking if module is loaded
-    # and sampler type name suggests it needs gradients
-    sampler_type = string(typeof(sampler))
-    if (occursin("HMC", sampler_type) || occursin("NUTS", sampler_type)) &&
-        occursin("AdvancedHMC", sampler_type)
-        # Wrap with default AD backend
-        # Note: Users should prefer explicit WithGradient(sampler, AutoReverseDiff())
-        return WithGradient(sampler, ADTypes.AutoReverseDiff())
-    else
-        # Return as-is for other samplers
-        return sampler
     end
 end
 
@@ -143,25 +76,27 @@ Variables can be specified individually or as groups:
 
 # Examples
 ```julia
+using ADTypes: AutoReverseDiff, AutoForwardDiff
+
 # Different samplers for different parameters
 sampler_map = OrderedDict(
-    @varname(μ) => WithGradient(HMC(0.01, 10)),
-    @varname(σ) => WithGradient(NUTS(0.65)),
+    @varname(μ) => (HMC(0.01, 10), AutoReverseDiff()),
+    @varname(σ) => (NUTS(0.65), AutoReverseDiff()),
     @varname(k) => IndependentMH()  # Good for discrete parameters
 )
 gibbs = Gibbs(model, sampler_map)
 
 # Group parameters that should be updated together
 sampler_map = OrderedDict(
-    [@varname(α), @varname(β)] => WithGradient(HMC(0.01, 10)),
-    @varname(σ) => WithGradient(NUTS(0.65))
+    [@varname(α), @varname(β)] => (HMC(0.01, 10), AutoForwardDiff()),
+    @varname(σ) => (NUTS(0.65), AutoForwardDiff())  # Must specify AD backend
 )
 gibbs = Gibbs(model, sampler_map)
 
 # Array variables are automatically expanded
 sampler_map = OrderedDict(
     @varname(x) => IndependentMH(),  # Updates all x[1], x[2], ..., x[n]
-    @varname(μ) => WithGradient(HMC(0.01, 10))
+    @varname(μ) => (HMC(0.01, 10), AutoForwardDiff())  # Must specify AD backend
 )
 gibbs = Gibbs(model, sampler_map)
 ```
@@ -178,9 +113,7 @@ function Gibbs(model::BUGSModel, sampler_map::OrderedDict)
         variable_group_vec =
             (variable_group isa VarName) ? [variable_group] : variable_group
         expanded_vars = expand_variables(variable_group_vec, model_parameters)
-        # Ensure gradient-based samplers have explicit AD backend
-        wrapped_sampler = ensure_explicit_ad_backend(sampler)
-        expanded_sampler_map[expanded_vars] = wrapped_sampler
+        expanded_sampler_map[expanded_vars] = sampler
     end
     return Gibbs{eltype(keys(expanded_sampler_map)),eltype(values(expanded_sampler_map))}(
         expanded_sampler_map
@@ -206,7 +139,8 @@ single-site Gibbs sampling.
 gibbs = Gibbs(model, IndependentMH())
 
 # Use HMC for all parameters (each updated individually)
-gibbs = Gibbs(model, WithGradient(HMC(0.01, 10)))
+gibbs = Gibbs(model, (HMC(0.01, 10), AutoForwardDiff()))
+# Note: For gradient-based samplers, you must specify the AD backend
 ```
 
 # Notes
@@ -214,10 +148,9 @@ For better performance with continuous parameters, consider grouping related
 parameters and using the OrderedDict constructor instead.
 """
 function Gibbs(model::BUGSModel, s::AbstractMCMC.AbstractSampler)
-    # Ensure gradient-based samplers have explicit AD backend
-    wrapped_sampler = ensure_explicit_ad_backend(s)
+    # Use the sampler as-is for all parameters
     sampler_map = OrderedDict([
-        v => wrapped_sampler for v in model.graph_evaluation_data.sorted_parameters
+        v => s for v in model.graph_evaluation_data.sorted_parameters
     ])
     return Gibbs(model, sampler_map)
 end
@@ -494,10 +427,12 @@ function AbstractMCMC.step(
             θ_new = getparams(cond_model)
 
             # Create appropriate log density model based on sampler type
-            if sub_sampler isa WithGradient
+            if sub_sampler isa
+                Tuple{<:AbstractMCMC.AbstractSampler,<:ADTypes.AbstractADType}
                 # For gradient-based samplers, wrap with AD
+                _, ad_backend = sub_sampler
                 logdensitymodel = AbstractMCMC.LogDensityModel(
-                    LogDensityProblemsAD.ADgradient(sub_sampler.ad_backend, cond_model)
+                    LogDensityProblemsAD.ADgradient(ad_backend, cond_model)
                 )
             else
                 # For non-gradient samplers, use model directly
