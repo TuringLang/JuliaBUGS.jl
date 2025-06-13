@@ -9,7 +9,7 @@ using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.Random
 using MCMCChains: Chains
 
-import JuliaBUGS: gibbs_internal, update_sampler_state
+import JuliaBUGS: gibbs_internal
 
 function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG,
@@ -49,35 +49,6 @@ function _gibbs_internal_hmc(
     return updated_model.evaluation_env, s
 end
 
-function JuliaBUGS.update_sampler_state(
-    model::BUGSModel,
-    sampler::WithGradient{<:AdvancedHMC.AbstractHMCSampler},
-    state::AdvancedHMC.HMCState,
-)
-    # Get updated parameters from model
-    θ_new = getparams(model)
-
-    # Recompute log density and gradient at new position
-    logdensitymodel = LogDensityProblemsAD.ADgradient(sampler.ad_backend, model)
-    ℓ, ∇ℓ = LogDensityProblems.logdensity_and_gradient(logdensitymodel, θ_new)
-
-    # Create new phase point, preserving momentum for detailed balance
-    z_new = AdvancedHMC.PhasePoint(
-        θ_new,                    # Updated position
-        state.transition.z.r,     # Preserve momentum
-        AdvancedHMC.DualValue(ℓ, ∇ℓ),  # New log density and gradient
-        state.transition.z.ℓκ,    # Preserve kinetic energy
-    )
-
-    # Return new state with updated transition but preserved adaptation
-    return AdvancedHMC.HMCState(
-        state.i,
-        AdvancedHMC.Transition(z_new, state.transition.stat),
-        state.metric,
-        state.κ,
-        state.adaptor,
-    )
-end
 
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:AdvancedHMC.Transition},
