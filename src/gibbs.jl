@@ -63,19 +63,19 @@ end
 Ensure gradient-based samplers have an explicit AD backend specification.
 
 This internal helper function checks if a sampler requires gradients (HMC, NUTS)
-and wraps it with `WithGradient` if not already wrapped. This ensures all
+and wraps it with a tuple `(sampler, ad_backend)` if not already wrapped. This ensures all
 gradient-based samplers have an explicit AD backend, defaulting to ReverseDiff.
 
 # Arguments
 - `sampler`: Any AbstractMCMC sampler
 
 # Returns
-- The sampler wrapped in `WithGradient` if it's gradient-based and not already wrapped
+- A tuple `(sampler, ad_backend)` if it's gradient-based and not already wrapped
 - The original sampler otherwise
 
 # Notes
 This function uses heuristics (type name matching) to detect gradient-based samplers.
-Users should prefer explicitly wrapping their samplers with `WithGradient` for clarity.
+Users should prefer explicitly specifying tuples like `(HMC(0.01, 10), AutoReverseDiff())` for clarity.
 """
 function ensure_explicit_ad_backend(sampler)
     # If already a tuple with AD backend, return as-is

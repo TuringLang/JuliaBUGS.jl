@@ -519,7 +519,7 @@ using StatsBase: mode
         using AdvancedMH: RWMH, StaticMH
         using Distributions: Product, fill
 
-        @testset "WithGradient wrapper" begin
+        @testset "Gradient-based samplers with AD backends" begin
             model_def = @bugs begin
                 μ ~ Normal(0, 10)
                 σ ~ truncated(Normal(1, 1), 0, Inf)
