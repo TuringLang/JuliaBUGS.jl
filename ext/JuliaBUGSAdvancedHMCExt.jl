@@ -2,8 +2,9 @@ module JuliaBUGSAdvancedHMCExt
 
 using AbstractMCMC
 using AdvancedHMC
+using ADTypes
 using JuliaBUGS
-using JuliaBUGS: BUGSModel, WithGradient, getparams, initialize!
+using JuliaBUGS: BUGSModel, getparams, initialize!
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.Random
@@ -14,11 +15,12 @@ import JuliaBUGS: gibbs_internal
 function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG,
     cond_model::BUGSModel,
-    wrapped::WithGradient{<:AdvancedHMC.AbstractHMCSampler},
+    sampler_tuple::Tuple{<:AdvancedHMC.AbstractHMCSampler,<:ADTypes.AbstractADType},
     state=nothing,
 )
-    # Extract sampler and AD backend from wrapper
-    return _gibbs_internal_hmc(rng, cond_model, wrapped.sampler, wrapped.ad_backend, state)
+    # Extract sampler and AD backend from tuple
+    sampler, ad_backend = sampler_tuple
+    return _gibbs_internal_hmc(rng, cond_model, sampler, ad_backend, state)
 end
 
 function _gibbs_internal_hmc(
@@ -48,7 +50,6 @@ function _gibbs_internal_hmc(
     updated_model = initialize!(cond_model, t.z.θ)
     return updated_model.evaluation_env, s
 end
-
 
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:AdvancedHMC.Transition},

@@ -1,14 +1,7 @@
 using Test
 using JuliaBUGS
 using JuliaBUGS:
-    @bugs,
-    compile,
-    @varname,
-    Gibbs,
-    IndependentMH,
-    WithGradient,
-    verify_sampler_map,
-    expand_variables
+    @bugs, compile, @varname, Gibbs, IndependentMH, verify_sampler_map, expand_variables
 using ADTypes
 using AbstractMCMC
 using Random
@@ -542,8 +535,8 @@ using StatsBase: mode
             @testset "Default ReverseDiff" begin
                 # Test both ways of specifying ReverseDiff
                 sampler_map1 = OrderedDict(
-                    @varname(μ) => WithGradient(NUTS(0.65), ADTypes.AutoReverseDiff()),
-                    @varname(σ) => WithGradient(NUTS(0.65)),  # Default ReverseDiff
+                    @varname(μ) => (NUTS(0.65), ADTypes.AutoReverseDiff()),
+                    @varname(σ) => NUTS(0.65),  # Default ReverseDiff
                 )
                 gibbs1 = Gibbs(model, sampler_map1)
 
@@ -565,8 +558,8 @@ using StatsBase: mode
             @testset "Different AD backends" begin
                 # Test with ForwardDiff (should work for small models)
                 sampler_map2 = OrderedDict(
-                    @varname(μ) => WithGradient(HMC(0.01, 10), ADTypes.AutoForwardDiff()),
-                    @varname(σ) => WithGradient(NUTS(0.65), ADTypes.AutoReverseDiff()),
+                    @varname(μ) => (HMC(0.01, 10), ADTypes.AutoForwardDiff()),
+                    @varname(σ) => (NUTS(0.65), ADTypes.AutoReverseDiff()),
                 )
                 gibbs2 = Gibbs(model, sampler_map2)
 
@@ -609,8 +602,7 @@ using StatsBase: mode
 
             # Use HMC for continuous, IndependentMH for discrete
             sampler_map = OrderedDict(
-                [@varname(μ), @varname(log_σ)] =>
-                    WithGradient(HMC(0.1, 10), ADTypes.AutoReverseDiff()),  # Larger step size
+                [@varname(μ), @varname(log_σ)] => (HMC(0.1, 10), ADTypes.AutoReverseDiff()),  # Larger step size
                 @varname(k) => IndependentMH(),
             )
             gibbs = Gibbs(model, sampler_map)
@@ -764,8 +756,7 @@ using StatsBase: mode
 
         @testset "NUTS within Gibbs" begin
             sampler_map = OrderedDict(
-                [@varname(μ), @varname(τ)] =>
-                    WithGradient(NUTS(0.65), ADTypes.AutoReverseDiff()),
+                [@varname(μ), @varname(τ)] => (NUTS(0.65), ADTypes.AutoReverseDiff()),
                 @varname(θ) => IndependentMH(),  # Use MH for group means
             )
             gibbs = Gibbs(model, sampler_map)
@@ -826,9 +817,9 @@ using StatsBase: mode
 
         # Create a custom Gibbs state to inspect sub_states
         sampler_map = OrderedDict(
-            @varname(α) => WithGradient(HMC(0.01, 5), ADTypes.AutoReverseDiff()),
+            @varname(α) => (HMC(0.01, 5), ADTypes.AutoReverseDiff()),
             @varname(β) => IndependentMH(),
-            @varname(γ) => WithGradient(HMC(0.01, 5), ADTypes.AutoReverseDiff()),
+            @varname(γ) => (HMC(0.01, 5), ADTypes.AutoReverseDiff()),
         )
         gibbs = Gibbs(model, sampler_map)
 
