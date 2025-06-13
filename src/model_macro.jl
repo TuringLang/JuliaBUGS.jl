@@ -118,14 +118,33 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
 
     bugs_ast = Parser.bugs_top(model_def, __source__)
 
+    # Parse different parameter destructuring patterns
     param_type = nothing
-    MacroTools.@capture(
-        param_destructure, (((; param_fields__)::param_type_) | ((; param_fields__)))
-    ) || return :(throw(
-        ArgumentError(
-            "The first argument of the model function must be a destructuring assignment with a type annotation defined using `@parameters`.",
-        ),
-    ))
+    param_fields = Symbol[]
+    param_annotations = Dict{Symbol,Any}()
+
+    # Try to match different parameter patterns
+    if MacroTools.@capture(param_destructure, ((; fields__)::ptype_))
+        # NamedTuple with type annotation: (;x, y, z)::ParamType
+        param_type = ptype
+        param_fields = extract_field_names(fields)
+    elseif MacroTools.@capture(param_destructure, (; fields__))
+        # NamedTuple without type annotation: (;x, y, z) or (;x::of(...), y::of(...))
+        param_fields, param_annotations = extract_fields_with_annotations(fields)
+    elseif MacroTools.@capture(param_destructure, ((fields__,)::ptype_))
+        # Tuple with type annotation: (x, y, z)::ParamType
+        param_type = ptype
+        param_fields = extract_field_names(fields)
+    elseif MacroTools.@capture(param_destructure, (fields__,))
+        # Tuple without type annotation: (x, y, z) or (x::of(...), y::of(...))
+        param_fields, param_annotations = extract_fields_with_annotations(fields)
+    else
+        return :(throw(
+            ArgumentError(
+                "The first argument of the model function must be a destructuring assignment (tuple or named tuple).",
+            ),
+        ))
+    end
 
     illegal_constant_variables = Any[]
     constant_variables_symbols = map(constant_variables) do constant_variable
@@ -182,15 +201,36 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
         )
     end
 
-    func_expr = MacroTools.@q function ($(esc(model_name)))(
-        params_struct, $(esc.(constant_variables)...)
-    )
-        (; $(esc.(param_fields)...)) = params_struct
-        data = _param_struct_to_NT((;
-            $([esc.(param_fields)..., esc.(constant_variables)...]...)
-        ))
-        model_def = $(QuoteNode(bugs_ast))
-        return compile(model_def, data)
+    # Generate function based on parameter style
+    if !isempty(param_annotations)
+        # Direct `of` annotations in the model
+        func_expr = MacroTools.@q function ($(esc(model_name)))(
+            params_struct, $(esc.(constant_variables)...)
+        )
+            # Extract fields from tuple or named tuple
+            if params_struct isa NamedTuple
+                (; $(esc.(param_fields)...)) = params_struct
+            else
+                ($(esc.(param_fields)...),) = params_struct
+            end
+            data = _param_struct_to_NT((;
+                $([esc.(param_fields)..., esc.(constant_variables)...]...)
+            ))
+            model_def = $(QuoteNode(bugs_ast))
+            return compile(model_def, data)
+        end
+    else
+        # Traditional style with type annotation or plain destructuring
+        func_expr = MacroTools.@q function ($(esc(model_name)))(
+            params_struct, $(esc.(constant_variables)...)
+        )
+            (; $(esc.(param_fields)...)) = params_struct
+            data = _param_struct_to_NT((;
+                $([esc.(param_fields)..., esc.(constant_variables)...]...)
+            ))
+            model_def = $(QuoteNode(bugs_ast))
+            return compile(model_def, data)
+        end
     end
 
     if param_type === nothing
@@ -256,4 +296,40 @@ function _add_line_number_nodes(expr)
         new_args = map(arg -> _add_line_number_nodes(arg), expr.args)
         return Expr(expr.head, new_args...)
     end
+end
+
+# Helper function to extract field names from various patterns
+function extract_field_names(fields)
+    field_names = Symbol[]
+    for field in fields
+        if field isa Symbol
+            push!(field_names, field)
+        elseif MacroTools.@capture(field, name_::type_)
+            push!(field_names, name)
+        else
+            error("Unsupported field pattern: $field")
+        end
+    end
+    return field_names
+end
+
+# Extract fields with potential `of` annotations
+function extract_fields_with_annotations(fields)
+    field_names = Symbol[]
+    annotations = Dict{Symbol,Any}()
+
+    for field in fields
+        if field isa Symbol
+            push!(field_names, field)
+        elseif MacroTools.@capture(field, name_::ann_)
+            push!(field_names, name)
+            if MacroTools.@capture(ann, of(args__))
+                annotations[name] = ann
+            end
+        else
+            error("Unsupported field pattern: $field")
+        end
+    end
+
+    return field_names, annotations
 end
