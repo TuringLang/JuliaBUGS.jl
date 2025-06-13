@@ -1,5 +1,5 @@
 """
-    MHFromPrior <: AbstractMCMC.AbstractSampler
+    IndependentMH <: AbstractMCMC.AbstractSampler
 
 A Metropolis-Hastings sampler that proposes new values by sampling from the prior distribution.
 
@@ -27,22 +27,22 @@ end
 # Compile with data
 model = compile(model_def, (; N=10, y=[1,0,1,1,0,1,0,1,1,0]))
 
-# Sample using MHFromPrior
-chain = sample(Random.default_rng(), model, MHFromPrior(), 1000)
+# Sample using IndependentMH
+chain = sample(Random.default_rng(), model, IndependentMH(), 1000)
 ```
 """
-struct MHFromPrior <: AbstractMCMC.AbstractSampler end
+struct IndependentMH <: AbstractMCMC.AbstractSampler end
 
 """
-    MHFromPriorState{E<:NamedTuple,L<:Real}
+    IndependentMHState{E<:NamedTuple,L<:Real}
 
-State for the MHFromPrior sampler.
+State for the IndependentMH sampler.
 
 # Fields
 - `evaluation_env::E`: Current evaluation environment containing all variable values
 - `logp::L`: Current log posterior density
 """
-struct MHFromPriorState{E<:NamedTuple,L<:Real}
+struct IndependentMHState{E<:NamedTuple,L<:Real}
     evaluation_env::E
     logp::L
 end
@@ -51,7 +51,7 @@ end
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
     logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
-    sampler::MHFromPrior;
+    sampler::IndependentMH;
     initial_params=nothing,
     kwargs...,
 )
@@ -68,15 +68,15 @@ function AbstractMCMC.step(
     end
 
     # Return evaluation environment directly (efficient with smart copying)
-    return evaluation_env, MHFromPriorState(evaluation_env, logp)
+    return evaluation_env, IndependentMHState(evaluation_env, logp)
 end
 
 # Subsequent steps
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
     logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
-    sampler::MHFromPrior,
-    state::MHFromPriorState;
+    sampler::IndependentMH,
+    state::IndependentMHState;
     kwargs...,
 )
     model = logdensitymodel.logdensity
@@ -98,7 +98,7 @@ function AbstractMCMC.step(
     #        = log_posterior(proposed) - log_posterior(current)
     if logp_proposed - logp_current > log(rand(rng))
         # Accept proposal
-        return proposed_env, MHFromPriorState(proposed_env, logp_proposed)
+        return proposed_env, IndependentMHState(proposed_env, logp_proposed)
     else
         # Reject proposal, keep current state
         return state.evaluation_env, state
@@ -107,13 +107,13 @@ end
 
 # For use within Gibbs sampling
 """
-    gibbs_internal(rng, cond_model, ::MHFromPrior, state)
+    gibbs_internal(rng, cond_model, ::IndependentMH, state)
 
-Internal function for using MHFromPrior within Gibbs sampling.
-Returns the updated evaluation environment and state (nothing for MHFromPrior).
+Internal function for using IndependentMH within Gibbs sampling.
+Returns the updated evaluation environment and state (nothing for IndependentMH).
 """
 function gibbs_internal(
-    rng::Random.AbstractRNG, cond_model::BUGSModel, ::MHFromPrior, state=nothing
+    rng::Random.AbstractRNG, cond_model::BUGSModel, ::IndependentMH, state=nothing
 )
     # Get current values and log density
     current_env = cond_model.evaluation_env
