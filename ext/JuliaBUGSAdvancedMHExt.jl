@@ -9,7 +9,7 @@ using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.Random
 using MCMCChains: Chains
 
-import JuliaBUGS: gibbs_internal, update_sampler_state
+import JuliaBUGS: gibbs_internal
 
 function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG,
@@ -127,22 +127,5 @@ function AbstractMCMC.bundle_samples(
     )
 end
 
-function JuliaBUGS.update_sampler_state(
-    model::BUGSModel,
-    sampler::Union{AdvancedMH.MHSampler,WithGradient{<:AdvancedMH.MHSampler}},
-    state::AdvancedMH.Transition,
-)
-    # Get updated parameters and compute new log probability
-    θ_new = getparams(model)
-    lp_new = LogDensityProblems.logdensity(model, θ_new)
-
-    # Preserve scalar/vector format from original state
-    if !(state.params isa AbstractVector) && length(θ_new) == 1
-        θ_new = θ_new[1]  # Convert single-element vector back to scalar
-    end
-
-    # Return updated transition with new parameters and log probability
-    return AdvancedMH.Transition(θ_new, lp_new, state.accepted)
-end
 
 end
