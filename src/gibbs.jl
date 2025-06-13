@@ -4,8 +4,8 @@
 # `(sampler, ad_backend)` where `ad_backend` is from ADTypes.
 #
 # Supported AD Backends:
-# - `AutoReverseDiff()` (default): Good for models with many parameters
-# - `AutoForwardDiff()`: Good for models with few parameters (<100)
+# - `AutoForwardDiff()` (default): Good for models with few parameters (<100)
+# - `AutoReverseDiff()`: Good for models with many parameters
 # - `AutoMooncake()`: Experimental, potentially faster for some models
 #
 # Examples:
@@ -18,7 +18,7 @@
 #     @varname(σ) => (NUTS(0.65), AutoReverseDiff())
 # )
 # 
-# # Or use plain sampler (defaults to AutoReverseDiff for HMC/NUTS)
+# # Or use plain sampler (defaults to AutoForwardDiff for HMC/NUTS)
 # sampler_map = OrderedDict(
 #     @varname(μ) => HMC(0.01, 10),
 #     @varname(σ) => NUTS(0.65)
@@ -26,7 +26,7 @@
 # ```
 # Helper function to create gradient-based sampler tuples
 # Not exported - users just use tuples directly
-with_ad(sampler, ad_backend=ADTypes.AutoReverseDiff()) = (sampler, ad_backend)
+with_ad(sampler, ad_backend=ADTypes.AutoForwardDiff()) = (sampler, ad_backend)
 
 """
     Gibbs{N,S} <: AbstractMCMC.AbstractSampler
@@ -64,7 +64,7 @@ Ensure gradient-based samplers have an explicit AD backend specification.
 
 This internal helper function checks if a sampler requires gradients (HMC, NUTS)
 and wraps it with a tuple `(sampler, ad_backend)` if not already wrapped. This ensures all
-gradient-based samplers have an explicit AD backend, defaulting to ReverseDiff.
+gradient-based samplers have an explicit AD backend, defaulting to ForwardDiff.
 
 # Arguments
 - `sampler`: Any AbstractMCMC sampler
@@ -75,7 +75,7 @@ gradient-based samplers have an explicit AD backend, defaulting to ReverseDiff.
 
 # Notes
 This function uses heuristics (type name matching) to detect gradient-based samplers.
-Users should prefer explicitly specifying tuples like `(HMC(0.01, 10), AutoReverseDiff())` for clarity.
+Users should prefer explicitly specifying tuples like `(HMC(0.01, 10), AutoForwardDiff())` for clarity.
 """
 function ensure_explicit_ad_backend(sampler)
     # If already a tuple with AD backend, return as-is
@@ -89,8 +89,8 @@ function ensure_explicit_ad_backend(sampler)
     if (occursin("HMC", sampler_type) || occursin("NUTS", sampler_type)) &&
         occursin("AdvancedHMC", sampler_type)
         # Wrap with default AD backend
-        # Note: Users should prefer explicit (sampler, AutoReverseDiff())
-        return (sampler, ADTypes.AutoReverseDiff())
+        # Note: Users should prefer explicit (sampler, AutoForwardDiff())
+        return (sampler, ADTypes.AutoForwardDiff())
     else
         # Return as-is for other samplers
         return sampler
@@ -132,14 +132,14 @@ gibbs = Gibbs(model, sampler_map)
 # Group parameters that should be updated together
 sampler_map = OrderedDict(
     [@varname(α), @varname(β)] => (HMC(0.01, 10), AutoForwardDiff()),
-    @varname(σ) => NUTS(0.65)  # Will use default AutoReverseDiff
+    @varname(σ) => NUTS(0.65)  # Will use default AutoForwardDiff
 )
 gibbs = Gibbs(model, sampler_map)
 
 # Array variables are automatically expanded
 sampler_map = OrderedDict(
     @varname(x) => IndependentMH(),  # Updates all x[1], x[2], ..., x[n]
-    @varname(μ) => HMC(0.01, 10)  # Will use default AutoReverseDiff
+    @varname(μ) => HMC(0.01, 10)  # Will use default AutoForwardDiff
 )
 gibbs = Gibbs(model, sampler_map)
 ```
@@ -184,8 +184,8 @@ single-site Gibbs sampling.
 gibbs = Gibbs(model, IndependentMH())
 
 # Use HMC for all parameters (each updated individually)
-gibbs = Gibbs(model, (HMC(0.01, 10), AutoReverseDiff()))
-# Or let it default to AutoReverseDiff:
+gibbs = Gibbs(model, (HMC(0.01, 10), AutoForwardDiff()))
+# Or let it default to AutoForwardDiff:
 gibbs = Gibbs(model, HMC(0.01, 10))
 ```
 

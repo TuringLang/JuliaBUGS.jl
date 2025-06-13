@@ -532,11 +532,11 @@ using StatsBase: mode
             y_data = randn(N) .+ 2.0
             model = compile(model_def, (; N=N, y=y_data))
 
-            @testset "Default ReverseDiff" begin
-                # Test both ways of specifying ReverseDiff
+            @testset "Default ForwardDiff" begin
+                # Test both ways of specifying AD backends
                 sampler_map1 = OrderedDict(
                     @varname(μ) => (NUTS(0.65), ADTypes.AutoReverseDiff()),
-                    @varname(σ) => NUTS(0.65),  # Default ReverseDiff
+                    @varname(σ) => NUTS(0.65),  # Default ForwardDiff
                 )
                 gibbs1 = Gibbs(model, sampler_map1)
 
