@@ -82,35 +82,6 @@ struct Gibbs{N,S} <: AbstractMCMC.AbstractSampler
 end
 
 """
-    update_sampler_state(model::BUGSModel, sampler, state)
-
-Update the sampler state to reflect parameter changes from other samplers in Gibbs.
-
-When using Gibbs sampling, parameters updated by one sampler affect the log density
-and gradients used by other samplers. This function updates the sampler's internal
-state to reflect these changes.
-
-# Arguments
-- `model`: The current conditioned BUGSModel
-- `sampler`: The sampler whose state needs updating
-- `state`: The current state of the sampler
-
-# Returns
-- Updated sampler state
-
-# Implementation Notes
-This is a generic fallback that returns the state unchanged. Extensions should
-override this method for samplers that maintain internal state (e.g., HMC/NUTS
-with cached gradients).
-```
-"""
-function update_sampler_state(model::BUGSModel, sampler, state)
-    # Default: return state unchanged
-    # Extensions should override this for their sampler types
-    return state
-end
-
-"""
     ensure_explicit_ad_backend(sampler)
 
 Ensure gradient-based samplers have an explicit AD backend specification.
@@ -519,8 +490,22 @@ function AbstractMCMC.step(
 
         # Update the state to reflect changes from other samplers
         if !isnothing(sub_state)
-            # Update state for any sampler type to account for parameter changes
-            sub_state = update_sampler_state(cond_model, sub_sampler, sub_state)
+            # Get updated parameters from the conditioned model
+            θ_new = getparams(cond_model)
+
+            # Create appropriate log density model based on sampler type
+            if sub_sampler isa WithGradient
+                # For gradient-based samplers, wrap with AD
+                logdensitymodel = AbstractMCMC.LogDensityModel(
+                    LogDensityProblemsAD.ADgradient(sub_sampler.ad_backend, cond_model)
+                )
+            else
+                # For non-gradient samplers, use model directly
+                logdensitymodel = AbstractMCMC.LogDensityModel(cond_model)
+            end
+
+            # Update state using AbstractMCMC interface
+            sub_state = AbstractMCMC.setparams!!(logdensitymodel, sub_state, θ_new)
         end
 
         # Take a step with the sampler
