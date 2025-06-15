@@ -139,8 +139,12 @@ jobs:
       
       - uses: julia-actions/julia-buildpkg@v1
 
+      - name: Set thread count
+        id: threads
+        run: echo "count=$(nproc)" >> $GITHUB_OUTPUT
+
       - name: Running parallel_sampling tests
         uses: julia-actions/julia-runtest@v1
         env:
           TEST_GROUP: parallel_sampling
-          JULIA_NUM_THREADS: $(nproc)
+          JULIA_NUM_THREADS: ${{ steps.threads.outputs.count }}
