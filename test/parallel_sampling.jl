@@ -95,6 +95,9 @@
         try
             using Distributed
 
+            # Import @everywhere macro
+            import Distributed: @everywhere
+
             # Add workers if needed
             if nworkers() < 2
                 addprocs(2)
