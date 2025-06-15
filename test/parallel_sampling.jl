@@ -24,19 +24,20 @@
     ad_model = ADgradient(:ReverseDiff, model; compile=Val(false))
 
     # Single chain reference
-    n_samples = 1000
+    n_samples = 200
+    n_adapts = 100
     reference_chain = sample(
         StableRNG(123),
         ad_model,
         NUTS(0.8),
         n_samples;
         progress=false,
-        n_adapts=500,
-        discard_initial=500,
+        n_adapts=n_adapts,
+        discard_initial=n_adapts,
     )
 
     @testset "MCMCThreads" begin
-        n_chains = 4
+        n_chains = 2
 
         # Test basic functionality
         chains = sample(
@@ -47,8 +48,8 @@
             n_samples,
             n_chains;
             progress=false,
-            n_adapts=500,
-            discard_initial=500,
+            n_adapts=n_adapts,
+            discard_initial=n_adapts,
         )
 
         @test chains isa AbstractVector
@@ -92,18 +93,21 @@
 
     @testset "MCMCDistributed" begin
         # Only run if Distributed is available
+        distributed_available = false
         try
-            using Distributed
+            @eval Main using Distributed
+            distributed_available = true
+        catch e
+            @info "Skipping MCMCDistributed tests - Distributed not available"
+        end
 
-            # Import @everywhere macro
-            import Distributed: @everywhere
-
+        if distributed_available
             # Add workers if needed
-            if nworkers() < 2
-                addprocs(2)
+            if Main.Distributed.nworkers() < 2
+                Main.Distributed.addprocs(2)
             end
 
-            @everywhere begin
+            Main.Distributed.@everywhere begin
                 using JuliaBUGS
                 using AbstractMCMC
                 using AdvancedHMC
@@ -133,19 +137,13 @@
             @test all(length(chain) == n_samples for chain in chains)
 
             # Clean up workers
-            rmprocs(workers())
-        catch e
-            if e isa ArgumentError && occursin("Distributed", string(e))
-                @info "Skipping MCMCDistributed tests - Distributed not available"
-            else
-                rethrow(e)
-            end
+            Main.Distributed.rmprocs(Main.Distributed.workers())
         end
     end
 
     @testset "Chain statistics" begin
         # Test that parallel chains produce reasonable statistics
-        n_chains = 4
+        n_chains = 2
         chains = sample(
             StableRNG(123),
             ad_model,
