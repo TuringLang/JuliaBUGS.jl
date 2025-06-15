@@ -1,4 +1,4 @@
-@testset "Parallel and Distributed Sampling" begin
+@testset "Multi-threaded Sampling" begin
     # Use a simple model for testing
     model_def = @bugs begin
         mu ~ dnorm(0, 0.0001)
@@ -89,61 +89,6 @@
 
         # Results should be different with different seeds
         @test !all(chains[1][1] == chains3[1][1])
-    end
-
-    @testset "MCMCDistributed" begin
-        @info "Skipping MCMCDistributed tests - serialization issues with dynamically generated functions"
-        return nothing
-        # Only run if Distributed is available
-        distributed_available = false
-        try
-            @eval using Distributed
-            distributed_available = true
-        catch e
-            @info "Skipping MCMCDistributed tests - Distributed not available"
-        end
-
-        if distributed_available
-            # Import the functions we need
-            @eval import Distributed: nworkers, addprocs, rmprocs, workers
-            # Add workers if needed
-            if nworkers() < 2
-                addprocs(2)
-            end
-
-            @eval Distributed.@everywhere begin
-                using JuliaBUGS
-                using AbstractMCMC
-                using AdvancedHMC
-                using LogDensityProblems
-                using LogDensityProblemsAD
-                using ADTypes
-                using StableRNGs
-                using ReverseDiff
-            end
-
-            n_chains = 2
-
-            # Test basic functionality
-            chains = sample(
-                StableRNG(123),
-                ad_model,
-                NUTS(0.8),
-                MCMCDistributed(),
-                n_samples,
-                n_chains;
-                progress=false,
-                n_adapts=500,
-                discard_initial=500,
-            )
-
-            @test chains isa AbstractVector
-            @test length(chains) == n_chains
-            @test all(length(chain) == n_samples for chain in chains)
-
-            # Clean up workers
-            rmprocs(workers())
-        end
     end
 
     @testset "Chain statistics" begin
