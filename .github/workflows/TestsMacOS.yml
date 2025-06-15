@@ -98,3 +98,42 @@ jobs:
         uses: julia-actions/julia-runtest@v1
         env:
           TEST_GROUP: ${{ matrix.test_group }}
+
+  # Parallel sampling tests with multiple threads on macOS
+  test-parallel:
+    name: Parallel Sampling - Julia ${{ matrix.version }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: false
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1'
+        os: [macOS-latest]
+        arch: [aarch64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+      
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.julia
+            ~/.julia/artifacts
+          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-
+            ${{ runner.os }}-julia-${{ matrix.version }}-
+      
+      - uses: julia-actions/julia-buildpkg@v1
+
+      - name: Running parallel_sampling tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: parallel_sampling
+          JULIA_NUM_THREADS: $(sysctl -n hw.activecpu)
