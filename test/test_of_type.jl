@@ -1,301 +1,200 @@
 using Test
 using JuliaBUGS
 
-@testset "of type system" begin
-    @testset "Basic of construction" begin
-        # Array types
-        of_arr1 = of(Array, 3, 4)
-        @test of_arr1 isa JuliaBUGS.OfArray{Any,2}
-        @test of_arr1.dims == (3, 4)
-        @test of_arr1.element_type == Any
-
-        of_arr2 = of(Array, Float64, 2, 5)
-        @test of_arr2 isa JuliaBUGS.OfArray{Float64,2}
-        @test of_arr2.dims == (2, 5)
-        @test of_arr2.element_type == Float64
-
-        # Real types
-        of_real1 = of(Real)
-        @test of_real1 isa JuliaBUGS.OfReal
-        @test isnothing(of_real1.lower)
-        @test isnothing(of_real1.upper)
-
-        of_real2 = of(Real, 0.0, 1.0)
-        @test of_real2 isa JuliaBUGS.OfReal
-        @test of_real2.lower == 0.0
-        @test of_real2.upper == 1.0
-
-        # Nested of types
-        of_arr3 = of(Array, of(Real), 3, 3)
-        @test of_arr3 isa JuliaBUGS.OfArray{Float64,2}
-        @test of_arr3.dims == (3, 3)
+@testset "OfType Tests" begin
+    @testset "Basic Constructors" begin
+        # Test array specifications
+        @test JuliaBUGS.of(Array, 2, 3) isa JuliaBUGS.OfArray{Float64,2}
+        @test JuliaBUGS.of(Array, Int, 2, 3) isa JuliaBUGS.OfArray{Int,2}
+        
+        # Test real specifications
+        @test JuliaBUGS.of(Real) isa JuliaBUGS.OfReal
+        @test JuliaBUGS.of(Real, 0, 10) isa JuliaBUGS.OfReal
+        
+        # Test named tuple specifications
+        nt_spec = JuliaBUGS.of((a = Real, b = Array))
+        @test nt_spec isa JuliaBUGS.OfNamedTuple
     end
-
-    @testset "Tuple and NamedTuple construction" begin
-        # Tuple
-        x = of(Array, 8)
-        y = of(Array, Float64, 4, 3)
-        w = of(Real, 0.0, 1.0)
-
-        of_tuple = of((x, y, w))
-        @test of_tuple isa JuliaBUGS.OfTuple
-        @test length(of_tuple.types) == 3
-        @test of_tuple.types[1] === x
-        @test of_tuple.types[2] === y
-        @test of_tuple.types[3] === w
-
-        # NamedTuple
-        of_nt = of((x=x, y=y, w=w))
-        @test of_nt isa JuliaBUGS.OfNamedTuple{(:x, :y, :w)}
-        @test length(of_nt.types) == 3
+    
+    @testset "julia_type" begin
+        @test JuliaBUGS.julia_type(JuliaBUGS.of(Array, 2, 3)) == Array{Float64,2}
+        @test JuliaBUGS.julia_type(JuliaBUGS.of(Real)) == Float64
+        @test JuliaBUGS.julia_type(JuliaBUGS.of((a = Real, b = Array))) == NamedTuple{(:a, :b),Tuple{Float64,Array{Float64,1}}}
     end
-
-    @testset "rand() for of types" begin
-        # Array
-        of_arr = of(Array, Float64, 3, 4)
-        arr = rand(of_arr)
+    
+    @testset "rand" begin
+        # Test array generation
+        arr_spec = JuliaBUGS.of(Array, 2, 3)
+        arr = rand(arr_spec)
         @test arr isa Array{Float64,2}
-        @test size(arr) == (3, 4)
-        @test all(0 .<= arr .<= 1)
-
-        # Real without bounds
-        of_real = of(Real)
-        val = rand(of_real)
-        @test val isa Float64
-        @test 0 <= val <= 1
-
-        # Real with bounds
-        of_real_bounded = of(Real, 10.0, 20.0)
-        val_bounded = rand(of_real_bounded)
-        @test val_bounded isa Float64
-        @test 10.0 <= val_bounded <= 20.0
-
-        # Tuple
-        of_tuple = of((of(Array, 2, 2), of(Real)))
-        tuple_val = rand(of_tuple)
-        @test tuple_val isa Tuple
-        @test length(tuple_val) == 2
-        @test tuple_val[1] isa Array{Any,2}
-        @test size(tuple_val[1]) == (2, 2)
-        @test tuple_val[2] isa Float64
-
-        # NamedTuple
-        of_nt = of((x=of(Array, 3), y=of(Real, 0.0, 1.0)))
-        nt_val = rand(of_nt)
-        @test nt_val isa NamedTuple{(:x, :y)}
-        @test nt_val.x isa Array{Any,1}
-        @test length(nt_val.x) == 3
-        @test 0.0 <= nt_val.y <= 1.0
-    end
-
-    @testset "zero() for of types" begin
-        # Array
-        of_arr = of(Array, Float64, 3, 4)
-        arr = zero(of_arr)
-        @test arr isa Array{Float64,2}
-        @test size(arr) == (3, 4)
-        @test all(arr .== 0.0)
-
-        # Real without bounds
-        of_real = of(Real)
-        val = zero(of_real)
-        @test val == 0.0
-
-        # Real with positive lower bound
-        of_real_pos = of(Real, 5.0, 10.0)
-        val_pos = zero(of_real_pos)
-        @test val_pos == 5.0
-
-        # Real with negative upper bound
-        of_real_neg = of(Real, -10.0, -5.0)
-        val_neg = zero(of_real_neg)
-        @test val_neg == -5.0
-
-        # Tuple
-        of_tuple = of((of(Array, 2, 2), of(Real)))
-        tuple_val = zero(of_tuple)
-        @test tuple_val isa Tuple
-        @test all(tuple_val[1] .== 0.0)
-        @test tuple_val[2] == 0.0
-
-        # NamedTuple
-        of_nt = of((x=of(Array, Int, 3), y=of(Real)))
-        nt_val = zero(of_nt)
-        @test nt_val isa NamedTuple{(:x, :y)}
-        @test all(nt_val.x .== 0)
-        @test nt_val.y == 0.0
-    end
-
-    @testset "Callable syntax" begin
-        of_arr = of(Array, 2, 3)
-        @test of_arr() == zero(of_arr)
-
-        of_real = of(Real, 1.0, 2.0)
-        @test of_real() == 1.0
-
-        of_tuple = of((of(Array, 2), of(Real)))
-        @test of_tuple() == zero(of_tuple)
-
-        of_nt = of((x=of(Real), y=of(Array, 3)))
-        @test of_nt() == zero(of_nt)
-    end
-
-    @testset "Type conversion" begin
-        @test JuliaBUGS.julia_type(of(Array, 3, 4)) == Array{Any,2}
-        @test JuliaBUGS.julia_type(of(Array, Float64, 2)) == Array{Float64,1}
-        @test JuliaBUGS.julia_type(of(Real)) == Float64
-
-        of_tuple = of((of(Array, 2), of(Real)))
-        @test JuliaBUGS.julia_type(of_tuple) == Tuple{Array{Any,1},Float64}
-
-        of_nt = of((x=of(Real), y=of(Array, Int, 3, 3)))
-        @test JuliaBUGS.julia_type(of_nt) ==
-            NamedTuple{(:x, :y),Tuple{Float64,Array{Int,2}}}
-    end
-
-    @testset "Show methods" begin
-        @test string(of(Array, 3, 4)) == "of(Array, 3, 4)"
-        @test string(of(Array, Float64, 2)) == "of(Array, Float64, 2)"
-        @test string(of(Real)) == "of(Real)"
-        @test string(of(Real, 0.0, 1.0)) == "of(Real, 0.0, 1.0)"
-        @test string(of((of(Array, 2), of(Real)))) == "of((of(Array, 2), of(Real)))"
-        @test string(of((x=of(Real), y=of(Array, 3)))) == "of((x=of(Real), y=of(Array, 3)))"
-    end
-
-    @testset "Vector and Dict types" begin
-        # Vector construction
-        ofv1 = of(Vector, Float64, 5)
-        @test ofv1 isa JuliaBUGS.OfVector
-        @test ofv1.length == 5
-        @test ofv1.element_type == of(Float64)
-
-        ofv2 = of(Vector, of(Array, 2, 2))
-        @test ofv2 isa JuliaBUGS.OfVector
-        @test isnothing(ofv2.length)
-
-        # Dict construction
-        ofd1 = of(Dict, Symbol, Float64)
-        @test ofd1 isa JuliaBUGS.OfDict{Symbol}
-        @test isnothing(ofd1.keys)
-
-        ofd2 = of(Dict, String, of(Array, 3), ["a", "b", "c"])
-        @test ofd2 isa JuliaBUGS.OfDict{String}
-        @test ofd2.keys == ["a", "b", "c"]
-
-        # rand for Vector and Dict
-        v1 = rand(ofv1)
-        @test v1 isa Vector{Float64}
-        @test length(v1) == 5
-
-        d1 = rand(ofd2)
-        @test d1 isa Dict{String}
-        @test keys(d1) == Set(["a", "b", "c"])
-        @test all(v isa Array && length(v) == 3 for v in values(d1))
-
-        # zero for Vector and Dict
-        v0 = zero(ofv1)
-        @test v0 isa Vector{Float64}
-        @test length(v0) == 5
-        @test all(v0 .== 0.0)
-
-        d0 = zero(ofd2)
-        @test d0 isa Dict{String}
-        @test keys(d0) == Set(["a", "b", "c"])
-        @test all(v isa Array && all(v .== 0.0) for v in values(d0))
-    end
-
-    @testset "Pytree utilities" begin
-        # Test is_leaf
-        @test JuliaBUGS.is_leaf(of(Real))
-        @test JuliaBUGS.is_leaf(of(Array, 3, 4))
-        @test !JuliaBUGS.is_leaf(of((of(Real), of(Array, 2))))
-        @test !JuliaBUGS.is_leaf(of((x=of(Real), y=of(Array, 2))))
-        @test !JuliaBUGS.is_leaf(of(Vector, Float64))
-        @test !JuliaBUGS.is_leaf(of(Dict, Symbol, Float64))
-
-        # Test tree_leaves
-        simple = of(Real)
-        @test JuliaBUGS.tree_leaves(simple) == [simple]
-
-        tuple_type = of((of(Real), of(Array, 2, 3)))
-        leaves = JuliaBUGS.tree_leaves(tuple_type)
-        @test length(leaves) == 2
-        @test leaves[1] isa JuliaBUGS.OfReal
-        @test leaves[2] isa JuliaBUGS.OfArray
-
-        nested = of((
-            x=of(Array, 3),
-            y=of((of(Real, 0, 1), of(Array, Float64, 2, 2))),
-            z=of(Vector, of(Real), 5),
-        ))
-        leaves = JuliaBUGS.tree_leaves(nested)
-        @test length(leaves) == 4  # Array, Real, Array, Real (in Vector)
-
-        # Test tree_map
-        doubled = JuliaBUGS.tree_map(tuple_type) do leaf
-            if leaf isa JuliaBUGS.OfArray
-                return of(Array, leaf.element_type, (leaf.dims .* 2)...)
-            else
-                return leaf
-            end
+        @test size(arr) == (2, 3)
+        
+        # Test bounded real generation
+        bounded_spec = JuliaBUGS.of(Real, 5, 10)
+        for _ in 1:100
+            val = rand(bounded_spec)
+            @test 5 <= val <= 10
         end
-        @test doubled.types[2].dims == (4, 6)
-
-        # Test flatten/unflatten
-        complex_type = of((
-            a=of(Real, 0, 1),
-            b=of(Array, Float64, 3, 3),
-            c=of(Vector, of(Array, 2, 2), 4),
-            d=of(Dict, Symbol, of(Real), [:x, :y, :z]),
-        ))
-
-        leaves, structure = JuliaBUGS.flatten(complex_type)
-        @test length(leaves) == 4  # Real, Array, Array (in Vector), Real (in Dict)
-
-        reconstructed = JuliaBUGS.unflatten(leaves, structure)
-        @test reconstructed isa JuliaBUGS.OfNamedTuple{(:a, :b, :c, :d)}
-        @test reconstructed.types[1] isa JuliaBUGS.OfReal
-        @test reconstructed.types[2] isa JuliaBUGS.OfArray{Float64,2}
-        @test reconstructed.types[3] isa JuliaBUGS.OfVector
-        @test reconstructed.types[4] isa JuliaBUGS.OfDict{Symbol}
-
-        # Test tree_map_with_path
-        paths_and_types = Tuple{Any,DataType}[]
-        JuliaBUGS.tree_map_with_path(complex_type) do path, leaf
-            push!(paths_and_types, (path, typeof(leaf)))
-            return leaf
-        end
-
-        @test length(paths_and_types) == 4
-        @test paths_and_types[1] == ((:a,), JuliaBUGS.OfReal)
-        @test paths_and_types[2] == ((:b,), JuliaBUGS.OfArray{Float64,2})
-        @test paths_and_types[3] == ((:c, :element), JuliaBUGS.OfArray{Any,2})
-        @test paths_and_types[4] == ((:d, :value), JuliaBUGS.OfReal)
+        
+        # Test named tuple generation
+        nt_spec = JuliaBUGS.of((a = Real, b = of(Array, 2)))
+        nt = rand(nt_spec)
+        @test nt isa NamedTuple{(:a, :b)}
+        @test nt.a isa Float64
+        @test nt.b isa Array{Float64,1}
+        @test length(nt.b) == 2
+    end
+    
+    @testset "zero" begin
+        # Test array zeros
+        arr_spec = JuliaBUGS.of(Array, 2, 3)
+        arr = zero(arr_spec)
+        @test all(arr .== 0)
+        @test size(arr) == (2, 3)
+        
+        # Test bounded real zeros
+        @test zero(JuliaBUGS.of(Real, 5, 10)) == 5.0
+        @test zero(JuliaBUGS.of(Real, -10, -5)) == -5.0
+        @test zero(JuliaBUGS.of(Real, -5, 5)) == 0.0
+        
+        # Test named tuple zeros
+        nt_spec = JuliaBUGS.of((a = Real, b = of(Array, 2)))
+        nt = zero(nt_spec)
+        @test nt.a == 0.0
+        @test all(nt.b .== 0)
+    end
+    
+    @testset "validate" begin
+        # Test array validation
+        arr_spec = JuliaBUGS.of(Array, Int, 2, 2)
+        @test JuliaBUGS.validate(arr_spec, [1 2; 3 4]) == [1 2; 3 4]
+        @test_throws ErrorException JuliaBUGS.validate(arr_spec, [1, 2, 3])  # Wrong dimensions
+        
+        # Test bounded real validation
+        bounded_spec = JuliaBUGS.of(Real, 0, 10)
+        @test JuliaBUGS.validate(bounded_spec, 5) == 5.0
+        @test_throws ErrorException JuliaBUGS.validate(bounded_spec, -1)
+        @test_throws ErrorException JuliaBUGS.validate(bounded_spec, 11)
+        
+        # Test named tuple validation
+        nt_spec = JuliaBUGS.of((a = Real, b = of(Array, 2)))
+        @test JuliaBUGS.validate(nt_spec, (a = 1, b = [2, 3])) == (a = 1.0, b = [2.0, 3.0])
     end
 end
 
-@testset "Integration with @model macro" begin
-    # Test with NamedTuple and of annotations
-    JuliaBUGS.@model function test_model1((; x::of(Array, 3), y::of(Real, 0.0, 1.0)), n)
-        for i in 1:n
-            x[i] ~ Normal(0, 1)
-        end
-        return y ~ Uniform(0, 1)
+@testset "Flatten and Unflatten" begin
+    # Test from design doc: hierarchical linear model
+    @testset "Hierarchical Model Example" begin
+        # Define hierarchical model parameters
+        params_spec = of((
+            # Fixed effects
+            mu0 = of(Real),                      # Grand mean
+            beta = of(Array, Float64, 3),        # Regression coefficients (3 covariates)
+            
+            # Variance components
+            tau2 = of(Real, 0, nothing),         # Between-school variance
+            sigma2 = of(Real, 0, nothing),       # Within-school variance
+            
+            # Random effects
+            school_effects = of(Array, 10)       # School-specific intercepts (10 schools)
+        ))
+
+        # Create test values
+        test_params = (
+            mu0 = 75.0,
+            beta = [2.1, -0.5, 1.3],
+            tau2 = 25.0,
+            sigma2 = 100.0,
+            school_effects = randn(10) * 5
+        )
+        
+        # Validate parameters
+        validated_params = JuliaBUGS.validate(params_spec, test_params)
+        
+        # Test flatten
+        flat_params = JuliaBUGS.flatten(params_spec, validated_params)
+        
+        # Check correct number of parameters
+        # 1 (mu0) + 3 (beta) + 1 (tau2) + 1 (sigma2) + 10 (school_effects) = 16
+        @test length(flat_params) == 16
+        
+        # Check values are in correct order
+        @test flat_params[1] == 75.0
+        @test flat_params[2:4] == [2.1, -0.5, 1.3]
+        @test flat_params[5] == 25.0
+        @test flat_params[6] == 100.0
+        @test flat_params[7:16] == vec(test_params.school_effects)
+        
+        # Test unflatten
+        reconstructed = JuliaBUGS.unflatten(params_spec, flat_params)
+        
+        # Check reconstructed values match original
+        @test reconstructed.mu0 == test_params.mu0
+        @test reconstructed.beta == test_params.beta
+        @test reconstructed.tau2 == test_params.tau2
+        @test reconstructed.sigma2 == test_params.sigma2
+        @test reconstructed.school_effects == test_params.school_effects
+        
+        # Test round trip with transformation
+        new_flat = flat_params .* 0.9
+        transformed_params = JuliaBUGS.unflatten(params_spec, new_flat)
+        
+        @test transformed_params.mu0 H test_params.mu0 * 0.9
+        @test transformed_params.beta H test_params.beta .* 0.9
+        @test transformed_params.tau2 H test_params.tau2 * 0.9
+        @test transformed_params.sigma2 H test_params.sigma2 * 0.9
+        @test transformed_params.school_effects H test_params.school_effects .* 0.9
     end
-
-    # Test with regular parameters
-    JuliaBUGS.@model function test_model2((; x, y), n)
-        for i in 1:n
-            x[i] ~ Normal(0, 1)
-        end
-        return y ~ Uniform(0, 1)
+    
+    @testset "Simple cases" begin
+        # Test single array
+        spec1 = of(Array, 2, 3)
+        val1 = rand(2, 3)
+        flat1 = JuliaBUGS.flatten(spec1, val1)
+        @test length(flat1) == 6
+        @test flat1 == vec(val1)
+        reconstructed1 = JuliaBUGS.unflatten(spec1, flat1)
+        @test reconstructed1 == val1
+        
+        # Test single real
+        spec2 = of(Real, 0, 10)
+        val2 = 5.5
+        flat2 = JuliaBUGS.flatten(spec2, val2)
+        @test length(flat2) == 1
+        @test flat2[1] == 5.5
+        reconstructed2 = JuliaBUGS.unflatten(spec2, flat2)
+        @test reconstructed2 == 5.5
+        
+        # Test nested structure
+        spec3 = of((
+            a = of(Real),
+            b = of((
+                x = of(Array, 2),
+                y = of(Real, 0, nothing)
+            ))
+        ))
+        val3 = (a = 1.0, b = (x = [2.0, 3.0], y = 4.0))
+        flat3 = JuliaBUGS.flatten(spec3, val3)
+        @test length(flat3) == 4
+        @test flat3 == [1.0, 2.0, 3.0, 4.0]
+        reconstructed3 = JuliaBUGS.unflatten(spec3, flat3)
+        @test reconstructed3.a == 1.0
+        @test reconstructed3.b.x == [2.0, 3.0]
+        @test reconstructed3.b.y == 4.0
     end
-
-    # Test model instantiation
-    params = of((x=of(Array, 3), y=of(Real, 0.0, 1.0)))
-    model1 = test_model1(rand(params), 3)
-    @test model1 isa JuliaBUGS.BUGSModel
-
-    model2 = test_model2((x=randn(3), y=0.5), 3)
-    @test model2 isa JuliaBUGS.BUGSModel
+    
+    @testset "Error cases" begin
+        spec = of((a = of(Array, 2), b = of(Real)))
+        
+        # Not enough values
+        @test_throws ErrorException JuliaBUGS.unflatten(spec, [1.0])
+        
+        # Too many values
+        @test_throws ErrorException JuliaBUGS.unflatten(spec, [1.0, 2.0, 3.0, 4.0])
+        
+        # Bounds violation
+        spec_bounded = of(Real, 0, 10)
+        @test_throws ErrorException JuliaBUGS.unflatten(spec_bounded, [-1.0])
+        @test_throws ErrorException JuliaBUGS.unflatten(spec_bounded, [11.0])
+    end
 end
