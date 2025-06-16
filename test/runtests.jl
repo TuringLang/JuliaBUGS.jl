@@ -59,6 +59,7 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     "inference_chains" => () -> include("ext/JuliaBUGSMCMCChainsExt.jl"),
     "inference_mh" => () -> include("independent_mh.jl"),
     "gibbs" => () -> include("gibbs.jl"),
+    "parallel_sampling" => () -> include("parallel_sampling.jl"),
     "experimental" => () -> 1, # TODO: revive this
     # () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
 )
