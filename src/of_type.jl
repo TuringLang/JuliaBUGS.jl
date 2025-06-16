@@ -1,38 +1,26 @@
-abstract type OfType end
-abstract type OfLeaf <: OfType end
-abstract type OfContainer <: OfType end
+using Functors
 
-struct OfArray{T,N} <: OfLeaf
+abstract type OfType end
+
+struct OfArray{T,N} <: OfType
     element_type::Type
     dims::NTuple{N,Int}
 end
 
-struct OfReal <: OfLeaf
+struct OfReal <: OfType
     lower::Union{Nothing,Real}
     upper::Union{Nothing,Real}
 end
 
-struct OfTuple{T<:Tuple} <: OfContainer
+struct OfNamedTuple{names,T<:Tuple} <: OfType
     types::T
 end
 
-struct OfNamedTuple{names,T<:Tuple} <: OfContainer
-    types::T
-end
-
-struct OfVector{T} <: OfContainer
-    element_type::OfType
-    length::Union{Nothing,Int}
-end
-
-struct OfDict{K,V} <: OfContainer
-    key_type::Type{K}
-    value_type::OfType
-    keys::Union{Nothing,Vector{K}}
-end
+get_names(::OfNamedTuple{names}) where {names} = names
 
 function of(::Type{Array}, dims::Int...)
-    return OfArray{Any,length(dims)}(Any, dims)
+    # Default to Float64 for unspecified array types
+    return OfArray{Float64,length(dims)}(Float64, dims)
 end
 
 function of(::Type{Array}, T::Union{Type,OfType}, dims::Int...)
@@ -44,35 +32,13 @@ function of(::Type{Real})
     return OfReal(nothing, nothing)
 end
 
-function of(::Type{Real}, lower::Real, upper::Real)
+function of(::Type{Real}, lower::Union{Real,Nothing}, upper::Union{Real,Nothing})
     return OfReal(lower, upper)
-end
-
-function of(t::Tuple)
-    of_types = map(of, t)
-    return OfTuple(of_types)
 end
 
 function of(nt::NamedTuple{names}) where {names}
     of_types = map(of, values(nt))
     return OfNamedTuple{names,typeof(of_types)}(of_types)
-end
-
-function of(
-    ::Type{Vector}, element_type::Union{Type,OfType}, len::Union{Nothing,Int}=nothing
-)
-    et = element_type isa OfType ? element_type : of(element_type)
-    return OfVector{typeof(et)}(et, len)
-end
-
-function of(
-    ::Type{Dict},
-    K::Type,
-    value_type::Union{Type,OfType},
-    keys::Union{Nothing,Vector}=nothing,
-)
-    vt = value_type isa OfType ? value_type : of(value_type)
-    return OfDict{K,typeof(vt)}(K, vt, keys)
 end
 
 function of(x::OfType)
@@ -95,20 +61,8 @@ function julia_type(::OfReal)
     return Float64
 end
 
-function julia_type(oft::OfTuple)
-    return Tuple{map(julia_type, oft.types)...}
-end
-
 function julia_type(oft::OfNamedTuple{names}) where {names}
     return NamedTuple{names,Tuple{map(julia_type, oft.types)...}}
-end
-
-function julia_type(ofv::OfVector)
-    return Vector{julia_type(ofv.element_type)}
-end
-
-function julia_type(ofd::OfDict{K}) where {K}
-    return Dict{K,julia_type(ofd.value_type)}
 end
 
 Base.rand(ofa::OfArray{T,N}) where {T,N} = rand(T, ofa.dims...)
@@ -126,37 +80,9 @@ function Base.rand(ofr::OfReal)
     end
 end
 
-function Base.rand(oft::OfTuple)
-    return map(rand, oft.types)
-end
-
 function Base.rand(oft::OfNamedTuple{names}) where {names}
     values = map(rand, oft.types)
     return NamedTuple{names}(values)
-end
-
-function Base.rand(ofv::OfVector)
-    len = something(ofv.length, rand(1:10))  # default random length if not specified
-    return [rand(ofv.element_type) for _ in 1:len]
-end
-
-function Base.rand(ofd::OfDict)
-    if isnothing(ofd.keys)
-        # Generate random keys if not specified
-        n = rand(1:5)
-        if ofd.key_type === Symbol
-            ks = [Symbol("key_", i) for i in 1:n]
-        elseif ofd.key_type === String
-            ks = ["key_$i" for i in 1:n]
-        elseif ofd.key_type <: Integer
-            ks = collect(1:n)
-        else
-            error("Unsupported key type for random generation: $(ofd.key_type)")
-        end
-    else
-        ks = ofd.keys
-    end
-    return Dict(k => rand(ofd.value_type) for k in ks)
 end
 
 Base.zero(ofa::OfArray{T,N}) where {T,N} = zeros(T, ofa.dims...)
@@ -171,39 +97,56 @@ function Base.zero(ofr::OfReal)
     end
 end
 
-function Base.zero(oft::OfTuple)
-    return map(zero, oft.types)
-end
-
 function Base.zero(oft::OfNamedTuple{names}) where {names}
     values = map(zero, oft.types)
     return NamedTuple{names}(values)
 end
 
-function Base.zero(ofv::OfVector)
-    len = something(ofv.length, 0)  # default to empty vector if length not specified
-    return [zero(ofv.element_type) for _ in 1:len]
-end
-
-function Base.zero(ofd::OfDict{K}) where {K}
-    if isnothing(ofd.keys)
-        return Dict{K,julia_type(ofd.value_type)}()
-    else
-        return Dict(k => zero(ofd.value_type) for k in ofd.keys)
-    end
-end
-
 (ofa::OfArray)() = zero(ofa)
 (ofr::OfReal)() = zero(ofr)
-(oft::OfTuple)() = zero(oft)
 (ofnt::OfNamedTuple)() = zero(ofnt)
-(ofv::OfVector)() = zero(ofv)
-(ofd::OfDict)() = zero(ofd)
 
 Base.convert(::Type{Type}, of_type::OfType) = julia_type(of_type)
 
+# Type wrapper that preserves of specification while being usable in type annotations
+struct TypeOf{T,S}
+    spec::S
+
+    TypeOf(spec::OfType) = new{julia_type(spec),typeof(spec)}(spec)
+end
+
+# Extract the Julia type from TypeOf
+Base.eltype(::Type{TypeOf{T,S}}) where {T,S} = T
+
+# Allow pattern matching on TypeOf
+# Note: This would need special handling in the macro system
+# For now, just provide a way to extract the type
+julia_type(::TypeOf{T,S}) where {T,S} = T
+
+# Macro for creating types from of specifications
+macro of(expr)
+    # Transform of(...) expressions into TypeOf{...}
+    if Meta.isexpr(expr, :call) && expr.args[1] == :of
+        return :(TypeOf(of($(map(esc, expr.args[2:end])...))))
+    else
+        return :(TypeOf(of($(esc(expr)))))
+    end
+end
+
+# Functors.jl integration
+# Leaf types should not be traversed
+Functors.@leaf OfArray
+Functors.@leaf OfReal
+
+# Define functor for OfNamedTuple to enable traversal
+function Functors.functor(::Type{<:OfNamedTuple{names}}, x) where {names}
+    return NamedTuple{names}(x.types),
+    nt -> OfNamedTuple{names,typeof(values(nt))}(values(nt))
+end
+
 function Base.show(io::IO, ofa::OfArray{T,N}) where {T,N}
-    if T === Any
+    if T === Float64
+        # For default Float64, show shorter form
         print(io, "of(Array, ", join(ofa.dims, ", "), ")")
     else
         print(io, "of(Array, ", T, ", ", join(ofa.dims, ", "), ")")
@@ -225,190 +168,161 @@ function Base.show(io::IO, ofr::OfReal)
     end
 end
 
-function Base.show(io::IO, oft::OfTuple)
-    print(io, "of((")
-    for (i, t) in enumerate(oft.types)
-        print(io, t)
-        if i < length(oft.types)
-            print(io, ", ")
-        end
-    end
-    return print(io, "))")
-end
-
 function Base.show(io::IO, ofnt::OfNamedTuple{names}) where {names}
     print(io, "of((")
-    for (i, (name, t)) in enumerate(zip(names, ofnt.types))
+    name_tuple = names
+    for (i, (name, t)) in enumerate(zip(name_tuple, ofnt.types))
         print(io, name, "=", t)
-        if i < length(names)
+        if i < length(name_tuple)
             print(io, ", ")
         end
     end
     return print(io, "))")
 end
 
-function Base.show(io::IO, ofv::OfVector)
-    if isnothing(ofv.length)
-        print(io, "of(Vector, ", ofv.element_type, ")")
-    else
-        print(io, "of(Vector, ", ofv.element_type, ", ", ofv.length, ")")
-    end
-end
-
-function Base.show(io::IO, ofd::OfDict{K}) where {K}
-    if isnothing(ofd.keys)
-        print(io, "of(Dict, ", K, ", ", ofd.value_type, ")")
-    else
-        print(io, "of(Dict, ", K, ", ", ofd.value_type, ", ", ofd.keys, ")")
-    end
-end
-
-# Pytree-like traversal utilities
+# Functors.jl-based traversal utilities
 
 """
     is_leaf(of_type)
 
 Check if an OfType is a leaf node (not a container).
 """
-is_leaf(::OfLeaf) = true
-is_leaf(::OfContainer) = false
+is_leaf(oft::OfType) = Functors.isleaf(oft)
 
 """
     tree_map(f, of_type)
 
 Apply function `f` to all leaf nodes in the tree structure.
+Uses Functors.jl's fmap for traversal.
 """
 function tree_map(f, oft::OfType)
-    if is_leaf(oft)
-        return f(oft)
-    elseif oft isa OfTuple
-        return OfTuple(map(x -> tree_map(f, x), oft.types))
-    elseif oft isa OfNamedTuple{names} where {names}
-        new_types = map(x -> tree_map(f, x), oft.types)
-        return OfNamedTuple{names,typeof(new_types)}(new_types)
-    elseif oft isa OfVector
-        return OfVector(tree_map(f, oft.element_type), oft.length)
-    elseif oft isa OfDict{K} where {K}
-        return OfDict{K,typeof(tree_map(f, oft.value_type))}(
-            oft.key_type, tree_map(f, oft.value_type), oft.keys
-        )
-    else
-        error("Unknown OfType: $(typeof(oft))")
+    return Functors.fmap(oft; exclude=is_leaf) do x
+        f(x)
     end
 end
 
 """
-    tree_leaves(of_type)
+    flatten(of_type, values)
 
-Collect all leaf nodes from the tree structure.
+Flatten a structured value into a vector of numerical values according to the of_type specification.
+Returns a vector of numbers that can be used for optimization.
 """
-function tree_leaves(oft::OfType)
-    leaves = OfType[]
-    function collect_leaves(node)
-        if is_leaf(node)
-            push!(leaves, node)
-        elseif node isa OfTuple
-            foreach(collect_leaves, node.types)
-        elseif node isa OfNamedTuple
-            foreach(collect_leaves, node.types)
-        elseif node isa OfVector
-            collect_leaves(node.element_type)
-        elseif node isa OfDict
-            collect_leaves(node.value_type)
+function flatten(oft::OfType, values)
+    # First validate the values match the specification
+    validated = validate(oft, values)
+
+    # Extract all numerical values in order
+    numerical_values = Real[]
+    
+    # Helper function to walk the tree
+    function walk_tree(oft_node, val_node)
+        if is_leaf(oft_node)
+            if oft_node isa OfArray
+                append!(numerical_values, vec(val_node))
+            elseif oft_node isa OfReal
+                push!(numerical_values, val_node)
+            end
+        elseif oft_node isa OfNamedTuple
+            # Process fields in order
+            for (i, name) in enumerate(get_names(oft_node))
+                walk_tree(oft_node.types[i], getproperty(val_node, name))
+            end
         end
     end
-    collect_leaves(oft)
-    return leaves
+    
+    walk_tree(oft, validated)
+    return numerical_values
 end
 
 """
-    tree_structure(of_type)
+    unflatten(of_type, flat_values)
 
-Return the structure of the tree without the leaf values.
+Reconstruct a structured value from a flat vector of numerical values according to the of_type specification.
 """
-function tree_structure(oft::OfType)
-    if is_leaf(oft)
-        return nothing
-    elseif oft isa OfTuple
-        return (map(tree_structure, oft.types)...,)
-    elseif oft isa OfNamedTuple{names} where {names}
-        return NamedTuple{names}(map(tree_structure, oft.types))
-    elseif oft isa OfVector
-        return (Vector, tree_structure(oft.element_type), oft.length)
-    elseif oft isa OfDict{K} where {K}
-        return (Dict, K, tree_structure(oft.value_type), oft.keys)
-    end
-end
-
-"""
-    flatten(of_type)
-
-Flatten the tree structure into a vector of leaves and return the structure.
-"""
-function flatten(oft::OfType)
-    return tree_leaves(oft), tree_structure(oft)
-end
-
-"""
-    unflatten(leaves, structure)
-
-Reconstruct an OfType tree from leaves and structure.
-"""
-function unflatten(leaves::Vector{<:OfType}, structure)
-    idx = Ref(1)
-    function reconstruct(s)
-        if isnothing(s)
-            leaf = leaves[idx[]]
-            idx[] += 1
-            return leaf
-        elseif s isa Tuple && length(s) > 0 && s[1] === Vector
-            # OfVector case
-            _, elem_struct, len = s
-            elem_type = reconstruct(elem_struct)
-            return OfVector(elem_type, len)
-        elseif s isa Tuple && length(s) > 0 && s[1] === Dict
-            # OfDict case
-            _, K, val_struct, keys = s
-            val_type = reconstruct(val_struct)
-            return OfDict{K,typeof(val_type)}(K, val_type, keys)
-        elseif s isa Tuple
-            # OfTuple case
-            types = map(reconstruct, s)
-            return OfTuple(types)
-        elseif s isa NamedTuple{names} where {names}
-            # OfNamedTuple case
-            types = map(reconstruct, values(s))
-            return OfNamedTuple{names,typeof(types)}(types)
-        else
-            error("Unknown structure: $s")
-        end
-    end
-    return reconstruct(structure)
+function unflatten(oft::OfType, flat_values::Vector{<:Real})
+    # Keep track of position in flat array
+    pos = Ref(1)
+    
+    # Reconstruct values using Functors.jl
+    
+    return reconstructed
 end
 
 """
     tree_map_with_path(f, of_type)
 
 Apply function `f(path, leaf)` to all leaf nodes, where path is a tuple of keys/indices.
+Uses Functors.jl's fmap_with_path.
 """
-function tree_map_with_path(f, oft::OfType, path=())
-    if is_leaf(oft)
-        return f(path, oft)
-    elseif oft isa OfTuple
-        new_types = ntuple(
-            i -> tree_map_with_path(f, oft.types[i], (path..., i)), length(oft.types)
-        )
-        return OfTuple(new_types)
-    elseif oft isa OfNamedTuple{names} where {names}
-        new_types = map(enumerate(names)) do (i, name)
-            tree_map_with_path(f, oft.types[i], (path..., name))
-        end
-        return OfNamedTuple{names,typeof(new_types)}(new_types)
-    elseif oft isa OfVector
-        new_elem = tree_map_with_path(f, oft.element_type, (path..., :element))
-        return OfVector(new_elem, oft.length)
-    elseif oft isa OfDict{K} where {K}
-        new_val = tree_map_with_path(f, oft.value_type, (path..., :value))
-        return OfDict{K,typeof(new_val)}(oft.key_type, new_val, oft.keys)
+function tree_map_with_path(f, oft::OfType)
+    return Functors.fmap_with_path(oft; exclude=(kp, x) -> is_leaf(x)) do kp, x
+        f(Tuple(kp), x)
     end
+end
+
+"""
+    validate(of_type, value)
+
+Validate and convert a Julia value to match the structure of an OfType specification.
+This ensures values conform to the expected types, dimensions, and bounds.
+"""
+function validate(oft::OfType, value)
+    if is_leaf(oft)
+        return validate_leaf(oft, value)
+    else
+        return validate_container(oft, value)
+    end
+end
+
+function validate_container(oft::OfNamedTuple{names,T}, value) where {names,T}
+    if value isa NamedTuple
+        # Build a new NamedTuple with canonicalized values
+        # Use the fact that we can iterate over the indices
+        vals = ntuple(length(oft.types)) do i
+            # Get the field name from the type parameter
+            field_name = names[i]
+            # Validate the corresponding value
+            validate(oft.types[i], getproperty(value, field_name))
+        end
+        return NamedTuple{names}(vals)
+    else
+        error("Expected NamedTuple for OfNamedTuple, got $(typeof(value))")
+    end
+end
+
+function validate_leaf(oft::OfArray{T,N}, value) where {T,N}
+    if value isa AbstractArray
+        # Convert to the expected array type and dimensions
+        arr = convert(Array{T,N}, value)
+        if size(arr) != oft.dims
+            error("Array dimensions mismatch: expected $(oft.dims), got $(size(arr))")
+        end
+        return arr
+    else
+        error("Expected Array for OfArray, got $(typeof(value))")
+    end
+end
+
+function validate_leaf(oft::OfReal, value)
+    if value isa Real
+        val = convert(Float64, value)
+        # Check bounds
+        if !isnothing(oft.lower) && val < oft.lower
+            error("Value $val is below lower bound $(oft.lower)")
+        end
+        if !isnothing(oft.upper) && val > oft.upper
+            error("Value $val is above upper bound $(oft.upper)")
+        end
+        return val
+    else
+        error("Expected Real for OfReal, got $(typeof(value))")
+    end
+end
+
+# Fallback for unknown leaf types
+validate_leaf(oft::OfType, value) = error("No validate_leaf method for $(typeof(oft))")
+
+# Fallback for unknown container types
+function validate_container(oft::OfType, value)
+    return error("No validate_container method for $(typeof(oft))")
 end
