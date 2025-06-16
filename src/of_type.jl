@@ -108,6 +108,9 @@ end
 
 Base.convert(::Type{Type}, of_type::OfType) = julia_type(of_type)
 
+# Since OfType cannot be a subtype of Type, we need macros to transform the syntax
+# The existing TypeOf wrapper approach is the right solution
+
 # Type wrapper that preserves of specification while being usable in type annotations
 struct TypeOf{T,S}
     spec::S
@@ -125,8 +128,75 @@ julia_type(::TypeOf{T,S}) where {T,S} = T
 
 # Macro for creating types from of specifications
 macro of(expr)
-    # Transform of(...) expressions into TypeOf{...}
-    if Meta.isexpr(expr, :call) && expr.args[1] == :of
+    # Check if it's a tuple expression (for named tuple support)
+    if Meta.isexpr(expr, :tuple) && length(expr.args) > 0
+        # Check if all elements are assignments (named tuple pattern)
+        all_assignments = all(arg -> Meta.isexpr(arg, :(=)), expr.args)
+
+        if all_assignments
+            # This is a named tuple like (a=..., b=...)
+            field_names = Symbol[]
+            field_types = []
+
+            for field in expr.args
+                if Meta.isexpr(field, :(=)) && length(field.args) == 2
+                    name = field.args[1]
+                    value_expr = field.args[2]
+
+                    # Handle of() expressions
+                    if Meta.isexpr(value_expr, :call) && value_expr.args[1] == :of
+                        # Create the of specification and extract its Julia type
+                        of_spec = esc(value_expr)
+                        push!(field_types, :($julia_type($of_spec)))
+                    else
+                        # For non-of expressions, just use them directly
+                        push!(field_types, esc(value_expr))
+                    end
+                    push!(field_names, name)
+                else
+                    error("Invalid field in named tuple: $field")
+                end
+            end
+
+            # Return the NamedTuple type
+            return :(NamedTuple{$(Tuple(field_names)),Tuple{$(field_types...)}})
+        else
+            # Check for parameters syntax (;a=..., b=...)
+            if Meta.isexpr(expr.args[1], :parameters)
+                # This is the (;a=..., b=...) syntax
+                fields = expr.args[1].args
+                field_names = Symbol[]
+                field_types = []
+
+                for field in fields
+                    if Meta.isexpr(field, :(=)) && length(field.args) == 2
+                        name = field.args[1]
+                        value_expr = field.args[2]
+
+                        # Handle of() expressions
+                        if Meta.isexpr(value_expr, :call) && value_expr.args[1] == :of
+                            # Create the of specification and extract its Julia type
+                            of_spec = esc(value_expr)
+                            push!(field_types, :($julia_type($of_spec)))
+                        else
+                            # For non-of expressions, just use them directly
+                            push!(field_types, esc(value_expr))
+                        end
+                        push!(field_names, name)
+                    else
+                        error("Invalid field in named tuple: $field")
+                    end
+                end
+
+                # Return the NamedTuple type
+                return :(NamedTuple{$(Tuple(field_names)),Tuple{$(field_types...)}})
+            else
+                # Regular tuple, not supported for now
+                error("@of with regular tuples is not supported. Use named tuples instead.")
+            end
+        end
+    elseif Meta.isexpr(expr, :call) && expr.args[1] == :of
+        # Regular of(...) call
         return :(TypeOf(of($(map(esc, expr.args[2:end])...))))
     else
         return :(TypeOf(of($(esc(expr)))))
@@ -213,7 +283,7 @@ function flatten(oft::OfType, values)
 
     # Extract all numerical values in order
     numerical_values = Real[]
-    
+
     # Helper function to walk the tree
     function walk_tree(oft_node, val_node)
         if is_leaf(oft_node)
@@ -229,7 +299,7 @@ function flatten(oft::OfType, values)
             end
         end
     end
-    
+
     walk_tree(oft, validated)
     return numerical_values
 end
@@ -242,9 +312,60 @@ Reconstruct a structured value from a flat vector of numerical values according 
 function unflatten(oft::OfType, flat_values::Vector{<:Real})
     # Keep track of position in flat array
     pos = Ref(1)
-    
-    # Reconstruct values using Functors.jl
-    
+
+    # Helper function to reconstruct from flat array
+    function reconstruct_node(oft_node)
+        if is_leaf(oft_node)
+            if oft_node isa OfArray
+                # Calculate number of elements needed
+                n_elements = prod(oft_node.dims)
+                if pos[] + n_elements - 1 > length(flat_values)
+                    error(
+                        "Not enough values in flat array: need $(pos[] + n_elements - 1), have $(length(flat_values))",
+                    )
+                end
+                # Extract values and reshape
+                values = flat_values[pos[]:(pos[] + n_elements - 1)]
+                pos[] += n_elements
+                return reshape(values, oft_node.dims)
+            elseif oft_node isa OfReal
+                if pos[] > length(flat_values)
+                    error(
+                        "Not enough values in flat array: need $(pos[]), have $(length(flat_values))",
+                    )
+                end
+                val = flat_values[pos[]]
+                pos[] += 1
+                # Apply bounds validation
+                if !isnothing(oft_node.lower) && val < oft_node.lower
+                    error("Value $val is below lower bound $(oft_node.lower)")
+                end
+                if !isnothing(oft_node.upper) && val > oft_node.upper
+                    error("Value $val is above upper bound $(oft_node.upper)")
+                end
+                return val
+            else
+                error("Unknown leaf type: $(typeof(oft_node))")
+            end
+        elseif oft_node isa OfNamedTuple
+            # Reconstruct each field
+            values = map(reconstruct_node, oft_node.types)
+            names = get_names(oft_node)
+            return NamedTuple{names}(values)
+        else
+            error("Unknown node type: $(typeof(oft_node))")
+        end
+    end
+
+    reconstructed = reconstruct_node(oft)
+
+    # Check that we used all values
+    if pos[] - 1 != length(flat_values)
+        error(
+            "Unused values in flat array: used $(pos[] - 1), provided $(length(flat_values))",
+        )
+    end
+
     return reconstructed
 end
 

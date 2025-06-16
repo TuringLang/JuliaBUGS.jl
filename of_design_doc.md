@@ -93,7 +93,7 @@ user_input = (
 validated_params = validate(params_spec, user_input)
 
 # Flatten/unflatten for optimization
-flat_params = flatten(params_spec, params)  # Extract numerical vector
+flat_params = flatten(params_spec, validated_params)  # Extract numerical vector
 println("Flattened parameters: ", length(flat_params), " values")
 
 new_flat = flat_params .* 0.9  # Example transformation
@@ -133,5 +133,26 @@ SchoolParams = @of((
     end
 end
 
-# TODO: it should also support directly use `of` in type annotation
+# Direct use of `of` in function type annotations
+
+## With @NamedTuple macro for type definition
+NTparameters = @NamedTuple{x::of(Array, 8), y::of(Array, of(Real), 4, 3), w::of(Real, 0, 1)}
+
+@model function demo(
+    (;x, y, w)::NTparameters,
+    constants1, 
+    constants2
+) 
+    # function body
+end
+
+## Direct destructuring with of() annotations (requires @model macro transformation)
+@model function demo(
+    (;x::of(Array, 8), y::of(Array, of(Real), 4, 3), w::of(Real, 0, 1)),
+    constants1, 
+    constants2
+)
+    # function body
+end
+
 ```
