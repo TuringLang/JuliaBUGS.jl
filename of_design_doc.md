@@ -22,7 +22,7 @@ The `of` function returns **types** (not instances) with specifications encoded 
 
 ### 2. Type Parameter Encoding
 
-The system encodes runtime values into type parameters:
+The system encodes extra useful information into type parameters:
 - **Dimensions**: Stored as tuple type parameters (e.g., `(3, 4)` for a 3×4 matrix)
 - **Bounds**: Encoded using `Val{x}` for numeric bounds or `Nothing` for unbounded
 - **Field names**: Stored as tuple of symbols in `OfNamedTuple`
@@ -32,18 +32,15 @@ The system encodes runtime values into type parameters:
 
 Since `of` returns types, they can be used directly in Julia's type system:
 ```julia
-# Direct in type annotations
-function process(x::OfReal{Nothing,Val{1.0}})
+function process(x::of(Real,nothing,1.0))
     # x is guaranteed to be a Float64 with upper bound 1.0
 end
 
-# In parametric types
-struct MyModel{T<:OfArray{Float64,2,(10,10)}}
+struct MyModel{T<:of(Array,Float64,10,10)}
     weights::T
 end
 
-# Type aliases
-const PositiveReal = OfReal{Val{0},Nothing}
+const PositiveReal = of(Real,0,nothing)
 ```
 
 ### 4. Operations on Types
