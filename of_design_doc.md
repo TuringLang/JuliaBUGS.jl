@@ -28,26 +28,8 @@ The system encodes extra useful information into type parameters:
 - **Field names**: Stored as tuple of symbols in `OfNamedTuple`
 - **Element types**: Preserved as type parameters for arrays and nested structures
 
-### 3. Direct Type Usage
+### 3. Operations on Types
 
-Since `of` returns types, they can be used directly in Julia's type system:
-```julia
-function process(x::of(Real,nothing,1.0))
-    # x is guaranteed to be a Float64 with upper bound 1.0
-end
-
-struct MyModel{T<:of(Array,Float64,10,10)}
-    weights::T
-end
-
-const PositiveReal = of(Real,0,nothing)
-```
-
-### 4. Operations on Types
-
-The system provides operations that work with types rather than instances:
-
-#### Type-level operations:
 - `rand(T::Type{<:OfType})` - Generate random values matching the type specification
 - `zero(T::Type{<:OfType})` - Generate zero/default values 
 - `T(value)` where `T<:OfType` - Constructor syntax to validate and convert values to match specifications
@@ -55,12 +37,10 @@ The system provides operations that work with types rather than instances:
 - `size(T::Type{<:OfType})` - Get dimensions/shape of the type
 - `length(T::Type{<:OfType})` - Get total number of elements when flattened
 
-#### Structure manipulation:
 - `flatten(T::Type{<:OfType}, values)` - Convert structured values to flat vector
 - `unflatten(T::Type{<:OfType}, vec)` - Reconstruct structured values from flat vector
-- Tree traversal using type introspection
 
-### 5. Symbolic Dimensions with Constants
+### 4. Symbolic Dimensions with Constants
 
 For cases where dimensions need to be specified at runtime:
 
@@ -84,7 +64,7 @@ flat = flatten(ConcreteType, data)
 reconstructed = unflatten(ConcreteType, flat)
 ```
 
-### 6. Limitations and Concerns
+### 5. Limitations and Concerns
 
 **Runtime bounds limitation**: The current design encodes bounds as type parameters using `Val`, which requires bounds to be compile-time constants. This means bounds cannot be determined at runtime from data or computed values. This is a fundamental limitation of the type-based approach, as type parameters in Julia must be immutable and known at compile time.
 
