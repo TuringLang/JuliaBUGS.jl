@@ -33,17 +33,17 @@ The system encodes runtime values into type parameters:
 Since `of` returns types, they can be used directly in Julia's type system:
 ```julia
 # Direct in type annotations
-function process(x::OfReal{Nothing, Val{1.0}})
+function process(x::OfReal{Nothing,Val{1.0}})
     # x is guaranteed to be a Float64 with upper bound 1.0
 end
 
 # In parametric types
-struct MyModel{T<:OfArray{Float64, 2, (10, 10)}}
+struct MyModel{T<:OfArray{Float64,2,(10,10)}}
     weights::T
 end
 
 # Type aliases
-const PositiveReal = OfReal{Val{0}, Nothing}
+const PositiveReal = OfReal{Val{0},Nothing}
 ```
 
 ### 4. Operations on Types
@@ -55,7 +55,7 @@ The system provides operations that work with types rather than instances:
 - `zero(T::Type{<:OfType})` - Generate zero/default values 
 - `T(value)` where `T<:OfType` - Constructor syntax to validate and convert values to match specifications
 - `julia_type(T::Type{<:OfType})` - Extract the corresponding Julia type
-- `dimension(T::Type{<:OfType})` - Get dimensions/shape of the type
+- `size(T::Type{<:OfType})` - Get dimensions/shape of the type
 - `length(T::Type{<:OfType})` - Get total number of elements when flattened
 
 #### Structure manipulation:
@@ -63,7 +63,31 @@ The system provides operations that work with types rather than instances:
 - `unflatten(T::Type{<:OfType}, vec)` - Reconstruct structured values from flat vector
 - Tree traversal using type introspection
 
-### 5. Limitations and Concerns
+### 5. Symbolic Dimensions with Constants
+
+For cases where dimensions need to be specified at runtime:
+
+```julia
+# Define type with symbolic dimensions
+MatrixType = of((
+    rows=of(Constant),
+    cols=of(Constant),
+    data=of(Array, :rows, :cols),
+))
+
+rand(MatrixType; rows=3, cols=4)
+zero(MatrixType; rows=10, cols=5)
+
+rand(MatrixType; rows=3) # this would fail because some `Constant`s are not specified
+
+# Create concrete type for use with flatten/unflatten
+ConcreteType = of(MatrixType; rows=3, cols=4)
+data = (data=rand(3, 4),)
+flat = flatten(ConcreteType, data)
+reconstructed = unflatten(ConcreteType, flat)
+```
+
+### 6. Limitations and Concerns
 
 **Runtime bounds limitation**: The current design encodes bounds as type parameters using `Val`, which requires bounds to be compile-time constants. This means bounds cannot be determined at runtime from data or computed values. This is a fundamental limitation of the type-based approach, as type parameters in Julia must be immutable and known at compile time.
 
@@ -95,64 +119,56 @@ Where:
 **Implementation with `of` type system:**
 
 ```julia
-# Define hierarchical model parameter types
 ParamsType = of((
-    # Fixed effects
-    mu0 = of(Real),                      # Grand mean
-    beta = of(Array, Float64, 3),        # Regression coefficients (3 covariates)
-    
-    # Variance components
-    tau2 = of(Real, 0, nothing),         # Between-school variance (≥ 0)
-    sigma2 = of(Real, 0, nothing),       # Within-school variance (≥ 0)
-    
-    # Random effects
-    school_effects = of(Array, 10)       # School-specific intercepts (10 schools)
+    mu0=of(Real),
+    beta=of(Array, Float64, 3),
+    tau2=of(Real, 0, nothing),
+    sigma2=of(Real, 0, nothing),
+    school_effects=of(Array, 10),
+    y=of(Array, 100),
 ))
 
-# Runtime operations using types
-params = rand(ParamsType)               # Generate random initial values
-params_zero = zero(ParamsType)          # Zero initialization
+params_rand = rand(ParamsType)
+params_zero = zero(ParamsType)
+
+julia_type(ParamsType)
 
 user_input = (
-    mu0 = 75.0,
-    beta = [2.1, -0.5, 1.3],
-    tau2 = 25.0,
-    sigma2 = 100.0,
-    school_effects = randn(10) * 5
+    mu0=75.0,
+    beta=[2.1, -0.5, 1.3],
+    tau2=25.0,
+    sigma2=100.0,
+    school_effects=randn(10) * 5,
+    y=randn(100) * 10 .+ 75,
 )
-validated_params = ParamsType(user_input)
+params = ParamsType(user_input)
 
-# Get dimensions and sizes
-println("Dimensions: ", dimension(ParamsType))
-# Output: (mu0=(), beta=(3,), tau2=(), sigma2=(), school_effects=(10,))
+InferredType = of(user_input) # the bounds of Real won't be inferred
 
-println("Total parameters: ", length(ParamsType))
-# Output: 15 (1 + 3 + 1 + 1 + 10)
+size(ParamsType)
+length(ParamsType)
 
-# Flatten/unflatten for optimization
-flat_params = flatten(ParamsType, validated_params)  # Extract numerical vector
-println("Flattened parameters: ", length(flat_params), " values")
+flat_params = flatten(ParamsType, params)
+new_flat_params = flat_params .* 0.9
+new_params = unflatten(ParamsType, new_flat_params)
 
-new_flat = flat_params .* 0.9  # Example transformation
-
-# Reconstruct structured parameters
-optimized_params = unflatten(ParamsType, new_flat)
-
-# Direct use as type annotation
-@model function school_model((; mu0, beta, tau2, sigma2, school_effects)::ParamsType, data)
-    (; y, X, school_id, n_students) = data
-    
+@model function school_model(
+    (; mu0, beta, tau2, sigma2, school_effects, y)::ParamsType,
+    X,
+    school_id,
+    n_students,
+)
     # Priors
     mu0 ~ Normal(0, 100)
     beta ~ MvNormal(zeros(3), 100 * I)
     tau2 ~ InverseGamma(0.001, 0.001)
     sigma2 ~ InverseGamma(0.001, 0.001)
-    
+
     # Random effects
     for j in 1:10
         school_effects[j] ~ Normal(mu0, sqrt(tau2))
     end
-    
+
     # Likelihood
     for i in 1:n_students
         j = school_id[i]
