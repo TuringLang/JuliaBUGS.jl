@@ -2,39 +2,70 @@
 
 ## Overview
 
-The `of` type system provides a declarative way to specify parameter **structure**s for probabilistic programming language. It serves as a lightweight type annotation system that:
-- Enables clear parameter structure specification
+The `of` type system provides a declarative way to specify parameter **types** for probabilistic programming. It serves as a lightweight type annotation system that:
+- Returns actual Julia types (not instances) that can be used in type annotations
+- Encodes specifications (dimensions, bounds) in type parameters
 - Supports automatic type validation and conversion
-- Integrates seamlessly with Julia's type system and Functors.jl
+- Integrates seamlessly with Julia's type system
 - Provides utilities for parameter manipulation
 
 ## Core Concepts
 
-### 1. Type Specifications
+### 1. Type-Based Design
 
-The `of` function creates type specifications:
-- `of(Array, dims...)` - Arrays with specified dimensions (element type defaults to Any)
-- `of(Array, T, dims...)` - Typed arrays with specific element type
-- `of(Real)` - Unbounded real numbers (stored as Float64)
-- `of(Real, lower, upper)` - Bounded real numbers with constraints
-- `of((field1=..., field2=...))` - Named tuples (only container type supported)
+The `of` function returns **types** (not instances) with specifications encoded in type parameters:
+- `of(Array, dims...)` → `OfArray{Float64, N, (dim1, dim2, ...)}` - Arrays with specified dimensions
+- `of(Array, T, dims...)` → `OfArray{T, N, (dim1, dim2, ...)}` - Typed arrays
+- `of(Real)` → `OfReal{Nothing, Nothing}` - Unbounded real numbers
+- `of(Real, lower, upper)` → `OfReal{Val{lower}, Val{upper}}` - Bounded real numbers
+- `of((field1=..., field2=...))` → `OfNamedTuple{(:field1, :field2), Tuple{Type1, Type2}}` - Named tuples
 
-### 2. Runtime vs Compile-time
+### 2. Type Parameter Encoding
 
-The system supports both approaches through a "middle ground" design:
-- **Runtime**: `of` returns instances (e.g., `OfArray{Float64,2}`) that store metadata
-- **Compile-time**: `@of` macro wraps specifications in `TypeOf{T,S}` for type annotations
-- Both approaches preserve the full specification for runtime operations
+The system encodes runtime values into type parameters:
+- **Dimensions**: Stored as tuple type parameters (e.g., `(3, 4)` for a 3×4 matrix)
+- **Bounds**: Encoded using `Val{x}` for numeric bounds or `Nothing` for unbounded
+- **Field names**: Stored as tuple of symbols in `OfNamedTuple`
+- **Element types**: Preserved as type parameters for arrays and nested structures
 
-### 3. Integration with Functors.jl
+### 3. Direct Type Usage
 
-The implementation leverages Functors.jl for tree operations:
-- Leaf types (`OfArray`, `OfReal`) are marked with `@leaf` 
-- `OfNamedTuple` implements custom `functor` method that enables deconstruction/reconstruction
-- The `functor` method returns `(children, reconstruct)` for tree traversal
-- Built-in functions like `fmap`, `fleaves` work seamlessly
-- `flatten`/`unflatten` use Functors.jl internally for structure manipulation
-- Users can apply Functors.jl operations directly to parameter values
+Since `of` returns types, they can be used directly in Julia's type system:
+```julia
+# Direct in type annotations
+function process(x::OfReal{Nothing, Val{1.0}})
+    # x is guaranteed to be a Float64 with upper bound 1.0
+end
+
+# In parametric types
+struct MyModel{T<:OfArray{Float64, 2, (10, 10)}}
+    weights::T
+end
+
+# Type aliases
+const PositiveReal = OfReal{Val{0}, Nothing}
+```
+
+### 4. Operations on Types
+
+The system provides operations that work with types rather than instances:
+
+#### Type-level operations:
+- `rand(T::Type{<:OfType})` - Generate random values matching the type specification
+- `zero(T::Type{<:OfType})` - Generate zero/default values 
+- `T(value)` where `T<:OfType` - Constructor syntax to validate and convert values to match specifications
+- `julia_type(T::Type{<:OfType})` - Extract the corresponding Julia type
+- `dimension(T::Type{<:OfType})` - Get dimensions/shape of the type
+- `length(T::Type{<:OfType})` - Get total number of elements when flattened
+
+#### Structure manipulation:
+- `flatten(T::Type{<:OfType}, values)` - Convert structured values to flat vector
+- `unflatten(T::Type{<:OfType}, vec)` - Reconstruct structured values from flat vector
+- Tree traversal using type introspection
+
+### 5. Limitations and Concerns
+
+**Runtime bounds limitation**: The current design encodes bounds as type parameters using `Val`, which requires bounds to be compile-time constants. This means bounds cannot be determined at runtime from data or computed values. This is a fundamental limitation of the type-based approach, as type parameters in Julia must be immutable and known at compile time.
 
 ## Example Usage
 
@@ -64,25 +95,24 @@ Where:
 **Implementation with `of` type system:**
 
 ```julia
-# Define hierarchical model parameters
-params_spec = of((
+# Define hierarchical model parameter types
+ParamsType = of((
     # Fixed effects
     mu0 = of(Real),                      # Grand mean
     beta = of(Array, Float64, 3),        # Regression coefficients (3 covariates)
     
     # Variance components
-    tau2 = of(Real, 0, nothing),         # Between-school variance
-    sigma2 = of(Real, 0, nothing),       # Within-school variance
+    tau2 = of(Real, 0, nothing),         # Between-school variance (≥ 0)
+    sigma2 = of(Real, 0, nothing),       # Within-school variance (≥ 0)
     
     # Random effects
     school_effects = of(Array, 10)       # School-specific intercepts (10 schools)
 ))
 
-# Runtime operations
-params = rand(params_spec)               # Generate random initial values
-params_zero = zero(params_spec)          # Zero initialization
+# Runtime operations using types
+params = rand(ParamsType)               # Generate random initial values
+params_zero = zero(ParamsType)          # Zero initialization
 
-# Validate user input (e.g., from previous MCMC run)
 user_input = (
     mu0 = 75.0,
     beta = [2.1, -0.5, 1.3],
@@ -90,28 +120,26 @@ user_input = (
     sigma2 = 100.0,
     school_effects = randn(10) * 5
 )
-validated_params = validate(params_spec, user_input)
+validated_params = ParamsType(user_input)
+
+# Get dimensions and sizes
+println("Dimensions: ", dimension(ParamsType))
+# Output: (mu0=(), beta=(3,), tau2=(), sigma2=(), school_effects=(10,))
+
+println("Total parameters: ", length(ParamsType))
+# Output: 15 (1 + 3 + 1 + 1 + 10)
 
 # Flatten/unflatten for optimization
-flat_params = flatten(params_spec, validated_params)  # Extract numerical vector
+flat_params = flatten(ParamsType, validated_params)  # Extract numerical vector
 println("Flattened parameters: ", length(flat_params), " values")
 
 new_flat = flat_params .* 0.9  # Example transformation
 
 # Reconstruct structured parameters
-optimized_params = unflatten(params_spec, new_flat)
+optimized_params = unflatten(ParamsType, new_flat)
 
-# Type annotation for model definition
-SchoolParams = @of((
-    mu0 = of(Real),
-    beta = of(Array, Float64, 3),
-    tau2 = of(Real, 0, nothing),
-    sigma2 = of(Real, 0, nothing),
-    school_effects = of(Array, 10)
-))
-
-@model function school_model(params::SchoolParams, data)
-    (; mu0, beta, tau2, sigma2, school_effects) = params
+# Direct use as type annotation
+@model function school_model((; mu0, beta, tau2, sigma2, school_effects)::ParamsType, data)
     (; y, X, school_id, n_students) = data
     
     # Priors
@@ -132,27 +160,4 @@ SchoolParams = @of((
         y[i] ~ Normal(mean_i, sqrt(sigma2))
     end
 end
-
-# Direct use of `of` in function type annotations
-
-## With @NamedTuple macro for type definition
-NTparameters = @NamedTuple{x::of(Array, 8), y::of(Array, of(Real), 4, 3), w::of(Real, 0, 1)}
-
-@model function demo(
-    (;x, y, w)::NTparameters,
-    constants1, 
-    constants2
-) 
-    # function body
-end
-
-## Direct destructuring with of() annotations (requires @model macro transformation)
-@model function demo(
-    (;x::of(Array, 8), y::of(Array, of(Real), 4, 3), w::of(Real, 0, 1)),
-    constants1, 
-    constants2
-)
-    # function body
-end
-
 ```

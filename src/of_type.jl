@@ -1,422 +1,190 @@
-using Functors
-
+# Abstract base type for all Of types
 abstract type OfType end
 
-struct OfArray{T,N} <: OfType
-    element_type::Type
-    dims::NTuple{N,Int}
+# Parametric types that store specification in type parameters
+# These are meant to be types only, not instantiable objects
+struct OfReal{Lower,Upper} <: OfType
+    function OfReal{L,U}() where {L,U}
+        return error(
+            "OfReal is a type specification, not an instantiable object. Use of(Real, ...) to create the type.",
+        )
+    end
+end
+struct OfArray{T,N,Dims} <: OfType
+    function OfArray{T,N,D}() where {T,N,D}
+        return error(
+            "OfArray is a type specification, not an instantiable object. Use of(Array, ...) to create the type.",
+        )
+    end
+end
+struct OfNamedTuple{Names,Types<:Tuple} <: OfType
+    function OfNamedTuple{Names,Types}() where {Names,Types}
+        return error(
+            "OfNamedTuple is a type specification, not an instantiable object. Use of(...) to create the type.",
+        )
+    end
 end
 
-struct OfReal <: OfType
-    lower::Union{Nothing,Real}
-    upper::Union{Nothing,Real}
-end
+# Helper functions to extract type parameters
+get_lower(::Type{OfReal{L,U}}) where {L,U} = L
+get_upper(::Type{OfReal{L,U}}) where {L,U} = U
+get_element_type(::Type{OfArray{T,N,D}}) where {T,N,D} = T
+get_ndims(::Type{OfArray{T,N,D}}) where {T,N,D} = N
+get_dims(::Type{OfArray{T,N,D}}) where {T,N,D} = D
+get_names(::Type{OfNamedTuple{Names,Types}}) where {Names,Types} = Names
+get_types(::Type{OfNamedTuple{Names,Types}}) where {Names,Types} = Types
 
-struct OfNamedTuple{names,T<:Tuple} <: OfType
-    types::T
-end
+# Convert bounds to type parameters (using Val for runtime values)
+bound_to_type(::Nothing) = Nothing
+bound_to_type(x::Real) = Val{x}
 
-get_names(::OfNamedTuple{names}) where {names} = names
+# Extract value from Val type
+type_to_bound(::Type{Nothing}) = nothing
+type_to_bound(::Type{Val{x}}) where {x} = x
 
+# Main of function that returns types
 function of(::Type{Array}, dims::Int...)
     # Default to Float64 for unspecified array types
-    return OfArray{Float64,length(dims)}(Float64, dims)
+    return OfArray{Float64,length(dims),dims}
 end
 
-function of(::Type{Array}, T::Union{Type,OfType}, dims::Int...)
-    element_type = T isa OfType ? julia_type(T) : T
-    return OfArray{element_type,length(dims)}(element_type, dims)
+function of(::Type{Array}, T::Type, dims::Int...)
+    return OfArray{T,length(dims),dims}
 end
 
 function of(::Type{Real})
-    return OfReal(nothing, nothing)
+    return OfReal{Nothing,Nothing}
 end
 
 function of(::Type{Real}, lower::Union{Real,Nothing}, upper::Union{Real,Nothing})
-    return OfReal(lower, upper)
+    L = bound_to_type(lower)
+    U = bound_to_type(upper)
+    return OfReal{L,U}
 end
 
 function of(nt::NamedTuple{names}) where {names}
     of_types = map(of, values(nt))
-    return OfNamedTuple{names,typeof(of_types)}(of_types)
+    return OfNamedTuple{names,Tuple{of_types...}}
 end
 
-function of(x::OfType)
-    return x
-end
+# Support for passing OfType types through of()
+of(T::Type{<:OfType}) = T
 
-function of(T::Type)
-    if T <: Real
-        return OfReal(nothing, nothing)
-    else
-        error("Unsupported type for of: $T")
-    end
-end
-
-function julia_type(::OfArray{T,N}) where {T,N}
+# Julia type extraction
+function julia_type(::Type{OfArray{T,N,D}}) where {T,N,D}
     return Array{T,N}
 end
 
-function julia_type(::OfReal)
+function julia_type(::Type{OfReal{L,U}}) where {L,U}
     return Float64
 end
 
-function julia_type(oft::OfNamedTuple{names}) where {names}
-    return NamedTuple{names,Tuple{map(julia_type, oft.types)...}}
+function julia_type(::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
+    jl_types = Tuple{[julia_type(T) for T in Types.parameters]...}
+    return NamedTuple{Names,jl_types}
 end
 
-Base.rand(ofa::OfArray{T,N}) where {T,N} = rand(T, ofa.dims...)
+# rand implementations for types
+function Base.rand(::Type{OfArray{T,N,D}}) where {T,N,D}
+    return rand(T, D...)
+end
 
-function Base.rand(ofr::OfReal)
+function Base.rand(::Type{OfReal{L,U}}) where {L,U}
     val = rand()
-    if !isnothing(ofr.lower) && !isnothing(ofr.upper)
-        return ofr.lower + val * (ofr.upper - ofr.lower)
-    elseif !isnothing(ofr.lower)
-        return ofr.lower + val
-    elseif !isnothing(ofr.upper)
-        return ofr.upper * val
+    lower = type_to_bound(L)
+    upper = type_to_bound(U)
+
+    if !isnothing(lower) && !isnothing(upper)
+        return lower + val * (upper - lower)
+    elseif !isnothing(lower)
+        return lower + val
+    elseif !isnothing(upper)
+        return upper * val
     else
         return val
     end
 end
 
-function Base.rand(oft::OfNamedTuple{names}) where {names}
-    values = map(rand, oft.types)
-    return NamedTuple{names}(values)
+function Base.rand(::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
+    values = Tuple(rand(T) for T in Types.parameters)
+    return NamedTuple{Names}(values)
 end
 
-Base.zero(ofa::OfArray{T,N}) where {T,N} = zeros(T, ofa.dims...)
+# zero implementations for types
+function Base.zero(::Type{OfArray{T,N,D}}) where {T,N,D}
+    return zeros(T, D...)
+end
 
-function Base.zero(ofr::OfReal)
-    if !isnothing(ofr.lower) && ofr.lower > 0
-        return ofr.lower
-    elseif !isnothing(ofr.upper) && ofr.upper < 0
-        return ofr.upper
+function Base.zero(::Type{OfReal{L,U}}) where {L,U}
+    lower = type_to_bound(L)
+    upper = type_to_bound(U)
+
+    if !isnothing(lower) && lower > 0
+        return lower
+    elseif !isnothing(upper) && upper < 0
+        return upper
     else
         return 0.0
     end
 end
 
-function Base.zero(oft::OfNamedTuple{names}) where {names}
-    values = map(zero, oft.types)
-    return NamedTuple{names}(values)
+function Base.zero(::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
+    values = Tuple(zero(T) for T in Types.parameters)
+    return NamedTuple{Names}(values)
 end
 
-(ofa::OfArray)() = zero(ofa)
-(ofr::OfReal)() = zero(ofr)
-(ofnt::OfNamedTuple)() = zero(ofnt)
-
-Base.convert(::Type{Type}, of_type::OfType) = julia_type(of_type)
-
-# Since OfType cannot be a subtype of Type, we need macros to transform the syntax
-# The existing TypeOf wrapper approach is the right solution
-
-# Type wrapper that preserves of specification while being usable in type annotations
-struct TypeOf{T,S}
-    spec::S
-
-    TypeOf(spec::OfType) = new{julia_type(spec),typeof(spec)}(spec)
-end
-
-# Extract the Julia type from TypeOf
-Base.eltype(::Type{TypeOf{T,S}}) where {T,S} = T
-
-# Allow pattern matching on TypeOf
-# Note: This would need special handling in the macro system
-# For now, just provide a way to extract the type
-julia_type(::TypeOf{T,S}) where {T,S} = T
-
-# Macro for creating types from of specifications
-macro of(expr)
-    # Check if it's a tuple expression (for named tuple support)
-    if Meta.isexpr(expr, :tuple) && length(expr.args) > 0
-        # Check if all elements are assignments (named tuple pattern)
-        all_assignments = all(arg -> Meta.isexpr(arg, :(=)), expr.args)
-
-        if all_assignments
-            # This is a named tuple like (a=..., b=...)
-            field_names = Symbol[]
-            field_types = []
-
-            for field in expr.args
-                if Meta.isexpr(field, :(=)) && length(field.args) == 2
-                    name = field.args[1]
-                    value_expr = field.args[2]
-
-                    # Handle of() expressions
-                    if Meta.isexpr(value_expr, :call) && value_expr.args[1] == :of
-                        # Create the of specification and extract its Julia type
-                        of_spec = esc(value_expr)
-                        push!(field_types, :($julia_type($of_spec)))
-                    else
-                        # For non-of expressions, just use them directly
-                        push!(field_types, esc(value_expr))
-                    end
-                    push!(field_names, name)
-                else
-                    error("Invalid field in named tuple: $field")
-                end
-            end
-
-            # Return the NamedTuple type
-            return :(NamedTuple{$(Tuple(field_names)),Tuple{$(field_types...)}})
-        else
-            # Check for parameters syntax (;a=..., b=...)
-            if Meta.isexpr(expr.args[1], :parameters)
-                # This is the (;a=..., b=...) syntax
-                fields = expr.args[1].args
-                field_names = Symbol[]
-                field_types = []
-
-                for field in fields
-                    if Meta.isexpr(field, :(=)) && length(field.args) == 2
-                        name = field.args[1]
-                        value_expr = field.args[2]
-
-                        # Handle of() expressions
-                        if Meta.isexpr(value_expr, :call) && value_expr.args[1] == :of
-                            # Create the of specification and extract its Julia type
-                            of_spec = esc(value_expr)
-                            push!(field_types, :($julia_type($of_spec)))
-                        else
-                            # For non-of expressions, just use them directly
-                            push!(field_types, esc(value_expr))
-                        end
-                        push!(field_names, name)
-                    else
-                        error("Invalid field in named tuple: $field")
-                    end
-                end
-
-                # Return the NamedTuple type
-                return :(NamedTuple{$(Tuple(field_names)),Tuple{$(field_types...)}})
-            else
-                # Regular tuple, not supported for now
-                error("@of with regular tuples is not supported. Use named tuples instead.")
-            end
-        end
-    elseif Meta.isexpr(expr, :call) && expr.args[1] == :of
-        # Regular of(...) call
-        return :(TypeOf(of($(map(esc, expr.args[2:end])...))))
-    else
-        return :(TypeOf(of($(esc(expr)))))
-    end
-end
-
-# Functors.jl integration
-# Leaf types should not be traversed
-Functors.@leaf OfArray
-Functors.@leaf OfReal
-
-# Define functor for OfNamedTuple to enable traversal
-function Functors.functor(::Type{<:OfNamedTuple{names}}, x) where {names}
-    return NamedTuple{names}(x.types),
-    nt -> OfNamedTuple{names,typeof(values(nt))}(values(nt))
-end
-
-function Base.show(io::IO, ofa::OfArray{T,N}) where {T,N}
+# Show implementations
+function Base.show(io::IO, ::Type{OfArray{T,N,D}}) where {T,N,D}
     if T === Float64
-        # For default Float64, show shorter form
-        print(io, "of(Array, ", join(ofa.dims, ", "), ")")
+        print(io, "of(Array, ", join(D, ", "), ")")
     else
-        print(io, "of(Array, ", T, ", ", join(ofa.dims, ", "), ")")
+        print(io, "of(Array, ", T, ", ", join(D, ", "), ")")
     end
 end
 
-function Base.show(io::IO, ofr::OfReal)
-    if isnothing(ofr.lower) && isnothing(ofr.upper)
+function Base.show(io::IO, ::Type{OfReal{L,U}}) where {L,U}
+    lower = type_to_bound(L)
+    upper = type_to_bound(U)
+
+    if isnothing(lower) && isnothing(upper)
         print(io, "of(Real)")
     else
         print(
             io,
             "of(Real, ",
-            something(ofr.lower, "-∞"),
+            something(lower, "nothing"),
             ", ",
-            something(ofr.upper, "∞"),
+            something(upper, "nothing"),
             ")",
         )
     end
 end
 
-function Base.show(io::IO, ofnt::OfNamedTuple{names}) where {names}
+function Base.show(io::IO, ::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
     print(io, "of((")
-    name_tuple = names
-    for (i, (name, t)) in enumerate(zip(name_tuple, ofnt.types))
-        print(io, name, "=", t)
-        if i < length(name_tuple)
+    for (i, (name, T)) in enumerate(zip(Names, Types.parameters))
+        print(io, name, "=", T)
+        if i < length(Names)
             print(io, ", ")
         end
     end
     return print(io, "))")
 end
 
-# Functors.jl-based traversal utilities
-
-"""
-    is_leaf(of_type)
-
-Check if an OfType is a leaf node (not a container).
-"""
-is_leaf(oft::OfType) = Functors.isleaf(oft)
-
-"""
-    tree_map(f, of_type)
-
-Apply function `f` to all leaf nodes in the tree structure.
-Uses Functors.jl's fmap for traversal.
-"""
-function tree_map(f, oft::OfType)
-    return Functors.fmap(oft; exclude=is_leaf) do x
-        f(x)
-    end
-end
-
-"""
-    flatten(of_type, values)
-
-Flatten a structured value into a vector of numerical values according to the of_type specification.
-Returns a vector of numbers that can be used for optimization.
-"""
-function flatten(oft::OfType, values)
-    # First validate the values match the specification
-    validated = validate(oft, values)
-
-    # Extract all numerical values in order
-    numerical_values = Real[]
-
-    # Helper function to walk the tree
-    function walk_tree(oft_node, val_node)
-        if is_leaf(oft_node)
-            if oft_node isa OfArray
-                append!(numerical_values, vec(val_node))
-            elseif oft_node isa OfReal
-                push!(numerical_values, val_node)
-            end
-        elseif oft_node isa OfNamedTuple
-            # Process fields in order
-            for (i, name) in enumerate(get_names(oft_node))
-                walk_tree(oft_node.types[i], getproperty(val_node, name))
-            end
-        end
-    end
-
-    walk_tree(oft, validated)
-    return numerical_values
-end
-
-"""
-    unflatten(of_type, flat_values)
-
-Reconstruct a structured value from a flat vector of numerical values according to the of_type specification.
-"""
-function unflatten(oft::OfType, flat_values::Vector{<:Real})
-    # Keep track of position in flat array
-    pos = Ref(1)
-
-    # Helper function to reconstruct from flat array
-    function reconstruct_node(oft_node)
-        if is_leaf(oft_node)
-            if oft_node isa OfArray
-                # Calculate number of elements needed
-                n_elements = prod(oft_node.dims)
-                if pos[] + n_elements - 1 > length(flat_values)
-                    error(
-                        "Not enough values in flat array: need $(pos[] + n_elements - 1), have $(length(flat_values))",
-                    )
-                end
-                # Extract values and reshape
-                values = flat_values[pos[]:(pos[] + n_elements - 1)]
-                pos[] += n_elements
-                return reshape(values, oft_node.dims)
-            elseif oft_node isa OfReal
-                if pos[] > length(flat_values)
-                    error(
-                        "Not enough values in flat array: need $(pos[]), have $(length(flat_values))",
-                    )
-                end
-                val = flat_values[pos[]]
-                pos[] += 1
-                # Apply bounds validation
-                if !isnothing(oft_node.lower) && val < oft_node.lower
-                    error("Value $val is below lower bound $(oft_node.lower)")
-                end
-                if !isnothing(oft_node.upper) && val > oft_node.upper
-                    error("Value $val is above upper bound $(oft_node.upper)")
-                end
-                return val
-            else
-                error("Unknown leaf type: $(typeof(oft_node))")
-            end
-        elseif oft_node isa OfNamedTuple
-            # Reconstruct each field
-            values = map(reconstruct_node, oft_node.types)
-            names = get_names(oft_node)
-            return NamedTuple{names}(values)
-        else
-            error("Unknown node type: $(typeof(oft_node))")
-        end
-    end
-
-    reconstructed = reconstruct_node(oft)
-
-    # Check that we used all values
-    if pos[] - 1 != length(flat_values)
-        error(
-            "Unused values in flat array: used $(pos[] - 1), provided $(length(flat_values))",
-        )
-    end
-
-    return reconstructed
-end
-
-"""
-    tree_map_with_path(f, of_type)
-
-Apply function `f(path, leaf)` to all leaf nodes, where path is a tuple of keys/indices.
-Uses Functors.jl's fmap_with_path.
-"""
-function tree_map_with_path(f, oft::OfType)
-    return Functors.fmap_with_path(oft; exclude=(kp, x) -> is_leaf(x)) do kp, x
-        f(Tuple(kp), x)
-    end
-end
-
-"""
-    validate(of_type, value)
-
-Validate and convert a Julia value to match the structure of an OfType specification.
-This ensures values conform to the expected types, dimensions, and bounds.
-"""
-function validate(oft::OfType, value)
-    if is_leaf(oft)
-        return validate_leaf(oft, value)
+# Make OfType types callable as constructors
+function (::Type{T})(value) where {T<:OfType}
+    if is_leaf(T)
+        return validate_leaf(T, value)
     else
-        return validate_container(oft, value)
+        return validate_container(T, value)
     end
 end
 
-function validate_container(oft::OfNamedTuple{names,T}, value) where {names,T}
-    if value isa NamedTuple
-        # Build a new NamedTuple with canonicalized values
-        # Use the fact that we can iterate over the indices
-        vals = ntuple(length(oft.types)) do i
-            # Get the field name from the type parameter
-            field_name = names[i]
-            # Validate the corresponding value
-            validate(oft.types[i], getproperty(value, field_name))
-        end
-        return NamedTuple{names}(vals)
-    else
-        error("Expected NamedTuple for OfNamedTuple, got $(typeof(value))")
-    end
-end
-
-function validate_leaf(oft::OfArray{T,N}, value) where {T,N}
+function validate_leaf(::Type{OfArray{T,N,D}}, value) where {T,N,D}
     if value isa AbstractArray
-        # Convert to the expected array type and dimensions
         arr = convert(Array{T,N}, value)
-        if size(arr) != oft.dims
-            error("Array dimensions mismatch: expected $(oft.dims), got $(size(arr))")
+        if size(arr) != D
+            error("Array dimensions mismatch: expected $D, got $(size(arr))")
         end
         return arr
     else
@@ -424,15 +192,17 @@ function validate_leaf(oft::OfArray{T,N}, value) where {T,N}
     end
 end
 
-function validate_leaf(oft::OfReal, value)
+function validate_leaf(::Type{OfReal{L,U}}, value) where {L,U}
     if value isa Real
         val = convert(Float64, value)
-        # Check bounds
-        if !isnothing(oft.lower) && val < oft.lower
-            error("Value $val is below lower bound $(oft.lower)")
+        lower = type_to_bound(L)
+        upper = type_to_bound(U)
+
+        if !isnothing(lower) && val < lower
+            error("Value $val is below lower bound $lower")
         end
-        if !isnothing(oft.upper) && val > oft.upper
-            error("Value $val is above upper bound $(oft.upper)")
+        if !isnothing(upper) && val > upper
+            error("Value $val is above upper bound $upper")
         end
         return val
     else
@@ -440,10 +210,131 @@ function validate_leaf(oft::OfReal, value)
     end
 end
 
-# Fallback for unknown leaf types
-validate_leaf(oft::OfType, value) = error("No validate_leaf method for $(typeof(oft))")
+function validate_container(::Type{OfNamedTuple{Names,Types}}, value) where {Names,Types}
+    if value isa NamedTuple
+        vals = ntuple(length(Names)) do i
+            field_name = Names[i]
+            field_type = Types.parameters[i]
+            field_type(getproperty(value, field_name))
+        end
+        return NamedTuple{Names}(vals)
+    else
+        error("Expected NamedTuple for OfNamedTuple, got $(typeof(value))")
+    end
+end
 
-# Fallback for unknown container types
-function validate_container(oft::OfType, value)
-    return error("No validate_container method for $(typeof(oft))")
+# Check if a type is a leaf
+is_leaf(::Type{<:OfArray}) = true
+is_leaf(::Type{<:OfReal}) = true
+is_leaf(::Type{<:OfNamedTuple}) = false
+
+# Get size of OfType types
+function Base.size(::Type{OfArray{T,N,D}}) where {T,N,D}
+    return D
+end
+
+function Base.size(::Type{OfReal{L,U}}) where {L,U}
+    return ()  # Scalar has empty dimensions
+end
+
+function Base.size(::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
+    # Return a named tuple with dimensions of each field
+    dims = map(Names) do name
+        idx = findfirst(==(name), Names)
+        size(Types.parameters[idx])
+    end
+    return NamedTuple{Names}(dims)
+end
+
+# Get flattened length of OfType types
+function Base.length(::Type{OfArray{T,N,D}}) where {T,N,D}
+    return prod(D)
+end
+
+function Base.length(::Type{OfReal{L,U}}) where {L,U}
+    return 1
+end
+
+function Base.length(::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
+    # Sum lengths of all fields
+    return sum(length(Types.parameters[i]) for i in 1:length(Names))
+end
+
+# Flatten implementation for types
+function flatten(::Type{T}, values) where {T<:OfType}
+    # First validate the values match the specification
+    validated = T(values)
+
+    # Extract all numerical values in order
+    numerical_values = Real[]
+
+    function walk_tree(oft_type::Type, val_node)
+        if is_leaf(oft_type)
+            if oft_type <: OfArray
+                append!(numerical_values, vec(val_node))
+            elseif oft_type <: OfReal
+                push!(numerical_values, val_node)
+            end
+        elseif oft_type <: OfNamedTuple
+            names = get_names(oft_type)
+            types = get_types(oft_type)
+            for (i, name) in enumerate(names)
+                walk_tree(types.parameters[i], getproperty(val_node, name))
+            end
+        end
+    end
+
+    walk_tree(T, validated)
+    return numerical_values
+end
+
+# Unflatten implementation for types
+function unflatten(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfType}
+    pos = Ref(1)
+
+    function reconstruct_node(oft_type::Type)
+        if is_leaf(oft_type)
+            if oft_type <: OfArray
+                dims = size(oft_type)
+                n_elements = prod(dims)
+                if pos[] + n_elements - 1 > length(flat_values)
+                    error("Not enough values in flat array")
+                end
+                values = flat_values[pos[]:(pos[] + n_elements - 1)]
+                pos[] += n_elements
+                return reshape(values, dims)
+            elseif oft_type <: OfReal
+                if pos[] > length(flat_values)
+                    error("Not enough values in flat array")
+                end
+                val = flat_values[pos[]]
+                pos[] += 1
+
+                # Apply bounds validation
+                lower = type_to_bound(get_lower(oft_type))
+                upper = type_to_bound(get_upper(oft_type))
+
+                if !isnothing(lower) && val < lower
+                    error("Value $val is below lower bound $lower")
+                end
+                if !isnothing(upper) && val > upper
+                    error("Value $val is above upper bound $upper")
+                end
+                return val
+            end
+        elseif oft_type <: OfNamedTuple
+            names = get_names(oft_type)
+            types = get_types(oft_type)
+            values = Tuple(reconstruct_node(types.parameters[i]) for i in 1:length(names))
+            return NamedTuple{names}(values)
+        end
+    end
+
+    reconstructed = reconstruct_node(T)
+
+    if pos[] - 1 != length(flat_values)
+        error("Unused values in flat array")
+    end
+
+    return reconstructed
 end
