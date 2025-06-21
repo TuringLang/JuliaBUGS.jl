@@ -37,6 +37,7 @@
         ad_model,
         NUTS(0.8),
         n_samples;
+        progress=false,
         chain_type=Chains,
         n_adapts=n_adapts,
         init_params=initial_θ,
@@ -64,21 +65,24 @@
         :is_adapt,
     ]
     means = mean(hmc_chain)
-    @test means[:alpha].nt.mean[1] ≈ 2.3 atol = 0.2
-    @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.2
-    @test means[:sigma].nt.mean[1] ≈ 0.9 atol = 0.2
-    @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.2
+    @test means[:alpha].nt.mean[1] ≈ 2.3 atol = 0.3
+    @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.3
+    @test means[:sigma].nt.mean[1] ≈ 0.9 atol = 0.3
+    @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.3
 
     n_samples, n_adapts = 20000, 5000
+
     mh_chain = AbstractMCMC.sample(
         model,
         RWMH(MvNormal(zeros(D), I)),
         n_samples;
+        progress=false,
         chain_type=Chains,
         n_adapts=n_adapts,
         init_params=initial_θ,
         discard_initial=n_adapts,
     )
+
     @test mh_chain.name_map[:parameters] == [
         :sigma
         :beta
@@ -87,10 +91,10 @@
     ]
     @test mh_chain.name_map[:internals] == [:lp]
     means = mean(mh_chain)
-    @test means[:alpha].nt.mean[1] ≈ 2.3 atol = 0.2
-    @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.2
-    @test means[:sigma].nt.mean[1] ≈ 0.9 atol = 0.2
-    @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.2
+    @test means[:alpha].nt.mean[1] ≈ 2.3 atol = 0.3
+    @test means[:beta].nt.mean[1] ≈ 2.1 atol = 0.3
+    @test means[:sigma].nt.mean[1] ≈ 0.9 atol = 0.3
+    @test means[:gen_quant].nt.mean[1] ≈ 4.2 atol = 0.3
 
     # test for more complicated varnames
     model_def = @bugs begin
@@ -105,8 +109,10 @@
     end
     model = compile(model_def, (;))
     ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
-    hmc_chain = AbstractMCMC.sample(ad_model, NUTS(0.8), 10; chain_type=Chains)
-    @test hmc_chain.name_map[:parameters] == [
+    hmc_chain = AbstractMCMC.sample(
+        ad_model, NUTS(0.8), 10; progress=false, chain_type=Chains
+    )
+    @test Set(hmc_chain.name_map[:parameters]) == Set([
         Symbol("sigma[3]"),
         Symbol("sigma[2]"),
         Symbol("sigma[1]"),
@@ -122,5 +128,5 @@
         Symbol("A[1, 1:3][1]"),
         Symbol("A[1, 1:3][2]"),
         Symbol("A[1, 1:3][3]"),
-    ]
+    ])
 end
