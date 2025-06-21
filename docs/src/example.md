@@ -238,8 +238,8 @@ parameters        = alpha0, alpha12, alpha1, alpha2, tau, b[16], b[12], b[10], b
 internals         = lp, n_steps, is_accept, acceptance_rate, log_density, hamiltonian_energy, hamiltonian_energy_error, max_hamiltonian_energy_error, tree_depth, numerical_error, step_size, nom_step_size, is_adapt
 
 Summary Statistics
-  parameters      mean       std      mcse    ess_bulk    ess_tail      rhat   ess_per_sec 
-      Symbol   Float64   Float64   Float64        Real     Float64   Float64       Missing 
+  parameters      mean       std      mcse    ess_bulk    ess_tail      rhat   ess_per_sec
+      Symbol   Float64   Float64   Float64        Real     Float64   Float64       Missing
 
       alpha0   -0.5642    0.2320    0.0084    766.9305   1022.5211    1.0021       missing
      alpha12   -0.8489    0.5247    0.0170    946.0418   1044.1109    1.0002       missing
@@ -253,8 +253,8 @@ Summary Statistics
                                                                              19 rows omitted
 
 Quantiles
-  parameters      2.5%     25.0%     50.0%     75.0%     97.5% 
-      Symbol   Float64   Float64   Float64   Float64   Float64 
+  parameters      2.5%     25.0%     50.0%     75.0%     97.5%
+      Symbol   Float64   Float64   Float64   Float64   Float64
 
       alpha0   -1.0143   -0.7143   -0.5590   -0.4100   -0.1185
      alpha12   -1.9063   -1.1812   -0.8296   -0.5153    0.1521
@@ -314,7 +314,7 @@ For example:
     using JuliaBUGS, LogDensityProblems, LogDensityProblemsAD, AbstractMCMC, AdvancedHMC, MCMCChains, ReverseDiff # also other packages one may need
 
     # Define the functions to use
-    # Use `@register_primitive` to register the functions to use in the model
+    # Use `@bugs_primitive` to register the functions to use in the model
 
     # Distributed can handle data dependencies in some cases, for more detail, see https://docs.julialang.org/en/v1/manual/distributed-computing/
 
@@ -339,8 +339,8 @@ In this case, we pass two additional arguments to `AbstractMCMC.sample`:
 
 - `AbstractMCMC.MCMCDistributed()`: the sampler type, and
 - `n_chains`: the number of chains to sample.
-Note that the `init_params` argument is now a vector of initial parameters for each chain.
-Sometimes the progress logger can cause problems in distributed setting, so we can disable it by setting `progress = false`.
+  Note that the `init_params` argument is now a vector of initial parameters for each chain.
+  Sometimes the progress logger can cause problems in distributed setting, so we can disable it by setting `progress = false`.
 
 ## More Examples
 
