@@ -33,7 +33,6 @@ The system encodes extra useful information into type parameters:
 - `rand(T::Type{<:OfType})` - Generate random values matching the type specification
 - `zero(T::Type{<:OfType})` - Generate zero/default values 
 - `T(value)` where `T<:OfType` - Constructor syntax to validate and convert values to match specifications
-- `julia_type(T::Type{<:OfType})` - Extract the corresponding Julia type
 - `size(T::Type{<:OfType})` - Get dimensions/shape of the type
 - `length(T::Type{<:OfType})` - Get total number of elements when flattened
 
@@ -107,8 +106,6 @@ ParamsType = of((
 
 params_rand = rand(ParamsType)
 params_zero = zero(ParamsType)
-
-julia_type(ParamsType)
 
 user_input = (
     mu0=75.0,

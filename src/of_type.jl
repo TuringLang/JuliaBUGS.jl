@@ -172,23 +172,6 @@ function of(::Type{T}, replacements::NamedTuple) where {T<:OfType}
     return T
 end
 
-# Julia type extraction
-function julia_type(::Type{OfArray{T,N,D}}) where {T,N,D}
-    return Array{T,N}
-end
-
-function julia_type(::Type{OfReal{L,U}}) where {L,U}
-    return Float64
-end
-
-function julia_type(::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
-    jl_types = Tuple{[julia_type(T) for T in Types.parameters]...}
-    return NamedTuple{Names,jl_types}
-end
-
-function julia_type(::Type{OfConstant})
-    return Real  # Constants can be any Real type (Int, Float64, etc.)
-end
 
 # rand implementations for types
 function Base.rand(::Type{OfArray{T,N,D}}) where {T,N,D}
