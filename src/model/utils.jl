@@ -1,8 +1,16 @@
 # TODO: Temporary solution until DynamicPPL/BangBang integration improves
-const _ArrayCompatibility = Module()
+module BangBangCompatibility
 
-# Define the methods in our own scope
-function _ArrayCompatibility._safe_setindex(xs::AbstractArray, v::AbstractArray, I...)
+using BangBang: NoBang, prefermutation, setindex!!
+using Accessors
+using AbstractPPL: getoptic, VarName
+
+"""
+    safe_array_update(xs::AbstractArray, v::AbstractArray, I...) -> ys
+
+Non-pirating version of array update that maintains identical behavior to BangBang._setindex
+"""
+function safe_array_update(xs::AbstractArray, v::AbstractArray, I...)
     T = promote_type(eltype(xs), eltype(v))
     ys = similar(xs, T)
     if eltype(xs) !== Union{}
@@ -12,25 +20,30 @@ function _ArrayCompatibility._safe_setindex(xs::AbstractArray, v::AbstractArray,
     return ys
 end
 
-function _ArrayCompatibility._namedtuple_set(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
-    optic = BangBang.prefermutation(
-        AbstractPPL.getoptic(vn) ∘ Accessors.PropertyLens{sym}()
+"""
+    safe_env_update(env::NameSingle, val, vn::VarName{sym}) where {sym} -> new_env
+
+Non-pirating version of environment update that maintains evaluation semantics.
+"""
+function safe_env_update(env::NameSingle, val, vn::VarName{sym}) where {sym}
+    optic = prefermutation(
+        getoptic(vn) ∘ Accessors.PropertyLens{sym}()
     )
-    return Accessors.set(nt, optic, val)
+    return Accessors.set(env, optic, val)
 end
 
-# Then selectively extend BangBang ONLY if it's loaded
+# Conditional BangBang extensions for backward compatibility
 if isdefined(Main, :BangBang)
     function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
-        _ArrayCompatibility._safe_setindex(xs, v, I...)
+        @warn "Deprecated: Use BangBangCompatibility.safe_array_update instead" maxlog=1
+        safe_array_update(xs, v, I...)
     end
 
-    function BangBang.setindex!!(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
-        _ArrayCompatibility._namedtuple_set(nt, val, vn)
+    function BangBang.setindex!!(env::NameSingle, val, vn::VarName{sym}) where {sym}
+        @warn "Deprecated: Use BangBangCompatibility.safe_env_update instead" maxlog=1
+        safe_env_update(env, val, vn)
     end
 end
-
-# Original reconstruct functions remain exactly the same below...
 
 """
     reconstruct([f, ]dist, val)
