@@ -5,11 +5,18 @@
 # )
 # to allow mutation, but the current solution seems create less possible problems, albeit less efficient.
 
+module SafeBangExtensions
 using BangBang: NoBang, prefermutation, setindex!!
 using Accessors
 using AbstractPPL: getoptic, VarName
 
-function _setindex(xs::AbstractArray, v::AbstractArray, I...)
+"""
+    _safe_array_update(xs, v, I...) -> ys
+
+Internal function for type-stable array updates without type piracy.
+Maintains AD compatibility and handles Union{} eltypes.
+"""
+function _safe_array_update(xs::AbstractArray, v::AbstractArray, I...)
     T = promote_type(eltype(xs), eltype(v))
     ys = similar(xs, T)
     if eltype(xs) !== Union{}
@@ -19,12 +26,24 @@ function _setindex(xs::AbstractArray, v::AbstractArray, I...)
     return ys
 end
 
-function setindex!!(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
+"""
+    _namedtuple_update(nt, val, vn) -> new_nt
+
+Internal function for named tuple updates without type piracy.
+Preserves the original mutation semantics.
+"""
+function _namedtuple_update(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
     optic = prefermutation(
-        AbstractPPL.getoptic(vn) ∘ Accessors.PropertyLens{sym}()
+        getoptic(vn) ∘ Accessors.PropertyLens{sym}()
     )
     return Accessors.set(nt, optic, val)
 end
+
+# Export the safe versions with BangBang-compatible names
+const NoBang = SafeBangExtensions.NoBang
+const setindex!! = SafeBangExtensions.setindex!!
+
+end 
 
 """
     reconstruct([f, ]dist, val)
