@@ -1,10 +1,17 @@
-# TODO: can't remove even with the `possible` fix in DynamicPPL, still seems to have eltype inference issue causing AD errors
-# Resolves: setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
-# Alternatively, can overload BangBang.possible(
-#     ::typeof(BangBang._setindex!), ::C, ::T, ::Vararg
-# )
-# to allow mutation, but the current solution seems create less possible problems, albeit less efficient.
-function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
+# TODO: Temporary solution until DynamicPPL/BangBang integration improves
+# Note: Using function composition instead of type piracy
+module SafeBangExtensions
+using BangBang: NoBang, prefermutation, setindex!!
+using Accessors
+using AbstractPPL: getoptic, VarName
+
+"""
+    _safe_array_update(xs, v, I...) -> ys
+
+Internal function for type-stable array updates without type piracy.
+Maintains AD compatibility and handles Union{} eltypes.
+"""
+function _safe_array_update(xs::AbstractArray, v::AbstractArray, I...)
     T = promote_type(eltype(xs), eltype(v))
     ys = similar(xs, T)
     if eltype(xs) !== Union{}
@@ -14,12 +21,24 @@ function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
     return ys
 end
 
-function BangBang.setindex!!(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
-    optic = BangBang.prefermutation(
-        AbstractPPL.getoptic(vn) ∘ Accessors.PropertyLens{sym}()
+"""
+    _namedtuple_update(nt, val, vn) -> new_nt
+
+Internal function for named tuple updates without type piracy.
+Preserves the original mutation semantics.
+"""
+function _namedtuple_update(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
+    optic = prefermutation(
+        getoptic(vn) ∘ Accessors.PropertyLens{sym}()
     )
     return Accessors.set(nt, optic, val)
 end
+end
+
+# Export the safe versions with BangBang-compatible names
+const NoBang = SafeBangExtensions.NoBang
+const setindex!! = SafeBangExtensions.setindex!!
+const _setindex = SafeBangExtensions._safe_array_update
 
 """
     reconstruct([f, ]dist, val)
