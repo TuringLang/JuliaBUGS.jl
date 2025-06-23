@@ -1,17 +1,8 @@
 # TODO: Temporary solution until DynamicPPL/BangBang integration improves
-# Note: Using function composition instead of type piracy
-module SafeBangExtensions
-using BangBang: NoBang, prefermutation, setindex!!
-using Accessors
-using AbstractPPL: getoptic, VarName
+const _ArrayCompatibility = Module()
 
-"""
-    _safe_array_update(xs, v, I...) -> ys
-
-Internal function for type-stable array updates without type piracy.
-Maintains AD compatibility and handles Union{} eltypes.
-"""
-function _safe_array_update(xs::AbstractArray, v::AbstractArray, I...)
+# Define the methods in our own scope
+function _ArrayCompatibility._safe_setindex(xs::AbstractArray, v::AbstractArray, I...)
     T = promote_type(eltype(xs), eltype(v))
     ys = similar(xs, T)
     if eltype(xs) !== Union{}
@@ -21,24 +12,25 @@ function _safe_array_update(xs::AbstractArray, v::AbstractArray, I...)
     return ys
 end
 
-"""
-    _namedtuple_update(nt, val, vn) -> new_nt
-
-Internal function for named tuple updates without type piracy.
-Preserves the original mutation semantics.
-"""
-function _namedtuple_update(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
-    optic = prefermutation(
-        getoptic(vn) ∘ Accessors.PropertyLens{sym}()
+function _ArrayCompatibility._namedtuple_set(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
+    optic = BangBang.prefermutation(
+        AbstractPPL.getoptic(vn) ∘ Accessors.PropertyLens{sym}()
     )
     return Accessors.set(nt, optic, val)
 end
+
+# Then selectively extend BangBang ONLY if it's loaded
+if isdefined(Main, :BangBang)
+    function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
+        _ArrayCompatibility._safe_setindex(xs, v, I...)
+    end
+
+    function BangBang.setindex!!(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
+        _ArrayCompatibility._namedtuple_set(nt, val, vn)
+    end
 end
 
-# Export the safe versions with BangBang-compatible names
-const NoBang = SafeBangExtensions.NoBang
-const setindex!! = SafeBangExtensions.setindex!!
-const _setindex = SafeBangExtensions._safe_array_update
+# Original reconstruct functions remain exactly the same below...
 
 """
     reconstruct([f, ]dist, val)
