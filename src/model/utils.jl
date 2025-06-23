@@ -5,45 +5,24 @@
 # )
 # to allow mutation, but the current solution seems create less possible problems, albeit less efficient.
 
-module SafeBangExtensions
-using BangBang: NoBang, prefermutation, setindex!!
-using Accessors
-using AbstractPPL: getoptic, VarName
+using BangBang
+import BangBang: possible, _setindex
 
-"""
-    _safe_array_update(xs, v, I...) -> ys
+# Custom fallback only for AbstractArrays and specific eltypes
+function possible(::typeof(_setindex), xs::AbstractArray{S}, v::AbstractArray{T}, I...) where {S, T}
+    return true
+end
 
-Internal function for type-stable array updates without type piracy.
-Maintains AD compatibility and handles Union{} eltypes.
-"""
-function _safe_array_update(xs::AbstractArray, v::AbstractArray, I...)
-    T = promote_type(eltype(xs), eltype(v))
-    ys = similar(xs, T)
-    if eltype(xs) !== Union{}
+# Define a non-pirating _setindex fallback for AbstractArray
+function _setindex(xs::AbstractArray{S}, v::AbstractArray{T}, I...) where {S, T}
+    T_promoted = promote_type(S, T)
+    ys = similar(xs, T_promoted)
+    if S !== Union{}
         copy!(ys, xs)
     end
     ys[I...] = v
     return ys
 end
-
-"""
-    _namedtuple_update(nt, val, vn) -> new_nt
-
-Internal function for named tuple updates without type piracy.
-Preserves the original mutation semantics.
-"""
-function _namedtuple_update(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
-    optic = prefermutation(
-        getoptic(vn) ∘ Accessors.PropertyLens{sym}()
-    )
-    return Accessors.set(nt, optic, val)
-end
-
-# Export the safe versions with BangBang-compatible names
-const NoBang = SafeBangExtensions.NoBang
-const setindex!! = SafeBangExtensions.setindex!!
-
-end 
 
 """
     reconstruct([f, ]dist, val)
