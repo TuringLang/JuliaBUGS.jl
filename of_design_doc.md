@@ -5,26 +5,28 @@
 The `of` type system provides a declarative way to specify parameter **types** for probabilistic programming. It serves as a lightweight type annotation system that:
 - Returns actual Julia types (not instances) that can be used in type annotations
 - Encodes specifications (dimensions, bounds) in type parameters
-- Supports automatic type validation and conversion
-- Integrates seamlessly with Julia's type system
 - Provides utilities for parameter manipulation
 
 ## Core Concepts
 
 ### 1. Type-Based Design
 
-The `of` function returns **types** (not instances) with specifications encoded in type parameters:
+The `of` function returns types with specifications encoded in type parameters:
 - `of(Array, dims...)` → `OfArray{Float64, N, (dim1, dim2, ...)}` - Arrays with specified dimensions
 - `of(Array, T, dims...)` → `OfArray{T, N, (dim1, dim2, ...)}` - Typed arrays
 - `of(Real)` → `OfReal{Nothing, Nothing}` - Unbounded real numbers
 - `of(Real, lower, upper)` → `OfReal{Val{lower}, Val{upper}}` - Bounded real numbers
+- `of(Int)` → `OfInt{Nothing, Nothing}` - Unbounded integers
+- `of(Int, lower, upper)` → `OfInt{Val{lower}, Val{upper}}` - Bounded integers
 - `of((field1=..., field2=...))` → `OfNamedTuple{(:field1, :field2), Tuple{Type1, Type2}}` - Named tuples
+- `of(...; constant=true)` → `OfConstantWrapper{T}` - Marks a type as constant/hyperparameter
 
 ### 2. Type Parameter Encoding
 
 The system encodes extra useful information into type parameters:
 - **Dimensions**: Stored as tuple type parameters (e.g., `(3, 4)` for a 3×4 matrix)
 - **Bounds**: Encoded using `Val{x}` for numeric bounds or `Nothing` for unbounded
+- **Symbolic references**: Encoded using `SymbolicRef{:symbol}` for referencing other fields
 - **Field names**: Stored as tuple of symbols in `OfNamedTuple`
 - **Element types**: Preserved as type parameters for arrays and nested structures
 
@@ -39,33 +41,59 @@ The system encodes extra useful information into type parameters:
 - `flatten(T::Type{<:OfType}, values)` - Convert structured values to flat vector
 - `unflatten(T::Type{<:OfType}, vec)` - Reconstruct structured values from flat vector
 
-### 4. Symbolic Dimensions with Constants
+### 4. The @of Macro
+
+The `@of` macro provides cleaner syntax by automatically converting field references to symbols:
+
+```julia
+# Instead of writing:
+T = of((
+    n = of(Int; constant=true),
+    data = of(Array, :n, 2)
+))
+
+# You can write:
+T = @of(
+    n = of(Int; constant=true),
+    data = of(Array, n, 2)  # 'n' is automatically converted to :n
+)
+```
+
+### 5. Symbolic Dimensions and Bounds
 
 For cases where dimensions need to be specified at runtime:
 
 ```julia
 # Define type with symbolic dimensions
 MatrixType = of((
-    rows=of(Constant),
-    cols=of(Constant),
-    data=of(Array, :rows, :cols),
+    rows=of(Int; constant=true),    # Integer type preserved
+    cols=of(Int; constant=true),    # Integer type preserved
+    data=of(Array, :rows, :cols),   # Note: expressions like :(rows + 1) not yet supported
 ))
 
-rand(MatrixType; rows=3, cols=4)
-zero(MatrixType; rows=10, cols=5)
-
-rand(MatrixType; rows=3) # this would fail because some `Constant`s are not specified
+# Simpler with @of macro
+MatrixType = @of(
+    rows=of(Int; constant=true),
+    cols=of(Int; constant=true),
+    data=of(Array, rows, cols),  # Direct references converted to symbols
+)
+# Note: Expressions like 'rows + 1' are not yet supported
 
 # Create concrete type for use with flatten/unflatten
 ConcreteType = of(MatrixType; rows=3, cols=4)
 data = (data=rand(3, 4),)
+ConcreteType(data)
 flat = flatten(ConcreteType, data)
 reconstructed = unflatten(ConcreteType, flat)
+
+SemiConcreteType = of(MatrixType; rows=3) # this will return a type with `cols` eliminated
+
+# rand and zero will first concretize the type and call rand
+rand(MatrixType; rows=3, cols=4)
+zero(MatrixType; rows=10, cols=5)
+
+rand(MatrixType; rows=3) # this would fail because some `Constant`s are not specified
 ```
-
-### 5. Limitations and Concerns
-
-**Runtime bounds limitation**: The current design encodes bounds as type parameters using `Val`, which requires bounds to be compile-time constants. This means bounds cannot be determined at runtime from data or computed values. This is a fundamental limitation of the type-based approach, as type parameters in Julia must be immutable and known at compile time.
 
 ## Example Usage
 
@@ -95,14 +123,14 @@ Where:
 **Implementation with `of` type system:**
 
 ```julia
-ParamsType = of((
+ParamsType = @of(
     mu0=of(Real),
     beta=of(Array, Float64, 3),
     tau2=of(Real, 0, nothing),
     sigma2=of(Real, 0, nothing),
     school_effects=of(Array, 10),
     y=of(Array, 100),
-))
+)
 
 params_rand = rand(ParamsType)
 params_zero = zero(ParamsType)
@@ -150,4 +178,82 @@ new_params = unflatten(ParamsType, new_flat_params)
         y[i] ~ Normal(mean_i, sqrt(sigma2))
     end
 end
+```
+
+### Dynamic Model with Variable Dimensions
+
+Here's an example of a model where array dimensions depend on other parameters:
+
+```julia
+# Model where the number of mixture components is dynamic
+Tparams = @of(
+    n_components=of(Int, 1, 3; constant=true),  # Can be 1, 2, or 3
+    weights=of(Array, n_components),            # Size depends on n_components
+    means=of(Array, n_components),              # Size depends on n_components
+    y=of(Real)
+)
+
+@model function dynamic_mixture((; n_components, weights, means, y)::Tparams)
+    # Prior on component probabilities (Dirichlet)
+    if n_components == 1
+        weights[1] = 1.0  # Single component has weight 1
+        means[1] ~ Normal(0.0, 1.0)
+        y ~ Normal(means[1], 0.5)
+    elseif n_components == 2
+        # Two components
+        weights ~ Dirichlet([1.0, 1.0])
+        means[1] ~ Normal(-1.0, 1.0)
+        means[2] ~ Normal(1.0, 1.0)
+        # Mixture likelihood
+        z ~ Categorical(weights)
+        y ~ Normal(means[z], 0.5)
+    else  # n_components == 3
+        # Three components
+        weights ~ Dirichlet([1.0, 1.0, 1.0])
+        means[1] ~ Normal(-2.0, 1.0)
+        means[2] ~ Normal(0.0, 1.0)
+        means[3] ~ Normal(2.0, 1.0)
+        # Mixture likelihood
+        z ~ Categorical(weights)
+        y ~ Normal(means[z], 0.5)
+    end
+end
+
+# Another example: Variable-order autoregressive model
+ARParams = @of(
+    order=of(Int, 1, 5; constant=true),  # AR order between 1 and 5
+    coeffs=of(Array, order),             # AR coefficients
+    sigma=of(Real, 0, nothing),          # Error variance
+    y=of(Array, 100),                    # Time series data
+)
+
+@model function dynamic_ar((; order, coeffs, sigma, y)::ARParams, n_obs)
+    # Priors
+    for i in 1:order
+        coeffs[i] ~ Normal(0.0, 0.5)  # Shrinkage prior on AR coefficients
+    end
+    sigma ~ InverseGamma(2.0, 1.0)
+    
+    # AR likelihood
+    for t in (order+1):n_obs
+        # Compute AR prediction
+        pred = 0.0
+        for i in 1:order
+            pred += coeffs[i] * y[t-i]
+        end
+        y[t] ~ Normal(pred, sqrt(sigma))
+    end
+end
+
+# Usage example
+# Concrete type with specific dimensions
+ConcreteARType = of(ARParams; order=3)
+# This creates a type where coeffs has size 3
+
+data = (
+    coeffs=[0.5, -0.3, 0.1],
+    sigma=0.25,
+    y=randn(100)
+)
+params = ConcreteARType(data)
 ```

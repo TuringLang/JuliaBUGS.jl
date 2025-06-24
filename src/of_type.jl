@@ -1,12 +1,22 @@
 # Abstract base type for all Of types
 abstract type OfType end
 
+# Wrapper type for symbolic references in bounds
+struct SymbolicRef{S} end
+
 # Parametric types that store specification in type parameters
 # These are meant to be types only, not instantiable objects
 struct OfReal{Lower,Upper} <: OfType
     function OfReal{L,U}() where {L,U}
         return error(
             "OfReal is a type specification, not an instantiable object. Use of(Real, ...) to create the type.",
+        )
+    end
+end
+struct OfInt{Lower,Upper} <: OfType
+    function OfInt{L,U}() where {L,U}
+        return error(
+            "OfInt is a type specification, not an instantiable object. Use of(Int, ...) to create the type.",
         )
     end
 end
@@ -24,10 +34,10 @@ struct OfNamedTuple{Names,Types<:Tuple} <: OfType
         )
     end
 end
-struct OfConstant <: OfType
-    function OfConstant()
+struct OfConstantWrapper{T<:OfType} <: OfType
+    function OfConstantWrapper{T}() where {T<:OfType}
         return error(
-            "OfConstant is a type specification, not an instantiable object. Use of(Constant) to create the type.",
+            "OfConstantWrapper is a type specification, not an instantiable object. Use of(...; constant=true) to create the type.",
         )
     end
 end
@@ -35,30 +45,87 @@ end
 # Helper functions to extract type parameters
 get_lower(::Type{OfReal{L,U}}) where {L,U} = L
 get_upper(::Type{OfReal{L,U}}) where {L,U} = U
+get_lower(::Type{OfInt{L,U}}) where {L,U} = L
+get_upper(::Type{OfInt{L,U}}) where {L,U} = U
 get_element_type(::Type{OfArray{T,N,D}}) where {T,N,D} = T
 get_ndims(::Type{OfArray{T,N,D}}) where {T,N,D} = N
 get_dims(::Type{OfArray{T,N,D}}) where {T,N,D} = D
 get_names(::Type{OfNamedTuple{Names,Types}}) where {Names,Types} = Names
 get_types(::Type{OfNamedTuple{Names,Types}}) where {Names,Types} = Types
+get_wrapped_type(::Type{OfConstantWrapper{T}}) where {T} = T
 
 # Convert bounds to type parameters (using Val for runtime values)
 bound_to_type(::Nothing) = Nothing
 bound_to_type(x::Real) = Val{x}
+bound_to_type(s::Symbol) = SymbolicRef{s}  # Wrap symbols in a type
+bound_to_type(s::QuoteNode) = SymbolicRef{s.value}  # Extract symbol from QuoteNode and wrap
 
 # Extract value from Val type
 type_to_bound(::Type{Nothing}) = nothing
 type_to_bound(::Type{Val{x}}) where {x} = x
+type_to_bound(::Type{SymbolicRef{S}}) where {S} = S  # Extract symbol from wrapper
+type_to_bound(s::Symbol) = s  # For runtime symbol values
 
-# Main of function that returns types
-function of(::Type{Array}, dims...)
-    # Default to Float64 for unspecified array types
-    # Dims can be integers or symbols (for referencing constants)
-    return OfArray{Float64,length(dims),dims}
+# Resolve bound references during type concretization
+function resolve_bound(::Type{Nothing}, replacements::NamedTuple)
+    return Nothing
 end
 
-function of(::Type{Array}, T::Type, dims...)
-    # Dims can be integers or symbols (for referencing constants)
-    return OfArray{T,length(dims),dims}
+function resolve_bound(::Type{Val{x}}, replacements::NamedTuple) where {x}
+    return Val{x}  # Already concrete
+end
+
+function resolve_bound(::Type{SymbolicRef{S}}, replacements::NamedTuple) where {S}
+    if haskey(replacements, S)
+        # Convert the replacement value to a bound type
+        return bound_to_type(replacements[S])
+    else
+        # Keep as symbolic if not in replacements
+        return SymbolicRef{S}
+    end
+end
+
+# Fallback for other types
+function resolve_bound(T::Type, replacements::NamedTuple)
+    return T
+end
+
+# Main of function that returns types
+function of(::Type{Array}, dims...; constant::Bool=false)
+    # Default to Float64 for unspecified array types
+    # Dims can be integers, symbols, or expressions (for referencing constants)
+    processed_dims = map(dims) do d
+        if d isa QuoteNode
+            d.value  # Extract the value from QuoteNode
+        else
+            d
+        end
+    end
+    base_type = OfArray{Float64,length(processed_dims),processed_dims}
+    return constant ? OfConstantWrapper{base_type} : base_type
+end
+
+function of(::Type{Array}, T::Type, dims...; constant::Bool=false)
+    # Dims can be integers, symbols, or expressions (for referencing constants)
+    processed_dims = map(dims) do d
+        if d isa QuoteNode
+            d.value  # Extract the value from QuoteNode
+        else
+            d
+        end
+    end
+    base_type = OfArray{T,length(processed_dims),processed_dims}
+    return constant ? OfConstantWrapper{base_type} : base_type
+end
+
+function of(::Type{Int})
+    return OfInt{Nothing,Nothing}
+end
+
+function of(::Type{Int}, lower::Union{Int,Nothing}, upper::Union{Int,Nothing})
+    L = bound_to_type(lower)
+    U = bound_to_type(upper)
+    return OfInt{L,U}
 end
 
 function of(::Type{Real})
@@ -93,11 +160,232 @@ end
 # Support for passing OfType types through of()
 of(T::Type{<:OfType}) = T
 
-# Create a marker type for Constant
-struct Constant end
+# Support constant=true syntax
+function of(::Type{Int}; constant::Bool=false)
+    base_type = OfInt{Nothing,Nothing}
+    return constant ? OfConstantWrapper{base_type} : base_type
+end
 
-# Create OfConstant
-of(::Type{Constant}) = OfConstant
+function of(
+    ::Type{Int}, lower::Union{Int,Nothing}, upper::Union{Int,Nothing}; constant::Bool=false
+)
+    L = bound_to_type(lower)
+    U = bound_to_type(upper)
+    base_type = OfInt{L,U}
+    return constant ? OfConstantWrapper{base_type} : base_type
+end
+
+function of(::Type{Real}; constant::Bool=false)
+    base_type = OfReal{Nothing,Nothing}
+    return constant ? OfConstantWrapper{base_type} : base_type
+end
+
+function of(
+    ::Type{Real},
+    lower::Union{Real,Nothing},
+    upper::Union{Real,Nothing};
+    constant::Bool=false,
+)
+    L = bound_to_type(lower)
+    U = bound_to_type(upper)
+    base_type = OfReal{L,U}
+    return constant ? OfConstantWrapper{base_type} : base_type
+end
+
+# Handle symbolic bounds
+function of(
+    ::Type{Int},
+    lower::Union{Int,Nothing,Symbol},
+    upper::Union{Int,Nothing,Symbol};
+    constant::Bool=false,
+)
+    L = bound_to_type(lower)
+    U = bound_to_type(upper)
+    base_type = OfInt{L,U}
+    return constant ? OfConstantWrapper{base_type} : base_type
+end
+
+function of(
+    ::Type{Real},
+    lower::Union{Real,Nothing,Symbol},
+    upper::Union{Real,Nothing,Symbol};
+    constant::Bool=false,
+)
+    L = bound_to_type(lower)
+    U = bound_to_type(upper)
+    base_type = OfReal{L,U}
+    return constant ? OfConstantWrapper{base_type} : base_type
+end
+
+# Macro implementation for cleaner of syntax
+
+"""
+    @of(field1=spec1, field2=spec2, ...)
+
+Create an OfNamedTuple type with cleaner syntax that allows direct references
+between fields without needing symbols.
+
+# Examples
+```julia
+# Instead of:
+T = of((
+    rows=of(Constant),
+    cols=of(Constant),
+    data=of(Array, :rows, :cols)
+))
+
+# You can write:
+T = @of(
+    rows=of(Int; constant=true),
+    cols=of(Int; constant=true),
+    data=of(Array, rows, cols)
+)
+```
+"""
+macro of(args...)
+    # Parse the arguments to extract field specifications
+    fields = Dict{Symbol,Any}()
+    field_order = Symbol[]
+
+    for arg in args
+        if !(arg isa Expr && arg.head == :(=) && length(arg.args) == 2)
+            error("@of expects keyword arguments like field=spec")
+        end
+
+        field_name = arg.args[1]
+        field_spec = arg.args[2]
+
+        if field_name isa Symbol
+            fields[field_name] = field_spec
+            push!(field_order, field_name)
+        else
+            error("Field name must be a symbol, got $(field_name)")
+        end
+    end
+
+    # Process each field specification, converting references to symbols
+    processed_fields = Dict{Symbol,Any}()
+
+    for (field_name, spec) in fields
+        processed_spec = process_of_spec(spec, field_order)
+        processed_fields[field_name] = processed_spec
+    end
+
+    # Build the named tuple expression
+    nt_expr = Expr(:tuple)
+    for field_name in field_order
+        push!(nt_expr.args, Expr(:(=), field_name, processed_fields[field_name]))
+    end
+
+    # Return the of call
+    return esc(:(of($nt_expr)))
+end
+
+"""
+Process an of specification, converting field references to symbols.
+"""
+function process_of_spec(spec::Expr, available_fields::Vector{Symbol})
+    if spec.head == :call && length(spec.args) >= 1
+        func = spec.args[1]
+
+        # Check if this is an of(...) call
+        if func == :of
+            # Process the arguments
+            new_args = Any[func]  # Use Any[] to allow mixed types
+
+            # Separate positional and keyword arguments
+            pos_args = []
+            kw_args = []
+
+            for arg in spec.args[2:end]
+                if arg isa Expr && arg.head == :parameters
+                    # Handle parameters block (e.g., f(x; a=1, b=2))
+                    for param in arg.args
+                        push!(kw_args, param)
+                    end
+                elseif arg isa Expr && arg.head == :kw
+                    # Handle individual keyword argument
+                    push!(kw_args, arg)
+                else
+                    # Positional argument
+                    push!(pos_args, arg)
+                end
+            end
+
+            # Process positional arguments
+            for arg in pos_args
+                processed_arg = process_dimension_arg(arg, available_fields)
+                push!(new_args, processed_arg)
+            end
+
+            # Add keyword arguments as-is
+            if !isempty(kw_args)
+                params_expr = Expr(:parameters, kw_args...)
+                insert!(new_args, 2, params_expr)
+            end
+
+            return Expr(:call, new_args...)
+        else
+            # Not an of call, process recursively
+            return Expr(
+                spec.head, [process_of_spec(arg, available_fields) for arg in spec.args]...
+            )
+        end
+    else
+        return spec
+    end
+end
+
+process_of_spec(x, available_fields::Vector{Symbol}) = x
+
+"""
+Process a dimension/bound argument, converting field references to symbols.
+"""
+function process_dimension_arg(arg, available_fields::Vector{Symbol})
+    if arg isa Symbol && arg in available_fields
+        # Convert field reference to symbol
+        return QuoteNode(arg)
+    elseif arg isa Expr
+        # Check for expressions containing field references
+        return process_expression_refs(arg, available_fields)
+    else
+        # Leave other values as-is
+        return arg
+    end
+end
+
+"""
+Process an expression, converting field references to symbols in expressions.
+"""
+function process_expression_refs(expr::Expr, available_fields::Vector{Symbol})
+    # For simple arithmetic expressions with field references
+    if expr.head in [:+, :-, :*, :/, :call]
+        new_args = []
+
+        for arg in expr.args
+            if arg isa Symbol && arg in available_fields
+                # This is a field reference in an expression
+                # We need to keep the expression structure but mark it
+                push!(new_args, arg)
+            elseif arg isa Expr
+                push!(new_args, process_expression_refs(arg, available_fields))
+            else
+                push!(new_args, arg)
+            end
+        end
+
+        # For expressions like `rows + 1`, we need to return the whole expression
+        # as a quoted expression that will be stored in the type
+        if any(arg isa Symbol && arg in available_fields for arg in expr.args)
+            # This expression contains field references, quote the whole thing
+            return QuoteNode(expr)
+        else
+            return Expr(expr.head, new_args...)
+        end
+    else
+        return expr
+    end
+end
 
 # Replace OfConstants in a type with concrete values
 function of(::Type{T}, pairs::Pair{Symbol}...) where {T<:OfType}
@@ -114,7 +402,7 @@ function of(::Type{OfNamedTuple{Names,Types}}, replacements::NamedTuple) where {
         name = Names[i]
         field_type = Types.parameters[i]
 
-        if field_type <: OfConstant && haskey(replacements, name)
+        if field_type <: OfConstantWrapper && haskey(replacements, name)
             # Skip - constants are removed in the concrete type
             return nothing
         elseif field_type <: OfArray
@@ -137,6 +425,69 @@ function of(::Type{OfNamedTuple{Names,Types}}, replacements::NamedTuple) where {
         elseif field_type <: OfNamedTuple
             # Recursively handle nested named tuples
             return of(field_type, replacements)
+        elseif field_type <: OfReal
+            # Check if bounds have symbolic references
+            lower = get_lower(field_type)
+            upper = get_upper(field_type)
+
+            new_lower = resolve_bound(lower, replacements)
+            new_upper = resolve_bound(upper, replacements)
+
+            if new_lower !== lower || new_upper !== upper
+                # Create new type with resolved bounds
+                return OfReal{new_lower,new_upper}
+            else
+                return field_type
+            end
+        elseif field_type <: OfInt
+            # Check if bounds have symbolic references
+            lower = get_lower(field_type)
+            upper = get_upper(field_type)
+
+            new_lower = resolve_bound(lower, replacements)
+            new_upper = resolve_bound(upper, replacements)
+
+            if new_lower !== lower || new_upper !== upper
+                # Create new type with resolved bounds
+                return OfInt{new_lower,new_upper}
+            else
+                return field_type
+            end
+        elseif field_type <: OfConstantWrapper
+            # Handle wrapped types - even constants might have symbolic bounds
+            wrapped = get_wrapped_type(field_type)
+            if wrapped <: OfReal
+                # Check if the wrapped real has symbolic bounds
+                lower = get_lower(wrapped)
+                upper = get_upper(wrapped)
+
+                new_lower = resolve_bound(lower, replacements)
+                new_upper = resolve_bound(upper, replacements)
+
+                if new_lower !== lower || new_upper !== upper
+                    # Create new wrapped type with resolved bounds
+                    return OfConstantWrapper{OfReal{new_lower,new_upper}}
+                else
+                    return field_type
+                end
+            elseif wrapped <: OfInt
+                # Check if the wrapped int has symbolic bounds
+                lower = get_lower(wrapped)
+                upper = get_upper(wrapped)
+
+                new_lower = resolve_bound(lower, replacements)
+                new_upper = resolve_bound(upper, replacements)
+
+                if new_lower !== lower || new_upper !== upper
+                    # Create new wrapped type with resolved bounds
+                    return OfConstantWrapper{OfInt{new_lower,new_upper}}
+                else
+                    return field_type
+                end
+            else
+                # For other wrapped types, keep as is
+                return field_type
+            end
         else
             return field_type
         end
@@ -168,10 +519,9 @@ function of(::Type{OfArray{T,N,D}}, replacements::NamedTuple) where {T,N,D}
 end
 
 function of(::Type{T}, replacements::NamedTuple) where {T<:OfType}
-    # For other types (OfReal, OfConstant), just return as-is
+    # For other types (OfReal, OfConstantWrapper), just return as-is
     return T
 end
-
 
 # rand implementations for types
 function Base.rand(::Type{OfArray{T,N,D}}) where {T,N,D}
@@ -203,9 +553,35 @@ function Base.rand(::Type{OfReal{L,U}}) where {L,U}
     end
 end
 
+function Base.rand(::Type{OfInt{L,U}}) where {L,U}
+    lower = type_to_bound(L)
+    upper = type_to_bound(U)
+
+    if !isnothing(lower) && !isnothing(upper)
+        # Generate random integer in [lower, upper]
+        return rand(lower:upper)
+    elseif !isnothing(lower)
+        # For lower bound only, generate values in [lower, lower+100]
+        # This is arbitrary but provides reasonable default behavior
+        return rand(lower:(lower + 100))
+    elseif !isnothing(upper)
+        # For upper bound only, generate values in [upper-100, upper]
+        return rand((upper - 100):upper)
+    else
+        # Unbounded integer - generate in reasonable range
+        return rand(-100:100)
+    end
+end
+
 function Base.rand(::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
     values = Tuple(rand(T) for T in Types.parameters)
     return NamedTuple{Names}(values)
+end
+
+function Base.rand(::Type{OfConstantWrapper{T}}) where {T}
+    return error(
+        "Cannot generate random values for constants. Use rand(T; const_name=value) to provide the constant value.",
+    )
 end
 
 # zero implementations for types
@@ -231,14 +607,61 @@ function Base.zero(::Type{OfReal{L,U}}) where {L,U}
     end
 end
 
+function Base.zero(::Type{OfInt{L,U}}) where {L,U}
+    lower = type_to_bound(L)
+    upper = type_to_bound(U)
+
+    if !isnothing(lower) && lower > 0
+        return lower
+    elseif !isnothing(upper) && upper < 0
+        return upper
+    else
+        return 0
+    end
+end
+
 function Base.zero(::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
     values = Tuple(zero(T) for T in Types.parameters)
     return NamedTuple{Names}(values)
 end
 
+function Base.zero(::Type{OfConstantWrapper{T}}) where {T}
+    return error(
+        "Cannot generate zero values for constants. Use zero(T; const_name=value) to provide the constant value.",
+    )
+end
+
 # Show implementations
 function Base.show(io::IO, ::Type{OfArray{T,N,D}}) where {T,N,D}
-    dims_str = join(map(d -> d isa Symbol ? ":$d" : string(d), D), ", ")
+    # Check if we're in a context where we can highlight symbolic references
+    use_color = get(io, :color, false)
+    constant_fields = get(io, :constant_fields, Symbol[])
+
+    # Process dimensions, highlighting those that reference constants
+    if use_color && !isempty(constant_fields)
+        # We need to manually handle the coloring
+        print(io, "of(Array, ")
+        if T !== Float64
+            print(io, T, ", ")
+        end
+        for (i, d) in enumerate(D)
+            if d isa Symbol && d in constant_fields
+                # This dimension references a constant field - highlight it
+                printstyled(io, string(d); color=:yellow)
+            else
+                print(io, string(d))
+            end
+            if i < length(D)
+                print(io, ", ")
+            end
+        end
+        print(io, ")")
+        return nothing
+    end
+
+    # Non-color version
+    dims_str = join(map(d -> string(d), D), ", ")
+
     if T === Float64
         print(io, "of(Array, ", dims_str, ")")
     else
@@ -247,27 +670,176 @@ function Base.show(io::IO, ::Type{OfArray{T,N,D}}) where {T,N,D}
 end
 
 function Base.show(io::IO, ::Type{OfReal{L,U}}) where {L,U}
-    lower = type_to_bound(L)
-    upper = type_to_bound(U)
-
-    if isnothing(lower) && isnothing(upper)
+    if isnothing(L) && isnothing(U)
         print(io, "of(Real)")
     else
-        print(
-            io,
-            "of(Real, ",
-            something(lower, "nothing"),
-            ", ",
-            something(upper, "nothing"),
-            ")",
-        )
+        use_color = get(io, :color, false)
+        constant_fields = get(io, :constant_fields, Symbol[])
+
+        # Handle different bound types
+        lower_str = if L === Nothing
+            "nothing"
+        elseif L <: Val
+            string(type_to_bound(L))
+        elseif L <: SymbolicRef
+            sym = type_to_bound(L)
+            if sym in constant_fields && use_color
+                sprint() do io_inner
+                    printstyled(io_inner, string(sym); color=:yellow)
+                end
+            else
+                string(sym)
+            end
+        else
+            string(L)
+        end
+
+        upper_str = if U === Nothing
+            "nothing"
+        elseif U <: Val
+            string(type_to_bound(U))
+        elseif U <: SymbolicRef
+            sym = type_to_bound(U)
+            if sym in constant_fields && use_color
+                sprint() do io_inner
+                    printstyled(io_inner, string(sym); color=:yellow)
+                end
+            else
+                string(sym)
+            end
+        else
+            string(U)
+        end
+
+        print(io, "of(Real, ")
+        # Handle lower bound
+        if L <: SymbolicRef && type_to_bound(L) in constant_fields && use_color
+            printstyled(io, string(type_to_bound(L)); color=:yellow)
+        else
+            print(io, lower_str)
+        end
+        print(io, ", ")
+        # Handle upper bound
+        if U <: SymbolicRef && type_to_bound(U) in constant_fields && use_color
+            printstyled(io, string(type_to_bound(U)); color=:yellow)
+        else
+            print(io, upper_str)
+        end
+        print(io, ")")
+    end
+end
+
+function Base.show(io::IO, ::Type{OfInt{L,U}}) where {L,U}
+    if isnothing(L) && isnothing(U)
+        print(io, "of(Int)")
+    else
+        use_color = get(io, :color, false)
+        constant_fields = get(io, :constant_fields, Symbol[])
+
+        # Handle different bound types
+        lower_str = if L === Nothing
+            "nothing"
+        elseif L <: Val
+            string(type_to_bound(L))
+        elseif L <: SymbolicRef
+            sym = type_to_bound(L)
+            if sym in constant_fields && use_color
+                sprint() do io_inner
+                    printstyled(io_inner, string(sym); color=:yellow)
+                end
+            else
+                string(sym)
+            end
+        else
+            string(L)
+        end
+
+        upper_str = if U === Nothing
+            "nothing"
+        elseif U <: Val
+            string(type_to_bound(U))
+        elseif U <: SymbolicRef
+            sym = type_to_bound(U)
+            if sym in constant_fields && use_color
+                sprint() do io_inner
+                    printstyled(io_inner, string(sym); color=:yellow)
+                end
+            else
+                string(sym)
+            end
+        else
+            string(U)
+        end
+
+        print(io, "of(Int, ")
+        # Handle lower bound
+        if L <: SymbolicRef && type_to_bound(L) in constant_fields && use_color
+            printstyled(io, string(type_to_bound(L)); color=:yellow)
+        else
+            print(io, lower_str)
+        end
+        print(io, ", ")
+        # Handle upper bound
+        if U <: SymbolicRef && type_to_bound(U) in constant_fields && use_color
+            printstyled(io, string(type_to_bound(U)); color=:yellow)
+        else
+            print(io, upper_str)
+        end
+        print(io, ")")
     end
 end
 
 function Base.show(io::IO, ::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
+    # Collect constant fields to pass to child types
+    constant_fields = Symbol[]
+    for (name, T) in zip(Names, Types.parameters)
+        if T <: OfConstantWrapper
+            push!(constant_fields, name)
+        end
+    end
+
+    # Create a new IO context with constant fields information
+    io_with_constants = IOContext(io, :constant_fields => constant_fields)
+
     print(io, "of((")
     for (i, (name, T)) in enumerate(zip(Names, Types.parameters))
-        print(io, name, "=", T)
+        # Check if this field is a constant
+        is_constant = T <: OfConstantWrapper
+
+        if is_constant && get(io, :color, false)
+            # Print constant fields in yellow
+            printstyled(io, name; color=:yellow, bold=true)
+        else
+            print(io, name)
+        end
+
+        print(io, "=")
+
+        # For constants, show the wrapped type with styling
+        if is_constant && get(io, :color, false)
+            # Show the wrapped type content
+            wrapped = get_wrapped_type(T)
+            if wrapped <: OfReal &&
+                get_lower(wrapped) === Nothing &&
+                get_upper(wrapped) === Nothing
+                printstyled(io, "of(Real"; color=:yellow)
+                printstyled(io, "; constant=true"; color=:light_black)
+                printstyled(io, ")"; color=:yellow)
+            elseif wrapped <: OfInt &&
+                get_lower(wrapped) === Nothing &&
+                get_upper(wrapped) === Nothing
+                printstyled(io, "of(Int"; color=:yellow)
+                printstyled(io, "; constant=true"; color=:light_black)
+                printstyled(io, ")"; color=:yellow)
+            else
+                # For other constant types, use default show with constants context
+                show(io_with_constants, T)
+            end
+        else
+            # Show non-constant fields with the constants context
+            show(io_with_constants, T)
+        end
+
         if i < length(Names)
             print(io, ", ")
         end
@@ -275,8 +847,205 @@ function Base.show(io::IO, ::Type{OfNamedTuple{Names,Types}}) where {Names,Types
     return print(io, "))")
 end
 
-function Base.show(io::IO, ::Type{OfConstant})
-    return print(io, "of(Constant)")
+function Base.show(io::IO, ::Type{OfConstantWrapper{T}}) where {T}
+    # Show the wrapped type with constant=true
+    # Extract the base specification
+    use_color = get(io, :color, false)
+
+    if T <: OfReal
+        L = get_lower(T)
+        U = get_upper(T)
+        if L === Nothing && U === Nothing
+            if use_color
+                printstyled(io, "of(Real"; color=:yellow)
+                printstyled(io, "; constant=true"; color=:light_black)
+                printstyled(io, ")"; color=:yellow)
+            else
+                print(io, "of(Real; constant=true)")
+            end
+        else
+            # Get constant fields from context
+            constant_fields = get(io, :constant_fields, Symbol[])
+
+            # Handle different bound types
+            lower_str = if L === Nothing
+                "nothing"
+            elseif L <: Val
+                string(type_to_bound(L))
+            elseif L <: SymbolicRef
+                sym = type_to_bound(L)
+                if sym in constant_fields && use_color
+                    sprint() do io_inner
+                        printstyled(io_inner, string(sym); color=:yellow)
+                    end
+                else
+                    string(sym)
+                end
+            else
+                string(L)
+            end
+
+            upper_str = if U === Nothing
+                "nothing"
+            elseif U <: Val
+                string(type_to_bound(U))
+            elseif U <: SymbolicRef
+                sym = type_to_bound(U)
+                if sym in constant_fields && use_color
+                    sprint() do io_inner
+                        printstyled(io_inner, string(sym); color=:yellow)
+                    end
+                else
+                    string(sym)
+                end
+            else
+                string(U)
+            end
+
+            if use_color
+                printstyled(io, "of(Real, "; color=:yellow)
+                # Handle lower bound
+                if L <: SymbolicRef && type_to_bound(L) in constant_fields
+                    printstyled(io, string(type_to_bound(L)); color=:yellow)
+                else
+                    printstyled(io, lower_str; color=:yellow)
+                end
+                printstyled(io, ", "; color=:yellow)
+                # Handle upper bound
+                if U <: SymbolicRef && type_to_bound(U) in constant_fields
+                    printstyled(io, string(type_to_bound(U)); color=:yellow)
+                else
+                    printstyled(io, upper_str; color=:yellow)
+                end
+                printstyled(io, "; constant=true"; color=:light_black)
+                printstyled(io, ")"; color=:yellow)
+            else
+                print(io, "of(Real, ", lower_str, ", ", upper_str, "; constant=true)")
+            end
+        end
+    elseif T <: OfInt
+        L = get_lower(T)
+        U = get_upper(T)
+        if L === Nothing && U === Nothing
+            if use_color
+                printstyled(io, "of(Int"; color=:yellow)
+                printstyled(io, "; constant=true"; color=:light_black)
+                printstyled(io, ")"; color=:yellow)
+            else
+                print(io, "of(Int; constant=true)")
+            end
+        else
+            # Get constant fields from context
+            constant_fields = get(io, :constant_fields, Symbol[])
+
+            # Handle different bound types
+            lower_str = if L === Nothing
+                "nothing"
+            elseif L <: Val
+                string(type_to_bound(L))
+            elseif L <: SymbolicRef
+                sym = type_to_bound(L)
+                if sym in constant_fields && use_color
+                    sprint() do io_inner
+                        printstyled(io_inner, string(sym); color=:yellow)
+                    end
+                else
+                    string(sym)
+                end
+            else
+                string(L)
+            end
+
+            upper_str = if U === Nothing
+                "nothing"
+            elseif U <: Val
+                string(type_to_bound(U))
+            elseif U <: SymbolicRef
+                sym = type_to_bound(U)
+                if sym in constant_fields && use_color
+                    sprint() do io_inner
+                        printstyled(io_inner, string(sym); color=:yellow)
+                    end
+                else
+                    string(sym)
+                end
+            else
+                string(U)
+            end
+
+            if use_color
+                printstyled(io, "of(Int, "; color=:yellow)
+                # Handle lower bound
+                if L <: SymbolicRef && type_to_bound(L) in constant_fields
+                    printstyled(io, string(type_to_bound(L)); color=:yellow)
+                else
+                    printstyled(io, lower_str; color=:yellow)
+                end
+                printstyled(io, ", "; color=:yellow)
+                # Handle upper bound
+                if U <: SymbolicRef && type_to_bound(U) in constant_fields
+                    printstyled(io, string(type_to_bound(U)); color=:yellow)
+                else
+                    printstyled(io, upper_str; color=:yellow)
+                end
+                printstyled(io, "; constant=true"; color=:light_black)
+                printstyled(io, ")"; color=:yellow)
+            else
+                print(io, "of(Int, ", lower_str, ", ", upper_str, "; constant=true)")
+            end
+        end
+    elseif T <: OfArray
+        elem_type = get_element_type(T)
+        dims = get_dims(T)
+
+        # Get constant fields from context
+        constant_fields = get(io, :constant_fields, Symbol[])
+
+        # Process dimensions with color highlighting for constant references
+        dims_parts = String[]
+        for d in dims
+            if d isa Symbol && d in constant_fields && use_color
+                # This dimension references a constant field - highlight it
+                dim_str = sprint() do io_inner
+                    printstyled(io_inner, string(d); color=:yellow)
+                end
+                push!(dims_parts, dim_str)
+            else
+                push!(dims_parts, string(d))
+            end
+        end
+        dims_str = join(dims_parts, ", ")
+
+        if use_color
+            printstyled(io, "of(Array, "; color=:yellow)
+            if elem_type !== Float64
+                print(io, elem_type)
+                printstyled(io, ", "; color=:yellow)
+            end
+            # Print dimensions with highlighting
+            for (i, d) in enumerate(dims)
+                if d isa Symbol && d in constant_fields
+                    printstyled(io, string(d); color=:yellow)
+                else
+                    printstyled(io, string(d); color=:yellow)
+                end
+                if i < length(dims)
+                    printstyled(io, ", "; color=:yellow)
+                end
+            end
+            printstyled(io, "; constant=true"; color=:light_black)
+            printstyled(io, ")"; color=:yellow)
+        else
+            if elem_type === Float64
+                print(io, "of(Array, ", dims_str, "; constant=true)")
+            else
+                print(io, "of(Array, ", elem_type, ", ", dims_str, "; constant=true)")
+            end
+        end
+    else
+        # Fallback
+        print(io, "OfConstantWrapper{", T, "}")
+    end
 end
 
 # Make OfType types callable as constructors
@@ -322,6 +1091,31 @@ function validate_leaf(::Type{OfReal{L,U}}, value) where {L,U}
     end
 end
 
+function validate_leaf(::Type{OfInt{L,U}}, value) where {L,U}
+    if value isa Integer
+        val = convert(Int, value)
+        lower = type_to_bound(L)
+        upper = type_to_bound(U)
+
+        if !isnothing(lower) && val < lower
+            error("Value $val is below lower bound $lower")
+        end
+        if !isnothing(upper) && val > upper
+            error("Value $val is above upper bound $upper")
+        end
+        return val
+    elseif value isa Real
+        # Allow conversion from Real to Int if it's a whole number
+        if isinteger(value)
+            return validate_leaf(OfInt{L,U}, Int(value))
+        else
+            error("Expected Integer for OfInt, got non-integer Real: $value")
+        end
+    else
+        error("Expected Integer for OfInt, got $(typeof(value))")
+    end
+end
+
 function validate_container(::Type{OfNamedTuple{Names,Types}}, value) where {Names,Types}
     value isa NamedTuple ||
         error("Expected NamedTuple for OfNamedTuple, got $(typeof(value))")
@@ -342,19 +1136,17 @@ function validate_container(::Type{OfNamedTuple{Names,Types}}, value) where {Nam
     return NamedTuple{Names}(vals)
 end
 
-function validate_leaf(::Type{OfConstant}, value)
-    if value isa Real
-        return value  # Keep the original type (Int, Float64, etc.)
-    else
-        error("Expected Real for OfConstant, got $(typeof(value))")
-    end
+function validate_leaf(::Type{OfConstantWrapper{T}}, value) where {T}
+    # Validate against the wrapped type
+    return validate_leaf(T, value)
 end
 
 # Check if a type is a leaf
 is_leaf(::Type{<:OfArray}) = true
 is_leaf(::Type{<:OfReal}) = true
+is_leaf(::Type{<:OfInt}) = true
 is_leaf(::Type{<:OfNamedTuple}) = false
-is_leaf(::Type{<:OfConstant}) = true
+is_leaf(::Type{<:OfConstantWrapper}) = true
 
 # Get size of OfType types
 function Base.size(::Type{OfArray{T,N,D}}) where {T,N,D}
@@ -368,6 +1160,10 @@ function Base.size(::Type{OfReal{L,U}}) where {L,U}
     return ()  # Scalar has empty dimensions
 end
 
+function Base.size(::Type{OfInt{L,U}}) where {L,U}
+    return ()  # Scalar has empty dimensions
+end
+
 function Base.size(::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
     # Return a named tuple with dimensions of each field
     dims = map(Names) do name
@@ -377,8 +1173,8 @@ function Base.size(::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
     return NamedTuple{Names}(dims)
 end
 
-function Base.size(::Type{OfConstant})
-    return ()  # Constants are scalars
+function Base.size(::Type{OfConstantWrapper{T}}) where {T}
+    return size(T)  # Delegate to wrapped type
 end
 
 # Get flattened length of OfType types
@@ -393,12 +1189,16 @@ function Base.length(::Type{OfReal{L,U}}) where {L,U}
     return 1
 end
 
+function Base.length(::Type{OfInt{L,U}}) where {L,U}
+    return 1
+end
+
 function Base.length(::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
     # Sum lengths of all fields
     return sum(length(Types.parameters[i]) for i in 1:length(Names))
 end
 
-function Base.length(::Type{OfConstant})
+function Base.length(::Type{OfConstantWrapper{T}}) where {T}
     return 0  # Constants are not part of the flattened representation
 end
 
@@ -411,7 +1211,7 @@ function has_symbolic_dims(::Type{T}) where {T<:OfType}
         types = get_types(T)
         for i in 1:length(types.parameters)
             field_type = types.parameters[i]
-            if field_type <: OfConstant || has_symbolic_dims(field_type)
+            if field_type <: OfConstantWrapper || has_symbolic_dims(field_type)
                 return true
             end
         end
@@ -439,7 +1239,7 @@ function get_unresolved_symbols(::Type{T}) where {T<:OfType}
             for (i, name) in enumerate(names)
                 field_type = types.parameters[i]
                 new_path = isempty(path) ? string(name) : "$path.$name"
-                if field_type <: OfConstant
+                if field_type <: OfConstantWrapper
                     push!(symbols, name)
                 else
                     collect_symbols(field_type, new_path)
@@ -473,6 +1273,8 @@ function flatten(::Type{T}, values) where {T<:OfType}
                 append!(numerical_values, vec(val_node))
             elseif oft_type <: OfReal
                 push!(numerical_values, val_node)
+            elseif oft_type <: OfInt
+                push!(numerical_values, Float64(val_node))  # Convert to Float64 for flattening
             end
         elseif oft_type <: OfNamedTuple
             names = get_names(oft_type)
@@ -502,13 +1304,16 @@ function unflatten(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfType}
         if is_leaf(oft_type)
             if oft_type <: OfArray
                 dims = size(oft_type)
+                elem_type = get_element_type(oft_type)
                 n_elements = prod(dims)
                 if pos[] + n_elements - 1 > length(flat_values)
                     error("Not enough values in flat array")
                 end
                 values = flat_values[pos[]:(pos[] + n_elements - 1)]
                 pos[] += n_elements
-                return reshape(values, dims)
+                # Convert to proper array type
+                typed_array = Array{elem_type}(reshape(values, dims))
+                return typed_array
             elseif oft_type <: OfReal
                 if pos[] > length(flat_values)
                     error("Not enough values in flat array")
@@ -527,6 +1332,25 @@ function unflatten(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfType}
                     error("Value $val is above upper bound $upper")
                 end
                 return val
+            elseif oft_type <: OfInt
+                if pos[] > length(flat_values)
+                    error("Not enough values in flat array")
+                end
+                val = flat_values[pos[]]
+                pos[] += 1
+
+                # Convert back to Int and apply bounds validation
+                int_val = round(Int, val)
+                lower = type_to_bound(get_lower(oft_type))
+                upper = type_to_bound(get_upper(oft_type))
+
+                if !isnothing(lower) && int_val < lower
+                    error("Value $int_val is below lower bound $lower")
+                end
+                if !isnothing(upper) && int_val > upper
+                    error("Value $int_val is above upper bound $upper")
+                end
+                return int_val
             end
         elseif oft_type <: OfNamedTuple
             names = get_names(oft_type)
@@ -571,15 +1395,67 @@ function Base.zero(::Type{T}; kwargs...) where {T<:OfType}
     return zero(concrete_type)
 end
 
-# Parameterized constructor that accepts keyword arguments for constants
+# Parameterized constructor that accepts keyword arguments for constants and values
 function (::Type{T})(; kwargs...) where {T<:OfType}
-    concrete_type = of(T, NamedTuple(kwargs))
-    if has_symbolic_dims(concrete_type)
-        missing_symbols = get_unresolved_symbols(concrete_type)
-        provided = keys(kwargs)
-        error(
-            "Missing values for symbolic dimensions: $(join(missing_symbols, ", ")). You provided: $(join(provided, ", "))",
-        )
+    kwargs_dict = Dict(kwargs)
+
+    # Separate constants from values
+    if T <: OfNamedTuple
+        names = get_names(T)
+        types = get_types(T)
+
+        # First pass: collect constants for resolution
+        constants = Dict{Symbol,Any}()
+        values = Dict{Symbol,Any}()
+
+        for (i, name) in enumerate(names)
+            field_type = types.parameters[i]
+            if field_type <: OfConstantWrapper && haskey(kwargs_dict, name)
+                constants[name] = kwargs_dict[name]
+            elseif haskey(kwargs_dict, name)
+                values[name] = kwargs_dict[name]
+            end
+        end
+
+        # Create concrete type with constants resolved
+        concrete_type = of(T, NamedTuple(constants))
+
+        # Check for unresolved symbols
+        if has_symbolic_dims(concrete_type)
+            missing_symbols = get_unresolved_symbols(concrete_type)
+            provided = keys(constants)
+            error(
+                "Missing values for symbolic dimensions: $(join(missing_symbols, ", ")). You provided: $(join(provided, ", "))",
+            )
+        end
+
+        # Now validate the values against the concrete type
+        concrete_names = get_names(concrete_type)
+        concrete_types = get_types(concrete_type)
+
+        # Build the result named tuple
+        result_values = []
+        for (i, name) in enumerate(concrete_names)
+            field_type = concrete_types.parameters[i]
+            if haskey(values, name)
+                # Validate the provided value
+                push!(result_values, field_type(values[name]))
+            else
+                error("Missing value for field: $name")
+            end
+        end
+
+        return NamedTuple{concrete_names}(Tuple(result_values))
+    else
+        # For non-NamedTuple types, just create zero
+        concrete_type = of(T, NamedTuple(kwargs))
+        if has_symbolic_dims(concrete_type)
+            missing_symbols = get_unresolved_symbols(concrete_type)
+            provided = keys(kwargs)
+            error(
+                "Missing values for symbolic dimensions: $(join(missing_symbols, ", ")). You provided: $(join(provided, ", "))",
+            )
+        end
+        return zero(concrete_type)
     end
-    return zero(concrete_type)
 end
