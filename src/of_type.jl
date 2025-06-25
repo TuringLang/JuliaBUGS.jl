@@ -321,11 +321,11 @@ function (::Type{T})(; kwargs...) where {T<:OfType}
     if T <: OfNamedTuple
         names = get_names(T)
         types = get_types(T)
-        
+
         # Separate constants from values
         constants = Dict{Symbol,Any}()
         values = Dict{Symbol,Any}()
-        
+
         for (key, val) in pairs(kwargs)
             idx = findfirst(==(key), names)
             if idx !== nothing && types.parameters[idx] <: OfConstantWrapper
@@ -334,27 +334,29 @@ function (::Type{T})(; kwargs...) where {T<:OfType}
                 values[key] = val
             end
         end
-        
+
         # First concretize with constants
         concrete_type = of(T, NamedTuple(constants))
-        
+
         # If values were provided, validate them against the concrete type
         if !isempty(values)
             # Check if all constants are resolved
             if has_symbolic_dims(concrete_type)
                 missing_symbols = get_unresolved_symbols(concrete_type)
-                error("Missing values for symbolic dimensions: $(join(missing_symbols, ", "))")
+                error(
+                    "Missing values for symbolic dimensions: $(join(missing_symbols, ", "))"
+                )
             end
-            
+
             # Validate the values match the concrete type structure
             concrete_names = get_names(concrete_type)
             concrete_types = get_types(concrete_type)
-            
+
             for name in concrete_names
                 if haskey(values, name)
                     idx = findfirst(==(name), concrete_names)
                     field_type = concrete_types.parameters[idx]
-                    
+
                     # Validate the value matches the expected type
                     try
                         _validate(field_type, values[name])
@@ -366,7 +368,7 @@ function (::Type{T})(; kwargs...) where {T<:OfType}
                 end
             end
         end
-        
+
         return concrete_type
     else
         # For non-NamedTuple types, just concretize
