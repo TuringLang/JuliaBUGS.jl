@@ -20,6 +20,10 @@ include("../src/of_type.jl")
 
         T4 = of(Real, 0, 10)
         @test T4 == OfReal{Val{0},Val{10}}
+        
+        # Test that constant=true is not allowed for Array
+        @test_throws ErrorException of(Array, 10; constant=true)
+        @test_throws ErrorException of(Array, Float64, 5, 5; constant=true)
     end
 
     @testset "Simple @of macro" begin
@@ -74,7 +78,7 @@ include("../src/of_type.jl")
         )
 
         # Create concrete type
-        ConcreteType = of(MatrixType; rows=3, cols=4)
+        ConcreteType = MatrixType(;rows=3, cols=4)
 
         # Check that constants are removed and dimensions resolved
         names = get_names(ConcreteType)
@@ -107,7 +111,7 @@ include("../src/of_type.jl")
             cols = of(Int; constant=true),
             data = of(Array, rows, cols)
         )
-        ConcreteType = of(T; rows=2, cols=3)
+        ConcreteType = T(;rows=2, cols=3)
 
         # Create test data
         original = (data=rand(Float64, 2, 3),)
@@ -143,12 +147,12 @@ end
     end
 
     @testset "Symbolic bounds in named tuples" begin
-        # Manual construction
-        T = of((
+        # Use @of macro instead of of((;...))
+        T = @of(
             lower_bound=of(Real, 0, nothing),
-            upper_bound=of(Real, :lower_bound, nothing),
-            param=of(Real, :lower_bound, :upper_bound),
-        ))
+            upper_bound=of(Real, lower_bound, nothing),
+            param=of(Real, lower_bound, upper_bound),
+        )
 
         types = get_types(T)
         @test types.parameters[1] == OfReal{Val{0},Nothing}
@@ -193,7 +197,7 @@ end
         )
 
         # Create concrete type by providing constants
-        ConcreteType = of(Schema; min_bound=0.0, max_bound=1.0)
+        ConcreteType = Schema(;min_bound=0.0, max_bound=1.0)
 
         # The constants should be removed and bounds should be resolved
         names = get_names(ConcreteType)

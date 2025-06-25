@@ -18,8 +18,8 @@ The `of` function returns types with specifications encoded in type parameters:
 - `of(Real, lower, upper)` → `OfReal{Val{lower}, Val{upper}}` - Bounded real numbers
 - `of(Int)` → `OfInt{Nothing, Nothing}` - Unbounded integers
 - `of(Int, lower, upper)` → `OfInt{Val{lower}, Val{upper}}` - Bounded integers
-- `of((field1=..., field2=...))` → `OfNamedTuple{(:field1, :field2), Tuple{Type1, Type2}}` - Named tuples
-- `of(...; constant=true)` → `OfConstantWrapper{T}` - Marks a type as constant/hyperparameter
+- `@of(field1=..., field2=...)` → `OfNamedTuple{(:field1, :field2), Tuple{Type1, Type2}}` - Named tuples (use @of macro only)
+- `of(...; constant=true)` → `OfConstantWrapper{T}` - Marks a type as constant/hyperparameter (only supported for `Int` and `Real` types)
 
 ### 2. Type Parameter Encoding
 
@@ -32,9 +32,10 @@ The system encodes extra useful information into type parameters:
 
 ### 3. Operations on Types
 
+- `T(;kwargs...)` where `T<:OfType` - Constructor syntax to create types with specified constants
+
 - `rand(T::Type{<:OfType})` - Generate random values matching the type specification
 - `zero(T::Type{<:OfType})` - Generate zero/default values 
-- `T(value)` where `T<:OfType` - Constructor syntax to validate and convert values to match specifications
 - `size(T::Type{<:OfType})` - Get dimensions/shape of the type
 - `length(T::Type{<:OfType})` - Get total number of elements when flattened
 
@@ -46,13 +47,6 @@ The system encodes extra useful information into type parameters:
 The `@of` macro provides cleaner syntax by automatically converting field references to symbols:
 
 ```julia
-# Instead of writing:
-T = of((
-    n = of(Int; constant=true),
-    data = of(Array, :n, 2)
-))
-
-# You can write:
 T = @of(
     n = of(Int; constant=true),
     data = of(Array, n, 2)  # 'n' is automatically converted to :n
@@ -64,14 +58,7 @@ T = @of(
 For cases where dimensions need to be specified at runtime:
 
 ```julia
-# Define type with symbolic dimensions
-MatrixType = of((
-    rows=of(Int; constant=true),    # Integer type preserved
-    cols=of(Int; constant=true),    # Integer type preserved
-    data=of(Array, :rows, :cols),   # Note: expressions like :(rows + 1) not yet supported
-))
-
-# Simpler with @of macro
+# Define type with symbolic dimensions using @of macro
 MatrixType = @of(
     rows=of(Int; constant=true),
     cols=of(Int; constant=true),
@@ -79,20 +66,21 @@ MatrixType = @of(
 )
 # Note: Expressions like 'rows + 1' are not yet supported
 
-# Create concrete type for use with flatten/unflatten
-ConcreteType = of(MatrixType; rows=3, cols=4)
-data = (data=rand(3, 4),)
-ConcreteType(data)
-flat = flatten(ConcreteType, data)
+# Create concrete type by specifying constants
+ConcreteType = MatrixType(;rows=3, cols=4)
+# Can also validate data while concretizing
+ConcreteType = MatrixType(;rows=3, cols=4, data=rand(3, 4))  # Validates that data matches 3x4
+data_nt = (data=rand(3, 4),)
+flat = flatten(ConcreteType, data_nt)
 reconstructed = unflatten(ConcreteType, flat)
 
-SemiConcreteType = of(MatrixType; rows=3) # this will return a type with `cols` eliminated
+SemiConcreteType = MatrixType(; rows=3) # this will return a type with `cols` eliminated
 
 # rand and zero will first concretize the type and call rand
-rand(MatrixType; rows=3, cols=4)
-zero(MatrixType; rows=10, cols=5)
+rand(MatrixType(; rows=3, cols=4))
+zero(MatrixType(; rows=10, cols=5))
 
-rand(MatrixType; rows=3) # this would fail because some `Constant`s are not specified
+rand(MatrixType(; rows=3)) # this would fail because some `Constant`s are not specified
 ```
 
 ## Example Usage
@@ -143,7 +131,6 @@ user_input = (
     school_effects=randn(10) * 5,
     y=randn(100) * 10 .+ 75,
 )
-params = ParamsType(user_input)
 
 InferredType = of(user_input) # the bounds of Real won't be inferred
 
@@ -180,33 +167,37 @@ new_params = unflatten(ParamsType, new_flat_params)
 end
 ```
 
-### Dynamic Model with Variable Dimensions
+### Model with Variable Dimensions
 
 Here's an example of a model where array dimensions depend on other parameters:
 
 ```julia
-# Model where the number of mixture components is dynamic
+# Mixture model where the number of mixture components is itself a parameter
 Tparams = @of(
     n_components=of(Int, 1, 3; constant=true),  # Can be 1, 2, or 3
     weights=of(Array, n_components),            # Size depends on n_components
     means=of(Array, n_components),              # Size depends on n_components
-    y=of(Real)
+    y=of(Array, 100)                            # Observations
 )
 
-@model function dynamic_mixture((; n_components, weights, means, y)::Tparams)
+@model function dynamic_mixture((; n_components, weights, means, y)::Tparams, n_obs)
     # Prior on component probabilities (Dirichlet)
     if n_components == 1
         weights[1] = 1.0  # Single component has weight 1
         means[1] ~ Normal(0.0, 1.0)
-        y ~ Normal(means[1], 0.5)
+        for i in 1:n_obs
+            y[i] ~ Normal(means[1], 0.5)
+        end
     elseif n_components == 2
         # Two components
         weights ~ Dirichlet([1.0, 1.0])
         means[1] ~ Normal(-1.0, 1.0)
         means[2] ~ Normal(1.0, 1.0)
         # Mixture likelihood
-        z ~ Categorical(weights)
-        y ~ Normal(means[z], 0.5)
+        for i in 1:n_obs
+            z ~ Categorical(weights)
+            y[i] ~ Normal(means[z], 0.5)
+        end
     else  # n_components == 3
         # Three components
         weights ~ Dirichlet([1.0, 1.0, 1.0])
@@ -214,8 +205,10 @@ Tparams = @of(
         means[2] ~ Normal(0.0, 1.0)
         means[3] ~ Normal(2.0, 1.0)
         # Mixture likelihood
-        z ~ Categorical(weights)
-        y ~ Normal(means[z], 0.5)
+        for i in 1:n_obs
+            z ~ Categorical(weights)
+            y[i] ~ Normal(means[z], 0.5)
+        end
     end
 end
 
@@ -227,7 +220,7 @@ ARParams = @of(
     y=of(Array, 100),                    # Time series data
 )
 
-@model function dynamic_ar((; order, coeffs, sigma, y)::ARParams, n_obs)
+@model function variable_order_ar((; order, coeffs, sigma, y)::ARParams, n_obs)
     # Priors
     for i in 1:order
         coeffs[i] ~ Normal(0.0, 0.5)  # Shrinkage prior on AR coefficients
@@ -239,7 +232,7 @@ ARParams = @of(
         # Compute AR prediction
         pred = 0.0
         for i in 1:order
-            pred += coeffs[i] * y[t-i]
+            pred += coeffs[order+1-i] * y[t-i]
         end
         y[t] ~ Normal(pred, sqrt(sigma))
     end
@@ -247,13 +240,8 @@ end
 
 # Usage example
 # Concrete type with specific dimensions
-ConcreteARType = of(ARParams; order=3)
+ConcreteARType = ARParams(; order=3)
 # This creates a type where coeffs has size 3
 
-data = (
-    coeffs=[0.5, -0.3, 0.1],
-    sigma=0.25,
-    y=randn(100)
-)
-params = ConcreteARType(data)
+params = ConcreteARType(;coeffs=[0.5, -0.3, 0.1], sigma=0.25, y=randn(100))
 ```
