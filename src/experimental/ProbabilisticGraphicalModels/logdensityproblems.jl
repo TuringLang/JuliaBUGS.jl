@@ -4,9 +4,8 @@
 Compute the log density of the BayesianNetwork given parameters x.
 Requires the original BUGSModel to access transformed_var_lengths.
 """
-
 function LogDensityProblems.logdensity(bn::BayesianNetwork, x::AbstractArray)
-    _, logp = evaluate_with_marginalization(bn, x)
+    _, logp = evaluate_with_values(bn, x)
     return logp
 end
 
@@ -16,8 +15,9 @@ end
 Return the dimension of the parameter space of the BayesianNetwork.
 """
 function LogDensityProblems.dimension(bn::BayesianNetwork)
-    return sum(bn.is_stochastic .& (.!bn.is_observed) .& (bn.node_types .!= :discrete))
+    return bn.transformed_param_length
 end
+
 """
     capabilities(::BayesianNetwork)
 
