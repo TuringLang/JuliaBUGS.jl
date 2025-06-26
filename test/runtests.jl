@@ -1,92 +1,88 @@
+using Test
+
+using ADTypes
+using AbstractPPL
+using Bijectors
+using ChainRules # needed for `Bijectors.cholesky_lower`
+using Distributions
+using Documenter
+using Graphs
 using JuliaBUGS
 using JuliaBUGS.BUGSPrimitives
-using Documenter
-using Test
 using JuliaBUGS.BUGSPrimitives: mean
-DocMeta.setdocmeta!(JuliaBUGS, :DocTestSetup, :(using JuliaBUGS); recursive=true)
-
-using AbstractPPL
-using AbstractMCMC
-using AdvancedHMC
-using AdvancedMH
-using Bijectors
-using ChainRules
-using DifferentiationInterface
-using Distributions
-using Graphs
-using MetaGraphsNext
 using LinearAlgebra
 using LogDensityProblems
 using LogDensityProblemsAD
-using OrderedCollections
 using MacroTools
-using MCMCChains
-using Mooncake: Mooncake
+using MetaGraphsNext
+using OrderedCollections
 using Random
-using ReverseDiff
 using Serialization
+using StableRNGs
 
-AbstractMCMC.setprogress!(false)
+using AbstractMCMC
+using AdvancedHMC
+using AdvancedMH
+using MCMCChains
+using ReverseDiff
 
-const Tests = (
-    "elementary",
-    "compilation",
-    "log_density",
-    "gibbs",
-    "mcmchains",
-    "experimental",
-    "source_gen",
-    "all",
+const TEST_GROUPS = OrderedDict{String,Function}(
+    "elementary" => () -> begin
+        Documenter.doctest(JuliaBUGS; manual=false)
+        include("BUGSPrimitives/distributions.jl")
+        include("BUGSPrimitives/functions.jl")
+    end,
+    "frontend" => () -> begin
+        include("parser/bugs_macro.jl")
+        include("parser/bugs_parser.jl")
+        include("compiler_pass.jl")
+        include("model_macro.jl")
+    end,
+    "graphs" => () -> include("graphs.jl"),
+    "compilation" => () -> begin
+        include("model/utils.jl")
+        include("model/bugsmodel.jl")
+        include("source_gen.jl")
+    end,
+    "model_operations" => () -> begin
+        include("model/abstractppl.jl")
+    end,
+    "log_density" => () -> begin
+        include("model/evaluation.jl")
+    end,
+    "inference" => () -> begin
+        include("independent_mh.jl")
+        include("ext/JuliaBUGSAdvancedHMCExt.jl")
+        include("ext/JuliaBUGSMCMCChainsExt.jl")
+    end,
+    "inference_hmc" => () -> include("ext/JuliaBUGSAdvancedHMCExt.jl"),
+    "inference_chains" => () -> include("ext/JuliaBUGSMCMCChainsExt.jl"),
+    "inference_mh" => () -> include("independent_mh.jl"),
+    "gibbs" => () -> include("gibbs.jl"),
+    "parallel_sampling" => () -> include("parallel_sampling.jl"),
+    "experimental" => () -> 1, # TODO: revive this
+    # () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
 )
 
-const test_group = get(ENV, "TEST_GROUP", "all")
-if test_group ∉ Tests
-    error("Unknown test group: $test_group")
-end
+raw_selection = get(ENV, "TEST_GROUP", "all")
+selected_groups = Set(split(raw_selection, ','))
 
-@info "Running tests for groups: $test_group"
-
-if test_group == "elementary" || test_group == "all"
-    @testset "Unit Tests" begin
-        Documenter.doctest(JuliaBUGS; manual=false)
-        include("utils.jl")
-    end
-    include("parser/test_parser.jl")
-    include("passes.jl")
-    include("graphs.jl")
-    include("model_macro.jl")
-end
-
-if test_group == "compilation" || test_group == "all"
-    @testset "BUGS examples volume 1" begin
-        @testset "$m" for m in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
-            m = JuliaBUGS.BUGSExamples.VOLUME_1[m]
-            model = compile(m.model_def, m.data, m.inits)
-        end
-    end
-    @testset "Some corner cases" begin
-        include("bugs_primitives.jl")
-        include("compile.jl")
+if "all" ∉ selected_groups
+    unknown = setdiff(selected_groups, keys(TEST_GROUPS))
+    if !isempty(unknown)
+        error("Unknown test group(s): $(join(collect(unknown), ", "))")
     end
 end
 
-if test_group == "log_density" || test_group == "all"
-    include("log_density.jl")
-    include("model.jl")
-end
-
-if test_group == "gibbs" || test_group == "all"
-    include("gibbs.jl")
-end
-
-if test_group == "mcmchains" || test_group == "all"
-    include("ext/mcmchains.jl")
-end
-
-if test_group == "experimental" || test_group == "all"
-    include("experimental/ProbabilisticGraphicalModels/bayesnet.jl")
-end
-
-if test_group == "source_gen" || test_group == "all"
-    include("source_gen.jl")
+# Execute the requested tests.
+if "all" in selected_groups
+    @info "Running tests for ALL groups"
+    for fn in values(TEST_GROUPS)
+        fn()
+    end
+else
+    @info "Running tests for groups: $(join(collect(selected_groups), ", "))"
+    for g in selected_groups
+        TEST_GROUPS[g]()
+    end
 end

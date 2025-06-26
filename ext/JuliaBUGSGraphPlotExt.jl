@@ -5,7 +5,7 @@ using JuliaBUGS
 using JuliaBUGS.MetaGraphsNext
 
 function GraphPlot.gplot(m::JuliaBUGS.BUGSModel; kwargs...)
-    return GraphPlot.gplot(m.g, m.parameters; kwargs...)
+    return GraphPlot.gplot(m.g, m.graph_evaluation_data.sorted_parameters; kwargs...)
 end
 
 function GraphPlot.gplot(g::JuliaBUGS.BUGSGraph, parameters; kwargs...)

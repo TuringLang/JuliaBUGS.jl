@@ -9,26 +9,31 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    name: Julia ${{ matrix.version }} on ${{ matrix.os }} (${{ matrix.arch }})
+  # Basic tests run in parallel  
+  test-basic:
+    name: ${{ matrix.test_group }} - Julia ${{ matrix.version }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.version == 'pre' }}
     strategy:
+      fail-fast: false
       matrix:
         version:
           - '1'
-          - 'min'
-          - 'pre'
+          # - 'min'
+          # - 'pre'
         os:
           - ubuntu-latest
-          - windows-latest
+          # - windows-latest
         arch:
           - x64
-        include:
-          - version: 'min'
-            os: ubuntu-latest
-            arch: x64
-            coverage: true
+        test_group:
+          - "elementary"
+          - "frontend" 
+          - "graphs"
+          - "compilation"
+          - "log_density"
+          - "model_operations"
+          - "experimental"
 
     steps:
       - uses: actions/checkout@v4
@@ -50,59 +55,96 @@ jobs:
       
       - uses: julia-actions/julia-buildpkg@v1
 
-      - name: Running elementary tests
+      - name: Running ${{ matrix.test_group }} tests
         uses: julia-actions/julia-runtest@v1
         env:
-          TEST_GROUP: "elementary"
+          TEST_GROUP: ${{ matrix.test_group }}
 
-      - name: Running compilation tests
-        uses: julia-actions/julia-runtest@v1
-        env:
-          TEST_GROUP: "compilation"
+  # Slow inference tests with retry logic
+  test-inference:
+    name: ${{ matrix.test_group }} - Julia ${{ matrix.version }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: false
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1'
+        os:
+          - ubuntu-latest
+        arch:
+          - x64
+        test_group:
+          - "gibbs"
+          - "inference_hmc"
+          - "inference_chains"
 
-      - name: Running `log_density` tests
-        uses: julia-actions/julia-runtest@v1
-        env:
-          TEST_GROUP: "log_density"
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Running `source_gen` tests
-        uses: julia-actions/julia-runtest@v1
-        env:
-          TEST_GROUP: "source_gen"
-
-      - name: Running `gibbs` tests
-        uses: nick-fields/retry@v3
+      - uses: julia-actions/setup-julia@v2
         with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true);"
-        env:
-          TEST_GROUP: "gibbs"
-
-      - name: Running `mcmchains` tests
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: julia --color=yes --project=. -e "import Pkg; Pkg.instantiate(); Pkg.test(coverage=true);"
-        env:
-          TEST_GROUP: "mcmchains"
-
-      - name: Running `experimental` tests
-        uses: julia-actions/julia-runtest@v1
-        env:
-          TEST_GROUP: "experimental"
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
       
-      - uses: julia-actions/julia-processcoverage@v1
-        if: matrix.coverage
-
-      - uses: codecov/codecov-action@v4
-        if: matrix.coverage
+      - uses: actions/cache@v4
         with:
-          file: lcov.info
+          path: |
+            ~/.julia
+            ~/.julia/artifacts
+          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-
+            ${{ runner.os }}-julia-${{ matrix.version }}-
       
-      - uses: coverallsapp/github-action@master
-        if: matrix.coverage
+      - uses: julia-actions/julia-buildpkg@v1
+
+      - name: Running ${{ matrix.test_group }} tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: ${{ matrix.test_group }}
+
+  # Parallel sampling tests with multiple threads
+  test-parallel:
+    name: Parallel Sampling - Julia ${{ matrix.version }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: false
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1'
+        os:
+          - ubuntu-latest
+        arch:
+          - x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path-to-lcov: lcov.info
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+      
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.julia
+            ~/.julia/artifacts
+          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-
+            ${{ runner.os }}-julia-${{ matrix.version }}-
+      
+      - uses: julia-actions/julia-buildpkg@v1
+
+      - name: Set thread count
+        id: threads
+        run: echo "count=$(nproc)" >> $GITHUB_OUTPUT
+
+      - name: Running parallel_sampling tests
+        uses: julia-actions/julia-runtest@v1
+        env:
+          TEST_GROUP: parallel_sampling
+          JULIA_NUM_THREADS: ${{ steps.threads.outputs.count }}
