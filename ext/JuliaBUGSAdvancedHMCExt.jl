@@ -10,6 +10,7 @@ using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.Random
 using MCMCChains: Chains
 
+using DynamicPPL: get_transform_info, invlink
 import JuliaBUGS: gibbs_internal
 
 """
@@ -71,7 +72,6 @@ function AbstractMCMC.bundle_samples(
     thinning=1,
     kwargs...,
 )
-    using DynamicPPL: get_transform_info, invlink
 
     param_samples = [t.z.θ for t in ts]
     stats_names = collect(keys(merge((; lp=ts[1].z.ℓπ.value), AdvancedHMC.stat(ts[1]))))
