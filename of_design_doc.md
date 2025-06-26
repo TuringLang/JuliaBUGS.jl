@@ -27,6 +27,7 @@ The system encodes extra useful information into type parameters:
 - **Dimensions**: Stored as tuple type parameters (e.g., `(3, 4)` for a 3×4 matrix)
 - **Bounds**: Encoded using `Val{x}` for numeric bounds or `Nothing` for unbounded
 - **Symbolic references**: Encoded using `SymbolicRef{:symbol}` for referencing other fields
+- **Arithmetic expressions**: Encoded using `SymbolicExpr{expr}` for expressions like `n+1`, `2*n`, etc. Division operations must result in integers for array dimensions.
 - **Field names**: Stored as tuple of symbols in `OfNamedTuple`
 - **Element types**: Preserved as type parameters for arrays and nested structures
 
@@ -62,9 +63,8 @@ For cases where dimensions need to be specified at runtime:
 MatrixType = @of(
     rows=of(Int; constant=true),
     cols=of(Int; constant=true),
-    data=of(Array, rows, cols),  # Direct references converted to symbols
+    data=of(Array, rows, cols),
 )
-# Note: Expressions like 'rows + 1' are not yet supported
 
 # Create concrete type by specifying constants
 ConcreteType = MatrixType(;rows=3, cols=4)
@@ -83,32 +83,28 @@ zero(MatrixType(; rows=10, cols=5))
 rand(MatrixType(; rows=3)) # this would fail because some `Constant`s are not specified
 ```
 
+```julia
+ExpandedMatrixType = @of(
+    n=of(Int; constant=true),
+    original=of(Array, n, n),
+    padded=of(Array, n+1, n+1),
+    doubled=of(Array, 2*n, n),
+    halved=of(Array, n/2, n),
+)
+
+ConcreteExpanded = ExpandedMatrixType(; n=10)
+# This creates:
+# - original: 10×10 matrix
+# - padded: 11×11 matrix
+# - doubled: 20×10 matrix  
+# - halved: 5×10 matrix  (n/2 must result in an integer, error if not)
+
+rand(ConcreteExpanded)
+```
+
 ## Example Usage
 
-### Hierarchical Linear Model
-
-Consider a hierarchical model for test scores across multiple schools:
-
-**Model:**
-
-$$
-\begin{align}
-y_{ij} &\sim \text{Normal}(\mu_j + x_{ij}'\beta, \sigma^2) && \text{Student } i \text{ in school } j \\
-\mu_j &\sim \text{Normal}(\mu_0, \tau^2) && \text{School } j \text{ effect} \\
-\beta &\sim \text{Normal}(0, 100) && \text{Regression coefficients} \\
-\mu_0 &\sim \text{Normal}(0, 100) && \text{Grand mean} \\
-\tau^2 &\sim \text{InverseGamma}(0.001, 0.001) && \text{Between-school variance} \\
-\sigma^2 &\sim \text{InverseGamma}(0.001, 0.001) && \text{Within-school variance}
-\end{align}
-$$
-
-Where:
-- $y_{ij}$ is the test score for student $i$ in school $j$
-- $x_{ij}$ are student-level covariates
-- $\mu_j$ is the random effect for school $j$
-- $\beta$ are fixed effects for covariates
-
-**Implementation with `of` type system:**
+### Static Model Specification
 
 ```julia
 ParamsType = @of(
@@ -119,27 +115,6 @@ ParamsType = @of(
     school_effects=of(Array, 10),
     y=of(Array, 100),
 )
-
-params_rand = rand(ParamsType)
-params_zero = zero(ParamsType)
-
-user_input = (
-    mu0=75.0,
-    beta=[2.1, -0.5, 1.3],
-    tau2=25.0,
-    sigma2=100.0,
-    school_effects=randn(10) * 5,
-    y=randn(100) * 10 .+ 75,
-)
-
-InferredType = of(user_input) # the bounds of Real won't be inferred
-
-size(ParamsType)
-length(ParamsType)
-
-flat_params = flatten(ParamsType, params)
-new_flat_params = flat_params .* 0.9
-new_params = unflatten(ParamsType, new_flat_params)
 
 @model function school_model(
     (; mu0, beta, tau2, sigma2, school_effects, y)::ParamsType,
@@ -169,7 +144,7 @@ end
 
 ### Model with Variable Dimensions
 
-Here's an example of a model where array dimensions depend on other parameters:
+#### Mixture Model
 
 ```julia
 # Mixture model where the number of mixture components is itself a parameter
@@ -211,8 +186,11 @@ Tparams = @of(
         end
     end
 end
+```
 
-# Another example: Variable-order autoregressive model
+#### Variable-order autoregressive model
+
+```julia
 ARParams = @of(
     order=of(Int, 1, 5; constant=true),  # AR order between 1 and 5
     coeffs=of(Array, order),             # AR coefficients
@@ -244,4 +222,97 @@ ConcreteARType = ARParams(; order=3)
 # This creates a type where coeffs has size 3
 
 params = ConcreteARType(;coeffs=[0.5, -0.3, 0.1], sigma=0.25, y=randn(100))
+```
+
+#### Bayesian Nonparametric clustering model
+
+```julia
+# Dirichlet Process Mixture Model with truncation
+DPMModel = @of(
+    n_obs = of(Int, 10, 1000; constant=true),      # Number of observations
+    n_features = of(Int, 1, 20; constant=true),    # Feature dimension
+    max_clusters = of(Int, 10, 50; constant=true), # Truncation level for DP
+    
+    # Observed data (n_obs × n_features)
+    data = of(Array, n_obs, n_features),
+    
+    # Cluster assignments (n_obs vector)
+    z = of(Array, n_obs),
+    
+    # Stick-breaking weights (max_clusters - 1 vector)
+    v = of(Array, max_clusters - 1),
+    
+    # Cluster weights derived from stick-breaking (max_clusters vector)
+    weights = of(Array, max_clusters),
+    
+    # Cluster parameters: means (max_clusters × n_features)
+    cluster_means = of(Array, max_clusters, n_features),
+    
+    # Cluster parameters: precisions (max_clusters vector)
+    cluster_precs = of(Array, max_clusters),
+    
+    # Number of active clusters (for monitoring)
+    n_active = of(Int, 1, max_clusters),
+    
+    # Concentration parameter
+    alpha = of(Real, 0.1, 10.0)
+)
+
+# Create concrete type with specific dimensions
+ConcreteDPM = DPMModel(; n_obs=100, n_features=2, max_clusters=20)
+# This creates:
+# - data: 100×2 array of observations
+# - z: 100-element vector of cluster assignments
+# - v: 19-element vector of stick-breaking proportions
+# - weights: 20-element vector of cluster weights
+# - cluster_means: 20×2 array of cluster centers
+# - cluster_precs: 20-element vector of cluster precisions
+
+@model function dp_mixture(
+    (; n_obs, n_features, max_clusters, data, z, v, weights, 
+      cluster_means, cluster_precs, n_active, alpha)::DPMModel
+)
+    # Prior on concentration parameter
+    alpha ~ Gamma(1.0, 1.0)
+    
+    # Stick-breaking construction for weights
+    for k in 1:(max_clusters-1)
+        v[k] ~ Beta(1.0, alpha)
+    end
+    
+    # Compute weights from stick-breaking
+    remaining = 1.0
+    for k in 1:max_clusters
+        if k < max_clusters
+            weights[k] = v[k] * remaining
+            remaining *= (1 - v[k])
+        else
+            weights[k] = remaining  # Last weight gets all remaining mass
+        end
+    end
+    
+    # Priors on cluster parameters
+    for k in 1:max_clusters
+        cluster_precs[k] ~ Gamma(1.0, 1.0)
+        for d in 1:n_features
+            cluster_means[k,d] ~ Normal(0.0, 10.0)
+        end
+    end
+    
+    # Data likelihood
+    for i in 1:n_obs
+        # Cluster assignment
+        z[i] ~ Categorical(weights)
+        
+        # Observation given cluster
+        for d in 1:n_features
+            data[i,d] ~ Normal(cluster_means[z[i],d], 1/sqrt(cluster_precs[z[i]]))
+        end
+    end
+    
+    # Count active clusters (those with at least one observation)
+    n_active = length(unique(z))
+end
+
+dpm = DPMModel(; n_obs=50, n_features=2, max_clusters=10)   # 50 observations, up to 10 clusters
 ```
