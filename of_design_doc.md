@@ -155,7 +155,7 @@ Tparams = @of(
     y=of(Array, 100)                            # Observations
 )
 
-@model function dynamic_mixture((; n_components, weights, means, y)::Tparams, n_obs)
+@model function dynamic_mixture((; weights, means, y)::Tparams, n_components, n_obs)
     # Prior on component probabilities (Dirichlet)
     if n_components == 1
         weights[1] = 1.0  # Single component has weight 1
@@ -269,8 +269,8 @@ ConcreteDPM = DPMModel(; n_obs=100, n_features=2, max_clusters=20)
 # - cluster_precs: 20-element vector of cluster precisions
 
 @model function dp_mixture(
-    (; n_obs, n_features, max_clusters, data, z, v, weights, 
-      cluster_means, cluster_precs, n_active, alpha)::DPMModel
+    (;data, z, v, weights, cluster_means, cluster_precs, n_active, alpha)::DPMModel, 
+    n_obs, n_features, max_clusters
 )
     # Prior on concentration parameter
     alpha ~ Gamma(1.0, 1.0)

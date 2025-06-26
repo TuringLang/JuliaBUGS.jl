@@ -1,5 +1,9 @@
 using Random: randexp
 
+# ========================================================================
+# Core Type Definitions
+# ========================================================================
+
 # Abstract base type for all Of types
 abstract type OfType end
 
@@ -50,7 +54,9 @@ struct OfConstantWrapper{T<:OfType} <: OfType
     end
 end
 
-# Helper functions to extract type parameters
+# ========================================================================
+# Type Parameter Extraction Helpers
+# ========================================================================
 get_lower(::Type{OfReal{L,U}}) where {L,U} = L
 get_upper(::Type{OfReal{L,U}}) where {L,U} = U
 get_lower(::Type{OfInt{L,U}}) where {L,U} = L
@@ -63,6 +69,10 @@ end
 get_names(::Type{OfNamedTuple{Names,Types}}) where {Names,Types} = Names
 get_types(::Type{OfNamedTuple{Names,Types}}) where {Names,Types} = Types
 get_wrapped_type(::Type{OfConstantWrapper{T}}) where {T} = T
+
+# ========================================================================
+# Type Classification and Conversion Utilities
+# ========================================================================
 
 # Check if a type is a leaf
 is_leaf(::Type{<:OfArray}) = true
@@ -83,7 +93,9 @@ type_to_bound(::Type{Val{x}}) where {x} = x
 type_to_bound(::Type{SymbolicRef{S}}) where {S} = S
 type_to_bound(s::Symbol) = s
 
-# Evaluate symbolic expressions
+# ========================================================================
+# Symbolic Expression Evaluation
+# ========================================================================
 function eval_symbolic_expr(expr::Tuple, bindings::NamedTuple)
     if length(expr) < 2
         error("Invalid expression format: $expr")
@@ -122,7 +134,7 @@ function eval_symbolic_expr(expr::Tuple, bindings::NamedTuple)
         end
         result = args[1] / args[2]
         # For array dimensions, ensure the result is an integer
-        if !isinteger(result)
+        if isinteger(args[1]) && !isinteger(result)
             error(
                 "Division $(args[1]) / $(args[2]) = $result is not an integer. Array dimensions must be integers.",
             )
@@ -130,6 +142,10 @@ function eval_symbolic_expr(expr::Tuple, bindings::NamedTuple)
         return Int(result)
     end
 end
+
+# ========================================================================
+# Type Concretization and Resolution
+# ========================================================================
 
 # Resolve bound references during type concretization
 function resolve_bound(::Type{Nothing}, replacements::NamedTuple)
@@ -148,16 +164,22 @@ function resolve_bound(::Type{SymbolicRef{S}}, replacements::NamedTuple) where {
     end
 end
 
+function resolve_bound(::Type{SymbolicExpr{E}}, replacements::NamedTuple) where {E}
+    # Evaluate the expression with current replacements
+    evaluated = eval_symbolic_expr(E, replacements)
+    return bound_to_type(evaluated)
+end
+
 function resolve_bound(T::Type, ::NamedTuple)
     return T
 end
 
-# Constructor functions for creating Of types
-function of(::Type{Array}, dims...; constant::Bool=false)
-    if constant
-        error("constant=true is only supported for Int and Real types, not Array")
-    end
-    # Default to Float64 for unspecified array types
+# ========================================================================
+# Helper Functions for Constructors
+# ========================================================================
+
+# Process array dimensions into a proper tuple type
+function process_array_dimensions(dims)
     processed_dims = map(dims) do d
         if d isa QuoteNode
             d.value
@@ -170,11 +192,37 @@ function of(::Type{Array}, dims...; constant::Bool=false)
     end
     # Ensure we have a tuple of dimensions
     if length(processed_dims) == 1
-        dims_tuple = Tuple{processed_dims[1]}
+        Tuple{processed_dims[1]}
     else
-        dims_tuple = Tuple{processed_dims...}
+        Tuple{processed_dims...}
     end
-    return OfArray{Float64,length(processed_dims),dims_tuple}
+end
+
+# Process bounds for Int/Real types
+function process_bounds(lower, upper)
+    L = if lower isa Type
+        lower  # Keep type parameters as-is
+    else
+        bound_to_type(lower)
+    end
+    U = if upper isa Type
+        upper  # Keep type parameters as-is
+    else
+        bound_to_type(upper)
+    end
+    return L, U
+end
+
+# ========================================================================
+# Constructor Functions
+# ========================================================================
+function of(::Type{Array}, dims...; constant::Bool=false)
+    if constant
+        error("constant=true is only supported for Int and Real types, not Array")
+    end
+    # Default to Float64 for unspecified array types
+    dims_tuple = process_array_dimensions(dims)
+    return OfArray{Float64,length(dims),dims_tuple}
 end
 
 function of(::Type{Array}, T::Type, dims...; constant::Bool=false)
@@ -186,46 +234,15 @@ function of(::Type{Array}, T::Type, dims...; constant::Bool=false)
             error("constant=true is only supported for Int and Real types, not Array")
         end
         all_dims = (T, dims...)
-        # Process dimensions
-        processed_dims = map(all_dims) do d
-            if d isa QuoteNode
-                d.value
-            elseif d isa Type
-                # Keep type parameters as-is (e.g., SymbolicExpr{...})
-                d
-            else
-                d
-            end
-        end
-        # Ensure we have a tuple of dimensions
-        if length(processed_dims) == 1
-            dims_tuple = Tuple{processed_dims[1]}
-        else
-            dims_tuple = Tuple{processed_dims...}
-        end
-        return OfArray{Float64,length(processed_dims),dims_tuple}
+        dims_tuple = process_array_dimensions(all_dims)
+        return OfArray{Float64,length(all_dims),dims_tuple}
     end
 
     if constant
         error("constant=true is only supported for Int and Real types, not Array")
     end
-    processed_dims = map(dims) do d
-        if d isa QuoteNode
-            d.value
-        elseif d isa Type
-            # Keep type parameters as-is (e.g., SymbolicExpr{...})
-            d
-        else
-            d
-        end
-    end
-    # Ensure we have a tuple of dimensions
-    if length(processed_dims) == 1
-        dims_tuple = Tuple{processed_dims[1]}
-    else
-        dims_tuple = Tuple{processed_dims...}
-    end
-    return OfArray{T,length(processed_dims),dims_tuple}
+    dims_tuple = process_array_dimensions(dims)
+    return OfArray{T,length(dims),dims_tuple}
 end
 
 function of(::Type{Int}; constant::Bool=false)
@@ -235,12 +252,11 @@ end
 
 function of(
     ::Type{Int},
-    lower::Union{Int,Nothing,Symbol},
-    upper::Union{Int,Nothing,Symbol};
+    lower::Union{Int,Nothing,Symbol,Type},
+    upper::Union{Int,Nothing,Symbol,Type};
     constant::Bool=false,
 )
-    L = bound_to_type(lower)
-    U = bound_to_type(upper)
+    L, U = process_bounds(lower, upper)
     base_type = OfInt{L,U}
     return constant ? OfConstantWrapper{base_type} : base_type
 end
@@ -252,12 +268,11 @@ end
 
 function of(
     ::Type{Real},
-    lower::Union{Real,Nothing,Symbol},
-    upper::Union{Real,Nothing,Symbol};
+    lower::Union{Real,Nothing,Symbol,Type},
+    upper::Union{Real,Nothing,Symbol,Type};
     constant::Bool=false,
 )
-    L = bound_to_type(lower)
-    U = bound_to_type(upper)
+    L, U = process_bounds(lower, upper)
     base_type = OfReal{L,U}
     return constant ? OfConstantWrapper{base_type} : base_type
 end
@@ -287,7 +302,36 @@ end
 # Support for passing OfType types through of()
 of(T::Type{<:OfType}) = T
 
-# Type concretization functions
+# ========================================================================
+# Helper Functions for Type Concretization
+# ========================================================================
+
+# Resolve bounds in a bounded type (OfReal or OfInt)
+function resolve_bounded_type(::Type{T}, replacements::NamedTuple) where {T<:OfType}
+    if !(T <: OfReal || T <: OfInt)
+        return T
+    end
+
+    lower = get_lower(T)
+    upper = get_upper(T)
+    new_lower = resolve_bound(lower, replacements)
+    new_upper = resolve_bound(upper, replacements)
+
+    if new_lower !== lower || new_upper !== upper
+        # Create new type with resolved bounds
+        if T <: OfReal
+            return OfReal{new_lower,new_upper}
+        elseif T <: OfInt
+            return OfInt{new_lower,new_upper}
+        end
+    else
+        return T
+    end
+end
+
+# ========================================================================
+# Type Concretization with Replacements
+# ========================================================================
 function of(::Type{T}, pairs::Pair{Symbol}...) where {T<:OfType}
     return of(T, NamedTuple(pairs))
 end
@@ -298,13 +342,17 @@ end
 
 function of(::Type{OfNamedTuple{Names,Types}}, replacements::NamedTuple) where {Names,Types}
     # Replace OfConstants and symbolic dimensions with concrete values
-    new_types = ntuple(length(Names)) do i
+    # Build lists for remaining fields (excluding resolved constants)
+    remaining_names = Symbol[]
+    remaining_types = []
+
+    for i in 1:length(Names)
         name = Names[i]
         field_type = Types.parameters[i]
 
         if field_type <: OfConstantWrapper && haskey(replacements, name)
-            # Skip - constants are removed in the concrete type
-            return nothing
+            # Skip this field - it's a constant that has been resolved
+            continue
         elseif field_type <: OfArray
             # Check if array has symbolic dimensions
             dims = get_dims(field_type)
@@ -322,92 +370,43 @@ function of(::Type{OfNamedTuple{Names,Types}}, replacements::NamedTuple) where {
             if new_dims != dims
                 # Create new array type with concrete dimensions
                 T = get_element_type(field_type)
-                return of(Array, T, new_dims...)
+                push!(remaining_names, name)
+                push!(remaining_types, of(Array, T, new_dims...))
             else
-                return field_type
+                push!(remaining_names, name)
+                push!(remaining_types, field_type)
             end
         elseif field_type <: OfNamedTuple
             # Recursively handle nested named tuples
-            return of(field_type, replacements)
-        elseif field_type <: OfReal
+            push!(remaining_names, name)
+            push!(remaining_types, of(field_type, replacements))
+        elseif field_type <: OfReal || field_type <: OfInt
             # Check if bounds have symbolic references
-            lower = get_lower(field_type)
-            upper = get_upper(field_type)
-
-            new_lower = resolve_bound(lower, replacements)
-            new_upper = resolve_bound(upper, replacements)
-
-            if new_lower !== lower || new_upper !== upper
-                # Create new type with resolved bounds
-                return OfReal{new_lower,new_upper}
-            else
-                return field_type
-            end
-        elseif field_type <: OfInt
-            # Check if bounds have symbolic references
-            lower = get_lower(field_type)
-            upper = get_upper(field_type)
-
-            new_lower = resolve_bound(lower, replacements)
-            new_upper = resolve_bound(upper, replacements)
-
-            if new_lower !== lower || new_upper !== upper
-                # Create new type with resolved bounds
-                return OfInt{new_lower,new_upper}
-            else
-                return field_type
-            end
+            push!(remaining_names, name)
+            push!(remaining_types, resolve_bounded_type(field_type, replacements))
         elseif field_type <: OfConstantWrapper
-            # Handle wrapped types - even constants might have symbolic bounds
+            # Handle wrapped types without replacement values - keep as constants
             wrapped = get_wrapped_type(field_type)
-            if wrapped <: OfReal
-                # Check if the wrapped real has symbolic bounds
-                lower = get_lower(wrapped)
-                upper = get_upper(wrapped)
-
-                new_lower = resolve_bound(lower, replacements)
-                new_upper = resolve_bound(upper, replacements)
-
-                if new_lower !== lower || new_upper !== upper
-                    # Create new wrapped type with resolved bounds
-                    return OfConstantWrapper{OfReal{new_lower,new_upper}}
-                else
-                    return field_type
-                end
-            elseif wrapped <: OfInt
-                # Check if the wrapped int has symbolic bounds
-                lower = get_lower(wrapped)
-                upper = get_upper(wrapped)
-
-                new_lower = resolve_bound(lower, replacements)
-                new_upper = resolve_bound(upper, replacements)
-
-                if new_lower !== lower || new_upper !== upper
-                    # Create new wrapped type with resolved bounds
-                    return OfConstantWrapper{OfInt{new_lower,new_upper}}
-                else
-                    return field_type
-                end
+            resolved = resolve_bounded_type(wrapped, replacements)
+            push!(remaining_names, name)
+            if resolved !== wrapped
+                # Wrap the resolved type back
+                push!(remaining_types, OfConstantWrapper{resolved})
             else
-                # For other wrapped types, keep as is
-                return field_type
+                push!(remaining_types, field_type)
             end
         else
-            return field_type
+            push!(remaining_names, name)
+            push!(remaining_types, field_type)
         end
     end
 
-    # Filter out the nothings (removed constants)
-    filtered_names = Symbol[]
-    filtered_types = DataType[]
-    for (i, new_type) in enumerate(new_types)
-        if !isnothing(new_type)
-            push!(filtered_names, Names[i])
-            push!(filtered_types, new_type)
-        end
+    # Create new NamedTuple type with only remaining fields
+    if isempty(remaining_names)
+        error("All fields were constants and have been resolved. No fields remain.")
     end
 
-    return OfNamedTuple{Tuple(filtered_names),Tuple{filtered_types...}}
+    return OfNamedTuple{Tuple(remaining_names),Tuple{remaining_types...}}
 end
 
 function of(::Type{OfArray{T,N,D}}, replacements::NamedTuple) where {T,N,D}
@@ -432,7 +431,9 @@ function of(::Type{T}, replacements::NamedTuple) where {T<:OfType}
     return T
 end
 
-# Constructor with keyword arguments - concretizes types and optionally validates
+# ========================================================================
+# Parameterized Constructor with Validation
+# ========================================================================
 function (::Type{T})(; kwargs...) where {T<:OfType}
     if T <: OfNamedTuple
         names = get_names(T)
@@ -468,9 +469,9 @@ function (::Type{T})(; kwargs...) where {T<:OfType}
             concrete_names = get_names(concrete_type)
             concrete_types = get_types(concrete_type)
 
-            for name in concrete_names
+            # Now validate all fields (constants have been removed from concrete_type)
+            for (idx, name) in enumerate(concrete_names)
                 if haskey(values, name)
-                    idx = findfirst(==(name), concrete_names)
                     field_type = concrete_types.parameters[idx]
 
                     # Validate the value matches the expected type
@@ -492,6 +493,10 @@ function (::Type{T})(; kwargs...) where {T<:OfType}
     end
 end
 
+# ========================================================================
+# @of Macro and Related Processing Functions
+# ========================================================================
+
 """
     @of(field1=spec1, field2=spec2, ...)
 
@@ -500,14 +505,6 @@ between fields without needing symbols.
 
 # Examples
 ```julia
-# Instead of:
-T = of((
-    rows=of(Constant),
-    cols=of(Constant),
-    data=of(Array, :rows, :cols)
-))
-
-# You can write:
 T = @of(
     rows=of(Int; constant=true),
     cols=of(Int; constant=true),
@@ -674,7 +671,9 @@ function process_expression_refs(expr::Expr, available_fields::Vector{Symbol})
     end
 end
 
-# rand implementations for types
+# ========================================================================
+# Random Value Generation
+# ========================================================================
 function Base.rand(::Type{OfArray{T,N,D}}) where {T,N,D}
     dims = get_dims(OfArray{T,N,D})
     if any(d -> d isa Symbol || (d isa Type && d <: SymbolicExpr), dims)
@@ -749,7 +748,9 @@ function Base.rand(::Type{T}; kwargs...) where {T<:OfType}
     return rand(concrete_type)
 end
 
-# zero implementations for types
+# ========================================================================
+# Zero Value Generation
+# ========================================================================
 function Base.zero(::Type{OfArray{T,N,D}}) where {T,N,D}
     dims = get_dims(OfArray{T,N,D})
     if any(d -> d isa Symbol || (d isa Type && d <: SymbolicExpr), dims)
@@ -810,6 +811,10 @@ function Base.zero(::Type{T}; kwargs...) where {T<:OfType}
     return zero(concrete_type)
 end
 
+# ========================================================================
+# Size and Length Operations
+# ========================================================================
+
 # Get size of OfType types
 function Base.size(::Type{OfArray{T,N,D}}) where {T,N,D}
     dims = get_dims(OfArray{T,N,D})
@@ -865,6 +870,10 @@ end
 function Base.length(::Type{OfConstantWrapper{T}}) where {T}
     return 0  # Constants are not part of the flattened representation
 end
+
+# ========================================================================
+# Symbolic Dimension Checking and Symbol Collection
+# ========================================================================
 
 # Check if a type has symbolic dimensions or constants
 function has_symbolic_dims(::Type{T}) where {T<:OfType}
@@ -930,6 +939,24 @@ function get_unresolved_symbols(::Type{T}) where {T<:OfType}
     return unique(symbols)
 end
 
+# ========================================================================
+# Validation Helper Functions
+# ========================================================================
+
+# Validate that a value is within bounds
+function validate_bounds(value, lower, upper, type_name)
+    if !isnothing(lower) && value < lower
+        error("$type_name value $value is below lower bound $lower")
+    end
+    if !isnothing(upper) && value > upper
+        error("$type_name value $value is above upper bound $upper")
+    end
+end
+
+# ========================================================================
+# Validation Functions
+# ========================================================================
+
 # Validation function - separate from type concretization
 function _validate(::Type{T}, value) where {T<:OfType}
     if is_leaf(T)
@@ -962,13 +989,7 @@ function _validate_leaf(::Type{OfReal{L,U}}, value) where {L,U}
         val = convert(Float64, value)
         lower = type_to_bound(L)
         upper = type_to_bound(U)
-
-        if !isnothing(lower) && val < lower
-            error("Value $val is below lower bound $lower")
-        end
-        if !isnothing(upper) && val > upper
-            error("Value $val is above upper bound $upper")
-        end
+        validate_bounds(val, lower, upper, "Real")
         return val
     else
         error("Expected Real for OfReal, got $(typeof(value))")
@@ -980,13 +1001,7 @@ function _validate_leaf(::Type{OfInt{L,U}}, value) where {L,U}
         val = convert(Int, value)
         lower = type_to_bound(L)
         upper = type_to_bound(U)
-
-        if !isnothing(lower) && val < lower
-            error("Value $val is below lower bound $lower")
-        end
-        if !isnothing(upper) && val > upper
-            error("Value $val is above upper bound $upper")
-        end
+        validate_bounds(val, lower, upper, "Int")
         return val
     elseif value isa Real
         # Allow conversion from Real to Int if it's a whole number
@@ -1024,6 +1039,10 @@ function _validate_leaf(::Type{OfConstantWrapper{T}}, value) where {T}
     # Validate against the wrapped type
     return _validate_leaf(T, value)
 end
+
+# ========================================================================
+# Flatten and Unflatten Operations
+# ========================================================================
 
 # Flatten implementation for types
 function flatten(::Type{T}, values) where {T<:OfType}
@@ -1097,13 +1116,7 @@ function unflatten(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfType}
                 # Apply bounds validation
                 lower = type_to_bound(get_lower(oft_type))
                 upper = type_to_bound(get_upper(oft_type))
-
-                if !isnothing(lower) && val < lower
-                    error("Value $val is below lower bound $lower")
-                end
-                if !isnothing(upper) && val > upper
-                    error("Value $val is above upper bound $upper")
-                end
+                validate_bounds(val, lower, upper, "Real")
                 return val
             elseif oft_type <: OfInt
                 if pos[] > length(flat_values)
@@ -1116,13 +1129,7 @@ function unflatten(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfType}
                 int_val = round(Int, val)
                 lower = type_to_bound(get_lower(oft_type))
                 upper = type_to_bound(get_upper(oft_type))
-
-                if !isnothing(lower) && int_val < lower
-                    error("Value $int_val is below lower bound $lower")
-                end
-                if !isnothing(upper) && int_val > upper
-                    error("Value $int_val is above upper bound $upper")
-                end
+                validate_bounds(int_val, lower, upper, "Int")
                 return int_val
             end
         elseif oft_type <: OfNamedTuple
@@ -1142,6 +1149,95 @@ function unflatten(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfType}
     return reconstructed
 end
 
+# ========================================================================
+# Display Helper Functions
+# ========================================================================
+
+# Format a bound type for display
+function format_bound(bound_type, constant_fields, use_color)
+    if bound_type === Nothing
+        return "nothing"
+    elseif bound_type <: Val
+        return string(type_to_bound(bound_type))
+    elseif bound_type <: SymbolicRef
+        sym = type_to_bound(bound_type)
+        if sym in constant_fields && use_color
+            return sprint() do io_inner
+                printstyled(io_inner, string(sym); color=:cyan)
+            end
+        else
+            return string(sym)
+        end
+    else
+        return string(bound_type)
+    end
+end
+
+# Show a bounded type (OfReal or OfInt) with proper formatting
+function show_bounded_type(io::IO, type_name::String, L, U; constant::Bool=false)
+    use_color = get(io, :color, false)
+    constant_fields = get(io, :constant_fields, Symbol[])
+
+    if L === Nothing && U === Nothing
+        if constant
+            if use_color
+                printstyled(io, "of($type_name"; color=:cyan)
+                printstyled(io, "; constant=true"; color=:light_black)
+                printstyled(io, ")"; color=:cyan)
+            else
+                print(io, "of($type_name; constant=true)")
+            end
+        else
+            print(io, "of($type_name)")
+        end
+    else
+        lower_str = format_bound(L, constant_fields, use_color)
+        upper_str = format_bound(U, constant_fields, use_color)
+
+        if constant && use_color
+            printstyled(io, "of($type_name, "; color=:cyan)
+            # Handle lower bound
+            if L <: SymbolicRef && type_to_bound(L) in constant_fields
+                printstyled(io, string(type_to_bound(L)); color=:cyan)
+            else
+                printstyled(io, lower_str; color=:cyan)
+            end
+            printstyled(io, ", "; color=:cyan)
+            # Handle upper bound
+            if U <: SymbolicRef && type_to_bound(U) in constant_fields
+                printstyled(io, string(type_to_bound(U)); color=:cyan)
+            else
+                printstyled(io, upper_str; color=:cyan)
+            end
+            printstyled(io, "; constant=true"; color=:light_black)
+            printstyled(io, ")"; color=:cyan)
+        else
+            print(io, "of($type_name, ")
+            # Handle lower bound
+            if L <: SymbolicRef && type_to_bound(L) in constant_fields && use_color
+                printstyled(io, string(type_to_bound(L)); color=:cyan)
+            else
+                print(io, lower_str)
+            end
+            print(io, ", ")
+            # Handle upper bound
+            if U <: SymbolicRef && type_to_bound(U) in constant_fields && use_color
+                printstyled(io, string(type_to_bound(U)); color=:cyan)
+            else
+                print(io, upper_str)
+            end
+            if constant
+                print(io, "; constant=true")
+            end
+            print(io, ")")
+        end
+    end
+end
+
+# ========================================================================
+# Display and Show Methods
+# ========================================================================
+
 # Helper to convert expression tuple back to string
 function expr_tuple_to_string(expr::Tuple)
     if length(expr) < 2
@@ -1149,72 +1245,33 @@ function expr_tuple_to_string(expr::Tuple)
     end
 
     op = expr[1]
-    if op == :+ && length(expr) == 3
-        arg1_str = if expr[2] isa Symbol
-            string(expr[2])
-        elseif expr[2] isa Tuple
-            expr_tuple_to_string(expr[2])
-        else
-            string(expr[2])
+    if op in (:+, :-, :*, :/) && length(expr) == 3
+        # Format arguments
+        arg1_str = format_expr_arg(expr[2])
+        arg2_str = format_expr_arg(expr[3])
+
+        # Add parentheses for multiplication and division if needed
+        if op in (:*, :/) && expr[2] isa Tuple
+            arg1_str = "($arg1_str)"
         end
-        arg2_str = if expr[3] isa Symbol
-            string(expr[3])
-        elseif expr[3] isa Tuple
-            expr_tuple_to_string(expr[3])
-        else
-            string(expr[3])
+        if op in (:*, :/) && expr[3] isa Tuple
+            arg2_str = "($arg2_str)"
         end
-        return "$arg1_str + $arg2_str"
-    elseif op == :- && length(expr) == 3
-        arg1_str = if expr[2] isa Symbol
-            string(expr[2])
-        elseif expr[2] isa Tuple
-            expr_tuple_to_string(expr[2])
-        else
-            string(expr[2])
-        end
-        arg2_str = if expr[3] isa Symbol
-            string(expr[3])
-        elseif expr[3] isa Tuple
-            expr_tuple_to_string(expr[3])
-        else
-            string(expr[3])
-        end
-        return "$arg1_str - $arg2_str"
-    elseif op == :* && length(expr) == 3
-        arg1_str = if expr[2] isa Symbol
-            string(expr[2])
-        elseif expr[2] isa Tuple
-            "($(expr_tuple_to_string(expr[2])))"
-        else
-            string(expr[2])
-        end
-        arg2_str = if expr[3] isa Symbol
-            string(expr[3])
-        elseif expr[3] isa Tuple
-            "($(expr_tuple_to_string(expr[3])))"
-        else
-            string(expr[3])
-        end
-        return "$arg1_str * $arg2_str"
-    elseif op == :/ && length(expr) == 3
-        arg1_str = if expr[2] isa Symbol
-            string(expr[2])
-        elseif expr[2] isa Tuple
-            "($(expr_tuple_to_string(expr[2])))"
-        else
-            string(expr[2])
-        end
-        arg2_str = if expr[3] isa Symbol
-            string(expr[3])
-        elseif expr[3] isa Tuple
-            "($(expr_tuple_to_string(expr[3])))"
-        else
-            string(expr[3])
-        end
-        return "$arg1_str / $arg2_str"
+
+        return "$arg1_str $op $arg2_str"
     else
         return string(expr)
+    end
+end
+
+# Format a single expression argument
+function format_expr_arg(arg)
+    if arg isa Symbol
+        string(arg)
+    elseif arg isa Tuple
+        expr_tuple_to_string(arg)
+    else
+        string(arg)
     end
 end
 
@@ -1292,123 +1349,11 @@ function Base.show(io::IO, ::Type{OfArray{T,N,D}}) where {T,N,D}
 end
 
 function Base.show(io::IO, ::Type{OfReal{L,U}}) where {L,U}
-    if isnothing(L) && isnothing(U)
-        print(io, "of(Real)")
-    else
-        use_color = get(io, :color, false)
-        constant_fields = get(io, :constant_fields, Symbol[])
-
-        # Handle different bound types
-        lower_str = if L === Nothing
-            "nothing"
-        elseif L <: Val
-            string(type_to_bound(L))
-        elseif L <: SymbolicRef
-            sym = type_to_bound(L)
-            if sym in constant_fields && use_color
-                sprint() do io_inner
-                    printstyled(io_inner, string(sym); color=:cyan)
-                end
-            else
-                string(sym)
-            end
-        else
-            string(L)
-        end
-
-        upper_str = if U === Nothing
-            "nothing"
-        elseif U <: Val
-            string(type_to_bound(U))
-        elseif U <: SymbolicRef
-            sym = type_to_bound(U)
-            if sym in constant_fields && use_color
-                sprint() do io_inner
-                    printstyled(io_inner, string(sym); color=:cyan)
-                end
-            else
-                string(sym)
-            end
-        else
-            string(U)
-        end
-
-        print(io, "of(Real, ")
-        # Handle lower bound
-        if L <: SymbolicRef && type_to_bound(L) in constant_fields && use_color
-            printstyled(io, string(type_to_bound(L)); color=:cyan)
-        else
-            print(io, lower_str)
-        end
-        print(io, ", ")
-        # Handle upper bound
-        if U <: SymbolicRef && type_to_bound(U) in constant_fields && use_color
-            printstyled(io, string(type_to_bound(U)); color=:cyan)
-        else
-            print(io, upper_str)
-        end
-        print(io, ")")
-    end
+    return show_bounded_type(io, "Real", L, U)
 end
 
 function Base.show(io::IO, ::Type{OfInt{L,U}}) where {L,U}
-    if isnothing(L) && isnothing(U)
-        print(io, "of(Int)")
-    else
-        use_color = get(io, :color, false)
-        constant_fields = get(io, :constant_fields, Symbol[])
-
-        # Handle different bound types
-        lower_str = if L === Nothing
-            "nothing"
-        elseif L <: Val
-            string(type_to_bound(L))
-        elseif L <: SymbolicRef
-            sym = type_to_bound(L)
-            if sym in constant_fields && use_color
-                sprint() do io_inner
-                    printstyled(io_inner, string(sym); color=:cyan)
-                end
-            else
-                string(sym)
-            end
-        else
-            string(L)
-        end
-
-        upper_str = if U === Nothing
-            "nothing"
-        elseif U <: Val
-            string(type_to_bound(U))
-        elseif U <: SymbolicRef
-            sym = type_to_bound(U)
-            if sym in constant_fields && use_color
-                sprint() do io_inner
-                    printstyled(io_inner, string(sym); color=:cyan)
-                end
-            else
-                string(sym)
-            end
-        else
-            string(U)
-        end
-
-        print(io, "of(Int, ")
-        # Handle lower bound
-        if L <: SymbolicRef && type_to_bound(L) in constant_fields && use_color
-            printstyled(io, string(type_to_bound(L)); color=:cyan)
-        else
-            print(io, lower_str)
-        end
-        print(io, ", ")
-        # Handle upper bound
-        if U <: SymbolicRef && type_to_bound(U) in constant_fields && use_color
-            printstyled(io, string(type_to_bound(U)); color=:cyan)
-        else
-            print(io, upper_str)
-        end
-        print(io, ")")
-    end
+    return show_bounded_type(io, "Int", L, U)
 end
 
 function Base.show(io::IO, ::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
@@ -1546,151 +1491,10 @@ end
 
 function Base.show(io::IO, ::Type{OfConstantWrapper{T}}) where {T}
     # Show the wrapped type with constant=true
-    # Extract the base specification
-    use_color = get(io, :color, false)
-
     if T <: OfReal
-        L = get_lower(T)
-        U = get_upper(T)
-        if L === Nothing && U === Nothing
-            if use_color
-                printstyled(io, "of(Real"; color=:cyan)
-                printstyled(io, "; constant=true"; color=:light_black)
-                printstyled(io, ")"; color=:cyan)
-            else
-                print(io, "of(Real; constant=true)")
-            end
-        else
-            # Get constant fields from context
-            constant_fields = get(io, :constant_fields, Symbol[])
-
-            # Handle different bound types
-            lower_str = if L === Nothing
-                "nothing"
-            elseif L <: Val
-                string(type_to_bound(L))
-            elseif L <: SymbolicRef
-                sym = type_to_bound(L)
-                if sym in constant_fields && use_color
-                    sprint() do io_inner
-                        printstyled(io_inner, string(sym); color=:cyan)
-                    end
-                else
-                    string(sym)
-                end
-            else
-                string(L)
-            end
-
-            upper_str = if U === Nothing
-                "nothing"
-            elseif U <: Val
-                string(type_to_bound(U))
-            elseif U <: SymbolicRef
-                sym = type_to_bound(U)
-                if sym in constant_fields && use_color
-                    sprint() do io_inner
-                        printstyled(io_inner, string(sym); color=:cyan)
-                    end
-                else
-                    string(sym)
-                end
-            else
-                string(U)
-            end
-
-            if use_color
-                printstyled(io, "of(Real, "; color=:cyan)
-                # Handle lower bound
-                if L <: SymbolicRef && type_to_bound(L) in constant_fields
-                    printstyled(io, string(type_to_bound(L)); color=:cyan)
-                else
-                    printstyled(io, lower_str; color=:cyan)
-                end
-                printstyled(io, ", "; color=:cyan)
-                # Handle upper bound
-                if U <: SymbolicRef && type_to_bound(U) in constant_fields
-                    printstyled(io, string(type_to_bound(U)); color=:cyan)
-                else
-                    printstyled(io, upper_str; color=:cyan)
-                end
-                printstyled(io, "; constant=true"; color=:light_black)
-                printstyled(io, ")"; color=:cyan)
-            else
-                print(io, "of(Real, ", lower_str, ", ", upper_str, "; constant=true)")
-            end
-        end
+        show_bounded_type(io, "Real", get_lower(T), get_upper(T); constant=true)
     elseif T <: OfInt
-        L = get_lower(T)
-        U = get_upper(T)
-        if L === Nothing && U === Nothing
-            if use_color
-                printstyled(io, "of(Int"; color=:cyan)
-                printstyled(io, "; constant=true"; color=:light_black)
-                printstyled(io, ")"; color=:cyan)
-            else
-                print(io, "of(Int; constant=true)")
-            end
-        else
-            # Get constant fields from context
-            constant_fields = get(io, :constant_fields, Symbol[])
-
-            # Handle different bound types
-            lower_str = if L === Nothing
-                "nothing"
-            elseif L <: Val
-                string(type_to_bound(L))
-            elseif L <: SymbolicRef
-                sym = type_to_bound(L)
-                if sym in constant_fields && use_color
-                    sprint() do io_inner
-                        printstyled(io_inner, string(sym); color=:cyan)
-                    end
-                else
-                    string(sym)
-                end
-            else
-                string(L)
-            end
-
-            upper_str = if U === Nothing
-                "nothing"
-            elseif U <: Val
-                string(type_to_bound(U))
-            elseif U <: SymbolicRef
-                sym = type_to_bound(U)
-                if sym in constant_fields && use_color
-                    sprint() do io_inner
-                        printstyled(io_inner, string(sym); color=:cyan)
-                    end
-                else
-                    string(sym)
-                end
-            else
-                string(U)
-            end
-
-            if use_color
-                printstyled(io, "of(Int, "; color=:cyan)
-                # Handle lower bound
-                if L <: SymbolicRef && type_to_bound(L) in constant_fields
-                    printstyled(io, string(type_to_bound(L)); color=:cyan)
-                else
-                    printstyled(io, lower_str; color=:cyan)
-                end
-                printstyled(io, ", "; color=:cyan)
-                # Handle upper bound
-                if U <: SymbolicRef && type_to_bound(U) in constant_fields
-                    printstyled(io, string(type_to_bound(U)); color=:cyan)
-                else
-                    printstyled(io, upper_str; color=:cyan)
-                end
-                printstyled(io, "; constant=true"; color=:light_black)
-                printstyled(io, ")"; color=:cyan)
-            else
-                print(io, "of(Int, ", lower_str, ", ", upper_str, "; constant=true)")
-            end
-        end
+        show_bounded_type(io, "Int", get_lower(T), get_upper(T); constant=true)
     elseif T <: OfArray
         # This case should not happen since constant=true is not allowed for Arrays
         # But if it does, show it as a fallback
