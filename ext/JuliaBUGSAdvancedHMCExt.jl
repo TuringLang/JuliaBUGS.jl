@@ -27,7 +27,6 @@ function JuliaBUGS.gibbs_internal(
     return _gibbs_internal_hmc(rng, cond_model, sampler, ad_backend, state)
 end
 
-
 # Error for plain HMC/NUTS samplers without explicit AD backend
 function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG,
@@ -41,7 +40,7 @@ function JuliaBUGS.gibbs_internal(
         "($(typeof(sampler).name.name)(...), AutoReverseDiff()) instead.",
     )
 end
-    
+
 function _gibbs_internal_hmc(
     rng::Random.AbstractRNG, cond_model::BUGSModel, sampler, ad_backend, state
 )
