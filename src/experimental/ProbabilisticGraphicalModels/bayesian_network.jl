@@ -1,5 +1,6 @@
 """
 	BayesianNetwork
+
 A structure representing a Bayesian Network.
 """
 struct BayesianNetwork{V,T,F}
@@ -49,6 +50,7 @@ end
 
 """
 	translate_BUGSGraph_to_BayesianNetwork(g::MetaGraph; init=Dict{Symbol,Any}())
+
 Translates a BUGSGraph (with node metadata stored in NodeInfo) into a BayesianNetwork.
 """
 function translate_BUGSGraph_to_BayesianNetwork(
@@ -132,6 +134,7 @@ end
 
 """
 	add_stochastic_vertex!(bn::BayesianNetwork{V,T}, name::V, dist::Any, node_type::Symbol; is_observed::Bool=false) where {V,T}
+
 Add a stochastic vertex with name `name`, a distribution object/function `dist`,
 and a declared node_type (`:discrete` or `:continuous`).
 """
@@ -156,6 +159,7 @@ end
 
 """
 	add_deterministic_vertex!(bn::BayesianNetwork{V,T}, name::V, f::F) where {T,V,F}
+
 Add a deterministic vertex.
 """
 function add_deterministic_vertex!(bn::BayesianNetwork{V,T}, name::V, f::F)::T where {T,V,F}
@@ -173,6 +177,7 @@ end
 
 """
 	add_edge!(bn::BayesianNetwork{V,T}, from::V, to::V) where {T,V}
+
 Add a directed edge from `from` -> `to`.
 """
 function add_edge!(bn::BayesianNetwork{V,T}, from::V, to::V)::Bool where {T,V}
@@ -404,6 +409,7 @@ end
 
 """
     enumerate_discrete_values(dist)
+
 Return all possible values for a discrete distribution.
 Currently supports Categorical, Bernoulli, Binomial, and DiscreteUniform distributions.
 """
