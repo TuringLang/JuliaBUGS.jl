@@ -33,7 +33,7 @@ The system encodes extra useful information into type parameters:
 
 ### 3. Operations on Types
 
-- `T(;kwargs...)` where `T<:OfType` - Constructor syntax to create types with specified constants
+- `T(;kwargs...)` where `T<:OfType` - Create instances with specified constants (returns values, not types)
 
 - `rand(T::Type{<:OfType})` - Generate random values matching the type specification
 - `zero(T::Type{<:OfType})` - Generate zero/default values 
@@ -66,21 +66,25 @@ MatrixType = @of(
     data=of(Array, rows, cols),
 )
 
-# Create concrete type by specifying constants
-ConcreteType = MatrixType(;rows=3, cols=4)
-# Can also validate data while concretizing
-ConcreteType = MatrixType(;rows=3, cols=4, data=rand(3, 4))  # Validates that data matches 3x4
-data_nt = (data=rand(3, 4),)
-flat = flatten(ConcreteType, data_nt)
-reconstructed = unflatten(ConcreteType, flat)
+# Create instance by providing all constants (default to zero for data)
+instance = MatrixType(;rows=3, cols=4)  
+# instance = (data = zeros(3, 4),)
 
-SemiConcreteType = MatrixType(; rows=3) # this will return a type with `cols` eliminated
+# Create instance with specific data
+instance = MatrixType(;rows=3, cols=4, data=rand(3, 4))  
+# instance = (data = <provided 3x4 matrix>,)
 
-# rand and zero will first concretize the type and call rand
-rand(MatrixType(; rows=3, cols=4))
-zero(MatrixType(; rows=10, cols=5))
+# Use flatten/unflatten with unconcretized types (providing constants as kwargs)
+flat = flatten(MatrixType, instance; rows=3, cols=4)
+reconstructed = unflatten(MatrixType, flat; rows=3, cols=4)
 
-rand(MatrixType(; rows=3)) # this would fail because some `Constant`s are not specified
+# rand and zero with keyword arguments
+rand(MatrixType; rows=3, cols=4)  # generates random instance
+zero(MatrixType; rows=10, cols=5) # generates zero instance
+
+# Missing constants will error
+MatrixType(; rows=3) # Error: Constant `cols` is required but not provided
+rand(MatrixType; rows=3) # Error: Missing values for symbolic dimensions: cols
 ```
 
 ```julia
@@ -92,14 +96,16 @@ ExpandedMatrixType = @of(
     halved=of(Array, n/2, n),
 )
 
-ConcreteExpanded = ExpandedMatrixType(; n=10)
-# This creates:
-# - original: 10×10 matrix
-# - padded: 11×11 matrix
-# - doubled: 20×10 matrix  
-# - halved: 5×10 matrix  (n/2 must result in an integer, error if not)
+# Create instance - all non-constant fields default to zero
+instance = ExpandedMatrixType(; n=10)
+# This creates an instance with:
+# - original: 10×10 zero matrix
+# - padded: 11×11 zero matrix
+# - doubled: 20×10 zero matrix  
+# - halved: 5×10 zero matrix  (n/2 must result in an integer, error if not)
 
-rand(ConcreteExpanded)
+# Generate random instance
+rand(ExpandedMatrixType; n=10)
 ```
 
 ## Example Usage
@@ -217,11 +223,12 @@ ARParams = @of(
 end
 
 # Usage example
-# Concrete type with specific dimensions
-ConcreteARType = ARParams(; order=3)
-# This creates a type where coeffs has size 3
+# Create instance with specific order
+params = ARParams(; order=3)
+# This creates an instance where coeffs has size 3, defaulting to zeros
 
-params = ConcreteARType(;coeffs=[0.5, -0.3, 0.1], sigma=0.25, y=randn(100))
+# Or with specific values
+params = ARParams(; order=3, coeffs=[0.5, -0.3, 0.1], sigma=0.25, y=randn(100))
 ```
 
 #### Bayesian Nonparametric clustering model
@@ -251,25 +258,23 @@ DPMModel = @of(
     # Cluster parameters: precisions (max_clusters vector)
     cluster_precs = of(Array, max_clusters),
     
-    # Number of active clusters (for monitoring)
-    n_active = of(Int, 1, max_clusters),
-    
     # Concentration parameter
     alpha = of(Real, 0.1, 10.0)
 )
 
-# Create concrete type with specific dimensions
-ConcreteDPM = DPMModel(; n_obs=100, n_features=2, max_clusters=20)
-# This creates:
+# Create instance with specific dimensions
+instance = DPMModel(; n_obs=100, n_features=2, max_clusters=20)
+# This creates an instance with (all defaulting to zero/appropriate defaults):
 # - data: 100×2 array of observations
 # - z: 100-element vector of cluster assignments
 # - v: 19-element vector of stick-breaking proportions
 # - weights: 20-element vector of cluster weights
 # - cluster_means: 20×2 array of cluster centers
 # - cluster_precs: 20-element vector of cluster precisions
+# - alpha: concentration parameter
 
 @model function dp_mixture(
-    (;data, z, v, weights, cluster_means, cluster_precs, n_active, alpha)::DPMModel, 
+    (;data, z, v, weights, cluster_means, cluster_precs, alpha)::DPMModel, 
     n_obs, n_features, max_clusters
 )
     # Prior on concentration parameter
@@ -309,10 +314,8 @@ ConcreteDPM = DPMModel(; n_obs=100, n_features=2, max_clusters=20)
             data[i,d] ~ Normal(cluster_means[z[i],d], 1/sqrt(cluster_precs[z[i]]))
         end
     end
-    
-    # Count active clusters (those with at least one observation)
-    n_active = length(unique(z))
 end
 
-dpm = DPMModel(; n_obs=50, n_features=2, max_clusters=10)   # 50 observations, up to 10 clusters
+# Create instance for 50 observations, up to 10 clusters
+dpm = DPMModel(; n_obs=50, n_features=2, max_clusters=10)
 ```

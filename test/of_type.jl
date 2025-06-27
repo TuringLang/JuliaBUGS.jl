@@ -97,7 +97,7 @@ end
         end
     end
 
-    @testset "Concrete type creation" begin
+    @testset "Concrete instance creation" begin
         # Define type with symbolic dimensions
         MatrixType = @of(
             rows = of(Int; constant=true),
@@ -105,15 +105,20 @@ end
             data = of(Array, rows, cols)
         )
 
-        # Create concrete type
-        ConcreteType = MatrixType(; rows=3, cols=4)
+        # Create instance with constants provided
+        instance = MatrixType(; rows=3, cols=4)
 
-        # Check that constants are eliminated
-        names = get_names(ConcreteType)
-        @test names == (:data,)  # only data field remains
+        # Check that we get an instance with only data field (constants eliminated)
+        @test instance isa NamedTuple
+        @test keys(instance) == (:data,)
+        @test instance.data isa Matrix{Float64}
+        @test size(instance.data) == (3, 4)
+        @test all(instance.data .== 0.0)  # Should default to zero
 
-        types = get_types(ConcreteType)
-        @test types.parameters[1] == OfArray{Float64,2,Tuple{3,4}}
+        # Create instance with data provided
+        test_data = rand(3, 4)
+        instance2 = MatrixType(; rows=3, cols=4, data=test_data)
+        @test instance2.data ≈ test_data
     end
 
     @testset "rand and zero with constants" begin
@@ -139,7 +144,7 @@ end
             cols = of(Int; constant=true),
             data = of(Array, rows, cols)
         )
-        ConcreteType = T(; rows=2, cols=3)
+        ConcreteType = of(T; rows=2, cols=3)
 
         # Create test data - only data field since constants are eliminated
         original = (data=rand(Float64, 2, 3),)
@@ -152,6 +157,38 @@ end
         @test typeof(reconstructed.data) == typeof(original.data)
         @test typeof(reconstructed.data) == Matrix{Float64}
         @test reconstructed.data ≈ original.data
+    end
+
+    @testset "flatten/unflatten with keyword arguments" begin
+        # Test flatten/unflatten with unconcretized types using kwargs
+        T = @of(
+            rows = of(Int; constant=true),
+            cols = of(Int; constant=true),
+            scale = of(Real, 0.1, 10.0),
+            data = of(Array, rows, cols)
+        )
+
+        # Create instance
+        instance = T(; rows=3, cols=2)
+        @test instance isa NamedTuple
+        @test keys(instance) == (:scale, :data)
+        @test size(instance.data) == (3, 2)
+
+        # Flatten using the unconcretized type with kwargs
+        flat = flatten(T, instance; rows=3, cols=2)
+        @test length(flat) == 7  # 1 scale + 6 data elements
+
+        # Unflatten using the unconcretized type with kwargs
+        reconstructed = unflatten(T, flat; rows=3, cols=2)
+        @test reconstructed.scale ≈ instance.scale
+        @test reconstructed.data ≈ instance.data
+
+        # Test with different data
+        instance2 = (scale=2.5, data=rand(3, 2))
+        flat2 = flatten(T, instance2; rows=3, cols=2)
+        reconstructed2 = unflatten(T, flat2; rows=3, cols=2)
+        @test reconstructed2.scale ≈ 2.5
+        @test reconstructed2.data ≈ instance2.data
     end
 end
 
@@ -207,7 +244,7 @@ end
         @test types.parameters[3] == OfReal{SymbolicRef{:lower},SymbolicRef{:upper}}
     end
 
-    @testset "Concrete type creation with symbolic resolution" begin
+    @testset "Concrete instance creation with symbolic resolution" begin
         # Define schema with symbolic bounds
         Schema = @of(
             min_bound = of(Real; constant=true),
@@ -215,16 +252,17 @@ end
             value = of(Real, min_bound, max_bound)
         )
 
-        # Create concrete type by providing constants
-        ConcreteType = Schema(; min_bound=0.0, max_bound=1.0)
+        # Create instance by providing constants
+        instance = Schema(; min_bound=0.0, max_bound=1.0)
 
-        # The constants should be eliminated
-        names = get_names(ConcreteType)
-        @test names == (:value,)
+        # The instance should only have the value field (constants eliminated)
+        @test instance isa NamedTuple
+        @test keys(instance) == (:value,)
+        @test instance.value == 0.0  # Should default to lower bound
 
-        types = get_types(ConcreteType)
-        # Only value field remains with resolved bounds
-        @test types.parameters[1] == OfReal{Val{0.0},Val{1.0}}
+        # Create instance with explicit value
+        instance2 = Schema(; min_bound=0.0, max_bound=1.0, value=0.5)
+        @test instance2.value == 0.5
     end
 
     @testset "Validation with symbolic bounds" begin
@@ -524,6 +562,10 @@ end
         # Should throw when trying to use without providing constant
         @test_throws ErrorException rand(T)
         @test_throws ErrorException zero(T)
+
+        # Should throw when trying to create instance without providing constant
+        @test_throws ErrorException T()
+        @test_throws ErrorException T(data=rand(5))
     end
 
     @testset "Type display" begin

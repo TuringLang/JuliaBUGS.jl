@@ -452,44 +452,49 @@ function (::Type{T})(; kwargs...) where {T<:OfType}
             end
         end
 
-        # First concretize with constants
-        concrete_type = of(T, NamedTuple(constants))
-
-        # If values were provided, validate them against the concrete type
-        if !isempty(values)
-            # Check if all constants are resolved
-            if has_symbolic_dims(concrete_type)
-                missing_symbols = get_unresolved_symbols(concrete_type)
-                error(
-                    "Missing values for symbolic dimensions: $(join(missing_symbols, ", "))"
-                )
-            end
-
-            # Validate the values match the concrete type structure
-            concrete_names = get_names(concrete_type)
-            concrete_types = get_types(concrete_type)
-
-            # Now validate all fields (constants have been removed from concrete_type)
-            for (idx, name) in enumerate(concrete_names)
-                if haskey(values, name)
-                    field_type = concrete_types.parameters[idx]
-
-                    # Validate the value matches the expected type
-                    try
-                        _validate(field_type, values[name])
-                    catch e
-                        error("Validation failed for field $name: $(e.msg)")
-                    end
-                else
-                    error("Missing value for field: $name when validating")
-                end
+        # Check that all constants are provided
+        for (idx, name) in enumerate(names)
+            if types.parameters[idx] <: OfConstantWrapper && !haskey(constants, name)
+                error("Constant `$name` is required but not provided")
             end
         end
 
-        return concrete_type
+        # First concretize with constants
+        concrete_type = of(T, NamedTuple(constants))
+
+        # Check if all constants are resolved
+        if has_symbolic_dims(concrete_type)
+            missing_symbols = get_unresolved_symbols(concrete_type)
+            error("Missing values for symbolic dimensions: $(join(missing_symbols, ", "))")
+        end
+
+        # Get the names and types from the concrete type (constants removed)
+        concrete_names = get_names(concrete_type)
+        concrete_types = get_types(concrete_type)
+
+        # Build the result with provided values or defaults
+        result_values = Any[]
+        for (idx, name) in enumerate(concrete_names)
+            field_type = concrete_types.parameters[idx]
+
+            if haskey(values, name)
+                # Validate the provided value
+                try
+                    push!(result_values, _validate(field_type, values[name]))
+                catch e
+                    error("Validation failed for field $name: $(e.msg)")
+                end
+            else
+                # Use zero as default for non-constant variables
+                push!(result_values, zero(field_type))
+            end
+        end
+
+        # Return the instance as a NamedTuple
+        return NamedTuple{concrete_names}(Tuple(result_values))
     else
-        # For non-NamedTuple types, just concretize
-        return of(T, NamedTuple(kwargs))
+        # For non-NamedTuple types, error since we need to return instances
+        error("T(;kwargs...) is only supported for OfNamedTuple types, not $(T)")
     end
 end
 
@@ -1044,12 +1049,12 @@ end
 # Flatten and Unflatten Operations
 # ========================================================================
 
-# Flatten implementation for types
-function flatten(::Type{T}, values) where {T<:OfType}
+# Internal implementation for flatten
+function _flatten_impl(::Type{T}, values) where {T<:OfType}
     # Check for symbolic dimensions
     if has_symbolic_dims(T)
         error(
-            "Cannot flatten type with symbolic dimensions or constants. Use of(T, rows=3, cols=4) to create a concrete type first.",
+            "Cannot flatten type with symbolic dimensions or constants. Use flatten(T, values; kwargs...) with constant values.",
         )
     end
 
@@ -1081,12 +1086,31 @@ function flatten(::Type{T}, values) where {T<:OfType}
     return numerical_values
 end
 
-# Unflatten implementation for types
-function unflatten(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfType}
+# Public flatten function
+function flatten(::Type{T}, values) where {T<:OfType}
+    return _flatten_impl(T, values)
+end
+
+# Flatten with keyword arguments for constants
+function flatten(::Type{T}, values; kwargs...) where {T<:OfType}
+    if !isempty(kwargs)
+        # First concretize the type with the provided constants
+        concrete_type = of(T, NamedTuple(kwargs))
+
+        # Then use the internal flatten
+        return _flatten_impl(concrete_type, values)
+    else
+        # Call the internal flatten method
+        return _flatten_impl(T, values)
+    end
+end
+
+# Internal implementation for unflatten
+function _unflatten_impl(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfType}
     # Check for symbolic dimensions
     if has_symbolic_dims(T)
         error(
-            "Cannot unflatten type with symbolic dimensions or constants. Use of(T, rows=3, cols=4) to create a concrete type first.",
+            "Cannot unflatten type with symbolic dimensions or constants. Use unflatten(T, flat_values; kwargs...) with constant values.",
         )
     end
 
@@ -1147,6 +1171,25 @@ function unflatten(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfType}
     end
 
     return reconstructed
+end
+
+# Public unflatten function
+function unflatten(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfType}
+    return _unflatten_impl(T, flat_values)
+end
+
+# Unflatten with keyword arguments for constants
+function unflatten(::Type{T}, flat_values::Vector{<:Real}; kwargs...) where {T<:OfType}
+    if !isempty(kwargs)
+        # First concretize the type with the provided constants
+        concrete_type = of(T, NamedTuple(kwargs))
+
+        # Then use the internal unflatten
+        return _unflatten_impl(concrete_type, flat_values)
+    else
+        # Call the internal unflatten method
+        return _unflatten_impl(T, flat_values)
+    end
 end
 
 # ========================================================================
