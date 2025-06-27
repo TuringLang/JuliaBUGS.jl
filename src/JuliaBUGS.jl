@@ -43,6 +43,7 @@ using .Model:
     UseGeneratedLogDensityFunction
 
 include("independent_mh.jl")
+include("mh_from_prior.jl")
 include("gibbs.jl")
 
 include("source_gen.jl")
