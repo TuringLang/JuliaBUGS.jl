@@ -1,28 +1,26 @@
-# TODO: Temporary solution until DynamicPPL/BangBang integration improves
-# Resolves: setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
-# Alternatively, can overload BangBang.possible(
-#     ::typeof(BangBang._setindex!), ::C, ::T, ::Vararg
-# )
-# to allow mutation, but the current solution seems create less possible problems, albeit less efficient.
-
-using BangBang
-import BangBang: possible, _setindex
-
-# Custom fallback only for AbstractArrays and specific eltypes
-function possible(::typeof(_setindex), xs::AbstractArray{S}, v::AbstractArray{T}, I...) where {S, T}
-    return true
-end
-
-# Define a non-pirating _setindex fallback for AbstractArray
-function _setindex(xs::AbstractArray{S}, v::AbstractArray{T}, I...) where {S, T}
-    T_promoted = promote_type(S, T)
+# TODO: Can't remove even after fixing `possible` in DynamicPPL.
+# Still needed: without it, setindex!! returns Matrix{Any}, breaks AD.
+function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
+    # Promote to concrete eltype
+    T_promoted = promote_type(eltype(xs), eltype(v))
     ys = similar(xs, T_promoted)
-    if S !== Union{}
+    if eltype(xs) !== Union{}
         copy!(ys, xs)
     end
     ys[I...] = v
     return ys
 end
+
+# Robust setindex!! for NamedTuple with VarName lens.
+function BangBang.setindex!!(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
+    optic = BangBang.prefermutation(
+        AbstractPPL.getoptic(vn) ∘ Accessors.PropertyLens{sym}()
+    )
+    Accessors.set(nt, optic, val)
+end
+
+# Optional: make possible return true explicitly for these types.
+BangBang.possible(::typeof(BangBang._setindex!), xs::AbstractArray, v::AbstractArray, I...) = true
 
 """
     reconstruct([f, ]dist, val)
