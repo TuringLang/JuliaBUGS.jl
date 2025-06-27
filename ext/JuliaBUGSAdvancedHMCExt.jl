@@ -1,14 +1,3 @@
-using DynamicPPL: get_transform_info, invlink
-```)  
-
-and these symbols (`get_transform_info`, `invlink`) aren’t used anywhere else in your code —  
-the clean fix is simply **delete that line**.  
-
----
-
-✅ **Here is your cleaned, fixed module without DynamicPPL:**  
-
-```julia
 module JuliaBUGSAdvancedHMCExt
 
 using AbstractMCMC
