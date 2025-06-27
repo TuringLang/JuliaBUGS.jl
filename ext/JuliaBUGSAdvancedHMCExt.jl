@@ -27,6 +27,21 @@ function JuliaBUGS.gibbs_internal(
     return _gibbs_internal_hmc(rng, cond_model, sampler, ad_backend, state)
 end
 
+
+# Error for plain HMC/NUTS samplers without explicit AD backend
+function JuliaBUGS.gibbs_internal(
+    rng::Random.AbstractRNG,
+    cond_model::BUGSModel,
+    sampler::AdvancedHMC.AbstractHMCSampler,
+    state=nothing,
+)
+    return error(
+        "Gradient-based samplers (HMC/NUTS) require an explicit AD backend. " *
+        "Use a tuple like ($(typeof(sampler).name.name)(...), AutoForwardDiff()) or " *
+        "($(typeof(sampler).name.name)(...), AutoReverseDiff()) instead.",
+    )
+end
+    
 function _gibbs_internal_hmc(
     rng::Random.AbstractRNG, cond_model::BUGSModel, sampler, ad_backend, state
 )
