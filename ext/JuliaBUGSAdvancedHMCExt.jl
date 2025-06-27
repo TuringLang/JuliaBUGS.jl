@@ -81,7 +81,6 @@ end
 
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:AdvancedHMC.Transition},
-    ts::Vector{<:AdvancedHMC.Transition},
     logdensitymodel::AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
     sampler::AdvancedHMC.AbstractHMCSampler,
     state,
