@@ -113,5 +113,5 @@ function AbstractMCMC.bundle_samples(
     )
 end
 
-end # module JuliaBUGSAdvancedHMCExt
+end
 
