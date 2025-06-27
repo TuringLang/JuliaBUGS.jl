@@ -2,8 +2,8 @@
 # Still needed: without it, setindex!! returns Matrix{Any}, breaks AD.
 function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
     # Promote to concrete eltype
-    T_promoted = promote_type(eltype(xs), eltype(v))
-    ys = similar(xs, T_promoted)
+    T = promote_type(eltype(xs), eltype(v))
+    ys = similar(xs, T)
     if eltype(xs) !== Union{}
         copy!(ys, xs)
     end
