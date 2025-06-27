@@ -34,6 +34,7 @@ The system encodes extra useful information into type parameters:
 ### 3. Operations on Types
 
 - `T(;kwargs...)` where `T<:OfType` - Create instances with specified constants (returns values, not types)
+- `of(T; kwargs...)` where `T<:OfType` - Create concrete types by resolving constants
 
 - `rand(T::Type{<:OfType})` - Generate random values matching the type specification
 - `zero(T::Type{<:OfType})` - Generate zero/default values 
@@ -66,6 +67,18 @@ MatrixType = @of(
     data=of(Array, rows, cols),
 )
 
+# Create concrete type by resolving constants
+ConcreteType = of(MatrixType; rows=3, cols=4)
+# ConcreteType is @of(data=of(Array, 3, 4))
+
+# Use concrete type with rand and zero
+rand(ConcreteType)  # generates random 3×4 matrix wrapped in NamedTuple
+zero(ConcreteType)  # generates zero 3×4 matrix wrapped in NamedTuple
+
+# Partial concretization (semiconcretized)
+SemiConcreteType = of(MatrixType; rows=3)
+# SemiConcreteType is @of(cols=of(Int; constant=true), data=of(Array, 3, :cols))
+
 # Create instance by providing all constants (default to zero for data)
 instance = MatrixType(;rows=3, cols=4)  
 # instance = (data = zeros(3, 4),)
@@ -77,6 +90,10 @@ instance = MatrixType(;rows=3, cols=4, data=rand(3, 4))
 # Use flatten/unflatten with unconcretized types (providing constants as kwargs)
 flat = flatten(MatrixType, instance; rows=3, cols=4)
 reconstructed = unflatten(MatrixType, flat; rows=3, cols=4)
+
+# Or use concrete type for flatten/unflatten
+flat = flatten(ConcreteType, instance)
+reconstructed = unflatten(ConcreteType, flat)
 
 # rand and zero with keyword arguments
 rand(MatrixType; rows=3, cols=4)  # generates random instance
