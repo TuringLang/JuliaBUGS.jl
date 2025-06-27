@@ -1,9 +1,9 @@
-# src/model/utils.jl
-# TODO: Can't remove even after fixing `possible` in DynamicPPL.
-# Reason: still hits eltype inference issues → AD errors.
-# Example that fails without this:
-#     setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) → returns Matrix{Any}.
-# Alternative: overload BangBang.possible(::typeof(BangBang._setindex!), ...) to allow mutation.
+# TODO: can't remove even with the `possible` fix in DynamicPPL, still seems to have eltype inference issue causing AD errors
+# Resolves: setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) # returns 2×2 Matrix{Any}
+# Alternatively, can overload BangBang.possible(
+#     ::typeof(BangBang._setindex!), ::C, ::T, ::Vararg
+# )
+# to allow mutation, but the current solution seems create less possible problems, albeit less efficient.
 
 # Wrapper to avoid piracy
 struct SafeArray{T<:AbstractArray}
