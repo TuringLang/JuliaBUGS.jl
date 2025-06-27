@@ -70,7 +70,7 @@ function _gibbs_internal_hmc(
     return updated_model.evaluation_env, s
 end
 
-function JuliaBUGS.update_sampler_state(
+function update_sampler_state(
     model::BUGSModel,
     sampler::WithGradient{<:AdvancedHMC.AbstractHMCSampler},
     state::AdvancedHMC.HMCState,
