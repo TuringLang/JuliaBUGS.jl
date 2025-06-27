@@ -3,7 +3,7 @@ module JuliaBUGSAdvancedHMCExt
 using AbstractMCMC
 using AdvancedHMC
 using JuliaBUGS
-using JuliaBUGS: BUGSModel, WithGradient, getparams, initialize!
+using JuliaBUGS: BUGSModel, getparams, initialize!
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.Random
