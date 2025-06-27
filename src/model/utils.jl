@@ -1,26 +1,36 @@
+# src/model/utils.jl
 # TODO: Can't remove even after fixing `possible` in DynamicPPL.
-# Still needed: without it, setindex!! returns Matrix{Any}, breaks AD.
-function BangBang.NoBang._setindex(xs::AbstractArray, v::AbstractArray, I...)
-    # Promote to concrete eltype
+# Reason: still hits eltype inference issues → AD errors.
+# Example that fails without this:
+#     setindex!!([1 2; 3 4], [2 3; 4 5], 1:2, 1:2) → returns Matrix{Any}.
+# Alternative: overload BangBang.possible(::typeof(BangBang._setindex!), ...) to allow mutation.
+
+# Wrapper to avoid piracy
+struct SafeArray{T<:AbstractArray}
+    data::T
+end
+
+# Safe mutation with concrete eltype
+function BangBang.NoBang._setindex(sa::SafeArray, v::AbstractArray, I...)
+    xs = sa.data
     T = promote_type(eltype(xs), eltype(v))
     ys = similar(xs, T)
     if eltype(xs) !== Union{}
         copy!(ys, xs)
     end
     ys[I...] = v
-    return ys
+    return SafeArray(ys)
 end
 
-# Robust setindex!! for NamedTuple with VarName lens.
+BangBang.possible(::typeof(BangBang._setindex!), sa::SafeArray, v::AbstractArray, I...) = true
+
+# Robust setindex!! for NamedTuple
 function BangBang.setindex!!(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
     optic = BangBang.prefermutation(
         AbstractPPL.getoptic(vn) ∘ Accessors.PropertyLens{sym}()
     )
     Accessors.set(nt, optic, val)
 end
-
-# Optional: make possible return true explicitly for these types.
-BangBang.possible(::typeof(BangBang._setindex!), xs::AbstractArray, v::AbstractArray, I...) = true
 
 """
     reconstruct([f, ]dist, val)
