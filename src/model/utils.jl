@@ -29,7 +29,7 @@ function BangBang.setindex!!(nt::NamedTuple, val, vn::VarName{sym}) where {sym}
     optic = BangBang.prefermutation(
         AbstractPPL.getoptic(vn) ∘ Accessors.PropertyLens{sym}()
     )
-    Accessors.set(nt, optic, val)
+    return Accessors.set(nt, optic, val)
 end
 
 """
