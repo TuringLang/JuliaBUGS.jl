@@ -106,7 +106,6 @@ function AbstractMCMC.bundle_samples(
     return JuliaBUGS.gen_chains(
         logdensitymodel,
         param_samples,
-        param_samples,
         stats_names,
         stats_values;
         discard_initial=discard_initial,
@@ -115,4 +114,4 @@ function AbstractMCMC.bundle_samples(
     )
 end
 
-end
+end # module JuliaBUGSAdvancedHMCExt
