@@ -2,6 +2,7 @@ module JuliaBUGSAdvancedHMCExt
 
 using AbstractMCMC
 using AdvancedHMC
+using ADTypes
 using JuliaBUGS
 using JuliaBUGS: BUGSModel, getparams, initialize!
 using JuliaBUGS.LogDensityProblems
