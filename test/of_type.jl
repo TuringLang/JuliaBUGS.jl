@@ -125,13 +125,15 @@ end
         # Define type with constants
         T = @of(n = of(Int; constant=true), data = of(Array, n))
 
-        # Test rand with keyword arguments
-        val = rand(T; n=5)
+        # Test rand with concrete type
+        CT = of(T; n=5)
+        val = rand(CT)
         @test haskey(val, :data)
         @test size(val.data) == (5,)
 
-        # Test zero with keyword arguments
-        val = zero(T; n=3)
+        # Test zero with concrete type
+        CT2 = of(T; n=3)
+        val = zero(CT2)
         @test haskey(val, :data)
         @test size(val.data) == (3,)
         @test all(val.data .== 0.0)
@@ -159,8 +161,8 @@ end
         @test reconstructed.data ≈ original.data
     end
 
-    @testset "flatten/unflatten with keyword arguments" begin
-        # Test flatten/unflatten with unconcretized types using kwargs
+    @testset "flatten/unflatten with concrete types" begin
+        # Test flatten/unflatten with concrete types
         T = @of(
             rows = of(Int; constant=true),
             cols = of(Int; constant=true),
@@ -174,19 +176,22 @@ end
         @test keys(instance) == (:scale, :data)
         @test size(instance.data) == (3, 2)
 
-        # Flatten using the unconcretized type with kwargs
-        flat = flatten(T, instance; rows=3, cols=2)
+        # Create concrete type first
+        CT = of(T; rows=3, cols=2)
+
+        # Flatten using the concrete type
+        flat = flatten(CT, instance)
         @test length(flat) == 7  # 1 scale + 6 data elements
 
-        # Unflatten using the unconcretized type with kwargs
-        reconstructed = unflatten(T, flat; rows=3, cols=2)
+        # Unflatten using the concrete type
+        reconstructed = unflatten(CT, flat)
         @test reconstructed.scale ≈ instance.scale
         @test reconstructed.data ≈ instance.data
 
         # Test with different data
         instance2 = (scale=2.5, data=rand(3, 2))
-        flat2 = flatten(T, instance2; rows=3, cols=2)
-        reconstructed2 = unflatten(T, flat2; rows=3, cols=2)
+        flat2 = flatten(CT, instance2)
+        reconstructed2 = unflatten(CT, flat2)
         @test reconstructed2.scale ≈ 2.5
         @test reconstructed2.data ≈ instance2.data
     end

@@ -87,21 +87,17 @@ instance = MatrixType(;rows=3, cols=4)
 instance = MatrixType(;rows=3, cols=4, data=rand(3, 4))  
 # instance = (data = <provided 3x4 matrix>,)
 
-# Use flatten/unflatten with unconcretized types (providing constants as kwargs)
-flat = flatten(MatrixType, instance; rows=3, cols=4)
-reconstructed = unflatten(MatrixType, flat; rows=3, cols=4)
-
-# Or use concrete type for flatten/unflatten
+# Create concrete type for flatten/unflatten
 flat = flatten(ConcreteType, instance)
 reconstructed = unflatten(ConcreteType, flat)
 
-# rand and zero with keyword arguments
-rand(MatrixType; rows=3, cols=4)  # generates random instance
-zero(MatrixType; rows=10, cols=5) # generates zero instance
+# rand and zero with concrete types
+rand(of(MatrixType; rows=3, cols=4))  # generates random instance
+zero(of(MatrixType; rows=10, cols=5)) # generates zero instance
 
 # Missing constants will error
 MatrixType(; rows=3) # Error: Constant `cols` is required but not provided
-rand(MatrixType; rows=3) # Error: Missing values for symbolic dimensions: cols
+rand(MatrixType) # Error: Cannot generate random values for types with symbolic dimensions
 ```
 
 ```julia
@@ -122,7 +118,7 @@ instance = ExpandedMatrixType(; n=10)
 # - halved: 5×10 zero matrix  (n/2 must result in an integer, error if not)
 
 # Generate random instance
-rand(ExpandedMatrixType; n=10)
+rand(of(ExpandedMatrixType; n=10))
 ```
 
 ## Example Usage

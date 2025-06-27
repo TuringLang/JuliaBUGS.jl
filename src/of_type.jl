@@ -736,21 +736,8 @@ end
 
 function Base.rand(::Type{OfConstantWrapper{T}}) where {T}
     return error(
-        "Cannot generate random values for constants. Use rand(T; const_name=value) to provide the constant value.",
+        "Cannot generate random values for constants. Use rand(of(T; const_name=value)) after providing the constant value.",
     )
-end
-
-# Parameterized rand that accepts keyword arguments for constants
-function Base.rand(::Type{T}; kwargs...) where {T<:OfType}
-    concrete_type = of(T, NamedTuple(kwargs))
-    if has_symbolic_dims(concrete_type)
-        missing_symbols = get_unresolved_symbols(concrete_type)
-        provided = keys(kwargs)
-        error(
-            "Missing values for symbolic dimensions: $(join(missing_symbols, ", ")). You provided: $(join(provided, ", "))",
-        )
-    end
-    return rand(concrete_type)
 end
 
 # ========================================================================
@@ -799,21 +786,8 @@ end
 
 function Base.zero(::Type{OfConstantWrapper{T}}) where {T}
     return error(
-        "Cannot generate zero values for constants. Use zero(T; const_name=value) to provide the constant value.",
+        "Cannot generate zero values for constants. Use zero(of(T; const_name=value)) after providing the constant value.",
     )
-end
-
-# Parameterized zero that accepts keyword arguments for constants
-function Base.zero(::Type{T}; kwargs...) where {T<:OfType}
-    concrete_type = of(T, NamedTuple(kwargs))
-    if has_symbolic_dims(concrete_type)
-        missing_symbols = get_unresolved_symbols(concrete_type)
-        provided = keys(kwargs)
-        error(
-            "Missing values for symbolic dimensions: $(join(missing_symbols, ", ")). You provided: $(join(provided, ", "))",
-        )
-    end
-    return zero(concrete_type)
 end
 
 # ========================================================================
@@ -1091,20 +1065,6 @@ function flatten(::Type{T}, values) where {T<:OfType}
     return _flatten_impl(T, values)
 end
 
-# Flatten with keyword arguments for constants
-function flatten(::Type{T}, values; kwargs...) where {T<:OfType}
-    if !isempty(kwargs)
-        # First concretize the type with the provided constants
-        concrete_type = of(T, NamedTuple(kwargs))
-
-        # Then use the internal flatten
-        return _flatten_impl(concrete_type, values)
-    else
-        # Call the internal flatten method
-        return _flatten_impl(T, values)
-    end
-end
-
 # Internal implementation for unflatten
 function _unflatten_impl(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfType}
     # Check for symbolic dimensions
@@ -1176,20 +1136,6 @@ end
 # Public unflatten function
 function unflatten(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfType}
     return _unflatten_impl(T, flat_values)
-end
-
-# Unflatten with keyword arguments for constants
-function unflatten(::Type{T}, flat_values::Vector{<:Real}; kwargs...) where {T<:OfType}
-    if !isempty(kwargs)
-        # First concretize the type with the provided constants
-        concrete_type = of(T, NamedTuple(kwargs))
-
-        # Then use the internal unflatten
-        return _unflatten_impl(concrete_type, flat_values)
-    else
-        # Call the internal unflatten method
-        return _unflatten_impl(T, flat_values)
-    end
 end
 
 # ========================================================================
