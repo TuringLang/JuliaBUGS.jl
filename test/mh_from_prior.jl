@@ -165,10 +165,15 @@ using Statistics
         # Test gibbs_internal
         rng = Random.MersenneTwister(222)
         param_values = gibbs_internal(rng, cond_model, MHFromPrior())
-
-        @test param_values isa Vector{Float64}
-        # Should be 2 parameters since both p and lambda are parameters in the base model
-        # When we condition on lambda, we still get its value in param_values
-        @test length(param_values) >= 1
+        
+        # Check that the returned value is a tuple (sample, state/logp)
+        @test param_values isa Tuple
+        
+        # The first element should be a NamedTuple containing the sampled parameters
+        @test param_values[1] isa NamedTuple
+        # Since we conditioned on lambda, we expect to get p sampled
+        @test haskey(param_values[1], :p)
+        # Confirm p itself is a Float64 value
+        @test param_values[1].p isa Float64
     end
 end
