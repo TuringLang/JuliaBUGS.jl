@@ -19,11 +19,12 @@ end
 function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG,
     cond_model::BUGSModel,
-    wrapped::WithGradient{<:AdvancedHMC.AbstractHMCSampler},
+    sampler_tuple::Tuple{<:AdvancedHMC.AbstractHMCSampler,<:ADTypes.AbstractADType},
     state=nothing,
 )
-    # Extract sampler and AD backend from wrapper
-    return _gibbs_internal_hmc(rng, cond_model, wrapped.sampler, wrapped.ad_backend, state)
+    # Extract sampler and AD backend from tuple
+    sampler, ad_backend = sampler_tuple
+    return _gibbs_internal_hmc(rng, cond_model, sampler, ad_backend, state)
 end
 
 function _gibbs_internal_hmc(
