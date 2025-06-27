@@ -9,7 +9,7 @@ using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.Random
 using MCMCChains: Chains
 
-import JuliaBUGS: gibbs_internal
+import JuliaBUGS: gibbs_internal, update_sampler_state
 
 function JuliaBUGS.gibbs_internal(
     rng::Random.AbstractRNG,
