@@ -75,8 +75,22 @@ JuliaBUGS provides a Julian interface inspired by Turing.jl's model macro syntax
 
 ### The `@model` Macro
 
+The `@model` macro provides a Julia-native interface for defining probabilistic models. It supports two styles for declaring model parameters:
+
+#### Style 1: Inline Type Annotations with `of`
+
 ```julia
-JuliaBUGS.@model function model_definition((;r, b, alpha0, alpha1, alpha2, alpha12, tau)::SeedsParams, x1, x2, N, n)    
+JuliaBUGS.@model function seeds(
+    (; r::of(Array, Int, 21),
+       b::of(Array, 21),
+       alpha0::of(Real),
+       alpha1::of(Real),
+       alpha2::of(Real),
+       alpha12::of(Real),
+       tau::of(Real, 0, nothing)
+    ), 
+    x1, x2, N, n
+)    
     for i in 1:N
         r[i] ~ dbin(p[i], n[i])
         b[i] ~ dnorm(0.0, tau)
@@ -91,34 +105,78 @@ JuliaBUGS.@model function model_definition((;r, b, alpha0, alpha1, alpha2, alpha
 end
 ```
 
-The `@model` macro requires a specific function signature:
-
-1. The first argument must declare stochastic parameters (variables defined with `~`) using destructuring assignment with the format `(; param1, param2, ...)`.
-2. We recommend providing a type annotation (e.g., `(; r, b, ...)::SeedsParams`). If `SeedsParams` is defined using `@parameters`, the macro automatically defines a constructor `SeedsParams(model::BUGSModel)` for extracting parameter values from the model.
-3. Alternatively, you can use a `NamedTuple` instead of a custom type. In this case, no type annotation is needed, but you would need to manually create a `NamedTuple` with `ParameterPlaceholder()` values or arrays of `missing` values for parameters that don't have observations.
-4. The remaining arguments must specify all constants and independent variables required by the model (variables used on the RHS but not on the LHS).
-
-The `@parameters` macro simplifies creating structs to hold model parameters:
+#### Style 2: External Type Definition with `@of`
 
 ```julia
-JuliaBUGS.@parameters struct SeedsParams
-    r
-    b
-    alpha0
-    alpha1
-    alpha2
-    alpha12
-    tau
+# Define parameter types
+SeedsParams = @of(
+    r = of(Array, Int, 21),
+    b = of(Array, 21),
+    alpha0 = of(Real),
+    alpha1 = of(Real),
+    alpha2 = of(Real),
+    alpha12 = of(Real),
+    tau = of(Real, 0, nothing)
+)
+
+# Use in model
+JuliaBUGS.@model function seeds(
+    (r, b, alpha0, alpha1, alpha2, alpha12, tau)::SeedsParams,
+    x1, x2, N, n
+)    
+    # Same model body as above
+    for i in 1:N
+        r[i] ~ dbin(p[i], n[i])
+        b[i] ~ dnorm(0.0, tau)
+        p[i] = logistic(alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] + b[i])
+    end
+    # ...
 end
 ```
 
-This macro applies `Base.@kwdef` to enable keyword initialization and creates a no-argument constructor. By default, fields are initialized to `JuliaBUGS.ParameterPlaceholder`. The concrete types and sizes of parameters are determined during compilation when the model function is called with constants. A constructor `SeedsParams(::BUGSModel)` is created for easy extraction of parameter values.
+#### Function Signature Requirements
+
+1. **First argument**: Declares stochastic parameters (variables defined with `~`)
+   - Style 1: Named tuple with optional `of` type annotations: `(; param::of(...), ...)`
+   - Style 2: Tuple with type annotation: `(param1, param2, ...)::TypeName`
+   
+2. **Remaining arguments**: All constants and independent variables required by the model
+
+#### The `of` Type System
+
+The `of` function creates type specifications for parameters:
+
+- `of(Real)` - Unbounded real number
+- `of(Real, lower, upper)` - Bounded real number
+- `of(Int)` - Unbounded integer  
+- `of(Int, lower, upper)` - Bounded integer
+- `of(Array, dims...)` - Array with specified dimensions (defaults to Float64)
+- `of(Array, T, dims...)` - Array with element type T
+
+For models with variable dimensions, use the `@of` macro to create types with symbolic dimensions:
+
+```julia
+DynamicModel = @of(
+    n = of(Int; constant=true),      # Constant (not sampled)
+    coeffs = of(Array, n),           # Array with symbolic dimension
+    sigma = of(Real, 0, nothing)     # Positive real
+)
+```
 
 ### Example
 
 ```julia
+julia> # Style 1: Using inline of annotations
 julia> @model function seeds(
-        (; r, b, alpha0, alpha1, alpha2, alpha12, tau)::SeedsParams, x1, x2, N, n
+        (; r::of(Array, Int, 21),
+           b::of(Array, 21),
+           alpha0::of(Real),
+           alpha1::of(Real),
+           alpha2::of(Real),
+           alpha12::of(Real),
+           tau::of(Real, 0, nothing)
+        ), 
+        x1, x2, N, n
     )
         for i in 1:N
             r[i] ~ dbin(p[i], n[i])
@@ -138,17 +196,8 @@ seeds (generic function with 1 method)
 
 julia> (; x1, x2, N, n) = JuliaBUGS.BUGSExamples.seeds.data; # extract data from existing BUGS example
 
-julia> @parameters struct SeedsParams
-        r
-        b
-        alpha0
-        alpha1
-        alpha2
-        alpha12
-        tau
-    end
-
-julia> m = seeds(SeedsParams(), x1, x2, N, n)
+julia> # Create model without observations (all parameters will be sampled)
+julia> m = seeds((), x1, x2, N, n)
 BUGSModel (parameters are in transformed (unconstrained) space, with dimension 47):
 
   Model parameters:
@@ -160,28 +209,40 @@ BUGSModel (parameters are in transformed (unconstrained) space, with dimension 4
     alpha1
     alpha0
 
-  Variable sizes and types:
-    b: size = (21,), type = Vector{Float64}
-    p: size = (21,), type = Vector{Float64}
-    n: size = (21,), type = Vector{Int64}
-    alpha2: type = Float64
-    sigma: type = Float64
-    alpha12: type = Float64
-    alpha0: type = Float64
-    N: type = Int64
-    tau: type = Float64
-    alpha1: type = Float64
-    r: size = (21,), type = Vector{Float64}
-    x1: size = (21,), type = Vector{Int64}
-    x2: size = (21,), type = Vector{Int64}
+julia> # Or create model with observations for r
+julia> r_data = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3]
+julia> m_obs = seeds((r=r_data,), x1, x2, N, n)
 
-julia> SeedsParams(m)
-SeedsParams:
-  r       = [0.0, 0.0, 0.0, 0.0, 39.0, 0.0, 0.0, 72.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 4.0, 12.0, 0.0, 0.0, 0.0, 0.0]
-  b       = [-Inf, -Inf, -Inf, -Inf, Inf, -Inf, -Inf, Inf, -Inf, -Inf  …  -Inf, -Inf, -Inf, -Inf, Inf, Inf, -Inf, -Inf, -Inf, -Inf]
-  alpha0  = -1423.52
-  alpha1  = 1981.99
-  alpha2  = -545.664
-  alpha12 = 1338.25
-  tau     = 0.0
+julia> # Style 2: Using external type definition
+julia> SeedsParams = @of(
+           r = of(Array, Int, 21),
+           b = of(Array, 21),
+           alpha0 = of(Real),
+           alpha1 = of(Real),
+           alpha2 = of(Real),
+           alpha12 = of(Real),
+           tau = of(Real, 0, nothing)
+       )
+
+julia> @model function seeds_v2(
+        (r, b, alpha0, alpha1, alpha2, alpha12, tau)::SeedsParams,
+        x1, x2, N, n
+    )
+        # Same model body
+        for i in 1:N
+            r[i] ~ dbin(p[i], n[i])
+            b[i] ~ dnorm(0.0, tau)
+            p[i] = logistic(
+                alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] + b[i]
+            )
+        end
+        alpha0 ~ dnorm(0.0, 1.0E-6)
+        alpha1 ~ dnorm(0.0, 1.0E-6)
+        alpha2 ~ dnorm(0.0, 1.0E-6)
+        alpha12 ~ dnorm(0.0, 1.0E-6)
+        tau ~ dgamma(0.001, 0.001)
+        sigma = 1 / sqrt(tau)
+    end
+
+julia> m2 = seeds_v2(NamedTuple(), x1, x2, N, n)  # Empty NamedTuple for no observations
 ```

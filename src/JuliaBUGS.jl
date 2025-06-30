@@ -23,6 +23,8 @@ export @bugs
 export compile, initialize!
 
 export @varname
+export @model
+export @of
 
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives

@@ -300,7 +300,7 @@ function of(value::NamedTuple{names}) where {names}
 end
 
 # Support for passing OfType types through of()
-of(T::Type{<:OfType}) = T
+# (This is handled by the generic of functions below)
 
 # ========================================================================
 # Helper Functions for Type Concretization
