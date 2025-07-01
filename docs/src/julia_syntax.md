@@ -196,8 +196,8 @@ seeds (generic function with 1 method)
 
 julia> (; x1, x2, N, n) = JuliaBUGS.BUGSExamples.seeds.data; # extract data from existing BUGS example
 
-julia> # Create model without observations (all parameters will be sampled)
-julia> m = seeds((), x1, x2, N, n)
+julia> # Create model without observations (all parameters will be sampled from the prior generative process)
+julia> m = seeds((;), x1, x2, N, n)
 BUGSModel (parameters are in transformed (unconstrained) space, with dimension 47):
 
   Model parameters:
@@ -244,5 +244,38 @@ julia> @model function seeds_v2(
         sigma = 1 / sqrt(tau)
     end
 
-julia> m2 = seeds_v2(NamedTuple(), x1, x2, N, n)  # Empty NamedTuple for no observations
+julia> m2 = seeds_v2((;), x1, x2, N, n) # Empty NamedTuple for no observations
+
+# Style 3: Using inline type annotations with optional type specifications
+julia> @model function seeds_v3(
+        (; r::of(Array, Int, 21),  # Full type annotation with dimensions
+           b,                       # No type annotation - compiler will infer
+           alpha0::of(Real),        # Type annotation without bounds
+           alpha1,                  # No type annotation
+           alpha2::of(Real),
+           alpha12,                 # No type annotation
+           tau::of(Real, 0, nothing)  # Type annotation with bounds
+        ), 
+        x1, x2, N, n
+    )
+        # Model body is the same
+        for i in 1:N
+            r[i] ~ dbin(p[i], n[i])
+            b[i] ~ dnorm(0.0, tau)
+            p[i] = logistic(
+                alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] + b[i]
+            )
+        end
+        alpha0 ~ dnorm(0.0, 1.0E-6)
+        alpha1 ~ dnorm(0.0, 1.0E-6)
+        alpha2 ~ dnorm(0.0, 1.0E-6)
+        alpha12 ~ dnorm(0.0, 1.0E-6)
+        tau ~ dgamma(0.001, 0.001)
+        sigma = 1 / sqrt(tau)
+    end
+seeds_v3 (generic function with 1 method)
+
+julia> # With optional type annotations, parameters without annotations will have their types inferred
+julia> # This is similar to how BUGS handles parameter type inference
+julia> m3 = seeds_v3((r=data.r,), x1, x2, N, n)  # Only provide observed data
 ```

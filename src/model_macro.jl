@@ -116,9 +116,30 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
     # Generate function based on parameter style
     if !isempty(param_annotations)
         # Interface 1: Direct `of` annotations in the model
+        # Create an @of type expression from the annotations
+        # Only include fields that have annotations
+        annotated_fields = collect(keys(param_annotations))
+        of_type_expr = if !isempty(annotated_fields)
+            Expr(
+                :macrocall,
+                Symbol("@of"),
+                LineNumberNode(0),
+                [
+                    Expr(:(=), field, param_annotations[field]) for
+                    field in annotated_fields
+                ]...,
+            )
+        else
+            # If no annotations, create an empty of type
+            Expr(:macrocall, Symbol("@of"), LineNumberNode(0))
+        end
+
         func_expr = MacroTools.@q function ($(esc(model_name)))(
             params_struct, $(esc.(constant_variables)...)
         )
+            # Create the of type from annotations
+            param_of_type = $(of_type_expr)
+
             # For named tuple with of annotations, we don't extract all fields
             # Only extract fields that are provided
             provided_fields = Symbol[]
@@ -164,7 +185,14 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
 
             data = NamedTuple(data_pairs)
             model_def = $(QuoteNode(bugs_ast))
-            return compile(model_def, data)
+            model = compile(model_def, data)
+
+            # Validate eval_env against of type - only validate annotated fields
+            _validate_eval_env_against_of_type(
+                model.evaluation_env, param_of_type, $(QuoteNode(annotated_fields))
+            )
+
+            return model
         end
     elseif is_of_type
         # Interface 2: Type annotation with of type
@@ -305,18 +333,27 @@ function check_if_of_type(type_expr)
     return type_expr isa Symbol || (type_expr isa Expr && occursin("of", string(type_expr)))
 end
 
-# Validate of annotations at runtime
-function _validate_of_annotations(params_struct, field_names, annotations)
-    for (field, ann) in annotations
-        if haskey(params_struct, field)
-            value = params_struct[field]
-            # Here we would validate against the of type
-            # For now, we just check that the value exists
-            if value === missing
-                continue
+# Validate evaluation environment against of type
+function _validate_eval_env_against_of_type(
+    eval_env::NamedTuple, param_of_type::Type{<:OfType}, param_fields::Vector{Symbol}
+)
+    # Extract a subset of eval_env that corresponds to the annotated model parameters
+    param_values = NamedTuple()
+
+    for field in param_fields
+        if haskey(eval_env, field)
+            value = eval_env[field]
+            # Skip missing values as they represent unobserved variables
+            if value !== missing && !(value isa AbstractArray && all(ismissing, value))
+                param_values = merge(param_values, NamedTuple{(field,)}((value,)))
             end
-            # TODO: Add actual type validation against of specifications
         end
+    end
+
+    # If we have any observed parameter values, validate them
+    if !isempty(param_values)
+        # The _validate function will check each field against its of type specification
+        _validate(param_of_type, param_values)
     end
 end
 

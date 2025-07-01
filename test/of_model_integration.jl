@@ -114,7 +114,7 @@ using Test
             end
         end
 
-        model = mixed_types(NamedTuple(), 10)
+        model = mixed_types((;), 10)
         @test model isa JuliaBUGS.BUGSModel
     end
 end
