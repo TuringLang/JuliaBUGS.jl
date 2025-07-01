@@ -585,8 +585,8 @@ seeds (generic function with 1 method)
 
 julia&gt; (; x1, x2, N, n) = JuliaBUGS.BUGSExamples.seeds.data; # extract data from existing BUGS example
 
-julia&gt; # Create model without observations (all parameters will be sampled)
-julia&gt; m = seeds((), x1, x2, N, n)
+julia&gt; # Create model without observations (all parameters will be sampled from the prior generative process)
+julia&gt; m = seeds((;), x1, x2, N, n)
 BUGSModel (parameters are in transformed (unconstrained) space, with dimension 47):
 
   Model parameters:
@@ -633,4 +633,37 @@ julia&gt; @model function seeds_v2(
         sigma = 1 / sqrt(tau)
     end
 
-julia&gt; m2 = seeds_v2(NamedTuple(), x1, x2, N, n)  # Empty NamedTuple for no observations</code></pre></article><nav class="docs-footer"><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Monday 30 June 2025 13:55">Monday 30 June 2025</span>. Using Julia version 1.11.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+julia&gt; m2 = seeds_v2((;), x1, x2, N, n) # Empty NamedTuple for no observations
+
+# Style 3: Using inline type annotations with optional type specifications
+julia&gt; @model function seeds_v3(
+        (; r::of(Array, Int, 21),  # Full type annotation with dimensions
+           b,                       # No type annotation - compiler will infer
+           alpha0::of(Real),        # Type annotation without bounds
+           alpha1,                  # No type annotation
+           alpha2::of(Real),
+           alpha12,                 # No type annotation
+           tau::of(Real, 0, nothing)  # Type annotation with bounds
+        ), 
+        x1, x2, N, n
+    )
+        # Model body is the same
+        for i in 1:N
+            r[i] ~ dbin(p[i], n[i])
+            b[i] ~ dnorm(0.0, tau)
+            p[i] = logistic(
+                alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] + b[i]
+            )
+        end
+        alpha0 ~ dnorm(0.0, 1.0E-6)
+        alpha1 ~ dnorm(0.0, 1.0E-6)
+        alpha2 ~ dnorm(0.0, 1.0E-6)
+        alpha12 ~ dnorm(0.0, 1.0E-6)
+        tau ~ dgamma(0.001, 0.001)
+        sigma = 1 / sqrt(tau)
+    end
+seeds_v3 (generic function with 1 method)
+
+julia&gt; # With optional type annotations, parameters without annotations will have their types inferred
+julia&gt; # This is similar to how BUGS handles parameter type inference
+julia&gt; m3 = seeds_v3((r=data.r,), x1, x2, N, n)  # Only provide observed data</code></pre></article><nav class="docs-footer"><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Tuesday 1 July 2025 13:12">Tuesday 1 July 2025</span>. Using Julia version 1.11.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
