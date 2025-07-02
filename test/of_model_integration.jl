@@ -26,21 +26,18 @@ using Test
 
         # Create model with n=3
         X = randn(100, 3)
-        model = dynamic_regression((n=3,), X, 3)
+        model = dynamic_regression(missing(of(DynamicParams; n=3)), X, 3)
         @test model isa JuliaBUGS.BUGSModel
     end
 
     @testset "Bounded parameters" begin
-        @model function bounded_model(
-            (;
-                alpha,      # Bounded between -10 and 10
-                beta,     # Positive only
-                gamma,    # Negative only
-                p,             # Probability
-                y,              # Observations
-            ),
-            n,
-        )
+        @model function bounded_model((;
+            alpha,      # Bounded between -10 and 10
+            beta,     # Positive only
+            gamma,    # Negative only
+            p,             # Probability
+            y,              # Observations
+        ), n)
             alpha ~ dunif(-10, 10)
             beta ~ dgamma(1, 1)
             gamma ~ dnorm(-5, 1)  # Prior centered at -5
@@ -52,7 +49,7 @@ using Test
             end
         end
 
-        model = bounded_model((; y = zero(of(Array, 100))), 100)
+        model = bounded_model((; y=zero(of(Array, 100))), 100)
         @test model isa JuliaBUGS.BUGSModel
     end
 
@@ -94,7 +91,9 @@ using Test
             end
         end
 
-        model = hierarchical((n_groups=5, n_obs_per_group=20), 5, 20)
+        model = hierarchical(
+            missing(of(HierarchicalParams; n_groups=5, n_obs_per_group=20)), 5, 20
+        )
         @test model isa JuliaBUGS.BUGSModel
     end
 

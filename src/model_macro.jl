@@ -28,7 +28,6 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
     # Parse different parameter destructuring patterns
     param_type = nothing
     param_fields = Symbol[]
-    param_annotations = Dict{Symbol,Any}()
     is_of_type = false
 
     # Try to match different parameter patterns
@@ -39,8 +38,8 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
         # Check if it's an of type
         is_of_type = check_if_of_type(ptype)
     elseif MacroTools.@capture(param_destructure, (; fields__))
-        # NamedTuple without type annotation: (;x, y, z) or (;x::of(...), y::of(...))
-        param_fields, param_annotations = extract_fields_with_annotations(fields)
+        # NamedTuple without type annotation: (;x, y, z)
+        param_fields = extract_field_names(fields)
     else
         return :(throw(
             ArgumentError(
@@ -105,77 +104,8 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
     end
 
     # Generate function based on parameter style
-    if !isempty(param_annotations)
-        # Interface 1: Direct `of` annotations in the model
-        # Create an @of type expression from the annotations
-        # Only include fields that have annotations
-        annotated_fields = collect(keys(param_annotations))
-        of_type_expr = if !isempty(annotated_fields)
-            Expr(
-                :macrocall,
-                Symbol("@of"),
-                LineNumberNode(0),
-                [
-                    Expr(:(=), field, param_annotations[field]) for
-                    field in annotated_fields
-                ]...,
-            )
-        else
-            # If no annotations, create an empty of type
-            Expr(:macrocall, Symbol("@of"), LineNumberNode(0))
-        end
-
-        func_expr = MacroTools.@q function ($(esc(model_name)))(
-            params_struct, $(esc.(constant_variables)...)
-        )
-            # Create the of type from annotations
-            param_of_type = $(of_type_expr)
-
-            # For named tuple with of annotations, we don't extract all fields
-            # Only extract fields that are provided
-            provided_fields = Symbol[]
-            provided_values = Any[]
-
-            if !(params_struct isa NamedTuple)
-                error("Expected a NamedTuple for parameters, got $(typeof(params_struct))")
-            end
-            
-            for field in $(QuoteNode(param_fields))
-                if haskey(params_struct, field)
-                    push!(provided_fields, field)
-                    push!(provided_values, params_struct[field])
-                end
-            end
-
-            # Create data NamedTuple with provided parameters and constants
-            data_pairs = Pair{Symbol,Any}[]
-            for (field, value) in zip(provided_fields, provided_values)
-                if value !== missing
-                    push!(data_pairs, field => value)
-                end
-            end
-
-            # Add constants
-            $(
-                [
-                    :(push!(data_pairs, $(QuoteNode(cv)) => $(esc(cv)))) for
-                    cv in constant_variables
-                ]...
-            )
-
-            data = NamedTuple(data_pairs)
-            model_def = $(QuoteNode(bugs_ast))
-            model = compile(model_def, data)
-
-            # Validate eval_env against of type - only validate annotated fields
-            _validate_eval_env_against_of_type(
-                model.evaluation_env, param_of_type, $(QuoteNode(annotated_fields))
-            )
-
-            return model
-        end
-    elseif is_of_type
-        # Interface 2: Type annotation with of type
+    if is_of_type
+        # Type annotation with of type
         func_expr = MacroTools.@q function ($(esc(model_name)))(
             params_struct, $(esc.(constant_variables)...)
         )
@@ -297,25 +227,6 @@ function extract_field_names(fields)
     return field_names
 end
 
-# Extract fields with potential `of` annotations
-function extract_fields_with_annotations(fields)
-    field_names = Symbol[]
-    annotations = Dict{Symbol,Any}()
-
-    for field in fields
-        if field isa Symbol
-            push!(field_names, field)
-        elseif MacroTools.@capture(field, name_::ann_)
-            push!(field_names, name)
-            # Store the entire annotation expression
-            annotations[name] = ann
-        else
-            error("Unsupported field pattern: $field")
-        end
-    end
-
-    return field_names, annotations
-end
 
 # Check if a type is an of type
 function check_if_of_type(type_expr)
@@ -325,29 +236,6 @@ function check_if_of_type(type_expr)
     return type_expr isa Symbol || (type_expr isa Expr && occursin("of", string(type_expr)))
 end
 
-# Validate evaluation environment against of type
-function _validate_eval_env_against_of_type(
-    eval_env::NamedTuple, param_of_type::Type{<:OfType}, param_fields::Vector{Symbol}
-)
-    # Extract a subset of eval_env that corresponds to the annotated model parameters
-    param_values = NamedTuple()
-
-    for field in param_fields
-        if haskey(eval_env, field)
-            value = eval_env[field]
-            # Skip missing values as they represent unobserved variables
-            if value !== missing && !(value isa AbstractArray && all(ismissing, value))
-                param_values = merge(param_values, NamedTuple{(field,)}((value,)))
-            end
-        end
-    end
-
-    # If we have any observed parameter values, validate them
-    if !isempty(param_values)
-        # The _validate function will check each field against its of type specification
-        _validate(param_of_type, param_values)
-    end
-end
 
 # Extract parameters from an of type instance
 function _extract_params_from_of_type(of_instance, of_type, param_names)
