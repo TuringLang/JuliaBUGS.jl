@@ -6,8 +6,8 @@ A web-based graphical editor for creating Bayesian models, inspired by DoodleBUG
 
 This project is currently in the pre-alpha phase of development as part of the Google Summer of Code 2025 program.
 
-Contributor: @shravanngoswamii
-Mentor: @sunxd3
+- Contributor: @shravanngoswamii
+- Mentor: @sunxd3
 
 As an early-stage project, it may contain bugs or incomplete features. We appreciate your understanding and feedback as we work to improve it.
 
