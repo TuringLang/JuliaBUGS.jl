@@ -36,7 +36,7 @@ using JuliaBUGS: @model, @of
         data = JuliaBUGS.BUGSExamples.seeds.data
 
         # Test with no observations
-        m1 = seeds((), data.x1, data.x2, data.N, data.n)
+        m1 = seeds((;), data.x1, data.x2, data.N, data.n)
         @test m1 isa JuliaBUGS.BUGSModel
 
         # Test with observations
@@ -58,7 +58,7 @@ using JuliaBUGS: @model, @of
 
         #! format: off
         @model function seeds2(
-            (r, b, alpha0, alpha1, alpha2, alpha12, tau)::SeedsParams, 
+            (; r, b, alpha0, alpha1, alpha2, alpha12, tau)::SeedsParams, 
             x1, x2, N, n
         )
             for i in 1:N
@@ -206,7 +206,7 @@ using JuliaBUGS: @model, @of
             for i in 1:n
                 x[i] ~ dnorm(0, 1)
             end
-            return y ~ dgamma(1, 1)
+            y ~ dgamma(1, 1)
         end
 
         # Test with valid data

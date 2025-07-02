@@ -41,19 +41,10 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
     elseif MacroTools.@capture(param_destructure, (; fields__))
         # NamedTuple without type annotation: (;x, y, z) or (;x::of(...), y::of(...))
         param_fields, param_annotations = extract_fields_with_annotations(fields)
-    elseif MacroTools.@capture(param_destructure, ((fields__,)::ptype_))
-        # Tuple with type annotation: (x, y, z)::ParamType
-        param_type = ptype
-        param_fields = extract_field_names(fields)
-        # Check if it's an of type
-        is_of_type = check_if_of_type(ptype)
-    elseif MacroTools.@capture(param_destructure, (fields__,))
-        # Tuple without type annotation: (x, y, z) or (x::of(...), y::of(...))
-        param_fields, param_annotations = extract_fields_with_annotations(fields)
     else
         return :(throw(
             ArgumentError(
-                "The first argument of the model function must be a destructuring assignment (tuple or named tuple).",
+                "The first argument of the model function must be a named tuple destructuring assignment (e.g., (; x, y, z)).",
             ),
         ))
     end
@@ -145,25 +136,14 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
             provided_fields = Symbol[]
             provided_values = Any[]
 
-            if params_struct isa NamedTuple
-                for field in $(QuoteNode(param_fields))
-                    if haskey(params_struct, field)
-                        push!(provided_fields, field)
-                        push!(provided_values, params_struct[field])
-                    end
-                end
-            else
-                # For tuples, match positionally
-                n_provided = length(params_struct)
-                n_expected = length($(QuoteNode(param_fields)))
-                if n_provided > n_expected
-                    error(
-                        "Too many parameters provided: expected at most $n_expected, got $n_provided",
-                    )
-                end
-                for (i, value) in enumerate(params_struct)
-                    push!(provided_fields, $(QuoteNode(param_fields))[i])
-                    push!(provided_values, value)
+            if !(params_struct isa NamedTuple)
+                error("Expected a NamedTuple for parameters, got $(typeof(params_struct))")
+            end
+            
+            for field in $(QuoteNode(param_fields))
+                if haskey(params_struct, field)
+                    push!(provided_fields, field)
+                    push!(provided_values, params_struct[field])
                 end
             end
 
@@ -223,10 +203,22 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
         func_expr = MacroTools.@q function ($(esc(model_name)))(
             params_struct, $(esc.(constant_variables)...)
         )
-            (; $(esc.(param_fields)...)) = params_struct
-            data = _param_struct_to_NT((;
-                $([esc.(param_fields)..., esc.(constant_variables)...]...)
-            ))
+            # Extract only the fields that are provided
+            provided_params = NamedTuple()
+            for field in $(QuoteNode(param_fields))
+                if haskey(params_struct, field)
+                    provided_params = merge(provided_params, NamedTuple{(field,)}((params_struct[field],)))
+                end
+            end
+            
+            # Merge with constants
+            data = merge(
+                provided_params,
+                NamedTuple{$(QuoteNode(Tuple(constant_variables)))}(
+                    tuple($(esc.(constant_variables)...))
+                )
+            )
+            
             model_def = $(QuoteNode(bugs_ast))
             return compile(model_def, data)
         end

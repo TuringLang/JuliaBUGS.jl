@@ -12,7 +12,7 @@ using Test
             y = of(Array, 100)
         )
 
-        @model function dynamic_regression((coeffs, sigma, y)::DynamicParams, X, n)
+        @model function dynamic_regression((; coeffs, sigma, y)::DynamicParams, X, n)
             sigma ~ dgamma(0.001, 0.001)
             for i in 1:n
                 coeffs[i] ~ dnorm(0, 0.001)
@@ -33,11 +33,11 @@ using Test
     @testset "Bounded parameters" begin
         @model function bounded_model(
             (;
-                alpha::of(Real, -10, 10),      # Bounded between -10 and 10
-                beta::of(Real, 0, nothing),     # Positive only
-                gamma::of(Real, nothing, 0),    # Negative only
-                p::of(Real, 0, 1),             # Probability
-                y::of(Array, 100),              # Observations
+                alpha,      # Bounded between -10 and 10
+                beta,     # Positive only
+                gamma,    # Negative only
+                p,             # Probability
+                y,              # Observations
             ),
             n,
         )
@@ -52,7 +52,7 @@ using Test
             end
         end
 
-        model = bounded_model((), 100)
+        model = bounded_model((; y = zero(of(Array, 100))), 100)
         @test model isa JuliaBUGS.BUGSModel
     end
 
@@ -75,7 +75,7 @@ using Test
         )
 
         @model function hierarchical(
-            (mu_global, tau_global, group_means, group_taus, y)::HierarchicalParams,
+            (; mu_global, tau_global, group_means, group_taus, y)::HierarchicalParams,
             n_groups,
             n_obs_per_group,
         )
@@ -106,7 +106,7 @@ using Test
             bool_array = of(Array, Bool, 10)
         )
 
-        @model function mixed_types((int_array, float_array, bool_array)::MixedParams, n)
+        @model function mixed_types((; int_array, float_array, bool_array)::MixedParams, n)
             for i in 1:n
                 int_array[i] ~ dpois(5.0)
                 float_array[i] ~ dnorm(0, 1)
