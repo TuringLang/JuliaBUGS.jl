@@ -16,6 +16,7 @@ const emit = defineEmits<{
   (e: 'canvas-tap', event: EventObject): void;
   (e: 'node-moved', payload: { nodeId: string, position: { x: number; y: number }, parentId: string | undefined }): void;
   (e: 'node-dropped', payload: { nodeType: NodeType; position: { x: number; y: number } }): void;
+  (e: 'plate-emptied', plateId: string): void;
 }>();
 
 const cyContainer = ref<HTMLElement | null>(null);
@@ -63,6 +64,20 @@ onMounted(() => {
     cy.on('cdnddrop', 'node', (evt: EventObject, dropTarget: NodeSingular | undefined) => {
         const node = evt.target as NodeSingular;
         const newParentId = dropTarget ? dropTarget.id() : undefined;
+
+        const originalNode = props.elements.find(el => el.id === node.id() && el.type === 'node') as GraphNode | undefined;
+
+        if (originalNode && originalNode.parent && originalNode.parent !== newParentId) {
+            const oldParentId = originalNode.parent;
+            const oldParent = props.elements.find(el => el.id === oldParentId && el.type === 'node' && (el as GraphNode).nodeType === 'plate');
+            
+            if (oldParent) {
+                const siblings = props.elements.filter(el => el.type === 'node' && (el as GraphNode).parent === oldParentId);
+                if (siblings.length === 1) { 
+                    emit('plate-emptied', oldParentId);
+                }
+            }
+        }
 
         emit('node-moved', {
             nodeId: node.id(),

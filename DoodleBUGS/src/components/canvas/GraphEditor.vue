@@ -20,11 +20,47 @@ const emit = defineEmits<{
   (e: 'update:currentNodeType', type: NodeType): void;
 }>();
 
-const { elements, addElement, updateElement } = useGraphElements();
+const { elements, addElement, updateElement, deleteElement } = useGraphElements();
 const { getCyInstance } = useGraphInstance();
 
 const sourceNode = ref<NodeSingular | null>(null);
 const isConnecting = ref(false);
+
+/**
+ * Creates a new plate with a default stochastic node inside it and adds them to the graph.
+ * @param position - The position to create the plate at.
+ * @param parentId - The ID of a parent element, if any.
+ * @returns The newly created plate node.
+ */
+const createPlateWithNode = (position: { x: number; y: number }, parentId?: string): GraphNode => {
+    const plateId = `node_${crypto.randomUUID().substring(0, 8)}`;
+    const newPlate: GraphNode = {
+      id: plateId,
+      name: `Plate ${elements.value.filter(e => e.type === 'node' && e.nodeType === 'plate').length + 1}`,
+      type: 'node',
+      nodeType: 'plate',
+      position: position,
+      parent: parentId, // For potential future nested plates
+      loopVariable: 'i',
+      loopRange: '1:N',
+    };
+
+    const innerNodeId = `node_${crypto.randomUUID().substring(0, 8)}`;
+    const innerNode: GraphNode = {
+        id: innerNodeId,
+        name: `Node ${elements.value.filter(e => e.type === 'node').length + 2}`,
+        type: 'node',
+        nodeType: 'stochastic',
+        position: { x: position.x, y: position.y }, // Position is relative to parent in cytoscape
+        parent: plateId,
+        distribution: 'dnorm',
+    };
+
+    // Use the setter from the computed property to update the store with both new elements
+    elements.value = [...elements.value, newPlate, innerNode];
+    return newPlate;
+}
+
 
 const handleCanvasTap = (event: EventObject) => {
   const { position, target } = event;
@@ -40,28 +76,31 @@ const handleCanvasTap = (event: EventObject) => {
   switch (props.currentMode) {
     case 'add-node':
       if (isBackgroundClick || isPlateClick) {
-        if (props.currentNodeType === 'plate' && isPlateClick) {
-            alert("Nesting plates is not currently supported.");
-            return;
+        if (props.currentNodeType === 'plate') {
+            if (isPlateClick) {
+                alert("Nesting plates is not currently supported.");
+                return;
+            }
+            const newPlate = createPlateWithNode(position, isPlateClick ? (target as NodeSingular).id() : undefined);
+            emit('element-selected', newPlate);
+            emit('update:currentMode', 'select');
+        } else {
+            const newId = `node_${crypto.randomUUID().substring(0, 8)}`;
+            const newNode: GraphNode = {
+              id: newId,
+              name: `${props.currentNodeType} ${elements.value.filter(e => e.type === 'node').length + 1}`,
+              type: 'node',
+              nodeType: props.currentNodeType,
+              position: { x: position.x, y: position.y },
+              parent: isPlateClick ? (target as NodeSingular).id() : undefined,
+              distribution: props.currentNodeType === 'stochastic' ? 'dnorm' : undefined,
+              equation: props.currentNodeType === 'deterministic' ? '' : undefined,
+              observed: props.currentNodeType === 'observed' ? true : undefined,
+            };
+            addElement(newNode);
+            emit('element-selected', newNode);
+            emit('update:currentMode', 'select');
         }
-
-        const newId = `node_${crypto.randomUUID().substring(0, 8)}`;
-        const newNode: GraphNode = {
-          id: newId,
-          name: `${props.currentNodeType} ${elements.value.filter(e => e.type === 'node').length + 1}`,
-          type: 'node',
-          nodeType: props.currentNodeType,
-          position: { x: position.x, y: position.y },
-          parent: isPlateClick ? (target as NodeSingular).id() : undefined,
-          distribution: props.currentNodeType === 'stochastic' ? 'dnorm' : undefined,
-          equation: props.currentNodeType === 'deterministic' ? '' : undefined,
-          observed: props.currentNodeType === 'observed' ? true : undefined,
-          loopVariable: props.currentNodeType === 'plate' ? 'i' : undefined,
-          loopRange: props.currentNodeType === 'plate' ? '1:N' : undefined,
-        };
-        addElement(newNode);
-        emit('element-selected', newNode);
-        emit('update:currentMode', 'select');
       }
       break;
 
@@ -124,15 +163,31 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
   const cy = getCyInstance();
   let parentPlateId: string | undefined = undefined;
 
+  // Handle plate creation separately to satisfy the type checker and simplify logic.
+  if (nodeType === 'plate') {
+      if (cy) {
+          // Check if dropping inside another plate, which is not allowed.
+          const plates = cy.nodes('[nodeType="plate"]');
+          for (const plate of plates) {
+              const bb = plate.boundingBox();
+              if (position.x > bb.x1 && position.x < bb.x2 && position.y > bb.y1 && position.y < bb.y2) {
+                  alert("Nesting plates is not currently supported.");
+                  return;
+              }
+          }
+      }
+      const newPlate = createPlateWithNode(position);
+      emit('element-selected', newPlate);
+      emit('update:currentMode', 'select');
+      return; // Exit after creating the plate.
+  }
+  
+  // Handle all other node types.
   if (cy) {
     const plates = cy.nodes('[nodeType="plate"]');
     for (const plate of plates) {
       const bb = plate.boundingBox();
       if (position.x > bb.x1 && position.x < bb.x2 && position.y > bb.y1 && position.y < bb.y2) {
-        if (nodeType === 'plate') {
-          alert("Nesting plates is not currently supported.");
-          return;
-        }
         parentPlateId = plate.id();
         break;
       }
@@ -150,12 +205,14 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
     distribution: nodeType === 'stochastic' ? 'dnorm' : undefined,
     equation: nodeType === 'deterministic' ? '' : undefined,
     observed: nodeType === 'observed' ? true : undefined,
-    loopVariable: nodeType === 'plate' ? 'i' : undefined,
-    loopRange: nodeType === 'plate' ? '1:N' : undefined,
   };
   addElement(newNode);
   emit('element-selected', newNode);
   emit('update:currentMode', 'select');
+};
+
+const handlePlateEmptied = (plateId: string) => {
+    deleteElement(plateId);
 };
 
 watch(() => props.currentMode, (newMode) => {
@@ -185,7 +242,9 @@ watch(() => props.currentMode, (newMode) => {
       :current-mode="props.currentMode"
       @canvas-tap="handleCanvasTap"
       @node-moved="handleNodeMoved"
-      @node-dropped="handleNodeDropped" />
+      @node-dropped="handleNodeDropped"
+      @plate-emptied="handlePlateEmptied"
+    />
   </div>
 </template>
 
