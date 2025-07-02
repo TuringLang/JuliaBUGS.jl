@@ -2,6 +2,8 @@ name: Format
 
 on:
   pull_request:
+    paths-ignore:
+      - 'DoodleBUGS/**'
   push:
     branches:
       - gh/update_manifests
