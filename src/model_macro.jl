@@ -137,18 +137,20 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
             provided_params = NamedTuple()
             for field in $(QuoteNode(param_fields))
                 if haskey(params_struct, field)
-                    provided_params = merge(provided_params, NamedTuple{(field,)}((params_struct[field],)))
+                    provided_params = merge(
+                        provided_params, NamedTuple{(field,)}((params_struct[field],))
+                    )
                 end
             end
-            
+
             # Merge with constants
             data = merge(
                 provided_params,
                 NamedTuple{$(QuoteNode(Tuple(constant_variables)))}(
                     tuple($(esc.(constant_variables)...))
-                )
+                ),
             )
-            
+
             model_def = $(QuoteNode(bugs_ast))
             return compile(model_def, data)
         end
@@ -227,7 +229,6 @@ function extract_field_names(fields)
     return field_names
 end
 
-
 # Check if a type is an of type
 function check_if_of_type(type_expr)
     # Check if the type expression references an of type
@@ -235,7 +236,6 @@ function check_if_of_type(type_expr)
     # or if it's a type expression that includes OfNamedTuple
     return type_expr isa Symbol || (type_expr isa Expr && occursin("of", string(type_expr)))
 end
-
 
 # Extract parameters from an of type instance
 function _extract_params_from_of_type(of_instance, of_type, param_names)
