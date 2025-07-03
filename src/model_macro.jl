@@ -43,7 +43,7 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
     else
         return :(throw(
             ArgumentError(
-                "The first argument of the model function must be a named tuple destructuring assignment (e.g., (; x, y, z)).",
+                "The first argument of the model function must be a destructuring assignment (e.g., (; x, y, z)).",
             ),
         ))
     end
@@ -220,7 +220,18 @@ function extract_field_names(fields)
     for field in fields
         if field isa Symbol
             push!(field_names, field)
-        elseif MacroTools.@capture(field, name_::type_)
+        elseif field isa Expr && field.head == :(::) && length(field.args) == 2
+            name = field.args[1]
+            type_expr = field.args[2]
+            # Check if this is an inline of-type annotation
+            if type_expr isa Expr &&
+                type_expr.head == :call &&
+                length(type_expr.args) >= 1 &&
+                type_expr.args[1] == :of
+                error(
+                    "Inline of-type annotations are not supported. Use external type definitions with @of macro instead.",
+                )
+            end
             push!(field_names, name)
         else
             error("Unsupported field pattern: $field")

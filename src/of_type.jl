@@ -790,70 +790,13 @@ function Base.zero(::Type{OfConstantWrapper{T}}) where {T}
     )
 end
 
-# ========================================================================
-# Missing Value Generation
-# ========================================================================
-function Base.missing(::Type{OfArray{T,N,D}}) where {T,N,D}
-    dims = get_dims(OfArray{T,N,D})
-    if any(d -> d isa Symbol || (d isa Type && d <: SymbolicExpr), dims)
+function unflatten(::Type{T}, ::Missing) where {T<:OfType}
+    if has_symbolic_dims(T)
         error(
-            "Cannot create missing array with symbolic dimensions. Use missing(T; kwargs...) with dimension values.",
+            "Cannot unflatten type with symbolic dimensions or constants. Use unflatten(T, missing; kwargs...) with constant values.",
         )
     end
-    return fill(missing, dims...)
-end
-
-function Base.missing(::Type{OfReal{L,U}}) where {L,U}
-    return missing
-end
-
-function Base.missing(::Type{OfInt{L,U}}) where {L,U}
-    return missing
-end
-
-function Base.missing(::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
-    values = Tuple(Base.missing(T) for T in Types.parameters)
-    return NamedTuple{Names}(values)
-end
-
-function Base.missing(::Type{OfConstantWrapper{T}}) where {T}
-    return error(
-        "Cannot generate missing values for constants. Use missing(of(T; const_name=value)) after providing the constant value.",
-    )
-end
-
-# Create instance with missing values from concretized of type
-function Base.missing(T::Type{<:OfType})
-    if T <: OfNamedTuple
-        # Check if type has unresolved constants/symbols
-        if has_symbolic_dims(T)
-            missing_symbols = get_unresolved_symbols(T)
-            error(
-                "Cannot create missing instance for type with unresolved symbols: $(join(missing_symbols, ", ")). Use missing(of(T; kwargs...)) after providing constant values.",
-            )
-        end
-
-        names = get_names(T)
-        types = get_types(T)
-
-        # Create instance with all fields set to missing
-        values = Tuple(Base.missing(types.parameters[i]) for i in 1:length(names))
-        return NamedTuple{names}(values)
-    elseif T <: OfArray
-        dims = get_dims(T)
-        if any(d -> d isa Symbol || (d isa Type && d <: SymbolicExpr), dims)
-            error(
-                "Cannot create missing array with symbolic dimensions. Use missing(of(T; kwargs...)) with dimension values.",
-            )
-        end
-        return fill(missing, dims...)
-    elseif T <: OfReal || T <: OfInt
-        return missing
-    elseif T <: OfConstantWrapper
-        error("Cannot create missing values for constants.")
-    else
-        error("missing(T) not implemented for type $(T)")
-    end
+    return _unflatten_impl(T, missing)
 end
 
 # ========================================================================
@@ -1202,6 +1145,26 @@ end
 # Public unflatten function
 function unflatten(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfType}
     return _unflatten_impl(T, flat_values)
+end
+
+# Internal implementation for unflatten with missing
+function _unflatten_impl(::Type{T}, ::Missing) where {T<:OfType}
+    function reconstruct_node(oft_type::Type)
+        if is_leaf(oft_type)
+            if oft_type <: OfArray
+                dims = size(oft_type)
+                return fill(missing, dims...)
+            elseif oft_type <: OfReal || oft_type <: OfInt
+                return missing
+            end
+        elseif oft_type <: OfNamedTuple
+            names = get_names(oft_type)
+            types = get_types(oft_type)
+            values = Tuple(reconstruct_node(types.parameters[i]) for i in 1:length(names))
+            return NamedTuple{names}(values)
+        end
+    end
+    return reconstruct_node(T)
 end
 
 # ========================================================================

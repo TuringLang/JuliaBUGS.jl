@@ -1,5 +1,5 @@
 using JuliaBUGS
-using JuliaBUGS: @model, @of
+using JuliaBUGS: @model, @of, unflatten
 using Test
 
 @testset "of type integration with @model" begin
@@ -26,7 +26,8 @@ using Test
 
         # Create model with n=3
         X = randn(100, 3)
-        model = dynamic_regression(missing(of(DynamicParams; n=3)), X, 3)
+        params = unflatten(of(DynamicParams; n=3), missing)
+        model = dynamic_regression(params, X, 3)
         @test model isa JuliaBUGS.BUGSModel
     end
 
@@ -92,7 +93,9 @@ using Test
         end
 
         model = hierarchical(
-            missing(of(HierarchicalParams; n_groups=5, n_obs_per_group=20)), 5, 20
+            unflatten(of(HierarchicalParams; n_groups=5, n_obs_per_group=20), missing),
+            5,
+            20,
         )
         @test model isa JuliaBUGS.BUGSModel
     end
