@@ -1,0 +1,58 @@
+name: DoodleBUGS PR Preview
+
+on:
+  pull_request:
+    paths:
+      - 'DoodleBUGS/**'
+      - '.github/workflows/DoodleBUGSpreview.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build-and-preview:
+    if: github.event.action == 'opened' || github.event.action == 'synchronize'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: DoodleBUGS/package-lock.json
+
+      - name: Install dependencies
+        run: npm install --prefix DoodleBUGS
+
+      - name: Build application for preview
+        run: npm run build --prefix DoodleBUGS
+        env:
+          VITE_APP_BASE_URL: JuliaBUGS.jl/DoodleBUGS/pr-previews/${{ github.event.pull_request.number }}/
+
+      - name: Deploy preview to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: DoodleBUGS/dist
+          target-folder: DoodleBUGS/pr-previews/${{ github.event.pull_request.number }}
+          clean: false
+          commit-message: "DoodleBUGS: Deploy preview for PR ${{ github.event.pull_request.number }}"
+
+      - name: Comment with preview URL
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          message: |
+            <!-- preview-url-comment -->
+            A preview of this pull request has been deployed.
+            **[https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/pr-previews/${{ github.event.pull_request.number }}](https://turinglang.github.io/JuliaBUGS.jl/DoodleBUGS/pr-previews/${{ github.event.pull_request.number }})**
+          comment_tag: preview-url-comment
