@@ -6,99 +6,6 @@ using MacroTools
 # variable name. If a variable is followed by double underscores (e.g., `vars__`), 
 # it captures multiple components into an array.
 
-struct ParameterPlaceholder end
-
-macro parameters(struct_expr)
-    if MacroTools.@capture(struct_expr, struct struct_name_
-        struct_fields__
-    end)
-        return _generate_struct_definition(
-            struct_name, struct_fields, __source__, __module__
-        )
-    else
-        return :(throw(
-            ArgumentError(
-                "Expected a struct definition like '@parameters struct MyParams ... end'"
-            ),
-        ))
-    end
-end
-
-function _generate_struct_definition(struct_name, struct_fields, __source__, __module__)
-    if !isa(struct_name, Symbol)
-        return :(throw(
-            ArgumentError(
-                "Parametrized types (e.g., `struct MyParams{T}`) are not supported yet"
-            ),
-        ))
-    end
-
-    if !all(isa.(struct_fields, Symbol))
-        return :(throw(
-            ArgumentError(
-                "Field types are determined by JuliaBUGS automatically. Specify types for fields is not allowed for now.",
-            ),
-        ))
-    end
-
-    show_method_expr = MacroTools.@q function Base.show(
-        io::IO, mime::MIME"text/plain", params::$(esc(struct_name))
-    )
-        # Use IOContext for potentially compact/limited printing of field values
-        ioc = IOContext(io, :compact => true, :limit => true)
-
-        println(ioc, "$(nameof(typeof(params))):")
-        fields = fieldnames(typeof(params))
-
-        # Handle empty structs gracefully
-        if isempty(fields)
-            print(ioc, "  (no fields)")
-            return nothing
-        end
-
-        # Calculate maximum field name length for alignment
-        max_len = maximum(length ∘ string, fields)
-        for field in fields
-            value = getfield(params, field)
-            field_str = rpad(string(field), max_len)
-            print(ioc, "  ", field_str, " = ")
-            if value isa JuliaBUGS.ParameterPlaceholder
-                # Use the IOContext here as well
-                printstyled(ioc, "<placeholder>"; color=:light_black)
-            else
-                # Capture the string representation using the context
-                # Use the basic `show` for a more compact representation, especially for arrays
-                str_representation = sprint(show, value; context=ioc)
-                # Print the captured string with color
-                printstyled(ioc, str_representation; color=:cyan)
-            end
-            # Use the IOContext for the newline too
-            println(ioc)
-        end
-    end
-
-    kw_assignments = map(f -> Expr(:kw, esc(f), :(ParameterPlaceholder())), struct_fields)
-    kwarg_constructor_expr = MacroTools.@q function $(esc(struct_name))(;
-        $(kw_assignments...)
-    )
-        return $(esc(struct_name))($(map(esc, struct_fields)...))
-    end
-    return MacroTools.@q begin
-        begin
-            struct $(esc(struct_name))
-                $(map(esc, struct_fields)...)
-            end
-            $(kwarg_constructor_expr)
-        end
-
-        $(show_method_expr)
-
-        function $(esc(struct_name))(model::BUGSModel)
-            return getparams($(esc(struct_name)), model)
-        end
-    end
-end
-
 macro model(model_function_expr)
     return _generate_model_definition(model_function_expr, __source__, __module__)
 end
@@ -118,14 +25,28 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
 
     bugs_ast = Parser.bugs_top(model_def, __source__)
 
+    # Parse different parameter destructuring patterns
     param_type = nothing
-    MacroTools.@capture(
-        param_destructure, (((; param_fields__)::param_type_) | ((; param_fields__)))
-    ) || return :(throw(
-        ArgumentError(
-            "The first argument of the model function must be a destructuring assignment with a type annotation defined using `@parameters`.",
-        ),
-    ))
+    param_fields = Symbol[]
+    is_of_type = false
+
+    # Try to match different parameter patterns
+    if MacroTools.@capture(param_destructure, ((; fields__)::ptype_))
+        # NamedTuple with type annotation: (;x, y, z)::ParamType
+        param_type = ptype
+        param_fields = extract_field_names(fields)
+        # Check if it's an of type
+        is_of_type = check_if_of_type(ptype)
+    elseif MacroTools.@capture(param_destructure, (; fields__))
+        # NamedTuple without type annotation: (;x, y, z)
+        param_fields = extract_field_names(fields)
+    else
+        return :(throw(
+            ArgumentError(
+                "The first argument of the model function must be a destructuring assignment (e.g., (; x, y, z)).",
+            ),
+        ))
+    end
 
     illegal_constant_variables = Any[]
     constant_variables_symbols = map(constant_variables) do constant_variable
@@ -182,51 +103,86 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
         )
     end
 
-    func_expr = MacroTools.@q function ($(esc(model_name)))(
-        params_struct, $(esc.(constant_variables)...)
-    )
-        (; $(esc.(param_fields)...)) = params_struct
-        data = _param_struct_to_NT((;
-            $([esc.(param_fields)..., esc.(constant_variables)...]...)
-        ))
-        model_def = $(QuoteNode(bugs_ast))
-        return compile(model_def, data)
-    end
+    # Generate function based on parameter style
+    if is_of_type
+        # Type annotation with of type
+        func_expr = MacroTools.@q function ($(esc(model_name)))(
+            params_struct, $(esc.(constant_variables)...)
+        )
+            # For of types, we need to handle parameter extraction differently
+            # params_struct is an instance of the of type
+            # param_fields tells us which fields to extract as parameters
 
-    if param_type === nothing
-        return func_expr
+            extracted_params = _extract_params_from_of_type(
+                params_struct, $(esc(param_type)), $(QuoteNode(param_fields))
+            )
+
+            # Merge with constants
+            data = merge(
+                extracted_params,
+                NamedTuple{$(QuoteNode(Tuple(constant_variables)))}(
+                    tuple($(esc.(constant_variables)...))
+                ),
+            )
+
+            model_def = $(QuoteNode(bugs_ast))
+            return compile(model_def, data)
+        end
     else
-        return MacroTools.@q begin
-            function JuliaBUGS.getparams($(esc(param_type)), model::BUGSModel)
-                env = model.evaluation_env
-                field_names = fieldnames($(esc(param_type)))
-                kwargs = Dict{Symbol,Any}()
-
-                for field in field_names
-                    if haskey(env, field)
-                        kwargs[field] = env[field]
-                    end
+        # Traditional style with type annotation or plain destructuring
+        func_expr = MacroTools.@q function ($(esc(model_name)))(
+            params_struct, $(esc.(constant_variables)...)
+        )
+            # Extract only the fields that are provided
+            provided_params = NamedTuple()
+            for field in $(QuoteNode(param_fields))
+                if haskey(params_struct, field)
+                    provided_params = merge(
+                        provided_params, NamedTuple{(field,)}((params_struct[field],))
+                    )
                 end
-
-                return $(esc(param_type))(; kwargs...)
             end
-            $func_expr
+
+            # Merge with constants
+            data = merge(
+                provided_params,
+                NamedTuple{$(QuoteNode(Tuple(constant_variables)))}(
+                    tuple($(esc.(constant_variables)...))
+                ),
+            )
+
+            model_def = $(QuoteNode(bugs_ast))
+            return compile(model_def, data)
         end
     end
+
+    return func_expr
 end
 
 function _param_struct_to_NT(param_struct)
-    field_names = fieldnames(typeof(param_struct))
-    pairs = Pair{Symbol,Any}[]
-
-    for field_name in field_names
-        value = getfield(param_struct, field_name)
-        if !(value isa ParameterPlaceholder)
-            push!(pairs, field_name => value)
+    if param_struct isa NamedTuple
+        # For NamedTuple, just filter out missing values
+        pairs = Pair{Symbol,Any}[]
+        for (k, v) in pairs(param_struct)
+            if v !== missing
+                push!(pairs, k => v)
+            end
         end
-    end
+        return NamedTuple(pairs)
+    else
+        # For structs, check field values
+        field_names = fieldnames(typeof(param_struct))
+        pairs = Pair{Symbol,Any}[]
 
-    return NamedTuple(pairs)
+        for field_name in field_names
+            value = getfield(param_struct, field_name)
+            if value !== missing
+                push!(pairs, field_name => value)
+            end
+        end
+
+        return NamedTuple(pairs)
+    end
 end
 
 # This function addresses a discrepancy in how Julia's parser handles LineNumberNode insertion.
@@ -255,5 +211,66 @@ function _add_line_number_nodes(expr)
     else
         new_args = map(arg -> _add_line_number_nodes(arg), expr.args)
         return Expr(expr.head, new_args...)
+    end
+end
+
+# Helper function to extract field names from various patterns
+function extract_field_names(fields)
+    field_names = Symbol[]
+    for field in fields
+        if field isa Symbol
+            push!(field_names, field)
+        elseif field isa Expr && field.head == :(::) && length(field.args) == 2
+            name = field.args[1]
+            type_expr = field.args[2]
+            # Check if this is an inline of-type annotation
+            if type_expr isa Expr &&
+                type_expr.head == :call &&
+                length(type_expr.args) >= 1 &&
+                type_expr.args[1] == :of
+                error(
+                    "Inline of-type annotations are not supported. Use external type definitions with @of macro instead.",
+                )
+            end
+            push!(field_names, name)
+        else
+            error("Unsupported field pattern: $field")
+        end
+    end
+    return field_names
+end
+
+# Check if a type is an of type
+function check_if_of_type(type_expr)
+    # Check if the type expression references an of type
+    # This is a heuristic - we check if it's a symbol that might be an of type
+    # or if it's a type expression that includes OfNamedTuple
+    return type_expr isa Symbol || (type_expr isa Expr && occursin("of", string(type_expr)))
+end
+
+# Extract parameters from an of type instance
+function _extract_params_from_of_type(of_instance, of_type, param_names)
+    # This function extracts the specified parameters from an of type instance
+    # It handles both NamedTuple instances and of type instances
+
+    if of_instance isa NamedTuple
+        # Direct NamedTuple - extract specified fields
+        # Only extract fields that exist in the instance
+        available_names = keys(of_instance)
+        params_to_extract = [name for name in param_names if name in available_names]
+
+        if isempty(params_to_extract)
+            # No parameters with values, return empty NamedTuple
+            return NamedTuple()
+        end
+
+        extracted = NamedTuple{Tuple(params_to_extract)}(
+            tuple((of_instance[name] for name in params_to_extract)...)
+        )
+        return extracted
+    else
+        # For of types created without values, return empty NamedTuple
+        # The compile function will handle missing parameter values
+        return NamedTuple()
     end
 end

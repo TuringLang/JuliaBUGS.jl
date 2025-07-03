@@ -75,8 +75,27 @@ JuliaBUGS provides a Julian interface inspired by Turing.jl's model macro syntax
 
 ### The `@model` Macro
 
+The `@model` macro provides a Julia-native interface for defining probabilistic models using external type definitions.
+
+#### External Type Definition with `@of`
+
 ```julia
-JuliaBUGS.@model function model_definition((;r, b, alpha0, alpha1, alpha2, alpha12, tau)::SeedsParams, x1, x2, N, n)    
+# Define parameter types
+SeedsParams = @of(
+    r = of(Array, Int, 21),
+    b = of(Array, 21),
+    alpha0 = of(Real),
+    alpha1 = of(Real),
+    alpha2 = of(Real),
+    alpha12 = of(Real),
+    tau = of(Real, 0, nothing)
+)
+
+# Use in model
+JuliaBUGS.@model function seeds(
+    (; r, b, alpha0, alpha1, alpha2, alpha12, tau)::SeedsParams,
+    x1, x2, N, n
+)    
     for i in 1:N
         r[i] ~ dbin(p[i], n[i])
         b[i] ~ dnorm(0.0, tau)
@@ -91,34 +110,73 @@ JuliaBUGS.@model function model_definition((;r, b, alpha0, alpha1, alpha2, alpha
 end
 ```
 
-The `@model` macro requires a specific function signature:
+#### Function Signature Requirements
 
-1. The first argument must declare stochastic parameters (variables defined with `~`) using destructuring assignment with the format `(; param1, param2, ...)`.
-2. We recommend providing a type annotation (e.g., `(; r, b, ...)::SeedsParams`). If `SeedsParams` is defined using `@parameters`, the macro automatically defines a constructor `SeedsParams(model::BUGSModel)` for extracting parameter values from the model.
-3. Alternatively, you can use a `NamedTuple` instead of a custom type. In this case, no type annotation is needed, but you would need to manually create a `NamedTuple` with `ParameterPlaceholder()` values or arrays of `missing` values for parameters that don't have observations.
-4. The remaining arguments must specify all constants and independent variables required by the model (variables used on the RHS but not on the LHS).
+1. **First argument**: Declares stochastic parameters (variables defined with `~`)
+   - Named tuple destructuring with type annotation: `(; param1, param2, ...)::TypeName`
+   
+2. **Remaining arguments**: All constants and independent variables required by the model
 
-The `@parameters` macro simplifies creating structs to hold model parameters:
+**Note**: Inline `of` type annotations (e.g., `(; param::of(Real))`) are not supported. Use external type definitions with the `@of` macro instead.
+
+#### The `of` Type System
+
+The `of` function creates type specifications for parameters:
+
+- `of(Real)` - Unbounded real number
+- `of(Real, lower, upper)` - Bounded real number
+- `of(Int)` - Unbounded integer  
+- `of(Int, lower, upper)` - Bounded integer
+- `of(Array, dims...)` - Array with specified dimensions (defaults to Float64)
+- `of(Array, T, dims...)` - Array with element type T
+
+For models with variable dimensions, use the `@of` macro to create types with symbolic dimensions:
 
 ```julia
-JuliaBUGS.@parameters struct SeedsParams
-    r
-    b
-    alpha0
-    alpha1
-    alpha2
-    alpha12
-    tau
-end
+DynamicModel = @of(
+    n = of(Int; constant=true),      # Constant (not sampled)
+    coeffs = of(Array, n),           # Array with symbolic dimension
+    sigma = of(Real, 0, nothing)     # Positive real
+)
 ```
 
-This macro applies `Base.@kwdef` to enable keyword initialization and creates a no-argument constructor. By default, fields are initialized to `JuliaBUGS.ParameterPlaceholder`. The concrete types and sizes of parameters are determined during compilation when the model function is called with constants. A constructor `SeedsParams(::BUGSModel)` is created for easy extraction of parameter values.
+#### Creating Model Instances
+
+To create model instances, you can provide parameter values as a `NamedTuple` or use the `unflatten` function for convenient initialization:
+
+```julia
+# Method 1: Provide specific parameter values
+model = my_model((; param1=value1, param2=value2), constants...)
+
+# Method 2: Use unflatten with missing values for initialization
+using JuliaBUGS: unflatten
+params = unflatten(of(MyParamType; n=5), missing)  # Creates instance with missing values
+model = my_model(params, constants...)
+
+# Method 3: Empty NamedTuple (all parameters sampled from prior)
+model = my_model((;), constants...)
+```
+
+The `unflatten` function is particularly useful for creating parameter instances when you need to specify constant values but want missing values for stochastic parameters that will be sampled.
 
 ### Example
 
 ```julia
+julia> # Define parameter types using @of macro
+julia> SeedsParams = @of(
+           r = of(Array, Int, 21),
+           b = of(Array, 21),
+           alpha0 = of(Real),
+           alpha1 = of(Real),
+           alpha2 = of(Real),
+           alpha12 = of(Real),
+           tau = of(Real, 0, nothing)
+       )
+
+julia> # Define model using external type definition
 julia> @model function seeds(
-        (; r, b, alpha0, alpha1, alpha2, alpha12, tau)::SeedsParams, x1, x2, N, n
+        (; r, b, alpha0, alpha1, alpha2, alpha12, tau)::SeedsParams,
+        x1, x2, N, n
     )
         for i in 1:N
             r[i] ~ dbin(p[i], n[i])
@@ -138,17 +196,8 @@ seeds (generic function with 1 method)
 
 julia> (; x1, x2, N, n) = JuliaBUGS.BUGSExamples.seeds.data; # extract data from existing BUGS example
 
-julia> @parameters struct SeedsParams
-        r
-        b
-        alpha0
-        alpha1
-        alpha2
-        alpha12
-        tau
-    end
-
-julia> m = seeds(SeedsParams(), x1, x2, N, n)
+julia> # Create model without observations (all parameters will be sampled from the prior generative process)
+julia> m = seeds((;), x1, x2, N, n)
 BUGSModel (parameters are in transformed (unconstrained) space, with dimension 47):
 
   Model parameters:
@@ -160,28 +209,58 @@ BUGSModel (parameters are in transformed (unconstrained) space, with dimension 4
     alpha1
     alpha0
 
-  Variable sizes and types:
-    b: size = (21,), type = Vector{Float64}
-    p: size = (21,), type = Vector{Float64}
-    n: size = (21,), type = Vector{Int64}
-    alpha2: type = Float64
-    sigma: type = Float64
-    alpha12: type = Float64
-    alpha0: type = Float64
-    N: type = Int64
-    tau: type = Float64
-    alpha1: type = Float64
-    r: size = (21,), type = Vector{Float64}
-    x1: size = (21,), type = Vector{Int64}
-    x2: size = (21,), type = Vector{Int64}
+julia> # Create model with observations for r
+julia> r_data = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3]
+julia> m_obs = seeds((r=r_data,), x1, x2, N, n)
 
-julia> SeedsParams(m)
-SeedsParams:
-  r       = [0.0, 0.0, 0.0, 0.0, 39.0, 0.0, 0.0, 72.0, 0.0, 0.0  …  0.0, 0.0, 0.0, 0.0, 4.0, 12.0, 0.0, 0.0, 0.0, 0.0]
-  b       = [-Inf, -Inf, -Inf, -Inf, Inf, -Inf, -Inf, Inf, -Inf, -Inf  …  -Inf, -Inf, -Inf, -Inf, Inf, Inf, -Inf, -Inf, -Inf, -Inf]
-  alpha0  = -1423.52
-  alpha1  = 1981.99
-  alpha2  = -545.664
-  alpha12 = 1338.25
-  tau     = 0.0
+julia> # Using unflatten for initialization with missing values
+julia> using JuliaBUGS: unflatten
+julia> params = unflatten(of(SeedsParams), missing)
+julia> m_init = seeds(params, x1, x2, N, n)
+
+julia> # Example with variable dimensions
+julia> DynamicParams = @of(
+           n = of(Int; constant=true),
+           coeffs = of(Array, n),
+           sigma = of(Real, 0, nothing),
+           y = of(Array, 100)
+       )
+
+julia> @model function dynamic_regression(
+        (; coeffs, sigma, y)::DynamicParams, 
+        X, n
+    )
+        sigma ~ dgamma(0.001, 0.001)
+        for i in 1:n
+            coeffs[i] ~ dnorm(0, 0.001)
+        end
+        for i in 1:100
+            y[i] ~ dnorm(coeffs[1] * X[i, 1], sigma)
+        end
+    end
+
+julia> # Create concrete type with n=3 and initialize with missing values
+julia> X = randn(100, 3)
+julia> params = unflatten(of(DynamicParams; n=3), missing)
+julia> model = dynamic_regression(params, X, 3)
 ```
+
+### Common Patterns and Best Practices
+
+#### Parameter Initialization
+
+1. **Empty NamedTuple**: Use `(;)` when you want all parameters to be sampled from their priors
+   ```julia
+   model = my_model((;), data...)
+   ```
+
+2. **Partial Observations**: Provide only observed variables
+   ```julia
+   model = my_model((; observed_var=data), constants...)
+   ```
+
+3. **Missing Value Initialization**: Use `unflatten` when you need to specify constants but want missing stochastic parameters
+   ```julia
+   params = unflatten(of(MyParams; n=10), missing)
+   model = my_model(params, constants...)
+   ```
