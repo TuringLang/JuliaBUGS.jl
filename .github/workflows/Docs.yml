@@ -5,7 +5,11 @@ on:
     branches:
       - main
     tags: '*'
+    paths-ignore:
+      - 'DoodleBUGS/**'
   pull_request:
+    paths-ignore:
+      - 'DoodleBUGS/**'
 
 concurrency:
   # Skip intermediate builds: always.

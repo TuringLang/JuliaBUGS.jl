@@ -4,8 +4,11 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'DoodleBUGS/**'
   pull_request:
-
+    paths-ignore:
+      - 'DoodleBUGS/**'
   workflow_dispatch:
 
 jobs:

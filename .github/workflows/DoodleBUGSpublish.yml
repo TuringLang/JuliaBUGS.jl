@@ -1,0 +1,48 @@
+name: DoodleBUGS Publish
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'DoodleBUGS/**'
+      - '.github/workflows/DoodleBUGSpublish.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: DoodleBUGS/package-lock.json
+
+      - name: Install dependencies
+        run: npm install --prefix DoodleBUGS
+
+      - name: Build application
+        run: npm run build --prefix DoodleBUGS
+        env:
+          VITE_APP_BASE_URL: JuliaBUGS.jl/DoodleBUGS/
+
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: DoodleBUGS/dist
+          target-folder: DoodleBUGS
+          clean: false
