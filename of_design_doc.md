@@ -43,6 +43,7 @@ The system encodes extra useful information into type parameters:
 
 - `flatten(T::Type{<:OfType}, values)` - Convert structured values to flat vector
 - `unflatten(T::Type{<:OfType}, vec)` - Reconstruct structured values from flat vector
+- `unflatten(T::Type{<:OfType}, missing)` - Create instances where element values are initialised to `missing`. 
 
 ### 4. The @of Macro
 
