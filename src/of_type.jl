@@ -432,70 +432,147 @@ function of(::Type{T}, replacements::NamedTuple) where {T<:OfType}
 end
 
 # ========================================================================
+# Helper for creating values with default
+# ========================================================================
+function _create_with_default(::Type{OfArray{T,N,D}}, default_value) where {T,N,D}
+    dims = get_dims(OfArray{T,N,D})
+    if any(d -> d isa Symbol || (d isa Type && d <: SymbolicExpr), dims)
+        error(
+            "Cannot create array with symbolic dimensions. Use T(default_value; kwargs...) with dimension values.",
+        )
+    end
+    # Handle missing values specially - create array of Union{T,Missing}
+    if default_value === missing
+        return fill(missing, dims...)
+    else
+        return fill(convert(T, default_value), dims...)
+    end
+end
+
+function _create_with_default(::Type{OfReal{L,U}}, default_value) where {L,U}
+    # Handle missing separately
+    if default_value === missing
+        return missing
+    end
+    val = convert(Float64, default_value)
+    lower = type_to_bound(L)
+    upper = type_to_bound(U)
+    validate_bounds(val, lower, upper, "Real")
+    return val
+end
+
+function _create_with_default(::Type{OfInt{L,U}}, default_value) where {L,U}
+    # Handle missing separately
+    if default_value === missing
+        return missing
+    end
+    # Use round for converting floats to ints
+    val = if isa(default_value, Integer)
+        convert(Int, default_value)
+    else
+        round(Int, default_value)
+    end
+    lower = type_to_bound(L)
+    upper = type_to_bound(U)
+    validate_bounds(val, lower, upper, "Int")
+    return val
+end
+
+function _create_with_default(
+    ::Type{OfNamedTuple{Names,Types}}, default_value
+) where {Names,Types}
+    values = Tuple(
+        _create_with_default(Types.parameters[i], default_value) for i in 1:length(Names)
+    )
+    return NamedTuple{Names}(values)
+end
+
+function _create_with_default(::Type{OfConstantWrapper{T}}, default_value) where {T}
+    return error(
+        "Cannot create values for constants. Provide the constant value in T(; const_name=value).",
+    )
+end
+
+# ========================================================================
+# Helper function for instance creation
+# ========================================================================
+function _create_instance_impl(
+    ::Type{T}, value_generator::Function, kwargs
+) where {T<:OfType}
+    if !(T <: OfNamedTuple)
+        error("Instance creation is only supported for OfNamedTuple types, not $(T)")
+    end
+
+    names = get_names(T)
+    types = get_types(T)
+
+    # Separate constants from values
+    constants = Dict{Symbol,Any}()
+    values = Dict{Symbol,Any}()
+
+    for (key, val) in pairs(kwargs)
+        idx = findfirst(==(key), names)
+        if idx !== nothing && types.parameters[idx] <: OfConstantWrapper
+            constants[key] = val
+        else
+            values[key] = val
+        end
+    end
+
+    # Check that all constants are provided
+    for (idx, name) in enumerate(names)
+        if types.parameters[idx] <: OfConstantWrapper && !haskey(constants, name)
+            error("Constant `$name` is required but not provided")
+        end
+    end
+
+    # First concretize with constants
+    concrete_type = of(T, NamedTuple(constants))
+
+    # Check if all constants are resolved
+    if has_symbolic_dims(concrete_type)
+        missing_symbols = get_unresolved_symbols(concrete_type)
+        error("Missing values for symbolic dimensions: $(join(missing_symbols, ", "))")
+    end
+
+    # Get the names and types from the concrete type (constants removed)
+    concrete_names = get_names(concrete_type)
+    concrete_types = get_types(concrete_type)
+
+    # Build the result with provided values or defaults
+    result_values = Any[]
+    for (idx, name) in enumerate(concrete_names)
+        field_type = concrete_types.parameters[idx]
+
+        if haskey(values, name)
+            # Validate the provided value
+            try
+                push!(result_values, _validate(field_type, values[name]))
+            catch e
+                error("Validation failed for field $name: $(e.msg)")
+            end
+        else
+            # Use the value generator function
+            push!(result_values, value_generator(field_type))
+        end
+    end
+
+    # Return the instance as a NamedTuple
+    return NamedTuple{concrete_names}(Tuple(result_values))
+end
+
+# ========================================================================
 # Parameterized Constructor with Validation
 # ========================================================================
 function (::Type{T})(; kwargs...) where {T<:OfType}
-    if T <: OfNamedTuple
-        names = get_names(T)
-        types = get_types(T)
+    return _create_instance_impl(T, zero, kwargs)
+end
 
-        # Separate constants from values
-        constants = Dict{Symbol,Any}()
-        values = Dict{Symbol,Any}()
-
-        for (key, val) in pairs(kwargs)
-            idx = findfirst(==(key), names)
-            if idx !== nothing && types.parameters[idx] <: OfConstantWrapper
-                constants[key] = val
-            else
-                values[key] = val
-            end
-        end
-
-        # Check that all constants are provided
-        for (idx, name) in enumerate(names)
-            if types.parameters[idx] <: OfConstantWrapper && !haskey(constants, name)
-                error("Constant `$name` is required but not provided")
-            end
-        end
-
-        # First concretize with constants
-        concrete_type = of(T, NamedTuple(constants))
-
-        # Check if all constants are resolved
-        if has_symbolic_dims(concrete_type)
-            missing_symbols = get_unresolved_symbols(concrete_type)
-            error("Missing values for symbolic dimensions: $(join(missing_symbols, ", "))")
-        end
-
-        # Get the names and types from the concrete type (constants removed)
-        concrete_names = get_names(concrete_type)
-        concrete_types = get_types(concrete_type)
-
-        # Build the result with provided values or defaults
-        result_values = Any[]
-        for (idx, name) in enumerate(concrete_names)
-            field_type = concrete_types.parameters[idx]
-
-            if haskey(values, name)
-                # Validate the provided value
-                try
-                    push!(result_values, _validate(field_type, values[name]))
-                catch e
-                    error("Validation failed for field $name: $(e.msg)")
-                end
-            else
-                # Use zero as default for non-constant variables
-                push!(result_values, zero(field_type))
-            end
-        end
-
-        # Return the instance as a NamedTuple
-        return NamedTuple{concrete_names}(Tuple(result_values))
-    else
-        # For non-NamedTuple types, error since we need to return instances
-        error("T(;kwargs...) is only supported for OfNamedTuple types, not $(T)")
-    end
+# Constructor with default_value as positional argument
+function (::Type{T})(default_value; kwargs...) where {T<:OfType}
+    return _create_instance_impl(
+        T, field_type -> _create_with_default(field_type, default_value), kwargs
+    )
 end
 
 # ========================================================================

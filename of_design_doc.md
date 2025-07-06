@@ -33,7 +33,8 @@ The system encodes extra useful information into type parameters:
 
 ### 3. Operations on Types
 
-- `T(;kwargs...)` where `T<:OfType` - Create instances with specified constants (returns values, not types)
+- `T(;kwargs...)` where `T<:OfType` - Create instances with specified constants (returns values, not types). Uses `zero()` as default for missing values.
+- `T(default_value; kwargs...)` where `T<:OfType` - Create instances with specified constants, and initialise all element values to `default_value`, e.g. `T(missing; kwargs...)` initialise all element values to `missing`. `T(...)` returns instances, not types.
 - `of(T; kwargs...)` where `T<:OfType` - Create concrete types by resolving constants
 
 - `rand(T::Type{<:OfType})` - Generate random values matching the type specification
@@ -84,6 +85,10 @@ SemiConcreteType = of(MatrixType; rows=3)
 instance = MatrixType(;rows=3, cols=4)  
 # instance = (data = zeros(3, 4),)
 
+# Create instance with missing values
+instance = MatrixType(missing; rows=3, cols=4)  
+# instance = (data = (3x4 matrix of `missing`s),)
+
 # Create instance with specific data
 instance = MatrixType(;rows=3, cols=4, data=rand(3, 4))  
 # instance = (data = <provided 3x4 matrix>,)
@@ -117,6 +122,10 @@ instance = ExpandedMatrixType(; n=10)
 # - padded: 11×11 zero matrix
 # - doubled: 20×10 zero matrix  
 # - halved: 5×10 zero matrix  (n/2 must result in an integer, error if not)
+
+# Create instance with custom default value
+instance = ExpandedMatrixType(1.0; n=10)
+# This creates an instance with all matrices filled with 1.0
 
 # Generate random instance
 rand(of(ExpandedMatrixType; n=10))

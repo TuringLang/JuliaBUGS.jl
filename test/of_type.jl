@@ -553,6 +553,102 @@ end
     end
 end
 
+@testset "Constructor with default_value" begin
+    @testset "Basic default_value usage" begin
+        # Define a simple type
+        T = @of(
+            rows = of(Int; constant=true),
+            cols = of(Int; constant=true),
+            scale = of(Real, 0.1, 10.0),
+            data = of(Array, rows, cols)
+        )
+
+        # Test using zero() as default (original behavior)
+        instance1 = T(; rows=3, cols=2)
+        @test instance1.scale == 0.1  # Should default to lower bound
+        @test all(instance1.data .== 0.0)
+
+        # Test using custom default_value
+        instance2 = T(1.5; rows=3, cols=2)
+        @test instance2.scale == 1.5
+        @test all(instance2.data .== 1.5)
+
+        # Test with missing as default_value
+        instance3 = T(missing; rows=3, cols=2)
+        @test instance3.scale === missing
+        @test all(instance3.data .=== missing)
+
+        # Test partial override with default_value
+        instance4 = T(2.0; rows=3, cols=2, scale=5.0)
+        @test instance4.scale == 5.0  # Explicitly provided
+        @test all(instance4.data .== 2.0)  # Uses default_value
+    end
+
+    @testset "Default value validation" begin
+        # Type with bounded values
+        T = @of(n = of(Int; constant=true), bounded = of(Real, 0, 10), data = of(Array, n))
+
+        # Valid default_value within bounds
+        instance = T(5.0; n=3)
+        @test instance.bounded == 5.0
+        @test all(instance.data .== 5.0)
+
+        # Invalid default_value outside bounds should throw
+        @test_throws ErrorException T(15.0; n=3)  # 15.0 > upper bound 10
+        @test_throws ErrorException T(-5.0; n=3)  # -5.0 < lower bound 0
+    end
+
+    @testset "Different types with default_value" begin
+        T = @of(
+            size = of(Int; constant=true),
+            int_val = of(Int, 1, 100),
+            real_val = of(Real),
+            vec = of(Array, size),
+            mat = of(Array, size, size)
+        )
+
+        # Test with integer default
+        instance1 = T(42; size=2)
+        @test instance1.int_val == 42
+        @test instance1.real_val == 42.0
+        @test all(instance1.vec .== 42.0)
+        @test all(instance1.mat .== 42.0)
+
+        # Test with float default
+        instance2 = T(3.14; size=2)
+        @test instance2.int_val == 3  # Should round to Int
+        @test instance2.real_val ≈ 3.14
+        @test all(instance2.vec .≈ 3.14)
+        @test all(instance2.mat .≈ 3.14)
+    end
+
+    @testset "Nested structures with default_value" begin
+        # For nested structures, we need a simpler example
+        # The inner structure's constants should be handled at the outer level
+        OuterT = @of(n = of(Int; constant=true), scale = of(Real), vec = of(Array, n))
+
+        # Test default_value propagation
+        instance = OuterT(7.0; n=5)
+        @test instance.scale == 7.0
+        @test instance.vec isa Vector{Float64}
+        @test length(instance.vec) == 5
+        @test all(instance.vec .== 7.0)
+    end
+
+    @testset "Type stability of default_value" begin
+        T = @of(n = of(Int; constant=true), data = of(Array, n))
+
+        # The two constructor methods should be type-stable
+        CT = of(T; n=5)
+
+        # Method 1: no positional argument
+        @inferred NamedTuple{(:data,),Tuple{Vector{Float64}}} T(; n=5)
+
+        # Method 2: with positional default_value
+        @inferred NamedTuple{(:data,),Tuple{Vector{Float64}}} T(1.0; n=5)
+    end
+end
+
 @testset "Edge cases and error handling" begin
     @testset "Invalid bounds" begin
         # Test that invalid bounds are caught during validation
