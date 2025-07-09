@@ -215,7 +215,7 @@ julia> m_obs = seeds((r=r_data,), x1, x2, N, n)
 
 julia> # Using unflatten for initialization with missing values
 julia> using JuliaBUGS: unflatten
-julia> params = unflatten(of(SeedsParams), missing)
+julia> params = unflatten(SeedsParams, missing)
 julia> m_init = seeds(params, x1, x2, N, n)
 
 julia> # Example with variable dimensions
