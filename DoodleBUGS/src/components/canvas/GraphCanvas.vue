@@ -35,12 +35,12 @@ const formatElementsForCytoscape = (elements: GraphElement[]): ElementDefinition
       const edge = el as GraphEdge;
       const targetNode = elements.find(n => n.id === edge.target && n.type === 'node') as GraphNode | undefined;
       const relType = (targetNode?.nodeType === 'stochastic' || targetNode?.nodeType === 'observed') ? 'stochastic' : 'deterministic';
-      return { 
-        group: 'edges', 
-        data: { 
+      return {
+        group: 'edges',
+        data: {
           ...edge,
-          relationshipType: relType 
-        } 
+          relationshipType: relType
+        }
       };
     }
   });
@@ -70,10 +70,10 @@ onMounted(() => {
         if (originalNode && originalNode.parent && originalNode.parent !== newParentId) {
             const oldParentId = originalNode.parent;
             const oldParent = props.elements.find(el => el.id === oldParentId && el.type === 'node' && (el as GraphNode).nodeType === 'plate');
-            
+
             if (oldParent) {
                 const siblings = props.elements.filter(el => el.type === 'node' && (el as GraphNode).parent === oldParentId);
-                if (siblings.length === 1) { 
+                if (siblings.length === 1) {
                     emit('plate-emptied', oldParentId);
                 }
             }
@@ -162,20 +162,27 @@ watch(() => props.elements, (newElements) => {
       if (!formattedEl.data.id) return;
 
       const existingCyEl = cy!.getElementById(formattedEl.data.id);
-      
+
       if (existingCyEl.empty()) {
         cy!.add(formattedEl);
       } else {
+        // Update data first
         existingCyEl.data(formattedEl.data);
+
+        // Then, handle position changes specifically for nodes
         if (formattedEl.group === 'nodes') {
           const newNode = formattedEl as ElementDefinition & { position: {x: number, y: number} };
           const currentCyPos = existingCyEl.position();
+
+          // If position from the store is different, update it on the canvas
           if (newNode.position.x !== currentCyPos.x || newNode.position.y !== currentCyPos.y) {
             existingCyEl.position(newNode.position);
           }
+
+          // Handle parent changes
           const parentCollection = existingCyEl.parent();
           const currentParentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined;
-          
+
           if (newNode.data.parent !== currentParentId) {
             existingCyEl.move({ parent: newNode.data.parent ?? null });
           }

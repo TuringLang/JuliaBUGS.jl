@@ -6,6 +6,7 @@ import CanvasToolbar from './CanvasToolbar.vue';
 import { useGraphElements } from '../../composables/useGraphElements';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import type { GraphElement, GraphNode, GraphEdge, NodeType } from '../../types';
+import { getDefaultNodeData } from '../../config/nodeDefinitions';
 
 const props = defineProps<{
   isGridEnabled: boolean;
@@ -27,34 +28,41 @@ const sourceNode = ref<NodeSingular | null>(null);
 const isConnecting = ref(false);
 
 /**
+ * Creates a new node based on its type, populating it with default data from the central config.
+ * @param nodeType - The type of node to create.
+ * @param position - The position for the new node.
+ * @param parentId - Optional ID of the parent plate.
+ * @returns The newly created GraphNode object.
+ */
+const createNode = (nodeType: NodeType, position: { x: number; y: number }, parentId?: string): GraphNode => {
+    const defaultData = getDefaultNodeData(nodeType);
+    const newId = `node_${crypto.randomUUID().substring(0, 8)}`;
+
+    const newNode: GraphNode = {
+        ...defaultData, // Spread the default properties
+        id: newId,
+        type: 'node',
+        nodeType: nodeType,
+        position: position,
+        parent: parentId,
+        // Override default name if it exists, to make it unique
+        name: `${defaultData.name || nodeType} ${elements.value.filter(e => e.type === 'node').length + 1}`,
+    };
+    return newNode;
+};
+
+
+/**
  * Creates a new plate with a default stochastic node inside it and adds them to the graph.
  * @param position - The position to create the plate at.
  * @param parentId - The ID of a parent element, if any.
  * @returns The newly created plate node.
  */
 const createPlateWithNode = (position: { x: number; y: number }, parentId?: string): GraphNode => {
-    const plateId = `node_${crypto.randomUUID().substring(0, 8)}`;
-    const newPlate: GraphNode = {
-      id: plateId,
-      name: `Plate ${elements.value.filter(e => e.type === 'node' && e.nodeType === 'plate').length + 1}`,
-      type: 'node',
-      nodeType: 'plate',
-      position: position,
-      parent: parentId, // For potential future nested plates
-      loopVariable: 'i',
-      loopRange: '1:N',
-    };
-
-    const innerNodeId = `node_${crypto.randomUUID().substring(0, 8)}`;
-    const innerNode: GraphNode = {
-        id: innerNodeId,
-        name: `Node ${elements.value.filter(e => e.type === 'node').length + 2}`,
-        type: 'node',
-        nodeType: 'stochastic',
-        position: { x: position.x, y: position.y }, // Position is relative to parent in cytoscape
-        parent: plateId,
-        distribution: 'dnorm',
-    };
+    const newPlate = createNode('plate', position, parentId);
+    
+    // Create an inner node that belongs to this new plate
+    const innerNode = createNode('stochastic', { x: position.x, y: position.y }, newPlate.id);
 
     // Use the setter from the computed property to update the store with both new elements
     elements.value = [...elements.value, newPlate, innerNode];
@@ -85,18 +93,7 @@ const handleCanvasTap = (event: EventObject) => {
             emit('element-selected', newPlate);
             emit('update:currentMode', 'select');
         } else {
-            const newId = `node_${crypto.randomUUID().substring(0, 8)}`;
-            const newNode: GraphNode = {
-              id: newId,
-              name: `${props.currentNodeType} ${elements.value.filter(e => e.type === 'node').length + 1}`,
-              type: 'node',
-              nodeType: props.currentNodeType,
-              position: { x: position.x, y: position.y },
-              parent: isPlateClick ? (target as NodeSingular).id() : undefined,
-              distribution: props.currentNodeType === 'stochastic' ? 'dnorm' : undefined,
-              equation: props.currentNodeType === 'deterministic' ? '' : undefined,
-              observed: props.currentNodeType === 'observed' ? true : undefined,
-            };
+            const newNode = createNode(props.currentNodeType, position, isPlateClick ? (target as NodeSingular).id() : undefined);
             addElement(newNode);
             emit('element-selected', newNode);
             emit('update:currentMode', 'select');
@@ -194,18 +191,7 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
     }
   }
 
-  const newId = `node_${crypto.randomUUID().substring(0, 8)}`;
-  const newNode: GraphNode = {
-    id: newId,
-    name: `${nodeType} ${elements.value.filter(e => e.type === 'node').length + 1}`,
-    type: 'node',
-    nodeType: nodeType,
-    position: position,
-    parent: parentPlateId,
-    distribution: nodeType === 'stochastic' ? 'dnorm' : undefined,
-    equation: nodeType === 'deterministic' ? '' : undefined,
-    observed: nodeType === 'observed' ? true : undefined,
-  };
+  const newNode = createNode(nodeType, position, parentPlateId);
   addElement(newNode);
   emit('element-selected', newNode);
   emit('update:currentMode', 'select');

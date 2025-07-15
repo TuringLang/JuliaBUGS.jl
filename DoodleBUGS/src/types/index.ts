@@ -2,6 +2,8 @@ export type NodeType = 'stochastic' | 'deterministic' | 'constant' | 'observed' 
 
 export type PaletteItemType = NodeType | 'add-edge';
 
+// This interface is now a superset of all possible properties defined in nodeDefinitions.ts.
+// All properties specific to a node type are optional.
 export interface GraphNode {
   id: string;
   name: string;
@@ -9,6 +11,8 @@ export interface GraphNode {
   nodeType: NodeType;
   position: { x: number; y: number; };
   parent?: string;
+
+  // Properties from definitions
   distribution?: string;
   equation?: string;
   observed?: boolean;
@@ -16,10 +20,13 @@ export interface GraphNode {
   indices?: string;
   loopVariable?: string;
   loopRange?: string;
+
+  // Allows for other dynamic properties if needed in the future
+  [key: string]: any;
 }
 
 export interface GraphEdge {
-  id: string;
+  id:string;
   name?: string;
   type: 'edge';
   source: string;

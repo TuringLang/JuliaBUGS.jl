@@ -4,6 +4,7 @@ import type { NodeType } from '../../types';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseInput from '../ui/BaseInput.vue';
 import DropdownMenu from '../common/DropdownMenu.vue';
+import { nodeDefinitions } from '../../config/nodeDefinitions';
 
 const props = defineProps<{
   projectName: string | null;
@@ -42,14 +43,6 @@ const displayTitle = computed(() => {
   }
   return 'No Project Selected';
 });
-
-const basicNodeTypes: { label: string; value: NodeType }[] = [
-  { label: 'Stochastic Node', value: 'stochastic' },
-  { label: 'Deterministic Node', value: 'deterministic' },
-  { label: 'Constant Node', value: 'constant' },
-  { label: 'Observed Node', value: 'observed' },
-  { label: 'Plate (Loop)', value: 'plate' },
-];
 
 const exampleModels = [
     { name: 'Rats Model', key: 'rats' },
@@ -91,9 +84,10 @@ const handleGridSizeInput = (event: Event) => {
           </template>
           <template #content>
             <div class="dropdown-section-title">Nodes</div>
-            <a v-for="nodeType in basicNodeTypes" :key="nodeType.value" href="#"
-              @click.prevent="setAddNodeType(nodeType.value)">
-              {{ nodeType.label }}
+            <!-- Dynamically generated node types -->
+            <a v-for="nodeDef in nodeDefinitions" :key="nodeDef.nodeType" href="#"
+              @click.prevent="setAddNodeType(nodeDef.nodeType)">
+              {{ nodeDef.label }}
             </a>
             <div class="dropdown-divider"></div>
             <a href="#" @click.prevent="emit('update:currentMode', 'add-edge')">Add Edge</a>
@@ -182,6 +176,7 @@ const handleGridSizeInput = (event: Event) => {
 </template>
 
 <style scoped>
+/* Styles remain the same */
 .navbar {
   display: flex;
   justify-content: space-between;
