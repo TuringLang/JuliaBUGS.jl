@@ -28,8 +28,8 @@ const emit = defineEmits<{
   (e: 'toggle-left-sidebar'): void;
   (e: 'toggle-right-sidebar'): void;
   (e: 'open-about-modal'): void;
+  (e: 'open-export-modal', format: 'png' | 'jpg' | 'svg'): void;
   (e: 'export-json'): void;
-  (e: 'export-png'): void;
   (e: 'apply-layout', layoutName: string): void;
   (e: 'load-example', exampleKey: string): void;
 }>();
@@ -72,9 +72,19 @@ const handleGridSizeInput = (event: Event) => {
             <a href="#" @click.prevent="emit('new-project')">New Project...</a>
             <a href="#" @click.prevent="emit('new-graph')">New Graph...</a>
             <a href="#" @click.prevent="emit('save-current-graph')">Save Current Graph</a>
+          </template>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <template #trigger>
+            <BaseButton type="ghost" size="small">Export</BaseButton>
+          </template>
+          <template #content>
+            <a href="#" @click.prevent="emit('open-export-modal', 'png')">as PNG...</a>
+            <a href="#" @click.prevent="emit('open-export-modal', 'jpg')">as JPG...</a>
+            <a href="#" @click.prevent="emit('open-export-modal', 'svg')">as SVG...</a>
             <div class="dropdown-divider"></div>
-            <a href="#" @click.prevent="emit('export-json')">Export as JSON</a>
-            <a href="#" @click.prevent="emit('export-png')">Export as PNG</a>
+            <a href="#" @click.prevent="emit('export-json')">as JSON</a>
           </template>
         </DropdownMenu>
 
@@ -84,7 +94,6 @@ const handleGridSizeInput = (event: Event) => {
           </template>
           <template #content>
             <div class="dropdown-section-title">Nodes</div>
-            <!-- Dynamically generated node types -->
             <a v-for="nodeDef in nodeDefinitions" :key="nodeDef.nodeType" href="#"
               @click.prevent="setAddNodeType(nodeDef.nodeType)">
               {{ nodeDef.label }}
@@ -176,7 +185,6 @@ const handleGridSizeInput = (event: Event) => {
 </template>
 
 <style scoped>
-/* Styles remain the same */
 .navbar {
   display: flex;
   justify-content: space-between;

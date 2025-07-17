@@ -43,6 +43,7 @@ export interface ExampleModel {
 declare module 'cytoscape' {
   interface Core {
     panzoom(options?: any): any;
+    svg(options?: any): string;
   }
 
   interface NodeSingular {

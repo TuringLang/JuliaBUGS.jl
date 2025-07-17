@@ -1,21 +1,23 @@
 import cytoscape from 'cytoscape';
-import type { Core, ElementDefinition, NodeSingular } from 'cytoscape';
+import type { Core, ElementDefinition, NodeSingular, SingularElementReturnValue } from 'cytoscape';
 import gridGuide from 'cytoscape-grid-guide';
 import contextMenus from 'cytoscape-context-menus';
 import dagre from 'cytoscape-dagre';
 import fcose from 'cytoscape-fcose';
 import compoundDragAndDrop from 'cytoscape-compound-drag-and-drop';
+import svg from 'cytoscape-svg';
 
 cytoscape.use(gridGuide);
 cytoscape.use(contextMenus);
 cytoscape.use(dagre);
 cytoscape.use(fcose);
 cytoscape.use(compoundDragAndDrop);
+cytoscape.use(svg);
 
 let cyInstance: Core | null = null;
 
 interface ContextMenuEvent {
-  target: cytoscape.SingularElementReturnValue;
+  target: SingularElementReturnValue;
 }
 
 export function useGraphInstance() {
@@ -120,7 +122,24 @@ export function useGraphInstance() {
     });
     
     (cyInstance as any).gridGuide({ drawGrid: false, snapToGridOnRelease: true, snapToGridDuringDrag: true, gridSpacing: 20 });
-    (cyInstance as any).contextMenus({ menuItems: [ { id: 'remove', content: 'Remove', selector: 'node, edge', onClickFunction: (evt: ContextMenuEvent) => evt.target.remove() } ] });
+    
+    (cyInstance as any).contextMenus({
+      menuItems: [
+        {
+          id: 'remove',
+          content: 'Remove',
+          selector: 'node, edge',
+          onClickFunction: (evt: ContextMenuEvent) => {
+            const targetElement = evt.target;
+            targetElement.cy().container()?.dispatchEvent(
+              new CustomEvent('cxt-remove', {
+                detail: { elementId: targetElement.id() }
+              })
+            );
+          }
+        }
+      ]
+    });
 
     return cyInstance;
   };

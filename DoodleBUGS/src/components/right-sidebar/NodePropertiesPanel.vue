@@ -19,7 +19,6 @@ const emit = defineEmits<{
 const localElement = ref<GraphElement | null>(null);
 const showDeleteConfirmModal = ref(false);
 
-// Get the full definition for the currently selected node
 const currentDefinition = computed<NodeDefinition | undefined>(() => {
   if (localElement.value?.type === 'node') {
     return getNodeDefinition((localElement.value as GraphNode).nodeType);
@@ -28,7 +27,6 @@ const currentDefinition = computed<NodeDefinition | undefined>(() => {
 });
 
 watch(() => props.selectedElement, (newVal) => {
-  // Create a deep copy to avoid modifying the store directly
   localElement.value = newVal ? JSON.parse(JSON.stringify(newVal)) : null;
 }, { deep: true, immediate: true });
 
@@ -67,13 +65,11 @@ const cancelDelete = () => {
       <p>Select a node or edge on the canvas to view/edit its properties.</p>
     </div>
     <div v-else class="properties-form">
-      <!-- Common Properties -->
       <div class="form-group">
         <label for="element-id">ID:</label>
         <BaseInput id="element-id" :model-value="localElement.id" disabled />
       </div>
 
-      <!-- Node-Specific Properties (Dynamically Rendered) -->
       <template v-if="isNode && currentDefinition">
         <div v-for="prop in currentDefinition.properties" :key="prop.key" class="form-group">
           <label :for="`prop-${prop.key}`">{{ prop.label }}:</label>
@@ -106,7 +102,6 @@ const cancelDelete = () => {
         </div>
       </template>
 
-      <!-- Edge-Specific Properties -->
       <template v-else-if="isEdge">
         <div class="form-group">
             <label for="element-name">Name:</label>

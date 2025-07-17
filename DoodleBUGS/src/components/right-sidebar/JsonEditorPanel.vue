@@ -3,14 +3,19 @@ import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useGraphStore } from '../../stores/graphStore';
 import { useGraphElements } from '../../composables/useGraphElements';
 import type { GraphElement } from '../../types';
-// These imports will now work because you installed the package via npm
 import 'codemirror/lib/codemirror.css';
 import 'codemirror/theme/material-darker.css';
 import 'codemirror/mode/javascript/javascript.js';
-import CodeMirror from 'codemirror';
+import 'codemirror/addon/scroll/simplescrollbars.css';
+import 'codemirror/addon/scroll/simplescrollbars.js';
+import 'codemirror/addon/search/searchcursor.js';
+import 'codemirror/addon/fold/foldcode.js';
+import 'codemirror/addon/fold/foldgutter.css';
+import 'codemirror/addon/fold/foldgutter.js';
+import 'codemirror/addon/fold/brace-fold.js';
 
-// After running `npm i --save-dev @types/codemirror`, we can import its types
-import type { Editor, TextMarker } from 'codemirror';
+import CodeMirror from 'codemirror';
+import type { Editor, TextMarker, Position } from 'codemirror';
 
 const graphStore = useGraphStore();
 const { selectedElement } = useGraphElements();
@@ -18,23 +23,16 @@ const { selectedElement } = useGraphElements();
 const errorText = ref('');
 const editorContainer = ref<HTMLDivElement | null>(null);
 let cmInstance: Editor | null = null;
-let isUpdatingFromSource = false; // A flag to prevent cyclical updates
+let isUpdatingFromSource = false;
 
 const graphElements = computed(() => graphStore.currentGraphElements);
 const protectedFields = ['id', 'type', 'nodeType', 'source', 'target', 'parent'];
 
-/**
- * Marks protected fields in the editor as read-only.
- */
 const markProtectedFields = () => {
   if (!cmInstance) return;
-  
-  // Clear previous marks
   cmInstance.getAllMarks().forEach((mark: TextMarker) => mark.clear());
-
   const text = cmInstance.getValue();
   const lines = text.split('\n');
-  
   lines.forEach((line: string, index: number) => {
     const trimmedLine = line.trim();
     const keyMatch = trimmedLine.match(/"([^"]+)"\s*:/);
@@ -56,14 +54,15 @@ onMounted(() => {
       theme: 'material-darker',
       lineNumbers: true,
       tabSize: 2,
+      scrollbarStyle: "simple",
+      lineWrapping: false,
+      foldGutter: true,
+      gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"]
     });
-
     cmInstance.on('change', (instance: Editor) => {
       if (isUpdatingFromSource) return;
       handleJsonInput(instance.getValue());
     });
-
-    // Initial population and marking
     const initialJson = JSON.stringify(graphElements.value, null, 2);
     isUpdatingFromSource = true;
     cmInstance.setValue(initialJson);
@@ -73,7 +72,6 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  // Correctly clean up the CodeMirror instance
   if (cmInstance) {
     const editorElement = cmInstance.getWrapperElement();
     editorElement.parentNode?.removeChild(editorElement);
@@ -83,27 +81,21 @@ onUnmounted(() => {
 
 watch(graphElements, (newElements) => {
   if (!cmInstance) return;
-
   const currentEditorValue = cmInstance.getValue();
   const newJsonString = JSON.stringify(newElements, null, 2);
-
   try {
-    // Check if the content is semantically the same, ignoring formatting
     if (JSON.stringify(JSON.parse(currentEditorValue)) === JSON.stringify(JSON.parse(newJsonString))) {
         return;
     }
   } catch (e) {
-    // Fallback to string comparison if parsing fails
     if (currentEditorValue === newJsonString) {
         return;
     }
   }
-
   isUpdatingFromSource = true;
   cmInstance.setValue(newJsonString);
   markProtectedFields();
   isUpdatingFromSource = false;
-
 }, { deep: true });
 
 watch(selectedElement, async (newSelection) => {
@@ -112,27 +104,23 @@ watch(selectedElement, async (newSelection) => {
   await nextTick();
 
   const searchText = `"id": "${newSelection.id}"`;
-  const cursor = (cmInstance as any).getSearchCursor(searchText);
-  
-  if (cursor.findNext()) {
-    const from = cursor.from();
-    const to = cursor.to();
-    
-    // Find the start and end of the JSON object
-    const text = cmInstance.getValue();
-    const objectStartIndex = text.lastIndexOf('{', cmInstance.indexFromPos(from));
-    const objectEndIndex = text.indexOf('}', cmInstance.indexFromPos(to)) + 1;
+  const idCursor = (cmInstance as any).getSearchCursor(searchText);
 
-    if (objectStartIndex !== -1 && objectEndIndex > objectStartIndex) {
-      cmInstance.focus();
-      cmInstance.setSelection(
-        cmInstance.posFromIndex(objectStartIndex),
-        cmInstance.posFromIndex(objectEndIndex)
-      );
-      cmInstance.scrollIntoView({
-        from: cmInstance.posFromIndex(objectStartIndex),
-        to: cmInstance.posFromIndex(objectEndIndex)
-      }, 50); // 50px margin
+  if (idCursor.findNext()) {
+    const idPosition = idCursor.from();
+    const objectStartCursor = (cmInstance as any).getSearchCursor('{', idPosition);
+    
+    if (objectStartCursor.findPrevious()) {
+        const fromPos = objectStartCursor.from();
+        const foldRange = (cmInstance as any).findMatchingBracket(fromPos, false);
+
+        if (foldRange && foldRange.to) {
+            const toPos = { line: foldRange.to.line, ch: foldRange.to.ch + 1 };
+
+            cmInstance.focus();
+            cmInstance.setSelection(fromPos, toPos);
+            cmInstance.scrollIntoView({ from: fromPos, to: toPos }, 50);
+        }
     }
   }
 });
@@ -143,10 +131,7 @@ const handleJsonInput = (value: string) => {
     if (!Array.isArray(newElements)) {
       throw new Error("JSON must be an array of graph elements.");
     }
-    
     if (graphStore.currentGraphId) {
-      // The sanitization logic is now handled by the read-only marks.
-      // We directly update the store.
       graphStore.updateGraphElements(graphStore.currentGraphId, newElements);
     }
     errorText.value = '';
@@ -164,13 +149,9 @@ const handleJsonInput = (value: string) => {
         Edit the JSON below to see live updates on the canvas. Read-only fields are protected.
       </p>
     </div>
-
-    <!-- This wrapper provides the border and rounded corners for the editor -->
     <div class="editor-wrapper">
       <div ref="editorContainer" class="json-editor-container"></div>
     </div>
-    
-    <!-- This new footer section will hold status text or error messages -->
     <div class="footer-section">
       <div v-if="errorText" class="error-message">
         {{ errorText }}
@@ -183,23 +164,34 @@ const handleJsonInput = (value: string) => {
 </template>
 
 <style>
-/* Global styles for CodeMirror, not scoped */
 .CodeMirror {
   height: 100%;
   font-family: 'Fira Code', 'Cascadia Code', monospace;
   font-size: 0.85em;
-  border-radius: 8px; /* Ensure editor itself has rounded corners */
+  border-radius: 8px;
 }
 .cm-protected {
   background-color: rgba(255, 255, 255, 0.1);
   cursor: not-allowed;
   opacity: 0.7;
 }
+
+.CodeMirror-simplescroll-horizontal div, .CodeMirror-simplescroll-vertical div {
+  background: #666;
+  border-radius: 3px;
+}
+.CodeMirror-simplescroll-horizontal, .CodeMirror-simplescroll-vertical {
+  background: transparent;
+  z-index: 99;
+}
+.CodeMirror-foldgutter-open,
+.CodeMirror-foldgutter-folded {
+  color: #999;
+}
 </style>
 
 <style scoped>
 .json-editor-panel {
-  /* Add padding to create left/right margins */
   padding: 15px;
   display: flex;
   flex-direction: column;
@@ -230,17 +222,17 @@ h4 {
 
 .editor-wrapper {
   flex-grow: 1;
-  /* Add a border and rounded corners to the editor's container */
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  overflow: hidden; /* This is crucial for the border-radius to apply to the CodeMirror instance */
-  display: flex; /* Helps the child container fill the space */
+  display: flex;
   position: relative;
+  min-height: 0;
 }
 
 .json-editor-container {
   flex-grow: 1;
   position: relative;
+  overflow-x: auto;
 }
 
 .footer-section {

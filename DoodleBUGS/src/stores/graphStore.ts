@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { GraphElement } from '../types';
+import { useDataStore } from './dataStore';
 
 export interface GraphContent {
   graphId: string;
@@ -8,8 +9,19 @@ export interface GraphContent {
 }
 
 export const useGraphStore = defineStore('graph', () => {
+  const dataStore = useDataStore();
   const graphContents = ref<Map<string, GraphContent>>(new Map());
-  const currentGraphId = ref<string | null>(null);
+  const currentGraphId = ref<string | null>(
+    localStorage.getItem('doodlebugs-currentGraphId') || null
+  );
+
+  watch(currentGraphId, (newId) => {
+    if (newId) {
+      localStorage.setItem('doodlebugs-currentGraphId', newId);
+    } else {
+      localStorage.removeItem('doodlebugs-currentGraphId');
+    }
+  });
 
   const currentGraphElements = computed<GraphElement[]>(() => {
     if (currentGraphId.value && graphContents.value.has(currentGraphId.value)) {
@@ -32,6 +44,8 @@ export const useGraphStore = defineStore('graph', () => {
     };
     graphContents.value.set(graphId, newContent);
     saveGraph(graphId, newContent);
+    // Also create data entry for the new graph
+    dataStore.createNewGraphData(graphId);
   };
 
   const updateGraphElements = (graphId: string, newElements: GraphElement[]) => {
@@ -45,8 +59,10 @@ export const useGraphStore = defineStore('graph', () => {
   const deleteGraphContent = (graphId: string) => {
     graphContents.value.delete(graphId);
     localStorage.removeItem(`doodlebugs-graph-${graphId}`);
+    // Also delete associated data
+    dataStore.deleteGraphData(graphId);
     if (currentGraphId.value === graphId) {
-      currentGraphId.value = null;
+      selectGraph(null);
     }
   };
 

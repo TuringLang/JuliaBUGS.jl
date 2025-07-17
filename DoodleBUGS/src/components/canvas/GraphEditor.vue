@@ -27,48 +27,28 @@ const { getCyInstance } = useGraphInstance();
 const sourceNode = ref<NodeSingular | null>(null);
 const isConnecting = ref(false);
 
-/**
- * Creates a new node based on its type, populating it with default data from the central config.
- * @param nodeType - The type of node to create.
- * @param position - The position for the new node.
- * @param parentId - Optional ID of the parent plate.
- * @returns The newly created GraphNode object.
- */
 const createNode = (nodeType: NodeType, position: { x: number; y: number }, parentId?: string): GraphNode => {
     const defaultData = getDefaultNodeData(nodeType);
     const newId = `node_${crypto.randomUUID().substring(0, 8)}`;
 
     const newNode: GraphNode = {
-        ...defaultData, // Spread the default properties
+        ...defaultData,
         id: newId,
         type: 'node',
         nodeType: nodeType,
         position: position,
         parent: parentId,
-        // Override default name if it exists, to make it unique
         name: `${defaultData.name || nodeType} ${elements.value.filter(e => e.type === 'node').length + 1}`,
     };
     return newNode;
 };
 
-
-/**
- * Creates a new plate with a default stochastic node inside it and adds them to the graph.
- * @param position - The position to create the plate at.
- * @param parentId - The ID of a parent element, if any.
- * @returns The newly created plate node.
- */
 const createPlateWithNode = (position: { x: number; y: number }, parentId?: string): GraphNode => {
     const newPlate = createNode('plate', position, parentId);
-    
-    // Create an inner node that belongs to this new plate
     const innerNode = createNode('stochastic', { x: position.x, y: position.y }, newPlate.id);
-
-    // Use the setter from the computed property to update the store with both new elements
     elements.value = [...elements.value, newPlate, innerNode];
     return newPlate;
 }
-
 
 const handleCanvasTap = (event: EventObject) => {
   const { position, target } = event;
@@ -132,7 +112,7 @@ const handleCanvasTap = (event: EventObject) => {
       }
       break;
 
-    default: // 'select' mode
+    default:
       if (isNodeClick || isEdgeClick) {
         emit('element-selected', target.data());
       } else if (isBackgroundClick) {
@@ -160,10 +140,8 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
   const cy = getCyInstance();
   let parentPlateId: string | undefined = undefined;
 
-  // Handle plate creation separately to satisfy the type checker and simplify logic.
   if (nodeType === 'plate') {
       if (cy) {
-          // Check if dropping inside another plate, which is not allowed.
           const plates = cy.nodes('[nodeType="plate"]');
           for (const plate of plates) {
               const bb = plate.boundingBox();
@@ -176,10 +154,9 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
       const newPlate = createPlateWithNode(position);
       emit('element-selected', newPlate);
       emit('update:currentMode', 'select');
-      return; // Exit after creating the plate.
+      return;
   }
   
-  // Handle all other node types.
   if (cy) {
     const plates = cy.nodes('[nodeType="plate"]');
     for (const plate of plates) {
@@ -199,6 +176,10 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
 
 const handlePlateEmptied = (plateId: string) => {
     deleteElement(plateId);
+};
+
+const handleDeleteElement = (elementId: string) => {
+    deleteElement(elementId);
 };
 
 watch(() => props.currentMode, (newMode) => {
@@ -230,6 +211,7 @@ watch(() => props.currentMode, (newMode) => {
       @node-moved="handleNodeMoved"
       @node-dropped="handleNodeDropped"
       @plate-emptied="handlePlateEmptied"
+      @element-remove="handleDeleteElement"
     />
   </div>
 </template>

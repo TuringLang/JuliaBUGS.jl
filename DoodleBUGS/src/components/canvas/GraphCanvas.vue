@@ -17,6 +17,7 @@ const emit = defineEmits<{
   (e: 'node-moved', payload: { nodeId: string, position: { x: number; y: number }, parentId: string | undefined }): void;
   (e: 'node-dropped', payload: { nodeType: NodeType; position: { x: number; y: number } }): void;
   (e: 'plate-emptied', plateId: string): void;
+  (e: 'element-remove', elementId: string): void;
 }>();
 
 const cyContainer = ref<HTMLElement | null>(null);
@@ -57,6 +58,13 @@ onMounted(() => {
       disableGridSnapping();
     }
 
+    cy.container()?.addEventListener('cxt-remove', (event: Event) => {
+        const customEvent = event as CustomEvent;
+        if (customEvent.detail.elementId) {
+            emit('element-remove', customEvent.detail.elementId);
+        }
+    });
+
     cy.on('tap', (evt: EventObject) => {
       emit('canvas-tap', evt);
     });
@@ -70,10 +78,10 @@ onMounted(() => {
         if (originalNode && originalNode.parent && originalNode.parent !== newParentId) {
             const oldParentId = originalNode.parent;
             const oldParent = props.elements.find(el => el.id === oldParentId && el.type === 'node' && (el as GraphNode).nodeType === 'plate');
-
+            
             if (oldParent) {
                 const siblings = props.elements.filter(el => el.type === 'node' && (el as GraphNode).parent === oldParentId);
-                if (siblings.length === 1) {
+                if (siblings.length === 1) { 
                     emit('plate-emptied', oldParentId);
                 }
             }
@@ -166,23 +174,16 @@ watch(() => props.elements, (newElements) => {
       if (existingCyEl.empty()) {
         cy!.add(formattedEl);
       } else {
-        // Update data first
         existingCyEl.data(formattedEl.data);
-
-        // Then, handle position changes specifically for nodes
         if (formattedEl.group === 'nodes') {
           const newNode = formattedEl as ElementDefinition & { position: {x: number, y: number} };
           const currentCyPos = existingCyEl.position();
-
-          // If position from the store is different, update it on the canvas
           if (newNode.position.x !== currentCyPos.x || newNode.position.y !== currentCyPos.y) {
             existingCyEl.position(newNode.position);
           }
-
-          // Handle parent changes
           const parentCollection = existingCyEl.parent();
           const currentParentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined;
-
+          
           if (newNode.data.parent !== currentParentId) {
             existingCyEl.move({ parent: newNode.data.parent ?? null });
           }

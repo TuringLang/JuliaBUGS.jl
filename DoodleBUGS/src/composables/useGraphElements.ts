@@ -34,15 +34,16 @@ export function useGraphElements() {
     const elementToDelete = elements.value.find(el => el.id === elementId);
     if (!elementToDelete) return;
 
+    const parentId = elementToDelete.type === 'node' ? elementToDelete.parent : undefined;
+
     const allIdsToDelete = new Set<string>([elementId]);
 
-    // If deleting a plate, recursively find all descendant nodes to delete them too.
+    // Recursively find all descendant nodes when deleting a plate
     if (elementToDelete.type === 'node' && elementToDelete.nodeType === 'plate') {
-      const findDescendants = (parentId: string) => {
+      const findDescendants = (pId: string) => {
         elements.value.forEach(el => {
-          if (el.type === 'node' && el.parent === parentId) {
+          if (el.type === 'node' && el.parent === pId) {
             allIdsToDelete.add(el.id);
-            // This is for future-proofing in case nested plates are ever supported.
             if (el.nodeType === 'plate') {
               findDescendants(el.id);
             }
@@ -52,7 +53,6 @@ export function useGraphElements() {
       findDescendants(elementId);
     }
     
-    // Create a set of all nodes that are marked for deletion.
     const nodesBeingDeleted = new Set<string>();
     allIdsToDelete.forEach(id => {
         const el = elements.value.find(e => e.id === id);
@@ -61,19 +61,28 @@ export function useGraphElements() {
         }
     });
 
-    // Also mark for deletion any edges connected to the nodes being deleted.
+    // Delete edges connected to nodes being removed
     elements.value.forEach(el => {
         if (el.type === 'edge' && (nodesBeingDeleted.has(el.source) || nodesBeingDeleted.has(el.target))) {
             allIdsToDelete.add(el.id);
         }
     });
 
-    // Filter the elements array to remove all items marked for deletion.
     elements.value = elements.value.filter(el => !allIdsToDelete.has(el.id));
 
-    // If the currently selected element is one of those deleted, deselect it.
     if (selectedElement.value && allIdsToDelete.has(selectedElement.value.id)) {
       selectedElement.value = null;
+    }
+
+    // Auto-cleanup empty parent plates
+    if (parentId) {
+      const parentPlate = elements.value.find(el => el.id === parentId);
+      if (parentPlate && parentPlate.type === 'node' && parentPlate.nodeType === 'plate') {
+        const hasRemainingChildren = elements.value.some(el => el.type === 'node' && el.parent === parentId);
+        if (!hasRemainingChildren) {
+          deleteElement(parentId);
+        }
+      }
     }
   };
 
