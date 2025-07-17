@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 
 export type RightSidebarTab = 'properties' | 'code' | 'json';
 
@@ -11,14 +11,36 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.getItem('doodlebugs-isRightTabPinned') === 'true'
   );
 
+  const leftSidebarWidth = ref<number>(
+    parseInt(localStorage.getItem('doodlebugs-leftSidebarWidth') || '330')
+  );
+  
+  const rightSidebarWidth = ref<number>(
+    parseInt(localStorage.getItem('doodlebugs-rightSidebarWidth') || '320')
+  );
+
+  watch(activeRightTab, (newTab) => {
+    localStorage.setItem('doodlebugs-activeRightTab', newTab);
+  });
+
+  watch(isRightTabPinned, (isPinned) => {
+    localStorage.setItem('doodlebugs-isRightTabPinned', isPinned.toString());
+  });
+
+  watch(leftSidebarWidth, (newWidth) => {
+    localStorage.setItem('doodlebugs-leftSidebarWidth', newWidth.toString());
+  });
+
+  watch(rightSidebarWidth, (newWidth) => {
+    localStorage.setItem('doodlebugs-rightSidebarWidth', newWidth.toString());
+  });
+
   const setActiveRightTab = (tab: RightSidebarTab) => {
     activeRightTab.value = tab;
-    localStorage.setItem('doodlebugs-activeRightTab', tab);
   };
 
   const toggleRightTabPinned = () => {
     isRightTabPinned.value = !isRightTabPinned.value;
-    localStorage.setItem('doodlebugs-isRightTabPinned', isRightTabPinned.value.toString());
   };
 
   return {
@@ -26,5 +48,7 @@ export const useUiStore = defineStore('ui', () => {
     isRightTabPinned,
     setActiveRightTab,
     toggleRightTabPinned,
+    leftSidebarWidth,
+    rightSidebarWidth,
   };
 });

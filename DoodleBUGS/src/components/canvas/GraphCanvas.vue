@@ -17,6 +17,7 @@ const emit = defineEmits<{
   (e: 'node-moved', payload: { nodeId: string, position: { x: number; y: number }, parentId: string | undefined }): void;
   (e: 'node-dropped', payload: { nodeType: NodeType; position: { x: number; y: number } }): void;
   (e: 'plate-emptied', plateId: string): void;
+  (e: 'element-remove', elementId: string): void;
 }>();
 
 const cyContainer = ref<HTMLElement | null>(null);
@@ -35,12 +36,12 @@ const formatElementsForCytoscape = (elements: GraphElement[]): ElementDefinition
       const edge = el as GraphEdge;
       const targetNode = elements.find(n => n.id === edge.target && n.type === 'node') as GraphNode | undefined;
       const relType = (targetNode?.nodeType === 'stochastic' || targetNode?.nodeType === 'observed') ? 'stochastic' : 'deterministic';
-      return { 
-        group: 'edges', 
-        data: { 
+      return {
+        group: 'edges',
+        data: {
           ...edge,
-          relationshipType: relType 
-        } 
+          relationshipType: relType
+        }
       };
     }
   });
@@ -56,6 +57,13 @@ onMounted(() => {
     } else {
       disableGridSnapping();
     }
+
+    cy.container()?.addEventListener('cxt-remove', (event: Event) => {
+        const customEvent = event as CustomEvent;
+        if (customEvent.detail.elementId) {
+            emit('element-remove', customEvent.detail.elementId);
+        }
+    });
 
     cy.on('tap', (evt: EventObject) => {
       emit('canvas-tap', evt);
@@ -162,7 +170,7 @@ watch(() => props.elements, (newElements) => {
       if (!formattedEl.data.id) return;
 
       const existingCyEl = cy!.getElementById(formattedEl.data.id);
-      
+
       if (existingCyEl.empty()) {
         cy!.add(formattedEl);
       } else {

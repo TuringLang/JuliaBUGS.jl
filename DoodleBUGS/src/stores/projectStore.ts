@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 import { useGraphStore } from './graphStore';
 
 export interface GraphMeta {
@@ -19,7 +19,9 @@ export interface Project {
 
 export const useProjectStore = defineStore('project', () => {
   const projects = ref<Project[]>([]);
-  const currentProjectId = ref<string | null>(null);
+  const currentProjectId = ref<string | null>(
+    localStorage.getItem('doodlebugs-currentProjectId') || null
+  );
 
   const graphStore = useGraphStore();
 
@@ -39,16 +41,9 @@ export const useProjectStore = defineStore('project', () => {
   const selectProject = (projectId: string | null) => {
     currentProjectId.value = projectId;
     if (projectId) {
-      const project = projects.value.find(p => p.id === projectId);
-      if (project && project.graphs.length > 0) {
-        if (!graphStore.currentGraphId || !project.graphs.some(g => g.id === graphStore.currentGraphId)) {
-            graphStore.selectGraph(project.graphs[0].id);
-        }
-      } else {
-        graphStore.selectGraph(null);
-      }
+      localStorage.setItem('doodlebugs-currentProjectId', projectId);
     } else {
-      graphStore.selectGraph(null);
+      localStorage.removeItem('doodlebugs-currentProjectId');
     }
   };
 
@@ -60,8 +55,7 @@ export const useProjectStore = defineStore('project', () => {
       });
       projects.value = projects.value.filter(p => p.id !== projectId);
       if (currentProjectId.value === projectId) {
-        currentProjectId.value = null;
-        graphStore.selectGraph(null);
+        selectProject(null);
       }
       saveProjects();
     }
@@ -113,22 +107,11 @@ export const useProjectStore = defineStore('project', () => {
     if (storedProjects) {
       projects.value = JSON.parse(storedProjects);
     }
-  };
-
-  watch(currentProjectId, (newProjectId) => {
-    if (newProjectId) {
-      const project = projects.value.find(p => p.id === newProjectId);
-      if (project && project.graphs.length > 0) {
-        if (!graphStore.currentGraphId || !project.graphs.some(g => g.id === graphStore.currentGraphId)) {
-          graphStore.selectGraph(project.graphs[0].id);
-        }
-      } else {
-        graphStore.selectGraph(null);
-      }
-    } else {
-      graphStore.selectGraph(null);
+    // Validate the persisted project ID - clear if no longer valid
+    if (currentProjectId.value && !projects.value.some(p => p.id === currentProjectId.value)) {
+      selectProject(null);
     }
-  }, { immediate: true });
+  };
 
   return {
     projects,

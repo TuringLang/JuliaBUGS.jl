@@ -4,6 +4,7 @@ import type { NodeType } from '../../types';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseInput from '../ui/BaseInput.vue';
 import DropdownMenu from '../common/DropdownMenu.vue';
+import { nodeDefinitions } from '../../config/nodeDefinitions';
 
 const props = defineProps<{
   projectName: string | null;
@@ -27,8 +28,8 @@ const emit = defineEmits<{
   (e: 'toggle-left-sidebar'): void;
   (e: 'toggle-right-sidebar'): void;
   (e: 'open-about-modal'): void;
+  (e: 'open-export-modal', format: 'png' | 'jpg' | 'svg'): void;
   (e: 'export-json'): void;
-  (e: 'export-png'): void;
   (e: 'apply-layout', layoutName: string): void;
   (e: 'load-example', exampleKey: string): void;
 }>();
@@ -42,14 +43,6 @@ const displayTitle = computed(() => {
   }
   return 'No Project Selected';
 });
-
-const basicNodeTypes: { label: string; value: NodeType }[] = [
-  { label: 'Stochastic Node', value: 'stochastic' },
-  { label: 'Deterministic Node', value: 'deterministic' },
-  { label: 'Constant Node', value: 'constant' },
-  { label: 'Observed Node', value: 'observed' },
-  { label: 'Plate (Loop)', value: 'plate' },
-];
 
 const exampleModels = [
     { name: 'Rats Model', key: 'rats' },
@@ -79,9 +72,19 @@ const handleGridSizeInput = (event: Event) => {
             <a href="#" @click.prevent="emit('new-project')">New Project...</a>
             <a href="#" @click.prevent="emit('new-graph')">New Graph...</a>
             <a href="#" @click.prevent="emit('save-current-graph')">Save Current Graph</a>
+          </template>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <template #trigger>
+            <BaseButton type="ghost" size="small">Export</BaseButton>
+          </template>
+          <template #content>
+            <a href="#" @click.prevent="emit('open-export-modal', 'png')">as PNG...</a>
+            <a href="#" @click.prevent="emit('open-export-modal', 'jpg')">as JPG...</a>
+            <a href="#" @click.prevent="emit('open-export-modal', 'svg')">as SVG...</a>
             <div class="dropdown-divider"></div>
-            <a href="#" @click.prevent="emit('export-json')">Export as JSON</a>
-            <a href="#" @click.prevent="emit('export-png')">Export as PNG</a>
+            <a href="#" @click.prevent="emit('export-json')">as JSON</a>
           </template>
         </DropdownMenu>
 
@@ -91,9 +94,9 @@ const handleGridSizeInput = (event: Event) => {
           </template>
           <template #content>
             <div class="dropdown-section-title">Nodes</div>
-            <a v-for="nodeType in basicNodeTypes" :key="nodeType.value" href="#"
-              @click.prevent="setAddNodeType(nodeType.value)">
-              {{ nodeType.label }}
+            <a v-for="nodeDef in nodeDefinitions" :key="nodeDef.nodeType" href="#"
+              @click.prevent="setAddNodeType(nodeDef.nodeType)">
+              {{ nodeDef.label }}
             </a>
             <div class="dropdown-divider"></div>
             <a href="#" @click.prevent="emit('update:currentMode', 'add-edge')">Add Edge</a>

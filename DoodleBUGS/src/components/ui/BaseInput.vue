@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 
 const props = defineProps<{
-  modelValue: string | number;
+  modelValue: string | number | null | undefined;
   type?: string;
   placeholder?: string;
   disabled?: boolean;
@@ -33,7 +33,7 @@ const handleKeyUpEnter = (event: KeyboardEvent) => {
 <template>
   <input
     :type="inputType"
-    :value="modelValue"
+    :value="modelValue ?? ''"
     :placeholder="placeholder"
     :disabled="disabled"
     :readonly="readonly"

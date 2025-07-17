@@ -3,3 +3,4 @@ declare module 'cytoscape-context-menus';
 declare module 'cytoscape-dagre';
 declare module 'cytoscape-fcose';
 declare module 'cytoscape-compound-drag-and-drop';
+declare module 'cytoscape-svg';

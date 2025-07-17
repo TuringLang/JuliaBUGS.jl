@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@types/cytoscape": "^3.21.9",
+    "codemirror": "^5.65.19",
     "cytoscape": "^3.32.0",
     "cytoscape-compound-drag-and-drop": "^1.1.0",
     "cytoscape-context-menus": "^4.2.1",
@@ -22,11 +23,13 @@
     "cytoscape-no-overlap": "^1.0.1",
     "cytoscape-panzoom": "^2.5.3",
     "cytoscape-snap-to-grid": "^2.0.0",
+    "cytoscape-svg": "^0.4.0",
     "pinia": "^3.0.2",
     "vue": "^3.5.13"
   },
   "devDependencies": {
     "@tsconfig/node22": "^22.0.1",
+    "@types/codemirror": "^5.60.16",
     "@types/cytoscape-context-menus": "^4.1.4",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-vue": "^5.2.3",

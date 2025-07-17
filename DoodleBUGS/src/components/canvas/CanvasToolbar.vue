@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import BaseButton from '../ui/BaseButton.vue';
 import type { NodeType } from '../../types';
+import { nodeDefinitions } from '../../config/nodeDefinitions';
+import { computed } from 'vue';
 
 defineProps<{
   currentMode: string;
@@ -14,13 +16,13 @@ const emit = defineEmits<{
   (e: 'update:currentNodeType', type: NodeType): void;
 }>();
 
-const availableNodeTypes: { label: string; value: NodeType }[] = [
-  { label: 'Stochastic Node', value: 'stochastic' },
-  { label: 'Deterministic Node', value: 'deterministic' },
-  { label: 'Constant Node', value: 'constant' },
-  { label: 'Observed Node', value: 'observed' },
-  { label: 'Plate (Loop)', value: 'plate' },
-];
+// Get node types for the dropdown from the central config file
+const availableNodeTypes = computed(() => {
+  return nodeDefinitions.map(def => ({
+    label: def.label,
+    value: def.nodeType
+  }));
+});
 
 const setMode = (mode: string) => {
   emit('update:currentMode', mode);
