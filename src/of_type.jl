@@ -14,10 +14,10 @@ struct SymbolicRef{S} end
 struct SymbolicExpr{E} end
 
 # Parametric types that store specification in type parameters
-struct OfReal{Lower,Upper} <: OfType
-    function OfReal{L,U}() where {L,U}
+struct OfReal{T<:AbstractFloat,Lower,Upper} <: OfType
+    function OfReal{T,L,U}() where {T<:AbstractFloat,L,U}
         return error(
-            "OfReal is a type specification, not an instantiable object. Use of(Real, ...) to create the type.",
+            "OfReal is a type specification, not an instantiable object. Use of(Float64, ...) or of(Float32, ...) to create the type.",
         )
     end
 end
@@ -57,8 +57,9 @@ end
 # ========================================================================
 # Type Parameter Extraction Helpers
 # ========================================================================
-get_lower(::Type{OfReal{L,U}}) where {L,U} = L
-get_upper(::Type{OfReal{L,U}}) where {L,U} = U
+get_lower(::Type{OfReal{T,L,U}}) where {T,L,U} = L
+get_upper(::Type{OfReal{T,L,U}}) where {T,L,U} = U
+get_element_type(::Type{OfReal{T,L,U}}) where {T,L,U} = T
 get_lower(::Type{OfInt{L,U}}) where {L,U} = L
 get_upper(::Type{OfInt{L,U}}) where {L,U} = U
 get_element_type(::Type{OfArray{T,N,D}}) where {T,N,D} = T
@@ -261,8 +262,26 @@ function of(
     return constant ? OfConstantWrapper{base_type} : base_type
 end
 
+# Support for specific float types
+function of(::Type{T}; constant::Bool=false) where {T<:AbstractFloat}
+    base_type = OfReal{T,Nothing,Nothing}
+    return constant ? OfConstantWrapper{base_type} : base_type
+end
+
+function of(
+    ::Type{T},
+    lower::Union{Real,Nothing,Symbol,Type},
+    upper::Union{Real,Nothing,Symbol,Type};
+    constant::Bool=false,
+) where {T<:AbstractFloat}
+    L, U = process_bounds(lower, upper)
+    base_type = OfReal{T,L,U}
+    return constant ? OfConstantWrapper{base_type} : base_type
+end
+
+# Backward compatibility: of(Real) defaults to Float64
 function of(::Type{Real}; constant::Bool=false)
-    base_type = OfReal{Nothing,Nothing}
+    base_type = OfReal{Float64,Nothing,Nothing}
     return constant ? OfConstantWrapper{base_type} : base_type
 end
 
@@ -273,13 +292,22 @@ function of(
     constant::Bool=false,
 )
     L, U = process_bounds(lower, upper)
-    base_type = OfReal{L,U}
+    base_type = OfReal{Float64,L,U}
     return constant ? OfConstantWrapper{base_type} : base_type
 end
 
 # Infer OfType from concrete values
-function of(::Real)
-    return of(Real)
+function of(value::T) where {T<:AbstractFloat}
+    return of(T)
+end
+
+function of(value::Integer)
+    return of(Int)
+end
+
+# Fallback for other Real types
+function of(value::Real)
+    return of(Float64)  # Default to Float64 for other Real types
 end
 
 function of(value::AbstractArray{T,N}) where {T,N}
@@ -320,7 +348,8 @@ function resolve_bounded_type(::Type{T}, replacements::NamedTuple) where {T<:OfT
     if new_lower !== lower || new_upper !== upper
         # Create new type with resolved bounds
         if T <: OfReal
-            return OfReal{new_lower,new_upper}
+            elem_type = get_element_type(T)
+            return OfReal{elem_type,new_lower,new_upper}
         elseif T <: OfInt
             return OfInt{new_lower,new_upper}
         end
@@ -449,12 +478,12 @@ function _create_with_default(::Type{OfArray{T,N,D}}, default_value) where {T,N,
     end
 end
 
-function _create_with_default(::Type{OfReal{L,U}}, default_value) where {L,U}
+function _create_with_default(::Type{OfReal{T,L,U}}, default_value) where {T,L,U}
     # Handle missing separately
     if default_value === missing
         return missing
     end
-    val = convert(Float64, default_value)
+    val = convert(T, default_value)
     lower = type_to_bound(L)
     upper = type_to_bound(U)
     validate_bounds(val, lower, upper, "Real")
@@ -766,23 +795,23 @@ function Base.rand(::Type{OfArray{T,N,D}}) where {T,N,D}
     return rand(T, dims...)
 end
 
-function Base.rand(::Type{OfReal{L,U}}) where {L,U}
+function Base.rand(::Type{OfReal{T,L,U}}) where {T,L,U}
     val = rand()
     lower = type_to_bound(L)
     upper = type_to_bound(U)
 
     if !isnothing(lower) && !isnothing(upper)
-        return lower + val * (upper - lower)
+        return T(lower + val * (upper - lower))
     elseif !isnothing(lower)
         # For lower bound only, generate values in [lower, ∞)
         # Using exponential distribution shifted by lower
-        return lower + randexp()
+        return T(lower + randexp())
     elseif !isnothing(upper)
         # For upper bound only, generate values in (-∞, upper]
         # Using negative exponential distribution shifted by upper
-        return upper - randexp()
+        return T(upper - randexp())
     else
-        return randn()  # Use normal distribution for unbounded
+        return T(randn())  # Use normal distribution for unbounded
     end
 end
 
@@ -830,16 +859,16 @@ function Base.zero(::Type{OfArray{T,N,D}}) where {T,N,D}
     return zeros(T, dims...)
 end
 
-function Base.zero(::Type{OfReal{L,U}}) where {L,U}
+function Base.zero(::Type{OfReal{T,L,U}}) where {T,L,U}
     lower = type_to_bound(L)
     upper = type_to_bound(U)
 
     if !isnothing(lower) && lower > 0
-        return lower
+        return T(lower)
     elseif !isnothing(upper) && upper < 0
-        return upper
+        return T(upper)
     else
-        return 0.0
+        return zero(T)
     end
 end
 
@@ -889,7 +918,7 @@ function Base.size(::Type{OfArray{T,N,D}}) where {T,N,D}
     return dims
 end
 
-function Base.size(::Type{OfReal{L,U}}) where {L,U}
+function Base.size(::Type{OfReal{T,L,U}}) where {T,L,U}
     return ()  # Scalar has empty dimensions
 end
 
@@ -919,7 +948,7 @@ function Base.length(::Type{OfArray{T,N,D}}) where {T,N,D}
     return prod(dims)
 end
 
-function Base.length(::Type{OfReal{L,U}}) where {L,U}
+function Base.length(::Type{OfReal{T,L,U}}) where {T,L,U}
     return 1
 end
 
@@ -1049,9 +1078,9 @@ function _validate_leaf(::Type{OfArray{T,N,D}}, value) where {T,N,D}
     return arr
 end
 
-function _validate_leaf(::Type{OfReal{L,U}}, value) where {L,U}
+function _validate_leaf(::Type{OfReal{T,L,U}}, value) where {T,L,U}
     if value isa Real
-        val = convert(Float64, value)
+        val = convert(T, value)
         lower = type_to_bound(L)
         upper = type_to_bound(U)
         validate_bounds(val, lower, upper, "Real")
@@ -1443,8 +1472,10 @@ function Base.show(io::IO, ::Type{OfArray{T,N,D}}) where {T,N,D}
     end
 end
 
-function Base.show(io::IO, ::Type{OfReal{L,U}}) where {L,U}
-    return show_bounded_type(io, "Real", L, U)
+function Base.show(io::IO, ::Type{OfReal{T,L,U}}) where {T,L,U}
+    # Show the specific float type instead of generic "Real"
+    type_name = string(T)
+    return show_bounded_type(io, type_name, L, U)
 end
 
 function Base.show(io::IO, ::Type{OfInt{L,U}}) where {L,U}
@@ -1510,7 +1541,9 @@ function Base.show(io::IO, ::Type{OfNamedTuple{Names,Types}}) where {Names,Types
                 if wrapped <: OfReal &&
                     get_lower(wrapped) === Nothing &&
                     get_upper(wrapped) === Nothing
-                    printstyled(io, "of(Real"; color=:cyan)
+                    elem_type = get_element_type(wrapped)
+                    type_name = elem_type === Float64 ? "Real" : string(elem_type)
+                    printstyled(io, "of($type_name"; color=:cyan)
                     printstyled(io, "; constant=true"; color=:light_black)
                     printstyled(io, ")"; color=:cyan)
                 elseif wrapped <: OfInt &&
@@ -1558,7 +1591,9 @@ function Base.show(io::IO, ::Type{OfNamedTuple{Names,Types}}) where {Names,Types
                 if wrapped <: OfReal &&
                     get_lower(wrapped) === Nothing &&
                     get_upper(wrapped) === Nothing
-                    printstyled(io, "of(Real"; color=:cyan)
+                    elem_type = get_element_type(wrapped)
+                    type_name = elem_type === Float64 ? "Real" : string(elem_type)
+                    printstyled(io, "of($type_name"; color=:cyan)
                     printstyled(io, "; constant=true"; color=:light_black)
                     printstyled(io, ")"; color=:cyan)
                 elseif wrapped <: OfInt &&
@@ -1587,7 +1622,10 @@ end
 function Base.show(io::IO, ::Type{OfConstantWrapper{T}}) where {T}
     # Show the wrapped type with constant=true
     if T <: OfReal
-        show_bounded_type(io, "Real", get_lower(T), get_upper(T); constant=true)
+        elem_type = get_element_type(T)
+        # Use "Real" for backward compatibility when Float64 is the element type
+        type_name = elem_type === Float64 ? "Real" : string(elem_type)
+        show_bounded_type(io, type_name, get_lower(T), get_upper(T); constant=true)
     elseif T <: OfInt
         show_bounded_type(io, "Int", get_lower(T), get_upper(T); constant=true)
     elseif T <: OfArray

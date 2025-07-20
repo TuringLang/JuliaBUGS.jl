@@ -7,8 +7,8 @@ include("../src/of_type.jl")
         # Test basic Int and Real types
         @test of(Int) == OfInt{Nothing,Nothing}
         @test of(Int, 0, 10) == OfInt{Val{0},Val{10}}
-        @test of(Real) == OfReal{Nothing,Nothing}
-        @test of(Real, 0.0, 1.0) == OfReal{Val{0.0},Val{1.0}}
+        @test of(Real) == OfReal{Float64,Nothing,Nothing}
+        @test of(Real, 0.0, 1.0) == OfReal{Float64,Val{0.0},Val{1.0}}
 
         # Test array types
         @test of(Array, 5) == OfArray{Float64,1,Tuple{5}}
@@ -19,14 +19,50 @@ include("../src/of_type.jl")
     @testset "Symbolic bounds" begin
         # Test creating types with symbolic bounds
         T1 = of(Real, :lower, :upper)
-        @test T1 == OfReal{SymbolicRef{:lower},SymbolicRef{:upper}}
+        @test T1 == OfReal{Float64,SymbolicRef{:lower},SymbolicRef{:upper}}
 
         T2 = of(Int, 0, :max)
         @test T2 == OfInt{Val{0},SymbolicRef{:max}}
 
         # Test with constants
         T3 = of(Real, :min, :max; constant=true)
-        @test T3 == OfConstantWrapper{OfReal{SymbolicRef{:min},SymbolicRef{:max}}}
+        @test T3 == OfConstantWrapper{OfReal{Float64,SymbolicRef{:min},SymbolicRef{:max}}}
+    end
+
+    @testset "Explicit float types" begin
+        # Test Float64
+        @test of(Float64) == OfReal{Float64,Nothing,Nothing}
+        @test of(Float64, 0.0, 1.0) == OfReal{Float64,Val{0.0},Val{1.0}}
+        @test of(Float64; constant=true) ==
+            OfConstantWrapper{OfReal{Float64,Nothing,Nothing}}
+
+        # Test Float32
+        @test of(Float32) == OfReal{Float32,Nothing,Nothing}
+        @test of(Float32, -1.0f0, 1.0f0) == OfReal{Float32,Val{-1.0f0},Val{1.0f0}}
+        @test of(Float32; constant=true) ==
+            OfConstantWrapper{OfReal{Float32,Nothing,Nothing}}
+
+        # Test that of(Real) defaults to Float64
+        @test of(Real) == OfReal{Float64,Nothing,Nothing}
+
+        # Test rand returns correct types
+        @test rand(of(Float64)) isa Float64
+        @test rand(of(Float32)) isa Float32
+        @test rand(of(Real)) isa Float64  # defaults to Float64
+
+        # Test zero returns correct types
+        @test zero(of(Float64)) isa Float64
+        @test zero(of(Float32)) isa Float32
+        @test zero(of(Real)) isa Float64
+
+        # Test with bounds
+        val64 = rand(of(Float64, 0.0, 1.0))
+        @test val64 isa Float64
+        @test 0.0 <= val64 <= 1.0
+
+        val32 = rand(of(Float32, -1.0f0, 1.0f0))
+        @test val32 isa Float32
+        @test -1.0f0 <= val32 <= 1.0f0
     end
 end
 
@@ -39,7 +75,7 @@ end
 
         # Test Real constant
         T2 = of(Real; constant=true)
-        @test T2 == OfConstantWrapper{OfReal{Nothing,Nothing}}
+        @test T2 == OfConstantWrapper{OfReal{Float64,Nothing,Nothing}}
         @test string(T2) == "of(Real; constant=true)"
 
         # Test non-constant versions
@@ -47,7 +83,7 @@ end
         @test T3 == OfInt{Nothing,Nothing}
 
         T4 = of(Real, 0, 10)
-        @test T4 == OfReal{Val{0},Val{10}}
+        @test T4 == OfReal{Float64,Val{0},Val{10}}
 
         # Test that constant=true is not allowed for Array
         @test_throws ErrorException of(Array, 10; constant=true)
@@ -63,8 +99,8 @@ end
         @test names == (:mu, :sigma, :data)
 
         types = get_types(T)
-        @test types.parameters[1] == OfReal{Nothing,Nothing}
-        @test types.parameters[2] == OfReal{Val{0},Nothing}
+        @test types.parameters[1] == OfReal{Float64,Nothing,Nothing}
+        @test types.parameters[2] == OfReal{Float64,Val{0},Nothing}
         @test types.parameters[3] == OfArray{Float64,1,Tuple{10}}
     end
 
@@ -95,6 +131,31 @@ end
 
             T <: OfNamedTuple
         end
+    end
+
+    @testset "@of with float types" begin
+        # Test using explicit float types in @of macro
+        T = @of(
+            f64_val = of(Float64),
+            f32_val = of(Float32, 0.0f0, 1.0f0),
+            real_val = of(Real; constant=true),
+            f64_array = of(Array, Float64, 3),
+            f32_array = of(Array, Float32, 2, 2)
+        )
+
+        types = get_types(T)
+        @test types.parameters[1] == OfReal{Float64,Nothing,Nothing}
+        @test types.parameters[2] == OfReal{Float32,Val{0.0f0},Val{1.0f0}}
+        @test types.parameters[3] == OfConstantWrapper{OfReal{Float64,Nothing,Nothing}}
+        @test types.parameters[4] == OfArray{Float64,1,Tuple{3}}
+        @test types.parameters[5] == OfArray{Float32,2,Tuple{2,2}}
+
+        # Test instance creation preserves types
+        instance = T(; real_val=5.0)
+        @test instance.f64_val isa Float64
+        @test instance.f32_val isa Float32
+        @test instance.f64_array isa Vector{Float64}
+        @test instance.f32_array isa Matrix{Float32}
     end
 
     @testset "Concrete instance creation" begin
@@ -204,7 +265,7 @@ end
 
         types = get_types(T)
         # The 'value' field should have symbolic references to min and max
-        @test types.parameters[3] == OfReal{SymbolicRef{:min},SymbolicRef{:max}}
+        @test types.parameters[3] == OfReal{Float64,SymbolicRef{:min},SymbolicRef{:max}}
     end
 
     @testset "Symbolic bounds in named tuples" begin
@@ -216,10 +277,10 @@ end
         )
 
         types = get_types(T)
-        @test types.parameters[1] == OfReal{Val{0},Nothing}
-        @test types.parameters[2] == OfReal{SymbolicRef{:lower_bound},Nothing}
+        @test types.parameters[1] == OfReal{Float64,Val{0},Nothing}
+        @test types.parameters[2] == OfReal{Float64,SymbolicRef{:lower_bound},Nothing}
         @test types.parameters[3] ==
-            OfReal{SymbolicRef{:lower_bound},SymbolicRef{:upper_bound}}
+            OfReal{Float64,SymbolicRef{:lower_bound},SymbolicRef{:upper_bound}}
     end
 
     @testset "@of macro with symbolic bounds" begin
@@ -231,9 +292,10 @@ end
         )
 
         types = get_types(Schema)
-        @test types.parameters[1] == OfReal{Val{0},Val{10}}
-        @test types.parameters[2] == OfReal{SymbolicRef{:min_val},Val{100}}
-        @test types.parameters[3] == OfReal{SymbolicRef{:min_val},SymbolicRef{:max_val}}
+        @test types.parameters[1] == OfReal{Float64,Val{0},Val{10}}
+        @test types.parameters[2] == OfReal{Float64,SymbolicRef{:min_val},Val{100}}
+        @test types.parameters[3] ==
+            OfReal{Float64,SymbolicRef{:min_val},SymbolicRef{:max_val}}
     end
 
     @testset "Symbolic bounds with constants" begin
@@ -244,9 +306,10 @@ end
         )
 
         types = get_types(Schema)
-        @test types.parameters[1] == OfConstantWrapper{OfReal{Val{0},Nothing}}
-        @test types.parameters[2] == OfConstantWrapper{OfReal{SymbolicRef{:lower},Nothing}}
-        @test types.parameters[3] == OfReal{SymbolicRef{:lower},SymbolicRef{:upper}}
+        @test types.parameters[1] == OfConstantWrapper{OfReal{Float64,Val{0},Nothing}}
+        @test types.parameters[2] ==
+            OfConstantWrapper{OfReal{Float64,SymbolicRef{:lower},Nothing}}
+        @test types.parameters[3] == OfReal{Float64,SymbolicRef{:lower},SymbolicRef{:upper}}
     end
 
     @testset "Concrete instance creation with symbolic resolution" begin
@@ -507,6 +570,35 @@ end
         # Test that flattening is consistent
         @test length(flat) == length(T)
     end
+
+    @testset "flatten/unflatten with float types" begin
+        # Test that float types are preserved through flatten/unflatten
+        T = @of(
+            f64 = of(Float64, 0.0, 1.0),
+            f32 = of(Float32, -1.0f0, 1.0f0),
+            f64_vec = of(Array, Float64, 3),
+            f32_mat = of(Array, Float32, 2, 2)
+        )
+
+        original = (
+            f64=0.5, f32=0.25f0, f64_vec=[0.1, 0.2, 0.3], f32_mat=Float32[0.1 0.2; 0.3 0.4]
+        )
+
+        flat = flatten(T, original)
+        reconstructed = unflatten(T, flat)
+
+        # Check types are preserved
+        @test reconstructed.f64 isa Float64
+        @test reconstructed.f32 isa Float32
+        @test reconstructed.f64_vec isa Vector{Float64}
+        @test reconstructed.f32_mat isa Matrix{Float32}
+
+        # Check values
+        @test reconstructed.f64 ≈ original.f64
+        @test reconstructed.f32 ≈ original.f32
+        @test reconstructed.f64_vec ≈ original.f64_vec
+        @test reconstructed.f32_mat ≈ original.f32_mat
+    end
 end
 
 @testset "Array type specifications" begin
@@ -673,13 +765,17 @@ end
         # Test string representations
         @test string(of(Int)) == "of(Int)"
         @test string(of(Int, 0, 10)) == "of(Int, 0, 10)"
-        @test string(of(Real, 0.0, nothing)) == "of(Real, 0.0, nothing)"
+        @test string(of(Real, 0.0, nothing)) == "of(Float64, 0.0, nothing)"
+        @test string(of(Float64, 0.0, nothing)) == "of(Float64, 0.0, nothing)"
+        @test string(of(Float32, 0.0f0, nothing)) == "of(Float32, 0.0, nothing)"
         @test string(of(Array, 5)) == "of(Array, 5)"
         @test string(of(Array, Float32, 3, 3)) == "of(Array, Float32, 3, 3)"
 
         # Test constant wrapper display
         @test string(of(Int; constant=true)) == "of(Int; constant=true)"
         @test string(of(Real, 0, 1; constant=true)) == "of(Real, 0, 1; constant=true)"
+        @test string(of(Float64; constant=true)) == "of(Real; constant=true)"
+        @test string(of(Float32; constant=true)) == "of(Float32; constant=true)"
 
         # Test that types without bounds don't show "nothing"
         T = @of(rows = of(Int), cols = of(Int), data = of(Array, 3, 4))
@@ -687,5 +783,19 @@ end
         @test occursin("rows = of(Int)", str)
         @test occursin("cols = of(Int)", str)
         @test !occursin("nothing", str)
+    end
+
+    @testset "Type inference from values" begin
+        # Test that of(value) infers the correct type
+        @test of(1.0) == of(Float64)
+        @test of(1.0f0) == of(Float32)
+        @test of(1) == of(Int)
+        @test of(1//2) == of(Float64)  # Rationals default to Float64
+        @test of(big(1.0)) == of(BigFloat)
+
+        # Test arrays
+        @test of([1.0, 2.0, 3.0]) == of(Array, Float64, 3)
+        @test of(Float32[1.0, 2.0]) == of(Array, Float32, 2)
+        @test of([1 2; 3 4]) == of(Array, Int, 2, 2)
     end
 end

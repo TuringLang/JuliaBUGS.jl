@@ -14,12 +14,16 @@ The `of` type system provides a declarative way to specify parameter **types** f
 The `of` function returns types with specifications encoded in type parameters:
 - `of(Array, dims...)` → `OfArray{Float64, N, (dim1, dim2, ...)}` - Arrays with specified dimensions
 - `of(Array, T, dims...)` → `OfArray{T, N, (dim1, dim2, ...)}` - Typed arrays
-- `of(Real)` → `OfReal{Nothing, Nothing}` - Unbounded real numbers
-- `of(Real, lower, upper)` → `OfReal{Val{lower}, Val{upper}}` - Bounded real numbers
+- `of(Float64)` → `OfReal{Float64, Nothing, Nothing}` - Unbounded 64-bit floating point numbers
+- `of(Float32)` → `OfReal{Float32, Nothing, Nothing}` - Unbounded 32-bit floating point numbers
+- `of(Float64, lower, upper)` → `OfReal{Float64, Val{lower}, Val{upper}}` - Bounded 64-bit floats
+- `of(Float32, lower, upper)` → `OfReal{Float32, Val{lower}, Val{upper}}` - Bounded 32-bit floats
+- `of(Real)` → `OfReal{Float64, Nothing, Nothing}` - Unbounded real numbers (defaults to Float64 for backward compatibility)
+- `of(Real, lower, upper)` → `OfReal{Float64, Val{lower}, Val{upper}}` - Bounded real numbers (defaults to Float64)
 - `of(Int)` → `OfInt{Nothing, Nothing}` - Unbounded integers
 - `of(Int, lower, upper)` → `OfInt{Val{lower}, Val{upper}}` - Bounded integers
 - `@of(field1=..., field2=...)` → `OfNamedTuple{(:field1, :field2), Tuple{Type1, Type2}}` - Named tuples (use @of macro only)
-- `of(...; constant=true)` → `OfConstantWrapper{T}` - Marks a type as constant/hyperparameter (only supported for `Int` and `Real` types)
+- `of(...; constant=true)` → `OfConstantWrapper{T}` - Marks a type as constant/hyperparameter (supported for float types and Int)
 
 ### 2. Type Parameter Encoding
 
@@ -137,12 +141,12 @@ rand(of(ExpandedMatrixType; n=10))
 
 ```julia
 ParamsType = @of(
-    mu0=of(Real),
+    mu0=of(Float64),  # Now explicitly Float64 instead of generic Real
     beta=of(Array, Float64, 3),
-    tau2=of(Real, 0, nothing),
-    sigma2=of(Real, 0, nothing),
-    school_effects=of(Array, 10),
-    y=of(Array, 100),
+    tau2=of(Float64, 0, nothing),  # Explicitly Float64 with lower bound
+    sigma2=of(Float64, 0, nothing),
+    school_effects=of(Array, 10),  # Still defaults to Float64 for arrays
+    y=of(Array, Float32, 100),  # Can use Float32 for data to save memory
 )
 
 @model function school_model(
