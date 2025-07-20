@@ -65,8 +65,19 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     # () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
 )
 
-raw_selection = get(ENV, "TEST_GROUP", "all")
-selected_groups = Set(split(raw_selection, ','))
+# Get test groups from both environment variable and command line arguments
+# Prefer command line arguments over environment variable
+if !isempty(ARGS)
+    raw_selection = join(ARGS, ',')
+    # Warn if TEST_GROUP env var is set but being ignored
+    if haskey(ENV, "TEST_GROUP")
+        @warn "TEST_GROUP environment variable is set to '$(ENV["TEST_GROUP"])' but is being overridden by command line arguments: $ARGS"
+    end
+else
+    raw_selection = get(ENV, "TEST_GROUP", "all")
+end
+
+selected_groups = Set(filter(!isempty, split(raw_selection, ',')))
 
 if "all" ∉ selected_groups
     unknown = setdiff(selected_groups, keys(TEST_GROUPS))
