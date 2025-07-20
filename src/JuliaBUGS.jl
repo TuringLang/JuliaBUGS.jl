@@ -208,27 +208,27 @@ end
 # end
 
 """
-    @register_primitive(expr)
+    @bugs_primitive(expr)
 
 Currently, only function defined in the `BUGSPrimitives` module can be used in the model definition. 
 This macro allows the user to register a user-defined function or distribution to be used in the model definition.
 
 Example:
 ```julia
-julia> @register_primitive function f(x) # function
+julia> @bugs_primitive function f(x) # function
     return x + 1
 end
 
 julia> JuliaBUGS.f(1)
 2
 
-julia> @register_primitive d(x) = Normal(0, x^2) # distribution
+julia> @bugs_primitive d(x) = Normal(0, x^2) # distribution
 
 julia> JuliaBUGS.d(1)
 Distributions.Normal{Float64}(μ=0.0, σ=1.0)
 ```
 """
-macro register_primitive(expr)
+macro bugs_primitive(expr)
     def = MacroTools.splitdef(expr)
     func_name = def[:name]
     func_expr = MacroTools.combinedef(def)
@@ -241,28 +241,28 @@ macro register_primitive(expr)
 end
 
 """
-    @register_primitive(func)
+    @bugs_primitive(func)
 
-`@register_primitive` can also be used to register function without definition.
+`@bugs_primitive` can also be used to register function without definition.
 
 Example
 ```julia
 julia> f(x) = x + 1
 
-julia> @register_primitive(f)
+julia> @bugs_primitive(f)
 
 julia> JuliaBUGS.f(1)
 2
 ```
 """
-macro register_primitive(func::Symbol)
+macro bugs_primitive(func::Symbol)
     return quote
         @eval JuliaBUGS begin
             $func = Main.$func
         end
     end
 end
-macro register_primitive(funcs::Vararg{Symbol})
+macro bugs_primitive(funcs::Vararg{Symbol})
     exprs = Expr(:block)
     for func in funcs
         push!(exprs.args, :($func = Main.$func))

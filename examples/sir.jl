@@ -36,11 +36,11 @@ end
 # --- Custom Primitive Definitions for BUGS ---
 
 # Register DifferentialEquations.jl functions to be callable from the BUGS model
-JuliaBUGS.@register_primitive DifferentialEquations SIR!
+JuliaBUGS.@bugs_primitive DifferentialEquations SIR!
 
 # Define a function to solve the SIR ODE and return the number of infected individuals over time.
 # This function will be called within the BUGS model.
-JuliaBUGS.@register_primitive function solve_ode(u0, p)
+JuliaBUGS.@bugs_primitive function solve_ode(u0, p)
     tspan = (0.0, 14.0) # Time span for the simulation (14 days)
     prob = DifferentialEquations.ODEProblem(SIR!, u0, tspan, p)
     # Solve the ODE, saving the solution at integer time steps (daily)
@@ -52,7 +52,7 @@ end
 
 # Define and register a custom Negative Binomial distribution parameterized by mean (μ) and dispersion (ϕ).
 # BUGS often uses this parameterization.
-JuliaBUGS.@register_primitive function NegativeBinomial2(μ, ϕ)
+JuliaBUGS.@bugs_primitive function NegativeBinomial2(μ, ϕ)
     # Convert (μ, ϕ) to Negative Binomial parameters (r, p)
     # Ensure μ is positive to avoid issues with p calculation
     μ_safe = max(μ, 1e-9)
