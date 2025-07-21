@@ -32,7 +32,7 @@ abstract type OfType end
 Wrapper type for symbolic references in bounds and dimensions.
 
 Used internally to encode references to other fields when specifying bounds or dimensions 
-that depend on constant fields. For example, when using `@of(n=of(Int; constant=true), 
+that depend on constant fields or other parameters. For example, when using `@of(n=of(Int; constant=true), 
 data=of(Array, n, 2))`, the reference to `n` in the array dimension is encoded as 
 `SymbolicRef{:n}`.
 
