@@ -1,6 +1,25 @@
 using Test
 
-include("../src/of_type.jl")
+using JuliaBUGS
+using JuliaBUGS:
+    OfType,
+    OfInt,
+    OfReal,
+    OfArray,
+    OfNamedTuple,
+    OfConstantWrapper,
+    SymbolicRef,
+    SymbolicExpr,
+    get_names,
+    get_types,
+    flatten,
+    unflatten,
+    has_symbolic_dims,
+    get_dims,
+    get_element_type,
+    get_ndims,
+    get_lower,
+    get_upper
 
 @testset "Basic type creation" begin
     @testset "Simple type creation" begin
@@ -798,4 +817,102 @@ end
         @test of(Float32[1.0, 2.0]) == of(Array, Float32, 2)
         @test of([1 2; 3 4]) == of(Array, Int, 2, 2)
     end
+end
+
+@testset "Show method for NamedTuple" begin
+    # Test simple display
+    T = @of(x = of(Real), y = of(Int, 0, 10))
+    str = string(T)
+    @test occursin("@of(", str)
+    @test occursin("x=of(Float64)", str)
+    @test occursin("y=of(Int, 0, 10)", str)
+
+    # Test multiline display with many fields
+    T2 = @of(a = of(Real), b = of(Int), c = of(Array, 3, 4), d = of(Float32, 0.0, 1.0))
+    str2 = string(T2)
+    @test occursin("@of(", str2)
+
+    # Test with constants
+    T3 = @of(n = of(Int; constant=true), data = of(Array, n, 2))
+    str3 = string(T3)
+    @test occursin("of(Int; constant=true)", str3)
+    @test occursin("of(Array, n, 2)", str3)
+end
+
+@testset "Type concretization" begin
+    # Test simple constant replacement
+    T = @of(n = of(Int; constant=true), data = of(Array, n))
+
+    ConcreteT = of(T; n=5)
+    @test ConcreteT <: OfNamedTuple
+    @test get_names(ConcreteT) == (:data,)
+    types = get_types(ConcreteT)
+    @test get_dims(types.parameters[1]) == (5,)
+
+    # Test expression dimensions
+    T2 = @of(
+        n = of(Int; constant=true),
+        original = of(Array, n, n),
+        padded = of(Array, n+1, n+1),
+        doubled = of(Array, 2*n, n)
+    )
+
+    ConcreteT2 = of(T2; n=10)
+    names = get_names(ConcreteT2)
+    @test names == (:original, :padded, :doubled)
+
+    types2 = get_types(ConcreteT2)
+    @test get_dims(types2.parameters[1]) == (10, 10)
+    @test get_dims(types2.parameters[2]) == (11, 11)
+    @test get_dims(types2.parameters[3]) == (20, 10)
+
+    # Test bounded types with symbolic references
+    T3 = @of(
+        lower = of(Real; constant=true),
+        upper = of(Real; constant=true),
+        param = of(Real, lower, upper)
+    )
+
+    ConcreteT3 = of(T3; lower=0.0, upper=1.0)
+    types3 = get_types(ConcreteT3)
+    @test get_lower(types3.parameters[1]) == 0.0
+    @test get_upper(types3.parameters[1]) == 1.0
+end
+
+@testset "Expression processing in @of macro" begin
+    # Test arithmetic expressions with field references
+    T = @of(
+        n = of(Int; constant=true),
+        data1 = of(Array, n+1),
+        data2 = of(Array, n*2),
+        data3 = of(Array, n-1),
+        data4 = of(Array, n/2)
+    )
+
+    ConcreteT = of(T; n=10)
+    types = get_types(ConcreteT)
+    @test get_dims(types.parameters[1]) == (11,)
+    @test get_dims(types.parameters[2]) == (20,)
+    @test get_dims(types.parameters[3]) == (9,)
+    @test get_dims(types.parameters[4]) == (5,)
+
+    # Test nested expressions
+    T2 = @of(
+        a = of(Int; constant=true), b = of(Int; constant=true), data = of(Array, (a+b)*2)
+    )
+
+    ConcreteT2 = of(T2; a=10, b=4)
+    types2 = get_types(ConcreteT2)
+    @test get_dims(types2.parameters[1]) == (28,)  # (10+4)*2
+
+    # Test division that requires integer result
+    T3 = @of(n = of(Int; constant=true), data = of(Array, n/3))
+
+    # Should error when n=10 since 10/3 is not an integer
+    @test_throws ErrorException of(T3; n=10)
+
+    # But should work when n=9
+    ConcreteT3 = of(T3; n=9)
+    types3 = get_types(ConcreteT3)
+    @test get_dims(types3.parameters[1]) == (3,)
 end

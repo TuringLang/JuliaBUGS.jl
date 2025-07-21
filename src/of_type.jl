@@ -4,16 +4,86 @@ using Random: randexp
 # Core Type Definitions
 # ========================================================================
 
-# Abstract base type for all Of types
+"""
+    OfType
+
+Abstract base type for all types in the `of` type system.
+
+The `of` type system provides a declarative way to specify parameter types for 
+probabilistic programming. All `of` types encode their specifications (dimensions, 
+bounds, etc.) in type parameters, allowing them to be used as actual Julia types 
+in type annotations.
+
+# Subtypes
+- `OfReal{T,Lower,Upper}`: Bounded or unbounded floating-point numbers
+- `OfInt{Lower,Upper}`: Bounded or unbounded integers  
+- `OfArray{T,N,Dims}`: Arrays with specified element type and dimensions
+- `OfNamedTuple{Names,Types}`: Named tuples with typed fields
+- `OfConstantWrapper{T}`: Wrapper marking a type as constant/hyperparameter
+
+# See also
+[`of`](@ref), [`@of`](@ref)
+"""
 abstract type OfType end
 
-# Wrapper type for symbolic references in bounds
+"""
+    SymbolicRef{S}
+
+Wrapper type for symbolic references in bounds and dimensions.
+
+Used internally to encode references to other fields when specifying bounds or dimensions 
+that depend on constant fields. For example, when using `@of(n=of(Int; constant=true), 
+data=of(Array, n, 2))`, the reference to `n` in the array dimension is encoded as 
+`SymbolicRef{:n}`.
+
+# Type Parameters
+- `S`: The symbol being referenced
+
+# See also
+[`@of`](@ref), [`of`](@ref)
+"""
 struct SymbolicRef{S} end
 
-# Wrapper type for symbolic expressions (e.g., b+1, 2*n)
+"""
+    SymbolicExpr{E}
+
+Wrapper type for symbolic expressions in dimensions.
+
+Used internally to encode arithmetic expressions involving constant fields. For example,
+when using `@of(n=of(Int; constant=true), padded=of(Array, n+1, n+1))`, the expression 
+`n+1` is encoded as `SymbolicExpr{(:+, :n, 1)}`.
+
+Supported operations: `+`, `-`, `*`, `/`. Division operations must result in integers 
+when used for array dimensions.
+
+# Type Parameters
+- `E`: A tuple representing the expression in prefix notation
+
+# See also
+[`@of`](@ref), [`of`](@ref)
+"""
 struct SymbolicExpr{E} end
 
-# Parametric types that store specification in type parameters
+"""
+    OfReal{T<:AbstractFloat,Lower,Upper}
+
+Type specification for bounded or unbounded floating-point numbers.
+
+# Type Parameters
+- `T<:AbstractFloat`: The concrete floating-point type (e.g., `Float64`, `Float32`)
+- `Lower`: Lower bound (numeric value, `Nothing` for unbounded, or `SymbolicRef`)
+- `Upper`: Upper bound (numeric value, `Nothing` for unbounded, or `SymbolicRef`)
+
+# Examples
+```julia
+of(Float64)              # OfReal{Float64, Nothing, Nothing}
+of(Float32, 0.0, 1.0)    # OfReal{Float32, 0.0, 1.0}
+of(Real, 0, nothing)     # OfReal{Float64, 0, Nothing} (defaults to Float64)
+```
+
+# See also
+[`of`](@ref), [`@of`](@ref)
+"""
 struct OfReal{T<:AbstractFloat,Lower,Upper} <: OfType
     function OfReal{T,L,U}() where {T<:AbstractFloat,L,U}
         return error(
@@ -22,6 +92,25 @@ struct OfReal{T<:AbstractFloat,Lower,Upper} <: OfType
     end
 end
 
+"""
+    OfInt{Lower,Upper}
+
+Type specification for bounded or unbounded integers.
+
+# Type Parameters
+- `Lower`: Lower bound (integer value, `Nothing` for unbounded, or `SymbolicRef`)
+- `Upper`: Upper bound (integer value, `Nothing` for unbounded, or `SymbolicRef`)
+
+# Examples
+```julia
+of(Int)           # OfInt{Nothing, Nothing}
+of(Int, 1, 10)    # OfInt{1, 10}
+of(Int, 0, nothing)  # OfInt{0, Nothing}
+```
+
+# See also
+[`of`](@ref), [`@of`](@ref)
+"""
 struct OfInt{Lower,Upper} <: OfType
     function OfInt{L,U}() where {L,U}
         return error(
@@ -30,6 +119,26 @@ struct OfInt{Lower,Upper} <: OfType
     end
 end
 
+"""
+    OfArray{T,N,Dims}
+
+Type specification for arrays with fixed element type and dimensions.
+
+# Type Parameters
+- `T`: Element type of the array
+- `N`: Number of dimensions
+- `Dims`: Tuple type encoding the size of each dimension (can include `SymbolicRef` or `SymbolicExpr`)
+
+# Examples
+```julia
+of(Array, 3, 4)          # OfArray{Float64, 2, (3, 4)}
+of(Array, Float32, 10)   # OfArray{Float32, 1, (10,)}
+@of(n=of(Int; constant=true), data=of(Array, n, 2))  # Symbolic dimension
+```
+
+# See also
+[`of`](@ref), [`@of`](@ref)
+"""
 struct OfArray{T,N,Dims} <: OfType
     function OfArray{T,N,D}() where {T,N,D}
         return error(
@@ -38,6 +147,24 @@ struct OfArray{T,N,Dims} <: OfType
     end
 end
 
+"""
+    OfNamedTuple{Names,Types<:Tuple}
+
+Type specification for named tuples with typed fields.
+
+# Type Parameters
+- `Names`: Tuple of field names as symbols
+- `Types<:Tuple`: Tuple of field types (each must be an `OfType`)
+
+# Examples
+```julia
+@of(mu=of(Real), tau=of(Real, 0, nothing))
+of((a=of(Int), b=of(Array, 3, 3)))
+```
+
+# See also
+[`of`](@ref), [`@of`](@ref)
+"""
 struct OfNamedTuple{Names,Types<:Tuple} <: OfType
     function OfNamedTuple{Names,Types}() where {Names,Types}
         return error(
@@ -46,6 +173,26 @@ struct OfNamedTuple{Names,Types<:Tuple} <: OfType
     end
 end
 
+"""
+    OfConstantWrapper{T<:OfType}
+
+Wrapper type marking a field as a constant/hyperparameter.
+
+Constants are not included in flattened representations and must be provided
+when creating instances or concretizing types with symbolic dimensions.
+
+# Type Parameters
+- `T<:OfType`: The wrapped type specification
+
+# Examples
+```julia
+of(Int; constant=true)    # OfConstantWrapper{OfInt{Nothing, Nothing}}
+of(Real; constant=true)   # OfConstantWrapper{OfReal{Float64, Nothing, Nothing}}
+```
+
+# See also
+[`of`](@ref), [`@of`](@ref)
+"""
 struct OfConstantWrapper{T<:OfType} <: OfType
     function OfConstantWrapper{T}() where {T<:OfType}
         return error(
@@ -84,7 +231,7 @@ is_leaf(::Type{<:OfConstantWrapper}) = true
 
 # Convert bounds to type parameters
 bound_to_type(::Nothing) = Nothing
-bound_to_type(x::Real) = x  # Numeric values are used directly as type parameters
+bound_to_type(x::Real) = x
 bound_to_type(s::Symbol) = SymbolicRef{s}
 bound_to_type(s::QuoteNode) = SymbolicRef{s.value}
 
@@ -155,7 +302,7 @@ function resolve_bound(::Type{Nothing}, replacements::NamedTuple)
 end
 
 function resolve_bound(::Type{x}, replacements::NamedTuple) where {x<:Real}
-    return x  # Numeric type parameters are returned as-is
+    return x
 end
 
 function resolve_bound(::Type{SymbolicRef{S}}, replacements::NamedTuple) where {S}
@@ -178,7 +325,7 @@ end
 
 # Handle numeric bounds
 function resolve_bound(x::Real, ::NamedTuple)
-    return x  # Numeric values are returned as-is
+    return x
 end
 
 # ========================================================================
@@ -208,12 +355,12 @@ end
 # Process bounds for Int/Real types
 function process_bounds(lower, upper)
     L = if lower isa Type
-        lower  # Keep type parameters as-is
+        lower
     else
         bound_to_type(lower)
     end
     U = if upper isa Type
-        upper  # Keep type parameters as-is
+        upper
     else
         bound_to_type(upper)
     end
@@ -223,6 +370,76 @@ end
 # ========================================================================
 # Constructor Functions
 # ========================================================================
+
+"""
+    of(T, args...; constant::Bool=false)
+
+Create an `OfType` specification from various inputs.
+
+# Main Methods
+
+## Arrays
+```julia
+of(Array, dims...)              # Float64 array with given dimensions
+of(Array, T, dims...)           # Array with element type T and given dimensions
+```
+
+## Real Numbers
+```julia
+of(Float64)                     # Unbounded Float64
+of(Float64, lower, upper)       # Bounded Float64
+of(Float32)                     # Unbounded Float32
+of(Float32, lower, upper)       # Bounded Float32
+of(Real)                        # Unbounded Real (defaults to Float64)
+of(Real, lower, upper)          # Bounded Real (defaults to Float64)
+```
+
+## Integers
+```julia
+of(Int)                         # Unbounded integer
+of(Int, lower, upper)           # Bounded integer
+```
+
+## Named Tuples
+```julia
+of((field1=spec1, field2=spec2, ...))  # NamedTuple with typed fields
+```
+
+## From Values (Type Inference)
+```julia
+of(1.0)                         # Infers of(Float64)
+of([1, 2, 3])                   # Infers of(Array, Int, 3)
+of((a=1, b=2.0))               # Infers OfNamedTuple
+```
+
+# Arguments
+- `T`: Type to create specification for
+- `args...`: Type-specific arguments (bounds, dimensions, etc.)
+- `constant`: Mark type as constant/hyperparameter (default: false)
+
+# Returns
+An `OfType` subtype encoding the specification in its type parameters.
+
+# Examples
+```julia
+# Basic types
+T1 = of(Float64, 0, 1)          # OfReal{Float64, 0, 1}
+T2 = of(Array, 3, 4)            # OfArray{Float64, 2, (3, 4)}
+T3 = of(Int; constant=true)     # OfConstantWrapper{OfInt{Nothing, Nothing}}
+
+# With @of macro for cleaner syntax
+T4 = @of(
+    n = of(Int; constant=true),
+    data = of(Array, n, 2)      # Symbolic dimension
+)
+
+# Type concretization
+T5 = of(T4; n=10)               # Concrete type with n=10
+```
+
+# See also
+[`@of`](@ref), [`OfType`](@ref)
+"""
 function of(::Type{Array}, dims...; constant::Bool=false)
     if constant
         error("constant=true is only supported for Int and Real types, not Array")
@@ -268,7 +485,6 @@ function of(
     return constant ? OfConstantWrapper{base_type} : base_type
 end
 
-# Support for specific float types
 function of(::Type{T}; constant::Bool=false) where {T<:AbstractFloat}
     base_type = OfReal{T,Nothing,Nothing}
     return constant ? OfConstantWrapper{base_type} : base_type
@@ -285,7 +501,7 @@ function of(
     return constant ? OfConstantWrapper{base_type} : base_type
 end
 
-# of(Real) creates Float64 type for backward compatibility
+# of(Real) creates Float64
 function of(::Type{Real}; constant::Bool=false)
     base_type = OfReal{Float64,Nothing,Nothing}
     return constant ? OfConstantWrapper{base_type} : base_type
@@ -333,9 +549,6 @@ function of(value::NamedTuple{names}) where {names}
     end
 end
 
-# Support for passing OfType types through of()
-# (This is handled by the generic of functions below)
-
 # ========================================================================
 # Helper Functions for Type Concretization
 # ========================================================================
@@ -367,6 +580,48 @@ end
 # ========================================================================
 # Type Concretization with Replacements
 # ========================================================================
+
+"""
+    of(::Type{T}, replacements::NamedTuple) where T<:OfType
+    of(::Type{T}; kwargs...) where T<:OfType
+    of(::Type{T}, pairs::Pair{Symbol}...) where T<:OfType
+
+Create a concrete type by resolving symbolic dimensions and removing constants.
+
+This function takes an `OfType` with symbolic dimensions or constants and creates
+a new type with some or all symbols resolved to concrete values. Constants that
+are provided are removed from the resulting type.
+
+# Arguments
+- `T<:OfType`: The type to concretize
+- `replacements`: Named tuple or keyword arguments mapping symbols to values
+
+# Returns
+A new `OfType` with symbols replaced and constants removed.
+
+# Examples
+```julia
+# Define type with symbolic dimensions
+T = @of(
+    n = of(Int; constant=true),
+    data = of(Array, n, 2)
+)
+
+# Create concrete type
+ConcreteT = of(T; n=10)      # @of(data=of(Array, 10, 2))
+
+# Partial concretization
+T2 = @of(
+    rows = of(Int; constant=true),
+    cols = of(Int; constant=true),
+    matrix = of(Array, rows, cols)
+)
+Partial = of(T2; rows=5)     # @of(cols=of(Int; constant=true), matrix=of(Array, 5, :cols))
+```
+
+# See also
+[`of`](@ref), [`@of`](@ref)
+"""
 function of(::Type{T}, pairs::Pair{Symbol}...) where {T<:OfType}
     return of(T, NamedTuple(pairs))
 end
@@ -375,79 +630,9 @@ function of(::Type{T}; kwargs...) where {T<:OfType}
     return of(T, NamedTuple(kwargs))
 end
 
-function of(::Type{OfNamedTuple{Names,Types}}, replacements::NamedTuple) where {Names,Types}
-    # Replace OfConstants and symbolic dimensions with concrete values
-    # Build lists for remaining fields (excluding resolved constants)
-    remaining_names = Symbol[]
-    remaining_types = []
-
-    for i in 1:length(Names)
-        name = Names[i]
-        field_type = Types.parameters[i]
-
-        if field_type <: OfConstantWrapper && haskey(replacements, name)
-            # Skip this field - it's a constant that has been resolved
-            continue
-        elseif field_type <: OfArray
-            # Check if array has symbolic dimensions
-            dims = get_dims(field_type)
-            new_dims = map(dims) do d
-                if d isa Symbol && haskey(replacements, d)
-                    replacements[d]
-                elseif d isa Type && d <: SymbolicExpr
-                    # Evaluate the expression
-                    expr = d.parameters[1]
-                    eval_symbolic_expr(expr, replacements)
-                else
-                    d
-                end
-            end
-            if new_dims != dims
-                # Create new array type with concrete dimensions
-                T = get_element_type(field_type)
-                push!(remaining_names, name)
-                push!(remaining_types, of(Array, T, new_dims...))
-            else
-                push!(remaining_names, name)
-                push!(remaining_types, field_type)
-            end
-        elseif field_type <: OfNamedTuple
-            # Recursively handle nested named tuples
-            push!(remaining_names, name)
-            push!(remaining_types, of(field_type, replacements))
-        elseif field_type <: OfReal || field_type <: OfInt
-            # Check if bounds have symbolic references
-            push!(remaining_names, name)
-            push!(remaining_types, resolve_bounded_type(field_type, replacements))
-        elseif field_type <: OfConstantWrapper
-            # Handle wrapped types without replacement values - keep as constants
-            wrapped = get_wrapped_type(field_type)
-            resolved = resolve_bounded_type(wrapped, replacements)
-            push!(remaining_names, name)
-            if resolved !== wrapped
-                # Wrap the resolved type back
-                push!(remaining_types, OfConstantWrapper{resolved})
-            else
-                push!(remaining_types, field_type)
-            end
-        else
-            push!(remaining_names, name)
-            push!(remaining_types, field_type)
-        end
-    end
-
-    # Create new NamedTuple type with only remaining fields
-    if isempty(remaining_names)
-        error("All fields were constants and have been resolved. No fields remain.")
-    end
-
-    return OfNamedTuple{Tuple(remaining_names),Tuple{remaining_types...}}
-end
-
-function of(::Type{OfArray{T,N,D}}, replacements::NamedTuple) where {T,N,D}
-    # Replace symbolic dimensions in array types
-    dims = get_dims(OfArray{T,N,D})
-    new_dims = map(dims) do d
+# Helper function to resolve dimensions with replacements
+function _resolve_dimensions(dims, replacements::NamedTuple)
+    return map(dims) do d
         if d isa Symbol && haskey(replacements, d)
             replacements[d]
         elseif d isa Type && d <: SymbolicExpr
@@ -458,6 +643,88 @@ function of(::Type{OfArray{T,N,D}}, replacements::NamedTuple) where {T,N,D}
             d
         end
     end
+end
+
+# Helper function to process a single field for concretization
+function _process_field_for_concretization(
+    name::Symbol, field_type::Type, replacements::NamedTuple
+)
+    # Case 1: Constant field that has been resolved - skip it
+    if field_type <: OfConstantWrapper && haskey(replacements, name)
+        return nothing
+    end
+
+    # Case 2: Array with potentially symbolic dimensions
+    if field_type <: OfArray
+        dims = get_dims(field_type)
+        new_dims = _resolve_dimensions(dims, replacements)
+
+        if new_dims != dims
+            # Create new array type with concrete dimensions
+            T = get_element_type(field_type)
+            return (name, of(Array, T, new_dims...))
+        else
+            return (name, field_type)
+        end
+    end
+
+    # Case 3: Nested NamedTuple - recursively concretize
+    if field_type <: OfNamedTuple
+        return (name, of(field_type, replacements))
+    end
+
+    # Case 4: Bounded types (Real/Int) with potentially symbolic bounds
+    if field_type <: OfReal || field_type <: OfInt
+        return (name, resolve_bounded_type(field_type, replacements))
+    end
+
+    # Case 5: Constant wrapper without replacement - resolve wrapped type
+    if field_type <: OfConstantWrapper
+        wrapped = get_wrapped_type(field_type)
+        resolved = resolve_bounded_type(wrapped, replacements)
+
+        if resolved !== wrapped
+            return (name, OfConstantWrapper{resolved})
+        else
+            return (name, field_type)
+        end
+    end
+
+    # Case 6: Other types - pass through unchanged
+    return (name, field_type)
+end
+
+function of(::Type{OfNamedTuple{Names,Types}}, replacements::NamedTuple) where {Names,Types}
+    # Process each field and collect the results
+    processed_fields = []
+
+    for i in 1:length(Names)
+        name = Names[i]
+        field_type = Types.parameters[i]
+
+        result = _process_field_for_concretization(name, field_type, replacements)
+
+        if !isnothing(result)
+            push!(processed_fields, result)
+        end
+    end
+
+    # Check if any fields remain
+    if isempty(processed_fields)
+        error("All fields were constants and have been resolved. No fields remain.")
+    end
+
+    # Extract names and types from processed fields
+    remaining_names = [field[1] for field in processed_fields]
+    remaining_types = [field[2] for field in processed_fields]
+
+    return OfNamedTuple{Tuple(remaining_names),Tuple{remaining_types...}}
+end
+
+function of(::Type{OfArray{T,N,D}}, replacements::NamedTuple) where {T,N,D}
+    # Replace symbolic dimensions in array types
+    dims = get_dims(OfArray{T,N,D})
+    new_dims = _resolve_dimensions(dims, replacements)
     return OfArray{T,N,Tuple{new_dims...}}
 end
 
@@ -599,6 +866,58 @@ end
 # ========================================================================
 # Parameterized Constructor with Validation
 # ========================================================================
+
+"""
+    (::Type{T})(; kwargs...) where {T<:OfType}
+    (::Type{T})(default_value; kwargs...) where {T<:OfType}
+
+Create an instance of an `OfNamedTuple` type with specified constant values.
+
+This constructor creates actual values (instances) from `OfType` specifications.
+It requires all constants to be provided and initializes non-constant fields
+to zero or a specified default value.
+
+# Arguments
+- `T<:OfType`: Must be an `OfNamedTuple` type
+- `default_value`: Optional value to initialize all non-constant fields (default: appropriate zero)
+- `kwargs...`: Constant values and optionally non-constant field values
+
+# Returns
+A `NamedTuple` instance with all fields initialized.
+
+# Examples
+```julia
+# Define type with constants
+T = @of(
+    n = of(Int; constant=true),
+    mu = of(Real),
+    data = of(Array, n, 2)
+)
+
+# Create instance with constants (non-constants default to zero)
+instance = T(; n=5)
+# Returns: (mu = 0.0, data = zeros(5, 2))
+
+# Create instance with custom default
+instance = T(1.0; n=5)  
+# Returns: (mu = 1.0, data = ones(5, 2))
+
+# Create instance with missing values
+instance = T(missing; n=5)
+# Returns: (mu = missing, data = 5×2 Array{Missing})
+
+# Provide specific values for non-constants
+instance = T(; n=5, mu=2.5, data=rand(5, 2))
+# Returns: (mu = 2.5, data = <provided 5×2 array>)
+```
+
+# Errors
+- Throws error if required constants are not provided
+- Throws error if this is called on non-NamedTuple types
+
+# See also
+[`of`](@ref), [`@of`](@ref)
+"""
 function (::Type{T})(; kwargs...) where {T<:OfType}
     return _create_instance_impl(T, zero, kwargs)
 end
@@ -617,17 +936,55 @@ end
 """
     @of(field1=spec1, field2=spec2, ...)
 
-Create an OfNamedTuple type with cleaner syntax that allows direct references
-between fields without needing symbols.
+Create an `OfNamedTuple` type with cleaner syntax for field references.
+
+The `@of` macro provides a more intuitive syntax for creating named tuple types
+where fields can reference each other. Field names used in dimensions or bounds
+are automatically converted to symbolic references.
+
+# Syntax
+```julia
+@of(
+    field_name = of_specification,
+    ...
+)
+```
+
+# Features
+- Direct field references without quoting (e.g., `n` instead of `:n`)
+- Support for arithmetic expressions in dimensions (e.g., `n+1`, `2*n`)
+- Automatic conversion to appropriate `OfNamedTuple` type
+- Fields are processed in order, allowing later fields to reference earlier ones
 
 # Examples
 ```julia
+# Basic usage with constants and arrays
 T = @of(
-    rows=of(Int; constant=true),
-    cols=of(Int; constant=true),
-    data=of(Array, rows, cols)
+    n = of(Int; constant=true),
+    mu = of(Real),
+    data = of(Array, n, 2)  # 'n' automatically converted to symbolic reference
+)
+
+# With arithmetic expressions
+T = @of(
+    n = of(Int; constant=true),
+    original = of(Array, n, n),
+    padded = of(Array, n+1, n+1),
+    doubled = of(Array, 2*n, n)
+)
+
+# Nested structures
+T = @of(
+    dims = @of(
+        rows = of(Int; constant=true),
+        cols = of(Int; constant=true)
+    ),
+    matrix = of(Array, dims.rows, dims.cols)
 )
 ```
+
+# See also
+[`of`](@ref), [`OfNamedTuple`](@ref)
 """
 macro of(args...)
     # Parse the arguments to extract field specifications
@@ -737,60 +1094,116 @@ function process_dimension_arg(arg, available_fields::Vector{Symbol})
     end
 end
 
+# Check if a processed expression is a SymbolicExpr type
+function _is_symbolic_expr_type(expr::Expr)
+    return expr.head == :curly && length(expr.args) >= 2 && expr.args[1] == :SymbolicExpr
+end
+
+# Process a single argument in an arithmetic expression
+function _process_arithmetic_arg(arg, available_fields::Vector{Symbol})
+    if arg isa Symbol && arg in available_fields
+        # Field reference - convert to quoted symbol
+        return (QuoteNode(arg), true)
+    elseif arg isa Expr
+        # Recursively process sub-expressions
+        processed = process_expression_refs(arg, available_fields)
+        if _is_symbolic_expr_type(processed)
+            # Extract the tuple from SymbolicExpr{...}
+            return (processed.args[2], true)
+        else
+            return (processed, false)
+        end
+    else
+        # Literal value - keep as-is
+        return (arg, false)
+    end
+end
+
+# Process an arithmetic expression, converting field references to symbols
+function _process_arithmetic_expr(expr::Expr, available_fields::Vector{Symbol})
+    op = expr.args[1]
+
+    # Build tuple representation: (op, arg1, arg2, ...)
+    tuple_args = Any[QuoteNode(op)]
+    has_field_ref = false
+
+    # Process each argument
+    for arg in expr.args[2:end]
+        processed_arg, has_ref = _process_arithmetic_arg(arg, available_fields)
+        push!(tuple_args, processed_arg)
+        has_field_ref |= has_ref
+    end
+
+    if has_field_ref
+        # Create SymbolicExpr type with tuple
+        tuple_expr = Expr(:tuple, tuple_args...)
+        return :(SymbolicExpr{$tuple_expr})
+    else
+        # No field references - return original expression
+        return expr
+    end
+end
+
 # Process an expression, converting field references to symbols in expressions
 function process_expression_refs(expr::Expr, available_fields::Vector{Symbol})
-    # For arithmetic expressions with field references
+    # Check if this is an arithmetic call expression
     if expr.head == :call && length(expr.args) >= 2
         op = expr.args[1]
         if op in [:+, :-, :*, :/]
-            # Convert expression to tuple format for SymbolicExpr
-            tuple_args = []
-            has_field_ref = false
-
-            # Add the operator
-            push!(tuple_args, QuoteNode(op))
-
-            # Process arguments
-            for arg in expr.args[2:end]
-                if arg isa Symbol && arg in available_fields
-                    push!(tuple_args, QuoteNode(arg))
-                    has_field_ref = true
-                elseif arg isa Expr
-                    processed = process_expression_refs(arg, available_fields)
-                    if processed isa Expr &&
-                        processed.head == :curly &&
-                        processed.args[1] == :SymbolicExpr
-                        # This is a SymbolicExpr{...} type, extract the tuple
-                        push!(tuple_args, processed.args[2])
-                        has_field_ref = true
-                    else
-                        push!(tuple_args, processed)
-                    end
-                else
-                    push!(tuple_args, arg)
-                end
-            end
-
-            if has_field_ref
-                # Return as SymbolicExpr type
-                tuple_expr = Expr(:tuple, tuple_args...)
-                return :(SymbolicExpr{$tuple_expr})
-            else
-                # No field references, return the expression as-is
-                return expr
-            end
-        else
-            # Not an arithmetic operation we support
-            return expr
+            return _process_arithmetic_expr(expr, available_fields)
         end
-    else
-        return expr
     end
+
+    # Not a supported arithmetic expression - return as-is
+    return expr
 end
 
 # ========================================================================
 # Random Value Generation
 # ========================================================================
+
+"""
+    rand(::Type{T}) where T<:OfType
+
+Generate random values matching the type specification.
+
+Creates random instances that satisfy the constraints encoded in the `OfType`.
+Arrays are filled with random values, bounded types respect their bounds,
+and named tuples recursively generate random values for all fields.
+
+# Supported Types
+- `OfReal`: Generates values within bounds (uniform for bounded, normal for unbounded)
+- `OfInt`: Generates integers within bounds  
+- `OfArray`: Generates arrays with random elements
+- `OfNamedTuple`: Recursively generates random values for all fields
+- `OfConstantWrapper`: Not supported (throws error)
+
+# Examples
+```julia
+# Bounded real
+T1 = of(Float64, 0, 1)
+rand(T1)  # Random Float64 in [0, 1]
+
+# Array 
+T2 = of(Array, 3, 4)
+rand(T2)  # 3×4 matrix of random Float64s
+
+# Named tuple
+T3 = @of(x=of(Real, 0, 1), y=of(Array, 2, 2))
+rand(T3)  # (x=0.7, y=[0.3 0.8; 0.2 0.5])
+
+# With resolved constants
+T4 = @of(n=of(Int; constant=true), data=of(Array, n, 2))
+rand(of(T4; n=5))  # (data = 5×2 random array)
+```
+
+# Errors
+- Throws error for types with unresolved symbolic dimensions
+- Throws error for constant wrapper types
+
+# See also
+[`zero`](@ref), [`of`](@ref)
+"""
 function Base.rand(::Type{OfArray{T,N,D}}) where {T,N,D}
     dims = get_dims(OfArray{T,N,D})
     if any(d -> d isa Symbol || (d isa Type && d <: SymbolicExpr), dims)
@@ -855,6 +1268,50 @@ end
 # ========================================================================
 # Zero Value Generation
 # ========================================================================
+
+"""
+    zero(::Type{T}) where T<:OfType
+
+Generate zero/default values matching the type specification.
+
+Creates instances initialized to appropriate zero values that satisfy the 
+constraints. For bounded types where zero is outside the bounds, returns 
+the nearest bound value.
+
+# Behavior by Type
+- `OfReal`: Returns 0.0 if within bounds, otherwise nearest bound
+- `OfInt`: Returns 0 if within bounds, otherwise nearest bound  
+- `OfArray`: Returns array filled with zeros
+- `OfNamedTuple`: Recursively generates zero values for all fields
+- `OfConstantWrapper`: Not supported (throws error)
+
+# Examples
+```julia
+# Unbounded types
+zero(of(Float64))           # 0.0
+zero(of(Int))               # 0
+zero(of(Array, 3, 2))       # 3×2 matrix of zeros
+
+# Bounded types respect bounds
+zero(of(Real, 1.0, 2.0))    # 1.0 (lower bound since 0 is outside)
+zero(of(Int, -10, -5))      # -5 (upper bound since 0 is outside)
+
+# Named tuples
+T = @of(x=of(Real), y=of(Array, 2, 2))
+zero(T)  # (x=0.0, y=[0.0 0.0; 0.0 0.0])
+
+# With resolved constants
+T = @of(n=of(Int; constant=true), data=of(Array, n, n))
+zero(of(T; n=3))  # (data = 3×3 zero matrix)
+```
+
+# Errors
+- Throws error for types with unresolved symbolic dimensions
+- Throws error for constant wrapper types
+
+# See also
+[`rand`](@ref), [`of`](@ref)
+"""
 function Base.zero(::Type{OfArray{T,N,D}}) where {T,N,D}
     dims = get_dims(OfArray{T,N,D})
     if any(d -> d isa Symbol || (d isa Type && d <: SymbolicExpr), dims)
@@ -902,6 +1359,7 @@ function Base.zero(::Type{OfConstantWrapper{T}}) where {T}
     )
 end
 
+# Unflatten with missing - documented in main unflatten docstring
 function unflatten(::Type{T}, ::Missing) where {T<:OfType}
     if has_symbolic_dims(T)
         error(
@@ -915,7 +1373,37 @@ end
 # Size and Length Operations
 # ========================================================================
 
-# Get size of OfType types
+"""
+    size(::Type{T}) where T<:OfType
+
+Get the dimensions/shape of an `OfType` specification.
+
+Returns the size information encoded in the type. For arrays, returns a tuple
+of dimensions. For scalars, returns an empty tuple. For named tuples, returns
+a named tuple with the size of each field.
+
+# Returns
+- `OfArray`: Tuple of dimensions
+- `OfReal`, `OfInt`: Empty tuple `()`
+- `OfNamedTuple`: Named tuple with sizes of each field
+- `OfConstantWrapper`: Delegates to wrapped type
+
+# Examples
+```julia
+size(of(Array, 3, 4))        # (3, 4)
+size(of(Float64))            # ()
+size(of(Int, 0, 10))         # ()
+
+T = @of(x=of(Real), y=of(Array, 2, 3))
+size(T)                      # (x=(), y=(2, 3))
+```
+
+# Errors
+- Throws error for arrays with unresolved symbolic dimensions
+
+# See also
+[`length`](@ref), [`of`](@ref)
+"""
 function Base.size(::Type{OfArray{T,N,D}}) where {T,N,D}
     dims = get_dims(OfArray{T,N,D})
     if any(d -> d isa Symbol || (d isa Type && d <: SymbolicExpr), dims)
@@ -945,7 +1433,44 @@ function Base.size(::Type{OfConstantWrapper{T}}) where {T}
     return size(T)  # Delegate to wrapped type
 end
 
-# Get flattened length of OfType types
+"""
+    length(::Type{T}) where T<:OfType
+
+Get the total number of elements when the type is flattened.
+
+Returns the total count of numerical values that would be in a flattened
+representation. Arrays contribute their total element count, scalars 
+contribute 1, and named tuples sum the lengths of all fields. Constants
+(wrapped in `OfConstantWrapper`) contribute 0 as they are not part of 
+the flattened representation.
+
+# Returns
+- `OfArray`: Product of dimensions (total elements)
+- `OfReal`, `OfInt`: 1
+- `OfNamedTuple`: Sum of lengths of all fields
+- `OfConstantWrapper`: 0 (constants excluded from flattening)
+
+# Examples
+```julia
+length(of(Array, 3, 4))      # 12
+length(of(Float64))          # 1
+length(of(Int, 0, 10))       # 1
+
+T = @of(x=of(Real), y=of(Array, 2, 3))
+length(T)                    # 7 (1 + 6)
+
+# Constants don't count
+T2 = @of(n=of(Int; constant=true), data=of(Array, 3, 3))
+length(T2)                   # 0 (constant excluded)
+length(of(T2; n=5))          # 9 (after resolving constant)
+```
+
+# Errors
+- Throws error for arrays with unresolved symbolic dimensions
+
+# See also
+[`size`](@ref), [`flatten`](@ref), [`unflatten`](@ref)
+"""
 function Base.length(::Type{OfArray{T,N,D}}) where {T,N,D}
     dims = get_dims(OfArray{T,N,D})
     if any(d -> d isa Symbol || (d isa Type && d <: SymbolicExpr), dims)
@@ -1141,8 +1666,54 @@ function _validate_leaf(::Type{OfConstantWrapper{T}}, value) where {T}
 end
 
 # ========================================================================
-# Flatten and Unflatten Operations
+# Flatten and Unflatten Operations  
 # ========================================================================
+
+"""
+    flatten(::Type{T}, values) where T<:OfType
+
+Convert structured values to a flat vector of numerical values.
+
+Takes values matching an `OfType` specification and extracts all numerical 
+values into a flat vector. This is useful for optimization routines that 
+require a flat parameter vector. Arrays are vectorized, scalars are included
+as single values, and named tuples are recursively flattened. Constants
+(wrapped in `OfConstantWrapper`) are excluded.
+
+# Arguments
+- `T<:OfType`: The type specification
+- `values`: Values matching the type specification
+
+# Returns
+A `Vector{Real}` containing all numerical values in order.
+
+# Examples
+```julia
+# Simple types
+flatten(of(Float64), 3.14)           # [3.14]
+flatten(of(Array, 2, 2), [1 2; 3 4]) # [1.0, 3.0, 2.0, 4.0]
+
+# Named tuples
+T = @of(x=of(Real), y=of(Array, 2, 2))
+values = (x=1.5, y=[1 2; 3 4])
+flatten(T, values)  # [1.5, 1.0, 3.0, 2.0, 4.0]
+
+# Constants excluded
+T2 = @of(n=of(Int; constant=true), data=of(Array, 2, 2))
+ConcreteT = of(T2; n=3)
+flatten(ConcreteT, (data=[1 2; 3 4]))  # [1.0, 3.0, 2.0, 4.0]
+```
+
+# Errors
+- Throws error if values don't match the type specification
+- Throws error for types with unresolved symbolic dimensions
+
+# See also
+[`unflatten`](@ref), [`length`](@ref)
+"""
+function flatten(::Type{T}, values) where {T<:OfType}
+    return _flatten_impl(T, values)
+end
 
 # Internal implementation for flatten
 function _flatten_impl(::Type{T}, values) where {T<:OfType}
@@ -1181,9 +1752,59 @@ function _flatten_impl(::Type{T}, values) where {T<:OfType}
     return numerical_values
 end
 
-# Public flatten function
-function flatten(::Type{T}, values) where {T<:OfType}
-    return _flatten_impl(T, values)
+"""
+    unflatten(::Type{T}, flat_values::Vector{<:Real}) where T<:OfType
+    unflatten(::Type{T}, ::Missing) where T<:OfType
+
+Reconstruct structured values from a flat vector of numerical values.
+
+Takes a flat vector produced by `flatten` and reconstructs the original 
+structured values according to the type specification. This is the inverse
+operation of `flatten`. Arrays are reshaped, scalars are extracted, and 
+named tuples are recursively reconstructed. Bounds are validated during
+reconstruction.
+
+The second method with `missing` creates a structure with all values 
+initialized to `missing`.
+
+# Arguments
+- `T<:OfType`: The type specification
+- `flat_values`: Vector of numerical values in flattened order
+- `missing`: Create structure with missing values
+
+# Returns
+Values matching the type specification structure.
+
+# Examples
+```julia
+# Simple types
+unflatten(of(Float64), [3.14])           # 3.14
+unflatten(of(Array, 2, 2), [1, 3, 2, 4]) # [1 2; 3 4]
+
+# Named tuples
+T = @of(x=of(Real), y=of(Array, 2, 2))
+flat = [1.5, 1.0, 3.0, 2.0, 4.0]
+unflatten(T, flat)  # (x=1.5, y=[1.0 2.0; 3.0 4.0])
+
+# With bounds validation
+T2 = of(Real, 0, 1)
+unflatten(T2, [0.5])  # 0.5
+# unflatten(T2, [2.0])  # Error: value above upper bound
+
+# Missing values
+unflatten(T, missing)  # (x=missing, y=[missing missing; missing missing])
+```
+
+# Errors
+- Throws error if wrong number of values provided
+- Throws error if values violate bounds
+- Throws error for types with unresolved symbolic dimensions
+
+# See also
+[`flatten`](@ref), [`length`](@ref)
+"""
+function unflatten(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfType}
+    return _unflatten_impl(T, flat_values)
 end
 
 # Internal implementation for unflatten
@@ -1252,11 +1873,6 @@ function _unflatten_impl(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfTyp
     end
 
     return reconstructed
-end
-
-# Public unflatten function
-function unflatten(::Type{T}, flat_values::Vector{<:Real}) where {T<:OfType}
-    return _unflatten_impl(T, flat_values)
 end
 
 # Internal implementation for unflatten with missing
@@ -1495,84 +2111,96 @@ function Base.show(io::IO, ::Type{OfInt{L,U}}) where {L,U}
     return show_bounded_type(io, "Int", L, U)
 end
 
-function Base.show(io::IO, ::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
-    # Collect constant fields to pass to child types
+# Helper function to collect constant fields from a NamedTuple type
+function _collect_constant_fields(Names, Types)
     constant_fields = Symbol[]
     for (name, T) in zip(Names, Types.parameters)
         if T <: OfConstantWrapper
             push!(constant_fields, name)
         end
     end
+    return constant_fields
+end
 
-    # Create a new IO context with constant fields information
+# Helper function to estimate output length for a NamedTuple type
+function _estimate_namedtuple_length(Names, Types)
+    total_length = 4  # "@of("
+    for (name, T) in zip(Names, Types.parameters)
+        total_length += length(string(name)) + 1  # name=
+        # Rough estimate of type string length
+        if T <: OfArray
+            dims = get_dims(T)
+            total_length += 15 + sum(d -> length(string(d)), dims; init=0)
+        else
+            total_length += 20
+        end
+        total_length += 2  # ", "
+    end
+    return total_length
+end
+
+# Helper function to show a field with appropriate styling
+function _show_field_type(io::IO, T::Type, is_constant::Bool)
+    if is_constant && get(io, :color, false)
+        wrapped = get_wrapped_type(T)
+        if wrapped <: OfReal &&
+            get_lower(wrapped) === Nothing &&
+            get_upper(wrapped) === Nothing
+            elem_type = get_element_type(wrapped)
+            type_name = elem_type === Float64 ? "Real" : string(elem_type)
+            printstyled(io, "of($type_name"; color=:cyan)
+            printstyled(io, "; constant=true"; color=:light_black)
+            printstyled(io, ")"; color=:cyan)
+        elseif wrapped <: OfInt &&
+            get_lower(wrapped) === Nothing &&
+            get_upper(wrapped) === Nothing
+            printstyled(io, "of(Int"; color=:cyan)
+            printstyled(io, "; constant=true"; color=:light_black)
+            printstyled(io, ")"; color=:cyan)
+        else
+            show(io, T)
+        end
+    else
+        show(io, T)
+    end
+end
+
+# Helper function to print a single field in NamedTuple
+function _print_namedtuple_field(
+    io::IO, name::Symbol, T::Type, is_constant::Bool, separator::String
+)
+    if is_constant && get(io, :color, false)
+        printstyled(io, name; color=:cyan, bold=true)
+    else
+        print(io, name)
+    end
+
+    print(io, separator)
+    _show_field_type(io, T, is_constant)
+end
+
+function Base.show(io::IO, ::Type{OfNamedTuple{Names,Types}}) where {Names,Types}
+    # Collect constant fields to pass to child types
+    constant_fields = _collect_constant_fields(Names, Types)
     io_with_constants = IOContext(io, :constant_fields => constant_fields)
 
-    # Check if we should use multi-line format
+    # Determine if we should use multi-line format
     compact = get(io, :compact, false)
     multiline = !compact && length(Names) > 3
 
-    # For very long single-line output, also use multiline
+    # Check if single-line output would be too long
     if !multiline && !compact
-        # Estimate the output length
-        total_length = 4  # "@of("
-        for (name, T) in zip(Names, Types.parameters)
-            total_length += length(string(name)) + 1  # name=
-            # Rough estimate of type string length
-            if T <: OfArray
-                dims = get_dims(T)
-                total_length += 15 + sum(d -> length(string(d)), dims; init=0)
-            else
-                total_length += 20
-            end
-            total_length += 2  # ", "
-        end
-        multiline = total_length > 80
+        multiline = _estimate_namedtuple_length(Names, Types) > 80
     end
 
+    print(io, "@of(")
+
     if multiline
-        println(io, "@of(")
-        indent = "    "
+        println(io)
         for (i, (name, T)) in enumerate(zip(Names, Types.parameters))
-            print(io, indent)
-
-            # Check if this field is a constant
+            print(io, "    ")
             is_constant = T <: OfConstantWrapper
-
-            if is_constant && get(io, :color, false)
-                # Print constant fields in yellow
-                printstyled(io, name; color=:cyan, bold=true)
-            else
-                print(io, name)
-            end
-
-            print(io, " = ")
-
-            # For constants, show the wrapped type with styling
-            if is_constant && get(io, :color, false)
-                # Show the wrapped type content
-                wrapped = get_wrapped_type(T)
-                if wrapped <: OfReal &&
-                    get_lower(wrapped) === Nothing &&
-                    get_upper(wrapped) === Nothing
-                    elem_type = get_element_type(wrapped)
-                    type_name = elem_type === Float64 ? "Real" : string(elem_type)
-                    printstyled(io, "of($type_name"; color=:cyan)
-                    printstyled(io, "; constant=true"; color=:light_black)
-                    printstyled(io, ")"; color=:cyan)
-                elseif wrapped <: OfInt &&
-                    get_lower(wrapped) === Nothing &&
-                    get_upper(wrapped) === Nothing
-                    printstyled(io, "of(Int"; color=:cyan)
-                    printstyled(io, "; constant=true"; color=:light_black)
-                    printstyled(io, ")"; color=:cyan)
-                else
-                    # For other constant types, use default show with constants context
-                    show(io_with_constants, T)
-                end
-            else
-                # Show non-constant fields with the constants context
-                show(io_with_constants, T)
-            end
+            _print_namedtuple_field(io_with_constants, name, T, is_constant, " = ")
 
             if i < length(Names)
                 println(io, ",")
@@ -1582,47 +2210,10 @@ function Base.show(io::IO, ::Type{OfNamedTuple{Names,Types}}) where {Names,Types
         end
         print(io, ")")
     else
-        # Single line format (original behavior)
-        print(io, "@of(")
+        # Single line format
         for (i, (name, T)) in enumerate(zip(Names, Types.parameters))
-            # Check if this field is a constant
             is_constant = T <: OfConstantWrapper
-
-            if is_constant && get(io, :color, false)
-                # Print constant fields in yellow
-                printstyled(io, name; color=:cyan, bold=true)
-            else
-                print(io, name)
-            end
-
-            print(io, "=")
-
-            # For constants, show the wrapped type with styling
-            if is_constant && get(io, :color, false)
-                # Show the wrapped type content
-                wrapped = get_wrapped_type(T)
-                if wrapped <: OfReal &&
-                    get_lower(wrapped) === Nothing &&
-                    get_upper(wrapped) === Nothing
-                    elem_type = get_element_type(wrapped)
-                    type_name = elem_type === Float64 ? "Real" : string(elem_type)
-                    printstyled(io, "of($type_name"; color=:cyan)
-                    printstyled(io, "; constant=true"; color=:light_black)
-                    printstyled(io, ")"; color=:cyan)
-                elseif wrapped <: OfInt &&
-                    get_lower(wrapped) === Nothing &&
-                    get_upper(wrapped) === Nothing
-                    printstyled(io, "of(Int"; color=:cyan)
-                    printstyled(io, "; constant=true"; color=:light_black)
-                    printstyled(io, ")"; color=:cyan)
-                else
-                    # For other constant types, use default show with constants context
-                    show(io_with_constants, T)
-                end
-            else
-                # Show non-constant fields with the constants context
-                show(io_with_constants, T)
-            end
+            _print_namedtuple_field(io_with_constants, name, T, is_constant, "=")
 
             if i < length(Names)
                 print(io, ", ")
