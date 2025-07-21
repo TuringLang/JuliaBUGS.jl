@@ -6,9 +6,9 @@ include("../src/of_type.jl")
     @testset "Simple type creation" begin
         # Test basic Int and Real types
         @test of(Int) == OfInt{Nothing,Nothing}
-        @test of(Int, 0, 10) == OfInt{Val{0},Val{10}}
+        @test of(Int, 0, 10) == OfInt{0,10}
         @test of(Real) == OfReal{Float64,Nothing,Nothing}
-        @test of(Real, 0.0, 1.0) == OfReal{Float64,Val{0.0},Val{1.0}}
+        @test of(Real, 0.0, 1.0) == OfReal{Float64,0.0,1.0}
 
         # Test array types
         @test of(Array, 5) == OfArray{Float64,1,Tuple{5}}
@@ -22,7 +22,7 @@ include("../src/of_type.jl")
         @test T1 == OfReal{Float64,SymbolicRef{:lower},SymbolicRef{:upper}}
 
         T2 = of(Int, 0, :max)
-        @test T2 == OfInt{Val{0},SymbolicRef{:max}}
+        @test T2 == OfInt{0,SymbolicRef{:max}}
 
         # Test with constants
         T3 = of(Real, :min, :max; constant=true)
@@ -32,13 +32,13 @@ include("../src/of_type.jl")
     @testset "Explicit float types" begin
         # Test Float64
         @test of(Float64) == OfReal{Float64,Nothing,Nothing}
-        @test of(Float64, 0.0, 1.0) == OfReal{Float64,Val{0.0},Val{1.0}}
+        @test of(Float64, 0.0, 1.0) == OfReal{Float64,0.0,1.0}
         @test of(Float64; constant=true) ==
             OfConstantWrapper{OfReal{Float64,Nothing,Nothing}}
 
         # Test Float32
         @test of(Float32) == OfReal{Float32,Nothing,Nothing}
-        @test of(Float32, -1.0f0, 1.0f0) == OfReal{Float32,Val{-1.0f0},Val{1.0f0}}
+        @test of(Float32, -1.0f0, 1.0f0) == OfReal{Float32,-1.0f0,1.0f0}
         @test of(Float32; constant=true) ==
             OfConstantWrapper{OfReal{Float32,Nothing,Nothing}}
 
@@ -83,7 +83,7 @@ end
         @test T3 == OfInt{Nothing,Nothing}
 
         T4 = of(Real, 0, 10)
-        @test T4 == OfReal{Float64,Val{0},Val{10}}
+        @test T4 == OfReal{Float64,0,10}
 
         # Test that constant=true is not allowed for Array
         @test_throws ErrorException of(Array, 10; constant=true)
@@ -100,7 +100,7 @@ end
 
         types = get_types(T)
         @test types.parameters[1] == OfReal{Float64,Nothing,Nothing}
-        @test types.parameters[2] == OfReal{Float64,Val{0},Nothing}
+        @test types.parameters[2] == OfReal{Float64,0,Nothing}
         @test types.parameters[3] == OfArray{Float64,1,Tuple{10}}
     end
 
@@ -145,7 +145,7 @@ end
 
         types = get_types(T)
         @test types.parameters[1] == OfReal{Float64,Nothing,Nothing}
-        @test types.parameters[2] == OfReal{Float32,Val{0.0f0},Val{1.0f0}}
+        @test types.parameters[2] == OfReal{Float32,0.0f0,1.0f0}
         @test types.parameters[3] == OfConstantWrapper{OfReal{Float64,Nothing,Nothing}}
         @test types.parameters[4] == OfArray{Float64,1,Tuple{3}}
         @test types.parameters[5] == OfArray{Float32,2,Tuple{2,2}}
@@ -277,7 +277,7 @@ end
         )
 
         types = get_types(T)
-        @test types.parameters[1] == OfReal{Float64,Val{0},Nothing}
+        @test types.parameters[1] == OfReal{Float64,0,Nothing}
         @test types.parameters[2] == OfReal{Float64,SymbolicRef{:lower_bound},Nothing}
         @test types.parameters[3] ==
             OfReal{Float64,SymbolicRef{:lower_bound},SymbolicRef{:upper_bound}}
@@ -292,8 +292,8 @@ end
         )
 
         types = get_types(Schema)
-        @test types.parameters[1] == OfReal{Float64,Val{0},Val{10}}
-        @test types.parameters[2] == OfReal{Float64,SymbolicRef{:min_val},Val{100}}
+        @test types.parameters[1] == OfReal{Float64,0,10}
+        @test types.parameters[2] == OfReal{Float64,SymbolicRef{:min_val},100}
         @test types.parameters[3] ==
             OfReal{Float64,SymbolicRef{:min_val},SymbolicRef{:max_val}}
     end
@@ -306,7 +306,7 @@ end
         )
 
         types = get_types(Schema)
-        @test types.parameters[1] == OfConstantWrapper{OfReal{Float64,Val{0},Nothing}}
+        @test types.parameters[1] == OfConstantWrapper{OfReal{Float64,0,Nothing}}
         @test types.parameters[2] ==
             OfConstantWrapper{OfReal{Float64,SymbolicRef{:lower},Nothing}}
         @test types.parameters[3] == OfReal{Float64,SymbolicRef{:lower},SymbolicRef{:upper}}

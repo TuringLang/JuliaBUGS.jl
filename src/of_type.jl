@@ -84,15 +84,16 @@ is_leaf(::Type{<:OfConstantWrapper}) = true
 
 # Convert bounds to type parameters
 bound_to_type(::Nothing) = Nothing
-bound_to_type(x::Real) = Val{x}
+bound_to_type(x::Real) = x  # Numeric values are used directly as type parameters
 bound_to_type(s::Symbol) = SymbolicRef{s}
 bound_to_type(s::QuoteNode) = SymbolicRef{s.value}
 
-# Extract value from Val type
+# Extract value from type parameter
 type_to_bound(::Type{Nothing}) = nothing
-type_to_bound(::Type{Val{x}}) where {x} = x
+type_to_bound(::Type{x}) where {x<:Real} = x  # Extract numeric type parameter
 type_to_bound(::Type{SymbolicRef{S}}) where {S} = S
 type_to_bound(s::Symbol) = s
+type_to_bound(x::Real) = x  # Pass through numeric values
 
 # ========================================================================
 # Symbolic Expression Evaluation
@@ -153,8 +154,8 @@ function resolve_bound(::Type{Nothing}, replacements::NamedTuple)
     return Nothing
 end
 
-function resolve_bound(::Type{Val{x}}, replacements::NamedTuple) where {x}
-    return Val{x}
+function resolve_bound(::Type{x}, replacements::NamedTuple) where {x<:Real}
+    return x  # Numeric type parameters are returned as-is
 end
 
 function resolve_bound(::Type{SymbolicRef{S}}, replacements::NamedTuple) where {S}
@@ -173,6 +174,11 @@ end
 
 function resolve_bound(T::Type, ::NamedTuple)
     return T
+end
+
+# Handle numeric bounds
+function resolve_bound(x::Real, ::NamedTuple)
+    return x  # Numeric values are returned as-is
 end
 
 # ========================================================================
@@ -279,7 +285,7 @@ function of(
     return constant ? OfConstantWrapper{base_type} : base_type
 end
 
-# Backward compatibility: of(Real) defaults to Float64
+# of(Real) creates Float64 type for backward compatibility
 function of(::Type{Real}; constant::Bool=false)
     base_type = OfReal{Float64,Nothing,Nothing}
     return constant ? OfConstantWrapper{base_type} : base_type
@@ -307,7 +313,7 @@ end
 
 # Fallback for other Real types
 function of(value::Real)
-    return of(Float64)  # Default to Float64 for other Real types
+    return of(Float64)  # Non-float Real types use Float64
 end
 
 function of(value::AbstractArray{T,N}) where {T,N}
@@ -1281,9 +1287,10 @@ end
 function format_bound(bound_type, constant_fields, use_color)
     if bound_type === Nothing
         return "nothing"
-    elseif bound_type <: Val
-        return string(type_to_bound(bound_type))
-    elseif bound_type <: SymbolicRef
+    elseif bound_type isa Real
+        # Numeric values
+        return string(bound_type)
+    elseif bound_type isa Type && bound_type <: SymbolicRef
         sym = type_to_bound(bound_type)
         if sym in constant_fields && use_color
             return sprint() do io_inner
@@ -1321,14 +1328,14 @@ function show_bounded_type(io::IO, type_name::String, L, U; constant::Bool=false
         if constant && use_color
             printstyled(io, "of($type_name, "; color=:cyan)
             # Handle lower bound
-            if L <: SymbolicRef && type_to_bound(L) in constant_fields
+            if L isa Type && L <: SymbolicRef && type_to_bound(L) in constant_fields
                 printstyled(io, string(type_to_bound(L)); color=:cyan)
             else
                 printstyled(io, lower_str; color=:cyan)
             end
             printstyled(io, ", "; color=:cyan)
             # Handle upper bound
-            if U <: SymbolicRef && type_to_bound(U) in constant_fields
+            if U isa Type && U <: SymbolicRef && type_to_bound(U) in constant_fields
                 printstyled(io, string(type_to_bound(U)); color=:cyan)
             else
                 printstyled(io, upper_str; color=:cyan)
@@ -1338,14 +1345,20 @@ function show_bounded_type(io::IO, type_name::String, L, U; constant::Bool=false
         else
             print(io, "of($type_name, ")
             # Handle lower bound
-            if L <: SymbolicRef && type_to_bound(L) in constant_fields && use_color
+            if L isa Type &&
+                L <: SymbolicRef &&
+                type_to_bound(L) in constant_fields &&
+                use_color
                 printstyled(io, string(type_to_bound(L)); color=:cyan)
             else
                 print(io, lower_str)
             end
             print(io, ", ")
             # Handle upper bound
-            if U <: SymbolicRef && type_to_bound(U) in constant_fields && use_color
+            if U isa Type &&
+                U <: SymbolicRef &&
+                type_to_bound(U) in constant_fields &&
+                use_color
                 printstyled(io, string(type_to_bound(U)); color=:cyan)
             else
                 print(io, upper_str)

@@ -16,12 +16,12 @@ The `of` function returns types with specifications encoded in type parameters:
 - `of(Array, T, dims...)` → `OfArray{T, N, (dim1, dim2, ...)}` - Typed arrays
 - `of(Float64)` → `OfReal{Float64, Nothing, Nothing}` - Unbounded 64-bit floating point numbers
 - `of(Float32)` → `OfReal{Float32, Nothing, Nothing}` - Unbounded 32-bit floating point numbers
-- `of(Float64, lower, upper)` → `OfReal{Float64, Val{lower}, Val{upper}}` - Bounded 64-bit floats
-- `of(Float32, lower, upper)` → `OfReal{Float32, Val{lower}, Val{upper}}` - Bounded 32-bit floats
+- `of(Float64, lower, upper)` → `OfReal{Float64, lower, upper}` - Bounded 64-bit floats
+- `of(Float32, lower, upper)` → `OfReal{Float32, lower, upper}` - Bounded 32-bit floats
 - `of(Real)` → `OfReal{Float64, Nothing, Nothing}` - Unbounded real numbers (defaults to Float64 for backward compatibility)
-- `of(Real, lower, upper)` → `OfReal{Float64, Val{lower}, Val{upper}}` - Bounded real numbers (defaults to Float64)
+- `of(Real, lower, upper)` → `OfReal{Float64, lower, upper}` - Bounded real numbers (defaults to Float64)
 - `of(Int)` → `OfInt{Nothing, Nothing}` - Unbounded integers
-- `of(Int, lower, upper)` → `OfInt{Val{lower}, Val{upper}}` - Bounded integers
+- `of(Int, lower, upper)` → `OfInt{lower, upper}` - Bounded integers
 - `@of(field1=..., field2=...)` → `OfNamedTuple{(:field1, :field2), Tuple{Type1, Type2}}` - Named tuples (use @of macro only)
 - `of(...; constant=true)` → `OfConstantWrapper{T}` - Marks a type as constant/hyperparameter (supported for float types and Int)
 
@@ -29,7 +29,7 @@ The `of` function returns types with specifications encoded in type parameters:
 
 The system encodes extra useful information into type parameters:
 - **Dimensions**: Stored as tuple type parameters (e.g., `(3, 4)` for a 3×4 matrix)
-- **Bounds**: Encoded using `Val{x}` for numeric bounds or `Nothing` for unbounded
+- **Bounds**: Numeric literals stored directly as type parameters (e.g., `0.0`, `1.0`), or `Nothing` for unbounded
 - **Symbolic references**: Encoded using `SymbolicRef{:symbol}` for referencing other fields
 - **Arithmetic expressions**: Encoded using `SymbolicExpr{expr}` for expressions like `n+1`, `2*n`, etc. Division operations must result in integers for array dimensions.
 - **Field names**: Stored as tuple of symbols in `OfNamedTuple`
@@ -141,12 +141,12 @@ rand(of(ExpandedMatrixType; n=10))
 
 ```julia
 ParamsType = @of(
-    mu0=of(Float64),  # Now explicitly Float64 instead of generic Real
+    mu0=of(Float64),
     beta=of(Array, Float64, 3),
-    tau2=of(Float64, 0, nothing),  # Explicitly Float64 with lower bound
+    tau2=of(Float64, 0, nothing),
     sigma2=of(Float64, 0, nothing),
-    school_effects=of(Array, 10),  # Still defaults to Float64 for arrays
-    y=of(Array, Float32, 100),  # Can use Float32 for data to save memory
+    school_effects=of(Array, 10),
+    y=of(Array, Float32, 100),
 )
 
 @model function school_model(
