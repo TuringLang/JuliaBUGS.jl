@@ -49,7 +49,7 @@ struct SymbolicRef{S} end
 
 Wrapper type for symbolic expressions in dimensions.
 
-Used internally to encode arithmetic expressions involving constant fields. For example,
+Used internally to encode arithmetic expressions involving constant fields or other parameters. For example,
 when using `@of(n=of(Int; constant=true), padded=of(Array, n+1, n+1))`, the expression 
 `n+1` is encoded as `SymbolicExpr{(:+, :n, 1)}`.
 
