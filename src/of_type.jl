@@ -402,7 +402,7 @@ of(Int, lower, upper)           # Bounded integer
 
 ## Named Tuples
 ```julia
-of((field1=spec1, field2=spec2, ...))  # NamedTuple with typed fields
+of((;field1=spec1, field2=spec2, ...))  # NamedTuple with typed fields
 ```
 
 ## From Values (Type Inference)
