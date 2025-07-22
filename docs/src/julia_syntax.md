@@ -113,11 +113,16 @@ end
 #### Function Signature Requirements
 
 1. **First argument**: Declares stochastic parameters (variables defined with `~`)
-   - Named tuple destructuring with type annotation: `(; param1, param2, ...)::TypeName`
+   - Named tuple destructuring without type: `(; param1, param2, ...)`
+   - Named tuple destructuring with of type annotation: `(; param1, param2, ...)::OfTypeName`
    
 2. **Remaining arguments**: All constants and independent variables required by the model
 
-**Note**: Inline `of` type annotations (e.g., `(; param::of(Real))`) are not supported. Use external type definitions with the `@of` macro instead.
+**Important Type Annotation Rules**:
+- **Only of types are supported**: Type annotations MUST be of types created with the `@of` macro
+- **Regular Julia structs are not supported**: Although Julia's destructuring syntax allows `(; x, y)::MyStruct`, the `@model` macro only supports of types for type annotations
+- **For non-of types**: Use plain destructuring syntax without type annotation: `(; x, y)`
+- **Inline of type annotations** (e.g., `(; param::of(Real))`) are not supported. Use external type definitions with the `@of` macro instead.
 
 #### The `of` Type System
 
@@ -140,6 +145,8 @@ DynamicModel = @of(
 )
 ```
 
+**Type Validation**: When you provide an of type annotation, the `@model` macro automatically validates that the compiled model's evaluation environment matches the specified type structure after model creation. This ensures type safety and helps catch errors early in the modeling process.
+
 #### Creating Model Instances
 
 To create model instances, you can provide parameter values as a `NamedTuple` or use the `unflatten` function for convenient initialization:
@@ -159,7 +166,9 @@ model = my_model((;), constants...)
 
 The `unflatten` function is particularly useful for creating parameter instances when you need to specify constant values but want missing values for stochastic parameters that will be sampled.
 
-### Example
+### Examples
+
+#### Correct Usage with Of Types
 
 ```julia
 julia> # Define parameter types using @of macro
@@ -174,7 +183,7 @@ julia> SeedsParams = @of(
        )
 
 julia> # Define model using external type definition
-julia> @model function seeds(
+    @model function seeds(
         (; r, b, alpha0, alpha1, alpha2, alpha12, tau)::SeedsParams,
         x1, x2, N, n
     )
@@ -197,7 +206,7 @@ seeds (generic function with 1 method)
 julia> (; x1, x2, N, n) = JuliaBUGS.BUGSExamples.seeds.data; # extract data from existing BUGS example
 
 julia> # Create model without observations (all parameters will be sampled from the prior generative process)
-julia> m = seeds((;), x1, x2, N, n)
+    m = seeds((;), x1, x2, N, n)
 BUGSModel (parameters are in transformed (unconstrained) space, with dimension 47):
 
   Model parameters:
@@ -208,59 +217,15 @@ BUGSModel (parameters are in transformed (unconstrained) space, with dimension 4
     alpha12
     alpha1
     alpha0
+  
+  [...]
 
 julia> # Create model with observations for r
-julia> r_data = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3]
+julia> r_data = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3];
 julia> m_obs = seeds((r=r_data,), x1, x2, N, n)
 
 julia> # Using unflatten for initialization with missing values
 julia> using JuliaBUGS: unflatten
-julia> params = unflatten(SeedsParams, missing)
+julia> params = unflatten(SeedsParams, missing);
 julia> m_init = seeds(params, x1, x2, N, n)
-
-julia> # Example with variable dimensions
-julia> DynamicParams = @of(
-           n = of(Int; constant=true),
-           coeffs = of(Array, n),
-           sigma = of(Real, 0, nothing),
-           y = of(Array, 100)
-       )
-
-julia> @model function dynamic_regression(
-        (; coeffs, sigma, y)::DynamicParams, 
-        X, n
-    )
-        sigma ~ dgamma(0.001, 0.001)
-        for i in 1:n
-            coeffs[i] ~ dnorm(0, 0.001)
-        end
-        for i in 1:100
-            y[i] ~ dnorm(coeffs[1] * X[i, 1], sigma)
-        end
-    end
-
-julia> # Create concrete type with n=3 and initialize with missing values
-julia> X = randn(100, 3)
-julia> params = unflatten(of(DynamicParams; n=3), missing)
-julia> model = dynamic_regression(params, X, 3)
 ```
-
-### Common Patterns and Best Practices
-
-#### Parameter Initialization
-
-1. **Empty NamedTuple**: Use `(;)` when you want all parameters to be sampled from their priors
-   ```julia
-   model = my_model((;), data...)
-   ```
-
-2. **Partial Observations**: Provide only observed variables
-   ```julia
-   model = my_model((; observed_var=data), constants...)
-   ```
-
-3. **Missing Value Initialization**: Use `unflatten` when you need to specify constants but want missing stochastic parameters
-   ```julia
-   params = unflatten(of(MyParams; n=10), missing)
-   model = my_model(params, constants...)
-   ```
