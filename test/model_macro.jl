@@ -208,7 +208,7 @@ using JuliaBUGS: @model, @of
                         x ~ Normal(0, 1)
                         return y ~ Normal(0, 1)
                     end
-                end,
+                end
             )
 
             @test_throws LoadError eval(
@@ -217,7 +217,7 @@ using JuliaBUGS: @model, @of
                         x ~ Normal(0, 1)
                         return y ~ Normal(0, 1)
                     end
-                end,
+                end
             )
         end
 
@@ -242,23 +242,21 @@ using JuliaBUGS: @model, @of
                     JuliaBUGS.@model function bad_signature(params, x, y)
                         # Should fail - first arg must be destructuring
                     end
-                end,
+                end
             )
 
-            @test_throws ArgumentError eval(
-                quote
-                    JuliaBUGS.@model function no_params()
-                        # Should fail - needs at least params argument
-                    end
-                end,
-            )
+            @test_throws ArgumentError eval(quote
+                JuliaBUGS.@model function no_params()
+                    # Should fail - needs at least params argument
+                end
+            end)
 
             @test_throws LoadError eval(
                 quote
                     JuliaBUGS.@model function just_number(42, x)
                         # Should fail - first arg must be destructuring
                     end
-                end,
+                end
             )
         end
     end
