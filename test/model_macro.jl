@@ -4,9 +4,11 @@ using JuliaBUGS: @model, @of
 @testset "model macro" begin
     @testset "Basic Model Usage" begin
         @testset "Minimal model body" begin
+            #! format: off
             @model function minimal_model((; x))
-                return x ~ Normal(0, 1)
+                x ~ Normal(0, 1)
             end
+            #! format: on
 
             model = minimal_model((;))
             @test model isa JuliaBUGS.BUGSModel
@@ -56,10 +58,12 @@ using JuliaBUGS: @model, @of
         end
 
         @testset "Regular models without of-type validation" begin
+            #! format: off
             @model function regular_model((; x, y))
                 x ~ Normal(0, 1)
-                return y ~ Normal(x, 1)
+                y ~ Normal(x, 1)
             end
+            #! format: on
 
             # This should work without any validation
             model = regular_model((x=0.5, y=0.5))
@@ -77,10 +81,12 @@ using JuliaBUGS: @model, @of
 
         @testset "Valid evaluation_env passes validation" begin
             # Model with all required fields
+            #! format: off
             @model function valid_model((; x, y)::SimpleOfType)
                 x ~ Normal(0, 1)
-                return y ~ Beta(1, 1)
+                y ~ Beta(1, 1)
             end
+            #! format: on
 
             # Providing initial values that satisfy constraints
             model = valid_model((x=0.0, y=0.5))
@@ -92,10 +98,12 @@ using JuliaBUGS: @model, @of
         @testset "Initial parameter validation" begin
             BoundedType = @of(alpha = of(Real, 0, 1), beta = of(Real, 0, nothing))
 
+            #! format: off
             @model function bounded_model((; alpha, beta)::BoundedType)
                 alpha ~ Beta(2, 2)
-                return beta ~ Exponential(1)
+                beta ~ Exponential(1)
             end
+            #! format: on
 
             # Valid initial values
             model = bounded_model((alpha=0.5, beta=1.0))
@@ -139,7 +147,7 @@ using JuliaBUGS: @model, @of
 
             @model function computed_model((; theta)::ComputedType, n)
                 theta ~ Beta(1, 1)
-                return logit_theta = log(theta / (1 - theta))
+                logit_theta = log(theta / (1 - theta))
             end
 
             # This should work - the model computes logit_theta
@@ -204,19 +212,23 @@ using JuliaBUGS: @model, @of
         @testset "Inline type annotations rejection" begin
             @test_throws LoadError eval(
                 quote
+                    #! format: off
                     JuliaBUGS.@model function invalid_inline((; x::Int, y::Float64))
                         x ~ Normal(0, 1)
-                        return y ~ Normal(0, 1)
+                        y ~ Normal(0, 1)
                     end
+                    #! format: on
                 end
             )
 
             @test_throws LoadError eval(
                 quote
+                    #! format: off
                     JuliaBUGS.@model function invalid_inline_of((; x::of(Real), y))
                         x ~ Normal(0, 1)
-                        return y ~ Normal(0, 1)
+                        y ~ Normal(0, 1)
                     end
+                    #! format: on
                 end
             )
         end
@@ -227,10 +239,12 @@ using JuliaBUGS: @model, @of
                 y::Float64
             end
 
+            #! format: off
             @model function with_regular_struct((; x, y)::RegularStruct)
                 x ~ Normal(0, 1)
-                return y ~ Normal(0, 1)
+                y ~ Normal(0, 1)
             end
+            #! format: on
 
             # Should throw error when trying to create model with non-of type
             @test_throws ErrorException with_regular_struct((x=1.0, y=2.0))
@@ -290,9 +304,11 @@ using JuliaBUGS: @model, @of
             # Test unsupported argument syntax
             @test_throws ErrorException eval(
                 quote
+                    #! format: off
                     JuliaBUGS.@model function bad_args((; x), ::Int)
-                        return x ~ Normal(0, 1)
+                        x ~ Normal(0, 1)
                     end
+                    #! format: on
                 end
             )
         end
@@ -356,10 +372,12 @@ using JuliaBUGS: @model, @of
             # Create an of type instance (not a NamedTuple)
             of_instance = of(SimpleType)
 
+            #! format: off
             @model function of_type_model((; x, y)::SimpleType)
                 x ~ Normal(0, 1)
-                return y ~ Beta(1, 1)
+                y ~ Beta(1, 1)
             end
+            #! format: on
 
             # Should handle of type instances
             model = of_type_model(of_instance)
