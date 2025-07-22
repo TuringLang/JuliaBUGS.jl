@@ -293,7 +293,7 @@ using JuliaBUGS: @model, @of
                     JuliaBUGS.@model function bad_args((; x), ::Int)
                         return x ~ Normal(0, 1)
                     end
-                end,
+                end
             )
         end
     end
