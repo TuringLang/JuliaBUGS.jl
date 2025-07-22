@@ -12,7 +12,7 @@ using Test
             y = of(Array, 100)
         )
 
-        @model function dynamic_regression((; coeffs, sigma, y)::DynamicParams, X, n)
+        @model function dynamic_regression((; coeffs, sigma, y), X, n)
             sigma ~ dgamma(0.001, 0.001)
             for i in 1:n
                 coeffs[i] ~ dnorm(0, 0.001)
@@ -26,9 +26,24 @@ using Test
 
         # Create model with n=3
         X = randn(100, 3)
-        params = unflatten(of(DynamicParams; n=3), missing)
+        DynamicParams3 = of(DynamicParams; n=3)
+        params = unflatten(DynamicParams3, missing)
         model = dynamic_regression(params, X, 3)
         @test model isa JuliaBUGS.BUGSModel
+
+        # Test with type annotation using concrete type
+        @model function typed_dynamic_regression((; coeffs, sigma, y)::DynamicParams3, X, n)
+            sigma ~ dgamma(0.001, 0.001)
+            for i in 1:n
+                coeffs[i] ~ dnorm(0, 0.001)
+            end
+            for i in 1:100
+                y[i] ~ dnorm(coeffs[1] * X[i, 1], sigma)
+            end
+        end
+
+        typed_model = typed_dynamic_regression(params, X, 3)
+        @test typed_model isa JuliaBUGS.BUGSModel
     end
 
     @testset "Bounded parameters" begin
@@ -73,9 +88,7 @@ using Test
         )
 
         @model function hierarchical(
-            (; mu_global, tau_global, group_means, group_taus, y)::HierarchicalParams,
-            n_groups,
-            n_obs_per_group,
+            (; mu_global, tau_global, group_means, group_taus, y), n_groups, n_obs_per_group
         )
             # Global priors
             mu_global ~ dnorm(0, 0.001)
@@ -92,12 +105,29 @@ using Test
             end
         end
 
-        model = hierarchical(
-            unflatten(of(HierarchicalParams; n_groups=5, n_obs_per_group=20), missing),
-            5,
-            20,
-        )
+        HierarchicalParams5_20 = of(HierarchicalParams; n_groups=5, n_obs_per_group=20)
+        model = hierarchical(unflatten(HierarchicalParams5_20, missing), 5, 20)
         @test model isa JuliaBUGS.BUGSModel
+
+        # Test with type annotation using concrete type
+        @model function typed_hierarchical(
+            (; mu_global, tau_global, group_means, group_taus, y)::HierarchicalParams5_20,
+            n_groups,
+            n_obs_per_group,
+        )
+            mu_global ~ dnorm(0, 0.001)
+            tau_global ~ dgamma(0.001, 0.001)
+            for g in 1:n_groups
+                group_means[g] ~ dnorm(mu_global, tau_global)
+                group_taus[g] ~ dgamma(0.001, 0.001)
+                for i in 1:n_obs_per_group
+                    y[g, i] ~ dnorm(group_means[g], group_taus[g])
+                end
+            end
+        end
+
+        typed_model = typed_hierarchical(unflatten(HierarchicalParams5_20, missing), 5, 20)
+        @test typed_model isa JuliaBUGS.BUGSModel
     end
 
     @testset "Mixed type annotations" begin
