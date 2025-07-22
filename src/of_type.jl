@@ -549,6 +549,45 @@ function of(value::NamedTuple{names}) where {names}
     end
 end
 
+"""
+    of(model::BUGSModel)
+
+Extract the `of` type specification from a compiled `BUGSModel`.
+
+This function introspects the model's evaluation environment to reconstruct the corresponding 
+`of` type specification. This is useful for:
+- Model introspection and debugging
+- Type validation after compilation
+- Generic code that needs to work with models without knowing their structure
+- Model serialization and deserialization
+
+# Arguments
+- `model::BUGSModel`: A compiled BUGS model
+
+# Returns
+- An `OfNamedTuple` type representing the structure of all variables in the model
+
+# Example
+```julia
+# Define and compile a model
+@model function regression((; y, beta, sigma), X, N)
+    # ... model definition ...
+end
+
+model = regression((; y = data), X, N)
+
+# Extract the of type from the compiled model
+ModelType = of(model)
+# ModelType might be: @of(y = of(Array, Float64, 100), beta = of(Array, Float64, 3), sigma = of(Real, 0, nothing))
+
+# Use the extracted type
+rand(ModelType)  # Generate random values matching the model structure
+```
+"""
+function of(model::BUGSModel)
+    return of(model.evaluation_env)
+end
+
 # ========================================================================
 # Helper Functions for Type Concretization
 # ========================================================================
