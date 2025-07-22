@@ -56,35 +56,16 @@ end
 
 ## Type Specifications with `of`
 
-JuliaBUGS provides an `of` type system for specifying parameter structures and constraints. This system serves two purposes:
+JuliaBUGS provides an `of` type system for specifying parameter structures and constraints. For a comprehensive guide to the `of` type system, including advanced features like symbolic dimensions, arithmetic expressions, and dynamic model structures, see the [of Design Documentation](of_design_doc.md).
+
+The `of` system serves two main purposes:
 1. Documents the expected structure of parameters
 2. Validates the model after compilation to ensure type safety
 
-### Basic `of` Types
+### Quick Example
 
 ```julia
-# Scalar types
-of(Real)                    # Unbounded real number (defaults to Float64)
-of(Real, 0, nothing)        # Positive real (lower bound only)
-of(Real, -1, 1)            # Bounded real
-of(Float64)                 # Unbounded 64-bit float
-of(Float32)                 # Unbounded 32-bit float
-of(Int)                     # Unbounded integer
-of(Int, 1, 10)             # Bounded integer
-
-# Array types
-of(Array, 10)               # 1D array of length 10 (Float64 default)
-of(Array, Int, 10)          # 1D array of integers
-of(Array, 5, 3)             # 2D array (5×3)
-of(Array, Float32, 100)     # 1D array of 32-bit floats
-```
-
-### Creating Complex Types with `@of`
-
-For models with multiple parameters, use the `@of` macro to create structured type definitions:
-
-```julia
-# Define a type for regression parameters with fixed dimensions
+# Define a type for regression parameters
 RegressionParams = @of(
     y = of(Array, Float64, 100),   # Observed data (100 observations)
     beta = of(Array, Float64, 3),  # Regression coefficients (3 predictors)
@@ -100,11 +81,7 @@ RegressionParams = @of(
 end
 ```
 
-### Type Validation
-
-When you provide an `of` type annotation, JuliaBUGS automatically validates the compiled model's evaluation environment against your type specification. This validation happens after model creation and helps catch structural errors early.
-
-If validation fails, you'll get a clear error message indicating the mismatch between your specification and the actual model structure.
+When you provide an `of` type annotation, JuliaBUGS automatically validates the compiled model's evaluation environment against your type specification.
 
 ## Creating and Using Models
 
