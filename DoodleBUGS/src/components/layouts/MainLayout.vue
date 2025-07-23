@@ -59,6 +59,15 @@ const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null);
 
 onMounted(() => {
   projectStore.loadProjects();
+
+  // If no projects exist (e.g., first time user or incognito), create a default project and graph.
+  if (projectStore.projects.length === 0) {
+    projectStore.createProject('Default Project');
+    if (projectStore.currentProjectId) {
+      projectStore.addGraphToProject(projectStore.currentProjectId, 'Untitled Graph');
+    }
+  }
+
   const lastGraphId = localStorage.getItem('doodlebugs-currentGraphId');
   if (lastGraphId) {
     const project = projectStore.currentProject;
