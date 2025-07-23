@@ -3,13 +3,14 @@ import { ref, onMounted, onUnmounted, watch } from 'vue';
 import type { Core, EventObject, NodeSingular, ElementDefinition } from 'cytoscape';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGridSnapping } from '../../composables/useGridSnapping';
-import type { GraphElement, GraphNode, GraphEdge, NodeType, PaletteItemType } from '../../types';
+import type { GraphElement, GraphNode, GraphEdge, NodeType, PaletteItemType, ValidationError } from '../../types';
 
 const props = defineProps<{
   elements: GraphElement[];
   isGridEnabled: boolean;
   gridSize: number;
   currentMode: string;
+  validationErrors: Map<string, ValidationError[]>;
 }>();
 
 const emit = defineEmits<{
@@ -28,10 +29,16 @@ const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping
 
 const validNodeTypes: NodeType[] = ['stochastic', 'deterministic', 'constant', 'observed', 'plate'];
 
-const formatElementsForCytoscape = (elements: GraphElement[]): ElementDefinition[] => {
+const formatElementsForCytoscape = (elements: GraphElement[], errors: Map<string, ValidationError[]>): ElementDefinition[] => {
   return elements.map(el => {
     if (el.type === 'node') {
-      return { group: 'nodes', data: { ...el }, position: el.position };
+      const node = el as GraphNode;
+      const hasError = errors.has(node.id);
+      return { 
+        group: 'nodes', 
+        data: { ...node, hasError }, 
+        position: node.position 
+      };
     } else {
       const edge = el as GraphEdge;
       const targetNode = elements.find(n => n.id === edge.target && n.type === 'node') as GraphNode | undefined;
@@ -152,10 +159,10 @@ watch(() => props.gridSize, (newValue) => {
   }
 });
 
-watch(() => props.elements, (newElements) => {
+watch([() => props.elements, () => props.validationErrors], ([newElements, newErrors]) => {
   if (!cy) return;
 
-  const formattedElements = formatElementsForCytoscape(newElements);
+  const formattedElements = formatElementsForCytoscape(newElements, newErrors);
 
   cy.batch(() => {
     const newElementIds = new Set(newElements.map(el => el.id));

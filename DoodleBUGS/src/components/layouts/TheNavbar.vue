@@ -15,6 +15,7 @@ const props = defineProps<{
   currentNodeType: NodeType;
   isLeftSidebarOpen: boolean;
   isRightSidebarOpen: boolean;
+  isModelValid: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -32,6 +33,8 @@ const emit = defineEmits<{
   (e: 'export-json'): void;
   (e: 'apply-layout', layoutName: string): void;
   (e: 'load-example', exampleKey: string): void;
+  (e: 'validate-model'): void;
+  (e: 'show-validation-issues'): void;
 }>();
 
 const displayTitle = computed(() => {
@@ -160,6 +163,20 @@ const handleGridSizeInput = (event: Event) => {
       </div>
     </div>
 
+    <div class="navbar-center">
+        <BaseButton @click="emit('validate-model')" type="ghost" size="small" title="Re-run model validation">
+            <i class="fas fa-sync-alt"></i> Validate
+        </BaseButton>
+        <div 
+            @click="emit('show-validation-issues')" 
+            class="validation-status" 
+            :class="isModelValid ? 'valid' : 'invalid'" 
+            :title="isModelValid ? 'Model is valid' : 'Model has errors. Click to see details.'"
+        >
+            <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
+        </div>
+    </div>
+
     <div class="navbar-right">
       <div class="pane-toggles">
         <button @click="emit('toggle-left-sidebar')" :class="{ active: isLeftSidebarOpen }" title="Toggle Left Sidebar">
@@ -203,6 +220,12 @@ const handleGridSizeInput = (event: Event) => {
   display: flex;
   align-items: center;
   gap: 20px;
+}
+
+.navbar-center {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .navbar-brand {
@@ -327,5 +350,28 @@ const handleGridSizeInput = (event: Event) => {
 .pane-toggles button svg {
   width: 18px;
   height: 18px;
+}
+
+.validation-status {
+    font-size: 1.2em;
+    padding: 5px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.validation-status:hover {
+    transform: scale(1.1);
+}
+
+.validation-status.valid {
+    color: var(--color-success);
+}
+
+.validation-status.invalid {
+    color: var(--color-danger);
 }
 </style>

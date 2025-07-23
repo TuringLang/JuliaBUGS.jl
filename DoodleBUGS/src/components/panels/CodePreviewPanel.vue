@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useGraphStore } from '../../stores/graphStore';
+import { useDataStore } from '../../stores/dataStore';
 import { useBugsCodeGenerator } from '../../composables/useBugsCodeGenerator';
 import BaseButton from '../ui/BaseButton.vue';
 import 'codemirror/lib/codemirror.css';
@@ -10,7 +12,12 @@ import CodeMirror from 'codemirror';
 import type { Editor } from 'codemirror';
 
 const graphStore = useGraphStore();
-const { generatedCode } = useBugsCodeGenerator(() => graphStore.currentGraphElements);
+const dataStore = useDataStore();
+
+const { currentGraphElements } = storeToRefs(graphStore);
+const { parsedGraphData } = storeToRefs(dataStore);
+
+const { generatedCode } = useBugsCodeGenerator(currentGraphElements, parsedGraphData);
 
 const copySuccess = ref(false);
 const editorContainer = ref<HTMLDivElement | null>(null);

@@ -5,7 +5,7 @@ import GraphCanvas from './GraphCanvas.vue';
 import CanvasToolbar from './CanvasToolbar.vue';
 import { useGraphElements } from '../../composables/useGraphElements';
 import { useGraphInstance } from '../../composables/useGraphInstance';
-import type { GraphElement, GraphNode, GraphEdge, NodeType } from '../../types';
+import type { GraphElement, GraphNode, GraphEdge, NodeType, ValidationError } from '../../types';
 import { getDefaultNodeData } from '../../config/nodeDefinitions';
 
 const props = defineProps<{
@@ -13,6 +13,8 @@ const props = defineProps<{
   gridSize: number;
   currentMode: string;
   currentNodeType: NodeType;
+  elements: GraphElement[];
+  validationErrors: Map<string, ValidationError[]>;
 }>();
 
 const emit = defineEmits<{
@@ -27,9 +29,41 @@ const { getCyInstance } = useGraphInstance();
 const sourceNode = ref<NodeSingular | null>(null);
 const isConnecting = ref(false);
 
+const greekAlphabet = [
+  'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 
+  'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'omicron', 'pi', 'rho', 
+  'sigma', 'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega'
+];
+
+const getNextNodeName = (): string => {
+    const existingNames = new Set(
+        elements.value
+            .filter(el => el.type === 'node')
+            .map(el => (el as GraphNode).name)
+    );
+
+    for (const letter of greekAlphabet) {
+        if (!existingNames.has(letter)) {
+            return letter;
+        }
+    }
+
+    // Fallback if all Greek letters are used
+    let i = 1;
+    while (true) {
+        const fallbackName = `var_${i}`;
+        if (!existingNames.has(fallbackName)) {
+            return fallbackName;
+        }
+        i++;
+    }
+};
+
+
 const createNode = (nodeType: NodeType, position: { x: number; y: number }, parentId?: string): GraphNode => {
     const defaultData = getDefaultNodeData(nodeType);
     const newId = `node_${crypto.randomUUID().substring(0, 8)}`;
+    const newName = nodeType === 'plate' ? 'Plate' : getNextNodeName();
 
     const newNode: GraphNode = {
         ...defaultData,
@@ -38,7 +72,7 @@ const createNode = (nodeType: NodeType, position: { x: number; y: number }, pare
         nodeType: nodeType,
         position: position,
         parent: parentId,
-        name: `${defaultData.name || nodeType} ${elements.value.filter(e => e.type === 'node').length + 1}`,
+        name: newName,
     };
     return newNode;
 };
@@ -203,10 +237,11 @@ watch(() => props.currentMode, (newMode) => {
     />
 
     <GraphCanvas
-      :elements="elements"
+      :elements="props.elements"
       :is-grid-enabled="isGridEnabled"
       :grid-size="gridSize"
       :current-mode="props.currentMode"
+      :validation-errors="props.validationErrors"
       @canvas-tap="handleCanvasTap"
       @node-moved="handleNodeMoved"
       @node-dropped="handleNodeDropped"

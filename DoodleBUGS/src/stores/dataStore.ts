@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useGraphStore } from './graphStore';
+import type { ModelData } from '../types';
 
 const defaultData = 
 `{
@@ -20,7 +21,7 @@ export const useDataStore = defineStore('data', () => {
   const graphStore = useGraphStore();
   const dataContents = ref<Map<string, string>>(new Map());
 
-  const currentGraphData = computed({
+  const currentGraphDataString = computed({
     get: () => {
       const graphId = graphStore.currentGraphId;
       if (graphId && dataContents.value.has(graphId)) {
@@ -45,6 +46,20 @@ export const useDataStore = defineStore('data', () => {
     }
   });
 
+  // Use a ref and a watcher instead of a computed property to resolve the type mismatch.
+  // This ensures that `parsedGraphData` is a writable Ref<ModelData>, which is expected by downstream composables.
+  const parsedGraphData = ref<ModelData>({ data: {}, inits: {} });
+
+  watch(currentGraphDataString, (newString) => {
+    try {
+      parsedGraphData.value = JSON.parse(newString);
+    } catch (e) {
+      // If JSON is invalid, reset to a default empty structure.
+      parsedGraphData.value = { data: {}, inits: {} };
+    }
+  }, { immediate: true });
+
+
   const updateGraphData = (graphId: string, newData: string) => {
     dataContents.value.set(graphId, newData);
     localStorage.setItem(`doodlebugs-data-${graphId}`, newData);
@@ -60,7 +75,8 @@ export const useDataStore = defineStore('data', () => {
   };
 
   return {
-    currentGraphData,
+    currentGraphDataString,
+    parsedGraphData,
     createNewGraphData,
     deleteGraphData,
   };

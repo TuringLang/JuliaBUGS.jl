@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, onUnmounted, onMounted } from 'vue';
 import type { StyleValue } from 'vue';
+import { storeToRefs } from 'pinia';
 import GraphEditor from '../canvas/GraphEditor.vue';
 import ProjectManager from '../left-sidebar/ProjectManager.vue';
 import NodePalette from '../left-sidebar/NodePalette.vue';
@@ -14,19 +15,26 @@ import BaseInput from '../ui/BaseInput.vue';
 import BaseButton from '../ui/BaseButton.vue';
 import AboutModal from './AboutModal.vue';
 import ExportModal from './ExportModal.vue';
+import ValidationIssuesModal from './ValidationIssuesModal.vue';
 
 import { useGraphElements } from '../../composables/useGraphElements';
 import { useProjectStore } from '../../stores/projectStore';
 import { useGraphStore } from '../../stores/graphStore';
 import { useUiStore } from '../../stores/uiStore';
+import { useDataStore } from '../../stores/dataStore';
 import { useGraphInstance } from '../../composables/useGraphInstance';
+import { useGraphValidator } from '../../composables/useGraphValidator';
 import type { GraphElement, NodeType, PaletteItemType, GraphNode, ExampleModel } from '../../types';
 
 const projectStore = useProjectStore();
 const graphStore = useGraphStore();
 const uiStore = useUiStore();
-const { selectedElement, updateElement, deleteElement } = useGraphElements();
+const dataStore = useDataStore();
+
+const { parsedGraphData } = storeToRefs(dataStore);
+const { elements, selectedElement, updateElement, deleteElement } = useGraphElements();
 const { getCyInstance } = useGraphInstance();
+const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
 
 const activeLeftTab = ref<'project' | 'palette' | 'data' | null>('project');
 const isLeftSidebarOpen = ref(true);
@@ -44,6 +52,7 @@ const newProjectName = ref('');
 const showNewGraphModal = ref(false);
 const newGraphName = ref('');
 const showAboutModal = ref(false);
+const showValidationModal = ref(false);
 
 const showExportModal = ref(false);
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null);
@@ -57,6 +66,7 @@ onMounted(() => {
       graphStore.selectGraph(lastGraphId);
     }
   }
+  validateGraph();
 });
 
 const currentProjectName = computed(() => projectStore.currentProject?.name || null);
@@ -156,6 +166,25 @@ const handleElementSelected = (element: GraphElement | null) => {
   if (element && !uiStore.isRightTabPinned) {
     uiStore.setActiveRightTab('properties');
   }
+};
+
+const handleSelectNodeFromModal = (nodeId: string) => {
+    const nodeToSelect = elements.value.find(el => el.id === nodeId);
+    if (nodeToSelect) {
+        handleElementSelected(nodeToSelect);
+        const cy = getCyInstance();
+        if (cy) {
+            cy.elements().unselect();
+            cy.getElementById(nodeId).select();
+            cy.animate({
+                center: {
+                    eles: cy.getElementById(nodeId)
+                },
+                zoom: 1.2,
+                duration: 500
+            });
+        }
+    }
 };
 
 const handleUpdateElement = (updatedEl: GraphElement) => {
@@ -303,18 +332,27 @@ const handleLoadExample = async (exampleKey: string) => {
 
     try {
         const baseUrl = import.meta.env.BASE_URL;
-        const fetchUrl = `${baseUrl}examples/${exampleKey}/model.json`;
+        const modelUrl = `${baseUrl}examples/${exampleKey}/model.json`;
+        const dataUrl = `${baseUrl}examples/${exampleKey}/data.json`;
 
-        const response = await fetch(fetchUrl);
-        if (!response.ok) {
-            throw new Error(`Could not fetch example: ${response.statusText}`);
+        const [modelResponse, dataResponse] = await Promise.all([
+            fetch(modelUrl),
+            fetch(dataUrl)
+        ]);
+
+        if (!modelResponse.ok) {
+            throw new Error(`Could not fetch example model: ${modelResponse.statusText}`);
         }
-        const modelData: ExampleModel = await response.json();
+        const modelData: ExampleModel = await modelResponse.json();
 
         const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId, modelData.name);
         
         if (newGraphMeta) {
             graphStore.updateGraphElements(newGraphMeta.id, modelData.graphJSON);
+            if (dataResponse.ok) {
+                const data = await dataResponse.json();
+                dataStore.currentGraphDataString = JSON.stringify(data, null, 2);
+            }
         }
         
         setTimeout(() => handleApplyLayout('dagre'), 100);
@@ -325,10 +363,7 @@ const handleLoadExample = async (exampleKey: string) => {
     }
 };
 
-
-watch(selectedElement, (newVal) => {
-  console.log('Selected element changed in MainLayout:', newVal);
-}, { deep: true });
+const isModelValid = computed(() => validationErrors.value.size === 0);
 </script>
 
 <template>
@@ -356,6 +391,9 @@ watch(selectedElement, (newVal) => {
       @open-export-modal="openExportModal"
       @apply-layout="handleApplyLayout"
       @load-example="handleLoadExample"
+      @validate-model="validateGraph"
+      :is-model-valid="isModelValid"
+      @show-validation-issues="showValidationModal = true"
     />
 
     <div class="content-area">
@@ -393,8 +431,9 @@ watch(selectedElement, (newVal) => {
           :is-grid-enabled="isGridEnabled"
           :grid-size="gridSize"
           :current-mode="currentMode"
-          :elements="graphStore.currentGraphElements"
+          :elements="elements"
           :current-node-type="currentNodeType"
+          :validation-errors="validationErrors"
           @update:current-mode="currentMode = $event"
           @update:current-node-type="currentNodeType = $event"
           @element-selected="handleElementSelected"
@@ -421,6 +460,7 @@ watch(selectedElement, (newVal) => {
           <div v-show="uiStore.activeRightTab === 'properties'" class="tab-pane">
             <NodePropertiesPanel
               :selected-element="selectedElement"
+              :validation-errors="validationErrors"
               @update-element="handleUpdateElement"
               @delete-element="handleDeleteElement"
             />
@@ -470,6 +510,13 @@ watch(selectedElement, (newVal) => {
       :export-type="currentExportType"
       @close="showExportModal = false"
       @confirm-export="handleConfirmExport"
+    />
+    <ValidationIssuesModal
+        :is-open="showValidationModal"
+        :validation-errors="validationErrors"
+        :elements="elements"
+        @close="showValidationModal = false"
+        @select-node="handleSelectNodeFromModal"
     />
   </div>
 </template>

@@ -2,6 +2,11 @@ export type NodeType = 'stochastic' | 'deterministic' | 'constant' | 'observed' 
 
 export type PaletteItemType = NodeType | 'add-edge';
 
+export interface ValidationError {
+  field: string;
+  message: string;
+}
+
 // This interface is now a superset of all possible properties defined in nodeDefinitions.ts.
 // All properties specific to a node type are optional.
 export interface GraphNode {
@@ -39,6 +44,12 @@ export interface ExampleModel {
   name: string;
   graphJSON: GraphElement[];
 }
+
+export interface ModelData {
+  data: { [key: string]: any };
+  inits: { [key: string]: any };
+}
+
 
 declare module 'cytoscape' {
   interface Core {

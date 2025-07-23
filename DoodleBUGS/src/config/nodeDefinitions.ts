@@ -2,12 +2,19 @@ import type { NodeType } from '../types';
 
 export type NodePropertyType = 'select' | 'text' | 'number' | 'checkbox';
 
+export interface SelectOption {
+    value: string;
+    label: string;
+    paramCount?: number;
+    paramNames?: string[];
+}
+
 export interface NodeProperty {
     key: string;
     label: string;
     type: NodePropertyType;
     placeholder?: string;
-    options?: { value: string; label: string }[];
+    options?: SelectOption[];
     defaultValue: any;
     helpText?: string;
 }
@@ -19,19 +26,17 @@ export interface NodeDefinition {
     description: string;
     styleClass: string;
     properties: NodeProperty[];
+    parameters?: NodeProperty[]; // Optional parameters for distributions
 }
 
-const distributionOptions = [
-    { value: 'dnorm', label: 'Normal (dnorm)' },
-    { value: 'dbeta', label: 'Beta (dbeta)' },
-    { value: 'dgamma', label: 'Gamma (dgamma)' },
-    { value: 'dbin', label: 'Binomial (dbin)' },
-    { value: 'dpois', label: 'Poisson (dpois)' },
-    { value: 'dt', label: 'Student-t (dt)' },
-    { value: 'dchisqr', label: 'Chi-squared (dchisqr)' },
-    { value: 'dweib', label: 'Weibull (dweib)' },
-    { value: 'dexp', label: 'Exponential (dexp)' },
-    { value: 'dloglik', label: 'Log-Likelihood (dloglik)' },
+const distributionOptions: SelectOption[] = [
+    { value: 'dnorm', label: 'Normal (dnorm)', paramCount: 2, paramNames: ['mean', 'precision'] },
+    { value: 'dgamma', label: 'Gamma (dgamma)', paramCount: 2, paramNames: ['shape', 'rate'] },
+    { value: 'dbeta', label: 'Beta (dbeta)', paramCount: 2, paramNames: ['shape1', 'shape2'] },
+    { value: 'dbin', label: 'Binomial (dbin)', paramCount: 2, paramNames: ['prob', 'size'] },
+    { value: 'dpois', label: 'Poisson (dpois)', paramCount: 1, paramNames: ['lambda'] },
+    { value: 'dt', label: 'Student-t (dt)', paramCount: 3, paramNames: ['mu', 'tau', 'k'] },
+    { value: 'dunif', label: 'Uniform (dunif)', paramCount: 2, paramNames: ['lower', 'upper'] },
 ];
 
 export const nodeDefinitions: NodeDefinition[] = [
@@ -42,11 +47,15 @@ export const nodeDefinitions: NodeDefinition[] = [
         description: 'Random variable with a distribution',
         styleClass: 'stochastic',
         properties: [
-            { key: 'name', label: 'Name', type: 'text', defaultValue: 'StochasticNode' },
+            { key: 'name', label: 'Name', type: 'text', defaultValue: 'stochastic_node' },
             { key: 'distribution', label: 'Distribution (~)', type: 'select', defaultValue: 'dnorm', options: distributionOptions },
-            { key: 'observed', label: 'Observed', type: 'checkbox', defaultValue: false },
-            { key: 'initialValue', label: 'Initial Value', type: 'text', placeholder: 'e.g., 0.5 or list(value=0.5)', defaultValue: '' },
-            { key: 'indices', label: 'Indices', type: 'text', placeholder: 'e.g., i,j or 1:N', defaultValue: '', helpText: "Use comma-separated for multiple indices, e.g., 'i,j' or '1:N, 1:M'" },
+            { key: 'observed', label: 'Observed', type: 'checkbox', defaultValue: false, helpText: "If checked, this node's value is provided in the data section." },
+            { key: 'indices', label: 'Indices', type: 'text', placeholder: 'e.g., i,j or 1:N', defaultValue: '' },
+        ],
+        parameters: [ // These fields will be used to store literal values or parent node links
+            { key: 'param1', label: 'Parameter 1', type: 'text', defaultValue: '' },
+            { key: 'param2', label: 'Parameter 2', type: 'text', defaultValue: '' },
+            { key: 'param3', label: 'Parameter 3', type: 'text', defaultValue: '' },
         ]
     },
     {
@@ -56,8 +65,8 @@ export const nodeDefinitions: NodeDefinition[] = [
         description: 'Logical function of parents',
         styleClass: 'deterministic',
         properties: [
-            { key: 'name', label: 'Name', type: 'text', defaultValue: 'DeterministicNode' },
-            { key: 'equation', label: 'Equation (<--)', type: 'text', placeholder: 'e.g., a + b * x', defaultValue: '' },
+            { key: 'name', label: 'Name', type: 'text', defaultValue: 'logical_node' },
+            { key: 'equation', label: 'Equation (<-)', type: 'text', placeholder: 'e.g., a + b * x', defaultValue: '' },
             { key: 'indices', label: 'Indices', type: 'text', placeholder: 'e.g., i,j', defaultValue: '' },
         ]
     },
@@ -65,12 +74,10 @@ export const nodeDefinitions: NodeDefinition[] = [
         nodeType: 'constant',
         label: 'Constant',
         icon: 'C',
-        description: 'A fixed value or parameter',
+        description: 'A fixed value or data input',
         styleClass: 'constant',
         properties: [
-            { key: 'name', label: 'Name', type: 'text', defaultValue: 'ConstantNode' },
-            { key: 'initialValue', label: 'Value', type: 'text', placeholder: 'e.g., 5 or 3.14', defaultValue: '0' },
-            { key: 'indices', label: 'Indices', type: 'text', placeholder: 'e.g., i,j', defaultValue: '' },
+            { key: 'name', label: 'Name', type: 'text', defaultValue: 'constant_node' },
         ]
     },
     {
@@ -80,10 +87,15 @@ export const nodeDefinitions: NodeDefinition[] = [
         description: 'A data node with a fixed value',
         styleClass: 'observed',
         properties: [
-            { key: 'name', label: 'Name', type: 'text', defaultValue: 'ObservedNode' },
+            { key: 'name', label: 'Name', type: 'text', defaultValue: 'observed_node' },
             { key: 'distribution', label: 'Distribution (~)', type: 'select', defaultValue: 'dnorm', options: distributionOptions },
             { key: 'observed', label: 'Observed', type: 'checkbox', defaultValue: true },
             { key: 'indices', label: 'Indices', type: 'text', placeholder: 'e.g., i,j or 1:N', defaultValue: '' },
+        ],
+        parameters: [
+            { key: 'param1', label: 'Parameter 1', type: 'text', defaultValue: '' },
+            { key: 'param2', label: 'Parameter 2', type: 'text', defaultValue: '' },
+            { key: 'param3', label: 'Parameter 3', type: 'text', defaultValue: '' },
         ]
     },
     {
@@ -95,7 +107,7 @@ export const nodeDefinitions: NodeDefinition[] = [
         properties: [
             { key: 'name', label: 'Name', type: 'text', defaultValue: 'Plate' },
             { key: 'loopVariable', label: 'Loop Variable', type: 'text', placeholder: 'e.g., i', defaultValue: 'i' },
-            { key: 'loopRange', label: 'Loop Range', type: 'text', placeholder: 'e.g., 1:N', defaultValue: '1:N', helpText: "Define the iteration for this plate, e.g., 'i' in '1:N'" },
+            { key: 'loopRange', label: 'Loop Range', type: 'text', placeholder: 'e.g., 1:N', defaultValue: '1:N' },
         ]
     },
 ];
@@ -104,14 +116,23 @@ export const getNodeDefinition = (type: NodeType): NodeDefinition | undefined =>
     return nodeDefinitions.find(def => def.nodeType === type);
 };
 
+export const getDistributionByName = (distName: string): SelectOption | undefined => {
+    return distributionOptions.find(opt => opt.value === distName);
+};
+
 export const getDefaultNodeData = (type: NodeType): { [key: string]: any } => {
     const definition = getNodeDefinition(type);
-    if (!definition) {
-        return {};
-    }
+    if (!definition) return {};
+    
     const defaultData: { [key: string]: any } = {};
     definition.properties.forEach(prop => {
         defaultData[prop.key] = prop.defaultValue;
     });
+    // Also initialize parameter fields
+    if (definition.parameters) {
+        definition.parameters.forEach(param => {
+            defaultData[param.key] = param.defaultValue;
+        });
+    }
     return defaultData;
 };

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useDataStore } from '../../stores/dataStore';
 import 'codemirror/lib/codemirror.css';
 import 'codemirror/theme/material-darker.css';
@@ -12,10 +12,12 @@ const editorContainer = ref<HTMLDivElement | null>(null);
 let cmInstance: Editor | null = null;
 let isUpdatingFromSource = false;
 
-onMounted(() => {
+onMounted(async () => {
+  // Wait for the next DOM update cycle to ensure the container is fully rendered.
+  await nextTick();
   if (editorContainer.value) {
     cmInstance = CodeMirror(editorContainer.value, {
-      value: dataStore.currentGraphData,
+      value: dataStore.currentGraphDataString,
       mode: { name: "javascript", json: true },
       theme: 'material-darker',
       lineNumbers: true,
@@ -24,7 +26,7 @@ onMounted(() => {
 
     cmInstance.on('change', (instance) => {
       if (isUpdatingFromSource) return;
-      dataStore.currentGraphData = instance.getValue();
+      dataStore.currentGraphDataString = instance.getValue();
     });
   }
 });
@@ -37,7 +39,7 @@ onUnmounted(() => {
   }
 });
 
-watch(() => dataStore.currentGraphData, (newData) => {
+watch(() => dataStore.currentGraphDataString, (newData) => {
   if (cmInstance && cmInstance.getValue() !== newData) {
     isUpdatingFromSource = true;
     cmInstance.setValue(newData);
