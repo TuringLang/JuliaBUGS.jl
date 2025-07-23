@@ -51,7 +51,7 @@ const getNextNodeName = (): string => {
     // Fallback if all Greek letters are used
     let i = 1;
     while (true) {
-        const fallbackName = `var_${i}`;
+        const fallbackName = `var.${i}`;
         if (!existingNames.has(fallbackName)) {
             return fallbackName;
         }
@@ -74,6 +74,19 @@ const createNode = (nodeType: NodeType, position: { x: number; y: number }, pare
         parent: parentId,
         name: newName,
     };
+
+    // Provide sensible, valid defaults for newly created stochastic nodes.
+    if (newNode.nodeType === 'stochastic' || newNode.nodeType === 'observed') {
+        if (newNode.distribution === 'dnorm') {
+            newNode.param1 = "0.0"; // Default mean
+            newNode.param2 = "1.0"; // Default precision
+        }
+        if (newNode.distribution === 'dgamma') {
+            newNode.param1 = "0.001";
+            newNode.param2 = "0.001";
+        }
+    }
+
     return newNode;
 };
 

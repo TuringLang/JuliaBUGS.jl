@@ -47,7 +47,7 @@ export const nodeDefinitions: NodeDefinition[] = [
         description: 'Random variable with a distribution',
         styleClass: 'stochastic',
         properties: [
-            { key: 'name', label: 'Name', type: 'text', defaultValue: 'stochastic_node' },
+            { key: 'name', label: 'Name', type: 'text', defaultValue: 'stochastic.node' },
             { key: 'distribution', label: 'Distribution (~)', type: 'select', defaultValue: 'dnorm', options: distributionOptions },
             { key: 'observed', label: 'Observed', type: 'checkbox', defaultValue: false, helpText: "If checked, this node's value is provided in the data section." },
             { key: 'indices', label: 'Indices', type: 'text', placeholder: 'e.g., i,j or 1:N', defaultValue: '' },
@@ -65,7 +65,7 @@ export const nodeDefinitions: NodeDefinition[] = [
         description: 'Logical function of parents',
         styleClass: 'deterministic',
         properties: [
-            { key: 'name', label: 'Name', type: 'text', defaultValue: 'logical_node' },
+            { key: 'name', label: 'Name', type: 'text', defaultValue: 'logical.node' },
             { key: 'equation', label: 'Equation (<-)', type: 'text', placeholder: 'e.g., a + b * x', defaultValue: '' },
             { key: 'indices', label: 'Indices', type: 'text', placeholder: 'e.g., i,j', defaultValue: '' },
         ]
@@ -77,7 +77,8 @@ export const nodeDefinitions: NodeDefinition[] = [
         description: 'A fixed value or data input',
         styleClass: 'constant',
         properties: [
-            { key: 'name', label: 'Name', type: 'text', defaultValue: 'constant_node' },
+            { key: 'name', label: 'Name', type: 'text', defaultValue: 'constant.node' },
+            { key: 'indices', label: 'Indices', type: 'text', placeholder: 'e.g., i,j', defaultValue: '' },
         ]
     },
     {
@@ -87,7 +88,7 @@ export const nodeDefinitions: NodeDefinition[] = [
         description: 'A data node with a fixed value',
         styleClass: 'observed',
         properties: [
-            { key: 'name', label: 'Name', type: 'text', defaultValue: 'observed_node' },
+            { key: 'name', label: 'Name', type: 'text', defaultValue: 'observed.node' },
             { key: 'distribution', label: 'Distribution (~)', type: 'select', defaultValue: 'dnorm', options: distributionOptions },
             { key: 'observed', label: 'Observed', type: 'checkbox', defaultValue: true },
             { key: 'indices', label: 'Indices', type: 'text', placeholder: 'e.g., i,j or 1:N', defaultValue: '' },
