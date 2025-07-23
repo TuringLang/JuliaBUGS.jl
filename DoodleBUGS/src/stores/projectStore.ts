@@ -38,6 +38,15 @@ export const useProjectStore = defineStore('project', () => {
     selectProject(newProject.id);
   };
 
+  const renameProject = (projectId: string, newName: string) => {
+    const project = projects.value.find(p => p.id === projectId);
+    if (project && newName.trim()) {
+        project.name = newName.trim();
+        project.lastModified = Date.now();
+        saveProjects();
+    }
+  };
+
   const selectProject = (projectId: string | null) => {
     currentProjectId.value = projectId;
     if (projectId) {
@@ -84,6 +93,19 @@ export const useProjectStore = defineStore('project', () => {
     return undefined;
   };
 
+  const renameGraphInProject = (projectId: string, graphId: string, newName: string) => {
+    const project = projects.value.find(p => p.id === projectId);
+    if (project && newName.trim()) {
+        const graph = project.graphs.find(g => g.id === graphId);
+        if (graph) {
+            graph.name = newName.trim();
+            graph.lastModified = Date.now();
+            project.lastModified = Date.now();
+            saveProjects();
+        }
+    }
+  };
+
   const deleteGraphFromProject = (projectId: string, graphId: string) => {
     const project = projects.value.find(p => p.id === projectId);
     if (project) {
@@ -118,9 +140,11 @@ export const useProjectStore = defineStore('project', () => {
     currentProjectId,
     currentProject,
     createProject,
+    renameProject,
     selectProject,
     deleteProject,
     addGraphToProject,
+    renameGraphInProject,
     deleteGraphFromProject,
     getGraphsForProject,
     loadProjects,

@@ -548,7 +548,7 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
   display: flex;
   background-color: var(--color-background-soft);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-  z-index: 10;
+  /* z-index: 10; */
   flex-shrink: 0;
 }
 
@@ -619,7 +619,7 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
   flex-direction: column;
   background-color: var(--color-background-soft);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-  z-index: 10;
+  /* z-index: 10; */
   flex-shrink: 0;
 }
 
@@ -707,10 +707,10 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
 
 .resizer {
   flex-shrink: 0;
-  width: 5px;
+  width: 2px;
   background-color: transparent;
   cursor: col-resize;
-  z-index: 20;
+  /* z-index: 20; */
   transition: background-color 0.2s ease;
 }
 .resizer:hover, .resizer-left:active, .resizer-right:active {

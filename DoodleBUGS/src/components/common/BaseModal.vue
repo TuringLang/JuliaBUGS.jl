@@ -51,7 +51,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1050;
+  z-index: 1050; /* Increased z-index to ensure it's on top of sidebars */
   padding: 1rem;
 }
 

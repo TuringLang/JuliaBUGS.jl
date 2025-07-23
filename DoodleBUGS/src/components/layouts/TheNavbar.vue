@@ -25,7 +25,6 @@ const emit = defineEmits<{
   (e: 'update:currentNodeType', type: NodeType): void;
   (e: 'new-project'): void;
   (e: 'new-graph'): void;
-  (e: 'save-current-graph'): void;
   (e: 'toggle-left-sidebar'): void;
   (e: 'toggle-right-sidebar'): void;
   (e: 'open-about-modal'): void;
@@ -74,7 +73,6 @@ const handleGridSizeInput = (event: Event) => {
           <template #content>
             <a href="#" @click.prevent="emit('new-project')">New Project...</a>
             <a href="#" @click.prevent="emit('new-graph')">New Graph...</a>
-            <a href="#" @click.prevent="emit('save-current-graph')">Save Current Graph</a>
           </template>
         </DropdownMenu>
 
