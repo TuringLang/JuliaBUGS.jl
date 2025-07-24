@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
+import { ref, watch, onMounted, onUnmounted, computed, nextTick } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useGraphStore } from '../../stores/graphStore';
 import { useDataStore } from '../../stores/dataStore';
@@ -10,6 +10,10 @@ import 'codemirror/theme/material-darker.css';
 import 'codemirror/mode/julia/julia.js';
 import CodeMirror from 'codemirror';
 import type { Editor } from 'codemirror';
+
+const props = defineProps<{
+  isActive: boolean;
+}>();
 
 const graphStore = useGraphStore();
 const dataStore = useDataStore();
@@ -33,6 +37,10 @@ onMounted(() => {
       readOnly: true,
       tabSize: 2,
     });
+    // Initial refresh if the tab is already active on component mount.
+    if (props.isActive) {
+      nextTick(() => cmInstance?.refresh());
+    }
   }
 });
 
@@ -47,6 +55,15 @@ onUnmounted(() => {
 watch(generatedCode, (newCode) => {
   if (cmInstance && cmInstance.getValue() !== newCode) {
     cmInstance.setValue(newCode);
+  }
+});
+
+watch(() => props.isActive, (newVal) => {
+  if (newVal && cmInstance) {
+    // Refresh the editor when its container becomes visible to prevent rendering issues.
+    nextTick(() => {
+      cmInstance?.refresh();
+    });
   }
 });
 

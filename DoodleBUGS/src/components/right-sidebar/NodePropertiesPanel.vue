@@ -167,12 +167,24 @@ const getErrorForField = (fieldKey: string): string | undefined => {
       </template>
 
       <div class="action-buttons">
-        <BaseButton @click="handleUpdate" type="primary">Apply Changes</BaseButton>
         <BaseButton @click="confirmDelete" type="danger">Delete Element</BaseButton>
       </div>
     </div>
     <BaseModal :is-open="showDeleteConfirmModal" @close="cancelDelete">
-      <!-- Modal Content -->
+      <template #header>
+        <h3>Confirm Deletion</h3>
+      </template>
+      <template #body>
+        <p v-if="localElement">
+          Are you sure you want to delete this {{ localElement.type }}?
+          <strong v-if="'name' in localElement">{{ localElement.name }}</strong>
+          This action cannot be undone.
+        </p>
+      </template>
+      <template #footer>
+        <BaseButton @click="cancelDelete" type="secondary">Cancel</BaseButton>
+        <BaseButton @click="executeDelete" type="danger">Delete</BaseButton>
+      </template>
     </BaseModal>
   </div>
 </template>
@@ -207,7 +219,6 @@ h4 {
   display: flex;
   flex-direction: column;
   gap: 15px;
-  overflow-y: auto;
   padding-right: 5px;
 }
 

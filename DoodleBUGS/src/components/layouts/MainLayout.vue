@@ -474,11 +474,11 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
               @delete-element="handleDeleteElement"
             />
           </div>
-          <div v-show="uiStore.activeRightTab === 'code'" class="tab-pane">
-            <CodePreviewPanel />
+          <div v-show="uiStore.activeRightTab === 'code'" class="tab-pane fill-height">
+            <CodePreviewPanel :is-active="uiStore.activeRightTab === 'code'" />
           </div>
-          <div v-show="uiStore.activeRightTab === 'json'" class="tab-pane">
-            <JsonEditorPanel />
+          <div v-show="uiStore.activeRightTab === 'json'" class="tab-pane fill-height">
+            <JsonEditorPanel :is-active="uiStore.activeRightTab === 'json'" />
           </div>
         </div>
       </aside>
@@ -548,7 +548,6 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
   display: flex;
   background-color: var(--color-background-soft);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-  /* z-index: 10; */
   flex-shrink: 0;
 }
 
@@ -619,7 +618,6 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
   flex-direction: column;
   background-color: var(--color-background-soft);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-  /* z-index: 10; */
   flex-shrink: 0;
 }
 
@@ -687,13 +685,13 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
 }
 
 .tab-pane {
-  height: 100%;
-  width: 100%;
-  overflow-y: auto;
-  position: absolute;
-  top: 0;
-  left: 0;
   background-color: var(--color-background-soft);
+}
+
+.tab-pane.fill-height {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 .graph-editor-wrapper {
@@ -710,7 +708,6 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
   width: 2px;
   background-color: transparent;
   cursor: col-resize;
-  /* z-index: 20; */
   transition: background-color 0.2s ease;
 }
 .resizer:hover, .resizer-left:active, .resizer-right:active {

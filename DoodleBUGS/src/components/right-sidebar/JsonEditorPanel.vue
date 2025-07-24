@@ -17,6 +17,10 @@ import 'codemirror/addon/fold/brace-fold.js';
 import CodeMirror from 'codemirror';
 import type { Editor, TextMarker, Position } from 'codemirror';
 
+const props = defineProps<{
+  isActive: boolean;
+}>();
+
 const graphStore = useGraphStore();
 const { selectedElement } = useGraphElements();
 
@@ -68,6 +72,11 @@ onMounted(() => {
     cmInstance.setValue(initialJson);
     markProtectedFields();
     isUpdatingFromSource = false;
+
+    // Initial refresh if the tab is already active on component mount.
+    if (props.isActive) {
+      nextTick(() => cmInstance?.refresh());
+    }
   }
 });
 
@@ -97,6 +106,15 @@ watch(graphElements, (newElements) => {
   markProtectedFields();
   isUpdatingFromSource = false;
 }, { deep: true });
+
+watch(() => props.isActive, (newVal) => {
+  if (newVal && cmInstance) {
+    // Refresh the editor when its container becomes visible to prevent rendering issues.
+    nextTick(() => {
+      cmInstance?.refresh();
+    });
+  }
+});
 
 watch(selectedElement, async (newSelection) => {
   if (!newSelection || !cmInstance) return;
