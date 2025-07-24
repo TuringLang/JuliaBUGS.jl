@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed, onUnmounted, onMounted } from 'vue';
+import { ref, watch, computed, onUnmounted, onMounted, nextTick } from 'vue';
 import type { StyleValue } from 'vue';
 import { storeToRefs } from 'pinia';
 import GraphEditor from '../canvas/GraphEditor.vue';
@@ -57,6 +57,44 @@ const showValidationModal = ref(false);
 const showExportModal = ref(false);
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null);
 
+const handleApplyLayout = (layoutName: string) => {
+    const cy = getCyInstance();
+    if (!cy) return;
+
+    const layoutOptions = {
+        name: layoutName,
+        animate: true,
+        padding: 50,
+        fit: true,
+        ...(layoutName === 'dagre' && { 
+            rankDir: 'TB', 
+            spacingFactor: 1.2 
+        }),
+        ...(layoutName === 'fcose' && { 
+            idealEdgeLength: 120, 
+            nodeSeparation: 150,
+            nodeRepulsion: 4500,
+            quality: 'proof',
+        }),
+    };
+
+    const layout = cy.layout(layoutOptions);
+    
+    layout.on('layoutstop', () => {
+        const updatedNodes = cy.nodes().map(node => {
+            const originalNode = graphStore.currentGraphElements.find(el => el.id === node.id() && el.type === 'node') as GraphNode | undefined;
+            if (originalNode) {
+                return { ...originalNode, position: node.position() };
+            }
+            return null;
+        }).filter(n => n !== null) as GraphNode[];
+
+        updatedNodes.forEach(node => updateElement(node));
+    });
+
+    layout.run();
+};
+
 onMounted(() => {
   projectStore.loadProjects();
 
@@ -74,9 +112,26 @@ onMounted(() => {
     if (project && project.graphs.some(g => g.id === lastGraphId)) {
       graphStore.selectGraph(lastGraphId);
     }
+  } else if (projectStore.currentProject?.graphs.length) {
+    // If no specific graph was saved, select the first one in the current project
+    graphStore.selectGraph(projectStore.currentProject.graphs[0].id);
   }
+
   validateGraph();
 });
+
+// Watch for changes in the current graph ID and apply the default layout.
+watch(() => graphStore.currentGraphId, (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    // Wait for Vue to update the DOM with the new graph elements.
+    nextTick(() => {
+      // A short timeout ensures Cytoscape has fully rendered the new elements before applying the layout.
+      setTimeout(() => {
+        handleApplyLayout('dagre');
+      }, 100);
+    });
+  }
+}, { immediate: true }); // `immediate: true` ensures this runs on initial load
 
 const currentProjectName = computed(() => projectStore.currentProject?.name || null);
 const activeGraphName = computed(() => {
@@ -295,44 +350,6 @@ const handleConfirmExport = (options: any) => {
     }
 };
 
-const handleApplyLayout = (layoutName: string) => {
-    const cy = getCyInstance();
-    if (!cy) return;
-
-    const layoutOptions = {
-        name: layoutName,
-        animate: true,
-        padding: 50,
-        fit: true,
-        ...(layoutName === 'dagre' && { 
-            rankDir: 'TB', 
-            spacingFactor: 1.2 
-        }),
-        ...(layoutName === 'fcose' && { 
-            idealEdgeLength: 120, 
-            nodeSeparation: 150,
-            nodeRepulsion: 4500,
-            quality: 'proof',
-        }),
-    };
-
-    const layout = cy.layout(layoutOptions);
-    
-    layout.on('layoutstop', () => {
-        const updatedNodes = cy.nodes().map(node => {
-            const originalNode = graphStore.currentGraphElements.find(el => el.id === node.id() && el.type === 'node') as GraphNode | undefined;
-            if (originalNode) {
-                return { ...originalNode, position: node.position() };
-            }
-            return null;
-        }).filter(n => n !== null) as GraphNode[];
-
-        updatedNodes.forEach(node => updateElement(node));
-    });
-
-    layout.run();
-};
-
 const handleLoadExample = async (exampleKey: string) => {
     if (!projectStore.currentProjectId) {
         alert("Please create or select a project before loading an example.");
@@ -364,8 +381,6 @@ const handleLoadExample = async (exampleKey: string) => {
             }
         }
         
-        setTimeout(() => handleApplyLayout('dagre'), 100);
-
     } catch (error) {
         console.error("Failed to load example model:", error);
         alert("Failed to load the example model. See console for details.");
