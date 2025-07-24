@@ -14,5 +14,5 @@ initialize!
 ```@docs
 of
 @of
-of(::BUGSModel)
+of(::JuliaBUGS.BUGSModel)
 ```
