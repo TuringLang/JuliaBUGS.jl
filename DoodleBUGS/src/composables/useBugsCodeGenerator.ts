@@ -94,8 +94,7 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>, modelData: R
         } else {
           // It's a regular node
           const nodeName = childNode.indices ? `${childNode.name}[${childNode.indices}]` : childNode.name;
-          const isTrulyObserved = childNode.observed && dataKeys.has(childNode.name);
-
+          
           if (childNode.nodeType === 'stochastic' || childNode.nodeType === 'observed') {
             const params = [childNode.param1, childNode.param2, childNode.param3]
                 .filter(p => p && String(p).trim() !== '')
@@ -110,7 +109,14 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>, modelData: R
     };
 
     const finalCodeLines = generateCodeRecursive(treeRoot, 1);
-    return `model {\n${finalCodeLines.join('\n')}\n}`;
+
+    const modelString = [
+      'model {',
+      ...finalCodeLines,
+      '}'
+    ].join('\n');
+    
+    return modelString;
   });
 
   return {
