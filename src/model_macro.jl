@@ -1,5 +1,104 @@
 using MacroTools
 
+"""
+    @model function_definition
+
+Define a probabilistic model using JuliaBUGS syntax.
+
+The `@model` macro transforms a function definition into a model-generating function. When called,
+this function returns a compiled `BUGSModel` object that can be used for inference.
+
+# Function Signature
+
+The macro creates a function with this pattern:
+```julia
+@model function model_name(
+    (; param1, param2, ...)::OptionalOfType,  # Stochastic parameters (first argument)
+    constant1, constant2, ...                  # Constants and covariates
+)
+    # Model body with probabilistic statements using ~
+end
+```
+
+This generates a function `model_name` that, when called with appropriate arguments,
+returns a `BUGSModel` instance.
+
+# Arguments
+
+- **First argument**: A named tuple destructuring pattern for stochastic parameters
+  - Must use the syntax `(; name1, name2, ...)`
+  - Can optionally include an `of` type annotation like `(; x, y)::MyOfType`
+  - Contains all variables that have probability distributions in the model
+  
+- **Remaining arguments**: Constants, covariates, and structural parameters
+  - These are deterministic values that don't have distributions
+  - Examples: covariate matrices, sample sizes, fixed hyperparameters
+
+# Model Body
+
+Inside the model body, use the `~` operator to specify probability distributions:
+```julia
+y ~ dnorm(mu, tau)     # y follows a normal distribution
+theta ~ dgamma(a, b)   # theta follows a gamma distribution
+```
+
+# Returns
+
+The generated function returns a `BUGSModel` object when called with appropriate arguments.
+
+# Examples
+
+## Simple Linear Regression
+```julia
+# Define the model-generating function
+@model function regression(
+    (; y, beta, sigma),  # y is observed data, beta and sigma are parameters
+    X, N                 # X is covariate matrix, N is number of observations
+)
+    for i in 1:N
+        mu[i] = X[i, :] ⋅ beta
+        y[i] ~ dnorm(mu[i], sigma)
+    end
+    beta ~ dnorm(0, 0.001)
+    sigma ~ dgamma(0.001, 0.001)
+end
+
+# Call the function to create a model instance
+model = regression((; y = observed_data), X_matrix, length(observed_data))
+# `model` is now a BUGSModel object
+```
+
+## With Type Specification
+```julia
+# Define parameter structure
+RegressionParams = @of(
+    y = of(Array, Float64, 100),
+    beta = of(Array, Float64, 3),
+    sigma = of(Real, 0, nothing)
+)
+
+# Define the model-generating function with type annotation
+@model function typed_regression(
+    (; y, beta, sigma)::RegressionParams,
+    X, N
+)
+    # Model body...
+end
+
+# Create a model instance
+model = typed_regression((; y = data), X, N)
+```
+
+# Notes
+
+- The macro performs compile-time validation of the model structure
+- Type annotations are validated after model compilation
+- Only `of` types created with `@of` are supported for type annotations
+- The first argument must always be a destructuring pattern, not a regular variable
+- Each call to the generated function creates a new `BUGSModel` instance
+
+See also: [`@bugs`](@ref), [`compile`](@ref), [`of`](@ref), [`@of`](@ref)
+"""
 macro model(model_function_expr)
     return _generate_model_definition(model_function_expr, __source__, __module__)
 end
