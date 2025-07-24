@@ -147,14 +147,14 @@ const handleJsonInput = (value: string) => {
   try {
     const newElements: GraphElement[] = JSON.parse(value);
     if (!Array.isArray(newElements)) {
-      throw new Error("JSON must be an array of graph elements.");
+      throw new Error("Invalid format: The root element must be an array of graph objects.");
     }
     if (graphStore.currentGraphId) {
       graphStore.updateGraphElements(graphStore.currentGraphId, newElements);
     }
     errorText.value = '';
   } catch (e: any) {
-    errorText.value = `Invalid JSON: ${e.message}`;
+    errorText.value = e.message;
   }
 };
 </script>
@@ -256,7 +256,8 @@ h4 {
 .footer-section {
   flex-shrink: 0;
   padding-top: 10px;
-  height: 40px;
+  min-height: 40px;
+  height: auto;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -278,8 +279,8 @@ h4 {
   border-radius: 4px;
   padding: 5px 10px;
   font-size: 0.8em;
-  white-space: pre-wrap;
-  word-break: break-all;
+  white-space: normal;
+  word-break: break-word;
   width: 100%;
 }
 </style>

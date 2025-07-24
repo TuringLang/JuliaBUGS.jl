@@ -443,7 +443,7 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
             <NodePalette @select-palette-item="handlePaletteSelection" />
           </div>
           <div v-show="activeLeftTab === 'data'">
-            <DataInputPanel />
+            <DataInputPanel :is-active="activeLeftTab === 'data'" />
           </div>
         </div>
       </aside>

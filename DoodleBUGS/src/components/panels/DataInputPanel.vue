@@ -7,13 +7,32 @@ import 'codemirror/mode/javascript/javascript.js';
 import CodeMirror from 'codemirror';
 import type { Editor } from 'codemirror';
 
+const props = defineProps<{
+  isActive: boolean;
+}>();
+
 const dataStore = useDataStore();
 const editorContainer = ref<HTMLDivElement | null>(null);
 let cmInstance: Editor | null = null;
 let isUpdatingFromSource = false;
 
+const jsonError = ref<string | null>(null);
+
+/**
+ * Validates a string to see if it is valid JSON.
+ * Updates the reactive `jsonError` ref with the specific error message if parsing fails.
+ * @param jsonString The string to validate.
+ */
+const validateJson = (jsonString: string) => {
+  try {
+    JSON.parse(jsonString);
+    jsonError.value = null;
+  } catch (e: any) {
+    jsonError.value = e.message;
+  }
+};
+
 onMounted(async () => {
-  // Wait for the next DOM update cycle to ensure the container is fully rendered.
   await nextTick();
   if (editorContainer.value) {
     cmInstance = CodeMirror(editorContainer.value, {
@@ -26,8 +45,17 @@ onMounted(async () => {
 
     cmInstance.on('change', (instance) => {
       if (isUpdatingFromSource) return;
-      dataStore.currentGraphDataString = instance.getValue();
+      const currentValue = instance.getValue();
+      dataStore.currentGraphDataString = currentValue;
+      validateJson(currentValue);
     });
+    
+    // Perform initial validation on mount.
+    validateJson(dataStore.currentGraphDataString);
+
+    if (props.isActive) {
+      nextTick(() => cmInstance?.refresh());
+    }
   }
 });
 
@@ -44,6 +72,16 @@ watch(() => dataStore.currentGraphDataString, (newData) => {
     isUpdatingFromSource = true;
     cmInstance.setValue(newData);
     isUpdatingFromSource = false;
+    validateJson(newData);
+  }
+});
+
+watch(() => props.isActive, (newVal) => {
+  if (newVal && cmInstance) {
+    // Refresh the editor when its container becomes visible to prevent rendering issues.
+    nextTick(() => {
+      cmInstance?.refresh();
+    });
   }
 });
 </script>
@@ -56,6 +94,14 @@ watch(() => dataStore.currentGraphDataString, (newData) => {
     </p>
     <div class="editor-wrapper">
       <div ref="editorContainer" class="editor-container"></div>
+    </div>
+    <div class="footer-status">
+      <div v-if="jsonError" class="status-message error">
+        <i class="fas fa-times-circle"></i> {{ jsonError }}
+      </div>
+      <div v-else class="status-message success">
+        <i class="fas fa-check-circle"></i> Valid JSON
+      </div>
     </div>
   </div>
 </template>
@@ -102,5 +148,29 @@ h4 {
 .editor-container {
   flex-grow: 1;
   position: relative;
+}
+.footer-status {
+  flex-shrink: 0;
+  padding-top: 8px;
+  min-height: 25px;
+  height: auto;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  font-size: 0.8em;
+}
+.status-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-weight: 500;
+}
+.status-message.success {
+  color: var(--color-success);
+}
+.status-message.error {
+  color: var(--color-danger);
+  white-space: normal;
+  word-break: break-word;
 }
 </style>

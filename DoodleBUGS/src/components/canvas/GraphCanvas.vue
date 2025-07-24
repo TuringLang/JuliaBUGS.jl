@@ -54,9 +54,62 @@ const formatElementsForCytoscape = (elements: GraphElement[], errors: Map<string
   });
 };
 
+/**
+ * Synchronizes the Cytoscape instance with the current graph elements from props.
+ * This function handles adding, updating, and removing nodes and edges.
+ * @param elementsToSync The array of graph elements to display.
+ * @param errorsToSync The map of validation errors.
+ */
+const syncGraphWithProps = (elementsToSync: GraphElement[], errorsToSync: Map<string, ValidationError[]>) => {
+  if (!cy) return;
+
+  const formattedElements = formatElementsForCytoscape(elementsToSync, errorsToSync);
+
+  cy.batch(() => {
+    const newElementIds = new Set(elementsToSync.map(el => el.id));
+
+    // Remove elements that are no longer in the props
+    cy!.elements().forEach(cyEl => {
+      if (!newElementIds.has(cyEl.id())) {
+        cyEl.remove();
+      }
+    });
+
+    // Add or update elements
+    formattedElements.forEach(formattedEl => {
+      if (!formattedEl.data.id) return;
+
+      const existingCyEl = cy!.getElementById(formattedEl.data.id);
+
+      if (existingCyEl.empty()) {
+        cy!.add(formattedEl);
+      } else {
+        existingCyEl.data(formattedEl.data);
+        if (formattedEl.group === 'nodes') {
+          const newNode = formattedEl as ElementDefinition & { position: {x: number, y: number} };
+          const currentCyPos = existingCyEl.position();
+          if (newNode.position.x !== currentCyPos.x || newNode.position.y !== currentCyPos.y) {
+            existingCyEl.position(newNode.position);
+          }
+          const parentCollection = existingCyEl.parent();
+          const currentParentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined;
+          
+          if (newNode.data.parent !== currentParentId) {
+            existingCyEl.move({ parent: newNode.data.parent ?? null });
+          }
+        }
+      }
+    });
+  });
+};
+
+
 onMounted(() => {
   if (cyContainer.value) {
     cy = initCytoscape(cyContainer.value, []);
+
+    // Perform the initial synchronization to draw the graph on load
+    syncGraphWithProps(props.elements, props.validationErrors);
 
     setGridSize(props.gridSize);
     if (props.isGridEnabled) {
@@ -159,46 +212,10 @@ watch(() => props.gridSize, (newValue) => {
   }
 });
 
+// Watch for subsequent changes to props and re-sync the graph
 watch([() => props.elements, () => props.validationErrors], ([newElements, newErrors]) => {
-  if (!cy) return;
-
-  const formattedElements = formatElementsForCytoscape(newElements, newErrors);
-
-  cy.batch(() => {
-    const newElementIds = new Set(newElements.map(el => el.id));
-
-    cy!.elements().forEach(cyEl => {
-      if (!newElementIds.has(cyEl.id())) {
-        cyEl.remove();
-      }
-    });
-
-    formattedElements.forEach(formattedEl => {
-      if (!formattedEl.data.id) return;
-
-      const existingCyEl = cy!.getElementById(formattedEl.data.id);
-
-      if (existingCyEl.empty()) {
-        cy!.add(formattedEl);
-      } else {
-        existingCyEl.data(formattedEl.data);
-        if (formattedEl.group === 'nodes') {
-          const newNode = formattedEl as ElementDefinition & { position: {x: number, y: number} };
-          const currentCyPos = existingCyEl.position();
-          if (newNode.position.x !== currentCyPos.x || newNode.position.y !== currentCyPos.y) {
-            existingCyEl.position(newNode.position);
-          }
-          const parentCollection = existingCyEl.parent();
-          const currentParentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined;
-          
-          if (newNode.data.parent !== currentParentId) {
-            existingCyEl.move({ parent: newNode.data.parent ?? null });
-          }
-        }
-      }
-    });
-  });
-}, { deep: true, immediate: true });
+  syncGraphWithProps(newElements, newErrors);
+}, { deep: true });
 </script>
 
 <template>

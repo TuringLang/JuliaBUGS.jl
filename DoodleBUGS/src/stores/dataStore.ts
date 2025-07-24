@@ -5,16 +5,8 @@ import type { ModelData } from '../types';
 
 const defaultData = 
 `{
-  "data": {
-    "N": 30,
-    "T": 5,
-    "x": [8.0, 15.0, 22.0, 29.0, 36.0],
-    "xbar": 22
-  },
-  "inits": {
-    "alpha": "fill(250.0, 30)",
-    "beta": "fill(6.0, 30)"
-  }
+  "data": {},
+  "inits": {}
 }`;
 
 export const useDataStore = defineStore('data', () => {
@@ -46,18 +38,18 @@ export const useDataStore = defineStore('data', () => {
     }
   });
 
-  // Use a ref and a watcher instead of a computed property to resolve the type mismatch.
-  // This ensures that `parsedGraphData` is a writable Ref<ModelData>, which is expected by downstream composables.
-  const parsedGraphData = ref<ModelData>({ data: {}, inits: {} });
-
-  watch(currentGraphDataString, (newString) => {
+  const parsedGraphData = computed<ModelData>(() => {
     try {
-      parsedGraphData.value = JSON.parse(newString);
+      const parsed = JSON.parse(currentGraphDataString.value);
+      return {
+        data: parsed.data || {},
+        inits: parsed.inits || {}
+      };
     } catch (e) {
-      // If JSON is invalid, reset to a default empty structure.
-      parsedGraphData.value = { data: {}, inits: {} };
+      // If JSON is invalid, return a default empty structure.
+      return { data: {}, inits: {} };
     }
-  }, { immediate: true });
+  });
 
 
   const updateGraphData = (graphId: string, newData: string) => {
