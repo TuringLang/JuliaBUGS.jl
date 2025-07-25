@@ -6,14 +6,9 @@ import { useDataStore } from '../../stores/dataStore';
 import { useBugsCodeGenerator } from '../../composables/useBugsCodeGenerator';
 import BaseButton from '../ui/BaseButton.vue';
 
-// Core CodeMirror and theme
 import 'codemirror/lib/codemirror.css';
 import 'codemirror/theme/material-darker.css';
-
-// Language mode
 import 'codemirror/mode/julia/julia.js';
-
-// Addons for scrolling and code folding
 import 'codemirror/addon/scroll/simplescrollbars.css';
 import 'codemirror/addon/scroll/simplescrollbars.js';
 import 'codemirror/addon/fold/foldgutter.css';
@@ -114,7 +109,6 @@ const copyCodeToClipboard = () => {
 </template>
 
 <style>
-/* enforce not-allowed cursor everywhere in the editor */
 .code-preview-panel .CodeMirror,
 .code-preview-panel .CodeMirror-scroll,
 .code-preview-panel .CodeMirror-gutters,
@@ -125,25 +119,21 @@ const copyCodeToClipboard = () => {
   cursor: not-allowed !important;
 }
 
-/* hide the text cursor in read-only mode */
 .code-preview-panel .CodeMirror-readonly .CodeMirror-cursors {
   display: none !important;
 }
 
-/* ensure scrollbars */
 .code-preview-panel .CodeMirror-scroll {
   overflow: auto !important;
   white-space: pre !important;
 }
 
-/* simple scrollbar styling */
 .code-preview-panel .CodeMirror-simplescroll-horizontal div,
 .code-preview-panel .CodeMirror-simplescroll-vertical div {
   background: #666;
   border-radius: 3px;
 }
 
-/* fold gutter icons */
 .code-preview-panel .CodeMirror-foldgutter-open,
 .code-preview-panel .CodeMirror-foldgutter-folded {
   color: #999;
