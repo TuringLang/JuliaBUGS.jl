@@ -1,13 +1,25 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, computed, nextTick } from 'vue';
+import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useGraphStore } from '../../stores/graphStore';
 import { useDataStore } from '../../stores/dataStore';
 import { useBugsCodeGenerator } from '../../composables/useBugsCodeGenerator';
 import BaseButton from '../ui/BaseButton.vue';
+
+// Core CodeMirror and theme
 import 'codemirror/lib/codemirror.css';
 import 'codemirror/theme/material-darker.css';
+
+// Language mode
 import 'codemirror/mode/julia/julia.js';
+
+// Addons for scrolling and code folding
+import 'codemirror/addon/scroll/simplescrollbars.css';
+import 'codemirror/addon/scroll/simplescrollbars.js';
+import 'codemirror/addon/fold/foldgutter.css';
+import 'codemirror/addon/fold/foldgutter.js';
+import 'codemirror/addon/fold/brace-fold.js';
+
 import CodeMirror from 'codemirror';
 import type { Editor } from 'codemirror';
 
@@ -36,8 +48,11 @@ onMounted(() => {
       lineNumbers: true,
       readOnly: true,
       tabSize: 2,
+      scrollbarStyle: "simple",
+      foldGutter: true,
+      gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"]
     });
-    // Initial refresh if the tab is already active on component mount.
+
     if (props.isActive) {
       nextTick(() => cmInstance?.refresh());
     }
@@ -60,7 +75,6 @@ watch(generatedCode, (newCode) => {
 
 watch(() => props.isActive, (newVal) => {
   if (newVal && cmInstance) {
-    // Refresh the editor when its container becomes visible to prevent rendering issues.
     nextTick(() => {
       cmInstance?.refresh();
     });
@@ -82,23 +96,57 @@ const copyCodeToClipboard = () => {
 
 <template>
   <div class="code-preview-panel">
-    <h4>Generated BUGS Code</h4>
-    <div class="code-output">
+    <div class="header-section">
+      <h4>Generated BUGS Code</h4>
+    </div>
+    <div class="editor-wrapper">
       <div ref="editorContainer" class="editor-container"></div>
-      <BaseButton @click="copyCodeToClipboard" class="copy-button" type="secondary">
+      <BaseButton
+        @click="copyCodeToClipboard"
+        class="copy-button"
+        type="secondary"
+      >
         <i v-if="copySuccess" class="fas fa-check"></i>
-        <span v-else>Copy Code</span>
+        <i v-else class="fas fa-copy"></i>
       </BaseButton>
     </div>
   </div>
 </template>
 
 <style>
-.code-preview-panel .CodeMirror {
-  height: 100%;
-  font-family: 'Fira Code', 'Cascadia Code', monospace;
-  font-size: 0.85em;
-  border-radius: 8px;
+/* enforce not-allowed cursor everywhere in the editor */
+.code-preview-panel .CodeMirror,
+.code-preview-panel .CodeMirror-scroll,
+.code-preview-panel .CodeMirror-gutters,
+.code-preview-panel .CodeMirror textarea,
+.code-preview-panel .CodeMirror pre,
+.code-preview-panel .CodeMirror-line,
+.code-preview-panel .CodeMirror-code {
+  cursor: not-allowed !important;
+}
+
+/* hide the text cursor in read-only mode */
+.code-preview-panel .CodeMirror-readonly .CodeMirror-cursors {
+  display: none !important;
+}
+
+/* ensure scrollbars */
+.code-preview-panel .CodeMirror-scroll {
+  overflow: auto !important;
+  white-space: pre !important;
+}
+
+/* simple scrollbar styling */
+.code-preview-panel .CodeMirror-simplescroll-horizontal div,
+.code-preview-panel .CodeMirror-simplescroll-vertical div {
+  background: #666;
+  border-radius: 3px;
+}
+
+/* fold gutter icons */
+.code-preview-panel .CodeMirror-foldgutter-open,
+.code-preview-panel .CodeMirror-foldgutter-folded {
+  color: #999;
 }
 </style>
 
@@ -108,54 +156,59 @@ const copyCodeToClipboard = () => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+}
+
+.header-section {
+  flex-shrink: 0;
 }
 
 h4 {
-  margin: 0 0 10px 0;
+  margin: 0 0 10px;
   color: var(--color-heading);
   text-align: center;
   border-bottom: 1px solid var(--color-border-light);
   padding-bottom: 10px;
 }
 
-.code-output {
+.editor-wrapper {
+  position: relative;
   flex-grow: 1;
-  display: flex;
-  flex-direction: column;
   background-color: #282c34;
   border-radius: 8px;
   overflow: hidden;
-  position: relative;
-  min-height: 0;
 }
 
 .editor-container {
-  flex-grow: 1;
-  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 .copy-button {
   position: absolute;
-  bottom: 10px;
-  right: 10px;
-  padding: 8px 15px;
+  bottom: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
   background-color: var(--color-secondary);
-  color: white;
-  border: none;
-  border-radius: 5px;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   cursor: pointer;
-  z-index: 10;
   opacity: 0.9;
-  min-width: 100px;
-  text-align: center;
+  transition: background-color 0.2s, opacity 0.2s;
 }
 
 .copy-button:hover {
-  opacity: 1;
   background-color: var(--color-secondary-hover);
+  opacity: 1;
 }
 
+.copy-button .fa-copy,
 .copy-button .fa-check {
-  color: var(--color-success);
+  font-size: 1.1rem;
 }
 </style>
