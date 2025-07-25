@@ -4,7 +4,7 @@ import type { NodeType } from '../../types';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseInput from '../ui/BaseInput.vue';
 import DropdownMenu from '../common/DropdownMenu.vue';
-import { nodeDefinitions } from '../../config/nodeDefinitions';
+import { nodeDefinitions, exampleModels } from '../../config/nodeDefinitions';
 
 const props = defineProps<{
   projectName: string | null;
@@ -45,10 +45,6 @@ const displayTitle = computed(() => {
   }
   return 'No Project Selected';
 });
-
-const exampleModels = [
-    { name: 'Rats Model', key: 'rats' },
-];
 
 const setAddNodeType = (type: NodeType) => {
   emit('update:currentNodeType', type);

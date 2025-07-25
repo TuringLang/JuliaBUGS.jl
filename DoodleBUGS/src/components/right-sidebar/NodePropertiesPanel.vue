@@ -35,6 +35,18 @@ const currentDistribution = computed(() => {
     return undefined;
 });
 
+const selectedDistributionOption = computed(() => {
+  if (localElement.value?.type === 'node') {
+    const node = localElement.value as GraphNode;
+    if (node.distribution) {
+      const definition = getNodeDefinition(node.nodeType);
+      const distProp = definition?.properties.find(p => p.key === 'distribution');
+      return distProp?.options?.find(opt => opt.value === node.distribution);
+    }
+  }
+  return undefined;
+});
+
 const elementErrors = computed(() => {
     if (props.selectedElement) {
         return props.validationErrors.get(props.selectedElement.id) || [];
@@ -74,7 +86,7 @@ const cancelDelete = () => {
 };
 
 const getErrorForField = (fieldKey: string): string | undefined => {
-    if (isNode.value && localElement.value) {
+    if (localElement.value) {
         const errors = props.validationErrors.get(localElement.value.id);
         const error = errors?.find(err => err.field === fieldKey);
         return error?.message;
@@ -90,7 +102,6 @@ const getErrorForField = (fieldKey: string): string | undefined => {
       <p>Select a node or edge on the canvas to view/edit its properties.</p>
     </div>
     <div v-else class="properties-form">
-      <!-- Validation Errors Display -->
       <div v-if="elementErrors.length > 0" class="validation-errors-container">
         <h5 class="validation-title">
             <i class="fas fa-exclamation-triangle"></i> Validation Issues
@@ -108,7 +119,6 @@ const getErrorForField = (fieldKey: string): string | undefined => {
       </div>
 
       <template v-if="isNode && currentDefinition">
-        <!-- Standard Properties -->
         <div v-for="prop in currentDefinition.properties" :key="prop.key" class="form-group">
           <label :for="`prop-${prop.key}`">{{ prop.label }}:</label>
           <div class="input-wrapper">
@@ -139,10 +149,12 @@ const getErrorForField = (fieldKey: string): string | undefined => {
             />
           </div>
           <small v-if="prop.helpText" class="help-text">{{ prop.helpText }}</small>
+          <small v-if="prop.key === 'distribution' && selectedDistributionOption?.helpText" class="help-text distribution-help">
+            {{ selectedDistributionOption.helpText }}
+          </small>
           <small v-if="getErrorForField(prop.key)" class="error-message">{{ getErrorForField(prop.key) }}</small>
         </div>
 
-        <!-- Dynamic Distribution Parameters -->
         <template v-if="currentDistribution && currentDefinition.parameters">
             <div 
                 v-for="(paramName, index) in currentDistribution.paramNames" 
@@ -163,7 +175,16 @@ const getErrorForField = (fieldKey: string): string | undefined => {
       </template>
 
       <template v-else-if="isEdge">
-        <!-- Edge Properties -->
+        <div class="form-group">
+          <label for="edge-name">Name (Label):</label>
+          <BaseInput
+            id="edge-name"
+            type="text"
+            v-model="(localElement as GraphEdge).name"
+            placeholder="Enter optional edge label"
+            @input="handleUpdate"
+          />
+        </div>
       </template>
 
       <div class="action-buttons">
@@ -177,7 +198,7 @@ const getErrorForField = (fieldKey: string): string | undefined => {
       <template #body>
         <p v-if="localElement">
           Are you sure you want to delete this {{ localElement.type }}?
-          <strong v-if="'name' in localElement">{{ localElement.name }}</strong>
+          <strong v-if="'name' in localElement && localElement.name">{{ localElement.name }}</strong>
           This action cannot be undone.
         </p>
       </template>
@@ -289,6 +310,13 @@ h4 {
   font-size: 0.75em;
   color: #888;
   margin-top: 2px;
+  line-height: 1.4;
+}
+
+.distribution-help {
+  background-color: var(--color-background-mute);
+  padding: 5px 8px;
+  border-radius: 4px;
 }
 
 .error-message {

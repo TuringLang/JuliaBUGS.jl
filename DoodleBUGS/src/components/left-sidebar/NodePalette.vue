@@ -1,15 +1,10 @@
 <script setup lang="ts">
-import type { PaletteItemType, NodeType } from '../../types';
-import { nodeDefinitions } from '../../config/nodeDefinitions';
+import type { PaletteItemType } from '../../types';
+import { nodeDefinitions, connectionPaletteItems } from '../../config/nodeDefinitions';
 
 const emit = defineEmits<{
   (e: 'select-palette-item', itemType: PaletteItemType): void;
 }>();
-
-// This is now the only hardcoded item, as it's not a node.
-const connectionItems: { label: string; type: 'add-edge'; styleClass: string; description: string }[] = [
-  { label: 'Add Edge', type: 'add-edge', styleClass: 'connection', description: 'Connect two nodes' },
-];
 
 const onDragStart = (event: DragEvent, itemType: PaletteItemType) => {
   if (event.dataTransfer) {
@@ -28,7 +23,6 @@ const onClickPaletteItem = (itemType: PaletteItemType) => {
     <div class="palette-section">
       <h5 class="section-title">Nodes</h5>
       <div class="palette-grid">
-        <!-- This list is generated dynamically from the config file -->
         <div
           v-for="node in nodeDefinitions"
           :key="node.nodeType"
@@ -49,12 +43,11 @@ const onClickPaletteItem = (itemType: PaletteItemType) => {
       <h5 class="section-title">Connections</h5>
       <div class="palette-grid">
         <div
-          v-for="connection in connectionItems"
+          v-for="connection in connectionPaletteItems"
           :key="connection.type"
           class="palette-card"
           :class="connection.styleClass"
-          draggable="true"
-          @dragstart="onDragStart($event, connection.type)"
+          draggable="false"
           @click="onClickPaletteItem(connection.type)"
           :title="connection.description"
         >
@@ -67,7 +60,6 @@ const onClickPaletteItem = (itemType: PaletteItemType) => {
 </template>
 
 <style scoped>
-/* Styles remain the same */
 .node-palette {
   padding: 12px;
   background-color: var(--color-background-soft);

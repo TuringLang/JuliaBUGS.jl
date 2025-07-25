@@ -20,28 +20,28 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>, modelData: R
     }
 
     // --- Topological Sort (Kahn's algorithm) ---
-    const inDegree: { [key: string]: number } = {};
-    const adj: { [key: string]: string[] } = {};
+    const nodeInDegree: { [key: string]: number } = {};
+    const adjacencyList: { [key: string]: string[] } = {};
     nodes.forEach(node => {
-      inDegree[node.id] = 0;
-      adj[node.id] = [];
+      nodeInDegree[node.id] = 0;
+      adjacencyList[node.id] = [];
     });
     edges.forEach(edge => {
-      if (adj[edge.source] && inDegree[edge.target] !== undefined) {
-        adj[edge.source].push(edge.target);
-        inDegree[edge.target]++;
+      if (adjacencyList[edge.source] && nodeInDegree[edge.target] !== undefined) {
+        adjacencyList[edge.source].push(edge.target);
+        nodeInDegree[edge.target]++;
       }
     });
-    const queue = nodes.filter(node => inDegree[node.id] === 0).map(n => n.id);
+    const queue = nodes.filter(node => nodeInDegree[node.id] === 0).map(n => n.id);
     const sortedNodeIds: string[] = [];
     while (queue.length > 0) {
-      const u = queue.shift()!;
-      sortedNodeIds.push(u);
-      adj[u]?.forEach(vId => {
-        if (inDegree[vId] !== undefined) {
-          inDegree[vId]--;
-          if (inDegree[vId] === 0) {
-            queue.push(vId);
+      const currentNodeId = queue.shift()!;
+      sortedNodeIds.push(currentNodeId);
+      adjacencyList[currentNodeId]?.forEach(childNodeId => {
+        if (nodeInDegree[childNodeId] !== undefined) {
+          nodeInDegree[childNodeId]--;
+          if (nodeInDegree[childNodeId] === 0) {
+            queue.push(childNodeId);
           }
         }
       });
@@ -94,11 +94,11 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>, modelData: R
         } else {
           // It's a regular node
           const nodeName = childNode.indices ? `${childNode.name}[${childNode.indices}]` : childNode.name;
-          
+
           if (childNode.nodeType === 'stochastic' || childNode.nodeType === 'observed') {
             const params = [childNode.param1, childNode.param2, childNode.param3]
-                .filter(p => p && String(p).trim() !== '')
-                .join(', ');
+              .filter(p => p && String(p).trim() !== '')
+              .join(', ');
             lines.push(`${indent}${nodeName} ~ ${childNode.distribution}(${params})`);
           } else if (childNode.nodeType === 'deterministic' && childNode.equation) {
             lines.push(`${indent}${nodeName} <- ${childNode.equation}`);
@@ -115,7 +115,7 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>, modelData: R
       ...finalCodeLines,
       '}'
     ].join('\n');
-    
+
     return modelString;
   });
 

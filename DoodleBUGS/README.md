@@ -6,6 +6,8 @@ A web-based graphical editor for creating Bayesian models, inspired by DoodleBUG
 
 This project is currently in the pre-alpha phase of development as part of the Google Summer of Code 2025 program.
 
+> Please avoid using this project in WebKit browsers like Safari, as it may not function correctly. We recommend using Chromium-based browsers such as Google Chrome or Microsoft Edge for the best experience, It works fine in Firefox as well. And it does not work in any browser in ipadOS and iOS as all browsers in these platforms are WebKit based.
+
 - Contributor: [Shravan Goswami @shravanngoswamii](https://github.com/shravanngoswamii)
 - Mentor: [Xianda Sun @sunxd3](https://github.com/sunxd3)
 

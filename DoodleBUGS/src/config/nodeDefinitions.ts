@@ -1,4 +1,4 @@
-import type { NodeType } from '../types';
+import type { NodeType, ExampleModel } from '../types';
 
 export type NodePropertyType = 'select' | 'text' | 'number' | 'checkbox';
 
@@ -7,6 +7,7 @@ export interface SelectOption {
     label: string;
     paramCount?: number;
     paramNames?: string[];
+    helpText?: string;
 }
 
 export interface NodeProperty {
@@ -30,13 +31,13 @@ export interface NodeDefinition {
 }
 
 const distributionOptions: SelectOption[] = [
-    { value: 'dnorm', label: 'Normal (dnorm)', paramCount: 2, paramNames: ['mean', 'precision'] },
-    { value: 'dgamma', label: 'Gamma (dgamma)', paramCount: 2, paramNames: ['shape', 'rate'] },
-    { value: 'dbeta', label: 'Beta (dbeta)', paramCount: 2, paramNames: ['shape1', 'shape2'] },
-    { value: 'dbin', label: 'Binomial (dbin)', paramCount: 2, paramNames: ['prob', 'size'] },
-    { value: 'dpois', label: 'Poisson (dpois)', paramCount: 1, paramNames: ['lambda'] },
-    { value: 'dt', label: 'Student-t (dt)', paramCount: 3, paramNames: ['mu', 'tau', 'k'] },
-    { value: 'dunif', label: 'Uniform (dunif)', paramCount: 2, paramNames: ['lower', 'upper'] },
+    { value: 'dnorm', label: 'Normal (dnorm)', paramCount: 2, paramNames: ['mean', 'precision'], helpText: 'Parameters: mean (expected value), precision (1/variance). Note: BUGS uses precision instead of standard deviation.' },
+    { value: 'dgamma', label: 'Gamma (dgamma)', paramCount: 2, paramNames: ['shape', 'rate'], helpText: 'Parameters: shape (alpha), rate (1/beta).' },
+    { value: 'dbeta', label: 'Beta (dbeta)', paramCount: 2, paramNames: ['shape1', 'shape2'], helpText: 'Parameters: shape1 (alpha), shape2 (beta).' },
+    { value: 'dbin', label: 'Binomial (dbin)', paramCount: 2, paramNames: ['prob', 'size'], helpText: 'Parameters: prob (success probability), size (number of trials).' },
+    { value: 'dpois', label: 'Poisson (dpois)', paramCount: 1, paramNames: ['lambda'], helpText: 'Parameter: lambda (expected number of occurrences).' },
+    { value: 'dt', label: 'Student-t (dt)', paramCount: 3, paramNames: ['mu', 'tau', 'k'], helpText: 'Parameters: mu (mean), tau (precision), k (degrees of freedom).' },
+    { value: 'dunif', label: 'Uniform (dunif)', paramCount: 2, paramNames: ['lower', 'upper'], helpText: 'Parameters: lower (minimum value), upper (maximum value).' },
 ];
 
 export const nodeDefinitions: NodeDefinition[] = [
@@ -113,6 +114,14 @@ export const nodeDefinitions: NodeDefinition[] = [
     },
 ];
 
+export const connectionPaletteItems: { label: string; type: 'add-edge'; styleClass: string; description: string }[] = [
+  { label: 'Add Edge', type: 'add-edge', styleClass: 'connection', description: 'Connect two nodes' },
+];
+
+export const exampleModels: { name: string; key: string }[] = [
+    { name: 'Rats Model', key: 'rats' },
+];
+
 export const getNodeDefinition = (type: NodeType): NodeDefinition | undefined => {
     return nodeDefinitions.find(def => def.nodeType === type);
 };
@@ -129,7 +138,6 @@ export const getDefaultNodeData = (type: NodeType): { [key: string]: any } => {
     definition.properties.forEach(prop => {
         defaultData[prop.key] = prop.defaultValue;
     });
-    // Also initialize parameter fields
     if (definition.parameters) {
         definition.parameters.forEach(param => {
             defaultData[param.key] = param.defaultValue;

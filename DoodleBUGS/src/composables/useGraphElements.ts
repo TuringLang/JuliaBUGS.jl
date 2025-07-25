@@ -40,9 +40,9 @@ export function useGraphElements() {
 
     // Recursively find all descendant nodes when deleting a plate
     if (elementToDelete.type === 'node' && elementToDelete.nodeType === 'plate') {
-      const findDescendants = (pId: string) => {
+      const findDescendants = (parentId: string) => {
         elements.value.forEach(el => {
-          if (el.type === 'node' && el.parent === pId) {
+          if (el.type === 'node' && el.parent === parentId) {
             allIdsToDelete.add(el.id);
             if (el.nodeType === 'plate') {
               findDescendants(el.id);
