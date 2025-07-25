@@ -440,7 +440,7 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
           <div v-show="activeLeftTab === 'palette'">
             <NodePalette @select-palette-item="handlePaletteSelection" />
           </div>
-          <div v-show="activeLeftTab === 'data'">
+          <div v-show="activeLeftTab === 'data'" class="fill-height">
             <DataInputPanel :is-active="activeLeftTab === 'data'" />
           </div>
         </div>
@@ -624,6 +624,12 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
   -webkit-overflow-scrolling: touch;
   transition: opacity 0.3s ease-in-out;
   box-sizing: border-box;
+}
+
+.left-sidebar-content > .fill-height {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .right-sidebar {

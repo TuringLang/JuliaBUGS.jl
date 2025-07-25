@@ -4,6 +4,8 @@ import { useDataStore } from '../../stores/dataStore';
 import 'codemirror/lib/codemirror.css';
 import 'codemirror/theme/material-darker.css';
 import 'codemirror/mode/javascript/javascript.js';
+import 'codemirror/addon/scroll/simplescrollbars.css';
+import 'codemirror/addon/scroll/simplescrollbars.js';
 import CodeMirror from 'codemirror';
 import type { Editor } from 'codemirror';
 
@@ -41,6 +43,8 @@ onMounted(async () => {
       theme: 'material-darker',
       lineNumbers: true,
       tabSize: 2,
+      scrollbarStyle: "simple",
+      lineWrapping: false,
     });
 
     cmInstance.on('change', (instance) => {
@@ -113,6 +117,14 @@ watch(() => props.isActive, (newVal) => {
   font-size: 0.85em;
   border-radius: 8px;
 }
+.CodeMirror-simplescroll-horizontal div, .CodeMirror-simplescroll-vertical div {
+  background: #666;
+  border-radius: 3px;
+}
+.CodeMirror-simplescroll-horizontal, .CodeMirror-simplescroll-vertical {
+  background: transparent;
+  z-index: 99;
+}
 </style>
 
 <style scoped>
@@ -140,7 +152,6 @@ h4 {
   flex-grow: 1;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  overflow: hidden;
   display: flex;
   position: relative;
   min-height: 0;
@@ -148,6 +159,7 @@ h4 {
 .editor-container {
   flex-grow: 1;
   position: relative;
+  overflow: auto;
 }
 .footer-status {
   flex-shrink: 0;
