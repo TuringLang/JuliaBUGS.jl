@@ -23,6 +23,8 @@ export @bugs
 export compile, initialize!
 
 export @varname
+export @model
+export @of
 
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
@@ -280,7 +282,10 @@ Only defined with `MCMCChains` extension.
 """
 function gen_chains end
 
+include("of_type.jl")
 include("model_macro.jl")
+
+export of
 
 include("serialization.jl")
 
