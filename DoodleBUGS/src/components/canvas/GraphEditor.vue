@@ -50,13 +50,16 @@ const getNextNodeName = (): string => {
 
     // Fallback if all Greek letters are used
     let i = 1;
-    while (true) {
-        const fallbackName = `var.${i}`;
+    while (i < 1000) { // Add a reasonable limit to prevent infinite loops
+        const fallbackName = `var${i}`;
         if (!existingNames.has(fallbackName)) {
             return fallbackName;
         }
         i++;
     }
+
+    // Ultimate fallback for extreme cases
+    return `node_${Date.now()}`;
 };
 
 
@@ -75,11 +78,10 @@ const createNode = (nodeType: NodeType, position: { x: number; y: number }, pare
         name: newName,
     };
 
-    // Provide sensible, valid defaults for newly created stochastic nodes.
     if (newNode.nodeType === 'stochastic' || newNode.nodeType === 'observed') {
         if (newNode.distribution === 'dnorm') {
-            newNode.param1 = "0.0"; // Default mean
-            newNode.param2 = "1.0"; // Default precision
+            newNode.param1 = "0.0";
+            newNode.param2 = "1.0";
         }
         if (newNode.distribution === 'dgamma') {
             newNode.param1 = "0.001";
@@ -137,7 +139,7 @@ const handleCanvasTap = (event: EventObject) => {
             type: 'edge',
             source: sourceNode.value.id(),
             target: tappedNode.id(),
-            name: `Edge ${sourceNode.value.data('name')} -> ${tappedNode.data('name')}`,
+            name: ``,
           };
           addElement(newEdge);
           sourceNode.value?.removeClass('cy-connecting');

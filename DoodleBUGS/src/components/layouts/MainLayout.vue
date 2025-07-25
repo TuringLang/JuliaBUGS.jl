@@ -98,7 +98,6 @@ const handleApplyLayout = (layoutName: string) => {
 onMounted(() => {
   projectStore.loadProjects();
 
-  // If no projects exist (e.g., first time user or incognito), create a default project and graph.
   if (projectStore.projects.length === 0) {
     projectStore.createProject('Default Project');
     if (projectStore.currentProjectId) {
@@ -113,25 +112,21 @@ onMounted(() => {
       graphStore.selectGraph(lastGraphId);
     }
   } else if (projectStore.currentProject?.graphs.length) {
-    // If no specific graph was saved, select the first one in the current project
     graphStore.selectGraph(projectStore.currentProject.graphs[0].id);
   }
 
   validateGraph();
 });
 
-// Watch for changes in the current graph ID and apply the default layout.
 watch(() => graphStore.currentGraphId, (newId, oldId) => {
   if (newId && newId !== oldId) {
-    // Wait for Vue to update the DOM with the new graph elements.
     nextTick(() => {
-      // A short timeout ensures Cytoscape has fully rendered the new elements before applying the layout.
       setTimeout(() => {
         handleApplyLayout('dagre');
       }, 100);
     });
   }
-}, { immediate: true }); // `immediate: true` ensures this runs on initial load
+}, { immediate: true });
 
 const currentProjectName = computed(() => projectStore.currentProject?.name || null);
 const activeGraphName = computed(() => {
@@ -378,6 +373,9 @@ const handleLoadExample = async (exampleKey: string) => {
             if (dataResponse.ok) {
                 const data = await dataResponse.json();
                 dataStore.currentGraphDataString = JSON.stringify(data, null, 2);
+            } else {
+                console.error(`Failed to load example data: ${dataResponse.statusText}`);
+                alert("Failed to load the example data. See console for details.");
             }
         }
         
@@ -734,5 +732,4 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
 .resizer-right {
   border-left: 1px solid var(--color-border);
 }
-
 </style>

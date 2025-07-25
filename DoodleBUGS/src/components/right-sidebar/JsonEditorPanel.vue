@@ -15,7 +15,7 @@ import 'codemirror/addon/fold/foldgutter.js';
 import 'codemirror/addon/fold/brace-fold.js';
 
 import CodeMirror from 'codemirror';
-import type { Editor, TextMarker, Position } from 'codemirror';
+import type { Editor, TextMarker } from 'codemirror';
 
 const props = defineProps<{
   isActive: boolean;
@@ -28,26 +28,40 @@ const errorText = ref('');
 const editorContainer = ref<HTMLDivElement | null>(null);
 let cmInstance: Editor | null = null;
 let isUpdatingFromSource = false;
+let existingMarks: Set<TextMarker> = new Set();
 
 const graphElements = computed(() => graphStore.currentGraphElements);
 const protectedFields = ['id', 'type', 'nodeType', 'source', 'target', 'parent'];
 
 const markProtectedFields = () => {
   if (!cmInstance) return;
-  cmInstance.getAllMarks().forEach((mark: TextMarker) => mark.clear());
+
   const text = cmInstance.getValue();
   const lines = text.split('\n');
+  const newMarks: Set<TextMarker> = new Set();
+
   lines.forEach((line: string, index: number) => {
     const trimmedLine = line.trim();
     const keyMatch = trimmedLine.match(/"([^"]+)"\s*:/);
     if (keyMatch && protectedFields.includes(keyMatch[1])) {
-      cmInstance?.markText(
+      const mark = cmInstance?.markText(
         { line: index, ch: 0 },
         { line: index, ch: line.length },
         { readOnly: true, className: 'cm-protected' }
       );
+      if (mark) newMarks.add(mark);
     }
   });
+
+  // Clear marks that are no longer needed
+  existingMarks.forEach((mark) => {
+    if (!newMarks.has(mark)) {
+      mark.clear();
+    }
+  });
+
+  // Update the existing marks set
+  existingMarks = newMarks;
 };
 
 onMounted(() => {
@@ -73,7 +87,6 @@ onMounted(() => {
     markProtectedFields();
     isUpdatingFromSource = false;
 
-    // Initial refresh if the tab is already active on component mount.
     if (props.isActive) {
       nextTick(() => cmInstance?.refresh());
     }
@@ -109,7 +122,6 @@ watch(graphElements, (newElements) => {
 
 watch(() => props.isActive, (newVal) => {
   if (newVal && cmInstance) {
-    // Refresh the editor when its container becomes visible to prevent rendering issues.
     nextTick(() => {
       cmInstance?.refresh();
     });
