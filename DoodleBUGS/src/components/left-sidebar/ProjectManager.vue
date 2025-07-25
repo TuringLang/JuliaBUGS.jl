@@ -4,12 +4,17 @@ import { useProjectStore, type Project, type GraphMeta } from '../../stores/proj
 import { useGraphStore } from '../../stores/graphStore';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseModal from '../common/BaseModal.vue';
+import BaseInput from '../ui/BaseInput.vue';
 
 const projectStore = useProjectStore();
 const graphStore = useGraphStore();
 
 const showDeleteConfirmModal = ref(false);
 const itemToDelete = ref<{ type: 'project' | 'graph', id: string, name: string, projectId?: string } | null>(null);
+
+const showRenameModal = ref(false);
+const itemToRename = ref<{ type: 'project' | 'graph', id: string, name: string, projectId?: string } | null>(null);
+const newItemName = ref('');
 
 const contextMenu = ref<{ type: 'project' | 'graph', id: string, x: number, y: number } | null>(null);
 const contextMenuRef = ref<HTMLElement | null>(null);
@@ -73,9 +78,24 @@ const executeDeletion = () => {
   }
 };
 
-const cancelDeletion = () => {
-  showDeleteConfirmModal.value = false;
-  itemToDelete.value = null;
+const openRenameModal = (type: 'project' | 'graph', id: string, name: string, projectId?: string) => {
+    itemToRename.value = { type, id, name, projectId };
+    newItemName.value = name;
+    showRenameModal.value = true;
+    contextMenu.value = null;
+};
+
+const executeRename = () => {
+    if (itemToRename.value && newItemName.value.trim()) {
+        if (itemToRename.value.type === 'project') {
+            projectStore.renameProject(itemToRename.value.id, newItemName.value);
+        } else if (itemToRename.value.type === 'graph' && itemToRename.value.projectId) {
+            projectStore.renameGraphInProject(itemToRename.value.projectId, itemToRename.value.id, newItemName.value);
+        }
+    }
+    showRenameModal.value = false;
+    itemToRename.value = null;
+    newItemName.value = '';
 };
 
 const emit = defineEmits(['newProject', 'newGraph']);
@@ -140,18 +160,20 @@ const handleNewGraph = () => {
       :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }">
       <template v-if="contextMenu.type === 'project'">
         <div class="context-menu-item" @click="handleNewGraph"><i class="fas fa-plus"></i> New Graph</div>
+        <div class="context-menu-item" @click="openRenameModal('project', contextMenu!.id, projectStore.projects.find(p => p.id === contextMenu!.id)!.name)"><i class="fas fa-edit"></i> Rename</div>
         <div class="context-menu-item danger"
           @click="confirmDeletion('project', contextMenu!.id, projectStore.projects.find((p: Project) => p.id === contextMenu!.id)!.name)">
           <i class="fas fa-trash-alt"></i> Delete Project</div>
       </template>
       <template v-if="contextMenu.type === 'graph'">
+        <div class="context-menu-item" @click="openRenameModal('graph', contextMenu!.id, currentProjectGraphs.find(g => g.id === contextMenu!.id)!.name, currentProject!.id)"><i class="fas fa-edit"></i> Rename</div>
         <div class="context-menu-item danger"
           @click="confirmDeletion('graph', contextMenu!.id, currentProjectGraphs.find((g: GraphMeta) => g.id === contextMenu!.id)!.name, currentProject!.id)">
           <i class="fas fa-trash-alt"></i> Delete Graph</div>
       </template>
     </div>
 
-    <BaseModal :is-open="showDeleteConfirmModal" @close="cancelDeletion">
+    <BaseModal :is-open="showDeleteConfirmModal" @close="showDeleteConfirmModal = false">
       <template #header>
         <h3>Confirm Deletion</h3>
       </template>
@@ -164,9 +186,23 @@ const handleNewGraph = () => {
         </p>
       </template>
       <template #footer>
-        <BaseButton @click="cancelDeletion" type="secondary">Cancel</BaseButton>
+        <BaseButton @click="showDeleteConfirmModal = false" type="secondary">Cancel</BaseButton>
         <BaseButton @click="executeDeletion" type="danger">Delete</BaseButton>
       </template>
+    </BaseModal>
+
+    <BaseModal :is-open="showRenameModal" @close="showRenameModal = false">
+        <template #header>
+            <h3>Rename {{ itemToRename?.type }}</h3>
+        </template>
+        <template #body>
+            <label for="new-item-name" style="display: block; margin-bottom: 8px; font-weight: 500;">New Name:</label>
+            <BaseInput id="new-item-name" v-model="newItemName" :placeholder="`Enter new ${itemToRename?.type} name`" @keyup.enter="executeRename" />
+        </template>
+        <template #footer>
+            <BaseButton @click="showRenameModal = false" type="secondary">Cancel</BaseButton>
+            <BaseButton @click="executeRename" type="primary">Rename</BaseButton>
+        </template>
     </BaseModal>
   </div>
 </template>
@@ -183,7 +219,7 @@ const handleNewGraph = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 15px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--color-border-light);
   flex-shrink: 0;
 }
@@ -191,12 +227,12 @@ const handleNewGraph = () => {
 .header h4 {
   margin: 0;
   color: var(--color-heading);
-  font-size: 1.1em;
+  font-size: 1em;
   font-weight: 600;
 }
 
 .add-project-btn {
-  padding: 4px 8px;
+  padding: 2px 6px;
 }
 
 .empty-state {
@@ -212,38 +248,37 @@ const handleNewGraph = () => {
 
 .empty-state p {
   margin: 0 0 10px 0;
-  font-size: 1.1em;
-  font-weight: 500;
+  font-size: 1em;
 }
 
 .empty-state-inner {
   color: var(--color-secondary);
   text-align: center;
-  padding: 15px;
-  font-size: 0.9em;
+  padding: 10px;
+  font-size: 0.85em;
 }
 
 .empty-state-inner p {
-  margin: 0 0 10px 0;
+  margin: 0 0 8px 0;
 }
 
 .project-list {
   flex-grow: 1;
   overflow-y: auto;
-  padding: 10px;
+  padding: 5px;
 }
 
 .project-item {
-  margin-bottom: 5px;
+  margin-bottom: 2px;
 }
 
 .project-header {
   display: flex;
   align-items: center;
-  padding: 8px 10px;
+  padding: 6px 8px;
   cursor: pointer;
   transition: background-color 0.2s ease;
-  gap: 8px;
+  gap: 6px;
   border-radius: 4px;
 }
 
@@ -263,10 +298,10 @@ const handleNewGraph = () => {
 }
 
 .icon-chevron {
-  font-size: 0.7em;
+  font-size: 0.6em;
   color: var(--color-secondary);
   transition: transform 0.2s ease-in-out;
-  width: 12px;
+  width: 10px;
   text-align: center;
 }
 
@@ -276,7 +311,7 @@ const handleNewGraph = () => {
 
 .icon-folder {
   color: var(--color-primary);
-  font-size: 0.9em;
+  font-size: 0.8em;
 }
 
 .project-name {
@@ -286,42 +321,36 @@ const handleNewGraph = () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 0.9em;
 }
 
 .graph-list {
-  padding-left: 20px;
+  padding-left: 15px;
   overflow: hidden;
   border-left: 1px solid var(--color-border-light);
-  margin-left: 14px;
+  margin-left: 12px;
+  padding-top: 2px;
+  padding-bottom: 2px;
 }
 
-.slide-fade-enter-active {
-  transition: all 0.3s ease-out;
+.slide-fade-enter-active, .slide-fade-leave-active {
+  transition: all 0.2s ease-out;
+  max-height: 500px;
 }
-
-.slide-fade-leave-active {
-  transition: all 0.2s cubic-bezier(1, 0.5, 0.8, 1);
-}
-
-.slide-fade-enter-from,
-.slide-fade-leave-to {
+.slide-fade-enter-from, .slide-fade-leave-to {
   max-height: 0;
   opacity: 0;
-}
-
-.slide-fade-enter-to,
-.slide-fade-leave-from {
-  max-height: 500px;
+  transform: translateY(-10px);
 }
 
 .graph-item {
   display: flex;
   align-items: center;
-  padding: 6px 10px;
-  margin-top: 4px;
+  padding: 4px 8px;
+  margin-top: 2px;
   cursor: pointer;
   transition: background-color 0.2s ease, color 0.2s ease;
-  gap: 8px;
+  gap: 6px;
   border-radius: 4px;
 }
 
@@ -340,16 +369,19 @@ const handleNewGraph = () => {
 
 .graph-item span {
   flex-grow: 1;
-  font-size: 0.9em;
+  font-size: 0.85em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .icon-file {
-  font-size: 0.9em;
+  font-size: 0.8em;
   color: var(--color-secondary);
 }
 
 .context-menu-btn {
-  padding: 4px 8px;
+  padding: 2px 6px;
   font-size: 0.8em;
   background-color: transparent;
   color: var(--color-secondary);
@@ -375,7 +407,7 @@ const handleNewGraph = () => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border-radius: 6px;
   padding: 8px 0;
-  z-index: 1000;
+  z-index: 1100; /* High z-index to appear above other UI elements */
   min-width: 180px;
 }
 

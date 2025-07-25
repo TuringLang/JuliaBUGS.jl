@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import type { GraphElement, GraphNode, GraphEdge, NodeType } from '../../types';
+import type { GraphElement, GraphNode, GraphEdge, ValidationError } from '../../types';
 import BaseInput from '../ui/BaseInput.vue';
 import BaseSelect from '../ui/BaseSelect.vue';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseModal from '../common/BaseModal.vue';
+import { getNodeDefinition, getDistributionByName, type NodeDefinition } from '../../config/nodeDefinitions';
 
 const props = defineProps<{
   selectedElement: GraphElement | null;
+  validationErrors: Map<string, ValidationError[]>;
 }>();
 
 const emit = defineEmits<{
@@ -18,53 +20,46 @@ const emit = defineEmits<{
 const localElement = ref<GraphElement | null>(null);
 const showDeleteConfirmModal = ref(false);
 
-watch(() => props.selectedElement, (newVal) => {
-  if (newVal) {
-    const newElement = JSON.parse(JSON.stringify(newVal));
-    if (newElement.type === 'node') {
-      newElement.distribution = newElement.distribution ?? '';
-      newElement.equation = newElement.equation ?? '';
-      if (typeof newElement.initialValue === 'object' && newElement.initialValue !== null) {
-        newElement.initialValue = JSON.stringify(newElement.initialValue);
-      } else {
-        newElement.initialValue = newElement.initialValue ?? '';
-      }
-      newElement.indices = newElement.indices ?? '';
-      newElement.loopVariable = newElement.loopVariable ?? '';
-      newElement.loopRange = newElement.loopRange ?? '';
-    } else if (newElement.type === 'edge') {
-      newElement.name = newElement.name ?? '';
-    }
-    localElement.value = newElement;
-  } else {
-    localElement.value = null;
+const currentDefinition = computed<NodeDefinition | undefined>(() => {
+  if (localElement.value?.type === 'node') {
+    return getNodeDefinition((localElement.value as GraphNode).nodeType);
   }
+  return undefined;
+});
+
+const currentDistribution = computed(() => {
+    if (localElement.value?.type === 'node') {
+        const node = localElement.value as GraphNode;
+        return getDistributionByName(node.distribution || '');
+    }
+    return undefined;
+});
+
+const selectedDistributionOption = computed(() => {
+  if (localElement.value?.type === 'node') {
+    const node = localElement.value as GraphNode;
+    if (node.distribution) {
+      const definition = getNodeDefinition(node.nodeType);
+      const distProp = definition?.properties.find(p => p.key === 'distribution');
+      return distProp?.options?.find(opt => opt.value === node.distribution);
+    }
+  }
+  return undefined;
+});
+
+const elementErrors = computed(() => {
+    if (props.selectedElement) {
+        return props.validationErrors.get(props.selectedElement.id) || [];
+    }
+    return [];
+});
+
+watch(() => props.selectedElement, (newVal) => {
+  localElement.value = newVal ? JSON.parse(JSON.stringify(newVal)) : null;
 }, { deep: true, immediate: true });
 
 const isNode = computed(() => localElement.value?.type === 'node');
 const isEdge = computed(() => localElement.value?.type === 'edge');
-const isPlate = computed(() => isNode.value && (localElement.value as GraphNode).nodeType === 'plate');
-
-const nodeTypes: { value: NodeType; label: string }[] = [
-  { value: 'stochastic', label: 'Stochastic' },
-  { value: 'deterministic', label: 'Deterministic' },
-  { value: 'constant', label: 'Constant' },
-  { value: 'observed', label: 'Observed' },
-  { value: 'plate', label: 'Plate' },
-];
-
-const distributionOptions = [
-  { value: 'dnorm', label: 'Normal (dnorm)' },
-  { value: 'dbeta', label: 'Beta (dbeta)' },
-  { value: 'dgamma', label: 'Gamma (dgamma)' },
-  { value: 'dbin', label: 'Binomial (dbin)' },
-  { value: 'dpois', label: 'Poisson (dpois)' },
-  { value: 'dt', label: 'Student-t (dt)' },
-  { value: 'dchisqr', label: 'Chi-squared (dchisqr)' },
-  { value: 'dweib', label: 'Weibull (dweib)' },
-  { value: 'dexp', label: 'Exponential (dexp)' },
-  { value: 'dloglik', label: 'Log-Likelihood (dloglik)' },
-];
 
 const handleUpdate = () => {
   if (localElement.value) {
@@ -89,7 +84,17 @@ const executeDelete = () => {
 const cancelDelete = () => {
   showDeleteConfirmModal.value = false;
 };
+
+const getErrorForField = (fieldKey: string): string | undefined => {
+    if (localElement.value) {
+        const errors = props.validationErrors.get(localElement.value.id);
+        const error = errors?.find(err => err.field === fieldKey);
+        return error?.message;
+    }
+    return undefined;
+};
 </script>
+
 <template>
   <div class="node-properties-panel">
     <h4>Properties</h4>
@@ -97,89 +102,92 @@ const cancelDelete = () => {
       <p>Select a node or edge on the canvas to view/edit its properties.</p>
     </div>
     <div v-else class="properties-form">
+      <div v-if="elementErrors.length > 0" class="validation-errors-container">
+        <h5 class="validation-title">
+            <i class="fas fa-exclamation-triangle"></i> Validation Issues
+        </h5>
+        <ul>
+          <li v-for="(error, index) in elementErrors" :key="index">
+            {{ error.message }}
+          </li>
+        </ul>
+      </div>
+
       <div class="form-group">
         <label for="element-id">ID:</label>
         <BaseInput id="element-id" :model-value="localElement.id" disabled />
       </div>
-      <div class="form-group">
-        <label for="element-name">Name:</label>
-        <BaseInput id="element-name" v-model="localElement.name!" @input="handleUpdate" />
-      </div>
 
-      <template v-if="isNode">
-        <div class="form-group">
-          <label for="node-type">Node Type:</label>
-          <BaseSelect id="node-type" v-model="(localElement as GraphNode).nodeType" :options="nodeTypes"
-            @change="handleUpdate" />
+      <template v-if="isNode && currentDefinition">
+        <div v-for="prop in currentDefinition.properties" :key="prop.key" class="form-group">
+          <label :for="`prop-${prop.key}`">{{ prop.label }}:</label>
+          <div class="input-wrapper">
+            <BaseSelect
+              v-if="prop.type === 'select'"
+              :id="`prop-${prop.key}`"
+              v-model="(localElement as GraphNode)[prop.key]"
+              :options="prop.options!"
+              @change="handleUpdate"
+              :class="{ 'has-error': getErrorForField(prop.key) }"
+            />
+            <input
+              v-else-if="prop.type === 'checkbox'"
+              type="checkbox"
+              :id="`prop-${prop.key}`"
+              v-model="(localElement as GraphNode)[prop.key]"
+              @change="handleUpdate"
+              class="form-checkbox"
+            />
+            <BaseInput
+              v-else
+              :id="`prop-${prop.key}`"
+              :type="prop.type"
+              v-model="(localElement as GraphNode)[prop.key]"
+              :placeholder="prop.placeholder"
+              @input="handleUpdate"
+              :class="{ 'has-error': getErrorForField(prop.key) }"
+            />
+          </div>
+          <small v-if="prop.helpText" class="help-text">{{ prop.helpText }}</small>
+          <small v-if="prop.key === 'distribution' && selectedDistributionOption?.helpText" class="help-text distribution-help">
+            {{ selectedDistributionOption.helpText }}
+          </small>
+          <small v-if="getErrorForField(prop.key)" class="error-message">{{ getErrorForField(prop.key) }}</small>
         </div>
-        <template v-if="!isPlate">
-          <div class="form-group">
-            <label for="node-position-x">Position X:</label>
-            <BaseInput id="node-position-x" type="number" v-model.number="(localElement as GraphNode).position.x"
-              @input="handleUpdate" />
-          </div>
-          <div class="form-group">
-            <label for="node-position-y">Position Y:</label>
-            <BaseInput id="node-position-y" type="number" v-model.number="(localElement as GraphNode).position.y"
-              @input="handleUpdate" />
-          </div>
-          <div class="form-section-header">BUGS Specific Properties</div>
-          <div class="form-group">
-            <label for="distribution">Distribution (~):</label>
-            <BaseSelect id="distribution" v-model="(localElement as GraphNode).distribution!"
-              :options="distributionOptions" @change="handleUpdate" />
-          </div>
-          <div class="form-group">
-            <label for="equation">Equation (&lt;--):</label>
-            <BaseInput id="equation" v-model="(localElement as GraphNode).equation!" placeholder="e.g., a + b * x"
-              @input="handleUpdate" />
-          </div>
-          <div class="form-group checkbox-group">
-            <label for="observed">Observed:</label>
-            <input type="checkbox" id="observed" v-model="(localElement as GraphNode).observed"
-              @change="handleUpdate" />
-          </div>
-          <div class="form-group">
-            <label for="initial-value">Initial Value:</label>
-            <BaseInput id="initial-value" v-model="(localElement as GraphNode).initialValue"
-              placeholder="e.g., 0.5 or list(value=0.5)" @input="handleUpdate" />
-          </div>
-          <div class="form-group">
-            <label for="variable-indices">Indices (e.g., i,j):</label>
-            <BaseInput id="variable-indices" v-model="(localElement as GraphNode).indices!"
-              placeholder="e.g., i,j or 1:N" @input="handleUpdate" />
-            <small class="help-text">Use comma-separated for multiple indices, e.g., 'i,j' or '1:N, 1:M'</small>
-          </div>
-        </template>
-        <template v-else>
-          <div class="form-section-header">Plate Properties</div>
-          <div class="form-group">
-            <label for="plate-loop-variable">Loop Variable:</label>
-            <BaseInput id="plate-loop-variable" v-model="(localElement as GraphNode).loopVariable!"
-              placeholder="e.g., i" @input="handleUpdate" />
-          </div>
-          <div class="form-group">
-            <label for="plate-loop-range">Loop Range:</label>
-            <BaseInput id="plate-loop-range" v-model="(localElement as GraphNode).loopRange!" placeholder="e.g., 1:N"
-              @input="handleUpdate" />
-          </div>
-          <small class="help-text">Define the iteration for this plate, e.g., 'i' in '1:N'</small>
+
+        <template v-if="currentDistribution && currentDefinition.parameters">
+            <div 
+                v-for="(paramName, index) in currentDistribution.paramNames" 
+                :key="paramName" 
+                class="form-group"
+            >
+                <label :for="`param-${index}`">{{ paramName }}:</label>
+                <BaseInput
+                    :id="`param-${index}`"
+                    type="text"
+                    v-model="(localElement as GraphNode)[`param${index + 1}`]"
+                    placeholder="Enter value or parent name"
+                    @input="handleUpdate"
+                    :class="{ 'has-error': getErrorForField(`param${index + 1}`) }"
+                />
+            </div>
         </template>
       </template>
 
       <template v-else-if="isEdge">
         <div class="form-group">
-          <label for="edge-source">Source Node ID:</label>
-          <BaseInput id="edge-source" :model-value="(localElement as GraphEdge).source" disabled />
-        </div>
-        <div class="form-group">
-          <label for="edge-target">Target Node ID:</label>
-          <BaseInput id="edge-target" :model-value="(localElement as GraphEdge).target" disabled />
+          <label for="edge-name">Name (Label):</label>
+          <BaseInput
+            id="edge-name"
+            type="text"
+            v-model="(localElement as GraphEdge).name"
+            placeholder="Enter optional edge label"
+            @input="handleUpdate"
+          />
         </div>
       </template>
 
       <div class="action-buttons">
-        <BaseButton @click="handleUpdate" type="primary">Apply Changes</BaseButton>
         <BaseButton @click="confirmDelete" type="danger">Delete Element</BaseButton>
       </div>
     </div>
@@ -188,7 +196,10 @@ const cancelDelete = () => {
         <h3>Confirm Deletion</h3>
       </template>
       <template #body>
-        <p>Are you sure you want to delete "{{ localElement?.name || localElement?.id }}"? This action cannot be undone.
+        <p v-if="localElement">
+          Are you sure you want to delete this {{ localElement.type }}?
+          <strong v-if="'name' in localElement && localElement.name">{{ localElement.name }}</strong>
+          This action cannot be undone.
         </p>
       </template>
       <template #footer>
@@ -198,6 +209,7 @@ const cancelDelete = () => {
     </BaseModal>
   </div>
 </template>
+
 <style scoped>
 .node-properties-panel {
   padding: 15px;
@@ -228,8 +240,32 @@ h4 {
   display: flex;
   flex-direction: column;
   gap: 15px;
-  overflow-y: auto;
   padding-right: 5px;
+}
+
+.validation-errors-container {
+    background-color: #fffbe6;
+    border: 1px solid #ffe58f;
+    border-radius: 4px;
+    padding: 10px 15px;
+    margin-bottom: 10px;
+}
+
+.validation-title {
+    margin: 0 0 8px 0;
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #d46b08;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.validation-errors-container ul {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 0.85em;
+    color: #d46b08;
 }
 
 .form-group {
@@ -242,39 +278,51 @@ h4 {
   font-weight: 500;
   color: var(--color-text);
   font-size: 0.9em;
+  text-transform: capitalize;
 }
 
-.form-group input[type="text"],
-.form-group input[type="number"],
-.form-group select {
-  width: 100%;
-  box-sizing: border-box;
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
 }
 
-.form-group.checkbox-group {
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
+.input-wrapper .base-input,
+.input-wrapper .base-select {
+    flex-grow: 1;
 }
 
-.form-group input[type="checkbox"] {
-  width: auto;
-  margin-top: 0;
+.has-error {
+    border-color: var(--color-danger) !important;
 }
 
-.form-section-header {
-  margin-top: 15px;
-  padding-bottom: 5px;
-  border-bottom: 1px dashed var(--color-border-light);
-  font-weight: 600;
-  color: var(--color-primary);
-  font-size: 0.95em;
+.has-error:focus {
+    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.25) !important;
+}
+
+.form-group .form-checkbox {
+  width: 16px;
+  height: 16px;
+  align-self: flex-start;
 }
 
 .help-text {
   font-size: 0.75em;
   color: #888;
   margin-top: 2px;
+  line-height: 1.4;
+}
+
+.distribution-help {
+  background-color: var(--color-background-mute);
+  padding: 5px 8px;
+  border-radius: 4px;
+}
+
+.error-message {
+    font-size: 0.75em;
+    color: var(--color-danger);
+    margin-top: 2px;
 }
 
 .action-buttons {

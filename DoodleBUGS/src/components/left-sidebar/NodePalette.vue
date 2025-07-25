@@ -1,21 +1,10 @@
 <script setup lang="ts">
-import type { NodeType, PaletteItemType } from '../../types';
+import type { PaletteItemType } from '../../types';
+import { nodeDefinitions, connectionPaletteItems } from '../../config/nodeDefinitions';
 
 const emit = defineEmits<{
   (e: 'select-palette-item', itemType: PaletteItemType): void;
 }>();
-
-const nodeItems: { label: string; type: NodeType; icon: string; styleClass: string; description: string }[] = [
-  { label: 'Stochastic', type: 'stochastic', icon: '~', styleClass: 'stochastic', description: 'Random variable with a distribution' },
-  { label: 'Deterministic', type: 'deterministic', icon: '<-', styleClass: 'deterministic', description: 'Logical function of parents' },
-  { label: 'Constant', type: 'constant', icon: 'C', styleClass: 'constant', description: 'A fixed value or parameter' },
-  { label: 'Observed', type: 'observed', icon: 'O', styleClass: 'observed', description: 'A data node with a fixed value' },
-  { label: 'Plate', type: 'plate', icon: '[]', styleClass: 'plate', description: 'Represents a loop structure' },
-];
-
-const connectionItems: { label: string; type: 'add-edge'; styleClass: string; description: string }[] = [
-  { label: 'Add Edge', type: 'add-edge', styleClass: 'connection', description: 'Connect two nodes' },
-];
 
 const onDragStart = (event: DragEvent, itemType: PaletteItemType) => {
   if (event.dataTransfer) {
@@ -35,16 +24,16 @@ const onClickPaletteItem = (itemType: PaletteItemType) => {
       <h5 class="section-title">Nodes</h5>
       <div class="palette-grid">
         <div
-          v-for="node in nodeItems"
-          :key="node.type"
+          v-for="node in nodeDefinitions"
+          :key="node.nodeType"
           class="palette-card"
           :class="node.styleClass"
           draggable="true"
-          @dragstart="onDragStart($event, node.type)"
-          @click="onClickPaletteItem(node.type)"
+          @dragstart="onDragStart($event, node.nodeType)"
+          @click="onClickPaletteItem(node.nodeType)"
           :title="node.description"
         >
-          <div class="card-icon" :class="`icon-${node.type}`">{{ node.icon }}</div>
+          <div class="card-icon" :class="`icon-${node.nodeType}`">{{ node.icon }}</div>
           <span class="card-label">{{ node.label }}</span>
         </div>
       </div>
@@ -54,12 +43,11 @@ const onClickPaletteItem = (itemType: PaletteItemType) => {
       <h5 class="section-title">Connections</h5>
       <div class="palette-grid">
         <div
-          v-for="connection in connectionItems"
+          v-for="connection in connectionPaletteItems"
           :key="connection.type"
           class="palette-card"
           :class="connection.styleClass"
-          draggable="true"
-          @dragstart="onDragStart($event, connection.type)"
+          draggable="false"
           @click="onClickPaletteItem(connection.type)"
           :title="connection.description"
         >

@@ -3,13 +3,14 @@ import { ref, onMounted, onUnmounted, watch } from 'vue';
 import type { Core, EventObject, NodeSingular, ElementDefinition } from 'cytoscape';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGridSnapping } from '../../composables/useGridSnapping';
-import type { GraphElement, GraphNode, GraphEdge, NodeType, PaletteItemType } from '../../types';
+import type { GraphElement, GraphNode, GraphEdge, NodeType, PaletteItemType, ValidationError } from '../../types';
 
 const props = defineProps<{
   elements: GraphElement[];
   isGridEnabled: boolean;
   gridSize: number;
   currentMode: string;
+  validationErrors: Map<string, ValidationError[]>;
 }>();
 
 const emit = defineEmits<{
@@ -17,6 +18,7 @@ const emit = defineEmits<{
   (e: 'node-moved', payload: { nodeId: string, position: { x: number; y: number }, parentId: string | undefined }): void;
   (e: 'node-dropped', payload: { nodeType: NodeType; position: { x: number; y: number } }): void;
   (e: 'plate-emptied', plateId: string): void;
+  (e: 'element-remove', elementId: string): void;
 }>();
 
 const cyContainer = ref<HTMLElement | null>(null);
@@ -27,28 +29,87 @@ const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping
 
 const validNodeTypes: NodeType[] = ['stochastic', 'deterministic', 'constant', 'observed', 'plate'];
 
-const formatElementsForCytoscape = (elements: GraphElement[]): ElementDefinition[] => {
+const formatElementsForCytoscape = (elements: GraphElement[], errors: Map<string, ValidationError[]>): ElementDefinition[] => {
   return elements.map(el => {
     if (el.type === 'node') {
-      return { group: 'nodes', data: { ...el }, position: el.position };
+      const node = el as GraphNode;
+      const hasError = errors.has(node.id);
+      return { 
+        group: 'nodes', 
+        data: { ...node, hasError }, 
+        position: node.position 
+      };
     } else {
       const edge = el as GraphEdge;
       const targetNode = elements.find(n => n.id === edge.target && n.type === 'node') as GraphNode | undefined;
       const relType = (targetNode?.nodeType === 'stochastic' || targetNode?.nodeType === 'observed') ? 'stochastic' : 'deterministic';
-      return { 
-        group: 'edges', 
-        data: { 
+      return {
+        group: 'edges',
+        data: {
           ...edge,
-          relationshipType: relType 
-        } 
+          relationshipType: relType
+        }
       };
     }
   });
 };
 
+/**
+ * Synchronizes the Cytoscape instance with the current graph elements from props.
+ * This function handles adding, updating, and removing nodes and edges.
+ * @param elementsToSync The array of graph elements to display.
+ * @param errorsToSync The map of validation errors.
+ */
+const syncGraphWithProps = (elementsToSync: GraphElement[], errorsToSync: Map<string, ValidationError[]>) => {
+  if (!cy) return;
+
+  const formattedElements = formatElementsForCytoscape(elementsToSync, errorsToSync);
+
+  cy.batch(() => {
+    const newElementIds = new Set(elementsToSync.map(el => el.id));
+
+    // Remove elements that are no longer in the props
+    cy!.elements().forEach(cyEl => {
+      if (!newElementIds.has(cyEl.id())) {
+        cyEl.remove();
+      }
+    });
+
+    // Add or update elements
+    formattedElements.forEach(formattedEl => {
+      if (!formattedEl.data.id) return;
+
+      const existingCyEl = cy!.getElementById(formattedEl.data.id);
+
+      if (existingCyEl.empty()) {
+        cy!.add(formattedEl);
+      } else {
+        existingCyEl.data(formattedEl.data);
+        if (formattedEl.group === 'nodes') {
+          const newNode = formattedEl as ElementDefinition & { position: {x: number, y: number} };
+          const currentCyPos = existingCyEl.position();
+          if (newNode.position.x !== currentCyPos.x || newNode.position.y !== currentCyPos.y) {
+            existingCyEl.position(newNode.position);
+          }
+          const parentCollection = existingCyEl.parent();
+          const currentParentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined;
+          
+          if (newNode.data.parent !== currentParentId) {
+            existingCyEl.move({ parent: newNode.data.parent ?? null });
+          }
+        }
+      }
+    });
+  });
+};
+
+
 onMounted(() => {
   if (cyContainer.value) {
     cy = initCytoscape(cyContainer.value, []);
+
+    // Perform the initial synchronization to draw the graph on load
+    syncGraphWithProps(props.elements, props.validationErrors);
 
     setGridSize(props.gridSize);
     if (props.isGridEnabled) {
@@ -56,6 +117,13 @@ onMounted(() => {
     } else {
       disableGridSnapping();
     }
+
+    cy.container()?.addEventListener('cxt-remove', (event: Event) => {
+        const customEvent = event as CustomEvent;
+        if (customEvent.detail.elementId) {
+            emit('element-remove', customEvent.detail.elementId);
+        }
+    });
 
     cy.on('tap', (evt: EventObject) => {
       emit('canvas-tap', evt);
@@ -144,46 +212,10 @@ watch(() => props.gridSize, (newValue) => {
   }
 });
 
-watch(() => props.elements, (newElements) => {
-  if (!cy) return;
-
-  const formattedElements = formatElementsForCytoscape(newElements);
-
-  cy.batch(() => {
-    const newElementIds = new Set(newElements.map(el => el.id));
-
-    cy!.elements().forEach(cyEl => {
-      if (!newElementIds.has(cyEl.id())) {
-        cyEl.remove();
-      }
-    });
-
-    formattedElements.forEach(formattedEl => {
-      if (!formattedEl.data.id) return;
-
-      const existingCyEl = cy!.getElementById(formattedEl.data.id);
-      
-      if (existingCyEl.empty()) {
-        cy!.add(formattedEl);
-      } else {
-        existingCyEl.data(formattedEl.data);
-        if (formattedEl.group === 'nodes') {
-          const newNode = formattedEl as ElementDefinition & { position: {x: number, y: number} };
-          const currentCyPos = existingCyEl.position();
-          if (newNode.position.x !== currentCyPos.x || newNode.position.y !== currentCyPos.y) {
-            existingCyEl.position(newNode.position);
-          }
-          const parentCollection = existingCyEl.parent();
-          const currentParentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined;
-          
-          if (newNode.data.parent !== currentParentId) {
-            existingCyEl.move({ parent: newNode.data.parent ?? null });
-          }
-        }
-      }
-    });
-  });
-}, { deep: true, immediate: true });
+// Watch for subsequent changes to props and re-sync the graph
+watch([() => props.elements, () => props.validationErrors], ([newElements, newErrors]) => {
+  syncGraphWithProps(newElements, newErrors);
+}, { deep: true });
 </script>
 
 <template>

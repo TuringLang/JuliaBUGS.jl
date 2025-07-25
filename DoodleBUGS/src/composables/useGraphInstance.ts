@@ -1,21 +1,23 @@
 import cytoscape from 'cytoscape';
-import type { Core, ElementDefinition, NodeSingular } from 'cytoscape';
+import type { Core, ElementDefinition, NodeSingular, SingularElementReturnValue } from 'cytoscape';
 import gridGuide from 'cytoscape-grid-guide';
 import contextMenus from 'cytoscape-context-menus';
 import dagre from 'cytoscape-dagre';
 import fcose from 'cytoscape-fcose';
 import compoundDragAndDrop from 'cytoscape-compound-drag-and-drop';
+import svg from 'cytoscape-svg';
 
 cytoscape.use(gridGuide);
 cytoscape.use(contextMenus);
 cytoscape.use(dagre);
 cytoscape.use(fcose);
 cytoscape.use(compoundDragAndDrop);
+cytoscape.use(svg);
 
 let cyInstance: Core | null = null;
 
 interface ContextMenuEvent {
-  target: cytoscape.SingularElementReturnValue;
+  target: SingularElementReturnValue;
 }
 
 export function useGraphInstance() {
@@ -31,11 +33,25 @@ export function useGraphInstance() {
       style: [
         {
           selector: 'node',
-          style: { 'background-color': '#e0e0e0', 'border-color': '#555', 'border-width': 2, 'label': 'data(name)', 'text-valign': 'center', 'text-halign': 'center', 'padding': '10px', 'font-size': '10px', 'text-wrap': 'wrap', 'text-max-width': '80px', 'height': '60px', 'width': '60px', 'line-height': 1.2, 'border-style': 'solid', 'z-index': 10 },
+          style: { 
+            'background-color': '#e0e0e0', 'border-color': '#555', 'border-width': 2, 
+            'label': (ele: NodeSingular) => {
+                const name = ele.data('name');
+                const indices = ele.data('indices');
+                return indices ? `${name}[${indices}]` : name;
+            },
+            'text-valign': 'center', 'text-halign': 'center', 'padding': '10px', 'font-size': '10px', 
+            'text-wrap': 'wrap', 'text-max-width': '80px', 'height': '60px', 'width': '60px', 
+            'line-height': 1.2, 'border-style': 'solid', 'z-index': 10 
+          },
         },
         {
           selector: 'node[nodeType="plate"]',
-          style: { 'background-color': '#f0f8ff', 'border-color': '#4682b4', 'border-style': 'dashed', 'shape': 'round-rectangle', 'corner-radius': '10px' },
+          style: { 
+            'background-color': '#f0f8ff', 'border-color': '#4682b4', 'border-style': 'dashed', 
+            'shape': 'round-rectangle', 'corner-radius': '10px',
+            'label': (ele: NodeSingular) => `for(${ele.data('loopVariable')} in ${ele.data('loopRange')})`
+          },
         },
         {
           selector: ':parent',
@@ -47,7 +63,7 @@ export function useGraphInstance() {
         },
         {
           selector: 'node[nodeType="deterministic"]',
-          style: { 'background-color': '#e0ffe0', 'border-color': '#28a745', 'shape': 'round-rectangle' },
+          style: { 'background-color': '#e0ffe0', 'border-color': '#28a745', 'shape': 'triangle' },
         },
         {
           selector: 'node[nodeType="constant"]',
@@ -56,6 +72,10 @@ export function useGraphInstance() {
         {
           selector: 'node[nodeType="observed"]',
           style: { 'background-color': '#e0f0ff', 'border-color': '#007bff', 'border-style': 'dashed', 'shape': 'ellipse' },
+        },
+        {
+          selector: 'node[?hasError]',
+          style: { 'border-color': '#ffc107', 'border-width': 3, 'border-style': 'double' }
         },
         {
           selector: 'edge',
@@ -120,7 +140,24 @@ export function useGraphInstance() {
     });
     
     (cyInstance as any).gridGuide({ drawGrid: false, snapToGridOnRelease: true, snapToGridDuringDrag: true, gridSpacing: 20 });
-    (cyInstance as any).contextMenus({ menuItems: [ { id: 'remove', content: 'Remove', selector: 'node, edge', onClickFunction: (evt: ContextMenuEvent) => evt.target.remove() } ] });
+    
+    (cyInstance as any).contextMenus({
+      menuItems: [
+        {
+          id: 'remove',
+          content: 'Remove',
+          selector: 'node, edge',
+          onClickFunction: (evt: ContextMenuEvent) => {
+            const targetElement = evt.target;
+            targetElement.cy().container()?.dispatchEvent(
+              new CustomEvent('cxt-remove', {
+                detail: { elementId: targetElement.id() }
+              })
+            );
+          }
+        }
+      ]
+    });
 
     return cyInstance;
   };

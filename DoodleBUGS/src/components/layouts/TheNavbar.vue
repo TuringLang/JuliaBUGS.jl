@@ -4,6 +4,7 @@ import type { NodeType } from '../../types';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseInput from '../ui/BaseInput.vue';
 import DropdownMenu from '../common/DropdownMenu.vue';
+import { nodeDefinitions, exampleModels } from '../../config/nodeDefinitions';
 
 const props = defineProps<{
   projectName: string | null;
@@ -14,6 +15,7 @@ const props = defineProps<{
   currentNodeType: NodeType;
   isLeftSidebarOpen: boolean;
   isRightSidebarOpen: boolean;
+  isModelValid: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -23,14 +25,15 @@ const emit = defineEmits<{
   (e: 'update:currentNodeType', type: NodeType): void;
   (e: 'new-project'): void;
   (e: 'new-graph'): void;
-  (e: 'save-current-graph'): void;
   (e: 'toggle-left-sidebar'): void;
   (e: 'toggle-right-sidebar'): void;
   (e: 'open-about-modal'): void;
+  (e: 'open-export-modal', format: 'png' | 'jpg' | 'svg'): void;
   (e: 'export-json'): void;
-  (e: 'export-png'): void;
   (e: 'apply-layout', layoutName: string): void;
   (e: 'load-example', exampleKey: string): void;
+  (e: 'validate-model'): void;
+  (e: 'show-validation-issues'): void;
 }>();
 
 const displayTitle = computed(() => {
@@ -42,18 +45,6 @@ const displayTitle = computed(() => {
   }
   return 'No Project Selected';
 });
-
-const basicNodeTypes: { label: string; value: NodeType }[] = [
-  { label: 'Stochastic Node', value: 'stochastic' },
-  { label: 'Deterministic Node', value: 'deterministic' },
-  { label: 'Constant Node', value: 'constant' },
-  { label: 'Observed Node', value: 'observed' },
-  { label: 'Plate (Loop)', value: 'plate' },
-];
-
-const exampleModels = [
-    { name: 'Rats Model', key: 'rats' },
-];
 
 const setAddNodeType = (type: NodeType) => {
   emit('update:currentNodeType', type);
@@ -78,10 +69,19 @@ const handleGridSizeInput = (event: Event) => {
           <template #content>
             <a href="#" @click.prevent="emit('new-project')">New Project...</a>
             <a href="#" @click.prevent="emit('new-graph')">New Graph...</a>
-            <a href="#" @click.prevent="emit('save-current-graph')">Save Current Graph</a>
+          </template>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <template #trigger>
+            <BaseButton type="ghost" size="small">Export</BaseButton>
+          </template>
+          <template #content>
+            <a href="#" @click.prevent="emit('open-export-modal', 'png')">as PNG...</a>
+            <a href="#" @click.prevent="emit('open-export-modal', 'jpg')">as JPG...</a>
+            <a href="#" @click.prevent="emit('open-export-modal', 'svg')">as SVG...</a>
             <div class="dropdown-divider"></div>
-            <a href="#" @click.prevent="emit('export-json')">Export as JSON</a>
-            <a href="#" @click.prevent="emit('export-png')">Export as PNG</a>
+            <a href="#" @click.prevent="emit('export-json')">as JSON</a>
           </template>
         </DropdownMenu>
 
@@ -91,9 +91,9 @@ const handleGridSizeInput = (event: Event) => {
           </template>
           <template #content>
             <div class="dropdown-section-title">Nodes</div>
-            <a v-for="nodeType in basicNodeTypes" :key="nodeType.value" href="#"
-              @click.prevent="setAddNodeType(nodeType.value)">
-              {{ nodeType.label }}
+            <a v-for="nodeDef in nodeDefinitions" :key="nodeDef.nodeType" href="#"
+              @click.prevent="setAddNodeType(nodeDef.nodeType)">
+              {{ nodeDef.label }}
             </a>
             <div class="dropdown-divider"></div>
             <a href="#" @click.prevent="emit('update:currentMode', 'add-edge')">Add Edge</a>
@@ -157,6 +157,20 @@ const handleGridSizeInput = (event: Event) => {
       </div>
     </div>
 
+    <div class="navbar-center">
+        <BaseButton @click="emit('validate-model')" type="ghost" size="small" title="Re-run model validation">
+            <i class="fas fa-sync-alt"></i> Validate
+        </BaseButton>
+        <div 
+            @click="emit('show-validation-issues')" 
+            class="validation-status" 
+            :class="isModelValid ? 'valid' : 'invalid'" 
+            :title="isModelValid ? 'Model is valid' : 'Model has errors. Click to see details.'"
+        >
+            <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
+        </div>
+    </div>
+
     <div class="navbar-right">
       <div class="pane-toggles">
         <button @click="emit('toggle-left-sidebar')" :class="{ active: isLeftSidebarOpen }" title="Toggle Left Sidebar">
@@ -200,6 +214,12 @@ const handleGridSizeInput = (event: Event) => {
   display: flex;
   align-items: center;
   gap: 20px;
+}
+
+.navbar-center {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .navbar-brand {
@@ -324,5 +344,28 @@ const handleGridSizeInput = (event: Event) => {
 .pane-toggles button svg {
   width: 18px;
   height: 18px;
+}
+
+.validation-status {
+    font-size: 1.2em;
+    padding: 5px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.validation-status:hover {
+    transform: scale(1.1);
+}
+
+.validation-status.valid {
+    color: var(--color-success);
+}
+
+.validation-status.invalid {
+    color: var(--color-danger);
 }
 </style>
