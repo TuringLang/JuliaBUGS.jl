@@ -41,8 +41,10 @@ export function useGraphValidator(
           const parentEdges = edges.filter(e => e.target === node.id);
           let providedParams = parentEdges.length;
           
-          const literalParams = [node.param1, node.param2, node.param3].filter(p => p && String(p).trim() !== '');
-          
+          const literalParams = Object.keys(node)
+            .filter(key => key.startsWith('param') && node[key] && String(node[key]).trim() !== '')
+            .map(key => node[key]);
+
           const linkedParams = literalParams.filter(p => nodeNames.has(p));
           const numericParams = literalParams.length - linkedParams.length;
 

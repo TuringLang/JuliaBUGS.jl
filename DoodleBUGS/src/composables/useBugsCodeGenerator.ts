@@ -4,7 +4,7 @@ import type { GraphElement, GraphNode, GraphEdge, ModelData } from '../types';
 
 /**
  * Composable that generates BUGS model code from graph elements.
- * This version correctly handles nested plates and substitutes constant values.
+ * This correctly handles nested plates and substitutes constant values.
  * @param elements - A ref to the graph elements.
  * @param modelData - A ref to the parsed model data.
  */
@@ -12,14 +12,13 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>, modelData: R
   const generatedCode = computed(() => {
     const nodes = elements.value.filter(el => el.type === 'node') as GraphNode[];
     const edges = elements.value.filter(el => el.type === 'edge') as GraphEdge[];
-    const dataKeys = new Set(Object.keys(modelData.value.data));
     const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
     if (nodes.length === 0) {
       return 'model {\n  # Your model will appear here...\n}';
     }
 
-    // --- Topological Sort (Kahn's algorithm) ---
+    // Topological Sort (Kahn's algorithm)
     const nodeInDegree: { [key: string]: number } = {};
     const adjacencyList: { [key: string]: string[] } = {};
     nodes.forEach(node => {
@@ -47,7 +46,6 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>, modelData: R
       });
     }
 
-    // --- Build a Tree Structure for Plates and Nodes ---
     interface TreeMember {
       id: string;
       type: 'node' | 'plate';
@@ -57,11 +55,7 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>, modelData: R
     const treeMemberMap = new Map<string, TreeMember>([['root', treeRoot]]);
 
     nodes.forEach(node => {
-      if (node.nodeType === 'plate') {
-        treeMemberMap.set(node.id, { id: node.id, type: 'plate', children: [] });
-      } else {
-        treeMemberMap.set(node.id, { id: node.id, type: 'node', children: [] });
-      }
+      treeMemberMap.set(node.id, { id: node.id, type: node.nodeType === 'plate' ? 'plate' : 'node', children: [] });
     });
 
     nodes.forEach(node => {
@@ -73,7 +67,6 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>, modelData: R
       }
     });
 
-    // --- Recursive Code Generation Function ---
     const generateCodeRecursive = (member: TreeMember, indentLevel: number): string[] => {
       let lines: string[] = [];
       const indent = '  '.repeat(indentLevel);
@@ -92,12 +85,12 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>, modelData: R
           lines.push(...generateCodeRecursive(child, indentLevel + 1));
           lines.push(`${indent}}`);
         } else {
-          // It's a regular node
           const nodeName = childNode.indices ? `${childNode.name}[${childNode.indices}]` : childNode.name;
 
           if (childNode.nodeType === 'stochastic' || childNode.nodeType === 'observed') {
-            const params = [childNode.param1, childNode.param2, childNode.param3]
-              .filter(p => p && String(p).trim() !== '')
+            const params = Object.keys(childNode)
+              .filter(key => key.startsWith('param') && childNode[key] && String(childNode[key]).trim() !== '')
+              .map(key => childNode[key])
               .join(', ');
             lines.push(`${indent}${nodeName} ~ ${childNode.distribution}(${params})`);
           } else if (childNode.nodeType === 'deterministic' && childNode.equation) {
@@ -110,13 +103,7 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>, modelData: R
 
     const finalCodeLines = generateCodeRecursive(treeRoot, 1);
 
-    const modelString = [
-      'model {',
-      ...finalCodeLines,
-      '}'
-    ].join('\n');
-
-    return modelString;
+    return ['model {', ...finalCodeLines, '}'].join('\n');
   });
 
   return {

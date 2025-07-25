@@ -125,7 +125,7 @@ const getErrorForField = (fieldKey: string): string | undefined => {
             <BaseSelect
               v-if="prop.type === 'select'"
               :id="`prop-${prop.key}`"
-              v-model="(localElement as any)[prop.key]"
+              v-model="(localElement as GraphNode)[prop.key]"
               :options="prop.options!"
               @change="handleUpdate"
               :class="{ 'has-error': getErrorForField(prop.key) }"
@@ -134,7 +134,7 @@ const getErrorForField = (fieldKey: string): string | undefined => {
               v-else-if="prop.type === 'checkbox'"
               type="checkbox"
               :id="`prop-${prop.key}`"
-              v-model="(localElement as any)[prop.key]"
+              v-model="(localElement as GraphNode)[prop.key]"
               @change="handleUpdate"
               class="form-checkbox"
             />
@@ -142,7 +142,7 @@ const getErrorForField = (fieldKey: string): string | undefined => {
               v-else
               :id="`prop-${prop.key}`"
               :type="prop.type"
-              v-model="(localElement as any)[prop.key]"
+              v-model="(localElement as GraphNode)[prop.key]"
               :placeholder="prop.placeholder"
               @input="handleUpdate"
               :class="{ 'has-error': getErrorForField(prop.key) }"
@@ -165,7 +165,7 @@ const getErrorForField = (fieldKey: string): string | undefined => {
                 <BaseInput
                     :id="`param-${index}`"
                     type="text"
-                    v-model="(localElement as any)[`param${index + 1}`]"
+                    v-model="(localElement as GraphNode)[`param${index + 1}`]"
                     placeholder="Enter value or parent name"
                     @input="handleUpdate"
                     :class="{ 'has-error': getErrorForField(`param${index + 1}`) }"

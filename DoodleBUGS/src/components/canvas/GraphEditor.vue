@@ -35,6 +35,8 @@ const greekAlphabet = [
   'sigma', 'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega'
 ];
 
+const MAX_NODE_NAME_ITERATIONS = 1000;
+
 const getNextNodeName = (): string => {
     const existingNames = new Set(
         elements.value
@@ -50,7 +52,7 @@ const getNextNodeName = (): string => {
 
     // Fallback if all Greek letters are used
     let i = 1;
-    while (i < 1000) { // Add a reasonable limit to prevent infinite loops
+    while (i < MAX_NODE_NAME_ITERATIONS) { // Add a reasonable limit to prevent infinite loops
         const fallbackName = `var${i}`;
         if (!existingNames.has(fallbackName)) {
             return fallbackName;
