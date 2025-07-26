@@ -683,8 +683,11 @@ function AddVertices(model_def::Expr, eval_env::NamedTuple; eval_module=nothing)
     end
 
     f_dict = build_node_functions(
-        model_def, eval_env, Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}(), ();
-        eval_module=eval_module
+        model_def,
+        eval_env,
+        Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}(),
+        ();
+        eval_module=eval_module,
     )
 
     return AddVertices(eval_env, g, NamedTuple(vertex_id_tracker), f_dict)
@@ -695,7 +698,7 @@ function build_node_functions(
     eval_env::NamedTuple,
     f_dict::Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}},
     loop_vars::Tuple{Vararg{Symbol}};
-    eval_module=nothing
+    eval_module=nothing,
 )
     for statement in expr.args
         if is_deterministic(statement) || is_stochastic(statement)
@@ -714,7 +717,9 @@ function build_node_functions(
             f_dict[statement] = (args, node_func_expr, node_func)
         elseif Meta.isexpr(statement, :for)
             loop_var, _, _, body = decompose_for_expr(statement)
-            build_node_functions(body, eval_env, f_dict, (loop_var, loop_vars...); eval_module=eval_module)
+            build_node_functions(
+                body, eval_env, f_dict, (loop_var, loop_vars...); eval_module=eval_module
+            )
         else
             error("Unknown statement type: $statement")
         end

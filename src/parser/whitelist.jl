@@ -154,33 +154,22 @@ const BUGS_STRICT_WHITELIST = union(
 )
 
 """
-    is_function_allowed_bugs_strict(func_name::Symbol, allowed_extras::Set{Symbol}=Set{Symbol}())
+    is_function_allowed_bugs_strict(func_name::Symbol)
 
 Check if a function is allowed in @bugs strict mode.
 """
-function is_function_allowed_bugs_strict(
-    func_name::Symbol, allowed_extras::Set{Symbol}=Set{Symbol}()
-)
-    return func_name in BUGS_STRICT_WHITELIST || func_name in allowed_extras
+function is_function_allowed_bugs_strict(func_name::Symbol)
+    return func_name in BUGS_STRICT_WHITELIST
 end
 
 """
-    is_qualified_name_allowed_bugs_strict(module_path::Vector{Symbol}, func_name::Symbol, allowed_extras::Set{Expr}=Set{Expr}())
+    is_qualified_name_allowed_bugs_strict(module_path::Vector{Symbol}, func_name::Symbol)
 
 Check if a qualified name (e.g., Distributions.Normal) is allowed in @bugs strict mode.
 """
 function is_qualified_name_allowed_bugs_strict(
-    module_path::Vector{Symbol}, func_name::Symbol, allowed_extras::Set{Expr}=Set{Expr}()
+    module_path::Vector{Symbol}, func_name::Symbol
 )
-    # Check if it's in the allowed extras as a qualified name
-    qual_expr = foldl(
-        (m, f) -> Expr(:., m, QuoteNode(f)), module_path[2:end]; init=module_path[1]
-    )
-    qual_expr = Expr(:., qual_expr, QuoteNode(func_name))
-    if qual_expr in allowed_extras
-        return true
-    end
-
     # Special handling for common packages
     if length(module_path) == 1
         if module_path[1] == :Distributions && func_name in DISTRIBUTIONS_STRICT_TYPES
@@ -195,19 +184,13 @@ function is_qualified_name_allowed_bugs_strict(
 end
 
 """
-    validate_expression_bugs_strict(expr, allowed_extras::Set{Union{Symbol,Expr}}=Set{Union{Symbol,Expr}}())
+    validate_expression_bugs_strict(expr)
 
 Recursively validate that all function calls in an expression are allowed in @bugs strict mode.
 Returns a vector of tuples (disallowed_function, line_number) for all disallowed functions found.
 """
-function validate_expression_bugs_strict(
-    expr, allowed_extras::Set{Union{Symbol,Expr}}=Set{Union{Symbol,Expr}}()
-)
+function validate_expression_bugs_strict(expr)
     disallowed = Vector{Tuple{Union{Symbol,Expr},Union{Int,Nothing}}}()
-
-    # Separate symbols and expressions in allowed_extras
-    allowed_symbols = Set{Symbol}(x for x in allowed_extras if x isa Symbol)
-    allowed_exprs = Set{Expr}(x for x in allowed_extras if x isa Expr)
 
     function get_line_number(e)
         # Try to find a LineNumberNode in the expression
@@ -228,16 +211,14 @@ function validate_expression_bugs_strict(
             if e.head == :call
                 func = e.args[1]
                 if func isa Symbol
-                    if !is_function_allowed_bugs_strict(func, allowed_symbols)
+                    if !is_function_allowed_bugs_strict(func)
                         push!(disallowed, (func, current_line))
                     end
                 elseif func isa Expr && func.head == :.
                     # Handle qualified names like Distributions.Normal
                     module_path, func_name = decompose_qualified_name(func)
                     if !isempty(module_path) &&
-                        !is_qualified_name_allowed_bugs_strict(
-                        module_path, func_name, allowed_exprs
-                    )
+                        !is_qualified_name_allowed_bugs_strict(module_path, func_name)
                         push!(disallowed, (func, current_line))
                     end
                 end

@@ -2,13 +2,11 @@
 # It only imports the whitelisted functions and distributions
 
 """
-    create_bugs_strict_module(allowed_extras::Set{Union{Symbol,Expr}}=Set{Union{Symbol,Expr}}())
+    create_bugs_strict_module()
 
-Create a new module with only whitelisted functions and any additional allowed functions.
+Create a new module with only whitelisted functions and functions registered via @bugs_primitive.
 """
-function create_bugs_strict_module(
-    allowed_extras::Set{Union{Symbol,Expr}}=Set{Union{Symbol,Expr}}()
-)
+function create_bugs_strict_module()
     # Create a unique module name to avoid conflicts
     module_name = gensym("BUGSStrictModule")
 
@@ -67,81 +65,33 @@ function create_bugs_strict_module(
     # Evaluate the module at the top level in Main to avoid "module expression not at top level" error
     strict_module = Core.eval(Main, mod_expr)
 
-    # Now add any extra allowed functions
-    for item in allowed_extras
-        if item isa Symbol
-            # Try to import from Main first, then from parent modules
-            try
-                Core.eval(strict_module, :(using Main: $item))
-            catch
-                # If not in Main, user needs to use qualified name
-                @warn "Function $item not found in Main. Use qualified name (e.g., MyModule.$item) instead."
+    # Import all functions that were registered via @bugs_primitive
+    # They are stored in the JuliaBUGS module
+    for name in names(JuliaBUGS; all=true)
+        # Skip special names and modules
+        if startswith(string(name), "#") ||
+            name in (:eval, :include) ||
+            name in names(Core) ||
+            name in names(Base) ||
+            name in (:JuliaBUGS, :BUGSPrimitives, :Parser, :Model) ||
+            # Skip symbols that are already imported from BUGSPrimitives or Distributions
+            name in BUGSPrimitives.BUGS_FUNCTIONS ||
+            name in BUGSPrimitives.BUGS_DISTRIBUTIONS
+            continue
+        end
+
+        # Try to get the value to check if it's a function
+        try
+            val = getfield(JuliaBUGS, name)
+            if isa(val, Function) && !isa(val, Type)
+                # Import the function into the strict module
+                Core.eval(strict_module, :(using JuliaBUGS: $name))
             end
-        elseif item isa Expr && item.head == :.
-            # Handle qualified names like MyModule.func
-            # Extract module path and function name
-            module_path, func_name = decompose_qualified_import(item)
-            if !isempty(module_path)
-                # Build import statement
-                import_expr = build_import_expr(module_path, func_name)
-                try
-                    Core.eval(strict_module, import_expr)
-                catch e
-                    @warn "Could not import $item: $e"
-                end
-            end
+        catch
+            # Skip if we can't access it
+            continue
         end
     end
 
     return strict_module
-end
-
-"""
-    decompose_qualified_import(expr::Expr)
-
-Decompose a qualified name for import purposes.
-"""
-function decompose_qualified_import(expr::Expr)
-    # Similar to decompose_qualified_name but for import statements
-    if expr.head != :.
-        return Symbol[], :nothing
-    end
-
-    path = Symbol[]
-    current = expr
-
-    while current isa Expr && current.head == :.
-        if length(current.args) == 2 && current.args[2] isa QuoteNode
-            pushfirst!(path, current.args[2].value)
-            current = current.args[1]
-        else
-            break
-        end
-    end
-
-    if current isa Symbol
-        pushfirst!(path, current)
-    end
-
-    if length(path) < 2
-        return Symbol[], :nothing
-    end
-
-    return path[1:(end - 1)], path[end]
-end
-
-"""
-    build_import_expr(module_path::Vector{Symbol}, func_name::Symbol)
-
-Build an import expression from module path and function name.
-"""
-function build_import_expr(module_path::Vector{Symbol}, func_name::Symbol)
-    # Build nested module access
-    mod_expr = module_path[1]
-    for m in module_path[2:end]
-        mod_expr = Expr(:., mod_expr, QuoteNode(m))
-    end
-
-    # Build the import statement
-    return :(using $mod_expr: $func_name)
 end

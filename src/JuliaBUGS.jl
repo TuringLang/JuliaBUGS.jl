@@ -263,14 +263,14 @@ julia> JuliaBUGS.f(1)
 macro bugs_primitive(func::Symbol)
     return quote
         @eval JuliaBUGS begin
-            $func = Main.$func
+            $func = $(__module__).$func
         end
     end
 end
 macro bugs_primitive(funcs::Vararg{Symbol})
     exprs = Expr(:block)
     for func in funcs
-        push!(exprs.args, :($func = Main.$func))
+        push!(exprs.args, :($func = $(__module__).$func))
     end
     return quote
         @eval JuliaBUGS begin

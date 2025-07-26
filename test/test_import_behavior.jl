@@ -32,8 +32,9 @@ end
             end
         end)
 
-        # Test 3: Allow list should work
-        model_def = @bugs allow=[custom_test_func] begin
+        # Test 3: @bugs_primitive should work
+        @bugs_primitive custom_test_func
+        model_def = @bugs begin
             x ~ dnorm(0, 1)
             y = custom_test_func(x)
         end
@@ -54,18 +55,21 @@ end
             end
         end)
 
-        # Test 6: Allow list with qualified names
-        model_def = @bugs allow=[TestFunctions.test_func1] begin
+        # Test 6: @bugs_primitive with module functions
+        using .TestFunctions
+        @bugs_primitive test_func1
+        model_def = @bugs begin
             x ~ dnorm(0, 1)
-            y = TestFunctions.test_func1(x)
+            y = test_func1(x)
         end
         @test model_def isa Expr
 
-        # Test 7: Multiple allowed functions
-        model_def = @bugs allow=[custom_test_func, TestFunctions.test_func2] begin
+        # Test 7: Multiple functions via @bugs_primitive
+        @bugs_primitive test_func2
+        model_def = @bugs begin
             x ~ dnorm(0, 1)
             y = custom_test_func(x)
-            z = TestFunctions.test_func2(x, y)
+            z = test_func2(x, y)
         end
         @test model_def isa Expr
     end
