@@ -153,7 +153,8 @@ function _generate_model_function(
             ),
         )
 
-        model = compile($(QuoteNode(bugs_ast)), data)
+        # Pass the module where @model was called to respect user's imports
+        model = compile($(QuoteNode(bugs_ast)), data; eval_module=($__module__))
 
         if $(param_type !== nothing)
             try
