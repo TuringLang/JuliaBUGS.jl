@@ -146,8 +146,8 @@ function finish_checking_repeated_assignments(
     end
 end
 
-function create_graph(model_def, eval_env)
-    pass = AddVertices(model_def, eval_env)
+function create_graph(model_def, eval_env; eval_module=nothing)
+    pass = AddVertices(model_def, eval_env; eval_module=eval_module)
     analyze_block(pass, model_def)
     pass = AddEdges(pass.env, pass.g, pass.vertex_id_tracker)
     analyze_block(pass, model_def)
@@ -172,11 +172,16 @@ end
 Compile the model with model definition and data. Optionally, initializations can be provided. 
 If initializations are not provided, values will be sampled from the prior distributions. 
 """
-function compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple=NamedTuple())
+function compile(
+    model_def::Expr,
+    data::NamedTuple,
+    initial_params::NamedTuple=NamedTuple();
+    eval_module::Module=@__MODULE__
+)
     data = check_input(data)
     eval_env = semantic_analysis(model_def, data)
     model_def = concretize_colon_indexing(model_def, eval_env)
-    g = create_graph(model_def, eval_env)
+    g = create_graph(model_def, eval_env; eval_module=eval_module)
     nonmissing_eval_env = NamedTuple{keys(eval_env)}(
         map(
             v -> begin
