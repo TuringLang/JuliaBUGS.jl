@@ -142,6 +142,10 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
     if (dragState.isDragging && dragState.draggedNode) {
       return;
     }
+    
+    // Determine the actual node to drag
+    // If it's a plate, drag the plate itself
+    // If it's a child node inside a plate, we track the child node
     dragState.draggedNode = node;
     dragState.originalPosition = { ...node.position() };
     dragState.isDragging = true;
@@ -227,8 +231,8 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
 
     // Check if we're moving a plate (or a node inside a plate)
     // If the dragged node is a plate, move the plate itself
-    // If the dragged node is inside a plate, check if we should move the entire plate
-    const nodeToMove = node.data('nodeType') === 'plate' ? node : node;
+    // If the dragged node is inside a plate, move the node itself
+    const nodeToMove = node;
     
     if (newParent) {
       // Move to new parent

@@ -224,7 +224,10 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
 };
 
 const handlePlateEmptied = (plateId: string) => {
-    deleteElement(plateId);
+    // This function is no longer called automatically when plates become empty
+    // Empty plates are now preserved and can be manually deleted by the user
+    // deleteElement(plateId);
+    console.log(`[DEBUG] handlePlateEmptied called for plate ${plateId} but plate will not be automatically deleted`);
 };
 
 const handleDeleteElement = (elementId: string) => {

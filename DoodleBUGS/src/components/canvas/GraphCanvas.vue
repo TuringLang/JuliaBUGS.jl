@@ -134,6 +134,8 @@ onMounted(() => {
         const newParentId = newParent ? newParent.id() : undefined;
         
         // Handle plate emptied logic
+        // Note: We no longer automatically delete empty plates
+        // Users can manually delete empty plates if desired
         if (oldParent) {
             const oldParentId = oldParent.id();
             const oldParentElement = props.elements.find(el => el.id === oldParentId && el.type === 'node' && (el as GraphNode).nodeType === 'plate');
@@ -145,9 +147,10 @@ onMounted(() => {
                     el.type === 'node' && 
                     (el as GraphNode).parent === oldParentId
                 );
-                if (siblings.length === 0) { 
-                    emit('plate-emptied', oldParentId);
-                }
+                // We no longer automatically delete empty plates
+                // if (siblings.length === 0) { 
+                //     emit('plate-emptied', oldParentId);
+                // }
             }
         }
 
