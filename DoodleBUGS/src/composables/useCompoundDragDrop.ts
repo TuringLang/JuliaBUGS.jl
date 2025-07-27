@@ -14,6 +14,7 @@ interface DragState {
   originalParentBounds: BoundingBox12 | null;
   originalPosition: Position | null;
   potentialDropTarget: NodeSingular | null;
+  platePositions: Map<string, Position>; // Store original positions of all plates
 }
 
 export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) {
@@ -24,6 +25,7 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
     originalParentBounds: null,
     originalPosition: null,
     potentialDropTarget: null,
+    platePositions: new Map<string, Position>(),
   };
 
   const canDropInto = (draggedNode: NodeSingular, targetNode: NodeSingular): boolean => {
@@ -120,6 +122,16 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
     if (!options.grabbedNode(node)) return;
     if (dragState.isDragging && dragState.draggedNode) {
       return;
+    }
+    
+    // Store original positions of all plates when dragging a non-plate node
+    // This will be used to restore plate positions when a node is removed from a plate
+    const isDraggingPlate = node.data('nodeType') === 'plate';
+    if (!isDraggingPlate) {
+      dragState.platePositions.clear();
+      cy.nodes().filter(n => n.data('nodeType') === 'plate').forEach(plate => {
+        dragState.platePositions.set(plate.id(), { ...plate.position() });
+      });
     }
     
     dragState.draggedNode = node;
@@ -227,11 +239,29 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
       }
     }
 
+    // Only restore plate positions if we were dragging a non-plate node AND the node is being removed from a plate
+    const isDraggingPlate = dragState.draggedNode?.data('nodeType') === 'plate';
+    const isNodeBeingRemovedFromPlate = dropPerformed && !dragState.potentialDropTarget && currentParentNode;
+    
+    if (!isDraggingPlate && isNodeBeingRemovedFromPlate && dragState.platePositions.size > 0) {
+      // Restore original positions of plates only when a child node is being removed from them
+      // This prevents plates from moving when children are moved within the plate
+      dragState.platePositions.forEach((position, plateId) => {
+        const plate = cy.getElementById(plateId);
+        if (plate.nonempty()) {
+          plate.position(position);
+        }
+      });
+    }
+    // If a node is moved within a plate (not removed), the plate will naturally move with it
+    // This is the desired behavior as it maintains the visual relationship between parent and child
+    
     dragState.draggedNode = null;
     dragState.originalParent = null;
     dragState.originalPosition = null;
     dragState.isDragging = false;
     dragState.potentialDropTarget = null;
+    dragState.platePositions.clear();
 
     cy.trigger('compound-drag-end', [{ node: nodeToMove, dropPerformed }]);
   };
