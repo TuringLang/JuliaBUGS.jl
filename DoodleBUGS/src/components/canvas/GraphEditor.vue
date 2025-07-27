@@ -52,7 +52,7 @@ const getNextNodeName = (): string => {
 
     // Fallback if all Greek letters are used
     let i = 1;
-    while (i < MAX_NODE_NAME_ITERATIONS) { // Add a reasonable limit to prevent infinite loops
+    while (i < MAX_NODE_NAME_ITERATIONS) { // reasonable limit to prevent infinite loops
         const fallbackName = `var${i}`;
         if (!existingNames.has(fallbackName)) {
             return fallbackName;
@@ -223,13 +223,6 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
   emit('update:currentMode', 'select');
 };
 
-const handlePlateEmptied = (plateId: string) => {
-    // This function is no longer called automatically when plates become empty
-    // Empty plates are now preserved and can be manually deleted by the user
-    // deleteElement(plateId);
-    console.log(`[DEBUG] handlePlateEmptied called for plate ${plateId} but plate will not be automatically deleted`);
-};
-
 const handleDeleteElement = (elementId: string) => {
     deleteElement(elementId);
 };
@@ -263,8 +256,7 @@ watch(() => props.currentMode, (newMode) => {
       @canvas-tap="handleCanvasTap"
       @node-moved="handleNodeMoved"
       @node-dropped="handleNodeDropped"
-      @plate-emptied="handlePlateEmptied"
-      @element-remove="handleDeleteElement"
+      @delete-element="handleDeleteElement"
     />
   </div>
 </template>

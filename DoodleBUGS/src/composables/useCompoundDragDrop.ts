@@ -26,15 +26,12 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
     potentialDropTarget: null,
   };
 
-  // Helper function to check if a node can be dropped into another
   const canDropInto = (draggedNode: NodeSingular, targetNode: NodeSingular): boolean => {
-    // Prevent dropping a node into itself
     if (draggedNode.id() === targetNode.id()) return false;
     
-    // Prevent dropping a parent into its descendant (circular reference)
     let current = targetNode.parent();
     while (current.length > 0) {
-      const currentNode = current[0]; // Get first node from collection
+      const currentNode = current[0];
       if (currentNode && currentNode.id() === draggedNode.id()) return false;
       current = currentNode ? currentNode.parent() : cy.collection();
     }
@@ -42,9 +39,7 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
     return options.dropTarget(targetNode);
   };
 
-  // Helper function to find potential drop target at position
   const findDropTargetAtPosition = (position: Position, draggedNode: NodeSingular): NodeSingular | null => {
-    // Get all nodes at the position, excluding the dragged node
     const allNodes = cy.nodes().filter(node => node.id() !== draggedNode.id());
     const nodesAtPosition = allNodes.filter((node) => {
       const bb = node.boundingBox();
@@ -52,14 +47,12 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
              position.y >= bb.y1 && position.y <= bb.y2;
     });
     
-    // Sort by depth (deepest first) to find the most specific drop target
     const sortedNodes = nodesAtPosition.sort((a, b) => {
       const aDepth = a.isNode() ? getNodeDepth(a as NodeSingular) : 0;
       const bDepth = b.isNode() ? getNodeDepth(b as NodeSingular) : 0;
-      return bDepth - aDepth; // Deeper nodes first
+      return bDepth - aDepth;
     });
     
-    // Find the first valid drop target
     for (const element of sortedNodes) {
       if (element.isNode() && canDropInto(draggedNode, element)) {
         return element;
@@ -69,7 +62,6 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
     return null;
   };
 
-  // Helper function to get node depth in the hierarchy
   const getNodeDepth = (node: NodeSingular): number => {
     let depth = 0;
     let current = node.parent();
@@ -80,7 +72,6 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
     return depth;
   };
 
-  // Helper function to check if position is outside a node's bounds
   const isOutsideNode = (position: Position, node: NodeSingular, threshold: number): boolean => {
     const bb = node.boundingBox();
     return position.x < bb.x1 - threshold || 
@@ -89,7 +80,6 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
            position.y > bb.y2 + threshold;
   };
 
-  // Helper function to expand bounds by padding
   const expandBounds = (bb: BoundingBox12, padding: number) => {
     return {
       x1: bb.x1 - padding,
@@ -99,65 +89,49 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
     };
   };
 
-  // Helper function to check if bounds overlap
   const boundsOverlap = (bb1: any, bb2: any): boolean => {
-    // case: one bb to right of other
     if (bb1.x1 > bb2.x2) { return false; }
     if (bb2.x1 > bb1.x2) { return false; }
 
-    // case: one bb to left of other
     if (bb1.x2 < bb2.x1) { return false; }
     if (bb2.x2 < bb1.x1) { return false; }
 
-    // case: one bb above other
     if (bb1.y2 < bb2.y1) { return false; }
     if (bb2.y2 < bb1.y1) { return false; }
 
-    // case: one bb below other
     if (bb1.y1 > bb2.y2) { return false; }
     if (bb2.y1 > bb1.y2) { return false; }
 
-    // otherwise, must have some overlap
     return true;
   };
 
-  // Helper function to check if a node should be removed from its parent based on bounds overlap
   const shouldRemoveFromParent = (node: NodeSingular, position: Position): boolean => {
-    // Check if we have original parent bounds stored
     if (!dragState.originalParentBounds) {
       return false;
     }
     
-    // Get current node bounds and expand by outThreshold
     const nodeBounds = node.boundingBox({ includeOverlays: false, includeLabels: true });
     const expandedNodeBounds = expandBounds(nodeBounds, options.outThreshold);
     
-    // Check if expanded node bounds overlap with original parent bounds
     return !boundsOverlap(dragState.originalParentBounds, expandedNodeBounds);
   };
 
-  // Start drag operation
   const startDrag = (node: NodeSingular) => {
     if (!options.grabbedNode(node)) return;
     if (dragState.isDragging && dragState.draggedNode) {
       return;
     }
     
-    // Determine the actual node to drag
-    // If it's a plate, drag the plate itself
-    // If it's a child node inside a plate, we track the child node
     dragState.draggedNode = node;
     dragState.originalPosition = { ...node.position() };
     dragState.isDragging = true;
     
-    // Store original parent bounds for removal detection
     const currentParent = node.parent();
     if (currentParent.length > 0) {
       dragState.originalParent = currentParent[0];
       dragState.originalParentBounds = currentParent[0].boundingBox({ includeOverlays: false, includeLabels: true });
     }
     
-    // Add visual feedback
     node.addClass('cdnd-grabbed-node');
     
     cy.trigger('compound-drag-start', [{ node }]);
@@ -189,7 +163,7 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
       
       // Add visual indicator that node is being dragged out of its parent
       node.addClass('cdnd-drag-out');
-      // Will be moved to root when dropped - no drop target needed
+      // Will be moved to root when dropped
       // The endDrag function will handle moving to root
     } else {
       // Remove drag-out indicator if it was previously added
@@ -210,18 +184,15 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
     }
   };
 
-  // End drag operation
   const endDrag = (node: NodeSingular) => {
     if (!dragState.isDragging || dragState.draggedNode?.id() !== node.id()) return;
 
-    // Remove visual feedback
     node.removeClass('cdnd-grabbed-node');
     node.removeClass('cdnd-drag-out');
     if (dragState.potentialDropTarget) {
       dragState.potentialDropTarget.removeClass('cdnd-drop-target');
     }
 
-    // Perform the drop operation
     const currentParent = node.parent();
     const currentParentNode = currentParent.length > 0 ? currentParent[0] : null;
     const newParent = dragState.potentialDropTarget;
@@ -229,13 +200,9 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
     
     let dropPerformed = false;
 
-    // Check if we're moving a plate (or a node inside a plate)
-    // If the dragged node is a plate, move the plate itself
-    // If the dragged node is inside a plate, move the node itself
     const nodeToMove = node;
     
     if (newParent) {
-      // Move to new parent
       const currentParentId = currentParentNode ? currentParentNode.id() : null;
       const newParentId = newParent.id();
       
@@ -249,9 +216,7 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
         dropPerformed = true;
       }
     } else if (currentParentNode) {
-      // Check if we should remove from current parent
       if (shouldRemoveFromParent(nodeToMove, nodePosition)) {
-        // Remove from parent (move to root)
         nodeToMove.move({ parent: null });
         cy.trigger('compound-drop', [{ 
           node: nodeToMove, 
@@ -262,7 +227,6 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
       }
     }
 
-    // Reset drag state
     dragState.draggedNode = null;
     dragState.originalParent = null;
     dragState.originalPosition = null;
@@ -272,7 +236,6 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
     cy.trigger('compound-drag-end', [{ node: nodeToMove, dropPerformed }]);
   };
 
-  // Set up event listeners
   cy.on('grab', 'node', (event) => {
     startDrag(event.target);
   });
@@ -285,7 +248,6 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
     endDrag(event.target);
   });
 
-  // Cleanup function
   const destroy = () => {
     cy.off('grab', 'node');
     cy.off('drag', 'node');

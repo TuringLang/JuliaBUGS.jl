@@ -4,6 +4,8 @@ import gridGuide from 'cytoscape-grid-guide';
 import contextMenus from 'cytoscape-context-menus';
 import dagre from 'cytoscape-dagre';
 import fcose from 'cytoscape-fcose';
+import cola from 'cytoscape-cola';
+import klay from 'cytoscape-klay';
 import { useCompoundDragDrop } from './useCompoundDragDrop';
 import svg from 'cytoscape-svg';
 
@@ -11,6 +13,8 @@ cytoscape.use(gridGuide);
 cytoscape.use(contextMenus);
 cytoscape.use(dagre);
 cytoscape.use(fcose);
+cytoscape.use(cola);
+cytoscape.use(klay);
 cytoscape.use(svg);
 
 let cyInstance: Core | null = null;

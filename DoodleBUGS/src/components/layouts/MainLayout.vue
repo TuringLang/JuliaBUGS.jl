@@ -57,44 +57,6 @@ const showValidationModal = ref(false);
 const showExportModal = ref(false);
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null);
 
-const handleApplyLayout = (layoutName: string) => {
-    const cy = getCyInstance();
-    if (!cy) return;
-
-    const layoutOptions = {
-        name: layoutName,
-        animate: true,
-        padding: 50,
-        fit: true,
-        ...(layoutName === 'dagre' && { 
-            rankDir: 'TB', 
-            spacingFactor: 1.2 
-        }),
-        ...(layoutName === 'fcose' && { 
-            idealEdgeLength: 120, 
-            nodeSeparation: 150,
-            nodeRepulsion: 4500,
-            quality: 'proof',
-        }),
-    };
-
-    const layout = cy.layout(layoutOptions);
-    
-    layout.on('layoutstop', () => {
-        const updatedNodes = cy.nodes().map(node => {
-            const originalNode = graphStore.currentGraphElements.find(el => el.id === node.id() && el.type === 'node') as GraphNode | undefined;
-            if (originalNode) {
-                return { ...originalNode, position: node.position() };
-            }
-            return null;
-        }).filter(n => n !== null) as GraphNode[];
-
-        updatedNodes.forEach(node => updateElement(node));
-    });
-
-    layout.run();
-};
-
 onMounted(() => {
   projectStore.loadProjects();
 
@@ -122,7 +84,7 @@ watch(() => graphStore.currentGraphId, (newId, oldId) => {
   if (newId && newId !== oldId) {
     nextTick(() => {
       setTimeout(() => {
-        handleApplyLayout('dagre');
+        handleGraphLayout('dagre');
       }, 100);
     });
   }
@@ -252,6 +214,64 @@ const handleUpdateElement = (updatedEl: GraphElement) => {
 
 const handleDeleteElement = (elementId: string) => {
   deleteElement(elementId);
+};
+
+const handleGraphLayout = (layoutName: string) => {
+  const cy = getCyInstance();
+  if (!cy) return;
+
+  // Define layout options for each layout type
+  const layoutOptions: Record<string, any> = {
+    dagre: {
+      name: 'dagre',
+      animate: true,
+      animationDuration: 500,
+      fit: true,
+      padding: 30
+    },
+    fcose: {
+      name: 'fcose',
+      animate: true,
+      animationDuration: 500,
+      fit: true,
+      padding: 30,
+      randomize: false,
+      quality: 'proof'
+    },
+    cola: {
+      name: 'cola',
+      animate: true,
+      fit: true,
+      padding: 30,
+      refresh: 1,
+      avoidOverlap: true,
+      infinite: false,
+      centerGraph: true,
+      flow: { axis: 'y', minSeparation: 30 }, // Good for DAG
+      handleDisconnected: false,
+      randomize: false,
+    },
+    klay: {
+      name: 'klay',
+      animate: true,
+      animationDuration: 500,
+      fit: true,
+      padding: 30,
+      klay: {
+        direction: 'RIGHT',
+        edgeRouting: 'SPLINES',
+        nodePlacement: 'LINEAR_SEGMENTS'
+      }
+    },
+    preset: {
+      name: 'preset'
+    }
+  };
+
+  // Apply the selected layout
+  const options = layoutOptions[layoutName] || layoutOptions.preset;
+  const layout = cy.layout(options);
+  layout.run();
 };
 
 const handlePaletteSelection = (itemType: PaletteItemType) => {
@@ -411,7 +431,7 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
       @open-about-modal="showAboutModal = true"
       @export-json="handleExportJson"
       @open-export-modal="openExportModal"
-      @apply-layout="handleApplyLayout"
+      @apply-layout="handleGraphLayout"
       @load-example="handleLoadExample"
       @validate-model="validateGraph"
       :is-model-valid="isModelValid"
