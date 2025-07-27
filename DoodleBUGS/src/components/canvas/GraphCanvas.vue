@@ -129,19 +129,23 @@ onMounted(() => {
       emit('canvas-tap', evt);
     });
 
-    cy.on('cdnddrop', 'node', (evt: EventObject, dropTarget: NodeSingular | undefined) => {
-        const node = evt.target as NodeSingular;
-        const newParentId = dropTarget ? dropTarget.id() : undefined;
-
-        const originalNode = props.elements.find(el => el.id === node.id() && el.type === 'node') as GraphNode | undefined;
-
-        if (originalNode && originalNode.parent && originalNode.parent !== newParentId) {
-            const oldParentId = originalNode.parent;
-            const oldParent = props.elements.find(el => el.id === oldParentId && el.type === 'node' && (el as GraphNode).nodeType === 'plate');
+    cy.on('compound-drop', (evt: EventObject, data: { node: NodeSingular; newParent: NodeSingular | null; oldParent: NodeSingular | null }) => {
+        const { node, newParent, oldParent } = data;
+        const newParentId = newParent ? newParent.id() : undefined;
+        
+        // Handle plate emptied logic
+        if (oldParent) {
+            const oldParentId = oldParent.id();
+            const oldParentElement = props.elements.find(el => el.id === oldParentId && el.type === 'node' && (el as GraphNode).nodeType === 'plate');
             
-            if (oldParent) {
-                const siblings = props.elements.filter(el => el.type === 'node' && (el as GraphNode).parent === oldParentId);
-                if (siblings.length === 1) { 
+            if (oldParentElement) {
+                // Count siblings after the move (excluding the moved node)
+                const siblings = props.elements.filter(el => 
+                    el.id !== node.id() && 
+                    el.type === 'node' && 
+                    (el as GraphNode).parent === oldParentId
+                );
+                if (siblings.length === 0) { 
                     emit('plate-emptied', oldParentId);
                 }
             }
@@ -150,7 +154,7 @@ onMounted(() => {
         emit('node-moved', {
             nodeId: node.id(),
             position: node.position(),
-            parentId: newParentId,
+            parentId: newParentId
         });
     });
 
@@ -247,5 +251,23 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
 
 .cytoscape-container.mode-add-edge {
   cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-arrow-right"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>') 12 12, crosshair;
+}
+
+/* Custom drag and drop styling */
+.cdnd-grabbed-node {
+  background-color: #FFD700 !important;
+  opacity: 0.7;
+  border: 2px dashed #FFA500;
+}
+
+.cdnd-drop-target {
+  border: 3px solid #32CD32 !important;
+  background-color: rgba(50, 205, 50, 0.1) !important;
+}
+
+/* Visual indicator for nodes being dragged out of plates */
+.cdnd-drag-out {
+  border: 2px dashed #FF0000 !important;
+  background-color: rgba(255, 0, 0, 0.1) !important;
 }
 </style>

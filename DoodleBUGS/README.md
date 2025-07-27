@@ -2,9 +2,23 @@
 
 A web-based graphical editor for creating Bayesian models, inspired by DoodleBUGS and designed to work with JuliaBUGS. This project aims to provide an visual interface for building, understanding, and sharing probabilistic models.
 
+## Features
+
+- Visual editor for creating Bayesian models
+- Support for nested plates (arbitrary depth)
+- Drag-and-drop functionality for nodes and plates
+- Intuitive visual feedback for user interactions
+
 # Project Status: Pre-Alpha
 
 This project is currently in the pre-alpha phase of development as part of the Google Summer of Code 2025 program.
+
+## Recent Updates
+
+- Implemented support for nested plates with arbitrary depth
+- Enhanced drag-and-drop functionality for nodes and plates
+- Added visual feedback for user interactions (drag-in, drag-out)
+- Fixed various UI/UX issues related to compound nodes
 
 > Please avoid using this project in WebKit browsers like Safari, as it may not function correctly. We recommend using Chromium-based browsers such as Google Chrome or Microsoft Edge for the best experience, It works fine in Firefox as well. And it does not work in any browser in ipadOS and iOS as all browsers in these platforms are WebKit based.
 

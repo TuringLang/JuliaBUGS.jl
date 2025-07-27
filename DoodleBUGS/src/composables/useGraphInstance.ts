@@ -4,14 +4,14 @@ import gridGuide from 'cytoscape-grid-guide';
 import contextMenus from 'cytoscape-context-menus';
 import dagre from 'cytoscape-dagre';
 import fcose from 'cytoscape-fcose';
-import compoundDragAndDrop from 'cytoscape-compound-drag-and-drop';
+import { useCompoundDragDrop } from './useCompoundDragDrop';
 import svg from 'cytoscape-svg';
 
 cytoscape.use(gridGuide);
 cytoscape.use(contextMenus);
 cytoscape.use(dagre);
 cytoscape.use(fcose);
-cytoscape.use(compoundDragAndDrop);
+
 cytoscape.use(svg);
 
 let cyInstance: Core | null = null;
@@ -121,6 +121,14 @@ export function useGraphInstance() {
             selector: '.cdnd-drop-target',
             style: { 'border-color': '#f1c40f', 'border-style': 'solid' }
         },
+        {
+            selector: '.cdnd-drag-out',
+            style: { 'border-color': '#e74c3c', 'border-style': 'dashed', 'border-width': 2, 'overlay-color': '#e74c3c', 'overlay-opacity': 0.3, 'overlay-padding': 5 }
+        },
+        {
+            selector: '.cdnd-grabbed-node.cdnd-drag-out',
+            style: { 'border-color': '#e74c3c', 'border-style': 'dashed', 'border-width': 2, 'background-color': '#f1c40f', 'opacity': 0.7, 'overlay-color': '#e74c3c', 'overlay-opacity': 0.3, 'overlay-padding': 5 }
+        },
       ],
       layout: { name: 'preset' },
       minZoom: 0.1,
@@ -132,11 +140,12 @@ export function useGraphInstance() {
 
     cyInstance = cytoscape(options);
     
-    (cyInstance as any).compoundDragAndDrop({
-        grabbedNode: (node: NodeSingular) => node.data('nodeType') !== 'plate',
+    // Initialize custom compound drag and drop
+    const compoundDragDrop = useCompoundDragDrop(cyInstance, {
+        grabbedNode: (node: NodeSingular) => true, // Allow dragging all node types
         dropTarget: (node: NodeSingular) => node.data('nodeType') === 'plate',
         dropSibling: () => false,
-        outThreshold: 50,
+        outThreshold: 30, // Reduced threshold for better UX
     });
     
     (cyInstance as any).gridGuide({ drawGrid: false, snapToGridOnRelease: true, snapToGridDuringDrag: true, gridSpacing: 20 });

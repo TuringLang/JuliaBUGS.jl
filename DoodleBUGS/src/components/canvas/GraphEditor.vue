@@ -116,10 +116,6 @@ const handleCanvasTap = (event: EventObject) => {
     case 'add-node':
       if (isBackgroundClick || isPlateClick) {
         if (props.currentNodeType === 'plate') {
-            if (isPlateClick) {
-                alert("Nesting plates is not currently supported.");
-                return;
-            }
             const newPlate = createPlateWithNode(position, isPlateClick ? (target as NodeSingular).id() : undefined);
             emit('element-selected', newPlate);
             emit('update:currentMode', 'select');
@@ -192,17 +188,19 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
   let parentPlateId: string | undefined = undefined;
 
   if (nodeType === 'plate') {
+      // Find parent plate for nested plate creation
+      let parentPlateId: string | undefined = undefined;
       if (cy) {
           const plates = cy.nodes('[nodeType="plate"]');
           for (const plate of plates) {
               const bb = plate.boundingBox();
               if (position.x > bb.x1 && position.x < bb.x2 && position.y > bb.y1 && position.y < bb.y2) {
-                  alert("Nesting plates is not currently supported.");
-                  return;
+                  parentPlateId = plate.id();
+                  break;
               }
           }
       }
-      const newPlate = createPlateWithNode(position);
+      const newPlate = createPlateWithNode(position, parentPlateId);
       emit('element-selected', newPlate);
       emit('update:currentMode', 'select');
       return;
