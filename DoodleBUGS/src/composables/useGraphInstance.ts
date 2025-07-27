@@ -11,11 +11,9 @@ cytoscape.use(gridGuide);
 cytoscape.use(contextMenus);
 cytoscape.use(dagre);
 cytoscape.use(fcose);
-
 cytoscape.use(svg);
 
 let cyInstance: Core | null = null;
-
 interface ContextMenuEvent {
   target: SingularElementReturnValue;
 }
@@ -33,22 +31,22 @@ export function useGraphInstance() {
       style: [
         {
           selector: 'node',
-          style: { 
-            'background-color': '#e0e0e0', 'border-color': '#555', 'border-width': 2, 
+          style: {
+            'background-color': '#e0e0e0', 'border-color': '#555', 'border-width': 2,
             'label': (ele: NodeSingular) => {
-                const name = ele.data('name');
-                const indices = ele.data('indices');
-                return indices ? `${name}[${indices}]` : name;
+              const name = ele.data('name');
+              const indices = ele.data('indices');
+              return indices ? `${name}[${indices}]` : name;
             },
-            'text-valign': 'center', 'text-halign': 'center', 'padding': '10px', 'font-size': '10px', 
-            'text-wrap': 'wrap', 'text-max-width': '80px', 'height': '60px', 'width': '60px', 
-            'line-height': 1.2, 'border-style': 'solid', 'z-index': 10 
+            'text-valign': 'center', 'text-halign': 'center', 'padding': '10px', 'font-size': '10px',
+            'text-wrap': 'wrap', 'text-max-width': '80px', 'height': '60px', 'width': '60px',
+            'line-height': 1.2, 'border-style': 'solid', 'z-index': 10
           },
         },
         {
           selector: 'node[nodeType="plate"]',
-          style: { 
-            'background-color': '#f0f8ff', 'border-color': '#4682b4', 'border-style': 'dashed', 
+          style: {
+            'background-color': '#f0f8ff', 'border-color': '#4682b4', 'border-style': 'dashed',
             'shape': 'round-rectangle', 'corner-radius': '10px',
             'label': (ele: NodeSingular) => `for(${ele.data('loopVariable')} in ${ele.data('loopRange')})`
           },
@@ -114,20 +112,20 @@ export function useGraphInstance() {
           style: { 'border-width': 3, 'border-color': '#007acc', 'overlay-color': '#007acc', 'overlay-opacity': 0.2 },
         },
         {
-            selector: '.cdnd-grabbed-node',
-            style: { 'background-color': '#f1c40f', 'opacity': 0.7 }
+          selector: '.cdnd-grabbed-node',
+          style: { 'background-color': '#f1c40f', 'opacity': 0.7 }
         },
         {
-            selector: '.cdnd-drop-target',
-            style: { 'border-color': '#f1c40f', 'border-style': 'solid' }
+          selector: '.cdnd-drop-target',
+          style: { 'border-color': '#f1c40f', 'border-style': 'solid' }
         },
         {
-            selector: '.cdnd-drag-out',
-            style: { 'border-color': '#e74c3c', 'border-style': 'dashed', 'border-width': 2, 'overlay-color': '#e74c3c', 'overlay-opacity': 0.3, 'overlay-padding': 5 }
+          selector: '.cdnd-drag-out',
+          style: { 'border-color': '#e74c3c', 'border-style': 'dashed', 'border-width': 2, 'overlay-color': '#e74c3c', 'overlay-opacity': 0.3, 'overlay-padding': 5 }
         },
         {
-            selector: '.cdnd-grabbed-node.cdnd-drag-out',
-            style: { 'border-color': '#e74c3c', 'border-style': 'dashed', 'border-width': 2, 'background-color': '#f1c40f', 'opacity': 0.7, 'overlay-color': '#e74c3c', 'overlay-opacity': 0.3, 'overlay-padding': 5 }
+          selector: '.cdnd-grabbed-node.cdnd-drag-out',
+          style: { 'border-color': '#e74c3c', 'border-style': 'dashed', 'border-width': 2, 'background-color': '#f1c40f', 'opacity': 0.7, 'overlay-color': '#e74c3c', 'overlay-opacity': 0.3, 'overlay-padding': 5 }
         },
       ],
       layout: { name: 'preset' },
@@ -139,17 +137,17 @@ export function useGraphInstance() {
     };
 
     cyInstance = cytoscape(options);
-    
+
     // Initialize custom compound drag and drop
     const compoundDragDrop = useCompoundDragDrop(cyInstance, {
-        grabbedNode: (node: NodeSingular) => true, // Allow dragging all node types
-        dropTarget: (node: NodeSingular) => node.data('nodeType') === 'plate',
-        dropSibling: () => false,
-        outThreshold: 30, // Reduced threshold for better UX
+      grabbedNode: (node: NodeSingular) => true, // Allow dragging all node types
+      dropTarget: (node: NodeSingular) => node.data('nodeType') === 'plate',
+      dropSibling: () => false,
+      outThreshold: 30, // Reduced threshold for better UX
     });
-    
+
     (cyInstance as any).gridGuide({ drawGrid: false, snapToGridOnRelease: true, snapToGridDuringDrag: true, gridSpacing: 20 });
-    
+
     (cyInstance as any).contextMenus({
       menuItems: [
         {

@@ -15,7 +15,6 @@
     "@types/cytoscape": "^3.21.9",
     "codemirror": "^5.65.19",
     "cytoscape": "^3.32.0",
-
     "cytoscape-context-menus": "^4.2.1",
     "cytoscape-dagre": "^2.5.0",
     "cytoscape-fcose": "^2.2.0",
