@@ -249,7 +249,7 @@ watch(() => props.currentMode, (newMode) => {
       @canvas-tap="handleCanvasTap"
       @node-moved="handleNodeMoved"
       @node-dropped="handleNodeDropped"
-      @delete-element="handleDeleteElement"
+      @element-remove="handleDeleteElement"
     />
   </div>
 </template>
