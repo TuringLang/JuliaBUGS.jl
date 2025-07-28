@@ -265,10 +265,13 @@ macro bugs_primitive(func::Symbol)
     mod = __module__
     return quote
         local f = $(esc(func))
+        # Add to the default bugs eval module
         Core.eval(
             JuliaBUGS.get_default_bugs_eval_module(),
             Expr(:const, Expr(:(=), $(QuoteNode(func)), f)),
         )
+        # Also add to JuliaBUGS module for direct access
+        Core.eval(JuliaBUGS, Expr(:const, Expr(:(=), $(QuoteNode(func)), f)))
     end
 end
 macro bugs_primitive(funcs::Vararg{Symbol})
@@ -279,10 +282,13 @@ macro bugs_primitive(funcs::Vararg{Symbol})
             exprs,
             quote
                 local f = $(esc(func))
+                # Add to the default bugs eval module
                 Core.eval(
                     JuliaBUGS.get_default_bugs_eval_module(),
                     Expr(:const, Expr(:(=), $(QuoteNode(func)), f)),
                 )
+                # Also add to JuliaBUGS module for direct access
+                Core.eval(JuliaBUGS, Expr(:const, Expr(:(=), $(QuoteNode(func)), f)))
             end,
         )
     end

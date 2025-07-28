@@ -166,7 +166,8 @@ function _generate_model_function(
         )
 
         # Pass the module where @model was called to respect user's imports
-        model = compile($(QuoteNode(bugs_ast)), data; eval_module=($calling_module))
+        # @info "Calling compile with eval_module=" $(esc(calling_module))
+        model = compile($(QuoteNode(bugs_ast)), data; eval_module=($(esc(calling_module))))
 
         if $(param_type !== nothing)
             try

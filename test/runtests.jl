@@ -26,7 +26,7 @@ using AdvancedMH
 using MCMCChains
 using ReverseDiff
 
-JuliaBUGS.@bugs_primitive Normal Gamma Beta InverseGamma Categorical truncated
+JuliaBUGS.@bugs_primitive Normal Gamma Beta InverseGamma Categorical truncated MvNormal
 
 const TEST_GROUPS = OrderedDict{String,Function}(
     "elementary" => () -> begin
