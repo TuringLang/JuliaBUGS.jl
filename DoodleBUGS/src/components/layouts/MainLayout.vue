@@ -44,8 +44,7 @@ const { elements, selectedElement, updateElement, deleteElement } = useGraphElem
 const { getCyInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
 
-const activeLeftTab = ref<'project' | 'palette' | 'data' | null>('project');
-const isLeftSidebarOpen = ref(true);
+const { activeLeftTab, isLeftSidebarOpen, leftSidebarWidth, rightSidebarWidth } = storeToRefs(uiStore);
 const isRightSidebarOpen = ref(true);
 const currentMode = ref<string>('select');
 const currentNodeType = ref<NodeType>('stochastic');
@@ -65,24 +64,24 @@ const showValidationModal = ref(false);
 const showExportModal = ref(false);
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null);
 
-onMounted(() => {
+onMounted(async () => {
   projectStore.loadProjects();
 
   if (projectStore.projects.length === 0) {
     projectStore.createProject('Default Project');
     if (projectStore.currentProjectId) {
-      projectStore.addGraphToProject(projectStore.currentProjectId, 'Untitled Graph');
+      await handleLoadExample('rats');
     }
-  }
-
-  const lastGraphId = localStorage.getItem('doodlebugs-currentGraphId');
-  if (lastGraphId) {
-    const project = projectStore.currentProject;
-    if (project && project.graphs.some(g => g.id === lastGraphId)) {
-      graphStore.selectGraph(lastGraphId);
+  } else {
+    const lastGraphId = localStorage.getItem('doodlebugs-currentGraphId');
+    if (lastGraphId) {
+      const project = projectStore.currentProject;
+      if (project && project.graphs.some(g => g.id === lastGraphId)) {
+        graphStore.selectGraph(lastGraphId);
+      }
+    } else if (projectStore.currentProject?.graphs.length) {
+      graphStore.selectGraph(projectStore.currentProject.graphs[0].id);
     }
-  } else if (projectStore.currentProject?.graphs.length) {
-    graphStore.selectGraph(projectStore.currentProject.graphs[0].id);
   }
 
   validateGraph();
@@ -109,30 +108,17 @@ const activeGraphName = computed(() => {
   return null;
 });
 
-const handleLeftTabClick = (tabName: 'project' | 'palette' | 'data') => {
-  if (activeLeftTab.value === tabName && isLeftSidebarOpen.value) {
-    isLeftSidebarOpen.value = false;
-  } else {
-    isLeftSidebarOpen.value = true;
-    activeLeftTab.value = tabName;
-  }
-};
-
-const toggleLeftSidebar = () => {
-  isLeftSidebarOpen.value = !isLeftSidebarOpen.value;
-};
-
 const toggleRightSidebar = () => {
   isRightSidebarOpen.value = !isRightSidebarOpen.value;
 };
 
 const leftSidebarStyle = computed((): StyleValue => ({
-  width: isLeftSidebarOpen.value ? `${uiStore.leftSidebarWidth}px` : 'var(--vertical-tab-width)',
+  width: isLeftSidebarOpen.value ? `${leftSidebarWidth.value}px` : 'var(--vertical-tab-width)',
   transition: isResizingLeft.value ? 'none' : 'width 0.3s ease-in-out',
 }));
 
 const leftSidebarContentStyle = computed((): StyleValue => {
-  const contentWidth = uiStore.leftSidebarWidth - 50;
+  const contentWidth = leftSidebarWidth.value - 50;
   return {
     width: `${contentWidth}px`,
     opacity: isLeftSidebarOpen.value ? '1' : '0',
@@ -141,7 +127,7 @@ const leftSidebarContentStyle = computed((): StyleValue => {
 });
 
 const rightSidebarStyle = computed((): StyleValue => ({
-  width: isRightSidebarOpen.value ? `${uiStore.rightSidebarWidth}px` : '0',
+  width: isRightSidebarOpen.value ? `${rightSidebarWidth.value}px` : '0',
   opacity: isRightSidebarOpen.value ? '1' : '0',
   pointerEvents: isRightSidebarOpen.value ? 'auto' : 'none',
   borderLeft: isRightSidebarOpen.value ? '1px solid var(--color-border)' : 'none',
@@ -159,7 +145,7 @@ const startResizeLeft = () => {
 const doResizeLeft = (event: MouseEvent) => {
   if (isResizingLeft.value) {
     const newWidth = event.clientX;
-    uiStore.leftSidebarWidth = Math.max(250, Math.min(newWidth, 600));
+    leftSidebarWidth.value = Math.max(250, Math.min(newWidth, 600));
   }
 };
 
@@ -174,7 +160,7 @@ const startResizeRight = () => {
 const doResizeRight = (event: MouseEvent) => {
   if (isResizingRight.value) {
     const newWidth = window.innerWidth - event.clientX;
-    uiStore.rightSidebarWidth = Math.max(280, Math.min(newWidth, 600));
+    rightSidebarWidth.value = Math.max(280, Math.min(newWidth, 600));
   }
 };
 
@@ -389,7 +375,7 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
       @update:is-grid-enabled="isGridEnabled = $event" :grid-size="gridSize" @update:grid-size="gridSize = $event"
       :current-mode="currentMode" @update:current-mode="currentMode = $event" :current-node-type="currentNodeType"
       @update:current-node-type="currentNodeType = $event" :is-left-sidebar-open="isLeftSidebarOpen"
-      :is-right-sidebar-open="isRightSidebarOpen" @toggle-left-sidebar="toggleLeftSidebar"
+      :is-right-sidebar-open="isRightSidebarOpen" @toggle-left-sidebar="uiStore.toggleLeftSidebar"
       @toggle-right-sidebar="toggleRightSidebar" @new-project="showNewProjectModal = true"
       @new-graph="showNewGraphModal = true" @save-current-graph="saveCurrentGraph"
       @open-about-modal="showAboutModal = true" @export-json="handleExportJson" @open-export-modal="openExportModal"
@@ -399,15 +385,16 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
     <div class="content-area">
       <aside class="left-sidebar" :style="leftSidebarStyle">
         <div class="vertical-tabs-container">
-          <button :class="{ active: activeLeftTab === 'project' }" @click="handleLeftTabClick('project')"
+          <button :class="{ active: activeLeftTab === 'project' }" @click="uiStore.handleLeftTabClick('project')"
             title="Project Manager">
             <i class="fas fa-folder"></i> <span v-show="isLeftSidebarOpen">Project</span>
           </button>
-          <button :class="{ active: activeLeftTab === 'palette' }" @click="handleLeftTabClick('palette')"
+          <button :class="{ active: activeLeftTab === 'palette' }" @click="uiStore.handleLeftTabClick('palette')"
             title="Node Palette">
             <i class="fas fa-shapes"></i> <span v-show="isLeftSidebarOpen">Palette</span>
           </button>
-          <button :class="{ active: activeLeftTab === 'data' }" @click="handleLeftTabClick('data')" title="Data Input">
+          <button :class="{ active: activeLeftTab === 'data' }" @click="uiStore.handleLeftTabClick('data')"
+            title="Data Input">
             <i class="fas fa-database"></i> <span v-show="isLeftSidebarOpen">Data</span>
           </button>
         </div>
