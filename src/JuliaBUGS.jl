@@ -270,8 +270,10 @@ macro bugs_primitive(func::Symbol)
             JuliaBUGS.get_default_bugs_eval_module(),
             Expr(:const, Expr(:(=), $(QuoteNode(func)), f)),
         )
-        # Also add to JuliaBUGS module for direct access
-        Core.eval(JuliaBUGS, Expr(:const, Expr(:(=), $(QuoteNode(func)), f)))
+        # Also add to JuliaBUGS module for direct access (if not already defined)
+        if !isdefined(JuliaBUGS, $(QuoteNode(func)))
+            Core.eval(JuliaBUGS, Expr(:const, Expr(:(=), $(QuoteNode(func)), f)))
+        end
     end
 end
 macro bugs_primitive(funcs::Vararg{Symbol})
@@ -287,8 +289,10 @@ macro bugs_primitive(funcs::Vararg{Symbol})
                     JuliaBUGS.get_default_bugs_eval_module(),
                     Expr(:const, Expr(:(=), $(QuoteNode(func)), f)),
                 )
-                # Also add to JuliaBUGS module for direct access
-                Core.eval(JuliaBUGS, Expr(:const, Expr(:(=), $(QuoteNode(func)), f)))
+                # Also add to JuliaBUGS module for direct access (if not already defined)
+                if !isdefined(JuliaBUGS, $(QuoteNode(func)))
+                    Core.eval(JuliaBUGS, Expr(:const, Expr(:(=), $(QuoteNode(func)), f)))
+                end
             end,
         )
     end
