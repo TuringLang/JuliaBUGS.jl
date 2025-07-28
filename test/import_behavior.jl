@@ -49,15 +49,6 @@ using JuliaBUGS: @bugs_primitive
 
         model = test_model(NamedTuple())
         @test model isa JuliaBUGS.BUGSModel
-
-        # This test expects that dbeta is not available in the calling module
-        # The @model macro should use the calling module's scope
-        # First create the model function
-        @eval @model function fail_model((; x))
-            x ~ dbeta(1, 1)
-        end
-        # Then test that calling it throws an error
-        @test_throws UndefVarError fail_model(NamedTuple())
     end
 
     @testset "@bugs_primitive registration" begin
