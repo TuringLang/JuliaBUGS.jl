@@ -26,7 +26,7 @@ using AdvancedMH
 using MCMCChains
 using ReverseDiff
 
-JuliaBUGS.@bugs_primitive Normal Gamma Beta InverseGamma Categorical truncated MvNormal Bernoulli Diagonal Dirichlet LKJ censored
+JuliaBUGS.@bugs_primitive Normal Gamma Beta InverseGamma Categorical truncated MvNormal Bernoulli Diagonal Dirichlet LKJ censored product_distribution
 
 const TEST_GROUPS = OrderedDict{String,Function}(
     "elementary" => () -> begin
