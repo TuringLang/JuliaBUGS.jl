@@ -48,6 +48,7 @@ include("independent_mh.jl")
 include("gibbs.jl")
 
 include("source_gen.jl")
+include("bugs_eval_module.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 
@@ -176,7 +177,7 @@ function compile(
     model_def::Expr,
     data::NamedTuple,
     initial_params::NamedTuple=NamedTuple();
-    eval_module::Module=@__MODULE__
+    eval_module::Module=get_default_bugs_eval_module()
 )
     data = check_input(data)
     eval_env = semantic_analysis(model_def, data)

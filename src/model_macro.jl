@@ -134,12 +134,24 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
     end
 
     return _generate_model_function(
-        model_name, param_type, param_fields, constant_variables, constant_names, bugs_ast
+        model_name,
+        param_type,
+        param_fields,
+        constant_variables,
+        constant_names,
+        bugs_ast,
+        __module__,
     )
 end
 
 function _generate_model_function(
-    model_name, param_type, param_fields, constant_variables, constant_names, bugs_ast
+    model_name,
+    param_type,
+    param_fields,
+    constant_variables,
+    constant_names,
+    bugs_ast,
+    calling_module,
 )
     return MacroTools.@q function ($(esc(model_name)))(
         params_struct, $(esc.(constant_variables)...)
@@ -154,7 +166,7 @@ function _generate_model_function(
         )
 
         # Pass the module where @model was called to respect user's imports
-        model = compile($(QuoteNode(bugs_ast)), data; eval_module=($__module__))
+        model = compile($(QuoteNode(bugs_ast)), data; eval_module=($calling_module))
 
         if $(param_type !== nothing)
             try
