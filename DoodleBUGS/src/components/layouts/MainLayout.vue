@@ -44,8 +44,8 @@ const { elements, selectedElement, updateElement, deleteElement } = useGraphElem
 const { getCyInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
 
-const { activeLeftTab, isLeftSidebarOpen, leftSidebarWidth, rightSidebarWidth } = storeToRefs(uiStore);
-const isRightSidebarOpen = ref(true);
+const { activeLeftTab, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth } = storeToRefs(uiStore);
+
 const currentMode = ref<string>('select');
 const currentNodeType = ref<NodeType>('stochastic');
 const isGridEnabled = ref(true);
@@ -68,6 +68,7 @@ onMounted(async () => {
   projectStore.loadProjects();
 
   if (projectStore.projects.length === 0) {
+    // If no projects exist, create a default one and load the 'rats' example
     projectStore.createProject('Default Project');
     if (projectStore.currentProjectId) {
       await handleLoadExample('rats');
@@ -107,10 +108,6 @@ const activeGraphName = computed(() => {
   }
   return null;
 });
-
-const toggleRightSidebar = () => {
-  isRightSidebarOpen.value = !isRightSidebarOpen.value;
-};
 
 const leftSidebarStyle = computed((): StyleValue => ({
   width: isLeftSidebarOpen.value ? `${leftSidebarWidth.value}px` : 'var(--vertical-tab-width)',
@@ -376,7 +373,7 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
       :current-mode="currentMode" @update:current-mode="currentMode = $event" :current-node-type="currentNodeType"
       @update:current-node-type="currentNodeType = $event" :is-left-sidebar-open="isLeftSidebarOpen"
       :is-right-sidebar-open="isRightSidebarOpen" @toggle-left-sidebar="uiStore.toggleLeftSidebar"
-      @toggle-right-sidebar="toggleRightSidebar" @new-project="showNewProjectModal = true"
+      @toggle-right-sidebar="uiStore.toggleRightSidebar" @new-project="showNewProjectModal = true"
       @new-graph="showNewGraphModal = true" @save-current-graph="saveCurrentGraph"
       @open-about-modal="showAboutModal = true" @export-json="handleExportJson" @open-export-modal="openExportModal"
       @apply-layout="handleGraphLayout" @load-example="handleLoadExample" @validate-model="validateGraph"

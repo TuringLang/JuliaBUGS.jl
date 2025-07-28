@@ -12,6 +12,9 @@ export const useUiStore = defineStore('ui', () => {
   const isRightTabPinned = ref<boolean>(
     localStorage.getItem('doodlebugs-isRightTabPinned') === 'true'
   );
+  const isRightSidebarOpen = ref<boolean>(
+    localStorage.getItem('doodlebugs-isRightSidebarOpen') !== 'false' // Default to true
+  );
   const rightSidebarWidth = ref<number>(
     parseInt(localStorage.getItem('doodlebugs-rightSidebarWidth') || '320')
   );
@@ -34,6 +37,9 @@ export const useUiStore = defineStore('ui', () => {
   watch(isRightTabPinned, (isPinned) => {
     localStorage.setItem('doodlebugs-isRightTabPinned', isPinned.toString());
   });
+  watch(isRightSidebarOpen, (isOpen) => {
+    localStorage.setItem('doodlebugs-isRightSidebarOpen', isOpen.toString());
+  });
   watch(rightSidebarWidth, (newWidth) => {
     localStorage.setItem('doodlebugs-rightSidebarWidth', newWidth.toString());
   });
@@ -54,6 +60,9 @@ export const useUiStore = defineStore('ui', () => {
   const toggleRightTabPinned = () => {
     isRightTabPinned.value = !isRightTabPinned.value;
   };
+  const toggleRightSidebar = () => {
+    isRightSidebarOpen.value = !isRightSidebarOpen.value;
+  };
 
   const handleLeftTabClick = (tab: LeftSidebarTab) => {
     if (activeLeftTab.value === tab && isLeftSidebarOpen.value) {
@@ -72,9 +81,11 @@ export const useUiStore = defineStore('ui', () => {
     // Right Sidebar
     activeRightTab,
     isRightTabPinned,
+    isRightSidebarOpen,
     rightSidebarWidth,
     setActiveRightTab,
     toggleRightTabPinned,
+    toggleRightSidebar,
     // Left Sidebar
     activeLeftTab,
     isLeftSidebarOpen,
