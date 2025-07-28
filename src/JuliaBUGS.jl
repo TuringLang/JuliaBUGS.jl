@@ -177,7 +177,7 @@ function compile(
     model_def::Expr,
     data::NamedTuple,
     initial_params::NamedTuple=NamedTuple();
-    eval_module::Module=get_default_bugs_eval_module()
+    eval_module::Module=get_default_bugs_eval_module(),
 )
     data = check_input(data)
     eval_env = semantic_analysis(model_def, data)
@@ -262,22 +262,31 @@ julia> JuliaBUGS.f(1)
 ```
 """
 macro bugs_primitive(func::Symbol)
+    mod = __module__
     return quote
-        @eval JuliaBUGS begin
-            $func = $(__module__).$func
-        end
+        local f = $(esc(func))
+        Core.eval(
+            JuliaBUGS.get_default_bugs_eval_module(),
+            Expr(:const, Expr(:(=), $(QuoteNode(func)), f)),
+        )
     end
 end
 macro bugs_primitive(funcs::Vararg{Symbol})
-    exprs = Expr(:block)
+    mod = __module__
+    exprs = []
     for func in funcs
-        push!(exprs.args, :($func = $(__module__).$func))
+        push!(
+            exprs,
+            quote
+                local f = $(esc(func))
+                Core.eval(
+                    JuliaBUGS.get_default_bugs_eval_module(),
+                    Expr(:const, Expr(:(=), $(QuoteNode(func)), f)),
+                )
+            end,
+        )
     end
-    return quote
-        @eval JuliaBUGS begin
-            $exprs
-        end
-    end
+    return Expr(:block, exprs...)
 end
 
 """
