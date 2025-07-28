@@ -26,6 +26,8 @@ using AdvancedMH
 using MCMCChains
 using ReverseDiff
 
+JuliaBUGS.@bugs_primitive Normal Gamma Beta InverseGamma Categorical truncated
+
 const TEST_GROUPS = OrderedDict{String,Function}(
     "elementary" => () -> begin
         Documenter.doctest(JuliaBUGS; manual=false)
