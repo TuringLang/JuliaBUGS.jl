@@ -6,6 +6,9 @@ import 'codemirror/theme/material-darker.css';
 import 'codemirror/mode/javascript/javascript.js';
 import 'codemirror/addon/scroll/simplescrollbars.css';
 import 'codemirror/addon/scroll/simplescrollbars.js';
+import 'codemirror/addon/fold/foldgutter.css';
+import 'codemirror/addon/fold/foldgutter.js';
+import 'codemirror/addon/fold/brace-fold.js';
 import CodeMirror from 'codemirror';
 import type { Editor } from 'codemirror';
 
@@ -44,6 +47,8 @@ onMounted(async () => {
       tabSize: 2,
       scrollbarStyle: "simple",
       lineWrapping: false,
+      foldGutter: true,
+      gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"]
     });
 
     cmInstance.on('change', (instance: Editor) => {
@@ -121,6 +126,10 @@ watch(() => props.isActive, (newVal) => {
 .CodeMirror-simplescroll-horizontal, .CodeMirror-simplescroll-vertical {
   background: transparent;
   z-index: 99;
+}
+.CodeMirror-foldgutter-open,
+.CodeMirror-foldgutter-folded {
+  color: #999;
 }
 </style>
 
