@@ -23,7 +23,7 @@ const emit = defineEmits<{
   (e: 'update:currentNodeType', type: NodeType): void;
 }>();
 
-const { elements, addElement, updateElement, deleteElement } = useGraphElements();
+const { elements: graphElements, addElement, updateElement, deleteElement } = useGraphElements();
 const { getCyInstance } = useGraphInstance();
 
 const sourceNode = ref<NodeSingular | null>(null);
@@ -35,13 +35,11 @@ const greekAlphabet = [
   'sigma', 'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega'
 ];
 
-const MAX_NODE_NAME_ITERATIONS = 1000;
-
 const getNextNodeName = (): string => {
     const existingNames = new Set(
-        elements.value
-            .filter(el => el.type === 'node')
-            .map(el => (el as GraphNode).name)
+        graphElements.value
+            .filter((el: GraphElement) => el.type === 'node')
+            .map((el: GraphElement) => (el as GraphNode).name)
     );
 
     for (const letter of greekAlphabet) {
@@ -50,17 +48,13 @@ const getNextNodeName = (): string => {
         }
     }
 
-    // Fallback if all Greek letters are used
-    let i = 1;
-    while (i < MAX_NODE_NAME_ITERATIONS) { // reasonable limit to prevent infinite loops
+    for (let i = 1; i < 1000; i++) {
         const fallbackName = `var${i}`;
         if (!existingNames.has(fallbackName)) {
             return fallbackName;
         }
-        i++;
     }
 
-    // Ultimate fallback for extreme cases
     return `node_${Date.now()}`;
 };
 
@@ -97,7 +91,7 @@ const createNode = (nodeType: NodeType, position: { x: number; y: number }, pare
 const createPlateWithNode = (position: { x: number; y: number }, parentId?: string): GraphNode => {
     const newPlate = createNode('plate', position, parentId);
     const innerNode = createNode('stochastic', { x: position.x, y: position.y }, newPlate.id);
-    elements.value = [...elements.value, newPlate, innerNode];
+    graphElements.value = [...graphElements.value, newPlate, innerNode];
     return newPlate;
 }
 
@@ -170,7 +164,7 @@ const handleCanvasTap = (event: EventObject) => {
 };
 
 const handleNodeMoved = (payload: { nodeId: string, position: { x: number; y: number }, parentId: string | undefined }) => {
-  const elementToUpdate = elements.value.find(el => el.id === payload.nodeId) as GraphNode | undefined;
+  const elementToUpdate = graphElements.value.find((el: GraphElement) => el.id === payload.nodeId) as GraphNode | undefined;
 
   if (elementToUpdate) {
     const updatedNode: GraphNode = {
@@ -188,7 +182,6 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
   let parentPlateId: string | undefined = undefined;
 
   if (nodeType === 'plate') {
-      // Find parent plate for nested plate creation
       let parentPlateId: string | undefined = undefined;
       if (cy) {
           const plates = cy.nodes('[nodeType="plate"]');
@@ -244,7 +237,7 @@ watch(() => props.currentMode, (newMode) => {
       @update:current-mode="(mode: string) => emit('update:currentMode', mode)"
       @update:current-node-type="(type: NodeType) => emit('update:currentNodeType', type)"
       :is-connecting="isConnecting"
-      :source-node-name="sourceNode?.data('name')"
+      :source-node-name="sourceNode ? (sourceNode.data('name') as string) : undefined"
     />
 
     <GraphCanvas

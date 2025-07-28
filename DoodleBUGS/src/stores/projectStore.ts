@@ -129,7 +129,6 @@ export const useProjectStore = defineStore('project', () => {
     if (storedProjects) {
       projects.value = JSON.parse(storedProjects);
     }
-    // Validate the persisted project ID - clear if no longer valid
     if (currentProjectId.value && !projects.value.some(p => p.id === currentProjectId.value)) {
       selectProject(null);
     }

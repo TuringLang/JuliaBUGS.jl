@@ -44,7 +44,6 @@ export const useGraphStore = defineStore('graph', () => {
     };
     graphContents.value.set(graphId, newContent);
     saveGraph(graphId, newContent);
-    // Also create data entry for the new graph
     dataStore.createNewGraphData(graphId);
   };
 
@@ -59,7 +58,6 @@ export const useGraphStore = defineStore('graph', () => {
   const deleteGraphContent = (graphId: string) => {
     graphContents.value.delete(graphId);
     localStorage.removeItem(`doodlebugs-graph-${graphId}`);
-    // Also delete associated data
     dataStore.deleteGraphData(graphId);
     if (currentGraphId.value === graphId) {
       selectGraph(null);

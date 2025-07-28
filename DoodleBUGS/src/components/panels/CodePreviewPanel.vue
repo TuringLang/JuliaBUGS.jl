@@ -2,7 +2,6 @@
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useGraphStore } from '../../stores/graphStore';
-import { useDataStore } from '../../stores/dataStore';
 import { useBugsCodeGenerator } from '../../composables/useBugsCodeGenerator';
 import BaseButton from '../ui/BaseButton.vue';
 
@@ -23,12 +22,10 @@ const props = defineProps<{
 }>();
 
 const graphStore = useGraphStore();
-const dataStore = useDataStore();
 
 const { currentGraphElements } = storeToRefs(graphStore);
-const { parsedGraphData } = storeToRefs(dataStore);
 
-const { generatedCode } = useBugsCodeGenerator(currentGraphElements, parsedGraphData);
+const { generatedCode } = useBugsCodeGenerator(currentGraphElements);
 
 const copySuccess = ref(false);
 const editorContainer = ref<HTMLDivElement | null>(null);

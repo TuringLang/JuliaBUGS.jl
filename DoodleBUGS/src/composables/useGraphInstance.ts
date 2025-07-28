@@ -1,5 +1,5 @@
 import cytoscape from 'cytoscape';
-import type { Core, ElementDefinition, NodeSingular, SingularElementReturnValue } from 'cytoscape';
+import type { Core, ElementDefinition, NodeSingular, EventObject } from 'cytoscape';
 import gridGuide from 'cytoscape-grid-guide';
 import contextMenus from 'cytoscape-context-menus';
 import dagre from 'cytoscape-dagre';
@@ -18,9 +18,6 @@ cytoscape.use(klay);
 cytoscape.use(svg);
 
 let cyInstance: Core | null = null;
-interface ContextMenuEvent {
-  target: SingularElementReturnValue;
-}
 
 export function useGraphInstance() {
   const initCytoscape = (container: HTMLElement, initialElements: ElementDefinition[]): Core => {
@@ -38,8 +35,8 @@ export function useGraphInstance() {
           style: {
             'background-color': '#e0e0e0', 'border-color': '#555', 'border-width': 2,
             'label': (ele: NodeSingular) => {
-              const name = ele.data('name');
-              const indices = ele.data('indices');
+              const name = ele.data('name') as string;
+              const indices = ele.data('indices') as string | undefined;
               return indices ? `${name}[${indices}]` : name;
             },
             'text-valign': 'center', 'text-halign': 'center', 'padding': '10px', 'font-size': '10px',
@@ -143,22 +140,22 @@ export function useGraphInstance() {
     cyInstance = cytoscape(options);
 
     // Initialize custom compound drag and drop
-    const compoundDragDrop = useCompoundDragDrop(cyInstance, {
-      grabbedNode: (node: NodeSingular) => true, // Allow dragging all node types
+    useCompoundDragDrop(cyInstance, {
+      grabbedNode: (node: NodeSingular) => node !== undefined, // Allow dragging all node types
       dropTarget: (node: NodeSingular) => node.data('nodeType') === 'plate',
       dropSibling: () => false,
       outThreshold: 30, // Reduced threshold for better UX
     });
 
-    (cyInstance as any).gridGuide({ drawGrid: false, snapToGridOnRelease: true, snapToGridDuringDrag: true, gridSpacing: 20 });
+    (cyInstance as Core & { gridGuide: (options: { drawGrid: boolean; snapToGridOnRelease: boolean; snapToGridDuringDrag: boolean; gridSpacing: number }) => void }).gridGuide({ drawGrid: false, snapToGridOnRelease: true, snapToGridDuringDrag: true, gridSpacing: 20 });
 
-    (cyInstance as any).contextMenus({
+    (cyInstance as Core & { contextMenus: (options: { menuItems: { id: string; content: string; selector: string; onClickFunction: (evt: cytoscape.EventObject) => void }[] }) => void }).contextMenus({
       menuItems: [
         {
           id: 'remove',
           content: 'Remove',
           selector: 'node, edge',
-          onClickFunction: (evt: ContextMenuEvent) => {
+          onClickFunction: (evt: cytoscape.EventObject) => {
             const targetElement = evt.target;
             targetElement.cy().container()?.dispatchEvent(
               new CustomEvent('cxt-remove', {

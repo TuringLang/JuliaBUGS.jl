@@ -1,4 +1,4 @@
-import type { NodeType, ExampleModel } from '../types';
+import type { NodeType } from '../types';
 
 export type NodePropertyType = 'select' | 'text' | 'number' | 'checkbox';
 
@@ -16,7 +16,7 @@ export interface NodeProperty {
     type: NodePropertyType;
     placeholder?: string;
     options?: SelectOption[];
-    defaultValue: any;
+    defaultValue: string | number | boolean | null | undefined;
     helpText?: string;
 }
 
@@ -130,11 +130,11 @@ export const getDistributionByName = (distName: string): SelectOption | undefine
     return distributionOptions.find(opt => opt.value === distName);
 };
 
-export const getDefaultNodeData = (type: NodeType): { [key: string]: any } => {
+export const getDefaultNodeData = (type: NodeType): { [key: string]: string | number | boolean | null | undefined } => {
     const definition = getNodeDefinition(type);
     if (!definition) return {};
     
-    const defaultData: { [key: string]: any } = {};
+    const defaultData: { [key: string]: string | number | boolean | null | undefined } = {};
     definition.properties.forEach(prop => {
         defaultData[prop.key] = prop.defaultValue;
     });

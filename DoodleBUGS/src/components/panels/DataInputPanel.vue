@@ -22,15 +22,14 @@ const jsonError = ref<string | null>(null);
 
 /**
  * Validates a string to see if it is valid JSON.
- * Updates the reactive `jsonError` ref with the specific error message if parsing fails.
  * @param jsonString The string to validate.
  */
 const validateJson = (jsonString: string) => {
   try {
     JSON.parse(jsonString);
     jsonError.value = null;
-  } catch (e: any) {
-    jsonError.value = e.message;
+  } catch (e: unknown) {
+    jsonError.value = e instanceof Error ? e.message : String(e);
   }
 };
 
@@ -47,14 +46,13 @@ onMounted(async () => {
       lineWrapping: false,
     });
 
-    cmInstance.on('change', (instance) => {
+    cmInstance.on('change', (instance: Editor) => {
       if (isUpdatingFromSource) return;
       const currentValue = instance.getValue();
       dataStore.currentGraphDataString = currentValue;
       validateJson(currentValue);
     });
     
-    // Perform initial validation on mount.
     validateJson(dataStore.currentGraphDataString);
 
     if (props.isActive) {
@@ -82,7 +80,6 @@ watch(() => dataStore.currentGraphDataString, (newData) => {
 
 watch(() => props.isActive, (newVal) => {
   if (newVal && cmInstance) {
-    // Refresh the editor when its container becomes visible to prevent rendering issues.
     nextTick(() => {
       cmInstance?.refresh();
     });

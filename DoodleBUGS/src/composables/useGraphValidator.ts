@@ -34,7 +34,6 @@ export function useGraphValidator(
     nodes.forEach(node => {
       const errors: ValidationError[] = [];
 
-      // Rule 1: Stochastic nodes must have the correct number of parents/parameters.
       if (node.nodeType === 'stochastic' || node.nodeType === 'observed') {
         const dist = getDistributionByName(node.distribution || '');
         if (dist && dist.paramCount !== undefined) {
@@ -42,8 +41,8 @@ export function useGraphValidator(
           let providedParams = parentEdges.length;
           
           const literalParams = Object.keys(node)
-            .filter(key => key.startsWith('param') && node[key] && String(node[key]).trim() !== '')
-            .map(key => node[key]);
+            .filter(key => key.startsWith('param') && node[key as keyof GraphNode] && String(node[key as keyof GraphNode]).trim() !== '')
+            .map(key => String(node[key as keyof GraphNode]));
 
           const linkedParams = literalParams.filter(p => nodeNames.has(p));
           const numericParams = literalParams.length - linkedParams.length;
@@ -59,7 +58,6 @@ export function useGraphValidator(
         }
       }
 
-      // Rule 2: Deterministic nodes validation
       if (node.nodeType === 'deterministic') {
         if (!node.equation?.trim()) {
             errors.push({
@@ -100,7 +98,6 @@ export function useGraphValidator(
         }
       }
 
-      // Rule 3: Observed nodes must have a corresponding entry in the data section.
       if (node.observed && !dataKeys.has(node.name)) {
           errors.push({
               field: 'name',
@@ -108,7 +105,6 @@ export function useGraphValidator(
           });
       }
 
-      // Rule 4: Node name should be a valid variable name.
       const baseName = node.name.split('[')[0].trim();
       if (!/^[a-zA-Z][a-zA-Z0-9.]*$/.test(baseName)) {
           errors.push({
