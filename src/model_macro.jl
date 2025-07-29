@@ -112,7 +112,7 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
 
     model_def = _add_line_number_nodes(Expr(:block, body_expr...))
     Parser.warn_cumulative_density_deviance(model_def)
-    bugs_ast = Parser.bugs_top(model_def, __source__)
+    bugs_ast = Parser.bugs_top(model_def, __source__; allow_qualified_names=true)
 
     param_parse_result = _parse_parameter_destructuring(param_destructure)
     param_parse_result === nothing && return :(throw(

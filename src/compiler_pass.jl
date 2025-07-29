@@ -710,7 +710,6 @@ function build_node_functions(
             args, node_func_expr = make_function_expr(
                 lhs, rhs, eval_env; eval_module=eval_module
             )
-            # Evaluate in the specified module if provided, otherwise in JuliaBUGS
             node_func = if eval_module !== nothing
                 Base.eval(eval_module, node_func_expr)
             else
@@ -776,24 +775,6 @@ function make_function_expr(
 
     unpacking_expr = :((; $(variables...),) = evaluation_env)
     unpacking_loop_vars_expr = :((; $(loop_vars...),) = loop_vars)
-
-    # Check for qualified names in the expression
-    MacroTools.postwalk(rhs) do sub_expr
-        if Meta.isexpr(sub_expr, :call) && Meta.isexpr(sub_expr.args[1], :.)
-            # Throw UndefVarError to match the test expectation
-            # Extract the function name from the qualified expression
-            qualified_expr = sub_expr.args[1]
-            func_name =
-                if Meta.isexpr(qualified_expr, :.) && length(qualified_expr.args) >= 2
-                    # For expressions like Base.exp, extract :exp
-                    qualified_expr.args[2].value
-                else
-                    qualified_expr
-                end
-            throw(UndefVarError(func_name))
-        end
-        return sub_expr
-    end
 
     func_body = MacroTools.postwalk(rhs) do sub_expr
         if @capture(sub_expr, v_[indices__])

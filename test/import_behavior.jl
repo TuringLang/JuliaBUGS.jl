@@ -84,16 +84,65 @@ using JuliaBUGS: @bugs_primitive
     end
 
     @testset "Qualified names in @bugs" begin
-        bugs_expr = @bugs begin
-            x ~ dnorm(0, 1)
-            y = SomeModule.some_func(x)
-        end
-        @test_throws UndefVarError compile(bugs_expr, NamedTuple())
+        # Test that @bugs macro throws error during parsing for qualified names
+        @test_throws LoadError eval(quote
+            @bugs begin
+                x ~ dnorm(0, 1)
+                y = SomeModule.some_func(x)
+            end
+        end)
 
-        bugs_expr = @bugs begin
+        @test_throws LoadError eval(quote
+            @bugs begin
+                x ~ dnorm(0, 1)
+                y = Base.exp(x)
+            end
+        end)
+
+        # Test that error message contains expected guidance
+        try
+            eval(quote
+                @bugs begin
+                    x ~ dnorm(0, 1)
+                    y = Base.exp(x)
+                end
+            end)
+        catch e
+            error_msg = if e isa LoadError
+                e.error.msg
+            else
+                e.msg
+            end
+            @test occursin("Qualified function names are not supported in BUGS", error_msg)
+            @test occursin("@bugs_primitive", error_msg)
+            @test occursin("unqualified function name", error_msg)
+        end
+    end
+
+    @testset "Qualified names in @model" begin
+        using JuliaBUGS.BUGSPrimitives: dnorm
+
+        # Define a custom function at module level for testing
+        @eval Main module TestModuleForJuliaBUGS
+        custom_func(x) = x * 2 + 5
+        end
+
+        # Test that @model macro accepts qualified names
+        @model function model_with_qualified((; x, y))
+            x ~ dnorm(0, 1)
+            y = Main.TestModuleForJuliaBUGS.custom_func(x)
+        end
+
+        model = model_with_qualified(NamedTuple())
+        @test model isa JuliaBUGS.BUGSModel
+
+        # Test with Base functions
+        @model function model_with_base((; x, y))
             x ~ dnorm(0, 1)
             y = Base.exp(x)
         end
-        @test_throws UndefVarError compile(bugs_expr, NamedTuple())
+
+        model2 = model_with_base(NamedTuple())
+        @test model2 isa JuliaBUGS.BUGSModel
     end
 end
