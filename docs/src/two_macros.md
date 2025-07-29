@@ -6,7 +6,7 @@ JuliaBUGS provides two macros for defining probabilistic models with different e
 
 The `@bugs` macro creates model expressions with restricted scope:
 - Only has access to BUGS primitives (dnorm, dgamma, exp, log, etc.)
-- Cannot access user-defined functions or imports
+- Custom functions and distributions must be imported using `@bugs_primitive`
 - Matches original BUGS language behavior
 
 ```julia
@@ -22,11 +22,6 @@ model_expr = @bugs begin
     x ~ dnorm(0, 1)
     y = my_func(x)  # ERROR: UndefVarError
 end
-```
-
-To add custom functions to `@bugs`, use `@bugs_primitive`:
-```julia
-@bugs_primitive my_func
 ```
 
 ## @model
