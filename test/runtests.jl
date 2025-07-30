@@ -26,8 +26,11 @@ using AdvancedMH
 using MCMCChains
 using ReverseDiff
 
-# Register distribution functions as primitives for tests
-JuliaBUGS.@bugs_primitive Bernoulli Beta Categorical censored Diagonal Dirichlet fill Gamma InverseGamma LKJ ones MvNormal Normal product_distribution sum truncated zeros
+JuliaBUGS.@bugs_primitive Beta Bernoulli Categorical Gamma InverseGamma Normal
+JuliaBUGS.@bugs_primitive Diagonal Dirichlet LKJ MvNormal
+JuliaBUGS.@bugs_primitive censored product_distribution truncated
+JuliaBUGS.@bugs_primitive fill ones zeros
+JuliaBUGS.@bugs_primitive sum
 
 const TEST_GROUPS = OrderedDict{String,Function}(
     "elementary" => () -> begin
