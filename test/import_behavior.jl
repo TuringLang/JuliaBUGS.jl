@@ -17,7 +17,7 @@ using JuliaBUGS: @bugs_primitive
             x ~ dnorm(0, 1)
             y = my_func(x)
         end
-        @test_throws UndefVarError compile(bugs_expr, NamedTuple())
+        @test_throws ErrorException compile(bugs_expr, NamedTuple())
 
         @bugs_primitive my_func
         model2 = compile(bugs_expr, NamedTuple())
@@ -38,12 +38,12 @@ using JuliaBUGS: @bugs_primitive
     @testset "@model macro uses caller's module" begin
         using JuliaBUGS.BUGSPrimitives: dnorm, dgamma
 
-        # Define function at module level using eval
-        @eval Main custom_transform_for_test(x) = x^2 + 1
+        # Define function in Main module (where tests run)
+        Main.eval(:(custom_transform_for_test(x) = x^2 + 1))
 
         @model function test_model((; theta, y))
             theta ~ dnorm(0, 1)
-            transformed = custom_transform_for_test(theta)
+            transformed = Main.custom_transform_for_test(theta)
             y ~ dgamma(transformed, 1)
         end
 
@@ -83,39 +83,46 @@ using JuliaBUGS: @bugs_primitive
         @test model isa JuliaBUGS.BUGSModel
     end
 
-    @testset "Qualified names in @bugs" begin
-        # Test that @bugs macro throws error during parsing for qualified names
-        @test_throws LoadError eval(quote
-            @bugs begin
-                x ~ dnorm(0, 1)
-                y = SomeModule.some_func(x)
-            end
-        end)
+    @testset "Unregistered functions in @bugs" begin
+        # Test that unregistered functions throw errors during validation
+        unregistered_func(x) = x * 5
 
-        @test_throws LoadError eval(quote
-            @bugs begin
-                x ~ dnorm(0, 1)
-                y = Base.exp(x)
-            end
-        end)
+        bugs_expr = @bugs begin
+            x ~ dnorm(0, 1)
+            y = unregistered_func(x)
+        end
+        @test_throws ErrorException compile(bugs_expr, NamedTuple())
 
         # Test that error message contains expected guidance
         try
-            eval(quote
-                @bugs begin
-                    x ~ dnorm(0, 1)
-                    y = Base.exp(x)
-                end
-            end)
+            compile(bugs_expr, NamedTuple())
         catch e
-            error_msg = if e isa LoadError
-                e.error.msg
-            else
-                e.msg
-            end
-            @test occursin("Qualified function names are not supported in BUGS", error_msg)
-            @test occursin("@bugs_primitive", error_msg)
-            @test occursin("unqualified function name", error_msg)
+            @test occursin("not allowed in @bugs", e.msg)
+            @test occursin("@bugs_primitive", e.msg)
+        end
+
+        # Test that Base functions like Base.exp work since exp is in allowlist
+        bugs_expr2 = @bugs begin
+            x ~ dnorm(0, 1)
+            y = exp(x)  # This should work because exp is in the allowlist
+        end
+        model = compile(bugs_expr2, NamedTuple())
+        @test model isa JuliaBUGS.BUGSModel
+    end
+
+    @testset "Qualified names in @bugs" begin
+        # Test that qualified names are rejected in @bugs
+        bugs_expr = @bugs begin
+            x ~ dnorm(0, 1)
+            y = Base.exp(x)
+        end
+        @test_throws ErrorException compile(bugs_expr, NamedTuple())
+
+        try
+            compile(bugs_expr, NamedTuple())
+        catch e
+            @test occursin("Qualified function names are not supported in @bugs", e.msg)
+            @test occursin("Base.exp", e.msg)
         end
     end
 

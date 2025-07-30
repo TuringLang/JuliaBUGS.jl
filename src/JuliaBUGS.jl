@@ -48,7 +48,7 @@ include("independent_mh.jl")
 include("gibbs.jl")
 
 include("source_gen.jl")
-include("bugs_eval_module.jl")
+include("allowed_functions.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
 
@@ -147,8 +147,8 @@ function finish_checking_repeated_assignments(
     end
 end
 
-function create_graph(model_def, eval_env; eval_module=nothing)
-    pass = AddVertices(model_def, eval_env; eval_module=eval_module)
+function create_graph(model_def, eval_env)
+    pass = AddVertices(model_def, eval_env)
     analyze_block(pass, model_def)
     pass = AddEdges(pass.env, pass.g, pass.vertex_id_tracker)
     analyze_block(pass, model_def)
@@ -168,21 +168,30 @@ function semantic_analysis(model_def, data)
 end
 
 """
-    compile(model_def, data[, initial_params])
+    compile(model_def, data[, initial_params]; from_model_macro=false)
 
 Compile the model with model definition and data. Optionally, initializations can be provided. 
-If initializations are not provided, values will be sampled from the prior distributions. 
+If initializations are not provided, values will be sampled from the prior distributions.
+
+By default, validates that all functions in the model are in the BUGS allowlist (suitable for @bugs macro).
+Set `from_model_macro=true` to skip validation (for @model macro usage).
 """
 function compile(
     model_def::Expr,
     data::NamedTuple,
     initial_params::NamedTuple=NamedTuple();
-    eval_module::Module=get_default_bugs_eval_module(),
+    from_model_macro::Bool=false,
 )
+    # Validate functions by default (for @bugs macro usage)
+    # Skip validation only for @model macro
+    if !from_model_macro
+        validate_bugs_expression(model_def, LineNumberNode(0))
+    end
+
     data = check_input(data)
     eval_env = semantic_analysis(model_def, data)
     model_def = concretize_colon_indexing(model_def, eval_env)
-    g = create_graph(model_def, eval_env; eval_module=eval_module)
+    g = create_graph(model_def, eval_env)
     nonmissing_eval_env = NamedTuple{keys(eval_env)}(
         map(
             v -> begin
@@ -262,37 +271,37 @@ julia> JuliaBUGS.f(1)
 ```
 """
 macro bugs_primitive(func::Symbol)
-    mod = __module__
     return quote
         local f = $(esc(func))
-        # Add to the default bugs eval module
-        Core.eval(
-            JuliaBUGS.get_default_bugs_eval_module(),
-            Expr(:const, Expr(:(=), $(QuoteNode(func)), f)),
-        )
+        if !isa(f, Function)
+            error("@bugs_primitive: $($(QuoteNode(func))) is not a function")
+        end
+        # Add to the allowed functions set
+        JuliaBUGS.register_bugs_function($(QuoteNode(func)))
         # Also add to JuliaBUGS module for direct access (if not already defined)
         if !isdefined(JuliaBUGS, $(QuoteNode(func)))
             Core.eval(JuliaBUGS, Expr(:const, Expr(:(=), $(QuoteNode(func)), f)))
         end
+        nothing
     end
 end
 macro bugs_primitive(funcs::Vararg{Symbol})
-    mod = __module__
     exprs = []
     for func in funcs
         push!(
             exprs,
             quote
                 local f = $(esc(func))
-                # Add to the default bugs eval module
-                Core.eval(
-                    JuliaBUGS.get_default_bugs_eval_module(),
-                    Expr(:const, Expr(:(=), $(QuoteNode(func)), f)),
-                )
+                if !isa(f, Function)
+                    error("@bugs_primitive: $($(QuoteNode(func))) is not a function")
+                end
+                # Add to the allowed functions set
+                JuliaBUGS.register_bugs_function($(QuoteNode(func)))
                 # Also add to JuliaBUGS module for direct access (if not already defined)
                 if !isdefined(JuliaBUGS, $(QuoteNode(func)))
                     Core.eval(JuliaBUGS, Expr(:const, Expr(:(=), $(QuoteNode(func)), f)))
                 end
+                nothing
             end,
         )
     end
@@ -315,5 +324,27 @@ export of
 include("serialization.jl")
 
 include("experimental/ProbabilisticGraphicalModels/ProbabilisticGraphicalModels.jl")
+
+function __init__()
+    # Initialize the allowed functions set with BUGSPrimitives exports
+    empty!(BUGS_ALLOWED_FUNCTIONS)
+
+    # Add all exported functions from BUGSPrimitives
+    for name in names(BUGSPrimitives; all=false)
+        if isdefined(BUGSPrimitives, name)
+            push!(BUGS_ALLOWED_FUNCTIONS, name)
+        end
+    end
+
+    # Add some common mathematical functions that are re-exported
+    for func in [:exp, :log, :sqrt, :abs, :sin, :cos, :tan]
+        push!(BUGS_ALLOWED_FUNCTIONS, func)
+    end
+
+    # Add basic operators
+    for op in [:+, :-, :*, :/, :^, :~, :>, :<, :>=, :<=, :(==), :!]
+        push!(BUGS_ALLOWED_FUNCTIONS, op)
+    end
+end
 
 end

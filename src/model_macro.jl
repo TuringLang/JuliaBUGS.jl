@@ -112,7 +112,7 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
 
     model_def = _add_line_number_nodes(Expr(:block, body_expr...))
     Parser.warn_cumulative_density_deviance(model_def)
-    bugs_ast = Parser.bugs_top(model_def, __source__; allow_qualified_names=true)
+    bugs_ast = Parser.bugs_top(model_def, __source__)
 
     param_parse_result = _parse_parameter_destructuring(param_destructure)
     param_parse_result === nothing && return :(throw(
@@ -134,24 +134,12 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
     end
 
     return _generate_model_function(
-        model_name,
-        param_type,
-        param_fields,
-        constant_variables,
-        constant_names,
-        bugs_ast,
-        __module__,
+        model_name, param_type, param_fields, constant_variables, constant_names, bugs_ast
     )
 end
 
 function _generate_model_function(
-    model_name,
-    param_type,
-    param_fields,
-    constant_variables,
-    constant_names,
-    bugs_ast,
-    calling_module,
+    model_name, param_type, param_fields, constant_variables, constant_names, bugs_ast
 )
     return MacroTools.@q function ($(esc(model_name)))(
         params_struct, $(esc.(constant_variables)...)
@@ -165,9 +153,7 @@ function _generate_model_function(
             ),
         )
 
-        # Pass the module where @model was called to respect user's imports
-        # @info "Calling compile with eval_module=" $(esc(calling_module))
-        model = compile($(QuoteNode(bugs_ast)), data; eval_module=($(esc(calling_module))))
+        model = compile($(QuoteNode(bugs_ast)), data; from_model_macro=true)
 
         if $(param_type !== nothing)
             try

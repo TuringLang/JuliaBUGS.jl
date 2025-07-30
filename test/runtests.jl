@@ -26,7 +26,8 @@ using AdvancedMH
 using MCMCChains
 using ReverseDiff
 
-JuliaBUGS.@bugs_primitive Normal Gamma Beta InverseGamma Categorical truncated MvNormal Bernoulli Diagonal Dirichlet LKJ censored product_distribution
+# Register commonly used distributions and functions for tests
+# Note: These are already available in the allowlist from BUGSPrimitives exports
 
 const TEST_GROUPS = OrderedDict{String,Function}(
     "elementary" => () -> begin
