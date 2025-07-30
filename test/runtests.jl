@@ -27,7 +27,7 @@ using MCMCChains
 using ReverseDiff
 
 # Register distribution functions as primitives for tests
-JuliaBUGS.@bugs_primitive Bernoulli Beta Categorical censored Diagonal Dirichlet fill Gamma InverseGamma LKJ MvNormal Normal product_distribution sum truncated
+JuliaBUGS.@bugs_primitive Bernoulli Beta Categorical censored Diagonal Dirichlet fill Gamma InverseGamma LKJ ones MvNormal Normal product_distribution sum truncated
 
 const TEST_GROUPS = OrderedDict{String,Function}(
     "elementary" => () -> begin
