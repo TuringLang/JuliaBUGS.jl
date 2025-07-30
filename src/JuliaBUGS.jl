@@ -273,8 +273,9 @@ julia> JuliaBUGS.f(1)
 macro bugs_primitive(func::Symbol)
     return quote
         local f = $(esc(func))
-        if !isa(f, Function)
-            error("@bugs_primitive: $($(QuoteNode(func))) is not a function")
+        # Check if it's callable by checking if it has methods
+        if length(methods(f)) == 0
+            error("@bugs_primitive: $($(QuoteNode(func))) is not callable")
         end
         # Add to the allowed functions set
         JuliaBUGS.register_bugs_function($(QuoteNode(func)))
@@ -292,8 +293,9 @@ macro bugs_primitive(funcs::Vararg{Symbol})
             exprs,
             quote
                 local f = $(esc(func))
-                if !isa(f, Function)
-                    error("@bugs_primitive: $($(QuoteNode(func))) is not a function")
+                # Check if it's callable by checking if it has methods
+                if length(methods(f)) == 0
+                    error("@bugs_primitive: $($(QuoteNode(func))) is not callable")
                 end
                 # Add to the allowed functions set
                 JuliaBUGS.register_bugs_function($(QuoteNode(func)))
@@ -336,8 +338,52 @@ function __init__()
         end
     end
 
-    # Add some common mathematical functions that are re-exported
-    for func in [:exp, :log, :sqrt, :abs, :sin, :cos, :tan]
+    # Add BUGS scalar functions that might come from Base or other modules
+    # These are documented BUGS functions that users expect to work
+    scalar_functions = [
+        :abs,
+        :arccos,
+        :arccosh,
+        :arcsin,
+        :arcsinh,
+        :arctan,
+        :arctanh,
+        :cloglog,
+        :cos,
+        :cosh,
+        :cumulative,
+        :cut,
+        :density,
+        :deviance,
+        :equals,
+        :exp,
+        :gammap,
+        :ilogit,
+        :icloglog,
+        :integral,
+        :log,
+        :logfact,
+        :loggam,
+        :logit,
+        :max,
+        :min,
+        :phi,
+        :pow,
+        :probit,
+        :round,
+        :sin,
+        :sinh,
+        :solution,
+        :sqrt,
+        :step,
+        :tan,
+        :tanh,
+        :trunc,
+        :sum,
+        :mean,
+    ]
+
+    for func in scalar_functions
         push!(BUGS_ALLOWED_FUNCTIONS, func)
     end
 
