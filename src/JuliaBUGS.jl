@@ -388,7 +388,7 @@ function __init__()
     end
 
     # Add basic operators
-    for op in [:+, :-, :*, :/, :^, :~, :>, :<, :>=, :<=, :(==), :!]
+    for op in [:+, :-, :*, :/, :^, :~, :>, :<, :>=, :<=, :(==), :!, :(:)]
         push!(BUGS_ALLOWED_FUNCTIONS, op)
     end
 end
