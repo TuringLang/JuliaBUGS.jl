@@ -10,6 +10,8 @@ using JuliaBUGS.Model:
 using LogDensityProblems
 using AbstractPPL: @varname
 
+JuliaBUGS.@bugs_primitive Normal Gamma
+
 @testset "AbstractPPL interface" begin
     @testset "condition" begin
         @testset "Generated function regeneration" begin

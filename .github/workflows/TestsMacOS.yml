@@ -70,9 +70,10 @@ jobs:
         os: [macOS-latest]
         arch: [aarch64]
         test_group:
-          - "gibbs"
           - "inference_hmc"
           - "inference_chains"
+          - "inference_mh"
+          - "gibbs"
 
     steps:
       - uses: actions/checkout@v4

@@ -255,16 +255,18 @@ For base_model restoration (no args):
 
 # Examples
 ```jldoctest decondition
-julia> using JuliaBUGS: @bugs, compile, @varname
+julia> using JuliaBUGS: @bugs, compile
 
 julia> using JuliaBUGS.Model: condition, parameters, decondition
+
+julia> using AbstractPPL: @varname
 
 julia> using Test
 
 julia> model_def = @bugs begin
-           x ~ Normal(0, 1)
-           y ~ Normal(x, 1) 
-           z ~ Normal(y, 1)
+           x ~ dnorm(0, 1)
+           y ~ dnorm(x, 1) 
+           z ~ dnorm(y, 1)
        end;
 
 julia> model = compile(model_def, (; z = 2.5));
@@ -333,7 +335,7 @@ true
 julia> # Subsumption example
        model_arr = compile(@bugs(begin
            for i in 1:3
-               v[i] ~ Normal(0, 1)
+               v[i] ~ dnorm(0, 1)
            end
        end), (;));
 

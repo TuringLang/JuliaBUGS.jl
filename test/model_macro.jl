@@ -1,6 +1,13 @@
 using JuliaBUGS
 using JuliaBUGS: @model, @of
 
+module TestPkg
+using Distributions: Normal
+test_dist(x, y) = Normal(x, y)
+end
+
+custom_transform_for_test(x) = x^2 + 1
+
 @testset "model macro" begin
     @testset "Basic Model Usage" begin
         @testset "Minimal model body" begin
@@ -312,6 +319,38 @@ using JuliaBUGS: @model, @of
                 end
             )
         end
+    end
+
+    @testset "@model macro uses caller's module" begin
+        using JuliaBUGS.BUGSPrimitives: dnorm, dgamma
+
+        @model function test_model((; theta, y))
+            theta ~ dnorm(0, 1)
+            transformed = custom_transform_for_test(theta)
+            y ~ dgamma(transformed, 1)
+        end
+
+        model = test_model(NamedTuple())
+        @test model isa JuliaBUGS.BUGSModel
+    end
+
+    @testset "Qualified names in @model" begin
+        # Test that @model macro accepts qualified names
+        @model function model_with_qualified((; x))
+            x ~ TestPkg.test_dist(0, 1)
+        end
+
+        model = model_with_qualified(NamedTuple())
+        @test model isa JuliaBUGS.BUGSModel
+
+        # Test with Base functions
+        @model function model_with_base((; x, y))
+            x ~ dnorm(0, 1)
+            y = Base.exp(x)
+        end
+
+        model2 = model_with_base(NamedTuple())
+        @test model2 isa JuliaBUGS.BUGSModel
     end
 
     @testset "Advanced Usage" begin

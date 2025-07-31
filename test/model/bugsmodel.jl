@@ -19,7 +19,7 @@ end
 
 @testset "dot call" begin
     model_def = @bugs begin
-        x[1:2] ~ Distributions.product_distribution(fill(Distributions.Normal(0, 1), 2))
+        x[1:2] ~ product_distribution(fill(Normal(0, 1), 2))
     end
     model = compile(model_def, (;))
     @test model.evaluation_env.x isa Vector{Float64}

@@ -1,3 +1,17 @@
+# Check if running directly (not through Pkg.test)
+# When run through Pkg.test, the working directory is set to the test directory
+if !endswith(pwd(), "/test") && !endswith(pwd(), "\\test")
+    # Running directly, not through Pkg.test
+    println("\nERROR: Do not run tests directly!\n")
+    println("Tests must be run using Pkg.test with test_args.\n")
+    println("Examples:")
+    println("    using Pkg")
+    println("    Pkg.test(test_args=[\"all\"])                    # Run all tests")
+    println("    Pkg.test(test_args=[\"elementary\"])             # Run elementary tests")
+    println("    Pkg.test(test_args=[\"model/abstractppl.jl\"])   # Run specific file")
+    exit(1)
+end
+
 using Test
 
 using ADTypes
@@ -25,6 +39,12 @@ using AdvancedHMC
 using AdvancedMH
 using MCMCChains
 using ReverseDiff
+
+JuliaBUGS.@bugs_primitive Beta Bernoulli Categorical Gamma InverseGamma Normal Uniform LogNormal Poisson
+JuliaBUGS.@bugs_primitive Diagonal Dirichlet LKJ MvNormal
+JuliaBUGS.@bugs_primitive censored product_distribution truncated
+JuliaBUGS.@bugs_primitive fill ones zeros
+JuliaBUGS.@bugs_primitive sum mean sqrt
 
 const TEST_GROUPS = OrderedDict{String,Function}(
     "elementary" => () -> begin
@@ -66,36 +86,109 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     # () -> include("experimental/ProbabilisticGraphicalModels/bayesnet.jl"),
 )
 
-# Get test groups from both environment variable and command line arguments
-# Prefer command line arguments over environment variable
+function print_test_usage()
+    println("""
+
+    JuliaBUGS Test Runner Usage:
+    ===========================
+
+    Tests must be run using Pkg.test with test_args:
+
+    Run all tests:
+        Pkg.test(test_args=["all"])
+
+    Run specific test groups:
+        Pkg.test(test_args=["<group1>", "<group2>", ...])
+
+    Run specific test files (must end with .jl):
+        Pkg.test(test_args=["path/to/test.jl"])
+
+    Available test groups:
+        $(join(sort(collect(keys(TEST_GROUPS))), "\n        "))
+
+    Examples:
+        using Pkg
+        Pkg.test(test_args=["all"])                    # Run all tests
+        Pkg.test(test_args=["elementary"])             # Run elementary tests
+        Pkg.test(test_args=["model_operations"])       # Run model operations tests
+        Pkg.test(test_args=["model/abstractppl.jl"])   # Run specific file
+        Pkg.test(test_args=["elementary", "graphs"])   # Run multiple groups
+    """)
+end
+
+# Get test selection from command line arguments or environment variable
+# No default - must be explicit
+selected_items = String[]
+
 if !isempty(ARGS)
-    raw_selection = join(ARGS, ',')
-    # Warn if TEST_GROUP env var is set but being ignored
-    if haskey(ENV, "TEST_GROUP")
-        @warn "TEST_GROUP environment variable is set to '$(ENV["TEST_GROUP"])' but is being overridden by command line arguments: $ARGS"
-    end
+    selected_items = ARGS
+elseif haskey(ENV, "TEST_GROUP")
+    # Support environment variable for CI
+    selected_items = split(ENV["TEST_GROUP"], ",")
 else
-    raw_selection = get(ENV, "TEST_GROUP", "all")
+    println("\nERROR: No tests specified!\n")
+    println(
+        "You must specify what to test using Pkg.test(test_args=[...]) or TEST_GROUP environment variable\n",
+    )
+    print_test_usage()
+    exit(1)  # Exit with error code
 end
 
-selected_groups = Set(filter(!isempty, split(raw_selection, ',')))
+# Separate files from groups
+test_files = String[]
+test_groups = String[]
+errors = String[]
 
-if "all" ∉ selected_groups
-    unknown = setdiff(selected_groups, keys(TEST_GROUPS))
-    if !isempty(unknown)
-        error("Unknown test group(s): $(join(collect(unknown), ", "))")
+for item in selected_items
+    if item == "all" || haskey(TEST_GROUPS, item)
+        # It's a valid test group
+        push!(test_groups, item)
+    elseif endswith(item, ".jl")
+        # It's a file path - must end with .jl
+        if isfile(joinpath(@__DIR__, item))
+            push!(test_files, item)
+        else
+            push!(errors, "File not found: $item")
+        end
+    else
+        # Invalid item - not a group and doesn't end with .jl
+        push!(
+            errors,
+            "Invalid test specification: '$item' (must be a test group name or a .jl file)",
+        )
     end
 end
 
-# Execute the requested tests.
-if "all" in selected_groups
+# Report all errors at once with helpful usage
+if !isempty(errors)
+    println("\nERROR: Invalid test arguments:")
+    for err in errors
+        println("  - $err")
+    end
+    print_test_usage()
+    error("Test runner failed due to invalid arguments")
+end
+
+# Execute test groups
+if "all" in test_groups
     @info "Running tests for ALL groups"
     for fn in values(TEST_GROUPS)
         fn()
     end
-else
-    @info "Running tests for groups: $(join(collect(selected_groups), ", "))"
-    for g in selected_groups
+elseif !isempty(test_groups)
+    @info "Running tests for groups: $(join(test_groups, ", "))"
+    for g in test_groups
         TEST_GROUPS[g]()
+    end
+end
+
+# Run individual test files
+# Note: Files are included after all imports at the top, so they have access to all dependencies
+if !isempty(test_files)
+    @info "Running individual test files: $(join(test_files, ", "))"
+    for file in test_files
+        @testset "$(file)" begin
+            include(file)
+        end
     end
 end
