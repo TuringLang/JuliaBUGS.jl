@@ -70,7 +70,7 @@ using JuliaBUGS.BUGSPrimitives: dgamma
     end
 
     @testset "Multiple statements on the same line" begin
-        ex = @bugs (x[1]=1; y[1] ~ dnorm(0, 1))
+        ex = @bugs (x[1] = 1; y[1] ~ dnorm(0, 1))
         @test ex == MacroTools.@q begin
             x[1] = 1
             y[1] ~ dnorm(0, 1)
