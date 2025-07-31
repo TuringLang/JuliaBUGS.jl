@@ -110,16 +110,21 @@ function print_test_usage()
     """)
 end
 
-# Get test selection from command line arguments only
+# Get test selection from command line arguments or environment variable
 # No default - must be explicit
-if isempty(ARGS)
+selected_items = if !isempty(ARGS)
+    ARGS
+elseif haskey(ENV, "JULIA_TEST_GROUP")
+    # Support environment variable for CI
+    split(ENV["JULIA_TEST_GROUP"], ",")
+else
     println("\nERROR: No tests specified!\n")
-    println("You must specify what to test using Pkg.test(test_args=[...])\n")
+    println(
+        "You must specify what to test using Pkg.test(test_args=[...]) or JULIA_TEST_GROUP environment variable\n",
+    )
     print_test_usage()
     return nothing  # Return instead of exit when called from Pkg.test
 end
-
-selected_items = ARGS
 
 # Separate files from groups
 test_files = String[]
