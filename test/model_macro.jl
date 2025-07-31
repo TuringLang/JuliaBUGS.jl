@@ -1,6 +1,13 @@
 using JuliaBUGS
 using JuliaBUGS: @model, @of
 
+module TestPkg
+using Distributions: Normal
+test_dist(x, y) = Normal(x, y)
+end
+
+custom_transform_for_test(x) = x^2 + 1
+
 @testset "model macro" begin
     @testset "Basic Model Usage" begin
         @testset "Minimal model body" begin
@@ -218,7 +225,7 @@ using JuliaBUGS: @model, @of
                         y ~ Normal(0, 1)
                     end
                     #! format: on
-                end
+                end,
             )
 
             @test_throws LoadError eval(
@@ -229,7 +236,7 @@ using JuliaBUGS: @model, @of
                         y ~ Normal(0, 1)
                     end
                     #! format: on
-                end
+                end,
             )
         end
 
@@ -256,21 +263,23 @@ using JuliaBUGS: @model, @of
                     JuliaBUGS.@model function bad_signature(params, x, y)
                         # Should fail - first arg must be destructuring
                     end
-                end
+                end,
             )
 
-            @test_throws ArgumentError eval(quote
-                JuliaBUGS.@model function no_params()
-                    # Should fail - needs at least params argument
-                end
-            end)
+            @test_throws ArgumentError eval(
+                quote
+                    JuliaBUGS.@model function no_params()
+                        # Should fail - needs at least params argument
+                    end
+                end,
+            )
 
             @test_throws LoadError eval(
                 quote
                     JuliaBUGS.@model function just_number(42, x)
                         # Should fail - first arg must be destructuring
                     end
-                end
+                end,
             )
         end
     end
@@ -309,9 +318,41 @@ using JuliaBUGS: @model, @of
                         x ~ Normal(0, 1)
                     end
                     #! format: on
-                end
+                end,
             )
         end
+    end
+
+    @testset "@model macro uses caller's module" begin
+        using JuliaBUGS.BUGSPrimitives: dnorm, dgamma
+
+        @model function test_model((; theta, y))
+            theta ~ dnorm(0, 1)
+            transformed = custom_transform_for_test(theta)
+            y ~ dgamma(transformed, 1)
+        end
+
+        model = test_model(NamedTuple())
+        @test model isa JuliaBUGS.BUGSModel
+    end
+
+    @testset "Qualified names in @model" begin
+        # Test that @model macro accepts qualified names
+        @model function model_with_qualified((; x))
+            x ~ TestPkg.test_dist(0, 1)
+        end
+
+        model = model_with_qualified(NamedTuple())
+        @test model isa JuliaBUGS.BUGSModel
+
+        # Test with Base functions
+        @model function model_with_base((; x, y))
+            x ~ dnorm(0, 1)
+            y = Base.exp(x)
+        end
+
+        model2 = model_with_base(NamedTuple())
+        @test model2 isa JuliaBUGS.BUGSModel
     end
 
     @testset "Advanced Usage" begin

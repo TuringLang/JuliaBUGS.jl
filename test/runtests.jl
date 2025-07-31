@@ -37,7 +37,6 @@ const TEST_GROUPS = OrderedDict{String,Function}(
         include("parser/bugs_parser.jl")
         include("compiler_pass.jl")
         include("model_macro.jl")
-        include("import_behavior.jl")
         include("of_type.jl")
         include("of_model_integration.jl")
     end,

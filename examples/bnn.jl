@@ -76,13 +76,15 @@ model_def = @bugs begin
     end
 end
 
-JuliaBUGS.@bugs_primitive function parameter_distribution(nparameters, sigma)
+function parameter_distribution(nparameters, sigma)
     return MvNormal(zeros(nparameters), Diagonal(abs2.(sigma .* ones(nparameters))))
 end
 
-JuliaBUGS.@bugs_primitive function make_prediction(parameters, xs; ps=ps, nn=nn)
+function make_prediction(parameters, xs; ps=ps, nn=nn)
     return Lux.apply(nn, f32(xs), f32(vector_to_parameters(parameters, ps)))
 end
+
+JuliaBUGS.@bugs_primitive parameter_distribution make_prediction
 
 @eval JuliaBUGS begin
     ps = Main.ps

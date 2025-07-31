@@ -92,13 +92,9 @@ end
 
 # --- Custom Primitive Definitions for BUGS ---
 
-# Register the GP kernel type with JuliaBUGS
-# This allows using AbstractGPs types directly in the model definition.
-JuliaBUGS.@bugs_primitive GP with_lengthscale SEKernel
-
 # Define a function callable within the BUGS model to compute GP predictions.
 # BUGS requires functions to operate on basic numerical types, so this wraps the GP call.
-JuliaBUGS.@bugs_primitive function gp_predict(v, l, d, jitter)
+function gp_predict(v, l, d, jitter)
     # Create a GP with a Squared Exponential kernel using the provided hyperparameters
     kernel = v * with_lengthscale(SEKernel(), l)
     gp = GP(kernel)
@@ -108,7 +104,7 @@ end
 
 # Define a function for the observation model (likelihood).
 # This creates a product distribution of Binomials, one for each distance.
-JuliaBUGS.@bugs_primitive function y_distribution(n, f_latent)
+function y_distribution(n, f_latent)
     return product_distribution(Binomial.(n, logistic.(f_latent)))
 end
 

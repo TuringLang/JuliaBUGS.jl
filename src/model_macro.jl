@@ -134,12 +134,24 @@ function _generate_model_definition(model_function_expr, __source__, __module__)
     end
 
     return _generate_model_function(
-        model_name, param_type, param_fields, constant_variables, constant_names, bugs_ast
+        model_name,
+        param_type,
+        param_fields,
+        constant_variables,
+        constant_names,
+        bugs_ast,
+        __module__,
     )
 end
 
 function _generate_model_function(
-    model_name, param_type, param_fields, constant_variables, constant_names, bugs_ast
+    model_name,
+    param_type,
+    param_fields,
+    constant_variables,
+    constant_names,
+    bugs_ast,
+    caller_module,
 )
     return MacroTools.@q function ($(esc(model_name)))(
         params_struct, $(esc.(constant_variables)...)
@@ -153,7 +165,9 @@ function _generate_model_function(
             ),
         )
 
-        model = compile($(QuoteNode(bugs_ast)), data; skip_validation=true)
+        model = compile(
+            $(QuoteNode(bugs_ast)), data; skip_validation=true, eval_module=($caller_module)
+        )
 
         if $(param_type !== nothing)
             try
