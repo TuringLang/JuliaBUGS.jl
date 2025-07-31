@@ -4,6 +4,8 @@ on:
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - 'DoodleBUGS/**'
   workflow_dispatch:
 
 permissions:
