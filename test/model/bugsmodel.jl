@@ -10,8 +10,6 @@ using JuliaBUGS.Model:
     UseGeneratedLogDensityFunction,
     UseGraph
 
-JuliaBUGS.@bugs_primitive Normal Gamma Beta product_distribution fill mean sum
-
 @testset "Compile Vol.1 BUGS Examples" begin
     for model_name in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
         (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1[model_name]

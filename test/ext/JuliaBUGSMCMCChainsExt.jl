@@ -1,5 +1,3 @@
-JuliaBUGS.@bugs_primitive Dirichlet MvNormal InverseGamma Diagonal ones zeros
-
 # test the Chain construction with a simple Bayesian linear regression model
 @testset "MCMCChains extension" begin
     model_def = @bugs begin

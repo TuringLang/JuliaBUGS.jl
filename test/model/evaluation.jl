@@ -1,5 +1,3 @@
-JuliaBUGS.@bugs_primitive Normal InverseGamma MvNormal Diagonal LKJ mean sqrt
-
 function _logjoint(model::JuliaBUGS.BUGSModel)
     _, log_densities = JuliaBUGS.evaluate_with_env!!(model; transformed=model.transformed)
     return log_densities.tempered_logjoint

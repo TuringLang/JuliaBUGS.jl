@@ -40,6 +40,8 @@ using AdvancedMH
 using MCMCChains
 using ReverseDiff
 
+JuliaBUGS.@bugs_primitive Normal Beta Gamma MvNormal Dirichlet Categorical truncated zeros mean sqrt Bernoulli InverseGamma Diagonal LKJ sum product_distribution fill ones LogNormal Uniform rand randn
+
 const TEST_GROUPS = OrderedDict{String,Function}(
     "elementary" => () -> begin
         Documenter.doctest(JuliaBUGS; manual=false)
