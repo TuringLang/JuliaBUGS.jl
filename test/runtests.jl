@@ -26,12 +26,6 @@ using AdvancedMH
 using MCMCChains
 using ReverseDiff
 
-JuliaBUGS.@bugs_primitive Beta Bernoulli Categorical Gamma InverseGamma Normal
-JuliaBUGS.@bugs_primitive Diagonal Dirichlet LKJ MvNormal
-JuliaBUGS.@bugs_primitive censored product_distribution truncated
-JuliaBUGS.@bugs_primitive fill ones zeros
-JuliaBUGS.@bugs_primitive sum
-
 const TEST_GROUPS = OrderedDict{String,Function}(
     "elementary" => () -> begin
         Documenter.doctest(JuliaBUGS; manual=false)

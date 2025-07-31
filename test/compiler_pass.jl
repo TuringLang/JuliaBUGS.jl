@@ -2,6 +2,8 @@ using JuliaBUGS: CollectVariables, DataTransformation, CheckRepeatedAssignments
 using JuliaBUGS: is_resolved
 using JuliaBUGS: is_specified_by_data, is_partially_specified_as_data
 
+JuliaBUGS.@bugs_primitive Normal MvNormal
+
 @testset "CollectVariables Error Cases" begin
     # assign to data
     model_def = @bugs begin

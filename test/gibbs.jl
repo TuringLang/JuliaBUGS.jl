@@ -11,6 +11,8 @@ using ReverseDiff
 using Statistics
 using StatsBase: mode
 
+JuliaBUGS.@bugs_primitive Normal MvNormal Gamma Beta Dirichlet Categorical truncated zeros mean sqrt
+
 @testset "Gibbs" begin
     @testset "verify_sampler_map" begin
         # Simple model for testing

@@ -6,6 +6,8 @@ using AbstractMCMC
 using Random
 using Statistics
 
+JuliaBUGS.@bugs_primitive Beta Bernoulli Normal Gamma Categorical truncated mean sum
+
 @testset "IndependentMH" begin
     @testset "Standalone IndependentMH targeting posterior" begin
         # Create a simple model where we know the posterior

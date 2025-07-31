@@ -48,9 +48,52 @@ include("independent_mh.jl")
 include("gibbs.jl")
 
 include("source_gen.jl")
-include("allowed_functions.jl")
 
 include("BUGSExamples/BUGSExamples.jl")
+
+# BUGS scalar functions that are documented and users expect to work
+const BUGS_SCALAR_FUNCTIONS = [
+    :abs,
+    :arccos,
+    :arccosh,
+    :arcsin,
+    :arcsinh,
+    :arctan,
+    :arctanh,
+    :cloglog,
+    :cos,
+    :cosh,
+    :cumulative,
+    :cut,
+    :density,
+    :deviance,
+    :equals,
+    :exp,
+    :gammap,
+    :ilogit,
+    :icloglog,
+    :integral,
+    :log,
+    :logfact,
+    :loggam,
+    :logit,
+    :max,
+    :min,
+    :phi,
+    :pow,
+    :probit,
+    :round,
+    :sin,
+    :sinh,
+    :solution,
+    :sqrt,
+    :step,
+    :tan,
+    :tanh,
+    :trunc,
+    :sum,
+    :mean,
+]
 
 function check_input(input::NamedTuple)
     valid_pairs = Pair{Symbol,Any}[]
@@ -168,24 +211,24 @@ function semantic_analysis(model_def, data)
 end
 
 """
-    compile(model_def, data[, initial_params]; from_model_macro=false)
+    compile(model_def, data[, initial_params]; skip_validation=false)
 
 Compile the model with model definition and data. Optionally, initializations can be provided. 
 If initializations are not provided, values will be sampled from the prior distributions.
 
 By default, validates that all functions in the model are in the BUGS allowlist (suitable for @bugs macro).
-Set `from_model_macro=true` to skip validation (for @model macro usage).
+Set `skip_validation=true` to skip validation (for @model macro usage).
 """
 function compile(
     model_def::Expr,
     data::NamedTuple,
     initial_params::NamedTuple=NamedTuple();
-    from_model_macro::Bool=false,
+    skip_validation::Bool=false,
 )
     # Validate functions by default (for @bugs macro usage)
     # Skip validation only for @model macro
-    if !from_model_macro
-        validate_bugs_expression(model_def, LineNumberNode(0))
+    if !skip_validation
+        parser.validate_bugs_expression(model_def, LineNumberNode(0))
     end
 
     data = check_input(data)
@@ -278,7 +321,7 @@ macro bugs_primitive(func::Symbol)
             error("@bugs_primitive: $($(QuoteNode(func))) is not callable")
         end
         # Add to the allowed functions set
-        JuliaBUGS.register_bugs_function($(QuoteNode(func)))
+        JuliaBUGS.parser.register_bugs_function($(QuoteNode(func)))
         # Also add to JuliaBUGS module for direct access (if not already defined)
         if !isdefined(JuliaBUGS, $(QuoteNode(func)))
             Core.eval(JuliaBUGS, Expr(:const, Expr(:(=), $(QuoteNode(func)), f)))
@@ -298,7 +341,7 @@ macro bugs_primitive(funcs::Vararg{Symbol})
                     error("@bugs_primitive: $($(QuoteNode(func))) is not callable")
                 end
                 # Add to the allowed functions set
-                JuliaBUGS.register_bugs_function($(QuoteNode(func)))
+                JuliaBUGS.parser.register_bugs_function($(QuoteNode(func)))
                 # Also add to JuliaBUGS module for direct access (if not already defined)
                 if !isdefined(JuliaBUGS, $(QuoteNode(func)))
                     Core.eval(JuliaBUGS, Expr(:const, Expr(:(=), $(QuoteNode(func)), f)))
@@ -329,67 +372,23 @@ include("experimental/ProbabilisticGraphicalModels/ProbabilisticGraphicalModels.
 
 function __init__()
     # Initialize the allowed functions set with BUGSPrimitives exports
-    empty!(BUGS_ALLOWED_FUNCTIONS)
+    empty!(parser.BUGS_ALLOWED_FUNCTIONS)
 
     # Add all exported functions from BUGSPrimitives
     for name in names(BUGSPrimitives; all=false)
         if isdefined(BUGSPrimitives, name)
-            push!(BUGS_ALLOWED_FUNCTIONS, name)
+            push!(parser.BUGS_ALLOWED_FUNCTIONS, name)
         end
     end
 
-    # Add BUGS scalar functions that might come from Base or other modules
-    # These are documented BUGS functions that users expect to work
-    scalar_functions = [
-        :abs,
-        :arccos,
-        :arccosh,
-        :arcsin,
-        :arcsinh,
-        :arctan,
-        :arctanh,
-        :cloglog,
-        :cos,
-        :cosh,
-        :cumulative,
-        :cut,
-        :density,
-        :deviance,
-        :equals,
-        :exp,
-        :gammap,
-        :ilogit,
-        :icloglog,
-        :integral,
-        :log,
-        :logfact,
-        :loggam,
-        :logit,
-        :max,
-        :min,
-        :phi,
-        :pow,
-        :probit,
-        :round,
-        :sin,
-        :sinh,
-        :solution,
-        :sqrt,
-        :step,
-        :tan,
-        :tanh,
-        :trunc,
-        :sum,
-        :mean,
-    ]
-
-    for func in scalar_functions
-        push!(BUGS_ALLOWED_FUNCTIONS, func)
+    # Add BUGS scalar functions
+    for func in BUGS_SCALAR_FUNCTIONS
+        push!(parser.BUGS_ALLOWED_FUNCTIONS, func)
     end
 
     # Add basic operators
     for op in [:+, :-, :*, :/, :^, :~, :>, :<, :>=, :<=, :(==), :!, :(:)]
-        push!(BUGS_ALLOWED_FUNCTIONS, op)
+        push!(parser.BUGS_ALLOWED_FUNCTIONS, op)
     end
 end
 

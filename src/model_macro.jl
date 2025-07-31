@@ -153,7 +153,7 @@ function _generate_model_function(
             ),
         )
 
-        model = compile($(QuoteNode(bugs_ast)), data; from_model_macro=true)
+        model = compile($(QuoteNode(bugs_ast)), data; skip_validation=true)
 
         if $(param_type !== nothing)
             try

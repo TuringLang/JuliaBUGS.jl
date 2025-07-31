@@ -55,6 +55,8 @@ end
     )
 end
 
+JuliaBUGS.@bugs_primitive Normal
+
 @testset "mixed data transformation and deterministic assignments" begin
     model_def = @bugs begin
         for i in 1:5

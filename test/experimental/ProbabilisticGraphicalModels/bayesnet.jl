@@ -20,6 +20,8 @@ using JuliaBUGS: @bugs, compile, NodeInfo, VarName
 using Bijectors: Bijectors
 using AbstractPPL
 
+JuliaBUGS.@bugs_primitive Normal Gamma Beta Bernoulli LogNormal Uniform zeros rand randn
+
 @testset "BayesianNetwork" begin
     @testset "Adding vertices" begin
         bn = BayesianNetwork{Symbol}()

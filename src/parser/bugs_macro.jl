@@ -1,3 +1,87 @@
+"""
+Manages the allowlist of functions that can be used in @bugs macro expressions.
+Only functions in this allowlist or registered via @bugs_primitive are permitted.
+"""
+
+# Global set of allowed function names for @bugs macro
+const BUGS_ALLOWED_FUNCTIONS = Set{Symbol}()
+
+"""
+    is_function_allowed(func_name::Symbol)
+
+Check if a function is allowed to be used in @bugs expressions.
+"""
+is_function_allowed(func_name::Symbol) = func_name in BUGS_ALLOWED_FUNCTIONS
+
+"""
+    register_bugs_function(func_name::Symbol)
+
+Register a function to be allowed in @bugs expressions.
+Used by @bugs_primitive macro.
+"""
+function register_bugs_function(func_name::Symbol)
+    push!(BUGS_ALLOWED_FUNCTIONS, func_name)
+end
+
+"""
+    validate_bugs_expression(expr, line_num)
+
+Validate that all function calls in the expression are allowed.
+Throws an error if an unregistered function is found.
+"""
+function validate_bugs_expression(expr, line_num)
+    if expr isa Symbol || expr isa Number
+        return nothing  # Base cases are fine
+    elseif Meta.isexpr(expr, :call)
+        func_name = expr.args[1]
+
+        # Check for qualified function names (e.g., Base.exp, Distributions.Normal)
+        if Meta.isexpr(func_name, :.)
+            qualified_expr = func_name
+            unqualified_name =
+                if Meta.isexpr(qualified_expr, :.) && length(qualified_expr.args) >= 2
+                    # For expressions like Base.exp, extract :exp
+                    qualified_expr.args[2].value
+                else
+                    qualified_expr
+                end
+            error(
+                "Qualified function names are not supported in @bugs. Found $(qualified_expr) at $line_num. " *
+                "To use custom functions, declare them with @bugs_primitive macro. " *
+                "Otherwise, use the unqualified function name `$(unqualified_name)` instead.",
+            )
+        elseif func_name isa Symbol && !is_function_allowed(func_name)
+            error(
+                "Function '$func_name' is not allowed in @bugs at $line_num. " *
+                "To use custom functions, declare them with @bugs_primitive macro.",
+            )
+        end
+        # Recursively validate arguments
+        for arg in expr.args[2:end]
+            validate_bugs_expression(arg, line_num)
+        end
+    elseif Meta.isexpr(expr, :ref)
+        # Validate array indexing expressions
+        for arg in expr.args
+            validate_bugs_expression(arg, line_num)
+        end
+    elseif Meta.isexpr(expr, :block)
+        # Validate block expressions
+        for arg in expr.args
+            if !(arg isa LineNumberNode)
+                validate_bugs_expression(arg, line_num)
+            end
+        end
+    elseif Meta.isexpr(expr, :for)
+        # Validate for loop expressions
+        validate_bugs_expression(expr.args[2], line_num)  # loop body
+    elseif Meta.isexpr(expr, :(=))
+        # For assignments, validate both LHS (in case of array indexing) and RHS
+        validate_bugs_expression(expr.args[1], line_num)
+        validate_bugs_expression(expr.args[2], line_num)
+    end
+end
+
 function warn_cumulative_density_deviance(expr::Expr)
     cumulative_density_warned = false
     deviance_warned = false
@@ -23,37 +107,35 @@ macro bugs(expr::Expr)
     return Meta.quot(bugs_top(expr, __source__))
 end
 
-function bugs_top(@nospecialize(expr), __source__; validate_functions::Bool=false)
+function bugs_top(@nospecialize(expr), __source__)
     if Meta.isexpr(expr, :block)
-        return Expr(:block, bugs_block_body(expr, __source__; validate_functions)...)
+        return Expr(:block, bugs_block_body(expr, __source__)...)
     elseif Meta.isexpr(expr, (:(=), :for)) || MacroTools.@capture(expr, lhs_ ~ rhs_)
-        return bugs_statement(expr, __source__; validate_functions)
+        return bugs_statement(expr, __source__)
     else
         error("Invalid model definition.")
     end
 end
 
-function bugs_block_body(@nospecialize(expr), __source__; validate_functions::Bool=false)
+function bugs_block_body(@nospecialize(expr), __source__)
     if !(expr.args[1] isa LineNumberNode) # if the model is given using parentheses, the first line is not a LineNumberNode
         expr.args = [__source__, expr.args...]
     end
     return [
-        bugs_statement(stmt, line_num; validate_functions) for (line_num, stmt) in
+        bugs_statement(stmt, line_num) for (line_num, stmt) in
         Iterators.take(Iterators.partition(expr.args, 2), length(expr.args) ÷ 2) # the last line is the LineNumberNode for `end`
     ]
 end
 
-function bugs_statement(@nospecialize(expr), line_num; validate_functions::Bool=false)
+function bugs_statement(@nospecialize(expr), line_num)
     if Meta.isexpr(expr, :(=))
-        check_lhs(expr.args[1], :(=), line_num; validate_functions)
-        return Expr(
-            :(=), expr.args[1], bugs_expression(expr.args[2], line_num; validate_functions)
-        )
+        check_lhs(expr.args[1], :(=), line_num)
+        return Expr(:(=), expr.args[1], bugs_expression(expr.args[2], line_num))
     elseif MacroTools.@capture(expr, lhs_ ~ rhs_)
-        check_lhs(lhs, :(~), line_num; validate_functions)
-        return Expr(:call, :(~), lhs, bugs_expression(rhs, line_num; validate_functions))
+        check_lhs(lhs, :(~), line_num)
+        return Expr(:call, :(~), lhs, bugs_expression(rhs, line_num))
     elseif Meta.isexpr(expr, :for)
-        return bugs_for(expr, line_num; validate_functions)
+        return bugs_for(expr, line_num)
     else
         error(
             "Invalid statement at $line_num: $(expr). Please note that `<-` is not supported, use `=` instead.",
@@ -61,12 +143,10 @@ function bugs_statement(@nospecialize(expr), line_num; validate_functions::Bool=
     end
 end
 
-function check_lhs(expr::Symbol, assignment_sign, line_num; validate_functions::Bool=false)
+function check_lhs(expr::Symbol, assignment_sign, line_num)
     return nothing # no effect
 end
-function check_lhs(
-    @nospecialize(expr), assignment_sign, line_num; validate_functions::Bool=false
-)
+function check_lhs(@nospecialize(expr), assignment_sign, line_num)
     if Meta.isexpr(expr, :call)
         if length(expr.args) == 2
             f = expr.args[1]
@@ -103,13 +183,13 @@ function check_lhs(
             )
         end
 
-        return [bugs_expression(arg, line_num; validate_functions) for arg in expr.args]
+        return [bugs_expression(arg, line_num) for arg in expr.args]
     else
         error("Invalid LHS at $line_num: $(expr)")
     end
 end
 
-function bugs_for(@nospecialize(expr), line_num; validate_functions::Bool=false)
+function bugs_for(@nospecialize(expr), line_num)
     if MacroTools.@capture(
         expr,
         for i_ in lower_:upper_
@@ -117,17 +197,17 @@ function bugs_for(@nospecialize(expr), line_num; validate_functions::Bool=false)
         end
     )
         i isa Symbol || error("Loop variable must be a scalar, at $line_num: $(i)")
-        lower = bugs_expression(lower, line_num; validate_functions)
-        upper = bugs_expression(upper, line_num; validate_functions)
+        lower = bugs_expression(lower, line_num)
+        upper = bugs_expression(upper, line_num)
         return MacroTools.@q for $i in ($lower):($upper)
-            $(bugs_block_body(body, line_num; validate_functions)...)
+            $(bugs_block_body(body, line_num)...)
         end
     else
         error("Invalid for loop: $(expr) at $line_num")
     end
 end
 
-function bugs_expression(expr, line_num; validate_functions::Bool=false)
+function bugs_expression(expr, line_num)
     if expr isa Union{Int,Float64,Symbol}
         return expr
     elseif Meta.isexpr(expr, :ref)
@@ -141,10 +221,7 @@ function bugs_expression(expr, line_num; validate_functions::Bool=false)
             )
         end
 
-        return Expr(
-            :ref,
-            [bugs_expression(arg, line_num; validate_functions) for arg in expr.args]...,
-        )
+        return Expr(:ref, [bugs_expression(arg, line_num) for arg in expr.args]...)
     elseif Meta.isexpr(expr, :call)
         if @capture(expr, l_:s_:u_) # range with step is not supported
             error("Range with step is not supported, error at $line_num: $(expr)")
@@ -155,10 +232,7 @@ function bugs_expression(expr, line_num; validate_functions::Bool=false)
             expr.args[1] = :_step
         end
 
-        return Expr(
-            :call,
-            [bugs_expression(arg, line_num; validate_functions) for arg in expr.args]...,
-        )
+        return Expr(:call, [bugs_expression(arg, line_num) for arg in expr.args]...)
     elseif Meta.isexpr(expr, :parameters)
         error(
             "Keyword argument syntax is not supported in BUGS, error at $line_num: $(expr)"
