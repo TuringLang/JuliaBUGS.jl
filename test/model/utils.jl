@@ -3,6 +3,8 @@ using JuliaBUGS
 using JuliaBUGS.Model: get_mutable_symbols, smart_copy_evaluation_env, condition
 using JuliaBUGS: @bugs, compile, @varname
 
+JuliaBUGS.@bugs_primitive Normal Beta Gamma
+
 @testset "Model Utilities" begin
     @testset "get_mutable_symbols" begin
         # Test model with parameters and deterministic nodes
