@@ -225,7 +225,7 @@ custom_transform_for_test(x) = x^2 + 1
                         y ~ Normal(0, 1)
                     end
                     #! format: on
-                end,
+                end
             )
 
             @test_throws LoadError eval(
@@ -236,7 +236,7 @@ custom_transform_for_test(x) = x^2 + 1
                         y ~ Normal(0, 1)
                     end
                     #! format: on
-                end,
+                end
             )
         end
 
@@ -263,23 +263,21 @@ custom_transform_for_test(x) = x^2 + 1
                     JuliaBUGS.@model function bad_signature(params, x, y)
                         # Should fail - first arg must be destructuring
                     end
-                end,
+                end
             )
 
-            @test_throws ArgumentError eval(
-                quote
-                    JuliaBUGS.@model function no_params()
-                        # Should fail - needs at least params argument
-                    end
-                end,
-            )
+            @test_throws ArgumentError eval(quote
+                JuliaBUGS.@model function no_params()
+                    # Should fail - needs at least params argument
+                end
+            end)
 
             @test_throws LoadError eval(
                 quote
                     JuliaBUGS.@model function just_number(42, x)
                         # Should fail - first arg must be destructuring
                     end
-                end,
+                end
             )
         end
     end
@@ -318,7 +316,7 @@ custom_transform_for_test(x) = x^2 + 1
                         x ~ Normal(0, 1)
                     end
                     #! format: on
-                end,
+                end
             )
         end
     end
