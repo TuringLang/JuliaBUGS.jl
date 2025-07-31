@@ -116,13 +116,13 @@ selected_items = String[]
 
 if !isempty(ARGS)
     selected_items = ARGS
-elseif haskey(ENV, "JULIA_TEST_GROUP")
+elseif haskey(ENV, "TEST_GROUP")
     # Support environment variable for CI
-    selected_items = split(ENV["JULIA_TEST_GROUP"], ",")
+    selected_items = split(ENV["TEST_GROUP"], ",")
 else
     println("\nERROR: No tests specified!\n")
     println(
-        "You must specify what to test using Pkg.test(test_args=[...]) or JULIA_TEST_GROUP environment variable\n",
+        "You must specify what to test using Pkg.test(test_args=[...]) or TEST_GROUP environment variable\n",
     )
     print_test_usage()
     exit(1)  # Exit with error code
