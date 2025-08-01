@@ -12,7 +12,6 @@ makedocs(;
             "General" => "api/api.md",
             "Functions" => "api/functions.md",
             "Distributions" => "api/distributions.md",
-            "User-Defined Functions and Distributions" => "api/user_defined_functions.md",
         ],
         "Differences from Other BUGS Implementations" => "differences.md",
         "Pitfalls" => "pitfalls.md",

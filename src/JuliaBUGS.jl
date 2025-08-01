@@ -3,6 +3,7 @@ module JuliaBUGS
 using AbstractMCMC
 using AbstractPPL
 using Accessors
+using ADTypes
 using BangBang
 using Bijectors: Bijectors
 using Distributions
@@ -22,20 +23,28 @@ export @bugs
 export compile, initialize!
 
 export @varname
+export @model
+export @of
 
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
 
 include("parser/Parser.jl")
 using .Parser
-
-include("utils.jl")
-using .CompilerUtils
+using .Parser.CompilerUtils
 
 include("graphs.jl")
 include("compiler_pass.jl")
-include("model.jl")
-include("logdensityproblems.jl")
+include("model/Model.jl")
+using .Model
+using .Model:
+    AbstractBUGSModel,
+    BUGSModel,
+    evaluate_with_values!!,
+    UseGraph,
+    UseGeneratedLogDensityFunction
+
+include("independent_mh.jl")
 include("gibbs.jl")
 
 include("source_gen.jl")
@@ -137,8 +146,8 @@ function finish_checking_repeated_assignments(
     end
 end
 
-function create_graph(model_def, eval_env)
-    pass = AddVertices(model_def, eval_env)
+function create_graph(model_def, eval_env, eval_module=Main)
+    pass = AddVertices(model_def, eval_env, eval_module)
     analyze_block(pass, model_def)
     pass = AddEdges(pass.env, pass.g, pass.vertex_id_tracker)
     analyze_block(pass, model_def)
@@ -158,16 +167,103 @@ function semantic_analysis(model_def, data)
 end
 
 """
-    compile(model_def, data[, initial_params])
+Manages the allowlist of functions that can be used in @bugs macro expressions.
+Only functions in this allowlist or registered via @bugs_primitive are permitted.
+"""
+const BUGS_ALLOWED_FUNCTIONS = Set{Symbol}()
+
+"""
+    is_function_allowed(func_name::Symbol)
+
+Check if a function is allowed to be used in @bugs expressions.
+"""
+is_function_allowed(func_name::Symbol) = func_name in BUGS_ALLOWED_FUNCTIONS
+
+"""
+    validate_bugs_expression(expr, line_num)
+
+Validate that all function calls in the expression are allowed.
+Throws an error if an unregistered function is found.
+"""
+function validate_bugs_expression(expr, line_num)
+    if expr isa Symbol || expr isa Number
+        return nothing  # Base cases are fine
+    elseif Meta.isexpr(expr, :call)
+        func_name = expr.args[1]
+
+        # Check for qualified function names (e.g., Base.exp, Distributions.Normal)
+        if Meta.isexpr(func_name, :.)
+            qualified_expr = func_name
+            unqualified_name =
+                if Meta.isexpr(qualified_expr, :.) && length(qualified_expr.args) >= 2
+                    # For expressions like Base.exp, extract :exp
+                    qualified_expr.args[2].value
+                else
+                    qualified_expr
+                end
+            error(
+                "Qualified function names are not supported in @bugs. Found $(qualified_expr) at $line_num. " *
+                "To use custom functions, declare them with @bugs_primitive macro. " *
+                "Otherwise, use the unqualified function name `$(unqualified_name)` instead.",
+            )
+        elseif func_name isa Symbol && !is_function_allowed(func_name)
+            error(
+                "Function '$func_name' is not allowed in @bugs at $line_num. " *
+                "To use custom functions, declare them with @bugs_primitive macro.",
+            )
+        end
+        # Recursively validate arguments
+        for arg in expr.args[2:end]
+            validate_bugs_expression(arg, line_num)
+        end
+    elseif Meta.isexpr(expr, :ref)
+        # Validate array indexing expressions
+        for arg in expr.args
+            validate_bugs_expression(arg, line_num)
+        end
+    elseif Meta.isexpr(expr, :block)
+        # Validate block expressions
+        for arg in expr.args
+            if !(arg isa LineNumberNode)
+                validate_bugs_expression(arg, line_num)
+            end
+        end
+    elseif Meta.isexpr(expr, :for)
+        # Validate for loop expressions
+        validate_bugs_expression(expr.args[2], line_num)  # loop body
+    elseif Meta.isexpr(expr, :(=))
+        # For assignments, validate both LHS (in case of array indexing) and RHS
+        validate_bugs_expression(expr.args[1], line_num)
+        validate_bugs_expression(expr.args[2], line_num)
+    end
+end
+
+"""
+    compile(model_def, data[, initial_params]; skip_validation=false)
 
 Compile the model with model definition and data. Optionally, initializations can be provided. 
-If initializations are not provided, values will be sampled from the prior distributions. 
+If initializations are not provided, values will be sampled from the prior distributions.
+
+By default, validates that all functions in the model are in the BUGS allowlist (suitable for @bugs macro).
+Set `skip_validation=true` to skip validation (for @model macro usage).
 """
-function compile(model_def::Expr, data::NamedTuple, initial_params::NamedTuple=NamedTuple())
+function compile(
+    model_def::Expr,
+    data::NamedTuple,
+    initial_params::NamedTuple=NamedTuple();
+    skip_validation::Bool=false,
+    eval_module::Module=@__MODULE__,
+)
+    # Validate functions by default (for @bugs macro usage)
+    # Skip validation only for @model macro
+    if !skip_validation
+        validate_bugs_expression(model_def, LineNumberNode(0))
+    end
+
     data = check_input(data)
     eval_env = semantic_analysis(model_def, data)
     model_def = concretize_colon_indexing(model_def, eval_env)
-    g = create_graph(model_def, eval_env)
+    g = create_graph(model_def, eval_env, eval_module)
     nonmissing_eval_env = NamedTuple{keys(eval_env)}(
         map(
             v -> begin
@@ -199,70 +295,47 @@ end
 # end
 
 """
-    @register_primitive(expr)
+    register_bugs_function(func_name::Symbol)
 
-Currently, only function defined in the `BUGSPrimitives` module can be used in the model definition. 
-This macro allows the user to register a user-defined function or distribution to be used in the model definition.
-
-Example:
-```julia
-julia> @register_primitive function f(x) # function
-    return x + 1
+Register a function to be allowed in @bugs expressions.
+Used by @bugs_primitive macro.
+"""
+function register_bugs_function(func_name::Symbol)
+    push!(BUGS_ALLOWED_FUNCTIONS, func_name)
 end
 
-julia> JuliaBUGS.f(1)
-2
-
-julia> @register_primitive d(x) = Normal(0, x^2) # distribution
-
-julia> JuliaBUGS.d(1)
-Distributions.Normal{Float64}(μ=0.0, σ=1.0)
-```
 """
-macro register_primitive(expr)
-    def = MacroTools.splitdef(expr)
-    func_name = def[:name]
-    func_expr = MacroTools.combinedef(def)
+Helper function to generate the expression for registering a single bugs primitive
+"""
+function _bugs_primitive_expr(func::Symbol, esc_func)
     return quote
-        @eval JuliaBUGS begin
-            # export $func_name
-            $func_expr
+        local f = $esc_func
+        # Check if it's callable by checking if it has methods
+        if length(methods(f)) == 0
+            error("@bugs_primitive: $($(QuoteNode(func))) is not callable")
         end
+        # Add to the allowed functions set
+        JuliaBUGS.register_bugs_function($(QuoteNode(func)))
+        # Also add to JuliaBUGS module for direct access (if not already defined)
+        if !isdefined(JuliaBUGS, $(QuoteNode(func)))
+            Core.eval(JuliaBUGS, Expr(:const, Expr(:(=), $(QuoteNode(func)), f)))
+        end
+        nothing
     end
 end
 
 """
-    @register_primitive(func)
+    @bugs_primitive(func)
 
-`@register_primitive` can also be used to register function without definition.
-
-Example
-```julia
-julia> f(x) = x + 1
-
-julia> @register_primitive(f)
-
-julia> JuliaBUGS.f(1)
-2
-```
+`@bugs_primitive` can also be used to register function without definition.
 """
-macro register_primitive(func::Symbol)
-    return quote
-        @eval JuliaBUGS begin
-            $func = Main.$func
-        end
-    end
+macro bugs_primitive(func::Symbol)
+    return _bugs_primitive_expr(func, esc(func))
 end
-macro register_primitive(funcs::Vararg{Symbol})
-    exprs = Expr(:block)
-    for func in funcs
-        push!(exprs.args, :($func = Main.$func))
-    end
-    return quote
-        @eval JuliaBUGS begin
-            $exprs
-        end
-    end
+
+macro bugs_primitive(funcs::Vararg{Symbol})
+    exprs = [_bugs_primitive_expr(func, esc(func)) for func in funcs]
+    return Expr(:block, exprs...)
 end
 
 """
@@ -273,8 +346,73 @@ Only defined with `MCMCChains` extension.
 """
 function gen_chains end
 
+include("of_type.jl")
 include("model_macro.jl")
 
+export of
+
+include("serialization.jl")
+
 include("experimental/ProbabilisticGraphicalModels/ProbabilisticGraphicalModels.jl")
+
+function __init__()
+    empty!(BUGS_ALLOWED_FUNCTIONS)
+
+    for name in names(BUGSPrimitives; all=false)
+        if isdefined(BUGSPrimitives, name)
+            push!(BUGS_ALLOWED_FUNCTIONS, name)
+        end
+    end
+
+    for func in [
+        :abs,
+        :arccos,
+        :arccosh,
+        :arcsin,
+        :arcsinh,
+        :arctan,
+        :arctanh,
+        :cloglog,
+        :cos,
+        :cosh,
+        :cumulative,
+        :cut,
+        :density,
+        :deviance,
+        :equals,
+        :exp,
+        :gammap,
+        :ilogit,
+        :icloglog,
+        :integral,
+        :log,
+        :logfact,
+        :loggam,
+        :logit,
+        :max,
+        :min,
+        :phi,
+        :pow,
+        :probit,
+        :round,
+        :sin,
+        :sinh,
+        :solution,
+        :sqrt,
+        :step,
+        :tan,
+        :tanh,
+        :trunc,
+        :sum,
+        :mean,
+    ]
+        push!(BUGS_ALLOWED_FUNCTIONS, func)
+    end
+
+    # Add basic operators
+    for op in [:+, :-, :*, :/, :^, :~, :>, :<, :>=, :<=, :(==), :!, :(:)]
+        push!(BUGS_ALLOWED_FUNCTIONS, op)
+    end
+end
 
 end
