@@ -107,6 +107,8 @@ const handleGridSizeInput = (event: Event) => {
           <template #content>
             <a href="#" @click.prevent="emit('apply-layout', 'dagre')">Dagre (Hierarchical)</a>
             <a href="#" @click.prevent="emit('apply-layout', 'fcose')">fCoSE (Force-Directed)</a>
+            <a href="#" @click.prevent="emit('apply-layout', 'cola')">Cola (Physics Simulation)</a>
+            <a href="#" @click.prevent="emit('apply-layout', 'klay')">KLay (Layered)</a>
             <a href="#" @click.prevent="emit('apply-layout', 'preset')">Reset to Preset</a>
           </template>
         </DropdownMenu>

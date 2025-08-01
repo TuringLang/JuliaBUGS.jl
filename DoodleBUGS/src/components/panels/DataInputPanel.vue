@@ -6,6 +6,9 @@ import 'codemirror/theme/material-darker.css';
 import 'codemirror/mode/javascript/javascript.js';
 import 'codemirror/addon/scroll/simplescrollbars.css';
 import 'codemirror/addon/scroll/simplescrollbars.js';
+import 'codemirror/addon/fold/foldgutter.css';
+import 'codemirror/addon/fold/foldgutter.js';
+import 'codemirror/addon/fold/brace-fold.js';
 import CodeMirror from 'codemirror';
 import type { Editor } from 'codemirror';
 
@@ -22,15 +25,14 @@ const jsonError = ref<string | null>(null);
 
 /**
  * Validates a string to see if it is valid JSON.
- * Updates the reactive `jsonError` ref with the specific error message if parsing fails.
  * @param jsonString The string to validate.
  */
 const validateJson = (jsonString: string) => {
   try {
     JSON.parse(jsonString);
     jsonError.value = null;
-  } catch (e: any) {
-    jsonError.value = e.message;
+  } catch (e: unknown) {
+    jsonError.value = e instanceof Error ? e.message : String(e);
   }
 };
 
@@ -45,16 +47,17 @@ onMounted(async () => {
       tabSize: 2,
       scrollbarStyle: "simple",
       lineWrapping: false,
+      foldGutter: true,
+      gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"]
     });
 
-    cmInstance.on('change', (instance) => {
+    cmInstance.on('change', (instance: Editor) => {
       if (isUpdatingFromSource) return;
       const currentValue = instance.getValue();
       dataStore.currentGraphDataString = currentValue;
       validateJson(currentValue);
     });
     
-    // Perform initial validation on mount.
     validateJson(dataStore.currentGraphDataString);
 
     if (props.isActive) {
@@ -82,7 +85,6 @@ watch(() => dataStore.currentGraphDataString, (newData) => {
 
 watch(() => props.isActive, (newVal) => {
   if (newVal && cmInstance) {
-    // Refresh the editor when its container becomes visible to prevent rendering issues.
     nextTick(() => {
       cmInstance?.refresh();
     });
@@ -124,6 +126,10 @@ watch(() => props.isActive, (newVal) => {
 .CodeMirror-simplescroll-horizontal, .CodeMirror-simplescroll-vertical {
   background: transparent;
   z-index: 99;
+}
+.CodeMirror-foldgutter-open,
+.CodeMirror-foldgutter-folded {
+  color: #999;
 }
 </style>
 
