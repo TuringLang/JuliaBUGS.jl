@@ -27,17 +27,17 @@ using Bijectors: Bijectors
 
         # Verify the translation
         @test length(bn.names) == 3
-        @test bn.names_to_ids[VarName(:a)] == 1
-        @test bn.names_to_ids[VarName(:b)] == 2
-        @test bn.names_to_ids[VarName(:c)] == 3
+        @test bn.names_to_ids[VarName{:a}()] == 1
+        @test bn.names_to_ids[VarName{:b}()] == 2
+        @test bn.names_to_ids[VarName{:c}()] == 3
 
-        @test bn.is_stochastic[bn.names_to_ids[VarName(:a)]] == true
-        @test bn.is_stochastic[bn.names_to_ids[VarName(:b)]] == true
-        @test bn.is_stochastic[bn.names_to_ids[VarName(:c)]] == true
+        @test bn.is_stochastic[bn.names_to_ids[VarName{:a}()]] == true
+        @test bn.is_stochastic[bn.names_to_ids[VarName{:b}()]] == true
+        @test bn.is_stochastic[bn.names_to_ids[VarName{:c}()]] == true
 
-        @test bn.distributions[bn.names_to_ids[VarName(:a)]] isa Function
-        @test bn.distributions[bn.names_to_ids[VarName(:b)]] isa Function
-        @test bn.distributions[bn.names_to_ids[VarName(:c)]] isa Function
+        @test bn.distributions[bn.names_to_ids[VarName{:a}()]] isa Function
+        @test bn.distributions[bn.names_to_ids[VarName{:b}()]] isa Function
+        @test bn.distributions[bn.names_to_ids[VarName{:c}()]] isa Function
     end
 
     @testset "Translating Complex BUGSGraph to BayesianNetwork" begin
@@ -61,17 +61,17 @@ using Bijectors: Bijectors
 
         # Verify the translation
         @test length(complex_bn.names) == 3
-        @test complex_bn.names_to_ids[VarName(:a)] == 1
-        @test complex_bn.names_to_ids[VarName(:b)] == 2
-        @test complex_bn.names_to_ids[VarName(:c)] == 3
+        @test complex_bn.names_to_ids[VarName{:a}()] == 1
+        @test complex_bn.names_to_ids[VarName{:b}()] == 2
+        @test complex_bn.names_to_ids[VarName{:c}()] == 3
 
-        @test complex_bn.is_stochastic[complex_bn.names_to_ids[VarName(:a)]] == true
-        @test complex_bn.is_stochastic[complex_bn.names_to_ids[VarName(:b)]] == true
-        @test complex_bn.is_stochastic[complex_bn.names_to_ids[VarName(:c)]] == false
+        @test complex_bn.is_stochastic[complex_bn.names_to_ids[VarName{:a}()]] == true
+        @test complex_bn.is_stochastic[complex_bn.names_to_ids[VarName{:b}()]] == true
+        @test complex_bn.is_stochastic[complex_bn.names_to_ids[VarName{:c}()]] == false
 
-        @test complex_bn.distributions[complex_bn.names_to_ids[VarName(:a)]] isa Function
-        @test complex_bn.distributions[complex_bn.names_to_ids[VarName(:b)]] isa Function
-        @test complex_bn.deterministic_functions[complex_bn.names_to_ids[VarName(:c)]] isa
+        @test complex_bn.distributions[complex_bn.names_to_ids[VarName{:a}()]] isa Function
+        @test complex_bn.distributions[complex_bn.names_to_ids[VarName{:b}()]] isa Function
+        @test complex_bn.deterministic_functions[complex_bn.names_to_ids[VarName{:c}()]] isa
             Function
     end
 
@@ -93,17 +93,17 @@ using Bijectors: Bijectors
 
         # Verify the translation
         @test length(bn.names) == 3
-        @test bn.names_to_ids[VarName(:a)] == 1
-        @test bn.names_to_ids[VarName(:b)] == 2
-        @test bn.names_to_ids[VarName(:c)] == 3
+        @test bn.names_to_ids[VarName{:a}()] == 1
+        @test bn.names_to_ids[VarName{:b}()] == 2
+        @test bn.names_to_ids[VarName{:c}()] == 3
 
-        @test bn.is_stochastic[bn.names_to_ids[VarName(:a)]] == true
-        @test bn.is_stochastic[bn.names_to_ids[VarName(:b)]] == true
-        @test bn.is_stochastic[bn.names_to_ids[VarName(:c)]] == true
+        @test bn.is_stochastic[bn.names_to_ids[VarName{:a}()]] == true
+        @test bn.is_stochastic[bn.names_to_ids[VarName{:b}()]] == true
+        @test bn.is_stochastic[bn.names_to_ids[VarName{:c}()]] == true
 
-        @test bn.distributions[bn.names_to_ids[VarName(:a)]] isa Function
-        @test bn.distributions[bn.names_to_ids[VarName(:b)]] isa Function
-        @test bn.distributions[bn.names_to_ids[VarName(:c)]] isa Function
+        @test bn.distributions[bn.names_to_ids[VarName{:a}()]] isa Function
+        @test bn.distributions[bn.names_to_ids[VarName{:b}()]] isa Function
+        @test bn.distributions[bn.names_to_ids[VarName{:c}()]] isa Function
     end
 
     @testset "Translating Complex BUGSGraph to BayesianNetwork and Evaluate" begin

@@ -9,7 +9,7 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
     evaluate_with_marginalization,
     _marginalize_recursive,
     _precompute_minimal_cache_keys
-using JuliaBUGS: VarName
+using JuliaBUGS: VarName, @varname
 using BangBang
 using AbstractPPL
 
@@ -74,15 +74,15 @@ end
         all_vars = Dict{Symbol,Any}()
 
         # Add first node
-        first_var = VarName(Symbol("z[1]"))
+        first_var = VarName{Symbol("z[1]")}()
         add_stochastic_vertex!(bn, first_var, (_, _) -> Bernoulli(0.5), false, :discrete)
         loop_vars[first_var] = (;)  # Empty named tuple
         all_vars[Symbol("z[1]")] = 0  # Initialize with value 0
 
         # Add subsequent nodes with dependencies
         for i in 2:n_chain
-            var = VarName(Symbol("z[$i]"))
-            prev_var = VarName(Symbol("z[$(i-1)]"))
+            var = VarName{Symbol("z[$i]")}()
+            prev_var = VarName{Symbol("z[$(i-1)]")}()
 
             # Add node
             add_stochastic_vertex!(
@@ -107,7 +107,7 @@ end
 
         # Add observable at the end
         y_var = VarName{:y}()
-        last_var = VarName(Symbol("z[$n_chain]"))
+        last_var = VarName{Symbol("z[$n_chain]")}()
 
         add_stochastic_vertex!(
             bn,
@@ -359,7 +359,7 @@ end
             var_name = typeof(var) == Symbol ? var : Symbol(var)
             var_value = init_values === nothing ? 0 : init_values[i]
             all_vars[var_name] = var_value
-            loop_vars[VarName(var_name)] = (;)
+            loop_vars[VarName{var_name}()] = (;)
         end
 
         return all_vars, loop_vars
@@ -385,13 +385,13 @@ end
         all_vars[:y] = 4.2  # Set observation
 
         # Add first node
-        first_var = VarName(Symbol("z1"))
+        first_var = VarName{Symbol("z1")}()
         add_stochastic_vertex!(bn, first_var, (_, _) -> Bernoulli(0.5), false, :discrete)
 
         # Add subsequent nodes with dependencies
         for i in 2:length
-            var = VarName(Symbol("z$i"))
-            prev_var = VarName(Symbol("z$(i-1)"))
+            var = VarName{Symbol("z$i")}()
+            prev_var = VarName{Symbol("z$(i-1)")}()
 
             # Add node with dependency on previous node
             add_stochastic_vertex!(
@@ -414,7 +414,7 @@ end
 
         # Add observable at the end
         y_var = VarName{:y}()
-        last_var = VarName(Symbol("z$length"))
+        last_var = VarName{Symbol("z$length")}()
 
         add_stochastic_vertex!(
             bn,
@@ -470,7 +470,7 @@ end
         all_vars[:y] = 3.7  # Set observation
 
         # Add root node
-        root_var = VarName(Symbol("z1"))
+        root_var = VarName{Symbol("z1")}()
         add_stochastic_vertex!(bn, root_var, (_, _) -> Bernoulli(0.5), false, :discrete)
 
         # Add nodes level by level
@@ -480,9 +480,9 @@ end
             parent_start = 2^(level - 1)
 
             for i in start_idx:end_idx
-                var = VarName(Symbol("z$i"))
+                var = VarName{Symbol("z$i")}()
                 parent_idx = parent_start + div(i - start_idx, 2)
-                parent_var = VarName(Symbol("z$parent_idx"))
+                parent_var = VarName{Symbol("z$parent_idx")}()
 
                 # Add node with dependency on parent
                 add_stochastic_vertex!(
@@ -514,7 +514,7 @@ end
                 # Observable depends on average of leaf values
                 leaf_sum = 0.0
                 for i in leaf_start:leaf_end
-                    leaf_var = VarName(Symbol("z$i"))
+                    leaf_var = VarName{Symbol("z$i")}()
                     leaf_sum += AbstractPPL.get(env, leaf_var)
                 end
                 leaf_avg = leaf_sum / (leaf_end - leaf_start + 1)
@@ -527,7 +527,7 @@ end
 
         # Add dependency edges from all leaf nodes
         for i in leaf_start:leaf_end
-            leaf_var = VarName(Symbol("z$i"))
+            leaf_var = VarName{Symbol("z$i")}()
             add_edge!(bn, leaf_var, y_var)
         end
 
@@ -571,7 +571,7 @@ end
         # Add nodes row by row, column by column
         for i in 1:height
             for j in 1:width
-                var = VarName(Symbol("z$(i)_$(j)"))
+                var = VarName{Symbol("z$(i)_$(j)")}()
 
                 # Determine dependencies
                 has_left = j > 1
@@ -592,13 +592,13 @@ end
                             p_base = 0.3  # Base probability
 
                             if has_left
-                                left_var = VarName(Symbol("z$(i)_$(j-1)"))
+                                left_var = VarName{Symbol("z$(i)_$(j-1)")}()
                                 left_val = AbstractPPL.get(env, left_var)
                                 p_base += 0.2 * left_val
                             end
 
                             if has_above
-                                above_var = VarName(Symbol("z$(i-1)_$(j)"))
+                                above_var = VarName{Symbol("z$(i-1)_$(j)")}()
                                 above_val = AbstractPPL.get(env, above_var)
                                 p_base += 0.3 * above_val
                             end
@@ -611,12 +611,12 @@ end
 
                     # Add dependency edges
                     if has_left
-                        left_var = VarName(Symbol("z$(i)_$(j-1)"))
+                        left_var = VarName{Symbol("z$(i)_$(j-1)")}()
                         add_edge!(bn, left_var, var)
                     end
 
                     if has_above
-                        above_var = VarName(Symbol("z$(i-1)_$(j)"))
+                        above_var = VarName{Symbol("z$(i-1)_$(j)")}()
                         add_edge!(bn, above_var, var)
                     end
                 end
@@ -631,7 +631,7 @@ end
             y_var,
             (env, _) -> begin
                 # Observable depends on the value of the bottom-right node
-                bottom_right_var = VarName(Symbol("z$(height)_$(width)"))
+                bottom_right_var = VarName{Symbol("z$(height)_$(width)")}()
                 bottom_right_val = AbstractPPL.get(env, bottom_right_var)
                 mu = bottom_right_val * 5.0
                 return Normal(mu, 1.0)
@@ -641,7 +641,7 @@ end
         )
 
         # Add dependency edge from bottom-right node
-        bottom_right_var = VarName(Symbol("z$(height)_$(width)"))
+        bottom_right_var = VarName{Symbol("z$(height)_$(width)")}()
         add_edge!(bn, bottom_right_var, y_var)
 
         # Create evaluation environment

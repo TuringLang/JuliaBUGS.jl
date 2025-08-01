@@ -14,18 +14,4 @@ using LogExpFunctions
 include("bayesian_network.jl")
 include("conditioning.jl")
 include("functions.jl")
-
-export BayesianNetwork,
-    condition,
-    condition!,
-    decondition,
-    decondition!,
-    ancestral_sampling,
-    is_conditionally_independent,
-    add_deterministic_vertex!,
-    add_stochastic_vertex!,
-    add_vertex!,
-    translate_BUGSGraph_to_BayesianNetwork,
-    evaluate,
-    evaluate_with_values
 end
