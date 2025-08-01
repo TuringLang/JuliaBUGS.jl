@@ -82,7 +82,8 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     "inference_mh" => () -> include("independent_mh.jl"),
     "gibbs" => () -> include("gibbs.jl"),
     "parallel_sampling" => () -> include("parallel_sampling.jl"),
-    "experimental" => () -> include("experimental/ProbabilisticGraphicalModels/runtests.jl"),
+    "experimental" =>
+        () -> include("experimental/ProbabilisticGraphicalModels/runtests.jl"),
 )
 
 function print_test_usage()

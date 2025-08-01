@@ -75,9 +75,7 @@ end
 
         # Add first node
         first_var = VarName(Symbol("z[1]"))
-        add_stochastic_vertex!(
-            bn, first_var, (_, _) -> Bernoulli(0.5), false, :discrete
-        )
+        add_stochastic_vertex!(bn, first_var, (_, _) -> Bernoulli(0.5), false, :discrete)
         loop_vars[first_var] = (;)  # Empty named tuple
         all_vars[Symbol("z[1]")] = 0  # Initialize with value 0
 
@@ -335,8 +333,7 @@ end
             p_obs2 = pdf(Normal(9.0, 1.0), obs_values[2])
 
             # Joint probability of this specific path
-            joint_prob =
-                p_x1 * p_y0 * p_z1_given_x1_y0 * p_w1_given_z1 * p_obs1 * p_obs2
+            joint_prob = p_x1 * p_y0 * p_z1_given_x1_y0 * p_w1_given_z1 * p_obs1 * p_obs2
 
             return log(joint_prob)
         end
@@ -389,9 +386,7 @@ end
 
         # Add first node
         first_var = VarName(Symbol("z1"))
-        add_stochastic_vertex!(
-            bn, first_var, (_, _) -> Bernoulli(0.5), false, :discrete
-        )
+        add_stochastic_vertex!(bn, first_var, (_, _) -> Bernoulli(0.5), false, :discrete)
 
         # Add subsequent nodes with dependencies
         for i in 2:length
@@ -678,15 +673,7 @@ end
         # Expected memoization sizes based on your provided log output.
         # The test will verify that the DP implementation produces exactly these cache sizes.
         expected_memo_sizes = Dict(
-            2 => 5,
-            3 => 7,
-            4 => 9,
-            5 => 11,
-            6 => 13,
-            7 => 15,
-            8 => 17,
-            9 => 19,
-            10 => 21,
+            2 => 5, 3 => 7, 4 => 9, 5 => 11, 6 => 13, 7 => 15, 8 => 17, 9 => 19, 10 => 21
         )
 
         # Define the chain lengths to be tested.

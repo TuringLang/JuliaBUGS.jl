@@ -156,10 +156,7 @@ end
 
             # Run the test
             test_marginalization(
-                bn,
-                Dict(vars["z"] => :discrete),
-                Dict(vars["y"] => y_value),
-                expected_logp,
+                bn, Dict(vars["z"] => :discrete), Dict(vars["y"] => y_value), expected_logp
             )
         end
 

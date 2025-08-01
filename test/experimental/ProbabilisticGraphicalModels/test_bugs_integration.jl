@@ -3,10 +3,7 @@ using Distributions
 using JuliaBUGS
 using JuliaBUGS: @bugs, compile, VarName
 using JuliaBUGS.ProbabilisticGraphicalModels:
-    BayesianNetwork,
-    translate_BUGSGraph_to_BayesianNetwork,
-    evaluate,
-    evaluate_with_values
+    BayesianNetwork, translate_BUGSGraph_to_BayesianNetwork, evaluate, evaluate_with_values
 using AbstractPPL
 using Bijectors: Bijectors
 
@@ -178,7 +175,9 @@ using Bijectors: Bijectors
 
             # Convert to BayesianNetwork
             loop_bn = translate_BUGSGraph_to_BayesianNetwork(
-                loop_compiled_model.g, loop_compiled_model.evaluation_env, loop_compiled_model
+                loop_compiled_model.g,
+                loop_compiled_model.evaluation_env,
+                loop_compiled_model,
             )
 
             loop_params = rand(3)
@@ -199,7 +198,9 @@ using Bijectors: Bijectors
             end
 
             model = compile(model_def, NamedTuple())
-            bn = translate_BUGSGraph_to_BayesianNetwork(model.g, model.evaluation_env, model)
+            bn = translate_BUGSGraph_to_BayesianNetwork(
+                model.g, model.evaluation_env, model
+            )
 
             params = [1.5, 2.0, 3.0]
 
