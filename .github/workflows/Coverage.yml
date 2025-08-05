@@ -4,8 +4,13 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'JuliaBUGS/**'
+      - '.github/workflows/Coverage.yml'
   pull_request:
-
+    paths:
+      - 'JuliaBUGS/**'
+      - '.github/workflows/Coverage.yml'
   workflow_dispatch:
 
 jobs:
@@ -34,25 +39,31 @@ jobs:
           path: |
             ~/.julia
             ~/.julia/artifacts
-          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
+          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('JuliaBUGS/**/Project.toml', 'JuliaBUGS/**/Manifest.toml') }}
           restore-keys: |
             ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-
             ${{ runner.os }}-julia-${{ matrix.version }}-
       
       - uses: julia-actions/julia-buildpkg@v1
+        with:
+          project: JuliaBUGS
 
       - name: Running all tests with coverage
         uses: julia-actions/julia-runtest@v1
+        with:
+          project: JuliaBUGS
         env:
           TEST_GROUP: "all"
 
       - uses: julia-actions/julia-processcoverage@v1
+        with:
+          directories: JuliaBUGS
 
       - uses: codecov/codecov-action@v4
         with:
-          file: lcov.info
+          file: JuliaBUGS/lcov.info
           
       - uses: coverallsapp/github-action@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          path-to-lcov: lcov.info
+          path-to-lcov: JuliaBUGS/lcov.info

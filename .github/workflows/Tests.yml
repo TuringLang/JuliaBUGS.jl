@@ -4,12 +4,13 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - 'DoodleBUGS/**'
+    paths:
+      - 'JuliaBUGS/**'
+      - '.github/workflows/Tests.yml'
   pull_request:
-    paths-ignore:
-      - 'DoodleBUGS/**'
-
+    paths:
+      - 'JuliaBUGS/**'
+      - '.github/workflows/Tests.yml'
   workflow_dispatch:
 
 jobs:
@@ -52,15 +53,19 @@ jobs:
           path: |
             ~/.julia
             ~/.julia/artifacts
-          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
+          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('JuliaBUGS/**/Project.toml', 'JuliaBUGS/**/Manifest.toml') }}
           restore-keys: |
             ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-
             ${{ runner.os }}-julia-${{ matrix.version }}-
       
       - uses: julia-actions/julia-buildpkg@v1
+        with:
+          project: JuliaBUGS
 
       - name: Running ${{ matrix.test_group }} tests
         uses: julia-actions/julia-runtest@v1
+        with:
+          project: JuliaBUGS
         env:
           TEST_GROUP: ${{ matrix.test_group }}
 
@@ -97,15 +102,19 @@ jobs:
           path: |
             ~/.julia
             ~/.julia/artifacts
-          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
+          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('JuliaBUGS/**/Project.toml', 'JuliaBUGS/**/Manifest.toml') }}
           restore-keys: |
             ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-
             ${{ runner.os }}-julia-${{ matrix.version }}-
       
       - uses: julia-actions/julia-buildpkg@v1
+        with:
+          project: JuliaBUGS
 
       - name: Running ${{ matrix.test_group }} tests
         uses: julia-actions/julia-runtest@v1
+        with:
+          project: JuliaBUGS
         env:
           TEST_GROUP: ${{ matrix.test_group }}
 
@@ -137,12 +146,14 @@ jobs:
           path: |
             ~/.julia
             ~/.julia/artifacts
-          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
+          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('JuliaBUGS/**/Project.toml', 'JuliaBUGS/**/Manifest.toml') }}
           restore-keys: |
             ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-
             ${{ runner.os }}-julia-${{ matrix.version }}-
       
       - uses: julia-actions/julia-buildpkg@v1
+        with:
+          project: JuliaBUGS
 
       - name: Set thread count
         id: threads
@@ -150,6 +161,8 @@ jobs:
 
       - name: Running parallel_sampling tests
         uses: julia-actions/julia-runtest@v1
+        with:
+          project: JuliaBUGS
         env:
           TEST_GROUP: parallel_sampling
           JULIA_NUM_THREADS: ${{ steps.threads.outputs.count }}
