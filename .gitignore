@@ -1,4 +1,3 @@
-
 # Julia code coverage files
 *.jl.cov
 *.jl.*.cov
