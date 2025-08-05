@@ -36,3 +36,4 @@ jobs:
           pkg_path: JuliaBUGS
           doc-path: JuliaBUGS/docs
           doc-make-path: JuliaBUGS/docs/make.jl
+          doc-build-path: JuliaBUGS/docs/build
