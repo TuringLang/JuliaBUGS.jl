@@ -4,8 +4,9 @@ on:
   pull_request:
     branches:
       - main
-    paths-ignore:
-      - 'DoodleBUGS/**'
+    paths:
+      - 'JuliaBUGS/**'
+      - '.github/workflows/Benchmark.yml'
   workflow_dispatch:
 
 permissions:
@@ -47,12 +48,13 @@ jobs:
         path: |
           ~/.julia
           ~/.julia/artifacts
-        key: ${{ runner.os }}-julia-benchmark-${{ matrix.arch }}-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
+        key: ${{ runner.os }}-julia-benchmark-${{ matrix.arch }}-${{ hashFiles('JuliaBUGS/**/Project.toml', 'JuliaBUGS/**/Manifest.toml') }}
         restore-keys: |
           ${{ runner.os }}-julia-benchmark-${{ matrix.arch }}-
           ${{ runner.os }}-julia-benchmark-
 
     - name: Run benchmarks
+      working-directory: ./JuliaBUGS
       run: |
         julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
         julia --project=benchmark benchmark/run_benchmarks.jl > benchmark_results_${{ matrix.os }}.txt
@@ -61,7 +63,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: benchmark-results-${{ matrix.os }}
-        path: benchmark_results_${{ matrix.os }}.txt
+        path: JuliaBUGS/benchmark_results_${{ matrix.os }}.txt
         retention-days: 7
 
   post-results:

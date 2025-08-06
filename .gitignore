@@ -1,4 +1,3 @@
-
 # Julia code coverage files
 *.jl.cov
 *.jl.*.cov
@@ -28,3 +27,6 @@ Manifest.toml
 
 # Local configuration files
 *.local.*
+
+# gitingest generated files
+digest.txt
