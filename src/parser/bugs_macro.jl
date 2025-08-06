@@ -99,7 +99,7 @@ function check_lhs(@nospecialize(expr), assignment_sign, line_num)
             )
         end
 
-        return Base.Fix2(bugs_expression, line_num).(expr.args)
+        return [bugs_expression(arg, line_num) for arg in expr.args]
     else
         error("Invalid LHS at $line_num: $(expr)")
     end
@@ -113,7 +113,8 @@ function bugs_for(@nospecialize(expr), line_num)
         end
     )
         i isa Symbol || error("Loop variable must be a scalar, at $line_num: $(i)")
-        lower, upper = Base.Fix2(bugs_expression, line_num).((lower, upper))
+        lower = bugs_expression(lower, line_num)
+        upper = bugs_expression(upper, line_num)
         return MacroTools.@q for $i in ($lower):($upper)
             $(bugs_block_body(body, line_num)...)
         end
@@ -136,17 +137,18 @@ function bugs_expression(expr, line_num)
             )
         end
 
-        return Expr(:ref, Base.Fix2(bugs_expression, line_num).(expr.args)...)
+        return Expr(:ref, [bugs_expression(arg, line_num) for arg in expr.args]...)
     elseif Meta.isexpr(expr, :call)
         if @capture(expr, l_:s_:u_) # range with step is not supported
             error("Range with step is not supported, error at $line_num: $(expr)")
         end
+
         # special case: `step` is renamed to `_step` to avoid conflict with `Base.step`
         if @capture(expr, step(args__))
             expr.args[1] = :_step
         end
 
-        return Expr(:call, Base.Fix2(bugs_expression, line_num).(expr.args)...)
+        return Expr(:call, [bugs_expression(arg, line_num) for arg in expr.args]...)
     elseif Meta.isexpr(expr, :parameters)
         error(
             "Keyword argument syntax is not supported in BUGS, error at $line_num: $(expr)"

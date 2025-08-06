@@ -671,7 +671,7 @@ mutable struct AddVertices <: CompilerPass
     const f_dict::Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}
 end
 
-function AddVertices(model_def::Expr, eval_env::NamedTuple)
+function AddVertices(model_def::Expr, eval_env::NamedTuple, eval_module::Module=Main)
     g = MetaGraph(DiGraph(); label_type=VarName, vertex_data_type=NodeInfo)
     vertex_id_tracker = Dict{Symbol,Any}()
     for (k, v) in pairs(eval_env)
@@ -683,7 +683,11 @@ function AddVertices(model_def::Expr, eval_env::NamedTuple)
     end
 
     f_dict = build_node_functions(
-        model_def, eval_env, Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}(), ()
+        model_def,
+        eval_env,
+        Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}}(),
+        (),
+        eval_module,
     )
 
     return AddVertices(eval_env, g, NamedTuple(vertex_id_tracker), f_dict)
@@ -694,6 +698,7 @@ function build_node_functions(
     eval_env::NamedTuple,
     f_dict::Dict{Expr,Tuple{Tuple{Vararg{Symbol}},Expr,Any}},
     loop_vars::Tuple{Vararg{Symbol}},
+    eval_module::Module=Main,
 )
     for statement in expr.args
         if is_deterministic(statement) || is_stochastic(statement)
@@ -703,11 +708,13 @@ function build_node_functions(
                 statement.args[2], statement.args[3]
             end
             args, node_func_expr = make_function_expr(lhs, rhs, eval_env)
-            node_func = eval(node_func_expr)
+            node_func = Core.eval(eval_module, node_func_expr)
             f_dict[statement] = (args, node_func_expr, node_func)
         elseif Meta.isexpr(statement, :for)
             loop_var, _, _, body = decompose_for_expr(statement)
-            build_node_functions(body, eval_env, f_dict, (loop_var, loop_vars...))
+            build_node_functions(
+                body, eval_env, f_dict, (loop_var, loop_vars...), eval_module
+            )
         else
             error("Unknown statement type: $statement")
         end

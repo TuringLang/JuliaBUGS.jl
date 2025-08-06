@@ -240,7 +240,7 @@ function evaluate_with_values(bn::BayesianNetwork, parameter_values::AbstractVec
                 end
                 l = var_lengths[vn]
                 b_inv = Bijectors.inverse(b)
-                reconstructed_value = JuliaBUGS.reconstruct(
+                reconstructed_value = JuliaBUGS.Model.reconstruct(
                     b_inv, dist, view(parameter_values, current_idx:(current_idx + l - 1))
                 )
                 value, logjac = Bijectors.with_logabsdet_jacobian(
@@ -518,7 +518,7 @@ function _marginalize_recursive(
         b_inv = Bijectors.inverse(b)
         param_slice = view(parameter_values, param_idx:(param_idx + l - 1))
 
-        reconstructed_value = JuliaBUGS.reconstruct(b_inv, dist, param_slice)
+        reconstructed_value = JuliaBUGS.Model.reconstruct(b_inv, dist, param_slice)
         value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
 
         new_env = BangBang.setindex!!(env, value, current_name)
