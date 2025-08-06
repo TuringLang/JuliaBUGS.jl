@@ -6,4 +6,6 @@ A modern implementation of the [BUGS](https://en.wikipedia.org/wiki/WinBUGS) pro
 
 For a working example, follow this [link](https://turinglang.org/JuliaBUGS.jl/stable/example).
 
+Try [DoodleBUGS](https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/) for a browser-based interface for drawing BUGS models. 
+
 See also, [JAGS](https://sourceforge.net/p/mcmc-jags/code-0/ci/default/tree/) and [Nimble](https://r-nimble.org/). 
