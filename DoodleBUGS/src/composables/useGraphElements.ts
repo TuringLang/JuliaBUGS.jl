@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue';
 import { useGraphStore } from '../stores/graphStore';
-import type { GraphElement, GraphNode } from '../types';
+import type { GraphElement } from '../types';
 
 export function useGraphElements() {
   const graphStore = useGraphStore();
@@ -30,20 +30,13 @@ export function useGraphElements() {
     }
   };
 
-  const deleteElement = (elementId: string, visited = new Set<string>()) => {
-    if (visited.has(elementId)) {
-      return;
-    }
-    visited.add(elementId);
-
+  const deleteElement = (elementId: string) => {
     const elementToDelete = elements.value.find(el => el.id === elementId);
     if (!elementToDelete) return;
 
-    const parentId = elementToDelete.type === 'node' ? elementToDelete.parent : undefined;
-
     const allIdsToDelete = new Set<string>([elementId]);
 
-    // Recursively find all descendant nodes when deleting a plate
+    // Recursively find all descendant nodes when deleting a plate.
     if (elementToDelete.type === 'node' && elementToDelete.nodeType === 'plate') {
       const findDescendants = (currentParentId: string) => {
         elements.value.forEach(el => {
@@ -66,7 +59,7 @@ export function useGraphElements() {
         }
     });
 
-    // Delete edges connected to nodes being removed
+    // Delete edges connected to the nodes being removed.
     elements.value.forEach(el => {
         if (el.type === 'edge' && (nodesBeingDeleted.has(el.source) || nodesBeingDeleted.has(el.target))) {
             allIdsToDelete.add(el.id);
@@ -77,17 +70,6 @@ export function useGraphElements() {
 
     if (selectedElement.value && allIdsToDelete.has(selectedElement.value.id)) {
       selectedElement.value = null;
-    }
-
-    // Auto-cleanup empty parent plates
-    if (parentId) {
-      const parentPlate = elements.value.find(el => el.id === parentId);
-      if (parentPlate && parentPlate.type === 'node' && parentPlate.nodeType === 'plate') {
-        const hasRemainingChildren = elements.value.some(el => el.type === 'node' && el.parent === parentId);
-        if (!hasRemainingChildren) {
-          deleteElement(parentId, visited);
-        }
-      }
     }
   };
 

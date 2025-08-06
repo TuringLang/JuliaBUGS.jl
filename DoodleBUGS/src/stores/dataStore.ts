@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 import { useGraphStore } from './graphStore';
 import type { ModelData } from '../types';
 
@@ -45,8 +45,7 @@ export const useDataStore = defineStore('data', () => {
         data: parsed.data || {},
         inits: parsed.inits || {}
       };
-    } catch (e) {
-      // If JSON is invalid, return a default empty structure.
+    } catch {
       return { data: {}, inits: {} };
     }
   });

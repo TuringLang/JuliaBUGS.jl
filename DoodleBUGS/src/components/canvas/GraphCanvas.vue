@@ -29,6 +29,12 @@ const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping
 
 const validNodeTypes: NodeType[] = ['stochastic', 'deterministic', 'constant', 'observed', 'plate'];
 
+interface CompoundDropPayload {
+  node: NodeSingular;
+  newParent: NodeSingular | null;
+  oldParent: NodeSingular | null;
+}
+
 const formatElementsForCytoscape = (elements: GraphElement[], errors: Map<string, ValidationError[]>): ElementDefinition[] => {
   return elements.map(el => {
     if (el.type === 'node') {
@@ -56,7 +62,6 @@ const formatElementsForCytoscape = (elements: GraphElement[], errors: Map<string
 
 /**
  * Synchronizes the Cytoscape instance with the current graph elements from props.
- * This function handles adding, updating, and removing nodes and edges.
  * @param elementsToSync The array of graph elements to display.
  * @param errorsToSync The map of validation errors.
  */
@@ -68,14 +73,12 @@ const syncGraphWithProps = (elementsToSync: GraphElement[], errorsToSync: Map<st
   cy.batch(() => {
     const newElementIds = new Set(elementsToSync.map(el => el.id));
 
-    // Remove elements that are no longer in the props
     cy!.elements().forEach(cyEl => {
       if (!newElementIds.has(cyEl.id())) {
         cyEl.remove();
       }
     });
 
-    // Add or update elements
     formattedElements.forEach(formattedEl => {
       if (!formattedEl.data.id) return;
 
@@ -108,7 +111,6 @@ onMounted(() => {
   if (cyContainer.value) {
     cy = initCytoscape(cyContainer.value, []);
 
-    // Perform the initial synchronization to draw the graph on load
     syncGraphWithProps(props.elements, props.validationErrors);
 
     setGridSize(props.gridSize);
@@ -129,29 +131,15 @@ onMounted(() => {
       emit('canvas-tap', evt);
     });
 
-    cy.on('cdnddrop', 'node', (evt: EventObject, dropTarget: NodeSingular | undefined) => {
-        const node = evt.target as NodeSingular;
-        const newParentId = dropTarget ? dropTarget.id() : undefined;
-
-        const originalNode = props.elements.find(el => el.id === node.id() && el.type === 'node') as GraphNode | undefined;
-
-        if (originalNode && originalNode.parent && originalNode.parent !== newParentId) {
-            const oldParentId = originalNode.parent;
-            const oldParent = props.elements.find(el => el.id === oldParentId && el.type === 'node' && (el as GraphNode).nodeType === 'plate');
-            
-            if (oldParent) {
-                const siblings = props.elements.filter(el => el.type === 'node' && (el as GraphNode).parent === oldParentId);
-                if (siblings.length === 1) { 
-                    emit('plate-emptied', oldParentId);
-                }
-            }
-        }
-
-        emit('node-moved', {
-            nodeId: node.id(),
-            position: node.position(),
-            parentId: newParentId,
-        });
+    cy.on('compound-drop', (_evt: EventObject, data: CompoundDropPayload) => {
+      const { node, newParent } = data;
+      const newParentId = newParent ? newParent.id() : undefined;
+      
+      emit('node-moved', {
+          nodeId: node.id(),
+          position: node.position(),
+          parentId: newParentId
+      });
     });
 
     cy.on('tap', 'node, edge', (evt: EventObject) => {
@@ -182,7 +170,12 @@ onMounted(() => {
             const clientX = event.clientX;
             const clientY = event.clientY;
             const renderedPos = { x: clientX - bbox.left, y: clientY - bbox.top };
-            const modelPos = cy.panzoom().renderedPositionToModelPosition(renderedPos);
+            const pan = cy.pan();
+            const zoom = cy.zoom();
+            const modelPos = { 
+              x: (renderedPos.x - pan.x) / zoom,
+              y: (renderedPos.y - pan.y) / zoom
+            };
             emit('node-dropped', { nodeType: droppedItemType as NodeType, position: modelPos });
           }
         }
@@ -197,7 +190,7 @@ onUnmounted(() => {
   }
 });
 
-watch(() => props.isGridEnabled, (newValue) => {
+watch(() => props.isGridEnabled, (newValue: boolean) => {
   if (newValue) {
     enableGridSnapping();
   } else {
@@ -205,14 +198,13 @@ watch(() => props.isGridEnabled, (newValue) => {
   }
 });
 
-watch(() => props.gridSize, (newValue) => {
+watch(() => props.gridSize, (newValue: number) => {
   setGridSize(newValue);
   if (props.isGridEnabled) {
     enableGridSnapping();
   }
 });
 
-// Watch for subsequent changes to props and re-sync the graph
 watch([() => props.elements, () => props.validationErrors], ([newElements, newErrors]) => {
   syncGraphWithProps(newElements, newErrors);
 }, { deep: true });
@@ -247,5 +239,23 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
 
 .cytoscape-container.mode-add-edge {
   cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-arrow-right"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>') 12 12, crosshair;
+}
+
+/* Custom drag and drop styling */
+.cdnd-grabbed-node {
+  background-color: #FFD700 !important;
+  opacity: 0.7;
+  border: 2px dashed #FFA500;
+}
+
+.cdnd-drop-target {
+  border: 3px solid #32CD32 !important;
+  background-color: rgba(50, 205, 50, 0.1) !important;
+}
+
+/* Visual indicator for nodes being dragged out of plates */
+.cdnd-drag-out {
+  border: 2px dashed #FF0000 !important;
+  background-color: rgba(255, 0, 0, 0.1) !important;
 }
 </style>

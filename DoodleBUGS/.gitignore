@@ -7,6 +7,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 digest.txt
+root.txt
+src.txt
+public.txt
 
 node_modules
 .DS_Store

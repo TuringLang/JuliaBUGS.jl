@@ -6,6 +6,15 @@ import BaseInput from '../ui/BaseInput.vue';
 
 export type ExportType = 'png' | 'jpg' | 'svg';
 
+interface ExportOptions {
+  bg: string;
+  full: boolean;
+  scale: number;
+  quality?: number;
+  maxWidth?: number;
+  maxHeight?: number;
+}
+
 const props = defineProps<{
   isOpen: boolean;
   exportType: ExportType | null;
@@ -41,7 +50,7 @@ const title = computed(() => {
 });
 
 const handleConfirm = () => {
-  const exportOptions: any = {
+  const exportOptions: ExportOptions = {
     bg: options.value.bg,
     full: options.value.full,
     scale: options.value.scale,

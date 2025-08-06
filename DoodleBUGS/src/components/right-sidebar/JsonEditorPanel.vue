@@ -9,13 +9,25 @@ import 'codemirror/mode/javascript/javascript.js';
 import 'codemirror/addon/scroll/simplescrollbars.css';
 import 'codemirror/addon/scroll/simplescrollbars.js';
 import 'codemirror/addon/search/searchcursor.js';
-import 'codemirror/addon/fold/foldcode.js';
 import 'codemirror/addon/fold/foldgutter.css';
 import 'codemirror/addon/fold/foldgutter.js';
 import 'codemirror/addon/fold/brace-fold.js';
 
 import CodeMirror from 'codemirror';
 import type { Editor, TextMarker } from 'codemirror';
+
+// Extend the CodeMirror type declarations to include custom methods.
+declare module 'codemirror' {
+  interface Editor {
+    getSearchCursor(query: string, pos?: CodeMirror.Position | null, caseFold?: boolean): {
+      findNext: () => boolean;
+      findPrevious: () => boolean;
+      from: () => CodeMirror.Position;
+      to: () => CodeMirror.Position;
+    };
+    findMatchingBracket(pos: CodeMirror.Position, strict?: boolean): { to: CodeMirror.Position | null } | null;
+  }
+}
 
 const props = defineProps<{
   isActive: boolean;
@@ -53,14 +65,12 @@ const markProtectedFields = () => {
     }
   });
 
-  // Clear marks that are no longer needed
   existingMarks.forEach((mark) => {
     if (!newMarks.has(mark)) {
       mark.clear();
     }
   });
 
-  // Update the existing marks set
   existingMarks = newMarks;
 };
 
@@ -109,7 +119,7 @@ watch(graphElements, (newElements) => {
     if (JSON.stringify(JSON.parse(currentEditorValue)) === JSON.stringify(JSON.parse(newJsonString))) {
         return;
     }
-  } catch (e) {
+  } catch {
     if (currentEditorValue === newJsonString) {
         return;
     }
@@ -130,21 +140,21 @@ watch(() => props.isActive, (newVal) => {
 
 watch(selectedElement, async (newSelection) => {
   if (!newSelection || !cmInstance) return;
-
   await nextTick();
-
+  if (!cmInstance) return;
+  
   const searchText = `"id": "${newSelection.id}"`;
-  const idCursor = (cmInstance as any).getSearchCursor(searchText);
+  const idCursor = cmInstance.getSearchCursor(searchText);
 
   if (idCursor.findNext()) {
     const idPosition = idCursor.from();
-    const objectStartCursor = (cmInstance as any).getSearchCursor('{', idPosition);
+    const objectStartCursor = cmInstance.getSearchCursor('{', idPosition);
     
     if (objectStartCursor.findPrevious()) {
         const fromPos = objectStartCursor.from();
-        const foldRange = (cmInstance as any).findMatchingBracket(fromPos, false);
+        const foldRange = cmInstance.findMatchingBracket(fromPos, false);
 
-        if (foldRange && foldRange.to) {
+        if (foldRange?.to) {
             const toPos = { line: foldRange.to.line, ch: foldRange.to.ch + 1 };
 
             cmInstance.focus();
@@ -165,8 +175,8 @@ const handleJsonInput = (value: string) => {
       graphStore.updateGraphElements(graphStore.currentGraphId, newElements);
     }
     errorText.value = '';
-  } catch (e: any) {
-    errorText.value = e.message;
+  } catch (e: unknown) {
+    errorText.value = (e as Error).message;
   }
 };
 </script>
