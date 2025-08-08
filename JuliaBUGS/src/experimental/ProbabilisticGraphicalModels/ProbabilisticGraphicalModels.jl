@@ -11,6 +11,8 @@ using Bijectors: Bijectors
 using LinearAlgebra: Cholesky
 using LogExpFunctions
 
+import Graphs: add_edge!
+
 include("bayesian_network.jl")
 include("conditioning.jl")
 include("functions.jl")
