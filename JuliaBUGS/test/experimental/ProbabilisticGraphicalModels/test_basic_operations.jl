@@ -1,6 +1,6 @@
 using Test
 using Distributions
-using Graphs
+using Graphs: has_edge
 using JuliaBUGS.ProbabilisticGraphicalModels:
     BayesianNetwork,
     add_stochastic_vertex!,

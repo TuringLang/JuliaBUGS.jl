@@ -40,6 +40,7 @@ function condition!(
 
     return BangBang.setproperties!!(bn; evaluation_env=evaluation_env)
 end
+
 """
     decondition(bn::BayesianNetwork{V}) where {V}
 

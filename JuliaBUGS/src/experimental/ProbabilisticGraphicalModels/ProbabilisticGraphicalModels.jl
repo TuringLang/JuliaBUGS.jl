@@ -11,7 +11,11 @@ using Bijectors: Bijectors
 using LinearAlgebra: Cholesky
 using LogExpFunctions
 
+import Graphs: add_edge!
+import AbstractPPL: condition, decondition
+
 include("bayesian_network.jl")
 include("conditioning.jl")
 include("functions.jl")
+
 end
