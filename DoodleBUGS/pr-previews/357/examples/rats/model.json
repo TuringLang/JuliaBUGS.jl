@@ -1,0 +1,80 @@
+{
+  "name": "Rats: A Normal Hierarchical Model",
+  "graphJSON": [
+    {
+      "id": "plate_i", "name": "Plate.i", "type": "node", "nodeType": "plate", "position": { "x": 450, "y": 400 },
+      "loopVariable": "i", "loopRange": "1:N"
+    },
+    {
+      "id": "plate_j", "name": "Plate.j", "type": "node", "nodeType": "plate", "position": { "x": 450, "y": 350 },
+      "parent": "plate_i", "loopVariable": "j", "loopRange": "1:T"
+    },
+    {
+      "id": "node_Y", "name": "Y", "type": "node", "nodeType": "observed", "position": { "x": 450, "y": 250 },
+      "parent": "plate_j", "distribution": "dnorm", "indices": "i,j", "observed": true,
+      "param1": "mu", "param2": "tau.c"
+    },
+    {
+      "id": "node_mu", "name": "mu", "type": "node", "nodeType": "deterministic", "position": { "x": 450, "y": 350 },
+      "parent": "plate_j", "equation": "alpha[i] + beta[i] * (x[j] - xbar)", "indices": "i,j"
+    },
+    {
+      "id": "node_alpha", "name": "alpha", "type": "node", "nodeType": "stochastic", "position": { "x": 350, "y": 450 },
+      "parent": "plate_i", "distribution": "dnorm", "indices": "i",
+      "param1": "alpha.c", "param2": "alpha.tau"
+    },
+    {
+      "id": "node_beta", "name": "beta", "type": "node", "nodeType": "stochastic", "position": { "x": 550, "y": 450 },
+      "parent": "plate_i", "distribution": "dnorm", "indices": "i",
+      "param1": "beta.c", "param2": "beta.tau"
+    },
+    {
+      "id": "node_tau.c", "name": "tau.c", "type": "node", "nodeType": "stochastic", "position": { "x": 200, "y": 200 },
+      "distribution": "dgamma", "param1": "0.001", "param2": "0.001"
+    },
+    {
+      "id": "node_sigma", "name": "sigma", "type": "node", "nodeType": "deterministic", "position": { "x": 200, "y": 100 },
+      "equation": "1 / sqrt(tau.c)"
+    },
+    {
+      "id": "node_alpha.c", "name": "alpha.c", "type": "node", "nodeType": "stochastic", "position": { "x": 250, "y": 550 },
+      "distribution": "dnorm", "param1": "0.0", "param2": "1.0E-6"
+    },
+    {
+      "id": "node_alpha.tau", "name": "alpha.tau", "type": "node", "nodeType": "stochastic", "position": { "x": 150, "y": 550 },
+      "distribution": "dgamma", "param1": "0.001", "param2": "0.001"
+    },
+    {
+      "id": "node_beta.c", "name": "beta.c", "type": "node", "nodeType": "stochastic", "position": { "x": 650, "y": 550 },
+      "distribution": "dnorm", "param1": "0.0", "param2": "1.0E-6"
+    },
+    {
+      "id": "node_beta.tau", "name": "beta.tau", "type": "node", "nodeType": "stochastic", "position": { "x": 750, "y": 550 },
+      "distribution": "dgamma", "param1": "0.001", "param2": "0.001"
+    },
+    {
+      "id": "node_alpha0", "name": "alpha0", "type": "node", "nodeType": "deterministic", "position": { "x": 450, "y": 650 },
+      "equation": "alpha.c - xbar * beta.c"
+    },
+    {
+      "id": "node_x", "name": "x", "type": "node", "nodeType": "constant", "position": { "x": 650, "y": 350 }, "indices": "j"
+    },
+    {
+      "id": "node_xbar", "name": "xbar", "type": "node", "nodeType": "constant", "position": { "x": 550, "y": 700 }
+    },
+    { "id": "edge_mu_to_y", "type": "edge", "source": "node_mu", "target": "node_Y" },
+    { "id": "edge_tauc_to_y", "type": "edge", "source": "node_tau.c", "target": "node_Y" },
+    { "id": "edge_alphai_to_mu", "type": "edge", "source": "node_alpha", "target": "node_mu" },
+    { "id": "edge_betai_to_mu", "type": "edge", "source": "node_beta", "target": "node_mu" },
+    { "id": "edge_x_to_mu", "type": "edge", "source": "node_x", "target": "node_mu" },
+    { "id": "edge_xbar_to_mu", "type": "edge", "source": "node_xbar", "target": "node_mu" },
+    { "id": "edge_alphac_to_alphai", "type": "edge", "source": "node_alpha.c", "target": "node_alpha" },
+    { "id": "edge_alphatau_to_alphai", "type": "edge", "source": "node_alpha.tau", "target": "node_alpha" },
+    { "id": "edge_betac_to_betai", "type": "edge", "source": "node_beta.c", "target": "node_beta" },
+    { "id": "edge_betatau_to_betai", "type": "edge", "source": "node_beta.tau", "target": "node_beta" },
+    { "id": "edge_tauc_to_sigma", "type": "edge", "source": "node_tau.c", "target": "node_sigma" },
+    { "id": "edge_alphac_to_alpha0", "type": "edge", "source": "node_alpha.c", "target": "node_alpha0" },
+    { "id": "edge_xbar_to_alpha0", "type": "edge", "source": "node_xbar", "target": "node_alpha0" },
+    { "id": "edge_betac_to_alpha0", "type": "edge", "source": "node_beta.c", "target": "node_alpha0" }
+  ]
+}
