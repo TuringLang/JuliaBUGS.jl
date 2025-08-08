@@ -373,8 +373,8 @@ end
             end
 
             # Sort variables to ensure consistent ordering
-            sort!(z_vars; by=x -> parse(Int, string(x)[2:end]))
-            sort!(y_vars; by=x -> parse(Int, string(x)[2:end]))
+            sort!(z_vars; by=x -> Base.parse(Int, string(x)[2:end]))
+            sort!(y_vars; by=x -> Base.parse(Int, string(x)[2:end]))
 
             # Set node types
             bn = set_node_types(bn, var_types)
