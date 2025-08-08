@@ -1,6 +1,6 @@
 using Test
 using Distributions
-using Graphs
+using Graphs: topological_sort_by_dfs
 using JuliaBUGS.ProbabilisticGraphicalModels:
     BayesianNetwork,
     add_stochastic_vertex!,

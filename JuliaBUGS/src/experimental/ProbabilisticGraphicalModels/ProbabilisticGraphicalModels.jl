@@ -14,4 +14,5 @@ using LogExpFunctions
 include("bayesian_network.jl")
 include("conditioning.jl")
 include("functions.jl")
+
 end

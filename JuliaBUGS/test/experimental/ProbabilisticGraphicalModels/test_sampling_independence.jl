@@ -1,6 +1,5 @@
 using Test
 using Distributions
-using Graphs
 using Statistics
 using JuliaBUGS.ProbabilisticGraphicalModels:
     BayesianNetwork,

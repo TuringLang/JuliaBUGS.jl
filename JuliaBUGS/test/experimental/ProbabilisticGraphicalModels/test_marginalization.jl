@@ -11,7 +11,6 @@ using JuliaBUGS.ProbabilisticGraphicalModels:
 using BangBang
 using AbstractPPL
 using LogExpFunctions
-using Graphs
 using LogDensityProblems
 
 # Register distributions for use in @bugs
