@@ -39,7 +39,7 @@ jobs:
           path: |
             ~/.julia
             ~/.julia/artifacts
-          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('JuliaBUGS/**/Project.toml', 'JuliaBUGS/**/Manifest.toml') }}
+          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('JuliaBUGS/Project.toml', 'JuliaBUGS/Manifest.toml') }}
           restore-keys: |
             ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-
             ${{ runner.os }}-julia-${{ matrix.version }}-
@@ -57,13 +57,14 @@ jobs:
 
       - uses: julia-actions/julia-processcoverage@v1
         with:
-          directories: JuliaBUGS
+          directories: JuliaBUGS/src,JuliaBUGS/ext
 
       - uses: codecov/codecov-action@v4
         with:
-          file: ./lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
           
-      - uses: coverallsapp/github-action@master
+      - uses: coverallsapp/github-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path-to-lcov: ./lcov.info
