@@ -5,6 +5,7 @@ using JuliaBUGS.BUGSPrimitives
 
 makedocs(;
     sitename="JuliaBUGS.jl",
+    warnonly=[:cross_references, :doctest],
     pages=[
         "Home" => "index.md",
         "Example" => "example.md",

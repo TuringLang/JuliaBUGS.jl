@@ -4,4 +4,4 @@ JuliaBUGS = "ba9fb4c0-828e-4473-b6a1-cd2560fee5bf"
 MetaGraphsNext = "fa8bd995-216d-47f1-8a91-f3b68fbeb377"
 
 [compat]
-Documenter = "0.27"
+Documenter = "1.14"
