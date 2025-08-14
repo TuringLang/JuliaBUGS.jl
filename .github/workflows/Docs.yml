@@ -37,3 +37,4 @@ jobs:
           doc-path: JuliaBUGS/docs
           doc-make-path: JuliaBUGS/docs/make.jl
           doc-build-path: JuliaBUGS/docs/build
+          tag_prefix: "JuliaBUGS-"
