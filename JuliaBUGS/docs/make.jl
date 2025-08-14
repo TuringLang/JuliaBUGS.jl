@@ -8,6 +8,11 @@ makedocs(;
     pages=[
         "Home" => "index.md",
         "Example" => "example.md",
+        "Modeling" => [
+            "Two Macros: `@bugs` & `@model`" => "two_macros.md",
+            "`@model` Macro" => "model_macro.md",
+            "`of` Type System" => "of_design_doc.md",
+        ],
         "API" => [
             "General" => "api/api.md",
             "Functions" => "api/functions.md",
@@ -17,7 +22,11 @@ makedocs(;
         "Pitfalls" => "pitfalls.md",
         "Plotting" => "graph_plotting.md",
         "R Interface" => "R_interface.md",
-        "For Developers" =>
-            ["Parser" => "parser.md", "Notes on BUGS Implementations" => "BUGS_notes.md"],
+        "For Developers" => [
+            "Parser" => "parser.md",
+            "Source Code Generation" => "source_gen.md",
+            "Implementation Tricks" => "tricks.md",
+            "Notes on BUGS Implementations" => "BUGS_notes.md",
+        ],
     ],
 )
