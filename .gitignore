@@ -3,8 +3,8 @@
 *.jl.*.cov
 
 # Documentation build artifacts
-docs/build/
-docs/site/
+JuliaBUGS/docs/build/
+JuliaBUGS/docs/site/
 
 # Julia dependency lockfile - auto-generated
 Manifest.toml
