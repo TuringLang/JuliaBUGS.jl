@@ -1,10 +1,13 @@
+<!-- src/components/layouts/TheNavbar.vue -->
 <script setup lang="ts">
 import { computed } from 'vue';
+import { storeToRefs } from 'pinia';
 import type { NodeType } from '../../types';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseInput from '../ui/BaseInput.vue';
 import DropdownMenu from '../common/DropdownMenu.vue';
 import { nodeDefinitions, exampleModels } from '../../config/nodeDefinitions';
+import { useExecutionStore } from '../../stores/executionStore';
 
 const props = defineProps<{
   projectName: string | null;
@@ -34,7 +37,12 @@ const emit = defineEmits<{
   (e: 'load-example', exampleKey: string): void;
   (e: 'validate-model'): void;
   (e: 'show-validation-issues'): void;
+  (e: 'connect-to-backend'): void;
+  (e: 'run-model'): void;
 }>();
+
+const executionStore = useExecutionStore();
+const { isConnected, isExecuting } = storeToRefs(executionStore);
 
 const displayTitle = computed(() => {
   if (props.projectName && props.activeGraphName) {
@@ -131,7 +139,7 @@ const handleGridSizeInput = (event: Event) => {
             </div>
           </template>
         </DropdownMenu>
-        
+
         <DropdownMenu>
           <template #trigger>
             <BaseButton type="ghost" size="small">Examples</BaseButton>
@@ -140,6 +148,15 @@ const handleGridSizeInput = (event: Event) => {
              <a v-for="example in exampleModels" :key="example.key" href="#" @click.prevent="emit('load-example', example.key)">
               {{ example.name }}
             </a>
+          </template>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <template #trigger>
+            <BaseButton type="ghost" size="small">Execution</BaseButton>
+          </template>
+          <template #content>
+            <a href="#" @click.prevent="emit('connect-to-backend')">Connect to Backend...</a>
           </template>
         </DropdownMenu>
 
@@ -160,17 +177,25 @@ const handleGridSizeInput = (event: Event) => {
     </div>
 
     <div class="navbar-center">
+        <div class="backend-status" :class="{ 'connected': isConnected, 'disconnected': !isConnected }" :title="isConnected ? 'Connected to backend' : 'Disconnected from backend'">
+            <i class="fas fa-circle"></i>
+        </div>
         <BaseButton @click="emit('validate-model')" type="ghost" size="small" title="Re-run model validation">
             <i class="fas fa-sync-alt"></i> Validate
         </BaseButton>
-        <div 
-            @click="emit('show-validation-issues')" 
-            class="validation-status" 
-            :class="isModelValid ? 'valid' : 'invalid'" 
+        <div
+            @click="emit('show-validation-issues')"
+            class="validation-status"
+            :class="isModelValid ? 'valid' : 'invalid'"
             :title="isModelValid ? 'Model is valid' : 'Model has errors. Click to see details.'"
         >
             <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
         </div>
+        <BaseButton @click="emit('run-model')" type="primary" size="small" title="Run Model on Backend" :disabled="!isConnected || isExecuting">
+            <i v-if="isExecuting" class="fas fa-spinner fa-spin"></i>
+            <i v-else class="fas fa-play"></i>
+            Run
+        </BaseButton>
     </div>
 
     <div class="navbar-right">
@@ -348,6 +373,17 @@ const handleGridSizeInput = (event: Event) => {
   height: 18px;
 }
 
+.backend-status {
+    font-size: 0.7em;
+    padding: 5px;
+}
+.backend-status.connected {
+    color: var(--color-success);
+}
+.backend-status.disconnected {
+    color: var(--color-danger);
+}
+
 .validation-status {
     font-size: 1.2em;
     padding: 5px;
@@ -369,5 +405,11 @@ const handleGridSizeInput = (event: Event) => {
 
 .validation-status.invalid {
     color: var(--color-danger);
+}
+
+.navbar-center .base-button {
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
 </style>

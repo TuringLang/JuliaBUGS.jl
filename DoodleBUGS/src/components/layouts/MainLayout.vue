@@ -1,14 +1,18 @@
+<!-- src/components/layouts/MainLayout.vue -->
 <script setup lang="ts">
 import { ref, computed, onUnmounted, watch, onMounted, nextTick } from 'vue';
 import type { StyleValue } from 'vue';
 import { storeToRefs } from 'pinia';
+import type { Core, LayoutOptions } from 'cytoscape';
 import GraphEditor from '../canvas/GraphEditor.vue';
 import ProjectManager from '../left-sidebar/ProjectManager.vue';
 import NodePalette from '../left-sidebar/NodePalette.vue';
+import ExecutionSettingsPanel from '../left-sidebar/ExecutionSettingsPanel.vue';
 import DataInputPanel from '../panels/DataInputPanel.vue';
 import NodePropertiesPanel from '../right-sidebar/NodePropertiesPanel.vue';
 import CodePreviewPanel from '../panels/CodePreviewPanel.vue';
 import JsonEditorPanel from '../right-sidebar/JsonEditorPanel.vue';
+import ExecutionPanel from '../right-sidebar/ExecutionPanel.vue';
 import TheNavbar from './TheNavbar.vue';
 import BaseModal from '../common/BaseModal.vue';
 import BaseInput from '../ui/BaseInput.vue';
@@ -21,8 +25,10 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useGraphStore } from '../../stores/graphStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useDataStore } from '../../stores/dataStore';
+import { useExecutionStore } from '../../stores/executionStore';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGraphValidator } from '../../composables/useGraphValidator';
+import { useBugsCodeGenerator } from '../../composables/useBugsCodeGenerator';
 import type { GraphElement, NodeType, PaletteItemType, ExampleModel } from '../../types';
 
 interface ExportOptions {
@@ -38,12 +44,14 @@ const projectStore = useProjectStore();
 const graphStore = useGraphStore();
 const uiStore = useUiStore();
 const dataStore = useDataStore();
+const executionStore = useExecutionStore();
 
 const { parsedGraphData } = storeToRefs(dataStore);
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements();
+const { generatedCode } = useBugsCodeGenerator(elements);
 const { getCyInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
-
+const { backendUrl, isConnected, isConnecting, isExecuting, dependencies, samplerSettings } = storeToRefs(executionStore);
 const { activeLeftTab, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth } = storeToRefs(uiStore);
 
 const currentMode = ref<string>('select');
@@ -60,6 +68,8 @@ const showNewGraphModal = ref(false);
 const newGraphName = ref('');
 const showAboutModal = ref(false);
 const showValidationModal = ref(false);
+const showConnectModal = ref(false);
+const tempBackendUrl = ref(backendUrl.value || 'http://localhost:8081');
 
 const showExportModal = ref(false);
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null);
@@ -68,7 +78,6 @@ onMounted(async () => {
   projectStore.loadProjects();
 
   if (projectStore.projects.length === 0) {
-    // If no projects exist, create a default one and load the 'rats' example
     projectStore.createProject('Default Project');
     if (projectStore.currentProjectId) {
       await handleLoadExample('rats');
@@ -157,7 +166,7 @@ const startResizeRight = () => {
 const doResizeRight = (event: MouseEvent) => {
   if (isResizingRight.value) {
     const newWidth = window.innerWidth - event.clientX;
-    rightSidebarWidth.value = Math.max(280, Math.min(newWidth, 600));
+    rightSidebarWidth.value = Math.max(400, Math.min(newWidth, 800));
   }
 };
 
@@ -212,19 +221,15 @@ const handleDeleteElement = (elementId: string) => {
 const handleGraphLayout = (layoutName: string) => {
   const cy = getCyInstance();
   if (!cy) return;
-
-  // The 'any' type is used here because each layout extension (dagre, fcose, etc.)
-  // has its own specific options that are not part of the base Cytoscape 'LayoutOptions' type.
-  // Using a more specific type would require creating complex union types for all possible layout options.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const layoutOptionsMap: Record<string, any> = {
-    dagre: { name: 'dagre', animate: true, animationDuration: 500, fit: true, padding: 30 },
-    fcose: { name: 'fcose', animate: true, animationDuration: 500, fit: true, padding: 30, randomize: false, quality: 'proof' },
-    cola: { name: 'cola', animate: true, fit: true, padding: 30, refresh: 1, avoidOverlap: true, infinite: false, centerGraph: true, flow: { axis: 'y', minSeparation: 30 }, handleDisconnected: false, randomize: false },
-    klay: { name: 'klay', animate: true, animationDuration: 500, fit: true, padding: 30, klay: { direction: 'RIGHT', edgeRouting: 'SPLINES', nodePlacement: 'LINEAR_SEGMENTS' } },
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const layoutOptionsMap: Record<string, LayoutOptions> = {
+    dagre: { name: 'dagre', animate: true, animationDuration: 500, fit: true, padding: 30 } as any,
+    fcose: { name: 'fcose', animate: true, animationDuration: 500, fit: true, padding: 30, randomize: false, quality: 'proof' } as any,
+    cola: { name: 'cola', animate: true, fit: true, padding: 30, refresh: 1, avoidOverlap: true, infinite: false, centerGraph: true, flow: { axis: 'y', minSeparation: 30 }, handleDisconnected: false, randomize: false } as any,
+    klay: { name: 'klay', animate: true, animationDuration: 500, fit: true, padding: 30, klay: { direction: 'RIGHT', edgeRouting: 'SPLINES', nodePlacement: 'LINEAR_SEGMENTS' } } as any,
     preset: { name: 'preset' }
   };
-
+  /* eslint-enable @typescript-eslint/no-explicit-any */
   const options = layoutOptionsMap[layoutName] || layoutOptionsMap.preset;
   cy.layout(options).run();
 };
@@ -260,8 +265,6 @@ const createNewGraph = () => {
 const saveCurrentGraph = () => {
   if (graphStore.currentGraphId) {
     graphStore.saveGraph(graphStore.currentGraphId, graphStore.graphContents.get(graphStore.currentGraphId)!);
-  } else {
-    console.warn("No graph currently selected to save.");
   }
 };
 
@@ -277,10 +280,7 @@ const triggerDownload = (blob: Blob, fileName: string) => {
 }
 
 const handleExportJson = () => {
-  if (!graphStore.currentGraphId) {
-    alert("Please select a graph to export.");
-    return;
-  }
+  if (!graphStore.currentGraphId) return;
   const elementsToExport = graphStore.currentGraphElements;
   const jsonString = JSON.stringify(elementsToExport, null, 2);
   const blob = new Blob([jsonString], { type: 'application/json' });
@@ -289,81 +289,157 @@ const handleExportJson = () => {
 };
 
 const openExportModal = (format: 'png' | 'jpg' | 'svg') => {
-  if (!graphStore.currentGraphId) {
-    alert("Please select a graph to export.");
-    return;
-  }
+  if (!graphStore.currentGraphId) return;
   currentExportType.value = format;
   showExportModal.value = true;
 };
 
 const handleConfirmExport = (options: ExportOptions) => {
-  const cy = getCyInstance();
+  const cy = getCyInstance() as Core & { svg: (options: object) => string; jpg: (options: object) => Blob; png: (options: object) => Blob; };
   if (!cy || !currentExportType.value) return;
-
   const fileName = `${activeGraphName.value || 'graph'}.${currentExportType.value}`;
-
   try {
     let blob: Blob;
     if (currentExportType.value === 'svg') {
       const svgOptions = { bg: options.bg, full: options.full, scale: options.scale };
-      const svgContent = cy.svg(svgOptions);
-      blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
-    } else if (currentExportType.value === 'jpg') {
-      const jpgOptions = { ...options, output: 'blob' as const };
-      blob = cy.jpg(jpgOptions);
+      blob = new Blob([cy.svg(svgOptions)], { type: 'image/svg+xml;charset=utf-8' });
     } else {
-      const pngOptions = { ...options, output: 'blob' as const };
-      blob = cy.png(pngOptions);
+      blob = cy[currentExportType.value]({ ...options, output: 'blob' });
     }
     triggerDownload(blob, fileName);
   } catch (err) {
     console.error(`Failed to export ${currentExportType.value}:`, err);
-    alert(`An error occurred while exporting the graph. Please check the console.`);
   }
 };
 
 const handleLoadExample = async (exampleKey: string) => {
-  if (!projectStore.currentProjectId) {
-    alert("Please create or select a project before loading an example.");
-    return;
-  }
-
+  if (!projectStore.currentProjectId) return;
   try {
     const baseUrl = import.meta.env.BASE_URL;
-    const modelUrl = `${baseUrl}examples/${exampleKey}/model.json`;
-    const dataUrl = `${baseUrl}examples/${exampleKey}/data.json`;
 
-    const [modelResponse, dataResponse] = await Promise.all([
-      fetch(modelUrl),
-      fetch(dataUrl)
-    ]);
-
-    if (!modelResponse.ok) {
-      throw new Error(`Could not fetch example model: ${modelResponse.statusText}`);
-    }
+    const modelResponse = await fetch(`${baseUrl}examples/${exampleKey}/model.json`);
+    if (!modelResponse.ok) throw new Error(`Could not fetch example model: ${modelResponse.statusText}`);
     const modelData: ExampleModel = await modelResponse.json();
 
     const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId, modelData.name);
+    if (!newGraphMeta) return;
 
-    if (newGraphMeta) {
-      graphStore.updateGraphElements(newGraphMeta.id, modelData.graphJSON);
-      if (dataResponse.ok) {
-        const data = await dataResponse.json();
-        dataStore.currentGraphDataString = JSON.stringify(data, null, 2);
-      } else {
-        console.error(`Failed to load example data: ${dataResponse.statusText}`);
-        alert("Failed to load the example data. See console for details.");
+    graphStore.updateGraphElements(newGraphMeta.id, modelData.graphJSON);
+    
+    const jsonDataResponse = await fetch(`${baseUrl}examples/${exampleKey}/data.json`);
+    if (jsonDataResponse.ok) {
+      const fullData = await jsonDataResponse.json();
+      
+      // Temporarily set mode to json to ensure correct data ingestion
+      dataStore.inputMode = 'json';
+      dataStore.dataString = JSON.stringify(fullData.data || {}, null, 2);
+      dataStore.initsString = JSON.stringify(fullData.inits || {}, null, 2);
+
+    } else {
+      const juliaDataResponse = await fetch(`${baseUrl}examples/${exampleKey}/data.jl`);
+      if (juliaDataResponse.ok) {
+        const juliaText = await juliaDataResponse.text();
+        const dataMatch = juliaText.match(/data\s*=\s*(\([\s\S]*?\))\s*/m);
+        const initsMatch = juliaText.match(/inits\s*=\s*(\([\s\S]*?\))\s*/m);
+        
+        // Set the mode to julia before assigning julia strings
+        dataStore.inputMode = 'julia';
+        dataStore.dataString = dataMatch ? dataMatch[1] : '()';
+        dataStore.initsString = initsMatch ? initsMatch[1] : '()';
       }
     }
+    
+    // Set the default view to Julia and save the final state
+    dataStore.inputMode = 'julia';
+    dataStore.updateGraphData(newGraphMeta.id, dataStore.getGraphData(newGraphMeta.id));
 
   } catch (error) {
     console.error("Failed to load example model:", error);
-    alert("Failed to load the example model. See console for details.");
   }
 };
 
 const isModelValid = computed(() => validationErrors.value.size === 0);
+
+const connectToBackend = async () => {
+  isConnecting.value = true;
+  isConnected.value = false;
+  executionStore.setBackendUrl(tempBackendUrl.value);
+  uiStore.setActiveRightTab('execution');
+  executionStore.executionLogs.push(`Attempting to connect to backend at ${tempBackendUrl.value}...`);
+  
+  try {
+    const response = await fetch(`${tempBackendUrl.value}/api/health`);
+    if (!response.ok) {
+      throw new Error(`Health check failed with status: ${response.status}`);
+    }
+    const result = await response.json();
+    if (result.status !== 'ok') {
+      throw new Error('Backend returned an invalid health status.');
+    }
+    isConnected.value = true;
+    executionStore.executionLogs.push("Connection successful.");
+    showConnectModal.value = false;
+  } catch (error: unknown) {
+    const errorMessage = (error as Error).message;
+    executionStore.executionLogs.push(`Connection failed: ${errorMessage}`);
+    isConnected.value = false;
+  } finally {
+    isConnecting.value = false;
+  }
+};
+
+const runModel = async () => {
+  if (!isConnected.value || !backendUrl.value || isExecuting.value) return;
+
+  uiStore.setActiveRightTab('execution');
+  executionStore.resetExecutionState();
+
+  try {
+    const payload = {
+      model_code: generatedCode.value,
+      data_string: dataStore.inputMode === 'julia' ? dataStore.dataString : jsonToJulia(dataStore.dataString),
+      inits_string: dataStore.inputMode === 'julia' ? dataStore.initsString : jsonToJulia(dataStore.initsString),
+      dependencies: dependencies.value.filter(d => d.name),
+      settings: samplerSettings.value
+    };
+    const response = await fetch(`${backendUrl.value}/api/run_model`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+    executionStore.executionLogs = result.logs || [];
+    if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
+    executionStore.executionResults = result.results;
+    executionStore.generatedFiles = result.files;
+    executionStore.executionError = null;
+
+  } catch (error: unknown) {
+    executionStore.executionError = (error as Error).message;
+  } finally {
+    isExecuting.value = false;
+  }
+};
+
+const jsonToJulia = (jsonString: string): string => {
+  try {
+    const obj = JSON.parse(jsonString);
+    if (Object.keys(obj).length === 0) return "()";
+    const formatValue = (value: unknown): string => {
+      if (Array.isArray(value)) {
+        if (Array.isArray(value[0])) {
+          return `[\n    ${value.map(row => (row as unknown[]).join(' ')).join(';\n    ')}\n]`;
+        }
+        return `[${value.join(', ')}]`;
+      }
+      return JSON.stringify(value);
+    };
+    const entries = Object.entries(obj).map(([key, value]) => `${key} = ${formatValue(value)}`);
+    return `(\n  ${entries.join(',\n  ')}\n)`;
+  } catch {
+    return "()";
+  }
+};
 </script>
 
 <template>
@@ -377,7 +453,8 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
       @new-graph="showNewGraphModal = true" @save-current-graph="saveCurrentGraph"
       @open-about-modal="showAboutModal = true" @export-json="handleExportJson" @open-export-modal="openExportModal"
       @apply-layout="handleGraphLayout" @load-example="handleLoadExample" @validate-model="validateGraph"
-      :is-model-valid="isModelValid" @show-validation-issues="showValidationModal = true" />
+      :is-model-valid="isModelValid" @show-validation-issues="showValidationModal = true"
+      @connect-to-backend="showConnectModal = true" @run-model="runModel" />
 
     <div class="content-area">
       <aside class="left-sidebar" :style="leftSidebarStyle">
@@ -394,6 +471,10 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
             title="Data Input">
             <i class="fas fa-database"></i> <span v-show="isLeftSidebarOpen">Data</span>
           </button>
+          <button :class="{ active: activeLeftTab === 'settings' }" @click="uiStore.handleLeftTabClick('settings')"
+            title="Execution Settings">
+            <i class="fas fa-cog"></i> <span v-show="isLeftSidebarOpen">Settings</span>
+          </button>
         </div>
         <div class="left-sidebar-content" :style="leftSidebarContentStyle">
           <div v-show="activeLeftTab === 'project'">
@@ -404,6 +485,9 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
           </div>
           <div v-show="activeLeftTab === 'data'" class="fill-height">
             <DataInputPanel :is-active="activeLeftTab === 'data'" />
+          </div>
+          <div v-show="activeLeftTab === 'settings'" class="fill-height">
+            <ExecutionSettingsPanel />
           </div>
         </div>
       </aside>
@@ -428,6 +512,8 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
               @click="uiStore.setActiveRightTab('code')">Code</button>
             <button :class="{ active: uiStore.activeRightTab === 'json' }"
               @click="uiStore.setActiveRightTab('json')">JSON</button>
+            <button :class="{ active: uiStore.activeRightTab === 'execution' }"
+              @click="uiStore.setActiveRightTab('execution')">Execution</button>
           </div>
           <button @click="uiStore.toggleRightTabPinned()" class="pin-button"
             :class="{ 'pinned': uiStore.isRightTabPinned }" title="Pin Tab">
@@ -445,39 +531,69 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
           <div v-show="uiStore.activeRightTab === 'json'" class="tab-pane fill-height">
             <JsonEditorPanel :is-active="uiStore.activeRightTab === 'json'" />
           </div>
+          <div v-show="uiStore.activeRightTab === 'execution'" class="tab-pane fill-height">
+            <ExecutionPanel />
+          </div>
         </div>
       </aside>
     </div>
 
+    <!-- Modals -->
     <BaseModal :is-open="showNewProjectModal" @close="showNewProjectModal = false">
       <template #header>
         <h3>Create New Project</h3>
       </template>
       <template #body>
-        <label for="new-project-name" style="display: block; margin-bottom: 8px; font-weight: 500;">Project
-          Name:</label>
-        <BaseInput id="new-project-name" v-model="newProjectName" placeholder="Enter project name"
-          @keyup.enter="createNewProject" />
+        <div class="modal-body-content">
+          <label for="new-project-name">Project Name:</label>
+          <BaseInput id="new-project-name" v-model="newProjectName" placeholder="Enter project name"
+            @keyup.enter="createNewProject" />
+        </div>
       </template>
       <template #footer>
         <BaseButton @click="showNewProjectModal = false" type="secondary">Cancel</BaseButton>
         <BaseButton @click="createNewProject" type="primary">Create</BaseButton>
       </template>
     </BaseModal>
+
     <BaseModal :is-open="showNewGraphModal" @close="showNewGraphModal = false">
       <template #header>
         <h3>Create New Graph</h3>
       </template>
       <template #body>
-        <label for="new-graph-name" style="display: block; margin-bottom: 8px; font-weight: 500;">Graph Name:</label>
-        <BaseInput id="new-graph-name" v-model="newGraphName" placeholder="Enter graph name"
-          @keyup.enter="createNewGraph" />
+        <div class="modal-body-content">
+          <label for="new-graph-name">Graph Name:</label>
+          <BaseInput id="new-graph-name" v-model="newGraphName" placeholder="Enter graph name"
+            @keyup.enter="createNewGraph" />
+        </div>
       </template>
       <template #footer>
         <BaseButton @click="showNewGraphModal = false" type="secondary">Cancel</BaseButton>
         <BaseButton @click="createNewGraph" type="primary">Create</BaseButton>
       </template>
     </BaseModal>
+
+    <BaseModal :is-open="showConnectModal" @close="showConnectModal = false">
+      <template #header>
+        <h3>Connect to Backend</h3>
+      </template>
+      <template #body>
+        <div class="modal-body-content">
+          <label for="backend-url">Backend Server URL:</label>
+          <BaseInput id="backend-url" v-model="tempBackendUrl" placeholder="http://localhost:8081"
+            @keyup.enter="connectToBackend" />
+          <small>The URL of your running JuliaBUGS backend server.</small>
+        </div>
+      </template>
+      <template #footer>
+        <BaseButton @click="showConnectModal = false" type="secondary">Cancel</BaseButton>
+        <BaseButton @click="connectToBackend" type="primary" :disabled="isConnecting">
+          <span v-if="isConnecting">Connecting...</span>
+          <span v-else>Connect</span>
+        </BaseButton>
+      </template>
+    </BaseModal>
+
     <AboutModal :is-open="showAboutModal" @close="showAboutModal = false" />
     <ExportModal :is-open="showExportModal" :export-type="currentExportType" @close="showExportModal = false"
       @confirm-export="handleConfirmExport" />
@@ -685,5 +801,21 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
 
 .resizer-right {
   border-left: 1px solid var(--color-border);
+}
+
+.modal-body-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal-body-content label {
+  font-weight: 500;
+}
+
+.modal-body-content small {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-secondary);
 }
 </style>
