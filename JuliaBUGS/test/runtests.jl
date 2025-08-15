@@ -68,6 +68,7 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     end,
     "model_operations" => () -> begin
         include("model/abstractppl.jl")
+        include("distribution_interface.jl")
     end,
     "log_density" => () -> begin
         include("model/evaluation.jl")

@@ -42,7 +42,8 @@ using .Model:
     BUGSModel,
     evaluate_with_values!!,
     UseGraph,
-    UseGeneratedLogDensityFunction
+    UseGeneratedLogDensityFunction,
+    to_distribution
 
 include("independent_mh.jl")
 include("gibbs.jl")
@@ -85,6 +86,7 @@ function check_input(input::Dict{KT,VT}) where {KT,VT}
         return check_input(NamedTuple(input))
     else
         ks = map(identity, collect(keys(input)))
+        vs = map(identity, collect(values(input)))
         if eltype(ks) === Symbol
             return check_input(NamedTuple(ks, vs))
         else
