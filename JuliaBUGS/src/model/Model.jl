@@ -17,8 +17,10 @@ include("bugsmodel.jl")
 include("evaluation.jl")
 include("abstractppl.jl")
 include("logdensityproblems.jl")
+include("distribution_interface.jl")
 
 export parameters, variables, initialize!, getparams, settrans, set_evaluation_mode
 export evaluate_with_rng!!, evaluate_with_env!!, evaluate_with_values!!
+export to_distribution
 
 end # Model
