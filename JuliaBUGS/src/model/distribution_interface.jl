@@ -9,7 +9,7 @@ The distribution uses LogDensityProblems interface for evaluation and supports:
 - Computing log densities
 - Working with transformed/untransformed parameter spaces
 """
-struct BUGSModelDistribution{K,M<:BUGSModel,S<:ValueSupport} <: 
+struct BUGSModelDistribution{K,M<:BUGSModel,S<:ValueSupport} <:
        Distribution{NamedTupleVariate{K},S}
     model::M
 end
@@ -18,12 +18,12 @@ function BUGSModelDistribution(model::BUGSModel)
     # Get unique parameter names as symbols (to handle arrays)
     param_syms = unique(Symbol(AbstractPPL.getsym(vn)) for vn in parameters(model))
     param_names = Tuple(param_syms)
-    
+
     # Determine value support based on model parameters
     # BUGSModel can have both continuous and discrete parameters
     # For now, we'll default to Continuous if any continuous parameters exist
     S = Continuous  # Could be made more sophisticated based on actual parameter types
-    
+
     return BUGSModelDistribution{param_names,typeof(model),S}(model)
 end
 
@@ -49,19 +49,19 @@ Base.eltype(::Type{<:BUGSModelDistribution}) = NamedTuple
 function Distributions.rand(rng::AbstractRNG, d::BUGSModelDistribution{K}) where {K}
     # Use ancestral sampling to generate a sample
     evaluation_env, _ = evaluate!!(rng, d.model; sample_all=false)
-    
+
     # Group parameters by their base symbol
     param_groups = Dict{Symbol,Vector{Pair{VarName,Any}}}()
     for vn in parameters(d.model)
         sym = Symbol(AbstractPPL.getsym(vn))
         val = AbstractPPL.get(evaluation_env, vn)
-        
+
         if !haskey(param_groups, sym)
             param_groups[sym] = Pair{VarName,Any}[]
         end
         push!(param_groups[sym], vn => val)
     end
-    
+
     # Construct the result dictionary
     param_dict = Dict{Symbol,Any}()
     for (sym, pairs) in param_groups
@@ -76,7 +76,7 @@ function Distributions.rand(rng::AbstractRNG, d::BUGSModelDistribution{K}) where
             param_dict[sym] = vals
         end
     end
-    
+
     # Create NamedTuple with correct order
     return NamedTuple{K}(Tuple(param_dict[k] for k in K))
 end
@@ -85,11 +85,13 @@ function Distributions.logpdf(d::BUGSModelDistribution{K}, x::NamedTuple) where 
     # Convert NamedTuple to flattened vector for the model
     # First, update the model's evaluation environment with the NamedTuple values
     new_env = d.model.evaluation_env
-    
+
     for (key, val) in pairs(x)
         # Find all VarNames that match this key
-        matching_vns = [vn for vn in parameters(d.model) if Symbol(AbstractPPL.getsym(vn)) == key]
-        
+        matching_vns = [
+            vn for vn in parameters(d.model) if Symbol(AbstractPPL.getsym(vn)) == key
+        ]
+
         if length(matching_vns) == 1
             # Single parameter (or single array parameter)
             new_env = BangBang.setindex!!(new_env, val, matching_vns[1])
@@ -108,10 +110,10 @@ function Distributions.logpdf(d::BUGSModelDistribution{K}, x::NamedTuple) where 
             end
         end
     end
-    
+
     # Create a new model with updated environment
     updated_model = BUGSModel(d.model; evaluation_env=new_env)
-    
+
     # Compute log density using the LogDensityProblems interface
     if d.model.transformed
         # If model is in transformed space, we need to transform the parameters
@@ -120,7 +122,7 @@ function Distributions.logpdf(d::BUGSModelDistribution{K}, x::NamedTuple) where 
     else
         _, logp = evaluate!!(updated_model)
     end
-    
+
     return logp
 end
 
@@ -135,7 +137,7 @@ function Distributions.insupport(d::BUGSModelDistribution{K}, x::NamedTuple) whe
     if !all(haskey(x, k) for k in K)
         return false
     end
-    
+
     # For now, return true if we can evaluate the log density
     # A more sophisticated check would validate parameter constraints
     try
