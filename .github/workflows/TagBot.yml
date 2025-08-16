@@ -14,4 +14,3 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           ssh: ${{ secrets.DOCUMENTER_KEY }}
           subdir: JuliaBUGS
-          
