@@ -35,7 +35,7 @@ model {
 
 posterior = compile(model, (; N = 10, y = randn(10)))
 
-chain = AbstractMCMC.sample(rng, posterior, JuliaBUGS.IndependentMH(), 1000)
+chain = AbstractMCMC.sample(Random.MersenneTwister(123), posterior, JuliaBUGS.IndependentMH(), 1000)
 ```
 
 For a complete walkthrough, see the [example](https://turinglang.org/JuliaBUGS.jl/stable/example).
