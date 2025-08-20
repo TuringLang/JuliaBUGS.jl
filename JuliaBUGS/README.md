@@ -10,9 +10,9 @@
 
 -   **BUGS syntax** — write models using standard BUGS notation.
     
--   **Julia performance** — leverage Julia’s speed and just-in-time (JIT) compilation.
+-   **High performance** — leverage Julia’s speed and just-in-time (JIT) compilation.
     
--   **Interoperability with Julia ecosystem** — works smoothly with MCMC algrorithms from [Turing.jl](https://turinglang.org/) and the broader Julia PPL ecosystem.   
+-   **Interoperability with Julia ecosystem** — works smoothly with MCMC algorithms from [Turing.jl](https://turinglang.org/) and the broader Julia PPL ecosystem.   
 
 ---
 
