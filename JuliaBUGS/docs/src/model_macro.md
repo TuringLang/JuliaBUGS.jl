@@ -2,21 +2,6 @@
 
 JuliaBUGS provides the `@model` macro for defining probabilistic models in a Julia-native way. This guide explains how to create and use models effectively.
 
-## Core Concepts
-
-When defining a model, you work with two main categories of variables:
-
-### 1. Stochastic Parameters
-Variables that follow probability distributions, defined with the `~` operator:
-- **Unobserved parameters**: Variables to be sampled during inference
-- **Observed data**: Known values that the model conditions on
-
-### 2. Constants and Covariates
-Deterministic inputs that don't have probability distributions:
-- **Covariates/predictors**: Input features like `x` in regression models
-- **Structural constants**: Values that determine model structure (e.g., `N` for array sizes)
-- **Fixed parameters**: Any other non-stochastic inputs
-
 ## The `@model` Macro
 
 The `@model` macro creates a function that returns a `BUGSModel` object. Here's the basic syntax:
@@ -38,12 +23,30 @@ end
 
 2. **Remaining arguments**: All constants, covariates, and structural parameters
 
+### Two Types of Variables
+
+As shown in the above model, we have two main categories of variables:
+
+#### 1. Stochastic Parameters
+Variables that follow probability distributions, defined with the `~` operator:
+- **Unobserved parameters**: Variables to be sampled during inference
+- **Observed data**: Known values that the model conditions on
+
+#### 2. Constants and Covariates
+Deterministic inputs that don't have probability distributions:
+- **Covariates/predictors**: Input features like `x` in regression models
+- **Structural constants**: Values that determine model structure (e.g., `N` for array sizes)
+- **Fixed parameters**: Any other non-stochastic inputs
+
 ### Example: Linear Regression
 
 ```julia
+using Julia
+using JuliaBUGS.BUGSPrimitives
+
 @model function linear_regression(
     (; y, beta, sigma),    # y is data, beta and sigma are parameters
-    X, N                   # X is covariate matrix, N is size
+    X, N                   # X is the covariate matrix, N is the size
 )
     for i in 1:N
         y[i] ~ dnorm(mu[i], sigma)
@@ -91,14 +94,14 @@ When you provide an `of` type annotation, JuliaBUGS automatically validates the 
 # Create model with no observations (sample from prior)
 model = my_model((;), constants...)
 
-# Create model with some observed values
+# Create a model with some observed values
 model = my_model((; y = observed_data), constants...)
 
 # Create model with all parameters specified
 model = my_model((; param1 = val1, param2 = val2), constants...)
 ```
 
-### Using `unflatten` for Initialization
+### Using `unflatten` for Initialisation
 
 The `unflatten` utility helps create parameter instances with missing values:
 
@@ -109,7 +112,7 @@ using JuliaBUGS: unflatten
 params = unflatten(MyParamType, missing)
 model = my_model(params, constants...)
 
-# This is useful for models that need initialization
+# This is useful for models that need initialisation
 ```
 
 ## Complete Example: Hierarchical Model
@@ -117,6 +120,9 @@ model = my_model(params, constants...)
 Here's a complete example showing all the concepts together:
 
 ```julia
+using JuliaBUGS
+using JuliaBUGS.BUGSPrimitives
+
 # Step 1: Define parameter types
 HierarchicalParams = @of(
     # Data
