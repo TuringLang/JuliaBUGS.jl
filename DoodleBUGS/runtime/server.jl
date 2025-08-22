@@ -87,7 +87,7 @@ function run_model_handler(req::HTTP.Request)
 
         try
             # Define the model from the string
-            model_def = JuliaBUGS.@bugs_str(\"\"\"
+            model_def = JuliaBUGS.@bugs(\"\"\"
             $(model_code)
             \"\"\", true, false)
 
