@@ -27,6 +27,7 @@ using JuliaBUGS.BUGSPrimitives: mean
 using LinearAlgebra
 using LogDensityProblems
 using LogDensityProblemsAD
+using LogExpFunctions
 using MacroTools
 using MetaGraphsNext
 using OrderedCollections
