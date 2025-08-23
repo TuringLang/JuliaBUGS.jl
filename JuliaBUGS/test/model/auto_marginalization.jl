@@ -1,6 +1,9 @@
 # Tests for auto-marginalization of discrete finite variables
 # This file is included from runtests.jl which provides all necessary imports
 
+using JuliaBUGS: @bugs, compile, settrans
+using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
+
 @testset "Auto-Marginalization" begin
     # HMM helper function for ground truth using forward algorithm
     function forward_algorithm_hmm(y, mu1, mu2, sigma, pi, trans)
@@ -61,9 +64,7 @@
 
         model = compile(hmm_fixed_def, data)
         model = settrans(model, true)
-        model = JuliaBUGS.Model.set_evaluation_mode(
-            model, JuliaBUGS.UseAutoMarginalization()
-        )
+        model = set_evaluation_mode(model, UseAutoMarginalization())
 
         # No continuous parameters, so empty array
         x_empty = Float64[]
@@ -122,9 +123,7 @@
 
             model = compile(hmm_param_def, data)
             model = settrans(model, true)
-            model = JuliaBUGS.Model.set_evaluation_mode(
-                model, JuliaBUGS.UseAutoMarginalization()
-            )
+            model = set_evaluation_mode(model, UseAutoMarginalization())
 
             # Check dimension - should be 3 (sigma, mu[2], mu[1])
             @test LogDensityProblems.dimension(model) == 3
@@ -184,14 +183,12 @@
         # Create model in graph mode
         model_graph = compile(hmm_def, data)
         model_graph = settrans(model_graph, true)
-        model_graph = JuliaBUGS.Model.set_evaluation_mode(model_graph, JuliaBUGS.UseGraph())
+        model_graph = set_evaluation_mode(model_graph, UseGraph())
 
         # Create model in marginalization mode
         model_marg = compile(hmm_def, data)
         model_marg = settrans(model_marg, true)
-        model_marg = JuliaBUGS.Model.set_evaluation_mode(
-            model_marg, JuliaBUGS.UseAutoMarginalization()
-        )
+        model_marg = set_evaluation_mode(model_marg, UseAutoMarginalization())
 
         # Graph mode should include discrete parameters
         @test LogDensityProblems.dimension(model_graph) == 6  # z[1:3] + sigma + mu[2] + mu[1]
@@ -221,9 +218,7 @@
 
             model = compile(continuous_def, data)
             model = settrans(model, true)
-            model = JuliaBUGS.Model.set_evaluation_mode(
-                model, JuliaBUGS.UseAutoMarginalization()
-            )
+            model = set_evaluation_mode(model, UseAutoMarginalization())
 
             @test LogDensityProblems.dimension(model) == 2  # mu, sigma
 
@@ -247,9 +242,7 @@
 
             model = compile(observed_discrete_def, data)
             model = settrans(model, true)
-            model = JuliaBUGS.Model.set_evaluation_mode(
-                model, JuliaBUGS.UseAutoMarginalization()
-            )
+            model = set_evaluation_mode(model, UseAutoMarginalization())
 
             @test LogDensityProblems.dimension(model) == 1  # Only p
 
