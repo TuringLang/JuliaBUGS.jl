@@ -202,6 +202,370 @@ using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
         @test discrete_count == 3  # z[1], z[2], z[3]
     end
 
+    @testset "Gaussian Mixture Models" begin
+        # Helper function for ground truth mixture likelihood
+        function mixture_loglikelihood(y, weights, mus, sigmas)
+            n = length(y)
+            k = length(weights)
+            logp_total = 0.0
+
+            for i in 1:n
+                # Log-sum-exp over components for each observation
+                log_probs = zeros(k)
+                for j in 1:k
+                    log_probs[j] = log(weights[j]) + logpdf(Normal(mus[j], sigmas[j]), y[i])
+                end
+                logp_total += LogExpFunctions.logsumexp(log_probs)
+            end
+
+            return logp_total
+        end
+
+        @testset "Two-component mixture with fixed weights" begin
+            # Simple mixture with fixed mixture weights
+            mixture_fixed_def = @bugs begin
+                # Fixed mixture weights
+                w[1] = 0.3
+                w[2] = 0.7
+
+                # Component parameters
+                mu[1] ~ Normal(-2, 5)
+                mu[2] ~ Normal(2, 5)
+                sigma[1] ~ Exponential(1)
+                sigma[2] ~ Exponential(1)
+
+                # Component assignments (discrete, to be marginalized)
+                for i in 1:N
+                    z[i] ~ Categorical(w[1:2])
+                    y[i] ~ Normal(mu[z[i]], sigma[z[i]])
+                end
+            end
+
+            N = 4
+            y_obs = [-1.5, 2.3, -2.1, 1.8]
+            data = (N=N, y=y_obs)
+
+            model = compile(mixture_fixed_def, data)
+            model = settrans(model, true)
+            model = set_evaluation_mode(model, UseAutoMarginalization())
+
+            # Should have 4 continuous parameters: sigma[1], sigma[2], mu[2], mu[1]
+            @test LogDensityProblems.dimension(model) == 4
+
+            # Test with specific parameters
+            # Order: log(sigma[1]), log(sigma[2]), mu[2], mu[1]
+            test_params = [0.0, 0.0, 2.0, -2.0]  # sigmas=1, mu[2]=2, mu[1]=-2
+
+            logp_marginalized = LogDensityProblems.logdensity(model, test_params)
+
+            # Compute expected value
+            weights = [0.3, 0.7]
+            mus = [-2.0, 2.0]
+            sigmas = [1.0, 1.0]
+
+            logp_likelihood = mixture_loglikelihood(y_obs, weights, mus, sigmas)
+            prior_logp =
+                logpdf(Normal(-2, 5), -2.0) +
+                logpdf(Normal(2, 5), 2.0) +
+                logpdf(Exponential(1), 1.0) +
+                logpdf(Exponential(1), 1.0)
+            expected = logp_likelihood + prior_logp
+
+            @test isapprox(logp_marginalized, expected; atol=1e-10)
+        end
+
+        @testset "Three-component mixture with fixed weights" begin
+            # Extend to 3 components with exact verification
+            mixture_3comp_def = @bugs begin
+                # Fixed mixture weights
+                w[1] = 0.2
+                w[2] = 0.5
+                w[3] = 0.3
+
+                # Component parameters
+                mu[1] ~ Normal(-3, 5)
+                mu[2] ~ Normal(0, 5)
+                mu[3] ~ Normal(3, 5)
+                for k in 1:3
+                    sigma[k] ~ Exponential(1)
+                end
+
+                # Component assignments
+                for i in 1:N
+                    z[i] ~ Categorical(w[1:3])
+                    y[i] ~ Normal(mu[z[i]], sigma[z[i]])
+                end
+            end
+
+            N = 3
+            y_obs = [-2.5, 0.5, 3.2]
+            data = (N=N, y=y_obs)
+
+            model = compile(mixture_3comp_def, data)
+            model = settrans(model, true)
+            model = set_evaluation_mode(model, UseAutoMarginalization())
+
+            # Should have 6 continuous parameters: 3 sigmas + 3 mus
+            @test LogDensityProblems.dimension(model) == 6
+
+            # Test with specific parameters
+            test_params = [0.0, 0.0, 0.0, 3.0, 0.0, -3.0]
+            # log(sigmas)=0 -> all sigmas=1, mu[3]=3, mu[2]=0, mu[1]=-3
+
+            logp_marginalized = LogDensityProblems.logdensity(model, test_params)
+
+            # Compute expected value
+            weights = [0.2, 0.5, 0.3]
+            mus = [-3.0, 0.0, 3.0]
+            sigmas = [1.0, 1.0, 1.0]
+
+            logp_likelihood = mixture_loglikelihood(y_obs, weights, mus, sigmas)
+            prior_logp = sum([
+                logpdf(Normal(-3, 5), -3.0),
+                logpdf(Normal(0, 5), 0.0),
+                logpdf(Normal(3, 5), 3.0),
+                logpdf(Exponential(1), 1.0),
+                logpdf(Exponential(1), 1.0),
+                logpdf(Exponential(1), 1.0),
+            ])
+            expected = logp_likelihood + prior_logp
+
+            @test isapprox(logp_marginalized, expected; atol=1e-10)
+        end
+
+        @testset "Label invariance" begin
+            # Verify that permuting component labels doesn't change log-density
+            # when weights are equal
+            mixture_sym_def = @bugs begin
+                w[1] = 0.5
+                w[2] = 0.5
+
+                mu[1] ~ Normal(0, 10)
+                mu[2] ~ Normal(0, 10)
+                sigma[1] ~ Exponential(1)
+                sigma[2] ~ Exponential(1)
+
+                for i in 1:N
+                    z[i] ~ Categorical(w[1:2])
+                    y[i] ~ Normal(mu[z[i]], sigma[z[i]])
+                end
+            end
+
+            N = 4
+            y_obs = [1.0, 2.0, -1.0, 3.0]
+            data = (N=N, y=y_obs)
+
+            model = compile(mixture_sym_def, data)
+            model = settrans(model, true)
+            model = set_evaluation_mode(model, UseAutoMarginalization())
+
+            # Test with original ordering
+            # Order: log(sigma[1]), log(sigma[2]), mu[2], mu[1]
+            params1 = [-0.5, 0.0, 3.0, 1.0]  # sigma[1]=exp(-0.5), sigma[2]=1, mu[2]=3, mu[1]=1
+            logp1 = LogDensityProblems.logdensity(model, params1)
+
+            # Test with swapped components (swap mu and sigma values)
+            params2 = [0.0, -0.5, 1.0, 3.0]  # sigma[1]=1, sigma[2]=exp(-0.5), mu[2]=1, mu[1]=3
+            logp2 = LogDensityProblems.logdensity(model, params2)
+
+            # The log probabilities should be equal due to symmetry
+            # (swapping components 1 and 2 completely with equal weights)
+            @test isapprox(logp1, logp2; atol=1e-10)
+        end
+
+        @testset "Partial observation of z" begin
+            # Some z[i] are observed, others are marginalized
+            mixture_partial_def = @bugs begin
+                w[1] = 0.3
+                w[2] = 0.7
+
+                mu[1] ~ Normal(-2, 5)
+                mu[2] ~ Normal(2, 5)
+                sigma ~ Exponential(1)  # Shared sigma
+
+                for i in 1:N
+                    z[i] ~ Categorical(w[1:2])
+                    y[i] ~ Normal(mu[z[i]], sigma)
+                end
+            end
+
+            N = 4
+            # Observe z[1] and z[3], marginalize z[2] and z[4]
+            data = (N=N, y=[1.0, 2.0, -1.0, 3.0], z=[2, missing, 1, missing])
+
+            model = compile(mixture_partial_def, data)
+            model = settrans(model, true)
+            model = set_evaluation_mode(model, UseAutoMarginalization())
+
+            # Should have 3 continuous parameters: sigma, mu[2], mu[1]
+            # z[2] and z[4] are marginalized out
+            @test LogDensityProblems.dimension(model) == 3
+
+            # Test evaluation
+            test_params = [0.0, 2.0, -2.0]  # log(sigma)=0->sigma=1, mu[2]=2, mu[1]=-2
+            logp = LogDensityProblems.logdensity(model, test_params)
+
+            # Verify it's finite and reasonable
+            @test isfinite(logp)
+            @test logp < 0
+
+            # Manually compute expected for observed components
+            # z[1]=2 -> y[1]=1.0 comes from mu[2]=2
+            # z[3]=1 -> y[3]=-1.0 comes from mu[1]=-2
+            # z[2] and z[4] are marginalized
+            sigma_val = 1.0
+            mu_vals = [-2.0, 2.0]
+            weights = [0.3, 0.7]
+
+            # Observed parts
+            logp_obs = (
+                log(weights[2]) +
+                logpdf(Normal(mu_vals[2], sigma_val), 1.0) +  # z[1]=2, y[1]=1.0
+                log(weights[1]) +
+                logpdf(Normal(mu_vals[1], sigma_val), -1.0)   # z[3]=1, y[3]=-1.0
+            )
+
+            # Marginalized parts for y[2]=2.0 and y[4]=3.0
+            logp_marg2 = LogExpFunctions.logsumexp([
+                log(weights[1]) + logpdf(Normal(mu_vals[1], sigma_val), 2.0),
+                log(weights[2]) + logpdf(Normal(mu_vals[2], sigma_val), 2.0),
+            ])
+            logp_marg4 = LogExpFunctions.logsumexp([
+                log(weights[1]) + logpdf(Normal(mu_vals[1], sigma_val), 3.0),
+                log(weights[2]) + logpdf(Normal(mu_vals[2], sigma_val), 3.0),
+            ])
+
+            logp_likelihood = logp_obs + logp_marg2 + logp_marg4
+            prior_logp = (
+                logpdf(Normal(-2, 5), -2.0) +
+                logpdf(Normal(2, 5), 2.0) +
+                logpdf(Exponential(1), 1.0)
+            )
+            expected = logp_likelihood + prior_logp
+
+            @test isapprox(logp, expected; atol=1e-10)
+        end
+
+        @testset "Mixture with Dirichlet prior on weights" begin
+            # More realistic mixture with learned weights
+            mixture_dirichlet_def = @bugs begin
+                # Mixture weights with Dirichlet prior
+                alpha[1] = 1.0
+                alpha[2] = 1.0
+                alpha[3] = 1.0
+                w[1:3] ~ ddirich(alpha[1:3])
+
+                # Component parameters
+                for k in 1:3
+                    mu[k] ~ Normal(0, 10)
+                    sigma[k] ~ Exponential(1)
+                end
+
+                # Component assignments
+                for i in 1:N
+                    z[i] ~ Categorical(w[1:3])
+                    y[i] ~ Normal(mu[z[i]], sigma[z[i]])
+                end
+            end
+
+            N = 5
+            y_obs = [-3.0, 0.1, 2.9, -2.8, 3.1]
+            data = (N=N, y=y_obs)
+
+            model = compile(mixture_dirichlet_def, data)
+            model = settrans(model, true)
+            model = set_evaluation_mode(model, UseAutoMarginalization())
+
+            # Should have 8 continuous parameters:
+            # 3 sigmas + 3 mus + 2 transformed weight components (3-1 due to simplex constraint)
+            @test LogDensityProblems.dimension(model) == 8
+
+            # Test with specific parameters
+            # Simplex transform for weights [0.2, 0.3, 0.5]
+            # Using stick-breaking: w1=0.2, w2=0.3, w3=0.5
+            # This requires specific transformed values
+            w_target = [0.2, 0.3, 0.5]
+            # For Dirichlet, use log-ratio transform
+            log_ratios = [log(w_target[1] / w_target[3]), log(w_target[2] / w_target[3])]
+
+            test_params = [
+                0.0,
+                0.0,
+                0.0,  # log(sigmas) = 0 -> all sigmas = 1
+                3.0,
+                0.0,
+                -3.0,  # mu[3]=3, mu[2]=0, mu[1]=-3
+                log_ratios[1],
+                log_ratios[2],  # transformed weights
+            ]
+
+            logp_marginalized = LogDensityProblems.logdensity(model, test_params)
+
+            # Verify it's finite and reasonable
+            @test isfinite(logp_marginalized)
+            @test logp_marginalized < 0  # Should be negative for realistic parameters
+        end
+
+        @testset "Hierarchical mixture model" begin
+            # Mixture with hierarchical structure on component means
+            hierarchical_mixture_def = @bugs begin
+                # Hyperpriors
+                mu_global ~ Normal(0, 10)
+                tau_global ~ Exponential(1)
+
+                # Mixture weights
+                w[1] = 0.5
+                w[2] = 0.5
+
+                # Component-specific parameters with hierarchical prior
+                for k in 1:2
+                    mu[k] ~ Normal(mu_global, tau_global)
+                    sigma[k] ~ Exponential(1)
+                end
+
+                # Data generation
+                for i in 1:N
+                    z[i] ~ Categorical(w[1:2])
+                    y[i] ~ Normal(mu[z[i]], sigma[z[i]])
+                end
+            end
+
+            N = 6
+            y_obs = [1.0, 1.2, 4.8, 5.1, 0.9, 5.0]
+            data = (N=N, y=y_obs)
+
+            model = compile(hierarchical_mixture_def, data)
+            model = settrans(model, true)
+            model = set_evaluation_mode(model, UseAutoMarginalization())
+
+            # Should have 6 continuous parameters:
+            # mu_global, tau_global, 2 sigmas, 2 mus
+            @test LogDensityProblems.dimension(model) == 6
+
+            # Test evaluation with multiple parameter sets
+            # Test 1: Parameters that should give reasonable likelihood
+            test_params = [3.0, 0.0, 0.0, 0.0, 5.0, 1.0]
+            # mu_global=3, log(tau_global)=0->tau=1, log(sigmas)=0->sigmas=1, mu[2]=5, mu[1]=1
+
+            logp_marginalized = LogDensityProblems.logdensity(model, test_params)
+
+            # Verify the result is finite and reasonable
+            @test isfinite(logp_marginalized)
+            @test logp_marginalized < 0  # Log probability should be negative
+
+            # Test 2: Different parameters - should give different likelihood
+            test_params2 = [2.5, -0.5, -0.5, 0.2, 4.5, 0.5]
+            logp_marginalized2 = LogDensityProblems.logdensity(model, test_params2)
+
+            @test isfinite(logp_marginalized2)
+            @test logp_marginalized2 != logp_marginalized  # Different params should give different results
+
+            # Test 3: Verify multiple evaluations are consistent
+            logp_repeat = LogDensityProblems.logdensity(model, test_params)
+            @test logp_repeat == logp_marginalized  # Same params should give same result
+        end
+    end
+
     @testset "Edge cases" begin
         @testset "Model with no discrete finite variables" begin
             # Simple continuous model - marginalization should work but do nothing special
