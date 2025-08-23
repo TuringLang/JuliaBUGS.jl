@@ -42,7 +42,8 @@ using .Model:
     BUGSModel,
     evaluate_with_values!!,
     UseGraph,
-    UseGeneratedLogDensityFunction
+    UseGeneratedLogDensityFunction,
+    UseAutoMarginalization
 
 include("independent_mh.jl")
 include("gibbs.jl")

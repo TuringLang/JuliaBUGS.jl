@@ -27,6 +27,7 @@ using JuliaBUGS.BUGSPrimitives: mean
 using LinearAlgebra
 using LogDensityProblems
 using LogDensityProblemsAD
+using LogExpFunctions
 using MacroTools
 using MetaGraphsNext
 using OrderedCollections
@@ -40,7 +41,7 @@ using AdvancedMH
 using MCMCChains
 using ReverseDiff
 
-JuliaBUGS.@bugs_primitive Beta Bernoulli Categorical Gamma InverseGamma Normal Uniform LogNormal Poisson
+JuliaBUGS.@bugs_primitive Beta Bernoulli Categorical Exponential Gamma InverseGamma Normal Uniform LogNormal Poisson
 JuliaBUGS.@bugs_primitive Diagonal Dirichlet LKJ MvNormal
 JuliaBUGS.@bugs_primitive censored product_distribution truncated
 JuliaBUGS.@bugs_primitive fill ones zeros
@@ -71,6 +72,7 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     end,
     "log_density" => () -> begin
         include("model/evaluation.jl")
+        include("model/auto_marginalization.jl")
     end,
     "inference" => () -> begin
         include("independent_mh.jl")
