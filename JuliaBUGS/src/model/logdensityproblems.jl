@@ -24,7 +24,7 @@ function LogDensityProblems.dimension(model::BUGSModel)
         continuous_param_length = 0
         for (i, vn) in enumerate(model.graph_evaluation_data.sorted_parameters)
             idx = findfirst(==(vn), model.graph_evaluation_data.sorted_nodes)
-            if idx !== nothing 
+            if idx !== nothing
                 node_type = model.graph_evaluation_data.node_types[idx]
                 # Only include continuous variables (exclude all discrete)
                 if node_type == :continuous
@@ -36,7 +36,7 @@ function LogDensityProblems.dimension(model::BUGSModel)
                 elseif node_type == :discrete_infinite
                     error(
                         "Model contains discrete infinite variable $(vn) which cannot be marginalized. " *
-                        "Use UseGraph evaluation mode instead."
+                        "Use UseGraph evaluation mode instead.",
                     )
                 end
             end
