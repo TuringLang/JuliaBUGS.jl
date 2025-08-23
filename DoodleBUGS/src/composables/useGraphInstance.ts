@@ -24,7 +24,7 @@ export function useGraphInstance() {
     if (cyInstance) {
       cyInstance.destroy();
       cyInstance = null;
-    }
+    } 
 
     const options: cytoscape.CytoscapeOptions = {
       container: container,

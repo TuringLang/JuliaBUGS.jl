@@ -11,6 +11,7 @@ const props = defineProps<{
   gridSize: number;
   currentMode: string;
   validationErrors: Map<string, ValidationError[]>;
+  zoomControlsPosition?: string;
 }>();
 
 const emit = defineEmits<{
@@ -28,6 +29,53 @@ const { initCytoscape, destroyCytoscape, getCyInstance } = useGraphInstance();
 const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping(getCyInstance);
 
 const validNodeTypes: NodeType[] = ['stochastic', 'deterministic', 'constant', 'observed', 'plate'];
+
+// Zoom state
+const currentZoom = ref(1);
+const minZoom = 0.1;
+const maxZoom =2;
+
+// Panzoom control functions
+const zoomIn = () => {
+  if (cy) {
+    const newZoom = Math.min(cy.zoom() * 1.2, maxZoom);
+    cy.zoom({
+      level: newZoom,
+      renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 }
+    });
+    currentZoom.value = newZoom;
+  }
+};
+
+const zoomOut = () => {
+  if (cy) {
+    const newZoom = Math.max(cy.zoom() / 1.2, minZoom);
+    cy.zoom({
+      level: newZoom,
+      renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 }
+    });
+    currentZoom.value = newZoom;
+  }
+};
+
+const resetView = () => {
+  if (cy) {
+    cy.fit();
+    currentZoom.value = 1;
+  }
+};
+
+const setZoomLevel = (event: Event) => {
+  if (cy) {
+    const target = event.target as HTMLInputElement;
+    const zoomLevel = Number(target.value);
+    cy.zoom({
+      level: zoomLevel,
+      renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 }
+    });
+    currentZoom.value = zoomLevel;
+  }
+}; 
 
 interface CompoundDropPayload {
   node: NodeSingular;
@@ -208,23 +256,72 @@ watch(() => props.gridSize, (newValue: number) => {
 watch([() => props.elements, () => props.validationErrors], ([newElements, newErrors]) => {
   syncGraphWithProps(newElements, newErrors);
 }, { deep: true });
+
+// Sync zoom level with graph
+watch(() => cy, (newCy) => {
+  if (newCy) {
+    // Set initial zoom level
+    currentZoom.value = newCy.zoom();
+    
+    // Listen for zoom events from other sources (mouse wheel, etc.)
+    newCy.on('zoom', () => {
+      currentZoom.value = newCy.zoom();
+    });
+  }
+}, { immediate: true });
 </script>
 
 <template>
-  <div
-    ref="cyContainer"
-    class="cytoscape-container"
-    :class="{
-      'grid-background': isGridEnabled && gridSize > 0,
-      'mode-add-node': currentMode === 'add-node',
-      'mode-add-edge': currentMode === 'add-edge',
-      'mode-select': currentMode === 'select'
-    }"
-    :style="{ '--grid-size': `${gridSize}px` }"
-  ></div>
+  <div class="canvas-wrapper">
+    <div
+      ref="cyContainer"
+      class="cytoscape-container"
+      :class="{
+        'grid-background': isGridEnabled && gridSize > 0,
+        'mode-add-node': currentMode === 'add-node',
+        'mode-add-edge': currentMode === 'add-edge',
+        'mode-select': currentMode === 'select'
+      }"
+      :style="{ '--grid-size': `${gridSize}px` }"
+    ></div>
+    
+    <!-- Custom Panzoom Controls Container -->
+    <div 
+      v-if="zoomControlsPosition !== 'hidden'"
+      class="panzoom-controls"
+      :class="`panzoom-position-${zoomControlsPosition || 'default'}`"
+    >
+      <div class="panzoom-button" @click="zoomIn" title="Zoom In">
+        <i class="fas fa-plus"></i>
+      </div>
+      <div class="panzoom-slider-container">
+        <input 
+          type="range" 
+          :min="minZoom" 
+          :max="maxZoom" 
+          :value="currentZoom" 
+          step="0.1" 
+          class="panzoom-slider" 
+          @input="setZoomLevel"
+        />
+      </div>
+      <div class="panzoom-button" @click="zoomOut" title="Zoom Out">
+        <i class="fas fa-minus"></i>
+      </div>
+      <div class="panzoom-button" @click="resetView" title="Reset View">
+        <i class="fas fa-expand"></i>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
+.canvas-wrapper {
+  position: relative;
+  flex-grow: 1;
+  display: flex;
+}
+
 .cytoscape-container {
   flex-grow: 1;
   background-color: var(--color-background-soft);
@@ -257,5 +354,77 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
 .cdnd-drag-out {
   border: 2px dashed #FF0000 !important;
   background-color: rgba(255, 0, 0, 0.1) !important;
+}
+
+/* Custom Panzoom Controls Container */
+.panzoom-controls {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(4px);
+}
+
+/* Position classes */
+.panzoom-position-default,
+.panzoom-position-bottom-left {
+  left: 12px;
+  bottom: 12px;
+}
+
+.panzoom-position-top-left {
+  left: 12px;
+  top: 12px;
+}
+
+.panzoom-position-top-right {
+  right: 12px;
+  top: 12px;
+}
+
+.panzoom-position-bottom-right {
+  right: 12px;
+  bottom: 12px;
+}
+
+.panzoom-button {
+  width: 32px;
+  height: 32px;
+  background: #ffffff;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #222;
+  font-size: 12px;
+}
+
+.panzoom-button:hover {
+  background: #f6f8fa;
+  border-color: #c2c8d0;
+  transform: scale(1.05);
+}
+
+.panzoom-button:active {
+  transform: scale(0.95);
+}
+
+.panzoom-slider-container {
+  
+  align-items: center;
+}
+/* Custom Panzoom Slider vertically */
+.panzoom-slider {
+  margin-left: 8px;
+  writing-mode: vertical-lr;
+  direction: rtl;
 }
 </style>
