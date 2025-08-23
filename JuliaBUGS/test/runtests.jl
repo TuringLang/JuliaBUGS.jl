@@ -40,7 +40,7 @@ using AdvancedMH
 using MCMCChains
 using ReverseDiff
 
-JuliaBUGS.@bugs_primitive Beta Bernoulli Categorical Gamma InverseGamma Normal Uniform LogNormal Poisson
+JuliaBUGS.@bugs_primitive Beta Bernoulli Categorical Exponential Gamma InverseGamma Normal Uniform LogNormal Poisson
 JuliaBUGS.@bugs_primitive Diagonal Dirichlet LKJ MvNormal
 JuliaBUGS.@bugs_primitive censored product_distribution truncated
 JuliaBUGS.@bugs_primitive fill ones zeros
