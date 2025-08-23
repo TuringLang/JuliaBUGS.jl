@@ -251,3 +251,444 @@ function evaluate_with_values!!(
         tempered_logjoint=logprior + temperature * loglikelihood,
     )
 end
+
+# ======================
+# Marginalization Support
+# ======================
+
+"""
+    _get_stochastic_parents_indices(model::BUGSModel)
+
+Get the stochastic parents (through deterministic nodes) for each node in the model.
+Returns a vector of index vectors aligned with sorted_nodes.
+"""
+function _get_stochastic_parents_indices(model::BUGSModel)
+    order = model.graph_evaluation_data.sorted_nodes
+    name_to_pos = Dict(order[i] => i for i in 1:length(order))
+    is_stochastic = model.graph_evaluation_data.is_stochastic_vals
+    parents_idx = [Int[] for _ in 1:length(order)]
+
+    for i in eachindex(order)
+        if is_stochastic[i]
+            # Use existing function to find stochastic parents through deterministic nodes
+            stochastic_parents, _ = JuliaBUGS.dfs_find_stochastic_boundary_and_deterministic_variables_en_route(
+                model.g, order[i], MetaGraphsNext.inneighbor_labels
+            )
+            # Convert VarNames to indices
+            for parent_vn in stochastic_parents
+                if haskey(name_to_pos, parent_vn)
+                    push!(parents_idx[i], name_to_pos[parent_vn])
+                end
+            end
+            sort!(parents_idx[i])  # Keep sorted for stability
+        end
+    end
+
+    return parents_idx
+end
+
+"""
+    _precompute_minimal_cache_keys(model::BUGSModel, order::Vector{Int})
+
+Precompute minimal cache keys for memoization during marginalization.
+The frontier at each position should include all discrete finite variables that:
+1. Have been processed (appear earlier in the evaluation order)
+2. May affect the current computation
+"""
+function _precompute_minimal_cache_keys(model::BUGSModel, order::Vector{Int})
+    gd = model.graph_evaluation_data
+    n = length(order)
+    is_stochastic = gd.is_stochastic_vals
+    is_observed = gd.is_observed_vals
+    is_discrete_finite = gd.is_discrete_finite_vals
+    node_types = gd.node_types
+
+    # Get stochastic parents for each node
+    parents_idx = _get_stochastic_parents_indices(model)
+
+    # Initialize frontier keys for each position
+    minimal_keys = Dict{Int,Vector{Int}}()
+
+    # For each node, determine which discrete finite variables should be in its frontier
+    for k in 1:n
+        current_idx = order[k]
+
+        # The frontier should include discrete finite variables that:
+        # 1. Come before this node in the evaluation order (have been set)
+        # 2. This node depends on (directly or indirectly)
+
+        filtered_frontier = Int[]
+
+        # For ALL nodes (stochastic and deterministic), we need to track dependencies
+        # on discrete finite variables that have been set
+
+        if node_types[current_idx] == :discrete_finite
+            # IMPORTANT: At a discrete node, the remainder of computation may include
+            # observed likelihood terms that depend on ALL earlier discrete assignments
+            # (e.g., y[1..t-1] in an HMM when all y's are evaluated after all z's).
+            # Therefore, to avoid incorrect cache reuse, conservatively include ALL
+            # prior discrete finite unobserved variables in the frontier.
+            for j in 1:(k - 1)
+                idx = order[j]
+                if is_discrete_finite[idx] && !is_observed[idx]
+                    push!(filtered_frontier, idx)
+                end
+            end
+        else
+            # For deterministic, continuous, or discrete-infinite nodes, we must ensure
+            # the memo key distinguishes different earlier discrete assignments that can
+            # influence any of the remaining computation (e.g., later likelihood terms).
+            # A conservative but correct choice is to include ALL prior discrete finite
+            # unobserved variables in the frontier.
+            for j in 1:(k - 1)
+                idx = order[j]
+                if is_discrete_finite[idx] && !is_observed[idx]
+                    push!(filtered_frontier, idx)
+                end
+            end
+        end
+
+        # Store as sorted vector
+        sort!(unique!(filtered_frontier))
+        minimal_keys[current_idx] = filtered_frontier
+    end
+
+    return minimal_keys
+end
+
+"""
+    _marginalize_recursive(model, env, remaining_indices, parameter_values, param_idx, 
+                          var_lengths, memo, minimal_keys)
+
+Recursively compute log probability by marginalizing over discrete finite variables.
+"""
+function _marginalize_recursive(
+    model::BUGSModel,
+    env::NamedTuple,
+    remaining_indices::AbstractVector{Int},
+    parameter_values::AbstractVector,
+    param_idx::Int,
+    var_lengths::Dict,
+    memo::Dict,
+    minimal_keys,
+)
+    # Base case: no more nodes to process
+    if isempty(remaining_indices)
+        return zero(eltype(parameter_values))
+    end
+
+    current_idx = remaining_indices[1]
+    current_vn = model.graph_evaluation_data.sorted_nodes[current_idx]
+
+    # Create memo key using minimal frontier
+    # Get the discrete finite frontier indices for this position (already sorted)
+    discrete_frontier_indices = get(minimal_keys, current_idx, Int[])
+
+    # Extract values only for discrete finite frontier variables
+    if !isempty(discrete_frontier_indices)
+        # These are discrete values set by enumeration, no AD wrapping
+        frontier_values = [
+            AbstractPPL.get(env, model.graph_evaluation_data.sorted_nodes[idx]) for
+            idx in discrete_frontier_indices
+        ]
+        minimal_hash = hash((discrete_frontier_indices, frontier_values))
+    else
+        minimal_hash = UInt64(0)  # Empty frontier
+    end
+    memo_key = (current_idx, param_idx, minimal_hash)
+
+    if haskey(memo, memo_key)
+        return memo[memo_key]
+    end
+
+    is_stochastic = model.graph_evaluation_data.is_stochastic_vals[current_idx]
+    is_observed = model.graph_evaluation_data.is_observed_vals[current_idx]
+    is_discrete_finite = model.graph_evaluation_data.is_discrete_finite_vals[current_idx]
+    node_function = model.graph_evaluation_data.node_function_vals[current_idx]
+    loop_vars = model.graph_evaluation_data.loop_vars_vals[current_idx]
+
+    if !is_stochastic
+        # Deterministic node
+        value = node_function(env, loop_vars)
+        new_env = BangBang.setindex!!(env, value, current_vn)
+        result = _marginalize_recursive(
+            model,
+            new_env,
+            @view(remaining_indices[2:end]),
+            parameter_values,
+            param_idx,
+            var_lengths,
+            memo,
+            minimal_keys,
+        )
+
+    elseif is_observed
+        # Observed stochastic node
+        dist = node_function(env, loop_vars)
+        obs_value = AbstractPPL.get(env, current_vn)
+        obs_logp = logpdf(dist, obs_value)
+
+        # Handle NaN values
+        if isnan(obs_logp)
+            obs_logp = -Inf
+        end
+
+        remaining_logp = _marginalize_recursive(
+            model,
+            env,
+            @view(remaining_indices[2:end]),
+            parameter_values,
+            param_idx,
+            var_lengths,
+            memo,
+            minimal_keys,
+        )
+        result = obs_logp + remaining_logp
+
+    elseif is_discrete_finite
+        # Discrete finite unobserved node - marginalize out
+        dist = node_function(env, loop_vars)
+        possible_values = enumerate_discrete_values(dist)
+
+        logp_branches = Vector{typeof(zero(eltype(parameter_values)))}(
+            undef, length(possible_values)
+        )
+
+        for (i, value) in enumerate(possible_values)
+            branch_env = BangBang.setindex!!(env, value, current_vn)
+
+            value_logp = logpdf(dist, value)
+            if isnan(value_logp)
+                value_logp = -Inf
+            end
+
+            remaining_logp = _marginalize_recursive(
+                model,
+                branch_env,
+                @view(remaining_indices[2:end]),
+                parameter_values,
+                param_idx,
+                var_lengths,
+                memo,
+                minimal_keys,
+            )
+
+            logp_branches[i] = value_logp + remaining_logp
+        end
+
+        result = LogExpFunctions.logsumexp(logp_branches)
+
+    else
+        # Continuous or discrete infinite unobserved node - use parameter values
+        dist = node_function(env, loop_vars)
+        b = Bijectors.bijector(dist)
+
+        if !haskey(var_lengths, current_vn)
+            error(
+                "Missing transformed length for variable '$(current_vn)'. " *
+                "All variables should have their transformed lengths pre-computed.",
+            )
+        end
+
+        l = var_lengths[current_vn]
+
+        if param_idx + l - 1 > length(parameter_values)
+            error(
+                "Parameter index out of bounds: needed $(param_idx + l - 1) elements, " *
+                "but parameter_values has only $(length(parameter_values)) elements.",
+            )
+        end
+
+        b_inv = Bijectors.inverse(b)
+        param_slice = view(parameter_values, param_idx:(param_idx + l - 1))
+
+        reconstructed_value = reconstruct(b_inv, dist, param_slice)
+        value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
+
+        new_env = BangBang.setindex!!(env, value, current_vn)
+
+        dist_logp = logpdf(dist, value)
+        if isnan(dist_logp)
+            dist_logp = -Inf
+        else
+            dist_logp += logjac
+        end
+
+        next_idx = param_idx + l
+        remaining_logp = _marginalize_recursive(
+            model,
+            new_env,
+            @view(remaining_indices[2:end]),
+            parameter_values,
+            next_idx,
+            var_lengths,
+            memo,
+            minimal_keys,
+        )
+
+        result = dist_logp + remaining_logp
+    end
+
+    memo[memo_key] = result
+    return result
+end
+
+"""
+    evaluate_with_marginalization_rng!!(
+        rng::Random.AbstractRNG, 
+        model::BUGSModel; 
+        temperature=1.0, 
+        transformed=true
+    )
+
+Evaluate model using marginalization for discrete finite variables and sampling for others.
+"""
+function evaluate_with_marginalization_rng!!(
+    rng::Random.AbstractRNG, model::BUGSModel; temperature=1.0, transformed=true
+)
+    if !transformed
+        error(
+            "Auto marginalization only supports transformed (unconstrained) parameter space. " *
+            "Please use transformed=true.",
+        )
+    end
+
+    # For RNG-based evaluation, we don't marginalize - we sample discrete variables
+    # This is similar to evaluate_with_rng!! but could be extended for hybrid approaches
+    return evaluate_with_rng!!(
+        rng, model; sample_all=true, temperature=temperature, transformed=transformed
+    )
+end
+
+"""
+    evaluate_with_marginalization_env!!(
+        model::BUGSModel,
+        evaluation_env=smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols);
+        temperature=1.0,
+        transformed=true
+    )
+
+Evaluate model using marginalization for discrete finite variables.
+"""
+function evaluate_with_marginalization_env!!(
+    model::BUGSModel,
+    evaluation_env=smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols);
+    temperature=1.0,
+    transformed=true,
+)
+    if !transformed
+        error(
+            "Auto marginalization only supports transformed (unconstrained) parameter space. " *
+            "Please use transformed=true.",
+        )
+    end
+
+    # For environment-based evaluation without explicit parameter values,
+    # we need to extract ONLY continuous parameters for marginalization
+    gd = model.graph_evaluation_data
+    param_values = Float64[]
+
+    for vn in gd.sorted_parameters
+        idx = findfirst(==(vn), gd.sorted_nodes)
+        if idx !== nothing && gd.node_types[idx] == :continuous
+            value = AbstractPPL.get(evaluation_env, vn)
+            if transformed
+                # Transform to unconstrained space
+                (; node_function, loop_vars) = model.g[vn]
+                dist = node_function(evaluation_env, loop_vars)
+                transformed_value = Bijectors.transform(Bijectors.bijector(dist), value)
+                if transformed_value isa AbstractArray
+                    append!(param_values, vec(transformed_value))
+                else
+                    push!(param_values, transformed_value)
+                end
+            else
+                if value isa AbstractArray
+                    append!(param_values, vec(value))
+                else
+                    push!(param_values, value)
+                end
+            end
+        end
+    end
+
+    return evaluate_with_marginalization_values!!(
+        model, param_values; temperature=temperature, transformed=transformed
+    )
+end
+
+"""
+    evaluate_with_marginalization_values!!(
+        model::BUGSModel, 
+        flattened_values::AbstractVector; 
+        temperature=1.0,
+        transformed=true
+    )
+
+Evaluate model with marginalization over discrete finite variables.
+"""
+function evaluate_with_marginalization_values!!(
+    model::BUGSModel, flattened_values::AbstractVector; temperature=1.0, transformed=true
+)
+    if !transformed
+        error(
+            "Auto marginalization only supports transformed (unconstrained) parameter space. " *
+            "Please use transformed=true.",
+        )
+    end
+
+    # Get indices for evaluation order
+    n = length(model.graph_evaluation_data.sorted_nodes)
+    sorted_indices = collect(1:n)
+
+    # Precompute minimal cache keys
+    minimal_keys = _precompute_minimal_cache_keys(model, sorted_indices)
+
+    # Initialize memoization cache
+    # Size hint: at most 2^|discrete_finite| * |nodes| entries
+    n_discrete_finite = sum(model.graph_evaluation_data.is_discrete_finite_vals)
+    expected_entries = if n_discrete_finite > 20
+        1_000_000  # Cap at 1M for large problems
+    else
+        min((1 << n_discrete_finite) * n, 1_000_000)
+    end
+    memo = Dict{Tuple{Int,Int,UInt64},Any}()
+    sizehint!(memo, expected_entries)
+
+    # Start recursive evaluation
+    evaluation_env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
+
+    # For marginalization, only continuous parameters need var_lengths
+    # Discrete finite variables are marginalized over, not sampled
+    var_lengths = Dict{VarName,Int}()
+    for (vn, length) in model.transformed_var_lengths
+        # Find the node index
+        idx = findfirst(==(vn), model.graph_evaluation_data.sorted_nodes)
+        if idx !== nothing
+            # Only include if it's continuous (not discrete finite)
+            if !model.graph_evaluation_data.is_discrete_finite_vals[idx]
+                var_lengths[vn] = length
+            end
+        end
+    end
+
+    logp = _marginalize_recursive(
+        model,
+        evaluation_env,
+        sorted_indices,
+        flattened_values,
+        1,
+        var_lengths,
+        memo,
+        minimal_keys,
+    )
+
+    # For consistency with other evaluate functions, we return the environment
+    # and split the log probability (though marginalization combines them)
+    return evaluation_env,
+    (
+        logprior=logp,
+        loglikelihood=0.0,  # Combined in logprior for marginalization
+        tempered_logjoint=logp * temperature,
+    )
+end
