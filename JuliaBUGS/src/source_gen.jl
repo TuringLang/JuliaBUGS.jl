@@ -191,28 +191,54 @@ function _sort_fissioned_stmts(stmt_dep_graph, fissioned_stmts, stmt_ids)
 end
 
 function _reconstruct_model_def_from_sorted_fissioned_stmts(sorted_fissioned_stmts)
-    args = []
-    for (loops, stmt) in sorted_fissioned_stmts
-        if loops == ()
-            push!(args, first(stmt))
-        else
-            push!(args, __gen_loop_expr(loops, first(stmt)))
+    args = Any[]
+
+    i = 1
+    N = length(sorted_fissioned_stmts)
+    while i <= N
+        loops_i, stmti = sorted_fissioned_stmts[i]
+        # collect consecutive statements with identical loop nests
+        group_stmts = Any[]
+        j = i
+        while j <= N
+            loops_j, stmtj = sorted_fissioned_stmts[j]
+            if loops_j == loops_i
+                append!(group_stmts, stmtj)
+                j += 1
+            else
+                break
+            end
         end
+
+        if loops_i == ()
+            # top-level sequential statements
+            append!(args, group_stmts)
+        else
+            push!(args, __gen_loop_expr(loops_i, group_stmts))
+        end
+        i = j
     end
+
     return Expr(:block, args...)
 end
 
-function __gen_loop_expr(loop_vars, stmt)
+# Overload to generate nested loops around a block of statements
+function __gen_loop_expr(loop_vars, stmts::Vector)
     loop_var, l, h = loop_vars[1]
     if length(loop_vars) == 1
         return MacroTools.@q for $(loop_var) in ($(l)):($(h))
-            $(stmt)
+            $(Expr(:block, stmts...))
         end
     else
         return MacroTools.@q for $(loop_var) in ($(l)):($(h))
-            $(__gen_loop_expr(loop_vars[2:end], stmt))
+            $(__gen_loop_expr(loop_vars[2:end], stmts))
         end
     end
+end
+
+# Backward-compatible helper to handle single statement
+function __gen_loop_expr(loop_vars, stmt)
+    return __gen_loop_expr(loop_vars, Any[stmt])
 end
 
 # add if statement in the lowered model def
@@ -327,7 +353,17 @@ function _generate_lowered_model_def(
     var_to_stmt_id = _build_var_to_stmt_id(model_def, g, evaluation_env, stmt_to_stmt_id)
     stmt_id_to_var = _build_stmt_id_to_var(var_to_stmt_id)
     coarse_graph = _build_coarse_dep_graph(g, stmt_to_stmt_id, var_to_stmt_id)
-    if Graphs.is_cyclic(coarse_graph)
+    # If there are cycles at the coarse statement level, try to resolve them
+    # by analyzing fine-grained dependence vectors. If all cycles are
+    # loop-carried with lexicographically non-negative distances within
+    # the same loop nest, they are sequentially valid and can be ignored
+    # for statement reordering.
+    ordering_graph, ok = _build_ordering_graph_via_dependence_vectors(
+        g, coarse_graph, var_to_stmt_id
+    )
+    if !ok || Graphs.is_cyclic(ordering_graph)
+        # Either we detected lexicographically negative dependences or
+        # remaining cycles cannot be resolved by dependence vectors.
         return nothing, nothing
     end
     # show_coarse_graph(stmt_id_to_stmt, coarse_graph)
@@ -337,8 +373,10 @@ function _generate_lowered_model_def(
     fissioned_stmts = _fully_fission_loop(
         model_def_removed_transformed_data, stmt_to_stmt_id, evaluation_env
     )
+    # Use the filtered ordering graph (with loop-carried non-negative
+    # dependences removed) to sort fissioned statements.
     sorted_fissioned_stmts = _sort_fissioned_stmts(
-        coarse_graph, fissioned_stmts, stmt_to_stmt_id
+        ordering_graph, fissioned_stmts, stmt_to_stmt_id
     )
     reconstructed_model_def = _reconstruct_model_def_from_sorted_fissioned_stmts(
         sorted_fissioned_stmts
@@ -592,6 +630,106 @@ function _find_corresponding_fine_grained_edges(
     end
 
     return fine_grained_edges
+end
+
+# Determine the lexicographic relation between two iteration vectors (loop vars).
+# Returns:
+# - :zero       -> loop-independent dependence (same iteration)
+# - :positive   -> loop-carried with lexicographically non-negative (and not all zero)
+# - :negative   -> lexicographically negative (invalid for sequential order)
+# - :unknown    -> cannot compare (different loop nests or empty)
+function _lex_dependence_relation(src_lv::NamedTuple, dst_lv::NamedTuple)
+    # Require identical loop nests (same keys in the same order)
+    src_keys = Tuple(keys(src_lv))
+    dst_keys = Tuple(keys(dst_lv))
+    if src_keys != dst_keys
+        return :unknown
+    end
+    if length(src_keys) == 0
+        return :unknown
+    end
+
+    # Compute difference vector dst - src in lexicographic order
+    first_nonzero = 0
+    for k in src_keys
+        d = Int(getfield(dst_lv, k)) - Int(getfield(src_lv, k))
+        if d != 0
+            first_nonzero = d
+            break
+        end
+    end
+    if first_nonzero == 0
+        return :zero
+    elseif first_nonzero > 0
+        return :positive
+    else
+        return :negative
+    end
+end
+
+# Classify a fine-grained edge by its dependence vector category
+function _classify_fine_edge(
+    g::JuliaBUGS.BUGSGraph, src_vn::VarName, dst_vn::VarName
+)
+    src_lv = g[src_vn].loop_vars
+    dst_lv = g[dst_vn].loop_vars
+    rel = _lex_dependence_relation(src_lv, dst_lv)
+    return rel
+end
+
+# Build an ordering graph for statements by removing edges that are purely
+# loop-carried with lexicographically non-negative dependence vectors. If any
+# edge has a lexicographically negative dependence, the graph is invalid.
+# IMPORTANT: Only removes positive edges for self-dependencies to avoid unsafe reorderings.
+function _build_ordering_graph_via_dependence_vectors(
+    g::JuliaBUGS.BUGSGraph,
+    coarse_graph::Graphs.SimpleDiGraph,
+    var_to_stmt_id::Dict{VarName,Int},
+)
+    ordering_graph = Graphs.SimpleDiGraph(Graphs.nv(coarse_graph))
+
+    # Iterate all coarse edges and decide whether to keep them for ordering
+    for e in Graphs.edges(coarse_graph)
+        src_stmt_id = Graphs.src(e)
+        dst_stmt_id = Graphs.dst(e)
+        fine_edges = _find_corresponding_fine_grained_edges(
+            g, var_to_stmt_id, src_stmt_id, dst_stmt_id
+        )
+
+        # If we can't find the fine edges, be conservative: keep the edge.
+        if isempty(fine_edges)
+            Graphs.add_edge!(ordering_graph, src_stmt_id, dst_stmt_id)
+            continue
+        end
+
+        # Check all fine edges to classify the coarse edge
+        all_positive = true
+        for (src_vn, dst_vn) in fine_edges
+            rel = _classify_fine_edge(g, src_vn, dst_vn)
+            if rel === :negative
+                # Invalid sequential order due to negative dependence
+                return ordering_graph, false
+            end
+            if rel !== :positive
+                all_positive = false
+            end
+        end
+
+        # Decision logic based on whether it's a self-edge or cross-statement edge
+        if src_stmt_id == dst_stmt_id
+            # Self-edge: only drop if ALL fine edges are positive (loop-carried)
+            # This safely breaks recursion cycles like x[t] ~ f(x[t-1])
+            if !all_positive
+                Graphs.add_edge!(ordering_graph, src_stmt_id, dst_stmt_id)
+            end
+        else
+            # Cross-statement edge: ALWAYS keep to preserve ordering constraints
+            # This prevents unsafe reorderings where consumers run before producers
+            Graphs.add_edge!(ordering_graph, src_stmt_id, dst_stmt_id)
+        end
+    end
+
+    return ordering_graph, true
 end
 
 struct CollectSortedNodes{ET} <: CompilerPass
