@@ -303,54 +303,73 @@ function _precompute_minimal_cache_keys(model::BUGSModel, order::Vector{Int})
     is_discrete_finite = gd.is_discrete_finite_vals
     node_types = gd.node_types
 
-    # Get stochastic parents for each node
+    # Get stochastic parents (stochastic boundary) for each node
     parents_idx = _get_stochastic_parents_indices(model)
 
-    # Initialize frontier keys for each position
-    minimal_keys = Dict{Int,Vector{Int}}()
+    # Build mapping from node index (in gd.sorted_nodes) -> position in the provided order.
+    # This lets us reason about liveness w.r.t. the chosen evaluation order.
+    order_pos = Vector{Int}(undef, length(gd.sorted_nodes))
+    @inbounds for k in 1:n
+        order_pos[order[k]] = k
+    end
 
-    # For each node, determine which discrete finite variables should be in its frontier
-    for k in 1:n
-        current_idx = order[k]
-
-        # The frontier should include discrete finite variables that:
-        # 1. Come before this node in the evaluation order (have been set)
-        # 2. This node depends on (directly or indirectly)
-
-        filtered_frontier = Int[]
-
-        # For ALL nodes (stochastic and deterministic), we need to track dependencies
-        # on discrete finite variables that have been set
-
-        if node_types[current_idx] == :discrete_finite
-            # IMPORTANT: At a discrete node, the remainder of computation may include
-            # observed likelihood terms that depend on ALL earlier discrete assignments
-            # (e.g., y[1..t-1] in an HMM when all y's are evaluated after all z's).
-            # Therefore, to avoid incorrect cache reuse, conservatively include ALL
-            # prior discrete finite unobserved variables in the frontier.
-            for j in 1:(k - 1)
-                idx = order[j]
-                if is_discrete_finite[idx] && !is_observed[idx]
-                    push!(filtered_frontier, idx)
-                end
-            end
-        else
-            # For deterministic, continuous, or discrete-infinite nodes, we must ensure
-            # the memo key distinguishes different earlier discrete assignments that can
-            # influence any of the remaining computation (e.g., later likelihood terms).
-            # A conservative but correct choice is to include ALL prior discrete finite
-            # unobserved variables in the frontier.
-            for j in 1:(k - 1)
-                idx = order[j]
-                if is_discrete_finite[idx] && !is_observed[idx]
-                    push!(filtered_frontier, idx)
+    # Compute last-use POSITIONS (w.r.t. 'order') for each unobserved finite-discrete variable.
+    # A variable stays in the frontier until we pass the last stochastic node
+    # (observed or unobserved) whose distribution depends on it.
+    last_use_pos = Dict{Int,Int}()  # map from variable index -> last position in 'order'
+    for j_label in 1:length(gd.sorted_nodes)
+        if gd.is_stochastic_vals[j_label]
+            j_pos = order_pos[j_label]
+            for p_label in parents_idx[j_label]
+                if is_discrete_finite[p_label] && !is_observed[p_label]
+                    # Default to the position of the variable itself if unseen
+                    default_pos = order_pos[p_label]
+                    last_use_pos[p_label] = max(get(last_use_pos, p_label, default_pos), j_pos)
                 end
             end
         end
+    end
 
-        # Store as sorted vector
-        sort!(unique!(filtered_frontier))
-        minimal_keys[current_idx] = filtered_frontier
+    # Initialize frontier keys for each position based on liveness
+    # Optimized incremental construction to avoid O(n^2) in common patterns
+    minimal_keys = Dict{Int,Vector{Int}}()
+
+    # Precompute starts and ends in order positions
+    starts_at = Dict{Int,Vector{Int}}()
+    for lbl in 1:length(gd.sorted_nodes)
+        pos = order_pos[lbl]
+        if is_discrete_finite[lbl] && !is_observed[lbl]
+            push!(get!(starts_at, pos, Int[]), lbl)
+        end
+    end
+
+    # Active set of earlier discrete finite variables (by label index)
+    active = Int[]
+    # Track end positions for active labels
+    function purge_expired!(active_vec::Vector{Int}, k_pos::Int)
+        # Remove any with last_use_pos < k_pos
+        i = 1
+        while i <= length(active_vec)
+            lbl = active_vec[i]
+            if get(last_use_pos, lbl, 0) < k_pos
+                deleteat!(active_vec, i)
+            else
+                i += 1
+            end
+        end
+        return active_vec
+    end
+
+    for k in 1:n
+        # Add labels that start at previous position so they count as "earlier"
+        if haskey(starts_at, k - 1)
+            append!(active, starts_at[k - 1])
+        end
+        # Drop any labels that have expired before current position
+        purge_expired!(active, k)
+        # Sort for stable key representation
+        sort!(active)
+        minimal_keys[order[k]] = copy(active)
     end
 
     return minimal_keys
@@ -409,7 +428,7 @@ function _marginalize_recursive(
 
     if !is_stochastic
         # Deterministic node
-        value = node_function(env, loop_vars)
+        value = Base.invokelatest(node_function, env, loop_vars)
         new_env = BangBang.setindex!!(env, value, current_vn)
         result = _marginalize_recursive(
             model,
@@ -424,7 +443,7 @@ function _marginalize_recursive(
 
     elseif is_observed
         # Observed stochastic node
-        dist = node_function(env, loop_vars)
+        dist = Base.invokelatest(node_function, env, loop_vars)
         obs_value = AbstractPPL.get(env, current_vn)
         obs_logp = logpdf(dist, obs_value)
 
@@ -447,7 +466,7 @@ function _marginalize_recursive(
 
     elseif is_discrete_finite
         # Discrete finite unobserved node - marginalize out
-        dist = node_function(env, loop_vars)
+        dist = Base.invokelatest(node_function, env, loop_vars)
         possible_values = enumerate_discrete_values(dist)
 
         logp_branches = Vector{typeof(zero(eltype(parameter_values)))}(
@@ -480,7 +499,7 @@ function _marginalize_recursive(
 
     else
         # Continuous or discrete infinite unobserved node - use parameter values
-        dist = node_function(env, loop_vars)
+        dist = Base.invokelatest(node_function, env, loop_vars)
         b = Bijectors.bijector(dist)
 
         if !haskey(var_lengths, current_vn)
@@ -641,8 +660,12 @@ function evaluate_with_marginalization_values!!(
     n = length(model.graph_evaluation_data.sorted_nodes)
     sorted_indices = collect(1:n)
 
-    # Precompute minimal cache keys
-    minimal_keys = _precompute_minimal_cache_keys(model, sorted_indices)
+    # Use precomputed minimal cache keys if available; otherwise compute once for this call
+    minimal_keys = if !isempty(model.graph_evaluation_data.minimal_cache_keys)
+        model.graph_evaluation_data.minimal_cache_keys
+    else
+        _precompute_minimal_cache_keys(model, sorted_indices)
+    end
 
     # Initialize memoization cache
     # Size hint: at most 2^|discrete_finite| * |nodes| entries

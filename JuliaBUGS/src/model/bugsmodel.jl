@@ -76,6 +76,7 @@ struct GraphEvaluationData{TNF,TV}
     loop_vars_vals::TV
     node_types::Vector{Symbol}
     is_discrete_finite_vals::Vector{Bool}
+    minimal_cache_keys::Dict{Int,Vector{Int}}
 end
 
 function GraphEvaluationData(
@@ -122,6 +123,7 @@ function GraphEvaluationData(
         map(identity, loop_vars_vals),
         node_types,
         is_discrete_finite_vals,
+        Dict{Int,Vector{Int}}(),
     )
 end
 
@@ -205,7 +207,8 @@ function BUGSModel(
     model_def::Expr=model.model_def,
     data=model.data,
 )
-    return BUGSModel(
+    # Build an intermediate model
+    m = BUGSModel(
         model_def,
         data,
         g,
@@ -217,6 +220,43 @@ function BUGSModel(
         untransformed_var_lengths,
         transformed_var_lengths,
         graph_evaluation_data,
+        log_density_computation_function,
+        mutable_symbols,
+        base_model,
+    )
+    # Precompute minimal cache keys for current evaluation order if not present
+    gd = m.graph_evaluation_data
+    minimal_keys = if !isempty(gd.minimal_cache_keys)
+        gd.minimal_cache_keys
+    else
+        n = length(gd.sorted_nodes)
+        JuliaBUGS.Model._precompute_minimal_cache_keys(m, collect(1:n))
+    end
+    # Attach minimal keys to GraphEvaluationData
+    gd2 = GraphEvaluationData(
+        gd.sorted_nodes,
+        gd.sorted_parameters,
+        gd.is_stochastic_vals,
+        gd.is_observed_vals,
+        gd.node_function_vals,
+        gd.loop_vars_vals,
+        gd.node_types,
+        gd.is_discrete_finite_vals,
+        minimal_keys,
+    )
+    # Return final model with cached minimal keys
+    return BUGSModel(
+        model_def,
+        data,
+        g,
+        evaluation_env,
+        transformed,
+        evaluation_mode,
+        untransformed_param_length,
+        transformed_param_length,
+        untransformed_var_lengths,
+        transformed_var_lengths,
+        gd2,
         log_density_computation_function,
         mutable_symbols,
         base_model,
@@ -337,6 +377,7 @@ function BUGSModel(
         graph_evaluation_data.loop_vars_vals,
         node_types,
         is_discrete_finite_vals,
+        Dict{Int,Vector{Int}}(),
     )
 
     lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
@@ -397,6 +438,7 @@ function BUGSModel(
             new_gd.loop_vars_vals,
             new_node_types,
             new_is_discrete_finite_vals,
+            Dict{Int,Vector{Int}}(),
         )
     else
         log_density_computation_function = nothing
@@ -405,7 +447,8 @@ function BUGSModel(
     # Compute mutable symbols from graph evaluation data
     mutable_symbols = get_mutable_symbols(graph_evaluation_data)
 
-    return BUGSModel(
+    # Build initial model (without minimal cache keys precomputed)
+    model_without_min_keys = BUGSModel(
         model_def,
         data,
         g,
@@ -417,6 +460,42 @@ function BUGSModel(
         untransformed_var_lengths,
         transformed_var_lengths,
         graph_evaluation_data,
+        log_density_computation_function,
+        mutable_symbols,
+        nothing,
+    )
+    # Precompute minimal cache keys for the default order (1:n)
+    n = length(graph_evaluation_data.sorted_nodes)
+    sorted_indices = collect(1:n)
+    minimal_keys = JuliaBUGS.Model._precompute_minimal_cache_keys(
+        model_without_min_keys, sorted_indices
+    )
+    # Attach minimal keys to GraphEvaluationData
+    graph_evaluation_data_with_keys = GraphEvaluationData(
+        graph_evaluation_data.sorted_nodes,
+        graph_evaluation_data.sorted_parameters,
+        graph_evaluation_data.is_stochastic_vals,
+        graph_evaluation_data.is_observed_vals,
+        graph_evaluation_data.node_function_vals,
+        graph_evaluation_data.loop_vars_vals,
+        graph_evaluation_data.node_types,
+        graph_evaluation_data.is_discrete_finite_vals,
+        minimal_keys,
+    )
+
+    # Return final model with cached minimal keys
+    return BUGSModel(
+        model_def,
+        data,
+        g,
+        evaluation_env,
+        is_transformed,
+        UseGraph(),
+        untransformed_param_length,
+        transformed_param_length,
+        untransformed_var_lengths,
+        transformed_var_lengths,
+        graph_evaluation_data_with_keys,
         log_density_computation_function,
         mutable_symbols,
         nothing,
@@ -546,7 +625,7 @@ function getparams(model::BUGSModel, evaluation_env=model.evaluation_env)
             end
         else
             (; node_function, loop_vars) = model.g[v]
-            dist = node_function(evaluation_env, loop_vars)
+            dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
             transformed_value = Bijectors.transform(
                 Bijectors.bijector(dist), AbstractPPL.get(evaluation_env, v)
             )
@@ -572,7 +651,7 @@ function getparams(
             d[v] = value
         else
             (; node_function, loop_vars) = model.g[v]
-            dist = node_function(evaluation_env, loop_vars)
+            dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
             d[v] = Bijectors.transform(Bijectors.bijector(dist), value)
         end
     end
