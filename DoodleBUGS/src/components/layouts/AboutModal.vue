@@ -7,7 +7,7 @@
       <div class="about-content">
         <p>
           <strong>DoodleBUGS</strong> is a graphical modeling tool designed to simplify the creation
-          of Bayesian models for analysis with BUGS language --
+          of Bayesian models for analysis with the BUGS language using
           <a href="https://github.com/TuringLang/JuliaBUGS.jl" target="_blank" rel="noopener noreferrer">JuliaBUGS.jl</a>.
         </p>
         <p>
@@ -15,7 +15,7 @@
           researchers, and students to build, understand, and share complex probabilistic models.
         </p>
         <hr />
-        <p><strong>Version:</strong> Alpha Phase -- We are just experimenting with things now!</p>
+        <p><strong>Version:</strong> Alpha Phase -- Currently in experimental development.</p>
       </div>
     </template>
     <template #footer>
