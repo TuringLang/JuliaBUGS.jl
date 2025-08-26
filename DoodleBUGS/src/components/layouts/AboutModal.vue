@@ -6,7 +6,7 @@
     <template #body>
       <div class="about-content">
         <p>
-          <strong>DoodleBUGS</strong> is a graphical modeling tool designed to simplify the creation
+          <strong>DoodleBUGS</strong> is a graphical modelling tool designed to simplify the creation
           of Bayesian models for analysis with the BUGS language using
           <a href="https://github.com/TuringLang/JuliaBUGS.jl" target="_blank" rel="noopener noreferrer">JuliaBUGS.jl</a>.
         </p>
