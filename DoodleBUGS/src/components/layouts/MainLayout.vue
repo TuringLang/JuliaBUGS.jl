@@ -51,7 +51,7 @@ const { elements, selectedElement, updateElement, deleteElement } = useGraphElem
 const { generatedCode } = useBugsCodeGenerator(elements);
 const { getCyInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
-const { backendUrl, isConnected, isConnecting, isExecuting, dependencies, samplerSettings } = storeToRefs(executionStore);
+const { backendUrl, isConnected, isConnecting, isExecuting, samplerSettings } = storeToRefs(executionStore);
 const { activeLeftTab, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth } = storeToRefs(uiStore);
 
 const currentMode = ref<string>('select');
@@ -395,18 +395,37 @@ const runModel = async () => {
   executionStore.resetExecutionState();
 
   try {
+    // Build payload with JSON-first approach
+    const dataPayload = dataStore.inputMode === 'json' ? JSON.parse(dataStore.dataString || '{}') : JSON.parse(JSON.stringify(juliaTupleToJsonObject(dataStore.dataString)));
+    const initsPayload = dataStore.inputMode === 'json' ? JSON.parse(dataStore.initsString || '{}') : JSON.parse(JSON.stringify(juliaTupleToJsonObject(dataStore.initsString)));
+
     const payload = {
       model_code: generatedCode.value,
-      data_string: dataStore.inputMode === 'julia' ? dataStore.dataString : jsonToJulia(dataStore.dataString),
-      inits_string: dataStore.inputMode === 'julia' ? dataStore.initsString : jsonToJulia(dataStore.initsString),
-      dependencies: dependencies.value.filter(d => d.name),
+      data: dataPayload,
+      inits: initsPayload,
       settings: samplerSettings.value
     };
-    const response = await fetch(`${backendUrl.value}/api/run_model`, {
+
+    // Prefer new /api/run endpoint; fallback to legacy /api/run_model
+    let response = await fetch(`${backendUrl.value}/api/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+
+    if (response.status === 404) {
+      response = await fetch(`${backendUrl.value}/api/run_model`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model_code: payload.model_code,
+          data_string: dataStore.inputMode === 'julia' ? dataStore.dataString : jsonToJulia(JSON.stringify(dataPayload)),
+          inits_string: dataStore.inputMode === 'julia' ? dataStore.initsString : jsonToJulia(JSON.stringify(initsPayload)),
+          settings: samplerSettings.value
+        })
+      });
+    }
+
     const result = await response.json();
     executionStore.executionLogs = result.logs || [];
     if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
@@ -420,6 +439,37 @@ const runModel = async () => {
     isExecuting.value = false;
   }
 };
+
+// Convert a Julia NamedTuple-like string to a JSON-friendly object (best-effort)
+function juliaTupleToJsonObject(juliaString: string): Record<string, unknown> {
+  try {
+    // Very conservative: if it's already JSON, return parsed
+    try { return JSON.parse(juliaString); } catch { /* ignore */ }
+    // Minimal parser for patterns like: (a = 1, b = [1,2], c = [ [..]; [..] ])
+    // We will transform into JSON by replacing Julia syntax tokens carefully.
+    let s = juliaString.trim();
+    if (!s || s === '()') return {};
+    // Replace tuple parens with braces
+    s = s.replace(/^\(/, '{').replace(/\)$/, '}');
+    // Replace "key =" with ""key":"
+    s = s.replace(/(\w+)\s*=\s*/g, '"$1": ');
+    // Replace Julia matrix [a b; c d] with array of arrays [[a,b],[c,d]] (best-effort)
+    s = s.replace(/\[\s*([\s\S]*?)\s*\]/g, (match, content) => {
+      // If it contains semicolons, treat as rows
+      if (content.includes(';')) {
+        const rows = content.split(';').map((row: string) => `[${row.trim().replace(/\s+/g, ', ')}]`);
+        return `[${rows.join(',')}]`;
+      }
+      // Otherwise keep commas
+      return `[${content.replace(/\s+/g, ' ')}]`;
+    });
+    // Remove trailing commas if any
+    s = s.replace(/,\s*}/g, '}');
+    return JSON.parse(s);
+  } catch {
+    return {};
+  }
+}
 
 const jsonToJulia = (jsonString: string): string => {
   try {

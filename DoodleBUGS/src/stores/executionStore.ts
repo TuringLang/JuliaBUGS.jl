@@ -12,15 +12,11 @@ export interface GeneratedFile {
   content: string;
 }
 
-export interface Dependency {
-    name: string;
-    version: string;
-}
-
 export interface SamplerSettings {
     n_samples: number;
     n_adapts: number;
     n_chains: number;
+    seed?: number | null;
 }
 
 export const useExecutionStore = defineStore('execution', () => {
@@ -36,19 +32,12 @@ export const useExecutionStore = defineStore('execution', () => {
   const executionError = ref<string | null>(null);
   const generatedFiles = ref<GeneratedFile[]>([]);
 
-  // State for settings
-  const dependencies = ref<Dependency[]>([
-      { name: 'JuliaBUGS', version: '' },
-      { name: 'LogDensityProblemsAD', version: '' },
-      { name: 'AdvancedHMC', version: '' },
-      { name: 'MCMCChains', version: '' },
-      { name: 'ReverseDiff', version: '' },
-      { name: 'JSON3', version: '' }, // Added to ensure the sandbox can write results
-  ]);
+  // Sampler settings (backend uses fixed environment; no per-request dependencies)
   const samplerSettings = ref<SamplerSettings>({
       n_samples: 1000,
       n_adapts: 1000,
-      n_chains: 1
+      n_chains: 1,
+      seed: null,
   });
 
   const setBackendUrl = (url: string | null) => {
@@ -78,7 +67,6 @@ export const useExecutionStore = defineStore('execution', () => {
     executionLogs,
     executionError,
     generatedFiles,
-    dependencies,
     samplerSettings,
     setBackendUrl,
     resetExecutionState,

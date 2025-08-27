@@ -3,18 +3,9 @@
 import { storeToRefs } from 'pinia';
 import { useExecutionStore } from '../../stores/executionStore';
 import BaseInput from '../ui/BaseInput.vue';
-import BaseButton from '../ui/BaseButton.vue';
 
 const executionStore = useExecutionStore();
-const { dependencies, samplerSettings } = storeToRefs(executionStore);
-
-const addDependency = () => {
-  dependencies.value.push({ name: '', version: '' });
-};
-
-const removeDependency = (index: number) => {
-  dependencies.value.splice(index, 1);
-};
+const { samplerSettings } = storeToRefs(executionStore);
 </script>
 
 <template>
@@ -33,18 +24,10 @@ const removeDependency = (index: number) => {
         <label for="n_chains">Chains</label>
         <BaseInput id="n_chains" type="number" v-model.number="samplerSettings.n_chains" />
       </div>
-    </div>
-
-    <div class="settings-section">
-      <h4>Dependencies</h4>
-      <div v-for="(dep, index) in dependencies" :key="index" class="dependency-item">
-        <BaseInput v-model="dep.name" placeholder="Package Name" class="dep-input" />
-        <BaseInput v-model="dep.version" placeholder="Version (e.g., 1.0)" class="dep-input" />
-        <BaseButton @click="removeDependency(index)" type="danger" size="small" class="remove-btn">-</BaseButton>
+      <div class="form-group">
+        <label for="seed">Seed (optional)</label>
+        <BaseInput id="seed" type="number" v-model.number="samplerSettings.seed" placeholder="Leave blank for random" />
       </div>
-      <BaseButton @click="addDependency" type="secondary" size="small" class="add-btn">
-        Add Dependency
-      </BaseButton>
     </div>
   </div>
 </template>
@@ -79,20 +62,5 @@ h4 {
 .form-group label {
   font-size: 0.9em;
   font-weight: 500;
-}
-.dependency-item {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-.dep-input {
-  flex-grow: 1;
-}
-.remove-btn {
-  padding: 5px 10px;
-}
-.add-btn {
-  align-self: flex-start;
-  margin-top: 10px;
 }
 </style>
