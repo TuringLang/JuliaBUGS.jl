@@ -28,8 +28,9 @@ import { useDataStore } from '../../stores/dataStore';
 import { useExecutionStore } from '../../stores/executionStore';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGraphValidator } from '../../composables/useGraphValidator';
-import { useBugsCodeGenerator } from '../../composables/useBugsCodeGenerator';
+import { useBugsCodeGenerator, generateStandaloneScript } from '../../composables/useBugsCodeGenerator';
 import type { GraphElement, NodeType, PaletteItemType, ExampleModel } from '../../types';
+import type { ExecutionResult, GeneratedFile } from '../../stores/executionStore';
 
 interface ExportOptions {
   bg: string;
@@ -370,7 +371,7 @@ const connectToBackend = async () => {
   isConnecting.value = true;
   isConnected.value = false;
   executionStore.setBackendUrl(tempBackendUrl.value);
-  uiStore.setActiveRightTab('execution');
+  uiStore.setActiveRightTab('connection');
   executionStore.executionLogs.push(`Attempting to connect to backend at ${tempBackendUrl.value}...`);
   
   try {
@@ -381,6 +382,7 @@ const connectToBackend = async () => {
     isConnected.value = true;
     executionStore.executionLogs.push("Connection successful.");
     showConnectModal.value = false;
+    isRightSidebarOpen.value = true;
   } catch (error: unknown) {
     const errorMessage = (error as Error).message;
     executionStore.executionLogs.push(`Connection failed: ${errorMessage}`);
@@ -391,11 +393,24 @@ const connectToBackend = async () => {
 };
 
 let currentRunController: AbortController | null = null;
+let abortedByUser = false;
+const abortRun = () => {
+  if (currentRunController) {
+    abortedByUser = true;
+    executionStore.executionLogs.push('Abort requested by user...');
+    currentRunController.abort();
+  }
+};
+
 const runModel = async () => {
   if (!isConnected.value || !backendUrl.value || isExecuting.value) return;
 
-  uiStore.setActiveRightTab('execution');
+  uiStore.setActiveRightTab('connection');
   executionStore.resetExecutionState();
+  executionStore.setExecutionPanelTab('logs');
+
+  // Reset abort flag each run
+  abortedByUser = false;
 
   try {
     // Ensure any previous in-flight request is cancelled
@@ -405,15 +420,20 @@ const runModel = async () => {
     }
     currentRunController = new AbortController();
 
-    // Build payload with JSON-first approach
+    // Build payload with JSON-first approach AND include Julia literals for backend
     const dataPayload = dataStore.inputMode === 'json' ? JSON.parse(dataStore.dataString || '{}') : JSON.parse(JSON.stringify(juliaTupleToJsonObject(dataStore.dataString)));
     const initsPayload = dataStore.inputMode === 'json' ? JSON.parse(dataStore.initsString || '{}') : JSON.parse(JSON.stringify(juliaTupleToJsonObject(dataStore.initsString)));
+
+    const dataString = dataStore.inputMode === 'julia' ? (dataStore.dataString || '') : jsonToJulia(JSON.stringify(dataPayload));
+    const initsString = dataStore.inputMode === 'julia' ? (dataStore.initsString || '') : jsonToJulia(JSON.stringify(initsPayload));
 
     const payload = {
       model_code: generatedCode.value,
       data: dataPayload,
       inits: initsPayload,
-      settings: { ...samplerSettings.value, attach_standalone: false }
+      data_string: dataString,
+      inits_string: initsString,
+      settings: { ...samplerSettings.value }
     };
 
     // Prefer new /api/run endpoint; fallback to legacy /api/run_model
@@ -434,17 +454,25 @@ const runModel = async () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model_code: payload.model_code,
-          data_string: dataStore.inputMode === 'julia' ? dataStore.dataString : jsonToJulia(JSON.stringify(dataPayload)),
-          inits_string: dataStore.inputMode === 'julia' ? dataStore.initsString : jsonToJulia(JSON.stringify(initsPayload)),
+          data_string: dataString,
+          inits_string: initsString,
           settings: samplerSettings.value
         }),
         signal: currentRunController.signal
       });
     }
 
-    let result: any;
+    type RunApiResponse = {
+      logs?: string[];
+      error?: string;
+      results?: ExecutionResult[] | null;
+      summary?: ExecutionResult[] | null;
+      quantiles?: ExecutionResult[] | null;
+      files?: GeneratedFile[];
+    };
+    let result: RunApiResponse;
     try {
-      result = await response.json();
+      result = (await response.json()) as RunApiResponse;
       executionStore.executionLogs.push(`Parsed JSON response in ${Math.round(performance.now() - tFetch)}ms`);
     } catch (e) {
       const text = await response.text().catch(() => '');
@@ -453,28 +481,54 @@ const runModel = async () => {
       throw e;
     }
 
-    executionStore.executionLogs = result.logs || [];
+    executionStore.executionLogs = result.logs ?? [];
     if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
-    executionStore.executionResults = result.results;
-    executionStore.generatedFiles = result.files;
+
+    // Maintain backward-compat; prefer summary if present
+    executionStore.executionResults = result.results ?? result.summary ?? null;
+    executionStore.summaryResults = result.summary ?? null;
+    executionStore.quantileResults = result.quantiles ?? null;
+
+    const frontendStandaloneScript = generateStandaloneScript({
+      modelCode: generatedCode.value,
+      data: dataPayload,
+      inits: initsPayload,
+      settings: {
+        n_samples: samplerSettings.value.n_samples,
+        n_adapts: samplerSettings.value.n_adapts,
+        n_chains: samplerSettings.value.n_chains,
+        seed: samplerSettings.value.seed ?? undefined,
+      }
+    });
+    const frontendStandaloneFile: GeneratedFile = { name: 'standalone.jl', content: frontendStandaloneScript };
+    executionStore.generatedFiles = (result.files ?? []).filter(file => file.name !== 'standalone.jl').concat(frontendStandaloneFile);
     executionStore.executionError = null;
 
+    // Switch to Results on successful completion
+    executionStore.setExecutionPanelTab('results');
+
   } catch (error: unknown) {
-    const err = error as any;
+    const err = error as Error & { name?: string };
     if (err?.name === 'AbortError') {
-      executionStore.executionError = 'Request was aborted. If this was unintentional, avoid editing or reloading during a run, or try a production preview build.';
-      executionStore.executionLogs.push('Fetch aborted by the browser or app environment.');
+      if (abortedByUser) {
+        executionStore.executionError = 'Execution aborted by user.';
+        executionStore.executionLogs.push('Fetch aborted by user.');
+      } else {
+        executionStore.executionError = 'Request was aborted. If this was unintentional, avoid editing or reloading during a run, or try a production preview build.';
+        executionStore.executionLogs.push('Fetch aborted by the browser or app environment.');
+      }
     } else if (err instanceof TypeError) {
       executionStore.executionError = `Network error during fetch: ${err.message}. This can happen if the request was interrupted (HMR/navigation).`;
       executionStore.executionLogs.push('Network error likely due to request interruption.');
     } else {
-      executionStore.executionError = (err as Error).message;
+      executionStore.executionError = err.message;
     }
   } finally {
     isExecuting.value = false;
     if (currentRunController) {
       currentRunController = null;
     }
+    abortedByUser = false;
   }
 };
 
@@ -528,6 +582,49 @@ const jsonToJulia = (jsonString: string): string => {
     return "()";
   }
 };
+
+const handleGenerateStandalone = () => {
+  try {
+    // Build JSON-first payloads similar to runModel
+    const dataPayload = dataStore.inputMode === 'json' ? JSON.parse(dataStore.dataString || '{}') : JSON.parse(JSON.stringify(juliaTupleToJsonObject(dataStore.dataString)));
+    const initsPayload = dataStore.inputMode === 'json' ? JSON.parse(dataStore.initsString || '{}') : JSON.parse(JSON.stringify(juliaTupleToJsonObject(dataStore.initsString)));
+
+    const script = generateStandaloneScript({
+      modelCode: generatedCode.value,
+      data: dataPayload,
+      inits: initsPayload,
+      settings: {
+        n_samples: samplerSettings.value.n_samples,
+        n_adapts: samplerSettings.value.n_adapts,
+        n_chains: samplerSettings.value.n_chains,
+        seed: samplerSettings.value.seed ?? undefined,
+      },
+    });
+
+    // Update files list (replace existing standalone.jl if present)
+    const files = executionStore.generatedFiles.filter(f => f.name !== 'standalone.jl');
+    files.unshift({ name: 'standalone.jl', content: script });
+    executionStore.generatedFiles = files;
+    executionStore.executionLogs.push('Generated standalone Julia script (frontend).');
+
+    // Focus Execution panel and open right sidebar
+    uiStore.setActiveRightTab('connection');
+    isRightSidebarOpen.value = true;
+
+    // Trigger immediate download
+    const blob = new Blob([script], { type: 'text/x-julia' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${activeGraphName.value || 'model'}-standalone.jl`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    executionStore.executionLogs.push(`Failed to generate standalone script: ${(err as Error).message}`);
+  }
+};
 </script>
 
 <template>
@@ -542,7 +639,7 @@ const jsonToJulia = (jsonString: string): string => {
       @open-about-modal="showAboutModal = true" @export-json="handleExportJson" @open-export-modal="openExportModal"
       @apply-layout="handleGraphLayout" @load-example="handleLoadExample" @validate-model="validateGraph"
       :is-model-valid="isModelValid" @show-validation-issues="showValidationModal = true"
-      @connect-to-backend-url="connectToBackendUrl" @run-model="runModel" />
+      @connect-to-backend-url="connectToBackendUrl" @run-model="runModel" @abort-run="abortRun" @generate-standalone="handleGenerateStandalone" />
 
     <div class="content-area">
       <aside class="left-sidebar" :style="leftSidebarStyle">
@@ -600,8 +697,8 @@ const jsonToJulia = (jsonString: string): string => {
               @click="uiStore.setActiveRightTab('code')">Code</button>
             <button :class="{ active: uiStore.activeRightTab === 'json' }"
               @click="uiStore.setActiveRightTab('json')">JSON</button>
-            <button :class="{ active: uiStore.activeRightTab === 'execution' }"
-              @click="uiStore.setActiveRightTab('execution')">Execution</button>
+            <button :class="{ active: uiStore.activeRightTab === 'connection' }"
+              @click="uiStore.setActiveRightTab('connection')">Connection</button>
           </div>
           <button @click="uiStore.toggleRightTabPinned()" class="pin-button"
             :class="{ 'pinned': uiStore.isRightTabPinned }" title="Pin Tab">
@@ -619,7 +716,7 @@ const jsonToJulia = (jsonString: string): string => {
           <div v-show="uiStore.activeRightTab === 'json'" class="tab-pane fill-height">
             <JsonEditorPanel :is-active="uiStore.activeRightTab === 'json'" />
           </div>
-          <div v-show="uiStore.activeRightTab === 'execution'" class="tab-pane fill-height">
+          <div v-show="uiStore.activeRightTab === 'connection'" class="tab-pane fill-height">
             <ExecutionPanel />
           </div>
         </div>

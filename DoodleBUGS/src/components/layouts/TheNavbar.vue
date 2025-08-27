@@ -38,6 +38,8 @@ const emit = defineEmits<{
   (e: 'show-validation-issues'): void;
   (e: 'connect-to-backend-url', url: string): void;
   (e: 'run-model'): void;
+  (e: 'abort-run'): void;
+  (e: 'generate-standalone'): void;
 }>();
 
 const executionStore = useExecutionStore();
@@ -153,7 +155,7 @@ const handleGridSizeInput = (event: Event) => {
 
         <DropdownMenu>
           <template #trigger>
-            <BaseButton type="ghost" size="small">Execution</BaseButton>
+            <BaseButton type="ghost" size="small">Connection</BaseButton>
           </template>
           <template #content>
             <div class="execution-dropdown" @click.stop>
@@ -171,6 +173,9 @@ const handleGridSizeInput = (event: Event) => {
                   <span v-else>Connect</span>
                 </BaseButton>
               </div>
+              <div class="dropdown-divider"></div>
+              <div class="dropdown-section-title">Standalone</div>
+              <a href="#" @click.prevent="emit('generate-standalone')">Generate Standalone Julia Script</a>
             </div>
           </template>
         </DropdownMenu>
@@ -210,6 +215,10 @@ const handleGridSizeInput = (event: Event) => {
             <i v-if="isExecuting" class="fas fa-spinner fa-spin"></i>
             <i v-else class="fas fa-play"></i>
             Run
+        </BaseButton>
+        <BaseButton v-if="isExecuting" @click="emit('abort-run')" type="danger" size="small" title="Abort current run">
+            <i class="fas fa-stop"></i>
+            Abort
         </BaseButton>
     </div>
 

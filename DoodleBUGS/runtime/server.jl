@@ -55,10 +55,8 @@ function run_model_handler(req::HTTP.Request)
         model_literal = repr(String(model_code))
 
         results_path = joinpath(tmp_dir, "results.json")
-        payload_path = joinpath(tmp_dir, "payload.json")
-        payload_literal = repr(String(payload_path))
-        results_literal = repr(String(results_path))
 
+        payload_path = joinpath(tmp_dir, "payload.json")
         payload_obj = Dict(
             "model_path" => model_path,
             "data" => data_json,
@@ -70,6 +68,7 @@ function run_model_handler(req::HTTP.Request)
                 "n_adapts" => get(settings, :n_adapts, 1000),
                 "n_chains" => get(settings, :n_chains, 1),
                 "seed" => get(settings, :seed, nothing),
+                "timeout_s" => get(settings, :timeout_s, nothing),
             ),
         )
         open(payload_path, "w") do f
@@ -77,272 +76,172 @@ function run_model_handler(req::HTTP.Request)
         end
         log!(logs, "Wrote payload to: $(payload_path)")
 
-        buf = IOBuffer()
-        JSON3.write(buf, payload_obj)
-        payload_json_literal = repr(String(take!(buf)))
         script_path = joinpath(tmp_dir, "run_script.jl")
         run_script_content = """
-        using JuliaBUGS
-        using LogDensityProblemsAD
-        using LogDensityProblems
-        using AdvancedHMC
-        using AbstractMCMC
-        using MCMCChains
-        using Random
-        using JSON3
-        using StatsBase
-        using DataFrames
-        using Statistics
-        using ReverseDiff
-
-        # Recursively convert JSON3 structures to Julia NamedTuples/Arrays
-        to_julia(x) = x
-        # Map JSON null-like values to Julia missing without depending on JSON3.Null type
-        map_null(v) = (isdefined(JSON3, :Null) && v isa getproperty(JSON3, :Null)) ? missing : (v === nothing ? missing : v)
-        function to_julia(x::JSON3.Object)
-            ks = collect(keys(x))
-            keys_sym = Symbol.(ks)
-            vals = map(k -> to_julia(map_null(x[k])), ks)
-            return NamedTuple{Tuple(keys_sym)}(vals)
-        end
-        function to_julia(x::AbstractDict)
-            keys_sym = Symbol.(collect(keys(x)))
-            vals = map(k -> to_julia(map_null(x[k])), collect(keys(x)))
-            return NamedTuple{Tuple(keys_sym)}(vals)
-        end
-        function to_julia(x::AbstractVector)
-            xs = map(y -> to_julia(map_null(y)), x)
-            # If this is a rectangular vector-of-vectors of numbers, convert to a Matrix
-            try
-                if !isempty(xs) && all(y -> y isa AbstractVector, xs)
-                    ncols = length(xs[1])
-                    if all(y -> length(y) == ncols, xs) && all(y -> all(z -> z isa Real, y), xs)
-                        has_float = any(y -> any(z -> z isa AbstractFloat, y), xs)
-                        T = has_float ? Float64 : Int
-                        m = Matrix{T}(undef, length(xs), ncols)
-                        @inbounds for i in 1:length(xs), j in 1:ncols
-                            m[i, j] = T(xs[i][j])
-                        end
-                        return m
-                    end
-                end
-            catch
-                # fall through to returning xs
-            end
-            return xs
-        end
+        using JuliaBUGS, AbstractMCMC, AdvancedHMC, LogDensityProblems, LogDensityProblemsAD, MCMCChains, ReverseDiff, Random, JSON3, DataFrames, StatsBase, Statistics
 
         try
             # Read payload
-            payload = JSON3.read(read($(payload_literal), String))
+            payload = JSON3.read(read($(repr(String(payload_path))), String))
             settings = payload.settings
-            @info "Worker: payload read"
 
-            # Build data/inits
-            has_json_data = length(collect(keys(payload.data))) > 0
-            has_json_inits = length(collect(keys(payload.inits))) > 0
+            # Robust integer parsing for settings that may arrive as numbers or strings
+            to_int(x, default) = begin
+                xv = x
+                if xv isa Integer
+                    return Int(xv)
+                else
+                    p = tryparse(Int, string(xv))
+                    return p === nothing ? default : p
+                end
+            end
 
-            if has_json_data
-                data_nt = to_julia(payload.data)
-            else
-                # Fallback: parse Julia tuple string
-                data_nt = isempty(payload.data_string) ? (;) : eval(Meta.parse(payload.data_string))
+            # Build data/inits as NamedTuples; prefer strings when valid, else JSON fallback that supports keys like "alpha.c"
+            to_nt(obj) = (; (Symbol(String(k)) => v for (k, v) in pairs(obj))...)
+            data_nt = begin
+                if !isempty(payload.data_string)
+                    try
+                        eval(Meta.parse(payload.data_string))
+                    catch
+                        to_nt(payload.data)
+                    end
+                else
+                    to_nt(payload.data)
+                end
             end
-            if has_json_inits
-                inits_nt = to_julia(payload.inits)
-            else
-                inits_nt = isempty(payload.inits_string) ? (;) : eval(Meta.parse(payload.inits_string))
+            inits_nt = begin
+                if !isempty(payload.inits_string)
+                    try
+                        eval(Meta.parse(payload.inits_string))
+                    catch
+                        to_nt(payload.inits)
+                    end
+                else
+                    to_nt(payload.inits)
+                end
             end
-            @info "Worker: data and inits built"
 
             # Define and compile model
             model_def = JuliaBUGS.@bugs($(model_literal), true, false)
             model = JuliaBUGS.compile(model_def, data_nt, inits_nt)
-            @info "Worker: model compiled"
 
             # Wrap for AD (ReverseDiff by default)
             ad_model = ADgradient(:ReverseDiff, model)
-            @info "Worker: AD gradient wrapper created (ReverseDiff)"
+            ld_model = AbstractMCMC.LogDensityModel(ad_model)
 
             # Settings
-            n_samples = Int(get(settings, :n_samples, 1000))
-            n_adapts = Int(get(settings, :n_adapts, 1000))
-            n_chains = Int(get(settings, :n_chains, 1))
+            n_samples = to_int(get(settings, :n_samples, 1000), 1000)
+            n_adapts = to_int(get(settings, :n_adapts, 1000), 1000)
+            n_chains = to_int(get(settings, :n_chains, 1), 1)
             seed = get(settings, :seed, nothing)
-            @info "Worker: settings parsed"
 
-            # RNG (robust to various JSON null representations)
+            # RNG
             seed_val = seed isa Integer ? Int(seed) : tryparse(Int, string(seed))
             rng = seed_val === nothing ? Random.MersenneTwister() : Random.MersenneTwister(seed_val)
-            @info "Worker: RNG initialized"
 
             # Initial params
-            D = LogDensityProblems.dimension(model)
+            D = LogDensityProblems.dimension(ad_model)
             initial_theta = rand(rng, D)
-            @info "Worker: initial parameters generated" D=D
 
-            # Sample (use threading if available and n_chains > 1)
+            # Sample
             if n_chains > 1 && Threads.nthreads() > 1
-                @info "Worker: starting sampling with threads"
                 samples = AbstractMCMC.sample(
                     rng,
-                    ad_model,
+                    ld_model,
                     NUTS(0.8),
                     AbstractMCMC.MCMCThreads(),
-                    n_samples;
+                    n_samples,
+                    n_chains;
                     n_adapts=n_adapts,
-                    n_chains=n_chains,
                     chain_type=Chains,
                     init_params=initial_theta,
                     discard_initial=n_adapts,
                     progress=false,
                 )
             else
-                @info "Worker: starting sampling (single-thread)"
-                samples = AbstractMCMC.sample(
-                    rng,
-                    ad_model,
-                    NUTS(0.8),
-                    n_samples;
-                    n_adapts=n_adapts,
-                    n_chains=n_chains,
-                    chain_type=Chains,
-                    init_params=initial_theta,
-                    discard_initial=n_adapts,
-                    progress=false,
-                )
+                if n_chains > 1
+                    samples = AbstractMCMC.sample(
+                        rng,
+                        ld_model,
+                        NUTS(0.8),
+                        AbstractMCMC.MCMCSerial(),
+                        n_samples,
+                        n_chains;
+                        n_adapts=n_adapts,
+                        chain_type=Chains,
+                        init_params=initial_theta,
+                        discard_initial=n_adapts,
+                        progress=false,
+                    )
+                else
+                    samples = AbstractMCMC.sample(
+                        rng,
+                        ld_model,
+                        NUTS(0.8),
+                        n_samples;
+                        n_adapts=n_adapts,
+                        chain_type=Chains,
+                        init_params=initial_theta,
+                        discard_initial=n_adapts,
+                        progress=false,
+                    )
+                end
             end
-            @info "Worker: sampling finished"
 
-            # Summarize (convert ChainDataFrame -> DataFrame for row iteration)
+            # Summaries
             summary_df = DataFrame(MCMCChains.summarystats(samples))
-            results_json = [Dict(pairs(row)) for row in eachrow(summary_df)]
-            @info "Worker: summarystats computed"
+            summary_json = [Dict(pairs(row)) for row in eachrow(summary_df)]
 
-            open($(results_literal), "w") do f
-                JSON3.write(f, Dict("success" => true, "results" => results_json))
+            q = [0.025, 0.25, 0.5, 0.75, 0.975]
+            quant_df = DataFrame(MCMCChains.quantile(samples; q=q))
+            quant_json = [Dict(pairs(row)) for row in eachrow(quant_df)]
+
+            open($(repr(String(results_path))), "w") do f
+                JSON3.write(f, Dict(
+                    "success" => true,
+                    "summary" => summary_json,
+                    "quantiles" => quant_json,
+                ))
             end
-            @info "Worker: results written"
         catch e
-            open($(results_literal), "w") do f
+            open($(repr(String(results_path))), "w") do f
                 JSON3.write(f, Dict("success" => false, "error" => sprint(showerror, e)))
             end
-            @info "Worker: error captured and written to results"
         end
         """
         write(script_path, run_script_content)
         log!(logs, "Generated execution script: $(script_path)")
-
-        standalone_script_content = """
-        using JuliaBUGS
-        using LogDensityProblemsAD
-        using LogDensityProblems
-        using AdvancedHMC
-        using AbstractMCMC
-        using MCMCChains
-        using Random
-        using JSON3
-        using StatsBase
-        using DataFrames
-        using Statistics
-        using ReverseDiff
-
-        # Optional: uncomment to auto-install dependencies if missing
-        # import Pkg; Pkg.activate(temp=true); Pkg.add([
-        #     "JuliaBUGS","LogDensityProblemsAD","LogDensityProblems","AdvancedHMC","AbstractMCMC",
-        #     "MCMCChains","JSON3","StatsBase","DataFrames","Statistics","ReverseDiff"
-        # ])
-
-        # Helpers to convert JSON payload to Julia types
-        to_julia(x) = x
-        map_null(v) = (isdefined(JSON3, :Null) && v isa getproperty(JSON3, :Null)) ? missing : (v === nothing ? missing : v)
-        function to_julia(x::JSON3.Object)
-            ks = collect(keys(x))
-            keys_sym = Symbol.(ks)
-            vals = map(k -> to_julia(map_null(x[k])), ks)
-            return NamedTuple{Tuple(keys_sym)}(vals)
-        end
-        function to_julia(x::AbstractDict)
-            keys_sym = Symbol.(collect(keys(x)))
-            vals = map(k -> to_julia(map_null(x[k])), collect(keys(x)))
-            return NamedTuple{Tuple(keys_sym)}(vals)
-        end
-        function to_julia(x::AbstractVector)
-            xs = map(y -> to_julia(map_null(y)), x)
-            try
-                if !isempty(xs) && all(y -> y isa AbstractVector, xs)
-                    ncols = length(xs[1])
-                    if all(y -> length(y) == ncols, xs) && all(y -> all(z -> z isa Real, y), xs)
-                        has_float = any(y -> any(z -> z isa AbstractFloat, y), xs)
-                        T = has_float ? Float64 : Int
-                        m = Matrix{T}(undef, length(xs), ncols)
-                        @inbounds for i in 1:length(xs), j in 1:ncols
-                            m[i, j] = T(xs[i][j])
-                        end
-                        return m
-                    end
-                end
-            catch
-            end
-            return xs
-        end
-
-        # Embedded payload and model for standalone execution
-        payload = JSON3.read($(payload_json_literal))
-        model_def = JuliaBUGS.@bugs($(model_literal), true, false)
-
-        # Build data/inits
-        has_json_data = length(collect(keys(payload.data))) > 0
-        has_json_inits = length(collect(keys(payload.inits))) > 0
-        data_nt = has_json_data ? to_julia(payload.data) : (isempty(payload.data_string) ? (;) : eval(Meta.parse(payload.data_string)))
-        inits_nt = has_json_inits ? to_julia(payload.inits) : (isempty(payload.inits_string) ? (;) : eval(Meta.parse(payload.inits_string)))
-        settings = payload.settings
-
-        # Compile and wrap
-        model = JuliaBUGS.compile(model_def, data_nt, inits_nt)
-        ad_model = ADgradient(:ReverseDiff, model)
-
-        # Settings
-        n_samples = Int(get(settings, :n_samples, 1000))
-        n_adapts = Int(get(settings, :n_adapts, 1000))
-        n_chains = Int(get(settings, :n_chains, 1))
-        seed = get(settings, :seed, nothing)
-
-        # RNG
-        seed_val = seed isa Integer ? Int(seed) : tryparse(Int, string(seed))
-        rng = seed_val === nothing ? Random.MersenneTwister() : Random.MersenneTwister(seed_val)
-
-        # Initial params
-        D = LogDensityProblems.dimension(model)
-        initial_theta = rand(rng, D)
-
-        # Sample
-        sampler = NUTS(0.8)
-        if n_chains > 1 && Threads.nthreads() > 1
-            samples = AbstractMCMC.sample(rng, ad_model, sampler, AbstractMCMC.MCMCThreads(), n_samples;
-                n_adapts=n_adapts, n_chains=n_chains, chain_type=Chains, init_params=initial_theta,
-                discard_initial=n_adapts, progress=false)
-        else
-            samples = AbstractMCMC.sample(rng, ad_model, sampler, n_samples;
-                n_adapts=n_adapts, n_chains=n_chains, chain_type=Chains, init_params=initial_theta,
-                discard_initial=n_adapts, progress=false)
-        end
-
-        # Summarize and write results.json to current directory
-        summary_df = DataFrame(MCMCChains.summarystats(samples))
-        results_json = [Dict(pairs(row)) for row in eachrow(summary_df)]
-        open("results.json", "w") do f
-            JSON3.write(f, Dict("success" => true, "results" => results_json))
-        end
-        """
 
         julia_executable = joinpath(Sys.BINDIR, "julia")
         project_dir = abspath(@__DIR__)
         cmd = `$(julia_executable) --project=$(project_dir) --threads=auto $(script_path)`
 
         log!(logs, "Executing script in worker process...")
-        run(cmd)
-        log!(logs, "Script execution finished.")
+        timeout_s = try Int(get(settings, :timeout_s, 0)) catch; 0 end
+        if timeout_s <= 0
+            run(cmd)
+            log!(logs, "Script execution finished.")
+        else
+            proc = run(cmd; wait=false)
+            log!(logs, "Worker process started; enforcing timeout of $(timeout_s)s")
+            deadline = time() + timeout_s
+            while process_running(proc) && time() < deadline
+                sleep(0.1)
+            end
+            if process_running(proc)
+                log!(logs, "Timeout reached; killing worker process...")
+                try
+                    kill(proc)
+                    log!(logs, "Worker process killed due to timeout.")
+                catch e
+                    log!(logs, "Failed to kill worker process: $(sprint(showerror, e)))")
+                end
+                throw(ErrorException("Execution timed out after $(timeout_s) seconds"))
+            else
+                wait(proc)
+                log!(logs, "Script execution finished within timeout.")
+            end
+        end
 
         log!(logs, "Reading results from: $(results_path)")
         results_content = JSON3.read(read(results_path, String))
@@ -353,10 +252,6 @@ function run_model_handler(req::HTTP.Request)
             throw(ErrorException(results_content.error))
         end
 
-        # Control whether to attach the standalone script; default is false to keep responses small
-        attach_standalone = get(settings, :attach_standalone, false)
-        max_attach_bytes = 2_000_000  # 2 MB
-
         files_arr = Any[
             Dict("name" => "model.bugs", "content" => model_code),
             Dict("name" => "run_script.jl", "content" => run_script_content),
@@ -364,14 +259,6 @@ function run_model_handler(req::HTTP.Request)
         ]
         if isfile(results_path)
             push!(files_arr, Dict("name" => "results.json", "content" => read(results_path, String)))
-        end
-
-        if attach_standalone
-            if sizeof(standalone_script_content) <= max_attach_bytes
-                push!(files_arr, Dict("name" => "standalone_run.jl", "content" => standalone_script_content))
-            else
-                log!(logs, "Skipping standalone_run.jl (size=$(sizeof(standalone_script_content)) bytes exceeds limit $(max_attach_bytes))")
-            end
         end
 
         # Diagnostics: log attachment sizes
@@ -383,7 +270,9 @@ function run_model_handler(req::HTTP.Request)
 
         response_body = Dict(
             "success" => true,
-            "results" => results_content.results,
+            "results" => (haskey(results_content, :summary) ? results_content[:summary] : (haskey(results_content, :results) ? results_content[:results] : Any[])),
+            "summary" => (haskey(results_content, :summary) ? results_content[:summary] : Any[]),
+            "quantiles" => (haskey(results_content, :quantiles) ? results_content[:quantiles] : Any[]),
             "logs" => logs,
             "files" => files_arr,
         )
@@ -405,9 +294,6 @@ function run_model_handler(req::HTTP.Request)
         end
         if @isdefined(run_script_content)
             push!(files_arr, Dict("name" => "run_script.jl", "content" => run_script_content))
-        end
-        if @isdefined(standalone_script_content)
-            push!(files_arr, Dict("name" => "standalone_run.jl", "content" => standalone_script_content))
         end
         if @isdefined(payload_path) && isfile(payload_path)
             push!(files_arr, Dict("name" => "payload.json", "content" => read(payload_path, String)))

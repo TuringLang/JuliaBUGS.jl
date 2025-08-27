@@ -1,14 +1,15 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
 
-export type RightSidebarTab = 'properties' | 'code' | 'json' | 'execution';
+export type RightSidebarTab = 'properties' | 'code' | 'json' | 'connection';
 export type LeftSidebarTab = 'project' | 'palette' | 'data' | 'settings';
 
 export const useUiStore = defineStore('ui', () => {
   // Right Sidebar State
-  const activeRightTab = ref<RightSidebarTab>(
-    (localStorage.getItem('doodlebugs-activeRightTab') as RightSidebarTab) || 'code'
-  );
+  // Normalize legacy stored value 'execution' to 'connection'
+  const storedRight = localStorage.getItem('doodlebugs-activeRightTab') as RightSidebarTab | 'execution' | null;
+  const initialRightTab: RightSidebarTab = storedRight === 'execution' ? 'connection' : (storedRight as RightSidebarTab) || 'code';
+  const activeRightTab = ref<RightSidebarTab>(initialRightTab);
   const isRightTabPinned = ref<boolean>(
     localStorage.getItem('doodlebugs-isRightTabPinned') === 'true'
   );
