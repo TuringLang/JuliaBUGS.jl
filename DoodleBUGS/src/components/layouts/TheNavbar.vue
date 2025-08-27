@@ -23,6 +23,7 @@ const emit = defineEmits<{
   (e: 'update:gridSize', value: number): void;
   (e: 'update:currentMode', mode: string): void;
   (e: 'update:currentNodeType', type: NodeType): void;
+  (e: 'update:zoomControlsPosition', position: string): void;
   (e: 'new-project'): void;
   (e: 'new-graph'): void;
   (e: 'toggle-left-sidebar'): void;
@@ -128,6 +129,20 @@ const handleGridSizeInput = (event: Event) => {
               <BaseInput id="grid-size-nav" type="number" :model-value="gridSize" @input="handleGridSizeInput" min="10"
                 max="100" step="5" class="w-20" />
               <span>px</span>
+            </div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-submenu">
+              <div class="dropdown-submenu-trigger">
+                Zoom Controls Position
+                <i class="fas fa-chevron-right"></i>
+              </div>
+              <div class="dropdown-submenu-content">
+                <a href="#" @click.prevent="emit('update:zoomControlsPosition', 'default')">Default</a>
+                <a href="#" @click.prevent="emit('update:zoomControlsPosition', 'top-left')">Top Left</a>
+                <a href="#" @click.prevent="emit('update:zoomControlsPosition', 'top-right')">Top Right</a>
+                <a href="#" @click.prevent="emit('update:zoomControlsPosition', 'bottom-right')">Bottom Right</a>
+                <a href="#" @click.prevent="emit('update:zoomControlsPosition', 'hidden')">Hidden</a>
+              </div>
             </div>
           </template>
         </DropdownMenu>
@@ -279,7 +294,8 @@ const handleGridSizeInput = (event: Event) => {
 }
 
 .dropdown-checkbox,
-.dropdown-input-group {
+.dropdown-input-group,
+.panzoom-checkbox {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -369,5 +385,63 @@ const handleGridSizeInput = (event: Event) => {
 
 .validation-status.invalid {
     color: var(--color-danger);
+}
+
+/* Submenu styling */
+.dropdown-submenu {
+  position: relative;
+}
+
+.dropdown-submenu-trigger {
+  padding: 10px 15px;
+  color: var(--color-text);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9em;
+  cursor: pointer;
+  border-radius: 10px;
+}
+
+.dropdown-submenu-trigger:hover {
+  background-color: var(--color-background-mute);
+}
+
+.dropdown-submenu-trigger i {
+  font-size: 0.8em;
+  opacity: 0.6;
+  transition: transform 0.2s ease;
+}
+
+.dropdown-submenu:hover .dropdown-submenu-trigger i {
+  transform: translateX(2px);
+}
+
+.dropdown-submenu-content {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 120px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-10px);
+  transition: all 0.2s ease;
+  z-index: 1000;
+}
+
+.dropdown-submenu:hover .dropdown-submenu-content {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  
+}
+
+.dropdown-submenu-content a:hover {
+  background-color: var(--color-primary);
+  color: white;
 }
 </style>

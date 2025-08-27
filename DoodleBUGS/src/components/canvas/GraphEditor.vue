@@ -15,6 +15,7 @@ const props = defineProps<{
   currentNodeType: NodeType;
   elements: GraphElement[];
   validationErrors: Map<string, ValidationError[]>;
+  zoomControlsPosition?: string;
 }>();
 
 const emit = defineEmits<{
@@ -246,6 +247,7 @@ watch(() => props.currentMode, (newMode) => {
       :grid-size="gridSize"
       :current-mode="props.currentMode"
       :validation-errors="props.validationErrors"
+      :zoom-controls-position="props.zoomControlsPosition"
       @canvas-tap="handleCanvasTap"
       @node-moved="handleNodeMoved"
       @node-dropped="handleNodeDropped"

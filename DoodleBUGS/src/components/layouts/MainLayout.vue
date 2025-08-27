@@ -50,6 +50,7 @@ const currentMode = ref<string>('select');
 const currentNodeType = ref<NodeType>('stochastic');
 const isGridEnabled = ref(true);
 const gridSize = ref(20);
+const zoomControlsPosition = ref<string>('default');
 
 const isResizingLeft = ref(false);
 const isResizingRight = ref(false);
@@ -377,7 +378,8 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
       @new-graph="showNewGraphModal = true" @save-current-graph="saveCurrentGraph"
       @open-about-modal="showAboutModal = true" @export-json="handleExportJson" @open-export-modal="openExportModal"
       @apply-layout="handleGraphLayout" @load-example="handleLoadExample" @validate-model="validateGraph"
-      :is-model-valid="isModelValid" @show-validation-issues="showValidationModal = true" />
+      :is-model-valid="isModelValid" @show-validation-issues="showValidationModal = true" 
+      @update:zoom-controls-position="zoomControlsPosition = $event" />
 
     <div class="content-area">
       <aside class="left-sidebar" :style="leftSidebarStyle">
@@ -413,6 +415,7 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
       <main class="graph-editor-wrapper">
         <GraphEditor :is-grid-enabled="isGridEnabled" :grid-size="gridSize" :current-mode="currentMode"
           :elements="elements" :current-node-type="currentNodeType" :validation-errors="validationErrors"
+          :zoom-controls-position="zoomControlsPosition"
           @update:current-mode="currentMode = $event" @update:current-node-type="currentNodeType = $event"
           @element-selected="handleElementSelected" />
       </main>
