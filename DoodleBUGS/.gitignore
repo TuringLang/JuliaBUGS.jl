@@ -19,6 +19,7 @@ dist-ssr
 coverage
 *.local
 ztest
+tmp
 
 /cypress/videos/
 /cypress/screenshots/

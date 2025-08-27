@@ -98,22 +98,25 @@ function run_model_handler(req::HTTP.Request)
         using StatsBase
         using DataFrames
         using Statistics
+        using ReverseDiff
 
         # Recursively convert JSON3 structures to Julia NamedTuples/Arrays
         to_julia(x) = x
+        # Map JSON null-like values to Julia missing without depending on JSON3.Null type
+        map_null(v) = (isdefined(JSON3, :Null) && v isa getproperty(JSON3, :Null)) ? missing : (v === nothing ? missing : v)
         function to_julia(x::JSON3.Object)
             ks = collect(keys(x))
             keys_sym = Symbol.(ks)
-            vals = map(k -> to_julia(x[k]), ks)
+            vals = map(k -> to_julia(map_null(x[k])), ks)
             return NamedTuple{Tuple(keys_sym)}(vals)
         end
         function to_julia(x::AbstractDict)
             keys_sym = Symbol.(collect(keys(x)))
-            vals = map(k -> to_julia(x[k]), collect(keys(x)))
+            vals = map(k -> to_julia(map_null(x[k])), collect(keys(x)))
             return NamedTuple{Tuple(keys_sym)}(vals)
         end
         function to_julia(x::AbstractVector)
-            xs = map(to_julia, x)
+            xs = map(y -> to_julia(map_null(y)), x)
             # If this is a rectangular vector-of-vectors of numbers, convert to a Matrix
             try
                 if !isempty(xs) && all(y -> y isa AbstractVector, xs)
@@ -160,7 +163,7 @@ function run_model_handler(req::HTTP.Request)
             model = JuliaBUGS.compile(model_def, data_nt, inits_nt)
 
             # Wrap for AD (ReverseDiff by default)
-            ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
+            ad_model = ADgradient(:ReverseDiff, model)
 
             # Settings
             n_samples = Int(get(settings, :n_samples, 1000))
@@ -168,9 +171,9 @@ function run_model_handler(req::HTTP.Request)
             n_chains = Int(get(settings, :n_chains, 1))
             seed = get(settings, :seed, nothing)
 
-            # RNG
-            has_seed = !(seed === nothing || seed === JSON3.Null() || seed === missing)
-            rng = has_seed ? Random.MersenneTwister(Int(seed)) : Random.MersenneTwister()
+            # RNG (robust to various JSON null representations)
+            seed_val = seed isa Integer ? Int(seed) : tryparse(Int, string(seed))
+            rng = seed_val === nothing ? Random.MersenneTwister() : Random.MersenneTwister(seed_val)
 
             # Initial params
             D = LogDensityProblems.dimension(model)
@@ -206,8 +209,8 @@ function run_model_handler(req::HTTP.Request)
                 )
             end
 
-            # Summarize
-            summary_df = MCMCChains.summarystats(samples)
+            # Summarize (convert ChainDataFrame -> DataFrame for row iteration)
+            summary_df = DataFrame(MCMCChains.summarystats(samples))
             results_json = [Dict(pairs(row)) for row in eachrow(summary_df)]
 
             open($(results_literal), "w") do f

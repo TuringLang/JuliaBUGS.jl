@@ -11,6 +11,7 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>) {
     const nodes = elements.value.filter(el => el.type === 'node') as GraphNode[];
     const edges = elements.value.filter(el => el.type === 'edge') as GraphEdge[];
     const nodeMap = new Map(nodes.map(n => [n.id, n]));
+    const nameToNode = new Map(nodes.map(n => [n.name, n]));
 
     if (nodes.length === 0) {
       return 'model {\n  # Your model will appear here...\n}';
@@ -65,11 +66,35 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>) {
       }
     });
 
+    const formatParam = (raw: string): string => {
+      const p = String(raw).trim();
+      if (!p) return p;
+      // If already indexed (e.g., foo[i,j]) leave as-is
+      if (/\[[^\]]+\]\s*$/.test(p)) return p;
+      // If numeric literal or contains parentheses (function/expression), leave as-is
+      if (/^[+-]?(?:\d+\.?\d*|\d*\.\d+)(?:[eE][+-]?\d+)?$/.test(p) || /[()]/.test(p)) return p;
+      const ref = nameToNode.get(p);
+      if (ref && ref.indices && String(ref.indices).trim() !== '') {
+        return `${p}[${ref.indices}]`;
+      }
+      return p;
+    };
+
     const generateCodeRecursive = (member: TreeMember, indentLevel: number): string[] => {
       const lines: string[] = [];
       const indent = '  '.repeat(indentLevel);
 
       const sortedChildren = member.children.sort((a, b) => {
+        // Plates first
+        if (a.type === 'plate' && b.type !== 'plate') return -1;
+        if (b.type === 'plate' && a.type !== 'plate') return 1;
+        // Among nodes: observed/stochastic before deterministic
+        const na = a.type === 'node' ? nodeMap.get(a.id) : undefined;
+        const nb = b.type === 'node' ? nodeMap.get(b.id) : undefined;
+        const pa = na ? (na.nodeType === 'deterministic' ? 1 : 0) : 0;
+        const pb = nb ? (nb.nodeType === 'deterministic' ? 1 : 0) : 0;
+        if (pa !== pb) return pa - pb;
+        // Tiebreaker: topological order
         return sortedNodeIds.indexOf(a.id) - sortedNodeIds.indexOf(b.id);
       });
 
@@ -87,7 +112,7 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>) {
           if (childNode.nodeType === 'stochastic' || childNode.nodeType === 'observed') {
             const params = Object.keys(childNode)
               .filter(key => key.startsWith('param') && childNode[key as keyof GraphNode] && String(childNode[key as keyof GraphNode]).trim() !== '')
-              .map(key => String(childNode[key as keyof GraphNode]))
+              .map(key => formatParam(String(childNode[key as keyof GraphNode])))
               .join(', ');
             lines.push(`${indent}${nodeName} ~ ${childNode.distribution}(${params})`);
           } else if (childNode.nodeType === 'deterministic' && childNode.equation) {
