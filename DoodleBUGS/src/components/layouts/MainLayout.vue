@@ -403,17 +403,21 @@ const runModel = async () => {
       model_code: generatedCode.value,
       data: dataPayload,
       inits: initsPayload,
-      settings: samplerSettings.value
+      settings: { ...samplerSettings.value, attach_standalone: false }
     };
 
     // Prefer new /api/run endpoint; fallback to legacy /api/run_model
+    const started = performance.now();
     let response = await fetch(`${backendUrl.value}/api/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+    const tFetch = performance.now();
+    executionStore.executionLogs.push(`HTTP ${response.status} from /api/run in ${Math.round(tFetch - started)}ms`);
 
     if (response.status === 404) {
+      executionStore.executionLogs.push(`Falling back to /api/run_model`);
       response = await fetch(`${backendUrl.value}/api/run_model`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -426,7 +430,17 @@ const runModel = async () => {
       });
     }
 
-    const result = await response.json();
+    let result: any;
+    try {
+      result = await response.json();
+      executionStore.executionLogs.push(`Parsed JSON response in ${Math.round(performance.now() - tFetch)}ms`);
+    } catch (e) {
+      const text = await response.text().catch(() => '');
+      executionStore.executionError = `Failed to parse JSON: ${(e as Error).message}`;
+      executionStore.executionLogs.push(`Response text (truncated): ${text.slice(0, 400)}...`);
+      throw e;
+    }
+
     executionStore.executionLogs = result.logs || [];
     if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
     executionStore.executionResults = result.results;
