@@ -8,6 +8,7 @@ Try DoodleBUGS at [`https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/`](https://tu
 
 This project is currently in the pre-alpha phase of development as part of the Google Summer of Code 2025 program.
 
+> [!NOTE]
 > Please avoid using this project in WebKit browsers like Safari, as it may not function correctly. We recommend using Chromium-based browsers such as Google Chrome or Microsoft Edge for the best experience. It works fine in Firefox as well. Note that it does not work in any browser on iPadOS and iOS, as all browsers on these platforms are WebKit-based.
 
 - Contributor: [Shravan Goswami @shravanngoswamii](https://github.com/shravanngoswamii)
