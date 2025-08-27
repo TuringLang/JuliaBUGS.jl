@@ -1,4 +1,3 @@
-<!-- src/components/panels/DataInputPanel.vue -->
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useDataStore } from '../../stores/dataStore';

@@ -1,5 +1,3 @@
-// src/composables/useGraphValidator.ts
-
 import { ref, watch } from 'vue';
 import type { Ref } from 'vue';
 import type { GraphElement, GraphNode, GraphEdge, ValidationError, ModelData } from '../types';

@@ -1,5 +1,3 @@
-// src/stores/uiStore.ts
-
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
 

@@ -1,5 +1,3 @@
-// src/stores/executionStore.ts
-
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 

@@ -1,4 +1,3 @@
-<!-- src/components/left-sidebar/ExecutionSettingsPanel.vue -->
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
 import { useExecutionStore } from '../../stores/executionStore';
