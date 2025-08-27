@@ -1,5 +1,9 @@
 # JuliaBUGS Changelog
 
+## 0.10.1
+
+Expose docs for changes in [v0.10.0](https://github.com/TuringLang/JuliaBUGS.jl/releases/tag/JuliaBUGS-v0.10.0)
+
 ## 0.10
 
 This is a major overhaul since v0.9.0. It introduces a faster evaluation mode, a refactored Gibbs sampler API, a new conditioning workflow, and a Turing-like modeling macro along with an ergonomic type system for model parameters.

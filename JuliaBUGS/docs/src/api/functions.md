@@ -48,8 +48,10 @@ JuliaBUGS.BUGSPrimitives.logdet
 JuliaBUGS.BUGSPrimitives.logfact
 JuliaBUGS.BUGSPrimitives.loggam
 JuliaBUGS.BUGSPrimitives.icloglog
+JuliaBUGS.BUGSPrimitives.ilogit
 JuliaBUGS.BUGSPrimitives.mexp
 JuliaBUGS.BUGSPrimitives.phi
+JuliaBUGS.BUGSPrimitives.probit
 JuliaBUGS.BUGSPrimitives.pow
 JuliaBUGS.BUGSPrimitives.rank
 JuliaBUGS.BUGSPrimitives.ranked

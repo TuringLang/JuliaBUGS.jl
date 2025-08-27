@@ -5,7 +5,7 @@ There exist many implementations of BUGS, notably [`WinBUGS`](https://www.mrc-bs
 This section aims to outline some differences between JuliaBUGS and other BUGS implementations.
 This comparison is not exhaustive, and we welcome any further discussion and reports on the matter.
 
-## Use of generaic function in distribution functions
+## Use of generic function in distribution functions
 
 In `WinBUGS`, `OpenBUGS`, and `MultiBUGS`, the arguments to distribution functions are typically restricted to variables or constants, not general expressions. JuliaBUGS, however, allows for more flexibility in these arguments.
 
