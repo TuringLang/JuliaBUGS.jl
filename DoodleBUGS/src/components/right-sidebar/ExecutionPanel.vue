@@ -1,6 +1,5 @@
-<!-- src/components/right-sidebar/ExecutionPanel.vue -->
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useExecutionStore } from '../../stores/executionStore';
 import BaseButton from '../ui/BaseButton.vue';
@@ -16,6 +15,24 @@ const {
 
 const activeTab = ref<'results' | 'logs' | 'files'>('results');
 const copySuccessStates = ref<{ [key: string]: boolean }>({});
+
+// Active file tab state
+const activeFileName = ref<string | null>(null);
+watch(generatedFiles, (files) => {
+  if (files.length === 0) {
+    activeFileName.value = null;
+    return;
+  }
+  if (!activeFileName.value || !files.some(f => f.name === activeFileName.value)) {
+    activeFileName.value = files[0].name;
+  }
+}, { immediate: true });
+
+const activeFileContent = computed(() => {
+  if (!activeFileName.value) return '';
+  const f = generatedFiles.value.find(f => f.name === activeFileName.value);
+  return f?.content ?? '';
+});
 
 const resultHeaders = computed(() => {
   if (!executionResults.value || executionResults.value.length === 0) {
@@ -105,16 +122,24 @@ const copyFileContent = (fileName: string, content: string) => {
         <div v-if="generatedFiles.length === 0" class="placeholder">
           <p>Generated files from the sandbox will appear here.</p>
         </div>
-        <div v-else class="files-container">
-          <div v-for="file in generatedFiles" :key="file.name" class="file-item">
+        <div v-else class="files-tabbed">
+          <div class="file-tabs">
+            <button v-for="file in generatedFiles" :key="file.name"
+                    class="file-tab"
+                    :class="{ active: file.name === activeFileName }"
+                    @click="activeFileName = file.name">
+              {{ file.name }}
+            </button>
+          </div>
+          <div class="file-view" v-if="activeFileName">
             <div class="file-header">
-              <strong>{{ file.name }}</strong>
-              <BaseButton @click="copyFileContent(file.name, file.content)" size="small">
-                <i v-if="copySuccessStates[file.name]" class="fas fa-check"></i>
+              <strong>{{ activeFileName }}</strong>
+              <BaseButton @click="copyFileContent(activeFileName, activeFileContent)" size="small">
+                <i v-if="copySuccessStates[activeFileName]" class="fas fa-check"></i>
                 <span v-else>Copy</span>
               </BaseButton>
             </div>
-            <pre class="file-content">{{ file.content }}</pre>
+            <pre class="file-content">{{ activeFileContent }}</pre>
           </div>
         </div>
       </div>
@@ -244,13 +269,46 @@ const copyFileContent = (fileName: string, content: string) => {
   background-color: var(--color-background-soft);
 }
 
-.files-container {
+.files-tabbed {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 6px;
 }
 
-.file-item {
+.file-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  flex-wrap: nowrap;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain; /* prevent horizontal scroll chaining to content */
+}
+
+.file-tab {
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.2;
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  background: var(--color-background-mute);
+  color: var(--color-text);
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  cursor: pointer;
+  flex: 0 0 auto; /* prevent tabs from stretching */
+}
+
+.file-tab.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.file-view {
   border: 1px solid var(--color-border);
   border-radius: 4px;
 }

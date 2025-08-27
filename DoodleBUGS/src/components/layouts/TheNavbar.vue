@@ -1,6 +1,6 @@
 <!-- src/components/layouts/TheNavbar.vue -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import type { NodeType } from '../../types';
 import BaseButton from '../ui/BaseButton.vue';
@@ -37,12 +37,13 @@ const emit = defineEmits<{
   (e: 'load-example', exampleKey: string): void;
   (e: 'validate-model'): void;
   (e: 'show-validation-issues'): void;
-  (e: 'connect-to-backend'): void;
+  (e: 'connect-to-backend-url', url: string): void;
   (e: 'run-model'): void;
 }>();
 
 const executionStore = useExecutionStore();
-const { isConnected, isExecuting } = storeToRefs(executionStore);
+const { isConnected, isExecuting, isConnecting, backendUrl } = storeToRefs(executionStore);
+const navBackendUrl = ref(backendUrl.value || 'http://localhost:8081');
 
 const displayTitle = computed(() => {
   if (props.projectName && props.activeGraphName) {
@@ -156,7 +157,22 @@ const handleGridSizeInput = (event: Event) => {
             <BaseButton type="ghost" size="small">Execution</BaseButton>
           </template>
           <template #content>
-            <a href="#" @click.prevent="emit('connect-to-backend')">Connect to Backend...</a>
+            <div class="execution-dropdown" @click.stop>
+              <div class="dropdown-section-title">Backend</div>
+              <div class="dropdown-input-group">
+                <label for="backend-url-nav">URL:</label>
+                <BaseInput id="backend-url-nav" v-model="navBackendUrl" placeholder="http://localhost:8081" class="backend-url-input" />
+              </div>
+              <div class="dropdown-actions">
+                <span class="connection-status" :class="{ connected: isConnected }">
+                  <strong>{{ isConnected ? 'Connected' : 'Disconnected' }}</strong>
+                </span>
+                <BaseButton @click="emit('connect-to-backend-url', navBackendUrl)" :disabled="isConnecting" size="small" type="primary">
+                  <span v-if="isConnecting">Connecting...</span>
+                  <span v-else>Connect</span>
+                </BaseButton>
+              </div>
+            </div>
           </template>
         </DropdownMenu>
 
@@ -412,4 +428,33 @@ const handleGridSizeInput = (event: Event) => {
     align-items: center;
     gap: 5px;
 }
+
+.execution-dropdown {
+  width: 250px;
+  padding: 4px 10px 8px;
+}
+
+.dropdown-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 8px;
+}
+
+.backend-url-input {
+  flex: 1 1 auto;
+  width: 90%;
+}
+
+.dropdown-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.connection-status {
+  opacity: 0.7;
+  color: rgb(228, 15, 15);
+}
+.connection-status.connected { opacity: 1; color: green }
 </style>

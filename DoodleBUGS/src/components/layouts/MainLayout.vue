@@ -360,6 +360,12 @@ const handleLoadExample = async (exampleKey: string) => {
 
 const isModelValid = computed(() => validationErrors.value.size === 0);
 
+// Inline navbar connect handler
+const connectToBackendUrl = async (url: string) => {
+  tempBackendUrl.value = url?.trim() || '';
+  await connectToBackend();
+};
+
 const connectToBackend = async () => {
   isConnecting.value = true;
   isConnected.value = false;
@@ -369,13 +375,9 @@ const connectToBackend = async () => {
   
   try {
     const response = await fetch(`${tempBackendUrl.value}/api/health`);
-    if (!response.ok) {
-      throw new Error(`Health check failed with status: ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`Health check failed with status: ${response.status}`);
     const result = await response.json();
-    if (result.status !== 'ok') {
-      throw new Error('Backend returned an invalid health status.');
-    }
+    if (result.status !== 'ok') throw new Error('Backend returned an invalid health status.');
     isConnected.value = true;
     executionStore.executionLogs.push("Connection successful.");
     showConnectModal.value = false;
@@ -388,6 +390,7 @@ const connectToBackend = async () => {
   }
 };
 
+let currentRunController: AbortController | null = null;
 const runModel = async () => {
   if (!isConnected.value || !backendUrl.value || isExecuting.value) return;
 
@@ -395,6 +398,13 @@ const runModel = async () => {
   executionStore.resetExecutionState();
 
   try {
+    // Ensure any previous in-flight request is cancelled
+    if (currentRunController) {
+      currentRunController.abort();
+      currentRunController = null;
+    }
+    currentRunController = new AbortController();
+
     // Build payload with JSON-first approach
     const dataPayload = dataStore.inputMode === 'json' ? JSON.parse(dataStore.dataString || '{}') : JSON.parse(JSON.stringify(juliaTupleToJsonObject(dataStore.dataString)));
     const initsPayload = dataStore.inputMode === 'json' ? JSON.parse(dataStore.initsString || '{}') : JSON.parse(JSON.stringify(juliaTupleToJsonObject(dataStore.initsString)));
@@ -411,7 +421,8 @@ const runModel = async () => {
     let response = await fetch(`${backendUrl.value}/api/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: currentRunController.signal
     });
     const tFetch = performance.now();
     executionStore.executionLogs.push(`HTTP ${response.status} from /api/run in ${Math.round(tFetch - started)}ms`);
@@ -426,7 +437,8 @@ const runModel = async () => {
           data_string: dataStore.inputMode === 'julia' ? dataStore.dataString : jsonToJulia(JSON.stringify(dataPayload)),
           inits_string: dataStore.inputMode === 'julia' ? dataStore.initsString : jsonToJulia(JSON.stringify(initsPayload)),
           settings: samplerSettings.value
-        })
+        }),
+        signal: currentRunController.signal
       });
     }
 
@@ -448,9 +460,21 @@ const runModel = async () => {
     executionStore.executionError = null;
 
   } catch (error: unknown) {
-    executionStore.executionError = (error as Error).message;
+    const err = error as any;
+    if (err?.name === 'AbortError') {
+      executionStore.executionError = 'Request was aborted. If this was unintentional, avoid editing or reloading during a run, or try a production preview build.';
+      executionStore.executionLogs.push('Fetch aborted by the browser or app environment.');
+    } else if (err instanceof TypeError) {
+      executionStore.executionError = `Network error during fetch: ${err.message}. This can happen if the request was interrupted (HMR/navigation).`;
+      executionStore.executionLogs.push('Network error likely due to request interruption.');
+    } else {
+      executionStore.executionError = (err as Error).message;
+    }
   } finally {
     isExecuting.value = false;
+    if (currentRunController) {
+      currentRunController = null;
+    }
   }
 };
 
@@ -518,7 +542,7 @@ const jsonToJulia = (jsonString: string): string => {
       @open-about-modal="showAboutModal = true" @export-json="handleExportJson" @open-export-modal="openExportModal"
       @apply-layout="handleGraphLayout" @load-example="handleLoadExample" @validate-model="validateGraph"
       :is-model-valid="isModelValid" @show-validation-issues="showValidationModal = true"
-      @connect-to-backend="showConnectModal = true" @run-model="runModel" />
+      @connect-to-backend-url="connectToBackendUrl" @run-model="runModel" />
 
     <div class="content-area">
       <aside class="left-sidebar" :style="leftSidebarStyle">
