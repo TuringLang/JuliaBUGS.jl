@@ -324,7 +324,9 @@ function _precompute_minimal_cache_keys(model::BUGSModel, order::Vector{Int})
                 if is_discrete_finite[p_label] && !is_observed[p_label]
                     # Default to the position of the variable itself if unseen
                     default_pos = order_pos[p_label]
-                    last_use_pos[p_label] = max(get(last_use_pos, p_label, default_pos), j_pos)
+                    last_use_pos[p_label] = max(
+                        get(last_use_pos, p_label, default_pos), j_pos
+                    )
                 end
             end
         end
@@ -656,16 +658,18 @@ function evaluate_with_marginalization_values!!(
         )
     end
 
-    # Get indices for evaluation order
-    n = length(model.graph_evaluation_data.sorted_nodes)
+    # Get indices for evaluation order (default to stored marginalization order)
+    gd = model.graph_evaluation_data
+    n = length(gd.sorted_nodes)
     sorted_indices = collect(1:n)
 
     # Use precomputed minimal cache keys if available; otherwise compute once for this call
-    minimal_keys = if !isempty(model.graph_evaluation_data.minimal_cache_keys)
-        model.graph_evaluation_data.minimal_cache_keys
-    else
-        _precompute_minimal_cache_keys(model, sorted_indices)
-    end
+    minimal_keys =
+        if !isempty(gd.minimal_cache_keys) && (length(keys(gd.minimal_cache_keys)) > 0)
+            gd.minimal_cache_keys
+        else
+            _precompute_minimal_cache_keys(model, sorted_indices)
+        end
 
     # Initialize memoization cache
     # Size hint: at most 2^|discrete_finite| * |nodes| entries
@@ -686,10 +690,10 @@ function evaluate_with_marginalization_values!!(
     var_lengths = Dict{VarName,Int}()
     for (vn, length) in model.transformed_var_lengths
         # Find the node index
-        idx = findfirst(==(vn), model.graph_evaluation_data.sorted_nodes)
+        idx = findfirst(==(vn), gd.sorted_nodes)
         if idx !== nothing
             # Only include if it's continuous (not discrete finite)
-            if !model.graph_evaluation_data.is_discrete_finite_vals[idx]
+            if !gd.is_discrete_finite_vals[idx]
                 var_lengths[vn] = length
             end
         end

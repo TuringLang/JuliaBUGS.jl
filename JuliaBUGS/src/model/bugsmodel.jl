@@ -232,7 +232,12 @@ function BUGSModel(
         n = length(gd.sorted_nodes)
         JuliaBUGS.Model._precompute_minimal_cache_keys(m, collect(1:n))
     end
-    # Attach minimal keys to GraphEvaluationData
+    # Attach minimal order and keys to GraphEvaluationData
+    order = if isempty(gd.marginalization_order)
+        collect(1:length(gd.sorted_nodes))
+    else
+        gd.marginalization_order
+    end
     gd2 = GraphEvaluationData(
         gd.sorted_nodes,
         gd.sorted_parameters,
@@ -242,6 +247,7 @@ function BUGSModel(
         gd.loop_vars_vals,
         gd.node_types,
         gd.is_discrete_finite_vals,
+        order,
         minimal_keys,
     )
     # Return final model with cached minimal keys
