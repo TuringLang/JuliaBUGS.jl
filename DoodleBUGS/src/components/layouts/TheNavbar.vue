@@ -47,11 +47,13 @@ const { isConnected, isExecuting, isConnecting, backendUrl } = storeToRefs(execu
 const navBackendUrl = ref(backendUrl.value || 'http://localhost:8081');
 const startCmd = 'julia --project=DoodleBUGS/runtime DoodleBUGS/runtime/server.jl';
 const instantiateCmd = 'julia --project=DoodleBUGS/runtime -e "using Pkg; Pkg.instantiate()"';
+const cloneCmd = 'git clone https://github.com/TuringLang/JuliaBUGS.jl.git';
 
 // Copy helpers with brief feedback
 const copiedBackendUrl = ref(false);
 const copiedStartCmd = ref(false);
 const copiedInstantiateCmd = ref(false);
+const copiedCloneCmd = ref(false);
 
 function copyWithFeedback(text: string, flag: typeof copiedBackendUrl) {
   navigator.clipboard.writeText(text).then(() => {
@@ -63,6 +65,7 @@ function copyWithFeedback(text: string, flag: typeof copiedBackendUrl) {
 const copyBackendUrl = () => copyWithFeedback(navBackendUrl.value, copiedBackendUrl);
 const copyStartCmd = () => copyWithFeedback(startCmd, copiedStartCmd);
 const copyInstantiateCmd = () => copyWithFeedback(instantiateCmd, copiedInstantiateCmd);
+const copyCloneCmd = () => copyWithFeedback(cloneCmd, copiedCloneCmd);
 
 const displayTitle = computed(() => {
   if (props.projectName && props.activeGraphName) {
@@ -187,7 +190,16 @@ const handleGridSizeInput = (event: Event) => {
                 </BaseButton>
               </div>
               <div class="dropdown-hint">
-                <div>First time only (instantiate deps):</div>
+                <div>1) Clone repository:</div>
+                <div class="copy-row">
+                  <div class="code-inline">{{ cloneCmd }}</div>
+                  <BaseButton size="small" type="ghost" class="copy-btn" title="Copy command" @click.stop="copyCloneCmd">
+                    <i v-if="copiedCloneCmd" class="fas fa-check"></i>
+                    <i v-else class="fas fa-copy"></i>
+                  </BaseButton>
+                </div>
+                <div style="height:6px;"></div>
+                <div>2) From repo root, first time only (instantiate deps):</div>
                 <div class="copy-row">
                   <div class="code-inline">{{ instantiateCmd }}</div>
                   <BaseButton size="small" type="ghost" class="copy-btn" title="Copy command" @click.stop="copyInstantiateCmd">
@@ -196,7 +208,7 @@ const handleGridSizeInput = (event: Event) => {
                   </BaseButton>
                 </div>
                 <div style="height:6px;"></div>
-                <div>Start backend from repo root:</div>
+                <div>3) From repo root, start backend:</div>
                 <div class="copy-row">
                   <div class="code-inline">{{ startCmd }}</div>
                   <BaseButton size="small" type="ghost" class="copy-btn" title="Copy command" @click.stop="copyStartCmd">
