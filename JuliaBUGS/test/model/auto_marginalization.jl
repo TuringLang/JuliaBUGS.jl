@@ -720,12 +720,23 @@ end
         # Auto-marginalized model with small-step NUTS
         model_marg = compile(mixture_def, data) |> m -> settrans(m, true) |> m -> set_evaluation_mode(m, UseAutoMarginalization())
         @test LogDensityProblems.dimension(model_marg) < LogDensityProblems.dimension(model_graph)
+        # Run gradient-based sampling (NUTS) on the auto-marginalized AD-wrapped model
         ad_model = ADgradient(AutoForwardDiff(), model_marg)
         D = LogDensityProblems.dimension(model_marg)
         θ0 = zeros(D)
-        println("[AutoMargTest] Efficiency smoke: skipping AutoMarg+NUTS sampling for now"); flush(stdout)
-        # Quick sanity: logdensity on AD-wrapped model at θ0 is finite
-        val = LogDensityProblems.logdensity(ad_model, θ0)
-        @test isfinite(val)
+        println("[AutoMargTest] Efficiency smoke: sampling AutoMarg+NUTS..."); flush(stdout)
+        samps = AbstractMCMC.sample(
+            Random.default_rng(),
+            ad_model,
+            NUTS(0.65),
+            10;
+            progress=false,
+            n_adapts=0,
+            init_params=θ0,
+            discard_initial=0,
+        )
+        println("[AutoMargTest] Efficiency smoke: AutoMarg+NUTS done"); flush(stdout)
+        # Ensure sampling executed without errors
+        @test !isnothing(samps)
     end
 end

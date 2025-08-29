@@ -79,6 +79,7 @@ const TEST_GROUPS = OrderedDict{String,Function}(
         include("independent_mh.jl")
         include("ext/JuliaBUGSAdvancedHMCExt.jl")
         include("ext/JuliaBUGSMCMCChainsExt.jl")
+        include("model/auto_marginalization_sampling.jl")
     end,
     "inference_hmc" => () -> include("ext/JuliaBUGSAdvancedHMCExt.jl"),
     "inference_chains" => () -> include("ext/JuliaBUGSMCMCChainsExt.jl"),
