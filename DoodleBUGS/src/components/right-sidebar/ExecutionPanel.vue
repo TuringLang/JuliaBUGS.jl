@@ -62,9 +62,6 @@ const activeFileContent = computed(() => {
   return f?.content ?? '';
 });
 
-// Show overlay copy button only for standalone.jl
-const isStandaloneActive = computed(() => (activeFileName.value ?? '').toLowerCase() === 'standalone.jl');
-
 // CodeMirror instance for file content
 const fileEditorContainer = ref<HTMLDivElement | null>(null);
 let cmInstance: Editor | null = null;
@@ -434,22 +431,16 @@ const downloadFileContent = (fileName: string, content: string) => {
           <div class="file-view" v-if="activeFileName">
             <div class="file-header">
               <strong>{{ activeFileName }}</strong>
-              <BaseButton v-if="!isStandaloneActive" @click="copyFileContent(activeFileName, activeFileContent)" size="small">
-                <i v-if="copySuccessStates[activeFileName]" class="fas fa-check"></i>
-                <span v-else>Copy</span>
-              </BaseButton>
               <BaseButton @click="downloadFileContent(activeFileName, activeFileContent)" size="small" type="secondary">
                 Download
               </BaseButton>
             </div>
-            <div ref="fileEditorContainer" class="cm-file-viewer">
-              <div v-if="isStandaloneActive" class="cm-copy-overlay">
-                <BaseButton size="small" type="secondary" title="Copy code" @click="copyFileContent(activeFileName, activeFileContent)">
-                  <i v-if="copySuccessStates[activeFileName]" class="fas fa-check"></i>
-                  <i v-else class="fas fa-copy"></i>
-                </BaseButton>
-              </div>
-              <pre v-if="!editorReady" class="file-content">{{ activeFileContent }}</pre>
+            <div class="editor-wrapper">
+              <div ref="fileEditorContainer" class="editor-container"></div>
+              <BaseButton size="small" type="secondary" class="copy-button" title="Copy code" @click="copyFileContent(activeFileName, activeFileContent)">
+                <i v-if="copySuccessStates[activeFileName]" class="fas fa-check"></i>
+                <i v-else class="fas fa-copy"></i>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -623,6 +614,8 @@ const downloadFileContent = (fileName: string, content: string) => {
   border: 1px solid var(--color-border);
   border-radius: 4px;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .file-header {
@@ -682,22 +675,29 @@ const downloadFileContent = (fileName: string, content: string) => {
 .table-title { font-size: 0.95em; }
 .table-actions { display: flex; gap: 8px; }
 
-.cm-file-viewer {
-  width: 100%;
-  min-height: 260px;
-  max-height: 50vh;
+.editor-wrapper {
   position: relative;
+  flex-grow: 1;
+  background-color: #282c34;
+  border-radius: 8px;
+  overflow: hidden;
+  height: 67vh; /* provide a consistent viewer height like a panel */
 }
 
-.cm-copy-overlay {
+.editor-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* Ensure CodeMirror fills the editor container so the internal scrollbar shows */
+.editor-container .CodeMirror { height: 100% !important; }
+.editor-container .CodeMirror-scroll { height: 100% !important; }
+
+.copy-button {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
-  z-index: 2;
-}
-
-/* Match CodePreviewPanel floating copy button visuals */
-.cm-copy-overlay .base-button {
+  bottom: 12px;
+  right: 12px;
+  z-index: 3;
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -707,17 +707,18 @@ const downloadFileContent = (fileName: string, content: string) => {
   align-items: center;
   justify-content: center;
   padding: 0;
+  cursor: pointer;
   opacity: 0.9;
   transition: background-color 0.2s, opacity 0.2s;
 }
 
-.cm-copy-overlay .base-button:hover {
+.copy-button:hover {
   background-color: var(--color-secondary-hover);
   opacity: 1;
 }
 
-.cm-copy-overlay .fa-copy,
-.cm-copy-overlay .fa-check {
+.copy-button .fa-copy,
+.copy-button .fa-check {
   font-size: 1.1rem;
 }
 </style>
