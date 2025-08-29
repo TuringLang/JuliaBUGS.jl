@@ -294,6 +294,147 @@ If the statements that form a cycle are all from the same loop (potentially at d
 
 Otherwise, the program need to be rewritten.
 
+## Implementation Overview (Current)
+
+At a high level, the current implementation follows a conservative, correctness‑first pipeline. It favors simple, explainable transformations and stops with diagnostics when safety cannot be guaranteed.
+
+- Build coarse statement graph: Construct a statement‑level dependence graph from the compiled BUGS graph. Nodes are top‑level statements; edges indicate that any variable produced by one statement is used by another.
+
+- Remove transformed data: Copy the model AST and remove statements whose variables are all compile‑time computable (in‑degree or out‑degree zero at the coarse level). This keeps the runtime program focused on values that must be evaluated.
+
+- Fully fission loops: Split each loop so that every resulting statement runs in its own loop nest. This simplifies subsequent ordering by ensuring we can reason per‑statement and per‑loop nest. The loop nests are retained as metadata with each fissioned statement.
+
+- Dependence vectors at fine granularity: For every coarse edge, find corresponding fine‑grained variable edges and classify their dependence relation using lexicographic comparison of loop indices:
+  - Zero: loop‑independent (same iteration)
+  - Positive: loop‑carried, lexicographically non‑negative
+  - Negative: lexicographically negative (unsafe for sequential order)
+  - Unknown: cannot be compared (e.g., different loop nests or missing loop information)
+
+- Filter into an ordering graph: Build an ordering graph for statements by:
+  - Dropping self‑edges when all corresponding fine edges are Positive (safe loop‑carried self‑recurrence such as x[t] depends on x[t‑1]).
+  - Retaining all cross‑statement edges by default to preserve producer→consumer ordering.
+  - Aborting if any Negative dependence is observed (unsafe), or recording Unknown dependences for diagnostics.
+
+- Resolve remaining cycles conservatively: If cycles remain in the ordering graph, attempt limited loop fusion within strongly‑connected components (SCCs) that meet all of the following:
+  - All statements share the exact same loop nest (same variables and identical bounds).
+  - No Negative or Unknown fine‑grained dependences among the SCC members.
+  - The subgraph induced by Zero dependences is acyclic, providing a valid intra‑iteration order.
+  If this succeeds, expand clusters in topological order to obtain a global statement order. Otherwise, abort with diagnostics.
+
+- Reconstruct structured loops: After sorting the fissioned statements, group consecutive statements with identical loop nests and reconstruct a single nested `for` around a block of statements rather than emitting many tiny loops. This preserves structure while avoiding over‑fissioning in the final program.
+
+- Lower observations and flatten blocks: Insert observation guards/casts during lowering, and flatten intermediate `:block` nodes introduced by reconstruction so that analysis and codegen see a normalized statement sequence.
+
+Diagnostics are collected throughout and surfaced to help users rewrite programs when the transformation cannot be proven safe (e.g., negative or unknown dependences).
+
+### What works well now
+
+- State‑space patterns with self‑recurrence inside a single loop nest (e.g., x[t] depends on x[t‑1])
+- Cross‑coupled SSMs where multiple state arrays reference each other at lag 1, provided they share the same time loop
+- Grid SSMs with independent per‑row recurrences, plus observation loops reading current state
+
+### What we intentionally reject (for now)
+
+- Inter‑loop cycles that require general loop fusion across different loop nests (e.g., even/odd split loops over the same domain but structured as separate loops)
+- Data‑dependent indexing that produces Unknown dependences across loop nests
+- Any pattern that induces Negative dependences under lexicographic ordering
+
+These cases either need manual refactoring into a single loop with a clear per‑iteration ordering, or future research‑grade transforms beyond our current scope.
+
+### Reference entry points (for developers)
+
+The following locations contain the mechanics described above:
+
+- Coarse graph, fission, and reconstruction: `JuliaBUGS/src/source_gen.jl:347`
+- Grouping statements into shared loop nests: `JuliaBUGS/src/source_gen.jl:193`
+- Loop construction around statement blocks: `JuliaBUGS/src/source_gen.jl:226`
+- Fine‑grained dependence classification: `JuliaBUGS/src/source_gen.jl:667`
+- Ordering graph via dependence vectors: `JuliaBUGS/src/source_gen.jl:710`
+- Limited SCC loop fusion (identical loop nests): `JuliaBUGS/src/source_gen.jl:788`
+- Sorting by explicit statement order: `JuliaBUGS/src/source_gen.jl:922`
+- Block flattening in analysis/codegen: `JuliaBUGS/src/compiler_pass.jl:38`, `JuliaBUGS/src/source_gen.jl:532`
+
+There is a small SSM‑focused test harness and benchmarks accompanying this work. See `test_ssm.jl` for representative models that should succeed or fail with diagnostics, and `bench_ssm*.jl` for performance comparisons between graph traversal and generated sequential code.
+
+## State‑Space Models (SSM) Support
+
+This section summarizes how the current pipeline recognizes and transforms common SSM patterns into correct sequential code.
+
+### Recognized Patterns
+
+- Single time loop with self‑recurrence:
+  ```julia
+  x[1] ~ Normal(0, 1)
+  for t in 2:T
+      x[t] ~ Normal(x[t-1], sigma_x)
+  end
+  ```
+
+- Lagged observations (read previous state):
+  ```julia
+  y[1] ~ Normal(x[1], sigma_y)
+  for t in 2:T
+      y[t] ~ Normal(x[t-1], sigma_y)
+  end
+  ```
+
+- Cross‑coupled states within the same time loop (mutual lag‑1):
+  ```julia
+  x[1] ~ Normal(0, 1); y[1] ~ Normal(0, 1)
+  for t in 2:T
+      x[t] ~ Normal(y[t-1], sigma_x)
+      y[t] ~ Normal(x[t-1], sigma_y)
+  end
+  ```
+
+- Grid SSMs with independent rows/series and a shared time dimension:
+  ```julia
+  for i in 1:I
+      x[i,1] ~ Normal(0, 1)
+      for t in 2:T
+          x[i,t] ~ Normal(x[i,t-1], sigma)
+      end
+  end
+  for i in 1:I, t in 1:T
+      y[i,t] ~ Normal(x[i,t], sigma_y)
+  end
+  ```
+
+### Transformation Outline for SSMs
+
+1) Build the coarse statement graph and fully fission the input into per‑statement loop nests.
+
+2) Classify fine‑grained dependences between statements by comparing loop indices lexicographically:
+   - Positive self‑dependences (e.g., x[t] → x[t+1]) are considered safe within the same loop nest and are dropped for ordering.
+   - Cross‑statement edges are kept to preserve producer→consumer order (e.g., x[t] → y[t] or x[t-1] → y[t]).
+   - Any Negative dependence (e.g., x[t+1] used by x[t]) aborts with diagnostics.
+
+3) If an SCC remains cyclic but all members share the exact same loop nest, attempt conservative loop fusion:
+   - Verify no Negative/Unknown dependences inside the SCC.
+   - Use Zero‑dependence edges (loop‑independent) to order statements within each iteration; if none exist, any fixed order is acceptable because constraints are cross‑iteration only.
+
+4) Reconstruct: group consecutive statements that share a loop nest and emit a single nested `for` around a block of statements.
+
+For typical SSMs, this yields either:
+- Separate time loops in producer→consumer order (e.g., first state update loop, then observation loop); or
+- A single fused time loop when multiple state updates mutually depend on the previous time step (cross‑coupled case).
+
+### Examples (from tests)
+
+- Basic SSM and lagged observations: accepted and reconstructed into sequential loops.
+- Cross‑coupled SSM: accepted; body contains both state updates per time step, unordered within iteration because constraints are cross‑iteration only.
+- Grid SSM: accepted for independent rows; observations read current state.
+- Negative dependence (reading future): rejected with diagnostics.
+- Inter‑loop cycle requiring even/odd fusion across separate loops: rejected (manual refactor recommended into one time loop).
+
+### Authoring Tips for SSMs
+
+- Keep all state updates for a given time index inside a single time loop with identical bounds.
+- Provide clear initial conditions (e.g., `x[1]`, `y[1]`).
+- Avoid referencing “future” states (e.g., `x[t+1]` inside the body); these create Negative dependences.
+- Prefer lag‑1 or other non‑negative lexicographic lags where the loop bounds make dependencies valid.
+- Avoid splitting a single logical time loop into multiple separate loops that mutually depend on each other (e.g., even/odd passes). If needed, write one fused time loop explicitly.
+
 We don't attempt to apply further transformations to the program, because it is a hard problem. We will use the following example to show why program transformations can be a difficult task. We will not attempt to implement the transformation demonstrated here.
 
 Consider this model,
