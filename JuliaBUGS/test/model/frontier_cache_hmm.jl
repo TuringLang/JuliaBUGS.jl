@@ -5,7 +5,8 @@ using JuliaBUGS.Model:
     _precompute_minimal_cache_keys, _marginalize_recursive, smart_copy_evaluation_env
 
 @testset "Frontier cache for HMM under different orders" begin
-    println("[FrontierCacheTest] Start HMM frontier cache tests..."); flush(stdout)
+    println("[FrontierCacheTest] Start HMM frontier cache tests...");
+    flush(stdout)
     # Simple HMM with fixed emission parameters (no continuous params)
     hmm_def = @bugs begin
         mu[1] = 0.0
@@ -67,9 +68,11 @@ using JuliaBUGS.Model:
     order_states_first = vcat(priority_states_first, rest_states_first)
 
     # Precompute minimal keys for both orders
-    println("[FrontierCacheTest] Computing minimal keys (interleaved)..."); flush(stdout)
+    println("[FrontierCacheTest] Computing minimal keys (interleaved)...");
+    flush(stdout)
     keys_interleaved = _precompute_minimal_cache_keys(model, order_interleaved)
-    println("[FrontierCacheTest] Computing minimal keys (states-first)..."); flush(stdout)
+    println("[FrontierCacheTest] Computing minimal keys (states-first)...");
+    flush(stdout)
     keys_states_first = _precompute_minimal_cache_keys(model, order_states_first)
 
     # Helper to map frontier indices back to a set of variable symbols we care about
@@ -104,14 +107,16 @@ using JuliaBUGS.Model:
     env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
     params = Float64[]
     memo1 = Dict{Tuple{Int,Int,UInt64},Any}()
-    println("[FrontierCacheTest] Evaluating logp with interleaved order..."); flush(stdout)
+    println("[FrontierCacheTest] Evaluating logp with interleaved order...");
+    flush(stdout)
     logp1 = _marginalize_recursive(
         model, env, order_interleaved, params, 1, Dict{Any,Int}(), memo1, keys_interleaved
     )
 
     env2 = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
     memo2 = Dict{Tuple{Int,Int,UInt64},Any}()
-    println("[FrontierCacheTest] Evaluating logp with states-first order..."); flush(stdout)
+    println("[FrontierCacheTest] Evaluating logp with states-first order...");
+    flush(stdout)
     logp2 = _marginalize_recursive(
         model,
         env2,
@@ -122,7 +127,8 @@ using JuliaBUGS.Model:
         memo2,
         keys_states_first,
     )
-    println("[FrontierCacheTest] Done evaluations, comparing..."); flush(stdout)
+    println("[FrontierCacheTest] Done evaluations, comparing...");
+    flush(stdout)
 
     @test isapprox(logp1, logp2; atol=1e-10)
 

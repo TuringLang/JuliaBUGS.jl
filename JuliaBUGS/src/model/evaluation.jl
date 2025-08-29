@@ -405,7 +405,7 @@ function _compute_marginalization_order(model::BUGSModel)
     function place_with_dependencies(vn::VarName)
         i = pos[vn]
         if placed[i]
-            return
+            return nothing
         end
         # Place all direct parents first
         for p in parents(vn)

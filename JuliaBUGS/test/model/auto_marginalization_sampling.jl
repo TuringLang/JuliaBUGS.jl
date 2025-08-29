@@ -1,5 +1,9 @@
 using JuliaBUGS: @bugs, compile, settrans, getparams, initialize!
-using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, parameters, evaluate_with_marginalization_values!!
+using JuliaBUGS.Model:
+    set_evaluation_mode,
+    UseAutoMarginalization,
+    parameters,
+    evaluate_with_marginalization_values!!
 
 @testset "Auto-Marginalization Sampling (NUTS)" begin
     # 2-component GMM with fixed weights. Discrete z marginalized out.
@@ -33,12 +37,12 @@ using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, parameters, 
         z_full[i] = 1
         z_obs[i] = 1
     end
-    for i in N-29:N
+    for i in (N - 29):N
         z_full[i] = 2
         z_obs[i] = 2
     end
     # Middle indices drawn randomly
-    for i in 31:N-30
+    for i in 31:(N - 30)
         z_full[i] = rand(rng, Categorical(true_w))
         z_obs[i] = missing
     end
@@ -51,7 +55,10 @@ using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, parameters, 
     data = (N=N, y=y, z=z_obs)
 
     # Compile auto-marginalized model and wrap with AD for NUTS
-    model = compile(mixture_def, data) |> m -> settrans(m, true) |> m -> set_evaluation_mode(m, UseAutoMarginalization())
+    model =
+        (m -> (m -> set_evaluation_mode(m, UseAutoMarginalization()))(settrans(m, true)))(compile(
+            mixture_def, data
+        ))
     # Initialize near ground truth for faster convergence
     initialize!(model, (; mu=[-2.0, 2.0], sigma=[1.0, 1.0]))
     ad_model = ADgradient(AutoForwardDiff(), model)
