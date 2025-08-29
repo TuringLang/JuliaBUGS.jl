@@ -727,10 +727,9 @@ using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
         data = (N=100, y=vcat(rand(Normal(-2, 1), 50), rand(Normal(2, 1), 50)))
 
         # Graph model with IndependentMH (quick smoke run)
-        model_graph =
-            (m -> (m -> set_evaluation_mode(m, UseGraph()))(settrans(m, true)))(compile(
-                mixture_def, data
-            ))
+        model_graph = (m -> (m -> set_evaluation_mode(m, UseGraph()))(settrans(m, true)))(
+            compile(mixture_def, data)
+        )
         gibbs = JuliaBUGS.Gibbs(model_graph, JuliaBUGS.IndependentMH())
         println("[AutoMargTest] Efficiency smoke: sampling Graph+IMH...");
         flush(stdout)
