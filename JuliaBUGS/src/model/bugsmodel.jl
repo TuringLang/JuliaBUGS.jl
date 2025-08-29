@@ -232,12 +232,7 @@ function BUGSModel(
         n = length(gd.sorted_nodes)
         JuliaBUGS.Model._precompute_minimal_cache_keys(m, collect(1:n))
     end
-    # Attach minimal order and keys to GraphEvaluationData
-    order = if isempty(gd.marginalization_order)
-        collect(1:length(gd.sorted_nodes))
-    else
-        gd.marginalization_order
-    end
+    # Attach minimal cache keys to GraphEvaluationData (order remains default)
     gd2 = GraphEvaluationData(
         gd.sorted_nodes,
         gd.sorted_parameters,
@@ -247,7 +242,6 @@ function BUGSModel(
         gd.loop_vars_vals,
         gd.node_types,
         gd.is_discrete_finite_vals,
-        order,
         minimal_keys,
     )
     # Return final model with cached minimal keys
@@ -612,15 +606,33 @@ params_dict = getparams(Dict, model, custom_env)
 ```
 """
 function getparams(model::BUGSModel, evaluation_env=model.evaluation_env)
-    param_length = if model.transformed
-        model.transformed_param_length
+    # Determine which parameters to include based on evaluation mode
+    gd = model.graph_evaluation_data
+    param_vars = if model.evaluation_mode isa UseAutoMarginalization
+        # Only include continuous parameters when auto marginalizing
+        filter(gd.sorted_parameters) do vn
+            idx = findfirst(==(vn), gd.sorted_nodes)
+            idx !== nothing && gd.node_types[idx] == :continuous
+        end
     else
-        model.untransformed_param_length
+        gd.sorted_parameters
+    end
+
+    # Compute total length for allocation
+    param_length = 0
+    if model.transformed
+        for vn in param_vars
+            param_length += model.transformed_var_lengths[vn]
+        end
+    else
+        for vn in param_vars
+            param_length += model.untransformed_var_lengths[vn]
+        end
     end
 
     param_vals = Vector{Float64}(undef, param_length)
     pos = 1
-    for v in model.graph_evaluation_data.sorted_parameters
+    for v in param_vars
         if !model.transformed
             val = AbstractPPL.get(evaluation_env, v)
             len = model.untransformed_var_lengths[v]
@@ -651,7 +663,17 @@ function getparams(
     T::Type{<:AbstractDict}, model::BUGSModel, evaluation_env=model.evaluation_env
 )
     d = T()
-    for v in model.graph_evaluation_data.sorted_parameters
+    gd = model.graph_evaluation_data
+    # Respect evaluation mode when selecting parameters
+    param_vars = if model.evaluation_mode isa UseAutoMarginalization
+        filter(gd.sorted_parameters) do vn
+            idx = findfirst(==(vn), gd.sorted_nodes)
+            idx !== nothing && gd.node_types[idx] == :continuous
+        end
+    else
+        gd.sorted_parameters
+    end
+    for v in param_vars
         value = AbstractPPL.get(evaluation_env, v)
         if !model.transformed
             d[v] = value

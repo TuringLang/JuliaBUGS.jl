@@ -378,6 +378,73 @@ function _precompute_minimal_cache_keys(model::BUGSModel, order::Vector{Int})
 end
 
 """
+    _compute_marginalization_order(model::BUGSModel) -> Vector{Int}
+
+Compute a topologically-valid evaluation order that reduces the frontier size
+by placing discrete finite variables immediately before their observed dependents
+whenever possible. This greatly reduces branching in the recursive enumerator.
+"""
+function _compute_marginalization_order(model::BUGSModel)
+    gd = model.graph_evaluation_data
+    n = length(gd.sorted_nodes)
+
+    # Mapping VarName <-> index in sorted_nodes
+    order = gd.sorted_nodes
+    pos = Dict(order[i] => i for i in 1:n)
+
+    # Direct parents via graph (for topo validity)
+    function parents(vn)
+        return collect(MetaGraphsNext.inneighbor_labels(model.g, vn))
+    end
+
+    # Keep track of which nodes are placed
+    placed = fill(false, n)
+    out = Int[]
+
+    # Recursive placer that ensures all parents are placed first
+    function place_with_dependencies(vn::VarName)
+        i = pos[vn]
+        if placed[i]
+            return
+        end
+        # Place all direct parents first
+        for p in parents(vn)
+            place_with_dependencies(p)
+        end
+        push!(out, i)
+        placed[i] = true
+    end
+
+    # Identify observed stochastic nodes and their discrete-finite parents (via stochastic boundary)
+    # We use the existing helper to traverse through deterministic nodes
+    stoch_parents = _get_stochastic_parents_indices(model)
+
+    # First, for each observed stochastic node, place its discrete-finite parents
+    # (and dependencies) immediately before placing the node itself.
+    for (i, vn) in enumerate(order)
+        if gd.is_stochastic_vals[i] && gd.is_observed_vals[i]
+            # Place discrete-finite unobserved parents (by label index -> VarName)
+            for pidx in stoch_parents[i]
+                if gd.is_discrete_finite_vals[pidx] && !gd.is_observed_vals[pidx]
+                    place_with_dependencies(order[pidx])
+                end
+            end
+            # Then place the observed node itself (ensures mu/sigma/etc. also placed)
+            place_with_dependencies(vn)
+        end
+    end
+
+    # Finally, place any remaining nodes in topological order
+    for vn in order
+        if !placed[pos[vn]]
+            place_with_dependencies(vn)
+        end
+    end
+
+    return out
+end
+
+"""
     _marginalize_recursive(model, env, remaining_indices, parameter_values, param_idx, 
                           var_lengths, memo, minimal_keys)
 
@@ -388,8 +455,8 @@ function _marginalize_recursive(
     env::NamedTuple,
     remaining_indices::AbstractVector{Int},
     parameter_values::AbstractVector,
-    param_idx::Int,
-    var_lengths::Dict,
+    param_offsets::Dict{VarName,Int},
+    var_lengths::Dict{VarName,Int},
     memo::Dict,
     minimal_keys,
 )
@@ -416,7 +483,10 @@ function _marginalize_recursive(
     else
         minimal_hash = UInt64(0)  # Empty frontier
     end
-    memo_key = (current_idx, param_idx, minimal_hash)
+    # With parameter access keyed by variable name, results depend only on the
+    # current node and the discrete frontier state. Continuous parameters are
+    # global and constant for a given input vector.
+    memo_key = (current_idx, minimal_hash)
 
     if haskey(memo, memo_key)
         return memo[memo_key]
@@ -437,7 +507,7 @@ function _marginalize_recursive(
             new_env,
             @view(remaining_indices[2:end]),
             parameter_values,
-            param_idx,
+            param_offsets,
             var_lengths,
             memo,
             minimal_keys,
@@ -459,7 +529,7 @@ function _marginalize_recursive(
             env,
             @view(remaining_indices[2:end]),
             parameter_values,
-            param_idx,
+            param_offsets,
             var_lengths,
             memo,
             minimal_keys,
@@ -488,7 +558,7 @@ function _marginalize_recursive(
                 branch_env,
                 @view(remaining_indices[2:end]),
                 parameter_values,
-                param_idx,
+                param_offsets,
                 var_lengths,
                 memo,
                 minimal_keys,
@@ -512,16 +582,20 @@ function _marginalize_recursive(
         end
 
         l = var_lengths[current_vn]
-
-        if param_idx + l - 1 > length(parameter_values)
+        # Fetch the start position for this variable from the precomputed map
+        start_idx = get(param_offsets, current_vn, 0)
+        if start_idx == 0
+            error("Missing parameter offset for variable '$(current_vn)'.")
+        end
+        if start_idx + l - 1 > length(parameter_values)
             error(
-                "Parameter index out of bounds: needed $(param_idx + l - 1) elements, " *
+                "Parameter index out of bounds: needed $(start_idx + l - 1) elements, " *
                 "but parameter_values has only $(length(parameter_values)) elements.",
             )
         end
 
         b_inv = Bijectors.inverse(b)
-        param_slice = view(parameter_values, param_idx:(param_idx + l - 1))
+        param_slice = view(parameter_values, start_idx:(start_idx + l - 1))
 
         reconstructed_value = reconstruct(b_inv, dist, param_slice)
         value, logjac = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed_value)
@@ -535,13 +609,12 @@ function _marginalize_recursive(
             dist_logp += logjac
         end
 
-        next_idx = param_idx + l
         remaining_logp = _marginalize_recursive(
             model,
             new_env,
             @view(remaining_indices[2:end]),
             parameter_values,
-            next_idx,
+            param_offsets,
             var_lengths,
             memo,
             minimal_keys,
@@ -658,18 +731,14 @@ function evaluate_with_marginalization_values!!(
         )
     end
 
-    # Get indices for evaluation order (default to stored marginalization order)
+    # Compute an order that minimizes frontier growth (interleave discrete parents before observed children)
     gd = model.graph_evaluation_data
     n = length(gd.sorted_nodes)
-    sorted_indices = collect(1:n)
+    sorted_indices = _compute_marginalization_order(model)
 
-    # Use precomputed minimal cache keys if available; otherwise compute once for this call
-    minimal_keys =
-        if !isempty(gd.minimal_cache_keys) && (length(keys(gd.minimal_cache_keys)) > 0)
-            gd.minimal_cache_keys
-        else
-            _precompute_minimal_cache_keys(model, sorted_indices)
-        end
+    # Compute minimal cache keys for this specific order
+    # (do not reuse cached keys if they were built for a different order)
+    minimal_keys = _precompute_minimal_cache_keys(model, sorted_indices)
 
     # Initialize memoization cache
     # Size hint: at most 2^|discrete_finite| * |nodes| entries
@@ -679,7 +748,7 @@ function evaluate_with_marginalization_values!!(
     else
         min((1 << n_discrete_finite) * n, 1_000_000)
     end
-    memo = Dict{Tuple{Int,Int,UInt64},Any}()
+    memo = Dict{Tuple{Int,UInt64},Any}()
     sizehint!(memo, expected_entries)
 
     # Start recursive evaluation
@@ -688,15 +757,21 @@ function evaluate_with_marginalization_values!!(
     # For marginalization, only continuous parameters need var_lengths
     # Discrete finite variables are marginalized over, not sampled
     var_lengths = Dict{VarName,Int}()
-    for (vn, length) in model.transformed_var_lengths
-        # Find the node index
+    continuous_param_order = VarName[]
+    for vn in gd.sorted_parameters
         idx = findfirst(==(vn), gd.sorted_nodes)
-        if idx !== nothing
-            # Only include if it's continuous (not discrete finite)
-            if !gd.is_discrete_finite_vals[idx]
-                var_lengths[vn] = length
-            end
+        if idx !== nothing && gd.node_types[idx] == :continuous
+            push!(continuous_param_order, vn)
+            var_lengths[vn] = model.transformed_var_lengths[vn]
         end
+    end
+
+    # Build mapping from variable -> start index in flattened_values
+    param_offsets = Dict{VarName,Int}()
+    start = 1
+    for vn in continuous_param_order
+        param_offsets[vn] = start
+        start += var_lengths[vn]
     end
 
     logp = _marginalize_recursive(
@@ -704,7 +779,7 @@ function evaluate_with_marginalization_values!!(
         evaluation_env,
         sorted_indices,
         flattened_values,
-        1,
+        param_offsets,
         var_lengths,
         memo,
         minimal_keys,

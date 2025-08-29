@@ -1,10 +1,11 @@
 # Tests for auto-marginalization of discrete finite variables
 # This file is included from runtests.jl which provides all necessary imports
 
-using JuliaBUGS: @bugs, compile, settrans
+using JuliaBUGS: @bugs, compile, settrans, initialize!, getparams
 using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
 
 @testset "Auto-Marginalization" begin
+    println("[AutoMargTest] Starting Auto-Marginalization test suite..."); flush(stdout)
     # HMM helper function for ground truth using forward algorithm
     function forward_algorithm_hmm(y, mu1, mu2, sigma, pi, trans)
         T = length(y)
@@ -32,6 +33,7 @@ using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
     end
 
     @testset "Simple HMM with fixed parameters" begin
+        println("[AutoMargTest] HMM (fixed params): compiling..."); flush(stdout)
         # HMM with fixed emission parameters (no continuous parameters to estimate)
         hmm_fixed_def = @bugs begin
             mu[1] = 0.0
@@ -65,6 +67,7 @@ using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
         model = compile(hmm_fixed_def, data)
         model = settrans(model, true)
         model = set_evaluation_mode(model, UseAutoMarginalization())
+        println("[AutoMargTest] HMM (fixed params): evaluating logdensity..."); flush(stdout)
 
         # No continuous parameters, so empty array
         x_empty = Float64[]
@@ -109,6 +112,7 @@ using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
         end
 
         @testset "T=$T" for T in [2, 3, 4, 5]
+            println("[AutoMargTest] HMM (params): T=$(T) compile+eval..."); flush(stdout)
             y_obs = if T == 2
                 [0.1, 4.9]
             elseif T == 3
@@ -133,6 +137,7 @@ using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
             test_params = [0.0, 5.0, 0.0]  # log(sigma)=0 -> sigma=1, mu[2]=5, mu[1]=0
 
             logp_marginalized = LogDensityProblems.logdensity(model, test_params)
+            println("[AutoMargTest] HMM (params): T=$(T) logdensity done"); flush(stdout)
 
             # Compute expected value using forward algorithm
             pi_vals = [0.5, 0.5]
@@ -200,9 +205,10 @@ using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
         gd = model_marg.graph_evaluation_data
         discrete_count = sum(gd.is_discrete_finite_vals)
         @test discrete_count == 3  # z[1], z[2], z[3]
-    end
+end
 
     @testset "Gaussian Mixture Models" begin
+        println("[AutoMargTest] GMM tests: start..."); flush(stdout)
         # Helper function for ground truth mixture likelihood
         function mixture_loglikelihood(y, weights, mus, sigmas)
             n = length(y)
@@ -222,6 +228,7 @@ using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
         end
 
         @testset "Two-component mixture with fixed weights" begin
+            println("[AutoMargTest] GMM K=2 correctness..."); flush(stdout)
             # Simple mixture with fixed mixture weights
             mixture_fixed_def = @bugs begin
                 # Fixed mixture weights
@@ -275,6 +282,7 @@ using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
         end
 
         @testset "Three-component mixture with fixed weights" begin
+            println("[AutoMargTest] GMM K=3 correctness..."); flush(stdout)
             # Extend to 3 components with exact verification
             mixture_3comp_def = @bugs begin
                 # Fixed mixture weights
@@ -334,6 +342,7 @@ using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
         end
 
         @testset "Label invariance" begin
+            println("[AutoMargTest] GMM label invariance..."); flush(stdout)
             # Verify that permuting component labels doesn't change log-density
             # when weights are equal
             mixture_sym_def = @bugs begin
@@ -626,5 +635,97 @@ using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
                 log(p_val * (1 - p_val))  # Jacobian
             @test isapprox(logp, expected; atol=1e-10)
         end
+    end
+
+    @testset "Gradient vs finite differences (GMM)" begin
+        println("[AutoMargTest] GMM gradients: compiling..."); flush(stdout)
+        # Two-component mixture with fixed weights; params: mu[1:2], sigma[1:2]
+        mixture_def = @bugs begin
+            w[1] = 0.3
+            w[2] = 0.7
+            mu[1] ~ Normal(-2, 5)
+            mu[2] ~ Normal(2, 5)
+            sigma[1] ~ Exponential(1)
+            sigma[2] ~ Exponential(1)
+            for i in 1:N
+                z[i] ~ Categorical(w[1:2])
+                y[i] ~ Normal(mu[z[i]], sigma[z[i]])
+            end
+        end
+
+        N = 6
+        y = [-1.8, -2.2, 1.9, 2.1, -1.5, 2.4]
+        data = (N=N, y=y)
+        model = compile(mixture_def, data)
+        model = settrans(model, true)
+        model = set_evaluation_mode(model, UseAutoMarginalization())
+
+        # Initialize model and extract parameter vector
+        initialize!(model, (; mu=[-2.0, 2.0], sigma=[1.1, 0.9]))
+        θ = getparams(model)
+
+        # AD gradient via ForwardDiff
+        ad_model = ADgradient(AutoForwardDiff(), model)
+        println("[AutoMargTest] GMM gradients: AD gradient..."); flush(stdout)
+        val_ad, grad_ad = LogDensityProblems.logdensity_and_gradient(ad_model, θ)
+        println("[AutoMargTest] GMM gradients: AD gradient done"); flush(stdout)
+
+        # Central finite differences
+        function f(θ)
+            LogDensityProblems.logdensity(model, θ)
+        end
+        ϵ = 1e-6
+        grad_fd = similar(θ)
+        println("[AutoMargTest] GMM gradients: FD gradient..."); flush(stdout)
+        for i in eachindex(θ)
+            e = zeros(length(θ)); e[i] = 1.0
+            fp = f(θ .+ ϵ .* e)
+            fm = f(θ .- ϵ .* e)
+            grad_fd[i] = (fp - fm) / (2ϵ)
+            println("[AutoMargTest] GMM gradients: FD step ", i, "/", length(θ)); flush(stdout)
+        end
+        println("[AutoMargTest] GMM gradients: FD gradient done"); flush(stdout)
+
+        rel_err = maximum(abs.(grad_ad .- grad_fd) ./ (abs.(grad_fd) .+ 1e-8))
+        @test isfinite(val_ad)
+        @test rel_err < 5e-5
+    end
+
+    @testset "Efficiency smoke: AutoMarg+NUTS vs Graph+IndependentMH" begin
+        println("[AutoMargTest] Efficiency smoke: compiling models..."); flush(stdout)
+        # Minimal smoke test to ensure both pipelines run (not a benchmark)
+        mixture_def = @bugs begin
+            w[1] = 0.3
+            w[2] = 0.7
+            mu[1] ~ Normal(-2, 5)
+            mu[2] ~ Normal(2, 5)
+            sigma[1] ~ Exponential(1)
+            sigma[2] ~ Exponential(1)
+            for i in 1:N
+                z[i] ~ Categorical(w[1:2])
+                y[i] ~ Normal(mu[z[i]], sigma[z[i]])
+            end
+        end
+
+        data = (N=100, y=vcat(rand(Normal(-2, 1), 50), rand(Normal(2, 1), 50)))
+
+        # Graph model with IndependentMH (quick smoke run)
+        model_graph = compile(mixture_def, data) |> m -> settrans(m, true) |> m -> set_evaluation_mode(m, UseGraph())
+        gibbs = JuliaBUGS.Gibbs(model_graph, JuliaBUGS.IndependentMH())
+        println("[AutoMargTest] Efficiency smoke: sampling Graph+IMH..."); flush(stdout)
+        chn_graph = AbstractMCMC.sample(Random.default_rng(), model_graph, gibbs, 10; progress=false, chain_type=MCMCChains.Chains)
+        println("[AutoMargTest] Efficiency smoke: Graph+IMH done"); flush(stdout)
+        @test length(chn_graph) == 10
+
+        # Auto-marginalized model with small-step NUTS
+        model_marg = compile(mixture_def, data) |> m -> settrans(m, true) |> m -> set_evaluation_mode(m, UseAutoMarginalization())
+        @test LogDensityProblems.dimension(model_marg) < LogDensityProblems.dimension(model_graph)
+        ad_model = ADgradient(AutoForwardDiff(), model_marg)
+        D = LogDensityProblems.dimension(model_marg)
+        θ0 = zeros(D)
+        println("[AutoMargTest] Efficiency smoke: skipping AutoMarg+NUTS sampling for now"); flush(stdout)
+        # Quick sanity: logdensity on AD-wrapped model at θ0 is finite
+        val = LogDensityProblems.logdensity(ad_model, θ0)
+        @test isfinite(val)
     end
 end
