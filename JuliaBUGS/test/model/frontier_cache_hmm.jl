@@ -106,15 +106,25 @@ using JuliaBUGS.Model:
     # Sanity: different orders should not change marginalized log-density
     env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
     params = Float64[]
-    memo1 = Dict{Tuple{Int,Int,UInt64},Any}()
+    # New marginalization uses parameter offsets/lengths and 2-tuple memo keys
+    param_offsets = Dict{VarName,Int}()
+    var_lengths = Dict{VarName,Int}()
+    memo1 = Dict{Tuple{Int,UInt64},Any}()
     println("[FrontierCacheTest] Evaluating logp with interleaved order...");
     flush(stdout)
     logp1 = _marginalize_recursive(
-        model, env, order_interleaved, params, 1, Dict{Any,Int}(), memo1, keys_interleaved
+        model,
+        env,
+        order_interleaved,
+        params,
+        param_offsets,
+        var_lengths,
+        memo1,
+        keys_interleaved,
     )
 
     env2 = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
-    memo2 = Dict{Tuple{Int,Int,UInt64},Any}()
+    memo2 = Dict{Tuple{Int,UInt64},Any}()
     println("[FrontierCacheTest] Evaluating logp with states-first order...");
     flush(stdout)
     logp2 = _marginalize_recursive(
@@ -122,8 +132,8 @@ using JuliaBUGS.Model:
         env2,
         order_states_first,
         params,
-        1,
-        Dict{Any,Int}(),
+        param_offsets,
+        var_lengths,
         memo2,
         keys_states_first,
     )
