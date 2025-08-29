@@ -242,7 +242,7 @@ end
 """
     compile(model_def, data[, initial_params]; skip_validation=false)
 
-Compile the model with model definition and data. Optionally, initializations can be provided. 
+Compile the model with model definition and data. Optionally, initializations can be provided.
 If initializations are not provided, values will be sampled from the prior distributions.
 
 By default, validates that all functions in the model are in the BUGS allowlist (suitable for @bugs macro).
@@ -328,7 +328,7 @@ end
 """
     @bugs_primitive(func)
 
-`@bugs_primitive` can also be used to register function without definition.
+`@bugs_primitive` can also be used to register functions without definition.
 """
 macro bugs_primitive(func::Symbol)
     return _bugs_primitive_expr(func, esc(func))
