@@ -1,6 +1,6 @@
 # JuliaBUGS Examples
 
-We adapted some examples to show how to use JuliaBUGS in this repo.
+We have adapted some examples to show how to use JuliaBUGS in this repository.
 
 ## Sources
 
