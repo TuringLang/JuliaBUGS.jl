@@ -746,10 +746,11 @@ using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
         @test length(chn_graph) == 10
 
         # Auto-marginalized model with small-step NUTS
-        model_marg = (m ->
-            (m -> set_evaluation_mode(m, UseAutoMarginalization()))(settrans(m, true)))(compile(
-            mixture_def, data
-        ))
+        model_marg = (
+            m -> (m -> set_evaluation_mode(m, UseAutoMarginalization()))(settrans(m, true))
+        )(
+            compile(mixture_def, data)
+        )
         @test LogDensityProblems.dimension(model_marg) <
             LogDensityProblems.dimension(model_graph)
         # Run gradient-based sampling (NUTS) on the auto-marginalized AD-wrapped model
