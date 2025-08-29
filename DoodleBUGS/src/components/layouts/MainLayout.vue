@@ -96,6 +96,29 @@ onMounted(async () => {
   }
 
   validateGraph();
+  
+  // Attempt silent reconnect to saved backend after reloads
+  if (backendUrl.value) {
+    try {
+      const resp = await fetch(`${backendUrl.value}/api/health`);
+      if (resp.ok) {
+        const j = await resp.json().catch(() => ({}));
+        if (j && j.status === 'ok') {
+          isConnected.value = true;
+          executionStore.executionLogs.push(`Reconnected to backend at ${backendUrl.value}.`);
+        } else {
+          isConnected.value = false;
+          executionStore.executionLogs.push(`Saved backend URL present but health check returned invalid payload.`);
+        }
+      } else {
+        isConnected.value = false;
+        executionStore.executionLogs.push(`Saved backend URL present but health check failed with ${resp.status}.`);
+      }
+    } catch (e) {
+      isConnected.value = false;
+      executionStore.executionLogs.push(`Saved backend URL present but health check errored: ${(e as Error).message}`);
+    }
+  }
 });
 
 watch(
@@ -420,9 +443,9 @@ const runModel = async () => {
     }
     currentRunController = new AbortController();
 
-    // Build payload with JSON-first approach AND include Julia literals for backend
-    const dataPayload = dataStore.inputMode === 'json' ? JSON.parse(dataStore.dataString || '{}') : JSON.parse(JSON.stringify(juliaTupleToJsonObject(dataStore.dataString)));
-    const initsPayload = dataStore.inputMode === 'json' ? JSON.parse(dataStore.initsString || '{}') : JSON.parse(JSON.stringify(juliaTupleToJsonObject(dataStore.initsString)));
+    // Build payload from parsedGraphData to ensure consistency across modes
+    const dataPayload = parsedGraphData.value.data || {};
+    const initsPayload = parsedGraphData.value.inits || {};
 
     const dataString = dataStore.inputMode === 'julia' ? (dataStore.dataString || '') : jsonToJulia(JSON.stringify(dataPayload));
     const initsString = dataStore.inputMode === 'julia' ? (dataStore.initsString || '') : jsonToJulia(JSON.stringify(initsPayload));
@@ -501,7 +524,21 @@ const runModel = async () => {
       }
     });
     const frontendStandaloneFile: GeneratedFile = { name: 'standalone.jl', content: frontendStandaloneScript };
-    executionStore.generatedFiles = (result.files ?? []).filter(file => file.name !== 'standalone.jl').concat(frontendStandaloneFile);
+    const backendFiles = (result.files ?? [])
+      .filter(file => file.name !== 'standalone.jl')
+      .map(file => ({
+        name: file.name,
+        content: typeof (file as any).content === 'string'
+          ? (file as any).content
+          : ((file as any).content == null ? '' : JSON.stringify((file as any).content)),
+      }));
+    // Put standalone first so users see a guaranteed non-empty file
+    executionStore.generatedFiles = [frontendStandaloneFile, ...backendFiles];
+    // Debug log: show file sizes to help diagnose empty content
+    try {
+      const sizes = executionStore.generatedFiles.map(f => `${f.name} (${(f.content || '').length})`).join(', ');
+      executionStore.executionLogs.push(`Generated files: ${sizes}`);
+    } catch { /* ignore logging errors */ }
     executionStore.executionError = null;
 
     // Switch to Results on successful completion
@@ -585,9 +622,9 @@ const jsonToJulia = (jsonString: string): string => {
 
 const handleGenerateStandalone = () => {
   try {
-    // Build JSON-first payloads similar to runModel
-    const dataPayload = dataStore.inputMode === 'json' ? JSON.parse(dataStore.dataString || '{}') : JSON.parse(JSON.stringify(juliaTupleToJsonObject(dataStore.dataString)));
-    const initsPayload = dataStore.inputMode === 'json' ? JSON.parse(dataStore.initsString || '{}') : JSON.parse(JSON.stringify(juliaTupleToJsonObject(dataStore.initsString)));
+    // Build payloads from parsedGraphData to ensure consistency across modes
+    const dataPayload = parsedGraphData.value.data || {};
+    const initsPayload = parsedGraphData.value.inits || {};
 
     const script = generateStandaloneScript({
       modelCode: generatedCode.value,
@@ -610,17 +647,8 @@ const handleGenerateStandalone = () => {
     // Focus Execution panel and open right sidebar
     uiStore.setActiveRightTab('connection');
     isRightSidebarOpen.value = true;
-
-    // Trigger immediate download
-    const blob = new Blob([script], { type: 'text/x-julia' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${activeGraphName.value || 'model'}-standalone.jl`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Switch the ExecutionPanel to the Files tab so the script is visible
+    executionStore.setExecutionPanelTab('files');
   } catch (err) {
     executionStore.executionLogs.push(`Failed to generate standalone script: ${(err as Error).message}`);
   }

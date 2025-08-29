@@ -45,6 +45,24 @@ const emit = defineEmits<{
 const executionStore = useExecutionStore();
 const { isConnected, isExecuting, isConnecting, backendUrl } = storeToRefs(executionStore);
 const navBackendUrl = ref(backendUrl.value || 'http://localhost:8081');
+const startCmd = 'julia --project=DoodleBUGS/runtime DoodleBUGS/runtime/server.jl';
+const instantiateCmd = 'julia --project=DoodleBUGS/runtime -e "using Pkg; Pkg.instantiate()"';
+
+// Copy helpers with brief feedback
+const copiedBackendUrl = ref(false);
+const copiedStartCmd = ref(false);
+const copiedInstantiateCmd = ref(false);
+
+function copyWithFeedback(text: string, flag: typeof copiedBackendUrl) {
+  navigator.clipboard.writeText(text).then(() => {
+    flag.value = true;
+    setTimeout(() => (flag.value = false), 1500);
+  }).catch(err => console.error('Clipboard copy failed:', err));
+}
+
+const copyBackendUrl = () => copyWithFeedback(navBackendUrl.value, copiedBackendUrl);
+const copyStartCmd = () => copyWithFeedback(startCmd, copiedStartCmd);
+const copyInstantiateCmd = () => copyWithFeedback(instantiateCmd, copiedInstantiateCmd);
 
 const displayTitle = computed(() => {
   if (props.projectName && props.activeGraphName) {
@@ -163,6 +181,29 @@ const handleGridSizeInput = (event: Event) => {
               <div class="dropdown-input-group">
                 <label for="backend-url-nav">URL:</label>
                 <BaseInput id="backend-url-nav" v-model="navBackendUrl" placeholder="http://localhost:8081" class="backend-url-input" />
+                <BaseButton size="small" type="secondary" class="copy-btn" title="Copy URL" @click.stop="copyBackendUrl">
+                  <i v-if="copiedBackendUrl" class="fas fa-check"></i>
+                  <i v-else class="fas fa-copy"></i>
+                </BaseButton>
+              </div>
+              <div class="dropdown-hint">
+                <div>First time only (instantiate deps):</div>
+                <div class="copy-row">
+                  <div class="code-inline">{{ instantiateCmd }}</div>
+                  <BaseButton size="small" type="ghost" class="copy-btn" title="Copy command" @click.stop="copyInstantiateCmd">
+                    <i v-if="copiedInstantiateCmd" class="fas fa-check"></i>
+                    <i v-else class="fas fa-copy"></i>
+                  </BaseButton>
+                </div>
+                <div style="height:6px;"></div>
+                <div>Start backend from repo root:</div>
+                <div class="copy-row">
+                  <div class="code-inline">{{ startCmd }}</div>
+                  <BaseButton size="small" type="ghost" class="copy-btn" title="Copy command" @click.stop="copyStartCmd">
+                    <i v-if="copiedStartCmd" class="fas fa-check"></i>
+                    <i v-else class="fas fa-copy"></i>
+                  </BaseButton>
+                </div>
               </div>
               <div class="dropdown-actions">
                 <span class="connection-status" :class="{ connected: isConnected }">
@@ -465,4 +506,36 @@ const handleGridSizeInput = (event: Event) => {
   color: rgb(228, 15, 15);
 }
 .connection-status.connected { opacity: 1; color: green }
+
+.dropdown-hint {
+  padding: 0 15px 8px;
+  font-size: 0.8em;
+  color: var(--color-secondary);
+}
+.dropdown-hint .code-inline {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9em;
+  opacity: 0.9;
+  overflow-x: auto;
+  white-space: pre;
+  flex: 1 1 auto;
+  line-height: 1.25;
+  padding-bottom: 4px; /* avoid scrollbar overlap on some platforms */
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-gutter: stable both-edges; /* reserve space for scrollbar */
+}
+.copy-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  min-width: 0;
+}
+.dropdown-hint .code-inline::-webkit-scrollbar { height: 6px; }
+.dropdown-hint .code-inline::-webkit-scrollbar-track { background: transparent; }
+.dropdown-hint .code-inline::-webkit-scrollbar-thumb { background-color: var(--color-border); border-radius: 3px; }
+.copy-btn {
+  padding: 2px 6px;
+}
 </style>

@@ -43,3 +43,35 @@ npm run preview
 ```
 
 For more information, questions, or to get involved, please contact [@shravanngoswamii](https://github.com/shravanngoswamii) (Ping me on [Julia Slack](https://julialang.slack.com/archives/CCYDC34A0)).
+
+> [!TIP]
+> You can generate a standalone Julia script directly from the app: open the navbar → `Connection` → `Generate Standalone Julia Script`.
+> The script opens in the right sidebar's Execution panel under the Files tab, where you can copy or download it.
+
+## Backend (Julia) Quick Start
+
+The DoodleBUGS app can connect to a local Julia backend for running models.
+
+1. Clone this repository and open a terminal at the repo root.
+2. Instantiate backend dependencies (first time only):
+
+```bash
+julia --project=DoodleBUGS/runtime -e "using Pkg; Pkg.instantiate()"
+```
+
+3. Start the backend server (defaults to http://localhost:8081):
+
+```bash
+julia --project=DoodleBUGS/runtime DoodleBUGS/runtime/server.jl
+```
+
+4. In the DoodleBUGS app, open the navbar → `Connection` → set URL to `http://localhost:8081` → `Connect`.
+
+Notes:
+- Keep the backend terminal open while using the app.
+- If the port is in use or blocked by a firewall, change the port in `DoodleBUGS/runtime/server.jl` and reconnect (the port is currently set to 8081 at the end of the file).
+
+#### Troubleshooting
+
+- To verify connectivity, open your browser at `http://localhost:8081/api/health` (replace 8081 if you changed the port). A healthy server returns `{ "status": "ok" }`.
+- If the health check fails, ensure the server is running, the URL/port are correct, and no firewall or VPN is blocking the port. Check the backend terminal output for errors.

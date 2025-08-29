@@ -62,9 +62,13 @@ const activeFileContent = computed(() => {
   return f?.content ?? '';
 });
 
+// Show overlay copy button only for standalone.jl
+const isStandaloneActive = computed(() => (activeFileName.value ?? '').toLowerCase() === 'standalone.jl');
+
 // CodeMirror instance for file content
 const fileEditorContainer = ref<HTMLDivElement | null>(null);
 let cmInstance: Editor | null = null;
+const editorReady = ref(false);
 
 function pickModeByExt(name: string | null): string | undefined {
   if (!name) return undefined;
@@ -89,6 +93,7 @@ function ensureEditor() {
       foldGutter: true,
       gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
     });
+    editorReady.value = true;
   } else {
     // Update mode and value to match current file
     const cm = cmInstance as Editor & { setOption: (option: string, value: unknown) => void };
@@ -110,10 +115,20 @@ onUnmounted(() => {
     el.parentNode?.removeChild(el);
     cmInstance = null;
   }
+  editorReady.value = false;
 });
 
 watch([activeTab, activeFileName], ([tab]) => {
   if (tab === 'files') nextTick(() => ensureEditor());
+});
+
+// Ensure editor also initializes when files arrive or container appears
+watch(generatedFiles, () => {
+  if (activeTab.value === 'files') nextTick(() => ensureEditor());
+});
+
+watch(fileEditorContainer, () => {
+  if (activeTab.value === 'files') nextTick(() => ensureEditor());
 });
 
 watch(activeFileContent, (content) => {
@@ -419,7 +434,7 @@ const downloadFileContent = (fileName: string, content: string) => {
           <div class="file-view" v-if="activeFileName">
             <div class="file-header">
               <strong>{{ activeFileName }}</strong>
-              <BaseButton @click="copyFileContent(activeFileName, activeFileContent)" size="small">
+              <BaseButton v-if="!isStandaloneActive" @click="copyFileContent(activeFileName, activeFileContent)" size="small">
                 <i v-if="copySuccessStates[activeFileName]" class="fas fa-check"></i>
                 <span v-else>Copy</span>
               </BaseButton>
@@ -427,7 +442,15 @@ const downloadFileContent = (fileName: string, content: string) => {
                 Download
               </BaseButton>
             </div>
-            <div ref="fileEditorContainer" class="cm-file-viewer"></div>
+            <div ref="fileEditorContainer" class="cm-file-viewer">
+              <div v-if="isStandaloneActive" class="cm-copy-overlay">
+                <BaseButton size="small" type="secondary" title="Copy code" @click="copyFileContent(activeFileName, activeFileContent)">
+                  <i v-if="copySuccessStates[activeFileName]" class="fas fa-check"></i>
+                  <i v-else class="fas fa-copy"></i>
+                </BaseButton>
+              </div>
+              <pre v-if="!editorReady" class="file-content">{{ activeFileContent }}</pre>
+            </div>
           </div>
         </div>
       </div>
@@ -599,6 +622,7 @@ const downloadFileContent = (fileName: string, content: string) => {
 .file-view {
   border: 1px solid var(--color-border);
   border-radius: 4px;
+  position: relative;
 }
 
 .file-header {
@@ -662,6 +686,39 @@ const downloadFileContent = (fileName: string, content: string) => {
   width: 100%;
   min-height: 260px;
   max-height: 50vh;
+  position: relative;
+}
+
+.cm-copy-overlay {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+}
+
+/* Match CodePreviewPanel floating copy button visuals */
+.cm-copy-overlay .base-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--color-secondary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0.9;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+
+.cm-copy-overlay .base-button:hover {
+  background-color: var(--color-secondary-hover);
+  opacity: 1;
+}
+
+.cm-copy-overlay .fa-copy,
+.cm-copy-overlay .fa-check {
+  font-size: 1.1rem;
 }
 </style>
 

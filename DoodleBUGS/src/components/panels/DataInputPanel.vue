@@ -27,6 +27,7 @@ let initsCm: Editor | null = null;
 let isUpdatingFromSource = false;
 
 const jsonError = ref<string | null>(null);
+const jsonInitsError = ref<string | null>(null);
 
 const validateJson = (jsonString: string) => {
   try {
@@ -34,6 +35,15 @@ const validateJson = (jsonString: string) => {
     jsonError.value = null;
   } catch (e: unknown) {
     jsonError.value = e instanceof Error ? e.message : String(e);
+  }
+};
+
+const validateJsonInits = (jsonString: string) => {
+  try {
+    JSON.parse(jsonString);
+    jsonInitsError.value = null;
+  } catch (e: unknown) {
+    jsonInitsError.value = e instanceof Error ? e.message : String(e);
   }
 };
 
@@ -75,6 +85,7 @@ const setupCodeMirror = () => {
         initsCm.on('change', (instance) => {
           if (isUpdatingFromSource) return;
           dataStore.initsString = instance.getValue();
+          validateJsonInits(instance.getValue());
         });
       }
     }
@@ -117,6 +128,7 @@ watch([() => dataStore.dataString, () => dataStore.initsString], () => {
     if (dataCm.getValue() !== dataStore.dataString) dataCm.setValue(dataStore.dataString);
     if (initsCm && initsCm.getValue() !== dataStore.initsString) initsCm.setValue(dataStore.initsString);
     validateJson(dataStore.dataString);
+    validateJsonInits(dataStore.initsString);
   }
   isUpdatingFromSource = false;
 }, { deep: true });
@@ -162,10 +174,16 @@ watch(() => props.isActive, (newVal) => {
     <div class="footer-status">
       <div v-if="dataStore.inputMode === 'json'">
         <div v-if="jsonError" class="status-message error">
-            <i class="fas fa-times-circle"></i> {{ jsonError }}
+            <i class="fas fa-times-circle"></i> <strong>Data:</strong> {{ jsonError }}
         </div>
         <div v-else class="status-message success">
-            <i class="fas fa-check-circle"></i> Valid JSON
+            <i class="fas fa-check-circle"></i> <strong>Data:</strong> Valid JSON
+        </div>
+        <div v-if="jsonInitsError" class="status-message error">
+            <i class="fas fa-times-circle"></i> <strong>Inits:</strong> {{ jsonInitsError }}
+        </div>
+        <div v-else class="status-message success">
+            <i class="fas fa-check-circle"></i> <strong>Inits:</strong> Valid JSON
         </div>
       </div>
       <div v-else class="status-message info">
