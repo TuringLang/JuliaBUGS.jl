@@ -55,10 +55,11 @@ using JuliaBUGS.Model:
     data = (N=N, y=y, z=z_obs)
 
     # Compile auto-marginalized model and wrap with AD for NUTS
-    model =
-        (m -> (m -> set_evaluation_mode(m, UseAutoMarginalization()))(settrans(m, true)))(compile(
-            mixture_def, data
-        ))
+    model = (
+        m -> (m -> set_evaluation_mode(m, UseAutoMarginalization()))(settrans(m, true))
+    )(
+        compile(mixture_def, data)
+    )
     # Initialize near ground truth for faster convergence
     initialize!(model, (; mu=[-2.0, 2.0], sigma=[1.0, 1.0]))
     ad_model = ADgradient(AutoForwardDiff(), model)
