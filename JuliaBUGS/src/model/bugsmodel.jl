@@ -31,9 +31,8 @@ end
 Return the finite support for a discrete univariate distribution.
 Relies on Distributions.support to provide an iterable, finite range.
 """
-enumerate_discrete_values(dist::Distributions.DiscreteUnivariateDistribution) = Distributions.support(
-    dist
-)
+enumerate_discrete_values(dist::Distributions.DiscreteUnivariateDistribution) =
+    Distributions.support(dist)
 
 """
     classify_node_type(dist)
@@ -77,8 +76,15 @@ struct GraphEvaluationData{TNF,TV}
     node_types::Vector{Symbol}
     is_discrete_finite_vals::Vector{Bool}
     minimal_cache_keys::Dict{Int,Vector{Int}}
+    marginalization_order::Vector{Int}
 end
 
+"""
+    GraphEvaluationData(compat constructor)
+
+Backward-compatible constructor that fills new caching fields with defaults
+when older call sites provide only the first nine fields.
+"""
 function GraphEvaluationData(
     g::BUGSGraph,
     sorted_nodes::Vector{<:VarName}=VarName[
@@ -114,7 +120,7 @@ function GraphEvaluationData(
         end
     end
 
-    return GraphEvaluationData(
+    return GraphEvaluationData{typeof(node_function_vals),typeof(loop_vars_vals)}(
         sorted_nodes,
         sorted_parameters,
         is_stochastic_vals,
@@ -124,6 +130,7 @@ function GraphEvaluationData(
         node_types,
         is_discrete_finite_vals,
         Dict{Int,Vector{Int}}(),
+        Int[],
     )
 end
 
@@ -233,7 +240,7 @@ function BUGSModel(
         JuliaBUGS.Model._precompute_minimal_cache_keys(m, collect(1:n))
     end
     # Attach minimal cache keys to GraphEvaluationData (order remains default)
-    gd2 = GraphEvaluationData(
+    gd2 = GraphEvaluationData{typeof(gd.node_function_vals),typeof(gd.loop_vars_vals)}(
         gd.sorted_nodes,
         gd.sorted_parameters,
         gd.is_stochastic_vals,
@@ -243,6 +250,7 @@ function BUGSModel(
         gd.node_types,
         gd.is_discrete_finite_vals,
         minimal_keys,
+        gd.marginalization_order,
     )
     # Return final model with cached minimal keys
     return BUGSModel(
@@ -368,7 +376,10 @@ function BUGSModel(
     end
 
     # Update graph_evaluation_data with the computed node types
-    graph_evaluation_data = GraphEvaluationData(
+    graph_evaluation_data = GraphEvaluationData{
+        typeof(graph_evaluation_data.node_function_vals),
+        typeof(graph_evaluation_data.loop_vars_vals),
+    }(
         graph_evaluation_data.sorted_nodes,
         graph_evaluation_data.sorted_parameters,
         graph_evaluation_data.is_stochastic_vals,
@@ -378,6 +389,7 @@ function BUGSModel(
         node_types,
         is_discrete_finite_vals,
         Dict{Int,Vector{Int}}(),
+        Int[],
     )
 
     lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
@@ -429,7 +441,9 @@ function BUGSModel(
         end
 
         # Reconstruct GraphEvaluationData while preserving classification
-        graph_evaluation_data = GraphEvaluationData(
+        graph_evaluation_data = GraphEvaluationData{
+            typeof(new_gd.node_function_vals),typeof(new_gd.loop_vars_vals)
+        }(
             new_gd.sorted_nodes,
             new_gd.sorted_parameters,
             new_gd.is_stochastic_vals,
@@ -439,6 +453,7 @@ function BUGSModel(
             new_node_types,
             new_is_discrete_finite_vals,
             Dict{Int,Vector{Int}}(),
+            Int[],
         )
     else
         log_density_computation_function = nothing
@@ -464,14 +479,17 @@ function BUGSModel(
         mutable_symbols,
         nothing,
     )
-    # Precompute minimal cache keys for the default order (1:n)
+    # Precompute marginalization order and minimal cache keys once
     n = length(graph_evaluation_data.sorted_nodes)
-    sorted_indices = collect(1:n)
+    sorted_indices = JuliaBUGS.Model._compute_marginalization_order(model_without_min_keys)
     minimal_keys = JuliaBUGS.Model._precompute_minimal_cache_keys(
         model_without_min_keys, sorted_indices
     )
-    # Attach minimal keys to GraphEvaluationData
-    graph_evaluation_data_with_keys = GraphEvaluationData(
+    # Attach cached order and keys to GraphEvaluationData
+    graph_evaluation_data_with_keys = GraphEvaluationData{
+        typeof(graph_evaluation_data.node_function_vals),
+        typeof(graph_evaluation_data.loop_vars_vals),
+    }(
         graph_evaluation_data.sorted_nodes,
         graph_evaluation_data.sorted_parameters,
         graph_evaluation_data.is_stochastic_vals,
@@ -481,6 +499,7 @@ function BUGSModel(
         graph_evaluation_data.node_types,
         graph_evaluation_data.is_discrete_finite_vals,
         minimal_keys,
+        sorted_indices,
     )
 
     # Return final model with cached minimal keys

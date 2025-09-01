@@ -731,14 +731,17 @@ function evaluate_with_marginalization_values!!(
         )
     end
 
-    # Compute an order that minimizes frontier growth (interleave discrete parents before observed children)
+    # Use cached marginalization order and minimal frontier keys when available
     gd = model.graph_evaluation_data
     n = length(gd.sorted_nodes)
-    sorted_indices = _compute_marginalization_order(model)
-
-    # Compute minimal cache keys for this specific order
-    # (do not reuse cached keys if they were built for a different order)
-    minimal_keys = _precompute_minimal_cache_keys(model, sorted_indices)
+    # Strictly require caches to be present for performance
+    if isempty(gd.marginalization_order) || isempty(gd.minimal_cache_keys)
+        error(
+            "Auto marginalization cache missing. This model was not prepared for UseAutoMarginalization.",
+        )
+    end
+    sorted_indices = gd.marginalization_order
+    minimal_keys = gd.minimal_cache_keys
 
     # Initialize memoization cache
     # Size hint: at most 2^|discrete_finite| * |nodes| entries
