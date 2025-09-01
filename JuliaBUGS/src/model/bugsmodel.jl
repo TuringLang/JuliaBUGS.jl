@@ -643,7 +643,7 @@ function getparams(model::BUGSModel, evaluation_env=model.evaluation_env)
             end
         else
             (; node_function, loop_vars) = model.g[v]
-            dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
+            dist = node_function(evaluation_env, loop_vars)
             transformed_value = Bijectors.transform(
                 Bijectors.bijector(dist), AbstractPPL.get(evaluation_env, v)
             )
@@ -679,7 +679,7 @@ function getparams(
             d[v] = value
         else
             (; node_function, loop_vars) = model.g[v]
-            dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
+            dist = node_function(evaluation_env, loop_vars)
             d[v] = Bijectors.transform(Bijectors.bijector(dist), value)
         end
     end

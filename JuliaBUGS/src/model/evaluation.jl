@@ -500,7 +500,7 @@ function _marginalize_recursive(
 
     if !is_stochastic
         # Deterministic node
-        value = Base.invokelatest(node_function, env, loop_vars)
+        value = node_function(env, loop_vars)
         new_env = BangBang.setindex!!(env, value, current_vn)
         result = _marginalize_recursive(
             model,
@@ -515,7 +515,7 @@ function _marginalize_recursive(
 
     elseif is_observed
         # Observed stochastic node
-        dist = Base.invokelatest(node_function, env, loop_vars)
+        dist = node_function(env, loop_vars)
         obs_value = AbstractPPL.get(env, current_vn)
         obs_logp = logpdf(dist, obs_value)
 
@@ -538,7 +538,7 @@ function _marginalize_recursive(
 
     elseif is_discrete_finite
         # Discrete finite unobserved node - marginalize out
-        dist = Base.invokelatest(node_function, env, loop_vars)
+        dist = node_function(env, loop_vars)
         possible_values = enumerate_discrete_values(dist)
 
         logp_branches = Vector{typeof(zero(eltype(parameter_values)))}(
@@ -571,7 +571,7 @@ function _marginalize_recursive(
 
     else
         # Continuous or discrete infinite unobserved node - use parameter values
-        dist = Base.invokelatest(node_function, env, loop_vars)
+        dist = node_function(env, loop_vars)
         b = Bijectors.bijector(dist)
 
         if !haskey(var_lengths, current_vn)

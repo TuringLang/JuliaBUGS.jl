@@ -698,8 +698,14 @@ function evaluate!!(
     temperature=1.0,
     transformed=model.transformed,
 )
-    evaluation_env, log_densities = evaluate_with_values!!(
-        model, flattened_values; temperature=temperature, transformed=transformed
-    )
+    if model.evaluation_mode isa UseAutoMarginalization
+        evaluation_env, log_densities = evaluate_with_marginalization_values!!(
+            model, flattened_values; temperature=temperature, transformed=transformed
+        )
+    else
+        evaluation_env, log_densities = evaluate_with_values!!(
+            model, flattened_values; temperature=temperature, transformed=transformed
+        )
+    end
     return evaluation_env, log_densities.tempered_logjoint
 end
