@@ -1,22 +1,23 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
 
-export type RightSidebarTab = 'properties' | 'code' | 'json';
-export type LeftSidebarTab = 'project' | 'palette' | 'data';
+export type RightSidebarTab = 'properties' | 'code' | 'json' | 'connection';
+export type LeftSidebarTab = 'project' | 'palette' | 'data' | 'settings';
 
 export const useUiStore = defineStore('ui', () => {
   // Right Sidebar State
-  const activeRightTab = ref<RightSidebarTab>(
-    (localStorage.getItem('doodlebugs-activeRightTab') as RightSidebarTab) || 'code'
-  );
+  // Normalize legacy stored value 'execution' to 'connection'
+  const storedRight = localStorage.getItem('doodlebugs-activeRightTab') as RightSidebarTab | 'execution' | null;
+  const initialRightTab: RightSidebarTab = storedRight === 'execution' ? 'connection' : (storedRight as RightSidebarTab) || 'code';
+  const activeRightTab = ref<RightSidebarTab>(initialRightTab);
   const isRightTabPinned = ref<boolean>(
     localStorage.getItem('doodlebugs-isRightTabPinned') === 'true'
   );
   const isRightSidebarOpen = ref<boolean>(
-    localStorage.getItem('doodlebugs-isRightSidebarOpen') !== 'false' // Default to true
+    localStorage.getItem('doodlebugs-isRightSidebarOpen') !== 'false'
   );
   const rightSidebarWidth = ref<number>(
-    parseInt(localStorage.getItem('doodlebugs-rightSidebarWidth') || '320')
+    parseInt(localStorage.getItem('doodlebugs-rightSidebarWidth') || '400') // Increased default width
   );
 
   // Left Sidebar State
@@ -24,7 +25,7 @@ export const useUiStore = defineStore('ui', () => {
     (localStorage.getItem('doodlebugs-activeLeftTab') as LeftSidebarTab) || 'project'
   );
   const isLeftSidebarOpen = ref<boolean>(
-    localStorage.getItem('doodlebugs-isLeftSidebarOpen') !== 'false' // Default to true
+    localStorage.getItem('doodlebugs-isLeftSidebarOpen') !== 'false'
   );
   const leftSidebarWidth = ref<number>(
     parseInt(localStorage.getItem('doodlebugs-leftSidebarWidth') || '330')
@@ -56,6 +57,9 @@ export const useUiStore = defineStore('ui', () => {
   // Actions
   const setActiveRightTab = (tab: RightSidebarTab) => {
     activeRightTab.value = tab;
+    if (!isRightSidebarOpen.value) {
+        isRightSidebarOpen.value = true;
+    }
   };
   const toggleRightTabPinned = () => {
     isRightTabPinned.value = !isRightTabPinned.value;
@@ -78,7 +82,6 @@ export const useUiStore = defineStore('ui', () => {
   };
 
   return {
-    // Right Sidebar
     activeRightTab,
     isRightTabPinned,
     isRightSidebarOpen,
@@ -86,7 +89,6 @@ export const useUiStore = defineStore('ui', () => {
     setActiveRightTab,
     toggleRightTabPinned,
     toggleRightSidebar,
-    // Left Sidebar
     activeLeftTab,
     isLeftSidebarOpen,
     leftSidebarWidth,
