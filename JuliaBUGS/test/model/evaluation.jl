@@ -18,16 +18,18 @@ function test_bugs_model_log_density(
     transformed_model = compile(model_def, data, inits)
     untransformed_model = JuliaBUGS.settrans(transformed_model, false)
 
-    # Evaluate directly; model compilation happens before these calls
-    @test _logjoint(untransformed_model) ≈ expected_untransformed rtol = 1E-6
-    @test _logjoint(transformed_model) ≈ expected_transformed rtol = 1E-6
+    # Allow world age to advance by calling the functions in a separate evaluation
+    Base.invokelatest() do
+        @test _logjoint(untransformed_model) ≈ expected_untransformed rtol = 1E-6
+        @test _logjoint(transformed_model) ≈ expected_transformed rtol = 1E-6
 
-    @test LogDensityProblems.logdensity(
-        transformed_model, JuliaBUGS.getparams(transformed_model)
-    ) ≈ expected_transformed rtol = 1E-6
-    @test LogDensityProblems.logdensity(
-        untransformed_model, JuliaBUGS.getparams(untransformed_model)
-    ) ≈ expected_untransformed rtol = 1E-6
+        @test LogDensityProblems.logdensity(
+            transformed_model, JuliaBUGS.getparams(transformed_model)
+        ) ≈ expected_transformed rtol = 1E-6
+        @test LogDensityProblems.logdensity(
+            untransformed_model, JuliaBUGS.getparams(untransformed_model)
+        ) ≈ expected_untransformed rtol = 1E-6
+    end
 end
 
 @testset "evaluate_with_rng!! - controlling sampling behavior" begin
