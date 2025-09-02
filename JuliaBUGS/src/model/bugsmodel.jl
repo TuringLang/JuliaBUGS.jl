@@ -31,8 +31,9 @@ end
 Return the finite support for a discrete univariate distribution.
 Relies on Distributions.support to provide an iterable, finite range.
 """
-enumerate_discrete_values(dist::Distributions.DiscreteUnivariateDistribution) =
-    Distributions.support(dist)
+enumerate_discrete_values(dist::Distributions.DiscreteUnivariateDistribution) = Distributions.support(
+    dist
+)
 
 """
     classify_node_type(dist)
