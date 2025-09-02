@@ -92,7 +92,7 @@ model_def = @bugs begin
             for t in 2:N
                 for s in 1:S
                     var"pi"[
-                        n, k, t, s] = inprod(
+                    n, k, t, s] = inprod(
                         var"pi"[n, k, t - 1, :], Lambda[n, k, t, :, s])
                 end
             end
