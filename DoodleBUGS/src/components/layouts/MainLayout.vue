@@ -1,4 +1,3 @@
-<!-- src/components/layouts/MainLayout.vue -->
 <script setup lang="ts">
 import { ref, computed, onUnmounted, watch, onMounted, nextTick } from 'vue';
 import type { StyleValue } from 'vue';
