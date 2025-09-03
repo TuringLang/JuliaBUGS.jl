@@ -123,11 +123,13 @@ onMounted(async () => {
 
 watch(
   () => graphStore.currentGraphId,
-  (newId, oldId) => {
-    if (newId && newId !== oldId) {
+  (newId) => {
+    if (newId) {
       nextTick(() => {
         setTimeout(() => {
-          handleGraphLayout('dagre');
+          const graphContent = graphStore.graphContents.get(newId);
+          const layoutToApply = graphContent?.lastLayout || 'dagre';
+          handleGraphLayout(layoutToApply);
         }, 100);
       });
     }
@@ -242,20 +244,50 @@ const handleDeleteElement = (elementId: string) => {
   deleteElement(elementId);
 };
 
+const handleLayoutUpdated = (layoutName: string) => {
+  if (graphStore.currentGraphId) {
+    graphStore.updateGraphLayout(graphStore.currentGraphId, layoutName);
+  }
+};
+
 const handleGraphLayout = (layoutName: string) => {
-  const cy = getCyInstance();
-  if (!cy) return;
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  const layoutOptionsMap: Record<string, LayoutOptions> = {
-    dagre: { name: 'dagre', animate: true, animationDuration: 500, fit: true, padding: 30 } as any,
-    fcose: { name: 'fcose', animate: true, animationDuration: 500, fit: true, padding: 30, randomize: false, quality: 'proof' } as any,
-    cola: { name: 'cola', animate: true, fit: true, padding: 30, refresh: 1, avoidOverlap: true, infinite: false, centerGraph: true, flow: { axis: 'y', minSeparation: 30 }, handleDisconnected: false, randomize: false } as any,
-    klay: { name: 'klay', animate: true, animationDuration: 500, fit: true, padding: 30, klay: { direction: 'RIGHT', edgeRouting: 'SPLINES', nodePlacement: 'LINEAR_SEGMENTS' } } as any,
-    preset: { name: 'preset' }
-  };
-  /* eslint-enable @typescript-eslint/no-explicit-any */
-  const options = layoutOptionsMap[layoutName] || layoutOptionsMap.preset;
-  cy.layout(options).run();
+    const cy = getCyInstance();
+    if (!cy) return;
+
+    const shouldUpdatePositions = layoutName !== 'preset';
+
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const layoutOptionsMap: Record<string, LayoutOptions> = {
+        dagre: { name: 'dagre', animate: true, animationDuration: 500, fit: true, padding: 30 } as any,
+        fcose: { name: 'fcose', animate: true, animationDuration: 500, fit: true, padding: 30, randomize: false, quality: 'proof' } as any,
+        cola: { name: 'cola', animate: true, fit: true, padding: 30, refresh: 1, avoidOverlap: true, infinite: false, centerGraph: true, flow: { axis: 'y', minSeparation: 30 }, handleDisconnected: false, randomize: false } as any,
+        klay: { name: 'klay', animate: true, animationDuration: 500, fit: true, padding: 30, klay: { direction: 'RIGHT', edgeRouting: 'SPLINES', nodePlacement: 'LINEAR_SEGMENTS' } } as any,
+        preset: { name: 'preset' }
+    };
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    const options = layoutOptionsMap[layoutName] || layoutOptionsMap.preset;
+    const layout = cy.layout(options);
+
+    if (shouldUpdatePositions) {
+        layout.one('layoutstop', () => {
+            const updatedElements = graphStore.currentGraphElements.map(el => {
+                if (el.type === 'node') {
+                    const cyNode = cy.getElementById(el.id);
+                    if (cyNode.length > 0) {
+                        const newPos = cyNode.position();
+                        return { ...el, position: { x: newPos.x, y: newPos.y } };
+                    }
+                }
+                return el;
+            });
+            if (graphStore.currentGraphId) {
+                graphStore.updateGraphElements(graphStore.currentGraphId, updatedElements);
+            }
+        });
+    }
+
+    layout.run();
+    handleLayoutUpdated(layoutName);
 };
 
 const handlePaletteSelection = (itemType: PaletteItemType) => {
@@ -524,14 +556,15 @@ const runModel = async () => {
       }
     });
     const frontendStandaloneFile: GeneratedFile = { name: 'standalone.jl', content: frontendStandaloneScript };
-    const backendFiles = (result.files ?? [])
-      .filter(file => file.name !== 'standalone.jl')
-      .map(file => ({
-        name: file.name,
-        content: typeof (file as any).content === 'string'
-          ? (file as any).content
-          : ((file as any).content == null ? '' : JSON.stringify((file as any).content)),
-      }));
+    const backendFiles = (result.files ?? []).filter(file => file.name !== 'standalone.jl').map(file => {
+      const content = (file as GeneratedFile & { content: unknown }).content;
+      return {
+          name: file.name,
+          content: typeof content === 'string'
+              ? content
+              : (content == null ? '' : JSON.stringify(content)),
+      };
+    });
     // Put standalone first so users see a guaranteed non-empty file
     executionStore.generatedFiles = [frontendStandaloneFile, ...backendFiles];
     // Debug log: show file sizes to help diagnose empty content
@@ -568,37 +601,6 @@ const runModel = async () => {
     abortedByUser = false;
   }
 };
-
-// Convert a Julia NamedTuple-like string to a JSON-friendly object (best-effort)
-function juliaTupleToJsonObject(juliaString: string): Record<string, unknown> {
-  try {
-    // Very conservative: if it's already JSON, return parsed
-    try { return JSON.parse(juliaString); } catch { /* ignore */ }
-    // Minimal parser for patterns like: (a = 1, b = [1,2], c = [ [..]; [..] ])
-    // We will transform into JSON by replacing Julia syntax tokens carefully.
-    let s = juliaString.trim();
-    if (!s || s === '()') return {};
-    // Replace tuple parens with braces
-    s = s.replace(/^\(/, '{').replace(/\)$/, '}');
-    // Replace "key =" with ""key":"
-    s = s.replace(/(\w+)\s*=\s*/g, '"$1": ');
-    // Replace Julia matrix [a b; c d] with array of arrays [[a,b],[c,d]] (best-effort)
-    s = s.replace(/\[\s*([\s\S]*?)\s*\]/g, (match, content) => {
-      // If it contains semicolons, treat as rows
-      if (content.includes(';')) {
-        const rows = content.split(';').map((row: string) => `[${row.trim().replace(/\s+/g, ', ')}]`);
-        return `[${rows.join(',')}]`;
-      }
-      // Otherwise keep commas
-      return `[${content.replace(/\s+/g, ' ')}]`;
-    });
-    // Remove trailing commas if any
-    s = s.replace(/,\s*}/g, '}');
-    return JSON.parse(s);
-  } catch {
-    return {};
-  }
-}
 
 const jsonToJulia = (jsonString: string): string => {
   try {
@@ -711,7 +713,7 @@ const handleGenerateStandalone = () => {
         <GraphEditor :is-grid-enabled="isGridEnabled" :grid-size="gridSize" :current-mode="currentMode"
           :elements="elements" :current-node-type="currentNodeType" :validation-errors="validationErrors"
           @update:current-mode="currentMode = $event" @update:current-node-type="currentNodeType = $event"
-          @element-selected="handleElementSelected" />
+          @element-selected="handleElementSelected" @layout-updated="handleLayoutUpdated" />
       </main>
 
       <div class="resizer resizer-right" @mousedown.prevent="startResizeRight"></div>

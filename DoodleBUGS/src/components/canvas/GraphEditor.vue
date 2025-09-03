@@ -21,6 +21,7 @@ const emit = defineEmits<{
   (e: 'element-selected', element: GraphElement | null): void;
   (e: 'update:currentMode', mode: string): void;
   (e: 'update:currentNodeType', type: NodeType): void;
+  (e: 'layout-updated', layoutName: string): void;
 }>();
 
 const { elements: graphElements, addElement, updateElement, deleteElement } = useGraphElements();
@@ -173,6 +174,7 @@ const handleNodeMoved = (payload: { nodeId: string, position: { x: number; y: nu
       parent: payload.parentId
     };
     updateElement(updatedNode);
+    emit('layout-updated', 'preset');
   }
 };
 
