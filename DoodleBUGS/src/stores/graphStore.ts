@@ -6,6 +6,7 @@ import { useDataStore } from './dataStore';
 export interface GraphContent {
   graphId: string;
   elements: GraphElement[];
+  lastLayout?: string;
 }
 
 export const useGraphStore = defineStore('graph', () => {
@@ -41,6 +42,7 @@ export const useGraphStore = defineStore('graph', () => {
     const newContent: GraphContent = {
       graphId: graphId,
       elements: [],
+      lastLayout: 'dagre', // Default layout for new graphs
     };
     graphContents.value.set(graphId, newContent);
     saveGraph(graphId, newContent);
@@ -52,6 +54,16 @@ export const useGraphStore = defineStore('graph', () => {
       const content = graphContents.value.get(graphId)!;
       content.elements = newElements;
       saveGraph(graphId, content);
+    }
+  };
+
+  const updateGraphLayout = (graphId: string, layoutName: string) => {
+    if (graphContents.value.has(graphId)) {
+      const content = graphContents.value.get(graphId)!;
+      if (content.lastLayout !== layoutName) {
+        content.lastLayout = layoutName;
+        saveGraph(graphId, content);
+      }
     }
   };
 
@@ -85,6 +97,7 @@ export const useGraphStore = defineStore('graph', () => {
     selectGraph,
     createNewGraphContent,
     updateGraphElements,
+    updateGraphLayout,
     deleteGraphContent,
     saveGraph,
     loadGraph,

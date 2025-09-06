@@ -29,12 +29,6 @@ const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping
 
 const validNodeTypes: NodeType[] = ['stochastic', 'deterministic', 'constant', 'observed', 'plate'];
 
-interface CompoundDropPayload {
-  node: NodeSingular;
-  newParent: NodeSingular | null;
-  oldParent: NodeSingular | null;
-}
-
 const formatElementsForCytoscape = (elements: GraphElement[], errors: Map<string, ValidationError[]>): ElementDefinition[] => {
   return elements.map(el => {
     if (el.type === 'node') {
@@ -131,15 +125,18 @@ onMounted(() => {
       emit('canvas-tap', evt);
     });
 
-    cy.on('compound-drop', (_evt: EventObject, data: CompoundDropPayload) => {
-      const { node, newParent } = data;
-      const newParentId = newParent ? newParent.id() : undefined;
-      
-      emit('node-moved', {
-          nodeId: node.id(),
-          position: node.position(),
-          parentId: newParentId
-      });
+    // Capture the final position of a node after any drag operation (including grid snapping).
+    // This is the definitive event for updating node positions and saving the 'preset' layout.
+    cy.on('free', 'node', (evt: EventObject) => {
+        const node = evt.target as NodeSingular;
+        const parentCollection = node.parent();
+        const parentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined;
+
+        emit('node-moved', {
+            nodeId: node.id(),
+            position: node.position(),
+            parentId: parentId,
+        });
     });
 
     cy.on('tap', 'node, edge', (evt: EventObject) => {
@@ -238,7 +235,7 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
 }
 
 .cytoscape-container.mode-add-edge {
-  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-arrow-right"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>') 12 12, crosshair;
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="%23333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-arrow-right"><line x1="5" y1="2" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>') 12 12, crosshair;
 }
 
 /* Custom drag and drop styling */
@@ -259,3 +256,4 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
   background-color: rgba(255, 0, 0, 0.1) !important;
 }
 </style>
+
