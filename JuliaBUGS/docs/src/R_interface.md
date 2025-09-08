@@ -1,16 +1,25 @@
 # R Interface
 
-As part of the Google Summer of Code (GSoC) 2025, a project was completed under the [Turing.jl](https://turinglang.org/) organization to develop an R interface for [`JuliaBUGS.jl`](https://github.com/TuringLang/JuliaBUGS.jl). The outcome of this project was the creation of the `rjuliabugs` package, developed by Mateus Maia with mentorship from Xianda Sun and Robert Goudie.  
+[**RJuliaBUGS**](https://mateusmaiads.github.io/rjuliabugs/) lets you run BUGS models from R using Julia's fast sampling algorithms.
 
-`rjuliabugs` provides a bridge between `R` and `JuliaBUGS`, the BUGS-style Bayesian modeling interface developed in Julia. JuliaBUGS enables users to specify models in the familiar BUGS syntax while leveraging the speed and flexibility of Julia, including advanced inference engines such as Hamiltonian Monte Carlo (HMC) through Turing.jl. With `rjuliabugs`, R users can run BUGS models directly from R, benefiting from Julia’s efficient inference algorithms without leaving the R environment.  
+Created by [Mateus Maia](https://github.com/MateusMaiaDS) as part of Google Summer of Code 2025.
 
-The package integrates seamlessly with R’s post-processing ecosystem, including tools like `bayesplot`, `posterior`, and `coda`, making diagnostics and visualization immediately accessible to applied researchers. This lowers the barrier for BUGS users to adopt modern Bayesian tools while retaining their existing model codebase.  
+## What is RJuliaBUGS?
 
+RJuliaBUGS connects R to JuliaBUGS. You write models in BUGS syntax and run them from R, but they execute using Julia's modern samplers like Hamiltonian Monte Carlo (HMC).
 
-Additional packages to provide an integration from Julia to language:
+**Key benefits:**
+- Keep your existing BUGS models
+- Run models faster with Julia's algorithms
+- Stay in R for all analysis
+- Works with `bayesplot`, `posterior`, `coda`, and other R packages
 
-- [`RCall.jl`](https://github.com/JuliaInterop/RCall.jl): interaction with R runtime.
-- [`RData.jl`](https://github.com/JuliaData/RData.jl): reading and writing R data files.
-- [`DataFrames.jl`](https://github.com/JuliaData/DataFrames.jl): `pandas` and `dplyr` for Julia.
-- [`CSV.jl`](https://github.com/JuliaData/CSV.jl): CSV file reading and writing.
-- [`JSON.jl`](https://github.com/JuliaIO/JSON.jl), [`JSON3.jl`](https://github.com/quinnj/JSON3.jl), - [`Serde.jl`](https://github.com/bhftbootcamp/Serde.jl): JSON file reading and writing.
+## Related Julia Packages
+
+For R users working with Julia:
+
+- [`RCall.jl`](https://github.com/JuliaInterop/RCall.jl) - Run R from Julia
+- [`RData.jl`](https://github.com/JuliaData/RData.jl) - Read/write R data files
+- [`DataFrames.jl`](https://github.com/JuliaData/DataFrames.jl) - Data manipulation (like `dplyr`)
+- [`CSV.jl`](https://github.com/JuliaData/CSV.jl) - Work with CSV files
+- [`JSON.jl`](https://github.com/JuliaIO/JSON.jl), [`JSON3.jl`](https://github.com/quinnj/JSON3.jl) - Work with JSON data

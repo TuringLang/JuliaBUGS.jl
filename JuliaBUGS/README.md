@@ -46,6 +46,6 @@ For a complete walkthrough, see the [example](https://turinglang.org/JuliaBUGS.j
 ## **Related Tools**
 
 - [**DoodleBUGS**](https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/) — a browser-based interface for drawing BUGS models.
-- [**RJuliaBUGS**](https://mateusmaiads.github.io/rjuliabugs/) — an R interface to JuliaBUGS. This is done using the R package `rjuliabugs`.
+- [**RJuliaBUGS**](https://mateusmaiads.github.io/rjuliabugs/) — an R interface to JuliaBUGS.
     
 For alternative BUGS-family tools, see [JAGS](https://sourceforge.net/p/mcmc-jags/code-0/ci/default/tree/) and [Nimble](https://r-nimble.org/).
