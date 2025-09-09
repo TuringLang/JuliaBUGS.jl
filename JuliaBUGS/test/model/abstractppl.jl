@@ -5,6 +5,8 @@ using JuliaBUGS.Model:
     decondition,
     parameters,
     set_evaluation_mode,
+    set_observed_values!,
+    regenerate_log_density_function,
     UseGeneratedLogDensityFunction,
     UseGraph
 using LogDensityProblems
@@ -148,6 +150,111 @@ JuliaBUGS.@bugs_primitive Normal Gamma
             )
             logp = LogDensityProblems.logdensity(model_cond_gen, Float64[])
             @test isfinite(logp)
+        end
+
+        @testset "Fast conditioning path and observed value updates" begin
+            @testset "Fast conditioning skips regeneration and forces graph mode" begin
+                model_def = @bugs begin
+                    x ~ Normal(0, 1)
+                    y ~ Normal(x, 1)
+                end
+
+                model = compile(model_def, (;))
+
+                # Regular conditioning (default regenerates)
+                model_reg = condition(model, Dict(@varname(x) => 1.0))
+                @test !isnothing(model_reg.log_density_computation_function)
+
+                # Fast conditioning (no regeneration)
+                model_fast = condition(
+                    model, Dict(@varname(x) => 1.0); regenerate_log_density=false
+                )
+                @test model_fast.log_density_computation_function === nothing
+                @test model_fast.evaluation_mode isa UseGraph
+
+                # Same parameters
+                @test parameters(model_reg) == parameters(model_fast)
+
+                # Compare log density via graph evaluation
+                params = zeros(length(parameters(model_fast)))
+                logp_fast = LogDensityProblems.logdensity(
+                    set_evaluation_mode(model_fast, UseGraph()), params
+                )
+                logp_reg = LogDensityProblems.logdensity(
+                    set_evaluation_mode(model_reg, UseGraph()), params
+                )
+                @test logp_fast ≈ logp_reg
+            end
+
+            @testset "set_observed_values! updates values and validates" begin
+                # Model with a deterministic node to hit validation
+                model_def = @bugs begin
+                    x ~ Normal(0, 1)
+                    y = x^2              # deterministic
+                    z ~ Normal(y, 1)
+                end
+
+                model = compile(model_def, (; z=2.0))
+
+                # Fast condition on x
+                m = condition(model, Dict(@varname(x) => 1.0); regenerate_log_density=false)
+                @test m.evaluation_mode isa UseGraph
+
+                # Update observed x value without reconditioning
+                m2 = set_observed_values!(m, Dict(@varname(x) => 2.0))
+                @test m2.evaluation_env.x == 2.0
+
+                # Structure unchanged (x observed; only z observed from data; no parameters)
+                # Here parameters is empty because y is deterministic and z is observed
+                @test parameters(m2) == parameters(m)
+
+                # Errors on invalid updates
+                @test_throws ArgumentError set_observed_values!(
+                    m2, Dict(@varname(y) => 3.0)
+                )  # deterministic
+
+                # Updating originally observed data should be allowed
+                m3 = set_observed_values!(m2, Dict(@varname(z) => 1.0))
+                @test m3.evaluation_env.z == 1.0
+                # To test non-observed error, try updating a parameter in a different model.
+            end
+
+            @testset "set_observed_values! errors on non-observed variables" begin
+                model_def = @bugs begin
+                    x ~ Normal(0, 1)
+                    y ~ Normal(x, 1)
+                end
+                model = compile(model_def, (;))
+                m = condition(model, Dict(@varname(x) => 1.0); regenerate_log_density=false)
+                # y is not observed
+                @test_throws ArgumentError set_observed_values!(m, Dict(@varname(y) => 0.0))
+            end
+
+            @testset "Regeneration after fast conditioning (no mode change)" begin
+                model_def = @bugs begin
+                    x ~ Normal(0, 1)
+                    y ~ Normal(x, 1)
+                end
+
+                model = compile(model_def, (;))
+                m = condition(model, Dict(@varname(x) => 1.0); regenerate_log_density=false)
+                @test m.log_density_computation_function === nothing
+
+                # Regenerate compiled function without changing mode
+                m2 = regenerate_log_density_function(m)
+                @test !isnothing(m2.log_density_computation_function)
+                @test m2.evaluation_mode isa UseGraph
+
+                # Can switch to generated mode explicitly and match graph
+                params = zeros(length(parameters(m2)))
+                logp_gen = LogDensityProblems.logdensity(
+                    set_evaluation_mode(m2, UseGeneratedLogDensityFunction()), params
+                )
+                logp_graph = LogDensityProblems.logdensity(
+                    set_evaluation_mode(m2, UseGraph()), params
+                )
+                @test logp_gen ≈ logp_graph
+            end
         end
     end
 
