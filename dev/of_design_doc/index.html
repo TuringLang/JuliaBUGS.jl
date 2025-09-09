@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>of Type System · JuliaBUGS.jl</title><meta name="title" content="of Type System · JuliaBUGS.jl"/><meta property="og:title" content="of Type System · JuliaBUGS.jl"/><meta property="twitter:title" content="of Type System · JuliaBUGS.jl"/><meta name="description" content="Documentation for JuliaBUGS.jl."/><meta property="og:description" content="Documentation for JuliaBUGS.jl."/><meta property="twitter:description" content="Documentation for JuliaBUGS.jl."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body>
+<!-- NAVBAR START -->
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro&display=swap');
+
+    /* Documenter.jl CSS Overrides */
+    html {
+        scroll-padding-top: calc(var(--navbar-height) + 1rem);
+    }
+    .docs-sidebar, #documenter {
+        margin-top: var(--navbar-height);
+    }
+    .docs-version-selector {
+        margin-bottom: 60px !important;
+    }
+    @media screen and (max-width: 1056px) {
+        .docs-version-selector {
+            margin-bottom: 60px !important;
+        }
+        .docs-sidebar {
+            margin-top: 0 !important;
+        }
+    }
+    /* End of Documenter.jl Tweaks */
+
+    /* Color and Font Variables */
+    :root {
+        --heading-color: #6c757d;
+        --item-color: rgb(165, 165, 165);
+        --primary-bg: white;
+        --hover-color: #8faad2;
+        --deprecated-bg: #ff4d4d;
+        --deprecated-text: white;
+        --icon-color: #6c757d;
+        --shadow-color: rgba(0, 0, 0, 0.1);
+        --dropdown-hover-bg: #e9ecef;
+        
+        /* Typography */
+        --font-family: "Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+        --nav-link-font-size: 1.0625rem;
+        --turing-title-font-size: 21.25px;
+        --icon-font-size: 1.25rem;
+        --dropdown-arrow-font-size: 0.6875rem;
+        --badge-font-size: 0.75rem;
+
+        /* Sizing and Spacing */
+        --navbar-height: 3.75rem;
+        --logo-height: 31.18px;
+        --logo-width: 52.47px;
+        --logo-padding-top: 7px;
+        --logo-margin-left: 0.3rem;
+        --title-margin-left: 0.4px;
+        --title-nav-spacing: 1.7rem;
+        --nav-item-margin-left: 1.3rem;
+        --icon-margin-left: 1rem;
+        --dropdown-padding: 1.875rem;
+        --dropdown-item-width: 12.5rem;
+        --dropdown-subitem-width: 15.625rem;
+        --dropdown-subitem-padding: 0.125rem 0.625rem;
+    }
+
+    /* Dark Theme Variable Overrides */
+    html.theme--documenter-dark {
+        --heading-color: #e0e0e0;
+        --item-color: #bdbdbd;
+        --primary-bg: #1f2424;
+        --hover-color: #ffffff;
+        --icon-color: #e0e0e0;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #424242;
+    }
+
+    /* Catppuccin Theme Overrides */
+    html.theme--catppuccin-latte {
+        --heading-color: #4c4f69;
+        --primary-bg: #eff1f5;
+        --icon-color: #4c4f69;
+        --shadow-color: rgba(0, 0, 0, 0.1);
+        --dropdown-hover-bg: #e6e9ef;
+    }
+    html.theme--catppuccin-frappe {
+        --heading-color: #c6d0f5;
+        --primary-bg: #303446;
+        --icon-color: #c6d0f5;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #51576d;
+    }
+    html.theme--catppuccin-macchiato {
+        --heading-color: #cad3f5;
+        --primary-bg: #24273a;
+        --icon-color: #cad3f5;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #494d64;
+    }
+    html.theme--catppuccin-mocha {
+        --heading-color: #cad3f5;
+        --primary-bg: #1e1e2e;
+        --icon-color: #cad3f5;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #45475a;
+    }
+
+
+    /* Main Navigation Bar */
+    .ext-navigation {
+        font-family: var(--font-family);
+        position: fixed;
+        height: var(--navbar-height);
+        top: 0;
+        width: 100%;
+        background-color: var(--primary-bg);
+        z-index: 1000;
+        box-shadow: 0 2px 4px var(--shadow-color);
+        display: flex;
+        align-items: center;
+        padding: 0 1.0625rem;
+        transition: transform 0.3s, background-color 0.3s;
+    }
+
+    nav.ext-navigation .ext-navbar-logo {
+        margin-left: var(--logo-margin-left);
+        height: var(--logo-height);
+        width: var(--logo-width);
+        padding-top: var(--logo-padding-top);
+    }
+    
+    .ext-navbar-title {
+        color: var(--heading-color) !important;
+        font-size: var(--turing-title-font-size) !important;
+        margin-left: var(--title-margin-left);
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+    
+    .ext-navbar-title:hover {
+        color: var(--hover-color) !important;
+    }
+
+    .ext-nav-links {
+        display: flex;
+        align-items: center;
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+        flex-grow: 1;
+        margin-left: var(--title-nav-spacing);
+    }
+
+    .ext-nav-links li:first-child {
+        margin-left: 0 !important;
+    }
+
+    .ext-nav-links li {
+        margin-left: var(--nav-item-margin-left) !important;
+    }
+
+    .ext-nav-link {
+        color: var(--heading-color) !important;
+        text-decoration: none;
+        font-size: var(--nav-link-font-size) !important;
+        transition: color 0.2s ease;
+        cursor: pointer;
+    }
+
+    .ext-nav-link:hover,
+    .ext-navbar-item-single a:hover,
+    .ext-navbar-icons a:hover {
+        color: var(--hover-color) !important;
+    }
+
+    .ext-navbar-item-single a {
+        color: var(--heading-color) !important;
+    }
+    
+    .ext-navbar-icons {
+        display: flex;
+        align-items: center;
+    }
+
+    .ext-navbar-icons a {
+        color: var(--icon-color) !important;
+        font-size: var(--icon-font-size) !important;
+        transition: color 0.2s ease;
+        margin-left: var(--icon-margin-left);
+    }
+
+    .ext-menu-toggle {
+        display: none;
+        font-size: 1.5rem;
+        color: var(--heading-color);
+        cursor: pointer;
+    }
+
+    .ext-dropdown {
+        display: none;
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        padding: var(--dropdown-padding);
+        position: absolute;
+        top: var(--navbar-height);
+        width: 100%;
+        left: 0;
+        background-color: var(--primary-bg);
+        line-height: 1.875rem;
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out, background-color 0.3s;
+        transform: translateY(-0.625rem);
+        box-shadow: 0 4px 6px var(--shadow-color);
+    }
+
+    #library-handler::after {
+        content: "▼";
+        font-size: var(--dropdown-arrow-font-size);
+        margin-left: 0.3125rem;
+        transition: transform 0.3s ease-in-out;
+    }
+
+    #library-handler.open::after {
+        content: "▲";
+    }
+
+    .ext-dropdown.show {
+        display: grid;
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .ext-dropdown ul {
+        width: var(--dropdown-item-width);
+        margin-bottom: 1.25rem;
+    }
+
+    .ext-dropdown ul li {
+        text-align: left;
+        display: flex;
+        align-items: center;
+    }
+
+    .ext-dropdown ul a li {
+        color: var(--item-color);
+        width: var(--dropdown-subitem-width);
+        border-radius: 3px;
+        padding: var(--dropdown-subitem-padding);
+        transition: background-color 0.2s ease;
+    }
+
+    .ext-dropdown ul a li:hover {
+        background-color: var(--dropdown-hover-bg);
+    }
+
+    .ext-dropdown-item-heading {
+        color: var(--heading-color);
+        text-align: center;
+    }
+
+    .deprecated-badge {
+        background-color: var(--deprecated-bg);
+        color: var(--deprecated-text);
+        font-size: var(--badge-font-size);
+        padding: .1rem;
+        border-radius: 3px;
+        margin-left: 0.5rem;
+        line-height: 1;
+    }
+
+    @media (max-width: 966px) {
+        .ext-dropdown {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .ext-nav-links {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            background-color: var(--primary-bg);
+            position: absolute;
+            top: var(--navbar-height);
+            left: 0;
+            padding: 0.625rem 0;
+            height: auto;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px var(--shadow-color);
+            margin-left: 0;
+        }
+
+        .ext-nav-links.show {
+            display: flex;
+        }
+
+        .ext-nav-links li {
+            margin: 0.625rem 0 !important;
+            text-align: center;
+        }
+        
+        .ext-menu-toggle {
+            display: block;
+            margin-left: auto;
+        }
+
+        .ext-navigation.hide {
+            transform: translateY(calc(-1 * var(--navbar-height)));
+        }
+
+        .ext-dropdown {
+            position: static;
+            display: block;
+            opacity: 1;
+            transform: none;
+            box-shadow: none;
+            grid-template-columns: 1fr;
+            padding: 0.625rem;
+            text-align: center;
+        }
+
+        .ext-dropdown ul {
+            width: auto;
+            display: inline-block;
+            margin: 0 auto 0.3125rem;
+            text-align: left;
+        }
+    }
+</style>
+<nav class="ext-navigation">
+    <a href="https://turinglang.org/">
+        <img src="https://turinglang.org/assets/images/turing-logo.svg" alt="Turing Logo" class="ext-navbar-logo">
+    </a>
+    <a class="ext-navbar-title" href="https://turinglang.org/">Turing.jl</a>
+    
+    <ul class="ext-nav-links">
+        <li><a class="ext-nav-link" href="https://turinglang.org/docs/getting-started/">Get Started</a></li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/docs/tutorials/">Tutorials</a></li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/docs/faq/">FAQ</a></li>
+        <li>
+            <p class="ext-nav-link" id="library-handler">Libraries</p>
+            <div class="ext-dropdown" id="ext-dropdown-items">
+                <ul>
+                    <li class="ext-dropdown-item-heading">Modelling Languages</li>
+                    <a href="https://turinglang.org/DynamicPPL.jl/"><li>DynamicPPL</li></a>
+                    <a href="https://turinglang.org/JuliaBUGS.jl/"><li>JuliaBUGS</li></a>
+                    <a href="https://turinglang.org/TuringGLM.jl/"><li>TuringGLM</li></a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">MCMC</li>
+                    <a href="https://turinglang.org/AdvancedHMC.jl/"><li>AdvancedHMC</li></a>
+                    <a href="https://turinglang.org/AbstractMCMC.jl/"><li>AbstractMCMC</li></a>
+                    <a href="https://github.com/theogf/ThermodynamicIntegration.jl"><li>ThermodynamicIntegration</li></a>
+                    <a href="https://turinglang.org/AdvancedPS.jl/"><li>AdvancedPS</li></a>
+                    <a href="https://turinglang.org/SliceSampling.jl/"><li>SliceSampling</li></a>
+                    <a href="https://turinglang.org/EllipticalSliceSampling.jl/"><li>EllipticalSliceSampling</li></a>
+                    <a href="https://turinglang.org/NestedSamplers.jl/"><li>NestedSamplers</li></a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">Diagnostics</li>
+                    <a href="https://turinglang.org/MCMCChains.jl/"><li>MCMCChains</li></a>
+                    <a href="https://turinglang.org/MCMCDiagnosticTools.jl/"><li>MCMCDiagnosticTools</li></a>
+                    <a href="https://turinglang.org/ParetoSmooth.jl/"><li>ParetoSmooth</li></a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">Gaussian Processes</li>
+                    <a href="https://juliagaussianprocesses.github.io/AbstractGPs.jl/"><li>AbstractGPs</li></a>
+                    <a href="https://juliagaussianprocesses.github.io/KernelFunctions.jl/"><li>KernelFunctions</li></a>
+                    <a href="https://juliagaussianprocesses.github.io/ApproximateGPs.jl/"><li>ApproximateGPs</li></a>
+                </ul>
+                <ul><li class="ext-dropdown-item-heading ext-navbar-item-single"><a href="https://turinglang.org/Bijectors.jl/">Bijectors</a></li></ul>
+                <ul><li class="ext-dropdown-item-heading ext-navbar-item-single"><a href="https://turinglang.org/TuringCallbacks.jl/">TuringCallbacks</a></li></ul>
+                <ul><li class="ext-dropdown-item-heading ext-navbar-item-single"><a href="https://turinglang.org/Deprecated/TuringBenchmarking/">TuringBenchmarking</a><span class="deprecated-badge">Deprecated</span></li></ul>
+            </div>
+        </li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/news/">News</a></li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/team/">Team</a></li>
+    </ul>
+
+    <div class="ext-navbar-icons">
+        <a href="https://x.com/TuringLang" aria-label="Turing on X"><i class="fa-brands fa-x-twitter"></i></a>
+        <a href="https://discourse.julialang.org/c/domain/probprog/48" aria-label="Turing on Discourse"><i class="fa-brands fa-discourse"></i></a>
+        <a href="https://julialang.slack.com/archives/CCYDC34A0" aria-label="Turing on Slack"><i class="fa-brands fa-slack"></i></a>
+        <a href="https://github.com/TuringLang/" aria-label="Turing.jl on GitHub"><i class="fa-brands fa-github"></i></a>
+    </div>
+
+    <span class="ext-menu-toggle"><i class="fa-solid fa-bars"></i></span>
+</nav>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const menuToggle = document.querySelector(".ext-menu-toggle");
+        const navLinks = document.querySelector(".ext-nav-links");
+        const nav = document.querySelector(".ext-navigation");
+        const libraryHandler = document.getElementById("library-handler");
+        const dropdownContainer = document.getElementById("ext-dropdown-items");
+        let lastScrollY = window.scrollY;
+
+        function closeDropdown() {
+            if (dropdownContainer.classList.contains("show")) {
+                libraryHandler.classList.remove("open");
+                dropdownContainer.classList.remove("show");
+                setTimeout(() => {
+                    if (!dropdownContainer.classList.contains("show")) {
+                        dropdownContainer.style.display = "none";
+                    }
+                }, 300);
+            }
+        }
+
+        function openDropdown() {
+            dropdownContainer.style.display = "grid";
+            libraryHandler.classList.add("open");
+            setTimeout(() => {
+                dropdownContainer.classList.add("show");
+            }, 10);
+        }
+
+        function setAppropriateHeight() {
+            if (window.innerWidth <= 768) {
+                const viewportHeight = window.innerHeight;
+                const navHeight = nav.offsetHeight;
+                navLinks.style.maxHeight = `${viewportHeight - navHeight}px`;
+                navLinks.style.overflowY = "auto";
+            } else {
+                navLinks.style.maxHeight = "";
+                navLinks.style.overflowY = "";
+            }
+        }
+
+        menuToggle.addEventListener("click", (event) => {
+            event.stopPropagation();
+            navLinks.classList.toggle("show");
+            if (navLinks.classList.contains("show")) {
+                setAppropriateHeight();
+                closeDropdown();
+                dropdownContainer.style.display = "none";
+            }
+        });
+
+        libraryHandler.addEventListener("click", (event) => {
+            event.stopPropagation();
+            event.preventDefault();
+            if (dropdownContainer.classList.contains("show")) {
+                closeDropdown();
+            } else {
+                openDropdown();
+            }
+            setAppropriateHeight();
+        });
+
+        // Close all menus if a click is registered outside the navigation bar.
+        document.addEventListener("click", (event) => {
+            if (!nav.contains(event.target)) {
+                navLinks.classList.remove("show");
+                closeDropdown();
+            }
+        });
+
+        // Hide navigation bar on scroll down in mobile view.
+        window.addEventListener("scroll", () => {
+            if (window.innerWidth <= 768) {
+                if (window.scrollY > lastScrollY && window.scrollY > nav.offsetHeight){
+                    nav.classList.add("hide");
+                } else {
+                    nav.classList.remove("hide");
+                }
+                lastScrollY = window.scrollY;
+            }
+        });
+
+        window.addEventListener("resize", setAppropriateHeight);
+    });
+</script>
+<!-- NAVBAR END -->
+
+<div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">JuliaBUGS.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../example/">Example</a></li><li><span class="tocitem">Modeling</span><ul><li><a class="tocitem" href="../two_macros/">Two Macros: <code>@bugs</code> &amp; <code>@model</code></a></li><li><a class="tocitem" href="../model_macro/"><code>@model</code> Macro</a></li><li class="is-active"><a class="tocitem" href><code>of</code> Type System</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Core-Concepts"><span>Core Concepts</span></a></li><li><a class="tocitem" href="#Example-Usage"><span>Example Usage</span></a></li></ul></li></ul></li><li><span class="tocitem">API</span><ul><li><a class="tocitem" href="../api/api/">General</a></li><li><a class="tocitem" href="../api/functions/">Functions</a></li><li><a class="tocitem" href="../api/distributions/">Distributions</a></li></ul></li><li><a class="tocitem" href="../differences/">Differences from Other BUGS Implementations</a></li><li><a class="tocitem" href="../pitfalls/">Pitfalls</a></li><li><a class="tocitem" href="../graph_plotting/">Plotting</a></li><li><a class="tocitem" href="../R_interface/">R Interface</a></li><li><span class="tocitem">For Developers</span><ul><li><a class="tocitem" href="../parser/">Parser</a></li><li><a class="tocitem" href="../source_gen/">Source Code Generation</a></li><li><a class="tocitem" href="../tricks/">Implementation Tricks</a></li><li><a class="tocitem" href="../BUGS_notes/">Notes on BUGS Implementations</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Modeling</a></li><li class="is-active"><a href><code>of</code> Type System</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href><code>of</code> Type System</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/TuringLang/JuliaBUGS.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/TuringLang/JuliaBUGS.jl/blob/main/JuliaBUGS/docs/src/of_design_doc.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Design-Document:-of-Type-System-for-JuliaBUGS"><a class="docs-heading-anchor" href="#Design-Document:-of-Type-System-for-JuliaBUGS">Design Document: <code>of</code> Type System for JuliaBUGS</a><a id="Design-Document:-of-Type-System-for-JuliaBUGS-1"></a><a class="docs-heading-anchor-permalink" href="#Design-Document:-of-Type-System-for-JuliaBUGS" title="Permalink"></a></h1><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>The <code>of</code> type system provides a declarative way to specify parameter <strong>types</strong> for probabilistic programming. It serves as a lightweight type annotation system that:</p><ul><li>Returns actual Julia types (not instances) that can be used in type annotations</li><li>Encodes specifications (dimensions, bounds) in type parameters</li><li>Provides utilities for parameter manipulation</li></ul><h2 id="Core-Concepts"><a class="docs-heading-anchor" href="#Core-Concepts">Core Concepts</a><a id="Core-Concepts-1"></a><a class="docs-heading-anchor-permalink" href="#Core-Concepts" title="Permalink"></a></h2><h3 id="1.-Type-Based-Design"><a class="docs-heading-anchor" href="#1.-Type-Based-Design">1. Type-Based Design</a><a id="1.-Type-Based-Design-1"></a><a class="docs-heading-anchor-permalink" href="#1.-Type-Based-Design" title="Permalink"></a></h3><p>The <code>of</code> function returns types with specifications encoded in type parameters:</p><ul><li><code>of(Array, dims...)</code> → <code>OfArray{Float64, N, (dim1, dim2, ...)}</code> - Arrays with specified dimensions</li><li><code>of(Array, T, dims...)</code> → <code>OfArray{T, N, (dim1, dim2, ...)}</code> - Typed arrays</li><li><code>of(Float64)</code> → <code>OfReal{Float64, Nothing, Nothing}</code> - Unbounded 64-bit floating point numbers</li><li><code>of(Float32)</code> → <code>OfReal{Float32, Nothing, Nothing}</code> - Unbounded 32-bit floating point numbers</li><li><code>of(Float64, lower, upper)</code> → <code>OfReal{Float64, lower, upper}</code> - Bounded 64-bit floats</li><li><code>of(Float32, lower, upper)</code> → <code>OfReal{Float32, lower, upper}</code> - Bounded 32-bit floats</li><li><code>of(Real)</code> → <code>OfReal{Float64, Nothing, Nothing}</code> - Unbounded real numbers (defaults to Float64 for backward compatibility)</li><li><code>of(Real, lower, upper)</code> → <code>OfReal{Float64, lower, upper}</code> - Bounded real numbers (defaults to Float64)</li><li><code>of(Int)</code> → <code>OfInt{Nothing, Nothing}</code> - Unbounded integers</li><li><code>of(Int, lower, upper)</code> → <code>OfInt{lower, upper}</code> - Bounded integers</li><li><code>@of(field1=..., field2=...)</code> → <code>OfNamedTuple{(:field1, :field2), Tuple{Type1, Type2}}</code> - Named tuples (use @of macro only)</li><li><code>of(...; constant=true)</code> → <code>OfConstantWrapper{T}</code> - Marks a type as constant/hyperparameter (supported for float types and Int)</li></ul><h3 id="2.-Type-Parameter-Encoding"><a class="docs-heading-anchor" href="#2.-Type-Parameter-Encoding">2. Type Parameter Encoding</a><a id="2.-Type-Parameter-Encoding-1"></a><a class="docs-heading-anchor-permalink" href="#2.-Type-Parameter-Encoding" title="Permalink"></a></h3><p>The system encodes extra useful information into type parameters:</p><ul><li><strong>Dimensions</strong>: Stored as tuple type parameters (e.g., <code>(3, 4)</code> for a 3×4 matrix)</li><li><strong>Bounds</strong>: Numeric literals stored directly as type parameters (e.g., <code>0.0</code>, <code>1.0</code>), or <code>Nothing</code> for unbounded</li><li><strong>Symbolic references</strong>: Encoded using <code>SymbolicRef{:symbol}</code> for referencing other fields</li><li><strong>Arithmetic expressions</strong>: Encoded using <code>SymbolicExpr{expr}</code> for expressions like <code>n+1</code>, <code>2*n</code>, etc. Division operations must result in integers for array dimensions.</li><li><strong>Field names</strong>: Stored as tuple of symbols in <code>OfNamedTuple</code></li><li><strong>Element types</strong>: Preserved as type parameters for arrays and nested structures</li></ul><h3 id="3.-Operations-on-Types"><a class="docs-heading-anchor" href="#3.-Operations-on-Types">3. Operations on Types</a><a id="3.-Operations-on-Types-1"></a><a class="docs-heading-anchor-permalink" href="#3.-Operations-on-Types" title="Permalink"></a></h3><ul><li><p><code>T(;kwargs...)</code> where <code>T&lt;:OfType</code> - Create instances with specified constants (returns values, not types). Uses <code>zero()</code> as default for missing values.</p></li><li><p><code>T(default_value; kwargs...)</code> where <code>T&lt;:OfType</code> - Create instances with specified constants, and initialise all element values to <code>default_value</code>, e.g. <code>T(missing; kwargs...)</code> initialise all element values to <code>missing</code>. <code>T(...)</code> returns instances, not types.</p></li><li><p><code>of(T; kwargs...)</code> where <code>T&lt;:OfType</code> - Create concrete types by resolving constants</p></li><li><p><code>rand(T::Type{&lt;:OfType})</code> - Generate random values matching the type specification</p></li><li><p><code>zero(T::Type{&lt;:OfType})</code> - Generate zero/default values </p></li><li><p><code>size(T::Type{&lt;:OfType})</code> - Get dimensions/shape of the type</p></li><li><p><code>length(T::Type{&lt;:OfType})</code> - Get total number of elements when flattened</p></li><li><p><code>flatten(T::Type{&lt;:OfType}, values)</code> - Convert structured values to flat vector</p></li><li><p><code>unflatten(T::Type{&lt;:OfType}, vec)</code> - Reconstruct structured values from flat vector</p></li><li><p><code>unflatten(T::Type{&lt;:OfType}, missing)</code> - Create instances where element values are initialised to <code>missing</code>. </p></li></ul><h3 id="4.-The-@of-Macro"><a class="docs-heading-anchor" href="#4.-The-@of-Macro">4. The @of Macro</a><a id="4.-The-@of-Macro-1"></a><a class="docs-heading-anchor-permalink" href="#4.-The-@of-Macro" title="Permalink"></a></h3><p>The <code>@of</code> macro provides cleaner syntax by automatically converting field references to symbols:</p><pre><code class="language-julia hljs">T = @of(
+    n = of(Int; constant=true),
+    data = of(Array, n, 2)  # &#39;n&#39; is automatically converted to :n
+)</code></pre><h3 id="5.-Symbolic-Dimensions-and-Bounds"><a class="docs-heading-anchor" href="#5.-Symbolic-Dimensions-and-Bounds">5. Symbolic Dimensions and Bounds</a><a id="5.-Symbolic-Dimensions-and-Bounds-1"></a><a class="docs-heading-anchor-permalink" href="#5.-Symbolic-Dimensions-and-Bounds" title="Permalink"></a></h3><p>For cases where dimensions need to be specified at runtime:</p><pre><code class="language-julia hljs"># Define type with symbolic dimensions using @of macro
+MatrixType = @of(
+    rows=of(Int; constant=true),
+    cols=of(Int; constant=true),
+    data=of(Array, rows, cols),
+)
+
+# Create concrete type by resolving constants
+ConcreteType = of(MatrixType; rows=3, cols=4)
+# ConcreteType is @of(data=of(Array, 3, 4))
+
+# Use concrete type with rand and zero
+rand(ConcreteType)  # generates random 3×4 matrix wrapped in NamedTuple
+zero(ConcreteType)  # generates zero 3×4 matrix wrapped in NamedTuple
+
+# Partial concretization (semiconcretized)
+SemiConcreteType = of(MatrixType; rows=3)
+# SemiConcreteType is @of(cols=of(Int; constant=true), data=of(Array, 3, :cols))
+
+# Create instance by providing all constants (default to zero for data)
+instance = MatrixType(;rows=3, cols=4)  
+# instance = (data = zeros(3, 4),)
+
+# Create instance with missing values
+instance = MatrixType(missing; rows=3, cols=4)  
+# instance = (data = (3x4 matrix of `missing`s),)
+
+# Create instance with specific data
+instance = MatrixType(;rows=3, cols=4, data=rand(3, 4))  
+# instance = (data = &lt;provided 3x4 matrix&gt;,)
+
+# Create concrete type for flatten/unflatten
+flat = flatten(ConcreteType, instance)
+reconstructed = unflatten(ConcreteType, flat)
+
+# rand and zero with concrete types
+rand(of(MatrixType; rows=3, cols=4))  # generates random instance
+zero(of(MatrixType; rows=10, cols=5)) # generates zero instance
+
+# Missing constants will error
+MatrixType(; rows=3) # Error: Constant `cols` is required but not provided
+rand(MatrixType) # Error: Cannot generate random values for types with symbolic dimensions</code></pre><pre><code class="language-julia hljs">ExpandedMatrixType = @of(
+    n=of(Int; constant=true),
+    original=of(Array, n, n),
+    padded=of(Array, n+1, n+1),
+    doubled=of(Array, 2*n, n),
+    halved=of(Array, n/2, n),
+)
+
+# Create instance - all non-constant fields default to zero
+instance = ExpandedMatrixType(; n=10)
+# This creates an instance with:
+# - original: 10×10 zero matrix
+# - padded: 11×11 zero matrix
+# - doubled: 20×10 zero matrix  
+# - halved: 5×10 zero matrix  (n/2 must result in an integer, error if not)
+
+# Create instance with custom default value
+instance = ExpandedMatrixType(1.0; n=10)
+# This creates an instance with all matrices filled with 1.0
+
+# Generate random instance
+rand(of(ExpandedMatrixType; n=10))</code></pre><h2 id="Example-Usage"><a class="docs-heading-anchor" href="#Example-Usage">Example Usage</a><a id="Example-Usage-1"></a><a class="docs-heading-anchor-permalink" href="#Example-Usage" title="Permalink"></a></h2><h3 id="Static-Model-Specification"><a class="docs-heading-anchor" href="#Static-Model-Specification">Static Model Specification</a><a id="Static-Model-Specification-1"></a><a class="docs-heading-anchor-permalink" href="#Static-Model-Specification" title="Permalink"></a></h3><pre><code class="language-julia hljs">ParamsType = @of(
+    mu0=of(Float64),
+    beta=of(Array, Float64, 3),
+    tau2=of(Float64, 0, nothing),
+    sigma2=of(Float64, 0, nothing),
+    school_effects=of(Array, 10),
+    y=of(Array, Float32, 100),
+)
+
+@model function school_model(
+    (; mu0, beta, tau2, sigma2, school_effects, y)::ParamsType,
+    X,
+    school_id,
+    n_students,
+)
+    # Priors
+    mu0 ~ Normal(0, 100)
+    beta ~ MvNormal(zeros(3), 100 * I)
+    tau2 ~ InverseGamma(0.001, 0.001)
+    sigma2 ~ InverseGamma(0.001, 0.001)
+
+    # Random effects
+    for j in 1:10
+        school_effects[j] ~ Normal(mu0, sqrt(tau2))
+    end
+
+    # Likelihood
+    for i in 1:n_students
+        j = school_id[i]
+        mean_i = school_effects[j] + dot(X[i, :], beta)
+        y[i] ~ Normal(mean_i, sqrt(sigma2))
+    end
+end</code></pre><h3 id="Model-with-Variable-Dimensions"><a class="docs-heading-anchor" href="#Model-with-Variable-Dimensions">Model with Variable Dimensions</a><a id="Model-with-Variable-Dimensions-1"></a><a class="docs-heading-anchor-permalink" href="#Model-with-Variable-Dimensions" title="Permalink"></a></h3><h4 id="Mixture-Model"><a class="docs-heading-anchor" href="#Mixture-Model">Mixture Model</a><a id="Mixture-Model-1"></a><a class="docs-heading-anchor-permalink" href="#Mixture-Model" title="Permalink"></a></h4><pre><code class="language-julia hljs"># Mixture model where the number of mixture components is itself a parameter
+Tparams = @of(
+    n_components=of(Int, 1, 3; constant=true),  # Can be 1, 2, or 3
+    weights=of(Array, n_components),            # Size depends on n_components
+    means=of(Array, n_components),              # Size depends on n_components
+    y=of(Array, 100)                            # Observations
+)
+
+@model function dynamic_mixture((; weights, means, y)::Tparams, n_components, n_obs)
+    # Prior on component probabilities (Dirichlet)
+    if n_components == 1
+        weights[1] = 1.0  # Single component has weight 1
+        means[1] ~ Normal(0.0, 1.0)
+        for i in 1:n_obs
+            y[i] ~ Normal(means[1], 0.5)
+        end
+    elseif n_components == 2
+        # Two components
+        weights ~ Dirichlet([1.0, 1.0])
+        means[1] ~ Normal(-1.0, 1.0)
+        means[2] ~ Normal(1.0, 1.0)
+        # Mixture likelihood
+        for i in 1:n_obs
+            z ~ Categorical(weights)
+            y[i] ~ Normal(means[z], 0.5)
+        end
+    else  # n_components == 3
+        # Three components
+        weights ~ Dirichlet([1.0, 1.0, 1.0])
+        means[1] ~ Normal(-2.0, 1.0)
+        means[2] ~ Normal(0.0, 1.0)
+        means[3] ~ Normal(2.0, 1.0)
+        # Mixture likelihood
+        for i in 1:n_obs
+            z ~ Categorical(weights)
+            y[i] ~ Normal(means[z], 0.5)
+        end
+    end
+end</code></pre><h4 id="Variable-order-autoregressive-model"><a class="docs-heading-anchor" href="#Variable-order-autoregressive-model">Variable-order autoregressive model</a><a id="Variable-order-autoregressive-model-1"></a><a class="docs-heading-anchor-permalink" href="#Variable-order-autoregressive-model" title="Permalink"></a></h4><pre><code class="language-julia hljs">ARParams = @of(
+    order=of(Int, 1, 5; constant=true),  # AR order between 1 and 5
+    coeffs=of(Array, order),             # AR coefficients
+    sigma=of(Real, 0, nothing),          # Error variance
+    y=of(Array, 100),                    # Time series data
+)
+
+@model function variable_order_ar((; order, coeffs, sigma, y)::ARParams, n_obs)
+    # Priors
+    for i in 1:order
+        coeffs[i] ~ Normal(0.0, 0.5)  # Shrinkage prior on AR coefficients
+    end
+    sigma ~ InverseGamma(2.0, 1.0)
+    
+    # AR likelihood
+    for t in (order+1):n_obs
+        # Compute AR prediction
+        pred = 0.0
+        for i in 1:order
+            pred += coeffs[order+1-i] * y[t-i]
+        end
+        y[t] ~ Normal(pred, sqrt(sigma))
+    end
+end
+
+# Usage example
+# Create instance with specific order
+params = ARParams(; order=3)
+# This creates an instance where coeffs has size 3, defaulting to zeros
+
+# Or with specific values
+params = ARParams(; order=3, coeffs=[0.5, -0.3, 0.1], sigma=0.25, y=randn(100))</code></pre><h4 id="Bayesian-Nonparametric-clustering-model"><a class="docs-heading-anchor" href="#Bayesian-Nonparametric-clustering-model">Bayesian Nonparametric clustering model</a><a id="Bayesian-Nonparametric-clustering-model-1"></a><a class="docs-heading-anchor-permalink" href="#Bayesian-Nonparametric-clustering-model" title="Permalink"></a></h4><pre><code class="language-julia hljs"># Dirichlet Process Mixture Model with truncation
+DPMModel = @of(
+    n_obs = of(Int, 10, 1000; constant=true),      # Number of observations
+    n_features = of(Int, 1, 20; constant=true),    # Feature dimension
+    max_clusters = of(Int, 10, 50; constant=true), # Truncation level for DP
+    
+    # Observed data (n_obs × n_features)
+    data = of(Array, n_obs, n_features),
+    
+    # Cluster assignments (n_obs vector)
+    z = of(Array, n_obs),
+    
+    # Stick-breaking weights (max_clusters - 1 vector)
+    v = of(Array, max_clusters - 1),
+    
+    # Cluster weights derived from stick-breaking (max_clusters vector)
+    weights = of(Array, max_clusters),
+    
+    # Cluster parameters: means (max_clusters × n_features)
+    cluster_means = of(Array, max_clusters, n_features),
+    
+    # Cluster parameters: precisions (max_clusters vector)
+    cluster_precs = of(Array, max_clusters),
+    
+    # Concentration parameter
+    alpha = of(Real, 0.1, 10.0)
+)
+
+# Create instance with specific dimensions
+instance = DPMModel(; n_obs=100, n_features=2, max_clusters=20)
+# This creates an instance with (all defaulting to zero/appropriate defaults):
+# - data: 100×2 array of observations
+# - z: 100-element vector of cluster assignments
+# - v: 19-element vector of stick-breaking proportions
+# - weights: 20-element vector of cluster weights
+# - cluster_means: 20×2 array of cluster centers
+# - cluster_precs: 20-element vector of cluster precisions
+# - alpha: concentration parameter
+
+@model function dp_mixture(
+    (;data, z, v, weights, cluster_means, cluster_precs, alpha)::DPMModel, 
+    n_obs, n_features, max_clusters
+)
+    # Prior on concentration parameter
+    alpha ~ Gamma(1.0, 1.0)
+    
+    # Stick-breaking construction for weights
+    for k in 1:(max_clusters-1)
+        v[k] ~ Beta(1.0, alpha)
+    end
+    
+    # Compute weights from stick-breaking
+    remaining = 1.0
+    for k in 1:max_clusters
+        if k &lt; max_clusters
+            weights[k] = v[k] * remaining
+            remaining *= (1 - v[k])
+        else
+            weights[k] = remaining  # Last weight gets all remaining mass
+        end
+    end
+    
+    # Priors on cluster parameters
+    for k in 1:max_clusters
+        cluster_precs[k] ~ Gamma(1.0, 1.0)
+        for d in 1:n_features
+            cluster_means[k,d] ~ Normal(0.0, 10.0)
+        end
+    end
+    
+    # Data likelihood
+    for i in 1:n_obs
+        # Cluster assignment
+        z[i] ~ Categorical(weights)
+        
+        # Observation given cluster
+        for d in 1:n_features
+            data[i,d] ~ Normal(cluster_means[z[i],d], 1/sqrt(cluster_precs[z[i]]))
+        end
+    end
+end
+
+# Create instance for 50 observations, up to 10 clusters
+dpm = DPMModel(; n_obs=50, n_features=2, max_clusters=10)</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../model_macro/">« <code>@model</code> Macro</a><a class="docs-footer-nextpage" href="../api/api/">General »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Monday 8 September 2025 10:23">Monday 8 September 2025</span>. Using Julia version 1.11.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
