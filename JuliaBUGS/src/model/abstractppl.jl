@@ -622,9 +622,10 @@ function _create_modified_model(
             order,
         )
         return BUGSModel(new_model; graph_evaluation_data=gd_cached)
-    catch
-        # If caches cannot be computed (e.g., unsupported model), return model as-is.
-        return new_model
+    catch err
+        @warn "Failed to precompute auto-marginalization caches; falling back to graph evaluation" exception=(err, catch_backtrace())
+        # Ensure the regenerated model does not stay in an inconsistent evaluation mode
+        return BangBang.setproperty!!(new_model, :evaluation_mode, UseGraph())
     end
 end
 

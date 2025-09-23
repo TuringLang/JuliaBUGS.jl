@@ -457,12 +457,12 @@ function _marginalize_recursive(
     parameter_values::AbstractVector,
     param_offsets::Dict{VarName,Int},
     var_lengths::Dict{VarName,Int},
-    memo::Dict,
+    memo::Dict{Tuple{Int,Tuple,Tuple},Any},
     minimal_keys,
 )
     # Base case: no more nodes to process
     if isempty(remaining_indices)
-        return zero(eltype(parameter_values))
+        return 0.0, 0.0
     end
 
     current_idx = remaining_indices[1]
@@ -479,14 +479,16 @@ function _marginalize_recursive(
             AbstractPPL.get(env, model.graph_evaluation_data.sorted_nodes[idx]) for
             idx in discrete_frontier_indices
         ]
-        minimal_hash = hash((discrete_frontier_indices, frontier_values))
+        frontier_indices_tuple = Tuple(discrete_frontier_indices)
+        frontier_values_tuple = Tuple(frontier_values)
     else
-        minimal_hash = UInt64(0)  # Empty frontier
+        frontier_indices_tuple = ()
+        frontier_values_tuple = ()
     end
     # With parameter access keyed by variable name, results depend only on the
     # current node and the discrete frontier state. Continuous parameters are
     # global and constant for a given input vector.
-    memo_key = (current_idx, minimal_hash)
+    memo_key = (current_idx, frontier_indices_tuple, frontier_values_tuple)
 
     if haskey(memo, memo_key)
         return memo[memo_key]
@@ -498,11 +500,14 @@ function _marginalize_recursive(
     node_function = model.graph_evaluation_data.node_function_vals[current_idx]
     loop_vars = model.graph_evaluation_data.loop_vars_vals[current_idx]
 
+    result_prior = 0.0
+    result_lik = 0.0
+
     if !is_stochastic
         # Deterministic node
         value = node_function(env, loop_vars)
         new_env = BangBang.setindex!!(env, value, current_vn)
-        result = _marginalize_recursive(
+        result_prior, result_lik = _marginalize_recursive(
             model,
             new_env,
             @view(remaining_indices[2:end]),
@@ -524,7 +529,7 @@ function _marginalize_recursive(
             obs_logp = -Inf
         end
 
-        remaining_logp = _marginalize_recursive(
+        rest_prior, rest_lik = _marginalize_recursive(
             model,
             env,
             @view(remaining_indices[2:end]),
@@ -534,16 +539,16 @@ function _marginalize_recursive(
             memo,
             minimal_keys,
         )
-        result = obs_logp + remaining_logp
+        result_prior = rest_prior
+        result_lik = obs_logp + rest_lik
 
     elseif is_discrete_finite
         # Discrete finite unobserved node - marginalize out
         dist = node_function(env, loop_vars)
         possible_values = enumerate_discrete_values(dist)
 
-        logp_branches = Vector{typeof(zero(eltype(parameter_values)))}(
-            undef, length(possible_values)
-        )
+        total_logpriors = nothing
+        branch_loglikelihoods = nothing
 
         for (i, value) in enumerate(possible_values)
             branch_env = BangBang.setindex!!(env, value, current_vn)
@@ -553,7 +558,7 @@ function _marginalize_recursive(
                 value_logp = -Inf
             end
 
-            remaining_logp = _marginalize_recursive(
+            branch_prior, branch_lik = _marginalize_recursive(
                 model,
                 branch_env,
                 @view(remaining_indices[2:end]),
@@ -564,10 +569,26 @@ function _marginalize_recursive(
                 minimal_keys,
             )
 
-            logp_branches[i] = value_logp + remaining_logp
+            total_val = value_logp + branch_prior
+            lik_val = branch_lik
+            if total_logpriors === nothing
+                total_logpriors = Vector{typeof(total_val)}(undef, length(possible_values))
+                branch_loglikelihoods = Vector{typeof(lik_val)}(undef, length(possible_values))
+            end
+            total_logpriors[i] = total_val
+            branch_loglikelihoods[i] = lik_val
         end
 
-        result = LogExpFunctions.logsumexp(logp_branches)
+        @assert total_logpriors !== nothing && branch_loglikelihoods !== nothing
+        log_prior_total = LogExpFunctions.logsumexp(total_logpriors)
+        log_joint_total = LogExpFunctions.logsumexp(total_logpriors .+ branch_loglikelihoods)
+        if isfinite(log_prior_total)
+            result_prior = log_prior_total
+            result_lik = log_joint_total - log_prior_total
+        else
+            result_prior = log_prior_total
+            result_lik = log_joint_total
+        end
 
     else
         # Continuous or discrete infinite unobserved node - use parameter values
@@ -609,7 +630,7 @@ function _marginalize_recursive(
             dist_logp += logjac
         end
 
-        remaining_logp = _marginalize_recursive(
+        rest_prior, rest_lik = _marginalize_recursive(
             model,
             new_env,
             @view(remaining_indices[2:end]),
@@ -620,11 +641,12 @@ function _marginalize_recursive(
             minimal_keys,
         )
 
-        result = dist_logp + remaining_logp
+        result_prior = dist_logp + rest_prior
+        result_lik = rest_lik
     end
 
-    memo[memo_key] = result
-    return result
+    memo[memo_key] = (result_prior, result_lik)
+    return result_prior, result_lik
 end
 
 """
@@ -751,7 +773,7 @@ function evaluate_with_marginalization_values!!(
     else
         min((1 << n_discrete_finite) * n, 1_000_000)
     end
-    memo = Dict{Tuple{Int,UInt64},Any}()
+    memo = Dict{Tuple{Int,Tuple,Tuple},Any}()
     sizehint!(memo, expected_entries)
 
     # Start recursive evaluation
@@ -777,7 +799,7 @@ function evaluate_with_marginalization_values!!(
         start += var_lengths[vn]
     end
 
-    logp = _marginalize_recursive(
+    log_prior, log_likelihood = _marginalize_recursive(
         model,
         evaluation_env,
         sorted_indices,
@@ -792,8 +814,8 @@ function evaluate_with_marginalization_values!!(
     # and split the log probability (though marginalization combines them)
     return evaluation_env,
     (
-        logprior=logp,
-        loglikelihood=0.0,  # Combined in logprior for marginalization
-        tempered_logjoint=logp * temperature,
+        logprior=log_prior,
+        loglikelihood=log_likelihood,
+        tempered_logjoint=log_prior + temperature * log_likelihood,
     )
 end

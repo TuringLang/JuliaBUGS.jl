@@ -2,7 +2,11 @@
 # This file is included from runtests.jl which provides all necessary imports
 
 using JuliaBUGS: @bugs, compile, settrans, initialize!, getparams
-using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
+using JuliaBUGS.Model:
+    set_evaluation_mode,
+    UseAutoMarginalization,
+    UseGraph,
+    evaluate_with_marginalization_values!!
 
 @testset "Auto-Marginalization" begin
     println("[AutoMargTest] Starting Auto-Marginalization test suite...");
@@ -705,6 +709,54 @@ using JuliaBUGS.Model: set_evaluation_mode, UseAutoMarginalization, UseGraph
         rel_err = maximum(abs.(grad_ad .- grad_fd) ./ (abs.(grad_fd) .+ 1e-8))
         @test isfinite(val_ad)
         @test rel_err < 5e-5
+    end
+
+    @testset "Log prior/likelihood split and tempering" begin
+        println("[AutoMargTest] Log split: compiling model...");
+        flush(stdout)
+        simple_def = @bugs begin
+            mu ~ Normal(0, 1)
+            z ~ Categorical(w[1:K])
+            y ~ Normal(mu + delta[z], sigma)
+        end
+
+        data = (
+            K=2,
+            w=[0.3, 0.7],
+            delta=[0.0, 2.0],
+            sigma=1.0,
+            y=1.5,
+        )
+
+        model = compile(simple_def, data)
+        model = settrans(model, true)
+        model = set_evaluation_mode(model, UseAutoMarginalization())
+
+        θ = [0.0]  # mu in transformed space (identity bijector)
+        _, stats = evaluate_with_marginalization_values!!(model, θ; temperature=0.4)
+
+        expected_logprior = logpdf(Normal(0, 1), 0.0)
+        log_weighted = [
+            log(data.w[i]) + logpdf(Normal(0.0 + data.delta[i], data.sigma), data.y) for
+            i in 1:data.K
+        ]
+        expected_loglik = LogExpFunctions.logsumexp(log_weighted)
+
+        @test isapprox(stats.logprior, expected_logprior; atol=1e-10)
+        @test isapprox(stats.loglikelihood, expected_loglik; atol=1e-10)
+        @test isapprox(
+            stats.tempered_logjoint, expected_logprior + 0.4 * expected_loglik; atol=1e-10
+        )
+
+        ad_model = ADgradient(AutoForwardDiff(), model)
+        val, grad = LogDensityProblems.logdensity_and_gradient(ad_model, θ)
+        @test isapprox(val, expected_logprior + expected_loglik; atol=1e-10)
+        function f_scalar(mu_val)
+            LogDensityProblems.logdensity(model, [mu_val])
+        end
+        ϵ = 1e-6
+        fd_grad = (f_scalar(θ[1] + ϵ) - f_scalar(θ[1] - ϵ)) / (2ϵ)
+        @test isapprox(grad[1], fd_grad; atol=1e-6)
     end
 
     @testset "Efficiency smoke: AutoMarg+NUTS vs Graph+IndependentMH" begin
