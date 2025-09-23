@@ -12,7 +12,7 @@ const CORS_HEADERS = [
 ]
 
 function cors_handler(handler)
-    return function(req::HTTP.Request)
+    return function (req::HTTP.Request)
         if HTTP.method(req) == "OPTIONS"
             return HTTP.Response(200, CORS_HEADERS)
         else
@@ -25,7 +25,11 @@ end
 
 function health_check_handler(req::HTTP.Request)
     @info "Health check ping (backend reachable)"
-    return HTTP.Response(200, ["Content-Type" => "application/json"], JSON3.write(Dict("status" => "ok")))
+    return HTTP.Response(
+        200,
+        ["Content-Type" => "application/json"],
+        JSON3.write(Dict("status" => "ok")),
+    )
 end
 
 
@@ -33,7 +37,7 @@ function run_model_handler(req::HTTP.Request)
     logs = String[]
     log!(logs, "Received /api/run request")
     log!(logs, "Backend processing started.")
-    
+
     tmp_dir = mktempdir()
     log!(logs, "Created temporary working directory at: $(tmp_dir)")
 
@@ -217,12 +221,17 @@ function run_model_handler(req::HTTP.Request)
         cmd = `$(julia_executable) --project=$(project_dir) --threads=auto $(script_path)`
 
         log!(logs, "Executing script in worker process...")
-        timeout_s = try Int(get(settings, :timeout_s, 0)) catch; 0 end
+        timeout_s = try
+            Int(get(settings, :timeout_s, 0))
+        catch
+            ;
+            0
+        end
         if timeout_s <= 0
             run(cmd)
             log!(logs, "Script execution finished.")
         else
-            proc = run(cmd; wait=false)
+            proc = run(cmd; wait = false)
             log!(logs, "Worker process started; enforcing timeout of $(timeout_s)s")
             deadline = time() + timeout_s
             while process_running(proc) && time() < deadline
@@ -258,21 +267,33 @@ function run_model_handler(req::HTTP.Request)
             Dict("name" => "payload.json", "content" => read(payload_path, String)),
         ]
         if isfile(results_path)
-            push!(files_arr, Dict("name" => "results.json", "content" => read(results_path, String)))
+            push!(
+                files_arr,
+                Dict("name" => "results.json", "content" => read(results_path, String)),
+            )
         end
 
         # Diagnostics: log attachment sizes
         sizes = String[]
         for f in files_arr
-            push!(sizes, string(f["name"], "=", sizeof(f["content"])) )
+            push!(sizes, string(f["name"], "=", sizeof(f["content"])))
         end
-        log!(logs, "Attaching $(length(files_arr)) files; sizes(bytes): $(join(sizes, ", "))")
+        log!(
+            logs,
+            "Attaching $(length(files_arr)) files; sizes(bytes): $(join(sizes, ", "))",
+        )
 
         response_body = Dict(
             "success" => true,
-            "results" => (haskey(results_content, :summary) ? results_content[:summary] : (haskey(results_content, :results) ? results_content[:results] : Any[])),
-            "summary" => (haskey(results_content, :summary) ? results_content[:summary] : Any[]),
-            "quantiles" => (haskey(results_content, :quantiles) ? results_content[:quantiles] : Any[]),
+            "results" => (
+                haskey(results_content, :summary) ? results_content[:summary] :
+                (haskey(results_content, :results) ? results_content[:results] : Any[])
+            ),
+            "summary" =>
+                (haskey(results_content, :summary) ? results_content[:summary] : Any[]),
+            "quantiles" => (
+                haskey(results_content, :quantiles) ? results_content[:quantiles] : Any[]
+            ),
             "logs" => logs,
             "files" => files_arr,
         )
@@ -293,13 +314,22 @@ function run_model_handler(req::HTTP.Request)
             push!(files_arr, Dict("name" => "model.bugs", "content" => model_code))
         end
         if @isdefined(run_script_content)
-            push!(files_arr, Dict("name" => "run_script.jl", "content" => run_script_content))
+            push!(
+                files_arr,
+                Dict("name" => "run_script.jl", "content" => run_script_content),
+            )
         end
         if @isdefined(payload_path) && isfile(payload_path)
-            push!(files_arr, Dict("name" => "payload.json", "content" => read(payload_path, String)))
+            push!(
+                files_arr,
+                Dict("name" => "payload.json", "content" => read(payload_path, String)),
+            )
         end
         if @isdefined(results_path) && isfile(results_path)
-            push!(files_arr, Dict("name" => "results.json", "content" => read(results_path, String)))
+            push!(
+                files_arr,
+                Dict("name" => "results.json", "content" => read(results_path, String)),
+            )
         end
         error_response = Dict(
             "success" => false,
@@ -307,7 +337,11 @@ function run_model_handler(req::HTTP.Request)
             "logs" => logs,
             "files" => files_arr,
         )
-        return HTTP.Response(500, ["Content-Type" => "application/json"], JSON3.write(error_response))
+        return HTTP.Response(
+            500,
+            ["Content-Type" => "application/json"],
+            JSON3.write(error_response),
+        )
     finally
         # Clean up temp directory in background with retries to avoid EBUSY on Windows
         @async safe_rmdir(tmp_dir)
@@ -327,11 +361,11 @@ end
 Remove directory tree with retries and backoff. Resilient to transient EBUSY on Windows.
 Intended to be called in a background task.
 """
-function safe_rmdir(path::AbstractString; retries::Int=6, sleep_s::Float64=0.25)
-    for _ in 1:retries
+function safe_rmdir(path::AbstractString; retries::Int = 6, sleep_s::Float64 = 0.25)
+    for _ = 1:retries
         try
             GC.gc()
-            rm(path; recursive=true, force=true)
+            rm(path; recursive = true, force = true)
             return
         catch e
             msg = sprint(showerror, e)
