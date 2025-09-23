@@ -70,7 +70,6 @@ model
 }
 """
 
-#! format: off
 data = (N = 1978, M = 38, mn = [0, 0, 0],
     prec = [0.0001 0 0; 0 0.0001 0; 0 0 0.0001],
     R = [0.1 0.005 0.005; 0.005 0.1 0.005; 0.005 0.005 0.1],
@@ -1574,7 +1573,6 @@ inits_alternative = (theta = 0.1, phi = 0, gamma = [1.0, 1.0, 1.0],
              0 0 0
              0 0 0
              0 0 0])
-#! format: on
 
 reference_results = (
     var"beta[1]" = (mean = 2.589E-4, std = 9.8E-5),

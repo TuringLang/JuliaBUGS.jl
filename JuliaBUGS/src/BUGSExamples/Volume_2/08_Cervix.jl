@@ -47,7 +47,6 @@ model
 }
 """
 
-#! format: off
 data = (N = 2044,
     d = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -443,7 +442,6 @@ data = (N = 2044,
 
 inits = (beta0C = 0, beta = 0, q = 0.5, phi = [0.5 0.5; 0.5 0.5])
 inits_alternative = (beta0C = 1.0, beta = 1.0, q = 0.75, phi = [0.15 0.15; 0.15 0.15])
-#! format: on
 
 reference_results = (
     var"beta" = (mean = 0.6156, std = 0.3406),
