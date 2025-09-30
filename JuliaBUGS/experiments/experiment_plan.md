@@ -48,11 +48,13 @@ AHDPG_SWEEP_SEEDS=1,2 AHDPG_SWEEP_K=5,10,20 AHDPG_SWEEP_T=100,200 AHDPG_KAPPA=5.
 
 ## 3. Scaling
 
-Benchmarks runtime vs problem size.
+Benchmarks runtime vs problem size to verify O(T·K²) complexity beyond overhead regime.
 
 ```bash
-# HMM
-AS_SWEEP_K=8,16,32,64,128,256,512 AS_SWEEP_T=50,100,200,400,800 \
+# HMM - Push into asymptotic regime
+AS_SWEEP_K=8,16,32,64,128,256,512,1024,2048 \
+AS_SWEEP_T=50,100,200,400,800,1600,3200,6400 \
+AS_TRIALS=10 \
   julia --project=JuliaBUGS/experiments scripts/hmm_scaling_bench.jl
 ```
 
@@ -100,7 +102,8 @@ AHMT_B=3 AHMT_K=2 AHMT_DEPTH=6 AHMT_MODE=frontier \
 
 ## Notes
 
-- **Ordering matters**: Good elimination orders (e.g., interleaved for HMMs) keep frontier width ≈ O(1), achieving O(K·T) cost. Bad orders (e.g., states-first) explode to O(K^T).
+- **Complexity**: With good (interleaved) ordering, HMM marginalization achieves **O(T·K²)** complexity (linear in T). Bad orderings (e.g., states-first) explode to O(K^T) by enumerating all state sequences. Frontier width measures active discrete variables: good orders keep it ≈ O(1), bad orders reach O(T).
 - **Heuristics**: Min-fill and min-degree with randomized tie-breaking (3 restarts) find good orders for arbitrary graphical models.
 - **HDP-HMM**: Both correctness and gradient scripts use the sticky HDP-HMM formulation with kappa (κ) parameter. Set AHDPC_KAPPA/AHDPG_KAPPA to control sticky self-transition bias. κ=0 is standard HDP-HMM, κ>0 adds self-transition preference.
+- **Scaling**: Sweep includes K up to 2048 states and T up to 6400 time steps to clearly show asymptotic O(T·K²) complexity beyond JIT/overhead regime. On log-log plot (time vs T, fixed K), expect slope=1 at large T. Parallel lines vertically shifted by ≈2·log(K) demonstrate tractability even with huge state spaces.
 - **Output**: All scripts write CSV to stdout. Redirect as needed: `> results/output.csv`
