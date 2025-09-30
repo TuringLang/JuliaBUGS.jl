@@ -536,3 +536,233 @@ function build_hmt_bfs_order(model)
     end
     return build_eval_order_from_discrete_order(model, order_z)
 end
+
+# ==========================
+# Graph Heuristic Orderings
+# ==========================
+
+"""
+    build_primal_graph(model)
+
+Build the primal graph (moralized graph) for discrete finite unobserved variables.
+Returns:
+- adj: adjacency list mapping label index -> Set of neighbor label indices
+- discrete_vars: sorted list of discrete finite unobserved variable label indices
+"""
+function build_primal_graph(model)
+    gd = model.graph_evaluation_data
+    n = length(gd.sorted_nodes)
+    st_parents = JModel._get_stochastic_parents_indices(model)
+
+    # Identify discrete finite unobserved variables
+    discrete_vars = Int[]
+    for i in 1:n
+        if gd.is_discrete_finite_vals[i] && !gd.is_observed_vals[i] && gd.is_stochastic_vals[i]
+            push!(discrete_vars, i)
+        end
+    end
+    sort!(discrete_vars)
+
+    # Build adjacency: connect variables that appear together in any stochastic parent set
+    adj = Dict{Int,Set{Int}}(i => Set{Int}() for i in discrete_vars)
+
+    for j in 1:n
+        if gd.is_stochastic_vals[j]
+            # Get discrete finite unobserved parents of this node
+            disc_parents = [p for p in st_parents[j] if p in discrete_vars]
+            # Moralize: connect all pairs of parents
+            for i in 1:length(disc_parents)
+                for k in (i+1):length(disc_parents)
+                    p1, p2 = disc_parents[i], disc_parents[k]
+                    push!(adj[p1], p2)
+                    push!(adj[p2], p1)
+                end
+            end
+        end
+    end
+
+    return adj, discrete_vars
+end
+
+"""
+    count_fill_edges(adj, var, eliminated)
+
+Count the number of fill edges that would be created by eliminating `var`.
+Fill edges connect neighbors of `var` that are not already connected.
+"""
+function count_fill_edges(adj::Dict{Int,Set{Int}}, var::Int, eliminated::Set{Int})
+    neighbors = setdiff(adj[var], eliminated)
+    fill_count = 0
+    neighbors_vec = collect(neighbors)
+    for i in 1:length(neighbors_vec)
+        for j in (i+1):length(neighbors_vec)
+            n1, n2 = neighbors_vec[i], neighbors_vec[j]
+            if n2 ∉ adj[n1]
+                fill_count += 1
+            end
+        end
+    end
+    return fill_count
+end
+
+"""
+    eliminate_variable!(adj, var, eliminated)
+
+Eliminate `var` from the graph by connecting all its remaining neighbors (creating fill edges).
+Updates `adj` in place and adds `var` to `eliminated`.
+"""
+function eliminate_variable!(adj::Dict{Int,Set{Int}}, var::Int, eliminated::Set{Int})
+    neighbors = setdiff(adj[var], eliminated)
+    neighbors_vec = collect(neighbors)
+    # Add fill edges: connect all pairs of neighbors
+    for i in 1:length(neighbors_vec)
+        for j in (i+1):length(neighbors_vec)
+            n1, n2 = neighbors_vec[i], neighbors_vec[j]
+            push!(adj[n1], n2)
+            push!(adj[n2], n1)
+        end
+    end
+    push!(eliminated, var)
+    return nothing
+end
+
+"""
+    build_min_fill_order(model; rng=nothing, num_restarts=3)
+
+Construct a discrete elimination order using the min-fill heuristic with randomized tie-breaking.
+Greedily eliminates the variable that creates the fewest fill edges.
+When ties occur, breaks them randomly and runs multiple restarts, returning the best order.
+
+# Arguments
+- `model`: The BUGSModel
+- `rng`: Random number generator for tie-breaking (default: MersenneTwister(42))
+- `num_restarts`: Number of randomized restarts when ties occur (default: 3)
+"""
+function build_min_fill_order(model; rng=nothing, num_restarts=3)
+    if rng === nothing
+        rng = Random.MersenneTwister(42)
+    end
+
+    best_order = Int[]
+    best_cost = Inf
+
+    for restart in 1:num_restarts
+        adj, discrete_vars = build_primal_graph(model)
+        eliminated = Set{Int}()
+        order = Int[]
+
+        while length(order) < length(discrete_vars)
+            remaining = setdiff(discrete_vars, eliminated)
+
+            # Find variables with minimum fill
+            min_fill = typemax(Int)
+            candidates = Int[]
+
+            for var in remaining
+                fill = count_fill_edges(adj, var, eliminated)
+                if fill < min_fill
+                    min_fill = fill
+                    candidates = [var]
+                elseif fill == min_fill
+                    push!(candidates, var)
+                end
+            end
+
+            # Break ties randomly
+            chosen = if length(candidates) == 1
+                candidates[1]
+            else
+                candidates[rand(rng, 1:length(candidates))]
+            end
+
+            push!(order, chosen)
+            eliminate_variable!(adj, chosen, eliminated)
+        end
+
+        # Evaluate cost using frontier proxy
+        test_model = make_model_with_order(model, build_eval_order_from_discrete_order(model, order))
+        _, _, _, log_cost = frontier_cost_proxy(test_model; K_hint=2)
+
+        if log_cost < best_cost
+            best_cost = log_cost
+            best_order = order
+        end
+    end
+
+    return build_eval_order_from_discrete_order(model, best_order)
+end
+
+"""
+    count_degree(adj, var, eliminated)
+
+Count the degree of `var` (number of remaining neighbors).
+"""
+function count_degree(adj::Dict{Int,Set{Int}}, var::Int, eliminated::Set{Int})
+    return length(setdiff(adj[var], eliminated))
+end
+
+"""
+    build_min_degree_order(model; rng=nothing, num_restarts=3)
+
+Construct a discrete elimination order using the min-degree heuristic with randomized tie-breaking.
+Greedily eliminates the variable with the smallest degree (fewest remaining neighbors).
+When ties occur, breaks them randomly and runs multiple restarts, returning the best order.
+
+# Arguments
+- `model`: The BUGSModel
+- `rng`: Random number generator for tie-breaking (default: MersenneTwister(42))
+- `num_restarts`: Number of randomized restarts when ties occur (default: 3)
+"""
+function build_min_degree_order(model; rng=nothing, num_restarts=3)
+    if rng === nothing
+        rng = Random.MersenneTwister(42)
+    end
+
+    best_order = Int[]
+    best_cost = Inf
+
+    for restart in 1:num_restarts
+        adj, discrete_vars = build_primal_graph(model)
+        eliminated = Set{Int}()
+        order = Int[]
+
+        while length(order) < length(discrete_vars)
+            remaining = setdiff(discrete_vars, eliminated)
+
+            # Find variables with minimum degree
+            min_degree = typemax(Int)
+            candidates = Int[]
+
+            for var in remaining
+                deg = count_degree(adj, var, eliminated)
+                if deg < min_degree
+                    min_degree = deg
+                    candidates = [var]
+                elseif deg == min_degree
+                    push!(candidates, var)
+                end
+            end
+
+            # Break ties randomly
+            chosen = if length(candidates) == 1
+                candidates[1]
+            else
+                candidates[rand(rng, 1:length(candidates))]
+            end
+
+            push!(order, chosen)
+            eliminate_variable!(adj, chosen, eliminated)
+        end
+
+        # Evaluate cost using frontier proxy
+        test_model = make_model_with_order(model, build_eval_order_from_discrete_order(model, order))
+        _, _, _, log_cost = frontier_cost_proxy(test_model; K_hint=2)
+
+        if log_cost < best_cost
+            best_cost = log_cost
+            best_order = order
+        end
+    end
+
+    return build_eval_order_from_discrete_order(model, best_order)
+end

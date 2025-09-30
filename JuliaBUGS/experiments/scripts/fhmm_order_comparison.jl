@@ -116,10 +116,12 @@ data = (
 )
 model, θ0 = compile_autmarg(model_def, data)
 
-# Define two consistent orders: good vs bad
+# Define all available orders
 orders = Dict{String,Function}(
     "interleaved"     => () -> make_model_with_order(model, build_fhmm_interleaved_order(model)),
     "states_then_y"   => () -> make_model_with_order(model, build_fhmm_states_then_emissions_order(model)),
+    "min_fill"        => () -> make_model_with_order(model, build_min_fill_order(model; rng=MersenneTwister(seed+2), num_restarts=3)),
+    "min_degree"      => () -> make_model_with_order(model, build_min_degree_order(model; rng=MersenneTwister(seed+3), num_restarts=3)),
 )
 
 function parse_orders_env(default_list)

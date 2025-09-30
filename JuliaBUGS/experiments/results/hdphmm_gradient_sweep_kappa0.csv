@@ -1,4 +1,0 @@
-# HDP-HMM gradient sweep (sticky κ=0.00)
-# seed,K,T,max_abs_diff,max_rel_diff,logp
-1,5,120,1.455e-07,1.059e-03,-271.423015891166
-1,5,200,2.478e-07,1.388e-03,-403.142155296914

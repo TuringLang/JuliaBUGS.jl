@@ -1,68 +1,106 @@
-# Streamlined Auto-Marginalization Experiment Plan
+# Experiment Plan: Auto-Marginalization
 
-## Core Validation: Essential Evidence
-**Goal**: Prove correctness and demonstrate core algorithmic advantages
+Experiments validating automatic marginalization of discrete latent variables in JuliaBUGS.
 
-1) **Correctness Validation**
-- HMM: K ∈ {2, 4}, T ∈ {50, 200} vs forward-backward reference
-- GMM: K ∈ {2, 4}, N ∈ {100, 1000} vs analytical collapsed likelihood
-- Gradient verification via finite differences
-- *Status: Partially implemented, needs expansion*
+## 1. Correctness
 
-2) **Scaling Demonstration**
-- HMM temporal ordering: measure O(T·K²) scaling
-- Peak frontier width profiling during evaluation
-- *Status: Basic benchmarks exist, needs theoretical overlay*
+Validates marginalized log-probability against analytical references.
 
-## Critical Impact Demo: Order Matters
-**Goal**: Show dramatic practical importance of variable ordering
+```bash
+# HMM
+AM_SWEEP_SEEDS=1,2,3 AM_SWEEP_K=2,4,8,16 AM_SWEEP_T=50,100,200,400 \
+  julia --project=JuliaBUGS/experiments scripts/hmm_correctness_sweep.jl
 
-3) **Factorial HMM Order Comparison**
-- C ∈ {2, 3, 4} chains, T = 100
-- Compare policies: interleaved (time‑first) vs min‑fill vs min‑degree (weighted by log K), with randomized tie‑breaks and a few restarts; report best of R restarts per heuristic.
-- Replace “worst‑case” (grouped/random) with practical heuristics; avoid pathological explosions.
-- Metrics:
-  - Frontier stats: max/mean/sum width over evaluation order
-  - Predicted DP cost proxy: Σ_t K^{w_t} (or Σ_t exp(Σ_i log K_i) for heterogeneous K)
-  - Timing: always time interleaved; time heuristic orders only if predicted cost < threshold (frontier‑only mode otherwise). Verify equal logp on small T.
-- Order construction: build discrete primal graph; generate elimination order via heuristic; lift to evaluation order by placing emissions as soon as all discrete parents are placed; topo‑repair; recompute minimal keys.
-- *Status: Heuristic plan defined; utils in place; implement min‑fill/min‑degree + frontier‑only reporting*
+# GMM
+AG_SWEEP_SEEDS=1,2,3 AG_SWEEP_K=2,4,8 AG_SWEEP_N=100,500,1000,5000 \
+  julia --project=JuliaBUGS/experiments scripts/gmm_correctness_sweep.jl
 
-## Theoretical Generalization: Beyond Chains
-**Goal**: Demonstrate algorithmic generality
+# HDP-HMM (sticky, κ=0)
+AHDPC_SEEDS=1,2 AHDPC_K=5,10,20 AHDPC_T=50,100,200,400 AHDPC_KAPPA=0.0 \
+  julia --project=JuliaBUGS/experiments scripts/hdphmm_correctness.jl
 
-4) **Tree Structure Validation**
-- Binary HMT: DFS vs BFS vs random orders
-- Show near-optimal frontier management
-- *Status: Not implemented*
+# HDP-HMM (sticky, κ=5)
+AHDPC_SEEDS=1,2 AHDPC_K=5,10,20 AHDPC_T=50,100,200,400 AHDPC_KAPPA=5.0 \
+  julia --project=JuliaBUGS/experiments scripts/hdphmm_correctness.jl
+```
 
-## Nonparametric Extension: Exact Finite Truncation
-**Goal**: Show method works for nonparametric models with finite support
+## 2. Gradients
 
-5) **HDP-HMM with Truncation**
-- Stick-breaking with K_max ∈ {5, 10, 20}
-- Marginalize assignments exactly under truncation
-- Compare against forward-backward with same truncation
-- Demonstrate exact gradients w.r.t. hyperparameters
-- *Status: Not implemented*
+Validates automatic differentiation against finite differences.
 
-## Implementation Priorities
+```bash
+# HMM
+AGC_SWEEP_SEEDS=1,2,3 AGC_SWEEP_K=2,4,8 AGC_SWEEP_T=50,100,200 \
+  julia --project=JuliaBUGS/experiments scripts/hmm_gradient_check.jl
 
-**Core Validation**
-1. Extend existing HMM/GMM correctness tests with more configurations
-2. Add theoretical complexity curve overlays to existing benchmarks
-3. Implement gradient verification via finite differences
+# GMM
+AGG_SWEEP_SEEDS=1,2,3 AGG_SWEEP_K=2,4,8 AGG_SWEEP_N=200,500,1000 \
+  julia --project=JuliaBUGS/experiments scripts/gmm_gradient_check.jl
 
-**Order Impact**
-4. Implement FHMM with heuristic orders (interleaved, min‑fill, min‑degree)
-5. Add frontier‑only mode with predicted cost proxy and timing threshold; time interleaved by default
-6. Add randomized restarts for heuristics with weighted scores (log K) and select the best
+# HDP-HMM (sticky, κ=0)
+AHDPG_SWEEP_SEEDS=1,2 AHDPG_SWEEP_K=5,10,20 AHDPG_SWEEP_T=100,200 AHDPG_KAPPA=0.0 \
+  julia --project=JuliaBUGS/experiments scripts/hdphmm_gradient_check.jl
 
-**Generalization**
-7. Add basic tree model (HMT) with heuristic orders (DFS‑like, min‑fill/min‑degree on tree moralization)
-8. Implement HDP-HMM with truncation and exact marginalization
+# HDP-HMM (sticky, κ=5)
+AHDPG_SWEEP_SEEDS=1,2 AHDPG_SWEEP_K=5,10,20 AHDPG_SWEEP_T=100,200 AHDPG_KAPPA=5.0 \
+  julia --project=JuliaBUGS/experiments scripts/hdphmm_gradient_check.jl
+```
 
-**Infrastructure**
-- Extend existing experiment harness for structured logging
-- Add frontier profiling and complexity proxy generation (Σ K^{w_t})
-- Add skip/timeout guards based on predicted cost; record “skipped” in logs
+## 3. Scaling
+
+Benchmarks runtime vs problem size.
+
+```bash
+# HMM
+AS_SWEEP_K=8,16,32,64,128,256,512 AS_SWEEP_T=50,100,200,400,800 \
+  julia --project=JuliaBUGS/experiments scripts/hmm_scaling_bench.jl
+```
+
+## 4. Variable Ordering: FHMM
+
+Compares elimination orders (interleaved, states_then_y, min_fill, min_degree).
+
+```bash
+# Small configs with timing
+AFH_C=2 AFH_K=2 AFH_T=5 AFH_MODE=timed AFH_ORDERS=interleaved,states_then_y \
+  julia --project=JuliaBUGS/experiments scripts/fhmm_order_comparison.jl
+AFH_C=2 AFH_K=4 AFH_T=10 AFH_MODE=timed AFH_ORDERS=interleaved,states_then_y \
+  julia --project=JuliaBUGS/experiments scripts/fhmm_order_comparison.jl
+
+# Larger configs (frontier only)
+AFH_C=2 AFH_K=4 AFH_T=50 AFH_MODE=frontier AFH_ORDERS=interleaved,states_then_y,min_fill,min_degree \
+  julia --project=JuliaBUGS/experiments scripts/fhmm_order_comparison.jl
+AFH_C=3 AFH_K=4 AFH_T=50 AFH_MODE=frontier AFH_ORDERS=interleaved,states_then_y,min_fill,min_degree \
+  julia --project=JuliaBUGS/experiments scripts/fhmm_order_comparison.jl
+AFH_C=4 AFH_K=4 AFH_T=50 AFH_MODE=frontier AFH_ORDERS=interleaved,states_then_y,min_fill,min_degree \
+  julia --project=JuliaBUGS/experiments scripts/fhmm_order_comparison.jl
+```
+
+## 5. Variable Ordering: HMT
+
+Compares tree traversal orders (dfs, bfs, random_dfs, min_fill, min_degree).
+
+```bash
+# Varying depth
+AHMT_B=2 AHMT_K=4 AHMT_DEPTH=4 AHMT_MODE=frontier \
+  julia --project=JuliaBUGS/experiments scripts/hmt_order_comparison.jl
+AHMT_B=2 AHMT_K=4 AHMT_DEPTH=6 AHMT_MODE=frontier \
+  julia --project=JuliaBUGS/experiments scripts/hmt_order_comparison.jl
+AHMT_B=2 AHMT_K=4 AHMT_DEPTH=8 AHMT_MODE=frontier \
+  julia --project=JuliaBUGS/experiments scripts/hmt_order_comparison.jl
+AHMT_B=2 AHMT_K=4 AHMT_DEPTH=10 AHMT_MODE=frontier \
+  julia --project=JuliaBUGS/experiments scripts/hmt_order_comparison.jl
+
+# Varying branching and states
+AHMT_B=2 AHMT_K=2 AHMT_DEPTH=6 AHMT_MODE=frontier \
+  julia --project=JuliaBUGS/experiments scripts/hmt_order_comparison.jl
+AHMT_B=3 AHMT_K=2 AHMT_DEPTH=6 AHMT_MODE=frontier \
+  julia --project=JuliaBUGS/experiments scripts/hmt_order_comparison.jl
+```
+
+## Notes
+
+- **Ordering matters**: Good elimination orders (e.g., interleaved for HMMs) keep frontier width ≈ O(1), achieving O(K·T) cost. Bad orders (e.g., states-first) explode to O(K^T).
+- **Heuristics**: Min-fill and min-degree with randomized tie-breaking (3 restarts) find good orders for arbitrary graphical models.
+- **HDP-HMM**: Both correctness and gradient scripts use the sticky HDP-HMM formulation with kappa (κ) parameter. Set AHDPC_KAPPA/AHDPG_KAPPA to control sticky self-transition bias. κ=0 is standard HDP-HMM, κ>0 adds self-transition preference.
+- **Output**: All scripts write CSV to stdout. Redirect as needed: `> results/output.csv`

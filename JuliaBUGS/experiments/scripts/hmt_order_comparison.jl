@@ -110,9 +110,11 @@ end
 model, θ0 = compile_case(B, depth, K, seed)
 
 orders = Dict{String,Function}(
-    "dfs" => () -> make_model_with_order(model, build_hmt_dfs_order(model; B_hint=B)),
-    "bfs" => () -> make_model_with_order(model, build_hmt_bfs_order(model)),
+    "dfs"        => () -> make_model_with_order(model, build_hmt_dfs_order(model; B_hint=B)),
+    "bfs"        => () -> make_model_with_order(model, build_hmt_bfs_order(model)),
     "random_dfs" => () -> make_model_with_order(model, build_hmt_dfs_order(model; B_hint=B, rng=MersenneTwister(seed+1), randomized=true)),
+    "min_fill"   => () -> make_model_with_order(model, build_min_fill_order(model; rng=MersenneTwister(seed+2), num_restarts=3)),
+    "min_degree" => () -> make_model_with_order(model, build_min_degree_order(model; rng=MersenneTwister(seed+3), num_restarts=3)),
 )
 
 @printf "# HMT order comparison (B=%d, depth=%d, K=%d)\n" B depth K

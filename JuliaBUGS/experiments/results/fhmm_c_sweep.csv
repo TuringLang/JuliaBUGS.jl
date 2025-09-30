@@ -1,9 +1,0 @@
-# FHMM order comparison (C=2, K=4, T=100)
-# order,max_frontier,mean_frontier,sum_frontier,log_cost_proxy,min_time_sec,logp
-interleaved,2,1.994,997,8.984e+00,3.621279e-02,-159.084764499352
-# FHMM order comparison (C=3, K=4, T=100)
-# order,max_frontier,mean_frontier,sum_frontier,log_cost_proxy,min_time_sec,logp
-interleaved,3,2.991,2094,1.071e+01,1.619965e-01,-174.241807200349
-# FHMM order comparison (C=4, K=4, T=100)
-# order,max_frontier,mean_frontier,sum_frontier,log_cost_proxy,min_time_sec,logp
-interleaved,4,3.989,3590,1.234e+01,8.969850e-01,-185.112139413195

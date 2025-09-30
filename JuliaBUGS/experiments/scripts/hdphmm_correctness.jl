@@ -8,7 +8,21 @@ include(joinpath(@__DIR__, "..", "utils.jl"))
 
 using JuliaBUGS
 using JuliaBUGS: @bugs
-JuliaBUGS.@bugs_primitive Categorical Normal
+
+# Deterministic helper to add kappa mass to one index of a vector
+function diagshift(alpha_beta::AbstractVector{T}, i::Integer, kappa::Real) where {T}
+    K = length(alpha_beta)
+    out = Vector{T}(undef, K)
+    @inbounds for j in 1:K
+        out[j] = alpha_beta[j]
+    end
+    if 1 <= i <= K
+        @inbounds out[i] = out[i] + kappa
+    end
+    return out
+end
+
+JuliaBUGS.@bugs_primitive Categorical Normal Beta Dirichlet diagshift
 using LogDensityProblems
 using LogExpFunctions: logsumexp
 
@@ -105,6 +119,8 @@ end
 
 function build_model()
     @bugs begin
+        # Simple HMM model with pre-computed sticky HDP-HMM parameters
+        # The init_probs and transition matrices are passed as data (already include sticky kappa)
         z[1] ~ Categorical(init_probs)
         y[1] ~ Normal(means[z[1]], sigmas[z[1]])
         for t in 2:T
@@ -116,8 +132,12 @@ end
 
 function run_case(; K::Int, T::Int, seed::Int, α::Float64, γ::Float64, κ::Float64)
     rng = MersenneTwister(seed)
+
+    # Generate parameters using sticky HDP-HMM structure
     beta, pi = simulate_hdp_params(rng, K; α=α, γ=γ, κ=κ)
     means, sigmas = default_emission_params(K)
+
+    # Simulate data from sticky HDP-HMM
     sim = simulate_hmm(rng, T, K; rho=beta, pi=pi, means=means, sigmas=sigmas)
 
     model_def = build_model()
@@ -125,8 +145,8 @@ function run_case(; K::Int, T::Int, seed::Int, α::Float64, γ::Float64, κ::Flo
         T = T,
         K = K,
         y = sim.y,
-        init_probs = beta,
-        transition = pi,
+        init_probs = beta,  # Initial state distribution from stick-breaking
+        transition = pi,     # Transition matrices with sticky kappa
         means = means,
         sigmas = sigmas,
     )
@@ -136,11 +156,11 @@ function run_case(; K::Int, T::Int, seed::Int, α::Float64, γ::Float64, κ::Flo
     return logp, logp_ref
 end
 
-@printf "# HDP-HMM correctness (fixed params, sticky κ=%.2f)\n" kappa
-@printf "# seed,K,T,alpha,gamma,logp_autmarg,logp_forward,diff\n"
+@printf "# HDP-HMM correctness (sticky κ=%.2f, data simulated from sticky HDP-HMM)\n" kappa
+@printf "# seed,K,T,alpha,gamma,kappa,logp_autmarg,logp_forward,diff\n"
 for seed in seeds, K in Ks, T in Ts
     logp, logp_ref = run_case(K=K, T=T, seed=seed, α=alpha, γ=gamma, κ=kappa)
     diff = logp - logp_ref
-    @printf "%d,%d,%d,%.3f,%.3f,%.12f,%.12f,%.3e\n" seed K T alpha gamma logp logp_ref diff
+    @printf "%d,%d,%d,%.3f,%.3f,%.3f,%.12f,%.12f,%.3e\n" seed K T alpha gamma kappa logp logp_ref diff
 end
 
