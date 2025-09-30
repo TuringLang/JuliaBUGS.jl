@@ -1,0 +1,4 @@
+# GMM gradient check
+seed=1, K=2, N=200
+logp = -468.030155527501
+max_abs_diff=6.644e-08, max_rel_diff=4.846e-08

@@ -1,0 +1,17 @@
+\begin{table}[t]
+    \centering
+    \caption{HDP-HMM correctness (finite truncation): auto-marginalized log density vs forward algorithm.}
+    \label{tab:correctness-hdphmm}
+    \small
+    \begin{tabular}{@{}rrrrrrrr@{}}
+        \toprule
+        seed & $K$ & $T$ & $\alpha$ & $\gamma$ & auto-marg & forward & diff \\
+        \midrule
+        1 & 5  & 100 & 5.000 & 1.000 & $-132.648742618434$ & $-132.648742618434$ & $0.000\times10^{0}$ \\
+        1 & 5  & 200 & 5.000 & 1.000 & $-263.448999241194$ & $-263.448999241194$ & $1.137\times10^{-13}$ \\
+        1 & 10 & 100 & 5.000 & 1.000 & $-94.917105497644$  & $-94.917105497644$  & $-7.105\times10^{-14}$ \\
+        1 & 10 & 200 & 5.000 & 1.000 & $-175.671119347952$ & $-175.671119347951$ & $-9.095\times10^{-13}$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+

@@ -204,3 +204,115 @@ Notes:
   - `logp = -236.450382897373`
   - `max_abs_diff = 9.347e-08`, `max_rel_diff = 1.402e-03`
 - Notes: Implemented sticky prior in-gradient via deterministic `diagshift` primitive to keep single-assignment and AD friendliness; validates end‑to‑end gradients with z marginalized.
+
+## 2025-09-24 — HMT order comparison (frontier-only; DFS timed)
+
+- Script: `JuliaBUGS/experiments/scripts/hmt_order_comparison.jl`
+- Config A (frontier-only): `AHMT_B=2`, `AHMT_DEPTH=8`, `AHMT_K=4`, `AHMT_MODE=frontier`.
+- Config B (DFS timed only): same but `AHMT_MODE=dfs`.
+- Output (order,B,K,depth,N,max_frontier,mean_frontier,sum_frontier,log_cost_proxy,min_time_sec,logp):
+  - Frontier-only:
+    - `random_dfs,2,4,8,255,8,3.765,1920,1.321e+01,NA,NA`
+    - `bfs,2,4,8,255,65,32.624,16638,9.134e+01,NA,NA`
+    - `dfs,2,4,8,255,8,3.765,1920,1.321e+01,NA,NA`
+  - DFS timed:
+    - `dfs,2,4,8,255,8,3.765,1920,1.321e+01,1.810321e+00,-340.498985428238`
+- Notes: BFS exhibits a large frontier (≈65 at depth 8) and a much larger cost proxy than DFS/randomized-DFS (≈8), consistent with tree pathwidth intuition. We avoid timing BFS due to proxy-based guard.
+
+## 2025-09-24 — FHMM order sweep (frontier-only for bad order)
+
+- Script: `JuliaBUGS/experiments/scripts/fhmm_order_comparison.jl`
+- Config: `AFH_C=2`, `AFH_K=4`, `AFH_T∈{20,40,80,100}`, `AFH_TRIALS=10`, `AFH_MODE=frontier`.
+- Output (order,max_frontier,mean_frontier,sum_frontier,log_cost_proxy,min_time_sec,logp):
+  - T=20
+    - `interleaved,2,1.970,197,7.361e+00,4.105792e-03,-32.517423501802`
+    - `states_then_y,40,20.200,2020,5.646e+01,NA,NA`
+  - T=40
+    - `interleaved,2,1.985,397,8.062e+00,1.012017e-02,-58.665977213007`
+    - `states_then_y,80,40.200,8040,1.119e+02,NA,NA`
+  - T=80
+    - `interleaved,2,1.992,797,8.760e+00,2.624392e-02,-121.075969900975`
+    - `states_then_y,160,80.200,32080,2.228e+02,NA,NA`
+  - T=100
+    - `interleaved,2,1.994,997,8.984e+00,3.694283e-02,-159.084764499352`
+    - `states_then_y,200,100.200,50100,2.783e+02,NA,NA`
+- Notes: Bad order’s proxy grows rapidly with T while interleaved remains near constant frontier≈C; timings reported only for interleaved per guard.
+
+## 2025-09-24 — FHMM C-sweep (interleaved only; K=4, T=100)
+
+- Script: `JuliaBUGS/experiments/scripts/fhmm_order_comparison.jl`
+- Config: `AFH_K=4`, `AFH_T=100`, `AFH_TRIALS=10`, `AFH_MODE=timed`, `AFH_ORDERS=interleaved`, `C∈{2,3,4}`.
+- Output (order,max_frontier,mean_frontier,sum_frontier,log_cost_proxy,min_time_sec,logp):
+  - `C=2: interleaved,2,1.994,997,8.984e+00,3.621279e-02,-159.084764499352`
+  - `C=3: interleaved,3,2.991,2094,1.071e+01,1.619965e-01,-174.241807200349`
+  - `C=4: interleaved,4,3.989,3590,1.234e+01,8.969850e-01,-185.112139413195`
+- Notes: Max frontier≈C and runtime increases with C, consistent with the frontier lens.
+
+## 2025-09-24 — HMT depth sweep (B=2, K=4): frontier-only vs DFS timed
+
+- Script: `JuliaBUGS/experiments/scripts/hmt_order_comparison.jl`
+- Configs per depth d∈{4,6,8,10}:
+  - Frontier-only: `AHMT_MODE=frontier`
+  - DFS-only timed: `AHMT_MODE=dfs`
+- Highlights (order,B,K,depth,N,max_frontier,log_cost_proxy,min_time_sec):
+  - `d=4`: BFS `max_frontier=5`, `log_cost_proxy≈8.154`; DFS `min_time_sec=2.048e-03`
+  - `d=6`: BFS `max_frontier=17`, `log_cost_proxy≈24.80`; DFS `min_time_sec=5.489e-02`
+  - `d=8`: BFS `max_frontier=65`, `log_cost_proxy≈91.34`; DFS `min_time_sec=1.806e+00`
+  - `d=10`: BFS `max_frontier=257`, `log_cost_proxy≈357.5`; DFS `min_time_sec=7.087e+01`
+- Notes: BFS frontier grows rapidly with depth; DFS time grows smoothly; we avoid timing BFS across depths.
+
+## 2025-09-24 — GMM correctness sweep (fresh run)
+
+- Script: `JuliaBUGS/experiments/scripts/gmm_correctness_sweep.jl`
+- Config: `AG_SWEEP_SEEDS=1`, `AG_SWEEP_K=2,4`, `AG_SWEEP_N=100,1000`.
+- Outputs (seed,K,N,logp_autmarg,logp_closed_form,diff):
+  - `1,2,100,-204.416329424201,-204.416329424201,-5.684e-14`
+  - `1,2,1000,-1970.291568636987,-1970.291568637027,4.047e-11`
+  - `1,4,100,-203.586552750729,-203.586552750729,-2.558e-13`
+  - `1,4,1000,-1948.173739898702,-1948.173739898751,4.843e-11`
+
+## 2025-09-24 — HMM correctness sweep (fresh run)
+
+- Script: `JuliaBUGS/experiments/scripts/hmm_correctness_sweep.jl`
+- Config: `AM_SWEEP_SEEDS=1`, `AM_SWEEP_K=2,4`, `AM_SWEEP_T=50,200`.
+- Outputs (seed,K,T,logp_autmarg,logp_forward,diff):
+  - `1,2,50,-79.870504305836,-79.870504305836,5.684e-14`
+  - `1,2,200,-278.627031832427,-278.627031832427,-4.547e-13`
+  - `1,4,50,-71.473518232377,-71.473518232377,1.421e-14`
+  - `1,4,200,-275.848467761660,-275.848467761659,-2.274e-13`
+
+## 2025-09-24 — Gradient checks (fresh runs)
+
+- Scripts: `hmm_gradient_check.jl`, `gmm_gradient_check.jl`, `hdphmm_gradient_check.jl`.
+- HMM (seed=1, K=2, T=50): `logp=-80.444277269128`, `max_abs_diff=2.422e-09`, `max_rel_diff=8.995e-10`.
+- GMM (seed=1, K=2, N=200): `logp=-468.030155527501`, `max_abs_diff=6.644e-08`, `max_rel_diff=4.846e-08`.
+- HDP-HMM non-sticky (seed=1, K=5, T=200): `logp=-403.142155296914`, `max_abs_diff=2.478e-07`, `max_rel_diff=1.388e-03`.
+- HDP-HMM sticky κ=5.0 (seed=1, K=5, T=120): `logp=-236.450382897373`, `max_abs_diff=9.347e-08`, `max_rel_diff=1.402e-03`.
+## 2025-09-24 — HMM scaling sweep (expanded K,T; interleaved; min_time)
+
+- Script: `JuliaBUGS/experiments/scripts/hmm_scaling_bench.jl`
+- Config: `AS_SWEEP_SEEDS=1`, `AS_SWEEP_K=8,16,32,64`, `AS_SWEEP_T=50,100,200,400,800`, `AS_TRIALS=15`.
+- Output (seed,K,T,trials,min_time_sec,logp,max_frontier,mean_frontier,sum_frontier):
+  - `1,8,50,15,4.031500e-03,-68.367716912908,1,0.990,99`
+  - `1,8,100,15,1.053150e-02,-134.566394931630,1,0.995,199`
+  - `1,8,200,15,3.109333e-02,-268.884504181967,1,0.998,399`
+  - `1,8,400,15,1.032710e-01,-507.899254715377,1,0.999,799`
+  - `1,8,800,15,3.868640e-01,-1014.031647189991,1,0.999,1599`
+  - `1,16,50,15,1.096975e-02,-68.640930263672,1,0.990,99`
+  - `1,16,100,15,2.583529e-02,-132.615884733434,1,0.995,199`
+  - `1,16,200,15,6.208867e-02,-264.898444018715,1,0.998,399`
+  - `1,16,400,15,1.653278e-01,-496.082331882703,1,0.999,799`
+  - `1,16,800,15,5.194480e-01,-994.008267544666,1,0.999,1599`
+  - `1,32,50,15,3.842762e-02,-67.917939032965,1,0.990,99`
+  - `1,32,100,15,8.173317e-02,-131.957904902438,1,0.995,199`
+  - `1,32,200,15,1.783575e-01,-262.204812107237,1,0.998,399`
+  - `1,32,400,15,4.249979e-01,-490.584185596219,1,0.999,799`
+  - `1,32,800,15,1.098389e+00,-983.156598392055,1,0.999,1599`
+  - `1,64,50,15,1.534776e-01,-67.624721238144,1,0.990,99`
+  - `1,64,100,15,3.294130e-01,-130.774108588117,1,0.995,199`
+  - `1,64,200,15,7.271693e-01,-260.703706812903,1,0.998,399`
+  - `1,64,400,15,1.479587e+00,-487.252773745216,1,0.999,799`
+  - `1,64,800,15,3.091532e+00,-976.386085472905,1,0.999,1599`
+- Notes:
+  - Normalized `time_over_TK2` (min time divided by `T*K^2`) plateaus for `K≥16` with mean≈1.09e-06 (min 7.49e-07, max 2.54e-06 over 15 cases). For `K=8` it is higher and more variable (mean≈3.39e-06), indicating overhead dominance at small K.
+  - Frontier metrics remain near the theoretical minimum (max≈1) for the enforced interleaved order.

@@ -1,0 +1,20 @@
+# HMT order comparison (B=2, depth=4, K=4)
+# order,B,K,depth,N,max_frontier,mean_frontier,sum_frontier,log_cost_proxy,min_time_sec,logp
+random_dfs,2,4,4,15,4,1.867,56,6.772e+00,NA,NA
+bfs,2,4,4,15,5,2.600,78,8.154e+00,NA,NA
+dfs,2,4,4,15,4,1.867,56,6.772e+00,2.048209e-03,-26.719456888574
+# HMT order comparison (B=2, depth=6, K=4)
+# order,B,K,depth,N,max_frontier,mean_frontier,sum_frontier,log_cost_proxy,min_time_sec,logp
+random_dfs,2,4,6,63,6,2.794,352,9.993e+00,NA,NA
+bfs,2,4,6,63,17,8.619,1086,2.480e+01,NA,NA
+dfs,2,4,6,63,6,2.794,352,9.993e+00,5.489042e-02,-82.614739116563
+# HMT order comparison (B=2, depth=8, K=4)
+# order,B,K,depth,N,max_frontier,mean_frontier,sum_frontier,log_cost_proxy,min_time_sec,logp
+random_dfs,2,4,8,255,8,3.765,1920,1.321e+01,NA,NA
+bfs,2,4,8,255,65,32.624,16638,9.134e+01,NA,NA
+dfs,2,4,8,255,8,3.765,1920,1.321e+01,1.805992e+00,-340.498985428238
+# HMT order comparison (B=2, depth=10, K=4)
+# order,B,K,depth,N,max_frontier,mean_frontier,sum_frontier,log_cost_proxy,min_time_sec,logp
+random_dfs,2,4,10,1023,10,4.755,9728,1.643e+01,NA,NA
+bfs,2,4,10,1023,257,128.625,263166,3.575e+02,NA,NA
+dfs,2,4,10,1023,10,4.755,9728,1.643e+01,7.086561e+01,-1308.617606189902

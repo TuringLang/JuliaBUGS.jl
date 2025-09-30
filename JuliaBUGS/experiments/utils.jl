@@ -419,3 +419,120 @@ function build_fhmm_states_then_emissions_order(model)
     end
     return order
 end
+
+"""
+    build_hmt_dfs_order(model; B_hint=2, rng=nothing, randomized=false)
+
+Construct a discrete-first DFS order for HMTs (variables named `z[i]`, `y[i]`).
+Discovers the tree structure directly from the model graph by following edges
+between `z` nodes. If `randomized=true`, shuffles child order using `rng`.
+Returns a full evaluation order via `build_eval_order_from_discrete_order`.
+"""
+function build_hmt_dfs_order(model; B_hint::Integer=2, rng=nothing, randomized::Bool=false)
+    gd = model.graph_evaluation_data
+    nodes = gd.sorted_nodes
+    n = length(nodes)
+    # Map VarName->sorted index and VarName->z index i
+    pos = Dict(nodes[i] => i for i in 1:n)
+    z_index = Dict{typeof(nodes[1]),Int}()
+    for (j, vn) in enumerate(nodes)
+        s = string(vn)
+        if startswith(s, "z[")
+            i = try parse(Int, s[3:end-1]) catch; -1 end
+            if i > 0
+                z_index[vn] = i
+            end
+        end
+    end
+    # Build adjacency among z nodes via out-neighbors
+    children = Dict{Int,Vector{Int}}()
+    has_parent = Dict{Int,Bool}()
+    for (vn, i) in z_index
+        kids = Int[]
+        for w in MetaGraphsNext.outneighbor_labels(model.g, vn)
+            if haskey(z_index, w)
+                j = z_index[w]
+                push!(kids, j)
+                has_parent[j] = true
+            end
+        end
+        children[i] = kids
+        has_parent[i] = get(has_parent, i, false)
+    end
+    # Roots: z nodes without z-parents
+    roots = sort([i for (i, hp) in has_parent if !hp])
+    order_z = Int[]  # sorted indices (positions) for z nodes
+    # Helper: get VarName for a given z index i
+    z_vn_by_i = Dict{Int,typeof(nodes[1])}()
+    for (vn, i) in z_index
+        z_vn_by_i[i] = vn
+    end
+    function dfs(i::Int)
+        push!(order_z, pos[z_vn_by_i[i]])
+        kids = get(children, i, Int[])
+        if randomized && rng !== nothing
+            Random.shuffle!(rng, kids)
+        else
+            sort!(kids)
+        end
+        for j in kids
+            dfs(j)
+        end
+    end
+    for r in roots
+        dfs(r)
+    end
+    return build_eval_order_from_discrete_order(model, order_z)
+end
+
+"""
+    build_hmt_bfs_order(model)
+
+Construct a discrete-first BFS order for HMTs by level, discovered from the
+graph. Returns a full evaluation order after lifting.
+"""
+function build_hmt_bfs_order(model)
+    gd = model.graph_evaluation_data
+    nodes = gd.sorted_nodes
+    n = length(nodes)
+    pos = Dict(nodes[i] => i for i in 1:n)
+    z_index = Dict{typeof(nodes[1]),Int}()
+    for (j, vn) in enumerate(nodes)
+        s = string(vn)
+        if startswith(s, "z[")
+            i = try parse(Int, s[3:end-1]) catch; -1 end
+            if i > 0
+                z_index[vn] = i
+            end
+        end
+    end
+    children = Dict{Int,Vector{Int}}()
+    has_parent = Dict{Int,Bool}()
+    for (vn, i) in z_index
+        kids = Int[]
+        for w in MetaGraphsNext.outneighbor_labels(model.g, vn)
+            if haskey(z_index, w)
+                j = z_index[w]
+                push!(kids, j)
+                has_parent[j] = true
+            end
+        end
+        children[i] = kids
+        has_parent[i] = get(has_parent, i, false)
+    end
+    roots = sort([i for (i, hp) in has_parent if !hp])
+    # BFS
+    order_z = Int[]
+    z_vn_by_i = Dict{Int,typeof(nodes[1])}()
+    for (vn, i) in z_index
+        z_vn_by_i[i] = vn
+    end
+    queue = copy(roots)
+    while !isempty(queue)
+        i = popfirst!(queue)
+        push!(order_z, pos[z_vn_by_i[i]])
+        kids = sort(get(children, i, Int[]))
+        append!(queue, kids)
+    end
+    return build_eval_order_from_discrete_order(model, order_z)
+end

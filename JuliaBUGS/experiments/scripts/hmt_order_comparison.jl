@@ -22,9 +22,8 @@ depth = try parse(Int, get(ENV, "AHMT_DEPTH", "8")) catch; 8 end
 K = try parse(Int, get(ENV, "AHMT_K", "4")) catch; 4 end
 seed = try parse(Int, get(ENV, "AHMT_SEED", "1")) catch; 1 end
 trials = try parse(Int, get(ENV, "AHMT_TRIALS", "10")) catch; 10 end
-mode = lowercase(get(ENV, "AHMT_MODE", "frontier"))  # frontier | timed
+mode = lowercase(get(ENV, "AHMT_MODE", "frontier"))  # frontier | timed | dfs
 cost_thresh = try parse(Float64, get(ENV, "AHMT_COST_THRESH", "1.0e8")) catch; 1.0e8 end
-include_heur = get(ENV, "AHMT_INCLUDE_HEUR", "0") == "1"
 
 function num_nodes(B::Int, depth::Int)
     if depth <= 0
@@ -115,11 +114,6 @@ orders = Dict{String,Function}(
     "bfs" => () -> make_model_with_order(model, build_hmt_bfs_order(model)),
     "random_dfs" => () -> make_model_with_order(model, build_hmt_dfs_order(model; B_hint=B, rng=MersenneTwister(seed+1), randomized=true)),
 )
-
-if include_heur
-    orders["min_degree"] = () -> make_model_with_heuristic_order(model; method=:min_degree, rng=MersenneTwister(seed+2))
-    orders["min_fill"] = () -> make_model_with_heuristic_order(model; method=:min_fill, rng=MersenneTwister(seed+3))
-end
 
 @printf "# HMT order comparison (B=%d, depth=%d, K=%d)\n" B depth K
 @printf "# order,B,K,depth,N,max_frontier,mean_frontier,sum_frontier,log_cost_proxy,min_time_sec,logp\n"

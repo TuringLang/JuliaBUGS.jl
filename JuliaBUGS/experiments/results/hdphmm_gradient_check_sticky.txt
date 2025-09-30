@@ -1,0 +1,4 @@
+# HDP-HMM gradient check (sticky κ=5.00)
+seed=1, K=5, T=120
+logp = -236.450382897373
+max_abs_diff=9.347e-08, max_rel_diff=1.402e-03

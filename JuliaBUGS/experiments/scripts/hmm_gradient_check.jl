@@ -15,8 +15,11 @@ using LogDensityProblems
 parse_list(str) = begin
     s = strip(str)
     isempty(s) && return Int[]
-    all(isdigit, replace(s, "," => "")) && return [parse(Int, s)]
-    return parse.(Int, split(s, ","))
+    if occursin(',', s)
+        return parse.(Int, split(s, ","))
+    else
+        return [parse(Int, s)]
+    end
 end
 
 seeds = let v = get(ENV, "AGC_SWEEP_SEEDS", get(ENV, "AGC_SEED", "1"))

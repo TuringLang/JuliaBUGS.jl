@@ -1,0 +1,4 @@
+# HMM gradient check
+seed=1, K=2, T=50
+logp = -80.444277269128
+max_abs_diff=2.422e-09, max_rel_diff=8.995e-10

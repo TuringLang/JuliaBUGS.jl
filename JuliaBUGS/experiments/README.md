@@ -82,5 +82,21 @@ Two consistent orders are evaluated:
 Output: CSV lines with columns
 `seed,K,T,trials,min_time_sec,logp,max_frontier,mean_frontier,sum_frontier`.
 
-When adding new scripts, document their environment variables near the top of
-the file and list them here for quick reference.
+HMT order comparison (`hmt_order_comparison.jl`):
+
+- `AHMT_SEED` (default `1`) – RNG seed.
+- `AHMT_B` (default `2`) – branching factor.
+- `AHMT_DEPTH` (default `8`) – tree depth.
+- `AHMT_K` (default `4`) – number of states per node.
+- `AHMT_TRIALS` (default `10`) – timing samples when timing is enabled.
+- `AHMT_MODE` (default `frontier`) – `frontier` (frontier/proxy only), `timed` (time all listed orders), or `dfs` (time DFS only). We avoid timing BFS when its proxy is enormous.
+
+Reproduce figures (PDFs in `experiments/figures`):
+
+```
+julia --project=JuliaBUGS/experiments experiments/plotting/make_figures.jl
+```
+
+Tables included in the draft live in `experiments/tables/` and are generated from CSV outputs under `experiments/results/`.
+
+When adding new scripts, document their environment variables near the top of the file and list them here for quick reference.
