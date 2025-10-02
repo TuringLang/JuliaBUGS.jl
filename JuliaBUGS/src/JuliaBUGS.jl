@@ -6,6 +6,7 @@ using Accessors
 using ADTypes
 using BangBang
 using Bijectors: Bijectors
+using DifferentiationInterface
 using Distributions
 using Graphs, MetaGraphsNext
 using LinearAlgebra
@@ -17,6 +18,7 @@ using Serialization: Serialization
 using StaticArrays
 
 import Base: ==, hash, Symbol, size
+import DifferentiationInterface as DI
 import Distributions: truncated
 
 export @bugs
@@ -239,13 +241,48 @@ function validate_bugs_expression(expr, line_num)
 end
 
 """
-    compile(model_def, data[, initial_params]; skip_validation=false)
+    compile(model_def, data[, initial_params]; skip_validation=false, adtype=nothing)
 
 Compile the model with model definition and data. Optionally, initializations can be provided.
 If initializations are not provided, values will be sampled from the prior distributions.
 
 By default, validates that all functions in the model are in the BUGS allowlist (suitable for @bugs macro).
 Set `skip_validation=true` to skip validation (for @model macro usage).
+
+If `adtype` is provided, returns a `BUGSModelWithGradient` that supports gradient-based MCMC 
+samplers like HMC/NUTS. The gradient computation is prepared during compilation for optimal performance.
+
+# Arguments
+- `model_def::Expr`: Model definition from @bugs macro
+- `data::NamedTuple`: Observed data
+- `initial_params::NamedTuple=NamedTuple()`: Initial parameter values (optional)
+- `skip_validation::Bool=false`: Skip function validation (for @model macro)
+- `eval_module::Module=@__MODULE__`: Module for evaluation
+- `adtype`: AD backend specification. Can be:
+  - `AutoReverseDiff(compile=true)` - ReverseDiff with tape compilation (fastest)
+  - `AutoReverseDiff(compile=false)` - ReverseDiff without compilation
+  - `:ReverseDiff` - Shorthand for `AutoReverseDiff(compile=true)`
+  - `:ForwardDiff` - Shorthand for `AutoForwardDiff()`
+  - `:Zygote` - Shorthand for `AutoZygote()`
+  - Any other `ADTypes.AbstractADType`
+
+# Examples
+```julia
+# Basic compilation
+model = compile(model_def, data)
+
+# With gradient support using explicit ADType
+model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
+
+# With gradient support using symbol shorthand
+model = compile(model_def, data; adtype=:ReverseDiff)  # Same as above
+
+# Using ForwardDiff for small models
+model = compile(model_def, data; adtype=:ForwardDiff)
+
+# Sample with NUTS
+chain = AbstractMCMC.sample(model, NUTS(0.8), 1000)
+```
 """
 function compile(
     model_def::Expr,
@@ -253,6 +290,7 @@ function compile(
     initial_params::NamedTuple=NamedTuple();
     skip_validation::Bool=false,
     eval_module::Module=@__MODULE__,
+    adtype::Union{Nothing,ADTypes.AbstractADType,Symbol}=nothing,
 )
     # Validate functions by default (for @bugs macro usage)
     # Skip validation only for @model macro
@@ -281,7 +319,65 @@ function compile(
             values(eval_env),
         ),
     )
-    return BUGSModel(g, nonmissing_eval_env, model_def, data, initial_params)
+    base_model = BUGSModel(g, nonmissing_eval_env, model_def, data, initial_params)
+    
+    # If adtype provided, wrap with gradient capabilities
+    if adtype !== nothing
+        # Convert symbol to ADType if needed
+        adtype_obj = _resolve_adtype(adtype)
+        return _wrap_with_gradient(base_model, adtype_obj)
+    end
+    
+    return base_model
+end
+
+"""
+    _resolve_adtype(adtype) -> ADTypes.AbstractADType
+
+Convert symbol shortcuts to ADTypes, or return the ADType as-is.
+
+Supported symbol shortcuts:
+- `:ReverseDiff` -> `AutoReverseDiff(compile=true)`
+- `:ForwardDiff` -> `AutoForwardDiff()`
+- `:Zygote` -> `AutoZygote()`
+- `:Enzyme` -> `AutoEnzyme()`
+"""
+function _resolve_adtype(adtype::Symbol)
+    if adtype === :ReverseDiff
+        return ADTypes.AutoReverseDiff(compile=true)
+    elseif adtype === :ForwardDiff
+        return ADTypes.AutoForwardDiff()
+    elseif adtype === :Zygote
+        return ADTypes.AutoZygote()
+    elseif adtype === :Enzyme
+        return ADTypes.AutoEnzyme()
+    else
+        error("Unknown AD backend symbol: $adtype. " *
+              "Supported symbols: :ReverseDiff, :ForwardDiff, :Zygote, :Enzyme. " *
+              "Or use an ADTypes object like AutoReverseDiff(compile=true).")
+    end
+end
+
+# Pass through ADTypes objects unchanged
+_resolve_adtype(adtype::ADTypes.AbstractADType) = adtype
+
+# Helper function to prepare gradient - separated to handle world age issues
+function _wrap_with_gradient(base_model::Model.BUGSModel, adtype::ADTypes.AbstractADType)
+    # Get initial parameters for preparation
+    # Use invokelatest to handle world age issues with generated functions
+    x = Base.invokelatest(getparams, base_model)
+    
+    # Prepare gradient using DifferentiationInterface
+    # Use invokelatest to handle world age issues when calling logdensity during preparation
+    prep = Base.invokelatest(
+        DI.prepare_gradient,
+        Model._logdensity_switched,
+        adtype,
+        x,
+        DI.Constant(base_model)
+    )
+    
+    return Model.BUGSModelWithGradient(adtype, prep, base_model)
 end
 # function compile(
 #     model_str::String,

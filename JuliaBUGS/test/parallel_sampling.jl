@@ -19,9 +19,8 @@
     data = (N=N, x=x_data)
     inits = (mu=0.0, tau=1.0)
 
-    model = compile(model_def, data, inits)
-    # Use compile=Val(false) for thread safety with ReverseDiff
-    ad_model = ADgradient(:ReverseDiff, model; compile=Val(false))
+    # Use compile=false for thread safety with ReverseDiff
+    ad_model = compile(model_def, data, inits; adtype=AutoReverseDiff(compile=false))
 
     # Single chain reference
     n_samples = 200

@@ -3,10 +3,12 @@ module JuliaBUGSAdvancedMHExt
 using AbstractMCMC
 using AdvancedMH
 using ADTypes
+import DifferentiationInterface as DI
 using JuliaBUGS
-using JuliaBUGS: BUGSModel, getparams, initialize!
+using JuliaBUGS: BUGSModel, BUGSModelWithGradient, getparams, initialize!
 using JuliaBUGS.LogDensityProblems
 using JuliaBUGS.LogDensityProblemsAD
+using JuliaBUGS.Model: _logdensity_switched
 using JuliaBUGS.Random
 using MCMCChains: Chains
 
@@ -52,10 +54,13 @@ end
 function _gibbs_internal_mh(
     rng::Random.AbstractRNG, cond_model::BUGSModel, sampler, ad_backend, state
 )
-    # Wrap model with AD gradient computation for gradient-based proposals
-    logdensitymodel = AbstractMCMC.LogDensityModel(
-        LogDensityProblemsAD.ADgradient(ad_backend, cond_model)
+    # Create gradient model on-the-fly using DifferentiationInterface
+    x = getparams(cond_model)
+    prep = DI.prepare_gradient(
+        _logdensity_switched, ad_backend, x, DI.Constant(cond_model)
     )
+    ad_model = BUGSModelWithGradient(ad_backend, prep, cond_model)
+    logdensitymodel = AbstractMCMC.LogDensityModel(ad_model)
 
     # Take MH step with gradient information
     if isnothing(state)
@@ -64,7 +69,7 @@ function _gibbs_internal_mh(
             logdensitymodel,
             sampler;
             n_adapts=0,  # Disable adaptation within Gibbs
-            initial_params=getparams(cond_model),
+            initial_params=x,
         )
     else
         t, s = AbstractMCMC.step(rng, logdensitymodel, sampler, state; n_adapts=0)
@@ -103,6 +108,32 @@ function AbstractMCMC.bundle_samples(
     )
 end
 
+function AbstractMCMC.bundle_samples(
+    ts::Vector{<:AdvancedMH.Transition},
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelWithGradient},
+    sampler::AdvancedMH.MHSampler,
+    state,
+    chain_type::Type{Chains};
+    discard_initial=0,
+    thinning=1,
+    kwargs...,
+)
+    param_samples = [t.params for t in ts]
+    stats_names = [:lp]
+    stats_values = [[t.lp] for t in ts]
+
+    return JuliaBUGS.gen_chains(
+        logdensitymodel,
+        param_samples,
+        stats_names,
+        stats_values;
+        discard_initial=discard_initial,
+        thinning=thinning,
+        kwargs...,
+    )
+end
+
+# Keep backward compatibility with LogDensityProblemsAD wrapper
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:AdvancedMH.Transition},
     logdensitymodel::AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
