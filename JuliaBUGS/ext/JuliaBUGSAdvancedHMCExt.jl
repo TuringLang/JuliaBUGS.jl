@@ -44,9 +44,7 @@ function _gibbs_internal_hmc(
 )
     # Create gradient model on-the-fly using DifferentiationInterface
     x = getparams(cond_model)
-    prep = DI.prepare_gradient(
-        _logdensity_switched, ad_backend, x, DI.Constant(cond_model)
-    )
+    prep = DI.prepare_gradient(_logdensity_switched, ad_backend, x, DI.Constant(cond_model))
     ad_model = BUGSModelWithGradient(ad_backend, prep, cond_model)
     logdensitymodel = AbstractMCMC.LogDensityModel(ad_model)
 

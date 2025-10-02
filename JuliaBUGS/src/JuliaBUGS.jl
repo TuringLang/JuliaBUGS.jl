@@ -320,14 +320,14 @@ function compile(
         ),
     )
     base_model = BUGSModel(g, nonmissing_eval_env, model_def, data, initial_params)
-    
+
     # If adtype provided, wrap with gradient capabilities
     if adtype !== nothing
         # Convert symbol to ADType if needed
         adtype_obj = _resolve_adtype(adtype)
         return _wrap_with_gradient(base_model, adtype_obj)
     end
-    
+
     return base_model
 end
 
@@ -344,7 +344,7 @@ Supported symbol shortcuts:
 """
 function _resolve_adtype(adtype::Symbol)
     if adtype === :ReverseDiff
-        return ADTypes.AutoReverseDiff(compile=true)
+        return ADTypes.AutoReverseDiff(; compile=true)
     elseif adtype === :ForwardDiff
         return ADTypes.AutoForwardDiff()
     elseif adtype === :Zygote
@@ -352,9 +352,11 @@ function _resolve_adtype(adtype::Symbol)
     elseif adtype === :Enzyme
         return ADTypes.AutoEnzyme()
     else
-        error("Unknown AD backend symbol: $adtype. " *
-              "Supported symbols: :ReverseDiff, :ForwardDiff, :Zygote, :Enzyme. " *
-              "Or use an ADTypes object like AutoReverseDiff(compile=true).")
+        error(
+            "Unknown AD backend symbol: $adtype. " *
+            "Supported symbols: :ReverseDiff, :ForwardDiff, :Zygote, :Enzyme. " *
+            "Or use an ADTypes object like AutoReverseDiff(compile=true).",
+        )
     end
 end
 
@@ -366,17 +368,13 @@ function _wrap_with_gradient(base_model::Model.BUGSModel, adtype::ADTypes.Abstra
     # Get initial parameters for preparation
     # Use invokelatest to handle world age issues with generated functions
     x = Base.invokelatest(getparams, base_model)
-    
+
     # Prepare gradient using DifferentiationInterface
     # Use invokelatest to handle world age issues when calling logdensity during preparation
     prep = Base.invokelatest(
-        DI.prepare_gradient,
-        Model._logdensity_switched,
-        adtype,
-        x,
-        DI.Constant(base_model)
+        DI.prepare_gradient, Model._logdensity_switched, adtype, x, DI.Constant(base_model)
     )
-    
+
     return Model.BUGSModelWithGradient(adtype, prep, base_model)
 end
 # function compile(

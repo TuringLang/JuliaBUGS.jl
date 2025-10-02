@@ -15,7 +15,9 @@ end
         A[1:2, 1:2] ~ dwish(B[:, :], 2)
         C[1:2] ~ dmnorm(mu[:], A[:, :])
     end
-    ad_model = compile(model_def, (mu=[0, 0], B=[1 0; 0 1]), (A=[1 0; 0 1],); adtype=AutoReverseDiff())
+    ad_model = compile(
+        model_def, (mu=[0, 0], B=[1 0; 0 1]), (A=[1 0; 0 1],); adtype=AutoReverseDiff()
+    )
 
     theta = [
         0.7931743744870574,

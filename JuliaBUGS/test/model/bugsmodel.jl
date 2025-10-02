@@ -414,22 +414,26 @@ end
             # Test :ReverseDiff shortcut
             model_rd = compile(model_def, data; adtype=:ReverseDiff)
             @test model_rd isa JuliaBUGS.Model.BUGSModelWithGradient
-            
+
             # Test equivalence with explicit ADType
-            model_explicit = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
+            model_explicit = compile(
+                model_def, data; adtype=AutoReverseDiff(; compile=true)
+            )
             @test model_explicit isa JuliaBUGS.Model.BUGSModelWithGradient
-            
+
             # Test that unknown symbol throws error
             @test_throws ErrorException compile(model_def, data; adtype=:UnknownBackend)
         end
 
         @testset "Explicit ADTypes" begin
             # Test with compile=true
-            model_compile = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
+            model_compile = compile(model_def, data; adtype=AutoReverseDiff(; compile=true))
             @test model_compile isa JuliaBUGS.Model.BUGSModelWithGradient
-            
+
             # Test with compile=false
-            model_nocompile = compile(model_def, data; adtype=AutoReverseDiff(compile=false))
+            model_nocompile = compile(
+                model_def, data; adtype=AutoReverseDiff(; compile=false)
+            )
             @test model_nocompile isa JuliaBUGS.Model.BUGSModelWithGradient
         end
 
@@ -443,10 +447,10 @@ end
         @testset "Gradient computation" begin
             model = compile(model_def, data; adtype=:ReverseDiff)
             test_point = [0.0]
-            
+
             # Test that gradient can be computed
             ℓ, grad = LogDensityProblems.logdensity_and_gradient(model, test_point)
-            
+
             @test ℓ isa Real
             @test grad isa Vector
             @test length(grad) == 1

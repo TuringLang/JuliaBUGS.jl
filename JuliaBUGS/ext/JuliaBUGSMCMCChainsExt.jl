@@ -2,7 +2,12 @@ module JuliaBUGSMCMCChainsExt
 
 using AbstractMCMC
 using JuliaBUGS
-using JuliaBUGS: BUGSModel, BUGSModelWithGradient, find_generated_quantities_variables, evaluate!!, getparams
+using JuliaBUGS:
+    BUGSModel,
+    BUGSModelWithGradient,
+    find_generated_quantities_variables,
+    evaluate!!,
+    getparams
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.Accessors
 using JuliaBUGS.LogDensityProblemsAD

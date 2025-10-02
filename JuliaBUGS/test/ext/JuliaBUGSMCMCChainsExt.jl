@@ -26,7 +26,7 @@
         y=[1.58, 4.80, 7.10, 8.86, 11.73, 14.52, 18.22, 18.73, 21.04, 22.93],
     )
 
-    ad_model = compile(model_def, data, (;); adtype=AutoReverseDiff(compile=true))
+    ad_model = compile(model_def, data, (;); adtype=AutoReverseDiff(; compile=true))
     n_samples, n_adapts = 2000, 1000
 
     D = LogDensityProblems.dimension(ad_model)
@@ -106,7 +106,7 @@
         sigma[2] ~ InverseGamma(2, 3)
         sigma[3] ~ InverseGamma(2, 3)
     end
-    ad_model = compile(model_def, (;); adtype=AutoReverseDiff(compile=true))
+    ad_model = compile(model_def, (;); adtype=AutoReverseDiff(; compile=true))
     hmc_chain = AbstractMCMC.sample(
         ad_model, NUTS(0.8), 10; progress=false, chain_type=Chains
     )

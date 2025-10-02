@@ -102,7 +102,11 @@ function LogDensityProblems.logdensity_and_gradient(
         )
     else
         return DI.value_and_gradient(
-            _logdensity_switched, model.prep, model.backend, x, DI.Constant(model.base_model)
+            _logdensity_switched,
+            model.prep,
+            model.backend,
+            x,
+            DI.Constant(model.base_model),
         )
     end
 end
