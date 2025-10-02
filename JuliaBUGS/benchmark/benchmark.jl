@@ -83,13 +83,15 @@ function _create_results_dataframe(results::OrderedDict{Symbol,BenchmarkResult})
             ),
         )
     end
-    DataFrames.rename!(df, :Density_Time => "Density Time (µs)", :Density_Gradient_Time => "Density+Gradient Time (µs)")
+    DataFrames.rename!(
+        df,
+        :Density_Time => "Density Time (µs)",
+        :Density_Gradient_Time => "Density+Gradient Time (µs)",
+    )
     return df
 end
 
-function _print_results_table(
-    results::OrderedDict{Symbol,BenchmarkResult}; backend=:text
-)
+function _print_results_table(results::OrderedDict{Symbol,BenchmarkResult}; backend=:text)
     df = _create_results_dataframe(results)
     return pretty_table(df; backend=backend)
 end
