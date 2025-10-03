@@ -172,11 +172,11 @@ export function useGraphInstance() {
         stackSizeLimit: undefined, // Unlimited stack size
         ready: () => {
           // This function is called when undo-redo is ready
-          console.log('✅ Undo-redo functionality initialized successfully');
+          console.log('Undo-redo functionality initialized successfully');
         }
       });
     } catch (error) {
-      console.warn('⚠️ Undo-redo initialization failed:', error);
+      console.warn('Undo-redo initialization failed:', error);
       undoRedoInstance = null;
     }
 

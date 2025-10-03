@@ -20,10 +20,10 @@ export function useUndoRedo() {
       if (newCanUndo !== canUndo.value || newCanRedo !== canRedo.value) {
         canUndo.value = newCanUndo;
         canRedo.value = newCanRedo;
-        console.log(`🔄 Undo/Redo state updated: undo=${newCanUndo}, redo=${newCanRedo}`);
+        console.log(`Undo/Redo state updated: undo=${newCanUndo}, redo=${newCanRedo}`);
       }
     } catch (error) {
-      console.warn('⚠️ Failed to update undo/redo state:', error);
+      console.warn('Failed to update undo/redo state:', error);
       canUndo.value = false;
       canRedo.value = false;
     }
@@ -31,28 +31,28 @@ export function useUndoRedo() {
 
   // Perform undo operation
   const performUndo = (): boolean => {
-    console.log('🔄 Attempting undo...');
+    console.log('Attempting undo...');
     try {
       const result = undo();
-      console.log(`🔄 Undo result: ${result}`);
+      console.log(`Undo result: ${result}`);
       updateUndoRedoState();
       return result;
     } catch (error) {
-      console.error('❌ Undo failed:', error);
+      console.error('Undo failed:', error);
       return false;
     }
   };
 
   // Perform redo operation
   const performRedo = (): boolean => {
-    console.log('🔄 Attempting redo...');
+    console.log('Attempting redo...');
     try {
       const result = redo();
-      console.log(`🔄 Redo result: ${result}`);
+      console.log(`Redo result: ${result}`);
       updateUndoRedoState();
       return result;
     } catch (error) {
-      console.error('❌ Redo failed:', error);
+      console.error('Redo failed:', error);
       return false;
     }
   };
@@ -62,9 +62,9 @@ export function useUndoRedo() {
     try {
       resetUndoRedoStack();
       updateUndoRedoState();
-      console.log('🔄 Reset undo/redo stacks');
+      console.log('Reset undo/redo stacks');
     } catch (error) {
-      console.warn('⚠️ Failed to reset stacks:', error);
+      console.warn('Failed to reset stacks:', error);
     }
   };
 
@@ -79,14 +79,14 @@ export function useUndoRedo() {
     // Ctrl+Z for undo
     if (event.ctrlKey && event.key === 'z' && !event.shiftKey) {
       event.preventDefault();
-      console.log('⌨️ Keyboard shortcut: Ctrl+Z (Undo)');
+      console.log('Keyboard shortcut: Ctrl+Z (Undo)');
       performUndo();
     }
     // Ctrl+Shift+Z or Ctrl+Y for redo
     else if ((event.ctrlKey && event.shiftKey && event.key === 'Z') || 
              (event.ctrlKey && event.key === 'y')) {
       event.preventDefault();
-      console.log('⌨️ Keyboard shortcut: Ctrl+Shift+Z or Ctrl+Y (Redo)');
+      console.log('Keyboard shortcut: Ctrl+Shift+Z or Ctrl+Y (Redo)');
       performRedo();
     }
   };

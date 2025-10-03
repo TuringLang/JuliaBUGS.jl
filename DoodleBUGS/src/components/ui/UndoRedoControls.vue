@@ -49,15 +49,15 @@ onUnmounted(() => {
 });
 
 const handleUndo = () => {
-  console.log('🔄 Undo button clicked');
+  console.log('Undo button clicked');
   const result = performUndo();
-  console.log(`🔄 Undo button result: ${result}`);
+  console.log(`Undo button result: ${result}`);
 };
 
 const handleRedo = () => {
-  console.log('🔄 Redo button clicked');
+  console.log('Redo button clicked');
   const result = performRedo();
-  console.log(`🔄 Redo button result: ${result}`);
+  console.log(`Redo button result: ${result}`);
 };
 </script>
 

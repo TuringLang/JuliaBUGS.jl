@@ -35,14 +35,14 @@ export function useGraphElements() {
           position: newElement.type === 'node' ? (newElement as GraphNode).position : undefined
         });
         
-        console.log('✅ Element added to cytoscape:', newElement.id);
+        console.log('Element added to cytoscape:', newElement.id);
         
         // Manually trigger undo-redo tracking if needed
         if (ur) {
-          console.log('📝 Undo-redo instance available for tracking');
+          console.log('Undo-redo instance available for tracking');
         }
       } catch (error) {
-        console.warn('⚠️ Failed to add element to cytoscape:', error);
+        console.warn('Failed to add element to cytoscape:', error);
       }
     }
   };
@@ -72,14 +72,14 @@ export function useGraphElements() {
         const element = cy.getElementById(elementId);
         if (element.length > 0) {
           element.remove();
-          console.log('✅ Element removed from cytoscape:', elementId);
+          console.log('Element removed from cytoscape:', elementId);
           
           if (ur) {
-            console.log('📝 Undo-redo instance available for tracking removal');
+            console.log('Undo-redo instance available for tracking removal');
           }
         }
       } catch (error) {
-        console.warn('⚠️ Failed to remove element from cytoscape:', error);
+        console.warn('Failed to remove element from cytoscape:', error);
       }
     }
   };
