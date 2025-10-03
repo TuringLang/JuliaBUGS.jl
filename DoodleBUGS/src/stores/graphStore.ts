@@ -6,6 +6,7 @@ import { useDataStore } from './dataStore';
 export interface GraphContent {
   graphId: string;
   elements: GraphElement[];
+  lastLayout?: string;
 }
 
 export const useGraphStore = defineStore('graph', () => {
@@ -41,10 +42,10 @@ export const useGraphStore = defineStore('graph', () => {
     const newContent: GraphContent = {
       graphId: graphId,
       elements: [],
+      lastLayout: 'dagre', // Default layout for new graphs
     };
     graphContents.value.set(graphId, newContent);
     saveGraph(graphId, newContent);
-    // Also create data entry for the new graph
     dataStore.createNewGraphData(graphId);
   };
 
@@ -56,10 +57,19 @@ export const useGraphStore = defineStore('graph', () => {
     }
   };
 
+  const updateGraphLayout = (graphId: string, layoutName: string) => {
+    if (graphContents.value.has(graphId)) {
+      const content = graphContents.value.get(graphId)!;
+      if (content.lastLayout !== layoutName) {
+        content.lastLayout = layoutName;
+        saveGraph(graphId, content);
+      }
+    }
+  };
+
   const deleteGraphContent = (graphId: string) => {
     graphContents.value.delete(graphId);
     localStorage.removeItem(`doodlebugs-graph-${graphId}`);
-    // Also delete associated data
     dataStore.deleteGraphData(graphId);
     if (currentGraphId.value === graphId) {
       selectGraph(null);
@@ -87,6 +97,7 @@ export const useGraphStore = defineStore('graph', () => {
     selectGraph,
     createNewGraphContent,
     updateGraphElements,
+    updateGraphLayout,
     deleteGraphContent,
     saveGraph,
     loadGraph,

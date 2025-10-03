@@ -125,9 +125,9 @@ const getErrorForField = (fieldKey: string): string | undefined => {
             <BaseSelect
               v-if="prop.type === 'select'"
               :id="`prop-${prop.key}`"
-              v-model="(localElement as GraphNode)[prop.key]"
+              :model-value="String((localElement as GraphNode)[prop.key] || '')"
               :options="prop.options!"
-              @change="handleUpdate"
+              @update:model-value="(value) => { (localElement as GraphNode)[prop.key] = value; handleUpdate(); }"
               :class="{ 'has-error': getErrorForField(prop.key) }"
             />
             <input
@@ -142,9 +142,19 @@ const getErrorForField = (fieldKey: string): string | undefined => {
               v-else
               :id="`prop-${prop.key}`"
               :type="prop.type"
-              v-model="(localElement as GraphNode)[prop.key]"
+              :model-value="(localElement as GraphNode)[prop.key] !== undefined ? String((localElement as GraphNode)[prop.key]) : ''"
+              @update:model-value="(value) => { 
+                // Convert value back to appropriate type based on prop.type
+                let convertedValue: string | number | null | undefined = value;
+                if (prop.type === 'number' && value !== '') {
+                  convertedValue = Number(value);
+                } else if (value === '') {
+                  convertedValue = null;
+                }
+                (localElement as GraphNode)[prop.key] = convertedValue; 
+                handleUpdate(); 
+              }"
               :placeholder="prop.placeholder"
-              @input="handleUpdate"
               :class="{ 'has-error': getErrorForField(prop.key) }"
             />
           </div>
@@ -165,9 +175,12 @@ const getErrorForField = (fieldKey: string): string | undefined => {
                 <BaseInput
                     :id="`param-${index}`"
                     type="text"
-                    v-model="(localElement as GraphNode)[`param${index + 1}`]"
+                    :model-value="(localElement as GraphNode)[`param${index + 1}`] !== undefined ? String((localElement as GraphNode)[`param${index + 1}`]) : ''"
+                    @update:model-value="(value) => { 
+                      (localElement as GraphNode)[`param${index + 1}`] = value || null; 
+                      handleUpdate(); 
+                    }"
                     placeholder="Enter value or parent name"
-                    @input="handleUpdate"
                     :class="{ 'has-error': getErrorForField(`param${index + 1}`) }"
                 />
             </div>

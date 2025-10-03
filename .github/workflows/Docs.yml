@@ -5,11 +5,16 @@ on:
     branches:
       - main
     tags: '*'
-    paths-ignore:
-      - 'DoodleBUGS/**'
+    paths:
+      - 'JuliaBUGS/docs/**'
+      - 'JuliaBUGS/src/**'
+      - '.github/workflows/Docs.yml'
   pull_request:
-    paths-ignore:
-      - 'DoodleBUGS/**'
+    paths:
+      - 'JuliaBUGS/docs/**'
+      - 'JuliaBUGS/src/**'
+      - '.github/workflows/Docs.yml'
+  workflow_dispatch:
 
 concurrency:
   # Skip intermediate builds: always.
@@ -28,3 +33,9 @@ jobs:
     steps:
       - name: Build and deploy Documenter.jl docs
         uses: TuringLang/actions/DocsDocumenter@main
+        with:
+          pkg_path: JuliaBUGS
+          doc-path: JuliaBUGS/docs
+          doc-make-path: JuliaBUGS/docs/make.jl
+          doc-build-path: JuliaBUGS/docs/build
+          tag_prefix: "JuliaBUGS-"

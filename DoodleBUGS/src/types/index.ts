@@ -21,13 +21,17 @@ export interface GraphNode {
   distribution?: string;
   equation?: string;
   observed?: boolean;
-  initialValue?: any;
+  initialValue?: string | number | boolean | null;
   indices?: string;
   loopVariable?: string;
   loopRange?: string;
-
-  // Allows for other dynamic properties if needed in the future
-  [key: string]: any;
+  
+  // Distribution parameters
+  param1?: string;
+  param2?: string;
+  
+  // Index signature to allow dynamic property access
+  [key: string]: string | number | boolean | null | undefined | { x: number; y: number; } | string[];
 }
 
 export interface GraphEdge {
@@ -46,19 +50,18 @@ export interface ExampleModel {
 }
 
 export interface ModelData {
-  data: { [key: string]: any };
-  inits: { [key: string]: any };
+  data: { [key: string]: string | number | boolean | null | undefined };
+  inits: { [key: string]: string | number | boolean | null | undefined };
 }
 
 
 declare module 'cytoscape' {
   interface Core {
-    panzoom(options?: any): any;
-    svg(options?: any): string;
+    svg(options?: Record<string, unknown>): string;
   }
 
   interface NodeSingular {
-    data(key: string): any;
+    data(key: string): unknown;
     data(): GraphNode;
   }
 

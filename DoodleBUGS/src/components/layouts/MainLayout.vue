@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { ref, watch, computed, onUnmounted, onMounted, nextTick } from 'vue';
+import { ref, computed, onUnmounted, watch, onMounted, nextTick } from 'vue';
 import type { StyleValue } from 'vue';
 import { storeToRefs } from 'pinia';
+import type { Core, LayoutOptions } from 'cytoscape';
 import GraphEditor from '../canvas/GraphEditor.vue';
 import ProjectManager from '../left-sidebar/ProjectManager.vue';
 import NodePalette from '../left-sidebar/NodePalette.vue';
+import ExecutionSettingsPanel from '../left-sidebar/ExecutionSettingsPanel.vue';
 import DataInputPanel from '../panels/DataInputPanel.vue';
 import NodePropertiesPanel from '../right-sidebar/NodePropertiesPanel.vue';
 import CodePreviewPanel from '../panels/CodePreviewPanel.vue';
 import JsonEditorPanel from '../right-sidebar/JsonEditorPanel.vue';
+import ExecutionPanel from '../right-sidebar/ExecutionPanel.vue';
 import TheNavbar from './TheNavbar.vue';
 import BaseModal from '../common/BaseModal.vue';
 import BaseInput from '../ui/BaseInput.vue';
@@ -16,12 +19,12 @@ import BaseButton from '../ui/BaseButton.vue';
 import AboutModal from './AboutModal.vue';
 import ExportModal from './ExportModal.vue';
 import ValidationIssuesModal from './ValidationIssuesModal.vue';
-
 import { useGraphElements } from '../../composables/useGraphElements';
 import { useProjectStore } from '../../stores/projectStore';
 import { useGraphStore } from '../../stores/graphStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useDataStore } from '../../stores/dataStore';
+import { useExecutionStore } from '../../stores/executionStore';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGraphValidator } from '../../composables/useGraphValidator';
 import { useUndoRedo } from '../../composables/useUndoRedo';
@@ -31,16 +34,15 @@ const projectStore = useProjectStore();
 const graphStore = useGraphStore();
 const uiStore = useUiStore();
 const dataStore = useDataStore();
+const executionStore = useExecutionStore();
 
 const { parsedGraphData } = storeToRefs(dataStore);
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements();
+const { generatedCode } = useBugsCodeGenerator(elements);
 const { getCyInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
 const { handleKeyboardShortcuts, updateUndoRedoState } = useUndoRedo();
 
-const activeLeftTab = ref<'project' | 'palette' | 'data' | null>('project');
-const isLeftSidebarOpen = ref(true);
-const isRightSidebarOpen = ref(true);
 const currentMode = ref<string>('select');
 const currentNodeType = ref<NodeType>('stochastic');
 const isGridEnabled = ref(true);
@@ -55,66 +57,30 @@ const showNewGraphModal = ref(false);
 const newGraphName = ref('');
 const showAboutModal = ref(false);
 const showValidationModal = ref(false);
+const showConnectModal = ref(false);
+const tempBackendUrl = ref(backendUrl.value || 'http://localhost:8081');
 
 const showExportModal = ref(false);
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null);
 
-const handleApplyLayout = (layoutName: string) => {
-    const cy = getCyInstance();
-    if (!cy) return;
-
-    const layoutOptions = {
-        name: layoutName,
-        animate: true,
-        padding: 50,
-        fit: true,
-        ...(layoutName === 'dagre' && { 
-            rankDir: 'TB', 
-            spacingFactor: 1.2 
-        }),
-        ...(layoutName === 'fcose' && { 
-            idealEdgeLength: 120, 
-            nodeSeparation: 150,
-            nodeRepulsion: 4500,
-            quality: 'proof',
-        }),
-    };
-
-    const layout = cy.layout(layoutOptions);
-    
-    layout.on('layoutstop', () => {
-        const updatedNodes = cy.nodes().map(node => {
-            const originalNode = graphStore.currentGraphElements.find(el => el.id === node.id() && el.type === 'node') as GraphNode | undefined;
-            if (originalNode) {
-                return { ...originalNode, position: node.position() };
-            }
-            return null;
-        }).filter(n => n !== null) as GraphNode[];
-
-        updatedNodes.forEach(node => updateElement(node));
-    });
-
-    layout.run();
-};
-
-onMounted(() => {
+onMounted(async () => {
   projectStore.loadProjects();
 
   if (projectStore.projects.length === 0) {
     projectStore.createProject('Default Project');
     if (projectStore.currentProjectId) {
-      projectStore.addGraphToProject(projectStore.currentProjectId, 'Untitled Graph');
+      await handleLoadExample('rats');
     }
-  }
-
-  const lastGraphId = localStorage.getItem('doodlebugs-currentGraphId');
-  if (lastGraphId) {
-    const project = projectStore.currentProject;
-    if (project && project.graphs.some(g => g.id === lastGraphId)) {
-      graphStore.selectGraph(lastGraphId);
+  } else {
+    const lastGraphId = localStorage.getItem('doodlebugs-currentGraphId');
+    if (lastGraphId) {
+      const project = projectStore.currentProject;
+      if (project && project.graphs.some(g => g.id === lastGraphId)) {
+        graphStore.selectGraph(lastGraphId);
+      }
+    } else if (projectStore.currentProject?.graphs.length) {
+      graphStore.selectGraph(projectStore.currentProject.graphs[0].id);
     }
-  } else if (projectStore.currentProject?.graphs.length) {
-    graphStore.selectGraph(projectStore.currentProject.graphs[0].id);
   }
 
   validateGraph();
@@ -128,15 +94,19 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyboardShortcuts);
 });
 
-watch(() => graphStore.currentGraphId, (newId, oldId) => {
-  if (newId && newId !== oldId) {
-    nextTick(() => {
-      setTimeout(() => {
-        handleApplyLayout('dagre');
-      }, 100);
-    });
-  }
-}, { immediate: true });
+watch(
+  () => graphStore.currentGraphId,
+  (newId) => {
+    if (newId) {
+      nextTick(() => {
+        setTimeout(() => {
+          const graphContent = graphStore.graphContents.get(newId);
+          const layoutToApply = graphContent?.lastLayout || 'dagre';
+          handleGraphLayout(layoutToApply);
+        }, 100);
+      });
+    }
+  }, { immediate: true });
 
 const currentProjectName = computed(() => projectStore.currentProject?.name || null);
 const activeGraphName = computed(() => {
@@ -147,39 +117,22 @@ const activeGraphName = computed(() => {
   return null;
 });
 
-const handleLeftTabClick = (tabName: 'project' | 'palette' | 'data') => {
-  if (activeLeftTab.value === tabName && isLeftSidebarOpen.value) {
-    isLeftSidebarOpen.value = false;
-  } else {
-    isLeftSidebarOpen.value = true;
-    activeLeftTab.value = tabName;
-  }
-};
-
-const toggleLeftSidebar = () => {
-  isLeftSidebarOpen.value = !isLeftSidebarOpen.value;
-};
-
-const toggleRightSidebar = () => {
-  isRightSidebarOpen.value = !isRightSidebarOpen.value;
-};
-
 const leftSidebarStyle = computed((): StyleValue => ({
-  width: isLeftSidebarOpen.value ? `${uiStore.leftSidebarWidth}px` : 'var(--vertical-tab-width)',
+  width: isLeftSidebarOpen.value ? `${leftSidebarWidth.value}px` : 'var(--vertical-tab-width)',
   transition: isResizingLeft.value ? 'none' : 'width 0.3s ease-in-out',
 }));
 
 const leftSidebarContentStyle = computed((): StyleValue => {
-  const contentWidth = uiStore.leftSidebarWidth - 50;
+  const contentWidth = leftSidebarWidth.value - 50;
   return {
     width: `${contentWidth}px`,
     opacity: isLeftSidebarOpen.value ? '1' : '0',
     pointerEvents: isLeftSidebarOpen.value ? 'auto' : 'none',
-  }
+  };
 });
 
 const rightSidebarStyle = computed((): StyleValue => ({
-  width: isRightSidebarOpen.value ? `${uiStore.rightSidebarWidth}px` : '0',
+  width: isRightSidebarOpen.value ? `${rightSidebarWidth.value}px` : '0',
   opacity: isRightSidebarOpen.value ? '1' : '0',
   pointerEvents: isRightSidebarOpen.value ? 'auto' : 'none',
   borderLeft: isRightSidebarOpen.value ? '1px solid var(--color-border)' : 'none',
@@ -197,7 +150,7 @@ const startResizeLeft = () => {
 const doResizeLeft = (event: MouseEvent) => {
   if (isResizingLeft.value) {
     const newWidth = event.clientX;
-    uiStore.leftSidebarWidth = Math.max(250, Math.min(newWidth, 600));
+    leftSidebarWidth.value = Math.max(250, Math.min(newWidth, 600));
   }
 };
 
@@ -212,7 +165,7 @@ const startResizeRight = () => {
 const doResizeRight = (event: MouseEvent) => {
   if (isResizingRight.value) {
     const newWidth = window.innerWidth - event.clientX;
-    uiStore.rightSidebarWidth = Math.max(280, Math.min(newWidth, 600));
+    rightSidebarWidth.value = Math.max(400, Math.min(newWidth, 800));
   }
 };
 
@@ -238,22 +191,22 @@ const handleElementSelected = (element: GraphElement | null) => {
 };
 
 const handleSelectNodeFromModal = (nodeId: string) => {
-    const nodeToSelect = elements.value.find(el => el.id === nodeId);
-    if (nodeToSelect) {
-        handleElementSelected(nodeToSelect);
-        const cy = getCyInstance();
-        if (cy) {
-            cy.elements().unselect();
-            cy.getElementById(nodeId).select();
-            cy.animate({
-                center: {
-                    eles: cy.getElementById(nodeId)
-                },
-                zoom: 1.2,
-                duration: 500
-            });
-        }
+  const nodeToSelect = elements.value.find(el => el.id === nodeId);
+  if (nodeToSelect) {
+    handleElementSelected(nodeToSelect);
+    const cy = getCyInstance();
+    if (cy) {
+      cy.elements().unselect();
+      cy.getElementById(nodeId).select();
+      cy.animate({
+        center: {
+          eles: cy.getElementById(nodeId)
+        },
+        zoom: 1.2,
+        duration: 500
+      });
     }
+  }
 };
 
 const handleUpdateElement = (updatedEl: GraphElement) => {
@@ -262,6 +215,52 @@ const handleUpdateElement = (updatedEl: GraphElement) => {
 
 const handleDeleteElement = (elementId: string) => {
   deleteElement(elementId);
+};
+
+const handleLayoutUpdated = (layoutName: string) => {
+  if (graphStore.currentGraphId) {
+    graphStore.updateGraphLayout(graphStore.currentGraphId, layoutName);
+  }
+};
+
+const handleGraphLayout = (layoutName: string) => {
+    const cy = getCyInstance();
+    if (!cy) return;
+
+    const shouldUpdatePositions = layoutName !== 'preset';
+
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const layoutOptionsMap: Record<string, LayoutOptions> = {
+        dagre: { name: 'dagre', animate: true, animationDuration: 500, fit: true, padding: 30 } as any,
+        fcose: { name: 'fcose', animate: true, animationDuration: 500, fit: true, padding: 30, randomize: false, quality: 'proof' } as any,
+        cola: { name: 'cola', animate: true, fit: true, padding: 30, refresh: 1, avoidOverlap: true, infinite: false, centerGraph: true, flow: { axis: 'y', minSeparation: 30 }, handleDisconnected: false, randomize: false } as any,
+        klay: { name: 'klay', animate: true, animationDuration: 500, fit: true, padding: 30, klay: { direction: 'RIGHT', edgeRouting: 'SPLINES', nodePlacement: 'LINEAR_SEGMENTS' } } as any,
+        preset: { name: 'preset' }
+    };
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    const options = layoutOptionsMap[layoutName] || layoutOptionsMap.preset;
+    const layout = cy.layout(options);
+
+    if (shouldUpdatePositions) {
+        layout.one('layoutstop', () => {
+            const updatedElements = graphStore.currentGraphElements.map(el => {
+                if (el.type === 'node') {
+                    const cyNode = cy.getElementById(el.id);
+                    if (cyNode.length > 0) {
+                        const newPos = cyNode.position();
+                        return { ...el, position: { x: newPos.x, y: newPos.y } };
+                    }
+                }
+                return el;
+            });
+            if (graphStore.currentGraphId) {
+                graphStore.updateGraphElements(graphStore.currentGraphId, updatedElements);
+            }
+        });
+    }
+
+    layout.run();
+    handleLayoutUpdated(layoutName);
 };
 
 const handlePaletteSelection = (itemType: PaletteItemType) => {
@@ -295,152 +294,374 @@ const createNewGraph = () => {
 const saveCurrentGraph = () => {
   if (graphStore.currentGraphId) {
     graphStore.saveGraph(graphStore.currentGraphId, graphStore.graphContents.get(graphStore.currentGraphId)!);
-  } else {
-    console.warn("No graph currently selected to save.");
   }
 };
 
 const triggerDownload = (blob: Blob, fileName: string) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 const handleExportJson = () => {
-    if (!graphStore.currentGraphId) {
-        alert("Please select a graph to export.");
-        return;
-    }
-    const elementsToExport = graphStore.currentGraphElements;
-    const jsonString = JSON.stringify(elementsToExport, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const fileName = `${activeGraphName.value || 'graph'}.json`;
-    triggerDownload(blob, fileName);
+  if (!graphStore.currentGraphId) return;
+  const elementsToExport = graphStore.currentGraphElements;
+  const jsonString = JSON.stringify(elementsToExport, null, 2);
+  const blob = new Blob([jsonString], { type: 'application/json' });
+  const fileName = `${activeGraphName.value || 'graph'}.json`;
+  triggerDownload(blob, fileName);
 };
 
 const openExportModal = (format: 'png' | 'jpg' | 'svg') => {
-    if (!graphStore.currentGraphId) {
-        alert("Please select a graph to export.");
-        return;
-    }
-    currentExportType.value = format;
-    showExportModal.value = true;
+  if (!graphStore.currentGraphId) return;
+  currentExportType.value = format;
+  showExportModal.value = true;
 };
 
-const handleConfirmExport = (options: any) => {
-    const cy = getCyInstance();
-    if (!cy || !currentExportType.value) return;
-
-    const fileName = `${activeGraphName.value || 'graph'}.${currentExportType.value}`;
-
-    try {
-        let blob: Blob;
-        if (currentExportType.value === 'svg') {
-            const svgContent = cy.svg(options);
-            blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
-        } else if (currentExportType.value === 'jpg') {
-            blob = cy.jpg({ ...options, output: 'blob' }) as unknown as Blob;
-        } else {
-            blob = cy.png({ ...options, output: 'blob' }) as unknown as Blob;
-        }
-        triggerDownload(blob, fileName);
-    } catch (err) {
-        console.error(`Failed to export ${currentExportType.value}:`, err);
-        alert(`An error occurred while exporting the graph. Please check the console.`);
+const handleConfirmExport = (options: ExportOptions) => {
+  const cy = getCyInstance() as Core & { svg: (options: object) => string; jpg: (options: object) => Blob; png: (options: object) => Blob; };
+  if (!cy || !currentExportType.value) return;
+  const fileName = `${activeGraphName.value || 'graph'}.${currentExportType.value}`;
+  try {
+    let blob: Blob;
+    if (currentExportType.value === 'svg') {
+      const svgOptions = { bg: options.bg, full: options.full, scale: options.scale };
+      blob = new Blob([cy.svg(svgOptions)], { type: 'image/svg+xml;charset=utf-8' });
+    } else {
+      blob = cy[currentExportType.value]({ ...options, output: 'blob' });
     }
+    triggerDownload(blob, fileName);
+  } catch (err) {
+    console.error(`Failed to export ${currentExportType.value}:`, err);
+  }
 };
 
 const handleLoadExample = async (exampleKey: string) => {
-    if (!projectStore.currentProjectId) {
-        alert("Please create or select a project before loading an example.");
-        return;
-    }
+  if (!projectStore.currentProjectId) return;
+  try {
+    const baseUrl = import.meta.env.BASE_URL;
 
-    try {
-        const baseUrl = import.meta.env.BASE_URL;
-        const modelUrl = `${baseUrl}examples/${exampleKey}/model.json`;
-        const dataUrl = `${baseUrl}examples/${exampleKey}/data.json`;
+    const modelResponse = await fetch(`${baseUrl}examples/${exampleKey}/model.json`);
+    if (!modelResponse.ok) throw new Error(`Could not fetch example model: ${modelResponse.statusText}`);
+    const modelData: ExampleModel = await modelResponse.json();
 
-        const [modelResponse, dataResponse] = await Promise.all([
-            fetch(modelUrl),
-            fetch(dataUrl)
-        ]);
+    const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId, modelData.name);
+    if (!newGraphMeta) return;
 
-        if (!modelResponse.ok) {
-            throw new Error(`Could not fetch example model: ${modelResponse.statusText}`);
-        }
-        const modelData: ExampleModel = await modelResponse.json();
+    graphStore.updateGraphElements(newGraphMeta.id, modelData.graphJSON);
+    
+    const jsonDataResponse = await fetch(`${baseUrl}examples/${exampleKey}/data.json`);
+    if (jsonDataResponse.ok) {
+      const fullData = await jsonDataResponse.json();
+      
+      // Temporarily set mode to json to ensure correct data ingestion
+      dataStore.inputMode = 'json';
+      dataStore.dataString = JSON.stringify(fullData.data || {}, null, 2);
+      dataStore.initsString = JSON.stringify(fullData.inits || {}, null, 2);
 
-        const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId, modelData.name);
+    } else {
+      const juliaDataResponse = await fetch(`${baseUrl}examples/${exampleKey}/data.jl`);
+      if (juliaDataResponse.ok) {
+        const juliaText = await juliaDataResponse.text();
+        const dataMatch = juliaText.match(/data\s*=\s*(\([\s\S]*?\))\s*/m);
+        const initsMatch = juliaText.match(/inits\s*=\s*(\([\s\S]*?\))\s*/m);
         
-        if (newGraphMeta) {
-            graphStore.updateGraphElements(newGraphMeta.id, modelData.graphJSON);
-            if (dataResponse.ok) {
-                const data = await dataResponse.json();
-                dataStore.currentGraphDataString = JSON.stringify(data, null, 2);
-            } else {
-                console.error(`Failed to load example data: ${dataResponse.statusText}`);
-                alert("Failed to load the example data. See console for details.");
-            }
-        }
-        
-    } catch (error) {
-        console.error("Failed to load example model:", error);
-        alert("Failed to load the example model. See console for details.");
+        // Set the mode to julia before assigning julia strings
+        dataStore.inputMode = 'julia';
+        dataStore.dataString = dataMatch ? dataMatch[1] : '()';
+        dataStore.initsString = initsMatch ? initsMatch[1] : '()';
+      }
     }
+    
+    // Set the default view to Julia and save the final state
+    dataStore.inputMode = 'julia';
+    dataStore.updateGraphData(newGraphMeta.id, dataStore.getGraphData(newGraphMeta.id));
+
+  } catch (error) {
+    console.error("Failed to load example model:", error);
+  }
 };
 
 const isModelValid = computed(() => validationErrors.value.size === 0);
+
+// Inline navbar connect handler
+const connectToBackendUrl = async (url: string) => {
+  tempBackendUrl.value = url?.trim() || '';
+  await connectToBackend();
+};
+
+const connectToBackend = async () => {
+  isConnecting.value = true;
+  isConnected.value = false;
+  executionStore.setBackendUrl(tempBackendUrl.value);
+  uiStore.setActiveRightTab('connection');
+  executionStore.executionLogs.push(`Attempting to connect to backend at ${tempBackendUrl.value}...`);
+  
+  try {
+    const response = await fetch(`${tempBackendUrl.value}/api/health`);
+    if (!response.ok) throw new Error(`Health check failed with status: ${response.status}`);
+    const result = await response.json();
+    if (result.status !== 'ok') throw new Error('Backend returned an invalid health status.');
+    isConnected.value = true;
+    executionStore.executionLogs.push("Connection successful.");
+    showConnectModal.value = false;
+    isRightSidebarOpen.value = true;
+  } catch (error: unknown) {
+    const errorMessage = (error as Error).message;
+    executionStore.executionLogs.push(`Connection failed: ${errorMessage}`);
+    isConnected.value = false;
+  } finally {
+    isConnecting.value = false;
+  }
+};
+
+let currentRunController: AbortController | null = null;
+let abortedByUser = false;
+const abortRun = () => {
+  if (currentRunController) {
+    abortedByUser = true;
+    executionStore.executionLogs.push('Abort requested by user...');
+    currentRunController.abort();
+  }
+};
+
+const runModel = async () => {
+  if (!isConnected.value || !backendUrl.value || isExecuting.value) return;
+
+  uiStore.setActiveRightTab('connection');
+  executionStore.resetExecutionState();
+  executionStore.setExecutionPanelTab('logs');
+
+  // Reset abort flag each run
+  abortedByUser = false;
+
+  try {
+    // Ensure any previous in-flight request is cancelled
+    if (currentRunController) {
+      currentRunController.abort();
+      currentRunController = null;
+    }
+    currentRunController = new AbortController();
+
+    // Build payload from parsedGraphData to ensure consistency across modes
+    const dataPayload = parsedGraphData.value.data || {};
+    const initsPayload = parsedGraphData.value.inits || {};
+
+    const dataString = dataStore.inputMode === 'julia' ? (dataStore.dataString || '') : jsonToJulia(JSON.stringify(dataPayload));
+    const initsString = dataStore.inputMode === 'julia' ? (dataStore.initsString || '') : jsonToJulia(JSON.stringify(initsPayload));
+
+    const payload = {
+      model_code: generatedCode.value,
+      data: dataPayload,
+      inits: initsPayload,
+      data_string: dataString,
+      inits_string: initsString,
+      settings: { ...samplerSettings.value }
+    };
+
+    // Prefer new /api/run endpoint; fallback to legacy /api/run_model
+    const started = performance.now();
+    let response = await fetch(`${backendUrl.value}/api/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: currentRunController.signal
+    });
+    const tFetch = performance.now();
+    executionStore.executionLogs.push(`HTTP ${response.status} from /api/run in ${Math.round(tFetch - started)}ms`);
+
+    if (response.status === 404) {
+      executionStore.executionLogs.push(`Falling back to /api/run_model`);
+      response = await fetch(`${backendUrl.value}/api/run_model`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model_code: payload.model_code,
+          data_string: dataString,
+          inits_string: initsString,
+          settings: samplerSettings.value
+        }),
+        signal: currentRunController.signal
+      });
+    }
+
+    type RunApiResponse = {
+      logs?: string[];
+      error?: string;
+      results?: ExecutionResult[] | null;
+      summary?: ExecutionResult[] | null;
+      quantiles?: ExecutionResult[] | null;
+      files?: GeneratedFile[];
+    };
+    let result: RunApiResponse;
+    try {
+      result = (await response.json()) as RunApiResponse;
+      executionStore.executionLogs.push(`Parsed JSON response in ${Math.round(performance.now() - tFetch)}ms`);
+    } catch (e) {
+      const text = await response.text().catch(() => '');
+      executionStore.executionError = `Failed to parse JSON: ${(e as Error).message}`;
+      executionStore.executionLogs.push(`Response text (truncated): ${text.slice(0, 400)}...`);
+      throw e;
+    }
+
+    executionStore.executionLogs = result.logs ?? [];
+    if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
+
+    // Maintain backward-compat; prefer summary if present
+    executionStore.executionResults = result.results ?? result.summary ?? null;
+    executionStore.summaryResults = result.summary ?? null;
+    executionStore.quantileResults = result.quantiles ?? null;
+
+    const frontendStandaloneScript = generateStandaloneScript({
+      modelCode: generatedCode.value,
+      data: dataPayload,
+      inits: initsPayload,
+      settings: {
+        n_samples: samplerSettings.value.n_samples,
+        n_adapts: samplerSettings.value.n_adapts,
+        n_chains: samplerSettings.value.n_chains,
+        seed: samplerSettings.value.seed ?? undefined,
+      }
+    });
+    const frontendStandaloneFile: GeneratedFile = { name: 'standalone.jl', content: frontendStandaloneScript };
+    const backendFiles = (result.files ?? []).filter(file => file.name !== 'standalone.jl').map(file => {
+      const content = (file as GeneratedFile & { content: unknown }).content;
+      return {
+          name: file.name,
+          content: typeof content === 'string'
+              ? content
+              : (content == null ? '' : JSON.stringify(content)),
+      };
+    });
+    // Put standalone first so users see a guaranteed non-empty file
+    executionStore.generatedFiles = [frontendStandaloneFile, ...backendFiles];
+    // Debug log: show file sizes to help diagnose empty content
+    try {
+      const sizes = executionStore.generatedFiles.map(f => `${f.name} (${(f.content || '').length})`).join(', ');
+      executionStore.executionLogs.push(`Generated files: ${sizes}`);
+    } catch { /* ignore logging errors */ }
+    executionStore.executionError = null;
+
+    // Switch to Results on successful completion
+    executionStore.setExecutionPanelTab('results');
+
+  } catch (error: unknown) {
+    const err = error as Error & { name?: string };
+    if (err?.name === 'AbortError') {
+      if (abortedByUser) {
+        executionStore.executionError = 'Execution aborted by user.';
+        executionStore.executionLogs.push('Fetch aborted by user.');
+      } else {
+        executionStore.executionError = 'Request was aborted. If this was unintentional, avoid editing or reloading during a run, or try a production preview build.';
+        executionStore.executionLogs.push('Fetch aborted by the browser or app environment.');
+      }
+    } else if (err instanceof TypeError) {
+      executionStore.executionError = `Network error during fetch: ${err.message}. This can happen if the request was interrupted (HMR/navigation).`;
+      executionStore.executionLogs.push('Network error likely due to request interruption.');
+    } else {
+      executionStore.executionError = err.message;
+    }
+  } finally {
+    isExecuting.value = false;
+    if (currentRunController) {
+      currentRunController = null;
+    }
+    abortedByUser = false;
+  }
+};
+
+const jsonToJulia = (jsonString: string): string => {
+  try {
+    const obj = JSON.parse(jsonString);
+    if (Object.keys(obj).length === 0) return "()";
+    const formatValue = (value: unknown): string => {
+      if (Array.isArray(value)) {
+        if (Array.isArray(value[0])) {
+          return `[\n    ${value.map(row => (row as unknown[]).join(' ')).join(';\n    ')}\n]`;
+        }
+        return `[${value.join(', ')}]`;
+      }
+      return JSON.stringify(value);
+    };
+    const entries = Object.entries(obj).map(([key, value]) => `${key} = ${formatValue(value)}`);
+    return `(\n  ${entries.join(',\n  ')}\n)`;
+  } catch {
+    return "()";
+  }
+};
+
+const handleGenerateStandalone = () => {
+  try {
+    // Build payloads from parsedGraphData to ensure consistency across modes
+    const dataPayload = parsedGraphData.value.data || {};
+    const initsPayload = parsedGraphData.value.inits || {};
+
+    const script = generateStandaloneScript({
+      modelCode: generatedCode.value,
+      data: dataPayload,
+      inits: initsPayload,
+      settings: {
+        n_samples: samplerSettings.value.n_samples,
+        n_adapts: samplerSettings.value.n_adapts,
+        n_chains: samplerSettings.value.n_chains,
+        seed: samplerSettings.value.seed ?? undefined,
+      },
+    });
+
+    // Update files list (replace existing standalone.jl if present)
+    const files = executionStore.generatedFiles.filter(f => f.name !== 'standalone.jl');
+    files.unshift({ name: 'standalone.jl', content: script });
+    executionStore.generatedFiles = files;
+    executionStore.executionLogs.push('Generated standalone Julia script (frontend).');
+
+    // Focus Execution panel and open right sidebar
+    uiStore.setActiveRightTab('connection');
+    isRightSidebarOpen.value = true;
+    // Switch the ExecutionPanel to the Files tab so the script is visible
+    executionStore.setExecutionPanelTab('files');
+  } catch (err) {
+    executionStore.executionLogs.push(`Failed to generate standalone script: ${(err as Error).message}`);
+  }
+};
 </script>
 
 <template>
   <div class="main-layout">
-    <TheNavbar
-      :project-name="currentProjectName"
-      :active-graph-name="activeGraphName"
-      :is-grid-enabled="isGridEnabled"
-      @update:is-grid-enabled="isGridEnabled = $event"
-      :grid-size="gridSize"
-      @update:grid-size="gridSize = $event"
-      :current-mode="currentMode"
-      @update:current-mode="currentMode = $event"
-      :current-node-type="currentNodeType"
-      @update:current-node-type="currentNodeType = $event"
-      :is-left-sidebar-open="isLeftSidebarOpen"
-      :is-right-sidebar-open="isRightSidebarOpen"
-      @toggle-left-sidebar="toggleLeftSidebar"
-      @toggle-right-sidebar="toggleRightSidebar"
-      @new-project="showNewProjectModal = true"
-      @new-graph="showNewGraphModal = true"
-      @save-current-graph="saveCurrentGraph"
-      @open-about-modal="showAboutModal = true"
-      @export-json="handleExportJson"
-      @open-export-modal="openExportModal"
-      @apply-layout="handleApplyLayout"
-      @load-example="handleLoadExample"
-      @validate-model="validateGraph"
-      :is-model-valid="isModelValid"
-      @show-validation-issues="showValidationModal = true"
-    />
+    <TheNavbar :project-name="currentProjectName" :active-graph-name="activeGraphName" :is-grid-enabled="isGridEnabled"
+      @update:is-grid-enabled="isGridEnabled = $event" :grid-size="gridSize" @update:grid-size="gridSize = $event"
+      :current-mode="currentMode" @update:current-mode="currentMode = $event" :current-node-type="currentNodeType"
+      @update:current-node-type="currentNodeType = $event" :is-left-sidebar-open="isLeftSidebarOpen"
+      :is-right-sidebar-open="isRightSidebarOpen" @toggle-left-sidebar="uiStore.toggleLeftSidebar"
+      @toggle-right-sidebar="uiStore.toggleRightSidebar" @new-project="showNewProjectModal = true"
+      @new-graph="showNewGraphModal = true" @save-current-graph="saveCurrentGraph"
+      @open-about-modal="showAboutModal = true" @export-json="handleExportJson" @open-export-modal="openExportModal"
+      @apply-layout="handleGraphLayout" @load-example="handleLoadExample" @validate-model="validateGraph"
+      :is-model-valid="isModelValid" @show-validation-issues="showValidationModal = true"
+      @connect-to-backend-url="connectToBackendUrl" @run-model="runModel" @abort-run="abortRun" @generate-standalone="handleGenerateStandalone" />
 
     <div class="content-area">
       <aside class="left-sidebar" :style="leftSidebarStyle">
         <div class="vertical-tabs-container">
-          <button :class="{ active: activeLeftTab === 'project' }" @click="handleLeftTabClick('project')"
+          <button :class="{ active: activeLeftTab === 'project' }" @click="uiStore.handleLeftTabClick('project')"
             title="Project Manager">
             <i class="fas fa-folder"></i> <span v-show="isLeftSidebarOpen">Project</span>
           </button>
-          <button :class="{ active: activeLeftTab === 'palette' }" @click="handleLeftTabClick('palette')"
+          <button :class="{ active: activeLeftTab === 'palette' }" @click="uiStore.handleLeftTabClick('palette')"
             title="Node Palette">
             <i class="fas fa-shapes"></i> <span v-show="isLeftSidebarOpen">Palette</span>
           </button>
-          <button :class="{ active: activeLeftTab === 'data' }" @click="handleLeftTabClick('data')" title="Data Input">
+          <button :class="{ active: activeLeftTab === 'data' }" @click="uiStore.handleLeftTabClick('data')"
+            title="Data Input">
             <i class="fas fa-database"></i> <span v-show="isLeftSidebarOpen">Data</span>
+          </button>
+          <button :class="{ active: activeLeftTab === 'settings' }" @click="uiStore.handleLeftTabClick('settings')"
+            title="Execution Settings">
+            <i class="fas fa-cog"></i> <span v-show="isLeftSidebarOpen">Settings</span>
           </button>
         </div>
         <div class="left-sidebar-content" :style="leftSidebarContentStyle">
@@ -453,23 +674,19 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
           <div v-show="activeLeftTab === 'data'" class="fill-height">
             <DataInputPanel :is-active="activeLeftTab === 'data'" />
           </div>
+          <div v-show="activeLeftTab === 'settings'" class="fill-height">
+            <ExecutionSettingsPanel />
+          </div>
         </div>
       </aside>
-      
+
       <div class="resizer resizer-left" @mousedown.prevent="startResizeLeft"></div>
 
       <main class="graph-editor-wrapper">
-        <GraphEditor
-          :is-grid-enabled="isGridEnabled"
-          :grid-size="gridSize"
-          :current-mode="currentMode"
-          :elements="elements"
-          :current-node-type="currentNodeType"
-          :validation-errors="validationErrors"
-          @update:current-mode="currentMode = $event"
-          @update:current-node-type="currentNodeType = $event"
-          @element-selected="handleElementSelected"
-        />
+        <GraphEditor :is-grid-enabled="isGridEnabled" :grid-size="gridSize" :current-mode="currentMode"
+          :elements="elements" :current-node-type="currentNodeType" :validation-errors="validationErrors"
+          @update:current-mode="currentMode = $event" @update:current-node-type="currentNodeType = $event"
+          @element-selected="handleElementSelected" @layout-updated="handleLayoutUpdated" />
       </main>
 
       <div class="resizer resizer-right" @mousedown.prevent="startResizeRight"></div>
@@ -483,19 +700,18 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
               @click="uiStore.setActiveRightTab('code')">Code</button>
             <button :class="{ active: uiStore.activeRightTab === 'json' }"
               @click="uiStore.setActiveRightTab('json')">JSON</button>
+            <button :class="{ active: uiStore.activeRightTab === 'connection' }"
+              @click="uiStore.setActiveRightTab('connection')">Connection</button>
           </div>
-          <button @click="uiStore.toggleRightTabPinned()" class="pin-button" :class="{ 'pinned': uiStore.isRightTabPinned }" title="Pin Tab">
+          <button @click="uiStore.toggleRightTabPinned()" class="pin-button"
+            :class="{ 'pinned': uiStore.isRightTabPinned }" title="Pin Tab">
             <i class="fas fa-thumbtack"></i>
           </button>
         </div>
         <div class="tabs-content">
           <div v-show="uiStore.activeRightTab === 'properties'" class="tab-pane">
-            <NodePropertiesPanel
-              :selected-element="selectedElement"
-              :validation-errors="validationErrors"
-              @update-element="handleUpdateElement"
-              @delete-element="handleDeleteElement"
-            />
+            <NodePropertiesPanel :selected-element="selectedElement" :validation-errors="validationErrors"
+              @update-element="handleUpdateElement" @delete-element="handleDeleteElement" />
           </div>
           <div v-show="uiStore.activeRightTab === 'code'" class="tab-pane fill-height">
             <CodePreviewPanel :is-active="uiStore.activeRightTab === 'code'" />
@@ -503,53 +719,74 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
           <div v-show="uiStore.activeRightTab === 'json'" class="tab-pane fill-height">
             <JsonEditorPanel :is-active="uiStore.activeRightTab === 'json'" />
           </div>
+          <div v-show="uiStore.activeRightTab === 'connection'" class="tab-pane fill-height">
+            <ExecutionPanel />
+          </div>
         </div>
       </aside>
     </div>
 
+    <!-- Modals -->
     <BaseModal :is-open="showNewProjectModal" @close="showNewProjectModal = false">
       <template #header>
         <h3>Create New Project</h3>
       </template>
       <template #body>
-        <label for="new-project-name" style="display: block; margin-bottom: 8px; font-weight: 500;">Project
-          Name:</label>
-        <BaseInput id="new-project-name" v-model="newProjectName" placeholder="Enter project name"
-          @keyup.enter="createNewProject" />
+        <div class="modal-body-content">
+          <label for="new-project-name">Project Name:</label>
+          <BaseInput id="new-project-name" v-model="newProjectName" placeholder="Enter project name"
+            @keyup.enter="createNewProject" />
+        </div>
       </template>
       <template #footer>
         <BaseButton @click="showNewProjectModal = false" type="secondary">Cancel</BaseButton>
         <BaseButton @click="createNewProject" type="primary">Create</BaseButton>
       </template>
     </BaseModal>
+
     <BaseModal :is-open="showNewGraphModal" @close="showNewGraphModal = false">
       <template #header>
         <h3>Create New Graph</h3>
       </template>
       <template #body>
-        <label for="new-graph-name" style="display: block; margin-bottom: 8px; font-weight: 500;">Graph Name:</label>
-        <BaseInput id="new-graph-name" v-model="newGraphName" placeholder="Enter graph name"
-          @keyup.enter="createNewGraph" />
+        <div class="modal-body-content">
+          <label for="new-graph-name">Graph Name:</label>
+          <BaseInput id="new-graph-name" v-model="newGraphName" placeholder="Enter graph name"
+            @keyup.enter="createNewGraph" />
+        </div>
       </template>
       <template #footer>
         <BaseButton @click="showNewGraphModal = false" type="secondary">Cancel</BaseButton>
         <BaseButton @click="createNewGraph" type="primary">Create</BaseButton>
       </template>
     </BaseModal>
+
+    <BaseModal :is-open="showConnectModal" @close="showConnectModal = false">
+      <template #header>
+        <h3>Connect to Backend</h3>
+      </template>
+      <template #body>
+        <div class="modal-body-content">
+          <label for="backend-url">Backend Server URL:</label>
+          <BaseInput id="backend-url" v-model="tempBackendUrl" placeholder="http://localhost:8081"
+            @keyup.enter="connectToBackend" />
+          <small>The URL of your running JuliaBUGS backend server.</small>
+        </div>
+      </template>
+      <template #footer>
+        <BaseButton @click="showConnectModal = false" type="secondary">Cancel</BaseButton>
+        <BaseButton @click="connectToBackend" type="primary" :disabled="isConnecting">
+          <span v-if="isConnecting">Connecting...</span>
+          <span v-else>Connect</span>
+        </BaseButton>
+      </template>
+    </BaseModal>
+
     <AboutModal :is-open="showAboutModal" @close="showAboutModal = false" />
-    <ExportModal 
-      :is-open="showExportModal" 
-      :export-type="currentExportType"
-      @close="showExportModal = false"
-      @confirm-export="handleConfirmExport"
-    />
-    <ValidationIssuesModal
-        :is-open="showValidationModal"
-        :validation-errors="validationErrors"
-        :elements="elements"
-        @close="showValidationModal = false"
-        @select-node="handleSelectNodeFromModal"
-    />
+    <ExportModal :is-open="showExportModal" :export-type="currentExportType" @close="showExportModal = false"
+      @confirm-export="handleConfirmExport" />
+    <ValidationIssuesModal :is-open="showValidationModal" :validation-errors="validationErrors" :elements="elements"
+      @close="showValidationModal = false" @select-node="handleSelectNodeFromModal" />
   </div>
 </template>
 
@@ -636,7 +873,7 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
   box-sizing: border-box;
 }
 
-.left-sidebar-content > .fill-height {
+.left-sidebar-content>.fill-height {
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -718,9 +955,9 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
 }
 
 .tab-pane.fill-height {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .graph-editor-wrapper {
@@ -739,13 +976,34 @@ const isModelValid = computed(() => validationErrors.value.size === 0);
   cursor: col-resize;
   transition: background-color 0.2s ease;
 }
-.resizer:hover, .resizer-left:active, .resizer-right:active {
+
+.resizer:hover,
+.resizer-left:active,
+.resizer-right:active {
   background-color: var(--color-primary);
 }
+
 .resizer-left {
   border-right: 1px solid var(--color-border);
 }
+
 .resizer-right {
   border-left: 1px solid var(--color-border);
+}
+
+.modal-body-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal-body-content label {
+  font-weight: 500;
+}
+
+.modal-body-content small {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-secondary);
 }
 </style>

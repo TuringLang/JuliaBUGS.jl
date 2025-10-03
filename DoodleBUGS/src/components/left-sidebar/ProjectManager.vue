@@ -115,9 +115,21 @@ const handleNewGraph = () => {
   <div class="project-manager">
     <div class="header">
       <h4>Projects</h4>
-      <BaseButton @click="handleNewProject" type="primary" size="small" class="add-project-btn" title="New Project">
-        <i class="fas fa-plus"></i>
-      </BaseButton>
+      <div class="header-actions">
+        <BaseButton
+          @click="handleNewGraph"
+          type="secondary"
+          size="small"
+          class="header-action-btn"
+          title="New Graph in Current Project"
+          :disabled="!currentProject"
+        >
+          <i class="fas fa-project-diagram"></i>
+        </BaseButton>
+        <BaseButton @click="handleNewProject" type="primary" size="small" class="header-action-btn" title="New Project">
+          <i class="fas fa-plus"></i>
+        </BaseButton>
+      </div>
     </div>
 
     <div v-if="projectStore.projects.length === 0" class="empty-state">
@@ -133,9 +145,11 @@ const handleNewGraph = () => {
             :class="{ 'open': projectStore.currentProjectId === project.id }"></i>
           <i class="icon-folder fas fa-folder"></i>
           <span class="project-name">{{ project.name }}</span>
-          <button @click="openContextMenu($event, 'project', project.id)" class="context-menu-btn">
-            <i class="fas fa-ellipsis-v"></i>
-          </button>
+          <div class="project-actions">
+            <button @click.stop="openContextMenu($event, 'project', project.id)" class="action-btn context-menu-btn">
+              <i class="fas fa-ellipsis-v"></i>
+            </button>
+          </div>
         </div>
         <transition name="slide-fade">
           <div v-if="projectStore.currentProject?.id === project.id" class="graph-list">
@@ -143,7 +157,7 @@ const handleNewGraph = () => {
               :class="{ 'active': graphStore.currentGraphId === graph.id }" @click="selectGraph(graph.id)">
               <i class="icon-file fas fa-file-alt"></i>
               <span>{{ graph.name }}</span>
-              <button @click="openContextMenu($event, 'graph', graph.id)" class="context-menu-btn">
+              <button @click.stop="openContextMenu($event, 'graph', graph.id)" class="action-btn context-menu-btn">
                 <i class="fas fa-ellipsis-v"></i>
               </button>
             </div>
@@ -231,7 +245,13 @@ const handleNewGraph = () => {
   font-weight: 600;
 }
 
-.add-project-btn {
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.header-action-btn {
   padding: 2px 6px;
 }
 
@@ -280,6 +300,7 @@ const handleNewGraph = () => {
   transition: background-color 0.2s ease;
   gap: 6px;
   border-radius: 4px;
+  position: relative;
 }
 
 .project-header:hover {
@@ -324,6 +345,43 @@ const handleNewGraph = () => {
   font-size: 0.9em;
 }
 
+.project-actions {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+}
+
+.action-btn {
+    padding: 2px 6px;
+    font-size: 0.9em;
+    background-color: transparent;
+    color: var(--color-secondary);
+    border: none;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+    line-height: 1;
+}
+
+.project-header:hover .action-btn,
+.graph-item:hover .action-btn,
+.project-header.active .action-btn {
+    opacity: 1;
+}
+
+.project-header.active .action-btn {
+    color: white;
+}
+
+.action-btn:hover {
+    background-color: var(--color-border-light);
+    color: var(--color-heading);
+}
+
+.project-header.active .action-btn:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
 .graph-list {
   padding-left: 15px;
   overflow: hidden;
@@ -352,6 +410,7 @@ const handleNewGraph = () => {
   transition: background-color 0.2s ease, color 0.2s ease;
   gap: 6px;
   border-radius: 4px;
+  position: relative;
 }
 
 .graph-item:hover {
@@ -380,24 +439,8 @@ const handleNewGraph = () => {
   color: var(--color-secondary);
 }
 
-.context-menu-btn {
-  padding: 2px 6px;
-  font-size: 0.8em;
-  background-color: transparent;
-  color: var(--color-secondary);
-  border: none;
-  border-radius: 3px;
-  opacity: 0;
-  transition: opacity 0.2s ease, color 0.2s ease;
-}
-
-.project-header:hover .context-menu-btn,
-.graph-item:hover .context-menu-btn {
-  opacity: 1;
-}
-
-.context-menu-btn:hover {
-  color: var(--color-heading);
+.graph-item .action-btn {
+    margin-left: auto;
 }
 
 .context-menu {
