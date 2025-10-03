@@ -5,6 +5,22 @@ import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGridSnapping } from '../../composables/useGridSnapping';
 import type { GraphElement, GraphNode, GraphEdge, NodeType, PaletteItemType, ValidationError } from '../../types';
 
+// Assume nodes is your reactive array of node positions
+// You may already have something like this:
+
+const nodes = ref<GraphNode[]>([]);
+
+// Save layout to localStorage whenever nodes change
+watch(nodes, (newVal) => {
+  const layout = newVal.map(node => ({
+    id: node.id,
+    x: node.x,
+    y: node.y,
+  }))
+  localStorage.setItem('doodlebugs-layout', JSON.stringify(layout))
+}, { deep: true })
+
+
 const props = defineProps<{
   elements: GraphElement[];
   isGridEnabled: boolean;
@@ -105,6 +121,18 @@ const syncGraphWithProps = (elementsToSync: GraphElement[], errorsToSync: Map<st
 
 
 onMounted(() => {
+  const savedLayout = localStorage.getItem('doodlebugs-layout');
+  if (savedLayout && Array.isArray(nodes.value)) {
+    const layout = JSON.parse(savedLayout);
+    layout.forEach((savedNode: any) => {
+      const node = nodes.value.find((n: any) => n.id === savedNode.id);
+      if (node) {
+        node.x = savedNode.x;
+        node.y = savedNode.y;
+      }
+    });
+  }
+
   if (cyContainer.value) {
     cy = initCytoscape(cyContainer.value, []);
 

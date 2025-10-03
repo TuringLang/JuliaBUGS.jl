@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import BaseButton from '../ui/BaseButton.vue';
+import UndoRedoControls from '../ui/UndoRedoControls.vue';
 import type { NodeType } from '../../types';
 import { nodeDefinitions } from '../../config/nodeDefinitions';
 import { computed } from 'vue';
@@ -54,6 +55,12 @@ const updateNodeType = (event: Event) => {
     >
       Add Edge
     </BaseButton>
+
+    <!-- Separator -->
+    <div class="toolbar-separator"></div>
+    
+    <!-- Undo/Redo Controls -->
+    <UndoRedoControls />
 
     <div v-if="currentMode === 'add-node'" class="node-type-selector">
       <label for="node-type">Node Type:</label>
@@ -128,5 +135,12 @@ const updateNodeType = (event: Event) => {
   color: #666;
   font-size: 0.9em;
   white-space: nowrap;
+}
+
+.toolbar-separator {
+  width: 1px;
+  height: 24px;
+  background-color: var(--color-border-dark);
+  margin: 0 8px;
 }
 </style>

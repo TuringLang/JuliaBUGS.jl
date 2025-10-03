@@ -24,6 +24,7 @@ import { useUiStore } from '../../stores/uiStore';
 import { useDataStore } from '../../stores/dataStore';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGraphValidator } from '../../composables/useGraphValidator';
+import { useUndoRedo } from '../../composables/useUndoRedo';
 import type { GraphElement, NodeType, PaletteItemType, GraphNode, ExampleModel } from '../../types';
 
 const projectStore = useProjectStore();
@@ -35,6 +36,7 @@ const { parsedGraphData } = storeToRefs(dataStore);
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements();
 const { getCyInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
+const { handleKeyboardShortcuts, updateUndoRedoState, syncCytoscapeWithStore } = useUndoRedo();
 
 const activeLeftTab = ref<'project' | 'palette' | 'data' | null>('project');
 const isLeftSidebarOpen = ref(true);
@@ -116,6 +118,14 @@ onMounted(() => {
   }
 
   validateGraph();
+
+  // Add keyboard shortcuts for undo/redo
+  document.addEventListener('keydown', handleKeyboardShortcuts);
+});
+
+onUnmounted(() => {
+  // Remove keyboard event listener
+  document.removeEventListener('keydown', handleKeyboardShortcuts);
 });
 
 watch(() => graphStore.currentGraphId, (newId, oldId) => {

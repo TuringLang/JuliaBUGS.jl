@@ -13,8 +13,8 @@ export interface GraphNode {
   id: string;
   name: string;
   type: 'node';
-  nodeType: NodeType;
-  position: { x: number; y: number; };
+  nodeType?: string;
+  position?: { x: number; y: number };
   parent?: string;
 
   // Properties from definitions

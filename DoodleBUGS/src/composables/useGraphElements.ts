@@ -1,9 +1,11 @@
 import { computed, ref } from 'vue';
 import { useGraphStore } from '../stores/graphStore';
+import { useGraphInstance } from './useGraphInstance';
 import type { GraphElement, GraphNode } from '../types';
 
 export function useGraphElements() {
   const graphStore = useGraphStore();
+  const { getCyInstance, getUndoRedoInstance } = useGraphInstance();
 
   const selectedElement = ref<GraphElement | null>(null);
 
@@ -17,7 +19,34 @@ export function useGraphElements() {
   });
 
   const addElement = (newElement: GraphElement) => {
-    elements.value = [...elements.value, newElement];
+    // Temporarily disable undo-redo integration to troubleshoot
+    // const cy = getCyInstance();
+    // const ur = getUndoRedoInstance();
+    
+    // if (cy && ur) {
+    //   try {
+    //     // Use cytoscape undo-redo to add element
+    //     const elementData = newElement.type === 'node' ? {
+    //       ...newElement,
+    //       parent: newElement.parent
+    //     } : {
+    //       ...newElement
+    //     };
+        
+    //     ur.do('add', {
+    //       group: newElement.type === 'node' ? 'nodes' : 'edges',
+    //       data: elementData,
+    //       position: newElement.type === 'node' ? newElement.position : undefined
+    //     });
+    //   } catch (error) {
+    //     console.warn('⚠️ Undo-redo add failed, falling back to direct addition:', error);
+    //     elements.value = [...elements.value, newElement];
+    //   }
+    // } else {
+      // Fallback to direct addition
+      elements.value = [...elements.value, newElement];
+    // }
+    
     selectedElement.value = newElement;
   };
 
@@ -31,6 +60,28 @@ export function useGraphElements() {
   };
 
   const deleteElement = (elementId: string, visited = new Set<string>()) => {
+    // Temporarily disable undo-redo integration to troubleshoot
+    // const cy = getCyInstance();
+    // const ur = getUndoRedoInstance();
+    
+    // if (cy && ur) {
+    //   try {
+    //     // Use cytoscape undo-redo to remove element
+    //     const element = cy.getElementById(elementId);
+    //     if (element.length > 0) {
+    //       ur.do('remove', element);
+    //     }
+    //   } catch (error) {
+    //     console.warn('⚠️ Undo-redo delete failed, falling back to manual deletion:', error);
+    //     deleteElementManually(elementId, visited);
+    //   }
+    // } else {
+      // Fallback to manual deletion logic
+      deleteElementManually(elementId, visited);
+    // }
+  };
+
+  const deleteElementManually = (elementId: string, visited = new Set<string>()) => {
     if (visited.has(elementId)) {
       return;
     }
