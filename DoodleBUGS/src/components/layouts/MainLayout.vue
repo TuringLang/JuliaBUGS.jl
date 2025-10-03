@@ -36,7 +36,7 @@ const { parsedGraphData } = storeToRefs(dataStore);
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements();
 const { getCyInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
-const { handleKeyboardShortcuts, updateUndoRedoState, syncCytoscapeWithStore } = useUndoRedo();
+const { handleKeyboardShortcuts, updateUndoRedoState } = useUndoRedo();
 
 const activeLeftTab = ref<'project' | 'palette' | 'data' | null>('project');
 const isLeftSidebarOpen = ref(true);

@@ -3,7 +3,7 @@
     <button 
       class="undo-btn toolbar-btn"
       :disabled="!canUndo"
-      @click="performUndo"
+      @click="handleUndo"
       title="Undo (Ctrl+Z)"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -15,7 +15,7 @@
     <button 
       class="redo-btn toolbar-btn"
       :disabled="!canRedo"
-      @click="performRedo"
+      @click="handleRedo"
       title="Redo (Ctrl+Shift+Z)"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -27,9 +27,38 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue';
 import { useUndoRedo } from '../../composables/useUndoRedo';
 
-const { canUndo, canRedo, performUndo, performRedo } = useUndoRedo();
+const { canUndo, canRedo, performUndo, performRedo, updateUndoRedoState } = useUndoRedo();
+
+let interval: number;
+
+// Update state when component mounts
+onMounted(() => {
+  updateUndoRedoState();
+  
+  // Set up periodic state updates to ensure buttons stay in sync
+  interval = setInterval(updateUndoRedoState, 500);
+});
+
+onUnmounted(() => {
+  if (interval) {
+    clearInterval(interval);
+  }
+});
+
+const handleUndo = () => {
+  console.log('🔄 Undo button clicked');
+  const result = performUndo();
+  console.log(`🔄 Undo button result: ${result}`);
+};
+
+const handleRedo = () => {
+  console.log('🔄 Redo button clicked');
+  const result = performRedo();
+  console.log(`🔄 Redo button result: ${result}`);
+};
 </script>
 
 <style scoped>
