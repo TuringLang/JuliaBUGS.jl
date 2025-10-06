@@ -264,6 +264,8 @@ samplers like HMC/NUTS. The gradient computation is prepared during compilation 
   - `:ReverseDiff` - Shorthand for `AutoReverseDiff(compile=true)`
   - `:ForwardDiff` - Shorthand for `AutoForwardDiff()`
   - `:Zygote` - Shorthand for `AutoZygote()`
+  - `:Enzyme` - Shorthand for `AutoEnzyme()`
+  - `:Mooncake` - Shorthand for `AutoMooncake()`
   - Any other `ADTypes.AbstractADType`
 
 # Examples
@@ -341,6 +343,7 @@ Supported symbol shortcuts:
 - `:ForwardDiff` -> `AutoForwardDiff()`
 - `:Zygote` -> `AutoZygote()`
 - `:Enzyme` -> `AutoEnzyme()`
+- `:Mooncake` -> `AutoMooncake()`
 """
 function _resolve_adtype(adtype::Symbol)
     if adtype === :ReverseDiff
@@ -351,10 +354,12 @@ function _resolve_adtype(adtype::Symbol)
         return ADTypes.AutoZygote()
     elseif adtype === :Enzyme
         return ADTypes.AutoEnzyme()
+    elseif adtype === :Mooncake
+        return ADTypes.AutoMooncake(; config=nothing)
     else
         error(
             "Unknown AD backend symbol: $adtype. " *
-            "Supported symbols: :ReverseDiff, :ForwardDiff, :Zygote, :Enzyme. " *
+            "Supported symbols: :ReverseDiff, :ForwardDiff, :Zygote, :Enzyme, :Mooncake. " *
             "Or use an ADTypes object like AutoReverseDiff(compile=true).",
         )
     end

@@ -409,6 +409,7 @@ The following AD backends are supported via convenient symbol shortcuts:
 - **`:ForwardDiff`** — Forward-mode AD, efficient for models with few parameters (typically < 20).
 - **`:Zygote`** — Source-to-source reverse-mode AD, general-purpose but may be slower than ReverseDiff for many models.
 - **`:Enzyme`** — Experimental high-performance AD backend with LLVM-level transformations.
+- **`:Mooncake`** — High-performance reverse-mode AD with advanced optimizations.
 
 ### Usage Examples
 
@@ -448,6 +449,9 @@ model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
 - **ForwardDiff** (`:ForwardDiff`) is often faster for models with few parameters (< 20), as it avoids tape construction overhead.
 
 - **Tape compilation trade-off**: While `AutoReverseDiff(compile=true)` has higher initial compilation time, it provides faster gradient evaluations during sampling. For quick prototyping or models that will only be sampled a few times, `AutoReverseDiff(compile=false)` may be preferable.
+
+!!! warning "Compiled tapes and control flow"
+    Compiled ReverseDiff tapes cannot handle value-dependent control flow (e.g., `if x[1] > 0`). If your model has such control flow, use `AutoReverseDiff(compile=false)` or a different backend like `:ForwardDiff` or `:Mooncake`. See the [ReverseDiff documentation](https://juliadiff.org/ReverseDiff.jl/stable/api/#The-AbstractTape-API) for details.
 
 ### Compatibility
 

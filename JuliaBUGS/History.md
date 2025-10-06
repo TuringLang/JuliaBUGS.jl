@@ -4,7 +4,7 @@
 
 - **DifferentiationInterface.jl integration**: JuliaBUGS now uses [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl) for automatic differentiation, providing a unified interface to multiple AD backends.
   - Add `adtype` parameter to `compile()` function for specifying AD backends
-  - Support convenient symbol shortcuts: `:ReverseDiff`, `:ForwardDiff`, `:Zygote`, `:Enzyme`
+  - Support convenient symbol shortcuts: `:ReverseDiff`, `:ForwardDiff`, `:Zygote`, `:Enzyme`, `:Mooncake`
   - Gradient computation is prepared during compilation for optimal performance
   - Example: `model = compile(model_def, data; adtype=:ReverseDiff)`
   - Full control available via explicit ADTypes: `adtype=AutoReverseDiff(compile=true)`
