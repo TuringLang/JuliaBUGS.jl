@@ -26,7 +26,7 @@
             [Symbol("x[3]"), Symbol("x[1:2][1]"), Symbol("x[1:2][2]"), :y]
     end
 
-    @testset "Symbol AD backend shortcuts" begin
+    @testset "AD backend sampling" begin
         model_def = @bugs begin
             mu ~ dnorm(0, 1)
             for i in 1:N
@@ -35,21 +35,21 @@
         end
         data = (N=5, y=[1.0, 2.0, 1.5, 2.5, 1.8])
 
-        # Test that symbol shortcut works
-        ad_model_symbol = compile(model_def, data; adtype=:ReverseDiff)
-        ad_model_explicit = compile(model_def, data; adtype=AutoReverseDiff(; compile=true))
+        # Test that ReverseDiff backend works
+        ad_model_compiled = compile(model_def, data; adtype=AutoReverseDiff(; compile=true))
+        ad_model_nocompile = compile(model_def, data; adtype=AutoReverseDiff(; compile=false))
 
-        @test ad_model_symbol isa JuliaBUGS.Model.BUGSModelWithGradient
-        @test ad_model_explicit isa JuliaBUGS.Model.BUGSModelWithGradient
+        @test ad_model_compiled isa JuliaBUGS.Model.BUGSModelWithGradient
+        @test ad_model_nocompile isa JuliaBUGS.Model.BUGSModelWithGradient
 
         # Test that both produce equivalent results
         n_samples, n_adapts = 100, 100
-        D = LogDensityProblems.dimension(ad_model_symbol)
+        D = LogDensityProblems.dimension(ad_model_compiled)
         initial_θ = rand(StableRNG(123), D)
 
-        samples_symbol = AbstractMCMC.sample(
+        samples_compiled = AbstractMCMC.sample(
             StableRNG(1234),
-            ad_model_symbol,
+            ad_model_compiled,
             NUTS(0.8),
             n_samples;
             progress=false,
@@ -59,9 +59,9 @@
             discard_initial=n_adapts,
         )
 
-        samples_explicit = AbstractMCMC.sample(
+        samples_nocompile = AbstractMCMC.sample(
             StableRNG(1234),
-            ad_model_explicit,
+            ad_model_nocompile,
             NUTS(0.8),
             n_samples;
             progress=false,
@@ -72,8 +72,8 @@
         )
 
         # Results should be very similar (same RNG seed)
-        @test summarize(samples_symbol)[:mu].nt.mean[1] ≈
-            summarize(samples_explicit)[:mu].nt.mean[1] rtol = 0.1
+        @test summarize(samples_compiled)[:mu].nt.mean[1] ≈
+            summarize(samples_nocompile)[:mu].nt.mean[1] rtol = 0.1
     end
 
     @testset "Inference results on examples: $example" for example in

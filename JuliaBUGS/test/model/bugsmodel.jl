@@ -410,22 +410,7 @@ end
         end
         data = (y=1.5,)
 
-        @testset "Symbol shortcuts" begin
-            # Test :ReverseDiff shortcut
-            model_rd = compile(model_def, data; adtype=:ReverseDiff)
-            @test model_rd isa JuliaBUGS.Model.BUGSModelWithGradient
-
-            # Test equivalence with explicit ADType
-            model_explicit = compile(
-                model_def, data; adtype=AutoReverseDiff(; compile=true)
-            )
-            @test model_explicit isa JuliaBUGS.Model.BUGSModelWithGradient
-
-            # Test that unknown symbol throws error
-            @test_throws ErrorException compile(model_def, data; adtype=:UnknownBackend)
-        end
-
-        @testset "Explicit ADTypes" begin
+        @testset "ADTypes backends" begin
             # Test with compile=true
             model_compile = compile(model_def, data; adtype=AutoReverseDiff(; compile=true))
             @test model_compile isa JuliaBUGS.Model.BUGSModelWithGradient
@@ -445,7 +430,7 @@ end
         end
 
         @testset "Gradient computation" begin
-            model = compile(model_def, data; adtype=:ReverseDiff)
+            model = compile(model_def, data; adtype=AutoReverseDiff(; compile=true))
             test_point = [0.0]
 
             # Test that gradient can be computed

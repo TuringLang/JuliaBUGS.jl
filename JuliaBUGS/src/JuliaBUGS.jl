@@ -258,14 +258,13 @@ samplers like HMC/NUTS. The gradient computation is prepared during compilation 
 - `initial_params::NamedTuple=NamedTuple()`: Initial parameter values (optional)
 - `skip_validation::Bool=false`: Skip function validation (for @model macro)
 - `eval_module::Module=@__MODULE__`: Module for evaluation
-- `adtype`: AD backend specification. Can be:
+- `adtype`: AD backend specification using ADTypes. Examples:
   - `AutoReverseDiff(compile=true)` - ReverseDiff with tape compilation (fastest)
   - `AutoReverseDiff(compile=false)` - ReverseDiff without compilation
-  - `:ReverseDiff` - Shorthand for `AutoReverseDiff(compile=true)`
-  - `:ForwardDiff` - Shorthand for `AutoForwardDiff()`
-  - `:Zygote` - Shorthand for `AutoZygote()`
-  - `:Enzyme` - Shorthand for `AutoEnzyme()`
-  - `:Mooncake` - Shorthand for `AutoMooncake()`
+  - `AutoForwardDiff()` - ForwardDiff backend
+  - `AutoZygote()` - Zygote backend
+  - `AutoEnzyme()` - Enzyme backend
+  - `AutoMooncake()` - Mooncake backend
   - Any other `ADTypes.AbstractADType`
 
 # Examples
@@ -273,14 +272,11 @@ samplers like HMC/NUTS. The gradient computation is prepared during compilation 
 # Basic compilation
 model = compile(model_def, data)
 
-# With gradient support using explicit ADType
+# With gradient support using ReverseDiff (recommended for most models)
 model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
 
-# With gradient support using symbol shorthand
-model = compile(model_def, data; adtype=:ReverseDiff)  # Same as above
-
 # Using ForwardDiff for small models
-model = compile(model_def, data; adtype=:ForwardDiff)
+model = compile(model_def, data; adtype=AutoForwardDiff())
 
 # Sample with NUTS
 chain = AbstractMCMC.sample(model, NUTS(0.8), 1000)
@@ -325,48 +321,11 @@ function compile(
 
     # If adtype provided, wrap with gradient capabilities
     if adtype !== nothing
-        # Convert symbol to ADType if needed
-        adtype_obj = _resolve_adtype(adtype)
-        return _wrap_with_gradient(base_model, adtype_obj)
+        return _wrap_with_gradient(base_model, adtype)
     end
 
     return base_model
 end
-
-"""
-    _resolve_adtype(adtype) -> ADTypes.AbstractADType
-
-Convert symbol shortcuts to ADTypes, or return the ADType as-is.
-
-Supported symbol shortcuts:
-- `:ReverseDiff` -> `AutoReverseDiff(compile=true)`
-- `:ForwardDiff` -> `AutoForwardDiff()`
-- `:Zygote` -> `AutoZygote()`
-- `:Enzyme` -> `AutoEnzyme()`
-- `:Mooncake` -> `AutoMooncake()`
-"""
-function _resolve_adtype(adtype::Symbol)
-    if adtype === :ReverseDiff
-        return ADTypes.AutoReverseDiff(; compile=true)
-    elseif adtype === :ForwardDiff
-        return ADTypes.AutoForwardDiff()
-    elseif adtype === :Zygote
-        return ADTypes.AutoZygote()
-    elseif adtype === :Enzyme
-        return ADTypes.AutoEnzyme()
-    elseif adtype === :Mooncake
-        return ADTypes.AutoMooncake(; config=nothing)
-    else
-        error(
-            "Unknown AD backend symbol: $adtype. " *
-            "Supported symbols: :ReverseDiff, :ForwardDiff, :Zygote, :Enzyme, :Mooncake. " *
-            "Or use an ADTypes object like AutoReverseDiff(compile=true).",
-        )
-    end
-end
-
-# Pass through ADTypes objects unchanged
-_resolve_adtype(adtype::ADTypes.AbstractADType) = adtype
 
 # Helper function to prepare gradient - separated to handle world age issues
 function _wrap_with_gradient(base_model::Model.BUGSModel, adtype::ADTypes.AbstractADType)

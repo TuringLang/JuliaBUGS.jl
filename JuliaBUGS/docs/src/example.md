@@ -199,21 +199,19 @@ JuliaBUGS integrates with automatic differentiation (AD) through [Differentiatio
 To compile a model with gradient support, pass the `adtype` parameter to `compile`:
 
 ```julia
-# Using explicit ADType from ADTypes.jl
+# Compile with gradient support using ADTypes from ADTypes.jl
 using ADTypes
 model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
-
-# Using convenient symbol shortcuts
-model = compile(model_def, data; adtype=:ReverseDiff)  # Equivalent to above
 ```
 
 Available AD backends include:
-- `:ReverseDiff` - ReverseDiff with tape compilation (recommended for most models)
-- `:ForwardDiff` - ForwardDiff (efficient for models with few parameters)
-- `:Zygote` - Zygote (source-to-source AD)
-- `:Enzyme` - Enzyme (experimental, high-performance)
+- `AutoReverseDiff(compile=true)` - ReverseDiff with tape compilation (recommended for most models)
+- `AutoForwardDiff()` - ForwardDiff (efficient for models with few parameters)
+- `AutoZygote()` - Zygote (source-to-source AD)
+- `AutoEnzyme()` - Enzyme (experimental, high-performance)
+- `AutoMooncake()` - Mooncake (high-performance reverse-mode AD)
 
-For fine-grained control, use explicit `ADTypes` constructors:
+For fine-grained control, you can configure the AD backend:
 
 ```julia
 # ReverseDiff without compilation
@@ -230,7 +228,7 @@ For gradient-based inference, we use [`AdvancedHMC.jl`](https://github.com/Turin
 using AdvancedHMC, AbstractMCMC, LogDensityProblems, MCMCChains, ReverseDiff
 
 # Compile with gradient support
-model = compile(model_def, data; adtype=:ReverseDiff)
+model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
 
 n_samples, n_adapts = 2000, 1000
 
@@ -403,34 +401,36 @@ JuliaBUGS integrates with multiple automatic differentiation (AD) backends throu
 
 ### Available Backends
 
-The following AD backends are supported via convenient symbol shortcuts:
+The following AD backends are supported via [ADTypes.jl](https://github.com/SciML/ADTypes.jl):
 
-- **`:ReverseDiff`** (recommended) — Tape-based reverse-mode AD, highly efficient for models with many parameters. Uses compilation by default for optimal performance.
-- **`:ForwardDiff`** — Forward-mode AD, efficient for models with few parameters (typically < 20).
-- **`:Zygote`** — Source-to-source reverse-mode AD, general-purpose but may be slower than ReverseDiff for many models.
-- **`:Enzyme`** — Experimental high-performance AD backend with LLVM-level transformations.
-- **`:Mooncake`** — High-performance reverse-mode AD with advanced optimizations.
+- **`AutoReverseDiff(compile=true)`** (recommended) — Tape-based reverse-mode AD, highly efficient for models with many parameters. Uses compilation by default for optimal performance.
+- **`AutoForwardDiff()`** — Forward-mode AD, efficient for models with few parameters (typically < 20).
+- **`AutoZygote()`** — Source-to-source reverse-mode AD, general-purpose but may be slower than ReverseDiff for many models.
+- **`AutoEnzyme()`** — Experimental high-performance AD backend with LLVM-level transformations.
+- **`AutoMooncake()`** — High-performance reverse-mode AD with advanced optimizations.
 
 ### Usage Examples
 
-#### Basic Usage with Symbol Shortcuts
+#### Basic Usage
 
-The simplest way to specify an AD backend is using symbol shortcuts:
+Specify an AD backend using ADTypes:
 
 ```julia
+using ADTypes
+
 # ReverseDiff with tape compilation (recommended for most models)
-model = compile(model_def, data; adtype=:ReverseDiff)
+model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
 
 # ForwardDiff (good for small models with few parameters)
-model = compile(model_def, data; adtype=:ForwardDiff)
+model = compile(model_def, data; adtype=AutoForwardDiff())
 
 # Zygote (source-to-source AD)
-model = compile(model_def, data; adtype=:Zygote)
+model = compile(model_def, data; adtype=AutoZygote())
 ```
 
 #### Advanced Configuration
 
-For fine-grained control, use explicit `ADTypes` constructors:
+For fine-grained control, you can configure the AD backends:
 
 ```julia
 using ADTypes
@@ -438,20 +438,20 @@ using ADTypes
 # ReverseDiff without tape compilation
 model = compile(model_def, data; adtype=AutoReverseDiff(compile=false))
 
-# ReverseDiff with compilation (equivalent to :ReverseDiff)
+# ReverseDiff with compilation (default, recommended)
 model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
 ```
 
 ### Performance Considerations
 
-- **ReverseDiff with compilation** (`:ReverseDiff`) is recommended for most models, especially those with many parameters. Compilation adds a one-time overhead but significantly speeds up subsequent gradient evaluations.
+- **ReverseDiff with compilation** (`AutoReverseDiff(compile=true)`) is recommended for most models, especially those with many parameters. Compilation adds a one-time overhead but significantly speeds up subsequent gradient evaluations.
 
-- **ForwardDiff** (`:ForwardDiff`) is often faster for models with few parameters (< 20), as it avoids tape construction overhead.
+- **ForwardDiff** (`AutoForwardDiff()`) is often faster for models with few parameters (< 20), as it avoids tape construction overhead.
 
 - **Tape compilation trade-off**: While `AutoReverseDiff(compile=true)` has higher initial compilation time, it provides faster gradient evaluations during sampling. For quick prototyping or models that will only be sampled a few times, `AutoReverseDiff(compile=false)` may be preferable.
 
 !!! warning "Compiled tapes and control flow"
-    Compiled ReverseDiff tapes cannot handle value-dependent control flow (e.g., `if x[1] > 0`). If your model has such control flow, use `AutoReverseDiff(compile=false)` or a different backend like `:ForwardDiff` or `:Mooncake`. See the [ReverseDiff documentation](https://juliadiff.org/ReverseDiff.jl/stable/api/#The-AbstractTape-API) for details.
+    Compiled ReverseDiff tapes cannot handle value-dependent control flow (e.g., `if x[1] > 0`). If your model has such control flow, use `AutoReverseDiff(compile=false)` or a different backend like `AutoForwardDiff()` or `AutoMooncake()`. See the [ReverseDiff documentation](https://juliadiff.org/ReverseDiff.jl/stable/api/#The-AbstractTape-API) for details.
 
 ### Compatibility
 
