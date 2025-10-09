@@ -577,7 +577,7 @@ function _create_modified_model(
     # Recompute mutable symbols for the new graph
     new_mutable_symbols = get_mutable_symbols(updated_graph_evaluation_data)
 
-    # Create the new model with all updated fields
+    # Create the new model with all updated fields (without auto-marg caches yet)
     kwargs = Dict{Symbol,Any}(
         :untransformed_param_length => new_untransformed_param_length,
         :transformed_param_length => new_transformed_param_length,
@@ -599,7 +599,34 @@ function _create_modified_model(
         kwargs[:base_model] = base_model
     end
 
-    return BUGSModel(model; kwargs...)
+    new_model = BUGSModel(model; kwargs...)
+
+    # Compute and attach auto-marg caches once for the new graph
+    try
+        order = JuliaBUGS.Model._compute_marginalization_order(new_model)
+        keys = JuliaBUGS.Model._precompute_minimal_cache_keys(new_model, order)
+
+        gd = new_model.graph_evaluation_data
+        gd_cached = GraphEvaluationData{
+            typeof(gd.node_function_vals),typeof(gd.loop_vars_vals)
+        }(
+            gd.sorted_nodes,
+            gd.sorted_parameters,
+            gd.is_stochastic_vals,
+            gd.is_observed_vals,
+            gd.node_function_vals,
+            gd.loop_vars_vals,
+            gd.node_types,
+            gd.is_discrete_finite_vals,
+            keys,
+            order,
+        )
+        return BUGSModel(new_model; graph_evaluation_data=gd_cached)
+    catch err
+        @warn "Failed to precompute auto-marginalization caches; falling back to graph evaluation" exception=(err, catch_backtrace())
+        # Ensure the regenerated model does not stay in an inconsistent evaluation mode
+        return BangBang.setproperty!!(new_model, :evaluation_mode, UseGraph())
+    end
 end
 
 # Common helper function to regenerate log density function
@@ -768,8 +795,14 @@ function evaluate!!(
     temperature=1.0,
     transformed=model.transformed,
 )
-    evaluation_env, log_densities = evaluate_with_values!!(
-        model, flattened_values; temperature=temperature, transformed=transformed
-    )
+    if model.evaluation_mode isa UseAutoMarginalization
+        evaluation_env, log_densities = evaluate_with_marginalization_values!!(
+            model, flattened_values; temperature=temperature, transformed=transformed
+        )
+    else
+        evaluation_env, log_densities = evaluate_with_values!!(
+            model, flattened_values; temperature=temperature, transformed=transformed
+        )
+    end
     return evaluation_env, log_densities.tempered_logjoint
 end
