@@ -8,6 +8,19 @@ import { useGraphInstance } from '../../composables/useGraphInstance';
 import type { GraphElement, GraphNode, GraphEdge, NodeType, ValidationError } from '../../types';
 import { getDefaultNodeData } from '../../config/nodeDefinitions';
 
+// Fallback UUID generator for iOS Safari (doesn't support crypto.randomUUID in non-HTTPS)
+const generateUUID = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback: generate a UUID v4-like string
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 const props = defineProps<{
   isGridEnabled: boolean;
   gridSize: number;
@@ -62,7 +75,7 @@ const getNextNodeName = (): string => {
 
 const createNode = (nodeType: NodeType, position: { x: number; y: number }, parentId?: string): GraphNode => {
     const defaultData = getDefaultNodeData(nodeType);
-    const newId = `node_${crypto.randomUUID().substring(0, 8)}`;
+    const newId = `node_${generateUUID().substring(0, 8)}`;
     const newName = nodeType === 'plate' ? 'Plate' : getNextNodeName();
 
     const newNode: GraphNode = {
@@ -126,9 +139,10 @@ const handleCanvasTap = (event: EventObject) => {
     case 'add-edge':
       if (isNodeClick) {
         const tappedNode = target as NodeSingular;
+        
         if (sourceNode.value && sourceNode.value.id() !== tappedNode.id()) {
           const newEdge: GraphEdge = {
-            id: `edge_${crypto.randomUUID().substring(0, 8)}`,
+            id: `edge_${generateUUID().substring(0, 8)}`,
             type: 'edge',
             source: sourceNode.value.id(),
             target: tappedNode.id(),
