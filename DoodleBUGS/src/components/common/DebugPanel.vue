@@ -8,7 +8,7 @@ const isVisible = ref(true);
 const maxLogs = 50;
 const copySuccess = ref(false);
 
-const formatValue = (value: any): string => {
+const formatValue = (value: unknown): string => {
   if (value === null) return 'null';
   if (value === undefined) return 'undefined';
   if (typeof value === 'string') return value;
@@ -26,7 +26,7 @@ const formatValue = (value: any): string => {
         }
         return val;
       }, 2);
-    } catch (e) {
+    } catch {
       return `[Object: ${Object.prototype.toString.call(value)}]`;
     }
   }
@@ -57,7 +57,7 @@ const copyLogs = async () => {
     setTimeout(() => {
       copySuccess.value = false;
     }, 2000);
-  } catch (err) {
+  } catch {
     // Fallback for older browsers or if clipboard API fails
     const textarea = document.createElement('textarea');
     textarea.value = logs.value.join('\n');
@@ -71,8 +71,8 @@ const copyLogs = async () => {
       setTimeout(() => {
         copySuccess.value = false;
       }, 2000);
-    } catch (e) {
-      console.error('Failed to copy logs:', e);
+    } catch {
+      // Silent fail - clipboard not supported
     }
     document.body.removeChild(textarea);
   }
@@ -84,17 +84,17 @@ const originalError = console.error;
 const originalWarn = console.warn;
 
 onMounted(() => {
-  console.log = (...args: any[]) => {
+  console.log = (...args: unknown[]) => {
     originalLog(...args);
     addLog(args.map(formatValue).join(' '));
   };
   
-  console.error = (...args: any[]) => {
+  console.error = (...args: unknown[]) => {
     originalError(...args);
     addLog('ERROR: ' + args.map(formatValue).join(' '));
   };
   
-  console.warn = (...args: any[]) => {
+  console.warn = (...args: unknown[]) => {
     originalWarn(...args);
     addLog('WARN: ' + args.map(formatValue).join(' '));
   };

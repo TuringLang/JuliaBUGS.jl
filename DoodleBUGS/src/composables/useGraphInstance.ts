@@ -1,5 +1,5 @@
 import cytoscape from 'cytoscape';
-import type { Core, ElementDefinition, NodeSingular, EventObject } from 'cytoscape';
+import type { Core, ElementDefinition, NodeSingular } from 'cytoscape';
 // NOTE: gridGuide and contextMenus extensions are DISABLED for iOS/iPad/WebKit compatibility
 // They block touch events and prevent node/edge creation on mobile devices
 // import gridGuide from 'cytoscape-grid-guide';
