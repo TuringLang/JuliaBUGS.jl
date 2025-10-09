@@ -9,8 +9,9 @@ import klay from 'cytoscape-klay';
 import { useCompoundDragDrop } from './useCompoundDragDrop';
 import svg from 'cytoscape-svg';
 
-cytoscape.use(gridGuide);
-cytoscape.use(contextMenus);
+// Disable extensions so DoodleBUGS works on iOS/Safari/WebKit browsers
+// cytoscape.use(gridGuide);
+// cytoscape.use(contextMenus);
 cytoscape.use(dagre);
 cytoscape.use(fcose);
 cytoscape.use(cola);
@@ -147,6 +148,10 @@ export function useGraphInstance() {
       outThreshold: 30, // Reduced threshold for better UX
     });
 
+    // NOTE: gridGuide and contextMenus extensions are disabled
+    // These extensions interfere with touch events on iOS/Safari/WebKit browsers
+    // Uncomment below to re-enable for desktop-only usage:
+    /*
     (cyInstance as Core & { gridGuide: (options: { drawGrid: boolean; snapToGridOnRelease: boolean; snapToGridDuringDrag: boolean; gridSpacing: number }) => void }).gridGuide({ drawGrid: false, snapToGridOnRelease: true, snapToGridDuringDrag: true, gridSpacing: 20 });
 
     (cyInstance as Core & { contextMenus: (options: { menuItems: { id: string; content: string; selector: string; onClickFunction: (evt: cytoscape.EventObject) => void }[] }) => void }).contextMenus({
@@ -166,6 +171,7 @@ export function useGraphInstance() {
         }
       ]
     });
+    */
 
     return cyInstance;
   };
