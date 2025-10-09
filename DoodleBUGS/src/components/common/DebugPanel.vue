@@ -41,6 +41,14 @@ const addLog = (message: string) => {
   }
 };
 
+const getLogClass = (log: string) => {
+  if (log.includes('ERROR')) return 'log-error';
+  if (log.includes('[GraphEditor]') || log.includes('[GraphCanvas]') || log.includes('[MainLayout]')) {
+    return 'log-important';
+  }
+  return '';
+};
+
 const clearLogs = () => {
   logs.value = [];
 };
@@ -129,7 +137,7 @@ onUnmounted(() => {
     <div v-if="isVisible" class="debug-content">
       <div class="log-count">{{ logs.length }} logs (max {{ maxLogs }})</div>
       <div class="debug-logs">
-        <div v-for="(log, index) in logs" :key="index" class="debug-log-entry">
+        <div v-for="(log, index) in logs" :key="index" class="debug-log-entry" :class="getLogClass(log)">
           {{ log }}
         </div>
         <div v-if="logs.length === 0" class="debug-empty">
@@ -249,14 +257,13 @@ onUnmounted(() => {
 }
 
 /* Highlight error messages */
-.debug-log-entry:has-text("ERROR") {
+.debug-log-entry.log-error {
   color: #ff4444;
+  font-weight: 500;
 }
 
 /* Highlight important events */
-.debug-log-entry:has-text("[GraphEditor]"),
-.debug-log-entry:has-text("[GraphCanvas]"),
-.debug-log-entry:has-text("[MainLayout]") {
+.debug-log-entry.log-important {
   background: rgba(0, 100, 255, 0.1);
 }
 </style>
