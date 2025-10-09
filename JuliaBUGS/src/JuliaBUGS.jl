@@ -17,7 +17,7 @@ using Serialization: Serialization
 using StaticArrays
 
 import Base: ==, hash, Symbol, size
-import Distributions: truncated
+import Distributions: truncated, censored
 
 export @bugs
 export compile, initialize!
@@ -372,6 +372,7 @@ function __init__()
         :arcsinh,
         :arctan,
         :arctanh,
+        :censored,
         :cloglog,
         :cos,
         :cosh,
@@ -403,6 +404,7 @@ function __init__()
         :tan,
         :tanh,
         :trunc,
+        :truncated,
         :sum,
         :mean,
     ]
