@@ -19,6 +19,7 @@ import BaseButton from '../ui/BaseButton.vue';
 import AboutModal from './AboutModal.vue';
 import ExportModal from './ExportModal.vue';
 import ValidationIssuesModal from './ValidationIssuesModal.vue';
+import DebugPanel from '../common/DebugPanel.vue';
 import { useGraphElements } from '../../composables/useGraphElements';
 import { useProjectStore } from '../../stores/projectStore';
 import { useGraphStore } from '../../stores/graphStore';
@@ -70,6 +71,7 @@ const showAboutModal = ref(false);
 const showValidationModal = ref(false);
 const showConnectModal = ref(false);
 const tempBackendUrl = ref(backendUrl.value || 'http://localhost:8081');
+const showDebugPanel = ref(false);
 
 const showExportModal = ref(false);
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null);
@@ -668,7 +670,8 @@ const handleGenerateStandalone = () => {
       @open-about-modal="showAboutModal = true" @export-json="handleExportJson" @open-export-modal="openExportModal"
       @apply-layout="handleGraphLayout" @load-example="handleLoadExample" @validate-model="validateGraph"
       :is-model-valid="isModelValid" @show-validation-issues="showValidationModal = true"
-      @connect-to-backend-url="connectToBackendUrl" @run-model="runModel" @abort-run="abortRun" @generate-standalone="handleGenerateStandalone" />
+      @connect-to-backend-url="connectToBackendUrl" @run-model="runModel" @abort-run="abortRun" @generate-standalone="handleGenerateStandalone"
+      :show-debug-panel="showDebugPanel" @update:show-debug-panel="showDebugPanel = $event" />
 
     <div class="content-area">
       <aside class="left-sidebar" :style="leftSidebarStyle">
@@ -813,6 +816,8 @@ const handleGenerateStandalone = () => {
       @confirm-export="handleConfirmExport" />
     <ValidationIssuesModal :is-open="showValidationModal" :validation-errors="validationErrors" :elements="elements"
       @close="showValidationModal = false" @select-node="handleSelectNodeFromModal" />
+    
+    <DebugPanel v-if="showDebugPanel" />
   </div>
 </template>
 
