@@ -1,12 +1,22 @@
-<!-- This file is AI generated using Claude Sonnet 4.5 -->
-<!-- TODO(shravanngoswamii): Review this file properly -->
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 
-const logs = ref<string[]>([]);
+interface LogEntry {
+  timestamp: string;
+  message: string;
+  type: 'log' | 'error' | 'warn';
+}
+
+const logs = ref<LogEntry[]>([]);
 const isVisible = ref(true);
-const maxLogs = 50;
+const maxLogs = 100;
 const copySuccess = ref(false);
+const filterType = ref<'all' | 'log' | 'error' | 'warn'>('all');
+
+const filteredLogs = computed(() => {
+  if (filterType.value === 'all') return logs.value;
+  return logs.value.filter(log => log.type === filterType.value);
+});
 
 const formatValue = (value: unknown): string => {
   if (value === null) return 'null';
@@ -33,20 +43,27 @@ const formatValue = (value: unknown): string => {
   return String(value);
 };
 
-const addLog = (message: string) => {
+const addLog = (message: string, type: 'log' | 'error' | 'warn' = 'log') => {
   const timestamp = new Date().toLocaleTimeString();
-  logs.value.unshift(`[${timestamp}] ${message}`);
+  logs.value.unshift({ timestamp, message, type });
   if (logs.value.length > maxLogs) {
-    logs.value = logs.value.slice(0, maxLogs);
+    logs.value.pop();
   }
 };
 
-const getLogClass = (log: string) => {
-  if (log.includes('ERROR')) return 'log-error';
-  if (log.includes('[GraphEditor]') || log.includes('[GraphCanvas]') || log.includes('[MainLayout]')) {
-    return 'log-important';
+const getLogClass = (log: LogEntry) => {
+  const classes: string[] = [];
+  
+  if (log.type === 'error') classes.push('log-error');
+  if (log.type === 'warn') classes.push('log-warn');
+  
+  if (log.message.includes('[GraphEditor]') || 
+      log.message.includes('[GraphCanvas]') || 
+      log.message.includes('[MainLayout]')) {
+    classes.push('log-important');
   }
-  return '';
+  
+  return classes.join(' ');
 };
 
 const clearLogs = () => {
@@ -58,17 +75,17 @@ const toggleVisibility = () => {
 };
 
 const copyLogs = async () => {
+  const logsText = filteredLogs.value
+    .map(log => `[${log.timestamp}] ${log.type.toUpperCase()}: ${log.message}`)
+    .join('\n');
+  
   try {
-    const logsText = logs.value.join('\n');
     await navigator.clipboard.writeText(logsText);
     copySuccess.value = true;
-    setTimeout(() => {
-      copySuccess.value = false;
-    }, 2000);
+    setTimeout(() => copySuccess.value = false, 2000);
   } catch {
-    // Fallback for older browsers or if clipboard API fails
     const textarea = document.createElement('textarea');
-    textarea.value = logs.value.join('\n');
+    textarea.value = logsText;
     textarea.style.position = 'fixed';
     textarea.style.opacity = '0';
     document.body.appendChild(textarea);
@@ -76,17 +93,14 @@ const copyLogs = async () => {
     try {
       document.execCommand('copy');
       copySuccess.value = true;
-      setTimeout(() => {
-        copySuccess.value = false;
-      }, 2000);
+      setTimeout(() => copySuccess.value = false, 2000);
     } catch {
-      // Silent fail - clipboard not supported
+      console.error('Clipboard not supported');
     }
     document.body.removeChild(textarea);
   }
 };
 
-// Override console.log to capture logs
 const originalLog = console.log;
 const originalError = console.error;
 const originalWarn = console.warn;
@@ -94,20 +108,20 @@ const originalWarn = console.warn;
 onMounted(() => {
   console.log = (...args: unknown[]) => {
     originalLog(...args);
-    addLog(args.map(formatValue).join(' '));
+    addLog(args.map(formatValue).join(' '), 'log');
   };
   
   console.error = (...args: unknown[]) => {
     originalError(...args);
-    addLog('ERROR: ' + args.map(formatValue).join(' '));
+    addLog(args.map(formatValue).join(' '), 'error');
   };
   
   console.warn = (...args: unknown[]) => {
     originalWarn(...args);
-    addLog('WARN: ' + args.map(formatValue).join(' '));
+    addLog(args.map(formatValue).join(' '), 'warn');
   };
   
-  addLog('Debug panel initialized');
+  addLog('Debug panel initialized', 'log');
 });
 
 onUnmounted(() => {
@@ -135,13 +149,34 @@ onUnmounted(() => {
       </div>
     </div>
     <div v-if="isVisible" class="debug-content">
-      <div class="log-count">{{ logs.length }} logs (max {{ maxLogs }})</div>
+      <div class="debug-filters">
+        <button 
+          v-for="type in ['all', 'log', 'error', 'warn']" 
+          :key="type"
+          @click="filterType = type as typeof filterType"
+          class="filter-btn"
+          :class="{ active: filterType === type }"
+        >
+          {{ type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1) }}
+          <span v-if="type !== 'all'" class="count">
+            {{ logs.filter(l => l.type === type).length }}
+          </span>
+          <span v-else class="count">{{ logs.length }}</span>
+        </button>
+      </div>
       <div class="debug-logs">
-        <div v-for="(log, index) in logs" :key="index" class="debug-log-entry" :class="getLogClass(log)">
-          {{ log }}
+        <div 
+          v-for="(log, index) in filteredLogs" 
+          :key="index" 
+          class="debug-log-entry" 
+          :class="getLogClass(log)"
+        >
+          <span class="log-time">[{{ log.timestamp }}]</span>
+          <span class="log-type" :class="`type-${log.type}`">[{{ log.type.toUpperCase() }}]</span>
+          <span class="log-message">{{ log.message }}</span>
         </div>
-        <div v-if="logs.length === 0" class="debug-empty">
-          No logs yet. Waiting for activity...
+        <div v-if="filteredLogs.length === 0" class="debug-empty">
+          {{ logs.length === 0 ? 'No logs yet. Waiting for activity...' : `No ${filterType} logs` }}
         </div>
       </div>
     </div>
@@ -223,12 +258,46 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-.log-count {
-  padding: 4px 12px;
+.debug-filters {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px;
   background: rgba(0, 100, 0, 0.2);
   border-bottom: 1px solid rgba(0, 255, 0, 0.3);
-  font-size: 10px;
+}
+
+.filter-btn {
+  background: rgba(0, 255, 0, 0.1);
+  border: 1px solid rgba(0, 255, 0, 0.3);
   color: #88ff88;
+  padding: 3px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: inherit;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filter-btn:hover {
+  background: rgba(0, 255, 0, 0.2);
+  border-color: #00ff00;
+}
+
+.filter-btn.active {
+  background: rgba(0, 255, 0, 0.3);
+  border-color: #00ff00;
+  color: #00ff00;
+  font-weight: bold;
+}
+
+.filter-btn .count {
+  background: rgba(0, 255, 0, 0.2);
+  padding: 1px 5px;
+  border-radius: 10px;
+  font-size: 9px;
 }
 
 .debug-logs {
@@ -243,10 +312,39 @@ onUnmounted(() => {
   border-bottom: 1px solid rgba(0, 255, 0, 0.1);
   word-break: break-word;
   line-height: 1.4;
+  display: flex;
+  gap: 6px;
 }
 
 .debug-log-entry:hover {
   background: rgba(0, 255, 0, 0.05);
+}
+
+.log-time {
+  color: #666;
+  flex-shrink: 0;
+}
+
+.log-type {
+  flex-shrink: 0;
+  font-weight: bold;
+  min-width: 50px;
+}
+
+.log-type.type-log {
+  color: #88ff88;
+}
+
+.log-type.type-error {
+  color: #ff4444;
+}
+
+.log-type.type-warn {
+  color: #ffaa00;
+}
+
+.log-message {
+  flex: 1;
 }
 
 .debug-empty {
@@ -256,14 +354,16 @@ onUnmounted(() => {
   font-style: italic;
 }
 
-/* Highlight error messages */
-.debug-log-entry.log-error {
+.debug-log-entry.log-error .log-message {
   color: #ff4444;
-  font-weight: 500;
 }
 
-/* Highlight important events */
+.debug-log-entry.log-warn .log-message {
+  color: #ffaa00;
+}
+
 .debug-log-entry.log-important {
   background: rgba(0, 100, 255, 0.1);
+  border-left: 3px solid #4A90E2;
 }
 </style>
