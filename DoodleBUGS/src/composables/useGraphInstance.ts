@@ -10,6 +10,8 @@ import cola from 'cytoscape-cola';
 import klay from 'cytoscape-klay';
 import { useCompoundDragDrop } from './useCompoundDragDrop';
 import svg from 'cytoscape-svg';
+// @ts-ignore
+import undoRedo from 'cytoscape-undo-redo';
 
 // NOTE: Do NOT register gridGuide or contextMenus - they break iPad/mobile touch events
 cytoscape.use(dagre);
@@ -17,8 +19,11 @@ cytoscape.use(fcose);
 cytoscape.use(cola);
 cytoscape.use(klay);
 cytoscape.use(svg);
+// @ts-ignore
+cytoscape.use(undoRedo);
 
 let cyInstance: Core | null = null;
+let undoRedoInstance: any = null;
 
 export function useGraphInstance() {
   const initCytoscape = (container: HTMLElement, initialElements: ElementDefinition[]): Core => {
@@ -173,6 +178,22 @@ export function useGraphInstance() {
     });
     */
 
+    // Initialize undo-redo functionality safely
+    try {
+      undoRedoInstance = (cyInstance as any).undoRedo({
+        isDebug: true, // Set to true for debugging
+        undoableDrag: true, // Allow dragging to be undoable
+        stackSizeLimit: undefined, // Unlimited stack size
+        ready: () => {
+          // This function is called when undo-redo is ready
+          console.log('Undo-redo functionality initialized successfully');
+        }
+      });
+    } catch (error) {
+      console.warn('Undo-redo initialization failed:', error);
+      undoRedoInstance = null;
+    }
+
     return cyInstance;
   };
 
@@ -180,10 +201,57 @@ export function useGraphInstance() {
     if (cy) {
       cy.destroy();
       cyInstance = null;
+      undoRedoInstance = null;
     }
   };
 
   const getCyInstance = (): Core | null => cyInstance;
 
-  return { initCytoscape, destroyCytoscape, getCyInstance };
+  const getUndoRedoInstance = (): any => undoRedoInstance;
+
+  const undo = (): boolean => {
+    if (undoRedoInstance) {
+      return undoRedoInstance.undo();
+    }
+    return false;
+  };
+
+  const redo = (): boolean => {
+    if (undoRedoInstance) {
+      return undoRedoInstance.redo();
+    }
+    return false;
+  };
+
+  const isUndoStackEmpty = (): boolean => {
+    if (undoRedoInstance) {
+      return undoRedoInstance.isUndoStackEmpty();
+    }
+    return true;
+  };
+
+  const isRedoStackEmpty = (): boolean => {
+    if (undoRedoInstance) {
+      return undoRedoInstance.isRedoStackEmpty();
+    }
+    return true;
+  };
+
+  const resetUndoRedoStack = (): void => {
+    if (undoRedoInstance) {
+      undoRedoInstance.reset();
+    }
+  };
+
+  return { 
+    initCytoscape, 
+    destroyCytoscape, 
+    getCyInstance, 
+    getUndoRedoInstance,
+    undo,
+    redo,
+    isUndoStackEmpty,
+    isRedoStackEmpty,
+    resetUndoRedoStack
+  };
 }

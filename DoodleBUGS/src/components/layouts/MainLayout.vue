@@ -28,18 +28,8 @@ import { useDataStore } from '../../stores/dataStore';
 import { useExecutionStore } from '../../stores/executionStore';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGraphValidator } from '../../composables/useGraphValidator';
-import { useBugsCodeGenerator, generateStandaloneScript } from '../../composables/useBugsCodeGenerator';
-import type { GraphElement, NodeType, PaletteItemType, ExampleModel } from '../../types';
-import type { ExecutionResult, GeneratedFile } from '../../stores/executionStore';
-
-interface ExportOptions {
-  bg: string;
-  full: boolean;
-  scale: number;
-  quality?: number;
-  maxWidth?: number;
-  maxHeight?: number;
-}
+import { useUndoRedo } from '../../composables/useUndoRedo';
+import type { GraphElement, NodeType, PaletteItemType, GraphNode, ExampleModel } from '../../types';
 
 const projectStore = useProjectStore();
 const graphStore = useGraphStore();
@@ -52,8 +42,7 @@ const { elements, selectedElement, updateElement, deleteElement } = useGraphElem
 const { generatedCode } = useBugsCodeGenerator(elements);
 const { getCyInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
-const { backendUrl, isConnected, isConnecting, isExecuting, samplerSettings } = storeToRefs(executionStore);
-const { activeLeftTab, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth } = storeToRefs(uiStore);
+const { handleKeyboardShortcuts, updateUndoRedoState } = useUndoRedo();
 
 const currentMode = ref<string>('select');
 const currentNodeType = ref<NodeType>('stochastic');
@@ -97,29 +86,14 @@ onMounted(async () => {
   }
 
   validateGraph();
-  
-  // Attempt silent reconnect to saved backend after reloads
-  if (backendUrl.value) {
-    try {
-      const resp = await fetch(`${backendUrl.value}/api/health`);
-      if (resp.ok) {
-        const j = await resp.json().catch(() => ({}));
-        if (j && j.status === 'ok') {
-          isConnected.value = true;
-          executionStore.executionLogs.push(`Reconnected to backend at ${backendUrl.value}.`);
-        } else {
-          isConnected.value = false;
-          executionStore.executionLogs.push(`Saved backend URL present but health check returned invalid payload.`);
-        }
-      } else {
-        isConnected.value = false;
-        executionStore.executionLogs.push(`Saved backend URL present but health check failed with ${resp.status}.`);
-      }
-    } catch (e) {
-      isConnected.value = false;
-      executionStore.executionLogs.push(`Saved backend URL present but health check errored: ${(e as Error).message}`);
-    }
-  }
+
+  // Add keyboard shortcuts for undo/redo
+  document.addEventListener('keydown', handleKeyboardShortcuts);
+});
+
+onUnmounted(() => {
+  // Remove keyboard event listener
+  document.removeEventListener('keydown', handleKeyboardShortcuts);
 });
 
 watch(
