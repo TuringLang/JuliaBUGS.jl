@@ -18,6 +18,7 @@ const props = defineProps<{
   isLeftSidebarOpen: boolean;
   isRightSidebarOpen: boolean;
   isModelValid: boolean;
+  showDebugPanel: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -40,6 +41,7 @@ const emit = defineEmits<{
   (e: 'run-model'): void;
   (e: 'abort-run'): void;
   (e: 'generate-standalone'): void;
+  (e: 'update:showDebugPanel', value: boolean): void;
 }>();
 
 const executionStore = useExecutionStore();
@@ -160,6 +162,12 @@ const handleGridSizeInput = (event: Event) => {
                 max="100" step="5" class="w-20" />
               <span>px</span>
             </div>
+            <div class="dropdown-divider"></div>
+            <label class="dropdown-checkbox" @click.stop>
+              <input type="checkbox" :checked="showDebugPanel"
+                @change="emit('update:showDebugPanel', ($event.target as HTMLInputElement).checked)" />
+              Show Debug Console
+            </label>
           </template>
         </DropdownMenu>
 
