@@ -139,7 +139,9 @@ const handleNewGraph = () => {
 
     <div v-else class="project-list">
       <div v-for="project in projectStore.projects" :key="project.id" class="project-item">
-        <div class="project-header" @click="projectStore.selectProject(project.id)"
+        <div class="project-header" 
+          @click="projectStore.selectProject(project.id)"
+          @touchend.prevent="projectStore.selectProject(project.id)"
           :class="{ 'active': projectStore.currentProjectId === project.id }">
           <i class="icon-chevron fas fa-chevron-right"
             :class="{ 'open': projectStore.currentProjectId === project.id }"></i>
@@ -154,7 +156,9 @@ const handleNewGraph = () => {
         <transition name="slide-fade">
           <div v-if="projectStore.currentProject?.id === project.id" class="graph-list">
             <div v-for="graph in currentProjectGraphs" :key="graph.id" class="graph-item"
-              :class="{ 'active': graphStore.currentGraphId === graph.id }" @click="selectGraph(graph.id)">
+              :class="{ 'active': graphStore.currentGraphId === graph.id }" 
+              @click="selectGraph(graph.id)"
+              @touchend.prevent="selectGraph(graph.id)">
               <i class="icon-file fas fa-file-alt"></i>
               <span>{{ graph.name }}</span>
               <button @click.stop="openContextMenu($event, 'graph', graph.id)" class="action-btn context-menu-btn">
