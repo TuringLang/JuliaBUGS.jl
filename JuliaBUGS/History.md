@@ -1,5 +1,14 @@
 # JuliaBUGS Changelog
 
+## 0.10.4
+
+- **DifferentiationInterface.jl integration**: JuliaBUGS now uses [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl) for automatic differentiation, providing a unified interface to multiple AD backends.
+  - Add `adtype` parameter to `compile()` function for specifying AD backends via [ADTypes.jl](https://github.com/SciML/ADTypes.jl)
+  - Supports multiple backends: `AutoReverseDiff`, `AutoForwardDiff`, `AutoZygote`, `AutoEnzyme`, `AutoMooncake`
+  - Gradient computation is prepared during compilation for optimal performance
+  - Example: `model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))`
+  - Backward compatible: models without `adtype` work as before
+
 ## 0.10.1
 
 Expose docs for changes in [v0.10.0](https://github.com/TuringLang/JuliaBUGS.jl/releases/tag/JuliaBUGS-v0.10.0)
