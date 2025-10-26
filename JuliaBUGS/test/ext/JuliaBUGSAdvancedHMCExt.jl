@@ -37,7 +37,9 @@
 
         # Test that ReverseDiff backend works
         ad_model_compiled = compile(model_def, data; adtype=AutoReverseDiff(; compile=true))
-        ad_model_nocompile = compile(model_def, data; adtype=AutoReverseDiff(; compile=false))
+        ad_model_nocompile = compile(
+            model_def, data; adtype=AutoReverseDiff(; compile=false)
+        )
 
         @test ad_model_compiled isa JuliaBUGS.Model.BUGSModelWithGradient
         @test ad_model_nocompile isa JuliaBUGS.Model.BUGSModelWithGradient
