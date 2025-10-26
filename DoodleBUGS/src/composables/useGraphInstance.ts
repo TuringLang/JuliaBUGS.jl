@@ -1,7 +1,9 @@
 import cytoscape from 'cytoscape';
-import type { Core, ElementDefinition, NodeSingular, EventObject } from 'cytoscape';
-import gridGuide from 'cytoscape-grid-guide';
-import contextMenus from 'cytoscape-context-menus';
+import type { Core, ElementDefinition, NodeSingular } from 'cytoscape';
+// NOTE: gridGuide and contextMenus extensions are DISABLED for iOS/iPad/WebKit compatibility
+// They block touch events and prevent node/edge creation on mobile devices
+// import gridGuide from 'cytoscape-grid-guide';
+// import contextMenus from 'cytoscape-context-menus';
 import dagre from 'cytoscape-dagre';
 import fcose from 'cytoscape-fcose';
 import cola from 'cytoscape-cola';
@@ -9,8 +11,7 @@ import klay from 'cytoscape-klay';
 import { useCompoundDragDrop } from './useCompoundDragDrop';
 import svg from 'cytoscape-svg';
 
-cytoscape.use(gridGuide);
-cytoscape.use(contextMenus);
+// NOTE: Do NOT register gridGuide or contextMenus - they break iPad/mobile touch events
 cytoscape.use(dagre);
 cytoscape.use(fcose);
 cytoscape.use(cola);
@@ -147,6 +148,10 @@ export function useGraphInstance() {
       outThreshold: 30, // Reduced threshold for better UX
     });
 
+    // NOTE: gridGuide and contextMenus extensions are disabled
+    // These extensions interfere with touch events on iOS/Safari/WebKit browsers
+    // Uncomment below to re-enable for desktop-only usage:
+    /*
     (cyInstance as Core & { gridGuide: (options: { drawGrid: boolean; snapToGridOnRelease: boolean; snapToGridDuringDrag: boolean; gridSpacing: number }) => void }).gridGuide({ drawGrid: false, snapToGridOnRelease: true, snapToGridDuringDrag: true, gridSpacing: 20 });
 
     (cyInstance as Core & { contextMenus: (options: { menuItems: { id: string; content: string; selector: string; onClickFunction: (evt: cytoscape.EventObject) => void }[] }) => void }).contextMenus({
@@ -166,6 +171,7 @@ export function useGraphInstance() {
         }
       ]
     });
+    */
 
     return cyInstance;
   };
