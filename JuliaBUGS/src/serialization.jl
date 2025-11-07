@@ -24,6 +24,8 @@ function Serialization.deserialize(s::Serialization.AbstractSerializer, ::Type{<
     evaluation_env = Serialization.deserialize(s)
     # use evaluation_env as initialization to restore the values
     # Pass skip_source_generation to preserve the original compilation mode
-    model = compile(model_def, data, evaluation_env; skip_source_generation=skip_source_generation)
+    model = compile(
+        model_def, data, evaluation_env; skip_source_generation=skip_source_generation
+    )
     return settrans(model, transformed)
 end

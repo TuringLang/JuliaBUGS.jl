@@ -288,7 +288,13 @@ function compile(
         ),
     )
     return BUGSModel(
-        g, nonmissing_eval_env, model_def, data, initial_params, true, skip_source_generation
+        g,
+        nonmissing_eval_env,
+        model_def,
+        data,
+        initial_params,
+        true,
+        skip_source_generation,
     )
 end
 # function compile(
