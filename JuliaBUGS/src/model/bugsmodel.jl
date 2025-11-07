@@ -213,6 +213,7 @@ function BUGSModel(
     data::NamedTuple,
     initial_params::NamedTuple=NamedTuple(),
     is_transformed::Bool=true,
+    skip_source_generation::Bool=false,
 )
     graph_evaluation_data = GraphEvaluationData(g)
     untransformed_param_length, transformed_param_length = 0, 0
@@ -251,30 +252,33 @@ function BUGSModel(
         end
     end
 
-    lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
-        model_def, g, evaluation_env
-    )
-    # if can't generate source, `_generate_lowered_model_def` will return a tuple of `nothing`
-    has_generated_log_density_function = !isnothing(lowered_model_def)
-
-    if has_generated_log_density_function
-        log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
-            lowered_model_def, evaluation_env, gensym(:__compute_log_density__)
+    # Conditionally generate optimized log-density function
+    # When skip_source_generation=true, we skip this to ensure type stability for serialization
+    log_density_computation_function = nothing
+    if !skip_source_generation
+        lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
+            model_def, g, evaluation_env
         )
-        log_density_computation_function = eval(log_density_computation_expr)
-        pass = JuliaBUGS.CollectSortedNodes(evaluation_env)
-        JuliaBUGS.analyze_block(pass, reconstructed_model_def)
+        # if can't generate source, `_generate_lowered_model_def` will return a tuple of `nothing`
+        has_generated_log_density_function = !isnothing(lowered_model_def)
 
-        # Because CollectSortedNodes only looks at the LHS,
-        # pass.sorted_nodes can contain variables that are not in the graph.
-        # This is most likely caused by arrays that are only partially transformed data.
-        sorted_nodes = filter(pass.sorted_nodes) do node
-            node in graph_evaluation_data.sorted_nodes
+        if has_generated_log_density_function
+            log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
+                lowered_model_def, evaluation_env, gensym(:__compute_log_density__)
+            )
+            log_density_computation_function = eval(log_density_computation_expr)
+            pass = JuliaBUGS.CollectSortedNodes(evaluation_env)
+            JuliaBUGS.analyze_block(pass, reconstructed_model_def)
+
+            # Because CollectSortedNodes only looks at the LHS,
+            # pass.sorted_nodes can contain variables that are not in the graph.
+            # This is most likely caused by arrays that are only partially transformed data.
+            sorted_nodes = filter(pass.sorted_nodes) do node
+                node in graph_evaluation_data.sorted_nodes
+            end
+
+            graph_evaluation_data = GraphEvaluationData(g, sorted_nodes)
         end
-
-        graph_evaluation_data = GraphEvaluationData(g, sorted_nodes)
-    else
-        log_density_computation_function = nothing
     end
 
     # Compute mutable symbols from graph evaluation data
