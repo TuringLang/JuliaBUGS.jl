@@ -62,7 +62,9 @@ end
 
             # Verify model works correctly after deserialization
             θ = JuliaBUGS.Model.getparams(model_no_gen)
-            logp_original = Base.invokelatest(LogDensityProblems.logdensity, model_no_gen, θ)
+            logp_original = Base.invokelatest(
+                LogDensityProblems.logdensity, model_no_gen, θ
+            )
             logp_restored = Base.invokelatest(
                 LogDensityProblems.logdensity, model_restored, θ
             )
