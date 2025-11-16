@@ -32,7 +32,8 @@
         model::BUGSModel; 
         sample_all=true, 
         temperature=1.0, 
-        transformed=true
+        transformed=true,
+        respect_observed=true,
     )
 
 Evaluate model using ancestral sampling from the given RNG.
@@ -43,6 +44,7 @@ Evaluate model using ancestral sampling from the given RNG.
 - `sample_all`: If true, sample all variables; if false, only sample unobserved variables
 - `temperature`: Temperature for tempering the likelihood (default 1.0)
 - `transformed`: Whether to compute log density in transformed space (default true)
+- `respect_observed`: If true (default), keep observed data fixed even when `sample_all=true`. Set to `false` to also sample observed nodes (useful for posterior predictive draws).
 
 # Returns
 - `evaluation_env`: Updated evaluation environment
@@ -54,6 +56,7 @@ function evaluate_with_rng!!(
     sample_all=true,
     temperature=1.0,
     transformed=true,
+    respect_observed=true,
 )
     logprior = 0.0
     loglikelihood = 0.0
@@ -64,17 +67,19 @@ function evaluate_with_rng!!(
         is_observed = model.graph_evaluation_data.is_observed_vals[i]
         node_function = model.graph_evaluation_data.node_function_vals[i]
         loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
-        if_sample = sample_all || !is_observed
-
         if !is_stochastic
             value = node_function(evaluation_env, loop_vars)
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
             dist = node_function(evaluation_env, loop_vars)
-            if if_sample
-                value = rand(rng, dist)
+            if is_observed
+                if sample_all && !respect_observed
+                    value = rand(rng, dist)
+                else
+                    value = AbstractPPL.get(model.evaluation_env, vn)
+                end
             else
-                value = AbstractPPL.get(evaluation_env, vn)
+                value = rand(rng, dist)
             end
 
             if transformed
