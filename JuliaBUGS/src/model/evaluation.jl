@@ -28,12 +28,11 @@
 
 """
     evaluate_with_rng!!(
-        rng::Random.AbstractRNG, 
-        model::BUGSModel; 
-        sample_all=true, 
-        temperature=1.0, 
+        rng::Random.AbstractRNG,
+        model::BUGSModel;
+        sample_observed=false,
+        temperature=1.0,
         transformed=true,
-        respect_observed=true,
     )
 
 Evaluate model using ancestral sampling from the given RNG.
@@ -41,10 +40,9 @@ Evaluate model using ancestral sampling from the given RNG.
 # Arguments
 - `rng`: Random number generator for sampling
 - `model`: The BUGSModel to evaluate
-- `sample_all`: If true, sample all variables; if false, only sample unobserved variables
+- `sample_observed`: If true, sample observed nodes; if false (default), keep observed data fixed at their data values. Latent variables are always sampled.
 - `temperature`: Temperature for tempering the likelihood (default 1.0)
 - `transformed`: Whether to compute log density in transformed space (default true)
-- `respect_observed`: If true (default), keep observed data fixed even when `sample_all=true`. Set to `false` to also sample observed nodes (useful for posterior predictive draws).
 
 # Returns
 - `evaluation_env`: Updated evaluation environment
@@ -53,10 +51,9 @@ Evaluate model using ancestral sampling from the given RNG.
 function evaluate_with_rng!!(
     rng::Random.AbstractRNG,
     model::BUGSModel;
-    sample_all=true,
+    sample_observed=false,
     temperature=1.0,
     transformed=true,
-    respect_observed=true,
 )
     logprior = 0.0
     loglikelihood = 0.0
@@ -73,7 +70,7 @@ function evaluate_with_rng!!(
         else
             dist = node_function(evaluation_env, loop_vars)
             if is_observed
-                if sample_all && !respect_observed
+                if sample_observed
                     value = rand(rng, dist)
                 else
                     value = AbstractPPL.get(model.evaluation_env, vn)

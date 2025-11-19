@@ -41,23 +41,24 @@ end
     data = (; y=1.0)
     model = compile(model_def, data, (; x=1.0))
 
-    eval_env, log_densities = JuliaBUGS.evaluate_with_rng!!(
-        Random.default_rng(), model; sample_all=false
-    )
-    @test eval_env.y == 1.0
-    @test eval_env.x != 1.0
+    # Default: sample_observed=false keeps observed data fixed
+    eval_env, log_densities = JuliaBUGS.evaluate_with_rng!!(Random.default_rng(), model)
+    @test eval_env.y == 1.0  # observed stays fixed
+    @test eval_env.x != 1.0  # latent resamples
 
+    # Explicit sample_observed=false keeps observed data fixed
     eval_env, log_densities = JuliaBUGS.evaluate_with_rng!!(
-        Random.default_rng(), model; sample_all=true
+        Random.default_rng(), model; sample_observed=false
     )
-    @test eval_env.y == 1.0
-    @test eval_env.x != 1.0
+    @test eval_env.y == 1.0  # observed stays fixed
+    @test eval_env.x != 1.0  # latent resamples
 
+    # sample_observed=true samples observed nodes (for posterior predictive)
     eval_env, log_densities = JuliaBUGS.evaluate_with_rng!!(
-        Random.default_rng(), model; sample_all=true, respect_observed=false
+        Random.default_rng(), model; sample_observed=true
     )
-    @test eval_env.y != 1.0
-    @test eval_env.x != 1.0
+    @test eval_env.y != 1.0  # observed resamples
+    @test eval_env.x != 1.0  # latent resamples
 
     verify_log_densities_structure(log_densities)
 end
@@ -531,13 +532,11 @@ end
         model = compile(model_def, data)
 
         rng = MersenneTwister(42)
-        eval_env, log_densities = JuliaBUGS.evaluate_with_rng!!(
-            rng, model; sample_all=false
-        )
+        eval_env, log_densities = JuliaBUGS.evaluate_with_rng!!(rng, model)
 
         @test length(eval_env.alpha) == 3
         @test isa(eval_env.sigma, Real)
-        @test eval_env.y == [1.0, 2.0, 3.0]
+        @test eval_env.y == [1.0, 2.0, 3.0]  # observed data stays fixed (default)
 
         @test log_densities.logprior < 0
         @test log_densities.loglikelihood < 0
