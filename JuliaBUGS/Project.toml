@@ -1,6 +1,6 @@
 name = "JuliaBUGS"
 uuid = "ba9fb4c0-828e-4473-b6a1-cd2560fee5bf"
-version = "0.10.5"
+version = "0.11.0"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
