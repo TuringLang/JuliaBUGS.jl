@@ -59,6 +59,7 @@ const currentMode = ref<string>('select');
 const currentNodeType = ref<NodeType>('stochastic');
 const isGridEnabled = ref(true);
 const gridSize = ref(20);
+const showZoomControls = ref(true);
 
 const isResizingLeft = ref(false);
 const isResizingRight = ref(false);
@@ -671,7 +672,9 @@ const handleGenerateStandalone = () => {
       @apply-layout="handleGraphLayout" @load-example="handleLoadExample" @validate-model="validateGraph"
       :is-model-valid="isModelValid" @show-validation-issues="showValidationModal = true"
       @connect-to-backend-url="connectToBackendUrl" @run-model="runModel" @abort-run="abortRun" @generate-standalone="handleGenerateStandalone"
-      :show-debug-panel="showDebugPanel" @update:show-debug-panel="showDebugPanel = $event" />
+      :show-debug-panel="showDebugPanel" @update:show-debug-panel="showDebugPanel = $event" 
+      :show-zoom-controls="showZoomControls" @update:show-zoom-controls="showZoomControls = $event"
+      />
 
     <div class="content-area">
       <aside class="left-sidebar" :style="leftSidebarStyle">
@@ -714,8 +717,10 @@ const handleGenerateStandalone = () => {
       <main class="graph-editor-wrapper">
         <GraphEditor :is-grid-enabled="isGridEnabled" :grid-size="gridSize" :current-mode="currentMode"
           :elements="elements" :current-node-type="currentNodeType" :validation-errors="validationErrors"
+          :show-zoom-controls="showZoomControls"
           @update:current-mode="currentMode = $event" @update:current-node-type="currentNodeType = $event"
-          @element-selected="handleElementSelected" @layout-updated="handleLayoutUpdated" />
+          @element-selected="handleElementSelected" @layout-updated="handleLayoutUpdated"
+          @update:show-zoom-controls="showZoomControls = $event" />
       </main>
 
       <div class="resizer resizer-right" @mousedown.prevent="startResizeRight"></div>

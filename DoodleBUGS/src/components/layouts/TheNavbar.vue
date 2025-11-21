@@ -19,6 +19,7 @@ const props = defineProps<{
   isRightSidebarOpen: boolean;
   isModelValid: boolean;
   showDebugPanel: boolean;
+  showZoomControls: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -42,6 +43,7 @@ const emit = defineEmits<{
   (e: 'abort-run'): void;
   (e: 'generate-standalone'): void;
   (e: 'update:showDebugPanel', value: boolean): void;
+  (e: 'update:showZoomControls', value: boolean): void;
 }>();
 
 const executionStore = useExecutionStore();
@@ -151,22 +153,28 @@ const handleGridSizeInput = (event: Event) => {
             <BaseButton type="ghost" size="small">View</BaseButton>
           </template>
           <template #content>
-            <label class="dropdown-checkbox" @click.stop>
+            <label class="dropdown-checkbox">
               <input type="checkbox" :checked="isGridEnabled"
                 @change="emit('update:isGridEnabled', ($event.target as HTMLInputElement).checked)" />
-              Show Grid
+              <span>Show Grid</span>
             </label>
-            <div class="dropdown-input-group" @click.stop>
-              <label for="grid-size-nav">Grid Size:</label>
-              <BaseInput id="grid-size-nav" type="number" :model-value="gridSize" @input="handleGridSizeInput" min="10"
+            <div class="dropdown-input-group">
+              <span>Grid Size:</span>
+              <input type="number" :value="gridSize" @input="handleGridSizeInput" min="5"
                 max="100" step="5" class="w-20" />
               <span>px</span>
             </div>
             <div class="dropdown-divider"></div>
-            <label class="dropdown-checkbox" @click.stop>
+            <label class="dropdown-checkbox">
+              <input type="checkbox" :checked="showZoomControls"
+                @change="emit('update:showZoomControls', ($event.target as HTMLInputElement).checked)" />
+              <span>Show Zoom Controls</span>
+            </label>
+            <div class="dropdown-divider"></div>
+            <label class="dropdown-checkbox">
               <input type="checkbox" :checked="showDebugPanel"
                 @change="emit('update:showDebugPanel', ($event.target as HTMLInputElement).checked)" />
-              Show Debug Console
+              <span>Show Debug Console</span>
             </label>
           </template>
         </DropdownMenu>
