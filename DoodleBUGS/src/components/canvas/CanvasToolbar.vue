@@ -14,6 +14,8 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'update:currentMode', mode: string): void;
   (e: 'update:currentNodeType', type: NodeType): void;
+  (e: 'undo'): void;
+  (e: 'redo'): void;
 }>();
 
 // Get node types for the dropdown from the central config file
@@ -55,6 +57,7 @@ const updateNodeType = (event: Event) => {
       Add Edge
     </BaseButton>
 
+    
     <div v-if="currentMode === 'add-node'" class="node-type-selector">
       <label for="node-type">Node Type:</label>
       <select id="node-type" :value="currentNodeType" @change="updateNodeType">
@@ -63,7 +66,21 @@ const updateNodeType = (event: Event) => {
         </option>
       </select>
     </div>
-
+    
+    <div class="separator"></div>
+    <BaseButton @click="$emit('undo')" title="Undo">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 7v6h6"></path>
+        <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+      </svg>
+    </BaseButton>
+    <BaseButton @click="$emit('redo')" title="Redo">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 7v6h-6"></path>
+        <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"></path>
+      </svg>
+    </BaseButton>
+    
     <span v-if="isConnecting" class="connecting-message">
       Connecting from: <strong>{{ sourceNodeName }}</strong> (Click target node)
     </span>
@@ -80,6 +97,13 @@ const updateNodeType = (event: Event) => {
   align-items: center;
   flex-wrap: wrap;
   flex-shrink: 0;
+}
+
+.separator {
+  width: 1px;
+  height: 24px;
+  background-color: var(--color-border-dark);
+  margin: 0 5px;
 }
 
 .canvas-toolbar .base-button {

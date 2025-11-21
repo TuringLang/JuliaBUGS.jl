@@ -22,13 +22,14 @@ const emit = defineEmits<{
   (e: 'plate-emptied', plateId: string): void;
   (e: 'element-remove', elementId: string): void;
   (e: 'update:show-zoom-controls', value: boolean): void;
+  (e: 'graph-updated', elements: GraphElement[]): void;
 }>();
 
 const cyContainer = ref<HTMLElement | null>(null);
 let cy: Core | null = null;
 const cyInstance = ref<Core | null>(null);
 
-const { initCytoscape, destroyCytoscape, getCyInstance } = useGraphInstance();
+const { initCytoscape, destroyCytoscape, getCyInstance, getUndoRedoInstance } = useGraphInstance();
 const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping(getCyInstance);
 
 const validNodeTypes: NodeType[] = ['stochastic', 'deterministic', 'constant', 'observed', 'plate'];
@@ -117,6 +118,34 @@ onMounted(() => {
       enableGridSnapping();
     } else {
       disableGridSnapping();
+    }
+
+    const ur = getUndoRedoInstance();
+    if (ur) {
+      cy.on('afterUndo afterRedo afterDo', () => {
+        if (!cy) return;
+        const allElements: GraphElement[] = cy.elements().toArray().map((ele) => {
+          const data = ele.data();
+          if (ele.isNode()) {
+            const parentCollection = ele.parent();
+            const parentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined;
+            return {
+              ...data,
+              type: 'node',
+              position: ele.position(),
+              parent: parentId,
+            } as GraphNode;
+          } else {
+            return {
+              ...data,
+              type: 'edge',
+              source: ele.source().id(),
+              target: ele.target().id(),
+            } as GraphEdge;
+          }
+        });
+        emit('graph-updated', allElements);
+      });
     }
 
     cy.container()?.addEventListener('cxt-remove', (event: Event) => {
