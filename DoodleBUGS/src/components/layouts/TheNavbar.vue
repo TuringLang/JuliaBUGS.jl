@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import Toolbar from 'primevue/toolbar';
 import Button from 'primevue/button';
 import Drawer from 'primevue/drawer';
-import Popover from 'primevue/popover';
-import Checkbox from 'primevue/checkbox';
 import ToggleSwitch from 'primevue/toggleswitch';
 import InputNumber from 'primevue/inputnumber';
 import Accordion from 'primevue/accordion';
@@ -19,7 +17,7 @@ import DropdownMenu from '../common/DropdownMenu.vue';
 import { nodeDefinitions, exampleModels } from '../../config/nodeDefinitions';
 import { useExecutionStore } from '../../stores/executionStore';
 
-const props = defineProps<{
+defineProps<{
   projectName: string | null;
   activeGraphName: string | null;
   isGridEnabled: boolean;
@@ -60,15 +58,15 @@ const emit = defineEmits<{
 const executionStore = useExecutionStore();
 const { isConnected, isExecuting, isConnecting, backendUrl } = storeToRefs(executionStore);
 const navBackendUrl = ref(backendUrl.value || 'http://localhost:8081');
-const startCmd = 'julia --project=DoodleBUGS/runtime DoodleBUGS/runtime/server.jl';
-const instantiateCmd = 'julia --project=DoodleBUGS/runtime -e "using Pkg; Pkg.instantiate()"';
 const cloneCmd = 'git clone https://github.com/TuringLang/JuliaBUGS.jl.git';
+const instantiateCmd = 'julia --project=DoodleBUGS/runtime -e "using Pkg; Pkg.instantiate()"';
+const startCmd = 'julia --project=DoodleBUGS/runtime DoodleBUGS/runtime/server.jl';
 
 // Copy helpers
 const copiedBackendUrl = ref(false);
-const copiedStartCmd = ref(false);
-const copiedInstantiateCmd = ref(false);
 const copiedCloneCmd = ref(false);
+const copiedInstantiateCmd = ref(false);
+const copiedStartCmd = ref(false);
 
 function copyWithFeedback(text: string, flag: typeof copiedBackendUrl) {
   navigator.clipboard.writeText(text).then(() => {
@@ -78,9 +76,9 @@ function copyWithFeedback(text: string, flag: typeof copiedBackendUrl) {
 }
 
 const copyBackendUrl = () => copyWithFeedback(navBackendUrl.value, copiedBackendUrl);
-const copyStartCmd = () => copyWithFeedback(startCmd, copiedStartCmd);
-const copyInstantiateCmd = () => copyWithFeedback(instantiateCmd, copiedInstantiateCmd);
 const copyCloneCmd = () => copyWithFeedback(cloneCmd, copiedCloneCmd);
+const copyInstantiateCmd = () => copyWithFeedback(instantiateCmd, copiedInstantiateCmd);
+const copyStartCmd = () => copyWithFeedback(startCmd, copiedStartCmd);
 
 const setAddNodeType = (type: NodeType) => {
   emit('update:currentNodeType', type);
@@ -93,12 +91,6 @@ const updateGridSize = (val: number | null) => {
 };
 const updateShowZoomControls = (val: boolean) => emit('update:showZoomControls', val);
 const updateShowDebugPanel = (val: boolean) => emit('update:showDebugPanel', val);
-
-// View Menu
-const viewMenu = ref();
-const toggleViewMenu = (event: Event) => {
-    viewMenu.value.toggle(event);
-};
 
 // Dark Mode
 const isDarkMode = ref(localStorage.getItem('darkMode') === 'true');
@@ -249,6 +241,40 @@ const mobileMenuOpen = ref(false);
                     <span v-if="isConnecting">Connecting...</span>
                     <span v-else>Connect</span>
                   </BaseButton>
+                </div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-section-title">Setup Instructions</div>
+                <div class="setup-instructions">
+                  <div class="instruction-item">
+                    <span class="instruction-label">1. Clone repository:</span>
+                    <div class="instruction-command">
+                      <code>{{ cloneCmd }}</code>
+                      <BaseButton size="small" type="secondary" class="copy-btn-inline" title="Copy command" @click.stop="copyCloneCmd">
+                        <i v-if="copiedCloneCmd" class="fas fa-check"></i>
+                        <i v-else class="fas fa-copy"></i>
+                      </BaseButton>
+                    </div>
+                  </div>
+                  <div class="instruction-item">
+                    <span class="instruction-label">2. From repo root, first time only (instantiate deps):</span>
+                    <div class="instruction-command">
+                      <code>{{ instantiateCmd }}</code>
+                      <BaseButton size="small" type="secondary" class="copy-btn-inline" title="Copy command" @click.stop="copyInstantiateCmd">
+                        <i v-if="copiedInstantiateCmd" class="fas fa-check"></i>
+                        <i v-else class="fas fa-copy"></i>
+                      </BaseButton>
+                    </div>
+                  </div>
+                  <div class="instruction-item">
+                    <span class="instruction-label">3. From repo root, start backend:</span>
+                    <div class="instruction-command">
+                      <code>{{ startCmd }}</code>
+                      <BaseButton size="small" type="secondary" class="copy-btn-inline" title="Copy command" @click.stop="copyStartCmd">
+                        <i v-if="copiedStartCmd" class="fas fa-check"></i>
+                        <i v-else class="fas fa-copy"></i>
+                      </BaseButton>
+                    </div>
+                  </div>
                 </div>
                 <div class="dropdown-divider"></div>
                 <div class="dropdown-section-title">Standalone</div>
@@ -567,5 +593,52 @@ const mobileMenuOpen = ref(false);
 
 .grid-size-input :deep(.p-inputnumber-button .p-icon) {
     font-size: 0.75rem;
+}
+
+.setup-instructions {
+    padding: 0.5rem 0;
+}
+
+.instruction-item {
+    margin-bottom: 1rem;
+}
+
+.instruction-item:last-child {
+    margin-bottom: 0;
+}
+
+.instruction-label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+    color: var(--p-text-color);
+}
+
+.instruction-command {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: var(--p-surface-50);
+    border: 1px solid var(--p-content-border-color);
+    border-radius: 4px;
+    padding: 0.5rem;
+}
+
+:global(html.dark-mode) .instruction-command {
+    background-color: var(--p-surface-800);
+}
+
+.instruction-command code {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    color: var(--p-text-color);
+    word-break: break-all;
+}
+
+.copy-btn-inline {
+    flex-shrink: 0;
+    padding: 0.25rem 0.5rem;
 }
 </style>

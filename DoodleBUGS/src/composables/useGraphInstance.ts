@@ -20,8 +20,11 @@ cytoscape.use(klay);
 cytoscape.use(svg);
 cytoscape.use(undoRedo);
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type UndoRedoInstance = any;
+
 let cyInstance: Core | null = null;
-let urInstance: any = null;
+let urInstance: UndoRedoInstance = null;
 
 export function useGraphInstance() {
   const initCytoscape = (container: HTMLElement, initialElements: ElementDefinition[]): Core => {
@@ -145,6 +148,7 @@ export function useGraphInstance() {
     cyInstance = cytoscape(options);
 
     // Initialize undo-redo
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     urInstance = (cyInstance as any).undoRedo({
       isDebug: false,
       undoableDrag: true,
@@ -152,6 +156,7 @@ export function useGraphInstance() {
     });
 
     urInstance.action("move", 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       function(args: any) {
         const eles = typeof args.eles === "string" ? cyInstance!.$(args.eles) : args.eles;
         const nodes = eles.nodes();
@@ -161,10 +166,12 @@ export function useGraphInstance() {
         const oldEdgesSources: string[] = [];
         const oldEdgesTargets: string[] = [];
         
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         nodes.forEach((node: any) => {
           oldNodesParents.push(node.parent().length > 0 ? node.parent().id() : null);
         });
         
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         edges.forEach((edge: any) => {
           oldEdgesSources.push(edge.source().id());
           oldEdgesTargets.push(edge.target().id());
@@ -178,8 +185,10 @@ export function useGraphInstance() {
             newEdges: edges.move(args.location)
         };
       },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       function(eles: any) {
         let newEles = cyInstance!.collection();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const location: any = {};
         
         if (eles.newNodes.length > 0) {
@@ -256,7 +265,7 @@ export function useGraphInstance() {
   };
 
   const getCyInstance = (): Core | null => cyInstance;
-  const getUndoRedoInstance = (): any => urInstance;
+  const getUndoRedoInstance = (): UndoRedoInstance => urInstance;
 
   return { initCytoscape, destroyCytoscape, getCyInstance, getUndoRedoInstance };
 }

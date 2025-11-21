@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import InputText from 'primevue/inputtext';
+import { computed } from 'vue';
 
-defineProps<{
+const props = defineProps<{
   modelValue: string | number | null | undefined;
   type?: string;
   placeholder?: string;
@@ -10,16 +11,30 @@ defineProps<{
 }>();
 
 const emit = defineEmits(['update:modelValue', 'change', 'input', 'keyup.enter']);
+
+const stringValue = computed(() => {
+  if (props.modelValue === null || props.modelValue === undefined) return '';
+  return String(props.modelValue);
+});
+
+const handleUpdate = (val: string | null | undefined) => {
+  if (props.type === 'number' && val !== null && val !== undefined && val !== '') {
+    const num = Number(val);
+    emit('update:modelValue', isNaN(num) ? val : num);
+  } else {
+    emit('update:modelValue', val);
+  }
+};
 </script>
 
 <template>
   <InputText
     :type="type || 'text'"
-    :model-value="modelValue"
+    :model-value="stringValue"
     :placeholder="placeholder"
     :disabled="disabled"
     :readonly="readonly"
-    @update:model-value="(val) => emit('update:modelValue', val)"
+    @update:model-value="handleUpdate"
     @change="(e) => emit('change', e)"
     @input="(e) => emit('input', e)"
     @keyup.enter="(e) => emit('keyup.enter', e)"
