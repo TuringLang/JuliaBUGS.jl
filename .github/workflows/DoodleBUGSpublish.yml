@@ -45,4 +45,5 @@ jobs:
           branch: gh-pages
           folder: DoodleBUGS/dist
           target-folder: DoodleBUGS
-          clean: false
+          clean: true
+          clean-exclude: pr-previews
