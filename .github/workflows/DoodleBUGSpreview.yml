@@ -2,6 +2,7 @@ name: DoodleBUGS PR Preview
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, closed]
     paths:
       - 'DoodleBUGS/**'
       - '.github/workflows/DoodleBUGSpreview.yml'
@@ -16,7 +17,7 @@ permissions:
 
 jobs:
   build-and-preview:
-    if: github.event.action == 'opened' || github.event.action == 'synchronize'
+    if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.action == 'reopened'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout PR code
@@ -56,3 +57,24 @@ jobs:
             A preview of this pull request has been deployed.
             **[https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/pr-previews/${{ github.event.pull_request.number }}](https://turinglang.github.io/JuliaBUGS.jl/DoodleBUGS/pr-previews/${{ github.event.pull_request.number }})**
           comment_tag: preview-url-comment
+
+  cleanup-preview:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout gh-pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+
+      - name: Remove PR preview
+        run: |
+          if [ -d "DoodleBUGS/pr-previews/${{ github.event.pull_request.number }}" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git rm -rf "DoodleBUGS/pr-previews/${{ github.event.pull_request.number }}"
+            git commit -m "DoodleBUGS: Remove preview for PR ${{ github.event.pull_request.number }}"
+            git push
+          else
+            echo "Preview directory not found, skipping removal."
+          fi
