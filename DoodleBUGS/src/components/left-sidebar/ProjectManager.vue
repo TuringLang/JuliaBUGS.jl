@@ -313,7 +313,6 @@ const handleNewGraph = () => {
 
 .project-header.active {
   background-color: var(--color-primary);
-  color: white;
 }
 
 .project-header.active .project-name,
@@ -337,6 +336,10 @@ const handleNewGraph = () => {
 .icon-folder {
   color: var(--color-primary);
   font-size: 0.8em;
+}
+
+.project-header.active .icon-folder {
+  color: white;
 }
 
 .project-name {
@@ -365,6 +368,7 @@ const handleNewGraph = () => {
     opacity: 0;
     transition: opacity 0.2s ease, color 0.2s ease, background-color 0.2s ease;
     line-height: 1;
+    cursor: pointer;
 }
 
 .project-header:hover .action-btn,
@@ -384,6 +388,7 @@ const handleNewGraph = () => {
 
 .project-header.active .action-btn:hover {
     background-color: rgba(255, 255, 255, 0.2);
+    color: white;
 }
 
 .graph-list {
@@ -436,11 +441,21 @@ const handleNewGraph = () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--color-heading);
 }
 
 .icon-file {
   font-size: 0.8em;
   color: var(--color-secondary);
+}
+
+.graph-item.active .action-btn {
+    color: white;
+}
+
+.graph-item.active .action-btn:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
 }
 
 .graph-item .action-btn {
@@ -454,8 +469,12 @@ const handleNewGraph = () => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border-radius: 6px;
   padding: 8px 0;
-  z-index: 1100; /* High z-index to appear above other UI elements */
+  z-index: 1100;
   min-width: 180px;
+}
+
+:global(html.dark-mode) .context-menu {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .context-menu-item {
@@ -465,6 +484,8 @@ const handleNewGraph = () => {
   display: flex;
   align-items: center;
   gap: 10px;
+  color: var(--color-heading);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .context-menu-item:hover {

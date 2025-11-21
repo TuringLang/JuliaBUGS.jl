@@ -37,6 +37,8 @@ const emit = defineEmits<{
   (e: 'update:currentNodeType', type: NodeType): void;
   (e: 'layout-updated', layoutName: string): void;
   (e: 'update:show-zoom-controls', value: boolean): void;
+  (e: 'update:isGridEnabled', value: boolean): void;
+  (e: 'update:gridSize', value: number): void;
 }>();
 
 const { elements: graphElements, addElement, updateElement, deleteElement } = useGraphElements();
@@ -309,8 +311,12 @@ watch(() => props.currentMode, (newMode) => {
     <CanvasToolbar
       :current-mode="props.currentMode"
       :current-node-type="props.currentNodeType"
+      :is-grid-enabled="props.isGridEnabled"
+      :grid-size="props.gridSize"
       @update:current-mode="(mode: string) => emit('update:currentMode', mode)"
       @update:current-node-type="(type: NodeType) => emit('update:currentNodeType', type)"
+      @update:is-grid-enabled="(val: boolean) => emit('update:isGridEnabled', val)"
+      @update:grid-size="(val: number) => emit('update:gridSize', val)"
       @undo="handleUndo"
       @redo="handleRedo"
       :is-connecting="isConnecting"

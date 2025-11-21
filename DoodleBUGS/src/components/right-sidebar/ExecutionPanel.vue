@@ -625,6 +625,7 @@ const downloadFileContent = (fileName: string, content: string) => {
   background-color: var(--color-background-mute);
   padding: 8px 12px;
   border-bottom: 1px solid var(--color-border);
+  color: var(--color-heading);
 }
 
 .file-content {

@@ -1,6 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { storeToRefs } from 'pinia';
+import Toolbar from 'primevue/toolbar';
+import Button from 'primevue/button';
+import Drawer from 'primevue/drawer';
+import Popover from 'primevue/popover';
+import Checkbox from 'primevue/checkbox';
+import ToggleSwitch from 'primevue/toggleswitch';
+import InputNumber from 'primevue/inputnumber';
+import Accordion from 'primevue/accordion';
+import AccordionPanel from 'primevue/accordionpanel';
+import AccordionHeader from 'primevue/accordionheader';
+import AccordionContent from 'primevue/accordioncontent';
 import type { NodeType } from '../../types';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseInput from '../ui/BaseInput.vue';
@@ -53,7 +64,7 @@ const startCmd = 'julia --project=DoodleBUGS/runtime DoodleBUGS/runtime/server.j
 const instantiateCmd = 'julia --project=DoodleBUGS/runtime -e "using Pkg; Pkg.instantiate()"';
 const cloneCmd = 'git clone https://github.com/TuringLang/JuliaBUGS.jl.git';
 
-// Copy helpers with brief feedback
+// Copy helpers
 const copiedBackendUrl = ref(false);
 const copiedStartCmd = ref(false);
 const copiedInstantiateCmd = ref(false);
@@ -71,201 +82,199 @@ const copyStartCmd = () => copyWithFeedback(startCmd, copiedStartCmd);
 const copyInstantiateCmd = () => copyWithFeedback(instantiateCmd, copiedInstantiateCmd);
 const copyCloneCmd = () => copyWithFeedback(cloneCmd, copiedCloneCmd);
 
-const displayTitle = computed(() => {
-  if (props.projectName && props.activeGraphName) {
-    return `${props.projectName} — ${props.activeGraphName}`;
-  }
-  if (props.projectName) {
-    return props.projectName;
-  }
-  return 'No Project Selected';
-});
-
 const setAddNodeType = (type: NodeType) => {
   emit('update:currentNodeType', type);
   emit('update:currentMode', 'add-node');
 };
 
-const handleGridSizeInput = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  emit('update:gridSize', Number(target.value));
+const updateGridEnabled = (val: boolean) => emit('update:isGridEnabled', val);
+const updateGridSize = (val: number | null) => {
+    if (val !== null) emit('update:gridSize', val);
 };
+const updateShowZoomControls = (val: boolean) => emit('update:showZoomControls', val);
+const updateShowDebugPanel = (val: boolean) => emit('update:showDebugPanel', val);
+
+// View Menu
+const viewMenu = ref();
+const toggleViewMenu = (event: Event) => {
+    viewMenu.value.toggle(event);
+};
+
+// Dark Mode
+const isDarkMode = ref(localStorage.getItem('darkMode') === 'true');
+
+const applyDarkMode = () => {
+    const element = document.querySelector('html');
+    if (isDarkMode.value) {
+        element?.classList.add('dark-mode');
+    } else {
+        element?.classList.remove('dark-mode');
+    }
+};
+
+// Apply on load
+applyDarkMode();
+
+const toggleDarkMode = () => {
+    isDarkMode.value = !isDarkMode.value;
+    localStorage.setItem('darkMode', String(isDarkMode.value));
+    applyDarkMode();
+};
+
+// Mobile Menu
+const mobileMenuOpen = ref(false);
 </script>
 
 <template>
-  <nav class="navbar">
-    <div class="navbar-left">
-      <div class="navbar-brand">DoodleBUGS</div>
-      <div class="navbar-menu">
-        <DropdownMenu>
-          <template #trigger>
-            <BaseButton type="ghost" size="small">Project</BaseButton>
-          </template>
-          <template #content>
-            <a href="#" @click.prevent="emit('new-project')">New Project...</a>
-            <a href="#" @click.prevent="emit('new-graph')">New Graph...</a>
-          </template>
-        </DropdownMenu>
+  <Toolbar class="navbar-toolbar">
+    <template #start>
+      <div class="flex items-center gap-2">
+        <span class="text-xl font-bold mr-4">DoodleBUGS</span>
+        
+        <!-- Desktop Menu -->
+        <div class="desktop-menu flex gap-2">
+          <DropdownMenu>
+            <template #trigger>
+              <BaseButton type="ghost" size="small">Project</BaseButton>
+            </template>
+            <template #content>
+              <a href="#" @click.prevent="emit('new-project')">New Project...</a>
+              <a href="#" @click.prevent="emit('new-graph')">New Graph...</a>
+            </template>
+          </DropdownMenu>
 
-        <DropdownMenu>
-          <template #trigger>
-            <BaseButton type="ghost" size="small">Export</BaseButton>
-          </template>
-          <template #content>
-            <a href="#" @click.prevent="emit('open-export-modal', 'png')">as PNG...</a>
-            <a href="#" @click.prevent="emit('open-export-modal', 'jpg')">as JPG...</a>
-            <a href="#" @click.prevent="emit('open-export-modal', 'svg')">as SVG...</a>
-            <div class="dropdown-divider"></div>
-            <a href="#" @click.prevent="emit('export-json')">as JSON</a>
-          </template>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <template #trigger>
-            <BaseButton type="ghost" size="small">Add</BaseButton>
-          </template>
-          <template #content>
-            <div class="dropdown-section-title">Nodes</div>
-            <a v-for="nodeDef in nodeDefinitions" :key="nodeDef.nodeType" href="#"
-              @click.prevent="setAddNodeType(nodeDef.nodeType)">
-              {{ nodeDef.label }}
-            </a>
-            <div class="dropdown-divider"></div>
-            <a href="#" @click.prevent="emit('update:currentMode', 'add-edge')">Add Edge</a>
-          </template>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <template #trigger>
-            <BaseButton type="ghost" size="small">Layout</BaseButton>
-          </template>
-          <template #content>
-            <a href="#" @click.prevent="emit('apply-layout', 'dagre')">Dagre (Hierarchical)</a>
-            <a href="#" @click.prevent="emit('apply-layout', 'fcose')">fCoSE (Force-Directed)</a>
-            <a href="#" @click.prevent="emit('apply-layout', 'cola')">Cola (Physics Simulation)</a>
-            <a href="#" @click.prevent="emit('apply-layout', 'klay')">KLay (Layered)</a>
-            <a href="#" @click.prevent="emit('apply-layout', 'preset')">Reset to Preset</a>
-          </template>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <template #trigger>
-            <BaseButton type="ghost" size="small">View</BaseButton>
-          </template>
-          <template #content>
-            <label class="dropdown-checkbox">
-              <input type="checkbox" :checked="isGridEnabled"
-                @change="emit('update:isGridEnabled', ($event.target as HTMLInputElement).checked)" />
-              <span>Show Grid</span>
-            </label>
-            <div class="dropdown-input-group">
-              <span>Grid Size:</span>
-              <input type="number" :value="gridSize" @input="handleGridSizeInput" min="5"
-                max="100" step="5" class="w-20" />
-              <span>px</span>
-            </div>
-            <div class="dropdown-divider"></div>
-            <label class="dropdown-checkbox">
-              <input type="checkbox" :checked="showZoomControls"
-                @change="emit('update:showZoomControls', ($event.target as HTMLInputElement).checked)" />
-              <span>Show Zoom Controls</span>
-            </label>
-            <div class="dropdown-divider"></div>
-            <label class="dropdown-checkbox">
-              <input type="checkbox" :checked="showDebugPanel"
-                @change="emit('update:showDebugPanel', ($event.target as HTMLInputElement).checked)" />
-              <span>Show Debug Console</span>
-            </label>
-          </template>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <template #trigger>
-            <BaseButton type="ghost" size="small">Examples</BaseButton>
-          </template>
-          <template #content>
-             <a v-for="example in exampleModels" :key="example.key" href="#" @click.prevent="emit('load-example', example.key)">
-              {{ example.name }}
-            </a>
-          </template>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <template #trigger>
-            <BaseButton type="ghost" size="small">Connection</BaseButton>
-          </template>
-          <template #content>
-            <div class="execution-dropdown" @click.stop>
-              <div class="dropdown-section-title">Backend</div>
-              <div class="dropdown-input-group">
-                <label for="backend-url-nav">URL:</label>
-                <BaseInput id="backend-url-nav" v-model="navBackendUrl" placeholder="http://localhost:8081" class="backend-url-input" />
-                <BaseButton size="small" type="secondary" class="copy-btn" title="Copy URL" @click.stop="copyBackendUrl">
-                  <i v-if="copiedBackendUrl" class="fas fa-check"></i>
-                  <i v-else class="fas fa-copy"></i>
-                </BaseButton>
-              </div>
-              <div class="dropdown-hint">
-                <div>1) Clone repository:</div>
-                <div class="copy-row">
-                  <div class="code-inline">{{ cloneCmd }}</div>
-                  <BaseButton size="small" type="ghost" class="copy-btn" title="Copy command" @click.stop="copyCloneCmd">
-                    <i v-if="copiedCloneCmd" class="fas fa-check"></i>
-                    <i v-else class="fas fa-copy"></i>
-                  </BaseButton>
-                </div>
-                <div style="height:6px;"></div>
-                <div>2) From repo root, first time only (instantiate deps):</div>
-                <div class="copy-row">
-                  <div class="code-inline">{{ instantiateCmd }}</div>
-                  <BaseButton size="small" type="ghost" class="copy-btn" title="Copy command" @click.stop="copyInstantiateCmd">
-                    <i v-if="copiedInstantiateCmd" class="fas fa-check"></i>
-                    <i v-else class="fas fa-copy"></i>
-                  </BaseButton>
-                </div>
-                <div style="height:6px;"></div>
-                <div>3) From repo root, start backend:</div>
-                <div class="copy-row">
-                  <div class="code-inline">{{ startCmd }}</div>
-                  <BaseButton size="small" type="ghost" class="copy-btn" title="Copy command" @click.stop="copyStartCmd">
-                    <i v-if="copiedStartCmd" class="fas fa-check"></i>
-                    <i v-else class="fas fa-copy"></i>
-                  </BaseButton>
-                </div>
-              </div>
-              <div class="dropdown-actions">
-                <span class="connection-status" :class="{ connected: isConnected }">
-                  <strong>{{ isConnected ? 'Connected' : 'Disconnected' }}</strong>
-                </span>
-                <BaseButton @click="emit('connect-to-backend-url', navBackendUrl)" :disabled="isConnecting" size="small" type="primary">
-                  <span v-if="isConnecting">Connecting...</span>
-                  <span v-else>Connect</span>
-                </BaseButton>
-              </div>
+          <DropdownMenu>
+            <template #trigger>
+              <BaseButton type="ghost" size="small">Export</BaseButton>
+            </template>
+            <template #content>
+              <a href="#" @click.prevent="emit('open-export-modal', 'png')">as PNG...</a>
+              <a href="#" @click.prevent="emit('open-export-modal', 'jpg')">as JPG...</a>
+              <a href="#" @click.prevent="emit('open-export-modal', 'svg')">as SVG...</a>
               <div class="dropdown-divider"></div>
-              <div class="dropdown-section-title">Standalone</div>
-              <a href="#" @click.prevent="emit('generate-standalone')">Generate Standalone Julia Script</a>
-            </div>
-          </template>
-        </DropdownMenu>
+              <a href="#" @click.prevent="emit('export-json')">as JSON</a>
+            </template>
+          </DropdownMenu>
 
-        <DropdownMenu>
-          <template #trigger>
-            <BaseButton type="ghost" size="small">Help</BaseButton>
-          </template>
-          <template #content>
-            <a href="#" @click.prevent="emit('open-about-modal')">About DoodleBUGS</a>
-            <span class="dropdown-item-placeholder">Documentation (Coming Soon)</span>
-            <a href="https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md" target="_blank" rel="noopener noreferrer" class="report-issue-link">
-               Report an Issue
-               <i class="fas fa-external-link-alt external-link-icon"></i>
-            </a>
-          </template>
-        </DropdownMenu>
+          <DropdownMenu>
+            <template #trigger>
+              <BaseButton type="ghost" size="small">Add</BaseButton>
+            </template>
+            <template #content>
+              <div class="dropdown-section-title">Nodes</div>
+              <a v-for="nodeDef in nodeDefinitions" :key="nodeDef.nodeType" href="#"
+                @click.prevent="setAddNodeType(nodeDef.nodeType)">
+                {{ nodeDef.label }}
+              </a>
+              <div class="dropdown-divider"></div>
+              <a href="#" @click.prevent="emit('update:currentMode', 'add-edge')">Add Edge</a>
+            </template>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <template #trigger>
+              <BaseButton type="ghost" size="small">Layout</BaseButton>
+            </template>
+            <template #content>
+              <a href="#" @click.prevent="emit('apply-layout', 'dagre')">Dagre (Hierarchical)</a>
+              <a href="#" @click.prevent="emit('apply-layout', 'fcose')">fCoSE (Force-Directed)</a>
+              <a href="#" @click.prevent="emit('apply-layout', 'cola')">Cola (Physics Simulation)</a>
+              <a href="#" @click.prevent="emit('apply-layout', 'klay')">KLay (Layered)</a>
+              <a href="#" @click.prevent="emit('apply-layout', 'preset')">Reset to Preset</a>
+            </template>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <template #trigger>
+              <BaseButton type="ghost" size="small">View</BaseButton>
+            </template>
+            <template #content>
+              <div class="view-options" @click.stop>
+                <div class="view-option-row">
+                  <label for="show-grid" class="view-label">Show Grid</label>
+                  <ToggleSwitch :modelValue="isGridEnabled" @update:modelValue="updateGridEnabled" inputId="show-grid" />
+                </div>
+                
+                <div class="view-option-row">
+                  <label for="grid-size" class="view-label">Grid Size</label>
+                  <InputNumber :modelValue="gridSize" @update:modelValue="updateGridSize" inputId="grid-size" :min="5" :max="100" :step="5" showButtons buttonLayout="horizontal" class="grid-size-input" />
+                </div>
+                
+                <div class="dropdown-divider"></div>
+                
+                <div class="view-option-row">
+                  <label for="show-zoom" class="view-label">Zoom Controls</label>
+                  <ToggleSwitch :modelValue="showZoomControls" @update:modelValue="updateShowZoomControls" inputId="show-zoom" />
+                </div>
+                
+                <div class="view-option-row">
+                  <label for="show-debug" class="view-label">Debug Console</label>
+                  <ToggleSwitch :modelValue="showDebugPanel" @update:modelValue="updateShowDebugPanel" inputId="show-debug" />
+                </div>
+              </div>
+            </template>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <template #trigger>
+              <BaseButton type="ghost" size="small">Examples</BaseButton>
+            </template>
+            <template #content>
+               <a v-for="example in exampleModels" :key="example.key" href="#" @click.prevent="emit('load-example', example.key)">
+                {{ example.name }}
+              </a>
+            </template>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <template #trigger>
+              <BaseButton type="ghost" size="small">Connection</BaseButton>
+            </template>
+            <template #content>
+              <div class="execution-dropdown" @click.stop>
+                <div class="dropdown-section-title">Backend</div>
+                <div class="dropdown-input-group">
+                  <label for="backend-url-nav">URL:</label>
+                  <BaseInput id="backend-url-nav" v-model="navBackendUrl" placeholder="http://localhost:8081" class="backend-url-input" />
+                  <BaseButton size="small" type="secondary" class="copy-btn" title="Copy URL" @click.stop="copyBackendUrl">
+                    <i v-if="copiedBackendUrl" class="fas fa-check"></i>
+                    <i v-else class="fas fa-copy"></i>
+                  </BaseButton>
+                </div>
+                <div class="dropdown-actions">
+                  <span class="connection-status" :class="{ connected: isConnected }">
+                    <strong>{{ isConnected ? 'Connected' : 'Disconnected' }}</strong>
+                  </span>
+                  <BaseButton @click="emit('connect-to-backend-url', navBackendUrl)" :disabled="isConnecting" size="small" type="primary">
+                    <span v-if="isConnecting">Connecting...</span>
+                    <span v-else>Connect</span>
+                  </BaseButton>
+                </div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-section-title">Standalone</div>
+                <a href="#" @click.prevent="emit('generate-standalone')">Generate Standalone Julia Script</a>
+              </div>
+            </template>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <template #trigger>
+              <BaseButton type="ghost" size="small">Help</BaseButton>
+            </template>
+            <template #content>
+              <a href="#" @click.prevent="emit('open-about-modal')">About DoodleBUGS</a>
+              <a href="https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md" target="_blank" rel="noopener noreferrer" class="report-issue-link">
+                 Report an Issue
+                 <i class="fas fa-external-link-alt external-link-icon"></i>
+              </a>
+            </template>
+          </DropdownMenu>
+        </div>
       </div>
-    </div>
+    </template>
 
-    <div class="navbar-center">
+    <template #center>
+      <div class="desktop-actions flex items-center gap-2">
         <div class="backend-status" :class="{ 'connected': isConnected, 'disconnected': !isConnected }" :title="isConnected ? 'Connected to backend' : 'Disconnected from backend'">
             <i class="fas fa-circle"></i>
         </div>
@@ -289,281 +298,274 @@ const handleGridSizeInput = (event: Event) => {
             <i class="fas fa-stop"></i>
             Abort
         </BaseButton>
-    </div>
-
-    <div class="navbar-right">
-      <div class="pane-toggles">
-        <button @click="emit('toggle-left-sidebar')" :class="{ active: isLeftSidebarOpen }" title="Toggle Left Sidebar">
-          <svg viewBox="0 0 64 64" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-            <path
-              d="M49.984,56l-35.989,0c-3.309,0 -5.995,-2.686 -5.995,-5.995l0,-36.011c0,-3.308 2.686,-5.995 5.995,-5.995l35.989,0c3.309,0 5.995,2.687 5.995,5.995l0,36.011c0,3.309 -2.686,5.995 -5.995,5.995Zm-25.984,-4.001l0,-39.999l-9.012,0c-1.65,0 -2.989,1.339 -2.989,2.989l0,34.021c0,1.65 1.339,2.989 2.989,2.989l9.012,0Zm24.991,-39.999l-20.991,0l0,39.999l20.991,0c1.65,0 2.989,-1.339 2.989,-2.989l0,-34.021c0,-1.65 -1.339,-2.989 -2.989,-2.989Z">
-            </path>
-          </svg>
-        </button>
-        <button @click="emit('toggle-right-sidebar')" :class="{ active: isRightSidebarOpen }"
-          title="Toggle Right Sidebar">
-          <svg viewBox="0 0 64 64" fill="currentColor" xmlns="http://www.w3.org/2000/svg"
-            transform="matrix(-1, 0, 0, 1, 0, 0)">
-            <path
-              d="M49.984,56l-35.989,0c-3.309,0 -5.995,-2.686 -5.995,-5.995l0,-36.011c0,-3.308 2.686,-5.995 5.995,-5.995l35.989,0c3.309,0 5.995,2.687 5.995,5.995l0,36.011c0,3.309 -2.686,5.995 -5.995,5.995Zm-25.984,-4.001l0,-39.999l-9.012,0c-1.65,0 -2.989,1.339 -2.989,2.989l0,34.021c0,1.65 1.339,2.989 2.989,2.989l9.012,0Zm24.991,-39.999l-20.991,0l0,39.999l20.991,0c1.65,0 2.989,-1.339 2.989,-2.989l0,-34.021c0,-1.65 -1.339,-2.989 -2.989,-2.989Z">
-            </path>
-          </svg>
-        </button>
       </div>
-      <span class="project-name">{{ displayTitle }}</span>
-    </div>
-  </nav>
+    </template>
+
+    <template #end>
+      <div class="flex items-center gap-2">
+        <Button 
+            :icon="isDarkMode ? 'pi pi-sun' : 'pi pi-moon'" 
+            @click="toggleDarkMode" 
+            text 
+            rounded 
+            aria-label="Toggle Dark Mode" 
+        />
+        
+        <Button @click="emit('toggle-left-sidebar')" :class="{ 'p-button-outlined': isLeftSidebarOpen }" icon="pi pi-align-left" text rounded title="Toggle Left Sidebar" />
+        <Button @click="emit('toggle-right-sidebar')" :class="{ 'p-button-outlined': isRightSidebarOpen }" icon="pi pi-align-right" text rounded title="Toggle Right Sidebar" />
+        
+        <Button icon="pi pi-bars" class="mobile-toggle" @click="mobileMenuOpen = true" text />
+      </div>
+    </template>
+  </Toolbar>
+
+  <Drawer v-model:visible="mobileMenuOpen" header="Menu" position="right" class="w-80">
+    <Accordion :multiple="true" :value="['actions', 'help']">
+        <AccordionPanel value="actions">
+            <AccordionHeader>Actions</AccordionHeader>
+            <AccordionContent>
+                <div class="flex flex-col gap-2">
+                    <BaseButton @click="emit('run-model'); mobileMenuOpen = false" type="primary" :disabled="!isConnected || isExecuting" class="w-full justify-center">Run Model</BaseButton>
+                    <BaseButton @click="emit('validate-model'); mobileMenuOpen = false" type="secondary" class="w-full justify-center">Validate</BaseButton>
+                </div>
+            </AccordionContent>
+        </AccordionPanel>
+        
+        <AccordionPanel value="project">
+            <AccordionHeader>Project</AccordionHeader>
+            <AccordionContent>
+                <div class="flex flex-col gap-2">
+                    <BaseButton @click="emit('new-project'); mobileMenuOpen = false" type="ghost" class="w-full text-left">New Project</BaseButton>
+                    <BaseButton @click="emit('new-graph'); mobileMenuOpen = false" type="ghost" class="w-full text-left">New Graph</BaseButton>
+                </div>
+            </AccordionContent>
+        </AccordionPanel>
+
+        <AccordionPanel value="export">
+            <AccordionHeader>Export</AccordionHeader>
+            <AccordionContent>
+                <div class="flex flex-col gap-2">
+                    <BaseButton @click="emit('open-export-modal', 'png'); mobileMenuOpen = false" type="ghost" class="w-full text-left">as PNG</BaseButton>
+                    <BaseButton @click="emit('open-export-modal', 'jpg'); mobileMenuOpen = false" type="ghost" class="w-full text-left">as JPG</BaseButton>
+                    <BaseButton @click="emit('open-export-modal', 'svg'); mobileMenuOpen = false" type="ghost" class="w-full text-left">as SVG</BaseButton>
+                    <BaseButton @click="emit('export-json'); mobileMenuOpen = false" type="ghost" class="w-full text-left">as JSON</BaseButton>
+                </div>
+            </AccordionContent>
+        </AccordionPanel>
+
+        <AccordionPanel value="add">
+            <AccordionHeader>Add</AccordionHeader>
+            <AccordionContent>
+                <div class="flex flex-col gap-2">
+                    <BaseButton v-for="nodeDef in nodeDefinitions" :key="nodeDef.nodeType" 
+                        @click="setAddNodeType(nodeDef.nodeType); mobileMenuOpen = false" type="ghost" size="small" class="w-full text-left justify-start">
+                        {{ nodeDef.label }}
+                    </BaseButton>
+                    <BaseButton @click="emit('update:currentMode', 'add-edge'); mobileMenuOpen = false" type="ghost" size="small" class="w-full text-left justify-start">Add Edge</BaseButton>
+                </div>
+            </AccordionContent>
+        </AccordionPanel>
+
+        <AccordionPanel value="layout">
+            <AccordionHeader>Layout</AccordionHeader>
+            <AccordionContent>
+                <div class="flex flex-col gap-2">
+                    <BaseButton @click="emit('apply-layout', 'dagre'); mobileMenuOpen = false" type="ghost" class="w-full text-left">Dagre</BaseButton>
+                    <BaseButton @click="emit('apply-layout', 'fcose'); mobileMenuOpen = false" type="ghost" class="w-full text-left">fCoSE</BaseButton>
+                    <BaseButton @click="emit('apply-layout', 'cola'); mobileMenuOpen = false" type="ghost" class="w-full text-left">Cola</BaseButton>
+                    <BaseButton @click="emit('apply-layout', 'klay'); mobileMenuOpen = false" type="ghost" class="w-full text-left">KLay</BaseButton>
+                    <BaseButton @click="emit('apply-layout', 'preset'); mobileMenuOpen = false" type="ghost" class="w-full text-left">Reset</BaseButton>
+                </div>
+            </AccordionContent>
+        </AccordionPanel>
+
+        <AccordionPanel value="view">
+            <AccordionHeader>View</AccordionHeader>
+            <AccordionContent>
+                <div class="flex flex-col gap-3">
+                    <div class="flex items-center justify-between">
+                        <label for="mobile-show-grid" class="cursor-pointer">Show Grid</label>
+                        <ToggleSwitch :modelValue="isGridEnabled" @update:modelValue="updateGridEnabled" inputId="mobile-show-grid" />
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label for="mobile-grid-size" class="cursor-pointer">Grid Size</label>
+                        <InputNumber :modelValue="gridSize" @update:modelValue="updateGridSize" inputId="mobile-grid-size" :min="5" :max="100" :step="5" showButtons buttonLayout="horizontal" class="w-28" />
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label for="mobile-show-zoom" class="cursor-pointer">Show Zoom Controls</label>
+                        <ToggleSwitch :modelValue="showZoomControls" @update:modelValue="updateShowZoomControls" inputId="mobile-show-zoom" />
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label for="mobile-show-debug" class="cursor-pointer">Show Debug Console</label>
+                        <ToggleSwitch :modelValue="showDebugPanel" @update:modelValue="updateShowDebugPanel" inputId="mobile-show-debug" />
+                    </div>
+                </div>
+            </AccordionContent>
+        </AccordionPanel>
+
+        <AccordionPanel value="examples">
+            <AccordionHeader>Examples</AccordionHeader>
+            <AccordionContent>
+                <div class="flex flex-col gap-2">
+                    <BaseButton v-for="example in exampleModels" :key="example.key" 
+                        @click="emit('load-example', example.key); mobileMenuOpen = false" type="ghost" class="w-full text-left">
+                        {{ example.name }}
+                    </BaseButton>
+                </div>
+            </AccordionContent>
+        </AccordionPanel>
+
+        <AccordionPanel value="connection">
+            <AccordionHeader>Connection</AccordionHeader>
+            <AccordionContent>
+                <div class="flex flex-col gap-3">
+                    <div class="flex flex-col gap-1">
+                        <label for="backend-url-mobile">URL:</label>
+                        <BaseInput id="backend-url-mobile" v-model="navBackendUrl" placeholder="http://localhost:8081" class="w-full" />
+                    </div>
+                    <BaseButton @click="emit('connect-to-backend-url', navBackendUrl); mobileMenuOpen = false" :disabled="isConnecting" type="primary" class="w-full justify-center">
+                        <span v-if="isConnecting">Connecting...</span>
+                        <span v-else>Connect</span>
+                    </BaseButton>
+                    <BaseButton @click="emit('generate-standalone'); mobileMenuOpen = false" type="ghost" class="w-full text-left">Generate Standalone Script</BaseButton>
+                </div>
+            </AccordionContent>
+        </AccordionPanel>
+
+        <AccordionPanel value="help">
+            <AccordionHeader>Help</AccordionHeader>
+            <AccordionContent>
+                <div class="flex flex-col gap-2">
+                    <BaseButton @click="emit('open-about-modal'); mobileMenuOpen = false" type="ghost" class="w-full text-left">About</BaseButton>
+                    <a href="https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md" target="_blank" rel="noopener noreferrer" class="p-button p-component p-button-ghost p-button-sm w-full text-left no-underline">
+                        Report an Issue
+                    </a>
+                </div>
+            </AccordionContent>
+        </AccordionPanel>
+    </Accordion>
+  </Drawer>
 </template>
 
 <style scoped>
-.navbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: var(--color-background-dark);
-  color: var(--color-text-light);
-  padding: 0 20px;
-  height: var(--navbar-height);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-  z-index: 50;
-  flex-shrink: 0;
+.navbar-toolbar {
+    border: none;
+    border-bottom: 1px solid var(--p-content-border-color);
+    border-radius: 0;
+    padding: 0.5rem 1rem;
+    background: var(--p-content-background);
 }
 
-.navbar-left,
-.navbar-right {
-  display: flex;
-  align-items: center;
-  gap: 20px;
+/* Responsive Visibility */
+@media (max-width: 1024px) {
+    .desktop-menu, .desktop-actions {
+        display: none !important;
+    }
+    .mobile-toggle {
+        display: inline-flex !important;
+    }
 }
 
-.navbar-center {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.navbar-brand {
-  font-size: 1.3em;
-  font-weight: 600;
-  color: white;
-}
-
-.project-name {
-  font-size: 1em;
-  color: var(--color-text-light);
-  opacity: 0.8;
-  white-space: nowrap;
-}
-
-.navbar-menu {
-  display: flex;
-  gap: 5px;
-}
-
-.dropdown-content a,
-.report-issue-link {
-  padding: 10px 15px;
-  color: var(--color-text);
-  text-decoration: none;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.9em;
-}
-
-.dropdown-content a:hover,
-.report-issue-link:hover {
-  background-color: var(--color-primary);
-  color: white;
-}
-
-.external-link-icon {
-    font-size: 0.8em;
-    opacity: 0.6;
-}
-
-.dropdown-divider {
-  height: 1px;
-  background-color: var(--color-border-light);
-  margin: 8px 0;
-}
-
-.dropdown-section-title {
-  padding: 5px 15px;
-  font-size: 0.8em;
-  color: var(--color-secondary);
-  text-transform: uppercase;
-  font-weight: 600;
-}
-
-.dropdown-checkbox,
-.dropdown-input-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 15px;
-  font-size: 0.9em;
-  color: var(--color-text);
-  cursor: pointer;
-}
-
-.dropdown-checkbox input[type="checkbox"] {
-  cursor: pointer;
-}
-
-.dropdown-checkbox:hover {
-  background-color: var(--color-background-mute);
-}
-
-.dropdown-input-group .base-input {
-  width: 50px;
-}
-
-.dropdown-item-placeholder {
-  padding: 10px 15px;
-  color: var(--color-secondary);
-  font-size: 0.9em;
-  cursor: default;
-  opacity: 0.7;
-}
-
-.pane-toggles {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid #555;
-  border-radius: 5px;
-  padding: 2px;
-}
-
-.pane-toggles button {
-  background-color: transparent;
-  border: 1px solid transparent;
-  color: var(--color-text-light);
-  opacity: 0.7;
-  padding: 4px;
-  border-radius: 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.pane-toggles button:hover {
-  opacity: 1;
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.pane-toggles button.active {
-  opacity: 1;
-  background-color: var(--color-primary);
-  color: white;
-}
-
-.pane-toggles button svg {
-  width: 18px;
-  height: 18px;
+@media (min-width: 1025px) {
+    .mobile-toggle {
+        display: none !important;
+    }
 }
 
 .backend-status {
-    font-size: 0.7em;
-    padding: 5px;
+    font-size: 0.8em;
+    margin-right: 5px;
 }
-.backend-status.connected {
-    color: var(--color-success);
-}
-.backend-status.disconnected {
-    color: var(--color-danger);
-}
+.backend-status.connected { color: var(--color-success); }
+.backend-status.disconnected { color: var(--color-danger); }
 
 .validation-status {
-    font-size: 1.2em;
-    padding: 5px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     cursor: pointer;
-    transition: transform 0.2s ease;
+    font-size: 1.2em;
+    margin: 0 5px;
 }
+.validation-status.valid { color: var(--color-success); }
+.validation-status.invalid { color: var(--color-warning); }
 
-.validation-status:hover {
-    transform: scale(1.1);
-}
-
-.validation-status.valid {
-    color: var(--color-success);
-}
-
-.validation-status.invalid {
-    color: var(--color-danger);
-}
-
-.navbar-center .base-button {
+.dropdown-checkbox {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 8px;
+    padding: 4px 8px;
+    cursor: pointer;
+}
+.dropdown-input-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
 }
 
 .execution-dropdown {
-  width: 250px;
-  padding: 4px 10px 8px;
+    padding: 5px;
+    min-width: 300px;
 }
-
-.dropdown-input-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 6px 0 8px;
-}
-
-.backend-url-input {
-  flex: 1 1 auto;
-  width: 90%;
-}
-
 .dropdown-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
 }
-
 .connection-status {
-  opacity: 0.7;
-  color: rgb(228, 15, 15);
+    font-size: 0.9em;
 }
-.connection-status.connected { opacity: 1; color: green }
+.connection-status.connected { color: var(--color-success); }
 
-.dropdown-hint {
-  padding: 0 15px 8px;
-  font-size: 0.8em;
-  color: var(--color-secondary);
+.report-issue-link {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
-.dropdown-hint .code-inline {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.9em;
-  opacity: 0.9;
-  overflow-x: auto;
-  white-space: pre;
-  flex: 1 1 auto;
-  line-height: 1.25;
-  padding-bottom: 4px; /* avoid scrollbar overlap on some platforms */
-  scrollbar-width: thin; /* Firefox */
-  scrollbar-gutter: stable both-edges; /* reserve space for scrollbar */
+.external-link-icon {
+    font-size: 0.8em;
+    opacity: 0.7;
 }
-.copy-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 4px;
-  min-width: 0;
+
+.view-options {
+    padding: 0.75rem;
+    min-width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
 }
-.dropdown-hint .code-inline::-webkit-scrollbar { height: 6px; }
-.dropdown-hint .code-inline::-webkit-scrollbar-track { background: transparent; }
-.dropdown-hint .code-inline::-webkit-scrollbar-thumb { background-color: var(--color-border); border-radius: 3px; }
-.copy-btn {
-  padding: 2px 6px;
+
+.view-option-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.view-label {
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    flex: 1;
+    text-align: left;
+}
+
+.grid-size-input {
+    width: 110px;
+}
+
+.grid-size-input :deep(.p-inputnumber-input) {
+    width: 45px;
+    text-align: center;
+    padding: 0.25rem;
+    font-size: 0.85rem;
+}
+
+.grid-size-input :deep(.p-inputnumber-button) {
+    width: 1.5rem;
+    padding: 0.25rem;
+}
+
+.grid-size-input :deep(.p-inputnumber-button .p-icon) {
+    font-size: 0.75rem;
 }
 </style>

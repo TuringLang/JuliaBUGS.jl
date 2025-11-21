@@ -715,7 +715,9 @@ const handleGenerateStandalone = () => {
       <div class="resizer resizer-left" @mousedown.prevent="startResizeLeft"></div>
 
       <main class="graph-editor-wrapper">
-        <GraphEditor :is-grid-enabled="isGridEnabled" :grid-size="gridSize" :current-mode="currentMode"
+        <GraphEditor :is-grid-enabled="isGridEnabled" @update:is-grid-enabled="isGridEnabled = $event"
+          :grid-size="gridSize" @update:grid-size="gridSize = $event"
+          :current-mode="currentMode"
           :elements="elements" :current-node-type="currentNodeType" :validation-errors="validationErrors"
           :show-zoom-controls="showZoomControls"
           @update:current-mode="currentMode = $event" @update:current-node-type="currentNodeType = $event"
@@ -893,7 +895,8 @@ const handleGenerateStandalone = () => {
 .vertical-tabs-container button.active {
   background-color: var(--color-primary);
   color: white;
-  border-left: 2px solid white;
+  border-left: 4px solid white;
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
 }
 
 .vertical-tabs-container button.active i {
@@ -957,6 +960,16 @@ const handleGenerateStandalone = () => {
   color: var(--color-primary);
   border-bottom-color: var(--color-primary);
   background-color: var(--color-background-soft);
+}
+
+/* Dark Mode Overrides for Right Sidebar Tabs */
+:global(html.dark-mode) .tab-buttons button.active {
+    background-color: var(--p-surface-800);
+    color: var(--p-primary-color);
+}
+
+:global(html.dark-mode) .tab-buttons button:hover {
+    background-color: var(--p-surface-700);
 }
 
 .pin-button {

@@ -14,7 +14,9 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.getItem('doodlebugs-isRightTabPinned') === 'true'
   );
   const isRightSidebarOpen = ref<boolean>(
-    localStorage.getItem('doodlebugs-isRightSidebarOpen') !== 'false'
+    typeof window !== 'undefined' && window.innerWidth <= 768
+      ? false
+      : localStorage.getItem('doodlebugs-isRightSidebarOpen') !== 'false'
   );
   const rightSidebarWidth = ref<number>(
     parseInt(localStorage.getItem('doodlebugs-rightSidebarWidth') || '400') // Increased default width
@@ -25,7 +27,9 @@ export const useUiStore = defineStore('ui', () => {
     (localStorage.getItem('doodlebugs-activeLeftTab') as LeftSidebarTab) || 'project'
   );
   const isLeftSidebarOpen = ref<boolean>(
-    localStorage.getItem('doodlebugs-isLeftSidebarOpen') !== 'false'
+    typeof window !== 'undefined' && window.innerWidth <= 768
+      ? false
+      : localStorage.getItem('doodlebugs-isLeftSidebarOpen') !== 'false'
   );
   const leftSidebarWidth = ref<number>(
     parseInt(localStorage.getItem('doodlebugs-leftSidebarWidth') || '330')

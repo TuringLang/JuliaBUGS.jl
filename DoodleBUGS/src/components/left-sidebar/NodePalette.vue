@@ -99,7 +99,7 @@ const onClickPaletteItem = (itemType: PaletteItemType) => {
   padding: 15px 10px;
   border-radius: 8px;
   border: 1px solid var(--color-border);
-  background-color: #fff;
+  background-color: var(--color-background-soft);
   cursor: grab;
   text-align: center;
   transition: all 0.2s ease-in-out;
@@ -117,6 +117,18 @@ const onClickPaletteItem = (itemType: PaletteItemType) => {
   cursor: grabbing;
   transform: translateY(-1px);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* Dark Mode Overrides */
+:global(html.dark-mode) .palette-card {
+  background-color: var(--p-surface-800);
+  border-color: var(--p-surface-700);
+  color: var(--p-text-color);
+}
+
+:global(html.dark-mode) .palette-card:hover {
+  border-color: var(--color-primary);
+  background-color: var(--p-surface-700);
 }
 
 .card-label {
@@ -142,14 +154,14 @@ const onClickPaletteItem = (itemType: PaletteItemType) => {
 .icon-deterministic { background-color: #28a745; border-radius: 8px; font-size: 1.2em; }
 .icon-constant { background-color: #6c757d; border-radius: 4px; }
 .icon-observed {
-  background-color: #fff;
+  background-color: var(--color-background-soft);
   border: 2px dashed #007bff;
   color: #007bff;
 }
 .icon-plate {
-  background-color: #fff;
-  border: 2px dashed #495057;
-  color: #495057;
+  background-color: var(--color-background-soft);
+  border: 2px dashed var(--color-text);
+  color: var(--color-text);
   border-radius: 8px;
   font-size: 1.2em;
 }

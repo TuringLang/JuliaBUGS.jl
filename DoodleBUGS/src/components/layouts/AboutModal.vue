@@ -14,18 +14,17 @@
           Our goal is to provide an intuitive, visual interface for statisticians,
           researchers, and students to build, understand, and share complex probabilistic models.
         </p>
-        <hr />
-        <p><strong>Version:</strong> Alpha Phase -- Currently in experimental development.</p>
       </div>
     </template>
     <template #footer>
-      <button @click="emit('close')" class="primary">Close</button>
+      <BaseButton @click="emit('close')" type="primary">Close</BaseButton>
     </template>
   </BaseModal>
 </template>
 
 <script setup lang="ts">
 import BaseModal from '../common/BaseModal.vue';
+import BaseButton from '../ui/BaseButton.vue';
 
 defineProps<{
   isOpen: boolean;
