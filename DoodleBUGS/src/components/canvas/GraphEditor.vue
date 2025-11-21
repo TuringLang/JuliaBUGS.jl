@@ -8,6 +8,19 @@ import { useGraphInstance } from '../../composables/useGraphInstance';
 import type { GraphElement, GraphNode, GraphEdge, NodeType, ValidationError } from '../../types';
 import { getDefaultNodeData } from '../../config/nodeDefinitions';
 
+// Fallback UUID generator for iOS Safari (doesn't support crypto.randomUUID in non-HTTPS)
+const generateUUID = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback: generate a UUID v4-like string
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 const props = defineProps<{
   isGridEnabled: boolean;
   gridSize: number;
@@ -15,16 +28,43 @@ const props = defineProps<{
   currentNodeType: NodeType;
   elements: GraphElement[];
   validationErrors: Map<string, ValidationError[]>;
+  showZoomControls?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: 'element-selected', element: GraphElement | null): void;
   (e: 'update:currentMode', mode: string): void;
   (e: 'update:currentNodeType', type: NodeType): void;
+  (e: 'layout-updated', layoutName: string): void;
+  (e: 'update:show-zoom-controls', value: boolean): void;
 }>();
 
 const { elements: graphElements, addElement, updateElement, deleteElement } = useGraphElements();
-const { getCyInstance } = useGraphInstance();
+const { getCyInstance, getUndoRedoInstance } = useGraphInstance();
+
+const handleGraphUpdated = (newElements: GraphElement[]) => {
+    graphElements.value = newElements;
+};
+
+const handleUndo = () => {
+    const ur = getUndoRedoInstance();
+    if (ur) ur.undo();
+};
+
+const handleRedo = () => {
+    const ur = getUndoRedoInstance();
+    if (ur) ur.redo();
+};
+
+const formatForCy = (el: GraphElement) => {
+    if (el.type === 'node') {
+        const node = el as GraphNode;
+        return { group: 'nodes', data: node, position: node.position };
+    } else {
+        const edge = el as GraphEdge;
+        return { group: 'edges', data: edge };
+    }
+};
 
 const sourceNode = ref<NodeSingular | null>(null);
 const isConnecting = ref(false);
@@ -61,7 +101,7 @@ const getNextNodeName = (): string => {
 
 const createNode = (nodeType: NodeType, position: { x: number; y: number }, parentId?: string): GraphNode => {
     const defaultData = getDefaultNodeData(nodeType);
-    const newId = `node_${crypto.randomUUID().substring(0, 8)}`;
+    const newId = `node_${generateUUID().substring(0, 8)}`;
     const newName = nodeType === 'plate' ? 'Plate' : getNextNodeName();
 
     const newNode: GraphNode = {
@@ -91,7 +131,16 @@ const createNode = (nodeType: NodeType, position: { x: number; y: number }, pare
 const createPlateWithNode = (position: { x: number; y: number }, parentId?: string): GraphNode => {
     const newPlate = createNode('plate', position, parentId);
     const innerNode = createNode('stochastic', { x: position.x, y: position.y }, newPlate.id);
-    graphElements.value = [...graphElements.value, newPlate, innerNode];
+    
+    const ur = getUndoRedoInstance();
+    if (ur) {
+        ur.do("batch", [
+            { name: "add", param: formatForCy(newPlate) },
+            { name: "add", param: formatForCy(innerNode) }
+        ]);
+    } else {
+        graphElements.value = [...graphElements.value, newPlate, innerNode];
+    }
     return newPlate;
 }
 
@@ -115,7 +164,12 @@ const handleCanvasTap = (event: EventObject) => {
             emit('update:currentMode', 'select');
         } else {
             const newNode = createNode(props.currentNodeType, position, isPlateClick ? (target as NodeSingular).id() : undefined);
-            addElement(newNode);
+            const ur = getUndoRedoInstance();
+            if (ur) {
+                ur.do("add", formatForCy(newNode));
+            } else {
+                addElement(newNode);
+            }
             emit('element-selected', newNode);
             emit('update:currentMode', 'select');
         }
@@ -125,15 +179,21 @@ const handleCanvasTap = (event: EventObject) => {
     case 'add-edge':
       if (isNodeClick) {
         const tappedNode = target as NodeSingular;
+        
         if (sourceNode.value && sourceNode.value.id() !== tappedNode.id()) {
           const newEdge: GraphEdge = {
-            id: `edge_${crypto.randomUUID().substring(0, 8)}`,
+            id: `edge_${generateUUID().substring(0, 8)}`,
             type: 'edge',
             source: sourceNode.value.id(),
             target: tappedNode.id(),
             name: ``,
           };
-          addElement(newEdge);
+          const ur = getUndoRedoInstance();
+          if (ur) {
+              ur.do("add", formatForCy(newEdge));
+          } else {
+              addElement(newEdge);
+          }
           sourceNode.value?.removeClass('cy-connecting');
           sourceNode.value = null;
           isConnecting.value = false;
@@ -173,6 +233,7 @@ const handleNodeMoved = (payload: { nodeId: string, position: { x: number; y: nu
       parent: payload.parentId
     };
     updateElement(updatedNode);
+    emit('layout-updated', 'preset');
   }
 };
 
@@ -211,13 +272,27 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
   }
 
   const newNode = createNode(nodeType, position, parentPlateId);
-  addElement(newNode);
+  const ur = getUndoRedoInstance();
+  if (ur) {
+      ur.do("add", formatForCy(newNode));
+  } else {
+      addElement(newNode);
+  }
   emit('element-selected', newNode);
   emit('update:currentMode', 'select');
 };
 
 const handleDeleteElement = (elementId: string) => {
-    deleteElement(elementId);
+    const ur = getUndoRedoInstance();
+    const cy = getCyInstance();
+    if (ur && cy) {
+        const el = cy.getElementById(elementId);
+        if (el.length > 0) {
+            ur.do("remove", el);
+        }
+    } else {
+        deleteElement(elementId);
+    }
 };
 
 watch(() => props.currentMode, (newMode) => {
@@ -236,6 +311,8 @@ watch(() => props.currentMode, (newMode) => {
       :current-node-type="props.currentNodeType"
       @update:current-mode="(mode: string) => emit('update:currentMode', mode)"
       @update:current-node-type="(type: NodeType) => emit('update:currentNodeType', type)"
+      @undo="handleUndo"
+      @redo="handleRedo"
       :is-connecting="isConnecting"
       :source-node-name="sourceNode ? (sourceNode.data('name') as string) : undefined"
     />
@@ -246,10 +323,13 @@ watch(() => props.currentMode, (newMode) => {
       :grid-size="gridSize"
       :current-mode="props.currentMode"
       :validation-errors="props.validationErrors"
+      :show-zoom-controls="props.showZoomControls"
       @canvas-tap="handleCanvasTap"
       @node-moved="handleNodeMoved"
       @node-dropped="handleNodeDropped"
       @element-remove="handleDeleteElement"
+      @graph-updated="handleGraphUpdated"
+      @update:show-zoom-controls="(value: boolean) => emit('update:show-zoom-controls', value)"
     />
   </div>
 </template>

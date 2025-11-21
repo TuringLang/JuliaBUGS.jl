@@ -11,6 +11,7 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>) {
     const nodes = elements.value.filter(el => el.type === 'node') as GraphNode[];
     const edges = elements.value.filter(el => el.type === 'edge') as GraphEdge[];
     const nodeMap = new Map(nodes.map(n => [n.id, n]));
+    const nameToNode = new Map(nodes.map(n => [n.name, n]));
 
     if (nodes.length === 0) {
       return 'model {\n  # Your model will appear here...\n}';
@@ -65,11 +66,35 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>) {
       }
     });
 
+    const formatParam = (raw: string): string => {
+      const p = String(raw).trim();
+      if (!p) return p;
+      // If already indexed (e.g., foo[i,j]) leave as-is
+      if (/\[[^\]]+\]\s*$/.test(p)) return p;
+      // If numeric literal or contains parentheses (function/expression), leave as-is
+      if (/^[+-]?(?:\d+\.?\d*|\d*\.\d+)(?:[eE][+-]?\d+)?$/.test(p) || /[()]/.test(p)) return p;
+      const ref = nameToNode.get(p);
+      if (ref && ref.indices && String(ref.indices).trim() !== '') {
+        return `${p}[${ref.indices}]`;
+      }
+      return p;
+    };
+
     const generateCodeRecursive = (member: TreeMember, indentLevel: number): string[] => {
       const lines: string[] = [];
       const indent = '  '.repeat(indentLevel);
 
       const sortedChildren = member.children.sort((a, b) => {
+        // Plates first
+        if (a.type === 'plate' && b.type !== 'plate') return -1;
+        if (b.type === 'plate' && a.type !== 'plate') return 1;
+        // Among nodes: observed/stochastic before deterministic
+        const na = a.type === 'node' ? nodeMap.get(a.id) : undefined;
+        const nb = b.type === 'node' ? nodeMap.get(b.id) : undefined;
+        const pa = na ? (na.nodeType === 'deterministic' ? 1 : 0) : 0;
+        const pb = nb ? (nb.nodeType === 'deterministic' ? 1 : 0) : 0;
+        if (pa !== pb) return pa - pb;
+        // Tiebreaker: topological order
         return sortedNodeIds.indexOf(a.id) - sortedNodeIds.indexOf(b.id);
       });
 
@@ -87,7 +112,7 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>) {
           if (childNode.nodeType === 'stochastic' || childNode.nodeType === 'observed') {
             const params = Object.keys(childNode)
               .filter(key => key.startsWith('param') && childNode[key as keyof GraphNode] && String(childNode[key as keyof GraphNode]).trim() !== '')
-              .map(key => String(childNode[key as keyof GraphNode]))
+              .map(key => formatParam(String(childNode[key as keyof GraphNode])))
               .join(', ');
             lines.push(`${indent}${nodeName} ~ ${childNode.distribution}(${params})`);
           } else if (childNode.nodeType === 'deterministic' && childNode.equation) {
@@ -106,4 +131,166 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>) {
   return {
     generatedCode,
   };
+}
+
+// Helpers to format JavaScript values as Julia literals for embedding
+// Render a Julia NamedTuple field name: either bare identifier or var"..."
+function juliaFieldLiteral(name: string): string {
+  const s = String(name);
+  const idok = /^[A-Za-z_][A-Za-z0-9_]*$/.test(s);
+  if (idok) return s;
+  const escaped = s.replace(/"/g, '\\"');
+  return `var"${escaped}"`;
+}
+
+function isVectorOfNumbers(v: unknown): v is number[] {
+  return Array.isArray(v) && v.every(x => typeof x === 'number');
+}
+
+function isMatrixLike(v: unknown): v is number[][] {
+  if (!Array.isArray(v) || v.length === 0) return false;
+  const rows = v as unknown[];
+  const firstRow = rows[0];
+  if (!Array.isArray(firstRow)) return false;
+  const cols = (firstRow as unknown[]).length;
+  return rows.every(r => Array.isArray(r)
+    && (r as unknown[]).length === cols
+    && (r as unknown[]).every(x => typeof x === 'number'));
+}
+
+function formatNumber(n: number): string {
+  if (Number.isNaN(n)) return 'NaN';
+  if (!Number.isFinite(n)) return n > 0 ? 'Inf' : '-Inf';
+  return `${n}`;
+}
+
+function formatVector(arr: number[]): string {
+  return `[${arr.map(formatNumber).join(', ')}]`;
+}
+
+function formatMatrix(mat: number[][]): string {
+  const rows = mat.map(row => row.map(formatNumber).join(' ')).join('\n        ');
+  return `[\n        ${rows}\n    ]`;
+}
+
+function formatValue(v: unknown): string {
+  if (v === null) return 'missing';
+  if (typeof v === 'number') return formatNumber(v);
+  if (typeof v === 'boolean') return v ? 'true' : 'false';
+  if (typeof v === 'string') return JSON.stringify(v);
+  if (isMatrixLike(v)) return formatMatrix(v as number[][]);
+  if (isVectorOfNumbers(v)) return formatVector(v as number[]);
+  if (Array.isArray(v)) return JSON.stringify(v);
+  if (v && typeof v === 'object') return JSON.stringify(v);
+  return 'nothing';
+}
+
+function buildNamedTupleLiteral(obj: Record<string, unknown>): string {
+  const entries = Object.entries(obj).map(([k, val]) => `  ${juliaFieldLiteral(k)} = ${formatValue(val)}`);
+  return entries.length ? `(\n${entries.join(',\n')}\n)` : '()';
+}
+
+// Standalone script generator: builds a Julia script matching the backend's standalone template
+export interface StandaloneGeneratorSettings {
+  n_samples: number;
+  n_adapts: number;
+  n_chains: number;
+  seed?: number | null;
+}
+
+export interface StandaloneScriptInput {
+  modelCode: string;
+  data: Record<string, unknown>;
+  inits: Record<string, unknown>;
+  settings: StandaloneGeneratorSettings;
+}
+
+export function generateStandaloneScript(input: StandaloneScriptInput): string {
+  const { modelCode, data, inits, settings } = input;
+
+  // Build literal NamedTuples
+  const dataLiteral = buildNamedTupleLiteral(data as Record<string, unknown>);
+  const initsLiteral = buildNamedTupleLiteral(inits as Record<string, unknown>);
+
+  const nSamples = settings?.n_samples ?? 1000;
+  const nAdapts = settings?.n_adapts ?? 1000;
+  const nChains = settings?.n_chains ?? 1;
+  const seed = settings?.seed;
+  const seedLiteral = typeof seed === 'number' ? String(seed) : (seed == null ? 'nothing' : JSON.stringify(seed));
+
+  const script = `using JuliaBUGS, AbstractMCMC, AdvancedHMC, LogDensityProblems, LogDensityProblemsAD, MCMCChains, ReverseDiff, Random
+
+data = ${dataLiteral}
+
+inits = ${initsLiteral}
+
+# Model definition using a string literal
+model_def = JuliaBUGS.@bugs("""
+${String(modelCode)}
+""", true, false)
+
+# Compile the model
+model = JuliaBUGS.compile(model_def, data, inits)
+
+# Wrap the model for automatic differentiation with ReverseDiff
+ad_model = ADgradient(:ReverseDiff, model)
+ld_model = AbstractMCMC.LogDensityModel(ad_model)
+
+# Define sampling parameters
+n_samples, n_adapts = ${nSamples}, ${nAdapts}
+n_chains = ${nChains}
+seed = ${seedLiteral}
+
+seed_val = tryparse(Int, string(seed))
+rng = seed === nothing ? Random.MersenneTwister() : (seed_val === nothing ? Random.MersenneTwister() : Random.MersenneTwister(seed_val))
+
+D = LogDensityProblems.dimension(ad_model); initial_θ = rand(rng, D)
+
+# Sample the model using AbstractMCMC
+if n_chains > 1 && Threads.nthreads() > 1
+    chain = AbstractMCMC.sample(
+        rng,
+        ld_model,
+        AdvancedHMC.NUTS(0.8),
+        AbstractMCMC.MCMCThreads(),
+        n_samples,
+        n_chains;
+        chain_type = Chains,
+        n_adapts = n_adapts,
+        init_params = initial_θ,
+        discard_initial = n_adapts,
+        progress = false,
+    )
+elseif n_chains > 1
+    chain = AbstractMCMC.sample(
+        rng,
+        ld_model,
+        AdvancedHMC.NUTS(0.8),
+        AbstractMCMC.MCMCSerial(),
+        n_samples,
+        n_chains;
+        chain_type = Chains,
+        n_adapts = n_adapts,
+        init_params = initial_θ,
+        discard_initial = n_adapts,
+        progress = false,
+    )
+else
+    chain = AbstractMCMC.sample(
+        rng,
+        ld_model,
+        AdvancedHMC.NUTS(0.8),
+        n_samples;
+        chain_type = Chains,
+        n_adapts = n_adapts,
+        init_params = initial_θ,
+        discard_initial = n_adapts,
+        progress = false,
+    )
+end
+
+describe(chain)
+`;
+
+  return script;
 }

@@ -51,7 +51,8 @@ end
 data_dict = JSON.parsefile(joinpath(readdir(), "methadone_data.json"))
 data = NamedTuple{Tuple([Symbol(key) for key in keys(data_dict)])}(Tuple([map(identity,
                                                                               val)
-                                                                          for val in values(data_dict)]))
+                                                                          for val in
+                                                                              values(data_dict)]))
 
 inits = (
     lambda = 0,

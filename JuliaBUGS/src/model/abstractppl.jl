@@ -20,7 +20,7 @@ import AbstractPPL: condition, decondition, evaluate!!
 #######################
 
 """
-    condition(model::BUGSModel, conditioning_spec)
+    condition(model::BUGSModel, conditioning_spec; regenerate_log_density::Bool=true)
 
 Create a new model by conditioning on specified variables with given values.
 
@@ -135,7 +135,7 @@ julia> parameters(model_cond4)
  y
 ```
 """
-function condition(model::BUGSModel, conditioning_spec)
+function condition(model::BUGSModel, conditioning_spec; regenerate_log_density::Bool=true)
     # Parse and validate conditioning specification
     var_values = _parse_conditioning_spec(conditioning_spec, model)::Dict{<:VarName,<:Any}
     vars_to_condition = collect(keys(var_values))::Vector{<:VarName}
@@ -157,6 +157,7 @@ function condition(model::BUGSModel, conditioning_spec)
         new_graph,
         new_evaluation_env;
         base_model=isnothing(model.base_model) ? model : model.base_model,
+        regenerate_log_density=regenerate_log_density,
     )
 end
 
@@ -551,6 +552,7 @@ function _create_modified_model(
     new_graph::BUGSGraph,
     new_evaluation_env::NamedTuple;
     base_model=nothing,
+    regenerate_log_density::Bool=true,
 )
     # Create new graph evaluation data
     new_graph_evaluation_data = GraphEvaluationData(new_graph)
@@ -562,9 +564,15 @@ function _create_modified_model(
     )
 
     # Generate new log density function and update graph evaluation data
-    new_log_density_computation_function, updated_graph_evaluation_data = _regenerate_log_density_function(
-        model.model_def, new_graph, new_evaluation_env, new_graph_evaluation_data
-    )
+    new_log_density_computation_function, updated_graph_evaluation_data =
+        if regenerate_log_density
+            _regenerate_log_density_function(
+                model.model_def, new_graph, new_evaluation_env, new_graph_evaluation_data
+            )
+        else
+            # Skip regeneration (fast path): ensure stale code isn't used
+            nothing, new_graph_evaluation_data
+        end
 
     # Recompute mutable symbols for the new graph
     new_mutable_symbols = get_mutable_symbols(updated_graph_evaluation_data)
@@ -579,6 +587,12 @@ function _create_modified_model(
         :log_density_computation_function => new_log_density_computation_function,
         :mutable_symbols => new_mutable_symbols,
     )
+
+    # Force graph evaluation mode when skipping regeneration to avoid stale compiled code
+    if !regenerate_log_density
+        kwargs[:evaluation_mode] = UseGraph()
+        kwargs[:log_density_computation_function] = nothing
+    end
 
     # Add base_model if provided
     if !isnothing(base_model)
@@ -624,18 +638,74 @@ function _regenerate_log_density_function(
 end
 
 #######################
+# Observed Value Updates
+#######################
+
+"""
+    set_observed_values!(model::BUGSModel, obs::Dict{<:VarName,<:Any})
+
+Update values of observed stochastic variables without reconditioning or regenerating code.
+
+Validates that each variable exists in the model, is stochastic, and is currently observed.
+Updates the evaluation environment in place and returns the updated model.
+"""
+function set_observed_values!(model::BUGSModel, obs::Dict{<:VarName,<:Any})
+    new_env = model.evaluation_env
+    for (vn, val) in obs
+        if vn ∉ labels(model.g)
+            throw(ArgumentError("Variable $vn does not exist in the model"))
+        end
+        node_info = model.g[vn]
+        if !node_info.is_stochastic
+            throw(ArgumentError("Cannot update $vn: it is deterministic (logical)"))
+        end
+        if !node_info.is_observed
+            throw(ArgumentError("Cannot update $vn: it is not observed"))
+        end
+        new_env = BangBang.setindex!!(new_env, val, vn)
+    end
+    return BangBang.setproperty!!(model, :evaluation_env, new_env)
+end
+
+"""
+    regenerate_log_density_function(model::BUGSModel; force::Bool=false)
+
+Generate and attach a compiled log-density function for the model's current graph and evaluation environment.
+
+Does not change the evaluation mode. When `force=false`, preserves an existing compiled function; when `force=true`,
+overwrites it if a new one can be generated. Returns the updated model (or the original if generation is not possible).
+"""
+function regenerate_log_density_function(model::BUGSModel; force::Bool=false)
+    new_fn, updated_graph_eval_data = _regenerate_log_density_function(
+        model.model_def, model.g, model.evaluation_env, model.graph_evaluation_data
+    )
+    # Always refresh graph_evaluation_data from regeneration helper (it may refine ordering)
+    model = BangBang.setproperty!!(model, :graph_evaluation_data, updated_graph_eval_data)
+
+    if isnothing(new_fn)
+        # Cannot generate compiled function; leave as-is
+        return model
+    end
+
+    if force || isnothing(model.log_density_computation_function)
+        model = BangBang.setproperty!!(model, :log_density_computation_function, new_fn)
+    end
+    return model
+end
+
+#######################
 # Evaluation API
 #######################
 
 """
-    AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel; sample_all=true)
+    AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel; sample_observed=false)
 
 Evaluate model using ancestral sampling from the given RNG.
 
 # Arguments
 - `rng`: Random number generator for sampling
 - `model`: The BUGSModel to evaluate
-- `sample_all`: If true, sample all variables; if false, only sample unobserved variables
+- `sample_observed`: If true, sample observed nodes; if false (default), keep observed data fixed. Latent variables are always sampled.
 - `temperature`: Temperature for tempering the likelihood (default 1.0)
 - `transformed`: Whether to compute log density in transformed space (default model.transformed)
 
@@ -646,12 +716,16 @@ Evaluate model using ancestral sampling from the given RNG.
 function evaluate!!(
     rng::Random.AbstractRNG,
     model::BUGSModel;
-    sample_all=true,
+    sample_observed=false,
     temperature=1.0,
     transformed=model.transformed,
 )
     evaluation_env, log_densities = evaluate_with_rng!!(
-        rng, model; sample_all=sample_all, temperature=temperature, transformed=transformed
+        rng,
+        model;
+        sample_observed=sample_observed,
+        temperature=temperature,
+        transformed=transformed,
     )
     return evaluation_env, log_densities.tempered_logjoint
 end

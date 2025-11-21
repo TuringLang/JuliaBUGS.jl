@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import { storeToRefs } from 'pinia';
 import type { NodeType } from '../../types';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseInput from '../ui/BaseInput.vue';
 import DropdownMenu from '../common/DropdownMenu.vue';
 import { nodeDefinitions, exampleModels } from '../../config/nodeDefinitions';
+import { useExecutionStore } from '../../stores/executionStore';
 
 const props = defineProps<{
   projectName: string | null;
@@ -16,6 +18,8 @@ const props = defineProps<{
   isLeftSidebarOpen: boolean;
   isRightSidebarOpen: boolean;
   isModelValid: boolean;
+  showDebugPanel: boolean;
+  showZoomControls: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -34,7 +38,38 @@ const emit = defineEmits<{
   (e: 'load-example', exampleKey: string): void;
   (e: 'validate-model'): void;
   (e: 'show-validation-issues'): void;
+  (e: 'connect-to-backend-url', url: string): void;
+  (e: 'run-model'): void;
+  (e: 'abort-run'): void;
+  (e: 'generate-standalone'): void;
+  (e: 'update:showDebugPanel', value: boolean): void;
+  (e: 'update:showZoomControls', value: boolean): void;
 }>();
+
+const executionStore = useExecutionStore();
+const { isConnected, isExecuting, isConnecting, backendUrl } = storeToRefs(executionStore);
+const navBackendUrl = ref(backendUrl.value || 'http://localhost:8081');
+const startCmd = 'julia --project=DoodleBUGS/runtime DoodleBUGS/runtime/server.jl';
+const instantiateCmd = 'julia --project=DoodleBUGS/runtime -e "using Pkg; Pkg.instantiate()"';
+const cloneCmd = 'git clone https://github.com/TuringLang/JuliaBUGS.jl.git';
+
+// Copy helpers with brief feedback
+const copiedBackendUrl = ref(false);
+const copiedStartCmd = ref(false);
+const copiedInstantiateCmd = ref(false);
+const copiedCloneCmd = ref(false);
+
+function copyWithFeedback(text: string, flag: typeof copiedBackendUrl) {
+  navigator.clipboard.writeText(text).then(() => {
+    flag.value = true;
+    setTimeout(() => (flag.value = false), 1500);
+  }).catch(err => console.error('Clipboard copy failed:', err));
+}
+
+const copyBackendUrl = () => copyWithFeedback(navBackendUrl.value, copiedBackendUrl);
+const copyStartCmd = () => copyWithFeedback(startCmd, copiedStartCmd);
+const copyInstantiateCmd = () => copyWithFeedback(instantiateCmd, copiedInstantiateCmd);
+const copyCloneCmd = () => copyWithFeedback(cloneCmd, copiedCloneCmd);
 
 const displayTitle = computed(() => {
   if (props.projectName && props.activeGraphName) {
@@ -118,20 +153,32 @@ const handleGridSizeInput = (event: Event) => {
             <BaseButton type="ghost" size="small">View</BaseButton>
           </template>
           <template #content>
-            <label class="dropdown-checkbox" @click.stop>
+            <label class="dropdown-checkbox">
               <input type="checkbox" :checked="isGridEnabled"
                 @change="emit('update:isGridEnabled', ($event.target as HTMLInputElement).checked)" />
-              Show Grid
+              <span>Show Grid</span>
             </label>
-            <div class="dropdown-input-group" @click.stop>
-              <label for="grid-size-nav">Grid Size:</label>
-              <BaseInput id="grid-size-nav" type="number" :model-value="gridSize" @input="handleGridSizeInput" min="10"
+            <div class="dropdown-input-group">
+              <span>Grid Size:</span>
+              <input type="number" :value="gridSize" @input="handleGridSizeInput" min="5"
                 max="100" step="5" class="w-20" />
               <span>px</span>
             </div>
+            <div class="dropdown-divider"></div>
+            <label class="dropdown-checkbox">
+              <input type="checkbox" :checked="showZoomControls"
+                @change="emit('update:showZoomControls', ($event.target as HTMLInputElement).checked)" />
+              <span>Show Zoom Controls</span>
+            </label>
+            <div class="dropdown-divider"></div>
+            <label class="dropdown-checkbox">
+              <input type="checkbox" :checked="showDebugPanel"
+                @change="emit('update:showDebugPanel', ($event.target as HTMLInputElement).checked)" />
+              <span>Show Debug Console</span>
+            </label>
           </template>
         </DropdownMenu>
-        
+
         <DropdownMenu>
           <template #trigger>
             <BaseButton type="ghost" size="small">Examples</BaseButton>
@@ -140,6 +187,65 @@ const handleGridSizeInput = (event: Event) => {
              <a v-for="example in exampleModels" :key="example.key" href="#" @click.prevent="emit('load-example', example.key)">
               {{ example.name }}
             </a>
+          </template>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <template #trigger>
+            <BaseButton type="ghost" size="small">Connection</BaseButton>
+          </template>
+          <template #content>
+            <div class="execution-dropdown" @click.stop>
+              <div class="dropdown-section-title">Backend</div>
+              <div class="dropdown-input-group">
+                <label for="backend-url-nav">URL:</label>
+                <BaseInput id="backend-url-nav" v-model="navBackendUrl" placeholder="http://localhost:8081" class="backend-url-input" />
+                <BaseButton size="small" type="secondary" class="copy-btn" title="Copy URL" @click.stop="copyBackendUrl">
+                  <i v-if="copiedBackendUrl" class="fas fa-check"></i>
+                  <i v-else class="fas fa-copy"></i>
+                </BaseButton>
+              </div>
+              <div class="dropdown-hint">
+                <div>1) Clone repository:</div>
+                <div class="copy-row">
+                  <div class="code-inline">{{ cloneCmd }}</div>
+                  <BaseButton size="small" type="ghost" class="copy-btn" title="Copy command" @click.stop="copyCloneCmd">
+                    <i v-if="copiedCloneCmd" class="fas fa-check"></i>
+                    <i v-else class="fas fa-copy"></i>
+                  </BaseButton>
+                </div>
+                <div style="height:6px;"></div>
+                <div>2) From repo root, first time only (instantiate deps):</div>
+                <div class="copy-row">
+                  <div class="code-inline">{{ instantiateCmd }}</div>
+                  <BaseButton size="small" type="ghost" class="copy-btn" title="Copy command" @click.stop="copyInstantiateCmd">
+                    <i v-if="copiedInstantiateCmd" class="fas fa-check"></i>
+                    <i v-else class="fas fa-copy"></i>
+                  </BaseButton>
+                </div>
+                <div style="height:6px;"></div>
+                <div>3) From repo root, start backend:</div>
+                <div class="copy-row">
+                  <div class="code-inline">{{ startCmd }}</div>
+                  <BaseButton size="small" type="ghost" class="copy-btn" title="Copy command" @click.stop="copyStartCmd">
+                    <i v-if="copiedStartCmd" class="fas fa-check"></i>
+                    <i v-else class="fas fa-copy"></i>
+                  </BaseButton>
+                </div>
+              </div>
+              <div class="dropdown-actions">
+                <span class="connection-status" :class="{ connected: isConnected }">
+                  <strong>{{ isConnected ? 'Connected' : 'Disconnected' }}</strong>
+                </span>
+                <BaseButton @click="emit('connect-to-backend-url', navBackendUrl)" :disabled="isConnecting" size="small" type="primary">
+                  <span v-if="isConnecting">Connecting...</span>
+                  <span v-else>Connect</span>
+                </BaseButton>
+              </div>
+              <div class="dropdown-divider"></div>
+              <div class="dropdown-section-title">Standalone</div>
+              <a href="#" @click.prevent="emit('generate-standalone')">Generate Standalone Julia Script</a>
+            </div>
           </template>
         </DropdownMenu>
 
@@ -160,17 +266,29 @@ const handleGridSizeInput = (event: Event) => {
     </div>
 
     <div class="navbar-center">
+        <div class="backend-status" :class="{ 'connected': isConnected, 'disconnected': !isConnected }" :title="isConnected ? 'Connected to backend' : 'Disconnected from backend'">
+            <i class="fas fa-circle"></i>
+        </div>
         <BaseButton @click="emit('validate-model')" type="ghost" size="small" title="Re-run model validation">
             <i class="fas fa-sync-alt"></i> Validate
         </BaseButton>
-        <div 
-            @click="emit('show-validation-issues')" 
-            class="validation-status" 
-            :class="isModelValid ? 'valid' : 'invalid'" 
+        <div
+            @click="emit('show-validation-issues')"
+            class="validation-status"
+            :class="isModelValid ? 'valid' : 'invalid'"
             :title="isModelValid ? 'Model is valid' : 'Model has errors. Click to see details.'"
         >
             <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
         </div>
+        <BaseButton @click="emit('run-model')" type="primary" size="small" title="Run Model on Backend" :disabled="!isConnected || isExecuting">
+            <i v-if="isExecuting" class="fas fa-spinner fa-spin"></i>
+            <i v-else class="fas fa-play"></i>
+            Run
+        </BaseButton>
+        <BaseButton v-if="isExecuting" @click="emit('abort-run')" type="danger" size="small" title="Abort current run">
+            <i class="fas fa-stop"></i>
+            Abort
+        </BaseButton>
     </div>
 
     <div class="navbar-right">
@@ -348,6 +466,17 @@ const handleGridSizeInput = (event: Event) => {
   height: 18px;
 }
 
+.backend-status {
+    font-size: 0.7em;
+    padding: 5px;
+}
+.backend-status.connected {
+    color: var(--color-success);
+}
+.backend-status.disconnected {
+    color: var(--color-danger);
+}
+
 .validation-status {
     font-size: 1.2em;
     padding: 5px;
@@ -369,5 +498,72 @@ const handleGridSizeInput = (event: Event) => {
 
 .validation-status.invalid {
     color: var(--color-danger);
+}
+
+.navbar-center .base-button {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.execution-dropdown {
+  width: 250px;
+  padding: 4px 10px 8px;
+}
+
+.dropdown-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 8px;
+}
+
+.backend-url-input {
+  flex: 1 1 auto;
+  width: 90%;
+}
+
+.dropdown-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.connection-status {
+  opacity: 0.7;
+  color: rgb(228, 15, 15);
+}
+.connection-status.connected { opacity: 1; color: green }
+
+.dropdown-hint {
+  padding: 0 15px 8px;
+  font-size: 0.8em;
+  color: var(--color-secondary);
+}
+.dropdown-hint .code-inline {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9em;
+  opacity: 0.9;
+  overflow-x: auto;
+  white-space: pre;
+  flex: 1 1 auto;
+  line-height: 1.25;
+  padding-bottom: 4px; /* avoid scrollbar overlap on some platforms */
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-gutter: stable both-edges; /* reserve space for scrollbar */
+}
+.copy-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  min-width: 0;
+}
+.dropdown-hint .code-inline::-webkit-scrollbar { height: 6px; }
+.dropdown-hint .code-inline::-webkit-scrollbar-track { background: transparent; }
+.dropdown-hint .code-inline::-webkit-scrollbar-thumb { background-color: var(--color-border); border-radius: 3px; }
+.copy-btn {
+  padding: 2px 6px;
 }
 </style>

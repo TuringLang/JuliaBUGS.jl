@@ -1,29 +1,34 @@
 import cytoscape from 'cytoscape';
-import type { Core, ElementDefinition, NodeSingular, EventObject } from 'cytoscape';
-import gridGuide from 'cytoscape-grid-guide';
-import contextMenus from 'cytoscape-context-menus';
+import type { Core, ElementDefinition, NodeSingular } from 'cytoscape';
+// NOTE: gridGuide and contextMenus extensions are DISABLED for iOS/iPad/WebKit compatibility
+// They block touch events and prevent node/edge creation on mobile devices
+// import gridGuide from 'cytoscape-grid-guide';
+// import contextMenus from 'cytoscape-context-menus';
 import dagre from 'cytoscape-dagre';
 import fcose from 'cytoscape-fcose';
 import cola from 'cytoscape-cola';
 import klay from 'cytoscape-klay';
+import undoRedo from 'cytoscape-undo-redo';
 import { useCompoundDragDrop } from './useCompoundDragDrop';
 import svg from 'cytoscape-svg';
 
-cytoscape.use(gridGuide);
-cytoscape.use(contextMenus);
+// NOTE: Do NOT register gridGuide or contextMenus - they break iPad/mobile touch events
 cytoscape.use(dagre);
 cytoscape.use(fcose);
 cytoscape.use(cola);
 cytoscape.use(klay);
 cytoscape.use(svg);
+cytoscape.use(undoRedo);
 
 let cyInstance: Core | null = null;
+let urInstance: any = null;
 
 export function useGraphInstance() {
   const initCytoscape = (container: HTMLElement, initialElements: ElementDefinition[]): Core => {
     if (cyInstance) {
       cyInstance.destroy();
       cyInstance = null;
+      urInstance = null;
     }
 
     const options: cytoscape.CytoscapeOptions = {
@@ -139,14 +144,85 @@ export function useGraphInstance() {
 
     cyInstance = cytoscape(options);
 
+    // Initialize undo-redo
+    urInstance = (cyInstance as any).undoRedo({
+      isDebug: false,
+      undoableDrag: true,
+      stackSizeLimit: 50,
+    });
+
+    urInstance.action("move", 
+      function(args: any) {
+        const eles = typeof args.eles === "string" ? cyInstance!.$(args.eles) : args.eles;
+        const nodes = eles.nodes();
+        const edges = eles.edges();
+        
+        const oldNodesParents: (string | null)[] = [];
+        const oldEdgesSources: string[] = [];
+        const oldEdgesTargets: string[] = [];
+        
+        nodes.forEach((node: any) => {
+          oldNodesParents.push(node.parent().length > 0 ? node.parent().id() : null);
+        });
+        
+        edges.forEach((edge: any) => {
+          oldEdgesSources.push(edge.source().id());
+          oldEdgesTargets.push(edge.target().id());
+        });
+        
+        return {
+            oldNodesParents: oldNodesParents,
+            newNodes: nodes.move(args.location),
+            oldEdgesSources: oldEdgesSources,
+            oldEdgesTargets: oldEdgesTargets,
+            newEdges: edges.move(args.location)
+        };
+      },
+      function(eles: any) {
+        let newEles = cyInstance!.collection();
+        const location: any = {};
+        
+        if (eles.newNodes.length > 0) {
+            const parent = eles.newNodes[0].parent();
+            location.parent = parent.length > 0 ? parent.id() : null;
+
+            for (let i = 0; i < eles.newNodes.length; i++) {
+                const newNode = eles.newNodes[i].move({
+                    parent: eles.oldNodesParents[i]
+                });
+                newEles = newEles.union(newNode);
+            }
+        } else if (eles.newEdges.length > 0) {
+            location.source = eles.newEdges[0].source().id();
+            location.target = eles.newEdges[0].target().id();
+
+            for (let i = 0; i < eles.newEdges.length; i++) {
+                const newEdge = eles.newEdges[i].move({
+                    source: eles.oldEdgesSources[i],
+                    target: eles.oldEdgesTargets[i]
+                });
+                newEles = newEles.union(newEdge);
+            }
+        }
+        return {
+            eles: newEles,
+            location: location
+        };
+      }
+    );
+
     // Initialize custom compound drag and drop
     useCompoundDragDrop(cyInstance, {
       grabbedNode: (node: NodeSingular) => node !== undefined, // Allow dragging all node types
       dropTarget: (node: NodeSingular) => node.data('nodeType') === 'plate',
       dropSibling: () => false,
       outThreshold: 30, // Reduced threshold for better UX
-    });
+    }, urInstance);
 
+    // NOTE: gridGuide and contextMenus extensions are disabled
+    // These extensions interfere with touch events on iOS/Safari/WebKit browsers
+    // Uncomment below to re-enable for desktop-only usage:
+    /*
     (cyInstance as Core & { gridGuide: (options: { drawGrid: boolean; snapToGridOnRelease: boolean; snapToGridDuringDrag: boolean; gridSpacing: number }) => void }).gridGuide({ drawGrid: false, snapToGridOnRelease: true, snapToGridDuringDrag: true, gridSpacing: 20 });
 
     (cyInstance as Core & { contextMenus: (options: { menuItems: { id: string; content: string; selector: string; onClickFunction: (evt: cytoscape.EventObject) => void }[] }) => void }).contextMenus({
@@ -166,6 +242,7 @@ export function useGraphInstance() {
         }
       ]
     });
+    */
 
     return cyInstance;
   };
@@ -174,10 +251,12 @@ export function useGraphInstance() {
     if (cy) {
       cy.destroy();
       cyInstance = null;
+      urInstance = null;
     }
   };
 
   const getCyInstance = (): Core | null => cyInstance;
+  const getUndoRedoInstance = (): any => urInstance;
 
-  return { initCytoscape, destroyCytoscape, getCyInstance };
+  return { initCytoscape, destroyCytoscape, getCyInstance, getUndoRedoInstance };
 }

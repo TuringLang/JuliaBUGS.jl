@@ -17,7 +17,7 @@ interface DragState {
   platePositions: Map<string, Position>;
 }
 
-export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) {
+export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions, ur?: any) {
   const dragState: DragState = {
     isDragging: false,
     draggedNode: null,
@@ -159,11 +159,19 @@ export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions) 
     let dropPerformed = false;
 
     if (newParent && newParent.id() !== currentParentNode?.id()) {
-      node.move({ parent: newParent.id() });
+      if (ur) {
+        ur.do("move", { eles: node, location: { parent: newParent.id() } });
+      } else {
+        node.move({ parent: newParent.id() });
+      }
       cy.trigger('compound-drop', [ { node, newParent, oldParent: currentParentNode } ]);
       dropPerformed = true;
     } else if (currentParentNode && !newParent && shouldRemoveFromParent(node)) {
-      node.move({ parent: null });
+      if (ur) {
+        ur.do("move", { eles: node, location: { parent: null } });
+      } else {
+        node.move({ parent: null });
+      }
       cy.trigger('compound-drop', [ { node, newParent: null, oldParent: currentParentNode } ]);
       dropPerformed = true;
     }

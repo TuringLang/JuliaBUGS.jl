@@ -10,6 +10,7 @@ digest.txt
 root.txt
 src.txt
 public.txt
+runtime.txt
 
 node_modules
 .DS_Store
@@ -18,6 +19,7 @@ dist-ssr
 coverage
 *.local
 ztest
+tmp
 
 /cypress/videos/
 /cypress/screenshots/

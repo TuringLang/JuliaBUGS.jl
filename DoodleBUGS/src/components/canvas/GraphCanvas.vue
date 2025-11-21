@@ -4,6 +4,7 @@ import type { Core, EventObject, NodeSingular, ElementDefinition } from 'cytosca
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGridSnapping } from '../../composables/useGridSnapping';
 import type { GraphElement, GraphNode, GraphEdge, NodeType, PaletteItemType, ValidationError } from '../../types';
+import GraphControls from './GraphControls.vue';
 
 const props = defineProps<{
   elements: GraphElement[];
@@ -11,6 +12,7 @@ const props = defineProps<{
   gridSize: number;
   currentMode: string;
   validationErrors: Map<string, ValidationError[]>;
+  showZoomControls?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -19,21 +21,18 @@ const emit = defineEmits<{
   (e: 'node-dropped', payload: { nodeType: NodeType; position: { x: number; y: number } }): void;
   (e: 'plate-emptied', plateId: string): void;
   (e: 'element-remove', elementId: string): void;
+  (e: 'update:show-zoom-controls', value: boolean): void;
+  (e: 'graph-updated', elements: GraphElement[]): void;
 }>();
 
 const cyContainer = ref<HTMLElement | null>(null);
 let cy: Core | null = null;
+const cyInstance = ref<Core | null>(null);
 
-const { initCytoscape, destroyCytoscape, getCyInstance } = useGraphInstance();
+const { initCytoscape, destroyCytoscape, getCyInstance, getUndoRedoInstance } = useGraphInstance();
 const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping(getCyInstance);
 
 const validNodeTypes: NodeType[] = ['stochastic', 'deterministic', 'constant', 'observed', 'plate'];
-
-interface CompoundDropPayload {
-  node: NodeSingular;
-  newParent: NodeSingular | null;
-  oldParent: NodeSingular | null;
-}
 
 const formatElementsForCytoscape = (elements: GraphElement[], errors: Map<string, ValidationError[]>): ElementDefinition[] => {
   return elements.map(el => {
@@ -110,6 +109,7 @@ const syncGraphWithProps = (elementsToSync: GraphElement[], errorsToSync: Map<st
 onMounted(() => {
   if (cyContainer.value) {
     cy = initCytoscape(cyContainer.value, []);
+    cyInstance.value = cy;
 
     syncGraphWithProps(props.elements, props.validationErrors);
 
@@ -118,6 +118,34 @@ onMounted(() => {
       enableGridSnapping();
     } else {
       disableGridSnapping();
+    }
+
+    const ur = getUndoRedoInstance();
+    if (ur) {
+      cy.on('afterUndo afterRedo afterDo', () => {
+        if (!cy) return;
+        const allElements: GraphElement[] = cy.elements().toArray().map((ele) => {
+          const data = ele.data();
+          if (ele.isNode()) {
+            const parentCollection = ele.parent();
+            const parentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined;
+            return {
+              ...data,
+              type: 'node',
+              position: ele.position(),
+              parent: parentId,
+            } as GraphNode;
+          } else {
+            return {
+              ...data,
+              type: 'edge',
+              source: ele.source().id(),
+              target: ele.target().id(),
+            } as GraphEdge;
+          }
+        });
+        emit('graph-updated', allElements);
+      });
     }
 
     cy.container()?.addEventListener('cxt-remove', (event: Event) => {
@@ -131,15 +159,18 @@ onMounted(() => {
       emit('canvas-tap', evt);
     });
 
-    cy.on('compound-drop', (_evt: EventObject, data: CompoundDropPayload) => {
-      const { node, newParent } = data;
-      const newParentId = newParent ? newParent.id() : undefined;
-      
-      emit('node-moved', {
-          nodeId: node.id(),
-          position: node.position(),
-          parentId: newParentId
-      });
+    // Capture the final position of a node after any drag operation (including grid snapping).
+    // This is the definitive event for updating node positions and saving the 'preset' layout.
+    cy.on('free', 'node', (evt: EventObject) => {
+        const node = evt.target as NodeSingular;
+        const parentCollection = node.parent();
+        const parentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined;
+
+        emit('node-moved', {
+            nodeId: node.id(),
+            position: node.position(),
+            parentId: parentId,
+        });
     });
 
     cy.on('tap', 'node, edge', (evt: EventObject) => {
@@ -222,6 +253,12 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
     }"
     :style="{ '--grid-size': `${gridSize}px` }"
   ></div>
+  <GraphControls 
+    v-if="showZoomControls"
+    :cy="cyInstance" 
+    :elements="props.elements"
+    @hide-controls="emit('update:show-zoom-controls', false)"
+  />
 </template>
 
 <style scoped>
@@ -238,7 +275,7 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
 }
 
 .cytoscape-container.mode-add-edge {
-  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-arrow-right"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>') 12 12, crosshair;
+  cursor: alias;
 }
 
 /* Custom drag and drop styling */
@@ -259,3 +296,4 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
   background-color: rgba(255, 0, 0, 0.1) !important;
 }
 </style>
+
