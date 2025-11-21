@@ -23,6 +23,7 @@ jobs:
       fail-fast: false
       matrix:
         version:
+          - '1.11'
           - '1'
           # - 'min'
           # - 'pre'
@@ -78,6 +79,7 @@ jobs:
       fail-fast: false
       matrix:
         version:
+          - '1.11'
           - '1'
         os:
           - ubuntu-latest
@@ -127,6 +129,7 @@ jobs:
       fail-fast: false
       matrix:
         version:
+          - '1.11'
           - '1'
         os:
           - ubuntu-latest
