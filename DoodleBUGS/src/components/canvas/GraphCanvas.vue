@@ -4,6 +4,7 @@ import type { Core, EventObject, NodeSingular, ElementDefinition } from 'cytosca
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGridSnapping } from '../../composables/useGridSnapping';
 import type { GraphElement, GraphNode, GraphEdge, NodeType, PaletteItemType, ValidationError } from '../../types';
+import GraphControls from './GraphControls.vue';
 
 const props = defineProps<{
   elements: GraphElement[];
@@ -11,6 +12,7 @@ const props = defineProps<{
   gridSize: number;
   currentMode: string;
   validationErrors: Map<string, ValidationError[]>;
+  showZoomControls?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -19,10 +21,12 @@ const emit = defineEmits<{
   (e: 'node-dropped', payload: { nodeType: NodeType; position: { x: number; y: number } }): void;
   (e: 'plate-emptied', plateId: string): void;
   (e: 'element-remove', elementId: string): void;
+  (e: 'update:show-zoom-controls', value: boolean): void;
 }>();
 
 const cyContainer = ref<HTMLElement | null>(null);
 let cy: Core | null = null;
+const cyInstance = ref<Core | null>(null);
 
 const { initCytoscape, destroyCytoscape, getCyInstance } = useGraphInstance();
 const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping(getCyInstance);
@@ -104,6 +108,7 @@ const syncGraphWithProps = (elementsToSync: GraphElement[], errorsToSync: Map<st
 onMounted(() => {
   if (cyContainer.value) {
     cy = initCytoscape(cyContainer.value, []);
+    cyInstance.value = cy;
 
     syncGraphWithProps(props.elements, props.validationErrors);
 
@@ -219,6 +224,12 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
     }"
     :style="{ '--grid-size': `${gridSize}px` }"
   ></div>
+  <GraphControls 
+    v-if="showZoomControls"
+    :cy="cyInstance" 
+    :elements="props.elements"
+    @hide-controls="emit('update:show-zoom-controls', false)"
+  />
 </template>
 
 <style scoped>

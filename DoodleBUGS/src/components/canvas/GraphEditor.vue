@@ -28,6 +28,7 @@ const props = defineProps<{
   currentNodeType: NodeType;
   elements: GraphElement[];
   validationErrors: Map<string, ValidationError[]>;
+  showZoomControls?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -35,6 +36,7 @@ const emit = defineEmits<{
   (e: 'update:currentMode', mode: string): void;
   (e: 'update:currentNodeType', type: NodeType): void;
   (e: 'layout-updated', layoutName: string): void;
+  (e: 'update:show-zoom-controls', value: boolean): void;
 }>();
 
 const { elements: graphElements, addElement, updateElement, deleteElement } = useGraphElements();
@@ -262,10 +264,12 @@ watch(() => props.currentMode, (newMode) => {
       :grid-size="gridSize"
       :current-mode="props.currentMode"
       :validation-errors="props.validationErrors"
+      :show-zoom-controls="props.showZoomControls"
       @canvas-tap="handleCanvasTap"
       @node-moved="handleNodeMoved"
       @node-dropped="handleNodeDropped"
       @element-remove="handleDeleteElement"
+      @update:show-zoom-controls="(value: boolean) => emit('update:show-zoom-controls', value)"
     />
   </div>
 </template>
