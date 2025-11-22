@@ -54,7 +54,7 @@ const { generatedCode } = useBugsCodeGenerator(elements);
 const { getCyInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
 const { backendUrl, isConnected, isConnecting, isExecuting, samplerSettings } = storeToRefs(executionStore);
-const { activeLeftTab, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth, isMultiCanvasView } = storeToRefs(uiStore);
+const { activeLeftTab, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth, isMultiCanvasView, canvasGridStyle } = storeToRefs(uiStore);
 
 const currentMode = ref<string>('select');
 const currentNodeType = ref<NodeType>('stochastic');
@@ -741,6 +741,7 @@ const handleGenerateStandalone = () => {
           @update:is-grid-enabled="isGridEnabled = $event"
           :grid-size="gridSize" 
           @update:grid-size="gridSize = $event"
+          :grid-style="canvasGridStyle"
           :current-mode="currentMode"
           :elements="elements" 
           :current-node-type="currentNodeType" 

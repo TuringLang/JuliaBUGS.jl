@@ -41,6 +41,9 @@ export const useUiStore = defineStore('ui', () => {
   );
 
   // Grid Settings
+  const isWorkspaceGridEnabled = ref<boolean>(
+    localStorage.getItem('doodlebugs-isWorkspaceGridEnabled') !== 'false'
+  );
   const workspaceGridStyle = ref<GridStyle>(
     (localStorage.getItem('doodlebugs-workspaceGridStyle') as GridStyle) || 'dots'
   );
@@ -75,6 +78,9 @@ export const useUiStore = defineStore('ui', () => {
   });
   watch(isMultiCanvasView, (isMulti) => {
     localStorage.setItem('doodlebugs-isMultiCanvasView', isMulti.toString());
+  });
+  watch(isWorkspaceGridEnabled, (enabled) => {
+    localStorage.setItem('doodlebugs-isWorkspaceGridEnabled', enabled.toString());
   });
   watch(workspaceGridStyle, (style) => {
     localStorage.setItem('doodlebugs-workspaceGridStyle', style);
@@ -132,6 +138,7 @@ export const useUiStore = defineStore('ui', () => {
     toggleLeftSidebar,
     isMultiCanvasView,
     toggleCanvasView,
+    isWorkspaceGridEnabled,
     workspaceGridStyle,
     canvasGridStyle,
     workspaceGridSize,

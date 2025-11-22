@@ -2,6 +2,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useGraphStore } from './graphStore';
+import type { GridStyle } from './uiStore';
 
 export interface GraphMeta {
   id: string;
@@ -19,6 +20,10 @@ export interface GraphMeta {
   codePanelY?: number;
   codePanelWidth?: number;
   codePanelHeight?: number;
+  // Per-graph Grid Settings
+  gridEnabled?: boolean;
+  gridSize?: number;
+  gridStyle?: GridStyle;
 }
 
 export interface Project {
@@ -103,7 +108,8 @@ export const useProjectStore = defineStore('project', () => {
         height: 400,
         showCodePanel: false,
         codePanelWidth: 400,
-        codePanelHeight: 400
+        codePanelHeight: 400,
+        // Defaults: let grid settings be undefined to fallback to global
       };
       project.graphs.push(newGraphMeta);
       project.lastModified = Date.now();
@@ -133,7 +139,8 @@ export const useProjectStore = defineStore('project', () => {
     graphId: string, 
     layout: Partial<{ 
         x: number; y: number; width: number; height: number; 
-        showCodePanel: boolean; codePanelX: number; codePanelY: number; codePanelWidth: number; codePanelHeight: number 
+        showCodePanel: boolean; codePanelX: number; codePanelY: number; codePanelWidth: number; codePanelHeight: number;
+        gridEnabled: boolean; gridSize: number; gridStyle: GridStyle;
     }>
   ) => {
     const project = projects.value.find(p => p.id === projectId);
@@ -150,6 +157,10 @@ export const useProjectStore = defineStore('project', () => {
             if (layout.codePanelY !== undefined) graph.codePanelY = layout.codePanelY;
             if (layout.codePanelWidth !== undefined) graph.codePanelWidth = layout.codePanelWidth;
             if (layout.codePanelHeight !== undefined) graph.codePanelHeight = layout.codePanelHeight;
+
+            if (layout.gridEnabled !== undefined) graph.gridEnabled = layout.gridEnabled;
+            if (layout.gridSize !== undefined) graph.gridSize = layout.gridSize;
+            if (layout.gridStyle !== undefined) graph.gridStyle = layout.gridStyle;
 
             // Initialize code panel position relative to graph if not set
             if (graph.showCodePanel && graph.codePanelX === undefined) {

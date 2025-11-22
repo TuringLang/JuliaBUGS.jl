@@ -63,7 +63,7 @@ const emit = defineEmits<{
 const executionStore = useExecutionStore();
 const uiStore = useUiStore();
 const { isConnected, isExecuting, isConnecting, backendUrl } = storeToRefs(executionStore);
-const { workspaceGridStyle, canvasGridStyle, workspaceGridSize } = storeToRefs(uiStore);
+const { workspaceGridStyle, canvasGridStyle, workspaceGridSize, isWorkspaceGridEnabled } = storeToRefs(uiStore);
 
 const navBackendUrl = ref(backendUrl.value || 'http://localhost:8081');
 const cloneCmd = 'git clone https://github.com/TuringLang/JuliaBUGS.jl.git';
@@ -204,14 +204,14 @@ const gridStyleOptions = [
                 </div>
                 
                 <div class="dropdown-divider"></div>
-                
+
                 <div class="view-option-row">
-                  <label for="show-grid" class="view-label">Show Grid</label>
-                  <ToggleSwitch :modelValue="isGridEnabled" @update:modelValue="updateGridEnabled" inputId="show-grid" />
+                  <label for="show-ws-grid" class="view-label">Workspace Grid</label>
+                  <ToggleSwitch v-model="isWorkspaceGridEnabled" inputId="show-ws-grid" />
                 </div>
                 
                 <div class="view-option-row grid-settings-row">
-                  <label for="ws-grid-style" class="view-label">Workspace Grid</label>
+                  <label for="ws-grid-style" class="view-label">Workspace Style</label>
                   <div class="flex gap-2 items-center justify-end settings-controls">
                     <BaseSelect 
                         id="ws-grid-style"
@@ -235,8 +235,13 @@ const gridStyleOptions = [
                   </div>
                 </div>
 
+                <div class="view-option-row">
+                  <label for="show-canvas-grid" class="view-label">Canvas Grid</label>
+                  <ToggleSwitch :modelValue="isGridEnabled" @update:modelValue="updateGridEnabled" inputId="show-canvas-grid" />
+                </div>
+
                 <div class="view-option-row grid-settings-row">
-                  <label for="canvas-grid-style" class="view-label">Canvas Grid</label>
+                  <label for="canvas-grid-style" class="view-label">Canvas Style</label>
                   <div class="flex gap-2 items-center justify-end settings-controls">
                     <BaseSelect 
                         id="canvas-grid-style"
@@ -437,11 +442,11 @@ const gridStyleOptions = [
                         <ToggleSwitch :modelValue="isMultiCanvasView" @update:modelValue="emit('toggle-canvas-view')" inputId="mobile-multi-canvas" />
                     </div>
                     <div class="mobile-option-row">
-                        <label for="mobile-show-grid">Show Grid</label>
-                        <ToggleSwitch :modelValue="isGridEnabled" @update:modelValue="updateGridEnabled" inputId="mobile-show-grid" />
+                        <label for="mobile-show-ws-grid">Workspace Grid</label>
+                        <ToggleSwitch v-model="isWorkspaceGridEnabled" inputId="mobile-show-ws-grid" />
                     </div>
                     <div class="mobile-option-row">
-                        <label>Workspace Grid</label>
+                        <label>Workspace Style</label>
                         <div class="flex gap-3 items-center">
                             <BaseSelect 
                                 v-model="workspaceGridStyle"
@@ -464,7 +469,11 @@ const gridStyleOptions = [
                         </div>
                     </div>
                     <div class="mobile-option-row">
-                        <label>Canvas Grid</label>
+                        <label for="mobile-show-canvas-grid">Canvas Grid</label>
+                        <ToggleSwitch :modelValue="isGridEnabled" @update:modelValue="updateGridEnabled" inputId="mobile-show-canvas-grid" />
+                    </div>
+                    <div class="mobile-option-row">
+                        <label>Canvas Style</label>
                         <div class="flex gap-3 items-center">
                             <BaseSelect 
                                 v-model="canvasGridStyle"

@@ -3,8 +3,8 @@ import { ref, onMounted, onUnmounted, watch } from 'vue';
 import type { Core, EventObject, NodeSingular, ElementDefinition } from 'cytoscape';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGridSnapping } from '../../composables/useGridSnapping';
-import { useUiStore } from '../../stores/uiStore';
 import type { GraphElement, GraphNode, GraphEdge, NodeType, PaletteItemType, ValidationError } from '../../types';
+import type { GridStyle } from '../../stores/uiStore';
 import GraphControls from './GraphControls.vue';
 
 const props = defineProps<{
@@ -12,6 +12,7 @@ const props = defineProps<{
   elements: GraphElement[];
   isGridEnabled: boolean;
   gridSize: number;
+  gridStyle?: GridStyle;
   currentMode: string;
   validationErrors: Map<string, ValidationError[]>;
   showZoomControls?: boolean;
@@ -27,7 +28,6 @@ const emit = defineEmits<{
   (e: 'graph-updated', elements: GraphElement[]): void;
 }>();
 
-const uiStore = useUiStore();
 const cyContainer = ref<HTMLElement | null>(null);
 let cy: Core | null = null;
 const cyInstance = ref<Core | null>(null);
@@ -105,18 +105,6 @@ const syncGraphWithProps = (elementsToSync: GraphElement[], errorsToSync: Map<st
   });
 };
 
-// Update grid background style based on store
-const updateGridStyle = () => {
-    if (!cyContainer.value) return;
-    if (uiStore.canvasGridStyle === 'lines') {
-        cyContainer.value.classList.add('grid-lines');
-        cyContainer.value.classList.remove('grid-dots');
-    } else {
-        cyContainer.value.classList.add('grid-dots');
-        cyContainer.value.classList.remove('grid-lines');
-    }
-};
-
 onMounted(() => {
   if (cyContainer.value) {
     cy = initCytoscape(cyContainer.value, [], props.graphId);
@@ -125,7 +113,6 @@ onMounted(() => {
     syncGraphWithProps(props.elements, props.validationErrors);
 
     setGridSize(props.gridSize);
-    updateGridStyle();
     
     if (props.isGridEnabled) {
       enableGridSnapping();
@@ -261,8 +248,6 @@ watch(() => props.gridSize, (newValue: number) => {
 watch([() => props.elements, () => props.validationErrors], ([newElements, newErrors]) => {
   syncGraphWithProps(newElements, newErrors);
 }, { deep: true });
-
-watch(() => uiStore.canvasGridStyle, updateGridStyle);
 </script>
 
 <template>
@@ -271,6 +256,8 @@ watch(() => uiStore.canvasGridStyle, updateGridStyle);
     class="cytoscape-container"
     :class="{
       'grid-background': isGridEnabled && gridSize > 0,
+      'grid-lines': (gridStyle === 'lines' || !gridStyle) && isGridEnabled && gridSize > 0,
+      'grid-dots': gridStyle === 'dots' && isGridEnabled && gridSize > 0,
       'mode-add-node': currentMode === 'add-node',
       'mode-add-edge': currentMode === 'add-edge',
       'mode-select': currentMode === 'select'
@@ -320,27 +307,27 @@ watch(() => uiStore.canvasGridStyle, updateGridStyle);
   background-color: rgba(255, 0, 0, 0.1) !important;
 }
 
-/* Grid styles */
+/* Grid styles with !important to override global defaults */
 .cytoscape-container.grid-background.grid-dots {
-  background-image: radial-gradient(circle, var(--color-border-dark) 1px, transparent 1px);
-  background-size: var(--grid-size) var(--grid-size);
+  background-image: radial-gradient(circle, var(--color-border-dark) 1px, transparent 1px) !important;
+  background-size: var(--grid-size) var(--grid-size) !important;
 }
 
 .cytoscape-container.grid-background.grid-lines {
   background-image:
     linear-gradient(to right, var(--color-border-dark) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--color-border-dark) 1px, transparent 1px);
-  background-size: var(--grid-size) var(--grid-size);
+    linear-gradient(to bottom, var(--color-border-dark) 1px, transparent 1px) !important;
+  background-size: var(--grid-size) var(--grid-size) !important;
 }
 
 /* Dark Mode support for grid colors */
 :global(html.dark-mode) .cytoscape-container.grid-background.grid-dots {
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.1) 1px, transparent 1px) !important;
 }
 
 :global(html.dark-mode) .cytoscape-container.grid-background.grid-lines {
   background-image:
     linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px) !important;
 }
 </style>

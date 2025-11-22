@@ -6,6 +6,7 @@ import CanvasToolbar from './CanvasToolbar.vue';
 import { useGraphElements } from '../../composables/useGraphElements';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import type { GraphElement, GraphNode, GraphEdge, NodeType, ValidationError } from '../../types';
+import type { GridStyle } from '../../stores/uiStore';
 import { getDefaultNodeData } from '../../config/nodeDefinitions';
 
 // Fallback UUID generator for iOS Safari (doesn't support crypto.randomUUID in non-HTTPS)
@@ -25,6 +26,7 @@ const props = defineProps<{
   graphId: string;
   isGridEnabled: boolean;
   gridSize: number;
+  gridStyle?: GridStyle;
   currentMode: string;
   currentNodeType: NodeType;
   elements: GraphElement[];
@@ -329,6 +331,7 @@ watch(() => props.currentMode, (newMode) => {
       :elements="props.elements"
       :is-grid-enabled="isGridEnabled"
       :grid-size="gridSize"
+      :grid-style="gridStyle"
       :current-mode="props.currentMode"
       :validation-errors="props.validationErrors"
       :show-zoom-controls="props.showZoomControls"

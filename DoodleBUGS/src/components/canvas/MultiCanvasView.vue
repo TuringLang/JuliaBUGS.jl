@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
+import ToggleSwitch from 'primevue/toggleswitch';
+import BaseSelect from '../ui/BaseSelect.vue';
+import InputNumber from 'primevue/inputnumber';
 import GraphEditor from './GraphEditor.vue';
 import GraphPreview from './GraphPreview.vue';
 import CodePreviewPanel from '../panels/CodePreviewPanel.vue';
 import { useProjectStore, type GraphMeta } from '../../stores/projectStore';
 import { useGraphStore } from '../../stores/graphStore';
-import { useUiStore } from '../../stores/uiStore';
+import { useUiStore, type GridStyle } from '../../stores/uiStore';
 import type { GraphElement, GraphNode, NodeType, ValidationError } from '../../types';
 import DropdownMenu from '../common/DropdownMenu.vue';
+import { useGraphInstance } from '../../composables/useGraphInstance';
 
-defineProps<{
-  isGridEnabled: boolean;
-  gridSize: number;
+const props = defineProps<{
+  isGridEnabled: boolean; // Global setting (from MainLayout default)
+  gridSize: number;       // Global setting
   currentMode: string;
   currentNodeType: NodeType;
   validationErrors: Map<string, ValidationError[]>;
@@ -36,6 +40,7 @@ const graphStore = useGraphStore();
 const uiStore = useUiStore();
 const { currentProject } = storeToRefs(projectStore);
 const { currentGraphId } = storeToRefs(graphStore);
+const { getCyInstance } = useGraphInstance();
 
 // --- Workspace State ---
 const workspaceX = ref(0);
@@ -64,7 +69,21 @@ const hoveredGraphId = ref<string | null>(null);
 const tooltipPos = ref({ x: 0, y: 0 });
 const showTooltip = ref(false);
 
+const gridStyleOptions = [
+    { label: 'Dots', value: 'dots' },
+    { label: 'Lines', value: 'lines' }
+];
+
 const graphs = computed(() => currentProject.value?.graphs || []);
+
+// Helper: Resolve Grid Settings (Local override > Global default)
+const resolveGrid = (graph: GraphMeta) => {
+    // If graph-specific setting exists (not undefined), use it. Otherwise use global prop/store.
+    const enabled = graph.gridEnabled !== undefined ? graph.gridEnabled : props.isGridEnabled;
+    const size = graph.gridSize !== undefined ? graph.gridSize : props.gridSize;
+    const style = graph.gridStyle !== undefined ? graph.gridStyle : uiStore.canvasGridStyle;
+    return { enabled, size, style };
+};
 
 // --- Graph Loading ---
 watch(graphs, (newGraphs) => {
@@ -119,6 +138,56 @@ const handleBadgeMove = (e: MouseEvent) => {
 const handleBadgeLeave = () => {
     showTooltip.value = false;
     hoveredGraphId.value = null;
+};
+
+// --- Zoom Helpers for Individual Graphs ---
+const zoomGraph = (graphId: string, factor: number) => {
+    const cy = getCyInstance(graphId);
+    if (cy) {
+        const currentZoom = cy.zoom();
+        const newZoom = currentZoom * factor;
+        cy.animate({
+            zoom: {
+                level: newZoom,
+                position: { x: cy.width() / 2, y: cy.height() / 2 }
+            },
+            duration: 200,
+            easing: 'ease-out'
+        });
+    }
+};
+
+const fitGraph = (graphId: string) => {
+    const cy = getCyInstance(graphId);
+    if (cy) {
+        cy.animate({
+            fit: {
+                eles: cy.elements(),
+                padding: 50
+            },
+            duration: 300,
+            easing: 'ease-in-out-cubic'
+        });
+    }
+};
+
+// --- Individual Grid Settings Updates ---
+const updateGraphGridEnabled = (graphId: string, enabled: boolean) => {
+    if (currentProject.value) {
+        projectStore.updateGraphLayout(currentProject.value.id, graphId, { gridEnabled: enabled });
+    }
+};
+
+const updateGraphGridStyle = (graphId: string, style: GridStyle) => {
+    if (currentProject.value) {
+        projectStore.updateGraphLayout(currentProject.value.id, graphId, { gridStyle: style });
+    }
+};
+
+const updateGraphGridSize = (graphId: string, size: number) => {
+    if (currentProject.value) {
+        projectStore.updateGraphLayout(currentProject.value.id, graphId, { gridSize: size });
+    }
 };
 
 // --- Workspace Interactions ---
@@ -540,7 +609,10 @@ const showArrangeMenu = ref(false);
       class="infinite-canvas" 
       @mousedown="startPan" 
       @wheel="handleWheel"
-      :class="{'grid-dots': uiStore.workspaceGridStyle === 'dots', 'grid-lines': uiStore.workspaceGridStyle === 'lines'}"
+      :class="{
+        'grid-dots': uiStore.isWorkspaceGridEnabled && uiStore.workspaceGridStyle === 'dots', 
+        'grid-lines': uiStore.isWorkspaceGridEnabled && uiStore.workspaceGridStyle === 'lines'
+      }"
       :style="{
         backgroundPosition: `${workspaceX}px ${workspaceY}px`,
         backgroundSize: `${uiStore.workspaceGridSize * workspaceScale}px ${uiStore.workspaceGridSize * workspaceScale}px`
@@ -586,6 +658,13 @@ const showArrangeMenu = ref(false);
           <div class="graph-header" @mousedown="startDragItem($event, graph.id, 'graph', {x: graph.x, y: graph.y, width: graph.width, height: graph.height})">
             <span class="graph-title">{{ graph.name }}</span>
             <div class="header-actions">
+                <!-- Individual Zoom Controls -->
+                <div class="header-zoom-controls" @mousedown.stop>
+                    <button class="icon-btn" @click.stop="zoomGraph(graph.id, 1.2)" title="Zoom In"><i class="fas fa-plus"></i></button>
+                    <button class="icon-btn" @click.stop="zoomGraph(graph.id, 0.8)" title="Zoom Out"><i class="fas fa-minus"></i></button>
+                    <button class="icon-btn" @click.stop="fitGraph(graph.id)" title="Fit"><i class="fas fa-compress"></i></button>
+                </div>
+
                 <span class="node-count-badge" 
                       @mouseenter="handleBadgeEnter($event, graph.id)" 
                       @mousemove="handleBadgeMove"
@@ -598,6 +677,39 @@ const showArrangeMenu = ref(false);
                         <button class="icon-btn"><i class="fas fa-ellipsis-v"></i></button>
                     </template>
                     <template #content>
+                        <div class="dropdown-section-title">Grid Settings</div>
+                        <div class="grid-settings-menu p-2" @click.stop>
+                            <div class="grid-settings-item">
+                                <label class="text-sm font-medium text-left flex-grow">Show Grid</label>
+                                <ToggleSwitch 
+                                    :modelValue="resolveGrid(graph).enabled" 
+                                    @update:modelValue="(val: boolean) => updateGraphGridEnabled(graph.id, val)" 
+                                />
+                            </div>
+                            <div class="grid-settings-item">
+                                <label class="text-sm font-medium text-left flex-grow">Style</label>
+                                <BaseSelect 
+                                    :modelValue="resolveGrid(graph).style" 
+                                    :options="gridStyleOptions" 
+                                    @update:modelValue="(val: string) => updateGraphGridStyle(graph.id, val as GridStyle)"
+                                    class="compact-select w-24"
+                                />
+                            </div>
+                            <div class="grid-settings-item">
+                                <label class="text-sm font-medium text-left flex-grow">Size</label>
+                                <InputNumber 
+                                    :modelValue="resolveGrid(graph).size" 
+                                    @update:modelValue="(val: number) => updateGraphGridSize(graph.id, val)" 
+                                    showButtons 
+                                    buttonLayout="stacked" 
+                                    :step="5" :min="5" :max="100" 
+                                    decrementButtonIcon="pi pi-angle-down"
+                                    incrementButtonIcon="pi pi-angle-up"
+                                    class="grid-size-input-small w-16"
+                                />
+                            </div>
+                        </div>
+                        <div class="dropdown-divider"></div>
                         <a href="#" @click.prevent="toggleCodePanel(graph)">
                             <i :class="graph.showCodePanel ? 'fas fa-eye-slash' : 'fas fa-code'"></i> {{ graph.showCodePanel ? 'Hide Code' : 'Pop-out Code' }}
                         </a>
@@ -614,10 +726,11 @@ const showArrangeMenu = ref(false);
             <GraphEditor 
               v-if="currentGraphId === graph.id"
               :graph-id="graph.id"
-              :is-grid-enabled="isGridEnabled"
-              @update:is-grid-enabled="$emit('update:isGridEnabled', $event)"
-              :grid-size="gridSize"
-              @update:grid-size="$emit('update:gridSize', $event)"
+              :is-grid-enabled="resolveGrid(graph).enabled"
+              @update:is-grid-enabled="(val: boolean) => updateGraphGridEnabled(graph.id, val)"
+              :grid-size="resolveGrid(graph).size"
+              @update:grid-size="(val: number) => updateGraphGridSize(graph.id, val)"
+              :grid-style="resolveGrid(graph).style"
               :current-mode="currentMode"
               :elements="getElementsForGraph(graph.id)"
               :current-node-type="currentNodeType"
@@ -633,6 +746,9 @@ const showArrangeMenu = ref(false);
                 <GraphPreview 
                   :elements="getElementsForGraph(graph.id)"
                   :graph-id="graph.id" 
+                  :is-grid-enabled="resolveGrid(graph).enabled"
+                  :grid-size="resolveGrid(graph).size"
+                  :grid-style="resolveGrid(graph).style"
                 />
             </div>
           </div>
@@ -821,6 +937,16 @@ const showArrangeMenu = ref(false);
     gap: 6px;
 }
 
+.header-zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-right: 4px;
+    background: var(--color-background-mute);
+    border-radius: 4px;
+    padding: 0 2px;
+}
+
 .node-count-badge {
     font-size: 10px;
     background: var(--color-background-mute);
@@ -839,6 +965,11 @@ const showArrangeMenu = ref(false);
     padding: 4px;
     border-radius: 4px;
     font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
 }
 .icon-btn:hover {
     background: var(--color-background-mute);
@@ -1042,5 +1173,46 @@ const showArrangeMenu = ref(false);
     width: 14px;
     text-align: center;
     color: var(--color-secondary);
+}
+
+/* Dropdown grid settings */
+.grid-settings-menu {
+    font-size: 0.85rem;
+    min-width: 200px;
+}
+
+.grid-settings-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 8px;
+}
+
+.compact-select {
+    width: auto !important;
+    min-width: 80px;
+}
+
+.compact-select :deep(.p-select-label) {
+    padding: 4px 8px;
+    font-size: 0.8rem;
+}
+
+.grid-size-input-small {
+    height: 30px;
+    width: 3rem !important;
+}
+
+.grid-size-input-small :deep(.p-inputnumber-input) {
+    width: 100% !important;
+    padding: 0 0.25rem !important;
+    font-size: 0.8rem;
+    text-align: left;
+}
+
+.grid-size-input-small :deep(.p-inputnumber-button) {
+    width: 1.2rem !important;
+    padding: 0 !important;
 }
 </style>

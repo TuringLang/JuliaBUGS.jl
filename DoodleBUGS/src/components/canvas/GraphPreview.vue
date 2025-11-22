@@ -2,14 +2,16 @@
 import { onMounted, ref, watch, onBeforeUnmount } from 'vue';
 import cytoscape from 'cytoscape';
 import type { GraphElement, GraphNode } from '../../types';
-import { useUiStore } from '../../stores/uiStore';
 
 const props = defineProps<{
   elements: GraphElement[];
   graphId: string;
+  // Grid props for per-graph overrides
+  isGridEnabled?: boolean;
+  gridSize?: number;
+  gridStyle?: string; // 'dots' | 'lines'
 }>();
 
-const uiStore = useUiStore();
 const container = ref<HTMLElement | null>(null);
 let cy: cytoscape.Core | null = null;
 
@@ -182,7 +184,11 @@ onBeforeUnmount(() => {
   <div 
     class="graph-preview" 
     ref="container"
-    :class="{'grid-dots': uiStore.canvasGridStyle === 'dots', 'grid-lines': uiStore.canvasGridStyle === 'lines'}"
+    :class="{
+        'grid-dots': isGridEnabled && gridStyle === 'dots', 
+        'grid-lines': isGridEnabled && gridStyle === 'lines'
+    }"
+    :style="isGridEnabled ? { backgroundSize: `${gridSize}px ${gridSize}px` } : {}"
   ></div>
 </template>
 
@@ -197,14 +203,12 @@ onBeforeUnmount(() => {
 
 .graph-preview.grid-dots {
   background-image: radial-gradient(circle, var(--color-border-dark) 1px, transparent 1px);
-  background-size: 20px 20px;
 }
 
 .graph-preview.grid-lines {
   background-image:
     linear-gradient(to right, var(--color-border-dark) 1px, transparent 1px),
     linear-gradient(to bottom, var(--color-border-dark) 1px, transparent 1px);
-  background-size: 20px 20px;
 }
 
 /* Dark mode support */
