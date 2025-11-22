@@ -2,16 +2,25 @@ import { computed, ref } from 'vue';
 import { useGraphStore } from '../stores/graphStore';
 import type { GraphElement } from '../types';
 
-export function useGraphElements() {
+export function useGraphElements(graphId?: string) {
   const graphStore = useGraphStore();
+
+  const targetGraphId = computed(() => graphId || graphStore.currentGraphId);
 
   const selectedElement = ref<GraphElement | null>(null);
 
   const elements = computed<GraphElement[]>({
-    get: () => graphStore.currentGraphElements,
+    get: () => {
+      const id = targetGraphId.value;
+      if (id && graphStore.graphContents.has(id)) {
+        return graphStore.graphContents.get(id)!.elements;
+      }
+      return [];
+    },
     set: (newElements) => {
-      if (graphStore.currentGraphId) {
-        graphStore.updateGraphElements(graphStore.currentGraphId, newElements);
+      const id = targetGraphId.value;
+      if (id) {
+        graphStore.updateGraphElements(id, newElements);
       }
     }
   });

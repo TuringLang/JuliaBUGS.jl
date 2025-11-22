@@ -1,12 +1,29 @@
+
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useGraphStore } from './graphStore';
+import type { GridStyle } from './uiStore';
 
 export interface GraphMeta {
   id: string;
   name: string;
   createdAt: number;
   lastModified: number;
+  // Layout props
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  // Code Panel Props
+  showCodePanel?: boolean;
+  codePanelX?: number;
+  codePanelY?: number;
+  codePanelWidth?: number;
+  codePanelHeight?: number;
+  // Per-graph Grid Settings
+  gridEnabled?: boolean;
+  gridSize?: number;
+  gridStyle?: GridStyle;
 }
 
 export interface Project {
@@ -77,11 +94,22 @@ export const useProjectStore = defineStore('project', () => {
   const addGraphToProject = (projectId: string, graphName: string): GraphMeta | undefined => {
     const project = projects.value.find(p => p.id === projectId);
     if (project) {
+      // Simple auto-layout: Offset new graphs slightly
+      const offset = project.graphs.length * 40;
+      
       const newGraphMeta: GraphMeta = {
         id: `graph_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         name: graphName,
         createdAt: Date.now(),
         lastModified: Date.now(),
+        x: 100 + offset,
+        y: 100 + offset,
+        width: 600,
+        height: 400,
+        showCodePanel: false,
+        codePanelWidth: 400,
+        codePanelHeight: 400,
+        // Defaults: let grid settings be undefined to fallback to global
       };
       project.graphs.push(newGraphMeta);
       project.lastModified = Date.now();
@@ -106,6 +134,47 @@ export const useProjectStore = defineStore('project', () => {
     }
   };
 
+  const updateGraphLayout = (
+    projectId: string, 
+    graphId: string, 
+    layout: Partial<{ 
+        x: number; y: number; width: number; height: number; 
+        showCodePanel: boolean; codePanelX: number; codePanelY: number; codePanelWidth: number; codePanelHeight: number;
+        gridEnabled: boolean; gridSize: number; gridStyle: GridStyle;
+    }>
+  ) => {
+    const project = projects.value.find(p => p.id === projectId);
+    if (project) {
+        const graph = project.graphs.find(g => g.id === graphId);
+        if (graph) {
+            if (layout.x !== undefined) graph.x = layout.x;
+            if (layout.y !== undefined) graph.y = layout.y;
+            if (layout.width !== undefined) graph.width = layout.width;
+            if (layout.height !== undefined) graph.height = layout.height;
+            
+            if (layout.showCodePanel !== undefined) graph.showCodePanel = layout.showCodePanel;
+            if (layout.codePanelX !== undefined) graph.codePanelX = layout.codePanelX;
+            if (layout.codePanelY !== undefined) graph.codePanelY = layout.codePanelY;
+            if (layout.codePanelWidth !== undefined) graph.codePanelWidth = layout.codePanelWidth;
+            if (layout.codePanelHeight !== undefined) graph.codePanelHeight = layout.codePanelHeight;
+
+            if (layout.gridEnabled !== undefined) graph.gridEnabled = layout.gridEnabled;
+            if (layout.gridSize !== undefined) graph.gridSize = layout.gridSize;
+            if (layout.gridStyle !== undefined) graph.gridStyle = layout.gridStyle;
+
+            // Initialize code panel position relative to graph if not set
+            if (graph.showCodePanel && graph.codePanelX === undefined) {
+                graph.codePanelX = graph.x + graph.width + 20;
+                graph.codePanelY = graph.y;
+                graph.codePanelWidth = 400;
+                graph.codePanelHeight = graph.height;
+            }
+
+            saveProjects();
+        }
+    }
+  }
+
   const deleteGraphFromProject = (projectId: string, graphId: string) => {
     const project = projects.value.find(p => p.id === projectId);
     if (project) {
@@ -127,7 +196,19 @@ export const useProjectStore = defineStore('project', () => {
   const loadProjects = () => {
     const storedProjects = localStorage.getItem('doodlebugs-projects');
     if (storedProjects) {
-      projects.value = JSON.parse(storedProjects);
+      const loaded = JSON.parse(storedProjects) as Project[];
+      // Migration: ensure old projects have layout props
+      loaded.forEach((p) => {
+          if (p.graphs) {
+              p.graphs.forEach((g, index) => {
+                  if (g.x === undefined) g.x = 100 + (index * 40);
+                  if (g.y === undefined) g.y = 100 + (index * 40);
+                  if (g.width === undefined) g.width = 600;
+                  if (g.height === undefined) g.height = 400;
+              });
+          }
+      });
+      projects.value = loaded;
     }
     if (currentProjectId.value && !projects.value.some(p => p.id === currentProjectId.value)) {
       selectProject(null);
@@ -144,6 +225,7 @@ export const useProjectStore = defineStore('project', () => {
     deleteProject,
     addGraphToProject,
     renameGraphInProject,
+    updateGraphLayout,
     deleteGraphFromProject,
     getGraphsForProject,
     loadProjects,

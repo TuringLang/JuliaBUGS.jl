@@ -148,8 +148,8 @@ watch(() => props.isActive, (newVal) => {
     <div class="header-controls">
         <h4>Model Data & Inits</h4>
         <div class="mode-switcher">
-            <BaseButton :class="{active: dataStore.inputMode === 'json'}" @click="dataStore.inputMode = 'json'" size="small">JSON</BaseButton>
-            <BaseButton :class="{active: dataStore.inputMode === 'julia'}" @click="dataStore.inputMode = 'julia'" size="small">Julia</BaseButton>
+            <BaseButton class="base-button" :class="{active: dataStore.inputMode === 'json'}" @click="dataStore.inputMode = 'json'" size="small" type="ghost">JSON</BaseButton>
+            <BaseButton class="base-button" :class="{active: dataStore.inputMode === 'julia'}" @click="dataStore.inputMode = 'julia'" size="small" type="ghost">Julia</BaseButton>
         </div>
     </div>
     <p class="description">
@@ -242,10 +242,19 @@ h4 {
     border: none;
     border-radius: 0;
     background-color: var(--color-background-soft);
+    color: var(--color-text);
+    box-sizing: border-box;
+}
+.mode-switcher .base-button:hover {
+    background-color: var(--color-background-soft);
+    border: none;
 }
 .mode-switcher .base-button.active {
-    background-color: var(--color-primary);
-    color: white;
+    background-color: var(--color-primary) !important;
+    color: white !important;
+}
+:global(html.dark-mode) .mode-switcher .base-button.active {
+    color: black !important;
 }
 .description {
   font-size: 0.85em;

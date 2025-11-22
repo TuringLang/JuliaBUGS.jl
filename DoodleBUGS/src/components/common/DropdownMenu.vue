@@ -1,86 +1,60 @@
-<template>
-  <div class="menu-item-wrapper" ref="dropdownRef">
-    <div @click="toggle" class="menu-toggle">
-      <slot name="trigger"></slot>
-    </div>
-    <transition name="dropdown-animation">
-      <div v-if="isOpen" class="dropdown-content" @click="close">
-        <slot name="content"></slot>
-      </div>
-    </transition>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref } from 'vue';
+import Popover from 'primevue/popover';
 
-const isOpen = ref(false);
-const dropdownRef = ref<HTMLElement | null>(null);
+const op = ref();
 
-const toggle = () => {
-  isOpen.value = !isOpen.value;
+const toggle = (event: Event) => {
+    op.value.toggle(event);
 };
 
 const close = () => {
-  isOpen.value = false;
+    op.value.hide();
 };
 
-const handleClickOutside = (event: MouseEvent) => {
-  if (dropdownRef.value && !dropdownRef.value.contains(event.target as Node)) {
+const onContentClick = (event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('input, select, textarea, label')) {
+        return;
+    }
     close();
-  }
 };
-
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside, true);
-});
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside, true);
-});
 </script>
 
-<style scoped>
-.menu-item-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
+<template>
+    <div class="inline-block">
+        <div @click="toggle" class="cursor-pointer inline-block">
+            <slot name="trigger"></slot>
+        </div>
+        <Popover ref="op">
+            <div class="flex flex-col min-w-[150px] py-1" @click="onContentClick">
+                <slot name="content"></slot>
+            </div>
+        </Popover>
+    </div>
+</template>
 
-.menu-toggle {
-  cursor: pointer;
+<style>
+/* Styles to match the previous dropdown content behavior */
+.p-popover-content a {
+    display: block;
+    padding: 0.5rem 1rem;
+    color: var(--p-text-color);
+    text-decoration: none;
+    transition: background-color 0.2s;
 }
-
-.dropdown-content {
-  position: absolute;
-  top: calc(100% + 5px);
-  left: 0;
-  background-color: var(--color-background-soft);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border-radius: 6px;
-  min-width: 220px;
-  z-index: 60;
-  display: flex;
-  flex-direction: column;
-  padding: 8px 0;
-  border: 1px solid var(--color-border-light);
+.p-popover-content a:hover {
+    background-color: var(--p-content-hover-background);
 }
-
-.dropdown-animation-enter-active {
-  animation: fadeInDown 0.2s ease-out;
+.dropdown-divider {
+    height: 1px;
+    background-color: var(--p-content-border-color);
+    margin: 0.25rem 0;
 }
-.dropdown-animation-leave-active {
-  animation: fadeInDown 0.15s ease-in reverse;
-}
-
-@keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.dropdown-section-title {
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    color: var(--p-text-muted-color);
+    font-size: 0.875rem;
 }
 </style>

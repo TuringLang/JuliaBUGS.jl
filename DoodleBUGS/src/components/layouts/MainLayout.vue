@@ -4,6 +4,7 @@ import type { StyleValue } from 'vue';
 import { storeToRefs } from 'pinia';
 import type { Core, LayoutOptions } from 'cytoscape';
 import GraphEditor from '../canvas/GraphEditor.vue';
+import MultiCanvasView from '../canvas/MultiCanvasView.vue';
 import ProjectManager from '../left-sidebar/ProjectManager.vue';
 import NodePalette from '../left-sidebar/NodePalette.vue';
 import ExecutionSettingsPanel from '../left-sidebar/ExecutionSettingsPanel.vue';
@@ -53,7 +54,7 @@ const { generatedCode } = useBugsCodeGenerator(elements);
 const { getCyInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
 const { backendUrl, isConnected, isConnecting, isExecuting, samplerSettings } = storeToRefs(executionStore);
-const { activeLeftTab, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth } = storeToRefs(uiStore);
+const { activeLeftTab, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth, isMultiCanvasView, canvasGridStyle } = storeToRefs(uiStore);
 
 const currentMode = ref<string>('select');
 const currentNodeType = ref<NodeType>('stochastic');
@@ -152,7 +153,7 @@ const leftSidebarStyle = computed((): StyleValue => ({
 }));
 
 const leftSidebarContentStyle = computed((): StyleValue => {
-  const contentWidth = leftSidebarWidth.value - 50;
+  const contentWidth = leftSidebarWidth.value - 45; // Adjust for new smaller tab width
   return {
     width: `${contentWidth}px`,
     opacity: isLeftSidebarOpen.value ? '1' : '0',
@@ -179,7 +180,7 @@ const startResizeLeft = () => {
 const doResizeLeft = (event: MouseEvent) => {
   if (isResizingLeft.value) {
     const newWidth = event.clientX;
-    leftSidebarWidth.value = Math.max(250, Math.min(newWidth, 600));
+    leftSidebarWidth.value = Math.max(200, Math.min(newWidth, 500));
   }
 };
 
@@ -194,7 +195,7 @@ const startResizeRight = () => {
 const doResizeRight = (event: MouseEvent) => {
   if (isResizingRight.value) {
     const newWidth = window.innerWidth - event.clientX;
-    rightSidebarWidth.value = Math.max(400, Math.min(newWidth, 800));
+    rightSidebarWidth.value = Math.max(300, Math.min(newWidth, 700));
   }
 };
 
@@ -223,7 +224,7 @@ const handleSelectNodeFromModal = (nodeId: string) => {
   const nodeToSelect = elements.value.find(el => el.id === nodeId);
   if (nodeToSelect) {
     handleElementSelected(nodeToSelect);
-    const cy = getCyInstance();
+    const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null;
     if (cy) {
       cy.elements().unselect();
       cy.getElementById(nodeId).select();
@@ -253,7 +254,7 @@ const handleLayoutUpdated = (layoutName: string) => {
 };
 
 const handleGraphLayout = (layoutName: string) => {
-    const cy = getCyInstance();
+    const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null;
     if (!cy) return;
 
     const shouldUpdatePositions = layoutName !== 'preset';
@@ -353,7 +354,7 @@ const openExportModal = (format: 'png' | 'jpg' | 'svg') => {
 };
 
 const handleConfirmExport = (options: ExportOptions) => {
-  const cy = getCyInstance() as Core & { svg: (options: object) => string; jpg: (options: object) => Blob; png: (options: object) => Blob; };
+  const cy = (graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null) as Core & { svg: (options: object) => string; jpg: (options: object) => Blob; png: (options: object) => Blob; };
   if (!cy || !currentExportType.value) return;
   const fileName = `${activeGraphName.value || 'graph'}.${currentExportType.value}`;
   try {
@@ -674,6 +675,7 @@ const handleGenerateStandalone = () => {
       @connect-to-backend-url="connectToBackendUrl" @run-model="runModel" @abort-run="abortRun" @generate-standalone="handleGenerateStandalone"
       :show-debug-panel="showDebugPanel" @update:show-debug-panel="showDebugPanel = $event" 
       :show-zoom-controls="showZoomControls" @update:show-zoom-controls="showZoomControls = $event"
+      :is-multi-canvas-view="isMultiCanvasView" @toggle-canvas-view="uiStore.toggleCanvasView"
       />
 
     <div class="content-area">
@@ -715,11 +717,40 @@ const handleGenerateStandalone = () => {
       <div class="resizer resizer-left" @mousedown.prevent="startResizeLeft"></div>
 
       <main class="graph-editor-wrapper">
-        <GraphEditor :is-grid-enabled="isGridEnabled" :grid-size="gridSize" :current-mode="currentMode"
-          :elements="elements" :current-node-type="currentNodeType" :validation-errors="validationErrors"
+        <MultiCanvasView 
+          v-if="isMultiCanvasView"
+          :is-grid-enabled="isGridEnabled" 
+          @update:is-grid-enabled="isGridEnabled = $event"
+          :grid-size="gridSize" 
+          @update:grid-size="gridSize = $event"
+          :current-mode="currentMode"
+          :current-node-type="currentNodeType" 
+          :validation-errors="validationErrors"
           :show-zoom-controls="showZoomControls"
-          @update:current-mode="currentMode = $event" @update:current-node-type="currentNodeType = $event"
-          @element-selected="handleElementSelected" @layout-updated="handleLayoutUpdated"
+          @update:current-mode="currentMode = $event" 
+          @update:current-node-type="currentNodeType = $event"
+          @element-selected="handleElementSelected" 
+          @layout-updated="handleLayoutUpdated"
+          @update:show-zoom-controls="showZoomControls = $event"
+          @new-graph="showNewGraphModal = true"
+          @open-export-modal="openExportModal" />
+        <GraphEditor 
+          v-else
+          :graph-id="graphStore.currentGraphId || ''"
+          :is-grid-enabled="isGridEnabled" 
+          @update:is-grid-enabled="isGridEnabled = $event"
+          :grid-size="gridSize" 
+          @update:grid-size="gridSize = $event"
+          :grid-style="canvasGridStyle"
+          :current-mode="currentMode"
+          :elements="elements" 
+          :current-node-type="currentNodeType" 
+          :validation-errors="validationErrors"
+          :show-zoom-controls="showZoomControls"
+          @update:current-mode="currentMode = $event" 
+          @update:current-node-type="currentNodeType = $event"
+          @element-selected="handleElementSelected" 
+          @layout-updated="handleLayoutUpdated"
           @update:show-zoom-controls="showZoomControls = $event" />
       </main>
 
@@ -853,7 +884,7 @@ const handleGenerateStandalone = () => {
   width: var(--vertical-tab-width);
   border-right: 1px solid var(--color-border-light);
   background-color: var(--color-background-dark);
-  padding-top: 10px;
+  padding-top: 8px;
   flex-shrink: 0;
 }
 
@@ -863,20 +894,20 @@ const handleGenerateStandalone = () => {
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 10px 0;
+  padding: 8px 0;
   border: none;
   background-color: transparent;
   color: var(--color-text-light);
   font-size: 0.75em;
   font-weight: 500;
   transition: all 0.2s ease;
-  gap: 5px;
+  gap: 4px;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .vertical-tabs-container button i {
-  font-size: 1.3em;
+  font-size: 1.2em;
   color: var(--color-secondary);
   transition: color 0.2s ease;
 }
@@ -893,7 +924,8 @@ const handleGenerateStandalone = () => {
 .vertical-tabs-container button.active {
   background-color: var(--color-primary);
   color: white;
-  border-left: 2px solid white;
+  border-left: 4px solid white;
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
 }
 
 .vertical-tabs-container button.active i {
@@ -903,7 +935,7 @@ const handleGenerateStandalone = () => {
 .left-sidebar-content {
   flex-grow: 1;
   overflow-y: auto;
-  padding: 15px;
+  padding: 10px;
   -webkit-overflow-scrolling: touch;
   transition: opacity 0.3s ease-in-out;
   box-sizing: border-box;
@@ -929,7 +961,7 @@ const handleGenerateStandalone = () => {
   align-items: center;
   border-bottom: 1px solid var(--color-border-light);
   flex-shrink: 0;
-  padding-right: 10px;
+  padding-right: 8px;
 }
 
 .tab-buttons {
@@ -939,11 +971,12 @@ const handleGenerateStandalone = () => {
 
 .tab-buttons button {
   flex: 1;
-  padding: 10px 15px;
+  padding: 6px 10px;
   border: none;
   background-color: transparent;
   border-bottom: 2px solid transparent;
   font-weight: 500;
+  font-size: 0.85em;
   color: var(--color-text);
   transition: all 0.2s ease;
   white-space: nowrap;
@@ -959,13 +992,23 @@ const handleGenerateStandalone = () => {
   background-color: var(--color-background-soft);
 }
 
+/* Dark Mode Overrides for Right Sidebar Tabs */
+:global(html.dark-mode) .tab-buttons button.active {
+    background-color: var(--p-surface-800);
+    color: var(--p-primary-color);
+}
+
+:global(html.dark-mode) .tab-buttons button:hover {
+    background-color: var(--p-surface-700);
+}
+
 .pin-button {
   background: none;
   border: none;
   color: var(--color-secondary);
   cursor: pointer;
-  padding: 5px;
-  font-size: 0.9em;
+  padding: 4px;
+  font-size: 0.85em;
   border-radius: 4px;
   transition: all 0.2s ease;
 }

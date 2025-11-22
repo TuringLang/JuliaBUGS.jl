@@ -6,6 +6,7 @@ import CanvasToolbar from './CanvasToolbar.vue';
 import { useGraphElements } from '../../composables/useGraphElements';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import type { GraphElement, GraphNode, GraphEdge, NodeType, ValidationError } from '../../types';
+import type { GridStyle } from '../../stores/uiStore';
 import { getDefaultNodeData } from '../../config/nodeDefinitions';
 
 // Fallback UUID generator for iOS Safari (doesn't support crypto.randomUUID in non-HTTPS)
@@ -22,8 +23,10 @@ const generateUUID = (): string => {
 };
 
 const props = defineProps<{
+  graphId: string;
   isGridEnabled: boolean;
   gridSize: number;
+  gridStyle?: GridStyle;
   currentMode: string;
   currentNodeType: NodeType;
   elements: GraphElement[];
@@ -37,9 +40,11 @@ const emit = defineEmits<{
   (e: 'update:currentNodeType', type: NodeType): void;
   (e: 'layout-updated', layoutName: string): void;
   (e: 'update:show-zoom-controls', value: boolean): void;
+  (e: 'update:isGridEnabled', value: boolean): void;
+  (e: 'update:gridSize', value: number): void;
 }>();
 
-const { elements: graphElements, addElement, updateElement, deleteElement } = useGraphElements();
+const { elements: graphElements, addElement, updateElement, deleteElement } = useGraphElements(props.graphId);
 const { getCyInstance, getUndoRedoInstance } = useGraphInstance();
 
 const handleGraphUpdated = (newElements: GraphElement[]) => {
@@ -47,12 +52,12 @@ const handleGraphUpdated = (newElements: GraphElement[]) => {
 };
 
 const handleUndo = () => {
-    const ur = getUndoRedoInstance();
+    const ur = getUndoRedoInstance(props.graphId);
     if (ur) ur.undo();
 };
 
 const handleRedo = () => {
-    const ur = getUndoRedoInstance();
+    const ur = getUndoRedoInstance(props.graphId);
     if (ur) ur.redo();
 };
 
@@ -132,7 +137,7 @@ const createPlateWithNode = (position: { x: number; y: number }, parentId?: stri
     const newPlate = createNode('plate', position, parentId);
     const innerNode = createNode('stochastic', { x: position.x, y: position.y }, newPlate.id);
     
-    const ur = getUndoRedoInstance();
+    const ur = getUndoRedoInstance(props.graphId);
     if (ur) {
         ur.do("batch", [
             { name: "add", param: formatForCy(newPlate) },
@@ -146,7 +151,7 @@ const createPlateWithNode = (position: { x: number; y: number }, parentId?: stri
 
 const handleCanvasTap = (event: EventObject) => {
   const { position, target } = event;
-  const cy = getCyInstance() as Core;
+  const cy = getCyInstance(props.graphId) as Core;
 
   if (!cy) return;
 
@@ -164,7 +169,7 @@ const handleCanvasTap = (event: EventObject) => {
             emit('update:currentMode', 'select');
         } else {
             const newNode = createNode(props.currentNodeType, position, isPlateClick ? (target as NodeSingular).id() : undefined);
-            const ur = getUndoRedoInstance();
+            const ur = getUndoRedoInstance(props.graphId);
             if (ur) {
                 ur.do("add", formatForCy(newNode));
             } else {
@@ -188,7 +193,7 @@ const handleCanvasTap = (event: EventObject) => {
             target: tappedNode.id(),
             name: ``,
           };
-          const ur = getUndoRedoInstance();
+          const ur = getUndoRedoInstance(props.graphId);
           if (ur) {
               ur.do("add", formatForCy(newEdge));
           } else {
@@ -239,7 +244,7 @@ const handleNodeMoved = (payload: { nodeId: string, position: { x: number; y: nu
 
 const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number; y: number } }) => {
   const { nodeType, position } = payload;
-  const cy = getCyInstance();
+  const cy = getCyInstance(props.graphId);
   let parentPlateId: string | undefined = undefined;
 
   if (nodeType === 'plate') {
@@ -272,7 +277,7 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
   }
 
   const newNode = createNode(nodeType, position, parentPlateId);
-  const ur = getUndoRedoInstance();
+  const ur = getUndoRedoInstance(props.graphId);
   if (ur) {
       ur.do("add", formatForCy(newNode));
   } else {
@@ -283,8 +288,8 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
 };
 
 const handleDeleteElement = (elementId: string) => {
-    const ur = getUndoRedoInstance();
-    const cy = getCyInstance();
+    const ur = getUndoRedoInstance(props.graphId);
+    const cy = getCyInstance(props.graphId);
     if (ur && cy) {
         const el = cy.getElementById(elementId);
         if (el.length > 0) {
@@ -309,8 +314,12 @@ watch(() => props.currentMode, (newMode) => {
     <CanvasToolbar
       :current-mode="props.currentMode"
       :current-node-type="props.currentNodeType"
+      :is-grid-enabled="props.isGridEnabled"
+      :grid-size="props.gridSize"
       @update:current-mode="(mode: string) => emit('update:currentMode', mode)"
       @update:current-node-type="(type: NodeType) => emit('update:currentNodeType', type)"
+      @update:is-grid-enabled="(val: boolean) => emit('update:isGridEnabled', val)"
+      @update:grid-size="(val: number) => emit('update:gridSize', val)"
       @undo="handleUndo"
       @redo="handleRedo"
       :is-connecting="isConnecting"
@@ -318,9 +327,11 @@ watch(() => props.currentMode, (newMode) => {
     />
 
     <GraphCanvas
+      :graph-id="props.graphId"
       :elements="props.elements"
       :is-grid-enabled="isGridEnabled"
       :grid-size="gridSize"
+      :grid-style="gridStyle"
       :current-mode="props.currentMode"
       :validation-errors="props.validationErrors"
       :show-zoom-controls="props.showZoomControls"

@@ -17,7 +17,10 @@ interface DragState {
   platePositions: Map<string, Position>;
 }
 
-export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions, ur?: any) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type UndoRedoInstance = any;
+
+export function useCompoundDragDrop(cy: Core, options: CompoundDragDropOptions, ur?: UndoRedoInstance) {
   const dragState: DragState = {
     isDragging: false,
     draggedNode: null,

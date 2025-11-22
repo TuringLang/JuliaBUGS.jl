@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
-import { storeToRefs } from 'pinia';
+import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue';
 import { useGraphStore } from '../../stores/graphStore';
 import { useBugsCodeGenerator } from '../../composables/useBugsCodeGenerator';
 import BaseButton from '../ui/BaseButton.vue';
@@ -19,13 +18,21 @@ import type { Editor } from 'codemirror';
 
 const props = defineProps<{
   isActive: boolean;
+  graphId?: string; // Optional: for multi-canvas code pop-outs
 }>();
 
 const graphStore = useGraphStore();
 
-const { currentGraphElements } = storeToRefs(graphStore);
+// Use a computed to get the correct elements (global current or specific graph)
+const targetElements = computed(() => {
+    if (props.graphId) {
+        return graphStore.graphContents.get(props.graphId)?.elements || [];
+    }
+    return graphStore.currentGraphElements;
+});
 
-const { generatedCode } = useBugsCodeGenerator(currentGraphElements);
+// useBugsCodeGenerator expects a Ref, computed fits
+const { generatedCode } = useBugsCodeGenerator(targetElements);
 
 const copySuccess = ref(false);
 const editorContainer = ref<HTMLDivElement | null>(null);
@@ -187,6 +194,7 @@ h4 {
   cursor: pointer;
   opacity: 0.9;
   transition: background-color 0.2s, opacity 0.2s;
+  z-index: 5;
 }
 
 .copy-button:hover {

@@ -254,7 +254,7 @@ watch(() => props.cy, (newCy) => {
 
 /* Panzoom */
 .panzoom-controls {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--color-background-soft);
   border-radius: 20px; /* More rounded for a modern look */
   box-shadow: 0 4px 15px rgba(0,0,0,0.15);
   padding: 8px 6px;
@@ -263,7 +263,7 @@ watch(() => props.cy, (newCy) => {
   gap: 8px;
   align-items: center;
   backdrop-filter: blur(5px);
-  border: 1px solid rgba(0,0,0,0.05);
+  border: 1px solid var(--color-border);
   transition: opacity 0.2s;
 }
 
@@ -274,12 +274,12 @@ watch(() => props.cy, (newCy) => {
 
 .drag-handle {
   cursor: grab;
-  color: #aaa;
+  color: var(--color-secondary);
   font-size: 10px;
   padding: 2px;
   width: 100%;
   text-align: center;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--color-border-light);
   margin-bottom: 2px;
   position: relative;
   display: flex;
@@ -292,7 +292,7 @@ watch(() => props.cy, (newCy) => {
   width: auto;
   height: 100%;
   border-bottom: none;
-  border-right: 1px solid #eee;
+  border-right: 1px solid var(--color-border-light);
   margin-bottom: 0;
   margin-right: 2px;
   padding: 0 4px;
@@ -302,12 +302,12 @@ watch(() => props.cy, (newCy) => {
 .orientation-toggle {
   cursor: pointer;
   font-size: 8px;
-  color: #888;
+  color: var(--color-secondary);
   opacity: 0;
   transition: opacity 0.2s;
   position: absolute;
   top: -12px;
-  background: white;
+  background: var(--color-background-soft);
   border-radius: 50%;
   width: 14px;
   height: 14px;
@@ -327,7 +327,7 @@ watch(() => props.cy, (newCy) => {
 }
 
 .orientation-toggle:hover {
-  color: #333;
+  color: var(--color-text);
   transform: scale(1.1);
 }
 
@@ -345,14 +345,14 @@ watch(() => props.cy, (newCy) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #555;
+  color: var(--color-text);
   transition: all 0.2s;
   font-size: 12px;
 }
 
 .control-btn:hover {
-  background: #f0f0f0;
-  color: #222;
+  background: var(--color-background-mute);
+  color: var(--color-text);
   transform: scale(1.1);
 }
 
@@ -381,7 +381,7 @@ watch(() => props.cy, (newCy) => {
   height: 100%;
   cursor: pointer;
   appearance: none;
-  background: #eee;
+  background: var(--color-border);
   border-radius: 2px;
 }
 
@@ -396,7 +396,7 @@ watch(() => props.cy, (newCy) => {
   appearance: none;
   width: 12px;
   height: 12px;
-  background: #666;
+  background: var(--color-secondary);
   border-radius: 50%;
   cursor: pointer;
 }
@@ -404,7 +404,7 @@ watch(() => props.cy, (newCy) => {
 .zoom-slider::-moz-range-thumb {
   width: 12px;
   height: 12px;
-  background: #666;
+  background: var(--color-secondary);
   border-radius: 50%;
   cursor: pointer;
   border: none;
@@ -413,8 +413,8 @@ watch(() => props.cy, (newCy) => {
 /* Context Menu */
 .context-menu {
   position: fixed;
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--color-background-soft);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
   z-index: 10000;
@@ -428,10 +428,11 @@ watch(() => props.cy, (newCy) => {
   align-items: center;
   gap: 8px;
   transition: background 0.2s;
+  color: var(--color-text);
 }
 
 .context-menu-item:hover {
-  background: #f0f0f0;
+  background: var(--color-background-mute);
 }
 
 .context-menu-item i {

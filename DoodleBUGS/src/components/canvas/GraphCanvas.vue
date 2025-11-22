@@ -4,12 +4,15 @@ import type { Core, EventObject, NodeSingular, ElementDefinition } from 'cytosca
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGridSnapping } from '../../composables/useGridSnapping';
 import type { GraphElement, GraphNode, GraphEdge, NodeType, PaletteItemType, ValidationError } from '../../types';
+import type { GridStyle } from '../../stores/uiStore';
 import GraphControls from './GraphControls.vue';
 
 const props = defineProps<{
+  graphId: string;
   elements: GraphElement[];
   isGridEnabled: boolean;
   gridSize: number;
+  gridStyle?: GridStyle;
   currentMode: string;
   validationErrors: Map<string, ValidationError[]>;
   showZoomControls?: boolean;
@@ -28,9 +31,11 @@ const emit = defineEmits<{
 const cyContainer = ref<HTMLElement | null>(null);
 let cy: Core | null = null;
 const cyInstance = ref<Core | null>(null);
+let resizeObserver: ResizeObserver | null = null;
 
 const { initCytoscape, destroyCytoscape, getCyInstance, getUndoRedoInstance } = useGraphInstance();
-const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping(getCyInstance);
+const getCy = () => getCyInstance(props.graphId);
+const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping(getCy);
 
 const validNodeTypes: NodeType[] = ['stochastic', 'deterministic', 'constant', 'observed', 'plate'];
 
@@ -59,11 +64,6 @@ const formatElementsForCytoscape = (elements: GraphElement[], errors: Map<string
   });
 };
 
-/**
- * Synchronizes the Cytoscape instance with the current graph elements from props.
- * @param elementsToSync The array of graph elements to display.
- * @param errorsToSync The map of validation errors.
- */
 const syncGraphWithProps = (elementsToSync: GraphElement[], errorsToSync: Map<string, ValidationError[]>) => {
   if (!cy) return;
 
@@ -105,22 +105,22 @@ const syncGraphWithProps = (elementsToSync: GraphElement[], errorsToSync: Map<st
   });
 };
 
-
 onMounted(() => {
   if (cyContainer.value) {
-    cy = initCytoscape(cyContainer.value, []);
+    cy = initCytoscape(cyContainer.value, [], props.graphId);
     cyInstance.value = cy;
 
     syncGraphWithProps(props.elements, props.validationErrors);
 
     setGridSize(props.gridSize);
+    
     if (props.isGridEnabled) {
       enableGridSnapping();
     } else {
       disableGridSnapping();
     }
 
-    const ur = getUndoRedoInstance();
+    const ur = getUndoRedoInstance(props.graphId);
     if (ur) {
       cy.on('afterUndo afterRedo afterDo', () => {
         if (!cy) return;
@@ -159,8 +159,6 @@ onMounted(() => {
       emit('canvas-tap', evt);
     });
 
-    // Capture the final position of a node after any drag operation (including grid snapping).
-    // This is the definitive event for updating node positions and saving the 'preset' layout.
     cy.on('free', 'node', (evt: EventObject) => {
         const node = evt.target as NodeSingular;
         const parentCollection = node.parent();
@@ -212,12 +210,23 @@ onMounted(() => {
         }
       }
     });
+
+    resizeObserver = new ResizeObserver(() => {
+      if (cy) {
+        cy.resize();
+      }
+    });
+    resizeObserver.observe(cyContainer.value);
   }
 });
 
 onUnmounted(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
   if (cy) {
-    destroyCytoscape(cy);
+    destroyCytoscape(props.graphId);
   }
 });
 
@@ -247,6 +256,8 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
     class="cytoscape-container"
     :class="{
       'grid-background': isGridEnabled && gridSize > 0,
+      'grid-lines': (gridStyle === 'lines' || !gridStyle) && isGridEnabled && gridSize > 0,
+      'grid-dots': gridStyle === 'dots' && isGridEnabled && gridSize > 0,
       'mode-add-node': currentMode === 'add-node',
       'mode-add-edge': currentMode === 'add-edge',
       'mode-select': currentMode === 'select'
@@ -295,5 +306,28 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
   border: 2px dashed #FF0000 !important;
   background-color: rgba(255, 0, 0, 0.1) !important;
 }
-</style>
 
+/* Grid styles with !important to override global defaults */
+.cytoscape-container.grid-background.grid-dots {
+  background-image: radial-gradient(circle, var(--color-border-dark) 1px, transparent 1px) !important;
+  background-size: var(--grid-size) var(--grid-size) !important;
+}
+
+.cytoscape-container.grid-background.grid-lines {
+  background-image:
+    linear-gradient(to right, var(--color-border-dark) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-border-dark) 1px, transparent 1px) !important;
+  background-size: var(--grid-size) var(--grid-size) !important;
+}
+
+/* Dark Mode support for grid colors */
+:global(html.dark-mode) .cytoscape-container.grid-background.grid-dots {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.1) 1px, transparent 1px) !important;
+}
+
+:global(html.dark-mode) .cytoscape-container.grid-background.grid-lines {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px) !important;
+}
+</style>
