@@ -245,18 +245,18 @@ const handleNewGraph = () => {
 .header h4 {
   margin: 0;
   color: var(--color-heading);
-  font-size: 1em;
+  font-size: 0.95em;
   font-weight: 600;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 
 .header-action-btn {
-  padding: 2px 6px;
+  padding: 2px 6px !important;
 }
 
 .empty-state {
@@ -272,24 +272,24 @@ const handleNewGraph = () => {
 
 .empty-state p {
   margin: 0 0 10px 0;
-  font-size: 1em;
+  font-size: 0.9em;
 }
 
 .empty-state-inner {
   color: var(--color-secondary);
   text-align: center;
-  padding: 10px;
-  font-size: 0.85em;
+  padding: 8px;
+  font-size: 0.8em;
 }
 
 .empty-state-inner p {
-  margin: 0 0 8px 0;
+  margin: 0 0 6px 0;
 }
 
 .project-list {
   flex-grow: 1;
   overflow-y: auto;
-  padding: 5px;
+  padding: 4px;
 }
 
 .project-item {
@@ -349,7 +349,7 @@ const handleNewGraph = () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 0.9em;
+  font-size: 0.85em;
 }
 
 .project-actions {
@@ -359,8 +359,8 @@ const handleNewGraph = () => {
 }
 
 .action-btn {
-    padding: 2px 6px;
-    font-size: 0.9em;
+    padding: 2px 4px;
+    font-size: 0.85em;
     background-color: transparent;
     color: var(--color-secondary);
     border: none;
@@ -392,10 +392,10 @@ const handleNewGraph = () => {
 }
 
 .graph-list {
-  padding-left: 15px;
+  padding-left: 12px;
   overflow: hidden;
   border-left: 1px solid var(--color-border-light);
-  margin-left: 12px;
+  margin-left: 10px;
   padding-top: 2px;
   padding-bottom: 2px;
 }
@@ -414,7 +414,7 @@ const handleNewGraph = () => {
   display: flex;
   align-items: center;
   padding: 4px 8px;
-  margin-top: 2px;
+  margin-top: 1px;
   cursor: pointer;
   transition: background-color 0.2s ease, color 0.2s ease;
   gap: 6px;
@@ -445,7 +445,7 @@ const handleNewGraph = () => {
 }
 
 .icon-file {
-  font-size: 0.8em;
+  font-size: 0.75em;
   color: var(--color-secondary);
 }
 
@@ -468,9 +468,9 @@ const handleNewGraph = () => {
   border: 1px solid var(--color-border);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border-radius: 6px;
-  padding: 8px 0;
+  padding: 4px 0;
   z-index: 1100;
-  min-width: 180px;
+  min-width: 160px;
 }
 
 :global(html.dark-mode) .context-menu {
@@ -478,12 +478,12 @@ const handleNewGraph = () => {
 }
 
 .context-menu-item {
-  padding: 8px 16px;
+  padding: 6px 12px;
   cursor: pointer;
-  font-size: 0.9em;
+  font-size: 0.85em;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   color: var(--color-heading);
   transition: background-color 0.2s ease, color 0.2s ease;
 }

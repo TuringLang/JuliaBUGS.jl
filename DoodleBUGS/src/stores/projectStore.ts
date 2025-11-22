@@ -1,3 +1,4 @@
+
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useGraphStore } from './graphStore';
@@ -12,6 +13,12 @@ export interface GraphMeta {
   y: number;
   width: number;
   height: number;
+  // Code Panel Props
+  showCodePanel?: boolean;
+  codePanelX?: number;
+  codePanelY?: number;
+  codePanelWidth?: number;
+  codePanelHeight?: number;
 }
 
 export interface Project {
@@ -93,7 +100,10 @@ export const useProjectStore = defineStore('project', () => {
         x: 100 + offset,
         y: 100 + offset,
         width: 600,
-        height: 400
+        height: 400,
+        showCodePanel: false,
+        codePanelWidth: 400,
+        codePanelHeight: 400
       };
       project.graphs.push(newGraphMeta);
       project.lastModified = Date.now();
@@ -118,7 +128,14 @@ export const useProjectStore = defineStore('project', () => {
     }
   };
 
-  const updateGraphLayout = (projectId: string, graphId: string, layout: Partial<{ x: number, y: number, width: number, height: number }>) => {
+  const updateGraphLayout = (
+    projectId: string, 
+    graphId: string, 
+    layout: Partial<{ 
+        x: number; y: number; width: number; height: number; 
+        showCodePanel: boolean; codePanelX: number; codePanelY: number; codePanelWidth: number; codePanelHeight: number 
+    }>
+  ) => {
     const project = projects.value.find(p => p.id === projectId);
     if (project) {
         const graph = project.graphs.find(g => g.id === graphId);
@@ -127,6 +144,21 @@ export const useProjectStore = defineStore('project', () => {
             if (layout.y !== undefined) graph.y = layout.y;
             if (layout.width !== undefined) graph.width = layout.width;
             if (layout.height !== undefined) graph.height = layout.height;
+            
+            if (layout.showCodePanel !== undefined) graph.showCodePanel = layout.showCodePanel;
+            if (layout.codePanelX !== undefined) graph.codePanelX = layout.codePanelX;
+            if (layout.codePanelY !== undefined) graph.codePanelY = layout.codePanelY;
+            if (layout.codePanelWidth !== undefined) graph.codePanelWidth = layout.codePanelWidth;
+            if (layout.codePanelHeight !== undefined) graph.codePanelHeight = layout.codePanelHeight;
+
+            // Initialize code panel position relative to graph if not set
+            if (graph.showCodePanel && graph.codePanelX === undefined) {
+                graph.codePanelX = graph.x + graph.width + 20;
+                graph.codePanelY = graph.y;
+                graph.codePanelWidth = 400;
+                graph.codePanelHeight = graph.height;
+            }
+
             saveProjects();
         }
     }
@@ -153,10 +185,11 @@ export const useProjectStore = defineStore('project', () => {
   const loadProjects = () => {
     const storedProjects = localStorage.getItem('doodlebugs-projects');
     if (storedProjects) {
-      const loaded = JSON.parse(storedProjects);
-      loaded.forEach((p: any) => {
+      const loaded = JSON.parse(storedProjects) as Project[];
+      // Migration: ensure old projects have layout props
+      loaded.forEach((p) => {
           if (p.graphs) {
-              p.graphs.forEach((g: any, index: number) => {
+              p.graphs.forEach((g, index) => {
                   if (g.x === undefined) g.x = 100 + (index * 40);
                   if (g.y === undefined) g.y = 100 + (index * 40);
                   if (g.width === undefined) g.width = 600;

@@ -61,26 +61,26 @@ const onClickPaletteItem = (itemType: PaletteItemType) => {
 
 <style scoped>
 .node-palette {
-  padding: 12px;
+  padding: 10px;
   background-color: var(--color-background-soft);
   height: 100%;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 15px;
 }
 
 .palette-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .section-title {
-  font-size: 0.9em;
+  font-size: 0.85em;
   font-weight: 600;
   color: var(--color-heading);
-  padding-bottom: 8px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--color-border-light);
   margin: 0;
 }
@@ -88,7 +88,7 @@ const onClickPaletteItem = (itemType: PaletteItemType) => {
 .palette-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: 8px;
 }
 
 .palette-card {
@@ -96,27 +96,27 @@ const onClickPaletteItem = (itemType: PaletteItemType) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 15px 10px;
-  border-radius: 8px;
+  padding: 10px 6px;
+  border-radius: 6px;
   border: 1px solid var(--color-border);
   background-color: var(--color-background-soft);
   cursor: grab;
   text-align: center;
   transition: all 0.2s ease-in-out;
   user-select: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .palette-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   border-color: var(--color-primary);
 }
 
 .palette-card:active {
   cursor: grabbing;
   transform: translateY(-1px);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 /* Dark Mode Overrides */
@@ -132,27 +132,27 @@ const onClickPaletteItem = (itemType: PaletteItemType) => {
 }
 
 .card-label {
-  font-size: 0.8em;
+  font-size: 0.75em;
   font-weight: 500;
   color: var(--color-text);
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .card-icon {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5em;
+  font-size: 1.2em;
   font-weight: bold;
   border-radius: 50%;
   color: #fff;
 }
 
 .icon-stochastic { background-color: #dc3545; }
-.icon-deterministic { background-color: #28a745; border-radius: 8px; font-size: 1.2em; }
-.icon-constant { background-color: #6c757d; border-radius: 4px; }
+.icon-deterministic { background-color: #28a745; border-radius: 6px; font-size: 1em; }
+.icon-constant { background-color: #6c757d; border-radius: 3px; }
 .icon-observed {
   background-color: var(--color-background-soft);
   border: 2px dashed #007bff;
@@ -162,13 +162,13 @@ const onClickPaletteItem = (itemType: PaletteItemType) => {
   background-color: var(--color-background-soft);
   border: 2px dashed var(--color-text);
   color: var(--color-text);
-  border-radius: 8px;
-  font-size: 1.2em;
+  border-radius: 6px;
+  font-size: 1em;
 }
 
 .connection-icon {
   width: 100%;
-  height: 20px;
+  height: 16px;
   background-color: transparent !important;
   position: relative;
   border-radius: 0;
@@ -194,7 +194,7 @@ const onClickPaletteItem = (itemType: PaletteItemType) => {
   width: 0;
   height: 0;
   border-style: solid;
-  border-width: 6px 0 6px 10px;
+  border-width: 5px 0 5px 8px;
   border-color: transparent transparent transparent #6c757d;
 }
 </style>

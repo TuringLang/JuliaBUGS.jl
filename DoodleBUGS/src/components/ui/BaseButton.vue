@@ -38,7 +38,18 @@ const primeSize = computed(() => {
     :size="primeSize" 
     :disabled="disabled" 
     :icon="icon"
+    class="base-button-compact"
   >
     <slot></slot>
   </Button>
 </template>
+
+<style scoped>
+.base-button-compact {
+    padding: 0.4rem 0.75rem;
+}
+.base-button-compact.p-button-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+}
+</style>

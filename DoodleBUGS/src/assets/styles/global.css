@@ -1,12 +1,15 @@
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css');
 
 :root {
+  /* Sizing settings - Increased by ~10% from compact */
+  font-size: 14.5px; 
+
   /* Layout Variables */
-  --navbar-height: 50px;
-  --vertical-tab-width: 50px;
-  --sidebar-content-width-left: 280px;
-  --sidebar-width-right: 320px;
-  --menubar-height: 40px;
+  --navbar-height: 44px;
+  --vertical-tab-width: 45px;
+  --sidebar-content-width-left: 265px;
+  --sidebar-width-right: 310px;
+  --menubar-height: 36px;
   --grid-size: 20px;
   
   /* Color Mappings to PrimeVue Aura */
@@ -34,6 +37,10 @@
   --color-info: var(--p-cyan-500);
   --color-warning: var(--p-yellow-500);
   --color-danger: var(--p-red-500);
+
+  /* Workspace specific */
+  --color-workspace-bg: #f5f5f5;
+  --color-workspace-grid: #cccccc;
 }
 
 body {
@@ -43,6 +50,7 @@ body {
   background-color: var(--p-content-background);
   color: var(--p-text-color);
   overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
 }
 
 #app {
@@ -93,6 +101,9 @@ html.dark-mode {
   
   --color-secondary: var(--p-surface-400);
   --color-secondary-hover: var(--p-surface-200);
+
+  --color-workspace-bg: #121212;
+  --color-workspace-grid: #333333;
 }
 
 html.dark-mode .cytoscape-container.grid-background {

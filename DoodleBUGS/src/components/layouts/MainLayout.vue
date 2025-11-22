@@ -153,7 +153,7 @@ const leftSidebarStyle = computed((): StyleValue => ({
 }));
 
 const leftSidebarContentStyle = computed((): StyleValue => {
-  const contentWidth = leftSidebarWidth.value - 50;
+  const contentWidth = leftSidebarWidth.value - 45; // Adjust for new smaller tab width
   return {
     width: `${contentWidth}px`,
     opacity: isLeftSidebarOpen.value ? '1' : '0',
@@ -180,7 +180,7 @@ const startResizeLeft = () => {
 const doResizeLeft = (event: MouseEvent) => {
   if (isResizingLeft.value) {
     const newWidth = event.clientX;
-    leftSidebarWidth.value = Math.max(250, Math.min(newWidth, 600));
+    leftSidebarWidth.value = Math.max(200, Math.min(newWidth, 500));
   }
 };
 
@@ -195,7 +195,7 @@ const startResizeRight = () => {
 const doResizeRight = (event: MouseEvent) => {
   if (isResizingRight.value) {
     const newWidth = window.innerWidth - event.clientX;
-    rightSidebarWidth.value = Math.max(400, Math.min(newWidth, 800));
+    rightSidebarWidth.value = Math.max(300, Math.min(newWidth, 700));
   }
 };
 
@@ -732,7 +732,8 @@ const handleGenerateStandalone = () => {
           @element-selected="handleElementSelected" 
           @layout-updated="handleLayoutUpdated"
           @update:show-zoom-controls="showZoomControls = $event"
-          @new-graph="showNewGraphModal = true" />
+          @new-graph="showNewGraphModal = true"
+          @open-export-modal="openExportModal" />
         <GraphEditor 
           v-else
           :graph-id="graphStore.currentGraphId || ''"
@@ -882,7 +883,7 @@ const handleGenerateStandalone = () => {
   width: var(--vertical-tab-width);
   border-right: 1px solid var(--color-border-light);
   background-color: var(--color-background-dark);
-  padding-top: 10px;
+  padding-top: 8px;
   flex-shrink: 0;
 }
 
@@ -892,20 +893,20 @@ const handleGenerateStandalone = () => {
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 10px 0;
+  padding: 8px 0;
   border: none;
   background-color: transparent;
   color: var(--color-text-light);
   font-size: 0.75em;
   font-weight: 500;
   transition: all 0.2s ease;
-  gap: 5px;
+  gap: 4px;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .vertical-tabs-container button i {
-  font-size: 1.3em;
+  font-size: 1.2em;
   color: var(--color-secondary);
   transition: color 0.2s ease;
 }
@@ -933,7 +934,7 @@ const handleGenerateStandalone = () => {
 .left-sidebar-content {
   flex-grow: 1;
   overflow-y: auto;
-  padding: 15px;
+  padding: 10px;
   -webkit-overflow-scrolling: touch;
   transition: opacity 0.3s ease-in-out;
   box-sizing: border-box;
@@ -959,7 +960,7 @@ const handleGenerateStandalone = () => {
   align-items: center;
   border-bottom: 1px solid var(--color-border-light);
   flex-shrink: 0;
-  padding-right: 10px;
+  padding-right: 8px;
 }
 
 .tab-buttons {
@@ -969,11 +970,12 @@ const handleGenerateStandalone = () => {
 
 .tab-buttons button {
   flex: 1;
-  padding: 10px 15px;
+  padding: 6px 10px;
   border: none;
   background-color: transparent;
   border-bottom: 2px solid transparent;
   font-weight: 500;
+  font-size: 0.85em;
   color: var(--color-text);
   transition: all 0.2s ease;
   white-space: nowrap;
@@ -1004,8 +1006,8 @@ const handleGenerateStandalone = () => {
   border: none;
   color: var(--color-secondary);
   cursor: pointer;
-  padding: 5px;
-  font-size: 0.9em;
+  padding: 4px;
+  font-size: 0.85em;
   border-radius: 4px;
   transition: all 0.2s ease;
 }

@@ -13,9 +13,11 @@ import AccordionContent from 'primevue/accordioncontent';
 import type { NodeType } from '../../types';
 import BaseButton from '../ui/BaseButton.vue';
 import BaseInput from '../ui/BaseInput.vue';
+import BaseSelect from '../ui/BaseSelect.vue';
 import DropdownMenu from '../common/DropdownMenu.vue';
 import { nodeDefinitions, exampleModels } from '../../config/nodeDefinitions';
 import { useExecutionStore } from '../../stores/executionStore';
+import { useUiStore } from '../../stores/uiStore';
 
 defineProps<{
   projectName: string | null;
@@ -59,7 +61,10 @@ const emit = defineEmits<{
 }>();
 
 const executionStore = useExecutionStore();
+const uiStore = useUiStore();
 const { isConnected, isExecuting, isConnecting, backendUrl } = storeToRefs(executionStore);
+const { workspaceGridStyle, canvasGridStyle, workspaceGridSize } = storeToRefs(uiStore);
+
 const navBackendUrl = ref(backendUrl.value || 'http://localhost:8081');
 const cloneCmd = 'git clone https://github.com/TuringLang/JuliaBUGS.jl.git';
 const instantiateCmd = 'julia --project=DoodleBUGS/runtime -e "using Pkg; Pkg.instantiate()"';
@@ -92,6 +97,9 @@ const updateGridEnabled = (val: boolean) => emit('update:isGridEnabled', val);
 const updateGridSize = (val: number | null) => {
     if (val !== null) emit('update:gridSize', val);
 };
+const updateWorkspaceGridSize = (val: number | null) => {
+    if (val !== null) workspaceGridSize.value = val;
+};
 const updateShowZoomControls = (val: boolean) => emit('update:showZoomControls', val);
 const updateShowDebugPanel = (val: boolean) => emit('update:showDebugPanel', val);
 
@@ -118,16 +126,21 @@ const toggleDarkMode = () => {
 
 // Mobile Menu
 const mobileMenuOpen = ref(false);
+
+const gridStyleOptions = [
+    { label: 'Dots', value: 'dots' },
+    { label: 'Lines', value: 'lines' }
+];
 </script>
 
 <template>
   <Toolbar class="navbar-toolbar">
     <template #start>
       <div class="flex items-center gap-2">
-        <span class="text-xl font-bold mr-4">DoodleBUGS</span>
+        <span class="text-lg font-bold mr-3">DoodleBUGS</span>
         
         <!-- Desktop Menu -->
-        <div class="desktop-menu flex gap-2">
+        <div class="desktop-menu flex gap-1">
           <DropdownMenu>
             <template #trigger>
               <BaseButton type="ghost" size="small">Project</BaseButton>
@@ -197,9 +210,54 @@ const mobileMenuOpen = ref(false);
                   <ToggleSwitch :modelValue="isGridEnabled" @update:modelValue="updateGridEnabled" inputId="show-grid" />
                 </div>
                 
-                <div class="view-option-row">
-                  <label for="grid-size" class="view-label">Grid Size</label>
-                  <InputNumber :modelValue="gridSize" @update:modelValue="updateGridSize" inputId="grid-size" :min="5" :max="100" :step="5" showButtons buttonLayout="horizontal" class="grid-size-input" />
+                <div class="view-option-row grid-settings-row">
+                  <label for="ws-grid-style" class="view-label">Workspace Grid</label>
+                  <div class="flex gap-2 items-center justify-end settings-controls">
+                    <BaseSelect 
+                        id="ws-grid-style"
+                        v-model="workspaceGridStyle"
+                        :options="gridStyleOptions"
+                        class="grid-style-select"
+                    />
+                    <InputNumber 
+                        :modelValue="workspaceGridSize" 
+                        @update:modelValue="updateWorkspaceGridSize" 
+                        showButtons 
+                        buttonLayout="stacked" 
+                        :step="10" 
+                        :min="10" 
+                        :max="200"
+                        decrementButtonIcon="pi pi-angle-down"
+                        incrementButtonIcon="pi pi-angle-up"
+                        class="grid-size-input"
+                        :allowEmpty="false"
+                    />
+                  </div>
+                </div>
+
+                <div class="view-option-row grid-settings-row">
+                  <label for="canvas-grid-style" class="view-label">Canvas Grid</label>
+                  <div class="flex gap-2 items-center justify-end settings-controls">
+                    <BaseSelect 
+                        id="canvas-grid-style"
+                        v-model="canvasGridStyle"
+                        :options="gridStyleOptions"
+                        class="grid-style-select"
+                    />
+                    <InputNumber 
+                        :modelValue="gridSize" 
+                        @update:modelValue="updateGridSize" 
+                        showButtons 
+                        buttonLayout="stacked" 
+                        :step="5" 
+                        :min="5" 
+                        :max="100" 
+                        decrementButtonIcon="pi pi-angle-down"
+                        incrementButtonIcon="pi pi-angle-up"
+                        class="grid-size-input"
+                        :allowEmpty="false"
+                    />
+                  </div>
                 </div>
                 
                 <div class="dropdown-divider"></div>
@@ -266,7 +324,7 @@ const mobileMenuOpen = ref(false);
                     </div>
                   </div>
                   <div class="instruction-item">
-                    <span class="instruction-label">2. From repo root, first time only (instantiate deps):</span>
+                    <span class="instruction-label">2. First time only (instantiate deps):</span>
                     <div class="instruction-command">
                       <code>{{ instantiateCmd }}</code>
                       <BaseButton size="small" type="secondary" class="copy-btn-inline" title="Copy command" @click.stop="copyInstantiateCmd">
@@ -276,7 +334,7 @@ const mobileMenuOpen = ref(false);
                     </div>
                   </div>
                   <div class="instruction-item">
-                    <span class="instruction-label">3. From repo root, start backend:</span>
+                    <span class="instruction-label">3. Start backend:</span>
                     <div class="instruction-command">
                       <code>{{ startCmd }}</code>
                       <BaseButton size="small" type="secondary" class="copy-btn-inline" title="Copy command" @click.stop="copyStartCmd">
@@ -311,20 +369,19 @@ const mobileMenuOpen = ref(false);
 
     <template #center>
       <div class="desktop-actions flex items-center gap-2">
-        <div class="backend-status" :class="{ 'connected': isConnected, 'disconnected': !isConnected }" :title="isConnected ? 'Connected to backend' : 'Disconnected from backend'">
+        <div class="status-indicator backend-status" 
+             :class="{ 'connected': isConnected, 'disconnected': !isConnected }">
             <i class="fas fa-circle"></i>
+            <div class="instant-tooltip">{{ isConnected ? 'Backend Connected' : 'Backend Disconnected' }}</div>
         </div>
-        <BaseButton @click="emit('validate-model')" type="ghost" size="small" title="Re-run model validation">
-            <i class="fas fa-sync-alt"></i> Validate
-        </BaseButton>
-        <div
+        
+        <div class="status-indicator validation-status"
             @click="emit('show-validation-issues')"
-            class="validation-status"
-            :class="isModelValid ? 'valid' : 'invalid'"
-            :title="isModelValid ? 'Model is valid' : 'Model has errors. Click to see details.'"
-        >
+            :class="isModelValid ? 'valid' : 'invalid'">
             <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
+            <div class="instant-tooltip">{{ isModelValid ? 'Model Valid' : 'Validation Errors Found' }}</div>
         </div>
+
         <BaseButton @click="emit('run-model')" type="primary" size="small" title="Run Model on Backend" :disabled="!isConnected || isExecuting">
             <i v-if="isExecuting" class="fas fa-spinner fa-spin"></i>
             <i v-else class="fas fa-play"></i>
@@ -338,41 +395,115 @@ const mobileMenuOpen = ref(false);
     </template>
 
     <template #end>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1">
         <Button 
             :icon="isDarkMode ? 'pi pi-sun' : 'pi pi-moon'" 
             @click="toggleDarkMode" 
             text 
             rounded 
             aria-label="Toggle Dark Mode" 
+            size="small"
         />
         
-        <Button @click="emit('toggle-left-sidebar')" :class="{ 'p-button-outlined': isLeftSidebarOpen }" icon="pi pi-align-left" text rounded title="Toggle Left Sidebar" />
-        <Button @click="emit('toggle-right-sidebar')" :class="{ 'p-button-outlined': isRightSidebarOpen }" icon="pi pi-align-right" text rounded title="Toggle Right Sidebar" />
+        <Button @click="emit('toggle-left-sidebar')" :class="{ 'p-button-outlined': isLeftSidebarOpen }" icon="pi pi-align-left" text rounded size="small" title="Toggle Left Sidebar" />
+        <Button @click="emit('toggle-right-sidebar')" :class="{ 'p-button-outlined': isRightSidebarOpen }" icon="pi pi-align-right" text rounded size="small" title="Toggle Right Sidebar" />
         
-        <Button icon="pi pi-bars" class="mobile-toggle" @click="mobileMenuOpen = true" text />
+        <Button icon="pi pi-bars" class="mobile-toggle" @click="mobileMenuOpen = true" text rounded size="small" />
       </div>
     </template>
   </Toolbar>
 
   <Drawer v-model:visible="mobileMenuOpen" header="Menu" position="right" class="w-80">
-    <Accordion :multiple="true" :value="['actions', 'help']">
-        <AccordionPanel value="actions">
-            <AccordionHeader>Actions</AccordionHeader>
+    <Accordion :multiple="true" :value="['run', 'view']">
+        <AccordionPanel value="run">
+            <AccordionHeader>Run</AccordionHeader>
             <AccordionContent>
-                <div class="flex flex-col gap-2">
-                    <BaseButton @click="emit('run-model'); mobileMenuOpen = false" type="primary" :disabled="!isConnected || isExecuting" class="w-full justify-center">Run Model</BaseButton>
-                    <BaseButton @click="emit('validate-model'); mobileMenuOpen = false" type="secondary" class="w-full justify-center">Validate</BaseButton>
+                <div class="flex flex-col gap-4 pt-3">
+                    <BaseButton @click="emit('run-model'); mobileMenuOpen = false" type="primary" :disabled="!isConnected || isExecuting" class="w-full justify-center py-3">
+                        <i v-if="isExecuting" class="fas fa-spinner fa-spin mr-2"></i>
+                        <i v-else class="fas fa-play mr-2"></i>
+                        Run Model
+                    </BaseButton>
                 </div>
             </AccordionContent>
         </AccordionPanel>
         
+        <AccordionPanel value="view">
+            <AccordionHeader>View Settings</AccordionHeader>
+            <AccordionContent>
+                <div class="flex flex-col gap-5 pt-3 mobile-view-options">
+                    <div class="mobile-option-row">
+                        <label for="mobile-multi-canvas">Multi-Canvas</label>
+                        <ToggleSwitch :modelValue="isMultiCanvasView" @update:modelValue="emit('toggle-canvas-view')" inputId="mobile-multi-canvas" />
+                    </div>
+                    <div class="mobile-option-row">
+                        <label for="mobile-show-grid">Show Grid</label>
+                        <ToggleSwitch :modelValue="isGridEnabled" @update:modelValue="updateGridEnabled" inputId="mobile-show-grid" />
+                    </div>
+                    <div class="mobile-option-row">
+                        <label>Workspace Grid</label>
+                        <div class="flex gap-3 items-center">
+                            <BaseSelect 
+                                v-model="workspaceGridStyle"
+                                :options="gridStyleOptions"
+                                class="w-24"
+                            />
+                            <InputNumber 
+                                :modelValue="workspaceGridSize" 
+                                @update:modelValue="updateWorkspaceGridSize" 
+                                showButtons 
+                                buttonLayout="stacked" 
+                                :step="10" 
+                                :min="10" 
+                                :max="200"
+                                decrementButtonIcon="pi pi-angle-down"
+                                incrementButtonIcon="pi pi-angle-up"
+                                class="grid-size-input"
+                                :allowEmpty="false"
+                            />
+                        </div>
+                    </div>
+                    <div class="mobile-option-row">
+                        <label>Canvas Grid</label>
+                        <div class="flex gap-3 items-center">
+                            <BaseSelect 
+                                v-model="canvasGridStyle"
+                                :options="gridStyleOptions"
+                                class="w-24"
+                            />
+                            <InputNumber 
+                                :modelValue="gridSize" 
+                                @update:modelValue="updateGridSize" 
+                                showButtons 
+                                buttonLayout="stacked" 
+                                :step="5" 
+                                :min="5" 
+                                :max="100" 
+                                decrementButtonIcon="pi pi-angle-down"
+                                incrementButtonIcon="pi pi-angle-up"
+                                class="grid-size-input"
+                                :allowEmpty="false"
+                            />
+                        </div>
+                    </div>
+                    <div class="mobile-option-row">
+                        <label for="mobile-show-zoom">Zoom Controls</label>
+                        <ToggleSwitch :modelValue="showZoomControls" @update:modelValue="updateShowZoomControls" inputId="mobile-show-zoom" />
+                    </div>
+                    <div class="mobile-option-row">
+                        <label for="mobile-show-debug">Debug Console</label>
+                        <ToggleSwitch :modelValue="showDebugPanel" @update:modelValue="updateShowDebugPanel" inputId="mobile-show-debug" />
+                    </div>
+                </div>
+            </AccordionContent>
+        </AccordionPanel>
+
         <AccordionPanel value="project">
             <AccordionHeader>Project</AccordionHeader>
             <AccordionContent>
-                <div class="flex flex-col gap-2">
-                    <BaseButton @click="emit('new-project'); mobileMenuOpen = false" type="ghost" class="w-full text-left">New Project</BaseButton>
-                    <BaseButton @click="emit('new-graph'); mobileMenuOpen = false" type="ghost" class="w-full text-left">New Graph</BaseButton>
+                <div class="flex flex-col gap-4 pt-3">
+                    <BaseButton @click="emit('new-project'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">New Project</BaseButton>
+                    <BaseButton @click="emit('new-graph'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">New Graph</BaseButton>
                 </div>
             </AccordionContent>
         </AccordionPanel>
@@ -380,24 +511,24 @@ const mobileMenuOpen = ref(false);
         <AccordionPanel value="export">
             <AccordionHeader>Export</AccordionHeader>
             <AccordionContent>
-                <div class="flex flex-col gap-2">
-                    <BaseButton @click="emit('open-export-modal', 'png'); mobileMenuOpen = false" type="ghost" class="w-full text-left">as PNG</BaseButton>
-                    <BaseButton @click="emit('open-export-modal', 'jpg'); mobileMenuOpen = false" type="ghost" class="w-full text-left">as JPG</BaseButton>
-                    <BaseButton @click="emit('open-export-modal', 'svg'); mobileMenuOpen = false" type="ghost" class="w-full text-left">as SVG</BaseButton>
-                    <BaseButton @click="emit('export-json'); mobileMenuOpen = false" type="ghost" class="w-full text-left">as JSON</BaseButton>
+                <div class="flex flex-col gap-4 pt-3">
+                    <BaseButton @click="emit('open-export-modal', 'png'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">as PNG</BaseButton>
+                    <BaseButton @click="emit('open-export-modal', 'jpg'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">as JPG</BaseButton>
+                    <BaseButton @click="emit('open-export-modal', 'svg'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">as SVG</BaseButton>
+                    <BaseButton @click="emit('export-json'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">as JSON</BaseButton>
                 </div>
             </AccordionContent>
         </AccordionPanel>
 
         <AccordionPanel value="add">
-            <AccordionHeader>Add</AccordionHeader>
+            <AccordionHeader>Add Nodes</AccordionHeader>
             <AccordionContent>
-                <div class="flex flex-col gap-2">
+                <div class="grid grid-cols-2 gap-3 pt-3">
                     <BaseButton v-for="nodeDef in nodeDefinitions" :key="nodeDef.nodeType" 
-                        @click="setAddNodeType(nodeDef.nodeType); mobileMenuOpen = false" type="ghost" size="small" class="w-full text-left justify-start">
+                        @click="setAddNodeType(nodeDef.nodeType); mobileMenuOpen = false" type="ghost" size="small" class="text-xs p-3 border border-gray-200 dark:border-gray-700 rounded h-full flex items-center justify-center">
                         {{ nodeDef.label }}
                     </BaseButton>
-                    <BaseButton @click="emit('update:currentMode', 'add-edge'); mobileMenuOpen = false" type="ghost" size="small" class="w-full text-left justify-start">Add Edge</BaseButton>
+                    <BaseButton @click="emit('update:currentMode', 'add-edge'); mobileMenuOpen = false" type="ghost" size="small" class="text-xs p-3 border border-gray-200 dark:border-gray-700 rounded h-full flex items-center justify-center">Add Edge</BaseButton>
                 </div>
             </AccordionContent>
         </AccordionPanel>
@@ -405,36 +536,12 @@ const mobileMenuOpen = ref(false);
         <AccordionPanel value="layout">
             <AccordionHeader>Layout</AccordionHeader>
             <AccordionContent>
-                <div class="flex flex-col gap-2">
-                    <BaseButton @click="emit('apply-layout', 'dagre'); mobileMenuOpen = false" type="ghost" class="w-full text-left">Dagre</BaseButton>
-                    <BaseButton @click="emit('apply-layout', 'fcose'); mobileMenuOpen = false" type="ghost" class="w-full text-left">fCoSE</BaseButton>
-                    <BaseButton @click="emit('apply-layout', 'cola'); mobileMenuOpen = false" type="ghost" class="w-full text-left">Cola</BaseButton>
-                    <BaseButton @click="emit('apply-layout', 'klay'); mobileMenuOpen = false" type="ghost" class="w-full text-left">KLay</BaseButton>
-                    <BaseButton @click="emit('apply-layout', 'preset'); mobileMenuOpen = false" type="ghost" class="w-full text-left">Reset</BaseButton>
-                </div>
-            </AccordionContent>
-        </AccordionPanel>
-
-        <AccordionPanel value="view">
-            <AccordionHeader>View</AccordionHeader>
-            <AccordionContent>
-                <div class="flex flex-col gap-3">
-                    <div class="flex items-center justify-between">
-                        <label for="mobile-show-grid" class="cursor-pointer">Show Grid</label>
-                        <ToggleSwitch :modelValue="isGridEnabled" @update:modelValue="updateGridEnabled" inputId="mobile-show-grid" />
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <label for="mobile-grid-size" class="cursor-pointer">Grid Size</label>
-                        <InputNumber :modelValue="gridSize" @update:modelValue="updateGridSize" inputId="mobile-grid-size" :min="5" :max="100" :step="5" showButtons buttonLayout="horizontal" class="w-28" />
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <label for="mobile-show-zoom" class="cursor-pointer">Show Zoom Controls</label>
-                        <ToggleSwitch :modelValue="showZoomControls" @update:modelValue="updateShowZoomControls" inputId="mobile-show-zoom" />
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <label for="mobile-show-debug" class="cursor-pointer">Show Debug Console</label>
-                        <ToggleSwitch :modelValue="showDebugPanel" @update:modelValue="updateShowDebugPanel" inputId="mobile-show-debug" />
-                    </div>
+                <div class="flex flex-col gap-4 pt-3">
+                    <BaseButton @click="emit('apply-layout', 'dagre'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">Dagre</BaseButton>
+                    <BaseButton @click="emit('apply-layout', 'fcose'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">fCoSE</BaseButton>
+                    <BaseButton @click="emit('apply-layout', 'cola'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">Cola</BaseButton>
+                    <BaseButton @click="emit('apply-layout', 'klay'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">KLay</BaseButton>
+                    <BaseButton @click="emit('apply-layout', 'preset'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">Reset</BaseButton>
                 </div>
             </AccordionContent>
         </AccordionPanel>
@@ -442,9 +549,9 @@ const mobileMenuOpen = ref(false);
         <AccordionPanel value="examples">
             <AccordionHeader>Examples</AccordionHeader>
             <AccordionContent>
-                <div class="flex flex-col gap-2">
+                <div class="flex flex-col gap-4 pt-3">
                     <BaseButton v-for="example in exampleModels" :key="example.key" 
-                        @click="emit('load-example', example.key); mobileMenuOpen = false" type="ghost" class="w-full text-left">
+                        @click="emit('load-example', example.key); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">
                         {{ example.name }}
                     </BaseButton>
                 </div>
@@ -454,16 +561,16 @@ const mobileMenuOpen = ref(false);
         <AccordionPanel value="connection">
             <AccordionHeader>Connection</AccordionHeader>
             <AccordionContent>
-                <div class="flex flex-col gap-3">
-                    <div class="flex flex-col gap-1">
-                        <label for="backend-url-mobile">URL:</label>
+                <div class="flex flex-col gap-5 pt-3">
+                    <div class="flex flex-col gap-2">
+                        <label for="backend-url-mobile" class="text-sm font-medium">URL:</label>
                         <BaseInput id="backend-url-mobile" v-model="navBackendUrl" placeholder="http://localhost:8081" class="w-full" />
                     </div>
-                    <BaseButton @click="emit('connect-to-backend-url', navBackendUrl); mobileMenuOpen = false" :disabled="isConnecting" type="primary" class="w-full justify-center">
+                    <BaseButton @click="emit('connect-to-backend-url', navBackendUrl); mobileMenuOpen = false" :disabled="isConnecting" type="primary" class="w-full justify-center py-3">
                         <span v-if="isConnecting">Connecting...</span>
                         <span v-else>Connect</span>
                     </BaseButton>
-                    <BaseButton @click="emit('generate-standalone'); mobileMenuOpen = false" type="ghost" class="w-full text-left">Generate Standalone Script</BaseButton>
+                    <BaseButton @click="emit('generate-standalone'); mobileMenuOpen = false" type="ghost" class="w-full text-left text-sm p-3 border border-gray-200 dark:border-gray-700 rounded">Generate Standalone Script</BaseButton>
                 </div>
             </AccordionContent>
         </AccordionPanel>
@@ -471,9 +578,9 @@ const mobileMenuOpen = ref(false);
         <AccordionPanel value="help">
             <AccordionHeader>Help</AccordionHeader>
             <AccordionContent>
-                <div class="flex flex-col gap-2">
-                    <BaseButton @click="emit('open-about-modal'); mobileMenuOpen = false" type="ghost" class="w-full text-left">About</BaseButton>
-                    <a href="https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md" target="_blank" rel="noopener noreferrer" class="p-button p-component p-button-ghost p-button-sm w-full text-left no-underline">
+                <div class="flex flex-col gap-4 pt-3">
+                    <BaseButton @click="emit('open-about-modal'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">About</BaseButton>
+                    <a href="https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md" target="_blank" rel="noopener noreferrer" class="p-button p-component p-button-ghost p-button-sm w-full text-left no-underline justify-start p-3 border border-gray-200 dark:border-gray-700 rounded">
                         Report an Issue
                     </a>
                 </div>
@@ -488,8 +595,9 @@ const mobileMenuOpen = ref(false);
     border: none;
     border-bottom: 1px solid var(--p-content-border-color);
     border-radius: 0;
-    padding: 0.5rem 1rem;
+    padding: 0.25rem 1rem;
     background: var(--p-content-background);
+    min-height: var(--navbar-height);
 }
 
 /* Responsive Visibility */
@@ -508,20 +616,47 @@ const mobileMenuOpen = ref(false);
     }
 }
 
-.backend-status {
-    font-size: 0.8em;
-    margin-right: 5px;
+/* Instant Tooltip Status Indicator */
+.status-indicator {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    cursor: help;
 }
+
+.backend-status { margin-right: 5px; }
 .backend-status.connected { color: var(--color-success); }
 .backend-status.disconnected { color: var(--color-danger); }
 
-.validation-status {
-    cursor: pointer;
-    font-size: 1.2em;
-    margin: 0 5px;
-}
+.validation-status { font-size: 1.1em; margin: 0 5px; }
 .validation-status.valid { color: var(--color-success); }
 .validation-status.invalid { color: var(--color-warning); }
+
+.instant-tooltip {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--color-background-dark);
+    color: var(--color-text-light);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s;
+    margin-top: 6px;
+    z-index: 100;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+.status-indicator:hover .instant-tooltip {
+    opacity: 1;
+}
 
 .dropdown-checkbox {
     display: flex;
@@ -548,7 +683,7 @@ const mobileMenuOpen = ref(false);
     margin-top: 10px;
 }
 .connection-status {
-    font-size: 0.9em;
+    font-size: 0.85em;
 }
 .connection-status.connected { color: var(--color-success); }
 
@@ -564,7 +699,7 @@ const mobileMenuOpen = ref(false);
 
 .view-options {
     padding: 0.75rem;
-    min-width: 240px;
+    min-width: 320px;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
@@ -579,30 +714,67 @@ const mobileMenuOpen = ref(false);
 
 .view-label {
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 500;
     flex: 1;
     text-align: left;
+    white-space: nowrap;
 }
 
+.settings-controls {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Compact InputNumber for Grid Size (Desktop) */
 .grid-size-input {
-    width: 110px;
+    height: 34px;
+    width: 3rem !important;
 }
 
 .grid-size-input :deep(.p-inputnumber-input) {
-    width: 45px;
-    text-align: center;
-    padding: 0.25rem;
+    width: 100% !important;
+    text-align: left;
+    padding: 0 0.25rem !important;
     font-size: 0.85rem;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.grid-size-input :deep(.p-inputnumber-button-group) {
+    width: 1.25rem;
 }
 
 .grid-size-input :deep(.p-inputnumber-button) {
-    width: 1.5rem;
-    padding: 0.25rem;
+    width: 100% !important;
+    padding: 0 !important;
+    font-size: 0.6rem;
+    height: 50%;
 }
 
-.grid-size-input :deep(.p-inputnumber-button .p-icon) {
-    font-size: 0.75rem;
+.grid-size-input :deep(.p-inputnumber-button-icon) {
+    font-size: 0.7rem;
+    font-weight: bold;
+}
+
+/* Select (Desktop) */
+.grid-style-select {
+    height: 34px;
+    width: 90px !important; 
+}
+
+.grid-style-select :deep(.p-select-label) {
+    padding: 0 8px;
+    font-size: 0.8rem;
+    line-height: 30px;
+    display: flex;
+    align-items: center;
+}
+
+.grid-style-select :deep(.p-select-dropdown) {
+    width: 24px;
 }
 
 .setup-instructions {
@@ -619,7 +791,7 @@ const mobileMenuOpen = ref(false);
 
 .instruction-label {
     display: block;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     font-weight: 500;
     margin-bottom: 0.25rem;
     color: var(--p-text-color);
@@ -629,26 +801,50 @@ const mobileMenuOpen = ref(false);
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    background-color: var(--p-surface-50);
+    background-color: var(--color-background-mute);
     border: 1px solid var(--p-content-border-color);
     border-radius: 4px;
     padding: 0.5rem;
 }
 
-:global(html.dark-mode) .instruction-command {
-    background-color: var(--p-surface-800);
+:global(.dark-mode) .instruction-command {
+    background-color: var(--color-background-soft);
 }
 
 .instruction-command code {
     flex: 1;
     font-family: 'Courier New', monospace;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: var(--p-text-color);
     word-break: break-all;
 }
 
 .copy-btn-inline {
     flex-shrink: 0;
-    padding: 0.25rem 0.5rem;
+    padding: 0.15rem 0.4rem;
+}
+
+/* Mobile Menu Spacing */
+.mobile-view-options {
+    gap: 1.5rem;
+}
+
+.mobile-option-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--p-content-border-color);
+}
+
+.mobile-option-row:last-child {
+    border-bottom: none;
+}
+
+.mobile-option-row label {
+    font-size: 0.95rem;
+    cursor: pointer;
+    font-weight: 500;
 }
 </style>
