@@ -7,6 +7,7 @@ import type { GraphElement, GraphNode, GraphEdge, NodeType, PaletteItemType, Val
 import GraphControls from './GraphControls.vue';
 
 const props = defineProps<{
+  graphId: string;
   elements: GraphElement[];
   isGridEnabled: boolean;
   gridSize: number;
@@ -28,9 +29,11 @@ const emit = defineEmits<{
 const cyContainer = ref<HTMLElement | null>(null);
 let cy: Core | null = null;
 const cyInstance = ref<Core | null>(null);
+let resizeObserver: ResizeObserver | null = null;
 
 const { initCytoscape, destroyCytoscape, getCyInstance, getUndoRedoInstance } = useGraphInstance();
-const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping(getCyInstance);
+const getCy = () => getCyInstance(props.graphId);
+const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping(getCy);
 
 const validNodeTypes: NodeType[] = ['stochastic', 'deterministic', 'constant', 'observed', 'plate'];
 
@@ -108,7 +111,7 @@ const syncGraphWithProps = (elementsToSync: GraphElement[], errorsToSync: Map<st
 
 onMounted(() => {
   if (cyContainer.value) {
-    cy = initCytoscape(cyContainer.value, []);
+    cy = initCytoscape(cyContainer.value, [], props.graphId);
     cyInstance.value = cy;
 
     syncGraphWithProps(props.elements, props.validationErrors);
@@ -120,7 +123,7 @@ onMounted(() => {
       disableGridSnapping();
     }
 
-    const ur = getUndoRedoInstance();
+    const ur = getUndoRedoInstance(props.graphId);
     if (ur) {
       cy.on('afterUndo afterRedo afterDo', () => {
         if (!cy) return;
@@ -212,12 +215,23 @@ onMounted(() => {
         }
       }
     });
+
+    resizeObserver = new ResizeObserver(() => {
+      if (cy) {
+        cy.resize();
+      }
+    });
+    resizeObserver.observe(cyContainer.value);
   }
 });
 
 onUnmounted(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
   if (cy) {
-    destroyCytoscape(cy);
+    destroyCytoscape(props.graphId);
   }
 });
 

@@ -4,6 +4,7 @@ import type { StyleValue } from 'vue';
 import { storeToRefs } from 'pinia';
 import type { Core, LayoutOptions } from 'cytoscape';
 import GraphEditor from '../canvas/GraphEditor.vue';
+import MultiCanvasView from '../canvas/MultiCanvasView.vue';
 import ProjectManager from '../left-sidebar/ProjectManager.vue';
 import NodePalette from '../left-sidebar/NodePalette.vue';
 import ExecutionSettingsPanel from '../left-sidebar/ExecutionSettingsPanel.vue';
@@ -53,7 +54,7 @@ const { generatedCode } = useBugsCodeGenerator(elements);
 const { getCyInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
 const { backendUrl, isConnected, isConnecting, isExecuting, samplerSettings } = storeToRefs(executionStore);
-const { activeLeftTab, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth } = storeToRefs(uiStore);
+const { activeLeftTab, isLeftSidebarOpen, leftSidebarWidth, isRightSidebarOpen, rightSidebarWidth, isMultiCanvasView } = storeToRefs(uiStore);
 
 const currentMode = ref<string>('select');
 const currentNodeType = ref<NodeType>('stochastic');
@@ -223,7 +224,7 @@ const handleSelectNodeFromModal = (nodeId: string) => {
   const nodeToSelect = elements.value.find(el => el.id === nodeId);
   if (nodeToSelect) {
     handleElementSelected(nodeToSelect);
-    const cy = getCyInstance();
+    const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null;
     if (cy) {
       cy.elements().unselect();
       cy.getElementById(nodeId).select();
@@ -253,7 +254,7 @@ const handleLayoutUpdated = (layoutName: string) => {
 };
 
 const handleGraphLayout = (layoutName: string) => {
-    const cy = getCyInstance();
+    const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null;
     if (!cy) return;
 
     const shouldUpdatePositions = layoutName !== 'preset';
@@ -353,7 +354,7 @@ const openExportModal = (format: 'png' | 'jpg' | 'svg') => {
 };
 
 const handleConfirmExport = (options: ExportOptions) => {
-  const cy = getCyInstance() as Core & { svg: (options: object) => string; jpg: (options: object) => Blob; png: (options: object) => Blob; };
+  const cy = (graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null) as Core & { svg: (options: object) => string; jpg: (options: object) => Blob; png: (options: object) => Blob; };
   if (!cy || !currentExportType.value) return;
   const fileName = `${activeGraphName.value || 'graph'}.${currentExportType.value}`;
   try {
@@ -674,6 +675,7 @@ const handleGenerateStandalone = () => {
       @connect-to-backend-url="connectToBackendUrl" @run-model="runModel" @abort-run="abortRun" @generate-standalone="handleGenerateStandalone"
       :show-debug-panel="showDebugPanel" @update:show-debug-panel="showDebugPanel = $event" 
       :show-zoom-controls="showZoomControls" @update:show-zoom-controls="showZoomControls = $event"
+      :is-multi-canvas-view="isMultiCanvasView" @toggle-canvas-view="uiStore.toggleCanvasView"
       />
 
     <div class="content-area">
@@ -715,13 +717,38 @@ const handleGenerateStandalone = () => {
       <div class="resizer resizer-left" @mousedown.prevent="startResizeLeft"></div>
 
       <main class="graph-editor-wrapper">
-        <GraphEditor :is-grid-enabled="isGridEnabled" @update:is-grid-enabled="isGridEnabled = $event"
-          :grid-size="gridSize" @update:grid-size="gridSize = $event"
+        <MultiCanvasView 
+          v-if="isMultiCanvasView"
+          :is-grid-enabled="isGridEnabled" 
+          @update:is-grid-enabled="isGridEnabled = $event"
+          :grid-size="gridSize" 
+          @update:grid-size="gridSize = $event"
           :current-mode="currentMode"
-          :elements="elements" :current-node-type="currentNodeType" :validation-errors="validationErrors"
+          :current-node-type="currentNodeType" 
+          :validation-errors="validationErrors"
           :show-zoom-controls="showZoomControls"
-          @update:current-mode="currentMode = $event" @update:current-node-type="currentNodeType = $event"
-          @element-selected="handleElementSelected" @layout-updated="handleLayoutUpdated"
+          @update:current-mode="currentMode = $event" 
+          @update:current-node-type="currentNodeType = $event"
+          @element-selected="handleElementSelected" 
+          @layout-updated="handleLayoutUpdated"
+          @update:show-zoom-controls="showZoomControls = $event"
+          @new-graph="showNewGraphModal = true" />
+        <GraphEditor 
+          v-else
+          :graph-id="graphStore.currentGraphId || ''"
+          :is-grid-enabled="isGridEnabled" 
+          @update:is-grid-enabled="isGridEnabled = $event"
+          :grid-size="gridSize" 
+          @update:grid-size="gridSize = $event"
+          :current-mode="currentMode"
+          :elements="elements" 
+          :current-node-type="currentNodeType" 
+          :validation-errors="validationErrors"
+          :show-zoom-controls="showZoomControls"
+          @update:current-mode="currentMode = $event" 
+          @update:current-node-type="currentNodeType = $event"
+          @element-selected="handleElementSelected" 
+          @layout-updated="handleLayoutUpdated"
           @update:show-zoom-controls="showZoomControls = $event" />
       </main>
 

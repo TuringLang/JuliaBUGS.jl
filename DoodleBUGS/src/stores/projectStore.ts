@@ -7,6 +7,11 @@ export interface GraphMeta {
   name: string;
   createdAt: number;
   lastModified: number;
+  // Layout props
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export interface Project {
@@ -77,11 +82,18 @@ export const useProjectStore = defineStore('project', () => {
   const addGraphToProject = (projectId: string, graphName: string): GraphMeta | undefined => {
     const project = projects.value.find(p => p.id === projectId);
     if (project) {
+      // Simple auto-layout: Offset new graphs slightly
+      const offset = project.graphs.length * 40;
+      
       const newGraphMeta: GraphMeta = {
         id: `graph_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         name: graphName,
         createdAt: Date.now(),
         lastModified: Date.now(),
+        x: 100 + offset,
+        y: 100 + offset,
+        width: 600,
+        height: 400
       };
       project.graphs.push(newGraphMeta);
       project.lastModified = Date.now();
@@ -106,6 +118,20 @@ export const useProjectStore = defineStore('project', () => {
     }
   };
 
+  const updateGraphLayout = (projectId: string, graphId: string, layout: Partial<{ x: number, y: number, width: number, height: number }>) => {
+    const project = projects.value.find(p => p.id === projectId);
+    if (project) {
+        const graph = project.graphs.find(g => g.id === graphId);
+        if (graph) {
+            if (layout.x !== undefined) graph.x = layout.x;
+            if (layout.y !== undefined) graph.y = layout.y;
+            if (layout.width !== undefined) graph.width = layout.width;
+            if (layout.height !== undefined) graph.height = layout.height;
+            saveProjects();
+        }
+    }
+  }
+
   const deleteGraphFromProject = (projectId: string, graphId: string) => {
     const project = projects.value.find(p => p.id === projectId);
     if (project) {
@@ -127,7 +153,18 @@ export const useProjectStore = defineStore('project', () => {
   const loadProjects = () => {
     const storedProjects = localStorage.getItem('doodlebugs-projects');
     if (storedProjects) {
-      projects.value = JSON.parse(storedProjects);
+      const loaded = JSON.parse(storedProjects);
+      loaded.forEach((p: any) => {
+          if (p.graphs) {
+              p.graphs.forEach((g: any, index: number) => {
+                  if (g.x === undefined) g.x = 100 + (index * 40);
+                  if (g.y === undefined) g.y = 100 + (index * 40);
+                  if (g.width === undefined) g.width = 600;
+                  if (g.height === undefined) g.height = 400;
+              });
+          }
+      });
+      projects.value = loaded;
     }
     if (currentProjectId.value && !projects.value.some(p => p.id === currentProjectId.value)) {
       selectProject(null);
@@ -144,6 +181,7 @@ export const useProjectStore = defineStore('project', () => {
     deleteProject,
     addGraphToProject,
     renameGraphInProject,
+    updateGraphLayout,
     deleteGraphFromProject,
     getGraphsForProject,
     loadProjects,

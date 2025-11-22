@@ -23,15 +23,14 @@ cytoscape.use(undoRedo);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type UndoRedoInstance = any;
 
-let cyInstance: Core | null = null;
-let urInstance: UndoRedoInstance = null;
+const instances = new Map<string, { cy: Core, ur: UndoRedoInstance }>();
 
 export function useGraphInstance() {
-  const initCytoscape = (container: HTMLElement, initialElements: ElementDefinition[]): Core => {
-    if (cyInstance) {
-      cyInstance.destroy();
-      cyInstance = null;
-      urInstance = null;
+  const initCytoscape = (container: HTMLElement, initialElements: ElementDefinition[], graphId: string): Core => {
+    if (instances.has(graphId)) {
+      const instance = instances.get(graphId)!;
+      instance.cy.destroy();
+      instances.delete(graphId);
     }
 
     const options: cytoscape.CytoscapeOptions = {
@@ -145,11 +144,11 @@ export function useGraphInstance() {
       autounselectify: false,
     };
 
-    cyInstance = cytoscape(options);
+    const cyInstance = cytoscape(options);
 
     // Initialize undo-redo
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    urInstance = (cyInstance as any).undoRedo({
+    const urInstance = (cyInstance as any).undoRedo({
       isDebug: false,
       undoableDrag: true,
       stackSizeLimit: 50,
@@ -253,19 +252,26 @@ export function useGraphInstance() {
     });
     */
 
+    instances.set(graphId, { cy: cyInstance, ur: urInstance });
+
     return cyInstance;
   };
 
-  const destroyCytoscape = (cy: Core): void => {
-    if (cy) {
-      cy.destroy();
-      cyInstance = null;
-      urInstance = null;
+  const destroyCytoscape = (graphId: string): void => {
+    if (instances.has(graphId)) {
+      const instance = instances.get(graphId)!;
+      instance.cy.destroy();
+      instances.delete(graphId);
     }
   };
 
-  const getCyInstance = (): Core | null => cyInstance;
-  const getUndoRedoInstance = (): UndoRedoInstance => urInstance;
+  const getCyInstance = (graphId: string): Core | null => {
+    return instances.get(graphId)?.cy || null;
+  };
+
+  const getUndoRedoInstance = (graphId: string): UndoRedoInstance => {
+    return instances.get(graphId)?.ur || null;
+  };
 
   return { initCytoscape, destroyCytoscape, getCyInstance, getUndoRedoInstance };
 }

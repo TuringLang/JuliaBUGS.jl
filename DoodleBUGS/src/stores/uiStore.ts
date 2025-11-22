@@ -35,6 +35,11 @@ export const useUiStore = defineStore('ui', () => {
     parseInt(localStorage.getItem('doodlebugs-leftSidebarWidth') || '330')
   );
 
+  // Canvas View Mode
+  const isMultiCanvasView = ref<boolean>(
+    localStorage.getItem('doodlebugs-isMultiCanvasView') === 'true'
+  );
+
   // Watchers for Persistence
   watch(activeRightTab, (newTab) => {
     localStorage.setItem('doodlebugs-activeRightTab', newTab);
@@ -56,6 +61,9 @@ export const useUiStore = defineStore('ui', () => {
   });
   watch(leftSidebarWidth, (newWidth) => {
     localStorage.setItem('doodlebugs-leftSidebarWidth', newWidth.toString());
+  });
+  watch(isMultiCanvasView, (isMulti) => {
+    localStorage.setItem('doodlebugs-isMultiCanvasView', isMulti.toString());
   });
 
   // Actions
@@ -85,6 +93,10 @@ export const useUiStore = defineStore('ui', () => {
     isLeftSidebarOpen.value = !isLeftSidebarOpen.value;
   };
 
+  const toggleCanvasView = () => {
+    isMultiCanvasView.value = !isMultiCanvasView.value;
+  };
+
   return {
     activeRightTab,
     isRightTabPinned,
@@ -98,5 +110,7 @@ export const useUiStore = defineStore('ui', () => {
     leftSidebarWidth,
     handleLeftTabClick,
     toggleLeftSidebar,
+    isMultiCanvasView,
+    toggleCanvasView,
   };
 });

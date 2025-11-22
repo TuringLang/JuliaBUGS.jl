@@ -29,6 +29,7 @@ defineProps<{
   isModelValid: boolean;
   showDebugPanel: boolean;
   showZoomControls: boolean;
+  isMultiCanvasView?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -53,6 +54,8 @@ const emit = defineEmits<{
   (e: 'generate-standalone'): void;
   (e: 'update:showDebugPanel', value: boolean): void;
   (e: 'update:showZoomControls', value: boolean): void;
+  (e: 'toggle-canvas-view'): void;
+  (e: 'save-current-graph'): void;
 }>();
 
 const executionStore = useExecutionStore();
@@ -182,6 +185,13 @@ const mobileMenuOpen = ref(false);
             </template>
             <template #content>
               <div class="view-options" @click.stop>
+                <div class="view-option-row">
+                  <label for="multi-canvas" class="view-label">Multi-Canvas View</label>
+                  <ToggleSwitch :modelValue="isMultiCanvasView" @update:modelValue="emit('toggle-canvas-view')" inputId="multi-canvas" />
+                </div>
+                
+                <div class="dropdown-divider"></div>
+                
                 <div class="view-option-row">
                   <label for="show-grid" class="view-label">Show Grid</label>
                   <ToggleSwitch :modelValue="isGridEnabled" @update:modelValue="updateGridEnabled" inputId="show-grid" />
