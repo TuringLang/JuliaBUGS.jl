@@ -20,8 +20,6 @@ const emit = defineEmits<{
   (e: 'zoom-out'): void;
   (e: 'fit'): void;
   (e: 'arrange', type: 'grid' | 'horizontal' | 'vertical'): void;
-  // Graph Layout
-  (e: 'layout-graph', layout: string): void;
 }>();
 
 const availableNodeTypes = computed(() => {
@@ -168,7 +166,7 @@ onUnmounted(() => {
       <div class="divider"></div>
 
       <!-- Add Node Inline Selector -->
-      <div class="inline-node-selector" :class="{ active: currentMode === 'add-node' }">
+      <div class="inline-node-selector" :class="{ active: currentMode === 'add-node' }" title="Add Node">
           <button class="icon-only-btn" @click="setMode('add-node')">
               <i class="fas fa-plus-circle"></i>
           </button>
@@ -229,26 +227,6 @@ onUnmounted(() => {
             </template>
         </DropdownMenu>
       </template>
-
-      <div class="divider"></div>
-
-      <!-- Graph Layout Menu -->
-      <DropdownMenu class="dock-dropdown">
-          <template #trigger>
-              <button class="dock-btn" title="Graph Layout">
-                  <i class="fas fa-sitemap"></i>
-              </button>
-          </template>
-          <template #content>
-              <div class="dropdown-section-title">Graph Layout</div>
-              <a href="#" @click.prevent="$emit('layout-graph', 'dagre')">Dagre (Hierarchical)</a>
-              <a href="#" @click.prevent="$emit('layout-graph', 'fcose')">fCoSE (Force)</a>
-              <a href="#" @click.prevent="$emit('layout-graph', 'cola')">Cola (Physics)</a>
-              <a href="#" @click.prevent="$emit('layout-graph', 'klay')">KLay (Layered)</a>
-              <div class="dropdown-divider"></div>
-              <a href="#" @click.prevent="$emit('layout-graph', 'preset')">Reset to Preset</a>
-          </template>
-      </DropdownMenu>
     </div>
   </div>
 </template>

@@ -168,8 +168,8 @@ const fitGraph = (graphId: string) => {
     }
 };
 
-const handleGraphLayout = (layoutName: string) => {
-    const targetId = pinnedGraphId.value || currentGraphId.value;
+const handleGraphLayout = (layoutName: string, graphId?: string) => {
+    const targetId = graphId || pinnedGraphId.value || currentGraphId.value;
     if (targetId) {
         const cy = getCyInstance(targetId);
         if (cy) {
@@ -968,12 +968,22 @@ onUnmounted(() => {
                     <i class="fas fa-expand"></i>
                 </button>
                 
-                <!-- Individual Graph controls only visible in multi view -->
-                <div class="header-zoom-controls" @mousedown.stop @touchstart.stop>
-                    <button class="icon-btn" @click.stop="zoomGraph(graph.id, 1.2)" @touchstart.stop="zoomGraph(graph.id, 1.2)"><i class="fas fa-plus"></i></button>
-                    <button class="icon-btn" @click.stop="zoomGraph(graph.id, 0.8)" @touchstart.stop="zoomGraph(graph.id, 0.8)"><i class="fas fa-minus"></i></button>
-                    <button class="icon-btn" @click.stop="fitGraph(graph.id)" @touchstart.stop="fitGraph(graph.id)"><i class="fas fa-compress"></i></button>
-                </div>
+                <!-- Graph Layout Dropdown -->
+                <DropdownMenu class="layout-menu">
+                    <template #trigger>
+                        <button class="icon-btn" title="Graph Layout" @mousedown.stop @touchstart.stop>
+                            <i class="fas fa-sitemap"></i>
+                        </button>
+                    </template>
+                    <template #content>
+                        <div class="dropdown-section-title">Layout</div>
+                        <a href="#" @click.prevent="handleGraphLayout('dagre', graph.id)">Dagre</a>
+                        <a href="#" @click.prevent="handleGraphLayout('fcose', graph.id)">fCoSE</a>
+                        <a href="#" @click.prevent="handleGraphLayout('cola', graph.id)">Cola</a>
+                        <a href="#" @click.prevent="handleGraphLayout('klay', graph.id)">KLay</a>
+                        <a href="#" @click.prevent="handleGraphLayout('preset', graph.id)">Reset</a>
+                    </template>
+                </DropdownMenu>
 
                 <span class="node-count-badge"
                       @mouseenter="handleBadgeEnter($event, graph.id)" 
@@ -1133,7 +1143,6 @@ onUnmounted(() => {
         @zoom-out="zoomOut"
         @fit="fitAll"
         @arrange="arrangeGraphs"
-        @layout-graph="handleGraphLayout"
     />
   </div>
 </template>
@@ -1285,16 +1294,6 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     gap: 6px;
-}
-
-.header-zoom-controls {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    margin-right: 4px;
-    background: var(--theme-bg-active);
-    border-radius: var(--radius-sm);
-    padding: 0 2px;
 }
 
 .node-count-badge {

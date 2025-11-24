@@ -628,19 +628,6 @@ const abortRun = () => {
 
             <DropdownMenu>
               <template #trigger>
-                <BaseButton type="ghost" size="small">Layout</BaseButton>
-              </template>
-              <template #content>
-                <a href="#" @click.prevent="handleGraphLayout('dagre')">Dagre (Hierarchical)</a>
-                <a href="#" @click.prevent="handleGraphLayout('fcose')">fCoSE (Force-Directed)</a>
-                <a href="#" @click.prevent="handleGraphLayout('cola')">Cola (Physics Simulation)</a>
-                <a href="#" @click.prevent="handleGraphLayout('klay')">KLay (Layered)</a>
-                <a href="#" @click.prevent="handleGraphLayout('preset')">Reset to Preset</a>
-              </template>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <template #trigger>
                 <BaseButton type="ghost" size="small">View</BaseButton>
               </template>
               <template #content>
@@ -962,19 +949,6 @@ const abortRun = () => {
                           {{ nodeDef.label }}
                       </BaseButton>
                       <BaseButton @click="setModeAddEdge(); mobileMenuOpen = false" type="ghost" size="small" class="text-xs p-3 border border-gray-200 dark:border-gray-700 rounded h-full flex items-center justify-center">Add Edge</BaseButton>
-                  </div>
-              </AccordionContent>
-          </AccordionPanel>
-
-          <AccordionPanel value="layout">
-              <AccordionHeader>Layout</AccordionHeader>
-              <AccordionContent>
-                  <div class="flex flex-col gap-4 pt-3">
-                      <BaseButton @click="handleGraphLayout('dagre'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">Dagre</BaseButton>
-                      <BaseButton @click="handleGraphLayout('fcose'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">fCoSE</BaseButton>
-                      <BaseButton @click="handleGraphLayout('cola'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">Cola</BaseButton>
-                      <BaseButton @click="handleGraphLayout('klay'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">KLay</BaseButton>
-                      <BaseButton @click="handleGraphLayout('preset'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">Reset</BaseButton>
                   </div>
               </AccordionContent>
           </AccordionPanel>
