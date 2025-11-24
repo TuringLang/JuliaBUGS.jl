@@ -500,8 +500,19 @@ const onDragItem = (e: MouseEvent) => {
 
 const stopDragItem = () => {
   // Save project state once at the end of the drag
-  if (dragTarget.value) {
+  const targetId = dragTarget.value;
+  const type = dragType.value;
+
+  if (targetId) {
       projectStore.saveProjects();
+      
+      // Fix for Cytoscape hit detection after move: force resize to update container bounds in Cytoscape's cache
+      if (type === 'graph') {
+          const cy = getCyInstance(targetId);
+          if (cy) {
+              cy.resize();
+          }
+      }
   }
   dragTarget.value = null;
   dragType.value = null;
@@ -553,8 +564,19 @@ const onDragItemTouch = (e: TouchEvent) => {
 };
 
 const stopDragItemTouch = () => {
-  if (dragTarget.value) {
+  const targetId = dragTarget.value;
+  const type = dragType.value;
+
+  if (targetId) {
       projectStore.saveProjects();
+      
+      // Fix for Cytoscape hit detection after move
+      if (type === 'graph') {
+          const cy = getCyInstance(targetId);
+          if (cy) {
+              cy.resize();
+          }
+      }
   }
   dragTarget.value = null;
   dragType.value = null;
