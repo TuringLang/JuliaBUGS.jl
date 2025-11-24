@@ -62,7 +62,7 @@ const { generatedCode } = useBugsCodeGenerator(elements);
 const { getCyInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
 const { backendUrl, isConnected, isConnecting, isExecuting, samplerSettings } = storeToRefs(executionStore);
-const { isLeftSidebarOpen, isRightSidebarOpen, canvasGridStyle, workspaceGridStyle, workspaceGridSize, isWorkspaceGridEnabled, isMultiCanvasView } = storeToRefs(uiStore);
+const { isLeftSidebarOpen, isRightSidebarOpen, canvasGridStyle, workspaceGridStyle, workspaceGridSize, isWorkspaceGridEnabled, isMultiCanvasView, pinnedGraphId } = storeToRefs(uiStore);
 
 const currentMode = ref<string>('select');
 const currentNodeType = ref<NodeType>('stochastic');
@@ -89,8 +89,12 @@ const showDebugPanel = ref(false);
 const showExportModal = ref(false);
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null);
 
-// Pinned State
-const pinnedGraphTitle = ref<string | null>(null);
+// Pinned Graph Title Computation
+const pinnedGraphTitle = computed(() => {
+    if (!pinnedGraphId.value || !projectStore.currentProject) return null;
+    const graph = projectStore.currentProject.graphs.find(g => g.id === pinnedGraphId.value);
+    return graph ? graph.name : null;
+});
 
 // --- View Options ---
 const gridStyleOptions = [
@@ -493,8 +497,8 @@ const toggleRightSidebar = () => {
     isRightSidebarOpen.value = !isRightSidebarOpen.value;
 };
 
-const handlePinnedChange = (payload: { id: string | null; name: string | null }) => {
-    pinnedGraphTitle.value = payload.name;
+const unpinGraph = () => {
+    uiStore.setPinnedGraph(null);
 };
 
 const leftSidebarStyle = computed(() => {
@@ -623,6 +627,19 @@ const abortRun = () => {
                 </a>
                 <div class="dropdown-divider"></div>
                 <a href="#" @click.prevent="currentMode = 'add-edge'">Add Edge</a>
+              </template>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <template #trigger>
+                <BaseButton type="ghost" size="small">Layout</BaseButton>
+              </template>
+              <template #content>
+                <a href="#" @click.prevent="handleGraphLayout('dagre')">Dagre (Hierarchical)</a>
+                <a href="#" @click.prevent="handleGraphLayout('fcose')">fCoSE (Force-Directed)</a>
+                <a href="#" @click.prevent="handleGraphLayout('cola')">Cola (Physics Simulation)</a>
+                <a href="#" @click.prevent="handleGraphLayout('klay')">KLay (Layered)</a>
+                <a href="#" @click.prevent="handleGraphLayout('preset')">Reset to Preset</a>
               </template>
             </DropdownMenu>
 
@@ -900,7 +917,7 @@ const abortRun = () => {
                               <input 
                                   type="number" 
                                   :value="gridSize" 
-                                  @input="(e) => updateGridSize((e.target as HTMLInputElement).value)"
+                                  @update:modelValue="updateGridSize" 
                                   step="5" min="5" max="100"
                                   class="native-number-input"
                               />
@@ -949,6 +966,19 @@ const abortRun = () => {
                           {{ nodeDef.label }}
                       </BaseButton>
                       <BaseButton @click="setModeAddEdge(); mobileMenuOpen = false" type="ghost" size="small" class="text-xs p-3 border border-gray-200 dark:border-gray-700 rounded h-full flex items-center justify-center">Add Edge</BaseButton>
+                  </div>
+              </AccordionContent>
+          </AccordionPanel>
+
+          <AccordionPanel value="layout">
+              <AccordionHeader>Layout</AccordionHeader>
+              <AccordionContent>
+                  <div class="flex flex-col gap-4 pt-3">
+                      <BaseButton @click="handleGraphLayout('dagre'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">Dagre</BaseButton>
+                      <BaseButton @click="handleGraphLayout('fcose'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">fCoSE</BaseButton>
+                      <BaseButton @click="handleGraphLayout('cola'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">Cola</BaseButton>
+                      <BaseButton @click="handleGraphLayout('klay'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">KLay</BaseButton>
+                      <BaseButton @click="handleGraphLayout('preset'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">Reset</BaseButton>
                   </div>
               </AccordionContent>
           </AccordionPanel>
@@ -1014,7 +1044,7 @@ const abortRun = () => {
         @layout-updated="handleLayoutUpdated"
         @new-graph="showNewGraphModal = true"
         @open-export-modal="openExportModal"
-        @pinned-graph-change="handlePinnedChange" />
+      />
     </main>
 
     <!-- Logo Button (Collapsed Left Sidebar) -->
@@ -1024,6 +1054,10 @@ const abortRun = () => {
                {{ pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS' }}
            </span>
        </div>
+       <button v-if="pinnedGraphId" class="unpin-icon-btn ml-2 group" @click.stop="unpinGraph">
+           <i class="fas fa-compress-arrows-alt"></i>
+           <div class="instant-tooltip">Unpin</div>
+       </button>
        <div class="flex items-center gap-1 ml-2">
            <button @click.stop="toggleDarkMode" class="theme-toggle-header" :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
                <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
@@ -1066,7 +1100,11 @@ const abortRun = () => {
             <span class="sidebar-title" @click="toggleLeftSidebar" style="cursor: pointer;">
                 {{ pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS' }}
             </span>
-            <div class="flex items-center gap-1">
+            <button v-if="pinnedGraphId" class="unpin-icon-btn" @click.stop="unpinGraph">
+                <i class="fas fa-compress-arrows-alt"></i>
+                <div class="instant-tooltip">Unpin</div>
+            </button>
+            <div class="flex items-center gap-1 ml-auto">
                 <!-- Theme Toggle -->
                 <button @click.stop="toggleDarkMode" class="theme-toggle-header" :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
                     <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
@@ -1461,6 +1499,30 @@ const abortRun = () => {
 .sidebar-title {
   font-weight: 600;
   font-size: var(--font-size-md);
+}
+
+.unpin-icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--theme-text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    margin-left: 8px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s, background-color 0.2s;
+    position: relative; /* Added for tooltip positioning */
+}
+
+.unpin-icon-btn:hover {
+    color: var(--theme-primary);
+    background-color: var(--theme-bg-hover);
+}
+
+.unpin-icon-btn:hover .instant-tooltip {
+    opacity: 1;
 }
 
 .toggle-icon {

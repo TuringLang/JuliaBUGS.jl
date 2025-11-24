@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { storeToRefs } from 'pinia';
 import ToggleSwitch from 'primevue/toggleswitch';
 import BaseSelect from '../ui/BaseSelect.vue';
@@ -42,6 +42,7 @@ const graphStore = useGraphStore();
 const uiStore = useUiStore();
 const { currentProject } = storeToRefs(projectStore);
 const { currentGraphId, elementToFocus } = storeToRefs(graphStore);
+const { pinnedGraphId } = storeToRefs(uiStore);
 const { getCyInstance, getUndoRedoInstance } = useGraphInstance();
 
 // --- Workspace State ---
@@ -65,8 +66,6 @@ const initialLayout = ref({ x: 0, y: 0, width: 0, height: 0 });
 const hoveredGraphId = ref<string | null>(null);
 const tooltipPos = ref({ x: 0, y: 0 });
 const showTooltip = ref(false);
-
-const pinnedGraphId = ref<string | null>(null);
 
 const gridStyleOptions = [
     { label: 'Dots', value: 'dots' },
@@ -157,6 +156,7 @@ const zoomGraph = (graphId: string, factor: number) => {
 const fitGraph = (graphId: string) => {
     const cy = getCyInstance(graphId);
     if (cy) {
+        cy.resize(); // Ensure resize is called before fitting, especially on display change
         cy.animate({
             fit: {
                 eles: cy.elements(),
@@ -694,14 +694,12 @@ const activateGraph = (graphId: string) => {
   }
 };
 
-const togglePinGraph = (graphId: string, name?: string) => {
+const togglePinGraph = (graphId: string) => {
     if (pinnedGraphId.value === graphId) {
-        pinnedGraphId.value = null; // Unpin
-        emit('pinned-graph-change', { id: null, name: null });
+        uiStore.setPinnedGraph(null); // Unpin via store
     } else {
-        pinnedGraphId.value = graphId; // Pin
+        uiStore.setPinnedGraph(graphId); // Pin via store
         graphStore.selectGraph(graphId);
-        emit('pinned-graph-change', { id: graphId, name: name || 'Graph' });
     }
 };
 
@@ -770,11 +768,27 @@ const exportGraph = (graphId: string, format: 'png' | 'jpg' | 'svg') => {
 
 // Workspace Controls
 const zoomIn = () => {
-    workspaceScale.value = Math.min(workspaceScale.value + 0.1, 5);
+    if (pinnedGraphId.value) {
+        zoomGraph(pinnedGraphId.value, 1.2);
+    } else {
+        workspaceScale.value = Math.min(workspaceScale.value + 0.1, 5);
+    }
 };
 const zoomOut = () => {
-    workspaceScale.value = Math.max(workspaceScale.value - 0.1, 0.1);
+    if (pinnedGraphId.value) {
+        zoomGraph(pinnedGraphId.value, 0.8);
+    } else {
+        workspaceScale.value = Math.max(workspaceScale.value - 0.1, 0.1);
+    }
 };
+const handleFit = () => {
+    if (pinnedGraphId.value) {
+        fitGraph(pinnedGraphId.value);
+    } else {
+        fitAll();
+    }
+};
+
 const fitAll = () => {
     if (graphs.value.length === 0) return;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -879,10 +893,36 @@ watch(elementToFocus, (newEl) => {
     }
 });
 
+watch(pinnedGraphId, (newId) => {
+    nextTick(() => {
+        if (newId) {
+            const cy = getCyInstance(newId);
+            if (cy) {
+                cy.resize();
+                cy.fit(undefined, 50);
+            }
+        } else {
+            setTimeout(() => fitAll(), 100);
+        }
+    });
+});
+
 onMounted(() => {
     if (graphs.value.length > 0) {
         workspaceX.value = 50;
         workspaceY.value = 50;
+    }
+    if (pinnedGraphId.value) {
+        setTimeout(() => {
+            const cy = getCyInstance(pinnedGraphId.value!);
+            if (cy) {
+                cy.resize();
+                cy.fit(undefined, 50);
+            }
+        }, 300);
+    } else {
+        // Ensure graphs are visible on load if unpinned
+        setTimeout(() => fitAll(), 100);
     }
 });
 
@@ -948,15 +988,6 @@ onUnmounted(() => {
             </defs>
         </svg>
 
-        <!-- Pinned Graph Controls (Floating Top Right) -->
-        <div v-if="pinnedGraphId" class="pinned-controls glass-panel">
-            <button class="icon-btn" @click="zoomGraph(pinnedGraphId, 1.2)" title="Zoom In"><i class="fas fa-plus"></i></button>
-            <button class="icon-btn" @click="zoomGraph(pinnedGraphId, 0.8)" title="Zoom Out"><i class="fas fa-minus"></i></button>
-            <button class="icon-btn" @click="fitGraph(pinnedGraphId)" title="Fit View"><i class="fas fa-compress"></i></button>
-            <div class="divider-vertical"></div>
-            <button class="icon-btn pin-active" @click="togglePinGraph(pinnedGraphId)" title="Return to Workspace"><i class="fas fa-compress-arrows-alt"></i> Unpin</button>
-        </div>
-
         <div 
           v-for="graph in graphs" 
           :key="graph.id"
@@ -984,8 +1015,8 @@ onUnmounted(() => {
             <span class="graph-title">{{ graph.name }}</span>
             <div class="header-actions">
                 <button class="icon-btn pin-btn" 
-                        @click.stop="togglePinGraph(graph.id, graph.name)" 
-                        @touchstart.stop="togglePinGraph(graph.id, graph.name)"
+                        @click.stop="togglePinGraph(graph.id)" 
+                        @touchstart.stop="togglePinGraph(graph.id)"
                         title="Pin to Fullscreen">
                     <i class="fas fa-expand"></i>
                 </button>
@@ -1156,15 +1187,17 @@ onUnmounted(() => {
     <FloatingBottomToolbar 
         :current-mode="currentMode"
         :current-node-type="currentNodeType"
-        :show-workspace-controls="!pinnedGraphId"
+        :show-workspace-controls="true"
+        :is-pinned="!!pinnedGraphId"
         @update:current-mode="$emit('update:currentMode', $event)"
         @update:current-node-type="$emit('update:currentNodeType', $event)"
         @undo="handleUndo"
         @redo="handleRedo"
         @zoom-in="zoomIn"
         @zoom-out="zoomOut"
-        @fit="fitAll"
+        @fit="handleFit"
         @arrange="arrangeGraphs"
+        @layout-graph="handleGraphLayout"
     />
   </div>
 </template>
@@ -1242,25 +1275,6 @@ onUnmounted(() => {
     z-index: 10 !important;
     border-radius: 0 !important;
     border: none !important;
-}
-
-.pinned-controls {
-    position: absolute;
-    top: 16px;
-    right: 340px; 
-    z-index: 60;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 6px 12px;
-    border-radius: var(--radius-pill);
-}
-
-.divider-vertical {
-    width: 1px;
-    height: 16px;
-    background: var(--theme-border);
-    margin: 0 6px;
 }
 
 .hidden {
