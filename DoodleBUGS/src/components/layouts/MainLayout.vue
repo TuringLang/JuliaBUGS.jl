@@ -37,7 +37,7 @@ import { useExecutionStore } from '../../stores/executionStore';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGraphValidator } from '../../composables/useGraphValidator';
 import { useBugsCodeGenerator, generateStandaloneScript } from '../../composables/useBugsCodeGenerator';
-import type { GraphElement, NodeType, ExampleModel, GraphNode } from '../../types';
+import type { GraphElement, NodeType, ExampleModel, PaletteItemType } from '../../types';
 import type { GeneratedFile } from '../../stores/executionStore';
 import { exampleModels, nodeDefinitions } from '../../config/nodeDefinitions';
 
@@ -493,10 +493,6 @@ const toggleRightSidebar = () => {
     isRightSidebarOpen.value = !isRightSidebarOpen.value;
 };
 
-const closeRightSidebar = () => {
-    isRightSidebarOpen.value = false;
-};
-
 const handlePinnedChange = (payload: { id: string | null; name: string | null }) => {
     pinnedGraphTitle.value = payload.name;
 };
@@ -799,6 +795,33 @@ const abortRun = () => {
         </div>
       </template>
 
+      <template #center>
+        <div class="desktop-actions flex items-center gap-2">
+          <div class="status-indicator backend-status" 
+               :class="{ 'connected': isConnected, 'disconnected': !isConnected }">
+              <i class="fas fa-circle"></i>
+              <div class="instant-tooltip">{{ isConnected ? 'Backend Connected' : 'Backend Disconnected' }}</div>
+          </div>
+          
+          <div class="status-indicator validation-status"
+              @click="showValidationModal = true"
+              :class="isModelValid ? 'valid' : 'invalid'">
+              <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
+              <div class="instant-tooltip">{{ isModelValid ? 'Model Valid' : 'Validation Errors Found' }}</div>
+          </div>
+
+          <BaseButton @click="runModel" type="primary" size="small" title="Run Model on Backend" :disabled="!isConnected || isExecuting">
+              <i v-if="isExecuting" class="fas fa-spinner fa-spin"></i>
+              <i v-else class="fas fa-play"></i>
+              Run
+          </BaseButton>
+          <BaseButton v-if="isExecuting" @click="abortRun" type="danger" size="small" title="Abort current run">
+              <i class="fas fa-stop"></i>
+              Abort
+          </BaseButton>
+        </div>
+      </template>
+
       <template #end>
         <div class="flex items-center gap-1">
           <Button 
@@ -1031,7 +1054,7 @@ const abortRun = () => {
            <span class="logo-text-minimized">Inspector</span>
        </div>
        
-       <div class="flex items-center gap-2 mr-2">
+       <div class="flex items-center gap-1 mr-2">
             <div class="status-indicator backend-status" 
                  :class="{ 'connected': isConnected, 'disconnected': !isConnected }">
                 <i class="fas fa-circle"></i>
@@ -1085,11 +1108,11 @@ const abortRun = () => {
                     <AccordionHeader><i class="fas fa-shapes icon-12"></i> Nodes</AccordionHeader>
                     <AccordionContent>
                         <div class="panel-content-wrapper">
-                            <NodePalette @select-palette-item="(type) => { 
+                            <NodePalette @select-palette-item="(type: PaletteItemType) => { 
                                 if (type === 'add-edge') {
                                     currentMode = 'add-edge';
                                 } else {
-                                    currentNodeType = type; 
+                                    currentNodeType = type as NodeType; 
                                     currentMode = 'add-node'; 
                                 }
                             }" />
@@ -1101,7 +1124,7 @@ const abortRun = () => {
                 <AccordionPanel value="data">
                     <AccordionHeader><i class="fas fa-database icon-12"></i> Data</AccordionHeader>
                     <AccordionContent>
-                        <div class="panel-content-wrapper fixed-height-panel">
+                        <div class="panel-content-wrapper">
                             <DataInputPanel :is-active="true" />
                         </div>
                     </AccordionContent>
@@ -1233,7 +1256,7 @@ const abortRun = () => {
             <span class="sidebar-title">Inspector</span>
             
             <!-- Controls in Header when Open -->
-            <div class="flex items-center gap-3 ml-auto" @click.stop>
+            <div class="flex items-center gap-1 ml-auto" @click.stop>
                  <div class="status-indicator backend-status" 
                      :class="{ 'connected': isConnected, 'disconnected': !isConnected }">
                     <i class="fas fa-circle"></i>
@@ -1327,7 +1350,8 @@ const abortRun = () => {
 .app-layout {
   position: relative;
   width: 100vw;
-  height: 100vh;
+  height: 100dvh; /* Use dvh for mobile browser compatibility */
+  height: 100vh; /* Fallback */
   overflow: hidden;
   background-color: var(--theme-bg-canvas);
 }
@@ -1413,13 +1437,17 @@ const abortRun = () => {
 .floating-sidebar {
   position: absolute;
   top: 16px;
-  bottom: 16px;
+  /* Use explicit height calculation to enforce symmetry with top */
+  height: calc(100dvh - 32px); 
+  bottom: auto;
   z-index: 50;
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-lg);
   overflow: hidden;
   transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease;
+  background: var(--theme-bg-panel);
+  box-shadow: var(--shadow-floating);
 }
 
 .floating-sidebar.left {
@@ -1476,6 +1504,7 @@ const abortRun = () => {
     overflow-y: auto;
     flex: 1;
     background: var(--theme-bg-panel);
+    min-height: 0; /* Crucial for flex container scrolling */
 }
 
 /* Accordion Styling Overrides */
@@ -1518,13 +1547,6 @@ const abortRun = () => {
     background: var(--theme-bg-panel);
 }
 
-.fixed-height-panel {
-    height: 350px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
 /* Override child styles to fit accordion */
 :deep(.project-manager), :deep(.node-palette), :deep(.execution-settings-panel) {
     background: transparent;
@@ -1537,6 +1559,7 @@ const abortRun = () => {
 :deep(.data-input-panel) {
     height: 100%;
     padding: 8px;
+    min-height: 300px; /* Ensure usable height for code editor */
 }
 
 /* Sidebar Right Content */
@@ -1770,12 +1793,13 @@ const abortRun = () => {
     cursor: help;
 }
 
-.backend-status { margin-right: 5px; }
+.backend-status { margin-right: 0; }
 .backend-status.connected { color: var(--theme-success); }
 .backend-status.disconnected { color: var(--theme-danger); }
 
-.validation-status { font-size: 1.1em; margin: 0 5px; }
-.validation-status.valid { color: var(--theme-success) !important; }
+/* Adjusted spacing for indicators */
+.validation-status { font-size: 1.1em; margin: 0; }
+.validation-status.valid { color: var(--theme-success); }
 .validation-status.invalid { color: var(--theme-warning); }
 
 .instant-tooltip {

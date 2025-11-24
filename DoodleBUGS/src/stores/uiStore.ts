@@ -14,10 +14,9 @@ export const useUiStore = defineStore('ui', () => {
   const isRightTabPinned = ref<boolean>(
     localStorage.getItem('doodlebugs-isRightTabPinned') === 'true'
   );
+  // Default to closed (false) if not set or not 'true'
   const isRightSidebarOpen = ref<boolean>(
-    typeof window !== 'undefined' && window.innerWidth <= 768
-      ? false
-      : localStorage.getItem('doodlebugs-isRightSidebarOpen') !== 'false'
+    localStorage.getItem('doodlebugs-isRightSidebarOpen') === 'true'
   );
   const rightSidebarWidth = ref<number>(
     parseInt(localStorage.getItem('doodlebugs-rightSidebarWidth') || '310')
@@ -27,10 +26,9 @@ export const useUiStore = defineStore('ui', () => {
   const activeLeftTab = ref<LeftSidebarTab>(
     (localStorage.getItem('doodlebugs-activeLeftTab') as LeftSidebarTab) || 'project'
   );
+  // Default to closed (false) if not set or not 'true'
   const isLeftSidebarOpen = ref<boolean>(
-    typeof window !== 'undefined' && window.innerWidth <= 768
-      ? false
-      : localStorage.getItem('doodlebugs-isLeftSidebarOpen') !== 'false'
+    localStorage.getItem('doodlebugs-isLeftSidebarOpen') === 'true'
   );
   const leftSidebarWidth = ref<number>(
     parseInt(localStorage.getItem('doodlebugs-leftSidebarWidth') || '265')

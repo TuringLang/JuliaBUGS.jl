@@ -14,7 +14,6 @@ import { useUiStore, type GridStyle } from '../../stores/uiStore';
 import type { GraphElement, GraphNode, NodeType, ValidationError } from '../../types';
 import DropdownMenu from '../common/DropdownMenu.vue';
 import { useGraphInstance } from '../../composables/useGraphInstance';
-import { useGraphElements } from '../../composables/useGraphElements';
 
 const props = defineProps<{
   isGridEnabled: boolean; 
@@ -44,8 +43,6 @@ const uiStore = useUiStore();
 const { currentProject } = storeToRefs(projectStore);
 const { currentGraphId, elementToFocus } = storeToRefs(graphStore);
 const { getCyInstance, getUndoRedoInstance } = useGraphInstance();
-// selectedElement is available if needed for other logic, but removed from zoom watcher
-const { selectedElement } = useGraphElements();
 
 // --- Workspace State ---
 const workspaceX = ref(0);
