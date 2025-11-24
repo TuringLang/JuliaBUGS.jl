@@ -1,3 +1,4 @@
+
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useDataStore } from '../../stores/dataStore';
@@ -148,8 +149,8 @@ watch(() => props.isActive, (newVal) => {
     <div class="header-controls">
         <h4>Model Data & Inits</h4>
         <div class="mode-switcher">
-            <BaseButton class="base-button" :class="{active: dataStore.inputMode === 'json'}" @click="dataStore.inputMode = 'json'" size="small" type="ghost">JSON</BaseButton>
-            <BaseButton class="base-button" :class="{active: dataStore.inputMode === 'julia'}" @click="dataStore.inputMode = 'julia'" size="small" type="ghost">Julia</BaseButton>
+            <BaseButton class="base-button" :class="{active: dataStore.inputMode === 'json'}" @click="dataStore.inputMode = 'json'" size="small">JSON</BaseButton>
+            <BaseButton class="base-button" :class="{active: dataStore.inputMode === 'julia'}" @click="dataStore.inputMode = 'julia'" size="small">Julia</BaseButton>
         </div>
     </div>
     <p class="description">
@@ -196,7 +197,7 @@ watch(() => props.isActive, (newVal) => {
 <style>
 .data-input-panel .CodeMirror {
   height: 100%;
-  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-family: monospace;
   font-size: 0.85em;
   border-radius: 8px;
 }
@@ -244,18 +245,23 @@ h4 {
     background-color: var(--color-background-soft);
     color: var(--color-text);
     box-sizing: border-box;
+    opacity: 0.7;
+    transition: all 0.2s;
 }
 .mode-switcher .base-button:hover {
-    background-color: var(--color-background-soft);
-    border: none;
+    background-color: var(--color-background-mute);
+    opacity: 1;
 }
 .mode-switcher .base-button.active {
-    background-color: var(--color-primary) !important;
-    color: white !important;
+    background-color: var(--theme-primary) !important;
+    color: var(--theme-text-inverse) !important;
+    opacity: 1;
 }
 :global(html.dark-mode) .mode-switcher .base-button.active {
-    color: black !important;
+    /* Ensure contrast in dark mode if inverse is white */
+    color: #fff !important; 
 }
+
 .description {
   font-size: 0.85em;
   color: var(--color-secondary);

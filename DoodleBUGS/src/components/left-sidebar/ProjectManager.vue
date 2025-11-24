@@ -230,7 +230,8 @@ const handleNewGraph = () => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: var(--color-background-soft);
+  /* Use explicit transparent background so it blends with sidebar panel */
+  background-color: transparent; 
 }
 
 .header {
@@ -238,13 +239,13 @@ const handleNewGraph = () => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 10px;
-  border-bottom: 1px solid var(--color-border-light);
+  border-bottom: 1px solid var(--theme-border);
   flex-shrink: 0;
 }
 
 .header h4 {
   margin: 0;
-  color: var(--color-heading);
+  color: var(--theme-text-primary); /* Explicitly use theme text color */
   font-size: 0.95em;
   font-weight: 600;
 }
@@ -267,7 +268,7 @@ const handleNewGraph = () => {
   justify-content: center;
   text-align: center;
   padding: 20px;
-  color: var(--color-secondary);
+  color: var(--theme-text-secondary);
 }
 
 .empty-state p {
@@ -276,7 +277,7 @@ const handleNewGraph = () => {
 }
 
 .empty-state-inner {
-  color: var(--color-secondary);
+  color: var(--theme-text-secondary);
   text-align: center;
   padding: 8px;
   font-size: 0.8em;
@@ -305,25 +306,26 @@ const handleNewGraph = () => {
   gap: 6px;
   border-radius: 4px;
   position: relative;
+  color: var(--theme-text-primary); /* Ensure text color */
 }
 
 .project-header:hover {
-  background-color: var(--color-background-mute);
+  background-color: var(--theme-bg-hover);
 }
 
 .project-header.active {
-  background-color: var(--color-primary);
+  background-color: var(--theme-primary);
 }
 
 .project-header.active .project-name,
 .project-header.active .icon-folder,
 .project-header.active .icon-chevron {
-  color: white;
+  color: var(--theme-text-inverse); /* White/Inverse text on active */
 }
 
 .icon-chevron {
   font-size: 0.6em;
-  color: var(--color-secondary);
+  color: var(--theme-text-secondary);
   transition: transform 0.2s ease-in-out;
   width: 10px;
   text-align: center;
@@ -334,18 +336,18 @@ const handleNewGraph = () => {
 }
 
 .icon-folder {
-  color: var(--color-primary);
+  color: var(--theme-primary);
   font-size: 0.8em;
 }
 
 .project-header.active .icon-folder {
-  color: white;
+  color: var(--theme-text-inverse);
 }
 
 .project-name {
   flex-grow: 1;
   font-weight: 500;
-  color: var(--color-heading);
+  color: var(--theme-text-primary); /* Explicit theme color */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -362,7 +364,7 @@ const handleNewGraph = () => {
     padding: 2px 4px;
     font-size: 0.85em;
     background-color: transparent;
-    color: var(--color-secondary);
+    color: var(--theme-text-secondary);
     border: none;
     border-radius: 3px;
     opacity: 0;
@@ -378,12 +380,12 @@ const handleNewGraph = () => {
 }
 
 .project-header.active .action-btn {
-    color: white;
+    color: var(--theme-text-inverse);
 }
 
 .action-btn:hover {
-    background-color: var(--color-border-light);
-    color: var(--color-heading);
+    background-color: var(--theme-border);
+    color: var(--theme-text-primary);
 }
 
 .project-header.active .action-btn:hover {
@@ -394,7 +396,7 @@ const handleNewGraph = () => {
 .graph-list {
   padding-left: 12px;
   overflow: hidden;
-  border-left: 1px solid var(--color-border-light);
+  border-left: 1px solid var(--theme-border);
   margin-left: 10px;
   padding-top: 2px;
   padding-bottom: 2px;
@@ -420,19 +422,20 @@ const handleNewGraph = () => {
   gap: 6px;
   border-radius: 4px;
   position: relative;
+  color: var(--theme-text-primary);
 }
 
 .graph-item:hover {
-  background-color: var(--color-background-mute);
+  background-color: var(--theme-bg-hover);
 }
 
 .graph-item.active {
-  background-color: var(--color-primary);
+  background-color: var(--theme-primary);
 }
 
 .graph-item.active span,
 .graph-item.active .icon-file {
-  color: white;
+  color: var(--theme-text-inverse);
 }
 
 .graph-item span {
@@ -441,16 +444,16 @@ const handleNewGraph = () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--color-heading);
+  color: var(--theme-text-primary);
 }
 
 .icon-file {
   font-size: 0.75em;
-  color: var(--color-secondary);
+  color: var(--theme-text-secondary);
 }
 
 .graph-item.active .action-btn {
-    color: white;
+    color: var(--theme-text-inverse);
 }
 
 .graph-item.active .action-btn:hover {
@@ -464,17 +467,13 @@ const handleNewGraph = () => {
 
 .context-menu {
   position: fixed;
-  background-color: var(--color-background-soft);
-  border: 1px solid var(--color-border);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background-color: var(--theme-bg-panel);
+  border: 1px solid var(--theme-border);
+  box-shadow: var(--shadow-md);
   border-radius: 6px;
   padding: 4px 0;
   z-index: 1100;
   min-width: 160px;
-}
-
-:global(html.dark-mode) .context-menu {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .context-menu-item {
@@ -484,17 +483,17 @@ const handleNewGraph = () => {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--color-heading);
+  color: var(--theme-text-primary);
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .context-menu-item:hover {
-  background-color: var(--color-primary);
-  color: white;
+  background-color: var(--theme-primary);
+  color: var(--theme-text-inverse);
 }
 
 .context-menu-item.danger:hover {
-  background-color: var(--color-danger);
+  background-color: var(--theme-danger);
   color: white;
 }
 

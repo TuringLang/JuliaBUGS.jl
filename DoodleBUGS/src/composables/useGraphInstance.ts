@@ -140,7 +140,6 @@ export function useGraphInstance() {
       minZoom: 0.1,
       maxZoom: 2,
       boxSelectionEnabled: true,
-      wheelSensitivity: 0.2,
       autounselectify: false,
     };
 

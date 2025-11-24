@@ -2,19 +2,17 @@
 import { ref, watch } from 'vue';
 import type { NodeSingular, EventObject, Core } from 'cytoscape';
 import GraphCanvas from './GraphCanvas.vue';
-import CanvasToolbar from './CanvasToolbar.vue';
 import { useGraphElements } from '../../composables/useGraphElements';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import type { GraphElement, GraphNode, GraphEdge, NodeType, ValidationError } from '../../types';
 import type { GridStyle } from '../../stores/uiStore';
 import { getDefaultNodeData } from '../../config/nodeDefinitions';
 
-// Fallback UUID generator for iOS Safari (doesn't support crypto.randomUUID in non-HTTPS)
+// Fallback UUID generator for iOS Safari
 const generateUUID = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
-  // Fallback: generate a UUID v4-like string
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = Math.random() * 16 | 0;
     const v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -49,16 +47,6 @@ const { getCyInstance, getUndoRedoInstance } = useGraphInstance();
 
 const handleGraphUpdated = (newElements: GraphElement[]) => {
     graphElements.value = newElements;
-};
-
-const handleUndo = () => {
-    const ur = getUndoRedoInstance(props.graphId);
-    if (ur) ur.undo();
-};
-
-const handleRedo = () => {
-    const ur = getUndoRedoInstance(props.graphId);
-    if (ur) ur.redo();
 };
 
 const formatForCy = (el: GraphElement) => {
@@ -248,7 +236,6 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
   let parentPlateId: string | undefined = undefined;
 
   if (nodeType === 'plate') {
-      let parentPlateId: string | undefined = undefined;
       if (cy) {
           const plates = cy.nodes('[nodeType="plate"]');
           for (const plate of plates) {
@@ -311,21 +298,6 @@ watch(() => props.currentMode, (newMode) => {
 
 <template>
   <div class="graph-editor-container">
-    <CanvasToolbar
-      :current-mode="props.currentMode"
-      :current-node-type="props.currentNodeType"
-      :is-grid-enabled="props.isGridEnabled"
-      :grid-size="props.gridSize"
-      @update:current-mode="(mode: string) => emit('update:currentMode', mode)"
-      @update:current-node-type="(type: NodeType) => emit('update:currentNodeType', type)"
-      @update:is-grid-enabled="(val: boolean) => emit('update:isGridEnabled', val)"
-      @update:grid-size="(val: number) => emit('update:gridSize', val)"
-      @undo="handleUndo"
-      @redo="handleRedo"
-      :is-connecting="isConnecting"
-      :source-node-name="sourceNode ? (sourceNode.data('name') as string) : undefined"
-    />
-
     <GraphCanvas
       :graph-id="props.graphId"
       :elements="props.elements"
@@ -352,5 +324,7 @@ watch(() => props.currentMode, (newMode) => {
   flex-direction: column;
   position: relative;
   overflow: hidden;
+  height: 100%;
+  width: 100%;
 }
 </style>

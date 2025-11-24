@@ -1,3 +1,4 @@
+
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import type { Core, EventObject, NodeSingular, ElementDefinition } from 'cytoscape';
@@ -5,7 +6,6 @@ import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGridSnapping } from '../../composables/useGridSnapping';
 import type { GraphElement, GraphNode, GraphEdge, NodeType, PaletteItemType, ValidationError } from '../../types';
 import type { GridStyle } from '../../stores/uiStore';
-import GraphControls from './GraphControls.vue';
 
 const props = defineProps<{
   graphId: string;
@@ -264,18 +264,12 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
     }"
     :style="{ '--grid-size': `${gridSize}px` }"
   ></div>
-  <GraphControls 
-    v-if="showZoomControls"
-    :cy="cyInstance" 
-    :elements="props.elements"
-    @hide-controls="emit('update:show-zoom-controls', false)"
-  />
 </template>
 
 <style scoped>
 .cytoscape-container {
   flex-grow: 1;
-  background-color: var(--color-background-soft);
+  background-color: var(--theme-bg-canvas);
   position: relative;
   overflow: hidden;
   cursor: grab;
@@ -307,27 +301,16 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
   background-color: rgba(255, 0, 0, 0.1) !important;
 }
 
-/* Grid styles with !important to override global defaults */
+/* Grid styles with !important to override global defaults and ensure visibility */
 .cytoscape-container.grid-background.grid-dots {
-  background-image: radial-gradient(circle, var(--color-border-dark) 1px, transparent 1px) !important;
+  background-image: radial-gradient(circle, var(--theme-grid-line) 1px, transparent 1px) !important;
   background-size: var(--grid-size) var(--grid-size) !important;
 }
 
 .cytoscape-container.grid-background.grid-lines {
   background-image:
-    linear-gradient(to right, var(--color-border-dark) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--color-border-dark) 1px, transparent 1px) !important;
+    linear-gradient(to right, var(--theme-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--theme-grid-line) 1px, transparent 1px) !important;
   background-size: var(--grid-size) var(--grid-size) !important;
-}
-
-/* Dark Mode support for grid colors */
-:global(html.dark-mode) .cytoscape-container.grid-background.grid-dots {
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.1) 1px, transparent 1px) !important;
-}
-
-:global(html.dark-mode) .cytoscape-container.grid-background.grid-lines {
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px) !important;
 }
 </style>

@@ -196,29 +196,18 @@ onBeforeUnmount(() => {
 .graph-preview {
   width: 100%;
   height: 100%;
-  background-color: var(--color-background);
+  background-color: var(--theme-bg-canvas);
   /* Ensure it expands */
   flex-grow: 1;
 }
 
 .graph-preview.grid-dots {
-  background-image: radial-gradient(circle, var(--color-border-dark) 1px, transparent 1px);
+  background-image: radial-gradient(circle, var(--theme-grid-line) 1px, transparent 1px);
 }
 
 .graph-preview.grid-lines {
   background-image:
-    linear-gradient(to right, var(--color-border-dark) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--color-border-dark) 1px, transparent 1px);
-}
-
-/* Dark mode support */
-:global(html.dark-mode) .graph-preview.grid-dots {
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
-}
-
-:global(html.dark-mode) .graph-preview.grid-lines {
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    linear-gradient(to right, var(--theme-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--theme-grid-line) 1px, transparent 1px);
 }
 </style>

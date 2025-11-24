@@ -24,6 +24,6 @@ const emit = defineEmits(['update:modelValue', 'change']);
     :disabled="disabled"
     @update:model-value="(val) => emit('update:modelValue', val)"
     @change="(e) => emit('change', e)"
-    class="w-full"
+    class="w-auto"
   />
 </template>

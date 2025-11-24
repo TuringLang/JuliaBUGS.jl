@@ -15,6 +15,11 @@ export const useGraphStore = defineStore('graph', () => {
   const currentGraphId = ref<string | null>(
     localStorage.getItem('doodlebugs-currentGraphId') || null
   );
+  
+  // Shared selection state
+  const selectedElement = ref<GraphElement | null>(null);
+  // Shared focus state (for zooming/panning to element)
+  const elementToFocus = ref<GraphElement | null>(null);
 
   watch(currentGraphId, (newId) => {
     if (newId) {
@@ -36,6 +41,14 @@ export const useGraphStore = defineStore('graph', () => {
     if (graphId && !graphContents.value.has(graphId)) {
       loadGraph(graphId);
     }
+  };
+  
+  const setSelectedElement = (element: GraphElement | null) => {
+    selectedElement.value = element;
+  };
+
+  const setElementToFocus = (element: GraphElement | null) => {
+    elementToFocus.value = element;
   };
 
   const createNewGraphContent = (graphId: string) => {
@@ -94,6 +107,10 @@ export const useGraphStore = defineStore('graph', () => {
     graphContents,
     currentGraphId,
     currentGraphElements,
+    selectedElement,
+    elementToFocus,
+    setSelectedElement,
+    setElementToFocus,
     selectGraph,
     createNewGraphContent,
     updateGraphElements,

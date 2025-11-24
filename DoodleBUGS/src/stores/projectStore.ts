@@ -141,7 +141,8 @@ export const useProjectStore = defineStore('project', () => {
         x: number; y: number; width: number; height: number; 
         showCodePanel: boolean; codePanelX: number; codePanelY: number; codePanelWidth: number; codePanelHeight: number;
         gridEnabled: boolean; gridSize: number; gridStyle: GridStyle;
-    }>
+    }>,
+    shouldSave: boolean = true // New param: default to true
   ) => {
     const project = projects.value.find(p => p.id === projectId);
     if (project) {
@@ -170,7 +171,9 @@ export const useProjectStore = defineStore('project', () => {
                 graph.codePanelHeight = graph.height;
             }
 
-            saveProjects();
+            if (shouldSave) {
+              saveProjects();
+            }
         }
     }
   }
@@ -229,5 +232,6 @@ export const useProjectStore = defineStore('project', () => {
     deleteGraphFromProject,
     getGraphsForProject,
     loadProjects,
+    saveProjects, // Exported so views can manually save after bulk updates
   };
 });

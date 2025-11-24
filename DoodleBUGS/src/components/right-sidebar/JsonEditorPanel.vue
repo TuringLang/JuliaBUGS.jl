@@ -1,3 +1,4 @@
+
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useGraphStore } from '../../stores/graphStore';
@@ -12,6 +13,7 @@ import 'codemirror/addon/search/searchcursor.js';
 import 'codemirror/addon/fold/foldgutter.css';
 import 'codemirror/addon/fold/foldgutter.js';
 import 'codemirror/addon/fold/brace-fold.js';
+import 'codemirror/addon/edit/matchbrackets.js';
 
 import CodeMirror from 'codemirror';
 import type { Editor, TextMarker } from 'codemirror';
@@ -85,7 +87,8 @@ onMounted(() => {
       scrollbarStyle: "simple",
       lineWrapping: false,
       foldGutter: true,
-      gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"]
+      gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
+      matchBrackets: true
     });
     cmInstance.on('change', (instance: Editor) => {
       if (isUpdatingFromSource) return;
@@ -206,7 +209,7 @@ const handleJsonInput = (value: string) => {
 <style>
 .CodeMirror {
   height: 100%;
-  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-family: monospace;
   font-size: 0.85em;
   border-radius: 8px;
 }

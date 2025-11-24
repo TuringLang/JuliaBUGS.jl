@@ -1,4 +1,5 @@
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useGraphStore } from '../stores/graphStore';
 import type { GraphElement } from '../types';
 
@@ -7,7 +8,8 @@ export function useGraphElements(graphId?: string) {
 
   const targetGraphId = computed(() => graphId || graphStore.currentGraphId);
 
-  const selectedElement = ref<GraphElement | null>(null);
+  // Use the shared selectedElement from the store
+  const { selectedElement } = storeToRefs(graphStore);
 
   const elements = computed<GraphElement[]>({
     get: () => {

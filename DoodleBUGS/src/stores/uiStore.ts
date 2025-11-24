@@ -2,7 +2,8 @@ import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
 
 export type RightSidebarTab = 'properties' | 'code' | 'json' | 'connection';
-export type LeftSidebarTab = 'project' | 'palette' | 'data' | 'settings';
+// Expanded to include all new sidebar menu items
+export type LeftSidebarTab = 'project' | 'palette' | 'data' | 'settings' | 'view' | 'export' | 'connect' | 'help';
 export type GridStyle = 'dots' | 'lines';
 
 export const useUiStore = defineStore('ui', () => {
@@ -107,6 +108,8 @@ export const useUiStore = defineStore('ui', () => {
   };
 
   const handleLeftTabClick = (tab: LeftSidebarTab) => {
+    // If clicking the same tab, toggle sidebar visibility
+    // If sidebar is closed, open it and set tab
     if (activeLeftTab.value === tab && isLeftSidebarOpen.value) {
       isLeftSidebarOpen.value = false;
     } else {
