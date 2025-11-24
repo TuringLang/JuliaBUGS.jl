@@ -512,12 +512,24 @@ const leftSidebarStyle = computed(() => {
     };
 });
 
-const rightSidebarStyle = computed(() => ({
-    transform: isRightSidebarOpen.value ? 'translateX(0)' : 'translateX(100%)',
-    width: '320px',
-    opacity: isRightSidebarOpen.value ? 1 : 0,
-    pointerEvents: isRightSidebarOpen.value ? 'auto' : 'none'
-}));
+const rightSidebarStyle = computed(() => {
+    if (!isRightSidebarOpen.value) {
+        return {
+            transform: 'scale(0)',
+            opacity: 0,
+            pointerEvents: 'none',
+            width: '320px',
+            transformOrigin: 'top right'
+        };
+    }
+    return {
+        transform: 'scale(1)',
+        opacity: 1,
+        pointerEvents: 'auto',
+        width: '320px',
+        transformOrigin: 'top right'
+    };
+});
 
 // Direct State Updaters
 const setAddNodeType = (type: NodeType) => {
@@ -1458,6 +1470,7 @@ const abortRun = () => {
 
 .floating-sidebar.right {
   right: 16px;
+  transform-origin: top right;
 }
 
 .sidebar-header {
@@ -1616,14 +1629,14 @@ const abortRun = () => {
     font-size: var(--font-size-xs);
     padding: 8px;
     border-radius: var(--radius-sm);
-    background: var(--theme-bg-active);
+    background: rgba(16, 185, 129, 0.1); /* Green tint */
     text-align: center;
     color: var(--theme-text-secondary);
     margin-bottom: 8px;
 }
 .status-display.connected {
-    color: var(--theme-success);
-    background: rgba(16, 185, 129, 0.1);
+    color: var(--theme-success); /* Green */
+    background: rgba(16, 185, 129, 0.15);
 }
 
 /* Theme toggle button in Header */

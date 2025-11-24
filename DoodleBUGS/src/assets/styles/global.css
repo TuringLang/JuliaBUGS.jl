@@ -5,8 +5,8 @@
   /* --- Typography Configuration --- */
   --font-family-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-size-xs: 10px;
-  --font-size-sm: 12px; /* Changed to 12px */
-  --font-size-md: 13px; /* Main headings */
+  --font-size-sm: 12px;
+  --font-size-md: 13px;
   --font-size-lg: 14px;
   --font-size-xl: 16px;
 
@@ -29,13 +29,13 @@
   --theme-border-hover: #d1d5db;
 
   /* Grids */
-  --theme-grid-line: #d1d5db; /* Darker than border for visibility */
+  --theme-grid-line: #d1d5db;
 
-  /* Accents */
-  --theme-primary: #3b82f6;
-  --theme-primary-hover: #2563eb;
+  /* Accents - GREEN THEME (Emerald) */
+  --theme-primary: #10b981;
+  --theme-primary-hover: #059669;
   --theme-danger: #ef4444;
-  --theme-success: #10b981;
+  --theme-success: #10b981; 
   --theme-warning: #f59e0b;
 
   /* Geometry */
@@ -54,6 +54,31 @@
   --p-text-color: var(--theme-text-primary);
   --p-content-border-color: var(--theme-border);
   --p-primary-color: var(--theme-primary);
+  --p-primary-500: var(--theme-primary);
+  --p-primary-600: var(--theme-primary-hover);
+
+  /* --- Legacy/Component Compatibility Aliases --- */
+  --color-primary: var(--theme-primary);
+  --color-primary-hover: var(--theme-primary-hover);
+  --color-secondary: var(--theme-text-secondary);
+  --color-secondary-hover: var(--theme-text-primary);
+  --color-danger: var(--theme-danger);
+  --color-success: var(--theme-success);
+  --color-warning: var(--theme-warning);
+  --color-info: var(--theme-primary);
+
+  --color-text: var(--theme-text-primary);
+  --color-text-light: var(--theme-text-inverse);
+  --color-text-secondary: var(--theme-text-secondary);
+  --color-heading: var(--theme-text-primary);
+
+  --color-background-soft: var(--theme-bg-canvas);
+  --color-background-mute: var(--theme-bg-active);
+  --color-background-dark: #1f2937;
+
+  --color-border: var(--theme-border);
+  --color-border-light: var(--theme-border);
+  --color-border-dark: var(--theme-text-secondary);
 }
 
 html.dark-mode {
@@ -78,8 +103,9 @@ html.dark-mode {
   --theme-grid-line: #3f3f46;
 
   /* Accents */
-  --theme-primary: #3b82f6;
-  --theme-primary-hover: #60a5fa;
+  --theme-primary: #10b981;
+  --theme-primary-hover: #34d399;
+  --theme-success: #10b981;
   
   /* Shadows */
   --shadow-floating: 0 10px 30px -4px rgba(0,0,0,0.6);
@@ -162,4 +188,25 @@ html.dark-mode .cytoscape-container {
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--theme-border);
   box-shadow: var(--shadow-floating);
+}
+
+/* --- Unified Theme Overrides --- */
+
+/* Debug Panel - Green Theme */
+.debug-panel {
+    border-top-color: var(--theme-primary) !important;
+    color: #fff !important;
+}
+.debug-header {
+    background: rgba(16, 185, 129, 0.2) !important;
+    border-bottom-color: var(--theme-primary) !important;
+    color: #fff !important;
+}
+.debug-btn {
+    border-color: var(--theme-primary) !important;
+    color: var(--theme-primary) !important;
+    background: transparent !important;
+}
+.log-type.type-log {
+    color: var(--theme-primary) !important;
 }

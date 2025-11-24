@@ -174,22 +174,24 @@ const handleNewGraph = () => {
       </div>
     </div>
 
-    <div v-if="contextMenu" ref="contextMenuRef" class="context-menu"
-      :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }">
-      <template v-if="contextMenu.type === 'project'">
-        <div class="context-menu-item" @click="handleNewGraph"><i class="fas fa-plus"></i> New Graph</div>
-        <div class="context-menu-item" @click="openRenameModal('project', contextMenu!.id, projectStore.projects.find(p => p.id === contextMenu!.id)!.name)"><i class="fas fa-edit"></i> Rename</div>
-        <div class="context-menu-item danger"
-          @click="confirmDeletion('project', contextMenu!.id, projectStore.projects.find((p: Project) => p.id === contextMenu!.id)!.name)">
-          <i class="fas fa-trash-alt"></i> Delete Project</div>
-      </template>
-      <template v-if="contextMenu.type === 'graph'">
-        <div class="context-menu-item" @click="openRenameModal('graph', contextMenu!.id, currentProjectGraphs.find(g => g.id === contextMenu!.id)!.name, currentProject!.id)"><i class="fas fa-edit"></i> Rename</div>
-        <div class="context-menu-item danger"
-          @click="confirmDeletion('graph', contextMenu!.id, currentProjectGraphs.find((g: GraphMeta) => g.id === contextMenu!.id)!.name, currentProject!.id)">
-          <i class="fas fa-trash-alt"></i> Delete Graph</div>
-      </template>
-    </div>
+    <Teleport to="body">
+      <div v-if="contextMenu" ref="contextMenuRef" class="context-menu"
+        :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }">
+        <template v-if="contextMenu.type === 'project'">
+          <div class="context-menu-item" @click="handleNewGraph"><i class="fas fa-plus"></i> New Graph</div>
+          <div class="context-menu-item" @click="openRenameModal('project', contextMenu!.id, projectStore.projects.find(p => p.id === contextMenu!.id)!.name)"><i class="fas fa-edit"></i> Rename</div>
+          <div class="context-menu-item danger"
+            @click="confirmDeletion('project', contextMenu!.id, projectStore.projects.find((p: Project) => p.id === contextMenu!.id)!.name)">
+            <i class="fas fa-trash-alt"></i> Delete Project</div>
+        </template>
+        <template v-if="contextMenu.type === 'graph'">
+          <div class="context-menu-item" @click="openRenameModal('graph', contextMenu!.id, currentProjectGraphs.find(g => g.id === contextMenu!.id)!.name, currentProject!.id)"><i class="fas fa-edit"></i> Rename</div>
+          <div class="context-menu-item danger"
+            @click="confirmDeletion('graph', contextMenu!.id, currentProjectGraphs.find((g: GraphMeta) => g.id === contextMenu!.id)!.name, currentProject!.id)">
+            <i class="fas fa-trash-alt"></i> Delete Graph</div>
+        </template>
+      </div>
+    </Teleport>
 
     <BaseModal :is-open="showDeleteConfirmModal" @close="showDeleteConfirmModal = false">
       <template #header>
