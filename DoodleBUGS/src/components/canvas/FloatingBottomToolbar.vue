@@ -237,6 +237,7 @@ onUnmounted(() => {
         :class="{ active: currentMode === 'select' }"
         @click="setMode('select')"
         title="Select Tool (V)"
+        type="button"
       >
         <i class="fas fa-mouse-pointer"></i>
       </button>
@@ -251,6 +252,7 @@ onUnmounted(() => {
                 :class="{ active: isAddModeActive }"
                 :style="addButtonStyle"
                 title="Add Node or Edge"
+                type="button"
               >
                   <i 
                     :class="currentAddToolIcon" 
@@ -285,10 +287,10 @@ onUnmounted(() => {
       <div class="divider"></div>
 
       <!-- Undo/Redo -->
-      <button class="dock-btn" @click="$emit('undo')" title="Undo (Ctrl+Z)">
+      <button class="dock-btn" @click="$emit('undo')" title="Undo (Ctrl+Z)" type="button">
         <i class="fas fa-undo"></i>
       </button>
-      <button class="dock-btn" @click="$emit('redo')" title="Redo (Ctrl+Y)">
+      <button class="dock-btn" @click="$emit('redo')" title="Redo (Ctrl+Y)" type="button">
         <i class="fas fa-redo"></i>
       </button>
 
@@ -296,20 +298,20 @@ onUnmounted(() => {
         <div class="divider"></div>
         
         <!-- Navigation -->
-        <button class="dock-btn" @click="$emit('zoom-in')" title="Zoom In">
+        <button class="dock-btn" @click="$emit('zoom-in')" title="Zoom In" type="button">
           <i class="fas fa-plus"></i>
         </button>
-        <button class="dock-btn" @click="$emit('zoom-out')" title="Zoom Out">
+        <button class="dock-btn" @click="$emit('zoom-out')" title="Zoom Out" type="button">
           <i class="fas fa-minus"></i>
         </button>
-        <button class="dock-btn" @click="$emit('fit')" title="Fit to View">
+        <button class="dock-btn" @click="$emit('fit')" title="Fit to View" type="button">
           <i class="fas fa-compress-arrows-alt"></i>
         </button>
         
         <!-- Auto Arrange Cards Menu -->
         <DropdownMenu class="dock-dropdown">
             <template #trigger>
-                <button class="dock-btn" title="Arrange Canvas Cards">
+                <button class="dock-btn" title="Arrange Canvas Cards" type="button">
                     <i class="fas fa-th"></i>
                 </button>
             </template>
@@ -422,6 +424,7 @@ onUnmounted(() => {
 .tool-icon {
     font-size: 14px;
     margin-right: 6px;
+    pointer-events: none;
 }
 
 .tool-label {
@@ -429,11 +432,13 @@ onUnmounted(() => {
     font-weight: 600;
     margin-right: 6px;
     white-space: nowrap;
+    pointer-events: none;
 }
 
 .arrow-icon {
     font-size: 10px;
     opacity: 0.7;
+    pointer-events: none;
 }
 
 /* Menu Icons */
