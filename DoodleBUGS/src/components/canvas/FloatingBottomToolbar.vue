@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, onUnmounted } from 'vue';
+import { computed, ref, onUnmounted, watch } from 'vue';
 import type { NodeType } from '../../types';
 import { nodeDefinitions } from '../../config/nodeDefinitions';
 import DropdownMenu from '../common/DropdownMenu.vue';
 
-defineProps<{
+const props = defineProps<{
   currentMode: string;
   currentNodeType: NodeType;
   showWorkspaceControls?: boolean;
@@ -34,11 +34,89 @@ const setMode = (mode: string) => {
   emit('update:currentMode', mode);
 };
 
-const handleNodeChange = (event: Event) => {
-    const target = event.target as HTMLSelectElement;
-    emit('update:currentNodeType', target.value as NodeType);
-    emit('update:currentMode', 'add-node');
+// --- Unified Add Tool Logic ---
+const nodeIcons: Record<string, string> = {
+    stochastic: 'fas fa-random',
+    deterministic: 'fas fa-calculator',
+    constant: 'fas fa-square',
+    observed: 'fas fa-eye',
+    plate: 'fas fa-th-large'
 };
+
+// Colors used for Active State Background and Inactive State Icon/Text
+const nodeColors: Record<string, string> = {
+    stochastic: '#ef4444', // Red
+    deterministic: '#10b981', // Green
+    constant: '#6b7280', // Gray
+    observed: '#3b82f6', // Blue
+    plate: '#8b5cf6', // Purple
+    edge: '#f59e0b'   // Amber
+};
+
+const lastAddTool = ref<NodeType | 'edge'>(props.currentNodeType);
+
+// Sync local state with props when mode changes externally
+watch(() => props.currentMode, (newMode) => {
+    if (newMode === 'add-edge') {
+        lastAddTool.value = 'edge';
+    } else if (newMode === 'add-node') {
+        lastAddTool.value = props.currentNodeType;
+    }
+});
+
+watch(() => props.currentNodeType, (newType) => {
+    if (props.currentMode === 'add-node') {
+        lastAddTool.value = newType;
+    }
+});
+
+const currentAddToolIcon = computed(() => {
+    if (lastAddTool.value === 'edge') return 'fas fa-bezier-curve';
+    return nodeIcons[lastAddTool.value] || 'fas fa-circle';
+});
+
+const currentAddToolColor = computed(() => {
+    if (lastAddTool.value === 'edge') return nodeColors.edge;
+    return nodeColors[lastAddTool.value] || 'var(--theme-primary)';
+});
+
+const currentAddToolLabel = computed(() => {
+    if (lastAddTool.value === 'edge') return 'Edge';
+    const node = availableNodeTypes.value.find(n => n.value === lastAddTool.value);
+    return node ? node.label : 'Node';
+});
+
+const isAddModeActive = computed(() => {
+    if (lastAddTool.value === 'edge') return props.currentMode === 'add-edge';
+    return props.currentMode === 'add-node' && props.currentNodeType === lastAddTool.value;
+});
+
+const activateAddTool = () => {
+    if (lastAddTool.value === 'edge') {
+        emit('update:currentMode', 'add-edge');
+    } else {
+        emit('update:currentNodeType', lastAddTool.value);
+        emit('update:currentMode', 'add-node');
+    }
+};
+
+const selectAddTool = (tool: NodeType | 'edge') => {
+    lastAddTool.value = tool;
+    activateAddTool();
+};
+
+// Style for the main add button
+const addButtonStyle = computed(() => {
+    if (isAddModeActive.value) {
+        const color = currentAddToolColor.value;
+        return {
+            backgroundColor: color,
+            borderColor: color,
+            color: '#ffffff' // Always white text on colored background
+        };
+    }
+    return {}; // Default styles (transparent bg, theme text)
+});
 
 // --- Dragging Logic ---
 const toolbarRef = ref<HTMLElement | null>(null);
@@ -165,28 +243,44 @@ onUnmounted(() => {
 
       <div class="divider"></div>
 
-      <!-- Add Node Inline Selector -->
-      <div class="inline-node-selector" :class="{ active: currentMode === 'add-node' }" title="Add Node">
-          <button class="icon-only-btn" @click="setMode('add-node')">
-              <i class="fas fa-plus-circle"></i>
-          </button>
-          <select class="native-select" :value="currentNodeType" @change="handleNodeChange">
-              <option v-for="opt in availableNodeTypes" :key="opt.value" :value="opt.value">
-                  {{ opt.label }}
-              </option>
-          </select>
-          <i class="fas fa-chevron-down select-arrow"></i>
-      </div>
-
-      <!-- Add Edge -->
-      <button 
-        class="dock-btn"
-        :class="{ active: currentMode === 'add-edge' }"
-        @click="setMode('add-edge')"
-        title="Add Connection (C)"
-      >
-        <i class="fas fa-bezier-curve"></i>
-      </button>
+      <!-- Unified Add Tool (Single Button with Dropdown) -->
+      <DropdownMenu class="dock-dropdown add-tool-dropdown">
+          <template #trigger>
+              <button 
+                class="add-tool-btn"
+                :class="{ active: isAddModeActive }"
+                :style="addButtonStyle"
+                title="Add Node or Edge"
+              >
+                  <i 
+                    :class="currentAddToolIcon" 
+                    class="tool-icon"
+                    :style="{ color: isAddModeActive ? 'white' : currentAddToolColor }"
+                  ></i>
+                  <span 
+                    class="tool-label"
+                    :style="{ color: isAddModeActive ? 'white' : 'var(--theme-text-primary)' }"
+                  >
+                    {{ currentAddToolLabel }}
+                  </span>
+                  <i 
+                    class="fas fa-chevron-down arrow-icon"
+                    :style="{ color: isAddModeActive ? 'white' : 'var(--theme-text-muted)' }"
+                  ></i>
+              </button>
+          </template>
+          <template #content>
+               <div class="dropdown-section-title">Nodes</div>
+               <a href="#" v-for="type in availableNodeTypes" :key="type.value" @click.prevent="selectAddTool(type.value)">
+                   <i :class="nodeIcons[type.value]" :style="{ color: nodeColors[type.value] }" class="menu-icon"></i> {{ type.label }}
+               </a>
+               <div class="dropdown-divider"></div>
+               <div class="dropdown-section-title">Connections</div>
+               <a href="#" @click.prevent="selectAddTool('edge')">
+                   <i class="fas fa-bezier-curve menu-icon" :style="{ color: nodeColors.edge }"></i> Edge
+               </a>
+          </template>
+      </DropdownMenu>
 
       <div class="divider"></div>
 
@@ -301,69 +395,52 @@ onUnmounted(() => {
   margin: 0 4px;
 }
 
-/* Inline Node Selector */
-.inline-node-selector {
+/* Unified Add Tool Button */
+.add-tool-btn {
     display: flex;
     align-items: center;
-    position: relative;
-    background: transparent;
-    border-radius: 16px;
-    padding-right: 8px;
-    transition: background 0.2s;
-}
-
-.inline-node-selector:hover {
-    background: var(--theme-bg-hover);
-}
-
-.inline-node-selector.active {
-    background: var(--theme-bg-active);
-}
-
-.inline-node-selector.active .icon-only-btn {
-    color: var(--theme-primary);
-}
-
-.icon-only-btn {
-    width: 32px;
     height: 32px;
     border: none;
     background: transparent;
-    color: var(--theme-text-secondary);
+    border-radius: 16px; /* Pill shape */
+    padding: 0 10px;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    transition: all 0.2s;
+    border: 1px solid transparent;
 }
 
-.native-select {
-    appearance: none;
-    background: transparent;
-    border: none;
+.add-tool-btn:hover {
+    background: var(--theme-bg-hover);
+    border-color: var(--theme-border);
+}
+
+/* When active, styles are applied via :style binding (colored background) */
+.add-tool-btn.active {
+    border-color: transparent;
+}
+
+.tool-icon {
+    font-size: 14px;
+    margin-right: 6px;
+}
+
+.tool-label {
     font-size: 12px;
-    color: var(--theme-text-primary);
-    padding: 4px 18px 4px 4px;
-    cursor: pointer;
-    font-family: inherit;
-    font-weight: 500;
-    outline: none;
-    width: auto; /* Allow auto width */
-    min-width: 60px;
-    max-width: 120px;
-    text-overflow: ellipsis;
+    font-weight: 600;
+    margin-right: 6px;
+    white-space: nowrap;
 }
 
-.native-select option {
-    background-color: var(--theme-bg-panel);
-    color: var(--theme-text-primary);
-}
-
-.select-arrow {
-    position: absolute;
-    right: 8px;
+.arrow-icon {
     font-size: 10px;
-    color: var(--theme-text-muted);
-    pointer-events: none;
+    opacity: 0.7;
+}
+
+/* Menu Icons */
+.menu-icon {
+    width: 20px;
+    text-align: center;
+    margin-right: 4px;
 }
 
 /* Dropdown adjustments */
