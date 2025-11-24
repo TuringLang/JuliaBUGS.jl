@@ -38,6 +38,11 @@ export const useUiStore = defineStore('ui', () => {
   const isMultiCanvasView = ref<boolean>(
     localStorage.getItem('doodlebugs-isMultiCanvasView') === 'true'
   );
+  
+  // Pinned Graph State (Fullscreen mode)
+  const pinnedGraphId = ref<string | null>(
+    localStorage.getItem('doodlebugs-pinnedGraphId') || null
+  );
 
   // Grid Settings
   const isWorkspaceGridEnabled = ref<boolean>(
@@ -77,6 +82,13 @@ export const useUiStore = defineStore('ui', () => {
   });
   watch(isMultiCanvasView, (isMulti) => {
     localStorage.setItem('doodlebugs-isMultiCanvasView', isMulti.toString());
+  });
+  watch(pinnedGraphId, (id) => {
+    if (id) {
+        localStorage.setItem('doodlebugs-pinnedGraphId', id);
+    } else {
+        localStorage.removeItem('doodlebugs-pinnedGraphId');
+    }
   });
   watch(isWorkspaceGridEnabled, (enabled) => {
     localStorage.setItem('doodlebugs-isWorkspaceGridEnabled', enabled.toString());
@@ -124,6 +136,10 @@ export const useUiStore = defineStore('ui', () => {
     isMultiCanvasView.value = !isMultiCanvasView.value;
   };
 
+  const setPinnedGraph = (graphId: string | null) => {
+    pinnedGraphId.value = graphId;
+  };
+
   return {
     activeRightTab,
     isRightTabPinned,
@@ -143,5 +159,7 @@ export const useUiStore = defineStore('ui', () => {
     workspaceGridStyle,
     canvasGridStyle,
     workspaceGridSize,
+    pinnedGraphId,
+    setPinnedGraph
   };
 });

@@ -8,6 +8,7 @@ const props = defineProps<{
   currentMode: string;
   currentNodeType: NodeType;
   showWorkspaceControls?: boolean;
+  isPinned?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -20,6 +21,8 @@ const emit = defineEmits<{
   (e: 'zoom-out'): void;
   (e: 'fit'): void;
   (e: 'arrange', type: 'grid' | 'horizontal' | 'vertical'): void;
+  // Graph Layout
+  (e: 'layout-graph', layout: string): void;
 }>();
 
 const availableNodeTypes = computed(() => {
@@ -284,6 +287,20 @@ onUnmounted(() => {
           </template>
       </DropdownMenu>
 
+      <!-- Zoom/Fit Controls (Now moved here) -->
+      <template v-if="showWorkspaceControls">
+        <div class="divider"></div>
+        <button class="dock-btn" @click="$emit('zoom-in')" title="Zoom In" type="button">
+          <i class="fas fa-plus"></i>
+        </button>
+        <button class="dock-btn" @click="$emit('zoom-out')" title="Zoom Out" type="button">
+          <i class="fas fa-minus"></i>
+        </button>
+        <button class="dock-btn" @click="$emit('fit')" title="Fit to View" type="button">
+          <i class="fas fa-compress-arrows-alt"></i>
+        </button>
+      </template>
+
       <div class="divider"></div>
 
       <!-- Undo/Redo -->
@@ -294,21 +311,29 @@ onUnmounted(() => {
         <i class="fas fa-redo"></i>
       </button>
 
-      <template v-if="showWorkspaceControls">
+      <!-- Graph Layout Menu (Visible only when pinned) -->
+      <template v-if="isPinned">
         <div class="divider"></div>
-        
-        <!-- Navigation -->
-        <button class="dock-btn" @click="$emit('zoom-in')" title="Zoom In" type="button">
-          <i class="fas fa-plus"></i>
-        </button>
-        <button class="dock-btn" @click="$emit('zoom-out')" title="Zoom Out" type="button">
-          <i class="fas fa-minus"></i>
-        </button>
-        <button class="dock-btn" @click="$emit('fit')" title="Fit to View" type="button">
-          <i class="fas fa-compress-arrows-alt"></i>
-        </button>
-        
-        <!-- Auto Arrange Cards Menu -->
+        <DropdownMenu class="dock-dropdown">
+            <template #trigger>
+                <button class="dock-btn" title="Graph Layout" type="button">
+                    <i class="fas fa-sitemap"></i>
+                </button>
+            </template>
+            <template #content>
+                <div class="dropdown-section-title">Layout</div>
+                <a href="#" @click.prevent="$emit('layout-graph', 'dagre')">Dagre</a>
+                <a href="#" @click.prevent="$emit('layout-graph', 'fcose')">fCoSE</a>
+                <a href="#" @click.prevent="$emit('layout-graph', 'cola')">Cola</a>
+                <a href="#" @click.prevent="$emit('layout-graph', 'klay')">KLay</a>
+                <a href="#" @click.prevent="$emit('layout-graph', 'preset')">Reset</a>
+            </template>
+        </DropdownMenu>
+      </template>
+
+      <!-- Arrange Menu (Hidden when pinned) -->
+      <template v-if="showWorkspaceControls && !isPinned">
+        <div class="divider"></div>
         <DropdownMenu class="dock-dropdown">
             <template #trigger>
                 <button class="dock-btn" title="Arrange Canvas Cards" type="button">
