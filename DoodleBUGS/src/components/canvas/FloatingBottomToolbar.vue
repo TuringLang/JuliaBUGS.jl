@@ -7,8 +7,8 @@ import DropdownMenu from '../common/DropdownMenu.vue';
 const props = defineProps<{
   currentMode: string;
   currentNodeType: NodeType;
-  showWorkspaceControls?: boolean;
-  isPinned?: boolean;
+  showCodePanel?: boolean;
+  showZoomControls?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -16,13 +16,13 @@ const emit = defineEmits<{
   (e: 'update:currentNodeType', type: NodeType): void;
   (e: 'undo'): void;
   (e: 'redo'): void;
-  // Workspace controls
   (e: 'zoom-in'): void;
   (e: 'zoom-out'): void;
   (e: 'fit'): void;
-  (e: 'arrange', type: 'grid' | 'horizontal' | 'vertical'): void;
-  // Graph Layout
   (e: 'layout-graph', layout: string): void;
+  (e: 'toggle-code-panel'): void;
+  (e: 'export-bugs'): void;
+  (e: 'export-standalone'): void;
 }>();
 
 const availableNodeTypes = computed(() => {
@@ -287,19 +287,48 @@ onUnmounted(() => {
           </template>
       </DropdownMenu>
 
-      <!-- Zoom/Fit Controls (Now moved here) -->
-      <template v-if="showWorkspaceControls">
+      <!-- Zoom Controls Group -->
+      <template v-if="showZoomControls">
         <div class="divider"></div>
         <button class="dock-btn" @click="$emit('zoom-in')" title="Zoom In" type="button">
-          <i class="fas fa-plus"></i>
+            <i class="fas fa-plus"></i>
         </button>
         <button class="dock-btn" @click="$emit('zoom-out')" title="Zoom Out" type="button">
-          <i class="fas fa-minus"></i>
+            <i class="fas fa-minus"></i>
         </button>
         <button class="dock-btn" @click="$emit('fit')" title="Fit to View" type="button">
-          <i class="fas fa-compress-arrows-alt"></i>
+            <i class="fas fa-compress-arrows-alt"></i>
         </button>
       </template>
+
+      <div class="divider"></div>
+
+      <!-- Code & Export -->
+      <DropdownMenu class="dock-dropdown">
+          <template #trigger>
+              <button 
+                class="dock-btn" 
+                :class="{ active: showCodePanel }"
+                title="Code & Export" 
+                type="button"
+              >
+                <i class="fas fa-code"></i>
+              </button>
+          </template>
+          <template #content>
+              <a href="#" @click.prevent="$emit('toggle-code-panel')">
+                  <i :class="showCodePanel ? 'fas fa-eye-slash' : 'fas fa-eye'" class="menu-icon"></i> {{ showCodePanel ? 'Hide Code' : 'Show Code' }}
+              </a>
+              <div class="dropdown-divider"></div>
+              <div class="dropdown-section-title">Export</div>
+              <a href="#" @click.prevent="$emit('export-bugs')">
+                  <i class="fas fa-file-code menu-icon"></i> BUGS Model
+              </a>
+              <a href="#" @click.prevent="$emit('export-standalone')">
+                  <i class="fas fa-file-alt menu-icon"></i> Standalone Script
+              </a>
+          </template>
+      </DropdownMenu>
 
       <div class="divider"></div>
 
@@ -311,43 +340,23 @@ onUnmounted(() => {
         <i class="fas fa-redo"></i>
       </button>
 
-      <!-- Graph Layout Menu (Visible only when pinned) -->
-      <template v-if="isPinned">
-        <div class="divider"></div>
-        <DropdownMenu class="dock-dropdown">
-            <template #trigger>
-                <button class="dock-btn" title="Graph Layout" type="button">
-                    <i class="fas fa-sitemap"></i>
-                </button>
-            </template>
-            <template #content>
-                <div class="dropdown-section-title">Layout</div>
-                <a href="#" @click.prevent="$emit('layout-graph', 'dagre')">Dagre</a>
-                <a href="#" @click.prevent="$emit('layout-graph', 'fcose')">fCoSE</a>
-                <a href="#" @click.prevent="$emit('layout-graph', 'cola')">Cola</a>
-                <a href="#" @click.prevent="$emit('layout-graph', 'klay')">KLay</a>
-                <a href="#" @click.prevent="$emit('layout-graph', 'preset')">Reset</a>
-            </template>
-        </DropdownMenu>
-      </template>
-
-      <!-- Arrange Menu (Hidden when pinned) -->
-      <template v-if="showWorkspaceControls && !isPinned">
-        <div class="divider"></div>
-        <DropdownMenu class="dock-dropdown">
-            <template #trigger>
-                <button class="dock-btn" title="Arrange Canvas Cards" type="button">
-                    <i class="fas fa-th"></i>
-                </button>
-            </template>
-            <template #content>
-                <div class="dropdown-section-title">Arrange Cards</div>
-                <a href="#" @click.prevent="$emit('arrange', 'grid')"><i class="fas fa-th-large"></i> Grid</a>
-                <a href="#" @click.prevent="$emit('arrange', 'horizontal')"><i class="fas fa-ellipsis-h"></i> Horizontal</a>
-                <a href="#" @click.prevent="$emit('arrange', 'vertical')"><i class="fas fa-ellipsis-v"></i> Vertical</a>
-            </template>
-        </DropdownMenu>
-      </template>
+      <!-- Graph Layout Menu -->
+      <div class="divider"></div>
+      <DropdownMenu class="dock-dropdown">
+          <template #trigger>
+              <button class="dock-btn" title="Graph Layout" type="button">
+                  <i class="fas fa-sitemap"></i>
+              </button>
+          </template>
+          <template #content>
+              <div class="dropdown-section-title">Layout</div>
+              <a href="#" @click.prevent="$emit('layout-graph', 'dagre')">Dagre</a>
+              <a href="#" @click.prevent="$emit('layout-graph', 'fcose')">fCoSE</a>
+              <a href="#" @click.prevent="$emit('layout-graph', 'cola')">Cola</a>
+              <a href="#" @click.prevent="$emit('layout-graph', 'klay')">KLay</a>
+              <a href="#" @click.prevent="$emit('layout-graph', 'preset')">Reset</a>
+          </template>
+      </DropdownMenu>
     </div>
   </div>
 </template>
