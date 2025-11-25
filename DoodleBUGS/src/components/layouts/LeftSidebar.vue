@@ -38,10 +38,13 @@ const emit = defineEmits<{
   (e: 'update:gridSize', value: number): void;
   (e: 'update:showZoomControls', value: boolean): void;
   (e: 'update:showDebugPanel', value: boolean): void;
+  (e: 'toggle-code-panel'): void;
   (e: 'load-example', key: string): void;
   (e: 'open-export-modal', format: 'png' | 'jpg' | 'svg'): void;
   (e: 'export-json'): void;
   (e: 'connect-to-backend-url', url: string): void;
+  (e: 'run-model'): void;
+  (e: 'abort-run'): void;
   (e: 'generate-standalone'): void;
   (e: 'open-about-modal'): void;
   (e: 'toggle-dark-mode'): void;
@@ -49,15 +52,12 @@ const emit = defineEmits<{
 
 const uiStore = useUiStore();
 const executionStore = useExecutionStore();
-const { isLeftSidebarOpen, canvasGridStyle, isDarkMode } = storeToRefs(uiStore);
-const { isConnected, isConnecting } = storeToRefs(executionStore);
+const { isLeftSidebarOpen, canvasGridStyle, isCodePanelOpen, isDarkMode } = storeToRefs(uiStore);
+const { isConnected, isConnecting, isExecuting } = storeToRefs(executionStore);
 
-// Removed local isDarkMode state as it is now managed in uiStore
-
-const navBackendUrl = ref(''); // Local for input
-
-// Need ref for local input
 import { ref } from 'vue';
+
+const navBackendUrl = ref('');
 
 const gridStyleOptions = [
     { label: 'Dots', value: 'dots' },
@@ -107,6 +107,11 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                     <AccordionContent>
                         <div class="panel-content-wrapper">
                             <ProjectManager @new-project="$emit('new-project')" @new-graph="$emit('new-graph')" />
+                            <div class="divider"></div>
+                            <div class="example-row">
+                                <label class="example-label">Examples</label>
+                                <BaseSelect :modelValue="''" :options="exampleModels.map(e => ({ label: e.name, value: e.key }))" @update:modelValue="$emit('load-example', $event)" placeholder="Load..." class="examples-dropdown" />
+                            </div>
                         </div>
                     </AccordionContent>
                 </AccordionPanel>
@@ -177,8 +182,8 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                                 <ToggleSwitch :modelValue="showDebugPanel" @update:modelValue="$emit('update:showDebugPanel', $event)" />
                             </div>
                             <div class="menu-row">
-                                <label>Examples</label>
-                                <BaseSelect :modelValue="''" :options="exampleModels.map(e => ({ label: e.name, value: e.key }))" @update:modelValue="$emit('load-example', $event)" placeholder="Load..." class="w-full" />
+                                <label>Code Panel</label>
+                                <ToggleSwitch :modelValue="isCodePanelOpen" @update:modelValue="$emit('toggle-code-panel')" />
                             </div>
                         </div>
                     </AccordionContent>
@@ -200,19 +205,33 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                 <AccordionPanel value="connect">
                     <AccordionHeader><i class="fas fa-network-wired icon-12"></i> Connection</AccordionHeader>
                     <AccordionContent>
-                        <div class="menu-panel flex-col gap-3">
-                            <div class="flex-col gap-2">
-                                <label class="text-xs font-bold">Backend URL</label>
-                                <BaseInput v-model="navBackendUrl" placeholder="http://localhost:8081" />
+                        <div class="panel-content-wrapper relative">
+                            <div class="experimental-badge">Experimental</div>
+                            <div class="menu-panel flex-col gap-3 pt-4">
+                                <div class="flex-col gap-2">
+                                    <label class="text-xs font-bold">Backend URL</label>
+                                    <BaseInput v-model="navBackendUrl" placeholder="http://localhost:8081" />
+                                </div>
+                                <div class="status-display" :class="{ connected: isConnected }">
+                                    Status: {{ isConnected ? 'Connected' : 'Disconnected' }}
+                                </div>
+                                <BaseButton @click="$emit('connect-to-backend-url', navBackendUrl)" :disabled="isConnecting" type="primary" class="w-full justify-center">
+                                    {{ isConnecting ? 'Connecting...' : 'Connect' }}
+                                </BaseButton>
+                                
+                                <BaseButton @click="$emit('run-model')" type="primary" size="small" class="w-full justify-center" :disabled="!isConnected || isExecuting">
+                                    <i v-if="isExecuting" class="fas fa-spinner fa-spin"></i>
+                                    <i v-else class="fas fa-play"></i>
+                                    <span class="ml-2">Run Model</span>
+                                </BaseButton>
+                                <BaseButton v-if="isExecuting" @click="$emit('abort-run')" type="danger" size="small" class="w-full justify-center">
+                                    <i class="fas fa-stop"></i>
+                                    <span class="ml-2">Abort</span>
+                                </BaseButton>
+
+                                <div class="divider"></div>
+                                <BaseButton @click="$emit('generate-standalone')" type="ghost" class="menu-btn"><i class="fas fa-file-alt"></i> Generate Script</BaseButton>
                             </div>
-                            <div class="status-display" :class="{ connected: isConnected }">
-                                Status: {{ isConnected ? 'Connected' : 'Disconnected' }}
-                            </div>
-                            <BaseButton @click="$emit('connect-to-backend-url', navBackendUrl)" :disabled="isConnecting" type="primary" class="w-full justify-center">
-                                {{ isConnecting ? 'Connecting...' : 'Connect' }}
-                            </BaseButton>
-                            <div class="divider"></div>
-                            <BaseButton @click="$emit('generate-standalone')" type="ghost" class="menu-btn"><i class="fas fa-file-alt"></i> Generate Script</BaseButton>
                         </div>
                     </AccordionContent>
                 </AccordionPanel>
@@ -326,6 +345,34 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
     border: none;
 }
 
+/* --- Compact Font Styles for Sidebar Inputs --- */
+:deep(.p-inputtext) {
+    font-size: 12px !important;
+    padding: 0.4rem 0.5rem !important;
+}
+
+:deep(.p-inputtext::placeholder) {
+    font-size: 12px !important;
+}
+
+:deep(.p-select-label) {
+    font-size: 12px !important;
+    padding: 0.4rem 0.5rem !important;
+}
+
+:deep(.p-select-option) {
+    font-size: 12px !important;
+}
+
+:deep(.p-inputnumber-input) {
+    font-size: 12px !important;
+    padding: 0.4rem 0.5rem !important;
+}
+
+:deep(.p-select-dropdown) {
+    width: 2rem;
+}
+
 .icon-12 {
     font-size: 12px;
     width: 20px;
@@ -337,6 +384,25 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
 .panel-content-wrapper {
     padding: 4px;
     background: var(--theme-bg-panel);
+}
+
+.panel-content-wrapper.relative {
+    position: relative;
+}
+
+.experimental-badge {
+    position: absolute;
+    top: 6px;
+    right: 10px;
+    background-color: var(--theme-warning);
+    color: white;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    pointer-events: none;
+    opacity: 0.8;
 }
 
 :deep(.project-manager), :deep(.node-palette), :deep(.execution-settings-panel) {
@@ -421,5 +487,25 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
 .native-number-input:focus {
     outline: none;
     border-color: var(--theme-primary);
+}
+
+.example-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px 8px 8px;
+    gap: 10px;
+}
+
+.example-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--theme-text-secondary);
+    white-space: nowrap;
+}
+
+.examples-dropdown {
+    width: 100% !important;
+    flex-grow: 1;
 }
 </style>

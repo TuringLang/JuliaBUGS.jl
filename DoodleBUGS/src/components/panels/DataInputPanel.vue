@@ -1,4 +1,3 @@
-
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useDataStore } from '../../stores/dataStore';
@@ -26,6 +25,7 @@ const initsEditorContainer = ref<HTMLDivElement | null>(null);
 let dataCm: Editor | null = null;
 let initsCm: Editor | null = null;
 let isUpdatingFromSource = false;
+let resizeObserver: ResizeObserver | null = null;
 
 const jsonError = ref<string | null>(null);
 const jsonInitsError = ref<string | null>(null);
@@ -107,7 +107,19 @@ const createCmInstance = (container: HTMLElement, value: string, mode: string | 
   });
 };
 
-onMounted(setupCodeMirror);
+onMounted(() => {
+  setupCodeMirror();
+  
+  // Refresh on resize to handle accordion expansion
+  if (dataEditorContainer.value) {
+      resizeObserver = new ResizeObserver(() => {
+          if (dataCm) dataCm.refresh();
+          if (initsCm) initsCm.refresh();
+      });
+      resizeObserver.observe(dataEditorContainer.value);
+  }
+});
+
 onUnmounted(() => {
   [dataCm, initsCm].forEach(cm => {
     if (cm) {
@@ -115,6 +127,9 @@ onUnmounted(() => {
       wrapper.parentNode?.removeChild(wrapper);
     }
   });
+  if (resizeObserver) {
+      resizeObserver.disconnect();
+  }
 });
 
 watch(() => dataStore.inputMode, setupCodeMirror);

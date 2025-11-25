@@ -6,7 +6,6 @@ import CodePreviewPanel from '../panels/CodePreviewPanel.vue';
 import JsonEditorPanel from '../right-sidebar/JsonEditorPanel.vue';
 import ExecutionPanel from '../right-sidebar/ExecutionPanel.vue';
 import { useUiStore } from '../../stores/uiStore';
-import { useExecutionStore } from '../../stores/executionStore';
 import type { GraphElement, ValidationError } from '../../types';
 
 const props = defineProps<{
@@ -23,9 +22,7 @@ const emit = defineEmits<{
 }>();
 
 const uiStore = useUiStore();
-const executionStore = useExecutionStore();
 const { isRightSidebarOpen, activeRightTab } = storeToRefs(uiStore);
-const { isConnected } = storeToRefs(executionStore);
 
 const sidebarStyle = (isOpen: boolean): StyleValue => {
     if (!isOpen) {
@@ -33,16 +30,14 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
             transform: 'scale(0)',
             opacity: 0,
             pointerEvents: 'none',
-            width: '320px',
-            transformOrigin: 'top right'
+            width: '320px'
         };
     }
     return {
         transform: 'scale(1)',
         opacity: 1,
         pointerEvents: 'auto',
-        width: '320px',
-        transformOrigin: 'top right'
+        width: '320px'
     };
 };
 </script>
@@ -53,11 +48,6 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
             <span class="sidebar-title">Inspector</span>
             
             <div class="flex items-center gap-1 ml-auto" @click.stop>
-                 <div class="status-indicator backend-status" 
-                     :class="{ 'connected': isConnected, 'disconnected': !isConnected }">
-                    <i class="fas fa-circle"></i>
-                    <div class="instant-tooltip">{{ isConnected ? 'Backend Connected' : 'Backend Disconnected' }}</div>
-                </div>
                 <div class="status-indicator validation-status"
                     @click="$emit('show-validation-issues')"
                     :class="isModelValid ? 'valid' : 'invalid'">
@@ -141,10 +131,6 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
     height: 24px;
     cursor: help;
 }
-
-.backend-status { margin-right: 0; }
-.backend-status.connected { color: var(--theme-success); }
-.backend-status.disconnected { color: var(--theme-danger); }
 
 .validation-status { font-size: 1.1em; margin: 0 5px; }
 .validation-status.valid { color: var(--theme-success); }

@@ -1,13 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick, computed } from 'vue';
+import { ref, onMounted, watch, nextTick, computed, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
-import type { LayoutOptions } from 'cytoscape';
+import type { LayoutOptions, Core } from 'cytoscape';
 import GraphEditor from '../canvas/GraphEditor.vue';
 import FloatingBottomToolbar from '../canvas/FloatingBottomToolbar.vue';
 import BaseModal from '../common/BaseModal.vue';
 import BaseInput from '../ui/BaseInput.vue';
 import BaseButton from '../ui/BaseButton.vue';
-import TheNavbar from './TheNavbar.vue';
 import LeftSidebar from './LeftSidebar.vue';
 import RightSidebar from './RightSidebar.vue';
 import AboutModal from './AboutModal.vue';
@@ -106,28 +105,7 @@ onMounted(async () => {
     }
   }
   validateGraph();
-  
-  // Initial fit on reload
-  setTimeout(() => {
-      if (graphStore.currentGraphId) {
-          const cy = getCyInstance(graphStore.currentGraphId);
-          cy?.resize();
-          cy?.fit(undefined, 50);
-      }
-  }, 500);
 });
-
-watch(() => graphStore.currentGraphId, (newId) => {
-    if (newId) {
-      nextTick(() => {
-        setTimeout(() => {
-          const graphContent = graphStore.graphContents.get(newId);
-          const layoutToApply = graphContent?.lastLayout || 'dagre';
-          handleGraphLayout(layoutToApply);
-        }, 100);
-      });
-    }
-}, { immediate: true });
 
 // Initialize Code Panel Position if needed
 watch([isCodePanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) => {
@@ -135,7 +113,6 @@ watch([isCodePanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) =>
         const graph = projectStore.currentProject.graphs.find(g => g.id === graphId);
         if (graph) {
             const hasValidPosition = graph.codePanelX !== undefined && graph.codePanelY !== undefined;
-            // If no position saved, OR if it's suspiciously at (0,0) or default (100,100) which might collide
             if (!hasValidPosition || (graph.codePanelX === 100 && graph.codePanelY === 100)) {
                 const viewportW = window.innerWidth;
                 const rightSidebarW = 340; // Approx with margin
@@ -145,7 +122,6 @@ watch([isCodePanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) =>
                 
                 // Position to the right, clearing the right sidebar if possible
                 let targetX = viewportW - rightSidebarW - panelW - 20;
-                // If too narrow, just center it
                 if (targetX < 100) targetX = (viewportW - panelW) / 2;
                 
                 projectStore.updateGraphLayout(projectStore.currentProject.id, graphId, {
@@ -165,37 +141,75 @@ const handleLayoutUpdated = (layoutName: string) => {
   }
 };
 
+const smartFit = (cy: Core, animate: boolean = true) => {
+    const eles = cy.elements();
+    if (eles.length === 0) return;
+    
+    const padding = 50;
+    const w = cy.width();
+    const h = cy.height();
+    const bb = eles.boundingBox();
+    
+    if (bb.w === 0 || bb.h === 0) return;
+
+    // Calculate zoom to fit
+    const zoomX = (w - 2 * padding) / bb.w;
+    const zoomY = (h - 2 * padding) / bb.h;
+    let targetZoom = Math.min(zoomX, zoomY);
+    
+    // Cap zoom to avoid overly large graph on big screens
+    targetZoom = Math.min(targetZoom, 0.8);
+    
+    // Calculate center pan for the target zoom
+    const targetPan = {
+        x: (w - targetZoom * (bb.x1 + bb.x2)) / 2,
+        y: (h - targetZoom * (bb.y1 + bb.y2)) / 2
+    };
+
+    if (animate) {
+        cy.animate({
+            zoom: targetZoom,
+            pan: targetPan,
+            duration: 500,
+            easing: 'ease-in-out-cubic'
+        });
+    } else {
+        cy.viewport({ zoom: targetZoom, pan: targetPan });
+    }
+};
+
 const handleGraphLayout = (layoutName: string) => {
     const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null;
     if (!cy) return;
+    
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const layoutOptionsMap: Record<string, LayoutOptions> = {
-        dagre: { name: 'dagre', animate: true, animationDuration: 500, fit: true, padding: 30 } as any,
-        fcose: { name: 'fcose', animate: true, animationDuration: 500, fit: true, padding: 30, randomize: false, quality: 'proof' } as any,
-        cola: { name: 'cola', animate: true, fit: true, padding: 30, refresh: 1, avoidOverlap: true, infinite: false, centerGraph: true, flow: { axis: 'y', minSeparation: 30 }, handleDisconnected: false, randomize: false } as any,
-        klay: { name: 'klay', animate: true, animationDuration: 500, fit: true, padding: 30, klay: { direction: 'RIGHT', edgeRouting: 'SPLINES', nodePlacement: 'LINEAR_SEGMENTS' } } as any,
-        preset: { name: 'preset' }
+        dagre: { name: 'dagre', animate: true, animationDuration: 500, fit: false, padding: 50 } as any,
+        fcose: { name: 'fcose', animate: true, animationDuration: 500, fit: false, padding: 50, randomize: false, quality: 'proof' } as any,
+        cola: { name: 'cola', animate: true, fit: false, padding: 50, refresh: 1, avoidOverlap: true, infinite: false, centerGraph: true, flow: { axis: 'y', minSeparation: 30 }, handleDisconnected: false, randomize: false } as any,
+        klay: { name: 'klay', animate: true, animationDuration: 500, fit: false, padding: 50, klay: { direction: 'RIGHT', edgeRouting: 'SPLINES', nodePlacement: 'LINEAR_SEGMENTS' } } as any,
+        preset: { name: 'preset', fit: false, padding: 50 } as any
     };
     /* eslint-enable @typescript-eslint/no-explicit-any */
+    
     const options = layoutOptionsMap[layoutName] || layoutOptionsMap.preset;
+    
+    cy.one('layoutstop', () => {
+        smartFit(cy, true);
+    });
+    
     cy.layout(options).run();
-    // Ensure centering even for preset
-    if (layoutName === 'preset') {
-        cy.fit(undefined, 50);
-    }
     handleLayoutUpdated(layoutName);
 };
 
 const handleElementSelected = (element: GraphElement | null) => {
   selectedElement.value = element;
   if (element) {
-    // Element selected: Open sidebar if not already open
     if (!uiStore.isRightTabPinned) {
       uiStore.setActiveRightTab('properties');
       if (!isRightSidebarOpen.value) isRightSidebarOpen.value = true;
     }
   } else {
-    // Element deselected (background click): Close sidebar if not pinned
     if (!uiStore.isRightTabPinned && isRightSidebarOpen.value) {
       isRightSidebarOpen.value = false;
     }
@@ -420,13 +434,6 @@ const runModel = async () => {
   }
 };
 
-const abortRun = () => {
-  if (currentRunController) {
-    abortedByUser = true;
-    currentRunController.abort();
-  }
-};
-
 const handleGenerateStandalone = () => {
     const dataPayload = parsedGraphData.value.data || {};
     const initsPayload = parsedGraphData.value.inits || {};
@@ -445,7 +452,7 @@ const handleGenerateStandalone = () => {
     files.unshift({ name: 'standalone.jl', content: script });
     executionStore.generatedFiles = files;
     uiStore.setActiveRightTab('connection');
-    if (!isRightSidebarOpen.value) uiStore.toggleRightSidebar();
+    isRightSidebarOpen.value = true;
     executionStore.setExecutionPanelTab('files');
 };
 
@@ -458,7 +465,13 @@ const handleLoadExample = async (exampleKey: string) => {
     const modelData: ExampleModel = await modelResponse.json();
     const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId, modelData.name);
     if (!newGraphMeta) return;
+    
+    projectStore.updateGraphLayout(projectStore.currentProject!.id, newGraphMeta.id, {});
     graphStore.updateGraphElements(newGraphMeta.id, modelData.graphJSON);
+    
+    // Force preset layout initially with the new smartFit flow
+    graphStore.updateGraphLayout(newGraphMeta.id, 'preset');
+
     const jsonDataResponse = await fetch(`${baseUrl}examples/${exampleKey}/data.json`);
     if (jsonDataResponse.ok) {
       const fullData = await jsonDataResponse.json();
@@ -473,328 +486,285 @@ const handleLoadExample = async (exampleKey: string) => {
   }
 };
 
-// --- Zoom Controls Handlers ---
+const toggleLeftSidebar = () => {
+    isLeftSidebarOpen.value = !isLeftSidebarOpen.value;
+};
+
+const toggleRightSidebar = () => {
+    isRightSidebarOpen.value = !isRightSidebarOpen.value;
+};
+
+const abortRun = () => {
+  if (currentRunController) {
+    abortedByUser = true;
+    currentRunController.abort();
+  }
+};
+
+// Helper methods for graph actions
+const handleUndo = () => {
+    if (graphStore.currentGraphId) {
+        getUndoRedoInstance(graphStore.currentGraphId)?.undo();
+    }
+};
+
+const handleRedo = () => {
+    if (graphStore.currentGraphId) {
+        getUndoRedoInstance(graphStore.currentGraphId)?.redo();
+    }
+};
+
 const handleZoomIn = () => {
     if (graphStore.currentGraphId) {
         const cy = getCyInstance(graphStore.currentGraphId);
-        if (cy) {
-            const currentZoom = cy.zoom();
-            cy.animate({ zoom: { level: currentZoom * 1.2, position: { x: cy.width()/2, y: cy.height()/2 } }, duration: 200 });
-        }
+        if (cy) cy.zoom(cy.zoom() * 1.2);
     }
 };
 
 const handleZoomOut = () => {
     if (graphStore.currentGraphId) {
         const cy = getCyInstance(graphStore.currentGraphId);
-        if (cy) {
-            const currentZoom = cy.zoom();
-            cy.animate({ zoom: { level: currentZoom * 0.8, position: { x: cy.width()/2, y: cy.height()/2 } }, duration: 200 });
-        }
+        if (cy) cy.zoom(cy.zoom() * 0.8);
     }
 };
 
 const handleFit = () => {
     if (graphStore.currentGraphId) {
         const cy = getCyInstance(graphStore.currentGraphId);
-        if (cy) {
-            cy.animate({ fit: { eles: cy.elements(), padding: 50 }, duration: 300 });
-        }
+        if (cy) smartFit(cy, true);
     }
 };
 
-const handleUndo = () => {
-    if (graphStore.currentGraphId) {
-        const ur = getUndoRedoInstance(graphStore.currentGraphId);
-        if (ur) ur.undo();
-    }
-};
+// Code Panel Drag Logic (Touch)
+const codePanelRef = ref<HTMLElement | null>(null);
+const isDraggingCode = ref(false);
+const dragStartCode = ref({ x: 0, y: 0 });
+const initialPanelPos = ref({ x: 0, y: 0 });
 
-const handleRedo = () => {
-    if (graphStore.currentGraphId) {
-        const ur = getUndoRedoInstance(graphStore.currentGraphId);
-        if (ur) ur.redo();
-    }
-};
+const startDragCodeTouch = (e: TouchEvent) => {
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return;
+    const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+    if (!graph) return;
 
-// --- Code Export ---
-const downloadString = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-};
-
-const handleExportBugs = () => {
-    downloadString(generatedCode.value, 'model.bugs');
-};
-
-const handleExportStandalone = () => {
-    const dataPayload = parsedGraphData.value.data || {};
-    const initsPayload = parsedGraphData.value.inits || {};
-    const script = generateStandaloneScript({
-      modelCode: generatedCode.value,
-      data: dataPayload,
-      inits: initsPayload,
-      settings: {
-        n_samples: samplerSettings.value.n_samples,
-        n_adapts: samplerSettings.value.n_adapts,
-        n_chains: samplerSettings.value.n_chains,
-        seed: samplerSettings.value.seed ?? undefined,
-      },
-    });
-    downloadString(script, 'standalone.jl');
-};
-
-// --- Draggable Code Panel Logic ---
-const currentGraph = computed(() => {
-    if (!projectStore.currentProject || !graphStore.currentGraphId) return null;
-    return projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
-});
-
-const codePanelPosition = computed(() => {
-    if (!currentGraph.value) return { x: 100, y: 100, width: 400, height: 400 };
-    return {
-        x: currentGraph.value.codePanelX ?? 100,
-        y: currentGraph.value.codePanelY ?? 100,
-        width: currentGraph.value.codePanelWidth ?? 400,
-        height: currentGraph.value.codePanelHeight ?? 400
+    isDraggingCode.value = true;
+    const touch = e.touches[0];
+    dragStartCode.value = { x: touch.clientX, y: touch.clientY };
+    initialPanelPos.value = { 
+        x: graph.codePanelX ?? (window.innerWidth - 420), 
+        y: graph.codePanelY ?? 80 
     };
-});
+    
+    window.addEventListener('touchmove', onDragCodeTouch, { passive: false });
+    window.addEventListener('touchend', stopDragCodeTouch);
+};
 
-const dragCodeState = ref<{isDragging: boolean, startX: number, startY: number, initialLeft: number, initialTop: number} | null>(null);
+const onDragCodeTouch = (e: TouchEvent) => {
+    if (!isDraggingCode.value) return;
+    e.preventDefault(); // Prevent scrolling while dragging panel
+    const touch = e.touches[0];
+    const dx = touch.clientX - dragStartCode.value.x;
+    const dy = touch.clientY - dragStartCode.value.y;
+    
+    if (projectStore.currentProject && graphStore.currentGraphId) {
+        projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+            codePanelX: initialPanelPos.value.x + dx,
+            codePanelY: initialPanelPos.value.y + dy
+        }, false);
+    }
+};
 
+const stopDragCodeTouch = () => {
+    isDraggingCode.value = false;
+    window.removeEventListener('touchmove', onDragCodeTouch);
+    window.removeEventListener('touchend', stopDragCodeTouch);
+    projectStore.saveProjects();
+};
+
+// Code Panel Drag Logic (Mouse)
 const startDragCode = (e: MouseEvent) => {
-    dragCodeState.value = {
-        isDragging: true,
-        startX: e.clientX,
-        startY: e.clientY,
-        initialLeft: codePanelPosition.value.x,
-        initialTop: codePanelPosition.value.y
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return;
+    const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+    if (!graph) return;
+
+    isDraggingCode.value = true;
+    dragStartCode.value = { x: e.clientX, y: e.clientY };
+    initialPanelPos.value = { 
+        x: graph.codePanelX ?? (window.innerWidth - 420), 
+        y: graph.codePanelY ?? 80 
     };
+    
     window.addEventListener('mousemove', onDragCode);
     window.addEventListener('mouseup', stopDragCode);
 };
 
 const onDragCode = (e: MouseEvent) => {
-    if (!dragCodeState.value || !currentGraph.value) return;
-    const dx = e.clientX - dragCodeState.value.startX;
-    const dy = e.clientY - dragCodeState.value.startY;
-    if (projectStore.currentProject) {
-        projectStore.updateGraphLayout(projectStore.currentProject.id, currentGraph.value.id, {
-            codePanelX: dragCodeState.value.initialLeft + dx,
-            codePanelY: dragCodeState.value.initialTop + dy
+    if (!isDraggingCode.value) return;
+    const dx = e.clientX - dragStartCode.value.x;
+    const dy = e.clientY - dragStartCode.value.y;
+    
+    if (projectStore.currentProject && graphStore.currentGraphId) {
+        projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+            codePanelX: initialPanelPos.value.x + dx,
+            codePanelY: initialPanelPos.value.y + dy
         }, false);
     }
 };
 
 const stopDragCode = () => {
-    if (projectStore.currentProject) projectStore.saveProjects();
-    dragCodeState.value = null;
+    isDraggingCode.value = false;
     window.removeEventListener('mousemove', onDragCode);
     window.removeEventListener('mouseup', stopDragCode);
+    projectStore.saveProjects();
 };
+
+const getCodePanelStyle = computed(() => {
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return {};
+    const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+    if (!graph) return {};
+    
+    return {
+        left: `${graph.codePanelX ?? (window.innerWidth - 420)}px`,
+        top: `${graph.codePanelY ?? 80}px`,
+        width: `${graph.codePanelWidth ?? 400}px`,
+        height: `${graph.codePanelHeight ?? 400}px`
+    };
+});
+
+// Resize Code Panel Logic
+const isResizingCode = ref(false);
+const initialPanelSize = ref({ width: 0, height: 0 });
 
 const startResizeCode = (e: MouseEvent) => {
-    const g = currentGraph.value;
-    if (!g) return;
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return;
+    const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+    if (!graph) return;
+
     e.stopPropagation();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startW = codePanelPosition.value.width;
-    const startH = codePanelPosition.value.height;
-
-    const onResize = (ev: MouseEvent) => {
-        const dx = ev.clientX - startX;
-        const dy = ev.clientY - startY;
-        if (projectStore.currentProject && currentGraph.value) {
-            projectStore.updateGraphLayout(projectStore.currentProject.id, currentGraph.value.id, {
-                codePanelWidth: Math.max(300, startW + dx),
-                codePanelHeight: Math.max(200, startH + dy)
-            }, false);
-        }
+    e.preventDefault();
+    isResizingCode.value = true;
+    dragStartCode.value = { x: e.clientX, y: e.clientY };
+    initialPanelSize.value = { 
+        width: graph.codePanelWidth ?? 400, 
+        height: graph.codePanelHeight ?? 400 
     };
+    window.addEventListener('mousemove', onResizeCode);
+    window.addEventListener('mouseup', stopResizeCode);
+};
 
-    const stopResize = () => {
-        if (projectStore.currentProject) projectStore.saveProjects();
-        window.removeEventListener('mousemove', onResize);
-        window.removeEventListener('mouseup', stopResize);
+const onResizeCode = (e: MouseEvent) => {
+    if (!isResizingCode.value) return;
+    const dx = e.clientX - dragStartCode.value.x;
+    const dy = e.clientY - dragStartCode.value.y;
+    
+    const newWidth = Math.max(300, initialPanelSize.value.width + dx);
+    const newHeight = Math.max(200, initialPanelSize.value.height + dy);
+
+    if (projectStore.currentProject && graphStore.currentGraphId) {
+        projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+            codePanelWidth: newWidth,
+            codePanelHeight: newHeight
+        }, false);
+    }
+};
+
+const stopResizeCode = () => {
+    isResizingCode.value = false;
+    window.removeEventListener('mousemove', onResizeCode);
+    window.removeEventListener('mouseup', stopResizeCode);
+    projectStore.saveProjects();
+};
+
+// Resize Code Panel (Touch)
+const startResizeCodeTouch = (e: TouchEvent) => {
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return;
+    const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+    if (!graph) return;
+
+    e.stopPropagation();
+    isResizingCode.value = true;
+    const touch = e.touches[0];
+    dragStartCode.value = { x: touch.clientX, y: touch.clientY };
+    initialPanelSize.value = { 
+        width: graph.codePanelWidth ?? 400, 
+        height: graph.codePanelHeight ?? 400 
     };
-
-    window.addEventListener('mousemove', onResize);
-    window.addEventListener('mouseup', stopResize);
+    window.addEventListener('touchmove', onResizeCodeTouch, { passive: false });
+    window.addEventListener('touchend', stopResizeCodeTouch);
 };
 
-const toggleCodePanel = () => {
-    uiStore.toggleCodePanel();
+const onResizeCodeTouch = (e: TouchEvent) => {
+    if (!isResizingCode.value) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const dx = touch.clientX - dragStartCode.value.x;
+    const dy = touch.clientY - dragStartCode.value.y;
+    
+    const newWidth = Math.max(300, initialPanelSize.value.width + dx);
+    const newHeight = Math.max(200, initialPanelSize.value.height + dy);
+
+    if (projectStore.currentProject && graphStore.currentGraphId) {
+        projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+            codePanelWidth: newWidth,
+            codePanelHeight: newHeight
+        }, false);
+    }
 };
 
-const toggleDarkMode = () => {
-    uiStore.toggleDarkMode();
+const stopResizeCodeTouch = () => {
+    isResizingCode.value = false;
+    window.removeEventListener('touchmove', onResizeCodeTouch);
+    window.removeEventListener('touchend', stopResizeCodeTouch);
+    projectStore.saveProjects();
 };
+
+// Left sidebar click-to-open logic
+const handleSidebarContainerClick = (e: MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.theme-toggle-header')) return;
+    if (!isLeftSidebarOpen.value) {
+        isLeftSidebarOpen.value = true;
+    }
+}
 
 </script>
 
 <template>
   <div class="app-layout">
-    <TheNavbar
-        :project-name="projectStore.currentProject?.name || null"
-        :active-graph-name="pinnedGraphTitle"
+    <main class="canvas-area">
+      <GraphEditor
+        v-if="graphStore.currentGraphId"
+        :key="graphStore.currentGraphId"
+        :graph-id="graphStore.currentGraphId"
         :is-grid-enabled="isGridEnabled"
-        :grid-size="gridSize"
-        :current-mode="currentMode"
-        :current-node-type="currentNodeType"
-        :is-left-sidebar-open="isLeftSidebarOpen"
-        :is-right-sidebar-open="isRightSidebarOpen"
-        :is-model-valid="isModelValid"
-        :show-debug-panel="showDebugPanel"
-        :show-zoom-controls="showZoomControls"
         @update:is-grid-enabled="isGridEnabled = $event"
+        :grid-size="gridSize"
         @update:grid-size="gridSize = $event"
+        :grid-style="canvasGridStyle"
+        :current-mode="currentMode"
+        :elements="elements"
+        :current-node-type="currentNodeType"
+        :validation-errors="validationErrors"
+        :show-zoom-controls="false" 
         @update:current-mode="currentMode = $event"
         @update:current-node-type="currentNodeType = $event"
-        @update:show-debug-panel="showDebugPanel = $event"
-        @update:show-zoom-controls="showZoomControls = $event"
-        @new-project="showNewProjectModal = true"
-        @new-graph="showNewGraphModal = true"
-        @toggle-left-sidebar="uiStore.toggleLeftSidebar()"
-        @toggle-right-sidebar="uiStore.toggleRightSidebar()"
-        @open-about-modal="showAboutModal = true"
-        @open-export-modal="openExportModal"
-        @export-json="handleExportJson"
-        @apply-layout="handleGraphLayout"
-        @load-example="handleLoadExample"
-        @show-validation-issues="showValidationModal = true"
-        @connect-to-backend-url="tempBackendUrl = $event; connectToBackend()"
-        @run-model="runModel"
-        @abort-run="abortRun"
-        @generate-standalone="handleGenerateStandalone"
-        @toggle-code-panel="toggleCodePanel"
-    />
-
-    <main class="canvas-area">
-        <div v-if="graphStore.currentGraphId" class="single-graph-container">
-            <GraphEditor 
-                :graph-id="graphStore.currentGraphId"
-                :is-grid-enabled="isGridEnabled"
-                @update:is-grid-enabled="isGridEnabled = $event"
-                :grid-size="gridSize"
-                @update:grid-size="gridSize = $event"
-                :grid-style="canvasGridStyle"
-                :current-mode="currentMode"
-                :elements="elements"
-                :current-node-type="currentNodeType"
-                :validation-errors="validationErrors"
-                :show-zoom-controls="false"
-                @update:current-mode="currentMode = $event"
-                @update:current-node-type="currentNodeType = $event"
-                @element-selected="handleElementSelected"
-                @layout-updated="handleLayoutUpdated"
-            />
-            
-            <FloatingBottomToolbar 
-                :current-mode="currentMode"
-                :current-node-type="currentNodeType"
-                :show-code-panel="isCodePanelOpen"
-                @update:current-mode="currentMode = $event"
-                @update:current-node-type="currentNodeType = $event"
-                @undo="handleUndo"
-                @redo="handleRedo"
-                @zoom-in="handleZoomIn"
-                @zoom-out="handleZoomOut"
-                @fit="handleFit"
-                @layout-graph="handleGraphLayout"
-                @toggle-code-panel="toggleCodePanel"
-                @export-bugs="handleExportBugs"
-                @export-standalone="handleExportStandalone"
-            />
-
-            <!-- Draggable Code Panel -->
-            <div v-if="isCodePanelOpen" 
-                 class="code-panel-card glass-panel"
-                 :style="{
-                    left: `${codePanelPosition.x}px`,
-                    top: `${codePanelPosition.y}px`,
-                    width: `${codePanelPosition.width}px`,
-                    height: `${codePanelPosition.height}px`
-                 }"
-            >
-                <div class="graph-header code-header" @mousedown="startDragCode">
-                    <span class="graph-title"><i class="fas fa-code"></i> BUGS Code Preview</span>
-                    <button class="close-btn" @click="toggleCodePanel"><i class="fas fa-times"></i></button>
-                </div>
-                <div class="code-content">
-                    <CodePreviewPanel :is-active="true" :graph-id="graphStore.currentGraphId" />
-                </div>
-                <div class="resize-handle" @mousedown.stop="startResizeCode">
-                    <i class="fas fa-chevron-right" style="transform: rotate(45deg);"></i>
-                </div>
-            </div>
-        </div>
-        <div v-else class="empty-workspace">
-            <p>Select or create a graph to start editing.</p>
-            <BaseButton @click="showNewGraphModal = true" type="primary">Create New Graph</BaseButton>
-        </div>
+        @element-selected="handleElementSelected"
+        @layout-updated="handleLayoutUpdated"
+      />
+      <div v-else class="empty-state">
+        <p>No graph selected. Create or select a graph to start.</p>
+        <BaseButton @click="showNewGraphModal = true" type="primary">Create New Graph</BaseButton>
+      </div>
     </main>
 
-    <!-- Logo Button (Collapsed Left Sidebar) -->
-    <div class="sidebar-toggle-logo glass-panel" :class="{ hidden: isLeftSidebarOpen }">
-       <div class="flex-grow cursor-pointer flex items-center" @click="uiStore.toggleLeftSidebar" title="Open Menu">
-           <span class="logo-text-minimized">
-               {{ pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS' }}
-           </span>
-       </div>
-       
-       <div class="flex items-center gap-1 ml-2">
-           <button @click.stop="toggleDarkMode" class="theme-toggle-header" :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
-               <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
-           </button>
-           <div class="cursor-pointer flex items-center ml-1" @click="uiStore.toggleLeftSidebar" title="Open Menu">
-               <svg data-v-ae240f47="" width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon"><path data-v-ae240f47="" fill="currentColor" fill-rule="evenodd" d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" clip-rule="evenodd"></path></svg>
-           </div>
-       </div>
-    </div>
-
-    <!-- Right Sidebar Toggle (Collapsed with Status Controls) -->
-    <div class="sidebar-toggle-logo right glass-panel" :class="{ hidden: isRightSidebarOpen }">
-       <div class="flex-grow cursor-pointer flex items-center" @click="uiStore.toggleRightSidebar" title="Open Inspector">
-           <span class="logo-text-minimized">Inspector</span>
-       </div>
-       
-       <div class="flex items-center gap-1 mr-2">
-            <div class="status-indicator backend-status" 
-                 :class="{ 'connected': isConnected, 'disconnected': !isConnected }">
-                <i class="fas fa-circle"></i>
-                <div class="instant-tooltip">{{ isConnected ? 'Backend Connected' : 'Backend Disconnected' }}</div>
-            </div>
-            
-            <div class="status-indicator validation-status"
-                @click="showValidationModal = true"
-                :class="isModelValid ? 'valid' : 'invalid'">
-                <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
-                <div class="instant-tooltip">{{ isModelValid ? 'Model Valid' : 'Validation Errors Found' }}</div>
-            </div>
-       </div>
-
-       <div class="cursor-pointer flex items-center" @click="uiStore.toggleRightSidebar" title="Open Inspector">
-           <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon"><path fill="currentColor" fill-rule="evenodd" d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" clip-rule="evenodd"></path></svg>
-       </div>
-    </div>
-
-    <LeftSidebar 
-        :active-accordion-tabs="activeAccordionTabs"
-        :project-name="projectStore.currentProject?.name || null"
-        :pinned-graph-title="pinnedGraphTitle"
-        :is-grid-enabled="isGridEnabled"
-        :grid-size="gridSize"
-        :show-zoom-controls="showZoomControls"
-        :show-debug-panel="showDebugPanel"
-        @toggle-left-sidebar="uiStore.toggleLeftSidebar"
+    <!-- Left Sidebar (Collapsed state handled via toggle) -->
+    <LeftSidebar
+        :activeAccordionTabs="activeAccordionTabs"
+        :projectName="projectStore.currentProject?.name || null"
+        :pinnedGraphTitle="pinnedGraphTitle"
+        :isGridEnabled="isGridEnabled"
+        :gridSize="gridSize"
+        :showZoomControls="showZoomControls"
+        :showDebugPanel="showDebugPanel"
+        @toggle-left-sidebar="toggleLeftSidebar"
         @new-project="showNewProjectModal = true"
         @new-graph="showNewGraphModal = true"
         @update:currentMode="currentMode = $event"
@@ -803,23 +773,112 @@ const toggleDarkMode = () => {
         @update:gridSize="gridSize = $event"
         @update:showZoomControls="showZoomControls = $event"
         @update:showDebugPanel="showDebugPanel = $event"
+        @toggle-code-panel="uiStore.toggleCodePanel"
         @load-example="handleLoadExample"
         @open-export-modal="openExportModal"
         @export-json="handleExportJson"
-        @connect-to-backend-url="tempBackendUrl = $event; connectToBackend()"
+        @connect-to-backend-url="(url) => { tempBackendUrl = url; connectToBackend(); }"
+        @run-model="runModel"
+        @abort-run="abortRun"
         @generate-standalone="handleGenerateStandalone"
         @open-about-modal="showAboutModal = true"
-        @toggle-dark-mode="toggleDarkMode"
     />
 
-    <RightSidebar 
-        :selected-element="selectedElement"
-        :validation-errors="validationErrors"
-        :is-model-valid="isModelValid"
-        @toggle-right-sidebar="uiStore.toggleRightSidebar"
+    <!-- Collapsed Left Sidebar Trigger Area -->
+    <Transition name="fade">
+        <div v-if="!isLeftSidebarOpen" 
+             class="collapsed-sidebar-trigger glass-panel"
+             @click="handleSidebarContainerClick">
+           <div class="sidebar-trigger-content">
+               <div class="flex-grow flex items-center gap-2">
+                   <span class="logo-text-minimized">
+                       {{ pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS' }}
+                   </span>
+               </div>
+               <div class="flex items-center gap-1">
+                   <button @click.stop="uiStore.toggleDarkMode()" class="theme-toggle-header" :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
+                       <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
+                   </button>
+                   <div class="toggle-icon-wrapper">
+                       <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon"><path fill="currentColor" fill-rule="evenodd" d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" clip-rule="evenodd"></path></svg>
+                   </div>
+               </div>
+           </div>
+        </div>
+    </Transition>
+
+    <!-- Right Sidebar -->
+    <RightSidebar
+        :selectedElement="selectedElement"
+        :validationErrors="validationErrors"
+        :isModelValid="isModelValid"
+        @toggle-right-sidebar="toggleRightSidebar"
         @update-element="updateElement"
         @delete-element="deleteElement"
         @show-validation-issues="showValidationModal = true"
+    />
+
+    <!-- Collapsed Right Sidebar Trigger Area -->
+    <Transition name="fade">
+        <div v-if="!isRightSidebarOpen" 
+             class="collapsed-sidebar-trigger right glass-panel"
+             @click="toggleRightSidebar">
+           <div class="sidebar-trigger-content">
+               <span class="sidebar-title-minimized">Inspector</span>
+               <div class="flex items-center gap-2">
+                    <div class="status-indicator validation-status"
+                        @click.stop="showValidationModal = true"
+                        :class="isModelValid ? 'valid' : 'invalid'">
+                        <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
+                    </div>
+                   <div class="toggle-icon-wrapper">
+                       <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon"><path fill="currentColor" fill-rule="evenodd" d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" clip-rule="evenodd"></path></svg>
+                   </div>
+               </div>
+           </div>
+        </div>
+    </Transition>
+
+    <!-- Code Panel Floating -->
+    <div v-if="isCodePanelOpen && graphStore.currentGraphId" 
+         ref="codePanelRef"
+         class="code-panel-floating glass-panel"
+         :style="getCodePanelStyle"
+         @mousedown="startDragCode"
+         @touchstart="startDragCodeTouch"
+    >
+        <div class="graph-header code-header">
+            <span class="graph-title"><i class="fas fa-code"></i> BUGS Code Preview</span>
+            <button class="close-btn" @click="uiStore.toggleCodePanel()" @touchstart.stop="uiStore.toggleCodePanel()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="code-content">
+            <CodePreviewPanel :is-active="true" />
+        </div>
+        <div class="resize-handle" 
+             @mousedown.stop="startResizeCode"
+             @touchstart.stop.prevent="startResizeCodeTouch"
+        >
+            <i class="fas fa-chevron-right" style="transform: rotate(45deg);"></i>
+        </div>
+    </div>
+
+    <!-- Floating Toolbar -->
+    <FloatingBottomToolbar 
+        :current-mode="currentMode"
+        :current-node-type="currentNodeType"
+        :show-code-panel="isCodePanelOpen"
+        :show-zoom-controls="showZoomControls"
+        @update:current-mode="currentMode = $event"
+        @update:current-node-type="currentNodeType = $event"
+        @undo="handleUndo"
+        @redo="handleRedo"
+        @zoom-in="handleZoomIn"
+        @zoom-out="handleZoomOut"
+        @fit="handleFit"
+        @layout-graph="handleGraphLayout"
+        @toggle-code-panel="uiStore.toggleCodePanel"
+        @export-bugs="() => { /* handled via copy inside panel mostly */ }"
+        @export-standalone="handleGenerateStandalone"
     />
 
     <!-- Modals -->
@@ -879,7 +938,7 @@ const toggleDarkMode = () => {
   position: relative;
   width: 100vw;
   height: 100dvh; 
-  height: 100vh; 
+  height: 100vh;
   overflow: hidden;
   background-color: var(--theme-bg-canvas);
 }
@@ -891,55 +950,43 @@ const toggleDarkMode = () => {
   width: 100%;
   height: 100%;
   z-index: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
 }
 
-.single-graph-container {
+.collapsed-sidebar-trigger {
+    position: absolute;
+    top: 16px;
+    z-index: 49; /* Below floating sidebar (50) */
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    transition: all 0.2s ease;
+    border: 1px solid var(--theme-border);
+    background: var(--theme-bg-panel);
+    cursor: pointer;
+    min-width: 140px;
+}
+
+.collapsed-sidebar-trigger.glass-panel {
+    left: 16px;
+    min-width: 200px;
+}
+
+.collapsed-sidebar-trigger.right {
+    left: auto;
+    right: 16px;
+}
+
+.collapsed-sidebar-trigger:hover {
+    box-shadow: var(--shadow-md);
+    transform: scale(1.01);
+}
+
+.sidebar-trigger-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     width: 100%;
-    height: 100%;
-    position: relative;
-}
-
-.empty-workspace {
-    text-align: center;
-    color: var(--theme-text-secondary);
-}
-
-.empty-workspace p {
-    margin-bottom: 1rem;
-}
-
-/* Logo Button (Collapsed Sidebar) */
-.sidebar-toggle-logo {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 50;
-  padding: 8px 12px;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  transition: all 0.2s ease;
-  border: 1px solid var(--theme-border);
-  background: var(--theme-bg-panel);
-}
-
-.sidebar-toggle-logo.right {
-  left: auto;
-  right: 16px;
-}
-
-.sidebar-toggle-logo.hidden {
-    opacity: 0;
-    pointer-events: none;
-    transform: scale(0.8);
-}
-
-.sidebar-toggle-logo:hover {
-  transform: scale(1.02);
-  box-shadow: var(--shadow-md);
 }
 
 .logo-text-minimized {
@@ -949,8 +996,10 @@ const toggleDarkMode = () => {
     color: var(--theme-text-primary);
 }
 
-.toggle-icon {
-    color: var(--theme-text-secondary);
+.sidebar-title-minimized {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--theme-text-primary);
 }
 
 .theme-toggle-header {
@@ -971,60 +1020,36 @@ const toggleDarkMode = () => {
     background: var(--theme-bg-hover);
 }
 
-/* Instant Tooltip Status Indicator */
-.status-indicator {
-    position: relative;
+.toggle-icon-wrapper {
     display: flex;
     align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    cursor: help;
 }
 
-.backend-status { margin-right: 0; }
-.backend-status.connected { color: var(--theme-success); }
-.backend-status.disconnected { color: var(--theme-danger); }
-
-.validation-status { font-size: 1.1em; margin: 0 5px; }
-.validation-status.valid { color: var(--theme-success); }
-.validation-status.invalid { color: var(--theme-warning); }
-
-.instant-tooltip {
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--color-background-dark);
-    color: var(--color-text-light);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.1s;
-    margin-top: 6px;
-    z-index: 100;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+.toggle-icon {
+    color: var(--theme-text-secondary);
 }
 
-.status-indicator:hover .instant-tooltip {
-    opacity: 1;
-}
-
-/* Draggable Code Panel Styling */
-.code-panel-card {
-  position: absolute;
-  background-color: var(--theme-bg-panel);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
+.empty-state {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--theme-border);
-  overflow: visible; 
-  transition: box-shadow 0.2s;
-  z-index: 100; 
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--theme-text-secondary);
+  gap: 1rem;
+}
+
+/* Code Panel Floating */
+.code-panel-floating {
+    position: absolute;
+    background-color: var(--theme-bg-panel);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-floating);
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--theme-border);
+    overflow: hidden;
+    z-index: 100;
 }
 
 .graph-header {
@@ -1037,31 +1062,35 @@ const toggleDarkMode = () => {
   cursor: move;
   user-select: none;
   justify-content: space-between;
-  border-top-left-radius: var(--radius-md);
-  border-top-right-radius: var(--radius-md);
 }
 
 .graph-title {
   font-weight: 600;
   font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   color: var(--theme-text-primary);
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
+.close-btn {
+    background: transparent;
+    border: none;
+    color: var(--theme-text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+}
+.close-btn:hover {
+    color: var(--theme-text-primary);
+}
+
 .code-content {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-  background-color: var(--theme-bg-panel);
-  display: flex;
-  flex-direction: column;
-  border-bottom-left-radius: var(--radius-md);
-  border-bottom-right-radius: var(--radius-md);
+    flex: 1;
+    overflow: hidden;
+    background-color: var(--theme-bg-panel);
 }
 
 .code-content :deep(.code-preview-panel) {
@@ -1090,25 +1119,53 @@ const toggleDarkMode = () => {
   z-index: 20;
   background: var(--theme-bg-hover);
   border-top-left-radius: 4px;
-  border-bottom-right-radius: var(--radius-md);
 }
 
-.close-btn {
-  background: transparent;
-  border: none;
-  color: var(--theme-text-secondary);
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  z-index: 100;
+.status-indicator {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    cursor: help;
 }
 
-.close-btn:hover {
-  color: var(--theme-text-primary);
-  background-color: var(--theme-bg-hover);
+.validation-status { font-size: 1.1em; margin: 0; }
+.validation-status.valid { color: var(--theme-success); }
+.validation-status.invalid { color: var(--theme-warning); }
+
+.instant-tooltip {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    transform: none;
+    background: var(--color-background-dark);
+    color: var(--color-text-light);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s;
+    margin-top: 6px;
+    z-index: 100;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+.status-indicator:hover .instant-tooltip {
+    opacity: 1;
+}
+
+/* Fade Transition */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

@@ -2,7 +2,6 @@
 import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue';
 import { useGraphStore } from '../../stores/graphStore';
 import { useBugsCodeGenerator } from '../../composables/useBugsCodeGenerator';
-import BaseButton from '../ui/BaseButton.vue';
 
 import 'codemirror/lib/codemirror.css';
 import 'codemirror/theme/material-darker.css';
@@ -100,14 +99,17 @@ const copyCodeToClipboard = () => {
     </div>
     <div class="editor-wrapper">
       <div ref="editorContainer" class="editor-container"></div>
-      <BaseButton
-        @click="copyCodeToClipboard"
-        class="copy-button"
-        type="secondary"
+      <!-- Use native button for reliable touch events -->
+      <button
+        @click.stop="copyCodeToClipboard"
+        @touchend.stop.prevent="copyCodeToClipboard"
+        class="native-copy-button"
+        type="button"
+        title="Copy Code"
       >
         <i v-if="copySuccess" class="fas fa-check"></i>
         <i v-else class="fas fa-copy"></i>
-      </BaseButton>
+      </button>
     </div>
   </div>
 </template>
@@ -178,7 +180,7 @@ h4 {
   height: 100%;
 }
 
-.copy-button {
+.native-copy-button {
   position: absolute;
   bottom: 12px;
   right: 12px;
@@ -194,16 +196,24 @@ h4 {
   cursor: pointer;
   opacity: 0.9;
   transition: background-color 0.2s, opacity 0.2s;
-  z-index: 5;
+  z-index: 1000;
+  pointer-events: auto;
+  border: none;
+  outline: none;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
-.copy-button:hover {
+.native-copy-button:hover {
   background-color: var(--color-secondary-hover);
   opacity: 1;
 }
 
-.copy-button .fa-copy,
-.copy-button .fa-check {
+.native-copy-button:active {
+  transform: scale(0.95);
+}
+
+.native-copy-button .fa-copy,
+.native-copy-button .fa-check {
   font-size: 1.1rem;
 }
 </style>

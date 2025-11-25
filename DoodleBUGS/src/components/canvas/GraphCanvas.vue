@@ -1,6 +1,5 @@
-
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import type { Core, EventObject, NodeSingular, ElementDefinition } from 'cytoscape';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGridSnapping } from '../../composables/useGridSnapping';
@@ -32,6 +31,9 @@ const cyContainer = ref<HTMLElement | null>(null);
 let cy: Core | null = null;
 const cyInstance = ref<Core | null>(null);
 let resizeObserver: ResizeObserver | null = null;
+
+// Start hidden to prevent flash of un-layouted content
+const isGraphVisible = ref(false);
 
 const { initCytoscape, destroyCytoscape, getCyInstance, getUndoRedoInstance } = useGraphInstance();
 const getCy = () => getCyInstance(props.graphId);
@@ -110,6 +112,7 @@ onMounted(() => {
     cy = initCytoscape(cyContainer.value, [], props.graphId);
     cyInstance.value = cy;
 
+    // Initial sync
     syncGraphWithProps(props.elements, props.validationErrors);
 
     setGridSize(props.gridSize);
@@ -214,6 +217,23 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(() => {
       if (cy) {
         cy.resize();
+        // Initial fit logic
+        if (!isGraphVisible.value) {
+            // If we have elements, fit them then show
+            if (props.elements.length > 0) {
+                if (cy.width() > 0 && cy.height() > 0) {
+                    cy.fit(undefined, 50);
+                    if (cy.zoom() > 0.8) {
+                        cy.zoom(0.8);
+                        cy.center();
+                    }
+                    isGraphVisible.value = true;
+                }
+            } else {
+                // If empty, just show immediately
+                isGraphVisible.value = true;
+            }
+        }
       }
     });
     resizeObserver.observe(cyContainer.value);
@@ -245,8 +265,32 @@ watch(() => props.gridSize, (newValue: number) => {
   }
 });
 
-watch([() => props.elements, () => props.validationErrors], ([newElements, newErrors]) => {
+watch([() => props.elements, () => props.validationErrors], async ([newElements, newErrors], [oldElements]) => {
+  // Detect bulk load (empty -> populated).
+  // Also handles reload where oldElements might be empty initially.
+  const isBulkLoad = oldElements.length === 0 && newElements.length > 0;
+
+  if (isBulkLoad) {
+      // Hide INSTANTLY to prevent flash of unpositioned nodes
+      isGraphVisible.value = false;
+      await nextTick(); 
+  }
+
   syncGraphWithProps(newElements, newErrors);
+
+  if (isBulkLoad && cy) {
+      // Ensure Cytoscape has processed the batch
+      // Then fit and show
+      setTimeout(() => {
+          cy!.fit(undefined, 50);
+          if (cy!.zoom() > 0.8) {
+              cy!.zoom(0.8);
+              cy!.center();
+          }
+          // Fade back in
+          isGraphVisible.value = true;
+      }, 50);
+  }
 }, { deep: true });
 </script>
 
@@ -260,9 +304,13 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
       'grid-dots': gridStyle === 'dots' && isGridEnabled && gridSize > 0,
       'mode-add-node': currentMode === 'add-node',
       'mode-add-edge': currentMode === 'add-edge',
-      'mode-select': currentMode === 'select'
+      'mode-select': currentMode === 'select',
+      'graph-ready': isGraphVisible
     }"
-    :style="{ '--grid-size': `${gridSize}px` }"
+    :style="{ 
+        '--grid-size': `${gridSize}px`,
+        'transition': isGraphVisible ? 'opacity 0.3s ease-in-out' : 'none'
+    }"
   ></div>
 </template>
 
@@ -273,6 +321,12 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
   position: relative;
   overflow: hidden;
   cursor: grab;
+  opacity: 0;
+  /* Transition defined inline to support instant toggle */
+}
+
+.cytoscape-container.graph-ready {
+    opacity: 1;
 }
 
 .cytoscape-container.mode-add-node {

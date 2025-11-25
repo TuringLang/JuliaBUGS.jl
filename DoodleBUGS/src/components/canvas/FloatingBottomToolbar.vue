@@ -8,6 +8,7 @@ const props = defineProps<{
   currentMode: string;
   currentNodeType: NodeType;
   showCodePanel?: boolean;
+  showZoomControls?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -286,17 +287,19 @@ onUnmounted(() => {
           </template>
       </DropdownMenu>
 
-      <div class="divider"></div>
-
-      <button class="dock-btn" @click="$emit('zoom-in')" title="Zoom In" type="button">
-        <i class="fas fa-plus"></i>
-      </button>
-      <button class="dock-btn" @click="$emit('zoom-out')" title="Zoom Out" type="button">
-        <i class="fas fa-minus"></i>
-      </button>
-      <button class="dock-btn" @click="$emit('fit')" title="Fit to View" type="button">
-        <i class="fas fa-compress-arrows-alt"></i>
-      </button>
+      <!-- Zoom Controls Group -->
+      <template v-if="showZoomControls">
+        <div class="divider"></div>
+        <button class="dock-btn" @click="$emit('zoom-in')" title="Zoom In" type="button">
+            <i class="fas fa-plus"></i>
+        </button>
+        <button class="dock-btn" @click="$emit('zoom-out')" title="Zoom Out" type="button">
+            <i class="fas fa-minus"></i>
+        </button>
+        <button class="dock-btn" @click="$emit('fit')" title="Fit to View" type="button">
+            <i class="fas fa-compress-arrows-alt"></i>
+        </button>
+      </template>
 
       <div class="divider"></div>
 

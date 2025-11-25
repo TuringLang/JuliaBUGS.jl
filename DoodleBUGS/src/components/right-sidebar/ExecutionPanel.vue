@@ -348,7 +348,7 @@ const downloadFileContent = (fileName: string, content: string) => {
 
           <div>
             <div class="table-header" @click="showSummary = !showSummary" style="cursor: pointer;">
-              <div class="table-title"><strong>Summary</strong> <span style="opacity:.7; margin-left:6px;">{{ showSummary ? '▾' : '▸' }}</span></div>
+              <div class="table-title"><strong>Summary</strong> <span style="opacity:.7; margin-left:6px;">{{ showSummary ? 'â–¾' : 'â–¸' }}</span></div>
               <div class="table-actions">
                 <BaseButton size="small" type="secondary" @click.stop="downloadSummaryCsv" :disabled="!hasSummary">Download CSV</BaseButton>
               </div>
@@ -362,7 +362,7 @@ const downloadFileContent = (fileName: string, content: string) => {
                         @click="toggleSummarySort(header)"
                         :class="['sortable', { sorted: summarySortKey === header, desc: summarySortKey === header && summarySortDir === 'desc' }]">
                       {{ header }}
-                      <span class="sort-indicator" v-if="summarySortKey === header">{{ summarySortDir === 'asc' ? '▲' : '▼' }}</span>
+                      <span class="sort-indicator" v-if="summarySortKey === header">{{ summarySortDir === 'asc' ? 'â–²' : 'â–¼' }}</span>
                     </th>
                   </tr>
                 </thead>
@@ -380,7 +380,7 @@ const downloadFileContent = (fileName: string, content: string) => {
 
           <div style="margin-top: 16px;">
             <div class="table-header" @click="showQuantiles = !showQuantiles" style="cursor: pointer;">
-              <div class="table-title"><strong>Quantiles</strong> <span style="opacity:.7; margin-left:6px;">{{ showQuantiles ? '▾' : '▸' }}</span></div>
+              <div class="table-title"><strong>Quantiles</strong> <span style="opacity:.7; margin-left:6px;">{{ showQuantiles ? 'â–¾' : 'â–¸' }}</span></div>
               <div class="table-actions">
                 <BaseButton size="small" type="secondary" @click.stop="downloadQuantilesCsv" :disabled="!hasQuantiles">Download CSV</BaseButton>
               </div>
@@ -394,7 +394,7 @@ const downloadFileContent = (fileName: string, content: string) => {
                         @click="toggleQuantSort(header)"
                         :class="['sortable', { sorted: quantSortKey === header, desc: quantSortKey === header && quantSortDir === 'desc' }]">
                       {{ header }}
-                      <span class="sort-indicator" v-if="quantSortKey === header">{{ quantSortDir === 'asc' ? '▲' : '▼' }}</span>
+                      <span class="sort-indicator" v-if="quantSortKey === header">{{ quantSortDir === 'asc' ? 'â–²' : 'â–¼' }}</span>
                     </th>
                   </tr>
                 </thead>
@@ -437,10 +437,17 @@ const downloadFileContent = (fileName: string, content: string) => {
             </div>
             <div class="editor-wrapper">
               <div ref="fileEditorContainer" class="editor-container"></div>
-              <BaseButton size="small" type="secondary" class="copy-button" title="Copy code" @click="copyFileContent(activeFileName, activeFileContent)">
+              <!-- Use native button for reliable touch events -->
+              <button
+                @click.stop="copyFileContent(activeFileName, activeFileContent)"
+                @touchend.stop.prevent="copyFileContent(activeFileName, activeFileContent)"
+                class="native-copy-button"
+                type="button"
+                title="Copy Code"
+              >
                 <i v-if="copySuccessStates[activeFileName]" class="fas fa-check"></i>
                 <i v-else class="fas fa-copy"></i>
-              </BaseButton>
+              </button>
             </div>
           </div>
         </div>
@@ -694,11 +701,11 @@ const downloadFileContent = (fileName: string, content: string) => {
 .editor-container .CodeMirror { height: 100% !important; }
 .editor-container .CodeMirror-scroll { height: 100% !important; }
 
-.copy-button {
+.native-copy-button {
   position: absolute;
   bottom: 12px;
   right: 12px;
-  z-index: 3;
+  z-index: 1000;
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -711,15 +718,23 @@ const downloadFileContent = (fileName: string, content: string) => {
   cursor: pointer;
   opacity: 0.9;
   transition: background-color 0.2s, opacity 0.2s;
+  pointer-events: auto;
+  border: none;
+  outline: none;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
-.copy-button:hover {
+.native-copy-button:hover {
   background-color: var(--color-secondary-hover);
   opacity: 1;
 }
 
-.copy-button .fa-copy,
-.copy-button .fa-check {
+.native-copy-button:active {
+  transform: scale(0.95);
+}
+
+.native-copy-button .fa-copy,
+.native-copy-button .fa-check {
   font-size: 1.1rem;
 }
 </style>
