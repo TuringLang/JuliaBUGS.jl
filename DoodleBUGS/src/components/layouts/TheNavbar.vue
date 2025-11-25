@@ -31,7 +31,6 @@ defineProps<{
   isModelValid: boolean;
   showDebugPanel: boolean;
   showZoomControls: boolean;
-  isMultiCanvasView?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -48,7 +47,6 @@ const emit = defineEmits<{
   (e: 'export-json'): void;
   (e: 'apply-layout', layoutName: string): void;
   (e: 'load-example', exampleKey: string): void;
-  (e: 'validate-model'): void;
   (e: 'show-validation-issues'): void;
   (e: 'connect-to-backend-url', url: string): void;
   (e: 'run-model'): void;
@@ -56,14 +54,13 @@ const emit = defineEmits<{
   (e: 'generate-standalone'): void;
   (e: 'update:showDebugPanel', value: boolean): void;
   (e: 'update:showZoomControls', value: boolean): void;
-  (e: 'toggle-canvas-view'): void;
-  (e: 'save-current-graph'): void;
+  (e: 'toggle-code-panel'): void;
 }>();
 
 const executionStore = useExecutionStore();
 const uiStore = useUiStore();
 const { isConnected, isExecuting, isConnecting, backendUrl } = storeToRefs(executionStore);
-const { workspaceGridStyle, canvasGridStyle, workspaceGridSize, isWorkspaceGridEnabled } = storeToRefs(uiStore);
+const { canvasGridStyle, isCodePanelOpen, isDarkMode } = storeToRefs(uiStore);
 
 const navBackendUrl = ref(backendUrl.value || 'http://localhost:8081');
 const cloneCmd = 'git clone https://github.com/TuringLang/JuliaBUGS.jl.git';
@@ -97,31 +94,11 @@ const updateGridEnabled = (val: boolean) => emit('update:isGridEnabled', val);
 const updateGridSize = (val: number | null) => {
     if (val !== null) emit('update:gridSize', val);
 };
-const updateWorkspaceGridSize = (val: number | null) => {
-    if (val !== null) workspaceGridSize.value = val;
-};
 const updateShowZoomControls = (val: boolean) => emit('update:showZoomControls', val);
 const updateShowDebugPanel = (val: boolean) => emit('update:showDebugPanel', val);
 
-// Dark Mode
-const isDarkMode = ref(localStorage.getItem('darkMode') === 'true');
-
-const applyDarkMode = () => {
-    const element = document.querySelector('html');
-    if (isDarkMode.value) {
-        element?.classList.add('dark-mode');
-    } else {
-        element?.classList.remove('dark-mode');
-    }
-};
-
-// Apply on load
-applyDarkMode();
-
 const toggleDarkMode = () => {
-    isDarkMode.value = !isDarkMode.value;
-    localStorage.setItem('darkMode', String(isDarkMode.value));
-    applyDarkMode();
+    uiStore.toggleDarkMode();
 };
 
 // Mobile Menu
@@ -199,43 +176,6 @@ const gridStyleOptions = [
             <template #content>
               <div class="view-options" @click.stop>
                 <div class="view-option-row">
-                  <label for="multi-canvas" class="view-label">Multi-Canvas View</label>
-                  <ToggleSwitch :modelValue="isMultiCanvasView" @update:modelValue="emit('toggle-canvas-view')" inputId="multi-canvas" />
-                </div>
-                
-                <div class="dropdown-divider"></div>
-
-                <div class="view-option-row">
-                  <label for="show-ws-grid" class="view-label">Workspace Grid</label>
-                  <ToggleSwitch v-model="isWorkspaceGridEnabled" inputId="show-ws-grid" />
-                </div>
-                
-                <div class="view-option-row grid-settings-row">
-                  <label for="ws-grid-style" class="view-label">Workspace Style</label>
-                  <div class="flex gap-2 items-center justify-end settings-controls">
-                    <BaseSelect 
-                        id="ws-grid-style"
-                        v-model="workspaceGridStyle"
-                        :options="gridStyleOptions"
-                        class="grid-style-select"
-                    />
-                    <InputNumber 
-                        :modelValue="workspaceGridSize" 
-                        @update:modelValue="updateWorkspaceGridSize" 
-                        showButtons 
-                        buttonLayout="stacked" 
-                        :step="10" 
-                        :min="10" 
-                        :max="200"
-                        decrementButtonIcon="pi pi-angle-down"
-                        incrementButtonIcon="pi pi-angle-up"
-                        class="grid-size-input"
-                        :allowEmpty="false"
-                    />
-                  </div>
-                </div>
-
-                <div class="view-option-row">
                   <label for="show-canvas-grid" class="view-label">Canvas Grid</label>
                   <ToggleSwitch :modelValue="isGridEnabled" @update:modelValue="updateGridEnabled" inputId="show-canvas-grid" />
                 </div>
@@ -275,6 +215,13 @@ const gridStyleOptions = [
                 <div class="view-option-row">
                   <label for="show-debug" class="view-label">Debug Console</label>
                   <ToggleSwitch :modelValue="showDebugPanel" @update:modelValue="updateShowDebugPanel" inputId="show-debug" />
+                </div>
+
+                <div class="dropdown-divider"></div>
+                <div class="view-option-row">
+                    <label class="view-label" @click="emit('toggle-code-panel')">
+                        <i :class="isCodePanelOpen ? 'fas fa-eye-slash' : 'fas fa-code'"></i> {{ isCodePanelOpen ? 'Hide Code Panel' : 'Show Code Panel' }}
+                    </label>
                 </div>
               </div>
             </template>
@@ -438,42 +385,11 @@ const gridStyleOptions = [
             <AccordionContent>
                 <div class="flex flex-col gap-5 pt-3 mobile-view-options">
                     <div class="mobile-option-row">
-                        <label for="mobile-multi-canvas">Multi-Canvas</label>
-                        <ToggleSwitch :modelValue="isMultiCanvasView" @update:modelValue="emit('toggle-canvas-view')" inputId="mobile-multi-canvas" />
-                    </div>
-                    <div class="mobile-option-row">
-                        <label for="mobile-show-ws-grid">Workspace Grid</label>
-                        <ToggleSwitch v-model="isWorkspaceGridEnabled" inputId="mobile-show-ws-grid" />
-                    </div>
-                    <div class="mobile-option-row">
-                        <label>Workspace Style</label>
-                        <div class="flex gap-3 items-center">
-                            <BaseSelect 
-                                v-model="workspaceGridStyle"
-                                :options="gridStyleOptions"
-                                class="w-24"
-                            />
-                            <InputNumber 
-                                :modelValue="workspaceGridSize" 
-                                @update:modelValue="updateWorkspaceGridSize" 
-                                showButtons 
-                                buttonLayout="stacked" 
-                                :step="10" 
-                                :min="10" 
-                                :max="200"
-                                decrementButtonIcon="pi pi-angle-down"
-                                incrementButtonIcon="pi pi-angle-up"
-                                class="grid-size-input"
-                                :allowEmpty="false"
-                            />
-                        </div>
-                    </div>
-                    <div class="mobile-option-row">
                         <label for="mobile-show-canvas-grid">Canvas Grid</label>
                         <ToggleSwitch :modelValue="isGridEnabled" @update:modelValue="updateGridEnabled" inputId="mobile-show-canvas-grid" />
                     </div>
                     <div class="mobile-option-row">
-                        <label>Canvas Style</label>
+                        <label>Grid Style</label>
                         <div class="flex gap-3 items-center">
                             <BaseSelect 
                                 v-model="canvasGridStyle"
@@ -502,6 +418,11 @@ const gridStyleOptions = [
                     <div class="mobile-option-row">
                         <label for="mobile-show-debug">Debug Console</label>
                         <ToggleSwitch :modelValue="showDebugPanel" @update:modelValue="updateShowDebugPanel" inputId="mobile-show-debug" />
+                    </div>
+                    <div class="mobile-option-row">
+                        <label @click="emit('toggle-code-panel')">
+                            Code Panel: {{ isCodePanelOpen ? 'ON' : 'OFF' }}
+                        </label>
                     </div>
                 </div>
             </AccordionContent>
@@ -636,13 +557,14 @@ const gridStyleOptions = [
     cursor: help;
 }
 
-.backend-status { margin-right: 5px; }
-.backend-status.connected { color: var(--color-success); }
-.backend-status.disconnected { color: var(--color-danger); }
+.backend-status { margin-right: 0; }
+.backend-status.connected { color: var(--theme-success); }
+.backend-status.disconnected { color: var(--theme-danger); }
 
-.validation-status { font-size: 1.1em; margin: 0 5px; }
-.validation-status.valid { color: var(--color-success); }
-.validation-status.invalid { color: var(--color-warning); }
+/* Adjusted spacing for indicators */
+.validation-status { font-size: 1.1em; margin: 0; }
+.validation-status.valid { color: var(--theme-success); }
+.validation-status.invalid { color: var(--theme-warning); }
 
 .instant-tooltip {
     position: absolute;
@@ -694,7 +616,7 @@ const gridStyleOptions = [
 .connection-status {
     font-size: 0.85em;
 }
-.connection-status.connected { color: var(--color-success); }
+.connection-status.connected { color: var(--theme-success); }
 
 .report-issue-link {
     display: flex;

@@ -1,33 +1,20 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick, computed, type StyleValue } from 'vue';
+import { ref, onMounted, watch, nextTick, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import type { LayoutOptions } from 'cytoscape';
-import MultiCanvasView from '../canvas/MultiCanvasView.vue';
-import ProjectManager from '../left-sidebar/ProjectManager.vue';
-import NodePalette from '../left-sidebar/NodePalette.vue';
-import ExecutionSettingsPanel from '../left-sidebar/ExecutionSettingsPanel.vue';
-import DataInputPanel from '../panels/DataInputPanel.vue';
-import NodePropertiesPanel from '../right-sidebar/NodePropertiesPanel.vue';
-import CodePreviewPanel from '../panels/CodePreviewPanel.vue';
-import JsonEditorPanel from '../right-sidebar/JsonEditorPanel.vue';
-import ExecutionPanel from '../right-sidebar/ExecutionPanel.vue';
+import GraphEditor from '../canvas/GraphEditor.vue';
+import FloatingBottomToolbar from '../canvas/FloatingBottomToolbar.vue';
 import BaseModal from '../common/BaseModal.vue';
 import BaseInput from '../ui/BaseInput.vue';
 import BaseButton from '../ui/BaseButton.vue';
-import BaseSelect from '../ui/BaseSelect.vue';
-import ToggleSwitch from 'primevue/toggleswitch';
-import Accordion from 'primevue/accordion';
-import AccordionPanel from 'primevue/accordionpanel';
-import AccordionHeader from 'primevue/accordionheader';
-import AccordionContent from 'primevue/accordioncontent';
-import Toolbar from 'primevue/toolbar';
-import Button from 'primevue/button';
-import Drawer from 'primevue/drawer';
+import TheNavbar from './TheNavbar.vue';
+import LeftSidebar from './LeftSidebar.vue';
+import RightSidebar from './RightSidebar.vue';
 import AboutModal from './AboutModal.vue';
 import ExportModal from './ExportModal.vue';
 import ValidationIssuesModal from './ValidationIssuesModal.vue';
 import DebugPanel from '../common/DebugPanel.vue';
-import DropdownMenu from '../common/DropdownMenu.vue';
+import CodePreviewPanel from '../panels/CodePreviewPanel.vue';
 import { useGraphElements } from '../../composables/useGraphElements';
 import { useProjectStore } from '../../stores/projectStore';
 import { useGraphStore } from '../../stores/graphStore';
@@ -37,9 +24,8 @@ import { useExecutionStore } from '../../stores/executionStore';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGraphValidator } from '../../composables/useGraphValidator';
 import { useBugsCodeGenerator, generateStandaloneScript } from '../../composables/useBugsCodeGenerator';
-import type { GraphElement, NodeType, ExampleModel, PaletteItemType } from '../../types';
+import type { GraphElement, NodeType, ExampleModel } from '../../types';
 import type { GeneratedFile } from '../../stores/executionStore';
-import { exampleModels, nodeDefinitions } from '../../config/nodeDefinitions';
 
 interface ExportOptions {
   bg: string;
@@ -59,19 +45,16 @@ const executionStore = useExecutionStore();
 const { parsedGraphData } = storeToRefs(dataStore);
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements();
 const { generatedCode } = useBugsCodeGenerator(elements);
-const { getCyInstance } = useGraphInstance();
+const { getCyInstance, getUndoRedoInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
 const { backendUrl, isConnected, isConnecting, isExecuting, samplerSettings } = storeToRefs(executionStore);
-const { isLeftSidebarOpen, isRightSidebarOpen, canvasGridStyle, workspaceGridStyle, workspaceGridSize, isWorkspaceGridEnabled, isMultiCanvasView, pinnedGraphId } = storeToRefs(uiStore);
+const { isLeftSidebarOpen, isRightSidebarOpen, canvasGridStyle, isCodePanelOpen, isDarkMode } = storeToRefs(uiStore);
 
 const currentMode = ref<string>('select');
 const currentNodeType = ref<NodeType>('stochastic');
 const isGridEnabled = ref(true);
 const gridSize = ref(20);
 const showZoomControls = ref(true);
-
-// Computed property for validation status
-const isModelValid = computed(() => validationErrors.value.size === 0);
 
 // Sidebar State
 const activeAccordionTabs = ref(['project', 'palette']);
@@ -89,58 +72,25 @@ const showDebugPanel = ref(false);
 const showExportModal = ref(false);
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null);
 
+// Computed property for validation status
+const isModelValid = computed(() => validationErrors.value.size === 0);
+
 // Pinned Graph Title Computation
 const pinnedGraphTitle = computed(() => {
-    if (!pinnedGraphId.value || !projectStore.currentProject) return null;
-    const graph = projectStore.currentProject.graphs.find(g => g.id === pinnedGraphId.value);
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return null;
+    const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
     return graph ? graph.name : null;
 });
 
-// --- View Options ---
-const gridStyleOptions = [
-    { label: 'Dots', value: 'dots' },
-    { label: 'Lines', value: 'lines' }
-];
+// Dark Mode Handling
+watch(isDarkMode, (val) => {
+  const element = document.querySelector('html');
+  if (val) element?.classList.add('dark-mode');
+  else element?.classList.remove('dark-mode');
+}, { immediate: true });
 
-const navBackendUrl = ref(backendUrl.value || 'http://localhost:8081');
-const cloneCmd = 'git clone https://github.com/TuringLang/JuliaBUGS.jl.git';
-const instantiateCmd = 'julia --project=DoodleBUGS/runtime -e "using Pkg; Pkg.instantiate()"';
-const startCmd = 'julia --project=DoodleBUGS/runtime DoodleBUGS/runtime/server.jl';
-
-// Copy helpers
-const copiedBackendUrl = ref(false);
-const copiedCloneCmd = ref(false);
-const copiedInstantiateCmd = ref(false);
-const copiedStartCmd = ref(false);
-
-function copyWithFeedback(text: string, flag: typeof copiedBackendUrl) {
-  navigator.clipboard.writeText(text).then(() => {
-    flag.value = true;
-    setTimeout(() => (flag.value = false), 1500);
-  }).catch(err => console.error('Clipboard copy failed:', err));
-}
-
-const copyBackendUrl = () => copyWithFeedback(navBackendUrl.value, copiedBackendUrl);
-const copyCloneCmd = () => copyWithFeedback(cloneCmd, copiedCloneCmd);
-const copyInstantiateCmd = () => copyWithFeedback(instantiateCmd, copiedInstantiateCmd);
-const copyStartCmd = () => copyWithFeedback(startCmd, copiedStartCmd);
-
-// Dark Mode
-const isDarkMode = ref(localStorage.getItem('darkMode') === 'true');
-const applyDarkMode = () => {
-    const element = document.querySelector('html');
-    if (isDarkMode.value) element?.classList.add('dark-mode');
-    else element?.classList.remove('dark-mode');
-};
-applyDarkMode();
-const toggleDarkMode = () => {
-    isDarkMode.value = !isDarkMode.value;
-    localStorage.setItem('darkMode', String(isDarkMode.value));
-    applyDarkMode();
-};
-
-// Mobile Menu
-const mobileMenuOpen = ref(false);
+let currentRunController: AbortController | null = null;
+let abortedByUser = false;
 
 onMounted(async () => {
   projectStore.loadProjects();
@@ -155,8 +105,16 @@ onMounted(async () => {
       graphStore.selectGraph(projectStore.currentProject.graphs[0].id);
     }
   }
-  uiStore.isMultiCanvasView = true;
   validateGraph();
+  
+  // Initial fit on reload
+  setTimeout(() => {
+      if (graphStore.currentGraphId) {
+          const cy = getCyInstance(graphStore.currentGraphId);
+          cy?.resize();
+          cy?.fit(undefined, 50);
+      }
+  }, 500);
 });
 
 watch(() => graphStore.currentGraphId, (newId) => {
@@ -168,6 +126,36 @@ watch(() => graphStore.currentGraphId, (newId) => {
           handleGraphLayout(layoutToApply);
         }, 100);
       });
+    }
+}, { immediate: true });
+
+// Initialize Code Panel Position if needed
+watch([isCodePanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) => {
+    if (isOpen && graphId && projectStore.currentProject) {
+        const graph = projectStore.currentProject.graphs.find(g => g.id === graphId);
+        if (graph) {
+            const hasValidPosition = graph.codePanelX !== undefined && graph.codePanelY !== undefined;
+            // If no position saved, OR if it's suspiciously at (0,0) or default (100,100) which might collide
+            if (!hasValidPosition || (graph.codePanelX === 100 && graph.codePanelY === 100)) {
+                const viewportW = window.innerWidth;
+                const rightSidebarW = 340; // Approx with margin
+                const panelW = graph.codePanelWidth || 400;
+                const panelH = graph.codePanelHeight || 400;
+                const topMargin = 80;
+                
+                // Position to the right, clearing the right sidebar if possible
+                let targetX = viewportW - rightSidebarW - panelW - 20;
+                // If too narrow, just center it
+                if (targetX < 100) targetX = (viewportW - panelW) / 2;
+                
+                projectStore.updateGraphLayout(projectStore.currentProject.id, graphId, {
+                    codePanelX: targetX,
+                    codePanelY: topMargin,
+                    codePanelWidth: panelW,
+                    codePanelHeight: panelH
+                });
+            }
+        }
     }
 }, { immediate: true });
 
@@ -191,53 +179,42 @@ const handleGraphLayout = (layoutName: string) => {
     /* eslint-enable @typescript-eslint/no-explicit-any */
     const options = layoutOptionsMap[layoutName] || layoutOptionsMap.preset;
     cy.layout(options).run();
+    // Ensure centering even for preset
+    if (layoutName === 'preset') {
+        cy.fit(undefined, 50);
+    }
     handleLayoutUpdated(layoutName);
 };
 
 const handleElementSelected = (element: GraphElement | null) => {
   selectedElement.value = element;
-  if (element && !uiStore.isRightTabPinned) {
-    uiStore.setActiveRightTab('properties');
-    if (!isRightSidebarOpen.value) isRightSidebarOpen.value = true;
+  if (element) {
+    // Element selected: Open sidebar if not already open
+    if (!uiStore.isRightTabPinned) {
+      uiStore.setActiveRightTab('properties');
+      if (!isRightSidebarOpen.value) isRightSidebarOpen.value = true;
+    }
+  } else {
+    // Element deselected (background click): Close sidebar if not pinned
+    if (!uiStore.isRightTabPinned && isRightSidebarOpen.value) {
+      isRightSidebarOpen.value = false;
+    }
   }
 };
 
-// Zoom to node logic from Validation Modal
 const handleSelectNodeFromModal = (nodeId: string) => {
-    // Find which graph this node belongs to
-    let targetGraphId: string | null = null;
-    let targetNode: GraphElement | null = null;
-
-    // Search current project graphs
-    if (projectStore.currentProject) {
-        for (const graph of projectStore.currentProject.graphs) {
-            // Check loaded content
-            if (graphStore.graphContents.has(graph.id)) {
-                const els = graphStore.graphContents.get(graph.id)!.elements;
-                const found = els.find(el => el.id === nodeId);
-                if (found) {
-                    targetGraphId = graph.id;
-                    targetNode = found;
-                    break;
-                }
-            }
-        }
-    }
-
-    if (targetGraphId && targetNode) {
-        if (graphStore.currentGraphId !== targetGraphId) {
-            graphStore.selectGraph(targetGraphId);
-        }
-        
+    const targetNode = elements.value.find(el => el.id === nodeId);
+    if (targetNode) {
         handleElementSelected(targetNode);
         graphStore.setElementToFocus(targetNode);
+        const cy = getCyInstance(graphStore.currentGraphId!);
+        if (cy) {
+            cy.animate({
+                fit: { eles: cy.getElementById(nodeId), padding: 50 },
+                duration: 500
+            });
+        }
     }
-};
-
-const openExportModal = (format: 'png' | 'jpg' | 'svg') => {
-  if (!graphStore.currentGraphId) return;
-  currentExportType.value = format;
-  showExportModal.value = true;
 };
 
 const createNewProject = () => {
@@ -255,6 +232,51 @@ const createNewGraph = () => {
     projectStore.addGraphToProject(projectStore.currentProject.id, newGraphName.value.trim());
     showNewGraphModal.value = false;
     newGraphName.value = '';
+  }
+};
+
+const openExportModal = (format: 'png' | 'jpg' | 'svg') => {
+  if (!graphStore.currentGraphId) return;
+  currentExportType.value = format;
+  showExportModal.value = true;
+};
+
+const handleExportJson = () => {
+  if (!graphStore.currentGraphId) return;
+  const elementsToExport = graphStore.currentGraphElements;
+  const jsonString = JSON.stringify(elementsToExport, null, 2);
+  const blob = new Blob([jsonString], { type: 'application/json' });
+  const fileName = `graph.json`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+};
+
+const handleConfirmExport = (options: ExportOptions) => {
+  const cy = (graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null) as any;
+  if (!cy || !currentExportType.value) return;
+  const fileName = `graph.${currentExportType.value}`;
+  try {
+    let blob: Blob;
+    if (currentExportType.value === 'svg') {
+      const svgOptions = { bg: options.bg, full: options.full, scale: options.scale };
+      blob = new Blob([cy.svg(svgOptions)], { type: 'image/svg+xml;charset=utf-8' });
+    } else {
+      blob = cy[currentExportType.value]({ ...options, output: 'blob' });
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch (err) {
+    console.error(`Failed to export ${currentExportType.value}:`, err);
   }
 };
 
@@ -303,8 +325,6 @@ const jsonToJulia = (jsonString: string): string => {
   }
 };
 
-let currentRunController: AbortController | null = null;
-let abortedByUser = false;
 const runModel = async () => {
   if (!isConnected.value || !backendUrl.value || isExecuting.value) return;
 
@@ -356,9 +376,7 @@ const runModel = async () => {
       });
     }
 
-    /* eslint-disable @typescript-eslint/no-explicit-any */
     const result: any = await response.json();
-    /* eslint-enable @typescript-eslint/no-explicit-any */
     executionStore.executionLogs = result.logs ?? [];
     if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
 
@@ -378,7 +396,6 @@ const runModel = async () => {
       }
     });
     const frontendStandaloneFile: GeneratedFile = { name: 'standalone.jl', content: frontendStandaloneScript };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const backendFiles = (result.files ?? []).filter((file: any) => file.name !== 'standalone.jl').map((file: any) => {
       return {
           name: file.name,
@@ -403,6 +420,13 @@ const runModel = async () => {
   }
 };
 
+const abortRun = () => {
+  if (currentRunController) {
+    abortedByUser = true;
+    currentRunController.abort();
+  }
+};
+
 const handleGenerateStandalone = () => {
     const dataPayload = parsedGraphData.value.data || {};
     const initsPayload = parsedGraphData.value.inits || {};
@@ -421,48 +445,8 @@ const handleGenerateStandalone = () => {
     files.unshift({ name: 'standalone.jl', content: script });
     executionStore.generatedFiles = files;
     uiStore.setActiveRightTab('connection');
-    isRightSidebarOpen.value = true;
+    if (!isRightSidebarOpen.value) uiStore.toggleRightSidebar();
     executionStore.setExecutionPanelTab('files');
-};
-
-const handleExportJson = () => {
-  if (!graphStore.currentGraphId) return;
-  const elementsToExport = graphStore.currentGraphElements;
-  const jsonString = JSON.stringify(elementsToExport, null, 2);
-  const blob = new Blob([jsonString], { type: 'application/json' });
-  const fileName = `graph.json`;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-};
-
-const handleConfirmExport = (options: ExportOptions) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cy = (graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null) as any;
-  if (!cy || !currentExportType.value) return;
-  const fileName = `graph.${currentExportType.value}`;
-  try {
-    let blob: Blob;
-    if (currentExportType.value === 'svg') {
-      const svgOptions = { bg: options.bg, full: options.full, scale: options.scale };
-      blob = new Blob([cy.svg(svgOptions)], { type: 'image/svg+xml;charset=utf-8' });
-    } else {
-      blob = cy[currentExportType.value]({ ...options, output: 'blob' });
-    }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  } catch (err) {
-    console.error(`Failed to export ${currentExportType.value}:`, err);
-  }
 };
 
 const handleLoadExample = async (exampleKey: string) => {
@@ -489,588 +473,296 @@ const handleLoadExample = async (exampleKey: string) => {
   }
 };
 
-const toggleLeftSidebar = () => {
-    isLeftSidebarOpen.value = !isLeftSidebarOpen.value;
-};
-
-const toggleRightSidebar = () => {
-    isRightSidebarOpen.value = !isRightSidebarOpen.value;
-};
-
-const unpinGraph = () => {
-    uiStore.setPinnedGraph(null);
-};
-
-const leftSidebarStyle = computed(() => {
-    if (!isLeftSidebarOpen.value) {
-        return {
-            transform: 'scale(0)',
-            opacity: 0,
-            pointerEvents: 'none'
-        };
+// --- Zoom Controls Handlers ---
+const handleZoomIn = () => {
+    if (graphStore.currentGraphId) {
+        const cy = getCyInstance(graphStore.currentGraphId);
+        if (cy) {
+            const currentZoom = cy.zoom();
+            cy.animate({ zoom: { level: currentZoom * 1.2, position: { x: cy.width()/2, y: cy.height()/2 } }, duration: 200 });
+        }
     }
+};
+
+const handleZoomOut = () => {
+    if (graphStore.currentGraphId) {
+        const cy = getCyInstance(graphStore.currentGraphId);
+        if (cy) {
+            const currentZoom = cy.zoom();
+            cy.animate({ zoom: { level: currentZoom * 0.8, position: { x: cy.width()/2, y: cy.height()/2 } }, duration: 200 });
+        }
+    }
+};
+
+const handleFit = () => {
+    if (graphStore.currentGraphId) {
+        const cy = getCyInstance(graphStore.currentGraphId);
+        if (cy) {
+            cy.animate({ fit: { eles: cy.elements(), padding: 50 }, duration: 300 });
+        }
+    }
+};
+
+const handleUndo = () => {
+    if (graphStore.currentGraphId) {
+        const ur = getUndoRedoInstance(graphStore.currentGraphId);
+        if (ur) ur.undo();
+    }
+};
+
+const handleRedo = () => {
+    if (graphStore.currentGraphId) {
+        const ur = getUndoRedoInstance(graphStore.currentGraphId);
+        if (ur) ur.redo();
+    }
+};
+
+// --- Code Export ---
+const downloadString = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+const handleExportBugs = () => {
+    downloadString(generatedCode.value, 'model.bugs');
+};
+
+const handleExportStandalone = () => {
+    const dataPayload = parsedGraphData.value.data || {};
+    const initsPayload = parsedGraphData.value.inits || {};
+    const script = generateStandaloneScript({
+      modelCode: generatedCode.value,
+      data: dataPayload,
+      inits: initsPayload,
+      settings: {
+        n_samples: samplerSettings.value.n_samples,
+        n_adapts: samplerSettings.value.n_adapts,
+        n_chains: samplerSettings.value.n_chains,
+        seed: samplerSettings.value.seed ?? undefined,
+      },
+    });
+    downloadString(script, 'standalone.jl');
+};
+
+// --- Draggable Code Panel Logic ---
+const currentGraph = computed(() => {
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return null;
+    return projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+});
+
+const codePanelPosition = computed(() => {
+    if (!currentGraph.value) return { x: 100, y: 100, width: 400, height: 400 };
     return {
-        transform: 'scale(1)',
-        opacity: 1,
-        pointerEvents: 'auto'
+        x: currentGraph.value.codePanelX ?? 100,
+        y: currentGraph.value.codePanelY ?? 100,
+        width: currentGraph.value.codePanelWidth ?? 400,
+        height: currentGraph.value.codePanelHeight ?? 400
     };
 });
 
-const rightSidebarStyle = computed(() => {
-    if (!isRightSidebarOpen.value) {
-        return {
-            transform: 'scale(0)',
-            opacity: 0,
-            pointerEvents: 'none',
-            width: '320px',
-            transformOrigin: 'top right'
-        };
-    }
-    return {
-        transform: 'scale(1)',
-        opacity: 1,
-        pointerEvents: 'auto',
-        width: '320px',
-        transformOrigin: 'top right'
+const dragCodeState = ref<{isDragging: boolean, startX: number, startY: number, initialLeft: number, initialTop: number} | null>(null);
+
+const startDragCode = (e: MouseEvent) => {
+    dragCodeState.value = {
+        isDragging: true,
+        startX: e.clientX,
+        startY: e.clientY,
+        initialLeft: codePanelPosition.value.x,
+        initialTop: codePanelPosition.value.y
     };
-});
-
-// Direct State Updaters
-const setAddNodeType = (type: NodeType) => {
-  currentNodeType.value = type;
-  currentMode.value = 'add-node';
+    window.addEventListener('mousemove', onDragCode);
+    window.addEventListener('mouseup', stopDragCode);
 };
 
-const updateGridEnabled = (val: boolean) => {
-  isGridEnabled.value = val;
-};
-
-const updateGridSize = (val: number | string | null) => {
-    if (val !== null && val !== '') {
-        gridSize.value = Number(val);
+const onDragCode = (e: MouseEvent) => {
+    if (!dragCodeState.value || !currentGraph.value) return;
+    const dx = e.clientX - dragCodeState.value.startX;
+    const dy = e.clientY - dragCodeState.value.startY;
+    if (projectStore.currentProject) {
+        projectStore.updateGraphLayout(projectStore.currentProject.id, currentGraph.value.id, {
+            codePanelX: dragCodeState.value.initialLeft + dx,
+            codePanelY: dragCodeState.value.initialTop + dy
+        }, false);
     }
 };
 
-const updateWorkspaceGridSize = (val: number | string | null) => {
-    if (val !== null && val !== '') {
-        workspaceGridSize.value = Number(val);
-    }
+const stopDragCode = () => {
+    if (projectStore.currentProject) projectStore.saveProjects();
+    dragCodeState.value = null;
+    window.removeEventListener('mousemove', onDragCode);
+    window.removeEventListener('mouseup', stopDragCode);
 };
 
-const updateShowZoomControls = (val: boolean) => {
-  showZoomControls.value = val;
+const startResizeCode = (e: MouseEvent) => {
+    const g = currentGraph.value;
+    if (!g) return;
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startW = codePanelPosition.value.width;
+    const startH = codePanelPosition.value.height;
+
+    const onResize = (ev: MouseEvent) => {
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+        if (projectStore.currentProject && currentGraph.value) {
+            projectStore.updateGraphLayout(projectStore.currentProject.id, currentGraph.value.id, {
+                codePanelWidth: Math.max(300, startW + dx),
+                codePanelHeight: Math.max(200, startH + dy)
+            }, false);
+        }
+    };
+
+    const stopResize = () => {
+        if (projectStore.currentProject) projectStore.saveProjects();
+        window.removeEventListener('mousemove', onResize);
+        window.removeEventListener('mouseup', stopResize);
+    };
+
+    window.addEventListener('mousemove', onResize);
+    window.addEventListener('mouseup', stopResize);
 };
 
-const updateShowDebugPanel = (val: boolean) => {
-  showDebugPanel.value = val;
+const toggleCodePanel = () => {
+    uiStore.toggleCodePanel();
 };
 
-const toggleCanvasView = () => {
-  isMultiCanvasView.value = !isMultiCanvasView.value;
-};
-
-const setModeAddEdge = () => {
-  currentMode.value = 'add-edge';
-};
-
-const abortRun = () => {
-  if (currentRunController) {
-    abortedByUser = true;
-    currentRunController.abort();
-  }
+const toggleDarkMode = () => {
+    uiStore.toggleDarkMode();
 };
 
 </script>
 
 <template>
   <div class="app-layout">
-    <!-- Top Navbar (PrimeVue Toolbar) -->
-    <Toolbar class="navbar-toolbar">
-      <template #start>
-        <div class="flex items-center gap-2">
-          <span class="text-lg font-bold mr-3">DoodleBUGS</span>
-          
-          <!-- Desktop Menu -->
-          <div class="desktop-menu flex gap-1">
-            <DropdownMenu>
-              <template #trigger>
-                <BaseButton type="ghost" size="small">Project</BaseButton>
-              </template>
-              <template #content>
-                <a href="#" @click.prevent="showNewProjectModal = true">New Project...</a>
-                <a href="#" @click.prevent="showNewGraphModal = true">New Graph...</a>
-              </template>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <template #trigger>
-                <BaseButton type="ghost" size="small">Export</BaseButton>
-              </template>
-              <template #content>
-                <a href="#" @click.prevent="openExportModal('png')">as PNG...</a>
-                <a href="#" @click.prevent="openExportModal('jpg')">as JPG...</a>
-                <a href="#" @click.prevent="openExportModal('svg')">as SVG...</a>
-                <div class="dropdown-divider"></div>
-                <a href="#" @click.prevent="handleExportJson()">as JSON</a>
-              </template>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <template #trigger>
-                <BaseButton type="ghost" size="small">Add</BaseButton>
-              </template>
-              <template #content>
-                <div class="dropdown-section-title">Nodes</div>
-                <a v-for="nodeDef in nodeDefinitions" :key="nodeDef.nodeType" href="#"
-                  @click.prevent="setAddNodeType(nodeDef.nodeType)">
-                  {{ nodeDef.label }}
-                </a>
-                <div class="dropdown-divider"></div>
-                <a href="#" @click.prevent="currentMode = 'add-edge'">Add Edge</a>
-              </template>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <template #trigger>
-                <BaseButton type="ghost" size="small">Layout</BaseButton>
-              </template>
-              <template #content>
-                <a href="#" @click.prevent="handleGraphLayout('dagre')">Dagre (Hierarchical)</a>
-                <a href="#" @click.prevent="handleGraphLayout('fcose')">fCoSE (Force-Directed)</a>
-                <a href="#" @click.prevent="handleGraphLayout('cola')">Cola (Physics Simulation)</a>
-                <a href="#" @click.prevent="handleGraphLayout('klay')">KLay (Layered)</a>
-                <a href="#" @click.prevent="handleGraphLayout('preset')">Reset to Preset</a>
-              </template>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <template #trigger>
-                <BaseButton type="ghost" size="small">View</BaseButton>
-              </template>
-              <template #content>
-                <div class="view-options" @click.stop>
-                  <div class="view-option-row">
-                    <label for="multi-canvas" class="view-label">Multi-Canvas View</label>
-                    <ToggleSwitch :modelValue="isMultiCanvasView" @update:modelValue="toggleCanvasView" inputId="multi-canvas" />
-                  </div>
-                  
-                  <div class="dropdown-divider"></div>
-
-                  <div class="view-option-row">
-                    <label for="show-ws-grid" class="view-label">Workspace Grid</label>
-                    <ToggleSwitch v-model="isWorkspaceGridEnabled" inputId="show-ws-grid" />
-                  </div>
-                  
-                  <div class="view-option-row grid-settings-row">
-                    <label for="ws-grid-style" class="view-label">Workspace Style</label>
-                    <div class="flex gap-2 items-center justify-end settings-controls">
-                      <BaseSelect 
-                          id="ws-grid-style"
-                          v-model="workspaceGridStyle"
-                          :options="gridStyleOptions"
-                          class="grid-style-select"
-                      />
-                      <input 
-                          type="number" 
-                          :value="workspaceGridSize" 
-                          @input="(e) => updateWorkspaceGridSize((e.target as HTMLInputElement).value)"
-                          step="10" min="10" max="200"
-                          class="native-number-input"
-                      />
-                    </div>
-                  </div>
-
-                  <div class="view-option-row">
-                    <label for="show-canvas-grid" class="view-label">Canvas Grid</label>
-                    <ToggleSwitch :modelValue="isGridEnabled" @update:modelValue="updateGridEnabled" inputId="show-canvas-grid" />
-                  </div>
-
-                  <div class="view-option-row grid-settings-row">
-                    <label for="canvas-grid-style" class="view-label">Canvas Style</label>
-                    <div class="flex gap-2 items-center justify-end settings-controls">
-                      <BaseSelect 
-                          id="canvas-grid-style"
-                          v-model="canvasGridStyle"
-                          :options="gridStyleOptions"
-                          class="grid-style-select"
-                      />
-                      <input 
-                          type="number" 
-                          :value="gridSize" 
-                          @input="(e) => updateGridSize((e.target as HTMLInputElement).value)"
-                          step="5" min="5" max="100"
-                          class="native-number-input"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div class="dropdown-divider"></div>
-                  
-                  <div class="view-option-row">
-                    <label for="show-zoom" class="view-label">Zoom Controls</label>
-                    <ToggleSwitch :modelValue="showZoomControls" @update:modelValue="updateShowZoomControls" inputId="show-zoom" />
-                  </div>
-                  
-                  <div class="view-option-row">
-                    <label for="show-debug" class="view-label">Debug Console</label>
-                    <ToggleSwitch :modelValue="showDebugPanel" @update:modelValue="updateShowDebugPanel" inputId="show-debug" />
-                  </div>
-                </div>
-              </template>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <template #trigger>
-                <BaseButton type="ghost" size="small">Examples</BaseButton>
-              </template>
-              <template #content>
-                 <a v-for="example in exampleModels" :key="example.key" href="#" @click.prevent="handleLoadExample(example.key)">
-                  {{ example.name }}
-                </a>
-              </template>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <template #trigger>
-                <BaseButton type="ghost" size="small">Connection</BaseButton>
-              </template>
-              <template #content>
-                <div class="execution-dropdown" @click.stop>
-                  <div class="dropdown-section-title">Backend</div>
-                  <div class="dropdown-input-group">
-                    <label for="backend-url-nav">URL:</label>
-                    <BaseInput id="backend-url-nav" v-model="navBackendUrl" placeholder="http://localhost:8081" class="backend-url-input" />
-                    <BaseButton size="small" type="secondary" class="copy-btn" title="Copy URL" @click.stop="copyBackendUrl">
-                      <i v-if="copiedBackendUrl" class="fas fa-check"></i>
-                      <i v-else class="fas fa-copy"></i>
-                    </BaseButton>
-                  </div>
-                  <div class="dropdown-actions">
-                    <span class="connection-status" :class="{ connected: isConnected }">
-                      <strong>{{ isConnected ? 'Connected' : 'Disconnected' }}</strong>
-                    </span>
-                    <BaseButton @click="connectToBackend" :disabled="isConnecting" size="small" type="primary">
-                      <span v-if="isConnecting">Connecting...</span>
-                      <span v-else>Connect</span>
-                    </BaseButton>
-                  </div>
-                  <div class="dropdown-divider"></div>
-                  <div class="dropdown-section-title">Setup Instructions</div>
-                  <div class="setup-instructions">
-                    <div class="instruction-item">
-                      <span class="instruction-label">1. Clone repository:</span>
-                      <div class="instruction-command">
-                        <code>{{ cloneCmd }}</code>
-                        <BaseButton size="small" type="secondary" class="copy-btn-inline" title="Copy command" @click.stop="copyCloneCmd">
-                          <i v-if="copiedCloneCmd" class="fas fa-check"></i>
-                          <i v-else class="fas fa-copy"></i>
-                        </BaseButton>
-                      </div>
-                    </div>
-                    <div class="instruction-item">
-                      <span class="instruction-label">2. First time only (instantiate deps):</span>
-                      <div class="instruction-command">
-                        <code>{{ instantiateCmd }}</code>
-                        <BaseButton size="small" type="secondary" class="copy-btn-inline" title="Copy command" @click.stop="copyInstantiateCmd">
-                          <i v-if="copiedInstantiateCmd" class="fas fa-check"></i>
-                          <i v-else class="fas fa-copy"></i>
-                        </BaseButton>
-                      </div>
-                    </div>
-                    <div class="instruction-item">
-                      <span class="instruction-label">3. Start backend:</span>
-                      <div class="instruction-command">
-                        <code>{{ startCmd }}</code>
-                        <BaseButton size="small" type="secondary" class="copy-btn-inline" title="Copy command" @click.stop="copyStartCmd">
-                          <i v-if="copiedStartCmd" class="fas fa-check"></i>
-                          <i v-else class="fas fa-copy"></i>
-                        </BaseButton>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="dropdown-divider"></div>
-                  <div class="dropdown-section-title">Standalone</div>
-                  <a href="#" @click.prevent="handleGenerateStandalone">Generate Standalone Julia Script</a>
-                </div>
-              </template>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <template #trigger>
-                <BaseButton type="ghost" size="small">Help</BaseButton>
-              </template>
-              <template #content>
-                <a href="#" @click.prevent="showAboutModal = true">About DoodleBUGS</a>
-                <a href="https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md" target="_blank" rel="noopener noreferrer" class="report-issue-link">
-                   Report an Issue
-                   <i class="fas fa-external-link-alt external-link-icon"></i>
-                </a>
-              </template>
-            </DropdownMenu>
-          </div>
-        </div>
-      </template>
-
-      <template #center>
-        <div class="desktop-actions flex items-center gap-2">
-          <div class="status-indicator backend-status" 
-               :class="{ 'connected': isConnected, 'disconnected': !isConnected }">
-              <i class="fas fa-circle"></i>
-              <div class="instant-tooltip">{{ isConnected ? 'Backend Connected' : 'Backend Disconnected' }}</div>
-          </div>
-          
-          <div class="status-indicator validation-status"
-              @click="showValidationModal = true"
-              :class="isModelValid ? 'valid' : 'invalid'">
-              <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
-              <div class="instant-tooltip">{{ isModelValid ? 'Model Valid' : 'Validation Errors Found' }}</div>
-          </div>
-
-          <BaseButton @click="runModel" type="primary" size="small" title="Run Model on Backend" :disabled="!isConnected || isExecuting">
-              <i v-if="isExecuting" class="fas fa-spinner fa-spin"></i>
-              <i v-else class="fas fa-play"></i>
-              Run
-          </BaseButton>
-          <BaseButton v-if="isExecuting" @click="abortRun" type="danger" size="small" title="Abort current run">
-              <i class="fas fa-stop"></i>
-              Abort
-          </BaseButton>
-        </div>
-      </template>
-
-      <template #end>
-        <div class="flex items-center gap-1">
-          <Button 
-              :icon="isDarkMode ? 'pi pi-sun' : 'pi pi-moon'" 
-              @click="toggleDarkMode" 
-              text 
-              rounded 
-              aria-label="Toggle Dark Mode" 
-              size="small"
-          />
-          
-          <Button @click="toggleLeftSidebar" :class="{ 'p-button-outlined': isLeftSidebarOpen }" icon="pi pi-align-left" text rounded size="small" title="Toggle Left Sidebar" />
-          <Button @click="toggleRightSidebar" :class="{ 'p-button-outlined': isRightSidebarOpen }" icon="pi pi-align-right" text rounded size="small" title="Toggle Right Sidebar" />
-          
-          <Button icon="pi pi-bars" class="mobile-toggle" @click="mobileMenuOpen = true" text rounded size="small" />
-        </div>
-      </template>
-    </Toolbar>
-
-    <!-- Mobile Menu Drawer -->
-    <Drawer v-model:visible="mobileMenuOpen" header="Menu" position="right" class="w-80">
-      <Accordion :multiple="true" :value="['run', 'view']">
-          <AccordionPanel value="run">
-              <AccordionHeader>Run</AccordionHeader>
-              <AccordionContent>
-                  <div class="flex flex-col gap-4 pt-3">
-                      <BaseButton @click="runModel(); mobileMenuOpen = false" type="primary" :disabled="!isConnected || isExecuting" class="w-full justify-center py-3">
-                          <i v-if="isExecuting" class="fas fa-spinner fa-spin mr-2"></i>
-                          <i v-else class="fas fa-play mr-2"></i>
-                          Run Model
-                      </BaseButton>
-                  </div>
-              </AccordionContent>
-          </AccordionPanel>
-          
-          <AccordionPanel value="view">
-              <AccordionHeader>View Settings</AccordionHeader>
-              <AccordionContent>
-                  <div class="flex flex-col gap-5 pt-3 mobile-view-options">
-                      <div class="mobile-option-row">
-                          <label for="mobile-multi-canvas">Multi-Canvas</label>
-                          <ToggleSwitch :modelValue="isMultiCanvasView" @update:modelValue="toggleCanvasView" inputId="mobile-multi-canvas" />
-                      </div>
-                      <div class="mobile-option-row">
-                          <label for="mobile-show-ws-grid">Workspace Grid</label>
-                          <ToggleSwitch v-model="isWorkspaceGridEnabled" inputId="mobile-show-ws-grid" />
-                      </div>
-                      <div class="mobile-option-row">
-                          <label>Workspace Style</label>
-                          <div class="flex gap-3 items-center">
-                              <BaseSelect 
-                                  v-model="workspaceGridStyle"
-                                  :options="gridStyleOptions"
-                                  class="w-24"
-                              />
-                              <input 
-                                  type="number" 
-                                  :value="workspaceGridSize" 
-                                  @input="(e) => updateWorkspaceGridSize((e.target as HTMLInputElement).value)"
-                                  step="10" min="10" max="200"
-                                  class="native-number-input"
-                              />
-                          </div>
-                      </div>
-                      <div class="mobile-option-row">
-                          <label for="mobile-show-canvas-grid">Canvas Grid</label>
-                          <ToggleSwitch :modelValue="isGridEnabled" @update:modelValue="updateGridEnabled" inputId="mobile-show-canvas-grid" />
-                      </div>
-                      <div class="mobile-option-row">
-                          <label>Canvas Style</label>
-                          <div class="flex gap-3 items-center">
-                              <BaseSelect 
-                                  v-model="canvasGridStyle"
-                                  :options="gridStyleOptions"
-                                  class="w-24"
-                              />
-                              <input 
-                                  type="number" 
-                                  :value="gridSize" 
-                                  @update:modelValue="updateGridSize" 
-                                  step="5" min="5" max="100"
-                                  class="native-number-input"
-                              />
-                          </div>
-                      </div>
-                      <div class="mobile-option-row">
-                          <label for="mobile-show-zoom">Zoom Controls</label>
-                          <ToggleSwitch :modelValue="showZoomControls" @update:modelValue="updateShowZoomControls" inputId="mobile-show-zoom" />
-                      </div>
-                      <div class="mobile-option-row">
-                          <label for="mobile-show-debug">Debug Console</label>
-                          <ToggleSwitch :modelValue="showDebugPanel" @update:modelValue="updateShowDebugPanel" inputId="mobile-show-debug" />
-                      </div>
-                  </div>
-              </AccordionContent>
-          </AccordionPanel>
-
-          <AccordionPanel value="project">
-              <AccordionHeader>Project</AccordionHeader>
-              <AccordionContent>
-                  <div class="flex flex-col gap-4 pt-3">
-                      <BaseButton @click="showNewProjectModal = true; mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">New Project</BaseButton>
-                      <BaseButton @click="showNewGraphModal = true; mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">New Graph</BaseButton>
-                  </div>
-              </AccordionContent>
-          </AccordionPanel>
-
-          <AccordionPanel value="export">
-              <AccordionHeader>Export</AccordionHeader>
-              <AccordionContent>
-                  <div class="flex flex-col gap-4 pt-3">
-                      <BaseButton @click="openExportModal('png'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">as PNG</BaseButton>
-                      <BaseButton @click="openExportModal('jpg'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">as JPG</BaseButton>
-                      <BaseButton @click="openExportModal('svg'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">as SVG</BaseButton>
-                      <BaseButton @click="handleExportJson(); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">as JSON</BaseButton>
-                  </div>
-              </AccordionContent>
-          </AccordionPanel>
-
-          <AccordionPanel value="add">
-              <AccordionHeader>Add Nodes</AccordionHeader>
-              <AccordionContent>
-                  <div class="grid grid-cols-2 gap-3 pt-3">
-                      <BaseButton v-for="nodeDef in nodeDefinitions" :key="nodeDef.nodeType" 
-                          @click="setAddNodeType(nodeDef.nodeType); mobileMenuOpen = false" type="ghost" size="small" class="text-xs p-3 border border-gray-200 dark:border-gray-700 rounded h-full flex items-center justify-center">
-                          {{ nodeDef.label }}
-                      </BaseButton>
-                      <BaseButton @click="setModeAddEdge(); mobileMenuOpen = false" type="ghost" size="small" class="text-xs p-3 border border-gray-200 dark:border-gray-700 rounded h-full flex items-center justify-center">Add Edge</BaseButton>
-                  </div>
-              </AccordionContent>
-          </AccordionPanel>
-
-          <AccordionPanel value="layout">
-              <AccordionHeader>Layout</AccordionHeader>
-              <AccordionContent>
-                  <div class="flex flex-col gap-4 pt-3">
-                      <BaseButton @click="handleGraphLayout('dagre'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">Dagre</BaseButton>
-                      <BaseButton @click="handleGraphLayout('fcose'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">fCoSE</BaseButton>
-                      <BaseButton @click="handleGraphLayout('cola'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">Cola</BaseButton>
-                      <BaseButton @click="handleGraphLayout('klay'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">KLay</BaseButton>
-                      <BaseButton @click="handleGraphLayout('preset'); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">Reset</BaseButton>
-                  </div>
-              </AccordionContent>
-          </AccordionPanel>
-
-          <AccordionPanel value="examples">
-              <AccordionHeader>Examples</AccordionHeader>
-              <AccordionContent>
-                  <div class="flex flex-col gap-4 pt-3">
-                      <BaseButton v-for="example in exampleModels" :key="example.key" 
-                          @click="handleLoadExample(example.key); mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">
-                          {{ example.name }}
-                      </BaseButton>
-                  </div>
-              </AccordionContent>
-          </AccordionPanel>
-
-          <AccordionPanel value="connection">
-              <AccordionHeader>Connection</AccordionHeader>
-              <AccordionContent>
-                  <div class="flex flex-col gap-5 pt-3">
-                      <div class="flex flex-col gap-2">
-                          <label for="backend-url-mobile" class="text-sm font-medium">URL:</label>
-                          <BaseInput id="backend-url-mobile" v-model="navBackendUrl" placeholder="http://localhost:8081" class="w-full" />
-                      </div>
-                      <BaseButton @click="connectToBackend(); mobileMenuOpen = false" :disabled="isConnecting" type="primary" class="w-full justify-center py-3">
-                          <span v-if="isConnecting">Connecting...</span>
-                          <span v-else>Connect</span>
-                      </BaseButton>
-                      <BaseButton @click="handleGenerateStandalone(); mobileMenuOpen = false" type="ghost" class="w-full text-left text-sm p-3 border border-gray-200 dark:border-gray-700 rounded">Generate Standalone Script</BaseButton>
-                  </div>
-              </AccordionContent>
-          </AccordionPanel>
-
-          <AccordionPanel value="help">
-              <AccordionHeader>Help</AccordionHeader>
-              <AccordionContent>
-                  <div class="flex flex-col gap-4 pt-3">
-                      <BaseButton @click="showAboutModal = true; mobileMenuOpen = false" type="ghost" class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded">About</BaseButton>
-                      <a href="https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md" target="_blank" rel="noopener noreferrer" class="p-button p-component p-button-ghost p-button-sm w-full text-left no-underline justify-start p-3 border border-gray-200 dark:border-gray-700 rounded">
-                          Report an Issue
-                      </a>
-                  </div>
-              </AccordionContent>
-          </AccordionPanel>
-      </Accordion>
-    </Drawer>
-
-    <!-- Full Screen Canvas -->
-    <main class="canvas-area">
-      <MultiCanvasView 
-        :is-grid-enabled="isGridEnabled" 
-        @update:is-grid-enabled="isGridEnabled = $event"
-        :grid-size="gridSize" 
-        @update:grid-size="gridSize = $event"
+    <TheNavbar
+        :project-name="projectStore.currentProject?.name || null"
+        :active-graph-name="pinnedGraphTitle"
+        :is-grid-enabled="isGridEnabled"
+        :grid-size="gridSize"
         :current-mode="currentMode"
-        @update:current-mode="currentMode = $event"
-        :current-node-type="currentNodeType" 
-        @update:current-node-type="currentNodeType = $event"
-        :validation-errors="validationErrors"
+        :current-node-type="currentNodeType"
+        :is-left-sidebar-open="isLeftSidebarOpen"
+        :is-right-sidebar-open="isRightSidebarOpen"
+        :is-model-valid="isModelValid"
+        :show-debug-panel="showDebugPanel"
         :show-zoom-controls="showZoomControls"
+        @update:is-grid-enabled="isGridEnabled = $event"
+        @update:grid-size="gridSize = $event"
+        @update:current-mode="currentMode = $event"
+        @update:current-node-type="currentNodeType = $event"
+        @update:show-debug-panel="showDebugPanel = $event"
         @update:show-zoom-controls="showZoomControls = $event"
-        @element-selected="handleElementSelected" 
-        @layout-updated="handleLayoutUpdated"
+        @new-project="showNewProjectModal = true"
         @new-graph="showNewGraphModal = true"
+        @toggle-left-sidebar="uiStore.toggleLeftSidebar()"
+        @toggle-right-sidebar="uiStore.toggleRightSidebar()"
+        @open-about-modal="showAboutModal = true"
         @open-export-modal="openExportModal"
-      />
+        @export-json="handleExportJson"
+        @apply-layout="handleGraphLayout"
+        @load-example="handleLoadExample"
+        @show-validation-issues="showValidationModal = true"
+        @connect-to-backend-url="tempBackendUrl = $event; connectToBackend()"
+        @run-model="runModel"
+        @abort-run="abortRun"
+        @generate-standalone="handleGenerateStandalone"
+        @toggle-code-panel="toggleCodePanel"
+    />
+
+    <main class="canvas-area">
+        <div v-if="graphStore.currentGraphId" class="single-graph-container">
+            <GraphEditor 
+                :graph-id="graphStore.currentGraphId"
+                :is-grid-enabled="isGridEnabled"
+                @update:is-grid-enabled="isGridEnabled = $event"
+                :grid-size="gridSize"
+                @update:grid-size="gridSize = $event"
+                :grid-style="canvasGridStyle"
+                :current-mode="currentMode"
+                :elements="elements"
+                :current-node-type="currentNodeType"
+                :validation-errors="validationErrors"
+                :show-zoom-controls="false"
+                @update:current-mode="currentMode = $event"
+                @update:current-node-type="currentNodeType = $event"
+                @element-selected="handleElementSelected"
+                @layout-updated="handleLayoutUpdated"
+            />
+            
+            <FloatingBottomToolbar 
+                :current-mode="currentMode"
+                :current-node-type="currentNodeType"
+                :show-code-panel="isCodePanelOpen"
+                @update:current-mode="currentMode = $event"
+                @update:current-node-type="currentNodeType = $event"
+                @undo="handleUndo"
+                @redo="handleRedo"
+                @zoom-in="handleZoomIn"
+                @zoom-out="handleZoomOut"
+                @fit="handleFit"
+                @layout-graph="handleGraphLayout"
+                @toggle-code-panel="toggleCodePanel"
+                @export-bugs="handleExportBugs"
+                @export-standalone="handleExportStandalone"
+            />
+
+            <!-- Draggable Code Panel -->
+            <div v-if="isCodePanelOpen" 
+                 class="code-panel-card glass-panel"
+                 :style="{
+                    left: `${codePanelPosition.x}px`,
+                    top: `${codePanelPosition.y}px`,
+                    width: `${codePanelPosition.width}px`,
+                    height: `${codePanelPosition.height}px`
+                 }"
+            >
+                <div class="graph-header code-header" @mousedown="startDragCode">
+                    <span class="graph-title"><i class="fas fa-code"></i> BUGS Code Preview</span>
+                    <button class="close-btn" @click="toggleCodePanel"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="code-content">
+                    <CodePreviewPanel :is-active="true" :graph-id="graphStore.currentGraphId" />
+                </div>
+                <div class="resize-handle" @mousedown.stop="startResizeCode">
+                    <i class="fas fa-chevron-right" style="transform: rotate(45deg);"></i>
+                </div>
+            </div>
+        </div>
+        <div v-else class="empty-workspace">
+            <p>Select or create a graph to start editing.</p>
+            <BaseButton @click="showNewGraphModal = true" type="primary">Create New Graph</BaseButton>
+        </div>
     </main>
 
     <!-- Logo Button (Collapsed Left Sidebar) -->
     <div class="sidebar-toggle-logo glass-panel" :class="{ hidden: isLeftSidebarOpen }">
-       <div class="flex-grow cursor-pointer flex items-center" @click="toggleLeftSidebar" title="Open Menu">
+       <div class="flex-grow cursor-pointer flex items-center" @click="uiStore.toggleLeftSidebar" title="Open Menu">
            <span class="logo-text-minimized">
                {{ pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS' }}
            </span>
        </div>
-       <button v-if="pinnedGraphId" class="unpin-icon-btn ml-2 group" @click.stop="unpinGraph">
-           <i class="fas fa-compress-arrows-alt"></i>
-           <div class="instant-tooltip">Unpin</div>
-       </button>
+       
        <div class="flex items-center gap-1 ml-2">
            <button @click.stop="toggleDarkMode" class="theme-toggle-header" :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
                <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
            </button>
-           <div class="cursor-pointer flex items-center" @click="toggleLeftSidebar" title="Open Menu">
-               <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" clip-rule="evenodd"></path></svg>
+           <div class="cursor-pointer flex items-center ml-1" @click="uiStore.toggleLeftSidebar" title="Open Menu">
+               <svg data-v-ae240f47="" width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon"><path data-v-ae240f47="" fill="currentColor" fill-rule="evenodd" d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" clip-rule="evenodd"></path></svg>
            </div>
        </div>
     </div>
 
     <!-- Right Sidebar Toggle (Collapsed with Status Controls) -->
     <div class="sidebar-toggle-logo right glass-panel" :class="{ hidden: isRightSidebarOpen }">
-       <div class="flex-grow cursor-pointer flex items-center" @click="toggleRightSidebar" title="Open Inspector">
+       <div class="flex-grow cursor-pointer flex items-center" @click="uiStore.toggleRightSidebar" title="Open Inspector">
            <span class="logo-text-minimized">Inspector</span>
        </div>
        
@@ -1089,234 +781,46 @@ const abortRun = () => {
             </div>
        </div>
 
-       <div class="cursor-pointer flex items-center" @click="toggleRightSidebar" title="Open Inspector">
+       <div class="cursor-pointer flex items-center" @click="uiStore.toggleRightSidebar" title="Open Inspector">
            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon"><path fill="currentColor" fill-rule="evenodd" d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" clip-rule="evenodd"></path></svg>
        </div>
     </div>
 
-    <!-- Floating Left Sidebar -->
-    <aside class="floating-sidebar left glass-panel" :style="leftSidebarStyle as StyleValue">
-        <div class="sidebar-header">
-            <span class="sidebar-title" @click="toggleLeftSidebar" style="cursor: pointer;">
-                {{ pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS' }}
-            </span>
-            <button v-if="pinnedGraphId" class="unpin-icon-btn" @click.stop="unpinGraph">
-                <i class="fas fa-compress-arrows-alt"></i>
-                <div class="instant-tooltip">Unpin</div>
-            </button>
-            <div class="flex items-center gap-1 ml-auto">
-                <!-- Theme Toggle -->
-                <button @click.stop="toggleDarkMode" class="theme-toggle-header" :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
-                    <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
-                </button>
-                <div class="cursor-pointer flex items-center" @click="toggleLeftSidebar">
-                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon"><path fill="currentColor" fill-rule="evenodd" d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" clip-rule="evenodd"></path></svg>
-                </div>
-            </div>
-        </div>
-        
-        <div class="sidebar-content-scrollable">
-             <Accordion :value="activeAccordionTabs" multiple class="sidebar-accordion">
-                <!-- Project -->
-                <AccordionPanel value="project">
-                    <AccordionHeader><i class="fas fa-folder icon-12"></i> Project</AccordionHeader>
-                    <AccordionContent>
-                        <div class="panel-content-wrapper">
-                            <ProjectManager @new-project="showNewProjectModal = true" @new-graph="showNewGraphModal = true" />
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
+    <LeftSidebar 
+        :active-accordion-tabs="activeAccordionTabs"
+        :project-name="projectStore.currentProject?.name || null"
+        :pinned-graph-title="pinnedGraphTitle"
+        :is-grid-enabled="isGridEnabled"
+        :grid-size="gridSize"
+        :show-zoom-controls="showZoomControls"
+        :show-debug-panel="showDebugPanel"
+        @toggle-left-sidebar="uiStore.toggleLeftSidebar"
+        @new-project="showNewProjectModal = true"
+        @new-graph="showNewGraphModal = true"
+        @update:currentMode="currentMode = $event"
+        @update:currentNodeType="currentNodeType = $event"
+        @update:isGridEnabled="isGridEnabled = $event"
+        @update:gridSize="gridSize = $event"
+        @update:showZoomControls="showZoomControls = $event"
+        @update:showDebugPanel="showDebugPanel = $event"
+        @load-example="handleLoadExample"
+        @open-export-modal="openExportModal"
+        @export-json="handleExportJson"
+        @connect-to-backend-url="tempBackendUrl = $event; connectToBackend()"
+        @generate-standalone="handleGenerateStandalone"
+        @open-about-modal="showAboutModal = true"
+        @toggle-dark-mode="toggleDarkMode"
+    />
 
-                <!-- Nodes -->
-                <AccordionPanel value="palette">
-                    <AccordionHeader><i class="fas fa-shapes icon-12"></i> Nodes</AccordionHeader>
-                    <AccordionContent>
-                        <div class="panel-content-wrapper">
-                            <NodePalette @select-palette-item="(type: PaletteItemType) => { 
-                                if (type === 'add-edge') {
-                                    currentMode = 'add-edge';
-                                } else {
-                                    currentNodeType = type as NodeType; 
-                                    currentMode = 'add-node'; 
-                                }
-                            }" />
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
-
-                <!-- Data -->
-                <AccordionPanel value="data">
-                    <AccordionHeader><i class="fas fa-database icon-12"></i> Data</AccordionHeader>
-                    <AccordionContent>
-                        <div class="panel-content-wrapper">
-                            <DataInputPanel :is-active="true" />
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
-
-                <!-- Settings -->
-                <AccordionPanel value="settings">
-                    <AccordionHeader><i class="fas fa-sliders-h icon-12"></i> Run Settings</AccordionHeader>
-                    <AccordionContent>
-                        <div class="panel-content-wrapper">
-                            <ExecutionSettingsPanel />
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
-
-                <!-- View Options -->
-                <AccordionPanel value="view">
-                    <AccordionHeader><i class="fas fa-eye icon-12"></i> View Options</AccordionHeader>
-                    <AccordionContent>
-                        <div class="menu-panel flex-col gap-3">
-                            <div class="menu-row">
-                                <label>Workspace Grid</label>
-                                <ToggleSwitch v-model="isWorkspaceGridEnabled" />
-                            </div>
-                            <div class="menu-row">
-                                <label>WS Style</label>
-                                <BaseSelect v-model="workspaceGridStyle" :options="gridStyleOptions" class="w-24" />
-                            </div>
-                            <div class="menu-row">
-                                <label>WS Size</label>
-                                <input 
-                                    type="number" 
-                                    :value="workspaceGridSize" 
-                                    @input="(e) => updateWorkspaceGridSize((e.target as HTMLInputElement).value)"
-                                    step="10" min="10" max="200"
-                                    class="native-number-input"
-                                />
-                            </div>
-                            <div class="divider"></div>
-                            <div class="menu-row">
-                                <label>Canvas Grid</label>
-                                <ToggleSwitch :modelValue="isGridEnabled" @update:modelValue="updateGridEnabled" />
-                            </div>
-                            <div class="menu-row">
-                                <label>Canvas Style</label>
-                                <BaseSelect v-model="canvasGridStyle" :options="gridStyleOptions" class="w-24" />
-                            </div>
-                            <div class="menu-row">
-                                <label>Canvas Size</label>
-                                <input 
-                                    type="number" 
-                                    :value="gridSize" 
-                                    @input="(e) => updateGridSize((e.target as HTMLInputElement).value)"
-                                    step="5" min="5" max="100"
-                                    class="native-number-input"
-                                />
-                            </div>
-                            <div class="divider"></div>
-                            <div class="menu-row">
-                                <label>Zoom Controls</label>
-                                <ToggleSwitch v-model="showZoomControls" />
-                            </div>
-                            <div class="menu-row">
-                                <label>Debug Console</label>
-                                <ToggleSwitch v-model="showDebugPanel" />
-                            </div>
-                            <div class="menu-row">
-                                <label>Examples</label>
-                                <BaseSelect :modelValue="''" :options="exampleModels.map(e => ({ label: e.name, value: e.key }))" @update:modelValue="handleLoadExample" placeholder="Load..." class="w-full" />
-                            </div>
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
-
-                <!-- Export -->
-                <AccordionPanel value="export">
-                    <AccordionHeader><i class="fas fa-file-export icon-12"></i> Export</AccordionHeader>
-                    <AccordionContent>
-                        <div class="menu-panel flex-col gap-3">
-                            <BaseButton type="ghost" class="menu-btn" @click="openExportModal('png')"><i class="fas fa-image"></i> PNG Image</BaseButton>
-                            <BaseButton type="ghost" class="menu-btn" @click="openExportModal('jpg')"><i class="fas fa-file-image"></i> JPG Image</BaseButton>
-                            <BaseButton type="ghost" class="menu-btn" @click="openExportModal('svg')"><i class="fas fa-vector-square"></i> SVG Vector</BaseButton>
-                            <div class="divider"></div>
-                            <BaseButton type="ghost" class="menu-btn" @click="handleExportJson()"><i class="fas fa-file-code"></i> JSON Data</BaseButton>
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
-
-                <!-- Connection -->
-                <AccordionPanel value="connect">
-                    <AccordionHeader><i class="fas fa-network-wired icon-12"></i> Connection</AccordionHeader>
-                    <AccordionContent>
-                        <div class="menu-panel flex-col gap-3">
-                            <div class="flex-col gap-2">
-                                <label class="text-xs font-bold">Backend URL</label>
-                                <BaseInput v-model="navBackendUrl" placeholder="http://localhost:8081" />
-                            </div>
-                            <div class="status-display" :class="{ connected: isConnected }">
-                                Status: {{ isConnected ? 'Connected' : 'Disconnected' }}
-                            </div>
-                            <BaseButton @click="connectToBackend" :disabled="isConnecting" type="primary" class="w-full justify-center">
-                                {{ isConnecting ? 'Connecting...' : 'Connect' }}
-                            </BaseButton>
-                            <div class="divider"></div>
-                            <BaseButton @click="handleGenerateStandalone" type="ghost" class="menu-btn"><i class="fas fa-file-alt"></i> Generate Script</BaseButton>
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
-
-                <!-- Help -->
-                <AccordionPanel value="help">
-                    <AccordionHeader><i class="fas fa-question-circle icon-12"></i> Help</AccordionHeader>
-                    <AccordionContent>
-                        <div class="menu-panel flex-col gap-3">
-                            <BaseButton type="ghost" class="menu-btn" @click="showAboutModal = true"><i class="fas fa-info-circle"></i> About</BaseButton>
-                            <a href="https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md" target="_blank" class="menu-btn ghost-btn">
-                                <i class="fab fa-github"></i> Report Issue
-                            </a>
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
-             </Accordion>
-        </div>
-    </aside>
-
-    <!-- Floating Right Sidebar -->
-    <aside class="floating-sidebar right glass-panel" :style="rightSidebarStyle as StyleValue">
-        <div class="sidebar-header" @click="toggleRightSidebar" style="cursor: pointer;">
-            <span class="sidebar-title">Inspector</span>
-            
-            <!-- Controls in Header when Open -->
-            <div class="flex items-center gap-1 ml-auto" @click.stop>
-                 <div class="status-indicator backend-status" 
-                     :class="{ 'connected': isConnected, 'disconnected': !isConnected }">
-                    <i class="fas fa-circle"></i>
-                    <div class="instant-tooltip">{{ isConnected ? 'Backend Connected' : 'Backend Disconnected' }}</div>
-                </div>
-                <div class="status-indicator validation-status"
-                    @click="showValidationModal = true"
-                    :class="isModelValid ? 'valid' : 'invalid'">
-                    <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
-                    <div class="instant-tooltip">{{ isModelValid ? 'Model Valid' : 'Validation Errors Found' }}</div>
-                </div>
-            </div>
-
-            <div class="cursor-pointer flex items-center ml-2">
-                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon"><path fill="currentColor" fill-rule="evenodd" d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" clip-rule="evenodd"></path></svg>
-            </div>
-        </div>
-        
-        <div class="sidebar-tabs text-tabs">
-            <button :class="{ active: uiStore.activeRightTab === 'properties' }" @click="uiStore.setActiveRightTab('properties')">Props</button>
-            <button :class="{ active: uiStore.activeRightTab === 'code' }" @click="uiStore.setActiveRightTab('code')">Code</button>
-            <button :class="{ active: uiStore.activeRightTab === 'json' }" @click="uiStore.setActiveRightTab('json')">JSON</button>
-            <button :class="{ active: uiStore.activeRightTab === 'connection' }" @click="uiStore.setActiveRightTab('connection')">Run</button>
-        </div>
-
-        <div class="sidebar-content">
-            <NodePropertiesPanel v-show="uiStore.activeRightTab === 'properties'" 
-                :selected-element="selectedElement" 
-                :validation-errors="validationErrors"
-                @update-element="updateElement" 
-                @delete-element="deleteElement" />
-            <CodePreviewPanel v-show="uiStore.activeRightTab === 'code'" :is-active="uiStore.activeRightTab === 'code'" />
-            <JsonEditorPanel v-show="uiStore.activeRightTab === 'json'" :is-active="uiStore.activeRightTab === 'json'" />
-            <ExecutionPanel v-show="uiStore.activeRightTab === 'connection'" />
-        </div>
-    </aside>
+    <RightSidebar 
+        :selected-element="selectedElement"
+        :validation-errors="validationErrors"
+        :is-model-valid="isModelValid"
+        @toggle-right-sidebar="uiStore.toggleRightSidebar"
+        @update-element="updateElement"
+        @delete-element="deleteElement"
+        @show-validation-issues="showValidationModal = true"
+    />
 
     <!-- Modals -->
     <BaseModal :is-open="showNewProjectModal" @close="showNewProjectModal = false">
@@ -1374,8 +878,8 @@ const abortRun = () => {
 .app-layout {
   position: relative;
   width: 100vw;
-  height: 100dvh; /* Use dvh for mobile browser compatibility */
-  height: 100vh; /* Fallback */
+  height: 100dvh; 
+  height: 100vh; 
   overflow: hidden;
   background-color: var(--theme-bg-canvas);
 }
@@ -1387,6 +891,24 @@ const abortRun = () => {
   width: 100%;
   height: 100%;
   z-index: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.single-graph-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.empty-workspace {
+    text-align: center;
+    color: var(--theme-text-secondary);
+}
+
+.empty-workspace p {
+    margin-bottom: 1rem;
 }
 
 /* Logo Button (Collapsed Sidebar) */
@@ -1427,255 +949,10 @@ const abortRun = () => {
     color: var(--theme-text-primary);
 }
 
-/* Right Sidebar Toggle */
-.sidebar-toggle {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 32px;
-  height: 60px;
-  z-index: 40;
-  border: none;
-  cursor: pointer;
-  color: var(--theme-text-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.sidebar-toggle.right {
-  right: 0;
-  border-top-left-radius: var(--radius-lg);
-  border-bottom-left-radius: var(--radius-lg);
-  border-right: none;
-}
-
-.sidebar-toggle:hover {
-  width: 40px;
-  color: var(--theme-primary);
-  background: var(--theme-bg-panel);
-}
-
-/* Floating Sidebars */
-.floating-sidebar {
-  position: absolute;
-  top: 16px;
-  /* Use explicit height calculation to enforce symmetry with top */
-  height: calc(100dvh - 32px); 
-  bottom: auto;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease;
-  background: var(--theme-bg-panel);
-  box-shadow: var(--shadow-floating);
-}
-
-.floating-sidebar.left {
-  left: 16px;
-  width: 300px !important;
-  transform-origin: top left;
-}
-
-.floating-sidebar.right {
-  right: 16px;
-  transform-origin: top right;
-}
-
-.sidebar-header {
-  padding: 12px 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--theme-border);
-  background: var(--theme-bg-panel-transparent);
-  color: var(--theme-text-primary);
-  flex-shrink: 0;
-}
-
-.sidebar-title {
-  font-weight: 600;
-  font-size: var(--font-size-md);
-}
-
-.unpin-icon-btn {
-    background: transparent;
-    border: none;
-    color: var(--theme-text-secondary);
-    cursor: pointer;
-    padding: 4px;
-    margin-left: 8px;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: color 0.2s, background-color 0.2s;
-    position: relative; /* Added for tooltip positioning */
-}
-
-.unpin-icon-btn:hover {
-    color: var(--theme-primary);
-    background-color: var(--theme-bg-hover);
-}
-
-.unpin-icon-btn:hover .instant-tooltip {
-    opacity: 1;
-}
-
 .toggle-icon {
     color: var(--theme-text-secondary);
 }
 
-.close-btn {
-  background: transparent;
-  border: none;
-  color: var(--theme-text-secondary);
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  z-index: 100;
-}
-
-.close-btn:hover {
-  color: var(--theme-text-primary);
-  background-color: var(--theme-bg-hover);
-}
-
-/* Accordion Sidebar Structure */
-.sidebar-content-scrollable {
-    overflow-y: auto;
-    flex: 1;
-    background: var(--theme-bg-panel);
-    min-height: 0; /* Crucial for flex container scrolling */
-}
-
-/* Accordion Styling Overrides */
-:deep(.sidebar-accordion .p-accordion-header-link) {
-    padding: 0.75rem 1rem;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--theme-text-primary);
-    background: transparent;
-    border: none;
-    border-bottom: 1px solid var(--theme-border);
-    outline: none;
-    justify-content: flex-start; /* Align headings to the left */
-}
-
-:deep(.sidebar-accordion .p-accordion-header:not(.p-disabled) .p-accordion-header-link:focus) {
-    box-shadow: none;
-    background: var(--theme-bg-hover);
-}
-
-:deep(.sidebar-accordion .p-accordion-content-content) {
-    padding: 0;
-    background: transparent;
-}
-
-:deep(.sidebar-accordion .p-accordion-panel) {
-    border: none;
-}
-
-.icon-12 {
-    font-size: 12px;
-    width: 20px;
-    text-align: center;
-    margin-right: 8px;
-    color: var(--theme-text-secondary);
-}
-
-.panel-content-wrapper {
-    padding: 4px;
-    background: var(--theme-bg-panel);
-}
-
-/* Override child styles to fit accordion */
-:deep(.project-manager), :deep(.node-palette), :deep(.execution-settings-panel) {
-    background: transparent;
-    height: auto !important;
-    overflow: visible !important;
-    padding: 8px;
-    border: none;
-}
-
-:deep(.data-input-panel) {
-    height: 100%;
-    padding: 8px;
-    min-height: 300px; /* Ensure usable height for code editor */
-}
-
-/* Sidebar Right Content */
-.sidebar-content {
-  flex: 1;
-  overflow-y: auto;
-  background: var(--theme-bg-panel);
-}
-
-/* Menu Panel Styling */
-.menu-panel {
-    display: flex;
-    padding: 8px;
-}
-.menu-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: var(--font-size-sm);
-    color: var(--theme-text-primary);
-    margin-bottom: 8px;
-}
-.menu-btn {
-    justify-content: flex-start !important;
-    gap: 10px;
-    width: 100%;
-    padding: 10px !important;
-    font-size: var(--font-size-sm);
-    color: var(--theme-text-primary);
-    border-radius: var(--radius-sm);
-    transition: background-color 0.2s;
-}
-.menu-btn:hover {
-    background-color: var(--theme-bg-hover);
-}
-.ghost-btn {
-    color: var(--theme-text-secondary);
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    border-radius: var(--radius-sm);
-    padding: 8px;
-}
-.ghost-btn:hover {
-    background: var(--theme-bg-hover);
-    color: var(--theme-text-primary);
-}
-.divider {
-    height: 1px;
-    background: var(--theme-border);
-    margin: 12px 0;
-}
-.status-display {
-    font-size: var(--font-size-xs);
-    padding: 8px;
-    border-radius: var(--radius-sm);
-    background: rgba(16, 185, 129, 0.1); /* Green tint */
-    text-align: center;
-    color: var(--theme-text-secondary);
-    margin-bottom: 8px;
-}
-.status-display.connected {
-    color: var(--theme-success); /* Green */
-    background: rgba(16, 185, 129, 0.15);
-}
-
-/* Theme toggle button in Header */
 .theme-toggle-header {
     background: transparent;
     border: none;
@@ -1694,143 +971,6 @@ const abortRun = () => {
     background: var(--theme-bg-hover);
 }
 
-/* Styled BaseInput for Grid Size */
-.native-number-input {
-    width: 60px;
-    padding: 0.25rem 0.5rem;
-    border: 1px solid var(--theme-border);
-    border-radius: var(--radius-sm);
-    background: var(--theme-bg-panel);
-    color: var(--theme-text-primary);
-    font-size: 0.85rem;
-    text-align: right;
-}
-.native-number-input:focus {
-    outline: none;
-    border-color: var(--theme-primary);
-}
-
-/* Select (Desktop) */
-.grid-style-select {
-    width: auto !important;
-    min-width: 4.5rem; /* Enough for "Lines" + arrow */
-}
-
-.grid-style-select :deep(.p-select-label) {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.85rem;
-}
-
-.grid-style-select :deep(.p-select-dropdown) {
-    width: 1.5rem;
-}
-
-.setup-instructions {
-    padding: 0.5rem 0;
-}
-
-.instruction-item {
-    margin-bottom: 1rem;
-}
-
-.instruction-item:last-child {
-    margin-bottom: 0;
-}
-
-.instruction-label {
-    display: block;
-    font-size: 0.8rem;
-    font-weight: 500;
-    margin-bottom: 0.25rem;
-    color: var(--p-text-color);
-}
-
-.instruction-command {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background-color: var(--color-background-mute);
-    border: 1px solid var(--p-content-border-color);
-    border-radius: 4px;
-    padding: 0.5rem;
-}
-
-:global(.dark-mode) .instruction-command {
-    background-color: var(--color-background-soft);
-}
-
-.instruction-command code {
-    flex: 1;
-    font-family: 'Courier New', monospace;
-    font-size: 0.75rem;
-    color: var(--p-text-color);
-    word-break: break-all;
-}
-
-.copy-btn-inline {
-    flex-shrink: 0;
-    padding: 0.15rem 0.4rem;
-}
-
-/* Mobile Menu Spacing */
-.mobile-view-options {
-    gap: 1.5rem;
-}
-
-.mobile-option-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--p-content-border-color);
-}
-
-.mobile-option-row:last-child {
-    border-bottom: none;
-}
-
-.mobile-option-row label {
-    font-size: 0.95rem;
-    cursor: pointer;
-    font-weight: 500;
-}
-
-.icon-only-btn-compact {
-    padding: 4px !important;
-    width: 24px;
-    height: 24px;
-    min-width: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.navbar-toolbar {
-    border: none;
-    border-bottom: 1px solid var(--p-content-border-color);
-    border-radius: 0;
-    padding: 0.25rem 1rem;
-    background: var(--p-content-background);
-    min-height: var(--navbar-height);
-}
-
-/* Responsive Visibility */
-@media (max-width: 1024px) {
-    .desktop-menu, .desktop-actions {
-        display: none !important;
-    }
-    .mobile-toggle {
-        display: inline-flex !important;
-    }
-}
-
-@media (min-width: 1025px) {
-    .mobile-toggle {
-        display: none !important;
-    }
-}
-
 /* Instant Tooltip Status Indicator */
 .status-indicator {
     position: relative;
@@ -1846,8 +986,7 @@ const abortRun = () => {
 .backend-status.connected { color: var(--theme-success); }
 .backend-status.disconnected { color: var(--theme-danger); }
 
-/* Adjusted spacing for indicators */
-.validation-status { font-size: 1.1em; margin: 0; }
+.validation-status { font-size: 1.1em; margin: 0 5px; }
 .validation-status.valid { color: var(--theme-success); }
 .validation-status.invalid { color: var(--theme-warning); }
 
@@ -1874,111 +1013,102 @@ const abortRun = () => {
     opacity: 1;
 }
 
-.dropdown-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 8px;
-    cursor: pointer;
-}
-.dropdown-input-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 8px;
-}
-
-.execution-dropdown {
-    padding: 5px;
-    min-width: 300px;
-}
-.dropdown-actions {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 10px;
-}
-.connection-status {
-    font-size: 0.85em;
-}
-.connection-status.connected { color: var(--theme-success); }
-
-.report-issue-link {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.external-link-icon {
-    font-size: 0.8em;
-    opacity: 0.7;
-}
-
-.view-options {
-    padding: 0.75rem;
-    min-width: 320px;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-
-.view-option-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-}
-
-.view-label {
-    cursor: pointer;
-    font-size: 0.85rem;
-    font-weight: 500;
-    flex: 1;
-    text-align: left;
-    white-space: nowrap;
-}
-
-.settings-controls {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-@media (max-width: 640px) {
-    .hidden-sm {
-        display: none;
-    }
-}
-
-/* Tabs for Right Sidebar */
-.sidebar-tabs {
+/* Draggable Code Panel Styling */
+.code-panel-card {
+  position: absolute;
+  background-color: var(--theme-bg-panel);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
   display: flex;
-  background: var(--theme-bg-hover);
-  padding: 4px;
-  gap: 4px;
-  border-bottom: 1px solid var(--theme-border);
+  flex-direction: column;
+  border: 1px solid var(--theme-border);
+  overflow: visible; 
+  transition: box-shadow 0.2s;
+  z-index: 100; 
 }
 
-.sidebar-tabs button {
+.graph-header {
+  height: 36px;
+  background-color: var(--theme-bg-hover);
+  border-bottom: 1px solid var(--theme-border);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  cursor: move;
+  user-select: none;
+  justify-content: space-between;
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
+}
+
+.graph-title {
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--theme-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.code-content {
   flex: 1;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--theme-bg-panel);
+  display: flex;
+  flex-direction: column;
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+}
+
+.code-content :deep(.code-preview-panel) {
+    height: 100%;
+    padding: 0;
+}
+.code-content :deep(.header-section) {
+    display: none; 
+}
+.code-content :deep(.editor-wrapper) {
+    border-radius: 0;
+}
+
+.resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--theme-text-secondary);
+  font-size: 9px;
+  z-index: 20;
+  background: var(--theme-bg-hover);
+  border-top-left-radius: 4px;
+  border-bottom-right-radius: var(--radius-md);
+}
+
+.close-btn {
   background: transparent;
   border: none;
-  padding: 8px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
   color: var(--theme-text-secondary);
-  transition: all 0.2s;
-  font-weight: 500;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  z-index: 100;
 }
 
-.sidebar-tabs button:hover {
-  background: rgba(0,0,0,0.05);
+.close-btn:hover {
   color: var(--theme-text-primary);
-}
-
-.sidebar-tabs button.active {
-  background: var(--theme-bg-panel);
-  color: var(--theme-primary);
-  box-shadow: var(--shadow-sm);
+  background-color: var(--theme-bg-hover);
 }
 </style>
