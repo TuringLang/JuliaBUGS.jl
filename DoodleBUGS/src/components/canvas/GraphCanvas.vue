@@ -265,32 +265,8 @@ watch(() => props.gridSize, (newValue: number) => {
   }
 });
 
-watch([() => props.elements, () => props.validationErrors], async ([newElements, newErrors], [oldElements]) => {
-  // Detect bulk load (empty -> populated).
-  // Also handles reload where oldElements might be empty initially.
-  const isBulkLoad = oldElements.length === 0 && newElements.length > 0;
-
-  if (isBulkLoad) {
-      // Hide INSTANTLY to prevent flash of unpositioned nodes
-      isGraphVisible.value = false;
-      await nextTick(); 
-  }
-
+watch([() => props.elements, () => props.validationErrors], ([newElements, newErrors]) => {
   syncGraphWithProps(newElements, newErrors);
-
-  if (isBulkLoad && cy) {
-      // Ensure Cytoscape has processed the batch
-      // Then fit and show
-      setTimeout(() => {
-          cy!.fit(undefined, 50);
-          if (cy!.zoom() > 0.8) {
-              cy!.zoom(0.8);
-              cy!.center();
-          }
-          // Fade back in
-          isGraphVisible.value = true;
-      }, 50);
-  }
 }, { deep: true });
 </script>
 
