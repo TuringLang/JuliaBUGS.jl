@@ -19,7 +19,6 @@ export const useGraphStore = defineStore('graph', () => {
   );
   
   const selectedElement = ref<GraphElement | null>(null);
-  const elementToFocus = ref<GraphElement | null>(null);
 
   watch(currentGraphId, (newId) => {
     if (newId) {
@@ -45,10 +44,6 @@ export const useGraphStore = defineStore('graph', () => {
   
   const setSelectedElement = (element: GraphElement | null) => {
     selectedElement.value = element;
-  };
-
-  const setElementToFocus = (element: GraphElement | null) => {
-    elementToFocus.value = element;
   };
 
   const createNewGraphContent = (graphId: string) => {
@@ -117,9 +112,7 @@ export const useGraphStore = defineStore('graph', () => {
     currentGraphId,
     currentGraphElements,
     selectedElement,
-    elementToFocus,
     setSelectedElement,
-    setElementToFocus,
     selectGraph,
     createNewGraphContent,
     updateGraphElements,

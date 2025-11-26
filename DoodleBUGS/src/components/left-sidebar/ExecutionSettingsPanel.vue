@@ -27,6 +27,10 @@ const { samplerSettings } = storeToRefs(executionStore);
         <label for="seed">Seed (optional)</label>
         <BaseInput id="seed" type="number" v-model.number="samplerSettings.seed" placeholder="Leave blank for random" />
       </div>
+      <div class="form-group">
+        <label for="timeout">Timeout (seconds)</label>
+        <BaseInput id="timeout" type="number" v-model.number="samplerSettings.timeout_s" placeholder="0 for no timeout" />
+      </div>
     </div>
   </div>
 </template>

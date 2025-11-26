@@ -21,7 +21,6 @@ export interface GraphNode {
   distribution?: string;
   equation?: string;
   observed?: boolean;
-  initialValue?: string | number | boolean | null;
   indices?: string;
   loopVariable?: string;
   loopRange?: string;
@@ -35,7 +34,7 @@ export interface GraphNode {
 }
 
 export interface GraphEdge {
-  id:string;
+  id: string;
   name?: string;
   type: 'edge';
   source: string;
@@ -54,18 +53,19 @@ export interface ModelData {
   inits: { [key: string]: string | number | boolean | null | undefined };
 }
 
-
 declare module 'cytoscape' {
   interface Core {
-    svg(options?: Record<string, unknown>): string;
-  }
-
-  interface NodeSingular {
-    data(key: string): unknown;
-    data(): GraphNode;
-  }
-
-  interface EdgeSingular {
-    data(): GraphEdge & { relationshipType?: 'stochastic' | 'deterministic' };
+    /**
+     * Export the graph as SVG.
+     * Provided by cytoscape-svg extension.
+     */
+    svg(options?: {
+      scale?: number;
+      full?: boolean;
+      bg?: string;
+      maxWidth?: number;
+      maxHeight?: number;
+      [key: string]: unknown;
+    }): string;
   }
 }

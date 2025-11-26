@@ -237,7 +237,6 @@ const handleSelectNodeFromModal = (nodeId: string) => {
     const targetNode = elements.value.find(el => el.id === nodeId);
     if (targetNode) {
         handleElementSelected(targetNode);
-        graphStore.setElementToFocus(targetNode);
         const cy = getCyInstance(graphStore.currentGraphId!);
         if (cy) {
             cy.animate({
@@ -288,18 +287,37 @@ const handleExportJson = () => {
 };
 
 const handleConfirmExport = (options: ExportOptions) => {
-  // Explicitly cast to Core, assuming custom method svg() exists via declaration merging
   const cy = (graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null) as Core | null;
   if (!cy || !currentExportType.value) return;
+  
   const fileName = `graph.${currentExportType.value}`;
+  
   try {
     let blob: Blob;
+    
     if (currentExportType.value === 'svg') {
       const svgOptions = { bg: options.bg, full: options.full, scale: options.scale };
+      // The svg() method is added via module augmentation in types/index.ts
       blob = new Blob([cy.svg(svgOptions)], { type: 'image/svg+xml;charset=utf-8' });
     } else {
-      blob = cy[currentExportType.value]({ ...options, output: 'blob' });
+      // Handle png/jpg with correct types
+      const baseOptions = {
+        bg: options.bg,
+        full: options.full,
+        scale: options.scale,
+        maxWidth: options.maxWidth,
+        maxHeight: options.maxHeight,
+        output: 'blob' as const
+      };
+      
+      if (currentExportType.value === 'png') {
+        blob = cy.png(baseOptions);
+      } else {
+        // JPG options include quality
+        blob = cy.jpg({ ...baseOptions, quality: options.quality });
+      }
     }
+    
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -307,6 +325,7 @@ const handleConfirmExport = (options: ExportOptions) => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   } catch (err) {
     console.error(`Failed to export ${currentExportType.value}:`, err);
   }
