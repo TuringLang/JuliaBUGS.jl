@@ -270,16 +270,42 @@ function downloadQuantilesCsv() {
   URL.revokeObjectURL(url);
 }
 
-const copyFileContent = (fileName: string, content: string) => {
-  navigator.clipboard.writeText(content).then(() => {
-    copySuccessStates.value[fileName] = true;
-    setTimeout(() => {
-      copySuccessStates.value[fileName] = false;
-    }, 2000);
-  }).catch(err => {
-    console.error(`Failed to copy ${fileName}:`, err);
-    alert('Failed to copy content to clipboard.');
-  });
+const copyFileContent = async (fileName: string, content: string) => {
+  try {
+    // Try modern API first
+    await navigator.clipboard.writeText(content);
+    triggerFileSuccess(fileName);
+  } catch (err) {
+    // Fallback to legacy API
+    const textArea = document.createElement("textarea");
+    textArea.value = content;
+    textArea.style.position = "fixed"; // avoid scrolling to bottom
+    textArea.style.opacity = "0";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        triggerFileSuccess(fileName);
+      } else {
+        console.error('Fallback copy failed.');
+        alert('Failed to copy content to clipboard.');
+      }
+    } catch (e) {
+      console.error('Copy failed', e);
+      alert('Failed to copy content to clipboard.');
+    } finally {
+      document.body.removeChild(textArea);
+    }
+  }
+};
+
+const triggerFileSuccess = (fileName: string) => {
+  copySuccessStates.value[fileName] = true;
+  setTimeout(() => {
+    copySuccessStates.value[fileName] = false;
+  }, 2000);
 };
 
 const downloadFileContent = (fileName: string, content: string) => {
@@ -348,7 +374,7 @@ const downloadFileContent = (fileName: string, content: string) => {
 
           <div>
             <div class="table-header" @click="showSummary = !showSummary" style="cursor: pointer;">
-              <div class="table-title"><strong>Summary</strong> <span style="opacity:.7; margin-left:6px;">{{ showSummary ? 'â–¾' : 'â–¸' }}</span></div>
+              <div class="table-title"><strong>Summary</strong> <span style="opacity:.7; margin-left:6px;">{{ showSummary ? '▼' : '▶' }}</span></div>
               <div class="table-actions">
                 <BaseButton size="small" type="secondary" @click.stop="downloadSummaryCsv" :disabled="!hasSummary">Download CSV</BaseButton>
               </div>
@@ -362,7 +388,7 @@ const downloadFileContent = (fileName: string, content: string) => {
                         @click="toggleSummarySort(header)"
                         :class="['sortable', { sorted: summarySortKey === header, desc: summarySortKey === header && summarySortDir === 'desc' }]">
                       {{ header }}
-                      <span class="sort-indicator" v-if="summarySortKey === header">{{ summarySortDir === 'asc' ? 'â–²' : 'â–¼' }}</span>
+                      <span class="sort-indicator" v-if="summarySortKey === header">{{ summarySortDir === 'asc' ? '▲' : '▼' }}</span>
                     </th>
                   </tr>
                 </thead>
@@ -380,7 +406,7 @@ const downloadFileContent = (fileName: string, content: string) => {
 
           <div style="margin-top: 16px;">
             <div class="table-header" @click="showQuantiles = !showQuantiles" style="cursor: pointer;">
-              <div class="table-title"><strong>Quantiles</strong> <span style="opacity:.7; margin-left:6px;">{{ showQuantiles ? 'â–¾' : 'â–¸' }}</span></div>
+              <div class="table-title"><strong>Quantiles</strong> <span style="opacity:.7; margin-left:6px;">{{ showQuantiles ? '▼' : '▶' }}</span></div>
               <div class="table-actions">
                 <BaseButton size="small" type="secondary" @click.stop="downloadQuantilesCsv" :disabled="!hasQuantiles">Download CSV</BaseButton>
               </div>
@@ -394,7 +420,7 @@ const downloadFileContent = (fileName: string, content: string) => {
                         @click="toggleQuantSort(header)"
                         :class="['sortable', { sorted: quantSortKey === header, desc: quantSortKey === header && quantSortDir === 'desc' }]">
                       {{ header }}
-                      <span class="sort-indicator" v-if="quantSortKey === header">{{ quantSortDir === 'asc' ? 'â–²' : 'â–¼' }}</span>
+                      <span class="sort-indicator" v-if="quantSortKey === header">{{ quantSortDir === 'asc' ? '▲' : '▼' }}</span>
                     </th>
                   </tr>
                 </thead>
@@ -440,7 +466,6 @@ const downloadFileContent = (fileName: string, content: string) => {
               <!-- Use native button for reliable touch events -->
               <button
                 @click.stop="copyFileContent(activeFileName, activeFileContent)"
-                @touchend.stop.prevent="copyFileContent(activeFileName, activeFileContent)"
                 class="native-copy-button"
                 type="button"
                 title="Copy Code"

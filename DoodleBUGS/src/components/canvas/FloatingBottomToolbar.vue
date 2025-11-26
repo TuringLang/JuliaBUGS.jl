@@ -491,4 +491,31 @@ onUnmounted(() => {
 .dock-dropdown :deep(.p-popover) {
     margin-bottom: 8px;
 }
+
+@media (max-width: 768px) {
+    .toolbar-container {
+        bottom: 16px !important; /* Force bottom */
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        top: auto !important; /* Reset drag position */
+        width: 100%;
+        max-width: 100vw;
+    }
+    .floating-dock {
+        max-width: calc(100vw - 32px);
+        overflow-x: auto;
+        justify-content: flex-start; /* Allow scrolling start */
+    }
+    /* Hide scrollbar */
+    .floating-dock::-webkit-scrollbar {
+        display: none;
+    }
+    .floating-dock {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+    }
+    .drag-handle {
+        display: none; /* Hide drag handle on mobile */
+    }
+}
 </style>

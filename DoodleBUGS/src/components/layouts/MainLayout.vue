@@ -105,6 +105,11 @@ onMounted(async () => {
     }
   }
   validateGraph();
+
+  // Mobile optimizations: hide zoom controls by default on small screens
+  if (window.innerWidth < 768) {
+      showZoomControls.value = false;
+  }
 });
 
 // Initialize Code Panel Position if needed
@@ -207,6 +212,10 @@ const handleElementSelected = (element: GraphElement | null) => {
   if (element) {
     if (!uiStore.isRightTabPinned) {
       uiStore.setActiveRightTab('properties');
+      const isMobile = window.innerWidth < 768;
+      if (isMobile && isLeftSidebarOpen.value) {
+          isLeftSidebarOpen.value = false;
+      }
       if (!isRightSidebarOpen.value) isRightSidebarOpen.value = true;
     }
   } else {
@@ -487,10 +496,18 @@ const handleLoadExample = async (exampleKey: string) => {
 };
 
 const toggleLeftSidebar = () => {
+    const isMobile = window.innerWidth < 768;
+    if (!isLeftSidebarOpen.value && isMobile) {
+        isRightSidebarOpen.value = false;
+    }
     isLeftSidebarOpen.value = !isLeftSidebarOpen.value;
 };
 
 const toggleRightSidebar = () => {
+    const isMobile = window.innerWidth < 768;
+    if (!isRightSidebarOpen.value && isMobile) {
+        isLeftSidebarOpen.value = false;
+    }
     isRightSidebarOpen.value = !isRightSidebarOpen.value;
 };
 
@@ -721,7 +738,7 @@ const stopResizeCodeTouch = () => {
 const handleSidebarContainerClick = (e: MouseEvent) => {
     if ((e.target as HTMLElement).closest('.theme-toggle-header')) return;
     if (!isLeftSidebarOpen.value) {
-        isLeftSidebarOpen.value = true;
+        toggleLeftSidebar(); // Use logic to ensure exclusive open
     }
 }
 
@@ -790,12 +807,13 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
              class="collapsed-sidebar-trigger glass-panel"
              @click="handleSidebarContainerClick">
            <div class="sidebar-trigger-content">
-               <div class="flex-grow flex items-center gap-2">
+               <div class="flex-grow flex items-center gap-2 overflow-hidden" style="flex-grow: 1; overflow: hidden;">
                    <span class="logo-text-minimized">
-                       {{ pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS' }}
+                       <span class="desktop-text">{{ pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS' }}</span>
+                       <span class="mobile-text">DoodleBUGS</span>
                    </span>
                </div>
-               <div class="flex items-center gap-1">
+               <div class="flex items-center gap-1 flex-shrink-0" style="flex-shrink: 0;">
                    <button @click.stop="uiStore.toggleDarkMode()" class="theme-toggle-header" :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
                        <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
                    </button>
@@ -1167,5 +1185,36 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* Responsive Text Styles */
+.desktop-text { display: inline; }
+.mobile-text { display: none; }
+
+@media (max-width: 768px) {
+    .desktop-text { display: none; }
+    .mobile-text { display: inline; }
+
+    .collapsed-sidebar-trigger {
+        min-width: auto !important; /* Override desktop min-widths */
+        max-width: 42%; /* Ensure two triggers don't overlap (42% * 2 + margins < 100%) */
+        padding: 8px;
+    }
+    
+    .collapsed-sidebar-trigger.glass-panel {
+        min-width: auto !important;
+    }
+
+    .logo-text-minimized {
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: block; /* Needed for ellipsis to work */
+    }
+    
+    .sidebar-trigger-content {
+        gap: 4px;
+    }
 }
 </style>

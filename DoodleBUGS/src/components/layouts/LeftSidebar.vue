@@ -274,6 +274,12 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
   transform-origin: top left;
 }
 
+@media (max-width: 768px) {
+  .floating-sidebar.left {
+    width: calc(100vw - 32px) !important;
+  }
+}
+
 .sidebar-header {
   padding: 12px 16px;
   display: flex;

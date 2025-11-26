@@ -30,14 +30,12 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
             transform: 'scale(0)',
             opacity: 0,
             pointerEvents: 'none',
-            width: '320px'
         };
     }
     return {
         transform: 'scale(1)',
         opacity: 1,
         pointerEvents: 'auto',
-        width: '320px'
     };
 };
 </script>
@@ -99,7 +97,18 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
 
 .floating-sidebar.right {
   right: 16px;
+  width: 320px;
   transform-origin: top right;
+}
+
+@media (max-width: 768px) {
+  .floating-sidebar.right {
+    width: calc(100vw - 32px) !important;
+  }
+  .sidebar-tabs button {
+      padding: 8px 4px; /* Compact tabs */
+      font-size: 0.8rem;
+  }
 }
 
 .sidebar-header {

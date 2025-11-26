@@ -79,16 +79,43 @@ watch(() => props.isActive, (newVal) => {
   }
 });
 
-const copyCodeToClipboard = () => {
-  navigator.clipboard.writeText(generatedCode.value).then(() => {
-    copySuccess.value = true;
-    setTimeout(() => {
-      copySuccess.value = false;
-    }, 2000);
-  }).catch(err => {
-    console.error('Failed to copy code: ', err);
-    alert('Failed to copy code to clipboard.');
-  });
+const copyCodeToClipboard = async () => {
+  const text = generatedCode.value;
+  try {
+    // Try modern API first
+    await navigator.clipboard.writeText(text);
+    triggerSuccess();
+  } catch (err) {
+    // Fallback to legacy API (often needed on iOS/mobile)
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed"; // avoid scrolling to bottom
+    textArea.style.opacity = "0";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        triggerSuccess();
+      } else {
+        console.error('Fallback copy failed.');
+        alert('Failed to copy code to clipboard.');
+      }
+    } catch (e) {
+      console.error('Copy failed', e);
+      alert('Failed to copy code to clipboard.');
+    } finally {
+      document.body.removeChild(textArea);
+    }
+  }
+};
+
+const triggerSuccess = () => {
+  copySuccess.value = true;
+  setTimeout(() => {
+    copySuccess.value = false;
+  }, 2000);
 };
 </script>
 
@@ -102,7 +129,6 @@ const copyCodeToClipboard = () => {
       <!-- Use native button for reliable touch events -->
       <button
         @click.stop="copyCodeToClipboard"
-        @touchend.stop.prevent="copyCodeToClipboard"
         class="native-copy-button"
         type="button"
         title="Copy Code"
