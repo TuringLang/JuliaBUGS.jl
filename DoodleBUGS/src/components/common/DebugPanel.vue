@@ -28,9 +28,7 @@ const formatValue = (value: unknown): string => {
   }
   if (typeof value === 'object') {
     try {
-      // Try to stringify, but handle circular references and errors
       return JSON.stringify(value, (key, val) => {
-        // Handle Error objects specially
         if (val instanceof Error) {
           return `Error: ${val.message}`;
         }

@@ -5,7 +5,6 @@ import { useExecutionStore } from '../../stores/executionStore';
 import type { ExecutionPanelTab } from '../../stores/executionStore';
 import BaseButton from '../ui/BaseButton.vue';
 
-// CodeMirror for file viewing
 import 'codemirror/lib/codemirror.css';
 import 'codemirror/theme/material-darker.css';
 import 'codemirror/mode/julia/julia.js';
@@ -24,7 +23,6 @@ const {
   executionLogs,
   executionError,
   generatedFiles,
-  // New richer result slices
   summaryResults,
   quantileResults,
   executionPanelTab,
@@ -36,15 +34,12 @@ const activeTab = computed<ExecutionPanelTab>({
 });
 const copySuccessStates = ref<{ [key: string]: boolean }>({});
 
-// Results datasets
 const hasSummary = computed(() => (summaryResults.value ?? executionResults.value ?? []).length > 0);
 const hasQuantiles = computed(() => (quantileResults.value ?? []).length > 0);
 
-// Collapsible sections
 const showSummary = ref(true);
 const showQuantiles = ref(true);
 
-// Active file tab state
 const activeFileName = ref<string | null>(null);
 watch(generatedFiles, (files) => {
   if (files.length === 0) {
@@ -62,7 +57,6 @@ const activeFileContent = computed(() => {
   return f?.content ?? '';
 });
 
-// CodeMirror instance for file content
 const fileEditorContainer = ref<HTMLDivElement | null>(null);
 let cmInstance: Editor | null = null;
 const editorReady = ref(false);
@@ -92,7 +86,6 @@ function ensureEditor() {
     });
     editorReady.value = true;
   } else {
-    // Update mode and value to match current file
     const cm = cmInstance as Editor & { setOption: (option: string, value: unknown) => void };
     cm.setOption('mode', pickModeByExt(activeFileName.value));
     if (cmInstance.getValue() !== activeFileContent.value) cmInstance.setValue(activeFileContent.value);
@@ -119,7 +112,6 @@ watch([activeTab, activeFileName], ([tab]) => {
   if (tab === 'files') nextTick(() => ensureEditor());
 });
 
-// Ensure editor also initializes when files arrive or container appears
 watch(generatedFiles, () => {
   if (activeTab.value === 'files') nextTick(() => ensureEditor());
 });
@@ -134,7 +126,6 @@ watch(activeFileContent, (content) => {
   }
 });
 
-// Per-table headers
 const summaryHeaders = computed(() => {
   const rows = summaryResults.value ?? executionResults.value ?? [];
   return rows.length ? Object.keys(rows[0]) : ([] as string[]);
@@ -144,11 +135,9 @@ const quantileHeaders = computed(() => {
   return rows.length ? Object.keys(rows[0]) : ([] as string[]);
 });
 
-// Interactive results helpers
 const filterText = ref('');
 const rhatThreshold = 1.1;
 
-// Independent sort state per table
 const summarySortKey = ref<string | null>(null);
 const summarySortDir = ref<'asc' | 'desc'>('asc');
 const quantSortKey = ref<string | null>(null);
@@ -279,7 +268,7 @@ const copyFileContent = async (fileName: string, content: string) => {
     // Fallback to legacy API
     const textArea = document.createElement("textarea");
     textArea.value = content;
-    textArea.style.position = "fixed"; // avoid scrolling to bottom
+    textArea.style.position = "fixed";
     textArea.style.opacity = "0";
     document.body.appendChild(textArea);
     textArea.focus();
@@ -619,7 +608,7 @@ const downloadFileContent = (fileName: string, content: string) => {
   flex-wrap: nowrap;
   padding-bottom: 2px;
   scrollbar-width: thin;
-  overscroll-behavior-x: contain; /* prevent horizontal scroll chaining to content */
+  overscroll-behavior-x: contain;
 }
 
 .file-tab {
@@ -633,7 +622,7 @@ const downloadFileContent = (fileName: string, content: string) => {
   border-top-left-radius: 4px;
   border-top-right-radius: 4px;
   cursor: pointer;
-  flex: 0 0 auto; /* prevent tabs from stretching */
+  flex: 0 0 auto;
 }
 
 .file-tab.active {
@@ -714,7 +703,7 @@ const downloadFileContent = (fileName: string, content: string) => {
   background-color: #282c34;
   border-radius: 8px;
   overflow: hidden;
-  height: 67vh; /* provide a consistent viewer height like a panel */
+  height: 67vh;
 }
 
 .editor-container {
@@ -722,7 +711,6 @@ const downloadFileContent = (fileName: string, content: string) => {
   height: 100%;
 }
 
-/* Ensure CodeMirror fills the editor container so the internal scrollbar shows */
 .editor-container .CodeMirror { height: 100% !important; }
 .editor-container .CodeMirror-scroll { height: 100% !important; }
 
@@ -765,7 +753,6 @@ const downloadFileContent = (fileName: string, content: string) => {
 </style>
 
 <style>
-/* Make CodeMirror read-only look consistent */
 .execution-panel .CodeMirror,
 .execution-panel .CodeMirror-scroll,
 .execution-panel .CodeMirror-gutters,

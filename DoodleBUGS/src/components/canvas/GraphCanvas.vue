@@ -34,7 +34,6 @@ let cy: Core | null = null;
 const cyInstance = ref<Core | null>(null);
 let resizeObserver: ResizeObserver | null = null;
 
-// Start hidden to prevent flash of un-layouted content
 const isGraphVisible = ref(false);
 
 const { initCytoscape, destroyCytoscape, getCyInstance, getUndoRedoInstance } = useGraphInstance();
@@ -94,7 +93,6 @@ const syncGraphWithProps = (elementsToSync: GraphElement[], errorsToSync: Map<st
         if (formattedEl.group === 'nodes') {
           const newNode = formattedEl as ElementDefinition & { position: {x: number, y: number} };
           const currentCyPos = existingCyEl.position();
-          // Only update position if significantly different to avoid fighting with layout/drag
           if (Math.abs(newNode.position.x - currentCyPos.x) > 0.01 || Math.abs(newNode.position.y - currentCyPos.y) > 0.01) {
             existingCyEl.position(newNode.position);
           }
@@ -139,7 +137,6 @@ onMounted(() => {
     cy = initCytoscape(cyContainer.value, [], props.graphId);
     cyInstance.value = cy;
 
-    // Initial sync
     syncGraphWithProps(props.elements, props.validationErrors);
 
     setGridSize(props.gridSize);
@@ -158,12 +155,10 @@ onMounted(() => {
       });
     }
 
-    // Save positions after layout finishes
     cy.on('layoutstop', () => {
         emit('graph-updated', getSerializedElements());
     });
 
-    // Debounce viewport updates
     let viewportTimeout: ReturnType<typeof setTimeout>;
     const emitViewport = () => {
         if (!cy) return;
@@ -240,14 +235,12 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(() => {
       if (cy) {
         cy.resize();
-        // Initial fit/restore logic
         if (!isGraphVisible.value) {
             if (props.initialViewport) {
                 cy.zoom(props.initialViewport.zoom);
                 cy.pan(props.initialViewport.pan);
                 isGraphVisible.value = true;
             } else {
-                // Only fit if we have elements and no stored viewport
                 if (props.elements.length > 0) {
                     if (cy.width() > 0 && cy.height() > 0) {
                         cy.fit(undefined, 50);
@@ -258,7 +251,6 @@ onMounted(() => {
                         isGraphVisible.value = true;
                     }
                 } else {
-                    // If empty, just show immediately
                     isGraphVisible.value = true;
                 }
             }
@@ -294,7 +286,6 @@ watch(() => props.gridSize, (newValue: number) => {
   }
 });
 
-// Watch for elements/errors changes
 watch([() => props.elements, () => props.validationErrors], ([newElements, newErrors]) => {
   syncGraphWithProps(newElements, newErrors);
 }, { deep: true });
@@ -328,7 +319,6 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
   overflow: hidden;
   cursor: grab;
   opacity: 0;
-  /* Transition defined inline to support instant toggle */
 }
 
 .cytoscape-container.graph-ready {
@@ -343,7 +333,6 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
   cursor: alias;
 }
 
-/* Custom drag and drop styling */
 .cdnd-grabbed-node {
   background-color: #FFD700 !important;
   opacity: 0.7;
@@ -355,13 +344,11 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
   background-color: rgba(50, 205, 50, 0.1) !important;
 }
 
-/* Visual indicator for nodes being dragged out of plates */
 .cdnd-drag-out {
   border: 2px dashed #FF0000 !important;
   background-color: rgba(255, 0, 0, 0.1) !important;
 }
 
-/* Grid styles with !important to override global defaults and ensure visibility */
 .cytoscape-container.grid-background.grid-dots {
   background-image: radial-gradient(circle, var(--theme-grid-line) 1px, transparent 1px) !important;
   background-size: var(--grid-size) var(--grid-size) !important;

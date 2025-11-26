@@ -21,14 +21,11 @@ export interface SamplerSettings {
 export type ExecutionPanelTab = 'logs' | 'files' | 'results';
 
 export const useExecutionStore = defineStore('execution', () => {
-  // State for backend connection
   const backendUrl = ref<string | null>(localStorage.getItem('doodlebugs-backendUrl') || null);
   const isConnected = ref(false);
   const isConnecting = ref(false);
 
-  // State for model execution
   const isExecuting = ref(false);
-  // LocalStorage keys
   const LS_KEYS = {
     logs: 'doodlebugs-executionLogs',
     error: 'doodlebugs-executionError',
@@ -56,11 +53,9 @@ export const useExecutionStore = defineStore('execution', () => {
   const executionError = ref<string | null>(safeParse<string | null>(LS_KEYS.error, null));
   const generatedFiles = ref<GeneratedFile[]>(safeParse<GeneratedFile[]>(LS_KEYS.files, []));
 
-  // Separate fields for richer result types
   const summaryResults = ref<ExecutionResult[] | null>(safeParse<ExecutionResult[] | null>(LS_KEYS.summary, null));
   const quantileResults = ref<ExecutionResult[] | null>(safeParse<ExecutionResult[] | null>(LS_KEYS.quantiles, null));
 
-  // UI state for ExecutionPanel tab selection (for auto-switching between Logs/Results/Files)
   const executionPanelTab = ref<ExecutionPanelTab>(
     (() => {
       const persisted = safeParse<unknown>(LS_KEYS.panelTab, 'results');
@@ -68,13 +63,12 @@ export const useExecutionStore = defineStore('execution', () => {
     })()
   );
 
-  // Sampler settings (backend uses fixed environment; no per-request dependencies)
   const samplerSettings = ref<SamplerSettings>({
       n_samples: 1000,
       n_adapts: 1000,
       n_chains: 1,
       seed: null,
-      timeout_s: 0, // default to no frontend timeout; backend may ignore or enforce separately
+      timeout_s: 0,
   });
 
   const setBackendUrl = (url: string | null) => {
@@ -102,7 +96,6 @@ export const useExecutionStore = defineStore('execution', () => {
     executionPanelTab.value = tab;
   };
 
-  // Persist to localStorage whenever these pieces change
   watch(executionLogs, (v) => localStorage.setItem(LS_KEYS.logs, JSON.stringify(v)), { deep: true });
   watch(executionError, (v) => localStorage.setItem(LS_KEYS.error, JSON.stringify(v)));
   watch(generatedFiles, (v) => localStorage.setItem(LS_KEYS.files, JSON.stringify(v)), { deep: true });

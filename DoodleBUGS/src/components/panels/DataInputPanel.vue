@@ -49,7 +49,6 @@ const validateJsonInits = (jsonString: string) => {
 };
 
 const setupCodeMirror = () => {
-  // Destroy existing instances
   [dataCm, initsCm].forEach(cm => {
     if (cm) {
       const wrapper = cm.getWrapperElement();
@@ -72,7 +71,7 @@ const setupCodeMirror = () => {
           dataStore.initsString = initsMatch ? initsMatch[1] : '()';
         });
       }
-    } else { // JSON mode
+    } else {
       if (dataEditorContainer.value) {
         dataCm = createCmInstance(dataEditorContainer.value, dataStore.dataString, { name: "javascript", json: true });
         dataCm.on('change', (instance) => {
@@ -110,7 +109,6 @@ const createCmInstance = (container: HTMLElement, value: string, mode: string | 
 onMounted(() => {
   setupCodeMirror();
   
-  // Refresh on resize to handle accordion expansion
   if (dataEditorContainer.value) {
       resizeObserver = new ResizeObserver(() => {
           if (dataCm) dataCm.refresh();
@@ -273,7 +271,6 @@ h4 {
     opacity: 1;
 }
 :global(html.dark-mode) .mode-switcher .base-button.active {
-    /* Ensure contrast in dark mode if inverse is white */
     color: #fff !important; 
 }
 

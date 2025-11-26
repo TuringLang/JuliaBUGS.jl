@@ -7,7 +7,7 @@ const defaultJson = `{}`;
 const defaultJulia = `()`;
 
 /**
- * A robust utility to convert a Julia NamedTuple string to a JSON string.
+ * A utility to convert a Julia NamedTuple string to a JSON string.
  * This version correctly handles Julia's matrix syntax.
  * @param juliaString - The string representing a Julia NamedTuple.
  * @returns A JSON string representation.

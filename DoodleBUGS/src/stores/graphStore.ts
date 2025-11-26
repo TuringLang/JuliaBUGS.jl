@@ -18,9 +18,7 @@ export const useGraphStore = defineStore('graph', () => {
     localStorage.getItem('doodlebugs-currentGraphId') || null
   );
   
-  // Shared selection state
   const selectedElement = ref<GraphElement | null>(null);
-  // Shared focus state (for zooming/panning to element)
   const elementToFocus = ref<GraphElement | null>(null);
 
   watch(currentGraphId, (newId) => {
@@ -57,7 +55,7 @@ export const useGraphStore = defineStore('graph', () => {
     const newContent: GraphContent = {
       graphId: graphId,
       elements: [],
-      lastLayout: 'dagre', // Default layout for new graphs
+      lastLayout: 'dagre',
     };
     graphContents.value.set(graphId, newContent);
     saveGraph(graphId, newContent);

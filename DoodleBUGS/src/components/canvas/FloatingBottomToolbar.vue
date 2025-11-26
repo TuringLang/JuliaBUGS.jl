@@ -37,7 +37,6 @@ const setMode = (mode: string) => {
   emit('update:currentMode', mode);
 };
 
-// --- Unified Add Tool Logic ---
 const nodeIcons: Record<string, string> = {
     stochastic: 'fas fa-random',
     deterministic: 'fas fa-calculator',
@@ -58,7 +57,6 @@ const nodeColors: Record<string, string> = {
 
 const lastAddTool = ref<NodeType | 'edge'>(props.currentNodeType);
 
-// Sync local state with props when mode changes externally
 watch(() => props.currentMode, (newMode) => {
     if (newMode === 'add-edge') {
         lastAddTool.value = 'edge';
@@ -108,27 +106,24 @@ const selectAddTool = (tool: NodeType | 'edge') => {
     activateAddTool();
 };
 
-// Style for the main add button
 const addButtonStyle = computed(() => {
     if (isAddModeActive.value) {
         const color = currentAddToolColor.value;
         return {
             backgroundColor: color,
             borderColor: color,
-            color: '#ffffff' // Always white text on colored background
+            color: '#ffffff'
         };
     }
-    return {}; // Default styles (transparent bg, theme text)
+    return {};
 });
 
-// --- Dragging Logic ---
 const toolbarRef = ref<HTMLElement | null>(null);
 const isDragging = ref(false);
 const position = ref({ bottom: '24px', left: '50%', transform: 'translateX(-50%)' });
 const dragOffset = ref({ x: 0, y: 0 });
 
 const startDrag = (event: MouseEvent) => {
-    // Only allow drag if clicking on the container, not buttons
     if ((event.target as HTMLElement).closest('button') || (event.target as HTMLElement).closest('select') || (event.target as HTMLElement).closest('.p-popover') || (event.target as HTMLElement).closest('input')) return;
     
     if (!toolbarRef.value) return;
@@ -136,14 +131,12 @@ const startDrag = (event: MouseEvent) => {
     isDragging.value = true;
     const rect = toolbarRef.value.getBoundingClientRect();
     
-    // Switch to fixed pixel positioning to allow free drag
     position.value = {
         left: `${rect.left}px`,
-        bottom: 'auto', // Unset bottom to allow top positioning
+        bottom: 'auto',
         transform: 'none'
     };
     
-    // Set top based on current rect to prevent jumping
     (toolbarRef.value.style as CSSStyleDeclaration).top = `${rect.top}px`;
 
     dragOffset.value = {
@@ -172,7 +165,6 @@ const stopDrag = () => {
 };
 
 const startDragTouch = (event: TouchEvent) => {
-    // prevent dragging if touching buttons
     if ((event.target as HTMLElement).closest('button') || (event.target as HTMLElement).closest('select') || (event.target as HTMLElement).closest('.p-popover') || (event.target as HTMLElement).closest('input')) return;
     
     if (!toolbarRef.value) return;
@@ -181,14 +173,12 @@ const startDragTouch = (event: TouchEvent) => {
     const rect = toolbarRef.value.getBoundingClientRect();
     const touch = event.touches[0];
     
-    // Switch to fixed pixel positioning to allow free drag
     position.value = {
         left: `${rect.left}px`,
-        bottom: 'auto', // Unset bottom to allow top positioning
+        bottom: 'auto',
         transform: 'none'
     };
     
-    // Set top based on current rect to prevent jumping
     (toolbarRef.value.style as CSSStyleDeclaration).top = `${rect.top}px`;
 
     dragOffset.value = {
@@ -229,12 +219,10 @@ onUnmounted(() => {
 <template>
   <div class="toolbar-container" ref="toolbarRef" :style="position" @mousedown="startDrag" @touchstart="startDragTouch">
     <div class="floating-dock glass-panel">
-      <!-- Drag Handle Indicator -->
       <div class="drag-handle" title="Drag Toolbar">
           <i class="fas fa-grip-vertical"></i>
       </div>
 
-      <!-- Selection Tool -->
       <button 
         class="dock-btn" 
         :class="{ active: currentMode === 'select' }"
@@ -247,7 +235,6 @@ onUnmounted(() => {
 
       <div class="divider"></div>
 
-      <!-- Unified Add Tool (Single Button with Dropdown) -->
       <DropdownMenu class="dock-dropdown add-tool-dropdown">
           <template #trigger>
               <button 
@@ -287,7 +274,6 @@ onUnmounted(() => {
           </template>
       </DropdownMenu>
 
-      <!-- Zoom Controls Group -->
       <template v-if="showZoomControls">
         <div class="divider"></div>
         <button class="dock-btn" @click="$emit('zoom-in')" title="Zoom In" type="button">
@@ -303,7 +289,6 @@ onUnmounted(() => {
 
       <div class="divider"></div>
 
-      <!-- Code & Export -->
       <DropdownMenu class="dock-dropdown">
           <template #trigger>
               <button 
@@ -332,7 +317,6 @@ onUnmounted(() => {
 
       <div class="divider"></div>
 
-      <!-- Undo/Redo -->
       <button class="dock-btn" @click="$emit('undo')" title="Undo (Ctrl+Z)" type="button">
         <i class="fas fa-undo"></i>
       </button>
@@ -340,7 +324,6 @@ onUnmounted(() => {
         <i class="fas fa-redo"></i>
       </button>
 
-      <!-- Graph Layout Menu -->
       <div class="divider"></div>
       <DropdownMenu class="dock-dropdown">
           <template #trigger>
@@ -370,7 +353,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   cursor: grab;
-  touch-action: none; /* Prevent default touch actions */
+  touch-action: none;
 }
 
 .toolbar-container:active {
@@ -431,14 +414,13 @@ onUnmounted(() => {
   margin: 0 4px;
 }
 
-/* Unified Add Tool Button */
 .add-tool-btn {
     display: flex;
     align-items: center;
     height: 32px;
     border: none;
     background: transparent;
-    border-radius: 16px; /* Pill shape */
+    border-radius: 16px;
     padding: 0 10px;
     cursor: pointer;
     transition: all 0.2s;
@@ -515,7 +497,7 @@ onUnmounted(() => {
         scrollbar-width: none;  /* Firefox */
     }
     .drag-handle {
-        display: none; /* Hide drag handle on mobile */
+        display: none;
     }
 }
 </style>

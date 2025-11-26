@@ -119,7 +119,6 @@ const onClickPaletteItem = (itemType: PaletteItemType) => {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-/* Dark Mode Overrides */
 :global(html.dark-mode) .palette-card {
   background-color: var(--p-surface-800);
   border-color: var(--p-surface-700);

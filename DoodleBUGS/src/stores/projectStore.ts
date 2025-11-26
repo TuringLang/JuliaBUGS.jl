@@ -1,4 +1,3 @@
-
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useGraphStore } from './graphStore';
@@ -94,7 +93,6 @@ export const useProjectStore = defineStore('project', () => {
   const addGraphToProject = (projectId: string, graphName: string): GraphMeta | undefined => {
     const project = projects.value.find(p => p.id === projectId);
     if (project) {
-      // Simple auto-layout: Offset new graphs slightly
       const offset = project.graphs.length * 40;
       
       const newGraphMeta: GraphMeta = {
@@ -109,7 +107,6 @@ export const useProjectStore = defineStore('project', () => {
         showCodePanel: false,
         codePanelWidth: 400,
         codePanelHeight: 400,
-        // Defaults: let grid settings be undefined to fallback to global
       };
       project.graphs.push(newGraphMeta);
       project.lastModified = Date.now();
@@ -142,7 +139,7 @@ export const useProjectStore = defineStore('project', () => {
         showCodePanel: boolean; codePanelX: number; codePanelY: number; codePanelWidth: number; codePanelHeight: number;
         gridEnabled: boolean; gridSize: number; gridStyle: GridStyle;
     }>,
-    shouldSave: boolean = true // New param: default to true
+    shouldSave: boolean = true
   ) => {
     const project = projects.value.find(p => p.id === projectId);
     if (project) {
@@ -163,7 +160,6 @@ export const useProjectStore = defineStore('project', () => {
             if (layout.gridSize !== undefined) graph.gridSize = layout.gridSize;
             if (layout.gridStyle !== undefined) graph.gridStyle = layout.gridStyle;
 
-            // Initialize code panel position relative to graph if not set
             if (graph.showCodePanel && graph.codePanelX === undefined) {
                 graph.codePanelX = graph.x + graph.width + 20;
                 graph.codePanelY = graph.y;
@@ -200,7 +196,6 @@ export const useProjectStore = defineStore('project', () => {
     const storedProjects = localStorage.getItem('doodlebugs-projects');
     if (storedProjects) {
       const loaded = JSON.parse(storedProjects) as Project[];
-      // Migration: ensure old projects have layout props
       loaded.forEach((p) => {
           if (p.graphs) {
               p.graphs.forEach((g, index) => {
@@ -232,6 +227,6 @@ export const useProjectStore = defineStore('project', () => {
     deleteGraphFromProject,
     getGraphsForProject,
     loadProjects,
-    saveProjects, // Exported so views can manually save after bulk updates
+    saveProjects,
   };
 });

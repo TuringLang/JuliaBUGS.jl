@@ -85,8 +85,6 @@ export const useUiStore = defineStore('ui', () => {
   };
 
   const handleLeftTabClick = (tab: LeftSidebarTab) => {
-    // If clicking the same tab, toggle sidebar visibility
-    // If sidebar is closed, open it and set tab
     if (activeLeftTab.value === tab && isLeftSidebarOpen.value) {
       isLeftSidebarOpen.value = false;
     } else {

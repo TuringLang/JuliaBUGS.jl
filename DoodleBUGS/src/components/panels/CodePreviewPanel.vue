@@ -89,7 +89,7 @@ const copyCodeToClipboard = async () => {
     // Fallback to legacy API (often needed on iOS/mobile)
     const textArea = document.createElement("textarea");
     textArea.value = text;
-    textArea.style.position = "fixed"; // avoid scrolling to bottom
+    textArea.style.position = "fixed";
     textArea.style.opacity = "0";
     document.body.appendChild(textArea);
     textArea.focus();
@@ -126,7 +126,6 @@ const triggerSuccess = () => {
     </div>
     <div class="editor-wrapper">
       <div ref="editorContainer" class="editor-container"></div>
-      <!-- Use native button for reliable touch events -->
       <button
         @click.stop="copyCodeToClipboard"
         class="native-copy-button"

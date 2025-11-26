@@ -27,7 +27,6 @@ const { samplerSettings } = storeToRefs(executionStore);
         <label for="seed">Seed (optional)</label>
         <BaseInput id="seed" type="number" v-model.number="samplerSettings.seed" placeholder="Leave blank for random" />
       </div>
-      <!-- Frontend timeout removed; backend may still enforce if configured server-side -->
     </div>
   </div>
 </template>

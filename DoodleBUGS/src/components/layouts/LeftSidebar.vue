@@ -352,7 +352,6 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
     border: none;
 }
 
-/* --- Compact Font Styles for Sidebar Inputs --- */
 :deep(.p-inputtext) {
     font-size: 12px !important;
     padding: 0.4rem 0.5rem !important;

@@ -18,7 +18,6 @@ import 'codemirror/addon/edit/matchbrackets.js';
 import CodeMirror from 'codemirror';
 import type { Editor, TextMarker } from 'codemirror';
 
-// Extend the CodeMirror type declarations to include custom methods.
 declare module 'codemirror' {
   interface Editor {
     getSearchCursor(query: string, pos?: CodeMirror.Position | null, caseFold?: boolean): {

@@ -115,13 +115,12 @@ onMounted(async () => {
   }
   validateGraph();
 
-  // Mobile optimizations: hide zoom controls by default on small screens
+  // Mobile: hide zoom controls by default on small screens
   if (window.innerWidth < 768) {
       showZoomControls.value = false;
   }
 });
 
-// Initialize Code Panel Position if needed
 watch([isCodePanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) => {
     if (isOpen && graphId && projectStore.currentProject) {
         const graph = projectStore.currentProject.graphs.find(g => g.id === graphId);
@@ -299,7 +298,6 @@ const handleConfirmExport = (options: ExportOptions) => {
       const svgOptions = { bg: options.bg, full: options.full, scale: options.scale };
       blob = new Blob([cy.svg(svgOptions)], { type: 'image/svg+xml;charset=utf-8' });
     } else {
-      // Typings should support png/jpg on Core
       blob = cy[currentExportType.value]({ ...options, output: 'blob' });
     }
     const url = URL.createObjectURL(blob);
@@ -492,7 +490,6 @@ const handleLoadExample = async (exampleKey: string) => {
     projectStore.updateGraphLayout(projectStore.currentProject!.id, newGraphMeta.id, {});
     graphStore.updateGraphElements(newGraphMeta.id, modelData.graphJSON);
     
-    // Force preset layout initially with the new smartFit flow
     graphStore.updateGraphLayout(newGraphMeta.id, 'preset');
 
     const jsonDataResponse = await fetch(`${baseUrl}examples/${exampleKey}/data.json`);
@@ -532,7 +529,6 @@ const abortRun = () => {
   }
 };
 
-// Helper methods for graph actions
 const handleUndo = () => {
     if (graphStore.currentGraphId) {
         getUndoRedoInstance(graphStore.currentGraphId)?.undo();
@@ -748,11 +744,10 @@ const stopResizeCodeTouch = () => {
     projectStore.saveProjects();
 };
 
-// Left sidebar click-to-open logic
 const handleSidebarContainerClick = (e: MouseEvent) => {
     if ((e.target as HTMLElement).closest('.theme-toggle-header')) return;
     if (!isLeftSidebarOpen.value) {
-        toggleLeftSidebar(); // Use logic to ensure exclusive open
+        toggleLeftSidebar();
     }
 }
 
@@ -786,7 +781,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
       </div>
     </main>
 
-    <!-- Left Sidebar (Collapsed state handled via toggle) -->
+    <!-- Left Sidebar -->
     <LeftSidebar
         :activeAccordionTabs="activeAccordionTabs"
         :projectName="projectStore.currentProject?.name || null"
@@ -815,7 +810,6 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @open-about-modal="showAboutModal = true"
     />
 
-    <!-- Collapsed Left Sidebar Trigger Area -->
     <Transition name="fade">
         <div v-if="!isLeftSidebarOpen" 
              class="collapsed-sidebar-trigger glass-panel"
@@ -850,7 +844,6 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @show-validation-issues="showValidationModal = true"
     />
 
-    <!-- Collapsed Right Sidebar Trigger Area -->
     <Transition name="fade">
         <div v-if="!isRightSidebarOpen" 
              class="collapsed-sidebar-trigger right glass-panel"
@@ -871,7 +864,6 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         </div>
     </Transition>
 
-    <!-- Code Panel Floating -->
     <div v-if="isCodePanelOpen && graphStore.currentGraphId" 
          ref="codePanelRef"
          class="code-panel-floating glass-panel"
@@ -894,7 +886,6 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         </div>
     </div>
 
-    <!-- Floating Toolbar -->
     <FloatingBottomToolbar 
         :current-mode="currentMode"
         :current-node-type="currentNodeType"
@@ -913,7 +904,6 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @export-standalone="handleGenerateStandalone"
     />
 
-    <!-- Modals -->
     <BaseModal :is-open="showNewProjectModal" @close="showNewProjectModal = false">
       <template #header><h3>Create New Project</h3></template>
       <template #body>
@@ -987,7 +977,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
 .collapsed-sidebar-trigger {
     position: absolute;
     top: 16px;
-    z-index: 49; /* Below floating sidebar (50) */
+    z-index: 49;
     padding: 8px 12px;
     border-radius: var(--radius-md);
     display: flex;
@@ -1071,7 +1061,6 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
   gap: 1rem;
 }
 
-/* Code Panel Floating */
 .code-panel-floating {
     position: absolute;
     background-color: var(--theme-bg-panel);
@@ -1190,7 +1179,6 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     opacity: 1;
 }
 
-/* Fade Transition */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.2s ease;
@@ -1201,7 +1189,6 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
   opacity: 0;
 }
 
-/* Responsive Text Styles */
 .desktop-text { display: inline; }
 .mobile-text { display: none; }
 
@@ -1210,8 +1197,8 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     .mobile-text { display: inline; }
 
     .collapsed-sidebar-trigger {
-        min-width: auto !important; /* Override desktop min-widths */
-        max-width: 42%; /* Ensure two triggers don't overlap (42% * 2 + margins < 100%) */
+        min-width: auto !important;
+        max-width: 42%;
         padding: 8px;
     }
     
@@ -1224,7 +1211,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        display: block; /* Needed for ellipsis to work */
+        display: block;
     }
     
     .sidebar-trigger-content {

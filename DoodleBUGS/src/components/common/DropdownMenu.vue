@@ -35,7 +35,6 @@ const onContentClick = (event: MouseEvent) => {
 </template>
 
 <style>
-/* Styles to match the previous dropdown content behavior */
 .p-popover-content a {
     display: block;
     padding: 0.5rem 1rem;

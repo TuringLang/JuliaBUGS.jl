@@ -106,7 +106,7 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
     width: calc(100vw - 32px) !important;
   }
   .sidebar-tabs button {
-      padding: 8px 4px; /* Compact tabs */
+      padding: 8px 4px;
       font-size: 0.8rem;
   }
 }

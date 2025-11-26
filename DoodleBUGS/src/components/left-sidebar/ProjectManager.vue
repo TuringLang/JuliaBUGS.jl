@@ -232,7 +232,6 @@ const handleNewGraph = () => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  /* Use explicit transparent background so it blends with sidebar panel */
   background-color: transparent; 
 }
 
@@ -247,7 +246,7 @@ const handleNewGraph = () => {
 
 .header h4 {
   margin: 0;
-  color: var(--theme-text-primary); /* Explicitly use theme text color */
+  color: var(--theme-text-primary);
   font-size: 0.95em;
   font-weight: 600;
 }
@@ -308,7 +307,7 @@ const handleNewGraph = () => {
   gap: 6px;
   border-radius: 4px;
   position: relative;
-  color: var(--theme-text-primary); /* Ensure text color */
+  color: var(--theme-text-primary);
 }
 
 .project-header:hover {
@@ -322,7 +321,7 @@ const handleNewGraph = () => {
 .project-header.active .project-name,
 .project-header.active .icon-folder,
 .project-header.active .icon-chevron {
-  color: var(--theme-text-inverse); /* White/Inverse text on active */
+  color: var(--theme-text-inverse);
 }
 
 .icon-chevron {
@@ -349,7 +348,7 @@ const handleNewGraph = () => {
 .project-name {
   flex-grow: 1;
   font-weight: 500;
-  color: var(--theme-text-primary); /* Explicit theme color */
+  color: var(--theme-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
