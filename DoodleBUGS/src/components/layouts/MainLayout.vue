@@ -14,6 +14,7 @@ import ExportModal from './ExportModal.vue';
 import ValidationIssuesModal from './ValidationIssuesModal.vue';
 import DebugPanel from '../common/DebugPanel.vue';
 import CodePreviewPanel from '../panels/CodePreviewPanel.vue';
+import DataInputPanel from '../panels/DataInputPanel.vue';
 import { useGraphElements } from '../../composables/useGraphElements';
 import { useProjectStore } from '../../stores/projectStore';
 import { useGraphStore } from '../../stores/graphStore';
@@ -110,6 +111,23 @@ const toggleCodePanel = () => {
     }
 };
 
+// Data Panel Visibility (Per-Graph State)
+const isDataPanelOpen = computed(() => {
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return false;
+    const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+    return !!graph?.showDataPanel;
+});
+
+const toggleDataPanel = () => {
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return;
+    const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+    if (graph) {
+        projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+            showDataPanel: !graph.showDataPanel
+        });
+    }
+};
+
 // Dark Mode Handling
 watch(isDarkMode, (val) => {
   const element = document.querySelector('html');
@@ -162,9 +180,6 @@ watch([isCodePanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) =>
         if (graph) {
             const needsInit = graph.codePanelX === undefined || graph.codePanelY === undefined;
             if (needsInit) {
-                const zoom = viewportState.value.zoom;
-                const pan = viewportState.value.pan;
-                
                 // Simple default dimensions
                 const panelW = 400;
                 const panelH = 300;
@@ -180,15 +195,43 @@ watch([isCodePanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) =>
                 // Top offset
                 const targetScreenY = 90;
 
-                // Convert Screen Coordinates to Model Coordinates
-                const modelX = (targetScreenX - pan.x) / zoom;
-                const modelY = (targetScreenY - pan.y) / zoom;
-                
                 projectStore.updateGraphLayout(projectStore.currentProject.id, graphId, {
-                    codePanelX: modelX,
-                    codePanelY: modelY,
+                    codePanelX: targetScreenX,
+                    codePanelY: targetScreenY,
                     codePanelWidth: panelW,
                     codePanelHeight: panelH
+                });
+            }
+        }
+    }
+}, { immediate: true });
+
+// Initialize Data Panel Position if missing
+watch([isDataPanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) => {
+    if (isOpen && graphId && projectStore.currentProject) {
+        const graph = projectStore.currentProject.graphs.find(g => g.id === graphId);
+        
+        if (graph) {
+            const needsInit = graph.dataPanelX === undefined || graph.dataPanelY === undefined;
+            if (needsInit) {
+                // Simple default dimensions
+                const panelW = 400;
+                const panelH = 300;
+                
+                // Position on the LEFT side relative to the graph view
+                // Sidebar is ~300px + 16px margin.
+                const leftSidebarOffset = isLeftSidebarOpen.value ? 320 : 20; 
+                
+                const targetScreenX = leftSidebarOffset + 20;
+                
+                // Top offset
+                const targetScreenY = 90;
+
+                projectStore.updateGraphLayout(projectStore.currentProject.id, graphId, {
+                    dataPanelX: targetScreenX,
+                    dataPanelY: targetScreenY,
+                    dataPanelWidth: panelW,
+                    dataPanelHeight: panelH
                 });
             }
         }
@@ -647,7 +690,7 @@ const startDragCodeTouch = (e: TouchEvent) => {
     const touch = e.touches[0];
     dragStartCode.value = { x: touch.clientX, y: touch.clientY };
     
-    // We store the current MODEL coordinates
+    // Use screen coordinates
     initialPanelPos.value = { 
         x: graph.codePanelX ?? 0,
         y: graph.codePanelY ?? 0
@@ -662,20 +705,13 @@ const onDragCodeTouch = (e: TouchEvent) => {
     e.preventDefault();
     const touch = e.touches[0];
     
-    const zoom = viewportState.value.zoom;
-    
-    // Screen delta
     const dx = touch.clientX - dragStartCode.value.x;
     const dy = touch.clientY - dragStartCode.value.y;
     
-    // Convert screen delta to model delta
-    const modelDx = dx / zoom;
-    const modelDy = dy / zoom;
-    
     if (projectStore.currentProject && graphStore.currentGraphId) {
         projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
-            codePanelX: initialPanelPos.value.x + modelDx,
-            codePanelY: initialPanelPos.value.y + modelDy
+            codePanelX: initialPanelPos.value.x + dx,
+            codePanelY: initialPanelPos.value.y + dy
         }, false);
     }
 };
@@ -707,19 +743,13 @@ const startDragCode = (e: MouseEvent) => {
 const onDragCode = (e: MouseEvent) => {
     if (!isDraggingCode.value) return;
     
-    const zoom = viewportState.value.zoom;
-    
     const dx = e.clientX - dragStartCode.value.x;
     const dy = e.clientY - dragStartCode.value.y;
     
-    // Convert to model delta
-    const modelDx = dx / zoom;
-    const modelDy = dy / zoom;
-    
     if (projectStore.currentProject && graphStore.currentGraphId) {
         projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
-            codePanelX: initialPanelPos.value.x + modelDx,
-            codePanelY: initialPanelPos.value.y + modelDy
+            codePanelX: initialPanelPos.value.x + dx,
+            codePanelY: initialPanelPos.value.y + dy
         }, false);
     }
 };
@@ -736,20 +766,14 @@ const getCodePanelStyle = computed(() => {
     const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
     if (!graph) return {};
     
-    const zoom = viewportState.value.zoom;
-    const pan = viewportState.value.pan;
-    const modelX = graph.codePanelX ?? 0;
-    const modelY = graph.codePanelY ?? 0;
-    
-    // Convert Model -> Screen
-    const screenX = modelX * zoom + pan.x;
-    const screenY = modelY * zoom + pan.y;
+    const screenX = graph.codePanelX ?? 0;
+    const screenY = graph.codePanelY ?? 0;
     
     return {
         left: `${screenX}px`,
         top: `${screenY}px`,
         width: `${graph.codePanelWidth ?? 400}px`,
-        height: `${graph.codePanelHeight ?? 400}px`
+        height: `${graph.codePanelHeight ?? 300}px`
     };
 });
 
@@ -768,7 +792,7 @@ const startResizeCode = (e: MouseEvent) => {
     dragStartCode.value = { x: e.clientX, y: e.clientY };
     initialPanelSize.value = { 
         width: graph.codePanelWidth ?? 400, 
-        height: graph.codePanelHeight ?? 400 
+        height: graph.codePanelHeight ?? 300 
     };
     window.addEventListener('mousemove', onResizeCode);
     window.addEventListener('mouseup', stopResizeCode);
@@ -780,7 +804,7 @@ const onResizeCode = (e: MouseEvent) => {
     const dy = e.clientY - dragStartCode.value.y;
     
     const newWidth = Math.max(300, initialPanelSize.value.width + dx);
-    const newHeight = Math.max(150, initialPanelSize.value.height + dy);
+    const newHeight = Math.max(200, initialPanelSize.value.height + dy);
 
     if (projectStore.currentProject && graphStore.currentGraphId) {
         projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
@@ -809,7 +833,7 @@ const startResizeCodeTouch = (e: TouchEvent) => {
     dragStartCode.value = { x: touch.clientX, y: touch.clientY };
     initialPanelSize.value = { 
         width: graph.codePanelWidth ?? 400, 
-        height: graph.codePanelHeight ?? 400 
+        height: graph.codePanelHeight ?? 300 
     };
     window.addEventListener('touchmove', onResizeCodeTouch, { passive: false });
     window.addEventListener('touchend', stopResizeCodeTouch);
@@ -823,7 +847,7 @@ const onResizeCodeTouch = (e: TouchEvent) => {
     const dy = touch.clientY - dragStartCode.value.y;
     
     const newWidth = Math.max(300, initialPanelSize.value.width + dx);
-    const newHeight = Math.max(150, initialPanelSize.value.height + dy);
+    const newHeight = Math.max(200, initialPanelSize.value.height + dy);
 
     if (projectStore.currentProject && graphStore.currentGraphId) {
         projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
@@ -837,6 +861,187 @@ const stopResizeCodeTouch = () => {
     isResizingCode.value = false;
     window.removeEventListener('touchmove', onResizeCodeTouch);
     window.removeEventListener('touchend', stopResizeCodeTouch);
+    projectStore.saveProjects();
+};
+
+// --- Data Panel Logic ---
+
+const dataPanelRef = ref<HTMLElement | null>(null);
+const isDraggingData = ref(false);
+const dragStartData = ref({ x: 0, y: 0 });
+const initialDataPanelPos = ref({ x: 0, y: 0 });
+
+const startDragDataTouch = (e: TouchEvent) => {
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return;
+    const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+    if (!graph) return;
+
+    isDraggingData.value = true;
+    const touch = e.touches[0];
+    dragStartData.value = { x: touch.clientX, y: touch.clientY };
+    
+    initialDataPanelPos.value = { 
+        x: graph.dataPanelX ?? 0,
+        y: graph.dataPanelY ?? 0
+    };
+    
+    window.addEventListener('touchmove', onDragDataTouch, { passive: false });
+    window.addEventListener('touchend', stopDragDataTouch);
+};
+
+const onDragDataTouch = (e: TouchEvent) => {
+    if (!isDraggingData.value) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const dx = touch.clientX - dragStartData.value.x;
+    const dy = touch.clientY - dragStartData.value.y;
+    
+    if (projectStore.currentProject && graphStore.currentGraphId) {
+        projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+            dataPanelX: initialDataPanelPos.value.x + dx,
+            dataPanelY: initialDataPanelPos.value.y + dy
+        }, false);
+    }
+};
+
+const stopDragDataTouch = () => {
+    isDraggingData.value = false;
+    window.removeEventListener('touchmove', onDragDataTouch);
+    window.removeEventListener('touchend', stopDragDataTouch);
+    projectStore.saveProjects();
+};
+
+const startDragData = (e: MouseEvent) => {
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return;
+    const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+    if (!graph) return;
+
+    isDraggingData.value = true;
+    dragStartData.value = { x: e.clientX, y: e.clientY };
+    initialDataPanelPos.value = { 
+        x: graph.dataPanelX ?? 0,
+        y: graph.dataPanelY ?? 0
+    };
+    window.addEventListener('mousemove', onDragData);
+    window.addEventListener('mouseup', stopDragData);
+};
+
+const onDragData = (e: MouseEvent) => {
+    if (!isDraggingData.value) return;
+    const dx = e.clientX - dragStartData.value.x;
+    const dy = e.clientY - dragStartData.value.y;
+    
+    if (projectStore.currentProject && graphStore.currentGraphId) {
+        projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+            dataPanelX: initialDataPanelPos.value.x + dx,
+            dataPanelY: initialDataPanelPos.value.y + dy
+        }, false);
+    }
+};
+
+const stopDragData = () => {
+    isDraggingData.value = false;
+    window.removeEventListener('mousemove', onDragData);
+    window.removeEventListener('mouseup', stopDragData);
+    projectStore.saveProjects();
+};
+
+const getDataPanelStyle = computed(() => {
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return {};
+    const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+    if (!graph) return {};
+    
+    const screenX = graph.dataPanelX ?? 0;
+    const screenY = graph.dataPanelY ?? 0;
+    
+    return {
+        left: `${screenX}px`,
+        top: `${screenY}px`,
+        width: `${graph.dataPanelWidth ?? 400}px`,
+        height: `${graph.dataPanelHeight ?? 300}px`
+    };
+});
+
+const isResizingData = ref(false);
+const initialDataPanelSize = ref({ width: 0, height: 0 });
+
+const startResizeData = (e: MouseEvent) => {
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return;
+    const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+    if (!graph) return;
+
+    e.stopPropagation();
+    e.preventDefault();
+    isResizingData.value = true;
+    dragStartData.value = { x: e.clientX, y: e.clientY };
+    initialDataPanelSize.value = { 
+        width: graph.dataPanelWidth ?? 400, 
+        height: graph.dataPanelHeight ?? 300 
+    };
+    window.addEventListener('mousemove', onResizeData);
+    window.addEventListener('mouseup', stopResizeData);
+};
+
+const onResizeData = (e: MouseEvent) => {
+    if (!isResizingData.value) return;
+    const dx = e.clientX - dragStartData.value.x;
+    const dy = e.clientY - dragStartData.value.y;
+    const newWidth = Math.max(300, initialDataPanelSize.value.width + dx);
+    const newHeight = Math.max(200, initialDataPanelSize.value.height + dy);
+
+    if (projectStore.currentProject && graphStore.currentGraphId) {
+        projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+            dataPanelWidth: newWidth,
+            dataPanelHeight: newHeight
+        }, false);
+    }
+};
+
+const stopResizeData = () => {
+    isResizingData.value = false;
+    window.removeEventListener('mousemove', onResizeData);
+    window.removeEventListener('mouseup', stopResizeData);
+    projectStore.saveProjects();
+};
+
+const startResizeDataTouch = (e: TouchEvent) => {
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return;
+    const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+    if (!graph) return;
+
+    e.stopPropagation();
+    isResizingData.value = true;
+    const touch = e.touches[0];
+    dragStartData.value = { x: touch.clientX, y: touch.clientY };
+    initialDataPanelSize.value = { 
+        width: graph.dataPanelWidth ?? 400, 
+        height: graph.dataPanelHeight ?? 300 
+    };
+    window.addEventListener('touchmove', onResizeDataTouch, { passive: false });
+    window.addEventListener('touchend', stopResizeDataTouch);
+};
+
+const onResizeDataTouch = (e: TouchEvent) => {
+    if (!isResizingData.value) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const dx = touch.clientX - dragStartData.value.x;
+    const dy = touch.clientY - dragStartData.value.y;
+    const newWidth = Math.max(300, initialDataPanelSize.value.width + dx);
+    const newHeight = Math.max(200, initialDataPanelSize.value.height + dy);
+
+    if (projectStore.currentProject && graphStore.currentGraphId) {
+        projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+            dataPanelWidth: newWidth,
+            dataPanelHeight: newHeight
+        }, false);
+    }
+};
+
+const stopResizeDataTouch = () => {
+    isResizingData.value = false;
+    window.removeEventListener('touchmove', onResizeDataTouch);
+    window.removeEventListener('touchend', stopResizeDataTouch);
     projectStore.saveProjects();
 };
 
@@ -984,10 +1189,38 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         </div>
     </div>
 
+    <!-- Data Panel Pop-out -->
+    <div v-if="isDataPanelOpen && graphStore.currentGraphId"
+         ref="dataPanelRef"
+         class="code-panel-floating glass-panel"
+         :style="getDataPanelStyle"
+         @mousedown="startDragData"
+         @touchstart="startDragDataTouch"
+    >
+        <div class="graph-header code-header">
+            <span class="graph-title"><i class="fas fa-database"></i> Data & Inits</span>
+            <div class="panel-switcher">
+                 <button :class="{active: dataStore.inputMode === 'json'}" @click="dataStore.inputMode = 'json'">JSON</button>
+                 <button :class="{active: dataStore.inputMode === 'julia'}" @click="dataStore.inputMode = 'julia'">Julia</button>
+            </div>
+            <button class="close-btn" @click="toggleDataPanel()" @touchstart.stop="toggleDataPanel()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="code-content">
+            <DataInputPanel :is-active="true" />
+        </div>
+        <div class="resize-handle"
+             @mousedown.stop="startResizeData"
+             @touchstart.stop.prevent="startResizeDataTouch"
+        >
+            <i class="fas fa-chevron-right" style="transform: rotate(45deg);"></i>
+        </div>
+    </div>
+
     <FloatingBottomToolbar 
         :current-mode="currentMode"
         :current-node-type="currentNodeType"
         :show-code-panel="isCodePanelOpen"
+        :show-data-panel="isDataPanelOpen"
         :show-zoom-controls="showZoomControls"
         @update:current-mode="currentMode = $event"
         @update:current-node-type="currentNodeType = $event"
@@ -998,6 +1231,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @fit="handleFit"
         @layout-graph="handleGraphLayout"
         @toggle-code-panel="toggleCodePanel"
+        @toggle-data-panel="toggleDataPanel"
         @export-bugs="() => { /* handled via copy inside panel mostly */ }"
         @export-standalone="handleGenerateStandalone"
     />
@@ -1192,6 +1426,31 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
   gap: 6px;
 }
 
+.panel-switcher {
+    display: flex;
+    background: rgba(0,0,0,0.05);
+    border-radius: 4px;
+    padding: 2px;
+    margin-left: auto; 
+    margin-right: 8px;
+}
+.panel-switcher button {
+    background: transparent;
+    border: none;
+    border-radius: 3px;
+    padding: 2px 8px;
+    font-size: 10px;
+    cursor: pointer;
+    color: var(--theme-text-secondary);
+    font-weight: 600;
+    line-height: 1.2;
+}
+.panel-switcher button.active {
+    background: var(--theme-bg-panel);
+    color: var(--theme-text-primary);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
 .close-btn {
     background: transparent;
     border: none;
@@ -1212,13 +1471,23 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     background-color: var(--theme-bg-panel);
 }
 
-.code-content :deep(.code-preview-panel) {
+.code-content :deep(.code-preview-panel), .code-content :deep(.data-input-panel) {
     height: 100%;
     padding: 0;
 }
 .code-content :deep(.header-section) {
     display: none; 
 }
+
+.code-content :deep(.header-controls) {
+    display: none;
+}
+
+.code-content :deep(.panel-title),
+.code-content :deep(.description) {
+    display: none;
+}
+
 .code-content :deep(.editor-wrapper) {
     border-radius: 0;
 }
@@ -1317,4 +1586,3 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     }
 }
 </style>
-

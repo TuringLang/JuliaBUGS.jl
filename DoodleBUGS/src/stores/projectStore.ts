@@ -19,6 +19,12 @@ export interface GraphMeta {
   codePanelY?: number;
   codePanelWidth?: number;
   codePanelHeight?: number;
+  // Data Panel Props
+  showDataPanel?: boolean;
+  dataPanelX?: number;
+  dataPanelY?: number;
+  dataPanelWidth?: number;
+  dataPanelHeight?: number;
   // Per-graph Grid Settings
   gridEnabled?: boolean;
   gridSize?: number;
@@ -105,6 +111,11 @@ export const useProjectStore = defineStore('project', () => {
         width: 600,
         height: 400,
         showCodePanel: false,
+        showDataPanel: false,
+        codePanelWidth: 400,
+        codePanelHeight: 300,
+        dataPanelWidth: 400,
+        dataPanelHeight: 300,
       };
       project.graphs.push(newGraphMeta);
       project.lastModified = Date.now();
@@ -135,6 +146,7 @@ export const useProjectStore = defineStore('project', () => {
     layout: Partial<{ 
         x: number; y: number; width: number; height: number; 
         showCodePanel: boolean; codePanelX: number; codePanelY: number; codePanelWidth: number; codePanelHeight: number;
+        showDataPanel: boolean; dataPanelX: number; dataPanelY: number; dataPanelWidth: number; dataPanelHeight: number;
         gridEnabled: boolean; gridSize: number; gridStyle: GridStyle;
     }>,
     shouldSave: boolean = true
@@ -153,6 +165,12 @@ export const useProjectStore = defineStore('project', () => {
             if (layout.codePanelY !== undefined) graph.codePanelY = layout.codePanelY;
             if (layout.codePanelWidth !== undefined) graph.codePanelWidth = layout.codePanelWidth;
             if (layout.codePanelHeight !== undefined) graph.codePanelHeight = layout.codePanelHeight;
+
+            if (layout.showDataPanel !== undefined) graph.showDataPanel = layout.showDataPanel;
+            if (layout.dataPanelX !== undefined) graph.dataPanelX = layout.dataPanelX;
+            if (layout.dataPanelY !== undefined) graph.dataPanelY = layout.dataPanelY;
+            if (layout.dataPanelWidth !== undefined) graph.dataPanelWidth = layout.dataPanelWidth;
+            if (layout.dataPanelHeight !== undefined) graph.dataPanelHeight = layout.dataPanelHeight;
 
             if (layout.gridEnabled !== undefined) graph.gridEnabled = layout.gridEnabled;
             if (layout.gridSize !== undefined) graph.gridSize = layout.gridSize;

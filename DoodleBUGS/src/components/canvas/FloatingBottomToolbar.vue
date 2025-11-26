@@ -8,6 +8,7 @@ const props = defineProps<{
   currentMode: string;
   currentNodeType: NodeType;
   showCodePanel?: boolean;
+  showDataPanel?: boolean;
   showZoomControls?: boolean;
 }>();
 
@@ -21,6 +22,7 @@ const emit = defineEmits<{
   (e: 'fit'): void;
   (e: 'layout-graph', layout: string): void;
   (e: 'toggle-code-panel'): void;
+  (e: 'toggle-data-panel'): void;
   (e: 'export-bugs'): void;
   (e: 'export-standalone'): void;
 }>();
@@ -288,6 +290,16 @@ onUnmounted(() => {
       </template>
 
       <div class="divider"></div>
+
+      <button 
+        class="dock-btn" 
+        :class="{ active: showDataPanel }"
+        @click="$emit('toggle-data-panel')"
+        title="Data Panel"
+        type="button"
+      >
+        <i class="fas fa-database"></i>
+      </button>
 
       <DropdownMenu class="dock-dropdown">
           <template #trigger>

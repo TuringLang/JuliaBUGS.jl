@@ -160,7 +160,7 @@ watch(() => props.isActive, (newVal) => {
 <template>
   <div class="data-input-panel">
     <div class="header-controls">
-        <h4>Model Data & Inits</h4>
+        <h4 class="panel-title">Model Data & Inits</h4>
         <div class="mode-switcher">
             <BaseButton class="base-button" :class="{active: dataStore.inputMode === 'json'}" @click="dataStore.inputMode = 'json'" size="small">JSON</BaseButton>
             <BaseButton class="base-button" :class="{active: dataStore.inputMode === 'julia'}" @click="dataStore.inputMode = 'julia'" size="small">Julia</BaseButton>
@@ -316,7 +316,9 @@ h4 {
 }
 .footer-status {
   flex-shrink: 0;
-  padding-top: 8px;
+  padding-top: 0;
+  padding-bottom: 4px;
+  padding-left: 12px;
   min-height: 25px;
   height: auto;
   box-sizing: border-box;
