@@ -11,7 +11,6 @@ import BaseInput from '../ui/BaseInput.vue';
 import ProjectManager from '../left-sidebar/ProjectManager.vue';
 import NodePalette from '../left-sidebar/NodePalette.vue';
 import ExecutionSettingsPanel from '../left-sidebar/ExecutionSettingsPanel.vue';
-import DataInputPanel from '../panels/DataInputPanel.vue';
 import type { NodeType, PaletteItemType } from '../../types';
 import { exampleModels } from '../../config/nodeDefinitions';
 import { useUiStore } from '../../stores/uiStore';
@@ -133,15 +132,6 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                     </AccordionContent>
                 </AccordionPanel>
 
-                <AccordionPanel value="data">
-                    <AccordionHeader><i class="fas fa-database icon-12"></i> Data</AccordionHeader>
-                    <AccordionContent>
-                        <div class="panel-content-wrapper">
-                            <DataInputPanel :is-active="true" />
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
-
                 <AccordionPanel value="settings">
                     <AccordionHeader><i class="fas fa-sliders-h icon-12"></i> Run Settings</AccordionHeader>
                     <AccordionContent>
@@ -181,10 +171,6 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                             <div class="menu-row">
                                 <label>Debug Console</label>
                                 <ToggleSwitch :modelValue="showDebugPanel" @update:modelValue="$emit('update:showDebugPanel', $event)" />
-                            </div>
-                            <div class="menu-row">
-                                <label>Code Panel</label>
-                                <ToggleSwitch :modelValue="isCodePanelOpen" @update:modelValue="$emit('toggle-code-panel')" />
                             </div>
                         </div>
                     </AccordionContent>
@@ -229,9 +215,6 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                                     <i class="fas fa-stop"></i>
                                     <span class="ml-2">Abort</span>
                                 </BaseButton>
-
-                                <div class="divider"></div>
-                                <BaseButton @click="$emit('generate-standalone')" type="ghost" class="menu-btn"><i class="fas fa-file-alt"></i> Generate Script</BaseButton>
                             </div>
                         </div>
                     </AccordionContent>

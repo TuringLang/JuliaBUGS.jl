@@ -26,6 +26,7 @@ const {
   summaryResults,
   quantileResults,
   executionPanelTab,
+  activeFileName
 } = storeToRefs(executionStore);
 
 const activeTab = computed<ExecutionPanelTab>({
@@ -36,11 +37,13 @@ const copySuccessStates = ref<{ [key: string]: boolean }>({});
 
 const hasSummary = computed(() => (summaryResults.value ?? executionResults.value ?? []).length > 0);
 const hasQuantiles = computed(() => (quantileResults.value ?? []).length > 0);
+const hasLogs = computed(() => executionLogs.value.length > 0);
+const hasFiles = computed(() => generatedFiles.value.length > 0);
 
 const showSummary = ref(true);
 const showQuantiles = ref(true);
 
-const activeFileName = ref<string | null>(null);
+// If generatedFiles changes, and activeFileName is null or invalid, default to the first file.
 watch(generatedFiles, (files) => {
   if (files.length === 0) {
     activeFileName.value = null;
@@ -324,6 +327,7 @@ const downloadFileContent = (fileName: string, content: string) => {
 
     <div class="panel-tabs">
       <BaseButton
+        v-if="hasLogs"
         :class="{ active: activeTab === 'logs' }"
         @click="activeTab = 'logs'"
         size="small"
@@ -331,6 +335,7 @@ const downloadFileContent = (fileName: string, content: string) => {
         Logs
       </BaseButton>
       <BaseButton
+        v-if="hasFiles"
         :class="{ active: activeTab === 'files' }"
         @click="activeTab = 'files'"
         size="small"
@@ -338,6 +343,7 @@ const downloadFileContent = (fileName: string, content: string) => {
         Files
       </BaseButton>
       <BaseButton
+        v-if="hasSummary || hasQuantiles"
         :class="{ active: activeTab === 'results' }"
         @click="activeTab = 'results'"
         size="small"
@@ -352,7 +358,7 @@ const downloadFileContent = (fileName: string, content: string) => {
         <pre>{{ executionError }}</pre>
       </div>
 
-      <div v-show="activeTab === 'results'" class="tab-pane">
+      <div v-show="activeTab === 'results'" class="tab-pane tab-pane-scrollable">
         <div v-if="!hasSummary && !hasQuantiles" class="placeholder">
           <p>Execution results will appear here.</p>
         </div>
@@ -363,7 +369,7 @@ const downloadFileContent = (fileName: string, content: string) => {
 
           <div>
             <div class="table-header" @click="showSummary = !showSummary" style="cursor: pointer;">
-              <div class="table-title"><strong>Summary</strong> <span style="opacity:.7; margin-left:6px;">{{ showSummary ? '▼' : '▶' }}</span></div>
+              <div class="table-title"><strong>Summary</strong> <span style="opacity:.7; margin-left:6px;">{{ showSummary ? 'â–¼' : 'â–¶' }}</span></div>
               <div class="table-actions">
                 <BaseButton size="small" type="secondary" @click.stop="downloadSummaryCsv" :disabled="!hasSummary">Download CSV</BaseButton>
               </div>
@@ -377,7 +383,7 @@ const downloadFileContent = (fileName: string, content: string) => {
                         @click="toggleSummarySort(header)"
                         :class="['sortable', { sorted: summarySortKey === header, desc: summarySortKey === header && summarySortDir === 'desc' }]">
                       {{ header }}
-                      <span class="sort-indicator" v-if="summarySortKey === header">{{ summarySortDir === 'asc' ? '▲' : '▼' }}</span>
+                      <span class="sort-indicator" v-if="summarySortKey === header">{{ summarySortDir === 'asc' ? 'â–²' : 'â–¼' }}</span>
                     </th>
                   </tr>
                 </thead>
@@ -395,7 +401,7 @@ const downloadFileContent = (fileName: string, content: string) => {
 
           <div style="margin-top: 16px;">
             <div class="table-header" @click="showQuantiles = !showQuantiles" style="cursor: pointer;">
-              <div class="table-title"><strong>Quantiles</strong> <span style="opacity:.7; margin-left:6px;">{{ showQuantiles ? '▼' : '▶' }}</span></div>
+              <div class="table-title"><strong>Quantiles</strong> <span style="opacity:.7; margin-left:6px;">{{ showQuantiles ? 'â–¼' : 'â–¶' }}</span></div>
               <div class="table-actions">
                 <BaseButton size="small" type="secondary" @click.stop="downloadQuantilesCsv" :disabled="!hasQuantiles">Download CSV</BaseButton>
               </div>
@@ -409,7 +415,7 @@ const downloadFileContent = (fileName: string, content: string) => {
                         @click="toggleQuantSort(header)"
                         :class="['sortable', { sorted: quantSortKey === header, desc: quantSortKey === header && quantSortDir === 'desc' }]">
                       {{ header }}
-                      <span class="sort-indicator" v-if="quantSortKey === header">{{ quantSortDir === 'asc' ? '▲' : '▼' }}</span>
+                      <span class="sort-indicator" v-if="quantSortKey === header">{{ quantSortDir === 'asc' ? 'â–²' : 'â–¼' }}</span>
                     </th>
                   </tr>
                 </thead>
@@ -426,11 +432,11 @@ const downloadFileContent = (fileName: string, content: string) => {
         </div>
       </div>
 
-      <div v-show="activeTab === 'logs'" class="tab-pane">
+      <div v-show="activeTab === 'logs'" class="tab-pane tab-pane-scrollable">
         <pre class="logs-display">{{ executionLogs.join('\n') }}</pre>
       </div>
 
-      <div v-show="activeTab === 'files'" class="tab-pane">
+      <div v-show="activeTab === 'files'" class="tab-pane full-height">
         <div v-if="generatedFiles.length === 0" class="placeholder">
           <p>Generated files from the sandbox will appear here.</p>
         </div>
@@ -532,7 +538,25 @@ const downloadFileContent = (fileName: string, content: string) => {
 
 .panel-content {
   flex-grow: 1;
-  overflow-y: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-pane {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tab-pane.tab-pane-scrollable {
+    overflow-y: auto;
+    display: block;
+}
+
+.tab-pane.full-height {
+    overflow: hidden;
 }
 
 .error-display {
@@ -565,6 +589,7 @@ const downloadFileContent = (fileName: string, content: string) => {
   padding: 40px 20px;
   color: var(--color-secondary);
   font-style: italic;
+  overflow-y: auto;
 }
 
 .results-table-container {
@@ -593,22 +618,25 @@ const downloadFileContent = (fileName: string, content: string) => {
 }
 
 .files-tabbed {
+  flex-grow: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  min-height: 0;
+  gap: 0;
 }
 
 .file-tabs {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   border-bottom: 1px solid var(--color-border);
   overflow-x: auto;
   overflow-y: hidden;
   white-space: nowrap;
   flex-wrap: nowrap;
-  padding-bottom: 2px;
+  padding-bottom: 0;
   scrollbar-width: thin;
   overscroll-behavior-x: contain;
+  flex-shrink: 0;
 }
 
 .file-tab {
@@ -623,20 +651,28 @@ const downloadFileContent = (fileName: string, content: string) => {
   border-top-right-radius: 4px;
   cursor: pointer;
   flex: 0 0 auto;
+  margin-bottom: -1px;
+  position: relative;
+  z-index: 0;
 }
 
 .file-tab.active {
   background: var(--color-primary);
   color: white;
   border-color: var(--color-primary);
+  z-index: 1;
+  border-bottom-color: var(--theme-bg-panel);
 }
 
 .file-view {
+  flex-grow: 1;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
   position: relative;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .file-header {
@@ -698,12 +734,11 @@ const downloadFileContent = (fileName: string, content: string) => {
 .table-actions { display: flex; gap: 8px; }
 
 .editor-wrapper {
-  position: relative;
   flex-grow: 1;
   background-color: #282c34;
-  border-radius: 8px;
-  overflow: hidden;
-  height: 67vh;
+  position: relative;
+  height: auto;
+  min-height: 0;
 }
 
 .editor-container {

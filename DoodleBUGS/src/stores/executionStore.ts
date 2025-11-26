@@ -52,6 +52,7 @@ export const useExecutionStore = defineStore('execution', () => {
   const executionLogs = ref<string[]>(safeParse<string[]>(LS_KEYS.logs, []));
   const executionError = ref<string | null>(safeParse<string | null>(LS_KEYS.error, null));
   const generatedFiles = ref<GeneratedFile[]>(safeParse<GeneratedFile[]>(LS_KEYS.files, []));
+  const activeFileName = ref<string | null>(null);
 
   const summaryResults = ref<ExecutionResult[] | null>(safeParse<ExecutionResult[] | null>(LS_KEYS.summary, null));
   const quantileResults = ref<ExecutionResult[] | null>(safeParse<ExecutionResult[] | null>(LS_KEYS.quantiles, null));
@@ -89,6 +90,7 @@ export const useExecutionStore = defineStore('execution', () => {
     executionLogs.value = [];
     executionError.value = null;
     generatedFiles.value = [];
+    activeFileName.value = null;
     executionPanelTab.value = 'logs';
   };
 
@@ -115,6 +117,7 @@ export const useExecutionStore = defineStore('execution', () => {
     executionLogs,
     executionError,
     generatedFiles,
+    activeFileName,
     samplerSettings,
     executionPanelTab,
     setBackendUrl,

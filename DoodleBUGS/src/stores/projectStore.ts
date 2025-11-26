@@ -25,6 +25,12 @@ export interface GraphMeta {
   dataPanelY?: number;
   dataPanelWidth?: number;
   dataPanelHeight?: number;
+  // JSON Panel Props
+  showJsonPanel?: boolean;
+  jsonPanelX?: number;
+  jsonPanelY?: number;
+  jsonPanelWidth?: number;
+  jsonPanelHeight?: number;
   // Per-graph Grid Settings
   gridEnabled?: boolean;
   gridSize?: number;
@@ -112,10 +118,13 @@ export const useProjectStore = defineStore('project', () => {
         height: 400,
         showCodePanel: false,
         showDataPanel: false,
+        showJsonPanel: false,
         codePanelWidth: 400,
         codePanelHeight: 300,
         dataPanelWidth: 400,
         dataPanelHeight: 300,
+        jsonPanelWidth: 400,
+        jsonPanelHeight: 300,
       };
       project.graphs.push(newGraphMeta);
       project.lastModified = Date.now();
@@ -147,6 +156,7 @@ export const useProjectStore = defineStore('project', () => {
         x: number; y: number; width: number; height: number; 
         showCodePanel: boolean; codePanelX: number; codePanelY: number; codePanelWidth: number; codePanelHeight: number;
         showDataPanel: boolean; dataPanelX: number; dataPanelY: number; dataPanelWidth: number; dataPanelHeight: number;
+        showJsonPanel: boolean; jsonPanelX: number; jsonPanelY: number; jsonPanelWidth: number; jsonPanelHeight: number;
         gridEnabled: boolean; gridSize: number; gridStyle: GridStyle;
     }>,
     shouldSave: boolean = true
@@ -171,6 +181,12 @@ export const useProjectStore = defineStore('project', () => {
             if (layout.dataPanelY !== undefined) graph.dataPanelY = layout.dataPanelY;
             if (layout.dataPanelWidth !== undefined) graph.dataPanelWidth = layout.dataPanelWidth;
             if (layout.dataPanelHeight !== undefined) graph.dataPanelHeight = layout.dataPanelHeight;
+
+            if (layout.showJsonPanel !== undefined) graph.showJsonPanel = layout.showJsonPanel;
+            if (layout.jsonPanelX !== undefined) graph.jsonPanelX = layout.jsonPanelX;
+            if (layout.jsonPanelY !== undefined) graph.jsonPanelY = layout.jsonPanelY;
+            if (layout.jsonPanelWidth !== undefined) graph.jsonPanelWidth = layout.jsonPanelWidth;
+            if (layout.jsonPanelHeight !== undefined) graph.jsonPanelHeight = layout.jsonPanelHeight;
 
             if (layout.gridEnabled !== undefined) graph.gridEnabled = layout.gridEnabled;
             if (layout.gridSize !== undefined) graph.gridSize = layout.gridSize;

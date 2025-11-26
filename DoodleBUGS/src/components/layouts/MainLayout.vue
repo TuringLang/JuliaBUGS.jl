@@ -128,6 +128,11 @@ const toggleDataPanel = () => {
     }
 };
 
+const toggleJsonPanel = () => {
+    uiStore.setActiveRightTab('json');
+    uiStore.isRightSidebarOpen = true;
+};
+
 // Dark Mode Handling
 watch(isDarkMode, (val) => {
   const element = document.querySelector('html');
@@ -222,7 +227,7 @@ watch([isDataPanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) =>
                 // Sidebar is ~300px + 16px margin.
                 const leftSidebarOffset = isLeftSidebarOpen.value ? 320 : 20; 
                 
-                const targetScreenX = leftSidebarOffset + 20;
+                let targetScreenX = leftSidebarOffset + 20;
                 
                 // Top offset
                 const targetScreenY = 90;
@@ -383,6 +388,22 @@ const handleExportJson = () => {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+};
+
+const handleExportBugs = () => {
+  const content = generatedCode.value;
+  const file: GeneratedFile = { name: 'model.bugs', content: content };
+  
+  // Avoid duplicate file if already exists
+  const existing = executionStore.generatedFiles.filter(f => f.name !== 'model.bugs');
+  existing.unshift(file);
+  
+  executionStore.generatedFiles = existing;
+  executionStore.activeFileName = 'model.bugs';
+
+  uiStore.setActiveRightTab('connection');
+  uiStore.isRightSidebarOpen = true;
+  executionStore.setExecutionPanelTab('files');
 };
 
 const handleConfirmExport = (options: ExportOptions) => {
@@ -584,6 +605,8 @@ const handleGenerateStandalone = () => {
     const files = executionStore.generatedFiles.filter(f => f.name !== 'standalone.jl');
     files.unshift({ name: 'standalone.jl', content: script });
     executionStore.generatedFiles = files;
+    executionStore.activeFileName = 'standalone.jl';
+
     uiStore.setActiveRightTab('connection');
     isRightSidebarOpen.value = true;
     executionStore.setExecutionPanelTab('files');
@@ -1221,6 +1244,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         :current-node-type="currentNodeType"
         :show-code-panel="isCodePanelOpen"
         :show-data-panel="isDataPanelOpen"
+        :show-json-panel="false"
         :show-zoom-controls="showZoomControls"
         @update:current-mode="currentMode = $event"
         @update:current-node-type="currentNodeType = $event"
@@ -1232,7 +1256,8 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @layout-graph="handleGraphLayout"
         @toggle-code-panel="toggleCodePanel"
         @toggle-data-panel="toggleDataPanel"
-        @export-bugs="() => { /* handled via copy inside panel mostly */ }"
+        @toggle-json-panel="toggleJsonPanel"
+        @export-bugs="handleExportBugs"
         @export-standalone="handleGenerateStandalone"
     />
 
@@ -1471,7 +1496,9 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     background-color: var(--theme-bg-panel);
 }
 
-.code-content :deep(.code-preview-panel), .code-content :deep(.data-input-panel) {
+.code-content :deep(.code-preview-panel), 
+.code-content :deep(.data-input-panel),
+.code-content :deep(.json-editor-panel) {
     height: 100%;
     padding: 0;
 }

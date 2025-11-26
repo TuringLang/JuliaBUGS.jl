@@ -2,9 +2,8 @@
 import { type StyleValue } from 'vue';
 import { storeToRefs } from 'pinia';
 import NodePropertiesPanel from '../right-sidebar/NodePropertiesPanel.vue';
-import CodePreviewPanel from '../panels/CodePreviewPanel.vue';
-import JsonEditorPanel from '../right-sidebar/JsonEditorPanel.vue';
 import ExecutionPanel from '../right-sidebar/ExecutionPanel.vue';
+import JsonEditorPanel from '../right-sidebar/JsonEditorPanel.vue';
 import { useUiStore } from '../../stores/uiStore';
 import type { GraphElement, ValidationError } from '../../types';
 
@@ -61,9 +60,8 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
         
         <div class="sidebar-tabs text-tabs">
             <button :class="{ active: activeRightTab === 'properties' }" @click="uiStore.setActiveRightTab('properties')">Props</button>
-            <button :class="{ active: activeRightTab === 'code' }" @click="uiStore.setActiveRightTab('code')">Code</button>
             <button :class="{ active: activeRightTab === 'json' }" @click="uiStore.setActiveRightTab('json')">JSON</button>
-            <button :class="{ active: activeRightTab === 'connection' }" @click="uiStore.setActiveRightTab('connection')">Run</button>
+            <button :class="{ active: activeRightTab === 'connection' }" @click="uiStore.setActiveRightTab('connection')">Execution</button>
         </div>
 
         <div class="sidebar-content">
@@ -72,7 +70,6 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                 :validation-errors="validationErrors"
                 @update-element="$emit('update-element', $event)" 
                 @delete-element="$emit('delete-element', $event)" />
-            <CodePreviewPanel v-show="activeRightTab === 'code'" :is-active="activeRightTab === 'code'" />
             <JsonEditorPanel v-show="activeRightTab === 'json'" :is-active="activeRightTab === 'json'" />
             <ExecutionPanel v-show="activeRightTab === 'connection'" />
         </div>

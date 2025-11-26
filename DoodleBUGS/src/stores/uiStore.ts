@@ -7,8 +7,17 @@ export type GridStyle = 'dots' | 'lines';
 
 export const useUiStore = defineStore('ui', () => {
   // Right Sidebar State
-  const storedRight = localStorage.getItem('doodlebugs-activeRightTab') as RightSidebarTab | 'execution' | null;
-  const initialRightTab: RightSidebarTab = storedRight === 'execution' ? 'connection' : (storedRight as RightSidebarTab) || 'code';
+  const storedRight = localStorage.getItem('doodlebugs-activeRightTab') as string | null;
+  let initialRightTab: RightSidebarTab = 'properties';
+  
+  if (storedRight === 'execution') {
+      initialRightTab = 'connection';
+  } else if (storedRight === 'properties' || storedRight === 'code' || storedRight === 'connection' || storedRight === 'json') {
+      initialRightTab = storedRight as RightSidebarTab;
+  } else if (storedRight) {
+      initialRightTab = storedRight as RightSidebarTab;
+  }
+
   const activeRightTab = ref<RightSidebarTab>(initialRightTab);
   
   const isRightTabPinned = ref<boolean>(

@@ -9,6 +9,7 @@ const props = defineProps<{
   currentNodeType: NodeType;
   showCodePanel?: boolean;
   showDataPanel?: boolean;
+  showJsonPanel?: boolean;
   showZoomControls?: boolean;
 }>();
 
@@ -23,6 +24,7 @@ const emit = defineEmits<{
   (e: 'layout-graph', layout: string): void;
   (e: 'toggle-code-panel'): void;
   (e: 'toggle-data-panel'): void;
+  (e: 'toggle-json-panel'): void;
   (e: 'export-bugs'): void;
   (e: 'export-standalone'): void;
 }>();
@@ -305,7 +307,7 @@ onUnmounted(() => {
           <template #trigger>
               <button 
                 class="dock-btn" 
-                :class="{ active: showCodePanel }"
+                :class="{ active: showCodePanel || showJsonPanel }"
                 title="Code & Export" 
                 type="button"
               >
@@ -316,13 +318,16 @@ onUnmounted(() => {
               <a href="#" @click.prevent="$emit('toggle-code-panel')">
                   <i :class="showCodePanel ? 'fas fa-eye-slash' : 'fas fa-eye'" class="menu-icon"></i> {{ showCodePanel ? 'Hide Code' : 'Show Code' }}
               </a>
+              <a href="#" @click.prevent="$emit('toggle-json-panel')">
+                  <i class="fas fa-code menu-icon"></i> Open JSON
+              </a>
               <div class="dropdown-divider"></div>
               <div class="dropdown-section-title">Export</div>
               <a href="#" @click.prevent="$emit('export-bugs')">
                   <i class="fas fa-file-code menu-icon"></i> BUGS Model
               </a>
               <a href="#" @click.prevent="$emit('export-standalone')">
-                  <i class="fas fa-file-alt menu-icon"></i> Standalone Script
+                  <i class="fas fa-file-alt menu-icon"></i> Standalone Julia Script
               </a>
           </template>
       </DropdownMenu>
