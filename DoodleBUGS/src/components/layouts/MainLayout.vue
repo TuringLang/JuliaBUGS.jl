@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick, computed, onUnmounted } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import type { LayoutOptions, Core } from 'cytoscape';
 import GraphEditor from '../canvas/GraphEditor.vue';
@@ -33,6 +33,15 @@ interface ExportOptions {
   quality?: number;
   maxWidth?: number;
   maxHeight?: number;
+}
+
+interface RunResponse {
+  logs?: string[];
+  error?: string;
+  results?: Record<string, unknown>[];
+  summary?: Record<string, unknown>[];
+  quantiles?: Record<string, unknown>[];
+  files?: { name: string; content: string | object }[];
 }
 
 const projectStore = useProjectStore();
@@ -280,7 +289,8 @@ const handleExportJson = () => {
 };
 
 const handleConfirmExport = (options: ExportOptions) => {
-  const cy = (graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null) as any;
+  // Explicitly cast to Core, assuming custom method svg() exists via declaration merging
+  const cy = (graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null) as Core | null;
   if (!cy || !currentExportType.value) return;
   const fileName = `graph.${currentExportType.value}`;
   try {
@@ -289,6 +299,7 @@ const handleConfirmExport = (options: ExportOptions) => {
       const svgOptions = { bg: options.bg, full: options.full, scale: options.scale };
       blob = new Blob([cy.svg(svgOptions)], { type: 'image/svg+xml;charset=utf-8' });
     } else {
+      // Typings should support png/jpg on Core
       blob = cy[currentExportType.value]({ ...options, output: 'blob' });
     }
     const url = URL.createObjectURL(blob);
@@ -399,13 +410,16 @@ const runModel = async () => {
       });
     }
 
-    const result: any = await response.json();
+    const result = await response.json() as RunResponse;
     executionStore.executionLogs = result.logs ?? [];
     if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
 
-    executionStore.executionResults = result.results ?? result.summary ?? null;
-    executionStore.summaryResults = result.summary ?? null;
-    executionStore.quantileResults = result.quantiles ?? null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    executionStore.executionResults = (result.results ?? result.summary ?? null) as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    executionStore.summaryResults = (result.summary ?? null) as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    executionStore.quantileResults = (result.quantiles ?? null) as any;
 
     const frontendStandaloneScript = generateStandaloneScript({
       modelCode: generatedCode.value,
@@ -419,7 +433,7 @@ const runModel = async () => {
       }
     });
     const frontendStandaloneFile: GeneratedFile = { name: 'standalone.jl', content: frontendStandaloneScript };
-    const backendFiles = (result.files ?? []).filter((file: any) => file.name !== 'standalone.jl').map((file: any) => {
+    const backendFiles = (result.files ?? []).filter((file: {name: string}) => file.name !== 'standalone.jl').map((file: {name: string; content: string | object}) => {
       return {
           name: file.name,
           content: typeof file.content === 'string' ? file.content : JSON.stringify(file.content),

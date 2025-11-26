@@ -85,7 +85,7 @@ const copyCodeToClipboard = async () => {
     // Try modern API first
     await navigator.clipboard.writeText(text);
     triggerSuccess();
-  } catch (err) {
+  } catch {
     // Fallback to legacy API (often needed on iOS/mobile)
     const textArea = document.createElement("textarea");
     textArea.value = text;

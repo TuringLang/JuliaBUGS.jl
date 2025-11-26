@@ -18,7 +18,7 @@ import { useUiStore } from '../../stores/uiStore';
 import { useExecutionStore } from '../../stores/executionStore';
 import { storeToRefs } from 'pinia';
 
-const props = defineProps<{
+defineProps<{
   activeAccordionTabs: string[];
   projectName: string | null;
   pinnedGraphTitle: string | null;
@@ -28,7 +28,7 @@ const props = defineProps<{
   showDebugPanel: boolean;
 }>();
 
-const emit = defineEmits<{
+defineEmits<{
   (e: 'toggle-left-sidebar'): void;
   (e: 'new-project'): void;
   (e: 'new-graph'): void;

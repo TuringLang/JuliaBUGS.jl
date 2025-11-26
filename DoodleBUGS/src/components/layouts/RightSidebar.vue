@@ -8,13 +8,13 @@ import ExecutionPanel from '../right-sidebar/ExecutionPanel.vue';
 import { useUiStore } from '../../stores/uiStore';
 import type { GraphElement, ValidationError } from '../../types';
 
-const props = defineProps<{
+defineProps<{
   selectedElement: GraphElement | null;
   validationErrors: Map<string, ValidationError[]>;
   isModelValid: boolean;
 }>();
 
-const emit = defineEmits<{
+defineEmits<{
   (e: 'toggle-right-sidebar'): void;
   (e: 'update-element', element: GraphElement): void;
   (e: 'delete-element', elementId: string): void;

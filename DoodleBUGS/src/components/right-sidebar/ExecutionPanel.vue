@@ -275,7 +275,7 @@ const copyFileContent = async (fileName: string, content: string) => {
     // Try modern API first
     await navigator.clipboard.writeText(content);
     triggerFileSuccess(fileName);
-  } catch (err) {
+  } catch {
     // Fallback to legacy API
     const textArea = document.createElement("textarea");
     textArea.value = content;
