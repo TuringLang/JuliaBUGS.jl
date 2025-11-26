@@ -41,6 +41,7 @@ const emit = defineEmits<{
   (e: 'update:show-zoom-controls', value: boolean): void;
   (e: 'update:isGridEnabled', value: boolean): void;
   (e: 'update:gridSize', value: number): void;
+  (e: 'viewport-changed', value: { zoom: number, pan: { x: number, y: number } }): void;
 }>();
 
 const graphStore = useGraphStore();
@@ -325,7 +326,7 @@ watch(() => props.currentMode, (newMode) => {
       @node-dropped="handleNodeDropped"
       @element-remove="handleDeleteElement"
       @graph-updated="handleGraphUpdated"
-      @viewport-changed="(v) => graphStore.updateGraphViewport(props.graphId, v.zoom, v.pan)"
+      @viewport-changed="(v) => emit('viewport-changed', v)"
       @update:show-zoom-controls="(value: boolean) => emit('update:show-zoom-controls', value)"
     />
   </div>

@@ -105,8 +105,6 @@ export const useProjectStore = defineStore('project', () => {
         width: 600,
         height: 400,
         showCodePanel: false,
-        codePanelWidth: 400,
-        codePanelHeight: 400,
       };
       project.graphs.push(newGraphMeta);
       project.lastModified = Date.now();
@@ -159,13 +157,6 @@ export const useProjectStore = defineStore('project', () => {
             if (layout.gridEnabled !== undefined) graph.gridEnabled = layout.gridEnabled;
             if (layout.gridSize !== undefined) graph.gridSize = layout.gridSize;
             if (layout.gridStyle !== undefined) graph.gridStyle = layout.gridStyle;
-
-            if (graph.showCodePanel && graph.codePanelX === undefined) {
-                graph.codePanelX = graph.x + graph.width + 20;
-                graph.codePanelY = graph.y;
-                graph.codePanelWidth = 400;
-                graph.codePanelHeight = graph.height;
-            }
 
             if (shouldSave) {
               saveProjects();

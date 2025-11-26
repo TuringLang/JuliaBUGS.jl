@@ -34,11 +34,6 @@ export const useUiStore = defineStore('ui', () => {
     (localStorage.getItem('doodlebugs-canvasGridStyle') as GridStyle) || 'lines'
   );
 
-  // Code Panel State
-  const isCodePanelOpen = ref<boolean>(
-    localStorage.getItem('doodlebugs-isCodePanelOpen') === 'true'
-  );
-
   // Theme State
   const isDarkMode = ref<boolean>(localStorage.getItem('doodlebugs-darkMode') === 'true');
 
@@ -60,9 +55,6 @@ export const useUiStore = defineStore('ui', () => {
   });
   watch(canvasGridStyle, (style) => {
     localStorage.setItem('doodlebugs-canvasGridStyle', style);
-  });
-  watch(isCodePanelOpen, (isOpen) => {
-    localStorage.setItem('doodlebugs-isCodePanelOpen', String(isOpen));
   });
   watch(isDarkMode, (val) => {
     localStorage.setItem('doodlebugs-darkMode', String(val));
@@ -97,10 +89,6 @@ export const useUiStore = defineStore('ui', () => {
     isLeftSidebarOpen.value = !isLeftSidebarOpen.value;
   };
 
-  const toggleCodePanel = () => {
-    isCodePanelOpen.value = !isCodePanelOpen.value;
-  };
-
   const toggleDarkMode = () => {
     isDarkMode.value = !isDarkMode.value;
   };
@@ -117,8 +105,6 @@ export const useUiStore = defineStore('ui', () => {
     handleLeftTabClick,
     toggleLeftSidebar,
     canvasGridStyle,
-    isCodePanelOpen,
-    toggleCodePanel,
     isDarkMode,
     toggleDarkMode
   };

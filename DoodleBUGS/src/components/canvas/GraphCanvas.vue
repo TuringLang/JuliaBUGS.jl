@@ -132,6 +132,22 @@ const getSerializedElements = (): GraphElement[] => {
     });
 };
 
+const updateGridStyle = () => {
+    if (!cyContainer.value || !cy) return;
+    
+    if (props.isGridEnabled && props.gridSize > 0) {
+        const pan = cy.pan();
+        const zoom = cy.zoom();
+        const scaledSize = props.gridSize * zoom;
+        
+        cyContainer.value.style.backgroundPosition = `${pan.x}px ${pan.y}px`;
+        cyContainer.value.style.backgroundSize = `${scaledSize}px ${scaledSize}px`;
+    } else {
+        cyContainer.value.style.backgroundPosition = '';
+        cyContainer.value.style.backgroundSize = '';
+    }
+};
+
 onMounted(() => {
   if (cyContainer.value) {
     cy = initCytoscape(cyContainer.value, [], props.graphId);
@@ -146,6 +162,8 @@ onMounted(() => {
     } else {
       disableGridSnapping();
     }
+    
+    updateGridStyle();
 
     const ur = getUndoRedoInstance(props.graphId);
     if (ur) {
@@ -157,16 +175,20 @@ onMounted(() => {
 
     cy.on('layoutstop', () => {
         emit('graph-updated', getSerializedElements());
+        updateGridStyle();
     });
 
-    let viewportTimeout: ReturnType<typeof setTimeout>;
+    let rafId: number | null = null;
     const emitViewport = () => {
         if (!cy) return;
+        updateGridStyle();
         emit('viewport-changed', { zoom: cy.zoom(), pan: cy.pan() });
+        rafId = null;
     };
     cy.on('pan zoom', () => {
-        clearTimeout(viewportTimeout);
-        viewportTimeout = setTimeout(emitViewport, 300);
+        if (rafId === null) {
+            rafId = requestAnimationFrame(emitViewport);
+        }
     });
 
     cy.container()?.addEventListener('cxt-remove', (event: Event) => {
@@ -239,6 +261,7 @@ onMounted(() => {
             if (props.initialViewport) {
                 cy.zoom(props.initialViewport.zoom);
                 cy.pan(props.initialViewport.pan);
+                updateGridStyle();
                 isGraphVisible.value = true;
             } else {
                 if (props.elements.length > 0) {
@@ -248,12 +271,16 @@ onMounted(() => {
                             cy.zoom(0.8);
                             cy.center();
                         }
+                        updateGridStyle();
                         isGraphVisible.value = true;
                     }
                 } else {
+                    updateGridStyle();
                     isGraphVisible.value = true;
                 }
             }
+        } else {
+            updateGridStyle();
         }
       }
     });
@@ -274,8 +301,13 @@ onUnmounted(() => {
 watch(() => props.isGridEnabled, (newValue: boolean) => {
   if (newValue) {
     enableGridSnapping();
+    updateGridStyle();
   } else {
     disableGridSnapping();
+    if (cyContainer.value) {
+        cyContainer.value.style.backgroundPosition = '';
+        cyContainer.value.style.backgroundSize = '';
+    }
   }
 });
 
@@ -283,6 +315,7 @@ watch(() => props.gridSize, (newValue: number) => {
   setGridSize(newValue);
   if (props.isGridEnabled) {
     enableGridSnapping();
+    updateGridStyle();
   }
 });
 
@@ -305,7 +338,6 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
       'graph-ready': isGraphVisible
     }"
     :style="{ 
-        '--grid-size': `${gridSize}px`,
         'transition': isGraphVisible ? 'opacity 0.3s ease-in-out' : 'none'
     }"
   ></div>
@@ -319,6 +351,8 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
   overflow: hidden;
   cursor: grab;
   opacity: 0;
+  background-position: 0 0; 
+  background-repeat: repeat;
 }
 
 .cytoscape-container.graph-ready {
@@ -351,13 +385,11 @@ watch([() => props.elements, () => props.validationErrors], ([newElements, newEr
 
 .cytoscape-container.grid-background.grid-dots {
   background-image: radial-gradient(circle, var(--theme-grid-line) 1px, transparent 1px) !important;
-  background-size: var(--grid-size) var(--grid-size) !important;
 }
 
 .cytoscape-container.grid-background.grid-lines {
   background-image:
     linear-gradient(to right, var(--theme-grid-line) 1px, transparent 1px),
     linear-gradient(to bottom, var(--theme-grid-line) 1px, transparent 1px) !important;
-  background-size: var(--grid-size) var(--grid-size) !important;
 }
 </style>

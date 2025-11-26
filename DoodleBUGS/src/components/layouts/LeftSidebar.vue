@@ -26,6 +26,7 @@ defineProps<{
   gridSize: number;
   showZoomControls: boolean;
   showDebugPanel: boolean;
+  isCodePanelOpen: boolean;
 }>();
 
 defineEmits<{
@@ -52,7 +53,7 @@ defineEmits<{
 
 const uiStore = useUiStore();
 const executionStore = useExecutionStore();
-const { isLeftSidebarOpen, canvasGridStyle, isCodePanelOpen, isDarkMode } = storeToRefs(uiStore);
+const { isLeftSidebarOpen, canvasGridStyle, isDarkMode } = storeToRefs(uiStore);
 const { isConnected, isConnecting, isExecuting } = storeToRefs(executionStore);
 
 import { ref } from 'vue';

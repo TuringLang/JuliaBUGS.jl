@@ -24,7 +24,7 @@ import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGraphValidator } from '../../composables/useGraphValidator';
 import { useBugsCodeGenerator, generateStandaloneScript } from '../../composables/useBugsCodeGenerator';
 import type { GraphElement, NodeType, ExampleModel } from '../../types';
-import type { GeneratedFile } from '../../stores/executionStore';
+import type { GeneratedFile, ExecutionResult } from '../../stores/executionStore';
 
 interface ExportOptions {
   bg: string;
@@ -56,7 +56,7 @@ const { generatedCode } = useBugsCodeGenerator(elements);
 const { getCyInstance, getUndoRedoInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
 const { backendUrl, isConnected, isConnecting, isExecuting, samplerSettings } = storeToRefs(executionStore);
-const { isLeftSidebarOpen, isRightSidebarOpen, canvasGridStyle, isCodePanelOpen, isDarkMode } = storeToRefs(uiStore);
+const { isLeftSidebarOpen, isRightSidebarOpen, canvasGridStyle, isDarkMode } = storeToRefs(uiStore);
 
 const currentMode = ref<string>('select');
 const currentNodeType = ref<NodeType>('stochastic');
@@ -80,6 +80,9 @@ const showDebugPanel = ref(false);
 const showExportModal = ref(false);
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null);
 
+// Local viewport state for smooth UI updates
+const viewportState = ref({ zoom: 1, pan: { x: 0, y: 0 } });
+
 // Computed property for validation status
 const isModelValid = computed(() => validationErrors.value.size === 0);
 
@@ -89,6 +92,23 @@ const pinnedGraphTitle = computed(() => {
     const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
     return graph ? graph.name : null;
 });
+
+// Code Panel Visibility (Per-Graph State)
+const isCodePanelOpen = computed(() => {
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return false;
+    const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+    return !!graph?.showCodePanel;
+});
+
+const toggleCodePanel = () => {
+    if (!projectStore.currentProject || !graphStore.currentGraphId) return;
+    const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+    if (graph) {
+        projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+            showCodePanel: !graph.showCodePanel
+        });
+    }
+};
 
 // Dark Mode Handling
 watch(isDarkMode, (val) => {
@@ -121,25 +141,52 @@ onMounted(async () => {
   }
 });
 
+// Sync viewport state when graph changes
+watch(() => graphStore.currentGraphId, (newId) => {
+    if (newId) {
+        const content = graphStore.graphContents.get(newId);
+        if (content) {
+            viewportState.value = {
+                zoom: content.zoom ?? 1,
+                pan: content.pan ?? { x: 0, y: 0 }
+            };
+        }
+    }
+}, { immediate: true });
+
+// Initialize Code Panel Position if missing
 watch([isCodePanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) => {
     if (isOpen && graphId && projectStore.currentProject) {
         const graph = projectStore.currentProject.graphs.find(g => g.id === graphId);
+        
         if (graph) {
-            const hasValidPosition = graph.codePanelX !== undefined && graph.codePanelY !== undefined;
-            if (!hasValidPosition || (graph.codePanelX === 100 && graph.codePanelY === 100)) {
-                const viewportW = window.innerWidth;
-                const rightSidebarW = 340; // Approx with margin
-                const panelW = graph.codePanelWidth || 400;
-                const panelH = graph.codePanelHeight || 400;
-                const topMargin = 80;
+            const needsInit = graph.codePanelX === undefined || graph.codePanelY === undefined;
+            if (needsInit) {
+                const zoom = viewportState.value.zoom;
+                const pan = viewportState.value.pan;
                 
-                // Position to the right, clearing the right sidebar if possible
-                let targetX = viewportW - rightSidebarW - panelW - 20;
-                if (targetX < 100) targetX = (viewportW - panelW) / 2;
+                // Simple default dimensions
+                const panelW = 400;
+                const panelH = 300;
+                
+                // Position on the RIGHT side relative to the graph view
+                const viewportW = window.innerWidth;
+                // Sidebar is ~320px + 16px margin = 336px.
+                const rightSidebarOffset = isRightSidebarOpen.value ? 340 : 20; 
+                
+                let targetScreenX = viewportW - rightSidebarOffset - panelW - 10;
+                if (targetScreenX < 20) targetScreenX = 20; // Safety check
+                
+                // Top offset
+                const targetScreenY = 90;
+
+                // Convert Screen Coordinates to Model Coordinates
+                const modelX = (targetScreenX - pan.x) / zoom;
+                const modelY = (targetScreenY - pan.y) / zoom;
                 
                 projectStore.updateGraphLayout(projectStore.currentProject.id, graphId, {
-                    codePanelX: targetX,
-                    codePanelY: topMargin,
+                    codePanelX: modelX,
+                    codePanelY: modelY,
                     codePanelWidth: panelW,
                     codePanelHeight: panelH
                 });
@@ -154,6 +201,21 @@ const handleLayoutUpdated = (layoutName: string) => {
   }
 };
 
+let saveViewportTimeout: ReturnType<typeof setTimeout> | null = null;
+
+const handleViewportChanged = (v: { zoom: number, pan: { x: number, y: number } }) => {
+    // Update local state immediately for smooth UI
+    viewportState.value = v;
+    
+    // Debounce persistence
+    if (saveViewportTimeout) clearTimeout(saveViewportTimeout);
+    saveViewportTimeout = setTimeout(() => {
+        if (graphStore.currentGraphId) {
+            graphStore.updateGraphViewport(graphStore.currentGraphId, v.zoom, v.pan);
+        }
+    }, 500);
+}
+
 const smartFit = (cy: Core, animate: boolean = true) => {
     const eles = cy.elements();
     if (eles.length === 0) return;
@@ -165,15 +227,11 @@ const smartFit = (cy: Core, animate: boolean = true) => {
     
     if (bb.w === 0 || bb.h === 0) return;
 
-    // Calculate zoom to fit
     const zoomX = (w - 2 * padding) / bb.w;
     const zoomY = (h - 2 * padding) / bb.h;
     let targetZoom = Math.min(zoomX, zoomY);
-    
-    // Cap zoom to avoid overly large graph on big screens
     targetZoom = Math.min(targetZoom, 0.8);
     
-    // Calculate center pan for the target zoom
     const targetPan = {
         x: (w - targetZoom * (bb.x1 + bb.x2)) / 2,
         y: (h - targetZoom * (bb.y1 + bb.y2)) / 2
@@ -195,15 +253,13 @@ const handleGraphLayout = (layoutName: string) => {
     const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null;
     if (!cy) return;
     
-    /* eslint-disable @typescript-eslint/no-explicit-any */
     const layoutOptionsMap: Record<string, LayoutOptions> = {
-        dagre: { name: 'dagre', animate: true, animationDuration: 500, fit: false, padding: 50 } as any,
-        fcose: { name: 'fcose', animate: true, animationDuration: 500, fit: false, padding: 50, randomize: false, quality: 'proof' } as any,
-        cola: { name: 'cola', animate: true, fit: false, padding: 50, refresh: 1, avoidOverlap: true, infinite: false, centerGraph: true, flow: { axis: 'y', minSeparation: 30 }, handleDisconnected: false, randomize: false } as any,
-        klay: { name: 'klay', animate: true, animationDuration: 500, fit: false, padding: 50, klay: { direction: 'RIGHT', edgeRouting: 'SPLINES', nodePlacement: 'LINEAR_SEGMENTS' } } as any,
-        preset: { name: 'preset', fit: false, padding: 50 } as any
+        dagre: { name: 'dagre', animate: true, animationDuration: 500, fit: false, padding: 50 } as unknown as LayoutOptions,
+        fcose: { name: 'fcose', animate: true, animationDuration: 500, fit: false, padding: 50, randomize: false, quality: 'proof' } as unknown as LayoutOptions,
+        cola: { name: 'cola', animate: true, fit: false, padding: 50, refresh: 1, avoidOverlap: true, infinite: false, centerGraph: true, flow: { axis: 'y', minSeparation: 30 }, handleDisconnected: false, randomize: false } as unknown as LayoutOptions,
+        klay: { name: 'klay', animate: true, animationDuration: 500, fit: false, padding: 50, klay: { direction: 'RIGHT', edgeRouting: 'SPLINES', nodePlacement: 'LINEAR_SEGMENTS' } } as unknown as LayoutOptions,
+        preset: { name: 'preset', fit: false, padding: 50 } as unknown as LayoutOptions
     };
-    /* eslint-enable @typescript-eslint/no-explicit-any */
     
     const options = layoutOptionsMap[layoutName] || layoutOptionsMap.preset;
     
@@ -297,10 +353,8 @@ const handleConfirmExport = (options: ExportOptions) => {
     
     if (currentExportType.value === 'svg') {
       const svgOptions = { bg: options.bg, full: options.full, scale: options.scale };
-      // The svg() method is added via module augmentation in types/index.ts
       blob = new Blob([cy.svg(svgOptions)], { type: 'image/svg+xml;charset=utf-8' });
     } else {
-      // Handle png/jpg with correct types
       const baseOptions = {
         bg: options.bg,
         full: options.full,
@@ -311,10 +365,9 @@ const handleConfirmExport = (options: ExportOptions) => {
       };
       
       if (currentExportType.value === 'png') {
-        blob = cy.png(baseOptions);
+        blob = cy.png(baseOptions) as unknown as Blob;
       } else {
-        // JPG options include quality
-        blob = cy.jpg({ ...baseOptions, quality: options.quality });
+        blob = cy.jpg({ ...baseOptions, quality: options.quality }) as unknown as Blob;
       }
     }
     
@@ -431,12 +484,9 @@ const runModel = async () => {
     executionStore.executionLogs = result.logs ?? [];
     if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    executionStore.executionResults = (result.results ?? result.summary ?? null) as any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    executionStore.summaryResults = (result.summary ?? null) as any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    executionStore.quantileResults = (result.quantiles ?? null) as any;
+    executionStore.executionResults = (result.results ?? result.summary ?? null) as unknown as ExecutionResult[] | null;
+    executionStore.summaryResults = (result.summary ?? null) as unknown as ExecutionResult[] | null;
+    executionStore.quantileResults = (result.quantiles ?? null) as unknown as ExecutionResult[] | null;
 
     const frontendStandaloneScript = generateStandaloneScript({
       modelCode: generatedCode.value,
@@ -587,6 +637,7 @@ const isDraggingCode = ref(false);
 const dragStartCode = ref({ x: 0, y: 0 });
 const initialPanelPos = ref({ x: 0, y: 0 });
 
+// When dragging starts, we capture the current Zoom/Pan state
 const startDragCodeTouch = (e: TouchEvent) => {
     if (!projectStore.currentProject || !graphStore.currentGraphId) return;
     const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
@@ -595,9 +646,11 @@ const startDragCodeTouch = (e: TouchEvent) => {
     isDraggingCode.value = true;
     const touch = e.touches[0];
     dragStartCode.value = { x: touch.clientX, y: touch.clientY };
+    
+    // We store the current MODEL coordinates
     initialPanelPos.value = { 
-        x: graph.codePanelX ?? (window.innerWidth - 420), 
-        y: graph.codePanelY ?? 80 
+        x: graph.codePanelX ?? 0,
+        y: graph.codePanelY ?? 0
     };
     
     window.addEventListener('touchmove', onDragCodeTouch, { passive: false });
@@ -606,15 +659,23 @@ const startDragCodeTouch = (e: TouchEvent) => {
 
 const onDragCodeTouch = (e: TouchEvent) => {
     if (!isDraggingCode.value) return;
-    e.preventDefault(); // Prevent scrolling while dragging panel
+    e.preventDefault();
     const touch = e.touches[0];
+    
+    const zoom = viewportState.value.zoom;
+    
+    // Screen delta
     const dx = touch.clientX - dragStartCode.value.x;
     const dy = touch.clientY - dragStartCode.value.y;
     
+    // Convert screen delta to model delta
+    const modelDx = dx / zoom;
+    const modelDy = dy / zoom;
+    
     if (projectStore.currentProject && graphStore.currentGraphId) {
         projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
-            codePanelX: initialPanelPos.value.x + dx,
-            codePanelY: initialPanelPos.value.y + dy
+            codePanelX: initialPanelPos.value.x + modelDx,
+            codePanelY: initialPanelPos.value.y + modelDy
         }, false);
     }
 };
@@ -635,8 +696,8 @@ const startDragCode = (e: MouseEvent) => {
     isDraggingCode.value = true;
     dragStartCode.value = { x: e.clientX, y: e.clientY };
     initialPanelPos.value = { 
-        x: graph.codePanelX ?? (window.innerWidth - 420), 
-        y: graph.codePanelY ?? 80 
+        x: graph.codePanelX ?? 0,
+        y: graph.codePanelY ?? 0
     };
     
     window.addEventListener('mousemove', onDragCode);
@@ -645,13 +706,20 @@ const startDragCode = (e: MouseEvent) => {
 
 const onDragCode = (e: MouseEvent) => {
     if (!isDraggingCode.value) return;
+    
+    const zoom = viewportState.value.zoom;
+    
     const dx = e.clientX - dragStartCode.value.x;
     const dy = e.clientY - dragStartCode.value.y;
     
+    // Convert to model delta
+    const modelDx = dx / zoom;
+    const modelDy = dy / zoom;
+    
     if (projectStore.currentProject && graphStore.currentGraphId) {
         projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
-            codePanelX: initialPanelPos.value.x + dx,
-            codePanelY: initialPanelPos.value.y + dy
+            codePanelX: initialPanelPos.value.x + modelDx,
+            codePanelY: initialPanelPos.value.y + modelDy
         }, false);
     }
 };
@@ -668,15 +736,24 @@ const getCodePanelStyle = computed(() => {
     const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
     if (!graph) return {};
     
+    const zoom = viewportState.value.zoom;
+    const pan = viewportState.value.pan;
+    const modelX = graph.codePanelX ?? 0;
+    const modelY = graph.codePanelY ?? 0;
+    
+    // Convert Model -> Screen
+    const screenX = modelX * zoom + pan.x;
+    const screenY = modelY * zoom + pan.y;
+    
     return {
-        left: `${graph.codePanelX ?? (window.innerWidth - 420)}px`,
-        top: `${graph.codePanelY ?? 80}px`,
+        left: `${screenX}px`,
+        top: `${screenY}px`,
         width: `${graph.codePanelWidth ?? 400}px`,
         height: `${graph.codePanelHeight ?? 400}px`
     };
 });
 
-// Resize Code Panel Logic
+// Resize Code Panel Logic (remains in pixels/screen coords)
 const isResizingCode = ref(false);
 const initialPanelSize = ref({ width: 0, height: 0 });
 
@@ -703,7 +780,7 @@ const onResizeCode = (e: MouseEvent) => {
     const dy = e.clientY - dragStartCode.value.y;
     
     const newWidth = Math.max(300, initialPanelSize.value.width + dx);
-    const newHeight = Math.max(200, initialPanelSize.value.height + dy);
+    const newHeight = Math.max(150, initialPanelSize.value.height + dy);
 
     if (projectStore.currentProject && graphStore.currentGraphId) {
         projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
@@ -746,7 +823,7 @@ const onResizeCodeTouch = (e: TouchEvent) => {
     const dy = touch.clientY - dragStartCode.value.y;
     
     const newWidth = Math.max(300, initialPanelSize.value.width + dx);
-    const newHeight = Math.max(200, initialPanelSize.value.height + dy);
+    const newHeight = Math.max(150, initialPanelSize.value.height + dy);
 
     if (projectStore.currentProject && graphStore.currentGraphId) {
         projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
@@ -793,6 +870,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @update:current-node-type="currentNodeType = $event"
         @element-selected="handleElementSelected"
         @layout-updated="handleLayoutUpdated"
+        @viewport-changed="handleViewportChanged"
       />
       <div v-else class="empty-state">
         <p>No graph selected. Create or select a graph to start.</p>
@@ -809,6 +887,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         :gridSize="gridSize"
         :showZoomControls="showZoomControls"
         :showDebugPanel="showDebugPanel"
+        :isCodePanelOpen="isCodePanelOpen"
         @toggle-left-sidebar="toggleLeftSidebar"
         @new-project="showNewProjectModal = true"
         @new-graph="showNewGraphModal = true"
@@ -818,7 +897,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @update:gridSize="gridSize = $event"
         @update:showZoomControls="showZoomControls = $event"
         @update:showDebugPanel="showDebugPanel = $event"
-        @toggle-code-panel="uiStore.toggleCodePanel"
+        @toggle-code-panel="toggleCodePanel"
         @load-example="handleLoadExample"
         @open-export-modal="openExportModal"
         @export-json="handleExportJson"
@@ -892,7 +971,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     >
         <div class="graph-header code-header">
             <span class="graph-title"><i class="fas fa-code"></i> BUGS Code Preview</span>
-            <button class="close-btn" @click="uiStore.toggleCodePanel()" @touchstart.stop="uiStore.toggleCodePanel()"><i class="fas fa-times"></i></button>
+            <button class="close-btn" @click="toggleCodePanel()" @touchstart.stop="toggleCodePanel()"><i class="fas fa-times"></i></button>
         </div>
         <div class="code-content">
             <CodePreviewPanel :is-active="true" />
@@ -918,7 +997,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @zoom-out="handleZoomOut"
         @fit="handleFit"
         @layout-graph="handleGraphLayout"
-        @toggle-code-panel="uiStore.toggleCodePanel"
+        @toggle-code-panel="toggleCodePanel"
         @export-bugs="() => { /* handled via copy inside panel mostly */ }"
         @export-standalone="handleGenerateStandalone"
     />
@@ -1238,3 +1317,4 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     }
 }
 </style>
+
