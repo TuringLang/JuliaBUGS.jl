@@ -227,7 +227,7 @@ watch([isDataPanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) =>
                 // Sidebar is ~300px + 16px margin.
                 const leftSidebarOffset = isLeftSidebarOpen.value ? 320 : 20; 
                 
-                const targetScreenX = leftSidebarOffset + 20;
+                let targetScreenX = leftSidebarOffset + 20;
                 
                 // Top offset
                 const targetScreenY = 90;
@@ -1194,12 +1194,13 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
          ref="codePanelRef"
          class="code-panel-floating glass-panel"
          :style="getCodePanelStyle"
-         @mousedown="startDragCode"
-         @touchstart="startDragCodeTouch"
     >
-        <div class="graph-header code-header">
+        <div class="graph-header code-header"
+             @mousedown="startDragCode"
+             @touchstart="startDragCodeTouch"
+        >
             <span class="graph-title"><i class="fas fa-code"></i> BUGS Code Preview</span>
-            <button class="close-btn" @click="toggleCodePanel()" @touchstart.stop="toggleCodePanel()"><i class="fas fa-times"></i></button>
+            <button class="close-btn" @click="toggleCodePanel()" @touchstart.stop="toggleCodePanel()" @mousedown.stop><i class="fas fa-times"></i></button>
         </div>
         <div class="code-content">
             <CodePreviewPanel :is-active="true" />
@@ -1217,16 +1218,17 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
          ref="dataPanelRef"
          class="code-panel-floating glass-panel"
          :style="getDataPanelStyle"
-         @mousedown="startDragData"
-         @touchstart="startDragDataTouch"
     >
-        <div class="graph-header code-header">
+        <div class="graph-header code-header"
+             @mousedown="startDragData"
+             @touchstart="startDragDataTouch"
+        >
             <span class="graph-title"><i class="fas fa-database"></i> Data & Inits</span>
             <div class="panel-switcher">
-                 <button :class="{active: dataStore.inputMode === 'json'}" @click="dataStore.inputMode = 'json'">JSON</button>
-                 <button :class="{active: dataStore.inputMode === 'julia'}" @click="dataStore.inputMode = 'julia'">Julia</button>
+                 <button :class="{active: dataStore.inputMode === 'json'}" @click="dataStore.inputMode = 'json'" @mousedown.stop @touchstart.stop>JSON</button>
+                 <button :class="{active: dataStore.inputMode === 'julia'}" @click="dataStore.inputMode = 'julia'" @mousedown.stop @touchstart.stop>Julia</button>
             </div>
-            <button class="close-btn" @click="toggleDataPanel()" @touchstart.stop="toggleDataPanel()"><i class="fas fa-times"></i></button>
+            <button class="close-btn" @click="toggleDataPanel()" @touchstart.stop="toggleDataPanel()" @mousedown.stop><i class="fas fa-times"></i></button>
         </div>
         <div class="code-content">
             <DataInputPanel :is-active="true" />
