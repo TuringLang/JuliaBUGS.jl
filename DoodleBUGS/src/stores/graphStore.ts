@@ -7,6 +7,8 @@ export interface GraphContent {
   graphId: string;
   elements: GraphElement[];
   lastLayout?: string;
+  zoom?: number;
+  pan?: { x: number; y: number };
 }
 
 export const useGraphStore = defineStore('graph', () => {
@@ -80,6 +82,15 @@ export const useGraphStore = defineStore('graph', () => {
     }
   };
 
+  const updateGraphViewport = (graphId: string, zoom: number, pan: { x: number; y: number }) => {
+    if (graphContents.value.has(graphId)) {
+      const content = graphContents.value.get(graphId)!;
+      content.zoom = zoom;
+      content.pan = pan;
+      saveGraph(graphId, content);
+    }
+  };
+
   const deleteGraphContent = (graphId: string) => {
     graphContents.value.delete(graphId);
     localStorage.removeItem(`doodlebugs-graph-${graphId}`);
@@ -115,6 +126,7 @@ export const useGraphStore = defineStore('graph', () => {
     createNewGraphContent,
     updateGraphElements,
     updateGraphLayout,
+    updateGraphViewport,
     deleteGraphContent,
     saveGraph,
     loadGraph,

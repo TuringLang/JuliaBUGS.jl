@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import type { NodeSingular, EventObject, Core } from 'cytoscape';
 import GraphCanvas from './GraphCanvas.vue';
 import { useGraphElements } from '../../composables/useGraphElements';
 import { useGraphInstance } from '../../composables/useGraphInstance';
+import { useGraphStore } from '../../stores/graphStore';
 import type { GraphElement, GraphNode, GraphEdge, NodeType, ValidationError } from '../../types';
 import type { GridStyle } from '../../stores/uiStore';
 import { getDefaultNodeData } from '../../config/nodeDefinitions';
@@ -42,8 +43,19 @@ const emit = defineEmits<{
   (e: 'update:gridSize', value: number): void;
 }>();
 
+const graphStore = useGraphStore();
 const { elements: graphElements, addElement, updateElement, deleteElement } = useGraphElements(props.graphId);
 const { getCyInstance, getUndoRedoInstance } = useGraphInstance();
+
+const initialViewport = computed(() => {
+    if (props.graphId && graphStore.graphContents.has(props.graphId)) {
+        const content = graphStore.graphContents.get(props.graphId);
+        if (content && content.zoom !== undefined && content.pan) {
+            return { zoom: content.zoom, pan: content.pan };
+        }
+    }
+    return undefined;
+});
 
 const handleGraphUpdated = (newElements: GraphElement[]) => {
     graphElements.value = newElements;
@@ -307,11 +319,13 @@ watch(() => props.currentMode, (newMode) => {
       :current-mode="props.currentMode"
       :validation-errors="props.validationErrors"
       :show-zoom-controls="props.showZoomControls"
+      :initial-viewport="initialViewport"
       @canvas-tap="handleCanvasTap"
       @node-moved="handleNodeMoved"
       @node-dropped="handleNodeDropped"
       @element-remove="handleDeleteElement"
       @graph-updated="handleGraphUpdated"
+      @viewport-changed="(v) => graphStore.updateGraphViewport(props.graphId, v.zoom, v.pan)"
       @update:show-zoom-controls="(value: boolean) => emit('update:show-zoom-controls', value)"
     />
   </div>

@@ -15,6 +15,7 @@ const props = defineProps<{
   currentMode: string;
   validationErrors: Map<string, ValidationError[]>;
   showZoomControls?: boolean;
+  initialViewport?: { zoom: number; pan: { x: number; y: number } };
 }>();
 
 const emit = defineEmits<{
@@ -25,6 +26,7 @@ const emit = defineEmits<{
   (e: 'element-remove', elementId: string): void;
   (e: 'update:show-zoom-controls', value: boolean): void;
   (e: 'graph-updated', elements: GraphElement[]): void;
+  (e: 'viewport-changed', viewport: { zoom: number; pan: { x: number; y: number } }): void;
 }>();
 
 const cyContainer = ref<HTMLElement | null>(null);
@@ -92,7 +94,8 @@ const syncGraphWithProps = (elementsToSync: GraphElement[], errorsToSync: Map<st
         if (formattedEl.group === 'nodes') {
           const newNode = formattedEl as ElementDefinition & { position: {x: number, y: number} };
           const currentCyPos = existingCyEl.position();
-          if (newNode.position.x !== currentCyPos.x || newNode.position.y !== currentCyPos.y) {
+          // Only update position if significantly different to avoid fighting with layout/drag
+          if (Math.abs(newNode.position.x - currentCyPos.x) > 0.01 || Math.abs(newNode.position.y - currentCyPos.y) > 0.01) {
             existingCyEl.position(newNode.position);
           }
           const parentCollection = existingCyEl.parent();
@@ -105,6 +108,30 @@ const syncGraphWithProps = (elementsToSync: GraphElement[], errorsToSync: Map<st
       }
     });
   });
+};
+
+const getSerializedElements = (): GraphElement[] => {
+    if (!cy) return [];
+    return cy.elements().toArray().map((ele) => {
+        const data = ele.data();
+        if (ele.isNode()) {
+            const parentCollection = ele.parent();
+            const parentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined;
+            return {
+                ...data,
+                type: 'node',
+                position: ele.position(),
+                parent: parentId,
+            } as GraphNode;
+        } else {
+            return {
+                ...data,
+                type: 'edge',
+                source: ele.source().id(),
+                target: ele.target().id(),
+            } as GraphEdge;
+        }
+    });
 };
 
 onMounted(() => {
@@ -127,29 +154,25 @@ onMounted(() => {
     if (ur) {
       cy.on('afterUndo afterRedo afterDo', () => {
         if (!cy) return;
-        const allElements: GraphElement[] = cy.elements().toArray().map((ele) => {
-          const data = ele.data();
-          if (ele.isNode()) {
-            const parentCollection = ele.parent();
-            const parentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined;
-            return {
-              ...data,
-              type: 'node',
-              position: ele.position(),
-              parent: parentId,
-            } as GraphNode;
-          } else {
-            return {
-              ...data,
-              type: 'edge',
-              source: ele.source().id(),
-              target: ele.target().id(),
-            } as GraphEdge;
-          }
-        });
-        emit('graph-updated', allElements);
+        emit('graph-updated', getSerializedElements());
       });
     }
+
+    // Save positions after layout finishes
+    cy.on('layoutstop', () => {
+        emit('graph-updated', getSerializedElements());
+    });
+
+    // Debounce viewport updates
+    let viewportTimeout: ReturnType<typeof setTimeout>;
+    const emitViewport = () => {
+        if (!cy) return;
+        emit('viewport-changed', { zoom: cy.zoom(), pan: cy.pan() });
+    };
+    cy.on('pan zoom', () => {
+        clearTimeout(viewportTimeout);
+        viewportTimeout = setTimeout(emitViewport, 300);
+    });
 
     cy.container()?.addEventListener('cxt-remove', (event: Event) => {
         const customEvent = event as CustomEvent;
@@ -217,21 +240,27 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(() => {
       if (cy) {
         cy.resize();
-        // Initial fit logic
+        // Initial fit/restore logic
         if (!isGraphVisible.value) {
-            // If we have elements, fit them then show
-            if (props.elements.length > 0) {
-                if (cy.width() > 0 && cy.height() > 0) {
-                    cy.fit(undefined, 50);
-                    if (cy.zoom() > 0.8) {
-                        cy.zoom(0.8);
-                        cy.center();
+            if (props.initialViewport) {
+                cy.zoom(props.initialViewport.zoom);
+                cy.pan(props.initialViewport.pan);
+                isGraphVisible.value = true;
+            } else {
+                // Only fit if we have elements and no stored viewport
+                if (props.elements.length > 0) {
+                    if (cy.width() > 0 && cy.height() > 0) {
+                        cy.fit(undefined, 50);
+                        if (cy.zoom() > 0.8) {
+                            cy.zoom(0.8);
+                            cy.center();
+                        }
+                        isGraphVisible.value = true;
                     }
+                } else {
+                    // If empty, just show immediately
                     isGraphVisible.value = true;
                 }
-            } else {
-                // If empty, just show immediately
-                isGraphVisible.value = true;
             }
         }
       }
@@ -265,6 +294,7 @@ watch(() => props.gridSize, (newValue: number) => {
   }
 });
 
+// Watch for elements/errors changes
 watch([() => props.elements, () => props.validationErrors], ([newElements, newErrors]) => {
   syncGraphWithProps(newElements, newErrors);
 }, { deep: true });
