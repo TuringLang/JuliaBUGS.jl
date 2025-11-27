@@ -37,10 +37,37 @@ npm run build
 npm run preview
 ```
 
+### Linting and Formatting
+
+````sh
+# Run ESLint check
+npm run lint
+``
+
+```sh
+# Run ESLint with auto-fix
+npm run lint:fix
+````
+
+```sh
+# Format all files with Prettier
+npm run format
+```
+
+```sh
+# Check formatting (without modifying)
+npm run format:check
+```
+
+```sh
+# Run type checking
+npm run type-check
+```
+
 For more information, questions, or to get involved, please contact [@shravanngoswamii](https://github.com/shravanngoswamii) (Ping me on [Julia Slack](https://julialang.slack.com/archives/CCYDC34A0)).
 
 > [!TIP]
-> You can generate a standalone Julia script directly from the app using the "Script for Local Run" option in the floating bottom toolbar. The script opens in the right sidebar's Script panel, where you can configure parameters, copy, or download it.
+> You can generate a standalone Julia script for local run directly from the web app using the "Scripts" option in the right sidebar where you can configure parameters, copy, or download it.
 
 ## Acknowledgements & GSoC 2025
 

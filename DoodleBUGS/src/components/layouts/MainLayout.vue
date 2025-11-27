@@ -1624,6 +1624,13 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   const newVal = Array.isArray(val) ? val : [val]
   activeLeftAccordionTabs.value = newVal
 }
+
+const clearImportedData = () => {
+  importedGraphData.value = null
+  if (graphImportInput.value) {
+    graphImportInput.value.value = ''
+  }
+}
 </script>
 
 <template>
@@ -1967,14 +1974,7 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
                   <span class="action-text">File Loaded Successfully</span>
                   <small class="sub-text">{{ importedGraphData.name || 'Untitled Graph' }}</small>
                 </div>
-                <button
-                  class="remove-file-btn"
-                  @click.stop="
-                    importedGraphData = null
-                    if (graphImportInput) graphImportInput.value = ''
-                  "
-                  title="Remove file"
-                >
+                <button class="remove-file-btn" @click.stop="clearImportedData" title="Remove file">
                   <i class="fas fa-times"></i>
                 </button>
               </div>

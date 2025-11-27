@@ -24,6 +24,27 @@ cytoscape.use(undoRedo)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type UndoRedoInstance = any
 
+// Define specific types for Cytoscape styles to avoid 'any'
+type CyLineStyle = 'solid' | 'dotted' | 'dashed' | 'double'
+type CyNodeShape =
+  | 'ellipse'
+  | 'rectangle'
+  | 'round-rectangle'
+  | 'triangle'
+  | 'pentagon'
+  | 'hexagon'
+  | 'star'
+  | 'diamond'
+  | 'vee'
+  | 'rhomboid'
+  | 'polygon'
+  | 'tag'
+  | 'barrel'
+  | 'cut-rectangle'
+  | 'bottom-round-rectangle'
+  | 'concave-hexagon'
+type CyTextBackgroundShape = 'rectangle' | 'roundrectangle'
+
 const instances = new Map<string, { cy: Core; ur: UndoRedoInstance }>()
 
 export function useGraphInstance() {
@@ -56,12 +77,10 @@ export function useGraphInstance() {
               uiStore.nodeStyles[ele.data('nodeType')]?.borderColor || '#555',
             'border-width': (ele: NodeSingular) =>
               uiStore.nodeStyles[ele.data('nodeType')]?.borderWidth || 2,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             'border-style': (ele: NodeSingular) =>
-              (uiStore.nodeStyles[ele.data('nodeType')]?.borderStyle || 'solid') as any,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (uiStore.nodeStyles[ele.data('nodeType')]?.borderStyle || 'solid') as CyLineStyle,
             shape: (ele: NodeSingular) =>
-              (uiStore.nodeStyles[ele.data('nodeType')]?.shape || 'ellipse') as any,
+              (uiStore.nodeStyles[ele.data('nodeType')]?.shape || 'ellipse') as CyNodeShape,
             width: (ele: NodeSingular) => uiStore.nodeStyles[ele.data('nodeType')]?.width || 60,
             height: (ele: NodeSingular) => uiStore.nodeStyles[ele.data('nodeType')]?.height || 60,
 
@@ -131,10 +150,9 @@ export function useGraphInstance() {
               uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic' | 'deterministic']
                 ?.labelBackgroundColor || '#ffffff',
             'text-background-padding': '3px',
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             'text-background-shape': (ele: EdgeSingular) =>
-              uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic' | 'deterministic']
-                ?.labelBackgroundShape || ('rectangle' as any),
+              (uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic' | 'deterministic']
+                ?.labelBackgroundShape || 'rectangle') as CyTextBackgroundShape,
 
             'text-border-width': (ele: EdgeSingular) =>
               uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic' | 'deterministic']

@@ -24,7 +24,7 @@ defineProps<{
   isCodePanelOpen: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'toggle-left-sidebar'): void
   (e: 'new-project'): void
   (e: 'new-graph'): void
@@ -68,6 +68,11 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
     opacity: 1,
     pointerEvents: 'auto',
   }
+}
+
+const handleGridSizeInput = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  emit('update:gridSize', Number(target.value))
 }
 </script>
 
@@ -150,9 +155,7 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                 <input
                   type="number"
                   :value="gridSize"
-                  @input="
-                    (e) => $emit('update:gridSize', Number((e.target as HTMLInputElement).value))
-                  "
+                  @input="handleGridSizeInput"
                   step="5"
                   min="5"
                   max="100"

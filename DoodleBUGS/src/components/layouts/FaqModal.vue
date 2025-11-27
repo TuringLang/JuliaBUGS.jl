@@ -21,8 +21,13 @@ const faqs = ref<FaqItem[]>([
     open: false,
   },
   {
+    q: 'How do I connect nodes?',
+    a: 'Select the <strong>Edge</strong> tool from the bottom toolbar (click the node icon to switch to the connector icon, or select "Edge" from the dropdown). Tap the source node first, then tap the target node to create a connection.',
+    open: false,
+  },
+  {
     q: 'How do I run the model locally?',
-    a: 'Use the "Script for Local Run" option in the bottom toolbar (under the Code menu). This generates a standalone Julia script that includes your model definition, data, and initial values. You can run this script using your local Julia installation.',
+    a: 'Use the "Script for Local Run" option in the bottom toolbar (under the Code menu) or the "Script" tab in the right sidebar. This generates a standalone Julia script that includes your model definition, data, and initial values. You can run this script using your local Julia installation.',
     open: false,
   },
   {
@@ -31,13 +36,23 @@ const faqs = ref<FaqItem[]>([
     open: false,
   },
   {
-    q: 'How do I delete a node or edge?',
-    a: 'Select the element by tapping or clicking it (it will be highlighted), then open the "Inspector" panel (right sidebar). Click the red "Delete Element" button.',
+    q: 'Which distributions are supported?',
+    a: 'We support standard BUGS distributions including Normal (dnorm), Gamma (dgamma), Beta (dbeta), Binomial (dbin), Poisson (dpois), Student-t (dt), and Uniform (dunif). You can select these in the Node Properties panel.',
     open: false,
   },
   {
     q: 'What are Stochastic vs Deterministic edges?',
-    a: '<strong>Stochastic edges</strong> (dashed) represent probabilistic dependencies (e.g., parameters of a distribution). <strong>Deterministic edges</strong> (solid) represent functional relationships (e.g., variables in an equation).',
+    a: '<strong>Stochastic edges</strong> (dashed) represent probabilistic dependencies (e.g., parameters of a distribution). <strong>Deterministic edges</strong> (solid) represent functional relationships (e.g., variables in an equation). The system automatically selects the edge type based on the target node.',
+    open: false,
+  },
+  {
+    q: 'Why is the Share URL so long?',
+    a: 'DoodleBUGS is a client-side application. We do not store your data on a server. Instead, the entire model structure, parameters, and data are compressed and encoded directly into the URL. This ensures your model remains private and accessible without a database.',
+    open: false,
+  },
+  {
+    q: 'Troubleshooting Sharing & URL Shortener',
+    a: 'The URL shortener (is.gd) is a third-party service. It may fail if: <ul style="margin: 5px 0 5px 20px; padding: 0;"><li>Your project contains a large dataset, making the URL too long for browsers or the shortener service.</li><li>You have generated too many links quickly (rate limiting).</li></ul> In these cases, please use the <strong>Export JSON</strong> feature in the Inspector panel to share your work.',
     open: false,
   },
   {
@@ -160,12 +175,11 @@ const toggleItem = (index: number) => {
   padding-right: 6px;
   display: flex;
   flex-direction: column;
-  gap: 0; /* Removed gap */
+  gap: 0;
 }
 
 .faq-item {
   border-bottom: 1px solid var(--theme-border);
-  /* Removed border, radius, background, overflow */
 }
 
 .faq-item:last-child {
@@ -179,7 +193,7 @@ const toggleItem = (index: number) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 0; /* Reduced padding, no side padding */
+  padding: 10px 0;
   cursor: pointer;
   background-color: transparent;
   transition: color 0.2s;
@@ -202,7 +216,6 @@ const toggleItem = (index: number) => {
   font-weight: 800;
   font-size: 0.85em;
   opacity: 0.8;
-  /* Removed background block styling for simple look */
 }
 
 .toggle-icon {
@@ -232,7 +245,7 @@ const toggleItem = (index: number) => {
   color: var(--theme-text-secondary);
   font-size: 0.9em;
   line-height: 1.6;
-  padding: 0 0 15px 20px; /* Reduced padding, indented slightly */
+  padding: 0 0 15px 20px;
 }
 
 .faq-footer {

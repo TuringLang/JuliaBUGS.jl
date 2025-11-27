@@ -24,7 +24,34 @@ const shortUrl = ref<string | null>(null)
 const isLoadingShort = ref(false)
 const shortError = ref<string | null>(null)
 
+interface HistoryItem {
+  shortUrl: string
+  label: string
+  timestamp: number
+}
+
+const urlHistory = ref<HistoryItem[]>([])
+
 const projectGraphs = computed(() => props.project?.graphs || [])
+
+// Load history from localStorage
+const storedHistory = localStorage.getItem('doodlebugs-urlHistory')
+if (storedHistory) {
+  try {
+    urlHistory.value = JSON.parse(storedHistory)
+  } catch {
+    urlHistory.value = []
+  }
+}
+
+const saveHistory = () => {
+  localStorage.setItem('doodlebugs-urlHistory', JSON.stringify(urlHistory.value))
+}
+
+const deleteHistoryItem = (index: number) => {
+  urlHistory.value.splice(index, 1)
+  saveHistory()
+}
 
 // Reset state when modal opens
 watch(
@@ -86,19 +113,26 @@ const displayUrl = computed(() => shortUrl.value || props.url)
 
 const copyToClipboard = async () => {
   if (!displayUrl.value) return
+  await performCopy(displayUrl.value)
+  copySuccess.value = true
+  setTimeout(() => (copySuccess.value = false), 2000)
+}
+
+const copyHistoryItem = async (text: string) => {
+  await performCopy(text)
+  // No explicit UI feedback for history items needed per spec, but copy is performed
+}
+
+const performCopy = async (text: string) => {
   try {
-    await navigator.clipboard.writeText(displayUrl.value)
-    copySuccess.value = true
-    setTimeout(() => (copySuccess.value = false), 2000)
+    await navigator.clipboard.writeText(text)
   } catch {
     const input = document.createElement('textarea')
-    input.value = displayUrl.value
+    input.value = text
     document.body.appendChild(input)
     input.select()
     document.execCommand('copy')
     document.body.removeChild(input)
-    copySuccess.value = true
-    setTimeout(() => (copySuccess.value = false), 2000)
   }
 }
 
@@ -120,8 +154,35 @@ const shortenUrl = async () => {
     if (proxyData.contents) {
       const data = JSON.parse(proxyData.contents)
       if (data.errorcode) throw new Error(data.errormessage || 'Unknown is.gd error')
-      if (data.shorturl) shortUrl.value = data.shorturl
-      else throw new Error('Invalid response from is.gd')
+      if (data.shorturl) {
+        shortUrl.value = data.shorturl
+
+        // Add to history
+        let label = 'Shared Model'
+        if (activeTab.value === 'current' && props.currentGraphId) {
+          const g = projectGraphs.value.find((g) => g.id === props.currentGraphId)
+          label = g ? g.name : 'Current Graph'
+        } else if (activeTab.value === 'project' && props.project) {
+          label = `Project: ${props.project.name}`
+        } else if (activeTab.value === 'custom') {
+          label = `Selection (${selectedGraphs.value.size} graphs)`
+        }
+
+        const newItem: HistoryItem = {
+          shortUrl: data.shorturl,
+          label,
+          timestamp: Date.now(),
+        }
+
+        // Add to history (avoid duplicates, limit to 10)
+        urlHistory.value = [
+          newItem,
+          ...urlHistory.value.filter((i) => i.shortUrl !== data.shorturl),
+        ].slice(0, 10)
+        saveHistory()
+      } else {
+        throw new Error('Invalid response from is.gd')
+      }
     } else {
       throw new Error('Empty response from proxy')
     }
@@ -136,6 +197,10 @@ const shortenUrl = async () => {
   } finally {
     isLoadingShort.value = false
   }
+}
+
+const handleUrlFocus = (event: FocusEvent) => {
+  ;(event.target as HTMLInputElement).select()
 }
 </script>
 
@@ -201,7 +266,7 @@ const shortenUrl = async () => {
                 readonly
                 class="url-input"
                 :class="{ 'is-short': !!shortUrl }"
-                @focus="(e: FocusEvent) => (e.target as HTMLInputElement).select()"
+                @focus="handleUrlFocus"
               />
               <BaseButton
                 @click="copyToClipboard"
@@ -251,6 +316,34 @@ const shortenUrl = async () => {
               </small>
             </div>
           </template>
+        </div>
+
+        <!-- History Section -->
+        <div v-if="urlHistory.length > 0" class="history-section">
+          <div class="divider"></div>
+          <div class="history-header">Recent Short Links</div>
+          <div class="history-list">
+            <div v-for="(item, index) in urlHistory" :key="item.shortUrl" class="history-item">
+              <div class="history-info">
+                <span class="history-label">{{ item.label }}</span>
+                <a :href="item.shortUrl" target="_blank" class="history-link">{{
+                  item.shortUrl
+                }}</a>
+              </div>
+              <div class="history-actions">
+                <button @click="copyHistoryItem(item.shortUrl)" class="icon-btn small" title="Copy">
+                  <i class="fas fa-copy"></i>
+                </button>
+                <button
+                  @click="deleteHistoryItem(index)"
+                  class="icon-btn small danger"
+                  title="Delete"
+                >
+                  <i class="fas fa-trash-alt"></i>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </template>
@@ -412,8 +505,8 @@ const shortenUrl = async () => {
   gap: 8px;
   align-items: flex-start;
   font-size: 0.8em;
-  color: var(--theme-text-secondary); /* Slightly different color to distinguish */
-  background-color: rgba(245, 158, 11, 0.1); /* Amber tint for warning */
+  color: var(--theme-text-secondary);
+  background-color: rgba(245, 158, 11, 0.1);
   padding: 8px;
   border-radius: var(--radius-sm);
 }
@@ -438,5 +531,92 @@ const shortenUrl = async () => {
   color: var(--theme-text-secondary);
   font-style: italic;
   padding: 20px;
+}
+
+.history-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-header {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--theme-text-secondary);
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  background: var(--theme-bg-hover);
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.history-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.history-label {
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-link {
+  color: var(--theme-primary);
+  text-decoration: none;
+  font-size: 0.9em;
+}
+
+.history-link:hover {
+  text-decoration: underline;
+}
+
+.history-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.icon-btn.small {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  background: transparent;
+  border: none;
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.icon-btn.small:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--theme-text-primary);
+}
+
+.icon-btn.small.danger:hover {
+  color: var(--theme-danger);
+  background: rgba(239, 68, 68, 0.1);
 }
 </style>
