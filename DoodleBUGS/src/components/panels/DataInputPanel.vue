@@ -1,110 +1,116 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
-import { useDataStore } from '../../stores/dataStore';
-import 'codemirror/lib/codemirror.css';
-import 'codemirror/theme/material-darker.css';
-import 'codemirror/mode/javascript/javascript.js';
-import 'codemirror/addon/scroll/simplescrollbars.css';
-import 'codemirror/addon/scroll/simplescrollbars.js';
-import 'codemirror/addon/fold/foldgutter.css';
-import 'codemirror/addon/fold/foldgutter.js';
-import 'codemirror/addon/fold/brace-fold.js';
-import 'codemirror/addon/edit/matchbrackets.js';
-import CodeMirror from 'codemirror';
-import type { Editor } from 'codemirror';
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { useDataStore } from '../../stores/dataStore'
+import 'codemirror/lib/codemirror.css'
+import 'codemirror/theme/material-darker.css'
+import 'codemirror/mode/javascript/javascript.js'
+import 'codemirror/addon/scroll/simplescrollbars.css'
+import 'codemirror/addon/scroll/simplescrollbars.js'
+import 'codemirror/addon/fold/foldgutter.css'
+import 'codemirror/addon/fold/foldgutter.js'
+import 'codemirror/addon/fold/brace-fold.js'
+import 'codemirror/addon/edit/matchbrackets.js'
+import CodeMirror from 'codemirror'
+import type { Editor } from 'codemirror'
 
 const props = defineProps<{
-  isActive: boolean;
-}>();
+  isActive: boolean
+}>()
 
-const dataStore = useDataStore();
-const editorContainer = ref<HTMLDivElement | null>(null);
+const dataStore = useDataStore()
+const editorContainer = ref<HTMLDivElement | null>(null)
 
-let cm: Editor | null = null;
-let isUpdatingFromSource = false;
-let resizeObserver: ResizeObserver | null = null;
+let cm: Editor | null = null
+let isUpdatingFromSource = false
+let resizeObserver: ResizeObserver | null = null
 
-const jsonError = ref<string | null>(null);
+const jsonError = ref<string | null>(null)
 
 const validateJson = (jsonString: string) => {
   try {
-    JSON.parse(jsonString);
-    jsonError.value = null;
+    JSON.parse(jsonString)
+    jsonError.value = null
   } catch (e: unknown) {
-    jsonError.value = e instanceof Error ? e.message : String(e);
+    jsonError.value = e instanceof Error ? e.message : String(e)
   }
-};
+}
 
 const setupCodeMirror = () => {
   if (cm) {
-    const wrapper = cm.getWrapperElement();
-    wrapper.parentNode?.removeChild(wrapper);
-    cm = null;
+    const wrapper = cm.getWrapperElement()
+    wrapper.parentNode?.removeChild(wrapper)
+    cm = null
   }
 
   nextTick(() => {
     if (editorContainer.value) {
       cm = CodeMirror(editorContainer.value, {
         value: dataStore.dataContent,
-        mode: { name: "javascript", json: true },
+        mode: { name: 'javascript', json: true },
         theme: 'material-darker',
         lineNumbers: true,
         tabSize: 2,
-        scrollbarStyle: "simple",
+        scrollbarStyle: 'simple',
         lineWrapping: false,
         foldGutter: true,
-        gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
+        gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
         matchBrackets: true,
-      });
+      })
 
       cm.on('change', (instance) => {
-        if (isUpdatingFromSource) return;
-        const val = instance.getValue();
-        dataStore.dataContent = val;
-        validateJson(val);
-      });
+        if (isUpdatingFromSource) return
+        const val = instance.getValue()
+        dataStore.dataContent = val
+        validateJson(val)
+      })
     }
-  });
-};
+  })
+}
 
 onMounted(() => {
-  setupCodeMirror();
-  
+  setupCodeMirror()
+
   if (editorContainer.value) {
-      resizeObserver = new ResizeObserver(() => {
-          if (cm) cm.refresh();
-      });
-      resizeObserver.observe(editorContainer.value);
+    resizeObserver = new ResizeObserver(() => {
+      if (cm) cm.refresh()
+    })
+    resizeObserver.observe(editorContainer.value)
   }
-});
+})
 
 onUnmounted(() => {
   if (cm) {
-    const wrapper = cm.getWrapperElement();
-    wrapper.parentNode?.removeChild(wrapper);
+    const wrapper = cm.getWrapperElement()
+    wrapper.parentNode?.removeChild(wrapper)
   }
   if (resizeObserver) {
-      resizeObserver.disconnect();
+    resizeObserver.disconnect()
   }
-});
+})
 
-watch(() => dataStore.dataContent, (newValue) => {
-  if (!cm) return;
-  if (cm.getValue() !== newValue) {
-      isUpdatingFromSource = true;
-      cm.setValue(newValue);
-      validateJson(newValue);
-      isUpdatingFromSource = false;
+watch(
+  () => dataStore.dataContent,
+  (newValue) => {
+    if (!cm) return
+    if (cm.getValue() !== newValue) {
+      isUpdatingFromSource = true
+      cm.setValue(newValue)
+      validateJson(newValue)
+      isUpdatingFromSource = false
+    }
   }
-});
+)
 
-watch(() => props.isActive, (newVal) => {
-  if (newVal) {
-    nextTick(() => {
-      cm?.refresh();
-    });
+watch(
+  () => props.isActive,
+  (newVal) => {
+    if (newVal) {
+      nextTick(() => {
+        cm?.refresh()
+      })
+    }
   }
-});
+)
 </script>
 
 <template>
@@ -114,12 +120,12 @@ watch(() => props.isActive, (newVal) => {
     </div>
 
     <div class="footer-status">
-        <div v-if="jsonError" class="status-message error">
-            <i class="fas fa-times-circle"></i> {{ jsonError }}
-        </div>
-        <div v-else class="status-message success">
-            <i class="fas fa-check-circle"></i> Valid JSON
-        </div>
+      <div v-if="jsonError" class="status-message error">
+        <i class="fas fa-times-circle"></i> {{ jsonError }}
+      </div>
+      <div v-else class="status-message success">
+        <i class="fas fa-check-circle"></i> Valid JSON
+      </div>
     </div>
   </div>
 </template>

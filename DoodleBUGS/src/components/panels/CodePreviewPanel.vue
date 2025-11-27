@@ -1,41 +1,41 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue';
-import { useGraphStore } from '../../stores/graphStore';
-import { useBugsCodeGenerator } from '../../composables/useBugsCodeGenerator';
+import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { useGraphStore } from '../../stores/graphStore'
+import { useBugsCodeGenerator } from '../../composables/useBugsCodeGenerator'
 
-import 'codemirror/lib/codemirror.css';
-import 'codemirror/theme/material-darker.css';
-import 'codemirror/mode/julia/julia.js';
-import 'codemirror/addon/scroll/simplescrollbars.css';
-import 'codemirror/addon/scroll/simplescrollbars.js';
-import 'codemirror/addon/fold/foldgutter.css';
-import 'codemirror/addon/fold/foldgutter.js';
-import 'codemirror/addon/fold/brace-fold.js';
+import 'codemirror/lib/codemirror.css'
+import 'codemirror/theme/material-darker.css'
+import 'codemirror/mode/julia/julia.js'
+import 'codemirror/addon/scroll/simplescrollbars.css'
+import 'codemirror/addon/scroll/simplescrollbars.js'
+import 'codemirror/addon/fold/foldgutter.css'
+import 'codemirror/addon/fold/foldgutter.js'
+import 'codemirror/addon/fold/brace-fold.js'
 
-import CodeMirror from 'codemirror';
-import type { Editor } from 'codemirror';
+import CodeMirror from 'codemirror'
+import type { Editor } from 'codemirror'
 
 const props = defineProps<{
-  isActive: boolean;
-  graphId?: string; // Optional: for multi-canvas code pop-outs
-}>();
+  isActive: boolean
+  graphId?: string // Optional: for multi-canvas code pop-outs
+}>()
 
-const graphStore = useGraphStore();
+const graphStore = useGraphStore()
 
 // Use a computed to get the correct elements (global current or specific graph)
 const targetElements = computed(() => {
-    if (props.graphId) {
-        return graphStore.graphContents.get(props.graphId)?.elements || [];
-    }
-    return graphStore.currentGraphElements;
-});
+  if (props.graphId) {
+    return graphStore.graphContents.get(props.graphId)?.elements || []
+  }
+  return graphStore.currentGraphElements
+})
 
 // useBugsCodeGenerator expects a Ref, computed fits
-const { generatedCode } = useBugsCodeGenerator(targetElements);
+const { generatedCode } = useBugsCodeGenerator(targetElements)
 
-const copySuccess = ref(false);
-const editorContainer = ref<HTMLDivElement | null>(null);
-let cmInstance: Editor | null = null;
+const copySuccess = ref(false)
+const editorContainer = ref<HTMLDivElement | null>(null)
+let cmInstance: Editor | null = null
 
 onMounted(() => {
   if (editorContainer.value) {
@@ -46,77 +46,80 @@ onMounted(() => {
       lineNumbers: true,
       readOnly: true,
       tabSize: 2,
-      scrollbarStyle: "simple",
+      scrollbarStyle: 'simple',
       foldGutter: true,
-      gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"]
-    });
+      gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
+    })
 
     if (props.isActive) {
-      nextTick(() => cmInstance?.refresh());
+      nextTick(() => cmInstance?.refresh())
     }
   }
-});
+})
 
 onUnmounted(() => {
   if (cmInstance) {
-    const editorElement = cmInstance.getWrapperElement();
-    editorElement.parentNode?.removeChild(editorElement);
-    cmInstance = null;
+    const editorElement = cmInstance.getWrapperElement()
+    editorElement.parentNode?.removeChild(editorElement)
+    cmInstance = null
   }
-});
+})
 
 watch(generatedCode, (newCode) => {
   if (cmInstance && cmInstance.getValue() !== newCode) {
-    cmInstance.setValue(newCode);
+    cmInstance.setValue(newCode)
   }
-});
+})
 
-watch(() => props.isActive, (newVal) => {
-  if (newVal && cmInstance) {
-    nextTick(() => {
-      cmInstance?.refresh();
-    });
-  }
-});
-
-const copyCodeToClipboard = async () => {
-  const text = generatedCode.value;
-  try {
-    // Try modern API first
-    await navigator.clipboard.writeText(text);
-    triggerSuccess();
-  } catch {
-    // Fallback to legacy API (often needed on iOS/mobile)
-    const textArea = document.createElement("textarea");
-    textArea.value = text;
-    textArea.style.position = "fixed";
-    textArea.style.opacity = "0";
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-    try {
-      const successful = document.execCommand('copy');
-      if (successful) {
-        triggerSuccess();
-      } else {
-        console.error('Fallback copy failed.');
-        alert('Failed to copy code to clipboard.');
-      }
-    } catch (e) {
-      console.error('Copy failed', e);
-      alert('Failed to copy code to clipboard.');
-    } finally {
-      document.body.removeChild(textArea);
+watch(
+  () => props.isActive,
+  (newVal) => {
+    if (newVal && cmInstance) {
+      nextTick(() => {
+        cmInstance?.refresh()
+      })
     }
   }
-};
+)
+
+const copyCodeToClipboard = async () => {
+  const text = generatedCode.value
+  try {
+    // Try modern API first
+    await navigator.clipboard.writeText(text)
+    triggerSuccess()
+  } catch {
+    // Fallback to legacy API (often needed on iOS/mobile)
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    textArea.style.position = 'fixed'
+    textArea.style.opacity = '0'
+    document.body.appendChild(textArea)
+    textArea.focus()
+    textArea.select()
+    try {
+      const successful = document.execCommand('copy')
+      if (successful) {
+        triggerSuccess()
+      } else {
+        console.error('Fallback copy failed.')
+        alert('Failed to copy code to clipboard.')
+      }
+    } catch (e) {
+      console.error('Copy failed', e)
+      alert('Failed to copy code to clipboard.')
+    } finally {
+      document.body.removeChild(textArea)
+    }
+  }
+}
 
 const triggerSuccess = () => {
-  copySuccess.value = true;
+  copySuccess.value = true
   setTimeout(() => {
-    copySuccess.value = false;
-  }, 2000);
-};
+    copySuccess.value = false
+  }, 2000)
+}
 </script>
 
 <template>
@@ -220,7 +223,9 @@ h4 {
   padding: 0;
   cursor: pointer;
   opacity: 0.5;
-  transition: background-color 0.2s, opacity 0.2s;
+  transition:
+    background-color 0.2s,
+    opacity 0.2s;
   z-index: 1000;
   pointer-events: auto;
   border: none;

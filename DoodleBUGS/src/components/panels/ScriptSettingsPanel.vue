@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { storeToRefs } from 'pinia';
-import { useScriptStore } from '../../stores/scriptStore';
-import BaseInput from '../ui/BaseInput.vue';
+import { storeToRefs } from 'pinia'
+import { useScriptStore } from '../../stores/scriptStore'
+import BaseInput from '../ui/BaseInput.vue'
 
-const scriptStore = useScriptStore();
-const { samplerSettings } = storeToRefs(scriptStore);
+const scriptStore = useScriptStore()
+const { samplerSettings } = storeToRefs(scriptStore)
 </script>
 
 <template>
@@ -25,7 +25,12 @@ const { samplerSettings } = storeToRefs(scriptStore);
       </div>
       <div class="form-group">
         <label for="seed">Seed (optional)</label>
-        <BaseInput id="seed" type="number" v-model.number="samplerSettings.seed" placeholder="Leave blank for random" />
+        <BaseInput
+          id="seed"
+          type="number"
+          v-model.number="samplerSettings.seed"
+          placeholder="Leave blank for random"
+        />
       </div>
     </div>
   </div>

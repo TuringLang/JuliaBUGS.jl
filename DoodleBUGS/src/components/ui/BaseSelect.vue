@@ -1,18 +1,18 @@
 <script setup lang="ts">
-import Select from 'primevue/select';
+import Select from 'primevue/select'
 
 interface SelectOption {
-  value: string;
-  label: string;
+  value: string
+  label: string
 }
 
 defineProps<{
-  modelValue: string;
-  options: SelectOption[];
-  disabled?: boolean;
-}>();
+  modelValue: string
+  options: SelectOption[]
+  disabled?: boolean
+}>()
 
-const emit = defineEmits(['update:modelValue', 'change']);
+const emit = defineEmits(['update:modelValue', 'change'])
 </script>
 
 <template>
