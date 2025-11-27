@@ -24,6 +24,9 @@ const shortUrl = ref<string | null>(null)
 const isLoadingShort = ref(false)
 const shortError = ref<string | null>(null)
 
+// Track which history item shows the "Copied" state
+const copiedHistoryIndex = ref<number | null>(null)
+
 interface HistoryItem {
   shortUrl: string
   label: string
@@ -80,6 +83,7 @@ const resetUrlState = () => {
   shortUrl.value = null
   shortError.value = null
   isLoadingShort.value = false
+  copiedHistoryIndex.value = null
 }
 
 const toggleGraphSelection = (id: string) => {
@@ -118,9 +122,14 @@ const copyToClipboard = async () => {
   setTimeout(() => (copySuccess.value = false), 2000)
 }
 
-const copyHistoryItem = async (text: string) => {
+const copyHistoryItem = async (text: string, index: number) => {
   await performCopy(text)
-  // No explicit UI feedback for history items needed per spec, but copy is performed
+  copiedHistoryIndex.value = index
+  setTimeout(() => {
+    if (copiedHistoryIndex.value === index) {
+      copiedHistoryIndex.value = null
+    }
+  }, 2000)
 }
 
 const performCopy = async (text: string) => {
@@ -331,8 +340,15 @@ const handleUrlFocus = (event: FocusEvent) => {
                 }}</a>
               </div>
               <div class="history-actions">
-                <button @click="copyHistoryItem(item.shortUrl)" class="icon-btn small" title="Copy">
-                  <i class="fas fa-copy"></i>
+                <button
+                  @click="copyHistoryItem(item.shortUrl, index)"
+                  class="icon-btn small"
+                  :title="copiedHistoryIndex === index ? 'Copied' : 'Copy'"
+                >
+                  <i
+                    :class="copiedHistoryIndex === index ? 'fas fa-check' : 'fas fa-copy'"
+                    :style="{ color: copiedHistoryIndex === index ? 'var(--theme-success)' : '' }"
+                  ></i>
                 </button>
                 <button
                   @click="deleteHistoryItem(index)"

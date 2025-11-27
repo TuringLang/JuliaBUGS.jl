@@ -652,6 +652,11 @@ const handleLoadShared = async () => {
       // Clean URL without reloading
       const newUrl = window.location.origin + window.location.pathname
       window.history.replaceState({}, document.title, newUrl)
+
+      // Force fit graph to viewport to ensure visibility
+      setTimeout(() => {
+        handleFit()
+      }, 500)
     } catch (e) {
       console.error('Failed to load shared model:', e)
       alert('Invalid or corrupted share link.')
