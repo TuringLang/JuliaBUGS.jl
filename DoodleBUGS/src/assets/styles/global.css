@@ -190,6 +190,29 @@ body {
   height: 100%;
 }
 
+/* Custom Base Modal Responsive Width */
+.base-modal-responsive {
+  width: 50vw;
+}
+
+@media (max-width: 768px) {
+  .base-modal-responsive {
+    width: 95vw !important;
+  }
+}
+
+/* Input Placeholder and Styling */
+input::placeholder,
+textarea::placeholder {
+  font-size: 12px !important;
+  color: var(--theme-text-muted);
+  opacity: 0.8;
+}
+
+.p-inputtext, .p-inputnumber-input, .p-select-label {
+  font-size: 12px !important; /* Slightly larger text for readability */
+}
+
 /* Cytoscape Grid */
 .cytoscape-container.grid-background {
   background-image:

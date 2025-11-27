@@ -67,8 +67,6 @@ const showNewProjectModal = ref(false);
 const newProjectName = ref('');
 const showNewGraphModal = ref(false);
 const newGraphName = ref('');
-const importMode = ref<'blank' | 'json'>('blank');
-const importJsonContent = ref('');
 const showAboutModal = ref(false);
 const showFaqModal = ref(false);
 const showValidationModal = ref(false);
@@ -155,35 +153,15 @@ const persistViewport = () => {
 };
 
 // Minification Helpers
-// Map full keys to short keys
 const keyMap: Record<string, string> = {
-    id: 'i',
-    name: 'n',
-    type: 't',
-    nodeType: 'nt',
-    position: 'p',
-    parent: 'pa',
-    distribution: 'di',
-    equation: 'eq',
-    observed: 'ob',
-    indices: 'id',
-    loopVariable: 'lv',
-    loopRange: 'lr',
-    param1: 'p1',
-    param2: 'p2',
-    param3: 'p3',
-    source: 's',
-    target: 'tg',
-    x: 'x',
-    y: 'y'
+    id: 'i', name: 'n', type: 't', nodeType: 'nt', position: 'p', parent: 'pa',
+    distribution: 'di', equation: 'eq', observed: 'ob', indices: 'id',
+    loopVariable: 'lv', loopRange: 'lr', param1: 'p1', param2: 'p2', param3: 'p3',
+    source: 's', target: 'tg', x: 'x', y: 'y'
 };
 
 const nodeTypeMap: Record<string, number> = {
-    stochastic: 1,
-    deterministic: 2,
-    constant: 3,
-    observed: 4,
-    plate: 5
+    stochastic: 1, deterministic: 2, constant: 3, observed: 4, plate: 5
 };
 const revNodeTypeMap = { 1: 'stochastic', 2: 'deterministic', 3: 'constant', 4: 'observed', 5: 'plate' };
 
@@ -194,9 +172,9 @@ const minifyGraph = (elements: GraphElement[]): any[] => {
         const min: any = {};
         if (el.type === 'node') {
             const node = el as GraphNode;
-            min[keyMap.id] = node.id.replace('node_', ''); // Strip prefix if standard
+            min[keyMap.id] = node.id.replace('node_', '');
             min[keyMap.name] = node.name;
-            min[keyMap.type] = 0; // 0 for node
+            min[keyMap.type] = 0;
             min[keyMap.nodeType] = nodeTypeMap[node.nodeType];
             min[keyMap.position] = [Math.round(node.position.x), Math.round(node.position.y)];
             if (node.parent) min[keyMap.parent] = node.parent.replace('node_', '').replace('plate_', '');
@@ -213,7 +191,7 @@ const minifyGraph = (elements: GraphElement[]): any[] => {
         } else {
             const edge = el;
             min[keyMap.id] = edge.id.replace('edge_', '');
-            min[keyMap.type] = 1; // 1 for edge
+            min[keyMap.type] = 1;
             min[keyMap.source] = edge.source.replace('node_', '').replace('plate_', '');
             min[keyMap.target] = edge.target.replace('node_', '').replace('plate_', '');
         }
@@ -223,7 +201,7 @@ const minifyGraph = (elements: GraphElement[]): any[] => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const expandGraph = (minElements: any[]): GraphElement[] => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     return minElements.map(min => {
         if (min[keyMap.type] === 0) { // Node
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -240,7 +218,7 @@ const expandGraph = (minElements: any[]): GraphElement[] => {
             };
             if (min[keyMap.parent]) {
                 const pid = min[keyMap.parent];
-                node.parent = pid.startsWith('plate_') || pid.startsWith('node_') ? pid : 'plate_' + pid; // Guessing prefix if missing, usually plates are parents
+                node.parent = pid.startsWith('plate_') || pid.startsWith('node_') ? pid : 'plate_' + pid;
             }
             if (min[keyMap.distribution]) node.distribution = min[keyMap.distribution];
             if (min[keyMap.equation]) node.equation = min[keyMap.equation];
@@ -264,35 +242,13 @@ const expandGraph = (minElements: any[]): GraphElement[] => {
     });
 };
 
-const createSharePayload = (graphName: string, graphElements: GraphElement[], dataContent: string, version: number) => {
-    // Minify Data content: Parse JSON and re-stringify to remove whitespace
-    let minData = dataContent;
-    try {
-        const d = JSON.parse(dataContent);
-        minData = JSON.stringify(d); // Removes whitespace
-    } catch { /* ignore */ }
-
-    // Version 2: Minified Single Graph
-    if (version === 2) {
-        return {
-            v: 2,
-            n: graphName,
-            e: minifyGraph(graphElements),
-            d: minData
-        };
-    }
-    return {};
-};
-
 const generateShareLink = (payload: object) => {
     try {
         const jsonStr = JSON.stringify(payload);
-        // Standard Base64 Encoding with UTF-8 support
         const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
         
         const baseUrl = window.location.origin + window.location.pathname;
         shareUrl.value = `${baseUrl}?share=${encodeURIComponent(base64)}`;
-        showShareModal.value = true;
     } catch (e) {
         console.error("Failed to generate share link:", e);
         alert("Failed to generate share link. Model might be too large.");
@@ -300,61 +256,31 @@ const generateShareLink = (payload: object) => {
 }
 
 const handleShare = () => {
-    if (!graphStore.currentGraphId || !pinnedGraphTitle.value) return;
-    const payload = createSharePayload(pinnedGraphTitle.value, graphStore.currentGraphElements, dataStore.dataContent, 2);
-    generateShareLink(payload);
+    if (!graphStore.currentGraphId) return;
+    shareUrl.value = ''; // Reset
+    showShareModal.value = true;
 };
 
-const handleShareGraph = (graphId: string) => {
-    // Logic to get graph data even if not loaded in memory (from LS)
-    let elements: GraphElement[] = [];
-    let dataContent = "";
-    let name = "";
+const handleGenerateShareLink = (options: { scope: 'current' | 'project' | 'custom', selectedGraphIds?: string[] }) => {
+    if (!projectStore.currentProject) return;
 
-    if (graphId === graphStore.currentGraphId) {
-        elements = graphStore.currentGraphElements;
-        dataContent = dataStore.dataContent;
-        name = pinnedGraphTitle.value || "Graph";
-    } else {
-        const storedGraph = localStorage.getItem(`doodlebugs-graph-${graphId}`);
-        const storedData = localStorage.getItem(`doodlebugs-data-${graphId}`);
-        const project = projectStore.projects.find(p => p.graphs.some(g => g.id === graphId));
-        const graphMeta = project?.graphs.find(g => g.id === graphId);
-        name = graphMeta?.name || "Graph";
+    let payload = {};
 
-        if (storedGraph) {
-            try {
-                elements = JSON.parse(storedGraph).elements;
-            } catch { elements = []; }
-        }
-        if (storedData) {
-             try {
-                const parsed = JSON.parse(storedData);
-                dataContent = parsed.content || (parsed.jsonData ? JSON.stringify({data: JSON.parse(parsed.jsonData || '{}'), inits: JSON.parse(parsed.jsonInits || '{}')}) : '{}');
-            } catch { 
-                dataContent = "{}";
-            }
-        }
-    }
-    
-    const payload = createSharePayload(name, elements, dataContent, 2);
-    generateShareLink(payload);
-};
-
-const handleShareProjectUrl = (projectId: string) => {
-    const project = projectStore.projects.find(p => p.id === projectId);
-    if (!project) return;
-
-    const graphsData = project.graphs.map(graphMeta => {
+    // Helper to get graph data (from memory or storage)
+    const getGraphDataForShare = (graphId: string) => {
         let elements: GraphElement[] = [];
         let dataContent = "{}";
+        let name = "Graph";
 
-        if (graphMeta.id === graphStore.currentGraphId) {
+        const graphMeta = projectStore.currentProject?.graphs.find(g => g.id === graphId);
+        if (graphMeta) name = graphMeta.name;
+
+        if (graphId === graphStore.currentGraphId) {
             elements = graphStore.currentGraphElements;
             dataContent = dataStore.dataContent;
         } else {
-            const storedGraph = localStorage.getItem(`doodlebugs-graph-${graphMeta.id}`);
-            const storedData = localStorage.getItem(`doodlebugs-data-${graphMeta.id}`);
+            const storedGraph = localStorage.getItem(`doodlebugs-graph-${graphId}`);
+            const storedData = localStorage.getItem(`doodlebugs-data-${graphId}`);
             
             if (storedGraph) {
                 try { elements = JSON.parse(storedGraph).elements; } catch {}
@@ -362,48 +288,56 @@ const handleShareProjectUrl = (projectId: string) => {
             if (storedData) {
                 try {
                     const parsed = JSON.parse(storedData);
-                    dataContent = parsed.content || "{}";
+                    dataContent = parsed.content || (parsed.jsonData ? JSON.stringify({data: JSON.parse(parsed.jsonData || '{}'), inits: JSON.parse(parsed.jsonInits || '{}')}) : '{}');
                 } catch {}
             }
         }
-
+        
         // Minify Data
         try {
             const d = JSON.parse(dataContent);
             dataContent = JSON.stringify(d);
         } catch { /* ignore */ }
 
-        return {
-            n: graphMeta.name,
+        return { name, elements, dataContent };
+    };
+
+    if (options.scope === 'current') {
+        const targetId = options.selectedGraphIds?.[0] || graphStore.currentGraphId;
+        if (!targetId) return;
+        
+        const { name, elements, dataContent } = getGraphDataForShare(targetId);
+        // Use v2 format for single graph for backward compatibility / simplicity
+        payload = {
+            v: 2,
+            n: name,
             e: minifyGraph(elements),
             d: dataContent
         };
-    });
+    } else {
+        // Project or Custom Scope - Use v3 format
+        const targetIds = options.scope === 'project' 
+            ? projectStore.currentProject.graphs.map(g => g.id)
+            : (options.selectedGraphIds || []);
+        
+        const graphsData = targetIds.map(id => {
+            const { name, elements, dataContent } = getGraphDataForShare(id);
+            return {
+                n: name,
+                e: minifyGraph(elements),
+                d: dataContent
+            };
+        });
 
-    // Version 3 Payload: Full Project
-    const payload = {
-        v: 3,
-        pn: project.name,
-        g: graphsData
-    };
+        payload = {
+            v: 3,
+            pn: projectStore.currentProject.name,
+            g: graphsData
+        };
+    }
 
     generateShareLink(payload);
 };
-
-const handleExportData = () => {
-    if (!graphStore.currentGraphId) return;
-    const content = dataStore.dataContent;
-    const blob = new Blob([content], { type: 'application/json' });
-    const fileName = `data.json`;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
 
 // Data Import Logic
 const triggerDataImport = () => {
@@ -421,7 +355,7 @@ const handleDataImport = (event: Event) => {
             // Validate JSON
             JSON.parse(content);
             dataStore.dataContent = content;
-        } catch (e) {
+        } catch {
             alert('Invalid JSON file format.');
         }
         // Reset file input
@@ -627,7 +561,7 @@ watch([isDataPanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) =>
                 // Sidebar is ~300px + 16px margin.
                 const leftSidebarOffset = isLeftSidebarOpen.value ? 320 : 20; 
                 
-                let targetScreenX = leftSidebarOffset + 20;
+                const targetScreenX = leftSidebarOffset + 20;
                 
                 // Top offset
                 const targetScreenY = 90;
@@ -760,44 +694,11 @@ const createNewProject = () => {
   }
 };
 
-const handleFileUpload = (event: Event) => {
-    const file = (event.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        importJsonContent.value = e.target?.result as string;
-    };
-    reader.readAsText(file);
-};
-
 const createNewGraph = () => {
   if (projectStore.currentProject && newGraphName.value.trim()) {
-    const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId!, newGraphName.value.trim());
-    if (newGraphMeta) {
-        if (importMode.value === 'json' && importJsonContent.value) {
-            try {
-                const importedElements = JSON.parse(importJsonContent.value);
-                if (Array.isArray(importedElements)) {
-                    graphStore.updateGraphElements(newGraphMeta.id, importedElements);
-                    // Also try to layout if imported
-                    setTimeout(() => {
-                        graphStore.updateGraphLayout(newGraphMeta.id, 'preset');
-                        const cy = getCyInstance(newGraphMeta.id);
-                        if (cy) smartFit(cy, true);
-                    }, 100);
-                } else {
-                    alert("Invalid JSON format. Expected an array of graph elements.");
-                }
-            } catch (e) {
-                console.error(e);
-                alert("Failed to parse JSON.");
-            }
-        }
-    }
+    projectStore.addGraphToProject(projectStore.currentProjectId!, newGraphName.value.trim());
     showNewGraphModal.value = false;
     newGraphName.value = '';
-    importJsonContent.value = '';
-    importMode.value = 'blank';
   }
 };
 
@@ -805,21 +706,6 @@ const openExportModal = (format: 'png' | 'jpg' | 'svg') => {
   if (!graphStore.currentGraphId) return;
   currentExportType.value = format;
   showExportModal.value = true;
-};
-
-const handleExportJson = () => {
-  if (!graphStore.currentGraphId) return;
-  const elementsToExport = graphStore.currentGraphElements;
-  const jsonString = JSON.stringify(elementsToExport, null, 2);
-  const blob = new Blob([jsonString], { type: 'application/json' });
-  const fileName = `graph.json`;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
 };
 
 const handleDownloadBugs = () => {
@@ -1450,8 +1336,6 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @load-example="handleLoadExample"
         @open-about-modal="showAboutModal = true"
         @open-faq-modal="showFaqModal = true"
-        @share-graph="handleShareGraph"
-        @share-project-url="handleShareProjectUrl"
     />
 
     <Transition name="fade">
@@ -1491,8 +1375,6 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @generate-script="handleGenerateStandalone"
         @share="handleShare"
         @open-export-modal="openExportModal"
-        @export-json="handleExportJson"
-        @export-data="handleExportData"
     />
 
     <Transition name="fade">
@@ -1507,6 +1389,9 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
                         :class="isModelValid ? 'valid' : 'invalid'">
                         <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
                     </div>
+                   <button class="header-icon-btn collapsed-share-btn" @click.stop="handleShare" title="Share via URL">
+                        <i class="fas fa-share-alt"></i>
+                   </button>
                    <div class="toggle-icon-wrapper">
                        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon"><path fill="currentColor" fill-rule="evenodd" d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" clip-rule="evenodd"></path></svg>
                    </div>
@@ -1602,8 +1487,8 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     <BaseModal :is-open="showNewProjectModal" @close="showNewProjectModal = false">
       <template #header><h3>Create New Project</h3></template>
       <template #body>
-        <div class="flex-col gap-2">
-          <label>Project Name:</label>
+        <div class="flex items-center gap-3">
+          <label style="min-width: 100px; font-weight: 500;">Project Name:</label>
           <BaseInput v-model="newProjectName" placeholder="Enter project name" @keyup.enter="createNewProject" />
         </div>
       </template>
@@ -1616,24 +1501,9 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     <BaseModal :is-open="showNewGraphModal" @close="showNewGraphModal = false">
       <template #header><h3>Create New Graph</h3></template>
       <template #body>
-        <div class="flex-col gap-4">
-          <div class="flex gap-2 mb-2">
-              <BaseButton :type="importMode === 'blank' ? 'primary' : 'secondary'" size="small" @click="importMode = 'blank'" class="flex-1">Blank Graph</BaseButton>
-              <BaseButton :type="importMode === 'json' ? 'primary' : 'secondary'" size="small" @click="importMode = 'json'" class="flex-1">Import JSON</BaseButton>
-          </div>
-          
-          <div class="flex-col gap-2">
-            <label>Graph Name:</label>
-            <BaseInput v-model="newGraphName" placeholder="Enter graph name" @keyup.enter="createNewGraph" />
-          </div>
-
-          <div v-if="importMode === 'json'" class="flex-col gap-2">
-              <label>Paste JSON or Upload File:</label>
-              <textarea v-model="importJsonContent" class="json-textarea" placeholder="Paste graph JSON here..."></textarea>
-              <div class="file-upload-wrapper">
-                  <input type="file" accept=".json" @change="handleFileUpload" class="file-input"/>
-              </div>
-          </div>
+        <div class="flex items-center gap-3">
+          <label style="min-width: 90px; font-weight: 500;">Graph Name:</label>
+          <BaseInput v-model="newGraphName" placeholder="Enter graph name" @keyup.enter="createNewGraph" />
         </div>
       </template>
       <template #footer>
@@ -1657,7 +1527,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     <ExportModal :is-open="showExportModal" :export-type="currentExportType" @close="showExportModal = false" @confirm-export="handleConfirmExport" />
     <ValidationIssuesModal :is-open="showValidationModal" :validation-errors="validationErrors" :elements="elements" @select-node="handleSelectNodeFromModal" @close="showValidationModal = false" />
     <GraphStyleModal :is-open="showStyleModal" @close="showStyleModal = false" />
-    <ShareModal :is-open="showShareModal" :url="shareUrl" @close="showShareModal = false" />
+    <ShareModal :is-open="showShareModal" :url="shareUrl" :project="projectStore.currentProject" :current-graph-id="graphStore.currentGraphId" @close="showShareModal = false" @generate="handleGenerateShareLink" />
     <DebugPanel v-if="showDebugPanel" />
   </div>
 </template>
@@ -1929,6 +1799,31 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
 
 .status-indicator:hover .instant-tooltip {
     opacity: 1;
+}
+
+.header-icon-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--theme-text-secondary);
+    font-size: 14px;
+    padding: 6px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.header-icon-btn:hover {
+    background-color: var(--theme-bg-hover);
+    color: var(--theme-text-primary);
+}
+
+.collapsed-share-btn {
+    width: 24px;
+    height: 24px;
+    padding: 0;
 }
 
 .fade-enter-active,

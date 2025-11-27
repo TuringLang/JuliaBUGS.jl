@@ -317,12 +317,6 @@ onUnmounted(() => {
 
       <div class="divider"></div>
 
-      <button class="dock-btn" @click="$emit('share')" title="Share via URL" type="button">
-        <i class="fas fa-share-alt"></i>
-      </button>
-
-      <div class="divider"></div>
-
       <button class="dock-btn" @click="$emit('undo')" title="Undo (Ctrl+Z)" type="button">
         <i class="fas fa-undo"></i>
       </button>

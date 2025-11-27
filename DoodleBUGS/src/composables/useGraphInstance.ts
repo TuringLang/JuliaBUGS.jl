@@ -1,5 +1,5 @@
 import cytoscape from 'cytoscape';
-import type { Core, ElementDefinition, NodeSingular } from 'cytoscape';
+import type { Core, ElementDefinition, NodeSingular, EdgeSingular } from 'cytoscape';
 // NOTE: gridGuide and contextMenus extensions are DISABLED for iOS/iPad/WebKit compatibility
 // They block touch events and prevent node/edge creation on mobile devices
 // import gridGuide from 'cytoscape-grid-guide';
@@ -61,7 +61,7 @@ export function useGraphInstance() {
               return indices ? `${name}[${indices}]` : name;
             },
             'color': (ele: NodeSingular) => uiStore.nodeStyles[ele.data('nodeType')]?.labelColor || '#000000',
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             'font-size': (ele: NodeSingular) => uiStore.nodeStyles[ele.data('nodeType')]?.labelFontSize || 10,
             
             'text-valign': 'center', 'text-halign': 'center', 'padding': '10px',
@@ -99,24 +99,19 @@ export function useGraphInstance() {
           selector: 'edge[name]',
           style: {
             'label': 'data(name)',
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            'font-size': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelFontSize || 8,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            'color': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelColor || '#000000',
+            'font-size': (ele: EdgeSingular) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelFontSize || 8,
+            'color': (ele: EdgeSingular) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelColor || '#000000',
             
             'text-rotation': 'autorotate',
-            'text-background-opacity': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBackgroundOpacity ?? 1,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            'text-background-color': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBackgroundColor || '#ffffff',
+            'text-background-opacity': (ele: EdgeSingular) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBackgroundOpacity ?? 1,
+            'text-background-color': (ele: EdgeSingular) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBackgroundColor || '#ffffff',
             'text-background-padding': '3px',
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            'text-background-shape': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBackgroundShape || 'rectangle',
+            'text-background-shape': (ele: EdgeSingular) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBackgroundShape || 'rectangle' as any,
             
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            'text-border-width': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBorderWidth ?? 1,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            'text-border-color': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBorderColor || '#ccc',
-            'text-border-opacity': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBackgroundOpacity ?? 1,
+            'text-border-width': (ele: EdgeSingular) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBorderWidth ?? 1,
+            'text-border-color': (ele: EdgeSingular) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBorderColor || '#ccc',
+            'text-border-opacity': (ele: EdgeSingular) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBackgroundOpacity ?? 1,
           }
         },
         {

@@ -98,7 +98,7 @@ const executeRename = () => {
     newItemName.value = '';
 };
 
-const emit = defineEmits(['newProject', 'newGraph', 'share-graph', 'share-project-url']);
+const emit = defineEmits(['newProject', 'newGraph']);
 
 const handleNewProject = () => {
   emit('newProject');
@@ -108,20 +108,6 @@ const handleNewProject = () => {
 const handleNewGraph = () => {
   emit('newGraph');
   contextMenu.value = null;
-}
-
-const handleShareGraph = () => {
-    if (contextMenu.value?.type === 'graph') {
-        emit('share-graph', contextMenu.value.id);
-        contextMenu.value = null;
-    }
-}
-
-const handleShareProjectUrl = () => {
-    if (contextMenu.value?.type === 'project') {
-        emit('share-project-url', contextMenu.value.id);
-        contextMenu.value = null;
-    }
 }
 </script>
 
@@ -138,7 +124,7 @@ const handleShareProjectUrl = () => {
           title="New Graph in Current Project"
           :disabled="!currentProject"
         >
-          <i class="fas fa-project-diagram"></i>
+          <i class="fas fa-plus"></i>
         </BaseButton>
         <BaseButton @click="handleNewProject" type="primary" size="small" class="header-action-btn" title="New Project">
           <i class="fas fa-plus"></i>
@@ -193,14 +179,12 @@ const handleShareProjectUrl = () => {
         :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }">
         <template v-if="contextMenu.type === 'project'">
           <div class="context-menu-item" @click="handleNewGraph"><i class="fas fa-plus"></i> New Graph</div>
-          <div class="context-menu-item" @click="handleShareProjectUrl"><i class="fas fa-link"></i> Share Project via URL</div>
           <div class="context-menu-item" @click="openRenameModal('project', contextMenu!.id, projectStore.projects.find(p => p.id === contextMenu!.id)!.name)"><i class="fas fa-edit"></i> Rename</div>
           <div class="context-menu-item danger"
             @click="confirmDeletion('project', contextMenu!.id, projectStore.projects.find((p: Project) => p.id === contextMenu!.id)!.name)">
             <i class="fas fa-trash-alt"></i> Delete Project</div>
         </template>
         <template v-if="contextMenu.type === 'graph'">
-          <div class="context-menu-item" @click="handleShareGraph"><i class="fas fa-share-alt"></i> Share via URL</div>
           <div class="context-menu-item" @click="openRenameModal('graph', contextMenu!.id, currentProjectGraphs.find(g => g.id === contextMenu!.id)!.name, currentProject!.id)"><i class="fas fa-edit"></i> Rename</div>
           <div class="context-menu-item danger"
             @click="confirmDeletion('graph', contextMenu!.id, currentProjectGraphs.find((g: GraphMeta) => g.id === contextMenu!.id)!.name, currentProject!.id)">
@@ -214,12 +198,14 @@ const handleShareProjectUrl = () => {
         <h3>Confirm Deletion</h3>
       </template>
       <template #body>
-        <p v-if="itemToDelete">
-          Are you sure you want to delete the {{ itemToDelete.type }}
-          <strong>"{{ itemToDelete.name }}"</strong>?
-          <span v-if="itemToDelete.type === 'project'">This will also delete all of its graphs.</span>
-          This action cannot be undone.
-        </p>
+        <div class="confirm-body">
+            <p v-if="itemToDelete">
+            Are you sure you want to delete the {{ itemToDelete.type }}
+            <strong>"{{ itemToDelete.name }}"</strong>?
+            <span v-if="itemToDelete.type === 'project'">This will also delete all of its graphs.</span>
+            This action cannot be undone.
+            </p>
+        </div>
       </template>
       <template #footer>
         <BaseButton @click="showDeleteConfirmModal = false" type="secondary">Cancel</BaseButton>
@@ -232,8 +218,10 @@ const handleShareProjectUrl = () => {
             <h3>Rename {{ itemToRename?.type }}</h3>
         </template>
         <template #body>
-            <label for="new-item-name" style="display: block; margin-bottom: 8px; font-weight: 500;">New Name:</label>
-            <BaseInput id="new-item-name" v-model="newItemName" :placeholder="`Enter new ${itemToRename?.type} name`" @keyup.enter="executeRename" />
+            <div class="rename-body">
+                <label for="new-item-name" style="display: block; margin-bottom: 8px; font-weight: 500;">New Name:</label>
+                <BaseInput id="new-item-name" v-model="newItemName" :placeholder="`Enter new ${itemToRename?.type} name`" @keyup.enter="executeRename" />
+            </div>
         </template>
         <template #footer>
             <BaseButton @click="showRenameModal = false" type="secondary">Cancel</BaseButton>
@@ -517,5 +505,9 @@ const handleShareProjectUrl = () => {
 .context-menu-item .fas {
   width: 14px;
   text-align: center;
+}
+
+.rename-body, .confirm-body {
+    padding: 10px 0;
 }
 </style>

@@ -38,6 +38,6 @@ const handleUpdate = (val: string | null | undefined) => {
     @change="(e) => emit('change', e)"
     @input="(e) => emit('input', e)"
     @keyup.enter="(e) => emit('keyup.enter', e)"
-    class="w-full"
+    class="w-full base-input-field"
   />
 </template>

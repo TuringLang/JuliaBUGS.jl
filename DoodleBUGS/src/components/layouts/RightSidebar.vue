@@ -23,8 +23,6 @@ defineEmits<{
   (e: 'generate-script'): void;
   (e: 'share'): void;
   (e: 'open-export-modal', format: 'png' | 'jpg' | 'svg'): void;
-  (e: 'export-json'): void;
-  (e: 'export-data'): void;
 }>();
 
 const uiStore = useUiStore();
@@ -58,6 +56,10 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                     <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
                     <div class="instant-tooltip">{{ isModelValid ? 'Model Valid' : 'Validation Errors Found' }}</div>
                 </div>
+                
+                <button class="header-icon-btn" @click="$emit('share')" title="Share via URL">
+                    <i class="fas fa-share-alt"></i>
+                </button>
             </div>
 
             <div class="cursor-pointer flex items-center ml-2">
@@ -88,19 +90,10 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
 
             <div v-show="activeRightTab === 'export'" class="export-panel">
                 <div class="menu-panel flex-col gap-3">
-                    <h5 class="section-title">Share</h5>
-                    <BaseButton type="ghost" class="menu-btn" @click="$emit('share')"><i class="fas fa-share-alt"></i> Share via URL</BaseButton>
-                    
-                    <div class="divider"></div>
                     <h5 class="section-title">Image Export</h5>
                     <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'png')"><i class="fas fa-image"></i> PNG Image</BaseButton>
                     <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'jpg')"><i class="fas fa-file-image"></i> JPG Image</BaseButton>
                     <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'svg')"><i class="fas fa-vector-square"></i> SVG Vector</BaseButton>
-                    
-                    <div class="divider"></div>
-                    <h5 class="section-title">Graph and Data Export</h5>
-                    <BaseButton type="ghost" class="menu-btn" @click="$emit('export-json')"><i class="fas fa-file-code"></i> Graph as JSON</BaseButton>
-                    <BaseButton type="ghost" class="menu-btn" @click="$emit('export-data')"><i class="fas fa-database"></i> Data as JSON</BaseButton>
                 </div>
             </div>
         </div>
@@ -197,6 +190,25 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
 
 .status-indicator:hover .instant-tooltip {
     opacity: 1;
+}
+
+.header-icon-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--theme-text-secondary);
+    font-size: 14px;
+    padding: 6px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.header-icon-btn:hover {
+    background-color: var(--theme-bg-hover);
+    color: var(--theme-text-primary);
 }
 
 .sidebar-tabs {
