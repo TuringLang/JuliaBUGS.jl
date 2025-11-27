@@ -15,7 +15,7 @@ const props = defineProps<{
   isActive: boolean;
 }>();
 
-const emit = defineEmits<{
+defineEmits<{
   (e: 'open-settings'): void;
   (e: 'download'): void;
   (e: 'generate'): void;

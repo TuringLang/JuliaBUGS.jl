@@ -26,7 +26,6 @@ import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGraphValidator } from '../../composables/useGraphValidator';
 import { useBugsCodeGenerator, generateStandaloneScript } from '../../composables/useBugsCodeGenerator';
 import type { GraphElement, NodeType, ExampleModel } from '../../types';
-import type { GeneratedFile, ExecutionResult } from '../../stores/executionStore';
 
 interface ExportOptions {
   bg: string;
@@ -35,15 +34,6 @@ interface ExportOptions {
   quality?: number;
   maxWidth?: number;
   maxHeight?: number;
-}
-
-interface RunResponse {
-  logs?: string[];
-  error?: string;
-  results?: Record<string, unknown>[];
-  summary?: Record<string, unknown>[];
-  quantiles?: Record<string, unknown>[];
-  files?: { name: string; content: string | object }[];
 }
 
 const projectStore = useProjectStore();
@@ -57,7 +47,7 @@ const { elements, selectedElement, updateElement, deleteElement } = useGraphElem
 const { generatedCode } = useBugsCodeGenerator(elements);
 const { getCyInstance, getUndoRedoInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
-const { backendUrl, isConnected, isConnecting, isExecuting, samplerSettings, standaloneScript } = storeToRefs(executionStore);
+const { samplerSettings, standaloneScript } = storeToRefs(executionStore);
 const { isLeftSidebarOpen, isRightSidebarOpen, canvasGridStyle, isDarkMode } = storeToRefs(uiStore);
 
 const currentMode = ref<string>('select');
@@ -76,9 +66,7 @@ const showNewGraphModal = ref(false);
 const newGraphName = ref('');
 const showAboutModal = ref(false);
 const showValidationModal = ref(false);
-const showConnectModal = ref(false);
 const showScriptSettingsModal = ref(false);
-const tempBackendUrl = ref(backendUrl.value || 'http://localhost:8081');
 const showDebugPanel = ref(false);
 const showExportModal = ref(false);
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null);
@@ -141,9 +129,6 @@ watch(isDarkMode, (val) => {
   if (val) element?.classList.add('dark-mode');
   else element?.classList.remove('dark-mode');
 }, { immediate: true });
-
-let currentRunController: AbortController | null = null;
-let abortedByUser = false;
 
 onMounted(async () => {
   projectStore.loadProjects();
@@ -229,7 +214,7 @@ watch([isDataPanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) =>
                 // Sidebar is ~300px + 16px margin.
                 const leftSidebarOffset = isLeftSidebarOpen.value ? 320 : 20; 
                 
-                let targetScreenX = leftSidebarOffset + 20;
+                const targetScreenX = leftSidebarOffset + 20;
                 
                 // Top offset
                 const targetScreenY = 90;
@@ -448,142 +433,6 @@ const handleConfirmExport = (options: ExportOptions) => {
   }
 };
 
-const connectToBackend = async () => {
-  isConnecting.value = true;
-  isConnected.value = false;
-  executionStore.setBackendUrl(tempBackendUrl.value);
-  executionStore.executionLogs.push(`Attempting to connect to backend at ${tempBackendUrl.value}...`);
-  
-  try {
-    const response = await fetch(`${tempBackendUrl.value}/api/health`);
-    if (!response.ok) throw new Error(`Health check failed with status: ${response.status}`);
-    const result = await response.json();
-    if (result.status !== 'ok') throw new Error('Backend returned an invalid health status.');
-    isConnected.value = true;
-    executionStore.executionLogs.push("Connection successful.");
-    showConnectModal.value = false;
-  } catch (error: unknown) {
-    const errorMessage = (error as Error).message;
-    executionStore.executionLogs.push(`Connection failed: ${errorMessage}`);
-    isConnected.value = false;
-  } finally {
-    isConnecting.value = false;
-  }
-};
-
-const jsonToJulia = (jsonString: string): string => {
-  try {
-    const obj = JSON.parse(jsonString);
-    if (Object.keys(obj).length === 0) return "()";
-    const formatValue = (value: unknown): string => {
-      if (Array.isArray(value)) {
-        if (Array.isArray(value[0])) {
-          return `[\n    ${value.map(row => (row as unknown[]).join(' ')).join(';\n    ')}\n]`;
-        }
-        return `[${value.join(', ')}]`;
-      }
-      return JSON.stringify(value);
-    };
-    const entries = Object.entries(obj).map(([key, value]) => `${key} = ${formatValue(value)}`);
-    return `(\n  ${entries.join(',\n  ')}\n)`;
-  } catch {
-    return "()";
-  }
-};
-
-const runModel = async () => {
-  if (!isConnected.value || !backendUrl.value || isExecuting.value) return;
-
-  executionStore.resetExecutionState();
-  executionStore.setExecutionPanelTab('logs');
-  abortedByUser = false;
-
-  try {
-    if (currentRunController) {
-      currentRunController.abort();
-      currentRunController = null;
-    }
-    currentRunController = new AbortController();
-
-    const dataPayload = parsedGraphData.value.data || {};
-    const initsPayload = parsedGraphData.value.inits || {};
-    const dataString = dataStore.inputMode === 'julia' ? (dataStore.dataString || '') : jsonToJulia(JSON.stringify(dataPayload));
-    const initsString = dataStore.inputMode === 'julia' ? (dataStore.initsString || '') : jsonToJulia(JSON.stringify(initsPayload));
-
-    const payload = {
-      model_code: generatedCode.value,
-      data: dataPayload,
-      inits: initsPayload,
-      data_string: dataString,
-      inits_string: initsString,
-      settings: { ...samplerSettings.value }
-    };
-
-    let response = await fetch(`${backendUrl.value}/api/run`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: currentRunController.signal
-    });
-
-    if (response.status === 404) {
-      response = await fetch(`${backendUrl.value}/api/run_model`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model_code: payload.model_code,
-          data_string: dataString,
-          inits_string: initsString,
-          settings: samplerSettings.value
-        }),
-        signal: currentRunController.signal
-      });
-    }
-
-    const result = await response.json() as RunResponse;
-    executionStore.executionLogs = result.logs ?? [];
-    if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
-
-    executionStore.executionResults = (result.results ?? result.summary ?? null) as unknown as ExecutionResult[] | null;
-    executionStore.summaryResults = (result.summary ?? null) as unknown as ExecutionResult[] | null;
-    executionStore.quantileResults = (result.quantiles ?? null) as unknown as ExecutionResult[] | null;
-
-    const frontendStandaloneScript = generateStandaloneScript({
-      modelCode: generatedCode.value,
-      data: dataPayload,
-      inits: initsPayload,
-      settings: {
-        n_samples: samplerSettings.value.n_samples,
-        n_adapts: samplerSettings.value.n_adapts,
-        n_chains: samplerSettings.value.n_chains,
-        seed: samplerSettings.value.seed ?? undefined,
-      }
-    });
-    const frontendStandaloneFile: GeneratedFile = { name: 'standalone.jl', content: frontendStandaloneScript };
-    const backendFiles = (result.files ?? []).filter((file: {name: string}) => file.name !== 'standalone.jl').map((file: {name: string; content: string | object}) => {
-      return {
-          name: file.name,
-          content: typeof file.content === 'string' ? file.content : JSON.stringify(file.content),
-      };
-    });
-    executionStore.generatedFiles = [frontendStandaloneFile, ...backendFiles];
-    executionStore.executionError = null;
-    executionStore.setExecutionPanelTab('results');
-
-  } catch (error: unknown) {
-    const err = error as Error & { name?: string };
-    if (err?.name === 'AbortError') {
-      executionStore.executionError = abortedByUser ? 'Execution aborted by user.' : 'Request aborted.';
-    } else {
-      executionStore.executionError = err.message;
-    }
-  } finally {
-    isExecuting.value = false;
-    currentRunController = null;
-    abortedByUser = false;
-  }
-};
-
 const getScriptContent = () => {
     const dataPayload = parsedGraphData.value.data || {};
     const initsPayload = parsedGraphData.value.inits || {};
@@ -674,13 +523,6 @@ const toggleRightSidebar = () => {
         isLeftSidebarOpen.value = false;
     }
     isRightSidebarOpen.value = !isRightSidebarOpen.value;
-};
-
-const abortRun = () => {
-  if (currentRunController) {
-    abortedByUser = true;
-    currentRunController.abort();
-  }
 };
 
 const handleUndo = () => {

@@ -11,6 +11,7 @@ import klay from 'cytoscape-klay';
 import undoRedo from 'cytoscape-undo-redo';
 import { useCompoundDragDrop } from './useCompoundDragDrop';
 import svg from 'cytoscape-svg';
+import { useUiStore } from '../stores/uiStore';
 
 // NOTE: Do NOT register gridGuide or contextMenus - they break iPad/mobile touch events
 cytoscape.use(dagre);
@@ -26,6 +27,8 @@ type UndoRedoInstance = any;
 const instances = new Map<string, { cy: Core, ur: UndoRedoInstance }>();
 
 export function useGraphInstance() {
+  const uiStore = useUiStore();
+
   const initCytoscape = (container: HTMLElement, initialElements: ElementDefinition[], graphId: string): Core => {
     if (instances.has(graphId)) {
       const instance = instances.get(graphId)!;
@@ -40,44 +43,38 @@ export function useGraphInstance() {
         {
           selector: 'node',
           style: {
-            'background-color': '#e0e0e0', 'border-color': '#555', 'border-width': 2,
+            // Core shape and size logic: Use global preference from uiStore
+            'background-color': (ele: NodeSingular) => uiStore.nodeStyles[ele.data('nodeType')]?.backgroundColor || '#999',
+            'background-opacity': (ele: NodeSingular) => uiStore.nodeStyles[ele.data('nodeType')]?.backgroundOpacity ?? 1,
+            'border-color': (ele: NodeSingular) => uiStore.nodeStyles[ele.data('nodeType')]?.borderColor || '#555',
+            'border-width': (ele: NodeSingular) => uiStore.nodeStyles[ele.data('nodeType')]?.borderWidth || 2,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            'border-style': (ele: NodeSingular) => (uiStore.nodeStyles[ele.data('nodeType')]?.borderStyle || 'solid') as any,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            'shape': (ele: NodeSingular) => (uiStore.nodeStyles[ele.data('nodeType')]?.shape || 'ellipse') as any,
+            'width': (ele: NodeSingular) => uiStore.nodeStyles[ele.data('nodeType')]?.width || 60,
+            'height': (ele: NodeSingular) => uiStore.nodeStyles[ele.data('nodeType')]?.height || 60,
+            
             'label': (ele: NodeSingular) => {
               const name = ele.data('name') as string;
               const indices = ele.data('indices') as string | undefined;
               return indices ? `${name}[${indices}]` : name;
             },
             'text-valign': 'center', 'text-halign': 'center', 'padding': '10px', 'font-size': '10px',
-            'text-wrap': 'wrap', 'text-max-width': '80px', 'height': '60px', 'width': '60px',
-            'line-height': 1.2, 'border-style': 'solid', 'z-index': 10
+            'text-wrap': 'wrap', 'text-max-width': '80px', 
+            'line-height': 1.2, 'z-index': 10
           },
         },
         {
           selector: 'node[nodeType="plate"]',
           style: {
-            'background-color': '#f0f8ff', 'border-color': '#4682b4', 'border-style': 'dashed',
-            'shape': 'round-rectangle', 'corner-radius': '10px',
-            'label': (ele: NodeSingular) => `for(${ele.data('loopVariable')} in ${ele.data('loopRange')})`
+            // Plate specific overrides - label handling primarily
+            'label': (ele: NodeSingular) => `for(${ele.data('loopVariable')} in ${ele.data('loopRange')})`,
           },
         },
         {
           selector: ':parent',
-          style: { 'text-valign': 'top', 'text-halign': 'center', 'padding': '15px', 'background-opacity': 0.2, 'z-index': 5 },
-        },
-        {
-          selector: 'node[nodeType="stochastic"]',
-          style: { 'background-color': '#ffe0e0', 'border-color': '#dc3545', 'shape': 'ellipse' },
-        },
-        {
-          selector: 'node[nodeType="deterministic"]',
-          style: { 'background-color': '#e0ffe0', 'border-color': '#28a745', 'shape': 'triangle' },
-        },
-        {
-          selector: 'node[nodeType="constant"]',
-          style: { 'background-color': '#e9ecef', 'border-color': '#6c757d', 'shape': 'rectangle' },
-        },
-        {
-          selector: 'node[nodeType="observed"]',
-          style: { 'background-color': '#e0f0ff', 'border-color': '#007bff', 'border-style': 'dashed', 'shape': 'ellipse' },
+          style: { 'text-valign': 'top', 'text-halign': 'center', 'padding': '15px', 'z-index': 5 },
         },
         {
           selector: 'node[?hasError]',
@@ -109,11 +106,23 @@ export function useGraphInstance() {
         },
         {
           selector: 'edge[relationshipType="stochastic"]',
-          style: { 'line-color': '#dc3545', 'target-arrow-color': '#dc3545', 'line-style': 'dashed' },
+          style: {
+            'line-color': () => uiStore.edgeStyles.stochastic.color,
+            'target-arrow-color': () => uiStore.edgeStyles.stochastic.color,
+            'width': () => uiStore.edgeStyles.stochastic.width,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            'line-style': () => uiStore.edgeStyles.stochastic.lineStyle as any,
+          },
         },
         {
           selector: 'edge[relationshipType="deterministic"]',
-          style: { 'line-color': '#28a745', 'target-arrow-color': '#28a745', 'line-style': 'solid' },
+          style: {
+            'line-color': () => uiStore.edgeStyles.deterministic.color,
+            'target-arrow-color': () => uiStore.edgeStyles.deterministic.color,
+            'width': () => uiStore.edgeStyles.deterministic.width,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            'line-style': () => uiStore.edgeStyles.deterministic.lineStyle as any,
+          },
         },
         {
           selector: '.cy-selected',
@@ -225,31 +234,6 @@ export function useGraphInstance() {
       dropSibling: () => false,
       outThreshold: 30, // Reduced threshold for better UX
     }, urInstance);
-
-    // NOTE: gridGuide and contextMenus extensions are disabled
-    // These extensions interfere with touch events on iOS/Safari/WebKit browsers
-    // Uncomment below to re-enable for desktop-only usage:
-    /*
-    (cyInstance as Core & { gridGuide: (options: { drawGrid: boolean; snapToGridOnRelease: boolean; snapToGridDuringDrag: boolean; gridSpacing: number }) => void }).gridGuide({ drawGrid: false, snapToGridOnRelease: true, snapToGridDuringDrag: true, gridSpacing: 20 });
-
-    (cyInstance as Core & { contextMenus: (options: { menuItems: { id: string; content: string; selector: string; onClickFunction: (evt: cytoscape.EventObject) => void }[] }) => void }).contextMenus({
-      menuItems: [
-        {
-          id: 'remove',
-          content: 'Remove',
-          selector: 'node, edge',
-          onClickFunction: (evt: cytoscape.EventObject) => {
-            const targetElement = evt.target;
-            targetElement.cy().container()?.dispatchEvent(
-              new CustomEvent('cxt-remove', {
-                detail: { elementId: targetElement.id() }
-              })
-            );
-          }
-        }
-      ]
-    });
-    */
 
     instances.set(graphId, { cy: cyInstance, ur: urInstance });
 

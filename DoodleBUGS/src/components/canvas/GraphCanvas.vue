@@ -5,6 +5,7 @@ import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGridSnapping } from '../../composables/useGridSnapping';
 import type { GraphElement, GraphNode, GraphEdge, NodeType, PaletteItemType, ValidationError } from '../../types';
 import type { GridStyle } from '../../stores/uiStore';
+import { useUiStore } from '../../stores/uiStore';
 
 const props = defineProps<{
   graphId: string;
@@ -34,11 +35,12 @@ let cy: Core | null = null;
 const cyInstance = ref<Core | null>(null);
 let resizeObserver: ResizeObserver | null = null;
 
-const isGraphVisible = ref(false);
-
 const { initCytoscape, destroyCytoscape, getCyInstance, getUndoRedoInstance } = useGraphInstance();
 const getCy = () => getCyInstance(props.graphId);
 const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping(getCy);
+const uiStore = useUiStore();
+
+const isGraphVisible = ref(false);
 
 const validNodeTypes: NodeType[] = ['stochastic', 'deterministic', 'constant', 'observed', 'plate'];
 
@@ -321,6 +323,14 @@ watch(() => props.gridSize, (newValue: number) => {
 
 watch([() => props.elements, () => props.validationErrors], ([newElements, newErrors]) => {
   syncGraphWithProps(newElements, newErrors);
+}, { deep: true });
+
+// Watch for global style changes and force update (for both nodes and edges)
+watch([() => uiStore.nodeStyles, () => uiStore.edgeStyles], () => {
+    if (cy) {
+        // Trigger style recalculation
+        cy.style().update();
+    }
 }, { deep: true });
 </script>
 

@@ -1,9 +1,21 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
+import { nodeDefinitions, defaultEdgeStyles, type EdgeStyle } from '../config/nodeDefinitions';
 
 export type RightSidebarTab = 'properties' | 'code' | 'json' | 'script';
 export type LeftSidebarTab = 'project' | 'palette' | 'data' | 'settings' | 'view' | 'export' | 'connect' | 'help';
 export type GridStyle = 'dots' | 'lines';
+
+export interface NodeStyle {
+    backgroundColor: string;
+    borderColor: string;
+    borderWidth: number;
+    borderStyle: string;
+    backgroundOpacity: number;
+    shape: string;
+    width: number;
+    height: number;
+}
 
 export const useUiStore = defineStore('ui', () => {
   // Right Sidebar State
@@ -44,6 +56,45 @@ export const useUiStore = defineStore('ui', () => {
   // Theme State
   const isDarkMode = ref<boolean>(localStorage.getItem('doodlebugs-darkMode') === 'true');
 
+  // Node Styles
+  const storedStyles = localStorage.getItem('doodlebugs-nodeStyles');
+  const initialNodeStyles: Record<string, NodeStyle> = {};
+  
+  // Initialize from definitions first
+  nodeDefinitions.forEach(def => {
+      initialNodeStyles[def.nodeType] = { ...def.defaultStyle };
+  });
+
+  // Override with stored
+  if (storedStyles) {
+      try {
+          const parsed = JSON.parse(storedStyles);
+          Object.keys(initialNodeStyles).forEach(key => {
+              if (parsed[key]) {
+                  initialNodeStyles[key] = { ...initialNodeStyles[key], ...parsed[key] };
+              }
+          });
+      } catch (e) {
+          console.error("Failed to load node styles", e);
+      }
+  }
+
+  const nodeStyles = ref<Record<string, NodeStyle>>(initialNodeStyles);
+
+  // Edge Styles
+  const storedEdgeStyles = localStorage.getItem('doodlebugs-edgeStyles');
+  let initialEdgeStyles = { ...defaultEdgeStyles };
+
+  if (storedEdgeStyles) {
+      try {
+          initialEdgeStyles = { ...initialEdgeStyles, ...JSON.parse(storedEdgeStyles) };
+      } catch (e) {
+          console.error("Failed to load edge styles", e);
+      }
+  }
+
+  const edgeStyles = ref<Record<'stochastic' | 'deterministic', EdgeStyle>>(initialEdgeStyles);
+
   // Watchers for Persistence
   watch(activeRightTab, (newTab) => {
     localStorage.setItem('doodlebugs-activeRightTab', newTab);
@@ -66,6 +117,12 @@ export const useUiStore = defineStore('ui', () => {
   watch(isDarkMode, (val) => {
     localStorage.setItem('doodlebugs-darkMode', String(val));
   });
+  watch(nodeStyles, (styles) => {
+      localStorage.setItem('doodlebugs-nodeStyles', JSON.stringify(styles));
+  }, { deep: true });
+  watch(edgeStyles, (styles) => {
+      localStorage.setItem('doodlebugs-edgeStyles', JSON.stringify(styles));
+  }, { deep: true });
 
   // Actions
   const setActiveRightTab = (tab: RightSidebarTab) => {
@@ -113,6 +170,8 @@ export const useUiStore = defineStore('ui', () => {
     toggleLeftSidebar,
     canvasGridStyle,
     isDarkMode,
-    toggleDarkMode
+    toggleDarkMode,
+    nodeStyles,
+    edgeStyles
   };
 });

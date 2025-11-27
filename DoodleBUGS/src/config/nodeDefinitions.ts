@@ -28,7 +28,28 @@ export interface NodeDefinition {
     styleClass: string;
     properties: NodeProperty[];
     parameters?: NodeProperty[]; // Optional parameters for distributions
+    defaultStyle: {
+        backgroundColor: string;
+        borderColor: string;
+        borderWidth: number;
+        borderStyle: string;
+        backgroundOpacity: number;
+        shape: string;
+        width: number;
+        height: number;
+    };
 }
+
+export interface EdgeStyle {
+    color: string;
+    width: number;
+    lineStyle: string; // 'solid' | 'dashed' | 'dotted'
+}
+
+export const defaultEdgeStyles: Record<'stochastic' | 'deterministic', EdgeStyle> = {
+    stochastic: { color: '#dc3545', width: 3, lineStyle: 'dashed' },
+    deterministic: { color: '#28a745', width: 3, lineStyle: 'solid' }
+};
 
 const distributionOptions: SelectOption[] = [
     { value: 'dnorm', label: 'Normal (dnorm)', paramCount: 2, paramNames: ['mean', 'precision'], helpText: 'Parameters: mean (expected value), precision (1/variance). Note: BUGS uses precision instead of standard deviation.' },
@@ -57,7 +78,17 @@ export const nodeDefinitions: NodeDefinition[] = [
             { key: 'param1', label: 'Parameter 1', type: 'text', defaultValue: '' },
             { key: 'param2', label: 'Parameter 2', type: 'text', defaultValue: '' },
             { key: 'param3', label: 'Parameter 3', type: 'text', defaultValue: '' },
-        ]
+        ],
+        defaultStyle: {
+            backgroundColor: '#ffe0e0',
+            borderColor: '#dc3545',
+            borderWidth: 2,
+            borderStyle: 'solid',
+            backgroundOpacity: 1,
+            shape: 'ellipse',
+            width: 60,
+            height: 60
+        }
     },
     {
         nodeType: 'deterministic',
@@ -69,7 +100,17 @@ export const nodeDefinitions: NodeDefinition[] = [
             { key: 'name', label: 'Name', type: 'text', defaultValue: 'logical.node' },
             { key: 'equation', label: 'Equation (<-)', type: 'text', placeholder: 'e.g., a + b * x', defaultValue: '' },
             { key: 'indices', label: 'Indices', type: 'text', placeholder: 'e.g., i,j', defaultValue: '' },
-        ]
+        ],
+        defaultStyle: {
+            backgroundColor: '#e0ffe0',
+            borderColor: '#28a745',
+            borderWidth: 2,
+            borderStyle: 'solid',
+            backgroundOpacity: 1,
+            shape: 'triangle', 
+            width: 60,
+            height: 60
+        }
     },
     {
         nodeType: 'constant',
@@ -80,7 +121,17 @@ export const nodeDefinitions: NodeDefinition[] = [
         properties: [
             { key: 'name', label: 'Name', type: 'text', defaultValue: 'constant.node' },
             { key: 'indices', label: 'Indices', type: 'text', placeholder: 'e.g., i,j', defaultValue: '' },
-        ]
+        ],
+        defaultStyle: {
+            backgroundColor: '#e9ecef',
+            borderColor: '#6c757d',
+            borderWidth: 2,
+            borderStyle: 'solid',
+            backgroundOpacity: 1,
+            shape: 'rectangle',
+            width: 60,
+            height: 60
+        }
     },
     {
         nodeType: 'observed',
@@ -98,7 +149,17 @@ export const nodeDefinitions: NodeDefinition[] = [
             { key: 'param1', label: 'Parameter 1', type: 'text', defaultValue: '' },
             { key: 'param2', label: 'Parameter 2', type: 'text', defaultValue: '' },
             { key: 'param3', label: 'Parameter 3', type: 'text', defaultValue: '' },
-        ]
+        ],
+        defaultStyle: {
+            backgroundColor: '#e0f0ff',
+            borderColor: '#007bff',
+            borderWidth: 2,
+            borderStyle: 'dashed',
+            backgroundOpacity: 1,
+            shape: 'ellipse',
+            width: 60,
+            height: 60
+        }
     },
     {
         nodeType: 'plate',
@@ -110,7 +171,17 @@ export const nodeDefinitions: NodeDefinition[] = [
             { key: 'name', label: 'Name', type: 'text', defaultValue: 'Plate' },
             { key: 'loopVariable', label: 'Loop Variable', type: 'text', placeholder: 'e.g., i', defaultValue: 'i' },
             { key: 'loopRange', label: 'Loop Range', type: 'text', placeholder: 'e.g., 1:N', defaultValue: '1:N' },
-        ]
+        ],
+        defaultStyle: {
+            backgroundColor: '#f0f8ff',
+            borderColor: '#4682b4',
+            borderWidth: 2,
+            borderStyle: 'dashed',
+            backgroundOpacity: 0.2, // Semi-transparent for plates
+            shape: 'round-rectangle',
+            width: 0, // Dynamic
+            height: 0 // Dynamic
+        }
     },
 ];
 
