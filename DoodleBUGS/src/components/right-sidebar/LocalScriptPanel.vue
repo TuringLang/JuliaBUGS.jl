@@ -219,33 +219,37 @@ const copyScript = async () => {
 
 .native-copy-button {
   position: absolute;
-  bottom: 12px;
-  right: 12px;
-  z-index: 100;
+  bottom: 5px;
+  right: 5px;
   width: 36px;
   height: 36px;
-  border-radius: 50%;
-  background-color: var(--color-secondary);
+  background-color: transparent;
   color: #fff;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   cursor: pointer;
-  opacity: 0.9;
+  opacity: 0.5;
   transition: background-color 0.2s, opacity 0.2s;
+  z-index: 1000;
   pointer-events: auto;
   border: none;
   outline: none;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
 .native-copy-button:hover {
-  background-color: var(--color-secondary-hover);
+  background-color: transparent;
   opacity: 1;
 }
 
 .native-copy-button:active {
   transform: scale(0.95);
+}
+
+.native-copy-button .fa-copy,
+.native-copy-button .fa-check {
+  font-size: 1rem;
 }
 </style>

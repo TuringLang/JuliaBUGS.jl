@@ -225,6 +225,7 @@ onUnmounted(() => {
           <i class="fas fa-grip-vertical"></i>
       </div>
 
+      <!-- 1. Selection Tool -->
       <button 
         class="dock-btn" 
         :class="{ active: currentMode === 'select' }"
@@ -235,8 +236,7 @@ onUnmounted(() => {
         <i class="fas fa-mouse-pointer"></i>
       </button>
 
-      <div class="divider"></div>
-
+      <!-- 2. Add Node/Edge Dropdown -->
       <DropdownMenu class="dock-dropdown add-tool-dropdown">
           <template #trigger>
               <button 
@@ -276,6 +276,44 @@ onUnmounted(() => {
           </template>
       </DropdownMenu>
 
+      <div class="divider"></div>
+
+      <!-- 3. Edit History -->
+      <button class="dock-btn" @click="$emit('undo')" title="Undo (Ctrl+Z)" type="button">
+        <i class="fas fa-undo"></i>
+      </button>
+      <button class="dock-btn" @click="$emit('redo')" title="Redo (Ctrl+Y)" type="button">
+        <i class="fas fa-redo"></i>
+      </button>
+
+      <div class="divider"></div>
+
+      <!-- 4. Panels & Style -->
+      <button 
+        class="dock-btn" 
+        :class="{ active: showCodePanel }"
+        @click="$emit('toggle-code-panel')"
+        title="BUGS Code" 
+        type="button"
+      >
+        <i class="fas fa-code"></i>
+      </button>
+
+      <button 
+        class="dock-btn" 
+        :class="{ active: showDataPanel }"
+        @click="$emit('toggle-data-panel')"
+        title="Data Panel"
+        type="button"
+      >
+        <i class="fas fa-database"></i>
+      </button>
+
+      <button class="dock-btn" @click="$emit('open-style-modal')" title="Graph Style" type="button">
+          <i class="fas fa-palette"></i>
+      </button>
+
+      <!-- 5. Zoom & Layout -->
       <template v-if="showZoomControls">
         <div class="divider"></div>
         <button class="dock-btn" @click="$emit('zoom-in')" title="Zoom In" type="button">
@@ -290,41 +328,7 @@ onUnmounted(() => {
       </template>
 
       <div class="divider"></div>
-
-      <button class="dock-btn" @click="$emit('open-style-modal')" title="Graph Style" type="button">
-          <i class="fas fa-palette"></i>
-      </button>
-
-      <button 
-        class="dock-btn" 
-        :class="{ active: showDataPanel }"
-        @click="$emit('toggle-data-panel')"
-        title="Data Panel"
-        type="button"
-      >
-        <i class="fas fa-database"></i>
-      </button>
-
-      <button 
-        class="dock-btn" 
-        :class="{ active: showCodePanel }"
-        @click="$emit('toggle-code-panel')"
-        title="BUGS Code" 
-        type="button"
-      >
-        <i class="fas fa-code"></i>
-      </button>
-
-      <div class="divider"></div>
-
-      <button class="dock-btn" @click="$emit('undo')" title="Undo (Ctrl+Z)" type="button">
-        <i class="fas fa-undo"></i>
-      </button>
-      <button class="dock-btn" @click="$emit('redo')" title="Redo (Ctrl+Y)" type="button">
-        <i class="fas fa-redo"></i>
-      </button>
-
-      <div class="divider"></div>
+      
       <DropdownMenu class="dock-dropdown">
           <template #trigger>
               <button class="dock-btn" title="Graph Layout" type="button">

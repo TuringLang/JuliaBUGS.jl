@@ -51,16 +51,21 @@ const { generatedCode } = useBugsCodeGenerator(elements);
 const { getCyInstance, getUndoRedoInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
 const { samplerSettings, standaloneScript } = storeToRefs(scriptStore);
-const { isLeftSidebarOpen, isRightSidebarOpen, canvasGridStyle, isDarkMode, activeRightTab } = storeToRefs(uiStore);
+const { 
+  isLeftSidebarOpen, 
+  isRightSidebarOpen, 
+  canvasGridStyle, 
+  isDarkMode, 
+  activeRightTab,
+  isGridEnabled,
+  gridSize,
+  showZoomControls,
+  showDebugPanel,
+  activeLeftAccordionTabs
+} = storeToRefs(uiStore);
 
 const currentMode = ref<string>('select');
 const currentNodeType = ref<NodeType>('stochastic');
-const isGridEnabled = ref(true);
-const gridSize = ref(20);
-const showZoomControls = ref(true);
-
-// Sidebar State
-const activeAccordionTabs = ref(['project']);
 
 // Modals State
 const showNewProjectModal = ref(false);
@@ -71,7 +76,6 @@ const showAboutModal = ref(false);
 const showFaqModal = ref(false);
 const showValidationModal = ref(false);
 const showScriptSettingsModal = ref(false);
-const showDebugPanel = ref(false);
 const showExportModal = ref(false);
 const showStyleModal = ref(false);
 const showShareModal = ref(false);
@@ -83,6 +87,7 @@ const dataImportInput = ref<HTMLInputElement | null>(null);
 const graphImportInput = ref<HTMLInputElement | null>(null);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const importedGraphData = ref<any>(null);
+const isDragOver = ref(false);
 
 // Local viewport state for smooth UI updates
 const viewportState = ref({ zoom: 1, pan: { x: 0, y: 0 } });
@@ -152,6 +157,39 @@ const persistViewport = () => {
     }
     if (graphStore.currentGraphId) {
         graphStore.updateGraphViewport(graphStore.currentGraphId, viewportState.value.zoom, viewportState.value.pan);
+    }
+};
+
+const smartFit = (cy: Core, animate: boolean = true) => {
+    const eles = cy.elements();
+    if (eles.length === 0) return;
+    
+    const padding = 50;
+    const w = cy.width();
+    const h = cy.height();
+    const bb = eles.boundingBox();
+    
+    if (bb.w === 0 || bb.h === 0) return;
+
+    const zoomX = (w - 2 * padding) / bb.w;
+    const zoomY = (h - 2 * padding) / bb.h;
+    let targetZoom = Math.min(zoomX, zoomY);
+    targetZoom = Math.min(targetZoom, 0.8);
+    
+    const targetPan = {
+        x: (w - targetZoom * (bb.x1 + bb.x2)) / 2,
+        y: (h - targetZoom * (bb.y1 + bb.y2)) / 2
+    };
+
+    if (animate) {
+        cy.animate({
+            zoom: targetZoom,
+            pan: targetPan,
+            duration: 500,
+            easing: 'ease-in-out-cubic'
+        });
+    } else {
+        cy.viewport({ zoom: targetZoom, pan: targetPan });
     }
 };
 
@@ -365,6 +403,46 @@ const handleDataImport = (event: Event) => {
         if (dataImportInput.value) dataImportInput.value.value = '';
     };
     reader.readAsText(file);
+};
+
+const triggerGraphImport = () => {
+    graphImportInput.value?.click();
+};
+
+const processGraphFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const content = e.target?.result as string;
+            const data = JSON.parse(content);
+            // Basic validation
+            if (data.elements && Array.isArray(data.elements)) {
+                importedGraphData.value = data;
+                if (!newGraphName.value && data.name) {
+                    newGraphName.value = data.name + ' (Imported)';
+                }
+            } else {
+                alert('Invalid graph JSON file.');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to parse file.');
+        }
+    };
+    reader.readAsText(file);
+};
+
+const handleGraphImportFile = (event: Event) => {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (file) processGraphFile(file);
+};
+
+const handleDrop = (event: DragEvent) => {
+    isDragOver.value = false;
+    const file = event.dataTransfer?.files?.[0];
+    if (file) {
+        processGraphFile(file);
+    }
 };
 
 const handleLoadShared = async () => {
@@ -595,39 +673,6 @@ const handleViewportChanged = (v: { zoom: number, pan: { x: number, y: number } 
     saveViewportTimeout = setTimeout(persistViewport, 200);
 }
 
-const smartFit = (cy: Core, animate: boolean = true) => {
-    const eles = cy.elements();
-    if (eles.length === 0) return;
-    
-    const padding = 50;
-    const w = cy.width();
-    const h = cy.height();
-    const bb = eles.boundingBox();
-    
-    if (bb.w === 0 || bb.h === 0) return;
-
-    const zoomX = (w - 2 * padding) / bb.w;
-    const zoomY = (h - 2 * padding) / bb.h;
-    let targetZoom = Math.min(zoomX, zoomY);
-    targetZoom = Math.min(targetZoom, 0.8);
-    
-    const targetPan = {
-        x: (w - targetZoom * (bb.x1 + bb.x2)) / 2,
-        y: (h - targetZoom * (bb.y1 + bb.y2)) / 2
-    };
-
-    if (animate) {
-        cy.animate({
-            zoom: targetZoom,
-            pan: targetPan,
-            duration: 500,
-            easing: 'ease-in-out-cubic'
-        });
-    } else {
-        cy.viewport({ zoom: targetZoom, pan: targetPan });
-    }
-};
-
 const handleGraphLayout = (layoutName: string) => {
     const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null;
     if (!cy) return;
@@ -692,7 +737,7 @@ const createNewProject = () => {
     projectStore.createProject(newProjectName.value.trim());
     showNewProjectModal.value = false;
     newProjectName.value = '';
-    activeAccordionTabs.value = [...new Set([...activeAccordionTabs.value, 'project'])];
+    activeLeftAccordionTabs.value = [...new Set([...activeLeftAccordionTabs.value, 'project'])];
     isLeftSidebarOpen.value = true;
   }
 };
@@ -723,32 +768,6 @@ const createNewGraph = () => {
     importedGraphData.value = null;
     if (graphImportInput.value) graphImportInput.value.value = '';
   }
-};
-
-const handleGraphImportFile = (event: Event) => {
-    const file = (event.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            const content = e.target?.result as string;
-            const data = JSON.parse(content);
-            // Basic validation
-            if (data.elements && Array.isArray(data.elements)) {
-                importedGraphData.value = data;
-                if (!newGraphName.value && data.name) {
-                    newGraphName.value = data.name + ' (Imported)';
-                }
-            } else {
-                alert('Invalid graph JSON file.');
-            }
-        } catch (err) {
-            console.error(err);
-            alert('Failed to parse file.');
-        }
-    };
-    reader.readAsText(file);
 };
 
 const openExportModal = (format: 'png' | 'jpg' | 'svg') => {
@@ -1375,8 +1394,16 @@ watch(showNewGraphModal, (val) => {
         importedGraphData.value = null;
         newGraphName.value = '';
         if (graphImportInput.value) graphImportInput.value.value = '';
+        isDragOver.value = false;
     }
 });
+
+// Update the Left Sidebar Accordion model from the store
+const updateActiveAccordionTabs = (val: string | string[]) => {
+    // PrimeVue might emit single value or array depending on config, but multiple=true implies array
+    const newVal = Array.isArray(val) ? val : [val];
+    activeLeftAccordionTabs.value = newVal;
+};
 
 </script>
 
@@ -1411,7 +1438,8 @@ watch(showNewGraphModal, (val) => {
 
     <!-- Left Sidebar -->
     <LeftSidebar
-        :activeAccordionTabs="activeAccordionTabs"
+        :activeAccordionTabs="activeLeftAccordionTabs"
+        @update:activeAccordionTabs="updateActiveAccordionTabs"
         :projectName="projectStore.currentProject?.name || null"
         :pinnedGraphTitle="pinnedGraphTitle"
         :isGridEnabled="isGridEnabled"
@@ -1597,28 +1625,61 @@ watch(showNewGraphModal, (val) => {
     <BaseModal :is-open="showNewGraphModal" @close="showNewGraphModal = false">
       <template #header><h3>Create New Graph</h3></template>
       <template #body>
-        <div class="flex flex-col gap-4">
-            <div class="flex items-center gap-3">
-                <label style="min-width: 90px; font-weight: 500;">Graph Name:</label>
-                <BaseInput v-model="newGraphName" placeholder="Enter graph name" @keyup.enter="createNewGraph" />
+        <div class="flex flex-col gap-5">
+            <div class="form-group">
+                <label for="new-graph-name">Graph Name</label>
+                <BaseInput id="new-graph-name" v-model="newGraphName" placeholder="Enter a name for your graph" @keyup.enter="createNewGraph" />
             </div>
             
             <div class="divider"></div>
             
-            <div class="flex flex-col gap-2">
-                <label style="font-weight: 500; font-size: 0.9em;">Import from JSON (Optional):</label>
-                <div class="flex gap-2 items-center">
-                     <input type="file" ref="graphImportInput" accept=".json" @change="handleGraphImportFile" class="text-sm" />
-                     <span v-if="importedGraphData" class="text-green-500 text-xs font-bold flex items-center gap-1">
-                         <i class="fas fa-check"></i> Loaded
-                     </span>
+            <div class="import-section">
+                <label class="section-label">Import from JSON (Optional)</label>
+                
+                <div 
+                    class="drop-zone" 
+                    :class="{ 'loaded': importedGraphData, 'drag-over': isDragOver }"
+                    @click="triggerGraphImport"
+                    @dragover.prevent="isDragOver = true"
+                    @dragleave.prevent="isDragOver = false"
+                    @drop.prevent="handleDrop"
+                >
+                    <input 
+                        type="file" 
+                        ref="graphImportInput" 
+                        accept=".json" 
+                        @change="handleGraphImportFile" 
+                        class="hidden-input"
+                    />
+                    
+                    <div v-if="!importedGraphData" class="drop-zone-content">
+                        <div class="icon-circle">
+                            <i class="fas fa-file-import"></i>
+                        </div>
+                        <div class="text-content">
+                            <span class="action-text">Click or Drag & Drop JSON file</span>
+                            <small class="sub-text">Restore a previously exported graph</small>
+                        </div>
+                    </div>
+                    
+                    <div v-else class="drop-zone-content success">
+                        <div class="icon-circle success">
+                            <i class="fas fa-check"></i>
+                        </div>
+                        <div class="text-content">
+                            <span class="action-text">File Loaded Successfully</span>
+                            <small class="sub-text">{{ importedGraphData.name || 'Untitled Graph' }}</small>
+                        </div>
+                        <button class="remove-file-btn" @click.stop="importedGraphData = null; if(graphImportInput) graphImportInput.value = ''" title="Remove file">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                 </div>
-                <small class="text-muted" style="font-size: 0.8em; color: var(--theme-text-muted);">Select a previously exported graph JSON file to restore it.</small>
             </div>
         </div>
       </template>
       <template #footer>
-        <BaseButton @click="createNewGraph" type="primary">Create</BaseButton>
+        <BaseButton @click="createNewGraph" type="primary">Create Graph</BaseButton>
       </template>
     </BaseModal>
 
@@ -1638,7 +1699,7 @@ watch(showNewGraphModal, (val) => {
     <ValidationIssuesModal :is-open="showValidationModal" :validation-errors="validationErrors" :elements="elements" @select-node="handleSelectNodeFromModal" @close="showValidationModal = false" />
     <GraphStyleModal :is-open="showStyleModal" @close="showStyleModal = false" />
     <ShareModal :is-open="showShareModal" :url="shareUrl" :project="projectStore.currentProject" :current-graph-id="graphStore.currentGraphId" @close="showShareModal = false" @generate="handleGenerateShareLink" />
-    <DebugPanel v-if="showDebugPanel" />
+    <DebugPanel v-if="showDebugPanel" @close="showDebugPanel = false" />
   </div>
 </template>
 
@@ -1657,8 +1718,9 @@ watch(showNewGraphModal, (val) => {
   top: 0;
   left: 0;
   width: 100%;
-  height: 100%;
+  bottom: 0;
   z-index: 0;
+  transition: bottom 0.1s ease;
 }
 
 .collapsed-sidebar-trigger {
@@ -1975,6 +2037,150 @@ watch(showNewGraphModal, (val) => {
 .text-green-500 { color: var(--theme-success); }
 .font-bold { font-weight: bold; }
 .text-xs { font-size: 0.75rem; }
+
+/* New Graph Modal Styles */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-group label {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: var(--theme-text-secondary);
+}
+
+.section-label {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: var(--theme-text-secondary);
+    margin-bottom: 8px;
+    display: block;
+}
+
+.drop-zone {
+    border: 2px dashed var(--theme-border);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    background-color: var(--theme-bg-hover);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 160px;
+}
+
+.drop-zone:hover {
+    border-color: var(--theme-text-muted);
+    background-color: var(--theme-bg-active);
+}
+
+.drop-zone.drag-over {
+    border-color: var(--theme-primary);
+    background-color: rgba(16, 185, 129, 0.1);
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+}
+
+.drop-zone.loaded {
+    border-style: solid;
+    border-color: var(--theme-success);
+    background-color: rgba(16, 185, 129, 0.05);
+}
+
+.drop-zone-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    pointer-events: none;
+    width: 100%;
+}
+
+.drop-zone-content.success {
+    pointer-events: auto;
+}
+
+.icon-circle {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background-color: var(--theme-bg-panel);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-sm);
+    color: var(--theme-text-muted);
+    font-size: 24px;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.drop-zone:hover .icon-circle {
+    transform: scale(1.1);
+    color: var(--theme-primary);
+}
+
+.drop-zone.drag-over .icon-circle {
+    transform: scale(1.2);
+    background-color: var(--theme-primary);
+    color: white;
+}
+
+.icon-circle.success {
+    background-color: var(--theme-success);
+    color: white;
+}
+
+.text-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.action-text {
+    font-weight: 600;
+    color: var(--theme-text-primary);
+    font-size: 1rem;
+}
+
+.sub-text {
+    color: var(--theme-text-secondary);
+    font-size: 0.85em;
+}
+
+.hidden-input {
+    display: none;
+}
+
+.remove-file-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: var(--theme-bg-panel);
+    border: 1px solid var(--theme-border);
+    color: var(--theme-text-secondary);
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
+}
+
+.remove-file-btn:hover {
+    background-color: var(--theme-danger);
+    border-color: var(--theme-danger);
+    color: white;
+}
 
 @media (max-width: 768px) {
     .desktop-text { display: none; }

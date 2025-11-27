@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import JsonEditorPanel from '../right-sidebar/JsonEditorPanel.vue';
 import { useGraphStore } from '../../stores/graphStore';
 
@@ -9,6 +9,8 @@ interface LogEntry {
   type: 'log' | 'error' | 'warn';
 }
 
+const emit = defineEmits(['close', 'resize']);
+
 const graphStore = useGraphStore();
 const logs = ref<LogEntry[]>([]);
 const isVisible = ref(true);
@@ -16,6 +18,11 @@ const maxLogs = 100;
 const copySuccess = ref(false);
 const filterType = ref<'all' | 'log' | 'error' | 'warn'>('all');
 const activeTab = ref<'console' | 'json'>('console');
+
+// Resizing State
+const panelHeight = ref(300); // Default height
+const isResizing = ref(false);
+const HEADER_HEIGHT = 40; // Height of the header bar when collapsed
 
 const filteredLogs = computed(() => {
   if (filterType.value === 'all') return logs.value;
@@ -118,6 +125,52 @@ const originalLog = console.log;
 const originalError = console.error;
 const originalWarn = console.warn;
 
+const handleKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape') {
+    emit('close');
+  }
+};
+
+// Resizing Logic
+const startResize = () => {
+  isResizing.value = true;
+  window.addEventListener('mousemove', onResize);
+  window.addEventListener('mouseup', stopResize);
+  // Prevent selection during drag
+  document.body.style.userSelect = 'none';
+};
+
+const onResize = (e: MouseEvent) => {
+  if (!isResizing.value) return;
+  
+  // Calculate height from bottom
+  const newHeight = window.innerHeight - e.clientY;
+  
+  // Constraints
+  const minHeight = 100;
+  const maxHeight = window.innerHeight - 100;
+  
+  if (newHeight >= minHeight && newHeight <= maxHeight) {
+    panelHeight.value = newHeight;
+  }
+};
+
+const stopResize = () => {
+  isResizing.value = false;
+  window.removeEventListener('mousemove', onResize);
+  window.removeEventListener('mouseup', stopResize);
+  document.body.style.userSelect = '';
+};
+
+// Emit height changes so parent can adjust layout
+watch([panelHeight, isVisible], () => {
+  if (isVisible.value) {
+    emit('resize', panelHeight.value);
+  } else {
+    emit('resize', HEADER_HEIGHT);
+  }
+});
+
 onMounted(() => {
   console.log = (...args: unknown[]) => {
     originalLog(...args);
@@ -134,6 +187,11 @@ onMounted(() => {
     addLog(args.map(formatValue).join(' '), 'warn');
   };
   
+  window.addEventListener('keydown', handleKeydown);
+  
+  // Emit initial height
+  emit('resize', isVisible.value ? panelHeight.value : HEADER_HEIGHT);
+  
   addLog('Debug panel initialized', 'log');
 });
 
@@ -141,11 +199,24 @@ onUnmounted(() => {
   console.log = originalLog;
   console.error = originalError;
   console.warn = originalWarn;
+  window.removeEventListener('keydown', handleKeydown);
+  window.removeEventListener('mousemove', onResize);
+  window.removeEventListener('mouseup', stopResize);
+  
+  // Reset parent layout on unmount (implicit via parent logic usually, but consistent behavior)
+  emit('resize', 0);
 });
 </script>
 
 <template>
-  <div class="debug-panel" :class="{ collapsed: !isVisible, 'expanded-height': activeTab === 'json' && isVisible }">
+  <div 
+    class="debug-panel" 
+    :class="{ collapsed: !isVisible }"
+    :style="{ height: isVisible ? `${panelHeight}px` : `${HEADER_HEIGHT}px` }"
+  >
+    <!-- Resize Handle -->
+    <div class="resize-handle" @mousedown="startResize"></div>
+
     <div class="debug-header">
       <div class="debug-tabs">
           <button 
@@ -160,6 +231,11 @@ onUnmounted(() => {
           >Graph JSON</button>
       </div>
       <div class="debug-controls">
+        <button v-if="activeTab === 'json'" @click="copyJson" class="debug-btn" :title="copySuccess ? 'Copied!' : 'Copy JSON'">
+            <span v-if="copySuccess">✓</span>
+            <i v-else class="fas fa-copy"></i>
+        </button>
+        
         <template v-if="activeTab === 'console'">
             <button @click="copyLogs" class="debug-btn" :title="copySuccess ? 'Copied!' : 'Copy logs'">
               <span v-if="copySuccess">✓</span>
@@ -172,9 +248,12 @@ onUnmounted(() => {
         <button @click="toggleVisibility" class="debug-btn" title="Toggle visibility">
           <i :class="isVisible ? 'fas fa-chevron-down' : 'fas fa-chevron-up'"></i>
         </button>
+        <button @click="$emit('close')" class="debug-btn close-btn" title="Close Debug Panel">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
     </div>
-    <div v-if="isVisible" class="debug-body">
+    <div v-show="isVisible" class="debug-body">
         <div v-show="activeTab === 'console'" class="debug-content-wrapper">
             <div class="debug-filters">
                 <button 
@@ -208,13 +287,6 @@ onUnmounted(() => {
             </div>
         </div>
         <div v-show="activeTab === 'json'" class="debug-content-wrapper json-wrapper">
-            <div class="json-header-actions">
-                <button @click="copyJson" class="debug-btn tiny-btn" title="Copy JSON">
-                    <i v-if="copySuccess" class="fas fa-check"></i>
-                    <i v-else class="fas fa-copy"></i>
-                    Copy JSON
-                </button>
-            </div>
             <JsonEditorPanel :is-active="activeTab === 'json' && isVisible" />
         </div>
     </div>
@@ -232,20 +304,26 @@ onUnmounted(() => {
   font-family: 'Courier New', monospace;
   font-size: 11px;
   z-index: 99999;
-  border-top: 2px solid #00ff00;
-  max-height: 40vh;
+  border-top: 1px solid #00ff00;
   display: flex;
   flex-direction: column;
   box-shadow: 0 -4px 20px rgba(0, 255, 0, 0.3);
-  transition: max-height 0.3s ease;
+  transition: height 0.1s ease; /* Faster transition for resize responsiveness */
 }
 
-.debug-panel.collapsed {
-  max-height: 40px;
+.resize-handle {
+  height: 5px;
+  width: 100%;
+  cursor: ns-resize;
+  background-color: transparent;
+  position: absolute;
+  top: -3px;
+  left: 0;
+  z-index: 100000;
 }
 
-.debug-panel.expanded-height {
-    max-height: 60vh;
+.resize-handle:hover {
+  background-color: rgba(0, 255, 0, 0.5);
 }
 
 .debug-header {
@@ -318,6 +396,17 @@ onUnmounted(() => {
   font-weight: bold;
 }
 
+.debug-btn.close-btn {
+    border-color: #ff4444 !important;
+    color: #ff4444 !important;
+    margin-left: 8px;
+}
+
+.debug-btn.close-btn:hover {
+    background: rgba(255, 68, 68, 0.2);
+    color: #ffaaaa !important;
+}
+
 .tiny-btn {
     padding: 2px 6px;
     font-size: 10px;
@@ -345,14 +434,6 @@ onUnmounted(() => {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-}
-
-.json-header-actions {
-    padding: 4px;
-    background: rgba(0, 0, 0, 0.3);
-    border-bottom: 1px solid rgba(0, 255, 0, 0.2);
-    display: flex;
-    justify-content: flex-end;
 }
 
 /* Adjustments for JsonEditorPanel when inside DebugPanel */

@@ -343,8 +343,8 @@ watch([() => uiStore.nodeStyles, () => uiStore.edgeStyles], () => {
     class="cytoscape-container"
     :class="{
       'grid-background': isGridEnabled && gridSize > 0,
-      'grid-lines': (gridStyle === 'lines' || !gridStyle) && isGridEnabled && gridSize > 0,
-      'grid-dots': gridStyle === 'dots' && isGridEnabled && gridSize > 0,
+      'grid-lines': (gridStyle === 'lines') && isGridEnabled && gridSize > 0,
+      'grid-dots': (gridStyle === 'dots') && isGridEnabled && gridSize > 0,
       'mode-add-node': currentMode === 'add-node',
       'mode-add-edge': currentMode === 'add-edge',
       'mode-select': currentMode === 'select',
@@ -397,7 +397,12 @@ watch([() => uiStore.nodeStyles, () => uiStore.edgeStyles], () => {
 }
 
 .cytoscape-container.grid-background.grid-dots {
-  background-image: radial-gradient(circle, var(--theme-grid-line) 1px, transparent 1px) !important;
+  background-image: radial-gradient(circle, var(--theme-text-secondary) 1.2px, transparent 1px) !important;
+  opacity: 0.8;
+}
+
+html.dark-mode .cytoscape-container.grid-background.grid-dots {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.2) 1.2px, transparent 1px) !important;
 }
 
 .cytoscape-container.grid-background.grid-lines {

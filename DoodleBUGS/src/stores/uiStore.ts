@@ -50,9 +50,29 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.getItem('doodlebugs-isLeftSidebarOpen') === 'true'
   );
 
-  // Grid Settings
+  // Persist Open Accordion Tabs
+  const storedAccordion = localStorage.getItem('doodlebugs-activeLeftAccordionTabs');
+  const activeLeftAccordionTabs = ref<string[]>(
+      storedAccordion ? JSON.parse(storedAccordion) : ['project']
+  );
+
+  // Persistent UI Settings
+  const isGridEnabled = ref<boolean>(
+    localStorage.getItem('doodlebugs-isGridEnabled') !== 'false'
+  );
+  const gridSize = ref<number>(
+    parseInt(localStorage.getItem('doodlebugs-gridSize') || '30', 10)
+  );
+  const showZoomControls = ref<boolean>(
+    localStorage.getItem('doodlebugs-showZoomControls') !== 'false'
+  );
+  const showDebugPanel = ref<boolean>(
+    localStorage.getItem('doodlebugs-showDebugPanel') === 'true'
+  );
+
+  // Grid Settings - Default to 'dots' now
   const canvasGridStyle = ref<GridStyle>(
-    (localStorage.getItem('doodlebugs-canvasGridStyle') as GridStyle) || 'lines'
+    (localStorage.getItem('doodlebugs-canvasGridStyle') as GridStyle) || 'dots'
   );
 
   // Theme State
@@ -113,6 +133,21 @@ export const useUiStore = defineStore('ui', () => {
   watch(isLeftSidebarOpen, (isOpen) => {
     localStorage.setItem('doodlebugs-isLeftSidebarOpen', isOpen.toString());
   });
+  watch(activeLeftAccordionTabs, (tabs) => {
+      localStorage.setItem('doodlebugs-activeLeftAccordionTabs', JSON.stringify(tabs));
+  }, { deep: true });
+  watch(isGridEnabled, (val) => {
+    localStorage.setItem('doodlebugs-isGridEnabled', String(val));
+  });
+  watch(gridSize, (val) => {
+    localStorage.setItem('doodlebugs-gridSize', String(val));
+  });
+  watch(showZoomControls, (val) => {
+    localStorage.setItem('doodlebugs-showZoomControls', String(val));
+  });
+  watch(showDebugPanel, (val) => {
+    localStorage.setItem('doodlebugs-showDebugPanel', String(val));
+  });
   watch(canvasGridStyle, (style) => {
     localStorage.setItem('doodlebugs-canvasGridStyle', style);
   });
@@ -170,10 +205,15 @@ export const useUiStore = defineStore('ui', () => {
     isLeftSidebarOpen,
     handleLeftTabClick,
     toggleLeftSidebar,
+    activeLeftAccordionTabs,
     canvasGridStyle,
     isDarkMode,
     toggleDarkMode,
     nodeStyles,
-    edgeStyles
+    edgeStyles,
+    isGridEnabled,
+    gridSize,
+    showZoomControls,
+    showDebugPanel
   };
 });

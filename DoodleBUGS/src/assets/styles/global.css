@@ -210,7 +210,7 @@ textarea::placeholder {
 }
 
 .p-inputtext, .p-inputnumber-input, .p-select-label {
-  font-size: 13px !important;
+  font-size: 12px !important;
 }
 
 /* Cytoscape Grid */

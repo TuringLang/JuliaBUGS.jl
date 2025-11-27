@@ -157,7 +157,7 @@ export function useGraphInstance() {
       ],
       layout: { name: 'preset' },
       minZoom: 0.1,
-      maxZoom: 2,
+      maxZoom: 7,
       boxSelectionEnabled: true,
       autounselectify: false,
     };
