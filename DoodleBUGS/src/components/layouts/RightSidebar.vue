@@ -2,8 +2,8 @@
 import { type StyleValue } from 'vue';
 import { storeToRefs } from 'pinia';
 import NodePropertiesPanel from '../right-sidebar/NodePropertiesPanel.vue';
-import JsonEditorPanel from '../right-sidebar/JsonEditorPanel.vue';
 import LocalScriptPanel from '../right-sidebar/LocalScriptPanel.vue';
+import BaseButton from '../ui/BaseButton.vue';
 import { useUiStore } from '../../stores/uiStore';
 import type { GraphElement, ValidationError } from '../../types';
 
@@ -21,6 +21,10 @@ defineEmits<{
   (e: 'open-script-settings'): void;
   (e: 'download-script'): void;
   (e: 'generate-script'): void;
+  (e: 'share'): void;
+  (e: 'open-export-modal', format: 'png' | 'jpg' | 'svg'): void;
+  (e: 'export-json'): void;
+  (e: 'export-data'): void;
 }>();
 
 const uiStore = useUiStore();
@@ -63,8 +67,8 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
         
         <div class="sidebar-tabs text-tabs">
             <button :class="{ active: activeRightTab === 'properties' }" @click="uiStore.setActiveRightTab('properties')">Props</button>
-            <button :class="{ active: activeRightTab === 'json' }" @click="uiStore.setActiveRightTab('json')">JSON</button>
             <button :class="{ active: activeRightTab === 'script' }" @click="uiStore.setActiveRightTab('script')">Script</button>
+            <button :class="{ active: activeRightTab === 'export' }" @click="uiStore.setActiveRightTab('export')">Export</button>
         </div>
 
         <div class="sidebar-content">
@@ -73,7 +77,7 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                 :validation-errors="validationErrors"
                 @update-element="$emit('update-element', $event)" 
                 @delete-element="$emit('delete-element', $event)" />
-            <JsonEditorPanel v-show="activeRightTab === 'json'" :is-active="activeRightTab === 'json'" />
+            
             <LocalScriptPanel 
                 v-show="activeRightTab === 'script'" 
                 :is-active="activeRightTab === 'script'" 
@@ -81,6 +85,24 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                 @download="$emit('download-script')"
                 @generate="$emit('generate-script')"
             />
+
+            <div v-show="activeRightTab === 'export'" class="export-panel">
+                <div class="menu-panel flex-col gap-3">
+                    <h5 class="section-title">Share</h5>
+                    <BaseButton type="ghost" class="menu-btn" @click="$emit('share')"><i class="fas fa-share-alt"></i> Share via URL</BaseButton>
+                    
+                    <div class="divider"></div>
+                    <h5 class="section-title">Image Export</h5>
+                    <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'png')"><i class="fas fa-image"></i> PNG Image</BaseButton>
+                    <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'jpg')"><i class="fas fa-file-image"></i> JPG Image</BaseButton>
+                    <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'svg')"><i class="fas fa-vector-square"></i> SVG Vector</BaseButton>
+                    
+                    <div class="divider"></div>
+                    <h5 class="section-title">Graph and Data Export</h5>
+                    <BaseButton type="ghost" class="menu-btn" @click="$emit('export-json')"><i class="fas fa-file-code"></i> Graph as JSON</BaseButton>
+                    <BaseButton type="ghost" class="menu-btn" @click="$emit('export-data')"><i class="fas fa-database"></i> Data as JSON</BaseButton>
+                </div>
+            </div>
         </div>
     </aside>
 </template>
@@ -212,5 +234,43 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
   flex: 1;
   overflow-y: auto;
   background: var(--theme-bg-panel);
+}
+
+.export-panel {
+    padding: 10px;
+}
+
+.menu-panel {
+    display: flex;
+    padding: 8px;
+}
+
+.menu-btn {
+    justify-content: flex-start !important;
+    gap: 10px;
+    width: 100%;
+    padding: 10px !important;
+    font-size: var(--font-size-sm);
+    color: var(--theme-text-primary);
+    border-radius: var(--radius-sm);
+    transition: background-color 0.2s;
+}
+.menu-btn:hover {
+    background-color: var(--theme-bg-hover);
+}
+
+.divider {
+    height: 1px;
+    background: var(--theme-border);
+    margin: 12px 0;
+}
+
+.section-title {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--theme-text-secondary);
+    margin: 0 0 4px 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 </style>

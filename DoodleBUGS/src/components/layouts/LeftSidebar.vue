@@ -36,11 +36,11 @@ defineEmits<{
   (e: 'update:showDebugPanel', value: boolean): void;
   (e: 'toggle-code-panel'): void;
   (e: 'load-example', key: string): void;
-  (e: 'open-export-modal', format: 'png' | 'jpg' | 'svg'): void;
-  (e: 'export-json'): void;
   (e: 'open-about-modal'): void;
   (e: 'open-faq-modal'): void;
   (e: 'toggle-dark-mode'): void;
+  (e: 'share-graph', graphId: string): void;
+  (e: 'share-project-url', projectId: string): void;
 }>();
 
 const uiStore = useUiStore();
@@ -93,7 +93,12 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                     <AccordionHeader><i class="fas fa-folder icon-12"></i> Project</AccordionHeader>
                     <AccordionContent>
                         <div class="panel-content-wrapper">
-                            <ProjectManager @new-project="$emit('new-project')" @new-graph="$emit('new-graph')" />
+                            <ProjectManager 
+                                @new-project="$emit('new-project')" 
+                                @new-graph="$emit('new-graph')" 
+                                @share-graph="(id: string) => $emit('share-graph', id)"
+                                @share-project-url="(id: string) => $emit('share-project-url', id)"
+                            />
                             <div class="divider"></div>
                             <div class="example-row">
                                 <label class="example-label">Examples</label>
@@ -130,23 +135,6 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                                 <label>Zoom Controls</label>
                                 <ToggleSwitch :modelValue="showZoomControls" @update:modelValue="$emit('update:showZoomControls', $event)" />
                             </div>
-                            <div class="menu-row">
-                                <label>Debug Console</label>
-                                <ToggleSwitch :modelValue="showDebugPanel" @update:modelValue="$emit('update:showDebugPanel', $event)" />
-                            </div>
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
-
-                <AccordionPanel value="export">
-                    <AccordionHeader><i class="fas fa-file-export icon-12"></i> Export</AccordionHeader>
-                    <AccordionContent>
-                        <div class="menu-panel flex-col gap-3">
-                            <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'png')"><i class="fas fa-image"></i> PNG Image</BaseButton>
-                            <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'jpg')"><i class="fas fa-file-image"></i> JPG Image</BaseButton>
-                            <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'svg')"><i class="fas fa-vector-square"></i> SVG Vector</BaseButton>
-                            <div class="divider"></div>
-                            <BaseButton type="ghost" class="menu-btn" @click="$emit('export-json')"><i class="fas fa-file-code"></i> JSON Data</BaseButton>
                         </div>
                     </AccordionContent>
                 </AccordionPanel>
@@ -160,6 +148,18 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                             <a href="https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md" target="_blank" class="menu-btn ghost-btn">
                                 <i class="fab fa-github"></i> Report Issue
                             </a>
+                        </div>
+                    </AccordionContent>
+                </AccordionPanel>
+
+                <AccordionPanel value="devtools">
+                    <AccordionHeader><i class="fas fa-terminal icon-12"></i> Developer Tools</AccordionHeader>
+                    <AccordionContent>
+                        <div class="menu-panel flex-col gap-3">
+                            <div class="menu-row">
+                                <label>Debug Console</label>
+                                <ToggleSwitch :modelValue="showDebugPanel" @update:modelValue="$emit('update:showDebugPanel', $event)" />
+                            </div>
                         </div>
                     </AccordionContent>
                 </AccordionPanel>

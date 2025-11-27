@@ -2,8 +2,8 @@ import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
 import { nodeDefinitions, defaultEdgeStyles, type EdgeStyle } from '../config/nodeDefinitions';
 
-export type RightSidebarTab = 'properties' | 'code' | 'json' | 'script';
-export type LeftSidebarTab = 'project' | 'palette' | 'data' | 'settings' | 'view' | 'export' | 'connect' | 'help';
+export type RightSidebarTab = 'properties' | 'script' | 'export';
+export type LeftSidebarTab = 'project' | 'palette' | 'data' | 'settings' | 'view' | 'connect' | 'help' | 'devtools';
 export type GridStyle = 'dots' | 'lines';
 
 export interface NodeStyle {
@@ -24,10 +24,10 @@ export const useUiStore = defineStore('ui', () => {
   const storedRight = localStorage.getItem('doodlebugs-activeRightTab') as string | null;
   let initialRightTab: RightSidebarTab = 'properties';
   
-  if (storedRight === 'properties' || storedRight === 'code' || storedRight === 'json' || storedRight === 'script') {
+  if (storedRight === 'properties' || storedRight === 'script' || storedRight === 'export') {
       initialRightTab = storedRight as RightSidebarTab;
-  } else if (storedRight === 'connection') {
-      initialRightTab = 'properties'; // Fallback since connection is removed
+  } else if (storedRight === 'json') {
+      initialRightTab = 'properties'; // Fallback since json is moved
   }
 
   const activeRightTab = ref<RightSidebarTab>(initialRightTab);

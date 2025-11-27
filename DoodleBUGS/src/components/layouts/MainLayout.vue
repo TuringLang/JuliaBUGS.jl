@@ -13,6 +13,7 @@ import AboutModal from './AboutModal.vue';
 import FaqModal from './FaqModal.vue';
 import ExportModal from './ExportModal.vue';
 import GraphStyleModal from './GraphStyleModal.vue';
+import ShareModal from './ShareModal.vue';
 import ValidationIssuesModal from './ValidationIssuesModal.vue';
 import DebugPanel from '../common/DebugPanel.vue';
 import CodePreviewPanel from '../panels/CodePreviewPanel.vue';
@@ -27,7 +28,7 @@ import { useExecutionStore } from '../../stores/executionStore';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGraphValidator } from '../../composables/useGraphValidator';
 import { useBugsCodeGenerator, generateStandaloneScript } from '../../composables/useBugsCodeGenerator';
-import type { GraphElement, NodeType, ExampleModel } from '../../types';
+import type { GraphElement, NodeType, ExampleModel, GraphNode } from '../../types';
 
 interface ExportOptions {
   bg: string;
@@ -66,6 +67,8 @@ const showNewProjectModal = ref(false);
 const newProjectName = ref('');
 const showNewGraphModal = ref(false);
 const newGraphName = ref('');
+const importMode = ref<'blank' | 'json'>('blank');
+const importJsonContent = ref('');
 const showAboutModal = ref(false);
 const showFaqModal = ref(false);
 const showValidationModal = ref(false);
@@ -73,7 +76,12 @@ const showScriptSettingsModal = ref(false);
 const showDebugPanel = ref(false);
 const showExportModal = ref(false);
 const showStyleModal = ref(false);
+const showShareModal = ref(false);
+const shareUrl = ref('');
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null);
+
+// Data Import Ref
+const dataImportInput = ref<HTMLInputElement | null>(null);
 
 // Local viewport state for smooth UI updates
 const viewportState = ref({ zoom: 1, pan: { x: 0, y: 0 } });
@@ -123,8 +131,7 @@ const toggleDataPanel = () => {
 };
 
 const toggleJsonPanel = () => {
-    uiStore.setActiveRightTab('json');
-    uiStore.isRightSidebarOpen = true;
+    showDebugPanel.value = true;
 };
 
 // Dark Mode Handling
@@ -147,17 +154,398 @@ const persistViewport = () => {
     }
 };
 
+// Minification Helpers
+// Map full keys to short keys
+const keyMap: Record<string, string> = {
+    id: 'i',
+    name: 'n',
+    type: 't',
+    nodeType: 'nt',
+    position: 'p',
+    parent: 'pa',
+    distribution: 'di',
+    equation: 'eq',
+    observed: 'ob',
+    indices: 'id',
+    loopVariable: 'lv',
+    loopRange: 'lr',
+    param1: 'p1',
+    param2: 'p2',
+    param3: 'p3',
+    source: 's',
+    target: 'tg',
+    x: 'x',
+    y: 'y'
+};
+
+const nodeTypeMap: Record<string, number> = {
+    stochastic: 1,
+    deterministic: 2,
+    constant: 3,
+    observed: 4,
+    plate: 5
+};
+const revNodeTypeMap = { 1: 'stochastic', 2: 'deterministic', 3: 'constant', 4: 'observed', 5: 'plate' };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const minifyGraph = (elements: GraphElement[]): any[] => {
+    return elements.map(el => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const min: any = {};
+        if (el.type === 'node') {
+            const node = el as GraphNode;
+            min[keyMap.id] = node.id.replace('node_', ''); // Strip prefix if standard
+            min[keyMap.name] = node.name;
+            min[keyMap.type] = 0; // 0 for node
+            min[keyMap.nodeType] = nodeTypeMap[node.nodeType];
+            min[keyMap.position] = [Math.round(node.position.x), Math.round(node.position.y)];
+            if (node.parent) min[keyMap.parent] = node.parent.replace('node_', '').replace('plate_', '');
+            
+            if (node.distribution) min[keyMap.distribution] = node.distribution;
+            if (node.equation) min[keyMap.equation] = node.equation;
+            if (node.observed) min[keyMap.observed] = 1;
+            if (node.indices) min[keyMap.indices] = node.indices;
+            if (node.loopVariable) min[keyMap.loopVariable] = node.loopVariable;
+            if (node.loopRange) min[keyMap.loopRange] = node.loopRange;
+            if (node.param1) min[keyMap.param1] = node.param1;
+            if (node.param2) min[keyMap.param2] = node.param2;
+            if (node.param3) min[keyMap.param3] = node.param3;
+        } else {
+            const edge = el;
+            min[keyMap.id] = edge.id.replace('edge_', '');
+            min[keyMap.type] = 1; // 1 for edge
+            min[keyMap.source] = edge.source.replace('node_', '').replace('plate_', '');
+            min[keyMap.target] = edge.target.replace('node_', '').replace('plate_', '');
+        }
+        return min;
+    });
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const expandGraph = (minElements: any[]): GraphElement[] => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return minElements.map(min => {
+        if (min[keyMap.type] === 0) { // Node
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const node: any = {
+                id: min[keyMap.id].startsWith('node_') || min[keyMap.id].startsWith('plate_') ? min[keyMap.id] : (min[keyMap.nodeType] === 5 ? 'plate_' : 'node_') + min[keyMap.id],
+                name: min[keyMap.name],
+                type: 'node',
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                nodeType: (revNodeTypeMap as any)[min[keyMap.nodeType]],
+                position: { 
+                    x: (min[keyMap.position] && !isNaN(min[keyMap.position][0])) ? min[keyMap.position][0] : 0, 
+                    y: (min[keyMap.position] && !isNaN(min[keyMap.position][1])) ? min[keyMap.position][1] : 0
+                }
+            };
+            if (min[keyMap.parent]) {
+                const pid = min[keyMap.parent];
+                node.parent = pid.startsWith('plate_') || pid.startsWith('node_') ? pid : 'plate_' + pid; // Guessing prefix if missing, usually plates are parents
+            }
+            if (min[keyMap.distribution]) node.distribution = min[keyMap.distribution];
+            if (min[keyMap.equation]) node.equation = min[keyMap.equation];
+            if (min[keyMap.observed]) node.observed = true;
+            if (min[keyMap.indices]) node.indices = min[keyMap.indices];
+            if (min[keyMap.loopVariable]) node.loopVariable = min[keyMap.loopVariable];
+            if (min[keyMap.loopRange]) node.loopRange = min[keyMap.loopRange];
+            if (min[keyMap.param1]) node.param1 = min[keyMap.param1];
+            if (min[keyMap.param2]) node.param2 = min[keyMap.param2];
+            if (min[keyMap.param3]) node.param3 = min[keyMap.param3];
+            return node as GraphNode;
+        } else {
+            // Edge
+            return {
+                id: min[keyMap.id].startsWith('edge_') ? min[keyMap.id] : 'edge_' + min[keyMap.id],
+                type: 'edge',
+                source: min[keyMap.source].startsWith('node_') || min[keyMap.source].startsWith('plate_') ? min[keyMap.source] : 'node_' + min[keyMap.source],
+                target: min[keyMap.target].startsWith('node_') || min[keyMap.target].startsWith('plate_') ? min[keyMap.target] : 'node_' + min[keyMap.target]
+            };
+        }
+    });
+};
+
+const createSharePayload = (graphName: string, graphElements: GraphElement[], dataContent: string, version: number) => {
+    // Minify Data content: Parse JSON and re-stringify to remove whitespace
+    let minData = dataContent;
+    try {
+        const d = JSON.parse(dataContent);
+        minData = JSON.stringify(d); // Removes whitespace
+    } catch { /* ignore */ }
+
+    // Version 2: Minified Single Graph
+    if (version === 2) {
+        return {
+            v: 2,
+            n: graphName,
+            e: minifyGraph(graphElements),
+            d: minData
+        };
+    }
+    return {};
+};
+
+const generateShareLink = (payload: object) => {
+    try {
+        const jsonStr = JSON.stringify(payload);
+        // Standard Base64 Encoding with UTF-8 support
+        const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
+        
+        const baseUrl = window.location.origin + window.location.pathname;
+        shareUrl.value = `${baseUrl}?share=${encodeURIComponent(base64)}`;
+        showShareModal.value = true;
+    } catch (e) {
+        console.error("Failed to generate share link:", e);
+        alert("Failed to generate share link. Model might be too large.");
+    }
+}
+
+const handleShare = () => {
+    if (!graphStore.currentGraphId || !pinnedGraphTitle.value) return;
+    const payload = createSharePayload(pinnedGraphTitle.value, graphStore.currentGraphElements, dataStore.dataContent, 2);
+    generateShareLink(payload);
+};
+
+const handleShareGraph = (graphId: string) => {
+    // Logic to get graph data even if not loaded in memory (from LS)
+    let elements: GraphElement[] = [];
+    let dataContent = "";
+    let name = "";
+
+    if (graphId === graphStore.currentGraphId) {
+        elements = graphStore.currentGraphElements;
+        dataContent = dataStore.dataContent;
+        name = pinnedGraphTitle.value || "Graph";
+    } else {
+        const storedGraph = localStorage.getItem(`doodlebugs-graph-${graphId}`);
+        const storedData = localStorage.getItem(`doodlebugs-data-${graphId}`);
+        const project = projectStore.projects.find(p => p.graphs.some(g => g.id === graphId));
+        const graphMeta = project?.graphs.find(g => g.id === graphId);
+        name = graphMeta?.name || "Graph";
+
+        if (storedGraph) {
+            try {
+                elements = JSON.parse(storedGraph).elements;
+            } catch { elements = []; }
+        }
+        if (storedData) {
+             try {
+                const parsed = JSON.parse(storedData);
+                dataContent = parsed.content || (parsed.jsonData ? JSON.stringify({data: JSON.parse(parsed.jsonData || '{}'), inits: JSON.parse(parsed.jsonInits || '{}')}) : '{}');
+            } catch { 
+                dataContent = "{}";
+            }
+        }
+    }
+    
+    const payload = createSharePayload(name, elements, dataContent, 2);
+    generateShareLink(payload);
+};
+
+const handleShareProjectUrl = (projectId: string) => {
+    const project = projectStore.projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const graphsData = project.graphs.map(graphMeta => {
+        let elements: GraphElement[] = [];
+        let dataContent = "{}";
+
+        if (graphMeta.id === graphStore.currentGraphId) {
+            elements = graphStore.currentGraphElements;
+            dataContent = dataStore.dataContent;
+        } else {
+            const storedGraph = localStorage.getItem(`doodlebugs-graph-${graphMeta.id}`);
+            const storedData = localStorage.getItem(`doodlebugs-data-${graphMeta.id}`);
+            
+            if (storedGraph) {
+                try { elements = JSON.parse(storedGraph).elements; } catch {}
+            }
+            if (storedData) {
+                try {
+                    const parsed = JSON.parse(storedData);
+                    dataContent = parsed.content || "{}";
+                } catch {}
+            }
+        }
+
+        // Minify Data
+        try {
+            const d = JSON.parse(dataContent);
+            dataContent = JSON.stringify(d);
+        } catch { /* ignore */ }
+
+        return {
+            n: graphMeta.name,
+            e: minifyGraph(elements),
+            d: dataContent
+        };
+    });
+
+    // Version 3 Payload: Full Project
+    const payload = {
+        v: 3,
+        pn: project.name,
+        g: graphsData
+    };
+
+    generateShareLink(payload);
+};
+
+const handleExportData = () => {
+    if (!graphStore.currentGraphId) return;
+    const content = dataStore.dataContent;
+    const blob = new Blob([content], { type: 'application/json' });
+    const fileName = `data.json`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Data Import Logic
+const triggerDataImport = () => {
+    dataImportInput.value?.click();
+};
+
+const handleDataImport = (event: Event) => {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const content = e.target?.result as string;
+        try {
+            // Validate JSON
+            JSON.parse(content);
+            dataStore.dataContent = content;
+        } catch (e) {
+            alert('Invalid JSON file format.');
+        }
+        // Reset file input
+        if (dataImportInput.value) dataImportInput.value.value = '';
+    };
+    reader.readAsText(file);
+};
+
+const handleLoadShared = async () => {
+    const params = new URLSearchParams(window.location.search);
+    const shareParam = params.get('share');
+    
+    let jsonStr: string | null = null;
+
+    if (shareParam) {
+        try {
+            // Standard Base64 Decoding with UTF-8 support
+            jsonStr = decodeURIComponent(escape(atob(shareParam)));
+        } catch {
+            console.error("Failed to decode base64 share");
+        }
+    }
+    
+    if (jsonStr) {
+        try {
+            const payload = JSON.parse(jsonStr);
+            
+            // Handle V3 (Project)
+            if (payload.v === 3 && payload.pn && payload.g) {
+                projectStore.createProject(payload.pn + " (Shared)");
+                if (projectStore.currentProjectId) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    payload.g.forEach((graphData: any) => {
+                        const newGraph = projectStore.addGraphToProject(projectStore.currentProjectId!, graphData.n);
+                        if (newGraph) {
+                            try {
+                                const elements = expandGraph(graphData.e);
+                                graphStore.updateGraphElements(newGraph.id, elements);
+                                graphStore.updateGraphLayout(newGraph.id, 'preset');
+                                
+                                if (graphData.d) {
+                                    try {
+                                        const dObj = JSON.parse(graphData.d);
+                                        dataStore.updateGraphData(newGraph.id, { content: JSON.stringify(dObj, null, 2) });
+                                    } catch {
+                                        dataStore.updateGraphData(newGraph.id, { content: graphData.d });
+                                    }
+                                }
+                            } catch (e) {
+                                console.error(`Error loading graph ${graphData.n}:`, e);
+                            }
+                        }
+                    });
+                    
+                    // Force save the project list to ensure persistence across reloads
+                    projectStore.saveProjects();
+
+                    // Select first graph
+                    if (projectStore.currentProject?.graphs.length) {
+                        graphStore.selectGraph(projectStore.currentProject.graphs[0].id);
+                    }
+                }
+            }
+            // Handle V2 (Single Graph)
+            else if (payload && payload.n && payload.e) {
+                projectStore.createProject("Shared Project");
+                if (projectStore.currentProjectId) {
+                    const newGraph = projectStore.addGraphToProject(projectStore.currentProjectId, payload.n);
+                    if (newGraph) {
+                        let elements = payload.e;
+                        // Check if version 2 (minified)
+                        if (payload.v === 2) {
+                            elements = expandGraph(payload.e);
+                        }
+
+                        graphStore.updateGraphElements(newGraph.id, elements);
+                        graphStore.updateGraphLayout(newGraph.id, 'preset');
+                        
+                        if (payload.d) {
+                            try {
+                                const dObj = JSON.parse(payload.d);
+                                dataStore.updateGraphData(newGraph.id, { content: JSON.stringify(dObj, null, 2) });
+                            } catch {
+                                dataStore.updateGraphData(newGraph.id, { content: payload.d });
+                            }
+                        }
+                        projectStore.saveProjects();
+                        graphStore.selectGraph(newGraph.id);
+                    }
+                }
+            }
+            
+            // Clean URL without reloading
+            const newUrl = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+
+        } catch (e) {
+            console.error("Failed to load shared model:", e);
+            alert("Invalid or corrupted share link.");
+        }
+    }
+};
+
 onMounted(async () => {
   projectStore.loadProjects();
+  
+  // Check for shared model
+  if (window.location.search.includes('share=')) {
+      await handleLoadShared();
+  }
+  
+  // Default init if no shared model loaded or no projects exist
   if (projectStore.projects.length === 0) {
     projectStore.createProject('Default Project');
     if (projectStore.currentProjectId) await handleLoadExample('rats');
   } else {
-    const lastGraphId = localStorage.getItem('doodlebugs-currentGraphId');
-    if (lastGraphId && projectStore.currentProject?.graphs.some(g => g.id === lastGraphId)) {
-      graphStore.selectGraph(lastGraphId);
-    } else if (projectStore.currentProject?.graphs.length) {
-      graphStore.selectGraph(projectStore.currentProject.graphs[0].id);
+    // If not a fresh shared load, restore last session
+    if (!window.location.search.includes('share=')) {
+        const lastGraphId = localStorage.getItem('doodlebugs-currentGraphId');
+        if (lastGraphId && projectStore.currentProject?.graphs.some(g => g.id === lastGraphId)) {
+          graphStore.selectGraph(lastGraphId);
+        } else if (projectStore.currentProject?.graphs.length) {
+          graphStore.selectGraph(projectStore.currentProject.graphs[0].id);
+        }
     }
   }
   validateGraph();
@@ -372,11 +760,44 @@ const createNewProject = () => {
   }
 };
 
+const handleFileUpload = (event: Event) => {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        importJsonContent.value = e.target?.result as string;
+    };
+    reader.readAsText(file);
+};
+
 const createNewGraph = () => {
   if (projectStore.currentProject && newGraphName.value.trim()) {
-    projectStore.addGraphToProject(projectStore.currentProject.id, newGraphName.value.trim());
+    const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId!, newGraphName.value.trim());
+    if (newGraphMeta) {
+        if (importMode.value === 'json' && importJsonContent.value) {
+            try {
+                const importedElements = JSON.parse(importJsonContent.value);
+                if (Array.isArray(importedElements)) {
+                    graphStore.updateGraphElements(newGraphMeta.id, importedElements);
+                    // Also try to layout if imported
+                    setTimeout(() => {
+                        graphStore.updateGraphLayout(newGraphMeta.id, 'preset');
+                        const cy = getCyInstance(newGraphMeta.id);
+                        if (cy) smartFit(cy, true);
+                    }, 100);
+                } else {
+                    alert("Invalid JSON format. Expected an array of graph elements.");
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Failed to parse JSON.");
+            }
+        }
+    }
     showNewGraphModal.value = false;
     newGraphName.value = '';
+    importJsonContent.value = '';
+    importMode.value = 'blank';
   }
 };
 
@@ -780,6 +1201,7 @@ const dragStartData = ref({ x: 0, y: 0 });
 const initialDataPanelPos = ref({ x: 0, y: 0 });
 
 const startDragDataTouch = (e: TouchEvent) => {
+    if ((e.target as HTMLElement).closest('.action-btn')) return;
     if (!projectStore.currentProject || !graphStore.currentGraphId) return;
     const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
     if (!graph) return;
@@ -820,6 +1242,7 @@ const stopDragDataTouch = () => {
 };
 
 const startDragData = (e: MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.action-btn')) return;
     if (!projectStore.currentProject || !graphStore.currentGraphId) return;
     const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
     if (!graph) return;
@@ -1012,10 +1435,10 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @update:showDebugPanel="showDebugPanel = $event"
         @toggle-code-panel="toggleCodePanel"
         @load-example="handleLoadExample"
-        @open-export-modal="openExportModal"
-        @export-json="handleExportJson"
         @open-about-modal="showAboutModal = true"
         @open-faq-modal="showFaqModal = true"
+        @share-graph="handleShareGraph"
+        @share-project-url="handleShareProjectUrl"
     />
 
     <Transition name="fade">
@@ -1053,6 +1476,10 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @open-script-settings="handleOpenScriptSettings"
         @download-script="handleDownloadScript"
         @generate-script="handleGenerateStandalone"
+        @share="handleShare"
+        @open-export-modal="openExportModal"
+        @export-json="handleExportJson"
+        @export-data="handleExportData"
     />
 
     <Transition name="fade">
@@ -1117,7 +1544,12 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
                 <i class="fas fa-database"></i> Data & Inits 
                 <span class="badge-json">JSON</span>
             </span>
-            <button class="close-btn" @click="toggleDataPanel()" @touchstart.stop="toggleDataPanel()" @mousedown.stop><i class="fas fa-times"></i></button>
+            <div class="panel-actions">
+                <button class="action-btn" @click.stop="triggerDataImport" title="Import JSON Data" @mousedown.stop @touchstart.stop>
+                    <i class="fas fa-file-upload"></i>
+                </button>
+                <button class="close-btn" @click="toggleDataPanel()" @touchstart.stop="toggleDataPanel()" @mousedown.stop><i class="fas fa-times"></i></button>
+            </div>
         </div>
         <div class="code-content">
             <DataInputPanel :is-active="true" />
@@ -1128,6 +1560,8 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         >
             <i class="fas fa-chevron-right" style="transform: rotate(45deg);"></i>
         </div>
+        <!-- Hidden file input for Data Import -->
+        <input type="file" ref="dataImportInput" accept=".json" style="display:none" @change="handleDataImport" />
     </div>
 
     <FloatingBottomToolbar 
@@ -1149,6 +1583,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @toggle-data-panel="toggleDataPanel"
         @toggle-json-panel="toggleJsonPanel"
         @open-style-modal="showStyleModal = true"
+        @share="handleShare"
     />
 
     <BaseModal :is-open="showNewProjectModal" @close="showNewProjectModal = false">
@@ -1168,9 +1603,24 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     <BaseModal :is-open="showNewGraphModal" @close="showNewGraphModal = false">
       <template #header><h3>Create New Graph</h3></template>
       <template #body>
-        <div class="flex-col gap-2">
-          <label>Graph Name:</label>
-          <BaseInput v-model="newGraphName" placeholder="Enter graph name" @keyup.enter="createNewGraph" />
+        <div class="flex-col gap-4">
+          <div class="flex gap-2 mb-2">
+              <BaseButton :type="importMode === 'blank' ? 'primary' : 'secondary'" size="small" @click="importMode = 'blank'" class="flex-1">Blank Graph</BaseButton>
+              <BaseButton :type="importMode === 'json' ? 'primary' : 'secondary'" size="small" @click="importMode = 'json'" class="flex-1">Import JSON</BaseButton>
+          </div>
+          
+          <div class="flex-col gap-2">
+            <label>Graph Name:</label>
+            <BaseInput v-model="newGraphName" placeholder="Enter graph name" @keyup.enter="createNewGraph" />
+          </div>
+
+          <div v-if="importMode === 'json'" class="flex-col gap-2">
+              <label>Paste JSON or Upload File:</label>
+              <textarea v-model="importJsonContent" class="json-textarea" placeholder="Paste graph JSON here..."></textarea>
+              <div class="file-upload-wrapper">
+                  <input type="file" accept=".json" @change="handleFileUpload" class="file-input"/>
+              </div>
+          </div>
         </div>
       </template>
       <template #footer>
@@ -1194,6 +1644,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     <ExportModal :is-open="showExportModal" :export-type="currentExportType" @close="showExportModal = false" @confirm-export="handleConfirmExport" />
     <ValidationIssuesModal :is-open="showValidationModal" :validation-errors="validationErrors" :elements="elements" @select-node="handleSelectNodeFromModal" @close="showValidationModal = false" />
     <GraphStyleModal :is-open="showStyleModal" @close="showStyleModal = false" />
+    <ShareModal :is-open="showShareModal" :url="shareUrl" @close="showShareModal = false" />
     <DebugPanel v-if="showDebugPanel" />
   </div>
 </template>
@@ -1475,6 +1926,23 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.json-textarea {
+    width: 100%;
+    height: 120px;
+    padding: 8px;
+    font-family: monospace;
+    font-size: 0.85em;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--radius-sm);
+    background-color: var(--theme-bg-hover);
+    color: var(--theme-text-primary);
+    resize: vertical;
+}
+
+.file-upload-wrapper {
+    margin-top: 5px;
 }
 
 .desktop-text { display: inline; }

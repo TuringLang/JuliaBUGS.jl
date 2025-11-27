@@ -109,13 +109,6 @@ watch(() => props.isActive, (newVal) => {
 
 <template>
   <div class="data-input-panel">
-    <div class="header-controls">
-        <h4 class="panel-title">Model Data & Inits</h4>
-    </div>
-    <p class="description">
-      Define observed data and initial values in a single JSON object.
-    </p>
-
     <div class="editor-wrapper flex-grow">
       <div ref="editorContainer" class="editor-container"></div>
     </div>
@@ -146,24 +139,6 @@ watch(() => props.isActive, (newVal) => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-.header-controls {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border-bottom: 1px solid var(--color-border-light);
-    padding-bottom: 10px;
-}
-h4 {
-  margin: 0;
-  color: var(--color-heading);
-}
-.description {
-  font-size: 0.85em;
-  color: var(--color-secondary);
-  text-align: center;
-  margin: 0 0 5px 0;
-  line-height: 1.4;
 }
 .editor-wrapper {
   flex: 1;

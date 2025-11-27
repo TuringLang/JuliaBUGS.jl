@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import JsonEditorPanel from '../right-sidebar/JsonEditorPanel.vue';
+import { useGraphStore } from '../../stores/graphStore';
 
 interface LogEntry {
   timestamp: string;
@@ -7,11 +9,13 @@ interface LogEntry {
   type: 'log' | 'error' | 'warn';
 }
 
+const graphStore = useGraphStore();
 const logs = ref<LogEntry[]>([]);
 const isVisible = ref(true);
 const maxLogs = 100;
 const copySuccess = ref(false);
 const filterType = ref<'all' | 'log' | 'error' | 'warn'>('all');
+const activeTab = ref<'console' | 'json'>('console');
 
 const filteredLogs = computed(() => {
   if (filterType.value === 'all') return logs.value;
@@ -99,6 +103,17 @@ const copyLogs = async () => {
   }
 };
 
+const copyJson = async () => {
+    const jsonString = JSON.stringify(graphStore.currentGraphElements, null, 2);
+    try {
+        await navigator.clipboard.writeText(jsonString);
+        copySuccess.value = true;
+        setTimeout(() => copySuccess.value = false, 2000);
+    } catch (err) {
+        console.error("Failed to copy JSON", err);
+    }
+}
+
 const originalLog = console.log;
 const originalError = console.error;
 const originalWarn = console.warn;
@@ -130,53 +145,78 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="debug-panel" :class="{ collapsed: !isVisible }">
+  <div class="debug-panel" :class="{ collapsed: !isVisible, 'expanded-height': activeTab === 'json' && isVisible }">
     <div class="debug-header">
-      <span>🐛 Debug Console</span>
+      <div class="debug-tabs">
+          <button 
+            @click="activeTab = 'console'" 
+            class="tab-btn" 
+            :class="{ active: activeTab === 'console' }"
+          >🐛 Console</button>
+          <button 
+            @click="activeTab = 'json'" 
+            class="tab-btn" 
+            :class="{ active: activeTab === 'json' }"
+          >Graph JSON</button>
+      </div>
       <div class="debug-controls">
-        <button @click="copyLogs" class="debug-btn" :title="copySuccess ? 'Copied!' : 'Copy logs'">
-          <span v-if="copySuccess">✓</span>
-          <i v-else class="fas fa-copy"></i>
-        </button>
-        <button @click="clearLogs" class="debug-btn" title="Clear logs">
-          <i class="fas fa-trash"></i>
-        </button>
+        <template v-if="activeTab === 'console'">
+            <button @click="copyLogs" class="debug-btn" :title="copySuccess ? 'Copied!' : 'Copy logs'">
+              <span v-if="copySuccess">✓</span>
+              <i v-else class="fas fa-copy"></i>
+            </button>
+            <button @click="clearLogs" class="debug-btn" title="Clear logs">
+              <i class="fas fa-trash"></i>
+            </button>
+        </template>
         <button @click="toggleVisibility" class="debug-btn" title="Toggle visibility">
           <i :class="isVisible ? 'fas fa-chevron-down' : 'fas fa-chevron-up'"></i>
         </button>
       </div>
     </div>
-    <div v-if="isVisible" class="debug-content">
-      <div class="debug-filters">
-        <button 
-          v-for="type in ['all', 'log', 'error', 'warn']" 
-          :key="type"
-          @click="filterType = type as typeof filterType"
-          class="filter-btn"
-          :class="{ active: filterType === type }"
-        >
-          {{ type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1) }}
-          <span v-if="type !== 'all'" class="count">
-            {{ logs.filter(l => l.type === type).length }}
-          </span>
-          <span v-else class="count">{{ logs.length }}</span>
-        </button>
-      </div>
-      <div class="debug-logs">
-        <div 
-          v-for="(log, index) in filteredLogs" 
-          :key="index" 
-          class="debug-log-entry" 
-          :class="getLogClass(log)"
-        >
-          <span class="log-time">[{{ log.timestamp }}]</span>
-          <span class="log-type" :class="`type-${log.type}`">[{{ log.type.toUpperCase() }}]</span>
-          <span class="log-message">{{ log.message }}</span>
+    <div v-if="isVisible" class="debug-body">
+        <div v-show="activeTab === 'console'" class="debug-content-wrapper">
+            <div class="debug-filters">
+                <button 
+                v-for="type in ['all', 'log', 'error', 'warn']" 
+                :key="type"
+                @click="filterType = type as typeof filterType"
+                class="filter-btn"
+                :class="{ active: filterType === type }"
+                >
+                {{ type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1) }}
+                <span v-if="type !== 'all'" class="count">
+                    {{ logs.filter(l => l.type === type).length }}
+                </span>
+                <span v-else class="count">{{ logs.length }}</span>
+                </button>
+            </div>
+            <div class="debug-logs">
+                <div 
+                v-for="(log, index) in filteredLogs" 
+                :key="index" 
+                class="debug-log-entry" 
+                :class="getLogClass(log)"
+                >
+                <span class="log-time">[{{ log.timestamp }}]</span>
+                <span class="log-type" :class="`type-${log.type}`">[{{ log.type.toUpperCase() }}]</span>
+                <span class="log-message">{{ log.message }}</span>
+                </div>
+                <div v-if="filteredLogs.length === 0" class="debug-empty">
+                {{ logs.length === 0 ? 'No logs yet. Waiting for activity...' : `No ${filterType} logs` }}
+                </div>
+            </div>
         </div>
-        <div v-if="filteredLogs.length === 0" class="debug-empty">
-          {{ logs.length === 0 ? 'No logs yet. Waiting for activity...' : `No ${filterType} logs` }}
+        <div v-show="activeTab === 'json'" class="debug-content-wrapper json-wrapper">
+            <div class="json-header-actions">
+                <button @click="copyJson" class="debug-btn tiny-btn" title="Copy JSON">
+                    <i v-if="copySuccess" class="fas fa-check"></i>
+                    <i v-else class="fas fa-copy"></i>
+                    Copy JSON
+                </button>
+            </div>
+            <JsonEditorPanel :is-active="activeTab === 'json' && isVisible" />
         </div>
-      </div>
     </div>
   </div>
 </template>
@@ -197,24 +237,54 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   box-shadow: 0 -4px 20px rgba(0, 255, 0, 0.3);
+  transition: max-height 0.3s ease;
 }
 
 .debug-panel.collapsed {
   max-height: 40px;
 }
 
+.debug-panel.expanded-height {
+    max-height: 60vh;
+}
+
 .debug-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  padding: 0 12px;
   background: rgba(0, 100, 0, 0.3);
   border-bottom: 1px solid #00ff00;
-  font-weight: bold;
-  font-size: 12px;
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.debug-tabs {
+    display: flex;
+    height: 100%;
+}
+
+.tab-btn {
+    background: transparent;
+    border: none;
+    color: #00aa00;
+    font-weight: bold;
+    padding: 0 16px;
+    cursor: pointer;
+    border-right: 1px solid rgba(0, 255, 0, 0.3);
+    height: 100%;
+    transition: all 0.2s;
+}
+
+.tab-btn:hover {
+    background: rgba(0, 255, 0, 0.1);
+    color: #00ff00;
+}
+
+.tab-btn.active {
+    background: rgba(0, 255, 0, 0.2);
+    color: #fff;
+    border-bottom: 2px solid #00ff00;
 }
 
 .debug-controls {
@@ -248,12 +318,74 @@ onUnmounted(() => {
   font-weight: bold;
 }
 
-.debug-content {
+.tiny-btn {
+    padding: 2px 6px;
+    font-size: 10px;
+    gap: 4px;
+}
+
+.debug-body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.debug-content-wrapper {
   display: flex;
   flex-direction: column;
   overflow: hidden;
   flex: 1;
   min-height: 0;
+}
+
+.json-wrapper {
+    background-color: #282c34; /* CodeMirror theme background match */
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.json-header-actions {
+    padding: 4px;
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid rgba(0, 255, 0, 0.2);
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* Adjustments for JsonEditorPanel when inside DebugPanel */
+.json-wrapper :deep(.json-editor-panel) {
+    height: 100%;
+    padding: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.json-wrapper :deep(.editor-wrapper) {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.json-wrapper :deep(.json-editor-container) {
+    flex: 1;
+    height: 100%;
+    overflow: auto;
+}
+
+.json-wrapper :deep(h4), .json-wrapper :deep(.description) {
+    display: none; /* Hide header text inside debug console */
+}
+
+.json-wrapper :deep(.footer-section) {
+    min-height: 30px;
+    padding-top: 4px;
+    flex-shrink: 0;
 }
 
 .debug-filters {
