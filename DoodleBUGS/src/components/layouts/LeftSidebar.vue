@@ -209,6 +209,10 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
   .floating-sidebar.left {
     width: calc(100vw - 32px) !important;
   }
+  
+  .sidebar-content-scrollable {
+      padding-bottom: 80px; /* Space for floating toolbar on mobile */
+  }
 }
 
 .sidebar-header {

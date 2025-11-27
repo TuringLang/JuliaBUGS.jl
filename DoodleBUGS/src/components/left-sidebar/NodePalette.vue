@@ -30,6 +30,7 @@ const showStyleModal = ref(false);
 const editingCategory = ref<'node' | 'edge' | null>(null);
 const editingNodeType = ref<NodeType | null>(null);
 const editingEdgeType = ref<'stochastic' | 'deterministic'>('stochastic');
+const applyFontToAllNodes = ref(false);
 
 const tempNodeStyle = ref({
     backgroundColor: '',
@@ -39,13 +40,22 @@ const tempNodeStyle = ref({
     backgroundOpacity: 1,
     shape: '',
     width: 60,
-    height: 60
+    height: 60,
+    labelFontSize: 10,
+    labelColor: '#000000'
 });
 
 const tempEdgeStyle = ref({
     color: '',
     width: 3,
-    lineStyle: 'solid'
+    lineStyle: 'solid',
+    labelFontSize: 10,
+    labelColor: '#000000',
+    labelBackgroundColor: '#ffffff',
+    labelBackgroundOpacity: 1,
+    labelBorderColor: '#cccccc',
+    labelBorderWidth: 1,
+    labelBackgroundShape: 'rectangle' as 'rectangle' | 'roundrectangle'
 });
 
 const shapeOptions = [
@@ -72,10 +82,16 @@ const edgeStyleOptions = [
     { label: 'Dotted', value: 'dotted' }
 ];
 
+const labelShapeOptions = [
+    { label: 'Rectangle', value: 'rectangle' },
+    { label: 'Rounded', value: 'roundrectangle' }
+];
+
 const openNodeStyleSettings = (event: MouseEvent, nodeType: NodeType) => {
     event.stopPropagation();
     editingCategory.value = 'node';
     editingNodeType.value = nodeType;
+    applyFontToAllNodes.value = false;
     const currentStyle = uiStore.nodeStyles[nodeType];
     tempNodeStyle.value = { ...currentStyle };
     showStyleModal.value = true;
@@ -95,16 +111,6 @@ const loadEdgeStyle = () => {
 };
 
 const switchEdgeType = (type: 'stochastic' | 'deterministic') => {
-    // Save current temp to store before switching (optional, or just switch view)
-    // Let's save to store immediately to allow switching back and forth without losing unsaved changes?
-    // Actually, standard behavior is "Save" commits everything. But complex with tabs.
-    // Simple approach: Commit current temp to a local buffer or just save to store?
-    // Let's just load the other type. If user didn't save, changes lost?
-    // Better: Auto-save to store is aggressive. Let's keeping it simple:
-    // Switching tabs loads from store. If you want to save "Stochastic", click Save first.
-    // Or, we can just update the store on "Save" button only for the CURRENTLY visible tab.
-    // Let's accept that limitation for now or implementing local buffer for both.
-    // For simplicity, I will just load from store.
     editingEdgeType.value = type;
     loadEdgeStyle();
 };
@@ -112,6 +118,15 @@ const switchEdgeType = (type: 'stochastic' | 'deterministic') => {
 const saveStyleSettings = () => {
     if (editingCategory.value === 'node' && editingNodeType.value) {
         uiStore.nodeStyles[editingNodeType.value] = { ...tempNodeStyle.value };
+        
+        if (applyFontToAllNodes.value) {
+            Object.keys(uiStore.nodeStyles).forEach(key => {
+                if (key !== editingNodeType.value) {
+                    uiStore.nodeStyles[key].labelFontSize = tempNodeStyle.value.labelFontSize;
+                    uiStore.nodeStyles[key].labelColor = tempNodeStyle.value.labelColor;
+                }
+            });
+        }
     } else if (editingCategory.value === 'edge') {
         uiStore.edgeStyles[editingEdgeType.value] = { ...tempEdgeStyle.value };
     }
@@ -226,6 +241,22 @@ const resetStyleSettings = () => {
                         <BaseInput type="number" v-model.number="tempNodeStyle.height" />
                     </div>
                 </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Label Size (px)</label>
+                        <BaseInput type="number" v-model.number="tempNodeStyle.labelFontSize" min="1" />
+                    </div>
+                    <div class="form-group">
+                        <label>Label Color</label>
+                        <div class="color-wrapper">
+                            <input type="color" v-model="tempNodeStyle.labelColor">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group checkbox-row">
+                    <input type="checkbox" id="apply-font-all" v-model="applyFontToAllNodes">
+                    <label for="apply-font-all">Apply font settings to all node types</label>
+                </div>
             </div>
 
             <!-- Edge Styling Form -->
@@ -250,6 +281,50 @@ const resetStyleSettings = () => {
                     <label>Line Style</label>
                     <BaseSelect :model-value="tempEdgeStyle.lineStyle" :options="edgeStyleOptions" @update:model-value="tempEdgeStyle.lineStyle = $event" />
                 </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Label Size (px)</label>
+                        <BaseInput type="number" v-model.number="tempEdgeStyle.labelFontSize" min="1" />
+                    </div>
+                    <div class="form-group">
+                        <label>Label Color</label>
+                        <div class="color-wrapper">
+                            <input type="color" v-model="tempEdgeStyle.labelColor">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dropdown-divider"></div>
+                <h5 class="sub-title">Label Background</h5>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Background Color</label>
+                        <div class="color-wrapper">
+                            <input type="color" v-model="tempEdgeStyle.labelBackgroundColor">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Opacity ({{ tempEdgeStyle.labelBackgroundOpacity }})</label>
+                        <input type="range" min="0" max="1" step="0.1" v-model.number="tempEdgeStyle.labelBackgroundOpacity" class="w-full h-8" />
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Border Color</label>
+                        <div class="color-wrapper">
+                            <input type="color" v-model="tempEdgeStyle.labelBorderColor">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Border Width</label>
+                        <BaseInput type="number" v-model.number="tempEdgeStyle.labelBorderWidth" min="0" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Background Shape</label>
+                    <BaseSelect :model-value="tempEdgeStyle.labelBackgroundShape" :options="labelShapeOptions" @update:model-value="tempEdgeStyle.labelBackgroundShape = $event" />
+                </div>
+
                 <div class="info-box">
                     <i class="fas fa-info-circle"></i>
                     <small>Note: Stochastic edges connect to stochastic/observed nodes. Deterministic edges connect to deterministic nodes.</small>
@@ -259,7 +334,7 @@ const resetStyleSettings = () => {
         <template #footer>
             <div class="modal-footer">
                 <BaseButton type="secondary" @click="resetStyleSettings">Reset to Default</BaseButton>
-                <div class="flex gap-2">
+                <div class="footer-actions">
                     <BaseButton type="secondary" @click="showStyleModal = false">Cancel</BaseButton>
                     <BaseButton type="primary" @click="saveStyleSettings">Save</BaseButton>
                 </div>
@@ -450,6 +525,19 @@ const resetStyleSettings = () => {
     font-weight: 600;
 }
 
+.checkbox-row {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.sub-title {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: var(--color-heading);
+    margin: 4px 0 0 0;
+}
+
 .grid-2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -493,5 +581,37 @@ const resetStyleSettings = () => {
     display: flex;
     justify-content: space-between;
     width: 100%;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.footer-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.h-8 {
+    height: 32px;
+}
+
+@media (max-width: 600px) {
+    .grid-2 {
+        grid-template-columns: 1fr;
+    }
+    .modal-footer {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .footer-actions {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+    }
+    .modal-footer > button {
+        width: 100%;
+    }
+    .footer-actions > button {
+        flex: 1;
+    }
 }
 </style>

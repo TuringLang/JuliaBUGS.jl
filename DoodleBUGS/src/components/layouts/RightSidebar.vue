@@ -115,6 +115,9 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
       padding: 8px 4px;
       font-size: 0.8rem;
   }
+  .sidebar-content {
+      padding-bottom: 80px; /* Space for floating toolbar on mobile */
+  }
 }
 
 .sidebar-header {

@@ -15,6 +15,8 @@ export interface NodeStyle {
     shape: string;
     width: number;
     height: number;
+    labelFontSize: number;
+    labelColor: string;
 }
 
 export const useUiStore = defineStore('ui', () => {

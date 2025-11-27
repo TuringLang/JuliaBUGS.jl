@@ -60,7 +60,11 @@ export function useGraphInstance() {
               const indices = ele.data('indices') as string | undefined;
               return indices ? `${name}[${indices}]` : name;
             },
-            'text-valign': 'center', 'text-halign': 'center', 'padding': '10px', 'font-size': '10px',
+            'color': (ele: NodeSingular) => uiStore.nodeStyles[ele.data('nodeType')]?.labelColor || '#000000',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            'font-size': (ele: NodeSingular) => uiStore.nodeStyles[ele.data('nodeType')]?.labelFontSize || 10,
+            
+            'text-valign': 'center', 'text-halign': 'center', 'padding': '10px',
             'text-wrap': 'wrap', 'text-max-width': '80px', 
             'line-height': 1.2, 'z-index': 10
           },
@@ -95,13 +99,24 @@ export function useGraphInstance() {
           selector: 'edge[name]',
           style: {
             'label': 'data(name)',
-            'font-size': '8px',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            'font-size': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelFontSize || 8,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            'color': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelColor || '#000000',
+            
             'text-rotation': 'autorotate',
-            'text-background-opacity': 1,
-            'text-background-color': '#ffffff',
+            'text-background-opacity': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBackgroundOpacity ?? 1,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            'text-background-color': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBackgroundColor || '#ffffff',
             'text-background-padding': '3px',
-            'text-border-width': 1,
-            'text-border-color': '#ccc',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            'text-background-shape': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBackgroundShape || 'rectangle',
+            
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            'text-border-width': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBorderWidth ?? 1,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            'text-border-color': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBorderColor || '#ccc',
+            'text-border-opacity': (ele: any) => uiStore.edgeStyles[ele.data('relationshipType') as 'stochastic'|'deterministic']?.labelBackgroundOpacity ?? 1,
           }
         },
         {

@@ -37,6 +37,8 @@ export interface NodeDefinition {
         shape: string;
         width: number;
         height: number;
+        labelFontSize: number;
+        labelColor: string;
     };
 }
 
@@ -44,11 +46,25 @@ export interface EdgeStyle {
     color: string;
     width: number;
     lineStyle: string; // 'solid' | 'dashed' | 'dotted'
+    labelFontSize: number;
+    labelColor: string;
+    // Label Background Styling
+    labelBackgroundColor: string;
+    labelBackgroundOpacity: number;
+    labelBorderColor: string;
+    labelBorderWidth: number;
+    labelBackgroundShape: 'rectangle' | 'roundrectangle';
 }
 
 export const defaultEdgeStyles: Record<'stochastic' | 'deterministic', EdgeStyle> = {
-    stochastic: { color: '#dc3545', width: 3, lineStyle: 'dashed' },
-    deterministic: { color: '#28a745', width: 3, lineStyle: 'solid' }
+    stochastic: { 
+        color: '#dc3545', width: 3, lineStyle: 'dashed', labelFontSize: 10, labelColor: '#000000',
+        labelBackgroundColor: '#ffffff', labelBackgroundOpacity: 1, labelBorderColor: '#cccccc', labelBorderWidth: 1, labelBackgroundShape: 'rectangle'
+    },
+    deterministic: { 
+        color: '#28a745', width: 3, lineStyle: 'solid', labelFontSize: 10, labelColor: '#000000',
+        labelBackgroundColor: '#ffffff', labelBackgroundOpacity: 1, labelBorderColor: '#cccccc', labelBorderWidth: 1, labelBackgroundShape: 'rectangle'
+    }
 };
 
 const distributionOptions: SelectOption[] = [
@@ -87,7 +103,9 @@ export const nodeDefinitions: NodeDefinition[] = [
             backgroundOpacity: 1,
             shape: 'ellipse',
             width: 60,
-            height: 60
+            height: 60,
+            labelFontSize: 10,
+            labelColor: '#000000'
         }
     },
     {
@@ -109,7 +127,9 @@ export const nodeDefinitions: NodeDefinition[] = [
             backgroundOpacity: 1,
             shape: 'triangle', 
             width: 60,
-            height: 60
+            height: 60,
+            labelFontSize: 10,
+            labelColor: '#000000'
         }
     },
     {
@@ -130,7 +150,9 @@ export const nodeDefinitions: NodeDefinition[] = [
             backgroundOpacity: 1,
             shape: 'rectangle',
             width: 60,
-            height: 60
+            height: 60,
+            labelFontSize: 10,
+            labelColor: '#000000'
         }
     },
     {
@@ -158,7 +180,9 @@ export const nodeDefinitions: NodeDefinition[] = [
             backgroundOpacity: 1,
             shape: 'ellipse',
             width: 60,
-            height: 60
+            height: 60,
+            labelFontSize: 10,
+            labelColor: '#000000'
         }
     },
     {
@@ -180,7 +204,9 @@ export const nodeDefinitions: NodeDefinition[] = [
             backgroundOpacity: 0.2, // Semi-transparent for plates
             shape: 'round-rectangle',
             width: 0, // Dynamic
-            height: 0 // Dynamic
+            height: 0, // Dynamic
+            labelFontSize: 10,
+            labelColor: '#000000'
         }
     },
 ];
