@@ -40,6 +40,7 @@ defineEmits<{
   (e: 'open-export-modal', format: 'png' | 'jpg' | 'svg'): void;
   (e: 'export-json'): void;
   (e: 'open-about-modal'): void;
+  (e: 'open-faq-modal'): void;
   (e: 'toggle-dark-mode'): void;
 }>();
 
@@ -170,7 +171,9 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                 <AccordionPanel value="help">
                     <AccordionHeader><i class="fas fa-question-circle icon-12"></i> Help</AccordionHeader>
                     <AccordionContent>
-                        <div class="menu-panel flex-col gap-3">
+                        <!-- Reduced gap from gap-3 to gap-1 -->
+                        <div class="menu-panel flex-col gap-1">
+                            <BaseButton type="ghost" class="menu-btn" @click="$emit('open-faq-modal')"><i class="fas fa-question"></i> FAQ</BaseButton>
                             <BaseButton type="ghost" class="menu-btn" @click="$emit('open-about-modal')"><i class="fas fa-info-circle"></i> About</BaseButton>
                             <a href="https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md" target="_blank" class="menu-btn ghost-btn">
                                 <i class="fab fa-github"></i> Report Issue

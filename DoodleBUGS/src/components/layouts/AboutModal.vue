@@ -14,6 +14,21 @@
           Our goal is to provide an intuitive, visual interface for statisticians,
           researchers, and students to build, understand, and share complex probabilistic models.
         </p>
+        
+        <div class="resources-section">
+            <h4>Resources</h4>
+            <div class="links-list">
+                <a href="https://github.com/TuringLang/JuliaBUGS.jl" target="_blank" rel="noopener noreferrer" class="resource-link">
+                    <i class="fab fa-github"></i> Codebase
+                </a>
+                <a href="https://github.com/TuringLang/JuliaBUGS.jl/issues?q=is%3Aissue%20state%3Aopen%20label%3ADoodleBUGS" target="_blank" rel="noopener noreferrer" class="resource-link">
+                    <i class="fas fa-list"></i> Issue Tracker
+                </a>
+                <a href="https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md" target="_blank" rel="noopener noreferrer" class="resource-link">
+                    <i class="fas fa-bug"></i> Report Issue
+                </a>
+            </div>
+        </div>
       </div>
     </template>
     <template #footer>
@@ -54,9 +69,47 @@ const emit = defineEmits(['close']);
 .about-content a:hover {
   text-decoration: underline;
 }
-hr {
-  border: none;
-  border-top: 1px solid var(--color-border-light);
-  margin: 10px 0;
+
+.resources-section {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--theme-border);
+}
+
+.resources-section h4 {
+    margin: 0 0 10px 0;
+    color: var(--theme-text-primary);
+    font-size: 0.95rem;
+}
+
+.links-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.resource-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background-color: var(--theme-bg-hover);
+    border-radius: var(--radius-sm);
+    color: var(--theme-text-primary) !important;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    border: 1px solid transparent;
+}
+
+.resource-link:hover {
+    background-color: var(--theme-bg-active);
+    text-decoration: none !important;
+    border-color: var(--theme-border);
+}
+
+.resource-link i {
+    width: 20px;
+    text-align: center;
+    color: var(--theme-text-secondary);
 }
 </style>

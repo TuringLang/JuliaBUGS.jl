@@ -10,6 +10,7 @@ import BaseButton from '../ui/BaseButton.vue';
 import LeftSidebar from './LeftSidebar.vue';
 import RightSidebar from './RightSidebar.vue';
 import AboutModal from './AboutModal.vue';
+import FaqModal from './FaqModal.vue';
 import ExportModal from './ExportModal.vue';
 import ValidationIssuesModal from './ValidationIssuesModal.vue';
 import DebugPanel from '../common/DebugPanel.vue';
@@ -65,6 +66,7 @@ const newProjectName = ref('');
 const showNewGraphModal = ref(false);
 const newGraphName = ref('');
 const showAboutModal = ref(false);
+const showFaqModal = ref(false);
 const showValidationModal = ref(false);
 const showScriptSettingsModal = ref(false);
 const showDebugPanel = ref(false);
@@ -214,7 +216,7 @@ watch([isDataPanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) =>
                 // Sidebar is ~300px + 16px margin.
                 const leftSidebarOffset = isLeftSidebarOpen.value ? 320 : 20; 
                 
-                const targetScreenX = leftSidebarOffset + 20;
+                let targetScreenX = leftSidebarOffset + 20;
                 
                 // Top offset
                 const targetScreenY = 90;
@@ -991,6 +993,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @open-export-modal="openExportModal"
         @export-json="handleExportJson"
         @open-about-modal="showAboutModal = true"
+        @open-faq-modal="showFaqModal = true"
     />
 
     <Transition name="fade">
@@ -1163,6 +1166,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     </BaseModal>
 
     <AboutModal :is-open="showAboutModal" @close="showAboutModal = false" />
+    <FaqModal :is-open="showFaqModal" @close="showFaqModal = false" />
     <ExportModal :is-open="showExportModal" :export-type="currentExportType" @close="showExportModal = false" @confirm-export="handleConfirmExport" />
     <ValidationIssuesModal :is-open="showValidationModal" :validation-errors="validationErrors" :elements="elements" @select-node="handleSelectNodeFromModal" @close="showValidationModal = false" />
     <DebugPanel v-if="showDebugPanel" />

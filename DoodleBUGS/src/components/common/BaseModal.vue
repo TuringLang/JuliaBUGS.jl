@@ -18,7 +18,7 @@ const visible = computed({
 </script>
 
 <template>
-  <Dialog v-model:visible="visible" modal :header="header" :style="{ width: '50vw' }">
+  <Dialog v-model:visible="visible" modal :header="header" :style="{ width: '50vw' }" dismissableMask>
     <template #header v-if="$slots.header">
       <slot name="header"></slot>
     </template>
