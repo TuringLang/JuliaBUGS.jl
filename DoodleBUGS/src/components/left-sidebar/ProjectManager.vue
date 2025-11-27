@@ -208,7 +208,6 @@ const handleNewGraph = () => {
         </div>
       </template>
       <template #footer>
-        <BaseButton @click="showDeleteConfirmModal = false" type="secondary">Cancel</BaseButton>
         <BaseButton @click="executeDeletion" type="danger">Delete</BaseButton>
       </template>
     </BaseModal>
@@ -224,7 +223,6 @@ const handleNewGraph = () => {
             </div>
         </template>
         <template #footer>
-            <BaseButton @click="showRenameModal = false" type="secondary">Cancel</BaseButton>
             <BaseButton @click="executeRename" type="primary">Rename</BaseButton>
         </template>
     </BaseModal>

@@ -236,9 +236,6 @@ const shortenUrl = async () => {
           </div>
       </div>
     </template>
-    <template #footer>
-        <BaseButton @click="emit('close')" type="secondary">Close</BaseButton>
-    </template>
   </BaseModal>
 </template>
 

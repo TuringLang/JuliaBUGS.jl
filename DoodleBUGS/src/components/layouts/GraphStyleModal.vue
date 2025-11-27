@@ -293,7 +293,6 @@ const resetStyleSettings = () => {
             <div class="modal-footer">
                 <BaseButton type="secondary" @click="resetStyleSettings">Reset to Default</BaseButton>
                 <div class="footer-actions">
-                    <BaseButton type="secondary" @click="emit('close')">Cancel</BaseButton>
                     <BaseButton type="primary" @click="saveStyleSettings">Save</BaseButton>
                 </div>
             </div>

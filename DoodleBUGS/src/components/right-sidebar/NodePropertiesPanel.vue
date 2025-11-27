@@ -216,7 +216,6 @@ const getErrorForField = (fieldKey: string): string | undefined => {
         </p>
       </template>
       <template #footer>
-        <BaseButton @click="cancelDelete" type="secondary">Cancel</BaseButton>
         <BaseButton @click="executeDelete" type="danger">Delete</BaseButton>
       </template>
     </BaseModal>

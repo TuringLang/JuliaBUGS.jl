@@ -370,7 +370,7 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
     background: var(--theme-bg-panel);
     color: var(--theme-text-primary);
     font-size: 0.85rem;
-    text-align: right;
+    text-align: left;
 }
 .native-number-input:focus {
     outline: none;

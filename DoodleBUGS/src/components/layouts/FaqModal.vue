@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import BaseModal from '../common/BaseModal.vue';
-import BaseButton from '../ui/BaseButton.vue';
 
 defineProps<{
   isOpen: boolean;
@@ -75,9 +74,6 @@ const toggleItem = (index: number) => {
             </a>
         </div>
       </div>
-    </template>
-    <template #footer>
-      <BaseButton @click="emit('close')" type="primary">Close</BaseButton>
     </template>
   </BaseModal>
 </template>

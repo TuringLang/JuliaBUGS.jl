@@ -89,11 +89,12 @@ const copyLogs = () => {
       </div>
     </template>
     <template #footer>
-      <BaseButton @click="copyLogs" type="secondary" v-if="errorsWithNodeNames.length > 0">
-        <i v-if="copySuccess" class="fas fa-check"></i>
-        <span v-else>Copy Logs</span>
-      </BaseButton>
-      <BaseButton @click="emit('close')" type="primary">Close</BaseButton>
+      <div class="w-full flex justify-end">
+        <BaseButton @click="copyLogs" type="secondary" v-if="errorsWithNodeNames.length > 0">
+          <i v-if="copySuccess" class="fas fa-check"></i>
+          <span v-else>Copy Logs</span>
+        </BaseButton>
+      </div>
     </template>
   </BaseModal>
 </template>
@@ -149,9 +150,5 @@ const copyLogs = () => {
   padding-left: 20px;
   font-size: 0.9em;
   color: var(--color-text);
-}
-
-.modal-footer {
-    justify-content: space-between;
 }
 </style>

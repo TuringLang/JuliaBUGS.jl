@@ -31,15 +31,11 @@
         </div>
       </div>
     </template>
-    <template #footer>
-      <BaseButton @click="emit('close')" type="primary">Close</BaseButton>
-    </template>
   </BaseModal>
 </template>
 
 <script setup lang="ts">
 import BaseModal from '../common/BaseModal.vue';
-import BaseButton from '../ui/BaseButton.vue';
 
 defineProps<{
   isOpen: boolean;
@@ -84,8 +80,9 @@ const emit = defineEmits(['close']);
 
 .links-list {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 12px;
 }
 
 .resource-link {
@@ -99,6 +96,9 @@ const emit = defineEmits(['close']);
     font-weight: 500;
     transition: background-color 0.2s;
     border: 1px solid transparent;
+    flex: 1;
+    justify-content: center;
+    min-width: 120px;
 }
 
 .resource-link:hover {

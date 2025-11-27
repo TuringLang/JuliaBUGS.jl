@@ -23,6 +23,7 @@ defineEmits<{
   (e: 'generate-script'): void;
   (e: 'share'): void;
   (e: 'open-export-modal', format: 'png' | 'jpg' | 'svg'): void;
+  (e: 'export-json'): void;
 }>();
 
 const uiStore = useUiStore();
@@ -94,6 +95,11 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                     <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'png')"><i class="fas fa-image"></i> PNG Image</BaseButton>
                     <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'jpg')"><i class="fas fa-file-image"></i> JPG Image</BaseButton>
                     <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'svg')"><i class="fas fa-draw-polygon"></i> SVG Vector</BaseButton>
+                    
+                    <div class="divider"></div>
+                    
+                    <h5 class="section-title">Model Export</h5>
+                    <BaseButton type="ghost" class="menu-btn" @click="$emit('export-json')"><i class="fas fa-file-code"></i>Export Graph, Data & Inits as JSON</BaseButton>
                 </div>
             </div>
         </div>

@@ -116,8 +116,7 @@ const handleConfirm = () => {
       </div>
     </template>
     <template #footer>
-      <BaseButton @click="$emit('close')" type="secondary">Cancel</BaseButton>
-      <BaseButton @click="handleConfirm" type="primary">Export</BaseButton>
++      <BaseButton @click="handleConfirm" type="primary">Export</BaseButton>
     </template>
   </BaseModal>
 </template>

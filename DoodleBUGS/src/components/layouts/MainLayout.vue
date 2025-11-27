@@ -80,6 +80,9 @@ const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null);
 
 // Data Import Ref
 const dataImportInput = ref<HTMLInputElement | null>(null);
+const graphImportInput = ref<HTMLInputElement | null>(null);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const importedGraphData = ref<any>(null);
 
 // Local viewport state for smooth UI updates
 const viewportState = ref({ zoom: 1, pan: { x: 0, y: 0 } });
@@ -201,7 +204,7 @@ const minifyGraph = (elements: GraphElement[]): any[] => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const expandGraph = (minElements: any[]): GraphElement[] => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     return minElements.map(min => {
         if (min[keyMap.type] === 0) { // Node
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -561,7 +564,7 @@ watch([isDataPanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) =>
                 // Sidebar is ~300px + 16px margin.
                 const leftSidebarOffset = isLeftSidebarOpen.value ? 320 : 20; 
                 
-                let targetScreenX = leftSidebarOffset + 20;
+                const targetScreenX = leftSidebarOffset + 20;
                 
                 // Top offset
                 const targetScreenY = 90;
@@ -695,11 +698,57 @@ const createNewProject = () => {
 };
 
 const createNewGraph = () => {
-  if (projectStore.currentProject && newGraphName.value.trim()) {
-    projectStore.addGraphToProject(projectStore.currentProjectId!, newGraphName.value.trim());
+  if (projectStore.currentProject && (newGraphName.value.trim() || importedGraphData.value)) {
+    const name = newGraphName.value.trim() || importedGraphData.value?.name || 'New Graph';
+    const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId!, name);
+    
+    if (newGraphMeta && importedGraphData.value) {
+        // Populate with imported data
+        graphStore.updateGraphElements(newGraphMeta.id, importedGraphData.value.elements);
+        
+        if (importedGraphData.value.dataContent) {
+            dataStore.updateGraphData(newGraphMeta.id, { content: importedGraphData.value.dataContent });
+        }
+        
+        // Restore layout settings if available
+        if (importedGraphData.value.layout) {
+             projectStore.updateGraphLayout(projectStore.currentProject.id, newGraphMeta.id, importedGraphData.value.layout);
+        }
+        
+        graphStore.updateGraphLayout(newGraphMeta.id, 'preset');
+    }
+
     showNewGraphModal.value = false;
     newGraphName.value = '';
+    importedGraphData.value = null;
+    if (graphImportInput.value) graphImportInput.value.value = '';
   }
+};
+
+const handleGraphImportFile = (event: Event) => {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const content = e.target?.result as string;
+            const data = JSON.parse(content);
+            // Basic validation
+            if (data.elements && Array.isArray(data.elements)) {
+                importedGraphData.value = data;
+                if (!newGraphName.value && data.name) {
+                    newGraphName.value = data.name + ' (Imported)';
+                }
+            } else {
+                alert('Invalid graph JSON file.');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to parse file.');
+        }
+    };
+    reader.readAsText(file);
 };
 
 const openExportModal = (format: 'png' | 'jpg' | 'svg') => {
@@ -763,6 +812,45 @@ const handleConfirmExport = (options: ExportOptions) => {
     console.error(`Failed to export ${currentExportType.value}:`, err);
   }
 };
+
+const handleExportGraphJson = () => {
+    if (!graphStore.currentGraphId || !projectStore.currentProject) return;
+    
+    const graphMeta = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
+    if (!graphMeta) return;
+
+    const exportData = {
+        name: graphMeta.name,
+        elements: graphStore.currentGraphElements,
+        dataContent: dataStore.dataContent,
+        version: 1,
+        layout: {
+            showCodePanel: graphMeta.showCodePanel,
+            codePanelX: graphMeta.codePanelX,
+            codePanelY: graphMeta.codePanelY,
+            codePanelWidth: graphMeta.codePanelWidth,
+            codePanelHeight: graphMeta.codePanelHeight,
+            showDataPanel: graphMeta.showDataPanel,
+            dataPanelX: graphMeta.dataPanelX,
+            dataPanelY: graphMeta.dataPanelY,
+            dataPanelWidth: graphMeta.dataPanelWidth,
+            dataPanelHeight: graphMeta.dataPanelHeight,
+            gridEnabled: graphMeta.gridEnabled,
+            gridSize: graphMeta.gridSize,
+            gridStyle: graphMeta.gridStyle
+        }
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${graphMeta.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
 
 const getScriptContent = () => {
     const dataPayload = parsedGraphData.value.data || {};
@@ -1282,6 +1370,14 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     }
 }
 
+watch(showNewGraphModal, (val) => {
+    if (!val) {
+        importedGraphData.value = null;
+        newGraphName.value = '';
+        if (graphImportInput.value) graphImportInput.value.value = '';
+    }
+});
+
 </script>
 
 <template>
@@ -1375,6 +1471,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @generate-script="handleGenerateStandalone"
         @share="handleShare"
         @open-export-modal="openExportModal"
+        @export-json="handleExportGraphJson"
     />
 
     <Transition name="fade">
@@ -1493,7 +1590,6 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         </div>
       </template>
       <template #footer>
-        <BaseButton @click="showNewProjectModal = false" type="secondary">Cancel</BaseButton>
         <BaseButton @click="createNewProject" type="primary">Create</BaseButton>
       </template>
     </BaseModal>
@@ -1501,13 +1597,27 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     <BaseModal :is-open="showNewGraphModal" @close="showNewGraphModal = false">
       <template #header><h3>Create New Graph</h3></template>
       <template #body>
-        <div class="flex items-center gap-3">
-          <label style="min-width: 90px; font-weight: 500;">Graph Name:</label>
-          <BaseInput v-model="newGraphName" placeholder="Enter graph name" @keyup.enter="createNewGraph" />
+        <div class="flex flex-col gap-4">
+            <div class="flex items-center gap-3">
+                <label style="min-width: 90px; font-weight: 500;">Graph Name:</label>
+                <BaseInput v-model="newGraphName" placeholder="Enter graph name" @keyup.enter="createNewGraph" />
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div class="flex flex-col gap-2">
+                <label style="font-weight: 500; font-size: 0.9em;">Import from JSON (Optional):</label>
+                <div class="flex gap-2 items-center">
+                     <input type="file" ref="graphImportInput" accept=".json" @change="handleGraphImportFile" class="text-sm" />
+                     <span v-if="importedGraphData" class="text-green-500 text-xs font-bold flex items-center gap-1">
+                         <i class="fas fa-check"></i> Loaded
+                     </span>
+                </div>
+                <small class="text-muted" style="font-size: 0.8em; color: var(--theme-text-muted);">Select a previously exported graph JSON file to restore it.</small>
+            </div>
         </div>
       </template>
       <template #footer>
-        <BaseButton @click="showNewGraphModal = false" type="secondary">Cancel</BaseButton>
         <BaseButton @click="createNewGraph" type="primary">Create</BaseButton>
       </template>
     </BaseModal>
@@ -1855,6 +1965,16 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
 
 .desktop-text { display: inline; }
 .mobile-text { display: none; }
+
+.divider {
+    height: 1px;
+    background: var(--theme-border);
+    width: 100%;
+}
+
+.text-green-500 { color: var(--theme-success); }
+.font-bold { font-weight: bold; }
+.text-xs { font-size: 0.75rem; }
 
 @media (max-width: 768px) {
     .desktop-text { display: none; }
