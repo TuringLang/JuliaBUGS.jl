@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
-import { useExecutionStore } from '../../stores/executionStore';
+import { useScriptStore } from '../../stores/scriptStore';
 import { storeToRefs } from 'pinia';
 import 'codemirror/lib/codemirror.css';
 import 'codemirror/theme/material-darker.css';
@@ -21,8 +21,8 @@ defineEmits<{
   (e: 'generate'): void;
 }>();
 
-const executionStore = useExecutionStore();
-const { standaloneScript } = storeToRefs(executionStore);
+const scriptStore = useScriptStore();
+const { standaloneScript } = storeToRefs(scriptStore);
 
 const editorContainer = ref<HTMLDivElement | null>(null);
 let cmInstance: Editor | null = null;

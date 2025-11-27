@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
-import { useExecutionStore } from '../../stores/executionStore';
+import { useScriptStore } from '../../stores/scriptStore';
 import BaseInput from '../ui/BaseInput.vue';
 
-const executionStore = useExecutionStore();
-const { samplerSettings } = storeToRefs(executionStore);
+const scriptStore = useScriptStore();
+const { samplerSettings } = storeToRefs(scriptStore);
 </script>
 
 <template>
@@ -26,10 +26,6 @@ const { samplerSettings } = storeToRefs(executionStore);
       <div class="form-group">
         <label for="seed">Seed (optional)</label>
         <BaseInput id="seed" type="number" v-model.number="samplerSettings.seed" placeholder="Leave blank for random" />
-      </div>
-      <div class="form-group">
-        <label for="timeout">Timeout (seconds)</label>
-        <BaseInput id="timeout" type="number" v-model.number="samplerSettings.timeout_s" placeholder="0 for no timeout" />
       </div>
     </div>
   </div>

@@ -50,26 +50,31 @@ const shortenUrl = async () => {
     shortError.value = null;
     
     try {
-        // Use a CORS proxy to bypass is.gd CORS restrictions on client-side calls
+        // Use allorigins.win proxy to bypass is.gd CORS restrictions
         const target = `https://is.gd/create.php?format=json&url=${encodeURIComponent(props.url)}`;
-        const proxy = `https://corsproxy.io/?${encodeURIComponent(target)}`;
+        const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(target)}`;
         
         const response = await fetch(proxy);
         if (!response.ok) {
             throw new Error(`HTTP Error ${response.status}`);
         }
         
-        const data = await response.json();
+        const proxyData = await response.json();
         
-        if (data.errorcode) {
-            throw new Error(data.errormessage || 'Unknown is.gd error');
-        }
-        
-        if (data.shorturl) {
-            shortUrl.value = data.shorturl;
+        if (proxyData.contents) {
+            const data = JSON.parse(proxyData.contents);
+            if (data.errorcode) {
+                throw new Error(data.errormessage || 'Unknown is.gd error');
+            }
+            if (data.shorturl) {
+                shortUrl.value = data.shorturl;
+            } else {
+                throw new Error('Invalid response from is.gd');
+            }
         } else {
-            throw new Error('Invalid response from is.gd');
+             throw new Error('Empty response from proxy');
         }
+
     } catch (e: unknown) {
         console.error("Shortening failed:", e);
         shortError.value = e instanceof Error ? e.message : String(e);

@@ -18,13 +18,13 @@ import ValidationIssuesModal from './ValidationIssuesModal.vue';
 import DebugPanel from '../common/DebugPanel.vue';
 import CodePreviewPanel from '../panels/CodePreviewPanel.vue';
 import DataInputPanel from '../panels/DataInputPanel.vue';
-import ExecutionSettingsPanel from '../panels/ExecutionSettingsPanel.vue';
+import ScriptSettingsPanel from '../panels/ScriptSettingsPanel.vue';
 import { useGraphElements } from '../../composables/useGraphElements';
 import { useProjectStore } from '../../stores/projectStore';
 import { useGraphStore } from '../../stores/graphStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useDataStore } from '../../stores/dataStore';
-import { useExecutionStore } from '../../stores/executionStore';
+import { useScriptStore } from '../../stores/scriptStore';
 import { useGraphInstance } from '../../composables/useGraphInstance';
 import { useGraphValidator } from '../../composables/useGraphValidator';
 import { useBugsCodeGenerator, generateStandaloneScript } from '../../composables/useBugsCodeGenerator';
@@ -43,15 +43,15 @@ const projectStore = useProjectStore();
 const graphStore = useGraphStore();
 const uiStore = useUiStore();
 const dataStore = useDataStore();
-const executionStore = useExecutionStore();
+const scriptStore = useScriptStore();
 
 const { parsedGraphData } = storeToRefs(dataStore);
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements();
 const { generatedCode } = useBugsCodeGenerator(elements);
 const { getCyInstance, getUndoRedoInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
-const { samplerSettings, standaloneScript } = storeToRefs(executionStore);
-const { isLeftSidebarOpen, isRightSidebarOpen, canvasGridStyle, isDarkMode } = storeToRefs(uiStore);
+const { samplerSettings, standaloneScript } = storeToRefs(scriptStore);
+const { isLeftSidebarOpen, isRightSidebarOpen, canvasGridStyle, isDarkMode, activeRightTab } = storeToRefs(uiStore);
 
 const currentMode = ref<string>('select');
 const currentNodeType = ref<NodeType>('stochastic');
@@ -896,14 +896,27 @@ const getScriptContent = () => {
 
 const handleGenerateStandalone = () => {
     const script = getScriptContent();
-    executionStore.standaloneScript = script;
+    scriptStore.standaloneScript = script;
     uiStore.setActiveRightTab('script');
     uiStore.isRightSidebarOpen = true;
 };
 
+// Auto-update script if it exists or script panel is open
+watch(
+  [generatedCode, parsedGraphData, samplerSettings],
+  () => {
+    // Update if script already exists OR if the panel is open
+    if (standaloneScript.value || (activeRightTab.value === 'script' && isRightSidebarOpen.value)) {
+      scriptStore.standaloneScript = getScriptContent();
+    }
+  },
+  { deep: true }
+);
+
 const handleScriptSettingsDone = () => {
+    // Also regenerate immediately on settings close
     const script = getScriptContent();
-    executionStore.standaloneScript = script;
+    scriptStore.standaloneScript = script;
     showScriptSettingsModal.value = false;
 };
 
@@ -1632,7 +1645,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     <BaseModal :is-open="showScriptSettingsModal" @close="showScriptSettingsModal = false">
       <template #header><h3>Script Configuration</h3></template>
       <template #body>
-        <ExecutionSettingsPanel />
+        <ScriptSettingsPanel />
       </template>
       <template #footer>
         <BaseButton @click="handleScriptSettingsDone">Done</BaseButton>

@@ -52,6 +52,7 @@ export const useGraphStore = defineStore('graph', () => {
       elements: [],
       lastLayout: 'dagre',
     };
+    // Ensure reactivity
     graphContents.value.set(graphId, newContent);
     saveGraph(graphId, newContent);
     dataStore.createNewGraphData(graphId);
@@ -60,8 +61,10 @@ export const useGraphStore = defineStore('graph', () => {
   const updateGraphElements = (graphId: string, newElements: GraphElement[]) => {
     if (graphContents.value.has(graphId)) {
       const content = graphContents.value.get(graphId)!;
-      content.elements = newElements;
-      saveGraph(graphId, content);
+      // Create new object to trigger reactivity
+      const newContent = { ...content, elements: newElements };
+      graphContents.value.set(graphId, newContent);
+      saveGraph(graphId, newContent);
     }
   };
 
@@ -69,8 +72,9 @@ export const useGraphStore = defineStore('graph', () => {
     if (graphContents.value.has(graphId)) {
       const content = graphContents.value.get(graphId)!;
       if (content.lastLayout !== layoutName) {
-        content.lastLayout = layoutName;
-        saveGraph(graphId, content);
+        const newContent = { ...content, lastLayout: layoutName };
+        graphContents.value.set(graphId, newContent);
+        saveGraph(graphId, newContent);
       }
     }
   };
@@ -78,9 +82,10 @@ export const useGraphStore = defineStore('graph', () => {
   const updateGraphViewport = (graphId: string, zoom: number, pan: { x: number; y: number }) => {
     if (graphContents.value.has(graphId)) {
       const content = graphContents.value.get(graphId)!;
-      content.zoom = zoom;
-      content.pan = pan;
-      saveGraph(graphId, content);
+      // Only update if changed to avoid loops, but ensure object reference changes
+      const newContent = { ...content, zoom, pan };
+      graphContents.value.set(graphId, newContent);
+      saveGraph(graphId, newContent);
     }
   };
 
@@ -100,9 +105,14 @@ export const useGraphStore = defineStore('graph', () => {
   const loadGraph = (graphId: string): GraphContent | null => {
     const storedContent = localStorage.getItem(`doodlebugs-graph-${graphId}`);
     if (storedContent) {
-      const content: GraphContent = JSON.parse(storedContent);
-      graphContents.value.set(graphId, content);
-      return content;
+      try {
+        const content: GraphContent = JSON.parse(storedContent);
+        graphContents.value.set(graphId, content);
+        return content;
+      } catch (e) {
+        console.error("Failed to load graph", e);
+        return null;
+      }
     }
     return null;
   };
