@@ -112,9 +112,9 @@ export const useDataStore = defineStore('data', () => {
                 }
                 dataContents.value.set(graphId, loadedState);
             } else {
-                // Default to Julia mode for new/uninitialized graphs.
+                // Default to JSON mode for new/uninitialized graphs.
                 dataContents.value.set(graphId, {
-                    mode: 'julia',
+                    mode: 'json',
                     jsonData: defaultJson,
                     jsonInits: defaultJson,
                     juliaData: defaultJulia,
@@ -131,7 +131,7 @@ export const useDataStore = defineStore('data', () => {
     });
 
     const inputMode = computed({
-        get: () => currentGraphState.value?.mode || 'julia',
+        get: () => currentGraphState.value?.mode || 'json',
         set: (newMode) => {
             if (currentGraphState.value && currentGraphState.value.mode !== newMode) {
                 currentGraphState.value.mode = newMode;
@@ -195,7 +195,7 @@ export const useDataStore = defineStore('data', () => {
 
     const createNewGraphData = (graphId: string) => {
         const newState: DataState = {
-            mode: 'julia', // Default to Julia for new graphs
+            mode: 'json', // Default to JSON for new graphs
             jsonData: defaultJson,
             jsonInits: defaultJson,
             juliaData: defaultJulia,

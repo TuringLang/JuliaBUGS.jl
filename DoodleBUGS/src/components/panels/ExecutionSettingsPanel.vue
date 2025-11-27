@@ -40,7 +40,6 @@ const { samplerSettings } = storeToRefs(executionStore);
   display: flex;
   flex-direction: column;
   gap: 20px;
-  height: 100%;
 }
 .settings-section {
   display: flex;

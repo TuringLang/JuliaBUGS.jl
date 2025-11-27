@@ -15,6 +15,7 @@ import ValidationIssuesModal from './ValidationIssuesModal.vue';
 import DebugPanel from '../common/DebugPanel.vue';
 import CodePreviewPanel from '../panels/CodePreviewPanel.vue';
 import DataInputPanel from '../panels/DataInputPanel.vue';
+import ExecutionSettingsPanel from '../panels/ExecutionSettingsPanel.vue';
 import { useGraphElements } from '../../composables/useGraphElements';
 import { useProjectStore } from '../../stores/projectStore';
 import { useGraphStore } from '../../stores/graphStore';
@@ -56,7 +57,7 @@ const { elements, selectedElement, updateElement, deleteElement } = useGraphElem
 const { generatedCode } = useBugsCodeGenerator(elements);
 const { getCyInstance, getUndoRedoInstance } = useGraphInstance();
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData);
-const { backendUrl, isConnected, isConnecting, isExecuting, samplerSettings } = storeToRefs(executionStore);
+const { backendUrl, isConnected, isConnecting, isExecuting, samplerSettings, standaloneScript } = storeToRefs(executionStore);
 const { isLeftSidebarOpen, isRightSidebarOpen, canvasGridStyle, isDarkMode } = storeToRefs(uiStore);
 
 const currentMode = ref<string>('select');
@@ -76,6 +77,7 @@ const newGraphName = ref('');
 const showAboutModal = ref(false);
 const showValidationModal = ref(false);
 const showConnectModal = ref(false);
+const showScriptSettingsModal = ref(false);
 const tempBackendUrl = ref(backendUrl.value || 'http://localhost:8081');
 const showDebugPanel = ref(false);
 const showExportModal = ref(false);
@@ -390,20 +392,18 @@ const handleExportJson = () => {
   document.body.removeChild(a);
 };
 
-const handleExportBugs = () => {
+const handleDownloadBugs = () => {
   const content = generatedCode.value;
-  const file: GeneratedFile = { name: 'model.bugs', content: content };
-  
-  // Avoid duplicate file if already exists
-  const existing = executionStore.generatedFiles.filter(f => f.name !== 'model.bugs');
-  existing.unshift(file);
-  
-  executionStore.generatedFiles = existing;
-  executionStore.activeFileName = 'model.bugs';
-
-  uiStore.setActiveRightTab('connection');
-  uiStore.isRightSidebarOpen = true;
-  executionStore.setExecutionPanelTab('files');
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const fileName = 'model.bugs';
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };
 
 const handleConfirmExport = (options: ExportOptions) => {
@@ -452,7 +452,6 @@ const connectToBackend = async () => {
   isConnecting.value = true;
   isConnected.value = false;
   executionStore.setBackendUrl(tempBackendUrl.value);
-  uiStore.setActiveRightTab('connection');
   executionStore.executionLogs.push(`Attempting to connect to backend at ${tempBackendUrl.value}...`);
   
   try {
@@ -463,7 +462,6 @@ const connectToBackend = async () => {
     isConnected.value = true;
     executionStore.executionLogs.push("Connection successful.");
     showConnectModal.value = false;
-    isRightSidebarOpen.value = true;
   } catch (error: unknown) {
     const errorMessage = (error as Error).message;
     executionStore.executionLogs.push(`Connection failed: ${errorMessage}`);
@@ -496,8 +494,6 @@ const jsonToJulia = (jsonString: string): string => {
 const runModel = async () => {
   if (!isConnected.value || !backendUrl.value || isExecuting.value) return;
 
-  uiStore.setActiveRightTab('connection');
-  if (!isRightSidebarOpen.value) isRightSidebarOpen.value = true;
   executionStore.resetExecutionState();
   executionStore.setExecutionPanelTab('logs');
   abortedByUser = false;
@@ -588,10 +584,10 @@ const runModel = async () => {
   }
 };
 
-const handleGenerateStandalone = () => {
+const getScriptContent = () => {
     const dataPayload = parsedGraphData.value.data || {};
     const initsPayload = parsedGraphData.value.inits || {};
-    const script = generateStandaloneScript({
+    return generateStandaloneScript({
       modelCode: generatedCode.value,
       data: dataPayload,
       inits: initsPayload,
@@ -602,15 +598,39 @@ const handleGenerateStandalone = () => {
         seed: samplerSettings.value.seed ?? undefined,
       },
     });
-    const files = executionStore.generatedFiles.filter(f => f.name !== 'standalone.jl');
-    files.unshift({ name: 'standalone.jl', content: script });
-    executionStore.generatedFiles = files;
-    executionStore.activeFileName = 'standalone.jl';
-
-    uiStore.setActiveRightTab('connection');
-    isRightSidebarOpen.value = true;
-    executionStore.setExecutionPanelTab('files');
 };
+
+const handleGenerateStandalone = () => {
+    const script = getScriptContent();
+    executionStore.standaloneScript = script;
+    uiStore.setActiveRightTab('script');
+    uiStore.isRightSidebarOpen = true;
+};
+
+const handleScriptSettingsDone = () => {
+    const script = getScriptContent();
+    executionStore.standaloneScript = script;
+    showScriptSettingsModal.value = false;
+};
+
+const handleDownloadScript = () => {
+    const content = standaloneScript.value;
+    if (!content) return;
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const fileName = 'DoodleBUGS-Julia-Script.jl';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+const handleOpenScriptSettings = () => {
+    showScriptSettingsModal.value = true;
+}
 
 const handleLoadExample = async (exampleKey: string) => {
   if (!projectStore.currentProjectId) return;
@@ -634,7 +654,6 @@ const handleLoadExample = async (exampleKey: string) => {
       dataStore.dataString = JSON.stringify(fullData.data || {}, null, 2);
       dataStore.initsString = JSON.stringify(fullData.inits || {}, null, 2);
     }
-    dataStore.inputMode = 'julia';
     dataStore.updateGraphData(newGraphMeta.id, dataStore.getGraphData(newGraphMeta.id));
   } catch (error) {
     console.error("Failed to load example model:", error);
@@ -1129,10 +1148,6 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @load-example="handleLoadExample"
         @open-export-modal="openExportModal"
         @export-json="handleExportJson"
-        @connect-to-backend-url="(url) => { tempBackendUrl = url; connectToBackend(); }"
-        @run-model="runModel"
-        @abort-run="abortRun"
-        @generate-standalone="handleGenerateStandalone"
         @open-about-modal="showAboutModal = true"
     />
 
@@ -1168,6 +1183,9 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @update-element="updateElement"
         @delete-element="deleteElement"
         @show-validation-issues="showValidationModal = true"
+        @open-script-settings="handleOpenScriptSettings"
+        @download-script="handleDownloadScript"
+        @generate-script="handleGenerateStandalone"
     />
 
     <Transition name="fade">
@@ -1259,8 +1277,9 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @toggle-code-panel="toggleCodePanel"
         @toggle-data-panel="toggleDataPanel"
         @toggle-json-panel="toggleJsonPanel"
-        @export-bugs="handleExportBugs"
+        @download-bugs="handleDownloadBugs"
         @export-standalone="handleGenerateStandalone"
+        @download-script="handleDownloadScript"
     />
 
     <BaseModal :is-open="showNewProjectModal" @close="showNewProjectModal = false">
@@ -1291,19 +1310,13 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
       </template>
     </BaseModal>
 
-    <BaseModal :is-open="showConnectModal" @close="showConnectModal = false">
-      <template #header><h3>Connect to Backend</h3></template>
+    <BaseModal :is-open="showScriptSettingsModal" @close="showScriptSettingsModal = false">
+      <template #header><h3>Script Configuration</h3></template>
       <template #body>
-        <div class="flex-col gap-2">
-          <label>Backend Server URL:</label>
-          <BaseInput v-model="tempBackendUrl" placeholder="http://localhost:8081" @keyup.enter="connectToBackend" />
-        </div>
+        <ExecutionSettingsPanel />
       </template>
       <template #footer>
-        <BaseButton @click="showConnectModal = false" type="secondary">Cancel</BaseButton>
-        <BaseButton @click="connectToBackend" type="primary" :disabled="isConnecting">
-          {{ isConnecting ? 'Connecting...' : 'Connect' }}
-        </BaseButton>
+        <BaseButton @click="handleScriptSettingsDone">Done</BaseButton>
       </template>
     </BaseModal>
 

@@ -34,6 +34,7 @@ export const useExecutionStore = defineStore('execution', () => {
     summary: 'doodlebugs-summaryResults',
     quantiles: 'doodlebugs-quantileResults',
     panelTab: 'doodlebugs-executionPanelTab',
+    standaloneScript: 'doodlebugs-standaloneScript',
   } as const;
 
   const safeParse = <T>(key: string, fallback: T): T => {
@@ -53,6 +54,7 @@ export const useExecutionStore = defineStore('execution', () => {
   const executionError = ref<string | null>(safeParse<string | null>(LS_KEYS.error, null));
   const generatedFiles = ref<GeneratedFile[]>(safeParse<GeneratedFile[]>(LS_KEYS.files, []));
   const activeFileName = ref<string | null>(null);
+  const standaloneScript = ref<string>(localStorage.getItem(LS_KEYS.standaloneScript) || '');
 
   const summaryResults = ref<ExecutionResult[] | null>(safeParse<ExecutionResult[] | null>(LS_KEYS.summary, null));
   const quantileResults = ref<ExecutionResult[] | null>(safeParse<ExecutionResult[] | null>(LS_KEYS.quantiles, null));
@@ -105,6 +107,7 @@ export const useExecutionStore = defineStore('execution', () => {
   watch(summaryResults, (v) => localStorage.setItem(LS_KEYS.summary, JSON.stringify(v)));
   watch(quantileResults, (v) => localStorage.setItem(LS_KEYS.quantiles, JSON.stringify(v)));
   watch(executionPanelTab, (v) => localStorage.setItem(LS_KEYS.panelTab, JSON.stringify(v)));
+  watch(standaloneScript, (v) => localStorage.setItem(LS_KEYS.standaloneScript, v));
 
   return {
     backendUrl,
@@ -118,6 +121,7 @@ export const useExecutionStore = defineStore('execution', () => {
     executionError,
     generatedFiles,
     activeFileName,
+    standaloneScript,
     samplerSettings,
     executionPanelTab,
     setBackendUrl,

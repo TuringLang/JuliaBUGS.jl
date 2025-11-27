@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
 
-export type RightSidebarTab = 'properties' | 'code' | 'json' | 'connection';
+export type RightSidebarTab = 'properties' | 'code' | 'json' | 'script';
 export type LeftSidebarTab = 'project' | 'palette' | 'data' | 'settings' | 'view' | 'export' | 'connect' | 'help';
 export type GridStyle = 'dots' | 'lines';
 
@@ -10,12 +10,10 @@ export const useUiStore = defineStore('ui', () => {
   const storedRight = localStorage.getItem('doodlebugs-activeRightTab') as string | null;
   let initialRightTab: RightSidebarTab = 'properties';
   
-  if (storedRight === 'execution') {
-      initialRightTab = 'connection';
-  } else if (storedRight === 'properties' || storedRight === 'code' || storedRight === 'connection' || storedRight === 'json') {
+  if (storedRight === 'properties' || storedRight === 'code' || storedRight === 'json' || storedRight === 'script') {
       initialRightTab = storedRight as RightSidebarTab;
-  } else if (storedRight) {
-      initialRightTab = storedRight as RightSidebarTab;
+  } else if (storedRight === 'connection') {
+      initialRightTab = 'properties'; // Fallback since connection is removed
   }
 
   const activeRightTab = ref<RightSidebarTab>(initialRightTab);

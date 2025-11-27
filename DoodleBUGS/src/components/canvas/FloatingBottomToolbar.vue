@@ -25,8 +25,9 @@ const emit = defineEmits<{
   (e: 'toggle-code-panel'): void;
   (e: 'toggle-data-panel'): void;
   (e: 'toggle-json-panel'): void;
-  (e: 'export-bugs'): void;
+  (e: 'download-bugs'): void;
   (e: 'export-standalone'): void;
+  (e: 'download-script'): void;
 }>();
 
 const availableNodeTypes = computed(() => {
@@ -315,20 +316,26 @@ onUnmounted(() => {
               </button>
           </template>
           <template #content>
-              <a href="#" @click.prevent="$emit('toggle-code-panel')">
-                  <i :class="showCodePanel ? 'fas fa-eye-slash' : 'fas fa-eye'" class="menu-icon"></i> {{ showCodePanel ? 'Hide Code' : 'Show Code' }}
-              </a>
+              <div class="menu-item-row">
+                  <a href="#" @click.prevent="$emit('toggle-code-panel')" class="flex-grow">
+                      <i :class="showCodePanel ? 'fas fa-eye-slash' : 'fas fa-eye'" class="menu-icon"></i> {{ showCodePanel ? 'Hide BUGS Code' : 'Show BUGS Code' }}
+                  </a>
+                  <button class="icon-btn download-btn" @click.stop="$emit('download-bugs')" title="Download BUGS Model">
+                      <i class="fas fa-download"></i>
+                  </button>
+              </div>
               <a href="#" @click.prevent="$emit('toggle-json-panel')">
                   <i class="fas fa-code menu-icon"></i> Open JSON
               </a>
               <div class="dropdown-divider"></div>
-              <div class="dropdown-section-title">Export</div>
-              <a href="#" @click.prevent="$emit('export-bugs')">
-                  <i class="fas fa-file-code menu-icon"></i> BUGS Model
-              </a>
-              <a href="#" @click.prevent="$emit('export-standalone')">
-                  <i class="fas fa-file-alt menu-icon"></i> Standalone Julia Script
-              </a>
+              <div class="menu-item-row">
+                  <a href="#" @click.prevent="$emit('export-standalone')" class="flex-grow">
+                      <i class="fas fa-file-alt menu-icon"></i> Julia Script for Local Run
+                  </a>
+                  <button class="icon-btn download-btn" @click.stop="$emit('download-script')" title="Download Script">
+                      <i class="fas fa-download"></i>
+                  </button>
+              </div>
           </template>
       </DropdownMenu>
 
@@ -489,6 +496,32 @@ onUnmounted(() => {
 
 .dock-dropdown :deep(.p-popover) {
     margin-bottom: 8px;
+}
+
+.menu-item-row {
+    display: flex;
+    align-items: center;
+    padding-right: 8px;
+}
+
+.menu-item-row a {
+    flex-grow: 1;
+}
+
+.icon-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--theme-text-secondary);
+    padding: 6px;
+    border-radius: 4px;
+    transition: background-color 0.2s, color 0.2s;
+    font-size: 12px;
+}
+
+.icon-btn:hover {
+    background-color: var(--theme-bg-hover);
+    color: var(--theme-text-primary);
 }
 
 @media (max-width: 768px) {

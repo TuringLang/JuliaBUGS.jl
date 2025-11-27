@@ -2,8 +2,8 @@
 import { type StyleValue } from 'vue';
 import { storeToRefs } from 'pinia';
 import NodePropertiesPanel from '../right-sidebar/NodePropertiesPanel.vue';
-import ExecutionPanel from '../right-sidebar/ExecutionPanel.vue';
 import JsonEditorPanel from '../right-sidebar/JsonEditorPanel.vue';
+import LocalScriptPanel from '../right-sidebar/LocalScriptPanel.vue';
 import { useUiStore } from '../../stores/uiStore';
 import type { GraphElement, ValidationError } from '../../types';
 
@@ -18,6 +18,9 @@ defineEmits<{
   (e: 'update-element', element: GraphElement): void;
   (e: 'delete-element', elementId: string): void;
   (e: 'show-validation-issues'): void;
+  (e: 'open-script-settings'): void;
+  (e: 'download-script'): void;
+  (e: 'generate-script'): void;
 }>();
 
 const uiStore = useUiStore();
@@ -61,7 +64,7 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
         <div class="sidebar-tabs text-tabs">
             <button :class="{ active: activeRightTab === 'properties' }" @click="uiStore.setActiveRightTab('properties')">Props</button>
             <button :class="{ active: activeRightTab === 'json' }" @click="uiStore.setActiveRightTab('json')">JSON</button>
-            <button :class="{ active: activeRightTab === 'connection' }" @click="uiStore.setActiveRightTab('connection')">Execution</button>
+            <button :class="{ active: activeRightTab === 'script' }" @click="uiStore.setActiveRightTab('script')">Script</button>
         </div>
 
         <div class="sidebar-content">
@@ -71,7 +74,13 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                 @update-element="$emit('update-element', $event)" 
                 @delete-element="$emit('delete-element', $event)" />
             <JsonEditorPanel v-show="activeRightTab === 'json'" :is-active="activeRightTab === 'json'" />
-            <ExecutionPanel v-show="activeRightTab === 'connection'" />
+            <LocalScriptPanel 
+                v-show="activeRightTab === 'script'" 
+                :is-active="activeRightTab === 'script'" 
+                @open-settings="$emit('open-script-settings')"
+                @download="$emit('download-script')"
+                @generate="$emit('generate-script')"
+            />
         </div>
     </aside>
 </template>

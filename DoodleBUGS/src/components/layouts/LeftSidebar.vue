@@ -7,14 +7,11 @@ import AccordionContent from 'primevue/accordioncontent';
 import ToggleSwitch from 'primevue/toggleswitch';
 import BaseSelect from '../ui/BaseSelect.vue';
 import BaseButton from '../ui/BaseButton.vue';
-import BaseInput from '../ui/BaseInput.vue';
 import ProjectManager from '../left-sidebar/ProjectManager.vue';
 import NodePalette from '../left-sidebar/NodePalette.vue';
-import ExecutionSettingsPanel from '../left-sidebar/ExecutionSettingsPanel.vue';
 import type { NodeType, PaletteItemType } from '../../types';
 import { exampleModels } from '../../config/nodeDefinitions';
 import { useUiStore } from '../../stores/uiStore';
-import { useExecutionStore } from '../../stores/executionStore';
 import { storeToRefs } from 'pinia';
 
 defineProps<{
@@ -42,22 +39,12 @@ defineEmits<{
   (e: 'load-example', key: string): void;
   (e: 'open-export-modal', format: 'png' | 'jpg' | 'svg'): void;
   (e: 'export-json'): void;
-  (e: 'connect-to-backend-url', url: string): void;
-  (e: 'run-model'): void;
-  (e: 'abort-run'): void;
-  (e: 'generate-standalone'): void;
   (e: 'open-about-modal'): void;
   (e: 'toggle-dark-mode'): void;
 }>();
 
 const uiStore = useUiStore();
-const executionStore = useExecutionStore();
 const { isLeftSidebarOpen, canvasGridStyle, isDarkMode } = storeToRefs(uiStore);
-const { isConnected, isConnecting, isExecuting } = storeToRefs(executionStore);
-
-import { ref } from 'vue';
-
-const navBackendUrl = ref('');
 
 const gridStyleOptions = [
     { label: 'Dots', value: 'dots' },
@@ -132,15 +119,6 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                     </AccordionContent>
                 </AccordionPanel>
 
-                <AccordionPanel value="settings">
-                    <AccordionHeader><i class="fas fa-sliders-h icon-12"></i> Run Settings</AccordionHeader>
-                    <AccordionContent>
-                        <div class="panel-content-wrapper">
-                            <ExecutionSettingsPanel />
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
-
                 <AccordionPanel value="view">
                     <AccordionHeader><i class="fas fa-eye icon-12"></i> View Options</AccordionHeader>
                     <AccordionContent>
@@ -185,37 +163,6 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                             <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'svg')"><i class="fas fa-vector-square"></i> SVG Vector</BaseButton>
                             <div class="divider"></div>
                             <BaseButton type="ghost" class="menu-btn" @click="$emit('export-json')"><i class="fas fa-file-code"></i> JSON Data</BaseButton>
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
-
-                <AccordionPanel value="connect">
-                    <AccordionHeader><i class="fas fa-network-wired icon-12"></i> Connection</AccordionHeader>
-                    <AccordionContent>
-                        <div class="panel-content-wrapper relative">
-                            <div class="experimental-badge">Experimental</div>
-                            <div class="menu-panel flex-col gap-3 pt-4">
-                                <div class="flex-col gap-2">
-                                    <label class="text-xs font-bold">Backend URL</label>
-                                    <BaseInput v-model="navBackendUrl" placeholder="http://localhost:8081" />
-                                </div>
-                                <div class="status-display" :class="{ connected: isConnected }">
-                                    Status: {{ isConnected ? 'Connected' : 'Disconnected' }}
-                                </div>
-                                <BaseButton @click="$emit('connect-to-backend-url', navBackendUrl)" :disabled="isConnecting" type="primary" class="w-full justify-center">
-                                    {{ isConnecting ? 'Connecting...' : 'Connect' }}
-                                </BaseButton>
-                                
-                                <BaseButton @click="$emit('run-model')" type="primary" size="small" class="w-full justify-center" :disabled="!isConnected || isExecuting">
-                                    <i v-if="isExecuting" class="fas fa-spinner fa-spin"></i>
-                                    <i v-else class="fas fa-play"></i>
-                                    <span class="ml-2">Run Model</span>
-                                </BaseButton>
-                                <BaseButton v-if="isExecuting" @click="$emit('abort-run')" type="danger" size="small" class="w-full justify-center">
-                                    <i class="fas fa-stop"></i>
-                                    <span class="ml-2">Abort</span>
-                                </BaseButton>
-                            </div>
                         </div>
                     </AccordionContent>
                 </AccordionPanel>
