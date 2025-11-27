@@ -259,15 +259,18 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(() => {
       if (cy) {
         cy.resize();
-        if (!isGraphVisible.value) {
-            if (props.initialViewport) {
-                cy.zoom(props.initialViewport.zoom);
-                cy.pan(props.initialViewport.pan);
-                updateGridStyle();
-                isGraphVisible.value = true;
-            } else {
-                if (props.elements.length > 0) {
-                    if (cy.width() > 0 && cy.height() > 0) {
+        // Only set viewport if container has valid dimensions
+        if (cy.width() > 0 && cy.height() > 0) {
+            if (!isGraphVisible.value) {
+                if (props.initialViewport) {
+                    cy.viewport({
+                        zoom: props.initialViewport.zoom,
+                        pan: props.initialViewport.pan
+                    });
+                    updateGridStyle();
+                    isGraphVisible.value = true;
+                } else {
+                    if (props.elements.length > 0) {
                         cy.fit(undefined, 50);
                         if (cy.zoom() > 0.8) {
                             cy.zoom(0.8);
@@ -275,14 +278,14 @@ onMounted(() => {
                         }
                         updateGridStyle();
                         isGraphVisible.value = true;
+                    } else {
+                        updateGridStyle();
+                        isGraphVisible.value = true;
                     }
-                } else {
-                    updateGridStyle();
-                    isGraphVisible.value = true;
                 }
+            } else {
+                updateGridStyle();
             }
-        } else {
-            updateGridStyle();
         }
       }
     });

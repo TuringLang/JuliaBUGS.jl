@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue';
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import type { LayoutOptions, Core } from 'cytoscape';
 import GraphEditor from '../canvas/GraphEditor.vue';
@@ -12,6 +12,7 @@ import RightSidebar from './RightSidebar.vue';
 import AboutModal from './AboutModal.vue';
 import FaqModal from './FaqModal.vue';
 import ExportModal from './ExportModal.vue';
+import GraphStyleModal from './GraphStyleModal.vue';
 import ValidationIssuesModal from './ValidationIssuesModal.vue';
 import DebugPanel from '../common/DebugPanel.vue';
 import CodePreviewPanel from '../panels/CodePreviewPanel.vue';
@@ -58,7 +59,7 @@ const gridSize = ref(20);
 const showZoomControls = ref(true);
 
 // Sidebar State
-const activeAccordionTabs = ref(['project', 'palette']);
+const activeAccordionTabs = ref(['project']);
 
 // Modals State
 const showNewProjectModal = ref(false);
@@ -71,6 +72,7 @@ const showValidationModal = ref(false);
 const showScriptSettingsModal = ref(false);
 const showDebugPanel = ref(false);
 const showExportModal = ref(false);
+const showStyleModal = ref(false);
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null);
 
 // Local viewport state for smooth UI updates
@@ -132,6 +134,19 @@ watch(isDarkMode, (val) => {
   else element?.classList.remove('dark-mode');
 }, { immediate: true });
 
+// Viewport Persistence Logic
+let saveViewportTimeout: ReturnType<typeof setTimeout> | null = null;
+
+const persistViewport = () => {
+    if (saveViewportTimeout) {
+        clearTimeout(saveViewportTimeout);
+        saveViewportTimeout = null;
+    }
+    if (graphStore.currentGraphId) {
+        graphStore.updateGraphViewport(graphStore.currentGraphId, viewportState.value.zoom, viewportState.value.pan);
+    }
+};
+
 onMounted(async () => {
   projectStore.loadProjects();
   if (projectStore.projects.length === 0) {
@@ -151,6 +166,14 @@ onMounted(async () => {
   if (window.innerWidth < 768) {
       showZoomControls.value = false;
   }
+
+  // Force save on page reload/close
+  window.addEventListener('beforeunload', persistViewport);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('beforeunload', persistViewport);
+    persistViewport();
 });
 
 // Sync viewport state when graph changes
@@ -238,19 +261,13 @@ const handleLayoutUpdated = (layoutName: string) => {
   }
 };
 
-let saveViewportTimeout: ReturnType<typeof setTimeout> | null = null;
-
 const handleViewportChanged = (v: { zoom: number, pan: { x: number, y: number } }) => {
     // Update local state immediately for smooth UI
     viewportState.value = v;
     
     // Debounce persistence
     if (saveViewportTimeout) clearTimeout(saveViewportTimeout);
-    saveViewportTimeout = setTimeout(() => {
-        if (graphStore.currentGraphId) {
-            graphStore.updateGraphViewport(graphStore.currentGraphId, v.zoom, v.pan);
-        }
-    }, 500);
+    saveViewportTimeout = setTimeout(persistViewport, 200);
 }
 
 const smartFit = (cy: Core, animate: boolean = true) => {
@@ -332,8 +349,13 @@ const handleSelectNodeFromModal = (nodeId: string) => {
         handleElementSelected(targetNode);
         const cy = getCyInstance(graphStore.currentGraphId!);
         if (cy) {
+            // Programmatically select node in Cytoscape for visual feedback
+            cy.elements().removeClass('cy-selected');
+            const cyNode = cy.getElementById(nodeId);
+            cyNode.addClass('cy-selected');
+
             cy.animate({
-                fit: { eles: cy.getElementById(nodeId), padding: 50 },
+                fit: { eles: cyNode, padding: 50 },
                 duration: 500
             });
         }
@@ -501,9 +523,7 @@ const handleLoadExample = async (exampleKey: string) => {
     const jsonDataResponse = await fetch(`${baseUrl}examples/${exampleKey}/data.json`);
     if (jsonDataResponse.ok) {
       const fullData = await jsonDataResponse.json();
-      dataStore.inputMode = 'json';
-      dataStore.dataString = JSON.stringify(fullData.data || {}, null, 2);
-      dataStore.initsString = JSON.stringify(fullData.inits || {}, null, 2);
+      dataStore.dataContent = JSON.stringify({ data: fullData.data || {}, inits: fullData.inits || {} }, null, 2);
     }
     dataStore.updateGraphData(newGraphMeta.id, dataStore.getGraphData(newGraphMeta.id));
   } catch (error) {
@@ -568,6 +588,7 @@ const initialPanelPos = ref({ x: 0, y: 0 });
 
 // When dragging starts, we capture the current Zoom/Pan state
 const startDragCodeTouch = (e: TouchEvent) => {
+    if ((e.target as HTMLElement).closest('.action-btn')) return;
     if (!projectStore.currentProject || !graphStore.currentGraphId) return;
     const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
     if (!graph) return;
@@ -611,6 +632,7 @@ const stopDragCodeTouch = () => {
 
 // Code Panel Drag Logic (Mouse)
 const startDragCode = (e: MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.action-btn')) return;
     if (!projectStore.currentProject || !graphStore.currentGraphId) return;
     const graph = projectStore.currentProject.graphs.find(g => g.id === graphStore.currentGraphId);
     if (!graph) return;
@@ -1063,7 +1085,12 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
              @touchstart="startDragCodeTouch"
         >
             <span class="graph-title"><i class="fas fa-code"></i> BUGS Code Preview</span>
-            <button class="close-btn" @click="toggleCodePanel()" @touchstart.stop="toggleCodePanel()" @mousedown.stop><i class="fas fa-times"></i></button>
+            <div class="panel-actions">
+                <button class="action-btn" @click.stop="handleDownloadBugs" title="Download BUGS Code" @mousedown.stop @touchstart.stop>
+                    <i class="fas fa-download"></i>
+                </button>
+                <button class="close-btn" @click="toggleCodePanel()" @touchstart.stop="toggleCodePanel()" @mousedown.stop><i class="fas fa-times"></i></button>
+            </div>
         </div>
         <div class="code-content">
             <CodePreviewPanel :is-active="true" />
@@ -1086,11 +1113,10 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
              @mousedown="startDragData"
              @touchstart="startDragDataTouch"
         >
-            <span class="graph-title"><i class="fas fa-database"></i> Data & Inits</span>
-            <div class="panel-switcher">
-                 <button :class="{active: dataStore.inputMode === 'json'}" @click="dataStore.inputMode = 'json'" @mousedown.stop @touchstart.stop>JSON</button>
-                 <button :class="{active: dataStore.inputMode === 'julia'}" @click="dataStore.inputMode = 'julia'" @mousedown.stop @touchstart.stop>Julia</button>
-            </div>
+            <span class="graph-title">
+                <i class="fas fa-database"></i> Data & Inits 
+                <span class="badge-json">JSON</span>
+            </span>
             <button class="close-btn" @click="toggleDataPanel()" @touchstart.stop="toggleDataPanel()" @mousedown.stop><i class="fas fa-times"></i></button>
         </div>
         <div class="code-content">
@@ -1122,9 +1148,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @toggle-code-panel="toggleCodePanel"
         @toggle-data-panel="toggleDataPanel"
         @toggle-json-panel="toggleJsonPanel"
-        @download-bugs="handleDownloadBugs"
-        @export-standalone="handleGenerateStandalone"
-        @download-script="handleDownloadScript"
+        @open-style-modal="showStyleModal = true"
     />
 
     <BaseModal :is-open="showNewProjectModal" @close="showNewProjectModal = false">
@@ -1169,6 +1193,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     <FaqModal :is-open="showFaqModal" @close="showFaqModal = false" />
     <ExportModal :is-open="showExportModal" :export-type="currentExportType" @close="showExportModal = false" @confirm-export="handleConfirmExport" />
     <ValidationIssuesModal :is-open="showValidationModal" :validation-errors="validationErrors" :elements="elements" @select-node="handleSelectNodeFromModal" @close="showValidationModal = false" />
+    <GraphStyleModal :is-open="showStyleModal" @close="showStyleModal = false" />
     <DebugPanel v-if="showDebugPanel" />
   </div>
 </template>
@@ -1312,29 +1337,37 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
   gap: 6px;
 }
 
-.panel-switcher {
-    display: flex;
-    background: rgba(0,0,0,0.05);
-    border-radius: 4px;
-    padding: 2px;
-    margin-left: auto; 
-    margin-right: 8px;
+.badge-json {
+    font-size: 0.7em;
+    background-color: var(--theme-primary);
+    color: white;
+    padding: 2px 4px;
+    border-radius: 3px;
+    margin-left: 6px;
+    font-weight: normal;
+    vertical-align: middle;
 }
-.panel-switcher button {
+
+.panel-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.action-btn {
     background: transparent;
     border: none;
-    border-radius: 3px;
-    padding: 2px 8px;
-    font-size: 10px;
-    cursor: pointer;
     color: var(--theme-text-secondary);
-    font-weight: 600;
-    line-height: 1.2;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    transition: color 0.2s;
 }
-.panel-switcher button.active {
-    background: var(--theme-bg-panel);
+
+.action-btn:hover {
     color: var(--theme-text-primary);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
 .close-btn {

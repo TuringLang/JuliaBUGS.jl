@@ -8,8 +8,7 @@ import ToggleSwitch from 'primevue/toggleswitch';
 import BaseSelect from '../ui/BaseSelect.vue';
 import BaseButton from '../ui/BaseButton.vue';
 import ProjectManager from '../left-sidebar/ProjectManager.vue';
-import NodePalette from '../left-sidebar/NodePalette.vue';
-import type { NodeType, PaletteItemType } from '../../types';
+import type { NodeType } from '../../types';
 import { exampleModels } from '../../config/nodeDefinitions';
 import { useUiStore } from '../../stores/uiStore';
 import { storeToRefs } from 'pinia';
@@ -104,22 +103,6 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                     </AccordionContent>
                 </AccordionPanel>
 
-                <AccordionPanel value="palette">
-                    <AccordionHeader><i class="fas fa-shapes icon-12"></i> Nodes</AccordionHeader>
-                    <AccordionContent>
-                        <div class="panel-content-wrapper">
-                            <NodePalette @select-palette-item="(type: PaletteItemType) => { 
-                                if (type === 'add-edge') {
-                                    $emit('update:currentMode', 'add-edge');
-                                } else {
-                                    $emit('update:currentNodeType', type as NodeType); 
-                                    $emit('update:currentMode', 'add-node'); 
-                                }
-                            }" />
-                        </div>
-                    </AccordionContent>
-                </AccordionPanel>
-
                 <AccordionPanel value="view">
                     <AccordionHeader><i class="fas fa-eye icon-12"></i> View Options</AccordionHeader>
                     <AccordionContent>
@@ -171,7 +154,6 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                 <AccordionPanel value="help">
                     <AccordionHeader><i class="fas fa-question-circle icon-12"></i> Help</AccordionHeader>
                     <AccordionContent>
-                        <!-- Reduced gap from gap-3 to gap-1 -->
                         <div class="menu-panel flex-col gap-1">
                             <BaseButton type="ghost" class="menu-btn" @click="$emit('open-faq-modal')"><i class="fas fa-question"></i> FAQ</BaseButton>
                             <BaseButton type="ghost" class="menu-btn" @click="$emit('open-about-modal')"><i class="fas fa-info-circle"></i> About</BaseButton>
@@ -330,37 +312,12 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
     background: var(--theme-bg-panel);
 }
 
-.panel-content-wrapper.relative {
-    position: relative;
-}
-
-.experimental-badge {
-    position: absolute;
-    top: 6px;
-    right: 10px;
-    background-color: var(--theme-warning);
-    color: white;
-    font-size: 9px;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-weight: 600;
-    text-transform: uppercase;
-    pointer-events: none;
-    opacity: 0.8;
-}
-
-:deep(.project-manager), :deep(.node-palette), :deep(.execution-settings-panel) {
+:deep(.project-manager) {
     background: transparent;
     height: auto !important;
     overflow: visible !important;
     padding: 8px;
     border: none;
-}
-
-:deep(.data-input-panel) {
-    height: 100%;
-    padding: 8px;
-    min-height: 300px;
 }
 
 .menu-panel {
@@ -404,19 +361,6 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
     height: 1px;
     background: var(--theme-border);
     margin: 12px 0;
-}
-.status-display {
-    font-size: var(--font-size-xs);
-    padding: 8px;
-    border-radius: var(--radius-sm);
-    background: rgba(16, 185, 129, 0.1);
-    text-align: center;
-    color: var(--theme-text-secondary);
-    margin-bottom: 8px;
-}
-.status-display.connected {
-    color: var(--theme-success);
-    background: rgba(16, 185, 129, 0.15);
 }
 .native-number-input {
     width: 60px;

@@ -167,7 +167,7 @@ const handleCanvasTap = (event: EventObject) => {
         if (props.currentNodeType === 'plate') {
             const newPlate = createPlateWithNode(position, isPlateClick ? (target as NodeSingular).id() : undefined);
             emit('element-selected', newPlate);
-            emit('update:currentMode', 'select');
+            // Don't switch back to select mode automatically
         } else {
             const newNode = createNode(props.currentNodeType, position, isPlateClick ? (target as NodeSingular).id() : undefined);
             const ur = getUndoRedoInstance(props.graphId);
@@ -177,7 +177,7 @@ const handleCanvasTap = (event: EventObject) => {
                 addElement(newNode);
             }
             emit('element-selected', newNode);
-            emit('update:currentMode', 'select');
+            // Don't switch back to select mode automatically
         }
       }
       break;
@@ -203,13 +203,21 @@ const handleCanvasTap = (event: EventObject) => {
           sourceNode.value?.removeClass('cy-connecting');
           sourceNode.value = null;
           isConnecting.value = false;
-          emit('update:currentMode', 'select');
+          // Keep in add-edge mode to allow adding multiple edges
+          // But clear selection so next click can start new edge? 
+          // Usually edge tool resets or waits for new source.
+          // Let's keep it waiting for new source.
           emit('element-selected', newEdge);
         } else if (!sourceNode.value) {
           sourceNode.value = tappedNode;
           sourceNode.value.addClass('cy-connecting');
           isConnecting.value = true;
           emit('element-selected', sourceNode.value.data());
+        } else if (sourceNode.value.id() === tappedNode.id()) {
+            // Clicked same node again, maybe deselect?
+            sourceNode.value.removeClass('cy-connecting');
+            sourceNode.value = null;
+            isConnecting.value = false;
         }
       } else if (isBackgroundClick) {
         sourceNode.value?.removeClass('cy-connecting');
@@ -261,7 +269,7 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
       }
       const newPlate = createPlateWithNode(position, parentPlateId);
       emit('element-selected', newPlate);
-      emit('update:currentMode', 'select');
+      // emit('update:currentMode', 'select'); // DND usually implies a one-off, but let's be consistent if drag from outside
       return;
   }
   
@@ -284,7 +292,6 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
       addElement(newNode);
   }
   emit('element-selected', newNode);
-  emit('update:currentMode', 'select');
 };
 
 const handleDeleteElement = (elementId: string) => {

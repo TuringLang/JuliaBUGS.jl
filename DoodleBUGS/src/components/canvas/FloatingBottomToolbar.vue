@@ -9,7 +9,6 @@ const props = defineProps<{
   currentNodeType: NodeType;
   showCodePanel?: boolean;
   showDataPanel?: boolean;
-  showJsonPanel?: boolean;
   showZoomControls?: boolean;
 }>();
 
@@ -24,10 +23,7 @@ const emit = defineEmits<{
   (e: 'layout-graph', layout: string): void;
   (e: 'toggle-code-panel'): void;
   (e: 'toggle-data-panel'): void;
-  (e: 'toggle-json-panel'): void;
-  (e: 'download-bugs'): void;
-  (e: 'export-standalone'): void;
-  (e: 'download-script'): void;
+  (e: 'open-style-modal'): void;
 }>();
 
 const availableNodeTypes = computed(() => {
@@ -294,6 +290,10 @@ onUnmounted(() => {
 
       <div class="divider"></div>
 
+      <button class="dock-btn" @click="$emit('open-style-modal')" title="Graph Style" type="button">
+          <i class="fas fa-palette"></i>
+      </button>
+
       <button 
         class="dock-btn" 
         :class="{ active: showDataPanel }"
@@ -304,40 +304,15 @@ onUnmounted(() => {
         <i class="fas fa-database"></i>
       </button>
 
-      <DropdownMenu class="dock-dropdown">
-          <template #trigger>
-              <button 
-                class="dock-btn" 
-                :class="{ active: showCodePanel || showJsonPanel }"
-                title="Code & Export" 
-                type="button"
-              >
-                <i class="fas fa-code"></i>
-              </button>
-          </template>
-          <template #content>
-              <div class="menu-item-row">
-                  <a href="#" @click.prevent="$emit('toggle-code-panel')" class="flex-grow">
-                      <i :class="showCodePanel ? 'fas fa-eye-slash' : 'fas fa-eye'" class="menu-icon"></i> {{ showCodePanel ? 'Hide BUGS Code' : 'Show BUGS Code' }}
-                  </a>
-                  <button class="icon-btn download-btn" @click.stop="$emit('download-bugs')" title="Download BUGS Model">
-                      <i class="fas fa-download"></i>
-                  </button>
-              </div>
-              <a href="#" @click.prevent="$emit('toggle-json-panel')">
-                  <i class="fas fa-code menu-icon"></i> Open JSON
-              </a>
-              <div class="dropdown-divider"></div>
-              <div class="menu-item-row">
-                  <a href="#" @click.prevent="$emit('export-standalone')" class="flex-grow">
-                      <i class="fas fa-file-alt menu-icon"></i> Julia Script for Local Run
-                  </a>
-                  <button class="icon-btn download-btn" @click.stop="$emit('download-script')" title="Download Script">
-                      <i class="fas fa-download"></i>
-                  </button>
-              </div>
-          </template>
-      </DropdownMenu>
+      <button 
+        class="dock-btn" 
+        :class="{ active: showCodePanel }"
+        @click="$emit('toggle-code-panel')"
+        title="BUGS Code" 
+        type="button"
+      >
+        <i class="fas fa-code"></i>
+      </button>
 
       <div class="divider"></div>
 
