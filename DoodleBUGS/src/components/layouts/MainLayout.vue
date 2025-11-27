@@ -201,7 +201,7 @@ const minifyGraph = (elements: GraphElement[]): any[] => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const expandGraph = (minElements: any[]): GraphElement[] => {
-     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return minElements.map(min => {
         if (min[keyMap.type] === 0) { // Node
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -561,7 +561,7 @@ watch([isDataPanelOpen, () => graphStore.currentGraphId], ([isOpen, graphId]) =>
                 // Sidebar is ~300px + 16px margin.
                 const leftSidebarOffset = isLeftSidebarOpen.value ? 320 : 20; 
                 
-                const targetScreenX = leftSidebarOffset + 20;
+                let targetScreenX = leftSidebarOffset + 20;
                 
                 // Top offset
                 const targetScreenY = 90;
@@ -1340,16 +1340,16 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
 
     <Transition name="fade">
         <div v-if="!isLeftSidebarOpen" 
-             class="collapsed-sidebar-trigger glass-panel"
+             class="collapsed-sidebar-trigger left-trigger"
              @click="handleSidebarContainerClick">
-           <div class="sidebar-trigger-content">
+           <div class="sidebar-trigger-content gap-1">
                <div class="flex-grow flex items-center gap-2 overflow-hidden" style="flex-grow: 1; overflow: hidden;">
                    <span class="logo-text-minimized">
                        <span class="desktop-text">{{ pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS' }}</span>
                        <span class="mobile-text">DoodleBUGS</span>
                    </span>
                </div>
-               <div class="flex items-center gap-1 flex-shrink-0" style="flex-shrink: 0;">
+               <div class="flex items-center flex-shrink-0" style="flex-shrink: 0;">
                    <button @click.stop="uiStore.toggleDarkMode()" class="theme-toggle-header" :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
                        <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
                    </button>
@@ -1379,11 +1379,11 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
 
     <Transition name="fade">
         <div v-if="!isRightSidebarOpen" 
-             class="collapsed-sidebar-trigger right glass-panel"
+             class="collapsed-sidebar-trigger right"
              @click="toggleRightSidebar">
-           <div class="sidebar-trigger-content">
+           <div class="sidebar-trigger-content gap-2">
                <span class="sidebar-title-minimized">Inspector</span>
-               <div class="flex items-center gap-2">
+               <div class="flex items-center">
                     <div class="status-indicator validation-status"
                         @click.stop="showValidationModal = true"
                         :class="isModelValid ? 'valid' : 'invalid'">
@@ -1566,7 +1566,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     min-width: 140px;
 }
 
-.collapsed-sidebar-trigger.glass-panel {
+.collapsed-sidebar-trigger.left-trigger {
     left: 16px;
     min-width: 200px;
 }
@@ -1866,7 +1866,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         padding: 8px;
     }
     
-    .collapsed-sidebar-trigger.glass-panel {
+    .collapsed-sidebar-trigger.left-trigger {
         min-width: auto !important;
     }
 

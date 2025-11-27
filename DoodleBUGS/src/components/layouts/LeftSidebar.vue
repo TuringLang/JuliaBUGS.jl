@@ -77,7 +77,7 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
             <span class="sidebar-title">
                 {{ pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS' }}
             </span>
-            <div class="flex items-center gap-1 ml-auto">
+            <div class="flex items-center ml-auto">
                 <button @click.stop="uiStore.toggleDarkMode()" class="theme-toggle-header" :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
                     <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
                 </button>

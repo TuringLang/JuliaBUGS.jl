@@ -49,7 +49,7 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
         <div class="sidebar-header" @click="$emit('toggle-right-sidebar')" style="cursor: pointer;">
             <span class="sidebar-title">Inspector</span>
             
-            <div class="flex items-center gap-1 ml-auto" @click.stop>
+            <div class="flex items-center ml-auto" @click.stop>
                 <div class="status-indicator validation-status"
                     @click="$emit('show-validation-issues')"
                     :class="isModelValid ? 'valid' : 'invalid'">
@@ -93,7 +93,7 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
                     <h5 class="section-title">Image Export</h5>
                     <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'png')"><i class="fas fa-image"></i> PNG Image</BaseButton>
                     <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'jpg')"><i class="fas fa-file-image"></i> JPG Image</BaseButton>
-                    <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'svg')"><i class="fas fa-vector-square"></i> SVG Vector</BaseButton>
+                    <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'svg')"><i class="fas fa-draw-polygon"></i> SVG Vector</BaseButton>
                 </div>
             </div>
         </div>

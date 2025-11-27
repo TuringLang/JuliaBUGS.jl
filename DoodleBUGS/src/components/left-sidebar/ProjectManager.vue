@@ -118,16 +118,16 @@ const handleNewGraph = () => {
       <div class="header-actions">
         <BaseButton
           @click="handleNewGraph"
-          type="secondary"
+          type="ghost"
           size="small"
           class="header-action-btn"
           title="New Graph in Current Project"
           :disabled="!currentProject"
         >
-          <i class="fas fa-plus"></i>
+          <i class="fas fa-hexagon-nodes"></i>
         </BaseButton>
-        <BaseButton @click="handleNewProject" type="primary" size="small" class="header-action-btn" title="New Project">
-          <i class="fas fa-plus"></i>
+        <BaseButton @click="handleNewProject" type="ghost" size="small" class="header-action-btn" title="New Project">
+          <i class="fas fa-folder" style="color: #10b981"></i>
         </BaseButton>
       </div>
     </div>
@@ -159,7 +159,7 @@ const handleNewGraph = () => {
               :class="{ 'active': graphStore.currentGraphId === graph.id }" 
               @click="selectGraph(graph.id)"
               @touchend.prevent="selectGraph(graph.id)">
-              <i class="icon-file fas fa-file-alt"></i>
+              <i class="icon-file fas fa-hexagon-nodes"></i>
               <span>{{ graph.name }}</span>
               <button @click.stop="openContextMenu($event, 'graph', graph.id)" class="action-btn context-menu-btn">
                 <i class="fas fa-ellipsis-v"></i>
@@ -178,7 +178,7 @@ const handleNewGraph = () => {
       <div v-if="contextMenu" ref="contextMenuRef" class="context-menu"
         :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }">
         <template v-if="contextMenu.type === 'project'">
-          <div class="context-menu-item" @click="handleNewGraph"><i class="fas fa-plus"></i> New Graph</div>
+          <div class="context-menu-item" @click="handleNewGraph"><i class="fas fa-hexagon-nodes"></i> New Graph</div>
           <div class="context-menu-item" @click="openRenameModal('project', contextMenu!.id, projectStore.projects.find(p => p.id === contextMenu!.id)!.name)"><i class="fas fa-edit"></i> Rename</div>
           <div class="context-menu-item danger"
             @click="confirmDeletion('project', contextMenu!.id, projectStore.projects.find((p: Project) => p.id === contextMenu!.id)!.name)">
