@@ -283,10 +283,66 @@ const expandGraph = (minElements: any[]): GraphElement[] => {
     });
 };
 
-const generateShareLink = (payload: object) => {
+// Compression Helpers
+const compressAndEncode = async (jsonStr: string): Promise<string> => {
+    try {
+        if (!window.CompressionStream) throw new Error("CompressionStream not supported");
+        // Create a stream from the string
+        const stream = new Blob([jsonStr]).stream();
+        // Pipe through gzip compressor
+        const compressedStream = stream.pipeThrough(new CompressionStream("gzip"));
+        // Read response
+        const response = new Response(compressedStream);
+        const blob = await response.blob();
+        const buffer = await blob.arrayBuffer();
+        
+        // Convert to binary string safely
+        const bytes = new Uint8Array(buffer);
+        let binaryStr = '';
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+            binaryStr += String.fromCharCode(bytes[i]);
+        }
+        
+        // Return with prefix to identify compressed data
+        return 'gz_' + btoa(binaryStr);
+    } catch (e) {
+        console.warn("Compression failed or not supported, falling back to legacy encoding", e);
+        // Fallback to old method if compression API is missing or fails
+        return btoa(unescape(encodeURIComponent(jsonStr)));
+    }
+};
+
+const decodeAndDecompress = async (input: string): Promise<string> => {
+    // Check for compressed prefix
+    if (input.startsWith('gz_')) {
+        try {
+            if (!window.DecompressionStream) throw new Error("DecompressionStream not supported");
+            const base64 = input.slice(3);
+            const binaryStr = atob(base64);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+            }
+            
+            const stream = new Blob([bytes]).stream();
+            const decompressedStream = stream.pipeThrough(new DecompressionStream("gzip"));
+            const response = new Response(decompressedStream);
+            return await response.text();
+        } catch (e) {
+            console.error("Decompression failed", e);
+            throw e;
+        }
+    } else {
+        // Legacy decoding
+        return decodeURIComponent(escape(atob(input)));
+    }
+};
+
+const generateShareLink = async (payload: object) => {
     try {
         const jsonStr = JSON.stringify(payload);
-        const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
+        const base64 = await compressAndEncode(jsonStr);
         
         const baseUrl = window.location.origin + window.location.pathname;
         shareUrl.value = `${baseUrl}?share=${encodeURIComponent(base64)}`;
@@ -302,7 +358,7 @@ const handleShare = () => {
     showShareModal.value = true;
 };
 
-const handleGenerateShareLink = (options: { scope: 'current' | 'project' | 'custom', selectedGraphIds?: string[] }) => {
+const handleGenerateShareLink = async (options: { scope: 'current' | 'project' | 'custom', selectedGraphIds?: string[] }) => {
     if (!projectStore.currentProject) return;
 
     let payload = {};
@@ -377,7 +433,7 @@ const handleGenerateShareLink = (options: { scope: 'current' | 'project' | 'cust
         };
     }
 
-    generateShareLink(payload);
+    await generateShareLink(payload);
 };
 
 // Data Import Logic
@@ -453,8 +509,7 @@ const handleLoadShared = async () => {
 
     if (shareParam) {
         try {
-            // Standard Base64 Decoding with UTF-8 support
-            jsonStr = decodeURIComponent(escape(atob(shareParam)));
+            jsonStr = await decodeAndDecompress(shareParam);
         } catch {
             console.error("Failed to decode base64 share");
         }
@@ -1625,14 +1680,12 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
     <BaseModal :is-open="showNewGraphModal" @close="showNewGraphModal = false">
       <template #header><h3>Create New Graph</h3></template>
       <template #body>
-        <div class="flex flex-col gap-5">
+        <div class="flex flex-col gap-2">
             <div class="form-group">
                 <label for="new-graph-name">Graph Name</label>
                 <BaseInput id="new-graph-name" v-model="newGraphName" placeholder="Enter a name for your graph" @keyup.enter="createNewGraph" />
             </div>
-            
-            <div class="divider"></div>
-            
+                        
             <div class="import-section">
                 <label class="section-label">Import from JSON (Optional)</label>
                 

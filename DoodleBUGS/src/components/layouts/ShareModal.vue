@@ -128,6 +128,8 @@ const shortenUrl = async () => {
         shortError.value = e instanceof Error ? e.message : String(e);
         if (shortError.value?.includes("Rate limit")) {
             shortError.value = "Rate limit exceeded. Please try again later.";
+        } else if (shortError.value?.includes("Failed to fetch") || shortError.value?.includes("414")) {
+             shortError.value = "URL is too long for the shortener service. Please use the Long URL.";
         }
     } finally {
         isLoadingShort.value = false;
