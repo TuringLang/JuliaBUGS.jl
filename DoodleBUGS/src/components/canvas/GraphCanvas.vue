@@ -98,13 +98,38 @@ const syncGraphWithProps = (
   cy.batch(() => {
     const newElementIds = new Set(elementsToSync.map((el) => el.id))
 
+    // 1. Remove deleted elements
     cy!.elements().forEach((cyEl) => {
       if (!newElementIds.has(cyEl.id())) {
         cyEl.remove()
       }
     })
 
-    formattedElements.forEach((formattedEl) => {
+    // 2. Separate Nodes and Edges
+    const nodes = formattedElements.filter((el) => el.group === 'nodes')
+    const edges = formattedElements.filter((el) => el.group === 'edges')
+
+    // 3. Sort nodes by depth (parents before children)
+    // This ensures parents exist before children are added/moved into them.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nodeDefMap = new Map<string, any>(nodes.map((n) => [n.data.id as string, n]))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const getDepth = (n: any, visited = new Set<string>()): number => {
+      const id = n.data.id
+      if (visited.has(id)) return 0
+      visited.add(id)
+      const parentId = n.data.parent
+      if (!parentId) return 0
+      const parentDef = nodeDefMap.get(parentId)
+      if (parentDef) {
+        return 1 + getDepth(parentDef, visited)
+      }
+      return 0
+    }
+    nodes.sort((a, b) => getDepth(a) - getDepth(b))
+
+    // 4. Process Nodes
+    nodes.forEach((formattedEl) => {
       if (!formattedEl.data.id) return
 
       const existingCyEl = cy!.getElementById(formattedEl.data.id)
@@ -112,23 +137,52 @@ const syncGraphWithProps = (
       if (existingCyEl.empty()) {
         cy!.add(formattedEl)
       } else {
-        existingCyEl.data(formattedEl.data)
-        if (formattedEl.group === 'nodes') {
-          const newNode = formattedEl as ElementDefinition & { position: { x: number; y: number } }
-          const currentCyPos = existingCyEl.position()
-          if (
-            Math.abs(newNode.position.x - currentCyPos.x) > 0.01 ||
-            Math.abs(newNode.position.y - currentCyPos.y) > 0.01
-          ) {
-            existingCyEl.position(newNode.position)
-          }
-          const parentCollection = existingCyEl.parent()
-          const currentParentId =
-            parentCollection.length > 0 ? parentCollection.first().id() : undefined
+        // Optimization: Only update data if it has changed
+        const currentData = existingCyEl.data()
+        const newData = formattedEl.data
+        if (JSON.stringify(currentData) !== JSON.stringify(newData)) {
+          existingCyEl.data(newData)
+        }
 
-          if (newNode.data.parent !== currentParentId) {
-            existingCyEl.move({ parent: newNode.data.parent ?? null })
-          }
+        const newNode = formattedEl as ElementDefinition & { position: { x: number; y: number } }
+        const currentCyPos = existingCyEl.position()
+        if (
+          Math.abs(newNode.position.x - currentCyPos.x) > 0.01 ||
+          Math.abs(newNode.position.y - currentCyPos.y) > 0.01
+        ) {
+          existingCyEl.position(newNode.position)
+        }
+
+        const parentCollection = existingCyEl.parent()
+        const currentParentId =
+          parentCollection.length > 0 ? parentCollection.first().id() : undefined
+
+        if (newNode.data.parent !== currentParentId) {
+          existingCyEl.move({ parent: newNode.data.parent ?? null })
+        }
+      }
+    })
+
+    // 5. Process Edges
+    edges.forEach((formattedEl) => {
+      if (!formattedEl.data.id) return
+
+      const existingCyEl = cy!.getElementById(formattedEl.data.id)
+
+      if (existingCyEl.empty()) {
+        const srcId = formattedEl.data.source
+        const tgtId = formattedEl.data.target
+        // Safety check: ensure source and target exist before adding edge
+        if (cy!.getElementById(srcId).nonempty() && cy!.getElementById(tgtId).nonempty()) {
+          cy!.add(formattedEl)
+        } else {
+          console.warn(
+            `Skipping edge ${formattedEl.data.id}: source ${srcId} or target ${tgtId} missing`
+          )
+        }
+      } else {
+        if (JSON.stringify(existingCyEl.data()) !== JSON.stringify(formattedEl.data)) {
+          existingCyEl.data(formattedEl.data)
         }
       }
     })
@@ -142,18 +196,22 @@ const getSerializedElements = (): GraphElement[] => {
     .toArray()
     .map((ele) => {
       const data = ele.data()
+      // Remove temporary UI state flags before serializing
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { hasError, ...cleanData } = data
+
       if (ele.isNode()) {
         const parentCollection = ele.parent()
         const parentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined
         return {
-          ...data,
+          ...cleanData,
           type: 'node',
           position: ele.position(),
           parent: parentId,
         } as GraphNode
       } else {
         return {
-          ...data,
+          ...cleanData,
           type: 'edge',
           source: ele.source().id(),
           target: ele.target().id(),
@@ -204,7 +262,10 @@ onMounted(() => {
     }
 
     cy.on('layoutstop', () => {
-      emit('graph-updated', getSerializedElements())
+      // Only emit if elements are actually in the graph to avoid emitting empty initial state
+      if (cy && cy.elements().length > 0) {
+        emit('graph-updated', getSerializedElements())
+      }
       updateGridStyle()
     })
 
