@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { storeToRefs } from 'pinia';
-import { useExecutionStore } from '../../stores/executionStore';
-import BaseInput from '../ui/BaseInput.vue';
+import { storeToRefs } from 'pinia'
+import { useScriptStore } from '../../stores/scriptStore'
+import BaseInput from '../ui/BaseInput.vue'
 
-const executionStore = useExecutionStore();
-const { samplerSettings } = storeToRefs(executionStore);
+const scriptStore = useScriptStore()
+const { samplerSettings } = storeToRefs(scriptStore)
 </script>
 
 <template>
@@ -25,9 +25,13 @@ const { samplerSettings } = storeToRefs(executionStore);
       </div>
       <div class="form-group">
         <label for="seed">Seed (optional)</label>
-        <BaseInput id="seed" type="number" v-model.number="samplerSettings.seed" placeholder="Leave blank for random" />
+        <BaseInput
+          id="seed"
+          type="number"
+          v-model.number="samplerSettings.seed"
+          placeholder="Leave blank for random"
+        />
       </div>
-      <!-- Frontend timeout removed; backend may still enforce if configured server-side -->
     </div>
   </div>
 </template>
@@ -37,7 +41,6 @@ const { samplerSettings } = storeToRefs(executionStore);
   display: flex;
   flex-direction: column;
   gap: 20px;
-  height: 100%;
 }
 .settings-section {
   display: flex;
