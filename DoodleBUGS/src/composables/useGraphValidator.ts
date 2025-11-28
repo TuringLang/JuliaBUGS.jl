@@ -30,6 +30,23 @@ const knownBugsFunctions = new Set([
   'phi',
 ])
 
+// Helper to compare error maps
+const areErrorMapsEqual = (
+  map1: Map<string, ValidationError[]>,
+  map2: Map<string, ValidationError[]>
+) => {
+  if (map1.size !== map2.size) return false
+  for (const [key, val1] of map1) {
+    const val2 = map2.get(key)
+    if (!val2) return false
+    if (val1.length !== val2.length) return false
+    for (let i = 0; i < val1.length; i++) {
+      if (val1[i].field !== val2[i].field || val1[i].message !== val2[i].message) return false
+    }
+  }
+  return true
+}
+
 /**
  * Composable for validating a BUGS graph model.
  * It produces a reactive map of errors without mutating the source elements.
@@ -43,6 +60,8 @@ export function useGraphValidator(elements: Ref<GraphElement[]>, modelData: Ref<
     const newErrors = new Map<string, ValidationError[]>()
     const nodes = elements.value.filter((el) => el.type === 'node') as GraphNode[]
     const edges = elements.value.filter((el) => el.type === 'edge') as GraphEdge[]
+
+    // Performance Optimization: Map for O(1) lookups
     const nodeMap = new Map(nodes.map((n) => [n.id, n]))
     const dataKeys = new Set(Object.keys(modelData.value.data))
     const nodeNames = new Set(nodes.map((n) => n.name))
@@ -88,21 +107,34 @@ export function useGraphValidator(elements: Ref<GraphElement[]>, modelData: Ref<
         } else {
           const ancestorLoopVars = new Set<string>()
           let currentNode: GraphNode | undefined = node
-          while (currentNode?.parent) {
+          // Basic loop detection to prevent infinite recursion in parent traversal
+          const visitedAncestors = new Set<string>([node.id])
+
+          while (true) {
+            if (!currentNode?.parent) break
+            if (visitedAncestors.has(currentNode.parent)) break
+            visitedAncestors.add(currentNode.parent)
+
+            // Optimized lookup
             const parentNode = nodeMap.get(currentNode.parent)
+
             if (parentNode && parentNode.nodeType === 'plate' && parentNode.loopVariable) {
               ancestorLoopVars.add(parentNode.loopVariable)
             }
             currentNode = parentNode
           }
 
-          const variablesInEquation = new Set(node.equation.match(/[a-zA-Z_][a-zA-Z0-9_.]*/g) || [])
-          const parentNames = new Set(
-            edges
-              .filter((e) => e.target === node.id)
-              .map((e) => nodeMap.get(e.source)?.name)
-              .filter((name): name is string => !!name)
+          const variablesInEquation = new Set<string>(
+            node.equation.match(/[a-zA-Z_][a-zA-Z0-9_.]*/g) || []
           )
+          // Optimized parent name lookup
+          const parentNames = new Set<string>()
+          edges.forEach((e) => {
+            if (e.target === node.id) {
+              const source = nodeMap.get(e.source)
+              if (source) parentNames.add(source.name)
+            }
+          })
 
           variablesInEquation.forEach((variable) => {
             if (knownBugsFunctions.has(variable)) {
@@ -139,7 +171,10 @@ export function useGraphValidator(elements: Ref<GraphElement[]>, modelData: Ref<
       }
     })
 
-    validationErrors.value = newErrors
+    // Only update if content actually changed to prevent infinite loops
+    if (!areErrorMapsEqual(validationErrors.value, newErrors)) {
+      validationErrors.value = newErrors
+    }
   }
 
   watch([elements, modelData], validateGraph, { deep: true, immediate: true })
