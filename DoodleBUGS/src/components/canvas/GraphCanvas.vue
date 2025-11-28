@@ -51,6 +51,7 @@ const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping
 const uiStore = useUiStore()
 
 const isGraphVisible = ref(false)
+const isGraphReady = ref(false)
 
 const validNodeTypes: NodeType[] = ['stochastic', 'deterministic', 'constant', 'observed', 'plate']
 
@@ -238,10 +239,10 @@ const updateGridStyle = () => {
 
 onMounted(() => {
   if (cyContainer.value) {
+    // Initialize Cytoscape with empty elements initially
+    // Elements will be synced once the container is properly resized
     cy = initCytoscape(cyContainer.value, [], props.graphId)
     cyInstance.value = cy
-
-    syncGraphWithProps(props.elements, props.validationErrors)
 
     setGridSize(props.gridSize)
 
@@ -250,8 +251,6 @@ onMounted(() => {
     } else {
       disableGridSnapping()
     }
-
-    updateGridStyle()
 
     const ur = getUndoRedoInstance(props.graphId)
     if (ur) {
@@ -348,31 +347,37 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(() => {
       if (cy) {
         cy.resize()
-        // Only set viewport if container has valid dimensions
+        // Only proceed if container has valid dimensions
         if (cy.width() > 0 && cy.height() > 0) {
-          if (!isGraphVisible.value) {
+          if (!isGraphReady.value) {
+            // First time setup after container is sized
+            isGraphReady.value = true
+
+            // Populate the graph now that we have dimensions
+            syncGraphWithProps(props.elements, props.validationErrors)
+
+            // Set initial viewport
             if (props.initialViewport) {
               cy.viewport({
                 zoom: props.initialViewport.zoom,
                 pan: props.initialViewport.pan,
               })
-              updateGridStyle()
-              isGraphVisible.value = true
-            } else {
-              if (props.elements.length > 0) {
-                cy.fit(undefined, 50)
-                if (cy.zoom() > 0.8) {
-                  cy.zoom(0.8)
-                  cy.center()
-                }
-                updateGridStyle()
-                isGraphVisible.value = true
-              } else {
-                updateGridStyle()
-                isGraphVisible.value = true
+            } else if (props.elements.length > 0) {
+              cy.fit(undefined, 50)
+              if (cy.zoom() > 0.8) {
+                cy.zoom(0.8)
+                cy.center()
               }
             }
+
+            updateGridStyle()
+
+            // Delay visibility slightly to ensure the canvas has painted the new state
+            requestAnimationFrame(() => {
+              isGraphVisible.value = true
+            })
           } else {
+            // Subsequent resizes
             updateGridStyle()
           }
         }
@@ -422,7 +427,10 @@ watch(
 watch(
   [() => props.elements, () => props.validationErrors],
   ([newElements, newErrors]) => {
-    syncGraphWithProps(newElements, newErrors)
+    // Only sync if graph is ready (container sized and initialized)
+    if (isGraphReady.value) {
+      syncGraphWithProps(newElements, newErrors)
+    }
   },
   { deep: true }
 )
@@ -469,6 +477,8 @@ watch(
   opacity: 0;
   background-position: 0 0;
   background-repeat: repeat;
+  width: 100%;
+  height: 100%;
 }
 
 .cytoscape-container.graph-ready {
