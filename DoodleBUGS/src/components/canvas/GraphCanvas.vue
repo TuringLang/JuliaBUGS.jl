@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import type { Core, EventObject, NodeSingular, ElementDefinition } from 'cytoscape'
+import { useToast } from 'primevue/usetoast'
 import { useGraphInstance } from '../../composables/useGraphInstance'
 import { useGridSnapping } from '../../composables/useGridSnapping'
 import type {
@@ -45,6 +46,7 @@ let cy: Core | null = null
 const cyInstance = ref<Core | null>(null)
 let resizeObserver: ResizeObserver | null = null
 
+const toast = useToast()
 const { initCytoscape, destroyCytoscape, getCyInstance, getUndoRedoInstance } = useGraphInstance()
 const getCy = () => getCyInstance(props.graphId)
 const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping(getCy)
@@ -237,11 +239,16 @@ const updateGridStyle = () => {
   }
 }
 
+const handleToast = (message: string, severity: 'info' | 'warn' | 'error' | 'success' = 'info') => {
+  toast.add({ severity: severity, summary: 'Info', detail: message, life: 3000 })
+}
+
 onMounted(() => {
   if (cyContainer.value) {
     // Initialize Cytoscape with empty elements initially
     // Elements will be synced once the container is properly resized
-    cy = initCytoscape(cyContainer.value, [], props.graphId)
+    // Pass handleToast to allow showing notifications from logic layers
+    cy = initCytoscape(cyContainer.value, [], props.graphId, handleToast)
     cyInstance.value = cy
 
     setGridSize(props.gridSize)

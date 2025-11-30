@@ -53,7 +53,8 @@ export function useGraphInstance() {
   const initCytoscape = (
     container: HTMLElement,
     initialElements: ElementDefinition[],
-    graphId: string
+    graphId: string,
+    onToast?: (message: string, severity?: 'info' | 'warn' | 'error' | 'success') => void
   ): Core => {
     if (instances.has(graphId)) {
       const instance = instances.get(graphId)!
@@ -317,7 +318,8 @@ export function useGraphInstance() {
         grabbedNode: (node: NodeSingular) => node !== undefined, // Allow dragging all node types
         dropTarget: (node: NodeSingular) => node.data('nodeType') === 'plate',
         dropSibling: () => false,
-        outThreshold: 30, // Reduced threshold for better UX
+        outThreshold: 30, // Threshold for drag out detection
+        onToast: onToast, // Pass the toast callback
       },
       urInstance
     )

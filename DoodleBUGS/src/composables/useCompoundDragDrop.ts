@@ -1,10 +1,11 @@
-import type { Core, NodeSingular, Position, BoundingBox12 } from 'cytoscape'
+import type { Core, NodeSingular, Position, BoundingBox12, EventObject } from 'cytoscape'
 
 export interface CompoundDragDropOptions {
   grabbedNode: (node: NodeSingular) => boolean
   dropTarget: (node: NodeSingular) => boolean
   dropSibling: () => boolean
   outThreshold: number
+  onToast?: (message: string, severity?: 'info' | 'warn' | 'error' | 'success') => void
 }
 
 interface DragState {
@@ -15,6 +16,8 @@ interface DragState {
   originalPosition: Position | null
   potentialDropTarget: NodeSingular | null
   platePositions: Map<string, Position>
+  detachedOnGrab: boolean
+  toastShown: boolean
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -33,6 +36,8 @@ export function useCompoundDragDrop(
     originalPosition: null,
     potentialDropTarget: null,
     platePositions: new Map<string, Position>(),
+    detachedOnGrab: false,
+    toastShown: false,
   }
 
   /**
@@ -115,19 +120,16 @@ export function useCompoundDragDrop(
     return !boundsOverlap(dragState.originalParentBounds, expandedNodeBounds)
   }
 
-  const startDrag = (node: NodeSingular) => {
+  const startDrag = (event: EventObject) => {
+    const node = event.target as NodeSingular
     if (!options.grabbedNode(node) || dragState.isDragging) return
 
-    if (node.data('nodeType') !== 'plate') {
-      dragState.platePositions.clear()
-      cy.nodes('[nodeType="plate"]').forEach((plate) => {
-        dragState.platePositions.set(plate.id(), { ...plate.position() })
-      })
-    }
-
+    // Initialize State
+    dragState.isDragging = true
     dragState.draggedNode = node
     dragState.originalPosition = { ...node.position() }
-    dragState.isDragging = true
+    dragState.platePositions.clear()
+    dragState.toastShown = false
 
     const currentParent = node.parent()
     if (currentParent.length > 0) {
@@ -136,6 +138,33 @@ export function useCompoundDragDrop(
         includeOverlays: false,
         includeLabels: true,
       })
+    } else {
+      dragState.originalParent = null
+      dragState.originalParentBounds = null
+    }
+
+    // --- ALT KEY LOGIC (Detach on Click) ---
+    // Check for Alt/Option key. If pressed and node is in a plate, detach immediately.
+    // This prevents the "plate stretching" behavior.
+    const isAltPressed = event.originalEvent?.altKey
+    const hasParent = currentParent.length > 0
+
+    if (isAltPressed && hasParent) {
+      dragState.detachedOnGrab = true
+      if (ur) {
+        ur.do('move', { eles: node, location: { parent: null } })
+      } else {
+        node.move({ parent: null })
+      }
+    } else {
+      dragState.detachedOnGrab = false
+      // Cache other plate positions to potentially restore them if needed (legacy logic),
+      // though snapping back prevents most destruction.
+      if (node.data('nodeType') !== 'plate') {
+        cy.nodes('[nodeType="plate"]').forEach((plate) => {
+          dragState.platePositions.set(plate.id(), { ...plate.position() })
+        })
+      }
     }
 
     node.addClass('cdnd-grabbed-node')
@@ -145,21 +174,42 @@ export function useCompoundDragDrop(
   const updateDrag = (node: NodeSingular, position: Position) => {
     if (!dragState.isDragging || dragState.draggedNode?.id() !== node.id()) return
 
-    const currentParentNode = node.parent().length > 0 ? node.parent()[0] : null
     const newDropTarget = findDropTargetAtPosition(position, node)
 
-    if (dragState.potentialDropTarget) {
+    // Clear previous drop target highlights
+    if (dragState.potentialDropTarget && dragState.potentialDropTarget.id() !== newDropTarget?.id()) {
       dragState.potentialDropTarget.removeClass('cdnd-drop-target')
-      dragState.potentialDropTarget = null
     }
 
-    if (currentParentNode && shouldRemoveFromParent(node)) {
-      node.addClass('cdnd-drag-out')
-    } else {
-      node.removeClass('cdnd-drag-out')
-      if (newDropTarget && newDropTarget.id() !== currentParentNode?.id()) {
+    // Logic Branch: Detached vs Bound
+    if (dragState.detachedOnGrab) {
+      // If detached, we are just looking for a new home (or the old one)
+      if (newDropTarget) {
         dragState.potentialDropTarget = newDropTarget
         newDropTarget.addClass('cdnd-drop-target')
+      } else {
+        dragState.potentialDropTarget = null
+      }
+    } else {
+      // Bound to parent (Alt NOT pressed)
+      const currentParentNode = node.parent().length > 0 ? node.parent()[0] : null
+
+      if (currentParentNode && shouldRemoveFromParent(node)) {
+        // Node is being dragged OUT, but Alt is NOT pressed.
+        // Warn the user and do NOT show drag-out styles (since action is forbidden)
+        if (!dragState.toastShown && options.onToast) {
+          options.onToast('Hold Alt/Option (⌥) key to remove node from plate', 'warn')
+          dragState.toastShown = true // Debounce toast per drag
+        }
+      } else {
+        // Node is inside or near parent, or moving between nested parents safely?
+        // Actually, if we aren't detached, normal compound behavior applies.
+        if (newDropTarget && newDropTarget.id() !== currentParentNode?.id()) {
+          dragState.potentialDropTarget = newDropTarget
+          newDropTarget.addClass('cdnd-drop-target')
+        } else {
+          dragState.potentialDropTarget = null
+        }
       }
     }
   }
@@ -176,31 +226,52 @@ export function useCompoundDragDrop(
     const newParent = dragState.potentialDropTarget
     let dropPerformed = false
 
-    if (newParent && newParent.id() !== currentParentNode?.id()) {
-      if (ur) {
-        ur.do('move', { eles: node, location: { parent: newParent.id() } })
+    // Logic Branch: Detached vs Bound
+    if (dragState.detachedOnGrab) {
+      // Node was already removed on grab.
+      // If dropped on a valid target, put it in.
+      // If dropped on nothing, it stays removed (which is the desired "Alt" behavior).
+      if (newParent) {
+        if (ur) {
+          ur.do('move', { eles: node, location: { parent: newParent.id() } })
+        } else {
+          node.move({ parent: newParent.id() })
+        }
+        cy.trigger('compound-drop', [{ node, newParent, oldParent: dragState.originalParent }])
+        dropPerformed = true
       } else {
-        node.move({ parent: newParent.id() })
+        // Stays removed. No action needed as it was moved in startDrag.
+        // We might want to emit an event or update state if needed.
+        dropPerformed = true // It was technically a change from original state
       }
-      cy.trigger('compound-drop', [{ node, newParent, oldParent: currentParentNode }])
-      dropPerformed = true
-    } else if (currentParentNode && !newParent && shouldRemoveFromParent(node)) {
-      if (ur) {
-        ur.do('move', { eles: node, location: { parent: null } })
-      } else {
-        node.move({ parent: null })
+    } else {
+      // Alt was NOT pressed.
+      // We enforce "Do not remove".
+
+      // 1. Moving to a new parent (nested drop)?
+      if (newParent && newParent.id() !== currentParentNode?.id()) {
+        if (ur) {
+          ur.do('move', { eles: node, location: { parent: newParent.id() } })
+        } else {
+          node.move({ parent: newParent.id() })
+        }
+        cy.trigger('compound-drop', [{ node, newParent, oldParent: currentParentNode }])
+        dropPerformed = true
       }
-      cy.trigger('compound-drop', [{ node, newParent: null, oldParent: currentParentNode }])
-      dropPerformed = true
-    }
-
-    const isDraggingPlate = dragState.draggedNode?.data('nodeType') === 'plate'
-    const isNodeRemovedFromPlate = dropPerformed && !newParent && currentParentNode
-
-    if (!isDraggingPlate && isNodeRemovedFromPlate && dragState.platePositions.size > 0) {
-      dragState.platePositions.forEach((position, plateId) => {
-        cy.getElementById(plateId).position(position)
-      })
+      // 2. Trying to leave parent?
+      else if (currentParentNode && !newParent && shouldRemoveFromParent(node)) {
+        // User tried to drag out without Alt.
+        // REJECT THE MOVE to prevent plate expansion ("hurting plate").
+        if (dragState.originalPosition) {
+          node.position(dragState.originalPosition)
+        }
+        
+        // Show toast if not already shown during drag
+        if (options.onToast && !dragState.toastShown) {
+          options.onToast('Hold Alt/Option (⌥) key to remove node from plate', 'warn')
+        }
+      }
+      // 3. Just moving around inside? Cytoscape handles this naturally.
     }
 
     Object.assign(dragState, {
@@ -210,20 +281,26 @@ export function useCompoundDragDrop(
       originalParentBounds: null,
       originalPosition: null,
       potentialDropTarget: null,
+      detachedOnGrab: false,
+      toastShown: false,
     })
     dragState.platePositions.clear()
 
     cy.trigger('compound-drag-end', [{ node, dropPerformed }])
   }
 
-  cy.on('grab', 'node', (event: cytoscape.EventObject) => startDrag(event.target as NodeSingular))
-  cy.on('drag', 'node', (event: cytoscape.EventObject) => {
+  // Bind Listeners
+  // Note: We bind 'grab' to startDrag to catch the Alt key state at the moment of click
+  cy.on('grab', 'node', (event: EventObject) => startDrag(event))
+  
+  cy.on('drag', 'node', (event: EventObject) => {
     const node = event.target as NodeSingular
     if (dragState.isDragging && dragState.draggedNode?.id() === node.id()) {
       updateDrag(node, node.position())
     }
   })
-  cy.on('free', 'node', (event: cytoscape.EventObject) => endDrag(event.target as NodeSingular))
+  
+  cy.on('free', 'node', (event: EventObject) => endDrag(event.target as NodeSingular))
 
   const destroy = () => {
     cy.off('grab', 'node')
