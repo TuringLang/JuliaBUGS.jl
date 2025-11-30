@@ -153,6 +153,10 @@ export function useCompoundDragDrop(
 
     // Detach Node
     dragState.detachedOnGrab = true
+
+    // The ghost node is a transient visual element used only during the drag interaction
+    // and is explicitly cleaned up in `endDrag`. It is intentionally excluded from the
+    // undo history to prevent restoring temporary UI artifacts.
     if (ur) {
       ur.do('move', { eles: node, location: { parent: null } })
     } else {
@@ -164,6 +168,7 @@ export function useCompoundDragDrop(
     const node = event.target as NodeSingular
     if (!options.grabbedNode(node) || dragState.isDragging) return
 
+    // Cleanup any orphaned ghost node from a previous cancelled interaction
     if (dragState.ghostNode) {
       cy.remove(dragState.ghostNode)
       dragState.ghostNode = null
