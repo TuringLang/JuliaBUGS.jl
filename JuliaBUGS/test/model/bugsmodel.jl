@@ -167,19 +167,19 @@ end
             param_names = parameters(model)
 
             # Default is transformed mode
-            params = getparams(model)
+            params = Base.invokelatest(getparams, model)
             @test length(params) == 5
 
             # Get params as dict to check order-independent
-            params_dict = getparams(Dict, model)
+            params_dict = Base.invokelatest(getparams, Dict, model)
             @test params_dict[@varname(mu)] ≈ 1.0
             @test params_dict[@varname(tau)] ≈ log(2.0)
             @test params_dict[@varname(x[1])] ≈ 1.5
 
             # Untransformed parameters
             model_untrans = settrans(model, false)
-            params_untrans = getparams(model_untrans)
-            params_dict_untrans = getparams(Dict, model_untrans)
+            params_untrans = Base.invokelatest(getparams, model_untrans)
+            params_dict_untrans = Base.invokelatest(getparams, Dict, model_untrans)
             @test length(params_untrans) == 5
             @test params_dict_untrans[@varname(mu)] ≈ 1.0
             @test params_dict_untrans[@varname(tau)] ≈ 2.0
@@ -188,20 +188,20 @@ end
 
         @testset "Dictionary extraction" begin
             # Default is transformed
-            params_dict = getparams(Dict, model)
+            params_dict = Base.invokelatest(getparams, Dict, model)
             @test params_dict[@varname(mu)] ≈ 1.0
             @test params_dict[@varname(tau)] ≈ log(2.0)  # transformed
             @test params_dict[@varname(x[1])] ≈ 1.5
 
             # Untransformed
             model_untrans = settrans(model, false)
-            params_dict_untrans = getparams(Dict, model_untrans)
+            params_dict_untrans = Base.invokelatest(getparams, Dict, model_untrans)
             @test params_dict_untrans[@varname(mu)] ≈ 1.0
             @test params_dict_untrans[@varname(tau)] ≈ 2.0  # untransformed
 
             # Different dict type
             using OrderedCollections
-            params_ordered = getparams(OrderedDict, model)
+            params_ordered = Base.invokelatest(getparams, OrderedDict, model)
             @test params_ordered isa OrderedDict
             @test params_ordered[@varname(mu)] ≈ 1.0
         end
@@ -210,12 +210,12 @@ end
             model_cond = condition(model, (; mu=0.5))
 
             # Only unconditioned parameters (default transformed)
-            params = getparams(model_cond)
+            params = Base.invokelatest(getparams, model_cond)
             @test length(params) == 4  # tau, x[1:3]
             @test params[1] ≈ log(2.0)  # tau transformed
             @test params[2:4] == [1.5, 2.5, 3.5]
 
-            params_dict = getparams(Dict, model_cond)
+            params_dict = Base.invokelatest(getparams, Dict, model_cond)
             @test !haskey(params_dict, @varname(mu))
             @test params_dict[@varname(tau)] ≈ log(2.0)  # transformed
         end
@@ -326,8 +326,10 @@ end
             model_graph = set_evaluation_mode(model, UseGraph())
 
             params = [0.5, 1.0]  # x, y
-            logp_gen = LogDensityProblems.logdensity(model_gen, params)
-            logp_graph = LogDensityProblems.logdensity(model_graph, params)
+            logp_gen = Base.invokelatest(LogDensityProblems.logdensity, model_gen, params)
+            logp_graph = Base.invokelatest(
+                LogDensityProblems.logdensity, model_graph, params
+            )
 
             @test logp_gen ≈ logp_graph
         end
@@ -356,9 +358,9 @@ end
             model = initialize!(model, (; mu=1.5, sigma=0.5))
 
             # Get parameters (default transformed)
-            params = getparams(model)
+            params = Base.invokelatest(getparams, model)
             @test length(params) == 2
-            params_dict = getparams(Dict, model)
+            params_dict = Base.invokelatest(getparams, Dict, model)
             @test params_dict[@varname(mu)] ≈ 1.5  # mu (identity transform)
             @test params_dict[@varname(sigma)] ≈ log(0.5)  # sigma (log transformed)
 
@@ -369,7 +371,7 @@ end
 
             # Switch to untransformed
             model_untrans = settrans(model_cond, false)
-            params_untrans = getparams(model_untrans)
+            params_untrans = Base.invokelatest(getparams, model_untrans)
             @test length(params_untrans) == 1
             @test params_untrans[1] ≈ 0.5
 

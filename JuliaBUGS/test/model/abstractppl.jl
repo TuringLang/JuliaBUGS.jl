@@ -37,11 +37,13 @@ JuliaBUGS.@bugs_primitive Normal Gamma
                 model_cond, UseGeneratedLogDensityFunction()
             )
             params = [0.5]  # Only y is a parameter now
-            logp1 = LogDensityProblems.logdensity(model_cond_gen, params)
+            logp1 = Base.invokelatest(LogDensityProblems.logdensity, model_cond_gen, params)
 
             # Compare with graph evaluation
             model_cond_graph = set_evaluation_mode(model_cond, UseGraph())
-            logp2 = LogDensityProblems.logdensity(model_cond_graph, params)
+            logp2 = Base.invokelatest(
+                LogDensityProblems.logdensity, model_cond_graph, params
+            )
 
             @test logp1 ≈ logp2
         end
@@ -73,11 +75,13 @@ JuliaBUGS.@bugs_primitive Normal Gamma
             )
             # Parameters should be in order: [x[2], y[1], y[2], y[3]]
             params = [0.0, 1.0, 2.0, 3.0]
-            logp1 = LogDensityProblems.logdensity(model_cond_gen, params)
+            logp1 = Base.invokelatest(LogDensityProblems.logdensity, model_cond_gen, params)
 
             # Compare with graph evaluation
             model_cond_graph = set_evaluation_mode(model_cond, UseGraph())
-            logp2 = LogDensityProblems.logdensity(model_cond_graph, params)
+            logp2 = Base.invokelatest(
+                LogDensityProblems.logdensity, model_cond_graph, params
+            )
 
             @test logp1 ≈ logp2
 
@@ -118,7 +122,7 @@ JuliaBUGS.@bugs_primitive Normal Gamma
                 model_cond2, UseGeneratedLogDensityFunction()
             )
             params = [1.5]  # Only c is a parameter
-            logp = LogDensityProblems.logdensity(model_cond2_gen, params)
+            logp = Base.invokelatest(LogDensityProblems.logdensity, model_cond2_gen, params)
             @test isfinite(logp)
         end
 
@@ -148,7 +152,9 @@ JuliaBUGS.@bugs_primitive Normal Gamma
             model_cond_gen = set_evaluation_mode(
                 model_cond, UseGeneratedLogDensityFunction()
             )
-            logp = LogDensityProblems.logdensity(model_cond_gen, Float64[])
+            logp = Base.invokelatest(
+                LogDensityProblems.logdensity, model_cond_gen, Float64[]
+            )
             @test isfinite(logp)
         end
 
@@ -177,11 +183,15 @@ JuliaBUGS.@bugs_primitive Normal Gamma
 
                 # Compare log density via graph evaluation
                 params = zeros(length(parameters(model_fast)))
-                logp_fast = LogDensityProblems.logdensity(
-                    set_evaluation_mode(model_fast, UseGraph()), params
+                logp_fast = Base.invokelatest(
+                    LogDensityProblems.logdensity,
+                    set_evaluation_mode(model_fast, UseGraph()),
+                    params,
                 )
-                logp_reg = LogDensityProblems.logdensity(
-                    set_evaluation_mode(model_reg, UseGraph()), params
+                logp_reg = Base.invokelatest(
+                    LogDensityProblems.logdensity,
+                    set_evaluation_mode(model_reg, UseGraph()),
+                    params,
                 )
                 @test logp_fast ≈ logp_reg
             end
@@ -247,11 +257,15 @@ JuliaBUGS.@bugs_primitive Normal Gamma
 
                 # Can switch to generated mode explicitly and match graph
                 params = zeros(length(parameters(m2)))
-                logp_gen = LogDensityProblems.logdensity(
-                    set_evaluation_mode(m2, UseGeneratedLogDensityFunction()), params
+                logp_gen = Base.invokelatest(
+                    LogDensityProblems.logdensity,
+                    set_evaluation_mode(m2, UseGeneratedLogDensityFunction()),
+                    params,
                 )
-                logp_graph = LogDensityProblems.logdensity(
-                    set_evaluation_mode(m2, UseGraph()), params
+                logp_graph = Base.invokelatest(
+                    LogDensityProblems.logdensity,
+                    set_evaluation_mode(m2, UseGraph()),
+                    params,
                 )
                 @test logp_gen ≈ logp_graph
             end
@@ -282,12 +296,16 @@ JuliaBUGS.@bugs_primitive Normal Gamma
                 model_decond, UseGeneratedLogDensityFunction()
             )
             params = [2.0]  # Only y is a parameter
-            logp = LogDensityProblems.logdensity(model_decond_gen, params)
+            logp = Base.invokelatest(
+                LogDensityProblems.logdensity, model_decond_gen, params
+            )
             @test isfinite(logp)
 
             # Compare with graph evaluation
             model_decond_graph = set_evaluation_mode(model_decond, UseGraph())
-            logp2 = LogDensityProblems.logdensity(model_decond_graph, params)
+            logp2 = Base.invokelatest(
+                LogDensityProblems.logdensity, model_decond_graph, params
+            )
             @test logp ≈ logp2
         end
 
@@ -320,7 +338,9 @@ JuliaBUGS.@bugs_primitive Normal Gamma
                 model_restored, UseGeneratedLogDensityFunction()
             )
             params = [0.5, 1.0]  # a and b
-            logp = LogDensityProblems.logdensity(model_restored_gen, params)
+            logp = Base.invokelatest(
+                LogDensityProblems.logdensity, model_restored_gen, params
+            )
             @test isfinite(logp)
         end
 
@@ -366,10 +386,10 @@ JuliaBUGS.@bugs_primitive Normal Gamma
         # Test evaluation
         model_cond_gen = set_evaluation_mode(model_cond, UseGeneratedLogDensityFunction())
         params = [2.0]  # Only sigma
-        logp1 = LogDensityProblems.logdensity(model_cond_gen, params)
+        logp1 = Base.invokelatest(LogDensityProblems.logdensity, model_cond_gen, params)
 
         model_cond_graph = set_evaluation_mode(model_cond, UseGraph())
-        logp2 = LogDensityProblems.logdensity(model_cond_graph, params)
+        logp2 = Base.invokelatest(LogDensityProblems.logdensity, model_cond_graph, params)
 
         @test logp1 ≈ logp2
     end

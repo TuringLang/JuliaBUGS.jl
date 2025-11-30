@@ -1,46 +1,46 @@
-import { ref, computed, watch } from 'vue';
-import type { Core } from 'cytoscape';
+import { ref, computed, watch } from 'vue'
+import type { Core } from 'cytoscape'
 
 export function useGridSnapping(getCyInstance: () => Core | null) {
-  const isGridEnabledRef = ref<boolean>(false);
-  const gridSizeRef = ref<number>(20);
+  const isGridEnabledRef = ref<boolean>(false)
+  const gridSizeRef = ref<number>(20)
 
-  const cssGridSize = computed<string>(() => `${gridSizeRef.value}px`);
+  const cssGridSize = computed<string>(() => `${gridSizeRef.value}px`)
 
   const updateGridBackground = () => {
-    const cy = getCyInstance();
+    const cy = getCyInstance()
     if (cy) {
-      const container = cy.container();
+      const container = cy.container()
       if (container) {
         if (isGridEnabledRef.value && gridSizeRef.value > 0) {
-          container.classList.add('grid-background');
-          container.style.setProperty('--grid-size', cssGridSize.value);
+          container.classList.add('grid-background')
+          container.style.setProperty('--grid-size', cssGridSize.value)
         } else {
-          container.classList.remove('grid-background');
-          container.style.removeProperty('--grid-size');
+          container.classList.remove('grid-background')
+          container.style.removeProperty('--grid-size')
         }
       }
     }
-  };
+  }
 
   const enableGridSnapping = (): void => {
-    isGridEnabledRef.value = true;
-    updateGridBackground();
-  };
+    isGridEnabledRef.value = true
+    updateGridBackground()
+  }
 
   const disableGridSnapping = (): void => {
-    isGridEnabledRef.value = false;
-    updateGridBackground();
-  };
+    isGridEnabledRef.value = false
+    updateGridBackground()
+  }
 
   const setGridSize = (size: number): void => {
-    gridSizeRef.value = size;
+    gridSizeRef.value = size
     if (isGridEnabledRef.value) {
-      updateGridBackground();
+      updateGridBackground()
     }
-  };
+  }
 
-  watch([isGridEnabledRef, gridSizeRef], updateGridBackground);
+  watch([isGridEnabledRef, gridSizeRef], updateGridBackground)
 
   return {
     isGridEnabledRef,
@@ -49,5 +49,5 @@ export function useGridSnapping(getCyInstance: () => Core | null) {
     enableGridSnapping,
     disableGridSnapping,
     setGridSize,
-  };
+  }
 }

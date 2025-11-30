@@ -1,35 +1,41 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
-import { storeToRefs } from 'pinia';
-import { useGraphStore } from '../../stores/graphStore';
-import { useBugsCodeGenerator } from '../../composables/useBugsCodeGenerator';
-import BaseButton from '../ui/BaseButton.vue';
+import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { useGraphStore } from '../../stores/graphStore'
+import { useBugsCodeGenerator } from '../../composables/useBugsCodeGenerator'
 
-import 'codemirror/lib/codemirror.css';
-import 'codemirror/theme/material-darker.css';
-import 'codemirror/mode/julia/julia.js';
-import 'codemirror/addon/scroll/simplescrollbars.css';
-import 'codemirror/addon/scroll/simplescrollbars.js';
-import 'codemirror/addon/fold/foldgutter.css';
-import 'codemirror/addon/fold/foldgutter.js';
-import 'codemirror/addon/fold/brace-fold.js';
+import 'codemirror/lib/codemirror.css'
+import 'codemirror/theme/material-darker.css'
+import 'codemirror/mode/julia/julia.js'
+import 'codemirror/addon/scroll/simplescrollbars.css'
+import 'codemirror/addon/scroll/simplescrollbars.js'
+import 'codemirror/addon/fold/foldgutter.css'
+import 'codemirror/addon/fold/foldgutter.js'
+import 'codemirror/addon/fold/brace-fold.js'
 
-import CodeMirror from 'codemirror';
-import type { Editor } from 'codemirror';
+import CodeMirror from 'codemirror'
+import type { Editor } from 'codemirror'
 
 const props = defineProps<{
-  isActive: boolean;
-}>();
+  isActive: boolean
+  graphId?: string // Optional: for multi-canvas code pop-outs
+}>()
 
-const graphStore = useGraphStore();
+const graphStore = useGraphStore()
 
-const { currentGraphElements } = storeToRefs(graphStore);
+// Use a computed to get the correct elements (global current or specific graph)
+const targetElements = computed(() => {
+  if (props.graphId) {
+    return graphStore.graphContents.get(props.graphId)?.elements || []
+  }
+  return graphStore.currentGraphElements
+})
 
-const { generatedCode } = useBugsCodeGenerator(currentGraphElements);
+// useBugsCodeGenerator expects a Ref, computed fits
+const { generatedCode } = useBugsCodeGenerator(targetElements)
 
-const copySuccess = ref(false);
-const editorContainer = ref<HTMLDivElement | null>(null);
-let cmInstance: Editor | null = null;
+const copySuccess = ref(false)
+const editorContainer = ref<HTMLDivElement | null>(null)
+let cmInstance: Editor | null = null
 
 onMounted(() => {
   if (editorContainer.value) {
@@ -40,50 +46,80 @@ onMounted(() => {
       lineNumbers: true,
       readOnly: true,
       tabSize: 2,
-      scrollbarStyle: "simple",
+      scrollbarStyle: 'simple',
       foldGutter: true,
-      gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"]
-    });
+      gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
+    })
 
     if (props.isActive) {
-      nextTick(() => cmInstance?.refresh());
+      nextTick(() => cmInstance?.refresh())
     }
   }
-});
+})
 
 onUnmounted(() => {
   if (cmInstance) {
-    const editorElement = cmInstance.getWrapperElement();
-    editorElement.parentNode?.removeChild(editorElement);
-    cmInstance = null;
+    const editorElement = cmInstance.getWrapperElement()
+    editorElement.parentNode?.removeChild(editorElement)
+    cmInstance = null
   }
-});
+})
 
 watch(generatedCode, (newCode) => {
   if (cmInstance && cmInstance.getValue() !== newCode) {
-    cmInstance.setValue(newCode);
+    cmInstance.setValue(newCode)
   }
-});
+})
 
-watch(() => props.isActive, (newVal) => {
-  if (newVal && cmInstance) {
-    nextTick(() => {
-      cmInstance?.refresh();
-    });
+watch(
+  () => props.isActive,
+  (newVal) => {
+    if (newVal && cmInstance) {
+      nextTick(() => {
+        cmInstance?.refresh()
+      })
+    }
   }
-});
+)
 
-const copyCodeToClipboard = () => {
-  navigator.clipboard.writeText(generatedCode.value).then(() => {
-    copySuccess.value = true;
-    setTimeout(() => {
-      copySuccess.value = false;
-    }, 2000);
-  }).catch(err => {
-    console.error('Failed to copy code: ', err);
-    alert('Failed to copy code to clipboard.');
-  });
-};
+const copyCodeToClipboard = async () => {
+  const text = generatedCode.value
+  try {
+    // Try modern API first
+    await navigator.clipboard.writeText(text)
+    triggerSuccess()
+  } catch {
+    // Fallback to legacy API (often needed on iOS/mobile)
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    textArea.style.position = 'fixed'
+    textArea.style.opacity = '0'
+    document.body.appendChild(textArea)
+    textArea.focus()
+    textArea.select()
+    try {
+      const successful = document.execCommand('copy')
+      if (successful) {
+        triggerSuccess()
+      } else {
+        console.error('Fallback copy failed.')
+        alert('Failed to copy code to clipboard.')
+      }
+    } catch (e) {
+      console.error('Copy failed', e)
+      alert('Failed to copy code to clipboard.')
+    } finally {
+      document.body.removeChild(textArea)
+    }
+  }
+}
+
+const triggerSuccess = () => {
+  copySuccess.value = true
+  setTimeout(() => {
+    copySuccess.value = false
+  }, 2000)
+}
 </script>
 
 <template>
@@ -93,14 +129,15 @@ const copyCodeToClipboard = () => {
     </div>
     <div class="editor-wrapper">
       <div ref="editorContainer" class="editor-container"></div>
-      <BaseButton
-        @click="copyCodeToClipboard"
-        class="copy-button"
-        type="secondary"
+      <button
+        @click.stop="copyCodeToClipboard"
+        class="native-copy-button"
+        type="button"
+        title="Copy Code"
       >
         <i v-if="copySuccess" class="fas fa-check"></i>
         <i v-else class="fas fa-copy"></i>
-      </BaseButton>
+      </button>
     </div>
   </div>
 </template>
@@ -171,13 +208,13 @@ h4 {
   height: 100%;
 }
 
-.copy-button {
+.native-copy-button {
   position: absolute;
-  bottom: 12px;
-  right: 12px;
+  bottom: 5px;
+  right: 5px;
   width: 36px;
   height: 36px;
-  background-color: var(--color-secondary);
+  background-color: transparent;
   color: #fff;
   border-radius: 50%;
   display: flex;
@@ -185,17 +222,27 @@ h4 {
   justify-content: center;
   padding: 0;
   cursor: pointer;
-  opacity: 0.9;
-  transition: background-color 0.2s, opacity 0.2s;
+  opacity: 0.5;
+  transition:
+    background-color 0.2s,
+    opacity 0.2s;
+  z-index: 1000;
+  pointer-events: auto;
+  border: none;
+  outline: none;
 }
 
-.copy-button:hover {
-  background-color: var(--color-secondary-hover);
+.native-copy-button:hover {
+  background-color: transparent;
   opacity: 1;
 }
 
-.copy-button .fa-copy,
-.copy-button .fa-check {
-  font-size: 1.1rem;
+.native-copy-button:active {
+  transform: scale(0.95);
+}
+
+.native-copy-button .fa-copy,
+.native-copy-button .fa-check {
+  font-size: 1rem;
 }
 </style>

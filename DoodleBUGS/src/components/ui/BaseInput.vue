@@ -1,81 +1,43 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import InputText from 'primevue/inputtext'
+import { computed } from 'vue'
 
 const props = defineProps<{
-  modelValue: string | number | null | undefined;
-  type?: string;
-  placeholder?: string;
-  disabled?: boolean;
-  readonly?: boolean;
-}>();
+  modelValue: string | number | null | undefined
+  type?: string
+  placeholder?: string
+  disabled?: boolean
+  readonly?: boolean
+}>()
 
-const emit = defineEmits(['update:modelValue', 'change', 'input', 'keyup.enter']);
+const emit = defineEmits(['update:modelValue', 'change', 'input', 'keyup.enter'])
 
-const inputType = computed(() => props.type || 'text');
+const stringValue = computed(() => {
+  if (props.modelValue === null || props.modelValue === undefined) return ''
+  return String(props.modelValue)
+})
 
-const handleInput = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  emit('update:modelValue', target.value);
-  emit('input', event);
-};
-
-const handleChange = (event: Event) => {
-  emit('change', event);
-};
-
-const handleKeyUpEnter = (event: KeyboardEvent) => {
-  if (event.key === 'Enter') {
-    emit('keyup.enter', event);
+const handleUpdate = (val: string | null | undefined) => {
+  if (props.type === 'number' && val !== null && val !== undefined && val !== '') {
+    const num = Number(val)
+    emit('update:modelValue', isNaN(num) ? val : num)
+  } else {
+    emit('update:modelValue', val)
   }
-};
+}
 </script>
 
 <template>
-  <input
-    :type="inputType"
-    :value="modelValue ?? ''"
+  <InputText
+    :type="type || 'text'"
+    :model-value="stringValue"
     :placeholder="placeholder"
     :disabled="disabled"
     :readonly="readonly"
-    @input="handleInput"
-    @change="handleChange"
-    @keyup="handleKeyUpEnter"
-    class="base-input"
+    @update:model-value="handleUpdate"
+    @change="(e) => emit('change', e)"
+    @input="(e) => emit('input', e)"
+    @keyup.enter="(e) => emit('keyup.enter', e)"
+    class="w-full base-input-field"
   />
 </template>
-
-<style scoped>
-.base-input {
-  padding: 8px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background-color: var(--color-background-soft);
-  color: var(--color-text);
-  box-sizing: border-box;
-  font-size: 0.9em;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.base-input:focus {
-  border-color: var(--color-primary);
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-}
-
-.base-input:disabled,
-.base-input:readonly {
-  background-color: var(--color-background-mute);
-  cursor: not-allowed;
-  opacity: 0.8;
-}
-
-.base-input[type="number"] {
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-.base-input[type="number"]::-webkit-outer-spin-button,
-.base-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-</style>

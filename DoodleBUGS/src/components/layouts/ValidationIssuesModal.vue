@@ -1,67 +1,72 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import BaseModal from '../common/BaseModal.vue';
-import BaseButton from '../ui/BaseButton.vue';
-import type { GraphElement, GraphNode, ValidationError } from '../../types';
+import { computed, ref } from 'vue'
+import BaseModal from '../common/BaseModal.vue'
+import BaseButton from '../ui/BaseButton.vue'
+import type { GraphElement, GraphNode, ValidationError } from '../../types'
 
 const props = defineProps<{
-  isOpen: boolean;
-  validationErrors: Map<string, ValidationError[]>;
-  elements: GraphElement[];
-}>();
+  isOpen: boolean
+  validationErrors: Map<string, ValidationError[]>
+  elements: GraphElement[]
+}>()
 
-const emit = defineEmits(['close', 'select-node']);
+const emit = defineEmits(['close', 'select-node'])
 
-const copySuccess = ref(false);
+const copySuccess = ref(false)
 
 const nodeMap = computed(() => {
-    const map = new Map<string, GraphNode>();
-    for (const el of props.elements) {
-        if (el.type === 'node') {
-            map.set(el.id, el as GraphNode);
-        }
+  const map = new Map<string, GraphNode>()
+  for (const el of props.elements) {
+    if (el.type === 'node') {
+      map.set(el.id, el as GraphNode)
     }
-    return map;
-});
+  }
+  return map
+})
 
 const errorsWithNodeNames = computed(() => {
-    const allErrors: { nodeId: string, nodeName: string, errors: ValidationError[] }[] = [];
-    for (const [nodeId, errors] of props.validationErrors.entries()) {
-        const node = nodeMap.value.get(nodeId);
-        if (node) {
-            allErrors.push({
-                nodeId,
-                nodeName: node.name,
-                errors
-            });
-        }
+  const allErrors: { nodeId: string; nodeName: string; errors: ValidationError[] }[] = []
+  for (const [nodeId, errors] of props.validationErrors.entries()) {
+    const node = nodeMap.value.get(nodeId)
+    if (node) {
+      allErrors.push({
+        nodeId,
+        nodeName: node.name,
+        errors,
+      })
     }
-    // Sort by node name for consistent order
-    allErrors.sort((a, b) => a.nodeName.localeCompare(b.nodeName));
-    return allErrors;
-});
+  }
+  // Sort by node name for consistent order
+  allErrors.sort((a, b) => a.nodeName.localeCompare(b.nodeName))
+  return allErrors
+})
 
 const handleSelectNode = (nodeId: string) => {
-    emit('select-node', nodeId);
-    emit('close');
-};
+  emit('select-node', nodeId)
+  emit('close')
+}
 
 const copyLogs = () => {
-    const logText = errorsWithNodeNames.value.map(item => {
-        const errorLines = item.errors.map(err => `- ${err.message}`).join('\n');
-        return `Node: ${item.nodeName}\n${errorLines}`;
-    }).join('\n\n');
+  const logText = errorsWithNodeNames.value
+    .map((item) => {
+      const errorLines = item.errors.map((err) => `- ${err.message}`).join('\n')
+      return `Node: ${item.nodeName}\n${errorLines}`
+    })
+    .join('\n\n')
 
-    navigator.clipboard.writeText(logText).then(() => {
-        copySuccess.value = true;
-        setTimeout(() => {
-            copySuccess.value = false;
-        }, 2000);
-    }).catch(err => {
-        console.error('Failed to copy validation logs: ', err);
-        alert('Could not copy logs to clipboard.');
-    });
-};
+  navigator.clipboard
+    .writeText(logText)
+    .then(() => {
+      copySuccess.value = true
+      setTimeout(() => {
+        copySuccess.value = false
+      }, 2000)
+    })
+    .catch((err) => {
+      console.error('Failed to copy validation logs: ', err)
+      alert('Could not copy logs to clipboard.')
+    })
+}
 </script>
 
 <template>
@@ -76,7 +81,11 @@ const copyLogs = () => {
       </div>
       <div v-else class="issues-list">
         <div v-for="item in errorsWithNodeNames" :key="item.nodeId" class="issue-item">
-          <div class="issue-header" @click="handleSelectNode(item.nodeId)" title="Click to select node">
+          <div
+            class="issue-header"
+            @click="handleSelectNode(item.nodeId)"
+            title="Click to select node"
+          >
             <strong>Node: {{ item.nodeName }}</strong>
             <i class="fas fa-crosshairs"></i>
           </div>
@@ -89,11 +98,12 @@ const copyLogs = () => {
       </div>
     </template>
     <template #footer>
-      <BaseButton @click="copyLogs" type="secondary" v-if="errorsWithNodeNames.length > 0">
-        <i v-if="copySuccess" class="fas fa-check"></i>
-        <span v-else>Copy Logs</span>
-      </BaseButton>
-      <BaseButton @click="emit('close')" type="primary">Close</BaseButton>
+      <div class="w-full flex justify-end">
+        <BaseButton @click="copyLogs" type="secondary" v-if="errorsWithNodeNames.length > 0">
+          <i v-if="copySuccess" class="fas fa-check"></i>
+          <span v-else>Copy Logs</span>
+        </BaseButton>
+      </div>
     </template>
   </BaseModal>
 </template>
@@ -139,19 +149,15 @@ const copyLogs = () => {
   transition: color 0.2s ease;
 }
 .issue-header:hover {
-    color: var(--color-primary);
+  color: var(--color-primary);
 }
 .issue-header i {
-    opacity: 0.6;
+  opacity: 0.6;
 }
 .error-details {
   margin: 8px 0 0 0;
   padding-left: 20px;
   font-size: 0.9em;
   color: var(--color-text);
-}
-
-.modal-footer {
-    justify-content: space-between;
 }
 </style>
