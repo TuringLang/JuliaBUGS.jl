@@ -573,7 +573,9 @@ function _marginalize_recursive(
             lik_val = branch_lik
             if total_logpriors === nothing
                 total_logpriors = Vector{typeof(total_val)}(undef, length(possible_values))
-                branch_loglikelihoods = Vector{typeof(lik_val)}(undef, length(possible_values))
+                branch_loglikelihoods = Vector{typeof(lik_val)}(
+                    undef, length(possible_values)
+                )
             end
             total_logpriors[i] = total_val
             branch_loglikelihoods[i] = lik_val
@@ -581,7 +583,9 @@ function _marginalize_recursive(
 
         @assert total_logpriors !== nothing && branch_loglikelihoods !== nothing
         log_prior_total = LogExpFunctions.logsumexp(total_logpriors)
-        log_joint_total = LogExpFunctions.logsumexp(total_logpriors .+ branch_loglikelihoods)
+        log_joint_total = LogExpFunctions.logsumexp(
+            total_logpriors .+ branch_loglikelihoods
+        )
         if isfinite(log_prior_total)
             result_prior = log_prior_total
             result_lik = log_joint_total - log_prior_total
