@@ -165,14 +165,16 @@ using StatsBase: mode
         model = compile(model_def, data, (;))
 
         # single step
-        p_s, st_init = AbstractMCMC.step(
+        p_s, st_init = Base.invokelatest(
+            AbstractMCMC.step,
             Random.default_rng(),
             AbstractMCMC.LogDensityModel(model),
             Gibbs(model, IndependentMH()),
         )
 
         # following step
-        p_s, st = AbstractMCMC.step(
+        p_s, st = Base.invokelatest(
+            AbstractMCMC.step,
             Random.default_rng(),
             AbstractMCMC.LogDensityModel(model),
             Gibbs(model, IndependentMH()),
@@ -230,7 +232,9 @@ using StatsBase: mode
 
             # Test that sampling runs without error
             rng = Random.MersenneTwister(123)
-            chain = sample(rng, model, gibbs, 100; progress=false, chain_type=Chains)
+            chain = Base.invokelatest(
+                sample, rng, model, gibbs, 100; progress=false, chain_type=Chains
+            )
 
             @test chain isa AbstractMCMC.AbstractChains
             @test size(chain, 1) == 100  # Number of samples
@@ -255,7 +259,8 @@ using StatsBase: mode
             # especially in a single-parameter model where Gibbs reduces to plain MH
             rng = Random.MersenneTwister(42)
             gibbs = Gibbs(model, IndependentMH())
-            chain = sample(
+            chain = Base.invokelatest(
+                sample,
                 rng,
                 model,
                 gibbs,
@@ -312,7 +317,8 @@ using StatsBase: mode
             # Sample with Gibbs - need more samples for IndependentMH
             rng = Random.MersenneTwister(42)
             gibbs = Gibbs(model, IndependentMH())
-            chain = sample(
+            chain = Base.invokelatest(
+                sample,
                 rng,
                 model,
                 gibbs,
@@ -350,7 +356,8 @@ using StatsBase: mode
             # Sample with Gibbs
             rng1 = Random.MersenneTwister(789)
             gibbs = Gibbs(model, IndependentMH())
-            chain_gibbs = sample(
+            chain_gibbs = Base.invokelatest(
+                sample,
                 rng1,
                 model,
                 gibbs,
@@ -407,7 +414,8 @@ using StatsBase: mode
             gibbs = Gibbs(model, sampler_map)
 
             rng = Random.MersenneTwister(999)
-            chain = sample(
+            chain = Base.invokelatest(
+                sample,
                 rng,
                 model,
                 gibbs,
@@ -448,11 +456,15 @@ using StatsBase: mode
 
                 # Take one step
                 rng = Random.MersenneTwister(123)
-                env1, state = AbstractMCMC.step(
-                    rng, AbstractMCMC.LogDensityModel(model_init), gibbs
+                env1, state = Base.invokelatest(
+                    AbstractMCMC.step, rng, AbstractMCMC.LogDensityModel(model_init), gibbs
                 )
-                env2, _ = AbstractMCMC.step(
-                    rng, AbstractMCMC.LogDensityModel(model_init), gibbs, state
+                env2, _ = Base.invokelatest(
+                    AbstractMCMC.step,
+                    rng,
+                    AbstractMCMC.LogDensityModel(model_init),
+                    gibbs,
+                    state,
                 )
 
                 # When updating a, b and c should remain fixed in that sub-step
@@ -541,8 +553,8 @@ using StatsBase: mode
                 gibbs_invalid = Gibbs(model, sampler_map_invalid)
 
                 rng = Random.MersenneTwister(123)
-                @test_throws ErrorException sample(
-                    rng, model, gibbs_invalid, 10; progress=false, chain_type=Chains
+                @test_throws ErrorException Base.invokelatest(
+                    sample, rng, model, gibbs_invalid, 10; progress=false, chain_type=Chains
                 )
 
                 # Also test with NUTS
@@ -551,8 +563,8 @@ using StatsBase: mode
                     @varname(σ) => IndependentMH(),
                 )
                 gibbs_nuts = Gibbs(model, sampler_map_nuts)
-                @test_throws ErrorException sample(
-                    rng, model, gibbs_nuts, 10; progress=false, chain_type=Chains
+                @test_throws ErrorException Base.invokelatest(
+                    sample, rng, model, gibbs_nuts, 10; progress=false, chain_type=Chains
                 )
             end
 
@@ -565,7 +577,9 @@ using StatsBase: mode
                 gibbs2 = Gibbs(model, sampler_map2)
 
                 rng = Random.MersenneTwister(456)
-                chain2 = sample(rng, model, gibbs2, 50; progress=false, chain_type=Chains)
+                chain2 = Base.invokelatest(
+                    sample, rng, model, gibbs2, 50; progress=false, chain_type=Chains
+                )
 
                 @test chain2 isa AbstractMCMC.AbstractChains
                 @test size(chain2, 1) == 50
@@ -613,7 +627,8 @@ using StatsBase: mode
             model_init = initialize!(model, init_params)
 
             rng = Random.MersenneTwister(789)
-            chain = sample(
+            chain = Base.invokelatest(
+                sample,
                 rng,
                 model_init,
                 gibbs,
@@ -664,7 +679,9 @@ using StatsBase: mode
         gibbs = Gibbs(model, sampler_map)
 
         rng = StableRNG(1234)
-        chain = sample(rng, model, gibbs, 1000; progress=false, chain_type=Chains)
+        chain = Base.invokelatest(
+            sample, rng, model, gibbs, 1000; progress=false, chain_type=Chains
+        )
 
         @test chain isa AbstractMCMC.AbstractChains
         @test size(chain, 1) == 1000
@@ -699,7 +716,9 @@ using StatsBase: mode
         gibbs = Gibbs(model, sampler_map)
 
         rng = Random.MersenneTwister(123)
-        chain = sample(rng, model, gibbs, 200; progress=false, chain_type=Chains)
+        chain = Base.invokelatest(
+            sample, rng, model, gibbs, 200; progress=false, chain_type=Chains
+        )
 
         @test chain isa AbstractMCMC.AbstractChains
         @test size(chain, 1) == 200
@@ -767,7 +786,8 @@ using StatsBase: mode
             model_init = initialize!(model, init_params)
 
             rng = Random.MersenneTwister(789)
-            chain = sample(
+            chain = Base.invokelatest(
+                sample,
                 rng,
                 model_init,
                 gibbs,
@@ -828,14 +848,18 @@ using StatsBase: mode
 
         # Manually step through to inspect states
         logdensitymodel = AbstractMCMC.LogDensityModel(model)
-        val, state = AbstractMCMC.step(rng, logdensitymodel, gibbs; model=model)
+        val, state = Base.invokelatest(
+            AbstractMCMC.step, rng, logdensitymodel, gibbs; model=model
+        )
 
         # Initial state should have empty sub_states
         @test isempty(state.sub_states)
 
         # Step a few times
         for i in 1:3
-            val, state = AbstractMCMC.step(rng, logdensitymodel, gibbs, state; model=model)
+            val, state = Base.invokelatest(
+                AbstractMCMC.step, rng, logdensitymodel, gibbs, state; model=model
+            )
         end
 
         # After stepping, HMC samplers should have preserved states
@@ -846,7 +870,7 @@ using StatsBase: mode
         @test !haskey(state.sub_states, [@varname(β)])
 
         # Verify that the sampler still works correctly
-        chain = sample(rng, model, gibbs, 100; progress=false)
+        chain = Base.invokelatest(sample, rng, model, gibbs, 100; progress=false)
         @test length(chain) == 100
     end
 end
