@@ -125,26 +125,30 @@ export function useCompoundDragDrop(
   const enterDetachMode = (node: NodeSingular) => {
     if (!dragState.originalParent || dragState.detachedOnGrab) return
 
-    // Create Ghost Node to maintain parent size
     const ghostId = `ghost_${node.id()}_${Date.now()}`
+
+    // Create node first without style object to avoid "bypass at creation" warning
     dragState.ghostNode = cy.add({
       group: 'nodes',
       data: {
         id: ghostId,
         parent: dragState.originalParent.id(),
         nodeType: 'constant',
+        name: ' ', // Dummy name for label mapper
       },
       position: { ...(dragState.originalPosition || node.position()) },
-      style: {
-        'background-opacity': 0,
-        'border-opacity': 0,
-        width: node.width(),
-        height: node.height(),
-        label: '',
-        events: 'no',
-      },
       grabbable: false,
       selectable: false,
+    })
+
+    // Apply styles post-creation
+    dragState.ghostNode.style({
+      'background-opacity': 0,
+      'border-opacity': 0,
+      width: node.width(),
+      height: node.height(),
+      label: '',
+      events: 'no',
     })
 
     // Detach Node
@@ -160,12 +164,16 @@ export function useCompoundDragDrop(
     const node = event.target as NodeSingular
     if (!options.grabbedNode(node) || dragState.isDragging) return
 
+    if (dragState.ghostNode) {
+      cy.remove(dragState.ghostNode)
+      dragState.ghostNode = null
+    }
+
     dragState.isDragging = true
     dragState.draggedNode = node
     dragState.originalPosition = { ...node.position() }
     dragState.platePositions.clear()
     dragState.toastShown = false
-    dragState.ghostNode = null
 
     const currentParent = node.parent()
     const hasParent = currentParent.length > 0
@@ -249,7 +257,7 @@ export function useCompoundDragDrop(
   const endDrag = (node: NodeSingular) => {
     if (!dragState.isDragging || dragState.draggedNode?.id() !== node.id()) return
 
-    node.removeClass('cdnd-grabbed-node cdnd-drag-out')
+    node.removeClass('cdnd-grabbed-node')
     if (dragState.potentialDropTarget) {
       dragState.potentialDropTarget.removeClass('cdnd-drop-target')
     }

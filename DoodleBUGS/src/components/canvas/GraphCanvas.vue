@@ -239,8 +239,16 @@ const updateGridStyle = () => {
   }
 }
 
+// Updated mapping for dynamic summary based on severity
+const summaryMap: Record<'info' | 'warn' | 'error' | 'success', string> = {
+  info: 'Info',
+  warn: 'Warning',
+  error: 'Error',
+  success: 'Success',
+}
+
 const handleToast = (message: string, severity: 'info' | 'warn' | 'error' | 'success' = 'info') => {
-  toast.add({ severity: severity, summary: 'Info', detail: message, life: 3000 })
+  toast.add({ severity: severity, summary: summaryMap[severity], detail: message, life: 3000 })
 }
 
 onMounted(() => {
