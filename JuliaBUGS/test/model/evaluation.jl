@@ -41,17 +41,26 @@ end
     data = (; y=1.0)
     model = compile(model_def, data, (; x=1.0))
 
+    # Default: sample_observed=false keeps observed data fixed
     eval_env, log_densities = Base.invokelatest(
-        JuliaBUGS.evaluate_with_rng!!, Random.default_rng(), model; sample_all=false
+        JuliaBUGS.evaluate_with_rng!!, Random.default_rng(), model
     )
-    @test eval_env.y == 1.0
-    @test eval_env.x != 1.0
+    @test eval_env.y == 1.0  # observed stays fixed
+    @test eval_env.x != 1.0  # latent resamples
 
+    # Explicit sample_observed=false keeps observed data fixed
     eval_env, log_densities = Base.invokelatest(
-        JuliaBUGS.evaluate_with_rng!!, Random.default_rng(), model; sample_all=true
+        JuliaBUGS.evaluate_with_rng!!, Random.default_rng(), model; sample_observed=false
     )
-    @test eval_env.y != 1.0
-    @test eval_env.x != 1.0
+    @test eval_env.y == 1.0  # observed stays fixed
+    @test eval_env.x != 1.0  # latent resamples
+
+    # sample_observed=true samples observed nodes (for posterior predictive)
+    eval_env, log_densities = Base.invokelatest(
+        JuliaBUGS.evaluate_with_rng!!, Random.default_rng(), model; sample_observed=true
+    )
+    @test eval_env.y != 1.0  # observed resamples
+    @test eval_env.x != 1.0  # latent resamples
 
     verify_log_densities_structure(log_densities)
 end
@@ -72,6 +81,32 @@ end
     @test eval_env.p_prod == eval_env.p[1] * eval_env.p[2]
     @test isa(eval_env.p_prod, Float64)
     @test 0 <= eval_env.p_prod <= 1
+end
+
+@testset "evaluate_with_rng!! - roundtrip with missing data" begin
+    model_def = @bugs begin
+        for i in 1:n
+            y[i] ~ dpois(mu)
+            z[i] ~ dbern(ilogit(y[i] * beta))
+        end
+        mu ~ dgamma(1, 1)
+        beta ~ dnorm(0, 0.1)
+    end
+
+    data = (n=4, y=[1, missing, 2, missing], z=[1, 0, 1, 0])
+
+    model = compile(model_def, data)
+    rng = MersenneTwister(42)
+
+    for _ in 1:20
+        eval_env, logdens1 = JuliaBUGS.evaluate_with_rng!!(rng, model)
+        params = JuliaBUGS.Model.getparams(model, eval_env)
+        _, logdens2 = JuliaBUGS.evaluate_with_values!!(
+            model, params; transformed=model.transformed
+        )
+        @test logdens1.logprior ≈ logdens2.logprior atol = 1e-10
+        @test logdens1.loglikelihood ≈ logdens2.loglikelihood atol = 1e-10
+    end
 end
 
 @testset "logprior and loglikelihood" begin
@@ -540,12 +575,12 @@ end
 
         rng = MersenneTwister(42)
         eval_env, log_densities = Base.invokelatest(
-            JuliaBUGS.evaluate_with_rng!!, rng, model; sample_all=false
+            JuliaBUGS.evaluate_with_rng!!, rng, model
         )
 
         @test length(eval_env.alpha) == 3
         @test isa(eval_env.sigma, Real)
-        @test eval_env.y == [1.0, 2.0, 3.0]
+        @test eval_env.y == [1.0, 2.0, 3.0]  # observed data stays fixed (default)
 
         @test log_densities.logprior < 0
         @test log_densities.loglikelihood < 0

@@ -698,14 +698,14 @@ end
 #######################
 
 """
-    AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel; sample_all=true)
+    AbstractPPL.evaluate!!(rng::Random.AbstractRNG, model::BUGSModel; sample_observed=false)
 
 Evaluate model using ancestral sampling from the given RNG.
 
 # Arguments
 - `rng`: Random number generator for sampling
 - `model`: The BUGSModel to evaluate
-- `sample_all`: If true, sample all variables; if false, only sample unobserved variables
+- `sample_observed`: If true, sample observed nodes; if false (default), keep observed data fixed. Latent variables are always sampled.
 - `temperature`: Temperature for tempering the likelihood (default 1.0)
 - `transformed`: Whether to compute log density in transformed space (default model.transformed)
 
@@ -716,12 +716,16 @@ Evaluate model using ancestral sampling from the given RNG.
 function evaluate!!(
     rng::Random.AbstractRNG,
     model::BUGSModel;
-    sample_all=true,
+    sample_observed=false,
     temperature=1.0,
     transformed=model.transformed,
 )
     evaluation_env, log_densities = evaluate_with_rng!!(
-        rng, model; sample_all=sample_all, temperature=temperature, transformed=transformed
+        rng,
+        model;
+        sample_observed=sample_observed,
+        temperature=temperature,
+        transformed=transformed,
     )
     return evaluation_env, log_densities.tempered_logjoint
 end
