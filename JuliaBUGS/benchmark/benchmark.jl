@@ -90,8 +90,6 @@ function _print_results_table(
     results::OrderedDict{Symbol,BenchmarkResult}; backend::Symbol=:text
 )
     df = _create_results_dataframe(results)
-    rename!(
-        df, ["Model", "Parameters", "Density Time (µs)", "Density+Gradient Time (µs)"]
-    )
+    rename!(df, ["Model", "Parameters", "Density Time (µs)", "Density+Gradient Time (µs)"])
     return pretty_table(df; backend=backend)
 end
