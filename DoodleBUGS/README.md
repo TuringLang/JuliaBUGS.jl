@@ -4,17 +4,12 @@ A web-based graphical editor for creating Bayesian models, inspired by DoodleBUG
 
 Try DoodleBUGS at [`https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/`](https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/).
 
-# Project Status: Pre-Alpha
+# Project Status
 
-This project is currently in the pre-alpha phase of development as part of the Google Summer of Code 2025 program.
+This project is in active development. You can track the development progress and view active work in the [Issues with `DoodleBUGS` label](https://github.com/TuringLang/JuliaBUGS.jl/issues?q=is%3Aissue%20state%3Aopen%20label%3ADoodleBUGS).
 
 > [!NOTE]
-> Please avoid using this project in WebKit browsers like Safari, as it may not function correctly. We recommend using Chromium-based browsers such as Google Chrome or Microsoft Edge for the best experience. It works fine in Firefox as well. Note that it does not work in any browser on iPadOS and iOS, as all browsers on these platforms are WebKit-based.
-
-- Contributor: [Shravan Goswami @shravanngoswamii](https://github.com/shravanngoswamii)
-- Mentor: [Xianda Sun @sunxd3](https://github.com/sunxd3)
-
-As an early-stage project, it may contain bugs or incomplete features. We appreciate your understanding and feedback as we work to improve it.
+> This project supports touch screen devices (iPad/Tablets), however, we recommend using a Desktop environment for the best model building experience.
 
 We welcome contributions! Feel free to explore the code, report [issues](https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md), or suggest new features. Your involvement is highly encouraged and valued.
 
@@ -42,36 +37,47 @@ npm run build
 npm run preview
 ```
 
+### Linting and Formatting
+
+````sh
+# Run ESLint check
+npm run lint
+``
+
+```sh
+# Run ESLint with auto-fix
+npm run lint:fix
+````
+
+```sh
+# Format all files with Prettier
+npm run format
+```
+
+```sh
+# Check formatting (without modifying)
+npm run format:check
+```
+
+```sh
+# Run type checking
+npm run type-check
+```
+
 For more information, questions, or to get involved, please contact [@shravanngoswamii](https://github.com/shravanngoswamii) (Ping me on [Julia Slack](https://julialang.slack.com/archives/CCYDC34A0)).
 
 > [!TIP]
-> You can generate a standalone Julia script directly from the app: open the navbar → `Connection` → `Generate Standalone Julia Script`.
-> The script opens in the right sidebar's Execution panel under the Files tab, where you can copy or download it.
+> You can generate a standalone Julia script for local run directly from the web app using the "Scripts" option in the right sidebar where you can configure parameters, copy, or download it.
 
-## Backend (Julia) Quick Start
+## Acknowledgements & GSoC 2025
 
-The DoodleBUGS app can connect to a local Julia backend for running models.
+This project was initiated as part of the Google Summer of Code 2025 program.
 
-1. Clone this repository and open a terminal at the repo root.
-2. Instantiate backend dependencies (first time only):
+- GSoC Project: [https://summerofcode.withgoogle.com/archive/2025/projects/4ecMbDwU](https://summerofcode.withgoogle.com/archive/2025/projects/4ecMbDwU)
+- GSoC Report: [https://turinglang.org/GSoC-2025-Report-DoodleBUGS](https://turinglang.org/GSoC-2025-Report-DoodleBUGS)
 
-```bash
-julia --project=DoodleBUGS/runtime -e "using Pkg; Pkg.instantiate()"
-```
+**Contributor**: Shravan Goswami (Github: [@shravanngoswamii](https://github.com/shravanngoswamii))
 
-3. Start the backend server (defaults to http://localhost:8081):
+**Mentors**: Xianda Sun (Github: [@sunxd3](https://github.com/sunxd3)) & Hong Ge (Github: [@yebai](https://github.com/yebai))
 
-```bash
-julia --project=DoodleBUGS/runtime DoodleBUGS/runtime/server.jl
-```
-
-4. In the DoodleBUGS app, open the navbar → `Connection` → set URL to `http://localhost:8081` → `Connect`.
-
-Notes:
-- Keep the backend terminal open while using the app.
-- If the port is in use or blocked by a firewall, change the port in `DoodleBUGS/runtime/server.jl` and reconnect (the port is currently set to 8081 at the end of the file).
-
-#### Troubleshooting
-
-- To verify connectivity, open your browser at `http://localhost:8081/api/health` (replace 8081 if you changed the port). A healthy server returns `{ "status": "ok" }`.
-- If the health check fails, ensure the server is running, the URL/port are correct, and no firewall or VPN is blocking the port. Check the backend terminal output for errors.
+Special thanks to the [TuringLang](https://github.com/TuringLang) and [JuliaBUGS](https://github.com/TuringLang/JuliaBUGS.jl) community and contributors.

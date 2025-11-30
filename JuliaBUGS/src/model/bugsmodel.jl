@@ -323,6 +323,7 @@ function BUGSModel(
     data::NamedTuple,
     initial_params::NamedTuple=NamedTuple(),
     is_transformed::Bool=true,
+    skip_source_generation::Bool=false,
 )
     graph_evaluation_data = GraphEvaluationData(g)
     untransformed_param_length, transformed_param_length = 0, 0
@@ -393,71 +394,74 @@ function BUGSModel(
         Int[],
     )
 
-    lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
-        model_def, g, evaluation_env
-    )
-    # if can't generate source, `_generate_lowered_model_def` will return a tuple of `nothing`
-    has_generated_log_density_function = !isnothing(lowered_model_def)
-
-    if has_generated_log_density_function
-        log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
-            lowered_model_def, evaluation_env, gensym(:__compute_log_density__)
+    # Conditionally generate optimized log-density function
+    # When skip_source_generation=true, we skip this to ensure type stability for serialization
+    log_density_computation_function = nothing
+    if !skip_source_generation
+        lowered_model_def, reconstructed_model_def = JuliaBUGS._generate_lowered_model_def(
+            model_def, g, evaluation_env
         )
-        log_density_computation_function = eval(log_density_computation_expr)
-        pass = JuliaBUGS.CollectSortedNodes(evaluation_env)
-        JuliaBUGS.analyze_block(pass, reconstructed_model_def)
+        # if can't generate source, `_generate_lowered_model_def` will return a tuple of `nothing`
+        has_generated_log_density_function = !isnothing(lowered_model_def)
 
-        # Because CollectSortedNodes only looks at the LHS,
-        # pass.sorted_nodes can contain variables that are not in the graph.
-        # This is most likely caused by arrays that are only partially transformed data.
-        sorted_nodes = filter(pass.sorted_nodes) do node
-            node in graph_evaluation_data.sorted_nodes
+        if has_generated_log_density_function
+            log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
+                lowered_model_def, evaluation_env, gensym(:__compute_log_density__)
+            )
+            log_density_computation_function = eval(log_density_computation_expr)
+            pass = JuliaBUGS.CollectSortedNodes(evaluation_env)
+            JuliaBUGS.analyze_block(pass, reconstructed_model_def)
+
+            # Because CollectSortedNodes only looks at the LHS,
+            # pass.sorted_nodes can contain variables that are not in the graph.
+            # This is most likely caused by arrays that are only partially transformed data.
+            sorted_nodes = filter(pass.sorted_nodes) do node
+                node in graph_evaluation_data.sorted_nodes
+            end
+
+            # Recreate GraphEvaluationData with the filtered sorted_nodes, but
+            # preserve previously computed node classifications. The earlier
+            # classification stored in `node_types` and `is_discrete_finite_vals`
+            # corresponds to `graph_evaluation_data.sorted_nodes` before filtering.
+            # A naive `GraphEvaluationData(g, sorted_nodes)` call would reset all
+            # node types to defaults, losing this information.
+
+            # Build a mapping from VarName -> classification from the original order
+            old_nodes = graph_evaluation_data.sorted_nodes
+            type_map = Dict{VarName,Symbol}(
+                old_nodes[i] => node_types[i] for i in eachindex(old_nodes)
+            )
+            disc_map = Dict{VarName,Bool}(
+                old_nodes[i] => is_discrete_finite_vals[i] for i in eachindex(old_nodes)
+            )
+
+            # Create a fresh GraphEvaluationData for the new order to reuse other fields
+            new_gd = GraphEvaluationData(g, sorted_nodes)
+
+            # Remap classification arrays to the new order
+            new_node_types = Vector{Symbol}(undef, length(new_gd.sorted_nodes))
+            new_is_discrete_finite_vals = Vector{Bool}(undef, length(new_gd.sorted_nodes))
+            for (i, vn) in enumerate(new_gd.sorted_nodes)
+                new_node_types[i] = get(type_map, vn, :continuous)
+                new_is_discrete_finite_vals[i] = get(disc_map, vn, false)
+            end
+
+            # Reconstruct GraphEvaluationData while preserving classification
+            graph_evaluation_data = GraphEvaluationData{
+                typeof(new_gd.node_function_vals),typeof(new_gd.loop_vars_vals)
+            }(
+                new_gd.sorted_nodes,
+                new_gd.sorted_parameters,
+                new_gd.is_stochastic_vals,
+                new_gd.is_observed_vals,
+                new_gd.node_function_vals,
+                new_gd.loop_vars_vals,
+                new_node_types,
+                new_is_discrete_finite_vals,
+                Dict{Int,Vector{Int}}(),
+                Int[],
+            )
         end
-
-        # Recreate GraphEvaluationData with the filtered sorted_nodes, but
-        # preserve previously computed node classifications. The earlier
-        # classification stored in `node_types` and `is_discrete_finite_vals`
-        # corresponds to `graph_evaluation_data.sorted_nodes` before filtering.
-        # A naive `GraphEvaluationData(g, sorted_nodes)` call would reset all
-        # node types to defaults, losing this information.
-
-        # Build a mapping from VarName -> classification from the original order
-        old_nodes = graph_evaluation_data.sorted_nodes
-        type_map = Dict{VarName,Symbol}(
-            old_nodes[i] => node_types[i] for i in eachindex(old_nodes)
-        )
-        disc_map = Dict{VarName,Bool}(
-            old_nodes[i] => is_discrete_finite_vals[i] for i in eachindex(old_nodes)
-        )
-
-        # Create a fresh GraphEvaluationData for the new order to reuse other fields
-        new_gd = GraphEvaluationData(g, sorted_nodes)
-
-        # Remap classification arrays to the new order
-        new_node_types = Vector{Symbol}(undef, length(new_gd.sorted_nodes))
-        new_is_discrete_finite_vals = Vector{Bool}(undef, length(new_gd.sorted_nodes))
-        for (i, vn) in enumerate(new_gd.sorted_nodes)
-            new_node_types[i] = get(type_map, vn, :continuous)
-            new_is_discrete_finite_vals[i] = get(disc_map, vn, false)
-        end
-
-        # Reconstruct GraphEvaluationData while preserving classification
-        graph_evaluation_data = GraphEvaluationData{
-            typeof(new_gd.node_function_vals),typeof(new_gd.loop_vars_vals)
-        }(
-            new_gd.sorted_nodes,
-            new_gd.sorted_parameters,
-            new_gd.is_stochastic_vals,
-            new_gd.is_observed_vals,
-            new_gd.node_function_vals,
-            new_gd.loop_vars_vals,
-            new_node_types,
-            new_is_discrete_finite_vals,
-            Dict{Int,Vector{Int}}(),
-            Int[],
-        )
-    else
-        log_density_computation_function = nothing
     end
 
     # Compute mutable symbols from graph evaluation data

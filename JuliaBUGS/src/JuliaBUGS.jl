@@ -240,19 +240,25 @@ function validate_bugs_expression(expr, line_num)
 end
 
 """
-    compile(model_def, data[, initial_params]; skip_validation=false)
+    compile(model_def, data[, initial_params]; skip_validation=false, skip_source_generation=false)
 
 Compile the model with model definition and data. Optionally, initializations can be provided.
 If initializations are not provided, values will be sampled from the prior distributions.
 
 By default, validates that all functions in the model are in the BUGS allowlist (suitable for @bugs macro).
 Set `skip_validation=true` to skip validation (for @model macro usage).
+
+Set `skip_source_generation=true` to bypass generating optimized log-density functions. This produces
+models with stable type signatures (no anonymous function types in type parameters), which is essential
+for serialization. When enabled, the model will use graph traversal for evaluation (UseGraph mode),
+which may be slower but ensures type stability across sessions.
 """
 function compile(
     model_def::Expr,
     data::NamedTuple,
     initial_params::NamedTuple=NamedTuple();
     skip_validation::Bool=false,
+    skip_source_generation::Bool=false,
     eval_module::Module=@__MODULE__,
 )
     # Validate functions by default (for @bugs macro usage)
@@ -282,7 +288,15 @@ function compile(
             values(eval_env),
         ),
     )
-    return BUGSModel(g, nonmissing_eval_env, model_def, data, initial_params)
+    return BUGSModel(
+        g,
+        nonmissing_eval_env,
+        model_def,
+        data,
+        initial_params,
+        true,
+        skip_source_generation,
+    )
 end
 # function compile(
 #     model_str::String,
