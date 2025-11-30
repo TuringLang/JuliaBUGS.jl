@@ -101,21 +101,17 @@ const syncGraphWithProps = (
   cy.batch(() => {
     const newElementIds = new Set(elementsToSync.map((el) => el.id))
 
-    // 1. Remove deleted elements
+    // Remove deleted elements, preserving ghost nodes used for drag operations
     cy!.elements().forEach((cyEl) => {
-      // IMPORTANT: Do not auto-remove ghost nodes during sync,
-      // as they are managed by the drag-drop logic, not the props.
       if (!newElementIds.has(cyEl.id()) && !cyEl.id().startsWith('ghost_')) {
         cyEl.remove()
       }
     })
 
-    // 2. Separate Nodes and Edges
     const nodes = formattedElements.filter((el) => el.group === 'nodes')
     const edges = formattedElements.filter((el) => el.group === 'edges')
 
-    // 3. Sort nodes by depth (parents before children)
-    // This ensures parents exist before children are added/moved into them.
+    // Sort nodes by depth (parents before children) to ensure correct parentage assignment
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const nodeDefMap = new Map<string, any>(nodes.map((n) => [n.data.id as string, n]))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -133,7 +129,6 @@ const syncGraphWithProps = (
     }
     nodes.sort((a, b) => getDepth(a) - getDepth(b))
 
-    // 4. Process Nodes
     nodes.forEach((formattedEl) => {
       if (!formattedEl.data.id) return
 
@@ -142,7 +137,7 @@ const syncGraphWithProps = (
       if (existingCyEl.empty()) {
         cy!.add(formattedEl)
       } else {
-        // Optimization: Only update data if it has changed
+        // Optimization: Only update data if changed
         const currentData = existingCyEl.data()
         const newData = formattedEl.data
         if (JSON.stringify(currentData) !== JSON.stringify(newData)) {
@@ -168,7 +163,6 @@ const syncGraphWithProps = (
       }
     })
 
-    // 5. Process Edges
     edges.forEach((formattedEl) => {
       if (!formattedEl.data.id) return
 
@@ -200,11 +194,11 @@ const getSerializedElements = (): GraphElement[] => {
     cy
       .elements()
       .toArray()
-      // FILTER: Exclude temporary "ghost" nodes from serialization to prevent saving them
+      // Exclude temporary "ghost" nodes from serialization
       .filter((ele) => !ele.id().startsWith('ghost_'))
       .map((ele) => {
         const data = ele.data()
-        // Remove temporary UI state flags before serializing
+        // Remove temporary UI state flags
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { hasError, ...cleanData } = data
 
@@ -251,9 +245,7 @@ const handleToast = (message: string, severity: 'info' | 'warn' | 'error' | 'suc
 
 onMounted(() => {
   if (cyContainer.value) {
-    // Initialize Cytoscape with empty elements initially
-    // Elements will be synced once the container is properly resized
-    // Pass handleToast to allow showing notifications from logic layers
+    // Initialize Cytoscape (elements synced later on resize)
     cy = initCytoscape(cyContainer.value, [], props.graphId, handleToast)
     cyInstance.value = cy
 
@@ -274,7 +266,6 @@ onMounted(() => {
     }
 
     cy.on('layoutstop', () => {
-      // Only emit if elements are actually in the graph to avoid emitting empty initial state
       if (cy && cy.elements().length > 0) {
         emit('graph-updated', getSerializedElements())
       }
@@ -308,7 +299,6 @@ onMounted(() => {
     cy.on('free', 'node', (evt: EventObject) => {
       const node = evt.target as NodeSingular
 
-      // Ignore free events for ghost nodes
       if (node.id().startsWith('ghost_')) return
 
       const parentCollection = node.parent()
@@ -364,16 +354,13 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(() => {
       if (cy) {
         cy.resize()
-        // Only proceed if container has valid dimensions
         if (cy.width() > 0 && cy.height() > 0) {
           if (!isGraphReady.value) {
-            // First time setup after container is sized
             isGraphReady.value = true
 
-            // Populate the graph now that we have dimensions
+            // Populate graph and set initial viewport
             syncGraphWithProps(props.elements, props.validationErrors)
 
-            // Set initial viewport
             if (props.initialViewport) {
               cy.viewport({
                 zoom: props.initialViewport.zoom,
@@ -394,7 +381,6 @@ onMounted(() => {
               isGraphVisible.value = true
             })
           } else {
-            // Subsequent resizes
             updateGridStyle()
           }
         }
@@ -457,7 +443,6 @@ watch(
   [() => uiStore.nodeStyles, () => uiStore.edgeStyles],
   () => {
     if (cy) {
-      // Trigger style recalculation
       cy.style().update()
     }
   },
