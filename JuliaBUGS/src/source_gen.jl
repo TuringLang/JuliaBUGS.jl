@@ -336,7 +336,7 @@ function __check_for_reserved_names(model_def::Expr)
     bad_variable_names = filter(
         variable_name ->
             startswith(string(variable_name), "__") &&
-                endswith(string(variable_name), "__"),
+            endswith(string(variable_name), "__"),
         variable_names,
     )
     if !isempty(bad_variable_names)
