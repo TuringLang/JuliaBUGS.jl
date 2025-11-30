@@ -284,6 +284,12 @@ function _lower_model_def_to_represent_observe_stmts(
             )
             new_for = Expr(:for, statement.args[1], new_body)
             push!(lowered_model_def.args, new_for)
+        elseif Meta.isexpr(statement, :block)
+            # Recursively process nested blocks introduced by program reconstruction
+            new_block = _lower_model_def_to_represent_observe_stmts(
+                statement, stmt_to_stmt_id, var_types, evaluation_env, Expr(:block)
+            )
+            push!(lowered_model_def.args, new_block)
         else
             # For any other kind of expression, simply include it as is.
             push!(lowered_model_def.args, statement)

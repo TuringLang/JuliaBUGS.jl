@@ -153,15 +153,16 @@ end
         for i in 2:N
             sumX[i] = sumX[i - 1] + x[i]
         end
-        for k in 1:div(N, 2)  # even indices
+        for k in 1:K  # even indices (K = N÷2 = 5)
             x[2 * k] ~ Normal(sumX[2 * k - 1], tau)
         end
-        for k in 1:(div(N, 2) - 1)  # odd indices
+        for k in 1:Km1  # odd indices (Km1 = N÷2 - 1 = 4)
             x[2 * k + 1] ~ Gamma(sumX[2 * k], tau)
         end
     end
     ok6, _ = _gen_ok(
-        model_def6, (N=10, tau=1.2, x=Union{Float64,Missing}[1.0; fill(missing, 9)])
+        model_def6,
+        (N=10, K=5, Km1=4, tau=1.2, x=Union{Float64,Missing}[1.0; fill(missing, 9)]),
     )
     @test !ok6
 
