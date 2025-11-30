@@ -103,7 +103,7 @@ const syncGraphWithProps = (
 
     // 1. Remove deleted elements
     cy!.elements().forEach((cyEl) => {
-      // IMPORTANT: Do not auto-remove ghost nodes during sync, 
+      // IMPORTANT: Do not auto-remove ghost nodes during sync,
       // as they are managed by the drag-drop logic, not the props.
       if (!newElementIds.has(cyEl.id()) && !cyEl.id().startsWith('ghost_')) {
         cyEl.remove()
@@ -196,35 +196,37 @@ const syncGraphWithProps = (
 
 const getSerializedElements = (): GraphElement[] => {
   if (!cy) return []
-  return cy
-    .elements()
-    .toArray()
-    // FILTER: Exclude temporary "ghost" nodes from serialization to prevent saving them
-    .filter((ele) => !ele.id().startsWith('ghost_'))
-    .map((ele) => {
-      const data = ele.data()
-      // Remove temporary UI state flags before serializing
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { hasError, ...cleanData } = data
+  return (
+    cy
+      .elements()
+      .toArray()
+      // FILTER: Exclude temporary "ghost" nodes from serialization to prevent saving them
+      .filter((ele) => !ele.id().startsWith('ghost_'))
+      .map((ele) => {
+        const data = ele.data()
+        // Remove temporary UI state flags before serializing
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { hasError, ...cleanData } = data
 
-      if (ele.isNode()) {
-        const parentCollection = ele.parent()
-        const parentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined
-        return {
-          ...cleanData,
-          type: 'node',
-          position: ele.position(),
-          parent: parentId,
-        } as GraphNode
-      } else {
-        return {
-          ...cleanData,
-          type: 'edge',
-          source: ele.source().id(),
-          target: ele.target().id(),
-        } as GraphEdge
-      }
-    })
+        if (ele.isNode()) {
+          const parentCollection = ele.parent()
+          const parentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined
+          return {
+            ...cleanData,
+            type: 'node',
+            position: ele.position(),
+            parent: parentId,
+          } as GraphNode
+        } else {
+          return {
+            ...cleanData,
+            type: 'edge',
+            source: ele.source().id(),
+            target: ele.target().id(),
+          } as GraphEdge
+        }
+      })
+  )
 }
 
 const updateGridStyle = () => {
@@ -305,9 +307,9 @@ onMounted(() => {
 
     cy.on('free', 'node', (evt: EventObject) => {
       const node = evt.target as NodeSingular
-      
+
       // Ignore free events for ghost nodes
-      if (node.id().startsWith('ghost_')) return;
+      if (node.id().startsWith('ghost_')) return
 
       const parentCollection = node.parent()
       const parentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined
