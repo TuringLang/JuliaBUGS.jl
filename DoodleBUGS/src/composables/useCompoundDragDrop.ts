@@ -117,9 +117,47 @@ export function useCompoundDragDrop(
 
     const nodeBounds = node.boundingBox({ includeOverlays: false, includeLabels: true })
     // We use a small buffer to avoid triggering immediately on slight movements
-    const expandedBounds = expandBounds(nodeBounds, 5) 
+    const expandedBounds = expandBounds(nodeBounds, 5)
 
     return !boundsOverlap(dragState.originalParentBounds, expandedBounds)
+  }
+
+  /**
+   * Logic to transition a node into 'detached' mode (floating).
+   * Creates a ghost node to hold parent shape and moves node to root.
+   */
+  const enterDetachMode = (node: NodeSingular) => {
+    if (!dragState.originalParent || dragState.detachedOnGrab) return
+
+    // 1. Create Ghost Node to maintain parent size
+    const ghostId = `ghost_${node.id()}_${Date.now()}`
+    dragState.ghostNode = cy.add({
+      group: 'nodes',
+      data: {
+        id: ghostId,
+        parent: dragState.originalParent.id(),
+        nodeType: 'constant', // Dummy type
+      },
+      position: { ...(dragState.originalPosition || node.position()) },
+      style: {
+        'background-opacity': 0,
+        'border-opacity': 0,
+        width: node.width(),
+        height: node.height(),
+        label: '',
+        events: 'no',
+      },
+      grabbable: false,
+      selectable: false,
+    })
+
+    // 2. Detach Node
+    dragState.detachedOnGrab = true
+    if (ur) {
+      ur.do('move', { eles: node, location: { parent: null } })
+    } else {
+      node.move({ parent: null })
+    }
   }
 
   const startDrag = (event: EventObject) => {
@@ -152,41 +190,10 @@ export function useCompoundDragDrop(
     const isAltPressed = event.originalEvent?.altKey
 
     if (isAltPressed && hasParent && dragState.originalParent) {
-      // 1. Create Ghost Node to maintain parent size
-      // Compound nodes in Cytoscape resize automatically based on children content.
-      // To prevent instant shrinking when the child is removed, we place a ghost node
-      // at the exact same position and size as the removed node.
-      const ghostId = `ghost_${node.id()}_${Date.now()}`
-      dragState.ghostNode = cy.add({
-        group: 'nodes',
-        data: {
-          id: ghostId,
-          parent: dragState.originalParent.id(),
-          nodeType: 'constant', // Dummy type to satisfy typing if needed
-        },
-        position: { ...node.position() },
-        style: {
-          'background-opacity': 0,
-          'border-opacity': 0,
-          'width': node.width(),
-          'height': node.height(),
-          'label': '',
-          'events': 'no' // CSS pointer-events none equivalent in some renderers, but mainly visual
-        },
-        grabbable: false,
-        selectable: false
-      })
-
-      // 2. Detach Node
-      dragState.detachedOnGrab = true
-      if (ur) {
-        ur.do('move', { eles: node, location: { parent: null } })
-      } else {
-        node.move({ parent: null })
-      }
+      enterDetachMode(node)
     } else {
       dragState.detachedOnGrab = false
-      
+
       // Cache plate positions only if we aren't detaching immediately
       if (node.data('nodeType') !== 'plate') {
         cy.nodes('[nodeType="plate"]').forEach((plate) => {
@@ -199,17 +206,27 @@ export function useCompoundDragDrop(
     cy.trigger('compound-drag-start', [{ node }])
   }
 
-  const updateDrag = (node: NodeSingular, position: Position) => {
+  const updateDrag = (node: NodeSingular, position: Position, event: EventObject) => {
     if (!dragState.isDragging || dragState.draggedNode?.id() !== node.id()) return
+
+    // --- DYNAMIC DETACH MODE ---
+    // Check if Alt is pressed mid-drag to trigger detach logic late
+    const isAltPressed = event.originalEvent?.altKey
+    if (isAltPressed && !dragState.detachedOnGrab && dragState.originalParent) {
+      enterDetachMode(node)
+    }
 
     const newDropTarget = findDropTargetAtPosition(position, node)
 
-    if (dragState.potentialDropTarget && dragState.potentialDropTarget.id() !== newDropTarget?.id()) {
+    if (
+      dragState.potentialDropTarget &&
+      dragState.potentialDropTarget.id() !== newDropTarget?.id()
+    ) {
       dragState.potentialDropTarget.removeClass('cdnd-drop-target')
     }
 
     if (dragState.detachedOnGrab) {
-      // ALT PRESSED: Node is floating. Look for new targets.
+      // ALT PRESSED (or activated mid-drag): Node is floating. Look for new targets.
       if (newDropTarget) {
         dragState.potentialDropTarget = newDropTarget
         newDropTarget.addClass('cdnd-drop-target')
@@ -259,8 +276,8 @@ export function useCompoundDragDrop(
     let dropPerformed = false
 
     if (dragState.detachedOnGrab) {
-      // --- Case 1: Alt was pressed (Detached) ---
-      
+      // --- Case 1: Detached Mode (Alt was pressed at start OR mid-drag) ---
+
       if (newParent) {
         // User dropped into a new plate (or back into the old one)
         if (ur) {
@@ -269,13 +286,12 @@ export function useCompoundDragDrop(
           node.move({ parent: newParent.id() })
         }
         cy.trigger('compound-drop', [{ node, newParent, oldParent: dragState.originalParent }])
-      } 
-      // If no newParent, node stays detached (which is what we did in startDrag). 
-      // The plate will shrink now because the ghost node was removed above.
+      }
+      // If no newParent, node stays detached.
       dropPerformed = true
     } else {
-      // --- Case 2: Alt NOT pressed (Still attached) ---
-      
+      // --- Case 2: Standard Drag (Still attached) ---
+
       if (newParent && newParent.id() !== currentParentNode?.id()) {
         // Moving into a nested plate or neighbor
         if (ur) {
@@ -288,7 +304,6 @@ export function useCompoundDragDrop(
       } else {
         // User dropped it somewhere else (inside or outside).
         // Standard behavior: Cytoscape expands the plate.
-        // We DO NOT snap back.
       }
     }
 
@@ -311,14 +326,15 @@ export function useCompoundDragDrop(
 
   // Bind Listeners
   cy.on('grab', 'node', (event: EventObject) => startDrag(event))
-  
+
   cy.on('drag', 'node', (event: EventObject) => {
     const node = event.target as NodeSingular
     if (dragState.isDragging && dragState.draggedNode?.id() === node.id()) {
-      updateDrag(node, node.position())
+      // Pass the full event object to access modifier keys (altKey)
+      updateDrag(node, node.position(), event)
     }
   })
-  
+
   cy.on('free', 'node', (event: EventObject) => endDrag(event.target as NodeSingular))
 
   const destroy = () => {
