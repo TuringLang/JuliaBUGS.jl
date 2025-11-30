@@ -41,17 +41,26 @@ end
     data = (; y=1.0)
     model = compile(model_def, data, (; x=1.0))
 
-    eval_env, log_densities = JuliaBUGS.evaluate_with_rng!!(
-        Random.default_rng(), model; sample_all=false
+    # Default: sample_observed=false keeps observed data fixed
+    eval_env, log_densities = Base.invokelatest(
+        JuliaBUGS.evaluate_with_rng!!, Random.default_rng(), model
     )
-    @test eval_env.y == 1.0
-    @test eval_env.x != 1.0
+    @test eval_env.y == 1.0  # observed stays fixed
+    @test eval_env.x != 1.0  # latent resamples
 
-    eval_env, log_densities = JuliaBUGS.evaluate_with_rng!!(
-        Random.default_rng(), model; sample_all=true
+    # Explicit sample_observed=false keeps observed data fixed
+    eval_env, log_densities = Base.invokelatest(
+        JuliaBUGS.evaluate_with_rng!!, Random.default_rng(), model; sample_observed=false
     )
-    @test eval_env.y != 1.0
-    @test eval_env.x != 1.0
+    @test eval_env.y == 1.0  # observed stays fixed
+    @test eval_env.x != 1.0  # latent resamples
+
+    # sample_observed=true samples observed nodes (for posterior predictive)
+    eval_env, log_densities = Base.invokelatest(
+        JuliaBUGS.evaluate_with_rng!!, Random.default_rng(), model; sample_observed=true
+    )
+    @test eval_env.y != 1.0  # observed resamples
+    @test eval_env.x != 1.0  # latent resamples
 
     verify_log_densities_structure(log_densities)
 end
@@ -68,10 +77,36 @@ end
     rng = MersenneTwister(123)
 
     model = compile(unid_model_def, data)
-    eval_env, log_densities = JuliaBUGS.evaluate_with_rng!!(rng, model)
+    eval_env, log_densities = Base.invokelatest(JuliaBUGS.evaluate_with_rng!!, rng, model)
     @test eval_env.p_prod == eval_env.p[1] * eval_env.p[2]
     @test isa(eval_env.p_prod, Float64)
     @test 0 <= eval_env.p_prod <= 1
+end
+
+@testset "evaluate_with_rng!! - roundtrip with missing data" begin
+    model_def = @bugs begin
+        for i in 1:n
+            y[i] ~ dpois(mu)
+            z[i] ~ dbern(ilogit(y[i] * beta))
+        end
+        mu ~ dgamma(1, 1)
+        beta ~ dnorm(0, 0.1)
+    end
+
+    data = (n=4, y=[1, missing, 2, missing], z=[1, 0, 1, 0])
+
+    model = compile(model_def, data)
+    rng = MersenneTwister(42)
+
+    for _ in 1:20
+        eval_env, logdens1 = JuliaBUGS.evaluate_with_rng!!(rng, model)
+        params = JuliaBUGS.Model.getparams(model, eval_env)
+        _, logdens2 = JuliaBUGS.evaluate_with_values!!(
+            model, params; transformed=model.transformed
+        )
+        @test logdens1.logprior ≈ logdens2.logprior atol = 1e-10
+        @test logdens1.loglikelihood ≈ logdens2.loglikelihood atol = 1e-10
+    end
 end
 
 @testset "logprior and loglikelihood" begin
@@ -114,8 +149,12 @@ end
             )
         end
 
-        _, log_densities = JuliaBUGS.evaluate_with_values!!(
-            model, params; temperature=2.0, transformed=true
+        _, log_densities = Base.invokelatest(
+            JuliaBUGS.evaluate_with_values!!,
+            model,
+            params;
+            temperature=2.0,
+            transformed=true,
         )
 
         @test log_densities.logprior ≈ log_prior_true rtol = 1E-6
@@ -144,14 +183,20 @@ end
                 logpdf(dist, test_θ) +
                 logabsdetjac(Bijectors.inverse(b), test_θ_transformed)
 
-            @test _logjoint(untransformed_model) ≈ reference_logp_untransformed rtol = 1E-6
-            @test _logjoint(transformed_model) ≈ reference_logp_transformed rtol = 1E-6
+            @test Base.invokelatest(_logjoint, untransformed_model) ≈
+                reference_logp_untransformed rtol = 1E-6
+            @test Base.invokelatest(_logjoint, transformed_model) ≈
+                reference_logp_transformed rtol = 1E-6
 
-            @test LogDensityProblems.logdensity(
-                transformed_model, JuliaBUGS.getparams(transformed_model)
+            @test Base.invokelatest(
+                LogDensityProblems.logdensity,
+                transformed_model,
+                Base.invokelatest(JuliaBUGS.getparams, transformed_model),
             ) ≈ reference_logp_transformed rtol = 1E-6
-            @test LogDensityProblems.logdensity(
-                untransformed_model, JuliaBUGS.getparams(untransformed_model)
+            @test Base.invokelatest(
+                LogDensityProblems.logdensity,
+                untransformed_model,
+                Base.invokelatest(JuliaBUGS.getparams, untransformed_model),
             ) ≈ reference_logp_untransformed rtol = 1E-6
         end
 
@@ -172,14 +217,20 @@ end
                 logpdf(dist, test_θ) +
                 logabsdetjac(Bijectors.inverse(b), test_θ_transformed)
 
-            @test _logjoint(untransformed_model) ≈ reference_logp_untransformed rtol = 1E-6
-            @test _logjoint(transformed_model) ≈ reference_logp_transformed rtol = 1E-6
+            @test Base.invokelatest(_logjoint, untransformed_model) ≈
+                reference_logp_untransformed rtol = 1E-6
+            @test Base.invokelatest(_logjoint, transformed_model) ≈
+                reference_logp_transformed rtol = 1E-6
 
-            @test LogDensityProblems.logdensity(
-                transformed_model, JuliaBUGS.getparams(transformed_model)
+            @test Base.invokelatest(
+                LogDensityProblems.logdensity,
+                transformed_model,
+                Base.invokelatest(JuliaBUGS.getparams, transformed_model),
             ) ≈ reference_logp_transformed rtol = 1E-6
-            @test LogDensityProblems.logdensity(
-                untransformed_model, JuliaBUGS.getparams(untransformed_model)
+            @test Base.invokelatest(
+                LogDensityProblems.logdensity,
+                untransformed_model,
+                Base.invokelatest(JuliaBUGS.getparams, untransformed_model),
             ) ≈ reference_logp_untransformed rtol = 1E-6
         end
 
@@ -202,14 +253,20 @@ end
             transformed_model = compile(model_def, (alpha=alpha,), (x=test_θ,))
             untransformed_model = JuliaBUGS.settrans(transformed_model, false)
 
-            @test _logjoint(untransformed_model) ≈ reference_logp_untransformed rtol = 1E-6
-            @test _logjoint(transformed_model) ≈ reference_logp_transformed rtol = 1E-6
+            @test Base.invokelatest(_logjoint, untransformed_model) ≈
+                reference_logp_untransformed rtol = 1E-6
+            @test Base.invokelatest(_logjoint, transformed_model) ≈
+                reference_logp_transformed rtol = 1E-6
 
-            @test LogDensityProblems.logdensity(
-                transformed_model, JuliaBUGS.getparams(transformed_model)
+            @test Base.invokelatest(
+                LogDensityProblems.logdensity,
+                transformed_model,
+                Base.invokelatest(JuliaBUGS.getparams, transformed_model),
             ) ≈ reference_logp_transformed rtol = 1E-6
-            @test LogDensityProblems.logdensity(
-                untransformed_model, JuliaBUGS.getparams(untransformed_model)
+            @test Base.invokelatest(
+                LogDensityProblems.logdensity,
+                untransformed_model,
+                Base.invokelatest(JuliaBUGS.getparams, untransformed_model),
             ) ≈ reference_logp_untransformed rtol = 1E-6
         end
 
@@ -239,14 +296,20 @@ end
             )
             untransformed_model = JuliaBUGS.settrans(transformed_model, false)
 
-            @test _logjoint(untransformed_model) ≈ reference_logp_untransformed rtol = 1E-6
-            @test _logjoint(transformed_model) ≈ reference_logp_transformed rtol = 1E-6
+            @test Base.invokelatest(_logjoint, untransformed_model) ≈
+                reference_logp_untransformed rtol = 1E-6
+            @test Base.invokelatest(_logjoint, transformed_model) ≈
+                reference_logp_transformed rtol = 1E-6
 
-            @test LogDensityProblems.logdensity(
-                transformed_model, JuliaBUGS.getparams(transformed_model)
+            @test Base.invokelatest(
+                LogDensityProblems.logdensity,
+                transformed_model,
+                Base.invokelatest(JuliaBUGS.getparams, transformed_model),
             ) ≈ reference_logp_transformed rtol = 1E-6
-            @test LogDensityProblems.logdensity(
-                untransformed_model, JuliaBUGS.getparams(untransformed_model)
+            @test Base.invokelatest(
+                LogDensityProblems.logdensity,
+                untransformed_model,
+                Base.invokelatest(JuliaBUGS.getparams, untransformed_model),
             ) ≈ reference_logp_untransformed rtol = 1E-6
         end
 
@@ -270,14 +333,20 @@ end
             @test LogDensityProblems.dimension(untransformed_model) == 100
             @test LogDensityProblems.dimension(transformed_model) == 45
 
-            @test _logjoint(untransformed_model) ≈ reference_logp_untransformed rtol = 1E-6
-            @test _logjoint(transformed_model) ≈ reference_logp_transformed rtol = 1E-6
+            @test Base.invokelatest(_logjoint, untransformed_model) ≈
+                reference_logp_untransformed rtol = 1E-6
+            @test Base.invokelatest(_logjoint, transformed_model) ≈
+                reference_logp_transformed rtol = 1E-6
 
-            @test LogDensityProblems.logdensity(
-                transformed_model, JuliaBUGS.getparams(transformed_model)
+            @test Base.invokelatest(
+                LogDensityProblems.logdensity,
+                transformed_model,
+                Base.invokelatest(JuliaBUGS.getparams, transformed_model),
             ) ≈ reference_logp_transformed rtol = 1E-6
-            @test LogDensityProblems.logdensity(
-                untransformed_model, JuliaBUGS.getparams(untransformed_model)
+            @test Base.invokelatest(
+                LogDensityProblems.logdensity,
+                untransformed_model,
+                Base.invokelatest(JuliaBUGS.getparams, untransformed_model),
             ) ≈ reference_logp_untransformed rtol = 1E-6
         end
     end
@@ -320,7 +389,7 @@ end
         data = (; y=2.0)
         model = compile(model_def, data, (; x=1.5))
 
-        eval_env, log_densities = JuliaBUGS.evaluate_with_env!!(model)
+        eval_env, log_densities = Base.invokelatest(JuliaBUGS.evaluate_with_env!!, model)
 
         @test eval_env.x == 1.5
         @test eval_env.y == 2.0
@@ -345,7 +414,9 @@ end
         model = compile(model_def, data, (; x=1.0))
 
         custom_env = JuliaBUGS.BangBang.setindex!!(model.evaluation_env, 3.0, @varname(x))
-        eval_env, log_densities = JuliaBUGS.evaluate_with_env!!(model, custom_env)
+        eval_env, log_densities = Base.invokelatest(
+            JuliaBUGS.evaluate_with_env!!, model, custom_env
+        )
 
         @test eval_env.x == 3.0
         @test eval_env.y == 2.0
@@ -369,8 +440,8 @@ end
         model = compile(model_def, data)
 
         transformed_vals = [0.5, 0.0]
-        eval_env, log_densities = JuliaBUGS.evaluate_with_values!!(
-            model, transformed_vals; transformed=true
+        eval_env, log_densities = Base.invokelatest(
+            JuliaBUGS.evaluate_with_values!!, model, transformed_vals; transformed=true
         )
 
         b = Bijectors.bijector(InverseGamma(2, 3))
@@ -396,8 +467,8 @@ end
         model = compile(model_def, data)
 
         untransformed_vals = [1.5, 0.5]
-        eval_env, log_densities = JuliaBUGS.evaluate_with_values!!(
-            model, untransformed_vals; transformed=false
+        eval_env, log_densities = Base.invokelatest(
+            JuliaBUGS.evaluate_with_values!!, model, untransformed_vals; transformed=false
         )
 
         @test eval_env.sigma ≈ 1.5
@@ -421,7 +492,9 @@ end
     model = compile(model_def, data, (; x=1.0))
 
     for temp in [0.5, 1.0, 2.0]
-        _, log_densities = JuliaBUGS.evaluate_with_env!!(model; temperature=temp)
+        _, log_densities = Base.invokelatest(
+            JuliaBUGS.evaluate_with_env!!, model; temperature=temp
+        )
 
         expected_logprior = logpdf(Normal(0, 1), 1.0)
         expected_loglikelihood = logpdf(Normal(1.0, 1), 2.0)
@@ -445,7 +518,7 @@ end
         model = compile(model_def, data, (; tau=2.0))
 
         # Get parameters in both spaces
-        params_transformed = JuliaBUGS.getparams(model)
+        params_transformed = Base.invokelatest(JuliaBUGS.getparams, model)
 
         # Convert to untransformed space
         b = Bijectors.bijector(dgamma(0.001, 0.001))
@@ -454,13 +527,13 @@ end
 
         # Test that evaluate_with_values!! correctly handles transformed flag
         # When transformed=true, it expects transformed parameters
-        env1, ld1 = JuliaBUGS.evaluate_with_values!!(
-            model, params_transformed; transformed=true
+        env1, ld1 = Base.invokelatest(
+            JuliaBUGS.evaluate_with_values!!, model, params_transformed; transformed=true
         )
 
         # When transformed=false, it expects untransformed parameters
-        env2, ld2 = JuliaBUGS.evaluate_with_values!!(
-            model, params_untransformed; transformed=false
+        env2, ld2 = Base.invokelatest(
+            JuliaBUGS.evaluate_with_values!!, model, params_untransformed; transformed=false
         )
 
         # The evaluation environments should have the same tau value
@@ -469,12 +542,14 @@ end
         # Test that log density computation respects model.transformed setting
         # For a transformed model, evaluate!! should use transformed space
         @test model.transformed == true
-        _, logp_trans = AbstractPPL.evaluate!!(model, params_transformed)
+        _, logp_trans = Base.invokelatest(AbstractPPL.evaluate!!, model, params_transformed)
 
         # For an untransformed model, evaluate!! should use untransformed space
         model_untrans = JuliaBUGS.settrans(model, false)
         @test model_untrans.transformed == false
-        _, logp_untrans = AbstractPPL.evaluate!!(model_untrans, params_untransformed)
+        _, logp_untrans = Base.invokelatest(
+            AbstractPPL.evaluate!!, model_untrans, params_untransformed
+        )
 
         # The log densities will be different due to Jacobian adjustment
         # But both should be valid log densities (finite)
@@ -499,13 +574,13 @@ end
         model = compile(model_def, data)
 
         rng = MersenneTwister(42)
-        eval_env, log_densities = JuliaBUGS.evaluate_with_rng!!(
-            rng, model; sample_all=false
+        eval_env, log_densities = Base.invokelatest(
+            JuliaBUGS.evaluate_with_rng!!, rng, model
         )
 
         @test length(eval_env.alpha) == 3
         @test isa(eval_env.sigma, Real)
-        @test eval_env.y == [1.0, 2.0, 3.0]
+        @test eval_env.y == [1.0, 2.0, 3.0]  # observed data stays fixed (default)
 
         @test log_densities.logprior < 0
         @test log_densities.loglikelihood < 0
@@ -524,7 +599,9 @@ end
         model = compile(model_def, (;))
 
         rng = MersenneTwister(123)
-        eval_env, log_densities = JuliaBUGS.evaluate_with_rng!!(rng, model)
+        eval_env, log_densities = Base.invokelatest(
+            JuliaBUGS.evaluate_with_rng!!, rng, model
+        )
 
         @test log_densities.loglikelihood == 0.0
         @test log_densities.logprior < 0
@@ -543,7 +620,7 @@ end
         data = (; y=3.0)
         model = compile(model_def, data, (; a=1.0, b=0.5))
 
-        eval_env, log_densities = JuliaBUGS.evaluate_with_env!!(model)
+        eval_env, log_densities = Base.invokelatest(JuliaBUGS.evaluate_with_env!!, model)
 
         @test eval_env.c ≈ 1.5
         @test eval_env.d ≈ 3.0
@@ -566,7 +643,7 @@ end
 
     @testset "evaluate!! with RNG" begin
         rng = MersenneTwister(42)
-        eval_env, logp = AbstractPPL.evaluate!!(rng, model)
+        eval_env, logp = Base.invokelatest(AbstractPPL.evaluate!!, rng, model)
 
         @test isa(eval_env, NamedTuple)
         @test isa(logp, Real)
@@ -575,7 +652,7 @@ end
     end
 
     @testset "evaluate!! without arguments" begin
-        eval_env, logp = AbstractPPL.evaluate!!(model)
+        eval_env, logp = Base.invokelatest(AbstractPPL.evaluate!!, model)
 
         @test eval_env.x == 1.0
         @test eval_env.y == 2.0
@@ -584,7 +661,7 @@ end
 
     @testset "evaluate!! with values" begin
         vals = [0.5]
-        eval_env, logp = AbstractPPL.evaluate!!(model, vals)
+        eval_env, logp = Base.invokelatest(AbstractPPL.evaluate!!, model, vals)
 
         @test eval_env.x ≈ 0.5
         @test eval_env.y == 2.0

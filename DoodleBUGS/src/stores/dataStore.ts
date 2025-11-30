@@ -1,74 +1,105 @@
-import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
-import { useGraphStore } from './graphStore';
-import type { ModelData } from '../types';
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import { useGraphStore } from './graphStore'
+import type { ModelData } from '../types'
 
-const defaultData = 
-`{
-  "data": {},
-  "inits": {}
-}`;
+const defaultContent = JSON.stringify(
+  {
+    data: {},
+    inits: {},
+  },
+  null,
+  2
+)
+
+interface DataState {
+  content: string
+}
 
 export const useDataStore = defineStore('data', () => {
-  const graphStore = useGraphStore();
-  const dataContents = ref<Map<string, string>>(new Map());
+  const graphStore = useGraphStore()
+  const dataContents = ref<Map<string, DataState>>(new Map())
 
-  const currentGraphDataString = computed({
-    get: () => {
-      const graphId = graphStore.currentGraphId;
-      if (graphId && dataContents.value.has(graphId)) {
-        return dataContents.value.get(graphId)!;
-      }
-      if (graphId) {
-        const storedData = localStorage.getItem(`doodlebugs-data-${graphId}`);
-        if (storedData) {
-          dataContents.value.set(graphId, storedData);
-          return storedData;
+  const getGraphData = (graphId: string): DataState => {
+    if (!dataContents.value.has(graphId)) {
+      const storedData = localStorage.getItem(`doodlebugs-data-${graphId}`)
+      if (storedData) {
+        try {
+          const loadedState = JSON.parse(storedData)
+          if (loadedState.jsonData !== undefined) {
+            const merged = {
+              data: JSON.parse(loadedState.jsonData || '{}'),
+              inits: JSON.parse(loadedState.jsonInits || '{}'),
+            }
+            dataContents.value.set(graphId, { content: JSON.stringify(merged, null, 2) })
+          } else {
+            dataContents.value.set(graphId, loadedState)
+          }
+        } catch (e) {
+          console.error('Failed to parse stored data', e)
+          dataContents.value.set(graphId, { content: defaultContent })
         }
-        dataContents.value.set(graphId, defaultData);
-        return defaultData;
-      }
-      return defaultData;
-    },
-    set: (newData: string) => {
-      const graphId = graphStore.currentGraphId;
-      if (graphId) {
-        updateGraphData(graphId, newData);
+      } else {
+        dataContents.value.set(graphId, { content: defaultContent })
       }
     }
-  });
+    return dataContents.value.get(graphId)!
+  }
+
+  const currentGraphState = computed(() => {
+    const graphId = graphStore.currentGraphId
+    return graphId ? getGraphData(graphId) : null
+  })
+
+  const dataContent = computed({
+    get: () => {
+      if (!currentGraphState.value) return defaultContent
+      return currentGraphState.value.content
+    },
+    set: (newContent) => {
+      if (currentGraphState.value) {
+        currentGraphState.value.content = newContent
+        updateGraphData(graphStore.currentGraphId!, currentGraphState.value)
+      }
+    },
+  })
 
   const parsedGraphData = computed<ModelData>(() => {
     try {
-      const parsed = JSON.parse(currentGraphDataString.value);
+      const parsed = JSON.parse(currentGraphState.value?.content || defaultContent)
       return {
         data: parsed.data || {},
-        inits: parsed.inits || {}
-      };
+        inits: parsed.inits || {},
+      }
     } catch {
-      return { data: {}, inits: {} };
+      return { data: {}, inits: {} }
     }
-  });
+  })
 
+  const updateGraphData = (graphId: string, newState: DataState) => {
+    dataContents.value.set(graphId, newState)
+    localStorage.setItem(`doodlebugs-data-${graphId}`, JSON.stringify(newState))
+  }
 
-  const updateGraphData = (graphId: string, newData: string) => {
-    dataContents.value.set(graphId, newData);
-    localStorage.setItem(`doodlebugs-data-${graphId}`, newData);
-  };
-  
   const createNewGraphData = (graphId: string) => {
-    updateGraphData(graphId, defaultData);
-  };
+    const newState: DataState = {
+      content: defaultContent,
+    }
+    dataContents.value.set(graphId, newState)
+    updateGraphData(graphId, newState)
+  }
 
   const deleteGraphData = (graphId: string) => {
-    dataContents.value.delete(graphId);
-    localStorage.removeItem(`doodlebugs-data-${graphId}`);
-  };
+    dataContents.value.delete(graphId)
+    localStorage.removeItem(`doodlebugs-data-${graphId}`)
+  }
 
   return {
-    currentGraphDataString,
+    dataContent,
     parsedGraphData,
     createNewGraphData,
     deleteGraphData,
-  };
-});
+    getGraphData,
+    updateGraphData,
+  }
+})

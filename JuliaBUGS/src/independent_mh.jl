@@ -59,8 +59,8 @@ function AbstractMCMC.step(
 
     # Initialize with provided params or sample from prior
     if isnothing(initial_params)
-        # Sample from prior for unobserved variables only
-        evaluation_env, logp = evaluate!!(rng, model; sample_all=false)
+        # Sample from prior for unobserved variables only (default: sample_observed=false)
+        evaluation_env, logp = evaluate!!(rng, model)
     else
         # Use provided initial parameters
         model = initialize!(model, initial_params)
@@ -90,8 +90,8 @@ function AbstractMCMC.step(
     # Current log density
     logp_current = state.logp
 
-    # Propose new values by sampling from prior (only unobserved variables)
-    proposed_env, logp_proposed = evaluate!!(rng, model; sample_all=false)
+    # Propose new values by sampling from prior (only unobserved variables; default: sample_observed=false)
+    proposed_env, logp_proposed = evaluate!!(rng, model)
 
     # Metropolis-Hastings acceptance ratio
     # log(α) = log(p(proposed|data)) - log(p(current|data))
@@ -125,8 +125,8 @@ function gibbs_internal(
     )
     _, logp_current = evaluate!!(model_with_current)
 
-    # Propose new values (only sampling unobserved variables)
-    proposed_env, logp_proposed = evaluate!!(rng, cond_model; sample_all=false)
+    # Propose new values (only sampling unobserved variables; default: sample_observed=false)
+    proposed_env, logp_proposed = evaluate!!(rng, cond_model)
 
     # Metropolis-Hastings acceptance
     if logp_proposed - logp_current > log(rand(rng))

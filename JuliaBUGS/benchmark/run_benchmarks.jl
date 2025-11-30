@@ -45,7 +45,7 @@ for (model_name, model) in zip(examples_to_benchmark, juliabugs_models)
 end
 
 println("### Stan results:")
-_print_results_table(stan_results; backend=Val(:markdown))
+_print_results_table(stan_results; backend=:markdown)
 
 println("### JuliaBUGS Mooncake results:")
-_print_results_table(juliabugs_results; backend=Val(:markdown))
+_print_results_table(juliabugs_results; backend=:markdown)

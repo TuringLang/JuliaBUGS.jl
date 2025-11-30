@@ -5,6 +5,8 @@ using JuliaBUGS.Model:
     decondition,
     parameters,
     set_evaluation_mode,
+    set_observed_values!,
+    regenerate_log_density_function,
     UseGeneratedLogDensityFunction,
     UseGraph
 using LogDensityProblems
@@ -35,11 +37,13 @@ JuliaBUGS.@bugs_primitive Normal Gamma
                 model_cond, UseGeneratedLogDensityFunction()
             )
             params = [0.5]  # Only y is a parameter now
-            logp1 = LogDensityProblems.logdensity(model_cond_gen, params)
+            logp1 = Base.invokelatest(LogDensityProblems.logdensity, model_cond_gen, params)
 
             # Compare with graph evaluation
             model_cond_graph = set_evaluation_mode(model_cond, UseGraph())
-            logp2 = LogDensityProblems.logdensity(model_cond_graph, params)
+            logp2 = Base.invokelatest(
+                LogDensityProblems.logdensity, model_cond_graph, params
+            )
 
             @test logp1 ≈ logp2
         end
@@ -71,11 +75,13 @@ JuliaBUGS.@bugs_primitive Normal Gamma
             )
             # Parameters should be in order: [x[2], y[1], y[2], y[3]]
             params = [0.0, 1.0, 2.0, 3.0]
-            logp1 = LogDensityProblems.logdensity(model_cond_gen, params)
+            logp1 = Base.invokelatest(LogDensityProblems.logdensity, model_cond_gen, params)
 
             # Compare with graph evaluation
             model_cond_graph = set_evaluation_mode(model_cond, UseGraph())
-            logp2 = LogDensityProblems.logdensity(model_cond_graph, params)
+            logp2 = Base.invokelatest(
+                LogDensityProblems.logdensity, model_cond_graph, params
+            )
 
             @test logp1 ≈ logp2
 
@@ -116,7 +122,7 @@ JuliaBUGS.@bugs_primitive Normal Gamma
                 model_cond2, UseGeneratedLogDensityFunction()
             )
             params = [1.5]  # Only c is a parameter
-            logp = LogDensityProblems.logdensity(model_cond2_gen, params)
+            logp = Base.invokelatest(LogDensityProblems.logdensity, model_cond2_gen, params)
             @test isfinite(logp)
         end
 
@@ -146,8 +152,123 @@ JuliaBUGS.@bugs_primitive Normal Gamma
             model_cond_gen = set_evaluation_mode(
                 model_cond, UseGeneratedLogDensityFunction()
             )
-            logp = LogDensityProblems.logdensity(model_cond_gen, Float64[])
+            logp = Base.invokelatest(
+                LogDensityProblems.logdensity, model_cond_gen, Float64[]
+            )
             @test isfinite(logp)
+        end
+
+        @testset "Fast conditioning path and observed value updates" begin
+            @testset "Fast conditioning skips regeneration and forces graph mode" begin
+                model_def = @bugs begin
+                    x ~ Normal(0, 1)
+                    y ~ Normal(x, 1)
+                end
+
+                model = compile(model_def, (;))
+
+                # Regular conditioning (default regenerates)
+                model_reg = condition(model, Dict(@varname(x) => 1.0))
+                @test !isnothing(model_reg.log_density_computation_function)
+
+                # Fast conditioning (no regeneration)
+                model_fast = condition(
+                    model, Dict(@varname(x) => 1.0); regenerate_log_density=false
+                )
+                @test model_fast.log_density_computation_function === nothing
+                @test model_fast.evaluation_mode isa UseGraph
+
+                # Same parameters
+                @test parameters(model_reg) == parameters(model_fast)
+
+                # Compare log density via graph evaluation
+                params = zeros(length(parameters(model_fast)))
+                logp_fast = Base.invokelatest(
+                    LogDensityProblems.logdensity,
+                    set_evaluation_mode(model_fast, UseGraph()),
+                    params,
+                )
+                logp_reg = Base.invokelatest(
+                    LogDensityProblems.logdensity,
+                    set_evaluation_mode(model_reg, UseGraph()),
+                    params,
+                )
+                @test logp_fast ≈ logp_reg
+            end
+
+            @testset "set_observed_values! updates values and validates" begin
+                # Model with a deterministic node to hit validation
+                model_def = @bugs begin
+                    x ~ Normal(0, 1)
+                    y = x^2              # deterministic
+                    z ~ Normal(y, 1)
+                end
+
+                model = compile(model_def, (; z=2.0))
+
+                # Fast condition on x
+                m = condition(model, Dict(@varname(x) => 1.0); regenerate_log_density=false)
+                @test m.evaluation_mode isa UseGraph
+
+                # Update observed x value without reconditioning
+                m2 = set_observed_values!(m, Dict(@varname(x) => 2.0))
+                @test m2.evaluation_env.x == 2.0
+
+                # Structure unchanged (x observed; only z observed from data; no parameters)
+                # Here parameters is empty because y is deterministic and z is observed
+                @test parameters(m2) == parameters(m)
+
+                # Errors on invalid updates
+                @test_throws ArgumentError set_observed_values!(
+                    m2, Dict(@varname(y) => 3.0)
+                )  # deterministic
+
+                # Updating originally observed data should be allowed
+                m3 = set_observed_values!(m2, Dict(@varname(z) => 1.0))
+                @test m3.evaluation_env.z == 1.0
+                # To test non-observed error, try updating a parameter in a different model.
+            end
+
+            @testset "set_observed_values! errors on non-observed variables" begin
+                model_def = @bugs begin
+                    x ~ Normal(0, 1)
+                    y ~ Normal(x, 1)
+                end
+                model = compile(model_def, (;))
+                m = condition(model, Dict(@varname(x) => 1.0); regenerate_log_density=false)
+                # y is not observed
+                @test_throws ArgumentError set_observed_values!(m, Dict(@varname(y) => 0.0))
+            end
+
+            @testset "Regeneration after fast conditioning (no mode change)" begin
+                model_def = @bugs begin
+                    x ~ Normal(0, 1)
+                    y ~ Normal(x, 1)
+                end
+
+                model = compile(model_def, (;))
+                m = condition(model, Dict(@varname(x) => 1.0); regenerate_log_density=false)
+                @test m.log_density_computation_function === nothing
+
+                # Regenerate compiled function without changing mode
+                m2 = regenerate_log_density_function(m)
+                @test !isnothing(m2.log_density_computation_function)
+                @test m2.evaluation_mode isa UseGraph
+
+                # Can switch to generated mode explicitly and match graph
+                params = zeros(length(parameters(m2)))
+                logp_gen = Base.invokelatest(
+                    LogDensityProblems.logdensity,
+                    set_evaluation_mode(m2, UseGeneratedLogDensityFunction()),
+                    params,
+                )
+                logp_graph = Base.invokelatest(
+                    LogDensityProblems.logdensity,
+                    set_evaluation_mode(m2, UseGraph()),
+                    params,
+                )
+                @test logp_gen ≈ logp_graph
+            end
         end
     end
 
@@ -175,12 +296,16 @@ JuliaBUGS.@bugs_primitive Normal Gamma
                 model_decond, UseGeneratedLogDensityFunction()
             )
             params = [2.0]  # Only y is a parameter
-            logp = LogDensityProblems.logdensity(model_decond_gen, params)
+            logp = Base.invokelatest(
+                LogDensityProblems.logdensity, model_decond_gen, params
+            )
             @test isfinite(logp)
 
             # Compare with graph evaluation
             model_decond_graph = set_evaluation_mode(model_decond, UseGraph())
-            logp2 = LogDensityProblems.logdensity(model_decond_graph, params)
+            logp2 = Base.invokelatest(
+                LogDensityProblems.logdensity, model_decond_graph, params
+            )
             @test logp ≈ logp2
         end
 
@@ -213,7 +338,9 @@ JuliaBUGS.@bugs_primitive Normal Gamma
                 model_restored, UseGeneratedLogDensityFunction()
             )
             params = [0.5, 1.0]  # a and b
-            logp = LogDensityProblems.logdensity(model_restored_gen, params)
+            logp = Base.invokelatest(
+                LogDensityProblems.logdensity, model_restored_gen, params
+            )
             @test isfinite(logp)
         end
 
@@ -259,10 +386,10 @@ JuliaBUGS.@bugs_primitive Normal Gamma
         # Test evaluation
         model_cond_gen = set_evaluation_mode(model_cond, UseGeneratedLogDensityFunction())
         params = [2.0]  # Only sigma
-        logp1 = LogDensityProblems.logdensity(model_cond_gen, params)
+        logp1 = Base.invokelatest(LogDensityProblems.logdensity, model_cond_gen, params)
 
         model_cond_graph = set_evaluation_mode(model_cond, UseGraph())
-        logp2 = LogDensityProblems.logdensity(model_cond_graph, params)
+        logp2 = Base.invokelatest(LogDensityProblems.logdensity, model_cond_graph, params)
 
         @test logp1 ≈ logp2
     end

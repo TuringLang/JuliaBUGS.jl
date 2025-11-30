@@ -1,92 +1,135 @@
-import { defineStore } from 'pinia';
-import { ref, computed, watch } from 'vue';
-import type { GraphElement } from '../types';
-import { useDataStore } from './dataStore';
+import { defineStore } from 'pinia'
+import { ref, computed, watch } from 'vue'
+import type { GraphElement } from '../types'
+import { useDataStore } from './dataStore'
 
 export interface GraphContent {
-  graphId: string;
-  elements: GraphElement[];
+  graphId: string
+  elements: GraphElement[]
+  lastLayout?: string
+  zoom?: number
+  pan?: { x: number; y: number }
 }
 
 export const useGraphStore = defineStore('graph', () => {
-  const dataStore = useDataStore();
-  const graphContents = ref<Map<string, GraphContent>>(new Map());
+  const dataStore = useDataStore()
+  const graphContents = ref<Map<string, GraphContent>>(new Map())
   const currentGraphId = ref<string | null>(
     localStorage.getItem('doodlebugs-currentGraphId') || null
-  );
+  )
+
+  const selectedElement = ref<GraphElement | null>(null)
 
   watch(currentGraphId, (newId) => {
     if (newId) {
-      localStorage.setItem('doodlebugs-currentGraphId', newId);
+      localStorage.setItem('doodlebugs-currentGraphId', newId)
     } else {
-      localStorage.removeItem('doodlebugs-currentGraphId');
+      localStorage.removeItem('doodlebugs-currentGraphId')
     }
-  });
+  })
 
   const currentGraphElements = computed<GraphElement[]>(() => {
     if (currentGraphId.value && graphContents.value.has(currentGraphId.value)) {
-      return graphContents.value.get(currentGraphId.value)!.elements;
+      return graphContents.value.get(currentGraphId.value)!.elements
     }
-    return [];
-  });
+    return []
+  })
 
   const selectGraph = (graphId: string | null) => {
-    currentGraphId.value = graphId;
+    currentGraphId.value = graphId
     if (graphId && !graphContents.value.has(graphId)) {
-      loadGraph(graphId);
+      loadGraph(graphId)
     }
-  };
+  }
+
+  const setSelectedElement = (element: GraphElement | null) => {
+    selectedElement.value = element
+  }
 
   const createNewGraphContent = (graphId: string) => {
     const newContent: GraphContent = {
       graphId: graphId,
       elements: [],
-    };
-    graphContents.value.set(graphId, newContent);
-    saveGraph(graphId, newContent);
-    dataStore.createNewGraphData(graphId);
-  };
+      lastLayout: 'dagre',
+    }
+    // Ensure reactivity
+    graphContents.value.set(graphId, newContent)
+    saveGraph(graphId, newContent)
+    dataStore.createNewGraphData(graphId)
+  }
 
   const updateGraphElements = (graphId: string, newElements: GraphElement[]) => {
     if (graphContents.value.has(graphId)) {
-      const content = graphContents.value.get(graphId)!;
-      content.elements = newElements;
-      saveGraph(graphId, content);
+      const content = graphContents.value.get(graphId)!
+      // Create new object to trigger reactivity
+      const newContent = { ...content, elements: newElements }
+      graphContents.value.set(graphId, newContent)
+      saveGraph(graphId, newContent)
     }
-  };
+  }
+
+  const updateGraphLayout = (graphId: string, layoutName: string) => {
+    if (graphContents.value.has(graphId)) {
+      const content = graphContents.value.get(graphId)!
+      if (content.lastLayout !== layoutName) {
+        const newContent = { ...content, lastLayout: layoutName }
+        graphContents.value.set(graphId, newContent)
+        saveGraph(graphId, newContent)
+      }
+    }
+  }
+
+  const updateGraphViewport = (graphId: string, zoom: number, pan: { x: number; y: number }) => {
+    if (graphContents.value.has(graphId)) {
+      const content = graphContents.value.get(graphId)!
+      // Only update if changed to avoid loops, but ensure object reference changes
+      const newContent = { ...content, zoom, pan }
+      graphContents.value.set(graphId, newContent)
+      saveGraph(graphId, newContent)
+    }
+  }
 
   const deleteGraphContent = (graphId: string) => {
-    graphContents.value.delete(graphId);
-    localStorage.removeItem(`doodlebugs-graph-${graphId}`);
-    dataStore.deleteGraphData(graphId);
+    graphContents.value.delete(graphId)
+    localStorage.removeItem(`doodlebugs-graph-${graphId}`)
+    dataStore.deleteGraphData(graphId)
     if (currentGraphId.value === graphId) {
-      selectGraph(null);
+      selectGraph(null)
     }
-  };
+  }
 
   const saveGraph = (graphId: string, content: GraphContent) => {
-    localStorage.setItem(`doodlebugs-graph-${graphId}`, JSON.stringify(content));
-  };
+    localStorage.setItem(`doodlebugs-graph-${graphId}`, JSON.stringify(content))
+  }
 
   const loadGraph = (graphId: string): GraphContent | null => {
-    const storedContent = localStorage.getItem(`doodlebugs-graph-${graphId}`);
+    const storedContent = localStorage.getItem(`doodlebugs-graph-${graphId}`)
     if (storedContent) {
-      const content: GraphContent = JSON.parse(storedContent);
-      graphContents.value.set(graphId, content);
-      return content;
+      try {
+        const content: GraphContent = JSON.parse(storedContent)
+        graphContents.value.set(graphId, content)
+        return content
+      } catch (e) {
+        console.error('Failed to load graph', e)
+        return null
+      }
     }
-    return null;
-  };
+    return null
+  }
 
   return {
     graphContents,
     currentGraphId,
     currentGraphElements,
+    selectedElement,
+    setSelectedElement,
     selectGraph,
     createNewGraphContent,
     updateGraphElements,
+    updateGraphLayout,
+    updateGraphViewport,
     deleteGraphContent,
     saveGraph,
     loadGraph,
-  };
-});
+  }
+})
