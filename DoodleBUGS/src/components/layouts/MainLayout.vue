@@ -2250,8 +2250,8 @@ const clearImportedData = () => {
   position: absolute;
   bottom: 0;
   right: 0;
-  width: 16px;
-  height: 16px;
+  width: 13px;
+  height: 13px;
   cursor: nwse-resize;
   display: flex;
   align-items: center;
