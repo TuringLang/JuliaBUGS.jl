@@ -72,7 +72,7 @@ using JuliaBUGS.Model:
 
         # No continuous parameters, so empty array
         x_empty = Float64[]
-        logp_marginalized = LogDensityProblems.logdensity(model, x_empty)
+        logp_marginalized = Base.invokelatest(LogDensityProblems.logdensity, model, x_empty)
 
         # Expected value (manual calculation)
         expected = -3.744970426679133
@@ -136,7 +136,9 @@ using JuliaBUGS.Model:
             # Order: sigma, mu[2], mu[1] (from sorted_parameters)
             test_params = [0.0, 5.0, 0.0]  # log(sigma)=0 -> sigma=1, mu[2]=5, mu[1]=0
 
-            logp_marginalized = LogDensityProblems.logdensity(model, test_params)
+            logp_marginalized = Base.invokelatest(
+                LogDensityProblems.logdensity, model, test_params
+            )
 
             # Compute expected value using forward algorithm
             pi_vals = [0.5, 0.5]
@@ -260,7 +262,9 @@ using JuliaBUGS.Model:
             # Order: log(sigma[1]), log(sigma[2]), mu[2], mu[1]
             test_params = [0.0, 0.0, 2.0, -2.0]  # sigmas=1, mu[2]=2, mu[1]=-2
 
-            logp_marginalized = LogDensityProblems.logdensity(model, test_params)
+            logp_marginalized = Base.invokelatest(
+                LogDensityProblems.logdensity, model, test_params
+            )
 
             # Compute expected value
             weights = [0.3, 0.7]
@@ -316,7 +320,9 @@ using JuliaBUGS.Model:
             test_params = [0.0, 0.0, 0.0, 3.0, 0.0, -3.0]
             # log(sigmas)=0 -> all sigmas=1, mu[3]=3, mu[2]=0, mu[1]=-3
 
-            logp_marginalized = LogDensityProblems.logdensity(model, test_params)
+            logp_marginalized = Base.invokelatest(
+                LogDensityProblems.logdensity, model, test_params
+            )
 
             # Compute expected value
             weights = [0.2, 0.5, 0.3]
@@ -366,11 +372,11 @@ using JuliaBUGS.Model:
             # Test with original ordering
             # Order: log(sigma[1]), log(sigma[2]), mu[2], mu[1]
             params1 = [-0.5, 0.0, 3.0, 1.0]  # sigma[1]=exp(-0.5), sigma[2]=1, mu[2]=3, mu[1]=1
-            logp1 = LogDensityProblems.logdensity(model, params1)
+            logp1 = Base.invokelatest(LogDensityProblems.logdensity, model, params1)
 
             # Test with swapped components (swap mu and sigma values)
             params2 = [0.0, -0.5, 1.0, 3.0]  # sigma[1]=1, sigma[2]=exp(-0.5), mu[2]=1, mu[1]=3
-            logp2 = LogDensityProblems.logdensity(model, params2)
+            logp2 = Base.invokelatest(LogDensityProblems.logdensity, model, params2)
 
             # The log probabilities should be equal due to symmetry
             # (swapping components 1 and 2 completely with equal weights)
@@ -407,7 +413,7 @@ using JuliaBUGS.Model:
 
             # Test evaluation
             test_params = [0.0, 2.0, -2.0]  # log(sigma)=0->sigma=1, mu[2]=2, mu[1]=-2
-            logp = LogDensityProblems.logdensity(model, test_params)
+            logp = Base.invokelatest(LogDensityProblems.logdensity, model, test_params)
 
             # Verify it's finite and reasonable
             @test isfinite(logp)
@@ -503,7 +509,9 @@ using JuliaBUGS.Model:
                 log_ratios[2],  # transformed weights
             ]
 
-            logp_marginalized = LogDensityProblems.logdensity(model, test_params)
+            logp_marginalized = Base.invokelatest(
+                LogDensityProblems.logdensity, model, test_params
+            )
 
             # Verify it's finite and reasonable
             @test isfinite(logp_marginalized)
@@ -551,7 +559,9 @@ using JuliaBUGS.Model:
             test_params = [3.0, 0.0, 0.0, 0.0, 5.0, 1.0]
             # mu_global=3, log(tau_global)=0->tau=1, log(sigmas)=0->sigmas=1, mu[2]=5, mu[1]=1
 
-            logp_marginalized = LogDensityProblems.logdensity(model, test_params)
+            logp_marginalized = Base.invokelatest(
+                LogDensityProblems.logdensity, model, test_params
+            )
 
             # Verify the result is finite and reasonable
             @test isfinite(logp_marginalized)
@@ -559,13 +569,17 @@ using JuliaBUGS.Model:
 
             # Test 2: Different parameters - should give different likelihood
             test_params2 = [2.5, -0.5, -0.5, 0.2, 4.5, 0.5]
-            logp_marginalized2 = LogDensityProblems.logdensity(model, test_params2)
+            logp_marginalized2 = Base.invokelatest(
+                LogDensityProblems.logdensity, model, test_params2
+            )
 
             @test isfinite(logp_marginalized2)
             @test logp_marginalized2 != logp_marginalized  # Different params should give different results
 
             # Test 3: Verify multiple evaluations are consistent
-            logp_repeat = LogDensityProblems.logdensity(model, test_params)
+            logp_repeat = Base.invokelatest(
+                LogDensityProblems.logdensity, model, test_params
+            )
             @test logp_repeat == logp_marginalized  # Same params should give same result
         end
     end
@@ -592,7 +606,7 @@ using JuliaBUGS.Model:
 
             # Should work normally
             test_params = [2.0, 0.0]  # mu=2, log(sigma)=0 -> sigma=1
-            logp = LogDensityProblems.logdensity(model, test_params)
+            logp = Base.invokelatest(LogDensityProblems.logdensity, model, test_params)
             @test isfinite(logp)
         end
 
@@ -616,7 +630,7 @@ using JuliaBUGS.Model:
 
             # Test evaluation
             test_params = [0.0]  # logit(p) = 0 -> p = 0.5
-            logp = LogDensityProblems.logdensity(model, test_params)
+            logp = Base.invokelatest(LogDensityProblems.logdensity, model, test_params)
 
             # Expected in transformed space:
             # - Beta(1,1) prior at p=0.5: log(1) = 0
@@ -660,11 +674,13 @@ using JuliaBUGS.Model:
 
         # AD gradient via ForwardDiff
         ad_model = ADgradient(AutoForwardDiff(), model)
-        val_ad, grad_ad = LogDensityProblems.logdensity_and_gradient(ad_model, θ)
+        val_ad, grad_ad = Base.invokelatest(
+            LogDensityProblems.logdensity_and_gradient, ad_model, θ
+        )
 
         # Central finite differences
         function f(θ)
-            LogDensityProblems.logdensity(model, θ)
+            Base.invokelatest(LogDensityProblems.logdensity, model, θ)
         end
         ϵ = 1e-6
         grad_fd = similar(θ)
@@ -711,10 +727,12 @@ using JuliaBUGS.Model:
         )
 
         ad_model = ADgradient(AutoForwardDiff(), model)
-        val, grad = LogDensityProblems.logdensity_and_gradient(ad_model, θ)
+        val, grad = Base.invokelatest(
+            LogDensityProblems.logdensity_and_gradient, ad_model, θ
+        )
         @test isapprox(val, expected_logprior + expected_loglik; atol=1e-10)
         function f_scalar(mu_val)
-            LogDensityProblems.logdensity(model, [mu_val])
+            Base.invokelatest(LogDensityProblems.logdensity, model, [mu_val])
         end
         ϵ = 1e-6
         fd_grad = (f_scalar(θ[1] + ϵ) - f_scalar(θ[1] - ϵ)) / (2ϵ)
