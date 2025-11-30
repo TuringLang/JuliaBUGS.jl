@@ -96,30 +96,27 @@ export function useCompoundDragDrop(
     return depth
   }
 
-  const expandBounds = (bb: BoundingBox12, padding: number): BoundingBox12 => {
-    return {
-      x1: bb.x1 - padding,
-      x2: bb.x2 + padding,
-      y1: bb.y1 - padding,
-      y2: bb.y2 + padding,
-    }
-  }
-
-  const boundsOverlap = (bb1: BoundingBox12, bb2: BoundingBox12): boolean => {
-    return !(bb1.x1 > bb2.x2 || bb2.x1 > bb1.x2 || bb1.y1 > bb2.y2 || bb2.y1 > bb1.y2)
-  }
-
   /**
    * Determines if a node has been dragged out of its parent's original bounds.
+   * Returns true if the node is no longer fully contained within the original parent box.
    */
   const isOutsideOriginalParent = (node: NodeSingular): boolean => {
     if (!dragState.originalParentBounds) return false
 
     const nodeBounds = node.boundingBox({ includeOverlays: false, includeLabels: true })
-    // We use a small buffer to avoid triggering immediately on slight movements
-    const expandedBounds = expandBounds(nodeBounds, 5)
+    const parentBounds = dragState.originalParentBounds
 
-    return !boundsOverlap(dragState.originalParentBounds, expandedBounds)
+    // Use a small buffer (e.g. 5px) to tolerate slight border overlaps/jitter
+    // but trigger as soon as the node significantly pushes the boundary (expands the plate)
+    const buffer = 5
+
+    const isContained =
+      nodeBounds.x1 >= parentBounds.x1 - buffer &&
+      nodeBounds.x2 <= parentBounds.x2 + buffer &&
+      nodeBounds.y1 >= parentBounds.y1 - buffer &&
+      nodeBounds.y2 <= parentBounds.y2 + buffer
+
+    return !isContained
   }
 
   /**
