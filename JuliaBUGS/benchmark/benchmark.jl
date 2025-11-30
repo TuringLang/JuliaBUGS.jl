@@ -86,9 +86,7 @@ function _create_results_dataframe(results::OrderedDict{Symbol,BenchmarkResult})
     return df
 end
 
-function _print_results_table(
-    results::OrderedDict{Symbol,BenchmarkResult}; backend=Val(:text)
-)
+function _print_results_table(results::OrderedDict{Symbol,BenchmarkResult}; backend::Symbol=:text)
     df = _create_results_dataframe(results)
     return pretty_table(
         df;
