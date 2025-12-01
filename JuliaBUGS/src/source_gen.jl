@@ -743,19 +743,11 @@ function _build_ordering_graph_via_dependence_vectors(
 
         # Check all fine edges to classify the coarse edge
         all_positive = true
+        has_negative = false
         for (src_vn, dst_vn) in fine_edges
             rel = _classify_fine_edge(g, src_vn, dst_vn)
             if rel === :negative
-                push!(
-                    diagnostics,
-                    "Negative dependence prevents ordering: $(src_stmt_id) -> $(dst_stmt_id) via $(src_vn) -> $(dst_vn)",
-                )
-                return ordering_graph, false
-            elseif rel === :unknown
-                push!(
-                    diagnostics,
-                    "Unknown dependence (different loop nests or missing info): $(src_stmt_id) -> $(dst_stmt_id) via $(src_vn) -> $(dst_vn)",
-                )
+                has_negative = true
             end
             if rel !== :positive
                 all_positive = false
@@ -764,14 +756,24 @@ function _build_ordering_graph_via_dependence_vectors(
 
         # Decision logic based on whether it's a self-edge or cross-statement edge
         if src_stmt_id == dst_stmt_id
+            # Self-edge: a negative dependence (e.g., x[t] depends on x[t+1]) is invalid
+            if has_negative
+                push!(
+                    diagnostics,
+                    "Negative self-dependence prevents ordering: statement $(src_stmt_id)",
+                )
+                return ordering_graph, false
+            end
             # Self-edge: only drop if ALL fine edges are positive (loop-carried)
             # This safely breaks recursion cycles like x[t] ~ f(x[t-1])
             if !all_positive
                 Graphs.add_edge!(ordering_graph, src_stmt_id, dst_stmt_id)
             end
         else
-            # Cross-statement edge: keep by default; it may later be relaxed if
-            # the component can be safely fused by _attempt_resolve_cycles_via_loop_fusion.
+            # Cross-statement edge: keep by default. A negative dependence between
+            # different statements just means the loops cannot be fused - the source
+            # statement's loop must complete all iterations before the destination
+            # statement's loop begins. This is handled by keeping the edge.
             Graphs.add_edge!(ordering_graph, src_stmt_id, dst_stmt_id)
         end
     end

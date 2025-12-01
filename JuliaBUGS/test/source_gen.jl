@@ -35,6 +35,9 @@ test_examples = [
 @testset "source_gen: $example_name" for example_name in test_examples
     (; model_def, data, inits) = getfield(JuliaBUGS.BUGSExamples, example_name)
     model = compile(model_def, data, inits)
+    # Explicitly check that source generation succeeded, otherwise the fallback
+    # to UseGraph() would make the comparison trivially pass
+    @test !isnothing(model.log_density_computation_function)
     params = Base.invokelatest(JuliaBUGS.getparams, model)
     result_with_bugsmodel = begin
         model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
