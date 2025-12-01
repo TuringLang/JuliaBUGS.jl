@@ -71,6 +71,9 @@ export const useUiStore = defineStore('ui', () => {
     localStorage.getItem('doodlebugs-showZoomControls') !== 'false'
   )
   const showDebugPanel = ref<boolean>(localStorage.getItem('doodlebugs-showDebugPanel') === 'true')
+  const showDetachModeControl = ref<boolean>(
+    localStorage.getItem('doodlebugs-showDetachModeControl') === 'true'
+  )
 
   // Interaction Modes
   const isDetachModeActive = ref<boolean>(false)
@@ -157,6 +160,9 @@ export const useUiStore = defineStore('ui', () => {
   watch(showDebugPanel, (val) => {
     localStorage.setItem('doodlebugs-showDebugPanel', String(val))
   })
+  watch(showDetachModeControl, (val) => {
+    localStorage.setItem('doodlebugs-showDetachModeControl', String(val))
+  })
   watch(canvasGridStyle, (style) => {
     localStorage.setItem('doodlebugs-canvasGridStyle', style)
   })
@@ -236,6 +242,7 @@ export const useUiStore = defineStore('ui', () => {
     gridSize,
     showZoomControls,
     showDebugPanel,
+    showDetachModeControl,
     isDetachModeActive,
     toggleDetachMode,
   }

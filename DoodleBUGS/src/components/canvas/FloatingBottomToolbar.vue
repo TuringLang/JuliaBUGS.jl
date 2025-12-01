@@ -11,6 +11,7 @@ const props = defineProps<{
   showDataPanel?: boolean
   showZoomControls?: boolean
   isDetachModeActive?: boolean
+  showDetachModeControl?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -312,18 +313,19 @@ onUnmounted(() => {
 
       <div class="divider"></div>
 
-      <!-- 3. Detach Mode (Touch) -->
-      <button
-        class="dock-btn"
-        :class="{ active: isDetachModeActive }"
-        @click="$emit('toggle-detach-mode')"
-        title="Detach Mode (Simulates Alt/Option key)"
-        type="button"
-      >
-        <i class="fas fa-unlink"></i>
-      </button>
-
-      <div class="divider"></div>
+      <!-- 3. Detach Mode (Touch) - Conditionally Rendered -->
+      <template v-if="showDetachModeControl">
+        <button
+          class="dock-btn"
+          :class="{ active: isDetachModeActive }"
+          @click="$emit('toggle-detach-mode')"
+          title="Detach Mode (Simulates Alt/Option key)"
+          type="button"
+        >
+          <i class="fas fa-unlink"></i>
+        </button>
+        <div class="divider"></div>
+      </template>
 
       <!-- 4. Edit History -->
       <button class="dock-btn" @click="$emit('undo')" title="Undo (Ctrl+Z)" type="button">

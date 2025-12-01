@@ -66,6 +66,7 @@ const {
   showDebugPanel,
   activeLeftAccordionTabs,
   isDetachModeActive,
+  showDetachModeControl,
 } = storeToRefs(uiStore)
 
 const currentMode = ref<string>('select')
@@ -1638,7 +1639,6 @@ const clearImportedData = () => {
   }
 }
 </script>
-
 <template>
   <div class="app-layout">
     <main class="canvas-area">
@@ -1679,6 +1679,8 @@ const clearImportedData = () => {
       :showZoomControls="showZoomControls"
       :showDebugPanel="showDebugPanel"
       :isCodePanelOpen="isCodePanelOpen"
+      :isDetachModeActive="isDetachModeActive"
+      :showDetachModeControl="showDetachModeControl"
       @toggle-left-sidebar="toggleLeftSidebar"
       @new-project="showNewProjectModal = true"
       @new-graph="showNewGraphModal = true"
@@ -1688,6 +1690,8 @@ const clearImportedData = () => {
       @update:gridSize="gridSize = $event"
       @update:showZoomControls="showZoomControls = $event"
       @update:showDebugPanel="showDebugPanel = $event"
+      @update:isDetachModeActive="isDetachModeActive = $event"
+      @update:showDetachModeControl="showDetachModeControl = $event"
       @toggle-code-panel="toggleCodePanel"
       @load-example="handleLoadExample"
       @open-about-modal="showAboutModal = true"
@@ -1898,6 +1902,7 @@ const clearImportedData = () => {
       :show-json-panel="false"
       :show-zoom-controls="showZoomControls"
       :is-detach-mode-active="isDetachModeActive"
+      :show-detach-mode-control="showDetachModeControl"
       @update:current-mode="currentMode = $event"
       @update:current-node-type="currentNodeType = $event"
       @undo="handleUndo"

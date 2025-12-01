@@ -247,7 +247,7 @@ export function useCompoundDragDrop(
 
       if (currentParentNode && isOutsideOriginalParent(node)) {
         if (!dragState.toastShown && options.onToast) {
-          options.onToast('Hold Alt/Option (⌥) key or use Detach button to remove node', 'warn')
+          options.onToast('Hold Alt/Option (⌥) key or enable Detach Mode  in View Options from left sidebar to remove node', 'warn')
           dragState.toastShown = true // Debounce
         }
       }
