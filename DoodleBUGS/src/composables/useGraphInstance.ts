@@ -320,6 +320,7 @@ export function useGraphInstance() {
         dropSibling: () => false,
         outThreshold: 30, // Threshold for drag out detection
         onToast: onToast, // Pass the toast callback
+        shouldDetach: () => uiStore.isDetachModeActive,
       },
       urInstance
     )

@@ -65,6 +65,7 @@ const {
   showZoomControls,
   showDebugPanel,
   activeLeftAccordionTabs,
+  isDetachModeActive,
 } = storeToRefs(uiStore)
 
 const currentMode = ref<string>('select')
@@ -1896,6 +1897,7 @@ const clearImportedData = () => {
       :show-data-panel="isDataPanelOpen"
       :show-json-panel="false"
       :show-zoom-controls="showZoomControls"
+      :is-detach-mode-active="isDetachModeActive"
       @update:current-mode="currentMode = $event"
       @update:current-node-type="currentNodeType = $event"
       @undo="handleUndo"
@@ -1907,6 +1909,7 @@ const clearImportedData = () => {
       @toggle-code-panel="toggleCodePanel"
       @toggle-data-panel="toggleDataPanel"
       @toggle-json-panel="toggleJsonPanel"
+      @toggle-detach-mode="uiStore.toggleDetachMode"
       @open-style-modal="showStyleModal = true"
       @share="handleShare"
     />

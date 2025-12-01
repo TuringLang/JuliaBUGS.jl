@@ -6,6 +6,7 @@ export interface CompoundDragDropOptions {
   dropSibling: () => boolean
   outThreshold: number
   onToast?: (message: string, severity?: 'info' | 'warn' | 'error' | 'success') => void
+  shouldDetach?: () => boolean
 }
 
 interface DragState {
@@ -194,7 +195,8 @@ export function useCompoundDragDrop(
       dragState.originalParentBounds = null
     }
 
-    const isAltPressed = event.originalEvent?.altKey
+    // Check for Alt key OR the detach mode toggle (for touch devices)
+    const isAltPressed = event.originalEvent?.altKey || options.shouldDetach?.()
 
     if (isAltPressed && hasParent && dragState.originalParent) {
       enterDetachMode(node)
@@ -215,8 +217,9 @@ export function useCompoundDragDrop(
   const updateDrag = (node: NodeSingular, position: Position, event: EventObject) => {
     if (!dragState.isDragging || dragState.draggedNode?.id() !== node.id()) return
 
-    // Dynamic Detach Mode: Trigger if Alt is pressed mid-drag
-    const isAltPressed = event.originalEvent?.altKey
+    // Dynamic Detach Mode: Trigger if Alt is pressed mid-drag OR detach mode is toggled
+    const isAltPressed = event.originalEvent?.altKey || options.shouldDetach?.()
+
     if (isAltPressed && !dragState.detachedOnGrab && dragState.originalParent) {
       enterDetachMode(node)
     }
@@ -244,7 +247,7 @@ export function useCompoundDragDrop(
 
       if (currentParentNode && isOutsideOriginalParent(node)) {
         if (!dragState.toastShown && options.onToast) {
-          options.onToast('Hold Alt/Option (⌥) key to remove node from plate', 'warn')
+          options.onToast('Hold Alt/Option (⌥) key or use Detach button to remove node', 'warn')
           dragState.toastShown = true // Debounce
         }
       }

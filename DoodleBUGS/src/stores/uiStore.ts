@@ -72,6 +72,9 @@ export const useUiStore = defineStore('ui', () => {
   )
   const showDebugPanel = ref<boolean>(localStorage.getItem('doodlebugs-showDebugPanel') === 'true')
 
+  // Interaction Modes
+  const isDetachModeActive = ref<boolean>(false)
+
   // Grid Settings - Default to 'dots' now
   const canvasGridStyle = ref<GridStyle>(
     (localStorage.getItem('doodlebugs-canvasGridStyle') as GridStyle) || 'dots'
@@ -208,6 +211,10 @@ export const useUiStore = defineStore('ui', () => {
     isDarkMode.value = !isDarkMode.value
   }
 
+  const toggleDetachMode = () => {
+    isDetachModeActive.value = !isDetachModeActive.value
+  }
+
   return {
     activeRightTab,
     isRightTabPinned,
@@ -229,5 +236,7 @@ export const useUiStore = defineStore('ui', () => {
     gridSize,
     showZoomControls,
     showDebugPanel,
+    isDetachModeActive,
+    toggleDetachMode,
   }
 })
