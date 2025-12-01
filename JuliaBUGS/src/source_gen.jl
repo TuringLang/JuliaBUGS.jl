@@ -336,7 +336,7 @@ function __check_for_reserved_names(model_def::Expr)
     bad_variable_names = filter(
         variable_name ->
             startswith(string(variable_name), "__") &&
-            endswith(string(variable_name), "__"),
+                endswith(string(variable_name), "__"),
         variable_names,
     )
     if !isempty(bad_variable_names)
@@ -376,11 +376,19 @@ function _generate_lowered_model_def(
     # the same loop nest, they are sequentially valid and we can either
     # drop those edges (self or cross-statement) or fuse statements into
     # a single loop with per-iteration ordering.
-    ordering_graph, ok = _build_ordering_graph_via_dependence_vectors(
+    ordering_graph, all_deps_valid = _build_ordering_graph_via_dependence_vectors(
         g, coarse_graph, var_to_stmt_id; diagnostics=diagnostics
     )
+    # If dependence analysis found a negative dependence, abort immediately.
+    # Negative dependences mean the model cannot be executed sequentially.
+    if !all_deps_valid
+        if !isempty(diagnostics)
+            @warn "Source generation aborted due to unsafe/corner-case dependencies\n - $(join(diagnostics, "\n - "))"
+        end
+        return nothing, nothing
+    end
     sorted_fissioned_stmts = nothing
-    if !ok || Graphs.is_cyclic(ordering_graph)
+    if Graphs.is_cyclic(ordering_graph)
         # Try to resolve remaining cycles by loop fusion within identical loop nests.
         stmt_order = _attempt_resolve_cycles_via_loop_fusion(
             g,
@@ -707,10 +715,14 @@ function _classify_fine_edge(g::JuliaBUGS.BUGSGraph, src_vn::VarName, dst_vn::Va
     return rel
 end
 
-# Build an ordering graph for statements by removing edges that are purely
-# loop-carried with lexicographically non-negative dependence vectors. If any
-# edge has a lexicographically negative dependence, the graph is invalid.
-# IMPORTANT: Only removes positive edges for self-dependencies to avoid unsafe reorderings.
+# Build an ordering graph from the coarse statement graph.
+#
+# - Self-edges are dropped if ALL their fine edges are positive (loop-carried
+#   with non-negative dependence vectors). This safely handles recurrences
+#   like x[t] ~ f(x[t-1]).
+# - Cross-statement edges are always kept. Cycles among them are resolved
+#   later by _attempt_resolve_cycles_via_loop_fusion.
+# - If any edge has a negative dependence vector, we abort (return ok=false).
 function _build_ordering_graph_via_dependence_vectors(
     g::JuliaBUGS.BUGSGraph,
     coarse_graph::Graphs.SimpleDiGraph,
@@ -723,15 +735,11 @@ function _build_ordering_graph_via_dependence_vectors(
     for e in Graphs.edges(coarse_graph)
         src_stmt_id = Graphs.src(e)
         dst_stmt_id = Graphs.dst(e)
+        # Every coarse edge was created from at least one fine edge (both are built
+        # from the same g.graph and var_to_stmt_id), so fine_edges is never empty.
         fine_edges = _find_corresponding_fine_grained_edges(
             g, var_to_stmt_id, src_stmt_id, dst_stmt_id
         )
-
-        # If we can't find the fine edges, be conservative: keep the edge.
-        if isempty(fine_edges)
-            Graphs.add_edge!(ordering_graph, src_stmt_id, dst_stmt_id)
-            continue
-        end
 
         # Check all fine edges to classify the coarse edge
         all_positive = true
@@ -889,18 +897,18 @@ function _attempt_resolve_cycles_via_loop_fusion(
             )
             return nothing
         end
+        # topological_sort returns all vertex indices; zero_graph has length(nodes) >= 2
+        # vertices, so local_order is never empty.
         local_order = [nodes[i] for i in Graphs.topological_sort(zero_graph)]
-        # If zero_graph has no edges, keep original node order as a fallback
-        if isempty(local_order)
-            local_order = copy(nodes)
-        end
         fuseable[scc_idx] = local_order
     end
 
-    # If there are cycles but none were fuseable, abort
-    any_fused = any(length(v) > 1 for v in values(fuseable))
-    if !any_fused
-        push!(diagnostics, "No fuseable SCCs found; cycles remain")
+    # If ordering_graph has multi-node SCCs but none were fuseable, we can't resolve.
+    # (If all SCCs are size 1, the graph is acyclic and this function shouldn't have
+    # been called, but we handle it gracefully by proceeding to cluster expansion.)
+    has_multi_node_scc = any(length(nodes) > 1 for nodes in sccs)
+    if has_multi_node_scc && isempty(fuseable)
+        push!(diagnostics, "Cycles exist but no SCCs could be fused")
         return nothing
     end
 

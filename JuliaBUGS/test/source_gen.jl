@@ -70,8 +70,8 @@ end
 end
 
 @testset "state-space models (SSM) transformation" begin
-    # Helper: run semantic analysis + graph + source-generation and return success flag + diags
-    function _gen_ok(model_def, data)
+    # Helper: check if source generation succeeds, returns (success::Bool, diagnostics)
+    function can_generate_source(model_def, data)
         eval_env = JuliaBUGS.semantic_analysis(model_def, data)
         g = JuliaBUGS.create_graph(model_def, eval_env)
         diags = String[]
@@ -81,101 +81,156 @@ end
         return lowered !== nothing, diags
     end
 
-    # 1) Basic SSM with self-recursion and observations
-    model_def1 = @bugs begin
-        x[1] ~ Normal(0, 1)
-        for t in 2:T
-            x[t] ~ Normal(x[t - 1], sigma_x)
+    # Helper: verify generated code produces same log density as graph evaluation
+    function generated_matches_graph(model_def, data)
+        model = compile(model_def, data)
+        params = Base.invokelatest(JuliaBUGS.getparams, model)
+        result_graph = begin
+            m = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+            Base.invokelatest(LogDensityProblems.logdensity, m, params)
         end
-        for t in 1:T
-            y[t] ~ Normal(x[t], sigma_y)
+        result_gen = begin
+            m = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())
+            Base.invokelatest(LogDensityProblems.logdensity, m, params)
         end
+        return result_graph ≈ result_gen
     end
-    ok1, _ = _gen_ok(model_def1, (T=10, sigma_x=0.5, sigma_y=0.3))
-    @test ok1
 
-    # 2) Lagged observations depend on previous state
-    model_def2 = @bugs begin
-        x[1] ~ Normal(0, 1)
-        for t in 2:T
-            x[t] ~ Normal(x[t - 1], sigma_x)
-        end
-        y[1] ~ Normal(x[1], sigma_y)
-        for t in 2:T
-            y[t] ~ Normal(x[t - 1], sigma_y)
-        end
-    end
-    ok2, _ = _gen_ok(model_def2, (T=10, sigma_x=0.5, sigma_y=0.3))
-    @test ok2
-
-    # 3) Cross-coupled SSM (mutual lag-1) in a single time loop
-    model_def3 = @bugs begin
-        x[1] ~ Normal(0, 1)
-        y[1] ~ Normal(0, 1)
-        for t in 2:T
-            x[t] ~ Normal(y[t - 1], sigma_x)
-            y[t] ~ Normal(x[t - 1], sigma_y)
-        end
-    end
-    ok3, _ = _gen_ok(model_def3, (T=10, sigma_x=0.5, sigma_y=0.3))
-    @test ok3
-
-    # 4) Invalid negative dependence (read future state)
-    model_def4 = @bugs begin
-        for t in 1:(T - 1)
-            x[t] ~ Normal(x[t + 1], sigma)
-        end
-        x[T] ~ Normal(0, 1)
-    end
-    ok4, _ = _gen_ok(model_def4, (T=10, sigma=0.7))
-    @test !ok4
-
-    # 5) Grid SSM: independent per-row recurrences, observations at current time
-    model_def5 = @bugs begin
-        for i in 1:I
-            x[i, 1] ~ Normal(0, 1)
+    @testset "basic SSM with self-recursion" begin
+        model_def = @bugs begin
+            x[1] ~ Normal(0, 1)
             for t in 2:T
-                x[i, t] ~ Normal(x[i, t - 1], sigma)
+                x[t] ~ Normal(x[t - 1], sigma_x)
             end
-        end
-        for i in 1:I
             for t in 1:T
-                y[i, t] ~ Normal(x[i, t], sigma_y)
+                y[t] ~ Normal(x[t], sigma_y)
             end
         end
+        data = (T=10, sigma_x=0.5, sigma_y=0.3)
+        @test first(can_generate_source(model_def, data))
+        @test generated_matches_graph(model_def, data)
     end
-    ok5, _ = _gen_ok(model_def5, (I=3, T=10, sigma=0.7, sigma_y=0.3))
-    @test ok5
 
-    # 6) Inter-loop cycle (even/odd) requiring general fusion across separate loops -> reject
-    model_def6 = @bugs begin
-        sumX[1] = x[1]
-        for i in 2:N
-            sumX[i] = sumX[i - 1] + x[i]
+    @testset "lagged observations" begin
+        model_def = @bugs begin
+            x[1] ~ Normal(0, 1)
+            for t in 2:T
+                x[t] ~ Normal(x[t - 1], sigma_x)
+            end
+            y[1] ~ Normal(x[1], sigma_y)
+            for t in 2:T
+                y[t] ~ Normal(x[t - 1], sigma_y)
+            end
         end
-        for k in 1:K  # even indices (K = N÷2 = 5)
-            x[2 * k] ~ Normal(sumX[2 * k - 1], tau)
-        end
-        for k in 1:Km1  # odd indices (Km1 = N÷2 - 1 = 4)
-            x[2 * k + 1] ~ Gamma(sumX[2 * k], tau)
-        end
+        data = (T=10, sigma_x=0.5, sigma_y=0.3)
+        @test first(can_generate_source(model_def, data))
+        @test generated_matches_graph(model_def, data)
     end
-    ok6, _ = _gen_ok(
-        model_def6,
-        (N=10, K=5, Km1=4, tau=1.2, x=Union{Float64,Missing}[1.0; fill(missing, 9)]),
-    )
-    @test !ok6
 
-    # 7) Data-dependent indexing induces unknown/cyclic deps -> reject
-    model_def7 = @bugs begin
-        z[1] = 0.0
-        z[2] = x[1] + 0.0
-        y[1] = 0.0
-        y[2] = x[3] + 0.0
-        for i in 1:3
-            x[i] = y[a[i]] + z[b[i]]
+    @testset "cross-coupled SSM (mutual lag-1)" begin
+        model_def = @bugs begin
+            x[1] ~ Normal(0, 1)
+            y[1] ~ Normal(0, 1)
+            for t in 2:T
+                x[t] ~ Normal(y[t - 1], sigma_x)
+                y[t] ~ Normal(x[t - 1], sigma_y)
+            end
         end
+        data = (T=10, sigma_x=0.5, sigma_y=0.3)
+        @test first(can_generate_source(model_def, data))
+        @test generated_matches_graph(model_def, data)
     end
-    ok7, _ = _gen_ok(model_def7, (a=[2, 2, 1], b=[2, 1, 2]))
-    @test !ok7
+
+    @testset "negative dependence (read future) rejected" begin
+        model_def = @bugs begin
+            for t in 1:(T - 1)
+                x[t] ~ Normal(x[t + 1], sigma)
+            end
+            x[T] ~ Normal(0, 1)
+        end
+        @test !first(can_generate_source(model_def, (T=10, sigma=0.7)))
+    end
+
+    @testset "grid SSM (multi-dimensional)" begin
+        model_def = @bugs begin
+            for i in 1:I
+                x[i, 1] ~ Normal(0, 1)
+                for t in 2:T
+                    x[i, t] ~ Normal(x[i, t - 1], sigma)
+                end
+            end
+            for i in 1:I
+                for t in 1:T
+                    y[i, t] ~ Normal(x[i, t], sigma_y)
+                end
+            end
+        end
+        data = (I=3, T=10, sigma=0.7, sigma_y=0.3)
+        @test first(can_generate_source(model_def, data))
+        @test generated_matches_graph(model_def, data)
+    end
+
+    @testset "inter-loop cycle rejected" begin
+        # Even/odd split loops with mutual dependencies cannot be fused automatically
+        model_def = @bugs begin
+            sumX[1] = x[1]
+            for i in 2:N
+                sumX[i] = sumX[i - 1] + x[i]
+            end
+            for k in 1:K
+                x[2 * k] ~ Normal(sumX[2 * k - 1], tau)
+            end
+            for k in 1:Km1
+                x[2 * k + 1] ~ Gamma(sumX[2 * k], tau)
+            end
+        end
+        data = (N=10, K=5, Km1=4, tau=1.2, x=Union{Float64,Missing}[1.0; fill(missing, 9)])
+        @test !first(can_generate_source(model_def, data))
+    end
+
+    @testset "deterministic cycle rejected" begin
+        # Cyclic deterministic dependencies cannot be resolved
+        model_def = @bugs begin
+            z[1] = 0.0
+            z[2] = x[1] + 0.0
+            y[1] = 0.0
+            y[2] = x[3] + 0.0
+            for i in 1:3
+                x[i] = y[a[i]] + z[b[i]]
+            end
+        end
+        @test !first(can_generate_source(model_def, (a=[2, 2, 1], b=[2, 1, 2])))
+    end
+
+    @testset "multi-statement loop with mixed dependencies" begin
+        # Self-recursion (positive) + same-iteration dependency (zero)
+        # Should stay as single fused loop with correct intra-iteration order
+        model_def = @bugs begin
+            x[1] ~ Normal(0, 1)
+            y[1] ~ Normal(0, 1)
+            for t in 2:T
+                x[t] ~ Normal(x[t - 1], sigma)  # positive self-dep
+                y[t] ~ Normal(x[t], sigma)       # zero dep (same iteration)
+            end
+        end
+        data = (T=10, sigma=0.5)
+        @test first(can_generate_source(model_def, data))
+        @test generated_matches_graph(model_def, data)
+    end
+
+    @testset "three-way cross-coupled SSM" begin
+        model_def = @bugs begin
+            x[1] ~ Normal(0, 1)
+            y[1] ~ Normal(0, 1)
+            z[1] ~ Normal(0, 1)
+            for t in 2:T
+                x[t] ~ Normal(y[t - 1] + z[t - 1], sigma)
+                y[t] ~ Normal(x[t - 1] + z[t - 1], sigma)
+                z[t] ~ Normal(x[t - 1] + y[t - 1], sigma)
+            end
+        end
+        data = (T=10, sigma=0.5)
+        @test first(can_generate_source(model_def, data))
+        @test generated_matches_graph(model_def, data)
+    end
 end
