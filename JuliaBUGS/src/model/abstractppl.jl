@@ -53,6 +53,8 @@ julia> using JuliaBUGS.Model: condition, parameters
 
 julia> using Test
 
+julia> using Distributions: Normal
+
 julia> @bugs_primitive Normal
 
 julia> model_def = @bugs begin
