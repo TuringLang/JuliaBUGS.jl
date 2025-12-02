@@ -42,5 +42,8 @@ open(output_file, "w") do io
         grad_ratio = jbugs_grad / stan_grad
         @printf(io, "| %s | %d | %d | %.2fx | %.2fx |\n", name, stan.dim, jbugs.dim, ld_ratio, grad_ratio)
     end
-    println(io, "\n*Note: Performance comparison may not be apples-to-apples as parameter counts can differ due to different model parameterizations.*")
+    println(
+        io,
+        "\n*Note: Performance comparison may not be apples-to-apples as parameter counts can differ due to different model parameterizations.*",
+    )
 end
