@@ -52,6 +52,6 @@ open(output_file, "w") do io
     end
     println(
         io,
-        "\n*Note: Performance comparison may not be apples-to-apples as parameter counts can differ due to different model parameterizations.*",
+        "\n*Note: Models may differ between Stan and JuliaBUGS. Numbers shown for reference only.*",
     )
 end
