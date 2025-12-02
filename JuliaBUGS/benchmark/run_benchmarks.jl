@@ -40,7 +40,15 @@ open(output_file, "w") do io
         jbugs_ld, jbugs_grad = extract_median_time(jbugs)
         ld_ratio = jbugs_ld / stan_ld
         grad_ratio = jbugs_grad / stan_grad
-        @printf(io, "| %s | %d | %d | %.2fx | %.2fx |\n", name, stan.dim, jbugs.dim, ld_ratio, grad_ratio)
+        @printf(
+            io,
+            "| %s | %d | %d | %.2fx | %.2fx |\n",
+            name,
+            stan.dim,
+            jbugs.dim,
+            ld_ratio,
+            grad_ratio
+        )
     end
     println(
         io,
