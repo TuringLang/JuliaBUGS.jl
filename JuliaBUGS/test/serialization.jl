@@ -29,7 +29,7 @@
     end
 end
 
-@testset "serialization with skip_source_generation" begin
+@testset "serialization with lazy generation" begin
     model_def = @bugs begin
         for i in 1:N
             y[i] ~ dnorm(mu, tau)
@@ -40,17 +40,17 @@ end
 
     data = (; N=5, y=[1.0, 2.0, 3.0, 4.0, 5.0])
 
-    @testset "type parameter F=Nothing when skip_source_generation=true" begin
-        model_no_gen = compile(model_def, data; skip_source_generation=true)
+    @testset "log density function is Nothing after compilation (lazy)" begin
+        model = compile(model_def, data)
 
-        # Verify type parameter F is Nothing before serialization
-        @test typeof(model_no_gen).parameters[7] === Nothing
-        @test isnothing(model_no_gen.log_density_computation_function)
+        # Log density function should be Nothing after compilation (lazy)
+        @test typeof(model).parameters[7] === Nothing
+        @test isnothing(model.log_density_computation_function)
 
         # Serialize and deserialize
         tmpfile = tempname()
         try
-            serialize(tmpfile, model_no_gen)
+            serialize(tmpfile, model)
             model_restored = deserialize(tmpfile)
 
             # Verify type parameter F is STILL Nothing after deserialization
@@ -58,13 +58,11 @@ end
             @test isnothing(model_restored.log_density_computation_function)
 
             # Verify types match exactly
-            @test typeof(model_no_gen) == typeof(model_restored)
+            @test typeof(model) == typeof(model_restored)
 
-            # Verify model works correctly after deserialization
-            θ = JuliaBUGS.Model.getparams(model_no_gen)
-            logp_original = Base.invokelatest(
-                LogDensityProblems.logdensity, model_no_gen, θ
-            )
+            # Verify model works correctly after deserialization (uses UseGraph mode)
+            θ = JuliaBUGS.Model.getparams(model)
+            logp_original = Base.invokelatest(LogDensityProblems.logdensity, model, θ)
             logp_restored = Base.invokelatest(
                 LogDensityProblems.logdensity, model_restored, θ
             )
@@ -74,15 +72,24 @@ end
         end
     end
 
-    @testset "correctness comparison with default compilation" begin
-        model_with_gen = compile(model_def, data)
-        model_no_gen = compile(model_def, data; skip_source_generation=true)
+    @testset "UseGraph and UseGeneratedLogDensityFunction produce same results" begin
+        model = compile(model_def, data)
 
-        # Both should produce same results
-        θ = JuliaBUGS.Model.getparams(model_with_gen)
-        logp_with = Base.invokelatest(LogDensityProblems.logdensity, model_with_gen, θ)
-        logp_without = Base.invokelatest(LogDensityProblems.logdensity, model_no_gen, θ)
+        # Get log density with UseGraph (default)
+        θ = JuliaBUGS.Model.getparams(model)
+        logp_graph = Base.invokelatest(LogDensityProblems.logdensity, model, θ)
 
-        @test logp_with ≈ logp_without
+        # Switch to UseGeneratedLogDensityFunction (triggers lazy generation)
+        model_gen = JuliaBUGS.Model.set_evaluation_mode(
+            model, JuliaBUGS.Model.UseGeneratedLogDensityFunction()
+        )
+
+        # Verify log density function was generated
+        @test !isnothing(model_gen.log_density_computation_function)
+
+        # Get log density with generated function
+        logp_gen = Base.invokelatest(LogDensityProblems.logdensity, model_gen, θ)
+
+        @test logp_graph ≈ logp_gen
     end
 end

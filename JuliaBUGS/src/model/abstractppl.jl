@@ -20,9 +20,11 @@ import AbstractPPL: condition, decondition, evaluate!!
 #######################
 
 """
-    condition(model::BUGSModel, conditioning_spec; regenerate_log_density::Bool=true)
+    condition(model::BUGSModel, conditioning_spec)
 
 Create a new model by conditioning on specified variables with given values.
+The returned model uses `UseGraph` evaluation mode. To use optimized log density
+computation, call `set_evaluation_mode(model, UseGeneratedLogDensityFunction())`.
 
 # Arguments
 - `model::BUGSModel`: The model to condition
@@ -135,7 +137,7 @@ julia> parameters(model_cond4)
  y
 ```
 """
-function condition(model::BUGSModel, conditioning_spec; regenerate_log_density::Bool=true)
+function condition(model::BUGSModel, conditioning_spec)
     # Parse and validate conditioning specification
     var_values = _parse_conditioning_spec(conditioning_spec, model)::Dict{<:VarName,<:Any}
     vars_to_condition = collect(keys(var_values))::Vector{<:VarName}
@@ -152,12 +154,12 @@ function condition(model::BUGSModel, conditioning_spec; regenerate_log_density::
     new_graph = _mark_as_observed(model.g, expanded_vars)
 
     # Create updated model with conditioned variables
+    # Log density function will be generated lazily when UseGeneratedLogDensityFunction mode is set
     return _create_modified_model(
         model,
         new_graph,
         new_evaluation_env;
         base_model=isnothing(model.base_model) ? model : model.base_model,
-        regenerate_log_density=regenerate_log_density,
     )
 end
 
@@ -552,7 +554,6 @@ function _create_modified_model(
     new_graph::BUGSGraph,
     new_evaluation_env::NamedTuple;
     base_model=nothing,
-    regenerate_log_density::Bool=true,
 )
     # Create new graph evaluation data
     new_graph_evaluation_data = GraphEvaluationData(new_graph)
@@ -563,42 +564,29 @@ function _create_modified_model(
         model, new_parameters
     )
 
-    # Generate new log density function and update graph evaluation data
-    new_log_density_computation_function, updated_graph_evaluation_data =
-        if regenerate_log_density
-            _regenerate_log_density_function(
-                model.model_def, new_graph, new_evaluation_env, new_graph_evaluation_data
-            )
-        else
-            # Skip regeneration (fast path): ensure stale code isn't used
-            nothing, new_graph_evaluation_data
-        end
-
     # Recompute mutable symbols for the new graph
-    new_mutable_symbols = get_mutable_symbols(updated_graph_evaluation_data)
+    new_mutable_symbols = get_mutable_symbols(new_graph_evaluation_data)
 
     # Create the new model with all updated fields
+    # Log density function is NOT generated here - it will be generated lazily
+    # when set_evaluation_mode(model, UseGeneratedLogDensityFunction()) is called
     kwargs = Dict{Symbol,Any}(
         :untransformed_param_length => new_untransformed_param_length,
         :transformed_param_length => new_transformed_param_length,
         :evaluation_env => new_evaluation_env,
-        :graph_evaluation_data => updated_graph_evaluation_data,
+        :graph_evaluation_data => new_graph_evaluation_data,
         :g => new_graph,
-        :log_density_computation_function => new_log_density_computation_function,
+        :log_density_computation_function => nothing,
         :mutable_symbols => new_mutable_symbols,
+        :evaluation_mode => UseGraph(),
     )
-
-    # Force graph evaluation mode when skipping regeneration to avoid stale compiled code
-    if !regenerate_log_density
-        kwargs[:evaluation_mode] = UseGraph()
-        kwargs[:log_density_computation_function] = nothing
-    end
 
     # Add base_model if provided
     if !isnothing(base_model)
         kwargs[:base_model] = base_model
     end
 
+    # Return model without precomputing log density function (lazy computation)
     return BUGSModel(model; kwargs...)
 end
 
