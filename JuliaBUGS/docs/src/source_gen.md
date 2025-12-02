@@ -123,7 +123,7 @@ flowchart TB
     10 --> 4
     9 --> 11
     9 --> 4
-    4 --> 11
+    7 --> 11
     3 --> 2
     4 --> 2
     2 --> 1
@@ -152,11 +152,11 @@ for i in 1:N
 end
 ```
 
-But this not totally satisfactory, because ideally we would want to be able to tell if we don't have to fission all the loops like Version 1 of `Rats`.
+But this is not totally satisfactory, because ideally we would like to tell when we don't have to fission all the loops, as in Version 1 of `Rats`.
 
 This shows the statement dependence graph alone is not quite sufficient. We need to analyze dependencies within loops more precisely using iteration spaces and dependence vectors. This allows transformations like loop fission (used in Version 2 of `Rats`).
 
-**Iteration Space and Vectors**
+### Iteration Space and Vectors
 
 Consider this loop:
 ```julia
@@ -170,7 +170,7 @@ end
 
 Each execution of the loop body corresponds to an *iteration vector* $\vec{k} = (i, j)$. The set of all possible iteration vectors is the *iteration space*, here $\{(i, j) | 1 \le i \le 2, 1 \le j \le 3\}$. Iterations execute sequentially in lexicographical order: (1,1), (1,2), (1,3), (2,1), (2,2), (2,3).
 
-**Dependence Vectors**
+### Dependence Vectors
 
 If a statement execution at iteration $\vec{i}$ (source) defines a value used by a statement execution at iteration $\vec{j}$ (sink), the *dependence vector* is $\vec{d} = \vec{j} - \vec{i}$. It represents the distance between dependent iterations. (Sometimes, we don't care about the distance between define and use, so we can simply use the sign of the elements of the dependence vector to represent the dependence relation.)
 
@@ -178,7 +178,7 @@ For sequential execution to be valid, all dependence vectors $\vec{d}$ must be *
 
 A lexicographically negative vector ($\vec{d} \prec \vec{0}$) indicates a violation. It means the sink iteration $\vec{j}$ executes *before* the source iteration $\vec{i}$ in sequential order, but $\vec{j}$ needs the value produced by $\vec{i}$.
 
-**Dependence Vectors and Sequential Execution**
+### Dependence Vectors and Sequential Execution
 
 Dependence vectors help analyze loops. Consider this invalid loop:
 ```julia
@@ -201,15 +201,17 @@ end
 
 Statement (2) computes `x[i]` using `x[i-1]`. The value `x[i-1]` is defined by statement (2) at iteration `i-1` (source). It is used by statement (2) at iteration `i` (sink). The dependence vector is $\vec{d} = \vec{j}_{sink} - \vec{i}_{source} = (i) - (i-1) = (1)$. Since $\vec{d} \succ \vec{0}$, this loop respects sequential order.
 
-**Loop-Independent vs. Loop-Carried Dependencies**
+### Loop-Independent vs. Loop-Carried Dependencies
 
 Dependencies involving loops are classified by their dependence vector $\vec{d} = \vec{j} - \vec{i}$:
 - **Loop-Independent Dependence:** Occurs within the same iteration: $\vec{d} = \vec{0}$.
 - **Loop-Carried Dependence:** Occurs between different iterations: $\vec{d} \neq \vec{0}$.
 
-The `Rats` example before is an example of (hierarchical) regression models. Many of these models don't model time, and there is no loop in the dependence graph.
+### Cyclic Graphs: State-Space Models
 
-But another very important class of models is state-space models where there are recursive structures and thus have loops in the dependence graph.
+The `Rats` example has an acyclic statement dependence graph—common for hierarchical and regression models that don't involve temporal dependencies.
+
+However, state-space models (SSMs) introduce cycles in the dependence graph due to recursive structures like `x[t]` depending on `x[t-1]`. These cycles are not errors; they represent valid sequential recurrences. To handle them, we use dependence vectors to verify that all loop-carried dependencies are lexicographically non-negative.
 
 Consider this Hidden Markov Model (HMM) fragment:
 ```julia
@@ -279,22 +281,75 @@ This requires storing the loop variable `i` for each variable, but we already co
 
 It should be noted that this approach doesn't scale well for general Julia programs, but it works appropriately for BUGS since the compilation process already has a time complexity of $O(N)$ with respect to the number of variables.
 
-It is worth pause here and give a summary:
+### Summary
+
+To summarize:
     
 To transform a BUGS program into a sequentially valid program, we will only apply two simple transformations, loop fission and statement reordering. These transformations will not need to modify loop bounds, renaming variables, adding any control flow, or make any changes to specific statements.
 
-A program that can be transformed are determined by the following procedure:
+Whether a program can be transformed is determined by the following procedure:
 
 First a statement dependence graph is computed.
 
 If the statement dependence graph is acyclic, then we topologically sort the statements and fission all the loops to create a sequentially valid program.
 
-In case the statement dependence graph is not acyclic.
-If the statements that form a cycle are all from the same loop (potentially at different nested levels), then we compute the dependence vectors to determine if the loop is sequentially valid. 
+If the statement dependence graph is cyclic, we check whether all statements in the cycle belong to the same loop nest. If so, we compute dependence vectors for the loop-carried edges. When all dependence vectors are lexicographically non-negative, the cycle represents a valid sequential recurrence (e.g., `x[t]` depending on `x[t-1]`), and we can generate correct code.
 
-Otherwise, the program need to be rewritten.
+If the cycle spans multiple loop nests, or if any dependence vector is negative, the program cannot be transformed automatically and must be rewritten manually.
 
-We don't attempt to apply further transformations to the program, because it is a hard problem. We will use the following example to show why program transformations can be a difficult task. We will not attempt to implement the transformation demonstrated here.
+## Implementation Overview
+
+At a high level, the current implementation follows a conservative, correctness‑first pipeline. It favors simple, explainable transformations and stops with diagnostics when safety cannot be guaranteed.
+
+- Build coarse statement graph: Construct a statement‑level dependence graph from the compiled BUGS graph. Nodes are top‑level statements; edges indicate that any variable produced by one statement is used by another.
+
+- Remove transformed data: Copy the model AST and remove statements whose variables are all compile‑time computable (in‑degree or out‑degree zero at the coarse level). This keeps the runtime program focused on values that must be evaluated.
+
+- Fully fission loops (intermediate step): Split each loop so that every statement runs in its own loop nest. This simplifies ordering by allowing per-statement reasoning. The loop nests are retained as metadata. Statements are re-grouped during reconstruction.
+
+- Classify dependence vectors: The coarse graph has statement-level edges (e.g., statement 3 → statement 2). For each coarse edge, we find the underlying variable-level edges (e.g., `alpha[1]` → `mu[1,1]`, `alpha[2]` → `mu[2,1]`, etc.) and classify each by comparing loop indices:
+  - Zero: loop-independent (same iteration)
+  - Positive: loop-carried, lexicographically non-negative
+  - Negative: lexicographically negative (unsafe for sequential order)
+  - Unknown: cannot be compared (e.g., different loop nests or data-dependent indexing)
+
+- Filter into an ordering graph: Build an ordering graph for statements by:
+  - Dropping self‑edges when all corresponding fine edges are Positive (safe loop‑carried self‑recurrence such as x[t] depends on x[t‑1]).
+  - Retaining all cross‑statement edges by default to preserve producer→consumer ordering.
+  - Aborting if any Negative dependence is observed (unsafe), or recording Unknown dependences for diagnostics.
+
+- Resolve remaining cycles conservatively: If cycles remain in the ordering graph, attempt limited loop fusion within strongly‑connected components (SCCs) that meet all of the following:
+  - All statements share the exact same loop nest (same variables and identical bounds).
+  - No Negative or Unknown fine‑grained dependences among the SCC members.
+  - The subgraph induced by Zero dependences is acyclic, providing a valid intra‑iteration order.
+  If this succeeds, expand clusters in topological order to obtain a global statement order. Otherwise, abort with diagnostics.
+
+- Reconstruct structured loops: After sorting the fissioned statements, group consecutive statements with identical loop nests and reconstruct a single nested `for` around a block of statements rather than emitting many tiny loops. This preserves structure while avoiding over‑fissioning in the final program.
+
+- Lower observations and flatten blocks: Insert observation guards/casts during lowering, and flatten intermediate `:block` nodes introduced by reconstruction so that analysis and codegen see a normalized statement sequence.
+
+Diagnostics are collected throughout and surfaced to help users rewrite programs when the transformation cannot be proven safe (e.g., negative or unknown dependences).
+
+### What works well now
+
+- Acyclic statement graphs (e.g., hierarchical/regression models like Rats) — the common case, handled by topological sort and loop fission
+- State-space patterns with self-recurrence inside a single loop nest (e.g., `x[t]` depends on `x[t-1]`)
+- Cross-coupled SSMs where multiple state arrays reference each other at lag 1, provided they share the same time loop
+- Grid SSMs with independent per-row recurrences, plus observation loops reading current state
+
+### What we intentionally reject
+
+- Inter-loop cycles requiring fusion across different loop nests
+- Data-dependent indexing producing Unknown dependences
+- Any pattern with Negative dependences
+
+These require manual refactoring. See [Unsupported Patterns](#unsupported-patterns) for detailed examples.
+
+## Unsupported Patterns
+
+Some dependency structures require transformations beyond statement reordering and loop fission. We do not attempt these transformations automatically—they are hard to implement correctly and the resulting code can be difficult to understand. Instead, we abort with diagnostics and recommend manual refactoring.
+
+### Inter-Loop Cycles
 
 Consider this model,
 
@@ -372,7 +427,9 @@ for i = 2 to N # Or a similar loop structure covering all indices
 end
 ```
 
-Things can get even trickier when data are involved in computing the indices. For instance,
+### Data-Dependent Indexing
+
+When data values determine array indices, dependencies become impossible to analyze statically without unrolling. For instance,
 
 ```julia
 begin
@@ -423,9 +480,11 @@ graph TD
 
 This represents a worst case where we can't do much better than fully unrolling.
 
-## Lowering BUGS programs into Julia programs that compute the log density
+## Lowering BUGS Programs to Log-Density Code
 
-The Version 2 of `Rats` program is:
+Once we have a sequentially valid program, we lower it to Julia code that computes log-densities. This involves distinguishing observations from parameters and handling mixed cases where some array elements are observed and others are not.
+
+The reordered Version 2 of `Rats` becomes:
 
 ```julia
 quote
