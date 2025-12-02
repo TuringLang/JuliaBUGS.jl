@@ -45,7 +45,9 @@ test_examples = [
 
     # Test with generated function (triggers on-demand generation)
     result_with_log_density_computation_function = begin
-        model_gen = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())
+        model_gen = JuliaBUGS.set_evaluation_mode(
+            model, JuliaBUGS.UseGeneratedLogDensityFunction()
+        )
         # Explicitly check that source generation succeeded
         @test !isnothing(model_gen.log_density_computation_function)
         Base.invokelatest(LogDensityProblems.logdensity, model_gen, params)
