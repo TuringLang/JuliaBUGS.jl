@@ -191,28 +191,54 @@ function _sort_fissioned_stmts(stmt_dep_graph, fissioned_stmts, stmt_ids)
 end
 
 function _reconstruct_model_def_from_sorted_fissioned_stmts(sorted_fissioned_stmts)
-    args = []
-    for (loops, stmt) in sorted_fissioned_stmts
-        if loops == ()
-            push!(args, first(stmt))
-        else
-            push!(args, __gen_loop_expr(loops, first(stmt)))
+    args = Any[]
+
+    i = 1
+    N = length(sorted_fissioned_stmts)
+    while i <= N
+        loops_i, stmti = sorted_fissioned_stmts[i]
+        # collect consecutive statements with identical loop nests
+        group_stmts = Any[]
+        j = i
+        while j <= N
+            loops_j, stmtj = sorted_fissioned_stmts[j]
+            if loops_j == loops_i
+                append!(group_stmts, stmtj)
+                j += 1
+            else
+                break
+            end
         end
+
+        if loops_i == ()
+            # top-level sequential statements
+            append!(args, group_stmts)
+        else
+            push!(args, __gen_loop_expr(loops_i, group_stmts))
+        end
+        i = j
     end
+
     return Expr(:block, args...)
 end
 
-function __gen_loop_expr(loop_vars, stmt)
+# Overload to generate nested loops around a block of statements
+function __gen_loop_expr(loop_vars, stmts::Vector)
     loop_var, l, h = loop_vars[1]
     if length(loop_vars) == 1
         return MacroTools.@q for $(loop_var) in ($(l)):($(h))
-            $(stmt)
+            $(Expr(:block, stmts...))
         end
     else
         return MacroTools.@q for $(loop_var) in ($(l)):($(h))
-            $(__gen_loop_expr(loop_vars[2:end], stmt))
+            $(__gen_loop_expr(loop_vars[2:end], stmts))
         end
     end
+end
+
+# Backward-compatible helper to handle single statement
+function __gen_loop_expr(loop_vars, stmt)
+    return __gen_loop_expr(loop_vars, Any[stmt])
 end
 
 # add if statement in the lowered model def
@@ -258,6 +284,12 @@ function _lower_model_def_to_represent_observe_stmts(
             )
             new_for = Expr(:for, statement.args[1], new_body)
             push!(lowered_model_def.args, new_for)
+        elseif Meta.isexpr(statement, :block)
+            # Recursively process nested blocks introduced by program reconstruction
+            new_block = _lower_model_def_to_represent_observe_stmts(
+                statement, stmt_to_stmt_id, var_types, evaluation_env, Expr(:block)
+            )
+            push!(lowered_model_def.args, new_block)
         else
             # For any other kind of expression, simply include it as is.
             push!(lowered_model_def.args, statement)
@@ -304,7 +336,7 @@ function __check_for_reserved_names(model_def::Expr)
     bad_variable_names = filter(
         variable_name ->
             startswith(string(variable_name), "__") &&
-            endswith(string(variable_name), "__"),
+                endswith(string(variable_name), "__"),
         variable_names,
     )
     if !isempty(bad_variable_names)
@@ -319,7 +351,10 @@ function __check_for_reserved_names(model_def::Expr)
 end
 
 function _generate_lowered_model_def(
-    model_def::Expr, g::JuliaBUGS.BUGSGraph, evaluation_env::NamedTuple
+    model_def::Expr,
+    g::JuliaBUGS.BUGSGraph,
+    evaluation_env::NamedTuple;
+    diagnostics::Vector{String}=String[],
 )
     __check_for_reserved_names(model_def)
     stmt_to_stmt_id = _build_stmt_to_stmt_id(model_def)
@@ -327,19 +362,58 @@ function _generate_lowered_model_def(
     var_to_stmt_id = _build_var_to_stmt_id(model_def, g, evaluation_env, stmt_to_stmt_id)
     stmt_id_to_var = _build_stmt_id_to_var(var_to_stmt_id)
     coarse_graph = _build_coarse_dep_graph(g, stmt_to_stmt_id, var_to_stmt_id)
-    if Graphs.is_cyclic(coarse_graph)
-        return nothing, nothing
-    end
-    # show_coarse_graph(stmt_id_to_stmt, coarse_graph)
+    # Remove transformed data before fissioning
     model_def_removed_transformed_data = _copy_and_remove_stmt_with_degree_0(
         model_def, stmt_to_stmt_id, coarse_graph
     )
+    # Fully fission now so we can reason about each statement's loop nest
     fissioned_stmts = _fully_fission_loop(
         model_def_removed_transformed_data, stmt_to_stmt_id, evaluation_env
     )
-    sorted_fissioned_stmts = _sort_fissioned_stmts(
-        coarse_graph, fissioned_stmts, stmt_to_stmt_id
+    # If there are cycles at the coarse statement level, try to resolve them
+    # by analyzing fine-grained dependence vectors. If all cycles are
+    # loop-carried with lexicographically non-negative distances within
+    # the same loop nest, they are sequentially valid and we can either
+    # drop those edges (self or cross-statement) or fuse statements into
+    # a single loop with per-iteration ordering.
+    ordering_graph, all_deps_valid = _build_ordering_graph_via_dependence_vectors(
+        g, coarse_graph, var_to_stmt_id; diagnostics=diagnostics
     )
+    # If dependence analysis found a negative dependence, abort immediately.
+    # Negative dependences mean the model cannot be executed sequentially.
+    if !all_deps_valid
+        if !isempty(diagnostics)
+            @warn "Source generation aborted due to unsafe/corner-case dependencies\n - $(join(diagnostics, "\n - "))"
+        end
+        return nothing, nothing
+    end
+    sorted_fissioned_stmts = nothing
+    if Graphs.is_cyclic(ordering_graph)
+        # Try to resolve remaining cycles by loop fusion within identical loop nests.
+        stmt_order = _attempt_resolve_cycles_via_loop_fusion(
+            g,
+            ordering_graph,
+            var_to_stmt_id,
+            fissioned_stmts,
+            stmt_to_stmt_id;
+            diagnostics=diagnostics,
+        )
+        if stmt_order === nothing
+            if !isempty(diagnostics)
+                @warn "Source generation aborted due to unsafe/corner-case dependencies\n - $(join(diagnostics, "\n - "))"
+            end
+            return nothing, nothing
+        end
+        sorted_fissioned_stmts = _sort_fissioned_stmts_by_stmt_order(
+            stmt_order, fissioned_stmts, stmt_to_stmt_id
+        )
+    else
+        # Use the filtered ordering graph (with loop-carried non-negative
+        # dependences removed) to sort fissioned statements.
+        sorted_fissioned_stmts = _sort_fissioned_stmts(
+            ordering_graph, fissioned_stmts, stmt_to_stmt_id
+        )
+    end
     reconstructed_model_def = _reconstruct_model_def_from_sorted_fissioned_stmts(
         sorted_fissioned_stmts
     )
@@ -488,6 +562,10 @@ function __gen_logp_density_function_body_exprs(stmts::Vector, evaluation_env, e
         elseif Meta.isexpr(stmt, :if)
             new_if = _handle_if_expr(stmt, evaluation_env)
             push!(exprs, new_if)
+        elseif Meta.isexpr(stmt, :block)
+            # Flatten nested blocks (e.g., grouped statements inside loop bodies)
+            new_inner = __gen_logp_density_function_body_exprs(stmt.args, evaluation_env)
+            append!(exprs, new_inner)
         else
             error("Unsupported statement: $stmt")
         end
@@ -592,6 +670,300 @@ function _find_corresponding_fine_grained_edges(
     end
 
     return fine_grained_edges
+end
+
+# Determine the lexicographic relation between two iteration vectors (loop vars).
+# Returns:
+# - :zero       -> loop-independent dependence (same iteration)
+# - :positive   -> loop-carried with lexicographically non-negative (and not all zero)
+# - :negative   -> lexicographically negative (invalid for sequential order)
+# - :unknown    -> cannot compare (different loop nests or empty)
+function _lex_dependence_relation(src_lv::NamedTuple, dst_lv::NamedTuple)
+    # Require identical loop nests (same keys in the same order)
+    src_keys = Tuple(keys(src_lv))
+    dst_keys = Tuple(keys(dst_lv))
+    if src_keys != dst_keys
+        return :unknown
+    end
+    if length(src_keys) == 0
+        return :unknown
+    end
+
+    # Compute difference vector dst - src in lexicographic order
+    first_nonzero = 0
+    for k in src_keys
+        d = Int(getfield(dst_lv, k)) - Int(getfield(src_lv, k))
+        if d != 0
+            first_nonzero = d
+            break
+        end
+    end
+    if first_nonzero == 0
+        return :zero
+    elseif first_nonzero > 0
+        return :positive
+    else
+        return :negative
+    end
+end
+
+# Classify a fine-grained edge by its dependence vector category
+function _classify_fine_edge(g::JuliaBUGS.BUGSGraph, src_vn::VarName, dst_vn::VarName)
+    src_lv = g[src_vn].loop_vars
+    dst_lv = g[dst_vn].loop_vars
+    rel = _lex_dependence_relation(src_lv, dst_lv)
+    return rel
+end
+
+# Build an ordering graph from the coarse statement graph.
+#
+# - Self-edges are dropped if ALL their fine edges are positive (loop-carried
+#   with non-negative dependence vectors). This safely handles recurrences
+#   like x[t] ~ f(x[t-1]).
+# - Cross-statement edges are always kept. Cycles among them are resolved
+#   later by _attempt_resolve_cycles_via_loop_fusion.
+# - If any edge has a negative dependence vector, we abort (return ok=false).
+function _build_ordering_graph_via_dependence_vectors(
+    g::JuliaBUGS.BUGSGraph,
+    coarse_graph::Graphs.SimpleDiGraph,
+    var_to_stmt_id::Dict{VarName,Int};
+    diagnostics::Vector{String}=String[],
+)
+    ordering_graph = Graphs.SimpleDiGraph(Graphs.nv(coarse_graph))
+
+    # Iterate all coarse edges and decide whether to keep them for ordering
+    for e in Graphs.edges(coarse_graph)
+        src_stmt_id = Graphs.src(e)
+        dst_stmt_id = Graphs.dst(e)
+        # Every coarse edge was created from at least one fine edge (both are built
+        # from the same g.graph and var_to_stmt_id), so fine_edges is never empty.
+        fine_edges = _find_corresponding_fine_grained_edges(
+            g, var_to_stmt_id, src_stmt_id, dst_stmt_id
+        )
+
+        # Check all fine edges to classify the coarse edge
+        all_positive = true
+        has_negative = false
+        for (src_vn, dst_vn) in fine_edges
+            rel = _classify_fine_edge(g, src_vn, dst_vn)
+            if rel === :negative
+                has_negative = true
+            end
+            if rel !== :positive
+                all_positive = false
+            end
+        end
+
+        # Decision logic based on whether it's a self-edge or cross-statement edge
+        if src_stmt_id == dst_stmt_id
+            # Self-edge: a negative dependence (e.g., x[t] depends on x[t+1]) is invalid
+            if has_negative
+                push!(
+                    diagnostics,
+                    "Negative self-dependence prevents ordering: statement $(src_stmt_id)",
+                )
+                return ordering_graph, false
+            end
+            # Self-edge: only drop if ALL fine edges are positive (loop-carried)
+            # This safely breaks recursion cycles like x[t] ~ f(x[t-1])
+            if !all_positive
+                Graphs.add_edge!(ordering_graph, src_stmt_id, dst_stmt_id)
+            end
+        else
+            # Cross-statement edge: keep by default. A negative dependence between
+            # different statements just means the loops cannot be fused - the source
+            # statement's loop must complete all iterations before the destination
+            # statement's loop begins. This is handled by keeping the edge.
+            Graphs.add_edge!(ordering_graph, src_stmt_id, dst_stmt_id)
+        end
+    end
+
+    return ordering_graph, true
+end
+
+# Build a mapping from statement id to its fissioned loop nest (tuple of (var, lb, ub)).
+function _build_stmt_to_loops_map(fissioned_stmts, stmt_ids)
+    stmt_to_loops = Dict{Int,Any}()
+    for (loops, stmt) in fissioned_stmts
+        sid = stmt_ids[first(stmt)]
+        stmt_to_loops[sid] = loops
+    end
+    return stmt_to_loops
+end
+
+_loop_var_names(loops) = map(lvh -> lvh[1], collect(loops))
+
+# Attempt to resolve cycles by fusing statements that:
+# - are in the same SCC
+# - share identical loop variable names and identical bounds (same loop nest)
+# - have no lexicographically negative fine-grained dependences among them
+# Ordering inside the fused loop is determined by zero-dependence edges.
+# Returns a vector of statement ids in a globally valid order, or nothing if not possible.
+function _attempt_resolve_cycles_via_loop_fusion(
+    g::JuliaBUGS.BUGSGraph,
+    ordering_graph::Graphs.SimpleDiGraph,
+    var_to_stmt_id::Dict{VarName,Int},
+    fissioned_stmts,
+    stmt_ids::IdDict{Expr,Int};
+    diagnostics::Vector{String}=String[],
+)
+    stmt_to_loops = _build_stmt_to_loops_map(fissioned_stmts, stmt_ids)
+
+    # Identify SCCs
+    sccs = Graphs.strongly_connected_components(ordering_graph)
+
+    # Track which SCCs we will fuse and their internal orders
+    fuseable = Dict{Int,Vector{Int}}() # scc_index => ordered stmt ids inside SCC
+
+    for (scc_idx, nodes) in enumerate(sccs)
+        if length(nodes) <= 1
+            continue
+        end
+
+        # Require all statements in SCC to have identical loop nests (names and bounds)
+        loops_first = get(stmt_to_loops, nodes[1], nothing)
+        if loops_first === nothing
+            push!(diagnostics, "Cannot fuse SCC $(scc_idx): missing loop nest metadata")
+            return nothing
+        end
+        names_first = _loop_var_names(loops_first)
+        same_loops = true
+        for n in nodes[2:end]
+            loops_n = get(stmt_to_loops, n, nothing)
+            if loops_n === nothing
+                push!(
+                    diagnostics,
+                    "Cannot fuse SCC $(scc_idx): missing loop nest metadata for statement $(n)",
+                )
+                return nothing
+            end
+            if _loop_var_names(loops_n) != names_first || loops_n != loops_first
+                same_loops = false
+                break
+            end
+        end
+        if !same_loops
+            push!(
+                diagnostics,
+                "Cannot fuse SCC $(scc_idx): statements have different loop nests",
+            )
+            return nothing
+        end
+
+        # Build a subgraph with edges only for zero-dependence (loop-independent) relations
+        zero_graph = Graphs.SimpleDiGraph(length(nodes))
+        idx_of = Dict(n => i for (i, n) in enumerate(nodes))
+
+        # Check all fine edges among nodes for negativity/unknown; collect zero edges
+        for u in nodes, v in nodes
+            if u == v
+                continue
+            end
+            # find all fine-grained edges mapping u->v
+            fine_edges = _find_corresponding_fine_grained_edges(g, var_to_stmt_id, u, v)
+            if isempty(fine_edges)
+                continue
+            end
+            # classify
+            has_zero = false
+            for (src_vn, dst_vn) in fine_edges
+                rel = _classify_fine_edge(g, src_vn, dst_vn)
+                if rel === :negative
+                    push!(
+                        diagnostics,
+                        "Cannot fuse SCC $(scc_idx): negative dependence inside SCC ($(u) -> $(v))",
+                    )
+                    return nothing
+                elseif rel === :unknown
+                    # Edges across different loop nests or missing loop info
+                    # make this SCC unsafe to fuse; abort.
+                    push!(
+                        diagnostics,
+                        "Cannot fuse SCC $(scc_idx): unknown dependence inside SCC ($(u) -> $(v))",
+                    )
+                    return nothing
+                elseif rel === :zero
+                    has_zero = true
+                end
+            end
+            if has_zero
+                Graphs.add_edge!(zero_graph, idx_of[u], idx_of[v])
+            end
+        end
+
+        # zero_graph must be acyclic to yield an intra-iteration order
+        if Graphs.is_cyclic(zero_graph)
+            push!(
+                diagnostics,
+                "Cannot fuse SCC $(scc_idx): intra-iteration order (zero-dep edges) is cyclic",
+            )
+            return nothing
+        end
+        # topological_sort returns all vertex indices; zero_graph has length(nodes) >= 2
+        # vertices, so local_order is never empty.
+        local_order = [nodes[i] for i in Graphs.topological_sort(zero_graph)]
+        fuseable[scc_idx] = local_order
+    end
+
+    # If ordering_graph has multi-node SCCs but none were fuseable, we can't resolve.
+    # (If all SCCs are size 1, the graph is acyclic and this function shouldn't have
+    # been called, but we handle it gracefully by proceeding to cluster expansion.)
+    has_multi_node_scc = any(length(nodes) > 1 for nodes in sccs)
+    if has_multi_node_scc && isempty(fuseable)
+        push!(diagnostics, "Cycles exist but no SCCs could be fused")
+        return nothing
+    end
+
+    # Build a condensed cluster graph: each SCC becomes a cluster; for fuseable SCCs
+    # we will drop internal edges and expand in the computed local order later.
+    cluster_graph = Graphs.SimpleDiGraph(length(sccs))
+    # Map stmt -> cluster index
+    stmt_to_cluster = Dict{Int,Int}()
+    for (ci, ns) in enumerate(sccs)
+        for n in ns
+            stmt_to_cluster[n] = ci
+        end
+    end
+    # Add inter-cluster edges
+    for e in Graphs.edges(ordering_graph)
+        cu = stmt_to_cluster[Graphs.src(e)]
+        cv = stmt_to_cluster[Graphs.dst(e)]
+        if cu != cv
+            Graphs.add_edge!(cluster_graph, cu, cv)
+        end
+    end
+
+    # Topologically sort clusters
+    cluster_order = Graphs.topological_sort(cluster_graph)
+    # Expand clusters into a flat statement order
+    stmt_order = Int[]
+    for cid in cluster_order
+        nodes = sccs[cid]
+        if haskey(fuseable, cid)
+            append!(stmt_order, fuseable[cid])
+        else
+            # size-1 SCC or non-fuseable SCC (should not exist here if cycles remain)
+            append!(stmt_order, nodes)
+        end
+    end
+    return stmt_order
+end
+
+# Sort fissioned statements according to an explicit statement id order
+function _sort_fissioned_stmts_by_stmt_order(
+    stmt_order::Vector{Int}, fissioned_stmts, stmt_ids
+)
+    order_pos = Dict{Int,Int}(sid => i for (i, sid) in enumerate(stmt_order))
+    # Filter only statements that appear in order (some transformed-data removed ones may be absent)
+    items = []
+    for (loops, stmt) in fissioned_stmts
+        sid = stmt_ids[first(stmt)]
+        if haskey(order_pos, sid)
+            push!(items, (order_pos[sid], loops, stmt))
+        end
+    end
+    sort!(items; by=x -> x[1])
+    return [(loops, stmt) for (_, loops, stmt) in items]
 end
 
 struct CollectSortedNodes{ET} <: CompilerPass

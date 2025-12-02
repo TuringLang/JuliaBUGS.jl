@@ -10,6 +10,8 @@ const props = defineProps<{
   showCodePanel?: boolean
   showDataPanel?: boolean
   showZoomControls?: boolean
+  isDetachModeActive?: boolean
+  showDetachModeControl?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -23,6 +25,7 @@ const emit = defineEmits<{
   (e: 'layout-graph', layout: string): void
   (e: 'toggle-code-panel'): void
   (e: 'toggle-data-panel'): void
+  (e: 'toggle-detach-mode'): void
   (e: 'open-style-modal'): void
   (e: 'share'): void
 }>()
@@ -310,7 +313,21 @@ onUnmounted(() => {
 
       <div class="divider"></div>
 
-      <!-- 3. Edit History -->
+      <!-- 3. Detach Mode (Touch) - Conditionally Rendered -->
+      <template v-if="showDetachModeControl">
+        <button
+          class="dock-btn"
+          :class="{ active: isDetachModeActive }"
+          @click="$emit('toggle-detach-mode')"
+          title="Detach Mode (Simulates Alt/Option key)"
+          type="button"
+        >
+          <i class="fas fa-unlink"></i>
+        </button>
+        <div class="divider"></div>
+      </template>
+
+      <!-- 4. Edit History -->
       <button class="dock-btn" @click="$emit('undo')" title="Undo (Ctrl+Z)" type="button">
         <i class="fas fa-undo"></i>
       </button>
@@ -320,7 +337,7 @@ onUnmounted(() => {
 
       <div class="divider"></div>
 
-      <!-- 4. Panels & Style -->
+      <!-- 5. Panels & Style -->
       <button
         class="dock-btn"
         :class="{ active: showCodePanel }"
@@ -345,7 +362,7 @@ onUnmounted(() => {
         <i class="fas fa-palette"></i>
       </button>
 
-      <!-- 5. Zoom & Layout -->
+      <!-- 6. Zoom & Layout -->
       <template v-if="showZoomControls">
         <div class="divider"></div>
         <button class="dock-btn" @click="$emit('zoom-in')" title="Zoom In" type="button">

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import type { Core, EventObject, NodeSingular, ElementDefinition } from 'cytoscape'
+import { useToast } from 'primevue/usetoast'
 import { useGraphInstance } from '../../composables/useGraphInstance'
 import { useGridSnapping } from '../../composables/useGridSnapping'
 import type {
@@ -45,6 +46,7 @@ let cy: Core | null = null
 const cyInstance = ref<Core | null>(null)
 let resizeObserver: ResizeObserver | null = null
 
+const toast = useToast()
 const { initCytoscape, destroyCytoscape, getCyInstance, getUndoRedoInstance } = useGraphInstance()
 const getCy = () => getCyInstance(props.graphId)
 const { enableGridSnapping, disableGridSnapping, setGridSize } = useGridSnapping(getCy)
@@ -99,19 +101,17 @@ const syncGraphWithProps = (
   cy.batch(() => {
     const newElementIds = new Set(elementsToSync.map((el) => el.id))
 
-    // 1. Remove deleted elements
+    // Remove deleted elements, preserving ghost nodes used for drag operations
     cy!.elements().forEach((cyEl) => {
-      if (!newElementIds.has(cyEl.id())) {
+      if (!newElementIds.has(cyEl.id()) && !cyEl.id().startsWith('ghost_')) {
         cyEl.remove()
       }
     })
 
-    // 2. Separate Nodes and Edges
     const nodes = formattedElements.filter((el) => el.group === 'nodes')
     const edges = formattedElements.filter((el) => el.group === 'edges')
 
-    // 3. Sort nodes by depth (parents before children)
-    // This ensures parents exist before children are added/moved into them.
+    // Sort nodes by depth (parents before children) to ensure correct parentage assignment
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const nodeDefMap = new Map<string, any>(nodes.map((n) => [n.data.id as string, n]))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -129,7 +129,6 @@ const syncGraphWithProps = (
     }
     nodes.sort((a, b) => getDepth(a) - getDepth(b))
 
-    // 4. Process Nodes
     nodes.forEach((formattedEl) => {
       if (!formattedEl.data.id) return
 
@@ -138,7 +137,7 @@ const syncGraphWithProps = (
       if (existingCyEl.empty()) {
         cy!.add(formattedEl)
       } else {
-        // Optimization: Only update data if it has changed
+        // Optimization: Only update data if changed
         const currentData = existingCyEl.data()
         const newData = formattedEl.data
         if (JSON.stringify(currentData) !== JSON.stringify(newData)) {
@@ -164,7 +163,6 @@ const syncGraphWithProps = (
       }
     })
 
-    // 5. Process Edges
     edges.forEach((formattedEl) => {
       if (!formattedEl.data.id) return
 
@@ -192,33 +190,37 @@ const syncGraphWithProps = (
 
 const getSerializedElements = (): GraphElement[] => {
   if (!cy) return []
-  return cy
-    .elements()
-    .toArray()
-    .map((ele) => {
-      const data = ele.data()
-      // Remove temporary UI state flags before serializing
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { hasError, ...cleanData } = data
+  return (
+    cy
+      .elements()
+      .toArray()
+      // Exclude temporary "ghost" nodes from serialization
+      .filter((ele) => !ele.id().startsWith('ghost_'))
+      .map((ele) => {
+        const data = ele.data()
+        // Remove temporary UI state flags
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { hasError, ...cleanData } = data
 
-      if (ele.isNode()) {
-        const parentCollection = ele.parent()
-        const parentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined
-        return {
-          ...cleanData,
-          type: 'node',
-          position: ele.position(),
-          parent: parentId,
-        } as GraphNode
-      } else {
-        return {
-          ...cleanData,
-          type: 'edge',
-          source: ele.source().id(),
-          target: ele.target().id(),
-        } as GraphEdge
-      }
-    })
+        if (ele.isNode()) {
+          const parentCollection = ele.parent()
+          const parentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined
+          return {
+            ...cleanData,
+            type: 'node',
+            position: ele.position(),
+            parent: parentId,
+          } as GraphNode
+        } else {
+          return {
+            ...cleanData,
+            type: 'edge',
+            source: ele.source().id(),
+            target: ele.target().id(),
+          } as GraphEdge
+        }
+      })
+  )
 }
 
 const updateGridStyle = () => {
@@ -237,11 +239,22 @@ const updateGridStyle = () => {
   }
 }
 
+// Updated mapping for dynamic summary based on severity
+const summaryMap: Record<'info' | 'warn' | 'error' | 'success', string> = {
+  info: 'Info',
+  warn: 'Warning',
+  error: 'Error',
+  success: 'Success',
+}
+
+const handleToast = (message: string, severity: 'info' | 'warn' | 'error' | 'success' = 'info') => {
+  toast.add({ severity: severity, summary: summaryMap[severity], detail: message, life: 3000 })
+}
+
 onMounted(() => {
   if (cyContainer.value) {
-    // Initialize Cytoscape with empty elements initially
-    // Elements will be synced once the container is properly resized
-    cy = initCytoscape(cyContainer.value, [], props.graphId)
+    // Initialize Cytoscape (elements synced later on resize)
+    cy = initCytoscape(cyContainer.value, [], props.graphId, handleToast)
     cyInstance.value = cy
 
     setGridSize(props.gridSize)
@@ -261,7 +274,6 @@ onMounted(() => {
     }
 
     cy.on('layoutstop', () => {
-      // Only emit if elements are actually in the graph to avoid emitting empty initial state
       if (cy && cy.elements().length > 0) {
         emit('graph-updated', getSerializedElements())
       }
@@ -294,6 +306,9 @@ onMounted(() => {
 
     cy.on('free', 'node', (evt: EventObject) => {
       const node = evt.target as NodeSingular
+
+      if (node.id().startsWith('ghost_')) return
+
       const parentCollection = node.parent()
       const parentId = parentCollection.length > 0 ? parentCollection.first().id() : undefined
 
@@ -347,16 +362,13 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(() => {
       if (cy) {
         cy.resize()
-        // Only proceed if container has valid dimensions
         if (cy.width() > 0 && cy.height() > 0) {
           if (!isGraphReady.value) {
-            // First time setup after container is sized
             isGraphReady.value = true
 
-            // Populate the graph now that we have dimensions
+            // Populate graph and set initial viewport
             syncGraphWithProps(props.elements, props.validationErrors)
 
-            // Set initial viewport
             if (props.initialViewport) {
               cy.viewport({
                 zoom: props.initialViewport.zoom,
@@ -377,7 +389,6 @@ onMounted(() => {
               isGraphVisible.value = true
             })
           } else {
-            // Subsequent resizes
             updateGridStyle()
           }
         }
@@ -440,7 +451,6 @@ watch(
   [() => uiStore.nodeStyles, () => uiStore.edgeStyles],
   () => {
     if (cy) {
-      // Trigger style recalculation
       cy.style().update()
     }
   },

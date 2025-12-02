@@ -35,6 +35,9 @@ function analyze_block(
                     )
                 end
             end
+        elseif Meta.isexpr(statement, :block)
+            # Flatten nested blocks introduced by program reconstruction
+            analyze_block(pass, statement, loop_vars; warn_loop_bounds=warn_loop_bounds)
         else
             error("Unsupported expression in top level: $statement")
         end
