@@ -51,8 +51,8 @@ getfield(Documenter.DocMeta, Symbol("setdocmeta!"))(
     JuliaBUGS,
     :DocTestSetup,
     :(using JuliaBUGS, Test, Distributions, AbstractPPL;
-      using JuliaBUGS.Model: condition, parameters, decondition;
-      JuliaBUGS.@bugs_primitive Normal Gamma);
+    using JuliaBUGS.Model: condition, parameters, decondition;
+    JuliaBUGS.@bugs_primitive Normal Gamma);
     recursive=true,
 )
 
