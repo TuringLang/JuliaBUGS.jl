@@ -74,7 +74,7 @@ end
 # ! writing a _function_ to benchmark all models won't work because of world-age error
 
 function benchmark_JuliaBUGS_model_with_Mooncake(model::JuliaBUGS.BUGSModel)
-    # Generate the log density function for optimal performance
+    # Use generated log density function for Mooncake
     model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())
     p = Base.Fix1(model.log_density_computation_function, model.evaluation_env)
     backend = AutoMooncake(; config=nothing)

@@ -47,16 +47,6 @@ New `BUGSModel` with:
 
 # Examples
 ```jldoctest condition
-julia> using JuliaBUGS: @bugs, compile, @varname, initialize!, @bugs_primitive
-
-julia> using JuliaBUGS.Model: condition, parameters
-
-julia> using Test
-
-julia> using Distributions: Normal
-
-julia> @bugs_primitive Normal
-
 julia> model_def = @bugs begin
            for i in 1:3
                x[i] ~ Normal(0, 1)
@@ -262,14 +252,6 @@ For base_model restoration (no args):
 
 # Examples
 ```jldoctest decondition
-julia> using JuliaBUGS: @bugs, compile
-
-julia> using JuliaBUGS.Model: condition, parameters, decondition
-
-julia> using AbstractPPL: @varname
-
-julia> using Test
-
 julia> model_def = @bugs begin
            x ~ dnorm(0, 1)
            y ~ dnorm(x, 1) 
