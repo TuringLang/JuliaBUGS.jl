@@ -22,6 +22,7 @@ defineProps<{
   showZoomControls: boolean
   showDebugPanel: boolean
   isCodePanelOpen: boolean
+  showDetachModeControl: boolean
 }>()
 
 const emit = defineEmits<{
@@ -34,6 +35,7 @@ const emit = defineEmits<{
   (e: 'update:gridSize', value: number): void
   (e: 'update:showZoomControls', value: boolean): void
   (e: 'update:showDebugPanel', value: boolean): void
+  (e: 'update:showDetachModeControl', value: boolean): void
   (e: 'toggle-code-panel'): void
   (e: 'load-example', key: string): void
   (e: 'open-about-modal'): void
@@ -163,6 +165,13 @@ const handleGridSizeInput = (event: Event) => {
                 />
               </div>
               <div class="divider"></div>
+              <div class="menu-row">
+                <label title="Show Detach button in toolbar">Show Node Detach Option</label>
+                <ToggleSwitch
+                  :modelValue="showDetachModeControl"
+                  @update:modelValue="$emit('update:showDetachModeControl', $event)"
+                />
+              </div>
               <div class="menu-row">
                 <label>Zoom Controls</label>
                 <ToggleSwitch
