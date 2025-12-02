@@ -249,7 +249,6 @@ Set `skip_validation=true` to skip validation (for @model macro usage).
 
 The compiled model uses `UseGraph` evaluation mode by default. To use the optimized generated
 log-density function, call `set_evaluation_mode(model, UseGeneratedLogDensityFunction())`.
-The generated function will be compiled lazily on first use.
 """
 function compile(
     model_def::Expr,

@@ -19,7 +19,7 @@ function Serialization.deserialize(s::Serialization.AbstractSerializer, ::Type{<
     data = Serialization.deserialize(s)
     evaluation_env = Serialization.deserialize(s)
     # use evaluation_env as initialization to restore the values
-    # Model starts with UseGraph mode; log density function is generated lazily if needed
+    # Model starts with UseGraph mode; log density function can be generated via set_evaluation_mode
     model = compile(model_def, data, evaluation_env)
     return settrans(model, transformed)
 end

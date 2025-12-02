@@ -254,8 +254,8 @@ function BUGSModel(
     # Compute mutable symbols from graph evaluation data
     mutable_symbols = get_mutable_symbols(graph_evaluation_data)
 
-    # Return model without generating log density function (lazy generation)
-    # Function will be generated on-demand when UseGeneratedLogDensityFunction mode is set
+    # Return model without generating log density function (on-demand generation)
+    # Function will be generated when UseGeneratedLogDensityFunction mode is set
 
     return BUGSModel(
         model_def,
@@ -269,7 +269,7 @@ function BUGSModel(
         untransformed_var_lengths,
         transformed_var_lengths,
         graph_evaluation_data,
-        nothing,  # log_density_computation_function - generated lazily
+        nothing,  # log_density_computation_function - generated on-demand
         mutable_symbols,
         nothing,
     )
@@ -459,8 +459,8 @@ Set the evaluation mode for the `BUGSModel`.
 The evaluation mode determines how the log-density of the model is computed.
 Possible modes are:
 - `UseGeneratedLogDensityFunction()`: Uses a statically generated function for log-density computation.
-  This is often faster but may not be available for all models. The function is generated lazily on
-  first use. If generation fails, a warning is issued and the mode defaults to `UseGraph()`.
+  This is often faster but may not be available for all models. The function is generated when
+  switching to this mode. If generation fails, a warning is issued and the mode defaults to `UseGraph()`.
 - `UseGraph()`: Computes the log-density by traversing the model's graph structure. This is always
   available but might be slower.
 

@@ -154,7 +154,7 @@ function condition(model::BUGSModel, conditioning_spec)
     new_graph = _mark_as_observed(model.g, expanded_vars)
 
     # Create updated model with conditioned variables
-    # Log density function will be generated lazily when UseGeneratedLogDensityFunction mode is set
+    # Log density function will be generated when set_evaluation_mode is called with UseGeneratedLogDensityFunction
     return _create_modified_model(
         model,
         new_graph,
@@ -568,7 +568,7 @@ function _create_modified_model(
     new_mutable_symbols = get_mutable_symbols(new_graph_evaluation_data)
 
     # Create the new model with all updated fields
-    # Log density function is NOT generated here - it will be generated lazily
+    # Log density function is NOT generated here - it will be generated on-demand
     # when set_evaluation_mode(model, UseGeneratedLogDensityFunction()) is called
     kwargs = Dict{Symbol,Any}(
         :untransformed_param_length => new_untransformed_param_length,
@@ -586,7 +586,7 @@ function _create_modified_model(
         kwargs[:base_model] = base_model
     end
 
-    # Return model without precomputing log density function (lazy computation)
+    # Return model without precomputing log density function (on-demand generation)
     return BUGSModel(model; kwargs...)
 end
 
