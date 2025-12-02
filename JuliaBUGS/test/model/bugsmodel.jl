@@ -143,10 +143,10 @@ end
             model_init = initialize!(model, (; theta=[1.0, 2.0, 3.0]))
             @test model_init.evaluation_env.theta == [1.0, 2.0, 3.0]
 
-            # Initialize with vector
+            # Initialize with vector (parameter order may vary)
             params = [0.5, 1.5, 2.5]
             model_vec = initialize!(model, params)
-            @test model_vec.evaluation_env.theta == [0.5, 1.5, 2.5]
+            @test Set(model_vec.evaluation_env.theta) == Set([0.5, 1.5, 2.5])
         end
     end
 
@@ -282,33 +282,14 @@ end
         end
 
         @testset "Generated function availability" begin
-            # Test behavior when model doesn't support generated function
-            # Create a model that doesn't have a generated function
-            model_no_gen = compile(model_def, (; z=2.5))
-            # Manually set the log_density_computation_function to nothing to simulate
-            # a model without generated function support
-            model_no_gen_modified = BUGSModel(
-                model_no_gen; log_density_computation_function=nothing
-            )
+            # With lazy generation, all compiled models start without a generated function
+            model = compile(model_def, (; z=2.5))
+            @test isnothing(model.log_density_computation_function)
+            @test model.evaluation_mode isa UseGraph
 
-            # Verify the function is indeed nothing
-            @test model_no_gen_modified.log_density_computation_function === nothing
-            @test model_no_gen_modified.evaluation_mode isa UseGraph
-
-            # When setting to UseGeneratedLogDensityFunction, it should automatically
-            # fall back to UseGraph mode since no generated function is available
-            # Test both the warning and the behavior
-            model_attempt = @test_logs (:warn,) set_evaluation_mode(
-                model_no_gen_modified, UseGeneratedLogDensityFunction()
-            )
-            @test model_attempt.evaluation_mode isa UseGraph
-
-            # Verify that a normal model with generated function works as expected
-            model_with_gen = compile(model_def, (; z=2.5))
-            @test !isnothing(model_with_gen.log_density_computation_function)
-            model_gen_mode = set_evaluation_mode(
-                model_with_gen, UseGeneratedLogDensityFunction()
-            )
+            # When setting to UseGeneratedLogDensityFunction, the function is generated on-demand
+            model_gen_mode = set_evaluation_mode(model, UseGeneratedLogDensityFunction())
+            @test !isnothing(model_gen_mode.log_density_computation_function)
             @test model_gen_mode.evaluation_mode isa UseGeneratedLogDensityFunction
         end
 

@@ -47,11 +47,13 @@ New `BUGSModel` with:
 
 # Examples
 ```jldoctest condition
-julia> using JuliaBUGS: @bugs, compile, @varname, initialize!
+julia> using JuliaBUGS: @bugs, compile, @varname, initialize!, @bugs_primitive
 
 julia> using JuliaBUGS.Model: condition, parameters
 
 julia> using Test
+
+julia> @bugs_primitive Normal
 
 julia> model_def = @bugs begin
            for i in 1:3
@@ -107,7 +109,7 @@ julia> # NamedTuple syntax
 julia> model_cond3.evaluation_env.y
 10.0
 
-julia> parameters(model_cond3)  # y removed, only x[i] remain
+julia> sort(parameters(model_cond3); by=string)  # y removed, only x[i] remain
 3-element Vector{AbstractPPL.VarName}:
  x[1]
  x[2]
@@ -353,7 +355,7 @@ julia> # Decondition with subsumption
            decondition(model_arr_cond, [@varname(v)])
        );
 
-julia> parameters(model_arr_decon)
+julia> sort(parameters(model_arr_decon); by=string)
 3-element Vector{AbstractPPL.VarName}:
  v[1]
  v[2]
