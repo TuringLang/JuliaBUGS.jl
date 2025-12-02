@@ -70,7 +70,6 @@ jobs:
         env:
           TEST_GROUP: ${{ matrix.test_group }}
 
-  # Slow inference tests with retry logic
   test-inference:
     name: ${{ matrix.test_group }} - Julia ${{ matrix.version }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
