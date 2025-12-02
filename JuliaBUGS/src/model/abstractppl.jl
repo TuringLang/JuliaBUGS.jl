@@ -65,7 +65,7 @@ julia> model_cond.evaluation_env.x[1:2]
  2.0
 
 julia> parameters(model_cond)
-2-element Vector{AbstractPPL.VarName}:
+2-element Vector{VarName}:
  x[3]
  y
 
@@ -82,7 +82,7 @@ julia> model_cond2.evaluation_env.x
  7.0
 
 julia> parameters(model_cond2)  # All x[i] removed, only y remains
-1-element Vector{AbstractPPL.VarName}:
+1-element Vector{VarName}:
  y
 
 julia> # Check parameter lengths
@@ -102,7 +102,7 @@ julia> model_cond3.evaluation_env.y
 10.0
 
 julia> sort(parameters(model_cond3); by=string)  # y removed, only x[i] remain
-3-element Vector{AbstractPPL.VarName}:
+3-element Vector{VarName}:
  x[1]
  x[2]
  x[3]
@@ -126,7 +126,7 @@ julia> model_cond4.evaluation_env.x[[1, 3]]
  3.0
 
 julia> parameters(model_cond4)
-2-element Vector{AbstractPPL.VarName}:
+2-element Vector{VarName}:
  x[2]
  y
 ```
@@ -264,13 +264,13 @@ julia> # Condition model
        model_cond = condition(model, (; x = 1.0, y = 1.5));
 
 julia> parameters(model_cond)
-AbstractPPL.VarName[]
+VarName[]
 
 julia> # Partial deconditioning with specified variables
        model_d1 = decondition(model_cond, [@varname(y)]);
 
 julia> parameters(model_d1)
-1-element Vector{AbstractPPL.VarName}:
+1-element Vector{VarName}:
  y
 
 julia> # Full restoration to base model (no arguments)
@@ -340,7 +340,7 @@ julia> # Decondition with subsumption
        );
 
 julia> sort(parameters(model_arr_decon); by=string)
-3-element Vector{AbstractPPL.VarName}:
+3-element Vector{VarName}:
  v[1]
  v[2]
  v[3]
