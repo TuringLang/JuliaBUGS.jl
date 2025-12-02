@@ -12,3 +12,6 @@ OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
 ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 StanLogDensityProblems = "a545de4d-8dba-46db-9d34-4e41d3f07807"
+
+[sources]
+JuliaBUGS = {path = ".."}
