@@ -120,8 +120,8 @@ model = gp_golf_putting(
     data.jitter, # Numerical stability term
 )
 
-# Optionally, set the evaluation mode. Using generated functions can be faster.
-# model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())
+# Generate the log density function for optimal performance
+model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())
 
 # --- MCMC Setup with Custom LogDensityProblems Wrapper ---
 

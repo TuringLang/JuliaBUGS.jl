@@ -215,13 +215,13 @@ julia> using JuliaBUGS: expand_variables, @varname
 julia> model_parameters = [@varname(x[1]), @varname(x[2]), @varname(x[3]), @varname(y)];
 
 julia> expand_variables([@varname(x)], model_parameters)
-3-element Vector{AbstractPPL.VarName}:
+3-element Vector{VarName}:
  x[1]
  x[2]
  x[3]
 
 julia> expand_variables([@varname(x[1]), @varname(y)], model_parameters)
-2-element Vector{AbstractPPL.VarName}:
+2-element Vector{VarName}:
  x[1]
  y
 ```

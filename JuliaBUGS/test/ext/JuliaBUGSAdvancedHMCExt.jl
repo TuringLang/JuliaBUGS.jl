@@ -10,7 +10,8 @@
         n_samples, n_adapts = 10, 0
         D = LogDensityProblems.dimension(ad_model)
         initial_θ = rand(D)
-        samples_and_stats = AbstractMCMC.sample(
+        samples_and_stats = Base.invokelatest(
+            AbstractMCMC.sample,
             StableRNG(1234),
             ad_model,
             NUTS(0.8),
@@ -92,7 +93,8 @@
         D = LogDensityProblems.dimension(ad_model)
         initial_θ = JuliaBUGS.getparams(ad_model.base_model)
 
-        samples_and_stats = AbstractMCMC.sample(
+        samples_and_stats = Base.invokelatest(
+            AbstractMCMC.sample,
             StableRNG(1234),
             ad_model,
             NUTS(0.8),

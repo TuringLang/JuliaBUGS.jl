@@ -249,7 +249,10 @@ If initializations are not provided, values will be sampled from the prior distr
 By default, validates that all functions in the model are in the BUGS allowlist (suitable for @bugs macro).
 Set `skip_validation=true` to skip validation (for @model macro usage).
 
-If `adtype` is provided, returns a `BUGSModelWithGradient` that supports gradient-based MCMC 
+The compiled model uses `UseGraph` evaluation mode by default. To use the optimized generated
+log-density function, call `set_evaluation_mode(model, UseGeneratedLogDensityFunction())`.
+
+If `adtype` is provided, returns a `BUGSModelWithGradient` that supports gradient-based MCMC
 samplers like HMC/NUTS. The gradient computation is prepared during compilation for optimal performance.
 
 # Arguments
@@ -317,7 +320,7 @@ function compile(
             values(eval_env),
         ),
     )
-    base_model = BUGSModel(g, nonmissing_eval_env, model_def, data, initial_params)
+    base_model = BUGSModel(g, nonmissing_eval_env, model_def, data, initial_params, true)
 
     # If adtype provided, wrap with gradient capabilities
     if adtype !== nothing

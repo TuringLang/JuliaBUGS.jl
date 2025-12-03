@@ -1,5 +1,7 @@
 using Pkg
-Pkg.develop(; path=joinpath(@__DIR__, ".."))
+redirect_stdout(devnull) do
+    Pkg.develop(; path=joinpath(@__DIR__, ".."))
+end
 
 using JuliaBUGS
 
@@ -91,7 +93,72 @@ function _create_results_dataframe(results::OrderedDict{Symbol,BenchmarkResult})
     return df
 end
 
-function _print_results_table(results::OrderedDict{Symbol,BenchmarkResult}; backend=:text)
+function _print_results_table(
+    results::OrderedDict{Symbol,BenchmarkResult}; backend::Symbol=:text
+)
     df = _create_results_dataframe(results)
+    rename!(df, ["Model", "Parameters", "Density Time (µs)", "Density+Gradient Time (µs)"])
     return pretty_table(df; backend=backend)
+end
+
+function _print_comparison_table(
+    stan_results::OrderedDict{Symbol,BenchmarkResult},
+    juliabugs_results::OrderedDict{Symbol,BenchmarkResult};
+    backend::Symbol=:text,
+)
+    df = DataFrame(;
+        Model=Symbol[],
+        Params=Int[],
+        Stan_LD=String[],
+        JuliaBUGS_LD=String[],
+        Ratio_LD=String[],
+        Stan_Grad=String[],
+        JuliaBUGS_Grad=String[],
+        Ratio_Grad=String[],
+    )
+
+    for model_name in keys(stan_results)
+        stan = stan_results[model_name]
+        jbugs = juliabugs_results[model_name]
+
+        stan_ld, stan_grad = extract_median_time(stan)
+        jbugs_ld, jbugs_grad = extract_median_time(jbugs)
+
+        ratio_ld = jbugs_ld / stan_ld
+        ratio_grad = jbugs_grad / stan_grad
+
+        push!(
+            df,
+            (
+                model_name,
+                Int(stan.dim),
+                @sprintf("%.1f", stan_ld),
+                @sprintf("%.1f", jbugs_ld),
+                @sprintf("%.2fx", ratio_ld),
+                @sprintf("%.1f", stan_grad),
+                @sprintf("%.1f", jbugs_grad),
+                @sprintf("%.2fx", ratio_grad),
+            ),
+        )
+    end
+
+    rename!(
+        df,
+        ["Model", "Params", "Stan LD", "JBUGS LD", "Ratio", "Stan ∇", "JBUGS ∇", "Ratio"],
+    )
+    return pretty_table(df; backend=backend, alignment=[:l, :r, :r, :r, :r, :r, :r, :r])
+end
+
+function _output_results_csv(
+    stan_results::OrderedDict{Symbol,BenchmarkResult},
+    juliabugs_results::OrderedDict{Symbol,BenchmarkResult},
+)
+    println("model,params,stan_ld,jbugs_ld,stan_grad,jbugs_grad")
+    for model_name in keys(stan_results)
+        stan = stan_results[model_name]
+        jbugs = juliabugs_results[model_name]
+        stan_ld, stan_grad = extract_median_time(stan)
+        jbugs_ld, jbugs_grad = extract_median_time(jbugs)
+        println("$model_name,$(stan.dim),$stan_ld,$jbugs_ld,$stan_grad,$jbugs_grad")
+    end
 end

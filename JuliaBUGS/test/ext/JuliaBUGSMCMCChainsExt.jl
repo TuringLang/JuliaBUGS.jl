@@ -26,13 +26,15 @@
         y=[1.58, 4.80, 7.10, 8.86, 11.73, 14.52, 18.22, 18.73, 21.04, 22.93],
     )
 
+    model = compile(model_def, data, (;))
     ad_model = compile(model_def, data, (;); adtype=AutoReverseDiff(; compile=true))
     n_samples, n_adapts = 2000, 1000
 
     D = LogDensityProblems.dimension(ad_model)
     initial_θ = rand(D)
 
-    hmc_chain = AbstractMCMC.sample(
+    hmc_chain = Base.invokelatest(
+        AbstractMCMC.sample,
         ad_model,
         NUTS(0.8),
         n_samples;
@@ -72,7 +74,7 @@
     n_samples, n_adapts = 20000, 5000
 
     mh_chain = AbstractMCMC.sample(
-        ad_model.base_model,
+        model,
         RWMH(MvNormal(zeros(D), I)),
         n_samples;
         progress=false,

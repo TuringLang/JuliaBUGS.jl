@@ -12,87 +12,41 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  repository-projects: write
 
 jobs:
   benchmark:
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - macOS-latest
-        include:
-          - os: macOS-latest
-            arch: aarch64
-          - os: ubuntu-latest
-            arch: x64
-
-    name: Benchmark on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: Benchmark
+    runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
 
-    - name: Set up Julia
-      uses: julia-actions/setup-julia@v2
+    - uses: julia-actions/setup-julia@v2
       with:
-        version: '1'
-        arch: ${{ matrix.arch }}
+        version: '1.11'
 
     - uses: actions/cache@v4
       with:
         path: |
           ~/.julia
           ~/.julia/artifacts
-        key: ${{ runner.os }}-julia-benchmark-${{ matrix.arch }}-${{ hashFiles('JuliaBUGS/**/Project.toml', 'JuliaBUGS/**/Manifest.toml') }}
+        key: ${{ runner.os }}-julia-benchmark-${{ hashFiles('JuliaBUGS/**/Project.toml', 'JuliaBUGS/**/Manifest.toml') }}
         restore-keys: |
-          ${{ runner.os }}-julia-benchmark-${{ matrix.arch }}-
           ${{ runner.os }}-julia-benchmark-
 
     - name: Run benchmarks
       working-directory: ./JuliaBUGS
+      env:
+        BENCHMARK_OUTPUT: benchmark_results.md
       run: |
         julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
-        julia --project=benchmark benchmark/run_benchmarks.jl > benchmark_results_${{ matrix.os }}.txt
+        julia --project=benchmark benchmark/run_benchmarks.jl
 
-    - name: Upload benchmark results
-      uses: actions/upload-artifact@v4
-      with:
-        name: benchmark-results-${{ matrix.os }}
-        path: JuliaBUGS/benchmark_results_${{ matrix.os }}.txt
-        retention-days: 7
-
-  post-results:
-    needs: benchmark
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    permissions:
-      pull-requests: write
-      contents: write
-
-    steps:
-    - name: Download all benchmark results
-      uses: actions/download-artifact@v4
-
-    - name: Combine benchmark results
-      run: |
-        echo "## Benchmark results on macOS (aarch64)" > combined_benchmark_results.txt
-        echo "" >> combined_benchmark_results.txt
-        cat benchmark-results-macOS-latest/benchmark_results_macOS-latest.txt >> combined_benchmark_results.txt
-        echo "" >> combined_benchmark_results.txt
-        echo "---" >> combined_benchmark_results.txt
-        echo "## Benchmark results on Ubuntu (x64)" >> combined_benchmark_results.txt
-        echo "" >> combined_benchmark_results.txt
-        cat benchmark-results-ubuntu-latest/benchmark_results_ubuntu-latest.txt >> combined_benchmark_results.txt
-        echo "" >> combined_benchmark_results.txt
-
-    - name: Post combined results to PR
+    - name: Post results to PR
       uses: marocchino/sticky-pull-request-comment@v2
-      if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+      if: github.event_name == 'pull_request'
       with:
-        path: combined_benchmark_results.txt
+        path: JuliaBUGS/benchmark_results.md
         recreate: true
