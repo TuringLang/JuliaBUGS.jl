@@ -37,12 +37,7 @@ include("graphs.jl")
 include("compiler_pass.jl")
 include("model/Model.jl")
 using .Model
-using .Model:
-    AbstractBUGSModel,
-    BUGSModel,
-    evaluate_with_values!!,
-    UseGraph,
-    UseGeneratedLogDensityFunction
+using .Model: AbstractBUGSModel, BUGSModel
 
 include("independent_mh.jl")
 include("gibbs.jl")

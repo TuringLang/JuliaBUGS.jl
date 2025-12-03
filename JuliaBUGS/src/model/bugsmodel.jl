@@ -4,6 +4,31 @@
 abstract type AbstractBUGSModel end
 
 """
+    MarginalizationCache
+
+Caches precomputed data for automatic marginalization of discrete finite variables.
+This cache is computed lazily when switching to `UseAutoMarginalization` mode and
+must be invalidated when the graph structure changes (e.g., during conditioning).
+
+# Fields
+- `minimal_cache_keys::Dict{Int,Vector{Int}}`: Maps node index to minimal frontier indices for memoization.
+- `marginalization_order::Vector{Int}`: Optimized evaluation order that reduces frontier size.
+- `node_types::Vector{Symbol}`: Node type for each node
+  (`:deterministic`, `:discrete_finite`, `:discrete_infinite`, or `:continuous`).
+- `param_lengths::Dict{VarName,Int}`: Transformed lengths for continuous parameters.
+- `param_offsets::Dict{VarName,Int}`: Start index in flattened parameter vector for each continuous param.
+- `n_discrete_finite::Int`: Number of discrete finite variables (for memo sizing).
+"""
+struct MarginalizationCache{V<:VarName}
+    minimal_cache_keys::Dict{Int,Vector{Int}}
+    marginalization_order::Vector{Int}
+    node_types::Vector{Symbol}
+    param_lengths::Dict{V,Int}
+    param_offsets::Dict{V,Int}
+    n_discrete_finite::Int
+end
+
+"""
     GraphEvaluationData{TNF,TV}
 
 Caches node information from the model graph to optimize evaluation performance.
@@ -12,7 +37,7 @@ Stores pre-computed values to avoid repeated lookups from the MetaGraph during m
 # Fields
 - `sorted_nodes::Vector{<:VarName}`: Variables in topological order for evaluation
 - `sorted_parameters::Vector{<:VarName}`: Parameters (unobserved stochastic variables) in sorted order consistent with sorted_nodes
-- `is_stochastic_vals::Vector{Bool}`: Whether each node represents a stochastic variable  
+- `is_stochastic_vals::Vector{Bool}`: Whether each node represents a stochastic variable
 - `is_observed_vals::Vector{Bool}`: Whether each node is observed (has data)
 - `node_function_vals::TNF`: Functions that define each node's computation
 - `loop_vars_vals::TV`: Loop variables associated with each node
@@ -26,6 +51,12 @@ struct GraphEvaluationData{TNF,TV}
     loop_vars_vals::TV
 end
 
+"""
+    GraphEvaluationData(g::BUGSGraph, [sorted_nodes], [active_parameters])
+
+Create a `GraphEvaluationData` from a `BUGSGraph`, extracting and caching node information
+for efficient evaluation.
+"""
 function GraphEvaluationData(
     g::BUGSGraph,
     sorted_nodes::Vector{<:VarName}=VarName[
@@ -55,7 +86,7 @@ function GraphEvaluationData(
         end
     end
 
-    return GraphEvaluationData(
+    return GraphEvaluationData{typeof(node_function_vals),typeof(loop_vars_vals)}(
         sorted_nodes,
         sorted_parameters,
         is_stochastic_vals,
@@ -69,6 +100,7 @@ abstract type EvaluationMode end
 
 struct UseGeneratedLogDensityFunction <: EvaluationMode end
 struct UseGraph <: EvaluationMode end
+struct UseAutoMarginalization <: EvaluationMode end
 
 """
     BUGSModel
@@ -80,18 +112,22 @@ The `BUGSModel` object is used for inference and represents the output of compil
 
 - `model_def::Expr`: The original model definition (for serialization).
 - `data::data_T`: The data associated with the model (for serialization).
-- `g::BUGSGraph`: An instance of `BUGSGraph`, representing the dependency graph of the model.
-- `evaluation_env::T`: A `NamedTuple` containing the values of the variables in the model, all the values are in the constrained space.
-- `transformed::Bool`: Indicates whether the model parameters are in the transformed space.
-- `evaluation_mode::EMT`: The mode for evaluating the log-density (either `UseGeneratedLogDensityFunction` or `UseGraph`).
-- `untransformed_param_length::Int`: The length of the parameters vector in the original (constrained) space.
-- `transformed_param_length::Int`: The length of the parameters vector in the transformed (unconstrained) space.
-- `untransformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the original (constrained) space.
-- `transformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space.
-- `graph_evaluation_data::GraphEvaluationData{TNF,TV}`: A `GraphEvaluationData` object containing pre-computed values of the nodes in the model, with sorted_parameters as the second field for easy access.
-- `log_density_computation_function::F`: The generated function for computing log-density (if available).
-- `mutable_symbols::Set{Symbol}`: Set of symbols in the evaluation environment that may be mutated during evaluation (parameters and deterministic nodes).
-- `base_model::base_model_T`: If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`.
+- `g::BUGSGraph`: The dependency graph of the model.
+- `evaluation_env::T`: A `NamedTuple` containing values of variables in the model (constrained space).
+- `transformed::Bool`: Whether model parameters are in the transformed (unconstrained) space.
+- `evaluation_mode::EMT`: The mode for evaluating the log-density
+  (`UseGeneratedLogDensityFunction`, `UseGraph`, or `UseAutoMarginalization`).
+- `untransformed_param_length::Int`: Length of parameters vector in constrained space.
+- `transformed_param_length::Int`: Length of parameters vector in unconstrained space.
+- `untransformed_var_lengths::Dict{<:VarName,Int}`: Variable lengths in constrained space.
+- `transformed_var_lengths::Dict{<:VarName,Int}`: Variable lengths in unconstrained space.
+- `graph_evaluation_data::GraphEvaluationData{TNF,TV}`: Pre-computed node values for evaluation.
+- `log_density_computation_function::F`: Generated log-density function (lazy, for
+  `UseGeneratedLogDensityFunction` mode).
+- `marginalization_cache::MC`: Cache for auto-marginalization (lazy, for
+  `UseAutoMarginalization` mode). Invalidated when graph structure changes.
+- `mutable_symbols::Set{Symbol}`: Symbols that may be mutated during evaluation.
+- `base_model::base_model_T`: The original model if this is a conditioned model; `nothing` otherwise.
 """
 struct BUGSModel{
     EMT<:EvaluationMode,
@@ -101,6 +137,7 @@ struct BUGSModel{
     TV,
     data_T,
     F<:Union{Function,Nothing},
+    MC<:Union{MarginalizationCache,Nothing},
 } <: AbstractBUGSModel
     model_def::Expr
     data::data_T
@@ -121,6 +158,8 @@ struct BUGSModel{
 
     log_density_computation_function::F
 
+    marginalization_cache::MC
+
     mutable_symbols::Set{Symbol}
 
     base_model::base_model_T
@@ -140,10 +179,12 @@ function BUGSModel(
     base_model::Union{<:AbstractBUGSModel,Nothing}=model.base_model,
     evaluation_mode::EvaluationMode=model.evaluation_mode,
     log_density_computation_function::Union{Function,Nothing}=model.log_density_computation_function,
+    marginalization_cache::Union{MarginalizationCache,Nothing}=model.marginalization_cache,
     mutable_symbols::Set{Symbol}=model.mutable_symbols,
     model_def::Expr=model.model_def,
     data=model.data,
 )
+    # Return model without precomputing caches (on-demand generation)
     return BUGSModel(
         model_def,
         data,
@@ -157,6 +198,7 @@ function BUGSModel(
         transformed_var_lengths,
         graph_evaluation_data,
         log_density_computation_function,
+        marginalization_cache,
         mutable_symbols,
         base_model,
     )
@@ -226,27 +268,32 @@ function BUGSModel(
         loop_vars = graph_evaluation_data.loop_vars_vals[i]
 
         if !is_stochastic
+            # Deterministic node
             value = Base.invokelatest(node_function, evaluation_env, loop_vars)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
-        elseif !is_observed
+        else
+            # Stochastic node - evaluate distribution
             dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
 
-            untransformed_var_lengths[vn] = length(dist)
-            # not all distributions are defined for `Bijectors.transformed`
-            transformed_var_lengths[vn] = if Bijectors.bijector(dist) == identity
-                untransformed_var_lengths[vn]
-            else
-                length(Bijectors.transformed(dist))
-            end
-            untransformed_param_length += untransformed_var_lengths[vn]
-            transformed_param_length += transformed_var_lengths[vn]
+            if !is_observed
+                # Unobserved stochastic node (parameter)
+                untransformed_var_lengths[vn] = length(dist)
+                # not all distributions are defined for `Bijectors.transformed`
+                transformed_var_lengths[vn] = if Bijectors.bijector(dist) == identity
+                    untransformed_var_lengths[vn]
+                else
+                    length(Bijectors.transformed(dist))
+                end
+                untransformed_param_length += untransformed_var_lengths[vn]
+                transformed_param_length += transformed_var_lengths[vn]
 
-            if haskey(initial_params, AbstractPPL.getsym(vn))
-                initialization = AbstractPPL.get(initial_params, vn)
-                evaluation_env = BangBang.setindex!!(evaluation_env, initialization, vn)
-            else
-                init_value = rand(dist)
-                evaluation_env = BangBang.setindex!!(evaluation_env, init_value, vn)
+                if haskey(initial_params, AbstractPPL.getsym(vn))
+                    initialization = AbstractPPL.get(initial_params, vn)
+                    evaluation_env = BangBang.setindex!!(evaluation_env, initialization, vn)
+                else
+                    init_value = rand(dist)
+                    evaluation_env = BangBang.setindex!!(evaluation_env, init_value, vn)
+                end
             end
         end
     end
@@ -256,7 +303,7 @@ function BUGSModel(
 
     # Return model without generating log density function (on-demand generation)
     # Function will be generated when UseGeneratedLogDensityFunction mode is set
-
+    # Auto-marginalization caches computed on-demand when UseAutoMarginalization mode is set
     return BUGSModel(
         model_def,
         data,
@@ -270,6 +317,7 @@ function BUGSModel(
         transformed_var_lengths,
         graph_evaluation_data,
         nothing,  # log_density_computation_function - generated on-demand
+        nothing,  # marginalization_cache - generated on-demand
         mutable_symbols,
         nothing,
     )
@@ -379,15 +427,34 @@ params_dict = getparams(Dict, model, custom_env)
 ```
 """
 function getparams(model::BUGSModel, evaluation_env=model.evaluation_env)
-    param_length = if model.transformed
-        model.transformed_param_length
+    # Determine which parameters to include based on evaluation mode
+    gd = model.graph_evaluation_data
+    param_vars = if model.evaluation_mode isa UseAutoMarginalization
+        # Only include continuous parameters when auto marginalizing
+        mc = model.marginalization_cache
+        filter(gd.sorted_parameters) do vn
+            idx = findfirst(==(vn), gd.sorted_nodes)
+            idx !== nothing && mc.node_types[idx] == :continuous
+        end
     else
-        model.untransformed_param_length
+        gd.sorted_parameters
+    end
+
+    # Compute total length for allocation
+    param_length = 0
+    if model.transformed
+        for vn in param_vars
+            param_length += model.transformed_var_lengths[vn]
+        end
+    else
+        for vn in param_vars
+            param_length += model.untransformed_var_lengths[vn]
+        end
     end
 
     param_vals = Vector{Float64}(undef, param_length)
     pos = 1
-    for v in model.graph_evaluation_data.sorted_parameters
+    for v in param_vars
         if !model.transformed
             val = AbstractPPL.get(evaluation_env, v)
             len = model.untransformed_var_lengths[v]
@@ -418,7 +485,18 @@ function getparams(
     T::Type{<:AbstractDict}, model::BUGSModel, evaluation_env=model.evaluation_env
 )
     d = T()
-    for v in model.graph_evaluation_data.sorted_parameters
+    gd = model.graph_evaluation_data
+    # Respect evaluation mode when selecting parameters
+    param_vars = if model.evaluation_mode isa UseAutoMarginalization
+        mc = model.marginalization_cache
+        filter(gd.sorted_parameters) do vn
+            idx = findfirst(==(vn), gd.sorted_nodes)
+            idx !== nothing && mc.node_types[idx] == :continuous
+        end
+    else
+        gd.sorted_parameters
+    end
+    for v in param_vars
         value = AbstractPPL.get(evaluation_env, v)
         if !model.transformed
             d[v] = value
@@ -525,6 +603,60 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                     :log_density_computation_function,
                     log_density_computation_function,
                 )
+            end
+        end
+    elseif mode isa UseAutoMarginalization
+        if !model.transformed
+            error(
+                "Cannot use `UseAutoMarginalization` with untransformed model. " *
+                "Auto marginalization expects parameters in transformed (unconstrained) space. " *
+                "Please use `settrans(model, true)` before switching to auto marginalization mode.",
+            )
+        end
+        # Lazily compute auto-marginalization cache if not already present
+        if isnothing(model.marginalization_cache)
+            try
+                gd = model.graph_evaluation_data
+                sorted_nodes = gd.sorted_nodes
+
+                # Compute node types and stochastic parents
+                node_types = JuliaBUGS.Model._compute_node_types(model)
+                stochastic_parents = JuliaBUGS.Model._get_stochastic_parents_indices(model)
+
+                # Compute marginalization order and minimal cache keys
+                order = JuliaBUGS.Model._compute_marginalization_order(
+                    model, node_types, stochastic_parents
+                )
+                keys = JuliaBUGS.Model._precompute_minimal_cache_keys(
+                    model, order, node_types, stochastic_parents
+                )
+
+                # Build vn -> idx map and compute param_lengths/offsets for continuous params
+                vn_to_idx = Dict(sorted_nodes[i] => i for i in eachindex(sorted_nodes))
+                param_lengths = Dict{eltype(sorted_nodes),Int}()
+                param_offsets = Dict{eltype(sorted_nodes),Int}()
+                offset = 1
+                for vn in gd.sorted_parameters
+                    idx = get(vn_to_idx, vn, 0)
+                    if idx != 0 && node_types[idx] == :continuous
+                        len = model.transformed_var_lengths[vn]
+                        param_lengths[vn] = len
+                        param_offsets[vn] = offset
+                        offset += len
+                    end
+                end
+
+                n_discrete_finite = count(==(:discrete_finite), node_types)
+
+                cache = MarginalizationCache(
+                    keys, order, node_types, param_lengths, param_offsets, n_discrete_finite
+                )
+                model = BangBang.setproperty!!(model, :marginalization_cache, cache)
+            catch err
+                @warn "Failed to compute auto-marginalization caches; falling back to UseGraph mode" exception = (
+                    err, catch_backtrace()
+                )
+                mode = UseGraph()
             end
         end
     end
