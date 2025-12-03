@@ -554,18 +554,19 @@ function _create_modified_model(
     new_mutable_symbols = get_mutable_symbols(new_graph_evaluation_data)
 
     # Create the new model with all updated fields
-    # Log density function is NOT generated here - it will be generated on-demand
-    # when set_evaluation_mode(model, UseGeneratedLogDensityFunction()) is called
-    # Auto-marginalization caches are also computed on-demand when switching to UseAutoMarginalization
+    # IMPORTANT: Invalidate all caches when graph structure changes
+    # - Log density function is regenerated on-demand when switching to UseGeneratedLogDensityFunction
+    # - Auto-marginalization cache is recomputed on-demand when switching to UseAutoMarginalization
     kwargs = Dict{Symbol,Any}(
         :untransformed_param_length => new_untransformed_param_length,
         :transformed_param_length => new_transformed_param_length,
         :evaluation_env => new_evaluation_env,
         :graph_evaluation_data => new_graph_evaluation_data,
         :g => new_graph,
-        :log_density_computation_function => nothing,
+        :log_density_computation_function => nothing,  # Invalidate: graph changed
+        :marginalization_cache => nothing,  # Invalidate: graph changed
         :mutable_symbols => new_mutable_symbols,
-        :evaluation_mode => UseGraph(),
+        :evaluation_mode => UseGraph(),  # Reset to safe default
     )
 
     # Add base_model if provided

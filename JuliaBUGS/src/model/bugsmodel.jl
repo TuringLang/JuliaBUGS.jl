@@ -52,6 +52,22 @@ function classify_node_type(dist)
 end
 
 """
+    MarginalizationCache
+
+Caches precomputed data for automatic marginalization of discrete finite variables.
+This cache is computed lazily when switching to `UseAutoMarginalization` mode and
+must be invalidated when the graph structure changes (e.g., during conditioning).
+
+# Fields
+- `minimal_cache_keys::Dict{Int,Vector{Int}}`: Maps node index to minimal frontier indices needed for memoization
+- `marginalization_order::Vector{Int}`: Optimized evaluation order that reduces frontier size
+"""
+struct MarginalizationCache
+    minimal_cache_keys::Dict{Int,Vector{Int}}
+    marginalization_order::Vector{Int}
+end
+
+"""
     GraphEvaluationData{TNF,TV}
 
 Caches node information from the model graph to optimize evaluation performance.
@@ -60,7 +76,7 @@ Stores pre-computed values to avoid repeated lookups from the MetaGraph during m
 # Fields
 - `sorted_nodes::Vector{<:VarName}`: Variables in topological order for evaluation
 - `sorted_parameters::Vector{<:VarName}`: Parameters (unobserved stochastic variables) in sorted order consistent with sorted_nodes
-- `is_stochastic_vals::Vector{Bool}`: Whether each node represents a stochastic variable  
+- `is_stochastic_vals::Vector{Bool}`: Whether each node represents a stochastic variable
 - `is_observed_vals::Vector{Bool}`: Whether each node is observed (has data)
 - `node_function_vals::TNF`: Functions that define each node's computation
 - `loop_vars_vals::TV`: Loop variables associated with each node
@@ -76,15 +92,13 @@ struct GraphEvaluationData{TNF,TV}
     loop_vars_vals::TV
     node_types::Vector{Symbol}
     is_discrete_finite_vals::Vector{Bool}
-    minimal_cache_keys::Dict{Int,Vector{Int}}
-    marginalization_order::Vector{Int}
 end
 
 """
-    GraphEvaluationData(compat constructor)
+    GraphEvaluationData(constructor)
 
-Backward-compatible constructor that fills new caching fields with defaults
-when older call sites provide only the first nine fields.
+Creates GraphEvaluationData from a BUGSGraph, extracting and caching node information
+for efficient evaluation.
 """
 function GraphEvaluationData(
     g::BUGSGraph,
@@ -130,8 +144,6 @@ function GraphEvaluationData(
         map(identity, loop_vars_vals),
         node_types,
         is_discrete_finite_vals,
-        Dict{Int,Vector{Int}}(),
-        Int[],
     )
 end
 
@@ -160,7 +172,8 @@ The `BUGSModel` object is used for inference and represents the output of compil
 - `untransformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the original (constrained) space.
 - `transformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space.
 - `graph_evaluation_data::GraphEvaluationData{TNF,TV}`: A `GraphEvaluationData` object containing pre-computed values of the nodes in the model, with sorted_parameters as the second field for easy access.
-- `log_density_computation_function::F`: The generated function for computing log-density (if available).
+- `log_density_computation_function::F`: The generated function for computing log-density (if available). Computed lazily when switching to `UseGeneratedLogDensityFunction` mode.
+- `marginalization_cache::MC`: Cache for auto-marginalization (minimal cache keys and evaluation order). Computed lazily when switching to `UseAutoMarginalization` mode. Invalidated when graph structure changes.
 - `mutable_symbols::Set{Symbol}`: Set of symbols in the evaluation environment that may be mutated during evaluation (parameters and deterministic nodes).
 - `base_model::base_model_T`: If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`.
 """
@@ -172,6 +185,7 @@ struct BUGSModel{
     TV,
     data_T,
     F<:Union{Function,Nothing},
+    MC<:Union{MarginalizationCache,Nothing},
 } <: AbstractBUGSModel
     model_def::Expr
     data::data_T
@@ -192,6 +206,8 @@ struct BUGSModel{
 
     log_density_computation_function::F
 
+    marginalization_cache::MC
+
     mutable_symbols::Set{Symbol}
 
     base_model::base_model_T
@@ -211,6 +227,7 @@ function BUGSModel(
     base_model::Union{<:AbstractBUGSModel,Nothing}=model.base_model,
     evaluation_mode::EvaluationMode=model.evaluation_mode,
     log_density_computation_function::Union{Function,Nothing}=model.log_density_computation_function,
+    marginalization_cache::Union{MarginalizationCache,Nothing}=model.marginalization_cache,
     mutable_symbols::Set{Symbol}=model.mutable_symbols,
     model_def::Expr=model.model_def,
     data=model.data,
@@ -229,6 +246,7 @@ function BUGSModel(
         transformed_var_lengths,
         graph_evaluation_data,
         log_density_computation_function,
+        marginalization_cache,
         mutable_symbols,
         base_model,
     )
@@ -351,8 +369,6 @@ function BUGSModel(
         graph_evaluation_data.loop_vars_vals,
         node_types,
         is_discrete_finite_vals,
-        Dict{Int,Vector{Int}}(),
-        Int[],
     )
 
     # Compute mutable symbols from graph evaluation data
@@ -374,6 +390,7 @@ function BUGSModel(
         transformed_var_lengths,
         graph_evaluation_data,
         nothing,  # log_density_computation_function - generated on-demand
+        nothing,  # marginalization_cache - generated on-demand
         mutable_symbols,
         nothing,
     )
@@ -667,30 +684,16 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                 "Please use `settrans(model, true)` before switching to auto marginalization mode.",
             )
         end
-        # Lazily compute auto-marginalization caches if not already present
-        gd = model.graph_evaluation_data
-        if isempty(gd.marginalization_order) || isempty(gd.minimal_cache_keys)
+        # Lazily compute auto-marginalization cache if not already present
+        if isnothing(model.marginalization_cache)
             try
                 # Compute marginalization order and minimal cache keys
                 order = JuliaBUGS.Model._compute_marginalization_order(model)
                 keys = JuliaBUGS.Model._precompute_minimal_cache_keys(model, order)
 
-                # Create new GraphEvaluationData with cached values
-                new_gd = GraphEvaluationData{
-                    typeof(gd.node_function_vals),typeof(gd.loop_vars_vals)
-                }(
-                    gd.sorted_nodes,
-                    gd.sorted_parameters,
-                    gd.is_stochastic_vals,
-                    gd.is_observed_vals,
-                    gd.node_function_vals,
-                    gd.loop_vars_vals,
-                    gd.node_types,
-                    gd.is_discrete_finite_vals,
-                    keys,
-                    order,
-                )
-                model = BangBang.setproperty!!(model, :graph_evaluation_data, new_gd)
+                # Create and attach cache
+                cache = MarginalizationCache(keys, order)
+                model = BangBang.setproperty!!(model, :marginalization_cache, cache)
             catch err
                 @warn "Failed to compute auto-marginalization caches; falling back to UseGraph mode" exception = (
                     err, catch_backtrace()

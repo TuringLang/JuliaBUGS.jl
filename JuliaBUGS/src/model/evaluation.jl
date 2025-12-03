@@ -759,17 +759,19 @@ function evaluate_with_marginalization_values!!(
         )
     end
 
-    # Use cached marginalization order and minimal frontier keys when available
-    gd = model.graph_evaluation_data
-    n = length(gd.sorted_nodes)
-    # Strictly require caches to be present for performance
-    if isempty(gd.marginalization_order) || isempty(gd.minimal_cache_keys)
+    # Use cached marginalization order and minimal frontier keys
+    # These must be precomputed when switching to UseAutoMarginalization mode
+    if isnothing(model.marginalization_cache)
         error(
-            "Auto marginalization cache missing. This model was not prepared for UseAutoMarginalization.",
+            "Auto marginalization cache missing. This model was not prepared for UseAutoMarginalization. " *
+            "Please call set_evaluation_mode(model, UseAutoMarginalization()) first.",
         )
     end
-    sorted_indices = gd.marginalization_order
-    minimal_keys = gd.minimal_cache_keys
+    sorted_indices = model.marginalization_cache.marginalization_order
+    minimal_keys = model.marginalization_cache.minimal_cache_keys
+
+    gd = model.graph_evaluation_data
+    n = length(gd.sorted_nodes)
 
     # Initialize memoization cache
     # Size hint: at most 2^|discrete_finite| * |nodes| entries
