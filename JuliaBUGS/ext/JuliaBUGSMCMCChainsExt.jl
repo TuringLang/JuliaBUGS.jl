@@ -10,7 +10,6 @@ using JuliaBUGS:
     getparams
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.Accessors
-using JuliaBUGS.LogDensityProblemsAD
 using MCMCChains: Chains
 
 function JuliaBUGS.gen_chains(
@@ -35,20 +34,6 @@ function JuliaBUGS.gen_chains(
 )
     # Extract BUGSModel from gradient wrapper
     bugs_model = model.logdensity.base_model
-
-    return JuliaBUGS.gen_chains(bugs_model, samples, stats_names, stats_values; kwargs...)
-end
-
-# Keep backward compatibility with LogDensityProblemsAD wrapper
-function JuliaBUGS.gen_chains(
-    model::AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
-    samples,
-    stats_names,
-    stats_values;
-    kwargs...,
-)
-    # Extract BUGSModel from ADGradient wrapper
-    bugs_model = model.logdensity.ℓ
 
     return JuliaBUGS.gen_chains(bugs_model, samples, stats_names, stats_values; kwargs...)
 end

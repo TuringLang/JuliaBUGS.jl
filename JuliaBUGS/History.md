@@ -7,7 +7,12 @@
   - Supports multiple backends: `AutoReverseDiff`, `AutoForwardDiff`, `AutoZygote`, `AutoEnzyme`, `AutoMooncake`
   - Gradient computation is prepared during compilation for optimal performance
   - Example: `model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))`
-  - Backward compatible: models without `adtype` work as before
+  - New `BUGSModelWithGradient(model, adtype)` constructor for adding gradients to existing models
+  - Models without `adtype` work as before (no gradients)
+
+- **Breaking**: `LogDensityProblemsAD.ADgradient` is no longer supported for gradient computation.
+  - **Old**: `ad_model = ADgradient(:ReverseDiff, model)`
+  - **New**: `model = compile(model_def, data; adtype=AutoReverseDiff())` or `BUGSModelWithGradient(model, AutoReverseDiff())`
 
 ## 0.10.1
 

@@ -332,17 +332,8 @@ end
 
 # Helper function to prepare gradient - separated to handle world age issues
 function _wrap_with_gradient(base_model::Model.BUGSModel, adtype::ADTypes.AbstractADType)
-    # Get initial parameters for preparation
     # Use invokelatest to handle world age issues with generated functions
-    x = Base.invokelatest(getparams, base_model)
-
-    # Prepare gradient using DifferentiationInterface
-    # Use invokelatest to handle world age issues when calling logdensity during preparation
-    prep = Base.invokelatest(
-        DI.prepare_gradient, Model._logdensity_switched, adtype, x, DI.Constant(base_model)
-    )
-
-    return Model.BUGSModelWithGradient(adtype, prep, base_model)
+    return Base.invokelatest(Model.BUGSModelWithGradient, base_model, adtype)
 end
 # function compile(
 #     model_str::String,

@@ -3,12 +3,9 @@ module JuliaBUGSAdvancedMHExt
 using AbstractMCMC
 using AdvancedMH
 using ADTypes
-import DifferentiationInterface as DI
 using JuliaBUGS
 using JuliaBUGS: BUGSModel, BUGSModelWithGradient, getparams, initialize!
 using JuliaBUGS.LogDensityProblems
-using JuliaBUGS.LogDensityProblemsAD
-using JuliaBUGS.Model: _logdensity_switched
 using JuliaBUGS.Random
 using MCMCChains: Chains
 
@@ -54,10 +51,9 @@ end
 function _gibbs_internal_mh(
     rng::Random.AbstractRNG, cond_model::BUGSModel, sampler, ad_backend, state
 )
-    # Create gradient model on-the-fly using DifferentiationInterface
+    # Create gradient model on-the-fly
+    ad_model = BUGSModelWithGradient(cond_model, ad_backend)
     x = getparams(cond_model)
-    prep = DI.prepare_gradient(_logdensity_switched, ad_backend, x, DI.Constant(cond_model))
-    ad_model = BUGSModelWithGradient(ad_backend, prep, cond_model)
     logdensitymodel = AbstractMCMC.LogDensityModel(ad_model)
 
     # Take MH step with gradient information
@@ -116,33 +112,6 @@ function AbstractMCMC.bundle_samples(
     thinning=1,
     kwargs...,
 )
-    param_samples = [t.params for t in ts]
-    stats_names = [:lp]
-    stats_values = [[t.lp] for t in ts]
-
-    return JuliaBUGS.gen_chains(
-        logdensitymodel,
-        param_samples,
-        stats_names,
-        stats_values;
-        discard_initial=discard_initial,
-        thinning=thinning,
-        kwargs...,
-    )
-end
-
-# Keep backward compatibility with LogDensityProblemsAD wrapper
-function AbstractMCMC.bundle_samples(
-    ts::Vector{<:AdvancedMH.Transition},
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
-    sampler::AdvancedMH.MHSampler,
-    state,
-    chain_type::Type{Chains};
-    discard_initial=0,
-    thinning=1,
-    kwargs...,
-)
-    # Same extraction for gradient-based MH samplers
     param_samples = [t.params for t in ts]
     stats_names = [:lp]
     stats_values = [[t.lp] for t in ts]

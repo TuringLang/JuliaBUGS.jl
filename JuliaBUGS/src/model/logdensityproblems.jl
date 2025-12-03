@@ -26,14 +26,14 @@ function LogDensityProblems.capabilities(::AbstractBUGSModel)
 end
 
 """
-    BUGSModelWithGradient{B,P,M}
+    BUGSModelWithGradient{AD,P,M}
 
 Wraps a BUGSModel with automatic differentiation capabilities using DifferentiationInterface.
 Implements both `LogDensityProblems.logdensity` and `LogDensityProblems.logdensity_and_gradient`.
 
 # Fields
-- `backend::B`: ADTypes backend (e.g., AutoReverseDiff())
-- `prep::P`: Prepared gradient from DifferentiationInterface (can be nothing)
+- `adtype::AD`: ADTypes backend (e.g., AutoReverseDiff())
+- `prep::P`: Prepared gradient from DifferentiationInterface
 - `base_model::M`: The underlying BUGSModel
 
 # Example
@@ -50,10 +50,57 @@ model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
 chain = AbstractMCMC.sample(rng, model, NUTS(0.8), 1000)
 ```
 """
-struct BUGSModelWithGradient{B<:ADTypes.AbstractADType,P,M<:BUGSModel}
-    backend::B
+struct BUGSModelWithGradient{AD<:ADTypes.AbstractADType,P,M<:BUGSModel}
+    adtype::AD
     prep::P
     base_model::M
+end
+
+"""
+    BUGSModelWithGradient(model::BUGSModel, adtype::ADTypes.AbstractADType)
+
+Construct a gradient-enabled model wrapper from a BUGSModel and an AD backend.
+
+# AD Backend Compatibility
+
+Different AD backends have different compatibility with evaluation modes:
+
+- **`UseGeneratedLogDensityFunction`**: Only compatible with mutation-supporting backends
+  like `AutoMooncake` and `AutoEnzyme`. The generated functions mutate arrays in-place.
+- **`UseGraph`**: Compatible with `AutoReverseDiff`, `AutoForwardDiff`, and other
+  tape-based or forward-mode backends. Also works with Mooncake and Enzyme.
+
+If an incompatible combination is detected, a warning is issued and the model is
+automatically switched to `UseGraph` mode.
+
+# Example
+```julia
+model = compile(model_def, data)
+grad_model = BUGSModelWithGradient(model, AutoReverseDiff(compile=true))
+```
+"""
+function BUGSModelWithGradient(model::BUGSModel, adtype::ADTypes.AbstractADType)
+    # Check AD backend compatibility with evaluation mode
+    model = _check_ad_compatibility(model, adtype)
+
+    x = getparams(model)
+    prep = DI.prepare_gradient(_logdensity_for_gradient, adtype, x, DI.Constant(model))
+    return BUGSModelWithGradient(adtype, prep, model)
+end
+
+# AD backends that support mutation (required for UseGeneratedLogDensityFunction)
+_supports_mutation(::ADTypes.AutoMooncake) = true
+_supports_mutation(::ADTypes.AutoEnzyme) = true
+_supports_mutation(::ADTypes.AbstractADType) = false
+
+function _check_ad_compatibility(model::BUGSModel, adtype::ADTypes.AbstractADType)
+    if model.evaluation_mode isa UseGeneratedLogDensityFunction &&
+        !_supports_mutation(adtype)
+        @warn "AD backend $(typeof(adtype)) does not support mutation required by " *
+            "UseGeneratedLogDensityFunction mode. Switching to UseGraph mode." maxlog = 1
+        return set_evaluation_mode(model, UseGraph())
+    end
+    return model
 end
 
 # Forward base BUGSModel interface
@@ -70,43 +117,26 @@ function LogDensityProblems.capabilities(::Type{<:BUGSModelWithGradient})
 end
 
 """
-    _logdensity_switched(x, base_model_constant)
+    _logdensity_for_gradient(x, model_constant)
 
-Helper function that switches argument order for DifferentiationInterface compatibility.
-DI expects the active argument (to differentiate w.r.t.) to come first.
+Target function for gradient computation via DifferentiationInterface.
+The parameter vector `x` comes first (the argument to differentiate w.r.t.),
+and the model is wrapped in `DI.Constant` to indicate it's not differentiated.
 """
-function _logdensity_switched(x::AbstractVector, base_model_constant::DI.Constant)
-    base_model = DI.unwrap(base_model_constant)
-    return LogDensityProblems.logdensity(base_model, x)
-end
-
-# Fallback for testing during preparation (when DI calls without Constant wrapper)
-function _logdensity_switched(x::AbstractVector, base_model::BUGSModel)
-    return LogDensityProblems.logdensity(base_model, x)
+function _logdensity_for_gradient(x::AbstractVector, model_constant::DI.Constant)
+    model = DI.unwrap(model_constant)
+    return _eval_logdensity(model, model.evaluation_mode, x)
 end
 
 """
     LogDensityProblems.logdensity_and_gradient(model::BUGSModelWithGradient, x)
 
 Compute log density and its gradient using DifferentiationInterface.
-Uses prepared gradient if available, otherwise falls back to unprepared computation.
 """
 function LogDensityProblems.logdensity_and_gradient(
     model::BUGSModelWithGradient, x::AbstractVector
 )
-    # Active argument (x) comes first for DI
-    # Base model passed as Constant context
-    if model.prep === nothing
-        return DI.value_and_gradient(
-            _logdensity_switched, model.backend, x, DI.Constant(model.base_model)
-        )
-    else
-        return DI.value_and_gradient(
-            _logdensity_switched,
-            model.prep,
-            model.backend,
-            x,
-            DI.Constant(model.base_model),
-        )
-    end
+    return DI.value_and_gradient(
+        _logdensity_for_gradient, model.prep, model.adtype, x, DI.Constant(model.base_model)
+    )
 end
