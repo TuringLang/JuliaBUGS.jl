@@ -74,8 +74,11 @@ using JuliaBUGS.Model:
         x_empty = Float64[]
         logp_marginalized = Base.invokelatest(LogDensityProblems.logdensity, model, x_empty)
 
-        # Expected value (manual calculation)
-        expected = -3.744970426679133
+        # Expected value computed via forward algorithm:
+        # forward_algorithm_hmm([0.1, 4.9], 0.0, 5.0, 1.0, [0.5, 0.5], [0.7 0.3; 0.4 0.6])
+        expected = forward_algorithm_hmm(
+            y_obs, 0.0, 5.0, 1.0, [0.5, 0.5], [0.7 0.3; 0.4 0.6]
+        )
 
         @test isapprox(logp_marginalized, expected; atol=1e-6)
     end
@@ -754,7 +757,10 @@ using JuliaBUGS.Model:
             end
         end
 
-        data = (N=100, y=vcat(rand(Normal(-2, 1), 50), rand(Normal(2, 1), 50)))
+        # Use StableRNG for reproducible test data
+        rng = StableRNG(42)
+        y_data = vcat(rand(rng, Normal(-2, 1), 50), rand(rng, Normal(2, 1), 50))
+        data = (N=100, y=y_data)
 
         # Graph model with IndependentMH (quick smoke run)
         model_graph = (m -> (m -> set_evaluation_mode(m, UseGraph()))(settrans(m, true)))(
@@ -762,7 +768,7 @@ using JuliaBUGS.Model:
         )
         gibbs = JuliaBUGS.Gibbs(model_graph, JuliaBUGS.IndependentMH())
         chn_graph = AbstractMCMC.sample(
-            Random.default_rng(),
+            rng,
             model_graph,
             gibbs,
             10;
@@ -779,21 +785,73 @@ using JuliaBUGS.Model:
         )
         @test LogDensityProblems.dimension(model_marg) <
             LogDensityProblems.dimension(model_graph)
+
         # Run gradient-based sampling (NUTS) on the auto-marginalized AD-wrapped model
         ad_model = ADgradient(AutoForwardDiff(), model_marg)
         D = LogDensityProblems.dimension(model_marg)
-        θ0 = zeros(D)
+        # Initialize near true values for faster convergence
+        initialize!(model_marg, (; mu=[-2.0, 2.0], sigma=[1.0, 1.0]))
+        θ0 = getparams(model_marg)
+
+        # Short NUTS run with minimal adaptation
         samps = AbstractMCMC.sample(
-            Random.default_rng(),
+            rng,
             ad_model,
             NUTS(0.65),
-            10;
+            50;
             progress=false,
-            n_adapts=0,
+            n_adapts=20,
             init_params=θ0,
-            discard_initial=0,
+            discard_initial=20,
         )
-        # Ensure sampling executed without errors
+        # Ensure sampling executed without errors and samples are reasonable
         @test !isnothing(samps)
+        @test length(samps) == 50
+
+        # Verify samples are in reasonable range (not diverged to infinity)
+        for t in samps
+            θ = t.z.θ
+            @test all(isfinite, θ)
+            @test all(abs.(θ) .< 20)  # Samples shouldn't explode
+        end
+    end
+
+    @testset "ReverseDiff gradient compatibility" begin
+        # Verify auto-marginalization works with ReverseDiff backend
+        mixture_def = @bugs begin
+            w[1] = 0.4
+            w[2] = 0.6
+            mu[1] ~ Normal(-1, 3)
+            mu[2] ~ Normal(1, 3)
+            sigma ~ Exponential(1)
+            for i in 1:N
+                z[i] ~ Categorical(w[1:2])
+                y[i] ~ Normal(mu[z[i]], sigma)
+            end
+        end
+
+        data = (N=5, y=[-0.8, 1.2, -1.1, 0.9, 1.5])
+        model = compile(mixture_def, data)
+        model = settrans(model, true)
+        model = set_evaluation_mode(model, UseAutoMarginalization())
+
+        initialize!(model, (; mu=[-1.0, 1.0], sigma=[1.0]))
+        θ = getparams(model)
+
+        # ReverseDiff gradient
+        ad_model_rd = ADgradient(AutoReverseDiff(), model)
+        val_rd, grad_rd = Base.invokelatest(
+            LogDensityProblems.logdensity_and_gradient, ad_model_rd, θ
+        )
+
+        # ForwardDiff gradient for comparison
+        ad_model_fd = ADgradient(AutoForwardDiff(), model)
+        val_fd, grad_fd = Base.invokelatest(
+            LogDensityProblems.logdensity_and_gradient, ad_model_fd, θ
+        )
+
+        # Both should give same results
+        @test isapprox(val_rd, val_fd; atol=1e-10)
+        @test isapprox(grad_rd, grad_fd; atol=1e-8)
     end
 end
