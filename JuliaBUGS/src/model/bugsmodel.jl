@@ -692,8 +692,9 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                 )
                 model = BangBang.setproperty!!(model, :graph_evaluation_data, new_gd)
             catch err
-                @warn "Failed to compute auto-marginalization caches; falling back to UseGraph mode" exception =
-                    (err, catch_backtrace())
+                @warn "Failed to compute auto-marginalization caches; falling back to UseGraph mode" exception = (
+                    err, catch_backtrace()
+                )
                 mode = UseGraph()
             end
         end
