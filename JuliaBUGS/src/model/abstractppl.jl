@@ -20,9 +20,11 @@ import AbstractPPL: condition, decondition, evaluate!!
 #######################
 
 """
-    condition(model::BUGSModel, conditioning_spec; regenerate_log_density::Bool=true)
+    condition(model::BUGSModel, conditioning_spec)
 
 Create a new model by conditioning on specified variables with given values.
+The returned model uses `UseGraph` evaluation mode. To use optimized log density
+computation, call `set_evaluation_mode(model, UseGeneratedLogDensityFunction())`.
 
 # Arguments
 - `model::BUGSModel`: The model to condition
@@ -45,12 +47,6 @@ New `BUGSModel` with:
 
 # Examples
 ```jldoctest condition
-julia> using JuliaBUGS: @bugs, compile, @varname, initialize!
-
-julia> using JuliaBUGS.Model: condition, parameters
-
-julia> using Test
-
 julia> model_def = @bugs begin
            for i in 1:3
                x[i] ~ Normal(0, 1)
@@ -69,7 +65,7 @@ julia> model_cond.evaluation_env.x[1:2]
  2.0
 
 julia> parameters(model_cond)
-2-element Vector{AbstractPPL.VarName}:
+2-element Vector{VarName}:
  x[3]
  y
 
@@ -86,7 +82,7 @@ julia> model_cond2.evaluation_env.x
  7.0
 
 julia> parameters(model_cond2)  # All x[i] removed, only y remains
-1-element Vector{AbstractPPL.VarName}:
+1-element Vector{VarName}:
  y
 
 julia> # Check parameter lengths
@@ -105,8 +101,8 @@ julia> # NamedTuple syntax
 julia> model_cond3.evaluation_env.y
 10.0
 
-julia> parameters(model_cond3)  # y removed, only x[i] remain
-3-element Vector{AbstractPPL.VarName}:
+julia> sort(parameters(model_cond3); by=string)  # y removed, only x[i] remain
+3-element Vector{VarName}:
  x[1]
  x[2]
  x[3]
@@ -130,12 +126,12 @@ julia> model_cond4.evaluation_env.x[[1, 3]]
  3.0
 
 julia> parameters(model_cond4)
-2-element Vector{AbstractPPL.VarName}:
+2-element Vector{VarName}:
  x[2]
  y
 ```
 """
-function condition(model::BUGSModel, conditioning_spec; regenerate_log_density::Bool=true)
+function condition(model::BUGSModel, conditioning_spec)
     # Parse and validate conditioning specification
     var_values = _parse_conditioning_spec(conditioning_spec, model)::Dict{<:VarName,<:Any}
     vars_to_condition = collect(keys(var_values))::Vector{<:VarName}
@@ -152,12 +148,12 @@ function condition(model::BUGSModel, conditioning_spec; regenerate_log_density::
     new_graph = _mark_as_observed(model.g, expanded_vars)
 
     # Create updated model with conditioned variables
+    # Log density function will be generated when set_evaluation_mode is called with UseGeneratedLogDensityFunction
     return _create_modified_model(
         model,
         new_graph,
         new_evaluation_env;
         base_model=isnothing(model.base_model) ? model : model.base_model,
-        regenerate_log_density=regenerate_log_density,
     )
 end
 
@@ -256,14 +252,6 @@ For base_model restoration (no args):
 
 # Examples
 ```jldoctest decondition
-julia> using JuliaBUGS: @bugs, compile
-
-julia> using JuliaBUGS.Model: condition, parameters, decondition
-
-julia> using AbstractPPL: @varname
-
-julia> using Test
-
 julia> model_def = @bugs begin
            x ~ dnorm(0, 1)
            y ~ dnorm(x, 1) 
@@ -276,13 +264,13 @@ julia> # Condition model
        model_cond = condition(model, (; x = 1.0, y = 1.5));
 
 julia> parameters(model_cond)
-AbstractPPL.VarName[]
+VarName[]
 
 julia> # Partial deconditioning with specified variables
        model_d1 = decondition(model_cond, [@varname(y)]);
 
 julia> parameters(model_d1)
-1-element Vector{AbstractPPL.VarName}:
+1-element Vector{VarName}:
  y
 
 julia> # Full restoration to base model (no arguments)
@@ -351,8 +339,8 @@ julia> # Decondition with subsumption
            decondition(model_arr_cond, [@varname(v)])
        );
 
-julia> parameters(model_arr_decon)
-3-element Vector{AbstractPPL.VarName}:
+julia> sort(parameters(model_arr_decon); by=string)
+3-element Vector{VarName}:
  v[1]
  v[2]
  v[3]
@@ -552,7 +540,6 @@ function _create_modified_model(
     new_graph::BUGSGraph,
     new_evaluation_env::NamedTuple;
     base_model=nothing,
-    regenerate_log_density::Bool=true,
 )
     # Create new graph evaluation data
     new_graph_evaluation_data = GraphEvaluationData(new_graph)
@@ -563,42 +550,29 @@ function _create_modified_model(
         model, new_parameters
     )
 
-    # Generate new log density function and update graph evaluation data
-    new_log_density_computation_function, updated_graph_evaluation_data =
-        if regenerate_log_density
-            _regenerate_log_density_function(
-                model.model_def, new_graph, new_evaluation_env, new_graph_evaluation_data
-            )
-        else
-            # Skip regeneration (fast path): ensure stale code isn't used
-            nothing, new_graph_evaluation_data
-        end
-
     # Recompute mutable symbols for the new graph
-    new_mutable_symbols = get_mutable_symbols(updated_graph_evaluation_data)
+    new_mutable_symbols = get_mutable_symbols(new_graph_evaluation_data)
 
     # Create the new model with all updated fields
+    # Log density function is NOT generated here - it will be generated on-demand
+    # when set_evaluation_mode(model, UseGeneratedLogDensityFunction()) is called
     kwargs = Dict{Symbol,Any}(
         :untransformed_param_length => new_untransformed_param_length,
         :transformed_param_length => new_transformed_param_length,
         :evaluation_env => new_evaluation_env,
-        :graph_evaluation_data => updated_graph_evaluation_data,
+        :graph_evaluation_data => new_graph_evaluation_data,
         :g => new_graph,
-        :log_density_computation_function => new_log_density_computation_function,
+        :log_density_computation_function => nothing,
         :mutable_symbols => new_mutable_symbols,
+        :evaluation_mode => UseGraph(),
     )
-
-    # Force graph evaluation mode when skipping regeneration to avoid stale compiled code
-    if !regenerate_log_density
-        kwargs[:evaluation_mode] = UseGraph()
-        kwargs[:log_density_computation_function] = nothing
-    end
 
     # Add base_model if provided
     if !isnothing(base_model)
         kwargs[:base_model] = base_model
     end
 
+    # Return model without precomputing log density function (on-demand generation)
     return BUGSModel(model; kwargs...)
 end
 

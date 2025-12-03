@@ -29,7 +29,8 @@ output_file = get(ENV, "BENCHMARK_OUTPUT", "benchmark_results.md")
 open(output_file, "w") do io
     println(io, "## Benchmark Results\n")
     cpu_info = first(Sys.cpu_info())
-    println(io, "**Julia $(VERSION)** on $(cpu_info.model)\n")
+    os_info = Sys.KERNEL
+    println(io, "**Julia $(VERSION)** on $(cpu_info.model) ($(os_info))\n")
     println(io, "Ratio = JuliaBUGS/Stan (lower is better for JuliaBUGS)\n")
     println(io, "| Model | Stan Params | JBUGS Params | LD Ratio | Grad Ratio |")
     println(io, "|:------|------------:|-------------:|---------:|-----------:|")
@@ -52,6 +53,6 @@ open(output_file, "w") do io
     end
     println(
         io,
-        "\n*Note: Performance comparison may not be apples-to-apples as parameter counts can differ due to different model parameterizations.*",
+        "\n*Note: Stan benchmarks use hand-optimized Stan models, not direct BUGS translations. Comparison is illustrative only.*",
     )
 end
