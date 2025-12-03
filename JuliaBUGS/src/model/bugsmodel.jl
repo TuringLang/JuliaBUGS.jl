@@ -506,7 +506,8 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                 )
                 log_density_computation_function = eval(log_density_computation_expr)
 
-                # Update sorted_nodes based on reconstructed model
+                # Update sorted_nodes based on reconstructed model to ensure parameter ordering
+                # consistency between UseGraph and UseGeneratedLogDensityFunction modes
                 pass = JuliaBUGS.CollectSortedNodes(model.evaluation_env)
                 JuliaBUGS.analyze_block(pass, reconstructed_model_def)
 

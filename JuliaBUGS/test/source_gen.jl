@@ -35,12 +35,12 @@ test_examples = [
 @testset "source_gen: $example_name" for example_name in test_examples
     (; model_def, data, inits) = getfield(JuliaBUGS.BUGSExamples, example_name)
     model = compile(model_def, data, inits)
-    params = Base.invokelatest(JuliaBUGS.getparams, model)
 
     # Test with graph evaluation
     result_with_bugsmodel = begin
         model_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
-        Base.invokelatest(LogDensityProblems.logdensity, model_graph, params)
+        params_graph = Base.invokelatest(JuliaBUGS.getparams, model_graph)
+        Base.invokelatest(LogDensityProblems.logdensity, model_graph, params_graph)
     end
 
     # Test with generated function (triggers on-demand generation)
@@ -50,7 +50,9 @@ test_examples = [
         )
         # Explicitly check that source generation succeeded
         @test !isnothing(model_gen.log_density_computation_function)
-        Base.invokelatest(LogDensityProblems.logdensity, model_gen, params)
+        # Extract params after setting mode to account for potential parameter reordering
+        params_gen = Base.invokelatest(JuliaBUGS.getparams, model_gen)
+        Base.invokelatest(LogDensityProblems.logdensity, model_gen, params_gen)
     end
 
     @test result_with_log_density_computation_function ≈ result_with_bugsmodel
@@ -93,13 +95,14 @@ end
     # Helper: verify generated code produces same log density as graph evaluation
     function generated_matches_graph(model_def, data)
         model = compile(model_def, data)
-        params = Base.invokelatest(JuliaBUGS.getparams, model)
         result_graph = begin
             m = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+            params = Base.invokelatest(JuliaBUGS.getparams, m)
             Base.invokelatest(LogDensityProblems.logdensity, m, params)
         end
         result_gen = begin
             m = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())
+            params = Base.invokelatest(JuliaBUGS.getparams, m)
             Base.invokelatest(LogDensityProblems.logdensity, m, params)
         end
         return result_graph ≈ result_gen
