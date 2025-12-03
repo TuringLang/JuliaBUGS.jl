@@ -107,19 +107,22 @@ The `BUGSModel` object is used for inference and represents the output of compil
 
 - `model_def::Expr`: The original model definition (for serialization).
 - `data::data_T`: The data associated with the model (for serialization).
-- `g::BUGSGraph`: An instance of `BUGSGraph`, representing the dependency graph of the model.
-- `evaluation_env::T`: A `NamedTuple` containing the values of the variables in the model, all the values are in the constrained space.
-- `transformed::Bool`: Indicates whether the model parameters are in the transformed space.
-- `evaluation_mode::EMT`: The mode for evaluating the log-density (either `UseGeneratedLogDensityFunction` or `UseGraph`).
-- `untransformed_param_length::Int`: The length of the parameters vector in the original (constrained) space.
-- `transformed_param_length::Int`: The length of the parameters vector in the transformed (unconstrained) space.
-- `untransformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the original (constrained) space.
-- `transformed_var_lengths::Dict{<:VarName,Int}`: A dictionary mapping the names of the variables to their lengths in the transformed (unconstrained) space.
-- `graph_evaluation_data::GraphEvaluationData{TNF,TV}`: A `GraphEvaluationData` object containing pre-computed values of the nodes in the model, with sorted_parameters as the second field for easy access.
-- `log_density_computation_function::F`: The generated function for computing log-density (if available). Computed lazily when switching to `UseGeneratedLogDensityFunction` mode.
-- `marginalization_cache::MC`: Cache for auto-marginalization (minimal cache keys and evaluation order). Computed lazily when switching to `UseAutoMarginalization` mode. Invalidated when graph structure changes.
-- `mutable_symbols::Set{Symbol}`: Set of symbols in the evaluation environment that may be mutated during evaluation (parameters and deterministic nodes).
-- `base_model::base_model_T`: If not `Nothing`, the model is a conditioned model; otherwise, it's the model returned by `compile`.
+- `g::BUGSGraph`: The dependency graph of the model.
+- `evaluation_env::T`: A `NamedTuple` containing values of variables in the model (constrained space).
+- `transformed::Bool`: Whether model parameters are in the transformed (unconstrained) space.
+- `evaluation_mode::EMT`: The mode for evaluating the log-density
+  (`UseGeneratedLogDensityFunction`, `UseGraph`, or `UseAutoMarginalization`).
+- `untransformed_param_length::Int`: Length of parameters vector in constrained space.
+- `transformed_param_length::Int`: Length of parameters vector in unconstrained space.
+- `untransformed_var_lengths::Dict{<:VarName,Int}`: Variable lengths in constrained space.
+- `transformed_var_lengths::Dict{<:VarName,Int}`: Variable lengths in unconstrained space.
+- `graph_evaluation_data::GraphEvaluationData{TNF,TV}`: Pre-computed node values for evaluation.
+- `log_density_computation_function::F`: Generated log-density function (lazy, for
+  `UseGeneratedLogDensityFunction` mode).
+- `marginalization_cache::MC`: Cache for auto-marginalization (lazy, for
+  `UseAutoMarginalization` mode). Invalidated when graph structure changes.
+- `mutable_symbols::Set{Symbol}`: Symbols that may be mutated during evaluation.
+- `base_model::base_model_T`: The original model if this is a conditioned model; `nothing` otherwise.
 """
 struct BUGSModel{
     EMT<:EvaluationMode,
