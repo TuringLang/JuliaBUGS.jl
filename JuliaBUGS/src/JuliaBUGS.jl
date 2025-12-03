@@ -26,13 +26,6 @@ export @varname
 export @model
 export @of
 
-# Model API - user-facing functions
-export parameters, variables, getparams, settrans
-export set_evaluation_mode, set_observed_values!
-
-# Evaluation modes
-export UseGraph, UseGeneratedLogDensityFunction, UseAutoMarginalization
-
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
 
@@ -44,13 +37,7 @@ include("graphs.jl")
 include("compiler_pass.jl")
 include("model/Model.jl")
 using .Model
-using .Model:
-    AbstractBUGSModel,
-    BUGSModel,
-    evaluate_with_values!!,
-    UseGraph,
-    UseGeneratedLogDensityFunction,
-    UseAutoMarginalization
+using .Model: AbstractBUGSModel, BUGSModel
 
 include("independent_mh.jl")
 include("gibbs.jl")
