@@ -259,6 +259,38 @@ end
 # ======================
 
 """
+    _compute_node_types(model::BUGSModel)
+
+Compute node type classification for all nodes in the model.
+Returns (node_types, is_discrete_finite_vals) where:
+- node_types: Vector{Symbol} with :deterministic, :discrete_finite, :discrete_infinite, or :continuous
+- is_discrete_finite_vals: Vector{Bool} indicating discrete finite nodes
+"""
+function _compute_node_types(model::BUGSModel)
+    gd = model.graph_evaluation_data
+    n = length(gd.sorted_nodes)
+    node_types = Vector{Symbol}(undef, n)
+    is_discrete_finite_vals = Vector{Bool}(undef, n)
+
+    for (i, vn) in enumerate(gd.sorted_nodes)
+        is_stochastic = gd.is_stochastic_vals[i]
+        node_function = gd.node_function_vals[i]
+        loop_vars = gd.loop_vars_vals[i]
+
+        if !is_stochastic
+            node_types[i] = :deterministic
+            is_discrete_finite_vals[i] = false
+        else
+            dist = node_function(model.evaluation_env, loop_vars)
+            node_types[i] = JuliaBUGS.Model.classify_node_type(dist)
+            is_discrete_finite_vals[i] = (node_types[i] == :discrete_finite)
+        end
+    end
+
+    return node_types, is_discrete_finite_vals
+end
+
+"""
     _get_stochastic_parents_indices(model::BUGSModel)
 
 Get the stochastic parents (through deterministic nodes) for each node in the model.
@@ -290,20 +322,20 @@ function _get_stochastic_parents_indices(model::BUGSModel)
 end
 
 """
-    _precompute_minimal_cache_keys(model::BUGSModel, order::Vector{Int})
+    _precompute_minimal_cache_keys(model::BUGSModel, order::Vector{Int}, is_discrete_finite::Vector{Bool})
 
 Precompute minimal cache keys for memoization during marginalization.
 The frontier at each position should include all discrete finite variables that:
 1. Have been processed (appear earlier in the evaluation order)
 2. May affect the current computation
 """
-function _precompute_minimal_cache_keys(model::BUGSModel, order::Vector{Int})
+function _precompute_minimal_cache_keys(
+    model::BUGSModel, order::Vector{Int}, is_discrete_finite::Vector{Bool}
+)
     gd = model.graph_evaluation_data
     n = length(order)
     is_stochastic = gd.is_stochastic_vals
     is_observed = gd.is_observed_vals
-    is_discrete_finite = gd.is_discrete_finite_vals
-    node_types = gd.node_types
 
     # Get stochastic parents (stochastic boundary) for each node
     parents_idx = _get_stochastic_parents_indices(model)
@@ -380,13 +412,13 @@ function _precompute_minimal_cache_keys(model::BUGSModel, order::Vector{Int})
 end
 
 """
-    _compute_marginalization_order(model::BUGSModel) -> Vector{Int}
+    _compute_marginalization_order(model::BUGSModel, is_discrete_finite::Vector{Bool}) -> Vector{Int}
 
 Compute a topologically-valid evaluation order that reduces the frontier size
 by placing discrete finite variables immediately before their observed dependents
 whenever possible. This greatly reduces branching in the recursive enumerator.
 """
-function _compute_marginalization_order(model::BUGSModel)
+function _compute_marginalization_order(model::BUGSModel, is_discrete_finite::Vector{Bool})
     gd = model.graph_evaluation_data
     n = length(gd.sorted_nodes)
 
@@ -427,7 +459,7 @@ function _compute_marginalization_order(model::BUGSModel)
         if gd.is_stochastic_vals[i] && gd.is_observed_vals[i]
             # Place discrete-finite unobserved parents (by label index -> VarName)
             for pidx in stoch_parents[i]
-                if gd.is_discrete_finite_vals[pidx] && !gd.is_observed_vals[pidx]
+                if is_discrete_finite[pidx] && !gd.is_observed_vals[pidx]
                     place_with_dependencies(order[pidx])
                 end
             end
@@ -498,7 +530,7 @@ function _marginalize_recursive(
 
     is_stochastic = model.graph_evaluation_data.is_stochastic_vals[current_idx]
     is_observed = model.graph_evaluation_data.is_observed_vals[current_idx]
-    is_discrete_finite = model.graph_evaluation_data.is_discrete_finite_vals[current_idx]
+    is_discrete_finite = model.marginalization_cache.is_discrete_finite_vals[current_idx]
     node_function = model.graph_evaluation_data.node_function_vals[current_idx]
     loop_vars = model.graph_evaluation_data.loop_vars_vals[current_idx]
 
@@ -708,11 +740,12 @@ function evaluate_with_marginalization_env!!(
     # For environment-based evaluation without explicit parameter values,
     # we need to extract ONLY continuous parameters for marginalization
     gd = model.graph_evaluation_data
+    mc = model.marginalization_cache
     param_values = Float64[]
 
     for vn in gd.sorted_parameters
         idx = findfirst(==(vn), gd.sorted_nodes)
-        if idx !== nothing && gd.node_types[idx] == :continuous
+        if idx !== nothing && mc.node_types[idx] == :continuous
             value = AbstractPPL.get(evaluation_env, vn)
             if transformed
                 # Transform to unconstrained space
@@ -767,15 +800,16 @@ function evaluate_with_marginalization_values!!(
             "Please call set_evaluation_mode(model, UseAutoMarginalization()) first.",
         )
     end
-    sorted_indices = model.marginalization_cache.marginalization_order
-    minimal_keys = model.marginalization_cache.minimal_cache_keys
+    mc = model.marginalization_cache
+    sorted_indices = mc.marginalization_order
+    minimal_keys = mc.minimal_cache_keys
 
     gd = model.graph_evaluation_data
     n = length(gd.sorted_nodes)
 
     # Initialize memoization cache
     # Size hint: at most 2^|discrete_finite| * |nodes| entries
-    n_discrete_finite = sum(model.graph_evaluation_data.is_discrete_finite_vals)
+    n_discrete_finite = sum(mc.is_discrete_finite_vals)
     expected_entries = if n_discrete_finite > 20
         1_000_000  # Cap at 1M for large problems
     else
@@ -793,7 +827,7 @@ function evaluate_with_marginalization_values!!(
     continuous_param_order = VarName[]
     for vn in gd.sorted_parameters
         idx = findfirst(==(vn), gd.sorted_nodes)
-        if idx !== nothing && gd.node_types[idx] == :continuous
+        if idx !== nothing && mc.node_types[idx] == :continuous
             push!(continuous_param_order, vn)
             var_lengths[vn] = model.transformed_var_lengths[vn]
         end

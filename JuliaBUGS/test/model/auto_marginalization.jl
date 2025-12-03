@@ -203,8 +203,8 @@ using JuliaBUGS.Model:
         @test LogDensityProblems.dimension(model_marg) == 3  # sigma + mu[2] + mu[1]
 
         # Check that discrete finite variables are correctly identified
-        gd = model_marg.graph_evaluation_data
-        discrete_count = sum(gd.is_discrete_finite_vals)
+        mc = model_marg.marginalization_cache
+        discrete_count = sum(mc.is_discrete_finite_vals)
         @test discrete_count == 3  # z[1], z[2], z[3]
     end
 

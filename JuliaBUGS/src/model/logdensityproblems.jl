@@ -21,11 +21,12 @@ end
 function LogDensityProblems.dimension(model::BUGSModel)
     # For auto marginalization, only count continuous parameters
     if model.evaluation_mode isa UseAutoMarginalization
+        mc = model.marginalization_cache
         continuous_param_length = 0
         for (i, vn) in enumerate(model.graph_evaluation_data.sorted_parameters)
             idx = findfirst(==(vn), model.graph_evaluation_data.sorted_nodes)
             if idx !== nothing
-                node_type = model.graph_evaluation_data.node_types[idx]
+                node_type = mc.node_types[idx]
                 # Only include continuous variables (exclude all discrete)
                 if node_type == :continuous
                     if model.transformed

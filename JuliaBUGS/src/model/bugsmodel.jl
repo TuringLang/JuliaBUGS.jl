@@ -31,9 +31,8 @@ end
 Return the finite support for a discrete univariate distribution.
 Relies on Distributions.support to provide an iterable, finite range.
 """
-enumerate_discrete_values(dist::Distributions.DiscreteUnivariateDistribution) = Distributions.support(
-    dist
-)
+enumerate_discrete_values(dist::Distributions.DiscreteUnivariateDistribution) =
+    Distributions.support(dist)
 
 """
     classify_node_type(dist)
@@ -61,10 +60,14 @@ must be invalidated when the graph structure changes (e.g., during conditioning)
 # Fields
 - `minimal_cache_keys::Dict{Int,Vector{Int}}`: Maps node index to minimal frontier indices needed for memoization
 - `marginalization_order::Vector{Int}`: Optimized evaluation order that reduces frontier size
+- `node_types::Vector{Symbol}`: Node type classification (:deterministic, :discrete_finite, :discrete_infinite, :continuous)
+- `is_discrete_finite_vals::Vector{Bool}`: Whether each node is a discrete variable with finite support
 """
 struct MarginalizationCache
     minimal_cache_keys::Dict{Int,Vector{Int}}
     marginalization_order::Vector{Int}
+    node_types::Vector{Symbol}
+    is_discrete_finite_vals::Vector{Bool}
 end
 
 """
@@ -80,8 +83,6 @@ Stores pre-computed values to avoid repeated lookups from the MetaGraph during m
 - `is_observed_vals::Vector{Bool}`: Whether each node is observed (has data)
 - `node_function_vals::TNF`: Functions that define each node's computation
 - `loop_vars_vals::TV`: Loop variables associated with each node
-- `node_types::Vector{Symbol}`: Node type classification (:deterministic, :discrete_finite, :discrete_infinite, :continuous)
-- `is_discrete_finite_vals::Vector{Bool}`: Whether each node is a discrete variable with finite support
 """
 struct GraphEvaluationData{TNF,TV}
     sorted_nodes::Vector{<:VarName}
@@ -90,8 +91,6 @@ struct GraphEvaluationData{TNF,TV}
     is_observed_vals::Vector{Bool}
     node_function_vals::TNF
     loop_vars_vals::TV
-    node_types::Vector{Symbol}
-    is_discrete_finite_vals::Vector{Bool}
 end
 
 """
@@ -111,8 +110,6 @@ function GraphEvaluationData(
     is_observed_vals = Array{Bool}(undef, length(sorted_nodes))
     node_function_vals = Array{Any}(undef, length(sorted_nodes))
     loop_vars_vals = Array{Any}(undef, length(sorted_nodes))
-    node_types = Array{Symbol}(undef, length(sorted_nodes))
-    is_discrete_finite_vals = Array{Bool}(undef, length(sorted_nodes))
     sorted_parameters = VarName[]
 
     for (i, vn) in enumerate(sorted_nodes)
@@ -121,10 +118,6 @@ function GraphEvaluationData(
         is_observed_vals[i] = is_observed
         node_function_vals[i] = node_function
         loop_vars_vals[i] = loop_vars
-
-        # Default node types - will be updated during BUGSModel construction
-        node_types[i] = :continuous
-        is_discrete_finite_vals[i] = false
 
         # If it's a stochastic variable and not observed, it's a parameter
         # If active_parameters is specified, only include those that are in the list
@@ -142,8 +135,6 @@ function GraphEvaluationData(
         is_observed_vals,
         map(identity, node_function_vals),
         map(identity, loop_vars_vals),
-        node_types,
-        is_discrete_finite_vals,
     )
 end
 
@@ -309,10 +300,6 @@ function BUGSModel(
     untransformed_var_lengths, transformed_var_lengths = Dict{VarName,Int}(),
     Dict{VarName,Int}()
 
-    # Create mutable copies of node_types and is_discrete_finite_vals for updating
-    node_types = copy(graph_evaluation_data.node_types)
-    is_discrete_finite_vals = copy(graph_evaluation_data.is_discrete_finite_vals)
-
     for (i, vn) in enumerate(graph_evaluation_data.sorted_nodes)
         is_stochastic = graph_evaluation_data.is_stochastic_vals[i]
         is_observed = graph_evaluation_data.is_observed_vals[i]
@@ -321,17 +308,11 @@ function BUGSModel(
 
         if !is_stochastic
             # Deterministic node
-            node_types[i] = :deterministic
-            is_discrete_finite_vals[i] = false
             value = Base.invokelatest(node_function, evaluation_env, loop_vars)
             evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
         else
-            # Stochastic node - evaluate distribution and classify
+            # Stochastic node - evaluate distribution
             dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
-
-            # Classify the node type based on the distribution
-            node_types[i] = classify_node_type(dist)
-            is_discrete_finite_vals[i] = (node_types[i] == :discrete_finite)
 
             if !is_observed
                 # Unobserved stochastic node (parameter)
@@ -355,21 +336,6 @@ function BUGSModel(
             end
         end
     end
-
-    # Update graph_evaluation_data with the computed node types
-    graph_evaluation_data = GraphEvaluationData{
-        typeof(graph_evaluation_data.node_function_vals),
-        typeof(graph_evaluation_data.loop_vars_vals),
-    }(
-        graph_evaluation_data.sorted_nodes,
-        graph_evaluation_data.sorted_parameters,
-        graph_evaluation_data.is_stochastic_vals,
-        graph_evaluation_data.is_observed_vals,
-        graph_evaluation_data.node_function_vals,
-        graph_evaluation_data.loop_vars_vals,
-        node_types,
-        is_discrete_finite_vals,
-    )
 
     # Compute mutable symbols from graph evaluation data
     mutable_symbols = get_mutable_symbols(graph_evaluation_data)
@@ -504,9 +470,10 @@ function getparams(model::BUGSModel, evaluation_env=model.evaluation_env)
     gd = model.graph_evaluation_data
     param_vars = if model.evaluation_mode isa UseAutoMarginalization
         # Only include continuous parameters when auto marginalizing
+        mc = model.marginalization_cache
         filter(gd.sorted_parameters) do vn
             idx = findfirst(==(vn), gd.sorted_nodes)
-            idx !== nothing && gd.node_types[idx] == :continuous
+            idx !== nothing && mc.node_types[idx] == :continuous
         end
     else
         gd.sorted_parameters
@@ -560,9 +527,10 @@ function getparams(
     gd = model.graph_evaluation_data
     # Respect evaluation mode when selecting parameters
     param_vars = if model.evaluation_mode isa UseAutoMarginalization
+        mc = model.marginalization_cache
         filter(gd.sorted_parameters) do vn
             idx = findfirst(==(vn), gd.sorted_nodes)
-            idx !== nothing && gd.node_types[idx] == :continuous
+            idx !== nothing && mc.node_types[idx] == :continuous
         end
     else
         gd.sorted_parameters
@@ -687,12 +655,23 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
         # Lazily compute auto-marginalization cache if not already present
         if isnothing(model.marginalization_cache)
             try
+                # Compute node types first
+                node_types, is_discrete_finite_vals = JuliaBUGS.Model._compute_node_types(
+                    model
+                )
+
                 # Compute marginalization order and minimal cache keys
-                order = JuliaBUGS.Model._compute_marginalization_order(model)
-                keys = JuliaBUGS.Model._precompute_minimal_cache_keys(model, order)
+                order = JuliaBUGS.Model._compute_marginalization_order(
+                    model, is_discrete_finite_vals
+                )
+                keys = JuliaBUGS.Model._precompute_minimal_cache_keys(
+                    model, order, is_discrete_finite_vals
+                )
 
                 # Create and attach cache
-                cache = MarginalizationCache(keys, order)
+                cache = MarginalizationCache(
+                    keys, order, node_types, is_discrete_finite_vals
+                )
                 model = BangBang.setproperty!!(model, :marginalization_cache, cache)
             catch err
                 @warn "Failed to compute auto-marginalization caches; falling back to UseGraph mode" exception = (
