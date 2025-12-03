@@ -47,6 +47,16 @@ JuliaBUGS.@bugs_primitive censored product_distribution truncated
 JuliaBUGS.@bugs_primitive fill ones zeros
 JuliaBUGS.@bugs_primitive sum mean sqrt
 
+# Set up common doctest environment
+getfield(Documenter.DocMeta, Symbol("setdocmeta!"))(
+    JuliaBUGS,
+    :DocTestSetup,
+    :(using JuliaBUGS, Test, Distributions, AbstractPPL;
+    using JuliaBUGS.Model: condition, parameters, decondition;
+    JuliaBUGS.@bugs_primitive Normal Gamma);
+    recursive=true,
+)
+
 const TEST_GROUPS = OrderedDict{String,Function}(
     "elementary" => () -> begin
         Documenter.doctest(JuliaBUGS; manual=false)
