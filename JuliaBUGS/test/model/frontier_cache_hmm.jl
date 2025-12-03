@@ -77,8 +77,12 @@ using AbstractPPL: VarName
     order_states_first = vcat(priority_states_first, rest_states_first)
 
     # Precompute minimal keys for both orders
-    keys_interleaved = _precompute_minimal_cache_keys(model, order_interleaved, node_types, stochastic_parents)
-    keys_states_first = _precompute_minimal_cache_keys(model, order_states_first, node_types, stochastic_parents)
+    keys_interleaved = _precompute_minimal_cache_keys(
+        model, order_interleaved, node_types, stochastic_parents
+    )
+    keys_states_first = _precompute_minimal_cache_keys(
+        model, order_states_first, node_types, stochastic_parents
+    )
 
     # Helper to map frontier indices back to a set of variable symbols we care about
     function frontier_syms(keys, key_idx)

@@ -768,12 +768,7 @@ using JuliaBUGS.Model:
         )
         gibbs = JuliaBUGS.Gibbs(model_graph, JuliaBUGS.IndependentMH())
         chn_graph = AbstractMCMC.sample(
-            rng,
-            model_graph,
-            gibbs,
-            10;
-            progress=false,
-            chain_type=MCMCChains.Chains,
+            rng, model_graph, gibbs, 10; progress=false, chain_type=MCMCChains.Chains
         )
         @test length(chn_graph) == 10
 
