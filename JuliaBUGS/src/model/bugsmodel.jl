@@ -47,9 +47,9 @@ struct GraphEvaluationData{TNF,TV}
 end
 
 """
-    GraphEvaluationData(constructor)
+    GraphEvaluationData(g::BUGSGraph, [sorted_nodes], [active_parameters])
 
-Creates GraphEvaluationData from a BUGSGraph, extracting and caching node information
+Create a `GraphEvaluationData` from a `BUGSGraph`, extracting and caching node information
 for efficient evaluation.
 """
 function GraphEvaluationData(
