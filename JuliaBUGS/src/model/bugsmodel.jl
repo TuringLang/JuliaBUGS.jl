@@ -11,16 +11,21 @@ This cache is computed lazily when switching to `UseAutoMarginalization` mode an
 must be invalidated when the graph structure changes (e.g., during conditioning).
 
 # Fields
-- `minimal_cache_keys::Dict{Int,Vector{Int}}`: Maps node index to minimal frontier indices needed for memoization
-- `marginalization_order::Vector{Int}`: Optimized evaluation order that reduces frontier size
-- `node_types::Vector{Symbol}`: Node type classification (:deterministic, :discrete_finite, :discrete_infinite, :continuous)
-- `is_discrete_finite_vals::Vector{Bool}`: Whether each node is a discrete variable with finite support
+- `minimal_cache_keys::Dict{Int,Vector{Int}}`: Maps node index to minimal frontier indices for memoization.
+- `marginalization_order::Vector{Int}`: Optimized evaluation order that reduces frontier size.
+- `node_types::Vector{Symbol}`: Node type for each node
+  (`:deterministic`, `:discrete_finite`, `:discrete_infinite`, or `:continuous`).
+- `param_lengths::Dict{VarName,Int}`: Transformed lengths for continuous parameters.
+- `param_offsets::Dict{VarName,Int}`: Start index in flattened parameter vector for each continuous param.
+- `n_discrete_finite::Int`: Number of discrete finite variables (for memo sizing).
 """
-struct MarginalizationCache
+struct MarginalizationCache{V<:VarName}
     minimal_cache_keys::Dict{Int,Vector{Int}}
     marginalization_order::Vector{Int}
     node_types::Vector{Symbol}
-    is_discrete_finite_vals::Vector{Bool}
+    param_lengths::Dict{V,Int}
+    param_offsets::Dict{V,Int}
+    n_discrete_finite::Int
 end
 
 """
@@ -611,22 +616,40 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
         # Lazily compute auto-marginalization cache if not already present
         if isnothing(model.marginalization_cache)
             try
-                # Compute node types first
-                node_types, is_discrete_finite_vals = JuliaBUGS.Model._compute_node_types(
-                    model
-                )
+                gd = model.graph_evaluation_data
+                sorted_nodes = gd.sorted_nodes
+
+                # Compute node types and stochastic parents
+                node_types = JuliaBUGS.Model._compute_node_types(model)
+                stochastic_parents = JuliaBUGS.Model._get_stochastic_parents_indices(model)
 
                 # Compute marginalization order and minimal cache keys
                 order = JuliaBUGS.Model._compute_marginalization_order(
-                    model, is_discrete_finite_vals
+                    model, node_types, stochastic_parents
                 )
                 keys = JuliaBUGS.Model._precompute_minimal_cache_keys(
-                    model, order, is_discrete_finite_vals
+                    model, order, node_types, stochastic_parents
                 )
 
-                # Create and attach cache
+                # Build vn -> idx map and compute param_lengths/offsets for continuous params
+                vn_to_idx = Dict(sorted_nodes[i] => i for i in eachindex(sorted_nodes))
+                param_lengths = Dict{eltype(sorted_nodes),Int}()
+                param_offsets = Dict{eltype(sorted_nodes),Int}()
+                offset = 1
+                for vn in gd.sorted_parameters
+                    idx = get(vn_to_idx, vn, 0)
+                    if idx != 0 && node_types[idx] == :continuous
+                        len = model.transformed_var_lengths[vn]
+                        param_lengths[vn] = len
+                        param_offsets[vn] = offset
+                        offset += len
+                    end
+                end
+
+                n_discrete_finite = count(==(:discrete_finite), node_types)
+
                 cache = MarginalizationCache(
-                    keys, order, node_types, is_discrete_finite_vals
+                    keys, order, node_types, param_lengths, param_offsets, n_discrete_finite
                 )
                 model = BangBang.setproperty!!(model, :marginalization_cache, cache)
             catch err

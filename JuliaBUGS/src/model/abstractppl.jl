@@ -750,7 +750,7 @@ function evaluate!!(
 )
     if model.evaluation_mode isa UseAutoMarginalization
         evaluation_env, log_densities = evaluate_with_marginalization_values!!(
-            model, flattened_values; temperature=temperature, transformed=transformed
+            model, flattened_values; temperature=temperature
         )
     else
         evaluation_env, log_densities = evaluate_with_values!!(

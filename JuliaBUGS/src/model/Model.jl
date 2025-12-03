@@ -28,7 +28,6 @@ export UseGraph, UseGeneratedLogDensityFunction, UseAutoMarginalization
 
 # Internal evaluation functions (exported for testing, not re-exported to users)
 export evaluate_with_rng!!, evaluate_with_env!!, evaluate_with_values!!
-export evaluate_with_marginalization_rng!!,
-    evaluate_with_marginalization_env!!, evaluate_with_marginalization_values!!
+export evaluate_with_marginalization_values!!
 
 end # Model

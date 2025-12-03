@@ -204,7 +204,7 @@ using JuliaBUGS.Model:
 
         # Check that discrete finite variables are correctly identified
         mc = model_marg.marginalization_cache
-        discrete_count = sum(mc.is_discrete_finite_vals)
+        discrete_count = count(==(:discrete_finite), mc.node_types)
         @test discrete_count == 3  # z[1], z[2], z[3]
     end
 

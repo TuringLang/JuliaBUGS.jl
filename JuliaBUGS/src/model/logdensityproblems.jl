@@ -10,7 +10,7 @@ function _eval_logdensity(model, ::UseGraph, x)
 end
 
 function _eval_logdensity(model, ::UseAutoMarginalization, x)
-    _, log_densities = evaluate_with_marginalization_values!!(model, x; transformed=true)
+    _, log_densities = evaluate_with_marginalization_values!!(model, x)
     return log_densities.tempered_logjoint
 end
 
