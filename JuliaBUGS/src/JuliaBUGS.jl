@@ -26,6 +26,13 @@ export @varname
 export @model
 export @of
 
+# Model API - user-facing functions
+export parameters, variables, getparams, settrans
+export set_evaluation_mode, set_observed_values!
+
+# Evaluation modes
+export UseGraph, UseGeneratedLogDensityFunction, UseAutoMarginalization
+
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
 
