@@ -4,53 +4,6 @@
 abstract type AbstractBUGSModel end
 
 """
-    is_discrete_finite_distribution(dist)
-
-Check if a distribution is discrete with finite support.
-"""
-function is_discrete_finite_distribution(dist)
-    # Check if it's a discrete distribution first
-    if !(dist isa Distributions.DiscreteUnivariateDistribution)
-        return false
-    end
-
-    # Whitelist of known finite discrete distributions
-    return dist isa Union{
-        Distributions.Bernoulli,
-        Distributions.Binomial,
-        Distributions.Categorical,
-        Distributions.DiscreteUniform,
-        Distributions.BetaBinomial,
-        Distributions.Hypergeometric,
-    }
-end
-
-"""
-    enumerate_discrete_values(dist)
-
-Return the finite support for a discrete univariate distribution.
-Relies on Distributions.support to provide an iterable, finite range.
-"""
-enumerate_discrete_values(dist::Distributions.DiscreteUnivariateDistribution) =
-    Distributions.support(dist)
-
-"""
-    classify_node_type(dist)
-
-Classify a distribution into node types for marginalization.
-Returns one of: :deterministic, :discrete_finite, :discrete_infinite, :continuous
-"""
-function classify_node_type(dist)
-    if is_discrete_finite_distribution(dist)
-        return :discrete_finite
-    elseif dist isa Distributions.DiscreteUnivariateDistribution
-        return :discrete_infinite
-    else
-        return :continuous
-    end
-end
-
-"""
     MarginalizationCache
 
 Caches precomputed data for automatic marginalization of discrete finite variables.

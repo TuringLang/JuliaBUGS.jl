@@ -259,6 +259,53 @@ end
 # ======================
 
 """
+    _is_discrete_finite_distribution(dist)
+
+Check if a distribution is discrete with finite support.
+"""
+function _is_discrete_finite_distribution(dist)
+    # Check if it's a discrete distribution first
+    if !(dist isa Distributions.DiscreteUnivariateDistribution)
+        return false
+    end
+
+    # Whitelist of known finite discrete distributions
+    return dist isa Union{
+        Distributions.Bernoulli,
+        Distributions.Binomial,
+        Distributions.Categorical,
+        Distributions.DiscreteUniform,
+        Distributions.BetaBinomial,
+        Distributions.Hypergeometric,
+    }
+end
+
+"""
+    _enumerate_discrete_values(dist)
+
+Return the finite support for a discrete univariate distribution.
+Relies on Distributions.support to provide an iterable, finite range.
+"""
+_enumerate_discrete_values(dist::Distributions.DiscreteUnivariateDistribution) =
+    Distributions.support(dist)
+
+"""
+    _classify_node_type(dist)
+
+Classify a distribution into node types for marginalization.
+Returns one of: :deterministic, :discrete_finite, :discrete_infinite, :continuous
+"""
+function _classify_node_type(dist)
+    if _is_discrete_finite_distribution(dist)
+        return :discrete_finite
+    elseif dist isa Distributions.DiscreteUnivariateDistribution
+        return :discrete_infinite
+    else
+        return :continuous
+    end
+end
+
+"""
     _compute_node_types(model::BUGSModel)
 
 Compute node type classification for all nodes in the model.
@@ -282,7 +329,7 @@ function _compute_node_types(model::BUGSModel)
             is_discrete_finite_vals[i] = false
         else
             dist = node_function(model.evaluation_env, loop_vars)
-            node_types[i] = JuliaBUGS.Model.classify_node_type(dist)
+            node_types[i] = _classify_node_type(dist)
             is_discrete_finite_vals[i] = (node_types[i] == :discrete_finite)
         end
     end
@@ -579,7 +626,7 @@ function _marginalize_recursive(
     elseif is_discrete_finite
         # Discrete finite unobserved node - marginalize out
         dist = node_function(env, loop_vars)
-        possible_values = enumerate_discrete_values(dist)
+        possible_values = _enumerate_discrete_values(dist)
 
         total_logpriors = nothing
         branch_loglikelihoods = nothing
