@@ -215,45 +215,7 @@ function BUGSModel(
     model_def::Expr=model.model_def,
     data=model.data,
 )
-    # Build an intermediate model
-    m = BUGSModel(
-        model_def,
-        data,
-        g,
-        evaluation_env,
-        transformed,
-        evaluation_mode,
-        untransformed_param_length,
-        transformed_param_length,
-        untransformed_var_lengths,
-        transformed_var_lengths,
-        graph_evaluation_data,
-        log_density_computation_function,
-        mutable_symbols,
-        base_model,
-    )
-    # Precompute minimal cache keys for current evaluation order if not present
-    gd = m.graph_evaluation_data
-    minimal_keys = if !isempty(gd.minimal_cache_keys)
-        gd.minimal_cache_keys
-    else
-        n = length(gd.sorted_nodes)
-        JuliaBUGS.Model._precompute_minimal_cache_keys(m, collect(1:n))
-    end
-    # Attach minimal cache keys to GraphEvaluationData (order remains default)
-    gd2 = GraphEvaluationData{typeof(gd.node_function_vals),typeof(gd.loop_vars_vals)}(
-        gd.sorted_nodes,
-        gd.sorted_parameters,
-        gd.is_stochastic_vals,
-        gd.is_observed_vals,
-        gd.node_function_vals,
-        gd.loop_vars_vals,
-        gd.node_types,
-        gd.is_discrete_finite_vals,
-        minimal_keys,
-        gd.marginalization_order,
-    )
-    # Return final model with cached minimal keys
+    # Return model without precomputing caches (on-demand generation)
     return BUGSModel(
         model_def,
         data,
@@ -265,7 +227,7 @@ function BUGSModel(
         transformed_param_length,
         untransformed_var_lengths,
         transformed_var_lengths,
-        gd2,
+        graph_evaluation_data,
         log_density_computation_function,
         mutable_symbols,
         base_model,
@@ -704,6 +666,36 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                 "Auto marginalization expects parameters in transformed (unconstrained) space. " *
                 "Please use `settrans(model, true)` before switching to auto marginalization mode.",
             )
+        end
+        # Lazily compute auto-marginalization caches if not already present
+        gd = model.graph_evaluation_data
+        if isempty(gd.marginalization_order) || isempty(gd.minimal_cache_keys)
+            try
+                # Compute marginalization order and minimal cache keys
+                order = JuliaBUGS.Model._compute_marginalization_order(model)
+                keys = JuliaBUGS.Model._precompute_minimal_cache_keys(model, order)
+
+                # Create new GraphEvaluationData with cached values
+                new_gd = GraphEvaluationData{
+                    typeof(gd.node_function_vals),typeof(gd.loop_vars_vals)
+                }(
+                    gd.sorted_nodes,
+                    gd.sorted_parameters,
+                    gd.is_stochastic_vals,
+                    gd.is_observed_vals,
+                    gd.node_function_vals,
+                    gd.loop_vars_vals,
+                    gd.node_types,
+                    gd.is_discrete_finite_vals,
+                    keys,
+                    order,
+                )
+                model = BangBang.setproperty!!(model, :graph_evaluation_data, new_gd)
+            catch err
+                @warn "Failed to compute auto-marginalization caches; falling back to UseGraph mode" exception =
+                    (err, catch_backtrace())
+                mode = UseGraph()
+            end
         end
     end
     return BangBang.setproperty!!(model, :evaluation_mode, mode)
