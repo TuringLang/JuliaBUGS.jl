@@ -148,14 +148,13 @@ function LogDensityProblems.capabilities(::Type{<:BUGSModelWithGradient})
 end
 
 """
-    _logdensity_for_gradient(x, model_constant)
+    _logdensity_for_gradient(x, model)
 
 Target function for gradient computation via DifferentiationInterface.
 The parameter vector `x` comes first (the argument to differentiate w.r.t.),
-and the model is wrapped in `DI.Constant` to indicate it's not differentiated.
+and the model is passed as a constant context (not differentiated).
 """
-function _logdensity_for_gradient(x::AbstractVector, model_constant::DI.Constant)
-    model = DI.unwrap(model_constant)
+function _logdensity_for_gradient(x::AbstractVector, model::BUGSModel)
     return _eval_logdensity(model, model.evaluation_mode, x)
 end
 
