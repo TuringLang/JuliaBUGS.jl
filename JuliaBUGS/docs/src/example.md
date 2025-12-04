@@ -245,7 +245,8 @@ samples_and_stats = AbstractMCMC.sample(
                         chain_type = Chains,
                         n_adapts = n_adapts,
                         init_params = initial_θ,
-                        discard_initial = n_adapts
+                        discard_initial = n_adapts,
+                        progress = false
                     )
 describe(samples_and_stats)
 ```
