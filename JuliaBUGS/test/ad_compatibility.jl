@@ -50,7 +50,9 @@
 
     @testset "UseGeneratedLogDensityFunction mode" begin
         model = compile(model_def, data)
-        model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())
+        model = JuliaBUGS.set_evaluation_mode(
+            model, JuliaBUGS.UseGeneratedLogDensityFunction()
+        )
         @test model.evaluation_mode isa JuliaBUGS.UseGeneratedLogDensityFunction
 
         x = JuliaBUGS.getparams(model)
@@ -78,8 +80,11 @@
         end
 
         @testset "AutoMooncake - should work without warning" begin
-            grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
-            @test grad_model.base_model.evaluation_mode isa JuliaBUGS.UseGeneratedLogDensityFunction
+            grad_model = JuliaBUGS.BUGSModelWithGradient(
+                model, AutoMooncake(; config=nothing)
+            )
+            @test grad_model.base_model.evaluation_mode isa
+                JuliaBUGS.UseGeneratedLogDensityFunction
 
             logp, grad = LogDensityProblems.logdensity_and_gradient(grad_model, x)
             @test isfinite(logp)
