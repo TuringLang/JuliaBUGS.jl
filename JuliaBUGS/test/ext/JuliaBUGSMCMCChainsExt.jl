@@ -27,10 +27,10 @@
     )
 
     model = compile(model_def, data, (;))
-    ad_model = Base.invokelatest(ADgradient, :ReverseDiff, model; compile=Val(true))
+    ad_model = compile(model_def, data, (;); adtype=AutoReverseDiff(; compile=true))
     n_samples, n_adapts = 2000, 1000
 
-    D = LogDensityProblems.dimension(model)
+    D = LogDensityProblems.dimension(ad_model)
     initial_θ = rand(D)
 
     hmc_chain = Base.invokelatest(
@@ -73,8 +73,7 @@
 
     n_samples, n_adapts = 20000, 5000
 
-    mh_chain = Base.invokelatest(
-        AbstractMCMC.sample,
+    mh_chain = AbstractMCMC.sample(
         model,
         RWMH(MvNormal(zeros(D), I)),
         n_samples;
@@ -109,10 +108,9 @@
         sigma[2] ~ InverseGamma(2, 3)
         sigma[3] ~ InverseGamma(2, 3)
     end
-    model = compile(model_def, (;))
-    ad_model = Base.invokelatest(ADgradient, :ReverseDiff, model; compile=Val(true))
-    hmc_chain = Base.invokelatest(
-        AbstractMCMC.sample, ad_model, NUTS(0.8), 10; progress=false, chain_type=Chains
+    ad_model = compile(model_def, (;); adtype=AutoReverseDiff(; compile=true))
+    hmc_chain = AbstractMCMC.sample(
+        ad_model, NUTS(0.8), 10; progress=false, chain_type=Chains
     )
     @test Set(hmc_chain.name_map[:parameters]) == Set([
         Symbol("sigma[3]"),

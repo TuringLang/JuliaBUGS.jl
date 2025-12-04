@@ -1,5 +1,14 @@
 # JuliaBUGS Changelog
 
+## 0.12
+
+- **DifferentiationInterface.jl integration**: Use `adtype` parameter in `compile()` to enable gradient-based inference via [ADTypes.jl](https://github.com/SciML/ADTypes.jl).
+  - Example: `model = compile(model_def, data; adtype=AutoReverseDiff())`
+  - Supports `AutoReverseDiff`, `AutoForwardDiff`, `AutoMooncake`
+
+- **Breaking**: `LogDensityProblemsAD.ADgradient` is no longer supported.
+  - Use `compile(...; adtype=...)` or `BUGSModelWithGradient(model, adtype)` instead.
+
 ## 0.10.1
 
 Expose docs for changes in [v0.10.0](https://github.com/TuringLang/JuliaBUGS.jl/releases/tag/JuliaBUGS-v0.10.0)

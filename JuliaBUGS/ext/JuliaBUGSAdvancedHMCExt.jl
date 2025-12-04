@@ -4,9 +4,8 @@ using AbstractMCMC
 using AdvancedHMC
 using ADTypes
 using JuliaBUGS
-using JuliaBUGS: BUGSModel, getparams, initialize!
+using JuliaBUGS: BUGSModel, BUGSModelWithGradient, getparams, initialize!
 using JuliaBUGS.LogDensityProblems
-using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.Random
 using MCMCChains: Chains
 
@@ -40,10 +39,10 @@ end
 function _gibbs_internal_hmc(
     rng::Random.AbstractRNG, cond_model::BUGSModel, sampler, ad_backend, state
 )
-    # Wrap model with AD gradient computation
-    logdensitymodel = AbstractMCMC.LogDensityModel(
-        LogDensityProblemsAD.ADgradient(ad_backend, cond_model)
-    )
+    # Create gradient model on-the-fly
+    ad_model = BUGSModelWithGradient(cond_model, ad_backend)
+    x = getparams(cond_model)
+    logdensitymodel = AbstractMCMC.LogDensityModel(ad_model)
 
     # Take HMC/NUTS step
     if isnothing(state)
@@ -53,7 +52,7 @@ function _gibbs_internal_hmc(
             logdensitymodel,
             sampler;
             n_adapts=0,  # Disable adaptation within Gibbs
-            initial_params=getparams(cond_model),
+            initial_params=x,
         )
     else
         # Use existing state for subsequent steps
@@ -67,7 +66,7 @@ end
 
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:AdvancedHMC.Transition},
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelWithGradient},
     sampler::AdvancedHMC.AbstractHMCSampler,
     state,
     chain_type::Type{Chains};

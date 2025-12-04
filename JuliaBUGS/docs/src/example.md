@@ -2,6 +2,7 @@
 
 ```@setup abc
 using JuliaBUGS
+using AdvancedHMC, AbstractMCMC, LogDensityProblems, MCMCChains, ADTypes, ReverseDiff
 
 data = (
     r = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3],
@@ -190,86 +191,113 @@ initialize!(model, initializations)
 initialize!(model, rand(26))
 ```
 
-`LogDensityProblemsAD.jl` defined some extensions that support automatic differentiation packages.
-For example, with `ReverseDiff.jl`
+### Automatic Differentiation
+
+JuliaBUGS integrates with automatic differentiation (AD) through [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl), enabling gradient-based inference methods like Hamiltonian Monte Carlo (HMC) and No-U-Turn Sampler (NUTS).
+
+#### Specifying an AD Backend
+
+To compile a model with gradient support, pass the `adtype` parameter to `compile`:
 
 ```julia
-using LogDensityProblemsAD, ReverseDiff
-
-ad_model = ADgradient(:ReverseDiff, model; compile=Val(true))
+# Compile with gradient support using ADTypes from ADTypes.jl
+using ADTypes
+model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
 ```
 
-Here `ad_model` will also implement all the interfaces of [`LogDensityProblems.jl`](https://www.tamaspapp.eu/LogDensityProblems.jl/dev/).
-`LogDensityProblemsAD.jl` will automatically add the interface function [`logdensity_and_gradient`](https://www.tamaspapp.eu/LogDensityProblems.jl/dev/#LogDensityProblems.logdensity_and_gradient) to the model, which will return the log density and gradient of the model.  
-And `ad_model` can be used in the same way as `model` in the example below.
+Alternatively, if you already have a compiled `BUGSModel`, you can wrap it with `BUGSModelWithGradient` without recompiling:
+
+```julia
+base_model = compile(model_def, data)
+model = BUGSModelWithGradient(base_model, AutoReverseDiff(compile=true))
+```
+
+Available AD backends include:
+- `AutoReverseDiff(compile=true)` - ReverseDiff with tape compilation (recommended for most models)
+- `AutoForwardDiff()` - ForwardDiff (efficient for models with few parameters)
+- `AutoMooncake()` - Mooncake (requires `UseGeneratedLogDensityFunction()` mode)
+
+For fine-grained control, you can configure the AD backend:
+
+```julia
+# ReverseDiff without compilation
+model = compile(model_def, data; adtype=AutoReverseDiff(compile=false))
+```
+
+The compiled model with gradient support implements the [`LogDensityProblems.jl`](https://www.tamaspapp.eu/LogDensityProblems.jl/dev/) interface, including [`logdensity_and_gradient`](https://www.tamaspapp.eu/LogDensityProblems.jl/dev/#LogDensityProblems.logdensity_and_gradient), which returns both the log density and its gradient.
 
 ### Inference
 
-For a differentiable model, we can use [`AdvancedHMC.jl`](https://github.com/TuringLang/AdvancedHMC.jl) to perform inference.
-For instance,
+For gradient-based inference, we use [`AdvancedHMC.jl`](https://github.com/TuringLang/AdvancedHMC.jl) with models compiled with an `adtype`:
 
-```julia
-using AdvancedHMC, AbstractMCMC, LogDensityProblems, MCMCChains
+```@example abc
+# Compile with gradient support
+model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
 
 n_samples, n_adapts = 2000, 1000
 
 D = LogDensityProblems.dimension(model); initial_θ = rand(D)
 
 samples_and_stats = AbstractMCMC.sample(
-                        ad_model,
+                        model,
                         NUTS(0.8),
                         n_samples;
                         chain_type = Chains,
                         n_adapts = n_adapts,
                         init_params = initial_θ,
-                        discard_initial = n_adapts
+                        discard_initial = n_adapts,
+                        progress = false
                     )
-```
-
-This will return the MCMC Chain,
-
-```plaintext
-Chains MCMC chain (2000×40×1 Array{Real, 3}):
-
-Iterations        = 1001:1:3000
-Number of chains  = 1
-Samples per chain = 2000
-parameters        = alpha0, alpha12, alpha1, alpha2, tau, b[16], b[12], b[10], b[14], b[13], b[7], b[6], b[20], b[1], b[4], b[5], b[2], b[18], b[8], b[3], b[9], b[21], b[17], b[15], b[11], b[19], sigma
-internals         = lp, n_steps, is_accept, acceptance_rate, log_density, hamiltonian_energy, hamiltonian_energy_error, max_hamiltonian_energy_error, tree_depth, numerical_error, step_size, nom_step_size, is_adapt
-
-Summary Statistics
-  parameters      mean       std      mcse    ess_bulk    ess_tail      rhat   ess_per_sec
-      Symbol   Float64   Float64   Float64        Real     Float64   Float64       Missing
-
-      alpha0   -0.5642    0.2320    0.0084    766.9305   1022.5211    1.0021       missing
-     alpha12   -0.8489    0.5247    0.0170    946.0418   1044.1109    1.0002       missing
-      alpha1    0.0587    0.3715    0.0119    966.4367   1233.2257    1.0007       missing
-      alpha2    1.3852    0.3410    0.0127    712.2978    974.1566    1.0002       missing
-         tau    1.8880    0.7705    0.0447    348.9331    338.3655    1.0030       missing
-       b[16]   -0.2445    0.4459    0.0132   1528.0578    843.8225    1.0003       missing
-       b[12]    0.2050    0.3602    0.0086   1868.6126   1202.1363    0.9996       missing
-       b[10]   -0.3500    0.2893    0.0090   1047.3119   1245.9358    1.0008       missing
-      ⋮           ⋮         ⋮         ⋮          ⋮           ⋮          ⋮           ⋮
-                                                                             19 rows omitted
-
-Quantiles
-  parameters      2.5%     25.0%     50.0%     75.0%     97.5%
-      Symbol   Float64   Float64   Float64   Float64   Float64
-
-      alpha0   -1.0143   -0.7143   -0.5590   -0.4100   -0.1185
-     alpha12   -1.9063   -1.1812   -0.8296   -0.5153    0.1521
-      alpha1   -0.6550   -0.1822    0.0512    0.2885    0.8180
-      alpha2    0.7214    1.1663    1.3782    1.5998    2.0986
-         tau    0.5461    1.3941    1.8353    2.3115    3.6225
-       b[16]   -1.2359   -0.4836   -0.1909    0.0345    0.5070
-       b[12]   -0.4493   -0.0370    0.1910    0.4375    0.9828
-       b[10]   -0.9570   -0.5264   -0.3331   -0.1514    0.1613
-      ⋮           ⋮         ⋮         ⋮         ⋮         ⋮
-                                                 19 rows omitted
-
+describe(samples_and_stats)
 ```
 
 This is consistent with the result in the [OpenBUGS seeds example](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html).
+
+## Evaluation Modes and Automatic Differentiation
+
+JuliaBUGS supports multiple evaluation modes and AD backends. The evaluation mode determines how the log density is computed, and constrains which AD backends can be used.
+
+### Evaluation Modes
+
+| Mode | AD Backends |
+|------|-------------|
+| `UseGraph()` (default) | ReverseDiff, ForwardDiff |
+| `UseGeneratedLogDensityFunction()` | Mooncake |
+
+- **`UseGraph()`**: Evaluates by traversing the computational graph. Supports user-defined primitives registered via `@bugs_primitive`.
+- **`UseGeneratedLogDensityFunction()`**: Generates and compiles a Julia function for the log density.
+
+### AD Backends with `UseGraph()` Mode
+
+Use [ReverseDiff.jl](https://github.com/JuliaDiff/ReverseDiff.jl) or [ForwardDiff.jl](https://github.com/JuliaDiff/ForwardDiff.jl) with the default `UseGraph()` mode:
+
+```julia
+using ADTypes
+
+# ReverseDiff with tape compilation (recommended for large models)
+model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
+
+# ForwardDiff (efficient for small models with < 20 parameters)
+model = compile(model_def, data; adtype=AutoForwardDiff())
+
+# ReverseDiff without compilation (supports control flow)
+model = compile(model_def, data; adtype=AutoReverseDiff(compile=false))
+```
+
+!!! warning "Compiled ReverseDiff does not support control flow"
+    Compiled tapes record a fixed execution path. If your model contains value-dependent control flow (e.g., `if x > 0`, `while`, truncation), the tape will only capture one branch and produce **incorrect gradients** when the control flow takes a different path. Use `AutoReverseDiff(compile=false)` or `AutoForwardDiff()` for models with control flow.
+
+### AD Backend with `UseGeneratedLogDensityFunction()` Mode
+
+Use [Mooncake.jl](https://github.com/compintell/Mooncake.jl) with the generated log density function mode:
+
+```julia
+using ADTypes
+
+model = compile(model_def, data)
+model = set_evaluation_mode(model, UseGeneratedLogDensityFunction())
+model = BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
+```
 
 ## Parallel and Distributed Sampling with `AbstractMCMC`
 
@@ -283,7 +311,7 @@ The model compilation code remains the same, and we can sample multiple chains i
 ```julia
 n_chains = 4
 samples_and_stats = AbstractMCMC.sample(
-    ad_model,
+    model,
     AdvancedHMC.NUTS(0.65),
     AbstractMCMC.MCMCThreads(),
     n_samples,
@@ -311,7 +339,7 @@ For example:
 
 ```julia
 @everywhere begin
-    using JuliaBUGS, LogDensityProblems, LogDensityProblemsAD, AbstractMCMC, AdvancedHMC, MCMCChains, ReverseDiff # also other packages one may need
+    using JuliaBUGS, LogDensityProblems, AbstractMCMC, AdvancedHMC, MCMCChains, ADTypes, ReverseDiff
 
     # Define the functions to use
     # Use `@bugs_primitive` to register the functions to use in the model
@@ -322,7 +350,7 @@ end
 
 n_chains = nprocs() - 1 # use all the processes except the parent process
 samples_and_stats = AbstractMCMC.sample(
-    ad_model,
+    model,
     AdvancedHMC.NUTS(0.65),
     AbstractMCMC.MCMCDistributed(),
     n_samples,

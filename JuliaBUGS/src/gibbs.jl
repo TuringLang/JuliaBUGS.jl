@@ -432,7 +432,7 @@ function AbstractMCMC.step(
                 # For gradient-based samplers, wrap with AD
                 _, ad_backend = sub_sampler
                 logdensitymodel = AbstractMCMC.LogDensityModel(
-                    LogDensityProblemsAD.ADgradient(ad_backend, cond_model)
+                    Model.BUGSModelWithGradient(cond_model, ad_backend)
                 )
             else
                 # For non-gradient samplers, use model directly

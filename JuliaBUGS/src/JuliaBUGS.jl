@@ -6,6 +6,7 @@ using Accessors
 using ADTypes
 using BangBang
 using Bijectors: Bijectors
+using DifferentiationInterface
 using Distributions
 using Graphs, MetaGraphsNext
 using LinearAlgebra
@@ -17,6 +18,7 @@ using Serialization: Serialization
 using StaticArrays
 
 import Base: ==, hash, Symbol, size
+import DifferentiationInterface as DI
 import Distributions: truncated
 
 export @bugs
@@ -234,16 +236,21 @@ function validate_bugs_expression(expr, line_num)
 end
 
 """
-    compile(model_def, data[, initial_params]; skip_validation=false)
+    compile(model_def, data[, initial_params]; adtype=nothing)
 
-Compile the model with model definition and data. Optionally, initializations can be provided.
-If initializations are not provided, values will be sampled from the prior distributions.
+Compile a BUGS model. Returns `BUGSModel`, or `BUGSModelWithGradient` if `adtype` is provided.
 
-By default, validates that all functions in the model are in the BUGS allowlist (suitable for @bugs macro).
-Set `skip_validation=true` to skip validation (for @model macro usage).
+# Arguments
+- `model_def::Expr`: Model definition from `@bugs` macro
+- `data::NamedTuple`: Observed data
+- `initial_params::NamedTuple`: Initial parameter values (optional, defaults to prior samples)
+- `adtype`: AD backend from ADTypes.jl (e.g., `AutoReverseDiff()`, `AutoForwardDiff()`, `AutoMooncake()`)
 
-The compiled model uses `UseGraph` evaluation mode by default. To use the optimized generated
-log-density function, call `set_evaluation_mode(model, UseGeneratedLogDensityFunction())`.
+# Examples
+```julia
+model = compile(model_def, data)
+model = compile(model_def, data; adtype=AutoReverseDiff())
+```
 """
 function compile(
     model_def::Expr,
@@ -251,6 +258,7 @@ function compile(
     initial_params::NamedTuple=NamedTuple();
     skip_validation::Bool=false,
     eval_module::Module=@__MODULE__,
+    adtype::Union{Nothing,ADTypes.AbstractADType,Symbol}=nothing,
 )
     # Validate functions by default (for @bugs macro usage)
     # Skip validation only for @model macro
@@ -279,18 +287,15 @@ function compile(
             values(eval_env),
         ),
     )
-    return BUGSModel(g, nonmissing_eval_env, model_def, data, initial_params, true)
+    base_model = BUGSModel(g, nonmissing_eval_env, model_def, data, initial_params, true)
+
+    # If adtype provided, wrap with gradient capabilities
+    if adtype !== nothing
+        return Base.invokelatest(Model.BUGSModelWithGradient, base_model, adtype)
+    end
+
+    return base_model
 end
-# function compile(
-#     model_str::String,
-#     data::NamedTuple,
-#     initial_params::NamedTuple=NamedTuple();
-#     replace_period::Bool=true,
-#     no_enclosure::Bool=false,
-# )
-#     model_def = _bugs_string_input(model_str, replace_period, no_enclosure)
-#     return compile(model_def, data, initial_params)
-# end
 
 """
     register_bugs_function(func_name::Symbol)

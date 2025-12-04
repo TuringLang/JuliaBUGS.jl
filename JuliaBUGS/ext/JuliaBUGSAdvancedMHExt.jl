@@ -4,9 +4,8 @@ using AbstractMCMC
 using AdvancedMH
 using ADTypes
 using JuliaBUGS
-using JuliaBUGS: BUGSModel, getparams, initialize!
+using JuliaBUGS: BUGSModel, BUGSModelWithGradient, getparams, initialize!
 using JuliaBUGS.LogDensityProblems
-using JuliaBUGS.LogDensityProblemsAD
 using JuliaBUGS.Random
 using MCMCChains: Chains
 
@@ -52,10 +51,10 @@ end
 function _gibbs_internal_mh(
     rng::Random.AbstractRNG, cond_model::BUGSModel, sampler, ad_backend, state
 )
-    # Wrap model with AD gradient computation for gradient-based proposals
-    logdensitymodel = AbstractMCMC.LogDensityModel(
-        LogDensityProblemsAD.ADgradient(ad_backend, cond_model)
-    )
+    # Create gradient model on-the-fly
+    ad_model = BUGSModelWithGradient(cond_model, ad_backend)
+    x = getparams(cond_model)
+    logdensitymodel = AbstractMCMC.LogDensityModel(ad_model)
 
     # Take MH step with gradient information
     if isnothing(state)
@@ -64,7 +63,7 @@ function _gibbs_internal_mh(
             logdensitymodel,
             sampler;
             n_adapts=0,  # Disable adaptation within Gibbs
-            initial_params=getparams(cond_model),
+            initial_params=x,
         )
     else
         t, s = AbstractMCMC.step(rng, logdensitymodel, sampler, state; n_adapts=0)
@@ -105,7 +104,7 @@ end
 
 function AbstractMCMC.bundle_samples(
     ts::Vector{<:AdvancedMH.Transition},
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
+    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModelWithGradient},
     sampler::AdvancedMH.MHSampler,
     state,
     chain_type::Type{Chains};
@@ -113,7 +112,6 @@ function AbstractMCMC.bundle_samples(
     thinning=1,
     kwargs...,
 )
-    # Same extraction for gradient-based MH samplers
     param_samples = [t.params for t in ts]
     stats_names = [:lp]
     stats_values = [[t.lp] for t in ts]

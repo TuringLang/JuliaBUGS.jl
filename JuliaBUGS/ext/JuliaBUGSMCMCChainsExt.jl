@@ -2,10 +2,14 @@ module JuliaBUGSMCMCChainsExt
 
 using AbstractMCMC
 using JuliaBUGS
-using JuliaBUGS: BUGSModel, find_generated_quantities_variables, evaluate!!, getparams
+using JuliaBUGS:
+    BUGSModel,
+    BUGSModelWithGradient,
+    find_generated_quantities_variables,
+    evaluate!!,
+    getparams
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.Accessors
-using JuliaBUGS.LogDensityProblemsAD
 using MCMCChains: Chains
 
 function JuliaBUGS.gen_chains(
@@ -22,14 +26,14 @@ function JuliaBUGS.gen_chains(
 end
 
 function JuliaBUGS.gen_chains(
-    model::AbstractMCMC.LogDensityModel{<:LogDensityProblemsAD.ADGradientWrapper},
+    model::AbstractMCMC.LogDensityModel{<:BUGSModelWithGradient},
     samples,
     stats_names,
     stats_values;
     kwargs...,
 )
-    # Extract BUGSModel from ADGradient wrapper
-    bugs_model = model.logdensity.ℓ
+    # Extract BUGSModel from gradient wrapper
+    bugs_model = model.logdensity.base_model
 
     return JuliaBUGS.gen_chains(bugs_model, samples, stats_names, stats_values; kwargs...)
 end

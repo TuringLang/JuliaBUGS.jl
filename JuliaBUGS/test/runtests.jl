@@ -40,6 +40,8 @@ using AdvancedHMC
 using AdvancedMH
 using MCMCChains
 using ReverseDiff
+using ForwardDiff
+using Mooncake
 
 JuliaBUGS.@bugs_primitive Beta Bernoulli Categorical Exponential Gamma InverseGamma Normal Uniform LogNormal Poisson
 JuliaBUGS.@bugs_primitive Diagonal Dirichlet LKJ MvNormal
@@ -96,6 +98,7 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     "inference_mh" => () -> include("independent_mh.jl"),
     "gibbs" => () -> include("gibbs.jl"),
     "parallel_sampling" => () -> include("parallel_sampling.jl"),
+    "ad_compatibility" => () -> include("ad_compatibility.jl"),
     "experimental" =>
         () -> include("experimental/ProbabilisticGraphicalModels/runtests.jl"),
 )

@@ -1,17 +1,16 @@
 using JuliaBUGS
+using Distributions: Bernoulli, MvNormal
 
 using AbstractMCMC
 using ADTypes
 using AdvancedHMC
-using DifferentiationInterface
 using FillArrays
+using ForwardDiff
 using Functors
 using LinearAlgebra
 using LogDensityProblems
-using LogDensityProblemsAD
 using Lux
 using MCMCChains
-using Mooncake
 using Random
 
 ## data simulation
@@ -84,7 +83,7 @@ function make_prediction(parameters, xs; ps=ps, nn=nn)
     return Lux.apply(nn, f32(xs), f32(vector_to_parameters(parameters, ps)))
 end
 
-JuliaBUGS.@bugs_primitive parameter_distribution make_prediction
+JuliaBUGS.@bugs_primitive parameter_distribution make_prediction Bernoulli
 
 @eval JuliaBUGS begin
     ps = Main.ps
@@ -96,16 +95,17 @@ end
 
 data = (nparameters=Lux.parameterlength(nn), xs=xs_hcat, ts=ts, N=length(ts), sigma=sigma)
 
+# Use ForwardDiff with UseGraph mode (required for user-defined primitives)
 model = compile(model_def, data)
-
-ad_model = ADgradient(AutoMooncake(; config=Mooncake.Config()), model)
+model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+model = JuliaBUGS.BUGSModelWithGradient(model, AutoForwardDiff())
 
 # sampling is slow, so sample 10 of them to verify that this can work
 samples_and_stats = AbstractMCMC.sample(
-    ad_model,
+    model,
     NUTS(0.65),
     10;
     chain_type=Chains,
-    # n_adapts=1000, 
+    # n_adapts=1000,
     # discard_initial=1000
 )

@@ -6,10 +6,9 @@
             y = x[1] + x[3]
         end
         data = (mu=[0, 0], sigma=[1 0; 0 1])
-        model = compile(model_def, data)
-        ad_model = Base.invokelatest(ADgradient, :ReverseDiff, model; compile=Val(true))
+        ad_model = compile(model_def, data; adtype=AutoReverseDiff(; compile=true))
         n_samples, n_adapts = 10, 0
-        D = LogDensityProblems.dimension(model)
+        D = LogDensityProblems.dimension(ad_model)
         initial_θ = rand(D)
         samples_and_stats = Base.invokelatest(
             AbstractMCMC.sample,
@@ -33,13 +32,14 @@
         (; model_def, data, inits, reference_results) = Base.getfield(
             JuliaBUGS.BUGSExamples, example
         )
-        model = JuliaBUGS.compile(model_def, data, inits)
-        ad_model = Base.invokelatest(ADgradient, :ReverseDiff, model; compile=Val(true))
+        ad_model = JuliaBUGS.compile(
+            model_def, data, inits; adtype=AutoReverseDiff(; compile=true)
+        )
 
         n_samples, n_adapts = 1000, 1000
 
-        D = LogDensityProblems.dimension(model)
-        initial_θ = Base.invokelatest(JuliaBUGS.getparams, model)
+        D = LogDensityProblems.dimension(ad_model)
+        initial_θ = Base.invokelatest(JuliaBUGS.getparams, ad_model.base_model)
 
         samples_and_stats = Base.invokelatest(
             AbstractMCMC.sample,
