@@ -6,7 +6,7 @@ using JuliaBUGS
 using JuliaBUGS: @model
 using Distributions
 using DifferentialEquations
-using LogDensityProblems, LogDensityProblemsAD
+using LogDensityProblems
 using ADTypes
 using AbstractMCMC, AdvancedHMC, MCMCChains
 using Distributed              # For distributed example
@@ -113,8 +113,8 @@ model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
 
 # --- MCMC Sampling: NUTS with ForwardDiff AD ---
 
-# Create an AD-aware wrapper for the model using ForwardDiff for gradients
-ad_model_forwarddiff = ADgradient(AutoForwardDiff(), model)
+# Create gradient-enabled model using ForwardDiff
+grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoForwardDiff())
 
 # MCMC settings
 n_samples = 1000
@@ -122,7 +122,7 @@ n_adapts = 500
 
 # Run the NUTS sampler
 samples_nuts_fwd = AbstractMCMC.sample(
-    ad_model_forwarddiff,
+    grad_model,
     AdvancedHMC.NUTS(0.65), # No-U-Turn Sampler with step size adaptation target
     n_samples;
     chain_type=Chains,     # Store results as MCMCChains object

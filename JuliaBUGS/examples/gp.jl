@@ -7,13 +7,10 @@ using JuliaBUGS
 using JuliaBUGS: @model
 
 # Required packages for GP modeling and MCMC
-using AbstractGPs, Distributions, LogExpFunctions
-using LogDensityProblems, LogDensityProblemsAD
+using AbstractGPs, Distributions, LogExpFunctions, ForwardDiff
+using LogDensityProblems
+using ADTypes
 using AbstractMCMC, AdvancedHMC, MCMCChains
-
-# Differentiation backend
-using DifferentiationInterface
-using Mooncake: Mooncake
 
 # --- Data Definition ---
 
@@ -120,94 +117,18 @@ model = gp_golf_putting(
     data.jitter, # Numerical stability term
 )
 
-# Generate the log density function for optimal performance
-model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())
-
-# --- MCMC Setup with Custom LogDensityProblems Wrapper ---
-
-# We need a wrapper around the JuliaBUGS model to interface with LogDensityProblems
-# and utilize automatic differentiation (AD) via Mooncake.jl for gradient computation,
-# which is required by AdvancedHMC.
-
-struct BUGSMooncakeModel{T,P}
-    model::T # The JuliaBUGS model
-    prep::P  # Pre-allocated workspace for gradient computation using Mooncake
-end
-
-# Define the function to compute the log density using the JuliaBUGS model's internal function
-f(x) = model.log_density_computation_function(model.evaluation_env, x)
-
-# Prepare the differentiation backend (Mooncake)
-backend = AutoMooncake(; config=nothing)
-x_init = rand(LogDensityProblems.dimension(model)) # Initial point for testing/preparation
-prep = prepare_gradient(f, backend, x_init)
-
-# Create the wrapped model instance
-bugsmooncake = BUGSMooncakeModel(model, prep)
-
-# --- LogDensityProblems Interface Implementation for the Wrapper ---
-
-# Define logdensity function for the wrapper
-function LogDensityProblems.logdensity(model::BUGSMooncakeModel, x::AbstractVector)
-    return f(x) # Calls the underlying JuliaBUGS log density function
-end
-
-# Define logdensity_and_gradient function using the prepared DifferentiationInterface setup
-function LogDensityProblems.logdensity_and_gradient(
-    model::BUGSMooncakeModel, x::AbstractVector
-)
-    # Computes both the log density and its gradient using Mooncake AD
-    return DifferentiationInterface.value_and_gradient(
-        f, model.prep, AutoMooncake(; config=nothing), x
-    )
-end
-
-# Define dimension function
-function LogDensityProblems.dimension(model::BUGSMooncakeModel)
-    return LogDensityProblems.dimension(model.model) # Delegates to the original model
-end
-
-# Define a custom bundle_samples function to convert the AdvancedHMC.Transition to a Chains object
-function AbstractMCMC.bundle_samples(
-    ts::Vector{<:AdvancedHMC.Transition},
-    logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSMooncakeModel},
-    sampler::AdvancedHMC.AbstractHMCSampler,
-    state,
-    chain_type::Type{Chains};
-    discard_initial=0,
-    thinning=1,
-    kwargs...,
-)
-    stats_names = collect(keys(merge((; lp=ts[1].z.ℓπ.value), AdvancedHMC.stat(ts[1]))))
-    stats_values = [
-        vcat([ts[i].z.ℓπ.value..., collect(values(AdvancedHMC.stat(ts[i])))...]) for
-        i in eachindex(ts)
-    ]
-
-    return JuliaBUGS.gen_chains(
-        logdensitymodel.logdensity.model,
-        [t.z.θ for t in ts],
-        stats_names,
-        stats_values;
-        discard_initial=discard_initial,
-        thinning=thinning,
-        kwargs...,
-    )
-end
-
-# Specify capabilities (indicates gradient availability)
-function LogDensityProblems.capabilities(::Type{<:BUGSMooncakeModel})
-    return LogDensityProblems.LogDensityOrder{1}() # Can compute up to the gradient
-end
+# Use graph evaluation mode with ForwardDiff AD (required for user-defined primitives)
+model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoForwardDiff())
 
 # --- MCMC Sampling ---
 
 # Sample from the posterior distribution using AdvancedHMC's NUTS sampler
 samples_and_stats = AbstractMCMC.sample(
-    AbstractMCMC.LogDensityModel(bugsmooncake), # Wrap the model for AbstractMCMC
+    grad_model,
     AdvancedHMC.NUTS(0.65), # No-U-Turn Sampler
     1000;                   # Total number of samples
     chain_type=Chains,      # Store results as MCMCChains object
     n_adapts=500,           # Number of adaptation steps for NUTS
-    discard_initial=500,    # Number of initial samples (warmup) to discard;
+    discard_initial=500,    # Number of initial samples (warmup) to discard
 )
