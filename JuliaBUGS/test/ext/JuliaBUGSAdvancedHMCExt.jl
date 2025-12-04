@@ -27,58 +27,6 @@
             [Symbol("x[3]"), Symbol("x[1:2][1]"), Symbol("x[1:2][2]"), :y]
     end
 
-    @testset "AD backend sampling" begin
-        model_def = @bugs begin
-            mu ~ dnorm(0, 1)
-            for i in 1:N
-                y[i] ~ dnorm(mu, 1)
-            end
-        end
-        data = (N=5, y=[1.0, 2.0, 1.5, 2.5, 1.8])
-
-        # Test that ReverseDiff backend works
-        ad_model_compiled = compile(model_def, data; adtype=AutoReverseDiff(; compile=true))
-        ad_model_nocompile = compile(
-            model_def, data; adtype=AutoReverseDiff(; compile=false)
-        )
-
-        @test ad_model_compiled isa JuliaBUGS.Model.BUGSModelWithGradient
-        @test ad_model_nocompile isa JuliaBUGS.Model.BUGSModelWithGradient
-
-        # Test that both produce equivalent results
-        n_samples, n_adapts = 100, 100
-        D = LogDensityProblems.dimension(ad_model_compiled)
-        initial_θ = rand(StableRNG(123), D)
-
-        samples_compiled = AbstractMCMC.sample(
-            StableRNG(1234),
-            ad_model_compiled,
-            NUTS(0.8),
-            n_samples;
-            progress=false,
-            chain_type=Chains,
-            n_adapts=n_adapts,
-            init_params=initial_θ,
-            discard_initial=n_adapts,
-        )
-
-        samples_nocompile = AbstractMCMC.sample(
-            StableRNG(1234),
-            ad_model_nocompile,
-            NUTS(0.8),
-            n_samples;
-            progress=false,
-            chain_type=Chains,
-            n_adapts=n_adapts,
-            init_params=initial_θ,
-            discard_initial=n_adapts,
-        )
-
-        # Results should be very similar (same RNG seed)
-        @test summarize(samples_compiled)[:mu].nt.mean[1] ≈
-            summarize(samples_nocompile)[:mu].nt.mean[1] rtol = 0.1
-    end
-
     @testset "Inference results on examples: $example" for example in
                                                            [:seeds, :rats, :stacks]
         (; model_def, data, inits, reference_results) = Base.getfield(

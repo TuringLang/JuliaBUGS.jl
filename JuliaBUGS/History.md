@@ -1,18 +1,13 @@
 # JuliaBUGS Changelog
 
-## 0.10.4
+## 0.12
 
-- **DifferentiationInterface.jl integration**: JuliaBUGS now uses [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl) for automatic differentiation, providing a unified interface to multiple AD backends.
-  - Add `adtype` parameter to `compile()` function for specifying AD backends via [ADTypes.jl](https://github.com/SciML/ADTypes.jl)
-  - Supports multiple backends: `AutoReverseDiff`, `AutoForwardDiff`, `AutoZygote`, `AutoEnzyme`, `AutoMooncake`
-  - Gradient computation is prepared during compilation for optimal performance
-  - Example: `model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))`
-  - New `BUGSModelWithGradient(model, adtype)` constructor for adding gradients to existing models
-  - Models without `adtype` work as before (no gradients)
+- **DifferentiationInterface.jl integration**: Use `adtype` parameter in `compile()` to enable gradient-based inference via [ADTypes.jl](https://github.com/SciML/ADTypes.jl).
+  - Example: `model = compile(model_def, data; adtype=AutoReverseDiff())`
+  - Supports `AutoReverseDiff`, `AutoForwardDiff`, `AutoMooncake`
 
-- **Breaking**: `LogDensityProblemsAD.ADgradient` is no longer supported for gradient computation.
-  - **Old**: `ad_model = ADgradient(:ReverseDiff, model)`
-  - **New**: `model = compile(model_def, data; adtype=AutoReverseDiff())` or `BUGSModelWithGradient(model, AutoReverseDiff())`
+- **Breaking**: `LogDensityProblemsAD.ADgradient` is no longer supported.
+  - Use `compile(...; adtype=...)` or `BUGSModelWithGradient(model, adtype)` instead.
 
 ## 0.10.1
 

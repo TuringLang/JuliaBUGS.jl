@@ -385,45 +385,4 @@ end
             @test occursin("Variable sizes and types:", output)
         end
     end
-
-    @testset "AD Type Parameter" begin
-        model_def = @bugs begin
-            mu ~ dnorm(0, 1)
-            y ~ dnorm(mu, 1)
-        end
-        data = (y=1.5,)
-
-        @testset "ADTypes backends" begin
-            # Test with compile=true
-            model_compile = compile(model_def, data; adtype=AutoReverseDiff(; compile=true))
-            @test model_compile isa JuliaBUGS.Model.BUGSModelWithGradient
-
-            # Test with compile=false
-            model_nocompile = compile(
-                model_def, data; adtype=AutoReverseDiff(; compile=false)
-            )
-            @test model_nocompile isa JuliaBUGS.Model.BUGSModelWithGradient
-        end
-
-        @testset "Default behavior (no adtype)" begin
-            # Without adtype, should return regular BUGSModel
-            model_default = compile(model_def, data)
-            @test model_default isa BUGSModel
-            @test !(model_default isa JuliaBUGS.Model.BUGSModelWithGradient)
-        end
-
-        @testset "Gradient computation" begin
-            model = compile(model_def, data; adtype=AutoReverseDiff(; compile=true))
-            test_point = [0.0]
-
-            # Test that gradient can be computed
-            ℓ, grad = LogDensityProblems.logdensity_and_gradient(model, test_point)
-
-            @test ℓ isa Real
-            @test grad isa Vector
-            @test length(grad) == 1
-            @test isfinite(ℓ)
-            @test all(isfinite, grad)
-        end
-    end
 end

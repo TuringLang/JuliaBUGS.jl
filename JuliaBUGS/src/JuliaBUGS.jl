@@ -236,48 +236,20 @@ function validate_bugs_expression(expr, line_num)
 end
 
 """
-    compile(model_def, data[, initial_params]; skip_validation=false, adtype=nothing)
+    compile(model_def, data[, initial_params]; adtype=nothing)
 
-Compile the model with model definition and data. Optionally, initializations can be provided.
-If initializations are not provided, values will be sampled from the prior distributions.
-
-By default, validates that all functions in the model are in the BUGS allowlist (suitable for @bugs macro).
-Set `skip_validation=true` to skip validation (for @model macro usage).
-
-The compiled model uses `UseGraph` evaluation mode by default. To use the optimized generated
-log-density function, call `set_evaluation_mode(model, UseGeneratedLogDensityFunction())`.
-
-If `adtype` is provided, returns a `BUGSModelWithGradient` that supports gradient-based MCMC
-samplers like HMC/NUTS. The gradient computation is prepared during compilation for optimal performance.
+Compile a BUGS model. Returns `BUGSModel`, or `BUGSModelWithGradient` if `adtype` is provided.
 
 # Arguments
-- `model_def::Expr`: Model definition from @bugs macro
+- `model_def::Expr`: Model definition from `@bugs` macro
 - `data::NamedTuple`: Observed data
-- `initial_params::NamedTuple=NamedTuple()`: Initial parameter values (optional)
-- `skip_validation::Bool=false`: Skip function validation (for @model macro)
-- `eval_module::Module=@__MODULE__`: Module for evaluation
-- `adtype`: AD backend specification using ADTypes. Examples:
-  - `AutoReverseDiff(compile=true)` - ReverseDiff with tape compilation (fastest)
-  - `AutoReverseDiff(compile=false)` - ReverseDiff without compilation
-  - `AutoForwardDiff()` - ForwardDiff backend
-  - `AutoZygote()` - Zygote backend
-  - `AutoEnzyme()` - Enzyme backend
-  - `AutoMooncake()` - Mooncake backend
-  - Any other `ADTypes.AbstractADType`
+- `initial_params::NamedTuple`: Initial parameter values (optional, defaults to prior samples)
+- `adtype`: AD backend from ADTypes.jl (e.g., `AutoReverseDiff()`, `AutoForwardDiff()`, `AutoMooncake()`)
 
 # Examples
 ```julia
-# Basic compilation
 model = compile(model_def, data)
-
-# With gradient support using ReverseDiff (recommended for most models)
-model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
-
-# Using ForwardDiff for small models
-model = compile(model_def, data; adtype=AutoForwardDiff())
-
-# Sample with NUTS
-chain = AbstractMCMC.sample(model, NUTS(0.8), 1000)
+model = compile(model_def, data; adtype=AutoReverseDiff())
 ```
 """
 function compile(
@@ -319,27 +291,11 @@ function compile(
 
     # If adtype provided, wrap with gradient capabilities
     if adtype !== nothing
-        return _wrap_with_gradient(base_model, adtype)
+        return Base.invokelatest(Model.BUGSModelWithGradient, base_model, adtype)
     end
 
     return base_model
 end
-
-# Helper function to prepare gradient - separated to handle world age issues
-function _wrap_with_gradient(base_model::Model.BUGSModel, adtype::ADTypes.AbstractADType)
-    # Use invokelatest to handle world age issues with generated functions
-    return Base.invokelatest(Model.BUGSModelWithGradient, base_model, adtype)
-end
-# function compile(
-#     model_str::String,
-#     data::NamedTuple,
-#     initial_params::NamedTuple=NamedTuple();
-#     replace_period::Bool=true,
-#     no_enclosure::Bool=false,
-# )
-#     model_def = _bugs_string_input(model_str, replace_period, no_enclosure)
-#     return compile(model_def, data, initial_params)
-# end
 
 """
     register_bugs_function(func_name::Symbol)

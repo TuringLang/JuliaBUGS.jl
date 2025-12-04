@@ -59,27 +59,16 @@ end
 """
     BUGSModelWithGradient{AD,P,M}
 
-Wraps a BUGSModel with automatic differentiation capabilities using DifferentiationInterface.
-Implements both `LogDensityProblems.logdensity` and `LogDensityProblems.logdensity_and_gradient`.
+Wrap a `BUGSModel` with AD capabilities for gradient-based inference.
+
+Implements `LogDensityProblems.logdensity` and `LogDensityProblems.logdensity_and_gradient`.
 
 # Fields
-- `adtype::AD`: ADTypes backend (e.g., AutoReverseDiff())
+- `adtype::AD`: AD backend (e.g., `AutoReverseDiff()`)
 - `prep::P`: Prepared gradient from DifferentiationInterface
-- `base_model::M`: The underlying BUGSModel
+- `base_model::M`: The underlying `BUGSModel`
 
-# Example
-```julia
-model_def = @bugs begin
-    x ~ dnorm(0, 1)
-end
-data = NamedTuple()
-
-# Create model with gradient capabilities
-model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
-
-# Use with gradient-based MCMC
-chain = AbstractMCMC.sample(rng, model, NUTS(0.8), 1000)
-```
+See also [`compile`](@ref).
 """
 struct BUGSModelWithGradient{AD<:ADTypes.AbstractADType,P,M<:BUGSModel}
     adtype::AD
