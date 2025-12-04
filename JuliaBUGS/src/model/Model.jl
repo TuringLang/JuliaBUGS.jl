@@ -11,6 +11,7 @@ using Graphs
 using LinearAlgebra
 using JuliaBUGS: JuliaBUGS, BUGSGraph
 using JuliaBUGS.BUGSPrimitives
+using LogExpFunctions
 using MetaGraphsNext
 using Random
 
@@ -25,9 +26,13 @@ export parameters, variables, initialize!, getparams, settrans
 export set_evaluation_mode, set_observed_values!
 
 # Evaluation mode types
-export UseGraph, UseGeneratedLogDensityFunction
+export UseGraph, UseGeneratedLogDensityFunction, UseAutoMarginalization
 
 # Gradient wrapper
 export BUGSModelWithGradient
+
+# Internal evaluation functions (exported for testing, not re-exported to users)
+export evaluate_with_rng!!, evaluate_with_env!!, evaluate_with_values!!
+export evaluate_with_marginalization_values!!
 
 end # Model

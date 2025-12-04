@@ -554,17 +554,19 @@ function _create_modified_model(
     new_mutable_symbols = get_mutable_symbols(new_graph_evaluation_data)
 
     # Create the new model with all updated fields
-    # Log density function is NOT generated here - it will be generated on-demand
-    # when set_evaluation_mode(model, UseGeneratedLogDensityFunction()) is called
+    # IMPORTANT: Invalidate all caches when graph structure changes
+    # - Log density function is regenerated on-demand when switching to UseGeneratedLogDensityFunction
+    # - Auto-marginalization cache is recomputed on-demand when switching to UseAutoMarginalization
     kwargs = Dict{Symbol,Any}(
         :untransformed_param_length => new_untransformed_param_length,
         :transformed_param_length => new_transformed_param_length,
         :evaluation_env => new_evaluation_env,
         :graph_evaluation_data => new_graph_evaluation_data,
         :g => new_graph,
-        :log_density_computation_function => nothing,
+        :log_density_computation_function => nothing,  # Invalidate: graph changed
+        :marginalization_cache => nothing,  # Invalidate: graph changed
         :mutable_symbols => new_mutable_symbols,
-        :evaluation_mode => UseGraph(),
+        :evaluation_mode => UseGraph(),  # Reset to safe default
     )
 
     # Add base_model if provided
@@ -572,7 +574,7 @@ function _create_modified_model(
         kwargs[:base_model] = base_model
     end
 
-    # Return model without precomputing log density function (on-demand generation)
+    # Return model without precomputing (on-demand generation for all modes)
     return BUGSModel(model; kwargs...)
 end
 
@@ -746,8 +748,14 @@ function evaluate!!(
     temperature=1.0,
     transformed=model.transformed,
 )
-    evaluation_env, log_densities = evaluate_with_values!!(
-        model, flattened_values; temperature=temperature, transformed=transformed
-    )
+    if model.evaluation_mode isa UseAutoMarginalization
+        evaluation_env, log_densities = evaluate_with_marginalization_values!!(
+            model, flattened_values; temperature=temperature
+        )
+    else
+        evaluation_env, log_densities = evaluate_with_values!!(
+            model, flattened_values; temperature=temperature, transformed=transformed
+        )
+    end
     return evaluation_env, log_densities.tempered_logjoint
 end
