@@ -205,6 +205,13 @@ using ADTypes
 model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
 ```
 
+Alternatively, if you already have a compiled `BUGSModel`, you can wrap it with `BUGSModelWithGradient` without recompiling:
+
+```julia
+base_model = compile(model_def, data)
+model = BUGSModelWithGradient(base_model, AutoReverseDiff(compile=true))
+```
+
 Available AD backends include:
 - `AutoReverseDiff(compile=true)` - ReverseDiff with tape compilation (recommended for most models)
 - `AutoForwardDiff()` - ForwardDiff (efficient for models with few parameters)
@@ -240,7 +247,7 @@ samples_and_stats = AbstractMCMC.sample(
                         init_params = initial_θ,
                         discard_initial = n_adapts
                     )
-samples_and_stats
+describe(samples_and_stats)
 ```
 
 This is consistent with the result in the [OpenBUGS seeds example](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html).

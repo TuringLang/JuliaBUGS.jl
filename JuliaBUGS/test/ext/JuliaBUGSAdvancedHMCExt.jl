@@ -39,7 +39,7 @@
         n_samples, n_adapts = 1000, 1000
 
         D = LogDensityProblems.dimension(ad_model)
-        initial_θ = JuliaBUGS.getparams(ad_model.base_model)
+        initial_θ = Base.invokelatest(JuliaBUGS.getparams, ad_model.base_model)
 
         samples_and_stats = Base.invokelatest(
             AbstractMCMC.sample,
