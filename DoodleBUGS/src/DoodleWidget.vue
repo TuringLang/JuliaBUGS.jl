@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed, Transition } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import Toast from 'primevue/toast'
 
@@ -47,6 +47,13 @@ const graphStore = useGraphStore()
 const uiStore = useUiStore()
 const dataStore = useDataStore()
 const scriptStore = useScriptStore()
+
+// Ensure sidebars are closed by default for the widget (before any rendering)
+uiStore.isLeftSidebarOpen = false
+uiStore.isRightSidebarOpen = false
+
+// Widget-specific flag to prevent sidebar flash during initialization
+const widgetInitialized = ref(false)
 
 const currentMode = ref('select')
 const currentNodeType = ref<NodeType>('stochastic')
@@ -111,10 +118,6 @@ const initGraph = () => {
 }
 
 onMounted(() => {
-  // Ensure sidebars are closed by default for the widget
-  uiStore.isLeftSidebarOpen = false
-  uiStore.isRightSidebarOpen = false
-
   graphStore.selectGraph(undefined as unknown as string)
 
   projectStore.loadProjects()
@@ -144,6 +147,7 @@ onMounted(() => {
 
   initGraph()
   isInitialized.value = true
+  widgetInitialized.value = true
   validateGraph()
   document.body.classList.add('doodle-bugs-host')
 })
@@ -398,7 +402,7 @@ const createNewGraph = () => {
       }
 
       // Restore layout settings if available
-      if (importedGraphData.value.layout) {
+      if (importedGraphData.value.layout && projectStore.currentProject) {
         projectStore.updateGraphLayout(
           projectStore.currentProject.id,
           newGraphMeta.id,
@@ -892,86 +896,6 @@ const handleUIInteractionEnd = () => {
     :class="{ 'dark-mode': isDarkMode }"
     style="width: 100%; height: 100%; position: relative; overflow: hidden"
   >
-    <!-- Collapsed Sidebar Triggers (Inside Widget Root for Correct Positioning) -->
-    <Transition name="fade">
-      <div
-        v-if="!isLeftSidebarOpen"
-        class="collapsed-sidebar-trigger left-trigger"
-        @click="uiStore.toggleLeftSidebar"
-      >
-        <div class="sidebar-trigger-content gap-1">
-          <div
-            class="flex-grow flex items-center gap-2 overflow-hidden"
-            style="flex-grow: 1; overflow: hidden"
-          >
-            <span class="logo-text-minimized">
-              <span class="desktop-text">{{
-                pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS'
-              }}</span>
-              <span class="mobile-text">DoodleBUGS</span>
-            </span>
-          </div>
-          <div class="flex items-center flex-shrink-0" style="flex-shrink: 0">
-            <button
-              @click.stop="uiStore.toggleDarkMode()"
-              class="theme-toggle-header"
-              :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
-            >
-              <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
-            </button>
-            <div class="toggle-icon-wrapper">
-              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon">
-                <path
-                  fill="currentColor"
-                  fill-rule="evenodd"
-                  d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"
-                  clip-rule="evenodd"
-                ></path>
-              </svg>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Transition>
-
-    <Transition name="fade">
-      <div
-        v-if="!isRightSidebarOpen"
-        class="collapsed-sidebar-trigger right"
-        @click="uiStore.toggleRightSidebar"
-      >
-        <div class="sidebar-trigger-content gap-2">
-          <span class="sidebar-title-minimized">Inspector</span>
-          <div class="flex items-center">
-            <div
-              class="status-indicator validation-status"
-              @click.stop="showValidationModal = true"
-              :class="isModelValid ? 'valid' : 'invalid'"
-            >
-              <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
-            </div>
-            <button
-              class="header-icon-btn collapsed-share-btn"
-              @click.stop="handleShare"
-              title="Share via URL"
-            >
-              <i class="fas fa-share-alt"></i>
-            </button>
-            <div class="toggle-icon-wrapper">
-              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon">
-                <path
-                  fill="currentColor"
-                  fill-rule="evenodd"
-                  d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"
-                  clip-rule="evenodd"
-                ></path>
-              </svg>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Transition>
-
     <div
       class="canvas-layer"
       :style="{
@@ -1016,11 +940,11 @@ const handleUIInteractionEnd = () => {
     </div>
 
     <Teleport to="body">
-      <div class="doodle-bugs-ui-overlay" :class="{ 'dark-mode': isDarkMode }">
+      <div class="doodle-bugs-ui-overlay" :class="{ 'dark-mode': isDarkMode, 'widget-ready': widgetInitialized }">
         <Toast position="top-center" />
 
         <!-- Left Sidebar (Floating) -->
-        <div v-if="isLeftSidebarOpen" class="sidebar-wrapper left" :style="leftDrag.style.value">
+        <div v-if="widgetInitialized && isLeftSidebarOpen" class="sidebar-wrapper left" :style="leftDrag.style.value">
           <LeftSidebar
             v-show="isLeftSidebarOpen"
             :activeAccordionTabs="activeLeftAccordionTabs"
@@ -1057,7 +981,7 @@ const handleUIInteractionEnd = () => {
           />
         </div>
 
-        <div v-if="isRightSidebarOpen" class="sidebar-wrapper right" :style="rightDrag.style.value">
+        <div v-if="widgetInitialized && isRightSidebarOpen" class="sidebar-wrapper right" :style="rightDrag.style.value">
           <RightSidebar
             v-show="isRightSidebarOpen"
             :selectedElement="selectedElement"
@@ -1692,11 +1616,11 @@ const handleUIInteractionEnd = () => {
 
 <style>
 .doodle-bugs-ui-overlay {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   z-index: 9999;
   pointer-events: none;
 
@@ -1748,6 +1672,14 @@ const handleUIInteractionEnd = () => {
   /* Will be positioned by transform */
   left: 0;
   top: 0;
+  /* Hide sidebars until widget is initialized */
+  opacity: 0;
+  visibility: hidden;
+}
+
+.doodle-bugs-ui-overlay.widget-ready .sidebar-wrapper {
+  opacity: 1;
+  visibility: visible;
 }
 
 .sidebar-wrapper.left {
