@@ -5,7 +5,7 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 import { resolve } from 'node:path'
 import { copyFileSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 
-function copyWidgetDemo(baseUrl: string) {
+function copyWidgetDemo() {
   return {
     name: 'copy-widget-demo',
     closeBundle() {
@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: baseUrl,
-    plugins: [vue(), vueDevTools(), copyWidgetDemo(baseUrl)],
+    plugins: [vue(), vueDevTools(), copyWidgetDemo()],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
