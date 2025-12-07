@@ -31,7 +31,7 @@ const emit = defineEmits<{
   (e: 'share'): void
   (e: 'nav', view: string): void
   (e: 'drag-start'): void
-  (e: 'drag-end'): void
+  (e: 'drag-end', position: { x: number; y: number }): void
 }>()
 
 const availableNodeTypes = computed(() => {
@@ -190,7 +190,7 @@ const onDrag = (event: MouseEvent) => {
 
 const stopDrag = () => {
   isDragging.value = false
-  emit('drag-end') // Signal end of drag
+  emit('drag-end', { x: 0, y: 0 })
   if (animationFrameId) cancelAnimationFrame(animationFrameId)
   animationFrameId = null
   window.removeEventListener('mousemove', onDrag)
@@ -247,7 +247,7 @@ const onDragTouch = (event: TouchEvent) => {
 
 const stopDragTouch = () => {
   isDragging.value = false
-  emit('drag-end') // Signal end of drag
+  emit('drag-end', { x: 0, y: 0 })
   if (animationFrameId) cancelAnimationFrame(animationFrameId)
   animationFrameId = null
   window.removeEventListener('touchmove', onDragTouch)

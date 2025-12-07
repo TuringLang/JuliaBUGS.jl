@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, reactive } from 'vue'
 import { storeToRefs } from 'pinia'
 import Toast from 'primevue/toast'
 
 import GraphEditor from './components/canvas/GraphEditor.vue'
 import FloatingBottomToolbar from './components/canvas/FloatingBottomToolbar.vue'
+import FloatingPanel from './components/common/FloatingPanel.vue'
 import LeftSidebar from './components/layouts/LeftSidebar.vue'
 import RightSidebar from './components/layouts/RightSidebar.vue'
 import CodePreviewPanel from './components/panels/CodePreviewPanel.vue'
@@ -74,6 +75,12 @@ const showNewGraphModal = ref(false)
 const newProjectName = ref('')
 const newGraphName = ref('')
 
+// Panel positions and sizes (will be loaded from localStorage or use defaults)
+const codePanelPos = reactive({ x: 0, y: 0 })
+const codePanelSize = reactive({ width: 400, height: 300 })
+const dataPanelPos = reactive({ x: 0, y: 0 })
+const dataPanelSize = reactive({ width: 400, height: 300 })
+
 // Import Graph State
 const graphImportInput = ref<HTMLInputElement | null>(null)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -83,8 +90,63 @@ const isDragOver = ref(false)
 // UI Dragging State (for performance optimization)
 const isDraggingUI = ref(false)
 
+// Computed window width for responsive positioning
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1920)
+
 // Flag to prevent premature canvas rendering
 const isInitialized = ref(false)
+
+// LocalStorage key for widget UI state
+const WIDGET_UI_STATE_KEY = 'doodlebugs-widget-ui-state'
+
+// Load UI state from localStorage
+const loadUIState = () => {
+  if (typeof window === 'undefined') return null
+  try {
+    const saved = localStorage.getItem(WIDGET_UI_STATE_KEY)
+    return saved ? JSON.parse(saved) : null
+  } catch (e) {
+    console.error('Failed to load UI state:', e)
+    return null
+  }
+}
+
+// Save UI state to localStorage
+const saveUIState = () => {
+  if (typeof window === 'undefined') return
+  try {
+    const state = {
+      leftSidebar: {
+        open: uiStore.isLeftSidebarOpen,
+        x: leftDrag.x.value,
+        y: leftDrag.y.value,
+      },
+      rightSidebar: {
+        open: uiStore.isRightSidebarOpen,
+        x: rightDrag.x.value,
+        y: rightDrag.y.value,
+      },
+      codePanel: {
+        open: showCodePanel.value,
+        x: codePanelPos.x,
+        y: codePanelPos.y,
+        width: codePanelSize.width,
+        height: codePanelSize.height,
+      },
+      dataPanel: {
+        open: showDataPanel.value,
+        x: dataPanelPos.x,
+        y: dataPanelPos.y,
+        width: dataPanelSize.width,
+        height: dataPanelSize.height,
+      },
+      currentGraphId: graphStore.currentGraphId,
+    }
+    localStorage.setItem(WIDGET_UI_STATE_KEY, JSON.stringify(state))
+  } catch (e) {
+    console.error('Failed to save UI state:', e)
+  }
+}
 
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements()
 const { parsedGraphData } = storeToRefs(dataStore)
@@ -145,11 +207,54 @@ onMounted(() => {
     }
   }
 
+  const savedUIState = loadUIState()
+  if (savedUIState) {
+    if (savedUIState.leftSidebar) {
+      leftDrag.x.value = savedUIState.leftSidebar.x
+      leftDrag.y.value = savedUIState.leftSidebar.y
+      uiStore.isLeftSidebarOpen = savedUIState.leftSidebar.open
+    }
+    if (savedUIState.rightSidebar) {
+      rightDrag.x.value = savedUIState.rightSidebar.x
+      rightDrag.y.value = savedUIState.rightSidebar.y
+      uiStore.isRightSidebarOpen = savedUIState.rightSidebar.open
+    }
+    if (savedUIState.codePanel) {
+      codePanelPos.x = savedUIState.codePanel.x
+      codePanelPos.y = savedUIState.codePanel.y
+      codePanelSize.width = savedUIState.codePanel.width
+      codePanelSize.height = savedUIState.codePanel.height
+      showCodePanel.value = savedUIState.codePanel.open
+    }
+    if (savedUIState.dataPanel) {
+      dataPanelPos.x = savedUIState.dataPanel.x
+      dataPanelPos.y = savedUIState.dataPanel.y
+      dataPanelSize.width = savedUIState.dataPanel.width
+      dataPanelSize.height = savedUIState.dataPanel.height
+      showDataPanel.value = savedUIState.dataPanel.open
+    }
+    if (savedUIState.currentGraphId) {
+      graphStore.selectGraph(savedUIState.currentGraphId)
+    }
+  }
+
   initGraph()
   isInitialized.value = true
   widgetInitialized.value = true
   validateGraph()
   document.body.classList.add('doodle-bugs-host')
+
+  // Update window width on resize
+  const handleResize = () => {
+    windowWidth.value = window.innerWidth
+    // Update right sidebar position on resize
+    rightDrag.x.value = window.innerWidth - 320 - 20
+  }
+  window.addEventListener('resize', handleResize)
+  
+  onUnmounted(() => {
+    window.removeEventListener('resize', handleResize)
+  })
 })
 
 onUnmounted(() => {
@@ -342,6 +447,20 @@ const handleGenerateStandalone = () => {
   scriptStore.standaloneScript = script
   uiStore.setActiveRightTab('script')
   uiStore.isRightSidebarOpen = true
+}
+
+const handleDownloadBugs = () => {
+  const content = generatedCode.value
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+  const fileName = 'model.bugs'
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 const handleDownloadScript = () => {
@@ -806,7 +925,38 @@ const useDrag = (initialX: number, initialY: number) => {
 }
 
 const leftDrag = useDrag(20, 20)
-const rightDrag = useDrag(window.innerWidth - 340, 20)
+const rightDrag = useDrag(typeof window !== 'undefined' ? window.innerWidth - 320 - 20 : 1580, 20)
+const toolbarDrag = useDrag(
+  typeof window !== 'undefined' ? window.innerWidth / 2 - 300 : 0,
+  typeof window !== 'undefined' ? window.innerHeight - 80 : 0
+)
+
+// Watch for changes to UI state and save to localStorage
+watch(
+  [
+    () => leftDrag.x.value,
+    () => leftDrag.y.value,
+    () => rightDrag.x.value,
+    () => rightDrag.y.value,
+    () => uiStore.isLeftSidebarOpen,
+    () => uiStore.isRightSidebarOpen,
+    () => showCodePanel.value,
+    () => showDataPanel.value,
+    () => codePanelPos.x,
+    () => codePanelPos.y,
+    () => codePanelSize.width,
+    () => codePanelSize.height,
+    () => dataPanelPos.x,
+    () => dataPanelPos.y,
+    () => dataPanelSize.width,
+    () => dataPanelSize.height,
+    () => graphStore.currentGraphId,
+  ],
+  () => {
+    saveUIState()
+  },
+  { deep: true }
+)
 
 const onLeftHeaderDragStart = (e: MouseEvent | TouchEvent) => {
   leftDrag.startDrag(e)
@@ -1029,29 +1179,42 @@ const handleUIInteractionEnd = () => {
           @drag-end="handleUIInteractionEnd"
         />
 
-        <div v-if="showCodePanel" class="floating-panel code-panel">
-          <div class="panel-header">
-            <span>BUGS Code</span>
-            <button class="close-btn" @click="showCodePanel = false">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
-          <div class="panel-content">
-            <CodePreviewPanel :is-active="showCodePanel" />
-          </div>
-        </div>
+        <FloatingPanel
+          title="BUGS Code Preview"
+          icon="fas fa-code"
+          :is-open="showCodePanel"
+          :default-width="codePanelSize.width"
+          :default-height="codePanelSize.height"
+          :default-x="codePanelPos.x"
+          :default-y="codePanelPos.y"
+          :show-download="true"
+          @close="showCodePanel = false"
+          @download="handleDownloadBugs"
+          @drag-start="handleUIInteractionStart"
+          @drag-end="(pos) => { codePanelPos.x = pos.x; codePanelPos.y = pos.y; handleUIInteractionEnd() }"
+          @resize-start="handleUIInteractionStart"
+          @resize-end="(size) => { codePanelSize.width = size.width; codePanelSize.height = size.height; handleUIInteractionEnd() }"
+        >
+          <CodePreviewPanel :is-active="showCodePanel" />
+        </FloatingPanel>
 
-        <div v-if="showDataPanel" class="floating-panel data-panel">
-          <div class="panel-header">
-            <span>Data Input</span>
-            <button class="close-btn" @click="showDataPanel = false">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
-          <div class="panel-content">
-            <DataInputPanel :is-active="showDataPanel" />
-          </div>
-        </div>
+        <FloatingPanel
+          title="Data & Inits"
+          icon="fas fa-database"
+          badge="JSON"
+          :is-open="showDataPanel"
+          :default-width="dataPanelSize.width"
+          :default-height="dataPanelSize.height"
+          :default-x="dataPanelPos.x || windowWidth - 420"
+          :default-y="dataPanelPos.y"
+          @close="showDataPanel = false"
+          @drag-start="handleUIInteractionStart"
+          @drag-end="(pos) => { dataPanelPos.x = pos.x; dataPanelPos.y = pos.y; handleUIInteractionEnd() }"
+          @resize-start="handleUIInteractionStart"
+          @resize-end="(size) => { dataPanelSize.width = size.width; dataPanelSize.height = size.height; handleUIInteractionEnd() }"
+        >
+          <DataInputPanel :is-active="showDataPanel" />
+        </FloatingPanel>
 
         <AboutModal :is-open="showAboutModal" @close="showAboutModal = false" />
         <FaqModal :is-open="showFaqModal" @close="showFaqModal = false" />
@@ -1690,80 +1853,16 @@ const handleUIInteractionEnd = () => {
   flex-direction: row-reverse;
 }
 
+/* Override RightSidebar positioning for widget mode - use left instead of right */
+.sidebar-wrapper.right .floating-sidebar.right {
+  right: auto !important;
+  left: 0 !important;
+}
+
 /* Removed separate drag-handle styles */
 
 .doodle-bugs-ui-overlay .toolbar-container {
   pointer-events: auto;
-}
-
-.floating-panel {
-  position: fixed;
-  pointer-events: auto;
-  z-index: 30000;
-  background: var(--theme-bg-panel);
-  border: 1px solid var(--theme-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-floating);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.floating-panel.code-panel {
-  bottom: 100px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 600px;
-  max-width: 90vw;
-  height: 350px;
-}
-
-.floating-panel.data-panel {
-  bottom: 100px;
-  right: 20px;
-  width: 450px;
-  max-width: 90vw;
-  height: 350px;
-}
-
-.floating-panel .panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 15px;
-  background: var(--theme-bg-hover);
-  border-bottom: 1px solid var(--theme-border);
-  font-weight: 600;
-  color: var(--theme-text-primary);
-  font-size: 14px;
-}
-
-.floating-panel .close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--theme-text-secondary);
-  font-size: 14px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: all 0.2s;
-}
-
-.floating-panel .close-btn:hover {
-  background: var(--theme-bg-active);
-  color: var(--theme-danger);
-}
-
-.floating-panel .panel-content {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.floating-panel .panel-content > * {
-  flex: 1;
-  height: 100%;
 }
 
 /* PrimeVue Popover/Portal Styles for Widget */

@@ -166,7 +166,8 @@ const handleHeaderClick = () => {
 .floating-sidebar {
   position: absolute;
   top: 16px;
-  height: calc(100dvh - 32px);
+  height: auto;
+  max-height: calc(100dvh - 32px);
   bottom: auto;
   z-index: 50;
   display: flex;
