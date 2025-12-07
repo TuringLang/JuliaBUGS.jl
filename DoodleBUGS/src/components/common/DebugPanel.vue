@@ -325,6 +325,7 @@ onUnmounted(() => {
   font-family: 'Courier New', monospace;
   font-size: 11px;
   z-index: 99999;
+  pointer-events: auto;
   border-top: 1px solid #00ff00;
   display: flex;
   flex-direction: column;

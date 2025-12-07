@@ -1699,7 +1699,7 @@ const handleUIInteractionEnd = () => {
 .floating-panel {
   position: fixed;
   pointer-events: auto;
-  z-index: 10001;
+  z-index: 30000;
   background: var(--theme-bg-panel);
   border: 1px solid var(--theme-border);
   border-radius: var(--radius-lg);
@@ -1780,5 +1780,15 @@ const handleUIInteractionEnd = () => {
 .p-select-overlay {
   pointer-events: auto !important;
   z-index: 100000 !important;
+}
+
+/* Ensure all PrimeVue modals appear above sidebars and toolbars */
+.p-dialog {
+  z-index: 50000 !important;
+}
+
+.p-dialog-mask {
+  z-index: 49999 !important;
+  pointer-events: auto !important;
 }
 </style>
