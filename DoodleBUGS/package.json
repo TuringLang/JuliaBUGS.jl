@@ -10,6 +10,7 @@
     "build-only": "vite build",
     "build:lib": "run-p type-check \"build-lib-only {@}\" --",
     "build-lib-only": "vite build --config vite.lib.config.ts",
+    "build:all": "npm run build:lib && npm run build",
     "type-check": "vue-tsc --build --force",
     "lint": "eslint . --ext .vue,.ts,.mts,.tsx",
     "lint:fix": "eslint . --ext .vue,.ts,.mts,.tsx --fix",
