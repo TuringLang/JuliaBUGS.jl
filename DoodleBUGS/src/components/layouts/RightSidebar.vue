@@ -7,13 +7,14 @@ import BaseButton from '../ui/BaseButton.vue'
 import { useUiStore } from '../../stores/uiStore'
 import type { GraphElement, ValidationError } from '../../types'
 
-defineProps<{
+const props = defineProps<{
   selectedElement: GraphElement | null
   validationErrors: Map<string, ValidationError[]>
   isModelValid: boolean
+  enableDrag?: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'toggle-right-sidebar'): void
   (e: 'update-element', element: GraphElement): void
   (e: 'delete-element', elementId: string): void
@@ -24,6 +25,7 @@ defineEmits<{
   (e: 'share'): void
   (e: 'open-export-modal', format: 'png' | 'jpg' | 'svg'): void
   (e: 'export-json'): void
+  (e: 'header-drag-start', event: MouseEvent | TouchEvent): void
 }>()
 
 const uiStore = useUiStore()
@@ -43,14 +45,32 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
     pointerEvents: 'auto',
   }
 }
+
+const handleHeaderMouseDown = (e: MouseEvent | TouchEvent) => {
+  if (props.enableDrag) {
+    emit('header-drag-start', e)
+  }
+}
+
+const handleHeaderClick = () => {
+  if (!props.enableDrag) {
+    emit('toggle-right-sidebar')
+  }
+}
 </script>
 
 <template>
   <aside class="floating-sidebar right glass-panel" :style="sidebarStyle(isRightSidebarOpen)">
-    <div class="sidebar-header" @click="$emit('toggle-right-sidebar')" style="cursor: pointer">
+    <div
+      class="sidebar-header"
+      @mousedown="handleHeaderMouseDown"
+      @touchstart="handleHeaderMouseDown"
+      @click="handleHeaderClick"
+      :style="{ cursor: enableDrag ? 'move' : 'pointer' }"
+    >
       <span class="sidebar-title">Inspector</span>
 
-      <div class="flex items-center ml-auto" @click.stop>
+      <div class="flex items-center ml-auto" @click.stop @mousedown.stop @touchstart.stop>
         <div
           class="status-indicator validation-status"
           @click="$emit('show-validation-issues')"
@@ -67,7 +87,7 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
         </button>
       </div>
 
-      <div class="cursor-pointer flex items-center ml-2">
+      <div class="pointer-events-none flex items-center ml-2">
         <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon">
           <path
             fill="currentColor"
@@ -193,6 +213,7 @@ const sidebarStyle = (isOpen: boolean): StyleValue => {
 .sidebar-title {
   font-weight: 600;
   font-size: var(--font-size-md);
+  user-select: none;
 }
 
 .toggle-icon {

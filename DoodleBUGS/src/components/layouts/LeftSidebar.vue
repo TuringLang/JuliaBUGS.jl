@@ -13,7 +13,7 @@ import { exampleModels } from '../../config/nodeDefinitions'
 import { useUiStore } from '../../stores/uiStore'
 import { storeToRefs } from 'pinia'
 
-defineProps<{
+const props = defineProps<{
   activeAccordionTabs: string[]
   projectName: string | null
   pinnedGraphTitle: string | null
@@ -23,6 +23,7 @@ defineProps<{
   showDebugPanel: boolean
   isCodePanelOpen: boolean
   showDetachModeControl: boolean
+  enableDrag?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -43,6 +44,7 @@ const emit = defineEmits<{
   (e: 'toggle-dark-mode'): void
   (e: 'share-graph', graphId: string): void
   (e: 'share-project-url', projectId: string): void
+  (e: 'header-drag-start', event: MouseEvent | TouchEvent): void
 }>()
 
 const uiStore = useUiStore()
@@ -76,17 +78,38 @@ const handleGridSizeInput = (event: Event) => {
   const target = event.target as HTMLInputElement
   emit('update:gridSize', Number(target.value))
 }
+
+const handleHeaderMouseDown = (e: MouseEvent | TouchEvent) => {
+  if (props.enableDrag) {
+    emit('header-drag-start', e)
+  }
+}
+
+const handleHeaderClick = () => {
+  // If drag is enabled, the parent handles the click/toggle logic to distinguish from dragging
+  if (!props.enableDrag) {
+    emit('toggle-left-sidebar')
+  }
+}
 </script>
 
 <template>
   <aside class="floating-sidebar left glass-panel" :style="sidebarStyle(isLeftSidebarOpen)">
-    <div class="sidebar-header" @click="$emit('toggle-left-sidebar')">
+    <div
+      class="sidebar-header"
+      @mousedown="handleHeaderMouseDown"
+      @touchstart="handleHeaderMouseDown"
+      @click="handleHeaderClick"
+      :style="{ cursor: enableDrag ? 'move' : 'pointer' }"
+    >
       <span class="sidebar-title">
         {{ pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS' }}
       </span>
       <div class="flex items-center ml-auto">
         <button
           @click.stop="uiStore.toggleDarkMode()"
+          @mousedown.stop
+          @touchstart.stop
           class="theme-toggle-header"
           :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
         >
@@ -266,12 +289,12 @@ const handleGridSizeInput = (event: Event) => {
   background: var(--theme-bg-panel-transparent);
   color: var(--theme-text-primary);
   flex-shrink: 0;
-  cursor: pointer;
 }
 
 .sidebar-title {
   font-weight: 600;
   font-size: var(--font-size-md);
+  user-select: none;
 }
 
 .theme-toggle-header {
@@ -294,6 +317,7 @@ const handleGridSizeInput = (event: Event) => {
 
 .toggle-icon {
   color: var(--theme-text-secondary);
+  pointer-events: none;
 }
 
 .sidebar-content-scrollable {

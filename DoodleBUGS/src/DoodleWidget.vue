@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, Transition } from 'vue'
 import { storeToRefs } from 'pinia'
 import Toast from 'primevue/toast'
 
@@ -67,6 +67,15 @@ const showNewGraphModal = ref(false)
 const newProjectName = ref('')
 const newGraphName = ref('')
 
+// Import Graph State
+const graphImportInput = ref<HTMLInputElement | null>(null)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const importedGraphData = ref<any>(null)
+const isDragOver = ref(false)
+
+// UI Dragging State (for performance optimization)
+const isDraggingUI = ref(false)
+
 // Flag to prevent premature canvas rendering
 const isInitialized = ref(false)
 
@@ -102,8 +111,9 @@ const initGraph = () => {
 }
 
 onMounted(() => {
-  uiStore.isLeftSidebarOpen = true
-  uiStore.isRightSidebarOpen = true
+  // Ensure sidebars are closed by default for the widget
+  uiStore.isLeftSidebarOpen = false
+  uiStore.isRightSidebarOpen = false
 
   graphStore.selectGraph(undefined as unknown as string)
 
@@ -188,7 +198,10 @@ const handleZoomOut = () => {
     )
 }
 const handleFit = () => {
-  if (graphStore.currentGraphId) getCyInstance(graphStore.currentGraphId)?.fit(undefined, 50)
+  if (graphStore.currentGraphId) {
+    const cy = getCyInstance(graphStore.currentGraphId)
+    if (cy) smartFit(cy, true) // Use smartFit for smooth animation
+  }
 }
 
 const smartFit = (cy: Core, animate: boolean = true) => {
@@ -372,16 +385,83 @@ const handleNewGraph = () => {
 }
 
 const createNewGraph = () => {
-  if (projectStore.currentProjectId && newGraphName.value.trim()) {
-    const newGraph = projectStore.addGraphToProject(
-      projectStore.currentProjectId,
-      newGraphName.value.trim()
-    )
-    if (newGraph) {
-      graphStore.selectGraph(newGraph.id)
+  if (projectStore.currentProjectId && (newGraphName.value.trim() || importedGraphData.value)) {
+    const name = newGraphName.value.trim() || importedGraphData.value?.name || 'New Graph'
+    const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId!, name)
+
+    if (newGraphMeta && importedGraphData.value) {
+      // Populate with imported data
+      graphStore.updateGraphElements(newGraphMeta.id, importedGraphData.value.elements)
+
+      if (importedGraphData.value.dataContent) {
+        dataStore.updateGraphData(newGraphMeta.id, { content: importedGraphData.value.dataContent })
+      }
+
+      // Restore layout settings if available
+      if (importedGraphData.value.layout) {
+        projectStore.updateGraphLayout(
+          projectStore.currentProject.id,
+          newGraphMeta.id,
+          importedGraphData.value.layout
+        )
+      }
+
+      graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
+    } else if (newGraphMeta) {
+      graphStore.selectGraph(newGraphMeta.id)
     }
+
     showNewGraphModal.value = false
     newGraphName.value = ''
+    importedGraphData.value = null
+    if (graphImportInput.value) graphImportInput.value.value = ''
+  }
+}
+
+const triggerGraphImport = () => {
+  graphImportInput.value?.click()
+}
+
+const processGraphFile = (file: File) => {
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    try {
+      const content = e.target?.result as string
+      const data = JSON.parse(content)
+      // Basic validation
+      if (data.elements && Array.isArray(data.elements)) {
+        importedGraphData.value = data
+        if (!newGraphName.value && data.name) {
+          newGraphName.value = data.name + ' (Imported)'
+        }
+      } else {
+        alert('Invalid graph JSON file.')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('Failed to parse file.')
+    }
+  }
+  reader.readAsText(file)
+}
+
+const handleGraphImportFile = (event: Event) => {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (file) processGraphFile(file)
+}
+
+const handleDrop = (event: DragEvent) => {
+  isDragOver.value = false
+  const file = event.dataTransfer?.files?.[0]
+  if (file) {
+    processGraphFile(file)
+  }
+}
+
+const clearImportedData = () => {
+  importedGraphData.value = null
+  if (graphImportInput.value) {
+    graphImportInput.value.value = ''
   }
 }
 
@@ -593,9 +673,21 @@ const handleExportJson = () => {
   URL.revokeObjectURL(url)
 }
 
+const handleElementSelected = (element: GraphElement | null) => {
+  graphStore.setSelectedElement(element)
+  if (element) {
+    uiStore.setActiveRightTab('properties')
+    uiStore.isRightSidebarOpen = true
+  } else {
+    if (!uiStore.isRightTabPinned && uiStore.isRightSidebarOpen) {
+      uiStore.isRightSidebarOpen = false
+    }
+  }
+}
+
 const handleSelectNodeFromModal = (nodeId: string) => {
   const el = elements.value.find((e) => e.id === nodeId)
-  if (el) graphStore.setSelectedElement(el)
+  if (el) handleElementSelected(el)
 }
 
 const {
@@ -625,43 +717,173 @@ const useDrag = (initialX: number, initialY: number) => {
   const isDragging = ref(false)
   const startX = ref(0)
   const startY = ref(0)
+  const dragThreshold = 3
+  let initialDragX = 0
+  let initialDragY = 0
+  let animationFrameId: number | null = null
 
-  const onMouseDown = (e: MouseEvent) => {
-    if (
-      (e.target as HTMLElement).closest(
-        'button, input, select, textarea, .p-accordion, .p-toggleswitch'
-      )
-    )
-      return
+  const startDrag = (e: MouseEvent | TouchEvent) => {
     isDragging.value = true
-    startX.value = e.clientX - x.value
-    startY.value = e.clientY - y.value
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
+    isDraggingUI.value = true // Disable canvas pointer events during drag
+    const clientX = e instanceof MouseEvent ? e.clientX : e.touches[0].clientX
+    const clientY = e instanceof MouseEvent ? e.clientY : e.touches[0].clientY
+
+    startX.value = clientX - x.value
+    startY.value = clientY - y.value
+    initialDragX = clientX
+    initialDragY = clientY
+
+    if (e instanceof MouseEvent) {
+      window.addEventListener('mousemove', onMouseMove)
+      window.addEventListener('mouseup', onMouseUp)
+    } else {
+      window.addEventListener('touchmove', onTouchMove, { passive: false })
+      window.addEventListener('touchend', onTouchEnd)
+    }
   }
 
   const onMouseMove = (e: MouseEvent) => {
     if (!isDragging.value) return
-    x.value = e.clientX - startX.value
-    y.value = e.clientY - startY.value
+    if (animationFrameId) cancelAnimationFrame(animationFrameId)
+
+    animationFrameId = requestAnimationFrame(() => {
+      x.value = e.clientX - startX.value
+      y.value = e.clientY - startY.value
+    })
   }
 
-  const onMouseUp = () => {
+  const onTouchMove = (e: TouchEvent) => {
+    if (!isDragging.value) return
+    e.preventDefault()
+    if (animationFrameId) cancelAnimationFrame(animationFrameId)
+
+    animationFrameId = requestAnimationFrame(() => {
+      x.value = e.touches[0].clientX - startX.value
+      y.value = e.touches[0].clientY - startY.value
+    })
+  }
+
+  const finishDrag = (clientX: number, clientY: number) => {
     isDragging.value = false
+    isDraggingUI.value = false // Re-enable canvas pointer events
+    if (animationFrameId) cancelAnimationFrame(animationFrameId)
+    const dist = Math.hypot(clientX - initialDragX, clientY - initialDragY)
+    return dist < dragThreshold
+  }
+
+  const onMouseUp = (e: MouseEvent) => {
+    const isClick = finishDrag(e.clientX, e.clientY)
     window.removeEventListener('mousemove', onMouseMove)
     window.removeEventListener('mouseup', onMouseUp)
+    return isClick
+  }
+
+  const onTouchEnd = (e: TouchEvent) => {
+    const touch = e.changedTouches[0]
+    finishDrag(touch.clientX, touch.clientY)
+    window.removeEventListener('touchmove', onTouchMove)
+    window.removeEventListener('touchend', onTouchEnd)
   }
 
   return {
     x,
     y,
-    onMouseDown,
-    style: computed(() => ({ left: `${x.value}px`, top: `${y.value}px` })),
+    startDrag,
+    onMouseUp,
+    style: computed(() => ({
+      // Use transform for smooth 60fps movement
+      transform: `translate3d(${x.value}px, ${y.value}px, 0)`,
+      // Force top/left to 0 so translate3d works from the origin
+      // This assumes the sidebar wrappers have 'position: fixed'
+      left: '0px',
+      top: '0px',
+    })),
   }
 }
 
 const leftDrag = useDrag(20, 20)
 const rightDrag = useDrag(window.innerWidth - 340, 20)
+
+const onLeftHeaderDragStart = (e: MouseEvent | TouchEvent) => {
+  leftDrag.startDrag(e)
+  if (e instanceof MouseEvent) {
+    const originalMouseUp = leftDrag.onMouseUp
+    // Hijack the mouse up to toggle if it was a click
+    const handleUp = (upEvent: MouseEvent) => {
+      const isClick = originalMouseUp(upEvent)
+      if (isClick) {
+        uiStore.toggleLeftSidebar()
+      }
+      window.removeEventListener('mouseup', handleUp)
+    }
+    window.addEventListener('mouseup', handleUp)
+  }
+}
+
+const onRightHeaderDragStart = (e: MouseEvent | TouchEvent) => {
+  rightDrag.startDrag(e)
+  if (e instanceof MouseEvent) {
+    const originalMouseUp = rightDrag.onMouseUp
+    const handleUp = (upEvent: MouseEvent) => {
+      const isClick = originalMouseUp(upEvent)
+      if (isClick) {
+        uiStore.toggleRightSidebar()
+      }
+      window.removeEventListener('mouseup', handleUp)
+    }
+    window.addEventListener('mouseup', handleUp)
+  }
+}
+
+// Logic to handle toolbar navigation clicks
+const handleToolbarNavigation = (view: string) => {
+  if (view === 'project') {
+    if (
+      uiStore.isLeftSidebarOpen &&
+      activeLeftAccordionTabs.value.includes('project') &&
+      activeLeftAccordionTabs.value.length === 1
+    ) {
+      uiStore.isLeftSidebarOpen = false
+    } else {
+      uiStore.isLeftSidebarOpen = true
+      activeLeftAccordionTabs.value = ['project']
+    }
+  } else if (view === 'view') {
+    if (
+      uiStore.isLeftSidebarOpen &&
+      activeLeftAccordionTabs.value.includes('view') &&
+      activeLeftAccordionTabs.value.length === 1
+    ) {
+      uiStore.isLeftSidebarOpen = false
+    } else {
+      uiStore.isLeftSidebarOpen = true
+      activeLeftAccordionTabs.value = ['view']
+    }
+  } else if (view === 'help') {
+    if (uiStore.isLeftSidebarOpen && activeLeftAccordionTabs.value.includes('help')) {
+      uiStore.isLeftSidebarOpen = false
+    } else {
+      uiStore.isLeftSidebarOpen = true
+      activeLeftAccordionTabs.value = ['help', 'devtools']
+    }
+  } else if (view === 'export') {
+    // Open Right Sidebar Export tab
+    if (uiStore.isRightSidebarOpen && uiStore.activeRightTab === 'export') {
+      uiStore.isRightSidebarOpen = false
+    } else {
+      uiStore.isRightSidebarOpen = true
+      uiStore.setActiveRightTab('export')
+    }
+  }
+}
+
+const handleUIInteractionStart = () => {
+  isDraggingUI.value = true
+}
+
+const handleUIInteractionEnd = () => {
+  isDraggingUI.value = false
+}
 </script>
 
 <template>
@@ -670,9 +892,98 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
     :class="{ 'dark-mode': isDarkMode }"
     style="width: 100%; height: 100%; position: relative; overflow: hidden"
   >
+    <!-- Collapsed Sidebar Triggers (Inside Widget Root for Correct Positioning) -->
+    <Transition name="fade">
+      <div
+        v-if="!isLeftSidebarOpen"
+        class="collapsed-sidebar-trigger left-trigger"
+        @click="uiStore.toggleLeftSidebar"
+      >
+        <div class="sidebar-trigger-content gap-1">
+          <div
+            class="flex-grow flex items-center gap-2 overflow-hidden"
+            style="flex-grow: 1; overflow: hidden"
+          >
+            <span class="logo-text-minimized">
+              <span class="desktop-text">{{
+                pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS'
+              }}</span>
+              <span class="mobile-text">DoodleBUGS</span>
+            </span>
+          </div>
+          <div class="flex items-center flex-shrink-0" style="flex-shrink: 0">
+            <button
+              @click.stop="uiStore.toggleDarkMode()"
+              class="theme-toggle-header"
+              :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+            >
+              <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
+            </button>
+            <div class="toggle-icon-wrapper">
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon">
+                <path
+                  fill="currentColor"
+                  fill-rule="evenodd"
+                  d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"
+                  clip-rule="evenodd"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
+        v-if="!isRightSidebarOpen"
+        class="collapsed-sidebar-trigger right"
+        @click="uiStore.toggleRightSidebar"
+      >
+        <div class="sidebar-trigger-content gap-2">
+          <span class="sidebar-title-minimized">Inspector</span>
+          <div class="flex items-center">
+            <div
+              class="status-indicator validation-status"
+              @click.stop="showValidationModal = true"
+              :class="isModelValid ? 'valid' : 'invalid'"
+            >
+              <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
+            </div>
+            <button
+              class="header-icon-btn collapsed-share-btn"
+              @click.stop="handleShare"
+              title="Share via URL"
+            >
+              <i class="fas fa-share-alt"></i>
+            </button>
+            <div class="toggle-icon-wrapper">
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon">
+                <path
+                  fill="currentColor"
+                  fill-rule="evenodd"
+                  d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"
+                  clip-rule="evenodd"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <div
       class="canvas-layer"
-      style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%"
+      :style="{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: isDraggingUI ? 'none' : 'auto',
+      }"
     >
       <GraphEditor
         v-if="isInitialized && graphStore.currentGraphId"
@@ -688,7 +999,7 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
         :show-zoom-controls="false"
         @update:current-mode="currentMode = $event"
         @update:current-node-type="currentNodeType = $event"
-        @element-selected="graphStore.setSelectedElement"
+        @element-selected="handleElementSelected"
         @layout-updated="(name) => graphStore.updateGraphLayout(graphStore.currentGraphId!, name)"
         @viewport-changed="
           (v) => graphStore.updateGraphViewport(graphStore.currentGraphId!, v.zoom, v.pan)
@@ -708,11 +1019,8 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
       <div class="doodle-bugs-ui-overlay" :class="{ 'dark-mode': isDarkMode }">
         <Toast position="top-center" />
 
-        <!-- Left Sidebar -->
+        <!-- Left Sidebar (Floating) -->
         <div v-if="isLeftSidebarOpen" class="sidebar-wrapper left" :style="leftDrag.style.value">
-          <div class="drag-handle left" @mousedown="leftDrag.onMouseDown" title="Drag to move">
-            <span></span><span></span><span></span>
-          </div>
           <LeftSidebar
             v-show="isLeftSidebarOpen"
             :activeAccordionTabs="activeLeftAccordionTabs"
@@ -726,6 +1034,7 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
             :isCodePanelOpen="showCodePanel"
             :isDetachModeActive="isDetachModeActive"
             :showDetachModeControl="showDetachModeControl"
+            :enableDrag="true"
             @toggle-left-sidebar="uiStore.toggleLeftSidebar"
             @new-project="handleNewProject"
             @new-graph="handleNewGraph"
@@ -736,7 +1045,7 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
             @update:showZoomControls="showZoomControls = $event"
             @update:showDebugPanel="showDebugPanel = $event"
             @update:isDetachModeActive="isDetachModeActive = $event"
-            @update:showDetachModeControl="showDetachModeControl = $event"
+            @update:show-detach-mode-control="showDetachModeControl = $event"
             @toggle-code-panel="toggleCodePanel"
             @load-example="handleLoadExample"
             @open-about-modal="showAboutModal = true"
@@ -744,15 +1053,8 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
             @toggle-dark-mode="uiStore.toggleDarkMode"
             @share-graph="handleShareGraph"
             @share-project-url="handleShareProjectUrl"
+            @header-drag-start="onLeftHeaderDragStart"
           />
-        </div>
-        <div
-          v-else
-          class="collapsed-sidebar-trigger left"
-          @click="uiStore.toggleLeftSidebar"
-          title="Open left sidebar"
-        >
-          <span></span><span></span><span></span>
         </div>
 
         <div v-if="isRightSidebarOpen" class="sidebar-wrapper right" :style="rightDrag.style.value">
@@ -761,6 +1063,7 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
             :selectedElement="selectedElement"
             :validationErrors="validationErrors"
             :isModelValid="isModelValid"
+            :enableDrag="true"
             @toggle-right-sidebar="uiStore.toggleRightSidebar"
             @update-element="updateElement"
             @delete-element="deleteElement"
@@ -771,18 +1074,8 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
             @share="handleShare"
             @open-export-modal="openExportModal"
             @export-json="handleExportJson"
+            @header-drag-start="onRightHeaderDragStart"
           />
-          <div class="drag-handle right" @mousedown="rightDrag.onMouseDown" title="Drag to move">
-            <span></span><span></span><span></span>
-          </div>
-        </div>
-        <div
-          v-else
-          class="collapsed-sidebar-trigger right"
-          @click="uiStore.toggleRightSidebar"
-          title="Open right sidebar"
-        >
-          <span></span><span></span><span></span>
         </div>
 
         <FloatingBottomToolbar
@@ -793,6 +1086,7 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
           :show-data-panel="showDataPanel"
           :is-detach-mode-active="isDetachModeActive"
           :show-detach-mode-control="showDetachModeControl"
+          :is-widget="true"
           @update:current-mode="currentMode = $event"
           @update:current-node-type="currentNodeType = $event"
           @undo="handleUndo"
@@ -806,6 +1100,9 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
           @toggle-detach-mode="uiStore.toggleDetachMode"
           @open-style-modal="showStyleModal = true"
           @share="handleShare"
+          @nav="handleToolbarNavigation"
+          @drag-start="handleUIInteractionStart"
+          @drag-end="handleUIInteractionEnd"
         />
 
         <div v-if="showCodePanel" class="floating-panel code-panel">
@@ -884,17 +1181,70 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
         <BaseModal :is-open="showNewGraphModal" @close="showNewGraphModal = false">
           <template #header><h3>Create New Graph</h3></template>
           <template #body>
-            <div class="modal-form-row">
-              <label>Graph Name:</label>
-              <BaseInput
-                v-model="newGraphName"
-                placeholder="Enter graph name"
-                @keyup.enter="createNewGraph"
-              />
+            <div class="flex flex-col gap-2">
+              <div class="form-group">
+                <label for="new-graph-name">Graph Name</label>
+                <BaseInput
+                  id="new-graph-name"
+                  v-model="newGraphName"
+                  placeholder="Enter a name for your graph"
+                  @keyup.enter="createNewGraph"
+                />
+              </div>
+
+              <div class="import-section">
+                <label class="section-label">Import from JSON (Optional)</label>
+
+                <div
+                  class="drop-zone"
+                  :class="{ loaded: importedGraphData, 'drag-over': isDragOver }"
+                  @click="triggerGraphImport"
+                  @dragover.prevent="isDragOver = true"
+                  @dragleave.prevent="isDragOver = false"
+                  @drop.prevent="handleDrop"
+                >
+                  <input
+                    type="file"
+                    ref="graphImportInput"
+                    accept=".json"
+                    @change="handleGraphImportFile"
+                    class="hidden-input"
+                  />
+
+                  <div v-if="!importedGraphData" class="drop-zone-content">
+                    <div class="icon-circle">
+                      <i class="fas fa-file-import"></i>
+                    </div>
+                    <div class="text-content">
+                      <span class="action-text">Click or Drag & Drop JSON file</span>
+                      <small class="sub-text">Restore a previously exported graph</small>
+                    </div>
+                  </div>
+
+                  <div v-else class="drop-zone-content success">
+                    <div class="icon-circle success">
+                      <i class="fas fa-check"></i>
+                    </div>
+                    <div class="text-content">
+                      <span class="action-text">File Loaded Successfully</span>
+                      <small class="sub-text"
+                        >{{ importedGraphData.name || 'Untitled Graph' }}</small
+                      >
+                    </div>
+                    <button
+                      class="remove-file-btn"
+                      @click.stop="clearImportedData"
+                      title="Remove file"
+                    >
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </template>
           <template #footer
-            ><BaseButton @click="createNewGraph" type="primary">Create</BaseButton></template
+            ><BaseButton @click="createNewGraph" type="primary">Create Graph</BaseButton></template
           >
         </BaseModal>
 
@@ -1020,6 +1370,324 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
   font-weight: 500;
   color: var(--theme-text-primary);
 }
+
+/* Collapsed Sidebar Triggers Styles */
+.collapsed-sidebar-trigger {
+  position: absolute;
+  top: 16px;
+  z-index: 9000; /* Increased z-index to ensure visibility above canvas layers */
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-panel);
+  cursor: pointer;
+  min-width: 140px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); /* Ensure it pops out visually */
+}
+
+.collapsed-sidebar-trigger.left-trigger {
+  left: 16px;
+  min-width: 200px;
+}
+
+.collapsed-sidebar-trigger.right {
+  left: auto;
+  right: 16px;
+}
+
+.collapsed-sidebar-trigger:hover {
+  box-shadow: var(--shadow-md);
+  transform: scale(1.01);
+  background: var(--theme-bg-hover);
+}
+
+.sidebar-trigger-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.logo-text-minimized {
+  font-family: var(--font-family-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+}
+
+.sidebar-title-minimized {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+}
+
+.theme-toggle-header {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  color: var(--theme-text-secondary);
+  font-size: 0.85rem;
+  transition: color 0.2s;
+  border-radius: 4px;
+}
+.theme-toggle-header:hover {
+  color: var(--theme-text-primary);
+  background: var(--theme-bg-hover);
+}
+
+.toggle-icon-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.toggle-icon {
+  color: var(--theme-text-secondary);
+}
+
+.header-icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--theme-text-secondary);
+  font-size: 14px;
+  padding: 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.header-icon-btn:hover {
+  background-color: var(--theme-bg-hover);
+  color: var(--theme-text-primary);
+}
+
+.collapsed-share-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+}
+
+.status-indicator {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  cursor: help;
+}
+
+.validation-status {
+  font-size: 1.1em;
+  margin: 0 5px;
+}
+.validation-status.valid {
+  color: var(--theme-success);
+}
+.validation-status.invalid {
+  color: var(--theme-warning);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.desktop-text {
+  display: inline;
+}
+.mobile-text {
+  display: none;
+}
+
+/* Modal and Drop Zone Styles */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 0.9em;
+  font-weight: 600;
+  color: var(--theme-text-secondary);
+}
+
+.section-label {
+  font-size: 0.9em;
+  font-weight: 600;
+  color: var(--theme-text-secondary);
+  margin-bottom: 8px;
+  display: block;
+}
+
+.drop-zone {
+  border: 2px dashed var(--theme-border);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background-color: var(--theme-bg-hover);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+}
+
+.drop-zone:hover {
+  border-color: var(--theme-text-muted);
+  background-color: var(--theme-bg-active);
+}
+
+.drop-zone.drag-over {
+  border-color: var(--theme-primary);
+  background-color: rgba(16, 185, 129, 0.1);
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+}
+
+.drop-zone.loaded {
+  border-style: solid;
+  border-color: var(--theme-success);
+  background-color: rgba(16, 185, 129, 0.05);
+}
+
+.drop-zone-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+  width: 100%;
+}
+
+.drop-zone-content.success {
+  pointer-events: auto;
+}
+
+.icon-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: var(--theme-bg-panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+  color: var(--theme-text-muted);
+  font-size: 24px;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.drop-zone:hover .icon-circle {
+  transform: scale(1.1);
+  color: var(--theme-primary);
+}
+
+.drop-zone.drag-over .icon-circle {
+  transform: scale(1.2);
+  background-color: var(--theme-primary);
+  color: white;
+}
+
+.icon-circle.success {
+  background-color: var(--theme-success);
+  color: white;
+}
+
+.text-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.action-text {
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  font-size: 1rem;
+}
+
+.sub-text {
+  color: var(--theme-text-secondary);
+  font-size: 0.85em;
+}
+
+.hidden-input {
+  display: none;
+}
+
+.remove-file-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: var(--theme-bg-panel);
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  box-shadow: var(--shadow-sm);
+}
+
+.remove-file-btn:hover {
+  background-color: var(--theme-danger);
+  border-color: var(--theme-danger);
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .desktop-text {
+    display: none;
+  }
+  .mobile-text {
+    display: inline;
+  }
+
+  .collapsed-sidebar-trigger {
+    min-width: auto !important;
+    max-width: 42%;
+    padding: 8px;
+  }
+
+  .collapsed-sidebar-trigger.left-trigger {
+    min-width: auto !important;
+  }
+
+  .logo-text-minimized {
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+
+  .sidebar-trigger-content {
+    gap: 4px;
+  }
+}
 </style>
 
 <style>
@@ -1077,6 +1745,9 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
   flex-direction: row;
   align-items: flex-start;
   gap: 4px;
+  /* Will be positioned by transform */
+  left: 0;
+  top: 0;
 }
 
 .sidebar-wrapper.left {
@@ -1087,96 +1758,7 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
   flex-direction: row-reverse;
 }
 
-.drag-handle {
-  width: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 8px 0;
-  cursor: grab;
-  opacity: 0.5;
-  transition: opacity 0.2s;
-}
-
-.drag-handle span {
-  display: block;
-  width: 4px;
-  height: 4px;
-  background: var(--theme-text-secondary);
-  border-radius: 50%;
-}
-
-.drag-handle:hover {
-  opacity: 1;
-}
-
-.drag-handle:active {
-  cursor: grabbing;
-}
-
-.drag-handle.left {
-  margin-right: 4px;
-}
-
-.drag-handle.right {
-  margin-left: 4px;
-}
-
-.collapsed-sidebar-trigger {
-  position: fixed;
-  top: 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  width: 32px;
-  height: 32px;
-  background: var(--theme-bg-panel);
-  border: 1px solid var(--theme-border);
-  border-radius: 6px;
-  cursor: pointer;
-  box-shadow: var(--shadow-floating);
-  transition:
-    background 0.2s,
-    transform 0.2s;
-  z-index: 10001;
-}
-
-.collapsed-sidebar-trigger.left {
-  left: 16px;
-}
-
-.collapsed-sidebar-trigger.right {
-  right: 16px;
-}
-
-.collapsed-sidebar-trigger span {
-  display: block;
-  width: 16px;
-  height: 2px;
-  background: var(--theme-text-secondary);
-  border-radius: 1px;
-  transition: background 0.2s;
-}
-
-.collapsed-sidebar-trigger:hover {
-  background: var(--theme-bg-hover);
-}
-
-.collapsed-sidebar-trigger:hover span {
-  background: var(--theme-primary);
-}
-
-.sidebar-wrapper .floating-sidebar .sidebar-header {
-  cursor: grab;
-}
-
-.sidebar-wrapper .floating-sidebar .sidebar-header:active {
-  cursor: grabbing;
-}
+/* Removed separate drag-handle styles */
 
 .doodle-bugs-ui-overlay .toolbar-container {
   pointer-events: auto;
@@ -1266,10 +1848,5 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
 .p-select-overlay {
   pointer-events: auto !important;
   z-index: 100000 !important;
-}
-
-/* Debug border for sidebar wrapper */
-.sidebar-wrapper {
-  outline: 2px dashed rgba(255, 0, 0, 0.3);
 }
 </style>

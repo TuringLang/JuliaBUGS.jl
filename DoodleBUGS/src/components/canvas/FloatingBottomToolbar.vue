@@ -12,6 +12,7 @@ const props = defineProps<{
   showZoomControls?: boolean
   isDetachModeActive?: boolean
   showDetachModeControl?: boolean
+  isWidget?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -28,6 +29,9 @@ const emit = defineEmits<{
   (e: 'toggle-detach-mode'): void
   (e: 'open-style-modal'): void
   (e: 'share'): void
+  (e: 'nav', view: string): void
+  (e: 'drag-start'): void
+  (e: 'drag-end'): void
 }>()
 
 const availableNodeTypes = computed(() => {
@@ -50,14 +54,13 @@ const nodeIcons: Record<string, string> = {
   plate: 'fas fa-th-large',
 }
 
-// Colors used for Active State Background and Inactive State Icon/Text
 const nodeColors: Record<string, string> = {
-  stochastic: '#ef4444', // Red
-  deterministic: '#10b981', // Green
-  constant: '#6b7280', // Gray
-  observed: '#3b82f6', // Blue
-  plate: '#8b5cf6', // Purple
-  edge: '#f59e0b', // Amber
+  stochastic: '#ef4444',
+  deterministic: '#10b981',
+  constant: '#6b7280',
+  observed: '#3b82f6',
+  plate: '#8b5cf6',
+  edge: '#f59e0b',
 }
 
 const lastAddTool = ref<NodeType | 'edge'>(props.currentNodeType)
@@ -103,18 +106,14 @@ const isAddModeActive = computed(() => {
   return props.currentMode === 'add-node' && props.currentNodeType === lastAddTool.value
 })
 
-const activateAddTool = () => {
-  if (lastAddTool.value === 'edge') {
-    emit('update:currentMode', 'add-edge')
-  } else {
-    emit('update:currentNodeType', lastAddTool.value)
-    emit('update:currentMode', 'add-node')
-  }
-}
-
 const selectAddTool = (tool: NodeType | 'edge') => {
   lastAddTool.value = tool
-  activateAddTool()
+  if (tool === 'edge') {
+    emit('update:currentMode', 'add-edge')
+  } else {
+    emit('update:currentNodeType', tool)
+    emit('update:currentMode', 'add-node')
+  }
 }
 
 const addButtonStyle = computed(() => {
@@ -129,10 +128,18 @@ const addButtonStyle = computed(() => {
   return {}
 })
 
+// --- Smooth Dragging Logic (Transform-based) ---
 const toolbarRef = ref<HTMLElement | null>(null)
 const isDragging = ref(false)
-const position = ref({ bottom: '24px', left: '50%', transform: 'translateX(-50%)' })
+// Initial CSS state: Centered at bottom
+const styleState = ref({
+  left: '50%',
+  bottom: '24px',
+  top: 'auto',
+  transform: 'translateX(-50%)',
+})
 const dragOffset = ref({ x: 0, y: 0 })
+let animationFrameId: number | null = null
 
 const startDrag = (event: MouseEvent) => {
   if (
@@ -146,18 +153,21 @@ const startDrag = (event: MouseEvent) => {
   if (!toolbarRef.value) return
 
   isDragging.value = true
+  emit('drag-start') // Signal start of drag
   const rect = toolbarRef.value.getBoundingClientRect()
-
-  position.value = {
-    left: `${rect.left}px`,
-    bottom: 'auto',
-    transform: 'none',
-  }
-  ;(toolbarRef.value.style as CSSStyleDeclaration).top = `${rect.top}px`
 
   dragOffset.value = {
     x: event.clientX - rect.left,
     y: event.clientY - rect.top,
+  }
+
+  // Switch to absolute positioning with transform for performance
+  // We lock left/top to 0 and use translate3d for the actual position
+  styleState.value = {
+    left: '0px',
+    top: '0px',
+    bottom: 'auto',
+    transform: `translate3d(${rect.left}px, ${rect.top}px, 0)`,
   }
 
   window.addEventListener('mousemove', onDrag)
@@ -165,21 +175,29 @@ const startDrag = (event: MouseEvent) => {
 }
 
 const onDrag = (event: MouseEvent) => {
-  if (!isDragging.value || !toolbarRef.value) return
+  if (!isDragging.value) return
 
-  const x = event.clientX - dragOffset.value.x
-  const y = event.clientY - dragOffset.value.y
+  // Throttle updates using requestAnimationFrame
+  if (animationFrameId) return
 
-  position.value.left = `${x}px`
-  ;(toolbarRef.value.style as CSSStyleDeclaration).top = `${y}px`
+  animationFrameId = requestAnimationFrame(() => {
+    const x = event.clientX - dragOffset.value.x
+    const y = event.clientY - dragOffset.value.y
+    styleState.value.transform = `translate3d(${x}px, ${y}px, 0)`
+    animationFrameId = null
+  })
 }
 
 const stopDrag = () => {
   isDragging.value = false
+  emit('drag-end') // Signal end of drag
+  if (animationFrameId) cancelAnimationFrame(animationFrameId)
+  animationFrameId = null
   window.removeEventListener('mousemove', onDrag)
   window.removeEventListener('mouseup', stopDrag)
 }
 
+// Touch Support
 const startDragTouch = (event: TouchEvent) => {
   if (
     (event.target as HTMLElement).closest('button') ||
@@ -192,19 +210,20 @@ const startDragTouch = (event: TouchEvent) => {
   if (!toolbarRef.value) return
 
   isDragging.value = true
+  emit('drag-start') // Signal start of drag
   const rect = toolbarRef.value.getBoundingClientRect()
   const touch = event.touches[0]
-
-  position.value = {
-    left: `${rect.left}px`,
-    bottom: 'auto',
-    transform: 'none',
-  }
-  ;(toolbarRef.value.style as CSSStyleDeclaration).top = `${rect.top}px`
 
   dragOffset.value = {
     x: touch.clientX - rect.left,
     y: touch.clientY - rect.top,
+  }
+
+  styleState.value = {
+    left: '0px',
+    top: '0px',
+    bottom: 'auto',
+    transform: `translate3d(${rect.left}px, ${rect.top}px, 0)`,
   }
 
   window.addEventListener('touchmove', onDragTouch, { passive: false })
@@ -212,19 +231,25 @@ const startDragTouch = (event: TouchEvent) => {
 }
 
 const onDragTouch = (event: TouchEvent) => {
-  if (!isDragging.value || !toolbarRef.value) return
-  event.preventDefault() // Prevent scroll
+  if (!isDragging.value) return
+  event.preventDefault() // Prevent scrolling while dragging
   const touch = event.touches[0]
 
-  const x = touch.clientX - dragOffset.value.x
-  const y = touch.clientY - dragOffset.value.y
+  if (animationFrameId) return
 
-  position.value.left = `${x}px`
-  ;(toolbarRef.value.style as CSSStyleDeclaration).top = `${y}px`
+  animationFrameId = requestAnimationFrame(() => {
+    const x = touch.clientX - dragOffset.value.x
+    const y = touch.clientY - dragOffset.value.y
+    styleState.value.transform = `translate3d(${x}px, ${y}px, 0)`
+    animationFrameId = null
+  })
 }
 
 const stopDragTouch = () => {
   isDragging.value = false
+  emit('drag-end') // Signal end of drag
+  if (animationFrameId) cancelAnimationFrame(animationFrameId)
+  animationFrameId = null
   window.removeEventListener('touchmove', onDragTouch)
   window.removeEventListener('touchend', stopDragTouch)
 }
@@ -241,7 +266,7 @@ onUnmounted(() => {
   <div
     class="toolbar-container"
     ref="toolbarRef"
-    :style="position"
+    :style="styleState"
     @mousedown="startDrag"
     @touchstart="startDragTouch"
   >
@@ -250,7 +275,18 @@ onUnmounted(() => {
         <i class="fas fa-grip-vertical"></i>
       </div>
 
-      <!-- 1. Selection Tool -->
+      <!-- Widget-Only Navigation Group -->
+      <template v-if="isWidget">
+        <button class="dock-btn" @click="$emit('nav', 'project')" title="Projects">
+          <i class="fas fa-folder"></i>
+        </button>
+        <button class="dock-btn" @click="$emit('nav', 'view')" title="View Options">
+          <i class="fas fa-eye"></i>
+        </button>
+        <div class="divider"></div>
+      </template>
+
+      <!-- Tools Group -->
       <button
         class="dock-btn"
         :class="{ active: currentMode === 'select' }"
@@ -261,7 +297,6 @@ onUnmounted(() => {
         <i class="fas fa-mouse-pointer"></i>
       </button>
 
-      <!-- 2. Add Node/Edge Dropdown -->
       <DropdownMenu class="dock-dropdown add-tool-dropdown">
         <template #trigger>
           <button
@@ -313,7 +348,7 @@ onUnmounted(() => {
 
       <div class="divider"></div>
 
-      <!-- 3. Detach Mode (Touch) - Conditionally Rendered -->
+      <!-- Detach Mode (Touch) -->
       <template v-if="showDetachModeControl">
         <button
           class="dock-btn"
@@ -327,7 +362,7 @@ onUnmounted(() => {
         <div class="divider"></div>
       </template>
 
-      <!-- 4. Edit History -->
+      <!-- History & Panels -->
       <button class="dock-btn" @click="$emit('undo')" title="Undo (Ctrl+Z)" type="button">
         <i class="fas fa-undo"></i>
       </button>
@@ -335,9 +370,6 @@ onUnmounted(() => {
         <i class="fas fa-redo"></i>
       </button>
 
-      <div class="divider"></div>
-
-      <!-- 5. Panels & Style -->
       <button
         class="dock-btn"
         :class="{ active: showCodePanel }"
@@ -362,7 +394,6 @@ onUnmounted(() => {
         <i class="fas fa-palette"></i>
       </button>
 
-      <!-- 6. Zoom & Layout -->
       <template v-if="showZoomControls">
         <div class="divider"></div>
         <button class="dock-btn" @click="$emit('zoom-in')" title="Zoom In" type="button">
@@ -378,6 +409,18 @@ onUnmounted(() => {
 
       <div class="divider"></div>
 
+      <!-- Widget-Only Export & Help Group -->
+      <template v-if="isWidget">
+        <button class="dock-btn" @click="$emit('nav', 'export')" title="Export">
+          <i class="fas fa-file-export"></i>
+        </button>
+        <button class="dock-btn" @click="$emit('nav', 'help')" title="Help & Dev Tools">
+          <i class="fas fa-question-circle"></i>
+        </button>
+        <div class="divider"></div>
+      </template>
+
+      <!-- Layout Dropdown -->
       <DropdownMenu class="dock-dropdown">
         <template #trigger>
           <button class="dock-btn" title="Graph Layout" type="button">
@@ -407,6 +450,8 @@ onUnmounted(() => {
   gap: 8px;
   cursor: grab;
   touch-action: none;
+  /* Hardware acceleration for smooth movement */
+  will-change: transform;
 }
 
 .toolbar-container:active {
@@ -420,6 +465,8 @@ onUnmounted(() => {
   padding: 6px 8px;
   border-radius: var(--radius-pill);
   transition: box-shadow 0.2s ease;
+  /* Prevent text selection during drag */
+  user-select: none;
 }
 
 .drag-handle {
@@ -557,25 +604,24 @@ onUnmounted(() => {
 
 @media (max-width: 768px) {
   .toolbar-container {
-    bottom: 16px !important; /* Force bottom */
+    bottom: 16px !important;
     left: 50% !important;
-    transform: translateX(-50%) !important;
-    top: auto !important; /* Reset drag position */
+    top: auto !important;
+    /* Maintain transform for centering on mobile initially, JS will override if dragged */
     width: 100%;
     max-width: 100vw;
   }
   .floating-dock {
     max-width: calc(100vw - 32px);
     overflow-x: auto;
-    justify-content: flex-start; /* Allow scrolling start */
+    justify-content: flex-start;
   }
-  /* Hide scrollbar */
   .floating-dock::-webkit-scrollbar {
     display: none;
   }
   .floating-dock {
-    -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
   .drag-handle {
     display: none;
