@@ -30,7 +30,7 @@ import { useGraphElements } from './composables/useGraphElements'
 import { useBugsCodeGenerator, generateStandaloneScript } from './composables/useBugsCodeGenerator'
 import { useGraphValidator } from './composables/useGraphValidator'
 import { useGraphInstance } from './composables/useGraphInstance'
-import type { NodeType, GraphElement, ExampleModel } from './types'
+import type { NodeType, GraphElement, ExampleModel, GraphNode } from './types'
 import type { Core, LayoutOptions } from 'cytoscape'
 
 const props = defineProps<{
@@ -105,7 +105,7 @@ onMounted(() => {
   uiStore.isLeftSidebarOpen = true
   uiStore.isRightSidebarOpen = true
   
-  graphStore.selectGraph(null as any)
+  graphStore.selectGraph(undefined as unknown as string)
   
   projectStore.loadProjects()
 
@@ -113,8 +113,8 @@ onMounted(() => {
     try {
       const state = JSON.parse(props.initialState)
       if (state.project) projectStore.importState(state.project)
-      if (state.graphs) state.graphs.forEach((g: any) => graphStore.graphContents.set(g.graphId, g))
-      if (state.data) state.data.forEach((d: any) => dataStore.updateGraphData(d.graphId, { content: d.content }))
+      if (state.graphs) state.graphs.forEach((g: { graphId: string; elements: GraphElement[]; lastLayout?: string; zoom?: number; pan?: { x: number; y: number } }) => graphStore.graphContents.set(g.graphId, g))
+      if (state.data) state.data.forEach((d: { graphId: string; content: string }) => dataStore.updateGraphData(d.graphId, { content: d.content }))
     } catch (e) {
       console.error('DoodleBUGS: Failed to parse state', e)
     }
@@ -200,7 +200,7 @@ const openExportModal = (format: 'png' | 'jpg' | 'svg') => {
   showExportModal.value = true
 }
 
-const handleConfirmExport = (options: any) => {
+const handleConfirmExport = (options: { bg: string; full: boolean; scale: number; quality?: number }) => {
   const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null
   if (!cy || !currentExportType.value) return
 
@@ -353,11 +353,11 @@ const compressAndEncode = async (jsonStr: string): Promise<string> => {
 const keyMap: Record<string, string> = { id: 'i', name: 'n', type: 't', nodeType: 'nt', position: 'p', parent: 'pa', distribution: 'di', equation: 'eq', observed: 'ob', indices: 'id', loopVariable: 'lv', loopRange: 'lr', param1: 'p1', param2: 'p2', param3: 'p3', source: 's', target: 'tg' }
 const nodeTypeMap: Record<string, number> = { stochastic: 1, deterministic: 2, constant: 3, observed: 4, plate: 5 }
 
-const minifyGraph = (elems: GraphElement[]): any[] => {
+const minifyGraph = (elems: GraphElement[]): Record<string, unknown>[] => {
   return elems.map((el) => {
-    const min: any = {}
+    const min: Record<string, unknown> = {}
     if (el.type === 'node') {
-      const node = el as any
+      const node = el as GraphNode
       min[keyMap.id] = node.id.replace('node_', '')
       min[keyMap.name] = node.name
       min[keyMap.type] = 0
@@ -441,12 +441,12 @@ const handleGenerateShareLink = async (options: { scope: 'current' | 'project' |
   await generateShareLink(payload)
 }
 
-const handleShareGraph = (graphId: string) => {
+const handleShareGraph = () => {
   shareUrl.value = ''
   showShareModal.value = true
 }
 
-const handleShareProjectUrl = (projectId: string) => {
+const handleShareProjectUrl = () => {
   shareUrl.value = ''
   showShareModal.value = true
 }
@@ -483,7 +483,7 @@ const {
 const pinnedGraphTitle = computed(() => projectStore.currentProject?.graphs.find(g => g.id === graphStore.currentGraphId)?.name || 'Graph')
 const isModelValid = computed(() => validationErrors.value.size === 0)
 
-const useDrag = (initialX: number, initialY: number, name: string) => {
+const useDrag = (initialX: number, initialY: number) => {
   const x = ref(initialX)
   const y = ref(initialY)
   const isDragging = ref(false)
@@ -514,8 +514,8 @@ const useDrag = (initialX: number, initialY: number, name: string) => {
   return { x, y, onMouseDown, style: computed(() => ({ left: `${x.value}px`, top: `${y.value}px` })) }
 }
 
-const leftDrag = useDrag(20, 20, 'left-sidebar')
-const rightDrag = useDrag(window.innerWidth - 340, 20, 'right-sidebar')
+const leftDrag = useDrag(20, 20)
+const rightDrag = useDrag(window.innerWidth - 340, 20)
 </script>
 
 <template>
@@ -554,9 +554,10 @@ const rightDrag = useDrag(window.innerWidth - 340, 20, 'right-sidebar')
       <div class="doodle-bugs-ui-overlay" :class="{ 'dark-mode': isDarkMode }">
         <Toast position="top-center" />
 
-        <div class="sidebar-wrapper left" :style="leftDrag.style.value">
-          <div class="drag-handle" @mousedown="leftDrag.onMouseDown" title="Drag to move sidebar">
-            <i class="fas fa-grip-vertical"></i>
+        <!-- Left Sidebar -->
+        <div v-if="isLeftSidebarOpen" class="sidebar-wrapper left" :style="leftDrag.style.value">
+          <div class="drag-handle left" @mousedown="leftDrag.onMouseDown" title="Drag to move">
+            <span></span><span></span><span></span>
           </div>
           <LeftSidebar
             v-show="isLeftSidebarOpen"
@@ -590,16 +591,12 @@ const rightDrag = useDrag(window.innerWidth - 340, 20, 'right-sidebar')
             @share-graph="handleShareGraph"
             @share-project-url="handleShareProjectUrl"
           />
-
-          <div v-if="!isLeftSidebarOpen" class="sidebar-trigger" @click="uiStore.toggleLeftSidebar">
-            <i class="fas fa-bars"></i>
-          </div>
+        </div>
+        <div v-else class="collapsed-sidebar-trigger left" @click="uiStore.toggleLeftSidebar" title="Open left sidebar">
+          <span></span><span></span><span></span>
         </div>
 
-        <div class="sidebar-wrapper right" :style="rightDrag.style.value">
-          <div class="drag-handle" @mousedown="rightDrag.onMouseDown" title="Drag to move sidebar">
-            <i class="fas fa-grip-vertical"></i>
-          </div>
+        <div v-if="isRightSidebarOpen" class="sidebar-wrapper right" :style="rightDrag.style.value">
           <RightSidebar
             v-show="isRightSidebarOpen"
             :selectedElement="selectedElement"
@@ -616,10 +613,12 @@ const rightDrag = useDrag(window.innerWidth - 340, 20, 'right-sidebar')
             @open-export-modal="openExportModal"
             @export-json="handleExportJson"
           />
-
-          <div v-if="!isRightSidebarOpen" class="sidebar-trigger" @click="uiStore.toggleRightSidebar">
-            <i class="fas fa-info-circle"></i>
+          <div class="drag-handle right" @mousedown="rightDrag.onMouseDown" title="Drag to move">
+            <span></span><span></span><span></span>
           </div>
+        </div>
+        <div v-else class="collapsed-sidebar-trigger right" @click="uiStore.toggleRightSidebar" title="Open right sidebar">
+          <span></span><span></span><span></span>
         </div>
 
         <FloatingBottomToolbar
@@ -903,20 +902,24 @@ const rightDrag = useDrag(window.innerWidth - 340, 20, 'right-sidebar')
 }
 
 .drag-handle {
-  width: 20px;
-  height: 60px;
-  background: var(--theme-bg-panel);
-  border: 1px solid var(--theme-border);
-  border-radius: 4px;
+  width: 12px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 3px;
+  padding: 8px 0;
   cursor: grab;
-  box-shadow: var(--shadow-floating);
-  color: var(--theme-text-secondary);
-  font-size: 0.9rem;
-  opacity: 0.7;
+  opacity: 0.5;
   transition: opacity 0.2s;
+}
+
+.drag-handle span {
+  display: block;
+  width: 4px;
+  height: 4px;
+  background: var(--theme-text-secondary);
+  border-radius: 50%;
 }
 
 .drag-handle:hover {
@@ -927,34 +930,64 @@ const rightDrag = useDrag(window.innerWidth - 340, 20, 'right-sidebar')
   cursor: grabbing;
 }
 
+.drag-handle.left {
+  margin-right: 4px;
+}
+
+.drag-handle.right {
+  margin-left: 4px;
+}
+
+.collapsed-sidebar-trigger {
+  position: fixed;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 32px;
+  height: 32px;
+  background: var(--theme-bg-panel);
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: var(--shadow-floating);
+  transition: background 0.2s, transform 0.2s;
+  z-index: 10001;
+}
+
+.collapsed-sidebar-trigger.left {
+  left: 16px;
+}
+
+.collapsed-sidebar-trigger.right {
+  right: 16px;
+}
+
+.collapsed-sidebar-trigger span {
+  display: block;
+  width: 16px;
+  height: 2px;
+  background: var(--theme-text-secondary);
+  border-radius: 1px;
+  transition: background 0.2s;
+}
+
+.collapsed-sidebar-trigger:hover {
+  background: var(--theme-bg-hover);
+}
+
+.collapsed-sidebar-trigger:hover span {
+  background: var(--theme-primary);
+}
+
 .sidebar-wrapper .floating-sidebar .sidebar-header {
   cursor: grab;
 }
 
 .sidebar-wrapper .floating-sidebar .sidebar-header:active {
   cursor: grabbing;
-}
-
-.sidebar-trigger {
-  width: 40px;
-  height: 40px;
-  background: var(--theme-bg-panel);
-  border: 1px solid var(--theme-border);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: var(--shadow-floating);
-  color: var(--theme-text-primary);
-  font-size: 1.2rem;
-  transition: transform 0.2s;
-  pointer-events: auto;
-}
-
-.sidebar-trigger:hover {
-  transform: scale(1.1);
-  color: var(--theme-primary);
 }
 
 .doodle-bugs-ui-overlay .toolbar-container {
