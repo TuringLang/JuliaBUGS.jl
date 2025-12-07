@@ -8,6 +8,8 @@
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview --host",
     "build-only": "vite build",
+    "build:lib": "run-p type-check \"build-lib-only {@}\" --",
+    "build-lib-only": "vite build --config vite.lib.config.ts",
     "type-check": "vue-tsc --build --force",
     "lint": "eslint . --ext .vue,.ts,.mts,.tsx",
     "lint:fix": "eslint . --ext .vue,.ts,.mts,.tsx --fix",

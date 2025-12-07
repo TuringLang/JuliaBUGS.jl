@@ -53,6 +53,30 @@ export const useProjectStore = defineStore('project', () => {
 
   const graphStore = useGraphStore()
 
+  const exportState = () => {
+    return {
+      projects: JSON.parse(JSON.stringify(projects.value)),
+      currentProjectId: currentProjectId.value
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const importState = (state: any) => {
+    if (!state) return
+
+    if (state.project) {
+      projects.value = state.project.projects || []
+      currentProjectId.value = state.project.currentProjectId || null
+    } else if (state.projects) {
+      projects.value = state.projects
+      currentProjectId.value = state.currentProjectId
+    }
+
+    if (!currentProjectId.value && projects.value.length > 0) {
+      currentProjectId.value = projects.value[0].id
+    }
+  }
+
   const createProject = (name: string) => {
     const newProject: Project = {
       id: `project_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -270,5 +294,7 @@ export const useProjectStore = defineStore('project', () => {
     getGraphsForProject,
     loadProjects,
     saveProjects,
+    exportState,
+    importState
   }
 })

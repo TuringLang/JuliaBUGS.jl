@@ -233,9 +233,16 @@ const updateGridStyle = () => {
 
     cyContainer.value.style.backgroundPosition = `${pan.x}px ${pan.y}px`
     cyContainer.value.style.backgroundSize = `${scaledSize}px ${scaledSize}px`
+    
+    if (props.gridStyle === 'dots') {
+      cyContainer.value.style.backgroundImage = `radial-gradient(circle, #4b5563 1.2px, transparent 1px)`
+    } else {
+      cyContainer.value.style.backgroundImage = `linear-gradient(to right, #d1d5db 1px, transparent 1px), linear-gradient(to bottom, #d1d5db 1px, transparent 1px)`
+    }
   } else {
     cyContainer.value.style.backgroundPosition = ''
     cyContainer.value.style.backgroundSize = ''
+    cyContainer.value.style.backgroundImage = ''
   }
 }
 
@@ -362,11 +369,13 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(() => {
       if (cy) {
         cy.resize()
-        if (cy.width() > 0 && cy.height() > 0) {
+        const containerWidth = cyContainer.value?.clientWidth || 0
+        const containerHeight = cyContainer.value?.clientHeight || 0
+        
+        if (containerWidth > 0 && containerHeight > 0) {
           if (!isGraphReady.value) {
             isGraphReady.value = true
 
-            // Populate graph and set initial viewport
             syncGraphWithProps(props.elements, props.validationErrors)
 
             if (props.initialViewport) {
@@ -384,7 +393,6 @@ onMounted(() => {
 
             updateGridStyle()
 
-            // Delay visibility slightly to ensure the canvas has painted the new state
             requestAnimationFrame(() => {
               isGraphVisible.value = true
             })
@@ -436,6 +444,15 @@ watch(
 )
 
 watch(
+  () => props.gridStyle,
+  () => {
+    if (props.isGridEnabled) {
+      updateGridStyle()
+    }
+  }
+)
+
+watch(
   [() => props.elements, () => props.validationErrors],
   ([newElements, newErrors]) => {
     // Only sync if graph is ready (container sized and initialized)
@@ -472,6 +489,12 @@ watch(
       'graph-ready': isGraphVisible,
     }"
     :style="{
+      position: 'relative',
+      width: '100%',
+      height: '100%',
+      minHeight: '200px',
+      backgroundColor: '#f3f4f6',
+      opacity: isGraphVisible ? 1 : 0,
       transition: isGraphVisible ? 'opacity 0.3s ease-in-out' : 'none',
     }"
   ></div>
@@ -480,19 +503,15 @@ watch(
 <style scoped>
 .cytoscape-container {
   flex-grow: 1;
-  background-color: var(--theme-bg-canvas);
-  position: relative;
+  background-color: var(--theme-bg-canvas, #f3f4f6);
+  position: relative !important;
   overflow: hidden;
   cursor: grab;
-  opacity: 0;
   background-position: 0 0;
   background-repeat: repeat;
   width: 100%;
   height: 100%;
-}
-
-.cytoscape-container.graph-ready {
-  opacity: 1;
+  min-height: 200px;
 }
 
 .cytoscape-container.mode-add-node {
@@ -522,10 +541,9 @@ watch(
 .cytoscape-container.grid-background.grid-dots {
   background-image: radial-gradient(
     circle,
-    var(--theme-text-secondary) 1.2px,
+    var(--theme-text-secondary, #4b5563) 1.2px,
     transparent 1px
   ) !important;
-  opacity: 0.8;
 }
 
 html.dark-mode .cytoscape-container.grid-background.grid-dots {
@@ -538,7 +556,7 @@ html.dark-mode .cytoscape-container.grid-background.grid-dots {
 
 .cytoscape-container.grid-background.grid-lines {
   background-image:
-    linear-gradient(to right, var(--theme-grid-line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--theme-grid-line) 1px, transparent 1px) !important;
+    linear-gradient(to right, var(--theme-grid-line, #d1d5db) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--theme-grid-line, #d1d5db) 1px, transparent 1px) !important;
 }
 </style>
