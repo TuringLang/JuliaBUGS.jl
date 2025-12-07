@@ -56,7 +56,7 @@ export const useProjectStore = defineStore('project', () => {
   const exportState = () => {
     return {
       projects: JSON.parse(JSON.stringify(projects.value)),
-      currentProjectId: currentProjectId.value
+      currentProjectId: currentProjectId.value,
     }
   }
 
@@ -295,6 +295,6 @@ export const useProjectStore = defineStore('project', () => {
     loadProjects,
     saveProjects,
     exportState,
-    importState
+    importState,
   }
 })

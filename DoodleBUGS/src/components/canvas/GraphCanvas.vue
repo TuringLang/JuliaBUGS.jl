@@ -233,7 +233,7 @@ const updateGridStyle = () => {
 
     cyContainer.value.style.backgroundPosition = `${pan.x}px ${pan.y}px`
     cyContainer.value.style.backgroundSize = `${scaledSize}px ${scaledSize}px`
-    
+
     if (props.gridStyle === 'dots') {
       cyContainer.value.style.backgroundImage = `radial-gradient(circle, #4b5563 1.2px, transparent 1px)`
     } else {
@@ -371,7 +371,7 @@ onMounted(() => {
         cy.resize()
         const containerWidth = cyContainer.value?.clientWidth || 0
         const containerHeight = cyContainer.value?.clientHeight || 0
-        
+
         if (containerWidth > 0 && containerHeight > 0) {
           if (!isGraphReady.value) {
             isGraphReady.value = true

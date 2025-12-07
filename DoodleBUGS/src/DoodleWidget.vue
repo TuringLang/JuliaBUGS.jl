@@ -38,8 +38,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'state-update', payload: string): void 
-  (e: 'code-update', payload: string): void 
+  (e: 'state-update', payload: string): void
+  (e: 'code-update', payload: string): void
 }>()
 
 const projectStore = useProjectStore()
@@ -78,24 +78,24 @@ const { getCyInstance, getUndoRedoInstance } = useGraphInstance()
 
 const initGraph = () => {
   if (projectStore.projects.length === 0) {
-    projectStore.createProject("Default Project")
+    projectStore.createProject('Default Project')
   }
-  
+
   if (!projectStore.currentProjectId && projectStore.projects.length > 0) {
     projectStore.selectProject(projectStore.projects[0].id)
   }
-  
+
   const proj = projectStore.currentProject
   if (!proj) return
-  
+
   if (proj.graphs.length === 0) {
-    projectStore.addGraphToProject(proj.id, "Model 1")
+    projectStore.addGraphToProject(proj.id, 'Model 1')
   }
-  
+
   if (proj.graphs.length > 0 && !graphStore.currentGraphId) {
     graphStore.selectGraph(proj.graphs[0].id)
   }
-  
+
   if (graphStore.currentGraphId && !graphStore.graphContents.has(graphStore.currentGraphId)) {
     graphStore.createNewGraphContent(graphStore.currentGraphId)
   }
@@ -104,22 +104,34 @@ const initGraph = () => {
 onMounted(() => {
   uiStore.isLeftSidebarOpen = true
   uiStore.isRightSidebarOpen = true
-  
+
   graphStore.selectGraph(undefined as unknown as string)
-  
+
   projectStore.loadProjects()
 
   if (props.initialState) {
     try {
       const state = JSON.parse(props.initialState)
       if (state.project) projectStore.importState(state.project)
-      if (state.graphs) state.graphs.forEach((g: { graphId: string; elements: GraphElement[]; lastLayout?: string; zoom?: number; pan?: { x: number; y: number } }) => graphStore.graphContents.set(g.graphId, g))
-      if (state.data) state.data.forEach((d: { graphId: string; content: string }) => dataStore.updateGraphData(d.graphId, { content: d.content }))
+      if (state.graphs)
+        state.graphs.forEach(
+          (g: {
+            graphId: string
+            elements: GraphElement[]
+            lastLayout?: string
+            zoom?: number
+            pan?: { x: number; y: number }
+          }) => graphStore.graphContents.set(g.graphId, g)
+        )
+      if (state.data)
+        state.data.forEach((d: { graphId: string; content: string }) =>
+          dataStore.updateGraphData(d.graphId, { content: d.content })
+        )
     } catch (e) {
       console.error('DoodleBUGS: Failed to parse state', e)
     }
-  } 
-  
+  }
+
   initGraph()
   isInitialized.value = true
   validateGraph()
@@ -136,10 +148,10 @@ watch(
     const fullState = {
       project: projectStore.exportState(),
       graphs: Array.from(graphStore.graphContents.entries()).map(([, v]) => v),
-      data: Array.from(graphStore.graphContents.keys()).map(gid => ({
-          graphId: gid,
-          content: dataStore.getGraphData(gid).content
-      }))
+      data: Array.from(graphStore.graphContents.keys()).map((gid) => ({
+        graphId: gid,
+        content: dataStore.getGraphData(gid).content,
+      })),
     }
     emit('state-update', JSON.stringify(fullState))
   },
@@ -150,14 +162,34 @@ watch(generatedCode, (code) => {
   emit('code-update', code)
 })
 
-const toggleCodePanel = () => { showCodePanel.value = !showCodePanel.value }
-const toggleDataPanel = () => { showDataPanel.value = !showDataPanel.value }
+const toggleCodePanel = () => {
+  showCodePanel.value = !showCodePanel.value
+}
+const toggleDataPanel = () => {
+  showDataPanel.value = !showDataPanel.value
+}
 
-const handleUndo = () => { if (graphStore.currentGraphId) getUndoRedoInstance(graphStore.currentGraphId)?.undo() }
-const handleRedo = () => { if (graphStore.currentGraphId) getUndoRedoInstance(graphStore.currentGraphId)?.redo() }
-const handleZoomIn = () => { if (graphStore.currentGraphId) getCyInstance(graphStore.currentGraphId)?.zoom(getCyInstance(graphStore.currentGraphId)!.zoom() * 1.2) }
-const handleZoomOut = () => { if (graphStore.currentGraphId) getCyInstance(graphStore.currentGraphId)?.zoom(getCyInstance(graphStore.currentGraphId)!.zoom() * 0.8) }
-const handleFit = () => { if (graphStore.currentGraphId) getCyInstance(graphStore.currentGraphId)?.fit(undefined, 50) }
+const handleUndo = () => {
+  if (graphStore.currentGraphId) getUndoRedoInstance(graphStore.currentGraphId)?.undo()
+}
+const handleRedo = () => {
+  if (graphStore.currentGraphId) getUndoRedoInstance(graphStore.currentGraphId)?.redo()
+}
+const handleZoomIn = () => {
+  if (graphStore.currentGraphId)
+    getCyInstance(graphStore.currentGraphId)?.zoom(
+      getCyInstance(graphStore.currentGraphId)!.zoom() * 1.2
+    )
+}
+const handleZoomOut = () => {
+  if (graphStore.currentGraphId)
+    getCyInstance(graphStore.currentGraphId)?.zoom(
+      getCyInstance(graphStore.currentGraphId)!.zoom() * 0.8
+    )
+}
+const handleFit = () => {
+  if (graphStore.currentGraphId) getCyInstance(graphStore.currentGraphId)?.fit(undefined, 50)
+}
 
 const smartFit = (cy: Core, animate: boolean = true) => {
   const eles = cy.elements()
@@ -171,7 +203,10 @@ const smartFit = (cy: Core, animate: boolean = true) => {
   const zoomY = (h - 2 * padding) / bb.h
   let targetZoom = Math.min(zoomX, zoomY)
   targetZoom = Math.min(targetZoom, 0.8)
-  const targetPan = { x: (w - targetZoom * (bb.x1 + bb.x2)) / 2, y: (h - targetZoom * (bb.y1 + bb.y2)) / 2 }
+  const targetPan = {
+    x: (w - targetZoom * (bb.x1 + bb.x2)) / 2,
+    y: (h - targetZoom * (bb.y1 + bb.y2)) / 2,
+  }
   if (animate) {
     cy.animate({ zoom: targetZoom, pan: targetPan, duration: 500, easing: 'ease-in-out-cubic' })
   } else {
@@ -183,10 +218,43 @@ const handleGraphLayout = (layoutName: string) => {
   const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null
   if (!cy) return
   const layoutOptionsMap: Record<string, LayoutOptions> = {
-    dagre: { name: 'dagre', animate: true, animationDuration: 500, fit: false, padding: 50 } as unknown as LayoutOptions,
-    fcose: { name: 'fcose', animate: true, animationDuration: 500, fit: false, padding: 50, randomize: false, quality: 'proof' } as unknown as LayoutOptions,
-    cola: { name: 'cola', animate: true, fit: false, padding: 50, refresh: 1, avoidOverlap: true, infinite: false, centerGraph: true, flow: { axis: 'y', minSeparation: 30 }, handleDisconnected: false, randomize: false } as unknown as LayoutOptions,
-    klay: { name: 'klay', animate: true, animationDuration: 500, fit: false, padding: 50, klay: { direction: 'RIGHT', edgeRouting: 'SPLINES', nodePlacement: 'LINEAR_SEGMENTS' } } as unknown as LayoutOptions,
+    dagre: {
+      name: 'dagre',
+      animate: true,
+      animationDuration: 500,
+      fit: false,
+      padding: 50,
+    } as unknown as LayoutOptions,
+    fcose: {
+      name: 'fcose',
+      animate: true,
+      animationDuration: 500,
+      fit: false,
+      padding: 50,
+      randomize: false,
+      quality: 'proof',
+    } as unknown as LayoutOptions,
+    cola: {
+      name: 'cola',
+      animate: true,
+      fit: false,
+      padding: 50,
+      refresh: 1,
+      avoidOverlap: true,
+      infinite: false,
+      centerGraph: true,
+      flow: { axis: 'y', minSeparation: 30 },
+      handleDisconnected: false,
+      randomize: false,
+    } as unknown as LayoutOptions,
+    klay: {
+      name: 'klay',
+      animate: true,
+      animationDuration: 500,
+      fit: false,
+      padding: 50,
+      klay: { direction: 'RIGHT', edgeRouting: 'SPLINES', nodePlacement: 'LINEAR_SEGMENTS' },
+    } as unknown as LayoutOptions,
     preset: { name: 'preset', fit: false, padding: 50 } as unknown as LayoutOptions,
   }
   const options = layoutOptionsMap[layoutName] || layoutOptionsMap.preset
@@ -200,20 +268,29 @@ const openExportModal = (format: 'png' | 'jpg' | 'svg') => {
   showExportModal.value = true
 }
 
-const handleConfirmExport = (options: { bg: string; full: boolean; scale: number; quality?: number }) => {
+const handleConfirmExport = (options: {
+  bg: string
+  full: boolean
+  scale: number
+  quality?: number
+}) => {
   const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null
   if (!cy || !currentExportType.value) return
 
   try {
     let blob: Blob
     const baseOptions = { bg: options.bg, full: options.full, scale: options.scale }
-    
+
     if (currentExportType.value === 'svg') {
       blob = new Blob([cy.svg(baseOptions)], { type: 'image/svg+xml;charset=utf-8' })
     } else if (currentExportType.value === 'png') {
       blob = cy.png({ ...baseOptions, output: 'blob' }) as unknown as Blob
     } else {
-      blob = cy.jpg({ ...baseOptions, quality: options.quality || 0.9, output: 'blob' }) as unknown as Blob
+      blob = cy.jpg({
+        ...baseOptions,
+        quality: options.quality || 0.9,
+        output: 'blob',
+      }) as unknown as Blob
     }
 
     const url = URL.createObjectURL(blob)
@@ -225,7 +302,7 @@ const handleConfirmExport = (options: { bg: string; full: boolean; scale: number
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
   } catch (err) {
-    console.error("Export failed", err)
+    console.error('Export failed', err)
   }
 }
 
@@ -296,7 +373,10 @@ const handleNewGraph = () => {
 
 const createNewGraph = () => {
   if (projectStore.currentProjectId && newGraphName.value.trim()) {
-    const newGraph = projectStore.addGraphToProject(projectStore.currentProjectId, newGraphName.value.trim())
+    const newGraph = projectStore.addGraphToProject(
+      projectStore.currentProjectId,
+      newGraphName.value.trim()
+    )
     if (newGraph) {
       graphStore.selectGraph(newGraph.id)
     }
@@ -310,10 +390,14 @@ const handleLoadExample = async (exampleKey: string) => {
   try {
     const baseUrl = import.meta.env.BASE_URL
     const modelResponse = await fetch(`${baseUrl}examples/${exampleKey}/model.json`)
-    if (!modelResponse.ok) throw new Error(`Could not fetch example model: ${modelResponse.statusText}`)
-    
+    if (!modelResponse.ok)
+      throw new Error(`Could not fetch example model: ${modelResponse.statusText}`)
+
     const modelData: ExampleModel = await modelResponse.json()
-    const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId, modelData.name)
+    const newGraphMeta = projectStore.addGraphToProject(
+      projectStore.currentProjectId,
+      modelData.name
+    )
     if (!newGraphMeta) return
 
     graphStore.updateGraphElements(newGraphMeta.id, modelData.graphJSON)
@@ -322,7 +406,11 @@ const handleLoadExample = async (exampleKey: string) => {
     const jsonDataResponse = await fetch(`${baseUrl}examples/${exampleKey}/data.json`)
     if (jsonDataResponse.ok) {
       const fullData = await jsonDataResponse.json()
-      dataStore.dataContent = JSON.stringify({ data: fullData.data || {}, inits: fullData.inits || {} }, null, 2)
+      dataStore.dataContent = JSON.stringify(
+        { data: fullData.data || {}, inits: fullData.inits || {} },
+        null,
+        2
+      )
     }
     dataStore.updateGraphData(newGraphMeta.id, dataStore.getGraphData(newGraphMeta.id))
     graphStore.selectGraph(newGraphMeta.id)
@@ -350,8 +438,32 @@ const compressAndEncode = async (jsonStr: string): Promise<string> => {
   }
 }
 
-const keyMap: Record<string, string> = { id: 'i', name: 'n', type: 't', nodeType: 'nt', position: 'p', parent: 'pa', distribution: 'di', equation: 'eq', observed: 'ob', indices: 'id', loopVariable: 'lv', loopRange: 'lr', param1: 'p1', param2: 'p2', param3: 'p3', source: 's', target: 'tg' }
-const nodeTypeMap: Record<string, number> = { stochastic: 1, deterministic: 2, constant: 3, observed: 4, plate: 5 }
+const keyMap: Record<string, string> = {
+  id: 'i',
+  name: 'n',
+  type: 't',
+  nodeType: 'nt',
+  position: 'p',
+  parent: 'pa',
+  distribution: 'di',
+  equation: 'eq',
+  observed: 'ob',
+  indices: 'id',
+  loopVariable: 'lv',
+  loopRange: 'lr',
+  param1: 'p1',
+  param2: 'p2',
+  param3: 'p3',
+  source: 's',
+  target: 'tg',
+}
+const nodeTypeMap: Record<string, number> = {
+  stochastic: 1,
+  deterministic: 2,
+  constant: 3,
+  observed: 4,
+  plate: 5,
+}
 
 const minifyGraph = (elems: GraphElement[]): Record<string, unknown>[] => {
   return elems.map((el) => {
@@ -399,9 +511,12 @@ const handleShare = () => {
   showShareModal.value = true
 }
 
-const handleGenerateShareLink = async (options: { scope: 'current' | 'project' | 'custom'; selectedGraphIds?: string[] }) => {
+const handleGenerateShareLink = async (options: {
+  scope: 'current' | 'project' | 'custom'
+  selectedGraphIds?: string[]
+}) => {
   if (!projectStore.currentProject) return
-  
+
   const getGraphDataForShare = (graphId: string) => {
     let graphElements: GraphElement[] = []
     let dataContent = '{}'
@@ -416,8 +531,14 @@ const handleGenerateShareLink = async (options: { scope: 'current' | 'project' |
     } else {
       const storedGraph = localStorage.getItem(`doodlebugs-graph-${graphId}`)
       const storedData = localStorage.getItem(`doodlebugs-data-${graphId}`)
-      if (storedGraph) try { graphElements = JSON.parse(storedGraph).elements } catch {}
-      if (storedData) try { dataContent = JSON.parse(storedData).content || '{}' } catch {}
+      if (storedGraph)
+        try {
+          graphElements = JSON.parse(storedGraph).elements
+        } catch {}
+      if (storedData)
+        try {
+          dataContent = JSON.parse(storedData).content || '{}'
+        } catch {}
     }
     return { name, elements: graphElements, dataContent }
   }
@@ -429,9 +550,10 @@ const handleGenerateShareLink = async (options: { scope: 'current' | 'project' |
     const { name, elements: graphElements, dataContent } = getGraphDataForShare(targetId)
     payload = { v: 2, n: name, e: minifyGraph(graphElements), d: dataContent }
   } else {
-    const targetIds = options.scope === 'project' 
-      ? projectStore.currentProject.graphs.map((g) => g.id) 
-      : options.selectedGraphIds || []
+    const targetIds =
+      options.scope === 'project'
+        ? projectStore.currentProject.graphs.map((g) => g.id)
+        : options.selectedGraphIds || []
     const graphsData = targetIds.map((id) => {
       const { name, elements: graphElements, dataContent } = getGraphDataForShare(id)
       return { n: name, e: minifyGraph(graphElements), d: dataContent }
@@ -454,9 +576,11 @@ const handleShareProjectUrl = () => {
 const handleExportJson = () => {
   if (!graphStore.currentGraphId) return
   const data = {
-    name: projectStore.currentProject?.graphs.find(g => g.id === graphStore.currentGraphId)?.name || 'Graph',
+    name:
+      projectStore.currentProject?.graphs.find((g) => g.id === graphStore.currentGraphId)?.name ||
+      'Graph',
     elements: graphStore.currentGraphElements,
-    data: dataStore.dataContent
+    data: dataStore.dataContent,
   }
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -470,17 +594,29 @@ const handleExportJson = () => {
 }
 
 const handleSelectNodeFromModal = (nodeId: string) => {
-  const el = elements.value.find(e => e.id === nodeId)
+  const el = elements.value.find((e) => e.id === nodeId)
   if (el) graphStore.setSelectedElement(el)
 }
 
-const { 
-  isLeftSidebarOpen, isRightSidebarOpen, isGridEnabled, gridSize, 
-  showZoomControls, showDebugPanel, activeLeftAccordionTabs, isDetachModeActive,
-  showDetachModeControl, isDarkMode, canvasGridStyle 
+const {
+  isLeftSidebarOpen,
+  isRightSidebarOpen,
+  isGridEnabled,
+  gridSize,
+  showZoomControls,
+  showDebugPanel,
+  activeLeftAccordionTabs,
+  isDetachModeActive,
+  showDetachModeControl,
+  isDarkMode,
+  canvasGridStyle,
 } = storeToRefs(uiStore)
 
-const pinnedGraphTitle = computed(() => projectStore.currentProject?.graphs.find(g => g.id === graphStore.currentGraphId)?.name || 'Graph')
+const pinnedGraphTitle = computed(
+  () =>
+    projectStore.currentProject?.graphs.find((g) => g.id === graphStore.currentGraphId)?.name ||
+    'Graph'
+)
 const isModelValid = computed(() => validationErrors.value.size === 0)
 
 const useDrag = (initialX: number, initialY: number) => {
@@ -491,7 +627,12 @@ const useDrag = (initialX: number, initialY: number) => {
   const startY = ref(0)
 
   const onMouseDown = (e: MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button, input, select, textarea, .p-accordion, .p-toggleswitch')) return
+    if (
+      (e.target as HTMLElement).closest(
+        'button, input, select, textarea, .p-accordion, .p-toggleswitch'
+      )
+    )
+      return
     isDragging.value = true
     startX.value = e.clientX - x.value
     startY.value = e.clientY - y.value
@@ -511,7 +652,12 @@ const useDrag = (initialX: number, initialY: number) => {
     window.removeEventListener('mouseup', onMouseUp)
   }
 
-  return { x, y, onMouseDown, style: computed(() => ({ left: `${x.value}px`, top: `${y.value}px` })) }
+  return {
+    x,
+    y,
+    onMouseDown,
+    style: computed(() => ({ left: `${x.value}px`, top: `${y.value}px` })),
+  }
 }
 
 const leftDrag = useDrag(20, 20)
@@ -519,9 +665,15 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
 </script>
 
 <template>
-  <div class="doodle-widget-root" :class="{ 'dark-mode': isDarkMode }" style="width: 100%; height: 100%; position: relative; overflow: hidden;">
-    
-    <div class="canvas-layer" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%;">
+  <div
+    class="doodle-widget-root"
+    :class="{ 'dark-mode': isDarkMode }"
+    style="width: 100%; height: 100%; position: relative; overflow: hidden"
+  >
+    <div
+      class="canvas-layer"
+      style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%"
+    >
       <GraphEditor
         v-if="isInitialized && graphStore.currentGraphId"
         :key="graphStore.currentGraphId"
@@ -538,7 +690,9 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
         @update:current-node-type="currentNodeType = $event"
         @element-selected="graphStore.setSelectedElement"
         @layout-updated="(name) => graphStore.updateGraphLayout(graphStore.currentGraphId!, name)"
-        @viewport-changed="(v) => graphStore.updateGraphViewport(graphStore.currentGraphId!, v.zoom, v.pan)"
+        @viewport-changed="
+          (v) => graphStore.updateGraphViewport(graphStore.currentGraphId!, v.zoom, v.pan)
+        "
         @update:is-grid-enabled="isGridEnabled = $event"
         @update:grid-size="gridSize = $event"
       />
@@ -592,7 +746,12 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
             @share-project-url="handleShareProjectUrl"
           />
         </div>
-        <div v-else class="collapsed-sidebar-trigger left" @click="uiStore.toggleLeftSidebar" title="Open left sidebar">
+        <div
+          v-else
+          class="collapsed-sidebar-trigger left"
+          @click="uiStore.toggleLeftSidebar"
+          title="Open left sidebar"
+        >
           <span></span><span></span><span></span>
         </div>
 
@@ -617,7 +776,12 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
             <span></span><span></span><span></span>
           </div>
         </div>
-        <div v-else class="collapsed-sidebar-trigger right" @click="uiStore.toggleRightSidebar" title="Open right sidebar">
+        <div
+          v-else
+          class="collapsed-sidebar-trigger right"
+          @click="uiStore.toggleRightSidebar"
+          title="Open right sidebar"
+        >
           <span></span><span></span><span></span>
         </div>
 
@@ -670,23 +834,23 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
 
         <AboutModal :is-open="showAboutModal" @close="showAboutModal = false" />
         <FaqModal :is-open="showFaqModal" @close="showFaqModal = false" />
-        <ExportModal 
-          :is-open="showExportModal" 
-          :export-type="currentExportType" 
+        <ExportModal
+          :is-open="showExportModal"
+          :export-type="currentExportType"
           @close="showExportModal = false"
-          @confirm-export="handleConfirmExport" 
+          @confirm-export="handleConfirmExport"
         />
         <GraphStyleModal :is-open="showStyleModal" @close="showStyleModal = false" />
-        <ShareModal 
-          :is-open="showShareModal" 
-          :url="shareUrl" 
-          :project="projectStore.currentProject" 
+        <ShareModal
+          :is-open="showShareModal"
+          :url="shareUrl"
+          :project="projectStore.currentProject"
           :current-graph-id="graphStore.currentGraphId"
-          @close="showShareModal = false" 
+          @close="showShareModal = false"
           @generate="handleGenerateShareLink"
         />
-        <ValidationIssuesModal 
-          :is-open="showValidationModal" 
+        <ValidationIssuesModal
+          :is-open="showValidationModal"
           :validation-errors="validationErrors"
           :elements="elements"
           @close="showValidationModal = false"
@@ -695,36 +859,48 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
         <BaseModal :is-open="showScriptSettingsModal" @close="showScriptSettingsModal = false">
           <template #header><h3>Script Settings</h3></template>
           <template #body><ScriptSettingsPanel /></template>
-          <template #footer><BaseButton @click="showScriptSettingsModal = false">Done</BaseButton></template>
+          <template #footer
+            ><BaseButton @click="showScriptSettingsModal = false">Done</BaseButton></template
+          >
         </BaseModal>
-        
+
         <BaseModal :is-open="showNewProjectModal" @close="showNewProjectModal = false">
           <template #header><h3>Create New Project</h3></template>
           <template #body>
             <div class="modal-form-row">
               <label>Project Name:</label>
-              <BaseInput v-model="newProjectName" placeholder="Enter project name" @keyup.enter="createNewProject" />
+              <BaseInput
+                v-model="newProjectName"
+                placeholder="Enter project name"
+                @keyup.enter="createNewProject"
+              />
             </div>
           </template>
-          <template #footer><BaseButton @click="createNewProject" type="primary">Create</BaseButton></template>
+          <template #footer
+            ><BaseButton @click="createNewProject" type="primary">Create</BaseButton></template
+          >
         </BaseModal>
-        
+
         <BaseModal :is-open="showNewGraphModal" @close="showNewGraphModal = false">
           <template #header><h3>Create New Graph</h3></template>
           <template #body>
             <div class="modal-form-row">
               <label>Graph Name:</label>
-              <BaseInput v-model="newGraphName" placeholder="Enter graph name" @keyup.enter="createNewGraph" />
+              <BaseInput
+                v-model="newGraphName"
+                placeholder="Enter graph name"
+                @keyup.enter="createNewGraph"
+              />
             </div>
           </template>
-          <template #footer><BaseButton @click="createNewGraph" type="primary">Create</BaseButton></template>
+          <template #footer
+            ><BaseButton @click="createNewGraph" type="primary">Create</BaseButton></template
+          >
         </BaseModal>
-        
-        <DebugPanel v-if="showDebugPanel" @close="showDebugPanel = false" />
 
+        <DebugPanel v-if="showDebugPanel" @close="showDebugPanel = false" />
       </div>
     </Teleport>
-
   </div>
 </template>
 
@@ -738,7 +914,7 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
   z-index: 0;
   display: flex;
   flex-direction: column;
-  
+
   --theme-bg-canvas: #f3f4f6;
   --theme-grid-line: #d1d5db;
   --theme-bg-panel: #ffffff;
@@ -766,14 +942,19 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
 
 .doodle-widget-root .canvas-layer {
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  width: 100%; height: 100%;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .doodle-widget-root .graph-editor-container {
   display: flex;
   flex-direction: column;
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   position: relative;
 }
@@ -782,7 +963,8 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
 .cytoscape-container {
   flex: 1;
   display: block;
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100%;
   min-height: 200px;
   position: relative !important;
   background-color: var(--theme-bg-canvas);
@@ -814,7 +996,8 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
 }
 
 .doodle-widget-root .empty-placeholder {
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -842,12 +1025,15 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
 <style>
 .doodle-bugs-ui-overlay {
   position: fixed;
-  top: 0; left: 0;
-  width: 100vw; height: 100vh;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   z-index: 9999;
   pointer-events: none;
-  
-  --font-family-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  --font-family-sans:
+    -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --theme-bg-canvas: #f3f4f6;
   --theme-bg-panel: #ffffff;
   --theme-bg-panel-transparent: rgba(255, 255, 255, 0.95);
@@ -953,7 +1139,9 @@ const rightDrag = useDrag(window.innerWidth - 340, 20)
   border-radius: 6px;
   cursor: pointer;
   box-shadow: var(--shadow-floating);
-  transition: background 0.2s, transform 0.2s;
+  transition:
+    background 0.2s,
+    transform 0.2s;
   z-index: 10001;
 }
 

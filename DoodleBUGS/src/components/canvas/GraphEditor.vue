@@ -362,7 +362,17 @@ watch(
 </script>
 
 <template>
-  <div class="graph-editor-container" style="display: flex; flex-direction: column; position: relative; width: 100%; height: 100%; overflow: hidden;">
+  <div
+    class="graph-editor-container"
+    style="
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    "
+  >
     <GraphCanvas
       :graph-id="props.graphId"
       :elements="props.elements"

@@ -8,10 +8,10 @@ export default defineConfig({
     vue({
       template: {
         compilerOptions: {
-          isCustomElement: (tag) => tag === 'doodle-bugs'
-        }
-      }
-    })
+          isCustomElement: (tag) => tag === 'doodle-bugs',
+        },
+      },
+    }),
   ],
   resolve: {
     alias: {
@@ -19,27 +19,27 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'dist-lib', 
+    outDir: 'dist-lib',
     lib: {
       entry: './src/main.ce.ts',
       name: 'DoodleBugs',
-      fileName: 'doodlebugs'
+      fileName: 'doodlebugs',
     },
     rollupOptions: {
       output: {
         globals: {
-          vue: 'Vue'
+          vue: 'Vue',
         },
         assetFileNames: (assetInfo) => {
-          if (assetInfo.name === 'style.css') return 'doodlebugs.css';
-          return assetInfo.name || '';
-        }
-      }
+          if (assetInfo.name === 'style.css') return 'doodlebugs.css'
+          return assetInfo.name || ''
+        },
+      },
     },
     emptyOutDir: true,
-    copyPublicDir: false
+    copyPublicDir: false,
   },
   define: {
-    'process.env': {} 
-  }
+    'process.env': {},
+  },
 })
