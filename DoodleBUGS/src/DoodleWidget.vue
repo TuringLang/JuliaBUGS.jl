@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed, reactive } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, reactive, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import Toast from 'primevue/toast'
 
@@ -52,12 +52,18 @@ const uiStore = useUiStore()
 const dataStore = useDataStore()
 const scriptStore = useScriptStore()
 
-// Ensure sidebars are closed by default for the widget (before any rendering)
+// Ensure sidebars are closed by default for the widget
 uiStore.isLeftSidebarOpen = false
 uiStore.isRightSidebarOpen = false
 
 // Widget-specific flag to prevent sidebar flash during initialization
 const widgetInitialized = ref(false)
+
+// Widget Viewport & Edit Mode State
+const widgetRoot = ref<HTMLElement | null>(null)
+const isWidgetInView = ref(true) // Default to true to prevent initial flash
+const isEditMode = ref(false)
+let observer: IntersectionObserver | null = null
 
 const currentMode = ref('select')
 const currentNodeType = ref<NodeType>('stochastic')
@@ -75,7 +81,7 @@ const showNewGraphModal = ref(false)
 const newProjectName = ref('')
 const newGraphName = ref('')
 
-// Panel positions and sizes (will be loaded from localStorage or use defaults)
+// Panel positions and sizes
 const codePanelPos = reactive({ x: 0, y: 0 })
 const codePanelSize = reactive({ width: 400, height: 300 })
 const dataPanelPos = reactive({ x: 0, y: 0 })
@@ -85,10 +91,10 @@ const dataPanelSize = reactive({ width: 400, height: 300 })
 const graphImportInput = ref<HTMLInputElement | null>(null)
 const isDragOver = ref(false)
 
-// UI Dragging State (for performance optimization)
+// UI Dragging State
 const isDraggingUI = ref(false)
 
-// Computed window width for responsive positioning
+// Computed window width
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1920)
 
 // Flag to prevent premature canvas rendering
@@ -127,6 +133,8 @@ const saveWidgetUIState = () => {
       height: dataPanelSize.height,
     },
     currentGraphId: graphStore.currentGraphId || undefined,
+    // Persist edit mode
+    editMode: isEditMode.value,
   })
 }
 
@@ -139,21 +147,21 @@ const { smartFit, applyLayoutWithFit } = useGraphLayout()
 const { shareUrl, minifyGraph, generateShareLink } = useShareExport()
 const { importedGraphData, processGraphFile, clearImportedData } = useImportExport()
 
-// CSS for teleported widget content - injected into document head
-// This is needed because the widget's shadow DOM styles don't reach teleported elements
+// CSS for teleported widget content
+// NOTE: Z-index for PrimeVue components (popovers, dropdowns) must be > sidebar wrapper (2200)
+// We set them to 3000 to ensure they appear on top.
 const WIDGET_STYLES_ID = 'doodlebugs-widget-teleport-styles'
 
 const widgetTeleportCSS = `
 /* DoodleBUGS Widget - Teleported Content Styles */
-/* These styles override host page styles to maintain widget appearance */
-
-/* Base styles for all teleported containers - prevents host page style leakage */
 .db-ui-overlay,
 .db-sidebar-wrapper,
 .db-floating-panel,
 .p-dialog,
 .p-popover,
-.p-toast {
+.p-toast,
+.p-select-overlay,
+.p-tooltip {
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   font-size: 12px;
   line-height: 1.5;
@@ -163,22 +171,29 @@ const widgetTeleportCSS = `
   box-sizing: border-box;
 }
 
-/* UI Overlay positioning */
 .db-ui-overlay {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 10;
+  z-index: 2000;
   pointer-events: none;
 }
 
-/* Sidebar wrapper positioning */
+.db-ui-overlay > * {
+  pointer-events: auto;
+}
+
+/* Specifically target the toolbar container to ensure it is clickable */
+.db-ui-overlay .db-toolbar-container {
+  pointer-events: auto !important;
+}
+
 .db-sidebar-wrapper {
   position: fixed;
   pointer-events: auto;
-  z-index: 200;
+  z-index: 2200;
   display: flex;
   flex-direction: row;
   align-items: flex-start;
@@ -186,12 +201,23 @@ const widgetTeleportCSS = `
   left: 0;
   top: 0;
 }
+
+/* Force PrimeVue overlays to appear above our sidebars */
+.p-popover,
+.p-select-overlay,
+.p-dialog,
+.p-toast,
+.p-tooltip {
+  z-index: 3000 !important;
+}
+
+.p-dialog-mask {
+  z-index: 2900 !important;
+}
 `
 
 const injectWidgetStyles = () => {
-  // Check if styles are already injected
   if (document.getElementById(WIDGET_STYLES_ID)) return
-
   const styleElement = document.createElement('style')
   styleElement.id = WIDGET_STYLES_ID
   styleElement.textContent = widgetTeleportCSS
@@ -230,7 +256,43 @@ const initGraph = () => {
   }
 }
 
+const toggleEditMode = () => {
+  isEditMode.value = !isEditMode.value
+  if (!isEditMode.value) {
+    // When stopping edit, close sidebars
+    uiStore.isLeftSidebarOpen = false
+    uiStore.isRightSidebarOpen = false
+  }
+  // Save state immediately when toggled
+  saveWidgetUIState()
+}
+
+// Handler to force Cytoscape resize on scroll
+// This fixes the issue where click coordinates are offset after scrolling the host page
+const handleWindowScroll = () => {
+  if (graphStore.currentGraphId) {
+    const cy = getCyInstance(graphStore.currentGraphId)
+    if (cy) {
+      cy.resize()
+    }
+  }
+}
+
 onMounted(() => {
+  // Intersection Observer for Widget View
+  if (widgetRoot.value) {
+    observer = new IntersectionObserver(
+      (entries) => {
+        isWidgetInView.value = entries[0].isIntersecting
+      },
+      { threshold: 0.1 }
+    )
+    observer.observe(widgetRoot.value)
+  }
+
+  // Attach scroll listener to fix coordinate offsets
+  window.addEventListener('scroll', handleWindowScroll, { passive: true, capture: true })
+
   graphStore.selectGraph(undefined as unknown as string)
 
   projectStore.loadProjects()
@@ -259,6 +321,8 @@ onMounted(() => {
   }
 
   const savedUIState = loadUIState(WIDGET_UI_STATE_KEY)
+  let rightSidebarLoaded = false;
+
   if (savedUIState) {
     if (savedUIState.leftSidebar) {
       leftDrag.x.value = savedUIState.leftSidebar.x
@@ -269,24 +333,36 @@ onMounted(() => {
       rightDrag.x.value = savedUIState.rightSidebar.x
       rightDrag.y.value = savedUIState.rightSidebar.y
       uiStore.isRightSidebarOpen = savedUIState.rightSidebar.open
+      rightSidebarLoaded = true;
     }
     if (savedUIState.codePanel) {
       codePanelPos.x = savedUIState.codePanel.x
       codePanelPos.y = savedUIState.codePanel.y
       codePanelSize.width = savedUIState.codePanel.width
       codePanelSize.height = savedUIState.codePanel.height
-      // Note: open state now managed per-graph, not from savedUIState
     }
     if (savedUIState.dataPanel) {
       dataPanelPos.x = savedUIState.dataPanel.x
       dataPanelPos.y = savedUIState.dataPanel.y
       dataPanelSize.width = savedUIState.dataPanel.width
       dataPanelSize.height = savedUIState.dataPanel.height
-      // Note: open state now managed per-graph, not from savedUIState
     }
     if (savedUIState.currentGraphId) {
       graphStore.selectGraph(savedUIState.currentGraphId)
     }
+    // Restore Edit Mode state, defaulting to false if undefined
+    if (typeof (savedUIState as any).editMode === 'boolean') {
+      isEditMode.value = (savedUIState as any).editMode
+    }
+  }
+
+  // Force default right sidebar position if not loaded from state or looks invalid
+  if (!rightSidebarLoaded || rightDrag.x.value <= 0) {
+    nextTick(() => {
+      // Calculate correct right position: width of document - sidebar width (320) - margin (20)
+      const docWidth = document.documentElement.clientWidth || window.innerWidth;
+      rightDrag.x.value = docWidth - 320 - 20;
+    });
   }
 
   initGraph()
@@ -294,20 +370,21 @@ onMounted(() => {
   widgetInitialized.value = true
   validateGraph()
 
-  // Inject styles into document head for teleported content
-  // This is necessary because custom element shadow DOM styles don't reach teleported content
   injectWidgetStyles()
 
-  // Update window width on resize
   const handleResize = () => {
     windowWidth.value = window.innerWidth
-    // Update right sidebar position on resize
-    rightDrag.x.value = window.innerWidth - 320 - 20
+    // Ensure right sidebar stays docked to right on resize if close to edge
+    if (window.innerWidth - rightDrag.x.value < 400) {
+      rightDrag.x.value = window.innerWidth - 320 - 20
+    }
   }
   window.addEventListener('resize', handleResize)
 
   onUnmounted(() => {
     window.removeEventListener('resize', handleResize)
+    window.removeEventListener('scroll', handleWindowScroll, { capture: true })
+    if (observer) observer.disconnect()
   })
 })
 
@@ -337,7 +414,6 @@ watch(generatedCode, (code) => {
   emit('code-update', code)
 })
 
-// Code Panel Visibility (Per-Graph State)
 const isCodePanelOpen = computed(() => {
   if (!projectStore.currentProject || !graphStore.currentGraphId) return false
   const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
@@ -354,7 +430,6 @@ const toggleCodePanel = () => {
   }
 }
 
-// Data Panel Visibility (Per-Graph State)
 const isDataPanelOpen = computed(() => {
   if (!projectStore.currentProject || !graphStore.currentGraphId) return false
   const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
@@ -532,7 +607,6 @@ const createNewGraph = () => {
     const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId!, name)
 
     if (newGraphMeta && importedGraphData.value) {
-      // Populate with imported data
       graphStore.updateGraphElements(
         newGraphMeta.id,
         importedGraphData.value.elements as GraphElement[]
@@ -713,7 +787,9 @@ const handleElementSelected = (element: GraphElement | null) => {
   graphStore.setSelectedElement(element)
   if (element) {
     uiStore.setActiveRightTab('properties')
-    uiStore.isRightSidebarOpen = true
+    if (isEditMode.value) {
+      uiStore.isRightSidebarOpen = true
+    }
   } else {
     if (!uiStore.isRightTabPinned && uiStore.isRightSidebarOpen) {
       uiStore.isRightSidebarOpen = false
@@ -747,8 +823,6 @@ const pinnedGraphTitle = computed(
 )
 const isModelValid = computed(() => validationErrors.value.size === 0)
 
-// Sync dark mode class to html element for global.css selectors (like MainLayout does)
-// This makes html.db-dark-mode selectors work for teleported content
 watch(
   isDarkMode,
   (val) => {
@@ -777,7 +851,7 @@ const useDrag = (initialX: number, initialY: number) => {
 
   const startDrag = (e: MouseEvent | TouchEvent) => {
     isDragging.value = true
-    isDraggingUI.value = true // Disable canvas pointer events during drag
+    isDraggingUI.value = true 
     const clientX = e instanceof MouseEvent ? e.clientX : e.touches[0].clientX
     const clientY = e instanceof MouseEvent ? e.clientY : e.touches[0].clientY
 
@@ -818,7 +892,7 @@ const useDrag = (initialX: number, initialY: number) => {
 
   const finishDrag = (clientX: number, clientY: number) => {
     isDragging.value = false
-    isDraggingUI.value = false // Re-enable canvas pointer events
+    isDraggingUI.value = false
     if (animationFrameId) cancelAnimationFrame(animationFrameId)
     const dist = Math.hypot(clientX - initialDragX, clientY - initialDragY)
     return dist < dragThreshold
@@ -844,10 +918,7 @@ const useDrag = (initialX: number, initialY: number) => {
     startDrag,
     onMouseUp,
     style: computed(() => ({
-      // Use transform for smooth 60fps movement
       transform: `translate3d(${x.value}px, ${y.value}px, 0)`,
-      // Force top/left to 0 so translate3d works from the origin
-      // This assumes the sidebar wrappers have 'position: fixed'
       left: '0px',
       top: '0px',
     })),
@@ -857,7 +928,6 @@ const useDrag = (initialX: number, initialY: number) => {
 const leftDrag = useDrag(20, 20)
 const rightDrag = useDrag(typeof window !== 'undefined' ? window.innerWidth - 320 - 20 : 1580, 20)
 
-// Watch for changes to UI state and save to localStorage
 watch(
   [
     () => leftDrag.x.value,
@@ -877,6 +947,8 @@ watch(
     () => dataPanelSize.width,
     () => dataPanelSize.height,
     () => graphStore.currentGraphId,
+    // Add isEditMode to persisted state
+    isEditMode
   ],
   () => {
     saveWidgetUIState()
@@ -888,7 +960,6 @@ const onLeftHeaderDragStart = (e: MouseEvent | TouchEvent) => {
   leftDrag.startDrag(e)
   if (e instanceof MouseEvent) {
     const originalMouseUp = leftDrag.onMouseUp
-    // Hijack the mouse up to toggle if it was a click
     const handleUp = (upEvent: MouseEvent) => {
       const isClick = originalMouseUp(upEvent)
       if (isClick) {
@@ -915,7 +986,6 @@ const onRightHeaderDragStart = (e: MouseEvent | TouchEvent) => {
   }
 }
 
-// Logic to handle toolbar navigation clicks
 const handleToolbarNavigation = (view: string) => {
   if (view === 'project') {
     if (
@@ -947,7 +1017,6 @@ const handleToolbarNavigation = (view: string) => {
       activeLeftAccordionTabs.value = ['help', 'devtools']
     }
   } else if (view === 'export') {
-    // Open Right Sidebar Export tab
     if (uiStore.isRightSidebarOpen && uiStore.activeRightTab === 'export') {
       uiStore.isRightSidebarOpen = false
     } else {
@@ -967,8 +1036,9 @@ const handleUIInteractionEnd = () => {
 </script>
 
 <template>
-  <div class="db-widget-root" :class="{ 'db-dark-mode': isDarkMode }"
+  <div ref="widgetRoot" class="db-widget-root" :class="{ 'db-dark-mode': isDarkMode }"
     style="width: 100%; height: 100%; position: relative; overflow: hidden">
+    
     <div class="db-canvas-layer" :style="{
       position: 'absolute',
       top: 0,
@@ -996,8 +1066,40 @@ const handleUIInteractionEnd = () => {
       </div>
     </div>
 
+    <!-- Edit Toggle Button (Fixed inside Widget Root using inline styles for robustness) -->
+    <div class="db-edit-toggle-wrapper" style="position: absolute; top: 10px; right: 10px; z-index: 500;">
+      <button @click="toggleEditMode" :title="isEditMode ? 'Stop Editing' : 'Edit Graph'" style="
+          width: 40px; 
+          height: 40px; 
+          border-radius: 50%; 
+          background: white; 
+          border: 1px solid #e5e7eb; 
+          color: #4b5563; 
+          cursor: pointer; 
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+          padding: 0;
+          transition: all 0.2s;
+        " :style="isEditMode ? 'background: #ef4444; border-color: #ef4444; color: white;' : ''">
+        <svg v-if="!isEditMode" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          style="display: block;">
+          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+          <path d="m15 5 4 4" />
+        </svg>
+        <svg v-else viewBox="0 0 76.00 76.00" xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" stroke="currentColor">
+          <g stroke-width="0"></g>
+          <g stroke-linecap="round" stroke-linejoin="round" stroke-width="0.76"></g>
+          <g> <path fill="currentColor" fill-opacity="1" stroke-width="0.00076" stroke-linejoin="round" d="M 53.2929,21.2929L 54.7071,22.7071C 56.4645,24.4645 56.4645,27.3137 54.7071,29.0711L 52.2323,31.5459L 44.4541,23.7677L 46.9289,21.2929C 48.6863,19.5355 51.5355,19.5355 53.2929,21.2929 Z M 31.7262,52.052L 23.948,44.2738L 43.0399,25.182L 50.818,32.9601L 31.7262,52.052 Z M 23.2409,47.1023L 28.8977,52.7591L 21.0463,54.9537L 23.2409,47.1023 Z M 17,28L 17,23L 23,23L 23,17L 28,17L 28,23L 34,23L 34,28L 28,28L 28,34L 23,34L 23,28L 17,28 Z "></path> </g>
+        </svg>
+      </button>
+    </div>
+
     <Teleport to="body">
-      <div class="db-ui-overlay" :class="{ 'db-dark-mode': isDarkMode, 'db-widget-ready': widgetInitialized }">
+      <!-- Only show main UI if Editing AND Widget is visible in viewport -->
+      <div class="db-ui-overlay" :class="{ 'db-dark-mode': isDarkMode, 'db-widget-ready': widgetInitialized }" v-show="isWidgetInView && isEditMode">
         <Toast position="top-center" />
 
         <!-- Left Sidebar (Floating) -->
@@ -1211,6 +1313,42 @@ const handleUIInteractionEnd = () => {
   --theme-text-primary: #f3f4f6;
   --theme-text-secondary: #a1a1aa;
   --theme-border: #27272a;
+}
+
+/* Edit Toggle Button Styles */
+.db-edit-toggle-wrapper {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 500; /* Increased to ensure visibility above canvas */
+}
+
+.db-edit-toggle-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--theme-bg-panel);
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  padding: 0;
+}
+
+.db-edit-toggle-btn:hover {
+  background: var(--theme-bg-hover);
+  color: var(--theme-primary);
+  transform: scale(1.05);
+}
+
+.db-edit-toggle-btn.db-active {
+  background: var(--theme-danger);
+  border-color: var(--theme-danger);
+  color: white;
 }
 
 .db-widget-root .db-canvas-layer {
@@ -1632,127 +1770,5 @@ const handleUIInteractionEnd = () => {
   .db-sidebar-trigger-content {
     gap: 4px;
   }
-}
-</style>
-
-<style>
-/* Widget UI Layer Positioning (non-scoped for teleported content) */
-/* CSS variables are inherited from global.css */
-
-.db-ui-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 10;
-  pointer-events: none;
-}
-
-.db-sidebar-wrapper {
-  position: fixed;
-  pointer-events: auto;
-  z-index: 200;
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 4px;
-  left: 0;
-  top: 0;
-  /* Hide sidebars until widget is initialized */
-  opacity: 0;
-  visibility: hidden;
-}
-
-.db-ui-overlay.db-widget-ready .db-sidebar-wrapper {
-  opacity: 1;
-  visibility: visible;
-}
-
-.db-sidebar-wrapper.db-left {
-  flex-direction: row;
-}
-
-.db-sidebar-wrapper.db-right {
-  flex-direction: row-reverse;
-}
-
-/* Override RightSidebar positioning for widget mode */
-.db-sidebar-wrapper.db-right .db-floating-sidebar.db-right {
-  right: auto !important;
-  left: 0 !important;
-}
-
-.db-ui-overlay .db-toolbar-container {
-  pointer-events: auto;
-}
-
-/* PrimeVue z-index overrides for widget */
-.p-popover {
-  pointer-events: auto !important;
-  z-index: 500 !important;
-}
-
-.p-popover-content {
-  pointer-events: auto !important;
-}
-
-.p-select-overlay {
-  pointer-events: auto !important;
-  z-index: 500 !important;
-}
-
-.p-dialog {
-  z-index: 550 !important;
-}
-
-.p-dialog-mask {
-  z-index: 549 !important;
-  pointer-events: auto !important;
-}
-
-/* PrimeVue dark mode styles for teleported components */
-body.db-dark-mode .p-dialog {
-  background: var(--theme-bg-panel);
-  color: var(--theme-text-primary);
-  border: 1px solid var(--theme-border);
-}
-
-body.db-dark-mode .p-dialog .p-dialog-header {
-  background: var(--theme-bg-panel);
-  color: var(--theme-text-primary);
-  border-bottom: 1px solid var(--theme-border);
-}
-
-body.db-dark-mode .p-dialog .p-dialog-content {
-  background: var(--theme-bg-panel);
-  color: var(--theme-text-primary);
-}
-
-body.db-dark-mode .p-dialog .p-dialog-footer {
-  background: var(--theme-bg-panel);
-  border-top: 1px solid var(--theme-border);
-}
-
-body.db-dark-mode .p-select-overlay {
-  background: var(--theme-bg-panel);
-  border: 1px solid var(--theme-border);
-}
-
-body.db-dark-mode .p-select-option {
-  color: var(--theme-text-primary);
-}
-
-body.db-dark-mode .p-select-option:hover {
-  background: var(--theme-bg-hover);
-}
-
-body.db-dark-mode .p-popover {
-  background: var(--theme-bg-panel);
-  border: 1px solid var(--theme-border);
-}
-
-body.db-dark-mode .p-popover-content {
-  color: var(--theme-text-primary);
 }
 </style>

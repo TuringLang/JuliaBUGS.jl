@@ -24,6 +24,7 @@ export interface UIState {
     height: number
   }
   currentGraphId?: string
+  editMode?: boolean
 }
 
 export interface GraphData {
