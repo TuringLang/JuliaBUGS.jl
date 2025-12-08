@@ -32,7 +32,9 @@ import {
   useBugsCodeGenerator,
   generateStandaloneScript,
 } from '../../composables/useBugsCodeGenerator'
-import type { GraphElement, NodeType, ExampleModel, GraphNode } from '../../types'
+import { useShareExport } from '../../composables/useShareExport'
+import { useImportExport } from '../../composables/useImportExport'
+import type { GraphElement, NodeType, ExampleModel } from '../../types'
 
 interface ExportOptions {
   bg: string
@@ -55,6 +57,14 @@ const { generatedCode } = useBugsCodeGenerator(elements)
 const { getCyInstance, getUndoRedoInstance } = useGraphInstance()
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData)
 const { samplerSettings, standaloneScript } = storeToRefs(scriptStore)
+const {
+  shareUrl,
+  decodeAndDecompress,
+  minifyGraph,
+  expandGraph,
+  generateShareLink,
+} = useShareExport()
+const { importedGraphData, processGraphFile, clearImportedData } = useImportExport()
 const {
   isLeftSidebarOpen,
   isRightSidebarOpen,
@@ -85,14 +95,11 @@ const showScriptSettingsModal = ref(false)
 const showExportModal = ref(false)
 const showStyleModal = ref(false)
 const showShareModal = ref(false)
-const shareUrl = ref('')
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null)
 
 // Data Import Ref
 const dataImportInput = ref<HTMLInputElement | null>(null)
 const graphImportInput = ref<HTMLInputElement | null>(null)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const importedGraphData = ref<any>(null)
 const isDragOver = ref(false)
 
 // Local viewport state for smooth UI updates
@@ -220,199 +227,6 @@ const smartFit = (cy: Core, animate: boolean = true) => {
   }
 }
 
-// Minification Helpers
-const keyMap: Record<string, string> = {
-  id: 'i',
-  name: 'n',
-  type: 't',
-  nodeType: 'nt',
-  position: 'p',
-  parent: 'pa',
-  distribution: 'di',
-  equation: 'eq',
-  observed: 'ob',
-  indices: 'id',
-  loopVariable: 'lv',
-  loopRange: 'lr',
-  param1: 'p1',
-  param2: 'p2',
-  param3: 'p3',
-  source: 's',
-  target: 'tg',
-  x: 'x',
-  y: 'y',
-}
-
-const nodeTypeMap: Record<string, number> = {
-  stochastic: 1,
-  deterministic: 2,
-  constant: 3,
-  observed: 4,
-  plate: 5,
-}
-const revNodeTypeMap = {
-  1: 'stochastic',
-  2: 'deterministic',
-  3: 'constant',
-  4: 'observed',
-  5: 'plate',
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const minifyGraph = (elements: GraphElement[]): any[] => {
-  return elements.map((el) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const min: any = {}
-    if (el.type === 'node') {
-      const node = el as GraphNode
-      min[keyMap.id] = node.id.replace('node_', '')
-      min[keyMap.name] = node.name
-      min[keyMap.type] = 0
-      min[keyMap.nodeType] = nodeTypeMap[node.nodeType]
-      min[keyMap.position] = [Math.round(node.position.x), Math.round(node.position.y)]
-      if (node.parent) min[keyMap.parent] = node.parent.replace('node_', '').replace('plate_', '')
-
-      if (node.distribution) min[keyMap.distribution] = node.distribution
-      if (node.equation) min[keyMap.equation] = node.equation
-      if (node.observed) min[keyMap.observed] = 1
-      if (node.indices) min[keyMap.indices] = node.indices
-      if (node.loopVariable) min[keyMap.loopVariable] = node.loopVariable
-      if (node.loopRange) min[keyMap.loopRange] = node.loopRange
-      if (node.param1) min[keyMap.param1] = node.param1
-      if (node.param2) min[keyMap.param2] = node.param2
-      if (node.param3) min[keyMap.param3] = node.param3
-    } else {
-      const edge = el
-      min[keyMap.id] = edge.id.replace('edge_', '')
-      min[keyMap.type] = 1
-      min[keyMap.source] = edge.source.replace('node_', '').replace('plate_', '')
-      min[keyMap.target] = edge.target.replace('node_', '').replace('plate_', '')
-    }
-    return min
-  })
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const expandGraph = (minElements: any[]): GraphElement[] => {
-  return minElements.map((min) => {
-    if (min[keyMap.type] === 0) {
-      // Node
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const node: any = {
-        id:
-          min[keyMap.id].startsWith('node_') || min[keyMap.id].startsWith('plate_')
-            ? min[keyMap.id]
-            : (min[keyMap.nodeType] === 5 ? 'plate_' : 'node_') + min[keyMap.id],
-        name: min[keyMap.name],
-        type: 'node',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        nodeType: (revNodeTypeMap as any)[min[keyMap.nodeType]],
-        position: {
-          x: min[keyMap.position] && !isNaN(min[keyMap.position][0]) ? min[keyMap.position][0] : 0,
-          y: min[keyMap.position] && !isNaN(min[keyMap.position][1]) ? min[keyMap.position][1] : 0,
-        },
-      }
-      if (min[keyMap.parent]) {
-        const pid = min[keyMap.parent]
-        node.parent = pid.startsWith('plate_') || pid.startsWith('node_') ? pid : 'plate_' + pid
-      }
-      if (min[keyMap.distribution]) node.distribution = min[keyMap.distribution]
-      if (min[keyMap.equation]) node.equation = min[keyMap.equation]
-      if (min[keyMap.observed]) node.observed = true
-      if (min[keyMap.indices]) node.indices = min[keyMap.indices]
-      if (min[keyMap.loopVariable]) node.loopVariable = min[keyMap.loopVariable]
-      if (min[keyMap.loopRange]) node.loopRange = min[keyMap.loopRange]
-      if (min[keyMap.param1]) node.param1 = min[keyMap.param1]
-      if (min[keyMap.param2]) node.param2 = min[keyMap.param2]
-      if (min[keyMap.param3]) node.param3 = min[keyMap.param3]
-      return node as GraphNode
-    } else {
-      // Edge
-      return {
-        id: min[keyMap.id].startsWith('edge_') ? min[keyMap.id] : 'edge_' + min[keyMap.id],
-        type: 'edge',
-        source:
-          min[keyMap.source].startsWith('node_') || min[keyMap.source].startsWith('plate_')
-            ? min[keyMap.source]
-            : 'node_' + min[keyMap.source],
-        target:
-          min[keyMap.target].startsWith('node_') || min[keyMap.target].startsWith('plate_')
-            ? min[keyMap.target]
-            : 'node_' + min[keyMap.target],
-      }
-    }
-  })
-}
-
-// Compression Helpers
-const compressAndEncode = async (jsonStr: string): Promise<string> => {
-  try {
-    if (!window.CompressionStream) throw new Error('CompressionStream not supported')
-    // Create a stream from the string
-    const stream = new Blob([jsonStr]).stream()
-    // Pipe through gzip compressor
-    const compressedStream = stream.pipeThrough(new CompressionStream('gzip'))
-    // Read response
-    const response = new Response(compressedStream)
-    const blob = await response.blob()
-    const buffer = await blob.arrayBuffer()
-
-    // Convert to binary string safely
-    const bytes = new Uint8Array(buffer)
-    let binaryStr = ''
-    const len = bytes.byteLength
-    for (let i = 0; i < len; i++) {
-      binaryStr += String.fromCharCode(bytes[i])
-    }
-
-    // Return with prefix to identify compressed data
-    return 'gz_' + btoa(binaryStr)
-  } catch (e) {
-    console.warn('Compression failed or not supported, falling back to legacy encoding', e)
-    // Fallback to old method if compression API is missing or fails
-    return btoa(unescape(encodeURIComponent(jsonStr)))
-  }
-}
-
-const decodeAndDecompress = async (input: string): Promise<string> => {
-  // Check for compressed prefix
-  if (input.startsWith('gz_')) {
-    try {
-      if (!window.DecompressionStream) throw new Error('DecompressionStream not supported')
-      const base64 = input.slice(3)
-      const binaryStr = atob(base64)
-      const bytes = new Uint8Array(binaryStr.length)
-      for (let i = 0; i < binaryStr.length; i++) {
-        bytes[i] = binaryStr.charCodeAt(i)
-      }
-
-      const stream = new Blob([bytes]).stream()
-      const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'))
-      const response = new Response(decompressedStream)
-      return await response.text()
-    } catch (e) {
-      console.error('Decompression failed', e)
-      throw e
-    }
-  } else {
-    // Legacy decoding
-    return decodeURIComponent(escape(atob(input)))
-  }
-}
-
-const generateShareLink = async (payload: object) => {
-  try {
-    const jsonStr = JSON.stringify(payload)
-    const base64 = await compressAndEncode(jsonStr)
-
-    const baseUrl = window.location.origin + window.location.pathname
-    shareUrl.value = `${baseUrl}?share=${encodeURIComponent(base64)}`
-  } catch (e) {
-    console.error('Failed to generate share link:', e)
-    alert('Failed to generate share link. Model might be too large.')
-  }
-}
-
 const handleShare = () => {
   if (!graphStore.currentGraphId) return
   shareUrl.value = '' // Reset
@@ -537,32 +351,19 @@ const triggerGraphImport = () => {
   graphImportInput.value?.click()
 }
 
-const processGraphFile = (file: File) => {
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    try {
-      const content = e.target?.result as string
-      const data = JSON.parse(content)
-      // Basic validation
-      if (data.elements && Array.isArray(data.elements)) {
-        importedGraphData.value = data
-        if (!newGraphName.value && data.name) {
-          newGraphName.value = data.name + ' (Imported)'
-        }
-      } else {
-        alert('Invalid graph JSON file.')
-      }
-    } catch (err) {
-      console.error(err)
-      alert('Failed to parse file.')
-    }
-  }
-  reader.readAsText(file)
-}
-
 const handleGraphImportFile = (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0]
-  if (file) processGraphFile(file)
+  if (file) {
+    processGraphFile(file)
+      .then((data) => {
+        if (data && !newGraphName.value && data.name) {
+          newGraphName.value = data.name + ' (Imported)'
+        }
+      })
+      .catch((error) => {
+        alert(error.message || 'Failed to process graph file.')
+      })
+  }
 }
 
 const handleDrop = (event: DragEvent) => {
@@ -570,6 +371,14 @@ const handleDrop = (event: DragEvent) => {
   const file = event.dataTransfer?.files?.[0]
   if (file) {
     processGraphFile(file)
+      .then((data) => {
+        if (data && !newGraphName.value && data.name) {
+          newGraphName.value = data.name + ' (Imported)'
+        }
+      })
+      .catch((error) => {
+        alert(error.message || 'Failed to process graph file.')
+      })
   }
 }
 
@@ -930,19 +739,10 @@ const createNewGraph = () => {
 
     if (newGraphMeta && importedGraphData.value) {
       // Populate with imported data
-      graphStore.updateGraphElements(newGraphMeta.id, importedGraphData.value.elements)
+      graphStore.updateGraphElements(newGraphMeta.id, importedGraphData.value.elements as GraphElement[])
 
       if (importedGraphData.value.dataContent) {
         dataStore.updateGraphData(newGraphMeta.id, { content: importedGraphData.value.dataContent })
-      }
-
-      // Restore layout settings if available
-      if (importedGraphData.value.layout) {
-        projectStore.updateGraphLayout(
-          projectStore.currentProject.id,
-          newGraphMeta.id,
-          importedGraphData.value.layout
-        )
       }
 
       graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
@@ -950,7 +750,7 @@ const createNewGraph = () => {
 
     showNewGraphModal.value = false
     newGraphName.value = ''
-    importedGraphData.value = null
+    clearImportedData()
     if (graphImportInput.value) graphImportInput.value.value = ''
   }
 }
@@ -1283,7 +1083,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
 
 watch(showNewGraphModal, (val) => {
   if (!val) {
-    importedGraphData.value = null
+    clearImportedData()
     newGraphName.value = ''
     if (graphImportInput.value) graphImportInput.value.value = ''
     isDragOver.value = false
@@ -1295,13 +1095,6 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   // PrimeVue might emit single value or array depending on config, but multiple=true implies array
   const newVal = Array.isArray(val) ? val : [val]
   activeLeftAccordionTabs.value = newVal
-}
-
-const clearImportedData = () => {
-  importedGraphData.value = null
-  if (graphImportInput.value) {
-    graphImportInput.value.value = ''
-  }
 }
 </script>
 <template>

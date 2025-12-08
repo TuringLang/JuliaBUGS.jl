@@ -31,7 +31,9 @@ import { useGraphElements } from './composables/useGraphElements'
 import { useBugsCodeGenerator, generateStandaloneScript } from './composables/useBugsCodeGenerator'
 import { useGraphValidator } from './composables/useGraphValidator'
 import { useGraphInstance } from './composables/useGraphInstance'
-import type { NodeType, GraphElement, ExampleModel, GraphNode } from './types'
+import { useShareExport } from './composables/useShareExport'
+import { useImportExport } from './composables/useImportExport'
+import type { NodeType, GraphElement, ExampleModel } from './types'
 import type { Core, LayoutOptions } from 'cytoscape'
 
 const props = defineProps<{
@@ -65,7 +67,6 @@ const showExportModal = ref(false)
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null)
 const showStyleModal = ref(false)
 const showShareModal = ref(false)
-const shareUrl = ref('')
 const showValidationModal = ref(false)
 const showScriptSettingsModal = ref(false)
 const showCodePanel = ref(false)
@@ -83,8 +84,6 @@ const dataPanelSize = reactive({ width: 400, height: 300 })
 
 // Import Graph State
 const graphImportInput = ref<HTMLInputElement | null>(null)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const importedGraphData = ref<any>(null)
 const isDragOver = ref(false)
 
 // UI Dragging State (for performance optimization)
@@ -153,6 +152,12 @@ const { parsedGraphData } = storeToRefs(dataStore)
 const { generatedCode } = useBugsCodeGenerator(elements)
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData)
 const { getCyInstance, getUndoRedoInstance } = useGraphInstance()
+const {
+  shareUrl,
+  minifyGraph,
+  generateShareLink,
+} = useShareExport()
+const { importedGraphData, processGraphFile, clearImportedData } = useImportExport()
 
 const initGraph = () => {
   if (projectStore.projects.length === 0) {
@@ -514,19 +519,10 @@ const createNewGraph = () => {
 
     if (newGraphMeta && importedGraphData.value) {
       // Populate with imported data
-      graphStore.updateGraphElements(newGraphMeta.id, importedGraphData.value.elements)
+      graphStore.updateGraphElements(newGraphMeta.id, importedGraphData.value.elements as GraphElement[])
 
       if (importedGraphData.value.dataContent) {
         dataStore.updateGraphData(newGraphMeta.id, { content: importedGraphData.value.dataContent })
-      }
-
-      // Restore layout settings if available
-      if (importedGraphData.value.layout && projectStore.currentProject) {
-        projectStore.updateGraphLayout(
-          projectStore.currentProject.id,
-          newGraphMeta.id,
-          importedGraphData.value.layout
-        )
       }
 
       graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
@@ -536,7 +532,7 @@ const createNewGraph = () => {
 
     showNewGraphModal.value = false
     newGraphName.value = ''
-    importedGraphData.value = null
+    clearImportedData()
     if (graphImportInput.value) graphImportInput.value.value = ''
   }
 }
@@ -545,32 +541,19 @@ const triggerGraphImport = () => {
   graphImportInput.value?.click()
 }
 
-const processGraphFile = (file: File) => {
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    try {
-      const content = e.target?.result as string
-      const data = JSON.parse(content)
-      // Basic validation
-      if (data.elements && Array.isArray(data.elements)) {
-        importedGraphData.value = data
-        if (!newGraphName.value && data.name) {
-          newGraphName.value = data.name + ' (Imported)'
-        }
-      } else {
-        alert('Invalid graph JSON file.')
-      }
-    } catch (err) {
-      console.error(err)
-      alert('Failed to parse file.')
-    }
-  }
-  reader.readAsText(file)
-}
-
 const handleGraphImportFile = (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0]
-  if (file) processGraphFile(file)
+  if (file) {
+    processGraphFile(file)
+      .then((data) => {
+        if (data && !newGraphName.value && data.name) {
+          newGraphName.value = data.name + ' (Imported)'
+        }
+      })
+      .catch((error) => {
+        alert(error.message || 'Failed to process graph file.')
+      })
+  }
 }
 
 const handleDrop = (event: DragEvent) => {
@@ -578,13 +561,14 @@ const handleDrop = (event: DragEvent) => {
   const file = event.dataTransfer?.files?.[0]
   if (file) {
     processGraphFile(file)
-  }
-}
-
-const clearImportedData = () => {
-  importedGraphData.value = null
-  if (graphImportInput.value) {
-    graphImportInput.value.value = ''
+      .then((data) => {
+        if (data && !newGraphName.value && data.name) {
+          newGraphName.value = data.name + ' (Imported)'
+        }
+      })
+      .catch((error) => {
+        alert(error.message || 'Failed to process graph file.')
+      })
   }
 }
 
@@ -619,92 +603,6 @@ const handleLoadExample = async (exampleKey: string) => {
     graphStore.selectGraph(newGraphMeta.id)
   } catch (error) {
     console.error('Failed to load example model:', error)
-  }
-}
-
-const compressAndEncode = async (jsonStr: string): Promise<string> => {
-  try {
-    if (!window.CompressionStream) throw new Error('CompressionStream not supported')
-    const stream = new Blob([jsonStr]).stream()
-    const compressedStream = stream.pipeThrough(new CompressionStream('gzip'))
-    const response = new Response(compressedStream)
-    const blob = await response.blob()
-    const buffer = await blob.arrayBuffer()
-    const bytes = new Uint8Array(buffer)
-    let binaryStr = ''
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binaryStr += String.fromCharCode(bytes[i])
-    }
-    return 'gz_' + btoa(binaryStr)
-  } catch {
-    return btoa(unescape(encodeURIComponent(jsonStr)))
-  }
-}
-
-const keyMap: Record<string, string> = {
-  id: 'i',
-  name: 'n',
-  type: 't',
-  nodeType: 'nt',
-  position: 'p',
-  parent: 'pa',
-  distribution: 'di',
-  equation: 'eq',
-  observed: 'ob',
-  indices: 'id',
-  loopVariable: 'lv',
-  loopRange: 'lr',
-  param1: 'p1',
-  param2: 'p2',
-  param3: 'p3',
-  source: 's',
-  target: 'tg',
-}
-const nodeTypeMap: Record<string, number> = {
-  stochastic: 1,
-  deterministic: 2,
-  constant: 3,
-  observed: 4,
-  plate: 5,
-}
-
-const minifyGraph = (elems: GraphElement[]): Record<string, unknown>[] => {
-  return elems.map((el) => {
-    const min: Record<string, unknown> = {}
-    if (el.type === 'node') {
-      const node = el as GraphNode
-      min[keyMap.id] = node.id.replace('node_', '')
-      min[keyMap.name] = node.name
-      min[keyMap.type] = 0
-      min[keyMap.nodeType] = nodeTypeMap[node.nodeType]
-      min[keyMap.position] = [Math.round(node.position.x), Math.round(node.position.y)]
-      if (node.parent) min[keyMap.parent] = node.parent.replace('node_', '').replace('plate_', '')
-      if (node.distribution) min[keyMap.distribution] = node.distribution
-      if (node.equation) min[keyMap.equation] = node.equation
-      if (node.observed) min[keyMap.observed] = 1
-      if (node.indices) min[keyMap.indices] = node.indices
-      if (node.loopVariable) min[keyMap.loopVariable] = node.loopVariable
-      if (node.loopRange) min[keyMap.loopRange] = node.loopRange
-      if (node.param1) min[keyMap.param1] = node.param1
-      if (node.param2) min[keyMap.param2] = node.param2
-      if (node.param3) min[keyMap.param3] = node.param3
-    } else {
-      min[keyMap.id] = el.id.replace('edge_', '')
-      min[keyMap.type] = 1
-      min[keyMap.source] = el.source.replace('node_', '').replace('plate_', '')
-      min[keyMap.target] = el.target.replace('node_', '').replace('plate_', '')
-    }
-    return min
-  })
-}
-
-const generateShareLink = async (payload: object) => {
-  try {
-    const base64 = await compressAndEncode(JSON.stringify(payload))
-    const baseUrl = window.location.origin + window.location.pathname
-    shareUrl.value = `${baseUrl}?share=${encodeURIComponent(base64)}`
-  } catch (e) {
-    console.error('Failed to generate share link:', e)
   }
 }
 
@@ -777,19 +675,25 @@ const handleShareProjectUrl = () => {
 }
 
 const handleExportJson = () => {
-  if (!graphStore.currentGraphId) return
-  const data = {
-    name:
-      projectStore.currentProject?.graphs.find((g) => g.id === graphStore.currentGraphId)?.name ||
-      'Graph',
+  if (!graphStore.currentGraphId || !projectStore.currentProject) return
+
+  const graphMeta = projectStore.currentProject.graphs.find(
+    (g) => g.id === graphStore.currentGraphId
+  )
+  if (!graphMeta) return
+
+  const exportData = {
+    name: graphMeta.name,
     elements: graphStore.currentGraphElements,
-    data: dataStore.dataContent,
+    dataContent: dataStore.dataContent,
+    version: 1,
   }
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${data.name.replace(/\s+/g, '_')}.json`
+  a.download = `${graphMeta.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
