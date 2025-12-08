@@ -117,7 +117,6 @@ body {
   color: var(--theme-text-primary);
   font-family: var(--font-family-sans);
   font-size: var(--font-size-sm);
-  overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
 

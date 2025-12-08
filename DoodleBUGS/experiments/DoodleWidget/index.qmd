@@ -1,0 +1,84 @@
+---
+title: "DoodleBUGS Widget Demo"
+author: "Shravan Goswami"
+include-in-header: 
+    - text: |
+        <link rel="stylesheet" href="doodlebugs.css">
+        <script type="module" src="doodlebugs.js"></script>
+toc: true
+---
+
+# Introduction
+
+DoodleBUGS is a visual graphical model editor for building Bayesian models. It provides an intuitive drag-and-drop interface for constructing directed acyclic graphs (DAGs) that can be exported as BUGS code for inference in JuliaBUGS.
+
+This document demonstrates how to embed the DoodleBUGS widget in a Quarto document, making it easy to create interactive tutorials and documentation.
+
+## What are Bayesian Graphical Models?
+
+Bayesian graphical models, also known as Bayesian networks, are a way to represent joint probability distributions using a graph structure. Each node in the graph represents a random variable, and edges represent probabilistic dependencies between variables.
+
+The key insight is that joint distributions can often be factored into simpler conditional distributions:
+
+$$P(X_1, X_2, ..., X_n) = \prod_{i=1}^{n} P(X_i | Pa(X_i))$$
+
+where $Pa(X_i)$ denotes the parent nodes of $X_i$ in the graph.
+
+## Interactive Model Builder
+
+Below is an embedded DoodleBUGS widget. You can use it to:
+
+- **Add nodes** using the toolbar (stochastic, deterministic, constant, observed)
+- **Create edges** by connecting nodes to represent dependencies
+- **Organize models** using plates for repeated structures
+- **Export BUGS code** that can be used with JuliaBUGS
+
+```{=html}
+<doodle-bugs></doodle-bugs>
+```
+
+## Example: Simple Linear Regression
+
+A simple Bayesian linear regression model can be specified as:
+
+$$y_i \sim \text{Normal}(\alpha + \beta x_i, \tau)$$
+
+where:
+
+- $\alpha$ is the intercept
+- $\beta$ is the slope coefficient  
+- $\tau$ is the precision (inverse variance)
+
+Try building this model in the widget above! You'll need:
+
+1. A **constant** node for $x$
+2. **Stochastic** nodes for $\alpha$, $\beta$, and $\tau$ (with appropriate priors)
+3. An **observed** node for $y$
+4. Edges connecting the parameters to $y$
+
+## Using the Generated Code
+
+Once you've built your model, you can export the BUGS code and use it with JuliaBUGS:
+
+```julia
+using JuliaBUGS
+
+# Paste your generated BUGS model here
+model_code = """
+model {
+    # Your model specification
+}
+"""
+
+# Compile and run inference
+model = compile(model_code, data)
+samples = sample(model, NUTS(), 1000)
+```
+
+## Conclusion
+
+DoodleBUGS makes it easy to visualize and build Bayesian models interactively. Combined with Quarto documents, you can create engaging tutorials that let readers experiment with models directly in the browser.
+
+---
+
+*Built with DoodleBUGS · Part of the JuliaBUGS Project*

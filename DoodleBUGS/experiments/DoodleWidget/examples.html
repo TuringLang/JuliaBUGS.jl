@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DoodleBUGS Widget Examples</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f0 100%);
+            min-height: 100vh;
+            padding: 60px 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .logo {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #10b981, #059669);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            font-size: 1.1rem;
+        }
+
+        .examples-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 60px;
+        }
+
+        .example-card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .example-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .example-icon {
+            font-size: 2.5rem;
+            margin-bottom: 16px;
+        }
+
+        .example-card h2 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+
+        .example-card p {
+            color: #6b7280;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .example-tag {
+            display: inline-block;
+            background: #ecfdf5;
+            color: #059669;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 16px;
+        }
+
+        .usage-section {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        .usage-section h2 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #1f2937;
+        }
+
+        .code-block {
+            background: #1f2937;
+            color: #e5e7eb;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            margin: 20px 0;
+        }
+
+        .code-block .comment {
+            color: #6b7280;
+        }
+
+        .code-block .tag {
+            color: #f472b6;
+        }
+
+        .code-block .attr {
+            color: #a5b4fc;
+        }
+
+        .code-block .string {
+            color: #86efac;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 60px;
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+
+        footer a {
+            color: #10b981;
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">🎨</div>
+            <h1>DoodleBUGS Widget</h1>
+            <p class="subtitle">Interactive visual editor for Bayesian graphical models</p>
+        </header>
+
+        <section class="examples-grid">
+            <a href="demo.html" class="example-card">
+                <div class="example-icon">📦</div>
+                <h2>Basic Demo</h2>
+                <p>Simple grid layout demonstrating the widget in a constrained container with surrounding elements.</p>
+                <span class="example-tag">Getting Started</span>
+            </a>
+
+            <a href="embedded-article.html" class="example-card">
+                <div class="example-icon">📄</div>
+                <h2>Embedded Article</h2>
+                <p>Long scrollable article with the widget embedded mid-content, simulating a blog or documentation
+                    page.</p>
+                <span class="example-tag">Scrollable</span>
+            </a>
+
+            <a href="dashboard.html" class="example-card">
+                <div class="example-icon">📊</div>
+                <h2>Dashboard</h2>
+                <p>Dashboard layout with multiple widgets side-by-side for comparing different models.</p>
+                <span class="example-tag">Multi-Widget</span>
+            </a>
+
+            <a href="index.html" class="example-card"
+                onclick="alert('Render index.qmd with Quarto first: quarto render index.qmd'); return false;">
+                <div class="example-icon">📝</div>
+                <h2>Quarto Document</h2>
+                <p>Integration example for Quarto documents. Render index.qmd to see the result.</p>
+                <span class="example-tag">Quarto</span>
+            </a>
+        </section>
+
+        <section class="usage-section">
+            <h2>Quick Start</h2>
+            <p>Add the DoodleBUGS widget to your HTML page:</p>
+
+            <div class="code-block">
+                <span class="comment">&lt;!-- Include CSS and JS from dist-lib --&gt;</span>
+                <span class="tag">&lt;link</span> <span class="attr">rel=</span><span class="string">"stylesheet"</span>
+                <span class="attr">href=</span><span class="string">"path/to/doodlebugs.css"</span><span
+                    class="tag">&gt;</span>
+                <span class="tag">&lt;script</span> <span class="attr">type=</span><span class="string">"module"</span>
+                <span class="attr">src=</span><span class="string">"path/to/doodlebugs.js"</span><span
+                    class="tag">&gt;&lt;/script&gt;</span>
+
+                <span class="comment">&lt;!-- Use the widget --&gt;</span>
+                <span class="tag">&lt;div</span> <span class="attr">style=</span><span class="string">"width: 100%;
+                    height: 500px;"</span><span class="tag">&gt;</span>
+                <span class="tag">&lt;doodle-bugs&gt;&lt;/doodle-bugs&gt;</span>
+                <span class="tag">&lt;/div&gt;</span>
+            </div>
+
+            <p>Build the widget library using <code>npm run build:lib</code>, then copy
+                <code>dist-lib/doodlebugs.js</code> and <code>dist-lib/doodlebugs.css</code> to your project.</p>
+        </section>
+
+        <footer>
+            <p>Part of <a href="https://github.com/TuringLang/JuliaBUGS.jl">JuliaBUGS</a> · DoodleBUGS Visual Editor</p>
+        </footer>
+    </div>
+</body>
+
+</html>

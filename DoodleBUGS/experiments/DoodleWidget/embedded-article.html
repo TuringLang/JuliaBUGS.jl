@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DoodleBUGS Widget - Embedded Article Example</title>
+    <link rel="stylesheet" href="../../dist-lib/doodlebugs.css">
+    <script type="module" src="../../dist-lib/doodlebugs.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            line-height: 1.8;
+            color: #333;
+            background: #fafafa;
+        }
+
+        .article-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 60px 0 40px;
+            border-bottom: 1px solid #e0e0e0;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 400;
+            margin-bottom: 20px;
+            color: #1a1a1a;
+        }
+
+        .meta {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        h2 {
+            font-size: 1.6rem;
+            font-weight: 600;
+            margin: 40px 0 20px;
+            color: #1a1a1a;
+        }
+
+        p {
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+            text-align: justify;
+        }
+
+        .widget-section {
+            margin: 60px 0;
+            padding: 30px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        .widget-section h3 {
+            font-size: 1.2rem;
+            color: #10b981;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .widget-container {
+            width: 100%;
+            height: 500px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+
+        .callout {
+            background: #f0fdf4;
+            border-left: 4px solid #10b981;
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .callout p {
+            margin: 0;
+            font-style: italic;
+        }
+
+        code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px 0;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 60px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="article-container">
+        <header>
+            <h1>Introduction to Bayesian Graphical Models</h1>
+            <p class="meta">Published: December 2024 · 10 min read</p>
+        </header>
+
+        <article>
+            <p>Bayesian graphical models represent a powerful framework for reasoning under uncertainty. They combine
+                the mathematical rigor of probability theory with the intuitive representation of dependencies through
+                directed graphs.</p>
+
+            <h2>What are Graphical Models?</h2>
+
+            <p>A graphical model is a probabilistic model where a graph expresses the conditional dependence structure
+                between random variables. The graph consists of nodes representing variables and edges representing
+                probabilistic dependencies between them.</p>
+
+            <p>There are two main types of graphical models: directed graphical models (also known as Bayesian networks)
+                and undirected graphical models (also known as Markov random fields). In this article, we focus on
+                directed acyclic graphs (DAGs), which are the foundation of Bayesian networks.</p>
+
+            <div class="callout">
+                <p>"The great power of graphical models lies in their ability to represent complex joint probability
+                    distributions through simple local relationships."</p>
+            </div>
+
+            <h2>Interactive Model Builder</h2>
+
+            <p>The DoodleBUGS widget below allows you to interactively build and visualize Bayesian graphical models.
+                Try adding nodes, creating edges, and see how the BUGS code is generated in real-time.</p>
+
+            <div class="widget-section">
+                <h3>🎨 Interactive DAG Builder</h3>
+                <div class="widget-container">
+                    <doodle-bugs></doodle-bugs>
+                </div>
+            </div>
+
+            <p>The widget supports various node types including <code>stochastic</code> nodes (represented by circles),
+                <code>deterministic</code> nodes (double circles), <code>constant</code> nodes (squares), and
+                <code>observed</code> data nodes. You can also create plates to represent repeated structures.</p>
+
+            <h2>The BUGS Language</h2>
+
+            <p>BUGS (Bayesian inference Using Gibbs Sampling) is a probabilistic programming language for specifying
+                statistical models. The visual representation in the widget above is automatically converted to valid
+                BUGS code that can be executed in various inference engines.</p>
+
+            <p>For example, a simple hierarchical model might look like this:</p>
+
+            <pre><code>model {
+  for (i in 1:N) {
+    y[i] ~ dnorm(mu, tau)
+  }
+  mu ~ dnorm(0, 0.001)
+  tau ~ dgamma(0.001, 0.001)
+}</code></pre>
+
+            <h2>Why Use Graphical Models?</h2>
+
+            <p>Graphical models offer several advantages over traditional statistical approaches:</p>
+
+            <p><strong>Interpretability:</strong> The visual structure makes it easy to understand the relationships
+                between variables and communicate your model to others.</p>
+
+            <p><strong>Modularity:</strong> Complex models can be built from simpler components, and missing data is
+                handled naturally within the framework.</p>
+
+            <p><strong>Flexibility:</strong> Graphical models can represent a wide variety of probability distributions
+                and are not limited to specific parametric families.</p>
+
+            <h2>Getting Started with JuliaBUGS</h2>
+
+            <p>JuliaBUGS is a Julia implementation of the BUGS language that provides efficient inference for Bayesian
+                graphical models. Combined with the DoodleBUGS visual editor, it offers a complete workflow from model
+                design to inference.</p>
+
+            <p>The widget you see above is designed to integrate seamlessly with JuliaBUGS, allowing you to export your
+                visual models as executable Julia code. This bridges the gap between intuitive model building and
+                production-ready code.</p>
+
+            <h2>Conclusion</h2>
+
+            <p>Bayesian graphical models provide a principled way to reason about uncertainty. With tools like
+                DoodleBUGS and JuliaBUGS, building and running these models has never been more accessible. Give the
+                interactive widget above a try and start exploring the world of probabilistic modeling!</p>
+        </article>
+
+        <footer>
+            <p>Built with DoodleBUGS · Part of the JuliaBUGS Project</p>
+        </footer>
+    </div>
+</body>
+
+</html>
