@@ -28,7 +28,7 @@ export const DoodleBugsElement = defineCustomElement({
       theme: {
         preset: Aura,
         options: {
-          darkModeSelector: '.dark-mode',
+          darkModeSelector: '.db-dark-mode',
         },
       },
     })

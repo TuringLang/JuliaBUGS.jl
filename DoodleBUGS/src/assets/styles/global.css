@@ -79,7 +79,7 @@
   --color-border-dark: var(--theme-text-secondary);
 }
 
-html.dark-mode {
+html.db-dark-mode {
   /* Semantic Theme Configuration (Dark Mode) */
   /* Backgrounds */
   --theme-bg-canvas: #0f1115;
@@ -209,7 +209,9 @@ textarea::placeholder {
   opacity: 0.8;
 }
 
-.p-inputtext, .p-inputnumber-input, .p-select-label {
+.p-inputtext,
+.p-inputnumber-input,
+.p-select-label {
   font-size: 12px !important;
 }
 
@@ -220,13 +222,13 @@ textarea::placeholder {
     linear-gradient(to bottom, var(--theme-grid-line) 1px, transparent 1px);
 }
 
-html.dark-mode .cytoscape-container.grid-background {
+html.db-dark-mode .cytoscape-container.grid-background {
   background-image:
     linear-gradient(to right, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
 }
 
-html.dark-mode .cytoscape-container {
+html.db-dark-mode .cytoscape-container {
   background-color: var(--theme-bg-canvas) !important;
 }
 
