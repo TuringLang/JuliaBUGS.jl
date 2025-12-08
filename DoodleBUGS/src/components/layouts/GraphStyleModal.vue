@@ -141,10 +141,16 @@ const resetStyleSettings = () => {
     <template #body>
       <div class="db-style-container">
         <div class="db-category-tabs">
-          <button :class="{ 'db-active': editingCategory === 'node' }" @click="editingCategory = 'node'">
+          <button
+            :class="{ 'db-active': editingCategory === 'node' }"
+            @click="editingCategory = 'node'"
+          >
             Nodes
           </button>
-          <button :class="{ 'db-active': editingCategory === 'edge' }" @click="editingCategory = 'edge'">
+          <button
+            :class="{ 'db-active': editingCategory === 'edge' }"
+            @click="editingCategory = 'edge'"
+          >
             Edges
           </button>
         </div>

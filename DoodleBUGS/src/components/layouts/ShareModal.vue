@@ -317,7 +317,11 @@ const handleUrlFocus = (event: FocusEvent) => {
               <i class="fas fa-exclamation-triangle"></i>
               <small>
                 <strong>Note:</strong>
-                <a href="https://is.gd" target="_blank" rel="noopener noreferrer" class="db-text-link"
+                <a
+                  href="https://is.gd"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="db-text-link"
                   >is.gd</a
                 >
                 is a third-party service. Please avoid generating short links excessively to prevent

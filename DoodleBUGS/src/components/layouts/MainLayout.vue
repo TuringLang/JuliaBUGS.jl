@@ -61,13 +61,8 @@ const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGr
 const { samplerSettings, standaloneScript } = storeToRefs(scriptStore)
 const { smartFit, applyLayoutWithFit } = useGraphLayout()
 const { loadLastGraphId, getStoredGraphElements, getStoredDataContent } = usePersistence()
-const {
-  shareUrl,
-  decodeAndDecompress,
-  minifyGraph,
-  expandGraph,
-  generateShareLink,
-} = useShareExport()
+const { shareUrl, decodeAndDecompress, minifyGraph, expandGraph, generateShareLink } =
+  useShareExport()
 const { importedGraphData, processGraphFile, clearImportedData } = useImportExport()
 const {
   isLeftSidebarOpen,
@@ -113,12 +108,12 @@ const viewportState = ref({ zoom: 1, pan: { x: 0, y: 0 } })
 // Default positions: data panel on bottom-left, code panel on bottom-right
 const codePanelPos = reactive({
   x: typeof window !== 'undefined' ? window.innerWidth - 420 : 0,
-  y: typeof window !== 'undefined' ? window.innerHeight - 380 : 0
+  y: typeof window !== 'undefined' ? window.innerHeight - 380 : 0,
 })
 const codePanelSize = reactive({ width: 400, height: 300 })
 const dataPanelPos = reactive({
   x: 20,
-  y: typeof window !== 'undefined' ? window.innerHeight - 380 : 0
+  y: typeof window !== 'undefined' ? window.innerHeight - 380 : 0,
 })
 const dataPanelSize = reactive({ width: 400, height: 300 })
 
@@ -644,7 +639,10 @@ const createNewGraph = () => {
 
     if (newGraphMeta && importedGraphData.value) {
       // Populate with imported data
-      graphStore.updateGraphElements(newGraphMeta.id, importedGraphData.value.elements as GraphElement[])
+      graphStore.updateGraphElements(
+        newGraphMeta.id,
+        importedGraphData.value.elements as GraphElement[]
+      )
 
       if (importedGraphData.value.dataContent) {
         dataStore.updateGraphData(newGraphMeta.id, { content: importedGraphData.value.dataContent })
@@ -1005,14 +1003,26 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
 <template>
   <div class="db-app-layout">
     <main class="db-canvas-area">
-      <GraphEditor v-if="graphStore.currentGraphId" :key="graphStore.currentGraphId"
-        :graph-id="graphStore.currentGraphId" :is-grid-enabled="isGridEnabled"
-        @update:is-grid-enabled="isGridEnabled = $event" :grid-size="gridSize" @update:grid-size="gridSize = $event"
-        :grid-style="canvasGridStyle" :current-mode="currentMode" :elements="elements"
-        :current-node-type="currentNodeType" :validation-errors="validationErrors" :show-zoom-controls="false"
-        @update:current-mode="currentMode = $event" @update:current-node-type="currentNodeType = $event"
-        @element-selected="handleElementSelected" @layout-updated="handleLayoutUpdated"
-        @viewport-changed="handleViewportChanged" />
+      <GraphEditor
+        v-if="graphStore.currentGraphId"
+        :key="graphStore.currentGraphId"
+        :graph-id="graphStore.currentGraphId"
+        :is-grid-enabled="isGridEnabled"
+        @update:is-grid-enabled="isGridEnabled = $event"
+        :grid-size="gridSize"
+        @update:grid-size="gridSize = $event"
+        :grid-style="canvasGridStyle"
+        :current-mode="currentMode"
+        :elements="elements"
+        :current-node-type="currentNodeType"
+        :validation-errors="validationErrors"
+        :show-zoom-controls="false"
+        @update:current-mode="currentMode = $event"
+        @update:current-node-type="currentNodeType = $event"
+        @element-selected="handleElementSelected"
+        @layout-updated="handleLayoutUpdated"
+        @viewport-changed="handleViewportChanged"
+      />
       <div v-else class="db-empty-state">
         <p>No graph selected. Create or select a graph to start.</p>
         <BaseButton @click="showNewGraphModal = true" type="primary">Create New Graph</BaseButton>
@@ -1020,25 +1030,46 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
     </main>
 
     <!-- Left Sidebar -->
-    <LeftSidebar :activeAccordionTabs="activeLeftAccordionTabs" @update:activeAccordionTabs="updateActiveAccordionTabs"
-      :projectName="projectStore.currentProject?.name || null" :pinnedGraphTitle="pinnedGraphTitle"
-      :isGridEnabled="isGridEnabled" :gridSize="gridSize" :showZoomControls="showZoomControls"
-      :showDebugPanel="showDebugPanel" :isCodePanelOpen="isCodePanelOpen" :isDetachModeActive="isDetachModeActive"
-      :showDetachModeControl="showDetachModeControl" @toggle-left-sidebar="toggleLeftSidebar"
-      @new-project="showNewProjectModal = true" @new-graph="showNewGraphModal = true"
-      @update:currentMode="currentMode = $event" @update:currentNodeType="currentNodeType = $event"
-      @update:isGridEnabled="isGridEnabled = $event" @update:gridSize="gridSize = $event"
-      @update:showZoomControls="showZoomControls = $event" @update:showDebugPanel="showDebugPanel = $event"
+    <LeftSidebar
+      :activeAccordionTabs="activeLeftAccordionTabs"
+      @update:activeAccordionTabs="updateActiveAccordionTabs"
+      :projectName="projectStore.currentProject?.name || null"
+      :pinnedGraphTitle="pinnedGraphTitle"
+      :isGridEnabled="isGridEnabled"
+      :gridSize="gridSize"
+      :showZoomControls="showZoomControls"
+      :showDebugPanel="showDebugPanel"
+      :isCodePanelOpen="isCodePanelOpen"
+      :isDetachModeActive="isDetachModeActive"
+      :showDetachModeControl="showDetachModeControl"
+      @toggle-left-sidebar="toggleLeftSidebar"
+      @new-project="showNewProjectModal = true"
+      @new-graph="showNewGraphModal = true"
+      @update:currentMode="currentMode = $event"
+      @update:currentNodeType="currentNodeType = $event"
+      @update:isGridEnabled="isGridEnabled = $event"
+      @update:gridSize="gridSize = $event"
+      @update:showZoomControls="showZoomControls = $event"
+      @update:showDebugPanel="showDebugPanel = $event"
       @update:isDetachModeActive="isDetachModeActive = $event"
-      @update:showDetachModeControl="showDetachModeControl = $event" @toggle-code-panel="toggleCodePanel"
-      @load-example="handleLoadExample" @open-about-modal="showAboutModal = true"
-      @open-faq-modal="showFaqModal = true" />
+      @update:showDetachModeControl="showDetachModeControl = $event"
+      @toggle-code-panel="toggleCodePanel"
+      @load-example="handleLoadExample"
+      @open-about-modal="showAboutModal = true"
+      @open-faq-modal="showFaqModal = true"
+    />
 
     <Transition name="fade">
-      <div v-if="!isLeftSidebarOpen" class="db-collapsed-sidebar-trigger db-left-trigger"
-        @click="handleSidebarContainerClick">
+      <div
+        v-if="!isLeftSidebarOpen"
+        class="db-collapsed-sidebar-trigger db-left-trigger"
+        @click="handleSidebarContainerClick"
+      >
         <div class="db-sidebar-trigger-content gap-1">
-          <div class="flex-grow flex items-center gap-2 overflow-hidden" style="flex-grow: 1; overflow: hidden">
+          <div
+            class="flex-grow flex items-center gap-2 overflow-hidden"
+            style="flex-grow: 1; overflow: hidden"
+          >
             <span class="db-logo-text-minimized">
               <span class="db-desktop-text">{{
                 pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS'
@@ -1047,15 +1078,21 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
             </span>
           </div>
           <div class="flex items-center flex-shrink-0" style="flex-shrink: 0">
-            <button @click.stop="uiStore.toggleDarkMode()" class="db-theme-toggle-header"
-              :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
+            <button
+              @click.stop="uiStore.toggleDarkMode()"
+              class="db-theme-toggle-header"
+              :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+            >
               <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
             </button>
             <div class="db-toggle-icon-wrapper">
               <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="db-toggle-icon">
-                <path fill="currentColor" fill-rule="evenodd"
+                <path
+                  fill="currentColor"
+                  fill-rule="evenodd"
                   d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"
-                  clip-rule="evenodd"></path>
+                  clip-rule="evenodd"
+                ></path>
               </svg>
             </div>
           </div>
@@ -1064,29 +1101,53 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
     </Transition>
 
     <!-- Right Sidebar -->
-    <RightSidebar :selectedElement="selectedElement" :validationErrors="validationErrors" :isModelValid="isModelValid"
-      @toggle-right-sidebar="toggleRightSidebar" @update-element="updateElement" @delete-element="deleteElement"
-      @show-validation-issues="showValidationModal = true" @open-script-settings="handleOpenScriptSettings"
-      @download-script="handleDownloadScript" @generate-script="handleGenerateStandalone" @share="handleShare"
-      @open-export-modal="openExportModal" @export-json="handleExportGraphJson" />
+    <RightSidebar
+      :selectedElement="selectedElement"
+      :validationErrors="validationErrors"
+      :isModelValid="isModelValid"
+      @toggle-right-sidebar="toggleRightSidebar"
+      @update-element="updateElement"
+      @delete-element="deleteElement"
+      @show-validation-issues="showValidationModal = true"
+      @open-script-settings="handleOpenScriptSettings"
+      @download-script="handleDownloadScript"
+      @generate-script="handleGenerateStandalone"
+      @share="handleShare"
+      @open-export-modal="openExportModal"
+      @export-json="handleExportGraphJson"
+    />
 
     <Transition name="fade">
-      <div v-if="!isRightSidebarOpen" class="db-collapsed-sidebar-trigger db-right" @click="toggleRightSidebar">
+      <div
+        v-if="!isRightSidebarOpen"
+        class="db-collapsed-sidebar-trigger db-right"
+        @click="toggleRightSidebar"
+      >
         <div class="db-sidebar-trigger-content gap-2">
           <span class="db-sidebar-title-minimized">Inspector</span>
           <div class="flex items-center">
-            <div class="db-status-indicator db-validation-status" @click.stop="showValidationModal = true"
-              :class="isModelValid ? 'db-valid' : 'db-invalid'">
+            <div
+              class="db-status-indicator db-validation-status"
+              @click.stop="showValidationModal = true"
+              :class="isModelValid ? 'db-valid' : 'db-invalid'"
+            >
               <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
             </div>
-            <button class="db-header-icon-btn db-collapsed-share-btn" @click.stop="handleShare" title="Share via URL">
+            <button
+              class="db-header-icon-btn db-collapsed-share-btn"
+              @click.stop="handleShare"
+              title="Share via URL"
+            >
               <i class="fas fa-share-alt"></i>
             </button>
             <div class="db-toggle-icon-wrapper">
               <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="db-toggle-icon">
-                <path fill="currentColor" fill-rule="evenodd"
+                <path
+                  fill="currentColor"
+                  fill-rule="evenodd"
                   d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"
-                  clip-rule="evenodd"></path>
+                  clip-rule="evenodd"
+                ></path>
               </svg>
             </div>
           </div>
@@ -1095,32 +1156,76 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
     </Transition>
 
     <!-- Code Panel using FloatingPanel -->
-    <FloatingPanel v-if="isCodePanelOpen && graphStore.currentGraphId" title="BUGS Code Preview" icon="fas fa-code"
-      :is-open="isCodePanelOpen" :default-width="codePanelSize.width" :default-height="codePanelSize.height"
-      :default-x="codePanelPos.x" :default-y="codePanelPos.y" :show-download="true" @close="toggleCodePanel"
-      @download="handleDownloadBugs" @drag-end="handleCodePanelDragEnd" @resize-end="handleCodePanelResizeEnd">
+    <FloatingPanel
+      v-if="isCodePanelOpen && graphStore.currentGraphId"
+      title="BUGS Code Preview"
+      icon="fas fa-code"
+      :is-open="isCodePanelOpen"
+      :default-width="codePanelSize.width"
+      :default-height="codePanelSize.height"
+      :default-x="codePanelPos.x"
+      :default-y="codePanelPos.y"
+      :show-download="true"
+      @close="toggleCodePanel"
+      @download="handleDownloadBugs"
+      @drag-end="handleCodePanelDragEnd"
+      @resize-end="handleCodePanelResizeEnd"
+    >
       <CodePreviewPanel :is-active="true" />
     </FloatingPanel>
 
     <!-- Data Panel using FloatingPanel -->
-    <FloatingPanel v-if="isDataPanelOpen && graphStore.currentGraphId" title="Data & Inits" icon="fas fa-database"
-      badge="JSON" :is-open="isDataPanelOpen" :default-width="dataPanelSize.width"
-      :default-height="dataPanelSize.height" :default-x="dataPanelPos.x" :default-y="dataPanelPos.y" :show-import="true"
-      @close="toggleDataPanel" @import="dataImportInput?.click()" @drag-end="handleDataPanelDragEnd"
-      @resize-end="handleDataPanelResizeEnd">
+    <FloatingPanel
+      v-if="isDataPanelOpen && graphStore.currentGraphId"
+      title="Data & Inits"
+      icon="fas fa-database"
+      badge="JSON"
+      :is-open="isDataPanelOpen"
+      :default-width="dataPanelSize.width"
+      :default-height="dataPanelSize.height"
+      :default-x="dataPanelPos.x"
+      :default-y="dataPanelPos.y"
+      :show-import="true"
+      @close="toggleDataPanel"
+      @import="dataImportInput?.click()"
+      @drag-end="handleDataPanelDragEnd"
+      @resize-end="handleDataPanelResizeEnd"
+    >
       <DataInputPanel :is-active="true" />
       <!-- Hidden file input for Data Import -->
-      <input type="file" ref="dataImportInput" accept=".json" style="display: none" @change="handleDataImport" />
+      <input
+        type="file"
+        ref="dataImportInput"
+        accept=".json"
+        style="display: none"
+        @change="handleDataImport"
+      />
     </FloatingPanel>
 
-    <FloatingBottomToolbar :current-mode="currentMode" :current-node-type="currentNodeType"
-      :show-code-panel="isCodePanelOpen" :show-data-panel="isDataPanelOpen" :show-json-panel="false"
-      :show-zoom-controls="showZoomControls" :is-detach-mode-active="isDetachModeActive"
-      :show-detach-mode-control="showDetachModeControl" @update:current-mode="currentMode = $event"
-      @update:current-node-type="currentNodeType = $event" @undo="handleUndo" @redo="handleRedo" @zoom-in="handleZoomIn"
-      @zoom-out="handleZoomOut" @fit="handleFit" @layout-graph="handleGraphLayout" @toggle-code-panel="toggleCodePanel"
-      @toggle-data-panel="toggleDataPanel" @toggle-json-panel="toggleJsonPanel"
-      @toggle-detach-mode="uiStore.toggleDetachMode" @open-style-modal="showStyleModal = true" @share="handleShare" />
+    <FloatingBottomToolbar
+      :current-mode="currentMode"
+      :current-node-type="currentNodeType"
+      :show-code-panel="isCodePanelOpen"
+      :show-data-panel="isDataPanelOpen"
+      :show-json-panel="false"
+      :show-zoom-controls="showZoomControls"
+      :is-detach-mode-active="isDetachModeActive"
+      :show-detach-mode-control="showDetachModeControl"
+      @update:current-mode="currentMode = $event"
+      @update:current-node-type="currentNodeType = $event"
+      @undo="handleUndo"
+      @redo="handleRedo"
+      @zoom-in="handleZoomIn"
+      @zoom-out="handleZoomOut"
+      @fit="handleFit"
+      @layout-graph="handleGraphLayout"
+      @toggle-code-panel="toggleCodePanel"
+      @toggle-data-panel="toggleDataPanel"
+      @toggle-json-panel="toggleJsonPanel"
+      @toggle-detach-mode="uiStore.toggleDetachMode"
+      @open-style-modal="showStyleModal = true"
+      @share="handleShare"
+    />
 
     <BaseModal :is-open="showNewProjectModal" @close="showNewProjectModal = false">
       <template #header>
@@ -1129,7 +1234,11 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
       <template #body>
         <div class="flex items-center gap-3">
           <label style="min-width: 100px; font-weight: 500">Project Name:</label>
-          <BaseInput v-model="newProjectName" placeholder="Enter project name" @keyup.enter="createNewProject" />
+          <BaseInput
+            v-model="newProjectName"
+            placeholder="Enter project name"
+            @keyup.enter="createNewProject"
+          />
         </div>
       </template>
       <template #footer>
@@ -1145,18 +1254,32 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
         <div class="flex flex-col gap-2">
           <div class="db-form-group">
             <label for="new-graph-name">Graph Name</label>
-            <BaseInput id="new-graph-name" v-model="newGraphName" placeholder="Enter a name for your graph"
-              @keyup.enter="createNewGraph" />
+            <BaseInput
+              id="new-graph-name"
+              v-model="newGraphName"
+              placeholder="Enter a name for your graph"
+              @keyup.enter="createNewGraph"
+            />
           </div>
 
           <div class="db-import-section">
             <label class="db-section-label">Import from JSON (Optional)</label>
 
-            <div class="db-drop-zone" :class="{ 'db-loaded': importedGraphData, 'db-drag-over': isDragOver }"
-              @click="triggerGraphImport" @dragover.prevent="isDragOver = true" @dragleave.prevent="isDragOver = false"
-              @drop.prevent="handleDrop">
-              <input type="file" ref="graphImportInput" accept=".json" @change="handleGraphImportFile"
-                class="db-hidden-input" />
+            <div
+              class="db-drop-zone"
+              :class="{ 'db-loaded': importedGraphData, 'db-drag-over': isDragOver }"
+              @click="triggerGraphImport"
+              @dragover.prevent="isDragOver = true"
+              @dragleave.prevent="isDragOver = false"
+              @drop.prevent="handleDrop"
+            >
+              <input
+                type="file"
+                ref="graphImportInput"
+                accept=".json"
+                @change="handleGraphImportFile"
+                class="db-hidden-input"
+              />
 
               <div v-if="!importedGraphData" class="db-drop-zone-content">
                 <div class="db-icon-circle">
@@ -1174,9 +1297,15 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
                 </div>
                 <div class="db-text-content">
                   <span class="db-action-text">File Loaded Successfully</span>
-                  <small class="db-sub-text">{{ importedGraphData.name || 'Untitled Graph' }}</small>
+                  <small class="db-sub-text">{{
+                    importedGraphData.name || 'Untitled Graph'
+                  }}</small>
                 </div>
-                <button class="db-remove-file-btn" @click.stop="clearImportedData" title="Remove file">
+                <button
+                  class="db-remove-file-btn"
+                  @click.stop="clearImportedData"
+                  title="Remove file"
+                >
                   <i class="fas fa-times"></i>
                 </button>
               </div>
@@ -1203,14 +1332,28 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
 
     <AboutModal :is-open="showAboutModal" @close="showAboutModal = false" />
     <FaqModal :is-open="showFaqModal" @close="showFaqModal = false" />
-    <ExportModal :is-open="showExportModal" :export-type="currentExportType" @close="showExportModal = false"
-      @confirm-export="handleConfirmExport" />
-    <ValidationIssuesModal :is-open="showValidationModal" :validation-errors="validationErrors" :elements="elements"
-      @select-node="handleSelectNodeFromModal" @close="showValidationModal = false" />
+    <ExportModal
+      :is-open="showExportModal"
+      :export-type="currentExportType"
+      @close="showExportModal = false"
+      @confirm-export="handleConfirmExport"
+    />
+    <ValidationIssuesModal
+      :is-open="showValidationModal"
+      :validation-errors="validationErrors"
+      :elements="elements"
+      @select-node="handleSelectNodeFromModal"
+      @close="showValidationModal = false"
+    />
     <GraphStyleModal :is-open="showStyleModal" @close="showStyleModal = false" />
-    <ShareModal :is-open="showShareModal" :url="shareUrl" :project="projectStore.currentProject"
-      :current-graph-id="graphStore.currentGraphId" @close="showShareModal = false"
-      @generate="handleGenerateShareLink" />
+    <ShareModal
+      :is-open="showShareModal"
+      :url="shareUrl"
+      :project="projectStore.currentProject"
+      :current-graph-id="graphStore.currentGraphId"
+      @close="showShareModal = false"
+      @generate="handleGenerateShareLink"
+    />
     <DebugPanel v-if="showDebugPanel" @close="showDebugPanel = false" />
   </div>
 </template>

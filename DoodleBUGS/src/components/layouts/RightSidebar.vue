@@ -60,7 +60,10 @@ const handleHeaderClick = () => {
 </script>
 
 <template>
-  <aside class="db-floating-sidebar db-right db-glass-panel" :style="sidebarStyle(isRightSidebarOpen)">
+  <aside
+    class="db-floating-sidebar db-right db-glass-panel"
+    :style="sidebarStyle(isRightSidebarOpen)"
+  >
     <div
       class="db-sidebar-header"
       @mousedown="handleHeaderMouseDown"

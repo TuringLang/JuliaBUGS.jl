@@ -118,7 +118,11 @@ const copyScript = async () => {
       <div class="db-ls-panel-header">
         <span class="db-ls-title">Julia Script</span>
         <div class="db-ls-actions">
-          <button @click="$emit('open-settings')" title="Script Configuration" class="db-ls-action-btn">
+          <button
+            @click="$emit('open-settings')"
+            title="Script Configuration"
+            class="db-ls-action-btn"
+          >
             <i class="fas fa-cog"></i>
           </button>
           <button @click="$emit('download')" title="Download" class="db-ls-action-btn">
@@ -128,12 +132,7 @@ const copyScript = async () => {
       </div>
       <div class="db-ls-editor-wrapper">
         <div ref="editorContainer" class="db-ls-editor-container"></div>
-        <button
-          @click.stop="copyScript"
-          class="db-ls-copy-btn"
-          type="button"
-          title="Copy Script"
-        >
+        <button @click.stop="copyScript" class="db-ls-copy-btn" type="button" title="Copy Script">
           <i v-if="copySuccess" class="fas fa-check"></i>
           <i v-else class="fas fa-copy"></i>
         </button>

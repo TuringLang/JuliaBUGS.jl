@@ -297,7 +297,9 @@ onUnmounted(() => {
             :class="getLogClass(log)"
           >
             <span class="db-log-time">[{{ log.timestamp }}]</span>
-            <span class="db-log-type" :class="`db-type-${log.type}`">[{{ log.type.toUpperCase() }}]</span>
+            <span class="db-log-type" :class="`db-type-${log.type}`"
+              >[{{ log.type.toUpperCase() }}]</span
+            >
             <span class="db-log-message">{{ log.message }}</span>
           </div>
           <div v-if="filteredLogs.length === 0" class="db-debug-empty">

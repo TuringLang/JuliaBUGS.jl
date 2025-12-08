@@ -115,11 +115,12 @@ export function useShareExport() {
       if (min[keyMap.type] === 0) {
         const nodeTypeNum = min[keyMap.nodeType] as number
         const minId = min[keyMap.id] as string
-        
+
         // Handle plate vs regular node IDs
-        const id = minId.startsWith('node_') || minId.startsWith('plate_')
-          ? minId
-          : (nodeTypeNum === 5 ? 'plate_' : 'node_') + minId
+        const id =
+          minId.startsWith('node_') || minId.startsWith('plate_')
+            ? minId
+            : (nodeTypeNum === 5 ? 'plate_' : 'node_') + minId
 
         const node: Partial<GraphNode> = {
           type: 'node',
@@ -127,20 +128,20 @@ export function useShareExport() {
           name: min[keyMap.name] as string,
           nodeType: reverseNodeTypeMap[nodeTypeNum] as NodeType,
           position: {
-            x: min[keyMap.position] && !isNaN((min[keyMap.position] as number[])[0]) 
-              ? (min[keyMap.position] as number[])[0] 
-              : 0,
-            y: min[keyMap.position] && !isNaN((min[keyMap.position] as number[])[1]) 
-              ? (min[keyMap.position] as number[])[1] 
-              : 0,
+            x:
+              min[keyMap.position] && !isNaN((min[keyMap.position] as number[])[0])
+                ? (min[keyMap.position] as number[])[0]
+                : 0,
+            y:
+              min[keyMap.position] && !isNaN((min[keyMap.position] as number[])[1])
+                ? (min[keyMap.position] as number[])[1]
+                : 0,
           },
         }
-        
+
         if (min[keyMap.parent]) {
           const pid = min[keyMap.parent] as string
-          node.parent = pid.startsWith('plate_') || pid.startsWith('node_') 
-            ? pid 
-            : 'plate_' + pid
+          node.parent = pid.startsWith('plate_') || pid.startsWith('node_') ? pid : 'plate_' + pid
         }
         if (min[keyMap.distribution]) node.distribution = min[keyMap.distribution] as string
         if (min[keyMap.equation]) node.equation = min[keyMap.equation] as string
@@ -156,16 +157,18 @@ export function useShareExport() {
         const minId = min[keyMap.id] as string
         const minSource = min[keyMap.source] as string
         const minTarget = min[keyMap.target] as string
-        
+
         const edge = {
           type: 'edge' as const,
           id: minId.startsWith('edge_') ? minId : 'edge_' + minId,
-          source: minSource.startsWith('node_') || minSource.startsWith('plate_')
-            ? minSource
-            : 'node_' + minSource,
-          target: minTarget.startsWith('node_') || minTarget.startsWith('plate_')
-            ? minTarget
-            : 'node_' + minTarget,
+          source:
+            minSource.startsWith('node_') || minSource.startsWith('plate_')
+              ? minSource
+              : 'node_' + minSource,
+          target:
+            minTarget.startsWith('node_') || minTarget.startsWith('plate_')
+              ? minTarget
+              : 'node_' + minTarget,
         }
         return edge as GraphElement
       }

@@ -31,33 +31,51 @@ const panelRef = ref<HTMLElement | null>(null)
 // Position and size state
 const width = ref(props.defaultWidth || 400)
 const height = ref(props.defaultHeight || 300)
-const x = ref(props.defaultX || (typeof window !== 'undefined' ? window.innerWidth / 2 - (props.defaultWidth || 400) / 2 : 0))
-const y = ref(props.defaultY || (typeof window !== 'undefined' ? window.innerHeight - (props.defaultHeight || 300) - 100 : 0))
+const x = ref(
+  props.defaultX ||
+    (typeof window !== 'undefined' ? window.innerWidth / 2 - (props.defaultWidth || 400) / 2 : 0)
+)
+const y = ref(
+  props.defaultY ||
+    (typeof window !== 'undefined' ? window.innerHeight - (props.defaultHeight || 300) - 100 : 0)
+)
 
 // Watch for prop changes to sync with internal state
-watch(() => props.defaultWidth, (newWidth) => {
-  if (newWidth !== undefined && newWidth !== width.value) {
-    width.value = newWidth
+watch(
+  () => props.defaultWidth,
+  (newWidth) => {
+    if (newWidth !== undefined && newWidth !== width.value) {
+      width.value = newWidth
+    }
   }
-})
+)
 
-watch(() => props.defaultHeight, (newHeight) => {
-  if (newHeight !== undefined && newHeight !== height.value) {
-    height.value = newHeight
+watch(
+  () => props.defaultHeight,
+  (newHeight) => {
+    if (newHeight !== undefined && newHeight !== height.value) {
+      height.value = newHeight
+    }
   }
-})
+)
 
-watch(() => props.defaultX, (newX) => {
-  if (newX !== undefined && newX !== x.value) {
-    x.value = newX
+watch(
+  () => props.defaultX,
+  (newX) => {
+    if (newX !== undefined && newX !== x.value) {
+      x.value = newX
+    }
   }
-})
+)
 
-watch(() => props.defaultY, (newY) => {
-  if (newY !== undefined && newY !== y.value) {
-    y.value = newY
+watch(
+  () => props.defaultY,
+  (newY) => {
+    if (newY !== undefined && newY !== y.value) {
+      y.value = newY
+    }
   }
-})
+)
 
 // Dragging state
 const isDragging = ref(false)
@@ -90,10 +108,10 @@ const panelStyle = computed(() => ({
 // Drag handlers
 const startDrag = (e: MouseEvent | TouchEvent) => {
   if (!panelRef.value) return
-  
+
   isDragging.value = true
   emit('drag-start')
-  
+
   const rect = panelRef.value.getBoundingClientRect()
   const clientX = e instanceof MouseEvent ? e.clientX : e.touches[0].clientX
   const clientY = e instanceof MouseEvent ? e.clientY : e.touches[0].clientY
@@ -112,12 +130,12 @@ const startDrag = (e: MouseEvent | TouchEvent) => {
 
 const onDragMove = (e: MouseEvent) => {
   if (!isDragging.value) return
-  
+
   lastDragX = e.clientX - dragOffsetX.value
   lastDragY = e.clientY - dragOffsetY.value
-  
+
   if (dragAnimationFrame) return
-  
+
   dragAnimationFrame = requestAnimationFrame(() => {
     x.value = lastDragX
     y.value = lastDragY
@@ -128,12 +146,12 @@ const onDragMove = (e: MouseEvent) => {
 const onDragMoveTouch = (e: TouchEvent) => {
   if (!isDragging.value) return
   e.preventDefault()
-  
+
   lastDragX = e.touches[0].clientX - dragOffsetX.value
   lastDragY = e.touches[0].clientY - dragOffsetY.value
-  
+
   if (dragAnimationFrame) return
-  
+
   dragAnimationFrame = requestAnimationFrame(() => {
     x.value = lastDragX
     y.value = lastDragY
@@ -159,7 +177,7 @@ const startResize = (e: MouseEvent | TouchEvent) => {
   e.stopPropagation()
   isResizing.value = true
   emit('resize-start')
-  
+
   const clientX = e instanceof MouseEvent ? e.clientX : e.touches[0].clientX
   const clientY = e instanceof MouseEvent ? e.clientY : e.touches[0].clientY
 
@@ -179,12 +197,12 @@ const startResize = (e: MouseEvent | TouchEvent) => {
 
 const onResizeMove = (e: MouseEvent) => {
   if (!isResizing.value) return
-  
+
   lastResizeX = e.clientX
   lastResizeY = e.clientY
-  
+
   if (resizeAnimationFrame) return
-  
+
   resizeAnimationFrame = requestAnimationFrame(() => {
     const deltaX = lastResizeX - resizeStartX.value
     const deltaY = lastResizeY - resizeStartY.value
@@ -198,12 +216,12 @@ const onResizeMove = (e: MouseEvent) => {
 const onResizeMoveTouch = (e: TouchEvent) => {
   if (!isResizing.value) return
   e.preventDefault()
-  
+
   lastResizeX = e.touches[0].clientX
   lastResizeY = e.touches[0].clientY
-  
+
   if (resizeAnimationFrame) return
-  
+
   resizeAnimationFrame = requestAnimationFrame(() => {
     const deltaX = lastResizeX - resizeStartX.value
     const deltaY = lastResizeY - resizeStartY.value
@@ -240,17 +258,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
-    v-if="isOpen"
-    ref="panelRef"
-    class="db-floating-panel db-glass-panel"
-    :style="panelStyle"
-  >
-    <div
-      class="db-panel-header"
-      @mousedown="startDrag"
-      @touchstart="startDrag"
-    >
+  <div v-if="isOpen" ref="panelRef" class="db-floating-panel db-glass-panel" :style="panelStyle">
+    <div class="db-panel-header" @mousedown="startDrag" @touchstart="startDrag">
       <span class="db-graph-title">
         <i v-if="icon" :class="icon"></i>
         {{ title }}
@@ -277,12 +286,7 @@ onUnmounted(() => {
         >
           <i class="fas fa-file-upload"></i>
         </button>
-        <button
-          class="db-close-btn"
-          @click.stop="emit('close')"
-          @mousedown.stop
-          @touchstart.stop
-        >
+        <button class="db-close-btn" @click.stop="emit('close')" @mousedown.stop @touchstart.stop>
           <i class="fas fa-times"></i>
         </button>
       </div>

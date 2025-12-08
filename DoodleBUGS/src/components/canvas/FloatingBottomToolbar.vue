@@ -390,7 +390,12 @@ onUnmounted(() => {
         <i class="fas fa-database"></i>
       </button>
 
-      <button class="db-dock-btn" @click="$emit('open-style-modal')" title="Graph Style" type="button">
+      <button
+        class="db-dock-btn"
+        @click="$emit('open-style-modal')"
+        title="Graph Style"
+        type="button"
+      >
         <i class="fas fa-palette"></i>
       </button>
 

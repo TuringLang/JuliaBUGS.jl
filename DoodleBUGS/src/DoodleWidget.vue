@@ -136,11 +136,7 @@ const { generatedCode } = useBugsCodeGenerator(elements)
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData)
 const { getCyInstance, getUndoRedoInstance } = useGraphInstance()
 const { smartFit, applyLayoutWithFit } = useGraphLayout()
-const {
-  shareUrl,
-  minifyGraph,
-  generateShareLink,
-} = useShareExport()
+const { shareUrl, minifyGraph, generateShareLink } = useShareExport()
 const { importedGraphData, processGraphFile, clearImportedData } = useImportExport()
 
 // CSS for teleported widget content - injected into document head
@@ -306,7 +302,6 @@ onUnmounted(() => {
   document.documentElement.classList.remove('db-dark-mode')
   removeWidgetStyles()
 })
-
 
 watch(
   [() => projectStore.projects, () => graphStore.graphContents, () => dataStore.dataContent],
@@ -524,7 +519,10 @@ const createNewGraph = () => {
 
     if (newGraphMeta && importedGraphData.value) {
       // Populate with imported data
-      graphStore.updateGraphElements(newGraphMeta.id, importedGraphData.value.elements as GraphElement[])
+      graphStore.updateGraphElements(
+        newGraphMeta.id,
+        importedGraphData.value.elements as GraphElement[]
+      )
 
       if (importedGraphData.value.dataContent) {
         dataStore.updateGraphData(newGraphMeta.id, { content: importedGraphData.value.dataContent })
@@ -737,16 +735,20 @@ const isModelValid = computed(() => validationErrors.value.size === 0)
 
 // Sync dark mode class to html element for global.css selectors (like MainLayout does)
 // This makes html.db-dark-mode selectors work for teleported content
-watch(isDarkMode, (val) => {
-  const html = document.documentElement
-  if (val) {
-    html.classList.add('db-dark-mode')
-    document.body.classList.add('db-dark-mode')
-  } else {
-    html.classList.remove('db-dark-mode')
-    document.body.classList.remove('db-dark-mode')
-  }
-}, { immediate: true })
+watch(
+  isDarkMode,
+  (val) => {
+    const html = document.documentElement
+    if (val) {
+      html.classList.add('db-dark-mode')
+      document.body.classList.add('db-dark-mode')
+    } else {
+      html.classList.remove('db-dark-mode')
+      document.body.classList.remove('db-dark-mode')
+    }
+  },
+  { immediate: true }
+)
 
 const useDrag = (initialX: number, initialY: number) => {
   const x = ref(initialX)
@@ -951,27 +953,46 @@ const handleUIInteractionEnd = () => {
 </script>
 
 <template>
-  <div class="db-widget-root" :class="{ 'db-dark-mode': isDarkMode }"
-    style="width: 100%; height: 100%; position: relative; overflow: hidden">
-    <div class="db-canvas-layer" :style="{
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      width: '100%',
-      height: '100%',
-      pointerEvents: isDraggingUI ? 'none' : 'auto',
-    }">
-      <GraphEditor v-if="isInitialized && graphStore.currentGraphId" :key="graphStore.currentGraphId"
-        :graph-id="graphStore.currentGraphId" :is-grid-enabled="isGridEnabled" :grid-size="gridSize"
-        :grid-style="canvasGridStyle" :current-mode="currentMode" :elements="elements"
-        :current-node-type="currentNodeType" :validation-errors="validationErrors" :show-zoom-controls="false"
-        @update:current-mode="currentMode = $event" @update:current-node-type="currentNodeType = $event"
+  <div
+    class="db-widget-root"
+    :class="{ 'db-dark-mode': isDarkMode }"
+    style="width: 100%; height: 100%; position: relative; overflow: hidden"
+  >
+    <div
+      class="db-canvas-layer"
+      :style="{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: isDraggingUI ? 'none' : 'auto',
+      }"
+    >
+      <GraphEditor
+        v-if="isInitialized && graphStore.currentGraphId"
+        :key="graphStore.currentGraphId"
+        :graph-id="graphStore.currentGraphId"
+        :is-grid-enabled="isGridEnabled"
+        :grid-size="gridSize"
+        :grid-style="canvasGridStyle"
+        :current-mode="currentMode"
+        :elements="elements"
+        :current-node-type="currentNodeType"
+        :validation-errors="validationErrors"
+        :show-zoom-controls="false"
+        @update:current-mode="currentMode = $event"
+        @update:current-node-type="currentNodeType = $event"
         @element-selected="handleElementSelected"
-        @layout-updated="(name) => graphStore.updateGraphLayout(graphStore.currentGraphId!, name)" @viewport-changed="
+        @layout-updated="(name) => graphStore.updateGraphLayout(graphStore.currentGraphId!, name)"
+        @viewport-changed="
           (v) => graphStore.updateGraphViewport(graphStore.currentGraphId!, v.zoom, v.pan)
-        " @update:is-grid-enabled="isGridEnabled = $event" @update:grid-size="gridSize = $event" />
+        "
+        @update:is-grid-enabled="isGridEnabled = $event"
+        @update:grid-size="gridSize = $event"
+      />
       <div v-else class="db-empty-placeholder">
         <div class="db-msg-box">
           <i class="fas fa-spinner fa-spin"></i>
@@ -981,81 +1002,191 @@ const handleUIInteractionEnd = () => {
     </div>
 
     <Teleport to="body">
-      <div class="db-ui-overlay" :class="{ 'db-dark-mode': isDarkMode, 'db-widget-ready': widgetInitialized }">
+      <div
+        class="db-ui-overlay"
+        :class="{ 'db-dark-mode': isDarkMode, 'db-widget-ready': widgetInitialized }"
+      >
         <Toast position="top-center" />
 
         <!-- Left Sidebar (Floating) -->
-        <div v-if="widgetInitialized && isLeftSidebarOpen" class="db-sidebar-wrapper db-left"
-          :style="leftDrag.style.value">
-          <LeftSidebar v-show="isLeftSidebarOpen" :activeAccordionTabs="activeLeftAccordionTabs"
+        <div
+          v-if="widgetInitialized && isLeftSidebarOpen"
+          class="db-sidebar-wrapper db-left"
+          :style="leftDrag.style.value"
+        >
+          <LeftSidebar
+            v-show="isLeftSidebarOpen"
+            :activeAccordionTabs="activeLeftAccordionTabs"
             @update:activeAccordionTabs="activeLeftAccordionTabs = $event"
-            :projectName="projectStore.currentProject?.name || 'Project'" :pinnedGraphTitle="pinnedGraphTitle"
-            :isGridEnabled="isGridEnabled" :gridSize="gridSize" :showZoomControls="showZoomControls"
-            :showDebugPanel="showDebugPanel" :isCodePanelOpen="isCodePanelOpen" :isDetachModeActive="isDetachModeActive"
-            :showDetachModeControl="showDetachModeControl" :enableDrag="true"
-            @toggle-left-sidebar="uiStore.toggleLeftSidebar" @new-project="handleNewProject" @new-graph="handleNewGraph"
-            @update:currentMode="currentMode = $event" @update:currentNodeType="currentNodeType = $event"
-            @update:isGridEnabled="isGridEnabled = $event" @update:gridSize="gridSize = $event"
-            @update:showZoomControls="showZoomControls = $event" @update:showDebugPanel="showDebugPanel = $event"
+            :projectName="projectStore.currentProject?.name || 'Project'"
+            :pinnedGraphTitle="pinnedGraphTitle"
+            :isGridEnabled="isGridEnabled"
+            :gridSize="gridSize"
+            :showZoomControls="showZoomControls"
+            :showDebugPanel="showDebugPanel"
+            :isCodePanelOpen="isCodePanelOpen"
+            :isDetachModeActive="isDetachModeActive"
+            :showDetachModeControl="showDetachModeControl"
+            :enableDrag="true"
+            @toggle-left-sidebar="uiStore.toggleLeftSidebar"
+            @new-project="handleNewProject"
+            @new-graph="handleNewGraph"
+            @update:currentMode="currentMode = $event"
+            @update:currentNodeType="currentNodeType = $event"
+            @update:isGridEnabled="isGridEnabled = $event"
+            @update:gridSize="gridSize = $event"
+            @update:showZoomControls="showZoomControls = $event"
+            @update:showDebugPanel="showDebugPanel = $event"
             @update:isDetachModeActive="isDetachModeActive = $event"
-            @update:show-detach-mode-control="showDetachModeControl = $event" @toggle-code-panel="toggleCodePanel"
-            @load-example="handleLoadExample" @open-about-modal="showAboutModal = true"
-            @open-faq-modal="showFaqModal = true" @toggle-dark-mode="uiStore.toggleDarkMode"
-            @share-graph="handleShareGraph" @share-project-url="handleShareProjectUrl"
-            @header-drag-start="onLeftHeaderDragStart" />
+            @update:show-detach-mode-control="showDetachModeControl = $event"
+            @toggle-code-panel="toggleCodePanel"
+            @load-example="handleLoadExample"
+            @open-about-modal="showAboutModal = true"
+            @open-faq-modal="showFaqModal = true"
+            @toggle-dark-mode="uiStore.toggleDarkMode"
+            @share-graph="handleShareGraph"
+            @share-project-url="handleShareProjectUrl"
+            @header-drag-start="onLeftHeaderDragStart"
+          />
         </div>
 
-        <div v-if="widgetInitialized && isRightSidebarOpen" class="db-sidebar-wrapper db-right"
-          :style="rightDrag.style.value">
-          <RightSidebar v-show="isRightSidebarOpen" :selectedElement="selectedElement"
-            :validationErrors="validationErrors" :isModelValid="isModelValid" :enableDrag="true"
-            @toggle-right-sidebar="uiStore.toggleRightSidebar" @update-element="updateElement"
-            @delete-element="deleteElement" @show-validation-issues="showValidationModal = true"
-            @open-script-settings="showScriptSettingsModal = true" @download-script="handleDownloadScript"
-            @generate-script="handleGenerateStandalone" @share="handleShare" @open-export-modal="openExportModal"
-            @export-json="handleExportJson" @header-drag-start="onRightHeaderDragStart" />
+        <div
+          v-if="widgetInitialized && isRightSidebarOpen"
+          class="db-sidebar-wrapper db-right"
+          :style="rightDrag.style.value"
+        >
+          <RightSidebar
+            v-show="isRightSidebarOpen"
+            :selectedElement="selectedElement"
+            :validationErrors="validationErrors"
+            :isModelValid="isModelValid"
+            :enableDrag="true"
+            @toggle-right-sidebar="uiStore.toggleRightSidebar"
+            @update-element="updateElement"
+            @delete-element="deleteElement"
+            @show-validation-issues="showValidationModal = true"
+            @open-script-settings="showScriptSettingsModal = true"
+            @download-script="handleDownloadScript"
+            @generate-script="handleGenerateStandalone"
+            @share="handleShare"
+            @open-export-modal="openExportModal"
+            @export-json="handleExportJson"
+            @header-drag-start="onRightHeaderDragStart"
+          />
         </div>
 
-        <FloatingBottomToolbar :current-mode="currentMode" :current-node-type="currentNodeType"
-          :show-zoom-controls="showZoomControls" :show-code-panel="isCodePanelOpen" :show-data-panel="isDataPanelOpen"
-          :is-detach-mode-active="isDetachModeActive" :show-detach-mode-control="showDetachModeControl"
-          :is-widget="true" @update:current-mode="currentMode = $event"
-          @update:current-node-type="currentNodeType = $event" @undo="handleUndo" @redo="handleRedo"
-          @zoom-in="handleZoomIn" @zoom-out="handleZoomOut" @fit="handleFit" @layout-graph="handleGraphLayout"
-          @toggle-code-panel="toggleCodePanel" @toggle-data-panel="toggleDataPanel"
-          @toggle-detach-mode="uiStore.toggleDetachMode" @open-style-modal="showStyleModal = true" @share="handleShare"
-          @nav="handleToolbarNavigation" @drag-start="handleUIInteractionStart" @drag-end="handleUIInteractionEnd" />
-
-        <FloatingPanel title="BUGS Code Preview" icon="fas fa-code" :is-open="isCodePanelOpen"
-          :default-width="codePanelSize.width" :default-height="codePanelSize.height" :default-x="codePanelPos.x"
-          :default-y="codePanelPos.y" :show-download="true" @close="toggleCodePanel" @download="handleDownloadBugs"
+        <FloatingBottomToolbar
+          :current-mode="currentMode"
+          :current-node-type="currentNodeType"
+          :show-zoom-controls="showZoomControls"
+          :show-code-panel="isCodePanelOpen"
+          :show-data-panel="isDataPanelOpen"
+          :is-detach-mode-active="isDetachModeActive"
+          :show-detach-mode-control="showDetachModeControl"
+          :is-widget="true"
+          @update:current-mode="currentMode = $event"
+          @update:current-node-type="currentNodeType = $event"
+          @undo="handleUndo"
+          @redo="handleRedo"
+          @zoom-in="handleZoomIn"
+          @zoom-out="handleZoomOut"
+          @fit="handleFit"
+          @layout-graph="handleGraphLayout"
+          @toggle-code-panel="toggleCodePanel"
+          @toggle-data-panel="toggleDataPanel"
+          @toggle-detach-mode="uiStore.toggleDetachMode"
+          @open-style-modal="showStyleModal = true"
+          @share="handleShare"
+          @nav="handleToolbarNavigation"
           @drag-start="handleUIInteractionStart"
-          @drag-end="(pos) => { codePanelPos.x = pos.x; codePanelPos.y = pos.y; handleUIInteractionEnd() }"
+          @drag-end="handleUIInteractionEnd"
+        />
+
+        <FloatingPanel
+          title="BUGS Code Preview"
+          icon="fas fa-code"
+          :is-open="isCodePanelOpen"
+          :default-width="codePanelSize.width"
+          :default-height="codePanelSize.height"
+          :default-x="codePanelPos.x"
+          :default-y="codePanelPos.y"
+          :show-download="true"
+          @close="toggleCodePanel"
+          @download="handleDownloadBugs"
+          @drag-start="handleUIInteractionStart"
+          @drag-end="
+            (pos) => {
+              codePanelPos.x = pos.x
+              codePanelPos.y = pos.y
+              handleUIInteractionEnd()
+            }
+          "
           @resize-start="handleUIInteractionStart"
-          @resize-end="(size) => { codePanelSize.width = size.width; codePanelSize.height = size.height; handleUIInteractionEnd() }">
+          @resize-end="
+            (size) => {
+              codePanelSize.width = size.width
+              codePanelSize.height = size.height
+              handleUIInteractionEnd()
+            }
+          "
+        >
           <CodePreviewPanel :is-active="isCodePanelOpen" />
         </FloatingPanel>
 
-        <FloatingPanel title="Data & Inits" icon="fas fa-database" badge="JSON" :is-open="isDataPanelOpen"
-          :default-width="dataPanelSize.width" :default-height="dataPanelSize.height"
-          :default-x="dataPanelPos.x || windowWidth - 420" :default-y="dataPanelPos.y" @close="toggleDataPanel"
+        <FloatingPanel
+          title="Data & Inits"
+          icon="fas fa-database"
+          badge="JSON"
+          :is-open="isDataPanelOpen"
+          :default-width="dataPanelSize.width"
+          :default-height="dataPanelSize.height"
+          :default-x="dataPanelPos.x || windowWidth - 420"
+          :default-y="dataPanelPos.y"
+          @close="toggleDataPanel"
           @drag-start="handleUIInteractionStart"
-          @drag-end="(pos) => { dataPanelPos.x = pos.x; dataPanelPos.y = pos.y; handleUIInteractionEnd() }"
+          @drag-end="
+            (pos) => {
+              dataPanelPos.x = pos.x
+              dataPanelPos.y = pos.y
+              handleUIInteractionEnd()
+            }
+          "
           @resize-start="handleUIInteractionStart"
-          @resize-end="(size) => { dataPanelSize.width = size.width; dataPanelSize.height = size.height; handleUIInteractionEnd() }">
+          @resize-end="
+            (size) => {
+              dataPanelSize.width = size.width
+              dataPanelSize.height = size.height
+              handleUIInteractionEnd()
+            }
+          "
+        >
           <DataInputPanel :is-active="isDataPanelOpen" />
         </FloatingPanel>
 
         <AboutModal :is-open="showAboutModal" @close="showAboutModal = false" />
         <FaqModal :is-open="showFaqModal" @close="showFaqModal = false" />
-        <ExportModal :is-open="showExportModal" :export-type="currentExportType" @close="showExportModal = false"
-          @confirm-export="handleConfirmExport" />
+        <ExportModal
+          :is-open="showExportModal"
+          :export-type="currentExportType"
+          @close="showExportModal = false"
+          @confirm-export="handleConfirmExport"
+        />
         <GraphStyleModal :is-open="showStyleModal" @close="showStyleModal = false" />
-        <ShareModal :is-open="showShareModal" :url="shareUrl" :project="projectStore.currentProject"
-          :current-graph-id="graphStore.currentGraphId" @close="showShareModal = false"
-          @generate="handleGenerateShareLink" />
-        <ValidationIssuesModal :is-open="showValidationModal" :validation-errors="validationErrors" :elements="elements"
-          @close="showValidationModal = false" @select-node="handleSelectNodeFromModal" />
+        <ShareModal
+          :is-open="showShareModal"
+          :url="shareUrl"
+          :project="projectStore.currentProject"
+          :current-graph-id="graphStore.currentGraphId"
+          @close="showShareModal = false"
+          @generate="handleGenerateShareLink"
+        />
+        <ValidationIssuesModal
+          :is-open="showValidationModal"
+          :validation-errors="validationErrors"
+          :elements="elements"
+          @close="showValidationModal = false"
+          @select-node="handleSelectNodeFromModal"
+        />
         <BaseModal :is-open="showScriptSettingsModal" @close="showScriptSettingsModal = false">
           <template #header>
             <h3>Script Settings</h3>
@@ -1075,7 +1206,11 @@ const handleUIInteractionEnd = () => {
           <template #body>
             <div class="db-modal-form-row">
               <label>Project Name:</label>
-              <BaseInput v-model="newProjectName" placeholder="Enter project name" @keyup.enter="createNewProject" />
+              <BaseInput
+                v-model="newProjectName"
+                placeholder="Enter project name"
+                @keyup.enter="createNewProject"
+              />
             </div>
           </template>
           <template #footer>
@@ -1091,18 +1226,32 @@ const handleUIInteractionEnd = () => {
             <div class="flex flex-col gap-2">
               <div class="db-form-group">
                 <label for="new-graph-name">Graph Name</label>
-                <BaseInput id="new-graph-name" v-model="newGraphName" placeholder="Enter a name for your graph"
-                  @keyup.enter="createNewGraph" />
+                <BaseInput
+                  id="new-graph-name"
+                  v-model="newGraphName"
+                  placeholder="Enter a name for your graph"
+                  @keyup.enter="createNewGraph"
+                />
               </div>
 
               <div class="db-import-section">
                 <label class="db-section-label">Import from JSON (Optional)</label>
 
-                <div class="db-drop-zone" :class="{ 'db-loaded': importedGraphData, 'db-drag-over': isDragOver }"
-                  @click="triggerGraphImport" @dragover.prevent="isDragOver = true"
-                  @dragleave.prevent="isDragOver = false" @drop.prevent="handleDrop">
-                  <input type="file" ref="graphImportInput" accept=".json" @change="handleGraphImportFile"
-                    class="db-hidden-input" />
+                <div
+                  class="db-drop-zone"
+                  :class="{ 'db-loaded': importedGraphData, 'db-drag-over': isDragOver }"
+                  @click="triggerGraphImport"
+                  @dragover.prevent="isDragOver = true"
+                  @dragleave.prevent="isDragOver = false"
+                  @drop.prevent="handleDrop"
+                >
+                  <input
+                    type="file"
+                    ref="graphImportInput"
+                    accept=".json"
+                    @change="handleGraphImportFile"
+                    class="db-hidden-input"
+                  />
 
                   <div v-if="!importedGraphData" class="db-drop-zone-content">
                     <div class="db-icon-circle">
@@ -1120,9 +1269,15 @@ const handleUIInteractionEnd = () => {
                     </div>
                     <div class="db-text-content">
                       <span class="db-action-text">File Loaded Successfully</span>
-                      <small class="db-sub-text">{{ importedGraphData.name || 'Untitled Graph' }}</small>
+                      <small class="db-sub-text">{{
+                        importedGraphData.name || 'Untitled Graph'
+                      }}</small>
                     </div>
-                    <button class="db-remove-file-btn" @click.stop="clearImportedData" title="Remove file">
+                    <button
+                      class="db-remove-file-btn"
+                      @click.stop="clearImportedData"
+                      title="Remove file"
+                    >
                       <i class="fas fa-times"></i>
                     </button>
                   </div>
@@ -1225,9 +1380,11 @@ const handleUIInteractionEnd = () => {
 
 /* Dark mode grid styling for widget */
 .db-widget-root.db-dark-mode .db-cytoscape-container.db-grid-background.db-grid-dots {
-  background-image: radial-gradient(circle,
-      rgba(255, 255, 255, 0.2) 1.2px,
-      transparent 1px) !important;
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.2) 1.2px,
+    transparent 1px
+  ) !important;
 }
 
 .db-widget-root.db-dark-mode .db-cytoscape-container.db-grid-background.db-grid-lines {

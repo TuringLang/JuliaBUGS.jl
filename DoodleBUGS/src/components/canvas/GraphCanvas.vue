@@ -482,23 +482,28 @@ watch(
 </script>
 
 <template>
-  <div ref="cyContainer" class="db-cytoscape-container" :class="{
-    'db-grid-background': isGridEnabled && gridSize > 0,
-    'db-grid-lines': gridStyle === 'lines' && isGridEnabled && gridSize > 0,
-    'db-grid-dots': gridStyle === 'dots' && isGridEnabled && gridSize > 0,
-    'db-mode-add-node': currentMode === 'add-node',
-    'db-mode-add-edge': currentMode === 'add-edge',
-    'db-mode-select': currentMode === 'select',
-    'db-graph-ready': isGraphVisible,
-  }" :style="{
-    position: 'relative',
-    width: '100%',
-    height: '100%',
-    minHeight: '200px',
-    backgroundColor: 'var(--theme-bg-canvas)',
-    opacity: isGraphVisible ? 1 : 0,
-    transition: isGraphVisible ? 'opacity 0.3s ease-in-out' : 'none',
-  }"></div>
+  <div
+    ref="cyContainer"
+    class="db-cytoscape-container"
+    :class="{
+      'db-grid-background': isGridEnabled && gridSize > 0,
+      'db-grid-lines': gridStyle === 'lines' && isGridEnabled && gridSize > 0,
+      'db-grid-dots': gridStyle === 'dots' && isGridEnabled && gridSize > 0,
+      'db-mode-add-node': currentMode === 'add-node',
+      'db-mode-add-edge': currentMode === 'add-edge',
+      'db-mode-select': currentMode === 'select',
+      'db-graph-ready': isGraphVisible,
+    }"
+    :style="{
+      position: 'relative',
+      width: '100%',
+      height: '100%',
+      minHeight: '200px',
+      backgroundColor: 'var(--theme-bg-canvas)',
+      opacity: isGraphVisible ? 1 : 0,
+      transition: isGraphVisible ? 'opacity 0.3s ease-in-out' : 'none',
+    }"
+  ></div>
 </template>
 
 <style scoped>
@@ -544,9 +549,11 @@ watch(
 
 /* Grid Dots Styling - Uses variables for automatic Dark Mode support */
 .db-cytoscape-container.db-grid-background.db-grid-dots {
-  background-image: radial-gradient(circle,
-      var(--theme-text-secondary) 1.2px,
-      transparent 1px) !important;
+  background-image: radial-gradient(
+    circle,
+    var(--theme-text-secondary) 1.2px,
+    transparent 1px
+  ) !important;
 }
 
 /* Grid Lines Styling - Uses variables for automatic Dark Mode support */
@@ -559,9 +566,11 @@ watch(
 /* Dark mode overrides using :global to catch class on widget root or body (for teleported content) */
 :global(.db-dark-mode) .db-cytoscape-container.db-grid-background.db-grid-dots,
 :global(body.db-dark-mode) .db-cytoscape-container.db-grid-background.db-grid-dots {
-  background-image: radial-gradient(circle,
-      rgba(255, 255, 255, 0.2) 1.2px,
-      transparent 1px) !important;
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.2) 1.2px,
+    transparent 1px
+  ) !important;
 }
 
 :global(.db-dark-mode) .db-cytoscape-container.db-grid-background.db-grid-lines,

@@ -93,7 +93,10 @@ const handleHeaderClick = () => {
 </script>
 
 <template>
-  <aside class="db-floating-sidebar db-left db-glass-panel" :style="sidebarStyle(isLeftSidebarOpen)">
+  <aside
+    class="db-floating-sidebar db-left db-glass-panel"
+    :style="sidebarStyle(isLeftSidebarOpen)"
+  >
     <div
       class="db-sidebar-header"
       @mousedown="handleHeaderMouseDown"
@@ -227,7 +230,9 @@ const handleHeaderClick = () => {
         </AccordionPanel>
 
         <AccordionPanel value="devtools">
-          <AccordionHeader><i class="fas fa-terminal db-icon-12"></i> Developer Tools</AccordionHeader>
+          <AccordionHeader
+            ><i class="fas fa-terminal db-icon-12"></i> Developer Tools</AccordionHeader
+          >
           <AccordionContent>
             <div class="db-menu-panel flex-col gap-3">
               <div class="db-menu-row">
