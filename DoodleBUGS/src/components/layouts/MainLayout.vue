@@ -1364,14 +1364,14 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   left: 0;
   width: 100%;
   bottom: 0;
-  z-index: 0;
+  z-index: 0; /* Base layer: Canvas */
   transition: bottom 0.1s ease;
 }
 
 .collapsed-sidebar-trigger {
   position: absolute;
   top: 16px;
-  z-index: 49;
+  z-index: 100; /* Layer 2: Collapsed sidebar triggers */
   padding: 8px 12px;
   border-radius: var(--radius-md);
   display: flex;
@@ -1491,7 +1491,7 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   opacity: 0;
   transition: opacity 0.1s;
   margin-top: 6px;
-  z-index: 100;
+  z-index: 600; /* Layer 8: Tooltips - highest layer */
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 

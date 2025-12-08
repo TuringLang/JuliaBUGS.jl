@@ -1224,6 +1224,7 @@ const handleUIInteractionEnd = () => {
   bottom: 0;
   width: 100%;
   height: 100%;
+  z-index: 0; /* Base layer: Canvas */
 }
 
 .doodle-widget-root .graph-editor-container {
@@ -1301,7 +1302,7 @@ const handleUIInteractionEnd = () => {
 .collapsed-sidebar-trigger {
   position: absolute;
   top: 16px;
-  z-index: 9000; /* Increased z-index to ensure visibility above canvas layers */
+  z-index: 100; /* Layer 2: Collapsed sidebar triggers */
   padding: 8px 12px;
   border-radius: var(--radius-md);
   display: flex;
@@ -1623,7 +1624,7 @@ const handleUIInteractionEnd = () => {
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 9999;
+  z-index: 10; /* Layer 1: UI overlay container */
   pointer-events: none;
 
   --font-family-sans:
@@ -1666,7 +1667,7 @@ const handleUIInteractionEnd = () => {
 .sidebar-wrapper {
   position: fixed;
   pointer-events: auto;
-  z-index: 10000;
+  z-index: 200; /* Layer 3: Sidebars (LeftSidebar/RightSidebar have z-index: 50) */
   display: flex;
   flex-direction: row;
   align-items: flex-start;
@@ -1707,7 +1708,7 @@ const handleUIInteractionEnd = () => {
 /* PrimeVue Popover/Portal Styles for Widget */
 .p-popover {
   pointer-events: auto !important;
-  z-index: 100000 !important;
+  z-index: 500 !important; /* Layer 6: Dropdowns and popovers - above toolbar */
 }
 
 .p-popover-content {
@@ -1717,16 +1718,16 @@ const handleUIInteractionEnd = () => {
 /* Ensure BaseSelect dropdown works */
 .p-select-overlay {
   pointer-events: auto !important;
-  z-index: 100000 !important;
+  z-index: 500 !important; /* Layer 6: Dropdowns and select overlays */
 }
 
 /* Ensure all PrimeVue modals appear above sidebars and toolbars */
 .p-dialog {
-  z-index: 50000 !important;
+  z-index: 550 !important; /* Layer 7: Modals - above dropdowns */
 }
 
 .p-dialog-mask {
-  z-index: 49999 !important;
+  z-index: 549 !important; /* Layer 7: Modal backdrop */
   pointer-events: auto !important;
 }
 </style>

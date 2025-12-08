@@ -304,7 +304,7 @@ onUnmounted(() => {
 .floating-panel {
   position: fixed;
   pointer-events: auto;
-  z-index: 30000;
+  z-index: 300; /* Layer 4: Floating panels (code/data) - above sidebars, below toolbar */
   background: var(--theme-bg-panel);
   border: 1px solid var(--theme-border);
   border-radius: var(--radius-lg);
