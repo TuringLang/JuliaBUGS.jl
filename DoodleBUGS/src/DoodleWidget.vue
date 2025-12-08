@@ -148,71 +148,8 @@ const { importedGraphData, processGraphFile, clearImportedData } = useImportExpo
 const WIDGET_STYLES_ID = 'doodlebugs-widget-teleport-styles'
 
 const widgetTeleportCSS = `
-/* DoodleBUGS Widget - Teleported Content Base Styles */
-/* Since html.db-dark-mode is now set, global.css selectors work automatically */
-
-/* Light mode CSS variables for teleported containers */
-.db-ui-overlay,
-.db-sidebar-wrapper,
-.db-floating-panel {
-  --font-family-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-size-xs: 10px;
-  --font-size-sm: 12px;
-  --font-size-md: 13px;
-  --font-size-lg: 14px;
-  --theme-bg-canvas: #f3f4f6;
-  --theme-bg-panel: #ffffff;
-  --theme-bg-panel-transparent: rgba(255, 255, 255, 0.95);
-  --theme-bg-hover: #f3f4f6;
-  --theme-bg-active: #e5e7eb;
-  --theme-text-primary: #111827;
-  --theme-text-secondary: #4b5563;
-  --theme-text-muted: #9ca3af;
-  --theme-text-inverse: #ffffff;
-  --theme-border: #e5e7eb;
-  --theme-border-hover: #d1d5db;
-  --theme-grid-line: #d1d5db;
-  --theme-primary: #10b981;
-  --theme-primary-hover: #059669;
-  --theme-danger: #ef4444;
-  --theme-success: #10b981;
-  --theme-warning: #f59e0b;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-pill: 9999px;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-floating: 0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.08);
-  --p-content-background: var(--theme-bg-panel);
-  --p-text-color: var(--theme-text-primary);
-  --p-content-border-color: var(--theme-border);
-  --p-primary-color: var(--theme-primary);
-}
-
-/* Dark mode CSS variables - inherits from html.db-dark-mode via global.css */
-html.db-dark-mode .db-ui-overlay,
-html.db-dark-mode .db-sidebar-wrapper,
-html.db-dark-mode .db-floating-panel {
-  --theme-bg-canvas: #0f1115;
-  --theme-bg-panel: #18181b;
-  --theme-bg-panel-transparent: rgba(24, 24, 27, 0.9);
-  --theme-bg-hover: #27272a;
-  --theme-bg-active: #3f3f46;
-  --theme-text-primary: #f3f4f6;
-  --theme-text-secondary: #a1a1aa;
-  --theme-text-muted: #52525b;
-  --theme-border: #27272a;
-  --theme-border-hover: #3f3f46;
-  --theme-grid-line: #3f3f46;
-  --theme-primary: #10b981;
-  --theme-primary-hover: #34d399;
-  --theme-success: #10b981;
-  --shadow-floating: 0 10px 30px -4px rgba(0, 0, 0, 0.6);
-  --p-content-background: #18181b;
-  --p-text-color: #f3f4f6;
-  --p-content-border-color: #27272a;
-}
+/* DoodleBUGS Widget - Teleported Content Positioning Styles */
+/* CSS variables are inherited from global.css via html.db-dark-mode */
 
 /* UI Overlay positioning */
 .db-ui-overlay {
@@ -1663,6 +1600,9 @@ const handleUIInteractionEnd = () => {
 </style>
 
 <style>
+/* Widget UI Layer Positioning (non-scoped for teleported content) */
+/* CSS variables are inherited from global.css */
+
 .db-ui-overlay {
   position: absolute;
   top: 0;
@@ -1670,102 +1610,22 @@ const handleUIInteractionEnd = () => {
   width: 100%;
   height: 100%;
   z-index: 10;
-  /* Layer 1: UI overlay container */
   pointer-events: none;
-
-  --font-family-sans:
-    -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --theme-bg-canvas: #f3f4f6;
-  --theme-bg-panel: #ffffff;
-  --theme-bg-panel-transparent: rgba(255, 255, 255, 0.95);
-  --theme-bg-hover: #f3f4f6;
-  --theme-bg-active: #e5e7eb;
-  --theme-text-primary: #111827;
-  --theme-text-secondary: #4b5563;
-  --theme-text-muted: #9ca3af;
-  --theme-text-inverse: #ffffff;
-  --theme-border: #e5e7eb;
-  --theme-primary: #10b981;
-  --theme-primary-hover: #059669;
-  --theme-danger: #ef4444;
-  --theme-success: #10b981;
-  --theme-warning: #f59e0b;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-pill: 9999px;
-  --shadow-floating: 0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.08);
-}
-
-.db-ui-overlay.db-dark-mode {
-  --theme-bg-canvas: #0f1115;
-  --theme-bg-panel: #18181b;
-  --theme-bg-panel-transparent: rgba(24, 24, 27, 0.9);
-  --theme-bg-hover: #27272a;
-  --theme-bg-active: #3f3f46;
-  --theme-text-primary: #f3f4f6;
-  --theme-text-secondary: #a1a1aa;
-  --theme-border: #27272a;
-  --theme-primary: #10b981;
-  --shadow-floating: 0 10px 30px -4px rgba(0, 0, 0, 0.6);
 }
 
 .db-sidebar-wrapper {
   position: fixed;
   pointer-events: auto;
   z-index: 200;
-  /* Layer 3: Sidebars (LeftSidebar/RightSidebar have z-index: 50) */
   display: flex;
   flex-direction: row;
   align-items: flex-start;
   gap: 4px;
-  /* Will be positioned by transform */
   left: 0;
   top: 0;
   /* Hide sidebars until widget is initialized */
   opacity: 0;
   visibility: hidden;
-
-  /* Light mode CSS variables for sidebar content */
-  --theme-bg-canvas: #f3f4f6;
-  --theme-bg-panel: #ffffff;
-  --theme-bg-panel-transparent: rgba(255, 255, 255, 0.95);
-  --theme-bg-hover: #f3f4f6;
-  --theme-bg-active: #e5e7eb;
-  --theme-text-primary: #111827;
-  --theme-text-secondary: #4b5563;
-  --theme-text-muted: #9ca3af;
-  --theme-text-inverse: #ffffff;
-  --theme-border: #e5e7eb;
-  --theme-border-hover: #d1d5db;
-  --theme-primary: #10b981;
-  --theme-primary-hover: #059669;
-  --theme-danger: #ef4444;
-  --theme-success: #10b981;
-  --theme-warning: #f59e0b;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --shadow-floating: 0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.08);
-}
-
-/* Dark mode overrides for sidebar wrapper */
-.db-ui-overlay.db-dark-mode .db-sidebar-wrapper {
-  --theme-bg-canvas: #0f1115;
-  --theme-bg-panel: #18181b;
-  --theme-bg-panel-transparent: rgba(24, 24, 27, 0.9);
-  --theme-bg-hover: #27272a;
-  --theme-bg-active: #3f3f46;
-  --theme-text-primary: #f3f4f6;
-  --theme-text-secondary: #a1a1aa;
-  --theme-text-muted: #52525b;
-  --theme-text-inverse: #ffffff;
-  --theme-border: #27272a;
-  --theme-border-hover: #3f3f46;
-  --theme-primary: #10b981;
-  --theme-primary-hover: #34d399;
-  --theme-success: #10b981;
-  --shadow-floating: 0 10px 30px -4px rgba(0, 0, 0, 0.6);
 }
 
 .db-ui-overlay.db-widget-ready .db-sidebar-wrapper {
@@ -1781,149 +1641,82 @@ const handleUIInteractionEnd = () => {
   flex-direction: row-reverse;
 }
 
-/* Override RightSidebar positioning for widget mode - use left instead of right */
+/* Override RightSidebar positioning for widget mode */
 .db-sidebar-wrapper.db-right .db-floating-sidebar.db-right {
   right: auto !important;
   left: 0 !important;
 }
 
-/* Removed separate drag-handle styles */
-
 .db-ui-overlay .db-toolbar-container {
   pointer-events: auto;
 }
 
-/* Add dark mode CSS variables for floating panels */
-.db-ui-overlay .db-floating-panel {
-  /* Light mode CSS variables */
-  --theme-bg-panel: #ffffff;
-  --theme-bg-panel-transparent: rgba(255, 255, 255, 0.95);
-  --theme-bg-hover: #f3f4f6;
-  --theme-bg-active: #e5e7eb;
-  --theme-text-primary: #111827;
-  --theme-text-secondary: #4b5563;
-  --theme-text-muted: #9ca3af;
-  --theme-border: #e5e7eb;
-  --theme-primary: #10b981;
-  --theme-danger: #ef4444;
-  --radius-lg: 12px;
-  --shadow-floating: 0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.08);
-}
-
-.db-ui-overlay.db-dark-mode .db-floating-panel {
-  --theme-bg-panel: #18181b;
-  --theme-bg-panel-transparent: rgba(24, 24, 27, 0.9);
-  --theme-bg-hover: #27272a;
-  --theme-bg-active: #3f3f46;
-  --theme-text-primary: #f3f4f6;
-  --theme-text-secondary: #a1a1aa;
-  --theme-text-muted: #52525b;
-  --theme-border: #27272a;
-  --theme-primary: #10b981;
-  --theme-danger: #ef4444;
-  --shadow-floating: 0 10px 30px -4px rgba(0, 0, 0, 0.6);
-}
-
-/* PrimeVue Popover/Portal Styles for Widget */
+/* PrimeVue z-index overrides for widget */
 .p-popover {
   pointer-events: auto !important;
   z-index: 500 !important;
-  /* Layer 6: Dropdowns and popovers - above toolbar */
 }
 
 .p-popover-content {
   pointer-events: auto !important;
 }
 
-/* Ensure BaseSelect dropdown works */
 .p-select-overlay {
   pointer-events: auto !important;
   z-index: 500 !important;
-  /* Layer 6: Dropdowns and select overlays */
 }
 
-/* Ensure all PrimeVue modals appear above sidebars and toolbars */
 .p-dialog {
   z-index: 550 !important;
-  /* Layer 7: Modals - above dropdowns */
 }
 
 .p-dialog-mask {
   z-index: 549 !important;
-  /* Layer 7: Modal backdrop */
   pointer-events: auto !important;
 }
 
-/* Body dark mode for teleported widget content (sidebars, modals, panels) */
-body.db-dark-mode {
-  --theme-bg-canvas: #0f1115;
-  --theme-bg-panel: #18181b;
-  --theme-bg-panel-transparent: rgba(24, 24, 27, 0.9);
-  --theme-bg-hover: #27272a;
-  --theme-bg-active: #3f3f46;
-  --theme-text-primary: #f3f4f6;
-  --theme-text-secondary: #a1a1aa;
-  --theme-text-muted: #52525b;
-  --theme-text-inverse: #ffffff;
-  --theme-border: #27272a;
-  --theme-border-hover: #3f3f46;
-  --theme-grid-line: #3f3f46;
-  --theme-primary: #10b981;
-  --theme-primary-hover: #34d399;
-  --theme-success: #10b981;
-  --shadow-floating: 0 10px 30px -4px rgba(0, 0, 0, 0.6);
-
-  /* PrimeVue variable mappings for dark mode */
-  --p-content-background: #18181b;
-  --p-text-color: #f3f4f6;
-  --p-content-border-color: #27272a;
-  --p-primary-color: #10b981;
-}
-
-/* PrimeVue Dialog dark mode styles */
+/* PrimeVue dark mode styles for teleported components */
 body.db-dark-mode .p-dialog {
-  background: #18181b;
-  color: #f3f4f6;
-  border: 1px solid #27272a;
+  background: var(--theme-bg-panel);
+  color: var(--theme-text-primary);
+  border: 1px solid var(--theme-border);
 }
 
 body.db-dark-mode .p-dialog .p-dialog-header {
-  background: #18181b;
-  color: #f3f4f6;
-  border-bottom: 1px solid #27272a;
+  background: var(--theme-bg-panel);
+  color: var(--theme-text-primary);
+  border-bottom: 1px solid var(--theme-border);
 }
 
 body.db-dark-mode .p-dialog .p-dialog-content {
-  background: #18181b;
-  color: #f3f4f6;
+  background: var(--theme-bg-panel);
+  color: var(--theme-text-primary);
 }
 
 body.db-dark-mode .p-dialog .p-dialog-footer {
-  background: #18181b;
-  border-top: 1px solid #27272a;
+  background: var(--theme-bg-panel);
+  border-top: 1px solid var(--theme-border);
 }
 
-/* PrimeVue Select overlay dark mode */
 body.db-dark-mode .p-select-overlay {
-  background: #18181b;
-  border: 1px solid #27272a;
+  background: var(--theme-bg-panel);
+  border: 1px solid var(--theme-border);
 }
 
 body.db-dark-mode .p-select-option {
-  color: #f3f4f6;
+  color: var(--theme-text-primary);
 }
 
 body.db-dark-mode .p-select-option:hover {
-  background: #27272a;
+  background: var(--theme-bg-hover);
 }
 
-/* PrimeVue Popover dark mode */
 body.db-dark-mode .p-popover {
-  background: #18181b;
-  border: 1px solid #27272a;
+  background: var(--theme-bg-panel);
+  border: 1px solid var(--theme-border);
 }
 
 body.db-dark-mode .p-popover-content {
-  color: #f3f4f6;
+  color: var(--theme-text-primary);
 }
 </style>

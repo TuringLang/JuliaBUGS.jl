@@ -226,8 +226,6 @@ const getSerializedElements = (): GraphElement[] => {
 const updateGridStyle = () => {
   if (!cyContainer.value || !cy) return
 
-  // We only set Position and Size via JS because they depend on Zoom/Pan.
-  // We leave the BACKGROUND IMAGE/COLOR to CSS classes to handle Dark Mode.
   if (props.isGridEnabled && props.gridSize > 0) {
     const pan = cy.pan()
     const zoom = cy.zoom()
@@ -235,9 +233,22 @@ const updateGridStyle = () => {
 
     cyContainer.value.style.backgroundPosition = `${pan.x}px ${pan.y}px`
     cyContainer.value.style.backgroundSize = `${scaledSize}px ${scaledSize}px`
+
+    // Set background-image inline to ensure it works in widget mode
+    // where scoped CSS may not be properly applied
+    const isDarkMode = document.documentElement.classList.contains('db-dark-mode')
+
+    if (props.gridStyle === 'dots') {
+      const dotColor = isDarkMode ? 'rgba(255, 255, 255, 0.2)' : '#4b5563'
+      cyContainer.value.style.backgroundImage = `radial-gradient(circle, ${dotColor} 1.2px, transparent 1px)`
+    } else if (props.gridStyle === 'lines') {
+      const lineColor = isDarkMode ? 'rgba(255, 255, 255, 0.08)' : '#d1d5db'
+      cyContainer.value.style.backgroundImage = `linear-gradient(to right, ${lineColor} 1px, transparent 1px), linear-gradient(to bottom, ${lineColor} 1px, transparent 1px)`
+    }
   } else {
     cyContainer.value.style.backgroundPosition = ''
     cyContainer.value.style.backgroundSize = ''
+    cyContainer.value.style.backgroundImage = ''
   }
 }
 
