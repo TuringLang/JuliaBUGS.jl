@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, computed, reactive } from 'vue'
 import { storeToRefs } from 'pinia'
-import type { LayoutOptions, Core } from 'cytoscape'
+import type { Core } from 'cytoscape'
 import GraphEditor from '../canvas/GraphEditor.vue'
 import FloatingBottomToolbar from '../canvas/FloatingBottomToolbar.vue'
 import FloatingPanel from '../common/FloatingPanel.vue'
@@ -28,6 +28,7 @@ import { useDataStore } from '../../stores/dataStore'
 import { useScriptStore } from '../../stores/scriptStore'
 import { useGraphInstance } from '../../composables/useGraphInstance'
 import { useGraphValidator } from '../../composables/useGraphValidator'
+import { useGraphLayout } from '../../composables/useGraphLayout'
 import {
   useBugsCodeGenerator,
   generateStandaloneScript,
@@ -57,6 +58,7 @@ const { generatedCode } = useBugsCodeGenerator(elements)
 const { getCyInstance, getUndoRedoInstance } = useGraphInstance()
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData)
 const { samplerSettings, standaloneScript } = storeToRefs(scriptStore)
+const { smartFit, applyLayoutWithFit } = useGraphLayout()
 const {
   shareUrl,
   decodeAndDecompress,
@@ -194,42 +196,9 @@ const persistViewport = () => {
   }
 }
 
-const smartFit = (cy: Core, animate: boolean = true) => {
-  const eles = cy.elements()
-  if (eles.length === 0) return
-
-  const padding = 50
-  const w = cy.width()
-  const h = cy.height()
-  const bb = eles.boundingBox()
-
-  if (bb.w === 0 || bb.h === 0) return
-
-  const zoomX = (w - 2 * padding) / bb.w
-  const zoomY = (h - 2 * padding) / bb.h
-  let targetZoom = Math.min(zoomX, zoomY)
-  targetZoom = Math.min(targetZoom, 0.8)
-
-  const targetPan = {
-    x: (w - targetZoom * (bb.x1 + bb.x2)) / 2,
-    y: (h - targetZoom * (bb.y1 + bb.y2)) / 2,
-  }
-
-  if (animate) {
-    cy.animate({
-      zoom: targetZoom,
-      pan: targetPan,
-      duration: 500,
-      easing: 'ease-in-out-cubic',
-    })
-  } else {
-    cy.viewport({ zoom: targetZoom, pan: targetPan })
-  }
-}
-
 const handleShare = () => {
   if (!graphStore.currentGraphId) return
-  shareUrl.value = '' // Reset
+  shareUrl.value = ''
   showShareModal.value = true
 }
 
@@ -634,54 +603,7 @@ const handleGraphLayout = (layoutName: string) => {
   const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null
   if (!cy) return
 
-  const layoutOptionsMap: Record<string, LayoutOptions> = {
-    dagre: {
-      name: 'dagre',
-      animate: true,
-      animationDuration: 500,
-      fit: false,
-      padding: 50,
-    } as unknown as LayoutOptions,
-    fcose: {
-      name: 'fcose',
-      animate: true,
-      animationDuration: 500,
-      fit: false,
-      padding: 50,
-      randomize: false,
-      quality: 'proof',
-    } as unknown as LayoutOptions,
-    cola: {
-      name: 'cola',
-      animate: true,
-      fit: false,
-      padding: 50,
-      refresh: 1,
-      avoidOverlap: true,
-      infinite: false,
-      centerGraph: true,
-      flow: { axis: 'y', minSeparation: 30 },
-      handleDisconnected: false,
-      randomize: false,
-    } as unknown as LayoutOptions,
-    klay: {
-      name: 'klay',
-      animate: true,
-      animationDuration: 500,
-      fit: false,
-      padding: 50,
-      klay: { direction: 'RIGHT', edgeRouting: 'SPLINES', nodePlacement: 'LINEAR_SEGMENTS' },
-    } as unknown as LayoutOptions,
-    preset: { name: 'preset', fit: false, padding: 50 } as unknown as LayoutOptions,
-  }
-
-  const options = layoutOptionsMap[layoutName] || layoutOptionsMap.preset
-
-  cy.one('layoutstop', () => {
-    smartFit(cy, true)
-  })
-
-  cy.layout(options).run()
+  applyLayoutWithFit(cy, layoutName)
   handleLayoutUpdated(layoutName)
 }
 
