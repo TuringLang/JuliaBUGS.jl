@@ -202,6 +202,17 @@ const widgetTeleportCSS = `
   top: 0;
 }
 
+/* Override RightSidebar positioning for widget mode */
+/* Forces the sidebar to respect the wrapper's flow rather than its internal absolute positioning */
+.db-sidebar-wrapper.db-right .db-floating-sidebar.db-right {
+  position: relative !important;
+  right: auto !important;
+  left: auto !important;
+  margin: 0 !important;
+  /* Re-apply shadow that might be clipped or reset */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); 
+}
+
 /* Force PrimeVue overlays to appear above our sidebars */
 .p-popover,
 .p-select-overlay,
@@ -357,13 +368,21 @@ onMounted(() => {
   }
 
   // Force default right sidebar position if not loaded from state or looks invalid
-  if (!rightSidebarLoaded || rightDrag.x.value <= 0) {
-    nextTick(() => {
-      // Calculate correct right position: width of document - sidebar width (320) - margin (20)
-      const docWidth = document.documentElement.clientWidth || window.innerWidth;
-      rightDrag.x.value = docWidth - 320 - 20;
-    });
-  }
+  // Also fix position if it looks like it's floating in the middle due to window resize between sessions
+  nextTick(() => {
+    const docWidth = document.documentElement.clientWidth || window.innerWidth;
+    // Calculate correct right position: width of document - sidebar width (320) - very small gap (4px)
+    const defaultRightX = docWidth - 320 - 20;
+    
+    // If not loaded, or if loaded but position is significantly far from right edge (e.g. > 450px gap) which suggests a resize occurred
+    if (!rightSidebarLoaded || rightDrag.x.value <= 0 || (docWidth - rightDrag.x.value > 450)) {
+      rightDrag.x.value = defaultRightX;
+    }
+    // Ensure default Y position matches left sidebar logic (moved up)
+    if (!rightSidebarLoaded) {
+      rightDrag.y.value = 10;
+    }
+  });
 
   initGraph()
   isInitialized.value = true
@@ -375,8 +394,9 @@ onMounted(() => {
   const handleResize = () => {
     windowWidth.value = window.innerWidth
     // Ensure right sidebar stays docked to right on resize if close to edge
-    if (window.innerWidth - rightDrag.x.value < 400) {
-      rightDrag.x.value = window.innerWidth - 320 - 20
+    // Increased threshold to catch sidebars that should be docked
+    if (window.innerWidth - rightDrag.x.value < 500) {
+      rightDrag.x.value = window.innerWidth - 320 - 4
     }
   }
   window.addEventListener('resize', handleResize)
@@ -925,8 +945,10 @@ const useDrag = (initialX: number, initialY: number) => {
   }
 }
 
-const leftDrag = useDrag(20, 20)
-const rightDrag = useDrag(typeof window !== 'undefined' ? window.innerWidth - 320 - 20 : 1580, 20)
+// Left sidebar initialized higher (y=10)
+const leftDrag = useDrag(20, 10)
+// Right sidebar initialized (y=10 to match left)
+const rightDrag = useDrag(typeof window !== 'undefined' ? window.innerWidth - 320 - 20 : 1580, 10)
 
 watch(
   [
@@ -1083,16 +1105,15 @@ const handleUIInteractionEnd = () => {
           padding: 0;
           transition: all 0.2s;
         " :style="isEditMode ? 'background: #ef4444; border-color: #ef4444; color: white;' : ''">
-        <svg v-if="!isEditMode" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
-          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-          style="display: block;">
-          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-          <path d="m15 5 4 4" />
+        
+        <!-- Start Editing Icon (Pen) - Fixed SVG -->
+        <svg v-if="!isEditMode" viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+          <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
         </svg>
-        <svg v-else viewBox="0 0 76.00 76.00" xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" stroke="currentColor">
-          <g stroke-width="0"></g>
-          <g stroke-linecap="round" stroke-linejoin="round" stroke-width="0.76"></g>
-          <g> <path fill="currentColor" fill-opacity="1" stroke-width="0.00076" stroke-linejoin="round" d="M 53.2929,21.2929L 54.7071,22.7071C 56.4645,24.4645 56.4645,27.3137 54.7071,29.0711L 52.2323,31.5459L 44.4541,23.7677L 46.9289,21.2929C 48.6863,19.5355 51.5355,19.5355 53.2929,21.2929 Z M 31.7262,52.052L 23.948,44.2738L 43.0399,25.182L 50.818,32.9601L 31.7262,52.052 Z M 23.2409,47.1023L 28.8977,52.7591L 21.0463,54.9537L 23.2409,47.1023 Z M 17,28L 17,23L 23,23L 23,17L 28,17L 28,23L 34,23L 34,28L 28,28L 28,34L 23,34L 23,28L 17,28 Z "></path> </g>
+        
+        <!-- Stop Editing Icon (Close) - User Provided SVG -->
+        <svg v-else viewBox="0 0 76.00 76.00" xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor">
+          <path fill="currentColor" d="M 53.2929,21.2929L 54.7071,22.7071C 56.4645,24.4645 56.4645,27.3137 54.7071,29.0711L 52.2323,31.5459L 44.4541,23.7677L 46.9289,21.2929C 48.6863,19.5355 51.5355,19.5355 53.2929,21.2929 Z M 31.7262,52.052L 23.948,44.2738L 43.0399,25.182L 50.818,32.9601L 31.7262,52.052 Z M 23.2409,47.1023L 28.8977,52.7591L 21.0463,54.9537L 23.2409,47.1023 Z M 17,28L 17,23L 23,23L 23,17L 28,17L 28,23L 34,23L 34,28L 28,28L 28,34L 23,34L 23,28L 17,28 Z "></path>
         </svg>
       </button>
     </div>

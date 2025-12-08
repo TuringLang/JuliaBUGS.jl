@@ -36,16 +36,3 @@ tmp
 *.sw?
 
 *.tsbuildinfo
-
-
-
-doodlebugs.css
-doodlebugs.js
-experiments\DoodleWidget\index.html
-index.qmd
-examples.html
-experiments\DoodleWidget\examples\rats
-experiments\DoodleWidget\dashboard.html
-experiments\DoodleWidget\demo.html
-experiments\DoodleWidget\examples.html
-experiments\DoodleWidget\index_files

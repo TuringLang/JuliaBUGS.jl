@@ -234,9 +234,7 @@ const updateGridStyle = () => {
     cyContainer.value.style.backgroundPosition = `${pan.x}px ${pan.y}px`
     cyContainer.value.style.backgroundSize = `${scaledSize}px ${scaledSize}px`
 
-    // Set background-image inline to ensure it works in widget mode
-    // where scoped CSS may not be properly applied
-    const isDarkMode = document.documentElement.classList.contains('db-dark-mode')
+    const isDarkMode = uiStore.isDarkMode
 
     if (props.gridStyle === 'dots') {
       const dotColor = isDarkMode ? 'rgba(255, 255, 255, 0.2)' : '#4b5563'
@@ -455,6 +453,17 @@ watch(
     if (props.isGridEnabled) {
       updateGridStyle()
     }
+  }
+)
+
+// Watch for theme changes to update grid color
+watch(
+  () => uiStore.isDarkMode,
+  () => {
+    // Wait for DOM update of class
+    requestAnimationFrame(() => {
+        updateGridStyle()
+    })
   }
 )
 
