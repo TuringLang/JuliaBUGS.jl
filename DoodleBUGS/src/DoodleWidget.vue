@@ -32,6 +32,7 @@ import { useBugsCodeGenerator, generateStandaloneScript } from './composables/us
 import { useGraphValidator } from './composables/useGraphValidator'
 import { useGraphInstance } from './composables/useGraphInstance'
 import { useGraphLayout } from './composables/useGraphLayout'
+import { usePersistence } from './composables/usePersistence'
 import { useShareExport } from './composables/useShareExport'
 import { useImportExport } from './composables/useImportExport'
 import type { NodeType, GraphElement, ExampleModel } from './types'
@@ -69,8 +70,6 @@ const showStyleModal = ref(false)
 const showShareModal = ref(false)
 const showValidationModal = ref(false)
 const showScriptSettingsModal = ref(false)
-const showCodePanel = ref(false)
-const showDataPanel = ref(false)
 const showNewProjectModal = ref(false)
 const showNewGraphModal = ref(false)
 const newProjectName = ref('')
@@ -98,53 +97,37 @@ const isInitialized = ref(false)
 // LocalStorage key for widget UI state
 const WIDGET_UI_STATE_KEY = 'doodlebugs-widget-ui-state'
 
-// Load UI state from localStorage
-const loadUIState = () => {
-  if (typeof window === 'undefined') return null
-  try {
-    const saved = localStorage.getItem(WIDGET_UI_STATE_KEY)
-    return saved ? JSON.parse(saved) : null
-  } catch (e) {
-    console.error('Failed to load UI state:', e)
-    return null
-  }
-}
+const { loadUIState, saveUIState, getStoredGraphElements, getStoredDataContent } =
+  usePersistence('doodlebugs')
 
-// Save UI state to localStorage
-const saveUIState = () => {
-  if (typeof window === 'undefined') return
-  try {
-    const state = {
-      leftSidebar: {
-        open: uiStore.isLeftSidebarOpen,
-        x: leftDrag.x.value,
-        y: leftDrag.y.value,
-      },
-      rightSidebar: {
-        open: uiStore.isRightSidebarOpen,
-        x: rightDrag.x.value,
-        y: rightDrag.y.value,
-      },
-      codePanel: {
-        open: showCodePanel.value,
-        x: codePanelPos.x,
-        y: codePanelPos.y,
-        width: codePanelSize.width,
-        height: codePanelSize.height,
-      },
-      dataPanel: {
-        open: showDataPanel.value,
-        x: dataPanelPos.x,
-        y: dataPanelPos.y,
-        width: dataPanelSize.width,
-        height: dataPanelSize.height,
-      },
-      currentGraphId: graphStore.currentGraphId,
-    }
-    localStorage.setItem(WIDGET_UI_STATE_KEY, JSON.stringify(state))
-  } catch (e) {
-    console.error('Failed to save UI state:', e)
-  }
+const saveWidgetUIState = () => {
+  saveUIState(WIDGET_UI_STATE_KEY, {
+    leftSidebar: {
+      open: uiStore.isLeftSidebarOpen,
+      x: leftDrag.x.value,
+      y: leftDrag.y.value,
+    },
+    rightSidebar: {
+      open: uiStore.isRightSidebarOpen,
+      x: rightDrag.x.value,
+      y: rightDrag.y.value,
+    },
+    codePanel: {
+      open: isCodePanelOpen.value,
+      x: codePanelPos.x,
+      y: codePanelPos.y,
+      width: codePanelSize.width,
+      height: codePanelSize.height,
+    },
+    dataPanel: {
+      open: isDataPanelOpen.value,
+      x: dataPanelPos.x,
+      y: dataPanelPos.y,
+      width: dataPanelSize.width,
+      height: dataPanelSize.height,
+    },
+    currentGraphId: graphStore.currentGraphId || undefined,
+  })
 }
 
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements()
@@ -213,7 +196,7 @@ onMounted(() => {
     }
   }
 
-  const savedUIState = loadUIState()
+  const savedUIState = loadUIState(WIDGET_UI_STATE_KEY)
   if (savedUIState) {
     if (savedUIState.leftSidebar) {
       leftDrag.x.value = savedUIState.leftSidebar.x
@@ -230,14 +213,14 @@ onMounted(() => {
       codePanelPos.y = savedUIState.codePanel.y
       codePanelSize.width = savedUIState.codePanel.width
       codePanelSize.height = savedUIState.codePanel.height
-      showCodePanel.value = savedUIState.codePanel.open
+      // Note: open state now managed per-graph, not from savedUIState
     }
     if (savedUIState.dataPanel) {
       dataPanelPos.x = savedUIState.dataPanel.x
       dataPanelPos.y = savedUIState.dataPanel.y
       dataPanelSize.width = savedUIState.dataPanel.width
       dataPanelSize.height = savedUIState.dataPanel.height
-      showDataPanel.value = savedUIState.dataPanel.open
+      // Note: open state now managed per-graph, not from savedUIState
     }
     if (savedUIState.currentGraphId) {
       graphStore.selectGraph(savedUIState.currentGraphId)
@@ -287,11 +270,38 @@ watch(generatedCode, (code) => {
   emit('code-update', code)
 })
 
+// Code Panel Visibility (Per-Graph State)
+const isCodePanelOpen = computed(() => {
+  if (!projectStore.currentProject || !graphStore.currentGraphId) return false
+  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
+  return !!graph?.showCodePanel
+})
+
 const toggleCodePanel = () => {
-  showCodePanel.value = !showCodePanel.value
+  if (!projectStore.currentProject || !graphStore.currentGraphId) return
+  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
+  if (graph) {
+    projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+      showCodePanel: !graph.showCodePanel,
+    })
+  }
 }
+
+// Data Panel Visibility (Per-Graph State)
+const isDataPanelOpen = computed(() => {
+  if (!projectStore.currentProject || !graphStore.currentGraphId) return false
+  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
+  return !!graph?.showDataPanel
+})
+
 const toggleDataPanel = () => {
-  showDataPanel.value = !showDataPanel.value
+  if (!projectStore.currentProject || !graphStore.currentGraphId) return
+  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
+  if (graph) {
+    projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+      showDataPanel: !graph.showDataPanel,
+    })
+  }
 }
 
 const handleUndo = () => {
@@ -567,16 +577,8 @@ const handleGenerateShareLink = async (options: {
       graphElements = graphStore.currentGraphElements
       dataContent = dataStore.dataContent
     } else {
-      const storedGraph = localStorage.getItem(`doodlebugs-graph-${graphId}`)
-      const storedData = localStorage.getItem(`doodlebugs-data-${graphId}`)
-      if (storedGraph)
-        try {
-          graphElements = JSON.parse(storedGraph).elements
-        } catch {}
-      if (storedData)
-        try {
-          dataContent = JSON.parse(storedData).content || '{}'
-        } catch {}
+      graphElements = getStoredGraphElements(graphId) as GraphElement[]
+      dataContent = getStoredDataContent(graphId)
     }
     return { name, elements: graphElements, dataContent }
   }
@@ -777,8 +779,8 @@ watch(
     () => rightDrag.y.value,
     () => uiStore.isLeftSidebarOpen,
     () => uiStore.isRightSidebarOpen,
-    () => showCodePanel.value,
-    () => showDataPanel.value,
+    isCodePanelOpen,
+    isDataPanelOpen,
     () => codePanelPos.x,
     () => codePanelPos.y,
     () => codePanelSize.width,
@@ -790,7 +792,7 @@ watch(
     () => graphStore.currentGraphId,
   ],
   () => {
-    saveUIState()
+    saveWidgetUIState()
   },
   { deep: true }
 )
@@ -942,7 +944,7 @@ const handleUIInteractionEnd = () => {
             :gridSize="gridSize"
             :showZoomControls="showZoomControls"
             :showDebugPanel="showDebugPanel"
-            :isCodePanelOpen="showCodePanel"
+            :isCodePanelOpen="isCodePanelOpen"
             :isDetachModeActive="isDetachModeActive"
             :showDetachModeControl="showDetachModeControl"
             :enableDrag="true"
@@ -993,8 +995,8 @@ const handleUIInteractionEnd = () => {
           :current-mode="currentMode"
           :current-node-type="currentNodeType"
           :show-zoom-controls="showZoomControls"
-          :show-code-panel="showCodePanel"
-          :show-data-panel="showDataPanel"
+          :show-code-panel="isCodePanelOpen"
+          :show-data-panel="isDataPanelOpen"
           :is-detach-mode-active="isDetachModeActive"
           :show-detach-mode-control="showDetachModeControl"
           :is-widget="true"
@@ -1019,38 +1021,38 @@ const handleUIInteractionEnd = () => {
         <FloatingPanel
           title="BUGS Code Preview"
           icon="fas fa-code"
-          :is-open="showCodePanel"
+          :is-open="isCodePanelOpen"
           :default-width="codePanelSize.width"
           :default-height="codePanelSize.height"
           :default-x="codePanelPos.x"
           :default-y="codePanelPos.y"
           :show-download="true"
-          @close="showCodePanel = false"
+          @close="toggleCodePanel"
           @download="handleDownloadBugs"
           @drag-start="handleUIInteractionStart"
           @drag-end="(pos) => { codePanelPos.x = pos.x; codePanelPos.y = pos.y; handleUIInteractionEnd() }"
           @resize-start="handleUIInteractionStart"
           @resize-end="(size) => { codePanelSize.width = size.width; codePanelSize.height = size.height; handleUIInteractionEnd() }"
         >
-          <CodePreviewPanel :is-active="showCodePanel" />
+          <CodePreviewPanel :is-active="isCodePanelOpen" />
         </FloatingPanel>
 
         <FloatingPanel
           title="Data & Inits"
           icon="fas fa-database"
           badge="JSON"
-          :is-open="showDataPanel"
+          :is-open="isDataPanelOpen"
           :default-width="dataPanelSize.width"
           :default-height="dataPanelSize.height"
           :default-x="dataPanelPos.x || windowWidth - 420"
           :default-y="dataPanelPos.y"
-          @close="showDataPanel = false"
+          @close="toggleDataPanel"
           @drag-start="handleUIInteractionStart"
           @drag-end="(pos) => { dataPanelPos.x = pos.x; dataPanelPos.y = pos.y; handleUIInteractionEnd() }"
           @resize-start="handleUIInteractionStart"
           @resize-end="(size) => { dataPanelSize.width = size.width; dataPanelSize.height = size.height; handleUIInteractionEnd() }"
         >
-          <DataInputPanel :is-active="showDataPanel" />
+          <DataInputPanel :is-active="isDataPanelOpen" />
         </FloatingPanel>
 
         <AboutModal :is-open="showAboutModal" @close="showAboutModal = false" />

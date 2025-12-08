@@ -29,6 +29,7 @@ import { useScriptStore } from '../../stores/scriptStore'
 import { useGraphInstance } from '../../composables/useGraphInstance'
 import { useGraphValidator } from '../../composables/useGraphValidator'
 import { useGraphLayout } from '../../composables/useGraphLayout'
+import { usePersistence } from '../../composables/usePersistence'
 import {
   useBugsCodeGenerator,
   generateStandaloneScript,
@@ -59,6 +60,7 @@ const { getCyInstance, getUndoRedoInstance } = useGraphInstance()
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData)
 const { samplerSettings, standaloneScript } = storeToRefs(scriptStore)
 const { smartFit, applyLayoutWithFit } = useGraphLayout()
+const { loadLastGraphId, getStoredGraphElements, getStoredDataContent } = usePersistence()
 const {
   shareUrl,
   decodeAndDecompress,
@@ -223,27 +225,8 @@ const handleGenerateShareLink = async (options: {
       elements = graphStore.currentGraphElements
       dataContent = dataStore.dataContent
     } else {
-      const storedGraph = localStorage.getItem(`doodlebugs-graph-${graphId}`)
-      const storedData = localStorage.getItem(`doodlebugs-data-${graphId}`)
-
-      if (storedGraph) {
-        try {
-          elements = JSON.parse(storedGraph).elements
-        } catch {}
-      }
-      if (storedData) {
-        try {
-          const parsed = JSON.parse(storedData)
-          dataContent =
-            parsed.content ||
-            (parsed.jsonData
-              ? JSON.stringify({
-                  data: JSON.parse(parsed.jsonData || '{}'),
-                  inits: JSON.parse(parsed.jsonInits || '{}'),
-                })
-              : '{}')
-        } catch {}
-      }
+      elements = getStoredGraphElements(graphId) as GraphElement[]
+      dataContent = getStoredDataContent(graphId)
     }
 
     // Minify Data
@@ -469,7 +452,7 @@ onMounted(async () => {
   } else {
     // If not a fresh shared load, restore last session
     if (!window.location.search.includes('share=')) {
-      const lastGraphId = localStorage.getItem('doodlebugs-currentGraphId')
+      const lastGraphId = loadLastGraphId()
       if (lastGraphId && projectStore.currentProject?.graphs.some((g) => g.id === lastGraphId)) {
         graphStore.selectGraph(lastGraphId)
       } else if (projectStore.currentProject?.graphs.length) {
