@@ -120,9 +120,6 @@ const triggerSuccess = () => {
 
 <template>
   <div class="db-code-preview-panel">
-    <div class="db-cp-header">
-      <h4>Generated BUGS Code</h4>
-    </div>
     <div class="db-cp-wrapper">
       <div ref="editorContainer" class="db-cp-container"></div>
       <button
@@ -138,65 +135,21 @@ const triggerSuccess = () => {
   </div>
 </template>
 
-<style>
-.db-code-preview-panel .CodeMirror,
-.db-code-preview-panel .CodeMirror-scroll,
-.db-code-preview-panel .CodeMirror-gutters,
-.db-code-preview-panel .CodeMirror textarea,
-.db-code-preview-panel .CodeMirror pre,
-.db-code-preview-panel .CodeMirror-line,
-.db-code-preview-panel .CodeMirror-code {
-  cursor: not-allowed !important;
-}
-
-.db-code-preview-panel .CodeMirror-readonly .CodeMirror-cursors {
-  display: none !important;
-}
-
-.db-code-preview-panel .CodeMirror-scroll {
-  overflow: auto !important;
-  white-space: pre !important;
-}
-
-.db-code-preview-panel .CodeMirror-simplescroll-horizontal div,
-.db-code-preview-panel .CodeMirror-simplescroll-vertical div {
-  background: #666;
-  border-radius: 3px;
-}
-
-.db-code-preview-panel .CodeMirror-foldgutter-open,
-.db-code-preview-panel .CodeMirror-foldgutter-folded {
-  color: #999;
-}
-</style>
-
 <style scoped>
 .db-code-preview-panel {
-  padding: 15px;
+  padding: 0; /* Removed padding */
   height: 100%;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
 }
 
-.db-cp-header {
-  flex-shrink: 0;
-}
-
-h4 {
-  margin: 0 0 10px;
-  color: var(--color-heading);
-  text-align: center;
-  border-bottom: 1px solid var(--color-border-light);
-  padding-bottom: 10px;
-}
-
 .db-cp-wrapper {
   position: relative;
   flex-grow: 1;
   background-color: #282c34;
-  border-radius: 8px;
   overflow: hidden;
+  height: 100%;
 }
 
 .db-cp-container {
@@ -206,11 +159,11 @@ h4 {
 
 .db-cp-copy-btn {
   position: absolute;
-  bottom: 5px;
-  right: 5px;
+  bottom: 10px;
+  right: 10px;
   width: 36px;
   height: 36px;
-  background-color: transparent;
+  background-color: rgba(255, 255, 255, 0.1);
   color: #fff;
   border-radius: 50%;
   display: flex;
@@ -218,18 +171,18 @@ h4 {
   justify-content: center;
   padding: 0;
   cursor: pointer;
-  opacity: 0.5;
+  opacity: 0.7;
   transition:
     background-color 0.2s,
     opacity 0.2s;
   z-index: 1000;
   pointer-events: auto;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   outline: none;
 }
 
 .db-cp-copy-btn:hover {
-  background-color: transparent;
+  background-color: rgba(255, 255, 255, 0.2);
   opacity: 1;
 }
 
@@ -240,5 +193,25 @@ h4 {
 .db-cp-copy-btn .fa-copy,
 .db-cp-copy-btn .fa-check {
   font-size: 1rem;
+}
+
+/* Scrollbar hiding logic */
+:deep(.CodeMirror) {
+  height: 100%;
+}
+
+:deep(.CodeMirror-scroll) {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+:deep(.CodeMirror-scroll::-webkit-scrollbar) {
+  display: none; /* Chrome/Safari/Webkit */
+}
+
+/* Hide CodeMirror specific simple scrollbars */
+:deep(.CodeMirror-simplescroll-horizontal),
+:deep(.CodeMirror-simplescroll-vertical) {
+  display: none !important;
 }
 </style>

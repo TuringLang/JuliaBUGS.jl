@@ -115,75 +115,113 @@ watch(
 
 <template>
   <div class="db-data-input-panel">
+    <!-- Status Header -->
+    <div v-if="jsonError" class="db-di-status-header db-error">
+      <div class="db-status-row">
+        <i class="fas fa-times-circle"></i>
+        <span class="db-status-label">Invalid JSON</span>
+      </div>
+      <div class="db-error-msg">{{ jsonError }}</div>
+    </div>
+    <div v-else class="db-di-status-header db-success">
+      <i class="fas fa-check-circle"></i>
+      <span class="db-status-label">Valid JSON</span>
+    </div>
+
+    <!-- Editor Wrapper -->
     <div class="db-di-wrapper flex-grow">
       <div ref="editorContainer" class="db-di-container"></div>
     </div>
-
-    <div class="db-di-footer">
-      <div v-if="jsonError" class="db-di-status db-error">
-        <i class="fas fa-times-circle"></i> {{ jsonError }}
-      </div>
-      <div v-else class="db-di-status db-success">
-        <i class="fas fa-check-circle"></i> Valid JSON
-      </div>
-    </div>
   </div>
 </template>
-
-<style>
-.db-data-input-panel .CodeMirror {
-  height: 100%;
-  font-family: monospace;
-  font-size: 0.85em;
-  border-radius: 8px;
-}
-</style>
 
 <style scoped>
 .db-data-input-panel {
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  padding: 0;
+  background-color: #282c34;
 }
-.db-di-wrapper {
-  flex: 1;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+
+.db-di-status-header {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  font-size: 0.85em;
   display: flex;
   flex-direction: column;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.db-di-status-header.db-success {
+  background-color: transparent;
+  color: var(--color-success);
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+.db-di-status-header.db-error {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border-bottom: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.db-status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.db-status-label {
+  font-weight: 600;
+}
+
+.db-error-msg {
+  margin-top: 4px;
+  padding-left: 20px; /* Indent to align under icon roughly */
+  font-family: monospace;
+  font-size: 0.9em;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #fff;
+  opacity: 0.9;
+}
+
+.db-di-wrapper {
+  flex: 1;
   position: relative;
   min-height: 0;
 }
+
 .db-di-container {
   flex-grow: 1;
   position: relative;
-  overflow: auto;
+  overflow: hidden;
+  height: 100%;
 }
-.db-di-footer {
-  flex-shrink: 0;
-  padding-top: 0;
-  padding-bottom: 4px;
-  padding-left: 12px;
-  min-height: 25px;
-  height: auto;
-  box-sizing: border-box;
-  display: flex;
-  align-items: flex-start;
-  font-size: 0.8em;
+
+/* Scrollbar hiding logic */
+:deep(.CodeMirror) {
+  height: 100%;
+  font-family: monospace;
+  font-size: 0.85em;
 }
-.db-di-status {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  font-weight: 500;
+
+:deep(.CodeMirror-scroll) {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
 }
-.db-di-status.db-success {
-  color: var(--color-success);
+
+:deep(.CodeMirror-scroll::-webkit-scrollbar) {
+  display: none; /* Chrome/Safari/Webkit */
 }
-.db-di-status.db-error {
-  color: var(--color-danger);
-  white-space: normal;
-  word-break: break-word;
+
+/* Hide CodeMirror specific simple scrollbars */
+:deep(.CodeMirror-simplescroll-horizontal),
+:deep(.CodeMirror-simplescroll-vertical) {
+  display: none !important;
 }
 </style>
