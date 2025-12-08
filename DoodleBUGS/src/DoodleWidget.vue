@@ -926,10 +926,6 @@ const useDrag = (initialX: number, initialY: number) => {
 
 const leftDrag = useDrag(20, 20)
 const rightDrag = useDrag(typeof window !== 'undefined' ? window.innerWidth - 320 - 20 : 1580, 20)
-const toolbarDrag = useDrag(
-  typeof window !== 'undefined' ? window.innerWidth / 2 - 300 : 0,
-  typeof window !== 'undefined' ? window.innerHeight - 80 : 0
-)
 
 // Watch for changes to UI state and save to localStorage
 watch(

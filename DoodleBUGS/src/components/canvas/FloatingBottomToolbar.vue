@@ -443,7 +443,7 @@ onUnmounted(() => {
 <style scoped>
 .toolbar-container {
   position: fixed;
-  z-index: 20000;
+  z-index: 40000;
   display: flex;
   flex-direction: column;
   align-items: center;

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, reactive } from 'vue'
 import { storeToRefs } from 'pinia'
 import type { LayoutOptions, Core } from 'cytoscape'
 import GraphEditor from '../canvas/GraphEditor.vue'
 import FloatingBottomToolbar from '../canvas/FloatingBottomToolbar.vue'
+import FloatingPanel from '../common/FloatingPanel.vue'
 import BaseModal from '../common/BaseModal.vue'
 import BaseInput from '../ui/BaseInput.vue'
 import BaseButton from '../ui/BaseButton.vue'
@@ -96,6 +97,19 @@ const isDragOver = ref(false)
 
 // Local viewport state for smooth UI updates
 const viewportState = ref({ zoom: 1, pan: { x: 0, y: 0 } })
+
+// Panel positions and sizes (reactive objects for FloatingPanel)
+// Default positions: data panel on bottom-left, code panel on bottom-right
+const codePanelPos = reactive({ 
+  x: typeof window !== 'undefined' ? window.innerWidth - 420 : 0, 
+  y: typeof window !== 'undefined' ? window.innerHeight - 380 : 0
+})
+const codePanelSize = reactive({ width: 400, height: 300 })
+const dataPanelPos = reactive({ 
+  x: 20, 
+  y: typeof window !== 'undefined' ? window.innerHeight - 380 : 0
+})
+const dataPanelSize = reactive({ width: 400, height: 300 })
 
 // Computed property for validation status
 const isModelValid = computed(() => validationErrors.value.size === 0)
@@ -499,10 +513,6 @@ const handleGenerateShareLink = async (options: {
 }
 
 // Data Import Logic
-const triggerDataImport = () => {
-  dataImportInput.value?.click()
-}
-
 const handleDataImport = (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
@@ -1194,420 +1204,75 @@ const handleFit = () => {
   }
 }
 
-// Code Panel Drag Logic (Touch)
-const codePanelRef = ref<HTMLElement | null>(null)
-const isDraggingCode = ref(false)
-const dragStartCode = ref({ x: 0, y: 0 })
-const initialPanelPos = ref({ x: 0, y: 0 })
-
-// When dragging starts, we capture the current Zoom/Pan state
-const startDragCodeTouch = (e: TouchEvent) => {
-  if ((e.target as HTMLElement).closest('.action-btn')) return
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  isDraggingCode.value = true
-  const touch = e.touches[0]
-  dragStartCode.value = { x: touch.clientX, y: touch.clientY }
-
-  // Use screen coordinates
-  initialPanelPos.value = {
-    x: graph.codePanelX ?? 0,
-    y: graph.codePanelY ?? 0,
-  }
-
-  window.addEventListener('touchmove', onDragCodeTouch, { passive: false })
-  window.addEventListener('touchend', stopDragCodeTouch)
-}
-
-const onDragCodeTouch = (e: TouchEvent) => {
-  if (!isDraggingCode.value) return
-  e.preventDefault()
-  const touch = e.touches[0]
-
-  const dx = touch.clientX - dragStartCode.value.x
-  const dy = touch.clientY - dragStartCode.value.y
-
+// Panel event handlers for FloatingPanel component
+const handleCodePanelDragEnd = (pos: { x: number; y: number }) => {
+  codePanelPos.x = pos.x
+  codePanelPos.y = pos.y
   if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        codePanelX: initialPanelPos.value.x + dx,
-        codePanelY: initialPanelPos.value.y + dy,
-      },
-      false
-    )
+    projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+      codePanelX: pos.x,
+      codePanelY: pos.y,
+    })
   }
 }
 
-const stopDragCodeTouch = () => {
-  isDraggingCode.value = false
-  window.removeEventListener('touchmove', onDragCodeTouch)
-  window.removeEventListener('touchend', stopDragCodeTouch)
-  projectStore.saveProjects()
-}
-
-// Code Panel Drag Logic (Mouse)
-const startDragCode = (e: MouseEvent) => {
-  if ((e.target as HTMLElement).closest('.action-btn')) return
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  isDraggingCode.value = true
-  dragStartCode.value = { x: e.clientX, y: e.clientY }
-  initialPanelPos.value = {
-    x: graph.codePanelX ?? 0,
-    y: graph.codePanelY ?? 0,
-  }
-
-  window.addEventListener('mousemove', onDragCode)
-  window.addEventListener('mouseup', stopDragCode)
-}
-
-const onDragCode = (e: MouseEvent) => {
-  if (!isDraggingCode.value) return
-
-  const dx = e.clientX - dragStartCode.value.x
-  const dy = e.clientY - dragStartCode.value.y
-
+const handleCodePanelResizeEnd = (size: { width: number; height: number }) => {
+  codePanelSize.width = size.width
+  codePanelSize.height = size.height
   if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        codePanelX: initialPanelPos.value.x + dx,
-        codePanelY: initialPanelPos.value.y + dy,
-      },
-      false
-    )
+    projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+      codePanelWidth: size.width,
+      codePanelHeight: size.height,
+    })
   }
 }
 
-const stopDragCode = () => {
-  isDraggingCode.value = false
-  window.removeEventListener('mousemove', onDragCode)
-  window.removeEventListener('mouseup', stopDragCode)
-  projectStore.saveProjects()
-}
-
-const getCodePanelStyle = computed(() => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return {}
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return {}
-
-  const screenX = graph.codePanelX ?? 0
-  const screenY = graph.codePanelY ?? 0
-
-  return {
-    left: `${screenX}px`,
-    top: `${screenY}px`,
-    width: `${graph.codePanelWidth ?? 400}px`,
-    height: `${graph.codePanelHeight ?? 300}px`,
-  }
-})
-
-// Resize Code Panel Logic (remains in pixels/screen coords)
-const isResizingCode = ref(false)
-const initialPanelSize = ref({ width: 0, height: 0 })
-
-const startResizeCode = (e: MouseEvent) => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  e.stopPropagation()
-  e.preventDefault()
-  isResizingCode.value = true
-  dragStartCode.value = { x: e.clientX, y: e.clientY }
-  initialPanelSize.value = {
-    width: graph.codePanelWidth ?? 400,
-    height: graph.codePanelHeight ?? 300,
-  }
-  window.addEventListener('mousemove', onResizeCode)
-  window.addEventListener('mouseup', stopResizeCode)
-}
-
-const onResizeCode = (e: MouseEvent) => {
-  if (!isResizingCode.value) return
-  const dx = e.clientX - dragStartCode.value.x
-  const dy = e.clientY - dragStartCode.value.y
-
-  const newWidth = Math.max(300, initialPanelSize.value.width + dx)
-  const newHeight = Math.max(200, initialPanelSize.value.height + dy)
-
+const handleDataPanelDragEnd = (pos: { x: number; y: number }) => {
+  dataPanelPos.x = pos.x
+  dataPanelPos.y = pos.y
   if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        codePanelWidth: newWidth,
-        codePanelHeight: newHeight,
-      },
-      false
-    )
+    projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+      dataPanelX: pos.x,
+      dataPanelY: pos.y,
+    })
   }
 }
 
-const stopResizeCode = () => {
-  isResizingCode.value = false
-  window.removeEventListener('mousemove', onResizeCode)
-  window.removeEventListener('mouseup', stopResizeCode)
-  projectStore.saveProjects()
-}
-
-// Resize Code Panel (Touch)
-const startResizeCodeTouch = (e: TouchEvent) => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  e.stopPropagation()
-  isResizingCode.value = true
-  const touch = e.touches[0]
-  dragStartCode.value = { x: touch.clientX, y: touch.clientY }
-  initialPanelSize.value = {
-    width: graph.codePanelWidth ?? 400,
-    height: graph.codePanelHeight ?? 300,
-  }
-  window.addEventListener('touchmove', onResizeCodeTouch, { passive: false })
-  window.addEventListener('touchend', stopResizeCodeTouch)
-}
-
-const onResizeCodeTouch = (e: TouchEvent) => {
-  if (!isResizingCode.value) return
-  e.preventDefault()
-  const touch = e.touches[0]
-  const dx = touch.clientX - dragStartCode.value.x
-  const dy = touch.clientY - dragStartCode.value.y
-
-  const newWidth = Math.max(300, initialPanelSize.value.width + dx)
-  const newHeight = Math.max(200, initialPanelSize.value.height + dy)
-
+const handleDataPanelResizeEnd = (size: { width: number; height: number }) => {
+  dataPanelSize.width = size.width
+  dataPanelSize.height = size.height
   if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        codePanelWidth: newWidth,
-        codePanelHeight: newHeight,
-      },
-      false
-    )
+    projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+      dataPanelWidth: size.width,
+      dataPanelHeight: size.height,
+    })
   }
 }
 
-const stopResizeCodeTouch = () => {
-  isResizingCode.value = false
-  window.removeEventListener('touchmove', onResizeCodeTouch)
-  window.removeEventListener('touchend', stopResizeCodeTouch)
-  projectStore.saveProjects()
-}
-
-// --- Data Panel Logic ---
-
-const dataPanelRef = ref<HTMLElement | null>(null)
-const isDraggingData = ref(false)
-const dragStartData = ref({ x: 0, y: 0 })
-const initialDataPanelPos = ref({ x: 0, y: 0 })
-
-const startDragDataTouch = (e: TouchEvent) => {
-  if ((e.target as HTMLElement).closest('.action-btn')) return
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  isDraggingData.value = true
-  const touch = e.touches[0]
-  dragStartData.value = { x: touch.clientX, y: touch.clientY }
-
-  initialDataPanelPos.value = {
-    x: graph.dataPanelX ?? 0,
-    y: graph.dataPanelY ?? 0,
-  }
-
-  window.addEventListener('touchmove', onDragDataTouch, { passive: false })
-  window.addEventListener('touchend', stopDragDataTouch)
-}
-
-const onDragDataTouch = (e: TouchEvent) => {
-  if (!isDraggingData.value) return
-  e.preventDefault()
-  const touch = e.touches[0]
-  const dx = touch.clientX - dragStartData.value.x
-  const dy = touch.clientY - dragStartData.value.y
-
-  if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        dataPanelX: initialDataPanelPos.value.x + dx,
-        dataPanelY: initialDataPanelPos.value.y + dy,
-      },
-      false
-    )
-  }
-}
-
-const stopDragDataTouch = () => {
-  isDraggingData.value = false
-  window.removeEventListener('touchmove', onDragDataTouch)
-  window.removeEventListener('touchend', stopDragDataTouch)
-  projectStore.saveProjects()
-}
-
-const startDragData = (e: MouseEvent) => {
-  if ((e.target as HTMLElement).closest('.action-btn')) return
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  isDraggingData.value = true
-  dragStartData.value = { x: e.clientX, y: e.clientY }
-  initialDataPanelPos.value = {
-    x: graph.dataPanelX ?? 0,
-    y: graph.dataPanelY ?? 0,
-  }
-  window.addEventListener('mousemove', onDragData)
-  window.addEventListener('mouseup', stopDragData)
-}
-
-const onDragData = (e: MouseEvent) => {
-  if (!isDraggingData.value) return
-  const dx = e.clientX - dragStartData.value.x
-  const dy = e.clientY - dragStartData.value.y
-
-  if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        dataPanelX: initialDataPanelPos.value.x + dx,
-        dataPanelY: initialDataPanelPos.value.y + dy,
-      },
-      false
-    )
-  }
-}
-
-const stopDragData = () => {
-  isDraggingData.value = false
-  window.removeEventListener('mousemove', onDragData)
-  window.removeEventListener('mouseup', stopDragData)
-  projectStore.saveProjects()
-}
-
-const getDataPanelStyle = computed(() => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return {}
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return {}
-
-  const screenX = graph.dataPanelX ?? 0
-  const screenY = graph.dataPanelY ?? 0
-
-  return {
-    left: `${screenX}px`,
-    top: `${screenY}px`,
-    width: `${graph.dataPanelWidth ?? 400}px`,
-    height: `${graph.dataPanelHeight ?? 300}px`,
-  }
-})
-
-const isResizingData = ref(false)
-const initialDataPanelSize = ref({ width: 0, height: 0 })
-
-const startResizeData = (e: MouseEvent) => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  e.stopPropagation()
-  e.preventDefault()
-  isResizingData.value = true
-  dragStartData.value = { x: e.clientX, y: e.clientY }
-  initialDataPanelSize.value = {
-    width: graph.dataPanelWidth ?? 400,
-    height: graph.dataPanelHeight ?? 300,
-  }
-  window.addEventListener('mousemove', onResizeData)
-  window.addEventListener('mouseup', stopResizeData)
-}
-
-const onResizeData = (e: MouseEvent) => {
-  if (!isResizingData.value) return
-  const dx = e.clientX - dragStartData.value.x
-  const dy = e.clientY - dragStartData.value.y
-  const newWidth = Math.max(300, initialDataPanelSize.value.width + dx)
-  const newHeight = Math.max(200, initialDataPanelSize.value.height + dy)
-
-  if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        dataPanelWidth: newWidth,
-        dataPanelHeight: newHeight,
-      },
-      false
-    )
-  }
-}
-
-const stopResizeData = () => {
-  isResizingData.value = false
-  window.removeEventListener('mousemove', onResizeData)
-  window.removeEventListener('mouseup', stopResizeData)
-  projectStore.saveProjects()
-}
-
-const startResizeDataTouch = (e: TouchEvent) => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  e.stopPropagation()
-  isResizingData.value = true
-  const touch = e.touches[0]
-  dragStartData.value = { x: touch.clientX, y: touch.clientY }
-  initialDataPanelSize.value = {
-    width: graph.dataPanelWidth ?? 400,
-    height: graph.dataPanelHeight ?? 300,
-  }
-  window.addEventListener('touchmove', onResizeDataTouch, { passive: false })
-  window.addEventListener('touchend', stopResizeDataTouch)
-}
-
-const onResizeDataTouch = (e: TouchEvent) => {
-  if (!isResizingData.value) return
-  e.preventDefault()
-  const touch = e.touches[0]
-  const dx = touch.clientX - dragStartData.value.x
-  const dy = touch.clientY - dragStartData.value.y
-  const newWidth = Math.max(300, initialDataPanelSize.value.width + dx)
-  const newHeight = Math.max(200, initialDataPanelSize.value.height + dy)
-
-  if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        dataPanelWidth: newWidth,
-        dataPanelHeight: newHeight,
-      },
-      false
-    )
-  }
-}
-
-const stopResizeDataTouch = () => {
-  isResizingData.value = false
-  window.removeEventListener('touchmove', onResizeDataTouch)
-  window.removeEventListener('touchend', stopResizeDataTouch)
-  projectStore.saveProjects()
-}
+// Load panel positions and sizes from graph state
+watch(
+  [() => graphStore.currentGraphId, () => projectStore.currentProject?.graphs],
+  () => {
+    const currentGraphId = graphStore.currentGraphId
+    if (currentGraphId && projectStore.currentProject) {
+      const graph = projectStore.currentProject.graphs.find((g) => g.id === currentGraphId)
+      if (graph) {
+        // Use saved positions or defaults: data panel on bottom-left, code panel on bottom-right
+        const defaultCodeX = typeof window !== 'undefined' ? window.innerWidth - 420 : 0
+        const defaultY = typeof window !== 'undefined' ? window.innerHeight - 380 : 0
+        codePanelPos.x = graph.codePanelX ?? defaultCodeX
+        codePanelPos.y = graph.codePanelY ?? defaultY
+        codePanelSize.width = graph.codePanelWidth ?? 400
+        codePanelSize.height = graph.codePanelHeight ?? 300
+        dataPanelPos.x = graph.dataPanelX ?? 20
+        dataPanelPos.y = graph.dataPanelY ?? defaultY
+        dataPanelSize.width = graph.dataPanelWidth ?? 400
+        dataPanelSize.height = graph.dataPanelHeight ?? 300
+      }
+    }
+  },
+  { immediate: true, deep: true }
+)
 
 const handleSidebarContainerClick = (e: MouseEvent) => {
   if ((e.target as HTMLElement).closest('.theme-toggle-header')) return
@@ -1794,96 +1459,43 @@ const clearImportedData = () => {
       </div>
     </Transition>
 
-    <div
+    <!-- Code Panel using FloatingPanel -->
+    <FloatingPanel
       v-if="isCodePanelOpen && graphStore.currentGraphId"
-      ref="codePanelRef"
-      class="code-panel-floating glass-panel"
-      :style="getCodePanelStyle"
+      title="BUGS Code Preview"
+      icon="fas fa-code"
+      :is-open="isCodePanelOpen"
+      :default-width="codePanelSize.width"
+      :default-height="codePanelSize.height"
+      :default-x="codePanelPos.x"
+      :default-y="codePanelPos.y"
+      :show-download="true"
+      @close="toggleCodePanel"
+      @download="handleDownloadBugs"
+      @drag-end="handleCodePanelDragEnd"
+      @resize-end="handleCodePanelResizeEnd"
     >
-      <div
-        class="graph-header code-header"
-        @mousedown="startDragCode"
-        @touchstart="startDragCodeTouch"
-      >
-        <span class="graph-title"><i class="fas fa-code"></i> BUGS Code Preview</span>
-        <div class="panel-actions">
-          <button
-            class="action-btn"
-            @click.stop="handleDownloadBugs"
-            title="Download BUGS Code"
-            @mousedown.stop
-            @touchstart.stop
-          >
-            <i class="fas fa-download"></i>
-          </button>
-          <button
-            class="close-btn"
-            @click="toggleCodePanel()"
-            @touchstart.stop="toggleCodePanel()"
-            @mousedown.stop
-          >
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-      </div>
-      <div class="code-content">
-        <CodePreviewPanel :is-active="true" />
-      </div>
-      <div
-        class="resize-handle"
-        @mousedown.stop="startResizeCode"
-        @touchstart.stop.prevent="startResizeCodeTouch"
-      >
-        <i class="fas fa-chevron-right" style="transform: rotate(45deg)"></i>
-      </div>
-    </div>
+      <CodePreviewPanel :is-active="true" />
+    </FloatingPanel>
 
-    <!-- Data Panel Pop-out -->
-    <div
+    <!-- Data Panel using FloatingPanel -->
+    <FloatingPanel
       v-if="isDataPanelOpen && graphStore.currentGraphId"
-      ref="dataPanelRef"
-      class="code-panel-floating glass-panel"
-      :style="getDataPanelStyle"
+      title="Data & Inits"
+      icon="fas fa-database"
+      badge="JSON"
+      :is-open="isDataPanelOpen"
+      :default-width="dataPanelSize.width"
+      :default-height="dataPanelSize.height"
+      :default-x="dataPanelPos.x"
+      :default-y="dataPanelPos.y"
+      :show-import="true"
+      @close="toggleDataPanel"
+      @import="dataImportInput?.click()"
+      @drag-end="handleDataPanelDragEnd"
+      @resize-end="handleDataPanelResizeEnd"
     >
-      <div
-        class="graph-header code-header"
-        @mousedown="startDragData"
-        @touchstart="startDragDataTouch"
-      >
-        <span class="graph-title">
-          <i class="fas fa-database"></i> Data & Inits
-          <span class="badge-json">JSON</span>
-        </span>
-        <div class="panel-actions">
-          <button
-            class="action-btn"
-            @click.stop="triggerDataImport"
-            title="Import JSON Data"
-            @mousedown.stop
-            @touchstart.stop
-          >
-            <i class="fas fa-file-upload"></i>
-          </button>
-          <button
-            class="close-btn"
-            @click="toggleDataPanel()"
-            @touchstart.stop="toggleDataPanel()"
-            @mousedown.stop
-          >
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-      </div>
-      <div class="code-content">
-        <DataInputPanel :is-active="true" />
-      </div>
-      <div
-        class="resize-handle"
-        @mousedown.stop="startResizeData"
-        @touchstart.stop.prevent="startResizeDataTouch"
-      >
-        <i class="fas fa-chevron-right" style="transform: rotate(45deg)"></i>
-      </div>
+      <DataInputPanel :is-active="true" />
       <!-- Hidden file input for Data Import -->
       <input
         type="file"
@@ -1892,7 +1504,7 @@ const clearImportedData = () => {
         style="display: none"
         @change="handleDataImport"
       />
-    </div>
+    </FloatingPanel>
 
     <FloatingBottomToolbar
       :current-mode="currentMode"
@@ -2143,132 +1755,6 @@ const clearImportedData = () => {
   height: 100%;
   color: var(--theme-text-secondary);
   gap: 1rem;
-}
-
-.code-panel-floating {
-  position: absolute;
-  background-color: var(--theme-bg-panel);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-floating);
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--theme-border);
-  overflow: hidden;
-  z-index: 100;
-}
-
-.graph-header {
-  height: 36px;
-  background-color: var(--theme-bg-hover);
-  border-bottom: 1px solid var(--theme-border);
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  cursor: move;
-  user-select: none;
-  justify-content: space-between;
-}
-
-.graph-title {
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--theme-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.badge-json {
-  font-size: 0.7em;
-  background-color: var(--theme-primary);
-  color: white;
-  padding: 2px 4px;
-  border-radius: 3px;
-  margin-left: 6px;
-  font-weight: normal;
-  vertical-align: middle;
-}
-
-.panel-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.action-btn {
-  background: transparent;
-  border: none;
-  color: var(--theme-text-secondary);
-  cursor: pointer;
-  font-size: 13px;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  transition: color 0.2s;
-}
-
-.action-btn:hover {
-  color: var(--theme-text-primary);
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  color: var(--theme-text-secondary);
-  cursor: pointer;
-  font-size: 13px;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-}
-.close-btn:hover {
-  color: var(--theme-text-primary);
-}
-
-.code-content {
-  flex: 1;
-  overflow: hidden;
-  background-color: var(--theme-bg-panel);
-}
-
-.code-content :deep(.code-preview-panel),
-.code-content :deep(.data-input-panel),
-.code-content :deep(.json-editor-panel) {
-  height: 100%;
-  padding: 0;
-}
-.code-content :deep(.header-section) {
-  display: none;
-}
-
-.code-content :deep(.header-controls) {
-  display: none;
-}
-
-.code-content :deep(.panel-title),
-.code-content :deep(.description) {
-  display: none;
-}
-
-.code-content :deep(.editor-wrapper) {
-  border-radius: 0;
-}
-
-.resize-handle {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 13px;
-  height: 13px;
-  cursor: nwse-resize;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--theme-text-secondary);
-  font-size: 9px;
-  z-index: 20;
-  background: var(--theme-bg-hover);
-  border-top-left-radius: 4px;
 }
 
 .status-indicator {
