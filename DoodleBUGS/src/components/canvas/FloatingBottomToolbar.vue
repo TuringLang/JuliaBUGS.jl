@@ -264,32 +264,32 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="toolbar-container"
+    class="db-toolbar-container"
     ref="toolbarRef"
     :style="styleState"
     @mousedown="startDrag"
     @touchstart="startDragTouch"
   >
-    <div class="floating-dock glass-panel">
-      <div class="drag-handle" title="Drag Toolbar">
+    <div class="db-floating-dock db-glass-panel">
+      <div class="db-drag-handle" title="Drag Toolbar">
         <i class="fas fa-grip-vertical"></i>
       </div>
 
       <!-- Widget-Only Navigation Group -->
       <template v-if="isWidget">
-        <button class="dock-btn" @click="$emit('nav', 'project')" title="Projects">
+        <button class="db-dock-btn" @click="$emit('nav', 'project')" title="Projects">
           <i class="fas fa-folder"></i>
         </button>
-        <button class="dock-btn" @click="$emit('nav', 'view')" title="View Options">
+        <button class="db-dock-btn" @click="$emit('nav', 'view')" title="View Options">
           <i class="fas fa-eye"></i>
         </button>
-        <div class="divider"></div>
+        <div class="db-divider"></div>
       </template>
 
       <!-- Tools Group -->
       <button
-        class="dock-btn"
-        :class="{ active: currentMode === 'select' }"
+        class="db-dock-btn"
+        :class="{ 'db-active': currentMode === 'select' }"
         @click="setMode('select')"
         title="Select Tool (V)"
         type="button"
@@ -297,34 +297,34 @@ onUnmounted(() => {
         <i class="fas fa-mouse-pointer"></i>
       </button>
 
-      <DropdownMenu class="dock-dropdown add-tool-dropdown">
+      <DropdownMenu class="db-dock-dropdown add-tool-dropdown">
         <template #trigger>
           <button
-            class="add-tool-btn"
-            :class="{ active: isAddModeActive }"
+            class="db-add-tool-btn"
+            :class="{ 'db-active': isAddModeActive }"
             :style="addButtonStyle"
             title="Add Node or Edge"
             type="button"
           >
             <i
               :class="currentAddToolIcon"
-              class="tool-icon"
+              class="db-tool-icon"
               :style="{ color: isAddModeActive ? 'white' : currentAddToolColor }"
             ></i>
             <span
-              class="tool-label"
+              class="db-tool-label"
               :style="{ color: isAddModeActive ? 'white' : 'var(--theme-text-primary)' }"
             >
               {{ currentAddToolLabel }}
             </span>
             <i
-              class="fas fa-chevron-down arrow-icon"
+              class="fas fa-chevron-down db-arrow-icon"
               :style="{ color: isAddModeActive ? 'white' : 'var(--theme-text-muted)' }"
             ></i>
           </button>
         </template>
         <template #content>
-          <div class="dropdown-section-title">Nodes</div>
+          <div class="db-dropdown-section-title">Nodes</div>
           <a
             href="#"
             v-for="type in availableNodeTypes"
@@ -338,41 +338,41 @@ onUnmounted(() => {
             ></i>
             {{ type.label }}
           </a>
-          <div class="dropdown-divider"></div>
-          <div class="dropdown-section-title">Connections</div>
+          <div class="db-dropdown-divider"></div>
+          <div class="db-dropdown-section-title">Connections</div>
           <a href="#" @click.prevent="selectAddTool('edge')">
             <i class="fas fa-bezier-curve menu-icon" :style="{ color: nodeColors.edge }"></i> Edge
           </a>
         </template>
       </DropdownMenu>
 
-      <div class="divider"></div>
+      <div class="db-divider"></div>
 
       <!-- Detach Mode (Touch) -->
       <template v-if="showDetachModeControl">
         <button
-          class="dock-btn"
-          :class="{ active: isDetachModeActive }"
+          class="db-dock-btn"
+          :class="{ 'db-active': isDetachModeActive }"
           @click="$emit('toggle-detach-mode')"
           title="Detach Mode (Simulates Alt/Option key)"
           type="button"
         >
           <i class="fas fa-unlink"></i>
         </button>
-        <div class="divider"></div>
+        <div class="db-divider"></div>
       </template>
 
       <!-- History & Panels -->
-      <button class="dock-btn" @click="$emit('undo')" title="Undo (Ctrl+Z)" type="button">
+      <button class="db-dock-btn" @click="$emit('undo')" title="Undo (Ctrl+Z)" type="button">
         <i class="fas fa-undo"></i>
       </button>
-      <button class="dock-btn" @click="$emit('redo')" title="Redo (Ctrl+Y)" type="button">
+      <button class="db-dock-btn" @click="$emit('redo')" title="Redo (Ctrl+Y)" type="button">
         <i class="fas fa-redo"></i>
       </button>
 
       <button
-        class="dock-btn"
-        :class="{ active: showCodePanel }"
+        class="db-dock-btn"
+        :class="{ 'db-active': showCodePanel }"
         @click="$emit('toggle-code-panel')"
         title="BUGS Code"
         type="button"
@@ -381,8 +381,8 @@ onUnmounted(() => {
       </button>
 
       <button
-        class="dock-btn"
-        :class="{ active: showDataPanel }"
+        class="db-dock-btn"
+        :class="{ 'db-active': showDataPanel }"
         @click="$emit('toggle-data-panel')"
         title="Data Panel"
         type="button"
@@ -390,45 +390,45 @@ onUnmounted(() => {
         <i class="fas fa-database"></i>
       </button>
 
-      <button class="dock-btn" @click="$emit('open-style-modal')" title="Graph Style" type="button">
+      <button class="db-dock-btn" @click="$emit('open-style-modal')" title="Graph Style" type="button">
         <i class="fas fa-palette"></i>
       </button>
 
       <template v-if="showZoomControls">
-        <div class="divider"></div>
-        <button class="dock-btn" @click="$emit('zoom-in')" title="Zoom In" type="button">
+        <div class="db-divider"></div>
+        <button class="db-dock-btn" @click="$emit('zoom-in')" title="Zoom In" type="button">
           <i class="fas fa-plus"></i>
         </button>
-        <button class="dock-btn" @click="$emit('zoom-out')" title="Zoom Out" type="button">
+        <button class="db-dock-btn" @click="$emit('zoom-out')" title="Zoom Out" type="button">
           <i class="fas fa-minus"></i>
         </button>
-        <button class="dock-btn" @click="$emit('fit')" title="Fit to View" type="button">
+        <button class="db-dock-btn" @click="$emit('fit')" title="Fit to View" type="button">
           <i class="fas fa-compress-arrows-alt"></i>
         </button>
       </template>
 
-      <div class="divider"></div>
+      <div class="db-divider"></div>
 
       <!-- Widget-Only Export & Help Group -->
       <template v-if="isWidget">
-        <button class="dock-btn" @click="$emit('nav', 'export')" title="Export">
+        <button class="db-dock-btn" @click="$emit('nav', 'export')" title="Export">
           <i class="fas fa-file-export"></i>
         </button>
-        <button class="dock-btn" @click="$emit('nav', 'help')" title="Help & Dev Tools">
+        <button class="db-dock-btn" @click="$emit('nav', 'help')" title="Help & Dev Tools">
           <i class="fas fa-question-circle"></i>
         </button>
-        <div class="divider"></div>
+        <div class="db-divider"></div>
       </template>
 
       <!-- Layout Dropdown -->
-      <DropdownMenu class="dock-dropdown">
+      <DropdownMenu class="db-dock-dropdown">
         <template #trigger>
-          <button class="dock-btn" title="Graph Layout" type="button">
+          <button class="db-dock-btn" title="Graph Layout" type="button">
             <i class="fas fa-sitemap"></i>
           </button>
         </template>
         <template #content>
-          <div class="dropdown-section-title">Layout</div>
+          <div class="db-dropdown-section-title">Layout</div>
           <a href="#" @click.prevent="$emit('layout-graph', 'dagre')">Dagre</a>
           <a href="#" @click.prevent="$emit('layout-graph', 'fcose')">fCoSE</a>
           <a href="#" @click.prevent="$emit('layout-graph', 'cola')">Cola</a>
@@ -441,7 +441,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.toolbar-container {
+.db-toolbar-container {
   position: fixed;
   z-index: 400; /* Layer 5: Toolbar - above panels, below dropdowns */
   display: flex;
@@ -454,11 +454,11 @@ onUnmounted(() => {
   will-change: transform;
 }
 
-.toolbar-container:active {
+.db-toolbar-container:active {
   cursor: grabbing;
 }
 
-.floating-dock {
+.db-floating-dock {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -469,7 +469,7 @@ onUnmounted(() => {
   user-select: none;
 }
 
-.drag-handle {
+.db-drag-handle {
   color: var(--theme-text-muted);
   cursor: grab;
   padding: 0 6px;
@@ -478,11 +478,11 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
-.drag-handle:active {
+.db-drag-handle:active {
   cursor: grabbing;
 }
 
-.dock-btn {
+.db-dock-btn {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -497,24 +497,24 @@ onUnmounted(() => {
   transition: all 0.2s;
 }
 
-.dock-btn:hover {
+.db-dock-btn:hover {
   background: var(--theme-bg-hover);
   color: var(--theme-text-primary);
 }
 
-.dock-btn.active {
+.db-dock-btn.db-active {
   background: var(--theme-primary);
   color: white;
 }
 
-.divider {
+.db-divider {
   width: 1px;
   height: 16px;
   background: var(--theme-border);
   margin: 0 4px;
 }
 
-.add-tool-btn {
+.db-add-tool-btn {
   display: flex;
   align-items: center;
   height: 32px;
@@ -527,23 +527,23 @@ onUnmounted(() => {
   border: 1px solid transparent;
 }
 
-.add-tool-btn:hover {
+.db-add-tool-btn:hover {
   background: var(--theme-bg-hover);
   border-color: var(--theme-border);
 }
 
 /* When active, styles are applied via :style binding (colored background) */
-.add-tool-btn.active {
+.db-add-tool-btn.db-active {
   border-color: transparent;
 }
 
-.tool-icon {
+.db-tool-icon {
   font-size: 14px;
   margin-right: 6px;
   pointer-events: none;
 }
 
-.tool-label {
+.db-tool-label {
   font-size: 12px;
   font-weight: 600;
   margin-right: 6px;
@@ -551,7 +551,7 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-.arrow-icon {
+.db-arrow-icon {
   font-size: 10px;
   opacity: 0.7;
   pointer-events: none;
@@ -565,45 +565,17 @@ onUnmounted(() => {
 }
 
 /* Dropdown adjustments */
-.dock-dropdown {
+.db-dock-dropdown {
   display: flex;
   align-items: center;
 }
 
-.dock-dropdown :deep(.p-popover) {
+.db-dock-dropdown :deep(.p-popover) {
   margin-bottom: 8px;
 }
 
-.menu-item-row {
-  display: flex;
-  align-items: center;
-  padding-right: 8px;
-}
-
-.menu-item-row a {
-  flex-grow: 1;
-}
-
-.icon-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--theme-text-secondary);
-  padding: 6px;
-  border-radius: 4px;
-  transition:
-    background-color 0.2s,
-    color 0.2s;
-  font-size: 12px;
-}
-
-.icon-btn:hover {
-  background-color: var(--theme-bg-hover);
-  color: var(--theme-text-primary);
-}
-
 @media (max-width: 768px) {
-  .toolbar-container {
+  .db-toolbar-container {
     bottom: 16px !important;
     left: 50% !important;
     top: auto !important;
@@ -611,20 +583,29 @@ onUnmounted(() => {
     width: 100%;
     max-width: 100vw;
   }
-  .floating-dock {
+  .db-floating-dock {
     max-width: calc(100vw - 32px);
     overflow-x: auto;
     justify-content: flex-start;
   }
-  .floating-dock::-webkit-scrollbar {
+  .db-floating-dock::-webkit-scrollbar {
     display: none;
   }
-  .floating-dock {
+  .db-floating-dock {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  .drag-handle {
+  .db-drag-handle {
     display: none;
   }
+}
+
+/* Glass Panel Polyfill */
+.db-glass-panel {
+  background: var(--theme-bg-panel-transparent, rgba(255, 255, 255, 0.95));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--theme-border);
+  box-shadow: var(--shadow-floating);
 }
 </style>

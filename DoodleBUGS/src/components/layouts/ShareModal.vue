@@ -219,26 +219,26 @@ const handleUrlFocus = (event: FocusEvent) => {
       <h3>Share Model</h3>
     </template>
     <template #body>
-      <div class="share-layout">
+      <div class="db-share-layout">
         <!-- Tab Navigation -->
-        <div class="share-tabs">
+        <div class="db-share-tabs">
           <button
-            class="tab-btn"
-            :class="{ active: activeTab === 'current' }"
+            class="db-tab-btn"
+            :class="{ 'db-active': activeTab === 'current' }"
             @click="activeTab = 'current'"
           >
             <i class="fas fa-file-alt"></i> Current Graph
           </button>
           <button
-            class="tab-btn"
-            :class="{ active: activeTab === 'project' }"
+            class="db-tab-btn"
+            :class="{ 'db-active': activeTab === 'project' }"
             @click="activeTab = 'project'"
           >
             <i class="fas fa-folder"></i> Whole Project
           </button>
           <button
-            class="tab-btn"
-            :class="{ active: activeTab === 'custom' }"
+            class="db-tab-btn"
+            :class="{ 'db-active': activeTab === 'custom' }"
             @click="activeTab = 'custom'"
           >
             <i class="fas fa-check-square"></i> Select Graphs
@@ -246,66 +246,66 @@ const handleUrlFocus = (event: FocusEvent) => {
         </div>
 
         <!-- Custom Selection Area -->
-        <div v-if="activeTab === 'custom'" class="selection-area">
-          <div class="selection-header">Select graphs to include:</div>
-          <div class="graph-list">
-            <div v-for="graph in projectGraphs" :key="graph.id" class="graph-item">
+        <div v-if="activeTab === 'custom'" class="db-selection-area">
+          <div class="db-selection-header">Select graphs to include:</div>
+          <div class="db-graph-list">
+            <div v-for="graph in projectGraphs" :key="graph.id" class="db-graph-item">
               <label>
                 <input
                   type="checkbox"
                   :checked="selectedGraphs.has(graph.id)"
                   @change="toggleGraphSelection(graph.id)"
                 />
-                <span class="graph-name">{{ graph.name }}</span>
+                <span class="db-graph-name">{{ graph.name }}</span>
               </label>
             </div>
           </div>
         </div>
 
-        <div class="divider"></div>
+        <div class="db-divider"></div>
 
         <!-- URL Result Area -->
-        <div class="result-area">
-          <div v-if="!url" class="empty-message">Select graphs to generate a link.</div>
+        <div class="db-result-area">
+          <div v-if="!url" class="db-empty-message">Select graphs to generate a link.</div>
           <template v-else>
-            <label class="url-label">Share Link ({{ shortUrl ? 'Shortened' : 'Base64' }})</label>
-            <div class="url-row">
+            <label class="db-url-label">Share Link ({{ shortUrl ? 'Shortened' : 'Base64' }})</label>
+            <div class="db-url-row">
               <BaseInput
                 :model-value="displayUrl"
                 readonly
-                class="url-input"
-                :class="{ 'is-short': !!shortUrl }"
+                class="db-url-input"
+                :class="{ 'db-is-short': !!shortUrl }"
                 @focus="handleUrlFocus"
               />
               <BaseButton
                 @click="copyToClipboard"
                 type="primary"
-                class="icon-only-btn"
+                class="db-icon-only-btn"
                 title="Copy to Clipboard"
               >
                 <i :class="copySuccess ? 'fas fa-check' : 'fas fa-copy'"></i>
               </BaseButton>
             </div>
 
-            <div class="actions-row">
+            <div class="db-actions-row">
               <BaseButton
                 v-if="!shortUrl"
                 @click="shortenUrl"
                 type="secondary"
                 size="small"
                 :disabled="isLoadingShort"
-                class="shorten-btn"
+                class="db-shorten-btn"
               >
                 <i v-if="isLoadingShort" class="fas fa-spinner fa-spin"></i>
                 <span v-else>Shorten URL (is.gd)</span>
               </BaseButton>
 
-              <div v-if="shortError" class="error-msg">
+              <div v-if="shortError" class="db-error-msg">
                 <i class="fas fa-exclamation-circle"></i> {{ shortError }}
               </div>
             </div>
 
-            <div class="info-note">
+            <div class="db-info-note">
               <i class="fas fa-info-circle"></i>
               <span
                 >The model, data & inits are directly encoded as the base64 URL. Nothing is stored
@@ -313,11 +313,11 @@ const handleUrlFocus = (event: FocusEvent) => {
               >
             </div>
 
-            <div class="disclaimer-box">
+            <div class="db-disclaimer-box">
               <i class="fas fa-exclamation-triangle"></i>
               <small>
                 <strong>Note:</strong>
-                <a href="https://is.gd" target="_blank" rel="noopener noreferrer" class="text-link"
+                <a href="https://is.gd" target="_blank" rel="noopener noreferrer" class="db-text-link"
                   >is.gd</a
                 >
                 is a third-party service. Please avoid generating short links excessively to prevent
@@ -328,21 +328,21 @@ const handleUrlFocus = (event: FocusEvent) => {
         </div>
 
         <!-- History Section -->
-        <div v-if="urlHistory.length > 0" class="history-section">
-          <div class="divider"></div>
-          <div class="history-header">Recent Short Links</div>
-          <div class="history-list">
-            <div v-for="(item, index) in urlHistory" :key="item.shortUrl" class="history-item">
-              <div class="history-info">
-                <span class="history-label">{{ item.label }}</span>
-                <a :href="item.shortUrl" target="_blank" class="history-link">{{
+        <div v-if="urlHistory.length > 0" class="db-history-section">
+          <div class="db-divider"></div>
+          <div class="db-history-header">Recent Short Links</div>
+          <div class="db-history-list">
+            <div v-for="(item, index) in urlHistory" :key="item.shortUrl" class="db-history-item">
+              <div class="db-history-info">
+                <span class="db-history-label">{{ item.label }}</span>
+                <a :href="item.shortUrl" target="_blank" class="db-history-link">{{
                   item.shortUrl
                 }}</a>
               </div>
-              <div class="history-actions">
+              <div class="db-history-actions">
                 <button
                   @click="copyHistoryItem(item.shortUrl, index)"
-                  class="icon-btn small"
+                  class="db-icon-btn db-small"
                   :title="copiedHistoryIndex === index ? 'Copied' : 'Copy'"
                 >
                   <i
@@ -352,7 +352,7 @@ const handleUrlFocus = (event: FocusEvent) => {
                 </button>
                 <button
                   @click="deleteHistoryItem(index)"
-                  class="icon-btn small danger"
+                  class="db-icon-btn db-small db-danger"
                   title="Delete"
                 >
                   <i class="fas fa-trash-alt"></i>
@@ -367,13 +367,13 @@ const handleUrlFocus = (event: FocusEvent) => {
 </template>
 
 <style scoped>
-.share-layout {
+.db-share-layout {
   display: flex;
   flex-direction: column;
   gap: 15px;
 }
 
-.share-tabs {
+.db-share-tabs {
   display: flex;
   background-color: var(--theme-bg-hover);
   padding: 4px;
@@ -381,7 +381,7 @@ const handleUrlFocus = (event: FocusEvent) => {
   gap: 4px;
 }
 
-.tab-btn {
+.db-tab-btn {
   flex: 1;
   border: none;
   background: transparent;
@@ -398,33 +398,33 @@ const handleUrlFocus = (event: FocusEvent) => {
   gap: 6px;
 }
 
-.tab-btn:hover {
+.db-tab-btn:hover {
   color: var(--theme-text-primary);
   background-color: rgba(0, 0, 0, 0.05);
 }
 
-.tab-btn.active {
+.db-tab-btn.db-active {
   background-color: var(--theme-bg-panel);
   color: var(--theme-primary);
   box-shadow: var(--shadow-sm);
   font-weight: 600;
 }
 
-.selection-area {
+.db-selection-area {
   border: 1px solid var(--theme-border);
   border-radius: var(--radius-md);
   padding: 10px;
   background-color: var(--theme-bg-canvas);
 }
 
-.selection-header {
+.db-selection-header {
   font-size: 0.85em;
   font-weight: 600;
   color: var(--theme-text-secondary);
   margin-bottom: 8px;
 }
 
-.graph-list {
+.db-graph-list {
   max-height: 120px;
   overflow-y: auto;
   display: flex;
@@ -432,7 +432,7 @@ const handleUrlFocus = (event: FocusEvent) => {
   gap: 4px;
 }
 
-.graph-item label {
+.db-graph-item label {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -442,45 +442,45 @@ const handleUrlFocus = (event: FocusEvent) => {
   transition: background 0.2s;
 }
 
-.graph-item label:hover {
+.db-graph-item label:hover {
   background-color: var(--theme-bg-hover);
 }
 
-.divider {
+.db-divider {
   height: 1px;
   background-color: var(--theme-border);
   width: 100%;
 }
 
-.result-area {
+.db-result-area {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.url-label {
+.db-url-label {
   font-size: 0.85em;
   font-weight: 600;
   color: var(--theme-text-secondary);
 }
 
-.url-row {
+.db-url-row {
   display: flex;
   gap: 8px;
 }
 
-.url-input {
+.db-url-input {
   flex-grow: 1;
   font-family: monospace;
   font-size: 0.85em;
 }
 
-.url-input.is-short {
+.db-url-input.db-is-short {
   color: var(--theme-primary);
   font-weight: 600;
 }
 
-.icon-only-btn {
+.db-icon-only-btn {
   width: 36px;
   padding: 0;
   display: flex;
@@ -488,23 +488,23 @@ const handleUrlFocus = (event: FocusEvent) => {
   justify-content: center;
 }
 
-.actions-row {
+.db-actions-row {
   display: flex;
   align-items: center;
   gap: 10px;
   min-height: 32px;
 }
 
-.shorten-btn {
+.db-shorten-btn {
   min-width: 140px;
 }
 
-.error-msg {
+.db-error-msg {
   font-size: 0.8em;
   color: var(--theme-danger);
 }
 
-.info-note {
+.db-info-note {
   font-size: 0.8em;
   color: var(--theme-text-muted);
   background-color: var(--theme-bg-hover);
@@ -516,7 +516,7 @@ const handleUrlFocus = (event: FocusEvent) => {
   line-height: 1.4;
 }
 
-.disclaimer-box {
+.db-disclaimer-box {
   display: flex;
   gap: 8px;
   align-items: flex-start;
@@ -527,41 +527,41 @@ const handleUrlFocus = (event: FocusEvent) => {
   border-radius: var(--radius-sm);
 }
 
-.disclaimer-box i {
+.db-disclaimer-box i {
   color: var(--theme-warning);
   margin-top: 2px;
 }
 
-.text-link {
+.db-text-link {
   color: var(--theme-primary);
   text-decoration: underline;
   font-weight: 500;
 }
 
-.text-link:hover {
+.db-text-link:hover {
   color: var(--theme-primary-hover);
 }
 
-.empty-message {
+.db-empty-message {
   text-align: center;
   color: var(--theme-text-secondary);
   font-style: italic;
   padding: 20px;
 }
 
-.history-section {
+.db-history-section {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.history-header {
+.db-history-header {
   font-size: 0.85em;
   font-weight: 600;
   color: var(--theme-text-secondary);
 }
 
-.history-list {
+.db-history-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -572,7 +572,7 @@ const handleUrlFocus = (event: FocusEvent) => {
   padding: 4px;
 }
 
-.history-item {
+.db-history-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -582,13 +582,13 @@ const handleUrlFocus = (event: FocusEvent) => {
   font-size: 0.85em;
 }
 
-.history-info {
+.db-history-info {
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.history-label {
+.db-history-label {
   font-weight: 600;
   color: var(--theme-text-primary);
   white-space: nowrap;
@@ -596,23 +596,23 @@ const handleUrlFocus = (event: FocusEvent) => {
   text-overflow: ellipsis;
 }
 
-.history-link {
+.db-history-link {
   color: var(--theme-primary);
   text-decoration: none;
   font-size: 0.9em;
 }
 
-.history-link:hover {
+.db-history-link:hover {
   text-decoration: underline;
 }
 
-.history-actions {
+.db-history-actions {
   display: flex;
   gap: 4px;
   margin-left: 8px;
 }
 
-.icon-btn.small {
+.db-icon-btn.db-small {
   width: 24px;
   height: 24px;
   font-size: 12px;
@@ -626,12 +626,12 @@ const handleUrlFocus = (event: FocusEvent) => {
   border-radius: 4px;
 }
 
-.icon-btn.small:hover {
+.db-icon-btn.db-small:hover {
   background: rgba(0, 0, 0, 0.05);
   color: var(--theme-text-primary);
 }
 
-.icon-btn.small.danger:hover {
+.db-icon-btn.db-small.db-danger:hover {
   color: var(--theme-danger);
   background: rgba(239, 68, 68, 0.1);
 }

@@ -81,19 +81,19 @@ const handleConfirm = () => {
       <h3>{{ title }}</h3>
     </template>
     <template #body>
-      <div class="export-options-form">
-        <div class="form-group">
+      <div class="db-export-options-form">
+        <div class="db-form-group">
           <label for="export-bg">Background Color:</label>
           <BaseInput id="export-bg" type="color" v-model="options.bg" />
         </div>
 
-        <div class="form-group checkbox-group">
+        <div class="db-form-group checkbox-group">
           <label for="export-full">Export Full Graph:</label>
           <input id="export-full" type="checkbox" v-model="options.full" />
-          <small class="help-text">(Uncheck to export current view only)</small>
+          <small class="db-help-text">(Uncheck to export current view only)</small>
         </div>
 
-        <div class="form-group">
+        <div class="db-form-group">
           <label for="export-scale">Scale:</label>
           <BaseInput
             id="export-scale"
@@ -105,7 +105,7 @@ const handleConfirm = () => {
         </div>
 
         <template v-if="exportType === 'png' || exportType === 'jpg'">
-          <div class="form-group">
+          <div class="db-form-group">
             <label for="export-maxWidth">Max Width (optional):</label>
             <BaseInput
               id="export-maxWidth"
@@ -114,7 +114,7 @@ const handleConfirm = () => {
               placeholder="e.g., 1920"
             />
           </div>
-          <div class="form-group">
+          <div class="db-form-group">
             <label for="export-maxHeight">Max Height (optional):</label>
             <BaseInput
               id="export-maxHeight"
@@ -126,7 +126,7 @@ const handleConfirm = () => {
         </template>
 
         <template v-if="exportType === 'jpg'">
-          <div class="form-group">
+          <div class="db-form-group">
             <label for="export-quality">JPG Quality (0 to 1):</label>
             <input
               id="export-quality"
@@ -142,39 +142,39 @@ const handleConfirm = () => {
       </div>
     </template>
     <template #footer>
-      + <BaseButton @click="handleConfirm" type="primary">Export</BaseButton>
+      <BaseButton @click="handleConfirm" type="primary">Export</BaseButton>
     </template>
   </BaseModal>
 </template>
 
 <style scoped>
-.export-options-form {
+.db-export-options-form {
   display: flex;
   flex-direction: column;
   gap: 15px;
 }
-.form-group {
+.db-form-group {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
-.form-group.checkbox-group {
+.db-form-group.checkbox-group {
   flex-direction: row;
   align-items: center;
 }
-.form-group label {
+.db-form-group label {
   font-weight: 500;
   color: var(--color-text);
   font-size: 0.9em;
 }
-.form-group input[type='range'] {
+.db-form-group input[type='range'] {
   flex-grow: 1;
 }
-.form-group span {
+.db-form-group span {
   font-size: 0.9em;
   font-variant-numeric: tabular-nums;
 }
-.help-text {
+.db-help-text {
   font-size: 0.8em;
   color: var(--color-secondary);
   font-style: italic;

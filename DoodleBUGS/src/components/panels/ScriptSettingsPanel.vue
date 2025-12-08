@@ -8,22 +8,22 @@ const { samplerSettings } = storeToRefs(scriptStore)
 </script>
 
 <template>
-  <div class="execution-settings-panel">
-    <div class="settings-section">
+  <div class="db-settings-panel">
+    <div class="db-settings-section">
       <h4>Sampler Settings</h4>
-      <div class="form-group">
+      <div class="db-form-group">
         <label for="n_samples">Samples</label>
         <BaseInput id="n_samples" type="number" v-model.number="samplerSettings.n_samples" />
       </div>
-      <div class="form-group">
+      <div class="db-form-group">
         <label for="n_adapts">Adaptation Steps</label>
         <BaseInput id="n_adapts" type="number" v-model.number="samplerSettings.n_adapts" />
       </div>
-      <div class="form-group">
+      <div class="db-form-group">
         <label for="n_chains">Chains</label>
         <BaseInput id="n_chains" type="number" v-model.number="samplerSettings.n_chains" />
       </div>
-      <div class="form-group">
+      <div class="db-form-group">
         <label for="seed">Seed (optional)</label>
         <BaseInput
           id="seed"
@@ -37,12 +37,12 @@ const { samplerSettings } = storeToRefs(scriptStore)
 </template>
 
 <style scoped>
-.execution-settings-panel {
+.db-settings-panel {
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
-.settings-section {
+.db-settings-section {
   display: flex;
   flex-direction: column;
   gap: 15px;
@@ -57,12 +57,12 @@ h4 {
   color: var(--color-heading);
   font-weight: 600;
 }
-.form-group {
+.db-form-group {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
-.form-group label {
+.db-form-group label {
   font-size: 0.9em;
   font-weight: 500;
 }

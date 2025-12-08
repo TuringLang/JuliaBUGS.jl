@@ -86,7 +86,6 @@ const handleHeaderMouseDown = (e: MouseEvent | TouchEvent) => {
 }
 
 const handleHeaderClick = () => {
-  // If drag is enabled, the parent handles the click/toggle logic to distinguish from dragging
   if (!props.enableDrag) {
     emit('toggle-left-sidebar')
   }
@@ -94,15 +93,15 @@ const handleHeaderClick = () => {
 </script>
 
 <template>
-  <aside class="floating-sidebar left glass-panel" :style="sidebarStyle(isLeftSidebarOpen)">
+  <aside class="db-floating-sidebar db-left db-glass-panel" :style="sidebarStyle(isLeftSidebarOpen)">
     <div
-      class="sidebar-header"
+      class="db-sidebar-header"
       @mousedown="handleHeaderMouseDown"
       @touchstart="handleHeaderMouseDown"
       @click="handleHeaderClick"
       :style="{ cursor: enableDrag ? 'move' : 'pointer' }"
     >
-      <span class="sidebar-title">
+      <span class="db-sidebar-title">
         {{ pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS' }}
       </span>
       <div class="flex items-center ml-auto">
@@ -110,13 +109,13 @@ const handleHeaderClick = () => {
           @click.stop="uiStore.toggleDarkMode()"
           @mousedown.stop
           @touchstart.stop
-          class="theme-toggle-header"
+          class="db-theme-toggle-header"
           :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
         >
           <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
         </button>
         <div class="flex items-center">
-          <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon">
+          <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="db-toggle-icon">
             <path
               fill="currentColor"
               fill-rule="evenodd"
@@ -128,27 +127,27 @@ const handleHeaderClick = () => {
       </div>
     </div>
 
-    <div class="sidebar-content-scrollable">
-      <Accordion :value="activeAccordionTabs" multiple class="sidebar-accordion">
+    <div class="db-sidebar-content-scrollable">
+      <Accordion :value="activeAccordionTabs" multiple class="db-sidebar-accordion">
         <AccordionPanel value="project">
-          <AccordionHeader><i class="fas fa-folder icon-12"></i> Project</AccordionHeader>
+          <AccordionHeader><i class="fas fa-folder db-icon-12"></i> Project</AccordionHeader>
           <AccordionContent>
-            <div class="panel-content-wrapper">
+            <div class="db-panel-content-wrapper">
               <ProjectManager
                 @new-project="$emit('new-project')"
                 @new-graph="$emit('new-graph')"
                 @share-graph="(id: string) => $emit('share-graph', id)"
                 @share-project-url="(id: string) => $emit('share-project-url', id)"
               />
-              <div class="divider"></div>
-              <div class="example-row">
-                <label class="example-label">Examples</label>
+              <div class="db-divider"></div>
+              <div class="db-example-row">
+                <label class="db-example-label">Examples</label>
                 <BaseSelect
                   :modelValue="''"
                   :options="exampleModels.map((e) => ({ label: e.name, value: e.key }))"
                   @update:modelValue="$emit('load-example', $event)"
                   placeholder="Load..."
-                  class="examples-dropdown"
+                  class="db-examples-dropdown"
                 />
               </div>
             </div>
@@ -156,17 +155,17 @@ const handleHeaderClick = () => {
         </AccordionPanel>
 
         <AccordionPanel value="view">
-          <AccordionHeader><i class="fas fa-eye icon-12"></i> View Options</AccordionHeader>
+          <AccordionHeader><i class="fas fa-eye db-icon-12"></i> View Options</AccordionHeader>
           <AccordionContent>
-            <div class="menu-panel flex-col gap-3">
-              <div class="menu-row">
+            <div class="db-menu-panel flex-col gap-3">
+              <div class="db-menu-row">
                 <label>Canvas Grid</label>
                 <ToggleSwitch
                   :modelValue="isGridEnabled"
                   @update:modelValue="$emit('update:isGridEnabled', $event)"
                 />
               </div>
-              <div class="menu-row">
+              <div class="db-menu-row">
                 <label>Canvas Style</label>
                 <BaseSelect
                   :modelValue="canvasGridStyle"
@@ -175,7 +174,7 @@ const handleHeaderClick = () => {
                   @update:modelValue="updateCanvasGridStyle"
                 />
               </div>
-              <div class="menu-row">
+              <div class="db-menu-row">
                 <label>Canvas Size</label>
                 <input
                   type="number"
@@ -184,18 +183,18 @@ const handleHeaderClick = () => {
                   step="5"
                   min="5"
                   max="100"
-                  class="native-number-input"
+                  class="db-native-number-input"
                 />
               </div>
-              <div class="divider"></div>
-              <div class="menu-row">
+              <div class="db-divider"></div>
+              <div class="db-menu-row">
                 <label title="Show Detach button in toolbar">Show Node Detach Option</label>
                 <ToggleSwitch
                   :modelValue="showDetachModeControl"
                   @update:modelValue="$emit('update:showDetachModeControl', $event)"
                 />
               </div>
-              <div class="menu-row">
+              <div class="db-menu-row">
                 <label>Zoom Controls</label>
                 <ToggleSwitch
                   :modelValue="showZoomControls"
@@ -207,19 +206,19 @@ const handleHeaderClick = () => {
         </AccordionPanel>
 
         <AccordionPanel value="help">
-          <AccordionHeader><i class="fas fa-question-circle icon-12"></i> Help</AccordionHeader>
+          <AccordionHeader><i class="fas fa-question-circle db-icon-12"></i> Help</AccordionHeader>
           <AccordionContent>
-            <div class="menu-panel flex-col gap-1">
-              <BaseButton type="ghost" class="menu-btn" @click="$emit('open-faq-modal')"
+            <div class="db-menu-panel flex-col gap-1">
+              <BaseButton type="ghost" class="db-menu-btn" @click="$emit('open-faq-modal')"
                 ><i class="fas fa-question"></i> FAQ</BaseButton
               >
-              <BaseButton type="ghost" class="menu-btn" @click="$emit('open-about-modal')"
+              <BaseButton type="ghost" class="db-menu-btn" @click="$emit('open-about-modal')"
                 ><i class="fas fa-info-circle"></i> About</BaseButton
               >
               <a
                 href="https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md"
                 target="_blank"
-                class="menu-btn ghost-btn"
+                class="db-menu-btn db-ghost-btn"
               >
                 <i class="fab fa-github"></i> Report Issue
               </a>
@@ -228,10 +227,10 @@ const handleHeaderClick = () => {
         </AccordionPanel>
 
         <AccordionPanel value="devtools">
-          <AccordionHeader><i class="fas fa-terminal icon-12"></i> Developer Tools</AccordionHeader>
+          <AccordionHeader><i class="fas fa-terminal db-icon-12"></i> Developer Tools</AccordionHeader>
           <AccordionContent>
-            <div class="menu-panel flex-col gap-3">
-              <div class="menu-row">
+            <div class="db-menu-panel flex-col gap-3">
+              <div class="db-menu-row">
                 <label>Debug Console</label>
                 <ToggleSwitch
                   :modelValue="showDebugPanel"
@@ -247,7 +246,7 @@ const handleHeaderClick = () => {
 </template>
 
 <style scoped>
-.floating-sidebar {
+.db-floating-sidebar {
   position: absolute;
   top: 16px;
   height: auto;
@@ -265,23 +264,23 @@ const handleHeaderClick = () => {
   box-shadow: var(--shadow-floating);
 }
 
-.floating-sidebar.left {
+.db-floating-sidebar.db-left {
   left: 16px;
   width: 300px !important;
   transform-origin: top left;
 }
 
 @media (max-width: 768px) {
-  .floating-sidebar.left {
+  .db-floating-sidebar.db-left {
     width: calc(100vw - 32px) !important;
   }
 
-  .sidebar-content-scrollable {
-    padding-bottom: 80px; /* Space for floating toolbar on mobile */
+  .db-sidebar-content-scrollable {
+    padding-bottom: 80px;
   }
 }
 
-.sidebar-header {
+.db-sidebar-header {
   padding: 12px 16px;
   display: flex;
   justify-content: space-between;
@@ -292,13 +291,13 @@ const handleHeaderClick = () => {
   flex-shrink: 0;
 }
 
-.sidebar-title {
+.db-sidebar-title {
   font-weight: 600;
   font-size: var(--font-size-md);
   user-select: none;
 }
 
-.theme-toggle-header {
+.db-theme-toggle-header {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -311,24 +310,24 @@ const handleHeaderClick = () => {
   transition: color 0.2s;
   border-radius: 4px;
 }
-.theme-toggle-header:hover {
+.db-theme-toggle-header:hover {
   color: var(--theme-text-primary);
   background: var(--theme-bg-hover);
 }
 
-.toggle-icon {
+.db-toggle-icon {
   color: var(--theme-text-secondary);
   pointer-events: none;
 }
 
-.sidebar-content-scrollable {
+.db-sidebar-content-scrollable {
   overflow-y: auto;
   flex: 1;
   background: var(--theme-bg-panel);
   min-height: 0;
 }
 
-:deep(.sidebar-accordion .p-accordion-header-link) {
+:deep(.db-sidebar-accordion .p-accordion-header-link) {
   padding: 0.75rem 1rem;
   font-size: 0.9rem;
   font-weight: 600;
@@ -340,17 +339,17 @@ const handleHeaderClick = () => {
   justify-content: flex-start;
 }
 
-:deep(.sidebar-accordion .p-accordion-header:not(.p-disabled) .p-accordion-header-link:focus) {
+:deep(.db-sidebar-accordion .p-accordion-header:not(.p-disabled) .p-accordion-header-link:focus) {
   box-shadow: none;
   background: var(--theme-bg-hover);
 }
 
-:deep(.sidebar-accordion .p-accordion-content-content) {
+:deep(.db-sidebar-accordion .p-accordion-content-content) {
   padding: 0;
   background: transparent;
 }
 
-:deep(.sidebar-accordion .p-accordion-panel) {
+:deep(.db-sidebar-accordion .p-accordion-panel) {
   border: none;
 }
 
@@ -381,7 +380,7 @@ const handleHeaderClick = () => {
   width: 2rem;
 }
 
-.icon-12 {
+.db-icon-12 {
   font-size: 12px;
   width: 20px;
   text-align: center;
@@ -389,12 +388,13 @@ const handleHeaderClick = () => {
   color: var(--theme-text-secondary);
 }
 
-.panel-content-wrapper {
+.db-panel-content-wrapper {
   padding: 4px;
   background: var(--theme-bg-panel);
 }
 
-:deep(.project-manager) {
+/* Project Manager Container Override */
+:deep(.db-project-manager) {
   background: transparent;
   height: auto !important;
   overflow: visible !important;
@@ -402,11 +402,11 @@ const handleHeaderClick = () => {
   border: none;
 }
 
-.menu-panel {
+.db-menu-panel {
   display: flex;
   padding: 8px;
 }
-.menu-row {
+.db-menu-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -414,7 +414,7 @@ const handleHeaderClick = () => {
   color: var(--theme-text-primary);
   margin-bottom: 8px;
 }
-.menu-btn {
+.db-menu-btn {
   justify-content: flex-start !important;
   gap: 10px;
   width: 100%;
@@ -424,10 +424,10 @@ const handleHeaderClick = () => {
   border-radius: var(--radius-sm);
   transition: background-color 0.2s;
 }
-.menu-btn:hover {
+.db-menu-btn:hover {
   background-color: var(--theme-bg-hover);
 }
-.ghost-btn {
+.db-ghost-btn {
   color: var(--theme-text-secondary);
   text-decoration: none;
   display: flex;
@@ -435,16 +435,16 @@ const handleHeaderClick = () => {
   border-radius: var(--radius-sm);
   padding: 8px;
 }
-.ghost-btn:hover {
+.db-ghost-btn:hover {
   background: var(--theme-bg-hover);
   color: var(--theme-text-primary);
 }
-.divider {
+.db-divider {
   height: 1px;
   background: var(--theme-border);
   margin: 12px 0;
 }
-.native-number-input {
+.db-native-number-input {
   width: 60px;
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--theme-border);
@@ -454,12 +454,12 @@ const handleHeaderClick = () => {
   font-size: 0.85rem;
   text-align: left;
 }
-.native-number-input:focus {
+.db-native-number-input:focus {
   outline: none;
   border-color: var(--theme-primary);
 }
 
-.example-row {
+.db-example-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -467,15 +467,23 @@ const handleHeaderClick = () => {
   gap: 10px;
 }
 
-.example-label {
+.db-example-label {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--theme-text-secondary);
   white-space: nowrap;
 }
 
-.examples-dropdown {
+.db-examples-dropdown {
   width: 100% !important;
   flex-grow: 1;
+}
+
+.db-glass-panel {
+  background: var(--theme-bg-panel-transparent, rgba(255, 255, 255, 0.95));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--theme-border);
+  box-shadow: var(--shadow-floating);
 }
 </style>

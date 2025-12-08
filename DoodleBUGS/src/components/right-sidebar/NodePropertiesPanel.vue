@@ -104,14 +104,14 @@ const getErrorForField = (fieldKey: string): string | undefined => {
 </script>
 
 <template>
-  <div class="node-properties-panel">
+  <div class="db-node-properties-panel">
     <h4>Properties</h4>
-    <div v-if="!localElement" class="no-selection-message">
+    <div v-if="!localElement" class="db-no-selection-message">
       <p>Select a node or edge on the canvas to view/edit its properties.</p>
     </div>
-    <div v-else class="properties-form">
-      <div v-if="elementErrors.length > 0" class="validation-errors-container">
-        <h5 class="validation-title">
+    <div v-else class="db-properties-form">
+      <div v-if="elementErrors.length > 0" class="db-validation-errors-container">
+        <h5 class="db-validation-title">
           <i class="fas fa-exclamation-triangle"></i> Validation Issues
         </h5>
         <ul>
@@ -121,15 +121,15 @@ const getErrorForField = (fieldKey: string): string | undefined => {
         </ul>
       </div>
 
-      <div class="form-group">
+      <div class="db-form-group">
         <label for="element-id">ID:</label>
         <BaseInput id="element-id" :model-value="localElement.id" disabled />
       </div>
 
       <template v-if="isNode && currentDefinition">
-        <div v-for="prop in currentDefinition.properties" :key="prop.key" class="form-group">
+        <div v-for="prop in currentDefinition.properties" :key="prop.key" class="db-form-group">
           <label :for="`prop-${prop.key}`">{{ prop.label }}:</label>
-          <div class="input-wrapper">
+          <div class="db-input-wrapper">
             <BaseSelect
               v-if="prop.type === 'select'"
               :id="`prop-${prop.key}`"
@@ -141,7 +141,7 @@ const getErrorForField = (fieldKey: string): string | undefined => {
                   handleUpdate()
                 }
               "
-              :class="{ 'has-error': getErrorForField(prop.key) }"
+              :class="{ 'db-has-error': getErrorForField(prop.key) }"
             />
             <input
               v-else-if="prop.type === 'checkbox'"
@@ -149,7 +149,7 @@ const getErrorForField = (fieldKey: string): string | undefined => {
               :id="`prop-${prop.key}`"
               v-model="(localElement as GraphNode)[prop.key]"
               @change="handleUpdate"
-              class="form-checkbox"
+              class="db-form-checkbox"
             />
             <BaseInput
               v-else
@@ -174,17 +174,17 @@ const getErrorForField = (fieldKey: string): string | undefined => {
                 }
               "
               :placeholder="prop.placeholder"
-              :class="{ 'has-error': getErrorForField(prop.key) }"
+              :class="{ 'db-has-error': getErrorForField(prop.key) }"
             />
           </div>
-          <small v-if="prop.helpText" class="help-text">{{ prop.helpText }}</small>
+          <small v-if="prop.helpText" class="db-help-text">{{ prop.helpText }}</small>
           <small
             v-if="prop.key === 'distribution' && selectedDistributionOption?.helpText"
-            class="help-text distribution-help"
+            class="db-help-text db-distribution-help"
           >
             {{ selectedDistributionOption.helpText }}
           </small>
-          <small v-if="getErrorForField(prop.key)" class="error-message">{{
+          <small v-if="getErrorForField(prop.key)" class="db-error-message">{{
             getErrorForField(prop.key)
           }}</small>
         </div>
@@ -193,7 +193,7 @@ const getErrorForField = (fieldKey: string): string | undefined => {
           <div
             v-for="(paramName, index) in currentDistribution.paramNames"
             :key="paramName"
-            class="form-group"
+            class="db-form-group"
           >
             <label :for="`param-${index}`">{{ paramName }}:</label>
             <BaseInput
@@ -211,14 +211,14 @@ const getErrorForField = (fieldKey: string): string | undefined => {
                 }
               "
               placeholder="Enter value or parent name"
-              :class="{ 'has-error': getErrorForField(`param${index + 1}`) }"
+              :class="{ 'db-has-error': getErrorForField(`param${index + 1}`) }"
             />
           </div>
         </template>
       </template>
 
       <template v-else-if="isEdge">
-        <div class="form-group">
+        <div class="db-form-group">
           <label for="edge-name">Name (Label):</label>
           <BaseInput
             id="edge-name"
@@ -230,7 +230,7 @@ const getErrorForField = (fieldKey: string): string | undefined => {
         </div>
       </template>
 
-      <div class="action-buttons">
+      <div class="db-action-buttons">
         <BaseButton @click="confirmDelete" type="danger" size="small">Delete Element</BaseButton>
       </div>
     </div>
@@ -255,7 +255,7 @@ const getErrorForField = (fieldKey: string): string | undefined => {
 </template>
 
 <style scoped>
-.node-properties-panel {
+.db-node-properties-panel {
   padding: 10px;
   height: 100%;
   display: flex;
@@ -271,7 +271,7 @@ h4 {
   font-size: 0.95em;
 }
 
-.no-selection-message {
+.db-no-selection-message {
   text-align: center;
   padding: 20px;
   color: var(--color-secondary);
@@ -282,14 +282,14 @@ h4 {
   font-size: 0.9em;
 }
 
-.properties-form {
+.db-properties-form {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding-right: 2px;
 }
 
-.validation-errors-container {
+.db-validation-errors-container {
   background-color: #fffbe6;
   border: 1px solid #ffe58f;
   border-radius: 4px;
@@ -297,7 +297,7 @@ h4 {
   margin-bottom: 8px;
 }
 
-.validation-title {
+.db-validation-title {
   margin: 0 0 6px 0;
   font-size: 0.85em;
   font-weight: 600;
@@ -307,71 +307,71 @@ h4 {
   gap: 6px;
 }
 
-.validation-errors-container ul {
+.db-validation-errors-container ul {
   margin: 0;
   padding-left: 18px;
   font-size: 0.8em;
   color: #d46b08;
 }
 
-.form-group {
+.db-form-group {
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
 
-.form-group label {
+.db-form-group label {
   font-weight: 500;
   color: var(--color-text);
   font-size: 0.85em;
   text-transform: capitalize;
 }
 
-.input-wrapper {
+.db-input-wrapper {
   position: relative;
   display: flex;
   align-items: center;
 }
 
-.input-wrapper .base-input,
-.input-wrapper .base-select {
+.db-input-wrapper .base-input,
+.db-input-wrapper .base-select {
   flex-grow: 1;
 }
 
-.has-error {
+.db-has-error {
   border-color: var(--color-danger) !important;
 }
 
-.has-error:focus {
+.db-has-error:focus {
   box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.25) !important;
 }
 
-.form-group .form-checkbox {
+.db-form-group .db-form-checkbox {
   width: 14px;
   height: 14px;
   align-self: flex-start;
 }
 
-.help-text {
+.db-help-text {
   font-size: 0.75em;
   color: #888;
   margin-top: 1px;
   line-height: 1.3;
 }
 
-.distribution-help {
+.db-distribution-help {
   background-color: var(--color-background-mute);
   padding: 4px 6px;
   border-radius: 3px;
 }
 
-.error-message {
+.db-error-message {
   font-size: 0.75em;
   color: var(--color-danger);
   margin-top: 1px;
 }
 
-.action-buttons {
+.db-action-buttons {
   display: flex;
   justify-content: flex-end;
   gap: 8px;

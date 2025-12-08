@@ -60,35 +60,35 @@ const handleHeaderClick = () => {
 </script>
 
 <template>
-  <aside class="floating-sidebar right glass-panel" :style="sidebarStyle(isRightSidebarOpen)">
+  <aside class="db-floating-sidebar db-right db-glass-panel" :style="sidebarStyle(isRightSidebarOpen)">
     <div
-      class="sidebar-header"
+      class="db-sidebar-header"
       @mousedown="handleHeaderMouseDown"
       @touchstart="handleHeaderMouseDown"
       @click="handleHeaderClick"
       :style="{ cursor: enableDrag ? 'move' : 'pointer' }"
     >
-      <span class="sidebar-title">Inspector</span>
+      <span class="db-sidebar-title">Inspector</span>
 
       <div class="flex items-center ml-auto" @click.stop @mousedown.stop @touchstart.stop>
         <div
-          class="status-indicator validation-status"
+          class="db-status-indicator db-validation-status"
           @click="$emit('show-validation-issues')"
-          :class="isModelValid ? 'valid' : 'invalid'"
+          :class="isModelValid ? 'db-valid' : 'db-invalid'"
         >
           <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
-          <div class="instant-tooltip">
+          <div class="db-instant-tooltip">
             {{ isModelValid ? 'Model Valid' : 'Validation Errors Found' }}
           </div>
         </div>
 
-        <button class="header-icon-btn" @click="$emit('share')" title="Share via URL">
+        <button class="db-header-icon-btn" @click="$emit('share')" title="Share via URL">
           <i class="fas fa-share-alt"></i>
         </button>
       </div>
 
       <div class="pointer-events-none flex items-center ml-2">
-        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon">
+        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="db-toggle-icon">
           <path
             fill="currentColor"
             fill-rule="evenodd"
@@ -99,28 +99,28 @@ const handleHeaderClick = () => {
       </div>
     </div>
 
-    <div class="sidebar-tabs text-tabs">
+    <div class="db-sidebar-tabs">
       <button
-        :class="{ active: activeRightTab === 'properties' }"
+        :class="{ 'db-active': activeRightTab === 'properties' }"
         @click="uiStore.setActiveRightTab('properties')"
       >
         Props
       </button>
       <button
-        :class="{ active: activeRightTab === 'script' }"
+        :class="{ 'db-active': activeRightTab === 'script' }"
         @click="uiStore.setActiveRightTab('script')"
       >
         Script
       </button>
       <button
-        :class="{ active: activeRightTab === 'export' }"
+        :class="{ 'db-active': activeRightTab === 'export' }"
         @click="uiStore.setActiveRightTab('export')"
       >
         Export
       </button>
     </div>
 
-    <div class="sidebar-content">
+    <div class="db-sidebar-content">
       <NodePropertiesPanel
         v-show="activeRightTab === 'properties'"
         :selected-element="selectedElement"
@@ -137,23 +137,23 @@ const handleHeaderClick = () => {
         @generate="$emit('generate-script')"
       />
 
-      <div v-show="activeRightTab === 'export'" class="export-panel">
-        <div class="menu-panel flex-col gap-3">
-          <h5 class="section-title">Image Export</h5>
-          <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'png')"
+      <div v-show="activeRightTab === 'export'" class="db-export-panel">
+        <div class="db-menu-panel flex-col gap-3">
+          <h5 class="db-section-title">Image Export</h5>
+          <BaseButton type="ghost" class="db-menu-btn" @click="$emit('open-export-modal', 'png')"
             ><i class="fas fa-image"></i> PNG Image</BaseButton
           >
-          <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'jpg')"
+          <BaseButton type="ghost" class="db-menu-btn" @click="$emit('open-export-modal', 'jpg')"
             ><i class="fas fa-file-image"></i> JPG Image</BaseButton
           >
-          <BaseButton type="ghost" class="menu-btn" @click="$emit('open-export-modal', 'svg')"
+          <BaseButton type="ghost" class="db-menu-btn" @click="$emit('open-export-modal', 'svg')"
             ><i class="fas fa-draw-polygon"></i> SVG Vector</BaseButton
           >
 
-          <div class="divider"></div>
+          <div class="db-divider"></div>
 
-          <h5 class="section-title">Model Export</h5>
-          <BaseButton type="ghost" class="menu-btn" @click="$emit('export-json')"
+          <h5 class="db-section-title">Model Export</h5>
+          <BaseButton type="ghost" class="db-menu-btn" @click="$emit('export-json')"
             ><i class="fas fa-file-code"></i>Export Graph, Data & Inits as JSON</BaseButton
           >
         </div>
@@ -163,7 +163,7 @@ const handleHeaderClick = () => {
 </template>
 
 <style scoped>
-.floating-sidebar {
+.db-floating-sidebar {
   position: absolute;
   top: 16px;
   height: auto;
@@ -181,26 +181,26 @@ const handleHeaderClick = () => {
   box-shadow: var(--shadow-floating);
 }
 
-.floating-sidebar.right {
+.db-floating-sidebar.db-right {
   right: 16px;
   width: 320px;
   transform-origin: top right;
 }
 
 @media (max-width: 768px) {
-  .floating-sidebar.right {
+  .db-floating-sidebar.db-right {
     width: calc(100vw - 32px) !important;
   }
-  .sidebar-tabs button {
+  .db-sidebar-tabs button {
     padding: 8px 4px;
     font-size: 0.8rem;
   }
-  .sidebar-content {
+  .db-sidebar-content {
     padding-bottom: 80px; /* Space for floating toolbar on mobile */
   }
 }
 
-.sidebar-header {
+.db-sidebar-header {
   padding: 12px 16px;
   display: flex;
   justify-content: space-between;
@@ -211,17 +211,17 @@ const handleHeaderClick = () => {
   flex-shrink: 0;
 }
 
-.sidebar-title {
+.db-sidebar-title {
   font-weight: 600;
   font-size: var(--font-size-md);
   user-select: none;
 }
 
-.toggle-icon {
+.db-toggle-icon {
   color: var(--theme-text-secondary);
 }
 
-.status-indicator {
+.db-status-indicator {
   position: relative;
   display: flex;
   align-items: center;
@@ -231,18 +231,18 @@ const handleHeaderClick = () => {
   cursor: help;
 }
 
-.validation-status {
+.db-validation-status {
   font-size: 1.1em;
   margin: 0 5px;
 }
-.validation-status.valid {
+.db-validation-status.db-valid {
   color: var(--theme-success);
 }
-.validation-status.invalid {
+.db-validation-status.db-invalid {
   color: var(--theme-warning);
 }
 
-.instant-tooltip {
+.db-instant-tooltip {
   position: absolute;
   top: 100%;
   left: 50%;
@@ -261,11 +261,11 @@ const handleHeaderClick = () => {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
-.status-indicator:hover .instant-tooltip {
+.db-status-indicator:hover .db-instant-tooltip {
   opacity: 1;
 }
 
-.header-icon-btn {
+.db-header-icon-btn {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -279,12 +279,12 @@ const handleHeaderClick = () => {
   transition: all 0.2s;
 }
 
-.header-icon-btn:hover {
+.db-header-icon-btn:hover {
   background-color: var(--theme-bg-hover);
   color: var(--theme-text-primary);
 }
 
-.sidebar-tabs {
+.db-sidebar-tabs {
   display: flex;
   background: var(--theme-bg-hover);
   padding: 4px;
@@ -292,7 +292,7 @@ const handleHeaderClick = () => {
   border-bottom: 1px solid var(--theme-border);
 }
 
-.sidebar-tabs button {
+.db-sidebar-tabs button {
   flex: 1;
   background: transparent;
   border: none;
@@ -304,33 +304,33 @@ const handleHeaderClick = () => {
   font-weight: 500;
 }
 
-.sidebar-tabs button:hover {
+.db-sidebar-tabs button:hover {
   background: rgba(0, 0, 0, 0.05);
   color: var(--theme-text-primary);
 }
 
-.sidebar-tabs button.active {
+.db-sidebar-tabs button.db-active {
   background: var(--theme-bg-panel);
   color: var(--theme-primary);
   box-shadow: var(--shadow-sm);
 }
 
-.sidebar-content {
+.db-sidebar-content {
   flex: 1;
   overflow-y: auto;
   background: var(--theme-bg-panel);
 }
 
-.export-panel {
+.db-export-panel {
   padding: 10px;
 }
 
-.menu-panel {
+.db-menu-panel {
   display: flex;
   padding: 8px;
 }
 
-.menu-btn {
+.db-menu-btn {
   justify-content: flex-start !important;
   gap: 10px;
   width: 100%;
@@ -340,22 +340,30 @@ const handleHeaderClick = () => {
   border-radius: var(--radius-sm);
   transition: background-color 0.2s;
 }
-.menu-btn:hover {
+.db-menu-btn:hover {
   background-color: var(--theme-bg-hover);
 }
 
-.divider {
+.db-divider {
   height: 1px;
   background: var(--theme-border);
   margin: 12px 0;
 }
 
-.section-title {
+.db-section-title {
   font-size: 0.85em;
   font-weight: 600;
   color: var(--theme-text-secondary);
   margin: 0 0 4px 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.db-glass-panel {
+  background: var(--theme-bg-panel-transparent, rgba(255, 255, 255, 0.95));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--theme-border);
+  box-shadow: var(--shadow-floating);
 }
 </style>

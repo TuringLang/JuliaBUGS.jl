@@ -109,28 +109,28 @@ const copyScript = async () => {
 </script>
 
 <template>
-  <div class="local-script-panel">
-    <div v-if="!standaloneScript" class="empty-state">
+  <div class="db-local-script-panel">
+    <div v-if="!standaloneScript" class="db-ls-empty-state">
       <p>No script generated yet.</p>
       <BaseButton type="primary" @click="$emit('generate')">Generate Julia Script</BaseButton>
     </div>
-    <div v-else class="panel-container">
-      <div class="panel-header">
-        <span class="title">Julia Script</span>
-        <div class="actions">
-          <button @click="$emit('open-settings')" title="Script Configuration" class="action-btn">
+    <div v-else class="db-ls-panel-container">
+      <div class="db-ls-panel-header">
+        <span class="db-ls-title">Julia Script</span>
+        <div class="db-ls-actions">
+          <button @click="$emit('open-settings')" title="Script Configuration" class="db-ls-action-btn">
             <i class="fas fa-cog"></i>
           </button>
-          <button @click="$emit('download')" title="Download" class="action-btn">
+          <button @click="$emit('download')" title="Download" class="db-ls-action-btn">
             <i class="fas fa-download"></i>
           </button>
         </div>
       </div>
-      <div class="editor-wrapper">
-        <div ref="editorContainer" class="editor-container"></div>
+      <div class="db-ls-editor-wrapper">
+        <div ref="editorContainer" class="db-ls-editor-container"></div>
         <button
           @click.stop="copyScript"
-          class="native-copy-button"
+          class="db-ls-copy-btn"
           type="button"
           title="Copy Script"
         >
@@ -143,7 +143,7 @@ const copyScript = async () => {
 </template>
 
 <style scoped>
-.local-script-panel {
+.db-local-script-panel {
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -151,7 +151,7 @@ const copyScript = async () => {
   box-sizing: border-box;
 }
 
-.empty-state {
+.db-ls-empty-state {
   flex-grow: 1;
   display: flex;
   flex-direction: column;
@@ -164,7 +164,7 @@ const copyScript = async () => {
   text-align: center;
 }
 
-.panel-container {
+.db-ls-panel-container {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -172,7 +172,7 @@ const copyScript = async () => {
   gap: 10px;
 }
 
-.panel-header {
+.db-ls-panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -180,18 +180,18 @@ const copyScript = async () => {
   border-bottom: 1px solid var(--color-border);
 }
 
-.title {
+.db-ls-title {
   font-weight: 600;
   color: var(--color-heading);
   font-size: 0.9em;
 }
 
-.actions {
+.db-ls-actions {
   display: flex;
   gap: 8px;
 }
 
-.action-btn {
+.db-ls-action-btn {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -201,11 +201,11 @@ const copyScript = async () => {
   transition: color 0.2s;
 }
 
-.action-btn:hover {
+.db-ls-action-btn:hover {
   color: var(--theme-text-primary);
 }
 
-.editor-wrapper {
+.db-ls-editor-wrapper {
   flex-grow: 1;
   background-color: #282c34;
   border-radius: 4px;
@@ -214,7 +214,7 @@ const copyScript = async () => {
   min-height: 0;
 }
 
-.editor-container {
+.db-ls-editor-container {
   height: 100%;
 }
 
@@ -224,7 +224,7 @@ const copyScript = async () => {
   font-size: 0.85em;
 }
 
-.native-copy-button {
+.db-ls-copy-btn {
   position: absolute;
   bottom: 5px;
   right: 5px;
@@ -248,17 +248,17 @@ const copyScript = async () => {
   outline: none;
 }
 
-.native-copy-button:hover {
+.db-ls-copy-btn:hover {
   background-color: transparent;
   opacity: 1;
 }
 
-.native-copy-button:active {
+.db-ls-copy-btn:active {
   transform: scale(0.95);
 }
 
-.native-copy-button .fa-copy,
-.native-copy-button .fa-check {
+.db-ls-copy-btn .fa-copy,
+.db-ls-copy-btn .fa-check {
   font-size: 1rem;
 }
 </style>

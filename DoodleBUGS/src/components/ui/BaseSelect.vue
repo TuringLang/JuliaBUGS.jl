@@ -24,6 +24,12 @@ const emit = defineEmits(['update:modelValue', 'change'])
     :disabled="disabled"
     @update:model-value="(val) => emit('update:modelValue', val)"
     @change="(e) => emit('change', e)"
-    class="w-auto"
+    class="w-auto db-select-field"
   />
 </template>
+
+<style scoped>
+.db-select-field {
+  font-size: 12px;
+}
+</style>

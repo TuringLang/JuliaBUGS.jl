@@ -17,12 +17,11 @@ import type { Editor } from 'codemirror'
 
 const props = defineProps<{
   isActive: boolean
-  graphId?: string // Optional: for multi-canvas code pop-outs
+  graphId?: string
 }>()
 
 const graphStore = useGraphStore()
 
-// Use a computed to get the correct elements (global current or specific graph)
 const targetElements = computed(() => {
   if (props.graphId) {
     return graphStore.graphContents.get(props.graphId)?.elements || []
@@ -30,7 +29,6 @@ const targetElements = computed(() => {
   return graphStore.currentGraphElements
 })
 
-// useBugsCodeGenerator expects a Ref, computed fits
 const { generatedCode } = useBugsCodeGenerator(targetElements)
 
 const copySuccess = ref(false)
@@ -85,11 +83,9 @@ watch(
 const copyCodeToClipboard = async () => {
   const text = generatedCode.value
   try {
-    // Try modern API first
     await navigator.clipboard.writeText(text)
     triggerSuccess()
   } catch {
-    // Fallback to legacy API (often needed on iOS/mobile)
     const textArea = document.createElement('textarea')
     textArea.value = text
     textArea.style.position = 'fixed'
@@ -123,15 +119,15 @@ const triggerSuccess = () => {
 </script>
 
 <template>
-  <div class="code-preview-panel">
-    <div class="header-section">
+  <div class="db-code-preview-panel">
+    <div class="db-cp-header">
       <h4>Generated BUGS Code</h4>
     </div>
-    <div class="editor-wrapper">
-      <div ref="editorContainer" class="editor-container"></div>
+    <div class="db-cp-wrapper">
+      <div ref="editorContainer" class="db-cp-container"></div>
       <button
         @click.stop="copyCodeToClipboard"
-        class="native-copy-button"
+        class="db-cp-copy-btn"
         type="button"
         title="Copy Code"
       >
@@ -143,39 +139,39 @@ const triggerSuccess = () => {
 </template>
 
 <style>
-.code-preview-panel .CodeMirror,
-.code-preview-panel .CodeMirror-scroll,
-.code-preview-panel .CodeMirror-gutters,
-.code-preview-panel .CodeMirror textarea,
-.code-preview-panel .CodeMirror pre,
-.code-preview-panel .CodeMirror-line,
-.code-preview-panel .CodeMirror-code {
+.db-code-preview-panel .CodeMirror,
+.db-code-preview-panel .CodeMirror-scroll,
+.db-code-preview-panel .CodeMirror-gutters,
+.db-code-preview-panel .CodeMirror textarea,
+.db-code-preview-panel .CodeMirror pre,
+.db-code-preview-panel .CodeMirror-line,
+.db-code-preview-panel .CodeMirror-code {
   cursor: not-allowed !important;
 }
 
-.code-preview-panel .CodeMirror-readonly .CodeMirror-cursors {
+.db-code-preview-panel .CodeMirror-readonly .CodeMirror-cursors {
   display: none !important;
 }
 
-.code-preview-panel .CodeMirror-scroll {
+.db-code-preview-panel .CodeMirror-scroll {
   overflow: auto !important;
   white-space: pre !important;
 }
 
-.code-preview-panel .CodeMirror-simplescroll-horizontal div,
-.code-preview-panel .CodeMirror-simplescroll-vertical div {
+.db-code-preview-panel .CodeMirror-simplescroll-horizontal div,
+.db-code-preview-panel .CodeMirror-simplescroll-vertical div {
   background: #666;
   border-radius: 3px;
 }
 
-.code-preview-panel .CodeMirror-foldgutter-open,
-.code-preview-panel .CodeMirror-foldgutter-folded {
+.db-code-preview-panel .CodeMirror-foldgutter-open,
+.db-code-preview-panel .CodeMirror-foldgutter-folded {
   color: #999;
 }
 </style>
 
 <style scoped>
-.code-preview-panel {
+.db-code-preview-panel {
   padding: 15px;
   height: 100%;
   display: flex;
@@ -183,7 +179,7 @@ const triggerSuccess = () => {
   box-sizing: border-box;
 }
 
-.header-section {
+.db-cp-header {
   flex-shrink: 0;
 }
 
@@ -195,7 +191,7 @@ h4 {
   padding-bottom: 10px;
 }
 
-.editor-wrapper {
+.db-cp-wrapper {
   position: relative;
   flex-grow: 1;
   background-color: #282c34;
@@ -203,12 +199,12 @@ h4 {
   overflow: hidden;
 }
 
-.editor-container {
+.db-cp-container {
   width: 100%;
   height: 100%;
 }
 
-.native-copy-button {
+.db-cp-copy-btn {
   position: absolute;
   bottom: 5px;
   right: 5px;
@@ -232,17 +228,17 @@ h4 {
   outline: none;
 }
 
-.native-copy-button:hover {
+.db-cp-copy-btn:hover {
   background-color: transparent;
   opacity: 1;
 }
 
-.native-copy-button:active {
+.db-cp-copy-btn:active {
   transform: scale(0.95);
 }
 
-.native-copy-button .fa-copy,
-.native-copy-button .fa-check {
+.db-cp-copy-btn .fa-copy,
+.db-cp-copy-btn .fa-check {
   font-size: 1rem;
 }
 </style>

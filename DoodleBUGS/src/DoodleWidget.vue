@@ -881,12 +881,12 @@ const handleUIInteractionEnd = () => {
 
 <template>
   <div
-    class="doodle-widget-root"
+    class="db-widget-root"
     :class="{ 'dark-mode': isDarkMode }"
     style="width: 100%; height: 100%; position: relative; overflow: hidden"
   >
     <div
-      class="canvas-layer"
+      class="db-canvas-layer"
       :style="{
         position: 'absolute',
         top: 0,
@@ -920,8 +920,8 @@ const handleUIInteractionEnd = () => {
         @update:is-grid-enabled="isGridEnabled = $event"
         @update:grid-size="gridSize = $event"
       />
-      <div v-else class="empty-placeholder">
-        <div class="msg-box">
+      <div v-else class="db-empty-placeholder">
+        <div class="db-msg-box">
           <i class="fas fa-spinner fa-spin"></i>
           <p>Initializing...</p>
         </div>
@@ -929,11 +929,11 @@ const handleUIInteractionEnd = () => {
     </div>
 
     <Teleport to="body">
-      <div class="doodle-bugs-ui-overlay" :class="{ 'dark-mode': isDarkMode, 'widget-ready': widgetInitialized }">
+      <div class="db-ui-overlay" :class="{ 'dark-mode': isDarkMode, 'db-widget-ready': widgetInitialized }">
         <Toast position="top-center" />
 
         <!-- Left Sidebar (Floating) -->
-        <div v-if="widgetInitialized && isLeftSidebarOpen" class="sidebar-wrapper left" :style="leftDrag.style.value">
+        <div v-if="widgetInitialized && isLeftSidebarOpen" class="db-sidebar-wrapper db-left" :style="leftDrag.style.value">
           <LeftSidebar
             v-show="isLeftSidebarOpen"
             :activeAccordionTabs="activeLeftAccordionTabs"
@@ -970,7 +970,7 @@ const handleUIInteractionEnd = () => {
           />
         </div>
 
-        <div v-if="widgetInitialized && isRightSidebarOpen" class="sidebar-wrapper right" :style="rightDrag.style.value">
+        <div v-if="widgetInitialized && isRightSidebarOpen" class="db-sidebar-wrapper db-right" :style="rightDrag.style.value">
           <RightSidebar
             v-show="isRightSidebarOpen"
             :selectedElement="selectedElement"
@@ -1090,7 +1090,7 @@ const handleUIInteractionEnd = () => {
         <BaseModal :is-open="showNewProjectModal" @close="showNewProjectModal = false">
           <template #header><h3>Create New Project</h3></template>
           <template #body>
-            <div class="modal-form-row">
+            <div class="db-modal-form-row">
               <label>Project Name:</label>
               <BaseInput
                 v-model="newProjectName"
@@ -1108,7 +1108,7 @@ const handleUIInteractionEnd = () => {
           <template #header><h3>Create New Graph</h3></template>
           <template #body>
             <div class="flex flex-col gap-2">
-              <div class="form-group">
+              <div class="db-form-group">
                 <label for="new-graph-name">Graph Name</label>
                 <BaseInput
                   id="new-graph-name"
@@ -1118,12 +1118,12 @@ const handleUIInteractionEnd = () => {
                 />
               </div>
 
-              <div class="import-section">
-                <label class="section-label">Import from JSON (Optional)</label>
+              <div class="db-import-section">
+                <label class="db-section-label">Import from JSON (Optional)</label>
 
                 <div
-                  class="drop-zone"
-                  :class="{ loaded: importedGraphData, 'drag-over': isDragOver }"
+                  class="db-drop-zone"
+                  :class="{ 'db-loaded': importedGraphData, 'db-drag-over': isDragOver }"
                   @click="triggerGraphImport"
                   @dragover.prevent="isDragOver = true"
                   @dragleave.prevent="isDragOver = false"
@@ -1134,31 +1134,31 @@ const handleUIInteractionEnd = () => {
                     ref="graphImportInput"
                     accept=".json"
                     @change="handleGraphImportFile"
-                    class="hidden-input"
+                    class="db-hidden-input"
                   />
 
-                  <div v-if="!importedGraphData" class="drop-zone-content">
-                    <div class="icon-circle">
+                  <div v-if="!importedGraphData" class="db-drop-zone-content">
+                    <div class="db-icon-circle">
                       <i class="fas fa-file-import"></i>
                     </div>
-                    <div class="text-content">
-                      <span class="action-text">Click or Drag & Drop JSON file</span>
-                      <small class="sub-text">Restore a previously exported graph</small>
+                    <div class="db-text-content">
+                      <span class="db-action-text">Click or Drag & Drop JSON file</span>
+                      <small class="db-sub-text">Restore a previously exported graph</small>
                     </div>
                   </div>
 
-                  <div v-else class="drop-zone-content success">
-                    <div class="icon-circle success">
+                  <div v-else class="db-drop-zone-content db-success">
+                    <div class="db-icon-circle db-success">
                       <i class="fas fa-check"></i>
                     </div>
-                    <div class="text-content">
-                      <span class="action-text">File Loaded Successfully</span>
-                      <small class="sub-text"
+                    <div class="db-text-content">
+                      <span class="db-action-text">File Loaded Successfully</span>
+                      <small class="db-sub-text"
                         >{{ importedGraphData.name || 'Untitled Graph' }}</small
                       >
                     </div>
                     <button
-                      class="remove-file-btn"
+                      class="db-remove-file-btn"
                       @click.stop="clearImportedData"
                       title="Remove file"
                     >
@@ -1181,7 +1181,7 @@ const handleUIInteractionEnd = () => {
 </template>
 
 <style>
-.doodle-widget-root {
+.db-widget-root {
   width: 100%;
   height: 100%;
   position: relative;
@@ -1207,7 +1207,7 @@ const handleUIInteractionEnd = () => {
   --theme-warning: #f59e0b;
 }
 
-.doodle-widget-root.dark-mode {
+.db-widget-root.dark-mode {
   --theme-bg-canvas: #0f1115;
   --theme-grid-line: #3f3f46;
   --theme-bg-panel: #18181b;
@@ -1216,7 +1216,7 @@ const handleUIInteractionEnd = () => {
   --theme-border: #27272a;
 }
 
-.doodle-widget-root .canvas-layer {
+.db-widget-root .db-canvas-layer {
   position: absolute;
   top: 0;
   left: 0;
@@ -1227,7 +1227,7 @@ const handleUIInteractionEnd = () => {
   z-index: 0; /* Base layer: Canvas */
 }
 
-.doodle-widget-root .graph-editor-container {
+.db-widget-root .db-graph-editor-container {
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -1236,8 +1236,8 @@ const handleUIInteractionEnd = () => {
   position: relative;
 }
 
-.doodle-widget-root .cytoscape-container,
-.cytoscape-container {
+.db-widget-root .db-cytoscape-container,
+.db-cytoscape-container {
   flex: 1;
   display: block;
   width: 100%;
@@ -1249,15 +1249,15 @@ const handleUIInteractionEnd = () => {
   background-repeat: repeat;
 }
 
-.doodle-widget-root .cytoscape-container.grid-background.grid-lines,
-.cytoscape-container.grid-background.grid-lines {
+.db-widget-root .db-cytoscape-container.db-grid-background.db-grid-lines,
+.db-cytoscape-container.db-grid-background.db-grid-lines {
   background-image:
     linear-gradient(to right, var(--theme-grid-line) 1px, transparent 1px),
     linear-gradient(to bottom, var(--theme-grid-line) 1px, transparent 1px);
 }
 
-.doodle-widget-root .cytoscape-container.grid-background.grid-dots,
-.cytoscape-container.grid-background.grid-dots {
+.db-widget-root .db-cytoscape-container.db-grid-background.db-grid-dots,
+.db-cytoscape-container.db-grid-background.db-grid-dots {
   background-image: radial-gradient(circle, var(--theme-text-secondary) 1px, transparent 1px);
 }
 
@@ -1272,7 +1272,7 @@ const handleUIInteractionEnd = () => {
   background-color: rgba(50, 205, 50, 0.1) !important;
 }
 
-.doodle-widget-root .empty-placeholder {
+.db-widget-root .db-empty-placeholder {
   width: 100%;
   height: 100%;
   display: flex;
@@ -1281,25 +1281,25 @@ const handleUIInteractionEnd = () => {
   background: var(--theme-bg-canvas);
 }
 
-.doodle-widget-root .empty-placeholder .msg-box {
+.db-widget-root .db-empty-placeholder .db-msg-box {
   text-align: center;
   color: var(--theme-text-secondary);
 }
 
-.modal-form-row {
+.db-modal-form-row {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.modal-form-row label {
+.db-modal-form-row label {
   min-width: 100px;
   font-weight: 500;
   color: var(--theme-text-primary);
 }
 
 /* Collapsed Sidebar Triggers Styles */
-.collapsed-sidebar-trigger {
+.db-collapsed-sidebar-trigger {
   position: absolute;
   top: 16px;
   z-index: 100; /* Layer 2: Collapsed sidebar triggers */
@@ -1315,43 +1315,43 @@ const handleUIInteractionEnd = () => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); /* Ensure it pops out visually */
 }
 
-.collapsed-sidebar-trigger.left-trigger {
+.db-collapsed-sidebar-trigger.db-left-trigger {
   left: 16px;
   min-width: 200px;
 }
 
-.collapsed-sidebar-trigger.right {
+.db-collapsed-sidebar-trigger.db-right {
   left: auto;
   right: 16px;
 }
 
-.collapsed-sidebar-trigger:hover {
+.db-collapsed-sidebar-trigger:hover {
   box-shadow: var(--shadow-md);
   transform: scale(1.01);
   background: var(--theme-bg-hover);
 }
 
-.sidebar-trigger-content {
+.db-sidebar-trigger-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
   width: 100%;
 }
 
-.logo-text-minimized {
+.db-logo-text-minimized {
   font-family: var(--font-family-sans);
   font-size: 14px;
   font-weight: 600;
   color: var(--theme-text-primary);
 }
 
-.sidebar-title-minimized {
+.db-sidebar-title-minimized {
   font-size: 13px;
   font-weight: 600;
   color: var(--theme-text-primary);
 }
 
-.theme-toggle-header {
+.db-theme-toggle-header {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -1364,21 +1364,21 @@ const handleUIInteractionEnd = () => {
   transition: color 0.2s;
   border-radius: 4px;
 }
-.theme-toggle-header:hover {
+.db-theme-toggle-header:hover {
   color: var(--theme-text-primary);
   background: var(--theme-bg-hover);
 }
 
-.toggle-icon-wrapper {
+.db-toggle-icon-wrapper {
   display: flex;
   align-items: center;
 }
 
-.toggle-icon {
+.db-toggle-icon {
   color: var(--theme-text-secondary);
 }
 
-.header-icon-btn {
+.db-header-icon-btn {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -1392,18 +1392,18 @@ const handleUIInteractionEnd = () => {
   transition: all 0.2s;
 }
 
-.header-icon-btn:hover {
+.db-header-icon-btn:hover {
   background-color: var(--theme-bg-hover);
   color: var(--theme-text-primary);
 }
 
-.collapsed-share-btn {
+.db-collapsed-share-btn {
   width: 24px;
   height: 24px;
   padding: 0;
 }
 
-.status-indicator {
+.db-status-indicator {
   position: relative;
   display: flex;
   align-items: center;
@@ -1413,14 +1413,14 @@ const handleUIInteractionEnd = () => {
   cursor: help;
 }
 
-.validation-status {
+.db-validation-status {
   font-size: 1.1em;
   margin: 0 5px;
 }
-.validation-status.valid {
+.db-validation-status.db-valid {
   color: var(--theme-success);
 }
-.validation-status.invalid {
+.db-validation-status.db-invalid {
   color: var(--theme-warning);
 }
 
@@ -1434,27 +1434,27 @@ const handleUIInteractionEnd = () => {
   opacity: 0;
 }
 
-.desktop-text {
+.db-desktop-text {
   display: inline;
 }
-.mobile-text {
+.db-mobile-text {
   display: none;
 }
 
 /* Modal and Drop Zone Styles */
-.form-group {
+.db-form-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.form-group label {
+.db-form-group label {
   font-size: 0.9em;
   font-weight: 600;
   color: var(--theme-text-secondary);
 }
 
-.section-label {
+.db-section-label {
   font-size: 0.9em;
   font-weight: 600;
   color: var(--theme-text-secondary);
@@ -1462,7 +1462,7 @@ const handleUIInteractionEnd = () => {
   display: block;
 }
 
-.drop-zone {
+.db-drop-zone {
   border: 2px dashed var(--theme-border);
   border-radius: var(--radius-md);
   padding: 24px;
@@ -1478,25 +1478,25 @@ const handleUIInteractionEnd = () => {
   min-height: 160px;
 }
 
-.drop-zone:hover {
+.db-drop-zone:hover {
   border-color: var(--theme-text-muted);
   background-color: var(--theme-bg-active);
 }
 
-.drop-zone.drag-over {
+.db-drop-zone.db-drag-over {
   border-color: var(--theme-primary);
   background-color: rgba(16, 185, 129, 0.1);
   transform: scale(1.02);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
 }
 
-.drop-zone.loaded {
+.db-drop-zone.db-loaded {
   border-style: solid;
   border-color: var(--theme-success);
   background-color: rgba(16, 185, 129, 0.05);
 }
 
-.drop-zone-content {
+.db-drop-zone-content {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1505,11 +1505,11 @@ const handleUIInteractionEnd = () => {
   width: 100%;
 }
 
-.drop-zone-content.success {
+.db-drop-zone-content.db-success {
   pointer-events: auto;
 }
 
-.icon-circle {
+.db-icon-circle {
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -1523,45 +1523,45 @@ const handleUIInteractionEnd = () => {
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.drop-zone:hover .icon-circle {
+.db-drop-zone:hover .db-icon-circle {
   transform: scale(1.1);
   color: var(--theme-primary);
 }
 
-.drop-zone.drag-over .icon-circle {
+.db-drop-zone.db-drag-over .db-icon-circle {
   transform: scale(1.2);
   background-color: var(--theme-primary);
   color: white;
 }
 
-.icon-circle.success {
+.db-icon-circle.db-success {
   background-color: var(--theme-success);
   color: white;
 }
 
-.text-content {
+.db-text-content {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
 }
 
-.action-text {
+.db-action-text {
   font-weight: 600;
   color: var(--theme-text-primary);
   font-size: 1rem;
 }
 
-.sub-text {
+.db-sub-text {
   color: var(--theme-text-secondary);
   font-size: 0.85em;
 }
 
-.hidden-input {
+.db-hidden-input {
   display: none;
 }
 
-.remove-file-btn {
+.db-remove-file-btn {
   position: absolute;
   top: 10px;
   right: 10px;
@@ -1579,31 +1579,31 @@ const handleUIInteractionEnd = () => {
   box-shadow: var(--shadow-sm);
 }
 
-.remove-file-btn:hover {
+.db-remove-file-btn:hover {
   background-color: var(--theme-danger);
   border-color: var(--theme-danger);
   color: white;
 }
 
 @media (max-width: 768px) {
-  .desktop-text {
+  .db-desktop-text {
     display: none;
   }
-  .mobile-text {
+  .db-mobile-text {
     display: inline;
   }
 
-  .collapsed-sidebar-trigger {
+  .db-collapsed-sidebar-trigger {
     min-width: auto !important;
     max-width: 42%;
     padding: 8px;
   }
 
-  .collapsed-sidebar-trigger.left-trigger {
+  .db-collapsed-sidebar-trigger.db-left-trigger {
     min-width: auto !important;
   }
 
-  .logo-text-minimized {
+  .db-logo-text-minimized {
     font-size: 12px;
     white-space: nowrap;
     overflow: hidden;
@@ -1611,14 +1611,14 @@ const handleUIInteractionEnd = () => {
     display: block;
   }
 
-  .sidebar-trigger-content {
+  .db-sidebar-trigger-content {
     gap: 4px;
   }
 }
 </style>
 
 <style>
-.doodle-bugs-ui-overlay {
+.db-ui-overlay {
   position: absolute;
   top: 0;
   left: 0;
@@ -1651,7 +1651,7 @@ const handleUIInteractionEnd = () => {
   --shadow-floating: 0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.08);
 }
 
-.doodle-bugs-ui-overlay.dark-mode {
+.db-ui-overlay.dark-mode {
   --theme-bg-canvas: #0f1115;
   --theme-bg-panel: #18181b;
   --theme-bg-panel-transparent: rgba(24, 24, 27, 0.9);
@@ -1664,7 +1664,7 @@ const handleUIInteractionEnd = () => {
   --shadow-floating: 0 10px 30px -4px rgba(0, 0, 0, 0.6);
 }
 
-.sidebar-wrapper {
+.db-sidebar-wrapper {
   position: fixed;
   pointer-events: auto;
   z-index: 200; /* Layer 3: Sidebars (LeftSidebar/RightSidebar have z-index: 50) */
@@ -1680,28 +1680,28 @@ const handleUIInteractionEnd = () => {
   visibility: hidden;
 }
 
-.doodle-bugs-ui-overlay.widget-ready .sidebar-wrapper {
+.db-ui-overlay.db-widget-ready .db-sidebar-wrapper {
   opacity: 1;
   visibility: visible;
 }
 
-.sidebar-wrapper.left {
+.db-sidebar-wrapper.db-left {
   flex-direction: row;
 }
 
-.sidebar-wrapper.right {
+.db-sidebar-wrapper.db-right {
   flex-direction: row-reverse;
 }
 
 /* Override RightSidebar positioning for widget mode - use left instead of right */
-.sidebar-wrapper.right .floating-sidebar.right {
+.db-sidebar-wrapper.db-right .db-floating-sidebar.db-right {
   right: auto !important;
   left: 0 !important;
 }
 
 /* Removed separate drag-handle styles */
 
-.doodle-bugs-ui-overlay .toolbar-container {
+.db-ui-overlay .db-toolbar-container {
   pointer-events: auto;
 }
 

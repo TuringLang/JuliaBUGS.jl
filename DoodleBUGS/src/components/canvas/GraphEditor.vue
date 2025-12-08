@@ -363,7 +363,7 @@ watch(
 
 <template>
   <div
-    class="graph-editor-container"
+    class="db-graph-editor-container"
     style="
       display: flex;
       flex-direction: column;
@@ -395,7 +395,7 @@ watch(
 </template>
 
 <style scoped>
-.graph-editor-container {
+.db-graph-editor-container {
   flex-grow: 1;
   display: flex;
   flex-direction: column;

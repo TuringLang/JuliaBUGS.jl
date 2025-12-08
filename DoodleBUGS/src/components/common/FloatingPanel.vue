@@ -243,23 +243,23 @@ onUnmounted(() => {
   <div
     v-if="isOpen"
     ref="panelRef"
-    class="floating-panel glass-panel"
+    class="db-floating-panel db-glass-panel"
     :style="panelStyle"
   >
     <div
-      class="panel-header code-header"
+      class="db-panel-header"
       @mousedown="startDrag"
       @touchstart="startDrag"
     >
-      <span class="graph-title">
+      <span class="db-graph-title">
         <i v-if="icon" :class="icon"></i>
         {{ title }}
-        <span v-if="badge" class="badge-json">{{ badge }}</span>
+        <span v-if="badge" class="db-badge-json">{{ badge }}</span>
       </span>
-      <div class="panel-actions">
+      <div class="db-panel-actions">
         <button
           v-if="showDownload"
-          class="action-btn"
+          class="db-action-btn"
           @click.stop="emit('download')"
           @mousedown.stop
           @touchstart.stop
@@ -269,7 +269,7 @@ onUnmounted(() => {
         </button>
         <button
           v-if="showImport"
-          class="action-btn"
+          class="db-action-btn"
           @click.stop="emit('import')"
           @mousedown.stop
           @touchstart.stop
@@ -278,7 +278,7 @@ onUnmounted(() => {
           <i class="fas fa-file-upload"></i>
         </button>
         <button
-          class="close-btn"
+          class="db-close-btn"
           @click.stop="emit('close')"
           @mousedown.stop
           @touchstart.stop
@@ -287,11 +287,11 @@ onUnmounted(() => {
         </button>
       </div>
     </div>
-    <div class="panel-content">
+    <div class="db-panel-content">
       <slot></slot>
     </div>
     <div
-      class="resize-handle"
+      class="db-resize-handle"
       @mousedown.stop="startResize"
       @touchstart.stop.prevent="startResize"
     >
@@ -301,7 +301,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.floating-panel {
+.db-floating-panel {
   position: fixed;
   pointer-events: auto;
   z-index: 300; /* Layer 4: Floating panels (code/data) - above sidebars, below toolbar */
@@ -316,7 +316,7 @@ onUnmounted(() => {
   will-change: transform;
 }
 
-.panel-header {
+.db-panel-header {
   height: 36px;
   background-color: var(--theme-bg-hover);
   border-bottom: 1px solid var(--theme-border);
@@ -328,7 +328,7 @@ onUnmounted(() => {
   cursor: move;
 }
 
-.graph-title {
+.db-graph-title {
   font-weight: 600;
   font-size: 12px;
   color: var(--theme-text-primary);
@@ -337,7 +337,7 @@ onUnmounted(() => {
   gap: 6px;
 }
 
-.badge-json {
+.db-badge-json {
   font-size: 0.7em;
   background-color: var(--theme-primary);
   color: white;
@@ -348,13 +348,13 @@ onUnmounted(() => {
   vertical-align: middle;
 }
 
-.panel-actions {
+.db-panel-actions {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.action-btn {
+.db-action-btn {
   background: transparent;
   border: none;
   color: var(--theme-text-secondary);
@@ -366,11 +366,11 @@ onUnmounted(() => {
   transition: color 0.2s;
 }
 
-.action-btn:hover {
+.db-action-btn:hover {
   color: var(--theme-text-primary);
 }
 
-.close-btn {
+.db-close-btn {
   background: transparent;
   border: none;
   color: var(--theme-text-secondary);
@@ -382,12 +382,12 @@ onUnmounted(() => {
   transition: all 0.2s;
 }
 
-.close-btn:hover {
+.db-close-btn:hover {
   background: var(--theme-bg-active);
   color: var(--theme-danger);
 }
 
-.panel-content {
+.db-panel-content {
   flex: 1;
   overflow: hidden;
   display: flex;
@@ -395,27 +395,27 @@ onUnmounted(() => {
   background-color: var(--theme-bg-panel);
 }
 
-.panel-content :deep(.code-preview-panel),
-.panel-content :deep(.data-input-panel),
-.panel-content :deep(.json-editor-panel) {
+.db-panel-content :deep(.code-preview-panel),
+.db-panel-content :deep(.data-input-panel),
+.db-panel-content :deep(.json-editor-panel) {
   height: 100%;
   padding: 0;
 }
 
-.panel-content :deep(.header-section) {
+.db-panel-content :deep(.header-section) {
   display: none;
 }
 
-.panel-content :deep(.header-controls) {
+.db-panel-content :deep(.header-controls) {
   display: none;
 }
 
-.panel-content :deep(.panel-title),
-.panel-content :deep(.description) {
+.db-panel-content :deep(.panel-title),
+.db-panel-content :deep(.description) {
   display: none;
 }
 
-.resize-handle {
+.db-resize-handle {
   position: absolute;
   bottom: 0;
   right: 0;
@@ -432,8 +432,17 @@ onUnmounted(() => {
   transition: opacity 0.2s;
 }
 
-.resize-handle:hover {
+.db-resize-handle:hover {
   opacity: 1;
   color: var(--theme-text-primary);
+}
+
+/* Glass Panel Polyfill */
+.db-glass-panel {
+  background: var(--theme-bg-panel-transparent, rgba(255, 255, 255, 0.95));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--theme-border);
+  box-shadow: var(--shadow-floating);
 }
 </style>

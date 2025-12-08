@@ -980,7 +980,7 @@ watch(
 )
 
 const handleSidebarContainerClick = (e: MouseEvent) => {
-  if ((e.target as HTMLElement).closest('.theme-toggle-header')) return
+  if ((e.target as HTMLElement).closest('.db-theme-toggle-header')) return
   if (!isLeftSidebarOpen.value) {
     toggleLeftSidebar()
   }
@@ -1003,8 +1003,8 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
 }
 </script>
 <template>
-  <div class="app-layout">
-    <main class="canvas-area">
+  <div class="db-app-layout">
+    <main class="db-canvas-area">
       <GraphEditor
         v-if="graphStore.currentGraphId"
         :key="graphStore.currentGraphId"
@@ -1025,7 +1025,7 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
         @layout-updated="handleLayoutUpdated"
         @viewport-changed="handleViewportChanged"
       />
-      <div v-else class="empty-state">
+      <div v-else class="db-empty-state">
         <p>No graph selected. Create or select a graph to start.</p>
         <BaseButton @click="showNewGraphModal = true" type="primary">Create New Graph</BaseButton>
       </div>
@@ -1064,31 +1064,31 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
     <Transition name="fade">
       <div
         v-if="!isLeftSidebarOpen"
-        class="collapsed-sidebar-trigger left-trigger"
+        class="db-collapsed-sidebar-trigger db-left-trigger"
         @click="handleSidebarContainerClick"
       >
-        <div class="sidebar-trigger-content gap-1">
+        <div class="db-sidebar-trigger-content gap-1">
           <div
             class="flex-grow flex items-center gap-2 overflow-hidden"
             style="flex-grow: 1; overflow: hidden"
           >
-            <span class="logo-text-minimized">
-              <span class="desktop-text">{{
+            <span class="db-logo-text-minimized">
+              <span class="db-desktop-text">{{
                 pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS'
               }}</span>
-              <span class="mobile-text">DoodleBUGS</span>
+              <span class="db-mobile-text">DoodleBUGS</span>
             </span>
           </div>
           <div class="flex items-center flex-shrink-0" style="flex-shrink: 0">
             <button
               @click.stop="uiStore.toggleDarkMode()"
-              class="theme-toggle-header"
+              class="db-theme-toggle-header"
               :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
             >
               <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
             </button>
-            <div class="toggle-icon-wrapper">
-              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon">
+            <div class="db-toggle-icon-wrapper">
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="db-toggle-icon">
                 <path
                   fill="currentColor"
                   fill-rule="evenodd"
@@ -1122,28 +1122,28 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
     <Transition name="fade">
       <div
         v-if="!isRightSidebarOpen"
-        class="collapsed-sidebar-trigger right"
+        class="db-collapsed-sidebar-trigger db-right"
         @click="toggleRightSidebar"
       >
-        <div class="sidebar-trigger-content gap-2">
-          <span class="sidebar-title-minimized">Inspector</span>
+        <div class="db-sidebar-trigger-content gap-2">
+          <span class="db-sidebar-title-minimized">Inspector</span>
           <div class="flex items-center">
             <div
-              class="status-indicator validation-status"
+              class="db-status-indicator db-validation-status"
               @click.stop="showValidationModal = true"
-              :class="isModelValid ? 'valid' : 'invalid'"
+              :class="isModelValid ? 'db-valid' : 'db-invalid'"
             >
               <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
             </div>
             <button
-              class="header-icon-btn collapsed-share-btn"
+              class="db-header-icon-btn db-collapsed-share-btn"
               @click.stop="handleShare"
               title="Share via URL"
             >
               <i class="fas fa-share-alt"></i>
             </button>
-            <div class="toggle-icon-wrapper">
-              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon">
+            <div class="db-toggle-icon-wrapper">
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="db-toggle-icon">
                 <path
                   fill="currentColor"
                   fill-rule="evenodd"
@@ -1250,7 +1250,7 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
       <template #header><h3>Create New Graph</h3></template>
       <template #body>
         <div class="flex flex-col gap-2">
-          <div class="form-group">
+          <div class="db-form-group">
             <label for="new-graph-name">Graph Name</label>
             <BaseInput
               id="new-graph-name"
@@ -1260,12 +1260,12 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
             />
           </div>
 
-          <div class="import-section">
-            <label class="section-label">Import from JSON (Optional)</label>
+          <div class="db-import-section">
+            <label class="db-section-label">Import from JSON (Optional)</label>
 
             <div
-              class="drop-zone"
-              :class="{ loaded: importedGraphData, 'drag-over': isDragOver }"
+              class="db-drop-zone"
+              :class="{ 'db-loaded': importedGraphData, 'db-drag-over': isDragOver }"
               @click="triggerGraphImport"
               @dragover.prevent="isDragOver = true"
               @dragleave.prevent="isDragOver = false"
@@ -1276,28 +1276,28 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
                 ref="graphImportInput"
                 accept=".json"
                 @change="handleGraphImportFile"
-                class="hidden-input"
+                class="db-hidden-input"
               />
 
-              <div v-if="!importedGraphData" class="drop-zone-content">
-                <div class="icon-circle">
+              <div v-if="!importedGraphData" class="db-drop-zone-content">
+                <div class="db-icon-circle">
                   <i class="fas fa-file-import"></i>
                 </div>
-                <div class="text-content">
-                  <span class="action-text">Click or Drag & Drop JSON file</span>
-                  <small class="sub-text">Restore a previously exported graph</small>
+                <div class="db-text-content">
+                  <span class="db-action-text">Click or Drag & Drop JSON file</span>
+                  <small class="db-sub-text">Restore a previously exported graph</small>
                 </div>
               </div>
 
-              <div v-else class="drop-zone-content success">
-                <div class="icon-circle success">
+              <div v-else class="db-drop-zone-content db-success">
+                <div class="db-icon-circle db-success">
                   <i class="fas fa-check"></i>
                 </div>
-                <div class="text-content">
-                  <span class="action-text">File Loaded Successfully</span>
-                  <small class="sub-text">{{ importedGraphData.name || 'Untitled Graph' }}</small>
+                <div class="db-text-content">
+                  <span class="db-action-text">File Loaded Successfully</span>
+                  <small class="db-sub-text">{{ importedGraphData.name || 'Untitled Graph' }}</small>
                 </div>
-                <button class="remove-file-btn" @click.stop="clearImportedData" title="Remove file">
+                <button class="db-remove-file-btn" @click.stop="clearImportedData" title="Remove file">
                   <i class="fas fa-times"></i>
                 </button>
               </div>
@@ -1349,7 +1349,7 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
 </template>
 
 <style scoped>
-.app-layout {
+.db-app-layout {
   position: relative;
   width: 100vw;
   height: 100dvh;
@@ -1358,7 +1358,7 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   background-color: var(--theme-bg-canvas);
 }
 
-.canvas-area {
+.db-canvas-area {
   position: absolute;
   top: 0;
   left: 0;
@@ -1368,7 +1368,7 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   transition: bottom 0.1s ease;
 }
 
-.collapsed-sidebar-trigger {
+.db-collapsed-sidebar-trigger {
   position: absolute;
   top: 16px;
   z-index: 100; /* Layer 2: Collapsed sidebar triggers */
@@ -1383,42 +1383,42 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   min-width: 140px;
 }
 
-.collapsed-sidebar-trigger.left-trigger {
+.db-collapsed-sidebar-trigger.db-left-trigger {
   left: 16px;
   min-width: 200px;
 }
 
-.collapsed-sidebar-trigger.right {
+.db-collapsed-sidebar-trigger.db-right {
   left: auto;
   right: 16px;
 }
 
-.collapsed-sidebar-trigger:hover {
+.db-collapsed-sidebar-trigger:hover {
   box-shadow: var(--shadow-md);
   transform: scale(1.01);
 }
 
-.sidebar-trigger-content {
+.db-sidebar-trigger-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
   width: 100%;
 }
 
-.logo-text-minimized {
+.db-logo-text-minimized {
   font-family: var(--font-family-sans);
   font-size: 14px;
   font-weight: 600;
   color: var(--theme-text-primary);
 }
 
-.sidebar-title-minimized {
+.db-sidebar-title-minimized {
   font-size: 13px;
   font-weight: 600;
   color: var(--theme-text-primary);
 }
 
-.theme-toggle-header {
+.db-theme-toggle-header {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -1431,21 +1431,21 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   transition: color 0.2s;
   border-radius: 4px;
 }
-.theme-toggle-header:hover {
+.db-theme-toggle-header:hover {
   color: var(--theme-text-primary);
   background: var(--theme-bg-hover);
 }
 
-.toggle-icon-wrapper {
+.db-toggle-icon-wrapper {
   display: flex;
   align-items: center;
 }
 
-.toggle-icon {
+.db-toggle-icon {
   color: var(--theme-text-secondary);
 }
 
-.empty-state {
+.db-empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1455,7 +1455,7 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   gap: 1rem;
 }
 
-.status-indicator {
+.db-status-indicator {
   position: relative;
   display: flex;
   align-items: center;
@@ -1465,18 +1465,18 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   cursor: help;
 }
 
-.validation-status {
+.db-validation-status {
   font-size: 1.1em;
   margin: 0;
 }
-.validation-status.valid {
+.db-validation-status.db-valid {
   color: var(--theme-success);
 }
-.validation-status.invalid {
+.db-validation-status.db-invalid {
   color: var(--theme-warning);
 }
 
-.instant-tooltip {
+.db-instant-tooltip {
   position: absolute;
   top: 100%;
   right: 0;
@@ -1495,11 +1495,11 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
-.status-indicator:hover .instant-tooltip {
+.db-status-indicator:hover .db-instant-tooltip {
   opacity: 1;
 }
 
-.header-icon-btn {
+.db-header-icon-btn {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -1513,12 +1513,12 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   transition: all 0.2s;
 }
 
-.header-icon-btn:hover {
+.db-header-icon-btn:hover {
   background-color: var(--theme-bg-hover);
   color: var(--theme-text-primary);
 }
 
-.collapsed-share-btn {
+.db-collapsed-share-btn {
   width: 24px;
   height: 24px;
   padding: 0;
@@ -1534,7 +1534,7 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   opacity: 0;
 }
 
-.json-textarea {
+.db-json-textarea {
   width: 100%;
   height: 120px;
   padding: 8px;
@@ -1547,18 +1547,18 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   resize: vertical;
 }
 
-.file-upload-wrapper {
+.db-file-upload-wrapper {
   margin-top: 5px;
 }
 
-.desktop-text {
+.db-desktop-text {
   display: inline;
 }
-.mobile-text {
+.db-mobile-text {
   display: none;
 }
 
-.divider {
+.db-divider {
   height: 1px;
   background: var(--theme-border);
   width: 100%;
@@ -1575,19 +1575,19 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
 }
 
 /* New Graph Modal Styles */
-.form-group {
+.db-form-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.form-group label {
+.db-form-group label {
   font-size: 0.9em;
   font-weight: 600;
   color: var(--theme-text-secondary);
 }
 
-.section-label {
+.db-section-label {
   font-size: 0.9em;
   font-weight: 600;
   color: var(--theme-text-secondary);
@@ -1595,7 +1595,7 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   display: block;
 }
 
-.drop-zone {
+.db-drop-zone {
   border: 2px dashed var(--theme-border);
   border-radius: var(--radius-md);
   padding: 24px;
@@ -1611,25 +1611,25 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   min-height: 160px;
 }
 
-.drop-zone:hover {
+.db-drop-zone:hover {
   border-color: var(--theme-text-muted);
   background-color: var(--theme-bg-active);
 }
 
-.drop-zone.drag-over {
+.db-drop-zone.db-drag-over {
   border-color: var(--theme-primary);
   background-color: rgba(16, 185, 129, 0.1);
   transform: scale(1.02);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
 }
 
-.drop-zone.loaded {
+.db-drop-zone.db-loaded {
   border-style: solid;
   border-color: var(--theme-success);
   background-color: rgba(16, 185, 129, 0.05);
 }
 
-.drop-zone-content {
+.db-drop-zone-content {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1638,11 +1638,11 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   width: 100%;
 }
 
-.drop-zone-content.success {
+.db-drop-zone-content.db-success {
   pointer-events: auto;
 }
 
-.icon-circle {
+.db-icon-circle {
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -1656,45 +1656,45 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.drop-zone:hover .icon-circle {
+.db-drop-zone:hover .db-icon-circle {
   transform: scale(1.1);
   color: var(--theme-primary);
 }
 
-.drop-zone.drag-over .icon-circle {
+.db-drop-zone.db-drag-over .db-icon-circle {
   transform: scale(1.2);
   background-color: var(--theme-primary);
   color: white;
 }
 
-.icon-circle.success {
+.db-icon-circle.db-success {
   background-color: var(--theme-success);
   color: white;
 }
 
-.text-content {
+.db-text-content {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
 }
 
-.action-text {
+.db-action-text {
   font-weight: 600;
   color: var(--theme-text-primary);
   font-size: 1rem;
 }
 
-.sub-text {
+.db-sub-text {
   color: var(--theme-text-secondary);
   font-size: 0.85em;
 }
 
-.hidden-input {
+.db-hidden-input {
   display: none;
 }
 
-.remove-file-btn {
+.db-remove-file-btn {
   position: absolute;
   top: 10px;
   right: 10px;
@@ -1712,31 +1712,31 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   box-shadow: var(--shadow-sm);
 }
 
-.remove-file-btn:hover {
+.db-remove-file-btn:hover {
   background-color: var(--theme-danger);
   border-color: var(--theme-danger);
   color: white;
 }
 
 @media (max-width: 768px) {
-  .desktop-text {
+  .db-desktop-text {
     display: none;
   }
-  .mobile-text {
+  .db-mobile-text {
     display: inline;
   }
 
-  .collapsed-sidebar-trigger {
+  .db-collapsed-sidebar-trigger {
     min-width: auto !important;
     max-width: 42%;
     padding: 8px;
   }
 
-  .collapsed-sidebar-trigger.left-trigger {
+  .db-collapsed-sidebar-trigger.db-left-trigger {
     min-width: auto !important;
   }
 
-  .logo-text-minimized {
+  .db-logo-text-minimized {
     font-size: 12px;
     white-space: nowrap;
     overflow: hidden;
@@ -1744,7 +1744,7 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
     display: block;
   }
 
-  .sidebar-trigger-content {
+  .db-sidebar-trigger-content {
     gap: 4px;
   }
 }

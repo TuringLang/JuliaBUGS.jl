@@ -114,16 +114,16 @@ watch(
 </script>
 
 <template>
-  <div class="data-input-panel">
-    <div class="editor-wrapper flex-grow">
-      <div ref="editorContainer" class="editor-container"></div>
+  <div class="db-data-input-panel">
+    <div class="db-di-wrapper flex-grow">
+      <div ref="editorContainer" class="db-di-container"></div>
     </div>
 
-    <div class="footer-status">
-      <div v-if="jsonError" class="status-message error">
+    <div class="db-di-footer">
+      <div v-if="jsonError" class="db-di-status db-error">
         <i class="fas fa-times-circle"></i> {{ jsonError }}
       </div>
-      <div v-else class="status-message success">
+      <div v-else class="db-di-status db-success">
         <i class="fas fa-check-circle"></i> Valid JSON
       </div>
     </div>
@@ -131,7 +131,7 @@ watch(
 </template>
 
 <style>
-.data-input-panel .CodeMirror {
+.db-data-input-panel .CodeMirror {
   height: 100%;
   font-family: monospace;
   font-size: 0.85em;
@@ -140,13 +140,13 @@ watch(
 </style>
 
 <style scoped>
-.data-input-panel {
+.db-data-input-panel {
   height: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-.editor-wrapper {
+.db-di-wrapper {
   flex: 1;
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -155,12 +155,12 @@ watch(
   position: relative;
   min-height: 0;
 }
-.editor-container {
+.db-di-container {
   flex-grow: 1;
   position: relative;
   overflow: auto;
 }
-.footer-status {
+.db-di-footer {
   flex-shrink: 0;
   padding-top: 0;
   padding-bottom: 4px;
@@ -172,16 +172,16 @@ watch(
   align-items: flex-start;
   font-size: 0.8em;
 }
-.status-message {
+.db-di-status {
   display: flex;
   align-items: flex-start;
   gap: 6px;
   font-weight: 500;
 }
-.status-message.success {
+.db-di-status.db-success {
   color: var(--color-success);
 }
-.status-message.error {
+.db-di-status.db-error {
   color: var(--color-danger);
   white-space: normal;
   word-break: break-word;

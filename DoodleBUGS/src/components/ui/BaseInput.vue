@@ -38,6 +38,12 @@ const handleUpdate = (val: string | null | undefined) => {
     @change="(e) => emit('change', e)"
     @input="(e) => emit('input', e)"
     @keyup.enter="(e) => emit('keyup.enter', e)"
-    class="w-full base-input-field"
+    class="w-full db-input-field"
   />
 </template>
+
+<style scoped>
+.db-input-field {
+  font-size: 12px !important;
+}
+</style>
