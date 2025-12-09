@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, watch, computed, reactive, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import Toast from 'primevue/toast'
+import { useToast } from 'primevue/usetoast'
 
 import GraphEditor from './components/canvas/GraphEditor.vue'
 import FloatingBottomToolbar from './components/canvas/FloatingBottomToolbar.vue'
@@ -40,8 +41,8 @@ import { examples, isUrl } from './config/examples'
 
 const props = defineProps<{
   initialState?: string // Full JSON dump of project state (restores session)
-  model?: string        // GitHub URL or Model ID (e.g. 'rats')
-  localModel?: string   // Path to local model file (e.g. '/models/my-model.json')
+  model?: string        // GitHub URL, any URL, or Model ID (e.g. 'rats')
+  localModel?: string   // Path to local model file (e.g. 'model.json')
 }>()
 
 const emit = defineEmits<{
@@ -54,6 +55,7 @@ const graphStore = useGraphStore()
 const uiStore = useUiStore()
 const dataStore = useDataStore()
 const scriptStore = useScriptStore()
+const toast = useToast()
 
 // Ensure sidebars are closed by default for the widget
 uiStore.isLeftSidebarOpen = false
@@ -105,9 +107,24 @@ const isInitialized = ref(false)
 
 // LocalStorage key for widget UI state
 const WIDGET_UI_STATE_KEY = 'doodlebugs-widget-ui-state'
+const WIDGET_SOURCE_MAP_KEY = 'doodlebugs-widget-source-map'
 
-const { loadUIState, saveUIState, getStoredGraphElements, getStoredDataContent } =
+const { loadUIState, saveUIState, getStoredGraphElements, getStoredDataContent, saveLastGraphId, loadLastGraphId } =
   usePersistence('doodlebugs')
+
+const getSourceMap = (): Record<string, string> => {
+  try {
+    return JSON.parse(localStorage.getItem(WIDGET_SOURCE_MAP_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+const updateSourceMap = (source: string, graphId: string) => {
+  const map = getSourceMap()
+  map[source] = graphId
+  localStorage.setItem(WIDGET_SOURCE_MAP_KEY, JSON.stringify(map))
+}
 
 const saveWidgetUIState = () => {
   saveUIState(WIDGET_UI_STATE_KEY, {
@@ -151,8 +168,6 @@ const { shareUrl, minifyGraph, generateShareLink } = useShareExport()
 const { importedGraphData, processGraphFile, clearImportedData } = useImportExport()
 
 // CSS for teleported widget content
-// NOTE: Z-index for PrimeVue components (popovers, dropdowns) must be > sidebar wrapper (2200)
-// We set them to 3000 to ensure they appear on top.
 const WIDGET_STYLES_ID = 'doodlebugs-widget-teleport-styles'
 
 const widgetTeleportCSS = `
@@ -188,7 +203,6 @@ const widgetTeleportCSS = `
   pointer-events: auto;
 }
 
-/* Specifically target the toolbar container to ensure it is clickable */
 .db-ui-overlay .db-toolbar-container {
   pointer-events: auto !important;
 }
@@ -205,18 +219,14 @@ const widgetTeleportCSS = `
   top: 0;
 }
 
-/* Override RightSidebar positioning for widget mode */
-/* Forces the sidebar to respect the wrapper's flow rather than its internal absolute positioning */
 .db-sidebar-wrapper.db-right .db-floating-sidebar.db-right {
   position: relative !important;
   right: auto !important;
   left: auto !important;
   margin: 0 !important;
-  /* Re-apply shadow that might be clipped or reset */
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); 
 }
 
-/* Force PrimeVue overlays to appear above our sidebars */
 .p-popover,
 .p-select-overlay,
 .p-dialog,
@@ -246,7 +256,7 @@ const removeWidgetStyles = () => {
 }
 
 // Generic Loader for both bundled and remote models
-const loadModelData = async (data: UnifiedModelData | Record<string, unknown>, name: string) => {
+const loadModelData = async (data: UnifiedModelData | Record<string, unknown>, name: string, sourceKey?: string) => {
   if (!projectStore.currentProjectId) return
 
   const newGraphMeta = projectStore.addGraphToProject(
@@ -297,68 +307,176 @@ const loadModelData = async (data: UnifiedModelData | Record<string, unknown>, n
     )
   }
 
+  // Persist this choice:
+  // 1. Map the source string (URL/ID) to this new graph ID so reloads find it
+  if (sourceKey) {
+    updateSourceMap(sourceKey, newGraphMeta.id)
+  }
+  // 2. Select it now and set as default for reload
   graphStore.selectGraph(newGraphMeta.id)
+  saveLastGraphId(newGraphMeta.id)
+
+  return newGraphMeta.id;
+}
+
+// Helper to manually extract attributes if props fail (handling case sensitivity in DOM)
+const resolveProp = (propName: string, propValue: string | undefined): string | null => {
+  if (propValue) return propValue;
+  
+  // Fallback: Check the actual DOM element for attributes
+  if (widgetRoot.value) {
+    const root = widgetRoot.value.getRootNode()
+    if (root instanceof ShadowRoot && root.host) {
+      // Check both kebab-case (standard) and lowercase (often how browser parses simple attrs)
+      const kebab = propName.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2').toLowerCase();
+      const lower = propName.toLowerCase();
+      
+      const attrVal = root.host.getAttribute(kebab) || root.host.getAttribute(lower);
+      if (attrVal) {
+        console.log(`[DoodleBUGS] Recovered attribute manually: ${propName} -> "${attrVal}"`)
+        return attrVal;
+      }
+    }
+  }
+  return null;
 }
 
 // Unified Example Loader Logic
-const handleLoadExample = async (exampleIdOrUrl: string, isLocalPath = false) => {
+const handleLoadExample = async (input: string, type: 'local' | 'prop') => {
   if (!projectStore.currentProjectId) return
+
+  console.log(`[DoodleBUGS] handleLoadExample called. Type: ${type}, Input: "${input}"`)
+  
+  toast.add({ 
+    severity: 'info', 
+    summary: 'Loading...', 
+    detail: `Attempting to load ${type === 'local' ? 'local file' : 'model'}: ${input}`, 
+    life: 2000 
+  })
 
   try {
     let modelData = null
     let modelName = 'Imported Model'
-    let fetchUrl = ''
+    let sourceDescription = ''
 
-    if (isLocalPath) {
-        // Direct local path (e.g., from local-model prop)
-        fetchUrl = exampleIdOrUrl
-    } else if (isUrl(exampleIdOrUrl)) {
-      // 1. Direct URL (GitHub or other)
-      fetchUrl = exampleIdOrUrl
-    } else {
-      // 2. Check if it's a known example ID (fallback to config)
-      const config = examples.find((e) => e.id === exampleIdOrUrl)
-      if (config && config.url) {
-        // Priority 1: GitHub/Remote URL from config
-        fetchUrl = config.url
-      } else {
-        // Priority 2: Construct Turing URL with ID
-        // This is the fallback for when an ID is passed (e.g. 'rats', 'pumps') but not in local config
-        // or if it's just a raw ID provided in the prop
-        fetchUrl = `https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/examples/${exampleIdOrUrl}/model.json`
-      }
-    }
+    if (type === 'local') {
+        // --- CASE 1: LOCAL FILE PATH (localModel prop) ---
+        sourceDescription = 'Local File'
+        console.log(`[DoodleBUGS] Fetching local file: ${input}`)
+        
+        try {
+            const response = await fetch(input)
+            if (!response.ok) {
+                throw new Error(`Failed to load local file. Status: ${response.status} ${response.statusText}`)
+            }
+            
+            const text = await response.text()
+            try {
+                modelData = JSON.parse(text)
+            } catch (jsonErr: any) {
+                console.error('[DoodleBUGS] JSON Parse Error:', jsonErr, 'Content Snippet:', text.substring(0, 100))
+                throw new Error(`File found but contained invalid JSON. Check if file path redirects to index.html.`)
+            }
+            
+            modelName = modelData.name || input
+        } catch (e: any) {
+            console.error(`[DoodleBUGS] Local load failed:`, e)
+            throw new Error(e.message) // Re-throw to be caught by outer block
+        }
 
-    if (fetchUrl) {
-      try {
-        const response = await fetch(fetchUrl)
-        if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`)
-        modelData = await response.json()
-        modelName = modelData.name || 'Remote Model'
-      } catch (err) {
-        console.error(`Failed to load model from ${fetchUrl}`, err)
-        alert('Failed to load example model. Please check your internet connection or the model path.')
-        return
-      }
     } else {
-      console.warn(`Could not determine URL for example: ${exampleIdOrUrl}`)
-      return
+        // --- CASE 2: MODEL PROP (URL or ID) ---
+        if (isUrl(input)) {
+            // Sub-case A: Direct URL
+            const isGithub = input.toLowerCase().includes('github')
+            sourceDescription = isGithub ? 'GitHub Source' : 'External URL'
+            console.log(`[DoodleBUGS] Fetching URL: ${input}`)
+            
+            try {
+                const response = await fetch(input)
+                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+                modelData = await response.json()
+                modelName = modelData.name || 'Remote Model'
+            } catch (e: any) {
+                 throw new Error(`Failed to fetch URL: "${input}". ${e.message}`)
+            }
+
+        } else {
+            // Sub-case B: Model ID (e.g. 'rats')
+            console.log(`[DoodleBUGS] Resolving ID: ${input}`)
+            
+            // 1. Try Turing URL
+            const turingUrl = `https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/examples/${input}/model.json`
+            console.log(`[DoodleBUGS] Attempt 1 - Turing Repository: ${turingUrl}`)
+            
+            try {
+                const response = await fetch(turingUrl)
+                if (response.ok) {
+                    modelData = await response.json()
+                    modelName = modelData.name || input
+                    sourceDescription = 'Turing Repository'
+                }
+            } catch (err) {
+                console.warn('[DoodleBUGS] Turing fetch failed, checking fallback...')
+            }
+
+            // 2. Try Config Fallback (examples.ts) if Turing failed
+            if (!modelData) {
+                const config = examples.find((e) => e.id === input)
+                
+                if (config && config.url) {
+                    sourceDescription = 'GitHub/Config Source'
+                    console.log(`[DoodleBUGS] Found fallback URL in config: ${config.url}`)
+
+                    try {
+                        const response = await fetch(config.url)
+                        if (response.ok) {
+                            modelData = await response.json()
+                            modelName = config.name
+                        }
+                    } catch (remoteErr: any) {
+                        console.error(`[DoodleBUGS] Fallback load failed:`, remoteErr)
+                    }
+                } else {
+                    console.warn(`[DoodleBUGS] No fallback URL found in config for ID: ${input}`)
+                }
+            }
+
+            if (!modelData) {
+                throw new Error(`Model ID "${input}" not found in Turing Repo or Config.`)
+            }
+        }
     }
 
     if (modelData) {
-      await loadModelData(modelData, modelName)
+      console.log(`[DoodleBUGS] Successfully loaded data for "${modelName}". Importing...`)
+      await loadModelData(modelData, modelName, input)
+      toast.add({
+        severity: 'success',
+        summary: 'Loaded',
+        detail: `${modelName} loaded from ${sourceDescription}`,
+        life: 3000
+      })
     }
-  } catch (error) {
-    console.error('Failed to load example model:', error)
-    alert('Failed to load model. Check console for details.')
+  } catch (error: any) {
+    console.error('[DoodleBUGS] CRITICAL LOAD ERROR:', error)
+    toast.add({
+        severity: 'error',
+        summary: 'Load Failed',
+        detail: error.message || 'An unexpected error occurred.',
+        life: 5000
+    })
   }
 }
 
 const handleLoadExampleAction = (exampleKey: string) => {
-  handleLoadExample(exampleKey)
+  // Manual example loads are treated as prop-style ID lookups
+  handleLoadExample(exampleKey, 'prop')
 }
 
 const initGraph = async () => {
+  console.log('[DoodleBUGS] initGraph started.')
+  
   if (projectStore.projects.length === 0) {
     projectStore.createProject('Default Project')
   }
@@ -370,26 +488,59 @@ const initGraph = async () => {
   const proj = projectStore.currentProject
   if (!proj) return
 
-  // Initialization Logic with Priorities:
-  // 1. `model` prop (ID, GitHub URL, or other URL)
-  // 2. `local-model` prop (Local file path, e.g. './models/foo.json')
-  
-  if (props.model) {
-    await handleLoadExample(props.model)
-  } else if (props.localModel) {
-    await handleLoadExample(props.localModel, true)
+  // Attempt to resolve props, falling back to manual DOM inspection if needed
+  // This fixes the issue where <doodle-bugs localModel="..."> passes 'localmodel' attribute
+  // but Vue expects 'local-model' to map to 'localModel'.
+  const rawLocalModel = resolveProp('localModel', props.localModel)
+  const rawModel = resolveProp('model', props.model)
+
+  const sourceKey = rawLocalModel || rawModel
+  const isLocalFile = !!rawLocalModel
+
+  console.log('Resolved Props:', { localModel: rawLocalModel, model: rawModel })
+
+  if (sourceKey) {
+    console.log(`[DoodleBUGS] Valid prop detected: "${sourceKey}"`)
+    
+    // Check if we've already loaded this SPECIFIC source previously using SourceMap
+    const map = getSourceMap()
+    const mappedGraphId = map[sourceKey]
+    
+    // Check if that mapped graph actually exists in the current project
+    const existingGraph = mappedGraphId 
+      ? proj.graphs.find((g) => g.id === mappedGraphId) 
+      : undefined
+
+    if (existingGraph) {
+      console.log(`[DoodleBUGS] Restoring previously loaded graph from session: ${existingGraph.id}`)
+      graphStore.selectGraph(existingGraph.id)
+      saveLastGraphId(existingGraph.id)
+      // No toast needed for session restore
+    } else {
+      console.log(`[DoodleBUGS] New source detected. Initiating fetch...`)
+      await handleLoadExample(sourceKey, isLocalFile ? 'local' : 'prop')
+    }
+  } else {
+    // No props provided. Fallback to standard persistence logic.
+    console.log(`[DoodleBUGS] No model props. Checking last session...`)
+    const lastGraphId = loadLastGraphId()
+    
+    if (lastGraphId && proj.graphs.some(g => g.id === lastGraphId)) {
+       console.log(`[DoodleBUGS] Restoring last active graph: ${lastGraphId}`)
+       graphStore.selectGraph(lastGraphId)
+    } else {
+       // No valid session, check if project has graphs or create default
+       if (proj.graphs.length === 0) {
+         console.log(`[DoodleBUGS] Project empty. Creating default Model 1.`)
+         projectStore.addGraphToProject(proj.id, 'Model 1')
+       }
+       if (!graphStore.currentGraphId && proj.graphs.length > 0) {
+         graphStore.selectGraph(proj.graphs[0].id)
+       }
+    }
   }
 
-  // If after checking prop we still have no graphs, create a default one
-  if (proj.graphs.length === 0) {
-    projectStore.addGraphToProject(proj.id, 'Model 1')
-  }
-
-  // If no graph selected, select the first one
-  if (proj.graphs.length > 0 && !graphStore.currentGraphId) {
-    graphStore.selectGraph(proj.graphs[0].id)
-  }
-
+  // Ensure content is initialized for whatever was selected
   if (graphStore.currentGraphId && !graphStore.graphContents.has(graphStore.currentGraphId)) {
     graphStore.createNewGraphContent(graphStore.currentGraphId)
   }
@@ -425,6 +576,7 @@ const handleResize = () => {
 }
 
 onMounted(async () => {
+  console.log('[DoodleBUGS] Widget Mounted')
   // Intersection Observer for Widget View
   if (widgetRoot.value) {
     observer = new IntersectionObserver(
@@ -1194,7 +1346,6 @@ const handleUIInteractionEnd = () => {
       </div>
     </div>
 
-    <!-- Edit Toggle Button -->
     <div
       class="db-edit-toggle-wrapper"
       style="position: absolute; top: 10px; right: 10px; z-index: 500"
@@ -1249,15 +1400,15 @@ const handleUIInteractionEnd = () => {
     </div>
 
     <Teleport to="body">
-      <!-- Only show main UI if Editing AND Widget is visible in viewport -->
+      <div class="db-toast-wrapper">
+        <Toast position="top-center" />
+      </div>
+
       <div
         class="db-ui-overlay"
         :class="{ 'db-dark-mode': isDarkMode, 'db-widget-ready': widgetInitialized }"
         v-show="isWidgetInView && isEditMode"
       >
-        <Toast position="top-center" />
-
-        <!-- Left Sidebar (Floating) -->
         <div
           v-if="widgetInitialized && isLeftSidebarOpen"
           class="db-sidebar-wrapper db-left"
@@ -1546,7 +1697,6 @@ const handleUIInteractionEnd = () => {
 </template>
 
 <style>
-/* CSS unchanged */
 .db-widget-root {
   width: 100%;
   height: 100%;

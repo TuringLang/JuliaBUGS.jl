@@ -8,7 +8,7 @@ export const examples: ExampleModelConfig[] = [
   {
     id: 'rats',
     name: 'Rats Model',
-    // url: 'https://raw.githubusercontent.com/shravanngoswamii/experimental/refs/heads/main/model.json'
+    url: 'https://raw.githubusercontent.com/TuringLang/JuliaBUGS.jl/refs/heads/main/DoodleBUGS/public/examples/rats/model.json'
   },
   // Add other models here
 ]

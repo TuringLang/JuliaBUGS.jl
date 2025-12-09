@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, computed, reactive } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useToast } from 'primevue/usetoast'
 import type { Core } from 'cytoscape'
 import GraphEditor from '../canvas/GraphEditor.vue'
 import FloatingBottomToolbar from '../canvas/FloatingBottomToolbar.vue'
@@ -57,6 +58,7 @@ const graphStore = useGraphStore()
 const uiStore = useUiStore()
 const dataStore = useDataStore()
 const scriptStore = useScriptStore()
+const toast = useToast()
 
 const { parsedGraphData } = storeToRefs(dataStore)
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements()
@@ -484,56 +486,99 @@ const loadModelData = async (data: UnifiedModelData | Record<string, unknown>, n
   graphStore.selectGraph(newGraphMeta.id)
 }
 
-// Unified Example Loader
+// Main App Loading Logic: Local -> Github -> Turing
 const handleLoadExample = async (exampleIdOrUrl: string) => {
   if (!projectStore.currentProjectId) return
 
   try {
     let modelData = null
     let modelName = 'Imported Model'
+    let sourceDescription = ''
 
-    // 1. Check if it's a known example ID
     const config = examples.find((e) => e.id === exampleIdOrUrl)
+    const turingUrl = `https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/examples/${exampleIdOrUrl}/model.json`
 
     if (config) {
       modelName = config.name
-      // For Main App: Prioritize Local Fetch, then fallback to URL if configured
-      // Note: This logic assumes Main App context. The widget uses a different loader logic.
+      
+      // Step 1: Try Local URL
       try {
-        // Try local fetch first (works for Main App)
+        toast.add({ severity: 'info', summary: 'Loading...', detail: `Loading ${modelName} from Local Path...`, life: 2000 })
         const localUrl = `${import.meta.env.BASE_URL}examples/${config.id}/model.json`
         const response = await fetch(localUrl)
         if (response.ok) {
           modelData = await response.json()
+          sourceDescription = `Local Path`
         } else {
           throw new Error('Local fetch failed')
         }
-      } catch {
-        // Fallback to remote URL if configured
+      } catch (localErr) {
+        // Step 2: Try Configured URL (GitHub or other)
         if (config.url) {
-          const response = await fetch(config.url)
-          if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`)
-          modelData = await response.json()
+          const isGithub = config.url.includes('github')
+          const sourceLabel = isGithub ? 'GitHub Source' : 'Remote Source'
+          
+          toast.add({ severity: 'warn', summary: 'Local Not Found', detail: `Trying ${sourceLabel}...`, life: 2000 })
+          
+          try {
+            const response = await fetch(config.url)
+            if (response.ok) {
+              modelData = await response.json()
+              sourceDescription = sourceLabel
+            } else {
+              throw new Error(`${sourceLabel} fetch failed`)
+            }
+          } catch (remoteErr) {
+             // Fallthrough to Turing
+             toast.add({ severity: 'warn', summary: `${sourceLabel} Failed`, detail: 'Trying Turing Repository...', life: 2000 })
+          }
+        } else {
+           // Fallthrough if no url provided
+           toast.add({ severity: 'warn', summary: 'No Remote Config', detail: 'Trying Turing Repository...', life: 2000 })
         }
       }
-    }
-    // 2. Check if it's a direct URL
-    else if (isUrl(exampleIdOrUrl)) {
+    } else if (isUrl(exampleIdOrUrl)) {
+      // Direct URL case
+      toast.add({ severity: 'info', summary: 'Loading...', detail: `Model is loading from External Link`, life: 2000 })
       const response = await fetch(exampleIdOrUrl)
-      if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`)
-      modelData = await response.json()
-      modelName = modelData.name || 'Remote Model'
-    } else {
-      console.warn(`Unknown example ID or invalid URL: ${exampleIdOrUrl}`)
-      return
+      if (response.ok) {
+        modelData = await response.json()
+        modelName = modelData.name || 'Remote Model'
+        sourceDescription = `External Link`
+      }
+    }
+
+    // Step 3 (or fallback): Try Turing URL if still no data and it was an ID-like request
+    if (!modelData && !isUrl(exampleIdOrUrl)) {
+       const name = config ? config.name : exampleIdOrUrl
+       
+       // Only show initial turing load toast if we haven't shown chain messages
+       if (!config) {
+          toast.add({ severity: 'info', summary: 'Loading...', detail: `Loading ${name} from Turing Repository...`, life: 2000 })
+       }
+       
+       try {
+         const response = await fetch(turingUrl)
+         if (response.ok) {
+           modelData = await response.json()
+           modelName = modelData.name || name
+           sourceDescription = `Turing Repository`
+         } else {
+           throw new Error('All fetch attempts failed')
+         }
+       } catch (err) {
+         throw new Error(`Failed to load model from any source (Local/GitHub/Turing).`)
+       }
     }
 
     if (modelData) {
       await loadModelData(modelData, modelName)
+      toast.add({ severity: 'success', summary: 'Loaded', detail: `Model loaded from ${sourceDescription}`, life: 3000 })
     }
+
   } catch (error) {
     console.error('Failed to load example model:', error)
-    alert('Failed to load model. Check console for details.')
+    toast.add({ severity: 'error', summary: 'Load Failed', detail: 'Failed to load model. Check console for details.', life: 5000 })
   }
 }
 
@@ -1049,7 +1094,6 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   activeLeftAccordionTabs.value = newVal
 }
 </script>
-<!-- Template same as previous MainLayout -->
 <template>
   <div class="db-app-layout">
     <main class="db-canvas-area">

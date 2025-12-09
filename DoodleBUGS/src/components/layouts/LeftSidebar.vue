@@ -9,7 +9,7 @@ import BaseSelect from '../ui/BaseSelect.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import ProjectManager from '../left-sidebar/ProjectManager.vue'
 import type { NodeType } from '../../types'
-import { examples, type ExampleModelConfig } from '../../config/examples'
+import { examples } from '../../config/examples'
 import { useUiStore } from '../../stores/uiStore'
 import { storeToRefs } from 'pinia'
 
@@ -69,14 +69,6 @@ const availableExamples = computed(() => {
   // In "App Mode", show all examples (local lookups + remote)
   return examples
 })
-
-const getIconClass = (option: ExampleModelConfig) => {
-  if (!option.url) return 'fas fa-hdd' // Local/HDD icon
-  if (option.url.includes('githubusercontent.com') || option.url.includes('github.com')) {
-    return 'fab fa-github'
-  }
-  return 'fas fa-globe'
-}
 
 const sidebarStyle = (isOpen: boolean): StyleValue => {
   if (!isOpen) {
@@ -175,7 +167,6 @@ const handleHeaderClick = () => {
                 >
                   <template #option="{ option }">
                     <div class="flex items-center gap-2">
-                      <i :class="getIconClass(option)" :title="option.url ? 'Remote' : 'Local'"></i>
                       <span>{{ option.name }}</span>
                     </div>
                   </template>
