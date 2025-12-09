@@ -333,7 +333,6 @@ const resolveProp = (propName: string, propValue: string | undefined): string | 
       
       const attrVal = root.host.getAttribute(kebab) || root.host.getAttribute(lower);
       if (attrVal) {
-        console.log(`[DoodleBUGS] Recovered attribute manually: ${propName} -> "${attrVal}"`)
         return attrVal;
       }
     }
@@ -345,8 +344,6 @@ const resolveProp = (propName: string, propValue: string | undefined): string | 
 const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPersistSource: boolean = true) => {
   if (!projectStore.currentProjectId) return
 
-  console.log(`[DoodleBUGS] handleLoadExample called. Type: ${type}, Input: "${input}", Persist: ${shouldPersistSource}`)
-  
   toast.add({ 
     severity: 'info', 
     summary: 'Loading...', 
@@ -360,9 +357,7 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
     let sourceDescription = ''
 
     if (type === 'local') {
-        // --- CASE 1: LOCAL FILE PATH (localModel prop) ---
         sourceDescription = 'Local File'
-        console.log(`[DoodleBUGS] Fetching local file: ${input}`)
         
         try {
             const response = await fetch(input)
@@ -381,16 +376,13 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
             modelName = modelData.name || input
         } catch (e: any) {
             console.error(`[DoodleBUGS] Local load failed:`, e)
-            throw new Error(e.message) // Re-throw to be caught by outer block
+            throw new Error(e.message)
         }
 
     } else {
-        // --- CASE 2: MODEL PROP (URL or ID) ---
         if (isUrl(input)) {
-            // Sub-case A: Direct URL
             const isGithub = input.toLowerCase().includes('github')
             sourceDescription = isGithub ? 'GitHub Source' : 'External URL'
-            console.log(`[DoodleBUGS] Fetching URL: ${input}`)
             
             try {
                 const response = await fetch(input)
@@ -402,12 +394,7 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
             }
 
         } else {
-            // Sub-case B: Model ID (e.g. 'rats')
-            console.log(`[DoodleBUGS] Resolving ID: ${input}`)
-            
-            // 1. Try Turing URL
             const turingUrl = `https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/examples/${input}/model.json`
-            console.log(`[DoodleBUGS] Attempt 1 - Turing Repository: ${turingUrl}`)
             
             try {
                 const response = await fetch(turingUrl)
@@ -420,13 +407,11 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
                 console.warn('[DoodleBUGS] Turing fetch failed, checking fallback...')
             }
 
-            // 2. Try Config Fallback (examples.ts) if Turing failed
             if (!modelData) {
                 const config = examples.find((e) => e.id === input)
                 
                 if (config && config.url) {
                     sourceDescription = 'GitHub/Config Source'
-                    console.log(`[DoodleBUGS] Found fallback URL in config: ${config.url}`)
 
                     try {
                         const response = await fetch(config.url)
@@ -437,8 +422,6 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
                     } catch (remoteErr: any) {
                         console.error(`[DoodleBUGS] Fallback load failed:`, remoteErr)
                     }
-                } else {
-                    console.warn(`[DoodleBUGS] No fallback URL found in config for ID: ${input}`)
                 }
             }
 
@@ -449,9 +432,6 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
     }
 
     if (modelData) {
-      console.log(`[DoodleBUGS] Successfully loaded data for "${modelName}". Importing...`)
-      // Pass the original prop as the sourceKey for mapping/persistence ONLY if requested
-      // This prevents manual loads (from UI) from overwriting the prop-to-graph mapping
       await loadModelData(modelData, modelName, shouldPersistSource ? input : undefined)
       toast.add({
         severity: 'success',
@@ -472,13 +452,10 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
 }
 
 const handleLoadExampleAction = (exampleKey: string) => {
-  // Manual example loads should NOT overwrite the widget's prop persistence mapping
   handleLoadExample(exampleKey, 'prop', false)
 }
 
 const initGraph = async () => {
-  console.log('[DoodleBUGS] initGraph started.')
-  
   if (projectStore.projects.length === 0) {
     projectStore.createProject('Default Project')
   }
@@ -499,42 +476,27 @@ const initGraph = async () => {
   const sourceKey = rawLocalModel || rawModel
   const isLocalFile = !!rawLocalModel
 
-  console.log('Resolved Props:', { localModel: rawLocalModel, model: rawModel })
-
   if (sourceKey) {
-    console.log(`[DoodleBUGS] Valid prop detected: "${sourceKey}"`)
-    
-    // Check if we've already loaded this SPECIFIC source previously using SourceMap
     const map = getSourceMap()
     const mappedGraphId = map[sourceKey]
     
-    // Check if that mapped graph actually exists in the current project
     const existingGraph = mappedGraphId 
       ? proj.graphs.find((g) => g.id === mappedGraphId) 
       : undefined
 
     if (existingGraph) {
-      console.log(`[DoodleBUGS] Restoring previously loaded graph from session: ${existingGraph.id}`)
       graphStore.selectGraph(existingGraph.id)
       saveLastGraphId(existingGraph.id)
-      // No toast needed for session restore
     } else {
-      console.log(`[DoodleBUGS] New source detected. Initiating fetch...`)
-      // Initial load from prop MUST persist to establish the mapping
       await handleLoadExample(sourceKey, isLocalFile ? 'local' : 'prop', true)
     }
   } else {
-    // No props provided. Fallback to standard persistence logic.
-    console.log(`[DoodleBUGS] No model props. Checking last session...`)
     const lastGraphId = loadLastGraphId()
     
     if (lastGraphId && proj.graphs.some(g => g.id === lastGraphId)) {
-       console.log(`[DoodleBUGS] Restoring last active graph: ${lastGraphId}`)
        graphStore.selectGraph(lastGraphId)
     } else {
-       // No valid session, check if project has graphs or create default
        if (proj.graphs.length === 0) {
-         console.log(`[DoodleBUGS] Project empty. Creating default Model 1.`)
          projectStore.addGraphToProject(proj.id, 'Model 1')
        }
        if (!graphStore.currentGraphId && proj.graphs.length > 0) {
@@ -543,7 +505,6 @@ const initGraph = async () => {
     }
   }
 
-  // Ensure content is initialized for whatever was selected
   if (graphStore.currentGraphId && !graphStore.graphContents.has(graphStore.currentGraphId)) {
     graphStore.createNewGraphContent(graphStore.currentGraphId)
   }
@@ -552,16 +513,12 @@ const initGraph = async () => {
 const toggleEditMode = () => {
   isEditMode.value = !isEditMode.value
   if (!isEditMode.value) {
-    // When stopping edit, close sidebars
     uiStore.isLeftSidebarOpen = false
     uiStore.isRightSidebarOpen = false
   }
-  // Save state immediately when toggled
   saveWidgetUIState()
 }
 
-// Handler to force Cytoscape resize on scroll
-// This fixes the issue where click coordinates are offset after scrolling the host page
 const handleWindowScroll = () => {
   if (graphStore.currentGraphId) {
     const cy = getCyInstance(graphStore.currentGraphId)
@@ -579,8 +536,6 @@ const handleResize = () => {
 }
 
 onMounted(async () => {
-  console.log('[DoodleBUGS] Widget Mounted')
-  // Intersection Observer for Widget View
   if (widgetRoot.value) {
     observer = new IntersectionObserver(
       (entries) => {
@@ -591,7 +546,6 @@ onMounted(async () => {
     observer.observe(widgetRoot.value)
   }
 
-  // Attach scroll listener to fix coordinate offsets
   window.addEventListener('scroll', handleWindowScroll, { passive: true, capture: true })
 
   graphStore.selectGraph(undefined as unknown as string)
@@ -656,7 +610,6 @@ onMounted(async () => {
     }
   }
 
-  // Force default right sidebar position if not loaded from state or looks invalid
   nextTick(() => {
     const docWidth = document.documentElement.clientWidth || window.innerWidth
     const defaultRightX = docWidth - 320 - 20
