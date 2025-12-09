@@ -13,18 +13,33 @@ export interface GraphContent {
 
 export const useGraphStore = defineStore('graph', () => {
   const dataStore = useDataStore()
+  const storagePrefix = ref('doodlebugs')
+  
+  const currentGraphKey = computed(() => `${storagePrefix.value}-currentGraphId`)
+  const graphContentKey = (id: string) => `${storagePrefix.value}-graph-${id}`
+
   const graphContents = ref<Map<string, GraphContent>>(new Map())
   const currentGraphId = ref<string | null>(
-    localStorage.getItem('doodlebugs-currentGraphId') || null
+    localStorage.getItem(currentGraphKey.value) || null
   )
 
   const selectedElement = ref<GraphElement | null>(null)
 
+  const setPrefix = (prefix: string) => {
+    storagePrefix.value = prefix
+    currentGraphId.value = localStorage.getItem(currentGraphKey.value) || null
+    // Clear in-memory cache to force reload from new prefix if needed
+    graphContents.value.clear()
+    if (currentGraphId.value) {
+      loadGraph(currentGraphId.value)
+    }
+  }
+
   watch(currentGraphId, (newId) => {
     if (newId) {
-      localStorage.setItem('doodlebugs-currentGraphId', newId)
+      localStorage.setItem(currentGraphKey.value, newId)
     } else {
-      localStorage.removeItem('doodlebugs-currentGraphId')
+      localStorage.removeItem(currentGraphKey.value)
     }
   })
 
@@ -91,7 +106,7 @@ export const useGraphStore = defineStore('graph', () => {
 
   const deleteGraphContent = (graphId: string) => {
     graphContents.value.delete(graphId)
-    localStorage.removeItem(`doodlebugs-graph-${graphId}`)
+    localStorage.removeItem(graphContentKey(graphId))
     dataStore.deleteGraphData(graphId)
     if (currentGraphId.value === graphId) {
       selectGraph(null)
@@ -99,11 +114,11 @@ export const useGraphStore = defineStore('graph', () => {
   }
 
   const saveGraph = (graphId: string, content: GraphContent) => {
-    localStorage.setItem(`doodlebugs-graph-${graphId}`, JSON.stringify(content))
+    localStorage.setItem(graphContentKey(graphId), JSON.stringify(content))
   }
 
   const loadGraph = (graphId: string): GraphContent | null => {
-    const storedContent = localStorage.getItem(`doodlebugs-graph-${graphId}`)
+    const storedContent = localStorage.getItem(graphContentKey(graphId))
     if (storedContent) {
       try {
         const content: GraphContent = JSON.parse(storedContent)
@@ -118,6 +133,7 @@ export const useGraphStore = defineStore('graph', () => {
   }
 
   return {
+    setPrefix,
     graphContents,
     currentGraphId,
     currentGraphElements,

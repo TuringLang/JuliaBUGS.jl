@@ -43,6 +43,7 @@ const props = defineProps<{
   initialState?: string // Full JSON dump of project state (restores session)
   model?: string        // GitHub URL, any URL, or Model ID (e.g. 'rats')
   localModel?: string   // Path to local model file (e.g. 'model.json')
+  storageKey?: string   // Unique key for localStorage isolation (optional)
 }>()
 
 const emit = defineEmits<{
@@ -57,6 +58,27 @@ const dataStore = useDataStore()
 const scriptStore = useScriptStore()
 const toast = useToast()
 
+// Determine unique storage prefix for this instance
+// Order of precedence: prop.storageKey > prop.model > prop.localModel > 'default-widget'
+const persistencePrefix = computed(() => {
+  if (props.storageKey) return `db-${props.storageKey}`
+  
+  // Sanitize model strings to be valid keys
+  const modelKey = props.model ? props.model.replace(/[^a-zA-Z0-9-_]/g, '') : null
+  const localKey = props.localModel ? props.localModel.replace(/[^a-zA-Z0-9-_]/g, '') : null
+  
+  if (modelKey) return `db-model-${modelKey}`
+  if (localKey) return `db-local-${localKey}`
+  
+  return 'doodlebugs-widget'
+})
+
+// Configure stores with isolated prefix
+projectStore.setPrefix(persistencePrefix.value)
+graphStore.setPrefix(persistencePrefix.value)
+dataStore.setPrefix(persistencePrefix.value)
+uiStore.setPrefix(persistencePrefix.value)
+
 // Ensure sidebars are closed by default for the widget
 uiStore.isLeftSidebarOpen = false
 uiStore.isRightSidebarOpen = false
@@ -64,10 +86,14 @@ uiStore.isRightSidebarOpen = false
 // Widget-specific flag to prevent sidebar flash during initialization
 const widgetInitialized = ref(false)
 
+// Instance ID for coordination between multiple widgets
+const instanceId = ref(typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `widget-${Math.random().toString(36).substring(2, 9)}`)
+
 // Widget Viewport & Edit Mode State
 const widgetRoot = ref<HTMLElement | null>(null)
-const isWidgetInView = ref(true) // Default to true to prevent initial flash
+const isWidgetInView = ref(false)
 const isEditMode = ref(false)
+const isUIActive = ref(false) // Tracks if this specific widget should show its floating UI
 let observer: IntersectionObserver | null = null
 
 const currentMode = ref('select')
@@ -106,11 +132,12 @@ const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1920
 const isInitialized = ref(false)
 
 // LocalStorage key for widget UI state
-const WIDGET_UI_STATE_KEY = 'doodlebugs-widget-ui-state'
-const WIDGET_SOURCE_MAP_KEY = 'doodlebugs-widget-source-map'
+const WIDGET_UI_STATE_KEY = `${persistencePrefix.value}-ui-state`
+const WIDGET_SOURCE_MAP_KEY = `${persistencePrefix.value}-source-map`
 
+// Initialize persistence with scoped prefix
 const { loadUIState, saveUIState, getStoredGraphElements, getStoredDataContent, saveLastGraphId, loadLastGraphId } =
-  usePersistence('doodlebugs')
+  usePersistence(persistencePrefix.value)
 
 const getSourceMap = (): Record<string, string> => {
   try {
@@ -258,6 +285,10 @@ const injectWidgetStyles = () => {
 }
 
 const removeWidgetStyles = () => {
+  // Only remove styles if there are no other DoodleBUGS widgets on the page
+  const otherWidgets = document.querySelectorAll('doodle-bugs')
+  if (otherWidgets.length > 0) return
+
   const styleElement = document.getElementById(WIDGET_STYLES_ID)
   if (styleElement) {
     styleElement.remove()
@@ -510,11 +541,96 @@ const initGraph = async () => {
   }
 }
 
+// --- GLOBAL WIDGET MANAGER ---
+// Using window to coordinate separate web component instances
+const getManager = () => {
+  const w = window as any
+  if (!w.__DoodleBugsManager) {
+    w.__DoodleBugsManager = {
+      instances: new Map(), // id -> { setUIActive: (bool)=>void, setEditMode: (bool)=>void, getRect: ()=>DOMRect }
+      activeId: null,
+      globalEditMode: false,
+      
+      register(id: string, callbacks: any) {
+        this.instances.set(id, callbacks)
+        // Sync new instance to global edit mode
+        if (this.globalEditMode) {
+          callbacks.setEditMode(true)
+        }
+      },
+      
+      unregister(id: string) {
+        this.instances.delete(id)
+        if (this.activeId === id) {
+          this.activeId = null
+          // Pick another active if available
+          this.recalculateActive()
+        }
+      },
+      
+      setActive(id: string) {
+        if (this.activeId === id) return
+        this.activeId = id
+        this.instances.forEach((inst: any, key: string) => {
+          inst.setUIActive(key === id)
+        })
+      },
+      
+      setEditMode(mode: boolean) {
+        this.globalEditMode = mode
+        this.instances.forEach((inst: any) => {
+          inst.setEditMode(mode)
+        })
+        // If turning on edit mode, make sure *someone* is active if none is
+        if (mode && !this.activeId) {
+          this.recalculateActive()
+        }
+      },
+      
+      recalculateActive() {
+        // Find visible instances
+        const visible: {id: string, top: number}[] = []
+        this.instances.forEach((inst: any, id: string) => {
+          const rect = inst.getRect()
+          if (rect && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight) {
+            visible.push({ id, top: rect.top })
+          }
+        })
+        
+        if (visible.length === 0) {
+          this.setActive(null)
+          return
+        }
+        
+        visible.sort((a, b) => a.top - b.top)
+        
+        const currentIsVisible = visible.some(v => v.id === this.activeId)
+        
+        if (!currentIsVisible) {
+           this.setActive(visible[0].id)
+        }
+      }
+    }
+  }
+  return w.__DoodleBugsManager
+}
+
+const activateWidget = (source: 'click' | 'scroll') => {
+  const manager = getManager()
+  
+  if (source === 'click') {
+    manager.setActive(instanceId.value)
+  } else if (source === 'scroll') {
+    manager.recalculateActive()
+  }
+}
+
 const toggleEditMode = () => {
-  isEditMode.value = !isEditMode.value
-  if (!isEditMode.value) {
-    uiStore.isLeftSidebarOpen = false
-    uiStore.isRightSidebarOpen = false
+  const manager = getManager()
+  manager.setEditMode(!isEditMode.value)
+  
+  if (isEditMode.value) {
+    activateWidget('click')
   }
   saveWidgetUIState()
 }
@@ -523,10 +639,17 @@ const handleWindowScroll = (event: Event) => {
   const target = event.target as Node
   const isDocumentScroll = target === document || target === document.documentElement || target === document.body
 
-  if (isDocumentScroll && graphStore.currentGraphId) {
-    const cy = getCyInstance(graphStore.currentGraphId)
-    if (cy) {
-      cy.resize()
+  if (isDocumentScroll) {
+    if (observer) {
+    } else {
+       getManager().recalculateActive()
+    }
+    
+    if (graphStore.currentGraphId) {
+      const cy = getCyInstance(graphStore.currentGraphId)
+      if (cy) {
+        cy.resize()
+      }
     }
   }
 }
@@ -538,13 +661,34 @@ const handleResize = () => {
   }
 }
 
+const handleWidgetClick = () => {
+  activateWidget('click')
+}
+
 onMounted(async () => {
+  const manager = getManager()
+  
+  manager.register(instanceId.value, {
+    setUIActive: (val: boolean) => { isUIActive.value = val },
+    setEditMode: (val: boolean) => { 
+        isEditMode.value = val
+        if (!val) {
+            uiStore.isLeftSidebarOpen = false
+            uiStore.isRightSidebarOpen = false
+        }
+    },
+    getRect: () => widgetRoot.value ? widgetRoot.value.getBoundingClientRect() : null
+  })
+
   if (widgetRoot.value) {
     observer = new IntersectionObserver(
       (entries) => {
-        isWidgetInView.value = entries[0].isIntersecting
+        const entry = entries[0]
+        isWidgetInView.value = entry.isIntersecting
+        
+        manager.recalculateActive()
       },
-      { threshold: 0.1 }
+      { threshold: [0, 0.1] }
     )
     observer.observe(widgetRoot.value)
   }
@@ -609,7 +753,10 @@ onMounted(async () => {
       graphStore.selectGraph(savedUIState.currentGraphId)
     }
     if (savedUIState.editMode !== undefined) {
-      isEditMode.value = savedUIState.editMode
+      if (!manager.globalEditMode) {
+         isEditMode.value = savedUIState.editMode
+         manager.setEditMode(savedUIState.editMode)
+      }
     }
   }
 
@@ -636,6 +783,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  getManager().unregister(instanceId.value)
+
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('scroll', handleWindowScroll)
   if (observer) observer.disconnect()
@@ -1281,6 +1430,7 @@ const handleUIInteractionEnd = () => {
     ref="widgetRoot"
     class="db-widget-root"
     :class="{ 'db-dark-mode': isDarkMode }"
+    @mousedown.capture="handleWidgetClick"
     style="width: 100%; height: 100%; position: relative; overflow: hidden"
   >
     <div
@@ -1387,7 +1537,7 @@ const handleUIInteractionEnd = () => {
       <div
         class="db-ui-overlay"
         :class="{ 'db-dark-mode': isDarkMode, 'db-widget-ready': widgetInitialized }"
-        v-show="isWidgetInView && isEditMode"
+        v-show="isWidgetInView && isEditMode && isUIActive"
       >
         <div
           v-if="widgetInitialized && isLeftSidebarOpen"
