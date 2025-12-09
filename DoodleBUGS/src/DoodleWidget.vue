@@ -41,9 +41,9 @@ import { examples, isUrl } from './config/examples'
 
 const props = defineProps<{
   initialState?: string // Full JSON dump of project state (restores session)
-  model?: string        // GitHub URL, any URL, or Model ID (e.g. 'rats')
-  localModel?: string   // Path to local model file (e.g. 'model.json')
-  storageKey?: string   // Unique key for localStorage isolation (optional)
+  model?: string // GitHub URL, any URL, or Model ID (e.g. 'rats')
+  localModel?: string // Path to local model file (e.g. 'model.json')
+  storageKey?: string // Unique key for localStorage isolation (optional)
 }>()
 
 const emit = defineEmits<{
@@ -62,14 +62,14 @@ const toast = useToast()
 // Order of precedence: prop.storageKey > prop.model > prop.localModel > 'default-widget'
 const persistencePrefix = computed(() => {
   if (props.storageKey) return `db-${props.storageKey}`
-  
+
   // Sanitize model strings to be valid keys
   const modelKey = props.model ? props.model.replace(/[^a-zA-Z0-9-_]/g, '') : null
   const localKey = props.localModel ? props.localModel.replace(/[^a-zA-Z0-9-_]/g, '') : null
-  
+
   if (modelKey) return `db-model-${modelKey}`
   if (localKey) return `db-local-${localKey}`
-  
+
   return 'doodlebugs-widget'
 })
 
@@ -87,7 +87,11 @@ uiStore.isRightSidebarOpen = false
 const widgetInitialized = ref(false)
 
 // Instance ID for coordination between multiple widgets
-const instanceId = ref(typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `widget-${Math.random().toString(36).substring(2, 9)}`)
+const instanceId = ref(
+  typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `widget-${Math.random().toString(36).substring(2, 9)}`
+)
 
 // Widget Viewport & Edit Mode State
 const widgetRoot = ref<HTMLElement | null>(null)
@@ -136,8 +140,14 @@ const WIDGET_UI_STATE_KEY = `${persistencePrefix.value}-ui-state`
 const WIDGET_SOURCE_MAP_KEY = `${persistencePrefix.value}-source-map`
 
 // Initialize persistence with scoped prefix
-const { loadUIState, saveUIState, getStoredGraphElements, getStoredDataContent, saveLastGraphId, loadLastGraphId } =
-  usePersistence(persistencePrefix.value)
+const {
+  loadUIState,
+  saveUIState,
+  getStoredGraphElements,
+  getStoredDataContent,
+  saveLastGraphId,
+  loadLastGraphId,
+} = usePersistence(persistencePrefix.value)
 
 const getSourceMap = (): Record<string, string> => {
   try {
@@ -296,7 +306,11 @@ const removeWidgetStyles = () => {
 }
 
 // Generic Loader for both bundled and remote models
-const loadModelData = async (data: UnifiedModelData | Record<string, unknown>, name: string, sourceKey?: string) => {
+const loadModelData = async (
+  data: UnifiedModelData | Record<string, unknown>,
+  name: string,
+  sourceKey?: string
+) => {
   if (!projectStore.currentProjectId) return
 
   const newGraphMeta = projectStore.addGraphToProject(
@@ -353,36 +367,40 @@ const loadModelData = async (data: UnifiedModelData | Record<string, unknown>, n
   graphStore.selectGraph(newGraphMeta.id)
   saveLastGraphId(newGraphMeta.id)
 
-  return newGraphMeta.id;
+  return newGraphMeta.id
 }
 
 const resolveProp = (propName: string, propValue: string | undefined): string | null => {
-  if (propValue) return propValue;
-  
+  if (propValue) return propValue
+
   if (widgetRoot.value) {
     const root = widgetRoot.value.getRootNode()
     if (root instanceof ShadowRoot && root.host) {
       // Check both kebab-case (standard) and lowercase (often how browser parses simple attrs)
-      const kebab = propName.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2').toLowerCase();
-      const lower = propName.toLowerCase();
-      
-      const attrVal = root.host.getAttribute(kebab) || root.host.getAttribute(lower);
+      const kebab = propName.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2').toLowerCase()
+      const lower = propName.toLowerCase()
+
+      const attrVal = root.host.getAttribute(kebab) || root.host.getAttribute(lower)
       if (attrVal) {
-        return attrVal;
+        return attrVal
       }
     }
   }
-  return null;
+  return null
 }
 
-const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPersistSource: boolean = true) => {
+const handleLoadExample = async (
+  input: string,
+  type: 'local' | 'prop',
+  shouldPersistSource: boolean = true
+) => {
   if (!projectStore.currentProjectId) return
 
-  toast.add({ 
-    severity: 'info', 
-    summary: 'Loading...', 
-    detail: `Attempting to load ${type === 'local' ? 'local file' : 'model'}: ${input}`, 
-    life: 2000 
+  toast.add({
+    severity: 'info',
+    summary: 'Loading...',
+    detail: `Attempting to load ${type === 'local' ? 'local file' : 'model'}: ${input}`,
+    life: 2000,
   })
 
   try {
@@ -391,78 +409,87 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
     let sourceDescription = ''
 
     if (type === 'local') {
-        sourceDescription = 'Local File'
-        
+      sourceDescription = 'Local File'
+
+      try {
+        const response = await fetch(input)
+        if (!response.ok) {
+          throw new Error(
+            `Failed to load local file. Status: ${response.status} ${response.statusText}`
+          )
+        }
+
+        const text = await response.text()
         try {
-            const response = await fetch(input)
-            if (!response.ok) {
-                throw new Error(`Failed to load local file. Status: ${response.status} ${response.statusText}`)
-            }
-            
-            const text = await response.text()
-            try {
-                modelData = JSON.parse(text)
-            } catch (jsonErr: unknown) {
-                console.error('[DoodleBUGS] JSON Parse Error:', jsonErr, 'Content Snippet:', text.substring(0, 100))
-                throw new Error(`File found but contained invalid JSON. Check if file path redirects to index.html.`)
-            }
-            
-            modelName = modelData.name || input
-        } catch (e: unknown) {
-            console.error(`[DoodleBUGS] Local load failed:`, e)
-            throw new Error(e instanceof Error ? e.message : String(e))
+          modelData = JSON.parse(text)
+        } catch (jsonErr: unknown) {
+          console.error(
+            '[DoodleBUGS] JSON Parse Error:',
+            jsonErr,
+            'Content Snippet:',
+            text.substring(0, 100)
+          )
+          throw new Error(
+            `File found but contained invalid JSON. Check if file path redirects to index.html.`
+          )
         }
 
+        modelName = modelData.name || input
+      } catch (e: unknown) {
+        console.error(`[DoodleBUGS] Local load failed:`, e)
+        throw new Error(e instanceof Error ? e.message : String(e))
+      }
     } else {
-        if (isUrl(input)) {
-            const isGithub = input.toLowerCase().includes('github')
-            sourceDescription = isGithub ? 'GitHub Source' : 'External URL'
-            
-            try {
-                const response = await fetch(input)
-                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-                modelData = await response.json()
-                modelName = modelData.name || 'Remote Model'
-            } catch (e: unknown) {
-                 throw new Error(`Failed to fetch URL: "${input}". ${e instanceof Error ? e.message : String(e)}`)
-            }
+      if (isUrl(input)) {
+        const isGithub = input.toLowerCase().includes('github')
+        sourceDescription = isGithub ? 'GitHub Source' : 'External URL'
 
-        } else {
-            const turingUrl = `https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/examples/${input}/model.json`
-            
-            try {
-                const response = await fetch(turingUrl)
-                if (response.ok) {
-                    modelData = await response.json()
-                    modelName = modelData.name || input
-                    sourceDescription = 'Turing Repository'
-                }
-            } catch {
-                console.warn('[DoodleBUGS] Turing fetch failed, checking fallback...')
-            }
-
-            if (!modelData) {
-                const config = examples.find((e) => e.id === input)
-                
-                if (config && config.url) {
-                    sourceDescription = 'GitHub/Config Source'
-
-                    try {
-                        const response = await fetch(config.url)
-                        if (response.ok) {
-                            modelData = await response.json()
-                            modelName = config.name
-                        }
-                    } catch (remoteErr: unknown) {
-                        console.error(`[DoodleBUGS] Fallback load failed:`, remoteErr)
-                    }
-                }
-            }
-
-            if (!modelData) {
-                throw new Error(`Model ID "${input}" not found in Turing Repo or Config.`)
-            }
+        try {
+          const response = await fetch(input)
+          if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          modelData = await response.json()
+          modelName = modelData.name || 'Remote Model'
+        } catch (e: unknown) {
+          throw new Error(
+            `Failed to fetch URL: "${input}". ${e instanceof Error ? e.message : String(e)}`
+          )
         }
+      } else {
+        const turingUrl = `https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/examples/${input}/model.json`
+
+        try {
+          const response = await fetch(turingUrl)
+          if (response.ok) {
+            modelData = await response.json()
+            modelName = modelData.name || input
+            sourceDescription = 'Turing Repository'
+          }
+        } catch {
+          console.warn('[DoodleBUGS] Turing fetch failed, checking fallback...')
+        }
+
+        if (!modelData) {
+          const config = examples.find((e) => e.id === input)
+
+          if (config && config.url) {
+            sourceDescription = 'GitHub/Config Source'
+
+            try {
+              const response = await fetch(config.url)
+              if (response.ok) {
+                modelData = await response.json()
+                modelName = config.name
+              }
+            } catch (remoteErr: unknown) {
+              console.error(`[DoodleBUGS] Fallback load failed:`, remoteErr)
+            }
+          }
+        }
+
+        if (!modelData) {
+          throw new Error(`Model ID "${input}" not found in Turing Repo or Config.`)
+        }
+      }
     }
 
     if (modelData) {
@@ -471,16 +498,16 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
         severity: 'success',
         summary: 'Loaded',
         detail: `${modelName} loaded from ${sourceDescription}`,
-        life: 3000
+        life: 3000,
       })
     }
   } catch (error: unknown) {
     console.error('[DoodleBUGS] CRITICAL LOAD ERROR:', error)
     toast.add({
-        severity: 'error',
-        summary: 'Load Failed',
-        detail: error instanceof Error ? error.message : 'An unexpected error occurred.',
-        life: 5000
+      severity: 'error',
+      summary: 'Load Failed',
+      detail: error instanceof Error ? error.message : 'An unexpected error occurred.',
+      life: 5000,
     })
   }
 }
@@ -510,9 +537,9 @@ const initGraph = async () => {
   if (sourceKey) {
     const map = getSourceMap()
     const mappedGraphId = map[sourceKey]
-    
-    const existingGraph = mappedGraphId 
-      ? proj.graphs.find((g) => g.id === mappedGraphId) 
+
+    const existingGraph = mappedGraphId
+      ? proj.graphs.find((g) => g.id === mappedGraphId)
       : undefined
 
     if (existingGraph) {
@@ -523,16 +550,16 @@ const initGraph = async () => {
     }
   } else {
     const lastGraphId = loadLastGraphId()
-    
-    if (lastGraphId && proj.graphs.some(g => g.id === lastGraphId)) {
-       graphStore.selectGraph(lastGraphId)
+
+    if (lastGraphId && proj.graphs.some((g) => g.id === lastGraphId)) {
+      graphStore.selectGraph(lastGraphId)
     } else {
-       if (proj.graphs.length === 0) {
-         projectStore.addGraphToProject(proj.id, 'Model 1')
-       }
-       if (!graphStore.currentGraphId && proj.graphs.length > 0) {
-         graphStore.selectGraph(proj.graphs[0].id)
-       }
+      if (proj.graphs.length === 0) {
+        projectStore.addGraphToProject(proj.id, 'Model 1')
+      }
+      if (!graphStore.currentGraphId && proj.graphs.length > 0) {
+        graphStore.selectGraph(proj.graphs[0].id)
+      }
     }
   }
 
@@ -567,7 +594,7 @@ const getManager = (): DoodleBugsManager => {
       instances: new Map(), // id -> { setUIActive: (bool)=>void, setEditMode: (bool)=>void, getRect: ()=>DOMRect }
       activeId: null,
       globalEditMode: false,
-      
+
       register(id: string, callbacks: WidgetInstanceCallbacks) {
         this.instances.set(id, callbacks)
         // Sync new instance to global edit mode
@@ -575,7 +602,7 @@ const getManager = (): DoodleBugsManager => {
           callbacks.setEditMode(true)
         }
       },
-      
+
       unregister(id: string) {
         this.instances.delete(id)
         if (this.activeId === id) {
@@ -584,7 +611,7 @@ const getManager = (): DoodleBugsManager => {
           this.recalculateActive()
         }
       },
-      
+
       setActive(id: string | null) {
         if (this.activeId === id) return
         this.activeId = id
@@ -592,7 +619,7 @@ const getManager = (): DoodleBugsManager => {
           inst.setUIActive(key === id)
         })
       },
-      
+
       setEditMode(mode: boolean) {
         this.globalEditMode = mode
         this.instances.forEach((inst: WidgetInstanceCallbacks) => {
@@ -603,30 +630,30 @@ const getManager = (): DoodleBugsManager => {
           this.recalculateActive()
         }
       },
-      
+
       recalculateActive() {
         // Find visible instances
-        const visible: {id: string, top: number}[] = []
+        const visible: { id: string; top: number }[] = []
         this.instances.forEach((inst: WidgetInstanceCallbacks, id: string) => {
           const rect = inst.getRect()
           if (rect && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight) {
             visible.push({ id, top: rect.top })
           }
         })
-        
+
         if (visible.length === 0) {
           this.setActive(null)
           return
         }
-        
+
         visible.sort((a, b) => a.top - b.top)
-        
-        const currentIsVisible = visible.some(v => v.id === this.activeId)
-        
+
+        const currentIsVisible = visible.some((v) => v.id === this.activeId)
+
         if (!currentIsVisible) {
-           this.setActive(visible[0].id)
+          this.setActive(visible[0].id)
         }
-      }
+      },
     }
   }
   return w.__DoodleBugsManager
@@ -634,7 +661,7 @@ const getManager = (): DoodleBugsManager => {
 
 const activateWidget = (source: 'click' | 'scroll') => {
   const manager = getManager()
-  
+
   if (source === 'click') {
     manager.setActive(instanceId.value)
   } else if (source === 'scroll') {
@@ -645,7 +672,7 @@ const activateWidget = (source: 'click' | 'scroll') => {
 const toggleEditMode = () => {
   const manager = getManager()
   manager.setEditMode(!isEditMode.value)
-  
+
   if (isEditMode.value) {
     activateWidget('click')
   }
@@ -654,14 +681,15 @@ const toggleEditMode = () => {
 
 const handleWindowScroll = (event: Event) => {
   const target = event.target as Node
-  const isDocumentScroll = target === document || target === document.documentElement || target === document.body
+  const isDocumentScroll =
+    target === document || target === document.documentElement || target === document.body
 
   if (isDocumentScroll) {
     if (observer) {
     } else {
-       getManager().recalculateActive()
+      getManager().recalculateActive()
     }
-    
+
     if (graphStore.currentGraphId) {
       const cy = getCyInstance(graphStore.currentGraphId)
       if (cy) {
@@ -684,17 +712,19 @@ const handleWidgetClick = () => {
 
 onMounted(async () => {
   const manager = getManager()
-  
+
   manager.register(instanceId.value, {
-    setUIActive: (val: boolean) => { isUIActive.value = val },
-    setEditMode: (val: boolean) => { 
-        isEditMode.value = val
-        if (!val) {
-            uiStore.isLeftSidebarOpen = false
-            uiStore.isRightSidebarOpen = false
-        }
+    setUIActive: (val: boolean) => {
+      isUIActive.value = val
     },
-    getRect: () => widgetRoot.value ? widgetRoot.value.getBoundingClientRect() : null
+    setEditMode: (val: boolean) => {
+      isEditMode.value = val
+      if (!val) {
+        uiStore.isLeftSidebarOpen = false
+        uiStore.isRightSidebarOpen = false
+      }
+    },
+    getRect: () => (widgetRoot.value ? widgetRoot.value.getBoundingClientRect() : null),
   })
 
   if (widgetRoot.value) {
@@ -702,7 +732,7 @@ onMounted(async () => {
       (entries) => {
         const entry = entries[0]
         isWidgetInView.value = entry.isIntersecting
-        
+
         manager.recalculateActive()
       },
       { threshold: [0, 0.1] }
@@ -771,8 +801,8 @@ onMounted(async () => {
     }
     if (savedUIState.editMode !== undefined) {
       if (!manager.globalEditMode) {
-         isEditMode.value = savedUIState.editMode
-         manager.setEditMode(savedUIState.editMode)
+        isEditMode.value = savedUIState.editMode
+        manager.setEditMode(savedUIState.editMode)
       }
     }
   }
@@ -850,7 +880,10 @@ const getScriptContent = () => {
 watch(
   [generatedCode, parsedGraphData, samplerSettings],
   () => {
-    if (standaloneScript.value || (uiStore.activeRightTab === 'script' && uiStore.isRightSidebarOpen)) {
+    if (
+      standaloneScript.value ||
+      (uiStore.activeRightTab === 'script' && uiStore.isRightSidebarOpen)
+    ) {
       scriptStore.standaloneScript = getScriptContent()
     }
   },
@@ -987,9 +1020,7 @@ const handleDownloadBugs = () => {
 }
 
 const handleDownloadScript = () => {
-  const content =
-    scriptStore.standaloneScript ||
-    getScriptContent()
+  const content = scriptStore.standaloneScript || getScriptContent()
   if (!content) return
   const blob = new Blob([content], { type: 'text/plain' })
   const url = URL.createObjectURL(blob)
@@ -1133,7 +1164,7 @@ const handleGenerateShareLink = async (options: {
     })
     payload = { v: 3, pn: projectStore.currentProject.name, g: graphsData }
   }
-  
+
   // Use the main app URL when sharing from the widget
   await generateShareLink(payload, 'https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/')
 }
@@ -1275,7 +1306,7 @@ const useDrag = (initialX: number, initialY: number) => {
 
   const onMouseMove = (e: MouseEvent) => {
     if (!isDragging.value) return
-    
+
     if (animationFrameId) cancelAnimationFrame(animationFrameId)
 
     animationFrameId = requestAnimationFrame(() => {
@@ -1962,9 +1993,11 @@ const handleUIInteractionEnd = () => {
 
 /* Dark mode grid styling for widget */
 .db-widget-root.db-dark-mode .db-cytoscape-container.db-grid-background.db-grid-dots {
-  background-image: radial-gradient(circle,
-      rgba(255, 255, 255, 0.2) 1.2px,
-      transparent 1px) !important;
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.2) 1.2px,
+    transparent 1px
+  ) !important;
 }
 
 .db-widget-root.db-dark-mode .db-cytoscape-container.db-grid-background.db-grid-lines {

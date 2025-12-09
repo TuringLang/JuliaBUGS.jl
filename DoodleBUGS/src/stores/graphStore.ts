@@ -14,14 +14,12 @@ export interface GraphContent {
 export const useGraphStore = defineStore('graph', () => {
   const dataStore = useDataStore()
   const storagePrefix = ref('doodlebugs')
-  
+
   const currentGraphKey = computed(() => `${storagePrefix.value}-currentGraphId`)
   const graphContentKey = (id: string) => `${storagePrefix.value}-graph-${id}`
 
   const graphContents = ref<Map<string, GraphContent>>(new Map())
-  const currentGraphId = ref<string | null>(
-    localStorage.getItem(currentGraphKey.value) || null
-  )
+  const currentGraphId = ref<string | null>(localStorage.getItem(currentGraphKey.value) || null)
 
   const selectedElement = ref<GraphElement | null>(null)
 

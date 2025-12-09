@@ -44,13 +44,11 @@ export const useProjectStore = defineStore('project', () => {
   const projects = ref<Project[]>([])
   // Default to 'doodlebugs' to maintain backward compatibility with the Main App
   const storagePrefix = ref('doodlebugs')
-  
+
   const storageKey = computed(() => `${storagePrefix.value}-projects`)
   const currentProjectKey = computed(() => `${storagePrefix.value}-currentProjectId`)
 
-  const currentProjectId = ref<string | null>(
-    localStorage.getItem(currentProjectKey.value) || null
-  )
+  const currentProjectId = ref<string | null>(localStorage.getItem(currentProjectKey.value) || null)
 
   const graphStore = useGraphStore()
 
@@ -285,7 +283,7 @@ export const useProjectStore = defineStore('project', () => {
     } else {
       projects.value = []
     }
-    
+
     if (currentProjectId.value && !projects.value.some((p) => p.id === currentProjectId.value)) {
       selectProject(null)
     }

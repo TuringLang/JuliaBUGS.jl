@@ -22,11 +22,11 @@ interface WidgetProps {
 }
 
 export const DoodleBugsElement = defineCustomElement({
-  props: { 
+  props: {
     initialState: String,
     model: String,
     localModel: String,
-    storageKey: String
+    storageKey: String,
   },
   setup(props: WidgetProps) {
     const app = createApp(DoodleWidget)

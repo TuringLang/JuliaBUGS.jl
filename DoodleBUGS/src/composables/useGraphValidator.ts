@@ -90,7 +90,7 @@ export function useGraphValidator(elements: Ref<GraphElement[]>, modelData: Ref<
             const baseName = p.split('[')[0].trim()
             return nodeNames.has(baseName)
           })
-          
+
           const numericParams = literalParams.length - linkedParams.length
 
           providedParams += numericParams
