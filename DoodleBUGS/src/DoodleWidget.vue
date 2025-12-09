@@ -432,6 +432,8 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
     }
 
     if (modelData) {
+      // Pass the original prop as the sourceKey for mapping/persistence ONLY if requested
+      // This prevents manual loads (from UI) from overwriting the prop-to-graph mapping
       await loadModelData(modelData, modelName, shouldPersistSource ? input : undefined)
       toast.add({
         severity: 'success',
@@ -959,7 +961,9 @@ const handleGenerateShareLink = async (options: {
     })
     payload = { v: 3, pn: projectStore.currentProject.name, g: graphsData }
   }
-  await generateShareLink(payload)
+  
+  // Use the main app URL when sharing from the widget
+  await generateShareLink(payload, 'https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/')
 }
 
 const handleShareGraph = () => {
@@ -1014,7 +1018,20 @@ const handleElementSelected = (element: GraphElement | null) => {
 
 const handleSelectNodeFromModal = (nodeId: string) => {
   const el = elements.value.find((e) => e.id === nodeId)
-  if (el) handleElementSelected(el)
+  if (el) {
+    handleElementSelected(el)
+    // Add Zoom Logic
+    const cy = getCyInstance(graphStore.currentGraphId!)
+    if (cy) {
+      cy.elements().removeClass('cy-selected')
+      const cyNode = cy.getElementById(nodeId)
+      cyNode.addClass('cy-selected')
+      cy.animate({
+        fit: { eles: cyNode, padding: 50 },
+        duration: 500,
+      })
+    }
+  }
 }
 
 const {

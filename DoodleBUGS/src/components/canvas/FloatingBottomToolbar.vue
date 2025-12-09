@@ -370,14 +370,15 @@ onUnmounted(() => {
         <i class="fas fa-redo"></i>
       </button>
 
+      <div class="db-divider"></div>
+
       <button
         class="db-dock-btn"
-        :class="{ 'db-active': showCodePanel }"
-        @click="$emit('toggle-code-panel')"
-        title="BUGS Code"
+        @click="$emit('open-style-modal')"
+        title="Graph Style"
         type="button"
       >
-        <i class="fas fa-code"></i>
+        <i class="fas fa-palette"></i>
       </button>
 
       <button
@@ -392,11 +393,12 @@ onUnmounted(() => {
 
       <button
         class="db-dock-btn"
-        @click="$emit('open-style-modal')"
-        title="Graph Style"
+        :class="{ 'db-active': showCodePanel }"
+        @click="$emit('toggle-code-panel')"
+        title="BUGS Code"
         type="button"
       >
-        <i class="fas fa-palette"></i>
+        <i class="fas fa-code"></i>
       </button>
 
       <template v-if="showZoomControls">

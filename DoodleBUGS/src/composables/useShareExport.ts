@@ -175,10 +175,10 @@ export function useShareExport() {
     })
   }
 
-  const generateShareLink = async (payload: object) => {
+  const generateShareLink = async (payload: object, baseUrlOverride?: string) => {
     try {
       const base64 = await compressAndEncode(JSON.stringify(payload))
-      const baseUrl = window.location.origin + window.location.pathname
+      const baseUrl = baseUrlOverride || (window.location.origin + window.location.pathname)
       shareUrl.value = `${baseUrl}?share=${encodeURIComponent(base64)}`
     } catch (e) {
       console.error('Failed to generate share link:', e)
