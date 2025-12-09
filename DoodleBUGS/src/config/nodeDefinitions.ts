@@ -121,6 +121,13 @@ const distributionOptions: SelectOption[] = [
     helpText: 'Parameter: lambda (expected number of occurrences).',
   },
   {
+    value: 'dexp',
+    label: 'Exponential (dexp)',
+    paramCount: 1,
+    paramNames: ['rate'],
+    helpText: 'Parameter: rate (lambda).',
+  },
+  {
     value: 'dt',
     label: 'Student-t (dt)',
     paramCount: 3,
