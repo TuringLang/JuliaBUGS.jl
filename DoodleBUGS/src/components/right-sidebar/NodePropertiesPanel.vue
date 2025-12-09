@@ -156,18 +156,17 @@ const getErrorForField = (fieldKey: string): string | undefined => {
               :id="`prop-${prop.key}`"
               :type="prop.type"
               :model-value="
-                (localElement as GraphNode)[prop.key] !== undefined
+                (localElement as GraphNode)[prop.key] != null
                   ? String((localElement as GraphNode)[prop.key])
                   : ''
               "
               @update:model-value="
                 (value) => {
-                  // Convert value back to appropriate type based on prop.type
                   let convertedValue: string | number | null | undefined = value
                   if (prop.type === 'number' && value !== '') {
                     convertedValue = Number(value)
-                  } else if (value === '') {
-                    convertedValue = null
+                  } else if (value === '' || value === null) {
+                    convertedValue = null // Store as null in JSON
                   }
                   ;(localElement as GraphNode)[prop.key] = convertedValue
                   handleUpdate()
@@ -200,7 +199,7 @@ const getErrorForField = (fieldKey: string): string | undefined => {
               :id="`param-${index}`"
               type="text"
               :model-value="
-                (localElement as GraphNode)[`param${index + 1}`] !== undefined
+                (localElement as GraphNode)[`param${index + 1}`] != null
                   ? String((localElement as GraphNode)[`param${index + 1}`])
                   : ''
               "

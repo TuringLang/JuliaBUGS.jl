@@ -84,7 +84,11 @@ export function useGraphValidator(elements: Ref<GraphElement[]>, modelData: Ref<
             )
             .map((key) => String(node[key as keyof GraphNode]))
 
-          const linkedParams = literalParams.filter((p) => nodeNames.has(p))
+          const linkedParams = literalParams.filter((p) => {
+            const baseName = p.split('[')[0].trim()
+            return nodeNames.has(baseName)
+          })
+          
           const numericParams = literalParams.length - linkedParams.length
 
           providedParams += numericParams

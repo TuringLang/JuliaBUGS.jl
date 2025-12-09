@@ -10,6 +10,11 @@ export const examples: ExampleModelConfig[] = [
     name: 'Rats Model',
     url: 'https://raw.githubusercontent.com/TuringLang/JuliaBUGS.jl/refs/heads/main/DoodleBUGS/public/examples/rats/model.json'
   },
+  {
+    id: 'pumps',
+    name: 'Pumps Model',
+    url: 'https://raw.githubusercontent.com/TuringLang/JuliaBUGS.jl/refs/heads/main/DoodleBUGS/public/examples/pumps/model.json'
+  }
   // Add other models here
 ]
 
