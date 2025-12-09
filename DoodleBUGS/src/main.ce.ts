@@ -16,13 +16,15 @@ import 'primeicons/primeicons.css'
 
 interface WidgetProps {
   initialState?: string
-  defaultModel?: string
+  model?: string
+  localModel?: string
 }
 
 export const DoodleBugsElement = defineCustomElement({
   props: { 
     initialState: String,
-    defaultModel: String 
+    model: String,
+    localModel: String
   },
   setup(props: WidgetProps) {
     const app = createApp(DoodleWidget)

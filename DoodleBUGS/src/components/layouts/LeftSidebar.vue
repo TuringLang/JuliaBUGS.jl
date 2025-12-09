@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { type StyleValue } from 'vue'
+import { computed, type StyleValue } from 'vue'
 import Accordion from 'primevue/accordion'
 import AccordionPanel from 'primevue/accordionpanel'
 import AccordionHeader from 'primevue/accordionheader'
@@ -9,7 +9,7 @@ import BaseSelect from '../ui/BaseSelect.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import ProjectManager from '../left-sidebar/ProjectManager.vue'
 import type { NodeType } from '../../types'
-import { examples } from '../../config/examples'
+import { examples, type ExampleModelConfig } from '../../config/examples'
 import { useUiStore } from '../../stores/uiStore'
 import { storeToRefs } from 'pinia'
 
@@ -57,6 +57,25 @@ const gridStyleOptions = [
 
 const updateCanvasGridStyle = (val: string) => {
   canvasGridStyle.value = val as 'dots' | 'lines'
+}
+
+// Filter examples based on context
+const availableExamples = computed(() => {
+  // If we are in "Widget Mode" (indicated by enableDrag being true for floating sidebar),
+  // only show examples that have a valid URL (remote).
+  if (props.enableDrag) {
+    return examples.filter((e) => e.url)
+  }
+  // In "App Mode", show all examples (local lookups + remote)
+  return examples
+})
+
+const getIconClass = (option: ExampleModelConfig) => {
+  if (!option.url) return 'fas fa-hdd' // Local/HDD icon
+  if (option.url.includes('githubusercontent.com') || option.url.includes('github.com')) {
+    return 'fab fa-github'
+  }
+  return 'fas fa-globe'
 }
 
 const sidebarStyle = (isOpen: boolean): StyleValue => {
@@ -147,7 +166,7 @@ const handleHeaderClick = () => {
                 <label class="db-example-label">Examples</label>
                 <BaseSelect
                   :modelValue="null"
-                  :options="examples"
+                  :options="availableExamples"
                   optionLabel="name"
                   optionValue="id"
                   @update:modelValue="$emit('load-example', $event)"
@@ -156,8 +175,7 @@ const handleHeaderClick = () => {
                 >
                   <template #option="{ option }">
                     <div class="flex items-center gap-2">
-                      <i v-if="option.type === 'github'" class="fab fa-github" title="GitHub"></i>
-                      <i v-else class="fas fa-hdd" title="Local"></i>
+                      <i :class="getIconClass(option)" :title="option.url ? 'Remote' : 'Local'"></i>
                       <span>{{ option.name }}</span>
                     </div>
                   </template>

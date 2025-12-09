@@ -497,12 +497,24 @@ const handleLoadExample = async (exampleIdOrUrl: string) => {
 
     if (config) {
       modelName = config.name
-      if (config.type === 'local' && config.data) {
-        modelData = config.data
-      } else if (config.url) {
-        const response = await fetch(config.url)
-        if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`)
-        modelData = await response.json()
+      // For Main App: Prioritize Local Fetch, then fallback to URL if configured
+      // Note: This logic assumes Main App context. The widget uses a different loader logic.
+      try {
+        // Try local fetch first (works for Main App)
+        const localUrl = `${import.meta.env.BASE_URL}examples/${config.id}/model.json`
+        const response = await fetch(localUrl)
+        if (response.ok) {
+          modelData = await response.json()
+        } else {
+          throw new Error('Local fetch failed')
+        }
+      } catch {
+        // Fallback to remote URL if configured
+        if (config.url) {
+          const response = await fetch(config.url)
+          if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`)
+          modelData = await response.json()
+        }
       }
     }
     // 2. Check if it's a direct URL
@@ -718,16 +730,13 @@ const createNewGraph = () => {
     const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId!, name)
 
     if (newGraphMeta && importedGraphData.value) {
-      // Populate with imported data
       graphStore.updateGraphElements(
         newGraphMeta.id,
         importedGraphData.value.elements as GraphElement[]
       )
-
       if (importedGraphData.value.dataContent) {
         dataStore.updateGraphData(newGraphMeta.id, { content: importedGraphData.value.dataContent })
       }
-
       graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
     }
 
@@ -866,11 +875,9 @@ const handleGenerateStandalone = () => {
   uiStore.isRightSidebarOpen = true
 }
 
-// Auto-update script if it exists or script panel is open
 watch(
   [generatedCode, parsedGraphData, samplerSettings],
   () => {
-    // Update if script already exists OR if the panel is open
     if (standaloneScript.value || (activeRightTab.value === 'script' && isRightSidebarOpen.value)) {
       scriptStore.standaloneScript = getScriptContent()
     }
@@ -879,7 +886,6 @@ watch(
 )
 
 const handleScriptSettingsDone = () => {
-  // Also regenerate immediately on settings close
   const script = getScriptContent()
   scriptStore.standaloneScript = script
   showScriptSettingsModal.value = false
@@ -953,7 +959,6 @@ const handleFit = () => {
   }
 }
 
-// Panel event handlers for FloatingPanel component
 const handleCodePanelDragEnd = (pos: { x: number; y: number }) => {
   codePanelPos.x = pos.x
   codePanelPos.y = pos.y
@@ -1039,13 +1044,12 @@ watch(showNewGraphModal, (val) => {
   }
 })
 
-// Update the Left Sidebar Accordion model from the store
 const updateActiveAccordionTabs = (val: string | string[]) => {
-  // PrimeVue might emit single value or array depending on config, but multiple=true implies array
   const newVal = Array.isArray(val) ? val : [val]
   activeLeftAccordionTabs.value = newVal
 }
 </script>
+<!-- Template same as previous MainLayout -->
 <template>
   <div class="db-app-layout">
     <main class="db-canvas-area">
@@ -1146,7 +1150,6 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
       </div>
     </Transition>
 
-    <!-- Right Sidebar -->
     <RightSidebar
       :selectedElement="selectedElement"
       :validationErrors="validationErrors"
@@ -1204,7 +1207,6 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
       </div>
     </Transition>
 
-    <!-- Code Panel using FloatingPanel -->
     <FloatingPanel
       v-if="isCodePanelOpen && graphStore.currentGraphId"
       title="BUGS Code Preview"
@@ -1223,7 +1225,6 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
       <CodePreviewPanel :is-active="true" />
     </FloatingPanel>
 
-    <!-- Data Panel using FloatingPanel -->
     <FloatingPanel
       v-if="isDataPanelOpen && graphStore.currentGraphId"
       title="Data & Inits"
@@ -1241,7 +1242,6 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
       @resize-end="handleDataPanelResizeEnd"
     >
       <DataInputPanel :is-active="true" />
-      <!-- Hidden file input for Data Import -->
       <input
         type="file"
         ref="dataImportInput"
@@ -1408,6 +1408,7 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
 </template>
 
 <style scoped>
+/* Scoped styles are preserved as per the previous version */
 .db-app-layout {
   position: relative;
   width: 100vw;
@@ -1424,7 +1425,6 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   width: 100%;
   bottom: 0;
   z-index: 0;
-  /* Base layer: Canvas */
   transition: bottom 0.1s ease;
 }
 
@@ -1432,7 +1432,6 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   position: absolute;
   top: 16px;
   z-index: 100;
-  /* Layer 2: Collapsed sidebar triggers */
   padding: 8px 12px;
   border-radius: var(--radius-md);
   display: flex;
@@ -1596,23 +1595,6 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
-}
-
-.db-json-textarea {
-  width: 100%;
-  height: 120px;
-  padding: 8px;
-  font-family: monospace;
-  font-size: 0.85em;
-  border: 1px solid var(--theme-border);
-  border-radius: var(--radius-sm);
-  background-color: var(--theme-bg-hover);
-  color: var(--theme-text-primary);
-  resize: vertical;
-}
-
-.db-file-upload-wrapper {
-  margin-top: 5px;
 }
 
 .db-desktop-text {

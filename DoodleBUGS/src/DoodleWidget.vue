@@ -35,12 +35,13 @@ import { useGraphLayout } from './composables/useGraphLayout'
 import { usePersistence } from './composables/usePersistence'
 import { useShareExport } from './composables/useShareExport'
 import { useImportExport } from './composables/useImportExport'
-import type { NodeType, GraphElement } from './types'
+import type { NodeType, GraphElement, UnifiedModelData } from './types'
 import { examples, isUrl } from './config/examples'
 
 const props = defineProps<{
-  initialState?: string
-  defaultModel?: string
+  initialState?: string // Full JSON dump of project state (restores session)
+  model?: string        // GitHub URL or Model ID (e.g. 'rats')
+  localModel?: string   // Path to local model file (e.g. '/models/my-model.json')
 }>()
 
 const emit = defineEmits<{
@@ -244,6 +245,119 @@ const removeWidgetStyles = () => {
   }
 }
 
+// Generic Loader for both bundled and remote models
+const loadModelData = async (data: UnifiedModelData | Record<string, unknown>, name: string) => {
+  if (!projectStore.currentProjectId) return
+
+  const newGraphMeta = projectStore.addGraphToProject(
+    projectStore.currentProjectId,
+    (data as UnifiedModelData).name || name
+  )
+  if (!newGraphMeta) return
+
+  // Handle Elements
+  if ((data as UnifiedModelData).elements) {
+    graphStore.updateGraphElements(
+      newGraphMeta.id,
+      (data as UnifiedModelData).elements as GraphElement[]
+    )
+  } else if ((data as UnifiedModelData).graphJSON) {
+    // Legacy support
+    graphStore.updateGraphElements(
+      newGraphMeta.id,
+      (data as UnifiedModelData).graphJSON as GraphElement[]
+    )
+  }
+
+  // Handle Data/Inits
+  if ((data as UnifiedModelData).dataContent) {
+    dataStore.updateGraphData(newGraphMeta.id, {
+      content: (data as UnifiedModelData).dataContent || '',
+    })
+  } else if ((data as UnifiedModelData).data || (data as UnifiedModelData).inits) {
+    // Legacy separate fields
+    const content = JSON.stringify(
+      {
+        data: (data as UnifiedModelData).data || {},
+        inits: (data as UnifiedModelData).inits || {},
+      },
+      null,
+      2
+    )
+    dataStore.updateGraphData(newGraphMeta.id, { content })
+  }
+
+  // Handle Layout
+  graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
+  if ((data as UnifiedModelData).layout) {
+    projectStore.updateGraphLayout(
+      projectStore.currentProjectId,
+      newGraphMeta.id,
+      (data as UnifiedModelData).layout
+    )
+  }
+
+  graphStore.selectGraph(newGraphMeta.id)
+}
+
+// Unified Example Loader Logic
+const handleLoadExample = async (exampleIdOrUrl: string, isLocalPath = false) => {
+  if (!projectStore.currentProjectId) return
+
+  try {
+    let modelData = null
+    let modelName = 'Imported Model'
+    let fetchUrl = ''
+
+    if (isLocalPath) {
+        // Direct local path (e.g., from local-model prop)
+        fetchUrl = exampleIdOrUrl
+    } else if (isUrl(exampleIdOrUrl)) {
+      // 1. Direct URL (GitHub or other)
+      fetchUrl = exampleIdOrUrl
+    } else {
+      // 2. Check if it's a known example ID (fallback to config)
+      const config = examples.find((e) => e.id === exampleIdOrUrl)
+      if (config && config.url) {
+        // Priority 1: GitHub/Remote URL from config
+        fetchUrl = config.url
+      } else {
+        // Priority 2: Construct Turing URL with ID
+        // This is the fallback for when an ID is passed (e.g. 'rats', 'pumps') but not in local config
+        // or if it's just a raw ID provided in the prop
+        fetchUrl = `https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/examples/${exampleIdOrUrl}/model.json`
+      }
+    }
+
+    if (fetchUrl) {
+      try {
+        const response = await fetch(fetchUrl)
+        if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`)
+        modelData = await response.json()
+        modelName = modelData.name || 'Remote Model'
+      } catch (err) {
+        console.error(`Failed to load model from ${fetchUrl}`, err)
+        alert('Failed to load example model. Please check your internet connection or the model path.')
+        return
+      }
+    } else {
+      console.warn(`Could not determine URL for example: ${exampleIdOrUrl}`)
+      return
+    }
+
+    if (modelData) {
+      await loadModelData(modelData, modelName)
+    }
+  } catch (error) {
+    console.error('Failed to load example model:', error)
+    alert('Failed to load model. Check console for details.')
+  }
+}
+
+const handleLoadExampleAction = (exampleKey: string) => {
+  handleLoadExample(exampleKey)
+}
+
 const initGraph = async () => {
   if (projectStore.projects.length === 0) {
     projectStore.createProject('Default Project')
@@ -256,10 +370,14 @@ const initGraph = async () => {
   const proj = projectStore.currentProject
   if (!proj) return
 
-  // Logic for default-model prop
-  // If prop provided, try to load it first
-  if (props.defaultModel) {
-    await handleLoadExample(props.defaultModel)
+  // Initialization Logic with Priorities:
+  // 1. `model` prop (ID, GitHub URL, or other URL)
+  // 2. `local-model` prop (Local file path, e.g. './models/foo.json')
+  
+  if (props.model) {
+    await handleLoadExample(props.model)
+  } else if (props.localModel) {
+    await handleLoadExample(props.localModel, true)
   }
 
   // If after checking prop we still have no graphs, create a default one
@@ -296,6 +414,13 @@ const handleWindowScroll = () => {
     if (cy) {
       cy.resize()
     }
+  }
+}
+
+const handleResize = () => {
+  windowWidth.value = window.innerWidth
+  if (window.innerWidth - rightDrag.x.value < 500) {
+    rightDrag.x.value = window.innerWidth - 320 - 4
   }
 }
 
@@ -371,7 +496,6 @@ onMounted(async () => {
     if (savedUIState.currentGraphId) {
       graphStore.selectGraph(savedUIState.currentGraphId)
     }
-    // FIX: Removed casting to any and accessing editMode safely
     if (savedUIState.editMode !== undefined) {
       isEditMode.value = savedUIState.editMode
     }
@@ -397,22 +521,14 @@ onMounted(async () => {
 
   injectWidgetStyles()
 
-  const handleResize = () => {
-    windowWidth.value = window.innerWidth
-    if (window.innerWidth - rightDrag.x.value < 500) {
-      rightDrag.x.value = window.innerWidth - 320 - 4
-    }
-  }
   window.addEventListener('resize', handleResize)
-
-  onUnmounted(() => {
-    window.removeEventListener('resize', handleResize)
-    window.removeEventListener('scroll', handleWindowScroll, { capture: true })
-    if (observer) observer.disconnect()
-  })
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('scroll', handleWindowScroll, { capture: true })
+  if (observer) observer.disconnect()
+
   document.body.classList.remove('db-dark-mode')
   document.documentElement.classList.remove('db-dark-mode')
   removeWidgetStyles()
@@ -437,81 +553,6 @@ watch(
 watch(generatedCode, (code) => {
   emit('code-update', code)
 })
-
-// Unified Example Loader Logic
-const handleLoadExample = async (exampleIdOrUrl: string) => {
-  if (!projectStore.currentProjectId) return
-
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let modelData: any = null
-    let modelName = 'Imported Model'
-
-    const config = examples.find((e) => e.id === exampleIdOrUrl)
-
-    if (config) {
-      modelName = config.name
-      if (config.type === 'local' && config.data) {
-        modelData = config.data
-      } else if (config.url) {
-        const response = await fetch(config.url)
-        if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`)
-        modelData = await response.json()
-      }
-    } else if (isUrl(exampleIdOrUrl)) {
-      const response = await fetch(exampleIdOrUrl)
-      if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`)
-      modelData = await response.json()
-      modelName = modelData.name || 'Remote Model'
-    } else {
-      console.warn(`Unknown example ID: ${exampleIdOrUrl}`)
-      return
-    }
-
-    if (modelData) {
-      const newGraphMeta = projectStore.addGraphToProject(
-        projectStore.currentProjectId,
-        modelData.name || modelName
-      )
-      if (!newGraphMeta) return
-
-      // Handle Elements (FIX: Typed as GraphElement[])
-      if (modelData.elements) {
-        graphStore.updateGraphElements(newGraphMeta.id, modelData.elements as GraphElement[])
-      } else if (modelData.graphJSON) {
-        // Legacy support
-        graphStore.updateGraphElements(newGraphMeta.id, modelData.graphJSON as GraphElement[])
-      }
-
-      // Handle Data/Inits
-      if (modelData.dataContent) {
-        dataStore.updateGraphData(newGraphMeta.id, { content: modelData.dataContent })
-      } else if (modelData.data || modelData.inits) {
-        // Legacy separate fields
-        const content = JSON.stringify(
-          { data: modelData.data || {}, inits: modelData.inits || {} },
-          null,
-          2
-        )
-        dataStore.updateGraphData(newGraphMeta.id, { content })
-      }
-
-      // Handle Layout
-      graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
-      if (modelData.layout) {
-        projectStore.updateGraphLayout(
-          projectStore.currentProjectId,
-          newGraphMeta.id,
-          modelData.layout
-        )
-      }
-
-      graphStore.selectGraph(newGraphMeta.id)
-    }
-  } catch (error) {
-    console.error('Failed to load example model:', error)
-  }
-}
 
 const isCodePanelOpen = computed(() => {
   if (!projectStore.currentProject || !graphStore.currentGraphId) return false
@@ -759,10 +800,6 @@ const handleDrop = (event: DragEvent) => {
         alert(error.message || 'Failed to process graph file.')
       })
   }
-}
-
-const handleLoadExampleAction = (exampleKey: string) => {
-  handleLoadExample(exampleKey)
 }
 
 const handleShare = () => {
