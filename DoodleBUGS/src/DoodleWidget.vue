@@ -160,6 +160,7 @@ const saveWidgetUIState = () => {
 
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements()
 const { parsedGraphData } = storeToRefs(dataStore)
+const { samplerSettings, standaloneScript } = storeToRefs(scriptStore)
 const { generatedCode } = useBugsCodeGenerator(elements)
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData)
 const { getCyInstance, getUndoRedoInstance } = useGraphInstance()
@@ -210,7 +211,7 @@ const widgetTeleportCSS = `
 .db-sidebar-wrapper {
   position: fixed;
   pointer-events: auto;
-  z-index: 2200;
+  z-index: 2100;
   display: flex;
   flex-direction: row;
   align-items: flex-start;
@@ -225,6 +226,14 @@ const widgetTeleportCSS = `
   left: auto !important;
   margin: 0 !important;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); 
+}
+
+.db-ui-overlay .db-floating-panel {
+  z-index: 2200 !important;
+}
+
+.db-ui-overlay .db-toolbar-container {
+  z-index: 2300 !important;
 }
 
 .p-popover,
@@ -307,23 +316,18 @@ const loadModelData = async (data: UnifiedModelData | Record<string, unknown>, n
     )
   }
 
-  // Persist this choice:
-  // 1. Map the source string (URL/ID) to this new graph ID so reloads find it
   if (sourceKey) {
     updateSourceMap(sourceKey, newGraphMeta.id)
   }
-  // 2. Select it now and set as default for reload
   graphStore.selectGraph(newGraphMeta.id)
   saveLastGraphId(newGraphMeta.id)
 
   return newGraphMeta.id;
 }
 
-// Helper to manually extract attributes if props fail (handling case sensitivity in DOM)
 const resolveProp = (propName: string, propValue: string | undefined): string | null => {
   if (propValue) return propValue;
   
-  // Fallback: Check the actual DOM element for attributes
   if (widgetRoot.value) {
     const root = widgetRoot.value.getRootNode()
     if (root instanceof ShadowRoot && root.host) {
@@ -340,7 +344,6 @@ const resolveProp = (propName: string, propValue: string | undefined): string | 
   return null;
 }
 
-// Unified Example Loader Logic
 const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPersistSource: boolean = true) => {
   if (!projectStore.currentProjectId) return
 
@@ -432,8 +435,6 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
     }
 
     if (modelData) {
-      // Pass the original prop as the sourceKey for mapping/persistence ONLY if requested
-      // This prevents manual loads (from UI) from overwriting the prop-to-graph mapping
       await loadModelData(modelData, modelName, shouldPersistSource ? input : undefined)
       toast.add({
         severity: 'success',
@@ -469,9 +470,6 @@ const initGraph = async () => {
   const proj = projectStore.currentProject
   if (!proj) return
 
-  // Attempt to resolve props, falling back to manual DOM inspection if needed
-  // This fixes the issue where <doodle-bugs localModel="..."> passes 'localmodel' attribute
-  // but Vue expects 'local-model' to map to 'localModel'.
   const rawLocalModel = resolveProp('localModel', props.localModel)
   const rawModel = resolveProp('model', props.model)
 
@@ -521,8 +519,11 @@ const toggleEditMode = () => {
   saveWidgetUIState()
 }
 
-const handleWindowScroll = () => {
-  if (graphStore.currentGraphId) {
+const handleWindowScroll = (event: Event) => {
+  const target = event.target as Node
+  const isDocumentScroll = target === document || target === document.documentElement || target === document.body
+
+  if (isDocumentScroll && graphStore.currentGraphId) {
     const cy = getCyInstance(graphStore.currentGraphId)
     if (cy) {
       cy.resize()
@@ -548,7 +549,7 @@ onMounted(async () => {
     observer.observe(widgetRoot.value)
   }
 
-  window.addEventListener('scroll', handleWindowScroll, { passive: true, capture: true })
+  window.addEventListener('scroll', handleWindowScroll, { passive: true })
 
   graphStore.selectGraph(undefined as unknown as string)
 
@@ -636,7 +637,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  window.removeEventListener('scroll', handleWindowScroll, { capture: true })
+  window.removeEventListener('scroll', handleWindowScroll)
   if (observer) observer.disconnect()
 
   document.body.classList.remove('db-dark-mode')
@@ -663,6 +664,32 @@ watch(
 watch(generatedCode, (code) => {
   emit('code-update', code)
 })
+
+const getScriptContent = () => {
+  const dataPayload = parsedGraphData.value.data || {}
+  const initsPayload = parsedGraphData.value.inits || {}
+  return generateStandaloneScript({
+    modelCode: generatedCode.value,
+    data: dataPayload,
+    inits: initsPayload,
+    settings: {
+      n_samples: samplerSettings.value.n_samples,
+      n_adapts: samplerSettings.value.n_adapts,
+      n_chains: samplerSettings.value.n_chains,
+      seed: samplerSettings.value.seed ?? undefined,
+    },
+  })
+}
+
+watch(
+  [generatedCode, parsedGraphData, samplerSettings],
+  () => {
+    if (standaloneScript.value || (uiStore.activeRightTab === 'script' && uiStore.isRightSidebarOpen)) {
+      scriptStore.standaloneScript = getScriptContent()
+    }
+  },
+  { deep: true }
+)
 
 const isCodePanelOpen = computed(() => {
   if (!projectStore.currentProject || !graphStore.currentGraphId) return false
@@ -773,17 +800,7 @@ const handleConfirmExport = (options: {
 }
 
 const handleGenerateStandalone = () => {
-  const script = generateStandaloneScript({
-    modelCode: generatedCode.value,
-    data: dataStore.parsedGraphData.data || {},
-    inits: dataStore.parsedGraphData.inits || {},
-    settings: {
-      n_samples: scriptStore.samplerSettings.n_samples,
-      n_adapts: scriptStore.samplerSettings.n_adapts,
-      n_chains: scriptStore.samplerSettings.n_chains,
-      seed: scriptStore.samplerSettings.seed ?? undefined,
-    },
-  })
+  const script = getScriptContent()
   scriptStore.standaloneScript = script
   uiStore.setActiveRightTab('script')
   uiStore.isRightSidebarOpen = true
@@ -806,17 +823,7 @@ const handleDownloadBugs = () => {
 const handleDownloadScript = () => {
   const content =
     scriptStore.standaloneScript ||
-    generateStandaloneScript({
-      modelCode: generatedCode.value,
-      data: dataStore.parsedGraphData.data || {},
-      inits: dataStore.parsedGraphData.inits || {},
-      settings: {
-        n_samples: scriptStore.samplerSettings.n_samples,
-        n_adapts: scriptStore.samplerSettings.n_adapts,
-        n_chains: scriptStore.samplerSettings.n_chains,
-        seed: scriptStore.samplerSettings.seed ?? undefined,
-      },
-    })
+    getScriptContent()
   if (!content) return
   const blob = new Blob([content], { type: 'text/plain' })
   const url = URL.createObjectURL(blob)
@@ -937,7 +944,6 @@ const handleGenerateShareLink = async (options: {
       graphElements = graphStore.currentGraphElements
       dataContent = dataStore.dataContent
     } else {
-      // FIX: Cast to GraphElement[]
       graphElements = getStoredGraphElements(graphId) as GraphElement[]
       dataContent = getStoredDataContent(graphId)
     }
@@ -1103,6 +1109,7 @@ const useDrag = (initialX: number, initialY: number) => {
 
   const onMouseMove = (e: MouseEvent) => {
     if (!isDragging.value) return
+    
     if (animationFrameId) cancelAnimationFrame(animationFrameId)
 
     animationFrameId = requestAnimationFrame(() => {
