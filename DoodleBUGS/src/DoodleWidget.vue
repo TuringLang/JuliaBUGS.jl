@@ -342,10 +342,10 @@ const resolveProp = (propName: string, propValue: string | undefined): string | 
 }
 
 // Unified Example Loader Logic
-const handleLoadExample = async (input: string, type: 'local' | 'prop') => {
+const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPersistSource: boolean = true) => {
   if (!projectStore.currentProjectId) return
 
-  console.log(`[DoodleBUGS] handleLoadExample called. Type: ${type}, Input: "${input}"`)
+  console.log(`[DoodleBUGS] handleLoadExample called. Type: ${type}, Input: "${input}", Persist: ${shouldPersistSource}`)
   
   toast.add({ 
     severity: 'info', 
@@ -450,7 +450,9 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop') => {
 
     if (modelData) {
       console.log(`[DoodleBUGS] Successfully loaded data for "${modelName}". Importing...`)
-      await loadModelData(modelData, modelName, input)
+      // Pass the original prop as the sourceKey for mapping/persistence ONLY if requested
+      // This prevents manual loads (from UI) from overwriting the prop-to-graph mapping
+      await loadModelData(modelData, modelName, shouldPersistSource ? input : undefined)
       toast.add({
         severity: 'success',
         summary: 'Loaded',
@@ -470,8 +472,8 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop') => {
 }
 
 const handleLoadExampleAction = (exampleKey: string) => {
-  // Manual example loads are treated as prop-style ID lookups
-  handleLoadExample(exampleKey, 'prop')
+  // Manual example loads should NOT overwrite the widget's prop persistence mapping
+  handleLoadExample(exampleKey, 'prop', false)
 }
 
 const initGraph = async () => {
@@ -518,7 +520,8 @@ const initGraph = async () => {
       // No toast needed for session restore
     } else {
       console.log(`[DoodleBUGS] New source detected. Initiating fetch...`)
-      await handleLoadExample(sourceKey, isLocalFile ? 'local' : 'prop')
+      // Initial load from prop MUST persist to establish the mapping
+      await handleLoadExample(sourceKey, isLocalFile ? 'local' : 'prop', true)
     }
   } else {
     // No props provided. Fallback to standard persistence logic.
