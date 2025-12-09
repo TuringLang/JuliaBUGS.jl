@@ -108,8 +108,9 @@ const dataImportInput = ref<HTMLInputElement | null>(null)
 const graphImportInput = ref<HTMLInputElement | null>(null)
 const isDragOver = ref(false)
 
-// Local viewport state for smooth UI updates
-const viewportState = ref({ zoom: 1, pan: { x: 0, y: 0 } })
+// Local viewport state for smooth UI updates.
+// Initialized to null to prevent saving default (0,0) values during rapid reloads.
+const viewportState = ref<{ zoom: number; pan: { x: number; y: number } } | null>(null)
 
 // Panel positions and sizes
 const codePanelPos = reactive({
@@ -190,7 +191,9 @@ const persistViewport = () => {
     clearTimeout(saveViewportTimeout)
     saveViewportTimeout = null
   }
-  if (graphStore.currentGraphId) {
+  // Only save if we have a valid graph AND we have received at least one valid viewport update.
+  // This prevents overwriting saved state with default {0,0} during fast reloads.
+  if (graphStore.currentGraphId && viewportState.value) {
     graphStore.updateGraphViewport(
       graphStore.currentGraphId,
       viewportState.value.zoom,

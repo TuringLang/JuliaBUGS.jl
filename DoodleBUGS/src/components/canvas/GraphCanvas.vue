@@ -294,6 +294,10 @@ onMounted(() => {
     let rafId: number | null = null
     const emitViewport = () => {
       if (!cy) return
+      // Only emit viewport changes if the graph has been fully initialized and positioned.
+      // This prevents emitting default {0,0} pan values during race conditions on load.
+      if (!isGraphReady.value) return 
+      
       updateGridStyle()
       emit('viewport-changed', { zoom: cy.zoom(), pan: cy.pan() })
       rafId = null
