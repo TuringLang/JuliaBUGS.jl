@@ -504,7 +504,6 @@ const handleLoadExample = async (exampleIdOrUrl: string) => {
     if (config) {
       modelName = config.name
       
-      // Step 1: Try Local URL
       try {
         toast.add({ severity: 'info', summary: 'Loading...', detail: `Loading ${modelName} from Local Path...`, life: 2000 })
         const localUrl = `${import.meta.env.BASE_URL}examples/${config.id}/model.json`
@@ -515,8 +514,7 @@ const handleLoadExample = async (exampleIdOrUrl: string) => {
         } else {
           throw new Error('Local fetch failed')
         }
-      } catch (localErr) {
-        // Step 2: Try Configured URL (GitHub or other)
+      } catch {
         if (config.url) {
           const isGithub = config.url.includes('github')
           const sourceLabel = isGithub ? 'GitHub Source' : 'Remote Source'
@@ -531,12 +529,10 @@ const handleLoadExample = async (exampleIdOrUrl: string) => {
             } else {
               throw new Error(`${sourceLabel} fetch failed`)
             }
-          } catch (remoteErr) {
-             // Fallthrough to Turing
+          } catch {
              toast.add({ severity: 'warn', summary: `${sourceLabel} Failed`, detail: 'Trying Turing Repository...', life: 2000 })
           }
         } else {
-           // Fallthrough if no url provided
            toast.add({ severity: 'warn', summary: 'No Remote Config', detail: 'Trying Turing Repository...', life: 2000 })
         }
       }
@@ -551,11 +547,9 @@ const handleLoadExample = async (exampleIdOrUrl: string) => {
       }
     }
 
-    // Step 3 (or fallback): Try Turing URL if still no data and it was an ID-like request
     if (!modelData && !isUrl(exampleIdOrUrl)) {
        const name = config ? config.name : exampleIdOrUrl
        
-       // Only show initial turing load toast if we haven't shown chain messages
        if (!config) {
           toast.add({ severity: 'info', summary: 'Loading...', detail: `Loading ${name} from Turing Repository...`, life: 2000 })
        }
@@ -569,7 +563,7 @@ const handleLoadExample = async (exampleIdOrUrl: string) => {
          } else {
            throw new Error('All fetch attempts failed')
          }
-       } catch (err) {
+       } catch {
          throw new Error(`Failed to load model from any source (Local/GitHub/Turing).`)
        }
     }

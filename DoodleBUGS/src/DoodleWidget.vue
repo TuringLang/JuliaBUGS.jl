@@ -402,15 +402,15 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
             const text = await response.text()
             try {
                 modelData = JSON.parse(text)
-            } catch (jsonErr: any) {
+            } catch (jsonErr: unknown) {
                 console.error('[DoodleBUGS] JSON Parse Error:', jsonErr, 'Content Snippet:', text.substring(0, 100))
                 throw new Error(`File found but contained invalid JSON. Check if file path redirects to index.html.`)
             }
             
             modelName = modelData.name || input
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error(`[DoodleBUGS] Local load failed:`, e)
-            throw new Error(e.message)
+            throw new Error(e instanceof Error ? e.message : String(e))
         }
 
     } else {
@@ -423,8 +423,8 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
                 if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
                 modelData = await response.json()
                 modelName = modelData.name || 'Remote Model'
-            } catch (e: any) {
-                 throw new Error(`Failed to fetch URL: "${input}". ${e.message}`)
+            } catch (e: unknown) {
+                 throw new Error(`Failed to fetch URL: "${input}". ${e instanceof Error ? e.message : String(e)}`)
             }
 
         } else {
@@ -437,7 +437,7 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
                     modelName = modelData.name || input
                     sourceDescription = 'Turing Repository'
                 }
-            } catch (err) {
+            } catch {
                 console.warn('[DoodleBUGS] Turing fetch failed, checking fallback...')
             }
 
@@ -453,7 +453,7 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
                             modelData = await response.json()
                             modelName = config.name
                         }
-                    } catch (remoteErr: any) {
+                    } catch (remoteErr: unknown) {
                         console.error(`[DoodleBUGS] Fallback load failed:`, remoteErr)
                     }
                 }
@@ -474,12 +474,12 @@ const handleLoadExample = async (input: string, type: 'local' | 'prop', shouldPe
         life: 3000
       })
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[DoodleBUGS] CRITICAL LOAD ERROR:', error)
     toast.add({
         severity: 'error',
         summary: 'Load Failed',
-        detail: error.message || 'An unexpected error occurred.',
+        detail: error instanceof Error ? error.message : 'An unexpected error occurred.',
         life: 5000
     })
   }
@@ -542,16 +542,33 @@ const initGraph = async () => {
 }
 
 // --- GLOBAL WIDGET MANAGER ---
+interface WidgetInstanceCallbacks {
+  setUIActive: (val: boolean) => void
+  setEditMode: (val: boolean) => void
+  getRect: () => DOMRect | undefined | null
+}
+
+interface DoodleBugsManager {
+  instances: Map<string, WidgetInstanceCallbacks>
+  activeId: string | null
+  globalEditMode: boolean
+  register(id: string, callbacks: WidgetInstanceCallbacks): void
+  unregister(id: string): void
+  setActive(id: string | null): void
+  setEditMode(mode: boolean): void
+  recalculateActive(): void
+}
+
 // Using window to coordinate separate web component instances
-const getManager = () => {
-  const w = window as any
+const getManager = (): DoodleBugsManager => {
+  const w = window as unknown as Window & { __DoodleBugsManager?: DoodleBugsManager }
   if (!w.__DoodleBugsManager) {
     w.__DoodleBugsManager = {
       instances: new Map(), // id -> { setUIActive: (bool)=>void, setEditMode: (bool)=>void, getRect: ()=>DOMRect }
       activeId: null,
       globalEditMode: false,
       
-      register(id: string, callbacks: any) {
+      register(id: string, callbacks: WidgetInstanceCallbacks) {
         this.instances.set(id, callbacks)
         // Sync new instance to global edit mode
         if (this.globalEditMode) {
@@ -568,17 +585,17 @@ const getManager = () => {
         }
       },
       
-      setActive(id: string) {
+      setActive(id: string | null) {
         if (this.activeId === id) return
         this.activeId = id
-        this.instances.forEach((inst: any, key: string) => {
+        this.instances.forEach((inst: WidgetInstanceCallbacks, key: string) => {
           inst.setUIActive(key === id)
         })
       },
       
       setEditMode(mode: boolean) {
         this.globalEditMode = mode
-        this.instances.forEach((inst: any) => {
+        this.instances.forEach((inst: WidgetInstanceCallbacks) => {
           inst.setEditMode(mode)
         })
         // If turning on edit mode, make sure *someone* is active if none is
@@ -590,7 +607,7 @@ const getManager = () => {
       recalculateActive() {
         // Find visible instances
         const visible: {id: string, top: number}[] = []
-        this.instances.forEach((inst: any, id: string) => {
+        this.instances.forEach((inst: WidgetInstanceCallbacks, id: string) => {
           const rect = inst.getRect()
           if (rect && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight) {
             visible.push({ id, top: rect.top })
