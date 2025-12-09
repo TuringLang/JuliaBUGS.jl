@@ -36,7 +36,8 @@ import {
 } from '../../composables/useBugsCodeGenerator'
 import { useShareExport } from '../../composables/useShareExport'
 import { useImportExport } from '../../composables/useImportExport'
-import type { GraphElement, NodeType, ExampleModel } from '../../types'
+import type { GraphElement, NodeType, UnifiedModelData } from '../../types'
+import { examples, isUrl } from '../../config/examples'
 
 interface ExportOptions {
   bg: string
@@ -46,6 +47,10 @@ interface ExportOptions {
   maxWidth?: number
   maxHeight?: number
 }
+
+const props = defineProps<{
+  defaultModel?: string
+}>()
 
 const projectStore = useProjectStore()
 const graphStore = useGraphStore()
@@ -104,8 +109,7 @@ const isDragOver = ref(false)
 // Local viewport state for smooth UI updates
 const viewportState = ref({ zoom: 1, pan: { x: 0, y: 0 } })
 
-// Panel positions and sizes (reactive objects for FloatingPanel)
-// Default positions: data panel on bottom-left, code panel on bottom-right
+// Panel positions and sizes
 const codePanelPos = reactive({
   x: typeof window !== 'undefined' ? window.innerWidth - 420 : 0,
   y: typeof window !== 'undefined' ? window.innerHeight - 380 : 0,
@@ -127,7 +131,7 @@ const pinnedGraphTitle = computed(() => {
   return graph ? graph.name : null
 })
 
-// Code Panel Visibility (Per-Graph State)
+// Code Panel Visibility
 const isCodePanelOpen = computed(() => {
   if (!projectStore.currentProject || !graphStore.currentGraphId) return false
   const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
@@ -144,7 +148,7 @@ const toggleCodePanel = () => {
   }
 }
 
-// Data Panel Visibility (Per-Graph State)
+// Data Panel Visibility
 const isDataPanelOpen = computed(() => {
   if (!projectStore.currentProject || !graphStore.currentGraphId) return false
   const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
@@ -240,7 +244,6 @@ const handleGenerateShareLink = async (options: {
     if (!targetId) return
 
     const { name, elements, dataContent } = getGraphDataForShare(targetId)
-    // Use v2 format for single graph for backward compatibility / simplicity
     payload = {
       v: 2,
       n: name,
@@ -282,13 +285,11 @@ const handleDataImport = (event: Event) => {
   reader.onload = (e) => {
     const content = e.target?.result as string
     try {
-      // Validate JSON
       JSON.parse(content)
       dataStore.dataContent = content
     } catch {
       alert('Invalid JSON file format.')
     }
-    // Reset file input
     if (dataImportInput.value) dataImportInput.value.value = ''
   }
   reader.readAsText(file)
@@ -329,6 +330,7 @@ const handleDrop = (event: DragEvent) => {
   }
 }
 
+// Shared Model Loader
 const handleLoadShared = async () => {
   const params = new URLSearchParams(window.location.search)
   const shareParam = params.get('share')
@@ -379,10 +381,8 @@ const handleLoadShared = async () => {
             }
           })
 
-          // Force save the project list to ensure persistence across reloads
           projectStore.saveProjects()
 
-          // Select first graph
           if (projectStore.currentProject?.graphs.length) {
             graphStore.selectGraph(projectStore.currentProject.graphs[0].id)
           }
@@ -395,7 +395,6 @@ const handleLoadShared = async () => {
           const newGraph = projectStore.addGraphToProject(projectStore.currentProjectId, payload.n)
           if (newGraph) {
             let elements = payload.e
-            // Check if version 2 (minified)
             if (payload.v === 2) {
               elements = expandGraph(payload.e)
             }
@@ -417,11 +416,9 @@ const handleLoadShared = async () => {
         }
       }
 
-      // Clean URL without reloading
       const newUrl = window.location.origin + window.location.pathname
       window.history.replaceState({}, document.title, newUrl)
 
-      // Force fit graph to viewport to ensure visibility
       setTimeout(() => {
         handleFit()
       }, 500)
@@ -432,37 +429,140 @@ const handleLoadShared = async () => {
   }
 }
 
+// Generic Loader for both bundled and remote models
+const loadModelData = async (data: UnifiedModelData | Record<string, unknown>, name: string) => {
+  if (!projectStore.currentProjectId) return
+
+  const newGraphMeta = projectStore.addGraphToProject(
+    projectStore.currentProjectId,
+    (data as UnifiedModelData).name || name
+  )
+  if (!newGraphMeta) return
+
+  // Handle Elements
+  if ((data as UnifiedModelData).elements) {
+    graphStore.updateGraphElements(
+      newGraphMeta.id,
+      (data as UnifiedModelData).elements as GraphElement[]
+    )
+  } else if ((data as UnifiedModelData).graphJSON) {
+    // Legacy support
+    graphStore.updateGraphElements(
+      newGraphMeta.id,
+      (data as UnifiedModelData).graphJSON as GraphElement[]
+    )
+  }
+
+  // Handle Data/Inits
+  if ((data as UnifiedModelData).dataContent) {
+    dataStore.updateGraphData(newGraphMeta.id, {
+      content: (data as UnifiedModelData).dataContent || '',
+    })
+  } else if ((data as UnifiedModelData).data || (data as UnifiedModelData).inits) {
+    // Legacy separate fields
+    const content = JSON.stringify(
+      {
+        data: (data as UnifiedModelData).data || {},
+        inits: (data as UnifiedModelData).inits || {},
+      },
+      null,
+      2
+    )
+    dataStore.updateGraphData(newGraphMeta.id, { content })
+  }
+
+  // Handle Layout
+  graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
+  if ((data as UnifiedModelData).layout) {
+    projectStore.updateGraphLayout(
+      projectStore.currentProjectId,
+      newGraphMeta.id,
+      (data as UnifiedModelData).layout
+    )
+  }
+
+  graphStore.selectGraph(newGraphMeta.id)
+}
+
+// Unified Example Loader
+const handleLoadExample = async (exampleIdOrUrl: string) => {
+  if (!projectStore.currentProjectId) return
+
+  try {
+    let modelData = null
+    let modelName = 'Imported Model'
+
+    // 1. Check if it's a known example ID
+    const config = examples.find((e) => e.id === exampleIdOrUrl)
+
+    if (config) {
+      modelName = config.name
+      if (config.type === 'local' && config.data) {
+        modelData = config.data
+      } else if (config.url) {
+        const response = await fetch(config.url)
+        if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`)
+        modelData = await response.json()
+      }
+    }
+    // 2. Check if it's a direct URL
+    else if (isUrl(exampleIdOrUrl)) {
+      const response = await fetch(exampleIdOrUrl)
+      if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`)
+      modelData = await response.json()
+      modelName = modelData.name || 'Remote Model'
+    } else {
+      console.warn(`Unknown example ID or invalid URL: ${exampleIdOrUrl}`)
+      return
+    }
+
+    if (modelData) {
+      await loadModelData(modelData, modelName)
+    }
+  } catch (error) {
+    console.error('Failed to load example model:', error)
+    alert('Failed to load model. Check console for details.')
+  }
+}
+
 onMounted(async () => {
   projectStore.loadProjects()
 
-  // Check for shared model
   if (window.location.search.includes('share=')) {
     await handleLoadShared()
   }
 
-  // Default init if no shared model loaded or no projects exist
   if (projectStore.projects.length === 0) {
     projectStore.createProject('Default Project')
-    if (projectStore.currentProjectId) await handleLoadExample('rats')
+    // Load default model if provided in props
+    if (props.defaultModel) {
+      await handleLoadExample(props.defaultModel)
+    } else if (projectStore.currentProjectId) {
+      // Fallback default
+      await handleLoadExample('rats')
+    }
   } else {
-    // If not a fresh shared load, restore last session
+    // If returning user, only load default if explicitly requested via prop and no session active
+    // But usually we prefer restoring session.
+    // If props.defaultModel is present, maybe we should prompt or force load?
+    // For now, let's prioritize the session unless empty.
     if (!window.location.search.includes('share=')) {
       const lastGraphId = loadLastGraphId()
       if (lastGraphId && projectStore.currentProject?.graphs.some((g) => g.id === lastGraphId)) {
         graphStore.selectGraph(lastGraphId)
       } else if (projectStore.currentProject?.graphs.length) {
         graphStore.selectGraph(projectStore.currentProject.graphs[0].id)
+      } else if (props.defaultModel) {
+        await handleLoadExample(props.defaultModel)
       }
     }
   }
   validateGraph()
 
-  // Mobile: hide zoom controls by default on small screens
   if (window.innerWidth < 768) {
     showZoomControls.value = false
   }
 
-  // Force save on page reload/close
   window.addEventListener('beforeunload', persistViewport)
 })
 
@@ -498,19 +598,12 @@ watch(
       if (graph) {
         const needsInit = graph.codePanelX === undefined || graph.codePanelY === undefined
         if (needsInit) {
-          // Simple default dimensions
           const panelW = 400
           const panelH = 300
-
-          // Position on the RIGHT side relative to the graph view
           const viewportW = window.innerWidth
-          // Sidebar is ~320px + 16px margin = 336px.
           const rightSidebarOffset = isRightSidebarOpen.value ? 340 : 20
-
           let targetScreenX = viewportW - rightSidebarOffset - panelW - 10
-          if (targetScreenX < 20) targetScreenX = 20 // Safety check
-
-          // Top offset
+          if (targetScreenX < 20) targetScreenX = 20
           const targetScreenY = 90
 
           projectStore.updateGraphLayout(projectStore.currentProject.id, graphId, {
@@ -536,17 +629,10 @@ watch(
       if (graph) {
         const needsInit = graph.dataPanelX === undefined || graph.dataPanelY === undefined
         if (needsInit) {
-          // Simple default dimensions
           const panelW = 400
           const panelH = 300
-
-          // Position on the LEFT side relative to the graph view
-          // Sidebar is ~300px + 16px margin.
           const leftSidebarOffset = isLeftSidebarOpen.value ? 320 : 20
-
           const targetScreenX = leftSidebarOffset + 20
-
-          // Top offset
           const targetScreenY = 90
 
           projectStore.updateGraphLayout(projectStore.currentProject.id, graphId, {
@@ -569,10 +655,7 @@ const handleLayoutUpdated = (layoutName: string) => {
 }
 
 const handleViewportChanged = (v: { zoom: number; pan: { x: number; y: number } }) => {
-  // Update local state immediately for smooth UI
   viewportState.value = v
-
-  // Debounce persistence
   if (saveViewportTimeout) clearTimeout(saveViewportTimeout)
   saveViewportTimeout = setTimeout(persistViewport, 200)
 }
@@ -580,7 +663,6 @@ const handleViewportChanged = (v: { zoom: number; pan: { x: number; y: number } 
 const handleGraphLayout = (layoutName: string) => {
   const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null
   if (!cy) return
-
   applyLayoutWithFit(cy, layoutName)
   handleLayoutUpdated(layoutName)
 }
@@ -609,11 +691,9 @@ const handleSelectNodeFromModal = (nodeId: string) => {
     handleElementSelected(targetNode)
     const cy = getCyInstance(graphStore.currentGraphId!)
     if (cy) {
-      // Programmatically select node in Cytoscape for visual feedback
       cy.elements().removeClass('cy-selected')
       const cyNode = cy.getElementById(nodeId)
       cyNode.addClass('cy-selected')
-
       cy.animate({
         fit: { eles: cyNode, padding: 50 },
         duration: 500,
@@ -822,40 +902,6 @@ const handleDownloadScript = () => {
 
 const handleOpenScriptSettings = () => {
   showScriptSettingsModal.value = true
-}
-
-const handleLoadExample = async (exampleKey: string) => {
-  if (!projectStore.currentProjectId) return
-  try {
-    const baseUrl = import.meta.env.BASE_URL
-    const modelResponse = await fetch(`${baseUrl}examples/${exampleKey}/model.json`)
-    if (!modelResponse.ok)
-      throw new Error(`Could not fetch example model: ${modelResponse.statusText}`)
-    const modelData: ExampleModel = await modelResponse.json()
-    const newGraphMeta = projectStore.addGraphToProject(
-      projectStore.currentProjectId,
-      modelData.name
-    )
-    if (!newGraphMeta) return
-
-    projectStore.updateGraphLayout(projectStore.currentProject!.id, newGraphMeta.id, {})
-    graphStore.updateGraphElements(newGraphMeta.id, modelData.graphJSON)
-
-    graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
-
-    const jsonDataResponse = await fetch(`${baseUrl}examples/${exampleKey}/data.json`)
-    if (jsonDataResponse.ok) {
-      const fullData = await jsonDataResponse.json()
-      dataStore.dataContent = JSON.stringify(
-        { data: fullData.data || {}, inits: fullData.inits || {} },
-        null,
-        2
-      )
-    }
-    dataStore.updateGraphData(newGraphMeta.id, dataStore.getGraphData(newGraphMeta.id))
-  } catch (error) {
-    console.error('Failed to load example model:', error)
-  }
 }
 
 const toggleLeftSidebar = () => {
@@ -1132,6 +1178,9 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
               :class="isModelValid ? 'db-valid' : 'db-invalid'"
             >
               <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
+              <div class="db-instant-tooltip">
+                {{ isModelValid ? 'Model Valid' : 'Validation Errors Found' }}
+              </div>
             </div>
             <button
               class="db-header-icon-btn db-collapsed-share-btn"
@@ -1507,7 +1556,6 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
   transition: opacity 0.1s;
   margin-top: 6px;
   z-index: 600;
-  /* Layer 8: Tooltips - highest layer */
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 

@@ -28,6 +28,7 @@ export interface GraphNode {
   // Distribution parameters
   param1?: string
   param2?: string
+  param3?: string
 
   // Index signature to allow dynamic property access
   [key: string]: string | number | boolean | null | undefined | { x: number; y: number } | string[]
@@ -39,9 +40,22 @@ export interface GraphEdge {
   type: 'edge'
   source: string
   target: string
+  relationshipType?: 'stochastic' | 'deterministic'
 }
 
 export type GraphElement = GraphNode | GraphEdge
+
+export interface UnifiedModelData {
+  name: string
+  elements?: GraphElement[]
+  dataContent?: string
+  // Legacy support fields
+  graphJSON?: GraphElement[]
+  data?: Record<string, unknown>
+  inits?: Record<string, unknown>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  layout?: any
+}
 
 export interface ExampleModel {
   name: string

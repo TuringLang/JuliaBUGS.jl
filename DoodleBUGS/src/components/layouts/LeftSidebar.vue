@@ -9,7 +9,7 @@ import BaseSelect from '../ui/BaseSelect.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import ProjectManager from '../left-sidebar/ProjectManager.vue'
 import type { NodeType } from '../../types'
-import { exampleModels } from '../../config/nodeDefinitions'
+import { examples } from '../../config/examples'
 import { useUiStore } from '../../stores/uiStore'
 import { storeToRefs } from 'pinia'
 
@@ -38,7 +38,7 @@ const emit = defineEmits<{
   (e: 'update:showDebugPanel', value: boolean): void
   (e: 'update:showDetachModeControl', value: boolean): void
   (e: 'toggle-code-panel'): void
-  (e: 'load-example', key: string): void
+  (e: 'load-example', exampleId: string): void
   (e: 'open-about-modal'): void
   (e: 'open-faq-modal'): void
   (e: 'toggle-dark-mode'): void
@@ -146,12 +146,22 @@ const handleHeaderClick = () => {
               <div class="db-example-row">
                 <label class="db-example-label">Examples</label>
                 <BaseSelect
-                  :modelValue="''"
-                  :options="exampleModels.map((e) => ({ label: e.name, value: e.key }))"
+                  :modelValue="null"
+                  :options="examples"
+                  optionLabel="name"
+                  optionValue="id"
                   @update:modelValue="$emit('load-example', $event)"
-                  placeholder="Load..."
+                  placeholder="Load Example..."
                   class="db-examples-dropdown"
-                />
+                >
+                  <template #option="{ option }">
+                    <div class="flex items-center gap-2">
+                      <i v-if="option.type === 'github'" class="fab fa-github" title="GitHub"></i>
+                      <i v-else class="fas fa-hdd" title="Local"></i>
+                      <span>{{ option.name }}</span>
+                    </div>
+                  </template>
+                </BaseSelect>
               </div>
             </div>
           </AccordionContent>

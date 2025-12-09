@@ -35,10 +35,12 @@ import { useGraphLayout } from './composables/useGraphLayout'
 import { usePersistence } from './composables/usePersistence'
 import { useShareExport } from './composables/useShareExport'
 import { useImportExport } from './composables/useImportExport'
-import type { NodeType, GraphElement, ExampleModel } from './types'
+import type { NodeType, GraphElement } from './types'
+import { examples, isUrl } from './config/examples'
 
 const props = defineProps<{
   initialState?: string
+  defaultModel?: string
 }>()
 
 const emit = defineEmits<{
@@ -242,7 +244,7 @@ const removeWidgetStyles = () => {
   }
 }
 
-const initGraph = () => {
+const initGraph = async () => {
   if (projectStore.projects.length === 0) {
     projectStore.createProject('Default Project')
   }
@@ -254,10 +256,18 @@ const initGraph = () => {
   const proj = projectStore.currentProject
   if (!proj) return
 
+  // Logic for default-model prop
+  // If prop provided, try to load it first
+  if (props.defaultModel) {
+    await handleLoadExample(props.defaultModel)
+  }
+
+  // If after checking prop we still have no graphs, create a default one
   if (proj.graphs.length === 0) {
     projectStore.addGraphToProject(proj.id, 'Model 1')
   }
 
+  // If no graph selected, select the first one
   if (proj.graphs.length > 0 && !graphStore.currentGraphId) {
     graphStore.selectGraph(proj.graphs[0].id)
   }
@@ -289,7 +299,7 @@ const handleWindowScroll = () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   // Intersection Observer for Widget View
   if (widgetRoot.value) {
     observer = new IntersectionObserver(
@@ -332,7 +342,7 @@ onMounted(() => {
   }
 
   const savedUIState = loadUIState(WIDGET_UI_STATE_KEY)
-  let rightSidebarLoaded = false;
+  let rightSidebarLoaded = false
 
   if (savedUIState) {
     if (savedUIState.leftSidebar) {
@@ -344,7 +354,7 @@ onMounted(() => {
       rightDrag.x.value = savedUIState.rightSidebar.x
       rightDrag.y.value = savedUIState.rightSidebar.y
       uiStore.isRightSidebarOpen = savedUIState.rightSidebar.open
-      rightSidebarLoaded = true;
+      rightSidebarLoaded = true
     }
     if (savedUIState.codePanel) {
       codePanelPos.x = savedUIState.codePanel.x
@@ -361,30 +371,26 @@ onMounted(() => {
     if (savedUIState.currentGraphId) {
       graphStore.selectGraph(savedUIState.currentGraphId)
     }
-    // Restore Edit Mode state, defaulting to false if undefined
-    if (typeof (savedUIState as any).editMode === 'boolean') {
-      isEditMode.value = (savedUIState as any).editMode
+    // FIX: Removed casting to any and accessing editMode safely
+    if (savedUIState.editMode !== undefined) {
+      isEditMode.value = savedUIState.editMode
     }
   }
 
   // Force default right sidebar position if not loaded from state or looks invalid
-  // Also fix position if it looks like it's floating in the middle due to window resize between sessions
   nextTick(() => {
-    const docWidth = document.documentElement.clientWidth || window.innerWidth;
-    // Calculate correct right position: width of document - sidebar width (320) - very small gap (4px)
-    const defaultRightX = docWidth - 320 - 20;
-    
-    // If not loaded, or if loaded but position is significantly far from right edge (e.g. > 450px gap) which suggests a resize occurred
-    if (!rightSidebarLoaded || rightDrag.x.value <= 0 || (docWidth - rightDrag.x.value > 450)) {
-      rightDrag.x.value = defaultRightX;
-    }
-    // Ensure default Y position matches left sidebar logic (moved up)
-    if (!rightSidebarLoaded) {
-      rightDrag.y.value = 10;
-    }
-  });
+    const docWidth = document.documentElement.clientWidth || window.innerWidth
+    const defaultRightX = docWidth - 320 - 20
 
-  initGraph()
+    if (!rightSidebarLoaded || rightDrag.x.value <= 0 || docWidth - rightDrag.x.value > 450) {
+      rightDrag.x.value = defaultRightX
+    }
+    if (!rightSidebarLoaded) {
+      rightDrag.y.value = 10
+    }
+  })
+
+  await initGraph()
   isInitialized.value = true
   widgetInitialized.value = true
   validateGraph()
@@ -393,8 +399,6 @@ onMounted(() => {
 
   const handleResize = () => {
     windowWidth.value = window.innerWidth
-    // Ensure right sidebar stays docked to right on resize if close to edge
-    // Increased threshold to catch sidebars that should be docked
     if (window.innerWidth - rightDrag.x.value < 500) {
       rightDrag.x.value = window.innerWidth - 320 - 4
     }
@@ -433,6 +437,81 @@ watch(
 watch(generatedCode, (code) => {
   emit('code-update', code)
 })
+
+// Unified Example Loader Logic
+const handleLoadExample = async (exampleIdOrUrl: string) => {
+  if (!projectStore.currentProjectId) return
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let modelData: any = null
+    let modelName = 'Imported Model'
+
+    const config = examples.find((e) => e.id === exampleIdOrUrl)
+
+    if (config) {
+      modelName = config.name
+      if (config.type === 'local' && config.data) {
+        modelData = config.data
+      } else if (config.url) {
+        const response = await fetch(config.url)
+        if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`)
+        modelData = await response.json()
+      }
+    } else if (isUrl(exampleIdOrUrl)) {
+      const response = await fetch(exampleIdOrUrl)
+      if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`)
+      modelData = await response.json()
+      modelName = modelData.name || 'Remote Model'
+    } else {
+      console.warn(`Unknown example ID: ${exampleIdOrUrl}`)
+      return
+    }
+
+    if (modelData) {
+      const newGraphMeta = projectStore.addGraphToProject(
+        projectStore.currentProjectId,
+        modelData.name || modelName
+      )
+      if (!newGraphMeta) return
+
+      // Handle Elements (FIX: Typed as GraphElement[])
+      if (modelData.elements) {
+        graphStore.updateGraphElements(newGraphMeta.id, modelData.elements as GraphElement[])
+      } else if (modelData.graphJSON) {
+        // Legacy support
+        graphStore.updateGraphElements(newGraphMeta.id, modelData.graphJSON as GraphElement[])
+      }
+
+      // Handle Data/Inits
+      if (modelData.dataContent) {
+        dataStore.updateGraphData(newGraphMeta.id, { content: modelData.dataContent })
+      } else if (modelData.data || modelData.inits) {
+        // Legacy separate fields
+        const content = JSON.stringify(
+          { data: modelData.data || {}, inits: modelData.inits || {} },
+          null,
+          2
+        )
+        dataStore.updateGraphData(newGraphMeta.id, { content })
+      }
+
+      // Handle Layout
+      graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
+      if (modelData.layout) {
+        projectStore.updateGraphLayout(
+          projectStore.currentProjectId,
+          newGraphMeta.id,
+          modelData.layout
+        )
+      }
+
+      graphStore.selectGraph(newGraphMeta.id)
+    }
+  } catch (error) {
+    console.error('Failed to load example model:', error)
+  }
+}
 
 const isCodePanelOpen = computed(() => {
   if (!projectStore.currentProject || !graphStore.currentGraphId) return false
@@ -542,8 +621,8 @@ const handleConfirmExport = (options: {
   }
 }
 
-const getScriptContent = () => {
-  return generateStandaloneScript({
+const handleGenerateStandalone = () => {
+  const script = generateStandaloneScript({
     modelCode: generatedCode.value,
     data: dataStore.parsedGraphData.data || {},
     inits: dataStore.parsedGraphData.inits || {},
@@ -554,10 +633,6 @@ const getScriptContent = () => {
       seed: scriptStore.samplerSettings.seed ?? undefined,
     },
   })
-}
-
-const handleGenerateStandalone = () => {
-  const script = getScriptContent()
   scriptStore.standaloneScript = script
   uiStore.setActiveRightTab('script')
   uiStore.isRightSidebarOpen = true
@@ -578,7 +653,19 @@ const handleDownloadBugs = () => {
 }
 
 const handleDownloadScript = () => {
-  const content = scriptStore.standaloneScript || getScriptContent()
+  const content =
+    scriptStore.standaloneScript ||
+    generateStandaloneScript({
+      modelCode: generatedCode.value,
+      data: dataStore.parsedGraphData.data || {},
+      inits: dataStore.parsedGraphData.inits || {},
+      settings: {
+        n_samples: scriptStore.samplerSettings.n_samples,
+        n_adapts: scriptStore.samplerSettings.n_adapts,
+        n_chains: scriptStore.samplerSettings.n_chains,
+        seed: scriptStore.samplerSettings.seed ?? undefined,
+      },
+    })
   if (!content) return
   const blob = new Blob([content], { type: 'text/plain' })
   const url = URL.createObjectURL(blob)
@@ -590,16 +677,6 @@ const handleDownloadScript = () => {
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
-
-watch(
-  [generatedCode, () => dataStore.parsedGraphData, () => scriptStore.samplerSettings],
-  () => {
-    if (scriptStore.standaloneScript || uiStore.activeRightTab === 'script') {
-      scriptStore.standaloneScript = getScriptContent()
-    }
-  },
-  { deep: true }
-)
 
 const handleNewProject = () => {
   newProjectName.value = `Project ${projectStore.projects.length + 1}`
@@ -627,6 +704,7 @@ const createNewGraph = () => {
     const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId!, name)
 
     if (newGraphMeta && importedGraphData.value) {
+      // FIX: Typed as GraphElement[]
       graphStore.updateGraphElements(
         newGraphMeta.id,
         importedGraphData.value.elements as GraphElement[]
@@ -683,38 +761,8 @@ const handleDrop = (event: DragEvent) => {
   }
 }
 
-const handleLoadExample = async (exampleKey: string) => {
-  if (!projectStore.currentProjectId) return
-  try {
-    const baseUrl = import.meta.env.BASE_URL
-    const modelResponse = await fetch(`${baseUrl}examples/${exampleKey}/model.json`)
-    if (!modelResponse.ok)
-      throw new Error(`Could not fetch example model: ${modelResponse.statusText}`)
-
-    const modelData: ExampleModel = await modelResponse.json()
-    const newGraphMeta = projectStore.addGraphToProject(
-      projectStore.currentProjectId,
-      modelData.name
-    )
-    if (!newGraphMeta) return
-
-    graphStore.updateGraphElements(newGraphMeta.id, modelData.graphJSON)
-    graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
-
-    const jsonDataResponse = await fetch(`${baseUrl}examples/${exampleKey}/data.json`)
-    if (jsonDataResponse.ok) {
-      const fullData = await jsonDataResponse.json()
-      dataStore.dataContent = JSON.stringify(
-        { data: fullData.data || {}, inits: fullData.inits || {} },
-        null,
-        2
-      )
-    }
-    dataStore.updateGraphData(newGraphMeta.id, dataStore.getGraphData(newGraphMeta.id))
-    graphStore.selectGraph(newGraphMeta.id)
-  } catch (error) {
-    console.error('Failed to load example model:', error)
-  }
+const handleLoadExampleAction = (exampleKey: string) => {
+  handleLoadExample(exampleKey)
 }
 
 const handleShare = () => {
@@ -730,6 +778,7 @@ const handleGenerateShareLink = async (options: {
   if (!projectStore.currentProject) return
 
   const getGraphDataForShare = (graphId: string) => {
+    // FIX: Explicitly typed graphElements
     let graphElements: GraphElement[] = []
     let dataContent = '{}'
     let name = 'Graph'
@@ -741,6 +790,7 @@ const handleGenerateShareLink = async (options: {
       graphElements = graphStore.currentGraphElements
       dataContent = dataStore.dataContent
     } else {
+      // FIX: Cast to GraphElement[]
       graphElements = getStoredGraphElements(graphId) as GraphElement[]
       dataContent = getStoredDataContent(graphId)
     }
@@ -871,7 +921,7 @@ const useDrag = (initialX: number, initialY: number) => {
 
   const startDrag = (e: MouseEvent | TouchEvent) => {
     isDragging.value = true
-    isDraggingUI.value = true 
+    isDraggingUI.value = true
     const clientX = e instanceof MouseEvent ? e.clientX : e.touches[0].clientX
     const clientY = e instanceof MouseEvent ? e.clientY : e.touches[0].clientY
 
@@ -970,7 +1020,7 @@ watch(
     () => dataPanelSize.height,
     () => graphStore.currentGraphId,
     // Add isEditMode to persisted state
-    isEditMode
+    isEditMode,
   ],
   () => {
     saveWidgetUIState()
@@ -1058,28 +1108,47 @@ const handleUIInteractionEnd = () => {
 </script>
 
 <template>
-  <div ref="widgetRoot" class="db-widget-root" :class="{ 'db-dark-mode': isDarkMode }"
-    style="width: 100%; height: 100%; position: relative; overflow: hidden">
-    
-    <div class="db-canvas-layer" :style="{
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      width: '100%',
-      height: '100%',
-      pointerEvents: isDraggingUI ? 'none' : 'auto',
-    }">
-      <GraphEditor v-if="isInitialized && graphStore.currentGraphId" :key="graphStore.currentGraphId"
-        :graph-id="graphStore.currentGraphId" :is-grid-enabled="isGridEnabled" :grid-size="gridSize"
-        :grid-style="canvasGridStyle" :current-mode="currentMode" :elements="elements"
-        :current-node-type="currentNodeType" :validation-errors="validationErrors" :show-zoom-controls="false"
-        @update:current-mode="currentMode = $event" @update:current-node-type="currentNodeType = $event"
+  <div
+    ref="widgetRoot"
+    class="db-widget-root"
+    :class="{ 'db-dark-mode': isDarkMode }"
+    style="width: 100%; height: 100%; position: relative; overflow: hidden"
+  >
+    <div
+      class="db-canvas-layer"
+      :style="{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: isDraggingUI ? 'none' : 'auto',
+      }"
+    >
+      <GraphEditor
+        v-if="isInitialized && graphStore.currentGraphId"
+        :key="graphStore.currentGraphId"
+        :graph-id="graphStore.currentGraphId"
+        :is-grid-enabled="isGridEnabled"
+        :grid-size="gridSize"
+        :grid-style="canvasGridStyle"
+        :current-mode="currentMode"
+        :elements="elements"
+        :current-node-type="currentNodeType"
+        :validation-errors="validationErrors"
+        :show-zoom-controls="false"
+        @update:current-mode="currentMode = $event"
+        @update:current-node-type="currentNodeType = $event"
         @element-selected="handleElementSelected"
-        @layout-updated="(name) => graphStore.updateGraphLayout(graphStore.currentGraphId!, name)" @viewport-changed="
+        @layout-updated="(name) => graphStore.updateGraphLayout(graphStore.currentGraphId!, name)"
+        @viewport-changed="
           (v) => graphStore.updateGraphViewport(graphStore.currentGraphId!, v.zoom, v.pan)
-        " @update:is-grid-enabled="isGridEnabled = $event" @update:grid-size="gridSize = $event" />
+        "
+        @update:is-grid-enabled="isGridEnabled = $event"
+        @update:grid-size="gridSize = $event"
+      />
       <div v-else class="db-empty-placeholder">
         <div class="db-msg-box">
           <i class="fas fa-spinner fa-spin"></i>
@@ -1088,131 +1157,248 @@ const handleUIInteractionEnd = () => {
       </div>
     </div>
 
-    <!-- Edit Toggle Button (Fixed inside Widget Root using inline styles for robustness) -->
-    <div class="db-edit-toggle-wrapper" style="position: absolute; top: 10px; right: 10px; z-index: 500;">
-      <button @click="toggleEditMode" :title="isEditMode ? 'Stop Editing' : 'Edit Graph'" style="
-          width: 40px; 
-          height: 40px; 
-          border-radius: 50%; 
-          background: white; 
-          border: 1px solid #e5e7eb; 
-          color: #4b5563; 
-          cursor: pointer; 
-          display: flex; 
-          align-items: center; 
-          justify-content: center; 
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+    <!-- Edit Toggle Button -->
+    <div
+      class="db-edit-toggle-wrapper"
+      style="position: absolute; top: 10px; right: 10px; z-index: 500"
+    >
+      <button
+        @click="toggleEditMode"
+        :title="isEditMode ? 'Stop Editing' : 'Edit Graph'"
+        style="
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background: white;
+          border: 1px solid #e5e7eb;
+          color: #4b5563;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
           padding: 0;
           transition: all 0.2s;
-        " :style="isEditMode ? 'background: #ef4444; border-color: #ef4444; color: white;' : ''">
-        
-        <!-- Start Editing Icon (Pen) - Fixed SVG -->
-        <svg v-if="!isEditMode" viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-          <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+        "
+        :style="isEditMode ? 'background: #ef4444; border-color: #ef4444; color: white;' : ''"
+      >
+        <svg
+          v-if="!isEditMode"
+          viewBox="0 0 24 24"
+          width="18"
+          height="18"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="currentColor"
+        >
+          <path
+            d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+          />
         </svg>
-        
-        <!-- Stop Editing Icon (Close) - User Provided SVG -->
-        <svg v-else viewBox="0 0 76.00 76.00" xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor">
-          <path fill="currentColor" d="M 53.2929,21.2929L 54.7071,22.7071C 56.4645,24.4645 56.4645,27.3137 54.7071,29.0711L 52.2323,31.5459L 44.4541,23.7677L 46.9289,21.2929C 48.6863,19.5355 51.5355,19.5355 53.2929,21.2929 Z M 31.7262,52.052L 23.948,44.2738L 43.0399,25.182L 50.818,32.9601L 31.7262,52.052 Z M 23.2409,47.1023L 28.8977,52.7591L 21.0463,54.9537L 23.2409,47.1023 Z M 17,28L 17,23L 23,23L 23,17L 28,17L 28,23L 34,23L 34,28L 28,28L 28,34L 23,34L 23,28L 17,28 Z "></path>
+
+        <svg
+          v-else
+          viewBox="0 0 76.00 76.00"
+          xmlns="http://www.w3.org/2000/svg"
+          width="22"
+          height="22"
+          fill="currentColor"
+        >
+          <path
+            fill="currentColor"
+            d="M 53.2929,21.2929L 54.7071,22.7071C 56.4645,24.4645 56.4645,27.3137 54.7071,29.0711L 52.2323,31.5459L 44.4541,23.7677L 46.9289,21.2929C 48.6863,19.5355 51.5355,19.5355 53.2929,21.2929 Z M 31.7262,52.052L 23.948,44.2738L 43.0399,25.182L 50.818,32.9601L 31.7262,52.052 Z M 23.2409,47.1023L 28.8977,52.7591L 21.0463,54.9537L 23.2409,47.1023 Z M 17,28L 17,23L 23,23L 23,17L 28,17L 28,23L 34,23L 34,28L 28,28L 28,34L 23,34L 23,28L 17,28 Z "
+          ></path>
         </svg>
       </button>
     </div>
 
     <Teleport to="body">
       <!-- Only show main UI if Editing AND Widget is visible in viewport -->
-      <div class="db-ui-overlay" :class="{ 'db-dark-mode': isDarkMode, 'db-widget-ready': widgetInitialized }" v-show="isWidgetInView && isEditMode">
+      <div
+        class="db-ui-overlay"
+        :class="{ 'db-dark-mode': isDarkMode, 'db-widget-ready': widgetInitialized }"
+        v-show="isWidgetInView && isEditMode"
+      >
         <Toast position="top-center" />
 
         <!-- Left Sidebar (Floating) -->
-        <div v-if="widgetInitialized && isLeftSidebarOpen" class="db-sidebar-wrapper db-left"
-          :style="leftDrag.style.value">
-          <LeftSidebar v-show="isLeftSidebarOpen" :activeAccordionTabs="activeLeftAccordionTabs"
+        <div
+          v-if="widgetInitialized && isLeftSidebarOpen"
+          class="db-sidebar-wrapper db-left"
+          :style="leftDrag.style.value"
+        >
+          <LeftSidebar
+            v-show="isLeftSidebarOpen"
+            :activeAccordionTabs="activeLeftAccordionTabs"
             @update:activeAccordionTabs="activeLeftAccordionTabs = $event"
-            :projectName="projectStore.currentProject?.name || 'Project'" :pinnedGraphTitle="pinnedGraphTitle"
-            :isGridEnabled="isGridEnabled" :gridSize="gridSize" :showZoomControls="showZoomControls"
-            :showDebugPanel="showDebugPanel" :isCodePanelOpen="isCodePanelOpen" :isDetachModeActive="isDetachModeActive"
-            :showDetachModeControl="showDetachModeControl" :enableDrag="true"
-            @toggle-left-sidebar="uiStore.toggleLeftSidebar" @new-project="handleNewProject" @new-graph="handleNewGraph"
-            @update:currentMode="currentMode = $event" @update:currentNodeType="currentNodeType = $event"
-            @update:isGridEnabled="isGridEnabled = $event" @update:gridSize="gridSize = $event"
-            @update:showZoomControls="showZoomControls = $event" @update:showDebugPanel="showDebugPanel = $event"
+            :projectName="projectStore.currentProject?.name || 'Project'"
+            :pinnedGraphTitle="pinnedGraphTitle"
+            :isGridEnabled="isGridEnabled"
+            :gridSize="gridSize"
+            :showZoomControls="showZoomControls"
+            :showDebugPanel="showDebugPanel"
+            :isCodePanelOpen="isCodePanelOpen"
+            :isDetachModeActive="isDetachModeActive"
+            :showDetachModeControl="showDetachModeControl"
+            :enableDrag="true"
+            @toggle-left-sidebar="uiStore.toggleLeftSidebar"
+            @new-project="handleNewProject"
+            @new-graph="handleNewGraph"
+            @update:currentMode="currentMode = $event"
+            @update:currentNodeType="currentNodeType = $event"
+            @update:isGridEnabled="isGridEnabled = $event"
+            @update:gridSize="gridSize = $event"
+            @update:showZoomControls="showZoomControls = $event"
+            @update:showDebugPanel="showDebugPanel = $event"
             @update:isDetachModeActive="isDetachModeActive = $event"
-            @update:show-detach-mode-control="showDetachModeControl = $event" @toggle-code-panel="toggleCodePanel"
-            @load-example="handleLoadExample" @open-about-modal="showAboutModal = true"
-            @open-faq-modal="showFaqModal = true" @toggle-dark-mode="uiStore.toggleDarkMode"
-            @share-graph="handleShareGraph" @share-project-url="handleShareProjectUrl"
-            @header-drag-start="onLeftHeaderDragStart" />
+            @update:show-detach-mode-control="showDetachModeControl = $event"
+            @toggle-code-panel="toggleCodePanel"
+            @load-example="handleLoadExampleAction"
+            @open-about-modal="showAboutModal = true"
+            @open-faq-modal="showFaqModal = true"
+            @toggle-dark-mode="uiStore.toggleDarkMode"
+            @share-graph="handleShareGraph"
+            @share-project-url="handleShareProjectUrl"
+            @header-drag-start="onLeftHeaderDragStart"
+          />
         </div>
 
-        <div v-if="widgetInitialized && isRightSidebarOpen" class="db-sidebar-wrapper db-right"
-          :style="rightDrag.style.value">
-          <RightSidebar v-show="isRightSidebarOpen" :selectedElement="selectedElement"
-            :validationErrors="validationErrors" :isModelValid="isModelValid" :enableDrag="true"
-            @toggle-right-sidebar="uiStore.toggleRightSidebar" @update-element="updateElement"
-            @delete-element="deleteElement" @show-validation-issues="showValidationModal = true"
-            @open-script-settings="showScriptSettingsModal = true" @download-script="handleDownloadScript"
-            @generate-script="handleGenerateStandalone" @share="handleShare" @open-export-modal="openExportModal"
-            @export-json="handleExportJson" @header-drag-start="onRightHeaderDragStart" />
+        <div
+          v-if="widgetInitialized && isRightSidebarOpen"
+          class="db-sidebar-wrapper db-right"
+          :style="rightDrag.style.value"
+        >
+          <RightSidebar
+            v-show="isRightSidebarOpen"
+            :selectedElement="selectedElement"
+            :validationErrors="validationErrors"
+            :isModelValid="isModelValid"
+            :enableDrag="true"
+            @toggle-right-sidebar="uiStore.toggleRightSidebar"
+            @update-element="updateElement"
+            @delete-element="deleteElement"
+            @show-validation-issues="showValidationModal = true"
+            @open-script-settings="showScriptSettingsModal = true"
+            @download-script="handleDownloadScript"
+            @generate-script="handleGenerateStandalone"
+            @share="handleShare"
+            @open-export-modal="openExportModal"
+            @export-json="handleExportJson"
+            @header-drag-start="onRightHeaderDragStart"
+          />
         </div>
 
-        <FloatingBottomToolbar :current-mode="currentMode" :current-node-type="currentNodeType"
-          :show-zoom-controls="showZoomControls" :show-code-panel="isCodePanelOpen" :show-data-panel="isDataPanelOpen"
-          :is-detach-mode-active="isDetachModeActive" :show-detach-mode-control="showDetachModeControl"
-          :is-widget="true" @update:current-mode="currentMode = $event"
-          @update:current-node-type="currentNodeType = $event" @undo="handleUndo" @redo="handleRedo"
-          @zoom-in="handleZoomIn" @zoom-out="handleZoomOut" @fit="handleFit" @layout-graph="handleGraphLayout"
-          @toggle-code-panel="toggleCodePanel" @toggle-data-panel="toggleDataPanel"
-          @toggle-detach-mode="uiStore.toggleDetachMode" @open-style-modal="showStyleModal = true" @share="handleShare"
-          @nav="handleToolbarNavigation" @drag-start="handleUIInteractionStart" @drag-end="handleUIInteractionEnd" />
+        <FloatingBottomToolbar
+          :current-mode="currentMode"
+          :current-node-type="currentNodeType"
+          :show-zoom-controls="showZoomControls"
+          :show-code-panel="isCodePanelOpen"
+          :show-data-panel="isDataPanelOpen"
+          :is-detach-mode-active="isDetachModeActive"
+          :show-detach-mode-control="showDetachModeControl"
+          :is-widget="true"
+          @update:current-mode="currentMode = $event"
+          @update:current-node-type="currentNodeType = $event"
+          @undo="handleUndo"
+          @redo="handleRedo"
+          @zoom-in="handleZoomIn"
+          @zoom-out="handleZoomOut"
+          @fit="handleFit"
+          @layout-graph="handleGraphLayout"
+          @toggle-code-panel="toggleCodePanel"
+          @toggle-data-panel="toggleDataPanel"
+          @toggle-detach-mode="uiStore.toggleDetachMode"
+          @open-style-modal="showStyleModal = true"
+          @share="handleShare"
+          @nav="handleToolbarNavigation"
+          @drag-start="handleUIInteractionStart"
+          @drag-end="handleUIInteractionEnd"
+        />
 
-        <FloatingPanel title="BUGS Code Preview" icon="fas fa-code" :is-open="isCodePanelOpen"
-          :default-width="codePanelSize.width" :default-height="codePanelSize.height" :default-x="codePanelPos.x"
-          :default-y="codePanelPos.y" :show-download="true" @close="toggleCodePanel" @download="handleDownloadBugs"
-          @drag-start="handleUIInteractionStart" @drag-end="
+        <FloatingPanel
+          title="BUGS Code Preview"
+          icon="fas fa-code"
+          :is-open="isCodePanelOpen"
+          :default-width="codePanelSize.width"
+          :default-height="codePanelSize.height"
+          :default-x="codePanelPos.x"
+          :default-y="codePanelPos.y"
+          :show-download="true"
+          @close="toggleCodePanel"
+          @download="handleDownloadBugs"
+          @drag-start="handleUIInteractionStart"
+          @drag-end="
             (pos) => {
               codePanelPos.x = pos.x
               codePanelPos.y = pos.y
               handleUIInteractionEnd()
             }
-          " @resize-start="handleUIInteractionStart" @resize-end="
+          "
+          @resize-start="handleUIInteractionStart"
+          @resize-end="
             (size) => {
               codePanelSize.width = size.width
               codePanelSize.height = size.height
               handleUIInteractionEnd()
             }
-          ">
+          "
+        >
           <CodePreviewPanel :is-active="isCodePanelOpen" />
         </FloatingPanel>
 
-        <FloatingPanel title="Data & Inits" icon="fas fa-database" badge="JSON" :is-open="isDataPanelOpen"
-          :default-width="dataPanelSize.width" :default-height="dataPanelSize.height"
-          :default-x="dataPanelPos.x || windowWidth - 420" :default-y="dataPanelPos.y" @close="toggleDataPanel"
-          @drag-start="handleUIInteractionStart" @drag-end="
+        <FloatingPanel
+          title="Data & Inits"
+          icon="fas fa-database"
+          badge="JSON"
+          :is-open="isDataPanelOpen"
+          :default-width="dataPanelSize.width"
+          :default-height="dataPanelSize.height"
+          :default-x="dataPanelPos.x || windowWidth - 420"
+          :default-y="dataPanelPos.y"
+          @close="toggleDataPanel"
+          @drag-start="handleUIInteractionStart"
+          @drag-end="
             (pos) => {
               dataPanelPos.x = pos.x
               dataPanelPos.y = pos.y
               handleUIInteractionEnd()
             }
-          " @resize-start="handleUIInteractionStart" @resize-end="
+          "
+          @resize-start="handleUIInteractionStart"
+          @resize-end="
             (size) => {
               dataPanelSize.width = size.width
               dataPanelSize.height = size.height
               handleUIInteractionEnd()
             }
-          ">
+          "
+        >
           <DataInputPanel :is-active="isDataPanelOpen" />
         </FloatingPanel>
 
         <AboutModal :is-open="showAboutModal" @close="showAboutModal = false" />
         <FaqModal :is-open="showFaqModal" @close="showFaqModal = false" />
-        <ExportModal :is-open="showExportModal" :export-type="currentExportType" @close="showExportModal = false"
-          @confirm-export="handleConfirmExport" />
+        <ExportModal
+          :is-open="showExportModal"
+          :export-type="currentExportType"
+          @close="showExportModal = false"
+          @confirm-export="handleConfirmExport"
+        />
         <GraphStyleModal :is-open="showStyleModal" @close="showStyleModal = false" />
-        <ShareModal :is-open="showShareModal" :url="shareUrl" :project="projectStore.currentProject"
-          :current-graph-id="graphStore.currentGraphId" @close="showShareModal = false"
-          @generate="handleGenerateShareLink" />
-        <ValidationIssuesModal :is-open="showValidationModal" :validation-errors="validationErrors" :elements="elements"
-          @close="showValidationModal = false" @select-node="handleSelectNodeFromModal" />
+        <ShareModal
+          :is-open="showShareModal"
+          :url="shareUrl"
+          :project="projectStore.currentProject"
+          :current-graph-id="graphStore.currentGraphId"
+          @close="showShareModal = false"
+          @generate="handleGenerateShareLink"
+        />
+        <ValidationIssuesModal
+          :is-open="showValidationModal"
+          :validation-errors="validationErrors"
+          :elements="elements"
+          @close="showValidationModal = false"
+          @select-node="handleSelectNodeFromModal"
+        />
         <BaseModal :is-open="showScriptSettingsModal" @close="showScriptSettingsModal = false">
           <template #header>
             <h3>Script Settings</h3>
@@ -1232,7 +1418,11 @@ const handleUIInteractionEnd = () => {
           <template #body>
             <div class="db-modal-form-row">
               <label>Project Name:</label>
-              <BaseInput v-model="newProjectName" placeholder="Enter project name" @keyup.enter="createNewProject" />
+              <BaseInput
+                v-model="newProjectName"
+                placeholder="Enter project name"
+                @keyup.enter="createNewProject"
+              />
             </div>
           </template>
           <template #footer>
@@ -1248,18 +1438,32 @@ const handleUIInteractionEnd = () => {
             <div class="flex flex-col gap-2">
               <div class="db-form-group">
                 <label for="new-graph-name">Graph Name</label>
-                <BaseInput id="new-graph-name" v-model="newGraphName" placeholder="Enter a name for your graph"
-                  @keyup.enter="createNewGraph" />
+                <BaseInput
+                  id="new-graph-name"
+                  v-model="newGraphName"
+                  placeholder="Enter a name for your graph"
+                  @keyup.enter="createNewGraph"
+                />
               </div>
 
               <div class="db-import-section">
                 <label class="db-section-label">Import from JSON (Optional)</label>
 
-                <div class="db-drop-zone" :class="{ 'db-loaded': importedGraphData, 'db-drag-over': isDragOver }"
-                  @click="triggerGraphImport" @dragover.prevent="isDragOver = true"
-                  @dragleave.prevent="isDragOver = false" @drop.prevent="handleDrop">
-                  <input type="file" ref="graphImportInput" accept=".json" @change="handleGraphImportFile"
-                    class="db-hidden-input" />
+                <div
+                  class="db-drop-zone"
+                  :class="{ 'db-loaded': importedGraphData, 'db-drag-over': isDragOver }"
+                  @click="triggerGraphImport"
+                  @dragover.prevent="isDragOver = true"
+                  @dragleave.prevent="isDragOver = false"
+                  @drop.prevent="handleDrop"
+                >
+                  <input
+                    type="file"
+                    ref="graphImportInput"
+                    accept=".json"
+                    @change="handleGraphImportFile"
+                    class="db-hidden-input"
+                  />
 
                   <div v-if="!importedGraphData" class="db-drop-zone-content">
                     <div class="db-icon-circle">
@@ -1281,7 +1485,11 @@ const handleUIInteractionEnd = () => {
                         importedGraphData.name || 'Untitled Graph'
                       }}</small>
                     </div>
-                    <button class="db-remove-file-btn" @click.stop="clearImportedData" title="Remove file">
+                    <button
+                      class="db-remove-file-btn"
+                      @click.stop="clearImportedData"
+                      title="Remove file"
+                    >
                       <i class="fas fa-times"></i>
                     </button>
                   </div>
@@ -1301,6 +1509,7 @@ const handleUIInteractionEnd = () => {
 </template>
 
 <style>
+/* CSS unchanged */
 .db-widget-root {
   width: 100%;
   height: 100%;
@@ -1341,7 +1550,7 @@ const handleUIInteractionEnd = () => {
   position: absolute;
   top: 10px;
   right: 10px;
-  z-index: 500; /* Increased to ensure visibility above canvas */
+  z-index: 500;
 }
 
 .db-edit-toggle-btn {
@@ -1381,7 +1590,6 @@ const handleUIInteractionEnd = () => {
   width: 100%;
   height: 100%;
   z-index: 0;
-  /* Base layer: Canvas */
 }
 
 .db-widget-root .db-graph-editor-container {
@@ -1473,7 +1681,6 @@ const handleUIInteractionEnd = () => {
   position: absolute;
   top: 16px;
   z-index: 100;
-  /* Layer 2: Collapsed sidebar triggers */
   padding: 8px 12px;
   border-radius: var(--radius-md);
   display: flex;
@@ -1484,7 +1691,6 @@ const handleUIInteractionEnd = () => {
   cursor: pointer;
   min-width: 140px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  /* Ensure it pops out visually */
 }
 
 .db-collapsed-sidebar-trigger.db-left-trigger {
