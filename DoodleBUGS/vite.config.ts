@@ -10,7 +10,7 @@ function copyWidgetDemo() {
     name: 'copy-widget-demo',
     closeBundle() {
       const distDir = resolve(__dirname, 'dist')
-      const widgetDir = resolve(distDir, 'widget')
+      const widgetDir = resolve(distDir, 'DoodleWidget')
       const libDir = resolve(distDir, 'lib')
 
       if (!existsSync(widgetDir)) mkdirSync(widgetDir, { recursive: true })
