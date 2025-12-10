@@ -128,13 +128,13 @@
             <div class="widget-section">
                 <h3>🎨 Interactive DAG Builder</h3>
                 <div class="widget-container">
-                    <doodle-bugs localModel="model.json"></doodle-bugs>
+                    <doodle-bugs localModel="model.json" show-title="false"></doodle-bugs>
                 </div>
             </div>
             <div class="widget-section">
             <h3>🎨 Interactive DAG Builder</h3>
             <div class="widget-container">
-            <doodle-bugs model="https://raw.githubusercontent.com/shravanngoswamii/experimental/refs/heads/main/model.json"></doodle-bugs>
+            <doodle-bugs model="https://raw.githubusercontent.com/shravanngoswamii/experimental/refs/heads/main/model.json" show-title="false"></doodle-bugs>
             </div>
             </div>
             <p>Bayesian graphical models represent a powerful framework for reasoning under uncertainty. They combine
@@ -161,11 +161,11 @@
             <p>The DoodleBUGS widget below allows you to interactively build and visualize Bayesian graphical models.
                 Try adding nodes, creating edges, and see how the BUGS code is generated in real-time.</p>
 
+            <!-- Example 3: Standalone usage without external container style -->
             <!-- <div class="widget-section"> -->
-                <h3>🎨 Interactive DAG Builder</h3>
-                <!-- <div class="widget-container"> -->
-                    <doodle-bugs model="rats"></doodle-bugs>
-                <!-- </div> -->
+                <h3>🎨 Standalone Widget Demo (Self-contained)</h3>
+                <p>This instance uses the new internal sizing features and title border:</p>
+                <doodle-bugs model="rats" showtitle="true"></doodle-bugs>
             <!-- </div> -->
 
             <p>The widget supports various node types including <code>stochastic</code> nodes (represented by circles),
