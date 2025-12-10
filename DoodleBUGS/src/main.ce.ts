@@ -21,7 +21,6 @@ interface WidgetProps {
   storageKey?: string
   width?: string
   height?: string
-  showTitle?: boolean | string
 }
 
 export const DoodleBugsElement = defineCustomElement({
@@ -32,7 +31,6 @@ export const DoodleBugsElement = defineCustomElement({
     storageKey: String,
     width: String,
     height: String,
-    showTitle: [Boolean, String],
   },
   setup(props: WidgetProps) {
     const app = createApp(DoodleWidget)
