@@ -9,8 +9,8 @@
   - Supports `AutoReverseDiff`, `AutoForwardDiff`, `AutoMooncake`
 
 - **Auto-marginalization for discrete parameters** (#385): Automatically marginalize discrete latent variables to enable gradient-based inference on models with discrete parameters.
-  - Example: `model = compile(model_def, data; marginalization=AutoMarginalization())`
-  - Supports models where discrete parameters have finite support
+  - Example: `model = set_evaluation_mode(settrans(compile(model_def, data), true), UseAutoMarginalization())`
+  - Supports models where discrete parameters have finite support (e.g., `Categorical`, `Bernoulli`)
 
 - **On-demand log density function generation** (#416): Log density functions are now generated on-demand when `set_evaluation_mode(model, UseGeneratedLogDensityFunction())` is called, rather than at compile time. All models start with `UseGraph()` mode.
 
