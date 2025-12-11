@@ -85,9 +85,7 @@ jobs:
         arch:
           - x64
         test_group:
-          - "inference_hmc"
-          - "inference_chains"
-          - "inference_mh"
+          - "inference"
           - "gibbs"
 
     steps:
