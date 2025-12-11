@@ -3,6 +3,9 @@ import { computed, ref, onUnmounted, watch } from 'vue'
 import type { NodeType } from '../../types'
 import { nodeDefinitions } from '../../config/nodeDefinitions'
 import DropdownMenu from '../common/DropdownMenu.vue'
+import Tooltip from 'primevue/tooltip'
+
+const vTooltip = Tooltip
 
 const props = defineProps<{
   currentMode: string
@@ -33,6 +36,12 @@ const emit = defineEmits<{
   (e: 'drag-start'): void
   (e: 'drag-end', position: { x: number; y: number }): void
 }>()
+
+const showSecondaryMenu = ref(false)
+
+const toggleSecondaryMenu = () => {
+  showSecondaryMenu.value = !showSecondaryMenu.value
+}
 
 const availableNodeTypes = computed(() => {
   return nodeDefinitions.map((def) => ({
@@ -128,10 +137,8 @@ const addButtonStyle = computed(() => {
   return {}
 })
 
-// --- Smooth Dragging Logic (Transform-based) ---
 const toolbarRef = ref<HTMLElement | null>(null)
 const isDragging = ref(false)
-// Initial CSS state: Centered at bottom
 const styleState = ref({
   left: '50%',
   bottom: '24px',
@@ -162,7 +169,6 @@ const startDrag = (event: MouseEvent) => {
   }
 
   // Switch to absolute positioning with transform for performance
-  // We lock left/top to 0 and use translate3d for the actual position
   styleState.value = {
     left: '0px',
     top: '0px',
@@ -270,28 +276,123 @@ onUnmounted(() => {
     @mousedown="startDrag"
     @touchstart="startDragTouch"
   >
+    <!-- Secondary Menu (Above Main Bar) -->
+    <Transition name="db-slide-up">
+      <div v-if="showSecondaryMenu" class="db-secondary-dock db-glass-panel">
+        <!-- App Navigation Group (Widget Only) -->
+        <template v-if="isWidget">
+          <div class="db-menu-group">
+            <span class="db-group-label">Menu</span>
+            <div class="db-group-items">
+              <button
+                class="db-dock-btn db-secondary-btn"
+                @click="$emit('nav', 'project')"
+                v-tooltip.top="{ value: 'Projects', showDelay: 0, hideDelay: 0 }"
+              >
+                <i class="fas fa-folder"></i>
+              </button>
+              <button
+                class="db-dock-btn db-secondary-btn"
+                @click="$emit('nav', 'view')"
+                v-tooltip.top="{ value: 'View Options', showDelay: 0, hideDelay: 0 }"
+              >
+                <i class="fas fa-eye"></i>
+              </button>
+              <button
+                class="db-dock-btn db-secondary-btn"
+                @click="$emit('nav', 'help')"
+                v-tooltip.top="{ value: 'Help & Dev Tools', showDelay: 0, hideDelay: 0 }"
+              >
+                <i class="fas fa-question-circle"></i>
+              </button>
+            </div>
+          </div>
+          <div class="db-divider"></div>
+        </template>
+
+        <!-- Panels Group -->
+        <div class="db-menu-group">
+          <span class="db-group-label">Panels</span>
+          <div class="db-group-items">
+            <button
+              class="db-dock-btn db-secondary-btn"
+              @click="$emit('open-style-modal')"
+              v-tooltip.top="{ value: 'Graph Style', showDelay: 0, hideDelay: 0 }"
+            >
+              <i class="fas fa-palette"></i>
+            </button>
+            <button
+              class="db-dock-btn db-secondary-btn"
+              :class="{ 'db-active': showDataPanel }"
+              @click="$emit('toggle-data-panel')"
+              v-tooltip.top="{ value: 'Data Panel', showDelay: 0, hideDelay: 0 }"
+            >
+              <i class="fas fa-database"></i>
+            </button>
+            <button
+              class="db-dock-btn db-secondary-btn"
+              :class="{ 'db-active': showCodePanel }"
+              @click="$emit('toggle-code-panel')"
+              v-tooltip.top="{ value: 'BUGS Code', showDelay: 0, hideDelay: 0 }"
+            >
+              <i class="fas fa-code"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Export Group (Restricted to Widget Only) -->
+        <template v-if="isWidget">
+          <div class="db-divider"></div>
+          <div class="db-menu-group">
+            <span class="db-group-label">Actions</span>
+            <div class="db-group-items">
+              <button
+                class="db-dock-btn db-secondary-btn"
+                @click="$emit('share')"
+                v-tooltip.top="{ value: 'Share', showDelay: 0, hideDelay: 0 }"
+              >
+                <i class="fas fa-share-alt"></i>
+              </button>
+              <button
+                class="db-dock-btn db-secondary-btn"
+                @click="$emit('nav', 'export')"
+                v-tooltip.top="{ value: 'Export', showDelay: 0, hideDelay: 0 }"
+              >
+                <i class="fas fa-file-export"></i>
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </Transition>
+
+    <!-- Main Toolbar -->
     <div class="db-floating-dock db-glass-panel">
-      <div class="db-drag-handle" title="Drag Toolbar">
+      <div
+        class="db-drag-handle"
+        v-tooltip.top="{ value: 'Drag Toolbar', showDelay: 0, hideDelay: 0 }"
+      >
         <i class="fas fa-grip-vertical"></i>
       </div>
 
-      <!-- Widget-Only Navigation Group -->
-      <template v-if="isWidget">
-        <button class="db-dock-btn" @click="$emit('nav', 'project')" title="Projects">
-          <i class="fas fa-folder"></i>
-        </button>
-        <button class="db-dock-btn" @click="$emit('nav', 'view')" title="View Options">
-          <i class="fas fa-eye"></i>
-        </button>
-        <div class="db-divider"></div>
-      </template>
+      <!-- Menu Toggle -->
+      <button
+        class="db-dock-btn db-main-menu-toggle"
+        :class="{ 'db-active': showSecondaryMenu }"
+        @click="toggleSecondaryMenu"
+        v-tooltip.top="{ value: 'Menu', showDelay: 0, hideDelay: 0 }"
+      >
+        <i :class="showSecondaryMenu ? 'fas fa-times' : 'fas fa-bars'"></i>
+      </button>
+
+      <div class="db-divider"></div>
 
       <!-- Tools Group -->
       <button
         class="db-dock-btn"
         :class="{ 'db-active': currentMode === 'select' }"
         @click="setMode('select')"
-        title="Select Tool (V)"
+        v-tooltip.top="{ value: 'Select Tool', showDelay: 0, hideDelay: 0 }"
         type="button"
       >
         <i class="fas fa-mouse-pointer"></i>
@@ -303,7 +404,7 @@ onUnmounted(() => {
             class="db-add-tool-btn"
             :class="{ 'db-active': isAddModeActive }"
             :style="addButtonStyle"
-            title="Add Node or Edge"
+            v-tooltip.top="{ value: 'Add Node or Edge', showDelay: 0, hideDelay: 0 }"
             type="button"
           >
             <i
@@ -348,101 +449,89 @@ onUnmounted(() => {
 
       <div class="db-divider"></div>
 
-      <!-- Detach Mode (Touch) -->
-      <template v-if="showDetachModeControl">
-        <button
-          class="db-dock-btn"
-          :class="{ 'db-active': isDetachModeActive }"
-          @click="$emit('toggle-detach-mode')"
-          title="Detach Mode (Simulates Alt/Option key)"
-          type="button"
-        >
-          <i class="fas fa-unlink"></i>
-        </button>
-        <div class="db-divider"></div>
-      </template>
-
-      <!-- History & Panels -->
-      <button class="db-dock-btn" @click="$emit('undo')" title="Undo (Ctrl+Z)" type="button">
+      <!-- History -->
+      <button
+        class="db-dock-btn"
+        @click="$emit('undo')"
+        v-tooltip.top="{ value: 'Undo', showDelay: 0, hideDelay: 0 }"
+        type="button"
+      >
         <i class="fas fa-undo"></i>
       </button>
-      <button class="db-dock-btn" @click="$emit('redo')" title="Redo (Ctrl+Y)" type="button">
+      <button
+        class="db-dock-btn"
+        @click="$emit('redo')"
+        v-tooltip.top="{ value: 'Redo', showDelay: 0, hideDelay: 0 }"
+        type="button"
+      >
         <i class="fas fa-redo"></i>
       </button>
 
       <div class="db-divider"></div>
 
-      <button
-        class="db-dock-btn"
-        @click="$emit('open-style-modal')"
-        title="Graph Style"
-        type="button"
-      >
-        <i class="fas fa-palette"></i>
-      </button>
-
-      <button
-        class="db-dock-btn"
-        :class="{ 'db-active': showDataPanel }"
-        @click="$emit('toggle-data-panel')"
-        title="Data Panel"
-        type="button"
-      >
-        <i class="fas fa-database"></i>
-      </button>
-
-      <button
-        class="db-dock-btn"
-        :class="{ 'db-active': showCodePanel }"
-        @click="$emit('toggle-code-panel')"
-        title="BUGS Code"
-        type="button"
-      >
-        <i class="fas fa-code"></i>
-      </button>
-
-      <template v-if="showZoomControls">
-        <div class="db-divider"></div>
-        <button class="db-dock-btn" @click="$emit('zoom-in')" title="Zoom In" type="button">
-          <i class="fas fa-plus"></i>
-        </button>
-        <button class="db-dock-btn" @click="$emit('zoom-out')" title="Zoom Out" type="button">
-          <i class="fas fa-minus"></i>
-        </button>
-        <button class="db-dock-btn" @click="$emit('fit')" title="Fit to View" type="button">
-          <i class="fas fa-compress-arrows-alt"></i>
-        </button>
-      </template>
-
-      <div class="db-divider"></div>
-
-      <!-- Widget-Only Export & Help Group -->
-      <template v-if="isWidget">
-        <button class="db-dock-btn" @click="$emit('nav', 'export')" title="Export">
-          <i class="fas fa-file-export"></i>
-        </button>
-        <button class="db-dock-btn" @click="$emit('nav', 'help')" title="Help & Dev Tools">
-          <i class="fas fa-question-circle"></i>
-        </button>
-        <div class="db-divider"></div>
-      </template>
-
-      <!-- Layout Dropdown -->
+      <!-- Layout Dropdown (Moved from Secondary Menu) -->
       <DropdownMenu class="db-dock-dropdown">
         <template #trigger>
-          <button class="db-dock-btn" title="Graph Layout" type="button">
+          <button
+            class="db-dock-btn"
+            v-tooltip.top="{ value: 'Graph Layout', showDelay: 0, hideDelay: 0 }"
+            type="button"
+          >
             <i class="fas fa-sitemap"></i>
           </button>
         </template>
         <template #content>
-          <div class="db-dropdown-section-title">Layout</div>
-          <a href="#" @click.prevent="$emit('layout-graph', 'dagre')">Dagre</a>
-          <a href="#" @click.prevent="$emit('layout-graph', 'fcose')">fCoSE</a>
-          <a href="#" @click.prevent="$emit('layout-graph', 'cola')">Cola</a>
-          <a href="#" @click.prevent="$emit('layout-graph', 'klay')">KLay</a>
-          <a href="#" @click.prevent="$emit('layout-graph', 'preset')">Reset</a>
+          <div class="db-dropdown-section-title">Auto Layout</div>
+          <a href="#" @click.prevent="$emit('layout-graph', 'dagre')">Dagre (Hierarchical)</a>
+          <a href="#" @click.prevent="$emit('layout-graph', 'fcose')">fCoSE (Force)</a>
+          <a href="#" @click.prevent="$emit('layout-graph', 'cola')">Cola (Physics)</a>
+          <a href="#" @click.prevent="$emit('layout-graph', 'klay')">KLay (Layered)</a>
+          <a href="#" @click.prevent="$emit('layout-graph', 'preset')">Reset Positions</a>
         </template>
       </DropdownMenu>
+
+      <!-- Zoom (Conditional) -->
+      <template v-if="showZoomControls">
+        <div class="db-divider"></div>
+        <button
+          class="db-dock-btn"
+          @click="$emit('zoom-in')"
+          v-tooltip.top="{ value: 'Zoom In', showDelay: 0, hideDelay: 0 }"
+          type="button"
+        >
+          <i class="fas fa-plus"></i>
+        </button>
+        <button
+          class="db-dock-btn"
+          @click="$emit('zoom-out')"
+          v-tooltip.top="{ value: 'Zoom Out', showDelay: 0, hideDelay: 0 }"
+          type="button"
+        >
+          <i class="fas fa-minus"></i>
+        </button>
+        <button
+          class="db-dock-btn"
+          @click="$emit('fit')"
+          v-tooltip.top="{ value: 'Fit to View', showDelay: 0, hideDelay: 0 }"
+          type="button"
+        >
+          <i class="fas fa-compress-arrows-alt"></i>
+        </button>
+      </template>
+
+      <!-- Detach Toggle (Conditional) -->
+      <template v-if="showDetachModeControl">
+        <div class="db-divider"></div>
+        <button
+          class="db-dock-btn"
+          :class="{ 'db-active': isDetachModeActive }"
+          @click="$emit('toggle-detach-mode')"
+          v-tooltip.top="{ value: 'Detach Mode', showDelay: 0, hideDelay: 0 }"
+          type="button"
+        >
+          <i class="fas fa-unlink"></i>
+        </button>
+      </template>
     </div>
   </div>
 </template>
@@ -454,10 +543,9 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 0; /* Gap handled by margin/position of secondary */
   cursor: grab;
   touch-action: none;
-  /* Hardware acceleration for smooth movement */
   will-change: transform;
 }
 
@@ -472,8 +560,73 @@ onUnmounted(() => {
   padding: 6px 8px;
   border-radius: var(--radius-pill);
   transition: box-shadow 0.2s ease;
-  /* Prevent text selection during drag */
   user-select: none;
+  position: relative;
+  z-index: 2;
+  background: var(--theme-bg-panel); /* Ensure background is solid enough */
+}
+
+/* Secondary Menu Styles */
+.db-secondary-dock {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 12px; /* Space between main and secondary */
+  padding: 8px 12px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  z-index: 1;
+  width: max-content; /* Dynamic width */
+  white-space: nowrap;
+}
+
+.db-menu-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.db-group-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--theme-text-secondary);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.db-group-items {
+  display: flex;
+  gap: 4px;
+}
+
+.db-secondary-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px; /* Square-ish for secondary */
+}
+
+/* Transitions */
+.db-slide-up-enter-active,
+.db-slide-up-leave-active {
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: bottom center;
+}
+
+.db-slide-up-enter-from,
+.db-slide-up-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px) scale(0.95);
+}
+
+.db-slide-up-enter-to,
+.db-slide-up-leave-from {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
 }
 
 .db-drag-handle {
@@ -514,11 +667,22 @@ onUnmounted(() => {
   color: white;
 }
 
+/* Main Menu Toggle Highlight */
+.db-main-menu-toggle.db-active {
+  background: var(--theme-bg-active);
+  color: var(--theme-text-primary);
+}
+
 .db-divider {
   width: 1px;
-  height: 16px;
+  height: 20px;
   background: var(--theme-border);
   margin: 0 4px;
+  align-self: center;
+}
+
+.db-floating-dock .db-divider {
+  height: 16px;
 }
 
 .db-add-tool-btn {
@@ -586,7 +750,6 @@ onUnmounted(() => {
     bottom: 16px !important;
     left: 50% !important;
     top: auto !important;
-    /* Maintain transform for centering on mobile initially, JS will override if dragged */
     width: 100%;
     max-width: 100vw;
   }
@@ -604,6 +767,12 @@ onUnmounted(() => {
   }
   .db-drag-handle {
     display: none;
+  }
+
+  .db-secondary-dock {
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 90vw;
   }
 }
 

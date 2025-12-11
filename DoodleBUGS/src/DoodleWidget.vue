@@ -590,7 +590,6 @@ const initGraph = async () => {
   })
 }
 
-// --- GLOBAL WIDGET MANAGER ---
 interface WidgetInstanceCallbacks {
   setUIActive: (val: boolean) => void
   setEditMode: (val: boolean) => void
