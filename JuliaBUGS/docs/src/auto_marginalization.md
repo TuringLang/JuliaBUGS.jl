@@ -423,7 +423,5 @@ Enable auto-marginalization on a compiled model:
 Requires transformed space. Discrete variables must have finite support (Categorical, Bernoulli, etc.).
 
 ```@docs
-JuliaBUGS.Model.UseAutoMarginalization
 JuliaBUGS.Model.set_evaluation_mode
-JuliaBUGS.Model.evaluate_with_marginalization_values!!
 ```
