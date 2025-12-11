@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DoodleBUGS Widget - Embedded Article Example</title>
     <link rel="stylesheet" href="../../dist-lib/doodlebugs.css">
-    
+
     <!-- MathJax Configuration for rendering LaTeX -->
     <script>
         window.MathJax = {
@@ -137,7 +137,8 @@
         <article>
             <p>Bayesian graphical models represent a powerful framework for reasoning under uncertainty. They combine
                 the mathematical rigor of probability theory with the intuitive representation of dependencies through
-                directed graphs. In this article, we will explore the core concepts, learn how to visualize them, and examine real-world examples.</p>
+                directed graphs. In this article, we will explore the core concepts, learn how to visualize them, and
+                examine real-world examples.</p>
 
             <!-- Section 1: Theory and First Example -->
             <h2>What are Graphical Models?</h2>
@@ -152,13 +153,19 @@
             </div>
 
             <p>There are two main types of graphical models: directed graphical models (also known as Bayesian networks)
-                and undirected graphical models (also known as Markov random fields). We focus here on directed acyclic graphs (DAGs).</p>
+                and undirected graphical models (also known as Markov random fields). We focus here on directed acyclic
+                graphs (DAGs).</p>
 
             <!-- Example 1: Pumps (Simple Conjugate) -->
             <div class="widget-section">
-                <h3>Case Study 1: The Pumps Model</h3>
-                <p>To understand the utility of these models, let's look at the <strong>Pumps</strong> example (George et al., 1993). This model analyzes the failure rates of 10 pumps in a nuclear power plant. </p>
-                <p>This is a conjugate gamma-Poisson hierarchical model. The number of failures ($x_i$) for each pump is modeled using a Poisson distribution: $x_i \sim Poisson(\theta_i t_i)$. Crucially, the failure rates ($\theta_i$) are drawn from a common Gamma prior, $\theta_i \sim Gamma(\alpha, \beta)$, with hyperparameters $\alpha$ and $\beta$ given Exponential and Gamma priors respectively. This structure leads to a non-standard posterior for $\alpha$, necessitating the use of Gibbs sampling.</p>
+                <h3>Pumps: conjugate gamma-Poisson hierarchical model</h3>
+                <p>To understand the utility of these models, let's look at the <strong>Pumps</strong> example (George
+                    et al., 1993). This model analyzes the failure rates of 10 pumps in a nuclear power plant. </p>
+                <p>This is a conjugate gamma-Poisson hierarchical model. The number of failures ($x_i$) for each pump is
+                    modeled using a Poisson distribution: $x_i \sim Poisson(\theta_i t_i)$. Crucially, the failure rates
+                    ($\theta_i$) are drawn from a common Gamma prior, $\theta_i \sim Gamma(\alpha, \beta)$, with
+                    hyperparameters $\alpha$ and $\beta$ given Exponential and Gamma priors respectively. This structure
+                    leads to a non-standard posterior for $\alpha$, necessitating the use of Gibbs sampling.</p>
                 <div class="widget-container">
                     <doodle-bugs
                         model="https://raw.githubusercontent.com/shravanngoswamii/experimental/refs/heads/main/DoodlePPL/models/pumps.json"></doodle-bugs>
@@ -167,9 +174,14 @@
 
             <!-- Example 2: Rats (Growth) -->
             <div class="widget-section">
-                <h3>Case Study 2: The Rats Model (Growth Curves)</h3>
-                <p>Now let's look at a temporal model from Gelfand et al. (1990). The <strong>Rats</strong> example tracks the weight of 30 rats measured weekly over five weeks.</p>
-                <p>This is a random effects linear growth curve model. The weights $Y_{ij}$ are normally distributed with a mean that is a linear function of time: $\alpha_i + \beta_i(x_j - \bar{x})$. Note that the time points $x_j$ are standardized around their mean ($\bar{x} = 22$) to reduce dependence between the intercept $\alpha_i$ and slope $\beta_i$. We estimate these random effects to capture both individual trajectories and population-level growth.</p>
+                <h3>Rats: a normal hierarchical model</h3>
+                <p>Now let's look at a temporal model from Gelfand et al. (1990). The <strong>Rats</strong> example
+                    tracks the weight of 30 rats measured weekly over five weeks.</p>
+                <p>This is a random effects linear growth curve model. The weights $Y_{ij}$ are normally distributed
+                    with a mean that is a linear function of time: $\alpha_i + \beta_i(x_j - \bar{x})$. Note that the
+                    time points $x_j$ are standardized around their mean ($\bar{x} = 22$) to reduce dependence between
+                    the intercept $\alpha_i$ and slope $\beta_i$. We estimate these random effects to capture both
+                    individual trajectories and population-level growth.</p>
                 <div class="widget-container">
                     <doodle-bugs
                         model="https://raw.githubusercontent.com/shravanngoswamii/experimental/refs/heads/main/DoodlePPL/models/rats.json"></doodle-bugs>
@@ -182,15 +194,23 @@
             <p>As seen in the examples above, graphical models offer distinct advantages:</p>
 
             <p><strong>Interpretability:</strong> The visual structure makes it easy to understand the relationships
-                between variables. In the Rats model, seeing the connection between the population mean and individual rats helps clarify the hierarchical assumption.</p>
+                between variables. In the Rats model, seeing the connection between the population mean and individual
+                rats helps clarify the hierarchical assumption.</p>
 
-            <p><strong>Modularity:</strong> Complex models can be built from simpler components. We can easily add a new layer to our hierarchy without rewriting the entire mathematical derivation.</p>
+            <p><strong>Modularity:</strong> Complex models can be built from simpler components. We can easily add a new
+                layer to our hierarchy without rewriting the entire mathematical derivation.</p>
 
             <!-- Example 3: Seeds (Complex) -->
             <div class="widget-section">
-                <h3>Case Study 3: The Seeds Model (Logistic Regression)</h3>
-                <p>Finally, let's look at a random effects logistic regression from Crowder (1978). The <strong>Seeds</strong> example investigates germination rates across 21 plates arranged in a 2x2 factorial design by seed type and root extract.</p>
-                <p>The model accounts for <em>overdispersion</em>—variation greater than expected in a standard Binomial distribution—by introducing a random effect term $b_i$ for each plate. The probability of germination is modeled as $logit(p_i) = \alpha_0 + \alpha_1 x_{1i} + \alpha_2 x_{2i} + \alpha_{12} x_{1i}x_{2i} + b_i$, where $b_i \sim Normal(0, \tau)$, effectively capturing the unobserved heterogeneity.</p>
+                <h3>Seeds: Random effect logistic regression</h3>
+                <p>Finally, let's look at a random effects logistic regression from Crowder (1978). The
+                    <strong>Seeds</strong> example investigates germination rates across 21 plates arranged in a 2x2
+                    factorial design by seed type and root extract.</p>
+                <p>The model accounts for <em>overdispersion</em>—variation greater than expected in a standard Binomial
+                    distribution—by introducing a random effect term $b_i$ for each plate. The probability of
+                    germination is modeled as $logit(p_i) = \alpha_0 + \alpha_1 x_{1i} + \alpha_2 x_{2i} + \alpha_{12}
+                    x_{1i}x_{2i} + b_i$, where $b_i \sim Normal(0, \tau)$, effectively capturing the unobserved
+                    heterogeneity.</p>
                 <doodle-bugs
                     model="https://raw.githubusercontent.com/shravanngoswamii/experimental/refs/heads/main/DoodlePPL/models/seeds.json"
                     height="500px"></doodle-bugs>
@@ -219,14 +239,16 @@
                 graphical models. Combined with the DoodleBUGS visual editor, it offers a complete workflow from model
                 design to inference.</p>
 
-            <p>The widgets you see above are designed to integrate seamlessly with JuliaBUGS, allowing you to export your
+            <p>The widgets you see above are designed to integrate seamlessly with JuliaBUGS, allowing you to export
+                your
                 visual models as executable Julia code. This bridges the gap between intuitive model building and
                 production-ready code.</p>
 
             <h2>Conclusion</h2>
 
             <p>Bayesian graphical models provide a principled way to reason about uncertainty. With tools like
-                DoodleBUGS and JuliaBUGS, building and running these models has never been more accessible. We encourage you to explore the interactive widgets above to deepen your understanding of probabilistic modeling.</p>
+                DoodleBUGS and JuliaBUGS, building and running these models has never been more accessible. We encourage
+                you to explore the interactive widgets above to deepen your understanding of probabilistic modeling.</p>
         </article>
 
         <footer>
