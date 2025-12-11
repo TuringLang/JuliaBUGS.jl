@@ -142,6 +142,25 @@ using Statistics
         end
     end
 
+    @testset "IndependentMH with chain_type=Chains" begin
+        # Test that chain_type argument is respected (issue #381)
+        model_def = @bugs begin
+            mu ~ Normal(0, 1)
+            y ~ Normal(mu, 0.1)
+        end
+
+        model = compile(model_def, (; y=1.0))
+
+        rng = Random.MersenneTwister(999)
+        chain = sample(
+            rng, model, IndependentMH(), 100; chain_type=MCMCChains.Chains, progress=false
+        )
+
+        # Should return MCMCChains.Chains, not Vector{NamedTuple}
+        @test chain isa MCMCChains.Chains
+        @test :mu in chain.name_map[:parameters]
+    end
+
     @testset "IndependentMH within Gibbs" begin
         # This will be tested more thoroughly in gibbs.jl tests
         # Here we just verify the gibbs_internal function works

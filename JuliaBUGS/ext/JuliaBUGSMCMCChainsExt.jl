@@ -255,7 +255,7 @@ function AbstractMCMC.bundle_samples(
     samples::Vector,  # Contains evaluation environments
     logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
     sampler::JuliaBUGS.IndependentMH,
-    states::Vector,
+    state,  # Final state only (AbstractMCMC interface)
     ::Type{Chains};
     kwargs...,
 )
@@ -268,11 +268,8 @@ function AbstractMCMC.bundle_samples(
         push!(param_samples, getparams(model_with_env))
     end
 
-    # Include log probabilities as statistics
-    logps = [state.logp for state in states]
-    return JuliaBUGS.gen_chains(
-        logdensitymodel, param_samples, [:lp], [[lp] for lp in logps]; kwargs...
-    )
+    # No per-sample log probabilities available since AbstractMCMC only passes final state
+    return JuliaBUGS.gen_chains(logdensitymodel, param_samples, [], []; kwargs...)
 end
 
 end
