@@ -1488,6 +1488,117 @@ const handleUIInteractionStart = () => {
 const handleUIInteractionEnd = () => {
   isDraggingUI.value = false
 }
+
+// Improved Animation hooks for sidebars
+
+// Helper to get toolbar rect safely
+const getToolbarRect = (contextEl: HTMLElement): DOMRect | null => {
+  // 1. Try finding toolbar within the same overlay (most robust for multiple widgets)
+  let toolbarEl = contextEl.closest('.db-ui-overlay')?.querySelector('.db-toolbar-container')
+
+  // 2. Fallback to global document query if overlay context fails
+  if (!toolbarEl) {
+    toolbarEl = document.querySelector('.db-toolbar-container')
+  }
+
+  return toolbarEl ? toolbarEl.getBoundingClientRect() : null
+}
+
+const onSidebarLeave = (el: Element, done: () => void) => {
+  const htmlEl = el as HTMLElement
+  const isLeft = htmlEl.classList.contains('db-left')
+  const tbRect = getToolbarRect(htmlEl)
+
+  if (!tbRect) {
+    const anim = htmlEl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200 })
+    anim.onfinish = done
+    return
+  }
+
+  const sbRect = htmlEl.getBoundingClientRect()
+
+  // Calculate centers
+  const sbCenterX = sbRect.left + sbRect.width / 2
+  const sbCenterY = sbRect.top + sbRect.height / 2
+
+  // Target: Left side of toolbar for Left Sidebar, Right side for Right Sidebar
+  const targetX = isLeft
+    ? tbRect.left + tbRect.width * 0.2 // Move to left 20% of toolbar
+    : tbRect.right - tbRect.width * 0.2 // Move to right 20% of toolbar
+
+  const targetY = tbRect.top + tbRect.height / 2
+
+  const deltaX = targetX - sbCenterX
+  const deltaY = targetY - sbCenterY
+
+  const currentTransform = htmlEl.style.transform || ''
+
+  const animation = htmlEl.animate(
+    [
+      { transform: `${currentTransform} translate(0px, 0px) scale(1)`, opacity: 1 },
+      {
+        transform: `${currentTransform} translate(${deltaX}px, ${deltaY}px) scale(0.1)`,
+        opacity: 0,
+      },
+    ],
+    {
+      duration: 250,
+      easing: 'ease-in', // Accelerate into the toolbar
+    }
+  )
+
+  animation.onfinish = done
+}
+
+const onSidebarEnter = (el: Element, done: () => void) => {
+  const htmlEl = el as HTMLElement
+  const isLeft = htmlEl.classList.contains('db-left')
+  const tbRect = getToolbarRect(htmlEl)
+
+  if (!tbRect) {
+    const anim = htmlEl.animate(
+      [
+        { opacity: 0, transform: 'scale(0.9)' },
+        { opacity: 1, transform: 'scale(1)' },
+      ],
+      { duration: 200 }
+    )
+    anim.onfinish = done
+    return
+  }
+
+  const sbRect = htmlEl.getBoundingClientRect()
+
+  const sbCenterX = sbRect.left + sbRect.width / 2
+  const sbCenterY = sbRect.top + sbRect.height / 2
+
+  // Origin: Start from Left/Right side of toolbar
+  const originX = isLeft ? tbRect.left + tbRect.width * 0.2 : tbRect.right - tbRect.width * 0.2
+
+  const originY = tbRect.top + tbRect.height / 2
+
+  // Delta to move FROM Origin TO Destination (sbRect)
+  // We animate from the offset back to 0 (which is the natural position)
+  const startDeltaX = originX - sbCenterX
+  const startDeltaY = originY - sbCenterY
+
+  const currentTransform = htmlEl.style.transform || ''
+
+  const animation = htmlEl.animate(
+    [
+      {
+        transform: `${currentTransform} translate(${startDeltaX}px, ${startDeltaY}px) scale(0.1)`,
+        opacity: 0,
+      },
+      { transform: `${currentTransform} translate(0px, 0px) scale(1)`, opacity: 1 },
+    ],
+    {
+      duration: 250,
+      easing: 'ease-out', // Decelerate out of toolbar
+    }
+  )
+  animation.onfinish = done
+}
 </script>
 
 <template>
@@ -1607,73 +1718,78 @@ const handleUIInteractionEnd = () => {
         :class="{ 'db-dark-mode': isDarkMode, 'db-widget-ready': widgetInitialized }"
         v-show="isWidgetInView && isEditMode && isUIActive"
       >
-        <div
-          v-if="widgetInitialized && isLeftSidebarOpen"
-          class="db-sidebar-wrapper db-left"
-          :style="leftDrag.style.value"
-        >
-          <LeftSidebar
-            v-show="isLeftSidebarOpen"
-            :activeAccordionTabs="activeLeftAccordionTabs"
-            @update:activeAccordionTabs="activeLeftAccordionTabs = $event"
-            :projectName="projectStore.currentProject?.name || 'Project'"
-            :pinnedGraphTitle="pinnedGraphTitle"
-            :isGridEnabled="isGridEnabled"
-            :gridSize="gridSize"
-            :showZoomControls="showZoomControls"
-            :showDebugPanel="showDebugPanel"
-            :isCodePanelOpen="isCodePanelOpen"
-            :isDetachModeActive="isDetachModeActive"
-            :showDetachModeControl="showDetachModeControl"
-            :enableDrag="true"
-            @toggle-left-sidebar="uiStore.toggleLeftSidebar"
-            @new-project="handleNewProject"
-            @new-graph="handleNewGraph"
-            @update:currentMode="currentMode = $event"
-            @update:currentNodeType="currentNodeType = $event"
-            @update:isGridEnabled="isGridEnabled = $event"
-            @update:gridSize="gridSize = $event"
-            @update:showZoomControls="showZoomControls = $event"
-            @update:showDebugPanel="showDebugPanel = $event"
-            @update:isDetachModeActive="isDetachModeActive = $event"
-            @update:show-detach-mode-control="showDetachModeControl = $event"
-            @toggle-code-panel="toggleCodePanel"
-            @load-example="handleLoadExampleAction"
-            @open-about-modal="showAboutModal = true"
-            @open-faq-modal="showFaqModal = true"
-            @toggle-dark-mode="uiStore.toggleDarkMode"
-            @share-graph="handleShareGraph"
-            @share-project-url="handleShareProjectUrl"
-            @header-drag-start="onLeftHeaderDragStart"
-          />
-        </div>
+        <Transition :css="false" @enter="onSidebarEnter" @leave="onSidebarLeave">
+          <div
+            v-if="widgetInitialized && isLeftSidebarOpen"
+            class="db-sidebar-wrapper db-left"
+            :style="leftDrag.style.value"
+          >
+            <LeftSidebar
+              v-show="isLeftSidebarOpen"
+              :activeAccordionTabs="activeLeftAccordionTabs"
+              @update:activeAccordionTabs="activeLeftAccordionTabs = $event"
+              :projectName="projectStore.currentProject?.name || 'Project'"
+              :pinnedGraphTitle="pinnedGraphTitle"
+              :isGridEnabled="isGridEnabled"
+              :gridSize="gridSize"
+              :showZoomControls="showZoomControls"
+              :showDebugPanel="showDebugPanel"
+              :isCodePanelOpen="isCodePanelOpen"
+              :isDetachModeActive="isDetachModeActive"
+              :showDetachModeControl="showDetachModeControl"
+              :enableDrag="true"
+              @toggle-left-sidebar="uiStore.toggleLeftSidebar"
+              @new-project="handleNewProject"
+              @new-graph="handleNewGraph"
+              @update:currentMode="currentMode = $event"
+              @update:currentNodeType="currentNodeType = $event"
+              @update:isGridEnabled="isGridEnabled = $event"
+              @update:gridSize="gridSize = $event"
+              @update:showZoomControls="showZoomControls = $event"
+              @update:showDebugPanel="showDebugPanel = $event"
+              @update:isDetachModeActive="isDetachModeActive = $event"
+              @update:show-detach-mode-control="showDetachModeControl = $event"
+              @toggle-code-panel="toggleCodePanel"
+              @load-example="handleLoadExampleAction"
+              @open-about-modal="showAboutModal = true"
+              @open-faq-modal="showFaqModal = true"
+              @toggle-dark-mode="uiStore.toggleDarkMode"
+              @share-graph="handleShareGraph"
+              @share-project-url="handleShareProjectUrl"
+              @header-drag-start="onLeftHeaderDragStart"
+            />
+          </div>
+        </Transition>
 
-        <div
-          v-if="widgetInitialized && isRightSidebarOpen"
-          class="db-sidebar-wrapper db-right"
-          :style="rightDrag.style.value"
-        >
-          <RightSidebar
-            v-show="isRightSidebarOpen"
-            :selectedElement="selectedElement"
-            :validationErrors="validationErrors"
-            :isModelValid="isModelValid"
-            :enableDrag="true"
-            @toggle-right-sidebar="uiStore.toggleRightSidebar"
-            @update-element="updateElement"
-            @delete-element="deleteElement"
-            @show-validation-issues="showValidationModal = true"
-            @open-script-settings="showScriptSettingsModal = true"
-            @download-script="handleDownloadScript"
-            @generate-script="handleGenerateStandalone"
-            @share="handleShare"
-            @open-export-modal="openExportModal"
-            @export-json="handleExportJson"
-            @header-drag-start="onRightHeaderDragStart"
-          />
-        </div>
+        <Transition :css="false" @enter="onSidebarEnter" @leave="onSidebarLeave">
+          <div
+            v-if="widgetInitialized && isRightSidebarOpen"
+            class="db-sidebar-wrapper db-right"
+            :style="rightDrag.style.value"
+          >
+            <RightSidebar
+              v-show="isRightSidebarOpen"
+              :selectedElement="selectedElement"
+              :validationErrors="validationErrors"
+              :isModelValid="isModelValid"
+              :enableDrag="true"
+              @toggle-right-sidebar="uiStore.toggleRightSidebar"
+              @update-element="updateElement"
+              @delete-element="deleteElement"
+              @show-validation-issues="showValidationModal = true"
+              @open-script-settings="showScriptSettingsModal = true"
+              @download-script="handleDownloadScript"
+              @generate-script="handleGenerateStandalone"
+              @share="handleShare"
+              @open-export-modal="openExportModal"
+              @export-json="handleExportJson"
+              @header-drag-start="onRightHeaderDragStart"
+            />
+          </div>
+        </Transition>
 
         <FloatingBottomToolbar
+          ref="bottomToolbarRef"
           :current-mode="currentMode"
           :current-node-type="currentNodeType"
           :show-zoom-controls="showZoomControls"
