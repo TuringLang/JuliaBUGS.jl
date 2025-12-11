@@ -1,13 +1,52 @@
 # JuliaBUGS Changelog
 
-## 0.12
+## 0.12.0
 
-- **DifferentiationInterface.jl integration**: Use `adtype` parameter in `compile()` to enable gradient-based inference via [ADTypes.jl](https://github.com/SciML/ADTypes.jl).
+### Highlights
+
+- **DifferentiationInterface.jl integration** (#397): Use `adtype` parameter in `compile()` to enable gradient-based inference via [ADTypes.jl](https://github.com/SciML/ADTypes.jl).
   - Example: `model = compile(model_def, data; adtype=AutoReverseDiff())`
   - Supports `AutoReverseDiff`, `AutoForwardDiff`, `AutoMooncake`
 
-- **Breaking**: `LogDensityProblemsAD.ADgradient` is no longer supported.
-  - Use `compile(...; adtype=...)` or `BUGSModelWithGradient(model, adtype)` instead.
+- **Auto-marginalization for discrete parameters** (#385): Automatically marginalize discrete latent variables to enable gradient-based inference on models with discrete parameters.
+  - Example: `model = compile(model_def, data; marginalization=AutoMarginalization())`
+  - Supports models where discrete parameters have finite support
+
+- **On-demand log density function generation** (#416): Log density functions are now generated on-demand when `set_evaluation_mode(model, UseGeneratedLogDensityFunction())` is called, rather than at compile time. All models start with `UseGraph()` mode.
+
+### Breaking Changes
+
+- `LogDensityProblemsAD.ADgradient` is no longer supported. Use `compile(...; adtype=...)` or `BUGSModelWithGradient(model, adtype)` instead.
+- The `skip_source_generation` parameter has been removed from `compile()` and `BUGSModel()`.
+
+### Improvements
+
+- Expanded support for generated log density functions via dependence vectors (#390)
+- Julia 1.12 compatibility improvements (#404)
+
+## 0.11.0
+
+### Breaking Changes
+
+- **Simplified sampling API** (#406): Replaced `sample_all` and `respect_observed` kwargs with `sample_observed` in `AbstractPPL.evaluate!!`.
+  - Default behavior unchanged (samples latents, keeps observed fixed)
+  - `sample_all=true, respect_observed=false` → `sample_observed=true`
+  - Other uses → remove (now default)
+
+## 0.10.5
+
+- Add `respect_observed` kwarg to `evaluate_with_rng!!` to control whether observed values are resampled (#405)
+
+## 0.10.4
+
+- Add `skip_source_generation` option to `compile()` for serialization compatibility (#403)
+
+## 0.10.2
+
+- Fast conditioning API (#394): Add `regenerate_log_density=false` option to `condition()` for hot loops
+  - New `set_observed_values!` for in-place value updates
+  - New `regenerate_log_density_function` for explicit regeneration
+- R interface via `rjuliabugs` package (#389)
 
 ## 0.10.1
 
