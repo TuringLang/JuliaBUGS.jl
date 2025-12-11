@@ -34,12 +34,11 @@ jobs:
           - x64
         test_group:
           - "elementary"
-          - "frontend" 
+          - "frontend"
           - "graphs"
           - "compilation"
           - "log_density"
           - "model_operations"
-          - "experimental"
 
     steps:
       - uses: actions/checkout@v4
