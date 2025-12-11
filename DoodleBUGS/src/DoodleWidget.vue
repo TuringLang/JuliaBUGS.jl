@@ -265,6 +265,12 @@ const widgetTeleportCSS = `
   top: 0;
 }
 
+.db-sidebar-wrapper.db-right {
+  /* Override left:0 from base class */
+  left: auto !important;
+  right: 0;
+}
+
 .db-sidebar-wrapper.db-right .db-floating-sidebar.db-right {
   position: relative !important;
   right: auto !important;
@@ -720,16 +726,158 @@ const handleWindowScroll = (event: Event) => {
   }
 }
 
+const checkSidebarBounds = () => {
+  const winW = window.innerWidth
+  const winH = window.innerHeight
+  const margin = 20
+
+  if (leftDrag.x.value < 0 || leftDrag.x.value > winW - 100) {
+    leftDrag.x.value = margin
+  }
+
+  if (leftDrag.y.value < 0) leftDrag.y.value = margin
+  if (leftDrag.y.value > winH - 50) leftDrag.y.value = winH - 100
+
+  if (rightDrag.x.value > 0 || rightDrag.x.value < -(winW - 100)) {
+    rightDrag.x.value = -margin
+  }
+
+  if (rightDrag.y.value < 0) rightDrag.y.value = margin
+  if (rightDrag.y.value > winH - 50) rightDrag.y.value = winH - 100
+}
+
 const handleResize = () => {
   windowWidth.value = window.innerWidth
-  if (window.innerWidth - rightDrag.x.value < 500) {
-    rightDrag.x.value = window.innerWidth - 320 - 4
-  }
+  checkSidebarBounds()
 }
 
 const handleWidgetClick = () => {
   activateWidget('click')
 }
+
+const useDrag = (initialX: number, initialY: number, anchor: 'left' | 'right' = 'left') => {
+  const x = ref(initialX)
+  const y = ref(initialY)
+  const isDragging = ref(false)
+  const startX = ref(0)
+  const startY = ref(0)
+  const dragThreshold = 3
+  let initialDragX = 0
+  let initialDragY = 0
+  let animationFrameId: number | null = null
+
+  const startDrag = (e: MouseEvent | TouchEvent) => {
+    isDragging.value = true
+    isDraggingUI.value = true
+    const clientX = e instanceof MouseEvent ? e.clientX : e.touches[0].clientX
+    const clientY = e instanceof MouseEvent ? e.clientY : e.touches[0].clientY
+
+    if (anchor === 'left') {
+      startX.value = clientX - x.value
+    } else {
+      const winW = document.documentElement.clientWidth || window.innerWidth
+      startX.value = clientX - winW - x.value
+    }
+
+    startY.value = clientY - y.value
+    initialDragX = clientX
+    initialDragY = clientY
+
+    if (e instanceof MouseEvent) {
+      window.addEventListener('mousemove', onMouseMove)
+      window.addEventListener('mouseup', onMouseUp)
+    } else {
+      window.addEventListener('touchmove', onTouchMove, { passive: false })
+      window.addEventListener('touchend', onTouchEnd)
+    }
+  }
+
+  const onMouseMove = (e: MouseEvent) => {
+    if (!isDragging.value) return
+
+    if (animationFrameId) cancelAnimationFrame(animationFrameId)
+
+    animationFrameId = requestAnimationFrame(() => {
+      if (anchor === 'left') {
+        x.value = e.clientX - startX.value
+      } else {
+        const winW = document.documentElement.clientWidth || window.innerWidth
+        x.value = e.clientX - winW - startX.value
+      }
+      y.value = e.clientY - startY.value
+    })
+  }
+
+  const onTouchMove = (e: TouchEvent) => {
+    if (!isDragging.value) return
+    e.preventDefault()
+    if (animationFrameId) cancelAnimationFrame(animationFrameId)
+
+    animationFrameId = requestAnimationFrame(() => {
+      const touchX = e.touches[0].clientX
+      const touchY = e.touches[0].clientY
+
+      if (anchor === 'left') {
+        x.value = touchX - startX.value
+      } else {
+        const winW = document.documentElement.clientWidth || window.innerWidth
+        x.value = touchX - winW - startX.value
+      }
+      y.value = touchY - startY.value
+    })
+  }
+
+  const finishDrag = (clientX: number, clientY: number) => {
+    isDragging.value = false
+    isDraggingUI.value = false
+    if (animationFrameId) cancelAnimationFrame(animationFrameId)
+    const dist = Math.hypot(clientX - initialDragX, clientY - initialDragY)
+    return dist < dragThreshold
+  }
+
+  const onMouseUp = (e: MouseEvent) => {
+    const isClick = finishDrag(e.clientX, e.clientY)
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+    return isClick
+  }
+
+  const onTouchEnd = (e: TouchEvent) => {
+    const touch = e.changedTouches[0]
+    finishDrag(touch.clientX, touch.clientY)
+    window.removeEventListener('touchmove', onTouchMove)
+    window.removeEventListener('touchend', onTouchEnd)
+  }
+
+  return {
+    x,
+    y,
+    startDrag,
+    onMouseUp,
+    style: computed(() => {
+      if (anchor === 'left') {
+        return {
+          transform: `translate3d(${x.value}px, ${y.value}px, 0)`,
+          left: '0px',
+          top: '0px',
+          right: 'auto',
+        }
+      } else {
+        // Right anchor style
+        return {
+          transform: `translate3d(${x.value}px, ${y.value}px, 0)`,
+          left: 'auto',
+          top: '0px',
+          right: '0px', // Anchor to right edge
+        }
+      }
+    }),
+  }
+}
+
+const leftDrag = useDrag(20, 20, 'left')
+
+const rightDrag = useDrag(-20, 20, 'right')
 
 onMounted(async () => {
   const manager = getManager()
@@ -791,7 +939,6 @@ onMounted(async () => {
   }
 
   const savedUIState = loadUIState(WIDGET_UI_STATE_KEY)
-  let rightSidebarLoaded = false
 
   if (savedUIState) {
     if (savedUIState.leftSidebar) {
@@ -800,10 +947,15 @@ onMounted(async () => {
       uiStore.isLeftSidebarOpen = savedUIState.leftSidebar.open
     }
     if (savedUIState.rightSidebar) {
-      rightDrag.x.value = savedUIState.rightSidebar.x
+      // Migration Logic: If stored x is large positive (e.g. > 100), it's from old absolute coordinate system.
+      // Reset it to -20 (default right anchor gap) to prevent it flying off-screen.
+      if (savedUIState.rightSidebar.x > 100) {
+        rightDrag.x.value = -20
+      } else {
+        rightDrag.x.value = savedUIState.rightSidebar.x
+      }
       rightDrag.y.value = savedUIState.rightSidebar.y
       uiStore.isRightSidebarOpen = savedUIState.rightSidebar.open
-      rightSidebarLoaded = true
     }
     if (savedUIState.codePanel) {
       codePanelPos.x = savedUIState.codePanel.x
@@ -828,16 +980,9 @@ onMounted(async () => {
     }
   }
 
+  // Ensure sidebars are within bounds on mount
   nextTick(() => {
-    const docWidth = document.documentElement.clientWidth || window.innerWidth
-    const defaultRightX = docWidth - 320 - 20
-
-    if (!rightSidebarLoaded || rightDrag.x.value <= 0 || docWidth - rightDrag.x.value > 450) {
-      rightDrag.x.value = defaultRightX
-    }
-    if (!rightSidebarLoaded) {
-      rightDrag.y.value = 10
-    }
+    checkSidebarBounds()
   })
 
   await initGraph()
@@ -1288,99 +1433,6 @@ watch(
   },
   { immediate: true }
 )
-
-const useDrag = (initialX: number, initialY: number) => {
-  const x = ref(initialX)
-  const y = ref(initialY)
-  const isDragging = ref(false)
-  const startX = ref(0)
-  const startY = ref(0)
-  const dragThreshold = 3
-  let initialDragX = 0
-  let initialDragY = 0
-  let animationFrameId: number | null = null
-
-  const startDrag = (e: MouseEvent | TouchEvent) => {
-    isDragging.value = true
-    isDraggingUI.value = true
-    const clientX = e instanceof MouseEvent ? e.clientX : e.touches[0].clientX
-    const clientY = e instanceof MouseEvent ? e.clientY : e.touches[0].clientY
-
-    startX.value = clientX - x.value
-    startY.value = clientY - y.value
-    initialDragX = clientX
-    initialDragY = clientY
-
-    if (e instanceof MouseEvent) {
-      window.addEventListener('mousemove', onMouseMove)
-      window.addEventListener('mouseup', onMouseUp)
-    } else {
-      window.addEventListener('touchmove', onTouchMove, { passive: false })
-      window.addEventListener('touchend', onTouchEnd)
-    }
-  }
-
-  const onMouseMove = (e: MouseEvent) => {
-    if (!isDragging.value) return
-
-    if (animationFrameId) cancelAnimationFrame(animationFrameId)
-
-    animationFrameId = requestAnimationFrame(() => {
-      x.value = e.clientX - startX.value
-      y.value = e.clientY - startY.value
-    })
-  }
-
-  const onTouchMove = (e: TouchEvent) => {
-    if (!isDragging.value) return
-    e.preventDefault()
-    if (animationFrameId) cancelAnimationFrame(animationFrameId)
-
-    animationFrameId = requestAnimationFrame(() => {
-      x.value = e.touches[0].clientX - startX.value
-      y.value = e.touches[0].clientY - startY.value
-    })
-  }
-
-  const finishDrag = (clientX: number, clientY: number) => {
-    isDragging.value = false
-    isDraggingUI.value = false
-    if (animationFrameId) cancelAnimationFrame(animationFrameId)
-    const dist = Math.hypot(clientX - initialDragX, clientY - initialDragY)
-    return dist < dragThreshold
-  }
-
-  const onMouseUp = (e: MouseEvent) => {
-    const isClick = finishDrag(e.clientX, e.clientY)
-    window.removeEventListener('mousemove', onMouseMove)
-    window.removeEventListener('mouseup', onMouseUp)
-    return isClick
-  }
-
-  const onTouchEnd = (e: TouchEvent) => {
-    const touch = e.changedTouches[0]
-    finishDrag(touch.clientX, touch.clientY)
-    window.removeEventListener('touchmove', onTouchMove)
-    window.removeEventListener('touchend', onTouchEnd)
-  }
-
-  return {
-    x,
-    y,
-    startDrag,
-    onMouseUp,
-    style: computed(() => ({
-      transform: `translate3d(${x.value}px, ${y.value}px, 0)`,
-      left: '0px',
-      top: '0px',
-    })),
-  }
-}
-
-// Left sidebar initialized higher (y=10)
-const leftDrag = useDrag(20, 10)
-// Right sidebar initialized (y=10 to match left)
-const rightDrag = useDrag(typeof window !== 'undefined' ? window.innerWidth - 320 - 20 : 1580, 10)
 
 watch(
   [
