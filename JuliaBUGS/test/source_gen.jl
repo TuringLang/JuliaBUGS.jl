@@ -245,4 +245,27 @@ end
         @test first(can_generate_source(model_def, data))
         @test generated_matches_graph(model_def, data)
     end
+
+    @testset "@bugs_primitive works with UseGeneratedLogDensityFunction" begin
+        my_square(x) = x^2
+        JuliaBUGS.@bugs_primitive my_square
+
+        model_def = @bugs begin
+            x ~ dnorm(0, 1)
+            y = my_square(x)
+            z ~ dnorm(y, 1)
+        end
+
+        model = compile(model_def, (z=1.0,))
+        model_graph = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
+        model_gen = JuliaBUGS.set_evaluation_mode(
+            model, JuliaBUGS.UseGeneratedLogDensityFunction()
+        )
+
+        params = Base.invokelatest(JuliaBUGS.getparams, model_graph)
+        ld_graph = Base.invokelatest(LogDensityProblems.logdensity, model_graph, params)
+        ld_gen = Base.invokelatest(LogDensityProblems.logdensity, model_gen, params)
+
+        @test isapprox(ld_graph, ld_gen; rtol=1e-10)
+    end
 end
