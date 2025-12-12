@@ -582,7 +582,9 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                     model.evaluation_env,
                     gensym(:__compute_log_density__),
                 )
-                log_density_computation_function = eval(log_density_computation_expr)
+                log_density_computation_function = Core.eval(
+                    JuliaBUGS, log_density_computation_expr
+                )
 
                 # Update sorted_nodes based on reconstructed model to ensure parameter ordering
                 # consistency between UseGraph and UseGeneratedLogDensityFunction modes

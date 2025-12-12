@@ -593,7 +593,9 @@ function _regenerate_log_density_function(
         log_density_computation_expr = JuliaBUGS._gen_log_density_computation_function_expr(
             lowered_model_def, evaluation_env, gensym(:__compute_log_density__)
         )
-        new_log_density_computation_function = eval(log_density_computation_expr)
+        new_log_density_computation_function = Core.eval(
+            JuliaBUGS, log_density_computation_expr
+        )
 
         # Collect sorted nodes from the reconstructed model def to ensure correct parameter ordering
         pass = JuliaBUGS.CollectSortedNodes(evaluation_env)
