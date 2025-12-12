@@ -25,6 +25,7 @@ const props = defineProps<{
   validationErrors: Map<string, ValidationError[]>
   showZoomControls?: boolean
   initialViewport?: { zoom: number; pan: { x: number; y: number } }
+  readOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -276,6 +277,10 @@ onMounted(() => {
       disableGridSnapping()
     }
 
+    if (props.readOnly) {
+      cy.autoungrabify(true)
+    }
+
     const ur = getUndoRedoInstance(props.graphId)
     if (ur) {
       cy.on('afterUndo afterRedo afterDo', () => {
@@ -309,6 +314,7 @@ onMounted(() => {
     })
 
     cy.container()?.addEventListener('cxt-remove', (event: Event) => {
+      if (props.readOnly) return
       const customEvent = event as CustomEvent
       if (customEvent.detail.elementId) {
         emit('element-remove', customEvent.detail.elementId)
@@ -320,6 +326,7 @@ onMounted(() => {
     })
 
     cy.on('free', 'node', (evt: EventObject) => {
+      if (props.readOnly) return
       const node = evt.target as NodeSingular
 
       if (node.id().startsWith('ghost_')) return
@@ -345,6 +352,7 @@ onMounted(() => {
     })
 
     cyContainer.value.addEventListener('dragover', (event) => {
+      if (props.readOnly) return
       event.preventDefault()
       if (event.dataTransfer) {
         event.dataTransfer.dropEffect = 'copy'
@@ -353,6 +361,7 @@ onMounted(() => {
 
     cyContainer.value.addEventListener('drop', (event) => {
       event.preventDefault()
+      if (props.readOnly) return
 
       if (event.dataTransfer) {
         const droppedItemType = event.dataTransfer.getData('text/plain') as PaletteItemType
@@ -423,6 +432,16 @@ onUnmounted(() => {
     destroyCytoscape(props.graphId)
   }
 })
+
+watch(
+  () => props.readOnly,
+  (newVal) => {
+    if (cy) {
+      cy.autoungrabify(!!newVal)
+    }
+  },
+  { immediate: true }
+)
 
 watch(
   () => props.isGridEnabled,
@@ -502,8 +521,8 @@ watch(
       'db-grid-background': isGridEnabled && gridSize > 0,
       'db-grid-lines': gridStyle === 'lines' && isGridEnabled && gridSize > 0,
       'db-grid-dots': gridStyle === 'dots' && isGridEnabled && gridSize > 0,
-      'db-mode-add-node': currentMode === 'add-node',
-      'db-mode-add-edge': currentMode === 'add-edge',
+      'db-mode-add-node': currentMode === 'add-node' && !readOnly,
+      'db-mode-add-edge': currentMode === 'add-edge' && !readOnly,
       'db-mode-select': currentMode === 'select',
       'db-graph-ready': isGraphVisible,
     }"

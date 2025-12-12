@@ -598,18 +598,15 @@ const initGraph = async () => {
 
 interface WidgetInstanceCallbacks {
   setUIActive: (val: boolean) => void
-  setEditMode: (val: boolean) => void
   getRect: () => DOMRect | undefined | null
 }
 
 interface DoodleBugsManager {
   instances: Map<string, WidgetInstanceCallbacks>
   activeId: string | null
-  globalEditMode: boolean
   register(id: string, callbacks: WidgetInstanceCallbacks): void
   unregister(id: string): void
   setActive(id: string | null): void
-  setEditMode(mode: boolean): void
   recalculateActive(): void
 }
 
@@ -618,16 +615,11 @@ const getManager = (): DoodleBugsManager => {
   const w = window as unknown as Window & { __DoodleBugsManager?: DoodleBugsManager }
   if (!w.__DoodleBugsManager) {
     w.__DoodleBugsManager = {
-      instances: new Map(), // id -> { setUIActive: (bool)=>void, setEditMode: (bool)=>void, getRect: ()=>DOMRect }
+      instances: new Map(), // id -> { setUIActive: (bool)=>void, getRect: ()=>DOMRect }
       activeId: null,
-      globalEditMode: false,
 
       register(id: string, callbacks: WidgetInstanceCallbacks) {
         this.instances.set(id, callbacks)
-        // Sync new instance to global edit mode
-        if (this.globalEditMode) {
-          callbacks.setEditMode(true)
-        }
       },
 
       unregister(id: string) {
@@ -645,17 +637,6 @@ const getManager = (): DoodleBugsManager => {
         this.instances.forEach((inst: WidgetInstanceCallbacks, key: string) => {
           inst.setUIActive(key === id)
         })
-      },
-
-      setEditMode(mode: boolean) {
-        this.globalEditMode = mode
-        this.instances.forEach((inst: WidgetInstanceCallbacks) => {
-          inst.setEditMode(mode)
-        })
-        // If turning on edit mode, make sure *someone* is active if none is
-        if (mode && !this.activeId) {
-          this.recalculateActive()
-        }
       },
 
       recalculateActive() {
@@ -697,11 +678,13 @@ const activateWidget = (source: 'click' | 'scroll') => {
 }
 
 const toggleEditMode = () => {
-  const manager = getManager()
-  manager.setEditMode(!isEditMode.value)
+  isEditMode.value = !isEditMode.value
 
   if (isEditMode.value) {
     activateWidget('click')
+  } else {
+    uiStore.isLeftSidebarOpen = false
+    uiStore.isRightSidebarOpen = false
   }
   saveWidgetUIState()
 }
@@ -886,13 +869,6 @@ onMounted(async () => {
     setUIActive: (val: boolean) => {
       isUIActive.value = val
     },
-    setEditMode: (val: boolean) => {
-      isEditMode.value = val
-      if (!val) {
-        uiStore.isLeftSidebarOpen = false
-        uiStore.isRightSidebarOpen = false
-      }
-    },
     getRect: () => (widgetRoot.value ? widgetRoot.value.getBoundingClientRect() : null),
   })
 
@@ -973,10 +949,7 @@ onMounted(async () => {
       graphStore.selectGraph(savedUIState.currentGraphId)
     }
     if (savedUIState.editMode !== undefined) {
-      if (!manager.globalEditMode) {
-        isEditMode.value = savedUIState.editMode
-        manager.setEditMode(savedUIState.editMode)
-      }
+      isEditMode.value = savedUIState.editMode
     }
   }
 
@@ -1687,6 +1660,7 @@ const onSidebarEnter = (el: Element, done: () => void) => {
           :current-node-type="currentNodeType"
           :validation-errors="validationErrors"
           :show-zoom-controls="false"
+          :read-only="!isEditMode"
           @update:current-mode="currentMode = $event"
           @update:current-node-type="currentNodeType = $event"
           @element-selected="handleElementSelected"
