@@ -689,22 +689,27 @@ const toggleEditMode = () => {
   saveWidgetUIState()
 }
 
+let scrollRafId: number | null = null
+
 const handleWindowScroll = (event: Event) => {
   const target = event.target as Node
   const isDocumentScroll =
     target === document || target === document.documentElement || target === document.body
 
   if (isDocumentScroll) {
-    if (observer) {
-    } else {
-      getManager().recalculateActive()
-    }
+    if (!scrollRafId) {
+      scrollRafId = requestAnimationFrame(() => {
+        // Always check active widget on scroll to ensure smooth transitions
+        getManager().recalculateActive()
 
-    if (graphStore.currentGraphId) {
-      const cy = getCyInstance(graphStore.currentGraphId)
-      if (cy) {
-        cy.resize()
-      }
+        if (graphStore.currentGraphId) {
+          const cy = getCyInstance(graphStore.currentGraphId)
+          if (cy) {
+            cy.resize()
+          }
+        }
+        scrollRafId = null
+      })
     }
   }
 }
