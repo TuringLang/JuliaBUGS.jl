@@ -413,7 +413,7 @@ The contribution is to show what the cache key is and how to precompute
 
 ---
 
-## API
+## Usage
 
 Enable auto-marginalization on a compiled model:
 
@@ -422,6 +422,4 @@ Enable auto-marginalization on a compiled model:
 
 Requires transformed space. Discrete variables must have finite support (Categorical, Bernoulli, etc.).
 
-```@docs
-JuliaBUGS.Model.set_evaluation_mode
-```
+See [Evaluation Modes](evaluation_modes.md) for more on `set_evaluation_mode`.
