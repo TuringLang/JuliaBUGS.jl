@@ -356,8 +356,6 @@ export of
 
 include("serialization.jl")
 
-include("experimental/ProbabilisticGraphicalModels/ProbabilisticGraphicalModels.jl")
-
 function __init__()
     empty!(BUGS_ALLOWED_FUNCTIONS)
 

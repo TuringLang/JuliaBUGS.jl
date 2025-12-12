@@ -8,6 +8,7 @@ using JuliaBUGS:
     find_generated_quantities_variables,
     evaluate!!,
     getparams
+using JuliaBUGS.Model: UseAutoMarginalization
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.Accessors
 using MCMCChains: Chains
@@ -130,16 +131,24 @@ function JuliaBUGS.gen_chains(
     thinning=1,
     kwargs...,
 )
-    param_vars = model.graph_evaluation_data.sorted_parameters
+    gd = model.graph_evaluation_data
+    # Filter parameters based on evaluation mode - only include continuous parameters
+    # when auto-marginalization is active (discrete parameters are marginalized out)
+    param_vars = if model.evaluation_mode isa UseAutoMarginalization
+        mc = model.marginalization_cache
+        filter(gd.sorted_parameters) do vn
+            idx = findfirst(==(vn), gd.sorted_nodes)
+            idx !== nothing && mc.node_types[idx] == :continuous
+        end
+    else
+        gd.sorted_parameters
+    end
 
     # Find and order generated quantities
     # Exclude parameters to avoid double counting forward-sampled variables
     generated_vars = find_generated_quantities_variables(model.g)
     param_set = Set(param_vars)
-    generated_vars = [
-        v for v in model.graph_evaluation_data.sorted_nodes if
-        v in generated_vars && v ∉ param_set
-    ]
+    generated_vars = [v for v in gd.sorted_nodes if v in generated_vars && v ∉ param_set]
 
     # Evaluate model for each sample to get parameter values and generated quantities
     param_vals = []
@@ -246,7 +255,7 @@ function AbstractMCMC.bundle_samples(
     samples::Vector,  # Contains evaluation environments
     logdensitymodel::AbstractMCMC.LogDensityModel{<:BUGSModel},
     sampler::JuliaBUGS.IndependentMH,
-    states::Vector,
+    state,  # Final state only (AbstractMCMC interface)
     ::Type{Chains};
     kwargs...,
 )
@@ -259,11 +268,8 @@ function AbstractMCMC.bundle_samples(
         push!(param_samples, getparams(model_with_env))
     end
 
-    # Include log probabilities as statistics
-    logps = [state.logp for state in states]
-    return JuliaBUGS.gen_chains(
-        logdensitymodel, param_samples, [:lp], [[lp] for lp in logps]; kwargs...
-    )
+    # No per-sample log probabilities available since AbstractMCMC only passes final state
+    return JuliaBUGS.gen_chains(logdensitymodel, param_samples, [], []; kwargs...)
 end
 
 end

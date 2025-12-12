@@ -676,7 +676,7 @@ using JuliaBUGS.Model:
         θ = getparams(model)
 
         # AD gradient via ForwardDiff
-        ad_model = ADgradient(AutoForwardDiff(), model)
+        ad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoForwardDiff())
         val_ad, grad_ad = Base.invokelatest(
             LogDensityProblems.logdensity_and_gradient, ad_model, θ
         )
@@ -729,7 +729,7 @@ using JuliaBUGS.Model:
             stats.tempered_logjoint, expected_logprior + 0.4 * expected_loglik; atol=1e-10
         )
 
-        ad_model = ADgradient(AutoForwardDiff(), model)
+        ad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoForwardDiff())
         val, grad = Base.invokelatest(
             LogDensityProblems.logdensity_and_gradient, ad_model, θ
         )
@@ -782,7 +782,7 @@ using JuliaBUGS.Model:
             LogDensityProblems.dimension(model_graph)
 
         # Run gradient-based sampling (NUTS) on the auto-marginalized AD-wrapped model
-        ad_model = ADgradient(AutoForwardDiff(), model_marg)
+        ad_model = JuliaBUGS.BUGSModelWithGradient(model_marg, AutoForwardDiff())
         D = LogDensityProblems.dimension(model_marg)
         # Initialize near true values for faster convergence
         initialize!(model_marg, (; mu=[-2.0, 2.0], sigma=[1.0, 1.0]))
@@ -834,13 +834,13 @@ using JuliaBUGS.Model:
         θ = getparams(model)
 
         # ReverseDiff gradient
-        ad_model_rd = ADgradient(AutoReverseDiff(), model)
+        ad_model_rd = JuliaBUGS.BUGSModelWithGradient(model, AutoReverseDiff())
         val_rd, grad_rd = Base.invokelatest(
             LogDensityProblems.logdensity_and_gradient, ad_model_rd, θ
         )
 
         # ForwardDiff gradient for comparison
-        ad_model_fd = ADgradient(AutoForwardDiff(), model)
+        ad_model_fd = JuliaBUGS.BUGSModelWithGradient(model, AutoForwardDiff())
         val_fd, grad_fd = Base.invokelatest(
             LogDensityProblems.logdensity_and_gradient, ad_model_fd, θ
         )

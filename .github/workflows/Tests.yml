@@ -34,12 +34,11 @@ jobs:
           - x64
         test_group:
           - "elementary"
-          - "frontend" 
+          - "frontend"
           - "graphs"
           - "compilation"
           - "log_density"
           - "model_operations"
-          - "experimental"
 
     steps:
       - uses: actions/checkout@v4
@@ -85,9 +84,7 @@ jobs:
         arch:
           - x64
         test_group:
-          - "inference_hmc"
-          - "inference_chains"
-          - "inference_mh"
+          - "inference"
           - "gibbs"
 
     steps:
