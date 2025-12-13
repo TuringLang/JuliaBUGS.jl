@@ -3,6 +3,9 @@ import { computed, ref, onUnmounted, watch } from 'vue'
 import type { NodeType } from '../../types'
 import { nodeDefinitions } from '../../config/nodeDefinitions'
 import DropdownMenu from '../common/DropdownMenu.vue'
+import Tooltip from 'primevue/tooltip'
+
+const vTooltip = Tooltip
 
 const props = defineProps<{
   currentMode: string
@@ -12,6 +15,7 @@ const props = defineProps<{
   showZoomControls?: boolean
   isDetachModeActive?: boolean
   showDetachModeControl?: boolean
+  isWidget?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -28,7 +32,16 @@ const emit = defineEmits<{
   (e: 'toggle-detach-mode'): void
   (e: 'open-style-modal'): void
   (e: 'share'): void
+  (e: 'nav', view: string): void
+  (e: 'drag-start'): void
+  (e: 'drag-end', position: { x: number; y: number }): void
 }>()
+
+const showSecondaryMenu = ref(false)
+
+const toggleSecondaryMenu = () => {
+  showSecondaryMenu.value = !showSecondaryMenu.value
+}
 
 const availableNodeTypes = computed(() => {
   return nodeDefinitions.map((def) => ({
@@ -50,14 +63,13 @@ const nodeIcons: Record<string, string> = {
   plate: 'fas fa-th-large',
 }
 
-// Colors used for Active State Background and Inactive State Icon/Text
 const nodeColors: Record<string, string> = {
-  stochastic: '#ef4444', // Red
-  deterministic: '#10b981', // Green
-  constant: '#6b7280', // Gray
-  observed: '#3b82f6', // Blue
-  plate: '#8b5cf6', // Purple
-  edge: '#f59e0b', // Amber
+  stochastic: '#ef4444',
+  deterministic: '#10b981',
+  constant: '#6b7280',
+  observed: '#3b82f6',
+  plate: '#8b5cf6',
+  edge: '#f59e0b',
 }
 
 const lastAddTool = ref<NodeType | 'edge'>(props.currentNodeType)
@@ -103,18 +115,14 @@ const isAddModeActive = computed(() => {
   return props.currentMode === 'add-node' && props.currentNodeType === lastAddTool.value
 })
 
-const activateAddTool = () => {
-  if (lastAddTool.value === 'edge') {
-    emit('update:currentMode', 'add-edge')
-  } else {
-    emit('update:currentNodeType', lastAddTool.value)
-    emit('update:currentMode', 'add-node')
-  }
-}
-
 const selectAddTool = (tool: NodeType | 'edge') => {
   lastAddTool.value = tool
-  activateAddTool()
+  if (tool === 'edge') {
+    emit('update:currentMode', 'add-edge')
+  } else {
+    emit('update:currentNodeType', tool)
+    emit('update:currentMode', 'add-node')
+  }
 }
 
 const addButtonStyle = computed(() => {
@@ -131,8 +139,14 @@ const addButtonStyle = computed(() => {
 
 const toolbarRef = ref<HTMLElement | null>(null)
 const isDragging = ref(false)
-const position = ref({ bottom: '24px', left: '50%', transform: 'translateX(-50%)' })
+const styleState = ref({
+  left: '50%',
+  bottom: '24px',
+  top: 'auto',
+  transform: 'translateX(-50%)',
+})
 const dragOffset = ref({ x: 0, y: 0 })
+let animationFrameId: number | null = null
 
 const startDrag = (event: MouseEvent) => {
   if (
@@ -146,18 +160,20 @@ const startDrag = (event: MouseEvent) => {
   if (!toolbarRef.value) return
 
   isDragging.value = true
+  emit('drag-start') // Signal start of drag
   const rect = toolbarRef.value.getBoundingClientRect()
-
-  position.value = {
-    left: `${rect.left}px`,
-    bottom: 'auto',
-    transform: 'none',
-  }
-  ;(toolbarRef.value.style as CSSStyleDeclaration).top = `${rect.top}px`
 
   dragOffset.value = {
     x: event.clientX - rect.left,
     y: event.clientY - rect.top,
+  }
+
+  // Switch to absolute positioning with transform for performance
+  styleState.value = {
+    left: '0px',
+    top: '0px',
+    bottom: 'auto',
+    transform: `translate3d(${rect.left}px, ${rect.top}px, 0)`,
   }
 
   window.addEventListener('mousemove', onDrag)
@@ -165,21 +181,29 @@ const startDrag = (event: MouseEvent) => {
 }
 
 const onDrag = (event: MouseEvent) => {
-  if (!isDragging.value || !toolbarRef.value) return
+  if (!isDragging.value) return
 
-  const x = event.clientX - dragOffset.value.x
-  const y = event.clientY - dragOffset.value.y
+  // Throttle updates using requestAnimationFrame
+  if (animationFrameId) return
 
-  position.value.left = `${x}px`
-  ;(toolbarRef.value.style as CSSStyleDeclaration).top = `${y}px`
+  animationFrameId = requestAnimationFrame(() => {
+    const x = event.clientX - dragOffset.value.x
+    const y = event.clientY - dragOffset.value.y
+    styleState.value.transform = `translate3d(${x}px, ${y}px, 0)`
+    animationFrameId = null
+  })
 }
 
 const stopDrag = () => {
   isDragging.value = false
+  emit('drag-end', { x: 0, y: 0 })
+  if (animationFrameId) cancelAnimationFrame(animationFrameId)
+  animationFrameId = null
   window.removeEventListener('mousemove', onDrag)
   window.removeEventListener('mouseup', stopDrag)
 }
 
+// Touch Support
 const startDragTouch = (event: TouchEvent) => {
   if (
     (event.target as HTMLElement).closest('button') ||
@@ -192,19 +216,20 @@ const startDragTouch = (event: TouchEvent) => {
   if (!toolbarRef.value) return
 
   isDragging.value = true
+  emit('drag-start') // Signal start of drag
   const rect = toolbarRef.value.getBoundingClientRect()
   const touch = event.touches[0]
-
-  position.value = {
-    left: `${rect.left}px`,
-    bottom: 'auto',
-    transform: 'none',
-  }
-  ;(toolbarRef.value.style as CSSStyleDeclaration).top = `${rect.top}px`
 
   dragOffset.value = {
     x: touch.clientX - rect.left,
     y: touch.clientY - rect.top,
+  }
+
+  styleState.value = {
+    left: '0px',
+    top: '0px',
+    bottom: 'auto',
+    transform: `translate3d(${rect.left}px, ${rect.top}px, 0)`,
   }
 
   window.addEventListener('touchmove', onDragTouch, { passive: false })
@@ -212,19 +237,25 @@ const startDragTouch = (event: TouchEvent) => {
 }
 
 const onDragTouch = (event: TouchEvent) => {
-  if (!isDragging.value || !toolbarRef.value) return
-  event.preventDefault() // Prevent scroll
+  if (!isDragging.value) return
+  event.preventDefault() // Prevent scrolling while dragging
   const touch = event.touches[0]
 
-  const x = touch.clientX - dragOffset.value.x
-  const y = touch.clientY - dragOffset.value.y
+  if (animationFrameId) return
 
-  position.value.left = `${x}px`
-  ;(toolbarRef.value.style as CSSStyleDeclaration).top = `${y}px`
+  animationFrameId = requestAnimationFrame(() => {
+    const x = touch.clientX - dragOffset.value.x
+    const y = touch.clientY - dragOffset.value.y
+    styleState.value.transform = `translate3d(${x}px, ${y}px, 0)`
+    animationFrameId = null
+  })
 }
 
 const stopDragTouch = () => {
   isDragging.value = false
+  emit('drag-end', { x: 0, y: 0 })
+  if (animationFrameId) cancelAnimationFrame(animationFrameId)
+  animationFrameId = null
   window.removeEventListener('touchmove', onDragTouch)
   window.removeEventListener('touchend', stopDragTouch)
 }
@@ -239,57 +270,162 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="toolbar-container"
+    class="db-toolbar-container"
     ref="toolbarRef"
-    :style="position"
+    :style="styleState"
     @mousedown="startDrag"
     @touchstart="startDragTouch"
   >
-    <div class="floating-dock glass-panel">
-      <div class="drag-handle" title="Drag Toolbar">
+    <!-- Secondary Menu (Above Main Bar) -->
+    <Transition name="db-slide-up">
+      <div v-if="showSecondaryMenu" class="db-secondary-dock db-glass-panel">
+        <!-- App Navigation Group (Widget Only) -->
+        <template v-if="isWidget">
+          <div class="db-menu-group">
+            <span class="db-group-label">Menu</span>
+            <div class="db-group-items">
+              <button
+                class="db-dock-btn db-secondary-btn"
+                @click="$emit('nav', 'project')"
+                v-tooltip.top="{ value: 'Projects', showDelay: 0, hideDelay: 0 }"
+              >
+                <i class="fas fa-folder"></i>
+              </button>
+              <button
+                class="db-dock-btn db-secondary-btn"
+                @click="$emit('nav', 'view')"
+                v-tooltip.top="{ value: 'View Options', showDelay: 0, hideDelay: 0 }"
+              >
+                <i class="fas fa-eye"></i>
+              </button>
+              <button
+                class="db-dock-btn db-secondary-btn"
+                @click="$emit('nav', 'help')"
+                v-tooltip.top="{ value: 'Help & Dev Tools', showDelay: 0, hideDelay: 0 }"
+              >
+                <i class="fas fa-question-circle"></i>
+              </button>
+            </div>
+          </div>
+          <div class="db-divider"></div>
+        </template>
+
+        <!-- Panels Group -->
+        <div class="db-menu-group">
+          <span class="db-group-label">Panels</span>
+          <div class="db-group-items">
+            <button
+              class="db-dock-btn db-secondary-btn"
+              @click="$emit('open-style-modal')"
+              v-tooltip.top="{ value: 'Graph Style', showDelay: 0, hideDelay: 0 }"
+            >
+              <i class="fas fa-palette"></i>
+            </button>
+            <button
+              class="db-dock-btn db-secondary-btn"
+              :class="{ 'db-active': showDataPanel }"
+              @click="$emit('toggle-data-panel')"
+              v-tooltip.top="{ value: 'Data Panel', showDelay: 0, hideDelay: 0 }"
+            >
+              <i class="fas fa-database"></i>
+            </button>
+            <button
+              class="db-dock-btn db-secondary-btn"
+              :class="{ 'db-active': showCodePanel }"
+              @click="$emit('toggle-code-panel')"
+              v-tooltip.top="{ value: 'BUGS Code', showDelay: 0, hideDelay: 0 }"
+            >
+              <i class="fas fa-code"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Export Group (Restricted to Widget Only) -->
+        <template v-if="isWidget">
+          <div class="db-divider"></div>
+          <div class="db-menu-group">
+            <span class="db-group-label">Actions</span>
+            <div class="db-group-items">
+              <button
+                class="db-dock-btn db-secondary-btn"
+                @click="$emit('share')"
+                v-tooltip.top="{ value: 'Share', showDelay: 0, hideDelay: 0 }"
+              >
+                <i class="fas fa-share-alt"></i>
+              </button>
+              <button
+                class="db-dock-btn db-secondary-btn"
+                @click="$emit('nav', 'export')"
+                v-tooltip.top="{ value: 'Export', showDelay: 0, hideDelay: 0 }"
+              >
+                <i class="fas fa-file-export"></i>
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </Transition>
+
+    <!-- Main Toolbar -->
+    <div class="db-floating-dock db-glass-panel">
+      <div
+        class="db-drag-handle"
+        v-tooltip.top="{ value: 'Drag Toolbar', showDelay: 0, hideDelay: 0 }"
+      >
         <i class="fas fa-grip-vertical"></i>
       </div>
 
-      <!-- 1. Selection Tool -->
+      <!-- Menu Toggle -->
       <button
-        class="dock-btn"
-        :class="{ active: currentMode === 'select' }"
+        class="db-dock-btn db-main-menu-toggle"
+        :class="{ 'db-active': showSecondaryMenu }"
+        @click="toggleSecondaryMenu"
+        v-tooltip.top="{ value: 'Menu', showDelay: 0, hideDelay: 0 }"
+      >
+        <i :class="showSecondaryMenu ? 'fas fa-times' : 'fas fa-bars'"></i>
+      </button>
+
+      <div class="db-divider"></div>
+
+      <!-- Tools Group -->
+      <button
+        class="db-dock-btn"
+        :class="{ 'db-active': currentMode === 'select' }"
         @click="setMode('select')"
-        title="Select Tool (V)"
+        v-tooltip.top="{ value: 'Select Tool', showDelay: 0, hideDelay: 0 }"
         type="button"
       >
         <i class="fas fa-mouse-pointer"></i>
       </button>
 
-      <!-- 2. Add Node/Edge Dropdown -->
-      <DropdownMenu class="dock-dropdown add-tool-dropdown">
+      <DropdownMenu class="db-dock-dropdown add-tool-dropdown">
         <template #trigger>
           <button
-            class="add-tool-btn"
-            :class="{ active: isAddModeActive }"
+            class="db-add-tool-btn"
+            :class="{ 'db-active': isAddModeActive }"
             :style="addButtonStyle"
-            title="Add Node or Edge"
+            v-tooltip.top="{ value: 'Add Node or Edge', showDelay: 0, hideDelay: 0 }"
             type="button"
           >
             <i
               :class="currentAddToolIcon"
-              class="tool-icon"
+              class="db-tool-icon"
               :style="{ color: isAddModeActive ? 'white' : currentAddToolColor }"
             ></i>
             <span
-              class="tool-label"
+              class="db-tool-label"
               :style="{ color: isAddModeActive ? 'white' : 'var(--theme-text-primary)' }"
             >
               {{ currentAddToolLabel }}
             </span>
             <i
-              class="fas fa-chevron-down arrow-icon"
+              class="fas fa-chevron-down db-arrow-icon"
               :style="{ color: isAddModeActive ? 'white' : 'var(--theme-text-muted)' }"
             ></i>
           </button>
         </template>
         <template #content>
-          <div class="dropdown-section-title">Nodes</div>
+          <div class="db-dropdown-section-title">Nodes</div>
           <a
             href="#"
             v-for="type in availableNodeTypes"
@@ -303,126 +439,197 @@ onUnmounted(() => {
             ></i>
             {{ type.label }}
           </a>
-          <div class="dropdown-divider"></div>
-          <div class="dropdown-section-title">Connections</div>
+          <div class="db-dropdown-divider"></div>
+          <div class="db-dropdown-section-title">Connections</div>
           <a href="#" @click.prevent="selectAddTool('edge')">
             <i class="fas fa-bezier-curve menu-icon" :style="{ color: nodeColors.edge }"></i> Edge
           </a>
         </template>
       </DropdownMenu>
 
-      <div class="divider"></div>
+      <div class="db-divider"></div>
 
-      <!-- 3. Detach Mode (Touch) - Conditionally Rendered -->
-      <template v-if="showDetachModeControl">
-        <button
-          class="dock-btn"
-          :class="{ active: isDetachModeActive }"
-          @click="$emit('toggle-detach-mode')"
-          title="Detach Mode (Simulates Alt/Option key)"
-          type="button"
-        >
-          <i class="fas fa-unlink"></i>
-        </button>
-        <div class="divider"></div>
-      </template>
-
-      <!-- 4. Edit History -->
-      <button class="dock-btn" @click="$emit('undo')" title="Undo (Ctrl+Z)" type="button">
+      <!-- History -->
+      <button
+        class="db-dock-btn"
+        @click="$emit('undo')"
+        v-tooltip.top="{ value: 'Undo', showDelay: 0, hideDelay: 0 }"
+        type="button"
+      >
         <i class="fas fa-undo"></i>
       </button>
-      <button class="dock-btn" @click="$emit('redo')" title="Redo (Ctrl+Y)" type="button">
+      <button
+        class="db-dock-btn"
+        @click="$emit('redo')"
+        v-tooltip.top="{ value: 'Redo', showDelay: 0, hideDelay: 0 }"
+        type="button"
+      >
         <i class="fas fa-redo"></i>
       </button>
 
-      <div class="divider"></div>
+      <div class="db-divider"></div>
 
-      <!-- 5. Panels & Style -->
-      <button
-        class="dock-btn"
-        :class="{ active: showCodePanel }"
-        @click="$emit('toggle-code-panel')"
-        title="BUGS Code"
-        type="button"
-      >
-        <i class="fas fa-code"></i>
-      </button>
-
-      <button
-        class="dock-btn"
-        :class="{ active: showDataPanel }"
-        @click="$emit('toggle-data-panel')"
-        title="Data Panel"
-        type="button"
-      >
-        <i class="fas fa-database"></i>
-      </button>
-
-      <button class="dock-btn" @click="$emit('open-style-modal')" title="Graph Style" type="button">
-        <i class="fas fa-palette"></i>
-      </button>
-
-      <!-- 6. Zoom & Layout -->
-      <template v-if="showZoomControls">
-        <div class="divider"></div>
-        <button class="dock-btn" @click="$emit('zoom-in')" title="Zoom In" type="button">
-          <i class="fas fa-plus"></i>
-        </button>
-        <button class="dock-btn" @click="$emit('zoom-out')" title="Zoom Out" type="button">
-          <i class="fas fa-minus"></i>
-        </button>
-        <button class="dock-btn" @click="$emit('fit')" title="Fit to View" type="button">
-          <i class="fas fa-compress-arrows-alt"></i>
-        </button>
-      </template>
-
-      <div class="divider"></div>
-
-      <DropdownMenu class="dock-dropdown">
+      <!-- Layout Dropdown (Moved from Secondary Menu) -->
+      <DropdownMenu class="db-dock-dropdown">
         <template #trigger>
-          <button class="dock-btn" title="Graph Layout" type="button">
+          <button
+            class="db-dock-btn"
+            v-tooltip.top="{ value: 'Graph Layout', showDelay: 0, hideDelay: 0 }"
+            type="button"
+          >
             <i class="fas fa-sitemap"></i>
           </button>
         </template>
         <template #content>
-          <div class="dropdown-section-title">Layout</div>
-          <a href="#" @click.prevent="$emit('layout-graph', 'dagre')">Dagre</a>
-          <a href="#" @click.prevent="$emit('layout-graph', 'fcose')">fCoSE</a>
-          <a href="#" @click.prevent="$emit('layout-graph', 'cola')">Cola</a>
-          <a href="#" @click.prevent="$emit('layout-graph', 'klay')">KLay</a>
-          <a href="#" @click.prevent="$emit('layout-graph', 'preset')">Reset</a>
+          <div class="db-dropdown-section-title">Auto Layout</div>
+          <a href="#" @click.prevent="$emit('layout-graph', 'dagre')">Dagre (Hierarchical)</a>
+          <a href="#" @click.prevent="$emit('layout-graph', 'fcose')">fCoSE (Force)</a>
+          <a href="#" @click.prevent="$emit('layout-graph', 'cola')">Cola (Physics)</a>
+          <a href="#" @click.prevent="$emit('layout-graph', 'klay')">KLay (Layered)</a>
+          <a href="#" @click.prevent="$emit('layout-graph', 'preset')">Reset Positions</a>
         </template>
       </DropdownMenu>
+
+      <!-- Zoom (Conditional) -->
+      <template v-if="showZoomControls">
+        <div class="db-divider"></div>
+        <button
+          class="db-dock-btn"
+          @click="$emit('zoom-in')"
+          v-tooltip.top="{ value: 'Zoom In', showDelay: 0, hideDelay: 0 }"
+          type="button"
+        >
+          <i class="fas fa-plus"></i>
+        </button>
+        <button
+          class="db-dock-btn"
+          @click="$emit('zoom-out')"
+          v-tooltip.top="{ value: 'Zoom Out', showDelay: 0, hideDelay: 0 }"
+          type="button"
+        >
+          <i class="fas fa-minus"></i>
+        </button>
+        <button
+          class="db-dock-btn"
+          @click="$emit('fit')"
+          v-tooltip.top="{ value: 'Fit to View', showDelay: 0, hideDelay: 0 }"
+          type="button"
+        >
+          <i class="fas fa-compress-arrows-alt"></i>
+        </button>
+      </template>
+
+      <!-- Detach Toggle (Conditional) -->
+      <template v-if="showDetachModeControl">
+        <div class="db-divider"></div>
+        <button
+          class="db-dock-btn"
+          :class="{ 'db-active': isDetachModeActive }"
+          @click="$emit('toggle-detach-mode')"
+          v-tooltip.top="{ value: 'Detach Mode', showDelay: 0, hideDelay: 0 }"
+          type="button"
+        >
+          <i class="fas fa-unlink"></i>
+        </button>
+      </template>
     </div>
   </div>
 </template>
 
 <style scoped>
-.toolbar-container {
+.db-toolbar-container {
   position: fixed;
-  z-index: 100;
+  z-index: 400; /* Layer 5: Toolbar - above panels, below dropdowns */
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 0; /* Gap handled by margin/position of secondary */
   cursor: grab;
   touch-action: none;
+  will-change: transform;
 }
 
-.toolbar-container:active {
+.db-toolbar-container:active {
   cursor: grabbing;
 }
 
-.floating-dock {
+.db-floating-dock {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 6px 8px;
   border-radius: var(--radius-pill);
   transition: box-shadow 0.2s ease;
+  user-select: none;
+  position: relative;
+  z-index: 2;
+  background: var(--theme-bg-panel); /* Ensure background is solid enough */
 }
 
-.drag-handle {
+/* Secondary Menu Styles */
+.db-secondary-dock {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 12px; /* Space between main and secondary */
+  padding: 8px 12px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  z-index: 1;
+  width: max-content; /* Dynamic width */
+  white-space: nowrap;
+}
+
+.db-menu-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.db-group-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--theme-text-secondary);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.db-group-items {
+  display: flex;
+  gap: 4px;
+}
+
+.db-secondary-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px; /* Square-ish for secondary */
+}
+
+/* Transitions */
+.db-slide-up-enter-active,
+.db-slide-up-leave-active {
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: bottom center;
+}
+
+.db-slide-up-enter-from,
+.db-slide-up-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px) scale(0.95);
+}
+
+.db-slide-up-enter-to,
+.db-slide-up-leave-from {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.db-drag-handle {
   color: var(--theme-text-muted);
   cursor: grab;
   padding: 0 6px;
@@ -431,11 +638,11 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
-.drag-handle:active {
+.db-drag-handle:active {
   cursor: grabbing;
 }
 
-.dock-btn {
+.db-dock-btn {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -450,24 +657,35 @@ onUnmounted(() => {
   transition: all 0.2s;
 }
 
-.dock-btn:hover {
+.db-dock-btn:hover {
   background: var(--theme-bg-hover);
   color: var(--theme-text-primary);
 }
 
-.dock-btn.active {
+.db-dock-btn.db-active {
   background: var(--theme-primary);
   color: white;
 }
 
-.divider {
-  width: 1px;
-  height: 16px;
-  background: var(--theme-border);
-  margin: 0 4px;
+/* Main Menu Toggle Highlight */
+.db-main-menu-toggle.db-active {
+  background: var(--theme-bg-active);
+  color: var(--theme-text-primary);
 }
 
-.add-tool-btn {
+.db-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--theme-border);
+  margin: 0 4px;
+  align-self: center;
+}
+
+.db-floating-dock .db-divider {
+  height: 16px;
+}
+
+.db-add-tool-btn {
   display: flex;
   align-items: center;
   height: 32px;
@@ -480,23 +698,23 @@ onUnmounted(() => {
   border: 1px solid transparent;
 }
 
-.add-tool-btn:hover {
+.db-add-tool-btn:hover {
   background: var(--theme-bg-hover);
   border-color: var(--theme-border);
 }
 
 /* When active, styles are applied via :style binding (colored background) */
-.add-tool-btn.active {
+.db-add-tool-btn.db-active {
   border-color: transparent;
 }
 
-.tool-icon {
+.db-tool-icon {
   font-size: 14px;
   margin-right: 6px;
   pointer-events: none;
 }
 
-.tool-label {
+.db-tool-label {
   font-size: 12px;
   font-weight: 600;
   margin-right: 6px;
@@ -504,7 +722,7 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-.arrow-icon {
+.db-arrow-icon {
   font-size: 10px;
   opacity: 0.7;
   pointer-events: none;
@@ -518,67 +736,52 @@ onUnmounted(() => {
 }
 
 /* Dropdown adjustments */
-.dock-dropdown {
+.db-dock-dropdown {
   display: flex;
   align-items: center;
 }
 
-.dock-dropdown :deep(.p-popover) {
+.db-dock-dropdown :deep(.p-popover) {
   margin-bottom: 8px;
 }
 
-.menu-item-row {
-  display: flex;
-  align-items: center;
-  padding-right: 8px;
-}
-
-.menu-item-row a {
-  flex-grow: 1;
-}
-
-.icon-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--theme-text-secondary);
-  padding: 6px;
-  border-radius: 4px;
-  transition:
-    background-color 0.2s,
-    color 0.2s;
-  font-size: 12px;
-}
-
-.icon-btn:hover {
-  background-color: var(--theme-bg-hover);
-  color: var(--theme-text-primary);
-}
-
 @media (max-width: 768px) {
-  .toolbar-container {
-    bottom: 16px !important; /* Force bottom */
+  .db-toolbar-container {
+    bottom: 16px !important;
     left: 50% !important;
-    transform: translateX(-50%) !important;
-    top: auto !important; /* Reset drag position */
+    top: auto !important;
     width: 100%;
     max-width: 100vw;
   }
-  .floating-dock {
+  .db-floating-dock {
     max-width: calc(100vw - 32px);
     overflow-x: auto;
-    justify-content: flex-start; /* Allow scrolling start */
+    justify-content: flex-start;
   }
-  /* Hide scrollbar */
-  .floating-dock::-webkit-scrollbar {
+  .db-floating-dock::-webkit-scrollbar {
     display: none;
   }
-  .floating-dock {
-    -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none; /* Firefox */
+  .db-floating-dock {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
-  .drag-handle {
+  .db-drag-handle {
     display: none;
   }
+
+  .db-secondary-dock {
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 90vw;
+  }
+}
+
+/* Glass Panel Polyfill */
+.db-glass-panel {
+  background: var(--theme-bg-panel-transparent, rgba(255, 255, 255, 0.95));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--theme-border);
+  box-shadow: var(--shadow-floating);
 }
 </style>

@@ -4,7 +4,7 @@
       <h3>About DoodleBUGS</h3>
     </template>
     <template #body>
-      <div class="about-content">
+      <div class="db-about-content">
         <p>
           <strong>DoodleBUGS</strong> is a graphical modelling tool designed to simplify the
           creation of Bayesian models for analysis with the BUGS language using
@@ -20,14 +20,14 @@
           students to build, understand, and share complex probabilistic models.
         </p>
 
-        <div class="resources-section">
+        <div class="db-resources-section">
           <h4>Resources</h4>
-          <div class="links-list">
+          <div class="db-links-list">
             <a
               href="https://github.com/TuringLang/JuliaBUGS.jl"
               target="_blank"
               rel="noopener noreferrer"
-              class="resource-link"
+              class="db-resource-link"
             >
               <i class="fab fa-github"></i> Codebase
             </a>
@@ -35,7 +35,7 @@
               href="https://github.com/TuringLang/JuliaBUGS.jl/issues?q=is%3Aissue%20state%3Aopen%20label%3ADoodleBUGS"
               target="_blank"
               rel="noopener noreferrer"
-              class="resource-link"
+              class="db-resource-link"
             >
               <i class="fas fa-list"></i> Issue Tracker
             </a>
@@ -43,7 +43,7 @@
               href="https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md"
               target="_blank"
               rel="noopener noreferrer"
-              class="resource-link"
+              class="db-resource-link"
             >
               <i class="fas fa-bug"></i> Report Issue
             </a>
@@ -65,7 +65,7 @@ const emit = defineEmits(['close'])
 </script>
 
 <style scoped>
-.about-content {
+.db-about-content {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -73,39 +73,39 @@ const emit = defineEmits(['close'])
   line-height: 1.6;
 }
 
-.about-content p {
+.db-about-content p {
   margin: 0;
 }
 
-.about-content a {
+.db-about-content a {
   color: var(--color-primary);
   text-decoration: none;
   font-weight: 500;
 }
-.about-content a:hover {
+.db-about-content a:hover {
   text-decoration: underline;
 }
 
-.resources-section {
+.db-resources-section {
   margin-top: 15px;
   padding-top: 15px;
   border-top: 1px solid var(--theme-border);
 }
 
-.resources-section h4 {
+.db-resources-section h4 {
   margin: 0 0 10px 0;
   color: var(--theme-text-primary);
   font-size: 0.95rem;
 }
 
-.links-list {
+.db-links-list {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
   gap: 12px;
 }
 
-.resource-link {
+.db-resource-link {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -121,13 +121,13 @@ const emit = defineEmits(['close'])
   min-width: 120px;
 }
 
-.resource-link:hover {
+.db-resource-link:hover {
   background-color: var(--theme-bg-active);
   text-decoration: none !important;
   border-color: var(--theme-border);
 }
 
-.resource-link i {
+.db-resource-link i {
   width: 20px;
   text-align: center;
   color: var(--theme-text-secondary);

@@ -25,6 +25,8 @@ const knownBugsFunctions = new Set([
   'inverse',
   'logdet',
   'logit',
+  'ilogit',
+  'logistic',
   'probit',
   'cloglog',
   'phi',
@@ -84,7 +86,11 @@ export function useGraphValidator(elements: Ref<GraphElement[]>, modelData: Ref<
             )
             .map((key) => String(node[key as keyof GraphNode]))
 
-          const linkedParams = literalParams.filter((p) => nodeNames.has(p))
+          const linkedParams = literalParams.filter((p) => {
+            const baseName = p.split('[')[0].trim()
+            return nodeNames.has(baseName)
+          })
+
           const numericParams = literalParams.length - linkedParams.length
 
           providedParams += numericParams
@@ -158,12 +164,15 @@ export function useGraphValidator(elements: Ref<GraphElement[]>, modelData: Ref<
         })
       }
 
-      const baseName = node.name.split('[')[0].trim()
-      if (!/^[a-zA-Z][a-zA-Z0-9.]*$/.test(baseName)) {
-        errors.push({
-          field: 'name',
-          message: `Base name '${baseName}' is not a valid BUGS variable name.`,
-        })
+      // Check variable name validity (skip Plates as their name is just a UI label)
+      if (node.nodeType !== 'plate') {
+        const baseName = node.name.split('[')[0].trim()
+        if (!/^[a-zA-Z][a-zA-Z0-9.]*$/.test(baseName)) {
+          errors.push({
+            field: 'name',
+            message: `Base name '${baseName}' is not a valid BUGS variable name.`,
+          })
+        }
       }
 
       if (errors.length > 0) {

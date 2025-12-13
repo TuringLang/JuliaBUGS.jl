@@ -19,10 +19,18 @@ interface DataState {
 export const useDataStore = defineStore('data', () => {
   const graphStore = useGraphStore()
   const dataContents = ref<Map<string, DataState>>(new Map())
+  const storagePrefix = ref('doodlebugs')
+
+  const setPrefix = (prefix: string) => {
+    storagePrefix.value = prefix
+    dataContents.value.clear() // Clear cache to reload with new prefix
+  }
+
+  const dataKey = (graphId: string) => `${storagePrefix.value}-data-${graphId}`
 
   const getGraphData = (graphId: string): DataState => {
     if (!dataContents.value.has(graphId)) {
-      const storedData = localStorage.getItem(`doodlebugs-data-${graphId}`)
+      const storedData = localStorage.getItem(dataKey(graphId))
       if (storedData) {
         try {
           const loadedState = JSON.parse(storedData)
@@ -78,7 +86,7 @@ export const useDataStore = defineStore('data', () => {
 
   const updateGraphData = (graphId: string, newState: DataState) => {
     dataContents.value.set(graphId, newState)
-    localStorage.setItem(`doodlebugs-data-${graphId}`, JSON.stringify(newState))
+    localStorage.setItem(dataKey(graphId), JSON.stringify(newState))
   }
 
   const createNewGraphData = (graphId: string) => {
@@ -91,10 +99,11 @@ export const useDataStore = defineStore('data', () => {
 
   const deleteGraphData = (graphId: string) => {
     dataContents.value.delete(graphId)
-    localStorage.removeItem(`doodlebugs-data-${graphId}`)
+    localStorage.removeItem(dataKey(graphId))
   }
 
   return {
+    setPrefix,
     dataContent,
     parsedGraphData,
     createNewGraphData,

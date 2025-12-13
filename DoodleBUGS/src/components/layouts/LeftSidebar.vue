@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { type StyleValue } from 'vue'
+import { computed, type StyleValue } from 'vue'
 import Accordion from 'primevue/accordion'
 import AccordionPanel from 'primevue/accordionpanel'
 import AccordionHeader from 'primevue/accordionheader'
@@ -9,11 +9,11 @@ import BaseSelect from '../ui/BaseSelect.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import ProjectManager from '../left-sidebar/ProjectManager.vue'
 import type { NodeType } from '../../types'
-import { exampleModels } from '../../config/nodeDefinitions'
+import { examples } from '../../config/examples'
 import { useUiStore } from '../../stores/uiStore'
 import { storeToRefs } from 'pinia'
 
-defineProps<{
+const props = defineProps<{
   activeAccordionTabs: string[]
   projectName: string | null
   pinnedGraphTitle: string | null
@@ -23,6 +23,7 @@ defineProps<{
   showDebugPanel: boolean
   isCodePanelOpen: boolean
   showDetachModeControl: boolean
+  enableDrag?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -37,12 +38,13 @@ const emit = defineEmits<{
   (e: 'update:showDebugPanel', value: boolean): void
   (e: 'update:showDetachModeControl', value: boolean): void
   (e: 'toggle-code-panel'): void
-  (e: 'load-example', key: string): void
+  (e: 'load-example', exampleId: string): void
   (e: 'open-about-modal'): void
   (e: 'open-faq-modal'): void
   (e: 'toggle-dark-mode'): void
   (e: 'share-graph', graphId: string): void
   (e: 'share-project-url', projectId: string): void
+  (e: 'header-drag-start', event: MouseEvent | TouchEvent): void
 }>()
 
 const uiStore = useUiStore()
@@ -56,6 +58,17 @@ const gridStyleOptions = [
 const updateCanvasGridStyle = (val: string) => {
   canvasGridStyle.value = val as 'dots' | 'lines'
 }
+
+// Filter examples based on context
+const availableExamples = computed(() => {
+  // If we are in "Widget Mode" (indicated by enableDrag being true for floating sidebar),
+  // only show examples that have a valid URL (remote).
+  if (props.enableDrag) {
+    return examples.filter((e) => e.url)
+  }
+  // In "App Mode", show all examples (local lookups + remote)
+  return examples
+})
 
 const sidebarStyle = (isOpen: boolean): StyleValue => {
   if (!isOpen) {
@@ -76,24 +89,47 @@ const handleGridSizeInput = (event: Event) => {
   const target = event.target as HTMLInputElement
   emit('update:gridSize', Number(target.value))
 }
+
+const handleHeaderMouseDown = (e: MouseEvent | TouchEvent) => {
+  if (props.enableDrag) {
+    emit('header-drag-start', e)
+  }
+}
+
+const handleHeaderClick = () => {
+  if (!props.enableDrag) {
+    emit('toggle-left-sidebar')
+  }
+}
 </script>
 
 <template>
-  <aside class="floating-sidebar left glass-panel" :style="sidebarStyle(isLeftSidebarOpen)">
-    <div class="sidebar-header" @click="$emit('toggle-left-sidebar')">
-      <span class="sidebar-title">
+  <aside
+    class="db-floating-sidebar db-left db-glass-panel"
+    :style="sidebarStyle(isLeftSidebarOpen)"
+  >
+    <div
+      class="db-sidebar-header"
+      @mousedown="handleHeaderMouseDown"
+      @touchstart="handleHeaderMouseDown"
+      @click="handleHeaderClick"
+      :style="{ cursor: enableDrag ? 'move' : 'pointer' }"
+    >
+      <span class="db-sidebar-title">
         {{ pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS' }}
       </span>
       <div class="flex items-center ml-auto">
         <button
           @click.stop="uiStore.toggleDarkMode()"
-          class="theme-toggle-header"
+          @mousedown.stop
+          @touchstart.stop
+          class="db-theme-toggle-header"
           :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
         >
           <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
         </button>
         <div class="flex items-center">
-          <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon">
+          <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="db-toggle-icon">
             <path
               fill="currentColor"
               fill-rule="evenodd"
@@ -105,45 +141,53 @@ const handleGridSizeInput = (event: Event) => {
       </div>
     </div>
 
-    <div class="sidebar-content-scrollable">
-      <Accordion :value="activeAccordionTabs" multiple class="sidebar-accordion">
+    <div class="db-sidebar-content-scrollable">
+      <Accordion :value="activeAccordionTabs" multiple class="db-sidebar-accordion">
         <AccordionPanel value="project">
-          <AccordionHeader><i class="fas fa-folder icon-12"></i> Project</AccordionHeader>
+          <AccordionHeader><i class="fas fa-folder db-icon-12"></i> Project</AccordionHeader>
           <AccordionContent>
-            <div class="panel-content-wrapper">
+            <div class="db-panel-content-wrapper">
               <ProjectManager
                 @new-project="$emit('new-project')"
                 @new-graph="$emit('new-graph')"
                 @share-graph="(id: string) => $emit('share-graph', id)"
                 @share-project-url="(id: string) => $emit('share-project-url', id)"
               />
-              <div class="divider"></div>
-              <div class="example-row">
-                <label class="example-label">Examples</label>
+              <div class="db-divider"></div>
+              <div class="db-example-row">
+                <label class="db-example-label">Examples</label>
                 <BaseSelect
-                  :modelValue="''"
-                  :options="exampleModels.map((e) => ({ label: e.name, value: e.key }))"
+                  :modelValue="null"
+                  :options="availableExamples"
+                  optionLabel="name"
+                  optionValue="id"
                   @update:modelValue="$emit('load-example', $event)"
-                  placeholder="Load..."
-                  class="examples-dropdown"
-                />
+                  placeholder="Load Example..."
+                  class="db-examples-dropdown"
+                >
+                  <template #option="{ option }">
+                    <div class="flex items-center gap-2">
+                      <span>{{ option.name }}</span>
+                    </div>
+                  </template>
+                </BaseSelect>
               </div>
             </div>
           </AccordionContent>
         </AccordionPanel>
 
         <AccordionPanel value="view">
-          <AccordionHeader><i class="fas fa-eye icon-12"></i> View Options</AccordionHeader>
+          <AccordionHeader><i class="fas fa-eye db-icon-12"></i> View Options</AccordionHeader>
           <AccordionContent>
-            <div class="menu-panel flex-col gap-3">
-              <div class="menu-row">
+            <div class="db-menu-panel flex-col gap-3">
+              <div class="db-menu-row">
                 <label>Canvas Grid</label>
                 <ToggleSwitch
                   :modelValue="isGridEnabled"
                   @update:modelValue="$emit('update:isGridEnabled', $event)"
                 />
               </div>
-              <div class="menu-row">
+              <div class="db-menu-row">
                 <label>Canvas Style</label>
                 <BaseSelect
                   :modelValue="canvasGridStyle"
@@ -152,7 +196,7 @@ const handleGridSizeInput = (event: Event) => {
                   @update:modelValue="updateCanvasGridStyle"
                 />
               </div>
-              <div class="menu-row">
+              <div class="db-menu-row">
                 <label>Canvas Size</label>
                 <input
                   type="number"
@@ -161,18 +205,18 @@ const handleGridSizeInput = (event: Event) => {
                   step="5"
                   min="5"
                   max="100"
-                  class="native-number-input"
+                  class="db-native-number-input"
                 />
               </div>
-              <div class="divider"></div>
-              <div class="menu-row">
+              <div class="db-divider"></div>
+              <div class="db-menu-row">
                 <label title="Show Detach button in toolbar">Show Node Detach Option</label>
                 <ToggleSwitch
                   :modelValue="showDetachModeControl"
                   @update:modelValue="$emit('update:showDetachModeControl', $event)"
                 />
               </div>
-              <div class="menu-row">
+              <div class="db-menu-row">
                 <label>Zoom Controls</label>
                 <ToggleSwitch
                   :modelValue="showZoomControls"
@@ -184,19 +228,19 @@ const handleGridSizeInput = (event: Event) => {
         </AccordionPanel>
 
         <AccordionPanel value="help">
-          <AccordionHeader><i class="fas fa-question-circle icon-12"></i> Help</AccordionHeader>
+          <AccordionHeader><i class="fas fa-question-circle db-icon-12"></i> Help</AccordionHeader>
           <AccordionContent>
-            <div class="menu-panel flex-col gap-1">
-              <BaseButton type="ghost" class="menu-btn" @click="$emit('open-faq-modal')"
+            <div class="db-menu-panel flex-col gap-1">
+              <BaseButton type="ghost" class="db-menu-btn" @click="$emit('open-faq-modal')"
                 ><i class="fas fa-question"></i> FAQ</BaseButton
               >
-              <BaseButton type="ghost" class="menu-btn" @click="$emit('open-about-modal')"
+              <BaseButton type="ghost" class="db-menu-btn" @click="$emit('open-about-modal')"
                 ><i class="fas fa-info-circle"></i> About</BaseButton
               >
               <a
                 href="https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md"
                 target="_blank"
-                class="menu-btn ghost-btn"
+                class="db-menu-btn db-ghost-btn"
               >
                 <i class="fab fa-github"></i> Report Issue
               </a>
@@ -205,10 +249,12 @@ const handleGridSizeInput = (event: Event) => {
         </AccordionPanel>
 
         <AccordionPanel value="devtools">
-          <AccordionHeader><i class="fas fa-terminal icon-12"></i> Developer Tools</AccordionHeader>
+          <AccordionHeader
+            ><i class="fas fa-terminal db-icon-12"></i> Developer Tools</AccordionHeader
+          >
           <AccordionContent>
-            <div class="menu-panel flex-col gap-3">
-              <div class="menu-row">
+            <div class="db-menu-panel flex-col gap-3">
+              <div class="db-menu-row">
                 <label>Debug Console</label>
                 <ToggleSwitch
                   :modelValue="showDebugPanel"
@@ -224,10 +270,11 @@ const handleGridSizeInput = (event: Event) => {
 </template>
 
 <style scoped>
-.floating-sidebar {
+.db-floating-sidebar {
   position: absolute;
   top: 16px;
-  height: calc(100dvh - 32px);
+  height: auto;
+  max-height: calc(100dvh - 32px);
   bottom: auto;
   z-index: 50;
   display: flex;
@@ -241,23 +288,23 @@ const handleGridSizeInput = (event: Event) => {
   box-shadow: var(--shadow-floating);
 }
 
-.floating-sidebar.left {
+.db-floating-sidebar.db-left {
   left: 16px;
   width: 300px !important;
   transform-origin: top left;
 }
 
 @media (max-width: 768px) {
-  .floating-sidebar.left {
+  .db-floating-sidebar.db-left {
     width: calc(100vw - 32px) !important;
   }
 
-  .sidebar-content-scrollable {
-    padding-bottom: 80px; /* Space for floating toolbar on mobile */
+  .db-sidebar-content-scrollable {
+    padding-bottom: 80px;
   }
 }
 
-.sidebar-header {
+.db-sidebar-header {
   padding: 12px 16px;
   display: flex;
   justify-content: space-between;
@@ -266,15 +313,15 @@ const handleGridSizeInput = (event: Event) => {
   background: var(--theme-bg-panel-transparent);
   color: var(--theme-text-primary);
   flex-shrink: 0;
-  cursor: pointer;
 }
 
-.sidebar-title {
+.db-sidebar-title {
   font-weight: 600;
   font-size: var(--font-size-md);
+  user-select: none;
 }
 
-.theme-toggle-header {
+.db-theme-toggle-header {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -287,23 +334,24 @@ const handleGridSizeInput = (event: Event) => {
   transition: color 0.2s;
   border-radius: 4px;
 }
-.theme-toggle-header:hover {
+.db-theme-toggle-header:hover {
   color: var(--theme-text-primary);
   background: var(--theme-bg-hover);
 }
 
-.toggle-icon {
+.db-toggle-icon {
   color: var(--theme-text-secondary);
+  pointer-events: none;
 }
 
-.sidebar-content-scrollable {
+.db-sidebar-content-scrollable {
   overflow-y: auto;
   flex: 1;
   background: var(--theme-bg-panel);
   min-height: 0;
 }
 
-:deep(.sidebar-accordion .p-accordion-header-link) {
+:deep(.db-sidebar-accordion .p-accordion-header-link) {
   padding: 0.75rem 1rem;
   font-size: 0.9rem;
   font-weight: 600;
@@ -315,17 +363,17 @@ const handleGridSizeInput = (event: Event) => {
   justify-content: flex-start;
 }
 
-:deep(.sidebar-accordion .p-accordion-header:not(.p-disabled) .p-accordion-header-link:focus) {
+:deep(.db-sidebar-accordion .p-accordion-header:not(.p-disabled) .p-accordion-header-link:focus) {
   box-shadow: none;
   background: var(--theme-bg-hover);
 }
 
-:deep(.sidebar-accordion .p-accordion-content-content) {
+:deep(.db-sidebar-accordion .p-accordion-content-content) {
   padding: 0;
   background: transparent;
 }
 
-:deep(.sidebar-accordion .p-accordion-panel) {
+:deep(.db-sidebar-accordion .p-accordion-panel) {
   border: none;
 }
 
@@ -356,7 +404,7 @@ const handleGridSizeInput = (event: Event) => {
   width: 2rem;
 }
 
-.icon-12 {
+.db-icon-12 {
   font-size: 12px;
   width: 20px;
   text-align: center;
@@ -364,12 +412,13 @@ const handleGridSizeInput = (event: Event) => {
   color: var(--theme-text-secondary);
 }
 
-.panel-content-wrapper {
+.db-panel-content-wrapper {
   padding: 4px;
   background: var(--theme-bg-panel);
 }
 
-:deep(.project-manager) {
+/* Project Manager Container Override */
+:deep(.db-project-manager) {
   background: transparent;
   height: auto !important;
   overflow: visible !important;
@@ -377,11 +426,11 @@ const handleGridSizeInput = (event: Event) => {
   border: none;
 }
 
-.menu-panel {
+.db-menu-panel {
   display: flex;
   padding: 8px;
 }
-.menu-row {
+.db-menu-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -389,7 +438,7 @@ const handleGridSizeInput = (event: Event) => {
   color: var(--theme-text-primary);
   margin-bottom: 8px;
 }
-.menu-btn {
+.db-menu-btn {
   justify-content: flex-start !important;
   gap: 10px;
   width: 100%;
@@ -399,10 +448,10 @@ const handleGridSizeInput = (event: Event) => {
   border-radius: var(--radius-sm);
   transition: background-color 0.2s;
 }
-.menu-btn:hover {
+.db-menu-btn:hover {
   background-color: var(--theme-bg-hover);
 }
-.ghost-btn {
+.db-ghost-btn {
   color: var(--theme-text-secondary);
   text-decoration: none;
   display: flex;
@@ -410,16 +459,16 @@ const handleGridSizeInput = (event: Event) => {
   border-radius: var(--radius-sm);
   padding: 8px;
 }
-.ghost-btn:hover {
+.db-ghost-btn:hover {
   background: var(--theme-bg-hover);
   color: var(--theme-text-primary);
 }
-.divider {
+.db-divider {
   height: 1px;
   background: var(--theme-border);
   margin: 12px 0;
 }
-.native-number-input {
+.db-native-number-input {
   width: 60px;
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--theme-border);
@@ -429,12 +478,12 @@ const handleGridSizeInput = (event: Event) => {
   font-size: 0.85rem;
   text-align: left;
 }
-.native-number-input:focus {
+.db-native-number-input:focus {
   outline: none;
   border-color: var(--theme-primary);
 }
 
-.example-row {
+.db-example-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -442,15 +491,23 @@ const handleGridSizeInput = (event: Event) => {
   gap: 10px;
 }
 
-.example-label {
+.db-example-label {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--theme-text-secondary);
   white-space: nowrap;
 }
 
-.examples-dropdown {
+.db-examples-dropdown {
   width: 100% !important;
   flex-grow: 1;
+}
+
+.db-glass-panel {
+  background: var(--theme-bg-panel-transparent, rgba(255, 255, 255, 0.95));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--theme-border);
+  box-shadow: var(--shadow-floating);
 }
 </style>

@@ -107,6 +107,13 @@ const distributionOptions: SelectOption[] = [
     helpText: 'Parameters: shape1 (alpha), shape2 (beta).',
   },
   {
+    value: 'dbern',
+    label: 'Bernoulli (dbern)',
+    paramCount: 1,
+    paramNames: ['prob'],
+    helpText: 'Parameter: prob (probability of success).',
+  },
+  {
     value: 'dbin',
     label: 'Binomial (dbin)',
     paramCount: 2,
@@ -119,6 +126,13 @@ const distributionOptions: SelectOption[] = [
     paramCount: 1,
     paramNames: ['lambda'],
     helpText: 'Parameter: lambda (expected number of occurrences).',
+  },
+  {
+    value: 'dexp',
+    label: 'Exponential (dexp)',
+    paramCount: 1,
+    paramNames: ['rate'],
+    helpText: 'Parameter: rate (lambda).',
   },
   {
     value: 'dt',

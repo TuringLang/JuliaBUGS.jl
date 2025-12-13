@@ -82,10 +82,10 @@ const toggleItem = (index: number) => {
 <template>
   <BaseModal :is-open="isOpen" @close="emit('close')">
     <template #header>
-      <div class="header-row">
+      <div class="db-header-row">
         <h3>Frequently Asked Questions</h3>
         <button
-          class="toggle-all-btn"
+          class="db-toggle-all-btn"
           @click="toggleAll"
           :title="allExpanded ? 'Collapse All' : 'Expand All'"
         >
@@ -94,32 +94,32 @@ const toggleItem = (index: number) => {
       </div>
     </template>
     <template #body>
-      <div class="faq-layout">
-        <div class="faq-list">
+      <div class="db-faq-layout">
+        <div class="db-faq-list">
           <div
             v-for="(item, index) in faqs"
             :key="index"
-            class="faq-item"
+            class="db-faq-item"
             :class="{ 'is-open': item.open }"
           >
-            <div class="question" @click="toggleItem(index)">
-              <div class="q-content">
-                <span class="q-text">{{ item.q }}</span>
+            <div class="db-question" @click="toggleItem(index)">
+              <div class="db-q-content">
+                <span class="db-q-text">{{ item.q }}</span>
               </div>
-              <i class="fas fa-chevron-down toggle-icon"></i>
+              <i class="fas fa-chevron-down db-toggle-icon"></i>
             </div>
-            <div class="answer-wrapper" :class="{ open: item.open }">
-              <div class="answer" v-html="item.a"></div>
+            <div class="db-answer-wrapper" :class="{ 'db-open': item.open }">
+              <div class="db-answer" v-html="item.a"></div>
             </div>
           </div>
         </div>
 
-        <div class="faq-footer">
+        <div class="db-faq-footer">
           <p>Can't find your answer?</p>
           <a
             href="https://github.com/TuringLang/JuliaBUGS.jl/issues/new?template=doodlebugs.md"
             target="_blank"
-            class="support-link"
+            class="db-support-link"
           >
             Ask here <i class="fas fa-external-link-alt"></i>
           </a>
@@ -130,7 +130,7 @@ const toggleItem = (index: number) => {
 </template>
 
 <style scoped>
-.header-row {
+.db-header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -138,11 +138,11 @@ const toggleItem = (index: number) => {
   padding-right: 20px;
 }
 
-.header-row h3 {
+.db-header-row h3 {
   margin: 0;
 }
 
-.toggle-all-btn {
+.db-toggle-all-btn {
   background: transparent;
   border: 1px solid var(--theme-border);
   border-radius: 4px;
@@ -156,20 +156,20 @@ const toggleItem = (index: number) => {
   transition: all 0.2s;
 }
 
-.toggle-all-btn:hover {
+.db-toggle-all-btn:hover {
   background: var(--theme-bg-hover);
   color: var(--theme-primary);
   border-color: var(--theme-primary);
 }
 
-.faq-layout {
+.db-faq-layout {
   display: flex;
   flex-direction: column;
   max-height: 60vh;
   padding-top: 10px;
 }
 
-.faq-list {
+.db-faq-list {
   flex-grow: 1;
   overflow-y: auto;
   padding-right: 6px;
@@ -178,15 +178,15 @@ const toggleItem = (index: number) => {
   gap: 0;
 }
 
-.faq-item {
+.db-faq-item {
   border-bottom: 1px solid var(--theme-border);
 }
 
-.faq-item:last-child {
+.db-faq-item:last-child {
   border-bottom: none;
 }
 
-.question {
+.db-question {
   font-weight: 600;
   color: var(--theme-text-primary);
   font-size: 0.95em;
@@ -200,17 +200,17 @@ const toggleItem = (index: number) => {
   user-select: none;
 }
 
-.question:hover {
+.db-question:hover {
   color: var(--theme-primary);
 }
 
-.q-content {
+.db-q-content {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.q-content::before {
+.db-q-content::before {
   content: 'Q';
   color: var(--theme-primary);
   font-weight: 800;
@@ -218,37 +218,37 @@ const toggleItem = (index: number) => {
   opacity: 0.8;
 }
 
-.toggle-icon {
+.db-toggle-icon {
   transition: transform 0.3s ease;
   font-size: 0.85em;
   color: var(--theme-text-muted);
   margin-left: 10px;
 }
 
-.faq-item.is-open .toggle-icon {
+.db-faq-item.is-open .db-toggle-icon {
   transform: rotate(180deg);
   color: var(--theme-primary);
 }
 
-.answer-wrapper {
+.db-answer-wrapper {
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.answer-wrapper.open {
+.db-answer-wrapper.db-open {
   max-height: 1000px;
   transition: max-height 0.6s ease-in-out;
 }
 
-.answer {
+.db-answer {
   color: var(--theme-text-secondary);
   font-size: 0.9em;
   line-height: 1.6;
   padding: 0 0 15px 20px;
 }
 
-.faq-footer {
+.db-faq-footer {
   margin-top: 15px;
   padding: 15px;
   background-color: var(--theme-bg-hover);
@@ -262,13 +262,13 @@ const toggleItem = (index: number) => {
   border-top: 1px solid var(--theme-border);
 }
 
-.faq-footer p {
+.db-faq-footer p {
   margin: 0;
   font-weight: 500;
   color: var(--theme-text-primary);
 }
 
-.support-link {
+.db-support-link {
   color: var(--theme-primary);
   font-weight: 600;
   text-decoration: none;
@@ -277,7 +277,7 @@ const toggleItem = (index: number) => {
   gap: 5px;
 }
 
-.support-link:hover {
+.db-support-link:hover {
   text-decoration: underline;
 }
 </style>

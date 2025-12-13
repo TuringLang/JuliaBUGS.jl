@@ -22,7 +22,7 @@ const visible = computed({
     v-model:visible="visible"
     modal
     :header="header"
-    class="base-modal-responsive"
+    class="db-base-modal-responsive"
     dismissableMask
   >
     <template #header v-if="$slots.header">
@@ -37,3 +37,18 @@ const visible = computed({
     </template>
   </Dialog>
 </template>
+
+<style>
+/* Global styles for the PrimeVue Dialog class. 
+  We use the specific class 'db-base-modal-responsive' to target only our modals.
+*/
+.db-base-modal-responsive {
+  width: 50vw;
+}
+
+@media (max-width: 768px) {
+  .db-base-modal-responsive {
+    width: 95vw !important;
+  }
+}
+</style>
