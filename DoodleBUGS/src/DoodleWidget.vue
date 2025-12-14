@@ -67,17 +67,12 @@ const scriptStore = useScriptStore()
 const toast = useToast()
 
 // Determine unique storage prefix for this instance
-// Order of precedence: prop.storageKey > prop.model > prop.localModel > 'default-widget'
 const persistencePrefix = computed(() => {
   if (props.storageKey) return `db-${props.storageKey}`
-
-  // Sanitize model strings to be valid keys
   const modelKey = props.model ? props.model.replace(/[^a-zA-Z0-9-_]/g, '') : null
   const localKey = props.localModel ? props.localModel.replace(/[^a-zA-Z0-9-_]/g, '') : null
-
   if (modelKey) return `db-model-${modelKey}`
   if (localKey) return `db-local-${localKey}`
-
   return 'doodlebugs-widget'
 })
 
@@ -91,10 +86,7 @@ uiStore.setPrefix(persistencePrefix.value)
 uiStore.isLeftSidebarOpen = false
 uiStore.isRightSidebarOpen = false
 
-// Widget-specific flag to prevent sidebar flash during initialization
 const widgetInitialized = ref(false)
-
-// Instance ID for coordination between multiple widgets
 const instanceId = ref(
   typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
@@ -104,8 +96,10 @@ const instanceId = ref(
 // Widget Viewport & Edit Mode State
 const widgetRoot = ref<HTMLElement | null>(null)
 const isWidgetInView = ref(false)
+// Edit mode is now strictly tied to full screen mode for simplicity
 const isEditMode = ref(false)
-const isUIActive = ref(false) // Tracks if this specific widget should show its floating UI
+const isFullScreen = ref(false)
+const isUIActive = ref(true)
 let observer: IntersectionObserver | null = null
 
 const currentMode = ref('select')
@@ -124,30 +118,20 @@ const showNewGraphModal = ref(false)
 const newProjectName = ref('')
 const newGraphName = ref('')
 
-// Panel positions and sizes
 const codePanelPos = reactive({ x: 0, y: 0 })
 const codePanelSize = reactive({ width: 400, height: 300 })
 const dataPanelPos = reactive({ x: 0, y: 0 })
 const dataPanelSize = reactive({ width: 400, height: 300 })
 
-// Import Graph State
 const graphImportInput = ref<HTMLInputElement | null>(null)
 const isDragOver = ref(false)
-
-// UI Dragging State
 const isDraggingUI = ref(false)
-
-// Computed window width
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1920)
-
-// Flag to prevent premature canvas rendering
 const isInitialized = ref(false)
 
-// LocalStorage key for widget UI state
 const WIDGET_UI_STATE_KEY = `${persistencePrefix.value}-ui-state`
 const WIDGET_SOURCE_MAP_KEY = `${persistencePrefix.value}-source-map`
 
-// Initialize persistence with scoped prefix
 const {
   loadUIState,
   saveUIState,
@@ -175,13 +159,13 @@ const saveWidgetUIState = () => {
   saveUIState(WIDGET_UI_STATE_KEY, {
     leftSidebar: {
       open: uiStore.isLeftSidebarOpen,
-      x: leftDrag.x.value,
-      y: leftDrag.y.value,
+      x: 0,
+      y: 0,
     },
     rightSidebar: {
       open: uiStore.isRightSidebarOpen,
-      x: rightDrag.x.value,
-      y: rightDrag.y.value,
+      x: 0,
+      y: 0,
     },
     codePanel: {
       open: isCodePanelOpen.value,
@@ -198,7 +182,6 @@ const saveWidgetUIState = () => {
       height: dataPanelSize.height,
     },
     currentGraphId: graphStore.currentGraphId || undefined,
-    // Persist edit mode
     editMode: isEditMode.value,
   })
 }
@@ -213,7 +196,6 @@ const { smartFit, applyLayoutWithFit } = useGraphLayout()
 const { shareUrl, minifyGraph, generateShareLink } = useShareExport()
 const { importedGraphData, processGraphFile, clearImportedData } = useImportExport()
 
-// CSS for teleported widget content
 const WIDGET_STYLES_ID = 'doodlebugs-widget-teleport-styles'
 
 const widgetTeleportCSS = `
@@ -241,7 +223,7 @@ const widgetTeleportCSS = `
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 2000;
+  z-index: 9995;
   pointer-events: none;
 }
 
@@ -253,38 +235,35 @@ const widgetTeleportCSS = `
   pointer-events: auto !important;
 }
 
+/* Fixed positioning wrapper for sidebars to match MainLayout */
 .db-sidebar-wrapper {
-  position: fixed;
-  pointer-events: auto;
-  z-index: 2100;
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 4px;
+  position: absolute;
+  pointer-events: none; /* Let clicks pass through if sidebar is closed/scaled down */
+  z-index: 9996;
+  display: block;
+}
+
+.db-sidebar-wrapper > * {
+  pointer-events: auto; /* Re-enable for the sidebar content itself */
+}
+
+.db-sidebar-wrapper.db-left {
   left: 0;
   top: 0;
 }
 
 .db-sidebar-wrapper.db-right {
-  /* Override left:0 from base class */
-  left: auto !important;
   right: 0;
-}
-
-.db-sidebar-wrapper.db-right .db-floating-sidebar.db-right {
-  position: relative !important;
-  right: auto !important;
-  left: auto !important;
-  margin: 0 !important;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); 
+  top: 0;
+  left: auto;
 }
 
 .db-ui-overlay .db-floating-panel {
-  z-index: 2200 !important;
+  z-index: 9997 !important;
 }
 
 .db-ui-overlay .db-toolbar-container {
-  z-index: 2300 !important;
+  z-index: 9998 !important;
 }
 
 .p-popover,
@@ -292,11 +271,11 @@ const widgetTeleportCSS = `
 .p-dialog,
 .p-toast,
 .p-tooltip {
-  z-index: 3000 !important;
+  z-index: 10000 !important;
 }
 
 .p-dialog-mask {
-  z-index: 2900 !important;
+  z-index: 9999 !important;
 }
 `
 
@@ -309,10 +288,8 @@ const injectWidgetStyles = () => {
 }
 
 const removeWidgetStyles = () => {
-  // Only remove styles if there are no other DoodleBUGS widgets on the page
   const otherWidgets = document.querySelectorAll('doodle-bugs')
   if (otherWidgets.length > 0) return
-
   const styleElement = document.getElementById(WIDGET_STYLES_ID)
   if (styleElement) {
     styleElement.remove()
@@ -325,7 +302,6 @@ const pinnedGraphTitle = computed(() => {
   return graph ? graph.name : null
 })
 
-// Generic Loader for both bundled and remote models
 const loadModelData = async (
   data: UnifiedModelData | Record<string, unknown>,
   name: string,
@@ -339,27 +315,23 @@ const loadModelData = async (
   )
   if (!newGraphMeta) return
 
-  // Handle Elements
   if ((data as UnifiedModelData).elements) {
     graphStore.updateGraphElements(
       newGraphMeta.id,
       (data as UnifiedModelData).elements as GraphElement[]
     )
   } else if ((data as UnifiedModelData).graphJSON) {
-    // Legacy support
     graphStore.updateGraphElements(
       newGraphMeta.id,
       (data as UnifiedModelData).graphJSON as GraphElement[]
     )
   }
 
-  // Handle Data/Inits
   if ((data as UnifiedModelData).dataContent) {
     dataStore.updateGraphData(newGraphMeta.id, {
       content: (data as UnifiedModelData).dataContent || '',
     })
   } else if ((data as UnifiedModelData).data || (data as UnifiedModelData).inits) {
-    // Legacy separate fields
     const content = JSON.stringify(
       {
         data: (data as UnifiedModelData).data || {},
@@ -371,7 +343,6 @@ const loadModelData = async (
     dataStore.updateGraphData(newGraphMeta.id, { content })
   }
 
-  // Handle Layout
   graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
   if ((data as UnifiedModelData).layout) {
     projectStore.updateGraphLayout(
@@ -392,18 +363,13 @@ const loadModelData = async (
 
 const resolveProp = (propName: string, propValue: string | undefined): string | null => {
   if (propValue) return propValue
-
   if (widgetRoot.value) {
     const root = widgetRoot.value.getRootNode()
     if (root instanceof ShadowRoot && root.host) {
-      // Check both kebab-case (standard) and lowercase (often how browser parses simple attrs)
       const kebab = propName.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2').toLowerCase()
       const lower = propName.toLowerCase()
-
       const attrVal = root.host.getAttribute(kebab) || root.host.getAttribute(lower)
-      if (attrVal) {
-        return attrVal
-      }
+      if (attrVal) return attrVal
     }
   }
   return null
@@ -430,53 +396,29 @@ const handleLoadExample = async (
 
     if (type === 'local') {
       sourceDescription = 'Local File'
-
       try {
         const response = await fetch(input)
-        if (!response.ok) {
-          throw new Error(
-            `Failed to load local file. Status: ${response.status} ${response.statusText}`
-          )
-        }
-
+        if (!response.ok) throw new Error(`Failed to load local file. Status: ${response.status}`)
         const text = await response.text()
-        try {
-          modelData = JSON.parse(text)
-        } catch (jsonErr: unknown) {
-          console.error(
-            '[DoodleBUGS] JSON Parse Error:',
-            jsonErr,
-            'Content Snippet:',
-            text.substring(0, 100)
-          )
-          throw new Error(
-            `File found but contained invalid JSON. Check if file path redirects to index.html.`
-          )
-        }
-
+        modelData = JSON.parse(text)
         modelName = modelData.name || input
       } catch (e: unknown) {
-        console.error(`[DoodleBUGS] Local load failed:`, e)
         throw new Error(e instanceof Error ? e.message : String(e))
       }
     } else {
       if (isUrl(input)) {
         const isGithub = input.toLowerCase().includes('github')
         sourceDescription = isGithub ? 'GitHub Source' : 'External URL'
-
         try {
           const response = await fetch(input)
           if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
           modelData = await response.json()
           modelName = modelData.name || 'Remote Model'
         } catch (e: unknown) {
-          throw new Error(
-            `Failed to fetch URL: "${input}". ${e instanceof Error ? e.message : String(e)}`
-          )
+          throw new Error(`Failed to fetch URL: "${input}". ${e instanceof Error ? e.message : String(e)}`)
         }
       } else {
         const turingUrl = `https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/examples/${input}/model.json`
-
         try {
           const response = await fetch(turingUrl)
           if (response.ok) {
@@ -490,10 +432,8 @@ const handleLoadExample = async (
 
         if (!modelData) {
           const config = examples.find((e) => e.id === input)
-
           if (config && config.url) {
             sourceDescription = 'GitHub/Config Source'
-
             try {
               const response = await fetch(config.url)
               if (response.ok) {
@@ -501,7 +441,7 @@ const handleLoadExample = async (
                 modelName = config.name
               }
             } catch (remoteErr: unknown) {
-              console.error(`[DoodleBUGS] Fallback load failed:`, remoteErr)
+              console.error('[DoodleBUGS] Fallback load failed:', remoteErr)
             }
           }
         }
@@ -540,27 +480,21 @@ const initGraph = async () => {
   if (projectStore.projects.length === 0) {
     projectStore.createProject('Default Project')
   }
-
   if (!projectStore.currentProjectId && projectStore.projects.length > 0) {
     projectStore.selectProject(projectStore.projects[0].id)
   }
-
   const proj = projectStore.currentProject
   if (!proj) return
 
   const rawLocalModel = resolveProp('localModel', props.localModel)
   const rawModel = resolveProp('model', props.model)
-
   const sourceKey = rawLocalModel || rawModel
   const isLocalFile = !!rawLocalModel
 
   if (sourceKey) {
     const map = getSourceMap()
     const mappedGraphId = map[sourceKey]
-
-    const existingGraph = mappedGraphId
-      ? proj.graphs.find((g) => g.id === mappedGraphId)
-      : undefined
+    const existingGraph = mappedGraphId ? proj.graphs.find((g) => g.id === mappedGraphId) : undefined
 
     if (existingGraph) {
       graphStore.selectGraph(existingGraph.id)
@@ -570,7 +504,6 @@ const initGraph = async () => {
     }
   } else {
     const lastGraphId = loadLastGraphId()
-
     if (lastGraphId && proj.graphs.some((g) => g.id === lastGraphId)) {
       graphStore.selectGraph(lastGraphId)
     } else {
@@ -587,7 +520,6 @@ const initGraph = async () => {
     graphStore.createNewGraphContent(graphStore.currentGraphId)
   }
 
-  // Re-run validation or initial sizing if needed
   nextTick(() => {
     if (graphStore.currentGraphId) {
       const cy = getCyInstance(graphStore.currentGraphId)
@@ -610,27 +542,22 @@ interface DoodleBugsManager {
   recalculateActive(): void
 }
 
-// Using window to coordinate separate web component instances
 const getManager = (): DoodleBugsManager => {
   const w = window as unknown as Window & { __DoodleBugsManager?: DoodleBugsManager }
   if (!w.__DoodleBugsManager) {
     w.__DoodleBugsManager = {
-      instances: new Map(), // id -> { setUIActive: (bool)=>void, getRect: ()=>DOMRect }
+      instances: new Map(),
       activeId: null,
-
       register(id: string, callbacks: WidgetInstanceCallbacks) {
         this.instances.set(id, callbacks)
       },
-
       unregister(id: string) {
         this.instances.delete(id)
         if (this.activeId === id) {
           this.activeId = null
-          // Pick another active if available
           this.recalculateActive()
         }
       },
-
       setActive(id: string | null) {
         if (this.activeId === id) return
         this.activeId = id
@@ -638,9 +565,7 @@ const getManager = (): DoodleBugsManager => {
           inst.setUIActive(key === id)
         })
       },
-
       recalculateActive() {
-        // Find visible instances
         const visible: { id: string; top: number }[] = []
         this.instances.forEach((inst: WidgetInstanceCallbacks, id: string) => {
           const rect = inst.getRect()
@@ -648,16 +573,12 @@ const getManager = (): DoodleBugsManager => {
             visible.push({ id, top: rect.top })
           }
         })
-
         if (visible.length === 0) {
           this.setActive(null)
           return
         }
-
         visible.sort((a, b) => a.top - b.top)
-
         const currentIsVisible = visible.some((v) => v.id === this.activeId)
-
         if (!currentIsVisible) {
           this.setActive(visible[0].id)
         }
@@ -669,7 +590,6 @@ const getManager = (): DoodleBugsManager => {
 
 const activateWidget = (source: 'click' | 'scroll') => {
   const manager = getManager()
-
   if (source === 'click') {
     manager.setActive(instanceId.value)
   } else if (source === 'scroll') {
@@ -677,20 +597,28 @@ const activateWidget = (source: 'click' | 'scroll') => {
   }
 }
 
-const toggleEditMode = () => {
-  isEditMode.value = !isEditMode.value
+const toggleFullScreen = () => {
+  isFullScreen.value = !isFullScreen.value
+  
+  // Edit mode is strictly tied to full screen status
+  isEditMode.value = isFullScreen.value
 
-  if (isEditMode.value) {
+  if (isFullScreen.value) {
     activateWidget('click')
-  } else {
-    uiStore.isLeftSidebarOpen = false
-    uiStore.isRightSidebarOpen = false
   }
+
+  // Force graph resize after layout transition
+  setTimeout(() => {
+    if (graphStore.currentGraphId) {
+      const cy = getCyInstance(graphStore.currentGraphId)
+      if (cy) cy.resize()
+    }
+  }, 100)
+  
   saveWidgetUIState()
 }
 
 let scrollRafId: number | null = null
-
 const handleWindowScroll = (event: Event) => {
   const target = event.target as Node
   const isDocumentScroll =
@@ -699,14 +627,10 @@ const handleWindowScroll = (event: Event) => {
   if (isDocumentScroll) {
     if (!scrollRafId) {
       scrollRafId = requestAnimationFrame(() => {
-        // Always check active widget on scroll to ensure smooth transitions
         getManager().recalculateActive()
-
         if (graphStore.currentGraphId) {
           const cy = getCyInstance(graphStore.currentGraphId)
-          if (cy) {
-            cy.resize()
-          }
+          if (cy) cy.resize()
         }
         scrollRafId = null
       })
@@ -714,166 +638,18 @@ const handleWindowScroll = (event: Event) => {
   }
 }
 
-const checkSidebarBounds = () => {
-  const winW = window.innerWidth
-  const winH = window.innerHeight
-  const margin = 20
-
-  if (leftDrag.x.value < 0 || leftDrag.x.value > winW - 100) {
-    leftDrag.x.value = margin
-  }
-
-  if (leftDrag.y.value < 0) leftDrag.y.value = margin
-  if (leftDrag.y.value > winH - 50) leftDrag.y.value = winH - 100
-
-  if (rightDrag.x.value > 0 || rightDrag.x.value < -(winW - 100)) {
-    rightDrag.x.value = -margin
-  }
-
-  if (rightDrag.y.value < 0) rightDrag.y.value = margin
-  if (rightDrag.y.value > winH - 50) rightDrag.y.value = winH - 100
-}
-
 const handleResize = () => {
   windowWidth.value = window.innerWidth
-  checkSidebarBounds()
 }
 
 const handleWidgetClick = () => {
   activateWidget('click')
 }
 
-const useDrag = (initialX: number, initialY: number, anchor: 'left' | 'right' = 'left') => {
-  const x = ref(initialX)
-  const y = ref(initialY)
-  const isDragging = ref(false)
-  const startX = ref(0)
-  const startY = ref(0)
-  const dragThreshold = 3
-  let initialDragX = 0
-  let initialDragY = 0
-  let animationFrameId: number | null = null
-
-  const startDrag = (e: MouseEvent | TouchEvent) => {
-    isDragging.value = true
-    isDraggingUI.value = true
-    const clientX = e instanceof MouseEvent ? e.clientX : e.touches[0].clientX
-    const clientY = e instanceof MouseEvent ? e.clientY : e.touches[0].clientY
-
-    if (anchor === 'left') {
-      startX.value = clientX - x.value
-    } else {
-      const winW = document.documentElement.clientWidth || window.innerWidth
-      startX.value = clientX - winW - x.value
-    }
-
-    startY.value = clientY - y.value
-    initialDragX = clientX
-    initialDragY = clientY
-
-    if (e instanceof MouseEvent) {
-      window.addEventListener('mousemove', onMouseMove)
-      window.addEventListener('mouseup', onMouseUp)
-    } else {
-      window.addEventListener('touchmove', onTouchMove, { passive: false })
-      window.addEventListener('touchend', onTouchEnd)
-    }
-  }
-
-  const onMouseMove = (e: MouseEvent) => {
-    if (!isDragging.value) return
-
-    if (animationFrameId) cancelAnimationFrame(animationFrameId)
-
-    animationFrameId = requestAnimationFrame(() => {
-      if (anchor === 'left') {
-        x.value = e.clientX - startX.value
-      } else {
-        const winW = document.documentElement.clientWidth || window.innerWidth
-        x.value = e.clientX - winW - startX.value
-      }
-      y.value = e.clientY - startY.value
-    })
-  }
-
-  const onTouchMove = (e: TouchEvent) => {
-    if (!isDragging.value) return
-    e.preventDefault()
-    if (animationFrameId) cancelAnimationFrame(animationFrameId)
-
-    animationFrameId = requestAnimationFrame(() => {
-      const touchX = e.touches[0].clientX
-      const touchY = e.touches[0].clientY
-
-      if (anchor === 'left') {
-        x.value = touchX - startX.value
-      } else {
-        const winW = document.documentElement.clientWidth || window.innerWidth
-        x.value = touchX - winW - startX.value
-      }
-      y.value = touchY - startY.value
-    })
-  }
-
-  const finishDrag = (clientX: number, clientY: number) => {
-    isDragging.value = false
-    isDraggingUI.value = false
-    if (animationFrameId) cancelAnimationFrame(animationFrameId)
-    const dist = Math.hypot(clientX - initialDragX, clientY - initialDragY)
-    return dist < dragThreshold
-  }
-
-  const onMouseUp = (e: MouseEvent) => {
-    const isClick = finishDrag(e.clientX, e.clientY)
-    window.removeEventListener('mousemove', onMouseMove)
-    window.removeEventListener('mouseup', onMouseUp)
-    return isClick
-  }
-
-  const onTouchEnd = (e: TouchEvent) => {
-    const touch = e.changedTouches[0]
-    finishDrag(touch.clientX, touch.clientY)
-    window.removeEventListener('touchmove', onTouchMove)
-    window.removeEventListener('touchend', onTouchEnd)
-  }
-
-  return {
-    x,
-    y,
-    startDrag,
-    onMouseUp,
-    style: computed(() => {
-      if (anchor === 'left') {
-        return {
-          transform: `translate3d(${x.value}px, ${y.value}px, 0)`,
-          left: '0px',
-          top: '0px',
-          right: 'auto',
-        }
-      } else {
-        // Right anchor style
-        return {
-          transform: `translate3d(${x.value}px, ${y.value}px, 0)`,
-          left: 'auto',
-          top: '0px',
-          right: '0px', // Anchor to right edge
-        }
-      }
-    }),
-  }
-}
-
-const leftDrag = useDrag(20, 20, 'left')
-
-const rightDrag = useDrag(-20, 20, 'right')
-
 onMounted(async () => {
   const manager = getManager()
-
   manager.register(instanceId.value, {
-    setUIActive: (val: boolean) => {
-      isUIActive.value = val
-    },
+    setUIActive: (val: boolean) => { isUIActive.value = val },
     getRect: () => (widgetRoot.value ? widgetRoot.value.getBoundingClientRect() : null),
   })
 
@@ -882,7 +658,6 @@ onMounted(async () => {
       (entries) => {
         const entry = entries[0]
         isWidgetInView.value = entry.isIntersecting
-
         manager.recalculateActive()
       },
       { threshold: [0, 0.1] }
@@ -891,9 +666,7 @@ onMounted(async () => {
   }
 
   window.addEventListener('scroll', handleWindowScroll, { passive: true })
-
   graphStore.selectGraph(undefined as unknown as string)
-
   projectStore.loadProjects()
 
   if (props.initialState) {
@@ -901,41 +674,20 @@ onMounted(async () => {
       const state = JSON.parse(props.initialState)
       if (state.project) projectStore.importState(state.project)
       if (state.graphs)
-        state.graphs.forEach(
-          (g: {
-            graphId: string
-            elements: GraphElement[]
-            lastLayout?: string
-            zoom?: number
-            pan?: { x: number; y: number }
-          }) => graphStore.graphContents.set(g.graphId, g)
-        )
+        state.graphs.forEach((g: any) => graphStore.graphContents.set(g.graphId, g))
       if (state.data)
-        state.data.forEach((d: { graphId: string; content: string }) =>
-          dataStore.updateGraphData(d.graphId, { content: d.content })
-        )
+        state.data.forEach((d: any) => dataStore.updateGraphData(d.graphId, { content: d.content }))
     } catch (e) {
       console.error('DoodleBUGS: Failed to parse state', e)
     }
   }
 
   const savedUIState = loadUIState(WIDGET_UI_STATE_KEY)
-
   if (savedUIState) {
     if (savedUIState.leftSidebar) {
-      leftDrag.x.value = savedUIState.leftSidebar.x
-      leftDrag.y.value = savedUIState.leftSidebar.y
       uiStore.isLeftSidebarOpen = savedUIState.leftSidebar.open
     }
     if (savedUIState.rightSidebar) {
-      // Migration Logic: If stored x is large positive (e.g. > 100), it's from old absolute coordinate system.
-      // Reset it to -20 (default right anchor gap) to prevent it flying off-screen.
-      if (savedUIState.rightSidebar.x > 100) {
-        rightDrag.x.value = -20
-      } else {
-        rightDrag.x.value = savedUIState.rightSidebar.x
-      }
-      rightDrag.y.value = savedUIState.rightSidebar.y
       uiStore.isRightSidebarOpen = savedUIState.rightSidebar.open
     }
     if (savedUIState.codePanel) {
@@ -953,33 +705,26 @@ onMounted(async () => {
     if (savedUIState.currentGraphId) {
       graphStore.selectGraph(savedUIState.currentGraphId)
     }
+    // Respect saved edit mode IF it matches full screen state logic, 
+    // but here we enforce the rule: edit = fullscreen
     if (savedUIState.editMode !== undefined) {
-      isEditMode.value = savedUIState.editMode
+      // Logic overridden by simpler requirement: non-maximized = read-only
     }
   }
-
-  // Ensure sidebars are within bounds on mount
-  nextTick(() => {
-    checkSidebarBounds()
-  })
 
   await initGraph()
   isInitialized.value = true
   widgetInitialized.value = true
   validateGraph()
-
   injectWidgetStyles()
-
   window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
   getManager().unregister(instanceId.value)
-
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('scroll', handleWindowScroll)
   if (observer) observer.disconnect()
-
   document.body.classList.remove('db-dark-mode')
   document.documentElement.classList.remove('db-dark-mode')
   removeWidgetStyles()
@@ -1001,9 +746,7 @@ watch(
   { deep: true }
 )
 
-watch(generatedCode, (code) => {
-  emit('code-update', code)
-})
+watch(generatedCode, (code) => { emit('code-update', code) })
 
 const getScriptContent = () => {
   const dataPayload = parsedGraphData.value.data || {}
@@ -1024,10 +767,7 @@ const getScriptContent = () => {
 watch(
   [generatedCode, parsedGraphData, samplerSettings],
   () => {
-    if (
-      standaloneScript.value ||
-      (uiStore.activeRightTab === 'script' && uiStore.isRightSidebarOpen)
-    ) {
+    if (standaloneScript.value || (uiStore.activeRightTab === 'script' && uiStore.isRightSidebarOpen)) {
       scriptStore.standaloneScript = getScriptContent()
     }
   },
@@ -1066,35 +806,15 @@ const toggleDataPanel = () => {
   }
 }
 
-const handleUndo = () => {
-  if (graphStore.currentGraphId) getUndoRedoInstance(graphStore.currentGraphId)?.undo()
-}
-const handleRedo = () => {
-  if (graphStore.currentGraphId) getUndoRedoInstance(graphStore.currentGraphId)?.redo()
-}
-const handleZoomIn = () => {
-  if (graphStore.currentGraphId)
-    getCyInstance(graphStore.currentGraphId)?.zoom(
-      getCyInstance(graphStore.currentGraphId)!.zoom() * 1.2
-    )
-}
-const handleZoomOut = () => {
-  if (graphStore.currentGraphId)
-    getCyInstance(graphStore.currentGraphId)?.zoom(
-      getCyInstance(graphStore.currentGraphId)!.zoom() * 0.8
-    )
-}
-const handleFit = () => {
-  if (graphStore.currentGraphId) {
-    const cy = getCyInstance(graphStore.currentGraphId)
-    if (cy) smartFit(cy, true)
-  }
-}
+const handleUndo = () => { if (graphStore.currentGraphId) getUndoRedoInstance(graphStore.currentGraphId)?.undo() }
+const handleRedo = () => { if (graphStore.currentGraphId) getUndoRedoInstance(graphStore.currentGraphId)?.redo() }
+const handleZoomIn = () => { if (graphStore.currentGraphId) getCyInstance(graphStore.currentGraphId)?.zoom(getCyInstance(graphStore.currentGraphId)!.zoom() * 1.2) }
+const handleZoomOut = () => { if (graphStore.currentGraphId) getCyInstance(graphStore.currentGraphId)?.zoom(getCyInstance(graphStore.currentGraphId)!.zoom() * 0.8) }
+const handleFit = () => { if (graphStore.currentGraphId) { const cy = getCyInstance(graphStore.currentGraphId); if (cy) smartFit(cy, true) } }
 
 const handleGraphLayout = (layoutName: string) => {
   const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null
   if (!cy) return
-
   applyLayoutWithFit(cy, layoutName)
   if (graphStore.currentGraphId) graphStore.updateGraphLayout(graphStore.currentGraphId, layoutName)
 }
@@ -1104,31 +824,19 @@ const openExportModal = (format: 'png' | 'jpg' | 'svg') => {
   showExportModal.value = true
 }
 
-const handleConfirmExport = (options: {
-  bg: string
-  full: boolean
-  scale: number
-  quality?: number
-}) => {
+const handleConfirmExport = (options: { bg: string; full: boolean; scale: number; quality?: number }) => {
   const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null
   if (!cy || !currentExportType.value) return
-
   try {
     let blob: Blob
     const baseOptions = { bg: options.bg, full: options.full, scale: options.scale }
-
     if (currentExportType.value === 'svg') {
       blob = new Blob([cy.svg(baseOptions)], { type: 'image/svg+xml;charset=utf-8' })
     } else if (currentExportType.value === 'png') {
       blob = cy.png({ ...baseOptions, output: 'blob' }) as unknown as Blob
     } else {
-      blob = cy.jpg({
-        ...baseOptions,
-        quality: options.quality || 0.9,
-        output: 'blob',
-      }) as unknown as Blob
+      blob = cy.jpg({ ...baseOptions, quality: options.quality || 0.9, output: 'blob' }) as unknown as Blob
     }
-
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -1152,11 +860,10 @@ const handleGenerateStandalone = () => {
 const handleDownloadBugs = () => {
   const content = generatedCode.value
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-  const fileName = 'model.bugs'
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = fileName
+  a.download = 'model.bugs'
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
@@ -1201,23 +908,15 @@ const createNewGraph = () => {
   if (projectStore.currentProjectId && (newGraphName.value.trim() || importedGraphData.value)) {
     const name = newGraphName.value.trim() || importedGraphData.value?.name || 'New Graph'
     const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId!, name)
-
     if (newGraphMeta && importedGraphData.value) {
-      // FIX: Typed as GraphElement[]
-      graphStore.updateGraphElements(
-        newGraphMeta.id,
-        importedGraphData.value.elements as GraphElement[]
-      )
-
+      graphStore.updateGraphElements(newGraphMeta.id, importedGraphData.value.elements as GraphElement[])
       if (importedGraphData.value.dataContent) {
         dataStore.updateGraphData(newGraphMeta.id, { content: importedGraphData.value.dataContent })
       }
-
       graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
     } else if (newGraphMeta) {
       graphStore.selectGraph(newGraphMeta.id)
     }
-
     showNewGraphModal.value = false
     newGraphName.value = ''
     clearImportedData()
@@ -1225,22 +924,18 @@ const createNewGraph = () => {
   }
 }
 
-const triggerGraphImport = () => {
-  graphImportInput.value?.click()
-}
+const triggerGraphImport = () => { graphImportInput.value?.click() }
 
 const handleGraphImportFile = (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (file) {
-    processGraphFile(file)
-      .then((data) => {
-        if (data && !newGraphName.value && data.name) {
-          newGraphName.value = data.name + ' (Imported)'
-        }
-      })
-      .catch((error) => {
-        alert(error.message || 'Failed to process graph file.')
-      })
+    processGraphFile(file).then((data) => {
+      if (data && !newGraphName.value && data.name) {
+        newGraphName.value = data.name + ' (Imported)'
+      }
+    }).catch((error) => {
+      alert(error.message || 'Failed to process graph file.')
+    })
   }
 }
 
@@ -1248,15 +943,13 @@ const handleDrop = (event: DragEvent) => {
   isDragOver.value = false
   const file = event.dataTransfer?.files?.[0]
   if (file) {
-    processGraphFile(file)
-      .then((data) => {
-        if (data && !newGraphName.value && data.name) {
-          newGraphName.value = data.name + ' (Imported)'
-        }
-      })
-      .catch((error) => {
-        alert(error.message || 'Failed to process graph file.')
-      })
+    processGraphFile(file).then((data) => {
+      if (data && !newGraphName.value && data.name) {
+        newGraphName.value = data.name + ' (Imported)'
+      }
+    }).catch((error) => {
+      alert(error.message || 'Failed to process graph file.')
+    })
   }
 }
 
@@ -1266,21 +959,14 @@ const handleShare = () => {
   showShareModal.value = true
 }
 
-const handleGenerateShareLink = async (options: {
-  scope: 'current' | 'project' | 'custom'
-  selectedGraphIds?: string[]
-}) => {
+const handleGenerateShareLink = async (options: { scope: 'current' | 'project' | 'custom'; selectedGraphIds?: string[] }) => {
   if (!projectStore.currentProject) return
-
   const getGraphDataForShare = (graphId: string) => {
-    // FIX: Explicitly typed graphElements
     let graphElements: GraphElement[] = []
     let dataContent = '{}'
     let name = 'Graph'
-
     const graphMeta = projectStore.currentProject?.graphs.find((g) => g.id === graphId)
     if (graphMeta) name = graphMeta.name
-
     if (graphId === graphStore.currentGraphId) {
       graphElements = graphStore.currentGraphElements
       dataContent = dataStore.dataContent
@@ -1290,7 +976,6 @@ const handleGenerateShareLink = async (options: {
     }
     return { name, elements: graphElements, dataContent }
   }
-
   let payload = {}
   if (options.scope === 'current') {
     const targetId = options.selectedGraphIds?.[0] || graphStore.currentGraphId
@@ -1298,18 +983,13 @@ const handleGenerateShareLink = async (options: {
     const { name, elements: graphElements, dataContent } = getGraphDataForShare(targetId)
     payload = { v: 2, n: name, e: minifyGraph(graphElements), d: dataContent }
   } else {
-    const targetIds =
-      options.scope === 'project'
-        ? projectStore.currentProject.graphs.map((g) => g.id)
-        : options.selectedGraphIds || []
+    const targetIds = options.scope === 'project' ? projectStore.currentProject.graphs.map((g) => g.id) : options.selectedGraphIds || []
     const graphsData = targetIds.map((id) => {
       const { name, elements: graphElements, dataContent } = getGraphDataForShare(id)
       return { n: name, e: minifyGraph(graphElements), d: dataContent }
     })
     payload = { v: 3, pn: projectStore.currentProject.name, g: graphsData }
   }
-
-  // Use the main app URL when sharing from the widget
   await generateShareLink(payload, 'https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/')
 }
 
@@ -1325,19 +1005,14 @@ const handleShareProjectUrl = () => {
 
 const handleExportJson = () => {
   if (!graphStore.currentGraphId || !projectStore.currentProject) return
-
-  const graphMeta = projectStore.currentProject.graphs.find(
-    (g) => g.id === graphStore.currentGraphId
-  )
+  const graphMeta = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
   if (!graphMeta) return
-
   const exportData = {
     name: graphMeta.name,
     elements: graphStore.currentGraphElements,
     dataContent: dataStore.dataContent,
     version: 1,
   }
-
   const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -1367,16 +1042,12 @@ const handleSelectNodeFromModal = (nodeId: string) => {
   const el = elements.value.find((e) => e.id === nodeId)
   if (el) {
     handleElementSelected(el)
-    // Add Zoom Logic
     const cy = getCyInstance(graphStore.currentGraphId!)
     if (cy) {
       cy.elements().removeClass('cy-selected')
       const cyNode = cy.getElementById(nodeId)
       cyNode.addClass('cy-selected')
-      cy.animate({
-        fit: { eles: cyNode, padding: 50 },
-        duration: 500,
-      })
+      cy.animate({ fit: { eles: cyNode, padding: 50 }, duration: 500 })
     }
   }
 }
@@ -1397,27 +1068,19 @@ const {
 
 const isModelValid = computed(() => validationErrors.value.size === 0)
 
-watch(
-  isDarkMode,
-  (val) => {
-    const html = document.documentElement
-    if (val) {
-      html.classList.add('db-dark-mode')
-      document.body.classList.add('db-dark-mode')
-    } else {
-      html.classList.remove('db-dark-mode')
-      document.body.classList.remove('db-dark-mode')
-    }
-  },
-  { immediate: true }
-)
+watch(isDarkMode, (val) => {
+  const html = document.documentElement
+  if (val) {
+    html.classList.add('db-dark-mode')
+    document.body.classList.add('db-dark-mode')
+  } else {
+    html.classList.remove('db-dark-mode')
+    document.body.classList.remove('db-dark-mode')
+  }
+}, { immediate: true })
 
 watch(
   [
-    () => leftDrag.x.value,
-    () => leftDrag.y.value,
-    () => rightDrag.x.value,
-    () => rightDrag.y.value,
     () => uiStore.isLeftSidebarOpen,
     () => uiStore.isRightSidebarOpen,
     isCodePanelOpen,
@@ -1431,202 +1094,25 @@ watch(
     () => dataPanelSize.width,
     () => dataPanelSize.height,
     () => graphStore.currentGraphId,
-    // Add isEditMode to persisted state
     isEditMode,
   ],
-  () => {
-    saveWidgetUIState()
-  },
+  () => { saveWidgetUIState() },
   { deep: true }
 )
 
-const onLeftHeaderDragStart = (e: MouseEvent | TouchEvent) => {
-  leftDrag.startDrag(e)
-  if (e instanceof MouseEvent) {
-    const originalMouseUp = leftDrag.onMouseUp
-    const handleUp = (upEvent: MouseEvent) => {
-      const isClick = originalMouseUp(upEvent)
-      if (isClick) {
-        uiStore.toggleLeftSidebar()
-      }
-      window.removeEventListener('mouseup', handleUp)
-    }
-    window.addEventListener('mouseup', handleUp)
-  }
-}
-
-const onRightHeaderDragStart = (e: MouseEvent | TouchEvent) => {
-  rightDrag.startDrag(e)
-  if (e instanceof MouseEvent) {
-    const originalMouseUp = rightDrag.onMouseUp
-    const handleUp = (upEvent: MouseEvent) => {
-      const isClick = originalMouseUp(upEvent)
-      if (isClick) {
-        uiStore.toggleRightSidebar()
-      }
-      window.removeEventListener('mouseup', handleUp)
-    }
-    window.addEventListener('mouseup', handleUp)
-  }
-}
-
 const handleToolbarNavigation = (view: string) => {
-  if (view === 'project') {
-    if (
-      uiStore.isLeftSidebarOpen &&
-      activeLeftAccordionTabs.value.includes('project') &&
-      activeLeftAccordionTabs.value.length === 1
-    ) {
-      uiStore.isLeftSidebarOpen = false
-    } else {
-      uiStore.isLeftSidebarOpen = true
-      activeLeftAccordionTabs.value = ['project']
-    }
-  } else if (view === 'view') {
-    if (
-      uiStore.isLeftSidebarOpen &&
-      activeLeftAccordionTabs.value.includes('view') &&
-      activeLeftAccordionTabs.value.length === 1
-    ) {
-      uiStore.isLeftSidebarOpen = false
-    } else {
-      uiStore.isLeftSidebarOpen = true
-      activeLeftAccordionTabs.value = ['view']
-    }
-  } else if (view === 'help') {
-    if (uiStore.isLeftSidebarOpen && activeLeftAccordionTabs.value.includes('help')) {
-      uiStore.isLeftSidebarOpen = false
-    } else {
-      uiStore.isLeftSidebarOpen = true
-      activeLeftAccordionTabs.value = ['help', 'devtools']
-    }
-  } else if (view === 'export') {
-    if (uiStore.isRightSidebarOpen && uiStore.activeRightTab === 'export') {
-      uiStore.isRightSidebarOpen = false
-    } else {
-      uiStore.isRightSidebarOpen = true
-      uiStore.setActiveRightTab('export')
-    }
+  // Navigation handling for widget toolbar options if needed
+  // Currently simplified to remove widget-specific nav items from toolbar
+}
+
+const handleUIInteractionStart = () => { isDraggingUI.value = true }
+const handleUIInteractionEnd = () => { isDraggingUI.value = false }
+
+const handleSidebarContainerClick = (e: MouseEvent) => {
+  if ((e.target as HTMLElement).closest('.db-theme-toggle-header')) return
+  if (!uiStore.isLeftSidebarOpen) {
+    uiStore.toggleLeftSidebar()
   }
-}
-
-const handleUIInteractionStart = () => {
-  isDraggingUI.value = true
-}
-
-const handleUIInteractionEnd = () => {
-  isDraggingUI.value = false
-}
-
-// Improved Animation hooks for sidebars
-
-// Helper to get toolbar rect safely
-const getToolbarRect = (contextEl: HTMLElement): DOMRect | null => {
-  // 1. Try finding toolbar within the same overlay (most robust for multiple widgets)
-  let toolbarEl = contextEl.closest('.db-ui-overlay')?.querySelector('.db-toolbar-container')
-
-  // 2. Fallback to global document query if overlay context fails
-  if (!toolbarEl) {
-    toolbarEl = document.querySelector('.db-toolbar-container')
-  }
-
-  return toolbarEl ? toolbarEl.getBoundingClientRect() : null
-}
-
-const onSidebarLeave = (el: Element, done: () => void) => {
-  const htmlEl = el as HTMLElement
-  const isLeft = htmlEl.classList.contains('db-left')
-  const tbRect = getToolbarRect(htmlEl)
-
-  if (!tbRect) {
-    const anim = htmlEl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200 })
-    anim.onfinish = done
-    return
-  }
-
-  const sbRect = htmlEl.getBoundingClientRect()
-
-  // Calculate centers
-  const sbCenterX = sbRect.left + sbRect.width / 2
-  const sbCenterY = sbRect.top + sbRect.height / 2
-
-  // Target: Left side of toolbar for Left Sidebar, Right side for Right Sidebar
-  const targetX = isLeft
-    ? tbRect.left + tbRect.width * 0.2 // Move to left 20% of toolbar
-    : tbRect.right - tbRect.width * 0.2 // Move to right 20% of toolbar
-
-  const targetY = tbRect.top + tbRect.height / 2
-
-  const deltaX = targetX - sbCenterX
-  const deltaY = targetY - sbCenterY
-
-  const currentTransform = htmlEl.style.transform || ''
-
-  const animation = htmlEl.animate(
-    [
-      { transform: `${currentTransform} translate(0px, 0px) scale(1)`, opacity: 1 },
-      {
-        transform: `${currentTransform} translate(${deltaX}px, ${deltaY}px) scale(0.1)`,
-        opacity: 0,
-      },
-    ],
-    {
-      duration: 250,
-      easing: 'ease-in', // Accelerate into the toolbar
-    }
-  )
-
-  animation.onfinish = done
-}
-
-const onSidebarEnter = (el: Element, done: () => void) => {
-  const htmlEl = el as HTMLElement
-  const isLeft = htmlEl.classList.contains('db-left')
-  const tbRect = getToolbarRect(htmlEl)
-
-  if (!tbRect) {
-    const anim = htmlEl.animate(
-      [
-        { opacity: 0, transform: 'scale(0.9)' },
-        { opacity: 1, transform: 'scale(1)' },
-      ],
-      { duration: 200 }
-    )
-    anim.onfinish = done
-    return
-  }
-
-  const sbRect = htmlEl.getBoundingClientRect()
-
-  const sbCenterX = sbRect.left + sbRect.width / 2
-  const sbCenterY = sbRect.top + sbRect.height / 2
-
-  // Origin: Start from Left/Right side of toolbar
-  const originX = isLeft ? tbRect.left + tbRect.width * 0.2 : tbRect.right - tbRect.width * 0.2
-
-  const originY = tbRect.top + tbRect.height / 2
-
-  // Delta to move FROM Origin TO Destination (sbRect)
-  // We animate from the offset back to 0 (which is the natural position)
-  const startDeltaX = originX - sbCenterX
-  const startDeltaY = originY - sbCenterY
-
-  const currentTransform = htmlEl.style.transform || ''
-
-  const animation = htmlEl.animate(
-    [
-      {
-        transform: `${currentTransform} translate(${startDeltaX}px, ${startDeltaY}px) scale(0.1)`,
-        opacity: 0,
-      },
-      { transform: `${currentTransform} translate(0px, 0px) scale(1)`, opacity: 1 },
-    ],
-    {
-      duration: 250,
-      easing: 'ease-out', // Decelerate out of toolbar
-    }
-  )
-  animation.onfinish = done
 }
 </script>
 
@@ -1634,11 +1120,23 @@ const onSidebarEnter = (el: Element, done: () => void) => {
   <div
     ref="widgetRoot"
     class="db-widget-root"
-    :class="{ 'db-dark-mode': isDarkMode }"
+    :class="{ 'db-dark-mode': isDarkMode, 'db-fullscreen-mode': isFullScreen }"
     @mousedown.capture="handleWidgetClick"
-    :style="{ width: props.width, height: props.height, position: 'relative', display: 'block' }"
+    :style="
+      isFullScreen
+        ? {
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            zIndex: 9990,
+            margin: 0,
+            borderRadius: 0,
+          }
+        : { width: props.width, height: props.height, position: 'relative', display: 'block' }
+    "
   >
-    <!-- Removed .db-widget-frame wrapper entirely, just render content clipper directly -->
     <div class="db-content-clipper">
       <div
         class="db-canvas-layer"
@@ -1684,59 +1182,61 @@ const onSidebarEnter = (el: Element, done: () => void) => {
         </div>
       </div>
 
+      <!-- Non-Fullscreen Controls (Embedded Mode - Reduced to just Maximize) -->
       <div
+        v-if="!isFullScreen"
         class="db-edit-toggle-wrapper"
-        style="position: absolute; top: 10px; right: 10px; z-index: 500"
+        style="
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          z-index: 500;
+          display: flex;
+          gap: 8px;
+        "
       >
         <button
-          @click="toggleEditMode"
-          :title="isEditMode ? 'Stop Editing' : 'Edit Graph'"
-          style="
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: white;
-            border: 1px solid #e5e7eb;
-            color: #4b5563;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            padding: 0;
-            transition: all 0.2s;
-          "
-          :style="isEditMode ? 'background: #ef4444; border-color: #ef4444; color: white;' : ''"
+          @click="toggleFullScreen"
+          title="Maximize Graph"
+          class="db-control-btn"
         >
-          <svg
-            v-if="!isEditMode"
-            viewBox="0 0 24 24"
-            width="18"
-            height="18"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="currentColor"
-          >
-            <path
-              d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
-            />
-          </svg>
-
-          <svg
-            v-else
-            viewBox="0 0 76.00 76.00"
-            xmlns="http://www.w3.org/2000/svg"
-            width="22"
-            height="22"
-            fill="currentColor"
-          >
-            <path
-              fill="currentColor"
-              d="M 53.2929,21.2929L 54.7071,22.7071C 56.4645,24.4645 56.4645,27.3137 54.7071,29.0711L 52.2323,31.5459L 44.4541,23.7677L 46.9289,21.2929C 48.6863,19.5355 51.5355,19.5355 53.2929,21.2929 Z M 31.7262,52.052L 23.948,44.2738L 43.0399,25.182L 50.818,32.9601L 31.7262,52.052 Z M 23.2409,47.1023L 28.8977,52.7591L 21.0463,54.9537L 23.2409,47.1023 Z M 17,28L 17,23L 23,23L 23,17L 28,17L 28,23L 34,23L 34,28L 28,28L 28,34L 23,34L 23,28L 17,28 Z "
-            ></path>
-          </svg>
+          <i class="fas fa-expand"></i>
         </button>
       </div>
     </div>
+
+    <!-- Floating Toolbar (Only in Full Screen) -->
+    <Teleport to="body" :disabled="!isFullScreen">
+      <FloatingBottomToolbar
+        ref="bottomToolbarRef"
+        v-if="isWidgetInView && isEditMode"
+        :current-mode="currentMode"
+        :current-node-type="currentNodeType"
+        :show-zoom-controls="showZoomControls"
+        :show-code-panel="isCodePanelOpen"
+        :show-data-panel="isDataPanelOpen"
+        :is-detach-mode-active="isDetachModeActive"
+        :show-detach-mode-control="showDetachModeControl"
+        :is-widget="!isFullScreen"
+        :style="isFullScreen ? { zIndex: 10000 } : {}"
+        @update:current-mode="currentMode = $event"
+        @update:current-node-type="currentNodeType = $event"
+        @undo="handleUndo"
+        @redo="handleRedo"
+        @zoom-in="handleZoomIn"
+        @zoom-out="handleZoomOut"
+        @fit="handleFit"
+        @layout-graph="handleGraphLayout"
+        @toggle-code-panel="toggleCodePanel"
+        @toggle-data-panel="toggleDataPanel"
+        @toggle-detach-mode="uiStore.toggleDetachMode"
+        @open-style-modal="showStyleModal = true"
+        @share="handleShare"
+        @nav="handleToolbarNavigation"
+        @drag-start="handleUIInteractionStart"
+        @drag-end="handleUIInteractionEnd"
+      />
+    </Teleport>
 
     <Teleport to="body">
       <div class="db-toast-wrapper">
@@ -1745,106 +1245,193 @@ const onSidebarEnter = (el: Element, done: () => void) => {
 
       <div
         class="db-ui-overlay"
-        :class="{ 'db-dark-mode': isDarkMode, 'db-widget-ready': widgetInitialized }"
+        :class="{
+          'db-dark-mode': isDarkMode,
+          'db-widget-ready': widgetInitialized,
+          'db-fullscreen': isFullScreen,
+        }"
         v-show="isWidgetInView && isEditMode && isUIActive"
       >
-        <Transition :css="false" @enter="onSidebarEnter" @leave="onSidebarLeave">
-          <div
-            v-if="widgetInitialized && isLeftSidebarOpen"
-            class="db-sidebar-wrapper db-left"
-            :style="leftDrag.style.value"
+        <!-- Full Screen Mode Controls (Teleported to Overlay for Z-Index) -->
+        <div
+          v-if="isFullScreen"
+          class="db-edit-toggle-wrapper db-fullscreen-controls"
+          style="
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 10000;
+            display: flex;
+            gap: 8px;
+            pointer-events: auto;
+          "
+        >
+          <button
+            @click="toggleFullScreen"
+            title="Exit Full Screen"
+            class="db-control-btn db-active"
           >
-            <LeftSidebar
-              v-show="isLeftSidebarOpen"
-              :activeAccordionTabs="activeLeftAccordionTabs"
-              @update:activeAccordionTabs="activeLeftAccordionTabs = $event"
-              :projectName="projectStore.currentProject?.name || 'Project'"
-              :pinnedGraphTitle="pinnedGraphTitle"
-              :isGridEnabled="isGridEnabled"
-              :gridSize="gridSize"
-              :showZoomControls="showZoomControls"
-              :showDebugPanel="showDebugPanel"
-              :isCodePanelOpen="isCodePanelOpen"
-              :isDetachModeActive="isDetachModeActive"
-              :showDetachModeControl="showDetachModeControl"
-              :enableDrag="true"
-              @toggle-left-sidebar="uiStore.toggleLeftSidebar"
-              @new-project="handleNewProject"
-              @new-graph="handleNewGraph"
-              @update:currentMode="currentMode = $event"
-              @update:currentNodeType="currentNodeType = $event"
-              @update:isGridEnabled="isGridEnabled = $event"
-              @update:gridSize="gridSize = $event"
-              @update:showZoomControls="showZoomControls = $event"
-              @update:showDebugPanel="showDebugPanel = $event"
-              @update:isDetachModeActive="isDetachModeActive = $event"
-              @update:show-detach-mode-control="showDetachModeControl = $event"
-              @toggle-code-panel="toggleCodePanel"
-              @load-example="handleLoadExampleAction"
-              @open-about-modal="showAboutModal = true"
-              @open-faq-modal="showFaqModal = true"
-              @toggle-dark-mode="uiStore.toggleDarkMode"
-              @share-graph="handleShareGraph"
-              @share-project-url="handleShareProjectUrl"
-              @header-drag-start="onLeftHeaderDragStart"
-            />
-          </div>
-        </Transition>
+            <i class="fas fa-compress"></i>
+          </button>
+        </div>
 
-        <Transition :css="false" @enter="onSidebarEnter" @leave="onSidebarLeave">
-          <div
-            v-if="widgetInitialized && isRightSidebarOpen"
-            class="db-sidebar-wrapper db-right"
-            :style="rightDrag.style.value"
-          >
-            <RightSidebar
-              v-show="isRightSidebarOpen"
-              :selectedElement="selectedElement"
-              :validationErrors="validationErrors"
-              :isModelValid="isModelValid"
-              :enableDrag="true"
-              @toggle-right-sidebar="uiStore.toggleRightSidebar"
-              @update-element="updateElement"
-              @delete-element="deleteElement"
-              @show-validation-issues="showValidationModal = true"
-              @open-script-settings="showScriptSettingsModal = true"
-              @download-script="handleDownloadScript"
-              @generate-script="handleGenerateStandalone"
-              @share="handleShare"
-              @open-export-modal="openExportModal"
-              @export-json="handleExportJson"
-              @header-drag-start="onRightHeaderDragStart"
-            />
-          </div>
-        </Transition>
+        <!-- Collapsed Sidebar Triggers (Only in Full Screen) -->
+        <template v-if="isFullScreen">
+          <Transition name="fade">
+            <div
+              v-if="!isLeftSidebarOpen"
+              class="db-collapsed-sidebar-trigger db-left-trigger"
+              @click="handleSidebarContainerClick"
+            >
+              <div class="db-sidebar-trigger-content gap-1">
+                <div
+                  class="flex-grow flex items-center gap-2 overflow-hidden"
+                  style="flex-grow: 1; overflow: hidden"
+                >
+                  <span class="db-logo-text-minimized">
+                    <span class="db-desktop-text">{{
+                      pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS'
+                    }}</span>
+                    <span class="db-mobile-text">DoodleBUGS</span>
+                  </span>
+                </div>
+                <div class="flex items-center flex-shrink-0" style="flex-shrink: 0">
+                  <button
+                    @click.stop="uiStore.toggleDarkMode()"
+                    class="db-theme-toggle-header"
+                    :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+                  >
+                    <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
+                  </button>
+                  <div class="db-toggle-icon-wrapper">
+                    <svg
+                      width="20"
+                      height="20"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      class="db-toggle-icon"
+                    >
+                      <path
+                        fill="currentColor"
+                        fill-rule="evenodd"
+                        d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"
+                        clip-rule="evenodd"
+                      ></path>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Transition>
 
-        <FloatingBottomToolbar
-          ref="bottomToolbarRef"
-          :current-mode="currentMode"
-          :current-node-type="currentNodeType"
-          :show-zoom-controls="showZoomControls"
-          :show-code-panel="isCodePanelOpen"
-          :show-data-panel="isDataPanelOpen"
-          :is-detach-mode-active="isDetachModeActive"
-          :show-detach-mode-control="showDetachModeControl"
-          :is-widget="true"
-          @update:current-mode="currentMode = $event"
-          @update:current-node-type="currentNodeType = $event"
-          @undo="handleUndo"
-          @redo="handleRedo"
-          @zoom-in="handleZoomIn"
-          @zoom-out="handleZoomOut"
-          @fit="handleFit"
-          @layout-graph="handleGraphLayout"
-          @toggle-code-panel="toggleCodePanel"
-          @toggle-data-panel="toggleDataPanel"
-          @toggle-detach-mode="uiStore.toggleDetachMode"
-          @open-style-modal="showStyleModal = true"
-          @share="handleShare"
-          @nav="handleToolbarNavigation"
-          @drag-start="handleUIInteractionStart"
-          @drag-end="handleUIInteractionEnd"
-        />
+          <Transition name="fade">
+            <div
+              v-if="!isRightSidebarOpen"
+              class="db-collapsed-sidebar-trigger db-right"
+              @click="uiStore.toggleRightSidebar()"
+            >
+              <div class="db-sidebar-trigger-content gap-2">
+                <span class="db-sidebar-title-minimized">Inspector</span>
+                <div class="flex items-center">
+                  <div
+                    class="db-status-indicator db-validation-status"
+                    @click.stop="showValidationModal = true"
+                    :class="isModelValid ? 'db-valid' : 'db-invalid'"
+                  >
+                    <i
+                      :class="
+                        isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'
+                      "
+                    ></i>
+                  </div>
+                  <button
+                    class="db-header-icon-btn db-collapsed-share-btn"
+                    @click.stop="handleShare"
+                    title="Share via URL"
+                  >
+                    <i class="fas fa-share-alt"></i>
+                  </button>
+                  <div class="db-toggle-icon-wrapper">
+                    <svg
+                      width="20"
+                      height="20"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      class="db-toggle-icon"
+                    >
+                      <path
+                        fill="currentColor"
+                        fill-rule="evenodd"
+                        d="M10 7h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-8zM9 7H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3zM4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"
+                        clip-rule="evenodd"
+                      ></path>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Transition>
+        </template>
+
+        <!-- Sidebars (Visible only in Full Screen) -->
+        <!-- Logic updated to allow sidebar self-animation. Wrapper is always present in FS, pointer events managed by CSS -->
+        <div
+          v-if="widgetInitialized && isFullScreen"
+          class="db-sidebar-wrapper db-left"
+        >
+          <LeftSidebar
+            :activeAccordionTabs="activeLeftAccordionTabs"
+            @update:activeAccordionTabs="activeLeftAccordionTabs = $event"
+            :projectName="projectStore.currentProject?.name || 'Project'"
+            :pinnedGraphTitle="pinnedGraphTitle"
+            :isGridEnabled="isGridEnabled"
+            :gridSize="gridSize"
+            :showZoomControls="showZoomControls"
+            :showDebugPanel="showDebugPanel"
+            :isCodePanelOpen="isCodePanelOpen"
+            :isDetachModeActive="isDetachModeActive"
+            :showDetachModeControl="showDetachModeControl"
+            @toggle-left-sidebar="uiStore.toggleLeftSidebar"
+            @new-project="handleNewProject"
+            @new-graph="handleNewGraph"
+            @update:currentMode="currentMode = $event"
+            @update:currentNodeType="currentNodeType = $event"
+            @update:isGridEnabled="isGridEnabled = $event"
+            @update:gridSize="gridSize = $event"
+            @update:showZoomControls="showZoomControls = $event"
+            @update:showDebugPanel="showDebugPanel = $event"
+            @update:isDetachModeActive="isDetachModeActive = $event"
+            @update:show-detach-mode-control="showDetachModeControl = $event"
+            @toggle-code-panel="toggleCodePanel"
+            @load-example="handleLoadExampleAction"
+            @open-about-modal="showAboutModal = true"
+            @open-faq-modal="showFaqModal = true"
+            @toggle-dark-mode="uiStore.toggleDarkMode"
+            @share-graph="handleShareGraph"
+            @share-project-url="handleShareProjectUrl"
+          />
+        </div>
+
+        <div
+          v-if="widgetInitialized && isFullScreen"
+          class="db-sidebar-wrapper db-right"
+        >
+          <RightSidebar
+            :selectedElement="selectedElement"
+            :validationErrors="validationErrors"
+            :isModelValid="isModelValid"
+            @toggle-right-sidebar="uiStore.toggleRightSidebar"
+            @update-element="updateElement"
+            @delete-element="deleteElement"
+            @show-validation-issues="showValidationModal = true"
+            @open-script-settings="showScriptSettingsModal = true"
+            @download-script="handleDownloadScript"
+            @generate-script="handleGenerateStandalone"
+            @share="handleShare"
+            @open-export-modal="openExportModal"
+            @export-json="handleExportJson"
+          />
+        </div>
 
         <FloatingPanel
           title="BUGS Code Preview"
@@ -1977,10 +1564,8 @@ const onSidebarEnter = (el: Element, done: () => void) => {
                   @keyup.enter="createNewGraph"
                 />
               </div>
-
               <div class="db-import-section">
                 <label class="db-section-label">Import from JSON (Optional)</label>
-
                 <div
                   class="db-drop-zone"
                   :class="{ 'db-loaded': importedGraphData, 'db-drag-over': isDragOver }"
@@ -1996,7 +1581,6 @@ const onSidebarEnter = (el: Element, done: () => void) => {
                     @change="handleGraphImportFile"
                     class="db-hidden-input"
                   />
-
                   <div v-if="!importedGraphData" class="db-drop-zone-content">
                     <div class="db-icon-circle">
                       <i class="fas fa-file-import"></i>
@@ -2006,7 +1590,6 @@ const onSidebarEnter = (el: Element, done: () => void) => {
                       <small class="db-sub-text">Restore a previously exported graph</small>
                     </div>
                   </div>
-
                   <div v-else class="db-drop-zone-content db-success">
                     <div class="db-icon-circle db-success">
                       <i class="fas fa-check"></i>
@@ -2042,16 +1625,14 @@ const onSidebarEnter = (el: Element, done: () => void) => {
 
 <style>
 .db-widget-root {
-  /* Dimensions controlled by Vue style binding from props */
-  overflow: visible !important; /* Force overflow visible so content can hang outside */
+  overflow: visible !important;
   background: var(--theme-bg-canvas);
-  /* Create stacking context for children */
   isolation: isolate;
   z-index: 0;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  padding-top: 0; /* Let inner wrapper handle spacing */
+  padding-top: 0;
 
   --theme-bg-canvas: #f3f4f6;
   --theme-grid-line: #d1d5db;
@@ -2078,16 +1659,31 @@ const onSidebarEnter = (el: Element, done: () => void) => {
   --theme-border: #27272a;
 }
 
-/* Content Clipper ensures rounded corners and overflow hidden for the canvas */
+/* Full Screen Mode */
+.db-widget-root.db-fullscreen-mode {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 9990; /* Canvas base Z-Index */
+  margin: 0;
+  border-radius: 0;
+}
+
+.db-widget-root.db-fullscreen-mode .db-content-clipper {
+  border-radius: 0;
+  border: none;
+}
+
 .db-content-clipper {
-  flex: 1; /* Flex grow to fill remaining vertical space */
+  flex: 1;
   width: 100%;
   height: 100%;
   position: relative;
   overflow: hidden;
   border-radius: 6px;
   z-index: 10;
-  /* Removed border from here as we removed frame */
   border: 1px solid var(--theme-border);
 }
 
@@ -2095,37 +1691,29 @@ const onSidebarEnter = (el: Element, done: () => void) => {
   border-color: #3f3f46;
 }
 
-/* Edit Toggle Button Styles */
-.db-edit-toggle-wrapper {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 500;
-}
-
-.db-edit-toggle-btn {
+.db-control-btn {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--theme-bg-panel);
-  border: 1px solid var(--theme-border);
-  color: var(--theme-text-secondary);
+  background: white;
+  border: 1px solid #e5e7eb;
+  color: #4b5563;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-md);
-  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   padding: 0;
+  transition: all 0.2s;
 }
 
-.db-edit-toggle-btn:hover {
+.db-control-btn:hover {
   background: var(--theme-bg-hover);
   color: var(--theme-primary);
   transform: scale(1.05);
 }
 
-.db-edit-toggle-btn.db-active {
+.db-control-btn.db-active {
   background: var(--theme-danger);
   border-color: var(--theme-danger);
   color: white;
@@ -2176,7 +1764,6 @@ const onSidebarEnter = (el: Element, done: () => void) => {
   background-image: radial-gradient(circle, var(--theme-text-secondary) 1px, transparent 1px);
 }
 
-/* Dark mode grid styling for widget */
 .db-widget-root.db-dark-mode .db-cytoscape-container.db-grid-background.db-grid-dots {
   background-image: radial-gradient(
     circle,
@@ -2376,7 +1963,6 @@ const onSidebarEnter = (el: Element, done: () => void) => {
   display: none;
 }
 
-/* Modal and Drop Zone Styles */
 .db-form-group {
   display: flex;
   flex-direction: column;
@@ -2524,21 +2110,17 @@ const onSidebarEnter = (el: Element, done: () => void) => {
   .db-desktop-text {
     display: none;
   }
-
   .db-mobile-text {
     display: inline;
   }
-
   .db-collapsed-sidebar-trigger {
     min-width: auto !important;
     max-width: 42%;
     padding: 8px;
   }
-
   .db-collapsed-sidebar-trigger.db-left-trigger {
     min-width: auto !important;
   }
-
   .db-logo-text-minimized {
     font-size: 12px;
     white-space: nowrap;
@@ -2546,7 +2128,6 @@ const onSidebarEnter = (el: Element, done: () => void) => {
     text-overflow: ellipsis;
     display: block;
   }
-
   .db-sidebar-trigger-content {
     gap: 4px;
   }

@@ -37,12 +37,6 @@ const emit = defineEmits<{
   (e: 'drag-end', position: { x: number; y: number }): void
 }>()
 
-const showSecondaryMenu = ref(false)
-
-const toggleSecondaryMenu = () => {
-  showSecondaryMenu.value = !showSecondaryMenu.value
-}
-
 const availableNodeTypes = computed(() => {
   return nodeDefinitions.map((def) => ({
     label: def.label,
@@ -148,6 +142,7 @@ const styleState = ref({
 const dragOffset = ref({ x: 0, y: 0 })
 let animationFrameId: number | null = null
 
+// When dragging starts, calculate position relative to the offset parent (the widget container) or viewport
 const startDrag = (event: MouseEvent) => {
   if (
     (event.target as HTMLElement).closest('button') ||
@@ -161,19 +156,35 @@ const startDrag = (event: MouseEvent) => {
 
   isDragging.value = true
   emit('drag-start') // Signal start of drag
-  const rect = toolbarRef.value.getBoundingClientRect()
+  
+  const toolbar = toolbarRef.value
+  const rect = toolbar.getBoundingClientRect()
 
   dragOffset.value = {
     x: event.clientX - rect.left,
     y: event.clientY - rect.top,
   }
 
-  // Switch to absolute positioning with transform for performance
+  let relX = 0
+  let relY = 0
+
+  if (props.isWidget) {
+    // Absolute positioning (Embedded): Calculate relative to offset parent
+    const parent = toolbar.offsetParent as HTMLElement || document.body
+    const parentRect = parent.getBoundingClientRect()
+    relX = rect.left - parentRect.left
+    relY = rect.top - parentRect.top
+  } else {
+    // Fixed positioning (Fullscreen): Calculate relative to viewport
+    relX = rect.left
+    relY = rect.top
+  }
+
   styleState.value = {
     left: '0px',
     top: '0px',
     bottom: 'auto',
-    transform: `translate3d(${rect.left}px, ${rect.top}px, 0)`,
+    transform: `translate3d(${relX}px, ${relY}px, 0)`,
   }
 
   window.addEventListener('mousemove', onDrag)
@@ -187,8 +198,24 @@ const onDrag = (event: MouseEvent) => {
   if (animationFrameId) return
 
   animationFrameId = requestAnimationFrame(() => {
-    const x = event.clientX - dragOffset.value.x
-    const y = event.clientY - dragOffset.value.y
+    const toolbar = toolbarRef.value
+    if (!toolbar) return
+    
+    let x = 0
+    let y = 0
+
+    if (props.isWidget) {
+      // Absolute positioning
+      const parent = toolbar.offsetParent as HTMLElement || document.body
+      const parentRect = parent.getBoundingClientRect()
+      x = event.clientX - dragOffset.value.x - parentRect.left
+      y = event.clientY - dragOffset.value.y - parentRect.top
+    } else {
+      // Fixed positioning
+      x = event.clientX - dragOffset.value.x
+      y = event.clientY - dragOffset.value.y
+    }
+    
     styleState.value.transform = `translate3d(${x}px, ${y}px, 0)`
     animationFrameId = null
   })
@@ -217,19 +244,34 @@ const startDragTouch = (event: TouchEvent) => {
 
   isDragging.value = true
   emit('drag-start') // Signal start of drag
-  const rect = toolbarRef.value.getBoundingClientRect()
+  
   const touch = event.touches[0]
+  const toolbar = toolbarRef.value
+  const rect = toolbar.getBoundingClientRect()
 
   dragOffset.value = {
     x: touch.clientX - rect.left,
     y: touch.clientY - rect.top,
   }
 
+  let relX = 0
+  let relY = 0
+
+  if (props.isWidget) {
+    const parent = toolbar.offsetParent as HTMLElement || document.body
+    const parentRect = parent.getBoundingClientRect()
+    relX = rect.left - parentRect.left
+    relY = rect.top - parentRect.top
+  } else {
+    relX = rect.left
+    relY = rect.top
+  }
+
   styleState.value = {
     left: '0px',
     top: '0px',
     bottom: 'auto',
-    transform: `translate3d(${rect.left}px, ${rect.top}px, 0)`,
+    transform: `translate3d(${relX}px, ${relY}px, 0)`,
   }
 
   window.addEventListener('touchmove', onDragTouch, { passive: false })
@@ -244,8 +286,22 @@ const onDragTouch = (event: TouchEvent) => {
   if (animationFrameId) return
 
   animationFrameId = requestAnimationFrame(() => {
-    const x = touch.clientX - dragOffset.value.x
-    const y = touch.clientY - dragOffset.value.y
+    const toolbar = toolbarRef.value
+    if (!toolbar) return
+    
+    let x = 0
+    let y = 0
+
+    if (props.isWidget) {
+      const parent = toolbar.offsetParent as HTMLElement || document.body
+      const parentRect = parent.getBoundingClientRect()
+      x = touch.clientX - dragOffset.value.x - parentRect.left
+      y = touch.clientY - dragOffset.value.y - parentRect.top
+    } else {
+      x = touch.clientX - dragOffset.value.x
+      y = touch.clientY - dragOffset.value.y
+    }
+    
     styleState.value.transform = `translate3d(${x}px, ${y}px, 0)`
     animationFrameId = null
   })
@@ -272,100 +328,11 @@ onUnmounted(() => {
   <div
     class="db-toolbar-container"
     ref="toolbarRef"
+    :class="{ 'db-position-fixed': !isWidget }"
     :style="styleState"
     @mousedown="startDrag"
     @touchstart="startDragTouch"
   >
-    <!-- Secondary Menu (Above Main Bar) -->
-    <Transition name="db-slide-up">
-      <div v-if="showSecondaryMenu" class="db-secondary-dock db-glass-panel">
-        <!-- App Navigation Group (Widget Only) -->
-        <template v-if="isWidget">
-          <div class="db-menu-group">
-            <span class="db-group-label">Menu</span>
-            <div class="db-group-items">
-              <button
-                class="db-dock-btn db-secondary-btn"
-                @click="$emit('nav', 'project')"
-                v-tooltip.top="{ value: 'Projects', showDelay: 0, hideDelay: 0 }"
-              >
-                <i class="fas fa-folder"></i>
-              </button>
-              <button
-                class="db-dock-btn db-secondary-btn"
-                @click="$emit('nav', 'view')"
-                v-tooltip.top="{ value: 'View Options', showDelay: 0, hideDelay: 0 }"
-              >
-                <i class="fas fa-eye"></i>
-              </button>
-              <button
-                class="db-dock-btn db-secondary-btn"
-                @click="$emit('nav', 'help')"
-                v-tooltip.top="{ value: 'Help & Dev Tools', showDelay: 0, hideDelay: 0 }"
-              >
-                <i class="fas fa-question-circle"></i>
-              </button>
-            </div>
-          </div>
-          <div class="db-divider"></div>
-        </template>
-
-        <!-- Panels Group -->
-        <div class="db-menu-group">
-          <span class="db-group-label">Panels</span>
-          <div class="db-group-items">
-            <button
-              class="db-dock-btn db-secondary-btn"
-              @click="$emit('open-style-modal')"
-              v-tooltip.top="{ value: 'Graph Style', showDelay: 0, hideDelay: 0 }"
-            >
-              <i class="fas fa-palette"></i>
-            </button>
-            <button
-              class="db-dock-btn db-secondary-btn"
-              :class="{ 'db-active': showDataPanel }"
-              @click="$emit('toggle-data-panel')"
-              v-tooltip.top="{ value: 'Data Panel', showDelay: 0, hideDelay: 0 }"
-            >
-              <i class="fas fa-database"></i>
-            </button>
-            <button
-              class="db-dock-btn db-secondary-btn"
-              :class="{ 'db-active': showCodePanel }"
-              @click="$emit('toggle-code-panel')"
-              v-tooltip.top="{ value: 'BUGS Code', showDelay: 0, hideDelay: 0 }"
-            >
-              <i class="fas fa-code"></i>
-            </button>
-          </div>
-        </div>
-
-        <!-- Export Group (Restricted to Widget Only) -->
-        <template v-if="isWidget">
-          <div class="db-divider"></div>
-          <div class="db-menu-group">
-            <span class="db-group-label">Actions</span>
-            <div class="db-group-items">
-              <button
-                class="db-dock-btn db-secondary-btn"
-                @click="$emit('share')"
-                v-tooltip.top="{ value: 'Share', showDelay: 0, hideDelay: 0 }"
-              >
-                <i class="fas fa-share-alt"></i>
-              </button>
-              <button
-                class="db-dock-btn db-secondary-btn"
-                @click="$emit('nav', 'export')"
-                v-tooltip.top="{ value: 'Export', showDelay: 0, hideDelay: 0 }"
-              >
-                <i class="fas fa-file-export"></i>
-              </button>
-            </div>
-          </div>
-        </template>
-      </div>
-    </Transition>
-
     <!-- Main Toolbar -->
     <div class="db-floating-dock db-glass-panel">
       <div
@@ -374,18 +341,6 @@ onUnmounted(() => {
       >
         <i class="fas fa-grip-vertical"></i>
       </div>
-
-      <!-- Menu Toggle -->
-      <button
-        class="db-dock-btn db-main-menu-toggle"
-        :class="{ 'db-active': showSecondaryMenu }"
-        @click="toggleSecondaryMenu"
-        v-tooltip.top="{ value: 'Menu', showDelay: 0, hideDelay: 0 }"
-      >
-        <i :class="showSecondaryMenu ? 'fas fa-times' : 'fas fa-bars'"></i>
-      </button>
-
-      <div class="db-divider"></div>
 
       <!-- Tools Group -->
       <button
@@ -469,7 +424,7 @@ onUnmounted(() => {
 
       <div class="db-divider"></div>
 
-      <!-- Layout Dropdown (Moved from Secondary Menu) -->
+      <!-- Layout Dropdown -->
       <DropdownMenu class="db-dock-dropdown">
         <template #trigger>
           <button
@@ -489,6 +444,33 @@ onUnmounted(() => {
           <a href="#" @click.prevent="$emit('layout-graph', 'preset')">Reset Positions</a>
         </template>
       </DropdownMenu>
+
+      <div class="db-divider"></div>
+
+      <!-- Panel Toggles (Moved from Secondary Menu) -->
+      <button
+        class="db-dock-btn"
+        @click="$emit('open-style-modal')"
+        v-tooltip.top="{ value: 'Graph Style', showDelay: 0, hideDelay: 0 }"
+      >
+        <i class="fas fa-palette"></i>
+      </button>
+      <button
+        class="db-dock-btn"
+        :class="{ 'db-active': showDataPanel }"
+        @click="$emit('toggle-data-panel')"
+        v-tooltip.top="{ value: 'Data & Inits', showDelay: 0, hideDelay: 0 }"
+      >
+        <i class="fas fa-database"></i>
+      </button>
+      <button
+        class="db-dock-btn"
+        :class="{ 'db-active': showCodePanel }"
+        @click="$emit('toggle-code-panel')"
+        v-tooltip.top="{ value: 'BUGS Code', showDelay: 0, hideDelay: 0 }"
+      >
+        <i class="fas fa-code"></i>
+      </button>
 
       <!-- Zoom (Conditional) -->
       <template v-if="showZoomControls">
@@ -538,15 +520,21 @@ onUnmounted(() => {
 
 <style scoped>
 .db-toolbar-container {
-  position: fixed;
+  /* Default to absolute for widget containment */
+  position: absolute; 
   z-index: 400; /* Layer 5: Toolbar - above panels, below dropdowns */
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0; /* Gap handled by margin/position of secondary */
+  gap: 0;
   cursor: grab;
   touch-action: none;
   will-change: transform;
+}
+
+/* When in fullscreen/body teleport, switch to fixed positioning */
+.db-toolbar-container.db-position-fixed {
+  position: fixed;
 }
 
 .db-toolbar-container:active {
@@ -563,70 +551,7 @@ onUnmounted(() => {
   user-select: none;
   position: relative;
   z-index: 2;
-  background: var(--theme-bg-panel); /* Ensure background is solid enough */
-}
-
-/* Secondary Menu Styles */
-.db-secondary-dock {
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-bottom: 12px; /* Space between main and secondary */
-  padding: 8px 12px;
-  border-radius: var(--radius-lg);
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  z-index: 1;
-  width: max-content; /* Dynamic width */
-  white-space: nowrap;
-}
-
-.db-menu-group {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.db-group-label {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--theme-text-secondary);
-  font-weight: 600;
-  margin-bottom: 2px;
-}
-
-.db-group-items {
-  display: flex;
-  gap: 4px;
-}
-
-.db-secondary-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px; /* Square-ish for secondary */
-}
-
-/* Transitions */
-.db-slide-up-enter-active,
-.db-slide-up-leave-active {
-  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-  transform-origin: bottom center;
-}
-
-.db-slide-up-enter-from,
-.db-slide-up-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(10px) scale(0.95);
-}
-
-.db-slide-up-enter-to,
-.db-slide-up-leave-from {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0) scale(1);
+  background: var(--theme-bg-panel);
 }
 
 .db-drag-handle {
@@ -667,22 +592,12 @@ onUnmounted(() => {
   color: white;
 }
 
-/* Main Menu Toggle Highlight */
-.db-main-menu-toggle.db-active {
-  background: var(--theme-bg-active);
-  color: var(--theme-text-primary);
-}
-
 .db-divider {
   width: 1px;
-  height: 20px;
+  height: 16px;
   background: var(--theme-border);
   margin: 0 4px;
   align-self: center;
-}
-
-.db-floating-dock .db-divider {
-  height: 16px;
 }
 
 .db-add-tool-btn {
@@ -767,12 +682,6 @@ onUnmounted(() => {
   }
   .db-drag-handle {
     display: none;
-  }
-
-  .db-secondary-dock {
-    flex-wrap: wrap;
-    justify-content: center;
-    max-width: 90vw;
   }
 }
 
