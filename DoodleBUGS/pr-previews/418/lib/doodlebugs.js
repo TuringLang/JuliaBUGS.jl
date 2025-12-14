@@ -65632,7 +65632,7 @@ const fQe = { class: "db-floating-dock db-glass-panel" }, dQe = { class: "db-dra
       ])
     ], 38));
   }
-}), gQe = /* @__PURE__ */ vs(vQe, [["__scopeId", "data-v-bc77ae04"]]), bQe = { class: "db-graph-title" }, mQe = {
+}), gQe = /* @__PURE__ */ vs(vQe, [["__scopeId", "data-v-ae10308a"]]), bQe = { class: "db-graph-title" }, mQe = {
   key: 1,
   class: "db-badge-json"
 }, yQe = { class: "db-panel-actions" }, wQe = { class: "db-panel-content" }, kQe = /* @__PURE__ */ ba({
@@ -83310,7 +83310,7 @@ const est = { class: "db-content-clipper" }, tst = {
         },
         currentGraphId: l.currentGraphId || void 0,
         editMode: O.value,
-        // @ts-ignore - Extending UI state for widget specific needs
+        // @ts-expect-error - Extending UI state for widget specific needs
         isFullScreen: T.value
       });
     }, { elements: Ze, selectedElement: Ue, updateElement: ot, deleteElement: it } = GU(), { parsedGraphData: ft } = Sm(f), { samplerSettings: ut, standaloneScript: kt } = Sm(d), { generatedCode: yt } = v2e(Ze), { validateGraph: zt, validationErrors: lr } = Yat(Ze, ft), { getCyInstance: fr, getUndoRedoInstance: wr } = VU(), { smartFit: Cr, applyLayoutWithFit: pr } = Kat(), { shareUrl: er, minifyGraph: Ke, generateShareLink: ke } = Jat(), { importedGraphData: He, processGraphFile: nt, clearImportedData: Qe } = Qat(), tt = () => {
@@ -83396,7 +83396,9 @@ const est = { class: "db-content-clipper" }, tst = {
               if (!Xi.ok) throw new Error(`HTTP ${Xi.status}: ${Xi.statusText}`);
               Qt = await Xi.json(), Zn = Qt.name || "Remote Model";
             } catch (Xi) {
-              throw new Error(`Failed to fetch URL: "${_t}". ${Xi instanceof Error ? Xi.message : String(Xi)}`);
+              throw new Error(
+                `Failed to fetch URL: "${_t}". ${Xi instanceof Error ? Xi.message : String(Xi)}`
+              );
             }
           } else {
             const xi = `https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/examples/${_t}/model.json`;
@@ -83525,7 +83527,9 @@ const est = { class: "db-content-clipper" }, tst = {
       ), A.observe(E.value)), window.addEventListener("scroll", mr, { passive: !0 }), l.selectGraph(void 0), s.loadProjects(), n.initialState)
         try {
           const Rt = JSON.parse(n.initialState);
-          Rt.project && s.importState(Rt.project), Rt.graphs && Rt.graphs.forEach((Qt) => l.graphContents.set(Qt.graphId, Qt)), Rt.data && Rt.data.forEach((Qt) => f.updateGraphData(Qt.graphId, { content: Qt.content }));
+          Rt.project && s.importState(Rt.project), Rt.graphs && Rt.graphs.forEach((Qt) => l.graphContents.set(Qt.graphId, Qt)), Rt.data && Rt.data.forEach(
+            (Qt) => f.updateGraphData(Qt.graphId, { content: Qt.content })
+          );
         } catch (Rt) {
           console.error("DoodleBUGS: Failed to parse state", Rt);
         }
@@ -83601,10 +83605,14 @@ const est = { class: "db-content-clipper" }, tst = {
       l.currentGraphId && ((_t = wr(l.currentGraphId)) == null || _t.redo());
     }, oa = () => {
       var _t;
-      l.currentGraphId && ((_t = fr(l.currentGraphId)) == null || _t.zoom(fr(l.currentGraphId).zoom() * 1.2));
+      l.currentGraphId && ((_t = fr(l.currentGraphId)) == null || _t.zoom(
+        fr(l.currentGraphId).zoom() * 1.2
+      ));
     }, Fl = () => {
       var _t;
-      l.currentGraphId && ((_t = fr(l.currentGraphId)) == null || _t.zoom(fr(l.currentGraphId).zoom() * 0.8));
+      l.currentGraphId && ((_t = fr(l.currentGraphId)) == null || _t.zoom(
+        fr(l.currentGraphId).zoom() * 0.8
+      ));
     }, ro = () => {
       if (l.currentGraphId) {
         const _t = fr(l.currentGraphId);
@@ -83621,7 +83629,11 @@ const est = { class: "db-content-clipper" }, tst = {
         try {
           let Rt;
           const Qt = { bg: _t.bg, full: _t.full, scale: _t.scale };
-          K.value === "svg" ? Rt = new Blob([Je.svg(Qt)], { type: "image/svg+xml;charset=utf-8" }) : K.value === "png" ? Rt = Je.png({ ...Qt, output: "blob" }) : Rt = Je.jpg({ ...Qt, quality: _t.quality || 0.9, output: "blob" });
+          K.value === "svg" ? Rt = new Blob([Je.svg(Qt)], { type: "image/svg+xml;charset=utf-8" }) : K.value === "png" ? Rt = Je.png({ ...Qt, output: "blob" }) : Rt = Je.jpg({
+            ...Qt,
+            quality: _t.quality || 0.9,
+            output: "blob"
+          });
           const Zn = URL.createObjectURL(Rt), si = document.createElement("a");
           si.href = Zn, si.download = `graph.${K.value}`, document.body.appendChild(si), si.click(), document.body.removeChild(si), URL.revokeObjectURL(Zn);
         } catch (Rt) {
@@ -83648,7 +83660,10 @@ const est = { class: "db-content-clipper" }, tst = {
       var _t;
       if (s.currentProjectId && (ee.value.trim() || He.value)) {
         const Je = ee.value.trim() || ((_t = He.value) == null ? void 0 : _t.name) || "New Graph", Rt = s.addGraphToProject(s.currentProjectId, Je);
-        Rt && He.value ? (l.updateGraphElements(Rt.id, He.value.elements), He.value.dataContent && f.updateGraphData(Rt.id, { content: He.value.dataContent }), l.updateGraphLayout(Rt.id, "preset")) : Rt && l.selectGraph(Rt.id), G.value = !1, ee.value = "", Qe(), ge.value && (ge.value.value = "");
+        Rt && He.value ? (l.updateGraphElements(
+          Rt.id,
+          He.value.elements
+        ), He.value.dataContent && f.updateGraphData(Rt.id, { content: He.value.dataContent }), l.updateGraphLayout(Rt.id, "preset")) : Rt && l.selectGraph(Rt.id), G.value = !1, ee.value = "", Qe(), ge.value && (ge.value.value = "");
       }
     }, vu = () => {
       var _t;
@@ -83701,7 +83716,9 @@ const est = { class: "db-content-clipper" }, tst = {
       er.value = "", X.value = !0;
     }, Ce = () => {
       if (!l.currentGraphId || !s.currentProject) return;
-      const _t = s.currentProject.graphs.find((si) => si.id === l.currentGraphId);
+      const _t = s.currentProject.graphs.find(
+        (si) => si.id === l.currentGraphId
+      );
       if (!_t) return;
       const Je = {
         name: _t.name,
@@ -83736,10 +83753,14 @@ const est = { class: "db-content-clipper" }, tst = {
       isDarkMode: gp,
       canvasGridStyle: Vm
     } = Sm(c), eh = On(() => lr.value.size === 0);
-    sn(gp, (_t) => {
-      const Je = document.documentElement;
-      _t ? (Je.classList.add("db-dark-mode"), document.body.classList.add("db-dark-mode")) : (Je.classList.remove("db-dark-mode"), document.body.classList.remove("db-dark-mode"));
-    }, { immediate: !0 }), sn(
+    sn(
+      gp,
+      (_t) => {
+        const Je = document.documentElement;
+        _t ? (Je.classList.add("db-dark-mode"), document.body.classList.add("db-dark-mode")) : (Je.classList.remove("db-dark-mode"), document.body.classList.remove("db-dark-mode"));
+      },
+      { immediate: !0 }
+    ), sn(
       [
         () => c.isLeftSidebarOpen,
         () => c.isRightSidebarOpen,
@@ -83962,9 +83983,7 @@ const est = { class: "db-content-clipper" }, tst = {
                         onClick: Je[10] || (Je[10] = Li((Rt) => q.value = !0, ["stop"]))
                       }, [
                         be("i", {
-                          class: ln(
-                            eh.value ? "fas fa-check-circle" : "fas fa-exclamation-triangle"
-                          )
+                          class: ln(eh.value ? "fas fa-check-circle" : "fas fa-exclamation-triangle")
                         }, null, 2)
                       ], 2),
                       be("button", {
