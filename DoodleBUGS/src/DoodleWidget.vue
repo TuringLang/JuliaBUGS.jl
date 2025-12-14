@@ -24,7 +24,7 @@ import BaseInput from './components/ui/BaseInput.vue'
 import ScriptSettingsPanel from './components/panels/ScriptSettingsPanel.vue'
 
 import { useProjectStore } from './stores/projectStore'
-import { useGraphStore } from './stores/graphStore'
+import { useGraphStore, type GraphContent } from './stores/graphStore'
 import { useUiStore } from './stores/uiStore'
 import { useDataStore } from './stores/dataStore'
 import { useScriptStore } from './stores/scriptStore'
@@ -183,7 +183,7 @@ const saveWidgetUIState = () => {
     },
     currentGraphId: graphStore.currentGraphId || undefined,
     editMode: isEditMode.value,
-    // @ts-ignore - Extending UI state for widget specific needs
+    // @ts-expect-error - Extending UI state for widget specific needs
     isFullScreen: isFullScreen.value,
   })
 }
@@ -435,7 +435,9 @@ const handleLoadExample = async (
           modelData = await response.json()
           modelName = modelData.name || 'Remote Model'
         } catch (e: unknown) {
-          throw new Error(`Failed to fetch URL: "${input}". ${e instanceof Error ? e.message : String(e)}`)
+          throw new Error(
+            `Failed to fetch URL: "${input}". ${e instanceof Error ? e.message : String(e)}`
+          )
         }
       } else {
         const turingUrl = `https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/examples/${input}/model.json`
@@ -514,7 +516,9 @@ const initGraph = async () => {
   if (sourceKey) {
     const map = getSourceMap()
     const mappedGraphId = map[sourceKey]
-    const existingGraph = mappedGraphId ? proj.graphs.find((g) => g.id === mappedGraphId) : undefined
+    const existingGraph = mappedGraphId
+      ? proj.graphs.find((g) => g.id === mappedGraphId)
+      : undefined
 
     if (existingGraph) {
       graphStore.selectGraph(existingGraph.id)
@@ -619,7 +623,7 @@ const activateWidget = (source: 'click' | 'scroll') => {
 
 const toggleFullScreen = () => {
   isFullScreen.value = !isFullScreen.value
-  
+
   // Edit mode is strictly tied to full screen status
   isEditMode.value = isFullScreen.value
 
@@ -634,7 +638,7 @@ const toggleFullScreen = () => {
       if (cy) cy.resize()
     }
   }, 100)
-  
+
   saveWidgetUIState()
 }
 
@@ -669,7 +673,9 @@ const handleWidgetClick = () => {
 onMounted(async () => {
   const manager = getManager()
   manager.register(instanceId.value, {
-    setUIActive: (val: boolean) => { isUIActive.value = val },
+    setUIActive: (val: boolean) => {
+      isUIActive.value = val
+    },
     getRect: () => (widgetRoot.value ? widgetRoot.value.getBoundingClientRect() : null),
   })
 
@@ -694,9 +700,11 @@ onMounted(async () => {
       const state = JSON.parse(props.initialState)
       if (state.project) projectStore.importState(state.project)
       if (state.graphs)
-        state.graphs.forEach((g: any) => graphStore.graphContents.set(g.graphId, g))
+        state.graphs.forEach((g: GraphContent) => graphStore.graphContents.set(g.graphId, g))
       if (state.data)
-        state.data.forEach((d: any) => dataStore.updateGraphData(d.graphId, { content: d.content }))
+        state.data.forEach((d: { graphId: string; content: string }) =>
+          dataStore.updateGraphData(d.graphId, { content: d.content })
+        )
     } catch (e) {
       console.error('DoodleBUGS: Failed to parse state', e)
     }
@@ -726,7 +734,7 @@ onMounted(async () => {
       graphStore.selectGraph(savedUIState.currentGraphId)
     }
     // Restore Fullscreen state if persisted
-    // @ts-ignore - isFullScreen is added to saved state for widget persistence
+    // @ts-expect-error - isFullScreen is added to saved state for widget persistence
     if (savedUIState.isFullScreen) {
       isFullScreen.value = true
       isEditMode.value = true
@@ -773,7 +781,9 @@ watch(
   { deep: true }
 )
 
-watch(generatedCode, (code) => { emit('code-update', code) })
+watch(generatedCode, (code) => {
+  emit('code-update', code)
+})
 
 const getScriptContent = () => {
   const dataPayload = parsedGraphData.value.data || {}
@@ -794,7 +804,10 @@ const getScriptContent = () => {
 watch(
   [generatedCode, parsedGraphData, samplerSettings],
   () => {
-    if (standaloneScript.value || (uiStore.activeRightTab === 'script' && uiStore.isRightSidebarOpen)) {
+    if (
+      standaloneScript.value ||
+      (uiStore.activeRightTab === 'script' && uiStore.isRightSidebarOpen)
+    ) {
       scriptStore.standaloneScript = getScriptContent()
     }
   },
@@ -833,11 +846,30 @@ const toggleDataPanel = () => {
   }
 }
 
-const handleUndo = () => { if (graphStore.currentGraphId) getUndoRedoInstance(graphStore.currentGraphId)?.undo() }
-const handleRedo = () => { if (graphStore.currentGraphId) getUndoRedoInstance(graphStore.currentGraphId)?.redo() }
-const handleZoomIn = () => { if (graphStore.currentGraphId) getCyInstance(graphStore.currentGraphId)?.zoom(getCyInstance(graphStore.currentGraphId)!.zoom() * 1.2) }
-const handleZoomOut = () => { if (graphStore.currentGraphId) getCyInstance(graphStore.currentGraphId)?.zoom(getCyInstance(graphStore.currentGraphId)!.zoom() * 0.8) }
-const handleFit = () => { if (graphStore.currentGraphId) { const cy = getCyInstance(graphStore.currentGraphId); if (cy) smartFit(cy, true) } }
+const handleUndo = () => {
+  if (graphStore.currentGraphId) getUndoRedoInstance(graphStore.currentGraphId)?.undo()
+}
+const handleRedo = () => {
+  if (graphStore.currentGraphId) getUndoRedoInstance(graphStore.currentGraphId)?.redo()
+}
+const handleZoomIn = () => {
+  if (graphStore.currentGraphId)
+    getCyInstance(graphStore.currentGraphId)?.zoom(
+      getCyInstance(graphStore.currentGraphId)!.zoom() * 1.2
+    )
+}
+const handleZoomOut = () => {
+  if (graphStore.currentGraphId)
+    getCyInstance(graphStore.currentGraphId)?.zoom(
+      getCyInstance(graphStore.currentGraphId)!.zoom() * 0.8
+    )
+}
+const handleFit = () => {
+  if (graphStore.currentGraphId) {
+    const cy = getCyInstance(graphStore.currentGraphId)
+    if (cy) smartFit(cy, true)
+  }
+}
 
 const handleGraphLayout = (layoutName: string) => {
   const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null
@@ -851,7 +883,12 @@ const openExportModal = (format: 'png' | 'jpg' | 'svg') => {
   showExportModal.value = true
 }
 
-const handleConfirmExport = (options: { bg: string; full: boolean; scale: number; quality?: number }) => {
+const handleConfirmExport = (options: {
+  bg: string
+  full: boolean
+  scale: number
+  quality?: number
+}) => {
   const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null
   if (!cy || !currentExportType.value) return
   try {
@@ -862,7 +899,11 @@ const handleConfirmExport = (options: { bg: string; full: boolean; scale: number
     } else if (currentExportType.value === 'png') {
       blob = cy.png({ ...baseOptions, output: 'blob' }) as unknown as Blob
     } else {
-      blob = cy.jpg({ ...baseOptions, quality: options.quality || 0.9, output: 'blob' }) as unknown as Blob
+      blob = cy.jpg({
+        ...baseOptions,
+        quality: options.quality || 0.9,
+        output: 'blob',
+      }) as unknown as Blob
     }
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -936,7 +977,10 @@ const createNewGraph = () => {
     const name = newGraphName.value.trim() || importedGraphData.value?.name || 'New Graph'
     const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId!, name)
     if (newGraphMeta && importedGraphData.value) {
-      graphStore.updateGraphElements(newGraphMeta.id, importedGraphData.value.elements as GraphElement[])
+      graphStore.updateGraphElements(
+        newGraphMeta.id,
+        importedGraphData.value.elements as GraphElement[]
+      )
       if (importedGraphData.value.dataContent) {
         dataStore.updateGraphData(newGraphMeta.id, { content: importedGraphData.value.dataContent })
       }
@@ -951,18 +995,22 @@ const createNewGraph = () => {
   }
 }
 
-const triggerGraphImport = () => { graphImportInput.value?.click() }
+const triggerGraphImport = () => {
+  graphImportInput.value?.click()
+}
 
 const handleGraphImportFile = (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (file) {
-    processGraphFile(file).then((data) => {
-      if (data && !newGraphName.value && data.name) {
-        newGraphName.value = data.name + ' (Imported)'
-      }
-    }).catch((error) => {
-      alert(error.message || 'Failed to process graph file.')
-    })
+    processGraphFile(file)
+      .then((data) => {
+        if (data && !newGraphName.value && data.name) {
+          newGraphName.value = data.name + ' (Imported)'
+        }
+      })
+      .catch((error) => {
+        alert(error.message || 'Failed to process graph file.')
+      })
   }
 }
 
@@ -970,13 +1018,15 @@ const handleDrop = (event: DragEvent) => {
   isDragOver.value = false
   const file = event.dataTransfer?.files?.[0]
   if (file) {
-    processGraphFile(file).then((data) => {
-      if (data && !newGraphName.value && data.name) {
-        newGraphName.value = data.name + ' (Imported)'
-      }
-    }).catch((error) => {
-      alert(error.message || 'Failed to process graph file.')
-    })
+    processGraphFile(file)
+      .then((data) => {
+        if (data && !newGraphName.value && data.name) {
+          newGraphName.value = data.name + ' (Imported)'
+        }
+      })
+      .catch((error) => {
+        alert(error.message || 'Failed to process graph file.')
+      })
   }
 }
 
@@ -986,7 +1036,10 @@ const handleShare = () => {
   showShareModal.value = true
 }
 
-const handleGenerateShareLink = async (options: { scope: 'current' | 'project' | 'custom'; selectedGraphIds?: string[] }) => {
+const handleGenerateShareLink = async (options: {
+  scope: 'current' | 'project' | 'custom'
+  selectedGraphIds?: string[]
+}) => {
   if (!projectStore.currentProject) return
   const getGraphDataForShare = (graphId: string) => {
     let graphElements: GraphElement[] = []
@@ -1010,7 +1063,10 @@ const handleGenerateShareLink = async (options: { scope: 'current' | 'project' |
     const { name, elements: graphElements, dataContent } = getGraphDataForShare(targetId)
     payload = { v: 2, n: name, e: minifyGraph(graphElements), d: dataContent }
   } else {
-    const targetIds = options.scope === 'project' ? projectStore.currentProject.graphs.map((g) => g.id) : options.selectedGraphIds || []
+    const targetIds =
+      options.scope === 'project'
+        ? projectStore.currentProject.graphs.map((g) => g.id)
+        : options.selectedGraphIds || []
     const graphsData = targetIds.map((id) => {
       const { name, elements: graphElements, dataContent } = getGraphDataForShare(id)
       return { n: name, e: minifyGraph(graphElements), d: dataContent }
@@ -1032,7 +1088,9 @@ const handleShareProjectUrl = () => {
 
 const handleExportJson = () => {
   if (!graphStore.currentGraphId || !projectStore.currentProject) return
-  const graphMeta = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
+  const graphMeta = projectStore.currentProject.graphs.find(
+    (g) => g.id === graphStore.currentGraphId
+  )
   if (!graphMeta) return
   const exportData = {
     name: graphMeta.name,
@@ -1095,16 +1153,20 @@ const {
 
 const isModelValid = computed(() => validationErrors.value.size === 0)
 
-watch(isDarkMode, (val) => {
-  const html = document.documentElement
-  if (val) {
-    html.classList.add('db-dark-mode')
-    document.body.classList.add('db-dark-mode')
-  } else {
-    html.classList.remove('db-dark-mode')
-    document.body.classList.remove('db-dark-mode')
-  }
-}, { immediate: true })
+watch(
+  isDarkMode,
+  (val) => {
+    const html = document.documentElement
+    if (val) {
+      html.classList.add('db-dark-mode')
+      document.body.classList.add('db-dark-mode')
+    } else {
+      html.classList.remove('db-dark-mode')
+      document.body.classList.remove('db-dark-mode')
+    }
+  },
+  { immediate: true }
+)
 
 watch(
   [
@@ -1123,20 +1185,30 @@ watch(
     () => graphStore.currentGraphId,
     isEditMode,
   ],
-  () => { saveWidgetUIState() },
+  () => {
+    saveWidgetUIState()
+  },
   { deep: true }
 )
 
 const handleToolbarNavigation = (view: string) => {
   if (view === 'project') {
-    if (uiStore.isLeftSidebarOpen && activeLeftAccordionTabs.value.includes('project') && activeLeftAccordionTabs.value.length === 1) {
+    if (
+      uiStore.isLeftSidebarOpen &&
+      activeLeftAccordionTabs.value.includes('project') &&
+      activeLeftAccordionTabs.value.length === 1
+    ) {
       uiStore.isLeftSidebarOpen = false
     } else {
       uiStore.isLeftSidebarOpen = true
       activeLeftAccordionTabs.value = ['project']
     }
   } else if (view === 'view') {
-    if (uiStore.isLeftSidebarOpen && activeLeftAccordionTabs.value.includes('view') && activeLeftAccordionTabs.value.length === 1) {
+    if (
+      uiStore.isLeftSidebarOpen &&
+      activeLeftAccordionTabs.value.includes('view') &&
+      activeLeftAccordionTabs.value.length === 1
+    ) {
       uiStore.isLeftSidebarOpen = false
     } else {
       uiStore.isLeftSidebarOpen = true
@@ -1159,8 +1231,12 @@ const handleToolbarNavigation = (view: string) => {
   }
 }
 
-const handleUIInteractionStart = () => { isDraggingUI.value = true }
-const handleUIInteractionEnd = () => { isDraggingUI.value = false }
+const handleUIInteractionStart = () => {
+  isDraggingUI.value = true
+}
+const handleUIInteractionEnd = () => {
+  isDraggingUI.value = false
+}
 
 const handleSidebarContainerClick = (e: MouseEvent) => {
   if ((e.target as HTMLElement).closest('.db-theme-toggle-header')) return
@@ -1250,16 +1326,31 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
           pointer-events: auto;
         "
       >
-        <button
-          @click="toggleFullScreen"
-          title="Maximize Graph"
-          class="db-control-btn"
-        >
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="1.1rem" height="1.1rem" style="color: currentColor;">
-            <path d="M18 20.75H12C11.8011 20.75 11.6103 20.671 11.4697 20.5303C11.329 20.3897 11.25 20.1989 11.25 20C11.25 19.8011 11.329 19.6103 11.4697 19.4697C11.6103 19.329 11.8011 19.25 12 19.25H18C18.3315 19.25 18.6495 19.1183 18.8839 18.8839C19.1183 18.6495 19.25 18.3315 19.25 18V6C19.25 5.66848 19.1183 5.35054 18.8839 5.11612C18.6495 4.8817 18.3315 4.75 18 4.75H6C5.66848 4.75 5.35054 4.8817 5.11612 5.11612C4.8817 5.35054 4.75 5.66848 4.75 6V12C4.75 12.1989 4.67098 12.3897 4.53033 12.5303C4.38968 12.671 4.19891 12.75 4 12.75C3.80109 12.75 3.61032 12.671 3.46967 12.5303C3.32902 12.3897 3.25 12.1989 3.25 12V6C3.25 5.27065 3.53973 4.57118 4.05546 4.05546C4.57118 3.53973 5.27065 3.25 6 3.25H18C18.7293 3.25 19.4288 3.53973 19.9445 4.05546C20.4603 4.57118 20.75 5.27065 20.75 6V18C20.75 18.7293 20.4603 19.4288 19.9445 19.9445C19.4288 20.4603 18.7293 20.75 18 20.75Z" fill="currentColor"></path>
-            <path d="M16 12.75C15.8019 12.7474 15.6126 12.6676 15.4725 12.5275C15.3324 12.3874 15.2526 12.1981 15.25 12V8.75H12C11.8011 8.75 11.6103 8.67098 11.4697 8.53033C11.329 8.38968 11.25 8.19891 11.25 8C11.25 7.80109 11.329 7.61032 11.4697 7.46967C11.6103 7.32902 11.8011 7.25 12 7.25H16C16.1981 7.25259 16.3874 7.33244 16.5275 7.47253C16.6676 7.61263 16.7474 7.80189 16.75 8V12C16.7474 12.1981 16.6676 12.3874 16.5275 12.5275C16.3874 12.6676 16.1981 12.7474 16 12.75Z" fill="currentColor"></path>
-            <path d="M11.5 13.25C11.3071 13.2352 11.1276 13.1455 11 13C10.877 12.8625 10.809 12.6845 10.809 12.5C10.809 12.3155 10.877 12.1375 11 12L15.5 7.5C15.6422 7.36752 15.8302 7.29539 16.0245 7.29882C16.2188 7.30225 16.4042 7.38096 16.5416 7.51838C16.679 7.65579 16.7578 7.84117 16.7612 8.03548C16.7646 8.22978 16.6925 8.41782 16.56 8.56L12 13C11.8724 13.1455 11.6929 13.2352 11.5 13.25Z" fill="currentColor"></path>
-            <path d="M8 20.75H5C4.53668 20.7474 4.09309 20.5622 3.76546 20.2345C3.43784 19.9069 3.25263 19.4633 3.25 19V16C3.25263 15.5367 3.43784 15.0931 3.76546 14.7655C4.09309 14.4378 4.53668 14.2526 5 14.25H8C8.46332 14.2526 8.90691 14.4378 9.23454 14.7655C9.56216 15.0931 9.74738 15.5367 9.75 16V19C9.74738 19.4633 9.56216 19.9069 9.23454 20.2345C8.90691 20.5622 8.46332 20.7474 8 20.75ZM5 15.75C4.9337 15.75 4.87011 15.7763 4.82322 15.8232C4.77634 15.8701 4.75 15.9337 4.75 16V19C4.75 19.0663 4.77634 19.1299 4.82322 19.1768C4.87011 19.2237 4.9337 19.25 5 19.25H8C8.0663 19.25 8.12989 19.2237 8.17678 19.1768C8.22366 19.1299 8.25 19.0663 8.25 19V16C8.25 15.9337 8.22366 15.8701 8.17678 15.8232C8.12989 15.7763 8.0663 15.75 8 15.75H5Z" fill="currentColor"></path>
+        <button @click="toggleFullScreen" title="Maximize Graph" class="db-control-btn">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            width="1.1rem"
+            height="1.1rem"
+            style="color: currentColor"
+          >
+            <path
+              d="M18 20.75H12C11.8011 20.75 11.6103 20.671 11.4697 20.5303C11.329 20.3897 11.25 20.1989 11.25 20C11.25 19.8011 11.329 19.6103 11.4697 19.4697C11.6103 19.329 11.8011 19.25 12 19.25H18C18.3315 19.25 18.6495 19.1183 18.8839 18.8839C19.1183 18.6495 19.25 18.3315 19.25 18V6C19.25 5.66848 19.1183 5.35054 18.8839 5.11612C18.6495 4.8817 18.3315 4.75 18 4.75H6C5.66848 4.75 5.35054 4.8817 5.11612 5.11612C4.8817 5.35054 4.75 5.66848 4.75 6V12C4.75 12.1989 4.67098 12.3897 4.53033 12.5303C4.38968 12.671 4.19891 12.75 4 12.75C3.80109 12.75 3.61032 12.671 3.46967 12.5303C3.32902 12.3897 3.25 12.1989 3.25 12V6C3.25 5.27065 3.53973 4.57118 4.05546 4.05546C4.57118 3.53973 5.27065 3.25 6 3.25H18C18.7293 3.25 19.4288 3.53973 19.9445 4.05546C20.4603 4.57118 20.75 5.27065 20.75 6V18C20.75 18.7293 20.4603 19.4288 19.9445 19.9445C19.4288 20.4603 18.7293 20.75 18 20.75Z"
+              fill="currentColor"
+            ></path>
+            <path
+              d="M16 12.75C15.8019 12.7474 15.6126 12.6676 15.4725 12.5275C15.3324 12.3874 15.2526 12.1981 15.25 12V8.75H12C11.8011 8.75 11.6103 8.67098 11.4697 8.53033C11.329 8.38968 11.25 8.19891 11.25 8C11.25 7.80109 11.329 7.61032 11.4697 7.46967C11.6103 7.32902 11.8011 7.25 12 7.25H16C16.1981 7.25259 16.3874 7.33244 16.5275 7.47253C16.6676 7.61263 16.7474 7.80189 16.75 8V12C16.7474 12.1981 16.6676 12.3874 16.5275 12.5275C16.3874 12.6676 16.1981 12.7474 16 12.75Z"
+              fill="currentColor"
+            ></path>
+            <path
+              d="M11.5 13.25C11.3071 13.2352 11.1276 13.1455 11 13C10.877 12.8625 10.809 12.6845 10.809 12.5C10.809 12.3155 10.877 12.1375 11 12L15.5 7.5C15.6422 7.36752 15.8302 7.29539 16.0245 7.29882C16.2188 7.30225 16.4042 7.38096 16.5416 7.51838C16.679 7.65579 16.7578 7.84117 16.7612 8.03548C16.7646 8.22978 16.6925 8.41782 16.56 8.56L12 13C11.8724 13.1455 11.6929 13.2352 11.5 13.25Z"
+              fill="currentColor"
+            ></path>
+            <path
+              d="M8 20.75H5C4.53668 20.7474 4.09309 20.5622 3.76546 20.2345C3.43784 19.9069 3.25263 19.4633 3.25 19V16C3.25263 15.5367 3.43784 15.0931 3.76546 14.7655C4.09309 14.4378 4.53668 14.2526 5 14.25H8C8.46332 14.2526 8.90691 14.4378 9.23454 14.7655C9.56216 15.0931 9.74738 15.5367 9.75 16V19C9.74738 19.4633 9.56216 19.9069 9.23454 20.2345C8.90691 20.5622 8.46332 20.7474 8 20.75ZM5 15.75C4.9337 15.75 4.87011 15.7763 4.82322 15.8232C4.77634 15.8701 4.75 15.9337 4.75 16V19C4.75 19.0663 4.77634 19.1299 4.82322 19.1768C4.87011 19.2237 4.9337 19.25 5 19.25H8C8.0663 19.25 8.12989 19.2237 8.17678 19.1768C8.22366 19.1299 8.25 19.0663 8.25 19V16C8.25 15.9337 8.22366 15.8701 8.17678 15.8232C8.12989 15.7763 8.0663 15.75 8 15.75H5Z"
+              fill="currentColor"
+            ></path>
           </svg>
         </button>
       </div>
@@ -1376,9 +1467,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
                     :class="isModelValid ? 'db-valid' : 'db-invalid'"
                   >
                     <i
-                      :class="
-                        isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'
-                      "
+                      :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"
                     ></i>
                   </div>
                   <button
@@ -1394,9 +1483,9 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
                     @click.stop="toggleFullScreen"
                     title="Exit Full Screen"
                   >
-                    <i class="pi pi-window-minimize" style="font-size: 1rem;"></i>
+                    <i class="pi pi-window-minimize" style="font-size: 1rem"></i>
                   </button>
-                  
+
                   <div class="db-toggle-icon-wrapper">
                     <svg
                       width="20"

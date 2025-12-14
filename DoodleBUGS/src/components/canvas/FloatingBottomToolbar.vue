@@ -156,7 +156,7 @@ const startDrag = (event: MouseEvent) => {
 
   isDragging.value = true
   emit('drag-start') // Signal start of drag
-  
+
   const toolbar = toolbarRef.value
   const rect = toolbar.getBoundingClientRect()
 
@@ -170,7 +170,7 @@ const startDrag = (event: MouseEvent) => {
 
   if (props.isWidget) {
     // Absolute positioning (Embedded): Calculate relative to offset parent
-    const parent = toolbar.offsetParent as HTMLElement || document.body
+    const parent = (toolbar.offsetParent as HTMLElement) || document.body
     const parentRect = parent.getBoundingClientRect()
     relX = rect.left - parentRect.left
     relY = rect.top - parentRect.top
@@ -200,13 +200,13 @@ const onDrag = (event: MouseEvent) => {
   animationFrameId = requestAnimationFrame(() => {
     const toolbar = toolbarRef.value
     if (!toolbar) return
-    
+
     let x = 0
     let y = 0
 
     if (props.isWidget) {
       // Absolute positioning
-      const parent = toolbar.offsetParent as HTMLElement || document.body
+      const parent = (toolbar.offsetParent as HTMLElement) || document.body
       const parentRect = parent.getBoundingClientRect()
       x = event.clientX - dragOffset.value.x - parentRect.left
       y = event.clientY - dragOffset.value.y - parentRect.top
@@ -215,7 +215,7 @@ const onDrag = (event: MouseEvent) => {
       x = event.clientX - dragOffset.value.x
       y = event.clientY - dragOffset.value.y
     }
-    
+
     styleState.value.transform = `translate3d(${x}px, ${y}px, 0)`
     animationFrameId = null
   })
@@ -244,7 +244,7 @@ const startDragTouch = (event: TouchEvent) => {
 
   isDragging.value = true
   emit('drag-start') // Signal start of drag
-  
+
   const touch = event.touches[0]
   const toolbar = toolbarRef.value
   const rect = toolbar.getBoundingClientRect()
@@ -258,7 +258,7 @@ const startDragTouch = (event: TouchEvent) => {
   let relY = 0
 
   if (props.isWidget) {
-    const parent = toolbar.offsetParent as HTMLElement || document.body
+    const parent = (toolbar.offsetParent as HTMLElement) || document.body
     const parentRect = parent.getBoundingClientRect()
     relX = rect.left - parentRect.left
     relY = rect.top - parentRect.top
@@ -288,12 +288,12 @@ const onDragTouch = (event: TouchEvent) => {
   animationFrameId = requestAnimationFrame(() => {
     const toolbar = toolbarRef.value
     if (!toolbar) return
-    
+
     let x = 0
     let y = 0
 
     if (props.isWidget) {
-      const parent = toolbar.offsetParent as HTMLElement || document.body
+      const parent = (toolbar.offsetParent as HTMLElement) || document.body
       const parentRect = parent.getBoundingClientRect()
       x = touch.clientX - dragOffset.value.x - parentRect.left
       y = touch.clientY - dragOffset.value.y - parentRect.top
@@ -301,7 +301,7 @@ const onDragTouch = (event: TouchEvent) => {
       x = touch.clientX - dragOffset.value.x
       y = touch.clientY - dragOffset.value.y
     }
-    
+
     styleState.value.transform = `translate3d(${x}px, ${y}px, 0)`
     animationFrameId = null
   })
@@ -521,7 +521,7 @@ onUnmounted(() => {
 <style scoped>
 .db-toolbar-container {
   /* Default to absolute for widget containment */
-  position: absolute; 
+  position: absolute;
   z-index: 400; /* Layer 5: Toolbar - above panels, below dropdowns */
   display: flex;
   flex-direction: column;
