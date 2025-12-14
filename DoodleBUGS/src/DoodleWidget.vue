@@ -183,6 +183,8 @@ const saveWidgetUIState = () => {
     },
     currentGraphId: graphStore.currentGraphId || undefined,
     editMode: isEditMode.value,
+    // @ts-ignore - Extending UI state for widget specific needs
+    isFullScreen: isFullScreen.value,
   })
 }
 
@@ -276,6 +278,24 @@ const widgetTeleportCSS = `
 
 .p-dialog-mask {
   z-index: 9999 !important;
+}
+
+/* Sidebar Animations */
+.db-sidebar-transition-enter-active,
+.db-sidebar-transition-leave-active {
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease;
+}
+
+.db-sidebar-transition-enter-from,
+.db-sidebar-transition-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
+.db-sidebar-transition-enter-to,
+.db-sidebar-transition-leave-from {
+  opacity: 1;
+  transform: scale(1);
 }
 `
 
@@ -705,10 +725,12 @@ onMounted(async () => {
     if (savedUIState.currentGraphId) {
       graphStore.selectGraph(savedUIState.currentGraphId)
     }
-    // Respect saved edit mode IF it matches full screen state logic, 
-    // but here we enforce the rule: edit = fullscreen
-    if (savedUIState.editMode !== undefined) {
-      // Logic overridden by simpler requirement: non-maximized = read-only
+    // Restore Fullscreen state if persisted
+    // @ts-ignore - isFullScreen is added to saved state for widget persistence
+    if (savedUIState.isFullScreen) {
+      isFullScreen.value = true
+      isEditMode.value = true
+      activateWidget('click')
     }
   }
 
@@ -718,6 +740,11 @@ onMounted(async () => {
   validateGraph()
   injectWidgetStyles()
   window.addEventListener('resize', handleResize)
+
+  // Force fit to view on load (and reload)
+  setTimeout(() => {
+    handleFit()
+  }, 800)
 })
 
 onUnmounted(() => {
@@ -1101,8 +1128,35 @@ watch(
 )
 
 const handleToolbarNavigation = (view: string) => {
-  // Navigation handling for widget toolbar options if needed
-  // Currently simplified to remove widget-specific nav items from toolbar
+  if (view === 'project') {
+    if (uiStore.isLeftSidebarOpen && activeLeftAccordionTabs.value.includes('project') && activeLeftAccordionTabs.value.length === 1) {
+      uiStore.isLeftSidebarOpen = false
+    } else {
+      uiStore.isLeftSidebarOpen = true
+      activeLeftAccordionTabs.value = ['project']
+    }
+  } else if (view === 'view') {
+    if (uiStore.isLeftSidebarOpen && activeLeftAccordionTabs.value.includes('view') && activeLeftAccordionTabs.value.length === 1) {
+      uiStore.isLeftSidebarOpen = false
+    } else {
+      uiStore.isLeftSidebarOpen = true
+      activeLeftAccordionTabs.value = ['view']
+    }
+  } else if (view === 'help') {
+    if (uiStore.isLeftSidebarOpen && activeLeftAccordionTabs.value.includes('help')) {
+      uiStore.isLeftSidebarOpen = false
+    } else {
+      uiStore.isLeftSidebarOpen = true
+      activeLeftAccordionTabs.value = ['help', 'devtools']
+    }
+  } else if (view === 'export') {
+    if (uiStore.isRightSidebarOpen && uiStore.activeRightTab === 'export') {
+      uiStore.isRightSidebarOpen = false
+    } else {
+      uiStore.isRightSidebarOpen = true
+      uiStore.setActiveRightTab('export')
+    }
+  }
 }
 
 const handleUIInteractionStart = () => { isDraggingUI.value = true }
@@ -1190,9 +1244,10 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
           position: absolute;
           top: 10px;
           right: 10px;
-          z-index: 500;
+          z-index: 1000; /* Increased z-index to sit above canvas */
           display: flex;
           gap: 8px;
+          pointer-events: auto;
         "
       >
         <button
@@ -1200,7 +1255,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
           title="Maximize Graph"
           class="db-control-btn"
         >
-          <i class="fas fa-expand"></i>
+          <i class="pi pi-window-maximize" style="font-size: 1.1rem;"></i>
         </button>
       </div>
     </div>
@@ -1252,29 +1307,6 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         }"
         v-show="isWidgetInView && isEditMode && isUIActive"
       >
-        <!-- Full Screen Mode Controls (Teleported to Overlay for Z-Index) -->
-        <div
-          v-if="isFullScreen"
-          class="db-edit-toggle-wrapper db-fullscreen-controls"
-          style="
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 10000;
-            display: flex;
-            gap: 8px;
-            pointer-events: auto;
-          "
-        >
-          <button
-            @click="toggleFullScreen"
-            title="Exit Full Screen"
-            class="db-control-btn db-active"
-          >
-            <i class="fas fa-compress"></i>
-          </button>
-        </div>
-
         <!-- Collapsed Sidebar Triggers (Only in Full Screen) -->
         <template v-if="isFullScreen">
           <Transition name="fade">
@@ -1351,6 +1383,15 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
                   >
                     <i class="fas fa-share-alt"></i>
                   </button>
+                  <!-- Collapsed Exit Button -->
+                  <button
+                    class="db-header-icon-btn db-exit-btn"
+                    @click.stop="toggleFullScreen"
+                    title="Exit Full Screen"
+                  >
+                    <i class="pi pi-window-minimize" style="font-size: 1rem;"></i>
+                  </button>
+                  
                   <div class="db-toggle-icon-wrapper">
                     <svg
                       width="20"
@@ -1374,64 +1415,71 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         </template>
 
         <!-- Sidebars (Visible only in Full Screen) -->
-        <!-- Logic updated to allow sidebar self-animation. Wrapper is always present in FS, pointer events managed by CSS -->
-        <div
-          v-if="widgetInitialized && isFullScreen"
-          class="db-sidebar-wrapper db-left"
-        >
-          <LeftSidebar
-            :activeAccordionTabs="activeLeftAccordionTabs"
-            @update:activeAccordionTabs="activeLeftAccordionTabs = $event"
-            :projectName="projectStore.currentProject?.name || 'Project'"
-            :pinnedGraphTitle="pinnedGraphTitle"
-            :isGridEnabled="isGridEnabled"
-            :gridSize="gridSize"
-            :showZoomControls="showZoomControls"
-            :showDebugPanel="showDebugPanel"
-            :isCodePanelOpen="isCodePanelOpen"
-            :isDetachModeActive="isDetachModeActive"
-            :showDetachModeControl="showDetachModeControl"
-            @toggle-left-sidebar="uiStore.toggleLeftSidebar"
-            @new-project="handleNewProject"
-            @new-graph="handleNewGraph"
-            @update:currentMode="currentMode = $event"
-            @update:currentNodeType="currentNodeType = $event"
-            @update:isGridEnabled="isGridEnabled = $event"
-            @update:gridSize="gridSize = $event"
-            @update:showZoomControls="showZoomControls = $event"
-            @update:showDebugPanel="showDebugPanel = $event"
-            @update:isDetachModeActive="isDetachModeActive = $event"
-            @update:show-detach-mode-control="showDetachModeControl = $event"
-            @toggle-code-panel="toggleCodePanel"
-            @load-example="handleLoadExampleAction"
-            @open-about-modal="showAboutModal = true"
-            @open-faq-modal="showFaqModal = true"
-            @toggle-dark-mode="uiStore.toggleDarkMode"
-            @share-graph="handleShareGraph"
-            @share-project-url="handleShareProjectUrl"
-          />
-        </div>
+        <Transition name="db-sidebar-transition">
+          <div
+            v-if="widgetInitialized && isLeftSidebarOpen && isFullScreen"
+            class="db-sidebar-wrapper db-left"
+          >
+            <LeftSidebar
+              v-show="isLeftSidebarOpen"
+              :activeAccordionTabs="activeLeftAccordionTabs"
+              @update:activeAccordionTabs="activeLeftAccordionTabs = $event"
+              :projectName="projectStore.currentProject?.name || 'Project'"
+              :pinnedGraphTitle="pinnedGraphTitle"
+              :isGridEnabled="isGridEnabled"
+              :gridSize="gridSize"
+              :showZoomControls="showZoomControls"
+              :showDebugPanel="showDebugPanel"
+              :isCodePanelOpen="isCodePanelOpen"
+              :isDetachModeActive="isDetachModeActive"
+              :showDetachModeControl="showDetachModeControl"
+              @toggle-left-sidebar="uiStore.toggleLeftSidebar"
+              @new-project="handleNewProject"
+              @new-graph="handleNewGraph"
+              @update:currentMode="currentMode = $event"
+              @update:currentNodeType="currentNodeType = $event"
+              @update:isGridEnabled="isGridEnabled = $event"
+              @update:gridSize="gridSize = $event"
+              @update:showZoomControls="showZoomControls = $event"
+              @update:showDebugPanel="showDebugPanel = $event"
+              @update:isDetachModeActive="isDetachModeActive = $event"
+              @update:show-detach-mode-control="showDetachModeControl = $event"
+              @toggle-code-panel="toggleCodePanel"
+              @load-example="handleLoadExampleAction"
+              @open-about-modal="showAboutModal = true"
+              @open-faq-modal="showFaqModal = true"
+              @toggle-dark-mode="uiStore.toggleDarkMode"
+              @share-graph="handleShareGraph"
+              @share-project-url="handleShareProjectUrl"
+            />
+          </div>
+        </Transition>
 
-        <div
-          v-if="widgetInitialized && isFullScreen"
-          class="db-sidebar-wrapper db-right"
-        >
-          <RightSidebar
-            :selectedElement="selectedElement"
-            :validationErrors="validationErrors"
-            :isModelValid="isModelValid"
-            @toggle-right-sidebar="uiStore.toggleRightSidebar"
-            @update-element="updateElement"
-            @delete-element="deleteElement"
-            @show-validation-issues="showValidationModal = true"
-            @open-script-settings="showScriptSettingsModal = true"
-            @download-script="handleDownloadScript"
-            @generate-script="handleGenerateStandalone"
-            @share="handleShare"
-            @open-export-modal="openExportModal"
-            @export-json="handleExportJson"
-          />
-        </div>
+        <Transition name="db-sidebar-transition">
+          <div
+            v-if="widgetInitialized && isRightSidebarOpen && isFullScreen"
+            class="db-sidebar-wrapper db-right"
+          >
+            <RightSidebar
+              v-show="isRightSidebarOpen"
+              :selectedElement="selectedElement"
+              :validationErrors="validationErrors"
+              :isModelValid="isModelValid"
+              :showExitButton="true"
+              @toggle-right-sidebar="uiStore.toggleRightSidebar"
+              @update-element="updateElement"
+              @delete-element="deleteElement"
+              @show-validation-issues="showValidationModal = true"
+              @open-script-settings="showScriptSettingsModal = true"
+              @download-script="handleDownloadScript"
+              @generate-script="handleGenerateStandalone"
+              @share="handleShare"
+              @open-export-modal="openExportModal"
+              @export-json="handleExportJson"
+              @exit-fullscreen="toggleFullScreen"
+            />
+          </div>
+        </Transition>
 
         <FloatingPanel
           title="BUGS Code Preview"
@@ -1914,6 +1962,16 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
 .db-header-icon-btn:hover {
   background-color: var(--theme-bg-hover);
   color: var(--theme-text-primary);
+}
+
+.db-exit-btn {
+  margin-left: 4px;
+  color: var(--theme-text-primary);
+}
+
+.db-exit-btn:hover {
+  background-color: var(--theme-bg-active);
+  color: var(--theme-primary);
 }
 
 .db-collapsed-share-btn {

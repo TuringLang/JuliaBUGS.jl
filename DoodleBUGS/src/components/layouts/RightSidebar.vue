@@ -12,6 +12,7 @@ const props = defineProps<{
   validationErrors: Map<string, ValidationError[]>
   isModelValid: boolean
   enableDrag?: boolean
+  showExitButton?: boolean // New prop for fullscreen exit
 }>()
 
 const emit = defineEmits<{
@@ -26,6 +27,7 @@ const emit = defineEmits<{
   (e: 'open-export-modal', format: 'png' | 'jpg' | 'svg'): void
   (e: 'export-json'): void
   (e: 'header-drag-start', event: MouseEvent | TouchEvent): void
+  (e: 'exit-fullscreen'): void // New event
 }>()
 
 const uiStore = useUiStore()
@@ -87,6 +89,16 @@ const handleHeaderClick = () => {
 
         <button class="db-header-icon-btn" @click="$emit('share')" title="Share via URL">
           <i class="fas fa-share-alt"></i>
+        </button>
+
+        <!-- Exit Fullscreen Button (Conditionally Rendered) -->
+        <button
+          v-if="showExitButton"
+          class="db-header-icon-btn db-exit-btn"
+          @click="$emit('exit-fullscreen')"
+          title="Exit Full Screen"
+        >
+          <i class="fas fa-compress"></i>
         </button>
       </div>
 
@@ -285,6 +297,22 @@ const handleHeaderClick = () => {
 .db-header-icon-btn:hover {
   background-color: var(--theme-bg-hover);
   color: var(--theme-text-primary);
+}
+
+.db-exit-btn {
+  margin-left: 4px;
+  color: var(--theme-text-primary);
+}
+
+.db-exit-btn:hover {
+  background-color: var(--theme-bg-active);
+  color: var(--theme-primary);
+}
+
+.db-collapsed-share-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
 }
 
 .db-sidebar-tabs {
