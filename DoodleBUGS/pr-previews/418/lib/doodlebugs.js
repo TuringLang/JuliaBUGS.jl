@@ -65631,7 +65631,7 @@ const cQe = { class: "inline-block" }, xge = /* @__PURE__ */ ga({
       ])
     ], 38));
   }
-}), gQe = /* @__PURE__ */ hs(vQe, [["__scopeId", "data-v-3cbb3a34"]]), bQe = { class: "db-graph-title" }, mQe = {
+}), gQe = /* @__PURE__ */ hs(vQe, [["__scopeId", "data-v-f8fd4d9c"]]), bQe = { class: "db-graph-title" }, mQe = {
   key: 1,
   class: "db-badge-json"
 }, yQe = { class: "db-panel-actions" }, wQe = { class: "db-panel-content" }, kQe = /* @__PURE__ */ ga({
@@ -83216,7 +83216,7 @@ const tst = { class: "db-content-clipper" }, rst = {
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 9995;
+  z-index: 1000000; /* Higher than widget root to ensure UI is on top */
   pointer-events: none;
 }
 
@@ -83232,7 +83232,7 @@ const tst = { class: "db-content-clipper" }, rst = {
 .db-sidebar-wrapper {
   position: absolute;
   pointer-events: none; /* Let clicks pass through if sidebar is closed/scaled down */
-  z-index: 9996;
+  z-index: 1000001; /* Above UI overlay */
   display: block;
 }
 
@@ -83252,11 +83252,11 @@ const tst = { class: "db-content-clipper" }, rst = {
 }
 
 .db-ui-overlay .db-floating-panel {
-  z-index: 9997 !important;
+  z-index: 1000002 !important;
 }
 
 .db-ui-overlay .db-toolbar-container {
-  z-index: 9998 !important;
+  z-index: 1000003 !important; /* Toolbar should be above panels */
 }
 
 .p-popover,
@@ -83264,11 +83264,11 @@ const tst = { class: "db-content-clipper" }, rst = {
 .p-dialog,
 .p-toast,
 .p-tooltip {
-  z-index: 10000 !important;
+  z-index: 1000010 !important; /* Above all DoodleBUGS UI */
 }
 
 .p-dialog-mask {
-  z-index: 9999 !important;
+  z-index: 1000009 !important;
 }
 
 /* Sidebar Animations */
@@ -83940,7 +83940,7 @@ const tst = { class: "db-content-clipper" }, rst = {
           "is-detach-mode-active": Dt(_n),
           "show-detach-mode-control": Dt(D0),
           "is-widget": !1,
-          style: { zIndex: 1e4 },
+          style: { zIndex: 1000003 },
           "onUpdate:currentMode": Qe[8] || (Qe[8] = (Rt) => $.value = Rt),
           "onUpdate:currentNodeType": Qe[9] || (Qe[9] = (Rt) => j.value = Rt),
           onUndo: Ii,
