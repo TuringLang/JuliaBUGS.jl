@@ -65631,7 +65631,7 @@ const cQe = { class: "inline-block" }, xge = /* @__PURE__ */ ga({
       ])
     ], 38));
   }
-}), gQe = /* @__PURE__ */ hs(vQe, [["__scopeId", "data-v-ae10308a"]]), bQe = { class: "db-graph-title" }, mQe = {
+}), gQe = /* @__PURE__ */ hs(vQe, [["__scopeId", "data-v-3cbb3a34"]]), bQe = { class: "db-graph-title" }, mQe = {
   key: 1,
   class: "db-badge-json"
 }, yQe = { class: "db-panel-actions" }, wQe = { class: "db-panel-content" }, kQe = /* @__PURE__ */ ga({
