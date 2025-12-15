@@ -70,6 +70,9 @@
             margin-bottom: 20px;
             font-size: 1.1rem;
             text-align: justify;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            hyphens: auto;
         }
 
         .widget-section {
@@ -123,6 +126,29 @@
             margin-top: 60px;
             color: #666;
             font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .article-container {
+                padding: 20px 12px;
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+            h2 {
+                font-size: 1.3rem;
+            }
+            p {
+                font-size: 1rem;
+                text-align: left;
+            }
+            .widget-section {
+                padding: 16px;
+                margin: 40px 0;
+            }
+            .widget-container {
+                height: 400px;
+            }
         }
     </style>
 </head>
