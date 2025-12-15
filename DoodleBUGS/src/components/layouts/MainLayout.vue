@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, watch, computed, reactive } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useToast } from 'primevue/usetoast'
+import Tooltip from 'primevue/tooltip'
 import type { Core } from 'cytoscape'
 import GraphEditor from '../canvas/GraphEditor.vue'
 import FloatingBottomToolbar from '../canvas/FloatingBottomToolbar.vue'
@@ -59,6 +60,7 @@ const uiStore = useUiStore()
 const dataStore = useDataStore()
 const scriptStore = useScriptStore()
 const toast = useToast()
+const vTooltip = Tooltip
 
 const { parsedGraphData } = storeToRefs(dataStore)
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements()
@@ -1209,13 +1211,20 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
           </div>
           <div class="flex items-center flex-shrink-0" style="flex-shrink: 0">
             <button
+              v-tooltip.top="{
+                value: isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+                showDelay: 0,
+                hideDelay: 0,
+              }"
               @click.stop="uiStore.toggleDarkMode()"
               class="db-theme-toggle-header"
-              :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
             >
               <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
             </button>
-            <div class="db-toggle-icon-wrapper">
+            <div
+              v-tooltip.top="{ value: 'Expand Sidebar', showDelay: 0, hideDelay: 0 }"
+              class="db-toggle-icon-wrapper"
+            >
               <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="db-toggle-icon">
                 <path
                   fill="currentColor"
@@ -1266,13 +1275,16 @@ const updateActiveAccordionTabs = (val: string | string[]) => {
               </div>
             </div>
             <button
+              v-tooltip.top="{ value: 'Share via URL', showDelay: 0, hideDelay: 0 }"
               class="db-header-icon-btn db-collapsed-share-btn"
               @click.stop="handleShare"
-              title="Share via URL"
             >
               <i class="fas fa-share-alt"></i>
             </button>
-            <div class="db-toggle-icon-wrapper">
+            <div
+              v-tooltip.top="{ value: 'Expand Sidebar', showDelay: 0, hideDelay: 0 }"
+              class="db-toggle-icon-wrapper"
+            >
               <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="db-toggle-icon">
                 <path
                   fill="currentColor"
