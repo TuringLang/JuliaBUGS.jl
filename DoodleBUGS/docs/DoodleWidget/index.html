@@ -189,8 +189,8 @@
                 <p>To understand the utility of these models, let's look at the <strong>Pumps</strong> example (George
                     et al., 1993). This model analyzes the failure rates of 10 pumps in a nuclear power plant. </p>
                 <p>This is a conjugate gamma-Poisson hierarchical model. The number of failures ($x_i$) for each pump is
-                    modeled using a Poisson distribution: $x_i \sim Poisson(\theta_i t_i)$. Crucially, the failure rates
-                    ($\theta_i$) are drawn from a common Gamma prior, $\theta_i \sim Gamma(\alpha, \beta)$, with
+                    modeled using a Poisson distribution: $x_i \sim \text{Poisson}(\theta_i t_i)$. Crucially, the failure rates
+                    ($\theta_i$) are drawn from a common Gamma prior, $\theta_i \sim \text{Gamma}(\alpha, \beta)$, with
                     hyperparameters $\alpha$ and $\beta$ given Exponential and Gamma priors respectively. This structure
                     leads to a non-standard posterior for $\alpha$, necessitating the use of Gibbs sampling.</p>
                 <div class="widget-container">
@@ -233,8 +233,8 @@
                     factorial design by seed type and root extract.</p>
                 <p>The model accounts for <em>overdispersion</em>—variation greater than expected in a standard Binomial
                     distribution—by introducing a random effect term $b_i$ for each plate. The probability of
-                    germination is modeled as $logit(p_i) = \alpha_0 + \alpha_1 x_{1i} + \alpha_2 x_{2i} + \alpha_{12}
-                    x_{1i}x_{2i} + b_i$, where $b_i \sim Normal(0, \tau)$, effectively capturing the unobserved
+                    germination is modeled as $\text{logit}(p_i) = \alpha_0 + \alpha_1 x_{1i} + \alpha_2 x_{2i} + \alpha_{12}
+                    x_{1i}x_{2i} + b_i$, where $b_i \sim \text{Normal}(0, \tau)$, effectively capturing the unobserved
                     heterogeneity.</p>
                 <doodle-bugs model="seeds" height="500px"></doodle-bugs>
             </div>
