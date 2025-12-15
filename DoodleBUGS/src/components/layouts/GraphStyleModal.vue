@@ -139,19 +139,25 @@ const resetStyleSettings = () => {
       <h3>Graph Styles</h3>
     </template>
     <template #body>
-      <div class="style-container">
-        <div class="category-tabs">
-          <button :class="{ active: editingCategory === 'node' }" @click="editingCategory = 'node'">
+      <div class="db-style-container">
+        <div class="db-category-tabs">
+          <button
+            :class="{ 'db-active': editingCategory === 'node' }"
+            @click="editingCategory = 'node'"
+          >
             Nodes
           </button>
-          <button :class="{ active: editingCategory === 'edge' }" @click="editingCategory = 'edge'">
+          <button
+            :class="{ 'db-active': editingCategory === 'edge' }"
+            @click="editingCategory = 'edge'"
+          >
             Edges
           </button>
         </div>
 
         <!-- Node Styling Form -->
-        <div class="style-form" v-if="editingCategory === 'node'">
-          <div class="form-group">
+        <div class="db-style-form" v-if="editingCategory === 'node'">
+          <div class="db-form-group">
             <label>Node Type</label>
             <BaseSelect
               :model-value="editingNodeType"
@@ -160,8 +166,8 @@ const resetStyleSettings = () => {
             />
           </div>
 
-          <div class="scrollable-form">
-            <div class="form-group">
+          <div class="db-scrollable-form">
+            <div class="db-form-group">
               <label>Shape</label>
               <BaseSelect
                 :model-value="tempNodeStyle.shape"
@@ -169,26 +175,26 @@ const resetStyleSettings = () => {
                 @update:model-value="tempNodeStyle.shape = $event"
               />
             </div>
-            <div class="grid-2">
-              <div class="form-group">
+            <div class="db-grid-2">
+              <div class="db-form-group">
                 <label>Fill Color</label>
-                <div class="color-wrapper">
+                <div class="db-color-wrapper">
                   <input type="color" v-model="tempNodeStyle.backgroundColor" />
                 </div>
               </div>
-              <div class="form-group">
+              <div class="db-form-group">
                 <label>Border Color</label>
-                <div class="color-wrapper">
+                <div class="db-color-wrapper">
                   <input type="color" v-model="tempNodeStyle.borderColor" />
                 </div>
               </div>
             </div>
-            <div class="grid-2">
-              <div class="form-group">
+            <div class="db-grid-2">
+              <div class="db-form-group">
                 <label>Border Width (px)</label>
                 <BaseInput type="number" v-model.number="tempNodeStyle.borderWidth" min="0" />
               </div>
-              <div class="form-group">
+              <div class="db-form-group">
                 <label>Border Style</label>
                 <BaseSelect
                   :model-value="tempNodeStyle.borderStyle"
@@ -197,7 +203,7 @@ const resetStyleSettings = () => {
                 />
               </div>
             </div>
-            <div class="form-group">
+            <div class="db-form-group">
               <label>Opacity ({{ tempNodeStyle.backgroundOpacity }})</label>
               <input
                 type="range"
@@ -208,29 +214,29 @@ const resetStyleSettings = () => {
                 class="w-full"
               />
             </div>
-            <div class="grid-2" v-if="editingNodeType !== 'plate'">
-              <div class="form-group">
+            <div class="db-grid-2" v-if="editingNodeType !== 'plate'">
+              <div class="db-form-group">
                 <label>Width (px)</label>
                 <BaseInput type="number" v-model.number="tempNodeStyle.width" />
               </div>
-              <div class="form-group">
+              <div class="db-form-group">
                 <label>Height (px)</label>
                 <BaseInput type="number" v-model.number="tempNodeStyle.height" />
               </div>
             </div>
-            <div class="grid-2">
-              <div class="form-group">
+            <div class="db-grid-2">
+              <div class="db-form-group">
                 <label>Label Size (px)</label>
                 <BaseInput type="number" v-model.number="tempNodeStyle.labelFontSize" min="1" />
               </div>
-              <div class="form-group">
+              <div class="db-form-group">
                 <label>Label Color</label>
-                <div class="color-wrapper">
+                <div class="db-color-wrapper">
                   <input type="color" v-model="tempNodeStyle.labelColor" />
                 </div>
               </div>
             </div>
-            <div class="form-group checkbox-row">
+            <div class="db-form-group db-checkbox-row">
               <input type="checkbox" id="apply-font-all" v-model="applyFontToAllNodes" />
               <label for="apply-font-all">Apply font settings to all node types</label>
             </div>
@@ -238,8 +244,8 @@ const resetStyleSettings = () => {
         </div>
 
         <!-- Edge Styling Form -->
-        <div class="style-form" v-else>
-          <div class="edge-type-switcher">
+        <div class="db-style-form" v-else>
+          <div class="db-edge-type-switcher">
             <BaseButton
               size="small"
               :type="editingEdgeType === 'stochastic' ? 'primary' : 'secondary'"
@@ -253,20 +259,20 @@ const resetStyleSettings = () => {
               >Deterministic</BaseButton
             >
           </div>
-          <div class="scrollable-form">
-            <div class="grid-2">
-              <div class="form-group">
+          <div class="db-scrollable-form">
+            <div class="db-grid-2">
+              <div class="db-form-group">
                 <label>Line Color</label>
-                <div class="color-wrapper">
+                <div class="db-color-wrapper">
                   <input type="color" v-model="tempEdgeStyle.color" />
                 </div>
               </div>
-              <div class="form-group">
+              <div class="db-form-group">
                 <label>Width (px)</label>
                 <BaseInput type="number" v-model.number="tempEdgeStyle.width" min="1" />
               </div>
             </div>
-            <div class="form-group">
+            <div class="db-form-group">
               <label>Line Style</label>
               <BaseSelect
                 :model-value="tempEdgeStyle.lineStyle"
@@ -274,29 +280,29 @@ const resetStyleSettings = () => {
                 @update:model-value="tempEdgeStyle.lineStyle = $event"
               />
             </div>
-            <div class="grid-2">
-              <div class="form-group">
+            <div class="db-grid-2">
+              <div class="db-form-group">
                 <label>Label Size (px)</label>
                 <BaseInput type="number" v-model.number="tempEdgeStyle.labelFontSize" min="1" />
               </div>
-              <div class="form-group">
+              <div class="db-form-group">
                 <label>Label Color</label>
-                <div class="color-wrapper">
+                <div class="db-color-wrapper">
                   <input type="color" v-model="tempEdgeStyle.labelColor" />
                 </div>
               </div>
             </div>
 
-            <div class="dropdown-divider"></div>
-            <h5 class="sub-title">Label Background</h5>
-            <div class="grid-2">
-              <div class="form-group">
+            <div class="db-dropdown-divider"></div>
+            <h5 class="db-sub-title">Label Background</h5>
+            <div class="db-grid-2">
+              <div class="db-form-group">
                 <label>Background Color</label>
-                <div class="color-wrapper">
+                <div class="db-color-wrapper">
                   <input type="color" v-model="tempEdgeStyle.labelBackgroundColor" />
                 </div>
               </div>
-              <div class="form-group">
+              <div class="db-form-group">
                 <label>Opacity ({{ tempEdgeStyle.labelBackgroundOpacity }})</label>
                 <input
                   type="range"
@@ -308,19 +314,19 @@ const resetStyleSettings = () => {
                 />
               </div>
             </div>
-            <div class="grid-2">
-              <div class="form-group">
+            <div class="db-grid-2">
+              <div class="db-form-group">
                 <label>Border Color</label>
-                <div class="color-wrapper">
+                <div class="db-color-wrapper">
                   <input type="color" v-model="tempEdgeStyle.labelBorderColor" />
                 </div>
               </div>
-              <div class="form-group">
+              <div class="db-form-group">
                 <label>Border Width</label>
                 <BaseInput type="number" v-model.number="tempEdgeStyle.labelBorderWidth" min="0" />
               </div>
             </div>
-            <div class="form-group">
+            <div class="db-form-group">
               <label>Background Shape</label>
               <BaseSelect
                 :model-value="tempEdgeStyle.labelBackgroundShape"
@@ -329,7 +335,7 @@ const resetStyleSettings = () => {
               />
             </div>
 
-            <div class="info-box">
+            <div class="db-info-box">
               <i class="fas fa-info-circle"></i>
               <small
                 >Note: Stochastic edges connect to stochastic/observed nodes. Deterministic edges
@@ -341,9 +347,9 @@ const resetStyleSettings = () => {
       </div>
     </template>
     <template #footer>
-      <div class="modal-footer">
+      <div class="db-modal-footer">
         <BaseButton type="secondary" @click="resetStyleSettings">Reset to Default</BaseButton>
-        <div class="footer-actions">
+        <div class="db-footer-actions">
           <BaseButton type="primary" @click="saveStyleSettings">Save</BaseButton>
         </div>
       </div>
@@ -352,20 +358,20 @@ const resetStyleSettings = () => {
 </template>
 
 <style scoped>
-.style-container {
+.db-style-container {
   display: flex;
   flex-direction: column;
   gap: 15px;
   max-height: 60vh;
 }
 
-.category-tabs {
+.db-category-tabs {
   display: flex;
   border-bottom: 1px solid var(--theme-border);
   gap: 10px;
 }
 
-.category-tabs button {
+.db-category-tabs button {
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -376,12 +382,12 @@ const resetStyleSettings = () => {
   transition: all 0.2s;
 }
 
-.category-tabs button.active {
+.db-category-tabs button.db-active {
   color: var(--theme-primary);
   border-bottom-color: var(--theme-primary);
 }
 
-.style-form {
+.db-style-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -389,7 +395,7 @@ const resetStyleSettings = () => {
   overflow: hidden;
 }
 
-.scrollable-form {
+.db-scrollable-form {
   overflow-y: auto;
   padding-right: 5px;
   display: flex;
@@ -397,44 +403,44 @@ const resetStyleSettings = () => {
   gap: 12px;
 }
 
-.form-group {
+.db-form-group {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.form-group label {
+.db-form-group label {
   font-size: 0.85em;
   font-weight: 600;
 }
 
-.checkbox-row {
+.db-checkbox-row {
   flex-direction: row;
   align-items: center;
   gap: 8px;
 }
 
-.sub-title {
+.db-sub-title {
   font-size: 0.9em;
   font-weight: 600;
   color: var(--color-heading);
   margin: 4px 0 0 0;
 }
 
-.grid-2 {
+.db-grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 
-.color-wrapper {
+.db-color-wrapper {
   height: 32px;
   border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 2px;
 }
 
-.color-wrapper input {
+.db-color-wrapper input {
   width: 100%;
   height: 100%;
   border: none;
@@ -443,13 +449,13 @@ const resetStyleSettings = () => {
   background: none;
 }
 
-.edge-type-switcher {
+.db-edge-type-switcher {
   display: flex;
   gap: 8px;
   margin-bottom: 8px;
 }
 
-.info-box {
+.db-info-box {
   background-color: var(--color-background-mute);
   padding: 8px;
   border-radius: 4px;
@@ -460,7 +466,7 @@ const resetStyleSettings = () => {
   align-items: flex-start;
 }
 
-.modal-footer {
+.db-modal-footer {
   display: flex;
   justify-content: space-between;
   width: 100%;
@@ -468,7 +474,7 @@ const resetStyleSettings = () => {
   gap: 10px;
 }
 
-.footer-actions {
+.db-footer-actions {
   display: flex;
   gap: 8px;
 }

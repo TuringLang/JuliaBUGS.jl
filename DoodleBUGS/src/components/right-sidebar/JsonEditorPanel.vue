@@ -199,21 +199,21 @@ const handleJsonInput = (value: string) => {
 </script>
 
 <template>
-  <div class="json-editor-panel">
-    <div class="header-section">
+  <div class="db-json-editor-panel">
+    <div class="db-header-section">
       <h4>Live Graph JSON</h4>
-      <p class="description">
+      <p class="db-description">
         Edit the JSON below to see live updates on the canvas. Read-only fields are protected.
       </p>
     </div>
-    <div class="editor-wrapper">
-      <div ref="editorContainer" class="json-editor-container"></div>
+    <div class="db-editor-wrapper">
+      <div ref="editorContainer" class="db-json-editor-container"></div>
     </div>
-    <div class="footer-section">
-      <div v-if="errorText" class="error-message">
+    <div class="db-footer-section">
+      <div v-if="errorText" class="db-error-message">
         {{ errorText }}
       </div>
-      <span v-else class="status-text">
+      <span v-else class="db-status-text">
         <i class="fas fa-check-circle"></i> Live Sync Enabled
       </span>
     </div>
@@ -250,7 +250,7 @@ const handleJsonInput = (value: string) => {
 </style>
 
 <style scoped>
-.json-editor-panel {
+.db-json-editor-panel {
   padding: 15px;
   display: flex;
   flex-direction: column;
@@ -258,7 +258,7 @@ const handleJsonInput = (value: string) => {
   box-sizing: border-box;
 }
 
-.header-section {
+.db-header-section {
   padding-bottom: 10px;
   flex-shrink: 0;
 }
@@ -271,7 +271,7 @@ h4 {
   padding-bottom: 10px;
 }
 
-.description {
+.db-description {
   font-size: 0.85em;
   color: var(--color-secondary);
   text-align: center;
@@ -279,7 +279,7 @@ h4 {
   line-height: 1.4;
 }
 
-.editor-wrapper {
+.db-editor-wrapper {
   flex-grow: 1;
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -288,13 +288,13 @@ h4 {
   min-height: 0;
 }
 
-.json-editor-container {
+.db-json-editor-container {
   flex-grow: 1;
   position: relative;
   overflow-x: auto;
 }
 
-.footer-section {
+.db-footer-section {
   flex-shrink: 0;
   padding-top: 10px;
   min-height: 40px;
@@ -304,7 +304,7 @@ h4 {
   align-items: center;
 }
 
-.status-text {
+.db-status-text {
   font-size: 0.8em;
   color: var(--color-success);
   font-weight: 500;
@@ -313,7 +313,7 @@ h4 {
   gap: 5px;
 }
 
-.error-message {
+.db-error-message {
   color: var(--color-danger);
   background-color: #ffe0e0;
   border: 1px solid var(--color-danger);

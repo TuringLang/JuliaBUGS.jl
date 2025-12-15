@@ -28,74 +28,73 @@ export interface NodeStyle {
 }
 
 export const useUiStore = defineStore('ui', () => {
-  // Right Sidebar State
-  const storedRight = localStorage.getItem('doodlebugs-activeRightTab') as string | null
-  let initialRightTab: RightSidebarTab = 'properties'
+  const storagePrefix = ref('doodlebugs')
 
-  if (storedRight === 'properties' || storedRight === 'script' || storedRight === 'export') {
-    initialRightTab = storedRight as RightSidebarTab
-  } else if (storedRight === 'json') {
-    initialRightTab = 'properties' // Fallback since json is moved
-  }
+  const getStorageKey = (key: string) => `${storagePrefix.value}-${key}`
 
-  const activeRightTab = ref<RightSidebarTab>(initialRightTab)
+  // Initial State - Hydrate from localStorage immediately for the main app
+  const activeRightTab = ref<RightSidebarTab>(
+    (localStorage.getItem(getStorageKey('activeRightTab')) as RightSidebarTab) || 'properties'
+  )
 
   const isRightTabPinned = ref<boolean>(
-    localStorage.getItem('doodlebugs-isRightTabPinned') === 'true'
+    localStorage.getItem(getStorageKey('isRightTabPinned')) === 'true'
   )
 
-  // Default to closed (false) if not set or not 'true'
+  // Default to closed (false) only if not set or false in storage, but we check specific 'true' string
   const isRightSidebarOpen = ref<boolean>(
-    localStorage.getItem('doodlebugs-isRightSidebarOpen') === 'true'
+    localStorage.getItem(getStorageKey('isRightSidebarOpen')) === 'true'
   )
 
-  // Left Sidebar State
   const activeLeftTab = ref<LeftSidebarTab>(
-    (localStorage.getItem('doodlebugs-activeLeftTab') as LeftSidebarTab) || 'project'
-  )
-  // Default to closed (false) if not set or not 'true'
-  const isLeftSidebarOpen = ref<boolean>(
-    localStorage.getItem('doodlebugs-isLeftSidebarOpen') === 'true'
+    (localStorage.getItem(getStorageKey('activeLeftTab')) as LeftSidebarTab) || 'project'
   )
 
-  // Persist Open Accordion Tabs
-  const storedAccordion = localStorage.getItem('doodlebugs-activeLeftAccordionTabs')
+  const isLeftSidebarOpen = ref<boolean>(
+    localStorage.getItem(getStorageKey('isLeftSidebarOpen')) === 'true'
+  )
+
+  const storedAccordion = localStorage.getItem(getStorageKey('activeLeftAccordionTabs'))
   const activeLeftAccordionTabs = ref<string[]>(
     storedAccordion ? JSON.parse(storedAccordion) : ['project']
   )
 
-  // Persistent UI Settings
-  const isGridEnabled = ref<boolean>(localStorage.getItem('doodlebugs-isGridEnabled') !== 'false')
-  const gridSize = ref<number>(parseInt(localStorage.getItem('doodlebugs-gridSize') || '30', 10))
-  const showZoomControls = ref<boolean>(
-    localStorage.getItem('doodlebugs-showZoomControls') !== 'false'
-  )
-  const showDebugPanel = ref<boolean>(localStorage.getItem('doodlebugs-showDebugPanel') === 'true')
-  const showDetachModeControl = ref<boolean>(
-    localStorage.getItem('doodlebugs-showDetachModeControl') === 'true'
+  const isGridEnabled = ref<boolean>(
+    localStorage.getItem(getStorageKey('isGridEnabled')) !== 'false'
   )
 
-  // Interaction Modes
+  const gridSize = ref<number>(
+    parseInt(localStorage.getItem(getStorageKey('gridSize')) || '30', 10)
+  )
+
+  const showZoomControls = ref<boolean>(
+    localStorage.getItem(getStorageKey('showZoomControls')) !== 'false'
+  )
+
+  const showDebugPanel = ref<boolean>(
+    localStorage.getItem(getStorageKey('showDebugPanel')) === 'true'
+  )
+
+  const showDetachModeControl = ref<boolean>(
+    localStorage.getItem(getStorageKey('showDetachModeControl')) === 'true'
+  )
+
   const isDetachModeActive = ref<boolean>(false)
 
-  // Grid Settings - Default to 'dots' now
   const canvasGridStyle = ref<GridStyle>(
-    (localStorage.getItem('doodlebugs-canvasGridStyle') as GridStyle) || 'dots'
+    (localStorage.getItem(getStorageKey('canvasGridStyle')) as GridStyle) || 'dots'
   )
 
-  // Theme State
-  const isDarkMode = ref<boolean>(localStorage.getItem('doodlebugs-darkMode') === 'true')
+  const isDarkMode = ref<boolean>(localStorage.getItem(getStorageKey('darkMode')) === 'true')
 
   // Node Styles
-  const storedStyles = localStorage.getItem('doodlebugs-nodeStyles')
+  const storedStyles = localStorage.getItem(getStorageKey('nodeStyles'))
   const initialNodeStyles: Record<string, NodeStyle> = {}
 
-  // Initialize from definitions first
   nodeDefinitions.forEach((def) => {
     initialNodeStyles[def.nodeType] = { ...def.defaultStyle }
   })
 
-  // Override with stored
   if (storedStyles) {
     try {
       const parsed = JSON.parse(storedStyles)
@@ -105,82 +104,118 @@ export const useUiStore = defineStore('ui', () => {
         }
       })
     } catch (e) {
-      console.error('Failed to load node styles', e)
+      console.error(e)
     }
   }
-
-  const nodeStyles = ref<Record<string, NodeStyle>>(initialNodeStyles)
+  const nodeStyles = ref<Record<string, NodeStyle>>({ ...initialNodeStyles })
 
   // Edge Styles
-  const storedEdgeStyles = localStorage.getItem('doodlebugs-edgeStyles')
-  let initialEdgeStyles = { ...defaultEdgeStyles }
+  const storedEdgeStyles = localStorage.getItem(getStorageKey('edgeStyles'))
+  let initialEdgeStylesVal = { ...defaultEdgeStyles }
 
   if (storedEdgeStyles) {
     try {
-      initialEdgeStyles = { ...initialEdgeStyles, ...JSON.parse(storedEdgeStyles) }
+      initialEdgeStylesVal = { ...initialEdgeStylesVal, ...JSON.parse(storedEdgeStyles) }
     } catch (e) {
-      console.error('Failed to load edge styles', e)
+      console.error(e)
+    }
+  }
+  const edgeStyles = ref<Record<'stochastic' | 'deterministic', EdgeStyle>>(initialEdgeStylesVal)
+
+  // Function to initialize/reload store with new prefix (Used by Widget)
+  const setPrefix = (prefix: string) => {
+    storagePrefix.value = prefix
+
+    // Re-hydrate state from new keys
+    activeRightTab.value =
+      (localStorage.getItem(getStorageKey('activeRightTab')) as RightSidebarTab) || 'properties'
+    isRightTabPinned.value = localStorage.getItem(getStorageKey('isRightTabPinned')) === 'true'
+    isRightSidebarOpen.value = localStorage.getItem(getStorageKey('isRightSidebarOpen')) === 'true'
+    activeLeftTab.value =
+      (localStorage.getItem(getStorageKey('activeLeftTab')) as LeftSidebarTab) || 'project'
+    isLeftSidebarOpen.value = localStorage.getItem(getStorageKey('isLeftSidebarOpen')) === 'true'
+
+    const storedAccordion = localStorage.getItem(getStorageKey('activeLeftAccordionTabs'))
+    activeLeftAccordionTabs.value = storedAccordion ? JSON.parse(storedAccordion) : ['project']
+
+    isGridEnabled.value = localStorage.getItem(getStorageKey('isGridEnabled')) !== 'false'
+    gridSize.value = parseInt(localStorage.getItem(getStorageKey('gridSize')) || '30', 10)
+    showZoomControls.value = localStorage.getItem(getStorageKey('showZoomControls')) !== 'false'
+    showDebugPanel.value = localStorage.getItem(getStorageKey('showDebugPanel')) === 'true'
+    showDetachModeControl.value =
+      localStorage.getItem(getStorageKey('showDetachModeControl')) === 'true'
+    canvasGridStyle.value =
+      (localStorage.getItem(getStorageKey('canvasGridStyle')) as GridStyle) || 'dots'
+    isDarkMode.value = localStorage.getItem(getStorageKey('darkMode')) === 'true'
+
+    // Styles
+    const storedStyles = localStorage.getItem(getStorageKey('nodeStyles'))
+    if (storedStyles) {
+      try {
+        const parsed = JSON.parse(storedStyles)
+        Object.keys(initialNodeStyles).forEach((key) => {
+          if (parsed[key]) {
+            nodeStyles.value[key] = { ...initialNodeStyles[key], ...parsed[key] }
+          }
+        })
+      } catch (e) {
+        console.error(e)
+      }
+    } else {
+      // Reset to defaults if nothing stored for this prefix
+      Object.keys(initialNodeStyles).forEach((key) => {
+        nodeStyles.value[key] = { ...initialNodeStyles[key] }
+      })
+    }
+
+    const storedEdgeStyles = localStorage.getItem(getStorageKey('edgeStyles'))
+    if (storedEdgeStyles) {
+      try {
+        edgeStyles.value = { ...defaultEdgeStyles, ...JSON.parse(storedEdgeStyles) }
+      } catch (e) {
+        console.error(e)
+      }
+    } else {
+      edgeStyles.value = { ...defaultEdgeStyles }
     }
   }
 
-  const edgeStyles = ref<Record<'stochastic' | 'deterministic', EdgeStyle>>(initialEdgeStyles)
-
   // Watchers for Persistence
-  watch(activeRightTab, (newTab) => {
-    localStorage.setItem('doodlebugs-activeRightTab', newTab)
-  })
-  watch(isRightTabPinned, (isPinned) => {
-    localStorage.setItem('doodlebugs-isRightTabPinned', isPinned.toString())
-  })
-  watch(isRightSidebarOpen, (isOpen) => {
-    localStorage.setItem('doodlebugs-isRightSidebarOpen', isOpen.toString())
-  })
-  watch(activeLeftTab, (newTab) => {
-    localStorage.setItem('doodlebugs-activeLeftTab', newTab)
-  })
-  watch(isLeftSidebarOpen, (isOpen) => {
-    localStorage.setItem('doodlebugs-isLeftSidebarOpen', isOpen.toString())
-  })
+  watch(activeRightTab, (newTab) => localStorage.setItem(getStorageKey('activeRightTab'), newTab))
+  watch(isRightTabPinned, (isPinned) =>
+    localStorage.setItem(getStorageKey('isRightTabPinned'), isPinned.toString())
+  )
+  watch(isRightSidebarOpen, (isOpen) =>
+    localStorage.setItem(getStorageKey('isRightSidebarOpen'), isOpen.toString())
+  )
+  watch(activeLeftTab, (newTab) => localStorage.setItem(getStorageKey('activeLeftTab'), newTab))
+  watch(isLeftSidebarOpen, (isOpen) =>
+    localStorage.setItem(getStorageKey('isLeftSidebarOpen'), isOpen.toString())
+  )
   watch(
     activeLeftAccordionTabs,
-    (tabs) => {
-      localStorage.setItem('doodlebugs-activeLeftAccordionTabs', JSON.stringify(tabs))
-    },
+    (tabs) => localStorage.setItem(getStorageKey('activeLeftAccordionTabs'), JSON.stringify(tabs)),
     { deep: true }
   )
-  watch(isGridEnabled, (val) => {
-    localStorage.setItem('doodlebugs-isGridEnabled', String(val))
-  })
-  watch(gridSize, (val) => {
-    localStorage.setItem('doodlebugs-gridSize', String(val))
-  })
-  watch(showZoomControls, (val) => {
-    localStorage.setItem('doodlebugs-showZoomControls', String(val))
-  })
-  watch(showDebugPanel, (val) => {
-    localStorage.setItem('doodlebugs-showDebugPanel', String(val))
-  })
-  watch(showDetachModeControl, (val) => {
-    localStorage.setItem('doodlebugs-showDetachModeControl', String(val))
-  })
-  watch(canvasGridStyle, (style) => {
-    localStorage.setItem('doodlebugs-canvasGridStyle', style)
-  })
-  watch(isDarkMode, (val) => {
-    localStorage.setItem('doodlebugs-darkMode', String(val))
-  })
+  watch(isGridEnabled, (val) => localStorage.setItem(getStorageKey('isGridEnabled'), String(val)))
+  watch(gridSize, (val) => localStorage.setItem(getStorageKey('gridSize'), String(val)))
+  watch(showZoomControls, (val) =>
+    localStorage.setItem(getStorageKey('showZoomControls'), String(val))
+  )
+  watch(showDebugPanel, (val) => localStorage.setItem(getStorageKey('showDebugPanel'), String(val)))
+  watch(showDetachModeControl, (val) =>
+    localStorage.setItem(getStorageKey('showDetachModeControl'), String(val))
+  )
+  watch(canvasGridStyle, (style) => localStorage.setItem(getStorageKey('canvasGridStyle'), style))
+  watch(isDarkMode, (val) => localStorage.setItem(getStorageKey('darkMode'), String(val)))
   watch(
     nodeStyles,
-    (styles) => {
-      localStorage.setItem('doodlebugs-nodeStyles', JSON.stringify(styles))
-    },
+    (styles) => localStorage.setItem(getStorageKey('nodeStyles'), JSON.stringify(styles)),
     { deep: true }
   )
   watch(
     edgeStyles,
-    (styles) => {
-      localStorage.setItem('doodlebugs-edgeStyles', JSON.stringify(styles))
-    },
+    (styles) => localStorage.setItem(getStorageKey('edgeStyles'), JSON.stringify(styles)),
     { deep: true }
   )
 
@@ -222,6 +257,7 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
+    setPrefix,
     activeRightTab,
     isRightTabPinned,
     isRightSidebarOpen,

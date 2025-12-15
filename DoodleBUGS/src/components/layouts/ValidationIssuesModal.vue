@@ -75,21 +75,21 @@ const copyLogs = () => {
       <h3>Model Validation Issues</h3>
     </template>
     <template #body>
-      <div v-if="errorsWithNodeNames.length === 0" class="no-issues">
+      <div v-if="errorsWithNodeNames.length === 0" class="db-no-issues">
         <i class="fas fa-check-circle"></i>
         <p>No validation issues found. The model appears to be valid!</p>
       </div>
-      <div v-else class="issues-list">
-        <div v-for="item in errorsWithNodeNames" :key="item.nodeId" class="issue-item">
+      <div v-else class="db-issues-list">
+        <div v-for="item in errorsWithNodeNames" :key="item.nodeId" class="db-issue-item">
           <div
-            class="issue-header"
+            class="db-issue-header"
             @click="handleSelectNode(item.nodeId)"
             title="Click to select node"
           >
             <strong>Node: {{ item.nodeName }}</strong>
             <i class="fas fa-crosshairs"></i>
           </div>
-          <ul class="error-details">
+          <ul class="db-error-details">
             <li v-for="(error, index) in item.errors" :key="index">
               {{ error.message }}
             </li>
@@ -109,55 +109,55 @@ const copyLogs = () => {
 </template>
 
 <style scoped>
-.no-issues {
+.db-no-issues {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   padding: 20px;
-  color: var(--color-success);
+  color: var(--theme-success);
 }
-.no-issues i {
+.db-no-issues i {
   font-size: 3em;
   margin-bottom: 15px;
 }
-.no-issues p {
+.db-no-issues p {
   font-size: 1.1em;
   font-weight: 500;
   margin: 0;
 }
-.issues-list {
+.db-issues-list {
   display: flex;
   flex-direction: column;
   gap: 15px;
 }
-.issue-item {
-  background-color: var(--color-background-mute);
-  border: 1px solid var(--color-border-light);
-  border-left: 4px solid var(--color-danger);
+.db-issue-item {
+  background-color: var(--theme-bg-active);
+  border: 1px solid var(--theme-border);
+  border-left: 4px solid var(--theme-danger);
   border-radius: 4px;
   padding: 10px 15px;
 }
-.issue-header {
+.db-issue-header {
   font-weight: 600;
-  color: var(--color-heading);
+  color: var(--theme-text-primary);
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
   transition: color 0.2s ease;
 }
-.issue-header:hover {
-  color: var(--color-primary);
+.db-issue-header:hover {
+  color: var(--theme-primary);
 }
-.issue-header i {
+.db-issue-header i {
   opacity: 0.6;
 }
-.error-details {
+.db-error-details {
   margin: 8px 0 0 0;
   padding-left: 20px;
   font-size: 0.9em;
-  color: var(--color-text);
+  color: var(--theme-text-secondary);
 }
 </style>

@@ -31,6 +31,7 @@ const props = defineProps<{
   elements: GraphElement[]
   validationErrors: Map<string, ValidationError[]>
   showZoomControls?: boolean
+  readOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -64,6 +65,7 @@ const initialViewport = computed(() => {
 })
 
 const handleGraphUpdated = (newElements: GraphElement[]) => {
+  if (props.readOnly) return
   graphElements.value = newElements
 }
 
@@ -190,6 +192,16 @@ const handleCanvasTap = (event: EventObject) => {
   const isNodeClick = !isBackgroundClick && target.isNode()
   const isEdgeClick = !isBackgroundClick && target.isEdge()
 
+  // If read-only, only allow selection, prevent modifications
+  if (props.readOnly) {
+    if (!isBackgroundClick) {
+      emit('element-selected', target.data())
+    } else {
+      emit('element-selected', null)
+    }
+    return
+  }
+
   switch (props.currentMode) {
     case 'add-node':
       if (isBackgroundClick || isPlateClick) {
@@ -278,6 +290,8 @@ const handleNodeMoved = (payload: {
   position: { x: number; y: number }
   parentId: string | undefined
 }) => {
+  if (props.readOnly) return
+
   const elementToUpdate = graphElements.value.find(
     (el: GraphElement) => el.id === payload.nodeId
   ) as GraphNode | undefined
@@ -294,6 +308,8 @@ const handleNodeMoved = (payload: {
 }
 
 const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number; y: number } }) => {
+  if (props.readOnly) return
+
   const { nodeType, position } = payload
   const cy = getCyInstance(props.graphId)
   let parentPlateId: string | undefined = undefined
@@ -337,6 +353,8 @@ const handleNodeDropped = (payload: { nodeType: NodeType; position: { x: number;
 }
 
 const handleDeleteElement = (elementId: string) => {
+  if (props.readOnly) return
+
   const ur = getUndoRedoInstance(props.graphId)
   const cy = getCyInstance(props.graphId)
   if (ur && cy) {
@@ -362,7 +380,17 @@ watch(
 </script>
 
 <template>
-  <div class="graph-editor-container">
+  <div
+    class="db-graph-editor-container"
+    style="
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    "
+  >
     <GraphCanvas
       :graph-id="props.graphId"
       :elements="props.elements"
@@ -373,6 +401,7 @@ watch(
       :validation-errors="props.validationErrors"
       :show-zoom-controls="props.showZoomControls"
       :initial-viewport="initialViewport"
+      :read-only="readOnly"
       @canvas-tap="handleCanvasTap"
       @node-moved="handleNodeMoved"
       @node-dropped="handleNodeDropped"
@@ -385,7 +414,7 @@ watch(
 </template>
 
 <style scoped>
-.graph-editor-container {
+.db-graph-editor-container {
   flex-grow: 1;
   display: flex;
   flex-direction: column;

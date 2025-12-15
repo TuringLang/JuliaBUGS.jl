@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>DoodleWidget - Interactive Graphical Modeling for JuliaBUGS</title>
+    <meta name="title" content="DoodleWidget - Interactive Graphical Modeling for JuliaBUGS">
+    <meta name="description" content="Embeddable Bayesian graphical model editor for JuliaBUGS. Build, visualize, and export probabilistic models with an intuitive drag-and-drop interface.">
+    <meta name="keywords" content="Bayesian, graphical models, JuliaBUGS, BUGS, probabilistic programming, statistical modeling, DoodleBUGS, Turing, Julia, hierarchical models">
+    <meta name="author" content="Shravan Goswami, Hong Ge, Xianda Sun">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/DoodleWidget/">
+    
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/DoodleWidget/">
+    <meta property="og:title" content="DoodleWidget - Interactive Graphical Modeling for JuliaBUGS">
+    <meta property="og:description" content="Embeddable Bayesian graphical model editor for JuliaBUGS. Build, visualize, and export probabilistic models with an intuitive drag-and-drop interface.">
+    <meta property="og:image" content="https://turinglang.org/assets/logo/turing-text-logo.jpg">
+    <meta property="og:site_name" content="JuliaBUGS">
+    
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/DoodleWidget/">
+    <meta property="twitter:title" content="DoodleWidget - Interactive Graphical Modeling for JuliaBUGS">
+    <meta property="twitter:description" content="Embeddable Bayesian graphical model editor for JuliaBUGS. Build, visualize, and export probabilistic models with an intuitive drag-and-drop interface.">
+    <meta property="twitter:image" content="https://turinglang.org/assets/logo/turing-text-logo.jpg">
+    
+    <link rel="icon" type="image/x-icon" href="https://turinglang.org/assets/favicon.ico">
+    <link rel="apple-touch-icon" href="https://turinglang.org/assets/favicon.ico">
+    
+    <link rel="stylesheet" href="../../dist-lib/doodlebugs.css">
+
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']]
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <script type="module" src="../../dist-lib/doodlebugs.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            line-height: 1.8;
+            color: #333;
+            background: #fafafa;
+        }
+
+        .article-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 60px 0 0;
+            /* top | left-right | bottom */
+            border-bottom: 1px solid #e0e0e0;
+            margin-bottom: 40px;
+        }
+
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 400;
+            margin-bottom: 20px;
+            color: #1a1a1a;
+        }
+
+        .meta {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        h2 {
+            font-size: 1.6rem;
+            font-weight: 600;
+            margin: 40px 0 20px;
+            color: #1a1a1a;
+        }
+
+        p {
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+            text-align: justify;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            hyphens: auto;
+        }
+
+        .widget-section {
+            margin: 60px 0;
+            padding: 30px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        .widget-section h3 {
+            font-size: 1.2rem;
+            color: #10b981;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .widget-container {
+            width: 100%;
+            height: 500px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+
+        .callout {
+            background: #f0fdf4;
+            border-left: 4px solid #10b981;
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .callout p {
+            margin: 0;
+            font-style: italic;
+        }
+
+        code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+        }
+
+        pre {
+            background: #f8fafc;
+            color: #1e293b;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            border-left: 4px solid #10b981;
+            border: 1px solid #e2e8f0;
+        }
+
+        pre code {
+            background: transparent;
+            color: inherit;
+            padding: 0;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+
+        pre .keyword { color: #7c3aed; }
+        pre .function { color: #0891b2; }
+        pre .number { color: #dc2626; }
+        pre .variable { color: #ca8a04; }
+        pre .operator { color: #0369a1; }
+
+        .references {
+            margin-top: 60px;
+            padding-top: 40px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .references h2 {
+            font-size: 1.4rem;
+            margin-bottom: 20px;
+        }
+
+        .references ol {
+            padding-left: 20px;
+        }
+
+        .references li {
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px 0;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 60px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .article-container {
+                padding: 20px 12px;
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+            h2 {
+                font-size: 1.3rem;
+            }
+            p {
+                font-size: 1rem;
+                text-align: left;
+            }
+            .widget-section {
+                padding: 16px;
+                margin: 40px 0;
+            }
+            .widget-container {
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="article-container">
+        <header>
+            <h1>Introduction to Bayesian Graphical Models</h1>
+            <p class="meta">Published: December 2025 · 10 min read</p>
+            <p class="meta" style="margin-top: 10px;">
+                Authors: <a href="https://github.com/shravanngoswamii" style="color: #10b981; text-decoration: none;">Shravan Goswami</a>, 
+                <a href="https://github.com/yebai" style="color: #10b981; text-decoration: none;">Hong Ge</a>, and 
+                <a href="https://github.com/sunxd3" style="color: #10b981; text-decoration: none;">Xianda Sun</a>
+            </p>
+        </header>
+
+        <article>
+            <p>Bayesian graphical models represent a powerful framework for reasoning under uncertainty. They combine
+                the mathematical rigor of probability theory with the intuitive representation of dependencies through
+                directed graphs. In this article, we will explore the core concepts, learn how to visualize them, and
+                examine real-world examples.</p>
+
+            <h2>What are Graphical Models?</h2>
+
+            <p>A graphical model is a probabilistic model where a graph expresses the conditional dependence structure
+                between random variables. The graph consists of nodes representing variables and edges representing
+                probabilistic dependencies between them.</p>
+
+            <div class="callout">
+                <p>"The great power of graphical models lies in their ability to represent complex joint probability
+                    distributions through simple local relationships."</p>
+            </div>
+
+            <p>There are two main types of graphical models: directed graphical models (also known as Bayesian networks)
+                and undirected graphical models (also known as Markov random fields). We focus here on directed acyclic
+                graphs (DAGs).</p>
+
+            <div class="widget-section">
+                <h3>Pumps: conjugate gamma-Poisson hierarchical model</h3>
+                <p>To understand the utility of these models, let's look at the <strong>Pumps</strong> example [<a href="#ref1" style="color: #10b981; text-decoration: none;">1</a>]. This model analyzes the failure rates of 10 pumps in a nuclear power plant. </p>
+                <p>This is a conjugate gamma-Poisson hierarchical model. The number of failures ($x_i$) for each pump is
+                    modeled using a Poisson distribution: $x_i \sim \text{Poisson}(\theta_i t_i)$. Crucially, the failure rates
+                    ($\theta_i$) are drawn from a common Gamma prior, $\theta_i \sim \text{Gamma}(\alpha, \beta)$, with
+                    hyperparameters $\alpha$ and $\beta$ given Exponential and Gamma priors respectively. This structure
+                    leads to a non-standard posterior for $\alpha$, necessitating the use of Gibbs sampling.</p>
+                <div class="widget-container">
+                    <doodle-bugs model="pumps"></doodle-bugs>
+                </div>
+            </div>
+
+            <div class="widget-section">
+                <h3>Rats: a normal hierarchical model</h3>
+                <p>Now let's look at a temporal model [<a href="#ref2" style="color: #10b981; text-decoration: none;">2</a>]. The <strong>Rats</strong> example
+                    tracks the weight of 30 rats measured weekly over five weeks.</p>
+                <p>This is a random effects linear growth curve model. The weights $Y_{ij}$ are normally distributed
+                    with a mean that is a linear function of time: $\alpha_i + \beta_i(x_j - \bar{x})$. Note that the
+                    time points $x_j$ are standardized around their mean ($\bar{x} = 22$) to reduce dependence between
+                    the intercept $\alpha_i$ and slope $\beta_i$. We estimate these random effects to capture both
+                    individual trajectories and population-level growth.</p>
+                <div class="widget-container">
+                    <doodle-bugs model="rats"></doodle-bugs>
+                </div>
+            </div>
+
+            <h2>Why Use Graphical Models?</h2>
+
+            <p>As seen in the examples above, graphical models offer distinct advantages:</p>
+
+            <p><strong>Interpretability:</strong> The visual structure makes it easy to understand the relationships
+                between variables. In the Rats model, seeing the connection between the population mean and individual
+                rats helps clarify the hierarchical assumption.</p>
+
+            <p><strong>Modularity:</strong> Complex models can be built from simpler components. We can easily add a new
+                layer to our hierarchy without rewriting the entire mathematical derivation.</p>
+
+            <div class="widget-section">
+                <h3>Seeds: Random effect logistic regression</h3>
+                <p>Finally, let's look at a random effects logistic regression [<a href="#ref3" style="color: #10b981; text-decoration: none;">3</a>]. The
+                    <strong>Seeds</strong> example investigates germination rates across 21 plates arranged in a 2x2
+                    factorial design by seed type and root extract.</p>
+                <p>The model accounts for <em>overdispersion</em>—variation greater than expected in a standard Binomial
+                    distribution—by introducing a random effect term $b_i$ for each plate. The probability of
+                    germination is modeled as $\text{logit}(p_i) = \alpha_0 + \alpha_1 x_{1i} + \alpha_2 x_{2i} + \alpha_{12}
+                    x_{1i}x_{2i} + b_i$, where $b_i \sim \text{Normal}(0, \tau)$, effectively capturing the unobserved
+                    heterogeneity.</p>
+                <doodle-bugs model="seeds" height="500px"></doodle-bugs>
+            </div>
+
+            <h2>Under the Hood: The BUGS Language</h2>
+
+            <p>BUGS (Bayesian inference Using Gibbs Sampling) is a probabilistic programming language for specifying
+                statistical models. The visual representations in the widgets above are automatically converted to valid
+                BUGS code that can be executed in various inference engines.</p>
+
+            <p>For example, a simple hierarchical model might look like this:</p>
+
+            <pre><code><span class="keyword">model</span> {
+  <span class="keyword">for</span> (i <span class="keyword">in</span> <span class="number">1</span><span class="operator">:</span>N) {
+    <span class="variable">y</span>[i] <span class="operator">~</span> <span class="function">dnorm</span>(<span class="variable">mu</span>, <span class="variable">tau</span>)
+  }
+  <span class="variable">mu</span> <span class="operator">~</span> <span class="function">dnorm</span>(<span class="number">0</span>, <span class="number">0.001</span>)
+  <span class="variable">tau</span> <span class="operator">~</span> <span class="function">dgamma</span>(<span class="number">0.001</span>, <span class="number">0.001</span>)
+}</code></pre>
+
+            <h3>Getting Started with JuliaBUGS</h3>
+
+            <p>JuliaBUGS is a Julia implementation of the BUGS language that provides efficient inference for Bayesian
+                graphical models. Combined with the DoodleBUGS visual editor, it offers a complete workflow from model
+                design to inference.</p>
+
+            <p>The widgets you see above are designed to integrate seamlessly with JuliaBUGS, allowing you to export
+                your visual models as executable Julia code. This bridges the gap between intuitive model building and
+                production-ready code.</p>
+
+            <h3>DoodleWidget as Compound Documents</h3>
+
+            <p>DoodleWidget implements the concept of <em>compound documents</em> [<a href="#ref6" style="color: #10b981; text-decoration: none;">6</a>]—interactive documents that combine 
+                formatted text, mathematical notation, visualizations, and executable models in a single interface. Unlike traditional workflows 
+                that require switching between separate programs for writing, modeling, and visualization, DoodleWidget provides an integrated 
+                environment where all these tools are readily available. You can build graphical models, view generated code, input data, 
+                and interact with the complete modeling workflow without leaving the document.</p>
+
+            <h2>Conclusion</h2>
+
+            <p>Bayesian graphical models provide a principled way to reason about uncertainty. With tools like
+                DoodleBUGS and JuliaBUGS, building and running these models has never been more accessible. We encourage
+                you to explore the interactive widgets above to deepen your understanding of probabilistic modeling.</p>
+
+            <div class="references">
+                <h2>References</h2>
+                <ol>
+                    <li id="ref1">George, E. I., Makov, U. E., & Smith, A. F. M. (1993). Conjugate likelihood distributions. <em>Scandinavian Journal of Statistics</em>, 20(2), 147-156.</li>
+                    <li id="ref2">Gelfand, A. E., Hills, S. E., Racine-Poon, A., & Smith, A. F. M. (1990). Illustration of Bayesian inference in normal data models using Gibbs sampling. <em>Journal of the American Statistical Association</em>, 85(412), 972-985.</li>
+                    <li id="ref3">Crowder, M. J. (1978). Beta-binomial ANOVA for proportions. <em>Applied Statistics</em>, 27(1), 34-37.</li>
+                    <li id="ref4">Koller, D., & Friedman, N. (2009). <em>Probabilistic Graphical Models: Principles and Techniques</em>. MIT Press. 
+                        <a href="http://mcb111.org/w06/KollerFriedman.pdf" target="_blank" style="color: #10b981;">[PDF]</a></li>
+                    <li id="ref5">OpenBUGS Examples Volume I. 
+                        <a href="https://chjackson.github.io/openbugsdoc/Examples/Volumei.html" target="_blank" style="color: #10b981;">[Link]</a></li>
+                    <li id="ref6">OpenBUGS Compound Documents Manual. 
+                        <a href="https://chjackson.github.io/openbugsdoc/Manuals/CompoundDocuments.html" target="_blank" style="color: #10b981;">[Link]</a></li>
+                </ol>
+                <p style="margin-top: 20px; font-size: 0.9rem; color: #666;">
+                    <strong>Note:</strong> The examples and descriptions in this article are adapted from the classic BUGS examples collection [<a href="#ref5" style="color: #10b981; text-decoration: none;">5</a>], 
+                    originally distributed with WinBUGS as part of the MRC Biostatistics Unit research at Cambridge.
+                </p>
+            </div>
+        </article>
+
+        <footer>
+            <p>Built with <a href="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/" target="_blank" style="color: #10b981; text-decoration: none;">DoodleBUGS</a> · 
+               Part of the <a href="https://turinglang.org/JuliaBUGS.jl/" target="_blank" style="color: #10b981; text-decoration: none;">JuliaBUGS Project</a></p>
+        </footer>
+    </div>
+</body>
+
+</html>

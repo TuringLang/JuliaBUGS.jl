@@ -45,12 +45,14 @@ const onContentClick = (event: MouseEvent) => {
 .p-popover-content a:hover {
   background-color: var(--p-content-hover-background);
 }
-.dropdown-divider {
+
+.db-dropdown-divider {
   height: 1px;
   background-color: var(--p-content-border-color);
   margin: 0.25rem 0;
 }
-.dropdown-section-title {
+
+.db-dropdown-section-title {
   padding: 0.5rem 1rem;
   font-weight: 600;
   color: var(--p-text-muted-color);

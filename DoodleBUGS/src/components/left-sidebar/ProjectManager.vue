@@ -2,12 +2,15 @@
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useProjectStore, type Project, type GraphMeta } from '../../stores/projectStore'
 import { useGraphStore } from '../../stores/graphStore'
+import Tooltip from 'primevue/tooltip'
 import BaseButton from '../ui/BaseButton.vue'
 import BaseModal from '../common/BaseModal.vue'
 import BaseInput from '../ui/BaseInput.vue'
 
 const projectStore = useProjectStore()
 const graphStore = useGraphStore()
+
+const vTooltip = Tooltip
 
 const showDeleteConfirmModal = ref(false)
 const itemToDelete = ref<{
@@ -138,80 +141,82 @@ const handleNewGraph = () => {
 </script>
 
 <template>
-  <div class="project-manager">
-    <div class="header">
+  <div class="db-project-manager">
+    <div class="db-panel-header">
       <h4>Projects</h4>
-      <div class="header-actions">
+      <div class="db-actions">
         <BaseButton
+          v-tooltip.top="{ value: 'New Graph in Current Project', showDelay: 0, hideDelay: 0 }"
           @click="handleNewGraph"
           type="ghost"
           size="small"
-          class="header-action-btn"
-          title="New Graph in Current Project"
+          class="db-action-icon-btn"
           :disabled="!currentProject"
         >
           <i class="fas fa-hexagon-nodes"></i>
         </BaseButton>
         <BaseButton
+          v-tooltip.top="{ value: 'New Project', showDelay: 0, hideDelay: 0 }"
           @click="handleNewProject"
           type="ghost"
           size="small"
-          class="header-action-btn"
-          title="New Project"
+          class="db-action-icon-btn"
         >
           <i class="fas fa-folder" style="color: #10b981"></i>
         </BaseButton>
       </div>
     </div>
 
-    <div v-if="projectStore.projects.length === 0" class="empty-state">
+    <!-- Empty state namespaced -->
+    <div v-if="projectStore.projects.length === 0" class="db-empty-state">
       <p>No projects yet.</p>
       <BaseButton @click="handleNewProject" type="primary">Create New Project</BaseButton>
     </div>
 
-    <div v-else class="project-list">
-      <div v-for="project in projectStore.projects" :key="project.id" class="project-item">
+    <!-- Project list structure namespaced -->
+    <div v-else class="db-project-list">
+      <div v-for="project in projectStore.projects" :key="project.id" class="db-project-item">
         <div
-          class="project-header"
+          class="db-project-header"
           @click="projectStore.selectProject(project.id)"
           @touchend.prevent="projectStore.selectProject(project.id)"
-          :class="{ active: projectStore.currentProjectId === project.id }"
+          :class="{ 'db-active': projectStore.currentProjectId === project.id }"
         >
           <i
-            class="icon-chevron fas fa-chevron-right"
-            :class="{ open: projectStore.currentProjectId === project.id }"
+            class="db-icon-chevron fas fa-chevron-right"
+            :class="{ 'db-open': projectStore.currentProjectId === project.id }"
           ></i>
-          <i class="icon-folder fas fa-folder"></i>
-          <span class="project-name">{{ project.name }}</span>
-          <div class="project-actions">
+          <i class="db-icon-folder fas fa-folder"></i>
+          <span class="db-project-name">{{ project.name }}</span>
+          <div class="db-project-actions">
             <button
               @click.stop="openContextMenu($event, 'project', project.id)"
-              class="action-btn context-menu-btn"
+              class="db-context-trigger-btn"
             >
               <i class="fas fa-ellipsis-v"></i>
             </button>
           </div>
         </div>
         <transition name="slide-fade">
-          <div v-if="projectStore.currentProject?.id === project.id" class="graph-list">
+          <div v-if="projectStore.currentProject?.id === project.id" class="db-graph-list">
             <div
               v-for="graph in currentProjectGraphs"
               :key="graph.id"
-              class="graph-item"
-              :class="{ active: graphStore.currentGraphId === graph.id }"
+              class="db-graph-item"
+              :class="{ 'db-active': graphStore.currentGraphId === graph.id }"
               @click="selectGraph(graph.id)"
               @touchend.prevent="selectGraph(graph.id)"
             >
-              <i class="icon-file fas fa-hexagon-nodes"></i>
+              <i class="db-icon-file fas fa-hexagon-nodes"></i>
               <span>{{ graph.name }}</span>
               <button
                 @click.stop="openContextMenu($event, 'graph', graph.id)"
-                class="action-btn context-menu-btn"
+                class="db-context-trigger-btn"
               >
                 <i class="fas fa-ellipsis-v"></i>
               </button>
             </div>
-            <div v-if="currentProjectGraphs.length === 0" class="empty-state-inner">
+            <div v-if="currentProjectGraphs.length === 0" class="db-empty-state-inner">
               <p>No graphs in this project.</p>
               <BaseButton @click="handleNewGraph" type="secondary" size="small"
                 >Create New Graph</BaseButton
@@ -226,15 +231,15 @@ const handleNewGraph = () => {
       <div
         v-if="contextMenu"
         ref="contextMenuRef"
-        class="context-menu"
+        class="db-context-menu"
         :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }"
       >
         <template v-if="contextMenu.type === 'project'">
-          <div class="context-menu-item" @click="handleNewGraph">
+          <div class="db-context-menu-item" @click="handleNewGraph">
             <i class="fas fa-hexagon-nodes"></i> New Graph
           </div>
           <div
-            class="context-menu-item"
+            class="db-context-menu-item"
             @click="
               openRenameModal(
                 'project',
@@ -246,7 +251,7 @@ const handleNewGraph = () => {
             <i class="fas fa-edit"></i> Rename
           </div>
           <div
-            class="context-menu-item danger"
+            class="db-context-menu-item db-danger"
             @click="
               confirmDeletion(
                 'project',
@@ -260,7 +265,7 @@ const handleNewGraph = () => {
         </template>
         <template v-if="contextMenu.type === 'graph'">
           <div
-            class="context-menu-item"
+            class="db-context-menu-item"
             @click="
               openRenameModal(
                 'graph',
@@ -273,7 +278,7 @@ const handleNewGraph = () => {
             <i class="fas fa-edit"></i> Rename
           </div>
           <div
-            class="context-menu-item danger"
+            class="db-context-menu-item db-danger"
             @click="
               confirmDeletion(
                 'graph',
@@ -294,7 +299,7 @@ const handleNewGraph = () => {
         <h3>Confirm Deletion</h3>
       </template>
       <template #body>
-        <div class="confirm-body">
+        <div class="db-confirm-body">
           <p v-if="itemToDelete">
             Are you sure you want to delete the {{ itemToDelete.type }}
             <strong>"{{ itemToDelete.name }}"</strong>?
@@ -315,7 +320,7 @@ const handleNewGraph = () => {
         <h3>Rename {{ itemToRename?.type }}</h3>
       </template>
       <template #body>
-        <div class="rename-body">
+        <div class="db-rename-body">
           <label for="new-item-name" style="display: block; margin-bottom: 8px; font-weight: 500"
             >New Name:</label
           >
@@ -335,14 +340,20 @@ const handleNewGraph = () => {
 </template>
 
 <style scoped>
-.project-manager {
+/*
+  CRITICAL: All classes MUST have the 'db-' prefix (DoodleBUGS).
+  This acts as a namespace to prevent collision with host application CSS
+  when running as a widget.
+*/
+
+.db-project-manager {
   display: flex;
   flex-direction: column;
   height: 100%;
   background-color: transparent;
 }
 
-.header {
+.db-panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -351,24 +362,24 @@ const handleNewGraph = () => {
   flex-shrink: 0;
 }
 
-.header h4 {
+.db-panel-header h4 {
   margin: 0;
   color: var(--theme-text-primary);
   font-size: 0.95em;
   font-weight: 600;
 }
 
-.header-actions {
+.db-header-actions {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.header-action-btn {
+.db-action-icon-btn {
   padding: 2px 6px !important;
 }
 
-.empty-state {
+.db-empty-state {
   flex-grow: 1;
   display: flex;
   flex-direction: column;
@@ -379,33 +390,33 @@ const handleNewGraph = () => {
   color: var(--theme-text-secondary);
 }
 
-.empty-state p {
+.db-empty-state p {
   margin: 0 0 10px 0;
   font-size: 0.9em;
 }
 
-.empty-state-inner {
+.db-empty-state-inner {
   color: var(--theme-text-secondary);
   text-align: center;
   padding: 8px;
   font-size: 0.8em;
 }
 
-.empty-state-inner p {
+.db-empty-state-inner p {
   margin: 0 0 6px 0;
 }
 
-.project-list {
+.db-project-list {
   flex-grow: 1;
   overflow-y: auto;
   padding: 4px;
 }
 
-.project-item {
+.db-project-item {
   margin-bottom: 2px;
 }
 
-.project-header {
+.db-project-header {
   display: flex;
   align-items: center;
   padding: 6px 8px;
@@ -417,21 +428,21 @@ const handleNewGraph = () => {
   color: var(--theme-text-primary);
 }
 
-.project-header:hover {
+.db-project-header:hover {
   background-color: var(--theme-bg-hover);
 }
 
-.project-header.active {
+.db-project-header.db-active {
   background-color: var(--theme-primary);
 }
 
-.project-header.active .project-name,
-.project-header.active .icon-folder,
-.project-header.active .icon-chevron {
+.db-project-header.db-active .db-project-name,
+.db-project-header.db-active .db-icon-folder,
+.db-project-header.db-active .db-icon-chevron {
   color: var(--theme-text-inverse);
 }
 
-.icon-chevron {
+.db-icon-chevron {
   font-size: 0.6em;
   color: var(--theme-text-secondary);
   transition: transform 0.2s ease-in-out;
@@ -439,20 +450,20 @@ const handleNewGraph = () => {
   text-align: center;
 }
 
-.icon-chevron.open {
+.db-icon-chevron.db-open {
   transform: rotate(90deg);
 }
 
-.icon-folder {
+.db-icon-folder {
   color: var(--theme-primary);
   font-size: 0.8em;
 }
 
-.project-header.active .icon-folder {
+.db-project-header.db-active .db-icon-folder {
   color: var(--theme-text-inverse);
 }
 
-.project-name {
+.db-project-name {
   flex-grow: 1;
   font-weight: 500;
   color: var(--theme-text-primary);
@@ -462,13 +473,13 @@ const handleNewGraph = () => {
   font-size: 0.85em;
 }
 
-.project-actions {
+.db-project-actions {
   display: flex;
   align-items: center;
   margin-left: auto;
 }
 
-.action-btn {
+.db-context-trigger-btn {
   padding: 2px 4px;
   font-size: 0.85em;
   background-color: transparent;
@@ -484,27 +495,27 @@ const handleNewGraph = () => {
   cursor: pointer;
 }
 
-.project-header:hover .action-btn,
-.graph-item:hover .action-btn,
-.project-header.active .action-btn {
+.db-project-header:hover .db-context-trigger-btn,
+.db-graph-item:hover .db-context-trigger-btn,
+.db-project-header.db-active .db-context-trigger-btn {
   opacity: 1;
 }
 
-.project-header.active .action-btn {
+.db-project-header.db-active .db-context-trigger-btn {
   color: var(--theme-text-inverse);
 }
 
-.action-btn:hover {
+.db-context-trigger-btn:hover {
   background-color: var(--theme-border);
   color: var(--theme-text-primary);
 }
 
-.project-header.active .action-btn:hover {
+.db-project-header.db-active .db-context-trigger-btn:hover {
   background-color: rgba(255, 255, 255, 0.2);
   color: white;
 }
 
-.graph-list {
+.db-graph-list {
   padding-left: 12px;
   overflow: hidden;
   border-left: 1px solid var(--theme-border);
@@ -525,7 +536,7 @@ const handleNewGraph = () => {
   transform: translateY(-10px);
 }
 
-.graph-item {
+.db-graph-item {
   display: flex;
   align-items: center;
   padding: 4px 8px;
@@ -540,20 +551,20 @@ const handleNewGraph = () => {
   color: var(--theme-text-primary);
 }
 
-.graph-item:hover {
+.db-graph-item:hover {
   background-color: var(--theme-bg-hover);
 }
 
-.graph-item.active {
+.db-graph-item.db-active {
   background-color: var(--theme-primary);
 }
 
-.graph-item.active span,
-.graph-item.active .icon-file {
+.db-graph-item.db-active span,
+.db-graph-item.db-active .db-icon-file {
   color: var(--theme-text-inverse);
 }
 
-.graph-item span {
+.db-graph-item span {
   flex-grow: 1;
   font-size: 0.85em;
   white-space: nowrap;
@@ -562,36 +573,36 @@ const handleNewGraph = () => {
   color: var(--theme-text-primary);
 }
 
-.icon-file {
+.db-icon-file {
   font-size: 0.75em;
   color: var(--theme-text-secondary);
 }
 
-.graph-item.active .action-btn {
+.db-graph-item.db-active .db-context-trigger-btn {
   color: var(--theme-text-inverse);
 }
 
-.graph-item.active .action-btn:hover {
+.db-graph-item.db-active .db-context-trigger-btn:hover {
   background-color: rgba(255, 255, 255, 0.2);
   color: white;
 }
 
-.graph-item .action-btn {
+.db-graph-item .db-context-trigger-btn {
   margin-left: auto;
 }
 
-.context-menu {
+.db-context-menu {
   position: fixed;
   background-color: var(--theme-bg-panel);
   border: 1px solid var(--theme-border);
   box-shadow: var(--shadow-md);
   border-radius: 6px;
   padding: 4px 0;
-  z-index: 1100;
+  z-index: 100000; /* Increased z-index to appear above sidebars */
   min-width: 160px;
 }
 
-.context-menu-item {
+.db-context-menu-item {
   padding: 6px 12px;
   cursor: pointer;
   font-size: 0.85em;
@@ -604,23 +615,23 @@ const handleNewGraph = () => {
     color 0.2s ease;
 }
 
-.context-menu-item:hover {
+.db-context-menu-item:hover {
   background-color: var(--theme-primary);
   color: var(--theme-text-inverse);
 }
 
-.context-menu-item.danger:hover {
+.db-context-menu-item.db-danger:hover {
   background-color: var(--theme-danger);
   color: white;
 }
 
-.context-menu-item .fas {
+.db-context-menu-item .fas {
   width: 14px;
   text-align: center;
 }
 
-.rename-body,
-.confirm-body {
+.db-rename-body,
+.db-confirm-body {
   padding: 10px 0;
 }
 </style>

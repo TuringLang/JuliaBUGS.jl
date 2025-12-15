@@ -8,30 +8,25 @@ export interface GraphMeta {
   name: string
   createdAt: number
   lastModified: number
-  // Layout props
   x: number
   y: number
   width: number
   height: number
-  // Code Panel Props
   showCodePanel?: boolean
   codePanelX?: number
   codePanelY?: number
   codePanelWidth?: number
   codePanelHeight?: number
-  // Data Panel Props
   showDataPanel?: boolean
   dataPanelX?: number
   dataPanelY?: number
   dataPanelWidth?: number
   dataPanelHeight?: number
-  // JSON Panel Props
   showJsonPanel?: boolean
   jsonPanelX?: number
   jsonPanelY?: number
   jsonPanelWidth?: number
   jsonPanelHeight?: number
-  // Per-graph Grid Settings
   gridEnabled?: boolean
   gridSize?: number
   gridStyle?: GridStyle
@@ -47,11 +42,47 @@ export interface Project {
 
 export const useProjectStore = defineStore('project', () => {
   const projects = ref<Project[]>([])
-  const currentProjectId = ref<string | null>(
-    localStorage.getItem('doodlebugs-currentProjectId') || null
-  )
+  // Default to 'doodlebugs' to maintain backward compatibility with the Main App
+  const storagePrefix = ref('doodlebugs')
+
+  const storageKey = computed(() => `${storagePrefix.value}-projects`)
+  const currentProjectKey = computed(() => `${storagePrefix.value}-currentProjectId`)
+
+  const currentProjectId = ref<string | null>(localStorage.getItem(currentProjectKey.value) || null)
 
   const graphStore = useGraphStore()
+
+  // Called by Widget to isolate its data
+  const setPrefix = (prefix: string) => {
+    storagePrefix.value = prefix
+    // Reload state from the new prefix location
+    currentProjectId.value = localStorage.getItem(currentProjectKey.value) || null
+    loadProjects()
+  }
+
+  const exportState = () => {
+    return {
+      projects: JSON.parse(JSON.stringify(projects.value)),
+      currentProjectId: currentProjectId.value,
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const importState = (state: any) => {
+    if (!state) return
+
+    if (state.project) {
+      projects.value = state.project.projects || []
+      currentProjectId.value = state.project.currentProjectId || null
+    } else if (state.projects) {
+      projects.value = state.projects
+      currentProjectId.value = state.currentProjectId
+    }
+
+    if (!currentProjectId.value && projects.value.length > 0) {
+      currentProjectId.value = projects.value[0].id
+    }
+  }
 
   const createProject = (name: string) => {
     const newProject: Project = {
@@ -78,9 +109,9 @@ export const useProjectStore = defineStore('project', () => {
   const selectProject = (projectId: string | null) => {
     currentProjectId.value = projectId
     if (projectId) {
-      localStorage.setItem('doodlebugs-currentProjectId', projectId)
+      localStorage.setItem(currentProjectKey.value, projectId)
     } else {
-      localStorage.removeItem('doodlebugs-currentProjectId')
+      localStorage.removeItem(currentProjectKey.value)
     }
   }
 
@@ -231,11 +262,11 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   const saveProjects = () => {
-    localStorage.setItem('doodlebugs-projects', JSON.stringify(projects.value))
+    localStorage.setItem(storageKey.value, JSON.stringify(projects.value))
   }
 
   const loadProjects = () => {
-    const storedProjects = localStorage.getItem('doodlebugs-projects')
+    const storedProjects = localStorage.getItem(storageKey.value)
     if (storedProjects) {
       const loaded = JSON.parse(storedProjects) as Project[]
       loaded.forEach((p) => {
@@ -249,7 +280,10 @@ export const useProjectStore = defineStore('project', () => {
         }
       })
       projects.value = loaded
+    } else {
+      projects.value = []
     }
+
     if (currentProjectId.value && !projects.value.some((p) => p.id === currentProjectId.value)) {
       selectProject(null)
     }
@@ -259,6 +293,7 @@ export const useProjectStore = defineStore('project', () => {
     projects,
     currentProjectId,
     currentProject,
+    setPrefix,
     createProject,
     renameProject,
     selectProject,
@@ -270,5 +305,7 @@ export const useProjectStore = defineStore('project', () => {
     getGraphsForProject,
     loadProjects,
     saveProjects,
+    exportState,
+    importState,
   }
 })

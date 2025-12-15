@@ -69,6 +69,68 @@ For more information, questions, or to get involved, please contact [@shravanngo
 > [!TIP]
 > You can generate a standalone Julia script for local run directly from the web app using the "Scripts" option in the right sidebar where you can configure parameters, copy, or download it.
 
+## DoodleWidget: Embeddable Component
+
+DoodleBUGS can be embedded as a standalone web component in any HTML page or web app. This allows you to integrate the DoodleBUGS into documentation, tutorials, or custom applications.
+
+**Try DoodleWidget**: [`https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/DoodleWidget/`](https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/DoodleWidget/)
+
+### Usage
+
+Add the following to your HTML page (in the `<head>` section):
+
+```html
+<link rel="stylesheet" href="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.css" />
+<script
+  type="module"
+  src="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.js"
+></script>
+```
+
+Then use the custom element in your page body:
+
+```html
+<body>
+  <doodle-bugs width="100%" height="600px" model="rats"></doodle-bugs>
+</body>
+```
+
+### Props
+
+All props are optional:
+
+| Prop            | Type   | Default   | Description                                                                 |
+| --------------- | ------ | --------- | --------------------------------------------------------------------------- |
+| `width`         | string | `"100%"`  | Widget width                                                                |
+| `height`        | string | `"600px"` | Widget height                                                               |
+| `model`         | string | -         | Built-in model (`"rats"`, `"pumps"`, `"seeds"`) or URL to JSON file         |
+| `local-model`   | string | -         | Path to local JSON file                                                     |
+| `initial-state` | string | -         | JSON string to restore saved work (get from `state-update` event)           |
+| `storage-key`   | string | auto      | Custom key for localStorage (only needed for multiple widgets on same page) |
+
+### Events
+
+| Event          | Payload     | Description                                  |
+| -------------- | ----------- | -------------------------------------------- |
+| `state-update` | JSON string | Fires on any change. Contains complete state |
+| `code-update`  | string      | Fires when BUGS code changes                 |
+
+### Saving to Backend
+
+```javascript
+const widget = document.querySelector('doodle-bugs');
+
+// Listen for changes
+widget.addEventListener('state-update', (e) => {
+  const state = e.detail;
+  // Send 'state' to your server
+});
+
+// Load saved work
+const savedState = /* get from your server */;
+widget.setAttribute('initial-state', savedState);
+```
+
 ## Acknowledgements & GSoC 2025
 
 This project was initiated as part of the Google Summer of Code 2025 program.

@@ -25,6 +25,7 @@ const props = defineProps<{
   validationErrors: Map<string, ValidationError[]>
   showZoomControls?: boolean
   initialViewport?: { zoom: number; pan: { x: number; y: number } }
+  readOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -233,9 +234,20 @@ const updateGridStyle = () => {
 
     cyContainer.value.style.backgroundPosition = `${pan.x}px ${pan.y}px`
     cyContainer.value.style.backgroundSize = `${scaledSize}px ${scaledSize}px`
+
+    const isDarkMode = uiStore.isDarkMode
+
+    if (props.gridStyle === 'dots') {
+      const dotColor = isDarkMode ? 'rgba(255, 255, 255, 0.2)' : '#4b5563'
+      cyContainer.value.style.backgroundImage = `radial-gradient(circle, ${dotColor} 1.2px, transparent 1px)`
+    } else if (props.gridStyle === 'lines') {
+      const lineColor = isDarkMode ? 'rgba(255, 255, 255, 0.08)' : '#d1d5db'
+      cyContainer.value.style.backgroundImage = `linear-gradient(to right, ${lineColor} 1px, transparent 1px), linear-gradient(to bottom, ${lineColor} 1px, transparent 1px)`
+    }
   } else {
     cyContainer.value.style.backgroundPosition = ''
     cyContainer.value.style.backgroundSize = ''
+    cyContainer.value.style.backgroundImage = ''
   }
 }
 
@@ -265,6 +277,10 @@ onMounted(() => {
       disableGridSnapping()
     }
 
+    if (props.readOnly) {
+      cy.autoungrabify(true)
+    }
+
     const ur = getUndoRedoInstance(props.graphId)
     if (ur) {
       cy.on('afterUndo afterRedo afterDo', () => {
@@ -283,6 +299,10 @@ onMounted(() => {
     let rafId: number | null = null
     const emitViewport = () => {
       if (!cy) return
+      // Only emit viewport changes if the graph has been fully initialized and positioned.
+      // This prevents emitting default {0,0} pan values during race conditions on load.
+      if (!isGraphReady.value) return
+
       updateGridStyle()
       emit('viewport-changed', { zoom: cy.zoom(), pan: cy.pan() })
       rafId = null
@@ -294,6 +314,7 @@ onMounted(() => {
     })
 
     cy.container()?.addEventListener('cxt-remove', (event: Event) => {
+      if (props.readOnly) return
       const customEvent = event as CustomEvent
       if (customEvent.detail.elementId) {
         emit('element-remove', customEvent.detail.elementId)
@@ -305,6 +326,7 @@ onMounted(() => {
     })
 
     cy.on('free', 'node', (evt: EventObject) => {
+      if (props.readOnly) return
       const node = evt.target as NodeSingular
 
       if (node.id().startsWith('ghost_')) return
@@ -330,6 +352,7 @@ onMounted(() => {
     })
 
     cyContainer.value.addEventListener('dragover', (event) => {
+      if (props.readOnly) return
       event.preventDefault()
       if (event.dataTransfer) {
         event.dataTransfer.dropEffect = 'copy'
@@ -338,6 +361,7 @@ onMounted(() => {
 
     cyContainer.value.addEventListener('drop', (event) => {
       event.preventDefault()
+      if (props.readOnly) return
 
       if (event.dataTransfer) {
         const droppedItemType = event.dataTransfer.getData('text/plain') as PaletteItemType
@@ -362,11 +386,13 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(() => {
       if (cy) {
         cy.resize()
-        if (cy.width() > 0 && cy.height() > 0) {
+        const containerWidth = cyContainer.value?.clientWidth || 0
+        const containerHeight = cyContainer.value?.clientHeight || 0
+
+        if (containerWidth > 0 && containerHeight > 0) {
           if (!isGraphReady.value) {
             isGraphReady.value = true
 
-            // Populate graph and set initial viewport
             syncGraphWithProps(props.elements, props.validationErrors)
 
             if (props.initialViewport) {
@@ -384,7 +410,6 @@ onMounted(() => {
 
             updateGridStyle()
 
-            // Delay visibility slightly to ensure the canvas has painted the new state
             requestAnimationFrame(() => {
               isGraphVisible.value = true
             })
@@ -407,6 +432,16 @@ onUnmounted(() => {
     destroyCytoscape(props.graphId)
   }
 })
+
+watch(
+  () => props.readOnly,
+  (newVal) => {
+    if (cy) {
+      cy.autoungrabify(!!newVal)
+    }
+  },
+  { immediate: true }
+)
 
 watch(
   () => props.isGridEnabled,
@@ -436,6 +471,26 @@ watch(
 )
 
 watch(
+  () => props.gridStyle,
+  () => {
+    if (props.isGridEnabled) {
+      updateGridStyle()
+    }
+  }
+)
+
+// Watch for theme changes to update grid color
+watch(
+  () => uiStore.isDarkMode,
+  () => {
+    // Wait for DOM update of class
+    requestAnimationFrame(() => {
+      updateGridStyle()
+    })
+  }
+)
+
+watch(
   [() => props.elements, () => props.validationErrors],
   ([newElements, newErrors]) => {
     // Only sync if graph is ready (container sized and initialized)
@@ -461,74 +516,88 @@ watch(
 <template>
   <div
     ref="cyContainer"
-    class="cytoscape-container"
+    class="db-cytoscape-container"
     :class="{
-      'grid-background': isGridEnabled && gridSize > 0,
-      'grid-lines': gridStyle === 'lines' && isGridEnabled && gridSize > 0,
-      'grid-dots': gridStyle === 'dots' && isGridEnabled && gridSize > 0,
-      'mode-add-node': currentMode === 'add-node',
-      'mode-add-edge': currentMode === 'add-edge',
-      'mode-select': currentMode === 'select',
-      'graph-ready': isGraphVisible,
+      'db-grid-background': isGridEnabled && gridSize > 0,
+      'db-grid-lines': gridStyle === 'lines' && isGridEnabled && gridSize > 0,
+      'db-grid-dots': gridStyle === 'dots' && isGridEnabled && gridSize > 0,
+      'db-mode-add-node': currentMode === 'add-node' && !readOnly,
+      'db-mode-add-edge': currentMode === 'add-edge' && !readOnly,
+      'db-mode-select': currentMode === 'select',
+      'db-graph-ready': isGraphVisible,
     }"
     :style="{
+      position: 'relative',
+      width: '100%',
+      height: '100%',
+      minHeight: '200px',
+      backgroundColor: 'var(--theme-bg-canvas)',
+      opacity: isGraphVisible ? 1 : 0,
       transition: isGraphVisible ? 'opacity 0.3s ease-in-out' : 'none',
     }"
   ></div>
 </template>
 
 <style scoped>
-.cytoscape-container {
+.db-cytoscape-container {
   flex-grow: 1;
   background-color: var(--theme-bg-canvas);
-  position: relative;
+  position: relative !important;
   overflow: hidden;
   cursor: grab;
-  opacity: 0;
   background-position: 0 0;
   background-repeat: repeat;
   width: 100%;
   height: 100%;
+  min-height: 200px;
 }
 
-.cytoscape-container.graph-ready {
-  opacity: 1;
-}
-
-.cytoscape-container.mode-add-node {
+.db-cytoscape-container.db-mode-add-node {
   cursor: crosshair;
 }
 
-.cytoscape-container.mode-add-edge {
+.db-cytoscape-container.db-mode-add-edge {
   cursor: alias;
 }
 
-.cdnd-grabbed-node {
+/* NOTE: .cdnd- classes are usually injected by extensions or used globally.
+  We are keeping them as-is.
+*/
+:deep(.cdnd-grabbed-node) {
   background-color: #ffd700 !important;
   opacity: 0.7;
   border: 2px dashed #ffa500;
 }
 
-.cdnd-drop-target {
+:deep(.cdnd-drop-target) {
   border: 3px solid #32cd32 !important;
   background-color: rgba(50, 205, 50, 0.1) !important;
 }
 
-.cdnd-drag-out {
+:deep(.cdnd-drag-out) {
   border: 2px dashed #ff0000 !important;
   background-color: rgba(255, 0, 0, 0.1) !important;
 }
 
-.cytoscape-container.grid-background.grid-dots {
+/* Grid Dots Styling - Uses variables for automatic Dark Mode support */
+.db-cytoscape-container.db-grid-background.db-grid-dots {
   background-image: radial-gradient(
     circle,
     var(--theme-text-secondary) 1.2px,
     transparent 1px
   ) !important;
-  opacity: 0.8;
 }
 
-html.dark-mode .cytoscape-container.grid-background.grid-dots {
+/* Grid Lines Styling - Uses variables for automatic Dark Mode support */
+.db-cytoscape-container.db-grid-background.db-grid-lines {
+  background-image:
+    linear-gradient(to right, var(--theme-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--theme-grid-line) 1px, transparent 1px) !important;
+}
+
+/* Dark mode overrides using :global to catch class on widget root or body (for teleported content) */
+:global(.db-dark-mode) .db-cytoscape-container.db-grid-background.db-grid-dots,
+:global(body.db-dark-mode) .db-cytoscape-container.db-grid-background.db-grid-dots {
   background-image: radial-gradient(
     circle,
     rgba(255, 255, 255, 0.2) 1.2px,
@@ -536,9 +605,10 @@ html.dark-mode .cytoscape-container.grid-background.grid-dots {
   ) !important;
 }
 
-.cytoscape-container.grid-background.grid-lines {
+:global(.db-dark-mode) .db-cytoscape-container.db-grid-background.db-grid-lines,
+:global(body.db-dark-mode) .db-cytoscape-container.db-grid-background.db-grid-lines {
   background-image:
-    linear-gradient(to right, var(--theme-grid-line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--theme-grid-line) 1px, transparent 1px) !important;
+    linear-gradient(to right, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 1px, transparent 1px) !important;
 }
 </style>

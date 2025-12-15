@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, reactive } from 'vue'
 import { storeToRefs } from 'pinia'
-import type { LayoutOptions, Core } from 'cytoscape'
+import { useToast } from 'primevue/usetoast'
+import Tooltip from 'primevue/tooltip'
+import type { Core } from 'cytoscape'
 import GraphEditor from '../canvas/GraphEditor.vue'
 import FloatingBottomToolbar from '../canvas/FloatingBottomToolbar.vue'
+import FloatingPanel from '../common/FloatingPanel.vue'
 import BaseModal from '../common/BaseModal.vue'
 import BaseInput from '../ui/BaseInput.vue'
 import BaseButton from '../ui/BaseButton.vue'
@@ -27,11 +30,16 @@ import { useDataStore } from '../../stores/dataStore'
 import { useScriptStore } from '../../stores/scriptStore'
 import { useGraphInstance } from '../../composables/useGraphInstance'
 import { useGraphValidator } from '../../composables/useGraphValidator'
+import { useGraphLayout } from '../../composables/useGraphLayout'
+import { usePersistence } from '../../composables/usePersistence'
 import {
   useBugsCodeGenerator,
   generateStandaloneScript,
 } from '../../composables/useBugsCodeGenerator'
-import type { GraphElement, NodeType, ExampleModel, GraphNode } from '../../types'
+import { useShareExport } from '../../composables/useShareExport'
+import { useImportExport } from '../../composables/useImportExport'
+import type { GraphElement, NodeType, UnifiedModelData } from '../../types'
+import { examples, isUrl } from '../../config/examples'
 
 interface ExportOptions {
   bg: string
@@ -42,11 +50,17 @@ interface ExportOptions {
   maxHeight?: number
 }
 
+const props = defineProps<{
+  defaultModel?: string
+}>()
+
 const projectStore = useProjectStore()
 const graphStore = useGraphStore()
 const uiStore = useUiStore()
 const dataStore = useDataStore()
 const scriptStore = useScriptStore()
+const toast = useToast()
+const vTooltip = Tooltip
 
 const { parsedGraphData } = storeToRefs(dataStore)
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements()
@@ -54,6 +68,11 @@ const { generatedCode } = useBugsCodeGenerator(elements)
 const { getCyInstance, getUndoRedoInstance } = useGraphInstance()
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData)
 const { samplerSettings, standaloneScript } = storeToRefs(scriptStore)
+const { smartFit, applyLayoutWithFit } = useGraphLayout()
+const { loadLastGraphId, getStoredGraphElements, getStoredDataContent } = usePersistence()
+const { shareUrl, decodeAndDecompress, minifyGraph, expandGraph, generateShareLink } =
+  useShareExport()
+const { importedGraphData, processGraphFile, clearImportedData } = useImportExport()
 const {
   isLeftSidebarOpen,
   isRightSidebarOpen,
@@ -84,18 +103,28 @@ const showScriptSettingsModal = ref(false)
 const showExportModal = ref(false)
 const showStyleModal = ref(false)
 const showShareModal = ref(false)
-const shareUrl = ref('')
 const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null)
 
 // Data Import Ref
 const dataImportInput = ref<HTMLInputElement | null>(null)
 const graphImportInput = ref<HTMLInputElement | null>(null)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const importedGraphData = ref<any>(null)
 const isDragOver = ref(false)
 
-// Local viewport state for smooth UI updates
-const viewportState = ref({ zoom: 1, pan: { x: 0, y: 0 } })
+// Local viewport state for smooth UI updates.
+// Initialized to null to prevent saving default (0,0) values during rapid reloads.
+const viewportState = ref<{ zoom: number; pan: { x: number; y: number } } | null>(null)
+
+// Panel positions and sizes
+const codePanelPos = reactive({
+  x: typeof window !== 'undefined' ? window.innerWidth - 420 : 0,
+  y: typeof window !== 'undefined' ? window.innerHeight - 380 : 0,
+})
+const codePanelSize = reactive({ width: 400, height: 300 })
+const dataPanelPos = reactive({
+  x: 20,
+  y: typeof window !== 'undefined' ? window.innerHeight - 380 : 0,
+})
+const dataPanelSize = reactive({ width: 400, height: 300 })
 
 // Computed property for validation status
 const isModelValid = computed(() => validationErrors.value.size === 0)
@@ -107,7 +136,7 @@ const pinnedGraphTitle = computed(() => {
   return graph ? graph.name : null
 })
 
-// Code Panel Visibility (Per-Graph State)
+// Code Panel Visibility
 const isCodePanelOpen = computed(() => {
   if (!projectStore.currentProject || !graphStore.currentGraphId) return false
   const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
@@ -124,7 +153,7 @@ const toggleCodePanel = () => {
   }
 }
 
-// Data Panel Visibility (Per-Graph State)
+// Data Panel Visibility
 const isDataPanelOpen = computed(() => {
   if (!projectStore.currentProject || !graphStore.currentGraphId) return false
   const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
@@ -150,8 +179,8 @@ watch(
   isDarkMode,
   (val) => {
     const element = document.querySelector('html')
-    if (val) element?.classList.add('dark-mode')
-    else element?.classList.remove('dark-mode')
+    if (val) element?.classList.add('db-dark-mode')
+    else element?.classList.remove('db-dark-mode')
   },
   { immediate: true }
 )
@@ -164,7 +193,9 @@ const persistViewport = () => {
     clearTimeout(saveViewportTimeout)
     saveViewportTimeout = null
   }
-  if (graphStore.currentGraphId) {
+  // Only save if we have a valid graph AND we have received at least one valid viewport update.
+  // This prevents overwriting saved state with default {0,0} during fast reloads.
+  if (graphStore.currentGraphId && viewportState.value) {
     graphStore.updateGraphViewport(
       graphStore.currentGraphId,
       viewportState.value.zoom,
@@ -173,235 +204,9 @@ const persistViewport = () => {
   }
 }
 
-const smartFit = (cy: Core, animate: boolean = true) => {
-  const eles = cy.elements()
-  if (eles.length === 0) return
-
-  const padding = 50
-  const w = cy.width()
-  const h = cy.height()
-  const bb = eles.boundingBox()
-
-  if (bb.w === 0 || bb.h === 0) return
-
-  const zoomX = (w - 2 * padding) / bb.w
-  const zoomY = (h - 2 * padding) / bb.h
-  let targetZoom = Math.min(zoomX, zoomY)
-  targetZoom = Math.min(targetZoom, 0.8)
-
-  const targetPan = {
-    x: (w - targetZoom * (bb.x1 + bb.x2)) / 2,
-    y: (h - targetZoom * (bb.y1 + bb.y2)) / 2,
-  }
-
-  if (animate) {
-    cy.animate({
-      zoom: targetZoom,
-      pan: targetPan,
-      duration: 500,
-      easing: 'ease-in-out-cubic',
-    })
-  } else {
-    cy.viewport({ zoom: targetZoom, pan: targetPan })
-  }
-}
-
-// Minification Helpers
-const keyMap: Record<string, string> = {
-  id: 'i',
-  name: 'n',
-  type: 't',
-  nodeType: 'nt',
-  position: 'p',
-  parent: 'pa',
-  distribution: 'di',
-  equation: 'eq',
-  observed: 'ob',
-  indices: 'id',
-  loopVariable: 'lv',
-  loopRange: 'lr',
-  param1: 'p1',
-  param2: 'p2',
-  param3: 'p3',
-  source: 's',
-  target: 'tg',
-  x: 'x',
-  y: 'y',
-}
-
-const nodeTypeMap: Record<string, number> = {
-  stochastic: 1,
-  deterministic: 2,
-  constant: 3,
-  observed: 4,
-  plate: 5,
-}
-const revNodeTypeMap = {
-  1: 'stochastic',
-  2: 'deterministic',
-  3: 'constant',
-  4: 'observed',
-  5: 'plate',
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const minifyGraph = (elements: GraphElement[]): any[] => {
-  return elements.map((el) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const min: any = {}
-    if (el.type === 'node') {
-      const node = el as GraphNode
-      min[keyMap.id] = node.id.replace('node_', '')
-      min[keyMap.name] = node.name
-      min[keyMap.type] = 0
-      min[keyMap.nodeType] = nodeTypeMap[node.nodeType]
-      min[keyMap.position] = [Math.round(node.position.x), Math.round(node.position.y)]
-      if (node.parent) min[keyMap.parent] = node.parent.replace('node_', '').replace('plate_', '')
-
-      if (node.distribution) min[keyMap.distribution] = node.distribution
-      if (node.equation) min[keyMap.equation] = node.equation
-      if (node.observed) min[keyMap.observed] = 1
-      if (node.indices) min[keyMap.indices] = node.indices
-      if (node.loopVariable) min[keyMap.loopVariable] = node.loopVariable
-      if (node.loopRange) min[keyMap.loopRange] = node.loopRange
-      if (node.param1) min[keyMap.param1] = node.param1
-      if (node.param2) min[keyMap.param2] = node.param2
-      if (node.param3) min[keyMap.param3] = node.param3
-    } else {
-      const edge = el
-      min[keyMap.id] = edge.id.replace('edge_', '')
-      min[keyMap.type] = 1
-      min[keyMap.source] = edge.source.replace('node_', '').replace('plate_', '')
-      min[keyMap.target] = edge.target.replace('node_', '').replace('plate_', '')
-    }
-    return min
-  })
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const expandGraph = (minElements: any[]): GraphElement[] => {
-  return minElements.map((min) => {
-    if (min[keyMap.type] === 0) {
-      // Node
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const node: any = {
-        id:
-          min[keyMap.id].startsWith('node_') || min[keyMap.id].startsWith('plate_')
-            ? min[keyMap.id]
-            : (min[keyMap.nodeType] === 5 ? 'plate_' : 'node_') + min[keyMap.id],
-        name: min[keyMap.name],
-        type: 'node',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        nodeType: (revNodeTypeMap as any)[min[keyMap.nodeType]],
-        position: {
-          x: min[keyMap.position] && !isNaN(min[keyMap.position][0]) ? min[keyMap.position][0] : 0,
-          y: min[keyMap.position] && !isNaN(min[keyMap.position][1]) ? min[keyMap.position][1] : 0,
-        },
-      }
-      if (min[keyMap.parent]) {
-        const pid = min[keyMap.parent]
-        node.parent = pid.startsWith('plate_') || pid.startsWith('node_') ? pid : 'plate_' + pid
-      }
-      if (min[keyMap.distribution]) node.distribution = min[keyMap.distribution]
-      if (min[keyMap.equation]) node.equation = min[keyMap.equation]
-      if (min[keyMap.observed]) node.observed = true
-      if (min[keyMap.indices]) node.indices = min[keyMap.indices]
-      if (min[keyMap.loopVariable]) node.loopVariable = min[keyMap.loopVariable]
-      if (min[keyMap.loopRange]) node.loopRange = min[keyMap.loopRange]
-      if (min[keyMap.param1]) node.param1 = min[keyMap.param1]
-      if (min[keyMap.param2]) node.param2 = min[keyMap.param2]
-      if (min[keyMap.param3]) node.param3 = min[keyMap.param3]
-      return node as GraphNode
-    } else {
-      // Edge
-      return {
-        id: min[keyMap.id].startsWith('edge_') ? min[keyMap.id] : 'edge_' + min[keyMap.id],
-        type: 'edge',
-        source:
-          min[keyMap.source].startsWith('node_') || min[keyMap.source].startsWith('plate_')
-            ? min[keyMap.source]
-            : 'node_' + min[keyMap.source],
-        target:
-          min[keyMap.target].startsWith('node_') || min[keyMap.target].startsWith('plate_')
-            ? min[keyMap.target]
-            : 'node_' + min[keyMap.target],
-      }
-    }
-  })
-}
-
-// Compression Helpers
-const compressAndEncode = async (jsonStr: string): Promise<string> => {
-  try {
-    if (!window.CompressionStream) throw new Error('CompressionStream not supported')
-    // Create a stream from the string
-    const stream = new Blob([jsonStr]).stream()
-    // Pipe through gzip compressor
-    const compressedStream = stream.pipeThrough(new CompressionStream('gzip'))
-    // Read response
-    const response = new Response(compressedStream)
-    const blob = await response.blob()
-    const buffer = await blob.arrayBuffer()
-
-    // Convert to binary string safely
-    const bytes = new Uint8Array(buffer)
-    let binaryStr = ''
-    const len = bytes.byteLength
-    for (let i = 0; i < len; i++) {
-      binaryStr += String.fromCharCode(bytes[i])
-    }
-
-    // Return with prefix to identify compressed data
-    return 'gz_' + btoa(binaryStr)
-  } catch (e) {
-    console.warn('Compression failed or not supported, falling back to legacy encoding', e)
-    // Fallback to old method if compression API is missing or fails
-    return btoa(unescape(encodeURIComponent(jsonStr)))
-  }
-}
-
-const decodeAndDecompress = async (input: string): Promise<string> => {
-  // Check for compressed prefix
-  if (input.startsWith('gz_')) {
-    try {
-      if (!window.DecompressionStream) throw new Error('DecompressionStream not supported')
-      const base64 = input.slice(3)
-      const binaryStr = atob(base64)
-      const bytes = new Uint8Array(binaryStr.length)
-      for (let i = 0; i < binaryStr.length; i++) {
-        bytes[i] = binaryStr.charCodeAt(i)
-      }
-
-      const stream = new Blob([bytes]).stream()
-      const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'))
-      const response = new Response(decompressedStream)
-      return await response.text()
-    } catch (e) {
-      console.error('Decompression failed', e)
-      throw e
-    }
-  } else {
-    // Legacy decoding
-    return decodeURIComponent(escape(atob(input)))
-  }
-}
-
-const generateShareLink = async (payload: object) => {
-  try {
-    const jsonStr = JSON.stringify(payload)
-    const base64 = await compressAndEncode(jsonStr)
-
-    const baseUrl = window.location.origin + window.location.pathname
-    shareUrl.value = `${baseUrl}?share=${encodeURIComponent(base64)}`
-  } catch (e) {
-    console.error('Failed to generate share link:', e)
-    alert('Failed to generate share link. Model might be too large.')
-  }
-}
-
 const handleShare = () => {
   if (!graphStore.currentGraphId) return
-  shareUrl.value = '' // Reset
+  shareUrl.value = ''
   showShareModal.value = true
 }
 
@@ -426,27 +231,8 @@ const handleGenerateShareLink = async (options: {
       elements = graphStore.currentGraphElements
       dataContent = dataStore.dataContent
     } else {
-      const storedGraph = localStorage.getItem(`doodlebugs-graph-${graphId}`)
-      const storedData = localStorage.getItem(`doodlebugs-data-${graphId}`)
-
-      if (storedGraph) {
-        try {
-          elements = JSON.parse(storedGraph).elements
-        } catch {}
-      }
-      if (storedData) {
-        try {
-          const parsed = JSON.parse(storedData)
-          dataContent =
-            parsed.content ||
-            (parsed.jsonData
-              ? JSON.stringify({
-                  data: JSON.parse(parsed.jsonData || '{}'),
-                  inits: JSON.parse(parsed.jsonInits || '{}'),
-                })
-              : '{}')
-        } catch {}
-      }
+      elements = getStoredGraphElements(graphId) as GraphElement[]
+      dataContent = getStoredDataContent(graphId)
     }
 
     // Minify Data
@@ -465,7 +251,6 @@ const handleGenerateShareLink = async (options: {
     if (!targetId) return
 
     const { name, elements, dataContent } = getGraphDataForShare(targetId)
-    // Use v2 format for single graph for backward compatibility / simplicity
     payload = {
       v: 2,
       n: name,
@@ -499,10 +284,6 @@ const handleGenerateShareLink = async (options: {
 }
 
 // Data Import Logic
-const triggerDataImport = () => {
-  dataImportInput.value?.click()
-}
-
 const handleDataImport = (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
@@ -511,13 +292,11 @@ const handleDataImport = (event: Event) => {
   reader.onload = (e) => {
     const content = e.target?.result as string
     try {
-      // Validate JSON
       JSON.parse(content)
       dataStore.dataContent = content
     } catch {
       alert('Invalid JSON file format.')
     }
-    // Reset file input
     if (dataImportInput.value) dataImportInput.value.value = ''
   }
   reader.readAsText(file)
@@ -527,32 +306,19 @@ const triggerGraphImport = () => {
   graphImportInput.value?.click()
 }
 
-const processGraphFile = (file: File) => {
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    try {
-      const content = e.target?.result as string
-      const data = JSON.parse(content)
-      // Basic validation
-      if (data.elements && Array.isArray(data.elements)) {
-        importedGraphData.value = data
-        if (!newGraphName.value && data.name) {
-          newGraphName.value = data.name + ' (Imported)'
-        }
-      } else {
-        alert('Invalid graph JSON file.')
-      }
-    } catch (err) {
-      console.error(err)
-      alert('Failed to parse file.')
-    }
-  }
-  reader.readAsText(file)
-}
-
 const handleGraphImportFile = (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0]
-  if (file) processGraphFile(file)
+  if (file) {
+    processGraphFile(file)
+      .then((data) => {
+        if (data && !newGraphName.value && data.name) {
+          newGraphName.value = data.name + ' (Imported)'
+        }
+      })
+      .catch((error) => {
+        alert(error.message || 'Failed to process graph file.')
+      })
+  }
 }
 
 const handleDrop = (event: DragEvent) => {
@@ -560,9 +326,18 @@ const handleDrop = (event: DragEvent) => {
   const file = event.dataTransfer?.files?.[0]
   if (file) {
     processGraphFile(file)
+      .then((data) => {
+        if (data && !newGraphName.value && data.name) {
+          newGraphName.value = data.name + ' (Imported)'
+        }
+      })
+      .catch((error) => {
+        alert(error.message || 'Failed to process graph file.')
+      })
   }
 }
 
+// Shared Model Loader
 const handleLoadShared = async () => {
   const params = new URLSearchParams(window.location.search)
   const shareParam = params.get('share')
@@ -613,10 +388,8 @@ const handleLoadShared = async () => {
             }
           })
 
-          // Force save the project list to ensure persistence across reloads
           projectStore.saveProjects()
 
-          // Select first graph
           if (projectStore.currentProject?.graphs.length) {
             graphStore.selectGraph(projectStore.currentProject.graphs[0].id)
           }
@@ -629,7 +402,6 @@ const handleLoadShared = async () => {
           const newGraph = projectStore.addGraphToProject(projectStore.currentProjectId, payload.n)
           if (newGraph) {
             let elements = payload.e
-            // Check if version 2 (minified)
             if (payload.v === 2) {
               elements = expandGraph(payload.e)
             }
@@ -651,11 +423,9 @@ const handleLoadShared = async () => {
         }
       }
 
-      // Clean URL without reloading
       const newUrl = window.location.origin + window.location.pathname
       window.history.replaceState({}, document.title, newUrl)
 
-      // Force fit graph to viewport to ensure visibility
       setTimeout(() => {
         handleFit()
       }, 500)
@@ -666,37 +436,228 @@ const handleLoadShared = async () => {
   }
 }
 
+// Generic Loader for both bundled and remote models
+const loadModelData = async (data: UnifiedModelData | Record<string, unknown>, name: string) => {
+  if (!projectStore.currentProjectId) return
+
+  const newGraphMeta = projectStore.addGraphToProject(
+    projectStore.currentProjectId,
+    (data as UnifiedModelData).name || name
+  )
+  if (!newGraphMeta) return
+
+  // Handle Elements
+  if ((data as UnifiedModelData).elements) {
+    graphStore.updateGraphElements(
+      newGraphMeta.id,
+      (data as UnifiedModelData).elements as GraphElement[]
+    )
+  } else if ((data as UnifiedModelData).graphJSON) {
+    // Legacy support
+    graphStore.updateGraphElements(
+      newGraphMeta.id,
+      (data as UnifiedModelData).graphJSON as GraphElement[]
+    )
+  }
+
+  // Handle Data/Inits
+  if ((data as UnifiedModelData).dataContent) {
+    dataStore.updateGraphData(newGraphMeta.id, {
+      content: (data as UnifiedModelData).dataContent || '',
+    })
+  } else if ((data as UnifiedModelData).data || (data as UnifiedModelData).inits) {
+    // Legacy separate fields
+    const content = JSON.stringify(
+      {
+        data: (data as UnifiedModelData).data || {},
+        inits: (data as UnifiedModelData).inits || {},
+      },
+      null,
+      2
+    )
+    dataStore.updateGraphData(newGraphMeta.id, { content })
+  }
+
+  // Handle Layout
+  graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
+  if ((data as UnifiedModelData).layout) {
+    projectStore.updateGraphLayout(
+      projectStore.currentProjectId,
+      newGraphMeta.id,
+      (data as UnifiedModelData).layout
+    )
+  }
+
+  graphStore.selectGraph(newGraphMeta.id)
+}
+
+// Main App Loading Logic: Local -> Github -> Turing
+const handleLoadExample = async (exampleIdOrUrl: string) => {
+  if (!projectStore.currentProjectId) return
+
+  try {
+    let modelData = null
+    let modelName = 'Imported Model'
+    let sourceDescription = ''
+
+    const config = examples.find((e) => e.id === exampleIdOrUrl)
+    const turingUrl = `https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/examples/${exampleIdOrUrl}/model.json`
+
+    if (config) {
+      modelName = config.name
+
+      try {
+        toast.add({
+          severity: 'info',
+          summary: 'Loading...',
+          detail: `Loading ${modelName} from Local Path...`,
+          life: 2000,
+        })
+        const localUrl = `${import.meta.env.BASE_URL}examples/${config.id}/model.json`
+        const response = await fetch(localUrl)
+        if (response.ok) {
+          modelData = await response.json()
+          sourceDescription = `Local Path`
+        } else {
+          throw new Error('Local fetch failed')
+        }
+      } catch {
+        if (config.url) {
+          const isGithub = config.url.includes('github')
+          const sourceLabel = isGithub ? 'GitHub Source' : 'Remote Source'
+
+          toast.add({
+            severity: 'warn',
+            summary: 'Local Not Found',
+            detail: `Trying ${sourceLabel}...`,
+            life: 2000,
+          })
+
+          try {
+            const response = await fetch(config.url)
+            if (response.ok) {
+              modelData = await response.json()
+              sourceDescription = sourceLabel
+            } else {
+              throw new Error(`${sourceLabel} fetch failed`)
+            }
+          } catch {
+            toast.add({
+              severity: 'warn',
+              summary: `${sourceLabel} Failed`,
+              detail: 'Trying Turing Repository...',
+              life: 2000,
+            })
+          }
+        } else {
+          toast.add({
+            severity: 'warn',
+            summary: 'No Remote Config',
+            detail: 'Trying Turing Repository...',
+            life: 2000,
+          })
+        }
+      }
+    } else if (isUrl(exampleIdOrUrl)) {
+      // Direct URL case
+      toast.add({
+        severity: 'info',
+        summary: 'Loading...',
+        detail: `Model is loading from External Link`,
+        life: 2000,
+      })
+      const response = await fetch(exampleIdOrUrl)
+      if (response.ok) {
+        modelData = await response.json()
+        modelName = modelData.name || 'Remote Model'
+        sourceDescription = `External Link`
+      }
+    }
+
+    if (!modelData && !isUrl(exampleIdOrUrl)) {
+      const name = config ? config.name : exampleIdOrUrl
+
+      if (!config) {
+        toast.add({
+          severity: 'info',
+          summary: 'Loading...',
+          detail: `Loading ${name} from Turing Repository...`,
+          life: 2000,
+        })
+      }
+
+      try {
+        const response = await fetch(turingUrl)
+        if (response.ok) {
+          modelData = await response.json()
+          modelName = modelData.name || name
+          sourceDescription = `Turing Repository`
+        } else {
+          throw new Error('All fetch attempts failed')
+        }
+      } catch {
+        throw new Error(`Failed to load model from any source (Local/GitHub/Turing).`)
+      }
+    }
+
+    if (modelData) {
+      await loadModelData(modelData, modelName)
+      toast.add({
+        severity: 'success',
+        summary: 'Loaded',
+        detail: `Model loaded from ${sourceDescription}`,
+        life: 3000,
+      })
+    }
+  } catch (error) {
+    console.error('Failed to load example model:', error)
+    toast.add({
+      severity: 'error',
+      summary: 'Load Failed',
+      detail: 'Failed to load model. Check console for details.',
+      life: 5000,
+    })
+  }
+}
+
 onMounted(async () => {
   projectStore.loadProjects()
 
-  // Check for shared model
   if (window.location.search.includes('share=')) {
     await handleLoadShared()
   }
 
-  // Default init if no shared model loaded or no projects exist
   if (projectStore.projects.length === 0) {
     projectStore.createProject('Default Project')
-    if (projectStore.currentProjectId) await handleLoadExample('rats')
+    // Load default model if provided in props
+    if (props.defaultModel) {
+      await handleLoadExample(props.defaultModel)
+    } else if (projectStore.currentProjectId) {
+      // Fallback default
+      await handleLoadExample('rats')
+    }
   } else {
-    // If not a fresh shared load, restore last session
+    // If returning user, only load default if explicitly requested via prop and no session active
+    // But usually we prefer restoring session.
+    // If props.defaultModel is present, maybe we should prompt or force load?
+    // For now, let's prioritize the session unless empty.
     if (!window.location.search.includes('share=')) {
-      const lastGraphId = localStorage.getItem('doodlebugs-currentGraphId')
+      const lastGraphId = loadLastGraphId()
       if (lastGraphId && projectStore.currentProject?.graphs.some((g) => g.id === lastGraphId)) {
         graphStore.selectGraph(lastGraphId)
       } else if (projectStore.currentProject?.graphs.length) {
         graphStore.selectGraph(projectStore.currentProject.graphs[0].id)
+      } else if (props.defaultModel) {
+        await handleLoadExample(props.defaultModel)
       }
     }
   }
   validateGraph()
 
-  // Mobile: hide zoom controls by default on small screens
   if (window.innerWidth < 768) {
     showZoomControls.value = false
   }
 
-  // Force save on page reload/close
   window.addEventListener('beforeunload', persistViewport)
 })
 
@@ -732,19 +693,12 @@ watch(
       if (graph) {
         const needsInit = graph.codePanelX === undefined || graph.codePanelY === undefined
         if (needsInit) {
-          // Simple default dimensions
           const panelW = 400
           const panelH = 300
-
-          // Position on the RIGHT side relative to the graph view
           const viewportW = window.innerWidth
-          // Sidebar is ~320px + 16px margin = 336px.
           const rightSidebarOffset = isRightSidebarOpen.value ? 340 : 20
-
           let targetScreenX = viewportW - rightSidebarOffset - panelW - 10
-          if (targetScreenX < 20) targetScreenX = 20 // Safety check
-
-          // Top offset
+          if (targetScreenX < 20) targetScreenX = 20
           const targetScreenY = 90
 
           projectStore.updateGraphLayout(projectStore.currentProject.id, graphId, {
@@ -770,17 +724,10 @@ watch(
       if (graph) {
         const needsInit = graph.dataPanelX === undefined || graph.dataPanelY === undefined
         if (needsInit) {
-          // Simple default dimensions
           const panelW = 400
           const panelH = 300
-
-          // Position on the LEFT side relative to the graph view
-          // Sidebar is ~300px + 16px margin.
           const leftSidebarOffset = isLeftSidebarOpen.value ? 320 : 20
-
           const targetScreenX = leftSidebarOffset + 20
-
-          // Top offset
           const targetScreenY = 90
 
           projectStore.updateGraphLayout(projectStore.currentProject.id, graphId, {
@@ -803,10 +750,7 @@ const handleLayoutUpdated = (layoutName: string) => {
 }
 
 const handleViewportChanged = (v: { zoom: number; pan: { x: number; y: number } }) => {
-  // Update local state immediately for smooth UI
   viewportState.value = v
-
-  // Debounce persistence
   if (saveViewportTimeout) clearTimeout(saveViewportTimeout)
   saveViewportTimeout = setTimeout(persistViewport, 200)
 }
@@ -814,55 +758,7 @@ const handleViewportChanged = (v: { zoom: number; pan: { x: number; y: number } 
 const handleGraphLayout = (layoutName: string) => {
   const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null
   if (!cy) return
-
-  const layoutOptionsMap: Record<string, LayoutOptions> = {
-    dagre: {
-      name: 'dagre',
-      animate: true,
-      animationDuration: 500,
-      fit: false,
-      padding: 50,
-    } as unknown as LayoutOptions,
-    fcose: {
-      name: 'fcose',
-      animate: true,
-      animationDuration: 500,
-      fit: false,
-      padding: 50,
-      randomize: false,
-      quality: 'proof',
-    } as unknown as LayoutOptions,
-    cola: {
-      name: 'cola',
-      animate: true,
-      fit: false,
-      padding: 50,
-      refresh: 1,
-      avoidOverlap: true,
-      infinite: false,
-      centerGraph: true,
-      flow: { axis: 'y', minSeparation: 30 },
-      handleDisconnected: false,
-      randomize: false,
-    } as unknown as LayoutOptions,
-    klay: {
-      name: 'klay',
-      animate: true,
-      animationDuration: 500,
-      fit: false,
-      padding: 50,
-      klay: { direction: 'RIGHT', edgeRouting: 'SPLINES', nodePlacement: 'LINEAR_SEGMENTS' },
-    } as unknown as LayoutOptions,
-    preset: { name: 'preset', fit: false, padding: 50 } as unknown as LayoutOptions,
-  }
-
-  const options = layoutOptionsMap[layoutName] || layoutOptionsMap.preset
-
-  cy.one('layoutstop', () => {
-    smartFit(cy, true)
-  })
-
-  cy.layout(options).run()
+  applyLayoutWithFit(cy, layoutName)
   handleLayoutUpdated(layoutName)
 }
 
@@ -890,11 +786,9 @@ const handleSelectNodeFromModal = (nodeId: string) => {
     handleElementSelected(targetNode)
     const cy = getCyInstance(graphStore.currentGraphId!)
     if (cy) {
-      // Programmatically select node in Cytoscape for visual feedback
       cy.elements().removeClass('cy-selected')
       const cyNode = cy.getElementById(nodeId)
       cyNode.addClass('cy-selected')
-
       cy.animate({
         fit: { eles: cyNode, padding: 50 },
         duration: 500,
@@ -919,28 +813,19 @@ const createNewGraph = () => {
     const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId!, name)
 
     if (newGraphMeta && importedGraphData.value) {
-      // Populate with imported data
-      graphStore.updateGraphElements(newGraphMeta.id, importedGraphData.value.elements)
-
+      graphStore.updateGraphElements(
+        newGraphMeta.id,
+        importedGraphData.value.elements as GraphElement[]
+      )
       if (importedGraphData.value.dataContent) {
         dataStore.updateGraphData(newGraphMeta.id, { content: importedGraphData.value.dataContent })
       }
-
-      // Restore layout settings if available
-      if (importedGraphData.value.layout) {
-        projectStore.updateGraphLayout(
-          projectStore.currentProject.id,
-          newGraphMeta.id,
-          importedGraphData.value.layout
-        )
-      }
-
       graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
     }
 
     showNewGraphModal.value = false
     newGraphName.value = ''
-    importedGraphData.value = null
+    clearImportedData()
     if (graphImportInput.value) graphImportInput.value.value = ''
   }
 }
@@ -1073,11 +958,9 @@ const handleGenerateStandalone = () => {
   uiStore.isRightSidebarOpen = true
 }
 
-// Auto-update script if it exists or script panel is open
 watch(
   [generatedCode, parsedGraphData, samplerSettings],
   () => {
-    // Update if script already exists OR if the panel is open
     if (standaloneScript.value || (activeRightTab.value === 'script' && isRightSidebarOpen.value)) {
       scriptStore.standaloneScript = getScriptContent()
     }
@@ -1086,7 +969,6 @@ watch(
 )
 
 const handleScriptSettingsDone = () => {
-  // Also regenerate immediately on settings close
   const script = getScriptContent()
   scriptStore.standaloneScript = script
   showScriptSettingsModal.value = false
@@ -1109,40 +991,6 @@ const handleDownloadScript = () => {
 
 const handleOpenScriptSettings = () => {
   showScriptSettingsModal.value = true
-}
-
-const handleLoadExample = async (exampleKey: string) => {
-  if (!projectStore.currentProjectId) return
-  try {
-    const baseUrl = import.meta.env.BASE_URL
-    const modelResponse = await fetch(`${baseUrl}examples/${exampleKey}/model.json`)
-    if (!modelResponse.ok)
-      throw new Error(`Could not fetch example model: ${modelResponse.statusText}`)
-    const modelData: ExampleModel = await modelResponse.json()
-    const newGraphMeta = projectStore.addGraphToProject(
-      projectStore.currentProjectId,
-      modelData.name
-    )
-    if (!newGraphMeta) return
-
-    projectStore.updateGraphLayout(projectStore.currentProject!.id, newGraphMeta.id, {})
-    graphStore.updateGraphElements(newGraphMeta.id, modelData.graphJSON)
-
-    graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
-
-    const jsonDataResponse = await fetch(`${baseUrl}examples/${exampleKey}/data.json`)
-    if (jsonDataResponse.ok) {
-      const fullData = await jsonDataResponse.json()
-      dataStore.dataContent = JSON.stringify(
-        { data: fullData.data || {}, inits: fullData.inits || {} },
-        null,
-        2
-      )
-    }
-    dataStore.updateGraphData(newGraphMeta.id, dataStore.getGraphData(newGraphMeta.id))
-  } catch (error) {
-    console.error('Failed to load example model:', error)
-  }
 }
 
 const toggleLeftSidebar = () => {
@@ -1194,423 +1042,77 @@ const handleFit = () => {
   }
 }
 
-// Code Panel Drag Logic (Touch)
-const codePanelRef = ref<HTMLElement | null>(null)
-const isDraggingCode = ref(false)
-const dragStartCode = ref({ x: 0, y: 0 })
-const initialPanelPos = ref({ x: 0, y: 0 })
-
-// When dragging starts, we capture the current Zoom/Pan state
-const startDragCodeTouch = (e: TouchEvent) => {
-  if ((e.target as HTMLElement).closest('.action-btn')) return
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  isDraggingCode.value = true
-  const touch = e.touches[0]
-  dragStartCode.value = { x: touch.clientX, y: touch.clientY }
-
-  // Use screen coordinates
-  initialPanelPos.value = {
-    x: graph.codePanelX ?? 0,
-    y: graph.codePanelY ?? 0,
-  }
-
-  window.addEventListener('touchmove', onDragCodeTouch, { passive: false })
-  window.addEventListener('touchend', stopDragCodeTouch)
-}
-
-const onDragCodeTouch = (e: TouchEvent) => {
-  if (!isDraggingCode.value) return
-  e.preventDefault()
-  const touch = e.touches[0]
-
-  const dx = touch.clientX - dragStartCode.value.x
-  const dy = touch.clientY - dragStartCode.value.y
-
+const handleCodePanelDragEnd = (pos: { x: number; y: number }) => {
+  codePanelPos.x = pos.x
+  codePanelPos.y = pos.y
   if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        codePanelX: initialPanelPos.value.x + dx,
-        codePanelY: initialPanelPos.value.y + dy,
-      },
-      false
-    )
+    projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+      codePanelX: pos.x,
+      codePanelY: pos.y,
+    })
   }
 }
 
-const stopDragCodeTouch = () => {
-  isDraggingCode.value = false
-  window.removeEventListener('touchmove', onDragCodeTouch)
-  window.removeEventListener('touchend', stopDragCodeTouch)
-  projectStore.saveProjects()
-}
-
-// Code Panel Drag Logic (Mouse)
-const startDragCode = (e: MouseEvent) => {
-  if ((e.target as HTMLElement).closest('.action-btn')) return
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  isDraggingCode.value = true
-  dragStartCode.value = { x: e.clientX, y: e.clientY }
-  initialPanelPos.value = {
-    x: graph.codePanelX ?? 0,
-    y: graph.codePanelY ?? 0,
-  }
-
-  window.addEventListener('mousemove', onDragCode)
-  window.addEventListener('mouseup', stopDragCode)
-}
-
-const onDragCode = (e: MouseEvent) => {
-  if (!isDraggingCode.value) return
-
-  const dx = e.clientX - dragStartCode.value.x
-  const dy = e.clientY - dragStartCode.value.y
-
+const handleCodePanelResizeEnd = (size: { width: number; height: number }) => {
+  codePanelSize.width = size.width
+  codePanelSize.height = size.height
   if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        codePanelX: initialPanelPos.value.x + dx,
-        codePanelY: initialPanelPos.value.y + dy,
-      },
-      false
-    )
+    projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+      codePanelWidth: size.width,
+      codePanelHeight: size.height,
+    })
   }
 }
 
-const stopDragCode = () => {
-  isDraggingCode.value = false
-  window.removeEventListener('mousemove', onDragCode)
-  window.removeEventListener('mouseup', stopDragCode)
-  projectStore.saveProjects()
-}
-
-const getCodePanelStyle = computed(() => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return {}
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return {}
-
-  const screenX = graph.codePanelX ?? 0
-  const screenY = graph.codePanelY ?? 0
-
-  return {
-    left: `${screenX}px`,
-    top: `${screenY}px`,
-    width: `${graph.codePanelWidth ?? 400}px`,
-    height: `${graph.codePanelHeight ?? 300}px`,
-  }
-})
-
-// Resize Code Panel Logic (remains in pixels/screen coords)
-const isResizingCode = ref(false)
-const initialPanelSize = ref({ width: 0, height: 0 })
-
-const startResizeCode = (e: MouseEvent) => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  e.stopPropagation()
-  e.preventDefault()
-  isResizingCode.value = true
-  dragStartCode.value = { x: e.clientX, y: e.clientY }
-  initialPanelSize.value = {
-    width: graph.codePanelWidth ?? 400,
-    height: graph.codePanelHeight ?? 300,
-  }
-  window.addEventListener('mousemove', onResizeCode)
-  window.addEventListener('mouseup', stopResizeCode)
-}
-
-const onResizeCode = (e: MouseEvent) => {
-  if (!isResizingCode.value) return
-  const dx = e.clientX - dragStartCode.value.x
-  const dy = e.clientY - dragStartCode.value.y
-
-  const newWidth = Math.max(300, initialPanelSize.value.width + dx)
-  const newHeight = Math.max(200, initialPanelSize.value.height + dy)
-
+const handleDataPanelDragEnd = (pos: { x: number; y: number }) => {
+  dataPanelPos.x = pos.x
+  dataPanelPos.y = pos.y
   if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        codePanelWidth: newWidth,
-        codePanelHeight: newHeight,
-      },
-      false
-    )
+    projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+      dataPanelX: pos.x,
+      dataPanelY: pos.y,
+    })
   }
 }
 
-const stopResizeCode = () => {
-  isResizingCode.value = false
-  window.removeEventListener('mousemove', onResizeCode)
-  window.removeEventListener('mouseup', stopResizeCode)
-  projectStore.saveProjects()
-}
-
-// Resize Code Panel (Touch)
-const startResizeCodeTouch = (e: TouchEvent) => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  e.stopPropagation()
-  isResizingCode.value = true
-  const touch = e.touches[0]
-  dragStartCode.value = { x: touch.clientX, y: touch.clientY }
-  initialPanelSize.value = {
-    width: graph.codePanelWidth ?? 400,
-    height: graph.codePanelHeight ?? 300,
-  }
-  window.addEventListener('touchmove', onResizeCodeTouch, { passive: false })
-  window.addEventListener('touchend', stopResizeCodeTouch)
-}
-
-const onResizeCodeTouch = (e: TouchEvent) => {
-  if (!isResizingCode.value) return
-  e.preventDefault()
-  const touch = e.touches[0]
-  const dx = touch.clientX - dragStartCode.value.x
-  const dy = touch.clientY - dragStartCode.value.y
-
-  const newWidth = Math.max(300, initialPanelSize.value.width + dx)
-  const newHeight = Math.max(200, initialPanelSize.value.height + dy)
-
+const handleDataPanelResizeEnd = (size: { width: number; height: number }) => {
+  dataPanelSize.width = size.width
+  dataPanelSize.height = size.height
   if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        codePanelWidth: newWidth,
-        codePanelHeight: newHeight,
-      },
-      false
-    )
+    projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
+      dataPanelWidth: size.width,
+      dataPanelHeight: size.height,
+    })
   }
 }
 
-const stopResizeCodeTouch = () => {
-  isResizingCode.value = false
-  window.removeEventListener('touchmove', onResizeCodeTouch)
-  window.removeEventListener('touchend', stopResizeCodeTouch)
-  projectStore.saveProjects()
-}
-
-// --- Data Panel Logic ---
-
-const dataPanelRef = ref<HTMLElement | null>(null)
-const isDraggingData = ref(false)
-const dragStartData = ref({ x: 0, y: 0 })
-const initialDataPanelPos = ref({ x: 0, y: 0 })
-
-const startDragDataTouch = (e: TouchEvent) => {
-  if ((e.target as HTMLElement).closest('.action-btn')) return
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  isDraggingData.value = true
-  const touch = e.touches[0]
-  dragStartData.value = { x: touch.clientX, y: touch.clientY }
-
-  initialDataPanelPos.value = {
-    x: graph.dataPanelX ?? 0,
-    y: graph.dataPanelY ?? 0,
-  }
-
-  window.addEventListener('touchmove', onDragDataTouch, { passive: false })
-  window.addEventListener('touchend', stopDragDataTouch)
-}
-
-const onDragDataTouch = (e: TouchEvent) => {
-  if (!isDraggingData.value) return
-  e.preventDefault()
-  const touch = e.touches[0]
-  const dx = touch.clientX - dragStartData.value.x
-  const dy = touch.clientY - dragStartData.value.y
-
-  if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        dataPanelX: initialDataPanelPos.value.x + dx,
-        dataPanelY: initialDataPanelPos.value.y + dy,
-      },
-      false
-    )
-  }
-}
-
-const stopDragDataTouch = () => {
-  isDraggingData.value = false
-  window.removeEventListener('touchmove', onDragDataTouch)
-  window.removeEventListener('touchend', stopDragDataTouch)
-  projectStore.saveProjects()
-}
-
-const startDragData = (e: MouseEvent) => {
-  if ((e.target as HTMLElement).closest('.action-btn')) return
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  isDraggingData.value = true
-  dragStartData.value = { x: e.clientX, y: e.clientY }
-  initialDataPanelPos.value = {
-    x: graph.dataPanelX ?? 0,
-    y: graph.dataPanelY ?? 0,
-  }
-  window.addEventListener('mousemove', onDragData)
-  window.addEventListener('mouseup', stopDragData)
-}
-
-const onDragData = (e: MouseEvent) => {
-  if (!isDraggingData.value) return
-  const dx = e.clientX - dragStartData.value.x
-  const dy = e.clientY - dragStartData.value.y
-
-  if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        dataPanelX: initialDataPanelPos.value.x + dx,
-        dataPanelY: initialDataPanelPos.value.y + dy,
-      },
-      false
-    )
-  }
-}
-
-const stopDragData = () => {
-  isDraggingData.value = false
-  window.removeEventListener('mousemove', onDragData)
-  window.removeEventListener('mouseup', stopDragData)
-  projectStore.saveProjects()
-}
-
-const getDataPanelStyle = computed(() => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return {}
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return {}
-
-  const screenX = graph.dataPanelX ?? 0
-  const screenY = graph.dataPanelY ?? 0
-
-  return {
-    left: `${screenX}px`,
-    top: `${screenY}px`,
-    width: `${graph.dataPanelWidth ?? 400}px`,
-    height: `${graph.dataPanelHeight ?? 300}px`,
-  }
-})
-
-const isResizingData = ref(false)
-const initialDataPanelSize = ref({ width: 0, height: 0 })
-
-const startResizeData = (e: MouseEvent) => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  e.stopPropagation()
-  e.preventDefault()
-  isResizingData.value = true
-  dragStartData.value = { x: e.clientX, y: e.clientY }
-  initialDataPanelSize.value = {
-    width: graph.dataPanelWidth ?? 400,
-    height: graph.dataPanelHeight ?? 300,
-  }
-  window.addEventListener('mousemove', onResizeData)
-  window.addEventListener('mouseup', stopResizeData)
-}
-
-const onResizeData = (e: MouseEvent) => {
-  if (!isResizingData.value) return
-  const dx = e.clientX - dragStartData.value.x
-  const dy = e.clientY - dragStartData.value.y
-  const newWidth = Math.max(300, initialDataPanelSize.value.width + dx)
-  const newHeight = Math.max(200, initialDataPanelSize.value.height + dy)
-
-  if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        dataPanelWidth: newWidth,
-        dataPanelHeight: newHeight,
-      },
-      false
-    )
-  }
-}
-
-const stopResizeData = () => {
-  isResizingData.value = false
-  window.removeEventListener('mousemove', onResizeData)
-  window.removeEventListener('mouseup', stopResizeData)
-  projectStore.saveProjects()
-}
-
-const startResizeDataTouch = (e: TouchEvent) => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (!graph) return
-
-  e.stopPropagation()
-  isResizingData.value = true
-  const touch = e.touches[0]
-  dragStartData.value = { x: touch.clientX, y: touch.clientY }
-  initialDataPanelSize.value = {
-    width: graph.dataPanelWidth ?? 400,
-    height: graph.dataPanelHeight ?? 300,
-  }
-  window.addEventListener('touchmove', onResizeDataTouch, { passive: false })
-  window.addEventListener('touchend', stopResizeDataTouch)
-}
-
-const onResizeDataTouch = (e: TouchEvent) => {
-  if (!isResizingData.value) return
-  e.preventDefault()
-  const touch = e.touches[0]
-  const dx = touch.clientX - dragStartData.value.x
-  const dy = touch.clientY - dragStartData.value.y
-  const newWidth = Math.max(300, initialDataPanelSize.value.width + dx)
-  const newHeight = Math.max(200, initialDataPanelSize.value.height + dy)
-
-  if (projectStore.currentProject && graphStore.currentGraphId) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProject.id,
-      graphStore.currentGraphId,
-      {
-        dataPanelWidth: newWidth,
-        dataPanelHeight: newHeight,
-      },
-      false
-    )
-  }
-}
-
-const stopResizeDataTouch = () => {
-  isResizingData.value = false
-  window.removeEventListener('touchmove', onResizeDataTouch)
-  window.removeEventListener('touchend', stopResizeDataTouch)
-  projectStore.saveProjects()
-}
+// Load panel positions and sizes from graph state
+watch(
+  [() => graphStore.currentGraphId, () => projectStore.currentProject?.graphs],
+  () => {
+    const currentGraphId = graphStore.currentGraphId
+    if (currentGraphId && projectStore.currentProject) {
+      const graph = projectStore.currentProject.graphs.find((g) => g.id === currentGraphId)
+      if (graph) {
+        // Use saved positions or defaults: data panel on bottom-left, code panel on bottom-right
+        const defaultCodeX = typeof window !== 'undefined' ? window.innerWidth - 420 : 0
+        const defaultY = typeof window !== 'undefined' ? window.innerHeight - 380 : 0
+        codePanelPos.x = graph.codePanelX ?? defaultCodeX
+        codePanelPos.y = graph.codePanelY ?? defaultY
+        codePanelSize.width = graph.codePanelWidth ?? 400
+        codePanelSize.height = graph.codePanelHeight ?? 300
+        dataPanelPos.x = graph.dataPanelX ?? 20
+        dataPanelPos.y = graph.dataPanelY ?? defaultY
+        dataPanelSize.width = graph.dataPanelWidth ?? 400
+        dataPanelSize.height = graph.dataPanelHeight ?? 300
+      }
+    }
+  },
+  { immediate: true, deep: true }
+)
 
 const handleSidebarContainerClick = (e: MouseEvent) => {
-  if ((e.target as HTMLElement).closest('.theme-toggle-header')) return
+  if ((e.target as HTMLElement).closest('.db-theme-toggle-header')) return
   if (!isLeftSidebarOpen.value) {
     toggleLeftSidebar()
   }
@@ -1618,30 +1120,21 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
 
 watch(showNewGraphModal, (val) => {
   if (!val) {
-    importedGraphData.value = null
+    clearImportedData()
     newGraphName.value = ''
     if (graphImportInput.value) graphImportInput.value.value = ''
     isDragOver.value = false
   }
 })
 
-// Update the Left Sidebar Accordion model from the store
 const updateActiveAccordionTabs = (val: string | string[]) => {
-  // PrimeVue might emit single value or array depending on config, but multiple=true implies array
   const newVal = Array.isArray(val) ? val : [val]
   activeLeftAccordionTabs.value = newVal
 }
-
-const clearImportedData = () => {
-  importedGraphData.value = null
-  if (graphImportInput.value) {
-    graphImportInput.value.value = ''
-  }
-}
 </script>
 <template>
-  <div class="app-layout">
-    <main class="canvas-area">
+  <div class="db-app-layout">
+    <main class="db-canvas-area">
       <GraphEditor
         v-if="graphStore.currentGraphId"
         :key="graphStore.currentGraphId"
@@ -1662,7 +1155,7 @@ const clearImportedData = () => {
         @layout-updated="handleLayoutUpdated"
         @viewport-changed="handleViewportChanged"
       />
-      <div v-else class="empty-state">
+      <div v-else class="db-empty-state">
         <p>No graph selected. Create or select a graph to start.</p>
         <BaseButton @click="showNewGraphModal = true" type="primary">Create New Graph</BaseButton>
       </div>
@@ -1701,31 +1194,38 @@ const clearImportedData = () => {
     <Transition name="fade">
       <div
         v-if="!isLeftSidebarOpen"
-        class="collapsed-sidebar-trigger left-trigger"
+        class="db-collapsed-sidebar-trigger db-left-trigger"
         @click="handleSidebarContainerClick"
       >
-        <div class="sidebar-trigger-content gap-1">
+        <div class="db-sidebar-trigger-content gap-1">
           <div
             class="flex-grow flex items-center gap-2 overflow-hidden"
             style="flex-grow: 1; overflow: hidden"
           >
-            <span class="logo-text-minimized">
-              <span class="desktop-text">{{
+            <span class="db-logo-text-minimized">
+              <span class="db-desktop-text">{{
                 pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS'
               }}</span>
-              <span class="mobile-text">DoodleBUGS</span>
+              <span class="db-mobile-text">DoodleBUGS</span>
             </span>
           </div>
           <div class="flex items-center flex-shrink-0" style="flex-shrink: 0">
             <button
+              v-tooltip.top="{
+                value: isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+                showDelay: 0,
+                hideDelay: 0,
+              }"
               @click.stop="uiStore.toggleDarkMode()"
-              class="theme-toggle-header"
-              :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+              class="db-theme-toggle-header"
             >
               <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
             </button>
-            <div class="toggle-icon-wrapper">
-              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon">
+            <div
+              v-tooltip.top="{ value: 'Expand Sidebar', showDelay: 0, hideDelay: 0 }"
+              class="db-toggle-icon-wrapper"
+            >
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="db-toggle-icon">
                 <path
                   fill="currentColor"
                   fill-rule="evenodd"
@@ -1739,7 +1239,6 @@ const clearImportedData = () => {
       </div>
     </Transition>
 
-    <!-- Right Sidebar -->
     <RightSidebar
       :selectedElement="selectedElement"
       :validationErrors="validationErrors"
@@ -1759,28 +1258,34 @@ const clearImportedData = () => {
     <Transition name="fade">
       <div
         v-if="!isRightSidebarOpen"
-        class="collapsed-sidebar-trigger right"
+        class="db-collapsed-sidebar-trigger db-right"
         @click="toggleRightSidebar"
       >
-        <div class="sidebar-trigger-content gap-2">
-          <span class="sidebar-title-minimized">Inspector</span>
+        <div class="db-sidebar-trigger-content gap-2">
+          <span class="db-sidebar-title-minimized">Inspector</span>
           <div class="flex items-center">
             <div
-              class="status-indicator validation-status"
+              class="db-status-indicator db-validation-status"
               @click.stop="showValidationModal = true"
-              :class="isModelValid ? 'valid' : 'invalid'"
+              :class="isModelValid ? 'db-valid' : 'db-invalid'"
             >
               <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
+              <div class="db-instant-tooltip">
+                {{ isModelValid ? 'Model Valid' : 'Validation Errors Found' }}
+              </div>
             </div>
             <button
-              class="header-icon-btn collapsed-share-btn"
+              v-tooltip.top="{ value: 'Share via URL', showDelay: 0, hideDelay: 0 }"
+              class="db-header-icon-btn db-collapsed-share-btn"
               @click.stop="handleShare"
-              title="Share via URL"
             >
               <i class="fas fa-share-alt"></i>
             </button>
-            <div class="toggle-icon-wrapper">
-              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="toggle-icon">
+            <div
+              v-tooltip.top="{ value: 'Expand Sidebar', showDelay: 0, hideDelay: 0 }"
+              class="db-toggle-icon-wrapper"
+            >
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="db-toggle-icon">
                 <path
                   fill="currentColor"
                   fill-rule="evenodd"
@@ -1794,97 +1299,41 @@ const clearImportedData = () => {
       </div>
     </Transition>
 
-    <div
+    <FloatingPanel
       v-if="isCodePanelOpen && graphStore.currentGraphId"
-      ref="codePanelRef"
-      class="code-panel-floating glass-panel"
-      :style="getCodePanelStyle"
+      title="BUGS Code Preview"
+      icon="fas fa-code"
+      :is-open="isCodePanelOpen"
+      :default-width="codePanelSize.width"
+      :default-height="codePanelSize.height"
+      :default-x="codePanelPos.x"
+      :default-y="codePanelPos.y"
+      :show-download="true"
+      @close="toggleCodePanel"
+      @download="handleDownloadBugs"
+      @drag-end="handleCodePanelDragEnd"
+      @resize-end="handleCodePanelResizeEnd"
     >
-      <div
-        class="graph-header code-header"
-        @mousedown="startDragCode"
-        @touchstart="startDragCodeTouch"
-      >
-        <span class="graph-title"><i class="fas fa-code"></i> BUGS Code Preview</span>
-        <div class="panel-actions">
-          <button
-            class="action-btn"
-            @click.stop="handleDownloadBugs"
-            title="Download BUGS Code"
-            @mousedown.stop
-            @touchstart.stop
-          >
-            <i class="fas fa-download"></i>
-          </button>
-          <button
-            class="close-btn"
-            @click="toggleCodePanel()"
-            @touchstart.stop="toggleCodePanel()"
-            @mousedown.stop
-          >
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-      </div>
-      <div class="code-content">
-        <CodePreviewPanel :is-active="true" />
-      </div>
-      <div
-        class="resize-handle"
-        @mousedown.stop="startResizeCode"
-        @touchstart.stop.prevent="startResizeCodeTouch"
-      >
-        <i class="fas fa-chevron-right" style="transform: rotate(45deg)"></i>
-      </div>
-    </div>
+      <CodePreviewPanel :is-active="true" />
+    </FloatingPanel>
 
-    <!-- Data Panel Pop-out -->
-    <div
+    <FloatingPanel
       v-if="isDataPanelOpen && graphStore.currentGraphId"
-      ref="dataPanelRef"
-      class="code-panel-floating glass-panel"
-      :style="getDataPanelStyle"
+      title="Data & Inits"
+      icon="fas fa-database"
+      badge="JSON"
+      :is-open="isDataPanelOpen"
+      :default-width="dataPanelSize.width"
+      :default-height="dataPanelSize.height"
+      :default-x="dataPanelPos.x"
+      :default-y="dataPanelPos.y"
+      :show-import="true"
+      @close="toggleDataPanel"
+      @import="dataImportInput?.click()"
+      @drag-end="handleDataPanelDragEnd"
+      @resize-end="handleDataPanelResizeEnd"
     >
-      <div
-        class="graph-header code-header"
-        @mousedown="startDragData"
-        @touchstart="startDragDataTouch"
-      >
-        <span class="graph-title">
-          <i class="fas fa-database"></i> Data & Inits
-          <span class="badge-json">JSON</span>
-        </span>
-        <div class="panel-actions">
-          <button
-            class="action-btn"
-            @click.stop="triggerDataImport"
-            title="Import JSON Data"
-            @mousedown.stop
-            @touchstart.stop
-          >
-            <i class="fas fa-file-upload"></i>
-          </button>
-          <button
-            class="close-btn"
-            @click="toggleDataPanel()"
-            @touchstart.stop="toggleDataPanel()"
-            @mousedown.stop
-          >
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-      </div>
-      <div class="code-content">
-        <DataInputPanel :is-active="true" />
-      </div>
-      <div
-        class="resize-handle"
-        @mousedown.stop="startResizeData"
-        @touchstart.stop.prevent="startResizeDataTouch"
-      >
-        <i class="fas fa-chevron-right" style="transform: rotate(45deg)"></i>
-      </div>
-      <!-- Hidden file input for Data Import -->
+      <DataInputPanel :is-active="true" />
       <input
         type="file"
         ref="dataImportInput"
@@ -1892,7 +1341,7 @@ const clearImportedData = () => {
         style="display: none"
         @change="handleDataImport"
       />
-    </div>
+    </FloatingPanel>
 
     <FloatingBottomToolbar
       :current-mode="currentMode"
@@ -1920,7 +1369,9 @@ const clearImportedData = () => {
     />
 
     <BaseModal :is-open="showNewProjectModal" @close="showNewProjectModal = false">
-      <template #header><h3>Create New Project</h3></template>
+      <template #header>
+        <h3>Create New Project</h3>
+      </template>
       <template #body>
         <div class="flex items-center gap-3">
           <label style="min-width: 100px; font-weight: 500">Project Name:</label>
@@ -1937,10 +1388,12 @@ const clearImportedData = () => {
     </BaseModal>
 
     <BaseModal :is-open="showNewGraphModal" @close="showNewGraphModal = false">
-      <template #header><h3>Create New Graph</h3></template>
+      <template #header>
+        <h3>Create New Graph</h3>
+      </template>
       <template #body>
         <div class="flex flex-col gap-2">
-          <div class="form-group">
+          <div class="db-form-group">
             <label for="new-graph-name">Graph Name</label>
             <BaseInput
               id="new-graph-name"
@@ -1950,12 +1403,12 @@ const clearImportedData = () => {
             />
           </div>
 
-          <div class="import-section">
-            <label class="section-label">Import from JSON (Optional)</label>
+          <div class="db-import-section">
+            <label class="db-section-label">Import from JSON (Optional)</label>
 
             <div
-              class="drop-zone"
-              :class="{ loaded: importedGraphData, 'drag-over': isDragOver }"
+              class="db-drop-zone"
+              :class="{ 'db-loaded': importedGraphData, 'db-drag-over': isDragOver }"
               @click="triggerGraphImport"
               @dragover.prevent="isDragOver = true"
               @dragleave.prevent="isDragOver = false"
@@ -1966,28 +1419,34 @@ const clearImportedData = () => {
                 ref="graphImportInput"
                 accept=".json"
                 @change="handleGraphImportFile"
-                class="hidden-input"
+                class="db-hidden-input"
               />
 
-              <div v-if="!importedGraphData" class="drop-zone-content">
-                <div class="icon-circle">
+              <div v-if="!importedGraphData" class="db-drop-zone-content">
+                <div class="db-icon-circle">
                   <i class="fas fa-file-import"></i>
                 </div>
-                <div class="text-content">
-                  <span class="action-text">Click or Drag & Drop JSON file</span>
-                  <small class="sub-text">Restore a previously exported graph</small>
+                <div class="db-text-content">
+                  <span class="db-action-text">Click or Drag & Drop JSON file</span>
+                  <small class="db-sub-text">Restore a previously exported graph</small>
                 </div>
               </div>
 
-              <div v-else class="drop-zone-content success">
-                <div class="icon-circle success">
+              <div v-else class="db-drop-zone-content db-success">
+                <div class="db-icon-circle db-success">
                   <i class="fas fa-check"></i>
                 </div>
-                <div class="text-content">
-                  <span class="action-text">File Loaded Successfully</span>
-                  <small class="sub-text">{{ importedGraphData.name || 'Untitled Graph' }}</small>
+                <div class="db-text-content">
+                  <span class="db-action-text">File Loaded Successfully</span>
+                  <small class="db-sub-text">{{
+                    importedGraphData.name || 'Untitled Graph'
+                  }}</small>
                 </div>
-                <button class="remove-file-btn" @click.stop="clearImportedData" title="Remove file">
+                <button
+                  class="db-remove-file-btn"
+                  @click.stop="clearImportedData"
+                  title="Remove file"
+                >
                   <i class="fas fa-times"></i>
                 </button>
               </div>
@@ -2001,7 +1460,9 @@ const clearImportedData = () => {
     </BaseModal>
 
     <BaseModal :is-open="showScriptSettingsModal" @close="showScriptSettingsModal = false">
-      <template #header><h3>Script Configuration</h3></template>
+      <template #header>
+        <h3>Script Configuration</h3>
+      </template>
       <template #body>
         <ScriptSettingsPanel />
       </template>
@@ -2039,7 +1500,8 @@ const clearImportedData = () => {
 </template>
 
 <style scoped>
-.app-layout {
+/* Scoped styles are preserved as per the previous version */
+.db-app-layout {
   position: relative;
   width: 100vw;
   height: 100dvh;
@@ -2048,7 +1510,7 @@ const clearImportedData = () => {
   background-color: var(--theme-bg-canvas);
 }
 
-.canvas-area {
+.db-canvas-area {
   position: absolute;
   top: 0;
   left: 0;
@@ -2058,10 +1520,10 @@ const clearImportedData = () => {
   transition: bottom 0.1s ease;
 }
 
-.collapsed-sidebar-trigger {
+.db-collapsed-sidebar-trigger {
   position: absolute;
   top: 16px;
-  z-index: 49;
+  z-index: 100;
   padding: 8px 12px;
   border-radius: var(--radius-md);
   display: flex;
@@ -2073,42 +1535,42 @@ const clearImportedData = () => {
   min-width: 140px;
 }
 
-.collapsed-sidebar-trigger.left-trigger {
+.db-collapsed-sidebar-trigger.db-left-trigger {
   left: 16px;
   min-width: 200px;
 }
 
-.collapsed-sidebar-trigger.right {
+.db-collapsed-sidebar-trigger.db-right {
   left: auto;
   right: 16px;
 }
 
-.collapsed-sidebar-trigger:hover {
+.db-collapsed-sidebar-trigger:hover {
   box-shadow: var(--shadow-md);
   transform: scale(1.01);
 }
 
-.sidebar-trigger-content {
+.db-sidebar-trigger-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
   width: 100%;
 }
 
-.logo-text-minimized {
+.db-logo-text-minimized {
   font-family: var(--font-family-sans);
   font-size: 14px;
   font-weight: 600;
   color: var(--theme-text-primary);
 }
 
-.sidebar-title-minimized {
+.db-sidebar-title-minimized {
   font-size: 13px;
   font-weight: 600;
   color: var(--theme-text-primary);
 }
 
-.theme-toggle-header {
+.db-theme-toggle-header {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -2121,21 +1583,22 @@ const clearImportedData = () => {
   transition: color 0.2s;
   border-radius: 4px;
 }
-.theme-toggle-header:hover {
+
+.db-theme-toggle-header:hover {
   color: var(--theme-text-primary);
   background: var(--theme-bg-hover);
 }
 
-.toggle-icon-wrapper {
+.db-toggle-icon-wrapper {
   display: flex;
   align-items: center;
 }
 
-.toggle-icon {
+.db-toggle-icon {
   color: var(--theme-text-secondary);
 }
 
-.empty-state {
+.db-empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2145,133 +1608,7 @@ const clearImportedData = () => {
   gap: 1rem;
 }
 
-.code-panel-floating {
-  position: absolute;
-  background-color: var(--theme-bg-panel);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-floating);
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--theme-border);
-  overflow: hidden;
-  z-index: 100;
-}
-
-.graph-header {
-  height: 36px;
-  background-color: var(--theme-bg-hover);
-  border-bottom: 1px solid var(--theme-border);
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  cursor: move;
-  user-select: none;
-  justify-content: space-between;
-}
-
-.graph-title {
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--theme-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.badge-json {
-  font-size: 0.7em;
-  background-color: var(--theme-primary);
-  color: white;
-  padding: 2px 4px;
-  border-radius: 3px;
-  margin-left: 6px;
-  font-weight: normal;
-  vertical-align: middle;
-}
-
-.panel-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.action-btn {
-  background: transparent;
-  border: none;
-  color: var(--theme-text-secondary);
-  cursor: pointer;
-  font-size: 13px;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  transition: color 0.2s;
-}
-
-.action-btn:hover {
-  color: var(--theme-text-primary);
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  color: var(--theme-text-secondary);
-  cursor: pointer;
-  font-size: 13px;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-}
-.close-btn:hover {
-  color: var(--theme-text-primary);
-}
-
-.code-content {
-  flex: 1;
-  overflow: hidden;
-  background-color: var(--theme-bg-panel);
-}
-
-.code-content :deep(.code-preview-panel),
-.code-content :deep(.data-input-panel),
-.code-content :deep(.json-editor-panel) {
-  height: 100%;
-  padding: 0;
-}
-.code-content :deep(.header-section) {
-  display: none;
-}
-
-.code-content :deep(.header-controls) {
-  display: none;
-}
-
-.code-content :deep(.panel-title),
-.code-content :deep(.description) {
-  display: none;
-}
-
-.code-content :deep(.editor-wrapper) {
-  border-radius: 0;
-}
-
-.resize-handle {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 13px;
-  height: 13px;
-  cursor: nwse-resize;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--theme-text-secondary);
-  font-size: 9px;
-  z-index: 20;
-  background: var(--theme-bg-hover);
-  border-top-left-radius: 4px;
-}
-
-.status-indicator {
+.db-status-indicator {
   position: relative;
   display: flex;
   align-items: center;
@@ -2281,18 +1618,20 @@ const clearImportedData = () => {
   cursor: help;
 }
 
-.validation-status {
+.db-validation-status {
   font-size: 1.1em;
   margin: 0;
 }
-.validation-status.valid {
+
+.db-validation-status.db-valid {
   color: var(--theme-success);
 }
-.validation-status.invalid {
+
+.db-validation-status.db-invalid {
   color: var(--theme-warning);
 }
 
-.instant-tooltip {
+.db-instant-tooltip {
   position: absolute;
   top: 100%;
   right: 0;
@@ -2307,15 +1646,15 @@ const clearImportedData = () => {
   opacity: 0;
   transition: opacity 0.1s;
   margin-top: 6px;
-  z-index: 100;
+  z-index: 600;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
-.status-indicator:hover .instant-tooltip {
+.db-status-indicator:hover .db-instant-tooltip {
   opacity: 1;
 }
 
-.header-icon-btn {
+.db-header-icon-btn {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -2329,12 +1668,12 @@ const clearImportedData = () => {
   transition: all 0.2s;
 }
 
-.header-icon-btn:hover {
+.db-header-icon-btn:hover {
   background-color: var(--theme-bg-hover);
   color: var(--theme-text-primary);
 }
 
-.collapsed-share-btn {
+.db-collapsed-share-btn {
   width: 24px;
   height: 24px;
   padding: 0;
@@ -2350,31 +1689,15 @@ const clearImportedData = () => {
   opacity: 0;
 }
 
-.json-textarea {
-  width: 100%;
-  height: 120px;
-  padding: 8px;
-  font-family: monospace;
-  font-size: 0.85em;
-  border: 1px solid var(--theme-border);
-  border-radius: var(--radius-sm);
-  background-color: var(--theme-bg-hover);
-  color: var(--theme-text-primary);
-  resize: vertical;
-}
-
-.file-upload-wrapper {
-  margin-top: 5px;
-}
-
-.desktop-text {
+.db-desktop-text {
   display: inline;
 }
-.mobile-text {
+
+.db-mobile-text {
   display: none;
 }
 
-.divider {
+.db-divider {
   height: 1px;
   background: var(--theme-border);
   width: 100%;
@@ -2383,27 +1706,29 @@ const clearImportedData = () => {
 .text-green-500 {
   color: var(--theme-success);
 }
+
 .font-bold {
   font-weight: bold;
 }
+
 .text-xs {
   font-size: 0.75rem;
 }
 
 /* New Graph Modal Styles */
-.form-group {
+.db-form-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.form-group label {
+.db-form-group label {
   font-size: 0.9em;
   font-weight: 600;
   color: var(--theme-text-secondary);
 }
 
-.section-label {
+.db-section-label {
   font-size: 0.9em;
   font-weight: 600;
   color: var(--theme-text-secondary);
@@ -2411,7 +1736,7 @@ const clearImportedData = () => {
   display: block;
 }
 
-.drop-zone {
+.db-drop-zone {
   border: 2px dashed var(--theme-border);
   border-radius: var(--radius-md);
   padding: 24px;
@@ -2427,25 +1752,25 @@ const clearImportedData = () => {
   min-height: 160px;
 }
 
-.drop-zone:hover {
+.db-drop-zone:hover {
   border-color: var(--theme-text-muted);
   background-color: var(--theme-bg-active);
 }
 
-.drop-zone.drag-over {
+.db-drop-zone.db-drag-over {
   border-color: var(--theme-primary);
   background-color: rgba(16, 185, 129, 0.1);
   transform: scale(1.02);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
 }
 
-.drop-zone.loaded {
+.db-drop-zone.db-loaded {
   border-style: solid;
   border-color: var(--theme-success);
   background-color: rgba(16, 185, 129, 0.05);
 }
 
-.drop-zone-content {
+.db-drop-zone-content {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2454,11 +1779,11 @@ const clearImportedData = () => {
   width: 100%;
 }
 
-.drop-zone-content.success {
+.db-drop-zone-content.db-success {
   pointer-events: auto;
 }
 
-.icon-circle {
+.db-icon-circle {
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -2472,45 +1797,45 @@ const clearImportedData = () => {
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.drop-zone:hover .icon-circle {
+.db-drop-zone:hover .db-icon-circle {
   transform: scale(1.1);
   color: var(--theme-primary);
 }
 
-.drop-zone.drag-over .icon-circle {
+.db-drop-zone.db-drag-over .db-icon-circle {
   transform: scale(1.2);
   background-color: var(--theme-primary);
   color: white;
 }
 
-.icon-circle.success {
+.db-icon-circle.db-success {
   background-color: var(--theme-success);
   color: white;
 }
 
-.text-content {
+.db-text-content {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
 }
 
-.action-text {
+.db-action-text {
   font-weight: 600;
   color: var(--theme-text-primary);
   font-size: 1rem;
 }
 
-.sub-text {
+.db-sub-text {
   color: var(--theme-text-secondary);
   font-size: 0.85em;
 }
 
-.hidden-input {
+.db-hidden-input {
   display: none;
 }
 
-.remove-file-btn {
+.db-remove-file-btn {
   position: absolute;
   top: 10px;
   right: 10px;
@@ -2528,31 +1853,32 @@ const clearImportedData = () => {
   box-shadow: var(--shadow-sm);
 }
 
-.remove-file-btn:hover {
+.db-remove-file-btn:hover {
   background-color: var(--theme-danger);
   border-color: var(--theme-danger);
   color: white;
 }
 
 @media (max-width: 768px) {
-  .desktop-text {
+  .db-desktop-text {
     display: none;
   }
-  .mobile-text {
+
+  .db-mobile-text {
     display: inline;
   }
 
-  .collapsed-sidebar-trigger {
+  .db-collapsed-sidebar-trigger {
     min-width: auto !important;
     max-width: 42%;
     padding: 8px;
   }
 
-  .collapsed-sidebar-trigger.left-trigger {
+  .db-collapsed-sidebar-trigger.db-left-trigger {
     min-width: auto !important;
   }
 
-  .logo-text-minimized {
+  .db-logo-text-minimized {
     font-size: 12px;
     white-space: nowrap;
     overflow: hidden;
@@ -2560,7 +1886,7 @@ const clearImportedData = () => {
     display: block;
   }
 
-  .sidebar-trigger-content {
+  .db-sidebar-trigger-content {
     gap: 4px;
   }
 }
