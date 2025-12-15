@@ -636,11 +636,15 @@ const toggleFullScreen = () => {
     activateWidget('click')
   }
 
-  // Force graph resize after layout transition
+  // Force graph resize and center after layout transition
   setTimeout(() => {
     if (graphStore.currentGraphId) {
       const cy = getCyInstance(graphStore.currentGraphId)
-      if (cy) cy.resize()
+      if (cy) {
+        cy.resize()
+        // Center the graph after resize
+        smartFit(cy, true)
+      }
     }
   }, 100)
 
