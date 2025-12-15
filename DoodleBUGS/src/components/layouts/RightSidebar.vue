@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { type StyleValue } from 'vue'
 import { storeToRefs } from 'pinia'
+import Tooltip from 'primevue/tooltip'
 import NodePropertiesPanel from '../right-sidebar/NodePropertiesPanel.vue'
 import LocalScriptPanel from '../right-sidebar/LocalScriptPanel.vue'
 import BaseButton from '../ui/BaseButton.vue'
@@ -32,6 +33,8 @@ const emit = defineEmits<{
 
 const uiStore = useUiStore()
 const { isRightSidebarOpen, activeRightTab } = storeToRefs(uiStore)
+
+const vTooltip = Tooltip
 
 const sidebarStyle = (isOpen: boolean): StyleValue => {
   if (!isOpen) {
@@ -87,22 +90,29 @@ const handleHeaderClick = () => {
           </div>
         </div>
 
-        <button class="db-header-icon-btn" @click="$emit('share')" title="Share via URL">
+        <button 
+          v-tooltip.top="{ value: 'Share via URL', showDelay: 0, hideDelay: 0 }"
+          class="db-header-icon-btn" 
+          @click="$emit('share')"
+        >
           <i class="fas fa-share-alt"></i>
         </button>
 
         <!-- Exit Fullscreen Button (Conditionally Rendered) -->
         <button
           v-if="showExitButton"
+          v-tooltip.top="{ value: 'Exit Full Screen', showDelay: 0, hideDelay: 0 }"
           class="db-header-icon-btn db-exit-btn"
           @click="$emit('exit-fullscreen')"
-          title="Exit Full Screen"
         >
-          <i class="fas fa-compress"></i>
+          <i class="pi pi-window-minimize"></i>
         </button>
       </div>
 
-      <div class="pointer-events-none flex items-center ml-2">
+      <div 
+        v-tooltip.top="{ value: 'Collapse Sidebar', showDelay: 0, hideDelay: 0 }"
+        class="pointer-events-none flex items-center ml-2"
+      >
         <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="db-toggle-icon">
           <path
             fill="currentColor"

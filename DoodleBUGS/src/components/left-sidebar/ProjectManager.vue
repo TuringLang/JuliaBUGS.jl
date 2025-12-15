@@ -2,12 +2,15 @@
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useProjectStore, type Project, type GraphMeta } from '../../stores/projectStore'
 import { useGraphStore } from '../../stores/graphStore'
+import Tooltip from 'primevue/tooltip'
 import BaseButton from '../ui/BaseButton.vue'
 import BaseModal from '../common/BaseModal.vue'
 import BaseInput from '../ui/BaseInput.vue'
 
 const projectStore = useProjectStore()
 const graphStore = useGraphStore()
+
+const vTooltip = Tooltip
 
 const showDeleteConfirmModal = ref(false)
 const itemToDelete = ref<{
@@ -141,23 +144,23 @@ const handleNewGraph = () => {
   <div class="db-project-manager">
     <div class="db-panel-header">
       <h4>Projects</h4>
-      <div class="db-header-actions">
+      <div class="db-actions">
         <BaseButton
+          v-tooltip.top="{ value: 'New Graph in Current Project', showDelay: 0, hideDelay: 0 }"
           @click="handleNewGraph"
           type="ghost"
           size="small"
           class="db-action-icon-btn"
-          title="New Graph in Current Project"
           :disabled="!currentProject"
         >
           <i class="fas fa-hexagon-nodes"></i>
         </BaseButton>
         <BaseButton
+          v-tooltip.top="{ value: 'New Project', showDelay: 0, hideDelay: 0 }"
           @click="handleNewProject"
           type="ghost"
           size="small"
           class="db-action-icon-btn"
-          title="New Project"
         >
           <i class="fas fa-folder" style="color: #10b981"></i>
         </BaseButton>

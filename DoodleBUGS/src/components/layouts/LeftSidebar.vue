@@ -5,6 +5,7 @@ import AccordionPanel from 'primevue/accordionpanel'
 import AccordionHeader from 'primevue/accordionheader'
 import AccordionContent from 'primevue/accordioncontent'
 import ToggleSwitch from 'primevue/toggleswitch'
+import Tooltip from 'primevue/tooltip'
 import BaseSelect from '../ui/BaseSelect.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import ProjectManager from '../left-sidebar/ProjectManager.vue'
@@ -49,6 +50,8 @@ const emit = defineEmits<{
 
 const uiStore = useUiStore()
 const { isLeftSidebarOpen, canvasGridStyle, isDarkMode } = storeToRefs(uiStore)
+
+const vTooltip = Tooltip
 
 const gridStyleOptions = [
   { label: 'Dots', value: 'dots' },
@@ -120,15 +123,18 @@ const handleHeaderClick = () => {
       </span>
       <div class="flex items-center ml-auto">
         <button
+          v-tooltip.top="{ value: isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode', showDelay: 0, hideDelay: 0 }"
           @click.stop="uiStore.toggleDarkMode()"
           @mousedown.stop
           @touchstart.stop
           class="db-theme-toggle-header"
-          :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
         >
           <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
         </button>
-        <div class="flex items-center">
+        <div 
+          v-tooltip.top="{ value: 'Collapse Sidebar', showDelay: 0, hideDelay: 0 }"
+          class="flex items-center"
+        >
           <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="db-toggle-icon">
             <path
               fill="currentColor"
