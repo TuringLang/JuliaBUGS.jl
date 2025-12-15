@@ -120,6 +120,52 @@
             font-size: 0.9em;
         }
 
+        pre {
+            background: #f8fafc;
+            color: #1e293b;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            border-left: 4px solid #10b981;
+            border: 1px solid #e2e8f0;
+        }
+
+        pre code {
+            background: transparent;
+            color: inherit;
+            padding: 0;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+
+        pre .keyword { color: #7c3aed; }
+        pre .function { color: #0891b2; }
+        pre .number { color: #dc2626; }
+        pre .variable { color: #ca8a04; }
+        pre .operator { color: #0369a1; }
+
+        .references {
+            margin-top: 60px;
+            padding-top: 40px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .references h2 {
+            font-size: 1.4rem;
+            margin-bottom: 20px;
+        }
+
+        .references ol {
+            padding-left: 20px;
+        }
+
+        .references li {
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
         footer {
             text-align: center;
             padding: 40px 0;
@@ -159,6 +205,11 @@
         <header>
             <h1>Introduction to Bayesian Graphical Models</h1>
             <p class="meta">Published: December 2025 · 10 min read</p>
+            <p class="meta" style="margin-top: 10px;">
+                Authors: <a href="https://github.com/shravanngoswamii" style="color: #10b981; text-decoration: none;">Shravan Goswami</a>, 
+                <a href="https://github.com/yebai" style="color: #10b981; text-decoration: none;">Hong Ge</a>, and 
+                <a href="https://github.com/sunxd3" style="color: #10b981; text-decoration: none;">Xianda Sun</a>
+            </p>
         </header>
 
         <article>
@@ -184,8 +235,7 @@
 
             <div class="widget-section">
                 <h3>Pumps: conjugate gamma-Poisson hierarchical model</h3>
-                <p>To understand the utility of these models, let's look at the <strong>Pumps</strong> example (George
-                    et al., 1993). This model analyzes the failure rates of 10 pumps in a nuclear power plant. </p>
+                <p>To understand the utility of these models, let's look at the <strong>Pumps</strong> example [<a href="#ref1" style="color: #10b981; text-decoration: none;">1</a>]. This model analyzes the failure rates of 10 pumps in a nuclear power plant. </p>
                 <p>This is a conjugate gamma-Poisson hierarchical model. The number of failures ($x_i$) for each pump is
                     modeled using a Poisson distribution: $x_i \sim \text{Poisson}(\theta_i t_i)$. Crucially, the failure rates
                     ($\theta_i$) are drawn from a common Gamma prior, $\theta_i \sim \text{Gamma}(\alpha, \beta)$, with
@@ -198,7 +248,7 @@
 
             <div class="widget-section">
                 <h3>Rats: a normal hierarchical model</h3>
-                <p>Now let's look at a temporal model from Gelfand et al. (1990). The <strong>Rats</strong> example
+                <p>Now let's look at a temporal model [<a href="#ref2" style="color: #10b981; text-decoration: none;">2</a>]. The <strong>Rats</strong> example
                     tracks the weight of 30 rats measured weekly over five weeks.</p>
                 <p>This is a random effects linear growth curve model. The weights $Y_{ij}$ are normally distributed
                     with a mean that is a linear function of time: $\alpha_i + \beta_i(x_j - \bar{x})$. Note that the
@@ -223,7 +273,7 @@
 
             <div class="widget-section">
                 <h3>Seeds: Random effect logistic regression</h3>
-                <p>Finally, let's look at a random effects logistic regression from Crowder (1978). The
+                <p>Finally, let's look at a random effects logistic regression [<a href="#ref3" style="color: #10b981; text-decoration: none;">3</a>]. The
                     <strong>Seeds</strong> example investigates germination rates across 21 plates arranged in a 2x2
                     factorial design by seed type and root extract.</p>
                 <p>The model accounts for <em>overdispersion</em>—variation greater than expected in a standard Binomial
@@ -242,12 +292,12 @@
 
             <p>For example, a simple hierarchical model might look like this:</p>
 
-            <pre><code>model {
-  for (i in 1:N) {
-    y[i] ~ dnorm(mu, tau)
+            <pre><code><span class="keyword">model</span> {
+  <span class="keyword">for</span> (i <span class="keyword">in</span> <span class="number">1</span><span class="operator">:</span>N) {
+    <span class="variable">y</span>[i] <span class="operator">~</span> <span class="function">dnorm</span>(<span class="variable">mu</span>, <span class="variable">tau</span>)
   }
-  mu ~ dnorm(0, 0.001)
-  tau ~ dgamma(0.001, 0.001)
+  <span class="variable">mu</span> <span class="operator">~</span> <span class="function">dnorm</span>(<span class="number">0</span>, <span class="number">0.001</span>)
+  <span class="variable">tau</span> <span class="operator">~</span> <span class="function">dgamma</span>(<span class="number">0.001</span>, <span class="number">0.001</span>)
 }</code></pre>
 
             <h3>Getting Started with JuliaBUGS</h3>
@@ -257,19 +307,46 @@
                 design to inference.</p>
 
             <p>The widgets you see above are designed to integrate seamlessly with JuliaBUGS, allowing you to export
-                your
-                visual models as executable Julia code. This bridges the gap between intuitive model building and
+                your visual models as executable Julia code. This bridges the gap between intuitive model building and
                 production-ready code.</p>
+
+            <h3>DoodleWidget as Compound Documents</h3>
+
+            <p>DoodleWidget implements the concept of <em>compound documents</em> [<a href="#ref6" style="color: #10b981; text-decoration: none;">6</a>]—interactive documents that combine 
+                formatted text, mathematical notation, visualizations, and executable models in a single interface. Unlike traditional workflows 
+                that require switching between separate programs for writing, modeling, and visualization, DoodleWidget provides an integrated 
+                environment where all these tools are readily available. You can build graphical models, view generated code, input data, 
+                and interact with the complete modeling workflow without leaving the document.</p>
 
             <h2>Conclusion</h2>
 
             <p>Bayesian graphical models provide a principled way to reason about uncertainty. With tools like
                 DoodleBUGS and JuliaBUGS, building and running these models has never been more accessible. We encourage
                 you to explore the interactive widgets above to deepen your understanding of probabilistic modeling.</p>
+
+            <div class="references">
+                <h2>References</h2>
+                <ol>
+                    <li id="ref1">George, E. I., Makov, U. E., & Smith, A. F. M. (1993). Conjugate likelihood distributions. <em>Scandinavian Journal of Statistics</em>, 20(2), 147-156.</li>
+                    <li id="ref2">Gelfand, A. E., Hills, S. E., Racine-Poon, A., & Smith, A. F. M. (1990). Illustration of Bayesian inference in normal data models using Gibbs sampling. <em>Journal of the American Statistical Association</em>, 85(412), 972-985.</li>
+                    <li id="ref3">Crowder, M. J. (1978). Beta-binomial ANOVA for proportions. <em>Applied Statistics</em>, 27(1), 34-37.</li>
+                    <li id="ref4">Koller, D., & Friedman, N. (2009). <em>Probabilistic Graphical Models: Principles and Techniques</em>. MIT Press. 
+                        <a href="http://mcb111.org/w06/KollerFriedman.pdf" target="_blank" style="color: #10b981;">[PDF]</a></li>
+                    <li id="ref5">OpenBUGS Examples Volume I. 
+                        <a href="https://chjackson.github.io/openbugsdoc/Examples/Volumei.html" target="_blank" style="color: #10b981;">[Link]</a></li>
+                    <li id="ref6">OpenBUGS Compound Documents Manual. 
+                        <a href="https://chjackson.github.io/openbugsdoc/Manuals/CompoundDocuments.html" target="_blank" style="color: #10b981;">[Link]</a></li>
+                </ol>
+                <p style="margin-top: 20px; font-size: 0.9rem; color: #666;">
+                    <strong>Note:</strong> The examples and descriptions in this article are adapted from the classic BUGS examples collection [<a href="#ref5" style="color: #10b981; text-decoration: none;">5</a>], 
+                    originally distributed with WinBUGS as part of the MRC Biostatistics Unit research at Cambridge.
+                </p>
+            </div>
         </article>
 
         <footer>
-            <p>Built with DoodleBUGS · Part of the JuliaBUGS Project</p>
+            <p>Built with <a href="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/" target="_blank" style="color: #10b981; text-decoration: none;">DoodleBUGS</a> · 
+               Part of the <a href="https://turinglang.org/JuliaBUGS.jl/" target="_blank" style="color: #10b981; text-decoration: none;">JuliaBUGS Project</a></p>
         </footer>
     </div>
 </body>
