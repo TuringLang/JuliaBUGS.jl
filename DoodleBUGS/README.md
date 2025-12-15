@@ -80,8 +80,11 @@ DoodleBUGS can be embedded as a standalone web component in any HTML page or web
 Add the following to your HTML page (in the `<head>` section):
 
 ```html
-<link rel="stylesheet" href="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.css">
-<script type="module" src="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.js"></script>
+<link rel="stylesheet" href="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.css" />
+<script
+  type="module"
+  src="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.js"
+></script>
 ```
 
 Then use the custom element in your page body:
@@ -96,21 +99,21 @@ Then use the custom element in your page body:
 
 All props are optional:
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `width` | string | `"100%"` | Widget width |
-| `height` | string | `"600px"` | Widget height |
-| `model` | string | - | Built-in model (`"rats"`, `"pumps"`, `"seeds"`) or URL to JSON file |
-| `local-model` | string | - | Path to local JSON file |
-| `initial-state` | string | - | JSON string to restore saved work (get from `state-update` event) |
-| `storage-key` | string | auto | Custom key for localStorage (only needed for multiple widgets on same page) |
+| Prop            | Type   | Default   | Description                                                                 |
+| --------------- | ------ | --------- | --------------------------------------------------------------------------- |
+| `width`         | string | `"100%"`  | Widget width                                                                |
+| `height`        | string | `"600px"` | Widget height                                                               |
+| `model`         | string | -         | Built-in model (`"rats"`, `"pumps"`, `"seeds"`) or URL to JSON file         |
+| `local-model`   | string | -         | Path to local JSON file                                                     |
+| `initial-state` | string | -         | JSON string to restore saved work (get from `state-update` event)           |
+| `storage-key`   | string | auto      | Custom key for localStorage (only needed for multiple widgets on same page) |
 
 ### Events
 
-| Event | Payload | Description |
-|-------|---------|-------------|
+| Event          | Payload     | Description                                  |
+| -------------- | ----------- | -------------------------------------------- |
 | `state-update` | JSON string | Fires on any change. Contains complete state |
-| `code-update` | string | Fires when BUGS code changes |
+| `code-update`  | string      | Fires when BUGS code changes                 |
 
 ### Saving to Backend
 
