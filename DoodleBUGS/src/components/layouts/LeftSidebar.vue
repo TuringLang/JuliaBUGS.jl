@@ -123,7 +123,11 @@ const handleHeaderClick = () => {
       </span>
       <div class="flex items-center ml-auto">
         <button
-          v-tooltip.top="{ value: isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode', showDelay: 0, hideDelay: 0 }"
+          v-tooltip.top="{
+            value: isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+            showDelay: 0,
+            hideDelay: 0,
+          }"
           @click.stop="uiStore.toggleDarkMode()"
           @mousedown.stop
           @touchstart.stop
@@ -131,7 +135,7 @@ const handleHeaderClick = () => {
         >
           <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
         </button>
-        <div 
+        <div
           v-tooltip.top="{ value: 'Collapse Sidebar', showDelay: 0, hideDelay: 0 }"
           class="flex items-center"
         >

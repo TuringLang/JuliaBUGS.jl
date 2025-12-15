@@ -90,9 +90,9 @@ const handleHeaderClick = () => {
           </div>
         </div>
 
-        <button 
+        <button
           v-tooltip.top="{ value: 'Share via URL', showDelay: 0, hideDelay: 0 }"
-          class="db-header-icon-btn" 
+          class="db-header-icon-btn"
           @click="$emit('share')"
         >
           <i class="fas fa-share-alt"></i>
@@ -109,7 +109,7 @@ const handleHeaderClick = () => {
         </button>
       </div>
 
-      <div 
+      <div
         v-tooltip.top="{ value: 'Collapse Sidebar', showDelay: 0, hideDelay: 0 }"
         class="pointer-events-none flex items-center ml-2"
       >
