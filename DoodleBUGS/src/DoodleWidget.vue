@@ -229,7 +229,7 @@ const widgetTeleportCSS = `
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 9995;
+  z-index: 1000000; /* Higher than widget root to ensure UI is on top */
   pointer-events: none;
 }
 
@@ -245,7 +245,7 @@ const widgetTeleportCSS = `
 .db-sidebar-wrapper {
   position: absolute;
   pointer-events: none; /* Let clicks pass through if sidebar is closed/scaled down */
-  z-index: 9996;
+  z-index: 1000001; /* Above UI overlay */
   display: block;
 }
 
@@ -265,11 +265,11 @@ const widgetTeleportCSS = `
 }
 
 .db-ui-overlay .db-floating-panel {
-  z-index: 9997 !important;
+  z-index: 1000002 !important;
 }
 
 .db-ui-overlay .db-toolbar-container {
-  z-index: 9998 !important;
+  z-index: 1000003 !important; /* Toolbar should be above panels */
 }
 
 .p-popover,
@@ -277,11 +277,11 @@ const widgetTeleportCSS = `
 .p-dialog,
 .p-toast,
 .p-tooltip {
-  z-index: 10000 !important;
+  z-index: 1000010 !important; /* Above all DoodleBUGS UI */
 }
 
 .p-dialog-mask {
-  z-index: 9999 !important;
+  z-index: 1000009 !important;
 }
 
 /* Sidebar Animations */
@@ -1395,7 +1395,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         :is-detach-mode-active="isDetachModeActive"
         :show-detach-mode-control="showDetachModeControl"
         :is-widget="false"
-        :style="{ zIndex: 10000 }"
+        :style="{ zIndex: 1000003 }"
         @update:current-mode="currentMode = $event"
         @update:current-node-type="currentNodeType = $event"
         @undo="handleUndo"
@@ -1850,9 +1850,10 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
   left: 0;
   width: 100vw !important;
   height: 100vh !important;
-  z-index: 9990; /* Canvas base Z-Index */
+  z-index: 999999; /* Canvas base Z-Index - very high to cover everything */
   margin: 0;
   border-radius: 0;
+  background: var(--theme-bg-canvas) !important; /* Solid background to prevent bleed-through */
 }
 
 .db-widget-root.db-fullscreen-mode .db-content-clipper {
@@ -1975,9 +1976,9 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
 
 /* Collapsed Sidebar Triggers Styles */
 .db-collapsed-sidebar-trigger {
-  position: absolute;
+  position: fixed; /* Use fixed positioning in fullscreen mode */
   top: 16px;
-  z-index: 100;
+  z-index: 1000004; /* Above toolbar and panels */
   padding: 8px 12px;
   border-radius: var(--radius-md);
   display: flex;

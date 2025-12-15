@@ -520,9 +520,8 @@ onUnmounted(() => {
 
 <style scoped>
 .db-toolbar-container {
-  /* Default to absolute for widget containment */
   position: absolute;
-  z-index: 400; /* Layer 5: Toolbar - above panels, below dropdowns */
+  z-index: 400;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -530,11 +529,12 @@ onUnmounted(() => {
   cursor: grab;
   touch-action: none;
   will-change: transform;
+  pointer-events: auto;
 }
 
-/* When in fullscreen/body teleport, switch to fixed positioning */
 .db-toolbar-container.db-position-fixed {
   position: fixed;
+  pointer-events: auto;
 }
 
 .db-toolbar-container:active {
@@ -552,6 +552,8 @@ onUnmounted(() => {
   position: relative;
   z-index: 2;
   background: var(--theme-bg-panel);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--theme-border);
 }
 
 .db-drag-handle {
@@ -580,6 +582,7 @@ onUnmounted(() => {
   justify-content: center;
   font-size: 14px;
   transition: all 0.2s;
+  flex-shrink: 0;
 }
 
 .db-dock-btn:hover {
@@ -666,13 +669,15 @@ onUnmounted(() => {
     bottom: 16px !important;
     left: 50% !important;
     top: auto !important;
-    width: 100%;
-    max-width: 100vw;
+    transform: translateX(-50%) !important;
+    width: auto;
+    max-width: calc(100vw - 32px);
   }
   .db-floating-dock {
     max-width: calc(100vw - 32px);
     overflow-x: auto;
     justify-content: flex-start;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
   .db-floating-dock::-webkit-scrollbar {
     display: none;
