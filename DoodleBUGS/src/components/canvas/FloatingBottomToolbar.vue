@@ -590,6 +590,7 @@ onUnmounted(() => {
 .db-dock-btn.db-active {
   background: var(--theme-primary);
   color: white;
+  flex-shrink: 0;
 }
 
 .db-divider {
