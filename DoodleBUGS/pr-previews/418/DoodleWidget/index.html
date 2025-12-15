@@ -158,7 +158,7 @@
     <div class="article-container">
         <header>
             <h1>Introduction to Bayesian Graphical Models</h1>
-            <p class="meta">Published: December 2024 · 10 min read</p>
+            <p class="meta">Published: December 2025 · 10 min read</p>
         </header>
 
         <article>
@@ -167,7 +167,6 @@
                 directed graphs. In this article, we will explore the core concepts, learn how to visualize them, and
                 examine real-world examples.</p>
 
-            <!-- Section 1: Theory and First Example -->
             <h2>What are Graphical Models?</h2>
 
             <p>A graphical model is a probabilistic model where a graph expresses the conditional dependence structure
@@ -183,7 +182,6 @@
                 and undirected graphical models (also known as Markov random fields). We focus here on directed acyclic
                 graphs (DAGs).</p>
 
-            <!-- Example 1: Pumps (Simple Conjugate) -->
             <div class="widget-section">
                 <h3>Pumps: conjugate gamma-Poisson hierarchical model</h3>
                 <p>To understand the utility of these models, let's look at the <strong>Pumps</strong> example (George
@@ -198,7 +196,6 @@
                 </div>
             </div>
 
-            <!-- Example 2: Rats (Growth) -->
             <div class="widget-section">
                 <h3>Rats: a normal hierarchical model</h3>
                 <p>Now let's look at a temporal model from Gelfand et al. (1990). The <strong>Rats</strong> example
@@ -213,7 +210,6 @@
                 </div>
             </div>
 
-            <!-- Section 3: Benefits and Final Example -->
             <h2>Why Use Graphical Models?</h2>
 
             <p>As seen in the examples above, graphical models offer distinct advantages:</p>
@@ -225,7 +221,6 @@
             <p><strong>Modularity:</strong> Complex models can be built from simpler components. We can easily add a new
                 layer to our hierarchy without rewriting the entire mathematical derivation.</p>
 
-            <!-- Example 3: Seeds (Complex) -->
             <div class="widget-section">
                 <h3>Seeds: Random effect logistic regression</h3>
                 <p>Finally, let's look at a random effects logistic regression from Crowder (1978). The
@@ -239,7 +234,6 @@
                 <doodle-bugs model="seeds" height="500px"></doodle-bugs>
             </div>
 
-            <!-- Section 4: Under the Hood (Technical Implementation) -->
             <h2>Under the Hood: The BUGS Language</h2>
 
             <p>BUGS (Bayesian inference Using Gibbs Sampling) is a probabilistic programming language for specifying
