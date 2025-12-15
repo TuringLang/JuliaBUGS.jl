@@ -1315,25 +1315,44 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
       <!-- Non-Fullscreen Controls (Embedded Mode - Reduced to just Maximize) -->
       <div
         v-if="!isFullScreen"
-        class="db-edit-toggle-wrapper"
         style="
           position: absolute;
           top: 10px;
           right: 10px;
-          z-index: 1000; /* Increased z-index to sit above canvas */
+          z-index: 1000;
           display: flex;
           gap: 8px;
           pointer-events: auto;
         "
       >
-        <button @click="toggleFullScreen" title="Maximize Graph" class="db-control-btn">
+        <button 
+          @click="toggleFullScreen" 
+          title="Maximize Graph"
+          style="
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--theme-bg-panel, white);
+            border: 1px solid var(--theme-border, #e5e7eb);
+            color: var(--theme-text-secondary, #4b5563);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 0;
+            transition: all 0.2s;
+          "
+          @mouseenter="(e) => (e.currentTarget as HTMLElement).style.transform = 'scale(1.05)'"
+          @mouseleave="(e) => (e.currentTarget as HTMLElement).style.transform = 'scale(1)'"
+        >
           <svg
             viewBox="0 0 24 24"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             width="1.1rem"
             height="1.1rem"
-            style="color: currentColor"
+            style="color: currentColor; pointer-events: none;"
           >
             <path
               d="M18 20.75H12C11.8011 20.75 11.6103 20.671 11.4697 20.5303C11.329 20.3897 11.25 20.1989 11.25 20C11.25 19.8011 11.329 19.6103 11.4697 19.4697C11.6103 19.329 11.8011 19.25 12 19.25H18C18.3315 19.25 18.6495 19.1183 18.8839 18.8839C19.1183 18.6495 19.25 18.3315 19.25 18V6C19.25 5.66848 19.1183 5.35054 18.8839 5.11612C18.6495 4.8817 18.3315 4.75 18 4.75H6C5.66848 4.75 5.35054 4.8817 5.11612 5.11612C4.8817 5.35054 4.75 5.66848 4.75 6V12C4.75 12.1989 4.67098 12.3897 4.53033 12.5303C4.38968 12.671 4.19891 12.75 4 12.75C3.80109 12.75 3.61032 12.671 3.46967 12.5303C3.32902 12.3897 3.25 12.1989 3.25 12V6C3.25 5.27065 3.53973 4.57118 4.05546 4.05546C4.57118 3.53973 5.27065 3.25 6 3.25H18C18.7293 3.25 19.4288 3.53973 19.9445 4.05546C20.4603 4.57118 20.75 5.27065 20.75 6V18C20.75 18.7293 20.4603 19.4288 19.9445 19.9445C19.4288 20.4603 18.7293 20.75 18 20.75Z"
@@ -1357,10 +1376,10 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     </div>
 
     <!-- Floating Toolbar (Only in Full Screen) -->
-    <Teleport to="body" :disabled="!isFullScreen">
+    <Teleport to="body">
       <FloatingBottomToolbar
         ref="bottomToolbarRef"
-        v-if="isWidgetInView && isEditMode"
+        v-if="isWidgetInView && isFullScreen && isEditMode"
         :current-mode="currentMode"
         :current-node-type="currentNodeType"
         :show-zoom-controls="showZoomControls"
@@ -1368,8 +1387,8 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         :show-data-panel="isDataPanelOpen"
         :is-detach-mode-active="isDetachModeActive"
         :show-detach-mode-control="showDetachModeControl"
-        :is-widget="!isFullScreen"
-        :style="isFullScreen ? { zIndex: 10000 } : {}"
+        :is-widget="false"
+        :style="{ zIndex: 10000 }"
         @update:current-mode="currentMode = $event"
         @update:current-node-type="currentNodeType = $event"
         @undo="handleUndo"
@@ -1401,7 +1420,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
           'db-widget-ready': widgetInitialized,
           'db-fullscreen': isFullScreen,
         }"
-        v-show="isWidgetInView && isEditMode && isUIActive"
+        v-show="isWidgetInView && isFullScreen && isEditMode && isUIActive"
       >
         <!-- Collapsed Sidebar Triggers (Only in Full Screen) -->
         <template v-if="isFullScreen">
@@ -1431,7 +1450,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
                   >
                     <i :class="isDarkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
                   </button>
-                  <div class="db-toggle-icon-wrapper">
+                  <div class="db-toggle-icon-wrapper" title="Expand Sidebar">
                     <svg
                       width="20"
                       height="20"
@@ -1483,10 +1502,10 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
                     @click.stop="toggleFullScreen"
                     title="Exit Full Screen"
                   >
-                    <i class="pi pi-window-minimize" style="font-size: 1rem"></i>
+                    <i class="fas fa-compress"></i>
                   </button>
 
-                  <div class="db-toggle-icon-wrapper">
+                  <div class="db-toggle-icon-wrapper" title="Expand Sidebar">
                     <svg
                       width="20"
                       height="20"
@@ -1576,6 +1595,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         </Transition>
 
         <FloatingPanel
+          v-if="isFullScreen"
           title="BUGS Code Preview"
           icon="fas fa-code"
           :is-open="isCodePanelOpen"
@@ -1607,6 +1627,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         </FloatingPanel>
 
         <FloatingPanel
+          v-if="isFullScreen"
           title="Data & Inits"
           icon="fas fa-database"
           badge="JSON"
@@ -1831,33 +1852,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
 
 .db-widget-root.db-dark-mode .db-content-clipper {
   border-color: #3f3f46;
-}
-
-.db-control-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: white;
-  border: 1px solid #e5e7eb;
-  color: #4b5563;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  padding: 0;
-  transition: all 0.2s;
-}
-
-.db-control-btn:hover {
-  background: var(--theme-bg-hover);
-  color: var(--theme-primary);
-  transform: scale(1.05);
-}
-
-.db-control-btn.db-active {
-  background: var(--theme-danger);
-  border-color: var(--theme-danger);
+ border-color: var(--theme-danger);
   color: white;
 }
 
