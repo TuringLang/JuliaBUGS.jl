@@ -496,6 +496,7 @@ const handleLoadExample = async (
       detail: error instanceof Error ? error.message : 'An unexpected error occurred.',
       life: 5000,
     })
+    throw error
   }
 }
 
@@ -529,7 +530,17 @@ const initGraph = async () => {
       graphStore.selectGraph(existingGraph.id)
       saveLastGraphId(existingGraph.id)
     } else {
-      await handleLoadExample(sourceKey, isLocalFile ? 'local' : 'prop', true)
+      try {
+        await handleLoadExample(sourceKey, isLocalFile ? 'local' : 'prop', true)
+      } catch (error) {
+        console.warn('[DoodleBUGS] Failed to load model from URL, creating empty graph:', error)
+        if (proj.graphs.length === 0) {
+          projectStore.addGraphToProject(proj.id, 'Model 1')
+        }
+        if (!graphStore.currentGraphId && proj.graphs.length > 0) {
+          graphStore.selectGraph(proj.graphs[0].id)
+        }
+      }
     }
   } else {
     const lastGraphId = loadLastGraphId()
