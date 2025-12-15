@@ -2254,11 +2254,14 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
   }
   .db-collapsed-sidebar-trigger {
     min-width: auto !important;
-    max-width: 42%;
-    padding: 8px;
+    max-width: 48%;
+    padding: 6px 8px;
   }
   .db-collapsed-sidebar-trigger.db-left-trigger {
     min-width: auto !important;
+  }
+  .db-collapsed-sidebar-trigger.db-right {
+    max-width: 48%;
   }
   .db-logo-text-minimized {
     font-size: 12px;
@@ -2267,8 +2270,38 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
     text-overflow: ellipsis;
     display: block;
   }
+  .db-sidebar-title-minimized {
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .db-sidebar-trigger-content {
-    gap: 4px;
+    gap: 2px;
+    flex-wrap: wrap;
+  }
+  .db-header-icon-btn {
+    font-size: 11px;
+    padding: 3px;
+  }
+  .db-status-indicator {
+    width: 20px;
+    height: 20px;
+  }
+  .db-validation-status {
+    font-size: 0.95em;
+    margin: 0 2px;
+  }
+  .db-collapsed-share-btn {
+    width: 20px;
+    height: 20px;
+  }
+  .db-toggle-icon-wrapper {
+    gap: 6px;
+  }
+  .db-toggle-icon-wrapper svg {
+    width: 16px;
+    height: 16px;
   }
 }
 </style>

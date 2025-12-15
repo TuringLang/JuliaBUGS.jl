@@ -223,6 +223,24 @@ const handleHeaderClick = () => {
   .db-sidebar-content {
     padding-bottom: 80px; /* Space for floating toolbar on mobile */
   }
+  .db-sidebar-header {
+    padding: 8px 12px;
+  }
+  .db-sidebar-title {
+    font-size: 0.85rem;
+  }
+  .db-header-icon-btn {
+    font-size: 12px;
+    padding: 4px;
+  }
+  .db-status-indicator {
+    width: 20px;
+    height: 20px;
+  }
+  .db-validation-status {
+    font-size: 0.9em;
+    margin: 0 2px;
+  }
 }
 
 .db-sidebar-header {
@@ -234,6 +252,8 @@ const handleHeaderClick = () => {
   background: var(--theme-bg-panel-transparent);
   color: var(--theme-text-primary);
   flex-shrink: 0;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .db-sidebar-title {
