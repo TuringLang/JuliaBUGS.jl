@@ -62,7 +62,8 @@ using JuliaBUGS.Model:
     )
     # Initialize near ground truth for faster convergence
     initialize!(model, (; mu=[-2.0, 2.0], sigma=[1.0, 1.0]))
-    ad_model = ADgradient(AutoForwardDiff(), model)
+    # Use BUGSModelWithGradient to get proper parameter naming in chains
+    ad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoForwardDiff())
 
     # Initialize at current transformed parameters
     θ0 = getparams(model)

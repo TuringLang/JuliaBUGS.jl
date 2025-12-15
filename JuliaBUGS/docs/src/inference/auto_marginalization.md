@@ -410,3 +410,16 @@ Ultimately, the caching algorithm gives factor-graph quality marginalization wit
 - It's a natural compilation target, the evaluator is straightforward to write and understand
 
 The contribution is to show what the cache key is and how to precompute
+
+---
+
+## Usage
+
+Enable auto-marginalization on a compiled model:
+
+    model = settrans(model, true)
+    model = set_evaluation_mode(model, UseAutoMarginalization())
+
+Requires transformed space. Discrete variables must have finite support (Categorical, Bernoulli, etc.).
+
+See [Evaluation Modes](evaluation_modes.md) for more on `set_evaluation_mode`.

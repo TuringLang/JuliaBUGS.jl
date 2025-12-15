@@ -191,44 +191,9 @@ initialize!(model, initializations)
 initialize!(model, rand(26))
 ```
 
-### Automatic Differentiation
-
-JuliaBUGS integrates with automatic differentiation (AD) through [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl), enabling gradient-based inference methods like Hamiltonian Monte Carlo (HMC) and No-U-Turn Sampler (NUTS).
-
-#### Specifying an AD Backend
-
-To compile a model with gradient support, pass the `adtype` parameter to `compile`:
-
-```julia
-# Compile with gradient support using ADTypes from ADTypes.jl
-using ADTypes
-model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
-```
-
-Alternatively, if you already have a compiled `BUGSModel`, you can wrap it with `BUGSModelWithGradient` without recompiling:
-
-```julia
-base_model = compile(model_def, data)
-model = BUGSModelWithGradient(base_model, AutoReverseDiff(compile=true))
-```
-
-Available AD backends include:
-- `AutoReverseDiff(compile=true)` - ReverseDiff with tape compilation (recommended for most models)
-- `AutoForwardDiff()` - ForwardDiff (efficient for models with few parameters)
-- `AutoMooncake()` - Mooncake (requires `UseGeneratedLogDensityFunction()` mode)
-
-For fine-grained control, you can configure the AD backend:
-
-```julia
-# ReverseDiff without compilation
-model = compile(model_def, data; adtype=AutoReverseDiff(compile=false))
-```
-
-The compiled model with gradient support implements the [`LogDensityProblems.jl`](https://www.tamaspapp.eu/LogDensityProblems.jl/dev/) interface, including [`logdensity_and_gradient`](https://www.tamaspapp.eu/LogDensityProblems.jl/dev/#LogDensityProblems.logdensity_and_gradient), which returns both the log density and its gradient.
-
 ### Inference
 
-For gradient-based inference, we use [`AdvancedHMC.jl`](https://github.com/TuringLang/AdvancedHMC.jl) with models compiled with an `adtype`:
+For gradient-based inference, compile your model with an AD backend using the `adtype` parameter (see [Automatic Differentiation](inference/ad.md) for details). We use [`AdvancedHMC.jl`](https://github.com/TuringLang/AdvancedHMC.jl):
 
 ```@example abc
 # Compile with gradient support
@@ -253,122 +218,12 @@ describe(samples_and_stats)
 
 This is consistent with the result in the [OpenBUGS seeds example](https://chjackson.github.io/openbugsdoc/Examples/Seeds.html).
 
-## Evaluation Modes and Automatic Differentiation
+## Next Steps
 
-JuliaBUGS supports multiple evaluation modes and AD backends. The evaluation mode determines how the log density is computed, and constrains which AD backends can be used.
-
-### Evaluation Modes
-
-| Mode | AD Backends |
-|------|-------------|
-| `UseGraph()` (default) | ReverseDiff, ForwardDiff |
-| `UseGeneratedLogDensityFunction()` | Mooncake |
-
-- **`UseGraph()`**: Evaluates by traversing the computational graph. Supports user-defined primitives registered via `@bugs_primitive`.
-- **`UseGeneratedLogDensityFunction()`**: Generates and compiles a Julia function for the log density.
-
-### AD Backends with `UseGraph()` Mode
-
-Use [ReverseDiff.jl](https://github.com/JuliaDiff/ReverseDiff.jl) or [ForwardDiff.jl](https://github.com/JuliaDiff/ForwardDiff.jl) with the default `UseGraph()` mode:
-
-```julia
-using ADTypes
-
-# ReverseDiff with tape compilation (recommended for large models)
-model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
-
-# ForwardDiff (efficient for small models with < 20 parameters)
-model = compile(model_def, data; adtype=AutoForwardDiff())
-
-# ReverseDiff without compilation (supports control flow)
-model = compile(model_def, data; adtype=AutoReverseDiff(compile=false))
-```
-
-!!! warning "Compiled ReverseDiff does not support control flow"
-    Compiled tapes record a fixed execution path. If your model contains value-dependent control flow (e.g., `if x > 0`, `while`, truncation), the tape will only capture one branch and produce **incorrect gradients** when the control flow takes a different path. Use `AutoReverseDiff(compile=false)` or `AutoForwardDiff()` for models with control flow.
-
-### AD Backend with `UseGeneratedLogDensityFunction()` Mode
-
-Use [Mooncake.jl](https://github.com/compintell/Mooncake.jl) with the generated log density function mode:
-
-```julia
-using ADTypes
-
-model = compile(model_def, data)
-model = set_evaluation_mode(model, UseGeneratedLogDensityFunction())
-model = BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
-```
-
-## Parallel and Distributed Sampling with `AbstractMCMC`
-
-`AbstractMCMC` and `AdvancedHMC` support both parallel and distributed sampling.
-
-### Parallel Sampling
-
-To perform multi-threaded sampling of multiple chains, start the Julia session with the `-t <n_threads>` argument.
-The model compilation code remains the same, and we can sample multiple chains in parallel as follows:
-
-```julia
-n_chains = 4
-samples_and_stats = AbstractMCMC.sample(
-    model,
-    AdvancedHMC.NUTS(0.65),
-    AbstractMCMC.MCMCThreads(),
-    n_samples,
-    n_chains;
-    chain_type = Chains,
-    n_adapts = n_adapts,
-    init_params = [initial_θ for _ = 1:n_chains],
-    discard_initial = n_adapts,
-)
-```
-
-In this case, we pass two additional arguments to `AbstractMCMC.sample`:
-
-- `AbstractMCMC.MCMCThreads()`: the sampler type, and
-- `n_chains`: the number of chains to sample.
-
-### Distributed Sampling
-
-To perform distributed sampling of multiple chains, start the Julia session with the `-p <n_processes>` argument.
-
-In distributed mode, ensure that all functions and modules are available on all processes.
-Use `@everywhere` to make the functions and modules available on all processes.
-
-For example:
-
-```julia
-@everywhere begin
-    using JuliaBUGS, LogDensityProblems, AbstractMCMC, AdvancedHMC, MCMCChains, ADTypes, ReverseDiff
-
-    # Define the functions to use
-    # Use `@bugs_primitive` to register the functions to use in the model
-
-    # Distributed can handle data dependencies in some cases, for more detail, see https://docs.julialang.org/en/v1/manual/distributed-computing/
-
-end
-
-n_chains = nprocs() - 1 # use all the processes except the parent process
-samples_and_stats = AbstractMCMC.sample(
-    model,
-    AdvancedHMC.NUTS(0.65),
-    AbstractMCMC.MCMCDistributed(),
-    n_samples,
-    n_chains;
-    chain_type = Chains,
-    n_adapts = n_adapts,
-    init_params = [initial_θ for _ = 1:n_chains], # each chain has its own initial parameters
-    discard_initial = n_adapts,
-    progress = false, # Base.TTY creating problems in distributed setting
-)
-```
-
-In this case, we pass two additional arguments to `AbstractMCMC.sample`:
-
-- `AbstractMCMC.MCMCDistributed()`: the sampler type, and
-- `n_chains`: the number of chains to sample.
-  Note that the `init_params` argument is now a vector of initial parameters for each chain.
-  Sometimes the progress logger can cause problems in distributed setting, so we can disable it by setting `progress = false`.
+- [Automatic Differentiation](inference/ad.md) - AD backends and configuration
+- [Evaluation Modes](inference/evaluation_modes.md) - Different log density computation modes
+- [Auto-Marginalization](inference/auto_marginalization.md) - Gradient-based inference with discrete variables
+- [Parallel Sampling](inference/parallel.md) - Multi-threaded and distributed sampling
 
 ## More Examples
 
