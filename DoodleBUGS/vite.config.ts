@@ -22,7 +22,7 @@ function copyWidgetDemo() {
         if (existsSync(src)) copyFileSync(src, resolve(libDir, file))
       })
 
-      const demoSrc = resolve(__dirname, 'experiments/DoodleWidget/DoodleWidget.html')
+      const demoSrc = resolve(__dirname, 'docs/DoodleWidget/index.html')
       let demoContent = readFileSync(demoSrc, 'utf-8')
       demoContent = demoContent
         .replace('../../dist-lib/doodlebugs.css', '../lib/doodlebugs.css')
