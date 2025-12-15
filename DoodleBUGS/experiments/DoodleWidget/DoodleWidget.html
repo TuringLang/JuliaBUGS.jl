@@ -193,8 +193,7 @@
                     hyperparameters $\alpha$ and $\beta$ given Exponential and Gamma priors respectively. This structure
                     leads to a non-standard posterior for $\alpha$, necessitating the use of Gibbs sampling.</p>
                 <div class="widget-container">
-                    <doodle-bugs
-                        model="https://raw.githubusercontent.com/shravanngoswamii/experimental/refs/heads/main/DoodlePPL/models/pumps.json"></doodle-bugs>
+                    <doodle-bugs model="pumps"></doodle-bugs>
                 </div>
             </div>
 
@@ -209,8 +208,7 @@
                     the intercept $\alpha_i$ and slope $\beta_i$. We estimate these random effects to capture both
                     individual trajectories and population-level growth.</p>
                 <div class="widget-container">
-                    <doodle-bugs
-                        model="https://raw.githubusercontent.com/shravanngoswamii/experimental/refs/heads/main/DoodlePPL/models/rats.json"></doodle-bugs>
+                    <doodle-bugs model="rats"></doodle-bugs>
                 </div>
             </div>
 
@@ -237,9 +235,7 @@
                     germination is modeled as $logit(p_i) = \alpha_0 + \alpha_1 x_{1i} + \alpha_2 x_{2i} + \alpha_{12}
                     x_{1i}x_{2i} + b_i$, where $b_i \sim Normal(0, \tau)$, effectively capturing the unobserved
                     heterogeneity.</p>
-                <doodle-bugs
-                    model="https://raw.githubusercontent.com/shravanngoswamii/experimental/refs/heads/main/DoodlePPL/models/seeds.json"
-                    height="500px"></doodle-bugs>
+                <doodle-bugs model="seeds" height="500px"></doodle-bugs>
             </div>
 
             <!-- Section 4: Under the Hood (Technical Implementation) -->
