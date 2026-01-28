@@ -67,8 +67,6 @@ using Test
     @testset "mcmc_callback wrapper" begin
         collected = []
 
-        # mcmc_callback wraps raw callbacks - it doesn't take params/stats kwargs
-        # Those are for the TensorBoard extension
         cb = AbstractMCMC.mcmc_callback() do rng,
         model, sampler, transition, state,
         iteration
