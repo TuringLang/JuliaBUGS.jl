@@ -32,4 +32,4 @@ Manifest.toml
 digest.txt
 
 # Personal Test Directory
-usage/
+dev/
