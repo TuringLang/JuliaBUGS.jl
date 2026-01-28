@@ -30,3 +30,5 @@ Manifest.toml
 
 # gitingest generated files
 digest.txt
+
+usage/

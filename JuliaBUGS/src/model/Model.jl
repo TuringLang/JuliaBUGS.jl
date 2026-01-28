@@ -1,5 +1,6 @@
 module Model
 
+using AbstractMCMC
 using Accessors
 using AbstractPPL
 using ADTypes
@@ -13,6 +14,7 @@ using JuliaBUGS: JuliaBUGS, BUGSGraph
 using JuliaBUGS.BUGSPrimitives
 using LogExpFunctions
 using MetaGraphsNext
+using OrderedCollections: OrderedDict
 using Random
 
 include("utils.jl")
@@ -20,6 +22,7 @@ include("bugsmodel.jl")
 include("evaluation.jl")
 include("abstractppl.jl")
 include("logdensityproblems.jl")
+include("abstractmcmc.jl")
 
 # Public user-facing API
 export parameters, variables, initialize!, getparams, settrans
