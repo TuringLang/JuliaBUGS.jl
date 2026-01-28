@@ -481,7 +481,6 @@
 <!-- NAVBAR END -->
 
 
-
 <div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">JuliaBUGS.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li class="is-active"><a class="tocitem" href>Getting Started</a><ul class="internal"><li><a class="tocitem" href="#Modeling-Language"><span>Modeling Language</span></a></li><li><a class="tocitem" href="#Basic-Workflow"><span>Basic Workflow</span></a></li><li><a class="tocitem" href="#Next-Steps"><span>Next Steps</span></a></li><li><a class="tocitem" href="#More-Examples"><span>More Examples</span></a></li></ul></li><li><span class="tocitem">Modeling</span><ul><li><a class="tocitem" href="../two_macros/">Two Macros: <code>@bugs</code> &amp; <code>@model</code></a></li><li><a class="tocitem" href="../model_macro/"><code>@model</code> Macro</a></li><li><a class="tocitem" href="../of_design_doc/"><code>of</code> Type System</a></li></ul></li><li><span class="tocitem">Inference</span><ul><li><a class="tocitem" href="../inference/ad/">Automatic Differentiation</a></li><li><a class="tocitem" href="../inference/evaluation_modes/">Evaluation Modes</a></li><li><a class="tocitem" href="../inference/auto_marginalization/">Auto-Marginalization</a></li><li><a class="tocitem" href="../inference/parallel/">Parallel &amp; Distributed Sampling</a></li></ul></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="../api/api/">General</a></li><li><a class="tocitem" href="../api/functions/">Functions</a></li><li><a class="tocitem" href="../api/distributions/">Distributions</a></li></ul></li><li><span class="tocitem">Guides</span><ul><li><a class="tocitem" href="../guides/differences/">Differences from Other BUGS</a></li><li><a class="tocitem" href="../guides/pitfalls/">Pitfalls</a></li><li><a class="tocitem" href="../guides/tricks/">Implementation Tricks</a></li></ul></li><li><a class="tocitem" href="../graph_plotting/">Plotting</a></li><li><a class="tocitem" href="../R_interface/">R Interface</a></li><li><span class="tocitem">For Developers</span><ul><li><a class="tocitem" href="../developers/parser/">Parser</a></li><li><a class="tocitem" href="../developers/source_gen/">Source Code Generation</a></li><li><a class="tocitem" href="../developers/BUGS_notes/">Notes on BUGS Implementations</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Getting Started</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Getting Started</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/TuringLang/JuliaBUGS.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/TuringLang/JuliaBUGS.jl/blob/main/JuliaBUGS/docs/src/example.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Example:-Logistic-Regression-with-Random-Effects"><a class="docs-heading-anchor" href="#Example:-Logistic-Regression-with-Random-Effects">Example: Logistic Regression with Random Effects</a><a id="Example:-Logistic-Regression-with-Random-Effects-1"></a><a class="docs-heading-anchor-permalink" href="#Example:-Logistic-Regression-with-Random-Effects" title="Permalink"></a></h1><p>We will use the <a href="https://chjackson.github.io/openbugsdoc/Examples/Seeds.html">Seeds</a> for demonstration. This example concerns the proportion of seeds that germinated on each of 21 plates. Here, we transform the data into a <code>NamedTuple</code>:</p><pre><code class="language-julia hljs">data = (
     r = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3],
     n = [39, 62, 81, 51, 39, 6, 74, 72, 51, 79, 13, 16, 30, 28, 45, 4, 12, 41, 30, 51, 7],
@@ -656,25 +655,25 @@ internals         = lp, n_steps, is_accept, acceptance_rate, log_density, hamilt
 
 Summary Statistics
 
-  parameters      mean        std      mcse    ess_bulk    ess_tail      rhat  ⋯
-      Symbol   Float64    Float64   Float64        Real     Float64   Float64  ⋯
+  parameters      mean       std      mcse    ess_bulk    ess_tail      rhat   ⋯
+      Symbol   Float64   Float64   Float64        Real     Float64   Float64   ⋯
 
-         tau   81.1066   151.5217   29.0887     29.0792     72.5301    1.0238  ⋯
-     alpha12   -0.8150     0.4036    0.0136    884.4405   1148.4452    1.0008  ⋯
-      alpha2    1.3472     0.2473    0.0090    749.4412   1003.1480    1.0122  ⋯
-      alpha1    0.0927     0.2938    0.0100    863.3029   1084.0617    1.0006  ⋯
-      alpha0   -0.5565     0.1759    0.0062    791.9414    807.6287    1.0074  ⋯
-       b[21]   -0.0429     0.2513    0.0056   2054.4534   1105.6937    1.0073  ⋯
-       b[20]    0.1815     0.2451    0.0199    185.0154    963.2753    1.0045  ⋯
-       b[19]   -0.0118     0.2204    0.0046   2342.8869   1098.8187    1.0067  ⋯
-       b[18]    0.0376     0.2208    0.0055   1635.3318   1047.5908    1.0184  ⋯
-       b[17]   -0.1813     0.2852    0.0183    331.3083    751.7568    1.0020  ⋯
-       b[16]   -0.0970     0.2757    0.0083   1331.9671    945.3056    1.0043  ⋯
-       b[15]    0.1936     0.2509    0.0179    258.3427   1052.4169    1.0056  ⋯
-       b[14]   -0.1176     0.2481    0.0097    770.4256    877.7549    1.0051  ⋯
-       b[13]   -0.0608     0.2266    0.0062   1517.2914   1055.1638    1.0086  ⋯
-       b[12]    0.1046     0.2638    0.0093   1021.7450    755.5257    1.0145  ⋯
-           ⋮         ⋮          ⋮         ⋮           ⋮           ⋮         ⋮  ⋱
+         tau   40.5870   77.5883   10.3204     81.1993     72.9377    1.0074   ⋯
+     alpha12   -0.8169    0.4070    0.0129    992.1699   1092.5879    0.9995   ⋯
+      alpha2    1.3457    0.2521    0.0079   1001.3854   1083.7476    1.0003   ⋯
+      alpha1    0.0811    0.3069    0.0101    944.8872    903.2342    1.0009   ⋯
+      alpha0   -0.5494    0.1819    0.0057   1006.4929    765.2733    0.9997   ⋯
+       b[21]   -0.0422    0.2774    0.0059   2293.7414   1065.2162    1.0047   ⋯
+       b[20]    0.2004    0.2510    0.0117    538.0399    791.9514    0.9999   ⋯
+       b[19]   -0.0208    0.2308    0.0055   1787.0056    988.0991    1.0008   ⋯
+       b[18]    0.0455    0.2326    0.0063   1530.0132    860.6713    0.9996   ⋯
+       b[17]   -0.1892    0.2888    0.0107    769.3734    975.1411    1.0006   ⋯
+       b[16]   -0.1164    0.2815    0.0087   1231.2027    810.5283    0.9996   ⋯
+       b[15]    0.2195    0.2607    0.0129    471.6077   1068.6300    1.0040   ⋯
+       b[14]   -0.1385    0.2521    0.0070   1378.6153    966.5439    1.0004   ⋯
+       b[13]   -0.0680    0.2472    0.0056   2120.2268   1171.4995    0.9996   ⋯
+       b[12]    0.1138    0.2679    0.0095    930.9378   1033.7019    1.0037   ⋯
+           ⋮         ⋮         ⋮         ⋮           ⋮           ⋮         ⋮   ⋱
 
                                                     1 column and 12 rows omitted
 
@@ -683,21 +682,21 @@ Quantiles
   parameters      2.5%     25.0%     50.0%     75.0%      97.5%
       Symbol   Float64   Float64   Float64   Float64    Float64
 
-         tau    2.8878    8.7977   17.7530   63.0522   613.6365
-     alpha12   -1.6236   -1.0702   -0.8047   -0.5498    -0.0299
-      alpha2    0.8480    1.1844    1.3475    1.5094     1.8205
-      alpha1   -0.5116   -0.0987    0.0929    0.2787     0.6525
-      alpha0   -0.9083   -0.6683   -0.5554   -0.4463    -0.2070
-       b[21]   -0.6357   -0.1514   -0.0188    0.0770     0.4593
-       b[20]   -0.1879    0.0126    0.1284    0.3195     0.7729
-       b[19]   -0.4649   -0.1230   -0.0051    0.0953     0.4622
-       b[18]   -0.4042   -0.0744    0.0195    0.1448     0.5275
-       b[17]   -0.8765   -0.3159   -0.1120    0.0036     0.2237
-       b[16]   -0.7443   -0.2286   -0.0479    0.0520     0.3915
-       b[15]   -0.1774    0.0233    0.1401    0.3295     0.8166
-       b[14]   -0.7054   -0.2421   -0.0708    0.0262     0.3076
-       b[13]   -0.5930   -0.1762   -0.0388    0.0626     0.3840
-       b[12]   -0.3641   -0.0360    0.0544    0.2131     0.7554
+         tau    3.2681    8.2023   15.3543   31.9706   302.3962
+     alpha12   -1.6149   -1.0799   -0.8178   -0.5471    -0.0260
+      alpha2    0.8636    1.1765    1.3448    1.5131     1.8638
+      alpha1   -0.5511   -0.1110    0.0838    0.2797     0.6727
+      alpha0   -0.9097   -0.6694   -0.5504   -0.4334    -0.1894
+       b[21]   -0.6625   -0.1862   -0.0261    0.1142     0.4890
+       b[20]   -0.2054    0.0258    0.1662    0.3472     0.7826
+       b[19]   -0.5044   -0.1437   -0.0231    0.1036     0.4608
+       b[18]   -0.4023   -0.0927    0.0335    0.1746     0.5430
+       b[17]   -0.8794   -0.3282   -0.1499   -0.0069     0.2965
+       b[16]   -0.7577   -0.2576   -0.0837    0.0492     0.3976
+       b[15]   -0.1724    0.0404    0.1697    0.3620     0.8324
+       b[14]   -0.7103   -0.2791   -0.1109    0.0217     0.3085
+       b[13]   -0.5865   -0.2077   -0.0502    0.0647     0.4168
+       b[12]   -0.3397   -0.0491    0.0770    0.2526     0.7179
            ⋮         ⋮         ⋮         ⋮         ⋮          ⋮
 
-                                                  12 rows omitted</code></pre><p>This is consistent with the result in the <a href="https://chjackson.github.io/openbugsdoc/Examples/Seeds.html">OpenBUGS seeds example</a>.</p><h2 id="Next-Steps"><a class="docs-heading-anchor" href="#Next-Steps">Next Steps</a><a id="Next-Steps-1"></a><a class="docs-heading-anchor-permalink" href="#Next-Steps" title="Permalink"></a></h2><ul><li><a href="../inference/ad/">Automatic Differentiation</a> - AD backends and configuration</li><li><a href="../inference/evaluation_modes/">Evaluation Modes</a> - Different log density computation modes</li><li><a href="../inference/auto_marginalization/">Auto-Marginalization</a> - Gradient-based inference with discrete variables</li><li><a href="../inference/parallel/">Parallel Sampling</a> - Multi-threaded and distributed sampling</li></ul><h2 id="More-Examples"><a class="docs-heading-anchor" href="#More-Examples">More Examples</a><a id="More-Examples-1"></a><a class="docs-heading-anchor-permalink" href="#More-Examples" title="Permalink"></a></h2><p>We have transcribed all the examples from the first volume of the BUGS Examples (<a href="https://www.multibugs.org/examples/latest/VolumeI.html">original</a> and <a href="https://github.com/TuringLang/JuliaBUGS.jl/tree/main/JuliaBUGS/src/BUGSExamples/Volume_1">transcribed</a>). All programs and data are included, and can be compiled using the steps described in the tutorial above.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Home</a><a class="docs-footer-nextpage" href="../two_macros/">Two Macros: <code>@bugs</code> &amp; <code>@model</code> »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Saturday 13 December 2025 12:01">Saturday 13 December 2025</span>. Using Julia version 1.12.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+                                                  12 rows omitted</code></pre><p>This is consistent with the result in the <a href="https://chjackson.github.io/openbugsdoc/Examples/Seeds.html">OpenBUGS seeds example</a>.</p><h2 id="Next-Steps"><a class="docs-heading-anchor" href="#Next-Steps">Next Steps</a><a id="Next-Steps-1"></a><a class="docs-heading-anchor-permalink" href="#Next-Steps" title="Permalink"></a></h2><ul><li><a href="../inference/ad/">Automatic Differentiation</a> - AD backends and configuration</li><li><a href="../inference/evaluation_modes/">Evaluation Modes</a> - Different log density computation modes</li><li><a href="../inference/auto_marginalization/">Auto-Marginalization</a> - Gradient-based inference with discrete variables</li><li><a href="../inference/parallel/">Parallel Sampling</a> - Multi-threaded and distributed sampling</li></ul><h2 id="More-Examples"><a class="docs-heading-anchor" href="#More-Examples">More Examples</a><a id="More-Examples-1"></a><a class="docs-heading-anchor-permalink" href="#More-Examples" title="Permalink"></a></h2><p>We have transcribed all the examples from the first volume of the BUGS Examples (<a href="https://www.multibugs.org/examples/latest/VolumeI.html">original</a> and <a href="https://github.com/TuringLang/JuliaBUGS.jl/tree/main/JuliaBUGS/src/BUGSExamples/Volume_1">transcribed</a>). All programs and data are included, and can be compiled using the steps described in the tutorial above.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Home</a><a class="docs-footer-nextpage" href="../two_macros/">Two Macros: <code>@bugs</code> &amp; <code>@model</code> »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Wednesday 28 January 2026 17:27">Wednesday 28 January 2026</span>. Using Julia version 1.12.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
