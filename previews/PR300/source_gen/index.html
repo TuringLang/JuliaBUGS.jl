@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Generating Sequential Code from BUGS Program · JuliaBUGS.jl</title><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body>
+<!-- NAVBAR START -->
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro&display=swap');
+
+    /* Documenter.jl CSS Overrides */
+    html {
+        scroll-padding-top: calc(var(--navbar-height) + 1rem);
+    }
+    .docs-sidebar, #documenter {
+        margin-top: var(--navbar-height);
+    }
+    .docs-version-selector {
+        margin-bottom: 60px !important;
+    }
+    @media screen and (max-width: 1056px) {
+        .docs-version-selector {
+            margin-bottom: 60px !important;
+        }
+        .docs-sidebar {
+            margin-top: 0 !important;
+        }
+    }
+    /* End of Documenter.jl Tweaks */
+
+    /* Color and Font Variables */
+    :root {
+        --heading-color: #6c757d;
+        --item-color: rgb(165, 165, 165);
+        --primary-bg: white;
+        --hover-color: #8faad2;
+        --deprecated-bg: #ff4d4d;
+        --deprecated-text: white;
+        --icon-color: #6c757d;
+        --shadow-color: rgba(0, 0, 0, 0.1);
+        --dropdown-hover-bg: #e9ecef;
+        
+        /* Typography */
+        --font-family: "Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+        --nav-link-font-size: 1.0625rem;
+        --turing-title-font-size: 21.25px;
+        --icon-font-size: 1.25rem;
+        --dropdown-arrow-font-size: 0.6875rem;
+        --badge-font-size: 0.75rem;
+
+        /* Sizing and Spacing */
+        --navbar-height: 3.75rem;
+        --logo-height: 31px;
+        --logo-width: auto;
+        --logo-padding-top: 7px;
+        --logo-margin-left: 0.8rem;
+        --title-margin-left: 0.4px;
+        --title-nav-spacing: 1.1rem;
+        --nav-item-margin-left: 1.3rem;
+        --icon-margin-left: 1rem;
+        --dropdown-padding: 1.875rem;
+        --dropdown-item-width: 12.5rem;
+        --dropdown-subitem-width: 15.625rem;
+        --dropdown-subitem-padding: 0.125rem 0.625rem;
+    }
+
+    /* Dark Theme Variable Overrides */
+    html.theme--documenter-dark {
+        --heading-color: #e0e0e0;
+        --item-color: #bdbdbd;
+        --primary-bg: #1f2424;
+        --hover-color: #ffffff;
+        --icon-color: #e0e0e0;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #424242;
+    }
+
+    /* Catppuccin Theme Overrides */
+    html.theme--catppuccin-latte {
+        --heading-color: #4c4f69;
+        --primary-bg: #eff1f5;
+        --icon-color: #4c4f69;
+        --shadow-color: rgba(0, 0, 0, 0.1);
+        --dropdown-hover-bg: #e6e9ef;
+    }
+    html.theme--catppuccin-frappe {
+        --heading-color: #c6d0f5;
+        --primary-bg: #303446;
+        --icon-color: #c6d0f5;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #51576d;
+    }
+    html.theme--catppuccin-macchiato {
+        --heading-color: #cad3f5;
+        --primary-bg: #24273a;
+        --icon-color: #cad3f5;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #494d64;
+    }
+    html.theme--catppuccin-mocha {
+        --heading-color: #cad3f5;
+        --primary-bg: #1e1e2e;
+        --icon-color: #cad3f5;
+        --shadow-color: rgba(255, 255, 255, 0.1);
+        --dropdown-hover-bg: #45475a;
+    }
+
+
+    /* Main Navigation Bar */
+    .ext-navigation {
+        font-family: var(--font-family);
+        position: fixed;
+        height: var(--navbar-height);
+        top: 0;
+        width: 100%;
+        background-color: var(--primary-bg);
+        z-index: 1000;
+        box-shadow: 0 2px 4px var(--shadow-color);
+        display: flex;
+        align-items: center;
+        padding: 0 1.0625rem;
+        transition: transform 0.3s, background-color 0.3s;
+    }
+
+    nav.ext-navigation .ext-navbar-logo {
+        margin-left: var(--logo-margin-left);
+        height: auto;
+        max-height: var(--logo-height);
+        width: auto;
+        padding-top: var(--logo-padding-top);
+    }
+    
+    /* Theme-aware logo text color */
+    .ext-navbar-logo .logo-text {
+        fill: var(--heading-color);
+    }
+    
+    .ext-navbar-title {
+        color: var(--heading-color) !important;
+        font-size: var(--turing-title-font-size) !important;
+        margin-left: var(--title-margin-left);
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+    
+    .ext-navbar-title:hover {
+        color: var(--hover-color) !important;
+    }
+
+    .ext-nav-links {
+        display: flex;
+        align-items: center;
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+        flex-grow: 1;
+        margin-left: var(--title-nav-spacing);
+    }
+
+    .ext-nav-links li:first-child {
+        margin-left: 0 !important;
+    }
+
+    .ext-nav-links li {
+        margin-left: var(--nav-item-margin-left) !important;
+    }
+
+    .ext-nav-link {
+        color: var(--heading-color) !important;
+        text-decoration: none;
+        font-size: var(--nav-link-font-size) !important;
+        transition: color 0.2s ease;
+        cursor: pointer;
+    }
+
+    .ext-nav-link:hover,
+    .ext-navbar-item-single a:hover,
+    .ext-navbar-icons a:hover {
+        color: var(--hover-color) !important;
+    }
+
+    .ext-navbar-item-single a {
+        color: var(--heading-color) !important;
+    }
+    
+    .ext-navbar-icons {
+        display: flex;
+        align-items: center;
+    }
+
+    .ext-navbar-icons a {
+        color: var(--icon-color) !important;
+        font-size: var(--icon-font-size) !important;
+        transition: color 0.2s ease;
+        margin-left: var(--icon-margin-left);
+    }
+
+    .ext-menu-toggle {
+        display: none;
+        font-size: 1.5rem;
+        color: var(--heading-color);
+        cursor: pointer;
+    }
+
+    .ext-dropdown {
+        display: none;
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        padding: var(--dropdown-padding);
+        position: absolute;
+        top: var(--navbar-height);
+        width: 100%;
+        left: 0;
+        background-color: var(--primary-bg);
+        line-height: 1.875rem;
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out, background-color 0.3s;
+        transform: translateY(-0.625rem);
+        box-shadow: 0 4px 6px var(--shadow-color);
+    }
+
+    #library-handler::after {
+        content: "▼";
+        font-size: var(--dropdown-arrow-font-size);
+        margin-left: 0.3125rem;
+        transition: transform 0.3s ease-in-out;
+    }
+
+    #library-handler.open::after {
+        content: "▲";
+    }
+
+    .ext-dropdown.show {
+        display: grid;
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .ext-dropdown ul {
+        width: var(--dropdown-item-width);
+        margin-bottom: 1.25rem;
+    }
+
+    .ext-dropdown ul li {
+        text-align: left;
+        display: flex;
+        align-items: center;
+    }
+
+    .ext-dropdown ul a li {
+        color: var(--item-color);
+        width: var(--dropdown-subitem-width);
+        border-radius: 3px;
+        padding: var(--dropdown-subitem-padding);
+        transition: background-color 0.2s ease;
+    }
+
+    .ext-dropdown ul a li:hover {
+        background-color: var(--dropdown-hover-bg);
+    }
+
+    .ext-dropdown-item-heading {
+        color: var(--heading-color);
+        text-align: center;
+    }
+
+    .deprecated-badge {
+        background-color: var(--deprecated-bg);
+        color: var(--deprecated-text);
+        font-size: var(--badge-font-size);
+        padding: .1rem;
+        border-radius: 3px;
+        margin-left: 0.5rem;
+        line-height: 1;
+    }
+
+    @media (max-width: 966px) {
+        .ext-dropdown {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .ext-nav-links {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            background-color: var(--primary-bg);
+            position: absolute;
+            top: var(--navbar-height);
+            left: 0;
+            padding: 0.625rem 0;
+            height: auto;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px var(--shadow-color);
+            margin-left: 0;
+        }
+
+        .ext-nav-links.show {
+            display: flex;
+        }
+
+        .ext-nav-links li {
+            margin: 0.625rem 0 !important;
+            text-align: center;
+        }
+        
+        .ext-menu-toggle {
+            display: block;
+            margin-left: auto;
+        }
+
+        .ext-navigation.hide {
+            transform: translateY(calc(-1 * var(--navbar-height)));
+        }
+
+        .ext-dropdown {
+            position: static;
+            display: block;
+            opacity: 1;
+            transform: none;
+            box-shadow: none;
+            grid-template-columns: 1fr;
+            padding: 0.625rem;
+            text-align: center;
+        }
+
+        .ext-dropdown ul {
+            width: auto;
+            display: inline-block;
+            margin: 0 auto 0.3125rem;
+            text-align: left;
+        }
+    }
+</style>
+<nav class="ext-navigation">
+    <a href="https://turinglang.org/">
+        <svg width="4333" height="1145" viewBox="0 0 4333 1145" fill="none" xmlns="http://www.w3.org/2000/svg" class="ext-navbar-logo">
+            <path class="logo-text" d="M0.44603 193.181V66.9868H663.471V193.181H406.62V898H257.297V193.181H0.44603ZM1097.24 635.874V274.74H1244.13V898H1101.7V787.225H1095.21C1081.14 822.121 1058.01 850.66 1025.82 872.842C993.902 895.024 954.542 906.115 907.744 906.115C866.896 906.115 830.783 897.053 799.403 878.929C768.295 860.534 743.948 833.889 726.365 798.993C708.782 763.826 699.99 721.356 699.99 671.581V274.74H846.878V648.858C846.878 688.353 857.699 719.733 879.34 742.997C900.981 766.261 929.385 777.893 964.551 777.893C986.192 777.893 1007.16 772.618 1027.45 762.068C1047.73 751.518 1064.37 735.828 1077.35 714.999C1090.61 693.899 1097.24 667.524 1097.24 635.874ZM1395.17 898V274.74H1537.6V378.617H1544.09C1555.45 342.639 1574.93 314.911 1602.52 295.434C1630.38 275.687 1662.17 265.813 1697.88 265.813C1705.99 265.813 1715.05 266.219 1725.06 267.031C1735.34 267.572 1743.86 268.518 1750.63 269.871V404.992C1744.4 402.828 1734.53 400.934 1721 399.311C1707.75 397.417 1694.9 396.471 1682.46 396.471C1655.68 396.471 1631.6 402.287 1610.23 413.919C1589.13 425.28 1572.49 441.105 1560.32 461.393C1548.15 481.682 1542.06 505.081 1542.06 531.591V898H1395.17ZM1848.21 898V274.74H1995.1V898H1848.21ZM1922.06 186.283C1898.8 186.283 1878.78 178.573 1862.01 163.154C1845.24 147.464 1836.85 128.664 1836.85 106.752C1836.85 84.5701 1845.24 65.7695 1862.01 50.3503C1878.78 34.6606 1898.8 26.8158 1922.06 26.8158C1945.6 26.8158 1965.61 34.6606 1982.12 50.3503C1998.89 65.7695 2007.27 84.5701 2007.27 106.752C2007.27 128.664 1998.89 147.464 1982.12 163.154C1965.61 178.573 1945.6 186.283 1922.06 186.283ZM2293.04 532.809V898H2146.15V274.74H2286.54V380.646H2293.85C2308.18 345.75 2331.04 318.022 2362.42 297.463C2394.07 276.904 2433.16 266.625 2479.69 266.625C2522.7 266.625 2560.17 275.822 2592.09 294.217C2624.28 312.612 2649.17 339.257 2666.75 374.153C2684.6 409.049 2693.39 451.385 2693.12 501.159V898H2546.24V523.882C2546.24 482.223 2535.41 449.626 2513.77 426.092C2492.4 402.557 2462.78 390.79 2424.91 390.79C2399.21 390.79 2376.35 396.471 2356.34 407.832C2336.59 418.923 2321.03 435.019 2309.67 456.119C2298.58 477.218 2293.04 502.782 2293.04 532.809ZM3113.5 1144.71C3060.75 1144.71 3015.44 1137.54 2977.57 1123.2C2939.7 1109.13 2909.26 1090.2 2886.27 1066.39C2863.28 1042.59 2847.32 1016.21 2838.39 987.269L2970.67 955.213C2976.62 967.386 2985.28 979.424 2996.64 991.327C3008 1003.5 3023.28 1013.51 3042.49 1021.35C3061.97 1029.47 3086.45 1033.53 3115.93 1033.53C3157.59 1033.53 3192.08 1023.38 3219.4 1003.09C3246.73 983.076 3260.39 950.074 3260.39 904.087V786.008H3253.08C3245.51 801.157 3234.42 816.711 3219.81 832.671C3205.47 848.632 3186.4 862.022 3162.6 872.842C3139.06 883.663 3109.44 889.073 3073.73 889.073C3025.85 889.073 2982.44 877.847 2943.48 855.394C2904.8 832.671 2873.96 798.857 2850.97 753.952C2828.24 708.777 2816.88 652.24 2816.88 584.341C2816.88 515.902 2828.24 458.147 2850.97 411.078C2873.96 363.739 2904.93 327.896 2943.89 303.55C2982.84 278.933 3026.26 266.625 3074.14 266.625C3110.66 266.625 3140.69 272.847 3164.22 285.29C3188.03 297.463 3206.96 312.206 3221.03 329.519C3235.09 346.561 3245.78 362.657 3253.08 377.805H3261.2V274.74H3406.06V908.144C3406.06 961.435 3393.34 1005.53 3367.92 1040.42C3342.49 1075.32 3307.73 1101.43 3263.63 1118.74C3219.54 1136.05 3169.5 1144.71 3113.5 1144.71ZM3114.72 773.835C3145.83 773.835 3172.34 766.261 3194.25 751.112C3216.16 735.963 3232.79 714.187 3244.16 685.783C3255.52 657.379 3261.2 623.295 3261.2 583.53C3261.2 544.305 3255.52 509.95 3244.16 480.465C3233.07 450.979 3216.56 428.12 3194.65 411.89C3173.01 395.389 3146.37 387.138 3114.72 387.138C3081.98 387.138 3054.66 395.659 3032.75 412.701C3010.84 429.744 2994.34 453.143 2983.25 482.899C2972.16 512.385 2966.61 545.929 2966.61 583.53C2966.61 621.672 2972.16 655.08 2983.25 683.754C2994.61 712.158 3011.25 734.34 3033.16 750.3C3055.34 765.99 3082.53 773.835 3114.72 773.835ZM3647.08 906.927C3622.47 906.927 3601.37 898.271 3583.78 880.958C3566.2 863.645 3557.54 842.545 3557.82 817.658C3557.54 793.312 3566.2 772.482 3583.78 755.17C3601.37 737.857 3622.47 729.2 3647.08 729.2C3670.89 729.2 3691.58 737.857 3709.17 755.17C3727.02 772.482 3736.08 793.312 3736.35 817.658C3736.08 834.159 3731.75 849.173 3723.37 862.698C3715.25 876.224 3704.43 887.044 3690.91 895.16C3677.65 903.004 3663.04 906.927 3647.08 906.927ZM3888.01 274.74H4034.9V933.708C4034.9 978.613 4026.38 1015.67 4009.33 1044.89C3992.29 1074.1 3967.67 1095.88 3935.48 1110.22C3903.29 1124.55 3864.2 1131.72 3818.22 1131.72C3812.81 1131.72 3807.8 1131.59 3803.2 1131.32C3798.6 1131.32 3793.6 1131.18 3788.19 1130.91V1011.21C3792.25 1011.48 3795.9 1011.62 3799.15 1011.62C3802.39 1011.89 3805.77 1012.02 3809.29 1012.02C3837.42 1012.02 3857.58 1005.12 3869.75 991.327C3881.92 977.801 3888.01 957.918 3888.01 931.679V274.74ZM3961.05 186.283C3937.51 186.283 3917.36 178.573 3900.59 163.154C3884.09 147.464 3875.84 128.664 3875.84 106.752C3875.84 84.5701 3884.09 65.7695 3900.59 50.3503C3917.36 34.6606 3937.51 26.8158 3961.05 26.8158C3984.31 26.8158 4004.19 34.6606 4020.7 50.3503C4037.47 65.7695 4045.85 84.5701 4045.85 106.752C4045.85 128.664 4037.47 147.464 4020.7 163.154C4004.19 178.573 3984.31 186.283 3961.05 186.283ZM4332.83 66.9868V898H4185.94V66.9868H4332.83Z" fill="currentColor"/>
+            <path d="M4076 108.5C4076 168.424 4027.42 217 3967.5 217C3907.58 217 3859 168.424 3859 108.5C3859 48.5762 3907.58 0 3967.5 0C4027.42 0 4076 48.5762 4076 108.5Z" fill="#389725"/>
+            <path d="M3755 814.5C3755 874.424 3706.42 923 3646.5 923C3586.58 923 3538 874.424 3538 814.5C3538 754.576 3586.58 706 3646.5 706C3706.42 706 3755 754.576 3755 814.5Z" fill="#9457B1"/>
+            <path d="M2030 108.5C2030 168.424 1981.42 217 1921.5 217C1861.58 217 1813 168.424 1813 108.5C1813 48.5762 1861.58 0 1921.5 0C1981.42 0 2030 48.5762 2030 108.5Z" fill="#CA3B33"/>
+        </svg>
+    </a>
+    <!-- <a class="ext-navbar-title" href="https://turinglang.org/">Turing.jl</a> -->
+    
+    <ul class="ext-nav-links">
+        <li><a class="ext-nav-link" href="https://turinglang.org/docs/getting-started/">Get Started</a></li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/docs/tutorials/">Tutorials</a></li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/docs/faq/">FAQ</a></li>
+        <li>
+            <p class="ext-nav-link" id="library-handler">Libraries</p>
+            <div class="ext-dropdown" id="ext-dropdown-items">
+                <ul>
+                    <li class="ext-dropdown-item-heading">Modelling Languages</li>
+                    <a href="https://turinglang.org/DynamicPPL.jl/"><li>DynamicPPL</li></a>
+                    <a href="https://turinglang.org/JuliaBUGS.jl/"><li>JuliaBUGS</li></a>
+                    <a href="https://turinglang.org/TuringGLM.jl/"><li>TuringGLM</li></a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">MCMC</li>
+                    <a href="https://turinglang.org/AdvancedHMC.jl/"><li>AdvancedHMC</li></a>
+                    <a href="https://turinglang.org/AbstractMCMC.jl/"><li>AbstractMCMC</li></a>
+                    <a href="https://github.com/theogf/ThermodynamicIntegration.jl"><li>ThermodynamicIntegration</li></a>
+                    <a href="https://turinglang.org/AdvancedPS.jl/"><li>AdvancedPS</li></a>
+                    <a href="https://turinglang.org/SliceSampling.jl/"><li>SliceSampling</li></a>
+                    <a href="https://turinglang.org/EllipticalSliceSampling.jl/"><li>EllipticalSliceSampling</li></a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">Diagnostics</li>
+                    <a href="https://turinglang.org/MCMCChains.jl/"><li>MCMCChains</li></a>
+                    <a href="https://turinglang.org/MCMCDiagnosticTools.jl/"><li>MCMCDiagnosticTools</li></a>
+                    <a href="https://turinglang.org/ParetoSmooth.jl/"><li>ParetoSmooth</li></a>
+                </ul>
+                <ul>
+                    <li class="ext-dropdown-item-heading">Gaussian Processes</li>
+                    <a href="https://juliagaussianprocesses.github.io/AbstractGPs.jl/"><li>AbstractGPs</li></a>
+                    <a href="https://juliagaussianprocesses.github.io/KernelFunctions.jl/"><li>KernelFunctions</li></a>
+                    <a href="https://juliagaussianprocesses.github.io/ApproximateGPs.jl/"><li>ApproximateGPs</li></a>
+                </ul>
+                <ul><li class="ext-dropdown-item-heading ext-navbar-item-single"><a href="https://turinglang.org/Bijectors.jl/">Bijectors</a></li></ul>
+                <ul><li class="ext-dropdown-item-heading ext-navbar-item-single"><a href="https://turinglang.org/TuringCallbacks.jl/">TuringCallbacks</a></li></ul>
+                <ul><li class="ext-dropdown-item-heading ext-navbar-item-single"><a href="https://turinglang.org/Deprecated/TuringBenchmarking/">TuringBenchmarking</a><span class="deprecated-badge">Deprecated</span></li></ul>
+            </div>
+        </li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/news/">News</a></li>
+        <li><a class="ext-nav-link" href="https://turinglang.org/team/">Team</a></li>
+    </ul>
+
+    <div class="ext-navbar-icons">
+        <a href="https://x.com/TuringLang" aria-label="Turing on X"><i class="fa-brands fa-x-twitter"></i></a>
+        <a href="https://discourse.julialang.org/c/domain/probprog/48" aria-label="Turing on Discourse"><i class="fa-brands fa-discourse"></i></a>
+        <a href="https://julialang.slack.com/archives/CCYDC34A0" aria-label="Turing on Slack"><i class="fa-brands fa-slack"></i></a>
+        <a href="https://github.com/TuringLang/" aria-label="Turing.jl on GitHub"><i class="fa-brands fa-github"></i></a>
+    </div>
+
+    <span class="ext-menu-toggle"><i class="fa-solid fa-bars"></i></span>
+</nav>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const menuToggle = document.querySelector(".ext-menu-toggle");
+        const navLinks = document.querySelector(".ext-nav-links");
+        const nav = document.querySelector(".ext-navigation");
+        const libraryHandler = document.getElementById("library-handler");
+        const dropdownContainer = document.getElementById("ext-dropdown-items");
+        let lastScrollY = window.scrollY;
+
+        function closeDropdown() {
+            if (dropdownContainer.classList.contains("show")) {
+                libraryHandler.classList.remove("open");
+                dropdownContainer.classList.remove("show");
+                setTimeout(() => {
+                    if (!dropdownContainer.classList.contains("show")) {
+                        dropdownContainer.style.display = "none";
+                    }
+                }, 300);
+            }
+        }
+
+        function openDropdown() {
+            dropdownContainer.style.display = "grid";
+            libraryHandler.classList.add("open");
+            setTimeout(() => {
+                dropdownContainer.classList.add("show");
+            }, 10);
+        }
+
+        function setAppropriateHeight() {
+            if (window.innerWidth <= 768) {
+                const viewportHeight = window.innerHeight;
+                const navHeight = nav.offsetHeight;
+                navLinks.style.maxHeight = `${viewportHeight - navHeight}px`;
+                navLinks.style.overflowY = "auto";
+            } else {
+                navLinks.style.maxHeight = "";
+                navLinks.style.overflowY = "";
+            }
+        }
+
+        menuToggle.addEventListener("click", (event) => {
+            event.stopPropagation();
+            navLinks.classList.toggle("show");
+            if (navLinks.classList.contains("show")) {
+                setAppropriateHeight();
+                closeDropdown();
+                dropdownContainer.style.display = "none";
+            }
+        });
+
+        libraryHandler.addEventListener("click", (event) => {
+            event.stopPropagation();
+            event.preventDefault();
+            if (dropdownContainer.classList.contains("show")) {
+                closeDropdown();
+            } else {
+                openDropdown();
+            }
+            setAppropriateHeight();
+        });
+
+        // Close all menus if a click is registered outside the navigation bar.
+        document.addEventListener("click", (event) => {
+            if (!nav.contains(event.target)) {
+                navLinks.classList.remove("show");
+                closeDropdown();
+            }
+        });
+
+        // Hide navigation bar on scroll down in mobile view.
+        window.addEventListener("scroll", () => {
+            if (window.innerWidth <= 768) {
+                if (window.scrollY > lastScrollY && window.scrollY > nav.offsetHeight){
+                    nav.classList.add("hide");
+                } else {
+                    nav.classList.remove("hide");
+                }
+                lastScrollY = window.scrollY;
+            }
+        });
+
+        window.addEventListener("resize", setAppropriateHeight);
+    });
+</script>
+<!-- NAVBAR END -->
+
+
+
+<div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">JuliaBUGS.jl</a></span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../example/">Example</a></li><li><span class="tocitem">API</span><ul><li><a class="tocitem" href="../api/api/">General</a></li><li><a class="tocitem" href="../api/functions/">Functions</a></li><li><a class="tocitem" href="../api/distributions/">Distributions</a></li><li><a class="tocitem" href="../api/user_defined_functions/">User-Defined Functions and Distributions</a></li></ul></li><li><a class="tocitem" href="../differences/">Differences from Other BUGS Implementations</a></li><li><a class="tocitem" href="../pitfalls/">Pitfalls</a></li><li><a class="tocitem" href="../graph_plotting/">Plotting</a></li><li><a class="tocitem" href="../R_interface/">R Interface</a></li><li><span class="tocitem">For Developers</span><ul><li><a class="tocitem" href="../parser/">Parser</a></li><li><a class="tocitem" href="../BUGS_notes/">Notes on BUGS Implementations</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Generating Sequential Code from BUGS Program</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Generating Sequential Code from BUGS Program</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/TuringLang/JuliaBUGS.jl/blob/main/docs/src/source_gen.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Generating-Sequential-Code-from-BUGS-Program"><a class="docs-heading-anchor" href="#Generating-Sequential-Code-from-BUGS-Program">Generating Sequential Code from BUGS Program</a><a id="Generating-Sequential-Code-from-BUGS-Program-1"></a><a class="docs-heading-anchor-permalink" href="#Generating-Sequential-Code-from-BUGS-Program" title="Permalink"></a></h1><h2 id="Transform-BUGS-Programs-into-Sequential-Programs"><a class="docs-heading-anchor" href="#Transform-BUGS-Programs-into-Sequential-Programs">Transform BUGS Programs into Sequential Programs</a><a id="Transform-BUGS-Programs-into-Sequential-Programs-1"></a><a class="docs-heading-anchor-permalink" href="#Transform-BUGS-Programs-into-Sequential-Programs" title="Permalink"></a></h2><p>JuliaBUGS compiles a BUGS program into a directed probabilistic graphical model. This graphical model also serves as a dependence graph between the variables in the model/program.</p><p>With the dependence graph, the execution of the probabilistic program can be carried out by visiting nodes (variables) in the graph following a topological order. (Parallel computing opportunities are also exposed by exploiting the dependence relationships.)</p><p>The challenge arises because, given the semantics of the BUGS language, every element of an array can be a random variable, thus demanding its own node in the graph. Consequently, naively converting the graph execution into sequential programs would amount to fully unrolling all loops, which is often infeasible, particularly for automatic differentiation (AD) tools.</p><p>A potential solution is to transform the user-provided program, which might be out of sequential order, into a correct sequential program. Correctness here is defined as ensuring no variable is read before it is written. </p><p>Program transformation is a well-studied topic. It is known to be very challenging in terms of conceptual understanding, algorithm design, and practical implementation.</p><p>Traditionally, program transformation optimizes sequentially valid programs for performance (speed, memory usage) based on hardware characteristics, while respecting data dependencies. </p><p>For JuliaBUGS, it&#39;s crucial to clarify that the primary goal is not optimizing the generated program&#39;s performance but ensuring its correctness with respect to sequential execution order. The task is to transform a potentially out-of-sequential-order program into a sequentially correct one.</p><p>We aim to restrict ourselves initially and ask: How can we use a minimal set of transformations, starting with just statement reordering, to generate correct sequential programs from BUGS programs that might specify operations out of order? If the original program is already sequentially correct, it should be used directly. Furthermore, we need to provide clear feedback to the user if a transformation is necessary or if the program structure inherently prevents a valid sequential ordering, guiding them on how to rewrite it.</p><p>Consider the <code>Rats</code> example:</p><pre><code class="language-julia hljs">begin
+    for i in 1:N
+        for j in 1:T
+            Y[i, j] ~ dnorm(mu[i, j], tau_c)              # (1)
+            mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)  # (2)
+        end
+        alpha[i] ~ dnorm(alpha_c, alpha_tau)               # (3)
+        beta[i] ~ dnorm(beta_c, beta_tau)                  # (4)
+    end
+    tau_c ~ dgamma(0.001, 0.001)                          # (5)
+    sigma = 1 / sqrt(tau_c)                                # (6)
+    alpha_c ~ dnorm(0.0, 1.0e-6)                           # (7)
+    alpha_tau ~ dgamma(0.001, 0.001)                       # (8)
+    beta_c ~ dnorm(0.0, 1.0e-6)                            # (9)
+    beta_tau ~ dgamma(0.001, 0.001)                        # (10)
+    alpha0 = alpha_c - xbar * beta_c                        # (11)
+end</code></pre><p>This program defines the same probabilistic model (has the same BUGS semantics) as the following two versions:</p><p>Version 1 (Reordered Statements):</p><pre><code class="language-julia hljs">begin
+    tau_c ~ dgamma(0.001, 0.001)                           # (5)
+    sigma = 1 / sqrt(tau_c)                                # (6)
+    alpha_c ~ dnorm(0.0, 1.0e-6)                           # (7)
+    alpha_tau ~ dgamma(0.001, 0.001)                       # (8)
+    beta_c ~ dnorm(0.0, 1.0e-6)                            # (9)
+    beta_tau ~ dgamma(0.001, 0.001)                        # (10)
+    
+    for i in 1:N
+        alpha[i] ~ dnorm(alpha_c, alpha_tau)               # (3)
+        beta[i] ~ dnorm(beta_c, beta_tau)                  # (4)
+        
+        for j in 1:T
+            mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)  # (2)
+            Y[i, j] ~ dnorm(mu[i, j], tau_c)               # (1)
+        end
+    end
+    
+    alpha0 = alpha_c - xbar * beta_c                       # (11)
+end</code></pre><p>Version 2 (Reordered Statements + Loop Fission):</p><pre><code class="language-julia hljs">begin
+    tau_c ~ dgamma(0.001, 0.001)                           # (5)
+    sigma = 1 / sqrt(tau_c)                                # (6)
+    alpha_c ~ dnorm(0.0, 1.0e-6)                           # (7)
+    alpha_tau ~ dgamma(0.001, 0.001)                       # (8)
+    beta_c ~ dnorm(0.0, 1.0e-6)                            # (9)
+    beta_tau ~ dgamma(0.001, 0.001)                        # (10)
+    
+    for i in 1:N
+        alpha[i] ~ dnorm(alpha_c, alpha_tau)               # (3)
+    end
+
+    for i in 1:N
+        beta[i] ~ dnorm(beta_c, beta_tau)                  # (4)
+    end
+
+    for i in 1:N
+        for j in 1:T
+            mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)  # (2)
+        end
+    end
+    
+    for i in 1:N
+        for j in 1:T    
+            Y[i, j] ~ dnorm(mu[i, j], tau_c)               # (1)
+        end
+    end
+    
+    alpha0 = alpha_c - xbar * beta_c                        # (11)
+end</code></pre><p>While all three programs define the same model, only the latter two can run sequentially (e.g., for sampling) without encountering a &quot;read before write&quot; error. These are called <em>sequential versions</em> because they respect data dependencies in order.</p><p>We use a <em>statement dependence graph</em> to analyze these dependencies. An edge exists from statement S<em>source to S</em>sink if S<em>sink uses a value defined by S</em>source.</p><p>Consider this excerpt from the original <code>Rats</code> program:</p><pre><code class="language-julia hljs">for i in 1:N
+    for j in 1:T
+        Y[i, j] ~ dnorm(mu[i, j], tau_c)              # (1)
+        mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)  # (2)
+    end
+end</code></pre><p>Statement (2) defines <code>mu[i, j]</code>, which statement (1) uses. Thus, the dependence graph contains an edge (2) -&gt; (1). This is a <em>flow dependence</em> (or Read-After-Write). (We will not consider Write-After-Read and Write-After-Write dependencies.)</p><p>The full statement dependence graph for <code>Rats</code> is:</p><pre><code class="language-mermaid hljs">flowchart TB
+    8 --&gt; 3
+    7 --&gt; 3
+    10 --&gt; 4
+    9 --&gt; 11
+    9 --&gt; 4
+    4 --&gt; 11
+    3 --&gt; 2
+    4 --&gt; 2
+    2 --&gt; 1
+    5 --&gt; 1
+    5 --&gt; 6</code></pre><p>This graph is acyclic. But given this dependence graph, we can only produce Version 2 of the program by fissioning all the loops. The fissioning is conservative because given the dependence edges, we can only ensure the sequential order by finishing all the computation associated with a statement before moving on to the next one.</p><p>Consider this example:</p><pre><code class="language-julia hljs">for i in 1:N
+    x[i] ~ normal(0, 1)     # (1)
+    y[i] ~ normal(x[N], i)  # (2) 
+end</code></pre><p>The dependence graph is just (1) -&gt; (2), which is acyclic. However, this loop cannot run sequentially. Statement (2) at iteration <code>i</code> needs <code>x[N]</code>, but statement (1) defines <code>x[N]</code> only at iteration <code>N</code>. Any iteration <code>i &lt; N</code> for statement (2) reads <code>x[N]</code> before it&#39;s written.</p><p>The valid sequential version requires <em>loop fission</em>:</p><pre><code class="language-julia hljs">for i in 1:N
+    x[i] ~ normal(0, 1)     # (1)
+end
+for i in 1:N    
+    y[i] ~ normal(x[N], i)  # (2) 
+end</code></pre><p>But this not totally satisfactory, because ideally we would want to be able to tell if we don&#39;t have to fission all the loops like Version 1 of <code>Rats</code>.</p><p>This shows the statement dependence graph alone is not quite sufficient. We need to analyze dependencies within loops more precisely using iteration spaces and dependence vectors. This allows transformations like loop fission (used in Version 2 of <code>Rats</code>).</p><p><strong>Iteration Space and Vectors</strong></p><p>Consider this loop:</p><pre><code class="language-julia hljs">for i in 1:2
+    for j in 1:3
+        x[i] ~ normal(0, j)     # (1)
+        y[i] ~ normal(x[2], i)  # (2) 
+    end
+end</code></pre><p>Each execution of the loop body corresponds to an <em>iteration vector</em> <span>$\vec{k} = (i, j)$</span>. The set of all possible iteration vectors is the <em>iteration space</em>, here <span>$\{(i, j) | 1 \le i \le 2, 1 \le j \le 3\}$</span>. Iterations execute sequentially in lexicographical order: (1,1), (1,2), (1,3), (2,1), (2,2), (2,3).</p><p><strong>Dependence Vectors</strong></p><p>If a statement execution at iteration <span>$\vec{i}$</span> (source) defines a value used by a statement execution at iteration <span>$\vec{j}$</span> (sink), the <em>dependence vector</em> is <span>$\vec{d} = \vec{j} - \vec{i}$</span>. It represents the distance between dependent iterations. (Sometimes, we don&#39;t care about the distance between define and use, so we can simply use the sign of the elements of the dependence vector to represent the dependence relation.)</p><p>For sequential execution to be valid, all dependence vectors <span>$\vec{d}$</span> must be <em>lexicographically non-negative</em> (<span>$\vec{d} \succeq \vec{0}$</span>). This means either <span>$\vec{d} = \vec{0}$</span> or the first non-zero element of <span>$\vec{d}$</span> is positive.</p><p>A lexicographically negative vector (<span>$\vec{d} \prec \vec{0}$</span>) indicates a violation. It means the sink iteration <span>$\vec{j}$</span> executes <em>before</em> the source iteration <span>$\vec{i}$</span> in sequential order, but <span>$\vec{j}$</span> needs the value produced by <span>$\vec{i}$</span>.</p><p><strong>Dependence Vectors and Sequential Execution</strong></p><p>Dependence vectors help analyze loops. Consider this invalid loop:</p><pre><code class="language-julia hljs">x[6] ~ Normal() # (1)
+
+for i in 1:5
+    x[i] = x[i+1] + i # (2)  
+end</code></pre><p>Statement (2) computes <code>x[i]</code> using <code>x[i+1]</code>. The value <code>x[i+1]</code> is defined by statement (2) at iteration <code>i+1</code> (source). It is used by statement (2) at iteration <code>i</code> (sink). The dependence vector is <span>$\vec{d} = \vec{j}_{sink} - \vec{i}_{source} = (i) - (i+1) = (-1)$</span>. Since <span>$\vec{d} \prec \vec{0}$</span>, this loop violates sequential order. Computing <code>x[1]</code> requires <code>x[2]</code>, defined in a later iteration.</p><p>This loop is sequentially valid:</p><pre><code class="language-julia hljs">x[1] ~ Normal() # (1)
+
+for i in 2:5
+    x[i] = x[i-1] + i # (2)  
+end</code></pre><p>Statement (2) computes <code>x[i]</code> using <code>x[i-1]</code>. The value <code>x[i-1]</code> is defined by statement (2) at iteration <code>i-1</code> (source). It is used by statement (2) at iteration <code>i</code> (sink). The dependence vector is <span>$\vec{d} = \vec{j}_{sink} - \vec{i}_{source} = (i) - (i-1) = (1)$</span>. Since <span>$\vec{d} \succ \vec{0}$</span>, this loop respects sequential order.</p><p><strong>Loop-Independent vs. Loop-Carried Dependencies</strong></p><p>Dependencies involving loops are classified by their dependence vector <span>$\vec{d} = \vec{j} - \vec{i}$</span>:</p><ul><li><strong>Loop-Independent Dependence:</strong> Occurs within the same iteration: <span>$\vec{d} = \vec{0}$</span>.</li><li><strong>Loop-Carried Dependence:</strong> Occurs between different iterations: <span>$\vec{d} \neq \vec{0}$</span>.</li></ul><p>The <code>Rats</code> example before is an example of (hierarchical) regression models. Many of these models don&#39;t model time, and there is no loop in the dependence graph.</p><p>But another very important class of models is state-space models where there are recursive structures and thus have loops in the dependence graph.</p><p>Consider this Hidden Markov Model (HMM) fragment:</p><pre><code class="language-julia hljs"># Main loop processing time steps 2 to T
+for i in 2:T
+    # State transition: s[i] depends on s[i-1]
+    s[i] ~ dcat(transition[s[i-1], 1:K])  # (S1)
+    
+    # Emission model: Y[i] depends on s[i]
+    Y[i] ~ dnorm(mu[s[i]], tau[s[i]])     # (S2)
+end
+
+# Initial state at time 1
+s[1] ~ dcat(pi[1:K])                      # (S3) Prior for first state
+
+for k in 1:K
+    # Priors for parameters
+    mu[k] ~ dnorm(0, 0.01)                # (S4) Mean for state k
+    tau[k] ~ dgamma(0.01, 0.01)           # (S5) Precision for state k
+    transition[k, 1:K] ~ ddirch(alpha[1:K]) # (S6) Transition probabilities from state k
+    pi[1:K] ~ ddirch(alpha[1:K])          # (S7) Prior for initial state distribution
+end</code></pre><pre><code class="language-mermaid hljs">flowchart TD
+    subgraph PriorsAndParameters
+        S4[&quot;(S4) mu[k] ~ dnorm&quot;]
+        S5[&quot;(S5) tau[k] ~ dgamma&quot;]
+        S6[&quot;(S6) transition[k, 1:K] ~ ddirch&quot;]
+        S7[&quot;(S7) pi[1:K] ~ ddirch&quot;]
+    end
+
+    subgraph InitialState
+        S3[&quot;(S3) s[1] ~ dcat(pi[1:K])&quot;]
+    end
+
+    subgraph MainLoop [for i in 1:T]
+        S1[&quot;(S1) s[i] ~ dcat(transition[s[i-1], 1:K])&quot;]
+        S2[&quot;(S2) Y[i] ~ dnorm(mu[s[i]], tau[s[i]])&quot;]
+    end
+
+    S7 --&gt; S3
+    S6 --&gt; S1
+    S3 --&gt; S1
+    S1 -- loop-carried --&gt; S1
+    S4 --&gt; S2
+    S5 --&gt; S2
+    S1 --&gt; S2
+
+    %% Note: alpha is assumed to be an input/hyperparameter</code></pre><p>In this example, there is a self loop on <code>S1</code>. These represent the state transition. To see that we can actually sequentially execute the program, we can compute the dependence vectors.</p><p>The computation of the dependence vectors is done in the following steps: When executing the for loop from <code>i = 2</code> to <code>i = T</code>, we need to compute the dependence vector. Let&#39;s examine the case when <code>i = 2</code>:</p><ul><li>LHS: <code>s[2]</code> is defined at iteration <code>i=2</code></li><li>RHS: <code>s[1]</code> is defined at iteration <code>i=1</code></li><li>Dependence vector: <span>$\vec{d} = \vec{j}_{sink} - \vec{i}_{source} = (2) - (1) = (1)$</span></li></ul><p>All subsequent iterations follow the same pattern and have the same dependence vector of <span>$(1)$</span>. Because all dependence vectors are lexicographically non-negative, the loop is sequentially valid.</p><p>This requires storing the loop variable <code>i</code> for each variable, but we already computed this with JuliaBUGS compilation, so not much overhead is required. </p><p>It should be noted that this approach doesn&#39;t scale well for general Julia programs, but it works appropriately for BUGS since the compilation process already has a time complexity of <span>$O(N)$</span> with respect to the number of variables.</p><p>It is worth pause here and give a summary:</p><p>To transform a BUGS program into a sequentially valid program, we will only apply two simple transformations, loop fission and statement reordering. These transformations will not need to modify loop bounds, renaming variables, adding any control flow, or make any changes to specific statements.</p><p>A program that can be transformed are determined by the following procedure:</p><p>First a statement dependence graph is computed.</p><p>If the statement dependence graph is acyclic, then we topologically sort the statements and fission all the loops to create a sequentially valid program.</p><p>In case the statement dependence graph is not acyclic. If the statements that form a cycle are all from the same loop (potentially at different nested levels), then we compute the dependence vectors to determine if the loop is sequentially valid. </p><p>Otherwise, the program need to be rewritten.</p><p>We don&#39;t attempt to apply further transformations to the program, because it is a hard problem. We will use the following example to show why program transformations can be a difficult task. We will not attempt to implement the transformation demonstrated here.</p><p>Consider this model,</p><pre><code class="language-julia hljs">sumX[1] = x[1] # (S1)
+
+# Loop 1: for i in 2:N
+sumX[i] = sumX[i-1] + x[i] # (S2)
+# End Loop 1
+
+# Loop 2: for i in 1:N/2 (loop over even indices)
+x[2*i] ~ dnorm(sumX[2*i-1], tau) # (S3)
+# End Loop 2
+
+# Loop 3: for i in 1:N/2 (loop over odd indices)
+x[2*i + 1] ~ dgamma(sumX[2*i], tau) # (S4)
+# End Loop 3</code></pre><p>the dependency graph is:</p><pre><code class="language-mermaid hljs">flowchart TD
+    S_input[&quot;(Input) x[1]&quot;] --&gt; S1[&quot;(S1) sumX[1] = x[1]&quot;]
+
+    subgraph Loop1 [for i in 2:N]
+      S2[&quot;(S2) sumX[i] = sumX[i-1] + x[i]&quot;]
+    end
+
+    subgraph Loop2 [for i in 1:N/2 - Even Indices]
+      S3[&quot;(S3) x[2*i] ~ dnorm(sumX[2*i-1], tau)&quot;]
+    end
+
+    subgraph Loop3 [for i in 1:N/2 - Odd Indices]
+      S4[&quot;(S4) x[2*i + 1] ~ dgamma(sumX[2*i], tau)&quot;]
+    end
+
+    S1 --&gt; S2
+    S2 -- loop-carried --&gt; S2
+
+    S1 --&gt; S3
+    S2 -- inter-loop --&gt; S3
+    S2 -- inter-loop --&gt; S4
+
+    S3 -- inter-loop --&gt; S2
+    S4 -- inter-loop --&gt; S2
+    
+    S3 -- inter-loop --&gt; S4</code></pre><p>This code exhibits a complex web of dependencies: S2 (calculating sumX) depends on x values. S3 (defining even xs) depends on odd sumX values. S4 (defining odd xs) depends on even sumX values. Critically, S2 needs both even and odd x values (calculated in S3 and S4 respectively) to calculate the sumX values that S3 and S4 themselves depend on. </p><p>This creates a cyclical dependency across the three loops. To resolve this and make the code sequentially executable, a sophisticated transformation involving loop fusion and statement interleaving is required. All three loops need to be merged into a single loop structure that correctly orders the calculations within each logical iteration i (from 1 to N).</p><p>A possible (conceptual) fused structure might look like this:</p><pre><code class="language-julia hljs">sumX[1] = x[1] 
+# Potentially handle x[2] separately depending on loop bounds/logic
+for i = 2 to N # Or a similar loop structure covering all indices
+   if i is even:
+       # Calculate x[i] (originally S3) - needs sumX[i-1]
+       x[i] ~ dnorm(sumX[i-1], tau)
+   else: # i is odd
+       # Calculate x[i] (originally S4) - needs sumX[i-1]
+       x[i] ~ dgamma(sumX[i-1], tau) 
+   
+   # Calculate sumX[i] (originally S2) - needs x[i] just calculated
+   sumX[i] = sumX[i-1] + x[i]
+end</code></pre><p>Things can get even trickier when data are involved in computing the indices. For instance,</p><pre><code class="language-julia hljs">begin
+    z[2] = f(x[1]) # (S1)
+    y[2] = g(x[3]) # (S2)
+
+    for i in 1:3
+        x[i] = y[a[i]] + z[b[i]] # (S3)
+    end
+end
+
+data = (a = [2, 3, 1], b = [3, 1, 2])</code></pre><p>this results in the following dependencies between model variables</p><pre><code class="language-julia hljs">x[1] &lt;- y[2], z[3]
+x[2] &lt;- y[3], z[1]
+x[3] &lt;- y[1], z[2]
+z[2] &lt;- x[1]
+y[2] &lt;- x[2]</code></pre><p>with dependence graph</p><pre><code class="language-mermaid hljs">graph TD
+    y2 --&gt; x1
+    z3 --&gt; x1
+    z1 --&gt; x2
+    y3 --&gt; x2
+    y1 --&gt; x3
+    z2 --&gt; x3
+    x1 --&gt; z2
+    x2 --&gt; y2</code></pre><p>The statement dependence graph of this program, on the other hand is (obtained by merging all the <code>x</code> nodes)</p><pre><code class="language-mermaid hljs">graph TD
+    S3 --&gt; S1
+    S3 --&gt; S2
+    S1 --&gt; S3
+    S2 --&gt; S3</code></pre><p>This represents a worst case where we can&#39;t do much better than fully unrolling.</p><h2 id="Lowering-BUGS-programs-into-Julia-programs-that-compute-the-log-density"><a class="docs-heading-anchor" href="#Lowering-BUGS-programs-into-Julia-programs-that-compute-the-log-density">Lowering BUGS programs into Julia programs that compute the log density</a><a id="Lowering-BUGS-programs-into-Julia-programs-that-compute-the-log-density-1"></a><a class="docs-heading-anchor-permalink" href="#Lowering-BUGS-programs-into-Julia-programs-that-compute-the-log-density" title="Permalink"></a></h2><p>The Version 2 of <code>Rats</code> program is:</p><pre><code class="language-julia hljs">quote
+    var&quot;beta.tau&quot; ~ dgamma(0.001, 0.001)
+    var&quot;beta.c&quot; ~ dnorm(0.0, 1.0e-6)
+    var&quot;alpha.tau&quot; ~ dgamma(0.001, 0.001)
+    var&quot;alpha.c&quot; ~ dnorm(0.0, 1.0e-6)
+    alpha0 = var&quot;alpha.c&quot; - xbar * var&quot;beta.c&quot;
+    var&quot;tau.c&quot; ~ dgamma(0.001, 0.001)
+    sigma = 1 / sqrt(var&quot;tau.c&quot;)
+    for i = 1:30
+        beta[i] ~ dnorm(var&quot;beta.c&quot;, var&quot;beta.tau&quot;)
+    end
+    for i = 1:30
+        alpha[i] ~ dnorm(var&quot;alpha.c&quot;, var&quot;alpha.tau&quot;)
+    end
+    for i = 1:30
+        for j = 1:5
+            mu[i, j] = alpha[i] + beta[i] * (x[j] - xbar)
+        end
+    end
+    for i = 1:30
+        for j = 1:5
+            Y[i, j] \eqsim dnorm(mu[i, j], var&quot;tau.c&quot;)
+        end
+    end
+end</code></pre><p>We made a simple change to the program to prepare for lowering: we need to distinguish between observations and model parameters (because they correspond to different code). We introduce a new operator into the program <code>\eqsim</code> to indicate that the left hand side is an observation.</p><h3 id="Handling-Mixed-Observations-and-Parameters"><a class="docs-heading-anchor" href="#Handling-Mixed-Observations-and-Parameters">Handling Mixed Observations and Parameters</a><a id="Handling-Mixed-Observations-and-Parameters-1"></a><a class="docs-heading-anchor-permalink" href="#Handling-Mixed-Observations-and-Parameters" title="Permalink"></a></h3><p>BUGS supports mixing observations and model parameters for different elements of the same array variable. To support this, we introduce a guard to use conditional logic to decide what computation to do for different iteration of the same statement.</p><pre><code class="language-julia hljs">@bugs begin
+    for i in 1:2
+        for j in 1:5
+            x[i, j] ~ Normal()
+        end
+    end
+end
+
+data = (x = [1 2 missing 4 5; 1 2 missing 4 5])</code></pre><p>generated code:</p><pre><code class="language-julia hljs">begin
+    for i in 1:2
+        for j in 1:5
+            if i == 1 &amp;&amp; j == 3 || i == 2 &amp;&amp; j == 3
+                x[i, j] ~ Normal()
+            else
+                x[i, j] ≂ Normal()
+            end
+        end
+    end
+end</code></pre><h3 id="Handling-Mixed-Data-Transformation-and-Deterministic-Assignments"><a class="docs-heading-anchor" href="#Handling-Mixed-Data-Transformation-and-Deterministic-Assignments">Handling Mixed Data Transformation and Deterministic Assignments</a><a id="Handling-Mixed-Data-Transformation-and-Deterministic-Assignments-1"></a><a class="docs-heading-anchor-permalink" href="#Handling-Mixed-Data-Transformation-and-Deterministic-Assignments" title="Permalink"></a></h3><p>For instance</p><pre><code class="language-julia hljs">for i in 1:5
+    x[i] = y[i] + 1
+end</code></pre><p>if the data is</p><pre><code class="language-julia hljs">y = [1, 2, missing, missing, 2]</code></pre><p>this is generally allowed in BUGS.</p><p><code>x[1], x[2], x[5]</code> can be computed at compile time, so these are &quot;transformed data&quot;. <code>x[3], x[4]</code> need to be computed at evaluation time. And only <code>x[3]</code> and <code>x[4]</code> are in the compiled graph.</p><p>For generated Julia program, if a statement can be eliminated because all the variables stemmed from this statement are &quot;transformed data&quot;. While in the above case, where a statements corresponds to both transformed data and deterministic variables. It will be left in the generated program as is. In this case, there will be redundant computation.</p></article><nav class="docs-footer"><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Friday 23 May 2025 00:09">Friday 23 May 2025</span>. Using Julia version 1.11.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
