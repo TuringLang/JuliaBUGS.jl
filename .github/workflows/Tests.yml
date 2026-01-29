@@ -39,6 +39,7 @@ jobs:
           - "compilation"
           - "log_density"
           - "model_operations"
+          - "callbacks"
 
     steps:
       - uses: actions/checkout@v4
