@@ -73,7 +73,7 @@ function evaluate_with_rng!!(
                 if sample_observed
                     value = rand(rng, dist)
                 else
-                    value = AbstractPPL.get(model.evaluation_env, vn)
+                    value = AbstractPPL.getvalue(model.evaluation_env, vn)
                 end
             else
                 value = rand(rng, dist)
@@ -146,7 +146,7 @@ function evaluate_with_env!!(
             evaluation_env = setindex!!(evaluation_env, value, vn)
         else
             dist = node_function(evaluation_env, loop_vars)
-            value = AbstractPPL.get(evaluation_env, vn)
+            value = AbstractPPL.getvalue(evaluation_env, vn)
 
             if transformed
                 # although the values stored in `evaluation_env` are in their original space, 
@@ -242,7 +242,7 @@ function evaluate_with_values!!(
                 logprior += logpdf(dist, value) + logjac
                 evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
             else
-                loglikelihood += logpdf(dist, AbstractPPL.get(evaluation_env, vn))
+                loglikelihood += logpdf(dist, AbstractPPL.getvalue(evaluation_env, vn))
             end
         end
     end
@@ -521,7 +521,7 @@ function _marginalize_recursive(
     frontier_values = if isempty(frontier_indices)
         ()
     else
-        Tuple(AbstractPPL.get(env, gd.sorted_nodes[idx]) for idx in frontier_indices)
+        Tuple(AbstractPPL.getvalue(env, gd.sorted_nodes[idx]) for idx in frontier_indices)
     end
     memo_key = (current_idx, frontier_values)
 
@@ -549,7 +549,7 @@ function _marginalize_recursive(
     elseif gd.is_observed_vals[current_idx]
         # Observed stochastic node: add to likelihood
         dist = node_function(env, loop_vars)
-        obs_value = AbstractPPL.get(env, current_vn)
+        obs_value = AbstractPPL.getvalue(env, current_vn)
         obs_logp = logpdf(dist, obs_value)
         obs_logp = isnan(obs_logp) ? -Inf : obs_logp
 

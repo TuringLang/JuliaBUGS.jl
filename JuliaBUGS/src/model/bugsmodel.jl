@@ -288,7 +288,7 @@ function BUGSModel(
                 transformed_param_length += transformed_var_lengths[vn]
 
                 if haskey(initial_params, AbstractPPL.getsym(vn))
-                    initialization = AbstractPPL.get(initial_params, vn)
+                    initialization = AbstractPPL.getvalue(initial_params, vn)
                     evaluation_env = BangBang.setindex!!(evaluation_env, initialization, vn)
                 else
                     init_value = rand(dist)
@@ -362,7 +362,7 @@ function initialize!(
             )
         elseif !is_observed
             initialization = try
-                AbstractPPL.get(initial_params, vn)
+                AbstractPPL.getvalue(initial_params, vn)
             catch _
                 missing
             end
@@ -456,7 +456,7 @@ function getparams(model::BUGSModel, evaluation_env=model.evaluation_env)
     pos = 1
     for v in param_vars
         if !model.transformed
-            val = AbstractPPL.get(evaluation_env, v)
+            val = AbstractPPL.getvalue(evaluation_env, v)
             len = model.untransformed_var_lengths[v]
             if val isa AbstractArray
                 param_vals[pos:(pos + len - 1)] .= vec(val)
@@ -467,7 +467,7 @@ function getparams(model::BUGSModel, evaluation_env=model.evaluation_env)
             (; node_function, loop_vars) = model.g[v]
             dist = node_function(evaluation_env, loop_vars)
             transformed_value = Bijectors.transform(
-                Bijectors.bijector(dist), AbstractPPL.get(evaluation_env, v)
+                Bijectors.bijector(dist), AbstractPPL.getvalue(evaluation_env, v)
             )
             len = model.transformed_var_lengths[v]
             if transformed_value isa AbstractArray
@@ -497,7 +497,7 @@ function getparams(
         gd.sorted_parameters
     end
     for v in param_vars
-        value = AbstractPPL.get(evaluation_env, v)
+        value = AbstractPPL.getvalue(evaluation_env, v)
         if !model.transformed
             d[v] = value
         else
