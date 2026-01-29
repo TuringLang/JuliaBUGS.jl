@@ -839,10 +839,10 @@ function analyze_statement(pass::AddVertices, expr::Expr, loop_vars::NamedTuple)
     args, node_function_expr, node_function = pass.f_dict[expr]
 
     vn = if lhs isa Symbol
-        AbstractPPL.VarName{lhs}(identity)
+        AbstractPPL.VarName{lhs}(AbstractPPL.Iden())
     else
         v, indices... = lhs
-        AbstractPPL.VarName{v}(AbstractPPL.IndexLens(indices))
+        AbstractPPL.VarName{v}(AbstractPPL.Index((indices...,), (;)))
     end
     add_vertex!(
         pass.g,
@@ -896,7 +896,7 @@ function analyze_statement(pass::AddEdges, expr::Expr, loop_vars::NamedTuple)
         @varname($lhs)
     else
         v, indices... = lhs
-        AbstractPPL.VarName{v}(AbstractPPL.IndexLens(indices))
+        AbstractPPL.VarName{v}(AbstractPPL.Index((indices...,), (;)))
     end
 
     for var in dependencies
