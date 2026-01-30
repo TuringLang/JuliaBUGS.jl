@@ -95,7 +95,11 @@ function evaluate_with_rng!!(
                 logprior += logp
             end
 
-            evaluation_env = setindex!!(evaluation_env, value, vn)
+            # Only set value if we sampled it or if it's not observed
+            # Observed values are already in evaluation_env from smart_copy_evaluation_env
+            if !is_observed || sample_observed
+                evaluation_env = setindex!!(evaluation_env, value, vn)
+            end
         end
     end
 
