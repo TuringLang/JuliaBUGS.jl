@@ -64,7 +64,7 @@ function analyze_statement(
         VarName{simplified_lhs}()
     else
         symbol, indices... = simplified_lhs
-        VarName{symbol}(IndexLens(indices))
+        VarName{symbol}(AbstractPPL.Index((indices...,), (;)))
     end
 
     if varname in pass.all_variables_in_graph
@@ -480,7 +480,7 @@ function analyze_statement(
         VarName{simplified_lhs}()
     else
         symbol, indices... = simplified_lhs
-        VarName{symbol}(IndexLens(indices))
+        VarName{symbol}(AbstractPPL.Index((indices...,), (;)))
     end
     return pass.induction_variable_values[varname] = loop_variables
 end
@@ -983,7 +983,7 @@ function analyze_statement(pass::CollectSortedNodes, expr::Expr, loop_variables:
         VarName{simplified_lhs}()
     else
         symbol, indices... = simplified_lhs
-        VarName{symbol}(IndexLens(indices))
+        VarName{symbol}(AbstractPPL.Index((indices...,), (;)))
     end
     push!(pass.sorted_nodes, varname)
     return nothing
