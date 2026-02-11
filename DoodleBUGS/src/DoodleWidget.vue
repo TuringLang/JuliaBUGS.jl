@@ -48,10 +48,12 @@ const props = withDefaults(
     storageKey?: string // Unique key for localStorage isolation (optional)
     width?: string
     height?: string
+    themeMode?: string // 'light' or 'dark' to sync with host app theme
   }>(),
   {
     width: '100%',
     height: '600px',
+    themeMode: 'light',
   }
 )
 
@@ -89,6 +91,15 @@ uiStore.setPrefix(persistencePrefix.value)
 // Ensure sidebars are closed by default for the widget
 uiStore.isLeftSidebarOpen = false
 uiStore.isRightSidebarOpen = false
+
+// Sync theme mode with host app
+watch(
+  () => props.themeMode,
+  (mode) => {
+    uiStore.isDarkMode = mode === 'dark'
+  },
+  { immediate: true }
+)
 
 const widgetInitialized = ref(false)
 const instanceId = ref(
@@ -768,6 +779,20 @@ onMounted(async () => {
   validateGraph()
   injectWidgetStyles()
   window.addEventListener('resize', handleResize)
+
+  // Emit initial state and code after initialization (delay to ensure event listeners are attached)
+  setTimeout(() => {
+    const fullState = {
+      project: projectStore.exportState(),
+      graphs: Array.from(graphStore.graphContents.entries()).map(([, v]) => v),
+      data: Array.from(graphStore.graphContents.keys()).map((gid) => ({
+        graphId: gid,
+        content: dataStore.getGraphData(gid).content,
+      })),
+    }
+    emit('state-update', JSON.stringify(fullState))
+    emit('code-update', generatedCode.value)
+  }, 500)
 
   // Force fit to view on load (and reload)
   setTimeout(() => {
