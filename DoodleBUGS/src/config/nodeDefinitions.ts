@@ -361,6 +361,10 @@ export const connectionPaletteItems: {
 
 export const exampleModels: { name: string; key: string }[] = [{ name: 'Rats Model', key: 'rats' }]
 
+export const getAllNodeDefinitions = (): NodeDefinition[] => {
+  return nodeDefinitions
+}
+
 export const getNodeDefinition = (type: NodeType): NodeDefinition | undefined => {
   return nodeDefinitions.find((def) => def.nodeType === type)
 }
