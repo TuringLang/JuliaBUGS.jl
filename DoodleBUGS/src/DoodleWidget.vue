@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed, reactive, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import Toast from 'primevue/toast'
-import { useToast } from 'primevue/usetoast'
 import Tooltip from 'primevue/tooltip'
 
 import GraphEditor from './components/canvas/GraphEditor.vue'
@@ -30,36 +29,33 @@ import { useUiStore } from './stores/uiStore'
 import { useDataStore } from './stores/dataStore'
 import { useScriptStore } from './stores/scriptStore'
 import { useGraphElements } from './composables/useGraphElements'
-import { useBugsCodeGenerator, generateStandaloneScript } from './composables/useBugsCodeGenerator'
+import { useBugsCodeGenerator } from './composables/useBugsCodeGenerator'
 import { useGraphValidator } from './composables/useGraphValidator'
-import { useGraphInstance } from './composables/useGraphInstance'
-import { useGraphLayout } from './composables/useGraphLayout'
 import { usePersistence } from './composables/usePersistence'
-import { useShareExport } from './composables/useShareExport'
-import { useImportExport } from './composables/useImportExport'
-import type { NodeType, GraphElement, UnifiedModelData } from './types'
-import { examples, isUrl } from './config/examples'
+import { useEditorActions } from './composables/useEditorActions'
+import { useWidgetEmitter } from './composables/useWidgetEmitter'
 
 const props = withDefaults(
   defineProps<{
-    initialState?: string // Full JSON dump of project state (restores session)
-    model?: string // GitHub URL, any URL, or Model ID (e.g. 'rats')
-    localModel?: string // Path to local model file (e.g. 'model.json')
-    storageKey?: string // Unique key for localStorage isolation (optional)
+    initialState?: string
+    model?: string
+    localModel?: string
+    storageKey?: string
     width?: string
     height?: string
-    themeMode?: string // 'light' or 'dark' to sync with host app theme
+    themeMode?: string
+    enableEditor?: string
   }>(),
   {
     width: '100%',
     height: '600px',
-    themeMode: 'light',
   }
 )
 
 const emit = defineEmits<{
   (e: 'state-update', payload: string): void
   (e: 'code-update', payload: string): void
+  (e: 'ready', payload: string): void
 }>()
 
 const projectStore = useProjectStore()
@@ -67,9 +63,7 @@ const graphStore = useGraphStore()
 const uiStore = useUiStore()
 const dataStore = useDataStore()
 const scriptStore = useScriptStore()
-const toast = useToast()
 
-// Determine unique storage prefix for this instance
 const persistencePrefix = computed(() => {
   if (props.storageKey) return `db-${props.storageKey}`
   const modelKey = props.model ? props.model.replace(/[^a-zA-Z0-9-_]/g, '') : null
@@ -79,24 +73,29 @@ const persistencePrefix = computed(() => {
   return 'doodlebugs-widget'
 })
 
-// Set up tooltip directive
 const vTooltip = Tooltip
 
-// Configure stores with isolated prefix
 projectStore.setPrefix(persistencePrefix.value)
 graphStore.setPrefix(persistencePrefix.value)
 dataStore.setPrefix(persistencePrefix.value)
 uiStore.setPrefix(persistencePrefix.value)
+scriptStore.setPrefix(persistencePrefix.value)
 
-// Ensure sidebars are closed by default for the widget
-uiStore.isLeftSidebarOpen = false
-uiStore.isRightSidebarOpen = false
+const enableEditorMode = computed(() => props.enableEditor != null)
+const showEditorUI = computed(() => isFullScreen.value || enableEditorMode.value)
+const shouldTeleport = computed(() => isFullScreen.value || enableEditorMode.value)
 
-// Sync theme mode with host app
+if (!enableEditorMode.value) {
+  uiStore.isLeftSidebarOpen = false
+  uiStore.isRightSidebarOpen = false
+}
+
 watch(
   () => props.themeMode,
   (mode) => {
-    uiStore.isDarkMode = mode === 'dark'
+    if (mode != null) {
+      uiStore.isDarkMode = mode === 'dark'
+    }
   },
   { immediate: true }
 )
@@ -108,53 +107,89 @@ const instanceId = ref(
     : `widget-${Math.random().toString(36).substring(2, 9)}`
 )
 
-// Widget Viewport & Edit Mode State
 const widgetRoot = ref<HTMLElement | null>(null)
+const bottomToolbarRef = ref<InstanceType<typeof FloatingBottomToolbar> | null>(null)
 const isWidgetInView = ref(false)
-// Edit mode is now strictly tied to full screen mode for simplicity
 const isEditMode = ref(false)
 const isFullScreen = ref(false)
+
 const isUIActive = ref(true)
 let observer: IntersectionObserver | null = null
 
-const currentMode = ref('select')
-const currentNodeType = ref<NodeType>('stochastic')
+const { elements, selectedElement, updateElement, deleteElement } = useGraphElements()
+const { parsedGraphData } = storeToRefs(dataStore)
+const { generatedCode } = useBugsCodeGenerator(elements)
+const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData)
+const { standaloneScript } = storeToRefs(scriptStore)
 
-const showAboutModal = ref(false)
-const showFaqModal = ref(false)
-const showExportModal = ref(false)
-const currentExportType = ref<'png' | 'jpg' | 'svg' | null>(null)
-const showStyleModal = ref(false)
-const showShareModal = ref(false)
-const showValidationModal = ref(false)
-const showScriptSettingsModal = ref(false)
-const showNewProjectModal = ref(false)
-const showNewGraphModal = ref(false)
-const newProjectName = ref('')
-const newGraphName = ref('')
+const { loadUIState, saveUIState, saveLastGraphId, loadLastGraphId } = usePersistence(
+  persistencePrefix.value
+)
 
-const codePanelPos = reactive({ x: 0, y: 0 })
-const codePanelSize = reactive({ width: 400, height: 300 })
-const dataPanelPos = reactive({ x: 0, y: 0 })
-const dataPanelSize = reactive({ width: 400, height: 300 })
+const actions = useEditorActions(elements, generatedCode, persistencePrefix.value)
+const {
+  currentMode,
+  currentNodeType,
+  showNewProjectModal,
+  newProjectName,
+  showNewGraphModal,
+  newGraphName,
+  showAboutModal,
+  showFaqModal,
+  showValidationModal,
+  showScriptSettingsModal,
+  showExportModal,
+  showStyleModal,
+  showShareModal,
+  currentExportType,
+  graphImportInput,
+  isDragOver,
+  codePanelPos,
+  codePanelSize,
+  dataPanelPos,
+  dataPanelSize,
+  pinnedGraphTitle,
+  isCodePanelOpen,
+  isDataPanelOpen,
+  shareUrl,
+  importedGraphData,
+  toggleCodePanel,
+  toggleDataPanel,
+  handleUndo,
+  handleRedo,
+  handleZoomIn,
+  handleZoomOut,
+  handleFit,
+  handleGraphLayout,
+  handleLoadExample,
+  getScriptContent,
+  handleGenerateStandalone,
+  handleDownloadBugs,
+  handleDownloadScript,
+  openExportModal,
+  handleConfirmExport,
+  handleExportJson,
+  handleElementSelected,
+  handleSelectNodeFromModal,
+  handleShare,
+  handleGenerateShareLink,
+  createNewProject,
+  createNewGraph,
+  triggerGraphImport,
+  handleGraphImportFile,
+  handleDrop,
+  clearImportedData,
+  getCyInstance,
+  smartFit,
+} = actions
 
-const graphImportInput = ref<HTMLInputElement | null>(null)
-const isDragOver = ref(false)
-const isDraggingUI = ref(false)
-const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1920)
-const isInitialized = ref(false)
+const { emitReady } = useWidgetEmitter(emit, generatedCode)
 
 const WIDGET_UI_STATE_KEY = `${persistencePrefix.value}-ui-state`
 const WIDGET_SOURCE_MAP_KEY = `${persistencePrefix.value}-source-map`
-
-const {
-  loadUIState,
-  saveUIState,
-  getStoredGraphElements,
-  getStoredDataContent,
-  saveLastGraphId,
-  loadLastGraphId,
-} = usePersistence(persistencePrefix.value)
+const isDraggingUI = ref(false)
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1920)
+const isInitialized = ref(false)
 
 const getSourceMap = (): Record<string, string> => {
   try {
@@ -163,25 +198,17 @@ const getSourceMap = (): Record<string, string> => {
     return {}
   }
 }
-
 const updateSourceMap = (source: string, graphId: string) => {
   const map = getSourceMap()
   map[source] = graphId
   localStorage.setItem(WIDGET_SOURCE_MAP_KEY, JSON.stringify(map))
 }
+const sourceMapApi = { get: getSourceMap, set: updateSourceMap }
 
 const saveWidgetUIState = () => {
   saveUIState(WIDGET_UI_STATE_KEY, {
-    leftSidebar: {
-      open: uiStore.isLeftSidebarOpen,
-      x: 0,
-      y: 0,
-    },
-    rightSidebar: {
-      open: uiStore.isRightSidebarOpen,
-      x: 0,
-      y: 0,
-    },
+    leftSidebar: { open: uiStore.isLeftSidebarOpen, x: 0, y: 0 },
+    rightSidebar: { open: uiStore.isRightSidebarOpen, x: 0, y: 0 },
     codePanel: {
       open: isCodePanelOpen.value,
       x: codePanelPos.x,
@@ -198,25 +225,14 @@ const saveWidgetUIState = () => {
     },
     currentGraphId: graphStore.currentGraphId || undefined,
     editMode: isEditMode.value,
-    // @ts-expect-error - Extending UI state for widget specific needs
+    // @ts-expect-error - widget-specific UI state
     isFullScreen: isFullScreen.value,
   })
 }
 
-const { elements, selectedElement, updateElement, deleteElement } = useGraphElements()
-const { parsedGraphData } = storeToRefs(dataStore)
-const { samplerSettings, standaloneScript } = storeToRefs(scriptStore)
-const { generatedCode } = useBugsCodeGenerator(elements)
-const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData)
-const { getCyInstance, getUndoRedoInstance } = useGraphInstance()
-const { smartFit, applyLayoutWithFit } = useGraphLayout()
-const { shareUrl, minifyGraph, generateShareLink } = useShareExport()
-const { importedGraphData, processGraphFile, clearImportedData } = useImportExport()
-
 const WIDGET_STYLES_ID = 'doodlebugs-widget-teleport-styles'
 
 const widgetTeleportCSS = `
-/* DoodleBUGS Widget - Teleported Content Styles */
 .db-ui-overlay,
 .db-sidebar-wrapper,
 .db-floating-panel,
@@ -233,85 +249,22 @@ const widgetTeleportCSS = `
   color: var(--theme-text-primary, #1f2937);
   box-sizing: border-box;
 }
-
 .db-ui-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1000000; /* Higher than widget root to ensure UI is on top */
-  pointer-events: none;
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  z-index: 1000000; pointer-events: none;
 }
-
-.db-ui-overlay > * {
-  pointer-events: auto;
-}
-
-.db-ui-overlay .db-toolbar-container {
-  pointer-events: auto !important;
-}
-
-/* Fixed positioning wrapper for sidebars to match MainLayout */
+.db-ui-overlay > * { pointer-events: auto; }
+.db-ui-overlay .db-toolbar-container { pointer-events: auto !important; }
 .db-sidebar-wrapper {
-  position: absolute;
-  pointer-events: none; /* Let clicks pass through if sidebar is closed/scaled down */
-  z-index: 1000001; /* Above UI overlay */
-  display: block;
+  position: absolute; pointer-events: none; z-index: 1000001; display: block;
 }
-
-.db-sidebar-wrapper > * {
-  pointer-events: auto; /* Re-enable for the sidebar content itself */
-}
-
-.db-sidebar-wrapper.db-left {
-  left: 0;
-  top: 0;
-}
-
-.db-sidebar-wrapper.db-right {
-  right: 0;
-  top: 0;
-  left: auto;
-}
-
-.db-ui-overlay .db-floating-panel {
-  z-index: 1000002 !important;
-}
-
-.db-ui-overlay .db-toolbar-container {
-  z-index: 1000003 !important; /* Toolbar should be above panels */
-}
-
-.p-popover,
-.p-select-overlay,
-.p-dialog,
-.p-toast,
-.p-tooltip {
-  z-index: 1000010 !important; /* Above all DoodleBUGS UI */
-}
-
-.p-dialog-mask {
-  z-index: 1000009 !important;
-}
-
-/* Sidebar Animations */
-.db-sidebar-transition-enter-active,
-.db-sidebar-transition-leave-active {
-  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease;
-}
-
-.db-sidebar-transition-enter-from,
-.db-sidebar-transition-leave-to {
-  opacity: 0;
-  transform: scale(0.95);
-}
-
-.db-sidebar-transition-enter-to,
-.db-sidebar-transition-leave-from {
-  opacity: 1;
-  transform: scale(1);
-}
+.db-sidebar-wrapper > * { pointer-events: auto; }
+.db-sidebar-wrapper.db-left { left: 0; top: 0; }
+.db-sidebar-wrapper.db-right { right: 0; top: 0; left: auto; }
+.db-ui-overlay .db-floating-panel { z-index: 1000002 !important; }
+.db-ui-overlay .db-toolbar-container { z-index: 1000003 !important; }
+.p-popover, .p-select-overlay, .p-dialog, .p-toast, .p-tooltip { z-index: 1000010 !important; }
+.p-dialog-mask { z-index: 1000009 !important; }
 `
 
 const injectWidgetStyles = () => {
@@ -325,76 +278,7 @@ const injectWidgetStyles = () => {
 const removeWidgetStyles = () => {
   const otherWidgets = document.querySelectorAll('doodle-bugs')
   if (otherWidgets.length > 0) return
-
-  const styleElement = document.getElementById(WIDGET_STYLES_ID)
-  if (styleElement) {
-    styleElement.remove()
-  }
-}
-
-const pinnedGraphTitle = computed(() => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return null
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  return graph ? graph.name : null
-})
-
-const loadModelData = async (
-  data: UnifiedModelData | Record<string, unknown>,
-  name: string,
-  sourceKey?: string
-) => {
-  if (!projectStore.currentProjectId) return
-
-  const newGraphMeta = projectStore.addGraphToProject(
-    projectStore.currentProjectId,
-    (data as UnifiedModelData).name || name
-  )
-  if (!newGraphMeta) return
-
-  if ((data as UnifiedModelData).elements) {
-    graphStore.updateGraphElements(
-      newGraphMeta.id,
-      (data as UnifiedModelData).elements as GraphElement[]
-    )
-  } else if ((data as UnifiedModelData).graphJSON) {
-    graphStore.updateGraphElements(
-      newGraphMeta.id,
-      (data as UnifiedModelData).graphJSON as GraphElement[]
-    )
-  }
-
-  if ((data as UnifiedModelData).dataContent) {
-    dataStore.updateGraphData(newGraphMeta.id, {
-      content: (data as UnifiedModelData).dataContent || '',
-    })
-  } else if ((data as UnifiedModelData).data || (data as UnifiedModelData).inits) {
-    const content = JSON.stringify(
-      {
-        data: (data as UnifiedModelData).data || {},
-        inits: (data as UnifiedModelData).inits || {},
-      },
-      null,
-      2
-    )
-    dataStore.updateGraphData(newGraphMeta.id, { content })
-  }
-
-  graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
-  if ((data as UnifiedModelData).layout) {
-    projectStore.updateGraphLayout(
-      projectStore.currentProjectId,
-      newGraphMeta.id,
-      (data as UnifiedModelData).layout
-    )
-  }
-
-  if (sourceKey) {
-    updateSourceMap(sourceKey, newGraphMeta.id)
-  }
-  graphStore.selectGraph(newGraphMeta.id)
-  saveLastGraphId(newGraphMeta.id)
-
-  return newGraphMeta.id
+  document.getElementById(WIDGET_STYLES_ID)?.remove()
 }
 
 const resolveProp = (propName: string, propValue: string | undefined): string | null => {
@@ -404,115 +288,36 @@ const resolveProp = (propName: string, propValue: string | undefined): string | 
     if (root instanceof ShadowRoot && root.host) {
       const kebab = propName.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2').toLowerCase()
       const lower = propName.toLowerCase()
-      const attrVal = root.host.getAttribute(kebab) || root.host.getAttribute(lower)
-      if (attrVal) return attrVal
+      return root.host.getAttribute(kebab) || root.host.getAttribute(lower) || null
     }
   }
   return null
 }
 
-const handleLoadExample = async (
-  input: string,
-  type: 'local' | 'prop',
-  shouldPersistSource: boolean = true
-) => {
-  if (!projectStore.currentProjectId) return
+const handleLoadExampleAction = (exampleKey: string) => {
+  handleLoadExample(exampleKey, 'prop', sourceMapApi)
+}
 
-  toast.add({
-    severity: 'info',
-    summary: 'Loading...',
-    detail: `Attempting to load ${type === 'local' ? 'local file' : 'model'}: ${input}`,
-    life: 2000,
-  })
+const handleNewProject = () => {
+  newProjectName.value = `Project ${projectStore.projects.length + 1}`
+  showNewProjectModal.value = true
+}
 
-  try {
-    let modelData = null
-    let modelName = 'Imported Model'
-    let sourceDescription = ''
-
-    if (type === 'local') {
-      sourceDescription = 'Local File'
-      try {
-        const response = await fetch(input)
-        if (!response.ok) throw new Error(`Failed to load local file. Status: ${response.status}`)
-        const text = await response.text()
-        modelData = JSON.parse(text)
-        modelName = modelData.name || input
-      } catch (e: unknown) {
-        throw new Error(e instanceof Error ? e.message : String(e))
-      }
-    } else {
-      if (isUrl(input)) {
-        const isGithub = input.toLowerCase().includes('github')
-        sourceDescription = isGithub ? 'GitHub Source' : 'External URL'
-        try {
-          const response = await fetch(input)
-          if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-          modelData = await response.json()
-          modelName = modelData.name || 'Remote Model'
-        } catch (e: unknown) {
-          throw new Error(
-            `Failed to fetch URL: "${input}". ${e instanceof Error ? e.message : String(e)}`
-          )
-        }
-      } else {
-        const turingUrl = `https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/examples/${input}/model.json`
-        try {
-          const response = await fetch(turingUrl)
-          if (response.ok) {
-            modelData = await response.json()
-            modelName = modelData.name || input
-            sourceDescription = 'Turing Repository'
-          }
-        } catch {
-          console.warn('[DoodleBUGS] Turing fetch failed, checking fallback...')
-        }
-
-        if (!modelData) {
-          const config = examples.find((e) => e.id === input)
-          if (config && config.url) {
-            sourceDescription = 'GitHub/Config Source'
-            try {
-              const response = await fetch(config.url)
-              if (response.ok) {
-                modelData = await response.json()
-                modelName = config.name
-              }
-            } catch (remoteErr: unknown) {
-              console.error('[DoodleBUGS] Fallback load failed:', remoteErr)
-            }
-          }
-        }
-
-        if (!modelData) {
-          throw new Error(`Model ID "${input}" not found in Turing Repo or Config.`)
-        }
-      }
-    }
-
-    if (modelData) {
-      await loadModelData(modelData, modelName, shouldPersistSource ? input : undefined)
-      toast.add({
-        severity: 'success',
-        summary: 'Loaded',
-        detail: `${modelName} loaded from ${sourceDescription}`,
-        life: 3000,
-      })
-    }
-  } catch (error: unknown) {
-    console.error('[DoodleBUGS] CRITICAL LOAD ERROR:', error)
-    toast.add({
-      severity: 'error',
-      summary: 'Load Failed',
-      detail: error instanceof Error ? error.message : 'An unexpected error occurred.',
-      life: 5000,
-    })
-    throw error
+const handleNewGraph = () => {
+  if (projectStore.currentProjectId && projectStore.currentProject) {
+    newGraphName.value = `Graph ${projectStore.currentProject.graphs.length + 1}`
+    showNewGraphModal.value = true
   }
 }
 
-const handleLoadExampleAction = (exampleKey: string) => {
-  handleLoadExample(exampleKey, 'prop', false)
+const handleShareGraph = () => {
+  shareUrl.value = ''
+  showShareModal.value = true
+}
+
+const handleShareProjectUrl = () => {
+  shareUrl.value = ''
+  showShareModal.value = true
 }
 
 const initGraph = async () => {
@@ -542,15 +347,11 @@ const initGraph = async () => {
       saveLastGraphId(existingGraph.id)
     } else {
       try {
-        await handleLoadExample(sourceKey, isLocalFile ? 'local' : 'prop', true)
-      } catch (error) {
-        console.warn('[DoodleBUGS] Failed to load model from URL, creating empty graph:', error)
-        if (proj.graphs.length === 0) {
-          projectStore.addGraphToProject(proj.id, 'Model 1')
-        }
-        if (!graphStore.currentGraphId && proj.graphs.length > 0) {
+        await handleLoadExample(sourceKey, isLocalFile ? 'local' : 'prop', sourceMapApi)
+      } catch {
+        if (proj.graphs.length === 0) projectStore.addGraphToProject(proj.id, 'Model 1')
+        if (!graphStore.currentGraphId && proj.graphs.length > 0)
           graphStore.selectGraph(proj.graphs[0].id)
-        }
       }
     }
   } else {
@@ -558,12 +359,9 @@ const initGraph = async () => {
     if (lastGraphId && proj.graphs.some((g) => g.id === lastGraphId)) {
       graphStore.selectGraph(lastGraphId)
     } else {
-      if (proj.graphs.length === 0) {
-        projectStore.addGraphToProject(proj.id, 'Model 1')
-      }
-      if (!graphStore.currentGraphId && proj.graphs.length > 0) {
+      if (proj.graphs.length === 0) projectStore.addGraphToProject(proj.id, 'Model 1')
+      if (!graphStore.currentGraphId && proj.graphs.length > 0)
         graphStore.selectGraph(proj.graphs[0].id)
-      }
     }
   }
 
@@ -583,7 +381,6 @@ interface WidgetInstanceCallbacks {
   setUIActive: (val: boolean) => void
   getRect: () => DOMRect | undefined | null
 }
-
 interface DoodleBugsManager {
   instances: Map<string, WidgetInstanceCallbacks>
   activeId: string | null
@@ -599,26 +396,26 @@ const getManager = (): DoodleBugsManager => {
     w.__DoodleBugsManager = {
       instances: new Map(),
       activeId: null,
-      register(id: string, callbacks: WidgetInstanceCallbacks) {
+      register(id, callbacks) {
         this.instances.set(id, callbacks)
       },
-      unregister(id: string) {
+      unregister(id) {
         this.instances.delete(id)
         if (this.activeId === id) {
           this.activeId = null
           this.recalculateActive()
         }
       },
-      setActive(id: string | null) {
+      setActive(id) {
         if (this.activeId === id) return
         this.activeId = id
-        this.instances.forEach((inst: WidgetInstanceCallbacks, key: string) => {
+        this.instances.forEach((inst, key) => {
           inst.setUIActive(key === id)
         })
       },
       recalculateActive() {
         const visible: { id: string; top: number }[] = []
-        this.instances.forEach((inst: WidgetInstanceCallbacks, id: string) => {
+        this.instances.forEach((inst, id) => {
           const rect = inst.getRect()
           if (rect && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight) {
             visible.push({ id, top: rect.top })
@@ -629,10 +426,7 @@ const getManager = (): DoodleBugsManager => {
           return
         }
         visible.sort((a, b) => a.top - b.top)
-        const currentIsVisible = visible.some((v) => v.id === this.activeId)
-        if (!currentIsVisible) {
-          this.setActive(visible[0].id)
-        }
+        if (!visible.some((v) => v.id === this.activeId)) this.setActive(visible[0].id)
       },
     }
   }
@@ -641,35 +435,32 @@ const getManager = (): DoodleBugsManager => {
 
 const activateWidget = (source: 'click' | 'scroll') => {
   const manager = getManager()
-  if (source === 'click') {
-    manager.setActive(instanceId.value)
-  } else if (source === 'scroll') {
-    manager.recalculateActive()
+  if (source === 'click') manager.setActive(instanceId.value)
+  else manager.recalculateActive()
+}
+
+const toggleEditMode = () => {
+  isEditMode.value = !isEditMode.value
+  if (isEditMode.value) {
+    activateWidget('click')
+    injectWidgetStyles()
   }
+  saveWidgetUIState()
 }
 
 const toggleFullScreen = () => {
   isFullScreen.value = !isFullScreen.value
-
-  // Edit mode is strictly tied to full screen status
-  isEditMode.value = isFullScreen.value
-
-  if (isFullScreen.value) {
-    activateWidget('click')
-  }
-
-  // Force graph resize and center after layout transition
+  isEditMode.value = isFullScreen.value || enableEditorMode.value
+  if (isFullScreen.value) activateWidget('click')
   setTimeout(() => {
     if (graphStore.currentGraphId) {
       const cy = getCyInstance(graphStore.currentGraphId)
       if (cy) {
         cy.resize()
-        // Center the graph after resize
         smartFit(cy, true)
       }
     }
   }, 100)
-
   saveWidgetUIState()
 }
 
@@ -678,25 +469,21 @@ const handleWindowScroll = (event: Event) => {
   const target = event.target as Node
   const isDocumentScroll =
     target === document || target === document.documentElement || target === document.body
-
-  if (isDocumentScroll) {
-    if (!scrollRafId) {
-      scrollRafId = requestAnimationFrame(() => {
-        getManager().recalculateActive()
-        if (graphStore.currentGraphId) {
-          const cy = getCyInstance(graphStore.currentGraphId)
-          if (cy) cy.resize()
-        }
-        scrollRafId = null
-      })
-    }
+  if (isDocumentScroll && !scrollRafId) {
+    scrollRafId = requestAnimationFrame(() => {
+      getManager().recalculateActive()
+      if (graphStore.currentGraphId) {
+        const cy = getCyInstance(graphStore.currentGraphId)
+        if (cy) cy.resize()
+      }
+      scrollRafId = null
+    })
   }
 }
 
 const handleResize = () => {
   windowWidth.value = window.innerWidth
 }
-
 const handleWidgetClick = () => {
   activateWidget('click')
 }
@@ -704,17 +491,16 @@ const handleWidgetClick = () => {
 onMounted(async () => {
   const manager = getManager()
   manager.register(instanceId.value, {
-    setUIActive: (val: boolean) => {
+    setUIActive: (val) => {
       isUIActive.value = val
     },
-    getRect: () => (widgetRoot.value ? widgetRoot.value.getBoundingClientRect() : null),
+    getRect: () => widgetRoot.value?.getBoundingClientRect() ?? null,
   })
 
   if (widgetRoot.value) {
     observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries[0]
-        isWidgetInView.value = entry.isIntersecting
+        isWidgetInView.value = entries[0].isIntersecting
         manager.recalculateActive()
       },
       { threshold: [0, 0.1] }
@@ -743,12 +529,8 @@ onMounted(async () => {
 
   const savedUIState = loadUIState(WIDGET_UI_STATE_KEY)
   if (savedUIState) {
-    if (savedUIState.leftSidebar) {
-      uiStore.isLeftSidebarOpen = savedUIState.leftSidebar.open
-    }
-    if (savedUIState.rightSidebar) {
-      uiStore.isRightSidebarOpen = savedUIState.rightSidebar.open
-    }
+    if (savedUIState.leftSidebar) uiStore.isLeftSidebarOpen = savedUIState.leftSidebar.open
+    if (savedUIState.rightSidebar) uiStore.isRightSidebarOpen = savedUIState.rightSidebar.open
     if (savedUIState.codePanel) {
       codePanelPos.x = savedUIState.codePanel.x
       codePanelPos.y = savedUIState.codePanel.y
@@ -761,16 +543,18 @@ onMounted(async () => {
       dataPanelSize.width = savedUIState.dataPanel.width
       dataPanelSize.height = savedUIState.dataPanel.height
     }
-    if (savedUIState.currentGraphId) {
-      graphStore.selectGraph(savedUIState.currentGraphId)
-    }
-    // Restore Fullscreen state if persisted
-    // @ts-expect-error - isFullScreen is added to saved state for widget persistence
+    if (savedUIState.currentGraphId) graphStore.selectGraph(savedUIState.currentGraphId)
+    // @ts-expect-error - widget-specific UI state
     if (savedUIState.isFullScreen) {
       isFullScreen.value = true
       isEditMode.value = true
       activateWidget('click')
     }
+  }
+
+  if (enableEditorMode.value) {
+    isEditMode.value = true
+    activateWidget('click')
   }
 
   await initGraph()
@@ -780,24 +564,9 @@ onMounted(async () => {
   injectWidgetStyles()
   window.addEventListener('resize', handleResize)
 
-  // Emit initial state and code after initialization (delay to ensure event listeners are attached)
-  setTimeout(() => {
-    const fullState = {
-      project: projectStore.exportState(),
-      graphs: Array.from(graphStore.graphContents.entries()).map(([, v]) => v),
-      data: Array.from(graphStore.graphContents.keys()).map((gid) => ({
-        graphId: gid,
-        content: dataStore.getGraphData(gid).content,
-      })),
-    }
-    emit('state-update', JSON.stringify(fullState))
-    emit('code-update', generatedCode.value)
-  }, 500)
+  emitReady()
 
-  // Force fit to view on load (and reload)
-  setTimeout(() => {
-    handleFit()
-  }, 800)
+  setTimeout(() => handleFit(), 800)
 })
 
 onUnmounted(() => {
@@ -810,377 +579,16 @@ onUnmounted(() => {
   removeWidgetStyles()
 })
 
-watch(
-  [() => projectStore.projects, () => graphStore.graphContents, () => dataStore.dataContent],
-  () => {
-    const fullState = {
-      project: projectStore.exportState(),
-      graphs: Array.from(graphStore.graphContents.entries()).map(([, v]) => v),
-      data: Array.from(graphStore.graphContents.keys()).map((gid) => ({
-        graphId: gid,
-        content: dataStore.getGraphData(gid).content,
-      })),
-    }
-    emit('state-update', JSON.stringify(fullState))
-  },
-  { deep: true }
-)
-
-watch(generatedCode, (code) => {
-  emit('code-update', code)
+watch(generatedCode, () => {
+  if (
+    standaloneScript.value ||
+    (uiStore.activeRightTab === 'script' && uiStore.isRightSidebarOpen)
+  ) {
+    scriptStore.standaloneScript = getScriptContent()
+  }
 })
 
-const getScriptContent = () => {
-  const dataPayload = parsedGraphData.value.data || {}
-  const initsPayload = parsedGraphData.value.inits || {}
-  return generateStandaloneScript({
-    modelCode: generatedCode.value,
-    data: dataPayload,
-    inits: initsPayload,
-    settings: {
-      n_samples: samplerSettings.value.n_samples,
-      n_adapts: samplerSettings.value.n_adapts,
-      n_chains: samplerSettings.value.n_chains,
-      seed: samplerSettings.value.seed ?? undefined,
-    },
-  })
-}
-
-watch(
-  [generatedCode, parsedGraphData, samplerSettings],
-  () => {
-    if (
-      standaloneScript.value ||
-      (uiStore.activeRightTab === 'script' && uiStore.isRightSidebarOpen)
-    ) {
-      scriptStore.standaloneScript = getScriptContent()
-    }
-  },
-  { deep: true }
-)
-
-const isCodePanelOpen = computed(() => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return false
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  return !!graph?.showCodePanel
-})
-
-const toggleCodePanel = () => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (graph) {
-    projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
-      showCodePanel: !graph.showCodePanel,
-    })
-  }
-}
-
-const isDataPanelOpen = computed(() => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return false
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  return !!graph?.showDataPanel
-})
-
-const toggleDataPanel = () => {
-  if (!projectStore.currentProject || !graphStore.currentGraphId) return
-  const graph = projectStore.currentProject.graphs.find((g) => g.id === graphStore.currentGraphId)
-  if (graph) {
-    projectStore.updateGraphLayout(projectStore.currentProject.id, graphStore.currentGraphId, {
-      showDataPanel: !graph.showDataPanel,
-    })
-  }
-}
-
-const handleUndo = () => {
-  if (graphStore.currentGraphId) getUndoRedoInstance(graphStore.currentGraphId)?.undo()
-}
-const handleRedo = () => {
-  if (graphStore.currentGraphId) getUndoRedoInstance(graphStore.currentGraphId)?.redo()
-}
-const handleZoomIn = () => {
-  if (graphStore.currentGraphId)
-    getCyInstance(graphStore.currentGraphId)?.zoom(
-      getCyInstance(graphStore.currentGraphId)!.zoom() * 1.2
-    )
-}
-const handleZoomOut = () => {
-  if (graphStore.currentGraphId)
-    getCyInstance(graphStore.currentGraphId)?.zoom(
-      getCyInstance(graphStore.currentGraphId)!.zoom() * 0.8
-    )
-}
-const handleFit = () => {
-  if (graphStore.currentGraphId) {
-    const cy = getCyInstance(graphStore.currentGraphId)
-    if (cy) smartFit(cy, true)
-  }
-}
-
-const handleGraphLayout = (layoutName: string) => {
-  const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null
-  if (!cy) return
-  applyLayoutWithFit(cy, layoutName)
-  if (graphStore.currentGraphId) graphStore.updateGraphLayout(graphStore.currentGraphId, layoutName)
-}
-
-const openExportModal = (format: 'png' | 'jpg' | 'svg') => {
-  currentExportType.value = format
-  showExportModal.value = true
-}
-
-const handleConfirmExport = (options: {
-  bg: string
-  full: boolean
-  scale: number
-  quality?: number
-}) => {
-  const cy = graphStore.currentGraphId ? getCyInstance(graphStore.currentGraphId) : null
-  if (!cy || !currentExportType.value) return
-  try {
-    let blob: Blob
-    const baseOptions = { bg: options.bg, full: options.full, scale: options.scale }
-    if (currentExportType.value === 'svg') {
-      blob = new Blob([cy.svg(baseOptions)], { type: 'image/svg+xml;charset=utf-8' })
-    } else if (currentExportType.value === 'png') {
-      blob = cy.png({ ...baseOptions, output: 'blob' }) as unknown as Blob
-    } else {
-      blob = cy.jpg({
-        ...baseOptions,
-        quality: options.quality || 0.9,
-        output: 'blob',
-      }) as unknown as Blob
-    }
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `graph.${currentExportType.value}`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  } catch (err) {
-    console.error('Export failed', err)
-  }
-}
-
-const handleGenerateStandalone = () => {
-  const script = getScriptContent()
-  scriptStore.standaloneScript = script
-  uiStore.setActiveRightTab('script')
-  uiStore.isRightSidebarOpen = true
-}
-
-const handleDownloadBugs = () => {
-  const content = generatedCode.value
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'model.bugs'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-}
-
-const handleDownloadScript = () => {
-  const content = scriptStore.standaloneScript || getScriptContent()
-  if (!content) return
-  const blob = new Blob([content], { type: 'text/plain' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'model_script.jl'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-}
-
-const handleNewProject = () => {
-  newProjectName.value = `Project ${projectStore.projects.length + 1}`
-  showNewProjectModal.value = true
-}
-
-const createNewProject = () => {
-  if (newProjectName.value.trim()) {
-    projectStore.createProject(newProjectName.value.trim())
-    showNewProjectModal.value = false
-    newProjectName.value = ''
-  }
-}
-
-const handleNewGraph = () => {
-  if (projectStore.currentProjectId && projectStore.currentProject) {
-    newGraphName.value = `Graph ${projectStore.currentProject.graphs.length + 1}`
-    showNewGraphModal.value = true
-  }
-}
-
-const createNewGraph = () => {
-  if (projectStore.currentProjectId && (newGraphName.value.trim() || importedGraphData.value)) {
-    const name = newGraphName.value.trim() || importedGraphData.value?.name || 'New Graph'
-    const newGraphMeta = projectStore.addGraphToProject(projectStore.currentProjectId!, name)
-    if (newGraphMeta && importedGraphData.value) {
-      graphStore.updateGraphElements(
-        newGraphMeta.id,
-        importedGraphData.value.elements as GraphElement[]
-      )
-      if (importedGraphData.value.dataContent) {
-        dataStore.updateGraphData(newGraphMeta.id, { content: importedGraphData.value.dataContent })
-      }
-      graphStore.updateGraphLayout(newGraphMeta.id, 'preset')
-    } else if (newGraphMeta) {
-      graphStore.selectGraph(newGraphMeta.id)
-    }
-    showNewGraphModal.value = false
-    newGraphName.value = ''
-    clearImportedData()
-    if (graphImportInput.value) graphImportInput.value.value = ''
-  }
-}
-
-const triggerGraphImport = () => {
-  graphImportInput.value?.click()
-}
-
-const handleGraphImportFile = (event: Event) => {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  if (file) {
-    processGraphFile(file)
-      .then((data) => {
-        if (data && !newGraphName.value && data.name) {
-          newGraphName.value = data.name + ' (Imported)'
-        }
-      })
-      .catch((error) => {
-        alert(error.message || 'Failed to process graph file.')
-      })
-  }
-}
-
-const handleDrop = (event: DragEvent) => {
-  isDragOver.value = false
-  const file = event.dataTransfer?.files?.[0]
-  if (file) {
-    processGraphFile(file)
-      .then((data) => {
-        if (data && !newGraphName.value && data.name) {
-          newGraphName.value = data.name + ' (Imported)'
-        }
-      })
-      .catch((error) => {
-        alert(error.message || 'Failed to process graph file.')
-      })
-  }
-}
-
-const handleShare = () => {
-  if (!graphStore.currentGraphId) return
-  shareUrl.value = ''
-  showShareModal.value = true
-}
-
-const handleGenerateShareLink = async (options: {
-  scope: 'current' | 'project' | 'custom'
-  selectedGraphIds?: string[]
-}) => {
-  if (!projectStore.currentProject) return
-  const getGraphDataForShare = (graphId: string) => {
-    let graphElements: GraphElement[] = []
-    let dataContent = '{}'
-    let name = 'Graph'
-    const graphMeta = projectStore.currentProject?.graphs.find((g) => g.id === graphId)
-    if (graphMeta) name = graphMeta.name
-    if (graphId === graphStore.currentGraphId) {
-      graphElements = graphStore.currentGraphElements
-      dataContent = dataStore.dataContent
-    } else {
-      graphElements = getStoredGraphElements(graphId) as GraphElement[]
-      dataContent = getStoredDataContent(graphId)
-    }
-    return { name, elements: graphElements, dataContent }
-  }
-  let payload = {}
-  if (options.scope === 'current') {
-    const targetId = options.selectedGraphIds?.[0] || graphStore.currentGraphId
-    if (!targetId) return
-    const { name, elements: graphElements, dataContent } = getGraphDataForShare(targetId)
-    payload = { v: 2, n: name, e: minifyGraph(graphElements), d: dataContent }
-  } else {
-    const targetIds =
-      options.scope === 'project'
-        ? projectStore.currentProject.graphs.map((g) => g.id)
-        : options.selectedGraphIds || []
-    const graphsData = targetIds.map((id) => {
-      const { name, elements: graphElements, dataContent } = getGraphDataForShare(id)
-      return { n: name, e: minifyGraph(graphElements), d: dataContent }
-    })
-    payload = { v: 3, pn: projectStore.currentProject.name, g: graphsData }
-  }
-  await generateShareLink(payload, 'https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/')
-}
-
-const handleShareGraph = () => {
-  shareUrl.value = ''
-  showShareModal.value = true
-}
-
-const handleShareProjectUrl = () => {
-  shareUrl.value = ''
-  showShareModal.value = true
-}
-
-const handleExportJson = () => {
-  if (!graphStore.currentGraphId || !projectStore.currentProject) return
-  const graphMeta = projectStore.currentProject.graphs.find(
-    (g) => g.id === graphStore.currentGraphId
-  )
-  if (!graphMeta) return
-  const exportData = {
-    name: graphMeta.name,
-    elements: graphStore.currentGraphElements,
-    dataContent: dataStore.dataContent,
-    version: 1,
-  }
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${graphMeta.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-}
-
-const handleElementSelected = (element: GraphElement | null) => {
-  graphStore.setSelectedElement(element)
-  if (element) {
-    uiStore.setActiveRightTab('properties')
-    if (isEditMode.value) {
-      uiStore.isRightSidebarOpen = true
-    }
-  } else {
-    if (!uiStore.isRightTabPinned && uiStore.isRightSidebarOpen) {
-      uiStore.isRightSidebarOpen = false
-    }
-  }
-}
-
-const handleSelectNodeFromModal = (nodeId: string) => {
-  const el = elements.value.find((e) => e.id === nodeId)
-  if (el) {
-    handleElementSelected(el)
-    const cy = getCyInstance(graphStore.currentGraphId!)
-    if (cy) {
-      cy.elements().removeClass('cy-selected')
-      const cyNode = cy.getElementById(nodeId)
-      cyNode.addClass('cy-selected')
-      cy.animate({ fit: { eles: cyNode, padding: 50 }, duration: 500 })
-    }
-  }
-}
+const isModelValid = computed(() => validationErrors.value.size === 0)
 
 const {
   isLeftSidebarOpen,
@@ -1195,8 +603,6 @@ const {
   isDarkMode,
   canvasGridStyle,
 } = storeToRefs(uiStore)
-
-const isModelValid = computed(() => validationErrors.value.size === 0)
 
 watch(
   isDarkMode,
@@ -1285,9 +691,7 @@ const handleUIInteractionEnd = () => {
 
 const handleSidebarContainerClick = (e: MouseEvent) => {
   if ((e.target as HTMLElement).closest('.db-theme-toggle-header')) return
-  if (!uiStore.isLeftSidebarOpen) {
-    uiStore.toggleLeftSidebar()
-  }
+  if (!uiStore.isLeftSidebarOpen) uiStore.toggleLeftSidebar()
 }
 </script>
 
@@ -1357,7 +761,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         </div>
       </div>
 
-      <!-- Non-Fullscreen Controls (Embedded Mode - Reduced to just Maximize) -->
+      <!-- Non-Fullscreen Controls -->
       <div
         v-if="!isFullScreen"
         style="
@@ -1371,25 +775,18 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         "
       >
         <button
+          v-if="enableEditorMode"
+          v-tooltip.top="{ value: isEditMode ? 'Disable Editing' : 'Enable Editing', showDelay: 0, hideDelay: 0 }"
+          @click="toggleEditMode"
+          class="db-widget-control-btn"
+          :class="{ 'db-active': isEditMode }"
+        >
+          <i :class="isEditMode ? 'fas fa-eye' : 'fas fa-pen'"></i>
+        </button>
+        <button
           v-tooltip.top="{ value: 'Maximize Graph', showDelay: 0, hideDelay: 0 }"
           @click="toggleFullScreen"
-          style="
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: var(--theme-bg-panel, white);
-            border: 1px solid var(--theme-border, #e5e7eb);
-            color: var(--theme-text-secondary, #4b5563);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            padding: 0;
-            transition: all 0.2s;
-          "
-          @mouseenter="(e) => ((e.currentTarget as HTMLElement).style.transform = 'scale(1.05)')"
-          @mouseleave="(e) => ((e.currentTarget as HTMLElement).style.transform = 'scale(1)')"
+          class="db-widget-control-btn"
         >
           <svg
             viewBox="0 0 24 24"
@@ -1418,11 +815,11 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
       </div>
     </div>
 
-    <!-- Floating Toolbar (Only in Full Screen) -->
-    <Teleport to="body">
+    <!-- Floating Toolbar -->
+    <Teleport to="body" :disabled="!shouldTeleport">
       <FloatingBottomToolbar
         ref="bottomToolbarRef"
-        v-if="isWidgetInView && isFullScreen && isEditMode"
+        v-if="isWidgetInView && showEditorUI && isEditMode"
         :current-mode="currentMode"
         :current-node-type="currentNodeType"
         :show-zoom-controls="showZoomControls"
@@ -1451,7 +848,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
       />
     </Teleport>
 
-    <Teleport to="body">
+    <Teleport to="body" :disabled="!shouldTeleport">
       <div class="db-toast-wrapper">
         <Toast position="top-center" />
       </div>
@@ -1463,10 +860,10 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
           'db-widget-ready': widgetInitialized,
           'db-fullscreen': isFullScreen,
         }"
-        v-show="isWidgetInView && isFullScreen && isEditMode && isUIActive"
+        v-show="isWidgetInView && showEditorUI && isEditMode && isUIActive"
       >
-        <!-- Collapsed Sidebar Triggers (Only in Full Screen) -->
-        <template v-if="isFullScreen">
+        <!-- Collapsed Sidebar Triggers -->
+        <template v-if="showEditorUI">
           <Transition name="fade">
             <div
               v-if="!isLeftSidebarOpen"
@@ -1584,14 +981,12 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
           </Transition>
         </template>
 
-        <!-- Sidebars (Visible only in Full Screen) -->
-        <Transition name="db-sidebar-transition">
-          <div
-            v-if="widgetInitialized && isLeftSidebarOpen && isFullScreen"
-            class="db-sidebar-wrapper db-left"
-          >
+        <!-- Sidebars -->
+        <div
+          v-if="widgetInitialized && showEditorUI"
+          class="db-sidebar-wrapper db-left"
+        >
             <LeftSidebar
-              v-show="isLeftSidebarOpen"
               :activeAccordionTabs="activeLeftAccordionTabs"
               @update:activeAccordionTabs="activeLeftAccordionTabs = $event"
               :projectName="projectStore.currentProject?.name || 'Project'"
@@ -1622,16 +1017,13 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
               @share-graph="handleShareGraph"
               @share-project-url="handleShareProjectUrl"
             />
-          </div>
-        </Transition>
+        </div>
 
-        <Transition name="db-sidebar-transition">
-          <div
-            v-if="widgetInitialized && isRightSidebarOpen && isFullScreen"
-            class="db-sidebar-wrapper db-right"
-          >
+        <div
+          v-if="widgetInitialized && showEditorUI"
+          class="db-sidebar-wrapper db-right"
+        >
             <RightSidebar
-              v-show="isRightSidebarOpen"
               :selectedElement="selectedElement"
               :validationErrors="validationErrors"
               :isModelValid="isModelValid"
@@ -1648,11 +1040,10 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
               @export-json="handleExportJson"
               @exit-fullscreen="toggleFullScreen"
             />
-          </div>
-        </Transition>
+        </div>
 
         <FloatingPanel
-          v-if="isFullScreen"
+          v-if="showEditorUI"
           title="BUGS Code Preview"
           icon="fas fa-code"
           :is-open="isCodePanelOpen"
@@ -1680,11 +1071,11 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
             }
           "
         >
-          <CodePreviewPanel :is-active="isCodePanelOpen" />
+          <CodePreviewPanel :is-active="isCodePanelOpen" :code="generatedCode" />
         </FloatingPanel>
 
         <FloatingPanel
-          v-if="isFullScreen"
+          v-if="showEditorUI"
           title="Data & Inits"
           icon="fas fa-database"
           badge="JSON"
@@ -1879,17 +1270,16 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
   --theme-border: #27272a;
 }
 
-/* Full Screen Mode */
 .db-widget-root.db-fullscreen-mode {
   position: fixed !important;
   top: 0;
   left: 0;
   width: 100vw !important;
   height: 100vh !important;
-  z-index: 999999; /* Canvas base Z-Index - very high to cover everything */
+  z-index: 999999;
   margin: 0;
   border-radius: 0;
-  background: var(--theme-bg-canvas) !important; /* Solid background to prevent bleed-through */
+  background: var(--theme-bg-canvas) !important;
 }
 
 .db-widget-root.db-fullscreen-mode .db-content-clipper {
@@ -1998,376 +1388,37 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
   color: var(--theme-text-secondary);
 }
 
-.db-modal-form-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+/* Widget overrides: sidebar triggers use fixed positioning in fullscreen */
+.db-widget-root .db-collapsed-sidebar-trigger {
+  position: fixed;
+  z-index: 1000004;
 }
 
-.db-modal-form-row label {
-  min-width: 100px;
-  font-weight: 500;
-  color: var(--theme-text-primary);
-}
-
-/* Collapsed Sidebar Triggers Styles */
-.db-collapsed-sidebar-trigger {
-  position: fixed; /* Use fixed positioning in fullscreen mode */
-  top: 16px;
-  z-index: 1000004; /* Above toolbar and panels */
-  padding: 8px 12px;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  transition: all 0.2s ease;
-  border: 1px solid var(--theme-border);
-  background: var(--theme-bg-panel);
-  cursor: pointer;
-  min-width: 140px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.db-collapsed-sidebar-trigger.db-left-trigger {
-  left: 16px;
-  min-width: 200px;
-}
-
-.db-collapsed-sidebar-trigger.db-right {
-  left: auto;
-  right: 16px;
-}
-
-.db-collapsed-sidebar-trigger:hover {
-  box-shadow: var(--shadow-md);
-  transform: scale(1.01);
-  background: var(--theme-bg-hover);
-}
-
-.db-sidebar-trigger-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.db-logo-text-minimized {
-  font-family: var(--font-family-sans);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--theme-text-primary);
-}
-
-.db-sidebar-title-minimized {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--theme-text-primary);
-}
-
-.db-theme-toggle-header {
-  background: transparent;
-  border: none;
+.db-widget-control-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--theme-bg-panel, white);
+  border: 1px solid var(--theme-border, #e5e7eb);
+  color: var(--theme-text-secondary, #4b5563);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px;
-  color: var(--theme-text-secondary);
-  font-size: 0.85rem;
-  transition: color 0.2s;
-  border-radius: 4px;
-}
-
-.db-theme-toggle-header:hover {
-  color: var(--theme-text-primary);
-  background: var(--theme-bg-hover);
-}
-
-.db-toggle-icon-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.db-toggle-icon {
-  color: var(--theme-text-secondary);
-}
-
-.db-header-icon-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--theme-text-secondary);
-  font-size: 14px;
-  padding: 6px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.db-header-icon-btn:hover {
-  background-color: var(--theme-bg-hover);
-  color: var(--theme-text-primary);
-}
-
-.db-exit-btn {
-  margin-left: 4px;
-  color: var(--theme-text-primary);
-}
-
-.db-exit-btn:hover {
-  background-color: var(--theme-bg-active);
-  color: var(--theme-primary);
-}
-
-.db-collapsed-share-btn {
-  width: 24px;
-  height: 24px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   padding: 0;
-}
-
-.db-status-indicator {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  cursor: help;
-}
-
-.db-validation-status {
-  font-size: 1.1em;
-  margin: 0 5px;
-}
-
-.db-validation-status.db-valid {
-  color: var(--theme-success);
-}
-
-.db-validation-status.db-invalid {
-  color: var(--theme-warning);
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-.db-desktop-text {
-  display: inline;
-}
-
-.db-mobile-text {
-  display: none;
-}
-
-.db-form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.db-form-group label {
-  font-size: 0.9em;
-  font-weight: 600;
-  color: var(--theme-text-secondary);
-}
-
-.db-section-label {
-  font-size: 0.9em;
-  font-weight: 600;
-  color: var(--theme-text-secondary);
-  margin-bottom: 8px;
-  display: block;
-}
-
-.db-drop-zone {
-  border: 2px dashed var(--theme-border);
-  border-radius: var(--radius-md);
-  padding: 24px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  background-color: var(--theme-bg-hover);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 160px;
-}
-
-.db-drop-zone:hover {
-  border-color: var(--theme-text-muted);
-  background-color: var(--theme-bg-active);
-}
-
-.db-drop-zone.db-drag-over {
-  border-color: var(--theme-primary);
-  background-color: rgba(16, 185, 129, 0.1);
-  transform: scale(1.02);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
-}
-
-.db-drop-zone.db-loaded {
-  border-style: solid;
-  border-color: var(--theme-success);
-  background-color: rgba(16, 185, 129, 0.05);
-}
-
-.db-drop-zone-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  pointer-events: none;
-  width: 100%;
-}
-
-.db-drop-zone-content.db-success {
-  pointer-events: auto;
-}
-
-.db-icon-circle {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background-color: var(--theme-bg-panel);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-sm);
-  color: var(--theme-text-muted);
-  font-size: 24px;
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.db-drop-zone:hover .db-icon-circle {
-  transform: scale(1.1);
-  color: var(--theme-primary);
-}
-
-.db-drop-zone.db-drag-over .db-icon-circle {
-  transform: scale(1.2);
-  background-color: var(--theme-primary);
-  color: white;
-}
-
-.db-icon-circle.db-success {
-  background-color: var(--theme-success);
-  color: white;
-}
-
-.db-text-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.db-action-text {
-  font-weight: 600;
-  color: var(--theme-text-primary);
-  font-size: 1rem;
-}
-
-.db-sub-text {
-  color: var(--theme-text-secondary);
-  font-size: 0.85em;
-}
-
-.db-hidden-input {
-  display: none;
-}
-
-.db-remove-file-btn {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: var(--theme-bg-panel);
-  border: 1px solid var(--theme-border);
-  color: var(--theme-text-secondary);
-  cursor: pointer;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   transition: all 0.2s;
-  box-shadow: var(--shadow-sm);
+  font-size: 16px;
 }
 
-.db-remove-file-btn:hover {
-  background-color: var(--theme-danger);
-  border-color: var(--theme-danger);
+.db-widget-control-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.15);
+}
+
+.db-widget-control-btn.db-active {
+  background: var(--theme-primary, #10b981);
   color: white;
-}
-
-@media (max-width: 768px) {
-  .db-desktop-text {
-    display: none;
-  }
-  .db-mobile-text {
-    display: inline;
-  }
-  .db-collapsed-sidebar-trigger {
-    min-width: auto !important;
-    max-width: 48%;
-    padding: 6px 8px;
-  }
-  .db-collapsed-sidebar-trigger.db-left-trigger {
-    min-width: auto !important;
-  }
-  .db-collapsed-sidebar-trigger.db-right {
-    max-width: 48%;
-  }
-  .db-logo-text-minimized {
-    font-size: 12px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: block;
-  }
-  .db-sidebar-title-minimized {
-    font-size: 11px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .db-sidebar-trigger-content {
-    gap: 2px;
-    flex-wrap: wrap;
-  }
-  .db-header-icon-btn {
-    font-size: 11px;
-    padding: 3px;
-  }
-  .db-status-indicator {
-    width: 20px;
-    height: 20px;
-  }
-  .db-validation-status {
-    font-size: 0.95em;
-    margin: 0 2px;
-  }
-  .db-collapsed-share-btn {
-    width: 20px;
-    height: 20px;
-  }
-  .db-toggle-icon-wrapper {
-    gap: 6px;
-  }
-  .db-toggle-icon-wrapper svg {
-    width: 16px;
-    height: 16px;
-  }
+  border-color: var(--theme-primary, #10b981);
 }
 </style>

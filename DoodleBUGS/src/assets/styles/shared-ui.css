@@ -1,0 +1,421 @@
+/*
+ * Shared UI styles used by both MainLayout (standalone app) and DoodleWidget (embedded CE).
+ * Import this file instead of duplicating styles in each component.
+ */
+
+/* ─── Collapsed Sidebar Triggers ─── */
+.db-collapsed-sidebar-trigger {
+  position: absolute;
+  top: 16px;
+  z-index: 100;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+  border: 1px solid var(--theme-border);
+  background: var(--theme-bg-panel);
+  cursor: pointer;
+  min-width: 140px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.db-collapsed-sidebar-trigger.db-left-trigger {
+  left: 16px;
+  min-width: 200px;
+}
+
+.db-collapsed-sidebar-trigger.db-right {
+  left: auto;
+  right: 16px;
+}
+
+.db-collapsed-sidebar-trigger:hover {
+  box-shadow: var(--shadow-md);
+  transform: scale(1.01);
+  background: var(--theme-bg-hover);
+}
+
+.db-sidebar-trigger-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.db-logo-text-minimized {
+  font-family: var(--font-family-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+}
+
+.db-sidebar-title-minimized {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+}
+
+/* ─── Theme Toggle ─── */
+.db-theme-toggle-header {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  color: var(--theme-text-secondary);
+  font-size: 0.85rem;
+  transition: color 0.2s;
+  border-radius: 4px;
+}
+
+.db-theme-toggle-header:hover {
+  color: var(--theme-text-primary);
+  background: var(--theme-bg-hover);
+}
+
+.db-toggle-icon-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.db-toggle-icon {
+  color: var(--theme-text-secondary);
+}
+
+/* ─── Header Icon Buttons ─── */
+.db-header-icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--theme-text-secondary);
+  font-size: 14px;
+  padding: 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.db-header-icon-btn:hover {
+  background-color: var(--theme-bg-hover);
+  color: var(--theme-text-primary);
+}
+
+.db-exit-btn {
+  margin-left: 4px;
+  color: var(--theme-text-primary);
+}
+
+.db-exit-btn:hover {
+  background-color: var(--theme-bg-active);
+  color: var(--theme-primary);
+}
+
+.db-collapsed-share-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+}
+
+/* ─── Validation Status ─── */
+.db-status-indicator {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  cursor: help;
+}
+
+.db-validation-status {
+  font-size: 1.1em;
+  margin: 0 5px;
+}
+
+.db-validation-status.db-valid {
+  color: var(--theme-success);
+}
+
+.db-validation-status.db-invalid {
+  color: var(--theme-warning);
+}
+
+.db-instant-tooltip {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  transform: none;
+  background: var(--color-background-dark);
+  color: var(--color-text-light);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+  margin-top: 6px;
+  z-index: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.db-status-indicator:hover .db-instant-tooltip {
+  opacity: 1;
+}
+
+/* ─── Fade Transition ─── */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* ─── Responsive Text ─── */
+.db-desktop-text {
+  display: inline;
+}
+
+.db-mobile-text {
+  display: none;
+}
+
+/* ─── Modal Forms ─── */
+.db-modal-form-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.db-modal-form-row label {
+  min-width: 100px;
+  font-weight: 500;
+  color: var(--theme-text-primary);
+}
+
+.db-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.db-form-group label {
+  font-size: 0.9em;
+  font-weight: 600;
+  color: var(--theme-text-secondary);
+}
+
+.db-section-label {
+  font-size: 0.9em;
+  font-weight: 600;
+  color: var(--theme-text-secondary);
+  margin-bottom: 8px;
+  display: block;
+}
+
+/* ─── Drop Zone (Graph Import) ─── */
+.db-drop-zone {
+  border: 2px dashed var(--theme-border);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background-color: var(--theme-bg-hover);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+}
+
+.db-drop-zone:hover {
+  border-color: var(--theme-text-muted);
+  background-color: var(--theme-bg-active);
+}
+
+.db-drop-zone.db-drag-over {
+  border-color: var(--theme-primary);
+  background-color: rgba(16, 185, 129, 0.1);
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+}
+
+.db-drop-zone.db-loaded {
+  border-style: solid;
+  border-color: var(--theme-success);
+  background-color: rgba(16, 185, 129, 0.05);
+}
+
+.db-drop-zone-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+  width: 100%;
+}
+
+.db-drop-zone-content.db-success {
+  pointer-events: auto;
+}
+
+.db-icon-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: var(--theme-bg-panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+  color: var(--theme-text-muted);
+  font-size: 24px;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.db-drop-zone:hover .db-icon-circle {
+  transform: scale(1.1);
+  color: var(--theme-primary);
+}
+
+.db-drop-zone.db-drag-over .db-icon-circle {
+  transform: scale(1.2);
+  background-color: var(--theme-primary);
+  color: white;
+}
+
+.db-icon-circle.db-success {
+  background-color: var(--theme-success);
+  color: white;
+}
+
+.db-text-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.db-action-text {
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  font-size: 1rem;
+}
+
+.db-sub-text {
+  color: var(--theme-text-secondary);
+  font-size: 0.85em;
+}
+
+.db-hidden-input {
+  display: none;
+}
+
+.db-remove-file-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: var(--theme-bg-panel);
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  box-shadow: var(--shadow-sm);
+}
+
+.db-remove-file-btn:hover {
+  background-color: var(--theme-danger);
+  border-color: var(--theme-danger);
+  color: white;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 768px) {
+  .db-desktop-text {
+    display: none;
+  }
+
+  .db-mobile-text {
+    display: inline;
+  }
+
+  .db-collapsed-sidebar-trigger {
+    min-width: auto !important;
+    max-width: 48%;
+    padding: 6px 8px;
+  }
+
+  .db-collapsed-sidebar-trigger.db-left-trigger {
+    min-width: auto !important;
+  }
+
+  .db-collapsed-sidebar-trigger.db-right {
+    max-width: 48%;
+  }
+
+  .db-logo-text-minimized {
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+
+  .db-sidebar-title-minimized {
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .db-sidebar-trigger-content {
+    gap: 2px;
+    flex-wrap: wrap;
+  }
+
+  .db-header-icon-btn {
+    font-size: 11px;
+    padding: 3px;
+  }
+
+  .db-status-indicator {
+    width: 20px;
+    height: 20px;
+  }
+
+  .db-validation-status {
+    font-size: 0.95em;
+    margin: 0 2px;
+  }
+
+  .db-collapsed-share-btn {
+    width: 20px;
+    height: 20px;
+  }
+
+  .db-toggle-icon-wrapper {
+    gap: 6px;
+  }
+
+  .db-toggle-icon-wrapper svg {
+    width: 16px;
+    height: 16px;
+  }
+}

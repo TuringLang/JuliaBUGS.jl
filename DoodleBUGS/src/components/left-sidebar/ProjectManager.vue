@@ -598,7 +598,7 @@ const handleNewGraph = () => {
   box-shadow: var(--shadow-md);
   border-radius: 6px;
   padding: 4px 0;
-  z-index: 100000; /* Increased z-index to appear above sidebars */
+  z-index: 1000005;
   min-width: 160px;
 }
 
