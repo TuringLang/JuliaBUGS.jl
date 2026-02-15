@@ -288,7 +288,7 @@ const handleHeaderClick = () => {
   position: absolute;
   top: 16px;
   height: auto;
-  max-height: calc(100dvh - 32px);
+  max-height: calc(var(--db-container-height, 100dvh) - 32px);
   bottom: auto;
   z-index: 50;
   display: flex;

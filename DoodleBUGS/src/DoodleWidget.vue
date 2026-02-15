@@ -50,11 +50,13 @@ const props = withDefaults(
     controlsMarginRight?: string
     controlsMarginBottom?: string
     controlsMarginLeft?: string
+    sidebarInsetRight?: string
   }>(),
   {
     width: '100%',
     height: '600px',
     controlsPosition: 'bottom-right',
+    sidebarInsetRight: '0',
   }
 )
 
@@ -126,14 +128,23 @@ const isFullScreen = ref(false)
 const isUIActive = ref(true)
 let observer: IntersectionObserver | null = null
 
-const widgetRect = ref({ top: 0, left: 0, right: 0, width: 0 })
+const widgetRect = ref({ top: 0, left: 0, right: 0, width: 0, height: 0, bottom: 0 })
 let resizeObserver: ResizeObserver | null = null
 
 const updateWidgetRect = () => {
   if (!widgetRoot.value) return
   const r = widgetRoot.value.getBoundingClientRect()
-  widgetRect.value = { top: r.top, left: r.left, right: r.right, width: r.width }
+  widgetRect.value = {
+    top: r.top,
+    left: r.left,
+    right: r.right,
+    width: r.width,
+    height: r.height,
+    bottom: r.bottom,
+  }
 }
+
+const rightInset = computed(() => parseInt(props.sidebarInsetRight || '0', 10) || 0)
 
 const inlineLeftTriggerStyle = computed(() => {
   if (isFullScreen.value) return {}
@@ -154,7 +165,7 @@ const inlineRightTriggerStyle = computed(() => {
   return {
     position: 'fixed' as const,
     top: `${r.top + 10}px`,
-    right: `${window.innerWidth - r.right + 10}px`,
+    right: `${window.innerWidth - r.right + 10 + rightInset.value}px`,
     left: 'auto',
     maxWidth: `${Math.max(r.width / 2 - 60, 120)}px`,
   }
@@ -174,6 +185,25 @@ const sidebarDragStyle = (side: 'left' | 'right') => {
   const pos = side === 'left' ? leftSidebarDrag.value : rightSidebarDrag.value
   if (pos.x === 0 && pos.y === 0) return {}
   return { transform: `translate3d(${pos.x}px, ${pos.y}px, 0)` }
+}
+
+const sidebarWrapperStyle = (side: 'left' | 'right') => {
+  if (isFullScreen.value) return {}
+  const r = widgetRect.value
+  const style: Record<string, string> = {
+    position: 'fixed',
+    top: `${r.top}px`,
+    height: `${r.height}px`,
+    '--db-container-height': `${r.height}px`,
+  }
+  if (side === 'left') {
+    style.left = `${r.left}px`
+    style.right = 'auto'
+  } else {
+    style.right = `${window.innerWidth - r.right + rightInset.value}px`
+    style.left = 'auto'
+  }
+  return style
 }
 
 const handleSidebarDragStart = (side: 'left' | 'right', e: MouseEvent | TouchEvent) => {
@@ -1118,7 +1148,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         <div
           v-if="widgetInitialized && showEditorUI"
           class="db-sidebar-wrapper db-left"
-          :style="sidebarDragStyle('left')"
+          :style="[sidebarWrapperStyle('left'), sidebarDragStyle('left')]"
         >
           <LeftSidebar
             :enableDrag="isInlineEditor"
@@ -1158,7 +1188,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         <div
           v-if="widgetInitialized && showEditorUI"
           class="db-sidebar-wrapper db-right"
-          :style="sidebarDragStyle('right')"
+          :style="[sidebarWrapperStyle('right'), sidebarDragStyle('right')]"
         >
           <RightSidebar
             :enableDrag="isInlineEditor"
@@ -1435,11 +1465,11 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
   border-radius: 6px;
   z-index: 10;
   border: 1px solid var(--theme-border);
+  box-sizing: border-box;
 }
 
 .db-widget-root.db-dark-mode .db-content-clipper {
   border-color: #3f3f46;
-  border-color: var(--theme-danger);
   color: white;
 }
 

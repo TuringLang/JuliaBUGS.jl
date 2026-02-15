@@ -1,5 +1,6 @@
 import { watch, nextTick, ref } from 'vue'
 import type { Ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useProjectStore } from '../stores/projectStore'
 import { useGraphStore } from '../stores/graphStore'
 import { useDataStore } from '../stores/dataStore'
@@ -32,6 +33,7 @@ export function useWidgetEmitter(
       graphId: gid,
       content: dataStore.getGraphData(gid).content,
     })),
+    currentGraphId: graphStore.currentGraphId,
   })
 
   const emitStateDebounced = () => {
@@ -46,11 +48,25 @@ export function useWidgetEmitter(
     }, debounceMs)
   }
 
-  watch(
-    [() => projectStore.projects, () => graphStore.graphContents, () => dataStore.dataContent],
-    emitStateDebounced,
-    { deep: true }
-  )
+  const emitStateImmediate = () => {
+    if (!isReady.value) return
+    if (debounceTimer) clearTimeout(debounceTimer)
+    debounceTimer = null
+    const json = JSON.stringify(buildFullState())
+    if (json !== lastEmittedState) {
+      lastEmittedState = json
+      emit('state-update', json)
+    }
+  }
+
+  const { dataContent: dataContentRef } = storeToRefs(dataStore)
+  const { currentGraphId: currentGraphIdRef } = storeToRefs(graphStore)
+
+  watch([dataContentRef, currentGraphIdRef], emitStateImmediate)
+
+  watch([() => projectStore.projects, () => graphStore.graphContents], emitStateDebounced, {
+    deep: true,
+  })
 
   watch(generatedCode, (code) => {
     if (isReady.value) {
