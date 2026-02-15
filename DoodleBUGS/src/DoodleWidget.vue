@@ -470,6 +470,8 @@ const handleNewGraph = () => {
   }
 }
 
+const DOODLEBUGS_BASE_URL = 'https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/'
+
 const handleShareGraph = () => {
   shareUrl.value = ''
   showShareModal.value = true
@@ -478,6 +480,12 @@ const handleShareGraph = () => {
 const handleShareProjectUrl = () => {
   shareUrl.value = ''
   showShareModal.value = true
+}
+
+const handleWidgetGenerateShareLink = (
+  options: { scope: 'current' | 'project' | 'custom'; selectedGraphIds?: string[] }
+) => {
+  handleGenerateShareLink(options, DOODLEBUGS_BASE_URL)
 }
 
 const initGraph = async () => {
@@ -1295,7 +1303,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
           :project="projectStore.currentProject"
           :current-graph-id="graphStore.currentGraphId"
           @close="showShareModal = false"
-          @generate="handleGenerateShareLink"
+          @generate="handleWidgetGenerateShareLink"
         />
         <ValidationIssuesModal
           :is-open="showValidationModal"
