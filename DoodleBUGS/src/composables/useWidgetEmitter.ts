@@ -1,4 +1,4 @@
-import { watch, nextTick, ref } from 'vue'
+import { watch, nextTick, ref, onBeforeUnmount } from 'vue'
 import type { Ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useProjectStore } from '../stores/projectStore'
@@ -64,14 +64,16 @@ export function useWidgetEmitter(
 
   watch([dataContentRef, currentGraphIdRef], emitStateImmediate)
 
-  watch([() => projectStore.projects, () => graphStore.graphContents], emitStateDebounced, {
-    deep: true,
-  })
+  watch([() => projectStore.stateVersion, () => graphStore.stateVersion], emitStateDebounced)
 
   watch(generatedCode, (code) => {
     if (isReady.value) {
       emit('code-update', code)
     }
+  })
+
+  onBeforeUnmount(() => {
+    if (debounceTimer) clearTimeout(debounceTimer)
   })
 
   const emitReady = () => {

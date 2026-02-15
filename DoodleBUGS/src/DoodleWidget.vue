@@ -107,7 +107,7 @@ watch(
   () => props.model,
   (newModel, oldModel) => {
     if (newModel && newModel !== oldModel && widgetInitialized.value) {
-      handleLoadExample(newModel, 'prop', sourceMapApi)
+      handleLoadExample(newModel, 'standard', sourceMapApi)
     }
   }
 )
@@ -455,7 +455,7 @@ const resolveProp = (propName: string, propValue: string | undefined): string | 
 }
 
 const handleLoadExampleAction = (exampleKey: string) => {
-  handleLoadExample(exampleKey, 'prop', sourceMapApi)
+  handleLoadExample(exampleKey, 'standard', sourceMapApi)
 }
 
 const handleNewProject = () => {
@@ -507,7 +507,7 @@ const initGraph = async () => {
       saveLastGraphId(existingGraph.id)
     } else {
       try {
-        await handleLoadExample(sourceKey, isLocalFile ? 'local' : 'prop', sourceMapApi)
+        await handleLoadExample(sourceKey, isLocalFile ? 'local' : 'standard', sourceMapApi)
       } catch {
         if (proj.graphs.length === 0) projectStore.addGraphToProject(proj.id, 'Model 1')
         if (!graphStore.currentGraphId && proj.graphs.length > 0)
@@ -605,9 +605,15 @@ const toggleEditMode = () => {
   saveWidgetUIState()
 }
 
+let editModeBeforeFullScreen = false
 const toggleFullScreen = () => {
+  if (!isFullScreen.value) {
+    editModeBeforeFullScreen = isEditMode.value
+    isEditMode.value = true
+  } else {
+    isEditMode.value = editModeBeforeFullScreen
+  }
   isFullScreen.value = !isFullScreen.value
-  isEditMode.value = true
   if (isFullScreen.value) activateWidget('click')
   setTimeout(() => {
     if (graphStore.currentGraphId) {
