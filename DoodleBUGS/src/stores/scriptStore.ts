@@ -10,11 +10,14 @@ export interface SamplerSettings {
 
 export const useScriptStore = defineStore('script', () => {
   let prefix = 'doodlebugs'
+  let suppressWatch = false
 
   const setPrefix = (p: string) => {
+    suppressWatch = true
     prefix = p
     const stored = localStorage.getItem(`${prefix}-standaloneScript`)
     if (stored) standaloneScript.value = stored
+    suppressWatch = false
   }
 
   const standaloneScript = ref<string>(localStorage.getItem(`${prefix}-standaloneScript`) || '')
@@ -26,7 +29,9 @@ export const useScriptStore = defineStore('script', () => {
     seed: null,
   })
 
-  watch(standaloneScript, (v) => localStorage.setItem(`${prefix}-standaloneScript`, v))
+  watch(standaloneScript, (v) => {
+    if (!suppressWatch) localStorage.setItem(`${prefix}-standaloneScript`, v)
+  })
 
   return {
     standaloneScript,

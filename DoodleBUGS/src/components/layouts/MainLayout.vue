@@ -309,10 +309,6 @@ const toggleRightSidebar = () => {
   isRightSidebarOpen.value = !isRightSidebarOpen.value
 }
 
-const handleExportGraphJson = () => {
-  handleExportJson()
-}
-
 const handleCodePanelDragEnd = (pos: { x: number; y: number }) => {
   codePanelPos.x = pos.x
   codePanelPos.y = pos.y
@@ -614,7 +610,7 @@ onUnmounted(() => {
       @generate-script="handleGenerateStandalone"
       @share="handleShare"
       @open-export-modal="openExportModal"
-      @export-json="handleExportGraphJson"
+      @export-json="handleExportJson"
     />
 
     <Transition name="fade">

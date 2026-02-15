@@ -55,7 +55,8 @@ export function useEditorActions(
 
   const { shareUrl, minifyGraph, generateShareLink } = useShareExport()
   const { importedGraphData, processGraphFile, clearImportedData } = useImportExport()
-  const { getStoredGraphElements, getStoredDataContent } = usePersistence(persistencePrefix)
+  const { getStoredGraphElements, getStoredDataContent, saveLastGraphId } =
+    usePersistence(persistencePrefix)
 
   const currentMode = ref<string>('select')
   const currentNodeType = ref<NodeType>('stochastic')
@@ -164,6 +165,7 @@ export function useEditorActions(
       sourceMap.set(sourceKey, newGraphMeta.id)
     }
     graphStore.selectGraph(newGraphMeta.id)
+    saveLastGraphId(newGraphMeta.id)
 
     return newGraphMeta.id
   }
@@ -340,6 +342,12 @@ export function useEditorActions(
       } else {
         graphElements = getStoredGraphElements(graphId) as GraphElement[]
         dataContent = getStoredDataContent(graphId)
+      }
+      // Minify data content to reduce share URL size
+      try {
+        dataContent = JSON.stringify(JSON.parse(dataContent))
+      } catch {
+        /* keep original if not valid JSON */
       }
       return { name, elements: graphElements, dataContent }
     }

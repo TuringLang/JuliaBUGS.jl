@@ -90,6 +90,7 @@ dataStore.setPrefix(persistencePrefix.value)
 uiStore.setPrefix(persistencePrefix.value)
 scriptStore.setPrefix(persistencePrefix.value)
 
+// Always true in widget context — used for template consistency with MainLayout's conditional rendering
 const showEditorUI = computed(() => true)
 const shouldTeleport = computed(() => true)
 
@@ -280,7 +281,7 @@ const { elements, selectedElement, updateElement, deleteElement } = useGraphElem
 const { parsedGraphData } = storeToRefs(dataStore)
 const { generatedCode } = useBugsCodeGenerator(elements)
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData)
-const { standaloneScript } = storeToRefs(scriptStore)
+const { standaloneScript, samplerSettings } = storeToRefs(scriptStore)
 
 const { loadUIState, saveUIState, saveLastGraphId, loadLastGraphId } = usePersistence(
   persistencePrefix.value
@@ -385,7 +386,6 @@ const saveWidgetUIState = () => {
     },
     currentGraphId: graphStore.currentGraphId || undefined,
     editMode: isEditMode.value,
-    // @ts-expect-error - widget-specific UI state
     isFullScreen: isFullScreen.value,
   })
 }
@@ -517,7 +517,8 @@ const initGraph = async () => {
     } else {
       try {
         await handleLoadExample(sourceKey, isLocalFile ? 'local' : 'standard', sourceMapApi)
-      } catch {
+      } catch (error) {
+        console.warn('[DoodleBUGS] Failed to load model, creating empty graph:', error)
         if (proj.graphs.length === 0) projectStore.addGraphToProject(proj.id, 'Model 1')
         if (!graphStore.currentGraphId && proj.graphs.length > 0)
           graphStore.selectGraph(proj.graphs[0].id)
@@ -716,7 +717,6 @@ onMounted(async () => {
       dataPanelSize.height = savedUIState.dataPanel.height
     }
     if (savedUIState.currentGraphId) graphStore.selectGraph(savedUIState.currentGraphId)
-    // @ts-expect-error - widget-specific UI state
     if (savedUIState.isFullScreen) {
       isFullScreen.value = true
       isEditMode.value = true
@@ -763,14 +763,18 @@ onUnmounted(() => {
   removeWidgetStyles()
 })
 
-watch(generatedCode, () => {
-  if (
-    standaloneScript.value ||
-    (uiStore.activeRightTab === 'script' && uiStore.isRightSidebarOpen)
-  ) {
-    scriptStore.standaloneScript = getScriptContent()
-  }
-})
+watch(
+  [generatedCode, parsedGraphData, samplerSettings],
+  () => {
+    if (
+      standaloneScript.value ||
+      (uiStore.activeRightTab === 'script' && uiStore.isRightSidebarOpen)
+    ) {
+      scriptStore.standaloneScript = getScriptContent()
+    }
+  },
+  { deep: true }
+)
 
 const isModelValid = computed(() => validationErrors.value.size === 0)
 
