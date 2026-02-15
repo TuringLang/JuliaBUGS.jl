@@ -19,6 +19,9 @@ export { getAllNodeDefinitions, getNodeDefinition } from './config/nodeDefinitio
 
 export type { GraphNode, GraphEdge, GraphElement, NodeType } from './types'
 
+export { examples as availableModels } from './config/examples'
+export type { ExampleModelConfig } from './config/examples'
+
 export const DoodleBugsElement = defineCustomElement(DoodleWidget, {
   shadowRoot: false,
   configureApp(app) {

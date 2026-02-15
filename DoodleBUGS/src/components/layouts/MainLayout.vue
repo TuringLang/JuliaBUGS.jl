@@ -561,7 +561,7 @@ onUnmounted(() => {
       >
         <div class="db-sidebar-trigger-content gap-1">
           <div
-            class="flex-grow flex items-center gap-2 overflow-hidden"
+            class="grow flex items-center gap-2 overflow-hidden"
             style="flex-grow: 1; overflow: hidden"
           >
             <span class="db-logo-text-minimized">
@@ -571,7 +571,7 @@ onUnmounted(() => {
               <span class="db-mobile-text">DoodleBUGS</span>
             </span>
           </div>
-          <div class="flex items-center flex-shrink-0" style="flex-shrink: 0">
+          <div class="flex items-center shrink-0" style="flex-shrink: 0">
             <button
               v-tooltip.top="{
                 value: isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',

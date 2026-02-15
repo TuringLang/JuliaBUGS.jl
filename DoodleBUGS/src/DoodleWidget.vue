@@ -34,6 +34,7 @@ import { useGraphValidator } from './composables/useGraphValidator'
 import { usePersistence } from './composables/usePersistence'
 import { useEditorActions } from './composables/useEditorActions'
 import { useWidgetEmitter } from './composables/useWidgetEmitter'
+import { examples } from './config/examples'
 
 const props = withDefaults(
   defineProps<{
@@ -44,11 +45,16 @@ const props = withDefaults(
     width?: string
     height?: string
     themeMode?: string
-    enableEditor?: string
+    controlsPosition?: string
+    controlsMarginTop?: string
+    controlsMarginRight?: string
+    controlsMarginBottom?: string
+    controlsMarginLeft?: string
   }>(),
   {
     width: '100%',
     height: '600px',
+    controlsPosition: 'bottom-right',
   }
 )
 
@@ -56,6 +62,7 @@ const emit = defineEmits<{
   (e: 'state-update', payload: string): void
   (e: 'code-update', payload: string): void
   (e: 'ready', payload: string): void
+  (e: 'models-available', payload: string): void
 }>()
 
 const projectStore = useProjectStore()
@@ -81,14 +88,8 @@ dataStore.setPrefix(persistencePrefix.value)
 uiStore.setPrefix(persistencePrefix.value)
 scriptStore.setPrefix(persistencePrefix.value)
 
-const enableEditorMode = computed(() => props.enableEditor != null)
-const showEditorUI = computed(() => isFullScreen.value || enableEditorMode.value)
-const shouldTeleport = computed(() => isFullScreen.value || enableEditorMode.value)
-
-if (!enableEditorMode.value) {
-  uiStore.isLeftSidebarOpen = false
-  uiStore.isRightSidebarOpen = false
-}
+const showEditorUI = computed(() => true)
+const shouldTeleport = computed(() => true)
 
 watch(
   () => props.themeMode,
@@ -98,6 +99,15 @@ watch(
     }
   },
   { immediate: true }
+)
+
+watch(
+  () => props.model,
+  (newModel, oldModel) => {
+    if (newModel && newModel !== oldModel && widgetInitialized.value) {
+      handleLoadExample(newModel, 'prop', sourceMapApi)
+    }
+  }
 )
 
 const widgetInitialized = ref(false)
@@ -115,6 +125,126 @@ const isFullScreen = ref(false)
 
 const isUIActive = ref(true)
 let observer: IntersectionObserver | null = null
+
+const widgetRect = ref({ top: 0, left: 0, right: 0, width: 0 })
+let resizeObserver: ResizeObserver | null = null
+
+const updateWidgetRect = () => {
+  if (!widgetRoot.value) return
+  const r = widgetRoot.value.getBoundingClientRect()
+  widgetRect.value = { top: r.top, left: r.left, right: r.right, width: r.width }
+}
+
+const inlineLeftTriggerStyle = computed(() => {
+  if (isFullScreen.value) return {}
+  const r = widgetRect.value
+  return {
+    position: 'fixed' as const,
+    top: `${r.top + 10}px`,
+    left: `${r.left + 10}px`,
+    right: 'auto',
+    minWidth: '140px',
+    maxWidth: `${Math.max(r.width / 2 - 60, 120)}px`,
+  }
+})
+
+const inlineRightTriggerStyle = computed(() => {
+  if (isFullScreen.value) return {}
+  const r = widgetRect.value
+  return {
+    position: 'fixed' as const,
+    top: `${r.top + 10}px`,
+    right: `${window.innerWidth - r.right + 10}px`,
+    left: 'auto',
+    maxWidth: `${Math.max(r.width / 2 - 60, 120)}px`,
+  }
+})
+
+const isInlineEditor = computed(() => !isFullScreen.value)
+
+const leftSidebarDrag = ref({ x: 0, y: 0 })
+const rightSidebarDrag = ref({ x: 0, y: 0 })
+let activeDragSidebar: 'left' | 'right' | null = null
+let dragStartX = 0
+let dragStartY = 0
+let dragAnimFrame: number | null = null
+
+const sidebarDragStyle = (side: 'left' | 'right') => {
+  if (!isInlineEditor.value) return {}
+  const pos = side === 'left' ? leftSidebarDrag.value : rightSidebarDrag.value
+  if (pos.x === 0 && pos.y === 0) return {}
+  return { transform: `translate3d(${pos.x}px, ${pos.y}px, 0)` }
+}
+
+const handleSidebarDragStart = (side: 'left' | 'right', e: MouseEvent | TouchEvent) => {
+  activeDragSidebar = side
+  const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX
+  const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY
+  const pos = side === 'left' ? leftSidebarDrag.value : rightSidebarDrag.value
+  dragStartX = clientX - pos.x
+  dragStartY = clientY - pos.y
+  document.body.style.userSelect = 'none'
+  document.body.style.webkitUserSelect = 'none'
+  document.addEventListener('mousemove', handleSidebarDragMove)
+  document.addEventListener('mouseup', handleSidebarDragEnd)
+  document.addEventListener('touchmove', handleSidebarDragMoveTouch, { passive: false })
+  document.addEventListener('touchend', handleSidebarDragEnd)
+}
+
+const handleSidebarDragMove = (e: MouseEvent) => {
+  if (!activeDragSidebar) return
+  if (dragAnimFrame) return
+  dragAnimFrame = requestAnimationFrame(() => {
+    dragAnimFrame = null
+    if (!activeDragSidebar) return
+    const pos = activeDragSidebar === 'left' ? leftSidebarDrag : rightSidebarDrag
+    pos.value = { x: e.clientX - dragStartX, y: e.clientY - dragStartY }
+  })
+}
+
+const handleSidebarDragMoveTouch = (e: TouchEvent) => {
+  if (!activeDragSidebar) return
+  e.preventDefault()
+  if (dragAnimFrame) return
+  dragAnimFrame = requestAnimationFrame(() => {
+    dragAnimFrame = null
+    if (!activeDragSidebar) return
+    const t = e.touches[0]
+    const pos = activeDragSidebar === 'left' ? leftSidebarDrag : rightSidebarDrag
+    pos.value = { x: t.clientX - dragStartX, y: t.clientY - dragStartY }
+  })
+}
+
+const handleSidebarDragEnd = () => {
+  activeDragSidebar = null
+  if (dragAnimFrame) {
+    cancelAnimationFrame(dragAnimFrame)
+    dragAnimFrame = null
+  }
+  document.body.style.userSelect = ''
+  document.body.style.webkitUserSelect = ''
+  document.removeEventListener('mousemove', handleSidebarDragMove)
+  document.removeEventListener('mouseup', handleSidebarDragEnd)
+  document.removeEventListener('touchmove', handleSidebarDragMoveTouch)
+  document.removeEventListener('touchend', handleSidebarDragEnd)
+}
+
+const controlsStyle = computed(() => {
+  const pos = props.controlsPosition || 'bottom-right'
+  const style: Record<string, string> = {
+    position: 'absolute',
+    zIndex: '1000',
+    display: 'flex',
+    gap: '8px',
+    pointerEvents: 'auto',
+  }
+  const [vertical, horizontal] = pos.split('-')
+  if (vertical === 'top') style.top = props.controlsMarginTop || '10px'
+  else style.bottom = props.controlsMarginBottom || '10px'
+  if (horizontal === 'left') style.left = props.controlsMarginLeft || '10px'
+  else style.right = props.controlsMarginRight || '10px'
+  return style
+})
 
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements()
 const { parsedGraphData } = storeToRefs(dataStore)
@@ -441,16 +571,13 @@ const activateWidget = (source: 'click' | 'scroll') => {
 
 const toggleEditMode = () => {
   isEditMode.value = !isEditMode.value
-  if (isEditMode.value) {
-    activateWidget('click')
-    injectWidgetStyles()
-  }
+  if (isEditMode.value) activateWidget('click')
   saveWidgetUIState()
 }
 
 const toggleFullScreen = () => {
   isFullScreen.value = !isFullScreen.value
-  isEditMode.value = isFullScreen.value || enableEditorMode.value
+  isEditMode.value = true
   if (isFullScreen.value) activateWidget('click')
   setTimeout(() => {
     if (graphStore.currentGraphId) {
@@ -552,10 +679,10 @@ onMounted(async () => {
     }
   }
 
-  if (enableEditorMode.value) {
-    isEditMode.value = true
-    activateWidget('click')
+  if (savedUIState?.editMode != null) {
+    isEditMode.value = savedUIState.editMode
   }
+  if (isEditMode.value) activateWidget('click')
 
   await initGraph()
   isInitialized.value = true
@@ -564,7 +691,16 @@ onMounted(async () => {
   injectWidgetStyles()
   window.addEventListener('resize', handleResize)
 
+  if (widgetRoot.value) {
+    resizeObserver = new ResizeObserver(updateWidgetRect)
+    resizeObserver.observe(widgetRoot.value)
+    updateWidgetRect()
+  }
+  window.addEventListener('scroll', updateWidgetRect, { capture: true, passive: true })
+  window.addEventListener('resize', updateWidgetRect, { passive: true })
+
   emitReady()
+  emit('models-available', JSON.stringify(examples.map((e) => ({ id: e.id, name: e.name }))))
 
   setTimeout(() => handleFit(), 800)
 })
@@ -574,6 +710,9 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('scroll', handleWindowScroll)
   if (observer) observer.disconnect()
+  if (resizeObserver) resizeObserver.disconnect()
+  window.removeEventListener('scroll', updateWidgetRect, { capture: true } as EventListenerOptions)
+  window.removeEventListener('resize', updateWidgetRect)
   document.body.classList.remove('db-dark-mode')
   document.documentElement.classList.remove('db-dark-mode')
   removeWidgetStyles()
@@ -760,59 +899,22 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- Non-Fullscreen Controls -->
-      <div
-        v-if="!isFullScreen"
-        style="
-          position: absolute;
-          top: 10px;
-          right: 10px;
-          z-index: 1000;
-          display: flex;
-          gap: 8px;
-          pointer-events: auto;
-        "
+    <!-- Non-Fullscreen Controls -->
+    <div v-if="!isFullScreen" :style="controlsStyle">
+      <button
+        v-tooltip.top="{
+          value: isEditMode ? 'Disable Editing' : 'Enable Editing',
+          showDelay: 0,
+          hideDelay: 0,
+        }"
+        @click="toggleEditMode"
+        class="db-widget-control-btn"
+        :class="{ 'db-active': isEditMode }"
       >
-        <button
-          v-if="enableEditorMode"
-          v-tooltip.top="{ value: isEditMode ? 'Disable Editing' : 'Enable Editing', showDelay: 0, hideDelay: 0 }"
-          @click="toggleEditMode"
-          class="db-widget-control-btn"
-          :class="{ 'db-active': isEditMode }"
-        >
-          <i :class="isEditMode ? 'fas fa-eye' : 'fas fa-pen'"></i>
-        </button>
-        <button
-          v-tooltip.top="{ value: 'Maximize Graph', showDelay: 0, hideDelay: 0 }"
-          @click="toggleFullScreen"
-          class="db-widget-control-btn"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            style="width: 18px; height: 18px"
-          >
-            <path
-              d="M18 20.75H12C11.8011 20.75 11.6103 20.671 11.4697 20.5303C11.329 20.3897 11.25 20.1989 11.25 20C11.25 19.8011 11.329 19.6103 11.4697 19.4697C11.6103 19.329 11.8011 19.25 12 19.25H18C18.3315 19.25 18.6495 19.1183 18.8839 18.8839C19.1183 18.6495 19.25 18.3315 19.25 18V6C19.25 5.66848 19.1183 5.35054 18.8839 5.11612C18.6495 4.8817 18.3315 4.75 18 4.75H6C5.66848 4.75 5.35054 4.8817 5.11612 5.11612C4.8817 5.35054 4.75 5.66848 4.75 6V12C4.75 12.1989 4.67098 12.3897 4.53033 12.5303C4.38968 12.671 4.19891 12.75 4 12.75C3.80109 12.75 3.61032 12.671 3.46967 12.5303C3.32902 12.3897 3.25 12.1989 3.25 12V6C3.25 5.27065 3.53973 4.57118 4.05546 4.05546C4.57118 3.53973 5.27065 3.25 6 3.25H18C18.7293 3.25 19.4288 3.53973 19.9445 4.05546C20.4603 4.57118 20.75 5.27065 20.75 6V18C20.75 18.7293 20.4603 19.4288 19.9445 19.9445C19.4288 20.4603 18.7293 20.75 18 20.75Z"
-              fill="currentColor"
-            />
-            <path
-              d="M16 12.75C15.8019 12.7474 15.6126 12.6676 15.4725 12.5275C15.3324 12.3874 15.2526 12.1981 15.25 12V8.75H12C11.8011 8.75 11.6103 8.67098 11.4697 8.53033C11.329 8.38968 11.25 8.19891 11.25 8C11.25 7.80109 11.329 7.61032 11.4697 7.46967C11.6103 7.32902 11.8011 7.25 12 7.25H16C16.1981 7.25259 16.3874 7.33244 16.5275 7.47253C16.6676 7.61263 16.7474 7.80189 16.75 8V12C16.7474 12.1981 16.6676 12.3874 16.5275 12.5275C16.3874 12.6676 16.1981 12.7474 16 12.75Z"
-              fill="currentColor"
-            />
-            <path
-              d="M11.5 13.25C11.3071 13.2352 11.1276 13.1455 11 13C10.877 12.8625 10.809 12.6845 10.809 12.5C10.809 12.3155 10.877 12.1375 11 12L15.5 7.5C15.6422 7.36752 15.8302 7.29539 16.0245 7.29882C16.2188 7.30225 16.4042 7.38096 16.5416 7.51838C16.679 7.65579 16.7578 7.84117 16.7612 8.03548C16.7646 8.22978 16.6925 8.41782 16.56 8.56L12 13C11.8724 13.1455 11.6929 13.2352 11.5 13.25Z"
-              fill="currentColor"
-            />
-            <path
-              d="M8 20.75H5C4.53668 20.7474 4.09309 20.5622 3.76546 20.2345C3.43784 19.9069 3.25263 19.4633 3.25 19V16C3.25263 15.5367 3.43784 15.0931 3.76546 14.7655C4.09309 14.4378 4.53668 14.2526 5 14.25H8C8.46332 14.2526 8.90691 14.4378 9.23454 14.7655C9.56216 15.0931 9.74738 15.5367 9.75 16V19C9.74738 19.4633 9.56216 19.9069 9.23454 20.2345C8.90691 20.5622 8.46332 20.7474 8 20.75ZM5 15.75C4.9337 15.75 4.87011 15.7763 4.82322 15.8232C4.77634 15.8701 4.75 15.9337 4.75 16V19C4.75 19.0663 4.77634 19.1299 4.82322 19.1768C4.87011 19.2237 4.9337 19.25 5 19.25H8C8.0663 19.25 8.12989 19.2237 8.17678 19.1768C8.22366 19.1299 8.25 19.0663 8.25 19V16C8.25 15.9337 8.22366 15.8701 8.17678 15.8232C8.12989 15.7763 8.0663 15.75 8 15.75H5Z"
-              fill="currentColor"
-            />
-          </svg>
-        </button>
-      </div>
+        <i :class="isEditMode ? 'fas fa-eye' : 'fas fa-pen'"></i>
+      </button>
     </div>
 
     <!-- Floating Toolbar -->
@@ -868,11 +970,12 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
             <div
               v-if="!isLeftSidebarOpen"
               class="db-collapsed-sidebar-trigger db-left-trigger"
+              :style="inlineLeftTriggerStyle"
               @click="handleSidebarContainerClick"
             >
               <div class="db-sidebar-trigger-content gap-1">
                 <div
-                  class="flex-grow flex items-center gap-2 overflow-hidden"
+                  class="grow flex items-center gap-2 overflow-hidden"
                   style="flex-grow: 1; overflow: hidden"
                 >
                   <span class="db-logo-text-minimized">
@@ -882,7 +985,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
                     <span class="db-mobile-text">DoodleBUGS</span>
                   </span>
                 </div>
-                <div class="flex items-center flex-shrink-0" style="flex-shrink: 0">
+                <div class="flex items-center shrink-0" style="flex-shrink: 0">
                   <button
                     v-tooltip.top="{
                       value: isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
@@ -922,6 +1025,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
             <div
               v-if="!isRightSidebarOpen"
               class="db-collapsed-sidebar-trigger db-right"
+              :style="inlineRightTriggerStyle"
               @click="uiStore.toggleRightSidebar()"
             >
               <div class="db-sidebar-trigger-content gap-2">
@@ -949,11 +1053,40 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
                     <i class="fas fa-share-alt"></i>
                   </button>
                   <button
-                    v-tooltip.top="{ value: 'Exit Full Screen', showDelay: 0, hideDelay: 0 }"
-                    class="db-header-icon-btn db-exit-btn"
+                    v-tooltip.top="{
+                      value: isFullScreen ? 'Exit Full Screen' : 'Maximize Graph',
+                      showDelay: 0,
+                      hideDelay: 0,
+                    }"
+                    class="db-header-icon-btn"
+                    :class="{ 'db-exit-btn': isFullScreen }"
                     @click.stop="toggleFullScreen"
                   >
-                    <i class="pi pi-window-minimize"></i>
+                    <svg
+                      v-if="!isFullScreen"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      style="width: 14px; height: 14px"
+                    >
+                      <path
+                        d="M18 20.75H12C11.8011 20.75 11.6103 20.671 11.4697 20.5303C11.329 20.3897 11.25 20.1989 11.25 20C11.25 19.8011 11.329 19.6103 11.4697 19.4697C11.6103 19.329 11.8011 19.25 12 19.25H18C18.3315 19.25 18.6495 19.1183 18.8839 18.8839C19.1183 18.6495 19.25 18.3315 19.25 18V6C19.25 5.66848 19.1183 5.35054 18.8839 5.11612C18.6495 4.8817 18.3315 4.75 18 4.75H6C5.66848 4.75 5.35054 4.8817 5.11612 5.11612C4.8817 5.35054 4.75 5.66848 4.75 6V12C4.75 12.1989 4.67098 12.3897 4.53033 12.5303C4.38968 12.671 4.19891 12.75 4 12.75C3.80109 12.75 3.61032 12.671 3.46967 12.5303C3.32902 12.3897 3.25 12.1989 3.25 12V6C3.25 5.27065 3.53973 4.57118 4.05546 4.05546C4.57118 3.53973 5.27065 3.25 6 3.25H18C18.7293 3.25 19.4288 3.53973 19.9445 4.05546C20.4603 4.57118 20.75 5.27065 20.75 6V18C20.75 18.7293 20.4603 19.4288 19.9445 19.9445C19.4288 20.4603 18.7293 20.75 18 20.75Z"
+                        fill="currentColor"
+                      />
+                      <path
+                        d="M16 12.75C15.8019 12.7474 15.6126 12.6676 15.4725 12.5275C15.3324 12.3874 15.2526 12.1981 15.25 12V8.75H12C11.8011 8.75 11.6103 8.67098 11.4697 8.53033C11.329 8.38968 11.25 8.19891 11.25 8C11.25 7.80109 11.329 7.61032 11.4697 7.46967C11.6103 7.32902 11.8011 7.25 12 7.25H16C16.1981 7.25259 16.3874 7.33244 16.5275 7.47253C16.6676 7.61263 16.7474 7.80189 16.75 8V12C16.7474 12.1981 16.6676 12.3874 16.5275 12.5275C16.3874 12.6676 16.1981 12.7474 16 12.75Z"
+                        fill="currentColor"
+                      />
+                      <path
+                        d="M11.5 13.25C11.3071 13.2352 11.1276 13.1455 11 13C10.877 12.8625 10.809 12.6845 10.809 12.5C10.809 12.3155 10.877 12.1375 11 12L15.5 7.5C15.6422 7.36752 15.8302 7.29539 16.0245 7.29882C16.2188 7.30225 16.4042 7.38096 16.5416 7.51838C16.679 7.65579 16.7578 7.84117 16.7612 8.03548C16.7646 8.22978 16.6925 8.41782 16.56 8.56L12 13C11.8724 13.1455 11.6929 13.2352 11.5 13.25Z"
+                        fill="currentColor"
+                      />
+                      <path
+                        d="M8 20.75H5C4.53668 20.7474 4.09309 20.5622 3.76546 20.2345C3.43784 19.9069 3.25263 19.4633 3.25 19V16C3.25263 15.5367 3.43784 15.0931 3.76546 14.7655C4.09309 14.4378 4.53668 14.2526 5 14.25H8C8.46332 14.2526 8.90691 14.4378 9.23454 14.7655C9.56216 15.0931 9.74738 15.5367 9.75 16V19C9.74738 19.4633 9.56216 19.9069 9.23454 20.2345C8.90691 20.5622 8.46332 20.7474 8 20.75ZM5 15.75C4.9337 15.75 4.87011 15.7763 4.82322 15.8232C4.77634 15.8701 4.75 15.9337 4.75 16V19C4.75 19.0663 4.77634 19.1299 4.82322 19.1768C4.87011 19.2237 4.9337 19.25 5 19.25H8C8.0663 19.25 8.12989 19.2237 8.17678 19.1768C8.22366 19.1299 8.25 19.0663 8.25 19V16C8.25 15.9337 8.22366 15.8701 8.17678 15.8232C8.12989 15.7763 8.0663 15.75 8 15.75H5Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                    <i v-else class="pi pi-window-minimize"></i>
                   </button>
 
                   <div
@@ -985,61 +1118,67 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         <div
           v-if="widgetInitialized && showEditorUI"
           class="db-sidebar-wrapper db-left"
+          :style="sidebarDragStyle('left')"
         >
-            <LeftSidebar
-              :activeAccordionTabs="activeLeftAccordionTabs"
-              @update:activeAccordionTabs="activeLeftAccordionTabs = $event"
-              :projectName="projectStore.currentProject?.name || 'Project'"
-              :pinnedGraphTitle="pinnedGraphTitle"
-              :isGridEnabled="isGridEnabled"
-              :gridSize="gridSize"
-              :showZoomControls="showZoomControls"
-              :showDebugPanel="showDebugPanel"
-              :isCodePanelOpen="isCodePanelOpen"
-              :isDetachModeActive="isDetachModeActive"
-              :showDetachModeControl="showDetachModeControl"
-              @toggle-left-sidebar="uiStore.toggleLeftSidebar"
-              @new-project="handleNewProject"
-              @new-graph="handleNewGraph"
-              @update:currentMode="currentMode = $event"
-              @update:currentNodeType="currentNodeType = $event"
-              @update:isGridEnabled="isGridEnabled = $event"
-              @update:gridSize="gridSize = $event"
-              @update:showZoomControls="showZoomControls = $event"
-              @update:showDebugPanel="showDebugPanel = $event"
-              @update:isDetachModeActive="isDetachModeActive = $event"
-              @update:show-detach-mode-control="showDetachModeControl = $event"
-              @toggle-code-panel="toggleCodePanel"
-              @load-example="handleLoadExampleAction"
-              @open-about-modal="showAboutModal = true"
-              @open-faq-modal="showFaqModal = true"
-              @toggle-dark-mode="uiStore.toggleDarkMode"
-              @share-graph="handleShareGraph"
-              @share-project-url="handleShareProjectUrl"
-            />
+          <LeftSidebar
+            :enableDrag="isInlineEditor"
+            @header-drag-start="handleSidebarDragStart('left', $event)"
+            :activeAccordionTabs="activeLeftAccordionTabs"
+            @update:activeAccordionTabs="activeLeftAccordionTabs = $event"
+            :projectName="projectStore.currentProject?.name || 'Project'"
+            :pinnedGraphTitle="pinnedGraphTitle"
+            :isGridEnabled="isGridEnabled"
+            :gridSize="gridSize"
+            :showZoomControls="showZoomControls"
+            :showDebugPanel="showDebugPanel"
+            :isCodePanelOpen="isCodePanelOpen"
+            :isDetachModeActive="isDetachModeActive"
+            :showDetachModeControl="showDetachModeControl"
+            @toggle-left-sidebar="uiStore.toggleLeftSidebar"
+            @new-project="handleNewProject"
+            @new-graph="handleNewGraph"
+            @update:currentMode="currentMode = $event"
+            @update:currentNodeType="currentNodeType = $event"
+            @update:isGridEnabled="isGridEnabled = $event"
+            @update:gridSize="gridSize = $event"
+            @update:showZoomControls="showZoomControls = $event"
+            @update:showDebugPanel="showDebugPanel = $event"
+            @update:isDetachModeActive="isDetachModeActive = $event"
+            @update:show-detach-mode-control="showDetachModeControl = $event"
+            @toggle-code-panel="toggleCodePanel"
+            @load-example="handleLoadExampleAction"
+            @open-about-modal="showAboutModal = true"
+            @open-faq-modal="showFaqModal = true"
+            @toggle-dark-mode="uiStore.toggleDarkMode"
+            @share-graph="handleShareGraph"
+            @share-project-url="handleShareProjectUrl"
+          />
         </div>
 
         <div
           v-if="widgetInitialized && showEditorUI"
           class="db-sidebar-wrapper db-right"
+          :style="sidebarDragStyle('right')"
         >
-            <RightSidebar
-              :selectedElement="selectedElement"
-              :validationErrors="validationErrors"
-              :isModelValid="isModelValid"
-              :showExitButton="true"
-              @toggle-right-sidebar="uiStore.toggleRightSidebar"
-              @update-element="updateElement"
-              @delete-element="deleteElement"
-              @show-validation-issues="showValidationModal = true"
-              @open-script-settings="showScriptSettingsModal = true"
-              @download-script="handleDownloadScript"
-              @generate-script="handleGenerateStandalone"
-              @share="handleShare"
-              @open-export-modal="openExportModal"
-              @export-json="handleExportJson"
-              @exit-fullscreen="toggleFullScreen"
-            />
+          <RightSidebar
+            :enableDrag="isInlineEditor"
+            @header-drag-start="handleSidebarDragStart('right', $event)"
+            :selectedElement="selectedElement"
+            :validationErrors="validationErrors"
+            :isModelValid="isModelValid"
+            :isFullScreen="isFullScreen"
+            @toggle-right-sidebar="uiStore.toggleRightSidebar"
+            @update-element="updateElement"
+            @delete-element="deleteElement"
+            @show-validation-issues="showValidationModal = true"
+            @open-script-settings="showScriptSettingsModal = true"
+            @download-script="handleDownloadScript"
+            @generate-script="handleGenerateStandalone"
+            @share="handleShare"
+            @open-export-modal="openExportModal"
+            @export-json="handleExportJson"
+            @toggle-fullscreen="toggleFullScreen"
+          />
         </div>
 
         <FloatingPanel
