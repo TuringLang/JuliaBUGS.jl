@@ -80,14 +80,16 @@ const handleHeaderClick = () => {
 
       <div class="flex items-center ml-auto" @click.stop @mousedown.stop @touchstart.stop>
         <div
+          v-tooltip.top="{
+            value: isModelValid ? 'Model is valid' : 'Model has validation issues',
+            showDelay: 0,
+            hideDelay: 0,
+          }"
           class="db-status-indicator db-validation-status"
           @click="$emit('show-validation-issues')"
           :class="isModelValid ? 'db-valid' : 'db-invalid'"
         >
           <i :class="isModelValid ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'"></i>
-          <div class="db-instant-tooltip">
-            {{ isModelValid ? 'Model Valid' : 'Validation Errors Found' }}
-          </div>
         </div>
 
         <button
@@ -317,29 +319,6 @@ const handleHeaderClick = () => {
 }
 .db-validation-status.db-invalid {
   color: var(--theme-warning);
-}
-
-.db-instant-tooltip {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--color-background-dark);
-  color: var(--color-text-light);
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.1s;
-  margin-top: 6px;
-  z-index: 100;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-}
-
-.db-status-indicator:hover .db-instant-tooltip {
-  opacity: 1;
 }
 
 .db-header-icon-btn {
