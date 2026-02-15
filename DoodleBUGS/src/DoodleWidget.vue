@@ -482,9 +482,10 @@ const handleShareProjectUrl = () => {
   showShareModal.value = true
 }
 
-const handleWidgetGenerateShareLink = (
-  options: { scope: 'current' | 'project' | 'custom'; selectedGraphIds?: string[] }
-) => {
+const handleWidgetGenerateShareLink = (options: {
+  scope: 'current' | 'project' | 'custom'
+  selectedGraphIds?: string[]
+}) => {
   handleGenerateShareLink(options, DOODLEBUGS_BASE_URL)
 }
 
