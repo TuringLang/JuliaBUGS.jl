@@ -20,6 +20,7 @@ export const useGraphStore = defineStore('graph', () => {
 
   const graphContents = ref<Map<string, GraphContent>>(new Map())
   const currentGraphId = ref<string | null>(localStorage.getItem(currentGraphKey.value) || null)
+  const stateVersion = ref(0)
 
   const selectedElement = ref<GraphElement | null>(null)
 
@@ -67,6 +68,7 @@ export const useGraphStore = defineStore('graph', () => {
     }
     // Ensure reactivity
     graphContents.value.set(graphId, newContent)
+    stateVersion.value++
     saveGraph(graphId, newContent)
     dataStore.createNewGraphData(graphId)
   }
@@ -74,9 +76,9 @@ export const useGraphStore = defineStore('graph', () => {
   const updateGraphElements = (graphId: string, newElements: GraphElement[]) => {
     if (graphContents.value.has(graphId)) {
       const content = graphContents.value.get(graphId)!
-      // Create new object to trigger reactivity
       const newContent = { ...content, elements: newElements }
       graphContents.value.set(graphId, newContent)
+      stateVersion.value++
       saveGraph(graphId, newContent)
     }
   }
@@ -87,6 +89,7 @@ export const useGraphStore = defineStore('graph', () => {
       if (content.lastLayout !== layoutName) {
         const newContent = { ...content, lastLayout: layoutName }
         graphContents.value.set(graphId, newContent)
+        stateVersion.value++
         saveGraph(graphId, newContent)
       }
     }
@@ -95,15 +98,16 @@ export const useGraphStore = defineStore('graph', () => {
   const updateGraphViewport = (graphId: string, zoom: number, pan: { x: number; y: number }) => {
     if (graphContents.value.has(graphId)) {
       const content = graphContents.value.get(graphId)!
-      // Only update if changed to avoid loops, but ensure object reference changes
       const newContent = { ...content, zoom, pan }
       graphContents.value.set(graphId, newContent)
+      stateVersion.value++
       saveGraph(graphId, newContent)
     }
   }
 
   const deleteGraphContent = (graphId: string) => {
     graphContents.value.delete(graphId)
+    stateVersion.value++
     localStorage.removeItem(graphContentKey(graphId))
     dataStore.deleteGraphData(graphId)
     if (currentGraphId.value === graphId) {
@@ -135,6 +139,7 @@ export const useGraphStore = defineStore('graph', () => {
     graphContents,
     currentGraphId,
     currentGraphElements,
+    stateVersion,
     selectedElement,
     setSelectedElement,
     selectGraph,

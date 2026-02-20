@@ -129,7 +129,7 @@ watch(
     </div>
 
     <!-- Editor Wrapper -->
-    <div class="db-di-wrapper flex-grow">
+    <div class="db-di-wrapper grow">
       <div ref="editorContainer" class="db-di-container"></div>
     </div>
   </div>

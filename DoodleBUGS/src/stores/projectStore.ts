@@ -42,6 +42,7 @@ export interface Project {
 
 export const useProjectStore = defineStore('project', () => {
   const projects = ref<Project[]>([])
+  const stateVersion = ref(0)
   // Default to 'doodlebugs' to maintain backward compatibility with the Main App
   const storagePrefix = ref('doodlebugs')
 
@@ -263,6 +264,7 @@ export const useProjectStore = defineStore('project', () => {
 
   const saveProjects = () => {
     localStorage.setItem(storageKey.value, JSON.stringify(projects.value))
+    stateVersion.value++
   }
 
   const loadProjects = () => {
@@ -293,6 +295,7 @@ export const useProjectStore = defineStore('project', () => {
     projects,
     currentProjectId,
     currentProject,
+    stateVersion,
     setPrefix,
     createProject,
     renameProject,

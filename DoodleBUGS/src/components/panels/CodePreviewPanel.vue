@@ -18,18 +18,25 @@ import type { Editor } from 'codemirror'
 const props = defineProps<{
   isActive: boolean
   graphId?: string
+  code?: string
 }>()
 
 const graphStore = useGraphStore()
 
 const targetElements = computed(() => {
+  if (props.code !== undefined) return []
   if (props.graphId) {
     return graphStore.graphContents.get(props.graphId)?.elements || []
   }
   return graphStore.currentGraphElements
 })
 
-const { generatedCode } = useBugsCodeGenerator(targetElements)
+const { generatedCode: localGeneratedCode } = useBugsCodeGenerator(targetElements)
+
+const generatedCode = computed(() => {
+  if (props.code !== undefined) return props.code
+  return localGeneratedCode.value
+})
 
 const copySuccess = ref(false)
 const editorContainer = ref<HTMLDivElement | null>(null)
