@@ -16,7 +16,7 @@ export const useScriptStore = defineStore('script', () => {
     suppressWatch = true
     prefix = p
     const stored = localStorage.getItem(`${prefix}-standaloneScript`)
-    if (stored) standaloneScript.value = stored
+    standaloneScript.value = stored ?? ''
     suppressWatch = false
   }
 

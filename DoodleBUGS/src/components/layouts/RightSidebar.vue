@@ -14,6 +14,7 @@ const props = defineProps<{
   isModelValid: boolean
   enableDrag?: boolean
   isFullScreen?: boolean
+  showFullscreenToggle?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -102,6 +103,7 @@ const handleHeaderClick = () => {
 
         <!-- Maximize / Exit Fullscreen Button -->
         <button
+          v-if="showFullscreenToggle"
           v-tooltip.top="{
             value: isFullScreen ? 'Exit Full Screen' : 'Maximize Graph',
             showDelay: 0,

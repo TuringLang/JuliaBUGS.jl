@@ -1216,6 +1216,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
             :validationErrors="validationErrors"
             :isModelValid="isModelValid"
             :isFullScreen="isFullScreen"
+            :showFullscreenToggle="true"
             @toggle-right-sidebar="uiStore.toggleRightSidebar"
             @update-element="updateElement"
             @delete-element="deleteElement"
