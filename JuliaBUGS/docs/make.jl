@@ -1,4 +1,5 @@
 using Documenter
+using DocumenterMermaid
 using JuliaBUGS
 using MetaGraphsNext
 using JuliaBUGS.BUGSPrimitives
