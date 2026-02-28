@@ -258,7 +258,11 @@ function getArrayDimsFromNode(
   })
 }
 
-function inferStanType(node: GraphNode, nodeMap: Map<string, GraphNode>, allPlates: GraphNode[]): string {
+function inferStanType(
+  node: GraphNode,
+  nodeMap: Map<string, GraphNode>,
+  allPlates: GraphNode[]
+): string {
   const dims = getArrayDimsFromNode(node, nodeMap, allPlates)
   const dist = node.distribution
 

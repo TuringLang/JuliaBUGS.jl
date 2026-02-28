@@ -83,6 +83,7 @@ DoodleBUGS can generate Stan code from your graphical model, enabling you to run
 ### Running the Generated Stan Model
 
 **With CmdStanPy (recommended)**:
+
 ```bash
 pip install cmdstanpy
 python3 -m cmdstanpy.install_cmdstan
@@ -90,6 +91,7 @@ python3 stan.py
 ```
 
 **With [Stan Playground](https://stan-playground.flatironinstitute.org)** (browser-based, no install):
+
 1. Copy the Stan model code from Code Preview (Stan tab)
 2. Paste into the Stan editor (top-left) in Stan Playground
 3. Copy `data.json` from the Script tab (Stan → data.json → copy button)
@@ -102,6 +104,7 @@ python3 stan.py
 ### BUGS to Stan Translation
 
 The generator handles key differences between BUGS and Stan:
+
 - **Precision → Standard Deviation**: BUGS `dnorm(mu, tau)` → Stan `normal(mu, 1/sqrt(tau))`
 - **Distribution mapping**: `dgamma` → `gamma`, `dbeta` → `beta`, `dunif` → `uniform`, etc.
 - **Naming**: Dot-separated names (`alpha.c`) → underscores (`alpha_c`)

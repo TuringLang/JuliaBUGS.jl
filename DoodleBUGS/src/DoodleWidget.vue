@@ -290,7 +290,12 @@ const { loadUIState, saveUIState, saveLastGraphId, loadLastGraphId } = usePersis
   persistencePrefix.value
 )
 
-const actions = useEditorActions(elements, generatedCode, persistencePrefix.value, generatedStanCode)
+const actions = useEditorActions(
+  elements,
+  generatedCode,
+  persistencePrefix.value,
+  generatedStanCode
+)
 const {
   currentMode,
   currentNodeType,

@@ -20,7 +20,7 @@ const props = defineProps<{
   isActive: boolean
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   (e: 'open-settings'): void
   (e: 'download'): void
   (e: 'download-stan-script'): void
@@ -35,9 +35,7 @@ const { standaloneScript, standaloneStanScript } = storeToRefs(scriptStore)
 
 const activeScriptLang = ref<ScriptLanguage>('julia')
 
-const hasAnyScript = computed(
-  () => !!standaloneScript.value || !!standaloneStanScript.value
-)
+const hasAnyScript = computed(() => !!standaloneScript.value || !!standaloneStanScript.value)
 const currentLangHasScript = computed(() =>
   activeScriptLang.value === 'stan' ? !!standaloneStanScript.value : !!standaloneScript.value
 )
@@ -245,11 +243,7 @@ const copyInitsJson = () => copyToClipboard(stanInitsJson.value, initsCopySucces
           >
             <i class="fas fa-download"></i>
           </button>
-          <button
-            @click="$emit('generate')"
-            title="Regenerate Scripts"
-            class="db-ls-action-btn"
-          >
+          <button @click="$emit('generate')" title="Regenerate Scripts" class="db-ls-action-btn">
             <i class="fas fa-sync-alt"></i>
           </button>
         </div>
@@ -271,7 +265,11 @@ const copyInitsJson = () => copyToClipboard(stanInitsJson.value, initsCopySucces
               <button class="db-ls-action-btn" title="Copy data.json" @click="copyDataJson">
                 <i :class="dataCopySuccess ? 'fas fa-check' : 'fas fa-copy'"></i>
               </button>
-              <button class="db-ls-action-btn" title="Download data.json" @click="$emit('download-stan-data')">
+              <button
+                class="db-ls-action-btn"
+                title="Download data.json"
+                @click="$emit('download-stan-data')"
+              >
                 <i class="fas fa-download"></i>
               </button>
             </div>
@@ -289,7 +287,11 @@ const copyInitsJson = () => copyToClipboard(stanInitsJson.value, initsCopySucces
               <button class="db-ls-action-btn" title="Copy inits.json" @click="copyInitsJson">
                 <i :class="initsCopySuccess ? 'fas fa-check' : 'fas fa-copy'"></i>
               </button>
-              <button class="db-ls-action-btn" title="Download inits.json" @click="$emit('download-stan-inits')">
+              <button
+                class="db-ls-action-btn"
+                title="Download inits.json"
+                @click="$emit('download-stan-inits')"
+              >
                 <i class="fas fa-download"></i>
               </button>
             </div>
