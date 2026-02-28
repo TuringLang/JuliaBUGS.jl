@@ -69,6 +69,45 @@ For more information, questions, or to get involved, please contact [@shravanngo
 > [!TIP]
 > You can generate a standalone Julia script for local run directly from the web app using the "Scripts" option in the right sidebar where you can configure parameters, copy, or download it.
 
+## Stan Code Generation
+
+DoodleBUGS can generate Stan code from your graphical model, enabling you to run Bayesian inference using the Stan ecosystem.
+
+### Features
+
+- **Stan Model Code**: Automatically translates BUGS model to Stan syntax (BUGS/Stan toggle in Code Preview panel)
+- **Stan (Python) Script**: Generates a standalone Python script using CmdStanPy with embedded model, data, and initial values
+- **Data & Inits JSON**: Generates `data.json` and `inits.json` files for use with CmdStan, CmdStanPy, or Stan Playground
+- **Copy & Download**: All generated artifacts can be copied to clipboard or downloaded from the Script tab
+
+### Running the Generated Stan Model
+
+**With CmdStanPy (recommended)**:
+```bash
+pip install cmdstanpy
+python3 -m cmdstanpy.install_cmdstan
+python3 stan.py
+```
+
+**With [Stan Playground](https://stan-playground.flatironinstitute.org)** (browser-based, no install):
+1. Copy the Stan model code from Code Preview (Stan tab)
+2. Paste into the Stan editor (top-left) in Stan Playground
+3. Copy `data.json` from the Script tab (Stan → data.json → copy button)
+4. Paste into the Data editor (bottom-left) in Stan Playground
+5. Click Compile, then Sample
+
+> [!NOTE]
+> Stan Playground does not support custom initial values — it only offers an `init_radius` parameter for random initialization. For models requiring specific inits, use CmdStanPy or CmdStanR.
+
+### BUGS to Stan Translation
+
+The generator handles key differences between BUGS and Stan:
+- **Precision → Standard Deviation**: BUGS `dnorm(mu, tau)` → Stan `normal(mu, 1/sqrt(tau))`
+- **Distribution mapping**: `dgamma` → `gamma`, `dbeta` → `beta`, `dunif` → `uniform`, etc.
+- **Naming**: Dot-separated names (`alpha.c`) → underscores (`alpha_c`)
+- **Deterministic nodes** → `transformed parameters` block
+- **Logical structure**: Data, parameters, transformed parameters, and model blocks are automatically organized
+
 ## DoodleWidget: Embeddable Component
 
 DoodleBUGS can be embedded as a standalone web component in any HTML page or web app. This allows you to integrate the DoodleBUGS into documentation, tutorials, or custom applications.

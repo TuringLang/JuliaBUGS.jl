@@ -7,9 +7,14 @@ import { useDataStore } from '../stores/dataStore'
 import { useScriptStore } from '../stores/scriptStore'
 import { useGraphInstance } from './useGraphInstance'
 import { generateStandaloneScript } from './useBugsCodeGenerator'
+import {
+  generateStanStandaloneScript,
+  generateStanDataJson,
+  generateStanInitsJson,
+} from './useStanCodeGenerator'
 import { downloadBlob } from '../utils/downloadBlob'
 
-export function useFileExport(generatedCode: Ref<string>) {
+export function useFileExport(generatedCode: Ref<string>, stanCode?: Ref<string>) {
   const graphStore = useGraphStore()
   const projectStore = useProjectStore()
   const dataStore = useDataStore()
@@ -40,6 +45,58 @@ export function useFileExport(generatedCode: Ref<string>) {
   const handleDownloadBugs = () => {
     const blob = new Blob([generatedCode.value], { type: 'text/plain;charset=utf-8' })
     downloadBlob(blob, 'model.bugs')
+  }
+
+  const handleDownloadStan = () => {
+    const code = stanCode?.value || ''
+    if (!code) return
+    const blob = new Blob([code], { type: 'text/plain;charset=utf-8' })
+    downloadBlob(blob, 'model.stan')
+  }
+
+  const getStanScriptContent = () => {
+    const { parsedGraphData } = dataStore
+    const data = parsedGraphData?.data || {}
+    const inits = parsedGraphData?.inits || {}
+    const code = stanCode?.value || ''
+    return generateStanStandaloneScript({
+      modelCode: code,
+      data,
+      inits,
+      settings: {
+        n_samples: scriptStore.samplerSettings.n_samples,
+        n_adapts: scriptStore.samplerSettings.n_adapts,
+        n_chains: scriptStore.samplerSettings.n_chains,
+        seed: scriptStore.samplerSettings.seed ?? undefined,
+      },
+    })
+  }
+
+  const handleGenerateStanScript = () => {
+    scriptStore.standaloneStanScript = getStanScriptContent()
+  }
+
+  const handleDownloadStanScript = () => {
+    const content = scriptStore.standaloneStanScript || getStanScriptContent()
+    if (!content) return
+    const blob = new Blob([content], { type: 'text/plain' })
+    downloadBlob(blob, 'run_stan_model.py')
+  }
+
+  const handleDownloadStanData = () => {
+    const { parsedGraphData } = dataStore
+    const data = parsedGraphData?.data || {}
+    const json = generateStanDataJson(data)
+    const blob = new Blob([json], { type: 'application/json' })
+    downloadBlob(blob, 'data.json')
+  }
+
+  const handleDownloadStanInits = () => {
+    const { parsedGraphData } = dataStore
+    const inits = parsedGraphData?.inits || {}
+    const json = generateStanInitsJson(inits)
+    const blob = new Blob([json], { type: 'application/json' })
+    downloadBlob(blob, 'inits.json')
   }
 
   const handleDownloadScript = () => {
@@ -108,8 +165,14 @@ export function useFileExport(generatedCode: Ref<string>) {
     showExportModal,
     currentExportType,
     getScriptContent,
+    getStanScriptContent,
     handleDownloadBugs,
+    handleDownloadStan,
     handleDownloadScript,
+    handleGenerateStanScript,
+    handleDownloadStanScript,
+    handleDownloadStanData,
+    handleDownloadStanInits,
     openExportModal,
     handleConfirmExport,
     handleExportJson,

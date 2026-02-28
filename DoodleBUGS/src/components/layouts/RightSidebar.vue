@@ -24,6 +24,10 @@ const emit = defineEmits<{
   (e: 'show-validation-issues'): void
   (e: 'open-script-settings'): void
   (e: 'download-script'): void
+  (e: 'download-stan'): void
+  (e: 'download-stan-script'): void
+  (e: 'download-stan-data'): void
+  (e: 'download-stan-inits'): void
   (e: 'generate-script'): void
   (e: 'share'): void
   (e: 'open-export-modal', format: 'png' | 'jpg' | 'svg'): void
@@ -195,6 +199,9 @@ const handleHeaderClick = () => {
         :is-active="activeRightTab === 'script'"
         @open-settings="$emit('open-script-settings')"
         @download="$emit('download-script')"
+        @download-stan-script="$emit('download-stan-script')"
+        @download-stan-data="$emit('download-stan-data')"
+        @download-stan-inits="$emit('download-stan-inits')"
         @generate="$emit('generate-script')"
       />
 
@@ -216,6 +223,15 @@ const handleHeaderClick = () => {
           <h5 class="db-section-title">Model Export</h5>
           <BaseButton type="ghost" class="db-menu-btn" @click="$emit('export-json')"
             ><i class="fas fa-file-code"></i>Export Graph, Data & Inits as JSON</BaseButton
+          >
+          <BaseButton type="ghost" class="db-menu-btn" @click="$emit('download-stan')"
+            ><i class="fas fa-file-alt"></i>Download Stan Model (.stan)</BaseButton
+          >
+          <BaseButton type="ghost" class="db-menu-btn" @click="$emit('download-stan-data')"
+            ><i class="fas fa-database"></i>Download Stan Data (data.json)</BaseButton
+          >
+          <BaseButton type="ghost" class="db-menu-btn" @click="$emit('download-stan-inits')"
+            ><i class="fas fa-play-circle"></i>Download Stan Inits (inits.json)</BaseButton
           >
         </div>
       </div>
