@@ -20,7 +20,26 @@ export const examples: ExampleModelConfig[] = [
     name: 'Seeds Model',
     url: 'https://raw.githubusercontent.com/TuringLang/JuliaBUGS.jl/refs/heads/main/DoodleBUGS/public/examples/seeds/model.json',
   },
-  // Add other models here
+  {
+    id: 'surgical',
+    name: 'Surgical Model',
+    url: 'https://raw.githubusercontent.com/TuringLang/JuliaBUGS.jl/refs/heads/main/DoodleBUGS/public/examples/surgical/model.json',
+  },
+  {
+    id: 'dyes',
+    name: 'Dyes Model',
+    url: 'https://raw.githubusercontent.com/TuringLang/JuliaBUGS.jl/refs/heads/main/DoodleBUGS/public/examples/dyes/model.json',
+  },
+  {
+    id: 'blockers',
+    name: 'Blockers Model',
+    url: 'https://raw.githubusercontent.com/TuringLang/JuliaBUGS.jl/refs/heads/main/DoodleBUGS/public/examples/blockers/model.json',
+  },
+  {
+    id: 'salm',
+    name: 'Salm Model',
+    url: 'https://raw.githubusercontent.com/TuringLang/JuliaBUGS.jl/refs/heads/main/DoodleBUGS/public/examples/salm/model.json',
+  },
 ]
 
 // Helper to check if a string is a URL
