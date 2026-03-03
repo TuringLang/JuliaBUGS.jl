@@ -147,10 +147,14 @@ export function useGraphValidator(elements: Ref<GraphElement[]>, modelData: Ref<
               return
             }
             const baseVariable = variable.split('[')[0]
-            if (!parentNames.has(baseVariable) && !ancestorLoopVars.has(baseVariable)) {
+            if (
+              !parentNames.has(baseVariable) &&
+              !ancestorLoopVars.has(baseVariable) &&
+              !dataKeys.has(baseVariable)
+            ) {
               errors.push({
                 field: 'equation',
-                message: `Variable '${baseVariable}' in equation is not a parent or an available loop index.`,
+                message: `Variable '${baseVariable}' in equation is not a parent, data variable, or an available loop index.`,
               })
             }
           })

@@ -134,6 +134,24 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
       return [a || '1', b || '1']
     },
   },
+  ddexp: {
+    stanName: 'double_exponential',
+    stanParamNames: ['mu', 'sigma'],
+    transformParams: (params) => {
+      const [mu, tau] = params
+      return [mu || '0', tau ? `1.0 / ${tau}` : '1']
+    },
+  },
+  dlogis: {
+    stanName: 'logistic',
+    stanParamNames: ['mu', 's'],
+    transformParams: (params) => [params[0] || '0', params[1] || '1'],
+  },
+  df: {
+    stanName: 'inv_gamma',
+    stanParamNames: ['alpha', 'beta'],
+    transformParams: (params) => [params[0] || '1', params[1] || '1'],
+  },
 }
 
 function convertBugsName(name: string): string {
