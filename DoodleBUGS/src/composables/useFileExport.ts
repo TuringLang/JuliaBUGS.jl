@@ -11,6 +11,7 @@ import {
   generateStanStandaloneScript,
   generateStanDataJson,
   generateStanInitsJson,
+  extractCensoredFields,
 } from './useStanCodeGenerator'
 import { downloadBlob } from '../utils/downloadBlob'
 
@@ -59,10 +60,12 @@ export function useFileExport(generatedCode: Ref<string>, stanCode?: Ref<string>
     const data = parsedGraphData?.data || {}
     const inits = parsedGraphData?.inits || {}
     const code = stanCode?.value || ''
+    const censoredFields = extractCensoredFields(graphStore.currentGraphElements)
     return generateStanStandaloneScript({
       modelCode: code,
       data,
       inits,
+      censoredFields,
       settings: {
         n_samples: scriptStore.samplerSettings.n_samples,
         n_adapts: scriptStore.samplerSettings.n_adapts,
@@ -86,7 +89,8 @@ export function useFileExport(generatedCode: Ref<string>, stanCode?: Ref<string>
   const handleDownloadStanData = () => {
     const { parsedGraphData } = dataStore
     const data = parsedGraphData?.data || {}
-    const json = generateStanDataJson(data)
+    const censoredFields = extractCensoredFields(graphStore.currentGraphElements)
+    const json = generateStanDataJson(data, censoredFields)
     const blob = new Blob([json], { type: 'application/json' })
     downloadBlob(blob, 'data.json')
   }

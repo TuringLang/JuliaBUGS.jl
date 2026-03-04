@@ -27,7 +27,8 @@ export interface NodeDefinition {
   description: string
   styleClass: string
   properties: NodeProperty[]
-  parameters?: NodeProperty[] // Optional parameters for distributions
+  parameters?: NodeProperty[]
+  censoring?: NodeProperty[]
   defaultStyle: {
     backgroundColor: string
     borderColor: string
@@ -299,12 +300,38 @@ export const nodeDefinitions: NodeDefinition[] = [
         placeholder: 'e.g., i,j or 1:N',
         defaultValue: '',
       },
+      {
+        key: 'equation',
+        label: 'Data Transform (<-)',
+        type: 'text',
+        placeholder: 'e.g., 1 - Y[i,j]  (data-only transform)',
+        defaultValue: '',
+        helpText:
+          'Optional: output a <- assignment before the ~ line. Only reference observed data here.',
+      },
     ],
     parameters: [
-      // These fields will be used to store literal values or parent node links
       { key: 'param1', label: 'Parameter 1', type: 'text', defaultValue: '' },
       { key: 'param2', label: 'Parameter 2', type: 'text', defaultValue: '' },
       { key: 'param3', label: 'Parameter 3', type: 'text', defaultValue: '' },
+    ],
+    censoring: [
+      {
+        key: 'censorLower',
+        label: 'Lower Bound',
+        type: 'text',
+        placeholder: 'e.g., t.cen[i, j]',
+        defaultValue: '',
+        helpText: 'Left censoring bound. BUGS: C(lower, )',
+      },
+      {
+        key: 'censorUpper',
+        label: 'Upper Bound',
+        type: 'text',
+        placeholder: 'e.g., upper[i]',
+        defaultValue: '',
+        helpText: 'Right censoring bound. BUGS: C(, upper)',
+      },
     ],
     defaultStyle: {
       backgroundColor: '#ffe0e0',
@@ -407,11 +434,38 @@ export const nodeDefinitions: NodeDefinition[] = [
         placeholder: 'e.g., i,j or 1:N',
         defaultValue: '',
       },
+      {
+        key: 'equation',
+        label: 'Data Transform (<-)',
+        type: 'text',
+        placeholder: 'e.g., 1 - Y[i,j]  (data-only transform)',
+        defaultValue: '',
+        helpText:
+          'Optional: output a <- assignment before the ~ line. Only reference observed data here.',
+      },
     ],
     parameters: [
       { key: 'param1', label: 'Parameter 1', type: 'text', defaultValue: '' },
       { key: 'param2', label: 'Parameter 2', type: 'text', defaultValue: '' },
       { key: 'param3', label: 'Parameter 3', type: 'text', defaultValue: '' },
+    ],
+    censoring: [
+      {
+        key: 'censorLower',
+        label: 'Lower Bound',
+        type: 'text',
+        placeholder: 'e.g., t.cen[i, j]',
+        defaultValue: '',
+        helpText: 'Left censoring bound. BUGS: C(lower, )',
+      },
+      {
+        key: 'censorUpper',
+        label: 'Upper Bound',
+        type: 'text',
+        placeholder: 'e.g., upper[i]',
+        defaultValue: '',
+        helpText: 'Right censoring bound. BUGS: C(, upper)',
+      },
     ],
     defaultStyle: {
       backgroundColor: '#e0f0ff',
@@ -505,6 +559,11 @@ export const getDefaultNodeData = (
   if (definition.parameters) {
     definition.parameters.forEach((param) => {
       defaultData[param.key] = param.defaultValue
+    })
+  }
+  if (definition.censoring) {
+    definition.censoring.forEach((c) => {
+      defaultData[c.key] = c.defaultValue
     })
   }
   return defaultData

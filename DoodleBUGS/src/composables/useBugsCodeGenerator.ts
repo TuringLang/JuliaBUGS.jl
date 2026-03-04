@@ -125,7 +125,20 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>) {
               )
               .map((key) => formatParam(String(childNode[key as keyof GraphNode])))
               .join(', ')
-            lines.push(`${indent}${nodeName} ~ ${childNode.distribution}(${params})`)
+
+            // Hybrid: optional data-transform line before the stochastic line
+            if (childNode.equation && String(childNode.equation).trim()) {
+              lines.push(`${indent}${nodeName} <- ${childNode.equation}`)
+            }
+
+            let censorSuffix = ''
+            const cl = childNode.censorLower ? String(childNode.censorLower).trim() : ''
+            const cu = childNode.censorUpper ? String(childNode.censorUpper).trim() : ''
+            if (cl || cu) {
+              censorSuffix = `C(${cl},${cu ? ' ' + cu : ''})`
+            }
+
+            lines.push(`${indent}${nodeName} ~ ${childNode.distribution}(${params})${censorSuffix}`)
           } else if (childNode.nodeType === 'deterministic' && childNode.equation) {
             lines.push(`${indent}${nodeName} <- ${childNode.equation}`)
           }
@@ -145,20 +158,24 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>) {
 }
 
 // Helpers to format JavaScript values as Julia literals for embedding
-// Render a Julia NamedTuple field name: either bare identifier or var"..."
+// Render a Julia NamedTuple field name.
+// With replace_period=true (string-mode @bugs), the parser converts dots to underscores,
+// so we must also use underscores in the data/inits NamedTuple keys to match.
 function juliaFieldLiteral(name: string): string {
-  const s = String(name)
-  const idok = /^[A-Za-z_][A-Za-z0-9_]*$/.test(s)
-  if (idok) return s
-  const escaped = s.replace(/"/g, '\\"')
-  return `var"${escaped}"`
+  const s = String(name).replace(/\./g, '_')
+  // After dot→underscore the result is always a valid Julia identifier
+  return s
 }
 
-function isVectorOfNumbers(v: unknown): v is number[] {
-  return Array.isArray(v) && v.every((x) => typeof x === 'number')
+function isScalarOrMissing(x: unknown): boolean {
+  return x === null || x === undefined || typeof x === 'number'
 }
 
-function isMatrixLike(v: unknown): v is number[][] {
+function isVectorLike(v: unknown): v is (number | null)[] {
+  return Array.isArray(v) && v.every(isScalarOrMissing)
+}
+
+function isMatrixLike(v: unknown): v is (number | null)[][] {
   if (!Array.isArray(v) || v.length === 0) return false
   const rows = v as unknown[]
   const firstRow = rows[0]
@@ -168,7 +185,7 @@ function isMatrixLike(v: unknown): v is number[][] {
     (r) =>
       Array.isArray(r) &&
       (r as unknown[]).length === cols &&
-      (r as unknown[]).every((x) => typeof x === 'number')
+      (r as unknown[]).every(isScalarOrMissing)
   )
 }
 
@@ -178,12 +195,17 @@ function formatNumber(n: number): string {
   return `${n}`
 }
 
-function formatVector(arr: number[]): string {
-  return `[${arr.map(formatNumber).join(', ')}]`
+function formatScalar(v: number | null | undefined): string {
+  if (v === null || v === undefined) return 'missing'
+  return formatNumber(v)
 }
 
-function formatMatrix(mat: number[][]): string {
-  const rows = mat.map((row) => row.map(formatNumber).join(' ')).join('\n        ')
+function formatVector(arr: (number | null)[]): string {
+  return `[${arr.map(formatScalar).join(', ')}]`
+}
+
+function formatMatrix(mat: (number | null)[][]): string {
+  const rows = mat.map((row) => row.map(formatScalar).join(' ')).join('\n        ')
   return `[\n        ${rows}\n    ]`
 }
 
@@ -192,9 +214,9 @@ function formatValue(v: unknown): string {
   if (typeof v === 'number') return formatNumber(v)
   if (typeof v === 'boolean') return v ? 'true' : 'false'
   if (typeof v === 'string') return JSON.stringify(v)
-  if (isMatrixLike(v)) return formatMatrix(v as number[][])
-  if (isVectorOfNumbers(v)) return formatVector(v as number[])
-  if (Array.isArray(v)) return JSON.stringify(v)
+  if (isMatrixLike(v)) return formatMatrix(v as (number | null)[][])
+  if (isVectorLike(v)) return formatVector(v as (number | null)[])
+  if (Array.isArray(v)) return `[${(v as unknown[]).map(formatValue).join(', ')}]`
   if (v && typeof v === 'object') return JSON.stringify(v)
   return 'nothing'
 }
@@ -235,13 +257,19 @@ export function generateStandaloneScript(input: StandaloneScriptInput): string {
   const seedLiteral =
     typeof seed === 'number' ? String(seed) : seed == null ? 'nothing' : JSON.stringify(seed)
 
-  const script = `using JuliaBUGS, AbstractMCMC, AdvancedHMC, LogDensityProblems, LogDensityProblemsAD, MCMCChains, ReverseDiff, Random
+  const hasCensoring = /\bC\(/.test(String(modelCode))
+  const censoringImport = hasCensoring ? '\nusing Distributions: censored' : ''
+  const censoringPrimitive = hasCensoring
+    ? '\n# Register censored() as a valid BUGS primitive\nJuliaBUGS.@bugs_primitive censored\n'
+    : ''
+
+  const script = `using JuliaBUGS, AbstractMCMC, AdvancedHMC, LogDensityProblems, LogDensityProblemsAD, MCMCChains, ReverseDiff, Random${censoringImport}
 
 data = ${dataLiteral}
 
 inits = ${initsLiteral}
-
-# Model definition using a string literal
+${censoringPrimitive}
+# Model definition (replace_period=true converts dots to underscores, matching data keys)
 model_def = JuliaBUGS.@bugs("""
 ${String(modelCode)}
 """, true, false)

@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue'
 import { useScriptStore } from '../../stores/scriptStore'
 import { useDataStore } from '../../stores/dataStore'
+import { useGraphStore } from '../../stores/graphStore'
 import { storeToRefs } from 'pinia'
 import 'codemirror/lib/codemirror.css'
 import 'codemirror/theme/material-darker.css'
@@ -12,7 +13,11 @@ import 'codemirror/addon/scroll/simplescrollbars.js'
 import CodeMirror from 'codemirror'
 import type { Editor } from 'codemirror'
 import BaseButton from '../ui/BaseButton.vue'
-import { generateStanDataJson, generateStanInitsJson } from '../../composables/useStanCodeGenerator'
+import {
+  generateStanDataJson,
+  generateStanInitsJson,
+  extractCensoredFields,
+} from '../../composables/useStanCodeGenerator'
 
 export type ScriptLanguage = 'julia' | 'stan'
 
@@ -31,6 +36,7 @@ defineEmits<{
 
 const scriptStore = useScriptStore()
 const dataStore = useDataStore()
+const graphStore = useGraphStore()
 const { standaloneScript, standaloneStanScript } = storeToRefs(scriptStore)
 
 const activeScriptLang = ref<ScriptLanguage>('julia')
@@ -45,7 +51,8 @@ const activeScriptContent = computed(() =>
 
 const stanDataJson = computed(() => {
   const data = dataStore.parsedGraphData?.data || {}
-  return generateStanDataJson(data)
+  const censoredFields = extractCensoredFields(graphStore.currentGraphElements)
+  return generateStanDataJson(data, censoredFields)
 })
 
 const stanInitsJson = computed(() => {

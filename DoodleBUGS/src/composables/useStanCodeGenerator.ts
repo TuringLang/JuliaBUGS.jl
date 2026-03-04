@@ -408,6 +408,83 @@ function needsBoundsFromDistribution(dist: string | undefined): string {
   }
 }
 
+// Scans all node expressions and params for identifiers that are not already
+// declared as graph nodes, loop variables, or plate size variables.
+// Returns them with their inferred Stan type (array dims if subscripted).
+function findUndeclaredDataVars(
+  nodes: GraphNode[],
+  plates: GraphNode[],
+  plateSizeVars: Set<string>
+): { stanName: string; dims: string[] }[] {
+  const knownBugsNames = new Set<string>()
+  const loopVars = new Set<string>()
+  const loopVarToUpper = new Map<string, string>()
+
+  for (const n of nodes) {
+    if (n.nodeType === 'plate') {
+      const lv = n.loopVariable || 'i'
+      loopVars.add(lv)
+      const range = convertBugsName(n.loopRange || '1:N')
+      const parts = range.split(':')
+      const upper = parts.length === 2 ? parts[1].trim() : range
+      loopVarToUpper.set(lv, upper)
+    } else {
+      knownBugsNames.add(n.name)
+    }
+  }
+
+  const allExprs: string[] = []
+  for (const n of nodes) {
+    if (n.nodeType === 'plate') continue
+    for (const val of [n.equation, n.param1, n.param2, n.param3, n.censorLower, n.censorUpper]) {
+      if (val) allExprs.push(String(val))
+    }
+  }
+
+  // Match dotted-identifiers (BUGS names) optionally followed by [subscript].
+  // The lookbehind (?<![0-9.]) prevents matching the exponent letter in numeric
+  // literals like 1.0E-4 where E is preceded by a digit.
+  const IDENT_RE = /(?<![0-9.])([A-Za-z_][A-Za-z0-9_.]*)(\s*)(\[([^\]]*)\])?/g
+  const undeclared = new Map<string, Set<string>>()
+
+  for (const expr of allExprs) {
+    IDENT_RE.lastIndex = 0
+    let match: RegExpExecArray | null
+    while ((match = IDENT_RE.exec(expr)) !== null) {
+      const bugsName = match[1]
+      const subscript = match[4]?.trim()
+      const charAfterIdent = expr.charAt(match.index! + bugsName.length)
+
+      // Skip function calls (identifier immediately followed by '(')
+      if (charAfterIdent === '(') continue
+      // Skip loop variable bare names
+      if (loopVars.has(bugsName)) continue
+      // Skip known graph node names (dotted, as-is from JSON)
+      if (knownBugsNames.has(bugsName)) continue
+      // Skip numeric tokens
+      if (/^\d/.test(bugsName)) continue
+
+      const stanName = convertBugsName(bugsName)
+      if (plateSizeVars.has(stanName)) continue
+      if (loopVars.has(stanName)) continue
+
+      if (!undeclared.has(stanName)) undeclared.set(stanName, new Set())
+
+      if (subscript) {
+        for (const sub of subscript.split(',').map((s) => s.trim())) {
+          const upper = loopVarToUpper.get(sub)
+          if (upper) undeclared.get(stanName)!.add(upper)
+        }
+      }
+    }
+  }
+
+  return [...undeclared.entries()].map(([stanName, dimsSet]) => ({
+    stanName,
+    dims: [...dimsSet],
+  }))
+}
+
 export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
   const generatedStanCode = computed(() => {
     const nodes = elements.value.filter((el: GraphElement) => el.type === 'node') as GraphNode[]
@@ -461,6 +538,37 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
       const stanName = convertBugsName(node.name)
       const stanType = inferStanType(node, nodeMap, plates)
       dataDeclarations.push(`  ${stanType} ${stanName};`)
+
+      const cl = node.censorLower ? String(node.censorLower).trim() : ''
+      const cu = node.censorUpper ? String(node.censorUpper).trim() : ''
+      if (cl || cu) {
+        const dims = getArrayDimsFromNode(node, nodeMap, plates)
+        const censorBound = cl || cu
+        const rawBoundName = censorBound.replace(/\[.*$/, '')
+        const stanBoundName = convertBugsName(rawBoundName)
+        if (dims.length > 0) {
+          dataDeclarations.push(`  array[${dims.join(', ')}] real ${stanBoundName};`)
+          dataDeclarations.push(`  array[${dims.join(', ')}] int ${stanName}_is_obs;`)
+        } else {
+          dataDeclarations.push(`  real ${stanBoundName};`)
+          dataDeclarations.push(`  int ${stanName}_is_obs;`)
+        }
+      }
+    }
+
+    // Detect any identifiers used in equations/params that are not graph nodes.
+    // These are external data covariates (e.g. Base[j], Trt[j], log.Base4.bar).
+    const alreadyDeclared = new Set(
+      dataDeclarations.map((d) => d.trim().split(/\s+/).pop()!.replace(';', ''))
+    )
+    for (const { stanName, dims } of findUndeclaredDataVars(nodes, plates, plateSizeVars)) {
+      if (alreadyDeclared.has(stanName)) continue
+      if (dims.length > 0) {
+        dataDeclarations.push(`  array[${dims.join(', ')}] real ${stanName};`)
+      } else {
+        dataDeclarations.push(`  real ${stanName};`)
+      }
+      alreadyDeclared.add(stanName)
     }
 
     for (const node of stochasticParams.sort(sortByTopo)) {
@@ -555,7 +663,28 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
         ) {
           const distInfo = formatStanDistribution(node, nameToNode)
           if (distInfo) {
-            lines.push(`${indent}${stanName}${idx} ~ ${distInfo.stanDist}(${distInfo.stanParams});`)
+            const cl = node.censorLower ? String(node.censorLower).trim() : ''
+            const cu = node.censorUpper ? String(node.censorUpper).trim() : ''
+            const hasCensoring = !!(cl || cu)
+
+            if (hasCensoring && node.nodeType === 'observed') {
+              const censorBound = cl || cu
+              const stanBound = convertExpression(convertBugsName(censorBound))
+              const cdfFunc = cl ? `${distInfo.stanDist}_lccdf` : `${distInfo.stanDist}_lcdf`
+
+              const isObsName = `${stanName}_is_obs`
+              lines.push(`${indent}if (${isObsName}${idx} == 1) {`)
+              lines.push(
+                `${indent}  ${stanName}${idx} ~ ${distInfo.stanDist}(${distInfo.stanParams});`
+              )
+              lines.push(`${indent}} else {`)
+              lines.push(`${indent}  target += ${cdfFunc}(${stanBound} | ${distInfo.stanParams});`)
+              lines.push(`${indent}}`)
+            } else {
+              lines.push(
+                `${indent}${stanName}${idx} ~ ${distInfo.stanDist}(${distInfo.stanParams});`
+              )
+            }
           }
         }
       }
@@ -618,18 +747,77 @@ function convertDataKeys(obj: Record<string, unknown>): Record<string, unknown> 
   return result
 }
 
-export function generateStanDataJson(data: Record<string, unknown>): string {
-  return JSON.stringify(convertDataKeys(data), null, 2)
+function buildIsObsIndicator(arr: unknown): unknown {
+  if (Array.isArray(arr)) {
+    return arr.map((item) => {
+      if (Array.isArray(item)) return buildIsObsIndicator(item)
+      return item === null || item === undefined ? 0 : 1
+    })
+  }
+  return arr === null || arr === undefined ? 0 : 1
+}
+
+function fillMissingWithCensor(obs: unknown, cens: unknown): unknown {
+  if (Array.isArray(obs) && Array.isArray(cens)) {
+    return obs.map((item, i) => fillMissingWithCensor(item, cens[i]))
+  }
+  if (obs === null || obs === undefined) {
+    return typeof cens === 'number' ? cens : 0
+  }
+  return obs
+}
+
+export function generateStanDataJson(
+  data: Record<string, unknown>,
+  censoredFields?: { varName: string; censorBoundName: string }[]
+): string {
+  const converted = convertDataKeys(data)
+
+  if (censoredFields) {
+    for (const { varName, censorBoundName } of censoredFields) {
+      const stanVar = convertBugsName(varName)
+      const stanBound = convertBugsName(censorBoundName)
+      const obsData = converted[stanVar]
+      const cenData = converted[stanBound]
+
+      if (obsData !== undefined) {
+        converted[`${stanVar}_is_obs`] = buildIsObsIndicator(obsData)
+        if (cenData !== undefined) {
+          converted[stanVar] = fillMissingWithCensor(obsData, cenData)
+        }
+      }
+    }
+  }
+
+  return JSON.stringify(converted, null, 2)
 }
 
 export function generateStanInitsJson(inits: Record<string, unknown>): string {
   return JSON.stringify(convertDataKeys(inits), null, 2)
 }
 
+export function extractCensoredFields(
+  elements: GraphElement[]
+): { varName: string; censorBoundName: string }[] {
+  const nodes = elements.filter((el) => el.type === 'node') as GraphNode[]
+  const result: { varName: string; censorBoundName: string }[] = []
+  for (const node of nodes) {
+    if (node.nodeType !== 'observed') continue
+    const cl = node.censorLower ? String(node.censorLower).trim() : ''
+    const cu = node.censorUpper ? String(node.censorUpper).trim() : ''
+    const bound = cl || cu
+    if (!bound) continue
+    const boundName = bound.replace(/\[.*$/, '')
+    result.push({ varName: node.name, censorBoundName: boundName })
+  }
+  return result
+}
+
 export interface StanScriptInput {
   modelCode: string
   data: Record<string, unknown>
   inits: Record<string, unknown>
+  censoredFields?: { varName: string; censorBoundName: string }[]
   settings: {
     n_samples: number
     n_adapts: number
@@ -639,9 +827,9 @@ export interface StanScriptInput {
 }
 
 export function generateStanStandaloneScript(input: StanScriptInput): string {
-  const { modelCode, data, inits, settings } = input
+  const { modelCode, data, inits, censoredFields, settings } = input
 
-  const dataJson = generateStanDataJson(data)
+  const dataJson = generateStanDataJson(data, censoredFields)
   const initsJson = generateStanInitsJson(inits)
 
   const nSamples = settings?.n_samples ?? 1000

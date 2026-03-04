@@ -30,6 +30,10 @@ export interface GraphNode {
   param2?: string
   param3?: string
 
+  // Censoring bounds (BUGS C(lower, upper) syntax)
+  censorLower?: string
+  censorUpper?: string
+
   // Index signature to allow dynamic property access
   [key: string]: string | number | boolean | null | undefined | { x: number; y: number } | string[]
 }
