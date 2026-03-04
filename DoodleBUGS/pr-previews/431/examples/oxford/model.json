@@ -1,0 +1,279 @@
+{
+  "name": "Oxford: Smooth Fit to Log-Odds Ratios",
+  "elements": [
+    {
+      "id": "node_alpha",
+      "name": "alpha",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 58, "y": 41 },
+      "distribution": "dnorm",
+      "param1": "0.0",
+      "param2": "1.0E-6"
+    },
+    {
+      "id": "node_beta1",
+      "name": "beta1",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 200, "y": 41 },
+      "distribution": "dnorm",
+      "param1": "0.0",
+      "param2": "1.0E-6"
+    },
+    {
+      "id": "node_beta2",
+      "name": "beta2",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 340, "y": 41 },
+      "distribution": "dnorm",
+      "param1": "0.0",
+      "param2": "1.0E-6"
+    },
+    {
+      "id": "node_tau",
+      "name": "tau",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 500, "y": 41 },
+      "distribution": "dgamma",
+      "param1": "0.001",
+      "param2": "0.001"
+    },
+    {
+      "id": "node_sigma",
+      "name": "sigma",
+      "type": "node",
+      "nodeType": "deterministic",
+      "position": { "x": 650, "y": 41 },
+      "equation": "1 / sqrt(tau)"
+    },
+    {
+      "id": "plate_i",
+      "name": "Plate.i",
+      "type": "node",
+      "nodeType": "plate",
+      "position": { "x": 350, "y": 560 },
+      "loopVariable": "i",
+      "loopRange": "1:K"
+    },
+    {
+      "id": "node_year",
+      "name": "year",
+      "type": "node",
+      "nodeType": "constant",
+      "position": { "x": 150, "y": 180 },
+      "parent": "plate_i",
+      "indices": "i"
+    },
+    {
+      "id": "node_mu",
+      "name": "mu",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 100, "y": 310 },
+      "parent": "plate_i",
+      "distribution": "dnorm",
+      "indices": "i",
+      "param1": "0.0",
+      "param2": "1.0E-6"
+    },
+    {
+      "id": "node_b",
+      "name": "b",
+      "type": "node",
+      "nodeType": "stochastic",
+      "position": { "x": 500, "y": 220 },
+      "parent": "plate_i",
+      "distribution": "dnorm",
+      "indices": "i",
+      "param1": "0",
+      "param2": "tau"
+    },
+    {
+      "id": "node_logPsi",
+      "name": "logPsi",
+      "type": "node",
+      "nodeType": "deterministic",
+      "position": { "x": 350, "y": 270 },
+      "parent": "plate_i",
+      "indices": "i",
+      "equation": "alpha + beta1 * year[i] + beta2 * (year[i] * year[i] - 22) + b[i]"
+    },
+    {
+      "id": "node_p0",
+      "name": "p0",
+      "type": "node",
+      "nodeType": "deterministic",
+      "position": { "x": 200, "y": 390 },
+      "parent": "plate_i",
+      "indices": "i",
+      "equation": "logistic(mu[i])"
+    },
+    {
+      "id": "node_p1",
+      "name": "p1",
+      "type": "node",
+      "nodeType": "deterministic",
+      "position": { "x": 450, "y": 390 },
+      "parent": "plate_i",
+      "indices": "i",
+      "equation": "logistic(mu[i] + logPsi[i])"
+    },
+    {
+      "id": "node_n0",
+      "name": "n0",
+      "type": "node",
+      "nodeType": "constant",
+      "position": { "x": 100, "y": 470 },
+      "parent": "plate_i",
+      "indices": "i"
+    },
+    {
+      "id": "node_n1",
+      "name": "n1",
+      "type": "node",
+      "nodeType": "constant",
+      "position": { "x": 550, "y": 470 },
+      "parent": "plate_i",
+      "indices": "i"
+    },
+    {
+      "id": "node_r0",
+      "name": "r0",
+      "type": "node",
+      "nodeType": "observed",
+      "position": { "x": 200, "y": 510 },
+      "parent": "plate_i",
+      "distribution": "dbin",
+      "indices": "i",
+      "observed": true,
+      "param1": "p0[i]",
+      "param2": "n0[i]"
+    },
+    {
+      "id": "node_r1",
+      "name": "r1",
+      "type": "node",
+      "nodeType": "observed",
+      "position": { "x": 450, "y": 510 },
+      "parent": "plate_i",
+      "distribution": "dbin",
+      "indices": "i",
+      "observed": true,
+      "param1": "p1[i]",
+      "param2": "n1[i]"
+    },
+    {
+      "id": "edge_alpha_logPsi",
+      "type": "edge",
+      "source": "node_alpha",
+      "target": "node_logPsi",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_beta1_logPsi",
+      "type": "edge",
+      "source": "node_beta1",
+      "target": "node_logPsi",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_beta2_logPsi",
+      "type": "edge",
+      "source": "node_beta2",
+      "target": "node_logPsi",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_year_logPsi",
+      "type": "edge",
+      "source": "node_year",
+      "target": "node_logPsi",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_b_logPsi",
+      "type": "edge",
+      "source": "node_b",
+      "target": "node_logPsi",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_tau_b",
+      "type": "edge",
+      "source": "node_tau",
+      "target": "node_b",
+      "relationshipType": "stochastic"
+    },
+    {
+      "id": "edge_tau_sigma",
+      "type": "edge",
+      "source": "node_tau",
+      "target": "node_sigma",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_mu_p0",
+      "type": "edge",
+      "source": "node_mu",
+      "target": "node_p0",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_mu_p1",
+      "type": "edge",
+      "source": "node_mu",
+      "target": "node_p1",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_logPsi_p1",
+      "type": "edge",
+      "source": "node_logPsi",
+      "target": "node_p1",
+      "relationshipType": "deterministic"
+    },
+    {
+      "id": "edge_p0_r0",
+      "type": "edge",
+      "source": "node_p0",
+      "target": "node_r0",
+      "relationshipType": "stochastic"
+    },
+    {
+      "id": "edge_n0_r0",
+      "type": "edge",
+      "source": "node_n0",
+      "target": "node_r0",
+      "relationshipType": "stochastic"
+    },
+    {
+      "id": "edge_p1_r1",
+      "type": "edge",
+      "source": "node_p1",
+      "target": "node_r1",
+      "relationshipType": "stochastic"
+    },
+    {
+      "id": "edge_n1_r1",
+      "type": "edge",
+      "source": "node_n1",
+      "target": "node_r1",
+      "relationshipType": "stochastic"
+    }
+  ],
+  "dataContent": "{\n  \"data\": {\n    \"r1\": [3, 5, 2, 7, 7, 2, 5, 3, 5, 11, 6, 6, 11, 4, 4, 2, 8, 8, 6, 5, 15, 4, 9, 9, 4, 12, 8, 8, 6, 8, 12, 4, 7, 16, 12, 9, 4, 7, 8, 11, 5, 12, 8, 17, 9, 3, 2, 7, 6, 5, 11, 14, 13, 8, 6, 4, 8, 4, 8, 7, 15, 15, 9, 9, 5, 6, 3, 9, 12, 14, 16, 17, 8, 8, 9, 5, 9, 11, 6, 14, 21, 16, 6, 9, 8, 9, 8, 4, 11, 11, 6, 9, 4, 4, 9, 9, 10, 14, 6, 3, 4, 6, 10, 4, 3, 3, 10, 4, 10, 5, 4, 3, 13, 1, 7, 5, 7, 6, 3, 7],\n    \"n1\": [28, 21, 32, 35, 35, 38, 30, 43, 49, 53, 31, 35, 46, 53, 61, 40, 29, 44, 52, 55, 61, 31, 48, 44, 42, 53, 56, 71, 43, 43, 43, 40, 44, 70, 75, 71, 37, 31, 42, 46, 47, 55, 63, 91, 43, 39, 35, 32, 53, 49, 75, 64, 69, 64, 49, 29, 40, 27, 48, 43, 61, 77, 55, 60, 46, 28, 33, 32, 46, 57, 56, 78, 58, 52, 31, 28, 46, 42, 45, 63, 71, 69, 43, 50, 31, 34, 54, 46, 58, 62, 52, 41, 34, 52, 63, 59, 88, 62, 47, 53, 57, 74, 68, 61, 45, 45, 62, 73, 53, 39, 45, 51, 55, 41, 53, 51, 42, 46, 54, 32],\n    \"r0\": [0, 2, 2, 1, 2, 0, 1, 1, 1, 2, 4, 4, 2, 1, 7, 4, 3, 5, 3, 2, 4, 1, 4, 5, 2, 7, 5, 8, 2, 3, 5, 4, 1, 6, 5, 11, 5, 2, 5, 8, 5, 6, 6, 10, 7, 5, 5, 2, 8, 1, 13, 9, 11, 9, 4, 4, 8, 6, 8, 6, 8, 14, 6, 5, 5, 2, 4, 2, 9, 5, 6, 7, 5, 10, 3, 2, 1, 7, 9, 13, 9, 11, 4, 8, 2, 3, 7, 4, 7, 5, 6, 6, 5, 6, 9, 7, 7, 7, 4, 2, 3, 4, 10, 3, 4, 2, 10, 5, 4, 5, 4, 6, 5, 3, 2, 2, 4, 6, 4, 1],\n    \"n0\": [28, 21, 32, 35, 35, 38, 30, 43, 49, 53, 31, 35, 46, 53, 61, 40, 29, 44, 52, 55, 61, 31, 48, 44, 42, 53, 56, 71, 43, 43, 43, 40, 44, 70, 75, 71, 37, 31, 42, 46, 47, 55, 63, 91, 43, 39, 35, 32, 53, 49, 75, 64, 69, 64, 49, 29, 40, 27, 48, 43, 61, 77, 55, 60, 46, 28, 33, 32, 46, 57, 56, 78, 58, 52, 31, 28, 46, 42, 45, 63, 71, 69, 43, 50, 31, 34, 54, 46, 58, 62, 52, 41, 34, 52, 63, 59, 88, 62, 47, 53, 57, 74, 68, 61, 45, 45, 62, 73, 53, 39, 45, 51, 55, 41, 53, 51, 42, 46, 54, 32],\n    \"year\": [-10, -9, -9, -8, -8, -8, -7, -7, -7, -7, -6, -6, -6, -6, -6, -5, -5, -5, -5, -5, -5, -4, -4, -4, -4, -4, -4, -4, -3, -3, -3, -3, -3, -3, -3, -3, -2, -2, -2, -2, -2, -2, -2, -2, -2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 9, 9, 10],\n    \"K\": 120\n  },\n  \"inits\": {\n    \"alpha\": 0,\n    \"beta1\": 0,\n    \"beta2\": 0,\n    \"tau\": 1\n  }\n}",
+  "version": 1,
+  "layout": {
+    "showCodePanel": false,
+    "codePanelWidth": 400,
+    "codePanelHeight": 300,
+    "showDataPanel": false,
+    "dataPanelX": 40,
+    "dataPanelY": 90,
+    "dataPanelWidth": 400,
+    "dataPanelHeight": 300
+  }
+}
