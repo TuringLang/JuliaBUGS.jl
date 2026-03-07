@@ -109,7 +109,7 @@
       "position": { "x": 200, "y": 390 },
       "parent": "plate_i",
       "indices": "i",
-      "equation": "logistic(mu[i])"
+      "equation": "ilogit(mu[i])"
     },
     {
       "id": "node_p1",
@@ -119,7 +119,7 @@
       "position": { "x": 450, "y": 390 },
       "parent": "plate_i",
       "indices": "i",
-      "equation": "logistic(mu[i] + logPsi[i])"
+      "equation": "ilogit(mu[i] + logPsi[i])"
     },
     {
       "id": "node_n0",
