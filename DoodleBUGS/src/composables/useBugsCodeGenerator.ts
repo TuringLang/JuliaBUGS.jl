@@ -276,61 +276,37 @@ ${String(modelCode)}
 
 # Compile the model
 model = JuliaBUGS.compile(model_def, data, inits)
-
-# Wrap the model for automatic differentiation with ReverseDiff
 ad_model = ADgradient(:ReverseDiff, model)
 ld_model = AbstractMCMC.LogDensityModel(ad_model)
 
-# Define sampling parameters
+# Sampling parameters
 n_samples, n_adapts = ${nSamples}, ${nAdapts}
 n_chains = ${nChains}
 seed = ${seedLiteral}
 
 seed_val = tryparse(Int, string(seed))
-rng = seed === nothing ? Random.MersenneTwister() : (seed_val === nothing ? Random.MersenneTwister() : Random.MersenneTwister(seed_val))
+rng = seed === nothing ? Random.default_rng() : (seed_val === nothing ? Random.default_rng() : Random.MersenneTwister(seed_val))
 
-D = LogDensityProblems.dimension(ad_model); initial_θ = rand(rng, D)
+initial_θ = try; JuliaBUGS.getparams(model); catch; zeros(LogDensityProblems.dimension(ad_model)); end
 
-# Sample the model using AbstractMCMC
+# Sample
 if n_chains > 1 && Threads.nthreads() > 1
     chain = AbstractMCMC.sample(
-        rng,
-        ld_model,
-        AdvancedHMC.NUTS(0.8),
-        AbstractMCMC.MCMCThreads(),
-        n_samples,
-        n_chains;
-        chain_type = Chains,
-        n_adapts = n_adapts,
-        init_params = initial_θ,
-        discard_initial = n_adapts,
-        progress = false,
+        rng, ld_model, NUTS(0.65), MCMCThreads(), n_samples, n_chains;
+        chain_type = Chains, n_adapts = n_adapts, init_params = initial_θ,
+        discard_initial = n_adapts, progress = false,
     )
 elseif n_chains > 1
     chain = AbstractMCMC.sample(
-        rng,
-        ld_model,
-        AdvancedHMC.NUTS(0.8),
-        AbstractMCMC.MCMCSerial(),
-        n_samples,
-        n_chains;
-        chain_type = Chains,
-        n_adapts = n_adapts,
-        init_params = initial_θ,
-        discard_initial = n_adapts,
-        progress = false,
+        rng, ld_model, NUTS(0.65), MCMCSerial(), n_samples, n_chains;
+        chain_type = Chains, n_adapts = n_adapts, init_params = initial_θ,
+        discard_initial = n_adapts, progress = false,
     )
 else
     chain = AbstractMCMC.sample(
-        rng,
-        ld_model,
-        AdvancedHMC.NUTS(0.8),
-        n_samples;
-        chain_type = Chains,
-        n_adapts = n_adapts,
-        init_params = initial_θ,
-        discard_initial = n_adapts,
-        progress = false,
+        rng, ld_model, NUTS(0.65), n_samples;
+        chain_type = Chains, n_adapts = n_adapts, init_params = initial_θ,
+        discard_initial = n_adapts, progress = false,
     )
 end
 

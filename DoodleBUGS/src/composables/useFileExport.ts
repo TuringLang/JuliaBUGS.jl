@@ -65,6 +65,7 @@ export function useFileExport(generatedCode: Ref<string>, stanCode?: Ref<string>
       modelCode: code,
       data,
       inits,
+      elements: graphStore.currentGraphElements,
       censoredFields,
       settings: {
         n_samples: scriptStore.samplerSettings.n_samples,
@@ -98,7 +99,7 @@ export function useFileExport(generatedCode: Ref<string>, stanCode?: Ref<string>
   const handleDownloadStanInits = () => {
     const { parsedGraphData } = dataStore
     const inits = parsedGraphData?.inits || {}
-    const json = generateStanInitsJson(inits)
+    const json = generateStanInitsJson(inits, graphStore.currentGraphElements)
     const blob = new Blob([json], { type: 'application/json' })
     downloadBlob(blob, 'inits.json')
   }

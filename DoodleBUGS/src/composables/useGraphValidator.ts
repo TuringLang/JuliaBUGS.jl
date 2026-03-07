@@ -30,6 +30,15 @@ const knownBugsFunctions = new Set([
   'probit',
   'cloglog',
   'phi',
+  'pow',
+  'loggam',
+  'logfact',
+  'icloglog',
+  'cexpexp',
+  'inprod',
+  'equals',
+  'mexp',
+  'softplus',
 ])
 
 // Helper to compare error maps

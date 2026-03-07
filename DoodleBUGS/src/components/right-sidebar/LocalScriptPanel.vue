@@ -506,9 +506,9 @@ const copyInitsJson = () => copyToClipboard(stanInitsJson.value, initsCopySucces
 }
 
 .db-ls-copy-btn {
-  position: absolute;
+  position: fixed;
   bottom: 5px;
-  right: 5px;
+  right: 12px;
   width: 36px;
   height: 36px;
   background-color: transparent;

@@ -109,8 +109,10 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
     stanName: 'weibull',
     stanParamNames: ['alpha', 'sigma'],
     transformParams: (params) => {
-      const [a, b] = params
-      return [a || '1', b ? `1.0 / ${b}` : '1']
+      const [v, lambda] = params
+      const shape = v || '1'
+      if (!lambda) return [shape, '1']
+      return [shape, `pow(${lambda}, -1.0 / ${shape})`]
     },
   },
   dchisqr: {
@@ -154,16 +156,92 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
   },
 }
 
+// Map of BUGS distributions → which parameter positions (0-based) require int type.
+// dbin(p, n): param index 1 (n) is int
+// dnegbin(p, r): param index 1 (r) is int
+const INT_PARAM_POSITIONS: Record<string, Set<number>> = {
+  dbin: new Set([1]),
+  dnegbin: new Set([1]),
+  dhyper: new Set([0, 1, 2]),
+}
+
+function findArrayIndexVarNames(nodes: GraphNode[], plates: GraphNode[]): Set<string> {
+  const loopVars = new Set<string>()
+  for (const p of plates) loopVars.add(p.loopVariable || 'i')
+  const knownNames = new Set<string>()
+  for (const n of nodes) {
+    if (n.nodeType !== 'plate') knownNames.add(n.name)
+  }
+
+  const indexVarNames = new Set<string>()
+  for (const node of nodes) {
+    if (node.nodeType === 'plate') continue
+    for (const val of [
+      node.equation,
+      node.param1,
+      node.param2,
+      node.param3,
+      node.censorLower,
+      node.censorUpper,
+    ]) {
+      if (!val) continue
+      const expr = String(val)
+      let depth = 0
+      let i = 0
+      while (i < expr.length) {
+        if (expr[i] === '[') {
+          depth++
+          if (depth >= 1) {
+            const start = i + 1
+            let j = start
+            while (j < expr.length && /[A-Za-z0-9_.]/.test(expr[j])) j++
+            if (j > start) {
+              const name = expr.substring(start, j)
+              if (!loopVars.has(name) && /^[A-Za-z_]/.test(name)) {
+                indexVarNames.add(name)
+              }
+            }
+          }
+          i++
+        } else if (expr[i] === ']') {
+          depth = Math.max(0, depth - 1)
+          i++
+        } else {
+          i++
+        }
+      }
+    }
+  }
+  return indexVarNames
+}
+
+function findIntegerConstants(nodes: GraphNode[]): Set<string> {
+  const intConstants = new Set<string>()
+  for (const node of nodes) {
+    const dist = node.distribution
+    if (!dist) continue
+    const intPositions = INT_PARAM_POSITIONS[dist]
+    if (!intPositions) continue
+    for (const pos of intPositions) {
+      const key = (['param1', 'param2', 'param3'] as const)[pos]
+      const raw = node[key] ? String(node[key]).trim() : ''
+      if (!raw) continue
+      const baseName = raw.replace(/\[.*$/, '')
+      if (/^[A-Za-z_][A-Za-z0-9_.]*$/.test(baseName)) {
+        intConstants.add(baseName)
+      }
+    }
+  }
+  return intConstants
+}
+
 function convertBugsName(name: string): string {
   return name.replace(/\./g, '_')
 }
 
 function convertExpression(expr: string): string {
   let result = expr.replace(/([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_])/g, '$1_$2')
-  result = result.replace(/\b(pow)\s*\(/g, '(')
-  if (/\bpow\b/.test(expr)) {
-    result = result.replace(/\bpow\(([^,]+),\s*([^)]+)\)/g, '($1) ^ ($2)')
-  }
+  result = result.replace(/\bpow\s*\(([^,]+),\s*([^)]+)\)/g, 'pow($1, $2)')
   result = result.replace(/\bloggam\b/g, 'lgamma')
   result = result.replace(/\blogfact\b/g, 'log_factorial')
   result = result.replace(/\bilogit\b/g, 'inv_logit')
@@ -189,6 +267,37 @@ interface NodeClassification {
   observedNodes: GraphNode[]
   constantNodes: GraphNode[]
   plates: GraphNode[]
+}
+
+interface PartialPlateParam {
+  stanName: string
+  fullSize: number
+  plateStart: number
+  freeSize: number
+}
+
+export function detectPartialPlateParams(elements: GraphElement[]): PartialPlateParam[] {
+  const nodes = elements.filter((el) => el.type === 'node') as GraphNode[]
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]))
+  const result: PartialPlateParam[] = []
+  for (const node of nodes) {
+    if (node.nodeType !== 'stochastic' || !node.parent) continue
+    const parentPlate = nodeMap.get(node.parent)
+    if (!parentPlate || parentPlate.nodeType !== 'plate') continue
+    const range = convertBugsName(parentPlate.loopRange || '1:N')
+    const parts = range.split(':')
+    if (parts.length !== 2) continue
+    const lower = parseInt(parts[0])
+    const upper = parseInt(parts[1])
+    if (isNaN(lower) || isNaN(upper) || lower <= 1) continue
+    result.push({
+      stanName: convertBugsName(node.name),
+      fullSize: upper,
+      plateStart: lower,
+      freeSize: upper - lower + 1,
+    })
+  }
+  return result
 }
 
 function classifyNodes(nodes: GraphNode[]): NodeClassification {
@@ -485,6 +594,96 @@ function findUndeclaredDataVars(
   }))
 }
 
+// Distributions that cannot be vectorized in Stan (multivariate / non-scalar support)
+const NON_VECTORIZABLE_DISTS = new Set(['dmnorm', 'dmt', 'dwish', 'ddirich', 'dmulti'])
+
+// Given a raw BUGS param string and the current plate's loop variable, attempt to strip
+// the loop-variable index so the expression works on the whole array.
+// Returns null if the param depends on the loop var in a non-strippable way.
+function stripLoopVarFromParam(
+  raw: string,
+  plateVar: string,
+  nameToNode: Map<string, GraphNode>
+): string | null {
+  const p = raw.trim()
+
+  // Numeric literal — safe to broadcast
+  if (/^[+-]?(?:\d+\.?\d*|\d*\.\d+)(?:[eE][+-]?\d+)?$/.test(p)) return p
+
+  // name[exactly plateVar] → name (strip the index)
+  const singleIdxRe = /^([A-Za-z_][A-Za-z0-9_.]*)\[([^\]]+)\]$/
+  const m = singleIdxRe.exec(p)
+  if (m) {
+    const idx = m[2].trim()
+    if (idx === plateVar) return convertBugsName(m[1])
+    // Any other subscript (multi-index, different var) → can't vectorize
+    return null
+  }
+
+  // If the loop variable appears bare anywhere in the expression, can't vectorize
+  const bareVarRe = new RegExp(`\\b${plateVar}\\b`)
+  if (bareVarRe.test(p)) return null
+
+  // Expression with operators/functions but no loop var → convert and keep as-is
+  if (/[()/*+\-]/.test(p)) return convertExpression(p)
+
+  // Simple dotted identifier — look up to confirm it's not a multi-dim node
+  if (/^[A-Za-z_][A-Za-z0-9_.]*$/.test(p)) {
+    const ref = nameToNode.get(p)
+    if (ref?.indices) {
+      const refParts = ref.indices.split(',').map((s) => s.trim())
+      // If this node has >1 index dimension it can't be broadcast safely
+      if (refParts.length > 1) return null
+    }
+    return convertBugsName(p)
+  }
+
+  return null
+}
+
+// Try to produce a vectorized sampling statement for a node inside a single plate.
+// Returns the statement string (no trailing newline) or null if vectorization is not safe.
+function tryVectorizeNode(
+  node: GraphNode,
+  plateVar: string,
+  indent: string,
+  nameToNode: Map<string, GraphNode>
+): string | null {
+  // Can't vectorize censored or hybrid (equation) nodes
+  if (node.censorLower || node.censorUpper) return null
+  if (node.equation) return null
+
+  const dist = node.distribution
+  if (!dist || NON_VECTORIZABLE_DISTS.has(dist)) return null
+
+  // Node must be indexed by exactly this single loop variable
+  const idxParts = (node.indices || '').trim()
+    ? (node.indices || '').split(',').map((s) => s.trim())
+    : []
+  if (idxParts.length !== 1 || idxParts[0] !== plateVar) return null
+
+  const stanName = convertBugsName(node.name)
+  const rawParams = (['param1', 'param2', 'param3'] as const)
+    .map((k) => node[k])
+    .filter((v) => v && String(v).trim() !== '')
+    .map((v) => String(v!).trim())
+
+  const strippedParams: string[] = []
+  for (const raw of rawParams) {
+    const stripped = stripLoopVarFromParam(raw, plateVar, nameToNode)
+    if (stripped === null) return null
+    strippedParams.push(stripped)
+  }
+
+  const mapping = DISTRIBUTION_MAP[dist]
+  const stanDist = mapping?.stanName ?? dist
+  const stanParams = mapping
+    ? mapping.transformParams(strippedParams, node).join(', ')
+    : strippedParams.join(', ')
+
+  return `${indent}${stanName} ~ ${stanDist}(${stanParams});`
+}
+
 export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
   const generatedStanCode = computed(() => {
     const nodes = elements.value.filter((el: GraphElement) => el.type === 'node') as GraphNode[]
@@ -524,13 +723,21 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
       dataDeclarations.push(`  int<lower=1> ${v};`)
     }
 
+    const intConstantNames = findIntegerConstants(nodes)
+    const arrayIndexVarNames = findArrayIndexVarNames(nodes, plates)
+
     for (const node of constantNodes.sort(sortByTopo)) {
       const stanName = convertBugsName(node.name)
       const dims = getArrayDimsFromNode(node, nodeMap, plates)
+      const isInt =
+        intConstantNames.has(node.name) ||
+        arrayIndexVarNames.has(node.name) ||
+        arrayIndexVarNames.has(stanName)
+      const baseType = isInt ? 'int' : 'real'
       if (dims.length > 0) {
-        dataDeclarations.push(`  array[${dims.join(', ')}] real ${stanName};`)
+        dataDeclarations.push(`  array[${dims.join(', ')}] ${baseType} ${stanName};`)
       } else {
-        dataDeclarations.push(`  real ${stanName};`)
+        dataDeclarations.push(`  ${baseType} ${stanName};`)
       }
     }
 
@@ -563,18 +770,43 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
     )
     for (const { stanName, dims } of findUndeclaredDataVars(nodes, plates, plateSizeVars)) {
       if (alreadyDeclared.has(stanName)) continue
+      const bugsName = stanName.replace(/_/g, '.')
+      const isInt =
+        intConstantNames.has(bugsName) ||
+        intConstantNames.has(stanName) ||
+        arrayIndexVarNames.has(bugsName) ||
+        arrayIndexVarNames.has(stanName)
+      const baseType = isInt ? 'int' : 'real'
       if (dims.length > 0) {
-        dataDeclarations.push(`  array[${dims.join(', ')}] real ${stanName};`)
+        dataDeclarations.push(`  array[${dims.join(', ')}] ${baseType} ${stanName};`)
       } else {
-        dataDeclarations.push(`  real ${stanName};`)
+        dataDeclarations.push(`  ${baseType} ${stanName};`)
       }
       alreadyDeclared.add(stanName)
     }
+
+    const partialPlateParams = detectPartialPlateParams(elements.value)
+    const partialPlateMap = new Map(partialPlateParams.map((p) => [p.stanName, p]))
 
     for (const node of stochasticParams.sort(sortByTopo)) {
       const stanName = convertBugsName(node.name)
       const dims = getArrayDimsFromNode(node, nodeMap, plates)
       const bounds = needsBoundsFromDistribution(node.distribution)
+      const ppInfo = partialPlateMap.get(stanName)
+
+      if (ppInfo) {
+        parameterDeclarations.push(`  array[${ppInfo.freeSize}] real${bounds} ${stanName}_free;`)
+        transformedParamLines.push(`  array[${ppInfo.fullSize}] real ${stanName};`)
+        for (let i = 1; i < ppInfo.plateStart; i++) {
+          transformedParamLines.push(`  ${stanName}[${i}] = 0;`)
+        }
+        for (let i = ppInfo.plateStart; i <= ppInfo.fullSize; i++) {
+          transformedParamLines.push(
+            `  ${stanName}[${i}] = ${stanName}_free[${i - ppInfo.plateStart + 1}];`
+          )
+        }
+        continue
+      }
 
       const dist = node.distribution
       let baseType = 'real'
@@ -633,17 +865,54 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
           const rangeParts = plateRange.split(':')
           const lower = rangeParts[0] || '1'
           const upper = rangeParts.length === 2 ? rangeParts[1] : plateRange
-          lines.push(`${indent}for (${plateVar} in ${lower}:${upper}) {`)
           const children = plateChildren.get(node.id) || []
-          const plateNodes = children.filter((c) => {
-            if (blockType === 'transformed') return c.nodeType === 'deterministic'
-            return c.nodeType === 'stochastic' || c.nodeType === 'observed'
-          })
           const nestedPlates = plates.filter((p) => p.parent === node.id)
-          lines.push(
-            ...generateBlockStatements([...plateNodes, ...nestedPlates], indent + '  ', blockType)
-          )
-          lines.push(`${indent}}`)
+
+          if (blockType === 'model') {
+            const canVectorize = lower === '1'
+            const plateNodes = children
+              .filter((c) => c.nodeType === 'stochastic' || c.nodeType === 'observed')
+              .sort(sortByTopo)
+
+            const vectorizedLines: string[] = []
+            const loopNodes: GraphNode[] = []
+            for (const child of plateNodes) {
+              const vLine = canVectorize
+                ? tryVectorizeNode(child, plateVar, indent, nameToNode)
+                : null
+              if (vLine !== null) {
+                vectorizedLines.push(vLine)
+              } else {
+                loopNodes.push(child)
+              }
+            }
+
+            lines.push(...vectorizedLines)
+
+            if (loopNodes.length > 0 || nestedPlates.length > 0) {
+              lines.push(`${indent}for (${plateVar} in ${lower}:${upper}) {`)
+              lines.push(
+                ...generateBlockStatements(
+                  [...loopNodes, ...nestedPlates],
+                  indent + '  ',
+                  blockType
+                )
+              )
+              lines.push(`${indent}}`)
+            }
+          } else {
+            const plateNodes = children.filter((c) => c.nodeType === 'deterministic')
+            const innerLines = generateBlockStatements(
+              [...plateNodes, ...nestedPlates],
+              indent + '  ',
+              blockType
+            )
+            if (innerLines.length > 0) {
+              lines.push(`${indent}for (${plateVar} in ${lower}:${upper}) {`)
+              lines.push(...innerLines)
+              lines.push(`${indent}}`)
+            }
+          }
           continue
         }
 
@@ -739,6 +1008,32 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
   return { generatedStanCode }
 }
 
+function replaceNullsWithZero(val: unknown): unknown {
+  if (val === null || val === undefined) return 0
+  if (Array.isArray(val)) return val.map(replaceNullsWithZero)
+  if (typeof val === 'object') {
+    const result: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      result[k] = replaceNullsWithZero(v)
+    }
+    return result
+  }
+  return val
+}
+
+function stripNullsFromInits(val: unknown): unknown {
+  if (val === null || val === undefined) return 0
+  if (Array.isArray(val)) return val.map(stripNullsFromInits)
+  if (typeof val === 'object' && val !== null) {
+    const result: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      result[k] = stripNullsFromInits(v)
+    }
+    return result
+  }
+  return val
+}
+
 function convertDataKeys(obj: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {}
   for (const [key, val] of Object.entries(obj)) {
@@ -789,11 +1084,27 @@ export function generateStanDataJson(
     }
   }
 
-  return JSON.stringify(converted, null, 2)
+  return JSON.stringify(replaceNullsWithZero(converted), null, 2)
 }
 
-export function generateStanInitsJson(inits: Record<string, unknown>): string {
-  return JSON.stringify(convertDataKeys(inits), null, 2)
+export function generateStanInitsJson(
+  inits: Record<string, unknown>,
+  elements?: GraphElement[]
+): string {
+  const converted = convertDataKeys(inits)
+  if (elements) {
+    const ppParams = detectPartialPlateParams(elements)
+    for (const pp of ppParams) {
+      if (pp.stanName in converted) {
+        const arr = converted[pp.stanName]
+        if (Array.isArray(arr)) {
+          converted[`${pp.stanName}_free`] = arr.slice(pp.plateStart - 1)
+        }
+        delete converted[pp.stanName]
+      }
+    }
+  }
+  return JSON.stringify(stripNullsFromInits(converted), null, 2)
 }
 
 export function extractCensoredFields(
@@ -817,6 +1128,7 @@ export interface StanScriptInput {
   modelCode: string
   data: Record<string, unknown>
   inits: Record<string, unknown>
+  elements?: GraphElement[]
   censoredFields?: { varName: string; censorBoundName: string }[]
   settings: {
     n_samples: number
@@ -827,10 +1139,10 @@ export interface StanScriptInput {
 }
 
 export function generateStanStandaloneScript(input: StanScriptInput): string {
-  const { modelCode, data, inits, censoredFields, settings } = input
+  const { modelCode, data, inits, elements, censoredFields, settings } = input
 
   const dataJson = generateStanDataJson(data, censoredFields)
-  const initsJson = generateStanInitsJson(inits)
+  const initsJson = generateStanInitsJson(inits, elements)
 
   const nSamples = settings?.n_samples ?? 1000
   const nWarmup = settings?.n_adapts ?? 1000
