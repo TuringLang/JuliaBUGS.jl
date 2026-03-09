@@ -272,7 +272,6 @@ data = ${dataLiteral}
 
 inits = ${initsLiteral}
 ${censoringPrimitive}
-# Model definition (replace_period=true converts dots to underscores, matching data keys)
 model_def = JuliaBUGS.@bugs("""
 ${String(modelCode)}
 """, true, false)
