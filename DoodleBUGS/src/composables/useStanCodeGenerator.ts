@@ -301,9 +301,18 @@ function classifyDeterministicBlocks(
     if (isDataOnly.has(nodeId)) return isDataOnly.get(nodeId)!
     const node = nodeMap.get(nodeId)
     if (!node) return false
-    if (dataNodeIds.has(nodeId)) { isDataOnly.set(nodeId, true); return true }
-    if (node.nodeType === 'stochastic') { isDataOnly.set(nodeId, false); return false }
-    if (node.nodeType !== 'deterministic') { isDataOnly.set(nodeId, false); return false }
+    if (dataNodeIds.has(nodeId)) {
+      isDataOnly.set(nodeId, true)
+      return true
+    }
+    if (node.nodeType === 'stochastic') {
+      isDataOnly.set(nodeId, false)
+      return false
+    }
+    if (node.nodeType !== 'deterministic') {
+      isDataOnly.set(nodeId, false)
+      return false
+    }
     isDataOnly.set(nodeId, false)
     const parents = inEdges.get(nodeId) || []
     const result = parents.every((pid) => checkDataOnly(pid))
@@ -898,10 +907,18 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
       }
     }
 
-    const { transformedData, transformedParams: tpDetNodes, generatedQuantities: gqDetNodes } =
-      classifyDeterministicBlocks(
-        deterministicNodes, constantNodes, observedNodes, stochasticParams, edges, nodeMap
-      )
+    const {
+      transformedData,
+      transformedParams: tpDetNodes,
+      generatedQuantities: gqDetNodes,
+    } = classifyDeterministicBlocks(
+      deterministicNodes,
+      constantNodes,
+      observedNodes,
+      stochasticParams,
+      edges,
+      nodeMap
+    )
 
     const transformedDataDeclLines: string[] = []
     const transformedDataIds = new Set(transformedData.map((n) => n.id))
