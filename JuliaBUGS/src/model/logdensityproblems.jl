@@ -18,7 +18,8 @@ function LogDensityProblems.logdensity(model::BUGSModel, x::AbstractArray)
     try
         return _eval_logdensity(model, model.evaluation_mode, x)
     catch e
-        e isa DomainError && return oftype(float(eltype(x))(0), -Inf)
+        T = float(eltype(x))
+        e isa DomainError && return T(-Inf)
         rethrow(e)
     end
 end
@@ -171,7 +172,7 @@ function LogDensityProblems.logdensity_and_gradient(
     catch e
         if e isa DomainError
             T = float(eltype(x))
-            return (oftype(T(0), -Inf), fill(oftype(T(0), NaN), length(x)))
+            return (T(-Inf), fill(T(NaN), length(x)))
         end
         rethrow(e)
     end
