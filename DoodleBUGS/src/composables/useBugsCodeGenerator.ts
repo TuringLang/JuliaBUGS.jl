@@ -225,7 +225,10 @@ function buildNamedTupleLiteral(obj: Record<string, unknown>): string {
   const entries = Object.entries(obj).map(
     ([k, val]) => `  ${juliaFieldLiteral(k)} = ${formatValue(val)}`
   )
-  return entries.length ? `(\n${entries.join(',\n')}\n)` : '()'
+  if (!entries.length) return '()'
+  const body = entries.join(',\n')
+  const trailingComma = entries.length === 1 ? ',' : ''
+  return `(\n${body}${trailingComma}\n)`
 }
 
 // Standalone script generator: builds a Julia script matching the backend's standalone template

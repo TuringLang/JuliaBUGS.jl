@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import type { Ref } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { useGraphStore } from '../stores/graphStore'
@@ -165,6 +165,20 @@ export function useFileExport(generatedCode: Ref<string>, stanCode?: Ref<string>
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
     downloadBlob(blob, `${graphMeta.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`)
   }
+
+  if (stanCode) {
+    watch(stanCode, () => {
+      if (scriptStore.standaloneStanScript) {
+        scriptStore.standaloneStanScript = getStanScriptContent()
+      }
+    })
+  }
+
+  watch(generatedCode, () => {
+    if (scriptStore.standaloneScript) {
+      scriptStore.standaloneScript = getScriptContent()
+    }
+  })
 
   return {
     showExportModal,

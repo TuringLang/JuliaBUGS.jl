@@ -246,14 +246,14 @@ function convertExpression(expr: string): string {
   result = result.replace(/\blogfact\b/g, 'log_factorial')
   result = result.replace(/\bilogit\b/g, 'inv_logit')
   result = result.replace(/\blogistic\b/g, 'inv_logit')
-  result = result.replace(/\bphi\b/g, 'Phi')
-  result = result.replace(/\bprobit\b/g, 'inv_Phi')
-  result = result.replace(/\bcloglog\b/g, 'log(-log(1 - ')
-  result = result.replace(/\bicloglog\b/g, '1 - exp(-exp(')
-  result = result.replace(/\bcexpexp\b/g, '1 - exp(-exp(')
+  result = result.replace(/\bphi\s*\(/g, 'Phi(')
+  result = result.replace(/\bprobit\s*\(/g, 'inv_Phi(')
+  result = result.replace(/\bcloglog\s*\(([^)]+)\)/g, 'log(-log(1 - $1))')
+  result = result.replace(/\bicloglog\s*\(([^)]+)\)/g, '1 - exp(-exp($1))')
+  result = result.replace(/\bcexpexp\s*\(([^)]+)\)/g, '1 - exp(-exp($1))')
   result = result.replace(/\binprod\b/g, 'dot_product')
-  result = result.replace(/\bstep\b/g, '(x > 0 ? 1 : 0)')
-  result = result.replace(/\b_step\b/g, '(x > 0 ? 1 : 0)')
+  result = result.replace(/\bstep\s*\(([^)]+)\)/g, '($1 >= 0 ? 1 : 0)')
+  result = result.replace(/\b_step\s*\(([^)]+)\)/g, '($1 >= 0 ? 1 : 0)')
   result = result.replace(/\bequals\(([^,]+),\s*([^)]+)\)/g, '($1 == $2 ? 1 : 0)')
   result = result.replace(/\blogdet\b/g, 'log_determinant')
   result = result.replace(/\bmexp\b/g, 'matrix_exp')
@@ -267,6 +267,78 @@ interface NodeClassification {
   observedNodes: GraphNode[]
   constantNodes: GraphNode[]
   plates: GraphNode[]
+}
+
+interface DeterministicClassification {
+  transformedData: GraphNode[]
+  transformedParams: GraphNode[]
+  generatedQuantities: GraphNode[]
+}
+
+function classifyDeterministicBlocks(
+  deterministicNodes: GraphNode[],
+  constantNodes: GraphNode[],
+  observedNodes: GraphNode[],
+  stochasticParams: GraphNode[],
+  edges: GraphEdge[],
+  nodeMap: Map<string, GraphNode>
+): DeterministicClassification {
+  const dataNodeIds = new Set<string>()
+  for (const n of constantNodes) dataNodeIds.add(n.id)
+  for (const n of observedNodes) dataNodeIds.add(n.id)
+
+  const outEdges = new Map<string, string[]>()
+  const inEdges = new Map<string, string[]>()
+  for (const e of edges) {
+    if (!outEdges.has(e.source)) outEdges.set(e.source, [])
+    outEdges.get(e.source)!.push(e.target)
+    if (!inEdges.has(e.target)) inEdges.set(e.target, [])
+    inEdges.get(e.target)!.push(e.source)
+  }
+
+  const isDataOnly = new Map<string, boolean>()
+  function checkDataOnly(nodeId: string): boolean {
+    if (isDataOnly.has(nodeId)) return isDataOnly.get(nodeId)!
+    const node = nodeMap.get(nodeId)
+    if (!node) return false
+    if (dataNodeIds.has(nodeId)) { isDataOnly.set(nodeId, true); return true }
+    if (node.nodeType === 'stochastic') { isDataOnly.set(nodeId, false); return false }
+    if (node.nodeType !== 'deterministic') { isDataOnly.set(nodeId, false); return false }
+    isDataOnly.set(nodeId, false)
+    const parents = inEdges.get(nodeId) || []
+    const result = parents.every((pid) => checkDataOnly(pid))
+    isDataOnly.set(nodeId, result)
+    return result
+  }
+
+  const reachesModel = new Set<string>()
+  const modelNodeIds = new Set<string>()
+  for (const n of stochasticParams) modelNodeIds.add(n.id)
+  for (const n of observedNodes) modelNodeIds.add(n.id)
+
+  function markReachesModel(nodeId: string) {
+    if (reachesModel.has(nodeId)) return
+    reachesModel.add(nodeId)
+    const parents = inEdges.get(nodeId) || []
+    for (const pid of parents) markReachesModel(pid)
+  }
+  for (const mid of modelNodeIds) markReachesModel(mid)
+
+  const transformedData: GraphNode[] = []
+  const transformedParams: GraphNode[] = []
+  const generatedQuantities: GraphNode[] = []
+
+  for (const node of deterministicNodes) {
+    if (checkDataOnly(node.id)) {
+      transformedData.push(node)
+    } else if (reachesModel.has(node.id)) {
+      transformedParams.push(node)
+    } else {
+      generatedQuantities.push(node)
+    }
+  }
+
+  return { transformedData, transformedParams, generatedQuantities }
 }
 
 interface PartialPlateParam {
@@ -826,14 +898,51 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
       }
     }
 
-    const deterministic = deterministicNodes.sort(sortByTopo)
-    for (const node of deterministic) {
+    const { transformedData, transformedParams: tpDetNodes, generatedQuantities: gqDetNodes } =
+      classifyDeterministicBlocks(
+        deterministicNodes, constantNodes, observedNodes, stochasticParams, edges, nodeMap
+      )
+
+    const transformedDataDeclLines: string[] = []
+    const transformedDataIds = new Set(transformedData.map((n) => n.id))
+    const gqIds = new Set(gqDetNodes.map((n) => n.id))
+    const intTransformedDataIds = new Set<string>()
+
+    for (const node of transformedData.sort(sortByTopo)) {
+      const stanName = convertBugsName(node.name)
+      const dims = getArrayDimsFromNode(node, nodeMap, plates)
+      const baseName = node.name.replace(/\[.*$/, '')
+      const stanBaseName = convertBugsName(baseName)
+      const isIndex = arrayIndexVarNames.has(baseName) || arrayIndexVarNames.has(stanBaseName)
+      const baseType = isIndex ? 'int' : 'real'
+      if (isIndex) {
+        intTransformedDataIds.add(node.id)
+      }
+      if (dims.length > 0) {
+        transformedDataDeclLines.push(`  array[${dims.join(', ')}] ${baseType} ${stanName};`)
+      } else {
+        transformedDataDeclLines.push(`  ${baseType} ${stanName};`)
+      }
+    }
+
+    for (const node of tpDetNodes.sort(sortByTopo)) {
       const stanName = convertBugsName(node.name)
       const dims = getArrayDimsFromNode(node, nodeMap, plates)
       if (dims.length > 0) {
         transformedParamLines.push(`  array[${dims.join(', ')}] real ${stanName};`)
       } else {
         transformedParamLines.push(`  real ${stanName};`)
+      }
+    }
+
+    const gqDeclLines: string[] = []
+    for (const node of gqDetNodes.sort(sortByTopo)) {
+      const stanName = convertBugsName(node.name)
+      const dims = getArrayDimsFromNode(node, nodeMap, plates)
+      if (dims.length > 0) {
+        gqDeclLines.push(`  array[${dims.join(', ')}] real ${stanName};`)
+      } else {
+        gqDeclLines.push(`  real ${stanName};`)
       }
     }
 
@@ -853,7 +962,8 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
     const generateBlockStatements = (
       nodesToProcess: GraphNode[],
       indent: string,
-      blockType: 'transformed' | 'model'
+      blockType: 'transformed' | 'model',
+      detFilter?: Set<string>
     ): string[] => {
       const lines: string[] = []
       const sorted = [...nodesToProcess].sort(sortByTopo)
@@ -895,17 +1005,21 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
                 ...generateBlockStatements(
                   [...loopNodes, ...nestedPlates],
                   indent + '  ',
-                  blockType
+                  blockType,
+                  detFilter
                 )
               )
               lines.push(`${indent}}`)
             }
           } else {
-            const plateNodes = children.filter((c) => c.nodeType === 'deterministic')
+            const plateNodes = children.filter(
+              (c) => c.nodeType === 'deterministic' && (!detFilter || detFilter.has(c.id))
+            )
             const innerLines = generateBlockStatements(
               [...plateNodes, ...nestedPlates],
               indent + '  ',
-              blockType
+              blockType,
+              detFilter
             )
             if (innerLines.length > 0) {
               lines.push(`${indent}for (${plateVar} in ${lower}:${upper}) {`)
@@ -920,8 +1034,12 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
         const idx = node.indices ? `[${node.indices}]` : ''
 
         if (blockType === 'transformed' && node.nodeType === 'deterministic') {
+          if (detFilter && !detFilter.has(node.id)) continue
           if (node.equation) {
-            const expr = convertExpression(node.equation)
+            let expr = convertExpression(node.equation)
+            if (intTransformedDataIds.has(node.id)) {
+              expr = `to_int(round(${expr}))`
+            }
             lines.push(`${indent}${stanName}${idx} = ${expr};`)
           }
         }
@@ -966,10 +1084,19 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
     )
     const rootPlates = plates.filter((p) => !p.parent)
 
+    const tdStatements = generateBlockStatements(
+      [...rootDeterministic, ...rootPlates],
+      '  ',
+      'transformed',
+      transformedDataIds
+    )
+
+    const tpNodeIds = new Set(tpDetNodes.map((n) => n.id))
     const tpStatements = generateBlockStatements(
       [...rootDeterministic, ...rootPlates],
       '  ',
-      'transformed'
+      'transformed',
+      tpNodeIds
     )
 
     const modelStatements = generateBlockStatements(
@@ -978,24 +1105,46 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
       'model'
     )
 
+    const gqStatements = generateBlockStatements(
+      [...rootDeterministic, ...rootPlates],
+      '  ',
+      'transformed',
+      gqIds
+    )
+
     const sections: string[] = []
 
     if (dataDeclarations.length > 0) {
       sections.push(`data {\n${dataDeclarations.join('\n')}\n}`)
     }
 
+    if (tdStatements.length > 0) {
+      const tdDeclBlock =
+        transformedDataDeclLines.length > 0 ? transformedDataDeclLines.join('\n') + '\n' : ''
+      sections.push(`transformed data {\n${tdDeclBlock}${tdStatements.join('\n')}\n}`)
+    }
+
     if (parameterDeclarations.length > 0) {
       sections.push(`parameters {\n${parameterDeclarations.join('\n')}\n}`)
     }
 
-    if (tpStatements.length > 0) {
+    if (tpStatements.length > 0 || transformedParamLines.length > 0) {
       const tpDeclBlock =
         transformedParamLines.length > 0 ? transformedParamLines.join('\n') + '\n' : ''
-      sections.push(`transformed parameters {\n${tpDeclBlock}${tpStatements.join('\n')}\n}`)
+      const tpBody = tpStatements.length > 0 ? tpStatements.join('\n') : ''
+      const content = tpDeclBlock + tpBody
+      if (content.trim()) {
+        sections.push(`transformed parameters {\n${content}\n}`)
+      }
     }
 
     if (modelStatements.length > 0) {
       sections.push(`model {\n${modelStatements.join('\n')}\n}`)
+    }
+
+    if (gqStatements.length > 0) {
+      const gqDeclBlock = gqDeclLines.length > 0 ? gqDeclLines.join('\n') + '\n' : ''
+      sections.push(`generated quantities {\n${gqDeclBlock}${gqStatements.join('\n')}\n}`)
     }
 
     if (sections.length === 0) {
