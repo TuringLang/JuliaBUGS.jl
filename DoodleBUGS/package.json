@@ -15,7 +15,8 @@
     "lint": "eslint . --ext .vue,.ts,.mts,.tsx",
     "lint:fix": "eslint . --ext .vue,.ts,.mts,.tsx --fix",
     "format": "prettier --write \"**/*.{ts,mts,tsx,vue,json,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,mts,tsx,vue,json,md}\""
+    "format:check": "prettier --check \"**/*.{ts,mts,tsx,vue,json,md}\"",
+    "validate": "npm run typecheck && npm run lint && npm run format:check"
   },
   "dependencies": {
     "@primevue/themes": "^4.4.1",

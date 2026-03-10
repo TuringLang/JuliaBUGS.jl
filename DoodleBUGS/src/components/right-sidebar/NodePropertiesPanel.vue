@@ -214,6 +214,38 @@ const getErrorForField = (fieldKey: string): string | undefined => {
             />
           </div>
         </template>
+
+        <template v-if="currentDistribution && currentDefinition.censoring">
+          <div class="db-censoring-section">
+            <label class="db-section-label">Censoring C(lower, upper):</label>
+            <div
+              v-for="censorProp in currentDefinition.censoring"
+              :key="censorProp.key"
+              class="db-form-group"
+            >
+              <label :for="`censor-${censorProp.key}`">{{ censorProp.label }}:</label>
+              <BaseInput
+                :id="`censor-${censorProp.key}`"
+                type="text"
+                :model-value="
+                  (localElement as GraphNode)[censorProp.key] != null
+                    ? String((localElement as GraphNode)[censorProp.key])
+                    : ''
+                "
+                @update:model-value="
+                  (value) => {
+                    ;(localElement as GraphNode)[censorProp.key] = value || null
+                    handleUpdate()
+                  }
+                "
+                :placeholder="censorProp.placeholder"
+              />
+              <small v-if="censorProp.helpText" class="db-help-text">{{
+                censorProp.helpText
+              }}</small>
+            </div>
+          </div>
+        </template>
       </template>
 
       <template v-else-if="isEdge">
@@ -362,6 +394,20 @@ h4 {
   background-color: var(--color-background-mute);
   padding: 4px 6px;
   border-radius: 3px;
+}
+
+.db-censoring-section {
+  border-top: 1px dashed var(--color-border-light);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+.db-section-label {
+  font-weight: 600;
+  font-size: 0.85em;
+  color: var(--color-text);
+  margin-bottom: 4px;
+  display: block;
 }
 
 .db-error-message {

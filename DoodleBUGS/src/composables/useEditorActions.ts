@@ -21,7 +21,8 @@ const NODE_FOCUS_DURATION = 500
 export function useEditorActions(
   elements: Ref<GraphElement[]>,
   generatedCode: Ref<string>,
-  persistencePrefix?: string
+  persistencePrefix?: string,
+  stanCode?: Ref<string>
 ) {
   const projectStore = useProjectStore()
   const graphStore = useGraphStore()
@@ -46,12 +47,18 @@ export function useEditorActions(
     showExportModal,
     currentExportType,
     getScriptContent,
+    getStanScriptContent,
     handleDownloadBugs,
+    handleDownloadStan,
     handleDownloadScript,
+    handleGenerateStanScript,
+    handleDownloadStanScript,
+    handleDownloadStanData,
+    handleDownloadStanInits,
     openExportModal,
     handleConfirmExport,
     handleExportJson,
-  } = useFileExport(generatedCode)
+  } = useFileExport(generatedCode, stanCode)
 
   const { shareUrl, minifyGraph, generateShareLink } = useShareExport()
   const { importedGraphData, processGraphFile, clearImportedData } = useImportExport()
@@ -279,6 +286,7 @@ export function useEditorActions(
 
   const handleGenerateStandalone = () => {
     scriptStore.standaloneScript = getScriptContent()
+    scriptStore.standaloneStanScript = getStanScriptContent()
     uiStore.setActiveRightTab('script')
     uiStore.isRightSidebarOpen = true
   }
@@ -481,7 +489,12 @@ export function useEditorActions(
     getScriptContent,
     handleGenerateStandalone,
     handleDownloadBugs,
+    handleDownloadStan,
     handleDownloadScript,
+    handleGenerateStanScript,
+    handleDownloadStanScript,
+    handleDownloadStanData,
+    handleDownloadStanInits,
     openExportModal,
     handleConfirmExport,
     handleExportJson,
