@@ -132,8 +132,8 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
     stanName: 'pareto',
     stanParamNames: ['y_min', 'alpha'],
     transformParams: (params) => {
-      const [a, b] = params
-      return [a || '1', b || '1']
+      const [alpha, c] = params
+      return [c || '1', alpha || '1']
     },
   },
   ddexp: {
@@ -147,13 +147,12 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
   dlogis: {
     stanName: 'logistic',
     stanParamNames: ['mu', 's'],
-    transformParams: (params) => [params[0] || '0', params[1] || '1'],
+    transformParams: (params) => {
+      const [mu, tau] = params
+      return [mu || '0', tau ? `1.0 / ${tau}` : '1']
+    },
   },
-  df: {
-    stanName: 'inv_gamma',
-    stanParamNames: ['alpha', 'beta'],
-    transformParams: (params) => [params[0] || '1', params[1] || '1'],
-  },
+
 }
 
 // Map of BUGS distributions → which parameter positions (0-based) require int type.
@@ -466,6 +465,13 @@ function getArrayDimsFromNode(
   })
 }
 
+function inferMultivariateDim(node: GraphNode): string {
+  const param1 = node.param1 ? String(node.param1).trim() : ''
+  const dimMatch = param1.match(/\[1:(\w+)\]/) || param1.match(/\[(\d+)\]/)
+  if (dimMatch) return dimMatch[1]
+  return 'K'
+}
+
 function inferStanType(
   node: GraphNode,
   nodeMap: Map<string, GraphNode>,
@@ -488,17 +494,21 @@ function inferStanType(
     baseType = 'int'
   }
 
-  if (dist === 'dmnorm' || dist === 'dmt') baseType = 'vector[K]'
-  if (dist === 'dwish') baseType = 'matrix[K, K]'
-  if (dist === 'ddirich') baseType = 'simplex[K]'
-  if (dist === 'dmulti') baseType = 'array[] int'
+  const mvDim = inferMultivariateDim(node)
+  if (dist === 'dmnorm' || dist === 'dmt') baseType = `vector[${mvDim}]`
+  if (dist === 'dwish') baseType = `matrix[${mvDim}, ${mvDim}]`
+  if (dist === 'ddirich') baseType = `simplex[${mvDim}]`
+  if (dist === 'dmulti') baseType = `array[${mvDim}] int`
 
-  if (
-    dims.length > 0 &&
-    !baseType.startsWith('vector') &&
-    !baseType.startsWith('matrix') &&
-    !baseType.startsWith('simplex')
-  ) {
+  if (dims.length > 0) {
+    if (
+      baseType.startsWith('vector') ||
+      baseType.startsWith('matrix') ||
+      baseType.startsWith('simplex') ||
+      (dist === 'dmulti')
+    ) {
+      return `array[${dims.join(', ')}] ${baseType}`
+    }
     return `array[${dims.join(', ')}] ${baseType}`
   }
 
@@ -514,8 +524,9 @@ function formatStanDistribution(
 
   const mapping = DISTRIBUTION_MAP[dist]
   if (!mapping) {
+    if (dist === 'dflat') return null
     const rawParams = collectRawParams(node, nameToNode)
-    return { stanDist: dist, stanParams: rawParams.join(', ') }
+    return { stanDist: `/* ${dist} not supported in Stan */ ${dist}`, stanParams: rawParams.join(', ') }
   }
 
   const rawParams = collectRawParams(node, nameToNode)
@@ -788,6 +799,26 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
     const parameterDeclarations: string[] = []
     const transformedParamLines: string[] = []
 
+    const mvTypeOverrides = new Map<string, string>()
+    const mvDistNodes = [...stochasticParams, ...observedNodes]
+    for (const node of mvDistNodes) {
+      const dist = node.distribution
+      if (!dist) continue
+      const mvDim = inferMultivariateDim(node)
+      const p1 = node.param1 ? String(node.param1).trim().replace(/\[.*$/, '') : ''
+      const p2 = node.param2 ? String(node.param2).trim().replace(/\[.*$/, '') : ''
+      if (dist === 'dmnorm' || dist === 'dmt') {
+        if (p1) mvTypeOverrides.set(convertBugsName(p1), `vector[${mvDim}]`)
+        if (p2) mvTypeOverrides.set(convertBugsName(p2), `matrix[${mvDim}, ${mvDim}]`)
+      } else if (dist === 'dwish') {
+        if (p1) mvTypeOverrides.set(convertBugsName(p1), `matrix[${mvDim}, ${mvDim}]`)
+      } else if (dist === 'ddirich') {
+        if (p1) mvTypeOverrides.set(convertBugsName(p1), `vector[${mvDim}]`)
+      } else if (dist === 'dmulti') {
+        if (p1) mvTypeOverrides.set(convertBugsName(p1), `simplex[${mvDim}]`)
+      }
+    }
+
     const plateSizeVars = new Set<string>()
     for (const plate of plates) {
       const range = plate.loopRange || ''
@@ -810,15 +841,24 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
     for (const node of constantNodes.sort(sortByTopo)) {
       const stanName = convertBugsName(node.name)
       const dims = getArrayDimsFromNode(node, nodeMap, plates)
-      const isInt =
-        intConstantNames.has(node.name) ||
-        arrayIndexVarNames.has(node.name) ||
-        arrayIndexVarNames.has(stanName)
-      const baseType = isInt ? 'int' : 'real'
-      if (dims.length > 0) {
-        dataDeclarations.push(`  array[${dims.join(', ')}] ${baseType} ${stanName};`)
+      const mvType = mvTypeOverrides.get(stanName)
+      if (mvType) {
+        if (dims.length > 0) {
+          dataDeclarations.push(`  array[${dims.join(', ')}] ${mvType} ${stanName};`)
+        } else {
+          dataDeclarations.push(`  ${mvType} ${stanName};`)
+        }
       } else {
-        dataDeclarations.push(`  ${baseType} ${stanName};`)
+        const isInt =
+          intConstantNames.has(node.name) ||
+          arrayIndexVarNames.has(node.name) ||
+          arrayIndexVarNames.has(stanName)
+        const baseType = isInt ? 'int' : 'real'
+        if (dims.length > 0) {
+          dataDeclarations.push(`  array[${dims.join(', ')}] ${baseType} ${stanName};`)
+        } else {
+          dataDeclarations.push(`  ${baseType} ${stanName};`)
+        }
       }
     }
 
@@ -851,17 +891,26 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
     )
     for (const { stanName, dims } of findUndeclaredDataVars(nodes, plates, plateSizeVars)) {
       if (alreadyDeclared.has(stanName)) continue
-      const bugsName = stanName.replace(/_/g, '.')
-      const isInt =
-        intConstantNames.has(bugsName) ||
-        intConstantNames.has(stanName) ||
-        arrayIndexVarNames.has(bugsName) ||
-        arrayIndexVarNames.has(stanName)
-      const baseType = isInt ? 'int' : 'real'
-      if (dims.length > 0) {
-        dataDeclarations.push(`  array[${dims.join(', ')}] ${baseType} ${stanName};`)
+      const mvType = mvTypeOverrides.get(stanName)
+      if (mvType) {
+        if (dims.length > 0) {
+          dataDeclarations.push(`  array[${dims.join(', ')}] ${mvType} ${stanName};`)
+        } else {
+          dataDeclarations.push(`  ${mvType} ${stanName};`)
+        }
       } else {
-        dataDeclarations.push(`  ${baseType} ${stanName};`)
+        const bugsName = stanName.replace(/_/g, '.')
+        const isInt =
+          intConstantNames.has(bugsName) ||
+          intConstantNames.has(stanName) ||
+          arrayIndexVarNames.has(bugsName) ||
+          arrayIndexVarNames.has(stanName)
+        const baseType = isInt ? 'int' : 'real'
+        if (dims.length > 0) {
+          dataDeclarations.push(`  array[${dims.join(', ')}] ${baseType} ${stanName};`)
+        } else {
+          dataDeclarations.push(`  ${baseType} ${stanName};`)
+        }
       }
       alreadyDeclared.add(stanName)
     }
@@ -891,17 +940,21 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
 
       const dist = node.distribution
       let baseType = 'real'
-      if (dist === 'dmnorm' || dist === 'dmt') baseType = 'vector[K]'
-      else if (dist === 'dwish') baseType = 'cov_matrix[K]'
-      else if (dist === 'ddirich') baseType = 'simplex[K]'
+      const mvDim = inferMultivariateDim(node)
+      if (dist === 'dmnorm' || dist === 'dmt') baseType = `vector[${mvDim}]`
+      else if (dist === 'dwish') baseType = `cov_matrix[${mvDim}]`
+      else if (dist === 'ddirich') baseType = `simplex[${mvDim}]`
 
-      if (
-        dims.length > 0 &&
-        !baseType.startsWith('vector') &&
-        !baseType.startsWith('cov_matrix') &&
-        !baseType.startsWith('simplex')
-      ) {
-        parameterDeclarations.push(`  array[${dims.join(', ')}] real${bounds} ${stanName};`)
+      if (dims.length > 0) {
+        if (
+          baseType.startsWith('vector') ||
+          baseType.startsWith('cov_matrix') ||
+          baseType.startsWith('simplex')
+        ) {
+          parameterDeclarations.push(`  array[${dims.join(', ')}] ${baseType}${bounds} ${stanName};`)
+        } else {
+          parameterDeclarations.push(`  array[${dims.join(', ')}] real${bounds} ${stanName};`)
+        }
       } else {
         parameterDeclarations.push(`  ${baseType}${bounds} ${stanName};`)
       }
