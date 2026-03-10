@@ -152,7 +152,6 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
       return [mu || '0', tau ? `1.0 / ${tau}` : '1']
     },
   },
-
 }
 
 // Map of BUGS distributions → which parameter positions (0-based) require int type.
@@ -505,7 +504,7 @@ function inferStanType(
       baseType.startsWith('vector') ||
       baseType.startsWith('matrix') ||
       baseType.startsWith('simplex') ||
-      (dist === 'dmulti')
+      dist === 'dmulti'
     ) {
       return `array[${dims.join(', ')}] ${baseType}`
     }
@@ -526,7 +525,10 @@ function formatStanDistribution(
   if (!mapping) {
     if (dist === 'dflat') return null
     const rawParams = collectRawParams(node, nameToNode)
-    return { stanDist: `/* ${dist} not supported in Stan */ ${dist}`, stanParams: rawParams.join(', ') }
+    return {
+      stanDist: `/* ${dist} not supported in Stan */ ${dist}`,
+      stanParams: rawParams.join(', '),
+    }
   }
 
   const rawParams = collectRawParams(node, nameToNode)
@@ -951,7 +953,9 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
           baseType.startsWith('cov_matrix') ||
           baseType.startsWith('simplex')
         ) {
-          parameterDeclarations.push(`  array[${dims.join(', ')}] ${baseType}${bounds} ${stanName};`)
+          parameterDeclarations.push(
+            `  array[${dims.join(', ')}] ${baseType}${bounds} ${stanName};`
+          )
         } else {
           parameterDeclarations.push(`  array[${dims.join(', ')}] real${bounds} ${stanName};`)
         }
