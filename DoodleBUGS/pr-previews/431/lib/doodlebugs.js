@@ -80214,7 +80214,10 @@ function ait(t, e) {
   if (!a) {
     if (r === "dflat") return null;
     const c = Qve(t, e);
-    return { stanDist: `/* ${r} not supported in Stan */ ${r}`, stanParams: c.join(", ") };
+    return {
+      stanDist: `/* ${r} not supported in Stan */ ${r}`,
+      stanParams: c.join(", ")
+    };
   }
   const s = Qve(t, e), l = a.transformParams(s, t);
   return { stanDist: a.stanName, stanParams: l.join(", ") };
@@ -80410,7 +80413,9 @@ function L2e(t) {
       const Ee = Ce.distribution;
       let Be = "real";
       const lt = vq(Ce);
-      Ee === "dmnorm" || Ee === "dmt" ? Be = `vector[${lt}]` : Ee === "dwish" ? Be = `cov_matrix[${lt}]` : Ee === "ddirich" && (Be = `simplex[${lt}]`), Oe.length > 0 ? Be.startsWith("vector") || Be.startsWith("cov_matrix") || Be.startsWith("simplex") ? A.push(`  array[${Oe.join(", ")}] ${Be}${Me} ${Pe};`) : A.push(`  array[${Oe.join(", ")}] real${Me} ${Pe};`) : A.push(`  ${Be}${Me} ${Pe};`);
+      Ee === "dmnorm" || Ee === "dmt" ? Be = `vector[${lt}]` : Ee === "dwish" ? Be = `cov_matrix[${lt}]` : Ee === "ddirich" && (Be = `simplex[${lt}]`), Oe.length > 0 ? Be.startsWith("vector") || Be.startsWith("cov_matrix") || Be.startsWith("simplex") ? A.push(
+        `  array[${Oe.join(", ")}] ${Be}${Me} ${Pe};`
+      ) : A.push(`  array[${Oe.join(", ")}] real${Me} ${Pe};`) : A.push(`  ${Be}${Me} ${Pe};`);
     }
     const {
       transformedData: U,
