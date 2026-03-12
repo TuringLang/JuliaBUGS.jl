@@ -166,3 +166,48 @@ jobs:
         env:
           TEST_GROUP: parallel_sampling
           JULIA_NUM_THREADS: ${{ steps.threads.outputs.count }}
+
+  # Distributed sampling tests (Issue #333)
+  test-distributed:
+    name: Distributed Sampling - Julia ${{ matrix.version }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: false
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1.11'
+          - '1'
+        os:
+          - ubuntu-latest
+        arch:
+          - x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.julia
+            ~/.julia/artifacts
+          key: ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('JuliaBUGS/**/Project.toml', 'JuliaBUGS/**/Manifest.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-julia-${{ matrix.version }}-${{ matrix.arch }}-
+            ${{ runner.os }}-julia-${{ matrix.version }}-
+
+      - uses: julia-actions/julia-buildpkg@v1
+        with:
+          project: JuliaBUGS
+
+      - name: Running distributed_sampling tests
+        uses: julia-actions/julia-runtest@v1
+        with:
+          project: JuliaBUGS
+        env:
+          TEST_GROUP: distributed_sampling
