@@ -7,6 +7,11 @@ addprocs(2; exeflags=`--project=$(Base.active_project()) --startup-file=no --che
     using JuliaBUGS
     using LogDensityProblems
     using Serialization
+    using AbstractMCMC
+    using AdvancedHMC
+    using ADTypes
+    using ReverseDiff
+    using StableRNGs
 end
 
 @testset "Distributed Sampling (Issue #333)" begin
@@ -42,7 +47,9 @@ end
         local_ld = Base.invokelatest(LogDensityProblems.logdensity, model, θ)
 
         # Send model to worker and evaluate — this is what MCMCDistributed does
-        remote_ld = fetch(@spawnat 2 Base.invokelatest(LogDensityProblems.logdensity, $model, $θ))
+        remote_ld = remotecall_fetch(2, model, θ) do m, p
+            Base.invokelatest(LogDensityProblems.logdensity, m, p)
+        end
 
         @test local_ld ≈ remote_ld
     end
@@ -62,20 +69,14 @@ end
 
         # This would fail before the fix with:
         #   UndefVarError: `###__compute_log_density__#XXX` not defined in `JuliaBUGS.Model`
-        remote_ld = fetch(
-            @spawnat 2 Base.invokelatest(LogDensityProblems.logdensity, $model_gen, $θ)
-        )
+        remote_ld = remotecall_fetch(2, model_gen, θ) do m, p
+            Base.invokelatest(LogDensityProblems.logdensity, m, p)
+        end
 
         @test local_ld ≈ remote_ld
     end
 
     @testset "MCMCDistributed sampling" begin
-        using AbstractMCMC
-        using AdvancedHMC
-        using ADTypes
-        using ReverseDiff
-        using StableRNGs
-
         model = compile(model_def, data)
         ad_model = JuliaBUGS.BUGSModelWithGradient(
             model, AutoReverseDiff(; compile=false)

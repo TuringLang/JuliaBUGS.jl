@@ -41,7 +41,9 @@ function Serialization.deserialize(
     base_model = state.base_model
     try
         # Gradient initialization is performed locally on this process.
-        return JuliaBUGS.Model.BUGSModelWithGradient(base_model, state.adtype)
+        # Use invokelatest because compile() (called during base_model deserialization)
+        # defines new methods that aren't visible in the current world age.
+        return Base.invokelatest(JuliaBUGS.Model.BUGSModelWithGradient, base_model, state.adtype)
     catch err
         @warn "Failed to reconstruct BUGSModelWithGradient" exception=(err, catch_backtrace())
         rethrow(err)
