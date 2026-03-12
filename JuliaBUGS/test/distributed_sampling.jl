@@ -1,7 +1,7 @@
 using Distributed
 
 # Add worker processes, propagating the current project environment
-addprocs(2; exeflags="--project=$(Base.active_project())")
+addprocs(2; exeflags=`--project=$(Base.active_project()) --startup-file=no --check-bounds=yes`)
 
 @everywhere begin
     using JuliaBUGS
