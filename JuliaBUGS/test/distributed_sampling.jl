@@ -1,7 +1,7 @@
 using Distributed
 
-# Add worker processes before loading packages
-addprocs(2)
+# Add worker processes, propagating the current project environment
+addprocs(2; exeflags="--project=$(Base.active_project())")
 
 @everywhere begin
     using JuliaBUGS
