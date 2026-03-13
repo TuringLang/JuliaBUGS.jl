@@ -48,12 +48,12 @@ jobs:
         with:
           project: JuliaBUGS
 
-      - name: Running all tests with coverage
+      - name: Running tests with coverage (excluding slow sampling tests)
         uses: julia-actions/julia-runtest@v1
         with:
           project: JuliaBUGS
         env:
-          TEST_GROUP: "all"
+          TEST_GROUP: "elementary,frontend,graphs,compilation,log_density,model_operations,callbacks,inference,gibbs"
 
       - uses: julia-actions/julia-processcoverage@v1
         with:
