@@ -35,11 +35,15 @@ jobs:
           - "elementary"
           - "frontend"
           - "graphs"
-          - "compilation"
+          - "compilation_model"
+          - "compilation_source_gen"
           - "log_density"
           - "model_operations"
           - "callbacks"
-          - "inference"
+          - "inference_mh"
+          - "inference_hmc"
+          - "inference_chains"
+          - "inference_marginalization"
           - "gibbs"
           - "parallel_sampling"
           - "distributed_sampling"
@@ -75,6 +79,19 @@ jobs:
         uses: julia-actions/julia-runtest@v1
         with:
           project: JuliaBUGS
+          coverage: ${{ matrix.version == '1.11' }}
         env:
           TEST_GROUP: ${{ matrix.test_group }}
           JULIA_NUM_THREADS: ${{ matrix.test_group == 'parallel_sampling' && steps.threads.outputs.count || '1' }}
+
+      - uses: julia-actions/julia-processcoverage@v1
+        if: matrix.version == '1.11'
+        with:
+          directories: JuliaBUGS/src,JuliaBUGS/ext
+
+      - uses: codecov/codecov-action@v4
+        if: matrix.version == '1.11'
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: ${{ matrix.test_group }}
+          fail_ci_if_error: false
