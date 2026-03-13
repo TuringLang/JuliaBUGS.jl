@@ -25,7 +25,7 @@ function AbstractMCMC.ParamsWithStats(
     p = if params
         d = OrderedDict{String,Any}()
         for vn in param_vars
-            value = AbstractPPL.get(transition, vn)
+            value = AbstractPPL.getvalue(transition, vn)
             d[string(vn)] = value
         end
         [k => v for (k, v) in d]

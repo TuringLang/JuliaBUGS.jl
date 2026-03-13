@@ -94,7 +94,7 @@ function elementwise_varnames(
 ) where {sym}
     current_optic = getoptic(vn)
     return (
-        VarName{sym}(Accessors.IndexLens(Tuple(I)) ∘ current_optic) for
+        VarName{sym}(AbstractPPL.Index(Tuple(I), (;)) ∘ current_optic) for
         I in CartesianIndices(val)
     )
 end
@@ -161,14 +161,14 @@ function JuliaBUGS.gen_chains(
         # (they were just set by evaluate!!, so they match samples[i])
         push!(
             param_vals,
-            [AbstractPPL.get(evaluation_env, param_var) for param_var in param_vars],
+            [AbstractPPL.getvalue(evaluation_env, param_var) for param_var in param_vars],
         )
 
         # Get generated quantities from the evaluation environment
         push!(
             generated_quantities,
             [
-                AbstractPPL.get(evaluation_env, generated_var) for
+                AbstractPPL.getvalue(evaluation_env, generated_var) for
                 generated_var in generated_vars
             ],
         )
