@@ -51,7 +51,8 @@ end
             Base.invokelatest(LogDensityProblems.logdensity, m, p)
         end
 
-        @test local_ld ≈ remote_ld
+        # Use isequal to handle NaN (invalid initial params may produce NaN log density)
+        @test isequal(local_ld, remote_ld)
     end
 
     @testset "BUGSModel serialization to worker (UseGeneratedLogDensityFunction mode)" begin
@@ -73,7 +74,8 @@ end
             Base.invokelatest(LogDensityProblems.logdensity, m, p)
         end
 
-        @test local_ld ≈ remote_ld
+        # Use isequal to handle NaN (invalid initial params may produce NaN log density)
+        @test isequal(local_ld, remote_ld)
     end
 
     @testset "MCMCDistributed sampling" begin
