@@ -138,6 +138,10 @@ const handleHeaderClick = () => {
         <div
           v-tooltip.top="{ value: 'Collapse Sidebar', showDelay: 0, hideDelay: 0 }"
           class="flex items-center"
+          @mousedown.stop
+          @touchstart.stop
+          @click.stop="$emit('toggle-left-sidebar')"
+          style="cursor: pointer"
         >
           <svg width="20" height="20" fill="none" viewBox="0 0 24 24" class="db-toggle-icon">
             <path
@@ -284,7 +288,7 @@ const handleHeaderClick = () => {
   position: absolute;
   top: 16px;
   height: auto;
-  max-height: calc(100dvh - 32px);
+  max-height: calc(var(--db-container-height, 100dvh) - 32px);
   bottom: auto;
   z-index: 50;
   display: flex;

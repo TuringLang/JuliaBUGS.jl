@@ -15,7 +15,13 @@ function _eval_logdensity(model, ::UseAutoMarginalization, x)
 end
 
 function LogDensityProblems.logdensity(model::BUGSModel, x::AbstractArray)
-    return _eval_logdensity(model, model.evaluation_mode, x)
+    try
+        return _eval_logdensity(model, model.evaluation_mode, x)
+    catch e
+        T = float(eltype(x))
+        e isa DomainError && return T(-Inf)
+        rethrow(e)
+    end
 end
 
 function LogDensityProblems.dimension(model::BUGSModel)
@@ -155,7 +161,19 @@ Compute log density and its gradient using DifferentiationInterface.
 function LogDensityProblems.logdensity_and_gradient(
     model::BUGSModelWithGradient, x::AbstractVector
 )
-    return DI.value_and_gradient(
-        _logdensity_for_gradient, model.prep, model.adtype, x, DI.Constant(model.base_model)
-    )
+    try
+        return DI.value_and_gradient(
+            _logdensity_for_gradient,
+            model.prep,
+            model.adtype,
+            x,
+            DI.Constant(model.base_model),
+        )
+    catch e
+        if e isa DomainError
+            T = float(eltype(x))
+            return (T(-Inf), fill(T(NaN), length(x)))
+        end
+        rethrow(e)
+    end
 end

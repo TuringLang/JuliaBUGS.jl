@@ -25,6 +25,7 @@ export interface UIState {
   }
   currentGraphId?: string
   editMode?: boolean
+  isFullScreen?: boolean
 }
 
 export interface GraphData {
