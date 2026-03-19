@@ -79,6 +79,11 @@ const TEST_GROUPS = OrderedDict{String,Function}(
         include("model/bugsmodel.jl")
         include("source_gen.jl")
     end,
+    "compilation_model" => () -> begin
+        include("model/utils.jl")
+        include("model/bugsmodel.jl")
+    end,
+    "compilation_source_gen" => () -> include("source_gen.jl"),
     "model_operations" => () -> begin
         include("model/abstractppl.jl")
     end,
@@ -98,8 +103,10 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     "inference_hmc" => () -> include("ext/JuliaBUGSAdvancedHMCExt.jl"),
     "inference_chains" => () -> include("ext/JuliaBUGSMCMCChainsExt.jl"),
     "inference_mh" => () -> include("independent_mh.jl"),
+    "inference_marginalization" => () -> include("model/auto_marginalization_sampling.jl"),
     "gibbs" => () -> include("gibbs.jl"),
     "parallel_sampling" => () -> include("parallel_sampling.jl"),
+    "distributed_sampling" => () -> include("distributed_sampling.jl"),
     "ad_compatibility" => () -> include("ad_compatibility.jl"),
 )
 
