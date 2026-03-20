@@ -592,7 +592,11 @@ function buildTopologicalOrder(nodes: GraphNode[], edges: GraphEdge[]): string[]
   return sorted
 }
 
-function needsBoundsFromDistribution(dist: string | undefined): string {
+function needsBoundsFromDistribution(
+  dist: string | undefined,
+  node?: GraphNode,
+  nameToNode?: Map<string, GraphNode>
+): string {
   if (!dist) return ''
   switch (dist) {
     case 'dgamma':
@@ -604,8 +608,15 @@ function needsBoundsFromDistribution(dist: string | undefined): string {
       return '<lower=0>'
     case 'dbeta':
       return '<lower=0, upper=1>'
-    case 'dunif':
-      return ''
+    case 'dunif': {
+      if (node && nameToNode) {
+        const rawParams = collectRawParams(node, nameToNode)
+        const lower = rawParams[0] || '0'
+        const upper = rawParams[1] || '1'
+        return `<lower=${lower}, upper=${upper}>`
+      }
+      return '<lower=0, upper=1>'
+    }
     default:
       return ''
   }
@@ -873,14 +884,22 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
       const cu = node.censorUpper ? String(node.censorUpper).trim() : ''
       if (cl || cu) {
         const dims = getArrayDimsFromNode(node, nodeMap, plates)
-        const censorBound = cl || cu
-        const rawBoundName = censorBound.replace(/\[.*$/, '')
-        const stanBoundName = convertBugsName(rawBoundName)
+        const boundNames = new Set<string>()
+        for (const bound of [cl, cu]) {
+          if (!bound) continue
+          const rawBoundName = bound.replace(/\[.*$/, '')
+          boundNames.add(convertBugsName(rawBoundName))
+        }
+        for (const stanBoundName of boundNames) {
+          if (dims.length > 0) {
+            dataDeclarations.push(`  array[${dims.join(', ')}] real ${stanBoundName};`)
+          } else {
+            dataDeclarations.push(`  real ${stanBoundName};`)
+          }
+        }
         if (dims.length > 0) {
-          dataDeclarations.push(`  array[${dims.join(', ')}] real ${stanBoundName};`)
           dataDeclarations.push(`  array[${dims.join(', ')}] int ${stanName}_is_obs;`)
         } else {
-          dataDeclarations.push(`  real ${stanBoundName};`)
           dataDeclarations.push(`  int ${stanName}_is_obs;`)
         }
       }
@@ -923,7 +942,7 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
     for (const node of stochasticParams.sort(sortByTopo)) {
       const stanName = convertBugsName(node.name)
       const dims = getArrayDimsFromNode(node, nodeMap, plates)
-      const bounds = needsBoundsFromDistribution(node.distribution)
+      const bounds = needsBoundsFromDistribution(node.distribution, node, nameToNode)
       const ppInfo = partialPlateMap.get(stanName)
 
       if (ppInfo) {
@@ -1129,17 +1148,31 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
             const hasCensoring = !!(cl || cu)
 
             if (hasCensoring && node.nodeType === 'observed') {
-              const censorBound = cl || cu
-              const stanBound = convertExpression(convertBugsName(censorBound))
-              const cdfFunc = cl ? `${distInfo.stanDist}_lccdf` : `${distInfo.stanDist}_lcdf`
-
+              const stanBoundL = cl ? convertExpression(convertBugsName(cl)) : ''
+              const stanBoundU = cu ? convertExpression(convertBugsName(cu)) : ''
               const isObsName = `${stanName}_is_obs`
+
               lines.push(`${indent}if (${isObsName}${idx} == 1) {`)
               lines.push(
                 `${indent}  ${stanName}${idx} ~ ${distInfo.stanDist}(${distInfo.stanParams});`
               )
               lines.push(`${indent}} else {`)
-              lines.push(`${indent}  target += ${cdfFunc}(${stanBound} | ${distInfo.stanParams});`)
+              if (cl && cu) {
+                // Interval censoring: P(L < y < U) = F(U) - F(L)
+                lines.push(
+                  `${indent}  target += log_diff_exp(${distInfo.stanDist}_lcdf(${stanBoundU} | ${distInfo.stanParams}), ${distInfo.stanDist}_lcdf(${stanBoundL} | ${distInfo.stanParams}));`
+                )
+              } else if (cl) {
+                // Left censoring: P(y < L)
+                lines.push(
+                  `${indent}  target += ${distInfo.stanDist}_lccdf(${stanBoundL} | ${distInfo.stanParams});`
+                )
+              } else {
+                // Right censoring: P(y > U)
+                lines.push(
+                  `${indent}  target += ${distInfo.stanDist}_lcdf(${stanBoundU} | ${distInfo.stanParams});`
+                )
+              }
               lines.push(`${indent}}`)
             } else {
               lines.push(
@@ -1244,19 +1277,6 @@ function replaceNullsWithZero(val: unknown): unknown {
   return val
 }
 
-function stripNullsFromInits(val: unknown): unknown {
-  if (val === null || val === undefined) return 0
-  if (Array.isArray(val)) return val.map(stripNullsFromInits)
-  if (typeof val === 'object' && val !== null) {
-    const result: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-      result[k] = stripNullsFromInits(v)
-    }
-    return result
-  }
-  return val
-}
-
 function convertDataKeys(obj: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {}
   for (const [key, val] of Object.entries(obj)) {
@@ -1327,7 +1347,7 @@ export function generateStanInitsJson(
       }
     }
   }
-  return JSON.stringify(stripNullsFromInits(converted), null, 2)
+  return JSON.stringify(replaceNullsWithZero(converted), null, 2)
 }
 
 export function extractCensoredFields(
