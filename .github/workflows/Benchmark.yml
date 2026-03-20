@@ -9,10 +9,6 @@ on:
       - '.github/workflows/Benchmark.yml'
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
   benchmark:
     name: Benchmark
@@ -44,9 +40,9 @@ jobs:
         julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
         julia --project=benchmark benchmark/run_benchmarks.jl
 
-    - name: Post results to PR
-      uses: marocchino/sticky-pull-request-comment@v2
+    - name: Upload benchmark results
       if: github.event_name == 'pull_request'
+      uses: actions/upload-artifact@v4
       with:
+        name: benchmark-results
         path: JuliaBUGS/benchmark_results.md
-        recreate: true
