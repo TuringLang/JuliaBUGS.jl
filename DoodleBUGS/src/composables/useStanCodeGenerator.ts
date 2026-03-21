@@ -594,8 +594,8 @@ function buildTopologicalOrder(nodes: GraphNode[], edges: GraphEdge[]): string[]
 
 function needsBoundsFromDistribution(
   dist: string | undefined,
-  node?: GraphNode,
-  nameToNode?: Map<string, GraphNode>
+  node: GraphNode,
+  nameToNode: Map<string, GraphNode>
 ): string {
   if (!dist) return ''
   switch (dist) {
@@ -609,13 +609,8 @@ function needsBoundsFromDistribution(
     case 'dbeta':
       return '<lower=0, upper=1>'
     case 'dunif': {
-      if (node && nameToNode) {
-        const rawParams = collectRawParams(node, nameToNode)
-        const lower = rawParams[0] || '0'
-        const upper = rawParams[1] || '1'
-        return `<lower=${lower}, upper=${upper}>`
-      }
-      return '<lower=0, upper=1>'
+      const [lower = '0', upper = '1'] = collectRawParams(node, nameToNode)
+      return `<lower=${lower}, upper=${upper}>`
     }
     default:
       return ''
