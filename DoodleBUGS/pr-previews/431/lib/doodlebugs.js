@@ -80270,11 +80270,8 @@ function lit(t, e, r) {
     case "dbeta":
       return "<lower=0, upper=1>";
     case "dunif": {
-      if (e && r) {
-        const a = mq(e, r), s = a[0] || "0", l = a[1] || "1";
-        return `<lower=${s}, upper=${l}>`;
-      }
-      return "<lower=0, upper=1>";
+      const [a = "0", s = "1"] = mq(e, r);
+      return `<lower=${a}, upper=${s}>`;
     }
     default:
       return "";
