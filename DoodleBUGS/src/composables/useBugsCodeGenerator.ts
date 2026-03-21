@@ -125,7 +125,20 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>) {
               )
               .map((key) => formatParam(String(childNode[key as keyof GraphNode])))
               .join(', ')
-            lines.push(`${indent}${nodeName} ~ ${childNode.distribution}(${params})`)
+
+            // Hybrid: optional data-transform line before the stochastic line
+            if (childNode.equation && String(childNode.equation).trim()) {
+              lines.push(`${indent}${nodeName} <- ${childNode.equation}`)
+            }
+
+            let censorSuffix = ''
+            const cl = childNode.censorLower ? String(childNode.censorLower).trim() : ''
+            const cu = childNode.censorUpper ? String(childNode.censorUpper).trim() : ''
+            if (cl || cu) {
+              censorSuffix = `C(${cl},${cu ? ' ' + cu : ''})`
+            }
+
+            lines.push(`${indent}${nodeName} ~ ${childNode.distribution}(${params})${censorSuffix}`)
           } else if (childNode.nodeType === 'deterministic' && childNode.equation) {
             lines.push(`${indent}${nodeName} <- ${childNode.equation}`)
           }
@@ -145,20 +158,24 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>) {
 }
 
 // Helpers to format JavaScript values as Julia literals for embedding
-// Render a Julia NamedTuple field name: either bare identifier or var"..."
+// Render a Julia NamedTuple field name.
+// With replace_period=true (string-mode @bugs), the parser converts dots to underscores,
+// so we must also use underscores in the data/inits NamedTuple keys to match.
 function juliaFieldLiteral(name: string): string {
-  const s = String(name)
-  const idok = /^[A-Za-z_][A-Za-z0-9_]*$/.test(s)
-  if (idok) return s
-  const escaped = s.replace(/"/g, '\\"')
-  return `var"${escaped}"`
+  const s = String(name).replace(/\./g, '_')
+  // After dot→underscore the result is always a valid Julia identifier
+  return s
 }
 
-function isVectorOfNumbers(v: unknown): v is number[] {
-  return Array.isArray(v) && v.every((x) => typeof x === 'number')
+function isScalarOrMissing(x: unknown): boolean {
+  return x === null || x === undefined || typeof x === 'number'
 }
 
-function isMatrixLike(v: unknown): v is number[][] {
+function isVectorLike(v: unknown): v is (number | null)[] {
+  return Array.isArray(v) && v.every(isScalarOrMissing)
+}
+
+function isMatrixLike(v: unknown): v is (number | null)[][] {
   if (!Array.isArray(v) || v.length === 0) return false
   const rows = v as unknown[]
   const firstRow = rows[0]
@@ -168,7 +185,7 @@ function isMatrixLike(v: unknown): v is number[][] {
     (r) =>
       Array.isArray(r) &&
       (r as unknown[]).length === cols &&
-      (r as unknown[]).every((x) => typeof x === 'number')
+      (r as unknown[]).every(isScalarOrMissing)
   )
 }
 
@@ -178,12 +195,17 @@ function formatNumber(n: number): string {
   return `${n}`
 }
 
-function formatVector(arr: number[]): string {
-  return `[${arr.map(formatNumber).join(', ')}]`
+function formatScalar(v: number | null | undefined): string {
+  if (v === null || v === undefined) return 'missing'
+  return formatNumber(v)
 }
 
-function formatMatrix(mat: number[][]): string {
-  const rows = mat.map((row) => row.map(formatNumber).join(' ')).join('\n        ')
+function formatVector(arr: (number | null)[]): string {
+  return `[${arr.map(formatScalar).join(', ')}]`
+}
+
+function formatMatrix(mat: (number | null)[][]): string {
+  const rows = mat.map((row) => row.map(formatScalar).join(' ')).join('\n        ')
   return `[\n        ${rows}\n    ]`
 }
 
@@ -192,9 +214,9 @@ function formatValue(v: unknown): string {
   if (typeof v === 'number') return formatNumber(v)
   if (typeof v === 'boolean') return v ? 'true' : 'false'
   if (typeof v === 'string') return JSON.stringify(v)
-  if (isMatrixLike(v)) return formatMatrix(v as number[][])
-  if (isVectorOfNumbers(v)) return formatVector(v as number[])
-  if (Array.isArray(v)) return JSON.stringify(v)
+  if (isMatrixLike(v)) return formatMatrix(v as (number | null)[][])
+  if (isVectorLike(v)) return formatVector(v as (number | null)[])
+  if (Array.isArray(v)) return `[${(v as unknown[]).map(formatValue).join(', ')}]`
   if (v && typeof v === 'object') return JSON.stringify(v)
   return 'nothing'
 }
@@ -203,7 +225,10 @@ function buildNamedTupleLiteral(obj: Record<string, unknown>): string {
   const entries = Object.entries(obj).map(
     ([k, val]) => `  ${juliaFieldLiteral(k)} = ${formatValue(val)}`
   )
-  return entries.length ? `(\n${entries.join(',\n')}\n)` : '()'
+  if (!entries.length) return '()'
+  const body = entries.join(',\n')
+  const trailingComma = entries.length === 1 ? ',' : ''
+  return `(\n${body}${trailingComma}\n)`
 }
 
 // Standalone script generator: builds a Julia script matching the backend's standalone template
@@ -235,74 +260,55 @@ export function generateStandaloneScript(input: StandaloneScriptInput): string {
   const seedLiteral =
     typeof seed === 'number' ? String(seed) : seed == null ? 'nothing' : JSON.stringify(seed)
 
-  const script = `using JuliaBUGS, AbstractMCMC, AdvancedHMC, LogDensityProblems, LogDensityProblemsAD, MCMCChains, ReverseDiff, Random
+  const hasCensoring = /\bC\(/.test(String(modelCode))
+  const censoringImport = hasCensoring ? '\nusing Distributions: censored' : ''
+  const censoringPrimitive = hasCensoring
+    ? '\n# Register censored() as a valid BUGS primitive\nJuliaBUGS.@bugs_primitive censored\n'
+    : ''
+
+  const script = `using JuliaBUGS, AbstractMCMC, AdvancedHMC, LogDensityProblems, LogDensityProblemsAD, MCMCChains, ReverseDiff, Random${censoringImport}
 
 data = ${dataLiteral}
 
 inits = ${initsLiteral}
-
-# Model definition using a string literal
+${censoringPrimitive}
 model_def = JuliaBUGS.@bugs("""
 ${String(modelCode)}
 """, true, false)
 
 # Compile the model
 model = JuliaBUGS.compile(model_def, data, inits)
-
-# Wrap the model for automatic differentiation with ReverseDiff
 ad_model = ADgradient(:ReverseDiff, model)
 ld_model = AbstractMCMC.LogDensityModel(ad_model)
 
-# Define sampling parameters
+# Sampling parameters
 n_samples, n_adapts = ${nSamples}, ${nAdapts}
 n_chains = ${nChains}
 seed = ${seedLiteral}
 
 seed_val = tryparse(Int, string(seed))
-rng = seed === nothing ? Random.MersenneTwister() : (seed_val === nothing ? Random.MersenneTwister() : Random.MersenneTwister(seed_val))
+rng = seed === nothing ? Random.default_rng() : (seed_val === nothing ? Random.default_rng() : Random.MersenneTwister(seed_val))
 
-D = LogDensityProblems.dimension(ad_model); initial_θ = rand(rng, D)
+initial_θ = try; JuliaBUGS.getparams(model); catch; zeros(LogDensityProblems.dimension(ad_model)); end
 
-# Sample the model using AbstractMCMC
+# Sample
 if n_chains > 1 && Threads.nthreads() > 1
     chain = AbstractMCMC.sample(
-        rng,
-        ld_model,
-        AdvancedHMC.NUTS(0.8),
-        AbstractMCMC.MCMCThreads(),
-        n_samples,
-        n_chains;
-        chain_type = Chains,
-        n_adapts = n_adapts,
-        init_params = initial_θ,
-        discard_initial = n_adapts,
-        progress = false,
+        rng, ld_model, NUTS(0.65), MCMCThreads(), n_samples, n_chains;
+        chain_type = Chains, n_adapts = n_adapts, init_params = initial_θ,
+        discard_initial = n_adapts, progress = false,
     )
 elseif n_chains > 1
     chain = AbstractMCMC.sample(
-        rng,
-        ld_model,
-        AdvancedHMC.NUTS(0.8),
-        AbstractMCMC.MCMCSerial(),
-        n_samples,
-        n_chains;
-        chain_type = Chains,
-        n_adapts = n_adapts,
-        init_params = initial_θ,
-        discard_initial = n_adapts,
-        progress = false,
+        rng, ld_model, NUTS(0.65), MCMCSerial(), n_samples, n_chains;
+        chain_type = Chains, n_adapts = n_adapts, init_params = initial_θ,
+        discard_initial = n_adapts, progress = false,
     )
 else
     chain = AbstractMCMC.sample(
-        rng,
-        ld_model,
-        AdvancedHMC.NUTS(0.8),
-        n_samples;
-        chain_type = Chains,
-        n_adapts = n_adapts,
-        init_params = initial_θ,
-        discard_initial = n_adapts,
-        progress = false,
+        rng, ld_model, NUTS(0.65), n_samples;
+        chain_type = Chains, n_adapts = n_adapts, init_params = initial_θ,
+        discard_initial = n_adapts, progress = false,
     )
 end
 

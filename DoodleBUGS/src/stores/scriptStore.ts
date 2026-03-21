@@ -17,10 +17,15 @@ export const useScriptStore = defineStore('script', () => {
     prefix = p
     const stored = localStorage.getItem(`${prefix}-standaloneScript`)
     standaloneScript.value = stored ?? ''
+    const storedStan = localStorage.getItem(`${prefix}-standaloneStanScript`)
+    standaloneStanScript.value = storedStan ?? ''
     suppressWatch = false
   }
 
   const standaloneScript = ref<string>(localStorage.getItem(`${prefix}-standaloneScript`) || '')
+  const standaloneStanScript = ref<string>(
+    localStorage.getItem(`${prefix}-standaloneStanScript`) || ''
+  )
 
   const samplerSettings = ref<SamplerSettings>({
     n_samples: 1000,
@@ -33,8 +38,13 @@ export const useScriptStore = defineStore('script', () => {
     if (!suppressWatch) localStorage.setItem(`${prefix}-standaloneScript`, v)
   })
 
+  watch(standaloneStanScript, (v) => {
+    if (!suppressWatch) localStorage.setItem(`${prefix}-standaloneStanScript`, v)
+  })
+
   return {
     standaloneScript,
+    standaloneStanScript,
     samplerSettings,
     setPrefix,
   }

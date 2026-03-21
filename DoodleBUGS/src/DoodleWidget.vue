@@ -30,11 +30,13 @@ import { useDataStore } from './stores/dataStore'
 import { useScriptStore } from './stores/scriptStore'
 import { useGraphElements } from './composables/useGraphElements'
 import { useBugsCodeGenerator } from './composables/useBugsCodeGenerator'
+import { useStanCodeGenerator } from './composables/useStanCodeGenerator'
 import { useGraphValidator } from './composables/useGraphValidator'
 import { usePersistence } from './composables/usePersistence'
 import { useEditorActions } from './composables/useEditorActions'
 import { useWidgetEmitter } from './composables/useWidgetEmitter'
 import { examples } from './config/examples'
+import type { CodeLanguage } from './components/panels/CodePreviewPanel.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -280,6 +282,7 @@ const controlsStyle = computed(() => {
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements()
 const { parsedGraphData } = storeToRefs(dataStore)
 const { generatedCode } = useBugsCodeGenerator(elements)
+const { generatedStanCode } = useStanCodeGenerator(elements)
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData)
 const { standaloneScript, samplerSettings } = storeToRefs(scriptStore)
 
@@ -287,7 +290,12 @@ const { loadUIState, saveUIState, saveLastGraphId, loadLastGraphId } = usePersis
   persistencePrefix.value
 )
 
-const actions = useEditorActions(elements, generatedCode, persistencePrefix.value)
+const actions = useEditorActions(
+  elements,
+  generatedCode,
+  persistencePrefix.value,
+  generatedStanCode
+)
 const {
   currentMode,
   currentNodeType,
@@ -326,7 +334,11 @@ const {
   getScriptContent,
   handleGenerateStandalone,
   handleDownloadBugs,
+  handleDownloadStan,
   handleDownloadScript,
+  handleDownloadStanScript,
+  handleDownloadStanData,
+  handleDownloadStanInits,
   openExportModal,
   handleConfirmExport,
   handleExportJson,
@@ -345,6 +357,18 @@ const {
 } = actions
 
 const { emitReady } = useWidgetEmitter(emit, generatedCode)
+
+const codePanelLanguage = ref<CodeLanguage>('bugs')
+const codePanelTitle = computed(() =>
+  codePanelLanguage.value === 'stan' ? 'Stan Code Preview' : 'BUGS Code Preview'
+)
+const handleCodeDownload = () => {
+  if (codePanelLanguage.value === 'stan') {
+    handleDownloadStan()
+  } else {
+    handleDownloadBugs()
+  }
+}
 
 const WIDGET_UI_STATE_KEY = `${persistencePrefix.value}-ui-state`
 const WIDGET_SOURCE_MAP_KEY = `${persistencePrefix.value}-source-map`
@@ -1223,6 +1247,10 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
             @show-validation-issues="showValidationModal = true"
             @open-script-settings="showScriptSettingsModal = true"
             @download-script="handleDownloadScript"
+            @download-stan="handleDownloadStan"
+            @download-stan-script="handleDownloadStanScript"
+            @download-stan-data="handleDownloadStanData"
+            @download-stan-inits="handleDownloadStanInits"
             @generate-script="handleGenerateStandalone"
             @share="handleShare"
             @open-export-modal="openExportModal"
@@ -1233,7 +1261,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
 
         <FloatingPanel
           v-if="showEditorUI"
-          title="BUGS Code Preview"
+          :title="codePanelTitle"
           icon="fas fa-code"
           :is-open="isCodePanelOpen"
           :default-width="codePanelSize.width"
@@ -1242,7 +1270,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
           :default-y="codePanelPos.y"
           :show-download="true"
           @close="toggleCodePanel"
-          @download="handleDownloadBugs"
+          @download="handleCodeDownload"
           @drag-start="handleUIInteractionStart"
           @drag-end="
             (pos) => {
@@ -1260,7 +1288,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
             }
           "
         >
-          <CodePreviewPanel :is-active="isCodePanelOpen" :code="generatedCode" />
+          <CodePreviewPanel :is-active="isCodePanelOpen" v-model:language="codePanelLanguage" />
         </FloatingPanel>
 
         <FloatingPanel
