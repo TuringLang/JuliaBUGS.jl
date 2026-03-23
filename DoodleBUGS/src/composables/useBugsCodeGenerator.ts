@@ -1,7 +1,9 @@
 import { computed } from 'vue'
 import type { Ref } from 'vue'
-import * as ejs from 'ejs'
-import bugsScriptTemplate from '../templates/bugsScript.ejs?raw'
+import { template } from 'lodash'
+import bugsScriptRaw from '../templates/bugsScript.jl.tpl?raw'
+
+const BUGS_SCRIPT_TEMPLATE = template(bugsScriptRaw)
 import type { GraphElement, GraphNode, GraphEdge } from '../types'
 
 /**
@@ -263,7 +265,7 @@ export function generateStandaloneScript(input: StandaloneScriptInput): string {
 
   const hasCensoring = /\bC\(/.test(String(modelCode))
 
-  return ejs.render(bugsScriptTemplate, {
+  return BUGS_SCRIPT_TEMPLATE({
     modelCode,
     dataLiteral,
     initsLiteral,

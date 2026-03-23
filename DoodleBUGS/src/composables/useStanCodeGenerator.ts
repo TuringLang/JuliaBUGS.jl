@@ -1,7 +1,9 @@
 import { computed } from 'vue'
 import type { Ref } from 'vue'
-import * as ejs from 'ejs'
-import stanScriptTemplate from '../templates/stanScript.ejs?raw'
+import { template } from 'lodash'
+import stanScriptRaw from '../templates/stanScript.py.tpl?raw'
+
+const STAN_SCRIPT_TEMPLATE = template(stanScriptRaw)
 import type { GraphElement, GraphNode, GraphEdge } from '../types'
 
 interface DistributionMapping {
@@ -1388,7 +1390,7 @@ export function generateStanStandaloneScript(input: StanScriptInput): string {
   const nChains = settings?.n_chains ?? 1
   const seed = typeof settings?.seed === 'number' ? settings.seed : 12345
 
-  return ejs.render(stanScriptTemplate, {
+  return STAN_SCRIPT_TEMPLATE({
     modelCode,
     dataJson,
     initsJson,
