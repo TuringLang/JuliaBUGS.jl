@@ -560,7 +560,6 @@ function formatStanParam(raw: string, nameToNode: Map<string, GraphNode>): strin
   return convertBugsName(p)
 }
 
-
 function needsBoundsFromDistribution(
   dist: string | undefined,
   node: GraphNode,
@@ -933,7 +932,9 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
         // Indices 1..(plateStart-1) are outside the plate range and set to 0 as placeholders.
         // Review whether 0 is appropriate for your model or replace with a meaningful value.
         for (let i = 1; i < ppInfo.plateStart; i++) {
-          transformedParamLines.push(`  ${stanName}[${i}] = 0;  // placeholder: outside plate range`)
+          transformedParamLines.push(
+            `  ${stanName}[${i}] = 0;  // placeholder: outside plate range`
+          )
         }
         for (let i = ppInfo.plateStart; i <= ppInfo.fullSize; i++) {
           transformedParamLines.push(
@@ -1177,8 +1178,14 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
               }
               lines.push(`${indent}}`)
             } else {
-              if (node.nodeType === 'stochastic' && node.distribution && DISCRETE_DISTRIBUTIONS.has(node.distribution)) {
-                lines.push(`${indent}// WARNING: discrete latent variable — Stan requires marginalizing out ${stanName}.`)
+              if (
+                node.nodeType === 'stochastic' &&
+                node.distribution &&
+                DISCRETE_DISTRIBUTIONS.has(node.distribution)
+              ) {
+                lines.push(
+                  `${indent}// WARNING: discrete latent variable — Stan requires marginalizing out ${stanName}.`
+                )
               }
               lines.push(
                 `${indent}${stanName}${idx} ~ ${distInfo.stanDist}(${distInfo.stanParams});`
