@@ -5,6 +5,7 @@ import bugsScriptRaw from '../templates/bugsScript.jl.tpl?raw'
 
 const BUGS_SCRIPT_TEMPLATE = template(bugsScriptRaw)
 import type { GraphElement, GraphNode, GraphEdge } from '../types'
+import { buildTopologicalOrder } from '../utils/topoSort'
 
 /**
  * Composable that generates BUGS model code from graph elements.
@@ -21,33 +22,8 @@ export function useBugsCodeGenerator(elements: Ref<GraphElement[]>) {
       return 'model {\n  # Your model will appear here...\n}'
     }
 
-    // Topological Sort (Kahn's algorithm) to determine node definition order.
-    const nodeInDegree: { [key: string]: number } = {}
-    const adjacencyList: { [key: string]: string[] } = {}
-    nodes.forEach((node) => {
-      nodeInDegree[node.id] = 0
-      adjacencyList[node.id] = []
-    })
-    edges.forEach((edge) => {
-      if (adjacencyList[edge.source] && nodeInDegree[edge.target] !== undefined) {
-        adjacencyList[edge.source].push(edge.target)
-        nodeInDegree[edge.target]++
-      }
-    })
-    const queue = nodes.filter((node) => nodeInDegree[node.id] === 0).map((n) => n.id)
-    const sortedNodeIds: string[] = []
-    while (queue.length > 0) {
-      const currentNodeId = queue.shift()!
-      sortedNodeIds.push(currentNodeId)
-      adjacencyList[currentNodeId]?.forEach((childNodeId) => {
-        if (nodeInDegree[childNodeId] !== undefined) {
-          nodeInDegree[childNodeId]--
-          if (nodeInDegree[childNodeId] === 0) {
-            queue.push(childNodeId)
-          }
-        }
-      })
-    }
+    // Topological sort to determine node definition order.
+    const sortedNodeIds = buildTopologicalOrder(nodes, edges)
 
     interface TreeMember {
       id: string

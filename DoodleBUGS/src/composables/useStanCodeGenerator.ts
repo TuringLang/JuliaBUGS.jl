@@ -1,17 +1,17 @@
 import { computed } from 'vue'
 import type { Ref } from 'vue'
 import { template } from 'lodash'
-import stanScriptRaw from '../templates/stanScript.py.tpl?raw'
+import stanScriptRaw from '../templates/stanScript.tpl?raw'
 
 const STAN_SCRIPT_TEMPLATE = template(stanScriptRaw)
 import type { GraphElement, GraphNode, GraphEdge } from '../types'
+import { buildTopologicalOrder } from '../utils/topoSort'
 
 interface DistributionMapping {
   stanName: string
   transformParams: (params: string[], node: GraphNode) => string[]
   stanParamNames: string[]
   needsPrecisionConvert?: boolean
-  swapArgs?: boolean
 }
 
 const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
@@ -42,7 +42,6 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
   dbin: {
     stanName: 'binomial',
     stanParamNames: ['N', 'theta'],
-    swapArgs: true,
     transformParams: (params) => {
       const [prob, size] = params
       return [size || '1', prob || '0.5']
@@ -81,6 +80,16 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
     stanName: 'multi_normal_prec',
     stanParamNames: ['mu', 'Omega'],
     transformParams: (params) => [params[0] || 'mu', params[1] || 'Omega'],
+  },
+  // BUGS dmt(mu, Omega, k): Omega is precision matrix, k is degrees of freedom.
+  // Stan multi_student_t(nu, mu, Sigma): Sigma is scale/covariance matrix = inverse(Omega).
+  dmt: {
+    stanName: 'multi_student_t',
+    stanParamNames: ['nu', 'mu', 'Sigma'],
+    transformParams: (params) => {
+      const [mu, Omega, k] = params
+      return [k || '1', mu || 'mu', Omega ? `inverse(${Omega})` : 'Sigma']
+    },
   },
   dwish: {
     stanName: 'wishart',
@@ -188,29 +197,20 @@ function findArrayIndexVarNames(nodes: GraphNode[], plates: GraphNode[]): Set<st
     ]) {
       if (!val) continue
       const expr = String(val)
-      let depth = 0
       let i = 0
       while (i < expr.length) {
         if (expr[i] === '[') {
-          depth++
-          if (depth >= 1) {
-            const start = i + 1
-            let j = start
-            while (j < expr.length && /[A-Za-z0-9_.]/.test(expr[j])) j++
-            if (j > start) {
-              const name = expr.substring(start, j)
-              if (!loopVars.has(name) && /^[A-Za-z_]/.test(name)) {
-                indexVarNames.add(name)
-              }
+          const start = i + 1
+          let j = start
+          while (j < expr.length && /[A-Za-z0-9_.]/.test(expr[j])) j++
+          if (j > start) {
+            const name = expr.substring(start, j)
+            if (!loopVars.has(name) && /^[A-Za-z_]/.test(name)) {
+              indexVarNames.add(name)
             }
           }
-          i++
-        } else if (expr[i] === ']') {
-          depth = Math.max(0, depth - 1)
-          i++
-        } else {
-          i++
         }
+        i++
       }
     }
   }
@@ -247,7 +247,6 @@ function convertExpression(expr: string): string {
   result = result.replace(/\bloggam\b/g, 'lgamma')
   result = result.replace(/\blogfact\b/g, 'log_factorial')
   result = result.replace(/\bilogit\b/g, 'inv_logit')
-  result = result.replace(/\blogistic\b/g, 'inv_logit')
   result = result.replace(/\bphi\s*\(/g, 'Phi(')
   result = result.replace(/\bprobit\s*\(/g, 'inv_Phi(')
   result = result.replace(/\bcloglog\s*\(([^)]+)\)/g, 'log(-log(1 - $1))')
@@ -260,6 +259,9 @@ function convertExpression(expr: string): string {
   result = result.replace(/\blogdet\b/g, 'log_determinant')
   result = result.replace(/\bmexp\b/g, 'matrix_exp')
   result = result.replace(/\bsoftplus\b/g, 'log1p_exp')
+  // Replace BUGS `logistic(x)` link function → Stan `inv_logit(x)`.
+  // Use a negative lookahead to avoid matching Stan distribution suffixes like logistic_lpdf.
+  result = result.replace(/\blogistic\b(?!_)/g, 'inv_logit')
   return result
 }
 
@@ -558,33 +560,6 @@ function formatStanParam(raw: string, nameToNode: Map<string, GraphNode>): strin
   return convertBugsName(p)
 }
 
-function buildTopologicalOrder(nodes: GraphNode[], edges: GraphEdge[]): string[] {
-  const nodeInDegree: Record<string, number> = {}
-  const adjacencyList: Record<string, string[]> = {}
-  nodes.forEach((node) => {
-    nodeInDegree[node.id] = 0
-    adjacencyList[node.id] = []
-  })
-  edges.forEach((edge) => {
-    if (adjacencyList[edge.source] && nodeInDegree[edge.target] !== undefined) {
-      adjacencyList[edge.source].push(edge.target)
-      nodeInDegree[edge.target]++
-    }
-  })
-  const queue = nodes.filter((n) => nodeInDegree[n.id] === 0).map((n) => n.id)
-  const sorted: string[] = []
-  while (queue.length > 0) {
-    const id = queue.shift()!
-    sorted.push(id)
-    adjacencyList[id]?.forEach((child) => {
-      if (nodeInDegree[child] !== undefined) {
-        nodeInDegree[child]--
-        if (nodeInDegree[child] === 0) queue.push(child)
-      }
-    })
-  }
-  return sorted
-}
 
 function needsBoundsFromDistribution(
   dist: string | undefined,
@@ -598,8 +573,13 @@ function needsBoundsFromDistribution(
     case 'dchisqr':
     case 'dweib':
     case 'dlnorm':
-    case 'dpar':
       return '<lower=0>'
+    case 'dpar': {
+      // BUGS dpar(alpha, c): support is [c, ∞). Use c (param2) as lower bound when available.
+      const rawParams = collectRawParams(node, nameToNode)
+      const c = rawParams[1]
+      return c ? `<lower=${c}>` : '<lower=0>'
+    }
     case 'dbeta':
       return '<lower=0, upper=1>'
     case 'dunif': {
@@ -690,6 +670,19 @@ function findUndeclaredDataVars(
 
 // Distributions that cannot be vectorized in Stan (multivariate / non-scalar support)
 const NON_VECTORIZABLE_DISTS = new Set(['dmnorm', 'dmt', 'dwish', 'ddirich', 'dmulti'])
+
+// Discrete distributions: Stan cannot sample these as latent (parameters block) variables.
+// They require marginalizing out the discrete parameter or using a specialized sampler.
+const DISCRETE_DISTRIBUTIONS = new Set([
+  'dbern',
+  'dbin',
+  'dpois',
+  'dcat',
+  'dnegbin',
+  'dgeom',
+  'dhyper',
+  'dbetabin',
+])
 
 // Given a raw BUGS param string and the current plate's loop variable, attempt to strip
 // the loop-variable index so the expression works on the whole array.
@@ -937,8 +930,10 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
       if (ppInfo) {
         parameterDeclarations.push(`  array[${ppInfo.freeSize}] real${bounds} ${stanName}_free;`)
         transformedParamLines.push(`  array[${ppInfo.fullSize}] real ${stanName};`)
+        // Indices 1..(plateStart-1) are outside the plate range and set to 0 as placeholders.
+        // Review whether 0 is appropriate for your model or replace with a meaningful value.
         for (let i = 1; i < ppInfo.plateStart; i++) {
-          transformedParamLines.push(`  ${stanName}[${i}] = 0;`)
+          transformedParamLines.push(`  ${stanName}[${i}] = 0;  // placeholder: outside plate range`)
         }
         for (let i = ppInfo.plateStart; i <= ppInfo.fullSize; i++) {
           transformedParamLines.push(
@@ -954,6 +949,15 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
       if (dist === 'dmnorm' || dist === 'dmt') baseType = `vector[${mvDim}]`
       else if (dist === 'dwish') baseType = `cov_matrix[${mvDim}]`
       else if (dist === 'ddirich') baseType = `simplex[${mvDim}]`
+
+      if (dist && DISCRETE_DISTRIBUTIONS.has(dist)) {
+        parameterDeclarations.push(
+          `  // WARNING: ${stanName} ~ ${dist} is a discrete distribution.`
+        )
+        parameterDeclarations.push(
+          `  // Stan cannot sample discrete latent parameters. Marginalize out ${stanName} or restructure the model.`
+        )
+      }
 
       if (dims.length > 0) {
         if (
@@ -1173,6 +1177,9 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
               }
               lines.push(`${indent}}`)
             } else {
+              if (node.nodeType === 'stochastic' && node.distribution && DISCRETE_DISTRIBUTIONS.has(node.distribution)) {
+                lines.push(`${indent}// WARNING: discrete latent variable — Stan requires marginalizing out ${stanName}.`)
+              }
               lines.push(
                 `${indent}${stanName}${idx} ~ ${distInfo.stanDist}(${distInfo.stanParams});`
               )
@@ -1357,10 +1364,12 @@ export function extractCensoredFields(
     if (node.nodeType !== 'observed') continue
     const cl = node.censorLower ? String(node.censorLower).trim() : ''
     const cu = node.censorUpper ? String(node.censorUpper).trim() : ''
-    const bound = cl || cu
-    if (!bound) continue
-    const boundName = bound.replace(/\[.*$/, '')
-    result.push({ varName: node.name, censorBoundName: boundName })
+    if (!cl && !cu) continue
+    // One entry per censored variable is sufficient: it drives the _is_obs indicator and
+    // the fill-missing-with-bound step. The lower bound is preferred when both are set;
+    // the upper bound passes through the data JSON unchanged via convertDataKeys.
+    const primaryBound = cl || cu
+    result.push({ varName: node.name, censorBoundName: primaryBound.replace(/\[.*$/, '') })
   }
   return result
 }
