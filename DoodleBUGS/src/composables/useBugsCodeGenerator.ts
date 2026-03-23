@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import type { Ref } from 'vue'
 import { template } from 'lodash'
-import bugsScriptRaw from '../templates/bugsScript.jl.tpl?raw'
+import bugsScriptRaw from '../templates/bugsScript.tpl?raw'
 
 const BUGS_SCRIPT_TEMPLATE = template(bugsScriptRaw)
 import type { GraphElement, GraphNode, GraphEdge } from '../types'
