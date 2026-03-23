@@ -141,6 +141,16 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
       return [r || '1', p ? `${p} / (1.0 - ${p})` : '1']
     },
   },
+  // BUGS dgeom(p): geometric (failures before first success), P(Y=y) = p*(1-p)^y.
+  // Stan has no geometric distribution; use neg_binomial(1, p/(1-p)) which is equivalent.
+  dgeom: {
+    stanName: 'neg_binomial',
+    stanParamNames: ['alpha', 'beta'],
+    transformParams: (params) => {
+      const [p] = params
+      return ['1', p ? `${p} / (1.0 - ${p})` : '1']
+    },
+  },
   dpar: {
     stanName: 'pareto',
     stanParamNames: ['y_min', 'alpha'],
@@ -243,9 +253,9 @@ function convertBugsName(name: string): string {
 
 function convertExpression(expr: string): string {
   let result = expr.replace(/([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_])/g, '$1_$2')
-  result = result.replace(/\bpow\s*\(([^,]+),\s*([^)]+)\)/g, 'pow($1, $2)')
   result = result.replace(/\bloggam\b/g, 'lgamma')
-  result = result.replace(/\blogfact\b/g, 'log_factorial')
+  // BUGS logfact(n) = log(n!) → Stan lgamma(n + 1) since lgamma(n+1) = log(Gamma(n+1)) = log(n!)
+  result = result.replace(/\blogfact\s*\(([^)]+)\)/g, 'lgamma($1 + 1)')
   result = result.replace(/\bilogit\b/g, 'inv_logit')
   result = result.replace(/\bphi\s*\(/g, 'Phi(')
   result = result.replace(/\bprobit\s*\(/g, 'inv_Phi(')
