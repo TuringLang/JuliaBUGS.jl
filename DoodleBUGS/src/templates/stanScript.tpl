@@ -8,14 +8,14 @@ import os
 import cmdstanpy
 
 model_code = """
-<%- modelCode %>"""
+<%= modelCode %>"""
 
 data = json.loads("""
-<%- dataJson %>
+<%= dataJson %>
 """)
 
 inits = json.loads("""
-<%- initsJson %>
+<%= initsJson %>
 """)
 
 model_dir = os.path.join(os.path.dirname(__file__), "stan_model")
@@ -37,10 +37,10 @@ model = cmdstanpy.CmdStanModel(stan_file=model_file)
 fit = model.sample(
     data=data_file,
     inits=inits_file,
-    chains=<%- nChains %>,
-    iter_warmup=<%- nWarmup %>,
-    iter_sampling=<%- nSamples %>,
-    seed=<%- seed %>,
+    chains=<%= nChains %>,
+    iter_warmup=<%= nWarmup %>,
+    iter_sampling=<%= nSamples %>,
+    seed=<%= seed %>,
 )
 
 print(fit.summary())

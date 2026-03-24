@@ -806,6 +806,25 @@ function tryVectorizeNode(
   return `${indent}${stanName} ~ ${stanDist}(${stanParams});`
 }
 
+// Matrix-producing Stan functions: their result is a matrix/vector, not a scalar.
+const MATRIX_RESULT_FUNCTIONS =
+  /\b(inverse|matrix_exp|crossprod|tcrossprod|diag_matrix|rep_matrix|append_col|append_row|cholesky_decompose|quad_form|mdivide_left|mdivide_right)\s*\(/
+
+const MULTIVARIATE_DISTS = new Set(['dmnorm', 'dmt', 'dwish', 'ddirich', 'dmulti'])
+
+function nodeEquationHasMatrixResult(node: GraphNode, nameToNode: Map<string, GraphNode>): boolean {
+  const eq = node.equation ? String(node.equation) : ''
+  if (MATRIX_RESULT_FUNCTIONS.test(eq)) return true
+  // Also flag if any referenced variable has a multivariate distribution
+  const identRe = /[A-Za-z_][A-Za-z0-9_.]*/g
+  let m: RegExpExecArray | null
+  while ((m = identRe.exec(eq)) !== null) {
+    const ref = nameToNode.get(m[0])
+    if (ref?.distribution && MULTIVARIATE_DISTS.has(ref.distribution)) return true
+  }
+  return false
+}
+
 export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
   const generatedStanCode = computed(() => {
     const nodes = elements.value.filter((el: GraphElement) => el.type === 'node') as GraphNode[]
@@ -1114,14 +1133,12 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
     for (const node of tpDetNodes.sort(sortByTopo)) {
       const stanName = convertBugsName(node.name)
       const dims = getArrayDimsFromNode(node, nodeMap, plates)
+      const needsTypeNote = nodeEquationHasMatrixResult(node, nameToNode)
+      const suffix = needsTypeNote ? '  // TODO: verify type (may need vector/matrix)' : ''
       if (dims.length > 0) {
-        transformedParamLines.push(
-          `  array[${dims.join(', ')}] real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`
-        )
+        transformedParamLines.push(`  array[${dims.join(', ')}] real ${stanName};${suffix}`)
       } else {
-        transformedParamLines.push(
-          `  real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`
-        )
+        transformedParamLines.push(`  real ${stanName};${suffix}`)
       }
     }
 
@@ -1129,14 +1146,12 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
     for (const node of gqDetNodes.sort(sortByTopo)) {
       const stanName = convertBugsName(node.name)
       const dims = getArrayDimsFromNode(node, nodeMap, plates)
+      const needsTypeNote = nodeEquationHasMatrixResult(node, nameToNode)
+      const suffix = needsTypeNote ? '  // TODO: verify type (may need vector/matrix)' : ''
       if (dims.length > 0) {
-        gqDeclLines.push(
-          `  array[${dims.join(', ')}] real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`
-        )
+        gqDeclLines.push(`  array[${dims.join(', ')}] real ${stanName};${suffix}`)
       } else {
-        gqDeclLines.push(
-          `  real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`
-        )
+        gqDeclLines.push(`  real ${stanName};${suffix}`)
       }
     }
 

@@ -1,15 +1,15 @@
 using JuliaBUGS, AbstractMCMC, AdvancedHMC, LogDensityProblems, LogDensityProblemsAD, MCMCChains, ReverseDiff, Random<% if (hasCensoring) { %>
 using Distributions: censored<% } %>
 
-data = <%- dataLiteral %>
+data = <%= dataLiteral %>
 
-inits = <%- initsLiteral %>
+inits = <%= initsLiteral %>
 <% if (hasCensoring) { %>
 # Register censored() as a valid BUGS primitive
 JuliaBUGS.@bugs_primitive censored
 <% } %>
 model_def = JuliaBUGS.@bugs("""
-<%- modelCode %>
+<%= modelCode %>
 """, true, false)
 
 # Compile the model
@@ -18,9 +18,9 @@ ad_model = ADgradient(:ReverseDiff, model)
 ld_model = AbstractMCMC.LogDensityModel(ad_model)
 
 # Sampling parameters
-n_samples, n_adapts = <%- nSamples %>, <%- nAdapts %>
-n_chains = <%- nChains %>
-seed = <%- seedLiteral %>
+n_samples, n_adapts = <%= nSamples %>, <%= nAdapts %>
+n_chains = <%= nChains %>
+seed = <%= seedLiteral %>
 
 seed_val = tryparse(Int, string(seed))
 rng = seed === nothing ? Random.default_rng() : (seed_val === nothing ? Random.default_rng() : Random.MersenneTwister(seed_val))
