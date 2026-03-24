@@ -838,14 +838,19 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
       const p1Stan = p1 ? convertBugsName(p1) : ''
       const p2Stan = p2 ? convertBugsName(p2) : ''
       if (dist === 'dmnorm' || dist === 'dmt') {
-        if (p1Stan && !nonDataNodeStanNames.has(p1Stan)) mvTypeOverrides.set(p1Stan, `vector[${mvDim}]`)
-        if (p2Stan && !nonDataNodeStanNames.has(p2Stan)) mvTypeOverrides.set(p2Stan, `matrix[${mvDim}, ${mvDim}]`)
+        if (p1Stan && !nonDataNodeStanNames.has(p1Stan))
+          mvTypeOverrides.set(p1Stan, `vector[${mvDim}]`)
+        if (p2Stan && !nonDataNodeStanNames.has(p2Stan))
+          mvTypeOverrides.set(p2Stan, `matrix[${mvDim}, ${mvDim}]`)
       } else if (dist === 'dwish') {
-        if (p1Stan && !nonDataNodeStanNames.has(p1Stan)) mvTypeOverrides.set(p1Stan, `matrix[${mvDim}, ${mvDim}]`)
+        if (p1Stan && !nonDataNodeStanNames.has(p1Stan))
+          mvTypeOverrides.set(p1Stan, `matrix[${mvDim}, ${mvDim}]`)
       } else if (dist === 'ddirich') {
-        if (p1Stan && !nonDataNodeStanNames.has(p1Stan)) mvTypeOverrides.set(p1Stan, `vector[${mvDim}]`)
+        if (p1Stan && !nonDataNodeStanNames.has(p1Stan))
+          mvTypeOverrides.set(p1Stan, `vector[${mvDim}]`)
       } else if (dist === 'dmulti') {
-        if (p1Stan && !nonDataNodeStanNames.has(p1Stan)) mvTypeOverrides.set(p1Stan, `simplex[${mvDim}]`)
+        if (p1Stan && !nonDataNodeStanNames.has(p1Stan))
+          mvTypeOverrides.set(p1Stan, `simplex[${mvDim}]`)
       }
     }
 
@@ -1091,9 +1096,13 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
       const stanName = convertBugsName(node.name)
       const dims = getArrayDimsFromNode(node, nodeMap, plates)
       if (dims.length > 0) {
-        transformedParamLines.push(`  array[${dims.join(', ')}] real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`)
+        transformedParamLines.push(
+          `  array[${dims.join(', ')}] real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`
+        )
       } else {
-        transformedParamLines.push(`  real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`)
+        transformedParamLines.push(
+          `  real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`
+        )
       }
     }
 
@@ -1102,9 +1111,13 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
       const stanName = convertBugsName(node.name)
       const dims = getArrayDimsFromNode(node, nodeMap, plates)
       if (dims.length > 0) {
-        gqDeclLines.push(`  array[${dims.join(', ')}] real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`)
+        gqDeclLines.push(
+          `  array[${dims.join(', ')}] real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`
+        )
       } else {
-        gqDeclLines.push(`  real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`)
+        gqDeclLines.push(
+          `  real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`
+        )
       }
     }
 
