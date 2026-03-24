@@ -123,7 +123,8 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
       const [v, lambda] = params
       const shape = v || '1'
       if (!lambda) return [shape, '1']
-      return [shape, `pow(${lambda}, -1.0 / ${shape})`]
+      // JuliaBUGS dweib(a, b): scale = 1/b (Weibull(a, 1/b))
+      return [shape, `1.0 / (${lambda})`]
     },
   },
   dchisqr: {
@@ -777,13 +778,20 @@ function tryVectorizeNode(
   if (idxParts.length !== 1 || idxParts[0] !== plateVar) return null
 
   const stanName = convertBugsName(node.name)
-  const rawParams = (['param1', 'param2', 'param3'] as const)
-    .map((k) => node[k])
-    .filter((v) => v && String(v).trim() !== '')
-    .map((v) => String(v!).trim())
+  // Preserve positional slots (empty string for absent params) so that
+  // transformParams destructuring receives values at the correct indices,
+  // matching the behaviour of collectRawParams.
+  const rawParams = (['param1', 'param2', 'param3'] as const).map((k) => {
+    const val = node[k]
+    return val ? String(val).trim() : ''
+  })
 
   const strippedParams: string[] = []
   for (const raw of rawParams) {
+    if (!raw) {
+      strippedParams.push('')
+      continue
+    }
     const stripped = stripLoopVarFromParam(raw, plateVar, nameToNode)
     if (stripped === null) return null
     strippedParams.push(stripped)
