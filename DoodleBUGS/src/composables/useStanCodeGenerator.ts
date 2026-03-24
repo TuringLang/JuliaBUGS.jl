@@ -471,7 +471,13 @@ function getArrayDimsFromNode(
     const dims: string[] = []
     for (const idx of indexParts) {
       const upper = varToUpper.get(idx)
-      if (upper) dims.push(upper)
+      if (upper) {
+        dims.push(upper)
+      } else if (!/^\d+$/.test(idx)) {
+        // idx is not a loop variable and not a numeric literal (specific element index);
+        // treat it directly as a dimension — it may be a data-size constant.
+        dims.push(idx)
+      }
     }
     return dims
   }
@@ -545,14 +551,14 @@ function formatStanDistribution(
 }
 
 function collectRawParams(node: GraphNode, nameToNode: Map<string, GraphNode>): string[] {
-  const params: string[] = []
-  for (const key of ['param1', 'param2', 'param3'] as const) {
+  // Always return exactly 3 positional entries (one per param slot) so that
+  // transformParams destructuring gets the right value at each index regardless
+  // of which earlier params are absent.
+  return (['param1', 'param2', 'param3'] as const).map((key) => {
     const val = node[key]
-    if (val && String(val).trim() !== '') {
-      params.push(formatStanParam(String(val).trim(), nameToNode))
-    }
-  }
-  return params
+    const s = val ? String(val).trim() : ''
+    return s ? formatStanParam(s, nameToNode) : ''
+  })
 }
 
 function formatStanParam(raw: string, nameToNode: Map<string, GraphNode>): string {
@@ -587,14 +593,18 @@ function needsBoundsFromDistribution(
       return '<lower=0>'
     case 'dpar': {
       // BUGS dpar(alpha, c): support is [c, ∞). Use c (param2) as lower bound when available.
+      // Strip any subscript (e.g. c[i]) — declaration bounds must be scalar expressions.
       const rawParams = collectRawParams(node, nameToNode)
-      const c = rawParams[1]
+      const c = rawParams[1] ? rawParams[1].replace(/\[.*$/, '') : ''
       return c ? `<lower=${c}>` : '<lower=0>'
     }
     case 'dbeta':
       return '<lower=0, upper=1>'
     case 'dunif': {
-      const [lower = '0', upper = '1'] = collectRawParams(node, nameToNode)
+      // Strip any subscript — declaration bounds must be scalar expressions.
+      const rawParams = collectRawParams(node, nameToNode)
+      const lower = (rawParams[0] || '0').replace(/\[.*$/, '') || '0'
+      const upper = (rawParams[1] || '1').replace(/\[.*$/, '') || '1'
       return `<lower=${lower}, upper=${upper}>`
     }
     default:
@@ -754,6 +764,10 @@ function tryVectorizeNode(
   const dist = node.distribution
   if (!dist || NON_VECTORIZABLE_DISTS.has(dist)) return null
 
+  // Discrete latent parameters can't be sampled in Stan at all — keep them in the
+  // loop so the "discrete latent variable" warning comment is emitted there.
+  if (node.nodeType === 'stochastic' && DISCRETE_DISTRIBUTIONS.has(dist)) return null
+
   // Node must be indexed by exactly this single loop variable
   const idxParts = (node.indices || '').trim()
     ? (node.indices || '').split(',').map((s) => s.trim())
@@ -806,6 +820,14 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
     const transformedParamLines: string[] = []
 
     const mvTypeOverrides = new Map<string, string>()
+    // Don't override types for names that already correspond to stochastic or deterministic
+    // nodes — those are handled by their own declaration loops using inferStanType / per-dist
+    // logic. Overriding them here could mis-type a shared base name (e.g. mu[i] stripped to
+    // mu) whose declaration is already correct.
+    const nonDataNodeStanNames = new Set<string>([
+      ...stochasticParams.map((n) => convertBugsName(n.name)),
+      ...deterministicNodes.map((n) => convertBugsName(n.name)),
+    ])
     const mvDistNodes = [...stochasticParams, ...observedNodes]
     for (const node of mvDistNodes) {
       const dist = node.distribution
@@ -813,15 +835,17 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
       const mvDim = inferMultivariateDim(node)
       const p1 = node.param1 ? String(node.param1).trim().replace(/\[.*$/, '') : ''
       const p2 = node.param2 ? String(node.param2).trim().replace(/\[.*$/, '') : ''
+      const p1Stan = p1 ? convertBugsName(p1) : ''
+      const p2Stan = p2 ? convertBugsName(p2) : ''
       if (dist === 'dmnorm' || dist === 'dmt') {
-        if (p1) mvTypeOverrides.set(convertBugsName(p1), `vector[${mvDim}]`)
-        if (p2) mvTypeOverrides.set(convertBugsName(p2), `matrix[${mvDim}, ${mvDim}]`)
+        if (p1Stan && !nonDataNodeStanNames.has(p1Stan)) mvTypeOverrides.set(p1Stan, `vector[${mvDim}]`)
+        if (p2Stan && !nonDataNodeStanNames.has(p2Stan)) mvTypeOverrides.set(p2Stan, `matrix[${mvDim}, ${mvDim}]`)
       } else if (dist === 'dwish') {
-        if (p1) mvTypeOverrides.set(convertBugsName(p1), `matrix[${mvDim}, ${mvDim}]`)
+        if (p1Stan && !nonDataNodeStanNames.has(p1Stan)) mvTypeOverrides.set(p1Stan, `matrix[${mvDim}, ${mvDim}]`)
       } else if (dist === 'ddirich') {
-        if (p1) mvTypeOverrides.set(convertBugsName(p1), `vector[${mvDim}]`)
+        if (p1Stan && !nonDataNodeStanNames.has(p1Stan)) mvTypeOverrides.set(p1Stan, `vector[${mvDim}]`)
       } else if (dist === 'dmulti') {
-        if (p1) mvTypeOverrides.set(convertBugsName(p1), `simplex[${mvDim}]`)
+        if (p1Stan && !nonDataNodeStanNames.has(p1Stan)) mvTypeOverrides.set(p1Stan, `simplex[${mvDim}]`)
       }
     }
 
@@ -1067,9 +1091,9 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
       const stanName = convertBugsName(node.name)
       const dims = getArrayDimsFromNode(node, nodeMap, plates)
       if (dims.length > 0) {
-        transformedParamLines.push(`  array[${dims.join(', ')}] real ${stanName};`)
+        transformedParamLines.push(`  array[${dims.join(', ')}] real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`)
       } else {
-        transformedParamLines.push(`  real ${stanName};`)
+        transformedParamLines.push(`  real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`)
       }
     }
 
@@ -1078,9 +1102,9 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
       const stanName = convertBugsName(node.name)
       const dims = getArrayDimsFromNode(node, nodeMap, plates)
       if (dims.length > 0) {
-        gqDeclLines.push(`  array[${dims.join(', ')}] real ${stanName};`)
+        gqDeclLines.push(`  array[${dims.join(', ')}] real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`)
       } else {
-        gqDeclLines.push(`  real ${stanName};`)
+        gqDeclLines.push(`  real ${stanName};  // TODO: verify type (may need vector/matrix for non-scalar results)`)
       }
     }
 
@@ -1244,6 +1268,11 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
                 )
                 lines.push(
                   `${indent}// that was not translated. Embed this expression in the distribution parameters or use a deterministic node.`
+                )
+              }
+              if (node.distribution === 'dmulti') {
+                lines.push(
+                  `${indent}// Note: BUGS dmulti total count N dropped — Stan's multinomial treats N = sum(y) implicitly.`
                 )
               }
               lines.push(
