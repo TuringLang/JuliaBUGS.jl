@@ -57,7 +57,7 @@ const stanDataJson = computed(() => {
 
 const stanInitsJson = computed(() => {
   const inits = dataStore.parsedGraphData?.inits || {}
-  return generateStanInitsJson(inits)
+  return generateStanInitsJson(inits, graphStore.currentGraphElements)
 })
 
 const showDataPreview = ref(false)

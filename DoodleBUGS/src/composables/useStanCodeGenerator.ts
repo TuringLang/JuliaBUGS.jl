@@ -104,6 +104,8 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
     stanParamNames: ['alpha'],
     transformParams: (params) => [params[0] || 'alpha'],
   },
+  // BUGS dmulti(p, N): N (total count) is dropped because Stan's multinomial(theta)
+  // only takes the probability simplex — N is implicit as sum(y) from the observed data.
   dmulti: {
     stanName: 'multinomial',
     stanParamNames: ['theta'],
@@ -559,7 +561,7 @@ function formatStanParam(raw: string, nameToNode: Map<string, GraphNode>): strin
   if (/^[+-]?(?:\d+\.?\d*|\d*\.\d+)(?:[eE][+-]?\d+)?$/.test(p)) {
     return p
   }
-  if (/\[[^\]]+\]\s*$/.test(p)) return convertBugsName(p)
+  if (/\[[^\]]+\]\s*$/.test(p)) return convertExpression(p)
   if (/[()]/.test(p)) {
     return convertExpression(p)
   }
@@ -930,6 +932,25 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
     const partialPlateParams = detectPartialPlateParams(elements.value)
     const partialPlateMap = new Map(partialPlateParams.map((p) => [p.stanName, p]))
 
+    // Detect stochastic params in plates with lower > 1 but a non-literal upper bound.
+    // detectPartialPlateParams skips these, so they fall through to normal declarations
+    // which may produce incorrect Stan code — warn the user.
+    const partialPlateWarningNames = new Set<string>()
+    for (const node of stochasticParams) {
+      if (!node.parent) continue
+      const parentPlate = nodeMap.get(node.parent)
+      if (!parentPlate || parentPlate.nodeType !== 'plate') continue
+      const range = convertBugsName(parentPlate.loopRange || '1:N')
+      const parts = range.split(':')
+      if (parts.length !== 2) continue
+      const lower = parseInt(parts[0])
+      if (isNaN(lower) || lower <= 1) continue
+      const stanName = convertBugsName(node.name)
+      if (!partialPlateMap.has(stanName)) {
+        partialPlateWarningNames.add(stanName)
+      }
+    }
+
     for (const node of stochasticParams.sort(sortByTopo)) {
       const stanName = convertBugsName(node.name)
       const dims = getArrayDimsFromNode(node, nodeMap, plates)
@@ -954,12 +975,32 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
         continue
       }
 
+      if (partialPlateWarningNames.has(stanName)) {
+        const parentPlate = nodeMap.get(node.parent!)
+        const range = parentPlate ? convertBugsName(parentPlate.loopRange || '1:N') : '?:N'
+        parameterDeclarations.push(
+          `  // WARNING: '${stanName}' is in a plate with range '${range}' (lower > 1, symbolic upper).`
+        )
+        parameterDeclarations.push(
+          `  // Partial-plate handling requires a literal upper bound. Declare '${stanName}_free' manually.`
+        )
+      }
+
       const dist = node.distribution
       let baseType = 'real'
       const mvDim = inferMultivariateDim(node)
+      const mvDistributions = new Set(['dmnorm', 'dmt', 'dwish', 'ddirich'])
+      const p1str = node.param1 ? String(node.param1).trim() : ''
+      const mvDimExplicit = !!(p1str.match(/\[1:(\w+)\]/) || p1str.match(/\[(\d+)\]/))
       if (dist === 'dmnorm' || dist === 'dmt') baseType = `vector[${mvDim}]`
       else if (dist === 'dwish') baseType = `cov_matrix[${mvDim}]`
       else if (dist === 'ddirich') baseType = `simplex[${mvDim}]`
+
+      if (dist && mvDistributions.has(dist) && !mvDimExplicit) {
+        parameterDeclarations.push(
+          `  // TODO: Replace 'K' in the declaration below with the actual dimension (could not infer from param1).`
+        )
+      }
 
       if (dist && DISCRETE_DISTRIBUTIONS.has(dist)) {
         parameterDeclarations.push(
@@ -1195,6 +1236,14 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
               ) {
                 lines.push(
                   `${indent}// WARNING: discrete latent variable — Stan requires marginalizing out ${stanName}.`
+                )
+              }
+              if (node.equation && String(node.equation).trim()) {
+                lines.push(
+                  `${indent}// WARNING: BUGS node '${stanName}' has an equation ('${convertExpression(String(node.equation).trim())}')`
+                )
+                lines.push(
+                  `${indent}// that was not translated. Embed this expression in the distribution parameters or use a deterministic node.`
                 )
               }
               lines.push(
