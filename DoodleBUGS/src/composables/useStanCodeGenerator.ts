@@ -161,20 +161,26 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
       return [c || '1', alpha || '1']
     },
   },
+  // BUGS ddexp(mu, tau): tau is precision-like (variance ∝ 1/tau), scale b = 1/sqrt(tau).
+  // Stan double_exponential(mu, sigma): sigma = scale = 1/sqrt(tau).
   ddexp: {
     stanName: 'double_exponential',
     stanParamNames: ['mu', 'sigma'],
+    needsPrecisionConvert: true,
     transformParams: (params) => {
       const [mu, tau] = params
-      return [mu || '0', tau ? `1.0 / ${tau}` : '1']
+      return [mu || '0', tau ? `1.0 / sqrt(${tau})` : '1']
     },
   },
+  // BUGS dlogis(mu, tau): tau is precision-like (variance ∝ 1/tau), scale s = 1/sqrt(tau).
+  // Stan logistic(mu, sigma): sigma = scale = 1/sqrt(tau).
   dlogis: {
     stanName: 'logistic',
     stanParamNames: ['mu', 's'],
+    needsPrecisionConvert: true,
     transformParams: (params) => {
       const [mu, tau] = params
-      return [mu || '0', tau ? `1.0 / ${tau}` : '1']
+      return [mu || '0', tau ? `1.0 / sqrt(${tau})` : '1']
     },
   },
 }
@@ -263,6 +269,8 @@ function convertExpression(expr: string): string {
   result = result.replace(/\bprobit\s*\(/g, 'inv_Phi(')
   result = result.replace(/\bcloglog\s*\(([^)]+)\)/g, 'log(-log(1 - $1))')
   result = result.replace(/\bicloglog\s*\(([^)]+)\)/g, '1 - exp(-exp($1))')
+  // cexpexp is not a standard BUGS function; mapped to the same formula as icloglog
+  // (1 - exp(-exp(x))). Verify this matches your intended semantics.
   result = result.replace(/\bcexpexp\s*\(([^)]+)\)/g, '1 - exp(-exp($1))')
   result = result.replace(/\binprod\b/g, 'dot_product')
   result = result.replace(/\bstep\s*\(([^)]+)\)/g, '($1 >= 0 ? 1 : 0)')
@@ -1028,6 +1036,15 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
       if (dist && mvDistributions.has(dist) && !mvDimExplicit) {
         parameterDeclarations.push(
           `  // TODO: Replace 'K' in the declaration below with the actual dimension (could not infer from param1).`
+        )
+      }
+
+      if (dist === 'dwish') {
+        parameterDeclarations.push(
+          `  // NOTE: '${stanName}' is declared as cov_matrix (symmetric positive-definite).`
+        )
+        parameterDeclarations.push(
+          `  // In BUGS, dwish variables are typically used as precision matrices. If so, pass inverse(${stanName}) where a covariance matrix is expected.`
         )
       }
 
