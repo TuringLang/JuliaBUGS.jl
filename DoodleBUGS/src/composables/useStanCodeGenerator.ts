@@ -11,14 +11,12 @@ interface DistributionMapping {
   stanName: string
   transformParams: (params: string[], node: GraphNode) => string[]
   stanParamNames: string[]
-  needsPrecisionConvert?: boolean
 }
 
 const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
   dnorm: {
     stanName: 'normal',
     stanParamNames: ['mu', 'sigma'],
-    needsPrecisionConvert: true,
     transformParams: (params) => {
       const [mu, tau] = params
       return [mu || '0', tau ? `1.0 / sqrt(${tau})` : '1']
@@ -60,7 +58,6 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
   dt: {
     stanName: 'student_t',
     stanParamNames: ['nu', 'mu', 'sigma'],
-    needsPrecisionConvert: true,
     transformParams: (params) => {
       const [mu, tau, k] = params
       return [k || '1', mu || '0', tau ? `1.0 / sqrt(${tau})` : '1']
@@ -74,7 +71,7 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
   dcat: {
     stanName: 'categorical',
     stanParamNames: ['theta'],
-    transformParams: (params) => [params[0] || 'theta'],
+    transformParams: (params) => [params[0] || ''],
   },
   dmnorm: {
     stanName: 'multi_normal_prec',
@@ -114,7 +111,6 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
   dlnorm: {
     stanName: 'lognormal',
     stanParamNames: ['mu', 'sigma'],
-    needsPrecisionConvert: true,
     transformParams: (params) => {
       const [mu, tau] = params
       return [mu || '0', tau ? `1.0 / sqrt(${tau})` : '1']
@@ -166,7 +162,6 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
   ddexp: {
     stanName: 'double_exponential',
     stanParamNames: ['mu', 'sigma'],
-    needsPrecisionConvert: true,
     transformParams: (params) => {
       const [mu, tau] = params
       return [mu || '0', tau ? `1.0 / sqrt(${tau})` : '1']
@@ -177,7 +172,6 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
   dlogis: {
     stanName: 'logistic',
     stanParamNames: ['mu', 's'],
-    needsPrecisionConvert: true,
     transformParams: (params) => {
       const [mu, tau] = params
       return [mu || '0', tau ? `1.0 / sqrt(${tau})` : '1']
@@ -260,7 +254,7 @@ function convertBugsName(name: string): string {
 }
 
 function convertExpression(expr: string): string {
-  let result = expr.replace(/([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_])/g, '$1_$2')
+  let result = expr.replace(/([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_])/g, '$1_$2')
   result = result.replace(/\bloggam\b/g, 'lgamma')
   // BUGS logfact(n) = log(n!) → Stan lgamma(n + 1) since lgamma(n+1) = log(Gamma(n+1)) = log(n!)
   result = result.replace(/\blogfact\s*\(([^)]+)\)/g, 'lgamma($1 + 1)')
@@ -1522,7 +1516,7 @@ export function generateStanStandaloneScript(input: StanScriptInput): string {
   const nSamples = settings?.n_samples ?? 1000
   const nWarmup = settings?.n_adapts ?? 1000
   const nChains = settings?.n_chains ?? 1
-  const seed = typeof settings?.seed === 'number' ? settings.seed : 12345
+  const seed = typeof settings?.seed === 'number' ? settings.seed : 'None'
 
   return STAN_SCRIPT_TEMPLATE({
     modelCode,
