@@ -61,17 +61,17 @@ julia> using JuliaBUGS.AbstractPPL: VarName
 julia> vn = VarName(:x);
 
 julia> collect(elementwise_varnames(vn, 1.5))
-1-element Vector{VarName{:x, typeof(identity)}}:
+1-element Vector{VarName{:x, Iden}}:
  x
 
 julia> collect(elementwise_varnames(vn, [1.0, 2.0, 3.0]))
-3-element Vector{VarName{:x, ComposedFunction{IndexLens{Tuple{Int64}}, typeof(identity)}}}:
+3-element Vector{VarName{:x, Index{Tuple{Int64}, @NamedTuple{}, Iden}}}:
  x[1]
  x[2]
  x[3]
 
 julia> collect(elementwise_varnames(vn, [1.0 2.0; 3.0 4.0]))
-2×2 Matrix{VarName{:x, ComposedFunction{IndexLens{Tuple{Int64, Int64}}, typeof(identity)}}}:
+2×2 Matrix{VarName{:x, Index{Tuple{Int64, Int64}, @NamedTuple{}, Iden}}}:
  x[1, 1]  x[1, 2]
  x[2, 1]  x[2, 2]
 
@@ -94,7 +94,7 @@ function elementwise_varnames(
 ) where {sym}
     current_optic = getoptic(vn)
     return (
-        VarName{sym}(Accessors.IndexLens(Tuple(I)) ∘ current_optic) for
+        VarName{sym}(AbstractPPL.Index(Tuple(I), (;)) ∘ current_optic) for
         I in CartesianIndices(val)
     )
 end
@@ -161,14 +161,14 @@ function JuliaBUGS.gen_chains(
         # (they were just set by evaluate!!, so they match samples[i])
         push!(
             param_vals,
-            [AbstractPPL.get(evaluation_env, param_var) for param_var in param_vars],
+            [AbstractPPL.getvalue(evaluation_env, param_var) for param_var in param_vars],
         )
 
         # Get generated quantities from the evaluation environment
         push!(
             generated_quantities,
             [
-                AbstractPPL.get(evaluation_env, generated_var) for
+                AbstractPPL.getvalue(evaluation_env, generated_var) for
                 generated_var in generated_vars
             ],
         )
