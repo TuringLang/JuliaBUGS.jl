@@ -140,16 +140,9 @@ const DISTRIBUTION_MAP: Record<string, DistributionMapping> = {
       return [r || '1', p ? `${p} / (1.0 - ${p})` : '1']
     },
   },
-  // BUGS dgeom(p): geometric (failures before first success), P(Y=y) = p*(1-p)^y.
-  // Stan has no geometric distribution; use neg_binomial(1, p/(1-p)) which is equivalent.
-  dgeom: {
-    stanName: 'neg_binomial',
-    stanParamNames: ['alpha', 'beta'],
-    transformParams: (params) => {
-      const [p] = params
-      return ['1', p ? `${p} / (1.0 - ${p})` : '1']
-    },
-  },
+  // dgeom is intentionally not mapped: JuliaBUGS dgeom(p) is 1-based (P(X=x) = (1-p)^(x-1)*p,
+  // x >= 1) while Stan's neg_binomial(1, p/(1-p)) is 0-based. The support shift requires
+  // explicit likelihood adjustments in the generated code that are not yet implemented.
   dpar: {
     stanName: 'pareto',
     stanParamNames: ['y_min', 'alpha'],
@@ -533,19 +526,21 @@ function inferStanType(
   return baseType
 }
 
+type FormatDistResult =
+  | { stanDist: string; stanParams: string }
+  | { error: string }
+  | null // null means dflat or no distribution — no sampling statement emitted
+
 function formatStanDistribution(
   node: GraphNode,
   nameToNode: Map<string, GraphNode>
-): { stanDist: string; stanParams: string } | null {
+): FormatDistResult {
   const dist = node.distribution
-  if (!dist) return null
+  if (!dist || dist === 'dflat') return null // flat prior: intentionally no statement
 
   const mapping = DISTRIBUTION_MAP[dist]
   if (!mapping) {
-    // dflat = implicit flat prior in Stan (no sampling statement needed).
-    // All other unmapped distributions: return null so the caller emits a comment
-    // instead of a broken ~ statement that stanc would reject.
-    return null
+    return { error: `'${dist}' has no Stan equivalent — sampling statement omitted` }
   }
 
   const rawParams = collectRawParams(node, nameToNode)
@@ -1258,14 +1253,10 @@ export function useStanCodeGenerator(elements: Ref<GraphElement[]>) {
           (node.nodeType === 'stochastic' || node.nodeType === 'observed')
         ) {
           const distInfo = formatStanDistribution(node, nameToNode)
-          if (!distInfo) {
-            const dist = node.distribution
-            if (dist && dist !== 'dflat') {
-              lines.push(
-                `${indent}// ${dist}: not supported in Stan — add this distribution manually`
-              )
-            }
-            // dflat: implicit flat prior, no statement needed
+          if (distInfo === null) {
+            // dflat or no distribution: no sampling statement needed
+          } else if ('error' in distInfo) {
+            lines.push(`${indent}// ERROR: ${distInfo.error}`)
           } else {
             const cl = node.censorLower ? String(node.censorLower).trim() : ''
             const cu = node.censorUpper ? String(node.censorUpper).trim() : ''
