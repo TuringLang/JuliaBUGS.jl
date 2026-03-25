@@ -905,6 +905,30 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
   if ((e.target as HTMLElement).closest('.db-theme-toggle-header')) return
   if (!uiStore.isLeftSidebarOpen) uiStore.toggleLeftSidebar()
 }
+
+const dataImportInput = ref<HTMLInputElement | null>(null)
+
+const handleDataImport = (event: Event) => {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const content = e.target?.result as string
+    try {
+      JSON.parse(content)
+      dataStore.dataContent = content
+    } catch {
+      alert('Invalid JSON file format.')
+    }
+    if (dataImportInput.value) dataImportInput.value.value = ''
+  }
+  reader.readAsText(file)
+}
+
+const handleScriptSettingsDone = () => {
+  scriptStore.standaloneScript = getScriptContent()
+  showScriptSettingsModal.value = false
+}
 </script>
 
 <template>
@@ -1301,7 +1325,9 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
           :default-height="dataPanelSize.height"
           :default-x="dataPanelPos.x || windowWidth - 420"
           :default-y="dataPanelPos.y"
+          :show-import="true"
           @close="toggleDataPanel"
+          @import="dataImportInput?.click()"
           @drag-start="handleUIInteractionStart"
           @drag-end="
             (pos) => {
@@ -1320,6 +1346,13 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
           "
         >
           <DataInputPanel :is-active="isDataPanelOpen" />
+          <input
+            type="file"
+            ref="dataImportInput"
+            accept=".json"
+            style="display: none"
+            @change="handleDataImport"
+          />
         </FloatingPanel>
 
         <AboutModal :is-open="showAboutModal" @close="showAboutModal = false" />
@@ -1354,7 +1387,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
             <ScriptSettingsPanel />
           </template>
           <template #footer>
-            <BaseButton @click="showScriptSettingsModal = false">Done</BaseButton>
+            <BaseButton @click="handleScriptSettingsDone">Done</BaseButton>
           </template>
         </BaseModal>
 
