@@ -346,7 +346,7 @@ const {
   handleSelectNodeFromModal,
   handleShare,
   handleGenerateShareLink,
-  createNewProject,
+  createNewProject: baseCreateNewProject,
   createNewGraph,
   triggerGraphImport,
   handleGraphImportFile,
@@ -494,17 +494,13 @@ const handleNewGraph = () => {
   }
 }
 
+const createNewProject = () => {
+  baseCreateNewProject()
+  uiStore.activeLeftAccordionTabs = [...new Set([...uiStore.activeLeftAccordionTabs, 'project'])]
+  uiStore.isLeftSidebarOpen = true
+}
+
 const DOODLEBUGS_BASE_URL = 'https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/'
-
-const handleShareGraph = () => {
-  shareUrl.value = ''
-  showShareModal.value = true
-}
-
-const handleShareProjectUrl = () => {
-  shareUrl.value = ''
-  showShareModal.value = true
-}
 
 const handleWidgetGenerateShareLink = (options: {
   scope: 'current' | 'project' | 'custom'
@@ -854,46 +850,6 @@ watch(
   { deep: true }
 )
 
-const handleToolbarNavigation = (view: string) => {
-  if (view === 'project') {
-    if (
-      uiStore.isLeftSidebarOpen &&
-      activeLeftAccordionTabs.value.includes('project') &&
-      activeLeftAccordionTabs.value.length === 1
-    ) {
-      uiStore.isLeftSidebarOpen = false
-    } else {
-      uiStore.isLeftSidebarOpen = true
-      activeLeftAccordionTabs.value = ['project']
-    }
-  } else if (view === 'view') {
-    if (
-      uiStore.isLeftSidebarOpen &&
-      activeLeftAccordionTabs.value.includes('view') &&
-      activeLeftAccordionTabs.value.length === 1
-    ) {
-      uiStore.isLeftSidebarOpen = false
-    } else {
-      uiStore.isLeftSidebarOpen = true
-      activeLeftAccordionTabs.value = ['view']
-    }
-  } else if (view === 'help') {
-    if (uiStore.isLeftSidebarOpen && activeLeftAccordionTabs.value.includes('help')) {
-      uiStore.isLeftSidebarOpen = false
-    } else {
-      uiStore.isLeftSidebarOpen = true
-      activeLeftAccordionTabs.value = ['help', 'devtools']
-    }
-  } else if (view === 'export') {
-    if (uiStore.isRightSidebarOpen && uiStore.activeRightTab === 'export') {
-      uiStore.isRightSidebarOpen = false
-    } else {
-      uiStore.isRightSidebarOpen = true
-      uiStore.setActiveRightTab('export')
-    }
-  }
-}
-
 const handleUIInteractionStart = () => {
   isDraggingUI.value = true
 }
@@ -929,6 +885,15 @@ const handleScriptSettingsDone = () => {
   scriptStore.standaloneScript = getScriptContent()
   showScriptSettingsModal.value = false
 }
+
+watch(showNewGraphModal, (val) => {
+  if (!val) {
+    clearImportedData()
+    newGraphName.value = ''
+    if (graphImportInput.value) graphImportInput.value.value = ''
+    isDragOver.value = false
+  }
+})
 </script>
 
 <template>
@@ -1041,7 +1006,6 @@ const handleScriptSettingsDone = () => {
         @toggle-detach-mode="uiStore.toggleDetachMode"
         @open-style-modal="showStyleModal = true"
         @share="handleShare"
-        @nav="handleToolbarNavigation"
         @drag-start="handleUIInteractionStart"
         @drag-end="handleUIInteractionEnd"
       />
@@ -1229,7 +1193,6 @@ const handleScriptSettingsDone = () => {
             :showZoomControls="showZoomControls"
             :showDebugPanel="showDebugPanel"
             :isCodePanelOpen="isCodePanelOpen"
-            :isDetachModeActive="isDetachModeActive"
             :showDetachModeControl="showDetachModeControl"
             @toggle-left-sidebar="uiStore.toggleLeftSidebar"
             @new-project="handleNewProject"
@@ -1240,15 +1203,11 @@ const handleScriptSettingsDone = () => {
             @update:gridSize="gridSize = $event"
             @update:showZoomControls="showZoomControls = $event"
             @update:showDebugPanel="showDebugPanel = $event"
-            @update:isDetachModeActive="isDetachModeActive = $event"
             @update:show-detach-mode-control="showDetachModeControl = $event"
             @toggle-code-panel="toggleCodePanel"
             @load-example="handleLoadExampleAction"
             @open-about-modal="showAboutModal = true"
             @open-faq-modal="showFaqModal = true"
-            @toggle-dark-mode="uiStore.toggleDarkMode"
-            @share-graph="handleShareGraph"
-            @share-project-url="handleShareProjectUrl"
           />
         </div>
 

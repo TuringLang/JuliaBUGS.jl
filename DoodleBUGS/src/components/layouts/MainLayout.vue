@@ -315,10 +315,6 @@ const handleOpenScriptSettings = () => {
   showScriptSettingsModal.value = true
 }
 
-const toggleJsonPanel = () => {
-  showDebugPanel.value = true
-}
-
 const toggleLeftSidebar = () => {
   if (!isLeftSidebarOpen.value && window.innerWidth < 768) isRightSidebarOpen.value = false
   isLeftSidebarOpen.value = !isLeftSidebarOpen.value
@@ -550,7 +546,6 @@ onUnmounted(() => {
       :showZoomControls="showZoomControls"
       :showDebugPanel="showDebugPanel"
       :isCodePanelOpen="isCodePanelOpen"
-      :isDetachModeActive="isDetachModeActive"
       :showDetachModeControl="showDetachModeControl"
       @toggle-left-sidebar="toggleLeftSidebar"
       @new-project="showNewProjectModal = true"
@@ -561,7 +556,6 @@ onUnmounted(() => {
       @update:gridSize="gridSize = $event"
       @update:showZoomControls="showZoomControls = $event"
       @update:showDebugPanel="showDebugPanel = $event"
-      @update:isDetachModeActive="isDetachModeActive = $event"
       @update:showDetachModeControl="showDetachModeControl = $event"
       @toggle-code-panel="toggleCodePanel"
       @load-example="handleLoadExample"
@@ -744,7 +738,6 @@ onUnmounted(() => {
       @layout-graph="handleGraphLayout"
       @toggle-code-panel="toggleCodePanel"
       @toggle-data-panel="toggleDataPanel"
-      @toggle-json-panel="toggleJsonPanel"
       @toggle-detach-mode="uiStore.toggleDetachMode"
       @open-style-modal="showStyleModal = true"
       @share="handleShare"
