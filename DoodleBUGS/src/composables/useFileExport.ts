@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import type { Ref } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { useGraphStore } from '../stores/graphStore'
@@ -7,9 +7,15 @@ import { useDataStore } from '../stores/dataStore'
 import { useScriptStore } from '../stores/scriptStore'
 import { useGraphInstance } from './useGraphInstance'
 import { generateStandaloneScript } from './useBugsCodeGenerator'
+import {
+  generateStanStandaloneScript,
+  generateStanDataJson,
+  generateStanInitsJson,
+  extractCensoredFields,
+} from './useStanCodeGenerator'
 import { downloadBlob } from '../utils/downloadBlob'
 
-export function useFileExport(generatedCode: Ref<string>) {
+export function useFileExport(generatedCode: Ref<string>, stanCode?: Ref<string>) {
   const graphStore = useGraphStore()
   const projectStore = useProjectStore()
   const dataStore = useDataStore()
@@ -40,6 +46,62 @@ export function useFileExport(generatedCode: Ref<string>) {
   const handleDownloadBugs = () => {
     const blob = new Blob([generatedCode.value], { type: 'text/plain;charset=utf-8' })
     downloadBlob(blob, 'model.bugs')
+  }
+
+  const handleDownloadStan = () => {
+    const code = stanCode?.value || ''
+    if (!code) return
+    const blob = new Blob([code], { type: 'text/plain;charset=utf-8' })
+    downloadBlob(blob, 'model.stan')
+  }
+
+  const getStanScriptContent = () => {
+    const { parsedGraphData } = dataStore
+    const data = parsedGraphData?.data || {}
+    const inits = parsedGraphData?.inits || {}
+    const code = stanCode?.value || ''
+    const censoredFields = extractCensoredFields(graphStore.currentGraphElements)
+    return generateStanStandaloneScript({
+      modelCode: code,
+      data,
+      inits,
+      elements: graphStore.currentGraphElements,
+      censoredFields,
+      settings: {
+        n_samples: scriptStore.samplerSettings.n_samples,
+        n_adapts: scriptStore.samplerSettings.n_adapts,
+        n_chains: scriptStore.samplerSettings.n_chains,
+        seed: scriptStore.samplerSettings.seed ?? undefined,
+      },
+    })
+  }
+
+  const handleGenerateStanScript = () => {
+    scriptStore.standaloneStanScript = getStanScriptContent()
+  }
+
+  const handleDownloadStanScript = () => {
+    const content = scriptStore.standaloneStanScript || getStanScriptContent()
+    if (!content) return
+    const blob = new Blob([content], { type: 'text/plain' })
+    downloadBlob(blob, 'run_stan_model.py')
+  }
+
+  const handleDownloadStanData = () => {
+    const { parsedGraphData } = dataStore
+    const data = parsedGraphData?.data || {}
+    const censoredFields = extractCensoredFields(graphStore.currentGraphElements)
+    const json = generateStanDataJson(data, censoredFields)
+    const blob = new Blob([json], { type: 'application/json' })
+    downloadBlob(blob, 'data.json')
+  }
+
+  const handleDownloadStanInits = () => {
+    const { parsedGraphData } = dataStore
+    const inits = parsedGraphData?.inits || {}
+    const json = generateStanInitsJson(inits, graphStore.currentGraphElements)
+    const blob = new Blob([json], { type: 'application/json' })
+    downloadBlob(blob, 'inits.json')
   }
 
   const handleDownloadScript = () => {
@@ -104,12 +166,32 @@ export function useFileExport(generatedCode: Ref<string>) {
     downloadBlob(blob, `${graphMeta.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`)
   }
 
+  if (stanCode) {
+    watch(stanCode, () => {
+      if (scriptStore.standaloneStanScript) {
+        scriptStore.standaloneStanScript = getStanScriptContent()
+      }
+    })
+  }
+
+  watch(generatedCode, () => {
+    if (scriptStore.standaloneScript) {
+      scriptStore.standaloneScript = getScriptContent()
+    }
+  })
+
   return {
     showExportModal,
     currentExportType,
     getScriptContent,
+    getStanScriptContent,
     handleDownloadBugs,
+    handleDownloadStan,
     handleDownloadScript,
+    handleGenerateStanScript,
+    handleDownloadStanScript,
+    handleDownloadStanData,
+    handleDownloadStanInits,
     openExportModal,
     handleConfirmExport,
     handleExportJson,

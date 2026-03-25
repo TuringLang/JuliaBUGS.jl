@@ -42,9 +42,6 @@ const emit = defineEmits<{
   (e: 'load-example', exampleId: string): void
   (e: 'open-about-modal'): void
   (e: 'open-faq-modal'): void
-  (e: 'toggle-dark-mode'): void
-  (e: 'share-graph', graphId: string): void
-  (e: 'share-project-url', projectId: string): void
   (e: 'header-drag-start', event: MouseEvent | TouchEvent): void
 }>()
 
@@ -161,12 +158,7 @@ const handleHeaderClick = () => {
           <AccordionHeader><i class="fas fa-folder db-icon-12"></i> Project</AccordionHeader>
           <AccordionContent>
             <div class="db-panel-content-wrapper">
-              <ProjectManager
-                @new-project="$emit('new-project')"
-                @new-graph="$emit('new-graph')"
-                @share-graph="(id: string) => $emit('share-graph', id)"
-                @share-project-url="(id: string) => $emit('share-project-url', id)"
-              />
+              <ProjectManager @new-project="$emit('new-project')" @new-graph="$emit('new-graph')" />
               <div class="db-divider"></div>
               <div class="db-example-row">
                 <label class="db-example-label">Examples</label>

@@ -32,7 +32,6 @@ const emit = defineEmits<{
   (e: 'toggle-detach-mode'): void
   (e: 'open-style-modal'): void
   (e: 'share'): void
-  (e: 'nav', view: string): void
   (e: 'drag-start'): void
   (e: 'drag-end', position: { x: number; y: number }): void
 }>()

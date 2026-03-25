@@ -30,11 +30,13 @@ import { useDataStore } from './stores/dataStore'
 import { useScriptStore } from './stores/scriptStore'
 import { useGraphElements } from './composables/useGraphElements'
 import { useBugsCodeGenerator } from './composables/useBugsCodeGenerator'
+import { useStanCodeGenerator } from './composables/useStanCodeGenerator'
 import { useGraphValidator } from './composables/useGraphValidator'
 import { usePersistence } from './composables/usePersistence'
 import { useEditorActions } from './composables/useEditorActions'
 import { useWidgetEmitter } from './composables/useWidgetEmitter'
 import { examples } from './config/examples'
+import type { CodeLanguage } from './components/panels/CodePreviewPanel.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -280,6 +282,7 @@ const controlsStyle = computed(() => {
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements()
 const { parsedGraphData } = storeToRefs(dataStore)
 const { generatedCode } = useBugsCodeGenerator(elements)
+const { generatedStanCode } = useStanCodeGenerator(elements)
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData)
 const { standaloneScript, samplerSettings } = storeToRefs(scriptStore)
 
@@ -287,7 +290,12 @@ const { loadUIState, saveUIState, saveLastGraphId, loadLastGraphId } = usePersis
   persistencePrefix.value
 )
 
-const actions = useEditorActions(elements, generatedCode, persistencePrefix.value)
+const actions = useEditorActions(
+  elements,
+  generatedCode,
+  persistencePrefix.value,
+  generatedStanCode
+)
 const {
   currentMode,
   currentNodeType,
@@ -326,7 +334,11 @@ const {
   getScriptContent,
   handleGenerateStandalone,
   handleDownloadBugs,
+  handleDownloadStan,
   handleDownloadScript,
+  handleDownloadStanScript,
+  handleDownloadStanData,
+  handleDownloadStanInits,
   openExportModal,
   handleConfirmExport,
   handleExportJson,
@@ -334,7 +346,7 @@ const {
   handleSelectNodeFromModal,
   handleShare,
   handleGenerateShareLink,
-  createNewProject,
+  createNewProject: baseCreateNewProject,
   createNewGraph,
   triggerGraphImport,
   handleGraphImportFile,
@@ -345,6 +357,18 @@ const {
 } = actions
 
 const { emitReady } = useWidgetEmitter(emit, generatedCode)
+
+const codePanelLanguage = ref<CodeLanguage>('bugs')
+const codePanelTitle = computed(() =>
+  codePanelLanguage.value === 'stan' ? 'Stan Code Preview' : 'BUGS Code Preview'
+)
+const handleCodeDownload = () => {
+  if (codePanelLanguage.value === 'stan') {
+    handleDownloadStan()
+  } else {
+    handleDownloadBugs()
+  }
+}
 
 const WIDGET_UI_STATE_KEY = `${persistencePrefix.value}-ui-state`
 const WIDGET_SOURCE_MAP_KEY = `${persistencePrefix.value}-source-map`
@@ -470,17 +494,13 @@ const handleNewGraph = () => {
   }
 }
 
+const createNewProject = () => {
+  baseCreateNewProject()
+  uiStore.activeLeftAccordionTabs = [...new Set([...uiStore.activeLeftAccordionTabs, 'project'])]
+  uiStore.isLeftSidebarOpen = true
+}
+
 const DOODLEBUGS_BASE_URL = 'https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/'
-
-const handleShareGraph = () => {
-  shareUrl.value = ''
-  showShareModal.value = true
-}
-
-const handleShareProjectUrl = () => {
-  shareUrl.value = ''
-  showShareModal.value = true
-}
 
 const handleWidgetGenerateShareLink = (options: {
   scope: 'current' | 'project' | 'custom'
@@ -830,46 +850,6 @@ watch(
   { deep: true }
 )
 
-const handleToolbarNavigation = (view: string) => {
-  if (view === 'project') {
-    if (
-      uiStore.isLeftSidebarOpen &&
-      activeLeftAccordionTabs.value.includes('project') &&
-      activeLeftAccordionTabs.value.length === 1
-    ) {
-      uiStore.isLeftSidebarOpen = false
-    } else {
-      uiStore.isLeftSidebarOpen = true
-      activeLeftAccordionTabs.value = ['project']
-    }
-  } else if (view === 'view') {
-    if (
-      uiStore.isLeftSidebarOpen &&
-      activeLeftAccordionTabs.value.includes('view') &&
-      activeLeftAccordionTabs.value.length === 1
-    ) {
-      uiStore.isLeftSidebarOpen = false
-    } else {
-      uiStore.isLeftSidebarOpen = true
-      activeLeftAccordionTabs.value = ['view']
-    }
-  } else if (view === 'help') {
-    if (uiStore.isLeftSidebarOpen && activeLeftAccordionTabs.value.includes('help')) {
-      uiStore.isLeftSidebarOpen = false
-    } else {
-      uiStore.isLeftSidebarOpen = true
-      activeLeftAccordionTabs.value = ['help', 'devtools']
-    }
-  } else if (view === 'export') {
-    if (uiStore.isRightSidebarOpen && uiStore.activeRightTab === 'export') {
-      uiStore.isRightSidebarOpen = false
-    } else {
-      uiStore.isRightSidebarOpen = true
-      uiStore.setActiveRightTab('export')
-    }
-  }
-}
-
 const handleUIInteractionStart = () => {
   isDraggingUI.value = true
 }
@@ -881,6 +861,39 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
   if ((e.target as HTMLElement).closest('.db-theme-toggle-header')) return
   if (!uiStore.isLeftSidebarOpen) uiStore.toggleLeftSidebar()
 }
+
+const dataImportInput = ref<HTMLInputElement | null>(null)
+
+const handleDataImport = (event: Event) => {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const content = e.target?.result as string
+    try {
+      JSON.parse(content)
+      dataStore.dataContent = content
+    } catch {
+      alert('Invalid JSON file format.')
+    }
+    if (dataImportInput.value) dataImportInput.value.value = ''
+  }
+  reader.readAsText(file)
+}
+
+const handleScriptSettingsDone = () => {
+  scriptStore.standaloneScript = getScriptContent()
+  showScriptSettingsModal.value = false
+}
+
+watch(showNewGraphModal, (val) => {
+  if (!val) {
+    clearImportedData()
+    newGraphName.value = ''
+    if (graphImportInput.value) graphImportInput.value.value = ''
+    isDragOver.value = false
+  }
+})
 </script>
 
 <template>
@@ -993,7 +1006,6 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
         @toggle-detach-mode="uiStore.toggleDetachMode"
         @open-style-modal="showStyleModal = true"
         @share="handleShare"
-        @nav="handleToolbarNavigation"
         @drag-start="handleUIInteractionStart"
         @drag-end="handleUIInteractionEnd"
       />
@@ -1181,7 +1193,6 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
             :showZoomControls="showZoomControls"
             :showDebugPanel="showDebugPanel"
             :isCodePanelOpen="isCodePanelOpen"
-            :isDetachModeActive="isDetachModeActive"
             :showDetachModeControl="showDetachModeControl"
             @toggle-left-sidebar="uiStore.toggleLeftSidebar"
             @new-project="handleNewProject"
@@ -1192,15 +1203,11 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
             @update:gridSize="gridSize = $event"
             @update:showZoomControls="showZoomControls = $event"
             @update:showDebugPanel="showDebugPanel = $event"
-            @update:isDetachModeActive="isDetachModeActive = $event"
             @update:show-detach-mode-control="showDetachModeControl = $event"
             @toggle-code-panel="toggleCodePanel"
             @load-example="handleLoadExampleAction"
             @open-about-modal="showAboutModal = true"
             @open-faq-modal="showFaqModal = true"
-            @toggle-dark-mode="uiStore.toggleDarkMode"
-            @share-graph="handleShareGraph"
-            @share-project-url="handleShareProjectUrl"
           />
         </div>
 
@@ -1223,6 +1230,10 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
             @show-validation-issues="showValidationModal = true"
             @open-script-settings="showScriptSettingsModal = true"
             @download-script="handleDownloadScript"
+            @download-stan="handleDownloadStan"
+            @download-stan-script="handleDownloadStanScript"
+            @download-stan-data="handleDownloadStanData"
+            @download-stan-inits="handleDownloadStanInits"
             @generate-script="handleGenerateStandalone"
             @share="handleShare"
             @open-export-modal="openExportModal"
@@ -1233,7 +1244,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
 
         <FloatingPanel
           v-if="showEditorUI"
-          title="BUGS Code Preview"
+          :title="codePanelTitle"
           icon="fas fa-code"
           :is-open="isCodePanelOpen"
           :default-width="codePanelSize.width"
@@ -1242,7 +1253,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
           :default-y="codePanelPos.y"
           :show-download="true"
           @close="toggleCodePanel"
-          @download="handleDownloadBugs"
+          @download="handleCodeDownload"
           @drag-start="handleUIInteractionStart"
           @drag-end="
             (pos) => {
@@ -1260,7 +1271,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
             }
           "
         >
-          <CodePreviewPanel :is-active="isCodePanelOpen" :code="generatedCode" />
+          <CodePreviewPanel :is-active="isCodePanelOpen" v-model:language="codePanelLanguage" />
         </FloatingPanel>
 
         <FloatingPanel
@@ -1273,7 +1284,9 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
           :default-height="dataPanelSize.height"
           :default-x="dataPanelPos.x || windowWidth - 420"
           :default-y="dataPanelPos.y"
+          :show-import="true"
           @close="toggleDataPanel"
+          @import="dataImportInput?.click()"
           @drag-start="handleUIInteractionStart"
           @drag-end="
             (pos) => {
@@ -1292,6 +1305,13 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
           "
         >
           <DataInputPanel :is-active="isDataPanelOpen" />
+          <input
+            type="file"
+            ref="dataImportInput"
+            accept=".json"
+            style="display: none"
+            @change="handleDataImport"
+          />
         </FloatingPanel>
 
         <AboutModal :is-open="showAboutModal" @close="showAboutModal = false" />
@@ -1326,7 +1346,7 @@ const handleSidebarContainerClick = (e: MouseEvent) => {
             <ScriptSettingsPanel />
           </template>
           <template #footer>
-            <BaseButton @click="showScriptSettingsModal = false">Done</BaseButton>
+            <BaseButton @click="handleScriptSettingsDone">Done</BaseButton>
           </template>
         </BaseModal>
 

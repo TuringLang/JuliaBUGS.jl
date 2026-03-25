@@ -32,7 +32,9 @@ import { usePersistence } from '../../composables/usePersistence'
 import { useBugsCodeGenerator } from '../../composables/useBugsCodeGenerator'
 import { useShareExport } from '../../composables/useShareExport'
 import { useEditorActions } from '../../composables/useEditorActions'
+import { useStanCodeGenerator } from '../../composables/useStanCodeGenerator'
 import type { GraphElement } from '../../types'
+import type { CodeLanguage } from '../panels/CodePreviewPanel.vue'
 
 const props = defineProps<{
   defaultModel?: string
@@ -48,12 +50,13 @@ const vTooltip = Tooltip
 const { parsedGraphData } = storeToRefs(dataStore)
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements()
 const { generatedCode } = useBugsCodeGenerator(elements)
+const { generatedStanCode } = useStanCodeGenerator(elements)
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData)
 const { samplerSettings, standaloneScript } = storeToRefs(scriptStore)
 const { loadLastGraphId } = usePersistence()
 const { decodeAndDecompress, expandGraph } = useShareExport()
 
-const actions = useEditorActions(elements, generatedCode)
+const actions = useEditorActions(elements, generatedCode, undefined, generatedStanCode)
 const {
   currentMode,
   currentNodeType,
@@ -92,7 +95,11 @@ const {
   getScriptContent,
   handleGenerateStandalone,
   handleDownloadBugs,
+  handleDownloadStan,
   handleDownloadScript,
+  handleDownloadStanScript,
+  handleDownloadStanData,
+  handleDownloadStanInits,
   openExportModal,
   handleConfirmExport,
   handleExportJson,
@@ -126,6 +133,19 @@ const isModelValid = computed(() => validationErrors.value.size === 0)
 
 const dataImportInput = ref<HTMLInputElement | null>(null)
 const viewportState = ref<{ zoom: number; pan: { x: number; y: number } } | null>(null)
+const codePanelLanguage = ref<CodeLanguage>('bugs')
+
+const codePanelTitle = computed(() =>
+  codePanelLanguage.value === 'stan' ? 'Stan Code Preview' : 'BUGS Code Preview'
+)
+
+const handleCodeDownload = () => {
+  if (codePanelLanguage.value === 'stan') {
+    handleDownloadStan()
+  } else {
+    handleDownloadBugs()
+  }
+}
 
 watch(
   isDarkMode,
@@ -293,10 +313,6 @@ const handleScriptSettingsDone = () => {
 
 const handleOpenScriptSettings = () => {
   showScriptSettingsModal.value = true
-}
-
-const toggleJsonPanel = () => {
-  showDebugPanel.value = true
 }
 
 const toggleLeftSidebar = () => {
@@ -530,7 +546,6 @@ onUnmounted(() => {
       :showZoomControls="showZoomControls"
       :showDebugPanel="showDebugPanel"
       :isCodePanelOpen="isCodePanelOpen"
-      :isDetachModeActive="isDetachModeActive"
       :showDetachModeControl="showDetachModeControl"
       @toggle-left-sidebar="toggleLeftSidebar"
       @new-project="showNewProjectModal = true"
@@ -541,7 +556,6 @@ onUnmounted(() => {
       @update:gridSize="gridSize = $event"
       @update:showZoomControls="showZoomControls = $event"
       @update:showDebugPanel="showDebugPanel = $event"
-      @update:isDetachModeActive="isDetachModeActive = $event"
       @update:showDetachModeControl="showDetachModeControl = $event"
       @toggle-code-panel="toggleCodePanel"
       @load-example="handleLoadExample"
@@ -607,6 +621,10 @@ onUnmounted(() => {
       @show-validation-issues="showValidationModal = true"
       @open-script-settings="handleOpenScriptSettings"
       @download-script="handleDownloadScript"
+      @download-stan="handleDownloadStan"
+      @download-stan-script="handleDownloadStanScript"
+      @download-stan-data="handleDownloadStanData"
+      @download-stan-inits="handleDownloadStanInits"
       @generate-script="handleGenerateStandalone"
       @share="handleShare"
       @open-export-modal="openExportModal"
@@ -659,7 +677,7 @@ onUnmounted(() => {
 
     <FloatingPanel
       v-if="isCodePanelOpen && graphStore.currentGraphId"
-      title="BUGS Code Preview"
+      :title="codePanelTitle"
       icon="fas fa-code"
       :is-open="isCodePanelOpen"
       :default-width="codePanelSize.width"
@@ -668,11 +686,11 @@ onUnmounted(() => {
       :default-y="codePanelPos.y"
       :show-download="true"
       @close="toggleCodePanel"
-      @download="handleDownloadBugs"
+      @download="handleCodeDownload"
       @drag-end="handleCodePanelDragEnd"
       @resize-end="handleCodePanelResizeEnd"
     >
-      <CodePreviewPanel :is-active="true" />
+      <CodePreviewPanel :is-active="true" v-model:language="codePanelLanguage" />
     </FloatingPanel>
 
     <FloatingPanel
@@ -720,7 +738,6 @@ onUnmounted(() => {
       @layout-graph="handleGraphLayout"
       @toggle-code-panel="toggleCodePanel"
       @toggle-data-panel="toggleDataPanel"
-      @toggle-json-panel="toggleJsonPanel"
       @toggle-detach-mode="uiStore.toggleDetachMode"
       @open-style-modal="showStyleModal = true"
       @share="handleShare"
