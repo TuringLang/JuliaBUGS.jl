@@ -61,17 +61,17 @@ julia> using JuliaBUGS.AbstractPPL: VarName
 julia> vn = VarName(:x);
 
 julia> collect(elementwise_varnames(vn, 1.5))
-1-element Vector{VarName{:x, typeof(identity)}}:
+1-element Vector{VarName{:x, Iden}}:
  x
 
 julia> collect(elementwise_varnames(vn, [1.0, 2.0, 3.0]))
-3-element Vector{VarName{:x, ComposedFunction{IndexLens{Tuple{Int64}}, typeof(identity)}}}:
+3-element Vector{VarName{:x, Index{Tuple{Int64}, @NamedTuple{}, Iden}}}:
  x[1]
  x[2]
  x[3]
 
 julia> collect(elementwise_varnames(vn, [1.0 2.0; 3.0 4.0]))
-2×2 Matrix{VarName{:x, ComposedFunction{IndexLens{Tuple{Int64, Int64}}, typeof(identity)}}}:
+2×2 Matrix{VarName{:x, Index{Tuple{Int64, Int64}, @NamedTuple{}, Iden}}}:
  x[1, 1]  x[1, 2]
  x[2, 1]  x[2, 2]
 
