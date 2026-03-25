@@ -526,10 +526,7 @@ function inferStanType(
   return baseType
 }
 
-type FormatDistResult =
-  | { stanDist: string; stanParams: string }
-  | { error: string }
-  | null // null means dflat or no distribution — no sampling statement emitted
+type FormatDistResult = { stanDist: string; stanParams: string } | { error: string } | null // null means dflat or no distribution — no sampling statement emitted
 
 function formatStanDistribution(
   node: GraphNode,
