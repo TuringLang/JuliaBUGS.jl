@@ -8,7 +8,12 @@ using JuliaBUGS.Model:
     settrans,
     set_evaluation_mode,
     UseGeneratedLogDensityFunction,
-    UseGraph
+    UseGraph,
+    VariableType,
+    Deterministic,
+    Observation,
+    ModelParameter,
+    GeneratedQuantity
 
 @testset "Compile Vol.1 BUGS Examples" begin
     for model_name in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
@@ -84,6 +89,44 @@ end
             condition(model, Dict(@varname(x) => [1.0, 2.0, 3.0]))
         )
         @test length(parameters(model_subsume)) == 2  # Only mu and sigma remain
+    end
+
+    @testset "VariableType classification" begin
+        # Model with deterministic, observation, and model parameters
+        model_def = @bugs begin
+            mu ~ Normal(0, 10)
+            sigma ~ Gamma(1, 1)
+            for i in 1:3
+                x[i] ~ Normal(mu, sigma)
+            end
+            mean_x = mean(x[:])
+            y ~ Normal(mean_x, 1)
+        end
+
+        model = compile(model_def, (; y=2.5))
+        gd = model.graph_evaluation_data
+        type_of = Dict(gd.sorted_nodes .=> gd.variable_types)
+
+        @test type_of[@varname(mu)] == ModelParameter
+        @test type_of[@varname(sigma)] == ModelParameter
+        @test type_of[@varname(x[1])] == ModelParameter
+        @test type_of[@varname(mean_x)] == Deterministic
+        @test type_of[@varname(y)] == Observation
+
+        # Model with a generated quantity
+        model_def_gq = @bugs begin
+            mu ~ Normal(0, 1)
+            y ~ Normal(mu, 1)
+            z ~ Normal(mu, 1)  # no observation depends on z
+        end
+
+        model_gq = compile(model_def_gq, (; y=1.0))
+        gd_gq = model_gq.graph_evaluation_data
+        type_of_gq = Dict(gd_gq.sorted_nodes .=> gd_gq.variable_types)
+
+        @test type_of_gq[@varname(mu)] == ModelParameter
+        @test type_of_gq[@varname(y)] == Observation
+        @test type_of_gq[@varname(z)] == GeneratedQuantity
     end
 
     @testset "initialize!" begin

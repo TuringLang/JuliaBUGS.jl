@@ -9,7 +9,7 @@ using Bijectors
 using Distributions
 using Graphs
 using LinearAlgebra
-using JuliaBUGS: JuliaBUGS, BUGSGraph
+using JuliaBUGS: JuliaBUGS, BUGSGraph, find_generated_quantities_variables
 using JuliaBUGS.BUGSPrimitives
 using LogExpFunctions
 using MetaGraphsNext
@@ -27,6 +27,9 @@ include("to_distribution.jl")
 # Public user-facing API
 export parameters, variables, initialize!, getparams, settrans, to_distribution
 export set_evaluation_mode, set_observed_values!
+
+# Variable classification
+export VariableType, Deterministic, Observation, ModelParameter, GeneratedQuantity
 
 # Evaluation mode types
 export UseGraph, UseGeneratedLogDensityFunction, UseAutoMarginalization

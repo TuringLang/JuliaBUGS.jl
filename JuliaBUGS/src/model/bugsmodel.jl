@@ -29,6 +29,18 @@ struct MarginalizationCache{V<:VarName}
 end
 
 """
+    VariableType
+
+Classification of each node in the model graph.
+
+- `Deterministic`: a logical node (defined with `=`)
+- `Observation`: a stochastic node with observed data
+- `ModelParameter`: a stochastic node that influences observations (sampled by MCMC)
+- `GeneratedQuantity`: a stochastic node with no observed descendants (can be forward-sampled post-inference)
+"""
+@enum VariableType Deterministic Observation ModelParameter GeneratedQuantity
+
+"""
     GraphEvaluationData{TNF,TV}
 
 Caches node information from the model graph to optimize evaluation performance.
@@ -37,6 +49,7 @@ Stores pre-computed values to avoid repeated lookups from the MetaGraph during m
 # Fields
 - `sorted_nodes::Vector{<:VarName}`: Variables in topological order for evaluation
 - `sorted_parameters::Vector{<:VarName}`: Parameters (unobserved stochastic variables) in sorted order consistent with sorted_nodes
+- `variable_types::Vector{VariableType}`: Classification of each node
 - `is_stochastic_vals::Vector{Bool}`: Whether each node represents a stochastic variable
 - `is_observed_vals::Vector{Bool}`: Whether each node is observed (has data)
 - `node_function_vals::TNF`: Functions that define each node's computation
@@ -45,6 +58,7 @@ Stores pre-computed values to avoid repeated lookups from the MetaGraph during m
 struct GraphEvaluationData{TNF,TV}
     sorted_nodes::Vector{<:VarName}
     sorted_parameters::Vector{<:VarName}
+    variable_types::Vector{VariableType}
     is_stochastic_vals::Vector{Bool}
     is_observed_vals::Vector{Bool}
     node_function_vals::TNF
@@ -69,6 +83,9 @@ function GraphEvaluationData(
     node_function_vals = Array{Any}(undef, length(sorted_nodes))
     loop_vars_vals = Array{Any}(undef, length(sorted_nodes))
     sorted_parameters = VarName[]
+    variable_types = Vector{VariableType}(undef, length(sorted_nodes))
+
+    gq_vars = find_generated_quantities_variables(g)
 
     for (i, vn) in enumerate(sorted_nodes)
         (; is_stochastic, is_observed, node_function, loop_vars) = g[vn]
@@ -76,6 +93,17 @@ function GraphEvaluationData(
         is_observed_vals[i] = is_observed
         node_function_vals[i] = node_function
         loop_vars_vals[i] = loop_vars
+
+        # Classify each node
+        variable_types[i] = if !is_stochastic
+            Deterministic
+        elseif is_observed
+            Observation
+        elseif vn in gq_vars
+            GeneratedQuantity
+        else
+            ModelParameter
+        end
 
         # If it's a stochastic variable and not observed, it's a parameter
         # If active_parameters is specified, only include those that are in the list
@@ -89,6 +117,7 @@ function GraphEvaluationData(
     return GraphEvaluationData{typeof(node_function_vals),typeof(loop_vars_vals)}(
         sorted_nodes,
         sorted_parameters,
+        variable_types,
         is_stochastic_vals,
         is_observed_vals,
         map(identity, node_function_vals),
