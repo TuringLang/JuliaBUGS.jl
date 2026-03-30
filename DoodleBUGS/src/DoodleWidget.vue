@@ -716,6 +716,13 @@ onMounted(async () => {
           dataStore.updateGraphData(d.graphId, { content: d.content })
         )
       if (state.currentGraphId) graphStore.selectGraph(state.currentGraphId)
+
+      // Persist imported state to localStorage so it survives component
+      // remounts and is consistent with what setPrefix/loadProjects reads.
+      projectStore.saveProjects()
+      graphStore.graphContents.forEach((content, id) => {
+        graphStore.saveGraph(id, content)
+      })
     } catch (e) {
       console.error('DoodleBUGS: Failed to parse state', e)
     }
@@ -737,7 +744,8 @@ onMounted(async () => {
       dataPanelSize.width = savedUIState.dataPanel.width
       dataPanelSize.height = savedUIState.dataPanel.height
     }
-    if (savedUIState.currentGraphId) graphStore.selectGraph(savedUIState.currentGraphId)
+    if (savedUIState.currentGraphId && !props.initialState)
+      graphStore.selectGraph(savedUIState.currentGraphId)
     if (savedUIState.isFullScreen) {
       isFullScreen.value = true
       isEditMode.value = true
