@@ -715,6 +715,7 @@ onMounted(async () => {
         state.data.forEach((d: { graphId: string; content: string }) =>
           dataStore.updateGraphData(d.graphId, { content: d.content })
         )
+      if (state.currentGraphId) graphStore.selectGraph(state.currentGraphId)
     } catch (e) {
       console.error('DoodleBUGS: Failed to parse state', e)
     }
