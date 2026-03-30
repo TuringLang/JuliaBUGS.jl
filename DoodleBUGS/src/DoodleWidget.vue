@@ -744,7 +744,8 @@ onMounted(async () => {
       dataPanelSize.width = savedUIState.dataPanel.width
       dataPanelSize.height = savedUIState.dataPanel.height
     }
-    if (savedUIState.currentGraphId) graphStore.selectGraph(savedUIState.currentGraphId)
+    if (savedUIState.currentGraphId && !props.initialState)
+      graphStore.selectGraph(savedUIState.currentGraphId)
     if (savedUIState.isFullScreen) {
       isFullScreen.value = true
       isEditMode.value = true
