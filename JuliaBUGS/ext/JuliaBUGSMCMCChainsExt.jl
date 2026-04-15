@@ -5,10 +5,9 @@ using JuliaBUGS
 using JuliaBUGS:
     BUGSModel,
     BUGSModelWithGradient,
-    find_generated_quantities_variables,
     evaluate!!,
     getparams
-using JuliaBUGS.Model: UseAutoMarginalization
+using JuliaBUGS.Model: UseAutoMarginalization, evaluate_generated_quantities_with_values!!
 using JuliaBUGS.AbstractPPL
 using JuliaBUGS.Accessors
 using MCMCChains: Chains
@@ -144,21 +143,16 @@ function JuliaBUGS.gen_chains(
         gd.sorted_parameters
     end
 
-    # Find and order generated quantities
-    # Exclude parameters to avoid double counting forward-sampled variables
-    generated_vars = find_generated_quantities_variables(model.g)
     param_set = Set(param_vars)
-    generated_vars = [v for v in gd.sorted_nodes if v in generated_vars && v ∉ param_set]
+    generated_vars = [v for v in model.generated_variables if v ∉ param_set]
 
-    # Evaluate model for each sample to get parameter values and generated quantities
+    # Evaluate only the nodes required to materialize generated quantities.
     param_vals = []
     generated_quantities = []
     for i in axes(samples)[1]
-        # Set parameters and evaluate the model
-        evaluation_env = first(evaluate!!(model, samples[i]))
+        evaluation_env = evaluate_generated_quantities_with_values!!(model, samples[i])
 
         # Get parameter values from the evaluation environment
-        # (they were just set by evaluate!!, so they match samples[i])
         push!(
             param_vals,
             [AbstractPPL.getvalue(evaluation_env, param_var) for param_var in param_vars],

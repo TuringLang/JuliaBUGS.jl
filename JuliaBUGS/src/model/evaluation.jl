@@ -254,6 +254,65 @@ function evaluate_with_values!!(
     )
 end
 
+"""
+    evaluate_generated_quantities_with_values!!(model, flattened_values; transformed=model.transformed)
+
+Populate the evaluation environment from a parameter vector and recompute only the
+nodes required to materialize the model's generated quantities.
+
+This is intended for chain assembly, where the sampler has already produced the
+parameter values and only downstream saved variables need to be refreshed.
+"""
+function evaluate_generated_quantities_with_values!!(
+    model::BUGSModel, flattened_values::AbstractVector; transformed=model.transformed
+)
+    evaluation_env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
+
+    if isempty(model.generated_variables)
+        return evaluation_env
+    end
+
+    relevant_nodes = generated_quantities_dependency_closure(
+        model.g, union(model.graph_evaluation_data.sorted_parameters, model.generated_variables)
+    )
+    var_lengths = if transformed
+        model.transformed_var_lengths
+    else
+        model.untransformed_var_lengths
+    end
+
+    current_idx = 1
+    for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
+        vn ∈ relevant_nodes || continue
+
+        is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
+        is_observed = model.graph_evaluation_data.is_observed_vals[i]
+        node_function = model.graph_evaluation_data.node_function_vals[i]
+        loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
+
+        if !is_stochastic
+            value = Base.invokelatest(node_function, evaluation_env, loop_vars)
+            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+        elseif !is_observed
+            len = var_lengths[vn]
+            param_slice = view(flattened_values, current_idx:(current_idx + len - 1))
+            dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
+
+            if transformed
+                b_inv = Bijectors.inverse(Bijectors.bijector(dist))
+                value = reconstruct(b_inv, dist, param_slice)
+            else
+                value = reconstruct(dist, param_slice)
+            end
+
+            current_idx += len
+            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
+        end
+    end
+
+    return evaluation_env
+end
+
 # ======================
 # Marginalization Support
 # ======================
