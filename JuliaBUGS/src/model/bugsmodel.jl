@@ -304,9 +304,14 @@ function BUGSModel(
 
     # Compute mutable symbols from graph evaluation data
     mutable_symbols = get_mutable_symbols(graph_evaluation_data)
-    generated_variables = [
-        vn for vn in graph_evaluation_data.sorted_nodes if vn in JuliaBUGS.find_generated_quantities_variables(g)
-    ]
+    generated_set = JuliaBUGS.find_generated_quantities_variables(g)
+    generated_variables = Vector{VarName}()
+    sizehint!(generated_variables, length(generated_set))
+    for vn in graph_evaluation_data.sorted_nodes
+        if vn in generated_set
+            push!(generated_variables, vn)
+        end
+    end
 
     # Return model without generating log density function (on-demand generation)
     # Function will be generated when UseGeneratedLogDensityFunction mode is set
