@@ -293,8 +293,10 @@ function evaluate_generated_quantities_with_values!!(
             param_slice = view(flattened_values, current_idx:(current_idx + len - 1))
             
             if transformed
-                b_inv = Bijectors.inverse(Bijectors.bijector(dist))
-                value = reconstruct(b_inv, dist, param_slice)
+                # Transform from unconstrained space back to original domain
+                # bijector(dist) maps unconstrained -> constrained
+                b = Bijectors.bijector(dist)
+                value = Bijectors.transform(b, collect(param_slice))
             else
                 value = reconstruct(dist, param_slice)
             end

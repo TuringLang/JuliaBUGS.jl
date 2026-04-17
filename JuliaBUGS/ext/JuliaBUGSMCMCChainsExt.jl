@@ -110,7 +110,7 @@ end
     gen_chains(
         model::BUGSModel,
         samples, stats_names, stats_values;
-        discard_initial=0, thinning=1, kwargs...
+        discard_initial=0, thinning=1, samples_transformed=nothing, kwargs...
     )
 
 Convert parameter samples to MCMCChains format with proper variable names.
@@ -120,6 +120,10 @@ This function:
 2. Flattens array parameters into individual chain columns
 3. Combines parameters, generated quantities, and statistics
 4. Creates a properly formatted Chains object
+
+# Arguments
+- `samples_transformed`: Whether samples are in transformed (unconstrained) space. If `nothing`,
+  defaults to `model.transformed`. Set to `true` for HMC samples.
 """
 function JuliaBUGS.gen_chains(
     model::BUGSModel,
@@ -128,9 +132,13 @@ function JuliaBUGS.gen_chains(
     stats_values;
     discard_initial=0,
     thinning=1,
+    samples_transformed=nothing,
     kwargs...,
 )
     gd = model.graph_evaluation_data
+    # Determine whether samples are in transformed space
+    samples_are_transformed = something(samples_transformed, model.transformed)
+    
     # Filter parameters based on evaluation mode - only include continuous parameters
     # when auto-marginalization is active (discrete parameters are marginalized out)
     param_vars = if model.evaluation_mode isa UseAutoMarginalization
@@ -150,7 +158,7 @@ function JuliaBUGS.gen_chains(
     param_vals = []
     generated_quantities = []
     for i in axes(samples)[1]
-        evaluation_env = evaluate_generated_quantities_with_values!!(model, samples[i]; transformed=true)
+        evaluation_env = evaluate_generated_quantities_with_values!!(model, samples[i]; transformed=samples_are_transformed)
 
         # Get parameter values from the evaluation environment
         push!(

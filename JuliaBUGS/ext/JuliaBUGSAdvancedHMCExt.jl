@@ -93,6 +93,7 @@ function AbstractMCMC.bundle_samples(
         stats_values;
         discard_initial=discard_initial,
         thinning=thinning,
+        samples_transformed=true,
         kwargs...,
     )
 end
