@@ -10,7 +10,7 @@ import DifferentiationInterface as DI
 using Distributions
 using Graphs
 using LinearAlgebra
-using JuliaBUGS: JuliaBUGS, BUGSGraph
+using JuliaBUGS: JuliaBUGS, BUGSGraph, generated_quantities_dependency_closure
 using JuliaBUGS.BUGSPrimitives
 using LogExpFunctions
 using MetaGraphsNext

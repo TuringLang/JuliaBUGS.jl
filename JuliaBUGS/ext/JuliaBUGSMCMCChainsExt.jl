@@ -150,7 +150,7 @@ function JuliaBUGS.gen_chains(
     param_vals = []
     generated_quantities = []
     for i in axes(samples)[1]
-        evaluation_env = evaluate_generated_quantities_with_values!!(model, samples[i])
+        evaluation_env = evaluate_generated_quantities_with_values!!(model, samples[i]; transformed=true)
 
         # Get parameter values from the evaluation environment
         push!(
