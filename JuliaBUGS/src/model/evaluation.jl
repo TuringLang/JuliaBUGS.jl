@@ -266,69 +266,10 @@ parameter values and only downstream saved variables need to be refreshed.
 function evaluate_generated_quantities_with_values!!(
     model::BUGSModel, flattened_values::AbstractVector; transformed=model.transformed
 )
-    evaluation_env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
-
-    if isempty(model.generated_variables)
-        return evaluation_env
-    end
-
-    var_lengths = if transformed
-        model.transformed_var_lengths
-    else
-        model.untransformed_var_lengths
-    end
-
-    # First pass: reconstruct all parameters from flattened_values
-    current_idx = 1
-    for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
-        is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
-        is_observed = model.graph_evaluation_data.is_observed_vals[i]
-        
-        if is_stochastic && !is_observed
-            node_function = model.graph_evaluation_data.node_function_vals[i]
-            loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
-            dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
-            
-            len = var_lengths[vn]
-            param_slice = view(flattened_values, current_idx:(current_idx + len - 1))
-            
-            if transformed
-                # Transform from unconstrained space back to original domain
-                # bijector(dist) maps unconstrained -> constrained
-                b = Bijectors.bijector(dist)
-                value = Bijectors.transform(b, collect(param_slice))
-            else
-                value = reconstruct(dist, param_slice)
-            end
-            
-            current_idx += len
-            evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
-        end
-    end
-
-    # Second pass: evaluate deterministic nodes required for generated quantities
-    relevant_nodes = generated_quantities_dependency_closure(
-        model.g, union(model.graph_evaluation_data.sorted_parameters, model.generated_variables)
-    )
-    
-    for (i, vn) in enumerate(model.graph_evaluation_data.sorted_nodes)
-        vn ∈ relevant_nodes || continue
-        
-        is_stochastic = model.graph_evaluation_data.is_stochastic_vals[i]
-        is_observed = model.graph_evaluation_data.is_observed_vals[i]
-        
-        # Skip stochastic variables and observed variables - already handled or not needed
-        if is_stochastic || is_observed
-            continue
-        end
-        
-        node_function = model.graph_evaluation_data.node_function_vals[i]
-        loop_vars = model.graph_evaluation_data.loop_vars_vals[i]
-        
-        value = Base.invokelatest(node_function, evaluation_env, loop_vars)
-        evaluation_env = BangBang.setindex!!(evaluation_env, value, vn)
-    end
-
+    # Use evaluate_with_values!! which handles all parameter reconstruction correctly
+    # The 'transformed' parameter ensures we handle both HMC (transformed) and 
+    # Gibbs (untransformed) samples correctly
+    evaluation_env, _ = evaluate_with_values!!(model, flattened_values; transformed=transformed)
     return evaluation_env
 end
 
