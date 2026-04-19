@@ -266,10 +266,14 @@ parameter values and only downstream saved variables need to be refreshed.
 function evaluate_generated_quantities_with_values!!(
     model::BUGSModel, flattened_values::AbstractVector; transformed=model.transformed
 )
-    # Use evaluate_with_values!! which handles all parameter reconstruction correctly
-    # The 'transformed' parameter ensures we handle both HMC (transformed) and 
-    # Gibbs (untransformed) samples correctly
-    evaluation_env, _ = evaluate_with_values!!(model, flattened_values; transformed=transformed)
+    # Use the appropriate evaluation function based on evaluation mode
+    if model.evaluation_mode isa UseAutoMarginalization
+        # Marginalized models: use the marginalization evaluation function
+        evaluation_env, _ = evaluate_with_marginalization_values!!(model, flattened_values)
+    else
+        # Regular models: use standard evaluation with values
+        evaluation_env, _ = evaluate_with_values!!(model, flattened_values; transformed=transformed)
+    end
     return evaluation_env
 end
 
