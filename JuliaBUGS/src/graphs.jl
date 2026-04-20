@@ -40,26 +40,6 @@ function find_generated_quantities_variables(
     return generated_quantities_variables
 end
 
-function generated_quantities_dependency_closure(
-    g::MetaGraph{Int,<:SimpleDiGraph,Label,VertexData},
-    generated_variables::AbstractVector{<:Label},
-) where {Label,VertexData}
-    closure = Set{Label}(generated_variables)
-    stack = collect(generated_variables)
-
-    while !isempty(stack)
-        current = pop!(stack)
-        for parent in MetaGraphsNext.inneighbor_labels(g, current)
-            if parent ∉ closure
-                push!(closure, parent)
-                push!(stack, parent)
-            end
-        end
-    end
-
-    return closure
-end
-
 function dfs_can_reach_observations(g, n, can_reach_observations)
     if haskey(can_reach_observations, n)
         return can_reach_observations[n]

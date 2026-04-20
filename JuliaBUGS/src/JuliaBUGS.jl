@@ -28,8 +28,6 @@ export @varname
 export @model
 export @of
 
-export generated_quantities_dependency_closure
-
 include("BUGSPrimitives/BUGSPrimitives.jl")
 using .BUGSPrimitives
 
