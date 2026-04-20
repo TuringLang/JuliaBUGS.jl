@@ -122,6 +122,7 @@ The `BUGSModel` object is used for inference and represents the output of compil
 - `untransformed_var_lengths::Dict{<:VarName,Int}`: Variable lengths in constrained space.
 - `transformed_var_lengths::Dict{<:VarName,Int}`: Variable lengths in unconstrained space.
 - `graph_evaluation_data::GraphEvaluationData{TNF,TV}`: Pre-computed node values for evaluation.
+- `generated_variables::Vector{<:VarName}`: Variables whose values should be saved as generated quantities.
 - `log_density_computation_function::F`: Generated log-density function (lazy, for
   `UseGeneratedLogDensityFunction` mode).
 - `marginalization_cache::MC`: Cache for auto-marginalization (lazy, for
@@ -155,6 +156,7 @@ struct BUGSModel{
     transformed_var_lengths::Dict{<:VarName,Int}
 
     graph_evaluation_data::GraphEvaluationData{TNF,TV}
+    generated_variables::Vector{<:VarName}
 
     log_density_computation_function::F
 
@@ -175,6 +177,7 @@ function BUGSModel(
     transformed_var_lengths::Dict{<:VarName,Int}=model.transformed_var_lengths,
     evaluation_env::NamedTuple=model.evaluation_env,
     graph_evaluation_data::GraphEvaluationData=model.graph_evaluation_data,
+    generated_variables::Vector{<:VarName}=model.generated_variables,
     g::BUGSGraph=model.g,
     base_model::Union{<:AbstractBUGSModel,Nothing}=model.base_model,
     evaluation_mode::EvaluationMode=model.evaluation_mode,
@@ -197,6 +200,7 @@ function BUGSModel(
         untransformed_var_lengths,
         transformed_var_lengths,
         graph_evaluation_data,
+        generated_variables,
         log_density_computation_function,
         marginalization_cache,
         mutable_symbols,
@@ -300,6 +304,14 @@ function BUGSModel(
 
     # Compute mutable symbols from graph evaluation data
     mutable_symbols = get_mutable_symbols(graph_evaluation_data)
+    generated_set = JuliaBUGS.find_generated_quantities_variables(g)
+    generated_variables = Vector{VarName}()
+    sizehint!(generated_variables, length(generated_set))
+    for vn in graph_evaluation_data.sorted_nodes
+        if vn in generated_set
+            push!(generated_variables, vn)
+        end
+    end
 
     # Return model without generating log density function (on-demand generation)
     # Function will be generated when UseGeneratedLogDensityFunction mode is set
@@ -316,6 +328,7 @@ function BUGSModel(
         untransformed_var_lengths,
         transformed_var_lengths,
         graph_evaluation_data,
+        generated_variables,
         nothing,  # log_density_computation_function - generated on-demand
         nothing,  # marginalization_cache - generated on-demand
         mutable_symbols,
