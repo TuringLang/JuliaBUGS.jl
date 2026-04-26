@@ -133,6 +133,34 @@ end
         @test @varname(mu) in mcmc_parameters(model_gq)
         @test @varname(z) ∉ mcmc_parameters(model_gq)
         @test @varname(z) in postprocess_variables(model_gq)
+
+        # Missing-data interpolation that influences observed likelihood
+        # should remain a model parameter (sampled by MCMC).
+        model_def_missing = @bugs begin
+            x ~ Normal(0, 1)
+            y ~ Normal(x, 1)
+        end
+        model_missing = compile(model_def_missing, (; y=missing))
+        gd_missing = model_missing.graph_evaluation_data
+        type_of_missing = Dict(gd_missing.sorted_nodes .=> gd_missing.variable_types)
+
+        @test type_of_missing[@varname(y)] == ModelParameter
+        @test @varname(y) in mcmc_parameters(model_missing)
+        @test @varname(y) ∉ postprocess_variables(model_missing)
+
+        # Unobserved stochastic node with no observed descendants should be postprocessed.
+        model_def_post = @bugs begin
+            θ ~ Normal(0, 1)
+            y ~ Normal(θ, 1)
+            z ~ Normal(θ, 1)
+        end
+        model_post = compile(model_def_post, (; y=1.0))
+        gd_post = model_post.graph_evaluation_data
+        type_of_post = Dict(gd_post.sorted_nodes .=> gd_post.variable_types)
+
+        @test type_of_post[@varname(z)] == GeneratedQuantity
+        @test @varname(z) ∉ mcmc_parameters(model_post)
+        @test @varname(z) in postprocess_variables(model_post)
     end
 
     @testset "initialize!" begin
