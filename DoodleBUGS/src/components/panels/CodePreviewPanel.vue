@@ -2,10 +2,12 @@
 import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { useGraphStore } from '../../stores/graphStore'
 import { useBugsCodeGenerator } from '../../composables/useBugsCodeGenerator'
+import { useStanCodeGenerator } from '../../composables/useStanCodeGenerator'
 
 import 'codemirror/lib/codemirror.css'
 import 'codemirror/theme/material-darker.css'
 import 'codemirror/mode/julia/julia.js'
+import 'codemirror/mode/clike/clike.js'
 import 'codemirror/addon/scroll/simplescrollbars.css'
 import 'codemirror/addon/scroll/simplescrollbars.js'
 import 'codemirror/addon/fold/foldgutter.css'
@@ -15,13 +17,28 @@ import 'codemirror/addon/fold/brace-fold.js'
 import CodeMirror from 'codemirror'
 import type { Editor } from 'codemirror'
 
+export type CodeLanguage = 'bugs' | 'stan'
+
 const props = defineProps<{
   isActive: boolean
   graphId?: string
   code?: string
+  language?: CodeLanguage
+}>()
+
+const emit = defineEmits<{
+  (e: 'update:language', lang: CodeLanguage): void
 }>()
 
 const graphStore = useGraphStore()
+const activeLanguage = ref<CodeLanguage>(props.language ?? 'bugs')
+
+watch(
+  () => props.language,
+  (val) => {
+    if (val && val !== activeLanguage.value) activeLanguage.value = val
+  }
+)
 
 const targetElements = computed(() => {
   if (props.code !== undefined) return []
@@ -31,22 +48,30 @@ const targetElements = computed(() => {
   return graphStore.currentGraphElements
 })
 
-const { generatedCode: localGeneratedCode } = useBugsCodeGenerator(targetElements)
+const { generatedCode: bugsCode } = useBugsCodeGenerator(targetElements)
+const { generatedStanCode: stanCode } = useStanCodeGenerator(targetElements)
 
 const generatedCode = computed(() => {
   if (props.code !== undefined) return props.code
-  return localGeneratedCode.value
+  return activeLanguage.value === 'stan' ? stanCode.value : bugsCode.value
 })
+
+const toggleLanguage = () => {
+  activeLanguage.value = activeLanguage.value === 'bugs' ? 'stan' : 'bugs'
+  emit('update:language', activeLanguage.value)
+}
 
 const copySuccess = ref(false)
 const editorContainer = ref<HTMLDivElement | null>(null)
 let cmInstance: Editor | null = null
 
+const cmMode = computed(() => (activeLanguage.value === 'stan' ? 'text/x-c++src' : 'julia'))
+
 onMounted(() => {
   if (editorContainer.value) {
     cmInstance = CodeMirror(editorContainer.value, {
       value: generatedCode.value,
-      mode: 'julia',
+      mode: cmMode.value,
       theme: 'material-darker',
       lineNumbers: true,
       readOnly: true,
@@ -59,6 +84,12 @@ onMounted(() => {
     if (props.isActive) {
       nextTick(() => cmInstance?.refresh())
     }
+  }
+})
+
+watch(cmMode, (newMode) => {
+  if (cmInstance) {
+    cmInstance.setOption('mode', newMode)
   }
 })
 
@@ -129,15 +160,33 @@ const triggerSuccess = () => {
   <div class="db-code-preview-panel">
     <div class="db-cp-wrapper">
       <div ref="editorContainer" class="db-cp-container"></div>
-      <button
-        @click.stop="copyCodeToClipboard"
-        class="db-cp-copy-btn"
-        type="button"
-        title="Copy Code"
-      >
-        <i v-if="copySuccess" class="fas fa-check"></i>
-        <i v-else class="fas fa-copy"></i>
-      </button>
+      <div class="db-cp-controls">
+        <div class="db-cp-lang-toggle" v-if="!code">
+          <button
+            :class="{ 'db-active': activeLanguage === 'bugs' }"
+            @click.stop="activeLanguage !== 'bugs' && toggleLanguage()"
+            type="button"
+          >
+            BUGS
+          </button>
+          <button
+            :class="{ 'db-active': activeLanguage === 'stan' }"
+            @click.stop="activeLanguage !== 'stan' && toggleLanguage()"
+            type="button"
+          >
+            Stan
+          </button>
+        </div>
+        <button
+          @click.stop="copyCodeToClipboard"
+          class="db-cp-copy-btn"
+          type="button"
+          title="Copy Code"
+        >
+          <i v-if="copySuccess" class="fas fa-check"></i>
+          <i v-else class="fas fa-copy"></i>
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -165,9 +214,6 @@ const triggerSuccess = () => {
 }
 
 .db-cp-copy-btn {
-  position: absolute;
-  bottom: 10px;
-  right: 10px;
   width: 36px;
   height: 36px;
   background-color: rgba(255, 255, 255, 0.1);
@@ -186,6 +232,48 @@ const triggerSuccess = () => {
   pointer-events: auto;
   border: 1px solid rgba(255, 255, 255, 0.2);
   outline: none;
+}
+
+.db-cp-controls {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 1000;
+}
+
+.db-cp-lang-toggle {
+  display: flex;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.db-cp-lang-toggle button {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+  border: none;
+  padding: 4px 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+  outline: none;
+  letter-spacing: 0.5px;
+}
+
+.db-cp-lang-toggle button.db-active {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.db-cp-lang-toggle button:hover:not(.db-active) {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .db-cp-copy-btn:hover {

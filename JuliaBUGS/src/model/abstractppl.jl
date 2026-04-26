@@ -170,7 +170,7 @@ function _parse_conditioning_spec(spec::Vector{<:VarName}, model::BUGSModel)
     # Use current values from model's evaluation environment
     result = Dict{VarName,Any}()
     for vn in spec
-        result[vn] = AbstractPPL.get(model.evaluation_env, vn)
+        result[vn] = AbstractPPL.getvalue(model.evaluation_env, vn)
     end
     return result
 end

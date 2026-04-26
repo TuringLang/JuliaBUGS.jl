@@ -27,7 +27,8 @@ export interface NodeDefinition {
   description: string
   styleClass: string
   properties: NodeProperty[]
-  parameters?: NodeProperty[] // Optional parameters for distributions
+  parameters?: NodeProperty[]
+  censoring?: NodeProperty[]
   defaultStyle: {
     backgroundColor: string
     borderColor: string
@@ -148,6 +149,125 @@ const distributionOptions: SelectOption[] = [
     paramNames: ['lower', 'upper'],
     helpText: 'Parameters: lower (minimum value), upper (maximum value).',
   },
+  {
+    value: 'dweib',
+    label: 'Weibull (dweib)',
+    paramCount: 2,
+    paramNames: ['shape', 'lambda'],
+    helpText: 'Parameters: shape (v), lambda (rate). Mean = lambda^(-1/v) * Gamma(1 + 1/v).',
+  },
+  {
+    value: 'dlnorm',
+    label: 'Log-Normal (dlnorm)',
+    paramCount: 2,
+    paramNames: ['mu', 'precision'],
+    helpText: 'Parameters: mu (mean of log), precision (1/variance of log).',
+  },
+  {
+    value: 'dcat',
+    label: 'Categorical (dcat)',
+    paramCount: 1,
+    paramNames: ['p'],
+    helpText: 'Parameter: p (vector of probabilities).',
+  },
+  {
+    value: 'ddexp',
+    label: 'Double Exponential (ddexp)',
+    paramCount: 2,
+    paramNames: ['mu', 'tau'],
+    helpText: 'Parameters: mu (location), tau (precision). Also known as Laplace distribution.',
+  },
+  {
+    value: 'dchisqr',
+    label: 'Chi-Squared (dchisqr)',
+    paramCount: 1,
+    paramNames: ['k'],
+    helpText: 'Parameter: k (degrees of freedom).',
+  },
+  {
+    value: 'dpar',
+    label: 'Pareto (dpar)',
+    paramCount: 2,
+    paramNames: ['alpha', 'c'],
+    helpText: 'Parameters: alpha (shape), c (scale/minimum).',
+  },
+  {
+    value: 'dnegbin',
+    label: 'Negative Binomial (dnegbin)',
+    paramCount: 2,
+    paramNames: ['p', 'r'],
+    helpText: 'Parameters: p (probability), r (number of failures).',
+  },
+  {
+    value: 'dlogis',
+    label: 'Logistic (dlogis)',
+    paramCount: 2,
+    paramNames: ['mu', 'tau'],
+    helpText: 'Parameters: mu (location), tau (precision).',
+  },
+  {
+    value: 'dmnorm',
+    label: 'Multivariate Normal (dmnorm)',
+    paramCount: 2,
+    paramNames: ['mu', 'T'],
+    helpText: 'Parameters: mu (mean vector), T (precision matrix).',
+  },
+  {
+    value: 'dwish',
+    label: 'Wishart (dwish)',
+    paramCount: 2,
+    paramNames: ['R', 'k'],
+    helpText: 'Parameters: R (scale matrix), k (degrees of freedom).',
+  },
+  {
+    value: 'ddirich',
+    label: 'Dirichlet (ddirich)',
+    paramCount: 1,
+    paramNames: ['alpha'],
+    helpText: 'Parameter: alpha (concentration vector).',
+  },
+  {
+    value: 'dmulti',
+    label: 'Multinomial (dmulti)',
+    paramCount: 2,
+    paramNames: ['p', 'N'],
+    helpText: 'Parameters: p (probability vector), N (number of trials).',
+  },
+  {
+    value: 'dflat',
+    label: 'Flat (dflat)',
+    paramCount: 0,
+    paramNames: [],
+    helpText: 'Improper flat (uniform) prior on the real line.',
+  },
+  {
+    value: 'dhyper',
+    label: 'Hypergeometric (dhyper)',
+    paramCount: 3,
+    paramNames: ['n1', 'n2', 'n3'],
+    helpText: 'Parameters: n1 (white), n2 (total draws), n3 (total objects).',
+  },
+  {
+    value: 'dgev',
+    label: 'Generalized Extreme Value (dgev)',
+    paramCount: 3,
+    paramNames: ['mu', 'sigma', 'xi'],
+    helpText: 'Parameters: mu (location), sigma (scale), xi (shape).',
+  },
+  {
+    value: 'df',
+    label: 'F distribution (df)',
+    paramCount: 2,
+    paramNames: ['n', 'm'],
+    helpText: 'Parameters: n (numerator df), m (denominator df).',
+  },
+  {
+    value: 'dgenpar',
+    label: 'Generalized Pareto (dgenpar)',
+    paramCount: 3,
+    paramNames: ['mu', 'sigma', 'xi'],
+    helpText: 'Parameters: mu (location), sigma (scale), xi (shape).',
+  },
 ]
 
 export const nodeDefinitions: NodeDefinition[] = [
@@ -180,12 +300,38 @@ export const nodeDefinitions: NodeDefinition[] = [
         placeholder: 'e.g., i,j or 1:N',
         defaultValue: '',
       },
+      {
+        key: 'equation',
+        label: 'Data Transform (<-)',
+        type: 'text',
+        placeholder: 'e.g., 1 - Y[i,j]  (data-only transform)',
+        defaultValue: '',
+        helpText:
+          'Optional: output a <- assignment before the ~ line. Only reference observed data here.',
+      },
     ],
     parameters: [
-      // These fields will be used to store literal values or parent node links
       { key: 'param1', label: 'Parameter 1', type: 'text', defaultValue: '' },
       { key: 'param2', label: 'Parameter 2', type: 'text', defaultValue: '' },
       { key: 'param3', label: 'Parameter 3', type: 'text', defaultValue: '' },
+    ],
+    censoring: [
+      {
+        key: 'censorLower',
+        label: 'Lower Bound',
+        type: 'text',
+        placeholder: 'e.g., t.cen[i, j]',
+        defaultValue: '',
+        helpText: 'Left censoring bound. BUGS: C(lower, )',
+      },
+      {
+        key: 'censorUpper',
+        label: 'Upper Bound',
+        type: 'text',
+        placeholder: 'e.g., upper[i]',
+        defaultValue: '',
+        helpText: 'Right censoring bound. BUGS: C(, upper)',
+      },
     ],
     defaultStyle: {
       backgroundColor: '#ffe0e0',
@@ -288,11 +434,38 @@ export const nodeDefinitions: NodeDefinition[] = [
         placeholder: 'e.g., i,j or 1:N',
         defaultValue: '',
       },
+      {
+        key: 'equation',
+        label: 'Data Transform (<-)',
+        type: 'text',
+        placeholder: 'e.g., 1 - Y[i,j]  (data-only transform)',
+        defaultValue: '',
+        helpText:
+          'Optional: output a <- assignment before the ~ line. Only reference observed data here.',
+      },
     ],
     parameters: [
       { key: 'param1', label: 'Parameter 1', type: 'text', defaultValue: '' },
       { key: 'param2', label: 'Parameter 2', type: 'text', defaultValue: '' },
       { key: 'param3', label: 'Parameter 3', type: 'text', defaultValue: '' },
+    ],
+    censoring: [
+      {
+        key: 'censorLower',
+        label: 'Lower Bound',
+        type: 'text',
+        placeholder: 'e.g., t.cen[i, j]',
+        defaultValue: '',
+        helpText: 'Left censoring bound. BUGS: C(lower, )',
+      },
+      {
+        key: 'censorUpper',
+        label: 'Upper Bound',
+        type: 'text',
+        placeholder: 'e.g., upper[i]',
+        defaultValue: '',
+        helpText: 'Right censoring bound. BUGS: C(, upper)',
+      },
     ],
     defaultStyle: {
       backgroundColor: '#e0f0ff',
@@ -386,6 +559,11 @@ export const getDefaultNodeData = (
   if (definition.parameters) {
     definition.parameters.forEach((param) => {
       defaultData[param.key] = param.defaultValue
+    })
+  }
+  if (definition.censoring) {
+    definition.censoring.forEach((c) => {
+      defaultData[c.key] = c.defaultValue
     })
   }
   return defaultData
