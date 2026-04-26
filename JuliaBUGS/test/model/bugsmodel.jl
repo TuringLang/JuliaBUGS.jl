@@ -4,6 +4,8 @@ using JuliaBUGS.Model:
     decondition,
     parameters,
     variables,
+    mcmc_parameters,
+    postprocess_variables,
     getparams,
     settrans,
     set_evaluation_mode,
@@ -127,6 +129,10 @@ end
         @test type_of_gq[@varname(mu)] == ModelParameter
         @test type_of_gq[@varname(y)] == Observation
         @test type_of_gq[@varname(z)] == GeneratedQuantity
+
+        @test @varname(mu) in mcmc_parameters(model_gq)
+        @test @varname(z) ∉ mcmc_parameters(model_gq)
+        @test @varname(z) in postprocess_variables(model_gq)
     end
 
     @testset "initialize!" begin

@@ -27,6 +27,7 @@ include("abstractmcmc.jl")
 # Public user-facing API
 export parameters, variables, initialize!, getparams, settrans
 export set_evaluation_mode, set_observed_values!
+export mcmc_parameters, postprocess_variables
 
 # Variable classification
 export VariableType, Deterministic, Observation, ModelParameter, GeneratedQuantity
