@@ -40,6 +40,23 @@ Classification of each node in the model graph.
 """
 @enum VariableType Deterministic Observation ModelParameter GeneratedQuantity
 
+@inline function _classify_variable_type(
+    vn::VarName, is_stochastic::Bool, is_observed::Bool, gq_vars::Set{<:VarName}
+)
+    return if !is_stochastic
+        Deterministic
+    elseif is_observed
+        Observation
+    elseif vn in gq_vars
+        # Stochastic node with no observed descendants (forward-sampled after inference).
+        GeneratedQuantity
+    else
+        # Includes latent variables such as missing-data interpolation that still
+        # influence observed likelihood terms and must remain in MCMC.
+        ModelParameter
+    end
+end
+
 """
     GraphEvaluationData{TNF,TV}
 
@@ -101,15 +118,7 @@ function GraphEvaluationData(
         loop_vars_vals[i] = loop_vars
 
         # Classify each node
-        variable_types[i] = if !is_stochastic
-            Deterministic
-        elseif is_observed
-            Observation
-        elseif vn in gq_vars
-            GeneratedQuantity
-        else
-            ModelParameter
-        end
+        variable_types[i] = _classify_variable_type(vn, is_stochastic, is_observed, gq_vars)
 
         # If it's a stochastic variable and not observed, it's a parameter
         # If active_parameters is specified, only include those that are in the list
