@@ -29,6 +29,35 @@ struct MarginalizationCache{V<:VarName}
 end
 
 """
+    VariableType
+
+Classification of each node in the model graph.
+
+- `Deterministic`: a logical node (defined with `=`)
+- `Observation`: a stochastic node with observed data
+- `ModelParameter`: a stochastic node that influences observations (sampled by MCMC)
+- `GeneratedQuantity`: a stochastic node with no observed descendants (can be forward-sampled post-inference)
+"""
+@enum VariableType Deterministic Observation ModelParameter GeneratedQuantity
+
+@inline function _classify_variable_type(
+    vn::VarName, is_stochastic::Bool, is_observed::Bool, gq_vars::Set{<:VarName}
+)
+    return if !is_stochastic
+        Deterministic
+    elseif is_observed
+        Observation
+    elseif vn in gq_vars
+        # Stochastic node with no observed descendants (forward-sampled after inference).
+        GeneratedQuantity
+    else
+        # Includes latent variables such as missing-data interpolation that still
+        # influence observed likelihood terms and must remain in MCMC.
+        ModelParameter
+    end
+end
+
+"""
     GraphEvaluationData{TNF,TV}
 
 Caches node information from the model graph to optimize evaluation performance.
@@ -37,6 +66,9 @@ Stores pre-computed values to avoid repeated lookups from the MetaGraph during m
 # Fields
 - `sorted_nodes::Vector{<:VarName}`: Variables in topological order for evaluation
 - `sorted_parameters::Vector{<:VarName}`: Parameters (unobserved stochastic variables) in sorted order consistent with sorted_nodes
+- `mcmc_parameters::Vector{<:VarName}`: Unobserved stochastic variables intended for direct MCMC updates
+- `postprocess_stochastic::Vector{<:VarName}`: Unobserved stochastic variables tracked for post-inference computation
+- `variable_types::Vector{VariableType}`: Classification of each node
 - `is_stochastic_vals::Vector{Bool}`: Whether each node represents a stochastic variable
 - `is_observed_vals::Vector{Bool}`: Whether each node is observed (has data)
 - `node_function_vals::TNF`: Functions that define each node's computation
@@ -45,6 +77,9 @@ Stores pre-computed values to avoid repeated lookups from the MetaGraph during m
 struct GraphEvaluationData{TNF,TV}
     sorted_nodes::Vector{<:VarName}
     sorted_parameters::Vector{<:VarName}
+    mcmc_parameters::Vector{<:VarName}
+    postprocess_stochastic::Vector{<:VarName}
+    variable_types::Vector{VariableType}
     is_stochastic_vals::Vector{Bool}
     is_observed_vals::Vector{Bool}
     node_function_vals::TNF
@@ -69,6 +104,11 @@ function GraphEvaluationData(
     node_function_vals = Array{Any}(undef, length(sorted_nodes))
     loop_vars_vals = Array{Any}(undef, length(sorted_nodes))
     sorted_parameters = VarName[]
+    mcmc_parameters = VarName[]
+    postprocess_stochastic = VarName[]
+    variable_types = Vector{VariableType}(undef, length(sorted_nodes))
+
+    gq_vars = find_generated_quantities_variables(g)
 
     for (i, vn) in enumerate(sorted_nodes)
         (; is_stochastic, is_observed, node_function, loop_vars) = g[vn]
@@ -77,11 +117,19 @@ function GraphEvaluationData(
         node_function_vals[i] = node_function
         loop_vars_vals[i] = loop_vars
 
+        # Classify each node
+        variable_types[i] = _classify_variable_type(vn, is_stochastic, is_observed, gq_vars)
+
         # If it's a stochastic variable and not observed, it's a parameter
         # If active_parameters is specified, only include those that are in the list
         if is_stochastic && !is_observed
             if active_parameters === nothing || vn in active_parameters
                 push!(sorted_parameters, vn)
+                if variable_types[i] == GeneratedQuantity
+                    push!(postprocess_stochastic, vn)
+                else
+                    push!(mcmc_parameters, vn)
+                end
             end
         end
     end
@@ -89,6 +137,9 @@ function GraphEvaluationData(
     return GraphEvaluationData{typeof(node_function_vals),typeof(loop_vars_vals)}(
         sorted_nodes,
         sorted_parameters,
+        mcmc_parameters,
+        postprocess_stochastic,
+        variable_types,
         is_stochastic_vals,
         is_observed_vals,
         map(identity, node_function_vals),
@@ -331,6 +382,20 @@ end
 Return a vector of `VarName` containing the names of the model parameters (unobserved stochastic variables).
 """
 parameters(model::BUGSModel) = model.graph_evaluation_data.sorted_parameters
+
+"""
+    mcmc_parameters(model::BUGSModel)
+
+Return a vector of `VarName` containing the stochastic variables that should be sampled directly by MCMC.
+"""
+mcmc_parameters(model::BUGSModel) = model.graph_evaluation_data.mcmc_parameters
+
+"""
+    postprocess_variables(model::BUGSModel)
+
+Return a vector of `VarName` containing unobserved stochastic variables that are tracked for post-processing rather than direct MCMC updates.
+"""
+postprocess_variables(model::BUGSModel) = model.graph_evaluation_data.postprocess_stochastic
 
 """
     variables(model::BUGSModel)

@@ -4,11 +4,18 @@ using JuliaBUGS.Model:
     decondition,
     parameters,
     variables,
+    mcmc_parameters,
+    postprocess_variables,
     getparams,
     settrans,
     set_evaluation_mode,
     UseGeneratedLogDensityFunction,
-    UseGraph
+    UseGraph,
+    VariableType,
+    Deterministic,
+    Observation,
+    ModelParameter,
+    GeneratedQuantity
 
 @testset "Compile Vol.1 BUGS Examples" begin
     for model_name in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
@@ -84,6 +91,76 @@ end
             condition(model, Dict(@varname(x) => [1.0, 2.0, 3.0]))
         )
         @test length(parameters(model_subsume)) == 2  # Only mu and sigma remain
+    end
+
+    @testset "VariableType classification" begin
+        # Model with deterministic, observation, and model parameters
+        model_def = @bugs begin
+            mu ~ Normal(0, 10)
+            sigma ~ Gamma(1, 1)
+            for i in 1:3
+                x[i] ~ Normal(mu, sigma)
+            end
+            mean_x = mean(x[:])
+            y ~ Normal(mean_x, 1)
+        end
+
+        model = compile(model_def, (; y=2.5))
+        gd = model.graph_evaluation_data
+        type_of = Dict(gd.sorted_nodes .=> gd.variable_types)
+
+        @test type_of[@varname(mu)] == ModelParameter
+        @test type_of[@varname(sigma)] == ModelParameter
+        @test type_of[@varname(x[1])] == ModelParameter
+        @test type_of[@varname(mean_x)] == Deterministic
+        @test type_of[@varname(y)] == Observation
+
+        # Model with a generated quantity
+        model_def_gq = @bugs begin
+            mu ~ Normal(0, 1)
+            y ~ Normal(mu, 1)
+            z ~ Normal(mu, 1)  # no observation depends on z
+        end
+
+        model_gq = compile(model_def_gq, (; y=1.0))
+        gd_gq = model_gq.graph_evaluation_data
+        type_of_gq = Dict(gd_gq.sorted_nodes .=> gd_gq.variable_types)
+
+        @test type_of_gq[@varname(mu)] == ModelParameter
+        @test type_of_gq[@varname(y)] == Observation
+        @test type_of_gq[@varname(z)] == GeneratedQuantity
+
+        @test @varname(mu) in mcmc_parameters(model_gq)
+        @test @varname(z) ∉ mcmc_parameters(model_gq)
+        @test @varname(z) in postprocess_variables(model_gq)
+
+        # Missing-data interpolation that influences observed likelihood
+        # should remain a model parameter (sampled by MCMC).
+        model_def_missing = @bugs begin
+            x ~ Normal(0, 1)
+            y ~ Normal(x, 1)
+        end
+        model_missing = compile(model_def_missing, (; y=missing))
+        gd_missing = model_missing.graph_evaluation_data
+        type_of_missing = Dict(gd_missing.sorted_nodes .=> gd_missing.variable_types)
+
+        @test type_of_missing[@varname(y)] == ModelParameter
+        @test @varname(y) in mcmc_parameters(model_missing)
+        @test @varname(y) ∉ postprocess_variables(model_missing)
+
+        # Unobserved stochastic node with no observed descendants should be postprocessed.
+        model_def_post = @bugs begin
+            θ ~ Normal(0, 1)
+            y ~ Normal(θ, 1)
+            z ~ Normal(θ, 1)
+        end
+        model_post = compile(model_def_post, (; y=1.0))
+        gd_post = model_post.graph_evaluation_data
+        type_of_post = Dict(gd_post.sorted_nodes .=> gd_post.variable_types)
+
+        @test type_of_post[@varname(z)] == GeneratedQuantity
+        @test @varname(z) ∉ mcmc_parameters(model_post)
+        @test @varname(z) in postprocess_variables(model_post)
     end
 
     @testset "initialize!" begin
