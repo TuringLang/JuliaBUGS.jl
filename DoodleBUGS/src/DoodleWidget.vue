@@ -1027,7 +1027,8 @@ watch(showNewGraphModal, (val) => {
 
       <div
         class="db-ui-overlay"
-        :class="{ 'db-dark-mode': isDarkMode,
+        :class="{
+          'db-dark-mode': isDarkMode,
           'db-widget-ready': widgetInitialized,
           'db-fullscreen': isFullScreen,
         }"
