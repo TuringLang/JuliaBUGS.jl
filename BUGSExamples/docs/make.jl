@@ -58,7 +58,8 @@ makedocs(;
         assets=[
             asset("https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/pr-previews/451/lib/doodlebugs.css", class=:css),
             asset("https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/pr-previews/451/lib/doodlebugs.js", class=:js, attributes=Dict(:type => "module")),
-            asset("assets/sync_theme.js", class=:js),
+            asset("assets/sync_theme.js", islocal=true, class=:js),
+            asset("assets/doodlebugs-themes.css", islocal=true, class=:css),
         ],
     ),
     pages=page_list,
