@@ -64504,7 +64504,7 @@ const CQe = /* @__PURE__ */ ps({
   for (const [a, s] of e)
     r[a] = s;
   return r;
-}, SQe = /* @__PURE__ */ Cl(CQe, [["__scopeId", "data-v-7f5aea33"]]), UO = JSON.stringify(
+}, SQe = /* @__PURE__ */ Cl(CQe, [["__scopeId", "data-v-a2720df4"]]), UO = JSON.stringify(
   {
     data: {},
     inits: {}
@@ -65387,7 +65387,7 @@ const FQe = { class: "inline-block" }, A0e = /* @__PURE__ */ ps({
       }, {
         default: wn(() => [
           Ce("div", {
-            class: "flex flex-col min-w-[150px] py-1",
+            class: "db-flex db-flex-col min-w-[150px] py-1",
             onClick: s
           }, [
             Wr(l.$slots, "content")
@@ -69946,7 +69946,7 @@ function Ztt(t, e, r, a, s, l) {
 mke.render = Ztt;
 const Jtt = {
   key: 0,
-  class: "flex items-center"
+  class: "db-flex db-items-center"
 }, Qtt = { key: 1 }, ent = /* @__PURE__ */ ps({
   __name: "BaseSelect",
   props: {
@@ -69998,7 +69998,7 @@ const Jtt = {
       _: 3
     }, 8, ["model-value", "options", "optionLabel", "optionValue", "disabled", "placeholder"]));
   }
-}), Qw = /* @__PURE__ */ Cl(ent, [["__scopeId", "data-v-e37a74f3"]]);
+}), Qw = /* @__PURE__ */ Cl(ent, [["__scopeId", "data-v-5d4df8d6"]]);
 var tnt = `
     .p-badge {
         display: inline-flex;
@@ -72147,10 +72147,10 @@ const jg = /* @__PURE__ */ ps({
       onChange: f[0] || (f[0] = (d) => a("change", d)),
       onInput: f[1] || (f[1] = (d) => a("input", d)),
       onKeyup: f[2] || (f[2] = v6((d) => a("keyup.enter", d), ["enter"])),
-      class: "w-full db-input-field"
+      class: "db-w-full db-input-field"
     }, null, 8, ["type", "model-value", "placeholder", "disabled", "readonly"]));
   }
-}), el = /* @__PURE__ */ Cl(Unt, [["__scopeId", "data-v-9e1c90b3"]]), Wnt = { class: "db-project-manager" }, Ynt = { class: "db-panel-header" }, Knt = { class: "db-actions" }, Xnt = {
+}), el = /* @__PURE__ */ Cl(Unt, [["__scopeId", "data-v-81204b22"]]), Wnt = { class: "db-project-manager" }, Ynt = { class: "db-panel-header" }, Knt = { class: "db-actions" }, Xnt = {
   key: 0,
   class: "db-empty-state"
 }, Znt = {
@@ -72532,7 +72532,7 @@ const jg = /* @__PURE__ */ ps({
   } catch {
     return !1;
   }
-}, hrt = { class: "db-sidebar-title" }, prt = { class: "flex items-center ml-auto" }, grt = { class: "db-sidebar-content-scrollable" }, vrt = { class: "db-panel-content-wrapper" }, brt = { class: "db-example-row" }, mrt = { class: "flex items-center gap-2" }, yrt = { class: "db-menu-panel flex-col gap-3" }, wrt = { class: "db-menu-row" }, krt = { class: "db-menu-row" }, xrt = { class: "db-menu-row" }, Crt = ["value"], Srt = { class: "db-menu-row" }, Ert = { class: "db-menu-row" }, _rt = { class: "db-menu-panel flex-col gap-1" }, Trt = { class: "db-menu-panel flex-col gap-3" }, Ort = { class: "db-menu-row" }, Art = /* @__PURE__ */ ps({
+}, hrt = { class: "db-sidebar-title" }, prt = { class: "db-flex db-items-center ml-auto" }, grt = { class: "db-sidebar-content-scrollable" }, vrt = { class: "db-panel-content-wrapper" }, brt = { class: "db-example-row" }, mrt = { class: "db-flex db-items-center db-gap-2" }, yrt = { class: "db-menu-panel db-flex-col db-gap-3" }, wrt = { class: "db-menu-row" }, krt = { class: "db-menu-row" }, xrt = { class: "db-menu-row" }, Crt = ["value"], Srt = { class: "db-menu-row" }, Ert = { class: "db-menu-row" }, _rt = { class: "db-menu-panel db-flex-col db-gap-1" }, Trt = { class: "db-menu-panel db-flex-col db-gap-3" }, Ort = { class: "db-menu-row" }, Art = /* @__PURE__ */ ps({
   __name: "LeftSidebar",
   props: {
     activeAccordionTabs: {},
@@ -72606,7 +72606,7 @@ const jg = /* @__PURE__ */ ps({
             ]
           ]),
           Gr((tt(), yt("div", {
-            class: "flex items-center",
+            class: "db-flex db-items-center",
             onMousedown: O[3] || (O[3] = _i(() => {
             }, ["stop"])),
             onTouchstart: O[4] || (O[4] = _i(() => {
@@ -72837,7 +72837,7 @@ const jg = /* @__PURE__ */ ps({
       ])
     ], 4));
   }
-}), Lrt = /* @__PURE__ */ Cl(Art, [["__scopeId", "data-v-efee2473"]]), Irt = { class: "db-node-properties-panel" }, Prt = {
+}), Lrt = /* @__PURE__ */ Cl(Art, [["__scopeId", "data-v-593fbc70"]]), Irt = { class: "db-node-properties-panel" }, Prt = {
   key: 0,
   class: "db-no-selection-message"
 }, Nrt = {
@@ -84771,7 +84771,7 @@ const Eit = { class: "db-local-script-panel" }, _it = {
 }, qit = {
   key: 1,
   class: "pi pi-window-minimize"
-}, Uit = { class: "db-sidebar-tabs" }, Wit = { class: "db-sidebar-content" }, Yit = { class: "db-export-panel" }, Kit = { class: "db-menu-panel flex-col gap-3" }, Xit = /* @__PURE__ */ ps({
+}, Uit = { class: "db-sidebar-tabs" }, Wit = { class: "db-sidebar-content" }, Yit = { class: "db-export-panel" }, Kit = { class: "db-menu-panel db-flex-col db-gap-3" }, Xit = /* @__PURE__ */ ps({
   __name: "RightSidebar",
   props: {
     selectedElement: {},
@@ -84809,7 +84809,7 @@ const Eit = { class: "db-local-script-panel" }, _it = {
       }, [
         y[30] || (y[30] = Ce("span", { class: "db-sidebar-title" }, "Inspector", -1)),
         Ce("div", {
-          class: "flex items-center ml-auto",
+          class: "db-flex db-items-center ml-auto",
           onClick: y[3] || (y[3] = _i(() => {
           }, ["stop"])),
           onMousedown: y[4] || (y[4] = _i(() => {
@@ -84886,7 +84886,7 @@ const Eit = { class: "db-local-script-panel" }, _it = {
           ]) : ir("", !0)
         ], 32),
         Gr((tt(), yt("div", {
-          class: "pointer-events-auto flex items-center ml-2",
+          class: "pointer-events-auto db-flex db-items-center ml-2",
           onMousedown: y[6] || (y[6] = _i(() => {
           }, ["stop"])),
           onTouchstart: y[7] || (y[7] = _i(() => {
@@ -85047,7 +85047,7 @@ const Eit = { class: "db-local-script-panel" }, _it = {
       ])
     ], 4));
   }
-}), Zit = /* @__PURE__ */ Cl(Xit, [["__scopeId", "data-v-dbb97922"]]), Jit = `using JuliaBUGS, AbstractMCMC, AdvancedHMC, LogDensityProblems, LogDensityProblemsAD, MCMCChains, ReverseDiff, Random<% if (hasCensoring) { %>
+}), Zit = /* @__PURE__ */ Cl(Xit, [["__scopeId", "data-v-c328935e"]]), Jit = `using JuliaBUGS, AbstractMCMC, AdvancedHMC, LogDensityProblems, LogDensityProblemsAD, MCMCChains, ReverseDiff, Random<% if (hasCensoring) { %>
 using Distributions: censored<% } %>
 
 data = <%= dataLiteral %>
@@ -87574,7 +87574,7 @@ const wot = { class: "db-data-input-panel" }, kot = {
                   max: "1",
                   step: "0.1",
                   "onUpdate:modelValue": G[8] || (G[8] = (q) => d.value.backgroundOpacity = q),
-                  class: "w-full"
+                  class: "db-w-full"
                 }, null, 512), [
                   [
                     lm,
@@ -87740,7 +87740,7 @@ const wot = { class: "db-data-input-panel" }, kot = {
                     max: "1",
                     step: "0.1",
                     "onUpdate:modelValue": G[22] || (G[22] = (q) => h.value.labelBackgroundOpacity = q),
-                    class: "w-full h-8"
+                    class: "db-w-full h-8"
                   }, null, 512), [
                     [
                       lm,
@@ -87819,7 +87819,7 @@ const wot = { class: "db-data-input-panel" }, kot = {
       _: 1
     }, 8, ["is-open"]));
   }
-}), jat = /* @__PURE__ */ Cl(zat, [["__scopeId", "data-v-d544a3d4"]]), Gat = { class: "db-share-layout" }, Vat = { class: "db-share-tabs" }, Hat = {
+}), jat = /* @__PURE__ */ Cl(zat, [["__scopeId", "data-v-92bbe748"]]), Gat = { class: "db-share-layout" }, Vat = { class: "db-share-tabs" }, Hat = {
   key: 0,
   class: "db-selection-area"
 }, qat = { class: "db-graph-list" }, Uat = ["checked", "onChange"], Wat = { class: "db-graph-name" }, Yat = { class: "db-result-area" }, Kat = {
@@ -88089,7 +88089,7 @@ const wot = { class: "db-data-input-panel" }, kot = {
 }, hst = {
   key: 1,
   class: "db-issues-list"
-}, pst = ["onClick"], gst = { class: "db-error-details" }, vst = { class: "w-full flex justify-end" }, bst = {
+}, pst = ["onClick"], gst = { class: "db-error-details" }, vst = { class: "db-w-full db-flex justify-end" }, bst = {
   key: 0,
   class: "fas fa-check"
 }, mst = { key: 1 }, yst = /* @__PURE__ */ ps({
@@ -88183,7 +88183,7 @@ ${m}`;
       _: 1
     }, 8, ["is-open"]));
   }
-}), wst = /* @__PURE__ */ Cl(yst, [["__scopeId", "data-v-70cb0254"]]);
+}), wst = /* @__PURE__ */ Cl(yst, [["__scopeId", "data-v-9184b33d"]]);
 var lbe = { exports: {} }, ube;
 function kst() {
   return ube || (ube = 1, function(t, e) {
@@ -89646,13 +89646,13 @@ function klt(t, e, r = {}) {
 const xlt = { class: "db-content-clipper" }, Clt = {
   key: 1,
   class: "db-empty-placeholder"
-}, Slt = { class: "db-toast-wrapper" }, Elt = { class: "db-sidebar-trigger-content gap-1" }, _lt = {
-  class: "grow flex items-center gap-2 overflow-hidden",
+}, Slt = { class: "db-toast-wrapper" }, Elt = { class: "db-sidebar-trigger-content db-gap-1" }, _lt = {
+  class: "grow db-flex db-items-center db-gap-2 overflow-hidden",
   style: { "flex-grow": "1", overflow: "hidden" }
 }, Tlt = { class: "db-logo-text-minimized" }, Olt = { class: "db-desktop-text" }, Alt = {
-  class: "flex items-center shrink-0",
+  class: "db-flex db-items-center shrink-0",
   style: { "flex-shrink": "0" }
-}, Llt = { class: "db-toggle-icon-wrapper" }, Ilt = { class: "db-sidebar-trigger-content gap-2" }, Plt = { class: "flex items-center" }, Nlt = {
+}, Llt = { class: "db-toggle-icon-wrapper" }, Ilt = { class: "db-sidebar-trigger-content db-gap-2" }, Plt = { class: "db-flex db-items-center" }, Nlt = {
   key: 0,
   viewBox: "0 0 24 24",
   fill: "none",
@@ -89661,7 +89661,7 @@ const xlt = { class: "db-content-clipper" }, Clt = {
 }, Dlt = {
   key: 1,
   class: "pi pi-window-minimize"
-}, Rlt = { class: "db-toggle-icon-wrapper" }, Mlt = { class: "db-modal-form-row" }, $lt = { class: "flex flex-col gap-2" }, Blt = { class: "db-form-group" }, Flt = { class: "db-import-section" }, zlt = {
+}, Rlt = { class: "db-toggle-icon-wrapper" }, Mlt = { class: "db-modal-form-row" }, $lt = { class: "db-flex db-flex-col db-gap-2" }, Blt = { class: "db-form-group" }, Flt = { class: "db-import-section" }, zlt = {
   key: 0,
   class: "db-drop-zone-content"
 }, jlt = {
@@ -89813,7 +89813,7 @@ const xlt = { class: "db-content-clipper" }, Clt = {
       const Nn = r.controlsPosition || "bottom-right", ft = {
         position: "absolute",
         zIndex: "1000",
-        display: "flex",
+        display: "db-flex",
         gap: "8px",
         pointerEvents: "auto"
       }, [sr, on] = Nn.split("-");
