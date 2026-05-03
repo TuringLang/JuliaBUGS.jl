@@ -118,7 +118,7 @@ const handleHeaderClick = () => {
       <span class="db-sidebar-title">
         {{ pinnedGraphTitle ? `DoodleBUGS / ${pinnedGraphTitle}` : 'DoodleBUGS' }}
       </span>
-      <div class="flex items-center ml-auto">
+      <div class="db-flex db-items-center ml-auto">
         <button
           v-tooltip.top="{
             value: isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
@@ -134,7 +134,7 @@ const handleHeaderClick = () => {
         </button>
         <div
           v-tooltip.top="{ value: 'Collapse Sidebar', showDelay: 0, hideDelay: 0 }"
-          class="flex items-center"
+          class="db-flex db-items-center"
           @mousedown.stop
           @touchstart.stop
           @click.stop="$emit('toggle-left-sidebar')"
@@ -172,7 +172,7 @@ const handleHeaderClick = () => {
                   class="db-examples-dropdown"
                 >
                   <template #option="{ option }">
-                    <div class="flex items-center gap-2">
+                    <div class="db-flex db-items-center db-gap-2">
                       <span>{{ option.name }}</span>
                     </div>
                   </template>
@@ -185,7 +185,7 @@ const handleHeaderClick = () => {
         <AccordionPanel value="view">
           <AccordionHeader><i class="fas fa-eye db-icon-12"></i> View Options</AccordionHeader>
           <AccordionContent>
-            <div class="db-menu-panel flex-col gap-3">
+            <div class="db-menu-panel db-flex-col db-gap-3">
               <div class="db-menu-row">
                 <label>Canvas Grid</label>
                 <ToggleSwitch
@@ -236,7 +236,7 @@ const handleHeaderClick = () => {
         <AccordionPanel value="help">
           <AccordionHeader><i class="fas fa-question-circle db-icon-12"></i> Help</AccordionHeader>
           <AccordionContent>
-            <div class="db-menu-panel flex-col gap-1">
+            <div class="db-menu-panel db-flex-col db-gap-1">
               <BaseButton type="ghost" class="db-menu-btn" @click="$emit('open-faq-modal')"
                 ><i class="fas fa-question"></i> FAQ</BaseButton
               >
@@ -259,7 +259,7 @@ const handleHeaderClick = () => {
             ><i class="fas fa-terminal db-icon-12"></i> Developer Tools</AccordionHeader
           >
           <AccordionContent>
-            <div class="db-menu-panel flex-col gap-3">
+            <div class="db-menu-panel db-flex-col db-gap-3">
               <div class="db-menu-row">
                 <label>Debug Console</label>
                 <ToggleSwitch

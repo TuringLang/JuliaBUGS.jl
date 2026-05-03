@@ -517,8 +517,7 @@ watch(
   <div
     ref="cyContainer"
     class="db-cytoscape-container"
-    :class="{
-      'db-grid-background': isGridEnabled && gridSize > 0,
+    :class="{ 'db-grid-background': isGridEnabled && gridSize > 0,
       'db-grid-lines': gridStyle === 'lines' && isGridEnabled && gridSize > 0,
       'db-grid-dots': gridStyle === 'dots' && isGridEnabled && gridSize > 0,
       'db-mode-add-node': currentMode === 'add-node' && !readOnly,

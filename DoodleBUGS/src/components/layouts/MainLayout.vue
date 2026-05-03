@@ -569,9 +569,9 @@ onUnmounted(() => {
         class="db-collapsed-sidebar-trigger db-left-trigger"
         @click="handleSidebarContainerClick"
       >
-        <div class="db-sidebar-trigger-content gap-1">
+        <div class="db-sidebar-trigger-content db-gap-1">
           <div
-            class="grow flex items-center gap-2 overflow-hidden"
+            class="grow db-flex db-items-center db-gap-2 overflow-hidden"
             style="flex-grow: 1; overflow: hidden"
           >
             <span class="db-logo-text-minimized">
@@ -581,7 +581,7 @@ onUnmounted(() => {
               <span class="db-mobile-text">DoodleBUGS</span>
             </span>
           </div>
-          <div class="flex items-center shrink-0" style="flex-shrink: 0">
+          <div class="db-flex db-items-center shrink-0" style="flex-shrink: 0">
             <button
               v-tooltip.top="{
                 value: isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
@@ -637,9 +637,9 @@ onUnmounted(() => {
         class="db-collapsed-sidebar-trigger db-right"
         @click="toggleRightSidebar"
       >
-        <div class="db-sidebar-trigger-content gap-2">
+        <div class="db-sidebar-trigger-content db-gap-2">
           <span class="db-sidebar-title-minimized">Inspector</span>
-          <div class="flex items-center">
+          <div class="db-flex db-items-center">
             <div
               class="db-status-indicator db-validation-status"
               @click.stop="showValidationModal = true"
@@ -748,7 +748,7 @@ onUnmounted(() => {
         <h3>Create New Project</h3>
       </template>
       <template #body>
-        <div class="flex items-center gap-3">
+        <div class="db-flex db-items-center db-gap-3">
           <label style="min-width: 100px; font-weight: 500">Project Name:</label>
           <BaseInput
             v-model="newProjectName"
@@ -767,7 +767,7 @@ onUnmounted(() => {
         <h3>Create New Graph</h3>
       </template>
       <template #body>
-        <div class="flex flex-col gap-2">
+        <div class="db-flex db-flex-col db-gap-2">
           <div class="db-form-group">
             <label for="new-graph-name">Graph Name</label>
             <BaseInput

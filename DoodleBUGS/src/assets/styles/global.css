@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css');
 @import './shared-ui.css';
 
@@ -114,73 +113,73 @@ html.db-dark-mode {
 
 
 /* Utility classes */
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .flex {
+.db-flex {
   display: flex;
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .flex-col {
+.db-flex-col {
   flex-direction: column;
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .items-center {
+.db-items-center {
   align-items: center;
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .justify-center {
+.db-justify-center {
   justify-content: center;
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .justify-between {
+.db-justify-between {
   justify-content: space-between;
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .gap-1 {
+.db-gap-1 {
   gap: 4px;
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .gap-2 {
+.db-gap-2 {
   gap: 8px;
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .gap-3 {
+.db-gap-3 {
   gap: 12px;
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .p-2 {
+.db-p-2 {
   padding: 8px;
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .text-xs {
+.db-text-xs {
   font-size: var(--font-size-xs);
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .text-sm {
+.db-text-sm {
   font-size: var(--font-size-sm);
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .text-md {
+.db-text-md {
   font-size: var(--font-size-md);
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .font-bold {
+.db-font-bold {
   font-weight: 600;
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .w-full {
+.db-w-full {
   width: 100%;
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .h-full {
+.db-h-full {
   height: 100%;
 }
 
 /* Custom Base Modal Responsive Width */
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .base-modal-responsive {
+.db-base-modal-responsive {
   width: 50vw;
 }
 
 @media (max-width: 768px) {
-  :is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .base-modal-responsive {
+  .db-base-modal-responsive {
     width: 95vw !important;
   }
 }
@@ -236,7 +235,7 @@ html.db-dark-mode .cytoscape-container {
 }
 
 /* Glassmorphism Utility */
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .glass-panel {
+.db-glass-panel {
   background: var(--theme-bg-panel-transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -245,24 +244,24 @@ html.db-dark-mode .cytoscape-container {
 }
 
 /* Debug Panel - Green Theme */
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .debug-panel {
+.debug-panel {
   border-top-color: var(--theme-primary) !important;
   color: #fff !important;
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .debug-header {
+.debug-header {
   background: rgba(16, 185, 129, 0.2) !important;
   border-bottom-color: var(--theme-primary) !important;
   color: #fff !important;
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .debug-btn {
+.debug-btn {
   border-color: var(--theme-primary) !important;
   color: var(--theme-primary) !important;
   background: transparent !important;
 }
 
-:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .log-type.type-log {
+.log-type.type-log {
   color: var(--theme-primary) !important;
 }
 
