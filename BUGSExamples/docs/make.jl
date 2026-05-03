@@ -56,8 +56,9 @@ makedocs(;
         canonical="https://TuringLang.github.io/JuliaBUGS.jl/BUGSExamples",
         edit_link="main",
         assets=[
-            asset("https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.css", class=:css),
-            asset("https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.js", class=:js, attributes=Dict(:type => "module")),
+            asset("https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/pr-previews/451/lib/doodlebugs.css", class=:css),
+            asset("https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/pr-previews/451/lib/doodlebugs.js", class=:js, attributes=Dict(:type => "module")),
+            asset("assets/sync_theme.js", class=:js),
         ],
     ),
     pages=page_list,
