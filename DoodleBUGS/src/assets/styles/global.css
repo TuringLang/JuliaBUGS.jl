@@ -265,3 +265,16 @@ html.db-dark-mode .cytoscape-container {
 .log-type.type-log {
   color: var(--theme-primary) !important;
 }
+
+/* Base styles for the DoodleWidget container */
+.db-widget-root {
+  background-color: var(--theme-bg-canvas);
+  color: var(--theme-text-primary);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-sm);
+  -webkit-font-smoothing: antialiased;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
