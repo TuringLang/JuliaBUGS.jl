@@ -2,8 +2,6 @@ using BUGSExamples
 using Documenter
 using Literate
 
-# --- Generate markdown from Literate.jl source files ---
-
 const EXAMPLES_SRC = joinpath(@__DIR__, "..", "src")
 const GENERATED_DIR = joinpath(@__DIR__, "src", "generated")
 
