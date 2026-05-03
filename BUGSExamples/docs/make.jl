@@ -7,57 +7,60 @@ using Literate
 const EXAMPLES_SRC = joinpath(@__DIR__, "..", "src")
 const GENERATED_DIR = joinpath(@__DIR__, "src", "generated")
 
-# Process each volume directory
-generated_pages = Dict{String,Vector{Pair{String,String}}}()
-
-for vol in ["Volume_1", "Volume_2"]
-    vol_src = joinpath(EXAMPLES_SRC, vol)
-    isdir(vol_src) || continue
-
-    vol_out = joinpath(GENERATED_DIR, vol)
-    mkpath(vol_out)
-
-    pages = Pair{String,String}[]
-    for file in sort(filter(f -> endswith(f, ".jl"), readdir(vol_src)))
-        Literate.markdown(
-            joinpath(vol_src, file),
-            vol_out;
-            codefence = "```julia" => "```",  # Don't execute code in Documenter
-            credit = false,
-        )
-        # Convert filename to a nice page title: "01_Rats.jl" → "Rats"
-        page_name = replace(splitext(file)[1], r"^\d+_" => "")
-        page_name = replace(page_name, "_" => " ")
-        md_file = replace(file, ".jl" => ".md")
-        push!(pages, page_name => joinpath("generated", vol, md_file))
+# Find all model directories (each with a model.jl)
+model_dirs = String[]
+for entry in readdir(EXAMPLES_SRC)
+    model_file = joinpath(EXAMPLES_SRC, entry, "model.jl")
+    if isdir(joinpath(EXAMPLES_SRC, entry)) && isfile(model_file)
+        push!(model_dirs, entry)
     end
-    generated_pages[vol] = pages
+end
+sort!(model_dirs)
+
+# Generate markdown for each model
+generated_pages = Pair{String,String}[]
+mkpath(GENERATED_DIR)
+
+for model_name in model_dirs
+    model_file = joinpath(EXAMPLES_SRC, model_name, "model.jl")
+    Literate.markdown(
+        model_file,
+        GENERATED_DIR;
+        codefence = "```julia" => "```",
+        credit = false,
+        name = model_name,
+    )
+    # Title case the model name
+    page_title = titlecase(replace(model_name, "_" => " "))
+    push!(generated_pages, page_title => joinpath("generated", "$(model_name).md"))
 end
 
 # --- Build documentation ---
 
 DocMeta.setdocmeta!(BUGSExamples, :DocTestSetup, :(using BUGSExamples); recursive=true)
 
-# Assemble pages list
-page_list = Any["Home" => "index.md"]
+page_list = Any[
+    "Home" => "index.md",
+]
 
-if haskey(generated_pages, "Volume_1") && !isempty(generated_pages["Volume_1"])
-    push!(page_list, "Volume 1" => generated_pages["Volume_1"])
-end
-if haskey(generated_pages, "Volume_2") && !isempty(generated_pages["Volume_2"])
-    push!(page_list, "Volume 2" => generated_pages["Volume_2"])
+if !isempty(generated_pages)
+    push!(page_list, "Examples" => generated_pages)
 end
 
 push!(page_list, "API Reference" => "api.md")
 
 makedocs(;
     modules=[BUGSExamples],
-    authors="Shravan Goswami <shravanngoswamii@gmail.com> and contributors, Xianda Sun and contributors",
+    warnonly=[:missing_docs, :cross_references],
+    authors="Shravan Goswami <shravanngoswamii@gmail.com>, Xianda Sun",
     sitename="BUGSExamples.jl",
     format=Documenter.HTML(;
         canonical="https://TuringLang.github.io/JuliaBUGS.jl/BUGSExamples",
         edit_link="main",
-        assets=String[],
+        assets=[
+            asset("https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.css", class=:css),
+            asset("https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.js", class=:js, attributes=Dict(:type => "module")),
+        ],
     ),
     pages=page_list,
 )

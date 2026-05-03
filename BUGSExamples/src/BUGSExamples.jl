@@ -33,30 +33,16 @@ module BUGSExamples
 include("types.jl")
 include("data_loader.jl")
 
-export BUGSExample, VOLUME_1, VOLUME_2
+export BUGSExample
 
-# --- Volume 1 Examples ---
+# --- Examples ---
 
-include("Volume_1/01_Rats.jl")
-include("Volume_1/02_Pumps.jl")
-## TODO: Convert remaining Volume 1 examples (03-20)
-## include("Volume_1/03_Dogs.jl")
-## include("Volume_1/04_Seeds.jl")
-## include("Volume_1/05_Surgical.jl")
-## include("Volume_1/06_Magnesium.jl")
-## include("Volume_1/07_Salm.jl")
-## include("Volume_1/08_Equiv.jl")
-## include("Volume_1/09_Dyes.jl")
-## include("Volume_1/10_Stacks.jl")
-## include("Volume_1/11_Epil.jl")
-## include("Volume_1/12_Blocker.jl")
-## include("Volume_1/13_Oxford.jl")
-## include("Volume_1/14_LSAT.jl")
-## include("Volume_1/15_Bones.jl")
-## include("Volume_1/17_Mice.jl")
-## include("Volume_1/18_Kidney.jl")
-## include("Volume_1/19_Leuk.jl")
-## include("Volume_1/20_LeukFr.jl")
+include("rats/model.jl")
+include("pumps/model.jl")
+## TODO: Convert remaining examples
+## include("dogs/model.jl")
+## include("seeds/model.jl")
+## ...
 
 const VOLUME_1 = (
     rats = rats,
@@ -64,15 +50,11 @@ const VOLUME_1 = (
     ## TODO: Add remaining examples here
 )
 
-# --- Volume 2 Examples ---
-
-## TODO: Convert Volume 2 examples
-## include("Volume_2/01_Dugongs.jl")
-## ...
-
 const VOLUME_2 = (;
     ## TODO: Add Volume 2 examples here
 )
+
+export VOLUME_1, VOLUME_2
 
 # --- Utility functions ---
 

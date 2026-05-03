@@ -6,8 +6,6 @@
 # ## DoodleBUGS Model
 #
 # ```@raw html
-# <link rel="stylesheet" href="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.css" />
-# <script type="module" src="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.js"></script>
 # <doodle-bugs width="100%" height="600px" model="rats"></doodle-bugs>
 # ```
 #
@@ -88,9 +86,9 @@ end
 # | beta.c    | 6.186 | 0.1086 |
 # | sigma     | 6.093 | 0.4643 |
 #
-# Data is loaded from [`rats.json`](../data/rats.json).
+# Data is loaded from `data.json` in the source directory.
 
-_rats_data = load_example_data("rats.json")
+_rats_data = load_example_data(joinpath(@__DIR__, "data.json"))
 
 rats = BUGSExample(;
     name = "Rats: a normal hierarchical model",

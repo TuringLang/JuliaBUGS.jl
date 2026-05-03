@@ -1,6 +1,6 @@
 name = "BUGSExamples"
 uuid = "cb193daa-6fc7-4fc5-a2cb-89ec8f36026b"
-authors = ["Shravan Goswami <shravanngoswamii@gmail.com> and contributors", "Xianda Sun and contributors"]
+authors = ["Shravan Goswami <shravanngoswamii@gmail.com>", "Xianda Sun"]
 version = "0.1.0"
 
 [deps]

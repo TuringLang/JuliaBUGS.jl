@@ -6,8 +6,6 @@
 # ## DoodleBUGS Model
 #
 # ```@raw html
-# <link rel="stylesheet" href="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.css" />
-# <script type="module" src="https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/lib/doodlebugs.js"></script>
 # <doodle-bugs width="100%" height="600px" model="pumps"></doodle-bugs>
 # ```
 #
@@ -43,9 +41,9 @@ end
 
 model_function = ""
 
-# Data is loaded from [`pumps.json`](../data/pumps.json).
+# Data is loaded from `data.json` in the source directory.
 
-_pumps_data = load_example_data("pumps.json")
+_pumps_data = load_example_data(joinpath(@__DIR__, "data.json"))
 
 pumps = BUGSExample(;
     name = "Pumps: conjugate gamma-Poisson hierarchical model",

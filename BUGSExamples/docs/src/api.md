@@ -22,3 +22,10 @@ BUGSExamples.examples
 ```@docs
 BUGSExamples.BUGSExamples
 ```
+
+## Internal
+
+```@autodocs
+Modules = [BUGSExamples]
+Filter = t -> !any(n -> n === t, [BUGSExample, BUGSExamples.list, BUGSExamples.examples, BUGSExamples])
+```

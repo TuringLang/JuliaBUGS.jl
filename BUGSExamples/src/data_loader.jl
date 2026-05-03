@@ -1,22 +1,10 @@
 using JSON
 
-const DATA_DIR = joinpath(@__DIR__, "data")
-
-"""
-    _load_json(filename::String) -> Dict
-
-Load a JSON file from the package data directory.
-"""
-function _load_json(filename::String)
-    filepath = joinpath(DATA_DIR, filename)
-    return JSON.parsefile(filepath)
-end
-
 """
     _dict_to_namedtuple(d::Dict) -> NamedTuple
 
 Convert a Dict{String, Any} to a NamedTuple, converting nested arrays properly.
-Handles BUGS-style dot-separated names using `var\"name.subname\"` syntax.
+Handles BUGS-style dot-separated names via Julia's `var"name.subname"` syntax.
 """
 function _dict_to_namedtuple(d::AbstractDict)
     pairs = [Symbol(k) => _convert_value(v) for (k, v) in d]
@@ -28,7 +16,6 @@ function _convert_value(v)
         return _dict_to_namedtuple(v)
     elseif v isa AbstractVector
         if !isempty(v) && v[1] isa AbstractVector
-            # Convert vector of vectors to matrix
             return _vectors_to_matrix(v)
         elseif !isempty(v) && v[1] isa AbstractDict
             return [_dict_to_namedtuple(x) for x in v]
@@ -43,7 +30,6 @@ end
 function _vectors_to_matrix(vv::AbstractVector)
     nrows = length(vv)
     ncols = length(vv[1])
-    # JSON parses vectors as Vector{Any}. Detect actual element type from values.
     all_vals = Iterators.flatten(vv)
     if all(x -> x isa Integer, all_vals)
         T = Int
@@ -72,12 +58,15 @@ function _typed_vector(v::AbstractVector)
 end
 
 """
-    load_example_data(filename::String) -> NamedTuple{(:data, :inits, :inits_alternative, :reference_results)}
+    load_example_data(filepath::String)
 
 Load a JSON data file and return structured data for a BUGSExample.
+
+Each JSON file should have keys: `"data"`, `"inits"`, and optionally
+`"inits_alternative"` and `"reference_results"`.
 """
-function load_example_data(filename::String)
-    raw = _load_json(filename)
+function load_example_data(filepath::String)
+    raw = JSON.parsefile(filepath)
     data = _dict_to_namedtuple(raw["data"])
     inits = _dict_to_namedtuple(raw["inits"])
     inits_alt = haskey(raw, "inits_alternative") && raw["inits_alternative"] !== nothing ?
