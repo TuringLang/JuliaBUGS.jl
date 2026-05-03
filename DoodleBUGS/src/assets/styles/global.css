@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css');
 @import './shared-ui.css';
 
@@ -110,77 +111,76 @@ html.db-dark-mode {
   --shadow-floating: 0 10px 30px -4px rgba(0, 0, 0, 0.6);
 }
 
-/* Global body styles removed to prevent namespace pollution in host applications. 
-   These should be applied at the host level (e.g. App.vue) if needed. */
+
 
 /* Utility classes */
-.flex {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .flex {
   display: flex;
 }
 
-.flex-col {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .flex-col {
   flex-direction: column;
 }
 
-.items-center {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .items-center {
   align-items: center;
 }
 
-.justify-center {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .justify-center {
   justify-content: center;
 }
 
-.justify-between {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .justify-between {
   justify-content: space-between;
 }
 
-.gap-1 {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .gap-1 {
   gap: 4px;
 }
 
-.gap-2 {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .gap-2 {
   gap: 8px;
 }
 
-.gap-3 {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .gap-3 {
   gap: 12px;
 }
 
-.p-2 {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .p-2 {
   padding: 8px;
 }
 
-.text-xs {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .text-xs {
   font-size: var(--font-size-xs);
 }
 
-.text-sm {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .text-sm {
   font-size: var(--font-size-sm);
 }
 
-.text-md {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .text-md {
   font-size: var(--font-size-md);
 }
 
-.font-bold {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .font-bold {
   font-weight: 600;
 }
 
-.w-full {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .w-full {
   width: 100%;
 }
 
-.h-full {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .h-full {
   height: 100%;
 }
 
 /* Custom Base Modal Responsive Width */
-.base-modal-responsive {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .base-modal-responsive {
   width: 50vw;
 }
 
 @media (max-width: 768px) {
-  .base-modal-responsive {
+  :is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .base-modal-responsive {
     width: 95vw !important;
   }
 }
@@ -236,7 +236,7 @@ html.db-dark-mode .cytoscape-container {
 }
 
 /* Glassmorphism Utility */
-.glass-panel {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .glass-panel {
   background: var(--theme-bg-panel-transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -245,24 +245,24 @@ html.db-dark-mode .cytoscape-container {
 }
 
 /* Debug Panel - Green Theme */
-.debug-panel {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .debug-panel {
   border-top-color: var(--theme-primary) !important;
   color: #fff !important;
 }
 
-.debug-header {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .debug-header {
   background: rgba(16, 185, 129, 0.2) !important;
   border-bottom-color: var(--theme-primary) !important;
   color: #fff !important;
 }
 
-.debug-btn {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .debug-btn {
   border-color: var(--theme-primary) !important;
   color: var(--theme-primary) !important;
   background: transparent !important;
 }
 
-.log-type.type-log {
+:is(.db-widget-root, .db-ui-overlay, .db-sidebar-wrapper, .p-dialog) .log-type.type-log {
   color: var(--theme-primary) !important;
 }
 
