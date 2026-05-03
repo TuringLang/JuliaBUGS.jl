@@ -1,0 +1,10 @@
+/* Fix z-index issue where DoodleBUGS sidebars appear above Documenter's theme modal */
+.modal {
+    z-index: 9999 !important;
+}
+
+/* Force Documenter to respect DoodleBUGS font weights for titles */
+.db-sidebar-title-minimized,
+.db-logo-text-minimized {
+    font-weight: 600 !important;
+}
