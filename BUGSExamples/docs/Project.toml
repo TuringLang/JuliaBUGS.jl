@@ -1,0 +1,4 @@
+[deps]
+BUGSExamples = "cb193daa-6fc7-4fc5-a2cb-89ec8f36026b"
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
