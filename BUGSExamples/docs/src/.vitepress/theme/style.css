@@ -1,0 +1,5 @@
+/* DoodleBUGS font weight overrides */
+.db-sidebar-title-minimized,
+.db-logo-text-minimized {
+  font-weight: 600 !important;
+}

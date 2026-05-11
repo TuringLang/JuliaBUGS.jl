@@ -1,29 +1,32 @@
+```@raw html
+---
+layout: home
+
+hero:
+  name: "BUGSExamples.jl"
+  text: "Classical BUGS Models"
+  tagline: A collection of classical BUGS examples with multi-language model representations and interactive DoodleBUGS graphs
+  actions:
+    - theme: brand
+      text: Browse Examples
+      link: /generated/rats
+    - theme: alt
+      text: View on GitHub
+      link: https://github.com/TuringLang/JuliaBUGS.jl
+
+features:
+  - title: Multiple Representations
+    details: Each model includes original BUGS syntax, JuliaBUGS @bugs macro, and @model macro forms
+  - title: DoodleBUGS Graphs
+    details: Interactive graphical model visualizations powered by DoodleBUGS where available
+  - title: No JuliaBUGS Dependency
+    details: All model code is stored as plain strings — use the package as a reference library or pass directly to JuliaBUGS
+---
+```
+
 ```@meta
 CurrentModule = BUGSExamples
 ```
-
-# BUGSExamples.jl
-
-A standalone Julia package containing classical BUGS example models with
-multi-language representations.
-
-## Overview
-
-BUGSExamples provides a collection of example models from the classic BUGS project
-(Bayesian inference Using Gibbs Sampling). Each example includes the model code in
-multiple formats:
-
-| Field | Description |
-|-------|-------------|
-| `original_syntax_program` | Original BUGS syntax (`model{...}` string) |
-| `model_def` | JuliaBUGS `@bugs begin...end` Julia expression syntax |
-| `model_function` | JuliaBUGS `@model function...end` syntax |
-| `stan_code` | Stan model code |
-| `numpyro_code` | NumPyro/Python model code |
-| `data` | Model data as a NamedTuple |
-| `inits` | Initial parameter values |
-| `inits_alternative` | Alternative initial values |
-| `reference_results` | Reference posterior results |
 
 ## Quick Start
 
@@ -59,3 +62,12 @@ model = compile(model_def, ex.data, ex.inits)
 ## Available Examples
 
 Browse the sidebar to view all available examples grouped by volume.
+
+| Field | Description |
+|-------|-------------|
+| `original_syntax_program` | Original BUGS syntax (`model{...}` string) |
+| `model_def` | JuliaBUGS `@bugs begin...end` Julia expression syntax |
+| `model_function` | JuliaBUGS `@model function...end` syntax |
+| `data` | Model data as a NamedTuple |
+| `inits` | Initial parameter values |
+| `reference_results` | Reference posterior results |

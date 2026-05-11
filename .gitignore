@@ -5,6 +5,8 @@
 # Documentation build artifacts
 JuliaBUGS/docs/build/
 JuliaBUGS/docs/site/
+BUGSExamples/docs/build/
+BUGSExamples/docs/node_modules/
 
 # Julia dependency lockfile - auto-generated
 Manifest.toml
