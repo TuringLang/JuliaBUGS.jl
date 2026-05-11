@@ -1,5 +1,6 @@
 using BUGSExamples
 using Documenter
+using DocumenterVitepress
 using Literate
 
 const EXAMPLES_SRC = joinpath(@__DIR__, "..", "src")
@@ -28,7 +29,6 @@ for model_name in model_dirs
         credit = false,
         name = model_name,
     )
-    # Title case the model name
     page_title = titlecase(replace(model_name, "_" => " "))
     push!(generated_pages, page_title => joinpath("generated", "$(model_name).md"))
 end
@@ -52,22 +52,19 @@ makedocs(;
     warnonly=[:missing_docs, :cross_references],
     authors="Shravan Goswami <shravanngoswamii@gmail.com>, Xianda Sun",
     sitename="BUGSExamples.jl",
-    format=Documenter.HTML(;
-        canonical="https://TuringLang.github.io/JuliaBUGS.jl/BUGSExamples",
-        edit_link="main",
-        assets=[
-            asset("https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/pr-previews/451/lib/doodlebugs.css", class=:css),
-            asset("https://turinglang.org/JuliaBUGS.jl/DoodleBUGS/pr-previews/451/lib/doodlebugs.js", class=:js, attributes=Dict(:type => "module")),
-            asset("assets/sync_theme.js", islocal=true, class=:js),
-            asset("assets/custom.css", islocal=true, class=:css),
-        ],
+    format=DocumenterVitepress.MarkdownVitepress(
+        repo = "github.com/TuringLang/JuliaBUGS.jl",
+        devbranch = "main",
+        devurl = "dev",
     ),
     pages=page_list,
 )
 
-deploydocs(;
-    repo="github.com/TuringLang/JuliaBUGS.jl",
-    devbranch="main",
-    dirname="BUGSExamples",
-    push_preview=true,
+DocumenterVitepress.deploydocs(;
+    repo = "github.com/TuringLang/JuliaBUGS.jl",
+    target = joinpath(@__DIR__, "build"),
+    branch = "gh-pages",
+    devbranch = "main",
+    dirname = "BUGSExamples",
+    push_preview = true,
 )
