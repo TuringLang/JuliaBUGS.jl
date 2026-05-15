@@ -152,10 +152,15 @@ All props are optional:
 
 ### Events
 
-| Event          | Payload     | Description                                  |
-| -------------- | ----------- | -------------------------------------------- |
-| `state-update` | JSON string | Fires on any change. Contains complete state |
-| `code-update`  | string      | Fires when BUGS code changes                 |
+| Event               | Payload     | Description                                              |
+| ------------------- | ----------- | -------------------------------------------------------- |
+| `state-update`      | JSON string | Fires on any change. Contains complete state             |
+| `bugs-code-update`  | string      | Fires when the generated BUGS code changes               |
+| `stan-code-update`  | string      | Fires when the generated Stan code changes               |
+| `ready`             | JSON string | Fires once after mount with the initial state            |
+| `models-available`  | JSON string | Fires once with the list of built-in example model names |
+
+Both `bugs-code-update` and `stan-code-update` fire whenever the model changes, regardless of which language the user has visible in the code preview panel. Host applications that need one specific language should subscribe to the matching event.
 
 ### Saving to Backend
 

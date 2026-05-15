@@ -7,13 +7,15 @@ import { useDataStore } from '../stores/dataStore'
 
 export interface WidgetEmitFn {
   (e: 'state-update', payload: string): void
-  (e: 'code-update', payload: string): void
+  (e: 'bugs-code-update', payload: string): void
+  (e: 'stan-code-update', payload: string): void
   (e: 'ready', payload: string): void
 }
 
 export function useWidgetEmitter(
   emit: WidgetEmitFn,
-  generatedCode: Ref<string>,
+  generatedBugsCode: Ref<string>,
+  generatedStanCode: Ref<string>,
   options: { debounceMs?: number } = {}
 ) {
   const projectStore = useProjectStore()
@@ -66,9 +68,15 @@ export function useWidgetEmitter(
 
   watch([() => projectStore.stateVersion, () => graphStore.stateVersion], emitStateDebounced)
 
-  watch(generatedCode, (code) => {
+  watch(generatedBugsCode, (code: string) => {
     if (isReady.value) {
-      emit('code-update', code)
+      emit('bugs-code-update', code)
+    }
+  })
+
+  watch(generatedStanCode, (code: string) => {
+    if (isReady.value) {
+      emit('stan-code-update', code)
     }
   })
 
@@ -84,7 +92,8 @@ export function useWidgetEmitter(
 
     nextTick(() => {
       emit('state-update', json)
-      emit('code-update', generatedCode.value)
+      emit('bugs-code-update', generatedBugsCode.value)
+      emit('stan-code-update', generatedStanCode.value)
       emit('ready', json)
     })
   }
