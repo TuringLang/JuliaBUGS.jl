@@ -1,10 +1,12 @@
 using Documenter
 using DocumenterCitations
-using DocumenterMermaid
 using DocumenterVitepress
 using JuliaBUGS
 using MetaGraphsNext
 using JuliaBUGS.BUGSPrimitives
+using Distributions
+using AbstractPPL
+using Test
 
 include(joinpath(@__DIR__, "build_pages.jl"))
 
@@ -13,7 +15,16 @@ examples_section = build_example_pages(EXAMPLES_OUT_DIR)
 
 bib = CitationBibliography(joinpath(@__DIR__, "src", "refs.bib"); style = :numeric)
 
-DocMeta.setdocmeta!(JuliaBUGS, :DocTestSetup, :(using JuliaBUGS); recursive=true)
+DocMeta.setdocmeta!(
+    JuliaBUGS,
+    :DocTestSetup,
+    quote
+        using JuliaBUGS, Test, Distributions, AbstractPPL
+        using JuliaBUGS.Model: condition, parameters, decondition
+        JuliaBUGS.@bugs_primitive Normal Gamma
+    end;
+    recursive=true,
+)
 
 makedocs(;
     sitename="JuliaBUGS.jl",
