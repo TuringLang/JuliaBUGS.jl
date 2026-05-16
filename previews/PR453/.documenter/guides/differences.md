@@ -11,7 +11,7 @@ In `WinBUGS`, `OpenBUGS`, and `MultiBUGS`, the arguments to distribution functio
 
 For example, the following expressions are allowed in all BUGS implementations, including JuliaBUGS (assuming `y = [1, 2, 3]`):
 
-```S
+```r
 model {
  x ~ dnorm(y[y[2]], 1)
 }
@@ -24,7 +24,7 @@ model {
 
 However, JuliaBUGS allows more flexibility in these arguments. The following expressions, which are not allowed in traditional BUGS implementations, are permitted in JuliaBUGS:
 
-```S
+```r
 model {
  x ~ dnorm(y[1] + 1, 1)
 }
@@ -65,7 +65,7 @@ The `cdf` and `pdf` functions from the `Distributions.jl` are simple to use: the
 
 An OpenBUGS program like
 
-```S
+```r
 model {
     x ~ dnorm(0, 1)
     cumulative.x = cumulative(x, x)
@@ -95,7 +95,7 @@ BUGS supports four link functions: `log`, `logit`, `cloglog`, and `probit`. Thes
 
 For instance, the `Seeds` example features logistic regression, and the model definition is
 
-```S
+```r
 model
 {
     for( i in 1 : N ) {

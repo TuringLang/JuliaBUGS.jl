@@ -1,157 +1,46 @@
 
-Most of the [functions](https://www.multibugs.org/documentation/latest/Functions.html) from BUGS have been implemented. 
+# Functions {#Functions}
 
-`JuliaBUGS` directly utilizes functions from the Julia Standard Library when they share the same names and functionalities. For functions not available in the Julia Standard Library and other popular libraries, we have developed equivalents within `JuliaBUGS.BUGSPrimitives`.
-
-## Function defined in Julia Standard Library {#Function-defined-in-Julia-Standard-Library}
+Most of the [functions from BUGS](https://www.multibugs.org/documentation/latest/Functions.html) have been implemented. `JuliaBUGS` directly utilizes functions from the Julia Standard Library when they share the same names and functionalities. For functions not available in the Julia Standard Library and other popular libraries, we have developed equivalents within `JuliaBUGS.BUGSPrimitives`.
 
 ::: warning No keyword arguments syntax in BUGS
 
-Please note that some functions listed may accept additional arguments (e.g. `trunc`) and/or keyword arguments (e.g. `sum`, `sort`, `mean`). However, at the moment `JuliaBUGS` only supports function arguments of type `Real` or `AbstractArray{Real}`. Furthermore, `JuliaBUGS` does not accommodate the use of keyword argument syntax. Thus, the default values for any optional or keyword arguments will be automatically applied.
+Some of the listed functions accept additional or keyword arguments (e.g. `trunc`, `sum`, `sort`, `mean`). `JuliaBUGS` currently only supports positional arguments of type `Real` or `AbstractArray{<:Real}`, and does not accept keyword-argument syntax. Default values of any optional or keyword arguments are used automatically.
 
 :::
 
-::: warning Missing docstring.
-
-Missing docstring for `abs`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `exp(x::Real)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `log(x::Number)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `sqrt(x::Real)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `trunc`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `min(x::Real, y::Real)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `max(x::Real, y::Real)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `sum(x::AbstractArray)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `sort(x::AbstractArray)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `sin(x::Real)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `cos(x::Real)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `tan(x::Real)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `asin(x::Real)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `acos(x::Real)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `atan(x::Real)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `asinh(x::Real)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `acosh(x::Real)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `atanh(x::Real)`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `JuliaBUGS.BUGSPrimitives.mean(x::AbstractArray)`. Check Documenter&#39;s build log for details.
-
-:::
-
-## Function defined in [`LogExpFunctions`](https://github.com/JuliaStats/LogExpFunctions.jl) {#Function-defined-in-LogExpFunctionshttps://github.com/JuliaStats/LogExpFunctions.jl}
-
-::: warning Missing docstring.
-
-Missing docstring for `cloglog`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `cexpexp`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `logit`. Check Documenter&#39;s build log for details.
-
-:::
-
-::: warning Missing docstring.
-
-Missing docstring for `logistic`. Check Documenter&#39;s build log for details.
-
-:::
-
-## Function defined in `JuliaBUGS.BUGSPrimitives` {#Function-defined-in-JuliaBUGS.BUGSPrimitives}
+## From the Julia Standard Library {#From-the-Julia-Standard-Library}
+
+The following are re-used directly from Julia&#39;s `Base` / `Base.Math` (linked to the upstream Julia documentation):
+
+|                                                                                                                                                                                                                                          Function |                                                     Description |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:| ---------------------------------------------------------------:|
+|                                                                                                                                                                                     [`abs`](https://docs.julialang.org/en/v1/base/math/#Base.abs) |                                                  Absolute value |
+|                                                                                                                                                                      [`exp`](https://docs.julialang.org/en/v1/base/math/#Base.exp-Tuple{Float64}) |                                                     Exponential |
+|                                                                                                                                                                       [`log`](https://docs.julialang.org/en/v1/base/math/#Base.log-Tuple{Number}) |                                               Natural logarithm |
+|                                                                                                                                                                     [`sqrt`](https://docs.julialang.org/en/v1/base/math/#Base.sqrt-Tuple{Number}) |                                                     Square root |
+|                                                                                                                                                                                 [`trunc`](https://docs.julialang.org/en/v1/base/math/#Base.trunc) |                                            Truncate toward zero |
+|                                                                                                                                                                                     [`min`](https://docs.julialang.org/en/v1/base/math/#Base.min) |                                          Minimum of two scalars |
+|                                                                                                                                                                                     [`max`](https://docs.julialang.org/en/v1/base/math/#Base.max) |                                          Maximum of two scalars |
+|                                                                                                                                                                              [`sum`](https://docs.julialang.org/en/v1/base/collections/#Base.sum) |                                               Sum over an array |
+|                                                                                                                                                                                   [`sort`](https://docs.julialang.org/en/v1/base/sort/#Base.sort) |                                                   Sort an array |
+|             [`sin`](https://docs.julialang.org/en/v1/base/math/#Base.sin-Tuple{Number}), [`cos`](https://docs.julialang.org/en/v1/base/math/#Base.cos-Tuple{Number}), [`tan`](https://docs.julialang.org/en/v1/base/math/#Base.tan-Tuple{Number}) |                                         Trigonometric functions |
+|       [`asin`](https://docs.julialang.org/en/v1/base/math/#Base.asin-Tuple{Number}), [`acos`](https://docs.julialang.org/en/v1/base/math/#Base.acos-Tuple{Number}), [`atan`](https://docs.julialang.org/en/v1/base/math/#Base.atan-Tuple{Number}) |                                                    Inverse trig |
+| [`asinh`](https://docs.julialang.org/en/v1/base/math/#Base.asinh-Tuple{Number}), [`acosh`](https://docs.julialang.org/en/v1/base/math/#Base.acosh-Tuple{Number}), [`atanh`](https://docs.julialang.org/en/v1/base/math/#Base.atanh-Tuple{Number}) |                                              Inverse hyperbolic |
+|                                                                                                                                                                                                                                            `mean` | Available via `JuliaBUGS.BUGSPrimitives.mean(x::AbstractArray)` |
+
+
+## From [LogExpFunctions](https://github.com/JuliaStats/LogExpFunctions.jl) {#From-LogExpFunctionshttps://github.com/JuliaStats/LogExpFunctions.jl}
+
+|                                                                                 Function |                               Description |
+| ----------------------------------------------------------------------------------------:| -----------------------------------------:|
+|   [`cloglog`](https://juliastats.org/LogExpFunctions.jl/stable/#LogExpFunctions.cloglog) | Complementary log-log: `log(-log(1 - x))` |
+|   [`cexpexp`](https://juliastats.org/LogExpFunctions.jl/stable/#LogExpFunctions.cexpexp) |  Inverse of `cloglog`: `1 - exp(-exp(x))` |
+|       [`logit`](https://juliastats.org/LogExpFunctions.jl/stable/#LogExpFunctions.logit) |                 Logit: `log(x / (1 - x))` |
+| [`logistic`](https://juliastats.org/LogExpFunctions.jl/stable/#LogExpFunctions.logistic) |   Logistic (sigmoid): `1 / (1 + exp(-x))` |
+
+
+## From `JuliaBUGS.BUGSPrimitives` {#From-JuliaBUGS.BUGSPrimitives}
 <details class='jldocstring custom-block' open>
 <summary><a id='JuliaBUGS.BUGSPrimitives.equals' href='#JuliaBUGS.BUGSPrimitives.equals'><span class="jlbinding">JuliaBUGS.BUGSPrimitives.equals</span></a> <Badge type="info" class="jlObjectType jlFunction" text="Function" /></summary>
 
@@ -165,7 +54,7 @@ equals(x, y)
 Returns 1 if $x$ is equal to $y$, 0 otherwise.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L1-L5" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L1-L5" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -182,7 +71,7 @@ inprod(a, b)
 Inner product of $a$ and $b$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L28-L32" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L28-L32" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -199,7 +88,7 @@ inverse(m::AbstractMatrix)
 Inverse of matrix $\mathbf{m}$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L37-L41" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L37-L41" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -216,7 +105,7 @@ logdet(::AbstractMatrix)
 Logarithm of the determinant of matrix $\mathbf{v}$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L46-L50" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L46-L50" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -233,7 +122,7 @@ logfact(x)
 Logarithm of the factorial of $x$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L55-L59" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L55-L59" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -250,7 +139,7 @@ loggam(x)
 Logarithm of the gamma function of $x$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L64-L68" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L64-L68" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -264,10 +153,10 @@ icloglog(x)
 ```
 
 
-Inverse complementary log-log function of $x$. Alias for [`cexpexp(x)`](@ref).
+Inverse complementary log-log function of $x$. Alias for `cexpexp(x)`.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L10-L14" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L10-L14" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -281,10 +170,10 @@ ilogit(x)
 ```
 
 
-Inverse logit function of $x$. Alias for [`logistic(x)`](@ref).
+Inverse logit function of $x$. Alias for `logistic(x)`.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L19-L23" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L19-L23" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -301,7 +190,7 @@ mexp(x::AbstractMatrix)
 Matrix exponential of $\mathbf{x}$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L73-L77" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L73-L77" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -318,7 +207,7 @@ phi(x)
 Cumulative distribution function (CDF) of the standard normal distribution evaluated at $x$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L82-L86" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L82-L86" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -335,7 +224,7 @@ probit
 Inverse of [`phi`](/api/functions#JuliaBUGS.BUGSPrimitives.phi).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L91-L95" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L91-L95" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -352,7 +241,7 @@ pow(a, b)
 Return $a$ raised to the power of $b$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L100-L104" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L100-L104" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -369,7 +258,7 @@ rank(v::AbstractVector, i::Integer)
 Return the rank of the $i$-th element of $\mathbf{v}$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L109-L113" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L109-L113" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -386,7 +275,7 @@ ranked(v::AbstractVector, i::Integer)
 Return the $i$-th element of $\mathbf{v}$ sorted in ascending order.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L118-L122" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L118-L122" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -403,7 +292,7 @@ sd(v::AbstractVector)
 Return the standard deviation of the input vector $\mathbf{v}$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L127-L131" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L127-L131" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -420,7 +309,7 @@ softplus(x)
 Return the softplus function of `x`, defined as $\log(1 + \exp(x))$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L136-L140" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L136-L140" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -437,7 +326,7 @@ _step(x)
 Return 1 if $x$ is greater than 0, and 0 otherwise.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L145-L149" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L145-L149" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -451,10 +340,10 @@ arcsin(x)
 ```
 
 
-See [`asin`](@ref%20Base.Math.asin).
+See [`asin`](https://docs.julialang.org/en/v1/base/math/#Base.asin-Tuple{Number}).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L154-L158" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L154-L158" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -468,10 +357,10 @@ arcsinh(x)
 ```
 
 
-See [`asinh`](@ref%20Base.Math.asinh).
+See [`asinh`](https://docs.julialang.org/en/v1/base/math/#Base.asinh-Tuple{Number}).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L163-L167" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L163-L167" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -485,10 +374,10 @@ arccos(x)
 ```
 
 
-See [`acos`](@ref%20Base.Math.acos).
+See [`acos`](https://docs.julialang.org/en/v1/base/math/#Base.acos-Tuple{Number}).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L172-L176" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L172-L176" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -502,10 +391,10 @@ arccosh(x)
 ```
 
 
-See [`acosh`](@ref%20Base.Math.acosh).
+See [`acosh`](https://docs.julialang.org/en/v1/base/math/#Base.acosh-Tuple{Number}).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L181-L185" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L181-L185" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -519,10 +408,10 @@ arctan(x)
 ```
 
 
-See [`atan`](@ref%20Base.Math.atan).
+See [`atan`](https://docs.julialang.org/en/v1/base/math/#Base.atan-Tuple{Number}).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L190-L194" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L190-L194" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -536,10 +425,10 @@ arctanh(x)
 ```
 
 
-See [`atanh`](@ref%20Base.Math.atanh).
+See [`atanh`](https://docs.julialang.org/en/v1/base/math/#Base.atanh-Tuple{Number}).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/BUGSPrimitives/functions.jl#L199-L203" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/BUGSPrimitives/functions.jl#L199-L203" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 

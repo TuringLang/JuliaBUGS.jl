@@ -28,7 +28,7 @@ For the string input variant, the following optional arguments are available:
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/parser/bugs_macro.jl#L163-L177" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/parser/bugs_macro.jl#L163-L177" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -154,7 +154,7 @@ model = typed_regression((; y = data), X, N)
 See also: [`@bugs`](/two_macros#@bugs), [`compile`](/api/api#JuliaBUGS.compile), [`of`](/api/api#JuliaBUGS.of), [`@of`](/api/api#JuliaBUGS.@of)
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/model_macro.jl#L3-L101" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/model_macro.jl#L3-L101" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -189,7 +189,7 @@ model = compile(model_def, data; adtype=AutoReverseDiff())
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/JuliaBUGS.jl#L238-L254" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/JuliaBUGS.jl#L238-L254" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -206,7 +206,7 @@ initialize!(model::BUGSModel, initial_params::NamedTuple{<:Any, <:Tuple{Vararg{A
 Initialize the model with a NamedTuple of initial values, the values are expected to be in the original space.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/model/bugsmodel.jl#L345-L349" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/model/bugsmodel.jl#L345-L349" target="_blank" rel="noreferrer">source</a></Badge>
 
 
 
@@ -218,7 +218,7 @@ initialize!(model::BUGSModel, initial_params::AbstractVector)
 Initialize the model with a vector of initial values, the values can be in transformed space if `model.transformed` is set to true.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/model/bugsmodel.jl#L385-L389" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/model/bugsmodel.jl#L385-L389" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -315,10 +315,10 @@ T5 = of(T4; n=10)               # Concrete type with n=10
 
 **See also**
 
-[`@of`](/api/api#JuliaBUGS.@of), [`OfType`](@ref)
+[`@of`](/api/api#JuliaBUGS.@of), [`OfType`](/api/api#JuliaBUGS.OfType)
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/of_type.jl#L374-L442" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/of_type.jl#L374-L442" target="_blank" rel="noreferrer">source</a></Badge>
 
 
 
@@ -367,7 +367,7 @@ rand(ModelType)  # Generate random values matching the model structure
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/of_type.jl#L552-L586" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/of_type.jl#L552-L586" target="_blank" rel="noreferrer">source</a></Badge>
 
 
 
@@ -419,7 +419,7 @@ Partial = of(T2; rows=5)     # @of(cols=of(Int; constant=true), matrix=of(Array,
 [`of`](/api/api#JuliaBUGS.of), [`@of`](/api/api#JuliaBUGS.@of)
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/of_type.jl#L623-L663" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/of_type.jl#L623-L663" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -488,10 +488,10 @@ T = @of(
 
 **See also**
 
-[`of`](/api/api#JuliaBUGS.of), [`OfNamedTuple`](@ref)
+[`of`](/api/api#JuliaBUGS.of), [`OfNamedTuple`](/api/api#JuliaBUGS.OfNamedTuple)
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/of_type.jl#L975-L1027" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/of_type.jl#L975-L1027" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -545,7 +545,77 @@ rand(ModelType)  # Generate random values matching the model structure
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/e1350c4ebc29dec0f55680acbe864435d0a74857/JuliaBUGS/src/of_type.jl#L552-L586" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/of_type.jl#L552-L586" target="_blank" rel="noreferrer">source</a></Badge>
+
+</details>
+
+<details class='jldocstring custom-block' open>
+<summary><a id='JuliaBUGS.OfType' href='#JuliaBUGS.OfType'><span class="jlbinding">JuliaBUGS.OfType</span></a> <Badge type="info" class="jlObjectType jlType" text="Type" /></summary>
+
+
+
+```julia
+OfType
+```
+
+
+Abstract base type for all types in the `of` type system.
+
+The `of` type system provides a declarative way to specify parameter types for  probabilistic programming. All `of` types encode their specifications (dimensions,  bounds, etc.) in type parameters, allowing them to be used as actual Julia types  in type annotations.
+
+**Subtypes**
+- `OfReal{T,Lower,Upper}`: Bounded or unbounded floating-point numbers
+  
+- `OfInt{Lower,Upper}`: Bounded or unbounded integers  
+  
+- `OfArray{T,N,Dims}`: Arrays with specified element type and dimensions
+  
+- `OfNamedTuple{Names,Types}`: Named tuples with typed fields
+  
+- `OfConstantWrapper{T}`: Wrapper marking a type as constant/hyperparameter
+  
+
+**See also**
+
+[`of`](/api/api#JuliaBUGS.of), [`@of`](/api/api#JuliaBUGS.@of)
+
+
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/of_type.jl#L7-L26" target="_blank" rel="noreferrer">source</a></Badge>
+
+</details>
+
+<details class='jldocstring custom-block' open>
+<summary><a id='JuliaBUGS.OfNamedTuple' href='#JuliaBUGS.OfNamedTuple'><span class="jlbinding">JuliaBUGS.OfNamedTuple</span></a> <Badge type="info" class="jlObjectType jlType" text="Type" /></summary>
+
+
+
+```julia
+OfNamedTuple{Names,Types<:Tuple}
+```
+
+
+Type specification for named tuples with typed fields.
+
+**Type Parameters**
+- `Names`: Tuple of field names as symbols
+  
+- `Types<:Tuple`: Tuple of field types (each must be an `OfType`)
+  
+
+**Examples**
+
+```julia
+@of(mu=of(Real), tau=of(Real, 0, nothing))
+of((a=of(Int), b=of(Array, 3, 3)))
+```
+
+
+**See also**
+
+[`of`](/api/api#JuliaBUGS.of), [`@of`](/api/api#JuliaBUGS.@of)
+
+
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/of_type.jl#L150-L167" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 

@@ -45,7 +45,8 @@ const navTemp = {
 { text: 'API Reference', collapsed: false, items: [
 { text: 'General', link: '/api/api' },
 { text: 'Functions', link: '/api/functions' },
-{ text: 'Distributions', link: '/api/distributions' }]
+{ text: 'Distributions', link: '/api/distributions' },
+{ text: 'BUGSExamples', link: '/api/bugsexamples' }]
  },
 { text: 'Guides', collapsed: false, items: [
 { text: 'Differences from Other BUGS', link: '/guides/differences' },
@@ -57,7 +58,8 @@ const navTemp = {
 { text: 'For Developers', collapsed: false, items: [
 { text: 'Parser', link: '/developers/parser' },
 { text: 'Source Code Generation', link: '/developers/source_gen' },
-{ text: 'Notes on BUGS Implementations', link: '/developers/BUGS_notes' }]
+{ text: 'Notes on BUGS Implementations', link: '/developers/BUGS_notes' },
+{ text: 'Internal API', link: '/developers/internal_api' }]
  },
 { text: 'Bibliography', link: '/bibliography' }
 ]
@@ -103,6 +105,9 @@ export default defineConfig({
     },
   },
   vite: {
+    build: {
+      chunkSizeWarningLimit: 1500,
+    },
     plugins: [mathjax.vitePlugin],
     define: {
       __DEPLOY_ABSPATH__: JSON.stringify('/JuliaBUGS.jl'),
@@ -159,7 +164,8 @@ export default defineConfig({
 { text: 'API Reference', collapsed: false, items: [
 { text: 'General', link: '/api/api' },
 { text: 'Functions', link: '/api/functions' },
-{ text: 'Distributions', link: '/api/distributions' }]
+{ text: 'Distributions', link: '/api/distributions' },
+{ text: 'BUGSExamples', link: '/api/bugsexamples' }]
  },
 { text: 'Guides', collapsed: false, items: [
 { text: 'Differences from Other BUGS', link: '/guides/differences' },
@@ -171,7 +177,8 @@ export default defineConfig({
 { text: 'For Developers', collapsed: false, items: [
 { text: 'Parser', link: '/developers/parser' },
 { text: 'Source Code Generation', link: '/developers/source_gen' },
-{ text: 'Notes on BUGS Implementations', link: '/developers/BUGS_notes' }]
+{ text: 'Notes on BUGS Implementations', link: '/developers/BUGS_notes' },
+{ text: 'Internal API', link: '/developers/internal_api' }]
  },
 { text: 'Bibliography', link: '/bibliography' }
 ]
