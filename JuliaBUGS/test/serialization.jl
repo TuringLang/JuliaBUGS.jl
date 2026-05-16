@@ -109,16 +109,20 @@ end
             model_restored = deserialize(tmpfile)
 
             # Verification
-            @test model_restored.evaluation_mode isa JuliaBUGS.Model.UseGeneratedLogDensityFunction
+            @test model_restored.evaluation_mode isa
+                JuliaBUGS.Model.UseGeneratedLogDensityFunction
             @test !isnothing(model_restored.log_density_computation_function)
-            
+
             # The function should be different (re-generated)
-            @test model_restored.log_density_computation_function !== model_gen.log_density_computation_function
+            @test model_restored.log_density_computation_function !==
+                model_gen.log_density_computation_function
 
             # Results should be consistent
             θ = JuliaBUGS.Model.getparams(model_gen)
             logp_original = Base.invokelatest(LogDensityProblems.logdensity, model_gen, θ)
-            logp_restored = Base.invokelatest(LogDensityProblems.logdensity, model_restored, θ)
+            logp_restored = Base.invokelatest(
+                LogDensityProblems.logdensity, model_restored, θ
+            )
             @test logp_original ≈ logp_restored
         finally
             rm(tmpfile, force=true)

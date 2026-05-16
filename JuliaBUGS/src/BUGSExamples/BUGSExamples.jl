@@ -38,7 +38,9 @@ function _discover_examples()
         isdir(vol_entry) || continue
         startswith(basename(vol_entry), "Volume_") || continue
         for ex_entry in readdir(vol_entry; join=true)
-            isdir(ex_entry) && isfile(joinpath(ex_entry, "meta.toml")) && push!(dirs, ex_entry)
+            isdir(ex_entry) &&
+                isfile(joinpath(ex_entry, "meta.toml")) &&
+                push!(dirs, ex_entry)
         end
     end
     return dirs
@@ -47,7 +49,7 @@ end
 const _ALL_EXAMPLES = let
     loaded = [(basename(dir), load_example(dir)) for dir in _discover_examples()]
     # Sort by (volume, order) so docs and `list()` show examples in WinBUGS sequence.
-    sort!(loaded; by = ((_, ex),) -> (ex.volume, ex.order))
+    sort!(loaded; by=((_, ex),) -> (ex.volume, ex.order))
     NamedTuple(Symbol(name) => ex for (name, ex) in loaded)
 end
 
@@ -75,7 +77,7 @@ examples() = _ALL_EXAMPLES
 
 Print every available example grouped by volume.
 """
-function list(io::IO = stdout)
+function list(io::IO=stdout)
     println(io, "JuliaBUGS.BUGSExamples — Available Models")
     for (vol, vol_examples) in ((1, VOLUME_1), (2, VOLUME_2), (3, VOLUME_3), (4, VOLUME_4))
         isempty(vol_examples) && continue

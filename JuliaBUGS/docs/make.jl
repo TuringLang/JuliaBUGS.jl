@@ -13,7 +13,7 @@ include(joinpath(@__DIR__, "build_pages.jl"))
 const EXAMPLES_OUT_DIR = joinpath(@__DIR__, "src", "examples")
 examples_section = build_example_pages(EXAMPLES_OUT_DIR)
 
-bib = CitationBibliography(joinpath(@__DIR__, "src", "refs.bib"); style = :numeric)
+bib = CitationBibliography(joinpath(@__DIR__, "src", "refs.bib"); style=:numeric)
 
 DocMeta.setdocmeta!(
     JuliaBUGS,
@@ -31,10 +31,9 @@ makedocs(;
     modules=[JuliaBUGS],
     authors="The Turing.jl team",
     warnonly=true,
-    format=DocumenterVitepress.MarkdownVitepress(
-        repo = "github.com/TuringLang/JuliaBUGS.jl",
-        devbranch = "main",
-        devurl = "dev",
+    checkdocs=:exports,
+    format=DocumenterVitepress.MarkdownVitepress(;
+        repo="github.com/TuringLang/JuliaBUGS.jl", devbranch="main", devurl="dev"
     ),
     pages=[
         "Home" => "index.md",
@@ -55,6 +54,7 @@ makedocs(;
             "General" => "api/api.md",
             "Functions" => "api/functions.md",
             "Distributions" => "api/distributions.md",
+            "BUGSExamples" => "api/bugsexamples.md",
         ],
         "Guides" => [
             "Differences from Other BUGS" => "guides/differences.md",
@@ -67,6 +67,7 @@ makedocs(;
             "Parser" => "developers/parser.md",
             "Source Code Generation" => "developers/source_gen.md",
             "Notes on BUGS Implementations" => "developers/BUGS_notes.md",
+            "Internal API" => "developers/internal_api.md",
         ],
         "Bibliography" => "bibliography.md",
     ],
@@ -74,9 +75,9 @@ makedocs(;
 )
 
 DocumenterVitepress.deploydocs(;
-    repo = "github.com/TuringLang/JuliaBUGS.jl",
-    target = joinpath(@__DIR__, "build"),
-    branch = "gh-pages",
-    devbranch = "main",
-    push_preview = true,
+    repo="github.com/TuringLang/JuliaBUGS.jl",
+    target=joinpath(@__DIR__, "build"),
+    branch="gh-pages",
+    devbranch="main",
+    push_preview=true,
 )

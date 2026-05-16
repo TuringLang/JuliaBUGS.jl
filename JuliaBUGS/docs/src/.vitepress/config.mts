@@ -60,6 +60,9 @@ export default defineConfig({
     },
   },
   vite: {
+    build: {
+      chunkSizeWarningLimit: 1500,
+    },
     plugins: [mathjax.vitePlugin],
     define: {
       __DEPLOY_ABSPATH__: JSON.stringify('REPLACE_ME_DOCUMENTER_VITEPRESS_DEPLOY_ABSPATH'),

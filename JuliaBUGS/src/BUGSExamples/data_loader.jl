@@ -65,11 +65,13 @@ function _load_meta(dir::String)
     raw = TOML.parsefile(meta_path)
     name = get(raw, "name", basename(dir))
     description = get(raw, "description", "")
-    citations = String.(get(raw, "citations", String[]))
+    # `String[…]` forces a Vector{String} even when TOML hands us an empty
+    # `Vector{Union{}}` (which happens on Julia 1.11 for `citations = []`).
+    citations = String[s for s in get(raw, "citations", String[])]
     doodlebugs_id = get(raw, "doodlebugs_id", nothing)
     volume = Int(get(raw, "volume", 0))
     order = Int(get(raw, "order", 999))
-    tags = String.(get(raw, "tags", String[]))
+    tags = String[s for s in get(raw, "tags", String[])]
     return (; name, description, citations, doodlebugs_id, volume, order, tags)
 end
 
@@ -79,8 +81,11 @@ function _load_data_inits(dir::String)
     raw = JSON.parsefile(data_path)
     data = _dict_to_namedtuple(raw["data"])
     inits = _dict_to_namedtuple(raw["inits"])
-    inits_alt = haskey(raw, "inits_alternative") && raw["inits_alternative"] !== nothing ?
-        _dict_to_namedtuple(raw["inits_alternative"]) : inits
+    inits_alt = if haskey(raw, "inits_alternative") && raw["inits_alternative"] !== nothing
+        _dict_to_namedtuple(raw["inits_alternative"])
+    else
+        inits
+    end
     return (; data, inits, inits_alternative=inits_alt)
 end
 

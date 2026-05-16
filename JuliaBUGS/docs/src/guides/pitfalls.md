@@ -20,7 +20,7 @@ In this scenario, the generated graph will lack the edges `a -> c` and `b -> c`,
 
 A subtle and possibly contentious feature of `BUGS` syntax is that the observation value of a stochastic variable is treated identically to any model parameters supplied in the `data`. The following example is legal in BUGS if `N` is provided as data:
 
-```S
+```r
 model {
     N ~ dcat(p[])
     for (i in 1:N) {

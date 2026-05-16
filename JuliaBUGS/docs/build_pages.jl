@@ -2,19 +2,19 @@ using JuliaBUGS
 const BUGSExamples = JuliaBUGS.BUGSExamples
 
 const TAB_LABELS = (
-    "model.jl"     => "JuliaBUGS @bugs",
-    "model_fn.jl"  => "JuliaBUGS @model",
-    "model.bugs"   => "BUGS",
-    "model.stan"   => "Stan",
-    "model.py"     => "NumPyro",
+    "model.jl" => "JuliaBUGS @bugs",
+    "model_fn.jl" => "JuliaBUGS @model",
+    "model.bugs" => "BUGS",
+    "model.stan" => "Stan",
+    "model.py" => "NumPyro",
 )
 
 const FENCE_LANG = Dict(
-    "model.bugs"  => "julia",
-    "model.jl"    => "julia",
+    "model.bugs" => "julia",
+    "model.jl" => "julia",
     "model_fn.jl" => "julia",
-    "model.stan"  => "stan",
-    "model.py"    => "python",
+    "model.stan" => "stan",
+    "model.py" => "python",
 )
 
 function _render_results_table(io::IO, params::NamedTuple)
@@ -28,14 +28,15 @@ function _render_results_table(io::IO, params::NamedTuple)
 end
 
 function _render_results_meta(io::IO, meta::NamedTuple)
-    isempty(meta) && return
+    isempty(meta) && return nothing
     parts = String[]
-    haskey(meta, :sampler)            && push!(parts, string("sampler: ", meta.sampler))
-    haskey(meta, :n_samples)          && push!(parts, string(meta.n_samples, " samples"))
-    haskey(meta, :n_chains)           && push!(parts, string(meta.n_chains, " chains"))
-    haskey(meta, :ran_at)             && push!(parts, string("ran ", meta.ran_at))
-    haskey(meta, :juliabugs_version)  && push!(parts, string("JuliaBUGS v", meta.juliabugs_version))
-    haskey(meta, :note)               && push!(parts, string(meta.note))
+    haskey(meta, :sampler) && push!(parts, string("sampler: ", meta.sampler))
+    haskey(meta, :n_samples) && push!(parts, string(meta.n_samples, " samples"))
+    haskey(meta, :n_chains) && push!(parts, string(meta.n_chains, " chains"))
+    haskey(meta, :ran_at) && push!(parts, string("ran ", meta.ran_at))
+    haskey(meta, :juliabugs_version) &&
+        push!(parts, string("JuliaBUGS v", meta.juliabugs_version))
+    haskey(meta, :note) && push!(parts, string(meta.note))
     isempty(parts) || println(io, "\n*", join(parts, " · "), "*")
 end
 
@@ -53,15 +54,21 @@ function _render_example_page(ex::BUGSExamples.BUGSExample)
         println(io, "## Graphical Model")
         println(io)
         println(io, "```@raw html")
-        println(io, "<doodle-bugs width=\"100%\" height=\"600px\" model=\"",
-                ex.doodlebugs_id, "\"></doodle-bugs>")
+        println(
+            io,
+            "<doodle-bugs width=\"100%\" height=\"600px\" model=\"",
+            ex.doodlebugs_id,
+            "\"></doodle-bugs>",
+        )
         println(io, "```")
         println(io)
     end
 
     println(io, "## Model")
     println(io)
-    available = [(f, label) for (f, label) in TAB_LABELS if isfile(joinpath(ex.source_dir, f))]
+    available = [
+        (f, label) for (f, label) in TAB_LABELS if isfile(joinpath(ex.source_dir, f))
+    ]
     if !isempty(available)
         println(io, "::: tabs")
         println(io)
@@ -133,12 +140,14 @@ expanding to its examples.
 """
 function build_example_pages(output_dir::String)
     mkpath(output_dir)
-    by_volume = Dict{Int, Vector{Pair{String,String}}}()
+    by_volume = Dict{Int,Vector{Pair{String,String}}}()
     for (sym, ex) in pairs(BUGSExamples.examples())
         slug = String(sym)
         write(joinpath(output_dir, slug * ".md"), _render_example_page(ex))
-        push!(get!(by_volume, ex.volume, Pair{String,String}[]),
-              ex.name => joinpath("examples", slug * ".md"))
+        push!(
+            get!(by_volume, ex.volume, Pair{String,String}[]),
+            ex.name => joinpath("examples", slug * ".md"),
+        )
     end
     sections = Any[]
     for vol in sort!(collect(keys(by_volume)))
