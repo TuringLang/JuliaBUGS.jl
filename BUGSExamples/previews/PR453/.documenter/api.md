@@ -49,7 +49,7 @@ model = compile(model_def, ex.data, ex.inits)        # Compile to BUGSModel
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/5c0f001cb471167c189d1f400f9d5f09862dd813/BUGSExamples/src/types.jl#L1-L28" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/740fb2179ad431abe2c142a2bea6ee6c7f3f14aa/BUGSExamples/src/types.jl#L1-L28" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -68,7 +68,7 @@ list()
 Print all available BUGS examples grouped by volume.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/5c0f001cb471167c189d1f400f9d5f09862dd813/BUGSExamples/src/BUGSExamples.jl#L61-L65" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/740fb2179ad431abe2c142a2bea6ee6c7f3f14aa/BUGSExamples/src/BUGSExamples.jl#L61-L65" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -85,7 +85,7 @@ examples()
 Return a flat NamedTuple of all available examples across all volumes.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/5c0f001cb471167c189d1f400f9d5f09862dd813/BUGSExamples/src/BUGSExamples.jl#L80-L84" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/740fb2179ad431abe2c142a2bea6ee6c7f3f14aa/BUGSExamples/src/BUGSExamples.jl#L80-L84" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -128,7 +128,7 @@ println(ex.data)                           # Data as NamedTuple
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/5c0f001cb471167c189d1f400f9d5f09862dd813/BUGSExamples/src/BUGSExamples.jl#L1-L30" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/740fb2179ad431abe2c142a2bea6ee6c7f3f14aa/BUGSExamples/src/BUGSExamples.jl#L1-L30" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -147,7 +147,7 @@ _dict_to_namedtuple(d::Dict) -> NamedTuple
 Convert a Dict{String, Any} to a NamedTuple, converting nested arrays properly. Handles BUGS-style dot-separated names via Julia&#39;s `var"name.subname"` syntax.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/5c0f001cb471167c189d1f400f9d5f09862dd813/BUGSExamples/src/data_loader.jl#L3-L8" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/740fb2179ad431abe2c142a2bea6ee6c7f3f14aa/BUGSExamples/src/data_loader.jl#L3-L8" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -166,7 +166,7 @@ Load a JSON data file and return structured data for a BUGSExample.
 Each JSON file should have keys: `"data"`, `"inits"`, and optionally `"inits_alternative"` and `"reference_results"`.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/5c0f001cb471167c189d1f400f9d5f09862dd813/BUGSExamples/src/data_loader.jl#L60-L67" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/740fb2179ad431abe2c142a2bea6ee6c7f3f14aa/BUGSExamples/src/data_loader.jl#L60-L67" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
