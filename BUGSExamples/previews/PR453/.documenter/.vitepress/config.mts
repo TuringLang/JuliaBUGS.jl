@@ -21,10 +21,15 @@ const navTemp = {
   nav: [
 { text: 'Home', link: '/index' },
 { text: 'Examples', collapsed: false, items: [
-{ text: 'Pumps', link: '/generated/pumps' },
-{ text: 'Rats', link: '/generated/rats' }]
+{ text: 'Rats: a normal hierarchical model', link: '/generated/rats' },
+{ text: 'Pumps: conjugate gamma-Poisson hierarchical model', link: '/generated/pumps' },
+{ text: 'Dogs: loglinear model for binary data', link: '/generated/dogs' },
+{ text: 'Seeds: random-effect logistic regression', link: '/generated/seeds' },
+{ text: 'Surgical (simple): institutional ranking with independent rates', link: '/generated/surgical_simple' },
+{ text: 'Surgical (realistic): random-effects logistic regression for hospital rates', link: '/generated/surgical_realistic' }]
  },
-{ text: 'API Reference', link: '/api' }
+{ text: 'API Reference', link: '/api' },
+{ text: 'Bibliography', link: '/bibliography' }
 ]
 ,
 }
@@ -43,7 +48,7 @@ export default defineConfig({
   cleanUrls: true,
   outDir: '../1',
   head: [
-    
+    ['link', { rel: 'icon', href: 'https://turinglang.org/assets/favicon.ico' }],
     ['script', { src: `${getBaseRepository(baseTemp.base)}versions.js` }],
     ['script', { src: `${baseTemp.base}siteinfo.js` }],
     // DoodleBUGS widget
@@ -88,7 +93,7 @@ export default defineConfig({
   },
   themeConfig: {
     outline: 'deep',
-    
+    logo: { src: 'https://turinglang.org/assets/logo/turing-logo.svg', width: 24, height: 24 },
     search: {
       provider: 'local',
       options: { detailedView: true }
@@ -97,10 +102,15 @@ export default defineConfig({
     sidebar: [
 { text: 'Home', link: '/index' },
 { text: 'Examples', collapsed: false, items: [
-{ text: 'Pumps', link: '/generated/pumps' },
-{ text: 'Rats', link: '/generated/rats' }]
+{ text: 'Rats: a normal hierarchical model', link: '/generated/rats' },
+{ text: 'Pumps: conjugate gamma-Poisson hierarchical model', link: '/generated/pumps' },
+{ text: 'Dogs: loglinear model for binary data', link: '/generated/dogs' },
+{ text: 'Seeds: random-effect logistic regression', link: '/generated/seeds' },
+{ text: 'Surgical (simple): institutional ranking with independent rates', link: '/generated/surgical_simple' },
+{ text: 'Surgical (realistic): random-effects logistic regression for hospital rates', link: '/generated/surgical_realistic' }]
  },
-{ text: 'API Reference', link: '/api' }
+{ text: 'API Reference', link: '/api' },
+{ text: 'Bibliography', link: '/bibliography' }
 ]
 ,
     sidebarDrawer: false,

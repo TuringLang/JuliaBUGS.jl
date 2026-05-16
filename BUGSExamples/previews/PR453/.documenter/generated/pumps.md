@@ -1,35 +1,19 @@
 
-
-
-# Pumps: Conjugate Gamma-Poisson Hierarchical Model {#Pumps:-Conjugate-Gamma-Poisson-Hierarchical-Model}
+# Pumps: conjugate gamma-Poisson hierarchical model {#Pumps:-conjugate-gamma-Poisson-hierarchical-model}
 
 This example concerns the number of failures of pumps in a nuclear power plant, and uses a conjugate gamma-Poisson hierarchical model.
 
-## DoodleBUGS Model {#DoodleBUGS-Model}
+## Graphical Model {#Graphical-Model}
 <doodle-bugs width="100%" height="600px" model="pumps"></doodle-bugs>
 
 
-## Original BUGS Syntax {#Original-BUGS-Syntax}
+## Model {#Model}
+
+::: tabs
+
+== JuliaBUGS @bugs
 
 ```julia
-original_syntax_program = """
-model{
-    for (i in 1 : N) {
-        theta[i] ~ dgamma(alpha, beta)
-        lambda[i] <- theta[i] * t[i]
-        x[i] ~ dpois(lambda[i])
-    }
-    alpha ~ dexp(1)
-    beta ~ dgamma(0.1, 1.0)
-}
-"""
-```
-
-
-## `@bugs` Macro Syntax {#@bugs-Macro-Syntax}
-
-```julia
-model_def = """
 @bugs begin
     for i in 1:N
         theta[i] ~ dgamma(alpha, beta)
@@ -39,31 +23,50 @@ model_def = """
     alpha ~ dexp(1)
     beta ~ dgamma(0.1, 1.0)
 end
-"""
 ```
 
 
-## `@model` Macro Syntax {#@model-Macro-Syntax}
+== JuliaBUGS @model
 
 ```julia
-model_function = ""
+@model function pumps((; theta, alpha, beta), N, t, x)
+    for i in 1:N
+        theta[i] ~ dgamma(alpha, beta)
+        lambda[i] = theta[i] * t[i]
+        x[i] ~ dpois(lambda[i])
+    end
+    alpha ~ dexp(1)
+    beta ~ dgamma(0.1, 1.0)
+end
 ```
 
 
-Data is loaded from `data.json` in the source directory.
+== BUGS
 
 ```julia
-_pumps_data = load_example_data(joinpath(@__DIR__, "data.json"))
-
-pumps = BUGSExample(;
-    name = "Pumps: conjugate gamma-Poisson hierarchical model",
-    original_syntax_program = original_syntax_program,
-    model_def = model_def,
-    model_function = model_function,
-    data = _pumps_data.data,
-    inits = _pumps_data.inits,
-    inits_alternative = _pumps_data.inits_alternative,
-    reference_results = _pumps_data.reference_results,
-)
+model{
+    for (i in 1 : N) {
+        theta[i] ~ dgamma(alpha, beta)
+        lambda[i] <- theta[i] * t[i]
+        x[i] ~ dpois(lambda[i])
+    }
+    alpha ~ dexp(1)
+    beta ~ dgamma(0.1, 1.0)
+}
 ```
 
+
+:::
+
+## How to use this example {#How-to-use-this-example}
+
+```julia
+using JuliaBUGS, BUGSExamples
+ex = BUGSExamples.pumps
+model = compile(@bugs(ex.original_syntax_program), ex.data, ex.inits)
+```
+
+
+## References {#References}
+- [[2](/bibliography#george1993)]
+  
