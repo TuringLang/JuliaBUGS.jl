@@ -2068,7 +2068,12 @@ function format_expr_arg(arg)
 end
 
 # Show implementations
+Base.show(io::IO, ::Type{OfArray}) = print(io, "OfArray")
+
 function Base.show(io::IO, ::Type{OfArray{T,N,D}}) where {T,N,D}
+    if T isa TypeVar || N isa TypeVar || D isa TypeVar
+        return print(io, "OfArray")
+    end
     # Check if we're in a context where we can highlight symbolic references
     use_color = get(io, :color, false)
     constant_fields = get(io, :constant_fields, Symbol[])

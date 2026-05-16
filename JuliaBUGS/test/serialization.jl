@@ -1,6 +1,7 @@
 @testset "serialization" begin
-    (; model_def, data) = JuliaBUGS.BUGSExamples.rats
-    model = compile(model_def, data)
+    ex = JuliaBUGS.BUGSExamples.rats
+    model_def = include(JuliaBUGS.BUGSExamples.path(ex, "model.jl"))
+    model = compile(model_def, ex.data)
     serialize("m.jls", model)
     deserialized = deserialize("m.jls")
     rm("m.jls", force=true)
