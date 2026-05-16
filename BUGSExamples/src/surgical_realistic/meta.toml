@@ -1,0 +1,13 @@
+name = "Surgical (realistic): random-effects logistic regression for hospital rates"
+volume = 1
+order = 6
+doodlebugs_id = "surgical"
+tags = ["binomial", "ranking", "random-effects", "logistic-regression"]
+citations = []
+
+description = """
+Mortality rates following cardiac surgery in 12 hospitals, modelled with a
+random-effects logistic regression that pools information across hospitals.
+This is the "realistic" model in BUGS Volume 1; the simple counterpart fits
+independent Beta(1, 1) priors per hospital.
+"""

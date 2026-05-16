@@ -11,6 +11,5 @@
   "inits_alternative": {
     "alpha": 10,
     "beta": 10
-  },
-  "reference_results": null
+  }
 }

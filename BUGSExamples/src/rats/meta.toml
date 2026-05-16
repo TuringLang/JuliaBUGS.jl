@@ -1,0 +1,11 @@
+name = "Rats: a normal hierarchical model"
+volume = 1
+order = 1
+doodlebugs_id = "rats"
+tags = ["hierarchical", "normal", "longitudinal"]
+citations = ["gelfand1990"]
+
+description = """
+This example is taken from section 6 of Gelfand et al. (1990), and concerns
+30 young rats whose weights were measured weekly for five weeks.
+"""

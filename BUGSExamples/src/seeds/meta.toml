@@ -1,0 +1,12 @@
+name = "Seeds: random-effect logistic regression"
+volume = 1
+order = 4
+doodlebugs_id = "seeds"
+tags = ["logistic-regression", "random-effects", "overdispersion"]
+citations = ["crowder1978"]
+
+description = """
+Crowder's (1978) seed germination data: proportions of seeds of two species
+that germinate on two root extracts. The model is a random-effect logistic
+regression that accounts for overdispersion across plates.
+"""

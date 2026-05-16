@@ -1,33 +1,60 @@
 """
+    ReferenceResults
+
+Reference posterior summaries for a BUGS example, plus provenance metadata.
+
+`params` is a NamedTuple keyed by parameter name, each value a NamedTuple with
+at least `mean` and `std` fields (CI runs may also include `ess`, `rhat`).
+`meta` describes where the numbers came from — typically either
+`source = "reference"` (literature values) or `source = "ci"` (resampled by
+the BUGSExamples results workflow).
+"""
+struct ReferenceResults{P<:NamedTuple,M<:NamedTuple}
+    params::P
+    meta::M
+end
+
+"""
     BUGSExample
 
-A BUGS example with model code in multiple representations.
+A BUGS example: model code in multiple representations, data, inits, and
+optional reference results. Backed by a directory of plain files
+(`model.bugs`, `model.jl`, `model_fn.jl`, `data.json`, `results.json`,
+`meta.toml`) — see `BUGSExamples.path(ex, file)` to access the source files
+directly.
 
-All model representations are stored as strings, making this package completely
-independent of JuliaBUGS. Users can pass the model definitions directly to
-JuliaBUGS functions:
-
-```julia
-using JuliaBUGS, BUGSExamples
-ex = BUGSExamples.rats
-model_def = @bugs(ex.original_syntax_program)       # Parse BUGS string → Expr
-model = compile(model_def, ex.data, ex.inits)        # Compile to BUGSModel
-```
+`BUGSExamples` itself has no JuliaBUGS dependency; consumers parse the model
+strings (or `include` `model.jl` / `model_fn.jl` with JuliaBUGS loaded) when
+they need a compiled model.
 
 # Fields
-- `name::String`: Human-readable name of the example
-- `original_syntax_program::String`: Model in original BUGS syntax (`model{...}` string)
-- `model_def::String`: Model using `@bugs begin...end` Julia expression syntax (as string)
-- `model_function::String`: Model using `@model function...end` syntax (as string, empty if not available)
-- `stan_code::String`: Stan model code (empty string if unavailable)
-- `numpyro_code::String`: NumPyro/Python model code (empty string if unavailable)
-- `data::NamedTuple`: Data for the model
-- `inits::NamedTuple`: Initial values for model parameters
-- `inits_alternative::NamedTuple`: Alternative initial values
-- `reference_results`: Reference posterior results (NamedTuple or nothing)
+- `name::String` — human-readable title
+- `description::String` — short prose blurb (may be empty)
+- `citations::Vector{String}` — BibTeX keys (resolved via `docs/src/refs.bib`)
+- `doodlebugs_id::Union{Nothing,String}` — id under `DoodleBUGS/public/examples/<id>/` if a graph exists
+- `volume::Int` — BUGS volume number (1..4)
+- `order::Int` — within-volume display order (lower = earlier; defaults to 999 if absent)
+- `tags::Vector{String}`
+- `original_syntax_program::String` — raw BUGS source (from `model.bugs`)
+- `model_def::String` — `@bugs begin … end` source (from `model.jl`)
+- `model_function::String` — `@model function … end` source (from `model_fn.jl`, `""` if absent)
+- `stan_code::String` — Stan source (from `model.stan`, `""` if absent)
+- `numpyro_code::String` — NumPyro source (from `model.py`, `""` if absent)
+- `data::NamedTuple`
+- `inits::NamedTuple`
+- `inits_alternative::NamedTuple`
+- `reference_results::Union{ReferenceResults,Nothing}` — literature-known summaries from `reference.json` if present
+- `sampled_results::Union{ReferenceResults,Nothing}` — CI-sampled summaries from `results.json` if present
+- `source_dir::String` — absolute path to the example directory
 """
-struct BUGSExample{D<:NamedTuple,I<:NamedTuple,I2<:NamedTuple,R}
+struct BUGSExample{D<:NamedTuple,I<:NamedTuple,I2<:NamedTuple,R,S}
     name::String
+    description::String
+    citations::Vector{String}
+    doodlebugs_id::Union{Nothing,String}
+    volume::Int
+    order::Int
+    tags::Vector{String}
     original_syntax_program::String
     model_def::String
     model_function::String
@@ -37,23 +64,21 @@ struct BUGSExample{D<:NamedTuple,I<:NamedTuple,I2<:NamedTuple,R}
     inits::I
     inits_alternative::I2
     reference_results::R
+    sampled_results::S
+    source_dir::String
 end
 
-# Convenience constructor — Stan/NumPyro/model_function optional
-function BUGSExample(;
-    name::String,
-    original_syntax_program::String,
-    model_def::String,
-    model_function::String="",
-    stan_code::String="",
-    numpyro_code::String="",
-    data::NamedTuple,
-    inits::NamedTuple,
-    inits_alternative::NamedTuple=inits,
-    reference_results=nothing,
-)
-    return BUGSExample(
-        name, original_syntax_program, model_def, model_function,
-        stan_code, numpyro_code, data, inits, inits_alternative, reference_results,
-    )
-end
+"""
+    path(ex::BUGSExample, file::AbstractString) -> String
+
+Absolute path to a source file inside the example's directory. Use this when
+consumers (JuliaBUGS tests, benchmarks, doc templates) need to `include` or
+read the source files directly:
+
+```julia
+using JuliaBUGS, BUGSExamples
+ex = BUGSExamples.rats
+model_expr = include(BUGSExamples.path(ex, "model.jl"))  # returns an Expr
+```
+"""
+path(ex::BUGSExample, file::AbstractString) = joinpath(ex.source_dir, file)

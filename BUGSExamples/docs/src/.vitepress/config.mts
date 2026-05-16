@@ -35,7 +35,7 @@ export default defineConfig({
   cleanUrls: true,
   outDir: 'REPLACE_ME_DOCUMENTER_VITEPRESS',
   head: [
-    ['link', { rel: 'icon', href: 'REPLACE_ME_DOCUMENTER_VITEPRESS_FAVICON' }],
+    ['link', { rel: 'icon', href: 'https://turinglang.org/assets/favicon.ico' }],
     ['script', { src: `${getBaseRepository(baseTemp.base)}versions.js` }],
     ['script', { src: `${baseTemp.base}siteinfo.js` }],
     // DoodleBUGS widget
@@ -80,7 +80,7 @@ export default defineConfig({
   },
   themeConfig: {
     outline: 'deep',
-    logo: 'REPLACE_ME_DOCUMENTER_VITEPRESS',
+    logo: { src: 'https://turinglang.org/assets/logo/turing-logo.svg', width: 24, height: 24 },
     search: {
       provider: 'local',
       options: { detailedView: true }

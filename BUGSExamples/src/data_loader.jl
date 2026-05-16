@@ -1,11 +1,6 @@
 using JSON
+using TOML
 
-"""
-    _dict_to_namedtuple(d::Dict) -> NamedTuple
-
-Convert a Dict{String, Any} to a NamedTuple, converting nested arrays properly.
-Handles BUGS-style dot-separated names via Julia's `var"name.subname"` syntax.
-"""
 function _dict_to_namedtuple(d::AbstractDict)
     pairs = [Symbol(k) => _convert_value(v) for (k, v) in d]
     return NamedTuple(pairs)
@@ -57,21 +52,82 @@ function _typed_vector(v::AbstractVector)
     end
 end
 
-"""
-    load_example_data(filepath::String)
+# Read a model-source file as a String, trimming trailing whitespace.
+# Returns `""` if the file doesn't exist (i.e. the syntax variant is unavailable).
+function _read_source(dir::String, file::String)
+    p = joinpath(dir, file)
+    return isfile(p) ? rstrip(read(p, String)) * "\n" : ""
+end
 
-Load a JSON data file and return structured data for a BUGSExample.
+function _load_meta(dir::String)
+    meta_path = joinpath(dir, "meta.toml")
+    isfile(meta_path) || error("Missing meta.toml in $dir")
+    raw = TOML.parsefile(meta_path)
+    name = get(raw, "name", basename(dir))
+    description = get(raw, "description", "")
+    citations = String.(get(raw, "citations", String[]))
+    doodlebugs_id = get(raw, "doodlebugs_id", nothing)
+    volume = Int(get(raw, "volume", 0))
+    order = Int(get(raw, "order", 999))
+    tags = String.(get(raw, "tags", String[]))
+    return (; name, description, citations, doodlebugs_id, volume, order, tags)
+end
 
-Each JSON file should have keys: `"data"`, `"inits"`, and optionally
-`"inits_alternative"` and `"reference_results"`.
-"""
-function load_example_data(filepath::String)
-    raw = JSON.parsefile(filepath)
+function _load_data_inits(dir::String)
+    data_path = joinpath(dir, "data.json")
+    isfile(data_path) || error("Missing data.json in $dir")
+    raw = JSON.parsefile(data_path)
     data = _dict_to_namedtuple(raw["data"])
     inits = _dict_to_namedtuple(raw["inits"])
     inits_alt = haskey(raw, "inits_alternative") && raw["inits_alternative"] !== nothing ?
         _dict_to_namedtuple(raw["inits_alternative"]) : inits
-    ref = haskey(raw, "reference_results") && raw["reference_results"] !== nothing ?
-        _dict_to_namedtuple(raw["reference_results"]) : nothing
-    return (; data, inits, inits_alternative=inits_alt, reference_results=ref)
+    return (; data, inits, inits_alternative=inits_alt)
+end
+
+function _load_results_file(path::String)
+    isfile(path) || return nothing
+    raw = JSON.parsefile(path)
+    params = _dict_to_namedtuple(raw["params"])
+    meta = haskey(raw, "_meta") ? _dict_to_namedtuple(raw["_meta"]) : NamedTuple()
+    return ReferenceResults(params, meta)
+end
+
+"""
+    load_example(dir::String) -> BUGSExample
+
+Construct a `BUGSExample` from a directory containing (at minimum) `meta.toml`,
+`data.json`, `model.bugs`, and `model.jl`. Optional files (`model_fn.jl`,
+`model.stan`, `model.py`, `reference.json`, `results.json`) are picked up when
+present.
+"""
+function load_example(dir::String)
+    meta = _load_meta(dir)
+    di = _load_data_inits(dir)
+    original_syntax_program = _read_source(dir, "model.bugs")
+    model_def = _read_source(dir, "model.jl")
+    model_function = _read_source(dir, "model_fn.jl")
+    stan_code = _read_source(dir, "model.stan")
+    numpyro_code = _read_source(dir, "model.py")
+    reference_results = _load_results_file(joinpath(dir, "reference.json"))
+    sampled_results = _load_results_file(joinpath(dir, "results.json"))
+    return BUGSExample(
+        meta.name,
+        meta.description,
+        meta.citations,
+        meta.doodlebugs_id,
+        meta.volume,
+        meta.order,
+        meta.tags,
+        original_syntax_program,
+        model_def,
+        model_function,
+        stan_code,
+        numpyro_code,
+        di.data,
+        di.inits,
+        di.inits_alternative,
+        reference_results,
+        sampled_results,
+        abspath(dir),
+    )
 end

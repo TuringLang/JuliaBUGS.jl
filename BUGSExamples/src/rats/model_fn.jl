@@ -1,4 +1,7 @@
-@bugs begin
+@model function rats(
+    (; alpha, beta, var"tau.c", var"alpha.c", var"alpha.tau", var"beta.c", var"beta.tau"),
+    N, T, x, xbar, Y,
+)
     for i in 1:N
         for j in 1:T
             Y[i, j] ~ dnorm(mu[i, j], var"tau.c")

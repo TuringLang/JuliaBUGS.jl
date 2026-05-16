@@ -1,0 +1,12 @@
+name = "Dogs: loglinear model for binary data"
+volume = 1
+order = 3
+tags = ["loglinear", "binary", "learning"]
+citations = []
+
+description = """
+A reanalysis of Solomon-Wynne avoidance-learning data: 30 dogs each receive
+25 trials in a shuttle-box, where avoiding a shock after a warning stimulus
+is the success event. The model fits a loglinear specification for the
+probability of failure as a function of cumulative avoidances and shocks.
+"""

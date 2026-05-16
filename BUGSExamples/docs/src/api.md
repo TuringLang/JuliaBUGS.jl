@@ -8,6 +8,7 @@ CurrentModule = BUGSExamples
 
 ```@docs
 BUGSExample
+ReferenceResults
 ```
 
 ## Functions
@@ -15,17 +16,12 @@ BUGSExample
 ```@docs
 BUGSExamples.list
 BUGSExamples.examples
+BUGSExamples.path
+BUGSExamples.load_example
 ```
 
 ## Module
 
 ```@docs
 BUGSExamples.BUGSExamples
-```
-
-## Internal
-
-```@autodocs
-Modules = [BUGSExamples]
-Filter = t -> !any(n -> n === t, [BUGSExample, BUGSExamples.list, BUGSExamples.examples, BUGSExamples])
 ```

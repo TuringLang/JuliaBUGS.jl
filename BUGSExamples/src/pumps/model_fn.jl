@@ -1,4 +1,4 @@
-@bugs begin
+@model function pumps((; theta, alpha, beta), N, t, x)
     for i in 1:N
         theta[i] ~ dgamma(alpha, beta)
         lambda[i] = theta[i] * t[i]
