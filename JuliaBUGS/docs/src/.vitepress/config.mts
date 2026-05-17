@@ -17,13 +17,33 @@ const baseTemp = {
   base: 'REPLACE_ME_DOCUMENTER_VITEPRESS',
 }
 
-const navTemp = {
-  nav: 'REPLACE_ME_DOCUMENTER_VITEPRESS',
-}
-
+// DocumenterVitepress's default replaces both `sidebar:` and `nav:` with
+// the full `pages=` tree, which clutters the top navbar with every page.
+// Hardcode a curated nav here — DV's string-replacer only fires if the
+// literal `'REPLACE_ME_DOCUMENTER_VITEPRESS'` token is present, so this
+// stays as-is. The sidebar still gets auto-populated from `pages=` below.
 const nav = [
-  ...navTemp.nav,
-  { component: 'VersionPicker' }
+  { text: 'Home', link: '/' },
+  { text: 'Get Started', link: '/example' },
+  {
+    text: 'Modeling',
+    items: [
+      { text: 'Two Macros: @bugs & @model', link: '/two_macros' },
+      { text: '@model Macro', link: '/model_macro' },
+      { text: 'of Type System', link: '/of_design_doc' },
+    ],
+  },
+  { text: 'Examples', link: '/examples/rats' },
+  {
+    text: 'API',
+    items: [
+      { text: 'General', link: '/api/api' },
+      { text: 'Functions', link: '/api/functions' },
+      { text: 'Distributions', link: '/api/distributions' },
+      { text: 'BUGSExamples', link: '/api/bugsexamples' },
+    ],
+  },
+  { component: 'VersionPicker' },
 ]
 
 export default defineConfig({
