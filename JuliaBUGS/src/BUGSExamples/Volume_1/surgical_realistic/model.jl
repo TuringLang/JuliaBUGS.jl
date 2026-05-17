@@ -5,7 +5,7 @@
         p[i] = logistic(b[i])
     end
     var"pop.mean" = exp(mu) / (1 + exp(mu))
-    mu  ~ dnorm(0.0, 1.0e-6)
+    mu ~ dnorm(0.0, 1.0e-6)
     sigma = 1 / sqrt(tau)
     tau ~ dgamma(0.001, 0.001)
 end

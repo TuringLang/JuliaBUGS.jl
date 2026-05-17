@@ -32,10 +32,16 @@ jobs:
 
     steps:
       - name: Build and deploy Documenter.jl docs
-        uses: TuringLang/actions/DocsDocumenter@main
+        # Pinned to the sg/vitepress-support branch until that work is merged
+        # to main; it adds a `use-vitepress: true` flag that switches the
+        # deploy step from `Documenter.deploydocs` to
+        # `DocumenterVitepress.deploydocs`, preserving the multi-base layout
+        # (Vitepress bundles each version alias into its own subdir).
+        uses: TuringLang/actions/DocsDocumenter@sg/vitepress-support
         with:
           pkg_path: JuliaBUGS
           doc-path: JuliaBUGS/docs
           doc-make-path: JuliaBUGS/docs/make.jl
           doc-build-path: JuliaBUGS/docs/build
           tag_prefix: "JuliaBUGS-"
+          use-vitepress: 'true'

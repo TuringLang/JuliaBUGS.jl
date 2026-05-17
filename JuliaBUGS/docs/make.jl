@@ -74,10 +74,6 @@ makedocs(;
     plugins=[bib],
 )
 
-DocumenterVitepress.deploydocs(;
-    repo="github.com/TuringLang/JuliaBUGS.jl",
-    target=joinpath(@__DIR__, "build"),
-    branch="gh-pages",
-    devbranch="main",
-    push_preview=true,
-)
+# Deploy is handled by the TuringLang DocsDocumenter action (which runs
+# `DocumenterVitepress.deploydocs(...)` when called with `use-vitepress:
+# 'true'`). No deploydocs call needed here.
