@@ -64,7 +64,8 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'state-update', payload: string): void
-  (e: 'code-update', payload: string): void
+  (e: 'bugs-code-update', payload: string): void
+  (e: 'stan-code-update', payload: string): void
   (e: 'ready', payload: string): void
   (e: 'models-available', payload: string): void
 }>()
@@ -281,7 +282,7 @@ const controlsStyle = computed(() => {
 
 const { elements, selectedElement, updateElement, deleteElement } = useGraphElements()
 const { parsedGraphData } = storeToRefs(dataStore)
-const { generatedCode } = useBugsCodeGenerator(elements)
+const { generatedCode: generatedBugsCode } = useBugsCodeGenerator(elements)
 const { generatedStanCode } = useStanCodeGenerator(elements)
 const { validateGraph, validationErrors } = useGraphValidator(elements, parsedGraphData)
 const { standaloneScript, samplerSettings } = storeToRefs(scriptStore)
@@ -292,7 +293,7 @@ const { loadUIState, saveUIState, saveLastGraphId, loadLastGraphId } = usePersis
 
 const actions = useEditorActions(
   elements,
-  generatedCode,
+  generatedBugsCode,
   persistencePrefix.value,
   generatedStanCode
 )
@@ -356,7 +357,7 @@ const {
   smartFit,
 } = actions
 
-const { emitReady } = useWidgetEmitter(emit, generatedCode)
+const { emitReady } = useWidgetEmitter(emit, generatedBugsCode, generatedStanCode)
 
 const codePanelLanguage = ref<CodeLanguage>('bugs')
 const codePanelTitle = computed(() =>
@@ -793,7 +794,7 @@ onUnmounted(() => {
 })
 
 watch(
-  [generatedCode, parsedGraphData, samplerSettings],
+  [generatedBugsCode, parsedGraphData, samplerSettings],
   () => {
     if (
       standaloneScript.value ||
