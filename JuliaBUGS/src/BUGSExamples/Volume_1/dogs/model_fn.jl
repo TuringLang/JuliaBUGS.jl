@@ -1,4 +1,4 @@
-@model function dogs((; alpha, beta), Dogs, Trials, Y)
+@model function dogs((; y, alpha, beta), Dogs, Trials, Y)
     for i in 1:Dogs
         xa[i, 1] = 0
         xs[i, 1] = 0

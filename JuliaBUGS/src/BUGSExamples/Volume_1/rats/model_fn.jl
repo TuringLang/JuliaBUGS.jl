@@ -1,6 +1,11 @@
 @model function rats(
-    (; alpha, beta, var"tau.c", var"alpha.c", var"alpha.tau", var"beta.c", var"beta.tau"),
-    N, T, x, xbar, Y,
+    (;
+        Y, alpha, beta, var"tau.c", var"alpha.c", var"alpha.tau", var"beta.c", var"beta.tau"
+    ),
+    N,
+    T,
+    x,
+    xbar,
 )
     for i in 1:N
         for j in 1:T

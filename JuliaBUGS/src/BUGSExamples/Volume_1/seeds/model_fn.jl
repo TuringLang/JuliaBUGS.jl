@@ -1,12 +1,10 @@
-@model function seeds(
-    (; alpha0, alpha1, alpha2, alpha12, tau, b),
-    N, n, x1, x2, r,
-)
+@model function seeds((; r, alpha0, alpha1, alpha2, alpha12, tau, b), N, n, x1, x2)
     for i in 1:N
         r[i] ~ dbin(p[i], n[i])
         b[i] ~ dnorm(0.0, tau)
-        p[i] = logistic(alpha0 + alpha1 * x1[i] + alpha2 * x2[i] +
-                        alpha12 * x1[i] * x2[i] + b[i])
+        p[i] = logistic(
+            alpha0 + alpha1 * x1[i] + alpha2 * x2[i] + alpha12 * x1[i] * x2[i] + b[i]
+        )
     end
     alpha0 ~ dnorm(0.0, 1.0e-6)
     alpha1 ~ dnorm(0.0, 1.0e-6)
