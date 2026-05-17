@@ -89,7 +89,7 @@ model_with_generated_eval = set_evaluation_mode(model, UseGeneratedLogDensityFun
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/300c2cd7f822d896bd2215e9388bfceca36272bc/JuliaBUGS/src/model/bugsmodel.jl#L532-L558" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/bugsmodel.jl#L532-L558" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
