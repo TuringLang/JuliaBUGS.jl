@@ -13,7 +13,7 @@ Returns an instance of [Normal](https://juliastats.org/Distributions.jl/latest/u
 $$p(x|μ,τ) = \sqrt{\frac{τ}{2π}} e^{-τ \frac{(x-μ)^2}{2}}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L1-L10" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L1-L10" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -32,7 +32,7 @@ Return an instance of [Logistic](https://juliastats.org/Distributions.jl/latest/
 $$p(x|μ,τ) = \frac{\sqrt{τ} e^{-\sqrt{τ}(x-μ)}}{(1+e^{-\sqrt{τ}(x-μ)})^2}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L20-L29" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L20-L29" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -52,7 +52,7 @@ $$p(x|ν,μ,σ) = \frac{Γ((ν+1)/2)}{Γ(ν/2) \sqrt{νπσ}}
 \left(1+\frac{1}{ν}\left(\frac{x-μ}{σ}\right)^2\right)^{-\frac{ν+1}{2}}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L62-L72" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L62-L72" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -77,7 +77,7 @@ Only `pdf` and `logpdf` are implemented for this distribution.
 [TDist](https://juliastats.org/Distributions.jl/stable/univariate/#Distributions.TDist)
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L35-L48" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L35-L48" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -96,7 +96,7 @@ Return an instance of [Laplace (Double Exponential)](https://juliastats.org/Dist
 $$p(x|μ,τ) = \frac{\sqrt{τ}}{2} e^{-\sqrt{τ} |x-μ|}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L82-L91" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L82-L91" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -119,7 +119,7 @@ Only `pdf`, `logpdf`, `minimum`, and `maximum` are implemented for these Distrib
 When use in a model, the parameters always need to be initialized.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L97-L108" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L97-L108" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -136,7 +136,7 @@ Flat
 The flat distribution mimicking the behavior of the `dflat` distribution in the BUGS family of softwares.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L111-L115" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L111-L115" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -153,7 +153,7 @@ TruncatedFlat
 Truncated version of the [`Flat`](/api/distributions#JuliaBUGS.BUGSPrimitives.Flat) distribution.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L144-L148" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L144-L148" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -172,7 +172,7 @@ Returns an instance of [Exponential](https://juliastats.org/Distributions.jl/lat
 $$p(x|λ) = λ e^{-λ x}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L176-L185" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L176-L185" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -191,7 +191,7 @@ Returns an instance of [Chi-squared](https://juliastats.org/Distributions.jl/lat
 $$p(x|k) = \frac{1}{2^{k/2} Γ(k/2)} x^{k/2 - 1} e^{-x/2}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L205-L214" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L205-L214" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -212,7 +212,7 @@ The Weibull distribution is a common model for event times. The hazard or instan
 $$p(x|a,b) = abx^{a-1}e^{-b x^a}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L219-L232" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L219-L232" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -231,7 +231,7 @@ Returns an instance of [LogNormal](https://juliastats.org/Distributions.jl/lates
 $$p(x|μ,τ) = \frac{\sqrt{τ}}{x\sqrt{2π}} e^{-τ/2 (\log(x) - μ)^2}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L237-L246" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L237-L246" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -250,7 +250,7 @@ Returns an instance of [Gamma](https://juliastats.org/Distributions.jl/latest/un
 $$p(x|a,b) = \frac{b^a}{Γ(a)} x^{a-1} e^{-bx}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L190-L199" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L190-L199" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -269,7 +269,7 @@ Returns an instance of [Pareto](https://juliastats.org/Distributions.jl/latest/u
 $$p(x|a,b) = \frac{a b^a}{x^{a+1}}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L251-L260" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L251-L260" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -290,7 +290,7 @@ $$p(x|μ,σ,η) = \frac{1}{σ} \left(1 + η \frac{x - μ}{σ}\right)^{-\frac{1}{
 where $\frac{η(x - μ)}{σ} > -1$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L265-L276" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L265-L276" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -309,7 +309,7 @@ Returns an instance of [GeneralizedPareto](https://juliastats.org/Distributions.
 $$p(x|μ,σ,η) = \frac{1}{σ} (1 + η ((x - μ)/σ))^{-1/η - 1}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L289-L298" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L289-L298" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -330,7 +330,7 @@ $$p(x|n, m, μ, τ) = \frac{\Gamma\left(\frac{n+m}{2}\right)}{\Gamma\left(\frac{
 where $\frac{n \sqrt{τ} (x - μ)}{m} > -1$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L303-L314" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L303-L314" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -349,7 +349,7 @@ Returns an instance of [Uniform](https://juliastats.org/Distributions.jl/latest/
 $$p(x|a,b) = \frac{1}{b - a}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L333-L342" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L333-L342" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -368,7 +368,7 @@ Returns an instance of [Beta](https://juliastats.org/Distributions.jl/latest/uni
 $$p(x|a,b) = \frac{\Gamma(a + b)}{\Gamma(a)\Gamma(b)} x^{a-1} (1 - x)^{b-1}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L347-L356" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L347-L356" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -389,7 +389,7 @@ $$p(x|μ,T) = (2π)^{-k/2} |T|^{1/2} e^{-1/2 (x-μ)' T (x-μ)}$$
 where $k$ is the dimension of `x`.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L365-L375" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L365-L375" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -410,7 +410,7 @@ $$p(x|k,μ,Σ) = \frac{\Gamma((k+d)/2)}{\Gamma(k/2) (k\pi)^{p/2} |Σ|^{1/2}} \le
 where $p$ is the dimension of $x$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L380-L390" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L380-L390" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -431,7 +431,7 @@ $$p(X|R,k) = |R|^{k/2} |X|^{(k-p-1)/2} e^{-(1/2) tr(RX)} / (2^{kp/2} Γ_p(k/2))$
 where $p$ is the dimension of $X$, and it should be less than or equal to $k$. 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L395-L405" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L395-L405" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -452,7 +452,7 @@ $$p(x|θ) = \frac{Γ(\sum θ)}{∏ Γ(θ)} ∏ x_i^{θ_i - 1}$$
 where $\theta_i > 0, x_i \in [0, 1], \sum_i x_i = 1$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L417-L427" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L417-L427" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -471,7 +471,7 @@ Return an instance of [Bernoulli](https://juliastats.org/Distributions.jl/latest
 $$p(x|p) = p^x (1 - p)^{1-x}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L432-L441" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L432-L441" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -494,7 +494,7 @@ end
 where $\theta \in [0, 1], n \in \mathbb{Z}^+,$ and $x = 0, \ldots, n$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L446-L457" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L446-L457" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -513,7 +513,7 @@ Returns an instance of [Categorical](https://juliastats.org/Distributions.jl/lat
 $$p(x|p) = p[x]$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L462-L471" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L462-L471" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -532,7 +532,7 @@ Returns an instance of [Poisson](https://juliastats.org/Distributions.jl/latest/
 $$p(x|θ) = e^{-θ} θ^x / x!$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L476-L485" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L476-L485" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -551,7 +551,7 @@ Returns an instance of [Geometric](https://juliastats.org/Distributions.jl/lates
 $$p(x|θ) = (1 - θ)^{x-1} θ$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L490-L499" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L490-L499" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -572,7 +572,7 @@ $$P(x|r,p) = \binom{x + r - 1}{x} (1 - p)^x p^r$$
 where $x \in \mathbb{Z}^+$.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L504-L515" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L504-L515" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -591,7 +591,7 @@ Returns an instance of [Beta Binomial](https://juliastats.org/Distributions.jl/l
 $$P(x|a, b, n) = \frac{\binom{n}{x} \binom{a + b - 1}{a + x - 1}}{\binom{a + b + n - 1}{n}}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L520-L529" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L520-L529" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -612,7 +612,7 @@ $$p(x | n₁, n₂, m₁, \psi) = \frac{\binom{n₁}{x} \binom{n₂}{m₁ - x} \
 where $u_0 = \max(0, m₁-n₂), u_1 = \min(n₁,m₁),$ and $u_0 \leq x \leq u_1$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L534-L546" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L534-L546" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -631,7 +631,7 @@ Returns an instance [Multinomial](https://juliastats.org/Distributions.jl/latest
 $$P(x|n,θ) = \frac{n!}{∏_{r} x_{r}!} ∏_{r} θ_{r}^{x_{r}}$$
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L554-L563" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSPrimitives/distributions.jl#L554-L563" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 

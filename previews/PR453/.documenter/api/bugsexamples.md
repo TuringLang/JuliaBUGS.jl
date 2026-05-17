@@ -57,7 +57,7 @@ A BUGS example: model code in multiple representations, data, inits, and optiona
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSExamples/types.jl#L17-L49" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSExamples/types.jl#L17-L49" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -76,7 +76,7 @@ Reference posterior summaries for a BUGS example, plus provenance metadata.
 `params` is a NamedTuple keyed by parameter name, each value a NamedTuple with at least `mean` and `std` fields (CI runs may also include `ess`, `rhat`). `meta` describes where the numbers came from — typically either `source = "reference"` (literature values) or `source = "ci"` (resampled by the BUGSExamples results workflow).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSExamples/types.jl#L1-L11" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSExamples/types.jl#L1-L11" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -95,7 +95,7 @@ examples() -> NamedTuple
 Return a flat NamedTuple of every available example, keyed by symbol.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSExamples/BUGSExamples.jl#L68-L72" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSExamples/BUGSExamples.jl#L68-L72" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -112,7 +112,7 @@ list([io::IO = stdout])
 Print every available example grouped by volume.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSExamples/BUGSExamples.jl#L75-L79" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSExamples/BUGSExamples.jl#L75-L79" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -136,7 +136,7 @@ model_expr = include(BUGSExamples.path(ex, "model.jl"))  # returns an Expr
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSExamples/types.jl#L71-L83" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSExamples/types.jl#L71-L83" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -153,7 +153,7 @@ load_example(dir::String) -> BUGSExample
 Construct a `BUGSExample` from a directory containing (at minimum) `meta.toml`, `data.json`, `model.bugs`, and `model.jl`. Optional files (`model_fn.jl`, `model.stan`, `model.py`, `reference.json`, `results.json`) are picked up when present.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSExamples/data_loader.jl#L100-L107" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSExamples/data_loader.jl#L100-L107" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -187,7 +187,7 @@ model = compile(model_def, ex.data, ex.inits)
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/BUGSExamples/BUGSExamples.jl#L1-L24" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/BUGSExamples/BUGSExamples.jl#L1-L24" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 

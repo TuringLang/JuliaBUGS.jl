@@ -29,7 +29,7 @@ conversion process. If `true`, periods in variable names or other relevant place
 If `true`, the parse will not enforce the requirement that the program body to be enclosed in &quot;model { ... }&quot;. 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/parser/Parser.jl#L11-L26" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/parser/Parser.jl#L11-L26" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -59,7 +59,7 @@ For the string input variant, the following optional arguments are available:
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/parser/bugs_macro.jl#L163-L177" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/parser/bugs_macro.jl#L163-L177" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -86,7 +86,7 @@ julia> concretize_colon_indexing(:(f(x[1, :])), (x = [1 2 3 4; 5 6 7 8; 9 10 11 
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/parser/utils.jl#L476-L486" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/parser/utils.jl#L476-L486" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -112,7 +112,7 @@ julia> concretize_eval_env((a = Union{Missing,Int}[1, 2, 3],))
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/parser/utils.jl#L58-L71" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/parser/utils.jl#L58-L71" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -133,7 +133,7 @@ Arrays given by data will only be copied if they contain `missing` values. This 
 Variables not given by data will be assigned `missing` values.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/parser/utils.jl#L16-L25" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/parser/utils.jl#L16-L25" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -181,7 +181,7 @@ true
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/parser/utils.jl#L88-L122" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/parser/utils.jl#L88-L122" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -234,7 +234,7 @@ extract_variable_names_and_numdims(
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/parser/utils.jl#L195-L234" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/parser/utils.jl#L195-L234" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -277,7 +277,7 @@ julia> extract_variable_names_and_numdims(:(x[1, :]), ())
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/parser/utils.jl#L131-L159" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/parser/utils.jl#L131-L159" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -330,7 +330,7 @@ extract_variables_assigned_to(
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/parser/utils.jl#L388-L428" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/parser/utils.jl#L388-L428" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -383,7 +383,7 @@ extract_variables_in_bounds_and_lhs_indices(
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/parser/utils.jl#L286-L324" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/parser/utils.jl#L286-L324" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -414,7 +414,7 @@ julia> simple_arithmetic_eval((a = 1, b = [1, 2]), :(a + b[1]))
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/parser/utils.jl#L502-L519" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/parser/utils.jl#L502-L519" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -445,7 +445,7 @@ Implements `LogDensityProblems.logdensity` and `LogDensityProblems.logdensity_an
 See also [`compile`](/api/api#JuliaBUGS.compile).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/logdensityproblems.jl#L65-L78" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/logdensityproblems.jl#L65-L78" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -480,7 +480,7 @@ grad_model = BUGSModelWithGradient(model, AutoReverseDiff(compile=true))
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/logdensityproblems.jl#L85-L107" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/logdensityproblems.jl#L85-L107" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -497,7 +497,7 @@ GraphEvaluationData(g::BUGSGraph, [sorted_nodes], [active_parameters])
 Create a `GraphEvaluationData` from a `BUGSGraph`, extracting and caching node information for efficient evaluation.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/bugsmodel.jl#L54-L59" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/bugsmodel.jl#L54-L59" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -528,7 +528,7 @@ Caches node information from the model graph to optimize evaluation performance.
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/bugsmodel.jl#L31-L44" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/bugsmodel.jl#L31-L44" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -559,7 +559,7 @@ Caches precomputed data for automatic marginalization of discrete finite variabl
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/bugsmodel.jl#L6-L21" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/bugsmodel.jl#L6-L21" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -592,7 +592,7 @@ Evaluate model with the given parameter values.
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/abstractppl.jl#L732-L746" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/abstractppl.jl#L732-L746" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -623,7 +623,7 @@ Evaluate model using current values in the evaluation environment.
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/abstractppl.jl#L711-L724" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/abstractppl.jl#L711-L724" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -658,7 +658,7 @@ Evaluate model using ancestral sampling from the given RNG.
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/abstractppl.jl#L678-L693" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/abstractppl.jl#L678-L693" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -675,7 +675,7 @@ _classify_node_type(dist)
 Classify a distribution into node types for marginalization. Returns one of: :deterministic, :discrete_finite, :discrete_infinite, :continuous
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/evaluation.jl#L292-L297" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/evaluation.jl#L292-L297" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -694,7 +694,7 @@ Compute a topologically-valid evaluation order that reduces the frontier size by
 The heuristic iterates over observed nodes and places each node&#39;s discrete finite parents right before it. This keeps discrete variables in the frontier briefly. For models with shared discrete variables, more sophisticated ordering (e.g., min-degree) could further reduce frontier size, but this is NP-hard in general.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/evaluation.jl#L437-L447" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/evaluation.jl#L437-L447" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -711,7 +711,7 @@ _compute_node_types(model::BUGSModel)
 Compute node type classification for all nodes in the model. Returns a vector of symbols: `:deterministic`, `:discrete_finite`, `:discrete_infinite`, or `:continuous`.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/evaluation.jl#L308-L313" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/evaluation.jl#L308-L313" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -728,7 +728,7 @@ _enumerate_discrete_values(dist)
 Return the finite support for a discrete univariate distribution. Relies on Distributions.support to provide an iterable, finite range.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/evaluation.jl#L282-L287" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/evaluation.jl#L282-L287" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -745,7 +745,7 @@ _get_stochastic_parents_indices(model::BUGSModel)
 Get the stochastic parents (through deterministic nodes) for each node in the model. Returns a vector of index vectors aligned with sorted_nodes.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/evaluation.jl#L334-L339" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/evaluation.jl#L334-L339" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -762,7 +762,7 @@ _is_discrete_finite_distribution(dist)
 Check if a distribution is discrete with finite support.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/evaluation.jl#L261-L265" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/evaluation.jl#L261-L265" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -779,7 +779,7 @@ _logdensity_for_gradient(x, model)
 Target function for gradient computation via DifferentiationInterface. The parameter vector `x` comes first (the argument to differentiate w.r.t.), and the model is passed as a constant context (not differentiated).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/logdensityproblems.jl#L145-L151" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/logdensityproblems.jl#L145-L151" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -799,7 +799,7 @@ Recursively compute log probability by marginalizing over discrete finite variab
 Returns `(log_prior, log_lik)` where the total log joint is `log_prior + log_lik`. This separation allows for likelihood tempering.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/evaluation.jl#L491-L499" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/evaluation.jl#L491-L499" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -822,7 +822,7 @@ For each node, the frontier includes discrete finite variables that:
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/evaluation.jl#L365-L373" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/evaluation.jl#L365-L373" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -858,7 +858,7 @@ Evaluate model using current values in the evaluation environment.
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/evaluation.jl#L110-L128" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/evaluation.jl#L110-L128" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -877,7 +877,7 @@ Evaluate model with marginalization over discrete finite variables.
 This is the main entry point for auto-marginalization. Discrete finite variables are summed out, while continuous parameters are read from `flattened_values` (which must be in transformed/unconstrained space).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/evaluation.jl#L650-L658" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/evaluation.jl#L650-L658" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -918,7 +918,7 @@ Evaluate model using ancestral sampling from the given RNG.
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/evaluation.jl#L29-L50" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/evaluation.jl#L29-L50" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -956,7 +956,7 @@ Evaluate model with the given parameter values.
   
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/evaluation.jl#L180-L199" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/evaluation.jl#L180-L199" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -1001,7 +1001,7 @@ mutable_syms = get_mutable_symbols(model.graph_evaluation_data)
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/utils.jl#L82-L108" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/utils.jl#L82-L108" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -1053,7 +1053,7 @@ params_dict = getparams(Dict, model, custom_env)
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/bugsmodel.jl#L395-L428" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/bugsmodel.jl#L395-L428" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -1070,7 +1070,7 @@ initialize!(model::BUGSModel, initial_params::AbstractVector)
 Initialize the model with a vector of initial values, the values can be in transformed space if `model.transformed` is set to true.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/bugsmodel.jl#L385-L389" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/bugsmodel.jl#L385-L389" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -1087,7 +1087,7 @@ initialize!(model::BUGSModel, initial_params::NamedTuple{<:Any, <:Tuple{Vararg{A
 Initialize the model with a NamedTuple of initial values, the values are expected to be in the original space.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/bugsmodel.jl#L345-L349" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/bugsmodel.jl#L345-L349" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -1104,7 +1104,7 @@ parameters(model::BUGSModel)
 Return a vector of `VarName` containing the names of the model parameters (unobserved stochastic variables).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/bugsmodel.jl#L328-L332" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/bugsmodel.jl#L328-L332" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -1123,7 +1123,7 @@ Reconstruct `val` so that it&#39;s compatible with `dist`.
 If `f` is also provided, the reconstruct value will be such that `f(reconstruct_val)` is compatible with `dist`.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/utils.jl#L24-L31" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/utils.jl#L24-L31" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -1142,7 +1142,7 @@ Generate and attach a compiled log-density function for the model&#39;s current 
 Does not change the evaluation mode. When `force=false`, preserves an existing compiled function; when `force=true`, overwrites it if a new one can be generated. Returns the updated model (or the original if generation is not possible).
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/abstractppl.jl#L648-L655" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/abstractppl.jl#L648-L655" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -1184,7 +1184,7 @@ model_with_generated_eval = set_evaluation_mode(model, UseGeneratedLogDensityFun
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/bugsmodel.jl#L532-L558" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/bugsmodel.jl#L532-L558" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -1203,7 +1203,7 @@ Update values of observed stochastic variables without reconditioning or regener
 Validates that each variable exists in the model, is stochastic, and is currently observed. Updates the evaluation environment in place and returns the updated model.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/abstractppl.jl#L622-L629" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/abstractppl.jl#L622-L629" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -1222,7 +1222,7 @@ The `BUGSModel` contains information for evaluation in both transformed and untr
 This function enables switching the &quot;mode&quot; of the model.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/bugsmodel.jl#L512-L519" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/bugsmodel.jl#L512-L519" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -1265,7 +1265,7 @@ new_env = smart_copy_evaluation_env(env, mutable_syms)
 
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/utils.jl#L131-L155" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/utils.jl#L131-L155" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -1282,7 +1282,7 @@ variables(model::BUGSModel)
 Return a vector of `VarName` containing the names of all the variables in the model.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/bugsmodel.jl#L335-L339" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/bugsmodel.jl#L335-L339" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
@@ -1299,7 +1299,7 @@ LogDensityProblems.logdensity_and_gradient(model::BUGSModelWithGradient, x)
 Compute log density and its gradient using DifferentiationInterface.
 
 
-<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/7cfd2fd7541439ba8715c4f6d7a85c1ad1746c6c/JuliaBUGS/src/model/logdensityproblems.jl#L156-L160" target="_blank" rel="noreferrer">source</a></Badge>
+<Badge type="info" class="source-link" text="source"><a href="https://github.com/TuringLang/JuliaBUGS.jl/blob/1ba128513bf6b03be2a53a614e2cdee2eb213876/JuliaBUGS/src/model/logdensityproblems.jl#L156-L160" target="_blank" rel="noreferrer">source</a></Badge>
 
 </details>
 
