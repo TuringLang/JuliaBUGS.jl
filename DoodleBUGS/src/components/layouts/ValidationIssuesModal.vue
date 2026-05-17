@@ -98,7 +98,7 @@ const copyLogs = () => {
       </div>
     </template>
     <template #footer>
-      <div class="w-full flex justify-end">
+      <div class="db-w-full db-flex justify-end">
         <BaseButton @click="copyLogs" type="secondary" v-if="errorsWithNodeNames.length > 0">
           <i v-if="copySuccess" class="fas fa-check"></i>
           <span v-else>Copy Logs</span>

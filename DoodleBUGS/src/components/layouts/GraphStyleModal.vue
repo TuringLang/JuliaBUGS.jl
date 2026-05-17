@@ -211,7 +211,7 @@ const resetStyleSettings = () => {
                 max="1"
                 step="0.1"
                 v-model.number="tempNodeStyle.backgroundOpacity"
-                class="w-full"
+                class="db-w-full"
               />
             </div>
             <div class="db-grid-2" v-if="editingNodeType !== 'plate'">
@@ -310,7 +310,7 @@ const resetStyleSettings = () => {
                   max="1"
                   step="0.1"
                   v-model.number="tempEdgeStyle.labelBackgroundOpacity"
-                  class="w-full h-8"
+                  class="db-w-full h-8"
                 />
               </div>
             </div>

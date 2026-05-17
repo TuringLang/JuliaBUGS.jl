@@ -27,7 +27,7 @@ const onContentClick = (event: MouseEvent) => {
       <slot name="trigger"></slot>
     </div>
     <Popover ref="op">
-      <div class="flex flex-col min-w-[150px] py-1" @click="onContentClick">
+      <div class="db-flex db-flex-col min-w-[150px] py-1" @click="onContentClick">
         <slot name="content"></slot>
       </div>
     </Popover>

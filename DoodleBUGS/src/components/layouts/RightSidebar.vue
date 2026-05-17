@@ -83,7 +83,7 @@ const handleHeaderClick = () => {
     >
       <span class="db-sidebar-title">Inspector</span>
 
-      <div class="flex items-center ml-auto" @click.stop @mousedown.stop @touchstart.stop>
+      <div class="db-flex db-items-center ml-auto" @click.stop @mousedown.stop @touchstart.stop>
         <div
           v-tooltip.top="{
             value: isModelValid ? 'Model is valid' : 'Model has validation issues',
@@ -147,7 +147,7 @@ const handleHeaderClick = () => {
 
       <div
         v-tooltip.top="{ value: 'Collapse Sidebar', showDelay: 0, hideDelay: 0 }"
-        class="pointer-events-auto flex items-center ml-2"
+        class="pointer-events-auto db-flex db-items-center ml-2"
         @mousedown.stop
         @touchstart.stop
         @click.stop="$emit('toggle-right-sidebar')"
@@ -206,7 +206,7 @@ const handleHeaderClick = () => {
       />
 
       <div v-show="activeRightTab === 'export'" class="db-export-panel">
-        <div class="db-menu-panel flex-col gap-3">
+        <div class="db-menu-panel db-flex-col db-gap-3">
           <h5 class="db-section-title">Image Export</h5>
           <BaseButton type="ghost" class="db-menu-btn" @click="$emit('open-export-modal', 'png')"
             ><i class="fas fa-image"></i> PNG Image</BaseButton
