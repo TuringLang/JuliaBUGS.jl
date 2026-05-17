@@ -15,4 +15,6 @@ initialize!
 of
 @of
 of(::JuliaBUGS.BUGSModel)
+JuliaBUGS.OfType
+JuliaBUGS.OfNamedTuple
 ```

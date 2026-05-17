@@ -2068,7 +2068,22 @@ function format_expr_arg(arg)
 end
 
 # Show implementations
-function Base.show(io::IO, ::Type{OfArray{T,N,D}}) where {T,N,D}
+function Base.show(io::IO, OA::Type{<:OfArray})
+    # Julia 1.12's static-parameter matching does not bind a where-clause
+    # `{T,N,D}` when this method is invoked with the bare `OfArray` UnionAll
+    # (which happens during e.g. Documenter's introspection). Match on
+    # `Type{<:OfArray}` and pull parameters off `OA.parameters` so we can bail
+    # out cleanly on UnionAlls.
+    if OA isa UnionAll || OA === OfArray || length(OA.parameters) != 3
+        return print(io, "OfArray")
+    end
+    T = OA.parameters[1]
+    N = OA.parameters[2]
+    D = OA.parameters[3]
+    if T isa TypeVar || N isa TypeVar || D isa TypeVar
+        return print(io, "OfArray")
+    end
+
     # Check if we're in a context where we can highlight symbolic references
     use_color = get(io, :color, false)
     constant_fields = get(io, :constant_fields, Symbol[])
@@ -2081,7 +2096,7 @@ function Base.show(io::IO, ::Type{OfArray{T,N,D}}) where {T,N,D}
             print(io, T, ", ")
         end
         # D is a Tuple type, so we need to access its parameters
-        dims_list = get_dims(OfArray{T,N,D})
+        dims_list = get_dims(OA)
         for (i, d) in enumerate(dims_list)
             if d isa Symbol && d in constant_fields
                 # This dimension references a constant field - highlight it
@@ -2120,7 +2135,7 @@ function Base.show(io::IO, ::Type{OfArray{T,N,D}}) where {T,N,D}
 
     # Non-color version
     # D is a Tuple type, so we need to access its parameters
-    dims_list = get_dims(OfArray{T,N,D})
+    dims_list = get_dims(OA)
     dims_str = join(
         map(dims_list) do d
             if d isa Type && d <: SymbolicExpr

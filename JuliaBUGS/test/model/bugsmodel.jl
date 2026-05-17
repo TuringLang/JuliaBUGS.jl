@@ -12,8 +12,9 @@ using JuliaBUGS.Model:
 
 @testset "Compile Vol.1 BUGS Examples" begin
     for model_name in keys(JuliaBUGS.BUGSExamples.VOLUME_1)
-        (; model_def, data, inits) = JuliaBUGS.BUGSExamples.VOLUME_1[model_name]
-        model = compile(model_def, data, inits)
+        ex = JuliaBUGS.BUGSExamples.VOLUME_1[model_name]
+        model_def = include(JuliaBUGS.BUGSExamples.path(ex, "model.jl"))
+        model = compile(model_def, ex.data, ex.inits)
     end
 end
 

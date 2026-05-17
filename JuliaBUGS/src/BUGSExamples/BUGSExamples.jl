@@ -1,101 +1,93 @@
+"""
+    JuliaBUGS.BUGSExamples
+
+Classical BUGS example models with multi-language representations: original
+BUGS syntax (`model.bugs`), JuliaBUGS `@bugs` macro form (`model.jl`),
+JuliaBUGS `@model` macro form (`model_fn.jl`), and optionally Stan
+(`model.stan`) and NumPyro (`model.py`).
+
+Examples live under `Volume_<n>/<name>/`. Each model directory holds the
+syntax variants as plain files, plus `meta.toml`, `data.json`, and
+optionally `reference.json` (literature values) and `results.json` (CI-sampled).
+
+```julia
+using JuliaBUGS
+ex = JuliaBUGS.BUGSExamples.rats
+
+# Option 1: parse the raw BUGS string
+model = compile(@bugs(ex.original_syntax_program), ex.data, ex.inits)
+
+# Option 2: include the Julia model file (returns an Expr)
+model_def = include(JuliaBUGS.BUGSExamples.path(ex, "model.jl"))
+model = compile(model_def, ex.data, ex.inits)
+```
+"""
 module BUGSExamples
 
-using JuliaBUGS: JuliaBUGS, @bugs
-using JSON
+include("types.jl")
+include("data_loader.jl")
 
-struct Example{DNT <: NamedTuple, INT <: NamedTuple, INT2 <: NamedTuple, RNT}
-    name::String
-    model_def::Expr
-    original_syntax_program::String
-    data::DNT
-    inits::INT
-    inits_alternative::INT2
-    reference_results::RNT
+export BUGSExample, ReferenceResults
+
+const EXAMPLES_DIR = joinpath(@__DIR__)
+
+# Discover every example dir under `Volume_<n>/<name>/` that has a meta.toml.
+function _discover_examples()
+    dirs = String[]
+    for vol_entry in readdir(EXAMPLES_DIR; join=true)
+        isdir(vol_entry) || continue
+        startswith(basename(vol_entry), "Volume_") || continue
+        for ex_entry in readdir(vol_entry; join=true)
+            isdir(ex_entry) &&
+                isfile(joinpath(ex_entry, "meta.toml")) &&
+                push!(dirs, ex_entry)
+        end
+    end
+    return dirs
 end
 
-include("./Volume_1/01_Rats.jl")
-include("./Volume_1/02_Pumps.jl")
-include("./Volume_1/03_Dogs.jl")
-include("./Volume_1/04_Seeds.jl")
-include("./Volume_1/05_Surgical.jl")
-include("./Volume_1/06_Magnesium.jl")
-include("./Volume_1/07_Salm.jl")
-include("./Volume_1/08_Equiv.jl")
-include("./Volume_1/09_Dyes.jl")
-include("./Volume_1/10_Stacks.jl")
-include("./Volume_1/11_Epil.jl")
-include("./Volume_1/12_Blocker.jl")
-include("./Volume_1/13_Oxford.jl")
-include("./Volume_1/14_LSAT.jl")
-include("./Volume_1/15_Bones.jl")
-#include("./Volume_1/16_Inhalers.jl")
-include("./Volume_1/17_Mice.jl")
-include("./Volume_1/18_Kidney.jl")
-include("./Volume_1/19_Leuk.jl")
-include("./Volume_1/20_LeukFr.jl")
-
-vol_1 = (
-    rats = rats,
-    pumps = pumps,
-    dogs = dogs,
-    seeds = seeds,
-    surgical_simple = surgical_simple,
-    surgical_realistic = surgical_realistic,
-    magnesium = magnesium,
-    salm = salm,
-    equiv = equiv,
-    dyes = dyes,
-    stacks = stacks,
-    epil = epil,
-    blockers = blockers,
-    oxford = oxford,
-    lsat = lsat,
-    bones = bones,
-    mice = mice,
-    kidney = kidney,
-    leuk = leuk,
-    leukfr = leukfr
-)
-
-include("Volume_2/01_Dugongs.jl")
-include("Volume_2/02_Orange_trees.jl")
-include("Volume_2/03_Multivariate_Orange_trees.jl")
-include("Volume_2/04_Biopsies.jl")
-include("Volume_2/05_Eyes.jl")
-include("Volume_2/06_Hearts.jl")
-include("Volume_2/07_Air.jl")
-include("Volume_2/08_Cervix.jl")
-include("Volume_2/09_Jaws.jl")
-include("Volume_2/10_BiRats.jl")
-include("Volume_2/11_Schools.jl")
-include("Volume_2/12_Ice.jl")
-include("Volume_2/13_Beetles.jl")
-include("Volume_2/14_Alligators.jl")
-include("Volume_2/15_Endo.jl")
-# include("Volume_2/16_Stagnant.jl")
-# include("Volume_2/17_Asia.jl")
-# include("Volume_2/18_Pigs.jl")
-# include("Volume_2/19_Simulating_data.jl")
-
-vol_2 = (
-    dugongs = dugongs,
-    orange_trees = orange_trees,
-    orange_trees_multivariate = orange_trees_multivariate,
-    biopsies = biopsies,
-    eyes = eyes,
-    hearts = hearts,
-    air = air,
-    cervix = cervix,
-    jaws = jaws,
-    birats = birats,
-    schools = schools,
-    # ice = ice,
-    beetles = beetles,
-    alligators = alligators,
-    endo = endo
-)
-
-const VOLUME_1 = vol_1
-const VOLUME_2 = vol_2
-
+const _ALL_EXAMPLES = let
+    loaded = [(basename(dir), load_example(dir)) for dir in _discover_examples()]
+    # Sort by (volume, order) so docs and `list()` show examples in WinBUGS sequence.
+    sort!(loaded; by=((_, ex),) -> (ex.volume, ex.order))
+    NamedTuple(Symbol(name) => ex for (name, ex) in loaded)
 end
+
+# Bind each example as a top-level constant: JuliaBUGS.BUGSExamples.rats, …
+for (name, ex) in pairs(_ALL_EXAMPLES)
+    @eval const $(name) = $(ex)
+end
+
+const VOLUME_1 = NamedTuple(k => v for (k, v) in pairs(_ALL_EXAMPLES) if v.volume == 1)
+const VOLUME_2 = NamedTuple(k => v for (k, v) in pairs(_ALL_EXAMPLES) if v.volume == 2)
+const VOLUME_3 = NamedTuple(k => v for (k, v) in pairs(_ALL_EXAMPLES) if v.volume == 3)
+const VOLUME_4 = NamedTuple(k => v for (k, v) in pairs(_ALL_EXAMPLES) if v.volume == 4)
+
+export VOLUME_1, VOLUME_2, VOLUME_3, VOLUME_4
+
+"""
+    examples() -> NamedTuple
+
+Return a flat NamedTuple of every available example, keyed by symbol.
+"""
+examples() = _ALL_EXAMPLES
+
+"""
+    list([io::IO = stdout])
+
+Print every available example grouped by volume.
+"""
+function list(io::IO=stdout)
+    println(io, "JuliaBUGS.BUGSExamples — Available Models")
+    for (vol, vol_examples) in ((1, VOLUME_1), (2, VOLUME_2), (3, VOLUME_3), (4, VOLUME_4))
+        isempty(vol_examples) && continue
+        println(io, "\nVolume $vol ($(length(vol_examples)) examples):")
+        for (name, ex) in pairs(vol_examples)
+            println(io, "  :$name — $(ex.name)")
+        end
+    end
+end
+
+export list, examples, path
+
+end # module BUGSExamples

@@ -1,25 +1,58 @@
-# JuliaBUGS.jl
+```@raw html
+---
+layout: home
 
-JuliaBUGS is a graph-based probabilistic programming framework inspired by the BUGS language.
+hero:
+  name: "JuliaBUGS.jl"
+  text: "Graph-based Probabilistic Programming"
+  tagline: A pure-Julia implementation of the BUGS language with Hamiltonian Monte Carlo, automatic differentiation, and a curated collection of classical examples.
+  image:
+    src: https://turinglang.org/assets/logo/turing-logo.svg
+    alt: TuringLang
+  actions:
+    - theme: brand
+      text: Get Started
+      link: /example
+    - theme: alt
+      text: Browse Examples
+      link: /examples/rats
+    - theme: alt
+      text: View on GitHub
+      link: https://github.com/TuringLang/JuliaBUGS.jl
 
-Key features of JuliaBUGS include:
+features:
+  - title: Compatible with BUGS
+    details: Run existing BUGS programs without modification, alongside the modern @bugs and @model macros for Julia-native model definitions.
+  - title: Programmable Inference
+    details: HMC via AdvancedHMC, independent MH, Gibbs, and full integration with the SciML and AbstractMCMC ecosystem.
+  - title: Classical Examples Included
+    details: BUGSExamples ships with the Volume 1 corpus — model, data, inits, and reference posterior summaries — usable for benchmarks and tutorials.
+---
+```
 
-- Compatibility with existing BUGS programs
-- Extensibility through user-defined functions and distributions; programmable inference
-- Seamless integration with Julia's high-performance numerical and scientific computing libraries
-- Automatic differentiation and sampling using Hamiltonian Monte Carlo
+```@meta
+CurrentModule = JuliaBUGS
+```
 
-It's important to note that while BUGS traditionally refers to either the software system, the language, or the inference algorithm, JuliaBUGS is a pure Julia implementation of the BUGS language, not a wrapper for the BUGS system.
+## What is JuliaBUGS?
 
-## Understanding the BUGS Language
+JuliaBUGS is a graph-based probabilistic programming framework inspired by the BUGS language. It compiles BUGS or `@bugs`/`@model` Julia syntax into a typed graph model that supports HMC and other samplers via [AbstractMCMC.jl](https://github.com/TuringLang/AbstractMCMC.jl). BUGS traditionally refers to the software system, the language, or the inference algorithm; JuliaBUGS is a pure Julia implementation of the language — not a wrapper around the original system.
 
-The BUGS (Bayesian inference Using Gibbs Sampling) language is designed for specifying directed graphical models in probabilistic programming. Unlike imperative probabilistic programming languages such as Turing.jl or Pyro, BUGS focuses on declarative relationships between nodes in a graph.
+## Key features
 
-This graph-based approach offers several advantages:
+- Compatibility with existing BUGS programs (parse and compile from the original syntax).
+- Three model-definition surfaces: the `@bugs(str)` parser, the `@bugs begin … end` macro, and `@model function … end` with full Julia scope.
+- Automatic differentiation through DifferentiationInterface (ForwardDiff / ReverseDiff / Enzyme / Mooncake).
+- Hamiltonian Monte Carlo via AdvancedHMC, independent MH, Gibbs sampling, and parallel/distributed chain support.
+- A curated collection of classical examples (`JuliaBUGS.BUGSExamples`) with multi-language source files (BUGS, `@bugs`, `@model`, Stan-pending), reference posterior summaries, and interactive DoodleBUGS graphs in the docs.
 
-1. Clarity: It provides a clear understanding of dependencies and relationships within complex systems.
-2. Transparency: Users can explicitly state conditional dependencies between variables, making model structure and assumptions more transparent.
-3. Ease of development and interpretation: The graphical representation aids in both model development and result interpretation.
-4. Efficient inference: The graph structure facilitates the application of advanced inference algorithms, enabling more efficient computation by leveraging the model's structure.
+## Understanding the BUGS language
 
-By adopting this approach, JuliaBUGS aims to combine the clarity and power of graphical models with the performance and flexibility of the Julia programming language.
+The BUGS (Bayesian inference Using Gibbs Sampling) language is designed for specifying directed graphical models. Unlike imperative probabilistic programming languages such as Turing.jl or Pyro, BUGS focuses on declarative relationships between nodes in a graph. This graph-based approach offers several advantages:
+
+1. **Clarity**: dependencies and relationships are visible in the model text itself.
+2. **Transparency**: conditional dependencies between variables are explicit, making model structure and assumptions auditable.
+3. **Ease of development**: graphical representations aid both model development and result interpretation.
+4. **Efficient inference**: the graph structure exposes conditional independencies that downstream samplers can exploit.
+
+JuliaBUGS combines the clarity and power of graphical models with the performance and flexibility of the Julia programming language.

@@ -74,7 +74,7 @@ Implements `LogDensityProblems.logdensity` and `LogDensityProblems.logdensity_an
 - `prep::P`: Prepared gradient from DifferentiationInterface
 - `base_model::M`: The underlying `BUGSModel`
 
-See also [`compile`](@ref).
+See also [`compile`](@ref JuliaBUGS.compile).
 """
 struct BUGSModelWithGradient{AD<:ADTypes.AbstractADType,P,M<:BUGSModel}
     adtype::AD

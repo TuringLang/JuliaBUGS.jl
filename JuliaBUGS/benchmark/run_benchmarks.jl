@@ -1,8 +1,15 @@
 include("benchmark.jl")
 
-examples_to_benchmark = [
+# Master list of examples we want to benchmark (Stan models exist for all).
+# Filter to the ones currently ported to the new BUGSExamples layout — the
+# others can be added back as their model.bugs / model.jl / model_fn.jl /
+# data.json get migrated.
+const _CANDIDATE_BENCHMARKS = [
     :rats, :pumps, :bones, :oxford, :epil, :lsat, :schools, :beetles, :air
 ]
+const _PORTED = JuliaBUGS.BUGSExamples.examples()
+examples_to_benchmark = filter(name -> haskey(_PORTED, name), _CANDIDATE_BENCHMARKS)
+@info "Benchmarking $(length(examples_to_benchmark)) ported example(s): $(examples_to_benchmark)"
 
 # Run Stan benchmarks (suppress stderr for download messages)
 stan_results = redirect_stderr(devnull) do

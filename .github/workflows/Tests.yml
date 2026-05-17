@@ -34,6 +34,7 @@ jobs:
         test_group:
           - "elementary"
           - "frontend"
+          - "bugsexamples"
           - "graphs"
           - "compilation_model"
           - "compilation_source_gen"

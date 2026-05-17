@@ -10,7 +10,7 @@ end
 """
     icloglog(x)
 
-Inverse complementary log-log function of ``x``. Alias for [`cexpexp(x)`](@ref).
+Inverse complementary log-log function of ``x``. Alias for `cexpexp(x)`.
 """
 function icloglog(x)
     return cexpexp(x)
@@ -19,7 +19,7 @@ end
 """
     ilogit(x)
 
-Inverse logit function of ``x``. Alias for [`logistic(x)`](@ref).
+Inverse logit function of ``x``. Alias for `logistic(x)`.
 """
 function ilogit(x)
     return logistic(x)
@@ -154,7 +154,7 @@ end
 """
     arcsin(x)
 
-See [`asin`](@ref Base.Math.asin).
+See [`asin`](https://docs.julialang.org/en/v1/base/math/#Base.asin-Tuple{Number}).
 """
 function arcsin(x)
     return asin(x)
@@ -163,7 +163,7 @@ end
 """
     arcsinh(x)
 
-See [`asinh`](@ref Base.Math.asinh).
+See [`asinh`](https://docs.julialang.org/en/v1/base/math/#Base.asinh-Tuple{Number}).
 """
 function arcsinh(x)
     return asinh(x)
@@ -172,7 +172,7 @@ end
 """
     arccos(x)
 
-See [`acos`](@ref Base.Math.acos).
+See [`acos`](https://docs.julialang.org/en/v1/base/math/#Base.acos-Tuple{Number}).
 """
 function arccos(x)
     return Base.Math.acos(x)
@@ -181,7 +181,7 @@ end
 """
     arccosh(x)
 
-See [`acosh`](@ref Base.Math.acosh).
+See [`acosh`](https://docs.julialang.org/en/v1/base/math/#Base.acosh-Tuple{Number}).
 """
 function arccosh(x)
     return acosh(x)
@@ -190,7 +190,7 @@ end
 """
     arctan(x)
 
-See [`atan`](@ref Base.Math.atan).
+See [`atan`](https://docs.julialang.org/en/v1/base/math/#Base.atan-Tuple{Number}).
 """
 function arctan(x)
     return atan(x)
@@ -199,7 +199,7 @@ end
 """
     arctanh(x)
 
-See [`atanh`](@ref Base.Math.atanh).
+See [`atanh`](https://docs.julialang.org/en/v1/base/math/#Base.atanh-Tuple{Number}).
 """
 function arctanh(x)
     return atanh(x)

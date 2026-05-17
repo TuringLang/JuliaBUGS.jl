@@ -67,8 +67,9 @@ const juliabugs_all_example = (
 )
 
 function _create_JuliaBUGS_model(model_name::Symbol)
-    (; model_def, data, inits) = getfield(JuliaBUGS.BUGSExamples, model_name)
-    return compile(model_def, data, inits)
+    ex = getfield(JuliaBUGS.BUGSExamples, model_name)
+    model_def = include(JuliaBUGS.BUGSExamples.path(ex, "model.jl"))
+    return compile(model_def, ex.data, ex.inits)
 end
 
 # ! writing a _function_ to benchmark all models won't work because of world-age error

@@ -1,0 +1,13 @@
+name = "Surgical (simple): institutional ranking with independent rates"
+volume = 1
+order = 5
+doodlebugs_id = "surgical"
+tags = ["binomial", "ranking", "fixed-effects"]
+citations = []
+
+description = """
+Mortality rates following cardiac surgery in 12 hospitals, modelled with
+independent Beta(1, 1) priors on each hospital's failure rate. This is the
+"simplistic" model in BUGS Volume 1; the realistic counterpart pools
+information across hospitals via a random-effects logistic regression.
+"""

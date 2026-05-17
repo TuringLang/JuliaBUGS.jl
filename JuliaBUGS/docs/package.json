@@ -1,0 +1,23 @@
+{
+  "name": "juliabugs-docs",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "docs:dev": "vitepress dev build/.documenter",
+    "docs:build": "vitepress build build/.documenter",
+    "docs:preview": "vitepress preview build/.documenter"
+  },
+  "dependencies": {
+    "@mdit/plugin-mathjax": "^0.26.1",
+    "@mdit/plugin-tex": "^0.24.1",
+    "@nolebase/vitepress-plugin-enhanced-readabilities": "^2.18.2",
+    "markdown-it": "^14.1.0",
+    "markdown-it-footnote": "^4.0.0",
+    "vitepress": "^1.6.4",
+    "vitepress-plugin-tabs": "^0.9.0"
+  },
+  "devDependencies": {
+    "@types/markdown-it-footnote": "^3.0.4",
+    "@types/node": "^25.3.5"
+  }
+}

@@ -1,0 +1,11 @@
+name = "Pumps: conjugate gamma-Poisson hierarchical model"
+volume = 1
+order = 2
+doodlebugs_id = "pumps"
+tags = ["hierarchical", "poisson", "gamma", "conjugate"]
+citations = ["george1993"]
+
+description = """
+This example concerns the number of failures of pumps in a nuclear power
+plant, and uses a conjugate gamma-Poisson hierarchical model.
+"""

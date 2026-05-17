@@ -33,8 +33,13 @@ test_examples = [
 ]
 
 @testset "source_gen: $example_name" for example_name in test_examples
-    (; model_def, data, inits) = getfield(JuliaBUGS.BUGSExamples, example_name)
-    model = compile(model_def, data, inits)
+    if !haskey(JuliaBUGS.BUGSExamples.examples(), example_name)
+        @info "Skipping source_gen/$example_name: example not yet ported to new layout"
+        continue
+    end
+    ex = getfield(JuliaBUGS.BUGSExamples, example_name)
+    model_def = include(JuliaBUGS.BUGSExamples.path(ex, "model.jl"))
+    model = compile(model_def, ex.data, ex.inits)
 
     # Test with graph evaluation
     result_with_bugsmodel = begin

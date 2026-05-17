@@ -18,7 +18,7 @@ When you need a distribution not included in the standard set, the "zeros trick"
 
 **Implementation:**
 
-```bugs
+```r
 C <- 10000    # Large constant ensuring phi[i] > 0
 
 for (i in 1:N) {
@@ -41,7 +41,7 @@ An alternative approach uses Bernoulli observations fixed at 1:
 
 **Implementation:**
 
-```bugs
+```r
 C <- 10000    # Large constant ensuring p[i] < 1
 
 for (i in 1:N) {
@@ -55,7 +55,7 @@ for (i in 1:N) {
 
 The `dloglik` distribution provides a more direct approach for implementing custom likelihoods:
 
-```bugs
+```r
 dummy[i] <- 0
 dummy[i] ~ dloglik(logLike[i])
 ```
@@ -64,7 +64,7 @@ Where `logLike[i]` is the log-likelihood contribution for observation $i$. This 
 
 **Example: Manual Normal Likelihood Implementation**
 
-```bugs
+```r
 model {
    for (i in 1:7) {
       dummy[i] <- 0
@@ -78,7 +78,7 @@ model {
 
 **Standard equivalent:**
 
-```bugs
+```r
 model {
    for (i in 1:7) {
       x[i] ~ dnorm(mu, prec)
@@ -93,7 +93,7 @@ model {
 
 You can use `dloglik` to implement non-standard prior distributions:
 
-```bugs
+```r
 theta ~ dflat()           # Use flat improper prior as base
 dummy <- 0
 dummy ~ dloglik(logLike)  # Add custom prior via log-likelihood
@@ -102,7 +102,7 @@ logLike <- log(desired_prior_for_theta)
 
 **Example: Manual Normal Prior Implementation**
 
-```bugs
+```r
 model {
    for (i in 1:7) {
       x[i] ~ dnorm(mu, prec)
@@ -118,7 +118,7 @@ model {
 
 **Standard equivalent:**
 
-```bugs
+```r
 model {
    for (i in 1:7) {
       x[i] ~ dnorm(mu, prec)
@@ -137,7 +137,7 @@ model {
 
 To generate predictions for a new observation `x.pred`, specify it as missing and assign an improper uniform prior:
 
-```bugs
+```r
 x.pred ~ dflat()  # Improper uniform prior
 ```
 
@@ -147,7 +147,7 @@ Be aware this approach may increase computational inefficiency and Monte Carlo e
 
 For mixture models with components of varying complexity, a standard mixture distribution approach is often sufficient without requiring reversible jump techniques:
 
-```bugs
+```r
 model {
    mu ~ dunif(-5, 5)
    p ~ dunif(0, 1)
@@ -166,7 +166,7 @@ model {
 
 When loop bounds depend on random quantities (e.g., changepoints), use step functions to conditionally include elements:
 
-```bugs
+```r
 for (i in 1:N) {
    ind[i] <- 1 + step(i - K - 0.01)  # 1 if i ≤ K, 2 if i > K
    y[i] ~ model[ind[i]]              # Select appropriate model
@@ -175,7 +175,7 @@ for (i in 1:N) {
 
 **Example: Computing the Sum of First K Integers**
 
-```bugs
+```r
 model {
    # Define possible values for K
    for (i in 1:10) {

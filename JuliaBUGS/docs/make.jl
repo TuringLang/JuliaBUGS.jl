@@ -1,12 +1,40 @@
 using Documenter
-using DocumenterMermaid
+using DocumenterCitations
+using DocumenterVitepress
 using JuliaBUGS
 using MetaGraphsNext
 using JuliaBUGS.BUGSPrimitives
+using Distributions
+using AbstractPPL
+using Test
+
+include(joinpath(@__DIR__, "build_pages.jl"))
+
+const EXAMPLES_OUT_DIR = joinpath(@__DIR__, "src", "examples")
+examples_section = build_example_pages(EXAMPLES_OUT_DIR)
+
+bib = CitationBibliography(joinpath(@__DIR__, "src", "refs.bib"); style=:numeric)
+
+DocMeta.setdocmeta!(
+    JuliaBUGS,
+    :DocTestSetup,
+    quote
+        using JuliaBUGS, Test, Distributions, AbstractPPL
+        using JuliaBUGS.Model: condition, parameters, decondition
+        JuliaBUGS.@bugs_primitive Normal Gamma
+    end;
+    recursive=true,
+)
 
 makedocs(;
     sitename="JuliaBUGS.jl",
-    warnonly=[:cross_references, :doctest],
+    modules=[JuliaBUGS],
+    authors="The Turing.jl team",
+    warnonly=true,
+    checkdocs=:exports,
+    format=DocumenterVitepress.MarkdownVitepress(;
+        repo="github.com/TuringLang/JuliaBUGS.jl", devbranch="main", devurl="dev"
+    ),
     pages=[
         "Home" => "index.md",
         "Getting Started" => "example.md",
@@ -21,10 +49,12 @@ makedocs(;
             "Auto-Marginalization" => "inference/auto_marginalization.md",
             "Parallel & Distributed Sampling" => "inference/parallel.md",
         ],
+        examples_section,
         "API Reference" => [
             "General" => "api/api.md",
             "Functions" => "api/functions.md",
             "Distributions" => "api/distributions.md",
+            "BUGSExamples" => "api/bugsexamples.md",
         ],
         "Guides" => [
             "Differences from Other BUGS" => "guides/differences.md",
@@ -37,6 +67,13 @@ makedocs(;
             "Parser" => "developers/parser.md",
             "Source Code Generation" => "developers/source_gen.md",
             "Notes on BUGS Implementations" => "developers/BUGS_notes.md",
+            "Internal API" => "developers/internal_api.md",
         ],
+        "Bibliography" => "bibliography.md",
     ],
+    plugins=[bib],
 )
+
+# Deploy is handled by the TuringLang DocsDocumenter action (which runs
+# `DocumenterVitepress.deploydocs(...)` when called with `use-vitepress:
+# 'true'`). No deploydocs call needed here.
