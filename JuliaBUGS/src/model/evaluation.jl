@@ -254,6 +254,39 @@ function evaluate_with_values!!(
     )
 end
 
+"""
+    evaluate_generated_quantities_with_values!!(model, flattened_values; transformed=model.transformed)
+
+Populate the evaluation environment from a parameter vector, evaluating all nodes in the model.
+
+This is intended for chain assembly, where the sampler has already produced the parameter
+values and the full model needs to be re-evaluated (including generated quantities) given
+those parameter values.
+
+# Arguments
+- `model`: The BUGSModel to evaluate
+- `flattened_values`: Parameter vector (in transformed/untransformed space depending on `transformed` and model type)
+- `transformed`: Whether values are in transformed space (default: `model.transformed`).
+  - For regular models: controls parameter transformation via bijectors
+  - For marginalized models: ignored, always assumes transformed (unconstrained) space
+
+# Returns
+- `evaluation_env`: Updated evaluation environment with all nodes computed
+"""
+function evaluate_generated_quantities_with_values!!(
+    model::BUGSModel, flattened_values::AbstractVector; transformed=model.transformed
+)
+    # Use the appropriate evaluation function based on evaluation mode
+    if model.evaluation_mode isa UseAutoMarginalization
+        # Marginalized models: use the marginalization evaluation function
+        evaluation_env, _ = evaluate_with_marginalization_values!!(model, flattened_values)
+    else
+        # Regular models: use standard evaluation with values
+        evaluation_env, _ = evaluate_with_values!!(model, flattened_values; transformed=transformed)
+    end
+    return evaluation_env
+end
+
 # ======================
 # Marginalization Support
 # ======================

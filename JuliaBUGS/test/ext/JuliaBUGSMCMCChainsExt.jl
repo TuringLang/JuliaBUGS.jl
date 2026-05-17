@@ -28,6 +28,7 @@
 
     model = compile(model_def, data, (;))
     ad_model = compile(model_def, data, (;); adtype=AutoReverseDiff(; compile=true))
+    @test model.generated_variables == [@varname(gen_quant)]
     n_samples, n_adapts = 2000, 1000
 
     D = LogDensityProblems.dimension(ad_model)
