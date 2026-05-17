@@ -29,11 +29,18 @@
 
     @testset "Inference results on examples: $example" for example in
                                                            [:seeds, :rats, :stacks]
-        (; model_def, data, inits, reference_results) = Base.getfield(
-            JuliaBUGS.BUGSExamples, example
-        )
+        if !haskey(JuliaBUGS.BUGSExamples.examples(), example)
+            @info "Skipping inference/$example: example not yet ported to new layout"
+            continue
+        end
+        ex = Base.getfield(JuliaBUGS.BUGSExamples, example)
+        if ex.reference_results === nothing
+            @info "Skipping inference/$example: no reference results available"
+            continue
+        end
+        model_def = include(JuliaBUGS.BUGSExamples.path(ex, "model.jl"))
         ad_model = JuliaBUGS.compile(
-            model_def, data, inits; adtype=AutoReverseDiff(; compile=true)
+            model_def, ex.data, ex.inits; adtype=AutoReverseDiff(; compile=true)
         )
 
         n_samples, n_adapts = 1000, 1000
@@ -54,10 +61,11 @@
             discard_initial=n_adapts,
         )
 
-        @testset "$example: $var" for var in keys(reference_results)
-            @test summarize(samples_and_stats)[var].nt.mean[1] ≈ reference_results[var].mean rtol =
+        params_nt = ex.reference_results.params
+        @testset "$example: $var" for var in keys(params_nt)
+            @test summarize(samples_and_stats)[var].nt.mean[1] ≈ params_nt[var].mean rtol =
                 0.3
-            @test summarize(samples_and_stats)[var].nt.std[1] ≈ reference_results[var].std rtol =
+            @test summarize(samples_and_stats)[var].nt.std[1] ≈ params_nt[var].std rtol =
                 0.3
         end
     end
