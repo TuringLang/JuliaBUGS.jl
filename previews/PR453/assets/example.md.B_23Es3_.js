@@ -177,25 +177,25 @@ r_i &amp;\\sim \\text{Binomial}(p_i, n_i)
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Summary Statistics</span></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">  parameters      mean        std      mcse    ess_bulk    ess_tail      rhat  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">      Symbol   Float64    Float64   Float64        Real     Float64   Float64  ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">  parameters      mean       std      mcse    ess_bulk    ess_tail      rhat   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">      Symbol   Float64   Float64   Float64        Real     Float64   Float64   ⋯</span></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">         tau   51.8889   142.2927   18.8261     55.9161     64.8070    1.0032  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">     alpha12   -0.8085     0.4355    0.0148    869.6256    696.8260    1.0038  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">      alpha2    1.3408     0.2745    0.0092    902.8231    834.0994    1.0007  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">      alpha1    0.0707     0.3236    0.0115    832.0422    861.9412    1.0013  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">      alpha0   -0.5472     0.1965    0.0072    791.6972    754.9693    1.0003  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[21]   -0.0494     0.2821    0.0059   2404.8915   1128.5062    1.0004  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[20]    0.2236     0.2620    0.0124    425.2066    900.4227    1.0003  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[19]   -0.0165     0.2534    0.0054   2185.5986   1218.6424    1.0042  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[18]    0.0554     0.2440    0.0068   1366.9237   1267.4523    1.0004  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[17]   -0.2098     0.3063    0.0147    470.2669    931.8674    1.0006  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[16]   -0.1401     0.2883    0.0099   1013.4928   1111.0112    1.0006  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[15]    0.2375     0.2769    0.0144    391.2496   1130.1147    0.9995  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[14]   -0.1388     0.2639    0.0076   1286.8392   1452.5120    0.9998  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[13]   -0.0721     0.2586    0.0058   1925.3718    903.9813    1.0018  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[12]    0.1254     0.2773    0.0088   1407.2767   1260.4812    0.9998  ⋯</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">           ⋮         ⋮          ⋮         ⋮           ⋮           ⋮         ⋮  ⋱</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">         tau   22.6149   38.0436    2.8714    198.5354    260.8254    1.0002   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">     alpha12   -0.8375    0.4397    0.0148    893.7810    813.6786    1.0000   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">      alpha2    1.3496    0.2652    0.0095    784.3866    814.4678    0.9998   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">      alpha1    0.0833    0.3152    0.0102    955.9750    923.7498    1.0000   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">      alpha0   -0.5508    0.1917    0.0069    796.3280    838.0593    1.0004   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[21]   -0.0406    0.2930    0.0057   2539.8232   1444.0988    0.9995   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[20]    0.2406    0.2576    0.0090    871.1405   1186.6076    1.0008   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[19]   -0.0080    0.2550    0.0050   2582.3677   1454.9282    1.0010   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[18]    0.0553    0.2432    0.0057   1948.8753   1058.3485    0.9998   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[17]   -0.2236    0.3124    0.0102   1107.9743    836.1902    0.9995   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[16]   -0.1447    0.3156    0.0085   1690.7487    943.2655    1.0005   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[15]    0.2447    0.2643    0.0087    988.2288   1072.5832    0.9998   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[14]   -0.1576    0.2759    0.0067   1844.1969   1138.6478    0.9997   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[13]   -0.0832    0.2451    0.0068   1293.4084   1057.1169    1.0037   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[12]    0.1206    0.2736    0.0073   1569.8747   1412.0386    0.9997   ⋯</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">           ⋮         ⋮         ⋮         ⋮           ⋮           ⋮         ⋮   ⋱</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">                                                    1 column and 12 rows omitted</span></span>
 <span class="line"></span>
@@ -204,21 +204,21 @@ r_i &amp;\\sim \\text{Binomial}(p_i, n_i)
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">  parameters      2.5%     25.0%     50.0%     75.0%      97.5%</span></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">      Symbol   Float64   Float64   Float64   Float64    Float64</span></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">         tau    2.8735    7.3020   12.8287   27.1812   544.5851</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">     alpha12   -1.6592   -1.1007   -0.7999   -0.5377     0.0738</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">      alpha2    0.7893    1.1709    1.3380    1.5242     1.8770</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">      alpha1   -0.5937   -0.1178    0.0882    0.2818     0.6634</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">      alpha0   -0.9179   -0.6720   -0.5522   -0.4345    -0.1231</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[21]   -0.6594   -0.2036   -0.0339    0.1040     0.5139</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[20]   -0.2072    0.0416    0.1904    0.3703     0.8220</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[19]   -0.5398   -0.1615   -0.0167    0.1226     0.5012</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[18]   -0.3972   -0.0900    0.0424    0.2014     0.5723</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[17]   -0.9146   -0.3813   -0.1658    0.0022     0.3102</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[16]   -0.8276   -0.2963   -0.0998    0.0324     0.3833</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[15]   -0.1990    0.0376    0.2034    0.3904     0.8743</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[14]   -0.7238   -0.2884   -0.1041    0.0214     0.3367</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[13]   -0.6011   -0.2286   -0.0570    0.0786     0.4449</span></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[12]   -0.3526   -0.0482    0.0836    0.2720     0.7515</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">         tau    2.7956    7.2447   12.1216   21.3834   123.9310</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">     alpha12   -1.6869   -1.1167   -0.8315   -0.5462     0.0254</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">      alpha2    0.8293    1.1876    1.3503    1.5259     1.8839</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">      alpha1   -0.5494   -0.1176    0.0895    0.2971     0.6780</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">      alpha0   -0.9275   -0.6787   -0.5511   -0.4301    -0.1735</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[21]   -0.6622   -0.2038   -0.0369    0.1257     0.5806</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[20]   -0.1831    0.0585    0.2132    0.3904     0.8122</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[19]   -0.5166   -0.1688   -0.0139    0.1428     0.5227</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[18]   -0.4168   -0.0968    0.0451    0.1983     0.5800</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[17]   -0.9443   -0.4081   -0.1877   -0.0101     0.2944</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[16]   -0.8529   -0.3208   -0.1084    0.0550     0.4347</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[15]   -0.1953    0.0625    0.2144    0.4014     0.8312</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[14]   -0.7593   -0.3180   -0.1344    0.0195     0.3431</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[13]   -0.5856   -0.2258   -0.0749    0.0661     0.4176</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">       b[12]   -0.3803   -0.0569    0.1010    0.2845     0.7260</span></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">           ⋮         ⋮         ⋮         ⋮         ⋮          ⋮</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">                                                  12 rows omitted</span></span></code></pre></div><p>This is consistent with the result in the <a href="https://chjackson.github.io/openbugsdoc/Examples/Seeds.html" target="_blank" rel="noreferrer">OpenBUGS seeds example</a>.</p><h2 id="Next-Steps" tabindex="-1">Next Steps <a class="header-anchor" href="#Next-Steps" aria-label="Permalink to &quot;Next Steps {#Next-Steps}&quot;">​</a></h2><ul><li><p><a href="./inference/ad">Automatic Differentiation</a> - AD backends and configuration</p></li><li><p><a href="./inference/evaluation_modes">Evaluation Modes</a> - Different log density computation modes</p></li><li><p><a href="./inference/auto_marginalization">Auto-Marginalization</a> - Gradient-based inference with discrete variables</p></li><li><p><a href="./inference/parallel">Parallel Sampling</a> - Multi-threaded and distributed sampling</p></li></ul><h2 id="More-Examples" tabindex="-1">More Examples <a class="header-anchor" href="#More-Examples" aria-label="Permalink to &quot;More Examples {#More-Examples}&quot;">​</a></h2><p>We have transcribed all the examples from the first volume of the BUGS Examples (<a href="https://www.multibugs.org/examples/latest/VolumeI.html" target="_blank" rel="noreferrer">original</a> and <a href="https://github.com/TuringLang/JuliaBUGS.jl/tree/main/JuliaBUGS/src/BUGSExamples/Volume_1" target="_blank" rel="noreferrer">transcribed</a>). All programs and data are included, and can be compiled using the steps described in the tutorial above.</p>`,46))])}const A=l(h,[["render",L]]);export{w as __pageData,A as default};
