@@ -92,6 +92,7 @@ const TEST_GROUPS = OrderedDict{String,Function}(
         include("model/auto_marginalization.jl")
         include("model/frontier_cache_hmm.jl")
         include("model/domain_error_handling.jl")
+        include("ad_compatibility.jl")
     end,
     "inference" => () -> begin
         include("independent_mh.jl")
