@@ -48,6 +48,23 @@
             @test logp_rd ≈ logp_fd
             @test grad_rd ≈ grad_fd rtol = 1e-6
         end
+
+        @testset "Mooncake backends switch to generated log density" begin
+            for adtype in
+                (AutoMooncake(; config=nothing), AutoMooncakeForward(; config=nothing))
+                grad_model = JuliaBUGS.BUGSModelWithGradient(model, adtype)
+                @test grad_model.prep isa AbstractPPL.Evaluators.Prepared
+                @test grad_model.base_model.evaluation_mode isa
+                    JuliaBUGS.UseGeneratedLogDensityFunction
+
+                x_generated = JuliaBUGS.getparams(grad_model.base_model)
+                logp, grad = LogDensityProblems.logdensity_and_gradient(
+                    grad_model, x_generated
+                )
+                @test isfinite(logp)
+                @test all(isfinite, grad)
+            end
+        end
     end
 
     @testset "UseGeneratedLogDensityFunction mode" begin
@@ -97,6 +114,19 @@
             _, grad2 = LogDensityProblems.logdensity_and_gradient(grad_model, x .+ 0.1)
             @test grad == grad_saved
             @test grad2 != grad_saved
+        end
+
+        @testset "AutoMooncakeForward - should work without warning" begin
+            grad_model = JuliaBUGS.BUGSModelWithGradient(
+                model, AutoMooncakeForward(; config=nothing)
+            )
+            @test grad_model.prep isa AbstractPPL.Evaluators.Prepared
+            @test grad_model.base_model.evaluation_mode isa
+                JuliaBUGS.UseGeneratedLogDensityFunction
+
+            logp, grad = LogDensityProblems.logdensity_and_gradient(grad_model, x)
+            @test isfinite(logp)
+            @test all(isfinite, grad)
         end
     end
 
