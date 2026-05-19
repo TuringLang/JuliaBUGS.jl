@@ -6,7 +6,6 @@ using AbstractPPL
 using ADTypes
 using BangBang
 using Bijectors
-import DifferentiationInterface as DI
 using Distributions
 using Graphs
 using LinearAlgebra

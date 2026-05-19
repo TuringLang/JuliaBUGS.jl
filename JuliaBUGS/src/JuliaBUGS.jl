@@ -18,7 +18,6 @@ using Serialization: Serialization
 using StaticArrays
 
 import Base: ==, hash, Symbol, size
-import DifferentiationInterface as DI
 import Distributions: truncated
 
 export @bugs

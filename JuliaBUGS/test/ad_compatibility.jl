@@ -18,6 +18,7 @@
         @testset "AutoReverseDiff" begin
             grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoReverseDiff())
             @test grad_model isa JuliaBUGS.BUGSModelWithGradient
+            @test grad_model.prep isa AbstractPPL.Evaluators.Prepared
             @test grad_model.base_model.evaluation_mode isa JuliaBUGS.UseGraph
 
             # Test gradient computation works
@@ -29,6 +30,7 @@
         @testset "AutoForwardDiff" begin
             grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoForwardDiff())
             @test grad_model isa JuliaBUGS.BUGSModelWithGradient
+            @test grad_model.prep isa AbstractPPL.Evaluators.Prepared
             @test grad_model.base_model.evaluation_mode isa JuliaBUGS.UseGraph
 
             logp, grad = LogDensityProblems.logdensity_and_gradient(grad_model, x)
@@ -83,12 +85,18 @@
             grad_model = JuliaBUGS.BUGSModelWithGradient(
                 model, AutoMooncake(; config=nothing)
             )
+            @test grad_model.prep isa AbstractPPL.Evaluators.Prepared
             @test grad_model.base_model.evaluation_mode isa
                 JuliaBUGS.UseGeneratedLogDensityFunction
 
             logp, grad = LogDensityProblems.logdensity_and_gradient(grad_model, x)
             @test isfinite(logp)
             @test all(isfinite, grad)
+
+            grad_saved = copy(grad)
+            _, grad2 = LogDensityProblems.logdensity_and_gradient(grad_model, x .+ 0.1)
+            @test grad == grad_saved
+            @test grad2 != grad_saved
         end
     end
 

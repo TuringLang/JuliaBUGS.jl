@@ -71,7 +71,7 @@ Implements `LogDensityProblems.logdensity` and `LogDensityProblems.logdensity_an
 
 # Fields
 - `adtype::AD`: AD backend (e.g., `AutoReverseDiff()`)
-- `prep::P`: Prepared gradient from DifferentiationInterface
+- `prep::P`: Prepared evaluator from AbstractPPL
 - `base_model::M`: The underlying `BUGSModel`
 
 See also [`compile`](@ref).
@@ -110,7 +110,9 @@ function BUGSModelWithGradient(model::BUGSModel, adtype::ADTypes.AbstractADType)
     model = _check_ad_compatibility(model, adtype)
 
     x = getparams(model)
-    prep = DI.prepare_gradient(_logdensity_for_gradient, adtype, x, DI.Constant(model))
+    prep = AbstractPPL.prepare(
+        adtype, _logdensity_for_gradient, x; context=(model,)
+    )
     return BUGSModelWithGradient(adtype, prep, model)
 end
 
@@ -145,7 +147,7 @@ end
 """
     _logdensity_for_gradient(x, model)
 
-Target function for gradient computation via DifferentiationInterface.
+Target function for gradient computation via AbstractPPL's prepared evaluator API.
 The parameter vector `x` comes first (the argument to differentiate w.r.t.),
 and the model is passed as a constant context (not differentiated).
 """
@@ -156,19 +158,15 @@ end
 """
     LogDensityProblems.logdensity_and_gradient(model::BUGSModelWithGradient, x)
 
-Compute log density and its gradient using DifferentiationInterface.
+Compute log density and its gradient using AbstractPPL's prepared evaluator API.
+The gradient is copied out of the `value_and_gradient!!` cache before returning.
 """
 function LogDensityProblems.logdensity_and_gradient(
     model::BUGSModelWithGradient, x::AbstractVector
 )
     try
-        return DI.value_and_gradient(
-            _logdensity_for_gradient,
-            model.prep,
-            model.adtype,
-            x,
-            DI.Constant(model.base_model),
-        )
+        logp, grad = AbstractPPL.value_and_gradient!!(model.prep, x)
+        return (logp, copy(grad))
     catch e
         if e isa DomainError
             T = float(eltype(x))

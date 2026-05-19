@@ -1,6 +1,10 @@
 # Automatic Differentiation
 
-JuliaBUGS integrates with automatic differentiation (AD) through [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl), enabling gradient-based inference methods like Hamiltonian Monte Carlo (HMC) and No-U-Turn Sampler (NUTS).
+JuliaBUGS integrates with automatic differentiation (AD) through AbstractPPL's
+prepared evaluator interface, enabling gradient-based inference methods like
+Hamiltonian Monte Carlo (HMC) and No-U-Turn Sampler (NUTS). DifferentiationInterface
+and Mooncake backends are supported through the corresponding AbstractPPL
+extensions.
 
 ## Specifying an AD Backend
 
