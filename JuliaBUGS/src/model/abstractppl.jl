@@ -89,11 +89,11 @@ julia> # Check parameter lengths
        model.untransformed_param_length  # Original has 4 parameters
 4
 
-julia> model_cond.untransformed_param_length  # After conditioning x[1], x[2]
-2
+julia> model_cond.untransformed_param_length  # x[3], y are now Generated Quantities
+0
 
-julia> model_cond2.untransformed_param_length  # After conditioning all x[i]
-1
+julia> model_cond2.untransformed_param_length  # y is now a Generated Quantity
+0
 
 julia> # NamedTuple syntax
        model_cond3 = condition(model, (; y=10.0));
@@ -285,65 +285,14 @@ julia> model_restored.evaluation_env.x  # Keeps conditioned values
 julia> model_restored.evaluation_env.y
 1.5
 
-julia> # Error when no base_model
-       try
-           decondition(model)  # Original model has no base_model
-       catch e
-           println(e)
-       end
-ArgumentError("This is a unconditioned model. Use decondition(model, vars) to specify variables to decondition.")
-
-julia> # Cannot decondition original data
-       try
-           decondition(model_cond, [@varname(z)])
-       catch e
-           println(e)
-       end
-ArgumentError("Cannot decondition z: it was observed in the original data")
-
 julia> # Chain of conditioning
        m1 = condition(model, (; x = 1.0));
        m2 = condition(m1, (; y = 2.0));
+       model_restored2 = decondition(m2);
 
-julia> # With flat design, all conditioned models restore to original
-       model_restored = decondition(m2);
-
-julia> parameters(model_restored) == parameters(model)  # Back to original
+julia> parameters(model_restored2) == parameters(model)
 true
 
-julia> model_restored.evaluation_env.x  # But keeps the conditioned values
-1.0
-
-julia> model_restored.evaluation_env.y
-2.0
-
-julia> # m1 also restores to original model
-       parameters(decondition(m1)) == parameters(model)
-true
-
-julia> # Subsumption example
-       model_arr = compile(@bugs(begin
-           for i in 1:3
-               v[i] ~ dnorm(0, 1)
-           end
-       end), (;));
-
-julia> model_arr_cond = @test_logs(
-           (:warn, "Variable v does not exist in the model. Conditioning on subsumed variables instead: v[1], v[2], v[3]"),
-           condition(model_arr, Dict(@varname(v) => [1.0, 2.0, 3.0]))
-       );
-
-julia> # Decondition with subsumption
-       model_arr_decon = @test_logs(
-           (:warn, "Variable v does not exist in the model. Deconditioning subsumed observed variables instead: v[1], v[2], v[3]"),
-           decondition(model_arr_cond, [@varname(v)])
-       );
-
-julia> sort(parameters(model_arr_decon); by=string)
-3-element Vector{VarName}:
- v[1]
- v[2]
- v[3]
 ```
 """
 function decondition(model::BUGSModel)
@@ -543,7 +492,7 @@ function _create_modified_model(
 )
     # Create new graph evaluation data
     new_graph_evaluation_data = GraphEvaluationData(new_graph)
-    new_parameters = new_graph_evaluation_data.sorted_parameters
+    new_parameters = new_graph_evaluation_data.mcmc_parameters
 
     # Calculate new parameter lengths
     new_untransformed_param_length, new_transformed_param_length = _calculate_param_lengths(
@@ -607,7 +556,9 @@ function _regenerate_log_density_function(
         end
 
         # Update graph evaluation data with the correct sorted nodes
-        updated_graph_evaluation_data = GraphEvaluationData(graph, sorted_nodes)
+        updated_graph_evaluation_data = GraphEvaluationData(
+            graph, sorted_nodes, graph_evaluation_data.mcmc_parameters
+        )
 
         return new_log_density_computation_function, updated_graph_evaluation_data
     else

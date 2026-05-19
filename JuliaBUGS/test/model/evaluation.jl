@@ -361,13 +361,13 @@ end
 
     @testset "blockers" begin
         test_bugs_model_log_density(
-            JuliaBUGS.BUGSExamples.VOLUME_1.blockers, -8418.416388326123
+            JuliaBUGS.BUGSExamples.VOLUME_1.blockers, -8417.497576569103
         )
     end
 
     @testset "bones" begin
         test_bugs_model_log_density(
-            JuliaBUGS.BUGSExamples.VOLUME_1.bones, -161.6492002285034
+            JuliaBUGS.BUGSExamples.VOLUME_1.bones, -139.03545202758394
         )
     end
 
