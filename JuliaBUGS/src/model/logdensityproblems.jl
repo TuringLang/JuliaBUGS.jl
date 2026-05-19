@@ -117,14 +117,10 @@ function BUGSModelWithGradient(model::BUGSModel, adtype::ADTypes.AbstractADType)
 end
 
 # AD backends that support mutation (required for UseGeneratedLogDensityFunction)
-_supports_mutation(::ADTypes.AutoMooncake) = true
-_supports_mutation(::ADTypes.AutoMooncakeForward) = true
-_supports_mutation(::ADTypes.AutoEnzyme) = true
-_supports_mutation(::ADTypes.AbstractADType) = false
-
-_prefers_generated_logdensity(::ADTypes.AutoMooncake) = true
-_prefers_generated_logdensity(::ADTypes.AutoMooncakeForward) = true
-_prefers_generated_logdensity(::ADTypes.AbstractADType) = false
+function _supports_mutation(adtype::ADTypes.AbstractADType)
+    return adtype isa
+           Union{ADTypes.AutoMooncake,ADTypes.AutoMooncakeForward,ADTypes.AutoEnzyme}
+end
 
 function _check_ad_compatibility(model::BUGSModel, adtype::ADTypes.AbstractADType)
     if model.evaluation_mode isa UseGeneratedLogDensityFunction &&
@@ -132,7 +128,8 @@ function _check_ad_compatibility(model::BUGSModel, adtype::ADTypes.AbstractADTyp
         @warn "AD backend $(typeof(adtype)) does not support mutation required by " *
             "UseGeneratedLogDensityFunction mode. Switching to UseGraph mode." maxlog = 1
         return set_evaluation_mode(model, UseGraph())
-    elseif model.evaluation_mode isa UseGraph && _prefers_generated_logdensity(adtype)
+    elseif model.evaluation_mode isa UseGraph &&
+        adtype isa Union{ADTypes.AutoMooncake,ADTypes.AutoMooncakeForward}
         model = set_evaluation_mode(model, UseGeneratedLogDensityFunction())
         if !(model.evaluation_mode isa UseGeneratedLogDensityFunction)
             throw(
