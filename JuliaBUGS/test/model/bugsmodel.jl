@@ -86,6 +86,77 @@ end
         @test length(parameters(model_subsume)) == 2  # Only mu and sigma remain
     end
 
+    @testset "VariableType classification" begin
+        # Model with deterministic, observation, and model parameters
+        model_def = @bugs begin
+            mu ~ Normal(0, 10)
+            sigma ~ Gamma(1, 1)
+            for i in 1:3
+                x[i] ~ Normal(mu, sigma)
+            end
+            mean_x = mean(x[:])
+            y ~ Normal(mean_x, 1)
+        end
+
+        model = compile(model_def, (; y=2.5))
+        gd = model.graph_evaluation_data
+        type_of = Dict(gd.sorted_nodes .=> gd.variable_types)
+
+        @test type_of[@varname(mu)] == ModelParameter
+        @test type_of[@varname(sigma)] == ModelParameter
+        @test type_of[@varname(x[1])] == ModelParameter
+        @test type_of[@varname(mean_x)] == Deterministic
+        @test type_of[@varname(y)] == Observation
+
+        # Model with a generated quantity
+        model_def_gq = @bugs begin
+            mu ~ Normal(0, 1)
+            y ~ Normal(mu, 1)
+            z ~ Normal(mu, 1)  # no observation depends on z
+        end
+
+        model_gq = compile(model_def_gq, (; y=1.0))
+        gd_gq = model_gq.graph_evaluation_data
+        type_of_gq = Dict(gd_gq.sorted_nodes .=> gd_gq.variable_types)
+
+        @test type_of_gq[@varname(mu)] == ModelParameter
+        @test type_of_gq[@varname(y)] == Observation
+        @test type_of_gq[@varname(z)] == GeneratedQuantity
+
+        @test @varname(mu) in mcmc_parameters(model_gq)
+        @test @varname(z) ∉ mcmc_parameters(model_gq)
+        @test @varname(z) in postprocess_variables(model_gq)
+
+        # Missing-data interpolation that influences observed likelihood
+        # should remain a model parameter (sampled by MCMC).
+        model_def_missing = @bugs begin
+            x ~ Normal(0, 1)
+            y ~ Normal(x, 1)
+        end
+        model_missing = compile(model_def_missing, (; y=missing))
+        gd_missing = model_missing.graph_evaluation_data
+        type_of_missing = Dict(gd_missing.sorted_nodes .=> gd_missing.variable_types)
+
+        @test type_of_missing[@varname(y)] == ModelParameter
+        @test @varname(y) in mcmc_parameters(model_missing)
+        @test @varname(y) ∉ postprocess_variables(model_missing)
+
+        # Unobserved stochastic node with no observed descendants should be postprocessed.
+        model_def_post = @bugs begin
+            θ ~ Normal(0, 1)
+            y ~ Normal(θ, 1)
+            z ~ Normal(θ, 1)
+        end
+        model_post = compile(model_def_post, (; y=1.0))
+        gd_post = model_post.graph_evaluation_data
+        type_of_post = Dict(gd_post.sorted_nodes .=> gd_post.variable_types)
+
+        @test type_of_post[@varname(z)] == GeneratedQuantity
+        @test @varname(z) in parameters(model_post)
+        @test @varname(z) ∉ mcmc_parameters(model_post)
+        @test @varname(z) in postprocess_variables(model_post)
+    end
+
     @testset "initialize!" begin
         model_def = @bugs begin
             a ~ Normal(0, 1)
@@ -207,16 +278,17 @@ end
         end
 
         @testset "With conditioned model" begin
-            model_cond = condition(model, (; mu=0.5))
+            model_cond = condition(model, (; x=[1.5, 2.5, 3.5]))
 
             # Only unconditioned parameters (default transformed)
             params = Base.invokelatest(getparams, model_cond)
-            @test length(params) == 4  # tau, x[1:3]
+            @test length(params) == 2  # mu, tau
             @test params[1] ≈ log(2.0)  # tau transformed
-            @test params[2:4] == [1.5, 2.5, 3.5]
+            @test params[2] ≈ 1.0       # mu untransformed (identity)
 
             params_dict = Base.invokelatest(getparams, Dict, model_cond)
-            @test !haskey(params_dict, @varname(mu))
+            @test !haskey(params_dict, @varname(x[1]))
+            @test params_dict[@varname(mu)] ≈ 1.0
             @test params_dict[@varname(tau)] ≈ log(2.0)  # transformed
         end
     end

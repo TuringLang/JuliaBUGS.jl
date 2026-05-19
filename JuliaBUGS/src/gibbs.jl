@@ -109,7 +109,7 @@ gibbs = Gibbs(model, sampler_map)
 function Gibbs(model::BUGSModel, sampler_map::OrderedDict)
     verify_sampler_map(model, sampler_map)
     # Expand variable groups once to avoid repeated computation
-    model_parameters = model.graph_evaluation_data.sorted_parameters
+    model_parameters = model.graph_evaluation_data.mcmc_parameters
     expanded_sampler_map = OrderedDict()
     for (variable_group, sampler) in sampler_map
         variable_group_vec =
@@ -155,7 +155,7 @@ parameters and using the OrderedDict constructor instead.
 function Gibbs(model::BUGSModel, s::AbstractMCMC.AbstractSampler)
     # Use the sampler as-is for all parameters
     sampler_map = OrderedDict([
-        v => s for v in model.graph_evaluation_data.sorted_parameters
+        v => s for v in model.graph_evaluation_data.mcmc_parameters
     ])
     return Gibbs(model, sampler_map)
 end
@@ -215,20 +215,15 @@ that exist in the model parameters.
 
 # Examples
 ```jldoctest
-julia> using JuliaBUGS: expand_variables, @varname
+julia> using JuliaBUGS: expand_variables, @varname; using AbstractPPL: VarName
 
 julia> model_parameters = [@varname(x[1]), @varname(x[2]), @varname(x[3]), @varname(y)];
 
-julia> expand_variables([@varname(x)], model_parameters)
-3-element Vector{VarName}:
- x[1]
- x[2]
- x[3]
+julia> expand_variables([@varname(x)], model_parameters) == [@varname(x[1]), @varname(x[2]), @varname(x[3])]
+true
 
-julia> expand_variables([@varname(x[1]), @varname(y)], model_parameters)
-2-element Vector{VarName}:
- x[1]
- y
+julia> expand_variables([@varname(x[1]), @varname(y)], model_parameters) == [@varname(x[1]), @varname(y)]
+true
 ```
 """
 function expand_variables(vars::Vector{<:VarName}, model_parameters::Vector{<:VarName})
@@ -291,7 +286,7 @@ function verify_sampler_map(model::BUGSModel, sampler_map::OrderedDict)
     end
 
     # Get model parameters
-    model_parameters = model.graph_evaluation_data.sorted_parameters
+    model_parameters = model.graph_evaluation_data.mcmc_parameters
 
     # Track which model parameters are covered
     covered_parameters = Set{VarName}()
@@ -364,7 +359,7 @@ function AbstractMCMC.step(
     verify_sampler_map(model, sampler.sampler_map)
 
     cached_conditioned_models = OrderedDict()
-    model_parameters = model.graph_evaluation_data.sorted_parameters
+    model_parameters = model.graph_evaluation_data.mcmc_parameters
 
     for variables_to_update in keys(sampler.sampler_map)
         # Variables to condition on are all parameters except those we're updating

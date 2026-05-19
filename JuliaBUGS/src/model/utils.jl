@@ -113,8 +113,8 @@ function get_mutable_symbols(data)
 
     mutable_syms = Set{Symbol}()
 
-    # Add symbols from model parameters (stochastic, non-observed nodes)
-    for vn in graph_data.sorted_parameters
+    # Add symbols from sampled model parameters (stochastic, non-observed nodes).
+    for vn in graph_data.mcmc_parameters
         push!(mutable_syms, AbstractPPL.getsym(vn))
     end
 
