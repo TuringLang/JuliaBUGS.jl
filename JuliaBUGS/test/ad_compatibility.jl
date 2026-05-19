@@ -65,6 +65,24 @@
                 @test all(isfinite, grad)
             end
         end
+
+        @testset "Mooncake requires generated log density" begin
+            unsupported_model_def = @bugs begin
+                for t in 1:(T - 1)
+                    x[t] ~ Normal(x[t + 1], sigma)
+                end
+                x[T] ~ Normal(0, 1)
+            end
+            unsupported_model = compile(unsupported_model_def, (T=10, sigma=0.7))
+
+            @test_logs (:warn, r"Source generation aborted") (
+                :warn, r"Could not generate optimized log density"
+            ) begin
+                @test_throws ArgumentError JuliaBUGS.BUGSModelWithGradient(
+                    unsupported_model, AutoMooncake(; config=nothing)
+                )
+            end
+        end
     end
 
     @testset "UseGeneratedLogDensityFunction mode" begin
