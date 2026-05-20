@@ -2,7 +2,8 @@
 
 ```@setup abc
 using JuliaBUGS
-using AdvancedHMC, AbstractMCMC, LogDensityProblems, MCMCChains, ADTypes, ReverseDiff
+using AdvancedHMC, AbstractMCMC, LogDensityProblems, MCMCChains
+using ADTypes, DifferentiationInterface, ReverseDiff
 
 data = (
     r = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3],

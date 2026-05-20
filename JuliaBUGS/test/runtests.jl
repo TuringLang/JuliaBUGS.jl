@@ -18,6 +18,7 @@ using ADTypes
 using AbstractPPL
 using Bijectors
 using ChainRules # needed for `Bijectors.cholesky_lower`
+using DifferentiationInterface
 using Distributions
 using Documenter
 using Graphs

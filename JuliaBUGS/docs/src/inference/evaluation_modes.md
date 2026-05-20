@@ -31,6 +31,7 @@ model = set_evaluation_mode(model, UseGeneratedLogDensityFunction())
 Use with Mooncake for AD:
 
 ```julia
+using ADTypes, Mooncake
 model = BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
 ```
 

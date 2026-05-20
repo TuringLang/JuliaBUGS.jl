@@ -86,6 +86,9 @@ end
     BUGSModelWithGradient(model::BUGSModel, adtype::ADTypes.AbstractADType)
 
 Construct a gradient-enabled model wrapper from a BUGSModel and an AD backend.
+For DifferentiationInterface-backed AD backends like `AutoReverseDiff()` and
+`AutoForwardDiff()`, load `DifferentiationInterface` and the concrete backend
+package before constructing the wrapper.
 
 # AD Backend Compatibility
 

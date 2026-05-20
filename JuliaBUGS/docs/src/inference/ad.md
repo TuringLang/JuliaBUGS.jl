@@ -1,6 +1,8 @@
 # Automatic Differentiation
 
-JuliaBUGS integrates with automatic differentiation (AD) through AbstractPPL's prepared AD evaluator interface, enabling gradient-based inference methods like Hamiltonian Monte Carlo (HMC) and No-U-Turn Sampler (NUTS). DifferentiationInterface and Mooncake backends are supported through the corresponding AbstractPPL extensions.
+JuliaBUGS integrates with automatic differentiation (AD) through AbstractPPL's prepared AD evaluator interface, enabling gradient-based inference methods like Hamiltonian Monte Carlo (HMC) and No-U-Turn Sampler (NUTS). DifferentiationInterface and Mooncake backends are supported through the corresponding AbstractPPL extensions. JuliaBUGS does not load these extension packages for you, so load `DifferentiationInterface` with the concrete AD backend package for `AutoForwardDiff()`/`AutoReverseDiff()`, or load `Mooncake` for `AutoMooncake()`/`AutoMooncakeForward()`.
+
+For distributed sampling, load the same extension packages on every worker before sending a gradient-enabled model to workers, for example with `@everywhere using DifferentiationInterface, ReverseDiff`.
 
 ## Specifying an AD Backend
 
@@ -8,7 +10,7 @@ To compile a model with gradient support, pass the `adtype` parameter to `compil
 
 ```julia
 # Compile with gradient support using ADTypes from ADTypes.jl
-using ADTypes
+using ADTypes, DifferentiationInterface, ReverseDiff
 model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
 ```
 
@@ -27,6 +29,7 @@ model = BUGSModelWithGradient(base_model, AutoReverseDiff(compile=true))
 | `AutoReverseDiff(compile=false)` | Models with control flow |
 | `AutoForwardDiff()` | Small models (< 20 parameters) |
 | `AutoMooncake()` | With `UseGeneratedLogDensityFunction()` mode |
+| `AutoMooncakeForward()` | Forward-mode Mooncake with `UseGeneratedLogDensityFunction()` mode |
 
 The compiled model with gradient support implements the [`LogDensityProblems.jl`](https://www.tamaspapp.eu/LogDensityProblems.jl/dev/) interface, including [`logdensity_and_gradient`](https://www.tamaspapp.eu/LogDensityProblems.jl/dev/#LogDensityProblems.logdensity_and_gradient), which returns both the log density and its gradient.
 
@@ -35,7 +38,8 @@ The compiled model with gradient support implements the [`LogDensityProblems.jl`
 Use [ReverseDiff.jl](https://github.com/JuliaDiff/ReverseDiff.jl) or [ForwardDiff.jl](https://github.com/JuliaDiff/ForwardDiff.jl) with the default `UseGraph()` mode:
 
 ```julia
-using ADTypes
+using ADTypes, DifferentiationInterface
+using ForwardDiff, ReverseDiff
 
 # ReverseDiff with tape compilation (recommended for large models)
 model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
@@ -55,7 +59,7 @@ model = compile(model_def, data; adtype=AutoReverseDiff(compile=false))
 Use [Mooncake.jl](https://github.com/compintell/Mooncake.jl) with the generated log density function mode:
 
 ```julia
-using ADTypes
+using ADTypes, Mooncake
 
 model = compile(model_def, data)
 model = set_evaluation_mode(model, UseGeneratedLogDensityFunction())

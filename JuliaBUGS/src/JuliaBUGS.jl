@@ -6,7 +6,6 @@ using Accessors
 using ADTypes
 using BangBang
 using Bijectors: Bijectors
-using DifferentiationInterface
 using Distributions
 using Graphs, MetaGraphsNext
 using LinearAlgebra
@@ -244,6 +243,10 @@ Compile a BUGS model. Returns `BUGSModel`, or `BUGSModelWithGradient` if `adtype
 - `data::NamedTuple`: Observed data
 - `initial_params::NamedTuple`: Initial parameter values (optional, defaults to prior samples)
 - `adtype`: AD backend from ADTypes.jl (e.g., `AutoReverseDiff()`, `AutoForwardDiff()`, `AutoMooncake()`)
+
+For DifferentiationInterface-backed AD backends like `AutoReverseDiff()` and
+`AutoForwardDiff()`, load `DifferentiationInterface` and the concrete backend
+package before compiling with `adtype`.
 
 # Examples
 ```julia
