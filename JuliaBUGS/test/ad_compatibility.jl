@@ -49,7 +49,7 @@
             @test grad_rd ≈ grad_fd rtol = 1e-6
         end
 
-        @testset "Mooncake backends switch to generated log density" begin
+        @testset "AutoMooncake and AutoMooncakeForward switch to generated log density" begin
             for adtype in
                 (AutoMooncake(; config=nothing), AutoMooncakeForward(; config=nothing))
                 grad_model = JuliaBUGS.BUGSModelWithGradient(model, adtype)

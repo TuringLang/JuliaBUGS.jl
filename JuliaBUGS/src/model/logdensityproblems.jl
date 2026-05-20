@@ -98,8 +98,8 @@ Different AD backends have different compatibility with evaluation modes:
   like `AutoMooncake`, `AutoMooncakeForward`, and `AutoEnzyme`. The generated functions
   mutate arrays in-place.
 - **`UseGraph`**: Compatible with `AutoReverseDiff`, `AutoForwardDiff`, and other
-  tape-based or forward-mode backends that can handle the graph evaluator. Mooncake
-  backends are routed to `UseGeneratedLogDensityFunction`.
+  tape-based or forward-mode backends that can handle the graph evaluator.
+  `AutoMooncake` and `AutoMooncakeForward` are routed to `UseGeneratedLogDensityFunction`.
 
 If an incompatible combination is detected, JuliaBUGS switches to a compatible
 evaluation mode when possible.
@@ -119,10 +119,17 @@ function BUGSModelWithGradient(model::BUGSModel, adtype::ADTypes.AbstractADType)
     return BUGSModelWithGradient(adtype, prep, model)
 end
 
-# AD backends that support mutation (required for UseGeneratedLogDensityFunction)
+# True for any ADType that selects the Mooncake engine (reverse via `AutoMooncake`
+# or forward via `AutoMooncakeForward`); both currently require the generated
+# log-density target instead of the graph evaluator.
+function _is_mooncake(adtype::ADTypes.AbstractADType)
+    return adtype isa Union{ADTypes.AutoMooncake,ADTypes.AutoMooncakeForward}
+end
+
+# Whether the AD backend can differentiate through code that mutates arrays
+# in-place, which is what `UseGeneratedLogDensityFunction` requires.
 function _supports_mutation(adtype::ADTypes.AbstractADType)
-    return adtype isa
-           Union{ADTypes.AutoMooncake,ADTypes.AutoMooncakeForward,ADTypes.AutoEnzyme}
+    return _is_mooncake(adtype) || adtype isa ADTypes.AutoEnzyme
 end
 
 function _check_ad_compatibility(model::BUGSModel, adtype::ADTypes.AbstractADType)
@@ -131,8 +138,7 @@ function _check_ad_compatibility(model::BUGSModel, adtype::ADTypes.AbstractADTyp
         @warn "AD backend $(typeof(adtype)) does not support mutation required by " *
             "UseGeneratedLogDensityFunction mode. Switching to UseGraph mode." maxlog = 1
         return set_evaluation_mode(model, UseGraph())
-    elseif model.evaluation_mode isa UseGraph &&
-        adtype isa Union{ADTypes.AutoMooncake,ADTypes.AutoMooncakeForward}
+    elseif model.evaluation_mode isa UseGraph && _is_mooncake(adtype)
         model = set_evaluation_mode(model, UseGeneratedLogDensityFunction())
         if !(model.evaluation_mode isa UseGeneratedLogDensityFunction)
             throw(
