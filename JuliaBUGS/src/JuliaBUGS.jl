@@ -43,6 +43,7 @@ using .Model: AbstractBUGSModel, BUGSModel
 
 include("independent_mh.jl")
 include("gibbs.jl")
+include("gibbs_abstractmcmc_hooks.jl")
 
 include("source_gen.jl")
 
