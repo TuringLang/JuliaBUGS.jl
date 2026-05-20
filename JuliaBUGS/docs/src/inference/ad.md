@@ -1,8 +1,8 @@
 # Automatic Differentiation
 
-JuliaBUGS integrates with automatic differentiation (AD) through AbstractPPL's prepared AD evaluator interface, enabling gradient-based inference methods like Hamiltonian Monte Carlo (HMC) and No-U-Turn Sampler (NUTS). DifferentiationInterface and Mooncake backends are supported through the corresponding AbstractPPL extensions. JuliaBUGS does not load these extension packages for you, so load `DifferentiationInterface` with the concrete AD backend package for `AutoForwardDiff()`/`AutoReverseDiff()`, or load `Mooncake` for `AutoMooncake()`/`AutoMooncakeForward()`.
+JuliaBUGS integrates with automatic differentiation (AD) through AbstractPPL's prepared AD evaluator interface, enabling gradient-based inference methods like Hamiltonian Monte Carlo (HMC) and No-U-Turn Sampler (NUTS). AbstractPPL provides two AD integration paths: a native Mooncake extension that handles `AutoMooncake()` (reverse mode) and `AutoMooncakeForward()` (forward mode) directly, and a DifferentiationInterface extension that routes AD packages like ReverseDiff and ForwardDiff (selected via `AutoReverseDiff()`/`AutoForwardDiff()`) through DI's wrapper. JuliaBUGS does not load these packages for you, so load `Mooncake` for `AutoMooncake()`/`AutoMooncakeForward()`, or load `DifferentiationInterface` together with the concrete AD package for `AutoForwardDiff()`/`AutoReverseDiff()`.
 
-For distributed sampling, load the same extension packages on every worker before sending a gradient-enabled model to workers, for example with `@everywhere using DifferentiationInterface, ReverseDiff`.
+For distributed sampling, load the same packages on every worker before sending a gradient-enabled model to workers, for example `@everywhere using Mooncake` for `AutoMooncake()`, or `@everywhere using DifferentiationInterface, ReverseDiff` for `AutoReverseDiff()`.
 
 ## Specifying an AD Backend
 
