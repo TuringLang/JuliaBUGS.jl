@@ -56,7 +56,6 @@ function to_distribution(model::BUGSModel)
     return BUGSModelDistribution{names,typeof(model),S,eltypes}(model)
 end
 
-# Promote across parameter distributions to a single ValueSupport.
 function _bugs_param_value_support(model::BUGSModel)
     gd = model.graph_evaluation_data
     support_types = Type{<:Distributions.ValueSupport}[]

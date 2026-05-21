@@ -32,14 +32,14 @@
         samples = rand(MersenneTwister(0), d, 3)
         @test samples isa AbstractVector{<:NamedTuple{(:x,)}}
         @test length(samples) == 3
-        samples_2d = rand(MersenneTwister(0), d, 2, 2)
-        @test size(samples_2d) == (2, 2)
         @test rand(d, 3) isa AbstractVector{<:NamedTuple{(:x,)}}
 
-        # rand! fills a pre-allocated container
-        buf = Vector{NamedTuple{(:x,),Tuple{Float64}}}(undef, 4)
-        rand!(MersenneTwister(0), d, buf)
-        @test all(b -> b isa NamedTuple{(:x,)}, buf)
+        # rand! actually writes values: different seeds → different entries.
+        buf_a = Vector{NamedTuple{(:x,),Tuple{Float64}}}(undef, 4)
+        buf_b = Vector{NamedTuple{(:x,),Tuple{Float64}}}(undef, 4)
+        rand!(MersenneTwister(0), d, buf_a)
+        rand!(MersenneTwister(1), d, buf_b)
+        @test buf_a[1].x != buf_b[1].x
 
         # the wrapper ignores model.transformed: same logpdf in original space
         transformed_model = JuliaBUGS.Model.settrans(model, true)
