@@ -100,6 +100,8 @@ Different AD backends have different compatibility with evaluation modes:
 - **`UseGraph`**: Compatible with `AutoReverseDiff`, `AutoForwardDiff`, and other
   tape-based or forward-mode backends that can handle the graph evaluator.
   `AutoMooncake` and `AutoMooncakeForward` are routed to `UseGeneratedLogDensityFunction`.
+- **`UseAutoMarginalization`**: Compatible with `AutoReverseDiff` and `AutoForwardDiff`.
+  `AutoMooncake` and `AutoMooncakeForward` are not supported for this graph-based mode.
 
 If an incompatible combination is detected, JuliaBUGS switches to a compatible
 evaluation mode when possible.
@@ -107,6 +109,8 @@ evaluation mode when possible.
 # Example
 ```julia
 model = compile(model_def, data)
+
+using ADTypes, DifferentiationInterface, ReverseDiff
 grad_model = BUGSModelWithGradient(model, AutoReverseDiff(compile=true))
 ```
 """
@@ -148,6 +152,14 @@ function _check_ad_compatibility(model::BUGSModel, adtype::ADTypes.AbstractADTyp
                 ),
             )
         end
+    elseif model.evaluation_mode isa UseAutoMarginalization && _is_mooncake(adtype)
+        throw(
+            ArgumentError(
+                "AD backend $(typeof(adtype)) does not support UseAutoMarginalization mode. " *
+                "Use AutoForwardDiff/AutoReverseDiff for auto-marginalized models, or switch " *
+                "to UseGeneratedLogDensityFunction mode if marginalization is not required.",
+            ),
+        )
     end
     return model
 end

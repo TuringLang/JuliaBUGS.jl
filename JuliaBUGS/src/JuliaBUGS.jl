@@ -251,6 +251,8 @@ package before compiling with `adtype`.
 # Examples
 ```julia
 model = compile(model_def, data)
+
+using ADTypes, DifferentiationInterface, ReverseDiff
 model = compile(model_def, data; adtype=AutoReverseDiff())
 ```
 """

@@ -33,6 +33,8 @@ model = BUGSModelWithGradient(base_model, AutoReverseDiff(compile=true))
 
 The compiled model with gradient support implements the [`LogDensityProblems.jl`](https://www.tamaspapp.eu/LogDensityProblems.jl/dev/) interface, including [`logdensity_and_gradient`](https://www.tamaspapp.eu/LogDensityProblems.jl/dev/#LogDensityProblems.logdensity_and_gradient), which returns both the log density and its gradient.
 
+For `UseAutoMarginalization()` mode, use `AutoReverseDiff()` or `AutoForwardDiff()`. Mooncake currently requires generated log-density mode and does not support auto-marginalized models.
+
 ## AD Backends with `UseGraph()` Mode
 
 Use [ReverseDiff.jl](https://github.com/JuliaDiff/ReverseDiff.jl) or [ForwardDiff.jl](https://github.com/JuliaDiff/ForwardDiff.jl) with the default `UseGraph()` mode:
@@ -61,9 +63,12 @@ Use [Mooncake.jl](https://github.com/compintell/Mooncake.jl) with the generated 
 ```julia
 using ADTypes, Mooncake
 
-model = compile(model_def, data)
-model = set_evaluation_mode(model, UseGeneratedLogDensityFunction())
-model = BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
+base_model = compile(model_def, data)
+base_model = set_evaluation_mode(base_model, UseGeneratedLogDensityFunction())
+model = BUGSModelWithGradient(base_model, AutoMooncake(; config=nothing))
+
+# Forward-mode Mooncake is also available for small generated-function models.
+forward_model = BUGSModelWithGradient(base_model, AutoMooncakeForward(; config=nothing))
 ```
 
 For more details on evaluation modes, see [Evaluation Modes](evaluation_modes.md).

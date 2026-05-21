@@ -148,6 +148,31 @@
         end
     end
 
+    @testset "UseAutoMarginalization mode" begin
+        mixture_def = @bugs begin
+            mu ~ Normal(0, 1)
+            z ~ Categorical(w[1:K])
+            y ~ Normal(mu + delta[z], sigma)
+        end
+        model = compile(
+            mixture_def, (K=2, w=[0.3, 0.7], delta=[0.0, 2.0], sigma=1.0, y=1.5)
+        )
+        model = JuliaBUGS.settrans(model, true)
+        model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseAutoMarginalization())
+        @test model.evaluation_mode isa JuliaBUGS.UseAutoMarginalization
+
+        x = JuliaBUGS.getparams(model)
+        grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoForwardDiff())
+        logp, grad = LogDensityProblems.logdensity_and_gradient(grad_model, x)
+        @test isfinite(logp)
+        @test all(isfinite, grad)
+
+        for adtype in
+            (AutoMooncake(; config=nothing), AutoMooncakeForward(; config=nothing))
+            @test_throws ArgumentError JuliaBUGS.BUGSModelWithGradient(model, adtype)
+        end
+    end
+
     @testset "compile with adtype parameter" begin
         @testset "AutoReverseDiff" begin
             grad_model = compile(model_def, data; adtype=AutoReverseDiff())

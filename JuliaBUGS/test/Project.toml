@@ -36,7 +36,7 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 JuliaBUGS = {path = ".."}
 
 [compat]
-ADTypes = "1.14.0"
+ADTypes = "1.18.0"
 AbstractMCMC = "5"
 AbstractPPL = "0.15"
 AdvancedHMC = "0.6, 0.7, 0.8"

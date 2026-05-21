@@ -10,7 +10,7 @@
 #
 # Examples:
 # ```julia
-# using ADTypes
+# using ADTypes, DifferentiationInterface, ForwardDiff, ReverseDiff
 # 
 # # Explicit AD specification
 # sampler_map = OrderedDict(
@@ -77,6 +77,7 @@ Variables can be specified individually or as groups:
 # Examples
 ```julia
 using ADTypes: AutoReverseDiff, AutoForwardDiff
+using DifferentiationInterface, ForwardDiff, ReverseDiff
 
 # Different samplers for different parameters
 sampler_map = OrderedDict(
@@ -135,6 +136,9 @@ single-site Gibbs sampling.
 
 # Examples
 ```julia
+using ADTypes: AutoForwardDiff
+using DifferentiationInterface, ForwardDiff
+
 # Use IndependentMH for all parameters
 gibbs = Gibbs(model, IndependentMH())
 
