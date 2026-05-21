@@ -27,6 +27,11 @@ fields are the corresponding entries of the model evaluation environment.
 and returns the log joint density in the original (constrained) parameter
 space.
 
+The wrapper always operates in the original parameter space; `model.transformed`
+is ignored. `logpdf` returns the full joint (prior plus likelihood of any
+observed data baked into the model), so two models that differ only in observed
+data produce different `BUGSModelDistribution`s.
+
 # Example
 ```julia
 model_def = @bugs begin
@@ -54,17 +59,17 @@ end
 # Promote across parameter distributions to a single ValueSupport.
 function _bugs_param_value_support(model::BUGSModel)
     gd = model.graph_evaluation_data
-    supports = Distributions.ValueSupport[]
+    support_types = Type{<:Distributions.ValueSupport}[]
     for i in eachindex(gd.sorted_nodes)
         gd.is_stochastic_vals[i] || continue
         gd.is_observed_vals[i] && continue
         dist = Base.invokelatest(
             gd.node_function_vals[i], model.evaluation_env, gd.loop_vars_vals[i]
         )
-        push!(supports, Distributions.value_support(typeof(dist))())
+        push!(support_types, Distributions.value_support(typeof(dist)))
     end
-    isempty(supports) && return Distributions.Continuous
-    return mapreduce(typeof, promote_type, supports)
+    isempty(support_types) && return Distributions.Continuous
+    return reduce(promote_type, support_types)
 end
 
 # Recover the NamedTuple eltype from the current evaluation environment.
@@ -84,6 +89,28 @@ end
 function Random.rand(rng::Random.AbstractRNG, d::BUGSModelDistribution{names}) where {names}
     evaluation_env, _ = evaluate_with_rng!!(rng, d.model; transformed=false)
     return NamedTuple{names}(map(s -> getfield(evaluation_env, s), names))
+end
+
+# Random.rand has no built-in array fallback for `Distribution{NamedTupleVariate}`, so it
+# would recurse to a `StackOverflowError`. Provide an explicit `dims`-form that draws
+# scalar samples eagerly.
+function Base.rand(
+    rng::Random.AbstractRNG, d::BUGSModelDistribution{names}, dims::Dims
+) where {names}
+    out = Array{eltype(d)}(undef, dims)
+    for i in eachindex(out)
+        out[i] = rand(rng, d)
+    end
+    return out
+end
+
+function Distributions._rand!(
+    rng::Random.AbstractRNG, d::BUGSModelDistribution, xs::AbstractArray
+)
+    for i in eachindex(xs)
+        xs[i] = rand(rng, d)
+    end
+    return xs
 end
 
 function Distributions.logpdf(d::BUGSModelDistribution{names}, x::NamedTuple) where {names}

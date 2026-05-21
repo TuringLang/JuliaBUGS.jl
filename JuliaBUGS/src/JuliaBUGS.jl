@@ -39,9 +39,19 @@ include("graphs.jl")
 include("compiler_pass.jl")
 include("model/Model.jl")
 using .Model
-using .Model: AbstractBUGSModel, BUGSModel, to_distribution
+using .Model: AbstractBUGSModel, BUGSModel
 
-export to_distribution
+# Re-export the user-facing API of the Model submodule.
+export parameters,
+    variables,
+    initialize!,
+    getparams,
+    settrans,
+    set_evaluation_mode,
+    set_observed_values!,
+    to_distribution
+export UseGraph, UseGeneratedLogDensityFunction, UseAutoMarginalization
+export BUGSModelWithGradient
 
 include("independent_mh.jl")
 include("gibbs.jl")

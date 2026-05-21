@@ -6,7 +6,8 @@
             x ~ Normal(0, 1)
             y ~ Normal(x, 1)
         end
-        model = compile(model_def, (; y=1.5))
+        y_obs = 1.5
+        model = compile(model_def, (; y=y_obs))
         d = to_distribution(model)
 
         @test d isa Distribution{Distributions.NamedTupleVariate{(:x,)}}
@@ -17,11 +18,33 @@
         @test nt isa NamedTuple{(:x,)}
         @test nt.x isa Float64
 
-        expected = logpdf(Normal(0, 1), nt.x) + logpdf(Normal(nt.x, 1), 1.5)
+        expected = logpdf(Normal(0, 1), nt.x) + logpdf(Normal(nt.x, 1), y_obs)
         @test logpdf(d, nt) ≈ expected
         @test pdf(d, nt) ≈ exp(expected)
         @test Distributions.loglikelihood(d, nt) ≈ expected
         @test_throws ArgumentError logpdf(d, (; z=0.0))
+
+        # no-rng rand falls back to the default RNG
+        @test rand(d) isa NamedTuple{(:x,)}
+
+        # batched rand: Distributions has no array fallback for NamedTupleVariate,
+        # so without an explicit dims method this would StackOverflowError.
+        samples = rand(MersenneTwister(0), d, 3)
+        @test samples isa AbstractVector{<:NamedTuple{(:x,)}}
+        @test length(samples) == 3
+        samples_2d = rand(MersenneTwister(0), d, 2, 2)
+        @test size(samples_2d) == (2, 2)
+        @test rand(d, 3) isa AbstractVector{<:NamedTuple{(:x,)}}
+
+        # rand! fills a pre-allocated container
+        buf = Vector{NamedTuple{(:x,),Tuple{Float64}}}(undef, 4)
+        rand!(MersenneTwister(0), d, buf)
+        @test all(b -> b isa NamedTuple{(:x,)}, buf)
+
+        # the wrapper ignores model.transformed: same logpdf in original space
+        transformed_model = JuliaBUGS.Model.settrans(model, true)
+        d_t = to_distribution(transformed_model)
+        @test logpdf(d_t, nt) ≈ logpdf(d, nt)
     end
 
     @testset "vector-valued and hierarchical model" begin
@@ -34,7 +57,8 @@
                 y[i] ~ Normal(x[i], 1)
             end
         end
-        model = compile(model_def, (; y=[1.0, 2.0, 3.0]))
+        y_obs = [1.0, 2.0, 3.0]
+        model = compile(model_def, (; y=y_obs))
         d = to_distribution(model)
 
         @test d isa Distribution{Distributions.NamedTupleVariate{(:tau, :x)}}
@@ -44,12 +68,10 @@
         @test nt.x isa AbstractVector
         @test length(nt.x) == 3
 
-        # logpdf consistency: manually compute log joint at the sampled values
-        # in the original (constrained) parameter space.
         manual =
             logpdf(Gamma(2.0, 2.0), nt.tau) +
             sum(logpdf(Normal(0, nt.tau), xi) for xi in nt.x) +
-            sum(logpdf(Normal(nt.x[i], 1), [1.0, 2.0, 3.0][i]) for i in 1:3)
+            sum(logpdf(Normal(nt.x[i], 1), y_obs[i]) for i in eachindex(y_obs))
         @test logpdf(d, nt) ≈ manual
     end
 
