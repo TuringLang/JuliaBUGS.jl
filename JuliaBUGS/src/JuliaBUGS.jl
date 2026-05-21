@@ -39,7 +39,9 @@ include("graphs.jl")
 include("compiler_pass.jl")
 include("model/Model.jl")
 using .Model
-using .Model: AbstractBUGSModel, BUGSModel
+using .Model: AbstractBUGSModel, BUGSModel, to_distribution
+
+export to_distribution
 
 include("independent_mh.jl")
 include("gibbs.jl")

@@ -23,9 +23,10 @@ include("evaluation.jl")
 include("abstractppl.jl")
 include("logdensityproblems.jl")
 include("abstractmcmc.jl")
+include("to_distribution.jl")
 
 # Public user-facing API
-export parameters, variables, initialize!, getparams, settrans
+export parameters, variables, initialize!, getparams, settrans, to_distribution
 export set_evaluation_mode, set_observed_values!
 
 # Evaluation mode types
