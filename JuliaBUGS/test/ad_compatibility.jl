@@ -49,24 +49,33 @@
             @test grad_rd ≈ grad_fd rtol = 1e-6
         end
 
-        @testset "AutoMooncake and AutoMooncakeForward switch to generated log density" begin
-            for adtype in
-                (AutoMooncake(; config=nothing), AutoMooncakeForward(; config=nothing))
-                grad_model = JuliaBUGS.BUGSModelWithGradient(model, adtype)
-                @test grad_model.prep isa AbstractPPL.Evaluators.Prepared
-                @test grad_model.base_model.evaluation_mode isa
-                    JuliaBUGS.UseGeneratedLogDensityFunction
+        @testset "AutoMooncake works in UseGraph mode" begin
+            grad_model = JuliaBUGS.BUGSModelWithGradient(
+                model, AutoMooncake(; config=nothing)
+            )
+            @test grad_model.prep isa AbstractPPL.Evaluators.Prepared
+            @test grad_model.base_model.evaluation_mode isa JuliaBUGS.UseGraph
 
-                x_generated = JuliaBUGS.getparams(grad_model.base_model)
-                logp, grad = LogDensityProblems.logdensity_and_gradient(
-                    grad_model, x_generated
-                )
-                @test isfinite(logp)
-                @test all(isfinite, grad)
-            end
+            logp, grad = LogDensityProblems.logdensity_and_gradient(grad_model, x)
+            @test isfinite(logp)
+            @test all(isfinite, grad)
         end
 
-        @testset "Mooncake requires generated log density" begin
+        @testset "AutoMooncakeForward switches to generated log density" begin
+            grad_model = JuliaBUGS.BUGSModelWithGradient(
+                model, AutoMooncakeForward(; config=nothing)
+            )
+            @test grad_model.prep isa AbstractPPL.Evaluators.Prepared
+            @test grad_model.base_model.evaluation_mode isa
+                JuliaBUGS.UseGeneratedLogDensityFunction
+
+            x_generated = JuliaBUGS.getparams(grad_model.base_model)
+            logp, grad = LogDensityProblems.logdensity_and_gradient(grad_model, x_generated)
+            @test isfinite(logp)
+            @test all(isfinite, grad)
+        end
+
+        @testset "Mooncake works when source generation is unavailable" begin
             unsupported_model_def = @bugs begin
                 for t in 1:(T - 1)
                     x[t] ~ Normal(x[t + 1], sigma)
@@ -74,12 +83,24 @@
                 x[T] ~ Normal(0, 1)
             end
             unsupported_model = compile(unsupported_model_def, (T=10, sigma=0.7))
+            unsupported_x = JuliaBUGS.getparams(unsupported_model)
+
+            grad_model = JuliaBUGS.BUGSModelWithGradient(
+                unsupported_model, AutoMooncake(; config=nothing)
+            )
+            @test grad_model.base_model.evaluation_mode isa JuliaBUGS.UseGraph
+
+            logp, grad = LogDensityProblems.logdensity_and_gradient(
+                grad_model, unsupported_x
+            )
+            @test isfinite(logp)
+            @test all(isfinite, grad)
 
             @test_logs (:warn, r"Source generation aborted") (
                 :warn, r"Could not generate optimized log density"
             ) begin
                 @test_throws ArgumentError JuliaBUGS.BUGSModelWithGradient(
-                    unsupported_model, AutoMooncake(; config=nothing)
+                    unsupported_model, AutoMooncakeForward(; config=nothing)
                 )
             end
         end
@@ -167,10 +188,18 @@
         @test isfinite(logp)
         @test all(isfinite, grad)
 
-        for adtype in
-            (AutoMooncake(; config=nothing), AutoMooncakeForward(; config=nothing))
-            @test_throws ArgumentError JuliaBUGS.BUGSModelWithGradient(model, adtype)
-        end
+        grad_model_mooncake = JuliaBUGS.BUGSModelWithGradient(
+            model, AutoMooncake(; config=nothing)
+        )
+        logp_mc, grad_mc = LogDensityProblems.logdensity_and_gradient(
+            grad_model_mooncake, x
+        )
+        @test isfinite(logp_mc)
+        @test all(isfinite, grad_mc)
+
+        @test_throws ArgumentError JuliaBUGS.BUGSModelWithGradient(
+            model, AutoMooncakeForward(; config=nothing)
+        )
     end
 
     @testset "compile with adtype parameter" begin
