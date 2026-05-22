@@ -22,6 +22,26 @@
 - `AutoMooncakeForward()` is auto-routed to `UseGeneratedLogDensityFunction()` mode when source generation is possible; a clear `ArgumentError` is raised otherwise.
 - `Bijectors 0.16` is now allowed in compat.
 
+## 0.13.0
+
+### Breaking Changes
+
+- Bumped AbstractPPL compat to `0.14` (#422).
+
+## 0.12.3
+
+- Fix serialization for `BUGSModel` and add round-trip tests (#435)
+- `MetaGraphsNext` 0.8 is now allowed in compat (#425)
+
+## 0.12.2
+
+- Catch `DomainError` in `LogDensityProblems.logdensity` to prevent HMC crashes from leapfrog integration (#434)
+- Fix math and inline LaTeX rendering on docs pages (#430)
+
+## 0.12.1
+
+- Added support for `AbstractMCMC.mcmc_callbacks`, including `TensorBoardLogger.jl` (#423). See the [callbacks docs](https://turinglang.org/AbstractMCMC.jl/stable/callbacks/#TensorBoard-Logging).
+
 ## 0.12.0
 
 ### Highlights
