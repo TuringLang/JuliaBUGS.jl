@@ -6,13 +6,13 @@ JuliaBUGS supports multiple evaluation modes that determine how the log density 
 
 | Mode | Description | AD Backends |
 |------|-------------|-------------|
-| `UseGraph()` | Traverses computational graph (default) | ReverseDiff, ForwardDiff, AutoMooncake |
-| `UseGeneratedLogDensityFunction()` | Compiles a Julia function for log density | Mooncake |
-| `UseAutoMarginalization()` | Graph traversal with discrete variable marginalization | ReverseDiff, ForwardDiff, AutoMooncake |
+| `UseGraph()` | Traverses computational graph (default) | AutoMooncake, ReverseDiff, ForwardDiff |
+| `UseGeneratedLogDensityFunction()` | Compiles a Julia function for log density | AutoMooncake, AutoMooncakeForward |
+| `UseAutoMarginalization()` | Graph traversal with discrete variable marginalization | AutoMooncake, ReverseDiff, ForwardDiff |
 
 ## UseGraph (Default)
 
-The default mode evaluates the log density by traversing the computational graph. Works with ReverseDiff, ForwardDiff, and reverse-mode Mooncake.
+The default mode evaluates the log density by traversing the computational graph. It works with reverse-mode Mooncake, ReverseDiff, and ForwardDiff.
 
 ```julia
 model = compile(model_def, data)

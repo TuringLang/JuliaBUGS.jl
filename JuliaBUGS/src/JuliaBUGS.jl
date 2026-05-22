@@ -242,15 +242,19 @@ Compile a BUGS model. Returns `BUGSModel`, or `BUGSModelWithGradient` if `adtype
 - `model_def::Expr`: Model definition from `@bugs` macro
 - `data::NamedTuple`: Observed data
 - `initial_params::NamedTuple`: Initial parameter values (optional, defaults to prior samples)
-- `adtype`: AD backend from ADTypes.jl (e.g., `AutoReverseDiff()`, `AutoForwardDiff()`, `AutoMooncake()`)
+- `adtype`: AD backend from ADTypes.jl (e.g., `AutoMooncake()`, `AutoReverseDiff()`, `AutoForwardDiff()`)
 
-For DifferentiationInterface-backed AD backends like `AutoReverseDiff()` and
+For Mooncake-backed AD, load `Mooncake` before compiling with `adtype`. For
+DifferentiationInterface-backed AD backends like `AutoReverseDiff()` and
 `AutoForwardDiff()`, load `DifferentiationInterface` and the concrete backend
-package before compiling with `adtype`.
+package before compiling.
 
 # Examples
 ```julia
 model = compile(model_def, data)
+
+using ADTypes, Mooncake
+model = compile(model_def, data; adtype=AutoMooncake(; config=nothing))
 
 using ADTypes, DifferentiationInterface, ReverseDiff
 model = compile(model_def, data; adtype=AutoReverseDiff())

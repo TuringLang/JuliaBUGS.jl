@@ -31,8 +31,9 @@ function JuliaBUGS.gibbs_internal(
 )
     return error(
         "Gradient-based samplers (HMC/NUTS) require an explicit AD backend. " *
-        "Use a tuple like ($(typeof(sampler).name.name)(...), AutoForwardDiff()) or " *
-        "($(typeof(sampler).name.name)(...), AutoReverseDiff()) instead.",
+        "Use a tuple like ($(typeof(sampler).name.name)(...), AutoMooncake()) or " *
+        "($(typeof(sampler).name.name)(...), AutoReverseDiff()) or " *
+        "($(typeof(sampler).name.name)(...), AutoForwardDiff()) instead.",
     )
 end
 

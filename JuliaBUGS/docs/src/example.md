@@ -3,7 +3,7 @@
 ```@setup abc
 using JuliaBUGS
 using AdvancedHMC, AbstractMCMC, LogDensityProblems, MCMCChains
-using ADTypes, DifferentiationInterface, ReverseDiff
+using ADTypes, Mooncake
 
 data = (
     r = [10, 23, 23, 26, 17, 5, 53, 55, 32, 46, 10, 8, 10, 8, 23, 0, 3, 22, 15, 32, 3],
@@ -198,7 +198,7 @@ For gradient-based inference, compile your model with an AD backend using the `a
 
 ```@example abc
 # Compile with gradient support
-model = compile(model_def, data; adtype=AutoReverseDiff(compile=true))
+model = compile(model_def, data; adtype=AutoMooncake(; config=nothing))
 
 n_samples, n_adapts = 2000, 1000
 

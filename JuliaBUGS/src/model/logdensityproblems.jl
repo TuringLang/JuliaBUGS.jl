@@ -72,7 +72,7 @@ Wrap a `BUGSModel` with AD capabilities for gradient-based inference.
 Implements `LogDensityProblems.logdensity` and `LogDensityProblems.logdensity_and_gradient`.
 
 # Fields
-- `adtype::AD`: AD backend (e.g., `AutoReverseDiff()`)
+- `adtype::AD`: AD backend (e.g., `AutoMooncake()`)
 - `prep::P`: Prepared AD evaluator from AbstractPPL
 - `base_model::M`: The underlying `BUGSModel`
 
@@ -88,7 +88,8 @@ end
     BUGSModelWithGradient(model::BUGSModel, adtype::ADTypes.AbstractADType)
 
 Construct a gradient-enabled model wrapper from a BUGSModel and an AD backend.
-For DifferentiationInterface-backed AD backends like `AutoReverseDiff()` and
+For Mooncake-backed AD, load `Mooncake` before constructing the wrapper. For
+DifferentiationInterface-backed AD backends like `AutoReverseDiff()` and
 `AutoForwardDiff()`, load `DifferentiationInterface` and the concrete backend
 package before constructing the wrapper.
 
@@ -99,11 +100,12 @@ Different AD backends have different compatibility with evaluation modes:
 - **`UseGeneratedLogDensityFunction`**: Only compatible with mutation-supporting backends
   like `AutoMooncake`, `AutoMooncakeForward`, and `AutoEnzyme`. The generated functions
   mutate arrays in-place.
-- **`UseGraph`**: Compatible with `AutoReverseDiff`, `AutoForwardDiff`, and other
-  tape-based or forward-mode backends that can handle the graph evaluator.
+- **`UseGraph`**: Compatible with `AutoMooncake`, `AutoReverseDiff`,
+  `AutoForwardDiff`, and other backends that can handle the graph evaluator.
   `AutoMooncakeForward` is routed to `UseGeneratedLogDensityFunction`.
-- **`UseAutoMarginalization`**: Compatible with graph-capable AD backends.
-  `AutoMooncakeForward` is not supported for this graph-based mode.
+- **`UseAutoMarginalization`**: Compatible with graph-capable AD backends like
+  `AutoMooncake`, `AutoReverseDiff`, and `AutoForwardDiff`. `AutoMooncakeForward`
+  is not supported for this graph-based mode.
 
 If an incompatible combination is detected, JuliaBUGS switches to a compatible
 evaluation mode when possible.
@@ -112,8 +114,8 @@ evaluation mode when possible.
 ```julia
 model = compile(model_def, data)
 
-using ADTypes, DifferentiationInterface, ReverseDiff
-grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoReverseDiff(compile=true))
+using ADTypes, Mooncake
+grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
 ```
 """
 function BUGSModelWithGradient(model::BUGSModel, adtype::ADTypes.AbstractADType)
