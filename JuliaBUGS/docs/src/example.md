@@ -229,3 +229,5 @@ This is consistent with the result in the [OpenBUGS seeds example](https://chjac
 ## More Examples
 
 We have transcribed all the examples from the first volume of the BUGS Examples ([original](https://www.multibugs.org/examples/latest/VolumeI.html) and [transcribed](https://github.com/TuringLang/JuliaBUGS.jl/tree/main/JuliaBUGS/src/BUGSExamples/Volume_1)). All programs and data are included, and can be compiled using the steps described in the tutorial above.
+
+More worked Julia scripts are available in the [examples directory](https://github.com/TuringLang/JuliaBUGS.jl/tree/main/JuliaBUGS/examples), including SIR, Gaussian process, and Bayesian neural network examples using Mooncake-backed gradient sampling.
