@@ -77,6 +77,10 @@ using JuliaBUGS: @bugs, compile, @varname
         # Perform smart copy
         new_env = smart_copy_evaluation_env(env, mutable_syms)
 
+        # Preserve the original NamedTuple structure, including field order.
+        @test keys(new_env) == keys(env)
+        @test typeof(new_env) == typeof(env)
+
         # Test that mutable fields are copied (different objects)
         @test new_env.a !== env.a
         @test new_env.a == env.a

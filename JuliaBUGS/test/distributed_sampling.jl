@@ -1,7 +1,9 @@
 using Distributed
 
 # Add worker processes, propagating the current project environment
-addprocs(2; exeflags=`--project=$(Base.active_project()) --startup-file=no --check-bounds=yes`)
+addprocs(
+    2; exeflags=`--project=$(Base.active_project()) --startup-file=no --check-bounds=yes`
+)
 
 @everywhere begin
     using JuliaBUGS
@@ -10,6 +12,7 @@ addprocs(2; exeflags=`--project=$(Base.active_project()) --startup-file=no --che
     using AbstractMCMC
     using AdvancedHMC
     using ADTypes
+    using DifferentiationInterface
     using ReverseDiff
     using StableRNGs
 end
@@ -80,9 +83,7 @@ end
 
     @testset "MCMCDistributed sampling" begin
         model = compile(model_def, data)
-        ad_model = JuliaBUGS.BUGSModelWithGradient(
-            model, AutoReverseDiff(; compile=false)
-        )
+        ad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoReverseDiff(; compile=false))
 
         D = LogDensityProblems.dimension(model)
         n_samples = 100

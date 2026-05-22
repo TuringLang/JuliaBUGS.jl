@@ -6,8 +6,10 @@ using JuliaBUGS
 using JuliaBUGS: @model
 using Distributions
 using DifferentialEquations
+using SciMLSensitivity
 using LogDensityProblems
 using ADTypes
+using Mooncake
 using AbstractMCMC, AdvancedHMC, MCMCChains
 using Distributed              # For distributed example
 
@@ -111,17 +113,17 @@ model = sir_model(
 model = JuliaBUGS.initialize!(model, initial_θ)
 model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
 
-# --- MCMC Sampling: NUTS with ForwardDiff AD ---
+# --- MCMC Sampling: NUTS with Mooncake AD ---
 
-# Create gradient-enabled model using ForwardDiff
-grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoForwardDiff())
+# Create gradient-enabled model using Mooncake
+grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
 
 # MCMC settings
 n_samples = 1000
 n_adapts = 500
 
 # Run the NUTS sampler
-samples_nuts_fwd = AbstractMCMC.sample(
+samples_nuts_mooncake = AbstractMCMC.sample(
     grad_model,
     AdvancedHMC.NUTS(0.65), # No-U-Turn Sampler with step size adaptation target
     n_samples;
@@ -129,4 +131,5 @@ samples_nuts_fwd = AbstractMCMC.sample(
     n_adapts=n_adapts,     # Number of adaptation/warmup steps
     init_params=initial_θ_vec, # Starting point for the sampler
     discard_initial=n_adapts, # Discard warmup samples
+    progress=false,
 )

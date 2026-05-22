@@ -1,7 +1,9 @@
 using LogDensityProblems
 
 function _eval_logdensity(model, ::UseGeneratedLogDensityFunction, x)
-    return model.log_density_computation_function(model.evaluation_env, x)
+    return Base.invokelatest(
+        model.log_density_computation_function, model.evaluation_env, x
+    )
 end
 
 function _eval_logdensity(model, ::UseGraph, x)
@@ -70,8 +72,8 @@ Wrap a `BUGSModel` with AD capabilities for gradient-based inference.
 Implements `LogDensityProblems.logdensity` and `LogDensityProblems.logdensity_and_gradient`.
 
 # Fields
-- `adtype::AD`: AD backend (e.g., `AutoReverseDiff()`)
-- `prep::P`: Prepared gradient from DifferentiationInterface
+- `adtype::AD`: AD backend (e.g., `AutoMooncake()`)
+- `prep::P`: Prepared AD evaluator from AbstractPPL
 - `base_model::M`: The underlying `BUGSModel`
 
 See also [`compile`](@ref).
@@ -86,23 +88,34 @@ end
     BUGSModelWithGradient(model::BUGSModel, adtype::ADTypes.AbstractADType)
 
 Construct a gradient-enabled model wrapper from a BUGSModel and an AD backend.
+For Mooncake-backed AD, load `Mooncake` before constructing the wrapper. For
+DifferentiationInterface-backed AD backends like `AutoReverseDiff()` and
+`AutoForwardDiff()`, load `DifferentiationInterface` and the concrete backend
+package before constructing the wrapper.
 
 # AD Backend Compatibility
 
 Different AD backends have different compatibility with evaluation modes:
 
 - **`UseGeneratedLogDensityFunction`**: Only compatible with mutation-supporting backends
-  like `AutoMooncake` and `AutoEnzyme`. The generated functions mutate arrays in-place.
-- **`UseGraph`**: Compatible with `AutoReverseDiff`, `AutoForwardDiff`, and other
-  tape-based or forward-mode backends. Also works with Mooncake and Enzyme.
+  like `AutoMooncake`, `AutoMooncakeForward`, and `AutoEnzyme`. The generated functions
+  mutate arrays in-place.
+- **`UseGraph`**: Compatible with `AutoMooncake`, `AutoReverseDiff`,
+  `AutoForwardDiff`, and other backends that can handle the graph evaluator.
+  `AutoMooncakeForward` is routed to `UseGeneratedLogDensityFunction`.
+- **`UseAutoMarginalization`**: Compatible with graph-capable AD backends like
+  `AutoMooncake`, `AutoReverseDiff`, and `AutoForwardDiff`. `AutoMooncakeForward`
+  is not supported for this graph-based mode.
 
-If an incompatible combination is detected, a warning is issued and the model is
-automatically switched to `UseGraph` mode.
+If an incompatible combination is detected, JuliaBUGS switches to a compatible
+evaluation mode when possible.
 
 # Example
 ```julia
 model = compile(model_def, data)
-grad_model = BUGSModelWithGradient(model, AutoReverseDiff(compile=true))
+
+using ADTypes, Mooncake
+grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
 ```
 """
 function BUGSModelWithGradient(model::BUGSModel, adtype::ADTypes.AbstractADType)
@@ -110,14 +123,23 @@ function BUGSModelWithGradient(model::BUGSModel, adtype::ADTypes.AbstractADType)
     model = _check_ad_compatibility(model, adtype)
 
     x = getparams(model)
-    prep = DI.prepare_gradient(_logdensity_for_gradient, adtype, x, DI.Constant(model))
+    prep = _prepare_logdensity_gradient(adtype, model, x)
     return BUGSModelWithGradient(adtype, prep, model)
 end
 
-# AD backends that support mutation (required for UseGeneratedLogDensityFunction)
-_supports_mutation(::ADTypes.AutoMooncake) = true
-_supports_mutation(::ADTypes.AutoEnzyme) = true
-_supports_mutation(::ADTypes.AbstractADType) = false
+function _is_mooncake(adtype::ADTypes.AbstractADType)
+    return adtype isa Union{ADTypes.AutoMooncake,ADTypes.AutoMooncakeForward}
+end
+
+function _is_mooncake_forward(adtype::ADTypes.AbstractADType)
+    return adtype isa ADTypes.AutoMooncakeForward
+end
+
+# Whether the AD backend can differentiate through code that mutates arrays
+# in-place, which is what `UseGeneratedLogDensityFunction` requires.
+function _supports_mutation(adtype::ADTypes.AbstractADType)
+    return _is_mooncake(adtype) || adtype isa ADTypes.AutoEnzyme
+end
 
 function _check_ad_compatibility(model::BUGSModel, adtype::ADTypes.AbstractADType)
     if model.evaluation_mode isa UseGeneratedLogDensityFunction &&
@@ -125,6 +147,25 @@ function _check_ad_compatibility(model::BUGSModel, adtype::ADTypes.AbstractADTyp
         @warn "AD backend $(typeof(adtype)) does not support mutation required by " *
             "UseGeneratedLogDensityFunction mode. Switching to UseGraph mode." maxlog = 1
         return set_evaluation_mode(model, UseGraph())
+    elseif model.evaluation_mode isa UseGraph && _is_mooncake_forward(adtype)
+        model = set_evaluation_mode(model, UseGeneratedLogDensityFunction())
+        if !(model.evaluation_mode isa UseGeneratedLogDensityFunction)
+            throw(
+                ArgumentError(
+                    "AD backend $(typeof(adtype)) requires generated log-density mode, " *
+                    "but JuliaBUGS could not generate a log-density function for this model.",
+                ),
+            )
+        end
+    elseif model.evaluation_mode isa UseAutoMarginalization && _is_mooncake_forward(adtype)
+        throw(
+            ArgumentError(
+                "AD backend $(typeof(adtype)) does not support UseAutoMarginalization mode. " *
+                "Use AutoMooncake/AutoForwardDiff/AutoReverseDiff for auto-marginalized " *
+                "models, or switch to UseGeneratedLogDensityFunction mode if marginalization " *
+                "is not required.",
+            ),
+        )
     end
     return model
 end
@@ -145,7 +186,7 @@ end
 """
     _logdensity_for_gradient(x, model)
 
-Target function for gradient computation via DifferentiationInterface.
+Target function for gradient computation via AbstractPPL's prepared AD evaluator API.
 The parameter vector `x` comes first (the argument to differentiate w.r.t.),
 and the model is passed as a constant context (not differentiated).
 """
@@ -153,22 +194,44 @@ function _logdensity_for_gradient(x::AbstractVector, model::BUGSModel)
     return _eval_logdensity(model, model.evaluation_mode, x)
 end
 
+function _generated_logdensity_for_gradient(model::BUGSModel)
+    f = model.log_density_computation_function
+    env = model.evaluation_env
+    return x -> f(env, x)
+end
+
+function _prepare_logdensity_gradient(
+    adtype::ADTypes.AbstractADType, model::BUGSModel, x::AbstractVector
+)
+    if model.evaluation_mode isa UseGeneratedLogDensityFunction
+        # The generated log-density function is created by Core.eval when the
+        # evaluation mode is selected. AbstractPPL.prepare probes the target
+        # immediately, so prepare this target in the latest world age without
+        # putting invokelatest inside the function differentiated by AD.
+        return Base.invokelatest(
+            AbstractPPL.prepare, adtype, _generated_logdensity_for_gradient(model), x
+        )
+    elseif adtype isa ADTypes.AutoMooncake
+        # Mooncake's forward-mode path currently treats AbstractPPL context
+        # arguments as AD inputs, but reverse mode can capture the model here so
+        # only `x` is differentiated.
+        return AbstractPPL.prepare(adtype, x -> _logdensity_for_gradient(x, model), x)
+    end
+    return AbstractPPL.prepare(adtype, _logdensity_for_gradient, x; context=(model,))
+end
+
 """
     LogDensityProblems.logdensity_and_gradient(model::BUGSModelWithGradient, x)
 
-Compute log density and its gradient using DifferentiationInterface.
+Compute log density and its gradient using AbstractPPL's prepared AD evaluator API.
+The gradient is copied out of the `value_and_gradient!!` cache before returning.
 """
 function LogDensityProblems.logdensity_and_gradient(
     model::BUGSModelWithGradient, x::AbstractVector
 )
     try
-        return DI.value_and_gradient(
-            _logdensity_for_gradient,
-            model.prep,
-            model.adtype,
-            x,
-            DI.Constant(model.base_model),
-        )
+        logp, grad = AbstractPPL.value_and_gradient!!(model.prep, x)
+        return (logp, copy(grad))
     catch e
         if e isa DomainError
             T = float(eltype(x))
