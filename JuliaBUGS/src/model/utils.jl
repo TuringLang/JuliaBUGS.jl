@@ -118,6 +118,11 @@ function get_mutable_symbols(data)
         push!(mutable_syms, AbstractPPL.getsym(vn))
     end
 
+    # Add symbols from generated quantities (forward-sampled during post-processing)
+    for vn in graph_data.postprocess_stochastic
+        push!(mutable_syms, AbstractPPL.getsym(vn))
+    end
+
     # Add symbols from deterministic (logical) nodes
     for (i, vn) in enumerate(graph_data.sorted_nodes)
         if !graph_data.is_stochastic_vals[i]

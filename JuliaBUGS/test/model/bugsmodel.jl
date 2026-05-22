@@ -285,17 +285,16 @@ end
         end
 
         @testset "With conditioned model" begin
-            model_cond = condition(model, (; x=[1.5, 2.5, 3.5]))
+            model_cond = condition(model, (; mu=0.5))
 
             # Only unconditioned parameters (default transformed)
             params = Base.invokelatest(getparams, model_cond)
-            @test length(params) == 2  # mu, tau
+            @test length(params) == 4  # tau, x[1:3]
             @test params[1] ≈ log(2.0)  # tau transformed
-            @test params[2] ≈ 1.0       # mu untransformed (identity)
+            @test params[2:4] == [1.5, 2.5, 3.5]
 
             params_dict = Base.invokelatest(getparams, Dict, model_cond)
-            @test !haskey(params_dict, @varname(x[1]))
-            @test params_dict[@varname(mu)] ≈ 1.0
+            @test !haskey(params_dict, @varname(mu))
             @test params_dict[@varname(tau)] ≈ log(2.0)  # transformed
         end
     end
