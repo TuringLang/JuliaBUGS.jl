@@ -62,7 +62,8 @@ function GraphEvaluationData(
     sorted_nodes::Vector{<:VarName}=VarName[
         label_for(g, node) for node in topological_sort(g)
     ],
-    active_parameters::Union{Nothing,Vector{<:VarName}}=nothing,
+    active_parameters::Union{Nothing,Vector{<:VarName}}=nothing;
+    gq_override::Union{Nothing,Set{<:VarName}}=nothing,
 )
     is_stochastic_vals = Array{Bool}(undef, length(sorted_nodes))
     is_observed_vals = Array{Bool}(undef, length(sorted_nodes))
@@ -73,13 +74,14 @@ function GraphEvaluationData(
     postprocess_stochastic = VarName[]
     variable_types = Vector{VariableType}(undef, length(sorted_nodes))
 
-    gq_vars = find_generated_quantities_variables(g)
-
-    # If no observations exist, don't classify anything as GQ
-    # all unobserved stochastic nodes should be treated as ModelParameter.
-    has_observations = any(g[vn].is_observed for vn in labels(g) if g[vn].is_stochastic)
-    if !has_observations
-        gq_vars = Set{VarName}()
+    if gq_override !== nothing
+        gq_vars = gq_override
+    else
+        gq_vars = find_generated_quantities_variables(g)
+        has_observations = any(g[vn].is_observed for vn in labels(g) if g[vn].is_stochastic)
+        if !has_observations
+            gq_vars = Set{VarName}()
+        end
     end
 
     for (i, vn) in enumerate(sorted_nodes)
@@ -343,7 +345,7 @@ end
 """
     parameters(model::BUGSModel)
 
-Return a vector of `VarName` containing the names of stochastic variables that are sampled directly by MCMC.
+Return a vector of `VarName` containing the names of all unobserved stochastic variables.
 """
 parameters(model::BUGSModel) = model.graph_evaluation_data.sorted_parameters
 

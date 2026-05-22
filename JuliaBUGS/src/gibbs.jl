@@ -215,15 +215,20 @@ that exist in the model parameters.
 
 # Examples
 ```jldoctest
-julia> using JuliaBUGS: expand_variables, @varname; using AbstractPPL: VarName
+julia> using JuliaBUGS: expand_variables, @varname
 
 julia> model_parameters = [@varname(x[1]), @varname(x[2]), @varname(x[3]), @varname(y)];
 
-julia> expand_variables([@varname(x)], model_parameters) == [@varname(x[1]), @varname(x[2]), @varname(x[3])]
-true
+julia> expand_variables([@varname(x)], model_parameters)
+3-element Vector{VarName}:
+ x[1]
+ x[2]
+ x[3]
 
-julia> expand_variables([@varname(x[1]), @varname(y)], model_parameters) == [@varname(x[1]), @varname(y)]
-true
+julia> expand_variables([@varname(x[1]), @varname(y)], model_parameters)
+2-element Vector{VarName}:
+ x[1]
+ y
 ```
 """
 function expand_variables(vars::Vector{<:VarName}, model_parameters::Vector{<:VarName})
