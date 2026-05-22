@@ -502,7 +502,7 @@ function getparams(
             d[v] = value
         else
             (; node_function, loop_vars) = model.g[v]
-            dist = node_function(evaluation_env, loop_vars)
+            dist = Base.invokelatest(node_function, evaluation_env, loop_vars)
             d[v] = Bijectors.transform(Bijectors.bijector(dist), value)
         end
     end

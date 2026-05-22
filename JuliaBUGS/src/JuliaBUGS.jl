@@ -9,7 +9,7 @@ using Bijectors: Bijectors
 using Distributions
 using Graphs, MetaGraphsNext
 using LinearAlgebra
-using LogDensityProblems, LogDensityProblemsAD
+using LogDensityProblems
 using MacroTools
 using OrderedCollections: OrderedDict
 using Random
