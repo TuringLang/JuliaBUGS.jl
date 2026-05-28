@@ -612,7 +612,9 @@ function __gen_logp_density_function_body_exprs(stmts::Vector, evaluation_env, e
             elseif stmt.args[1] == :≂
                 push!(exprs, __gen_observe_exprs(stmt))
             elseif stmt.args[1] == :≃
-                push!(exprs, __gen_generated_quantity_exprs(stmt))
+                # Generated quantities don't contribute to log-density.
+                # Skip them entirely to keep the log-density function deterministic.
+                nothing
             else
                 error("Unknown operator: $(stmt.args[1])")
             end

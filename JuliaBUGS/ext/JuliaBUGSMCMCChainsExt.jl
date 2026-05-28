@@ -6,6 +6,7 @@ using JuliaBUGS:
     BUGSModel,
     BUGSModelWithGradient,
     find_generated_quantities_variables,
+    postprocess_variables,
     evaluate!!,
     getparams
 using JuliaBUGS.Model: UseAutoMarginalization, _active_parameter_vars
@@ -135,21 +136,37 @@ function JuliaBUGS.gen_chains(
     # Filter parameters based on evaluation mode and MCMC partition.
     param_vars = _active_parameter_vars(model)
 
-    # Find and order generated quantities
-    # Exclude parameters to avoid double counting forward-sampled variables
-    generated_vars = find_generated_quantities_variables(model.g)
+    # Find all generated quantities (both deterministic and stochastic) for chain columns.
+    # Use graph-based detection for the full list, then filter to topo order and exclude params.
+    all_gq_vars = find_generated_quantities_variables(model.g)
     param_set = Set(param_vars)
-    generated_vars = [v for v in gd.sorted_nodes if v in generated_vars && v ∉ param_set]
+    generated_vars = [v for v in gd.sorted_nodes if v in all_gq_vars && v ∉ param_set]
 
-    # Evaluate model for each sample to get parameter values and generated quantities
+    # Identify which GQs need forward-sampling (stochastic only).
+    # Deterministic GQs are already computed by evaluate!!.
+    stochastic_gq_set = Set(postprocess_variables(model))
+
+    # Evaluate model for each sample to get parameter values and forward-sample stochastic GQs
     param_vals = []
     generated_quantities = []
     for i in axes(samples)[1]
-        # Set parameters and evaluate the model
+        # Set MCMC parameters and evaluate the model (computes deterministic nodes + log-density)
         evaluation_env = first(evaluate!!(model, samples[i]))
 
+        # Forward-sample stochastic generated quantities: draw from their distributions
+        # using the freshly computed evaluation environment
+        for vn in generated_vars
+            if vn in stochastic_gq_set
+                idx = findfirst(==(vn), gd.sorted_nodes)
+                node_function = gd.node_function_vals[idx]
+                loop_vars = gd.loop_vars_vals[idx]
+                dist = node_function(evaluation_env, loop_vars)
+                value = rand(dist)
+                evaluation_env = JuliaBUGS.BangBang.setindex!!(evaluation_env, value, vn)
+            end
+        end
+
         # Get parameter values from the evaluation environment
-        # (they were just set by evaluate!!, so they match samples[i])
         push!(
             param_vals,
             [AbstractPPL.getvalue(evaluation_env, param_var) for param_var in param_vars],
