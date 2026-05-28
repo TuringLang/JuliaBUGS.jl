@@ -550,6 +550,12 @@ function __gen_logp_density_function_body_exprs(stmts::Vector, evaluation_env, e
         elseif Meta.isexpr(stmt, :call)
             if stmt.args[1] == :~
                 push!(exprs, __gen_model_parameter_exprs(stmt).args...)
+            elseif stmt.args[1] == :≂
+                push!(exprs, __gen_observe_exprs(stmt))
+            elseif stmt.args[1] == :≃
+                # Generated quantities don't contribute to log-density.
+                # Skip them entirely to keep the log-density function deterministic.
+                nothing
             else
                 push!(exprs, __gen_observe_exprs(stmt))
             end
