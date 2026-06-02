@@ -567,6 +567,7 @@ function _create_modified_model(
         :graph_evaluation_data => new_graph_evaluation_data,
         :g => new_graph,
         :log_density_computation_function => nothing,  # Invalidate: graph changed
+        :postprocess_function => nothing,  # Invalidate: graph changed
         :marginalization_cache => nothing,  # Invalidate: graph changed
         :mutable_symbols => new_mutable_symbols,
         :evaluation_mode => UseGraph(),  # Reset to safe default

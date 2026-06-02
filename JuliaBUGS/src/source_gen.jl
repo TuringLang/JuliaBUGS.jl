@@ -384,7 +384,7 @@ function __check_for_reserved_names(model_def::Expr)
     bad_variable_names = filter(
         variable_name ->
             startswith(string(variable_name), "__") &&
-            endswith(string(variable_name), "__"),
+                endswith(string(variable_name), "__"),
         variable_names,
     )
     if !isempty(bad_variable_names)
@@ -612,9 +612,7 @@ function __gen_logp_density_function_body_exprs(stmts::Vector, evaluation_env, e
             elseif stmt.args[1] == :≂
                 push!(exprs, __gen_observe_exprs(stmt))
             elseif stmt.args[1] == :≃
-                # Generated quantities don't contribute to log-density.
-                # Skip them entirely to keep the log-density function deterministic.
-                nothing
+                push!(exprs, __gen_generated_quantity_exprs(stmt))
             else
                 error("Unknown operator: $(stmt.args[1])")
             end
@@ -702,6 +700,76 @@ function __gen_model_parameter_exprs(stmt)
         __logprior__ = Distributions.logpdf(__dist__, __value__) + __logjac__
         __logp__ = __logp__ + __logprior__
         $lhs = __value__
+    end
+end
+
+# Generates a compiled function that forward-samples stochastic generated quantities and recomputes deterministic dependencies.
+
+function _gen_postprocess_function_expr(
+    model_def, evaluation_env, function_name::Symbol=:__postprocess_gq__
+)
+    env_keys = keys(evaluation_env)
+    return MacroTools.@q function $function_name(__evaluation_env__)
+        (; $(env_keys...)) = __evaluation_env__
+        $(__gen_postprocess_body_exprs(model_def.args, evaluation_env)...)
+        return (; $(env_keys...))
+    end
+end
+
+function __gen_postprocess_body_exprs(stmts::Vector, evaluation_env, exprs=Expr[])
+    for stmt in stmts
+        if Meta.isexpr(stmt, :(=))
+            push!(exprs, __gen_deterministic_exprs(stmt))
+        elseif Meta.isexpr(stmt, :call)
+            if stmt.args[1] == :~
+                # MCMC parameters: values already in env from evaluate!!, skip.
+                nothing
+            elseif stmt.args[1] == :≂
+                # Observations: values already in env, skip.
+                nothing
+            elseif stmt.args[1] == :≃
+                push!(exprs, __gen_generated_quantity_exprs(stmt))
+            else
+                error("Unknown operator: $(stmt.args[1])")
+            end
+        elseif Meta.isexpr(stmt, :for)
+            new_body = __gen_postprocess_body_exprs(stmt.args[2].args, evaluation_env)
+            new_for = Expr(:for, stmt.args[1], Expr(:block, new_body...))
+            push!(exprs, new_for)
+        elseif Meta.isexpr(stmt, :if)
+            new_if = _handle_if_expr_postprocess(stmt, evaluation_env)
+            push!(exprs, new_if)
+        elseif Meta.isexpr(stmt, :block)
+            new_inner = __gen_postprocess_body_exprs(stmt.args, evaluation_env)
+            append!(exprs, new_inner)
+        else
+            error("Unsupported statement: $stmt")
+        end
+    end
+    return exprs
+end
+
+function _handle_if_expr_postprocess(stmt, evaluation_env)
+    cond_expr = stmt.args[1]
+    then_expr = stmt.args[2]
+    elseif_or_else_expr = length(stmt.args) == 3 ? stmt.args[3] : nothing
+
+    new_then_body = __gen_postprocess_body_exprs(then_expr.args, evaluation_env)
+    new_then_block = Expr(:block, new_then_body...)
+    new_else_block = _handle_else_expr_postprocess(elseif_or_else_expr, evaluation_env)
+    return Expr(:if, cond_expr, new_then_block, new_else_block)
+end
+
+function _handle_else_expr_postprocess(expr, evaluation_env)
+    if expr === nothing
+        return nothing
+    elseif Meta.isexpr(expr, :elseif)
+        return _handle_if_expr_postprocess(expr, evaluation_env)
+    elseif Meta.isexpr(expr, :block)
+        new_else_body = __gen_postprocess_body_exprs(expr.args, evaluation_env)
+        return Expr(:block, new_else_body...)
+    else
+        error("Unsupported else expression: $expr")
     end
 end
 

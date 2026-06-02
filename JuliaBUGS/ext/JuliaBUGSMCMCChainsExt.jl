@@ -153,16 +153,26 @@ function JuliaBUGS.gen_chains(
         # Set MCMC parameters and evaluate the model (computes deterministic nodes + log-density)
         evaluation_env = first(evaluate!!(model, samples[i]))
 
-        # Forward-sample stochastic generated quantities: draw from their distributions
-        # using the freshly computed evaluation environment
-        for vn in generated_vars
-            if vn in stochastic_gq_set
+        if !isnothing(model.postprocess_function)
+            # The postprocess function re-evaluates all deterministic nodes
+            # and forward-samples stochastic generated quantities in a single compiled pass.
+            evaluation_env = Base.invokelatest(model.postprocess_function, evaluation_env)
+        else
+            # forward-sample stochastic generated quantities, then re-evaluate deterministic GQs that may depend on them.
+            for vn in generated_vars
                 idx = findfirst(==(vn), gd.sorted_nodes)
+                is_stochastic = gd.is_stochastic_vals[idx]
                 node_function = gd.node_function_vals[idx]
                 loop_vars = gd.loop_vars_vals[idx]
-                dist = node_function(evaluation_env, loop_vars)
-                value = rand(dist)
-                evaluation_env = JuliaBUGS.BangBang.setindex!!(evaluation_env, value, vn)
+                if is_stochastic && vn in stochastic_gq_set
+                    dist = node_function(evaluation_env, loop_vars)
+                    value = rand(dist)
+                    evaluation_env = JuliaBUGS.BangBang.setindex!!(evaluation_env, value, vn)
+                elseif !is_stochastic
+                    # Recompute deterministic GQ nodes (may depend on freshly sampled GQs)
+                    value = node_function(evaluation_env, loop_vars)
+                    evaluation_env = JuliaBUGS.BangBang.setindex!!(evaluation_env, value, vn)
+                end
             end
         end
 
