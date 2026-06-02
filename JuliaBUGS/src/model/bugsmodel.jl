@@ -124,6 +124,8 @@ The `BUGSModel` object is used for inference and represents the output of compil
 - `graph_evaluation_data::GraphEvaluationData{TNF,TV}`: Pre-computed node values for evaluation.
 - `log_density_computation_function::F`: Generated log-density function (lazy, for
   `UseGeneratedLogDensityFunction` mode).
+- `postprocess_function::PF`: Generated function for forward-sampling GQs and recomputing
+  deterministic dependencies (lazy, compiled alongside log-density function).
 - `marginalization_cache::MC`: Cache for auto-marginalization (lazy, for
   `UseAutoMarginalization` mode). Invalidated when graph structure changes.
 - `mutable_symbols::Set{Symbol}`: Symbols that may be mutated during evaluation.
@@ -137,6 +139,7 @@ struct BUGSModel{
     TV,
     data_T,
     F<:Union{Function,Nothing},
+    PF<:Union{Function,Nothing},
     MC<:Union{MarginalizationCache,Nothing},
 } <: AbstractBUGSModel
     model_def::Expr
@@ -157,6 +160,7 @@ struct BUGSModel{
     graph_evaluation_data::GraphEvaluationData{TNF,TV}
 
     log_density_computation_function::F
+    postprocess_function::PF
 
     marginalization_cache::MC
 
@@ -179,6 +183,7 @@ function BUGSModel(
     base_model::Union{<:AbstractBUGSModel,Nothing}=model.base_model,
     evaluation_mode::EvaluationMode=model.evaluation_mode,
     log_density_computation_function::Union{Function,Nothing}=model.log_density_computation_function,
+    postprocess_function::Union{Function,Nothing}=model.postprocess_function,
     marginalization_cache::Union{MarginalizationCache,Nothing}=model.marginalization_cache,
     mutable_symbols::Set{Symbol}=model.mutable_symbols,
     model_def::Expr=model.model_def,
@@ -198,6 +203,7 @@ function BUGSModel(
         transformed_var_lengths,
         graph_evaluation_data,
         log_density_computation_function,
+        postprocess_function,
         marginalization_cache,
         mutable_symbols,
         base_model,
@@ -317,6 +323,7 @@ function BUGSModel(
         transformed_var_lengths,
         graph_evaluation_data,
         nothing,  # log_density_computation_function - generated on-demand
+        nothing,  # postprocess_function - generated on-demand
         nothing,  # marginalization_cache - generated on-demand
         mutable_symbols,
         nothing,
@@ -586,6 +593,14 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                     JuliaBUGS, log_density_computation_expr
                 )
 
+                # Compile postprocess function for forward-sampling GQs
+                postprocess_expr = JuliaBUGS._gen_postprocess_function_expr(
+                    lowered_model_def,
+                    model.evaluation_env,
+                    gensym(:__postprocess_gq__),
+                )
+                postprocess_function = Core.eval(JuliaBUGS, postprocess_expr)
+
                 # Update sorted_nodes based on reconstructed model to ensure parameter ordering
                 # consistency between UseGraph and UseGeneratedLogDensityFunction modes
                 pass = JuliaBUGS.CollectSortedNodes(model.evaluation_env)
@@ -604,6 +619,11 @@ function set_evaluation_mode(model::BUGSModel, mode::EvaluationMode)
                     model,
                     :log_density_computation_function,
                     log_density_computation_function,
+                )
+                model = BangBang.setproperty!!(
+                    model,
+                    :postprocess_function,
+                    postprocess_function,
                 )
             end
         end
