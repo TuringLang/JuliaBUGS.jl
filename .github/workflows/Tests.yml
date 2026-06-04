@@ -89,7 +89,7 @@ jobs:
         with:
           directories: JuliaBUGS/src,JuliaBUGS/ext
 
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v6
         if: matrix.version == '1.11'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
