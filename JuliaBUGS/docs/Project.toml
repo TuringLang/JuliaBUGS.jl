@@ -18,3 +18,4 @@ JuliaBUGS = {path = ".."}
 
 [compat]
 Documenter = "1.14"
+LogDensityProblems = "2.2.0"

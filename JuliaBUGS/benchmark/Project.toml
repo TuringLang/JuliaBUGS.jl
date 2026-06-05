@@ -13,3 +13,6 @@ StanLogDensityProblems = "a545de4d-8dba-46db-9d34-4e41d3f07807"
 
 [sources]
 JuliaBUGS = {path = ".."}
+
+[compat]
+LogDensityProblems = "2.2.0"
