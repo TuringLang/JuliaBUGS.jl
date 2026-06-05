@@ -23,7 +23,6 @@ updates:
       all-julia-packages:
         patterns:
           - "*"
-        group-by: dependency-name
 
   - package-ecosystem: "npm"
     directory: "/DoodleBUGS"
