@@ -7,9 +7,10 @@ using JuliaBUGS
 using JuliaBUGS: @model
 
 # Required packages for GP modeling and MCMC
-using AbstractGPs, Distributions, LogExpFunctions, ForwardDiff
+using AbstractGPs, Distributions, LogExpFunctions
 using LogDensityProblems
 using ADTypes
+using Mooncake
 using AbstractMCMC, AdvancedHMC, MCMCChains
 
 # --- Data Definition ---
@@ -117,9 +118,9 @@ model = gp_golf_putting(
     data.jitter, # Numerical stability term
 )
 
-# Use graph evaluation mode with ForwardDiff AD (required for user-defined primitives)
+# Use graph evaluation mode with Mooncake AD.
 model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
-grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoForwardDiff())
+grad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
 
 # --- MCMC Sampling ---
 
@@ -131,4 +132,5 @@ samples_and_stats = AbstractMCMC.sample(
     chain_type=Chains,      # Store results as MCMCChains object
     n_adapts=500,           # Number of adaptation steps for NUTS
     discard_initial=500,    # Number of initial samples (warmup) to discard
+    progress=false,
 )

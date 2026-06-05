@@ -6,13 +6,13 @@ JuliaBUGS supports multiple evaluation modes that determine how the log density 
 
 | Mode | Description | AD Backends |
 |------|-------------|-------------|
-| `UseGraph()` | Traverses computational graph (default) | ReverseDiff, ForwardDiff |
-| `UseGeneratedLogDensityFunction()` | Compiles a Julia function for log density | Mooncake |
-| `UseAutoMarginalization()` | Graph traversal with discrete variable marginalization | ReverseDiff, ForwardDiff |
+| `UseGraph()` | Traverses computational graph (default) | AutoMooncake, ReverseDiff, ForwardDiff |
+| `UseGeneratedLogDensityFunction()` | Compiles a Julia function for log density | AutoMooncake, AutoMooncakeForward |
+| `UseAutoMarginalization()` | Graph traversal with discrete variable marginalization | AutoMooncake, ReverseDiff, ForwardDiff |
 
 ## UseGraph (Default)
 
-The default mode evaluates the log density by traversing the computational graph. Works with ReverseDiff and ForwardDiff.
+The default mode evaluates the log density by traversing the computational graph. It works with reverse-mode Mooncake, ReverseDiff, and ForwardDiff.
 
 ```julia
 model = compile(model_def, data)
@@ -25,13 +25,14 @@ This mode generates and compiles a Julia function for the log density, which can
 
 ```julia
 model = compile(model_def, data)
-model = set_evaluation_mode(model, UseGeneratedLogDensityFunction())
+model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())
 ```
 
-Use with Mooncake for AD:
+Use with Mooncake or another mutation-supporting backend for AD:
 
 ```julia
-model = BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
+using ADTypes, Mooncake
+model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
 ```
 
 ## UseAutoMarginalization
@@ -40,8 +41,8 @@ For models with discrete latent variables, auto-marginalization enables gradient
 
 ```julia
 model = compile(model_def, data)
-model = settrans(model, true)  # requires transformed space
-model = set_evaluation_mode(model, UseAutoMarginalization())
+model = JuliaBUGS.settrans(model, true)  # requires transformed space
+model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseAutoMarginalization())
 ```
 
 ## API

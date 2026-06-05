@@ -76,29 +76,15 @@ end
 function benchmark_JuliaBUGS_model_with_Mooncake(model::JuliaBUGS.BUGSModel)
     # Use generated log density function for Mooncake
     model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGeneratedLogDensityFunction())
-    p = Base.Fix1(model.log_density_computation_function, model.evaluation_env)
-    backend = AutoMooncake(; config=nothing)
+    ad_model = JuliaBUGS.BUGSModelWithGradient(model, AutoMooncake(; config=nothing))
     dim = LogDensityProblems.dimension(model)
     params_values = JuliaBUGS.getparams(model)
-    prep = prepare_gradient(p, backend, params_values)
-    density_time = Chairmarks.@be $p($params_values)
-    density_and_gradient_time = Chairmarks.@be gradient($p, $prep, $backend, $params_values)
+    density_time = Chairmarks.@be LogDensityProblems.logdensity($ad_model, $params_values)
+    density_and_gradient_time = Chairmarks.@be LogDensityProblems.logdensity_and_gradient(
+        $ad_model, $params_values
+    )
     return BenchmarkResult(:juliabugs, dim, density_time, density_and_gradient_time)
 end
-
-# function benchmark_JuliaBUGS_model_with_ReverseDiff(model::JuliaBUGS.BUGSModel)
-#     model = JuliaBUGS.set_evaluation_mode(model, JuliaBUGS.UseGraph())
-#     ad_model = LogDensityProblemsAD.ADgradient(:ReverseDiff, model; compile=Val(true))
-#     dim = LogDensityProblems.dimension(model)
-#     params_values = JuliaBUGS.getparams(model)
-#     density_time = Chairmarks.@be LogDensityProblemsAD.logdensity($model, $params_values)
-#     density_and_gradient_time = Chairmarks.@be LogDensityProblemsAD.logdensity_and_gradient(
-#         $ad_model, $params_values
-#     )
-#     return BenchmarkResult(
-#         :juliabugs_reverse_diff, dim, density_time, density_and_gradient_time
-#     )
-# end
 
 # function benchmark_JuliaBUGS_model_with_Enzyme(model::JuliaBUGS.BUGSModel)
 #     f(params, model) = LogDensityProblems.logdensity(model, params)

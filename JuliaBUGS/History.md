@@ -6,6 +6,48 @@
 
 - **`to_distribution(model::BUGSModel)`** (#27): Wrap a compiled BUGS model as a `Distributions.Distribution` with variate type `NamedTupleVariate{names}`, where `names` are the unique parameter symbols. `rand` performs ancestral sampling and returns a `NamedTuple`; `logpdf` evaluates the joint log density in the original (constrained) parameter space at the supplied `NamedTuple`. This makes BUGS models composable inside other PPLs that consume `Distribution` objects.
 
+## 0.14.0
+
+### Highlights
+
+- **Native AbstractPPL evaluator API for gradients** (#454, closes #449): `BUGSModelWithGradient` now prepares and computes gradients through `AbstractPPL.prepare` and `AbstractPPL.value_and_gradient!!` instead of calling `DifferentiationInterface` directly. This lets JuliaBUGS use AbstractPPL's native Mooncake extension.
+
+- **Mooncake-first.** `AutoMooncake()` is now the recommended AD backend and works with all three evaluation modes: `UseGraph()`, `UseGeneratedLogDensityFunction()`, and `UseAutoMarginalization()`. Docs and the main tutorial default to it.
+
+### Breaking Changes
+
+- **`DifferentiationInterface` is no longer a JuliaBUGS dependency.** Users of DI-backed backends like `AutoReverseDiff` and `AutoForwardDiff` must now load `DifferentiationInterface` themselves alongside the concrete AD package, for example `using ADTypes, DifferentiationInterface, ReverseDiff`. For Mooncake, just `using ADTypes, Mooncake` is enough. For distributed sampling, the same packages must be loaded on every worker.
+
+- **AbstractPPL compat bumped to `0.15`** for the new evaluator API.
+
+- **`BUGSModelWithGradient.prep` field type changed** from a DifferentiationInterface prep object to an `AbstractPPL.Evaluators.Prepared`. Code that reaches into `.prep` directly needs to be updated.
+
+### Improvements
+
+- `smart_copy_evaluation_env` now preserves the `NamedTuple` type of `evaluation_env` and only deep-copies mutable fields, which fixes Mooncake reverse mode on the graph evaluator.
+- `AutoMooncakeForward()` is auto-routed to `UseGeneratedLogDensityFunction()` mode when source generation is possible; a clear `ArgumentError` is raised otherwise.
+- `Bijectors 0.16` is now allowed in compat.
+
+## 0.13.0
+
+### Breaking Changes
+
+- Bumped AbstractPPL compat to `0.14` (#422).
+
+## 0.12.3
+
+- Fix serialization for `BUGSModel` and add round-trip tests (#435)
+- `MetaGraphsNext` 0.8 is now allowed in compat (#425)
+
+## 0.12.2
+
+- Catch `DomainError` in `LogDensityProblems.logdensity` to prevent HMC crashes from leapfrog integration (#434)
+- Fix math and inline LaTeX rendering on docs pages (#430)
+
+## 0.12.1
+
+- Added support for `AbstractMCMC.mcmc_callbacks`, including `TensorBoardLogger.jl` (#423). See the [callbacks docs](https://turinglang.org/AbstractMCMC.jl/stable/callbacks/#TensorBoard-Logging).
+
 ## 0.12.0
 
 ### Highlights
