@@ -18,3 +18,4 @@ JuliaBUGS = {path = ".."}
 
 [compat]
 Documenter = "1.14"
+MetaGraphsNext = "0.8.0"
