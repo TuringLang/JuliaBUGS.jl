@@ -578,6 +578,19 @@ function _marginalize_recursive(
         )
         (rest_prior, obs_logp + rest_lik)
 
+    elseif gd.variable_types[current_idx] == GeneratedQuantity
+        # Stochastic nodes not in param_offsets / param_lengths: skip them.
+        _marginalize_recursive(
+            model,
+            env,
+            rest_indices,
+            parameter_values,
+            param_offsets,
+            var_lengths,
+            memo,
+            minimal_keys,
+        )
+
     elseif mc.node_types[current_idx] == :discrete_finite
         # Discrete finite unobserved: marginalize by enumerating all values
         dist = node_function(env, loop_vars)
@@ -711,3 +724,105 @@ function evaluate_with_marginalization_values!!(
         tempered_logjoint=log_prior + temperature * log_likelihood,
     )
 end
+
+"""
+    evaluate_and_sample_with_marginalization_values!!(model, flattened_values)
+
+Reconstruct continuous parameters and ancestrally sample marginalized discrete
+finite variables from their conditional posterior.
+
+This is used in `gen_chains` under `UseAutoMarginalization` so that generated quantities
+which depend on marginalized discrete latents get correct values.
+"""
+function evaluate_and_sample_with_marginalization_values!!(
+    model::BUGSModel, flattened_values::AbstractVector
+)
+    mc = model.marginalization_cache
+    if isnothing(mc)
+        error(
+            "Auto marginalization cache missing. " *
+            "Call set_evaluation_mode(model, UseAutoMarginalization()) first.",
+        )
+    end
+
+    gd = model.graph_evaluation_data
+    T = eltype(flattened_values)
+
+    # Fresh memo cache for _marginalize_recursive calls
+    n_nodes = length(gd.sorted_nodes)
+    expected_entries = if mc.n_discrete_finite > 20
+        1_000_000
+    else
+        min((1 << mc.n_discrete_finite) * n_nodes, 1_000_000)
+    end
+    memo = Dict{Tuple{Int,Tuple},Tuple{T,T}}()
+    sizehint!(memo, expected_entries)
+
+    env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
+
+    for (pos, idx) in enumerate(mc.marginalization_order)
+        vn = gd.sorted_nodes[idx]
+        node_function = gd.node_function_vals[idx]
+        loop_vars = gd.loop_vars_vals[idx]
+
+        if !gd.is_stochastic_vals[idx]
+            value = node_function(env, loop_vars)
+            env = BangBang.setindex!!(env, value, vn)
+
+        elseif gd.is_observed_vals[idx]
+            continue
+
+        elseif gd.variable_types[idx] == GeneratedQuantity
+            continue
+
+        elseif mc.node_types[idx] == :discrete_finite
+            # Marginalized discrete latent: sample from conditional posterior.
+            # For each possible value, compute the full downstream joint via
+            # _marginalize_recursive, then normalize and draw.
+            dist = node_function(env, loop_vars)
+            possible_values = _enumerate_discrete_values(dist)
+            rest_indices = @view(mc.marginalization_order[(pos + 1):end])
+
+            log_joints = Vector{T}(undef, length(possible_values))
+            for (i, val) in enumerate(possible_values)
+                branch_env = BangBang.setindex!!(env, val, vn)
+                val_logp = logpdf(dist, val)
+                val_logp = isnan(val_logp) ? -Inf : val_logp
+
+                branch_prior, branch_lik = _marginalize_recursive(
+                    model,
+                    branch_env,
+                    rest_indices,
+                    flattened_values,
+                    mc.param_offsets,
+                    mc.param_lengths,
+                    memo,
+                    mc.minimal_cache_keys,
+                )
+                log_joints[i] = val_logp + branch_prior + branch_lik
+            end
+
+            # Sample from conditional posterior weights
+            probs = LogExpFunctions.softmax(log_joints)
+            sampled_val = possible_values[rand(Distributions.Categorical(probs))]
+            env = BangBang.setindex!!(env, sampled_val, vn)
+
+        else
+            dist = node_function(env, loop_vars)
+            bijector = Bijectors.bijector(dist)
+
+            len = mc.param_lengths[vn]
+            start_idx = mc.param_offsets[vn]
+            param_slice = view(flattened_values, start_idx:(start_idx + len - 1))
+
+            b_inv = Bijectors.inverse(bijector)
+            reconstructed = reconstruct(b_inv, dist, param_slice)
+            value, _ = Bijectors.with_logabsdet_jacobian(b_inv, reconstructed)
+
+            env = BangBang.setindex!!(env, value, vn)
+        end
+    end
+
+    return env
+end
+
