@@ -27,16 +27,27 @@ fields are the corresponding entries of the model evaluation environment.
 and returns the log joint density in the original (constrained) parameter
 space.
 
-The wrapper always operates in the original parameter space; `model.transformed`
-is ignored. `logpdf` returns the full joint (prior plus likelihood of any
-observed data baked into the model), so two models that differ only in observed
-data produce different `BUGSModelDistribution`s.
+The wrapper always operates in the model's original (constrained) parameter
+space: `model.transformed` is ignored and **no log-abs-det-Jacobian is added**,
+so the returned density is a constrained-space density and is not, on its own, a
+correct unconstrained-space (e.g. HMC) target. It also always uses graph
+evaluation (`UseGraph`) and ignores `model.evaluation_mode`, so for a
+marginalized model it can differ from `LogDensityProblems.logdensity`.
+
+`logpdf` returns the full joint (prior plus likelihood of any observed data
+baked into the model), so two models that differ only in observed data produce
+different `BUGSModelDistribution`s. The supplied `NamedTuple` is overlaid
+verbatim: for a partially-observed array, observed slots are scored against the
+values you pass, so supply the model's observed values there (as `rand` does) to
+score against the data. `loglikelihood(d, x)` is an alias for this joint
+`logpdf`, not a data-only likelihood. For a model that mixes discrete and
+continuous parameters the value support reduces to `Continuous`.
 
 # Example
 ```julia
 model_def = @bugs begin
-    x ~ Normal(0, 1)
-    y ~ Normal(x, 1)
+    x ~ dnorm(0, 1)
+    y ~ dnorm(x, 1)
 end
 model = compile(model_def, (; y = 1.0))
 d = to_distribution(model)
@@ -45,6 +56,25 @@ logpdf(d, nt)
 ```
 """
 function to_distribution(model::BUGSModel)
+    # `model.transformed` is intentionally ignored (constrained-space density, no
+    # log-abs-det-Jacobian). That holds for every freshly compiled model (which is
+    # `transformed = true` by default), so warning here would fire universally and
+    # become noise — it is left to the docstring instead.
+    #
+    # `model.evaluation_mode`, by contrast, is a no-op only for the default `UseGraph`.
+    # Under `UseAutoMarginalization`/`UseGeneratedLogDensityFunction` the raw graph
+    # density computed here can differ from `LogDensityProblems.logdensity` (e.g.
+    # marginalization sums out discrete variables, giving a different density over a
+    # different variate), so surface that once when the user has switched modes.
+    if !(model.evaluation_mode isa UseGraph)
+        @warn(
+            "to_distribution ignores `model.evaluation_mode` " *
+                "($(nameof(typeof(model.evaluation_mode)))) and always uses graph " *
+                "evaluation; its `logpdf` may differ from `LogDensityProblems.logdensity` " *
+                "for this (e.g. marginalized) model.",
+            maxlog = 1,
+        )
+    end
     syms = Symbol[]
     for vn in parameters(model)
         s = AbstractPPL.getsym(vn)
@@ -114,13 +144,17 @@ end
 
 function Distributions.logpdf(d::BUGSModelDistribution{names}, x::NamedTuple) where {names}
     model = d.model
-    env = model.evaluation_env
+    # Overlay onto an isolated copy (NOT model.evaluation_env): passing the live env
+    # would bypass evaluate_with_env!!'s default smart-copy and mutate the model's
+    # deterministic array nodes in place, so logpdf would have observable side effects.
+    env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
     for s in names
         haskey(x, s) || throw(ArgumentError("logpdf: missing field $s in NamedTuple input"))
         env = BangBang.setindex!!(env, getfield(x, s), s)
     end
     _, log_densities = evaluate_with_env!!(model, env; transformed=false)
-    return log_densities.tempered_logjoint
+    # Untempered joint = logprior + loglikelihood, independent of any temperature default.
+    return log_densities.logprior + log_densities.loglikelihood
 end
 
 Distributions.pdf(d::BUGSModelDistribution, x::NamedTuple) = exp(Distributions.logpdf(d, x))
@@ -131,5 +165,5 @@ end
 function Distributions.loglikelihood(
     d::BUGSModelDistribution, xs::AbstractArray{<:NamedTuple}
 )
-    return sum(Base.Fix1(Distributions.logpdf, d), xs)
+    return sum(Base.Fix1(Distributions.logpdf, d), xs; init=0.0)
 end

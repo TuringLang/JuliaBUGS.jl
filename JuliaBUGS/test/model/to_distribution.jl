@@ -34,12 +34,19 @@
         @test length(samples) == 3
         @test rand(d, 3) isa AbstractVector{<:NamedTuple{(:x,)}}
 
-        # rand! actually writes values: different seeds → different entries.
+        # rand! writes the whole buffer, returns it, and fills with distinct draws.
         buf_a = Vector{NamedTuple{(:x,),Tuple{Float64}}}(undef, 4)
         buf_b = Vector{NamedTuple{(:x,),Tuple{Float64}}}(undef, 4)
-        rand!(MersenneTwister(0), d, buf_a)
+        @test rand!(MersenneTwister(0), d, buf_a) === buf_a
         rand!(MersenneTwister(1), d, buf_b)
+        @test all(b -> b isa NamedTuple{(:x,)}, buf_a)
+        @test allunique(getfield.(buf_a, :x))   # ancestral draws differ within a buffer
         @test buf_a[1].x != buf_b[1].x
+
+        # loglikelihood over a vector sums the joint; empty input is 0.0; show is exercised.
+        @test Distributions.loglikelihood(d, [nt, nt]) ≈ 2 * logpdf(d, nt)
+        @test Distributions.loglikelihood(d, NamedTuple{(:x,),Tuple{Float64}}[]) == 0.0
+        @test occursin("BUGSModelDistribution", sprint(show, d))
 
         # the wrapper ignores model.transformed: same logpdf in original space
         transformed_model = JuliaBUGS.Model.settrans(model, true)
@@ -103,5 +110,90 @@
         @test nt isa NamedTuple{(:p, :z)}
         manual = logpdf(Beta(2, 2), nt.p) + logpdf(Bernoulli(nt.p), nt.z)
         @test logpdf(d, nt) ≈ manual
+        # mixed support currently reduces to Continuous (discreteness of z is lost).
+        @test Distributions.value_support(typeof(d)) === Distributions.Continuous
+    end
+
+    @testset "logpdf/rand leave the model unmutated (isolation)" begin
+        # A logical/deterministic array node (m) is the case that regressed: logpdf must
+        # not write recomputed deterministic values back into the wrapped model's env.
+        model_def = @bugs begin
+            tau ~ Gamma(2.0, 2.0)
+            for i in 1:3
+                m[i] = tau * i
+                y[i] ~ Normal(m[i], 1)
+            end
+        end
+        model = compile(model_def, (; y=[1.0, 2.0, 3.0]))
+        d = to_distribution(model)
+        m_before = copy(model.evaluation_env.m)
+        tau_before = model.evaluation_env.tau
+
+        lp = logpdf(d, (; tau=5.0))
+        @test model.evaluation_env.m == m_before     # deterministic node not corrupted
+        @test model.evaluation_env.tau == tau_before
+        @test logpdf(d, (; tau=5.0)) == lp           # no leaked state across calls
+
+        rand(MersenneTwister(0), d)
+        @test model.evaluation_env.m == m_before
+    end
+
+    @testset "fully observed model (empty parameter set)" begin
+        model_def = @bugs begin
+            x ~ Normal(0, 1)
+            y ~ Normal(x, 1)
+        end
+        model = compile(model_def, (; x=0.3, y=1.0))
+        d = to_distribution(model)
+        @test d isa Distribution{Distributions.NamedTupleVariate{()}}
+        @test Distributions.value_support(typeof(d)) === Distributions.Continuous
+        @test rand(MersenneTwister(0), d) == NamedTuple()
+        manual = logpdf(Normal(0, 1), 0.3) + logpdf(Normal(0.3, 1), 1.0)
+        @test logpdf(d, NamedTuple()) ≈ manual
+    end
+
+    @testset "multivariate parameter nodes" begin
+        # A single multivariate stochastic node packs into one NamedTuple field.
+        @testset "ddirich (simplex-valued)" begin
+            model_def = @bugs begin
+                w[1:3] ~ ddirich(alpha[1:3])
+            end
+            alpha = [1.0, 2.0, 3.0]
+            d = to_distribution(compile(model_def, (; alpha=alpha)))
+            @test d isa Distribution{Distributions.NamedTupleVariate{(:w,)}}
+            nt = rand(MersenneTwister(0), d)
+            @test nt.w isa AbstractVector && length(nt.w) == 3
+            @test sum(nt.w) ≈ 1
+            @test logpdf(d, nt) ≈ logpdf(ddirich(alpha), nt.w)
+        end
+
+        @testset "dmnorm (vector-valued)" begin
+            model_def = @bugs begin
+                x[1:2] ~ dmnorm(mu[:], Tau[:, :])
+            end
+            mu = [0.0, 1.0]
+            Tau = [2.0 0.0; 0.0 4.0]
+            d = to_distribution(compile(model_def, (; mu=mu, Tau=Tau)))
+            nt = rand(MersenneTwister(0), d)
+            @test nt.x isa AbstractVector && length(nt.x) == 2
+            @test logpdf(d, nt) ≈ logpdf(dmnorm(mu, Tau), nt.x)
+        end
+    end
+
+    @testset "warns only when evaluation_mode is not UseGraph" begin
+        model_def = @bugs begin
+            x ~ Normal(0, 1)
+            y ~ Normal(x, 1)
+        end
+        model = compile(model_def, (; y=1.5))
+        # default UseGraph model: the wrapper is constructed silently.
+        @test_logs to_distribution(model)
+        # explicitly switching modes surfaces a one-time warning (the wrapper still
+        # always uses graph evaluation, so logpdf may differ from this mode).
+        gen = JuliaBUGS.Model.set_evaluation_mode(
+            model, JuliaBUGS.Model.UseGeneratedLogDensityFunction()
+        )
+        @test !(gen.evaluation_mode isa JuliaBUGS.Model.UseGraph)
+        @test_logs (:warn,) match_mode = :any to_distribution(gen)
     end
 end
