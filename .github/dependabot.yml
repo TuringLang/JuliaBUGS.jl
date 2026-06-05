@@ -5,15 +5,25 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      all-github-actions-packages:
+        patterns:
+          - "*"
 
   - package-ecosystem: "julia"
-    directory: "/JuliaBUGS"
+    directories:
+      - "/JuliaBUGS"
+      - "/JuliaBUGS/docs"
+      - "/JuliaBUGS/test"
+      - "/JuliaBUGS/benchmark"
+      - "/JuliaBUGS/examples"
     schedule:
       interval: "weekly"
     groups:
       all-julia-packages:
         patterns:
           - "*"
+        group-by: dependency-name
 
   - package-ecosystem: "npm"
     directory: "/DoodleBUGS"
