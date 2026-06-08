@@ -162,7 +162,7 @@ function Distributions.logpdf(d::BUGSModelDistribution, x::NamedTuple)
     # supplied for those slots rather than on the model's data.
     for vn in parameters(model)
         AbstractPPL.hasvalue(x, vn) || throw(
-            ArgumentError("logpdf: missing value for parameter `$vn` in NamedTuple input")
+            ArgumentError("logpdf: missing value for parameter `$vn` in NamedTuple input"),
         )
         env = BangBang.setindex!!(env, AbstractPPL.getvalue(x, vn), vn)
     end
