@@ -23,9 +23,9 @@ The returned distribution's variate type is `NamedTupleVariate{names}`, where
 `names` are the unique symbols of the model parameters (in graph evaluation
 order). `rand(d)` performs ancestral sampling and returns a `NamedTuple` whose
 fields are the corresponding entries of the model evaluation environment.
-`logpdf(d, nt)` overlays the supplied values into the evaluation environment
-and returns the log joint density in the original (constrained) parameter
-space.
+`logpdf(d, nt)` overlays the supplied free-parameter values into the evaluation
+environment and returns the log joint density in the original (constrained)
+parameter space.
 
 The wrapper always operates in the model's original (constrained) parameter
 space: `model.transformed` is ignored and **no log-abs-det-Jacobian is added**,
@@ -35,13 +35,29 @@ evaluation (`UseGraph`) and ignores `model.evaluation_mode`, so for a
 marginalized model it can differ from `LogDensityProblems.logdensity`.
 
 `logpdf` returns the full joint (prior plus likelihood of any observed data
-baked into the model), so two models that differ only in observed data produce
-different `BUGSModelDistribution`s. The supplied `NamedTuple` is overlaid
-verbatim: for a partially-observed array, observed slots are scored against the
-values you pass, so supply the model's observed values there (as `rand` does) to
-score against the data. `loglikelihood(d, x)` is an alias for this joint
-`logpdf`, not a data-only likelihood. For a model that mixes discrete and
-continuous parameters the value support reduces to `Continuous`.
+baked into the model). The observed data is part of the distribution's
+**identity**: two models that differ only in their observed data are different
+`BUGSModelDistribution`s. Only the model's *free parameters* are read from the
+supplied `NamedTuple`, each addressed by its `VarName`; **observed and
+deterministic entries in the input are ignored** and taken from the model instead
+— observed slots hold the baked-in data, and deterministic nodes are functions of
+the parameters and are recomputed. For a partially-observed array this means
+`logpdf` is invariant to whatever you place in the observed slots:
+`logpdf(d, (x = [999.0, …],))` equals `logpdf(d, (x = [<data>, …],))`. Pass a
+full-shaped array (as `rand` returns); only the free-parameter slots affect the
+result.
+
+!!! warning
+    Tweaking an observed (or deterministic) slot is **inert** — it cannot change
+    the result. To score the model against *different* observed data you must
+    `compile` a new model and wrap it again; you cannot do it by changing the
+    values you pass to `logpdf`. This mirrors DynamicPPL's
+    `logjoint`/`loglikelihood(model, params)`, which likewise source observed
+    values from the model, not from `params`.
+
+`loglikelihood(d, x)` is an alias for this joint `logpdf`, not a data-only
+likelihood. For a model that mixes discrete and continuous parameters the value
+support reduces to `Continuous`.
 
 # Example
 ```julia
@@ -56,16 +72,6 @@ logpdf(d, nt)
 ```
 """
 function to_distribution(model::BUGSModel)
-    # `model.transformed` is intentionally ignored (constrained-space density, no
-    # log-abs-det-Jacobian). That holds for every freshly compiled model (which is
-    # `transformed = true` by default), so warning here would fire universally and
-    # become noise — it is left to the docstring instead.
-    #
-    # `model.evaluation_mode`, by contrast, is a no-op only for the default `UseGraph`.
-    # Under `UseAutoMarginalization`/`UseGeneratedLogDensityFunction` the raw graph
-    # density computed here can differ from `LogDensityProblems.logdensity` (e.g.
-    # marginalization sums out discrete variables, giving a different density over a
-    # different variate), so surface that once when the user has switched modes.
     if !(model.evaluation_mode isa UseGraph)
         @warn(
             "to_distribution ignores `model.evaluation_mode` " *
@@ -142,15 +148,23 @@ function Distributions._rand!(
     return xs
 end
 
-function Distributions.logpdf(d::BUGSModelDistribution{names}, x::NamedTuple) where {names}
+function Distributions.logpdf(d::BUGSModelDistribution, x::NamedTuple)
     model = d.model
     # Overlay onto an isolated copy (NOT model.evaluation_env): passing the live env
     # would bypass evaluate_with_env!!'s default smart-copy and mutate the model's
     # deterministic array nodes in place, so logpdf would have observable side effects.
     env = smart_copy_evaluation_env(model.evaluation_env, model.mutable_symbols)
-    for s in names
-        haskey(x, s) || throw(ArgumentError("logpdf: missing field $s in NamedTuple input"))
-        env = BangBang.setindex!!(env, getfield(x, s), s)
+    # Overlay only the *free parameters*, each addressed by its `VarName` optic. Observed and
+    # deterministic entries are deliberately NOT read from `x`: observed data is already baked
+    # into `env`, and deterministic nodes are recomputed during evaluation. Overlaying a whole
+    # top-level symbol instead (e.g. `setindex!!(env, x.x, :x)`) would clobber the observed
+    # slots of a partially-observed array, making the density depend on the values the caller
+    # supplied for those slots rather than on the model's data.
+    for vn in parameters(model)
+        AbstractPPL.hasvalue(x, vn) || throw(
+            ArgumentError("logpdf: missing value for parameter `$vn` in NamedTuple input")
+        )
+        env = BangBang.setindex!!(env, AbstractPPL.getvalue(x, vn), vn)
     end
     _, log_densities = evaluate_with_env!!(model, env; transformed=false)
     # Untempered joint = logprior + loglikelihood, independent of any temperature default.

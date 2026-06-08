@@ -38,10 +38,6 @@ include("compiler_pass.jl")
 include("model/Model.jl")
 using .Model
 using .Model: AbstractBUGSModel, BUGSModel
-
-# Re-export the headline API of this PR. Other Model-submodule symbols
-# (parameters, settrans, evaluation modes, …) remain accessible via
-# `JuliaBUGS.Model` / `using JuliaBUGS.Model: …`, matching existing convention.
 export to_distribution
 
 include("independent_mh.jl")

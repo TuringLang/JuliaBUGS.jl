@@ -104,6 +104,7 @@ const TEST_GROUPS = OrderedDict{String,Function}(
     "callbacks" => () -> include("model/abstractmcmc.jl"),
     "inference_hmc" => () -> include("ext/JuliaBUGSAdvancedHMCExt.jl"),
     "inference_chains" => () -> include("ext/JuliaBUGSMCMCChainsExt.jl"),
+    "dynamicppl" => () -> include("ext/JuliaBUGSDynamicPPLExt.jl"),
     "inference_mh" => () -> include("independent_mh.jl"),
     "inference_marginalization" => () -> include("model/auto_marginalization_sampling.jl"),
     "gibbs" => () -> include("gibbs.jl"),
