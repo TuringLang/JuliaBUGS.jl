@@ -200,50 +200,6 @@ for such a model (e.g. a marginalized one). See [Evaluation Modes](inference/eva
 and [Auto-Marginalization](inference/auto_marginalization.md) for the modes this
 concerns.
 
-## Using a BUGS model inside DynamicPPL
-
-A `BUGSModelDistribution` can be the right-hand side of a `~` inside a
-[DynamicPPL](https://github.com/TuringLang/DynamicPPL.jl) `@model`, so a compiled
-BUGS model becomes a reusable component of a larger Turing/DynamicPPL model. This
-is enabled by a package extension that loads when DynamicPPL is present. Both
-packages export `@model` and `~`, so qualify the macro as `DynamicPPL.@model`.
-
-```@example dpplintegration
-using JuliaBUGS, DynamicPPL, Distributions
-
-bugs = compile((@bugs begin
-    x ~ dnorm(0, 1)
-    y ~ dnorm(x, 1)
-end), (; y = 1.0))
-d = to_distribution(bugs)
-
-DynamicPPL.@model function outer()
-    θ ~ d                 # the BUGS parameters, as a NamedTuple
-    z ~ Normal(θ.x, 1)    # a BUGS latent reused downstream
-end
-
-# logjoint over the embedded model equals the BUGS joint plus the outer likelihood:
-DynamicPPL.logjoint(outer() | (; z = 0.5), (θ = (x = 0.3,),)) ≈
-    logpdf(d, (x = 0.3,)) + logpdf(Normal(0.3, 1), 0.5)
-```
-
-DynamicPPL stores every random variable as a flat real vector via the
-`Bijectors.VectorBijectors` interface; the extension supplies the
-`to_vec`/`from_vec`/`vec_length` methods that make a `NamedTuple` variate storable.
-Under `θ ~ d`, the **entire BUGS joint** (including the likelihood of its baked-in
-data) is registered as the outer model's *prior* contribution; the outer model's
-own `~`-observed nodes supply the likelihood.
-
-!!! note "Generative and non-gradient inference only"
-    This supports forward / prior-predictive sampling and any inference needing only
-    `rand` + the constrained `logpdf` (Metropolis–Hastings, SMC, importance sampling).
-    It is **not** wired for gradient-based samplers (HMC/NUTS): the wrapper is a
-    constrained-space density with no log-abs-det-Jacobian, and the *linked*
-    `VectorBijectors` methods are intentionally left undefined, so linking `θ` errors
-    rather than silently sampling the wrong distribution. For gradient-based inference,
-    sample the underlying `BUGSModel` through its `LogDensityProblems` interface (e.g.
-    via an external sampler) instead.
-
 ## Design notes / decisions
 
 ### Symbol-grouped `NamedTuple` variate
