@@ -51,9 +51,7 @@ result.
     Tweaking an observed (or deterministic) slot is **inert** — it cannot change
     the result. To score the model against *different* observed data you must
     `compile` a new model and wrap it again; you cannot do it by changing the
-    values you pass to `logpdf`. This mirrors DynamicPPL's
-    `logjoint`/`loglikelihood(model, params)`, which likewise source observed
-    values from the model, not from `params`.
+    values you pass to `logpdf`.
 
 `loglikelihood(d, x)` is an alias for this joint `logpdf`, not a data-only
 likelihood. For a model that mixes discrete and continuous parameters the value

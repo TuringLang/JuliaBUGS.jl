@@ -156,11 +156,9 @@ free positions before calling `logpdf`.
     Tweaking an observed or deterministic slot is **inert** — the observed data
     is part of the distribution's *identity*. To evaluate the density under
     *different* observed data, `compile` a new model and call `to_distribution`
-    again; you cannot do it by changing the values you pass to `logpdf`. This
-    matches DynamicPPL's `logjoint` / `loglikelihood(model, params)`, which take
-    observed values from the model, not from `params`. (This is also why a value
-    passed for a *deterministic* node is discarded: such a node is a function of
-    the parameters and is always recomputed.)
+    again; you cannot do it by changing the values you pass to `logpdf`. (This
+    is also why a value passed for a *deterministic* node is discarded: such a
+    node is a function of the parameters and is always recomputed.)
 
 ### Constrained space, no Jacobian
 
@@ -213,9 +211,8 @@ stable, reproducible field ordering tied to graph evaluation order.
 The tradeoff is intrinsic to choosing a `NamedTuple` variate: it cannot
 distinguish a loop-declared array `x[i]` from a single multivariate node
 `x[1:3]` (both become `(x = Vector,)`), and it cannot key individual array
-elements. Callers needing per-element addressing must use a different container
-(a `Dict{VarName}` or a `VarNamedTuple` with real `VarName` keys), which is
-outside this interface.
+elements. Callers needing per-element addressing must use a container with real
+`VarName` keys (e.g. a `Dict{VarName}`), which is outside this interface.
 
 ### Observed data sourced from the model
 
@@ -229,27 +226,6 @@ touches exactly the stochastic-unobserved slots; using `smart_copy` rather than
 the live env keeps `logpdf` free of observable side effects on the model's
 deterministic array nodes.
 
-### Consistency with DynamicPPL
-
-This design intentionally mirrors DynamicPPL's `NamedTuple` draw / `logjoint`
-path:
-
-- **Symbol-grouped keys.** In DynamicPPL, `NamedTuple(rand(model))` yields one
-  field per top-level symbol with arrays reconstructed, e.g. `(x = [v1,v2,v3],)`;
-  a loop-declared array and a single multivariate node are indistinguishable in
-  that representation. JuliaBUGS uses the same `getsym`-derived symbol keys.
-- **Per-element names live only in the chains layer.** Indexed names like `x[1]`,
-  `X[1,1]` exist only in DynamicPPL's MCMCChains / sample-table layer
-  (`Symbol(string(vn))`), never in the `NamedTuple` draw / `logjoint` layer — a
-  field literally named `Symbol("x[1]")` does not resolve as `@varname(x[1])`.
-  JuliaBUGS's variate is the draw/`logpdf` layer, so it is likewise symbol-grouped.
-- **Observed data comes from the model.** DynamicPPL's
-  `logjoint`/`logprior`/`loglikelihood(model, params)` source observed/conditioned
-  values from the **model**, not from `params`: changing values in observed slots
-  does not change the result, and a missing free parameter errors.
-  `logpdf(d, nt)` is the direct analog of `logjoint(model, nt)`, with the same
-  constrained-space, no-Jacobian semantics.
-
 ### Full-joint semantics and the `loglikelihood` alias
 
 Because observed data is part of the model rather than the variate, the natural
@@ -257,8 +233,7 @@ density over the free-parameter `NamedTuple` is the joint (prior times the
 likelihood of the baked-in data). Defining `Distributions.loglikelihood` as an
 alias for the joint `logpdf` populates the Distributions interface without
 inventing a separate, ambiguous data-only quantity the wrapper cannot cleanly
-express. This is a naming divergence from DynamicPPL, which keeps `logprior`,
-`loglikelihood`, and `logjoint` as distinct functions.
+express.
 
 ### Always `UseGraph`
 
@@ -287,7 +262,8 @@ is to modify a `rand(d)` draw in place.
       `model.transformed` and adds **no log-abs-det-Jacobian** (constrained-space
       density). Handing it to a gradient-based unconstrained sampler would sample
       the wrong distribution for any constrained parameter. Use the model's
-      `LogDensityProblems` interface (linked) for an HMC/NUTS target instead.
+      `LogDensityProblems` interface (see [Getting Started](example.md)) for an
+      HMC/NUTS target instead.
     - **`logpdf` is the full joint, not a likelihood.** `loglikelihood(d, x)` is
       an alias for the joint `logpdf` (prior plus likelihood of baked-in data),
       not a data-only likelihood.

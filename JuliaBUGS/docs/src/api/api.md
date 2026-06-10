@@ -6,6 +6,7 @@
 @bugs
 @model
 compile
+JuliaBUGS.BUGSModel
 initialize!
 ```
 
