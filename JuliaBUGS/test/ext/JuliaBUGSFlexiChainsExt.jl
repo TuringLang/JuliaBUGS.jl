@@ -1,3 +1,5 @@
+using JuliaBUGS: Gibbs, IndependentMH
+
 # test FlexiChain construction with a simple Bayesian linear regression model
 @testset "FlexiChains extension" begin
     model_def = @bugs begin
