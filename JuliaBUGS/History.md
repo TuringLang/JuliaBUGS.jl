@@ -1,5 +1,11 @@
 # JuliaBUGS Changelog
 
+## Unreleased
+
+### Highlights
+
+- **`to_distribution(model::BUGSModel)`** (#27): Wrap a compiled BUGS model as a `Distributions.Distribution` with variate type `NamedTupleVariate{names}`, where `names` are the unique parameter symbols. `rand` performs ancestral sampling and returns a `NamedTuple`; `logpdf` evaluates the joint log density in the original (constrained) parameter space at the supplied `NamedTuple`. This makes BUGS models composable inside other PPLs that consume `Distribution` objects.
+
 ## 0.14.0
 
 ### Highlights
