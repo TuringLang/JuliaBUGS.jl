@@ -14,7 +14,7 @@ samples_and_stats = AbstractMCMC.sample(
     AbstractMCMC.MCMCThreads(),
     n_samples,
     n_chains;
-    chain_type = Chains,
+    chain_type = VNChain,
     n_adapts = n_adapts,
     init_params = [initial_θ for _ = 1:n_chains],
     discard_initial = n_adapts,
@@ -34,7 +34,7 @@ Ensure all functions and modules are available on all processes using `@everywhe
 
 ```julia
 @everywhere begin
-    using JuliaBUGS, LogDensityProblems, AbstractMCMC, AdvancedHMC, MCMCChains
+    using JuliaBUGS, LogDensityProblems, AbstractMCMC, AdvancedHMC, FlexiChains
     using ADTypes, Mooncake
     # If using DI-backed AD, also load DifferentiationInterface and the backend,
     # for example: using DifferentiationInterface, ReverseDiff
@@ -50,7 +50,7 @@ samples_and_stats = AbstractMCMC.sample(
     AbstractMCMC.MCMCDistributed(),
     n_samples,
     n_chains;
-    chain_type = Chains,
+    chain_type = VNChain,
     n_adapts = n_adapts,
     init_params = [initial_θ for _ = 1:n_chains],
     discard_initial = n_adapts,

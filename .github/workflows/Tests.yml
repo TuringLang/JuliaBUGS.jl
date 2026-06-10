@@ -43,6 +43,7 @@ jobs:
           - "inference_mh"
           - "inference_hmc"
           - "inference_chains"
+          - "inference_flexichains"
           - "inference_marginalization"
           - "gibbs"
           - "parallel_sampling"

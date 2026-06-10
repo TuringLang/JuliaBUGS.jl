@@ -38,6 +38,7 @@ using StableRNGs
 using AbstractMCMC
 using AdvancedHMC
 using AdvancedMH
+using FlexiChains
 using MCMCChains
 using ReverseDiff
 using ForwardDiff
@@ -99,11 +100,13 @@ const TEST_GROUPS = OrderedDict{String,Function}(
         include("independent_mh.jl")
         include("ext/JuliaBUGSAdvancedHMCExt.jl")
         include("ext/JuliaBUGSMCMCChainsExt.jl")
+        include("ext/JuliaBUGSFlexiChainsExt.jl")
         include("model/auto_marginalization_sampling.jl")
     end,
     "callbacks" => () -> include("model/abstractmcmc.jl"),
     "inference_hmc" => () -> include("ext/JuliaBUGSAdvancedHMCExt.jl"),
     "inference_chains" => () -> include("ext/JuliaBUGSMCMCChainsExt.jl"),
+    "inference_flexichains" => () -> include("ext/JuliaBUGSFlexiChainsExt.jl"),
     "inference_mh" => () -> include("independent_mh.jl"),
     "inference_marginalization" => () -> include("model/auto_marginalization_sampling.jl"),
     "gibbs" => () -> include("gibbs.jl"),
